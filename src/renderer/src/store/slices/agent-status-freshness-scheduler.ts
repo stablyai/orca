@@ -1,6 +1,9 @@
 import { agentEntryCompletionAt } from '../../../../shared/agent-completion-time'
 import type { AgentStatusEntry } from '../../../../shared/agent-status-types'
-import { AGENT_STATUS_STALE_AFTER_MS } from '../../../../shared/agent-status-types'
+import {
+  AGENT_STATUS_STALE_AFTER_MS,
+  agentStatusEvidenceObservedAt
+} from '../../../../shared/agent-status-types'
 
 export type FreshnessSchedulerDeps = {
   getEntries: () => AgentStatusEntry[]
@@ -9,6 +12,12 @@ export type FreshnessSchedulerDeps = {
 
 export type FreshnessScheduler = {
   schedule: () => void
+  /**
+   * Defer a freshness scan until the microtask queue drains. Multiple pending
+   * requests still retain their queue slots for ordering, but only the newest
+   * request performs the scan.
+   */
+  scheduleDeferred: () => void
   /**
    * Cancel any pending freshness timer. Intended for tests that create a
    * fresh store per case — production callers do not need this because the
@@ -23,12 +32,23 @@ export function createFreshnessScheduler(deps: FreshnessSchedulerDeps): Freshnes
   // into the test process.
   let timer: ReturnType<typeof setTimeout> | null = null
   let lastCheckedAt: number | null = null
+  let deferredScheduleGeneration = 0
 
   const clear = (): void => {
     if (timer !== null) {
       clearTimeout(timer)
       timer = null
     }
+  }
+
+  const scheduleDeferred = (): void => {
+    const generation = ++deferredScheduleGeneration
+    queueMicrotask(() => {
+      if (generation !== deferredScheduleGeneration) {
+        return
+      }
+      schedule()
+    })
   }
 
   const schedule = (): void => {
@@ -50,7 +70,7 @@ export function createFreshnessScheduler(deps: FreshnessSchedulerDeps): Freshnes
     // future timer: the setAgentStatus write already bumped the epoch, so
     // freshness-aware selectors can decay them immediately on that render.
     for (const entry of entries) {
-      const expiryAt = entry.updatedAt + AGENT_STATUS_STALE_AFTER_MS
+      const expiryAt = agentStatusEvidenceObservedAt(entry) + AGENT_STATUS_STALE_AFTER_MS
       if (expiryAt >= now) {
         nextExpiryAt = Math.min(nextExpiryAt, expiryAt)
       }
@@ -91,5 +111,11 @@ export function createFreshnessScheduler(deps: FreshnessSchedulerDeps): Freshnes
     }, delayMs)
   }
 
-  return { schedule, dispose: clear }
+  const dispose = (): void => {
+    clear()
+    // Invalidate callbacks already queued by scheduleDeferred.
+    deferredScheduleGeneration += 1
+  }
+
+  return { schedule, scheduleDeferred, dispose }
 }

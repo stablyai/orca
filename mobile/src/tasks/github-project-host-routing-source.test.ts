@@ -1,7 +1,17 @@
 import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
 
-const source = readFileSync(new URL('../../app/h/[hostId]/tasks.tsx', import.meta.url), 'utf8')
+const readSource = (path: string): string => readFileSync(new URL(path, import.meta.url), 'utf8')
+const source = [
+  readSource('./use-mobile-tasks-project-loading-actions.tsx'),
+  readSource('./use-mobile-tasks-project-workspace-comment-actions.tsx'),
+  readSource('./use-mobile-tasks-project-thread-reply-actions.tsx'),
+  readSource('./use-mobile-tasks-project-detail-loading.tsx'),
+  readSource('./use-mobile-tasks-project-metadata-actions.tsx'),
+  readSource('./use-mobile-tasks-project-metadata-loading.tsx'),
+  readSource('./use-mobile-tasks-project-review-check-actions.tsx'),
+  readSource('./use-mobile-tasks-project-file-merge-actions.tsx')
+].join('\n')
 
 describe('mobile GitHub Project host routing boundary', () => {
   it('host-qualifies every Project RPC request', () => {

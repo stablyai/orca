@@ -45,7 +45,7 @@ describe('orchestration mutation recovery', () => {
     )
     expect((result.data as { nextSteps?: string[] }).nextSteps).toEqual([
       'Run orca orchestration worker-show --dispatch dispatch_1 --json before retrying.',
-      'Run orca orchestration worker-start --task task_1 --retry-request request_1.'
+      'After inspecting the Dispatch, if keyed recovery is still needed, run orca orchestration worker-start --task task_1 --retry-request request_1. --retry-request reuses the same operation identity so Orca can replay, join, or safely recover it without starting a separate duplicate.'
     ])
   })
 
@@ -68,6 +68,40 @@ describe('orchestration mutation recovery', () => {
     expect(result.message).not.toContain('worker death')
   })
 
+  it('offers a read-only request lookup when the response carried no dispatch', () => {
+    const result = orchestrationMutationRecoveryError(
+      new RuntimeClientError('runtime_unavailable', 'runtime unavailable', {
+        orchestrationRequestId: 'request_4',
+        originalCommand: ['orca', 'orchestration', 'worker-start', '--task', 'task_4']
+      })
+    ) as RuntimeClientError
+
+    expect(result.data).toMatchObject({
+      recovery: {
+        queryCommand: ['orca', 'orchestration', 'request-show', '--request', 'request_4', '--json']
+      }
+    })
+    expect((result.data as { nextSteps?: string[] }).nextSteps?.[0]).toBe(
+      'Run orca orchestration request-show --request request_4 --json before retrying.'
+    )
+  })
+
+  it('describes keyed retry without overclaiming one replay outcome', () => {
+    const result = orchestrationMutationRecoveryError(
+      new RuntimeClientError('runtime_timeout', 'request timed out', {
+        orchestrationRequestId: 'request_5',
+        originalCommand: ['orca', 'orchestration', 'worker-start', '--task', 'task_5']
+      })
+    ) as RuntimeClientError
+
+    expect((result.data as { nextSteps?: string[] }).nextSteps?.[1]).toContain(
+      'replay, join, or safely recover it without starting a separate duplicate'
+    )
+    expect((result.data as { nextSteps?: string[] }).nextSteps?.[1]).toContain(
+      'absence does not prove a retry is safe'
+    )
+  })
+
   it('renders the exact executable and safely quotes original arguments', () => {
     const result = orchestrationMutationRecoveryError(
       new RuntimeClientError('runtime_timeout', 'request timed out', {
@@ -87,7 +121,7 @@ describe('orchestration mutation recovery', () => {
 
     expect((result.data as { nextSteps?: string[] }).nextSteps).toEqual([
       'Run orca-dev orchestration worker-show --dispatch dispatch_3 --json before retrying.',
-      "Run orca-dev orchestration worker-start --task 'task 3' --comment 'literal $(do-not-run)' --retry-request request_3."
+      "After inspecting the Dispatch, if keyed recovery is still needed, run orca-dev orchestration worker-start --task 'task 3' --comment 'literal $(do-not-run)' --retry-request request_3. --retry-request reuses the same operation identity so Orca can replay, join, or safely recover it without starting a separate duplicate."
     ])
     expect(result.message).toContain("'literal $(do-not-run)'")
   })

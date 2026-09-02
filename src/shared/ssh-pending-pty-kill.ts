@@ -15,10 +15,9 @@ export type SshPendingPtyKill = {
   /** The host-minted PTY incarnation this kill was aimed at, and the whole fence.
    *
    *  A relay renumbers from `pty-1` on every start, so `(targetId, relayPtyId)` alone can name a
-   *  DIFFERENT shell after a redeploy — the collision behind #16970. `pty.shutdown` carries no
-   *  identity parameter and kills whatever holds the id, so the client has to prove identity before
-   *  it replays. The relay mints this per PTY process and publishes it on `pty.listProcesses`,
-   *  which makes it the one value that tells the two apart. */
+   *  DIFFERENT shell after a redeploy — the collision behind #16970. Current relays enforce this
+   *  identity on `pty.shutdown`; the client also proves it from `pty.listProcesses` before replay so
+   *  older relays that ignore the additive field keep the safest available fallback. */
   incarnationId: string
   /** Replays attempted since. Diagnostic; the TTL, not this, is the bound. */
   attempts: number

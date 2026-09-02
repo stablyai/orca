@@ -17,7 +17,7 @@ const {
   getHostedReviewCreationEligibilityMock,
   getHostedReviewForBranchMock,
   resolveRegisteredWorktreePathMock,
-  listRepoWorktreesMock
+  listRepoWorktreeGraphMock
 } = vi.hoisted(() => ({
   handleMock: vi.fn(),
   createHostedReviewMock: vi.fn(),
@@ -25,7 +25,7 @@ const {
   getHostedReviewCreationEligibilityMock: vi.fn(),
   getHostedReviewForBranchMock: vi.fn(),
   resolveRegisteredWorktreePathMock: vi.fn(),
-  listRepoWorktreesMock: vi.fn()
+  listRepoWorktreeGraphMock: vi.fn()
 }))
 
 vi.mock('electron', () => ({
@@ -52,7 +52,7 @@ vi.mock('./registered-worktree-roots-cache', () => ({
 }))
 
 vi.mock('../repo-worktrees', () => ({
-  listRepoWorktrees: listRepoWorktreesMock
+  listRepoWorktreeGraph: listRepoWorktreeGraphMock
 }))
 
 import { registerHostedReviewHandlers } from './hosted-review'
@@ -97,7 +97,7 @@ describe('registerHostedReviewHandlers', () => {
     getHostedReviewCreationEligibilityMock.mockReset()
     getHostedReviewForBranchMock.mockReset()
     resolveRegisteredWorktreePathMock.mockReset()
-    listRepoWorktreesMock.mockReset()
+    listRepoWorktreeGraphMock.mockReset()
     store.getRepo.mockReset()
     store.getRepos.mockReset()
     store.getProjects.mockReset()
@@ -114,7 +114,7 @@ describe('registerHostedReviewHandlers', () => {
     store.getRepos.mockReturnValue([repo])
     store.getProjects.mockReturnValue([])
     store.getSettings.mockReturnValue({ localWindowsRuntimeDefault: { kind: 'windows-host' } })
-    listRepoWorktreesMock.mockResolvedValue([{ path: worktreePath }])
+    listRepoWorktreeGraphMock.mockResolvedValue([{ path: worktreePath }])
   })
 
   it('routes local WSL project review creation through main-process runtime options', async () => {
@@ -143,7 +143,7 @@ describe('registerHostedReviewHandlers', () => {
     ])
     const resolvedWorktreePath = resolve('/workspace/feature')
     resolveRegisteredWorktreePathMock.mockResolvedValue(resolvedWorktreePath)
-    listRepoWorktreesMock.mockResolvedValue([{ path: resolvedWorktreePath }])
+    listRepoWorktreeGraphMock.mockResolvedValue([{ path: resolvedWorktreePath }])
     createHostedReviewMock.mockResolvedValueOnce({
       ok: true,
       number: 42,
@@ -162,7 +162,7 @@ describe('registerHostedReviewHandlers', () => {
       title: 'Feature PR'
     })
 
-    expect(listRepoWorktreesMock).toHaveBeenCalledWith(localRepo, { wslDistro: 'Ubuntu' })
+    expect(listRepoWorktreeGraphMock).toHaveBeenCalledWith(localRepo, { wslDistro: 'Ubuntu' })
     expect(createHostedReviewMock).toHaveBeenCalledWith(
       resolvedWorktreePath,
       expect.objectContaining({
@@ -171,7 +171,7 @@ describe('registerHostedReviewHandlers', () => {
         title: 'Feature PR'
       }),
       null,
-      { localGitExecOptions: { wslDistro: 'Ubuntu' } }
+      { localGitExecOptions: { wslDistro: 'Ubuntu', admissionTier: 'interactive' } }
     )
   })
 
@@ -193,7 +193,7 @@ describe('registerHostedReviewHandlers', () => {
     store.getRepos.mockReturnValue([localRepo])
     const resolvedWorktreePath = resolve('/workspace/feature')
     resolveRegisteredWorktreePathMock.mockResolvedValue(resolvedWorktreePath)
-    listRepoWorktreesMock.mockResolvedValue([{ path: resolvedWorktreePath }])
+    listRepoWorktreeGraphMock.mockResolvedValue([{ path: resolvedWorktreePath }])
     createHostedReviewMock.mockResolvedValueOnce({ ok: true, number: 42, url: 'https://x/1' })
 
     registerHostedReviewHandlers(store as never, stats as never)
@@ -212,7 +212,10 @@ describe('registerHostedReviewHandlers', () => {
       resolvedWorktreePath,
       expect.anything(),
       null,
-      { sharedLinkPaths: ['node_modules'] }
+      {
+        localGitExecOptions: { admissionTier: 'interactive' },
+        sharedLinkPaths: ['node_modules']
+      }
     )
   })
 
@@ -236,7 +239,9 @@ describe('registerHostedReviewHandlers', () => {
       title: 'Feature PR'
     })
 
-    expect(createHostedReviewMock).toHaveBeenCalledWith(worktreePath, expect.anything(), 'ssh-1')
+    expect(createHostedReviewMock).toHaveBeenCalledWith(worktreePath, expect.anything(), 'ssh-1', {
+      localGitExecOptions: { admissionTier: 'interactive' }
+    })
   })
 
   it('routes local WSL project review status through main-process runtime options', async () => {
@@ -289,7 +294,7 @@ describe('registerHostedReviewHandlers', () => {
         connectionId: undefined,
         branch: 'feature/wsl',
         linkedGitHubPR: 42,
-        localGitExecOptions: { wslDistro: 'Ubuntu' }
+        localGitExecOptions: { wslDistro: 'Ubuntu', admissionTier: 'background' }
       })
     )
     // Card-list polling is the O(N) tier and must not claim the fast one.
@@ -311,6 +316,25 @@ describe('registerHostedReviewHandlers', () => {
     // earns the per-minute tier instead of the card-list interval (#11532).
     expect(getHostedReviewForBranchMock).toHaveBeenCalledWith(
       expect.objectContaining({ branch: 'feature/selected', active: true })
+    )
+  })
+
+  it('uses interactive git admission for an explicit card refresh', async () => {
+    getHostedReviewForBranchMock.mockResolvedValueOnce(null)
+    registerHostedReviewHandlers(store as never, stats as never)
+
+    await handlers['hostedReview:forBranch'](null, {
+      repoPath,
+      repoId: repo.id,
+      branch: 'feature/refresh',
+      admissionTier: 'interactive'
+    })
+
+    expect(getHostedReviewForBranchMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        branch: 'feature/refresh',
+        localGitExecOptions: { admissionTier: 'interactive' }
+      })
     )
   })
 
@@ -411,7 +435,8 @@ describe('registerHostedReviewHandlers', () => {
         body: null,
         draft: false
       },
-      'ssh-1'
+      'ssh-1',
+      { localGitExecOptions: { admissionTier: 'interactive' } }
     )
     expect(resolveRegisteredWorktreePathMock).not.toHaveBeenCalled()
     expect(stats.record).toHaveBeenCalledWith(
@@ -447,7 +472,7 @@ describe('registerHostedReviewHandlers', () => {
       worktreePath,
       expect.objectContaining({ base: 'stack/parent', head: 'stack/child' }),
       'ssh-1',
-      {}
+      { localGitExecOptions: { admissionTier: 'interactive' } }
     )
     expect(createHostedReviewMock).not.toHaveBeenCalled()
   })

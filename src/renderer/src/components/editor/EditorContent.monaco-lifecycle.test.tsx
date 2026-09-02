@@ -184,6 +184,7 @@ function props(activeFile: OpenFile, content: string) {
     isCsv: false,
     isNotebook: false,
     mdViewMode: 'rich' as const,
+    inlineMarkdownRenderState: null,
     isChangesMode: false,
     sideBySide: false,
     pendingEditorReveal: null,
@@ -326,6 +327,10 @@ describe('EditorContent Monaco lifecycle boundary', () => {
         resolvedLanguage="markdown"
         isMarkdown
         mdViewMode="rich"
+        inlineMarkdownRenderState={{
+          renderMode: 'rich-editor',
+          richModeUnsupportedMessage: null
+        }}
       />
     )
 

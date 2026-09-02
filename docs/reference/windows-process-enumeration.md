@@ -206,7 +206,7 @@ The addon is Windows-only, so it follows the same contract as
 `config/scripts/package-electron-runtime-contract.test.mjs`):
 
 - an `optionalDependency`, so a macOS/Linux install tolerates its absence;
-- **not** in `pnpm.onlyBuiltDependencies` — pnpm installs optional dependencies
+- **not** enabled in `allowBuilds` in `pnpm-workspace.yaml` — pnpm installs optional dependencies
   on every host, and macOS/Linux must never run `node-gyp` for it;
 - listed in the win32 branch of `rebuild-native-deps.mjs` and
   `ensure-native-runtime.mjs`;

@@ -120,9 +120,9 @@ export function handleSshConnectionStateChange(targetId: string, state: SshConne
 
 export function createSshConnectionCallbacks(): SshConnectionCallbacks {
   return {
-    onCredentialRequest: (targetId, kind, detail) => {
+    onCredentialRequest: (targetId, kind, detail, signal) => {
       credentialRequestedForTarget.add(targetId)
-      return requestCredential(getCurrentMainWindow, targetId, kind, detail)
+      return requestCredential(getCurrentMainWindow, targetId, kind, detail, signal)
     },
     onStateChange: handleSshConnectionStateChange
   }

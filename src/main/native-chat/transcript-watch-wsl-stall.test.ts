@@ -11,6 +11,9 @@ const mocks = vi.hoisted(() => ({
 }))
 
 vi.mock('./session-file-resolver', () => ({ resolveSessionFilePath: mocks.resolve }))
+vi.mock('../wsl-running-path-filter', () => ({
+  filterPathsToRunningWslDistrosAsync: vi.fn(async (paths: readonly string[]) => [...paths])
+}))
 vi.mock('./transcript-native-watcher', () => ({
   createTranscriptNativeWatcher: () => ({
     bind: () => true,

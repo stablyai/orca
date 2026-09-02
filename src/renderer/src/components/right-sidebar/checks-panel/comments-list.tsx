@@ -72,7 +72,8 @@ export function PRCommentsList(props: PRCommentsListProps): React.JSX.Element {
     canShowResolveWithAI,
     startAddComment,
     renderCommentGroup,
-    renderAddCommentComposer
+    renderAddCommentComposer,
+    now
   } = useCommentsListState(props)
   return (
     <div className="border-t border-border">
@@ -352,6 +353,7 @@ export function PRCommentsList(props: PRCommentsListProps): React.JSX.Element {
                 groups={triageGroups.resolved}
                 botAuthorOverrides={botAuthorOverrides}
                 replyingCommentId={replyingCommentId}
+                now={now}
                 replyDisabled={commentsDisabled}
                 replyDisabledReason={commentsDisabledReason}
                 presentation={presentation}

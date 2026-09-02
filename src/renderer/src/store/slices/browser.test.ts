@@ -467,6 +467,61 @@ describe('createBrowserSlice annotations', () => {
     expect(stored?.comment).toHaveLength(GRAB_BUDGET.annotationCommentMaxLength)
     expect(stored?.payload.screenshot).toBeNull()
   })
+
+  it('updates an existing annotation comment and intent', () => {
+    const store = createTestStore()
+    const tab = store.getState().createBrowserTab('wt-1', 'https://example.com')
+    const pageId = tab.activePageId
+    if (!pageId) {
+      throw new Error('Expected a new browser page')
+    }
+    store.getState().addBrowserPageAnnotation(makeAnnotation(pageId))
+
+    store
+      .getState()
+      .updateBrowserPageAnnotation(pageId, 'annotation-1', { comment: 'Updated', intent: 'change' })
+
+    const stored = store.getState().browserAnnotationsByPageId[pageId]?.[0]
+    expect(stored?.comment).toBe('Updated')
+    expect(stored?.intent).toBe('change')
+  })
+
+  it('sanitizes an oversized comment when updating an annotation', () => {
+    const store = createTestStore()
+    const tab = store.getState().createBrowserTab('wt-1', 'https://example.com')
+    const pageId = tab.activePageId
+    if (!pageId) {
+      throw new Error('Expected a new browser page')
+    }
+    store.getState().addBrowserPageAnnotation(makeAnnotation(pageId))
+    const oversizedComment = 'a'.repeat(GRAB_BUDGET.annotationCommentMaxLength + 10)
+
+    store.getState().updateBrowserPageAnnotation(pageId, 'annotation-1', {
+      comment: oversizedComment,
+      intent: 'fix'
+    })
+
+    const stored = store.getState().browserAnnotationsByPageId[pageId]?.[0]
+    expect(stored?.comment).toHaveLength(GRAB_BUDGET.annotationCommentMaxLength)
+  })
+
+  it('is a no-op when updating an annotation id that does not exist', () => {
+    const store = createTestStore()
+    const tab = store.getState().createBrowserTab('wt-1', 'https://example.com')
+    const pageId = tab.activePageId
+    if (!pageId) {
+      throw new Error('Expected a new browser page')
+    }
+    store.getState().addBrowserPageAnnotation(makeAnnotation(pageId))
+    const stateBefore = store.getState()
+
+    store.getState().updateBrowserPageAnnotation(pageId, 'missing-annotation', {
+      comment: 'Updated',
+      intent: 'change'
+    })
+
+    expect(store.getState()).toBe(stateBefore)
+  })
 })
 
 describe('createBrowserSlice floating tabs', () => {

@@ -54,8 +54,9 @@ export function submitOrchestrationMailboxPointer<TWaiter extends OrchestrationM
       } else if (deps.mailboxOwner.resolve(currentLeaf) !== input.mailboxHandle) {
         clearAndRedrive = true
       } else if (
-        currentLeaf.lastAgentStatus === 'idle' &&
-        currentLeaf.lastAgentStatusObservedLive
+        currentLeaf.lastAgentStatusObservedLive &&
+        // Once staged, working is queue-safe; idle-only strands Orca-owned text in the composer.
+        (currentLeaf.lastAgentStatus === 'idle' || currentLeaf.lastAgentStatus === 'working')
       ) {
         if (
           shouldReleaseOrchestrationPointer(

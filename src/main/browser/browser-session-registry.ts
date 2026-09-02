@@ -12,7 +12,6 @@ import type {
   BrowserSessionProfileCreateOptions,
   BrowserSessionProfileScope
 } from '../../shared/browser-workspace-types'
-import { isBrowserRoutePartition } from './browser-route-identity'
 import {
   applyPendingBrowserCookieImports,
   clearPendingBrowserCookieImport,
@@ -26,11 +25,19 @@ import {
 import type { BrowserSessionMeta } from './browser-session-meta-store'
 import {
   applyBrowserSessionUserAgentModes,
-  clearBrowserSessionPartitionPolicies,
+  forgetBrowserSessionPartitionConfiguration,
   installBrowserSessionPartitionPolicies
 } from './browser-session-partition-policies'
 import { isValidPersistedBrowserSessionProfile } from './browser-session-persisted-profile-validation'
 import { clearBrowserSessionUserAgentMode } from './browser-session-user-agent-mode'
+import {
+  clearBrowserRoutePartitionPolicies,
+  installBrowserRoutePartitionPolicies
+} from './browser-session-route-policies'
+import { retireProxySessionApplication } from '../network/proxy-settings'
+import { invalidateBrowserSessionProxyApplication } from './browser-session-proxy'
+import { retireFailedBrowserSessionProfile } from './browser-session-profile-retirement'
+import { cancelBrowserWebAuthnAccountRequestsForSession } from './browser-webauthn-account-picker'
 
 export type BrowserSessionRegistryProfileOptions = {
   orcaProfileId: string
@@ -112,7 +119,10 @@ class BrowserSessionRegistry {
     }
 
     // Why: nothing else installs policies on the default partition (hydrate skips it), so without this its guest permissions would be denied.
-    installBrowserSessionPartitionPolicies(this.getDefaultProfile())
+    const defaultProfile = this.getDefaultProfile()
+    void installBrowserSessionPartitionPolicies(defaultProfile).catch(() => {
+      console.warn('[proxy] Failed to apply proxy to browser partition', defaultProfile.partition)
+    })
 
     applyBrowserSessionUserAgentModes(this.listProfiles())
   }
@@ -180,10 +190,10 @@ class BrowserSessionRegistry {
 
   setupRoutePartitionPolicies(partition: string, browserProfileId: string): void {
     const profile = this.profiles.get(browserProfileId)
-    if (!profile || !isBrowserRoutePartition(partition)) {
+    if (!profile) {
       throw new Error('browser_route_partition_profile_unavailable')
     }
-    installBrowserSessionPartitionPolicies({ ...profile, partition })
+    installBrowserRoutePartitionPolicies(profile, partition)
   }
 
   requireRouteBrowserProfile(browserProfileId: string): void {
@@ -193,19 +203,14 @@ class BrowserSessionRegistry {
   }
 
   clearRoutePartitionPolicies(partition: string): void {
-    if (!isBrowserRoutePartition(partition)) {
-      return
-    }
-    const sess = session.fromPartition(partition)
-    clearBrowserSessionUserAgentMode(sess)
-    clearBrowserSessionPartitionPolicies(partition, sess)
+    clearBrowserRoutePartitionPolicies(partition)
   }
 
-  createProfile(
+  async createProfile(
     scope: BrowserSessionProfileScope,
     label: string,
     options: BrowserSessionProfileCreateOptions = {}
-  ): BrowserSessionProfile | null {
+  ): Promise<BrowserSessionProfile | null> {
     // Why: the registry is also an IPC boundary, so runtime types alone cannot keep invalid values out of persisted metadata.
     if (
       (scope !== 'isolated' && scope !== 'imported') ||
@@ -226,8 +231,13 @@ class BrowserSessionRegistry {
       source: null,
       ...(options.userAgentMode ? { userAgentMode: options.userAgentMode } : {})
     }
+    try {
+      await installBrowserSessionPartitionPolicies(profile)
+    } catch (error) {
+      await retireFailedBrowserSessionProfile(partition, session.fromPartition(partition))
+      throw error
+    }
     this.profiles.set(id, profile)
-    installBrowserSessionPartitionPolicies(profile)
     this.persistProfiles()
     return profile
   }
@@ -270,7 +280,16 @@ class BrowserSessionRegistry {
     try {
       const sess = session.fromPartition(profile.partition)
       clearBrowserSessionUserAgentMode(sess)
-      clearBrowserSessionPartitionPolicies(profile.partition, sess)
+      forgetBrowserSessionPartitionConfiguration(profile.partition)
+      invalidateBrowserSessionProxyApplication(sess)
+      const release = retireProxySessionApplication(sess)
+      // Why: persistent partitions can retain service workers after every WebContents dies, so a retired session's deny policies must remain permanent.
+      cancelBrowserWebAuthnAccountRequestsForSession(sess)
+      try {
+        await release
+      } catch {
+        console.warn('[proxy] Failed to release proxy from browser partition', profile.partition)
+      }
       await sess.clearStorageData()
       await sess.clearCache()
     } catch {
@@ -311,7 +330,9 @@ class BrowserSessionRegistry {
       }
       this.profiles.set(profile.id, profile)
       if (profile.partition !== this.defaultPartition) {
-        installBrowserSessionPartitionPolicies(profile)
+        void installBrowserSessionPartitionPolicies(profile).catch(() => {
+          console.warn('[proxy] Failed to apply proxy to browser partition', profile.partition)
+        })
       }
     }
   }

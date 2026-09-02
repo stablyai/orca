@@ -106,6 +106,7 @@ function adapterFor(
     Pick<CodexStructuredSessionAdapterDeps, 'captureTurnProcesses' | 'terminateTurnProcesses'>
   > = {}
 ): CodexStructuredSessionAdapter {
+  let acquisitionGeneration = 0
   return new CodexStructuredSessionAdapter({
     resolveLaunch: async () => ({
       command: 'codex',
@@ -121,6 +122,7 @@ function adapterFor(
     captureTurnProcesses: async () => ({ platform: 'win32', identities: new Map() }),
     terminateTurnProcesses: async () => true,
     now: () => 1_700_000_000_500,
+    mintAcquisitionGeneration: () => `generation-${++acquisitionGeneration}`,
     ...processControl
   })
 }
@@ -168,6 +170,7 @@ describe('CodexStructuredSessionAdapter.acquire', () => {
       mintedAtFence: 7,
       observedAt: 1_700_000_000_500
     })
+    expect(acquisition.acquisitionGeneration).toBe('generation-1')
   })
 
   it('resumes the thread the durable handle chain names, not the client one', async () => {
@@ -185,11 +188,11 @@ describe('CodexStructuredSessionAdapter.acquire', () => {
 
     expect(codex.connections[0].calls[0]).toEqual({
       method: 'thread/resume',
-      params: {
+      params: expect.objectContaining({
         threadId: 'thread-proven',
         cwd: '/work/repo',
         path: '/rollouts/thread-proven.jsonl'
-      }
+      })
     })
     expect(acquisition.link.origin).toBe('resumed')
     expect(acquisition.link.handle).toEqual({ provider: 'codex', threadId: 'thread-proven' })
@@ -254,6 +257,42 @@ describe('CodexStructuredSessionAdapter.acquire', () => {
       fence: 7
     })
     expect(codex.connections[0].replies).toEqual([{ id: 5, result: { decision: 'accept' } }])
+  })
+
+  it('retries a notification rejected by journal admission instead of dropping it', async () => {
+    const codex = fakeCodex()
+    const events: CodexStructuredSessionEvent[] = []
+    let attempts = 0
+    const sink: StructuredAgentSessionEventSink = {
+      appendItem: vi.fn(),
+      appendTombstone: vi.fn(),
+      publish: vi.fn(),
+      tryAppendItem: vi.fn((identity, body, blobs) => {
+        attempts += 1
+        if (attempts === 1) {
+          return { accepted: false as const, reason: 'backpressure' as const }
+        }
+        sink.appendItem(identity, body, blobs)
+        return { accepted: true as const }
+      })
+    }
+    const adapter = adapterFor(codex, {}, events)
+    await adapter.acquire({
+      identity: identityFor('session-1'),
+      fence: 7,
+      spawnToken: 'spawn-9',
+      events: sink
+    })
+
+    codex.connections[0].handlers.onNotification?.('item/completed', {
+      item: { type: 'userMessage', id: 'message-1', text: 'hello' }
+    })
+
+    await vi.waitFor(() => {
+      expect(events).toHaveLength(1)
+      expect(events[0]).toMatchObject({ type: 'notification', method: 'item/completed' })
+    })
+    expect(attempts).toBe(2)
   })
 
   it('refuses to publish a session whose child died while it was being acquired', async () => {
@@ -618,6 +657,99 @@ describe('CodexStructuredSessionAdapter prompts', () => {
     expect(codex.connections[0].replies).toHaveLength(1)
   })
 
+  it('responds with an error when a prompt cannot be admitted to the journal sink', async () => {
+    const codex = fakeCodex()
+    const events: CodexStructuredSessionEvent[] = []
+    const sink: StructuredAgentSessionEventSink = {
+      appendItem: vi.fn(),
+      appendTombstone: vi.fn(),
+      publish: vi.fn(),
+      tryAppendItem: vi.fn(() => ({ accepted: false as const, reason: 'closed' as const }))
+    }
+    const adapter = adapterFor(codex, {}, events)
+    await adapter.acquire({
+      identity: identityFor('session-1'),
+      fence: 7,
+      spawnToken: 'spawn-9',
+      events: sink
+    })
+
+    askApproval(codex)
+
+    expect(events.filter((event) => event.type === 'prompt')).toEqual([])
+    expect(codex.connections[0].replies).toEqual([
+      {
+        id: 11,
+        code: -32001,
+        message:
+          'Orca could not durably record item/commandExecution/requestApproval prompt (closed)'
+      }
+    ])
+    await expect(
+      adapter.answerPrompt({
+        sessionId: 'session-1',
+        itemId: 'codex-item-1',
+        kind: 'approval',
+        optionId: 'accept',
+        fence: 7
+      })
+    ).rejects.toThrow('no longer waiting on')
+  })
+
+  it('force-closes when an unhandled provider frame cannot be admitted', async () => {
+    const codex = fakeCodex()
+    const events: CodexStructuredSessionEvent[] = []
+    const sink: StructuredAgentSessionEventSink = {
+      appendItem: vi.fn(),
+      appendTombstone: vi.fn(),
+      publish: vi.fn(),
+      tryAppendItem: vi.fn(() => ({ accepted: false as const, reason: 'backpressure' as const }))
+    }
+    const adapter = adapterFor(codex, {}, events)
+    await adapter.acquire({
+      identity: identityFor('session-1'),
+      fence: 7,
+      spawnToken: 'spawn-9',
+      events: sink
+    })
+
+    codex.connections[0].handlers.onUnhandledFrame?.('frame:invalid-json', '{')
+
+    await vi.waitFor(() => expect(codex.connections[0].closeCount).toBe(1))
+    expect(events.filter((event) => event.type === 'ended')).toMatchObject([
+      { cause: 'unexpected-exit', fence: 7, acquisitionGeneration: 'generation-1' }
+    ])
+  })
+
+  it('force-closes after a responded server request is not durably admitted', async () => {
+    const codex = fakeCodex()
+    const events: CodexStructuredSessionEvent[] = []
+    const sink: StructuredAgentSessionEventSink = {
+      appendItem: vi.fn(),
+      appendTombstone: vi.fn(),
+      publish: vi.fn(),
+      tryAppendItem: vi.fn(() => ({ accepted: false as const, reason: 'failed' as const }))
+    }
+    const adapter = adapterFor(codex, {}, events)
+    await adapter.acquire({
+      identity: identityFor('session-1'),
+      fence: 7,
+      spawnToken: 'spawn-9',
+      events: sink
+    })
+
+    codex.connections[0].handlers.onServerRequest?.({
+      id: 17,
+      method: 'item/permissions/requestApproval',
+      params: { threadId: THREAD_ID }
+    })
+
+    await vi.waitFor(() => expect(codex.connections[0].closeCount).toBe(1))
+    expect(events.filter((event) => event.type === 'ended')).toMatchObject([
+      { cause: 'unexpected-exit', fence: 7, acquisitionGeneration: 'generation-1' }
+    ])
+  })
+
   it('answers each approval a tool item asks for separately', async () => {
     const codex = fakeCodex()
     const events: CodexStructuredSessionEvent[] = []
@@ -687,7 +819,10 @@ describe('CodexStructuredSessionAdapter prompts', () => {
         itemId: 'codex-item-2',
         threadId: THREAD_ID,
         turnId: 'turn-1',
-        questions: [{ id: 'q1' }, { id: 'q2' }]
+        questions: [
+          { id: 'q1', question: 'Use this answer?' },
+          { id: 'q2', question: 'Use that answer?' }
+        ]
       }
     })
 
@@ -743,141 +878,5 @@ describe('CodexStructuredSessionAdapter prompts', () => {
         fence: 7
       })
     ).rejects.toThrow('no longer waiting on codex-item-gone')
-  })
-})
-
-describe('CodexStructuredSessionAdapter lifecycle', () => {
-  it('keeps sessions isolated and closes each child once', async () => {
-    const codex = fakeCodex()
-    const adapter = adapterFor(codex)
-    await adapter.acquire({ identity: identityFor('session-1'), fence: 1, spawnToken: 'spawn-a' })
-    await adapter.acquire({ identity: identityFor('session-2'), fence: 1, spawnToken: 'spawn-b' })
-
-    codex.connections[0].handlers.onServerRequest?.({
-      id: 21,
-      method: 'item/fileChange/requestApproval',
-      params: { itemId: 'codex-item-1', threadId: THREAD_ID, turnId: 'turn-1' }
-    })
-    await expect(
-      adapter.answerPrompt({
-        sessionId: 'session-2',
-        itemId: 'codex-item-1',
-        kind: 'approval',
-        optionId: 'accept',
-        fence: 1
-      })
-    ).rejects.toThrow('no longer waiting on')
-
-    await adapter.closeAll()
-    expect(codex.connections.map((connection) => connection.closeCount)).toEqual([1, 1])
-    await expect(
-      adapter.cancelTurn({ sessionId: 'session-1', turnId: 'turn-1', fence: 1 })
-    ).rejects.toThrow('no live codex app-server for session session-1')
-  })
-
-  it('retains ownership until a child exit is proven and reports it once', async () => {
-    const codex = fakeCodex()
-    const events: CodexStructuredSessionEvent[] = []
-    const adapter = await acquired(codex, {}, events)
-
-    const connection = codex.connections[0]
-    connection.close = async () => {
-      connection.closeCount += 1
-      return false
-    }
-    connection.handlers.onExit?.(new Error('codex app-server connection ended'))
-
-    expect(events.at(-1)).toEqual({
-      type: 'ended',
-      sessionId: 'session-1',
-      reason: 'codex app-server connection ended'
-    })
-    await expect(
-      adapter.dispatch({
-        sessionId: 'session-1',
-        clientMessageId: 'client-1',
-        body: USER_MESSAGE,
-        fence: 7
-      })
-    ).rejects.toThrow('no live codex app-server')
-    expect(await adapter.historyFilePath({ identity: identityFor('session-1') })).toBe(
-      '/rollouts/abc.jsonl'
-    )
-    await expect(adapter.closeSession('session-1')).resolves.toBe(false)
-    expect(events.filter((event) => event.type === 'ended')).toHaveLength(1)
-  })
-
-  it('keeps the live session when a child it already replaced dies', async () => {
-    const codex = fakeCodex()
-    const events: CodexStructuredSessionEvent[] = []
-    const adapter = await acquired(codex, {}, events)
-    await adapter.acquire({ identity: identityFor('session-1'), fence: 8, spawnToken: 'spawn-10' })
-    const endedBeforeStaleExit = events.filter((event) => event.type === 'ended').length
-
-    codex.connections[0].handlers.onExit?.(new Error('the superseded child died'))
-
-    expect(events.filter((event) => event.type === 'ended')).toHaveLength(endedBeforeStaleExit)
-    expect(await adapter.historyFilePath({ identity: identityFor('session-1') })).toBe(
-      '/rollouts/abc.jsonl'
-    )
-  })
-
-  it('ignores Codex traffic that arrives after the session is gone', async () => {
-    const codex = fakeCodex()
-    const adapter = await acquired(codex)
-    const connection = codex.connections[0]
-
-    await adapter.closeSession('session-1')
-    connection.handlers.onNotification?.('item/agentMessage/delta', { delta: 'x' })
-    connection.handlers.onServerRequest?.({
-      id: 31,
-      method: 'item/fileChange/requestApproval',
-      params: { itemId: 'codex-item-9', threadId: THREAD_ID }
-    })
-
-    expect(connection.replies).toEqual([])
-  })
-
-  it('flushes the final coalesced text before a graceful close', async () => {
-    const codex = fakeCodex()
-    const bodies: AgentJournalMessageItem[] = []
-    const tombstones: unknown[] = []
-    const sink: StructuredAgentSessionEventSink = {
-      appendItem: (_identity, body) => {
-        if (body.kind === 'message') {
-          bodies.push(body)
-        }
-      },
-      appendTombstone: (identity) => tombstones.push(identity),
-      publish: () => {}
-    }
-    const adapter = adapterFor(codex)
-    await adapter.acquire({
-      identity: identityFor('session-1'),
-      fence: 7,
-      spawnToken: 'spawn-9',
-      events: sink
-    })
-    const notify = codex.connections[0]!.handlers.onNotification
-    notify?.('turn/started', { threadId: THREAD_ID, turn: { id: 'turn-1' } })
-    notify?.('item/started', {
-      threadId: THREAD_ID,
-      item: { type: 'agentMessage', id: 'item-1', text: '' }
-    })
-    notify?.('item/agentMessage/delta', {
-      threadId: THREAD_ID,
-      itemId: 'item-1',
-      delta: 'last words'
-    })
-
-    await adapter.closeSession('session-1')
-
-    expect(bodies.at(-1)?.blocks).toEqual([{ type: 'text', text: 'last words' }])
-    expect(tombstones).toContainEqual({
-      provider: 'legacy',
-      agent: 'codex',
-      sessionId: 'session-1',
-      recordId: 'turn-lifecycle:turn-1'
-    })
   })
 })

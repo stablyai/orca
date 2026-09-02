@@ -51,6 +51,8 @@ export type NativeChatToolCallBlock = {
   type: 'tool-call'
   name: string
   input: unknown
+  /** Provider lifecycle when the structured app-server path can supply it. */
+  state?: 'running' | 'completed' | 'failed'
 }
 
 /** The result returned to the agent for a prior tool call. */

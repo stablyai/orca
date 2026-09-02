@@ -130,7 +130,7 @@ export async function handoffStructuredSessionToNative(
     throw error
   }
   context.releaseOwner(sessionId)
-  deps.transport?.revealNativeSession?.({
+  await deps.transport?.revealNativeSession?.({
     workspaceId: record.location.workspaceId,
     sessionId,
     agent: record.provider,

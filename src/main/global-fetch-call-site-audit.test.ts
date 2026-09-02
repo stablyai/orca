@@ -42,7 +42,7 @@ const AUDITED_GLOBAL_FETCH_LINES = new Map<string, number>([
   ['main/pi/agent-status-extension-source.ts', 1],
   // local identifiers named `fetch` (git fetch), not HTTP
   ['main/ipc/worktree-remote.ts', 2],
-  ['relay/git-handler.ts', 1],
+  ['relay/git-handler-fetch-operations.ts', 1],
   // fetch mentioned only in a comment
   ['main/ipc/feedback.ts', 1]
 ])

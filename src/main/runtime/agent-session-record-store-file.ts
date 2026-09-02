@@ -26,6 +26,8 @@ import {
   renameDurable,
   writeTempFileDurable
 } from '../durable-file-write'
+import { parseVisibleSessionIds } from './agent-session-visible-tab-index'
+import { serializeAgentSessionStoreState } from './agent-session-store-serialization'
 
 export const AGENT_SESSION_STORE_SCHEMA_VERSION = 2 as const
 
@@ -41,6 +43,10 @@ export type AgentSessionStoreState = {
   retiredClaimKeys: RetiredAgentSessionClaimKey[]
   /** Rows this build cannot validate, kept with a durable refusal reason. */
   unreadableRecords: Map<string, { reason: string; raw: unknown }>
+  /** Structured sessions that currently have a visible chat tab. */
+  visibleSessionIds: Set<string>
+  /** True once this store has committed the visibility index field. */
+  visibleSessionIdsIndexPresent: boolean
 }
 
 export type LoadedAgentSessionStore = {
@@ -58,9 +64,7 @@ export function agentSessionStorePath(directory: string): string {
   return join(directory, AGENT_SESSION_STORE_FILE_NAME)
 }
 
-function backupPath(filePath: string): string {
-  return `${filePath}.bak`
-}
+const backupPath = (filePath: string): string => `${filePath}.bak`
 
 function emptyState(hostId: string): AgentSessionStoreState {
   return {
@@ -69,7 +73,9 @@ function emptyState(hostId: string): AgentSessionStoreState {
     records: new Map(),
     operations: new Map(),
     retiredClaimKeys: [],
-    unreadableRecords: new Map()
+    unreadableRecords: new Map(),
+    visibleSessionIds: new Set(),
+    visibleSessionIdsIndexPresent: false
   }
 }
 
@@ -77,7 +83,7 @@ export function agentSessionStoreRevision(state: AgentSessionStoreState): string
   return createHash('sha256')
     .update(String(state.schemaVersion))
     .update('\0')
-    .update(serializeState(state))
+    .update(serializeAgentSessionStoreState(state))
     .digest('hex')
 }
 
@@ -101,6 +107,7 @@ function parseState(
     operations?: unknown
     retiredClaimKeys?: unknown
     unusableRecords?: unknown
+    visibleSessionIds?: unknown
   }
   if (
     !Number.isSafeInteger(file.schemaVersion) ||
@@ -208,6 +215,16 @@ function parseState(
       state.retiredClaimKeys.push({ keyId: key.keyId, retiredAt: key.retiredAt as number })
     }
   }
+  const visibleSessionIds = parseVisibleSessionIds(
+    file.visibleSessionIds,
+    schemaVersion,
+    AGENT_SESSION_STORE_SCHEMA_VERSION
+  )
+  if (!visibleSessionIds.valid) {
+    return null
+  }
+  state.visibleSessionIdsIndexPresent = visibleSessionIds.present
+  visibleSessionIds.ids.forEach((sessionId) => state.visibleSessionIds.add(sessionId))
   return { state, needsRewrite }
 }
 
@@ -295,21 +312,6 @@ export async function loadAgentSessionStore(
   }
 }
 
-function serializeState(state: AgentSessionStoreState): string {
-  const records: Record<string, unknown> = Object.create(null)
-  for (const [sessionId, record] of state.records) {
-    records[sessionId] = record
-  }
-  return JSON.stringify({
-    schemaVersion: AGENT_SESSION_STORE_SCHEMA_VERSION,
-    hostId: state.hostId,
-    records,
-    operations: Object.fromEntries(state.operations),
-    retiredClaimKeys: state.retiredClaimKeys,
-    unusableRecords: Object.fromEntries(state.unreadableRecords)
-  })
-}
-
 /**
  * Commit the whole state. The live path is never absent: the new content is made durable in a temp
  * file first, a validated primary is COPIED to the backup, and only then does the rename publish it.
@@ -329,7 +331,7 @@ export async function saveAgentSessionStore(
   await chmod(directory, 0o700)
   const tmpPath = durableWriteTempPath(filePath)
   try {
-    await writeTempFileDurable(tmpPath, serializeState(state), 0o600)
+    await writeTempFileDurable(tmpPath, serializeAgentSessionStoreState(state), 0o600)
     // Only a primary parsed under the transaction lock may replace the backup. During recovery the
     // primary is corrupt or absent, so the known-good backup must survive until publication.
     if (options.primaryStatus === 'validated') {

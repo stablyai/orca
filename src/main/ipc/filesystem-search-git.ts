@@ -32,6 +32,7 @@ export async function searchWithGitGrep(
   const gitArgs = buildGitGrepArgs(args.query, args)
   const child = await gitSpawnAfterWindowsEnvironmentReady(gitArgs, {
     cwd: rootPath,
+    admissionTier: 'interactive',
     ...(localGitOptions.wslDistro ? { wslDistro: localGitOptions.wslDistro } : {}),
     stdio: ['ignore', 'pipe', 'pipe']
   })

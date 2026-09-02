@@ -33,6 +33,7 @@ export type WorktreeMetaSnapshot = {
   comment: string
   issueInput: string
   issueProvider: IssueLinkProvider
+  prInput: string
   /** Stands in for an org key the typed value omits, so re-saving a stored bare
    *  identifier does not read as a change. */
   linkedLinearIssueOrganizationUrlKey?: string | null
@@ -44,6 +45,7 @@ export type WorktreeMetaSnapshot = {
  *  displace it, and a clear must not be emitted for a slot that is already empty
  *  — persistence gates the remote Linear capability on key presence, not value. */
 export type WorktreeMetaLiveLinks = {
+  linkedPR?: number | null
   linkedIssue?: number | null
   linkedLinearIssue?: string | null
   linkedLinearIssueOrganizationUrlKey?: string | null
@@ -260,16 +262,23 @@ function buildIssueLinkUpdates(
   return linearUpdates ? { linkedIssue: null, ...linearUpdates, ...displacedWorkItem } : {}
 }
 
-// Requires the dialog to seed `reviewInput` from the selected provider slot: the blank
-// input is written through as a clear, so an unseeded field drops the link on an
-// untouched save.
 function buildReviewLinkUpdate(
   draft: WorktreeMetaDraft,
+  current: WorktreeMetaSnapshot,
+  live: WorktreeMetaLiveLinks,
   provider: WorktreeReviewProvider
 ): Partial<WorktreeMeta> {
   const trimmed = draft.reviewInput.trim()
+  if (provider === 'github' && trimmed === current.prInput.trim()) {
+    return {}
+  }
   if (trimmed === '') {
-    return provider === 'gitlab' ? { linkedGitLabMR: null } : { linkedPR: null }
+    return provider === 'gitlab'
+      ? { linkedGitLabMR: null }
+      : {
+          linkedPR: null,
+          ...(typeof live.linkedPR === 'number' ? { suppressedGitHubPR: live.linkedPR } : {})
+        }
   }
   const number =
     provider === 'gitlab'
@@ -295,6 +304,6 @@ export function buildWorktreeMetaUpdates(
     ...buildCommentUpdate(draft, current),
     ...buildDisplayNameUpdate(draft, current),
     ...buildIssueLinkUpdates(draft, current, live),
-    ...buildReviewLinkUpdate(draft, reviewProvider)
+    ...buildReviewLinkUpdate(draft, current, live, reviewProvider)
   }
 }

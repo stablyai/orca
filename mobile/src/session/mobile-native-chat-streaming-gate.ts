@@ -18,6 +18,27 @@ export type MobileNativeChatStreamingGate = {
   baselineTailId: string | null
 }
 
+/** The preview text to feed the gate for one tick, or undefined for "no observation".
+ *
+ *  Providers publish a tool's stdout/error as `lastAssistantMessage` so status cards can
+ *  preview it. That text is not the reply and never lands in a transcript assistant block,
+ *  so the catch-up rule below could never retire it — it stayed on screen as a wall of raw
+ *  tool output until the turn ended. Treating it as no observation (rather than empty text
+ *  that still anchors) also keeps it out of `prevText`, so the next real reply is not
+ *  mistaken for a continuation of a tool result. */
+export function mobileNativeChatStreamPreview(
+  status:
+    | { lastAssistantMessage?: string; lastAssistantMessageIsToolOutput?: boolean }
+    | null
+    | undefined,
+  working: boolean
+): string | undefined {
+  if (!working || status?.lastAssistantMessageIsToolOutput === true) {
+    return undefined
+  }
+  return status?.lastAssistantMessage
+}
+
 export function createMobileNativeChatStreamingGate(
   scopeKey: string | null = null
 ): MobileNativeChatStreamingGate {

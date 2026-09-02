@@ -44,7 +44,10 @@ export type GithubPullRequestApi = {
     acceptMergedFallbackPR?: boolean
     currentHeadOid?: string | null
   }) => Promise<PRInfo | null>
-  refreshPRNow: (args: { candidate: GitHubPRRefreshCandidate }) => Promise<PRRefreshOutcome>
+  refreshPRNow: (args: {
+    candidate: GitHubPRRefreshCandidate
+    reason?: GitHubPRRefreshReason
+  }) => Promise<PRRefreshOutcome>
   enqueuePRRefresh: (args: {
     candidate: GitHubPRRefreshCandidate
     reason: GitHubPRRefreshReason

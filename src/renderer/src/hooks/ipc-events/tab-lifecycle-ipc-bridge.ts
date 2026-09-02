@@ -25,6 +25,7 @@ import {
 } from '@/lib/floating-workspace-guest-bridge'
 
 import { useAppStore } from '../../store'
+import { resolveBrowserWorkspaceOwner } from '../../lib/browser-workspace-source-resolution'
 import {
   handleSwitchRecentTab,
   handleSwitchTab,
@@ -86,15 +87,29 @@ export function registerTabLifecycleIpcBridge(unsubs: (() => void)[]): void {
   )
 
   unsubs.push(
-    window.api.ui.onCloseActiveTab(() => {
-      if (isEmptyFloatingWorkspacePanelVisible()) {
+    window.api.ui.onCloseActiveTab((payload) => {
+      // Why: the empty-panel toggle is the ambient fallback only. A guest-originated close names a
+      // main-workspace target, so an open-but-empty floating panel must not swallow it.
+      if (!payload?.sourceId && isEmptyFloatingWorkspacePanelVisible()) {
         window.dispatchEvent(new Event(TOGGLE_FLOATING_TERMINAL_EVENT))
         return
       }
       const store = useAppStore.getState()
-      if (store.activeTabType === 'browser' && store.activeBrowserTabId) {
-        const tabId = store.activeBrowserTabId
-        const worktreeId = store.activeWorktreeId
+      // Why: a guest-originated close names its own page; the activeTabType mirror goes stale in
+      // split layouts (guest focus never reaches the group's focus-capture), so trust the source id.
+      const explicitTarget = payload?.sourceId
+        ? resolveBrowserWorkspaceOwner(store, payload.sourceId)
+        : null
+      if (payload?.sourceId && !explicitTarget) {
+        // Stale id (guest closed between keydown and IPC) = no-op, never the ambient fallback.
+        return
+      }
+      if (explicitTarget || (store.activeTabType === 'browser' && store.activeBrowserTabId)) {
+        const tabId = explicitTarget?.workspaceId ?? store.activeBrowserTabId
+        const worktreeId = explicitTarget?.worktreeId ?? store.activeWorktreeId
+        if (!tabId) {
+          return
+        }
         const closeActiveBrowserTab = (): void => {
           const currentStore = useAppStore.getState()
           if (!worktreeId) {

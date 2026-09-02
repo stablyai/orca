@@ -15,7 +15,10 @@ import {
 } from '../shell-startup-features'
 import { resolveShellWrapperRoot } from '../shell-wrapper-content-address'
 import { writeShellWrapperFiles } from '../shell-wrapper-file-writer'
-import { buildDaemonShellReadyWrapperFiles } from './daemon-shell-ready-wrapper-fileset'
+import {
+  buildDaemonShellReadyWrapperFiles,
+  getDaemonShellReadyWrapperPaths
+} from './daemon-shell-ready-wrapper-fileset'
 import { inheritedZdotdirEnv, resolveInheritedZdotdir } from '../zsh-wrapper-dir-ownership'
 import { SHELL_READY_MARKER } from './daemon-shell-ready-marker'
 
@@ -50,8 +53,8 @@ export function getShellReadyWrapperRoot(): string {
   return cachedShellReadyWrapperRoot.root
 }
 
-function getRequiredShellReadyWrapperPaths(root = getShellReadyWrapperRoot()): string[] {
-  return buildDaemonShellReadyWrapperFiles(root).map(([path]) => path)
+function getRequiredShellReadyWrapperPaths(root = getShellReadyWrapperRoot()): readonly string[] {
+  return getDaemonShellReadyWrapperPaths(root)
 }
 
 // Why non-empty and not just present: a partial write leaves a zero-byte
@@ -172,6 +175,7 @@ export function getShellLaunchConfig(
       args: [
         '-NoLogo',
         '-NoExit',
+        // Why base64 and not -Command: see powershell-osc133-bootstrap.ts (MDE review).
         '-EncodedCommand',
         encodePowerShellCommand(getPowerShellOsc133Bootstrap())
       ],

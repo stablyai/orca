@@ -9,7 +9,7 @@ import type {
   AgentJournalItemIdentity,
   AgentSessionJournalIdentity
 } from '../../../shared/agent-session-journal-types'
-import { openAgentSessionJournal } from '../agent-session-journal/journal-store'
+import { openAgentSessionJournal } from '../agent-session-journal/journal-store-factory'
 import {
   openAgentSessionJournalWithRecovery,
   providerHistoryId,

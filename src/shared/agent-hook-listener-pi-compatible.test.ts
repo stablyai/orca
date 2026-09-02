@@ -310,7 +310,18 @@ describe('shared agent-hook-listener', () => {
     expect(tool?.payload.interactivePrompt).toBeUndefined()
   })
 
-  it('maps OMP ask to blocked without publishing a native prompt', () => {
+  it('maps OMP ask to blocked and publishes its questions payload', () => {
+    const questions = {
+      questions: [
+        {
+          question: 'Choose',
+          options: [
+            { label: 'x', description: 'First' },
+            { label: 'y', description: 'Second' }
+          ]
+        }
+      ]
+    }
     const tool = normalizeHookPayload(
       state,
       'omp',
@@ -323,14 +334,7 @@ describe('shared agent-hook-listener', () => {
         payload: {
           hook_event_name: 'tool_execution_start',
           tool_name: 'ask',
-          tool_input: {
-            questions: [
-              {
-                question: 'Choose',
-                options: ['x', 'y']
-              }
-            ]
-          }
+          tool_input: questions
         }
       },
       'production'
@@ -340,8 +344,59 @@ describe('shared agent-hook-listener', () => {
       agentType: 'omp',
       toolName: 'ask'
     })
-    expect(tool?.payload.interactivePrompt).toBeUndefined()
+    expect(tool?.payload.interactivePrompt).toBe(JSON.stringify(questions))
   })
+
+  it('blocks an OMP pane on a tool approval request and clears it on resolution', () => {
+    const requested = normalizeHookPayload(
+      state,
+      'omp',
+      {
+        paneKey: PANE_KEY,
+        payload: {
+          hook_event_name: 'tool_approval_requested',
+          tool_name: 'bash',
+          reason: 'tools.approval.bash: prompt',
+          approval_mode: 'prompt'
+        }
+      },
+      'production'
+    )
+
+    expect(requested?.payload).toMatchObject({
+      state: 'blocked',
+      agentType: 'omp',
+      toolName: 'bash',
+      toolInput: 'tools.approval.bash: prompt'
+    })
+
+    const resolved = normalizeHookPayload(
+      state,
+      'omp',
+      {
+        paneKey: PANE_KEY,
+        payload: { hook_event_name: 'tool_approval_resolved', tool_name: 'bash', approved: true }
+      },
+      'production'
+    )
+
+    expect(resolved?.payload).toMatchObject({ state: 'working', toolName: 'bash' })
+    expect(resolved?.payload.toolInput).toBeUndefined()
+  })
+
+  it.each(['tool_approval_requested', 'tool_approval_resolved'])(
+    'ignores %s from Pi-compatible agents that do not emit it',
+    (hookEventName) => {
+      expect(
+        normalizeHookPayload(
+          state,
+          'pi',
+          { paneKey: PANE_KEY, payload: { hook_event_name: hookEventName, tool_name: 'bash' } },
+          'production'
+        )
+      ).toBeNull()
+    }
+  )
 
   it('captures Pi session ids on Pi-compatible status events', () => {
     const event = normalizeHookPayload(

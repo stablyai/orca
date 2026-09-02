@@ -397,6 +397,8 @@ describe('Store.migrateWorktreeIdentity', () => {
 
   it('moves persisted mobile selections across reloads', async () => {
     const store = await createStore()
+    // Registered on purpose: rows owned by an unregistered repo id are swept as orphans on load.
+    store.addRepo(makeRepo({ id: 'repo1', path: '/repo1' }))
     store.setMobileClientTabSelections({
       'device-a': {
         [OLD]: { activeTabId: 'tab-1', activeGroupId: null, activeTabIdByGroupId: {} }

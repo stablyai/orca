@@ -1,9 +1,7 @@
 import type { AppState } from '@/store/types'
 import {
   DASHBOARD_MAX_MAP_WORKSPACES,
-  dashboardCardDisplayState,
   type DashboardCard,
-  type DashboardCardDotState,
   type DashboardSnapshot,
   type DashboardWorkspace
 } from '../../../../shared/dashboard-snapshot'
@@ -22,14 +20,9 @@ import {
   selectLiveAgentStatusEntriesForWorktree,
   selectMigrationUnsupportedEntriesForWorktree,
   selectRetainedAgentEntriesForWorktree,
-  selectRuntimeAgentOrchestrationForWorktree,
   selectTerminalLayoutsForWorktree
 } from '../sidebar/worktree-agent-row-selectors'
-import {
-  EMPTY_WORKTREE_AGENT_ORCHESTRATION,
-  releaseRuntimeAgentOrchestrationBatchCache,
-  selectRuntimeAgentOrchestrationBatch
-} from '../sidebar/worktree-agent-orchestration-batch'
+import { EMPTY_WORKTREE_AGENT_ORCHESTRATION } from '../sidebar/worktree-agent-orchestration-batch'
 import {
   selectLivePtyIdsForWorktree,
   selectRuntimePaneTitlesForWorktree
@@ -54,8 +47,9 @@ import {
   type DashboardLaunchDetectionState
 } from './dashboard-worktree-launch-options'
 import { buildDashboardSnapshotFilterOptions } from './dashboard-snapshot-filter-options'
-import { dashboardBucketForDotState } from './dashboard-card-bucket'
 import { groupSubagentsByParentPaneKey } from './dashboard-subagent-cards'
+import { selectDashboardOrchestration } from './dashboard-orchestration-selection'
+import { dashboardRowBucketProjection } from './dashboard-row-bucket'
 
 /** The store slices the snapshot builder reads. Kept as a Pick so unit tests
  *  can pass a partial store without constructing the whole AppState. */
@@ -78,7 +72,7 @@ export type DashboardSnapshotState = Pick<
   Partial<
     DashboardCardTerminalInputState &
       DashboardLaunchDetectionState &
-      Pick<AppState, 'runtimeEnvironments' | 'sshTargetLabels'>
+      Pick<AppState, 'runtimeEnvironments' | 'sshTargetLabels' | 'unifiedTabsByWorktree'>
   >
 
 /**
@@ -106,23 +100,10 @@ export function buildDashboardSnapshot(
     options.includeFilterOptions === false
       ? undefined
       : buildDashboardSnapshotFilterOptions(state, activeWorktrees)
-  let singletonOrchestration: ReturnType<typeof selectRuntimeAgentOrchestrationForWorktree> | null =
-    null
-  let orchestrationByWorktree: ReturnType<typeof selectRuntimeAgentOrchestrationBatch> | null = null
-  if (activeWorktrees.length >= 2) {
-    orchestrationByWorktree = selectRuntimeAgentOrchestrationBatch(
-      state,
-      activeWorktrees.map(({ worktree }) => worktree.id)
-    )
-  } else {
-    releaseRuntimeAgentOrchestrationBatchCache()
-    if (activeWorktrees.length === 1) {
-      singletonOrchestration = selectRuntimeAgentOrchestrationForWorktree(
-        state,
-        activeWorktrees[0].worktree.id
-      )
-    }
-  }
+  const { singletonOrchestration, orchestrationByWorktree } = selectDashboardOrchestration(
+    state,
+    activeWorktrees
+  )
 
   for (const workspace of activeWorktrees) {
     const { repo, worktree } = workspace
@@ -195,7 +176,8 @@ export function buildDashboardSnapshot(
       // agent-hook status) carry synthetic prompt/lastAssistantMessage — the
       // agent LABEL and a status word like "Idle". They're marked by
       // startedAt === 0, and must NOT be shown as real conversation.
-      const isTitleDerived = row.startedAt === 0
+      const { isTitleDerived, dotState, workingMode, unseen, bucket } =
+        dashboardRowBucketProjection(row, state.acknowledgedAgentsByPaneKey)
       const routingPaneKey = row.activationPaneKey ?? row.paneKey
       const parsed = parsePaneKey(routingPaneKey)
       const tabId = parsed?.tabId ?? row.tab.id
@@ -209,17 +191,6 @@ export function buildDashboardSnapshot(
         layoutPtyId && (state.ptyIdsByTabId?.[tabId] ?? []).includes(layoutPtyId)
           ? layoutPtyId
           : null
-      const dotState = row.state as DashboardCardDotState
-      const workingMode =
-        row.state === 'working' && row.entry.workingMode === 'monitoring'
-          ? row.entry.workingMode
-          : undefined
-      const unseen =
-        !isTitleDerived &&
-        (state.acknowledgedAgentsByPaneKey?.[row.paneKey] ?? 0) < row.entry.stateStartedAt
-      const bucket = dashboardBucketForDotState(
-        dashboardCardDisplayState({ dotState, workingMode, unseen })
-      )
       // Why: only a live pty can open a preview terminal, and only a
       // card-rendering caller can open one — the sidebar's bucket counts must
       // not pay host resolution on every agent-status tick.

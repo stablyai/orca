@@ -15,6 +15,7 @@ import type { TuiAgent } from '../../../../shared/tui-agent'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
 import type { PtyDataMeta } from './pty-dispatcher'
 import type { RemoteRuntimeSnapshotOutcome } from '../../runtime/remote-runtime-terminal-multiplexer'
+import type { PtyPreconnectInputEntry } from './pty-preconnect-input-buffer'
 
 export type PtyBufferSnapshot = {
   data: string
@@ -116,6 +117,7 @@ type PtyCallbacks = {
   onReplayData?: (data: string, meta?: PtyReplayDataMeta) => void
   onStatus?: (shell: string) => void
   onError?: (message: string, errors?: string[]) => void
+  onErrorCleared?: (message: string) => void
   onExit?: (code: number) => void
   onWriteUnavailable?: () => void
   onRecoveryStateChange?: (state: PtyTransportRecoveryState) => void
@@ -179,6 +181,8 @@ export type PtyTransport = {
   // (preserving order) and sends the reply immediately.
   sendInputImmediate: (data: string) => boolean
   sendInputAccepted?: (data: string) => Promise<boolean>
+  /** Settles retained pre-connect input when a deferred spawn is abandoned before connect. */
+  abandonPreconnectInput?: () => void
   claimViewport?: (cols: number, rows: number) => boolean
   /** Capability-negotiated paired-runtime delivery gate; false preserves legacy delivery. */
   setOutputPaused?: (paused: boolean) => boolean
@@ -227,6 +231,12 @@ export type PtyTransport = {
 
 export type IpcPtyTransportOptions = {
   cwd?: string
+  /** Retain bounded user input while a visible split waits to start its PTY. */
+  bufferInputUntilConnect?: boolean
+  /** Seed a fresh transport with input handed off from a remounted deferred split. */
+  preconnectInput?: readonly PtyPreconnectInputEntry[]
+  /** Records newly retained input against a remount-safe deferred split handoff. */
+  onPreconnectInput?: (input: PtyPreconnectInputEntry) => void
   cwdFallback?: 'worktree'
   env?: Record<string, string>
   envToDelete?: string[]

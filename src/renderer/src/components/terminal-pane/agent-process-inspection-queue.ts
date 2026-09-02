@@ -2,6 +2,7 @@ export type InspectionPriority = 'cadence' | 'pending-title'
 
 type InspectionTask = {
   priority: InspectionPriority
+  canRun: () => boolean
   run: () => Promise<void>
 }
 
@@ -37,6 +38,16 @@ function scheduleInspectionPump(delayMs = 0): void {
 }
 
 function pumpInspectionQueue(): void {
+  // Drop disposed tasks before slot/rate accounting.
+  for (let index = inspectionQueue.length - 1; index >= 0; index -= 1) {
+    const task = inspectionQueue[index]
+    if (task && !task.canRun()) {
+      inspectionQueue.splice(index, 1)
+    }
+  }
+  if (inspectionQueue.length === 0) {
+    return
+  }
   const now = Date.now()
   if (!canStartInspection(now)) {
     scheduleInspectionPump(100)
@@ -52,12 +63,18 @@ function pumpInspectionQueue(): void {
 
   activeInspections += 1
   inspectionStarts.push(now)
-  void next.run().finally(() => {
-    activeInspections = Math.max(0, activeInspections - 1)
-    if (inspectionQueue.length > 0) {
-      scheduleInspectionPump()
-    }
-  })
+  // Why the catch before finally: an unreachable runtime rejects the inspection on a cadence, and a
+  // bare `.finally()` chain re-raises it as a renderer-global unhandledrejection. Coordinators own
+  // their own failure/backoff state, so the queue only has to keep its accounting running.
+  void next
+    .run()
+    .catch(() => {})
+    .finally(() => {
+      activeInspections = Math.max(0, activeInspections - 1)
+      if (inspectionQueue.length > 0) {
+        scheduleInspectionPump()
+      }
+    })
 
   if (inspectionQueue.length > 0) {
     scheduleInspectionPump()

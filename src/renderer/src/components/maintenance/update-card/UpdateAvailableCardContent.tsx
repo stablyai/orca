@@ -7,6 +7,18 @@ function isAnimatedGif(url: string | undefined): boolean {
   return typeof url === 'string' && url.toLowerCase().endsWith('.gif')
 }
 
+/** A package manager owns this install: the release is real but Orca can never apply it here. */
+function ExternallyManagedNote(): React.JSX.Element {
+  return (
+    <p className="text-xs leading-relaxed text-muted-foreground">
+      {translate(
+        'auto.components.UpdateCard.7f1a4c9e02',
+        'Your system package manager installed Orca, so update it from there — Orca cannot install this release itself.'
+      )}
+    </p>
+  )
+}
+
 export function UpdateAvailableRichContent({
   release,
   releasesBehind,
@@ -16,7 +28,8 @@ export function UpdateAvailableRichContent({
   onMediaError,
   onMediaLoad,
   onUpdate,
-  onClose
+  onClose,
+  externallyManaged = false
 }: {
   release: NonNullable<ChangelogData['release']>
   releasesBehind: number | null
@@ -27,6 +40,7 @@ export function UpdateAvailableRichContent({
   onMediaLoad: () => void
   onUpdate: () => void
   onClose: () => void
+  externallyManaged?: boolean
 }): React.JSX.Element {
   const showMedia =
     release.mediaUrl && !mediaFailed && !(prefersReducedMotion && isAnimatedGif(release.mediaUrl))
@@ -87,9 +101,13 @@ export function UpdateAvailableRichContent({
       >
         {translate('auto.components.UpdateCard.aad383aecc', 'Read the full release notes')}
       </button>
-      <Button variant="default" size="sm" onClick={onUpdate} className="w-full cursor-pointer">
-        {translate('auto.components.UpdateCard.ec8fe71cfc', 'Update')}
-      </Button>
+      {externallyManaged ? (
+        <ExternallyManagedNote />
+      ) : (
+        <Button variant="default" size="sm" onClick={onUpdate} className="w-full cursor-pointer">
+          {translate('auto.components.UpdateCard.ec8fe71cfc', 'Update')}
+        </Button>
+      )}
     </div>
   )
 }
@@ -98,12 +116,14 @@ export function UpdateAvailableSimpleContent({
   version,
   releaseUrl,
   onUpdate,
-  onClose
+  onClose,
+  externallyManaged = false
 }: {
   version: string
   releaseUrl?: string
   onUpdate: () => void
   onClose: () => void
+  externallyManaged?: boolean
 }): React.JSX.Element {
   return (
     <div className="flex flex-col gap-2.5 p-3.5">
@@ -126,9 +146,13 @@ export function UpdateAvailableSimpleContent({
           value0: version
         })}
       </p>
-      <p className="text-xs leading-relaxed text-muted-foreground">
-        {translate('auto.components.UpdateCard.fdd4a364fa', "Sessions won't be interrupted.")}
-      </p>
+      {externallyManaged ? (
+        <ExternallyManagedNote />
+      ) : (
+        <p className="text-xs leading-relaxed text-muted-foreground">
+          {translate('auto.components.UpdateCard.fdd4a364fa', "Sessions won't be interrupted.")}
+        </p>
+      )}
       {releaseUrl && (
         <button
           type="button"
@@ -138,14 +162,16 @@ export function UpdateAvailableSimpleContent({
           {translate('auto.components.UpdateCard.44324ef542', 'Release notes')}
         </button>
       )}
-      <Button
-        variant="default"
-        size="sm"
-        onClick={onUpdate}
-        className="mt-0.5 w-full cursor-pointer"
-      >
-        {translate('auto.components.UpdateCard.ec8fe71cfc', 'Update')}
-      </Button>
+      {!externallyManaged && (
+        <Button
+          variant="default"
+          size="sm"
+          onClick={onUpdate}
+          className="mt-0.5 w-full cursor-pointer"
+        >
+          {translate('auto.components.UpdateCard.ec8fe71cfc', 'Update')}
+        </Button>
+      )}
     </div>
   )
 }

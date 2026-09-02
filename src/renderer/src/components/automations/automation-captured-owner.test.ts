@@ -92,6 +92,12 @@ describe('captured owner availability', () => {
     const availability = automationActionAvailability(legacy, 'delete')
     expect(availability.kind).toBe('blocked')
     expect(availability.kind === 'blocked' && availability.block.recovery).toBe('update-server')
+    expect(availability.kind === 'blocked' && availability.block.message).toContain(
+      'needs an update'
+    )
+    expect(availability.kind === 'blocked' && availability.block.message).toContain(
+      'Scheduled runs may still continue'
+    )
   })
 
   it('reports a row with no metadata as uncaptured rather than blocked', () => {

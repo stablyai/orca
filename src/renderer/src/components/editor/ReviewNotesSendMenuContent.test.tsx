@@ -102,7 +102,7 @@ vi.mock('@/lib/telemetry', () => ({
   track: harness.track
 }))
 
-vi.mock('@/components/dashboard/useNow', () => ({
+vi.mock('@/hooks/use-now', () => ({
   useNow: () => harness.now
 }))
 

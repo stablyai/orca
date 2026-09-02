@@ -6,7 +6,7 @@
  * the overlay layer only consumes the final parked tab set when deciding to
  * render a slot as null.
  */
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import type { TerminalTab } from '../../../../shared/terminal-tab-types'
 import { useAppStore } from '../../store'
@@ -21,10 +21,7 @@ import {
   selectColdParkedTerminalTabs
 } from './terminal-hidden-view-parking'
 import type { ParkVerdictFlipRecord } from './terminal-park-verdict-flip-telemetry'
-import {
-  haveSameTerminalTabIds,
-  useTerminalParkVerdictPin
-} from './use-terminal-park-verdict-pin'
+import { haveSameTerminalTabIds, useTerminalParkVerdictPin } from './use-terminal-park-verdict-pin'
 import { withholdUnparkableTerminalTabs } from './terminal-cold-park-withheld-tabs'
 import { getTerminalParkingPolicyOverrides } from './terminal-parking-e2e-overrides'
 import {
@@ -41,6 +38,10 @@ import {
   getTerminalParkingInputsKey,
   useParkedTerminalWatcherSynchronization
 } from './use-parked-terminal-watcher-synchronization'
+import {
+  getTerminalPaneSplitMountLeaseTabIds,
+  subscribeTerminalPaneSplitMountLeases
+} from './terminal-pane-split-request-routing'
 
 type TerminalOverlayTabAssignment = {
   groupId: string
@@ -101,6 +102,11 @@ export function useTerminalTabColdParking(args: {
   )
   const terminalSshParkingEnabled = useAppStore(
     (state) => state.settings?.terminalSshViewParking !== false
+  )
+  const terminalPaneSplitMountLeaseTabIds = useSyncExternalStore(
+    subscribeTerminalPaneSplitMountLeases,
+    getTerminalPaneSplitMountLeaseTabIds,
+    getTerminalPaneSplitMountLeaseTabIds
   )
   const pairedRuntimeParkingEnvironmentIds = useAppStore(
     selectPairedRuntimeParkingEnvironmentIdsFromState
@@ -314,6 +320,8 @@ export function useTerminalTabColdParking(args: {
         // force-parks: ordinary parks never contain exempt tabs (eligibility
         // requires every tab restorable, so the memo is empty for them).
         !evictionExemptTerminalTabIds.has(terminalTab.id) &&
+        // Why: CLI splits against a parked tab replay as soon as its exact pane remounts.
+        !terminalPaneSplitMountLeaseTabIds.has(terminalTab.id) &&
         // Why: the hidden-measuring startup probe needs mounted panes; gate
         // here too so the reveal lands in the same render that starts it.
         !shouldMeasureHiddenWorktree
@@ -343,6 +351,7 @@ export function useTerminalTabColdParking(args: {
     shouldMeasureHiddenWorktree,
     sleepingRecordOwnedTabIds,
     terminalTabs,
+    terminalPaneSplitMountLeaseTabIds,
     worktreeId
   ])
 

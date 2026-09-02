@@ -1,6 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { BrowserCertificateTrustController } from './browser-certificate-trust-controller'
+import {
+  applyProxySettingsToSession,
+  resetSessionProxyApplicationForTests
+} from '../network/proxy-settings'
 
 const FIRST_CERTIFICATE = certificate('first certificate')
 const SECOND_CERTIFICATE = certificate('replacement certificate')
@@ -11,6 +15,9 @@ let beforeRequestListener:
     ) => void)
   | null = null
 const browserSession = {
+  resolveProxy: vi.fn(async () => 'DIRECT'),
+  setProxy: vi.fn(async () => {}),
+  closeAllConnections: vi.fn(async () => {}),
   webRequest: {
     onBeforeRequest: vi.fn(
       (
@@ -99,6 +106,7 @@ describe('BrowserCertificateTrustController', () => {
 
   beforeEach(() => {
     vi.clearAllMocks()
+    resetSessionProxyApplicationForTests(browserSession)
     vi.mocked(guest.isDestroyed).mockReturnValue(false)
     vi.mocked(otherGuest.isDestroyed).mockReturnValue(false)
     vi.mocked(guest.loadURL).mockResolvedValue(undefined)
@@ -136,6 +144,41 @@ describe('BrowserCertificateTrustController', () => {
       createChallengeId: () => `challenge-${++challengeNumber}`
     })
     controller.installSessionRequestGuard(browserSession)
+  })
+
+  it('holds requests until proxy readiness settles', async () => {
+    let finishWrite: (() => void) | undefined
+    vi.mocked(browserSession.setProxy).mockImplementationOnce(
+      () => new Promise<void>((resolve) => (finishWrite = resolve))
+    )
+    const applying = applyProxySettingsToSession(
+      browserSession,
+      { httpProxyUrl: 'http://proxy.example:8080' },
+      { env: {} }
+    )
+    const callback = beforeRequest({ url: 'http://proxy-only.invalid/', webContentsId: guest.id })
+
+    await vi.waitFor(() => expect(browserSession.setProxy).toHaveBeenCalledOnce())
+    expect(callback).not.toHaveBeenCalled()
+    finishWrite?.()
+    await applying
+
+    await vi.waitFor(() => expect(callback).toHaveBeenCalledWith({}))
+  })
+
+  it('cancels requests after proxy readiness fails', async () => {
+    vi.mocked(browserSession.setProxy).mockRejectedValue(new Error('proxy apply failed'))
+    await expect(
+      applyProxySettingsToSession(
+        browserSession,
+        { httpProxyUrl: 'http://proxy.example:8080' },
+        { env: {} }
+      )
+    ).rejects.toThrow('proxy apply failed')
+
+    expect(
+      beforeRequest({ url: 'http://proxy-only.invalid/', webContentsId: guest.id })
+    ).toHaveBeenCalledWith({ cancel: true })
   })
 
   it('rejects first, then trusts only the approved guest, endpoint, certificate, and error', () => {

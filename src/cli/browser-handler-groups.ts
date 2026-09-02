@@ -53,7 +53,16 @@ export const BROWSER_HANDLER_GROUPS: readonly HandlerGroup[] = [
   },
   {
     name: 'browser-tab',
-    keys: ['tab list', 'tab show', 'tab current', 'tab switch', 'tab create', 'tab close', 'exec'],
+    keys: [
+      'open-url',
+      'tab list',
+      'tab show',
+      'tab current',
+      'tab switch',
+      'tab create',
+      'tab close',
+      'exec'
+    ],
     load: async () => (await import('./handlers/browser-tab.js')).BROWSER_TAB_HANDLERS
   },
   {

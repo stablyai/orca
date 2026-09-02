@@ -31,6 +31,7 @@ jobs:
       static_analysis: ${{ steps.filter.outputs.static_analysis }}
       typecheck: ${{ steps.filter.outputs.typecheck }}
       git_compatibility: ${{ steps.filter.outputs.git_compatibility }}
+      codex_index_heal_contract: ${{ steps.filter.outputs.codex_index_heal_contract }}
       xterm_patch_sync: ${{ steps.filter.outputs.xterm_patch_sync }}
       shell_contracts: ${{ steps.filter.outputs.shell_contracts }}
       test: ${{ steps.filter.outputs.test }}
@@ -130,6 +131,9 @@ jobs:
       - name: Enforce max-lines ratchet
         run: pnpm run check:max-lines-ratchet
 
+      - name: Enforce ts-nocheck ratchet
+        run: pnpm run check:ts-nocheck-ratchet
+
       - name: Enforce runtime Electron-import ratchet
         run: pnpm run check:runtime-electron-ratchet
 
@@ -214,16 +218,16 @@ jobs:
       - uses: ./.github/actions/install-node-dependencies
 
       # Why: every project is `composite`, so tsc already writes a .tsbuildinfo that lets
-      # the next run skip unchanged files. CI threw it away each time. The key is per-SHA
-      # so each run saves its own; restore-keys inherit the newest prior graph to diff against.
+      # the next run skip unchanged files. Share one cache entry across commits while the
+      # PR base stays stable; actions/cache keeps the first successful graph and the
+      # compiler still invalidates stale files from its content hashes.
       - name: Cache TypeScript incremental state
         uses: actions/cache@v5
         with:
           path: config/*.tsbuildinfo
-          key: tsbuildinfo-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml', 'config/tsconfig*.json') }}-${{ github.sha }}
+          key: tsbuildinfo-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml', 'config/tsconfig*.json') }}-${{ github.event.pull_request.base.sha }}
           restore-keys: |
             tsbuildinfo-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml', 'config/tsconfig*.json') }}-
-            tsbuildinfo-${{ runner.os }}-
 
       - run: pnpm run typecheck
 
@@ -294,6 +298,47 @@ jobs:
           done
           exit "$status"
 
+  # Why this job: Orca's session index-heal depends on a Codex behavior — a
+  # `thread/read` of an unindexed rollout performs a read-repair that inserts the
+  # `threads` row. Every unit test drives a stub app-server and asserts only that the
+  # call did not error, so if Codex dropped the repair they would all stay green while
+  # the subsystem went inert. This runs the pinned real binary and fails when the
+  # repair stops happening. Pinned because the binary is the thing expected to drift.
+  codex_index_heal_contract:
+    name: Codex index-heal contract
+    needs: [code_paths]
+    if: needs.code_paths.outputs.codex_index_heal_contract == 'true'
+    runs-on: ubuntu-latest
+    env:
+      CODEX_CLI_VERSION: '0.150.1'
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - uses: ./.github/actions/install-node-dependencies
+
+      - name: Install pinned Codex CLI
+        run: |
+          set -euo pipefail
+          npm install --no-audit --no-fund --prefix "$RUNNER_TEMP/codex-cli" \
+            "@openai/codex@$CODEX_CLI_VERSION"
+
+      - name: Verify Codex index-heal contract
+        env:
+          # Why REQUIRED: without a binary the suite skips, and a job that skips
+          # reports success. This turns a failed or missing install into a red test
+          # instead of a green no-op.
+          ORCA_CODEX_CONTRACT_REQUIRED: '1'
+          ORCA_CODEX_CONTRACT_VERSION: ${{ env.CODEX_CLI_VERSION }}
+        run: |
+          set -euo pipefail
+          ORCA_CODEX_CONTRACT_BINARY="$RUNNER_TEMP/codex-cli/node_modules/.bin/codex" \
+            pnpm exec vitest run --config config/vitest.config.ts \
+            src/main/codex/codex-index-heal-binary-contract.test.ts
+
   xterm_patch_sync:
     name: xterm patch sync
     needs: [code_paths]
@@ -308,9 +353,12 @@ jobs:
 
       - uses: ./.github/actions/install-node-dependencies
 
-      # Why: the check rebuilds xterm.js from a pinned upstream commit. Caching the
-      # npm metadata and the shallow clone turns a ~4 min cold run into well under a
-      # minute; the key is the manifest, so a commit or toolchain bump invalidates it.
+      # Why: the check rebuilds every package in the manifest from a pinned upstream
+      # commit — @xterm/xterm and the two addons, each built twice (once unmodified to
+      # prove the toolchain still reproduces the published bundles, once patched). Caching
+      # the npm metadata and the shallow clone keeps the repeated cost to the builds
+      # themselves; the key is the manifest, so a commit, package or toolchain bump
+      # invalidates it.
       - name: Restore upstream xterm build inputs
         uses: actions/cache@v5
         with:
@@ -542,6 +590,7 @@ jobs:
           tests/e2e/cross-version-wire/release-checkout.unit.test.ts
           tests/e2e/cross-version-wire/cross-version-browser-placement.unit.test.ts
           tests/e2e/cross-version-wire/cross-version-terminal-wire.unit.test.ts
+          tests/e2e/cross-version-wire/reported-lossy-initial-snapshot.unit.test.ts
           tests/e2e/cross-version-wire/cross-version-agent-session-wire.unit.test.ts
 
   managed_hook_node18:
@@ -574,6 +623,8 @@ jobs:
     needs: [code_paths]
     if: needs.code_paths.outputs.package == 'true'
     runs-on: ubuntu-latest
+    # Let the serial Docker gates reach their own deadlines and report cleanup failures.
+    timeout-minutes: 90
 
     steps:
       - name: Checkout
@@ -584,9 +635,7 @@ jobs:
       - name: Cache electron-builder downloads
         uses: actions/cache@v5
         with:
-          path: |
-            ~/.cache/electron
-            ~/.cache/electron-builder
+          path: ~/.cache/electron-builder
           key: electron-builder-linux-${{ hashFiles('pnpm-lock.yaml') }}
           restore-keys: |
             electron-builder-linux-
@@ -595,9 +644,13 @@ jobs:
         with:
           native-runtime: electron
 
+      # Why --no-file-parallelism: every file here launches a full Electron stack twice, and each
+      # probe carries its own in-process deadline. Four at once on a 4-vCPU runner starve each other
+      # past those deadlines; serial, every probe owns the runner.
       - name: Test Linux Electron lifecycle boundary
         run: >-
           xvfb-run --auto-servernum pnpm exec vitest run --config config/vitest.config.ts
+          --no-file-parallelism
           src/main/browser/browser-client-page-renderer-lifecycle.electron.test.ts
           src/main/browser/browser-route-tcp-egress.electron.test.ts
           src/main/browser/browser-route-webrtc-egress.electron.test.ts
@@ -627,13 +680,44 @@ jobs:
       - name: Build native components
         run: pnpm run build:native
 
+      - name: Install Linux package tooling
+        run: sudo apt-get update && sudo apt-get install -y cpio rpm
+
       - name: Package unpacked app
         env:
           ORCA_REUSE_PREPARED_NATIVE_RUNTIME: '1'
-        run: pnpm exec electron-builder --config config/electron-builder.config.cjs --linux AppImage --x64 --publish never
+        run: pnpm exec electron-builder --config config/electron-builder.config.cjs --linux AppImage deb rpm --x64 --publish never
+
+      - name: Verify root-package marker payloads
+        run: |
+          set -euo pipefail
+          version="$(node -p "require('./package.json').version")"
+          deb="dist/orca-ide_${version}_amd64.deb"
+          rpm="dist/orca-ide-${version}.x86_64.rpm"
+          test -s "$deb"
+          test -s "$rpm"
+          deb_marker="$(dpkg-deb --fsys-tarfile "$deb" | tar -xOf - ./opt/Orca/resources/package-type)"
+          rpm_marker="$(rpm2cpio "$rpm" | cpio --quiet --extract --to-stdout ./opt/Orca/resources/package-type)"
+          [[ "$deb_marker" == deb ]] || { echo "Expected deb marker, got: $deb_marker"; exit 1; }
+          [[ "$rpm_marker" == rpm ]] || { echo "Expected rpm marker, got: $rpm_marker"; exit 1; }
 
       - name: Verify headless serve signal shutdown
         run: node config/scripts/run-headless-serve-shutdown-docker.mjs --appimage dist/orca-linux.AppImage
+
+      - name: Verify extracted launcher serve signal shutdown
+        run: >-
+          node config/scripts/run-headless-serve-shutdown-docker.mjs
+          --appimage dist/orca-linux.AppImage --entrypoint launcher
+
+      - name: Verify AppImage CLI registration and serve signal shutdown
+        run: >-
+          node config/scripts/run-headless-serve-shutdown-docker.mjs
+          --appimage dist/orca-linux.AppImage --entrypoint appimage
+          --signal-target serving-electron --int-delivery pid
+
+      # A default container reproduces the hostile AppImage launch environment.
+      - name: Verify Linux CLI launch contract
+        run: node config/scripts/run-linux-cli-launch-contract-docker.mjs --appimage dist/orca-linux.AppImage
 
       - name: Smoke packaged CLI
         run: node config/scripts/smoke-packaged-cli.mjs --app-dir=dist/linux-unpacked
@@ -673,6 +757,7 @@ jobs:
           persist-native-cache: 'false'
 
       - name: Save compiled Node native modules
+        if: steps.deps.outputs.native-cache-hit != 'true'
         uses: actions/cache/save@v5
         with:
           path: |
@@ -762,6 +847,7 @@ jobs:
       should_run: ${{ steps.filter.outputs.should_run }}
       test_files: ${{ steps.filter.outputs.test_files }}
       ssh_source_changed: ${{ steps.filter.outputs.ssh_source_changed }}
+      native_ime_source_changed: ${{ steps.filter.outputs.native_ime_source_changed }}
     steps:
       - name: Checkout
         uses: actions/checkout@v6
@@ -789,6 +875,11 @@ jobs:
           SSH_SOURCE_CHANGED="$(printf '%s\n' "$CHANGED" | node config/scripts/pr-e2e-source-routing.mjs --ssh-source)"
           echo "ssh_source_changed=$SSH_SOURCE_CHANGED" >> "$GITHUB_OUTPUT"
           echo "SSH source changed: $SSH_SOURCE_CHANGED"
+          # Why its own signal: the real-IME lane is a whole ibus session, not a spec, so it must
+          # trigger on IME source rather than on a spec name in some route's list.
+          NATIVE_IME_SOURCE_CHANGED="$(printf '%s\n' "$CHANGED" | node config/scripts/pr-e2e-source-routing.mjs --native-ime-source)"
+          echo "native_ime_source_changed=$NATIVE_IME_SOURCE_CHANGED" >> "$GITHUB_OUTPUT"
+          echo "Native IME source changed: $NATIVE_IME_SOURCE_CHANGED"
           if [ "$TEST_FILES_JSON" != '[]' ]; then
             echo "should_run=true" >> "$GITHUB_OUTPUT"
             echo "Changed E2E specs: $TEST_FILES_JSON"
@@ -809,6 +900,21 @@ jobs:
       test_files: ${{ needs.e2e-paths.outputs.test_files }}
       ssh_source_changed: ${{ needs.e2e-paths.outputs.ssh_source_changed }}
 
+  # Why this is not in verify's needs: it is the first PR-gate run of a harness whose reliability
+  # is only known from nightly main runs (20/20 green, 2026-08-09..2026-08-29, p50 3m25s). It
+  # reports a red X on the PR without blocking, exactly like `e2e` above. Deliberately no
+  # continue-on-error: that renders the check green and hides the signal it exists to give. To
+  # make it blocking, add it to verify.needs, add TERMINAL_IME_NATIVE to the env below, and
+  # require `success || skipped` outside the strict loop — see the note on `e2e`.
+  terminal_ime_native:
+    name: real IME
+    needs: e2e-paths
+    if: needs.e2e-paths.outputs.native_ime_source_changed == 'true'
+    # Why: the reusable workflow only checks out, builds, and uploads artifacts.
+    permissions:
+      contents: read
+    uses: ./.github/workflows/terminal-ime-e2e.yml
+
   verify:
     if: always()
     needs:
@@ -817,6 +923,7 @@ jobs:
       - root_directory_guard
       - typecheck
       - git_compatibility
+      - codex_index_heal_contract
       - xterm_patch_sync
       - shell_contracts
       - test
@@ -847,6 +954,8 @@ jobs:
           TYPECHECK_SHOULD_RUN: ${{ needs.code_paths.outputs.typecheck }}
           GIT_COMPATIBILITY: ${{ needs.git_compatibility.result }}
           GIT_COMPATIBILITY_SHOULD_RUN: ${{ needs.code_paths.outputs.git_compatibility }}
+          CODEX_INDEX_HEAL_CONTRACT: ${{ needs.codex_index_heal_contract.result }}
+          CODEX_INDEX_HEAL_CONTRACT_SHOULD_RUN: ${{ needs.code_paths.outputs.codex_index_heal_contract }}
           XTERM_PATCH_SYNC: ${{ needs.xterm_patch_sync.result }}
           XTERM_PATCH_SYNC_SHOULD_RUN: ${{ needs.code_paths.outputs.xterm_patch_sync }}
           SHELL_CONTRACTS: ${{ needs.shell_contracts.result }}
@@ -892,6 +1001,7 @@ jobs:
           check_job static_analysis "$STATIC_ANALYSIS" "$STATIC_ANALYSIS_SHOULD_RUN"
           check_job typecheck "$TYPECHECK" "$TYPECHECK_SHOULD_RUN"
           check_job git_compatibility "$GIT_COMPATIBILITY" "$GIT_COMPATIBILITY_SHOULD_RUN"
+          check_job codex_index_heal_contract "$CODEX_INDEX_HEAL_CONTRACT" "$CODEX_INDEX_HEAL_CONTRACT_SHOULD_RUN"
           check_job xterm_patch_sync "$XTERM_PATCH_SYNC" "$XTERM_PATCH_SYNC_SHOULD_RUN"
           check_job shell_contracts "$SHELL_CONTRACTS" "$SHELL_CONTRACTS_SHOULD_RUN"
           check_job test "$TEST" "$TEST_SHOULD_RUN"

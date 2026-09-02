@@ -1,19 +1,26 @@
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http'
 import type { AddressInfo } from 'node:net'
 import type { Page } from '@stablyai/playwright-test'
+import { parseBrowserNetworkExecutionHostKey } from '../../src/main/browser/browser-network-execution-route'
 import { LOCAL_EXECUTION_HOST_ID } from '../../src/shared/execution-host'
+import { readOwnedPageUrls } from './helpers/client-hosted-browser-observer'
 import {
   launchHeadlessPairedRuntimeHost,
   type HeadlessPairedRuntimeHost
 } from './helpers/headless-paired-runtime-host'
+import { readHostBrowserPageUrls } from './helpers/host-session-tabs'
 import { expect, test } from './helpers/orca-app'
 import {
   launchPairedElectronClient,
   type PairedElectronClient
 } from './helpers/paired-electron-client'
 
-// The link is a dev-server URL, so a client-local fallback would silently load a *different
-// machine's* server while looking successful.
+// The link is a dev-server URL on the pane runtime's network, so a client-local fallback would
+// silently load a *different machine's* server. Which machine renders the pixels no longer answers
+// that: under client-hosted placement the guest paints on this desktop while its network is still
+// pinned to the host at creation. So each act below pins the placement it was written for and reads
+// the host's own record — the page row's placement and executionHostKey — instead of inferring
+// routing from where a <webview> appeared.
 
 const PANE_PATH = '/remote-pane'
 const LINK_PATH = '/remote-link-target'
@@ -77,8 +84,14 @@ async function startLinkFixtureServer(): Promise<LinkFixtureServer> {
   }
 }
 
-/** Asked over the host's own connection, not proxied through the client under test. */
-async function readHostBrowserUrls(
+/**
+ * The host's session-tab view, asked over the host's own CLI socket rather than proxied through the
+ * client under test.
+ *
+ * Server-placed pages only: this socket advertises no `BROWSER_CLIENT_HOST_RUNTIME_CAPABILITY`, so
+ * the host strips every client-placed page from the snapshot before answering.
+ */
+async function readHostServerPlacedBrowserUrls(
   host: HeadlessPairedRuntimeHost,
   worktreeId: string
 ): Promise<string[]> {
@@ -90,7 +103,57 @@ async function readHostBrowserUrls(
   return response.result.tabs.filter((tab) => tab.type === 'browser').map((tab) => tab.url ?? '')
 }
 
-/** A remote pane is a screencast image; a <webview> means the page really loaded on this machine. */
+type HostBrowserRow = {
+  executionHostKey: string | null
+  placementKind: string | null
+  url: string
+}
+
+/**
+ * The host's rows for one URL, asked through the paired client's connection.
+ *
+ * Why through the client: an Electron peer advertises the client-host capability, so the host
+ * answers it with client-placed pages intact and with the placement and network pin it minted at
+ * creation. The host still authors every field; the client is only the transport.
+ */
+async function readHostBrowserRows(
+  page: Page,
+  environmentId: string,
+  worktreeId: string,
+  urlPrefix: string
+): Promise<HostBrowserRow[]> {
+  return page.evaluate(
+    async ({ environmentId, urlPrefix, worktreeId }) => {
+      const response = await window.api.runtimeEnvironments.call({
+        selector: environmentId,
+        method: 'session.tabs.list',
+        params: { worktree: `id:${worktreeId}` },
+        timeoutMs: 15_000
+      })
+      if (!response.ok) {
+        throw new Error('host session tab inventory unavailable')
+      }
+      const { tabs } = response.result as {
+        tabs: {
+          type: string
+          url?: string
+          executionHostKey?: string
+          placement?: { kind: string }
+        }[]
+      }
+      return tabs
+        .filter((tab) => tab.type === 'browser' && (tab.url ?? '').startsWith(urlPrefix))
+        .map((tab) => ({
+          executionHostKey: tab.executionHostKey ?? null,
+          placementKind: tab.placement?.kind ?? null,
+          url: tab.url ?? ''
+        }))
+    },
+    { environmentId, urlPrefix, worktreeId }
+  )
+}
+
+/** Under server placement the client renders nothing itself, so any <webview> is a local fallback. */
 async function readLocalBrowserViewUrls(page: Page): Promise<string[]> {
   return page.evaluate(() =>
     Array.from(document.querySelectorAll('webview')).map(
@@ -117,17 +180,22 @@ async function findMirroredPage(
   page: Page,
   worktreeId: string,
   url: string
-): Promise<{ handleEnvironmentId: string | null; pageId: string } | null> {
+): Promise<{
+  handleEnvironmentId: string | null
+  pageId: string
+  placementKind: string | null
+} | null> {
   return page.evaluate(
     ({ url, worktreeId }) => {
       const state = window.__store?.getState()
       for (const workspace of state?.browserTabsByWorktree[worktreeId] ?? []) {
         for (const browserPage of state?.browserPagesByWorkspace[workspace.id] ?? []) {
           if (browserPage.url.startsWith(url)) {
+            const handle = state?.remoteBrowserPageHandlesByPageId[browserPage.id]
             return {
-              handleEnvironmentId:
-                state?.remoteBrowserPageHandlesByPageId[browserPage.id]?.environmentId ?? null,
-              pageId: browserPage.id
+              handleEnvironmentId: handle?.environmentId ?? null,
+              pageId: browserPage.id,
+              placementKind: handle?.placement?.kind ?? null
             }
           }
         }
@@ -149,13 +217,50 @@ async function focusMirroredPage(page: Page, worktreeId: string, pageId: string)
   )
 }
 
+/** Placement is a user setting whose default has already flipped once, so every act pins its own. */
+async function pinClientHostedPlacement(page: Page, enabled: boolean): Promise<void> {
+  await page.evaluate(async (enabled) => {
+    await window.__store?.getState().updateSettings({ browserClientHostedRemoteEnabled: enabled })
+  }, enabled)
+  expect(
+    await page.evaluate(
+      () => window.__store?.getState().settings?.browserClientHostedRemoteEnabled ?? null
+    ),
+    'the placement setting this act is written for did not take'
+  ).toBe(enabled)
+}
+
+/** Leaves the workspace holding only the screencast pane the next act right-clicks. */
+async function closeBrowserTabsExceptPane(
+  page: Page,
+  worktreeId: string,
+  paneUrl: string
+): Promise<void> {
+  await page.evaluate(
+    ({ paneUrl, worktreeId }) => {
+      const state = window.__store?.getState()
+      for (const workspace of state?.browserTabsByWorktree[worktreeId] ?? []) {
+        const pages = state?.browserPagesByWorkspace[workspace.id] ?? []
+        if (!pages.some((browserPage) => browserPage.url.startsWith(paneUrl))) {
+          state?.closeBrowserTab(workspace.id)
+        }
+      }
+    },
+    { paneUrl, worktreeId }
+  )
+}
+
 type LinkOpenOutcome = 'opened on this machine' | 'pending' | 'refused'
 
-async function readLinkOpenOutcome(page: Page, linkUrl: string): Promise<LinkOpenOutcome> {
-  if ((await readLocalBrowserViewUrls(page)).some((url) => url.startsWith(linkUrl))) {
+/** The previous act's guest is settled away before this runs, so any page here is the fallback. */
+async function readLinkOpenOutcome(
+  client: PairedElectronClient,
+  linkUrl: string
+): Promise<LinkOpenOutcome> {
+  if ((await readOwnedPageUrls(client.app, linkUrl)).length > 0) {
     return 'opened on this machine'
   }
-  const notice = page.getByTestId('remote-browser-stream-error')
+  const notice = client.page.getByTestId('remote-browser-stream-error')
   const text = (await notice.count()) > 0 ? ((await notice.first().textContent()) ?? '') : ''
   return text.includes('Unable to open URL.') ? 'refused' : 'pending'
 }
@@ -172,7 +277,7 @@ async function openLinkFromRemotePaneContextMenu(page: Page): Promise<void> {
   await openInOrca.click()
 }
 
-test('opens a remote pane link on the pane runtime and refuses to fall back to the client', async ({
+test('opens a remote pane link on the pane runtime under either placement and refuses to fall back to the client', async ({
   testRepoPath
 }, testInfo) => {
   test.setTimeout(300_000)
@@ -181,7 +286,8 @@ test('opens a remote pane link on the pane runtime and refuses to fall back to t
   let client: PairedElectronClient | null = null
 
   try {
-    await host.client.call('repo.add', { path: testRepoPath, kind: 'git' })
+    const hostRuntimeId = (await host.client.call('repo.add', { path: testRepoPath, kind: 'git' }))
+      ._meta.runtimeId
     client = await launchPairedElectronClient(host.offer, testInfo, 'Remote browser link routing')
     const page = client.page
     const environmentId = client.environmentId
@@ -198,6 +304,8 @@ test('opens a remote pane link on the pane runtime and refuses to fall back to t
     if (!worktreeId) {
       throw new Error('paired client did not receive the host worktree')
     }
+
+    const worktreeSelector = `id:${worktreeId}`
 
     // The workspace runs on the paired runtime, the way it does when the user picks that host.
     await page.evaluate(
@@ -227,13 +335,15 @@ test('opens a remote pane link on the pane runtime and refuses to fall back to t
     await focusMirroredPage(page, worktreeId, pane.pageId)
     const paneCountBeforeOpen = await page.getByTestId('remote-browser-pane').count()
 
-    // Act 1: the healthy path must land on the runtime, end to end.
+    // Act 1: server placement. The user asked for pages to live on the server, so the link must
+    // land on the runtime and be streamed back — nothing renders here.
+    await pinClientHostedPlacement(page, false)
     await openLinkFromRemotePaneContextMenu(page)
 
     await expect
       .poll(
         async () =>
-          (await readHostBrowserUrls(host, worktreeId)).filter((url) =>
+          (await readHostServerPlacedBrowserUrls(host, worktreeId)).filter((url) =>
             url.startsWith(fixture.linkUrl)
           ).length,
         { timeout: 60_000, message: 'the link never opened as a browser tab on the host runtime' }
@@ -241,6 +351,12 @@ test('opens a remote pane link on the pane runtime and refuses to fall back to t
       .toBe(1)
     // The host's browser really fetched it; a tab record alone would not prove a load.
     expect(fixture.linkLoadCount()).toBeGreaterThan(0)
+    await expect
+      .poll(() => readOwnedPageUrls(host.app, fixture.linkUrl), {
+        timeout: 60_000,
+        message: 'the runtime process never held a page for the link'
+      })
+      .toHaveLength(1)
     // One more remote pane, and still nothing rendered by this machine's own browser.
     await expect(page.getByTestId('remote-browser-pane')).toHaveCount(paneCountBeforeOpen + 1, {
       timeout: 60_000
@@ -250,34 +366,118 @@ test('opens a remote pane link on the pane runtime and refuses to fall back to t
     )
     expect(await readLocalBrowserViewUrls(page)).toHaveLength(0)
 
-    // Drop every tab except the pane's, so the second act drives the pane it started with.
-    await page.evaluate(
-      ({ paneUrl, worktreeId }) => {
-        const state = window.__store?.getState()
-        for (const workspace of state?.browserTabsByWorktree[worktreeId] ?? []) {
-          const pages = state?.browserPagesByWorkspace[workspace.id] ?? []
-          if (!pages.some((browserPage) => browserPage.url.startsWith(paneUrl))) {
-            state?.closeBrowserTab(workspace.id)
-          }
-        }
-      },
-      { paneUrl: fixture.paneUrl, worktreeId }
-    )
+    // Drop every tab except the pane's, so the next act drives the pane it started with against a
+    // host that no longer holds the link.
+    await closeBrowserTabsExceptPane(page, worktreeId, fixture.paneUrl)
     await expect(page.getByTestId('remote-browser-pane')).toHaveCount(paneCountBeforeOpen, {
       timeout: 60_000
     })
+    await expect
+      .poll(
+        async () =>
+          (await readHostServerPlacedBrowserUrls(host, worktreeId)).filter((url) =>
+            url.startsWith(fixture.linkUrl)
+          ).length,
+        { timeout: 60_000, message: 'the runtime kept the closed browser tab' }
+      )
+      .toBe(0)
+    await focusMirroredPage(page, worktreeId, pane.pageId)
+    const linkLoadsBeforeClientAct = fixture.linkLoadCount()
 
-    // Act 2: the user moves this workspace onto their own machine while the runtime's page is
+    // Act 2: client-hosted placement, the default. The page is hosted by this desktop, so the
+    // proof of correct routing is the host's record of it, not where it painted.
+    await pinClientHostedPlacement(page, true)
+    await openLinkFromRemotePaneContextMenu(page)
+
+    await expect
+      .poll(
+        async () => (await findMirroredPage(page, worktreeId, fixture.linkUrl))?.placementKind,
+        {
+          timeout: 60_000,
+          message: 'the link never became a client-hosted browser page on this desktop'
+        }
+      )
+      .toBe('client')
+    // The host's own connection, unprojected: browser.tabList reads the page registry, which is
+    // where a client-hosted page lives.
+    await expect
+      .poll(
+        async () =>
+          (await readHostBrowserPageUrls(host.client, worktreeSelector)).filter((url) =>
+            url.startsWith(fixture.linkUrl)
+          ).length,
+        { timeout: 60_000, message: 'the link never became a browser page on the host runtime' }
+      )
+      .toBe(1)
+    const hostRows = await readHostBrowserRows(page, environmentId, worktreeId, fixture.linkUrl)
+    expect(hostRows).toHaveLength(1)
+    expect(hostRows[0]?.placementKind).toBe('client')
+    // The routing invariant, structurally: the host pinned this page's network to its own runtime
+    // when it created it, so the dev server was reached through the runtime and not through this
+    // machine — which CI cannot tell apart by watching the fixture, since both ends are loopback.
+    const executionHostKey = hostRows[0]?.executionHostKey
+    if (!executionHostKey) {
+      // Narrowed before parsing: an unpinned page would otherwise surface as a parse crash rather
+      // than as the missing network pin it is.
+      throw new Error('the host minted no network pin for the client-hosted page')
+    }
+    expect(parseBrowserNetworkExecutionHostKey(executionHostKey)).toMatchObject({
+      runtimeId: hostRuntimeId
+    })
+    expect(fixture.linkLoadCount()).toBeGreaterThan(linkLoadsBeforeClientAct)
+    // Hosted here, streamed from nowhere: this desktop holds the page and the runtime holds none.
+    await expect
+      .poll(() => readOwnedPageUrls(client!.app, fixture.linkUrl), {
+        timeout: 60_000,
+        message: 'the client-hosted guest never loaded the link on this desktop'
+      })
+      .toHaveLength(1)
+    expect(await readOwnedPageUrls(host.app, fixture.linkUrl)).toHaveLength(0)
+    await expect(page.getByTestId('remote-browser-pane')).toHaveCount(paneCountBeforeOpen)
+
+    // The store drops the tab synchronously and only then fires browser.tabClose, so the mirror
+    // going empty proves nothing about the host or the guest. Settle both before act 3 baselines
+    // them, or act 3 reads this teardown landing mid-act as its own doing.
+    await closeBrowserTabsExceptPane(page, worktreeId, fixture.paneUrl)
+    await expect
+      .poll(() => findMirroredPage(page, worktreeId, fixture.linkUrl), {
+        timeout: 60_000,
+        message: 'the client kept the closed link tab'
+      })
+      .toBeNull()
+    await expect
+      .poll(
+        async () =>
+          (await readHostBrowserPageUrls(host.client, worktreeSelector)).filter((url) =>
+            url.startsWith(fixture.linkUrl)
+          ).length,
+        { timeout: 60_000, message: 'the runtime kept the closed client-hosted page' }
+      )
+      .toBe(0)
+    await expect
+      .poll(() => readOwnedPageUrls(client!.app, fixture.linkUrl), {
+        timeout: 60_000,
+        message: 'the client-hosted guest outlived the tab that owned it'
+      })
+      .toHaveLength(0)
+    await focusMirroredPage(page, worktreeId, pane.pageId)
+
+    // Act 3: the user moves this workspace onto their own machine while the runtime's page is
     // still on screen. Opening the link must fail in the pane, not load the runtime's dev server
     // here — the client has no business serving a page for a workspace it does not run.
     await page.evaluate(
       ({ localHostId, worktreeId }) => {
         window.__store?.getState().setActiveWorktree(worktreeId, localHostId)
       },
-      { localHostId: LOCAL_EXECUTION_HOST_ID, worktreeId }
+      // `as const` keeps the host id a literal through serialization; widened to string it stops
+      // being an ExecutionHostId.
+      { localHostId: LOCAL_EXECUTION_HOST_ID, worktreeId } as const
     )
     await focusMirroredPage(page, worktreeId, pane.pageId)
-    const hostUrlsBefore = await readHostBrowserUrls(host, worktreeId)
+    // The refusal is about who owns the workspace, not where pages render, so it must hold under
+    // the placement the user most likely has on.
+    await pinClientHostedPlacement(page, true)
+    const hostPagesBefore = await readHostBrowserPageUrls(host.client, worktreeSelector)
     const linkLoadsBefore = fixture.linkLoadCount()
 
     await openLinkFromRemotePaneContextMenu(page)
@@ -285,20 +485,20 @@ test('opens a remote pane link on the pane runtime and refuses to fall back to t
     // Wait for the click to produce an outcome — refusal or a local page — so the assertion below
     // reports which one happened instead of racing past a fallback that lands a moment later.
     await expect
-      .poll(() => readLinkOpenOutcome(page, fixture.linkUrl), {
+      .poll(() => readLinkOpenOutcome(client!, fixture.linkUrl), {
         timeout: 30_000,
         message: 'the link open produced neither a refusal nor a page'
       })
       .not.toBe('pending')
-    expect(await readLinkOpenOutcome(page, fixture.linkUrl)).toBe('refused')
+    expect(await readLinkOpenOutcome(client, fixture.linkUrl)).toBe('refused')
 
     // The workspace must still be the local one, or the refusal above proved nothing.
     expect(
       await page.evaluate(() => window.__store?.getState().activeWorkspaceExecutionHostId ?? null)
     ).toBe(LOCAL_EXECUTION_HOST_ID)
-    // Nothing rendered here, nothing new on the host, and nobody fetched the link anywhere.
-    expect(await readLocalBrowserViewUrls(page)).toHaveLength(0)
-    expect(await readHostBrowserUrls(host, worktreeId)).toEqual(hostUrlsBefore)
+    // Nothing new rendered here, nothing new on the host, and nobody fetched the link anywhere.
+    expect(await readOwnedPageUrls(client.app, fixture.linkUrl)).toHaveLength(0)
+    expect(await readHostBrowserPageUrls(host.client, worktreeSelector)).toEqual(hostPagesBefore)
     expect(fixture.linkLoadCount()).toBe(linkLoadsBefore)
   } finally {
     if (client) {

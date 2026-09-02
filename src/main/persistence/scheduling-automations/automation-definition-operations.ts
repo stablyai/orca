@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto'
+import { invalidateLocalWorktreeMetadataPruneInputs } from '../../local-worktree-metadata-prune-gate'
 import type {
   Automation,
   AutomationCreateInput,
@@ -262,5 +263,7 @@ export function deleteAutomation(
   operations.state.automationRuns = (operations.state.automationRuns ?? []).filter(
     (entry) => entry.automationId !== id
   )
+  // Why: the automation and its unfinished runs were pinning their workspace; both are gone (#17775).
+  invalidateLocalWorktreeMetadataPruneInputs()
   operations.flush()
 }

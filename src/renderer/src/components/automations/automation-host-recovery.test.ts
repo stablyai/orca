@@ -35,9 +35,10 @@ const DESKTOP_SSH = entry({
   stableRef: { authority: { kind: 'desktop' }, selector: { kind: 'ssh', targetId: 't1' } },
   kind: 'ssh'
 })
+const RUNTIME_ENVIRONMENT_ID = 'gpu'
 const RUNTIME_SSH = entry({
   stableRef: {
-    authority: { kind: 'runtime', environmentId: 'gpu' },
+    authority: { kind: 'runtime', environmentId: RUNTIME_ENVIRONMENT_ID },
     selector: { kind: 'ssh', targetId: 't1' }
   },
   kind: 'ssh'
@@ -65,7 +66,7 @@ describe('automation host recovery', () => {
       { ...RUNTIME_SSH, authorityHealth: 'unavailable' },
       target
     )
-    expect(target.connectRuntimeEnvironment).toHaveBeenCalledWith('gpu')
+    expect(target.connectRuntimeEnvironment).toHaveBeenCalledWith(RUNTIME_ENVIRONMENT_ID)
     expect(target.connectSshTarget).not.toHaveBeenCalled()
   })
 
@@ -78,10 +79,15 @@ describe('automation host recovery', () => {
     expect(target.retry).toHaveBeenCalledWith(desktopSelf)
   })
 
-  it('sends a runtime to the servers pane, since nothing here updates a host', () => {
+  it('deep-links a runtime to its update row in Remote Orca Servers settings', () => {
     const target = deps()
     runAutomationHostRecovery('update-server', RUNTIME_SSH, target)
-    expect(target.openSettings).toHaveBeenCalledWith({ pane: 'servers', repoId: null })
+    expect(target.openSettings).toHaveBeenCalledWith({
+      pane: 'servers',
+      repoId: null,
+      // Runtime environment IDs are nested scroll anchors within the pane.
+      sectionId: RUNTIME_ENVIRONMENT_ID
+    })
   })
 
   it('sends a stale desktop SSH registration to the SSH pane instead', () => {
