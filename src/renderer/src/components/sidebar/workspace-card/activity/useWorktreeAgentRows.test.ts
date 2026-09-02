@@ -210,4 +210,73 @@ describe('buildWorktreeAgentRows', () => {
 
     expect(rows.map((row) => [row.paneKey, row.state])).toEqual([[childPaneKey, 'done']])
   })
+
+  // #18113: tab-bar + leaves the newest agent on a rootless layout until the pane
+  // tree serializes, so title-derived rows used to drop that tab (count = actual-1).
+  it('includes the newest live agent when its layout is still rootless', () => {
+    const newestLeafId = '99999999-9999-4999-8999-999999999999'
+    const secondLeafId = '33333333-3333-4333-8333-333333333333'
+    const rows = buildWorktreeAgentRows({
+      tabs: [
+        makeTab('tab-1', { title: '⠋ Claude Code', sortOrder: 0, createdAt: 1 }),
+        makeTab('tab-2', { title: '⠋ Claude Code', sortOrder: 1, createdAt: 2 }),
+        makeTab('tab-newest', {
+          title: '⠋ Claude Code',
+          sortOrder: 2,
+          createdAt: 3,
+          launchAgent: 'claude'
+        })
+      ],
+      entries: [],
+      retained: [],
+      runtimePaneTitlesByTabId: {
+        'tab-1': { 1: '⠋ Claude Code' },
+        'tab-2': { 1: '⠋ Claude Code' },
+        'tab-newest': { 1: '⠋ Claude Code' }
+      },
+      ptyIdsByTabId: {
+        'tab-1': ['pty-1'],
+        'tab-2': ['pty-2'],
+        'tab-newest': ['pty-newest']
+      },
+      terminalLayoutsByTabId: {
+        'tab-1': makeSinglePaneLayout(LEAF_ID_1),
+        'tab-2': makeSinglePaneLayout(secondLeafId),
+        'tab-newest': {
+          root: null,
+          activeLeafId: null,
+          expandedLeafId: null,
+          ptyIdsByLeafId: { [newestLeafId]: 'pty-newest' }
+        }
+      },
+      now: 2000
+    })
+
+    expect(rows).toHaveLength(3)
+    expect(rows.map((row) => row.tab.id)).toContain('tab-newest')
+    expect(rows.map((row) => row.paneKey)).toContain(makePaneKey('tab-newest', newestLeafId))
+  })
+
+  it('attributes a spinner-only newest tab to launchAgent on a rootless layout', () => {
+    const newestLeafId = '99999999-9999-4999-8999-999999999999'
+    const rows = buildWorktreeAgentRows({
+      tabs: [makeTab('tab-newest', { launchAgent: 'claude', createdAt: 3, sortOrder: 2 })],
+      entries: [],
+      retained: [],
+      runtimePaneTitlesByTabId: { 'tab-newest': { 1: '⠼ demo-repo' } },
+      ptyIdsByTabId: { 'tab-newest': ['pty-newest'] },
+      terminalLayoutsByTabId: {
+        'tab-newest': {
+          root: null,
+          activeLeafId: newestLeafId,
+          expandedLeafId: null
+        }
+      },
+      now: 2000
+    })
+
+    expect(rows.map((row) => [row.tab.id, row.paneKey, row.agentType, row.state])).toEqual([
+      ['tab-newest', makePaneKey('tab-newest', newestLeafId), 'claude', 'working']
+    ])
+  })
 })
