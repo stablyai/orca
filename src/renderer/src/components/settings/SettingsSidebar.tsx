@@ -111,6 +111,7 @@ type SettingsSetupGuideRowProps = {
   onSelect: () => void
 }
 
+/** Setup-guide row above the section list; mirrors `SetupGuideSidebarEntry` styling inside settings. */
 function SettingsSetupGuideNavRow({
   progress,
   setupActive,
@@ -130,7 +131,7 @@ function SettingsSetupGuideNavRow({
         'flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left outline-none transition-colors focus-visible:ring-[3px] focus-visible:ring-worktree-sidebar-ring/50',
         setupActive
           ? 'bg-worktree-sidebar-accent font-medium text-worktree-sidebar-accent-foreground'
-          : 'text-worktree-sidebar-foreground/60 hover:bg-worktree-sidebar-foreground/8 hover:text-worktree-sidebar-foreground'
+          : 'text-muted-foreground hover:bg-worktree-sidebar-foreground/8 hover:text-worktree-sidebar-foreground'
       )}
     >
       <SetupGuideProgressRing
@@ -148,6 +149,7 @@ function SettingsSetupGuideNavRow({
   )
 }
 
+/** Settings navigation column: search, general section groups, and one per-repo section. */
 export function SettingsSidebar({
   activeSectionId,
   settings,
@@ -175,8 +177,9 @@ export function SettingsSidebar({
       'flex w-full items-center gap-2 rounded-lg px-3 py-1.5 text-left text-[13px] outline-none transition-colors duration-150 focus-visible:ring-[3px] focus-visible:ring-worktree-sidebar-ring/50',
       isActive
         ? 'bg-worktree-sidebar-accent font-medium text-worktree-sidebar-accent-foreground ring-1 ring-worktree-sidebar-ring/25'
-        : 'text-worktree-sidebar-foreground/60 hover:bg-worktree-sidebar-accent/60 hover:text-worktree-sidebar-foreground'
+        : 'text-muted-foreground hover:bg-worktree-sidebar-accent/60 hover:text-worktree-sidebar-foreground'
     )
+  /** Localized pill text for a repo section's skill-install status. */
   const installStatusLabel = (status: VisibleInstallStatus): string => {
     switch (status) {
       case 'update-available':

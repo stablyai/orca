@@ -25,6 +25,7 @@ function dashboardBucketLabel(bucket: DashboardBucket): string {
   }
 }
 
+/** Inline per-bucket agent counts; hides empty buckets and idle unless `showIdle`. */
 function DashboardBucketCounts({
   counts,
   showIdle
@@ -44,7 +45,7 @@ function DashboardBucketCounts({
         <span
           key={bucket}
           aria-label={`${dashboardBucketLabel(bucket)}: ${counts[bucket]}`}
-          className="inline-flex items-center gap-1 text-[10px] tabular-nums text-worktree-sidebar-foreground/55"
+          className="inline-flex items-center gap-1 text-[10px] tabular-nums text-muted-foreground/90"
         >
           {bucket === 'attention' ? (
             <AgentQuestionIcon className="size-2.5" />
@@ -58,6 +59,7 @@ function DashboardBucketCounts({
   )
 }
 
+/** Sidebar nav row that opens the agent dashboard as a drawer or popout per settings. */
 export default function AgentDashboardSidebarEntry(): React.JSX.Element {
   const dashboardBucketCounts = useAgentBucketCounts()
   const showIdle = useAppStore((s) => s.settings?.experimentalAgentDashboardShowIdle === true)
@@ -77,13 +79,10 @@ export default function AgentDashboardSidebarEntry(): React.JSX.Element {
       }}
       className={cn(
         'flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-[13px] font-medium tracking-tight transition-colors',
-        'text-worktree-sidebar-foreground/60 hover:bg-worktree-sidebar-foreground/8'
+        'text-muted-foreground hover:bg-worktree-sidebar-foreground/8'
       )}
     >
-      <LayoutDashboard
-        className="size-4 shrink-0 text-worktree-sidebar-foreground/30"
-        strokeWidth={1.75}
-      />
+      <LayoutDashboard className="size-4 shrink-0 text-muted-foreground/50" strokeWidth={1.75} />
       <span className="flex-1">{translate('dashboard.sidebar.label', 'Agent Dashboard')}</span>
       <DashboardBucketCounts counts={dashboardBucketCounts} showIdle={showIdle} />
     </button>

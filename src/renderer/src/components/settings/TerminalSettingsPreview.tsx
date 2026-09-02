@@ -49,6 +49,7 @@ function resolveAppMode(
   return settings.theme
 }
 
+/** Live xterm preview that mirrors `applyTerminalAppearance` so settings render exactly as real panes will. */
 export function TerminalSettingsPreview({
   title,
   description,
@@ -206,7 +207,8 @@ export function TerminalSettingsPreview({
     // Why: share applyTerminalAppearance's gating helper (#7934) so the preview can't drift from live panes.
     terminal.options.minimumContrastRatio = resolveTerminalMinimumContrastRatio(
       composedTheme.background,
-      effectiveMode
+      effectiveMode,
+      composedTheme.foreground
     )
     // Why: xterm renders an alpha-channel background opaque unless allowTransparency is set (matches applyTerminalAppearance).
     terminal.options.allowTransparency =

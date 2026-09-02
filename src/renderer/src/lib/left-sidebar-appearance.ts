@@ -5,6 +5,7 @@ import {
   normalizeLeftSidebarTintOpacity
 } from '../../../shared/left-sidebar-appearance'
 import { resolveEffectiveTerminalAppearance } from './terminal-theme'
+import { resolveMutedForegroundMixPercent } from './muted-foreground-contrast'
 
 type LeftSidebarAppearanceSettings = Pick<
   GlobalSettings,
@@ -46,12 +47,14 @@ function applyAlpha(color: string, alpha: number | undefined): string {
   return hexToRgba(color, Math.min(1, Math.max(0, alpha)))
 }
 
+/** Derives every sidebar-scoped CSS variable from one background/foreground pair via `color-mix`. */
 function buildSurfaceVariables(args: {
   background: string
   foreground: string
   overrideTextTokens?: boolean
+  appSurface?: 'dark' | 'light'
 }): LeftSidebarStyleVariables {
-  const { background, foreground, overrideTextTokens = false } = args
+  const { background, foreground, overrideTextTokens = false, appSurface } = args
   const accent = `color-mix(in srgb, ${foreground} 9%, ${background})`
   // 7% keeps the sidebar divider at the same prominence as the global --border
   // (7% in dark mode) so it reads like the rest of the UI; 14% rendered brighter (#5906).
@@ -82,13 +85,16 @@ function buildSurfaceVariables(args: {
     vars['--accent'] = `color-mix(in srgb, ${foreground} 9%, ${background})`
     vars['--accent-foreground'] = foreground
     vars['--muted'] = `color-mix(in srgb, ${foreground} 7%, ${background})`
-    vars['--muted-foreground'] = `color-mix(in srgb, ${foreground} 62%, ${background})`
+    // Contrast-gated (#16999): a fixed 62% vanishes on low-contrast themes such as Solarized.
+    const mutedPercent = resolveMutedForegroundMixPercent(background, foreground, { appSurface })
+    vars['--muted-foreground'] = `color-mix(in srgb, ${foreground} ${mutedPercent}%, ${background})`
     // Match the global --border (7%) so sidebar-scoped dividers aren't brighter (#5906).
     vars['--border'] = `color-mix(in srgb, ${foreground} 7%, ${background})`
   }
   return vars
 }
 
+/** Match-terminal mode: sidebar variables derived from the active terminal theme. */
 function resolveTerminalSurfaceVariables(
   settings: LeftSidebarAppearanceSettings,
   systemPrefersDark: boolean
@@ -100,7 +106,12 @@ function resolveTerminalSurfaceVariables(
   )
   const foreground =
     settings.terminalColorOverrides?.foreground ?? appearance.theme?.foreground ?? '#fafafa'
-  return buildSurfaceVariables({ background, foreground, overrideTextTokens: true })
+  return buildSurfaceVariables({
+    background,
+    foreground,
+    overrideTextTokens: true,
+    appSurface: appearance.mode
+  })
 }
 
 function resolveTintedSurfaceVariables(

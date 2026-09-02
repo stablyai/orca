@@ -54,6 +54,7 @@ function TaskProviderShortcut({
   )
 }
 
+/** Tasks nav row that opens the task page; hidden when `showTasksButton` is off in settings. */
 export function SidebarTaskNavButton(): React.JSX.Element | null {
   const openTaskPage = useAppStore((s) => s.openTaskPage)
   const updateSettings = useAppStore((s) => s.updateSettings)
@@ -169,14 +170,11 @@ export function SidebarTaskNavButton(): React.JSX.Element | null {
               'flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-[13px] font-medium tracking-tight transition-colors',
               tasksActive
                 ? 'bg-worktree-sidebar-accent text-worktree-sidebar-accent-foreground'
-                : 'text-worktree-sidebar-foreground/60 group-hover:bg-worktree-sidebar-foreground/8'
+                : 'text-muted-foreground group-hover:bg-worktree-sidebar-foreground/8'
             )}
           >
             <List
-              className={cn(
-                'size-4 shrink-0',
-                !tasksActive && 'text-worktree-sidebar-foreground/30'
-              )}
+              className={cn('size-4 shrink-0', !tasksActive && 'text-muted-foreground/50')}
               strokeWidth={tasksActive ? 2.25 : 1.75}
             />
             <span className="flex-1">

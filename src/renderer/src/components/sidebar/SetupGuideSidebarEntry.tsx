@@ -38,6 +38,7 @@ function isSetupGuideSidebarComplete(progress: FeatureWallSetupProgress): boolea
   return progress.coreDoneCount >= progress.coreTotal
 }
 
+/** Dismissible sidebar row with setup progress; hidden once setup completes or the user dismisses it. */
 export function SetupGuideSidebarEntry(): React.JSX.Element | null {
   const openModal = useAppStore((s) => s.openModal)
   const activeModal = useAppStore((s) => s.activeModal)
@@ -92,7 +93,7 @@ export function SetupGuideSidebarEntry(): React.JSX.Element | null {
             'flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-[13px] font-medium tracking-tight transition-colors',
             setupActive
               ? 'bg-worktree-sidebar-accent text-worktree-sidebar-accent-foreground'
-              : 'text-worktree-sidebar-foreground/60 hover:bg-worktree-sidebar-foreground/8'
+              : 'text-muted-foreground hover:bg-worktree-sidebar-foreground/8'
           )}
         >
           <SetupGuideProgressRing
