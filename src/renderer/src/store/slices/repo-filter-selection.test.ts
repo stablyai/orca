@@ -17,4 +17,8 @@ describe('widenFilterRepoIds', () => {
       'repo-3'
     ])
   })
+
+  it('appends a repeated missing id only once', () => {
+    expect(widenFilterRepoIds(['repo-1'], ['repo-2', 'repo-2'])).toEqual(['repo-1', 'repo-2'])
+  })
 })

@@ -17,6 +17,14 @@ export function widenFilterRepoIds(
   if (filterRepoIds.length === 0) {
     return null
   }
-  const missing = repoIds.filter((id) => !filterRepoIds.includes(id))
+  // Why: callers may pass the same id twice (batched imports), so dedupe against the running set.
+  const selected = new Set(filterRepoIds)
+  const missing: string[] = []
+  for (const id of repoIds) {
+    if (!selected.has(id)) {
+      selected.add(id)
+      missing.push(id)
+    }
+  }
   return missing.length > 0 ? [...filterRepoIds, ...missing] : null
 }
