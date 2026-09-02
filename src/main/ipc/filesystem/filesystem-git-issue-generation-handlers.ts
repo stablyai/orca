@@ -40,12 +40,22 @@ export function registerFilesystemGitIssueGenerationHandlers(
       }
     ): Promise<GenerateIssueFieldsResult> => {
       const discoveryHostKey = getCommitMessageModelDiscoveryHostKey(args.connectionId ?? null)
+      const repoForSourceControlAi = await getRepoForSourceControlAi(store, args)
+      // Why: the relay runs the agent with args.worktreePath as cwd. For SSH the only
+      // ownership proof is the repo registered for that connection — fail closed when
+      // the path does not belong to it (CWE-862).
+      if (args.connectionId && !repoForSourceControlAi) {
+        return {
+          success: false,
+          error: 'Access denied: unknown remote repository or worktree path.'
+        }
+      }
       // Why: issue generation has no dedicated settings lane yet; the pullRequest lane picks the agent/model.
       const resolvedSettings = resolveCommitMessageSettings(
         store.getSettings(),
         discoveryHostKey,
         'pullRequest',
-        await getRepoForSourceControlAi(store, args)
+        repoForSourceControlAi
       )
       if (!resolvedSettings.ok) {
         return { success: false, error: resolvedSettings.error }

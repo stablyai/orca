@@ -69,6 +69,18 @@ describe('git:generateIssueFields', () => {
     body: 'Print the open document.',
     repoSlug: 'owner/repo'
   }
+  const SSH_REPO = {
+    id: 'repo-ssh',
+    path: '/remote/repo',
+    displayName: 'remote',
+    badgeColor: '#000',
+    addedAt: 0,
+    connectionId: 'conn-1'
+  }
+  const sshStore = {
+    ...store,
+    getRepo: (id: string) => (id === 'repo-ssh' ? SSH_REPO : undefined)
+  }
 
   beforeEach(() => {
     resetFilesystemIpcMocks()
@@ -118,17 +130,24 @@ describe('git:generateIssueFields', () => {
     expect(generateIssueFieldsFromContextMock).not.toHaveBeenCalled()
   })
 
-  it('routes SSH requests through the git provider as a remote target', async () => {
+  it('routes SSH requests for an owned worktree through the git provider as a remote target', async () => {
     const executeCommitMessagePlan = vi.fn()
     getSshGitProviderMock.mockReturnValue({ executeCommitMessagePlan })
-    registerFilesystemHandlers(store as never)
+    registerFilesystemHandlers(sshStore as never)
 
     await handlers.get('git:generateIssueFields')!(null, {
       ...ISSUE_ARGS,
       worktreePath: '/remote/repo',
+      repoId: 'repo-ssh',
       connectionId: 'conn-1'
     })
 
+    expect(resolveCommitMessageSettingsMock).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.anything(),
+      'pullRequest',
+      SSH_REPO
+    )
     expect(generateIssueFieldsFromContextMock).toHaveBeenCalledWith(
       expect.objectContaining({ currentTitle: 'Add a Print button' }),
       params,
@@ -136,13 +155,29 @@ describe('git:generateIssueFields', () => {
     )
   })
 
+  it('rejects an SSH worktree that no registered repo for the connection owns', async () => {
+    getSshGitProviderMock.mockReturnValue({ executeCommitMessagePlan: vi.fn() })
+    registerFilesystemHandlers(sshStore as never)
+
+    const result = (await handlers.get('git:generateIssueFields')!(null, {
+      ...ISSUE_ARGS,
+      worktreePath: '/somewhere/else',
+      connectionId: 'conn-1'
+    })) as { success: boolean; error?: string }
+
+    expect(result.success).toBe(false)
+    expect(result.error).toContain('Access denied')
+    expect(generateIssueFieldsFromContextMock).not.toHaveBeenCalled()
+  })
+
   it('fails closed when the SSH provider is unavailable', async () => {
-    registerFilesystemHandlers(store as never)
+    registerFilesystemHandlers(sshStore as never)
 
     const result = (await handlers.get('git:generateIssueFields')!(null, {
       ...ISSUE_ARGS,
       worktreePath: '/remote/repo',
-      connectionId: 'conn-gone'
+      repoId: 'repo-ssh',
+      connectionId: 'conn-1'
     })) as { success: boolean }
 
     expect(result.success).toBe(false)

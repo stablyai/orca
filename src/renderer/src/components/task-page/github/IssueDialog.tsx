@@ -167,7 +167,7 @@ export function TaskPageGitHubIssueDialog({
                   preference={newIssueTargetRepo.issueSourcePreference}
                   origin={entry.sources.originCandidate}
                   upstream={entry.sources.upstreamCandidate}
-                  disabled={newIssueSubmitting}
+                  disabled={newIssueFieldsLocked}
                   // Why: composer only files issues, so the source tooltip is redundant here (kept on the Tasks header, which also lists PRs).
                   suppressTooltip
                   onChange={(next) => {
@@ -197,7 +197,9 @@ export function TaskPageGitHubIssueDialog({
                   setNewIssueLabels(reset.labels)
                   setNewIssueAssignees(reset.assignees)
                 }}
-                disabled={newIssueSubmitting}
+                // Why: generation is bound to the started repo; switching targets mid-run
+                // would land A's content and A-validated labels in B.
+                disabled={newIssueFieldsLocked}
               >
                 <SelectTrigger>
                   <SelectValue />

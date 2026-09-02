@@ -23,7 +23,11 @@ export function useTaskPageGitHubIssueGeneration(model: TaskPageJiraListEffectsM
   const [newIssueGenerating, setNewIssueGenerating] = useState(false)
   const [newIssueGenerateError, setNewIssueGenerateError] = useState<string | null>(null)
   const generationRequestIdRef = useRef(0)
-  const inFlightRepoPathRef = useRef<string | null>(null)
+  const inFlightTargetRef = useRef<{ path: string; connectionId: string | null } | null>(null)
+  // Why: the resolve closure holds click-time state; the ref exposes the live target so a
+  // repo switched mid-flight (e.g. the vanished-repo fallback) never receives A's content.
+  const currentTargetRepoIdRef = useRef<string | null>(null)
+  currentTargetRepoIdRef.current = newIssueTargetRepo?.id ?? null
 
   const newIssueAiEnabled = useMemo(
     () =>
@@ -64,19 +68,27 @@ export function useTaskPageGitHubIssueGeneration(model: TaskPageJiraListEffectsM
     const repoSlug = entry?.sources?.issues
       ? `${entry.sources.issues.owner}/${entry.sources.issues.repo}`
       : null
-    inFlightRepoPathRef.current = newIssueTargetRepo.path
+    const startedRepoId = newIssueTargetRepo.id
+    const connectionId = newIssueTargetRepo.connectionId ?? null
+    inFlightTargetRef.current = { path: newIssueTargetRepo.path, connectionId }
     setNewIssueGenerating(true)
     setNewIssueGenerateError(null)
     try {
       const result = await window.api.git.generateIssueFields({
         worktreePath: newIssueTargetRepo.path,
         repoId: newIssueTargetRepo.id,
+        ...(connectionId ? { connectionId } : {}),
         title: newIssueTitle,
         body: newIssueBody,
         repoSlug,
         availableLabels: newIssueRepoLabels.data ?? []
       })
       if (generationRequestIdRef.current !== requestId) {
+        return
+      }
+      // Why: labels and repo context were generated for the started repo; a target that
+      // changed mid-flight must not receive them.
+      if (currentTargetRepoIdRef.current !== startedRepoId) {
         return
       }
       if (!result.success) {
@@ -123,7 +135,7 @@ export function useTaskPageGitHubIssueGeneration(model: TaskPageJiraListEffectsM
       )
     } finally {
       if (generationRequestIdRef.current === requestId) {
-        inFlightRepoPathRef.current = null
+        inFlightTargetRef.current = null
         setNewIssueGenerating(false)
       }
     }
@@ -145,14 +157,17 @@ export function useTaskPageGitHubIssueGeneration(model: TaskPageJiraListEffectsM
   // Why: also runs on dialog dismissal so no agent keeps running and no stale error greets the next open.
   const handleCancelGenerateNewIssue = useCallback((): void => {
     setNewIssueGenerateError(null)
-    const worktreePath = inFlightRepoPathRef.current
-    if (!worktreePath) {
+    const target = inFlightTargetRef.current
+    if (!target) {
       return
     }
     generationRequestIdRef.current += 1
-    inFlightRepoPathRef.current = null
+    inFlightTargetRef.current = null
     setNewIssueGenerating(false)
-    void window.api.git.cancelGenerateIssueFields({ worktreePath })
+    void window.api.git.cancelGenerateIssueFields({
+      worktreePath: target.path,
+      ...(target.connectionId ? { connectionId: target.connectionId } : {})
+    })
   }, [])
 
   const nextModel = model as typeof model & {
