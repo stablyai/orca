@@ -168,12 +168,34 @@ describe('TabBarOpenInAppsButton', () => {
     expect(primaryButton().disabled).toBe(false)
   })
 
-  it('disables the primary action when no configured app can open the workspace here', () => {
+  it('disables the primary action and keeps its tooltip reachable when no app can open the workspace here', async () => {
     mockState.repos = [{ id: 'repo-1', connectionId: 'ssh-1' }]
     mockState.settings = { activeRuntimeEnvironmentId: null, openInApplications: [cursor] }
     render()
     expect(primaryButton().textContent).toBe('Cursor')
     expect(primaryButton().disabled).toBe(true)
+
+    // Why: a disabled button gets no focus or pointer events, so the wrapper must be the focusable tooltip trigger.
+    const trigger = primaryButton().parentElement
+    if (!(trigger instanceof HTMLElement)) {
+      throw new Error('tooltip trigger not found')
+    }
+    expect(trigger.getAttribute('data-slot')).toBe('tooltip-trigger')
+    expect(trigger.tabIndex).toBe(0)
+
+    await act(async () => {
+      trigger.focus()
+      await Promise.resolve()
+    })
+
+    const tooltip = document.querySelector('[data-slot="tooltip-content"]')
+    expect(tooltip?.textContent).toContain('Open in Cursor')
+    expect(tooltip?.textContent).toContain('Local only')
+  })
+
+  it('does not make the wrapper focusable while the primary button is enabled', () => {
+    render()
+    expect(primaryButton().parentElement?.hasAttribute('tabindex')).toBe(false)
   })
 
   it('lists every configured app in the dropdown and remembers the one launched from it', async () => {

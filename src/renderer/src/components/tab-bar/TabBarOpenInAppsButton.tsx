@@ -33,6 +33,7 @@ type TabBarOpenInAppsButtonProps = {
   worktreeId: string
 }
 
+/** Availability checks take menu entries, so adapt a configured app. */
 function toOpenInEntry(application: OpenInApplication): OpenInMenuEntry {
   return {
     id: application.id,
@@ -58,6 +59,7 @@ export function resolvePrimaryOpenInApplication(
   return applications.find(isAvailable) ?? recent ?? applications[0] ?? null
 }
 
+/** Tab-strip split button that opens the workspace in a configured Open In app. Hidden when the id has no workspace (floating terminals). */
 export function TabBarOpenInAppsButton({
   worktreeId
 }: TabBarOpenInAppsButtonProps): React.JSX.Element | null {
@@ -174,16 +176,22 @@ export function TabBarOpenInAppsButton({
     <div className={TAB_BAR_SPLIT_BUTTON_CLASS}>
       <Tooltip>
         <TooltipTrigger asChild>
-          <button
-            type="button"
-            onClick={openPrimary}
-            disabled={primaryAvailability.disabled}
-            className={TAB_BAR_SPLIT_BUTTON_PRIMARY_CLASS}
-            aria-label={openPrimaryLabel}
+          {/* Why: a disabled button gets no pointer or focus events, so the wrapper carries the tooltip that says why. */}
+          <span
+            className="flex focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+            tabIndex={primaryAvailability.disabled ? 0 : undefined}
           >
-            <OpenInApplicationIcon application={primary} size={12} />
-            <span className={TAB_BAR_SPLIT_BUTTON_LABEL_CLASS}>{primary.label}</span>
-          </button>
+            <button
+              type="button"
+              onClick={openPrimary}
+              disabled={primaryAvailability.disabled}
+              className={TAB_BAR_SPLIT_BUTTON_PRIMARY_CLASS}
+              aria-label={openPrimaryLabel}
+            >
+              <OpenInApplicationIcon application={primary} size={12} />
+              <span className={TAB_BAR_SPLIT_BUTTON_LABEL_CLASS}>{primary.label}</span>
+            </button>
+          </span>
         </TooltipTrigger>
         <TooltipContent side="bottom" sideOffset={6}>
           {openPrimaryLabel}
