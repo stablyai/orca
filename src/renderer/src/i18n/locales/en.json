@@ -5473,6 +5473,13 @@
           "74b1413279": "Appearance",
           "ccbd1e2c69": "Customize {{value0}} appearance"
         },
+        "WorkspaceTrustPromptDialog": {
+          "title": "Trust this location?",
+          "body": "{{path}} is not trusted yet. Trusting it lets Orca run local tools scoped to this folder — such as reading package details from your local npm client — and the decision applies to everything nested beneath it too.",
+          "trustParent": "Trust {{parentPath}} instead",
+          "decline": "Don't trust",
+          "trustWorkspace": "Trust this location"
+        },
         "WorktreeCard": {
           "a88c92d0e3": "{{value0}}/{{value1}} already exists.",
           "6f09f58541": "Delete workspace",

@@ -4560,6 +4560,13 @@
           "74b1413279": "외관",
           "ccbd1e2c69": "{{value0}} 모양 맞춤설정"
         },
+        "WorkspaceTrustPromptDialog": {
+          "title": "이 위치를 신뢰하시겠습니까?",
+          "body": "{{path}}는 아직 신뢰되지 않았습니다. 신뢰하면 Orca가 이 폴더로 범위가 제한된 로컬 도구를 실행할 수 있습니다(예: 로컬 npm 클라이언트에서 패키지 세부 정보 읽기). 이 결정은 이 폴더 내부의 모든 항목에도 적용됩니다.",
+          "trustParent": "대신 {{parentPath}} 신뢰",
+          "decline": "신뢰하지 않음",
+          "trustWorkspace": "이 위치 신뢰"
+        },
         "WorktreeCard": {
           "a88c92d0e3": "{{value0}}/{{value1}}이(가) 이미 있습니다.",
           "6f09f58541": "워크스페이스 삭제",

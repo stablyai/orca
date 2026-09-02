@@ -4603,6 +4603,13 @@
           "74b1413279": "外观",
           "ccbd1e2c69": "自定义 {{value0}} 外观"
         },
+        "WorkspaceTrustPromptDialog": {
+          "title": "信任此位置吗？",
+          "body": "{{path}} 尚未被信任。信任它后，Orca 可以运行仅限于此文件夹的本地工具——例如从本地 npm 客户端读取软件包详情——该决定同样适用于其中嵌套的所有内容。",
+          "trustParent": "改为信任 {{parentPath}}",
+          "decline": "不信任",
+          "trustWorkspace": "信任此位置"
+        },
         "WorktreeCard": {
           "a88c92d0e3": "{{value0}}/{{value1}} 已存在。",
           "6f09f58541": "删除工作区",

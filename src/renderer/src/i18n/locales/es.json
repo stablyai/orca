@@ -4574,6 +4574,13 @@
           "74b1413279": "Apariencia",
           "ccbd1e2c69": "Personaliza la apariencia de {{value0}}"
         },
+        "WorkspaceTrustPromptDialog": {
+          "title": "¿Confiar en esta ubicación?",
+          "body": "{{path}} aún no es confiable. Confiar en ella permite que Orca ejecute herramientas locales limitadas a esta carpeta, como leer detalles de paquetes desde tu cliente npm local, y la decisión se aplica también a todo lo que esté dentro de ella.",
+          "trustParent": "Confiar en {{parentPath}} en su lugar",
+          "decline": "No confiar",
+          "trustWorkspace": "Confiar en esta ubicación"
+        },
         "WorktreeCard": {
           "a88c92d0e3": "{{value0}}/{{value1}} ya existe.",
           "6f09f58541": "Eliminar espacio de trabajo",

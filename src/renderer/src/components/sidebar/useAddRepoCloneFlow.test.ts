@@ -20,7 +20,9 @@ const mocks = vi.hoisted(() => ({
   onCloneProgress: vi.fn(() => vi.fn()),
   callRuntimeRpc: vi.fn(),
   fetchWorktrees: vi.fn(),
-  onGitRepoReady: vi.fn()
+  onGitRepoReady: vi.fn(),
+  resolveIntake: vi.fn(() => Promise.resolve({ outcome: 'not-applicable' })),
+  decide: vi.fn()
 }))
 
 vi.mock('react', async (importOriginal) => {
@@ -107,7 +109,8 @@ describe('useAddRepoCloneFlow', () => {
           clone: mocks.cloneLocal,
           pickDirectory: mocks.pickDirectory,
           onCloneProgress: mocks.onCloneProgress
-        }
+        },
+        workspaceTrust: { resolveIntake: mocks.resolveIntake, decide: mocks.decide }
       }
     })
   })
@@ -150,6 +153,8 @@ describe('useAddRepoCloneFlow', () => {
       expect.arrayContaining([expect.objectContaining({ repoId: repo.id, path: repo.path })])
     )
     expect(mocks.onGitRepoReady).toHaveBeenCalledWith(repo.id, 'clone_url', 'ssh:ssh-1')
+    // Why: an SSH-hosted repo has no local filesystem root to gate.
+    expect(mocks.resolveIntake).not.toHaveBeenCalled()
   })
 
   it('does not prefill SSH clone destinations from the local workspace directory', async () => {
@@ -233,5 +238,32 @@ describe('useAddRepoCloneFlow', () => {
     })
     expect(mocks.storeState.repos).toContainEqual(localRepo)
     expect(mocks.onGitRepoReady).toHaveBeenCalledWith(repo.id, 'clone_url', 'runtime:env-1')
+    // Why: a runtime-hosted repo has no local filesystem root to gate.
+    expect(mocks.resolveIntake).not.toHaveBeenCalled()
+  })
+
+  it('resolves workspace trust for a fully local clone, after the fetch completes', async () => {
+    const repo = makeRepo()
+    mocks.cloneLocal.mockResolvedValue(repo)
+    // Why: 'not-applicable' avoids needing an `openModal` stub here — the prompt
+    // itself is fully covered by ensure-workspace-trust-confirmed.test.ts; this
+    // test only proves the call site passes the right target.
+    mocks.resolveIntake.mockResolvedValue({ outcome: 'not-applicable' })
+    mocks.fetchWorktrees.mockResolvedValue(true)
+    const { useAddRepoCloneFlow } = await import('./useAddRepoCloneFlow')
+
+    const result = useAddRepoCloneFlow({
+      step: 'clone',
+      activeRuntimeEnvironmentId: null,
+      sshTargetId: null,
+      workspaceDir: '/local/workspace',
+      fetchWorktrees: mocks.fetchWorktrees,
+      onGitRepoReady: mocks.onGitRepoReady
+    })
+    await result.handleClone()
+
+    expect(mocks.resolveIntake).toHaveBeenCalledWith({
+      target: { kind: 'repo', repoId: repo.id }
+    })
   })
 })

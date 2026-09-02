@@ -9,6 +9,7 @@ import { callRuntimeRpc, getActiveRuntimeTarget } from '../../runtime/runtime-rp
 import { resolveDismissedOnboardingFolderAgentLaunch } from '@/lib/onboarding-folder-agent-startup'
 import { isNativeChatTranscriptLocalReadable } from '@/lib/native-chat-transcript-readability'
 import { markOnboardingProjectAdded } from '@/lib/onboarding-project-checklist'
+import { ensureWorkspaceTrustConfirmed } from '@/lib/ensure-workspace-trust-confirmed'
 import { translate } from '@/i18n/i18n'
 import {
   getRepoExecutionHostId,
@@ -115,6 +116,13 @@ export function createRepoAddActions(
             folderWorkspacePathStatuses: {}
           }
         })
+        // Why: local-only — an SSH/runtime-added repo has no local filesystem root to gate
+        // (Req: Intake Resolves a Trust Outcome Before Completing; not-applicable elsewhere).
+        // Resolving again for an already-added repo is a harmless no-op (already
+        // trusted/declined never re-prompts).
+        if (target.kind === 'local') {
+          await ensureWorkspaceTrustConfirmed(get(), { kind: 'repo', repoId: repo.id }, repo.path)
+        }
         if (alreadyAdded) {
           toast.info(translate('auto.store.slices.repos.a8e4b3af5b', 'Project already added'), {
             description: repo.displayName

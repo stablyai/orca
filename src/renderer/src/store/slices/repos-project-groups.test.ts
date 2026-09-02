@@ -49,6 +49,7 @@ const folderWorkspacesGetPathStatus = vi.fn()
 const folderWorkspacesCreate = vi.fn()
 const folderWorkspacesUpdate = vi.fn()
 const folderWorkspacesDelete = vi.fn()
+const workspaceTrustResolveIntake = vi.fn()
 const runtimeEnvironmentCall = vi.fn()
 const runtimeEnvironmentTransportCall = vi.fn()
 
@@ -82,6 +83,7 @@ beforeEach(() => {
   folderWorkspacesCreate.mockReset()
   folderWorkspacesUpdate.mockReset()
   folderWorkspacesDelete.mockReset()
+  workspaceTrustResolveIntake.mockReset().mockResolvedValue({ outcome: 'not-applicable' })
   runtimeEnvironmentCall.mockReset()
   runtimeEnvironmentTransportCall.mockReset()
   runtimeEnvironmentTransportCall.mockImplementation((args: RuntimeEnvironmentCallRequest) => {
@@ -111,6 +113,7 @@ beforeEach(() => {
         update: folderWorkspacesUpdate,
         delete: folderWorkspacesDelete
       },
+      workspaceTrust: { resolveIntake: workspaceTrustResolveIntake },
       runtimeEnvironments: { call: runtimeEnvironmentTransportCall }
     }
   })
@@ -276,6 +279,8 @@ describe('project group store routing', () => {
       timeoutMs: 15_000
     })
     expect(folderWorkspacesCreate).not.toHaveBeenCalled()
+    // Why: a runtime-hosted folder workspace has no local filesystem root to gate.
+    expect(workspaceTrustResolveIntake).not.toHaveBeenCalled()
   })
 
   it('blocks Jira folder creation on runtimes without durable linked context support', async () => {
@@ -357,6 +362,9 @@ describe('project group store routing', () => {
       projectGroupId: projectGroup.id,
       name: 'Refund fix',
       linkedTask
+    })
+    expect(workspaceTrustResolveIntake).toHaveBeenCalledWith({
+      target: { kind: 'folderWorkspace', folderWorkspaceId: folderWorkspace.id }
     })
     expect(folderWorkspacesUpdate).toHaveBeenCalledWith({
       folderWorkspaceId: folderWorkspace.id,
