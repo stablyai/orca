@@ -2,7 +2,13 @@ import { describe, expect, it, vi, beforeEach } from 'vitest'
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { clientInstances, resetSshConnectionMocks, ssh2Mock } from './ssh-connection-test-harness'
+import {
+  clientInstances,
+  emitSshEvent,
+  nextSshClientCreation,
+  resetSshConnectionMocks,
+  ssh2Mock
+} from './ssh-connection-test-harness'
 import { createCallbacks, createTarget } from './ssh-connection-test-fixtures'
 import { SshConnection } from './ssh-connection'
 import { resolveWithSshG } from './ssh-config-parser'
@@ -169,7 +175,12 @@ describe('SshConnection', () => {
     expect(retryConfig.agent).toBeUndefined()
     expect(retryConfig.password).toBe('password-123')
     expect(retryConfig.privateKey).toBeUndefined()
-    expect(onCredentialRequest).toHaveBeenCalledWith('target-1', 'password', 'example.com')
+    expect(onCredentialRequest).toHaveBeenCalledWith(
+      'target-1',
+      'password',
+      'example.com',
+      expect.any(AbortSignal)
+    )
   })
 
   it('retries password auth with the no-agent key config after direct key fallback fails', async () => {
@@ -212,6 +223,165 @@ describe('SshConnection', () => {
     }
   })
 
+  it('answers bounded keyboard-interactive challenges such as Duo 2FA', async () => {
+    vi.useFakeTimers()
+    const onCredentialRequest = vi.fn().mockResolvedValueOnce('1').mockResolvedValueOnce('123456')
+    try {
+      const conn = new SshConnection(createTarget(), createCallbacks({ onCredentialRequest }))
+      const clientCreated = nextSshClientCreation()
+      const connected = conn.connect()
+      await clientCreated
+      const finish = vi.fn()
+
+      emitSshEvent(
+        'keyboard-interactive',
+        'Duo two-factor login',
+        'Select push or enter a passcode.',
+        '',
+        [
+          { prompt: 'Option:', echo: false },
+          { prompt: 'Passcode:', echo: false }
+        ],
+        finish
+      )
+      for (let turn = 0; turn < 8 && finish.mock.calls.length === 0; turn += 1) {
+        await Promise.resolve()
+      }
+
+      expect(clientInstances[0].lastConnectConfig).toMatchObject({ tryKeyboard: true })
+      expect(onCredentialRequest).toHaveBeenNthCalledWith(
+        1,
+        'target-1',
+        'keyboard-interactive',
+        'Duo two-factor login\nSelect push or enter a passcode.\nOption:',
+        expect.any(AbortSignal)
+      )
+      expect(onCredentialRequest).toHaveBeenNthCalledWith(
+        2,
+        'target-1',
+        'keyboard-interactive',
+        'Duo two-factor login\nSelect push or enter a passcode.\nPasscode:',
+        expect.any(AbortSignal)
+      )
+      expect(finish).toHaveBeenCalledWith(['1', '123456'])
+
+      await vi.advanceTimersByTimeAsync(1)
+      await connected
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('rearms the handshake budget for each slow prompt in one keyboard-interactive round', async () => {
+    vi.useFakeTimers()
+    ssh2Mock.connectBehavior = 'pending'
+    const firstResponse = Promise.withResolvers<string | null>()
+    const secondResponse = Promise.withResolvers<string | null>()
+    const onCredentialRequest = vi
+      .fn()
+      .mockImplementationOnce(() => firstResponse.promise)
+      .mockImplementationOnce(() => secondResponse.promise)
+    try {
+      const conn = new SshConnection(createTarget(), createCallbacks({ onCredentialRequest }))
+      const clientCreated = nextSshClientCreation()
+      const connected = conn.connect()
+      let settled = false
+      void connected.then(
+        () => {
+          settled = true
+        },
+        () => {
+          settled = true
+        }
+      )
+      await clientCreated
+      await vi.advanceTimersByTimeAsync(1)
+      const finish = vi.fn()
+      emitSshEvent(
+        'keyboard-interactive',
+        'Duo two-factor login',
+        'Complete both checks.',
+        '',
+        [
+          { prompt: 'Option:', echo: false },
+          { prompt: 'Passcode:', echo: false }
+        ],
+        finish
+      )
+
+      await vi.advanceTimersByTimeAsync(100_000)
+      firstResponse.resolve('1')
+      for (let turn = 0; turn < 4 && onCredentialRequest.mock.calls.length < 2; turn += 1) {
+        await Promise.resolve()
+      }
+      expect(onCredentialRequest).toHaveBeenCalledTimes(2)
+
+      await vi.advanceTimersByTimeAsync(30_000)
+      expect(settled).toBe(false)
+      expect(finish).not.toHaveBeenCalled()
+
+      secondResponse.resolve('123456')
+      for (let turn = 0; turn < 4 && finish.mock.calls.length === 0; turn += 1) {
+        await Promise.resolve()
+      }
+      expect(finish).toHaveBeenCalledWith(['1', '123456'])
+      emitSshEvent('ready')
+      await connected
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('aborts an in-flight keyboard challenge when the connection is disconnected', async () => {
+    vi.useFakeTimers()
+    ssh2Mock.connectBehavior = 'pending'
+    let credentialSignal: AbortSignal | undefined
+    const onCredentialRequest = vi.fn(
+      (_targetId: string, _kind: string, _detail: string, signal?: AbortSignal) => {
+        credentialSignal = signal
+        const response = Promise.withResolvers<string | null>()
+        if (signal?.aborted) {
+          response.resolve(null)
+        } else {
+          signal?.addEventListener('abort', () => response.resolve(null), { once: true })
+        }
+        return response.promise
+      }
+    )
+    try {
+      const conn = new SshConnection(createTarget(), createCallbacks({ onCredentialRequest }))
+      const clientCreated = nextSshClientCreation()
+      const connected = conn.connect()
+      const connectionResult = connected.then(
+        () => null,
+        (error: unknown) => error
+      )
+      await clientCreated
+      await vi.advanceTimersByTimeAsync(1)
+      const finish = vi.fn()
+      emitSshEvent(
+        'keyboard-interactive',
+        'Duo two-factor login',
+        'Approve the push.',
+        '',
+        [{ prompt: 'Response:', echo: false }],
+        finish
+      )
+      await Promise.resolve()
+      expect(credentialSignal?.aborted).toBe(false)
+
+      await conn.disconnect()
+      expect(credentialSignal?.aborted).toBe(true)
+      await expect(connectionResult).resolves.toBeInstanceOf(Error)
+      for (let turn = 0; turn < 4 && finish.mock.calls.length === 0; turn += 1) {
+        await Promise.resolve()
+      }
+      expect(finish).toHaveBeenCalledWith([])
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   it('does not prompt twice when post-agent private key passphrase is cancelled', async () => {
     vi.stubEnv('SSH_AUTH_SOCK', '/tmp/agent.sock')
     const tempDir = mkdtempSync(join(tmpdir(), 'orca-ssh-key-'))
@@ -231,7 +401,12 @@ describe('SshConnection', () => {
 
       await expect(conn.connect()).rejects.toThrow('Encrypted private OpenSSH key detected')
       expect(onCredentialRequest).toHaveBeenCalledTimes(1)
-      expect(onCredentialRequest).toHaveBeenCalledWith('target-1', 'passphrase', keyPath)
+      expect(onCredentialRequest).toHaveBeenCalledWith(
+        'target-1',
+        'passphrase',
+        keyPath,
+        expect.any(AbortSignal)
+      )
     } finally {
       rmSync(tempDir, { recursive: true, force: true })
     }

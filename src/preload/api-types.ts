@@ -6,7 +6,7 @@ import type {
   GrokAccountsApi,
   MinimaxCredentialsApi
 } from './api/agent-account-api'
-import type { AgentHooksApi, HooksApi } from './api/agent-hook-api'
+import type { HooksApi } from './api/agent-hook-api'
 import type { SkillsApi } from './api/agent-skill-api'
 import type { AgentAwakeApi, AgentStatusApi, AgentTrustApi } from './api/agent-status-api'
 import type {
@@ -104,7 +104,6 @@ export type PreloadApi = {
   claudeAccounts: ClaudeAccountsApi
   cli: CliApi
   codexConfigSync: CodexConfigSyncApi
-  agentHooks: AgentHooksApi
   agentTrust: AgentTrustApi
   preflight: PreflightApi
   notifications: NotificationsApi

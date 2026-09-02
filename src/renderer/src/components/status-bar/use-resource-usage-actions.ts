@@ -229,3 +229,5 @@ export function useResourceUsageActions({
     openSpaceResults
   }
 }
+
+export type ResourceUsageActions = ReturnType<typeof useResourceUsageActions>

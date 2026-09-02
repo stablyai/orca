@@ -7,6 +7,10 @@
 import type { GitPushTarget } from '../../shared/worktree/types'
 import { parseGitHubOwnerRepo } from '../github/gh-utils'
 import type { GitRemoteExec } from './worktree-push-target-cleanup'
+import {
+  buildNarrowForkFetchRefspec,
+  ensureRemoteTracksBranchNarrowly
+} from '../git/fork-remote-refspec'
 
 export async function findRemoteForUrl(
   execGit: GitRemoteExec,
@@ -91,9 +95,22 @@ export async function prepareWorktreePushTargetWithExec(
       // Why: if a later PR worktree reuses an Orca-created fork remote, it
       // must inherit ownership so deleting the final user can remove it.
       remoteCreated = isRemoteCreatedByKnownWorktree(existingRemote)
+      // Why: a remote created before this fix (or reused for a second branch on the
+      // same fork) may still carry the wide default refspec; widen-but-bound it to
+      // cover this branch too rather than trusting whatever is already configured.
+      await ensureRemoteTracksBranchNarrowly(execGit, repoPath, remoteName, target.branchName)
     } else {
       remoteName = await ensureUniqueRemoteName(execGit, repoPath, target.remoteName)
-      await execGit(['remote', 'add', remoteName, target.remoteUrl], repoPath)
+      // Why: `-t <branch> --no-tags` means this remote is never, even transiently,
+      // written with the wide default `refs/heads/*` refspec + tag auto-follow (#17828).
+      // `-t` itself writes a literal (non-wildcard-suffixed) refspec, so immediately
+      // rewrite it to the trailing-`*` form via `ensureRemoteTracksBranchNarrowly`
+      // (see that function's comment for why the suffix matters).
+      await execGit(
+        ['remote', 'add', '-t', target.branchName, '--no-tags', remoteName, target.remoteUrl],
+        repoPath
+      )
+      await ensureRemoteTracksBranchNarrowly(execGit, repoPath, remoteName, target.branchName)
       remoteCreated = true
       remoteAddedHere = true
     }
@@ -101,11 +118,7 @@ export async function prepareWorktreePushTargetWithExec(
 
   try {
     await execGit(
-      [
-        'fetch',
-        remoteName,
-        `+refs/heads/${target.branchName}:refs/remotes/${remoteName}/${target.branchName}`
-      ],
+      ['fetch', remoteName, buildNarrowForkFetchRefspec(remoteName, target.branchName)],
       repoPath
     )
   } catch (error) {

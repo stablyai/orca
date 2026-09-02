@@ -116,7 +116,7 @@ export class RuntimeGitStatusCommands {
       }
       return provider.detectConflictOperation(target.worktree.path)
     }
-    return detectConflictOperation(target.worktree.path)
+    return detectConflictOperation(target.worktree.path, localGitOptionsForTarget(target))
   }
 
   async checkoutRuntimeGitBranch(

@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 
 import React from 'react'
-import { cleanup, render, waitFor } from '@testing-library/react'
+import { cleanup, fireEvent, render, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const environmentMocks = vi.hoisted(() => ({
@@ -15,6 +15,7 @@ vi.mock('@/lib/client-environment-info', () => ({
 import {
   TerminalErrorToast,
   humanizeTerminalError,
+  isPaneOwnerUnverifiedError,
   isExplainedTerminalError,
   isSshReconnectOwnedTerminalError,
   shouldOfferDaemonRestart,
@@ -69,13 +70,37 @@ describe('humanizeTerminalError', () => {
   it('replaces the pane-owner-unverified code with actionable copy', () => {
     const humanized = humanizeTerminalError('terminal_pane_owner_unverified')
     expect(humanized).not.toContain('terminal_pane_owner_unverified')
-    expect(humanized).toContain('Reopen this pane to retry')
+    expect(humanized).toContain('Click Retry to try reconnecting now')
+    expect(humanized).toContain('Orca left the saved session unchanged')
+    expect(humanized).not.toContain('was not closed or deleted')
+  })
+
+  it('identifies the owner-unverified safety state', () => {
+    expect(isPaneOwnerUnverifiedError('terminal_pane_owner_unverified')).toBe(true)
+    expect(isPaneOwnerUnverifiedError('Paste failed.')).toBe(false)
+    expect(isPaneOwnerUnverifiedError('Paste failed.\nterminal_pane_owner_unverified')).toBe(false)
   })
 
   it('humanizes an IPC-wrapped pane-owner-unverified error', () => {
     const wrapped =
       "Error invoking remote method 'pty:spawn': Error: terminal_pane_owner_unverified"
     expect(humanizeTerminalError(wrapped)).not.toContain('terminal_pane_owner_unverified')
+  })
+
+  it('humanizes an owner marker without classifying mixed errors as safe warnings', () => {
+    const mixed = humanizeTerminalError('Paste failed.\nterminal_pane_owner_unverified')
+    expect(mixed).toContain('Paste failed.')
+    expect(mixed).toContain("Orca couldn't verify this terminal's owner.")
+    expect(mixed).not.toContain('terminal_pane_owner_unverified')
+    expect(isPaneOwnerUnverifiedError('Paste failed.\nterminal_pane_owner_unverified')).toBe(false)
+  })
+
+  it('humanizes every owner marker in an aggregated warning', () => {
+    const repeated = humanizeTerminalError(
+      "terminal_pane_owner_unverified\nError invoking remote method 'pty:spawn': Error: terminal_pane_owner_unverified"
+    )
+
+    expect(repeated).not.toContain('terminal_pane_owner_unverified')
   })
 
   it('leaves other errors untouched', () => {
@@ -301,5 +326,60 @@ describe('TerminalErrorToast environment footer', () => {
     )
 
     await waitFor(() => expect(environmentMocks.resolveFooter).not.toHaveBeenCalled())
+  })
+
+  it('renders owner-unverified as a warning without an issue link', () => {
+    const onRetry = vi.fn().mockResolvedValue(true)
+    const view = render(
+      React.createElement(TerminalErrorToast, {
+        error: 'terminal_pane_owner_unverified',
+        onDismiss: vi.fn(),
+        onRetry
+      })
+    )
+
+    const toast = view.container.querySelector('[data-terminal-error-toast]')
+    expect(toast?.getAttribute('data-terminal-error-kind')).toBe('owner-unverified')
+    expect(toast?.querySelector('a')).toBeNull()
+    expect(toast?.textContent).toContain('Orca left the saved session unchanged')
+    expect(view.getByRole('button', { name: 'Retry' }).getAttribute('data-slot')).toBe('button')
+    fireEvent.click(view.getByRole('button', { name: 'Retry' }))
+    expect(onRetry).toHaveBeenCalledTimes(1)
+  })
+
+  it('keeps Retry available when the recovery attempt rejects', async () => {
+    const onRetry = vi.fn().mockRejectedValue(new Error('recovery unavailable'))
+    const view = render(
+      React.createElement(TerminalErrorToast, {
+        error: 'terminal_pane_owner_unverified',
+        onDismiss: vi.fn(),
+        onRetry
+      })
+    )
+
+    fireEvent.click(view.getByRole('button', { name: 'Retry' }))
+
+    await waitFor(() =>
+      expect((view.getByRole('button', { name: 'Retry' }) as HTMLButtonElement).disabled).toBe(
+        false
+      )
+    )
+    expect(onRetry).toHaveBeenCalledTimes(1)
+  })
+
+  it('explains when Retry is temporarily unavailable', async () => {
+    const onRetry = vi.fn().mockResolvedValue(false)
+    const view = render(
+      React.createElement(TerminalErrorToast, {
+        error: 'terminal_pane_owner_unverified',
+        onDismiss: vi.fn(),
+        onRetry
+      })
+    )
+
+    fireEvent.click(view.getByRole('button', { name: 'Retry' }))
+    await waitFor(() =>
+      expect(view.container.textContent).toContain('Retry could not reconnect yet')
+    )
   })
 })

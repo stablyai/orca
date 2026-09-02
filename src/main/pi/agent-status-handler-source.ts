@@ -30,6 +30,34 @@ export function getPiAgentStatusHandlerSourceLines(kind: PiAgentKind): string[] 
       : []
   const ownerEnv = kind === 'prime-agent' ? 'ORCA_PRIME_AGENT_STATUS_OWNED' : 'ORCA_PI_STATUS_OWNED'
 
+  // Why: OMP suppresses its approval lifecycle unless an extension listens for it,
+  // and it is the only signal that the run is parked on a permission prompt rather
+  // than still working. Prime has no OMP runtime, so the handlers would be dead there.
+  const approvalHandlers =
+    kind === 'prime-agent'
+      ? []
+      : [
+          `  pi.on('tool_approval_requested', (event${ctxParam}) => {`,
+          ...captureSessionMetadata,
+          '    if (!isOmpRuntime()) return',
+          "    post('tool_approval_requested', {",
+          '      tool_name: event.toolName,',
+          '      reason: event.reason,',
+          '      approval_mode: event.approvalMode,',
+          '    })',
+          '  })',
+          '',
+          `  pi.on('tool_approval_resolved', (event${ctxParam}) => {`,
+          ...captureSessionMetadata,
+          '    if (!isOmpRuntime()) return',
+          "    post('tool_approval_resolved', {",
+          '      tool_name: event.toolName,',
+          '      approved: event.approved,',
+          '    })',
+          '  })',
+          ''
+        ]
+
   return [
     '// Why: pi assistant messages carry content as an array of parts',
     "// ({ type: 'text', text } / tool_use / tool_result / reasoning). We only",
@@ -102,6 +130,7 @@ export function getPiAgentStatusHandlerSourceLines(kind: PiAgentKind): string[] 
     '    })',
     '  })',
     '',
+    ...approvalHandlers,
     "  // Why: capture the assistant's final text on each completed message",
     '  // so the dashboard preview reflects the most recent reply even before',
     '  // agent_end fires. message_end is the right hook because pi guarantees',

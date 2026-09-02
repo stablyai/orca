@@ -117,6 +117,7 @@
     "../src/main/hermes/hermes-home-filesystem.ts",
     "../src/main/hermes/hermes-managed-plugin-source.ts",
     "../src/main/hermes/hook-service.ts",
+    "../src/main/in-flight-run-dedupe.ts",
     "../src/main/kimi/hook-service.ts",
     "../src/main/kimi/kimi-hook-config-toml.ts",
     "../src/main/openclaude/hook-service.ts",

@@ -9,13 +9,13 @@ import { mkdir, readFile, readdir, rm, stat } from 'node:fs/promises'
 import { join } from 'node:path'
 import { durableWriteTempPath, writeFileDurable } from '../../durable-file-write'
 
-const BLOB_DIR = 'blobs'
+export const JOURNAL_BLOB_DIR = 'blobs'
 const DIGEST_PATTERN = /^[0-9a-f]{64}$/
 
 /** A digest arrives back from a row on disk, so it is untrusted by the time it
  *  reaches the filesystem: anything but a bare sha256 could escape the store. */
 function blobPath(journalDir: string, digest: string): string | null {
-  return DIGEST_PATTERN.test(digest) ? join(journalDir, BLOB_DIR, digest) : null
+  return DIGEST_PATTERN.test(digest) ? join(journalDir, JOURNAL_BLOB_DIR, digest) : null
 }
 
 /** Persist `payload` under its digest. Returns the digest so the caller can
@@ -33,7 +33,7 @@ export async function putJournalBlob(
   if (await pathExists(target)) {
     return digest
   }
-  await mkdir(join(journalDir, BLOB_DIR), { recursive: true })
+  await mkdir(join(journalDir, JOURNAL_BLOB_DIR), { recursive: true })
   await writeFileDurable(durableWriteTempPath(target), target, payload)
   return digest
 }
@@ -68,7 +68,7 @@ export async function pruneJournalBlobs(
   let removed = 0
   let names: string[]
   try {
-    names = await readdir(join(journalDir, BLOB_DIR))
+    names = await readdir(join(journalDir, JOURNAL_BLOB_DIR))
   } catch {
     return 0
   }
@@ -76,7 +76,7 @@ export async function pruneJournalBlobs(
     if (retained.has(name)) {
       continue
     }
-    await rm(join(journalDir, BLOB_DIR, name), { force: true }).catch(() => {})
+    await rm(join(journalDir, JOURNAL_BLOB_DIR, name), { force: true }).catch(() => {})
     removed += 1
   }
   return removed
@@ -88,5 +88,23 @@ async function pathExists(path: string): Promise<boolean> {
     return true
   } catch {
     return false
+  }
+}
+
+export async function journalBlobFileSize(
+  journalDir: string,
+  digest: string
+): Promise<number | null> {
+  const target = blobPath(journalDir, digest)
+  if (!target) {
+    return null
+  }
+  try {
+    return (await stat(target)).size
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
+      return null
+    }
+    throw error
   }
 }

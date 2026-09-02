@@ -52,6 +52,13 @@ export type BrowserViewportOverride = {
   mobile: boolean
 }
 
+export type BrowserViewportScrollState = {
+  scrollLeft: number
+  scrollTop: number
+  maxScrollLeft: number
+  maxScrollTop: number
+}
+
 /**
  * A page that shows a workspace document rather than a URL. The document is the identity: the grant
  * and the `orca-preview://` URL it is served over are minted when the page mounts and replaced on a

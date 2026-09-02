@@ -136,6 +136,10 @@ export type AgentStatusEntry = {
   interactivePrompt?: string
   /** Most recent assistant message preview, when the hook carried one. */
   lastAssistantMessage?: string
+  /** True when `lastAssistantMessage` came from a tool result/error, not assistant prose.
+   *  Status/dashboard surfaces still render it; native chat's streaming bubble must not,
+   *  or a tool's stdout is shown as the agent's reply. */
+  lastAssistantMessageIsToolOutput?: boolean
   /** Output of the newest completed (non-boundary) turn, kept across the next `working`.
    *  Why: batched publications can fold a whole done→working turn into one notification,
    *  so `lastAssistantMessage` is already cleared by the time a subscriber observes it. */
@@ -180,6 +184,8 @@ export type AgentStatusPayload = {
    *  AgentStatusEntry field for semantics. Not truncated like toolInput. */
   interactivePrompt?: string
   lastAssistantMessage?: string
+  /** See the AgentStatusEntry field for semantics. */
+  lastAssistantMessageIsToolOutput?: boolean
   interrupted?: boolean
   /** True when this `done` marks a session boundary (connect/resume/clear landing idle,
    *  e.g. Claude SessionStart — STA-3386), not a completed turn. Consumers that react to
@@ -221,6 +227,9 @@ export function pickParsedAgentStatusPayload(
     ...(row.interactivePrompt !== undefined ? { interactivePrompt: row.interactivePrompt } : {}),
     ...(row.lastAssistantMessage !== undefined
       ? { lastAssistantMessage: row.lastAssistantMessage }
+      : {}),
+    ...(row.lastAssistantMessageIsToolOutput !== undefined
+      ? { lastAssistantMessageIsToolOutput: row.lastAssistantMessageIsToolOutput }
       : {}),
     ...(row.interrupted !== undefined ? { interrupted: row.interrupted } : {}),
     ...(row.sessionBoundary !== undefined ? { sessionBoundary: row.sessionBoundary } : {}),
@@ -391,6 +400,10 @@ function normalizeAgentStatusObject(parsed: unknown): ParsedAgentStatusPayload |
       obj.lastAssistantMessage,
       AGENT_STATUS_ASSISTANT_MESSAGE_MAX_LENGTH
     ),
+    // Why: absent/false collapse to undefined so the flag only ever means "known tool output";
+    // an old host that never sends it keeps today's behavior instead of silently suppressing.
+    lastAssistantMessageIsToolOutput:
+      obj.lastAssistantMessageIsToolOutput === true ? true : undefined,
     // Why: only meaningful on `done`; coerce to undefined elsewhere so it can't leak stale truth across transitions.
     interrupted: obj.interrupted === true && state === 'done' ? true : undefined,
     sessionBoundary: obj.sessionBoundary === true && state === 'done' ? true : undefined,

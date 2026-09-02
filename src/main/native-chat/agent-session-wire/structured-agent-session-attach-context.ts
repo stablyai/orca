@@ -5,6 +5,7 @@
 
 import type { AgentSessionWireRefusal } from '../../../shared/agent-session-wire'
 import type { AgentJournalResetReason } from '../../../shared/agent-session-journal-types'
+import type { AgentSessionAttachParams } from './structured-agent-session-attach'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import type {
   StructuredAgentSessionHostDeps,
@@ -29,6 +30,8 @@ export type StructuredAgentSessionAttachContext = {
   }
   tasks: StructuredAgentSessionTaskQueue
   reconcileLeases: (sessionId: string) => Promise<AgentSessionWireRefusal | null>
+  /** Retries a durable provider-exit journal settlement before a new owner is reserved. */
+  retryPendingSettlement?: (sessionId: string, params: AgentSessionAttachParams) => Promise<boolean>
   serialize: <T>(sessionId: string, task: () => Promise<T>) => Promise<T>
   now: () => number
 }

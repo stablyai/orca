@@ -120,6 +120,7 @@ export type {
   RuntimeMobileSessionCreateTerminalResult,
   RuntimeMobileSessionFileTab,
   RuntimeMobileSessionMarkdownTab,
+  RuntimeMobileSessionRetiredTerminalSurface,
   RuntimeMobileSessionSnapshotTab,
   RuntimeMobileSessionTabCloseResult,
   RuntimeMobileSessionTabGroup,

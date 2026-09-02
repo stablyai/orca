@@ -4,6 +4,7 @@ import type {
   HistoryRecoveryContext,
   PendingDaemonSpawnOperation
 } from './daemon-pty-runtime-state'
+import { trackDaemonPtyCwdDeniedIfDiverged } from './daemon-adoption-telemetry-event'
 import { STABLE_PANE_ATTACH_ONLY_DAEMON_PROTOCOL_VERSION } from './daemon-protocol-version'
 import { TerminalKilledError } from './daemon-pty-lifecycle-errors'
 import { DaemonPtySpawnResult } from './daemon-pty-spawn-result'
@@ -26,8 +27,8 @@ export abstract class DaemonPtySessionSpawn extends DaemonPtySpawnResult {
   async spawn(opts: PtySpawnOptions): Promise<PtySpawnResult> {
     const spawnOpts = this.withHistoryIsolation(opts)
     const sessionId = spawnOpts.sessionId ?? mintPtySessionId(spawnOpts.worktreeId)
-    const operation = {
-      exitsBySessionId: new Map<string, { incarnationId?: string }[]>(),
+    const operation: PendingDaemonSpawnOperation = {
+      exitsBySessionId: new Map(),
       ignoredExitIncarnationIds: new Set<string>(),
       ignoreNextExit: false
     }
@@ -246,6 +247,9 @@ export abstract class DaemonPtySessionSpawn extends DaemonPtySpawnResult {
     }
     activeSpawnContext = context
     const result = await this.createOrAttachSpawn(context, context.historySeedSegments)
+    if (result.isNew && !attachOnly) {
+      trackDaemonPtyCwdDeniedIfDiverged(effectiveCwd, result.cwdReadableByDaemon, this.pidPath)
+    }
     return this.finishSpawn(context, result)
   }
 
@@ -254,17 +258,25 @@ export abstract class DaemonPtySessionSpawn extends DaemonPtySpawnResult {
     result: CreateOrAttachResult,
     operation: PendingDaemonSpawnOperation
   ): PtySpawnResult | null {
-    const matchingExit = (operation.exitsBySessionId.get(sessionId) ?? []).some(
+    const knownIncarnationId = this.sessionIncarnations.get(sessionId)
+    const matchingExit = (operation.exitsBySessionId.get(sessionId) ?? []).find(
       (exit) =>
         !(exit.incarnationId && operation.ignoredExitIncarnationIds.has(exit.incarnationId)) &&
-        (!exit.incarnationId ||
-          !result.incarnationId ||
-          exit.incarnationId === result.incarnationId)
+        ((exit.incarnationId === undefined &&
+          result.incarnationId === undefined &&
+          knownIncarnationId === undefined) ||
+          (exit.incarnationId !== undefined &&
+            result.incarnationId !== undefined &&
+            exit.incarnationId === result.incarnationId))
     )
     if (!matchingExit) {
       return null
     }
-    // Why: stream exit can beat the control reply; return proof upward without republishing dead adapter state.
+    if (result.incarnationId) {
+      this.sessionIncarnations.set(sessionId, result.incarnationId)
+    }
+    this.clearExitedSessionState(sessionId, matchingExit.code, result.incarnationId)
+    // Why: stream exit can beat the control reply or post-reply recovery work; return proof without republishing dead state.
     const exitedResult: PtySpawnResult = {
       id: sessionId,
       exitedBeforeSpawnReply: true,

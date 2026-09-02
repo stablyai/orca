@@ -72,6 +72,8 @@ export type StructuredAgentSessionRuntimeDeps = {
 type InstalledRuntime = {
   host: StructuredAgentSessionHost
   adapter: CodexStructuredSessionAdapter
+  /** Resolves after every adapter-exit recovery callback has settled. */
+  waitForRecovery: () => Promise<void>
 }
 
 let installing: Promise<InstalledRuntime> | null = null
@@ -101,9 +103,15 @@ export async function stopStructuredAgentSessionRuntime(): Promise<void> {
   if (!installed) {
     return
   }
+  // Drain an in-flight recovery before stopping children; recovery may still
+  // be writing lifecycle rows or acquiring a replacement child.
+  await installed.waitForRecovery()
   try {
     await installed.adapter.closeAll()
   } finally {
+    // closeAll can itself deliver a final exit callback; observe that callback
+    // before flushing and releasing the host's journal resources.
+    await installed.waitForRecovery()
     await installed.host.flushAllStreamedEvents()
   }
 }
@@ -137,6 +145,8 @@ async function install(deps: StructuredAgentSessionRuntimeDeps): Promise<Install
     }
   })
   try {
+    let host: StructuredAgentSessionHost | null = null
+    let recoveryChain = Promise.resolve()
     const codex = new CodexStructuredSessionAdapter({
       resolveLaunch: createCodexStructuredLaunchResolver({
         store,
@@ -145,10 +155,25 @@ async function install(deps: StructuredAgentSessionRuntimeDeps): Promise<Install
         ...(deps.resolveCodexCommand ? { resolveCommand: deps.resolveCodexCommand } : {})
       }),
       ...(deps.openCodexConnection ? { openConnection: deps.openCodexConnection } : {}),
-      ...(deps.readProcessStartTime ? { readProcessStartTime: deps.readProcessStartTime } : {})
+      ...(deps.readProcessStartTime ? { readProcessStartTime: deps.readProcessStartTime } : {}),
+      onEvent: (event) => {
+        if (event.type !== 'ended' || !('cause' in event) || event.cause !== 'unexpected-exit') {
+          return
+        }
+        // Serialize recovery with teardown. Exit callbacks arrive from child
+        // process tasks, so a fire-and-forget callback can otherwise append
+        // after the host has flushed and its journal directory is removed.
+        recoveryChain = recoveryChain.then(async () => {
+          try {
+            await host?.handleAdapterEvent(event)
+          } catch (error) {
+            deps.onError?.({ scope: `structured-agent-session-exit:${event.sessionId}`, error })
+          }
+        })
+      }
     })
     const adapter = codex
-    const host = new StructuredAgentSessionHost({
+    host = new StructuredAgentSessionHost({
       store,
       adapter,
       journalRoot: deps.stateDirectory,
@@ -171,7 +196,21 @@ async function install(deps: StructuredAgentSessionRuntimeDeps): Promise<Install
       ...(deps.handoffTransport ? { handoffTransport: deps.handoffTransport } : {})
     })
     setStructuredAgentSessionHost(host)
-    return { host, adapter }
+    return {
+      host,
+      adapter,
+      waitForRecovery: async () => {
+        // A recovery may synchronously trigger another exit while it is
+        // reacquiring. Observe until the chain stops growing.
+        for (;;) {
+          const observed = recoveryChain
+          await observed
+          if (observed === recoveryChain) {
+            return
+          }
+        }
+      }
+    }
   } catch (error) {
     agentSessionPtyWriteGate.detachRecordLookup()
     throw error

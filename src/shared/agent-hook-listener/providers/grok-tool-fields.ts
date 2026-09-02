@@ -63,6 +63,7 @@ export function extractGrokToolFields(
         readString(hookPayload, 'message')
       if (responseText) {
         update.lastAssistantMessage = responseText
+        update.lastAssistantMessageIsToolOutput = true
       }
     }
     return update

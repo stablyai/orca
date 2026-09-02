@@ -14,7 +14,7 @@
  */
 import { describe, expect, it, vi } from 'vitest'
 import type * as AgentStatusModule from '@/lib/agent-status'
-import type { RemoteWorkspaceSnapshot } from '../../../shared/remote-workspace-types'
+import type { RemoteWorkspaceObservedSnapshot } from '../../../shared/remote-workspace-types'
 import type { DirectSshAuthority, SshProviderEpoch } from '../../../shared/ssh-types'
 import { createTestStore, makeWorktree } from '../store/slices/store-test-helpers'
 import { ensureWorktreeHasInitialTerminal } from '@/lib/worktree-initial-terminal-seeding'
@@ -48,12 +48,13 @@ function token(snapshotRevision: number): DirectSshSnapshotApplyToken {
   }
 }
 
-function snapshot(revision: number, tabIds: readonly string[]): RemoteWorkspaceSnapshot {
+function snapshot(revision: number, tabIds: readonly string[]): RemoteWorkspaceObservedSnapshot {
   return {
     namespace: 'workspace',
     revision,
     updatedAt: revision,
     schemaVersion: 1,
+    hostObservationToken: `observation-${revision}`,
     session: {
       activeWorktreePath: PATH,
       activeTabId: tabIds[0] ?? null,
@@ -76,12 +77,15 @@ function snapshot(revision: number, tabIds: readonly string[]): RemoteWorkspaceS
       lastVisitedAtByWorktreePath: { [PATH]: revision },
       defaultTerminalTabsAppliedByWorktreePath: { [PATH]: true }
     }
-  } satisfies RemoteWorkspaceSnapshot
+  } satisfies RemoteWorkspaceObservedSnapshot
 }
 
 type TestStore = ReturnType<typeof createTestStore>
 
-async function applySnapshot(store: TestStore, snap: RemoteWorkspaceSnapshot): Promise<void> {
+async function applySnapshot(
+  store: TestStore,
+  snap: RemoteWorkspaceObservedSnapshot
+): Promise<void> {
   await applyDirectSshRemoteWorkspaceSnapshot({
     store,
     snapshot: snap,

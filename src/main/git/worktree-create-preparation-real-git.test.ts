@@ -68,6 +68,55 @@ describe('prepared worktree creation with real Git', () => {
     expect(await listWorktrees(repoPath, { includeCreatePreparations: true })).toHaveLength(1)
   })
 
+  it('lands a cross-base retarget on exactly the requested commit', async () => {
+    const { repoPath, root } = await createRepo()
+    const preparationRoot = join(root, WORKTREE_CREATE_PREPARATION_DIRECTORY)
+    const preparedPath = join(preparationRoot, `${process.pid}-retarget`)
+    const finalPath = join(root, 'retargeted-worktree')
+    await mkdir(preparationRoot, { recursive: true })
+
+    await writeFile(join(repoPath, 'shared.txt'), 'kept\n')
+    git(repoPath, ['add', 'shared.txt'])
+    git(repoPath, ['commit', '--quiet', '-m', 'local main'])
+    const localMainHead = git(repoPath, ['rev-parse', 'HEAD'])
+
+    // A remote-tracking `main` that diverged: different content, an extra file, and one deletion.
+    git(repoPath, ['checkout', '--quiet', '-b', 'upstream-main'])
+    await writeFile(join(repoPath, 'version.txt'), 'two\n')
+    await writeFile(join(repoPath, 'only-upstream.txt'), 'upstream\n')
+    git(repoPath, ['rm', '--quiet', 'shared.txt'])
+    git(repoPath, ['add', 'version.txt', 'only-upstream.txt'])
+    git(repoPath, ['commit', '--quiet', '-m', 'upstream main'])
+    git(repoPath, ['update-ref', 'refs/remotes/origin/main', 'HEAD'])
+    git(repoPath, ['checkout', '--quiet', 'main'])
+    git(repoPath, ['branch', '--quiet', '-D', 'upstream-main'])
+
+    await prepareWorktreeCreateCheckout(
+      repoPath,
+      preparedPath,
+      'refs/remotes/origin/main',
+      createWorktreePreparationLockReason('retarget-test')
+    )
+    expect(git(preparedPath, ['rev-parse', 'HEAD'])).not.toBe(localMainHead)
+
+    await finalizePreparedWorktree(repoPath, preparedPath, finalPath, 'feature/retargeted', 'main')
+
+    expect(git(finalPath, ['rev-parse', 'HEAD'])).toBe(localMainHead)
+    // A retarget that left stale files behind would be a wrong checkout, not just a slow one.
+    expect(git(finalPath, ['status', '--porcelain'])).toBe('')
+    expect((await readFile(join(finalPath, 'version.txt'), 'utf8')).replaceAll('\r\n', '\n')).toBe(
+      'one\n'
+    )
+    expect((await readFile(join(finalPath, 'shared.txt'), 'utf8')).replaceAll('\r\n', '\n')).toBe(
+      'kept\n'
+    )
+    await expect(readFile(join(finalPath, 'only-upstream.txt'), 'utf8')).rejects.toThrow()
+    expect(git(finalPath, ['branch', '--show-current'])).toBe('feature/retargeted')
+    expect(git(finalPath, ['config', '--get', 'branch.feature/retargeted.base'])).toBe(
+      'refs/heads/main'
+    )
+  })
+
   it('hides the preparation, retargets an advanced base, and attaches the final branch', async () => {
     const { repoPath, root } = await createRepo()
     const preparationRoot = join(root, WORKTREE_CREATE_PREPARATION_DIRECTORY)

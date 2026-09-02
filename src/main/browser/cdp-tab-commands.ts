@@ -20,12 +20,7 @@ export class CdpTabCommands extends CdpBridgeCommandModule {
     if (!this.activeWebContentsId) {
       return null
     }
-    for (const [tabId, wcId] of this.getRegisteredTabs()) {
-      if (wcId === this.activeWebContentsId) {
-        return tabId
-      }
-    }
-    return null
+    return this.resolveTabIdSafe(this.activeWebContentsId)
   }
 
   getPageInfo(

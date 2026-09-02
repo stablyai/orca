@@ -1,0 +1,54 @@
+---
+title: Rich markdown editor
+---
+
+Markdown files open in a rich editor by default — slash menu, toolbar, inline previews for images and code, internal link autocomplete. Toggle to raw Monaco whenever you want with `Cmd-Shift-M`.
+
+For files larger than 300 KB, Orca opens the raw editor first to keep typing responsive. Choose **Open anyway** in the fallback banner when you want the rich editor for that file; the choice lasts until you close its tab. Files that use Markdown constructs the rich editor cannot safely preserve still stay in the raw editor.
+
+## Slash menu
+
+Type `/` on an empty line to open the slash menu: headings, lists, code blocks, callouts, images, mermaid diagrams, and toggle blocks.
+
+Use `/toggle-text` for collapsible notes, or `/toggle-h1` … `/toggle-h5` when the toggle summary should read like a heading level. You can edit nested toggles in place. Orca saves toggles as portable `<details>` / `<summary>` markdown so the file still previews outside Orca.
+
+## Internal links
+
+Type `[[` to start a wiki-style link. Orca autocompletes file paths within the worktree and inserts a relative link.
+
+## Search
+
+In-editor markdown search respects rendered text, not raw markdown — so searching for "Install" finds a heading whether written as `# Install` or `<h1>Install</h1>`.
+
+## Review annotations
+
+When you're reviewing markdown in Orca's rich editor, select rendered text to add an annotation without switching back to raw markdown. Orca keeps the note tied to the selected source range so it can show the comment while you continue editing the rendered document.
+
+**Add Review Note** is a remappable shortcut (`Cmd+Shift+A` / `Ctrl+Shift+A` by default under [Settings → Shortcuts](/docs/settings)).
+
+## Front matter
+
+YAML and TOML front matter is shown in the rich editor and rendered preview by default so docs and static-site posts expose their metadata without switching to raw markdown. Open the editor's **More actions** (`…`) menu and choose **Hide front matter** when you want the body-only view; the same menu toggles it back to **Show front matter**. The toggle is per-file, so hiding it on one document doesn't hide it on the rest.
+
+## Tables
+
+In rich markdown tables:
+
+| Key                                                           | Behavior                                                   |
+| ------------------------------------------------------------- | ---------------------------------------------------------- |
+| **Tab** / **Shift-Tab**                                       | Next / previous cell; Tab past the last cell inserts a row |
+| **Enter**                                                     | Move to the cell below; on the last row, add a row         |
+| **Backspace** on a fully empty row                            | Delete the row (or the whole table if it is the last row)  |
+| **Backspace** in an empty cell when the row still has content | Step to the previous cell                                  |
+
+Use **Shift-Tab** to unindent a list item or the selected lines of a code block.
+
+When the caret is in a table, the rich-editor toolbar shows one-click **row and column insert/delete** controls. Right-click a table cell for the same structure commands in the context menu (the Table submenu only appears when the target is a table cell).
+
+## Table of contents
+
+For long documents, click the **Table of Contents** button (tree icon) in the editor header to open a heading outline pinned to the left of the editor. Clicking a heading jumps to it; collapse and expand controls keep deeply nested sections readable. Available in rich and preview modes.
+
+## Share as artifact
+
+From the editor header, **Share as artifact** publishes the open Markdown file as a public view link through your signed-in Orca account. Requires **Settings → Artifacts → Allow publishing public artifact links** (off by default). Republish updates the same link when Orca still has the mapping; manage or delete links from the sidebar **Artifacts** page. Agents and scripts can use `orca artifacts share|update|list|delete` — see [CLI reference → Artifacts](/docs/cli/reference#artifacts).

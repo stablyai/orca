@@ -12,6 +12,7 @@ export type CdpBridgeStateBindings = {
   getActiveWebContentsId: () => number | null
   setActiveWebContentsId: (webContentsId: number | null) => void
   getRegisteredTabs: () => Map<string, number>
+  getTabIdForWebContentsId: (webContentsId: number) => string | null
   tabState: Map<string, CdpTabState>
   commandQueues: Map<string, CdpQueuedCommand[]>
   processingQueues: Set<string>
@@ -84,21 +85,15 @@ export class CdpBridgeState {
   }
 
   resolveTabId(webContentsId: number): string {
-    for (const [tabId, wcId] of this.getRegisteredTabs()) {
-      if (wcId === webContentsId) {
-        return tabId
-      }
+    const tabId = this.bindings.getTabIdForWebContentsId(webContentsId)
+    if (tabId !== null) {
+      return tabId
     }
     throw new BrowserError('browser_debugger_detached', 'Tab is no longer registered.')
   }
 
   resolveTabIdSafe(webContentsId: number): string | null {
-    for (const [tabId, wcId] of this.getRegisteredTabs()) {
-      if (wcId === webContentsId) {
-        return tabId
-      }
-    }
-    return null
+    return this.bindings.getTabIdForWebContentsId(webContentsId)
   }
 
   getOrCreateTabState(tabId: string): CdpTabState {

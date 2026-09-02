@@ -63,6 +63,34 @@ type MobileSessionTabLike =
       isActive?: boolean
     }
 
+export function mobileTerminalThemesEqual(
+  left: MobileTerminalTheme | null | undefined,
+  right: MobileTerminalTheme | null | undefined
+): boolean {
+  if (left === right) {
+    return true
+  }
+  if (!left || !right || left.mode !== right.mode) {
+    return false
+  }
+  const leftColors = left.theme as Readonly<Record<string, unknown>>
+  const rightColors = right.theme as Readonly<Record<string, unknown>>
+  for (const color in leftColors) {
+    if (
+      Object.hasOwn(leftColors, color) &&
+      (!Object.hasOwn(rightColors, color) || leftColors[color] !== rightColors[color])
+    ) {
+      return false
+    }
+  }
+  for (const color in rightColors) {
+    if (Object.hasOwn(rightColors, color) && !Object.hasOwn(leftColors, color)) {
+      return false
+    }
+  }
+  return true
+}
+
 export function mobileSessionTabsEqual(
   a: readonly MobileSessionTabLike[],
   b: readonly MobileSessionTabLike[]
@@ -96,7 +124,7 @@ function mobileSessionTabEqual(
         a.launchDraft === b.launchDraft &&
         a.launchDraftCreatedAt === b.launchDraftCreatedAt &&
         JSON.stringify(a.agentStatus ?? null) === JSON.stringify(b.agentStatus ?? null) &&
-        JSON.stringify(a.terminalTheme ?? null) === JSON.stringify(b.terminalTheme ?? null)
+        mobileTerminalThemesEqual(a.terminalTheme, b.terminalTheme)
       )
     case 'markdown':
       return (
@@ -234,8 +262,7 @@ export function terminalRecordsEqual(
       (terminal, index) =>
         terminal.handle === b[index]?.handle &&
         terminal.title === b[index]?.title &&
-        JSON.stringify(terminal.terminalTheme ?? null) ===
-          JSON.stringify(b[index]?.terminalTheme ?? null) &&
+        mobileTerminalThemesEqual(terminal.terminalTheme, b[index]?.terminalTheme) &&
         terminal.isActive === b[index]?.isActive
     )
   )

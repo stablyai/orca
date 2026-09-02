@@ -6,7 +6,7 @@ import {
   startGitHubListScrollRestore,
   supersedeGitHubListScrollRestore,
   type GitHubListRestoreWrite
-} from './task-page/github/github-list-scroll-restore'
+} from './task-page-github-list-scroll-restore'
 
 type FakeResizeObserver = {
   targets: Set<Element>
@@ -104,6 +104,28 @@ describe('GitHub task list scroll restore', () => {
     expect(list.element.scrollTop).toBe(360)
     expect(pendingRestoreRef.current).toBeNull()
     expect(applied.at(-1)).toBe(360)
+  })
+
+  it('retries when the rows mount after the restore starts', async () => {
+    const list = createScrollList(0)
+    list.element.removeChild(list.rows)
+    const pendingRestoreRef = ref<number | null>(360)
+    const restoreWriteRef = ref<GitHubListRestoreWrite | null>(null)
+
+    startGitHubListScrollRestore({
+      target: 360,
+      scrollElementRef: ref<HTMLElement | null>(list.element),
+      pendingRestoreRef,
+      restoreWriteRef,
+      onScrollTopApplied: () => {}
+    })
+
+    list.setMaxScrollTop(900)
+    list.element.append(list.rows)
+    await Promise.resolve()
+
+    expect(list.element.scrollTop).toBe(360)
+    expect(pendingRestoreRef.current).toBeNull()
   })
 
   it('keeps the remembered offset armed when the list never becomes tall enough', () => {

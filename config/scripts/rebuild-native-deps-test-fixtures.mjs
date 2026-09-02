@@ -3,6 +3,7 @@ import { chmodSync, copyFileSync, mkdirSync, mkdtempSync, writeFileSync } from '
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { copyScriptWithLocalModules } from './script-module-dependencies.mjs'
 
 const sourceScriptPath = fileURLToPath(new URL('./rebuild-native-deps.mjs', import.meta.url))
 const sourceInstallScriptPath = fileURLToPath(
@@ -19,10 +20,7 @@ export function mkTempProject() {
   const projectDir = mkdtempSync(join(tmpdir(), 'orca-rebuild-native-deps-'))
   mkdirSync(join(projectDir, 'config', 'scripts'), { recursive: true })
   copyFileSync(sourceScriptPath, join(projectDir, 'config', 'scripts', 'rebuild-native-deps.mjs'))
-  copyFileSync(
-    sourceInstallScriptPath,
-    join(projectDir, 'config', 'scripts', 'install-electron-package-binary.mjs')
-  )
+  copyScriptWithLocalModules(sourceInstallScriptPath, join(projectDir, 'config', 'scripts'))
   copyFileSync(
     sourceNodePtyJobOwnershipPath,
     join(projectDir, 'config', 'scripts', 'node-pty-job-ownership.cjs')

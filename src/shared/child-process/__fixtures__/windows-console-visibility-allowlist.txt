@@ -9,7 +9,6 @@ main/agent-hooks/managed-hook-owner-identity.ts
 main/agent-hooks/managed-hook-runtime.ts
 main/app-icon.ts
 main/automations/precheck-runner.ts
-main/browser/browser-cookie-import.ts
 main/claude-accounts/keychain.ts
 main/computer/macos-computer-use-permission-status.ts
 main/computer/macos-computer-use-permissions.ts
@@ -27,7 +26,6 @@ main/external-editor-launch.ts
 main/hooks.ts
 main/ipc/app.ts
 main/ipc/developer-permissions.ts
-main/ipc/filesystem.ts
 main/ipc/macos-keyboard-layout-snapshot.ts
 main/ipc/notification-authorization-status.ts
 main/ipc/worktree-apfs-clone.ts
@@ -43,7 +41,6 @@ main/pty/posix-pty-foreground-group.ts
 main/pty/posix-pty-process-groups.ts
 main/pty/windows-environment-path.ts
 main/rate-limits/codex-fetcher.ts
-main/runtime/orca-runtime-files.ts
 main/runtime/tls-certificate.ts
 main/ssh/ssh-connection.ts
 main/startup/appimage-cli-redirect.ts

@@ -6,10 +6,12 @@ import type { CrashReportDetailValue } from '../../shared/crash-reporting'
 // memory/commit", which the per-process buckets alone cannot.
 // Timing honesty: this reads AFTER the crashed process's memory returned to
 // the OS, so free/swapFree can look healthier than they were at kill time.
-// Platform honesty: swap* exist on Windows/Linux only. On macOS `free` is
-// near-meaningless (file cache and compression keep it low on healthy
-// machines); fileBacked/purgeable are the only reclaimability proxy this API
-// gives there, and none of these fields answers "was the machine under
+// Platform honesty: swap* exist on Windows/Linux only. On Linux `free` is
+// /proc/meminfo MemFree and is NOT the pressure signal — it excludes page cache
+// and other reclaimable memory; `available` (MemAvailable, Linux-only) is. On
+// macOS `free` is near-meaningless (file cache and compression keep it low on
+// healthy machines); fileBacked/purgeable are the only reclaimability proxy this
+// API gives there, and none of these fields answers "was the machine under
 // pressure" on macOS — that needs a signal Electron does not expose.
 
 type CrashReportDetails = Record<string, CrashReportDetailValue>
@@ -22,6 +24,7 @@ export function memoryKBFieldMB(value: unknown): number | undefined {
 type SystemMemoryInfoLike = {
   total?: unknown
   free?: unknown
+  available?: unknown
   swapTotal?: unknown
   swapFree?: unknown
   fileBacked?: unknown
@@ -58,6 +61,7 @@ export function getSystemMemoryAtGoneDetails(): CrashReportDetails {
   const fields: readonly [keyof SystemMemoryInfoLike, string][] = [
     ['total', 'systemMemoryTotalMB'],
     ['free', 'systemMemoryFreeMB'],
+    ['available', 'systemMemoryAvailableMB'],
     ['swapTotal', 'systemMemorySwapTotalMB'],
     ['swapFree', 'systemMemorySwapFreeMB'],
     ['fileBacked', 'systemMemoryFileBackedMB'],

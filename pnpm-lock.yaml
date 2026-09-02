@@ -115,7 +115,7 @@ patchedDependencies:
   '@xterm/addon-webgl@0.20.0-beta.299': 94687e89a0115e6e6aa102837f986debdc029c091527ee5eb4a4e17ceaf9473e
   '@xterm/xterm@6.1.0-beta.303': 98756bcedc402bcdb7c6ab7b015d2e59cd18e97b03a2c06a27e95bb3ba429d9d
   lint-staged@16.4.0: 7333b3837f80a7fbd045964db6d76ba4fc118e49134bdbabb00585b6b7b60673
-  node-pty@1.1.0: 9a2eedbf2448b8ff1387a8a740ee5e4e968bf8484d7d80e12a3f6a2dc26b0e17
+  node-pty@1.1.0: 572a46f539dd9da26e259702da974e1e693329e299625c97eb7c28e4e642500e
 
 importers:
 
@@ -156,7 +156,7 @@ importers:
         version: 3.3.1
       node-pty:
         specifier: ^1.1.0
-        version: 1.1.0(patch_hash=9a2eedbf2448b8ff1387a8a740ee5e4e968bf8484d7d80e12a3f6a2dc26b0e17)
+        version: 1.1.0(patch_hash=572a46f539dd9da26e259702da974e1e693329e299625c97eb7c28e4e642500e)
       posthog-node:
         specifier: ^5.33.3
         version: 5.33.3
@@ -191,8 +191,8 @@ importers:
         specifier: ^2.8.4
         version: 2.8.4
       zod:
-        specifier: ~4.4.3
-        version: 4.4.3
+        specifier: ~4.5.4
+        version: 4.5.4
     devDependencies:
       '@dnd-kit/core':
         specifier: ^6.3.1
@@ -217,7 +217,7 @@ importers:
         version: 3.2.0
       '@stablyai/playwright-test':
         specifier: ^2.1.14
-        version: 2.1.14(@playwright/test@1.59.1)(zod@4.4.3)
+        version: 2.1.14(@playwright/test@1.59.1)(zod@4.5.4)
       '@tailwindcss/vite':
         specifier: ^4.2.4
         version: 4.2.4(rolldown-vite@7.3.1(@emnapi/core@1.11.2)(@emnapi/runtime@1.11.2)(@types/node@25.9.5)(jiti@2.7.0)(yaml@2.8.4))
@@ -6982,8 +6982,8 @@ packages:
   zod@3.25.76:
     resolution: {integrity: sha512-gzUt/qt81nXsFGKIFcC3YnfEAx5NkunCfnDlvuBSSFS02bcXu4Lmea0AFIUwbLWxWPx3d9p8S5QoaujKcNQxcQ==}
 
-  zod@4.4.3:
-    resolution: {integrity: sha512-ytENFjIJFl2UwYglde2jchW2Hwm4GJFLDiSXWdTrJQBIN9Fcyp7n4DhxJEiWNAJMV1/BqWfW/kkg71UDcHJyTQ==}
+  zod@4.5.4:
+    resolution: {integrity: sha512-sC95tT5iHHH9gtpj6A81kh+NEaRAUFN+qlUPDUbRfOMvNf5QCBqsb3WgvnpVtK5Y+4UfA6KqufotuTvMGiTlsA==}
 
   zustand@5.0.14:
     resolution: {integrity: sha512-/8tAspM5LMPr28b3fwLYrtdj77ECpfZviaP75CMTnwO8ISyaE4GDIG/9rDDYq/cH9D2Xw2A2RXglLInmVBQB/g==}
@@ -8916,27 +8916,27 @@ snapshots:
 
   '@sindresorhus/merge-streams@4.0.0': {}
 
-  '@stablyai/playwright-base@2.1.14(@playwright/test@1.59.1)(zod@4.4.3)':
+  '@stablyai/playwright-base@2.1.14(@playwright/test@1.59.1)(zod@4.5.4)':
     dependencies:
       '@playwright/test': 1.59.1
       jpeg-js: 0.4.4
       p-retry: 4.6.2
       pngjs: 7.0.0
     optionalDependencies:
-      zod: 4.4.3
+      zod: 4.5.4
 
-  '@stablyai/playwright-test@2.1.14(@playwright/test@1.59.1)(zod@4.4.3)':
+  '@stablyai/playwright-test@2.1.14(@playwright/test@1.59.1)(zod@4.5.4)':
     dependencies:
       '@playwright/test': 1.59.1
-      '@stablyai/playwright': 2.1.14(@playwright/test@1.59.1)(zod@4.4.3)
-      '@stablyai/playwright-base': 2.1.14(@playwright/test@1.59.1)(zod@4.4.3)
+      '@stablyai/playwright': 2.1.14(@playwright/test@1.59.1)(zod@4.5.4)
+      '@stablyai/playwright-base': 2.1.14(@playwright/test@1.59.1)(zod@4.5.4)
     transitivePeerDependencies:
       - zod
 
-  '@stablyai/playwright@2.1.14(@playwright/test@1.59.1)(zod@4.4.3)':
+  '@stablyai/playwright@2.1.14(@playwright/test@1.59.1)(zod@4.5.4)':
     dependencies:
       '@playwright/test': 1.59.1
-      '@stablyai/playwright-base': 2.1.14(@playwright/test@1.59.1)(zod@4.4.3)
+      '@stablyai/playwright-base': 2.1.14(@playwright/test@1.59.1)(zod@4.5.4)
     transitivePeerDependencies:
       - zod
 
@@ -12194,7 +12194,7 @@ snapshots:
 
   node-int64@0.4.0: {}
 
-  node-pty@1.1.0(patch_hash=9a2eedbf2448b8ff1387a8a740ee5e4e968bf8484d7d80e12a3f6a2dc26b0e17):
+  node-pty@1.1.0(patch_hash=572a46f539dd9da26e259702da974e1e693329e299625c97eb7c28e4e642500e):
     dependencies:
       node-addon-api: 7.1.1
 
@@ -13787,7 +13787,7 @@ snapshots:
 
   zod@3.25.76: {}
 
-  zod@4.4.3: {}
+  zod@4.5.4: {}
 
   zustand@5.0.14(@types/react@19.2.17)(react@19.2.8)(use-sync-external-store@1.6.0(react@19.2.8)):
     optionalDependencies:

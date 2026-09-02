@@ -1,6 +1,14 @@
-import * as fsPromises from 'node:fs/promises'
 import { win32 } from 'node:path'
-import type { Stats } from 'node:fs'
+import {
+  defaultWslLinkedWorktreeRoutingFileSystem,
+  probeWslLinkedWorktreeGitRoute,
+  type WslLinkedWorktreeRoutingFileSystem
+} from './wsl-linked-worktree-git-route-probe'
+
+export {
+  parseWindowsLinkedGitdir,
+  type WslLinkedWorktreeRoutingFileSystem
+} from './wsl-linked-worktree-git-route-probe'
 
 type CachedRoute = { usesHostGit: boolean; expiresAt: number }
 type TransientRouteFailure = { count: number; retryAfter: number }
@@ -46,56 +54,11 @@ function cachedRoute(cwd: string, now: number): boolean | undefined {
   return exact.usesHostGit
 }
 
-export function parseWindowsLinkedGitdir(content: string): string | null {
-  const firstLine = content.split(/\r?\n/, 1)[0] ?? ''
-  return firstLine.match(/^gitdir:\s*([A-Za-z]:[/\\].*?)\s*$/i)?.[1] ?? null
-}
-
-export type WslLinkedWorktreeRoutingFileSystem = {
-  stat(path: string): Promise<Pick<Stats, 'isDirectory' | 'isFile'>>
-  readFile(path: string): Promise<string>
-}
-
 export type WslLinkedWorktreeRoutingOptions = {
   platform?: NodeJS.Platform
   fileSystem?: WslLinkedWorktreeRoutingFileSystem
   now?: () => number
   signal?: AbortSignal
-}
-
-const defaultFileSystem: WslLinkedWorktreeRoutingFileSystem = {
-  stat: (path) => fsPromises.stat(path),
-  readFile: (path) => fsPromises.readFile(path, 'utf8')
-}
-
-async function shouldUseHostGit(
-  cwd: string,
-  fileSystem: WslLinkedWorktreeRoutingFileSystem
-): Promise<boolean> {
-  let candidate = cwd
-  const driveRoot = win32.parse(candidate).root
-  while (true) {
-    const markerPath = win32.join(candidate, '.git')
-    try {
-      const marker = await fileSystem.stat(markerPath)
-      if (marker.isDirectory()) {
-        return false
-      }
-      if (marker.isFile()) {
-        return parseWindowsLinkedGitdir(await fileSystem.readFile(markerPath)) !== null
-      }
-      return false
-    } catch (error) {
-      const code = error && typeof error === 'object' ? (error as NodeJS.ErrnoException).code : null
-      if (code !== 'ENOENT' && code !== 'ENOTDIR') {
-        throw error
-      }
-    }
-    if (candidate === driveRoot) {
-      return false
-    }
-    candidate = win32.dirname(candidate)
-  }
 }
 
 function rememberRoute(cwd: string, usesHostGit: boolean, now: number): boolean {
@@ -117,6 +80,30 @@ function rememberRoute(cwd: string, usesHostGit: boolean, now: number): boolean 
 
 function routingAbortError(): Error {
   return Object.assign(new Error('The operation was aborted.'), { name: 'AbortError' })
+}
+
+function forgetPathAndDescendants<T>(entries: Map<string, T>, root: string): void {
+  const prefix = root.endsWith(win32.sep) ? root : root + win32.sep
+  for (const path of entries.keys()) {
+    if (path === root || path.startsWith(prefix)) {
+      entries.delete(path)
+    }
+  }
+}
+
+/**
+ * Drop the cached route and retry backoff after Git adds, moves, or removes a
+ * worktree at `cwd`, so the next command re-reads the rewritten `.git` marker.
+ * Descendants go too: a submodule under the worktree resolved its route from the
+ * same marker walk.
+ *
+ * A probe already in flight is deliberately left alone: it still answers and still
+ * caches, so a mutation that lands mid-probe is no worse off than the 30s TTL.
+ */
+export function invalidateWslLinkedWorktreeGitRouting(cwd: string): void {
+  const normalizedCwd = normalize(cwd)
+  forgetPathAndDescendants(routeByCwd, normalizedCwd)
+  forgetPathAndDescendants(transientFailuresByCwd, normalizedCwd)
 }
 
 function rememberTransientFailure(cwd: string, now: number): void {
@@ -205,7 +192,7 @@ function discoverRoute(
   return new Promise((resolve) => {
     const generation = routeProbeGeneration
     let settled = false
-    const finish = (usesHostGit: boolean, cacheable: boolean): void => {
+    const finish = (usesHostGit: boolean, known: boolean): void => {
       if (settled) {
         return
       }
@@ -215,7 +202,7 @@ function discoverRoute(
         resolve(false)
         return
       }
-      if (cacheable) {
+      if (known) {
         transientFailuresByCwd.delete(cwd)
         resolve(rememberRoute(cwd, usesHostGit, now()))
       } else {
@@ -226,10 +213,10 @@ function discoverRoute(
     const timer = setTimeout(() => finish(false, false), WSL_LINKED_WORKTREE_ROUTE_PROBE_TIMEOUT_MS)
     timer.unref()
     const releaseProbe = trackRouteProbe(cwd)
-    void shouldUseHostGit(cwd, fileSystem).then(
-      (usesHostGit) => {
+    void probeWslLinkedWorktreeGitRoute(cwd, fileSystem).then(
+      ({ usesHostGit, known }) => {
         releaseProbe()
-        finish(usesHostGit, true)
+        finish(usesHostGit, known)
       },
       () => {
         releaseProbe()
@@ -245,7 +232,7 @@ export async function prepareWslLinkedWorktreeGitRouting(
   options: WslLinkedWorktreeRoutingOptions = {}
 ): Promise<boolean> {
   const platform = options.platform ?? process.platform
-  const fileSystem = options.fileSystem ?? defaultFileSystem
+  const fileSystem = options.fileSystem ?? defaultWslLinkedWorktreeRoutingFileSystem
   const now = options.now ?? Date.now
   if (!isWslLinkedWorktreeGitRoutingCandidate(cwd, wslDistro, platform)) {
     return false

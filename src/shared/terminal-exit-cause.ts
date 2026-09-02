@@ -101,3 +101,14 @@ export function describeTerminalExitCause(cause: TerminalExitCause): string {
 export function isDeliberateTerminalExit(cause: TerminalExitCause): boolean {
   return cause.kind === 'operator_close'
 }
+
+/**
+ * Whether an exit code is positive evidence that the process ended.
+ *
+ * Negative codes are synthetic stop sentinels; they mean that the host lost
+ * contact before it could vouch for the child, so downstream cleanup must use
+ * the `unverifiable` path instead of treating the tab as exited.
+ */
+export function isProvenProcessExit(exitCode: number): boolean {
+  return resolveProcessExitCause({ exitCode }).kind !== 'unknown'
+}

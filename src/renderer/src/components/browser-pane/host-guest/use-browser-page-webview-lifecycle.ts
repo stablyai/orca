@@ -34,6 +34,7 @@ import type {
 export function useBrowserPageWebviewLifecycle({
   browserTabId,
   browserTabUrl,
+  browserTabLoading,
   browserTabLoadError,
   workspaceId,
   worktreeId,
@@ -75,6 +76,7 @@ export function useBrowserPageWebviewLifecycle({
 }: {
   browserTabId: string
   browserTabUrl: string
+  browserTabLoading: boolean
   browserTabLoadError: BrowserLoadError | null
   workspaceId: string
   worktreeId: string
@@ -120,6 +122,7 @@ export function useBrowserPageWebviewLifecycle({
   const guestRecoveryPendingRef = useRef(false)
   const validateVisibleGuestRegistrationRef = useRef<() => void>(() => {})
   const wasPaintableForGuestValidationRef = useRef(isPaintable)
+  const browserTabLoadingRef = useRef(browserTabLoading)
   const inputLockedRef = useRef(inputLocked)
   const faviconUrlRef = useRef<string | null>(faviconUrl)
   const initialBrowserUrlRef = useRef(browserTabUrl)
@@ -140,6 +143,7 @@ export function useBrowserPageWebviewLifecycle({
   const clearBrowserPageAnnotationsRef = useRef(clearBrowserPageAnnotations)
 
   useLayoutEffect(() => {
+    browserTabLoadingRef.current = browserTabLoading
     inputLockedRef.current = inputLocked
     viewportPresetIdRef.current = viewportPresetId
     isActiveRef.current = isActive
@@ -149,6 +153,7 @@ export function useBrowserPageWebviewLifecycle({
     isPaintableRef.current = isPaintable
   }, [
     browserAnnotations,
+    browserTabLoading,
     clearBrowserPageAnnotations,
     inputLocked,
     isActive,
@@ -185,12 +190,15 @@ export function useBrowserPageWebviewLifecycle({
   const syncNavigationState = useCallback(
     (webview: Electron.WebviewTag): void => {
       try {
+        // Parked panes miss guest events; only reconcile isLoading when the store already knows
+        // a navigation is active so an attach-time transient cannot flash a loading indicator.
+        const loading = browserTabLoadingRef.current ? webview.isLoading() : undefined
         onUpdatePageStateRef.current(browserTabId, {
           title: getBrowserDisplayTitle(
             webview.getTitle(),
             webview.getURL() || browserTabUrlRef.current
           ),
-          // Why: attach can transiently report isLoading() with no real navigation; syncing it would flash the loading dot on tab switches.
+          ...(loading === undefined ? {} : { loading }),
           canGoBack: webview.canGoBack(),
           canGoForward: webview.canGoForward()
         })

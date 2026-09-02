@@ -32,6 +32,7 @@ let presentedHostKey: Buffer
 let hostKeyAccepted: boolean | undefined
 
 vi.mock('ssh2', () => {
+  const utils = { parseKey: vi.fn(() => new Error('parse failed')) }
   class MockSshClient {
     setNoDelay = vi.fn()
     _sock: Socket | undefined = new Socket()
@@ -69,7 +70,8 @@ vi.mock('ssh2', () => {
   return {
     Client: MockSshClient,
     BaseAgent: MockBaseAgent,
-    default: { Client: MockSshClient, BaseAgent: MockBaseAgent }
+    utils,
+    default: { Client: MockSshClient, BaseAgent: MockBaseAgent, utils }
   }
 })
 

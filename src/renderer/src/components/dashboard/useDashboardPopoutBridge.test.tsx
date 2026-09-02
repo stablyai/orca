@@ -59,6 +59,7 @@ function makeSnapshotWatchState(): DashboardSnapshotWatchState {
     repos: [],
     worktreesByRepo: {},
     tabsByWorktree: {},
+    unifiedTabsByWorktree: {},
     agentStatusByPaneKey: {},
     retainedAgentsByPaneKey: {},
     migrationUnsupportedByPtyId: {},
@@ -182,6 +183,7 @@ describe('useDashboardPopoutBridge', () => {
       'repos',
       'worktreesByRepo',
       'tabsByWorktree',
+      'unifiedTabsByWorktree',
       'retainedAgentsByPaneKey',
       'migrationUnsupportedByPtyId',
       'runtimeAgentOrchestrationByPaneKey',
@@ -239,6 +241,19 @@ describe('useDashboardPopoutBridge', () => {
       )
       .map((next) => Object.keys(next)[0])
     expect(republished).toEqual(profileInputs.map((next) => Object.keys(next)[0]))
+  })
+
+  it('republishes when the unified agent-session tab projection changes', () => {
+    const previousState = makeSnapshotWatchState()
+    expect(
+      dashboardSnapshotInputsChanged(
+        {
+          ...previousState,
+          unifiedTabsByWorktree: { 'worktree-1': [] }
+        },
+        previousState
+      )
+    ).toBe(true)
   })
 
   it('releases every dashboard listener when the experiment is disabled', async () => {

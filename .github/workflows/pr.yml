@@ -131,6 +131,9 @@ jobs:
       - name: Enforce max-lines ratchet
         run: pnpm run check:max-lines-ratchet
 
+      - name: Enforce ts-nocheck ratchet
+        run: pnpm run check:ts-nocheck-ratchet
+
       - name: Enforce runtime Electron-import ratchet
         run: pnpm run check:runtime-electron-ratchet
 

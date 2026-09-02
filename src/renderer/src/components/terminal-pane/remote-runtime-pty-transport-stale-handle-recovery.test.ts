@@ -322,7 +322,7 @@ describe('createRemoteRuntimePtyTransport', () => {
 
     await vi.waitFor(() => expect(onPtyExit).toHaveBeenCalledOnce())
     expect(subscribedTerminalHandles()).toEqual(['terminal-old'])
-    expect(onPtyExit).toHaveBeenCalledWith('remote:env-1@@terminal-old')
+    expect(onPtyExit).toHaveBeenCalledWith('remote:env-1@@terminal-old', -1)
     expect(transport.getPtyId()).toBeNull()
     expect(transport.isConnected()).toBe(false)
   })

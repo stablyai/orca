@@ -18,6 +18,24 @@ function readSkill(path = guidePath) {
 }
 
 describe('orca CLI skill guidance', () => {
+  it('keeps external browser routing at the OS/page boundary', () => {
+    const skill = readSkill(guidePath)
+    const description = skill.replace(/\s+/gu, ' ')
+
+    expect(description).toContain(
+      'Use Computer Use for external browser windows, webviews, or desktop UI only when the task requires OS/window-level control such as focus, menus, dialogs, coordinates, or screenshots.'
+    )
+    expect(description).toContain(
+      "`orca-cli` for Orca's embedded pages and a page-automation tool such as Playwright or CDP for external pages."
+    )
+    expect(skill).toContain(
+      'For external Chrome/Safari/webviews or Orca app chrome/settings, use the Computer Use skill/tool only when the task requires OS/window-level control'
+    )
+    expect(skill).toContain(
+      "Use `orca-cli` for Orca's embedded pages and a page-automation tool such as Playwright or CDP for external pages"
+    )
+  })
+
   it('keeps independent worktree lineage separate from Git base selection', () => {
     const skill = readSkill()
 

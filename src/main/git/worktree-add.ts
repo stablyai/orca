@@ -4,8 +4,10 @@ import type {
   LocalBaseRefUpdateSuggestion
 } from '../../shared/worktree/base-ref-drift-types'
 import { windowsLongPathGitArgs } from '../../shared/windows-long-path-git-args'
+import { withRepoRefMaintenancePaused } from './local-repo-ref-maintenance'
 import { gitExecFileAsync } from './runner'
 import { runWithGitReadCacheInvalidation } from './status'
+import { invalidateWslLinkedWorktreeGitRouting } from './wsl-linked-worktree-git-routing'
 import {
   getLocalBaseRefUpdateSuggestionForWorktreeCreate,
   refreshLocalBaseRefForWorktreeCreate
@@ -148,15 +150,17 @@ export async function addWorktree(
   options: AddWorktreeOptions = {}
 ): Promise<AddWorktreeResult> {
   try {
-    return await runWithGitReadCacheInvalidation(() =>
-      performAddWorktree(
-        repoPath,
-        worktreePath,
-        branch,
-        baseBranch,
-        refreshLocalBaseRef,
-        noCheckout,
-        options
+    return await withRepoRefMaintenancePaused('worktree-add', () =>
+      runWithGitReadCacheInvalidation(() =>
+        performAddWorktree(
+          repoPath,
+          worktreePath,
+          branch,
+          baseBranch,
+          refreshLocalBaseRef,
+          noCheckout,
+          options
+        )
       )
     )
   } finally {
@@ -200,11 +204,17 @@ async function performAddWorktree(
       args.push(effectiveBase)
     }
   }
-  await gitExecFileAsync(args, {
-    ...gitExecOptions(repoPath, options),
-    // Why: resolve per call — hoisting this to a module const would freeze the override at import.
-    timeout: resolveWorktreeAddTimeoutMs()
-  })
+  try {
+    await gitExecFileAsync(args, {
+      ...gitExecOptions(repoPath, options),
+      // Why: resolve per call — hoisting this to a module const would freeze the override at import.
+      timeout: resolveWorktreeAddTimeoutMs()
+    })
+  } finally {
+    // Git may have written the target's `.git` marker even when it reports a late
+    // failure, so drop any pre-create route before the follow-up commands route.
+    invalidateWslLinkedWorktreeGitRouting(worktreePath)
+  }
 
   if (options.checkoutExistingBranch) {
     return localBaseRefRefresh ? { localBaseRefRefresh } : {}

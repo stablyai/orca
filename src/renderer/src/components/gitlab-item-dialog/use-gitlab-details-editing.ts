@@ -53,7 +53,14 @@ export function useGitLabDetailsEditing(
         setLabelOptionsLoading(false)
       }
     }
-  }, [labelOptions, labelOptionsLoading, mountedRef, repoSelector])
+  }, [
+    labelOptions,
+    labelOptionsLoading,
+    mountedRef,
+    repoSelector,
+    setLabelOptions,
+    setLabelOptionsLoading
+  ])
 
   const handleStartDetailsEdit = useCallback((): void => {
     if (!item || !details || item.type !== 'mr') {
@@ -64,14 +71,22 @@ export function useGitLabDetailsEditing(
     setLabelDraft(formatGitLabLabelDraft(details.item.labels ?? item.labels))
     setEditingDetails(true)
     void loadGitLabLabelOptions()
-  }, [details, item, loadGitLabLabelOptions])
+  }, [
+    details,
+    item,
+    loadGitLabLabelOptions,
+    setBodyDraft,
+    setEditingDetails,
+    setLabelDraft,
+    setTitleDraft
+  ])
 
   const handleCancelDetailsEdit = useCallback((): void => {
     setEditingDetails(false)
     setTitleDraft('')
     setBodyDraft('')
     setLabelDraft('')
-  }, [])
+  }, [setBodyDraft, setEditingDetails, setLabelDraft, setTitleDraft])
 
   const handleSaveDetails = useCallback(async (): Promise<void> => {
     if (!item || !details || !repoSelector || item.type !== 'mr') {
@@ -153,6 +168,13 @@ export function useGitLabDetailsEditing(
     labelDraft,
     mountedRef,
     repoSelector,
+    setBodyDraft,
+    setDetails,
+    setDetailsSaving,
+    setEditingDetails,
+    setLabelDraft,
+    setLabelOptions,
+    setTitleDraft,
     titleDraft
   ])
 

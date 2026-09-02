@@ -21,7 +21,7 @@ const PERSISTED_UI_WRITER_PATH = 'src/renderer/src/app-shell/use-persisted-ui-wr
 describe('renderer startup runtime routing', () => {
   it('routes packaged terminal restore through the daemon adoption gate', () => {
     const source = readFileSync(
-      join(process.cwd(), 'src/renderer/src/components/Terminal.tsx'),
+      join(process.cwd(), 'src/renderer/src/components/use-terminal-watcher-effects.ts'),
       'utf8'
     )
     const gateStart = source.indexOf('const startupActivationGateWorktreeIdsRef')
@@ -226,7 +226,9 @@ describe('renderer startup runtime routing', () => {
   })
 
   it('keeps the persisted Automations view from starting its own bootstrap worktree scan', () => {
-    const source = readSource('src/renderer/src/components/automations/AutomationsPage.tsx')
+    const source = readSource(
+      'src/renderer/src/components/automations/use-automations-page-refresh.ts'
+    )
     const fullRefreshStart = source.indexOf('const mountedBeforeStartupWorktreeRefreshRef')
     const fullRefreshEffect = source.slice(
       fullRefreshStart,
@@ -306,7 +308,8 @@ describe('renderer startup runtime routing', () => {
 
     expect(source).toContain("import('../components/dictation/DictationController').then")
     expect(source).not.toContain("from '../components/dictation/DictationController'")
-    expect(source).toContain("settings?.voice?.enabled === true || dictationState !== 'idle'")
+    expect(source).toContain('useAppStore(selectAppRootSurfaceVoiceEnabled)')
+    expect(source).toContain("voiceEnabled || dictationState !== 'idle'")
     expect(source).toContain('shouldMountDictationController ?')
   })
 
@@ -347,7 +350,7 @@ describe('renderer startup runtime routing', () => {
       'utf8'
     )
     const terminalSource = readFileSync(
-      join(process.cwd(), 'src/renderer/src/components/Terminal.tsx'),
+      join(process.cwd(), 'src/renderer/src/components/use-terminal-watcher-effects.ts'),
       'utf8'
     )
     const hydrateIndex = appSource.indexOf("timeRendererStartupSyncStep('hydrate-session-stores'")
@@ -467,7 +470,7 @@ describe('renderer startup runtime routing', () => {
   })
 
   it('does not eagerly import optional status-bar segments on startup', () => {
-    const source = readSource('src/renderer/src/components/status-bar/StatusBar.tsx')
+    const source = readSource('src/renderer/src/components/status-bar/StatusBarSurface.tsx')
 
     expect(source).toContain("import('./ResourceUsageStatusSegment').then")
     expect(source).toContain("import('./PortsStatusSegment').then")

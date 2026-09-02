@@ -38,7 +38,7 @@ describe('Windows signing workflow contract', () => {
 
     const installStep = steps[installStepIndexes[0]]
 
-    expect(installStep.if).toBe("matrix.platform == 'win'")
+    expect(installStep.if).toBe("matrix.platform == 'win' && github.run_attempt == 1")
     expect(installStep.uses).toBe('./.github/actions/install-signpath-module')
     expect(installStep.run).toBeUndefined()
 
@@ -137,6 +137,34 @@ describe('Windows signing workflow contract', () => {
 
     expect(installRun).toContain('$actualHash -ne $expectedHash.ToUpperInvariant()')
     expect(installRun).toContain('throw "SHA-256 mismatch for $source')
+  })
+
+  it('never recreates Windows signing requests on a workflow rerun', () => {
+    const parsedWorkflow = readWorkflow('.github/workflows/release-cut.yml')
+    const steps = parsedWorkflow.jobs.build.steps
+    const stepNames = steps.map((step) => step.name)
+    const skipStep = steps.find((step) => step.name === 'Skip Windows artifact rebuild on rerun')
+
+    expect(skipStep?.if).toBe("matrix.platform == 'win' && github.run_attempt != 1")
+    expect(skipStep?.run).toContain('Existing signed release assets must be reused')
+
+    const signingStepNames = [
+      'Build Windows release artifacts',
+      'Stage unsigned inner PE files for signing',
+      'Upload unsigned inner binaries for SignPath',
+      'Submit inner binaries signing request',
+      'Download signed inner binaries from SignPath',
+      'Upload unsigned Windows installer for SignPath',
+      'Submit Windows installer signing request',
+      'Download signed Windows installer from SignPath',
+      'Stage signed Windows release assets',
+      'Publish signed Windows release artifacts'
+    ]
+
+    for (const stepName of signingStepNames) {
+      const step = steps[stepNames.indexOf(stepName)]
+      expect(step?.if, stepName).toContain('github.run_attempt == 1')
+    }
   })
 
   it('shares one SignPath module install path between release and rehearsal', () => {

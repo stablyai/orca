@@ -14,6 +14,7 @@ import {
   acceptReplayedWebSessionTabsSnapshot,
   applyFreshWebSessionTabsSnapshot,
   applyWebSessionTabsSnapshot,
+  clearWebSessionTabsTrackingForEnvironment,
   resolveHostSessionTabIdForWebSessionTab,
   shouldApplyWebSessionTabsSnapshot,
   type WebSessionTabsSyncState
@@ -166,6 +167,102 @@ describe('applyWebSessionTabsSnapshot', () => {
       activeTabType: null
     })
     expect(shouldApplyWebSessionTabsSnapshot(sameEpochOlder, ENV)).toBe(false)
+  })
+
+  it('rejects a delayed frame from an epoch superseded by a later restart', () => {
+    const beforeRestart = makeSnapshot([], {
+      publicationEpoch: 'epoch-before-restart',
+      snapshotVersion: 5,
+      activeTabType: null
+    })
+    const pendingRestart = makeSnapshot([], {
+      publicationEpoch: 'epoch-pending-restart',
+      snapshotVersion: 1,
+      activeTabType: null
+    })
+    const afterRestart = makeSnapshot([], {
+      publicationEpoch: 'epoch-after-restart',
+      snapshotVersion: 2,
+      activeTabType: null
+    })
+
+    expect(shouldApplyWebSessionTabsSnapshot(beforeRestart, ENV)).toBe(true)
+    expect(shouldApplyWebSessionTabsSnapshot(pendingRestart, ENV)).toBe(true)
+    expect(shouldApplyWebSessionTabsSnapshot(afterRestart, ENV)).toBe(true)
+
+    // The pending publication may still be queued on another subscription;
+    // once the ready restart epoch wins, it must not roll the mirror back.
+    expect(shouldApplyWebSessionTabsSnapshot(pendingRestart, ENV)).toBe(false)
+  })
+
+  it('rejects an unseen old epoch when its runtime process was retired', () => {
+    const beforeRestart = makeSnapshot([], {
+      publicationEpoch: 'epoch-before-runtime-restart',
+      snapshotVersion: 7,
+      activeTabType: null
+    })
+    const afterRestart = makeSnapshot([], {
+      publicationEpoch: 'epoch-after-runtime-restart',
+      snapshotVersion: 1,
+      activeTabType: null
+    })
+    const delayedOldEpoch = makeSnapshot([], {
+      publicationEpoch: 'epoch-never-observed-by-this-worktree',
+      snapshotVersion: 1,
+      activeTabType: null
+    })
+
+    expect(shouldApplyWebSessionTabsSnapshot(beforeRestart, ENV, 'runtime-old')).toBe(true)
+    expect(shouldApplyWebSessionTabsSnapshot(afterRestart, ENV, 'runtime-new')).toBe(true)
+    // The epoch was never accepted for this worktree, but its runtime process
+    // is known to be retired, so it cannot roll the restart back.
+    expect(shouldApplyWebSessionTabsSnapshot(delayedOldEpoch, ENV, 'runtime-old')).toBe(false)
+
+    // Teardown starts a fresh identity epoch; a later connection may reuse the
+    // same test id without inheriting the retired-runtime fence.
+    clearWebSessionTabsTrackingForEnvironment(ENV)
+    expect(shouldApplyWebSessionTabsSnapshot(delayedOldEpoch, ENV, 'runtime-old')).toBe(true)
+  })
+
+  it('keeps a removed worktree fenced against delayed predecessor epochs', () => {
+    const beforeRemoval = makeSnapshot([], {
+      publicationEpoch: 'epoch-before-removal',
+      snapshotVersion: 3,
+      activeTabType: null
+    })
+    const removed = {
+      ...makeSnapshot([], {
+        publicationEpoch: 'epoch-removed',
+        snapshotVersion: 0,
+        activeGroupId: null,
+        activeTabId: null,
+        activeTabType: null
+      }),
+      removed: true as const
+    }
+
+    expect(shouldApplyWebSessionTabsSnapshot(beforeRemoval, ENV)).toBe(true)
+    expect(shouldApplyWebSessionTabsSnapshot(removed, ENV)).toBe(true)
+    expect(
+      shouldApplyWebSessionTabsSnapshot(
+        makeSnapshot([], {
+          publicationEpoch: 'epoch-before-removal',
+          snapshotVersion: 4,
+          activeTabType: null
+        }),
+        ENV
+      )
+    ).toBe(false)
+    expect(
+      shouldApplyWebSessionTabsSnapshot(
+        makeSnapshot([], {
+          publicationEpoch: 'epoch-recreated',
+          snapshotVersion: 1,
+          activeTabType: null
+        }),
+        ENV
+      )
+    ).toBe(true)
   })
 
   it('accepts a replayed same-epoch same-version snapshot after a transport reconnect', () => {

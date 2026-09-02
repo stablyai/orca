@@ -172,6 +172,47 @@ describe('normalizeImageTranscriptMessages', () => {
     ])
   })
 
+  it('folds a multi-block companion turn into one turn carrying every ref', () => {
+    // Claude records a multi-image paste as ONE companion message with a marker block
+    // per image, so a single-block-only rule missed every multi-image turn.
+    const out = normalizeImageTranscriptMessages([
+      {
+        id: 'companion',
+        role: 'user',
+        blocks: [
+          { type: 'text', text: '[Image: source: /tmp/a.png]' },
+          { type: 'text', text: '[Image: source: /tmp/b.png]' }
+        ],
+        timestamp: 1,
+        source: 'transcript'
+      }
+    ])
+
+    expect(out).toHaveLength(1)
+    expect(out[0]!.blocks).toEqual([
+      { type: 'image-ref', path: '/tmp/a.png' },
+      { type: 'image-ref', path: '/tmp/b.png' }
+    ])
+  })
+
+  it('does not treat a turn mixing prose with a marker as an image-source turn', () => {
+    const messages = [
+      {
+        id: 'mixed',
+        role: 'user' as const,
+        blocks: [
+          { type: 'text' as const, text: '[Image: source: /tmp/a.png]' },
+          { type: 'text' as const, text: 'and here is what I think' }
+        ],
+        timestamp: 1,
+        source: 'transcript' as const
+      }
+    ]
+    const out = normalizeImageTranscriptMessages(messages)
+
+    expect(out[0]!.blocks.some((block) => block.type === 'image-ref')).toBe(false)
+  })
+
   it('leaves ordinary user text untouched', () => {
     const message = userText('a', 'how about this')
     const messages = [message]

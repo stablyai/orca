@@ -56,11 +56,25 @@ of the libraries installed.
 On Ubuntu 20.04 and 22.04, install `libfuse2` to execute the AppImage through
 FUSE. On Ubuntu 24.04 and Debian 13 the package is `libfuse2t64`, though the plain
 `libfuse2` name also resolves there because nothing else provides it. FUSE is
-optional: without it, use the AppImage's supported extraction path:
+optional: without it, use the AppImage's supported extraction path. CLI
+registration does this once automatically, so registered commands do not need
+FUSE.
+
+Download and make the AppImage executable:
+
+```bash
+sudo mkdir -p /opt/orca
+sudo curl -L https://github.com/stablyai/orca/releases/latest/download/orca-linux.AppImage \
+  -o /opt/orca/orca-linux.AppImage
+sudo chmod +x /opt/orca/orca-linux.AppImage
+```
+
+To extract it without FUSE, run the extraction as root because the installation
+directory is root-owned:
 
 ```bash
 cd /opt/orca
-./orca-linux.AppImage --appimage-extract
+sudo ./orca-linux.AppImage --appimage-extract
 sudo chmod -R a+rX /opt/orca/squashfs-root
 /opt/orca/squashfs-root/AppRun serve --port 6768
 ```
@@ -75,15 +89,6 @@ Docker commonly has no FUSE device. Use `--appimage-extract` once or
 extract-and-run wrapper can print extracted paths before Orca starts, so
 automation that requires stdout to contain only the ready JSON should extract
 once and invoke `squashfs-root/AppRun`.
-
-Download and make the AppImage executable:
-
-```bash
-sudo mkdir -p /opt/orca
-sudo curl -L https://github.com/stablyai/orca/releases/latest/download/orca-linux.AppImage \
-  -o /opt/orca/orca-linux.AppImage
-sudo chmod +x /opt/orca/orca-linux.AppImage
-```
 
 If `Xvfb` was installed somewhere other than `/usr/bin`, confirm systemd can
 find it later:

@@ -658,7 +658,8 @@ describe('WebRuntimeClient', () => {
     vi.stubGlobal('WebSocket', WebSocket)
     const serverKeys = generateKeyPair()
     const frame = new Uint8Array([9, 8, 7])
-    const wss = new WebSocketServer({ port: 0 })
+    // host must match the 127.0.0.1 clients dial: a wildcard bind lets a foreign loopback listener claim the port and answer here.
+    const wss = new WebSocketServer({ host: '127.0.0.1', port: 0 })
     const sockets = new Set<WebSocket>()
     wss.on('connection', (socket) => {
       sockets.add(socket)

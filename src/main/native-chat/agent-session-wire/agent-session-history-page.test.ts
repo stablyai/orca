@@ -26,10 +26,8 @@ import {
   type JournalRow,
   type JournalTombstoneRow
 } from '../agent-session-journal/journal-row-schema'
-import {
-  openAgentSessionJournal,
-  type AgentSessionJournal
-} from '../agent-session-journal/journal-store'
+import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
+import { openAgentSessionJournal } from '../agent-session-journal/journal-store-factory'
 import { projectJournalBatch } from './agent-session-journal-batch'
 import { readAgentSessionHistory, resolveHistoryLimit } from './agent-session-history-page'
 
@@ -312,6 +310,49 @@ describe('history page byte ceiling', () => {
 })
 
 describe('projectJournalBatch', () => {
+  it('publishes every nested lifecycle mutation atomically at the outer cursor', async () => {
+    const turn: AgentJournalItemIdentity = {
+      provider: 'legacy',
+      agent: 'codex',
+      sessionId: 'session-1',
+      recordId: 'turn-lifecycle:turn-1'
+    }
+    await journal.appendItem(turn, { kind: 'status', text: 'working' }, { fence: 1 })
+    const cursor = journal.cursor()
+    await journal.appendLifecycleBatch({
+      settlementId: 'settlement-1',
+      fence: 1,
+      mutations: [
+        { kind: 'item', identity: item(1), body: body('one') },
+        { kind: 'item', identity: item(2), body: body('two') },
+        { kind: 'tombstone', identity: turn }
+      ]
+    })
+
+    const page = readAgentSessionHistory(journal, {
+      sessionId: 'session-1',
+      direction: 'after',
+      cursor,
+      limit: 1
+    })
+    if (!page.ok) {
+      throw new Error(`expected a page, got reset ${page.reset}`)
+    }
+    expect(page.page.items.map((entry) => entry.body)).toEqual([body('one'), body('two')])
+    expect(page.page.removedItemIds).toHaveLength(1)
+    expect(new Set(page.page.items.map((entry) => entry.sequence)).size).toBe(1)
+
+    const tail = readAgentSessionHistory(journal, {
+      sessionId: 'session-1',
+      direction: 'tail',
+      limit: 1
+    })
+    if (!tail.ok) {
+      throw new Error(`expected a page, got reset ${tail.reset}`)
+    }
+    expect(tail.page.items.map((entry) => entry.body)).toEqual([body('one'), body('two')])
+  })
+
   it('reports a hole in the row sequence as journal_gap', async () => {
     await appendItems(3)
     const since = journal.readSince({ epoch: journal.epoch, sequence: 0 })

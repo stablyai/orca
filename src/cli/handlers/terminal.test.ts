@@ -10,13 +10,18 @@ const ORIGINAL_EXIT_CODE = process.exitCode
 describe('terminal close CLI', () => {
   afterEach(() => {
     vi.restoreAllMocks()
+    process.exitCode = ORIGINAL_EXIT_CODE
   })
 
   it('keeps the default close RPC unchanged', async () => {
+    process.exitCode = undefined
     const call = vi.fn().mockResolvedValue({
-      result: { close: { handle: 'term-1', tabId: 'tab-1', ptyKilled: true } }
+      id: 'req-close',
+      ok: true,
+      result: { close: { handle: 'term-1', tabId: 'tab-1', ptyKilled: true } },
+      _meta: { runtimeId: 'runtime-1' }
     })
-    vi.spyOn(console, 'log').mockImplementation(() => {})
+    const log = vi.spyOn(console, 'log').mockImplementation(() => {})
 
     await TERMINAL_HANDLERS['terminal close']({
       flags: new Map([['terminal', 'term-1']]),
@@ -26,9 +31,72 @@ describe('terminal close CLI', () => {
     })
 
     expect(call).toHaveBeenCalledWith('terminal.close', { terminal: 'term-1' })
+    expect(JSON.parse(String(log.mock.calls[0]?.[0]))).toMatchObject({
+      ok: true,
+      result: { close: { ptyKilled: true } }
+    })
+    expect(process.exitCode).toBeUndefined()
+  })
+
+  it('reports an unverifiable PTY stop as a failing JSON outcome', async () => {
+    process.exitCode = undefined
+    const close = {
+      handle: 'term-remote',
+      tabId: 'tab-1',
+      ptyKilled: false,
+      ptyStopVerdict: 'unverifiable' as const,
+      ptyStopReason: 'its SSH provider is no longer registered'
+    }
+    const call = vi.fn().mockResolvedValue({
+      id: 'req-close',
+      ok: true,
+      result: { close },
+      _meta: { runtimeId: 'runtime-1' }
+    })
+    const log = vi.spyOn(console, 'log').mockImplementation(() => {})
+
+    await TERMINAL_HANDLERS['terminal close']({
+      flags: new Map([['terminal', close.handle]]),
+      client: { call } as unknown as RuntimeClient,
+      cwd: '/tmp/worktree',
+      json: true
+    })
+
+    expect(JSON.parse(String(log.mock.calls[0]?.[0]))).toMatchObject({
+      ok: false,
+      error: {
+        code: 'terminal_stop_unverifiable',
+        message: expect.stringContaining('unverifiable'),
+        data: { close }
+      }
+    })
+    expect(process.exitCode).toBe(1)
+  })
+
+  it('reports a live PTY stop as a failing human outcome', async () => {
+    process.exitCode = undefined
+    const close = {
+      handle: 'term-live',
+      tabId: 'tab-1',
+      ptyKilled: false,
+      ptyStopVerdict: 'live' as const
+    }
+    const call = vi.fn().mockResolvedValue({ result: { close } })
+    const log = vi.spyOn(console, 'log').mockImplementation(() => {})
+
+    await TERMINAL_HANDLERS['terminal close']({
+      flags: new Map([['terminal', close.handle]]),
+      client: { call } as unknown as RuntimeClient,
+      cwd: '/tmp/worktree',
+      json: false
+    })
+
+    expect(log).toHaveBeenCalledWith(expect.stringContaining('The PTY is live.'))
+    expect(process.exitCode).toBe(1)
   })
 
   it('routes --tab to the durable whole-tab RPC', async () => {
+    process.exitCode = undefined
     const parsed = parseArgs(['terminal', 'close', '--terminal', 'term-1', '--tab'])
     const call = vi.fn().mockResolvedValue({
       result: {
@@ -51,6 +119,7 @@ describe('terminal close CLI', () => {
 
     expect(parsed.flags.get('tab')).toBe(true)
     expect(call).toHaveBeenCalledWith('terminal.closeTab', { terminal: 'term-1' })
+    expect(process.exitCode).toBeUndefined()
   })
 
   it('documents that --tab waits for durable persistence', () => {

@@ -39,6 +39,7 @@ export function BrowserPageViewportOverlays({
   sshRouted,
   isBlankTab,
   containerRef,
+  markupPortalContainer,
   browserOverlayViewport,
   worktreeId,
   grab,
@@ -63,6 +64,7 @@ export function BrowserPageViewportOverlays({
   sshRouted: boolean
   isBlankTab: boolean
   containerRef: RefObject<HTMLDivElement | null>
+  markupPortalContainer: HTMLDivElement | null
   browserOverlayViewport: BrowserOverlayViewport
   worktreeId: string
   grab: GrabModeHook
@@ -77,6 +79,7 @@ export function BrowserPageViewportOverlays({
         grab={grab}
         annotationSend={annotationSend}
         grabAnnotations={grabAnnotations}
+        markupPortalContainer={markupPortalContainer}
         containerRef={containerRef}
         webviewRef={webviewRef}
         browserOverlayViewport={browserOverlayViewport}

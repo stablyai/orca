@@ -61,8 +61,11 @@ vi.mock('fs/promises', () => ({
   rm: rmMock
 }))
 
+// `availableParallelism` is read at module load by the git admission scheduler,
+// which this module graph reaches; a partial `os` mock breaks that import.
 vi.mock('os', () => ({
-  homedir: homedirMock
+  homedir: homedirMock,
+  availableParallelism: () => 8
 }))
 
 vi.mock('../git/runner', () => ({
