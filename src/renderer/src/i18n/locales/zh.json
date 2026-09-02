@@ -13830,6 +13830,35 @@
         }
       },
       "automations": {
+        "AutomationListToolbar": {
+          "runs": "运行"
+        },
+        "AutomationRunsDashboard": {
+          "search": "搜索运行…",
+          "filters": "筛选条件",
+          "host": "主机",
+          "status": "状态",
+          "refresh": "刷新运行",
+          "successful24h": "成功 · 24 小时",
+          "failed24h": "失败 · 24 小时",
+          "successful7d": "成功 · 7 天",
+          "failed7d": "失败 · 7 天",
+          "historyUnavailableOne": "1 个自动化的运行历史不可用。计数仅包含可用的历史记录。",
+          "historyUnavailableMany": "{{count}} 个自动化的运行历史不可用。计数仅包含可用的历史记录。",
+          "automation": "自动化",
+          "triggered": "已触发",
+          "trigger": "触发",
+          "loading": "正在加载运行…",
+          "noRuns": "尚无运行",
+          "emptyDescription": "触发自动化后，运行记录会显示在这里。",
+          "runs": "运行",
+          "local": "本地",
+          "remote": "远程"
+        },
+        "AutomationsPageBreadcrumb": {
+          "ariaLabel": "自动化面包屑导航",
+          "runDetails": "运行详情"
+        },
         "AutomationCustomCronPanel": {
           "3e3b2c369f": "cron",
           "e81a02d61b": "保存前输入有效的五字段 cron。",
@@ -14763,10 +14792,7 @@
         "SortableTabContextMenu": {
           "switchToTerminalView": "切换到终端视图",
           "switchToChatView": "切换到聊天视图",
-          "closeTabsToLeft": "关闭左侧的选项卡",
-          "copySessionId": "复制会话 ID",
-          "copySessionIdSuccess": "已复制会话 ID",
-          "copySessionIdError": "复制会话 ID 失败"
+          "closeTabsToLeft": "关闭左侧的选项卡"
         },
         "BrowserTab": {
           "closeOthers": "关闭其他",
@@ -14875,6 +14901,13 @@
       "sent": "已将会话上下文发送到新的 {{agent}} 会话。",
       "deliveryFailed": "新的 {{agent}} 会话已启动，但无法发送上下文。",
       "launchFailed": "无法启动新的 {{agent}} 会话。"
+    },
+    "terminalPane": {
+      "TerminalContextMenu": {
+        "copySessionId": "复制会话 ID",
+        "copySessionIdSuccess": "已复制会话 ID",
+        "copySessionIdError": "复制会话 ID 失败"
+      }
     }
   },
   "dashboardPopout": {

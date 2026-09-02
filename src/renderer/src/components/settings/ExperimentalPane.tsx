@@ -39,9 +39,6 @@ export function ExperimentalPane({
   const showNativeChat = matchesSettingsSearch(searchQuery, [
     getExperimentalSearchEntry().nativeChat
   ])
-  const showAgentsSidebar = matchesSettingsSearch(searchQuery, [
-    getExperimentalSearchEntry().agentsSidebar
-  ])
   const showAgentDashboard = matchesSettingsSearch(searchQuery, [
     getExperimentalSearchEntry().agentDashboard
   ])
@@ -64,33 +61,6 @@ export function ExperimentalPane({
 
   return (
     <div className="space-y-4">
-      {showAgentsSidebar ? (
-        <SearchableSetting
-          title={getExperimentalSearchEntry().agentsSidebar.title}
-          description={getExperimentalSearchEntry().agentsSidebar.description}
-          keywords={getExperimentalSearchEntry().agentsSidebar.keywords}
-          className="space-y-3 py-2"
-          id="experimental-agents-sidebar"
-        >
-          <div className="flex items-start justify-between gap-4">
-            <div className="min-w-0 shrink space-y-0.5">
-              <Label>{getExperimentalSearchEntry().agentsSidebar.title}</Label>
-              {/* Same string the search entry advertises, so search results match the page. */}
-              <p className="text-xs text-muted-foreground">
-                {getExperimentalSearchEntry().agentsSidebar.description}
-              </p>
-            </div>
-            <SettingsSwitch
-              checked={settings.showAgentsSidebar !== false}
-              ariaLabel={getExperimentalSearchEntry().agentsSidebar.title}
-              onChange={() =>
-                updateSettings({ showAgentsSidebar: settings.showAgentsSidebar === false })
-              }
-            />
-          </div>
-        </SearchableSetting>
-      ) : null}
-
       {showAgentDashboard ? (
         <AgentDashboardExperimentalSetting settings={settings} updateSettings={updateSettings} />
       ) : null}

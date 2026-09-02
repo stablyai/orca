@@ -1,5 +1,6 @@
 import { execFile as execFileCb } from 'node:child_process'
 import { promisify } from 'node:util'
+import type { ProcessTableIndexOf } from './process-table-index'
 
 const execFile = promisify(execFileCb)
 
@@ -10,6 +11,11 @@ const execFile = promisify(execFileCb)
 /** Columns used by the evidence reader. Keep command last so its spaces survive parsing. */
 export const PS_ARGS = ['-axo', 'pid=,ppid=,pgid=,tpgid=,stat=,command='] as const
 const PS_TIMEOUT_MS = 3000
+// Why: execFile's 1MB default leaves ~3x headroom (326KB / 1,460 processes, and
+// a single 5KB argv row is ordinary), so a busy host overflows it and then EVERY
+// capture fails — a readable process table degrading into permanent
+// "unverifiable". Matches the sibling reader in pty-descendant-termination.ts.
+export const PS_MAX_BUFFER_BYTES = 32 * 1024 * 1024
 
 // Why: 500ms is below the active cadence poll's minimum inter-poll gap (~675ms
 // = 750ms less jitter), so a cadence-driven pane never reuses a snapshot older
@@ -117,49 +123,7 @@ export function parseStrictProcessTableRows(stdout: string): ProcessTableRow[] {
   return rows
 }
 
-export type ProcessTableIndexStats = {
-  captures?: number
-  indexBuilds: number
-  rowVisits: number
-  indexLookups: number
-}
-
-export type ProcessTableIndex = {
-  rows: readonly ProcessTableRow[]
-  byPid: ReadonlyMap<number, ProcessTableRow>
-  childrenByPpid: ReadonlyMap<number, readonly ProcessTableRow[]>
-  stats?: ProcessTableIndexStats
-}
-
-/**
- * Build the correlation indexes in one linear pass over a capture. Only the
- * indexes a resolver actually reads are materialized: group indexes would cost
- * two more maps plus a per-row array allocation on every capture, and foreground
- * membership is derived from each row's own `pgid` against the root's `tpgid`.
- */
-export function buildProcessTableIndex(
-  rows: readonly ProcessTableRow[],
-  stats?: ProcessTableIndexStats
-): ProcessTableIndex {
-  if (stats) {
-    stats.indexBuilds += 1
-  }
-  const byPid = new Map<number, ProcessTableRow>()
-  const childrenByPpid = new Map<number, ProcessTableRow[]>()
-  for (const row of rows) {
-    if (stats) {
-      stats.rowVisits += 1
-    }
-    // Preserve rows.find() semantics if a malformed table repeats a pid
-    if (!byPid.has(row.pid)) {
-      byPid.set(row.pid, row)
-    }
-    const children = childrenByPpid.get(row.ppid) ?? []
-    children.push(row)
-    childrenByPpid.set(row.ppid, children)
-  }
-  return { rows, byPid, childrenByPpid, stats }
-}
+export type ProcessTableIndex = ProcessTableIndexOf<ProcessTableRow>
 
 /**
  * Rank a descendant row as a foreground candidate: a `+` (foreground process
@@ -167,42 +131,6 @@ export function buildProcessTableIndex(
  */
 export function scoreForegroundCandidateRow(row: ProcessTableRow & { depth: number }): number {
   return (row.stat.includes('+') ? 10_000 : 0) + row.depth
-}
-
-export function lookupProcessTableIndex<T>(
-  index: ProcessTableIndex,
-  lookup: (index: ProcessTableIndex) => T,
-  stats = index.stats
-): T {
-  if (stats) {
-    stats.indexLookups += 1
-  }
-  return lookup(index)
-}
-
-const processTableIndexes = new WeakMap<readonly ProcessTableRow[], ProcessTableIndex>()
-
-/**
- * Memoize one index per snapshot identity, so the panes that share a TTL-cached
- * capture walk its rows once instead of once each. Keyed weakly by the rows
- * array, so an index dies with the snapshot that produced it. The shared build
- * materializes only `byPid` and `childrenByPpid`, so a one-pane relay pays for
- * two maps per capture rather than four indexes no resolver queries.
- *
- * Deliberately stats-free: `buildProcessTableIndex` mutates the caller's counter
- * bag and stores it on the index, so a shared index would hand one caller's bag
- * to an unrelated later caller and let a cache hit satisfy an `indexBuilds`
- * measurement without building anything. Measured callers keep calling
- * `buildProcessTableIndex(rows, stats)` directly.
- */
-export function getProcessTableIndex(rows: readonly ProcessTableRow[]): ProcessTableIndex {
-  const cached = processTableIndexes.get(rows)
-  if (cached) {
-    return cached
-  }
-  const index = buildProcessTableIndex(rows)
-  processTableIndexes.set(rows, index)
-  return index
 }
 
 type Snapshot<T> = { value: T; capturedAtMs: number }
@@ -353,13 +281,44 @@ function createProcessTableCapture(stdout: string): ProcessTableCapture {
   }
 }
 
+/**
+ * Reject a capture that cannot be a whole process table.
+ *
+ * Why this is not redundant with the buffer ceiling: `parseProcessTableRows`
+ * drops unparseable lines, so a short capture reads as a *complete* table whose
+ * missing processes simply are not running — a false "no agent"/"no children",
+ * i.e. the `unverifiable` -> `exited` collapse the execution boundary forbids.
+ * Only the strict view would notice today; the lenient view would not. A capture
+ * that stopped at the ceiling, or that carries no rows at all, is unreadable
+ * evidence and must fail loudly on both views.
+ */
+function assertWholeCapture(stdout: string): string {
+  if (Buffer.byteLength(stdout, 'utf-8') >= PS_MAX_BUFFER_BYTES) {
+    throw new ProcessTableCaptureError('capture_truncated')
+  }
+  if (!/\S/.test(stdout)) {
+    throw new ProcessTableCaptureError('empty_capture')
+  }
+  return stdout
+}
+
 const processTableReader = createProcessTableSnapshotReader<ProcessTableCapture>({
   runPs: async () => {
-    const { stdout } = await execFile('ps', [...PS_ARGS], {
-      encoding: 'utf-8',
-      timeout: PS_TIMEOUT_MS
-    })
-    return createProcessTableCapture(stdout)
+    let stdout: string
+    try {
+      ;({ stdout } = await execFile('ps', [...PS_ARGS], {
+        encoding: 'utf-8',
+        timeout: PS_TIMEOUT_MS,
+        maxBuffer: PS_MAX_BUFFER_BYTES
+      }))
+    } catch (error) {
+      // A ceiling hit is truncation, not absence: name it in the domain vocabulary.
+      if ((error as { code?: unknown } | null)?.code === 'ERR_CHILD_PROCESS_STDIO_MAXBUFFER') {
+        throw new ProcessTableCaptureError('capture_truncated')
+      }
+      throw error
+    }
+    return createProcessTableCapture(assertWholeCapture(stdout))
   },
   now: () => Date.now()
 })

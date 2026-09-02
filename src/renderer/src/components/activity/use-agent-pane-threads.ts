@@ -121,8 +121,10 @@ export function useAgentPaneThreads(args: {
   // identities across rebuilds, so a status write to one agent leaves every other row's
   // memo bail-out and cached search text intact. Rebuilds are deterministic, so a repeated
   // (StrictMode/deferred) memo invocation returns identical objects from the cache.
-  const eventBuildCacheRef = useRef(createActivityEventBuildCache())
-  const threadReuseCacheRef = useRef(createAgentPaneThreadReuseCache())
+  const eventBuildCacheRef = useRef<ReturnType<typeof createActivityEventBuildCache>>(undefined!)
+  eventBuildCacheRef.current ??= createActivityEventBuildCache()
+  const threadReuseCacheRef = useRef<ReturnType<typeof createAgentPaneThreadReuseCache>>(undefined!)
+  threadReuseCacheRef.current ??= createAgentPaneThreadReuseCache()
 
   const { events: allEvents, liveAgentByPaneKey } = useMemo(
     () =>

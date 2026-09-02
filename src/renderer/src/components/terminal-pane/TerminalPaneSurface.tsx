@@ -59,6 +59,7 @@ export function TerminalPaneSurface({
     keybindings,
     managedPanes,
     managerRef,
+    menuAgentSessionId,
     menuPaneHasCustomTitle,
     openDiskSpaceAnalyzer,
     openQuickCommandEditor,
@@ -247,6 +248,8 @@ export function TerminalPaneSurface({
         canClearPaneTitle={menuPaneHasCustomTitle}
         onCopyTerminalId={() => void contextMenu.onCopyTerminalId()}
         onCopyPaneId={contextMenu.onCopyPaneId}
+        canCopyAgentSessionId={menuAgentSessionId !== null}
+        onCopyAgentSessionId={() => void contextMenu.onCopyAgentSessionId()}
       />
       <TerminalLinkActionPopover
         request={terminalLinkActionRequest}

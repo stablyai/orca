@@ -68,8 +68,11 @@ describe('renderer startup runtime routing', () => {
     const hydrationWorktreesIndex = source.indexOf(
       "timeRendererStartupStep('fetch-hydration-worktrees'"
     )
-    const servicesIndex = source.indexOf(
-      "timeRendererStartupStep('first-window-services-await'",
+    // Why this barrier: worktree hydration can spawn host Git, so it must sit behind the
+    // shell-PATH + managed-WSL fence. On packaged Windows the window opens before
+    // shellPathReady resolves, so this really is the fence, not a formality.
+    const gitEnvironmentBarrierIndex = source.indexOf(
+      "timeRendererStartupStep('git-environment-barrier-await'",
       sessionIndex
     )
     const fullWorktreesIndex = source.indexOf('await actions.fetchAllWorktrees()')
@@ -89,8 +92,11 @@ describe('renderer startup runtime routing', () => {
     expect(localReposIndex).toBeLessThan(localGroupsIndex)
     expect(localGroupsIndex).toBeLessThan(localFoldersIndex)
     expect(localReposIndex).toBeLessThan(sessionIndex)
-    expect(sessionIndex).toBeLessThan(servicesIndex)
-    expect(servicesIndex).toBeLessThan(hydrationWorktreesIndex)
+    expect(sessionIndex).toBeLessThan(gitEnvironmentBarrierIndex)
+    expect(gitEnvironmentBarrierIndex).toBeLessThan(hydrationWorktreesIndex)
+    expect(source.slice(gitEnvironmentBarrierIndex, hydrationWorktreesIndex)).toContain(
+      'window.api.app.awaitGitEnvironmentStartupBarrier()'
+    )
     const hydrationWorktreeBlock = source.slice(
       hydrationWorktreesIndex,
       source.indexOf('await keybindingsPromise')
@@ -180,7 +186,13 @@ describe('renderer startup runtime routing', () => {
 
   it('waits for first-window startup services before terminal reconnect', () => {
     const source = readSource(STARTUP_HYDRATION_PATH)
-    const servicesIndex = source.indexOf("timeRendererStartupStep('first-window-services-await'")
+    // Why this step: `app:prepareTerminalStartupRestoration` awaits
+    // firstWindowStartupServicesReady + managedWslCliStartupBarrierReady in main before it
+    // does anything else, so it is the renderer-side position of that fence.
+    // `desktop-startup-ordering.test.ts` pins the main-side await itself.
+    const servicesIndex = source.indexOf(
+      "timeRendererStartupStep('prepare-terminal-startup-restoration'"
+    )
     const preReconnectRecoveryIndex = source.indexOf(
       "timeRendererStartupStep('recover-legacy-worker-terminals-pre-reconnect'"
     )
@@ -193,6 +205,9 @@ describe('renderer startup runtime routing', () => {
     )
 
     expect(servicesIndex).toBeGreaterThanOrEqual(0)
+    expect(source.slice(servicesIndex)).toContain(
+      'window.api.app.prepareTerminalStartupRestoration()'
+    )
     expect(preReconnectRecoveryIndex).toBeGreaterThan(servicesIndex)
     expect(capabilityRefreshIndex).toBeGreaterThan(preReconnectRecoveryIndex)
     expect(reconnectIndex).toBeGreaterThan(capabilityRefreshIndex)

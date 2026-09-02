@@ -45,7 +45,8 @@ export function useFileExplorerTree(
   const [rootError, setRootError] = useState<string | null>(null)
   const dirCacheRef = useRef(dirCache)
   dirCacheRef.current = dirCache
-  const dirLoadTrackerRef = useRef(createFileExplorerDirLoadTracker())
+  const dirLoadTrackerRef = useRef<ReturnType<typeof createFileExplorerDirLoadTracker>>(undefined!)
+  dirLoadTrackerRef.current ??= createFileExplorerDirLoadTracker()
   // Why: a ref, not state — the expansion effect must read the mark set by a refresh that landed
   // after the effect's render, and a state write would only be visible one render too late.
   const staleDirsRef = useRef(new Set<string>())

@@ -8,7 +8,7 @@ import { isWorktreeHostIdentity } from '../../../shared/worktree/host-qualified-
 import {
   GLOBAL_WORKSPACE_SESSION_FIELDS,
   WORKSPACE_SESSION_FIELD_OWNERSHIP
-} from './workspace-session-host-field-ownership'
+} from '../../../shared/workspace-session-host-field-ownership'
 import {
   buildWorktreeIdByFileId,
   buildWorktreeIdByTabId,

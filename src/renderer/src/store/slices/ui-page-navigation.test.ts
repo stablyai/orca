@@ -301,9 +301,6 @@ describe('createUISlice settings navigation', () => {
   it('returns to the graduated Agents view after visiting settings', () => {
     const store = createUIStore()
 
-    store.setState({
-      settings: { showAgentsSidebar: true } as unknown as AppState['settings']
-    } as unknown as Partial<AppState>)
     store.getState().openActivityPage()
     expect(store.getState().activeView).toBe('activity')
 
@@ -311,20 +308,6 @@ describe('createUISlice settings navigation', () => {
     store.getState().closeSettingsPage()
 
     expect(store.getState().activeView).toBe('activity')
-  })
-
-  it('falls back to terminal when closing settings with the Agents surfaces hidden', () => {
-    const store = createUIStore()
-
-    store.setState({
-      settings: { showAgentsSidebar: false } as unknown as AppState['settings'],
-      activeView: 'settings',
-      previousViewBeforeSettings: 'activity'
-    } as unknown as Partial<AppState>)
-
-    store.getState().closeSettingsPage()
-
-    expect(store.getState().activeView).toBe('terminal')
   })
 
   it('clears transient settings search when opening settings', () => {

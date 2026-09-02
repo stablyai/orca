@@ -51,7 +51,8 @@ export function useAgentBucketCounts(): AgentBucketCounts {
 
   // Why a per-hook cache: unrelated status/title writes change one worktree's inputs;
   // the cache keeps every other worktree's counts without rerunning its row pipeline.
-  const cacheRef = useRef(createDashboardBucketCountsCache())
+  const cacheRef = useRef<ReturnType<typeof createDashboardBucketCountsCache>>(undefined!)
+  cacheRef.current ??= createDashboardBucketCountsCache()
   return useMemo(() => {
     return buildDashboardBucketCounts(
       {

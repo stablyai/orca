@@ -4,7 +4,7 @@ import type { editor as monacoEditor } from 'monaco-editor'
 import { useAppStore } from '@/store'
 import { DiffSectionItem } from '@/components/editor/DiffSectionItem'
 import { CombinedDiffFileTree } from '../../editor/combined-diff/browse-files/combined-diff-file-tree'
-import { createCombinedDiffSectionIndexMap } from '../../editor/combined-diff/resolve-changes/combined-diff-section-identity'
+import { useCombinedDiffSectionIndexMap } from '../../editor/combined-diff/resolve-changes/use-combined-diff-section-index-map'
 import { handleCombinedDiffFileTreeNavigation } from '../../editor/combined-diff/browse-files/combined-diff-file-tree-navigation'
 import { getDiffSectionRowEstimatedHeight } from '@/components/editor/diff-section-layout'
 import type { DiffSection } from '@/components/editor/diff-section-types'
@@ -180,7 +180,7 @@ export function PRFilesCombinedDiffViewer({
     })
 
   const allSectionsCollapsed = sections.length > 0 && sections.every((section) => section.collapsed)
-  const sectionIndexByKey = useMemo(() => createCombinedDiffSectionIndexMap(sections), [sections])
+  const sectionIndexByKey = useCombinedDiffSectionIndexMap({ entrySignature, sections })
   const visibleActiveTreeSectionKey =
     activeTreeSectionKey && sectionIndexByKey.has(activeTreeSectionKey)
       ? activeTreeSectionKey

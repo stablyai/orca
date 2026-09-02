@@ -44,14 +44,14 @@ authority.
 
 ### Placeholders That Fail Open
 
-`GitCapabilityCache` records commands Git *rejects*. A `git log --format`
+`GitCapabilityCache` records commands Git _rejects_. A `git log --format`
 placeholder Git does not know is not rejected: Git echoes it verbatim and exits
 zero, so there is no error to remember and no probe to cache. Ask for both forms
 in one record and pick at parse time.
 
-| Placeholder      | Preferred behavior                                                                                | Compatibility behavior                                                                                     |
-| ---------------- | ------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------ |
-| `%(decorate:…)`  | Git 2.43 separates commit decorations with `\x1f`, so ref names containing commas survive         | The same record also carries `%D` (Git 2.10); an unexpanded `%(decorate` placeholder selects it, at the cost of comma-splitting |
+| Placeholder     | Preferred behavior                                                                        | Compatibility behavior                                                                                                          |
+| --------------- | ----------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
+| `%(decorate:…)` | Git 2.43 separates commit decorations with `\x1f`, so ref names containing commas survive | The same record also carries `%D` (Git 2.10); an unexpanded `%(decorate` placeholder selects it, at the cost of comma-splitting |
 
 ## Why Not `simple-git`
 

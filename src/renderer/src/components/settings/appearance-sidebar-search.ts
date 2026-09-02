@@ -123,27 +123,6 @@ export const getShowPinnedWorktreesInGroupsEntry = createLocalizedCatalog(
   })
 )
 
-export const getAgentsSidebarEntry = createLocalizedCatalog((): SettingsSearchEntry => ({
-  title: translate('settings.appearance.agentsSidebar.title', 'Show Agents Button'),
-  description: translate(
-    'settings.appearance.agentsSidebar.description',
-    'Control whether the Agents tab appears in the left sidebar so you can monitor agent activity.'
-  ),
-  keywords: [
-    ...translateSearchKeyword('auto.components.settings.general.search.baa263d6d8', 'agents'),
-    ...translateSearchKeyword('auto.components.settings.agents.search.96ba2373b6', 'agent'),
-    // Why: the sidebar row is labeled "Agent Dashboard"; searching that name must find this.
-    ...translateSearchKeyword(
-      'auto.components.settings.experimental.search.agentDashboard.dashboard',
-      'dashboard'
-    ),
-    ...translateSearchKeyword('auto.components.settings.appearance.search.5bff6a2ef0', 'sidebar'),
-    ...translateSearchKeyword('auto.components.settings.general.search.2a254b725e', 'tab'),
-    ...translateSearchKeyword('auto.components.settings.appearance.search.648eeada79', 'hide'),
-    ...translateSearchKeyword('auto.components.settings.appearance.search.ac79fe4a04', 'show')
-  ]
-}))
-
 export const getSidebarEntries = createLocalizedCatalog((): SettingsSearchEntry[] => [
   {
     title: translate('auto.components.settings.appearance.search.155a1e7438', 'Show Tasks Button'),

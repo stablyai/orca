@@ -7,6 +7,7 @@ import {
 } from '@/lib/floating-workspace-shortcut-policy'
 import { isFloatingWorkspaceTerminalInputTarget } from '@/lib/floating-workspace-terminal-actions'
 import { getShortcutPlatform } from '@/lib/shortcut-platform'
+import { requestTerminalTabRename } from '@/components/tab-bar/terminal-tab-rename-request'
 import { useAppStore } from '@/store'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
 import type { KeybindingContext, KeybindingMatchOptions } from '../../../../shared/keybindings'
@@ -168,7 +169,7 @@ export function useFloatingTerminalPanelShortcuts({
           return 'unmatched'
         }
         consume()
-        useAppStore.getState().setRenamingTabId(activeTab.id)
+        requestTerminalTabRename(activeTab.id)
         return 'handled'
       }
       consume()

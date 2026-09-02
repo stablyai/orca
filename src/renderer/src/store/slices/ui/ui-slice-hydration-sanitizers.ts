@@ -15,8 +15,6 @@ import {
   normalizeExecutionHostScope
 } from '../../../../../shared/execution-host'
 import { persistedUIValuesEqual } from '../../../../../shared/persisted-ui-equality'
-// Pure predicate over GlobalSettings; safe to share with the store layer.
-import { shouldShowAgentsSidebar } from '@/components/sidebar/agents-sidebar-visibility'
 import { DEFAULT_STATUS_BAR_ITEMS } from '../../../../../shared/constants'
 import type { UISlice } from './ui-slice-contract'
 
@@ -173,18 +171,9 @@ export function sanitizeWorkspaceCleanupDismissals(
   return out
 }
 
-export function sanitizeHydratedActiveView(
-  value: PersistedUIState['activeView'],
-  settings: Parameters<typeof shouldShowAgentsSidebar>[0]
-): TopLevelView {
+export function sanitizeHydratedActiveView(value: PersistedUIState['activeView']): TopLevelView {
   // Why: older data (pre-activeView) or a view a different build doesn't have falls back to terminal rather than rendering nothing.
   if (!isTopLevelView(value)) {
-    return 'terminal'
-  }
-  // Why: activity is hidden when its entry points are, so gate only it (mobile/automations stay functional when hidden).
-  // Why the null check: a failed settings fetch is not an opt-out. Downgrading on absent settings
-  // would let the persisted-UI writer overwrite the user's saved `activity` with `terminal`.
-  if (value === 'activity' && settings && !shouldShowAgentsSidebar(settings)) {
     return 'terminal'
   }
   return value

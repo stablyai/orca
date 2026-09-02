@@ -4,6 +4,7 @@ import {
 } from '../../shared/git-remote-error'
 import { resolveEffectiveGitUpstream } from '../../shared/git-effective-upstream'
 import { gitRefTargetsBranchOnRemote } from '../../shared/git-remote-branch-name'
+import { findGitRemoteNameByFetchUrl } from '../../shared/git-remote-url-index'
 import type { GitPushTarget } from '../../shared/worktree/types'
 import type { GitRuntimeOptions } from './git-runtime-options'
 import { gitOptionsForWorktree } from './git-runtime-options'
@@ -84,6 +85,8 @@ type ConfiguredPushRemote = {
   branchRemote: string | null
 }
 
+// One `git remote -v` instead of `git remote` plus a serial `git remote get-url`
+// per remote; both print the same insteadOf-expanded fetch URL.
 async function findRemoteNameForUrl(
   worktreePath: string,
   remoteUrl: string,
@@ -91,30 +94,13 @@ async function findRemoteNameForUrl(
 ): Promise<string | null> {
   try {
     const { stdout } = await gitExecFileAsync(
-      ['remote'],
+      ['remote', '-v'],
       gitOptionsForWorktree(worktreePath, options)
     )
-    const remotes = stdout
-      .split(/\r?\n/)
-      .map((line) => line.trim())
-      .filter(Boolean)
-    for (const remoteName of remotes) {
-      try {
-        const { stdout: urlStdout } = await gitExecFileAsync(
-          ['remote', 'get-url', remoteName],
-          gitOptionsForWorktree(worktreePath, options)
-        )
-        if (urlStdout.trim() === remoteUrl) {
-          return remoteName
-        }
-      } catch {
-        // Ignore a remote that disappeared or has no fetch URL.
-      }
-    }
+    return findGitRemoteNameByFetchUrl(stdout, (candidateUrl) => candidateUrl === remoteUrl)
   } catch {
     return null
   }
-  return null
 }
 
 async function normalizePushRemote(
@@ -141,11 +127,17 @@ async function getConfiguredPushRemote(
   if (!remote) {
     return null
   }
+  const normalizedRemote = await normalizePushRemote(worktreePath, remote, options)
+  // The two usually name the same URL; resolving it twice reads the remote table twice.
+  if (!branchRemote) {
+    return { remote: normalizedRemote, branchRemote: null }
+  }
   return {
-    remote: await normalizePushRemote(worktreePath, remote, options),
-    branchRemote: branchRemote
-      ? await normalizePushRemote(worktreePath, branchRemote, options)
-      : null
+    remote: normalizedRemote,
+    branchRemote:
+      branchRemote === remote
+        ? normalizedRemote
+        : await normalizePushRemote(worktreePath, branchRemote, options)
   }
 }
 

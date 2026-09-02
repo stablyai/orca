@@ -40,6 +40,9 @@ export function useNativeChatComposerAttachments({
   clearImageAttachments: () => void
   flushPendingAttachments: () => void
   removeImageAttachment: (id: string) => void
+  beginPendingImageAttachment: (previewUrl?: string) => string | null
+  resolvePendingImageAttachment: (id: string, path: string, connectionId?: string | null) => void
+  dropPendingImageAttachment: (id: string) => void
 } {
   const [imageAttachments, setImageAttachments] = useState<NativeChatComposerImageAttachment[]>(
     () => readNativeChatAttachmentCache(attachmentScopeKey)
@@ -72,6 +75,30 @@ export function useNativeChatComposerAttachments({
     [attachmentScopeKey]
   )
 
+  const nextAttachmentId = useCallback((): string => {
+    imageAttachmentCounter.current += 1
+    return `${Date.now()}-${imageAttachmentCounter.current}`
+  }, [])
+
+  // Local paths are only attachable when the composer's target runs locally;
+  // remote-runtime panes read a different filesystem than the one we resolved.
+  const attachmentTargetBlocked = useCallback((): boolean => {
+    const target = resolveTarget()
+    return (
+      (!target && !allowWithoutTarget) ||
+      Boolean(target && nativeChatComposerTargetIsRemote(target.ptyId))
+    )
+  }, [allowWithoutTarget, resolveTarget])
+
+  const noteAttachmentTargetBlocked = useCallback(() => {
+    setNotice(
+      translate(
+        'components.native-chat.composer.localAttachmentUnsupported',
+        'Local attachments are not available for remote sessions.'
+      )
+    )
+  }, [setNotice])
+
   const appendImageAttachments = useCallback(
     (paths: { path: string; connectionId?: string | null }[]) => {
       if (paths.length === 0) {
@@ -79,15 +106,55 @@ export function useNativeChatComposerAttachments({
       }
       updateImageAttachments((prev) => [
         ...prev,
-        ...paths.map(({ path, connectionId }) => {
-          imageAttachmentCounter.current += 1
-          return {
-            id: `${Date.now()}-${imageAttachmentCounter.current}`,
-            path,
-            connectionId: connectionId ?? undefined
-          }
-        })
+        ...paths.map(({ path, connectionId }) => ({
+          id: nextAttachmentId(),
+          path,
+          connectionId: connectionId ?? undefined
+        }))
       ])
+    },
+    [nextAttachmentId, updateImageAttachments]
+  )
+
+  // Placeholder chip shown the instant a paste starts, so a clipboard image that
+  // takes a beat to save (or upload over SSH) never reads as a dropped paste.
+  const beginPendingImageAttachment = useCallback(
+    (previewUrl?: string): string | null => {
+      if (disabledRef.current) {
+        return null
+      }
+      if (attachmentTargetBlocked()) {
+        noteAttachmentTargetBlocked()
+        return null
+      }
+      const id = nextAttachmentId()
+      updateImageAttachments((prev) => [...prev, { id, path: '', previewUrl, pending: true }])
+      return id
+    },
+    [attachmentTargetBlocked, nextAttachmentId, noteAttachmentTargetBlocked, updateImageAttachments]
+  )
+
+  const resolvePendingImageAttachment = useCallback(
+    (id: string, path: string, connectionId?: string | null) => {
+      updateImageAttachments((prev) =>
+        prev.map((attachment) =>
+          attachment.id === id
+            ? {
+                ...attachment,
+                path,
+                connectionId: connectionId ?? undefined,
+                pending: undefined
+              }
+            : attachment
+        )
+      )
+    },
+    [updateImageAttachments]
+  )
+
+  const dropPendingImageAttachment = useCallback(
+    (id: string) => {
+      updateImageAttachments((prev) => removeAttachmentById(prev, id))
     },
     [updateImageAttachments]
   )
@@ -120,17 +187,8 @@ export function useNativeChatComposerAttachments({
       focus: boolean,
       preserveNotice = false
     ) => {
-      const target = resolveTarget()
-      if (
-        (!target && !allowWithoutTarget) ||
-        (target && nativeChatComposerTargetIsRemote(target.ptyId))
-      ) {
-        setNotice(
-          translate(
-            'components.native-chat.composer.localAttachmentUnsupported',
-            'Local attachments are not available for remote sessions.'
-          )
-        )
+      if (attachmentTargetBlocked()) {
+        noteAttachmentTargetBlocked()
         return
       }
       const imagePaths = resolvedPaths.filter(({ path }) => isNativeChatImageAttachmentPath(path))
@@ -150,10 +208,10 @@ export function useNativeChatComposerAttachments({
       }
     },
     [
-      allowWithoutTarget,
       appendImageAttachments,
+      attachmentTargetBlocked,
       insertFileReferences,
-      resolveTarget,
+      noteAttachmentTargetBlocked,
       setNotice,
       textareaRef
     ]
@@ -201,11 +259,35 @@ export function useNativeChatComposerAttachments({
   return {
     imageAttachments,
     attachResolvedPaths,
-    clearImageAttachments: () => updateImageAttachments(() => []),
+    clearImageAttachments: () =>
+      updateImageAttachments((prev) => {
+        prev.forEach(releaseAttachmentPreview)
+        return []
+      }),
     flushPendingAttachments,
-    removeImageAttachment: (id) =>
-      updateImageAttachments((prev) => prev.filter((attachment) => attachment.id !== id))
+    removeImageAttachment: (id) => updateImageAttachments((prev) => removeAttachmentById(prev, id)),
+    beginPendingImageAttachment,
+    resolvePendingImageAttachment,
+    dropPendingImageAttachment
   }
+}
+
+/** Object URLs minted from a clipboard blob leak until revoked; data URLs don't. */
+function releaseAttachmentPreview(attachment: NativeChatComposerImageAttachment): void {
+  if (attachment.previewUrl?.startsWith('blob:')) {
+    URL.revokeObjectURL(attachment.previewUrl)
+  }
+}
+
+function removeAttachmentById(
+  attachments: readonly NativeChatComposerImageAttachment[],
+  id: string
+): NativeChatComposerImageAttachment[] {
+  const removed = attachments.find((attachment) => attachment.id === id)
+  if (removed) {
+    releaseAttachmentPreview(removed)
+  }
+  return attachments.filter((attachment) => attachment.id !== id)
 }
 
 const attachmentCache = new Map<string, NativeChatComposerImageAttachment[]>()
@@ -218,8 +300,16 @@ export function readNativeChatAttachmentCache(
 
 function writeNativeChatAttachmentCache(
   scopeKey: string,
-  attachments: readonly NativeChatComposerImageAttachment[]
+  cacheable: readonly NativeChatComposerImageAttachment[]
 ): void {
+  // A pending chip's save resolves into THIS hook instance; restoring one into a
+  // remount would strand it pending forever, so only settled chips are cached.
+  const attachments = cacheable
+    .filter((attachment) => !attachment.pending)
+    // Preview URLs can retain the full clipboard Blob (or a large data URL) for
+    // the lifetime of the scope cache. Settled attachments reload from their
+    // authorized path after a remount, so never retain the transient preview.
+    .map(({ previewUrl: _previewUrl, ...attachment }) => attachment)
   if (attachments.length === 0) {
     attachmentCache.delete(scopeKey)
     return

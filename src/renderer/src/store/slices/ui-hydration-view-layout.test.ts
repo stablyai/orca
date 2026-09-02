@@ -164,33 +164,11 @@ describe('createUISlice hydratePersistedUI', () => {
     expect(store.getState().activeView).toBe('terminal')
   })
 
-  it('drops a persisted activity view when the Agents sidebar is hidden', () => {
-    const store = createUIStore()
-    store.setState({
-      settings: { showAgentsSidebar: false } as AppState['settings']
-    })
-
-    store.getState().hydratePersistedUI(makePersistedUI({ activeView: 'activity' }), 'startup')
-
-    expect(store.getState().activeView).toBe('terminal')
-  })
-
   it('keeps a persisted activity view when the settings fetch failed', () => {
     // A failed window.api.settings.get() leaves settings null; downgrading here would let the
     // persisted-UI writer overwrite the saved view with terminal.
     const store = createUIStore()
     store.setState({ settings: null as unknown as AppState['settings'] })
-
-    store.getState().hydratePersistedUI(makePersistedUI({ activeView: 'activity' }), 'startup')
-
-    expect(store.getState().activeView).toBe('activity')
-  })
-
-  it('restores a persisted activity view when the Agents sidebar is shown', () => {
-    const store = createUIStore()
-    store.setState({
-      settings: { showAgentsSidebar: true } as AppState['settings']
-    })
 
     store.getState().hydratePersistedUI(makePersistedUI({ activeView: 'activity' }), 'startup')
 

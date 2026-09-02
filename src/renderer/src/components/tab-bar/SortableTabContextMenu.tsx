@@ -11,8 +11,6 @@ import type { TerminalTab } from '../../../../shared/terminal-tab-types'
 import { useAppStore } from '../../store'
 import { formatShortcutLabel, useOptionalShortcutLabel } from '@/hooks/useShortcutLabel'
 import { translate } from '@/i18n/i18n'
-import { TabAgentSessionIdMenuItem } from './TabAgentSessionIdMenuItem'
-import { resolveTabAgentSessionId } from './tab-agent-session-id'
 import { TerminalTabSplitMenuSection } from './TerminalTabSplitMenuSection'
 import { TAB_CONTEXT_MENU_CONTENT_CLASS } from './tab-context-menu-sizing'
 
@@ -123,10 +121,6 @@ export function SortableTabContextMenu({
   onTogglePin
 }: SortableTabContextMenuProps): React.JSX.Element {
   const keybindings = useAppStore((state) => state.keybindings)
-  // The id is a primitive, so unchanged sessions stay referentially stable without a cache.
-  const agentSessionId = useAppStore((state) =>
-    open ? resolveTabAgentSessionId(state, tab.id) : null
-  )
   const splitRightShortcut = formatShortcutLabel('terminal.splitRight', keybindings)
   const splitDownShortcut = formatShortcutLabel('terminal.splitDown', keybindings)
 
@@ -194,7 +188,6 @@ export function SortableTabContextMenu({
           {translate('auto.components.tab.bar.SortableTabContextMenu.2f697b3c31', 'Change Title')}
           {renameShortcut ? <DropdownMenuShortcut>{renameShortcut}</DropdownMenuShortcut> : null}
         </DropdownMenuItem>
-        <TabAgentSessionIdMenuItem sessionId={agentSessionId} />
         <div className="px-2 pt-1.5 pb-1">
           <div className="text-xs font-medium text-muted-foreground mb-1.5">
             {translate('auto.components.tab.bar.SortableTabContextMenu.35e8892fd0', 'Tab Color')}

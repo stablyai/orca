@@ -11,7 +11,8 @@ import { createWorktreeAgentRowsCache } from './worktree-agent-rows-cache'
  * is no relay, so we derive it here from the same builder the bridge uses.
  */
 export function useLiveDashboardSnapshot(): DashboardSnapshot {
-  const rowsCacheRef = useRef(createWorktreeAgentRowsCache())
+  const rowsCacheRef = useRef<ReturnType<typeof createWorktreeAgentRowsCache>>(undefined!)
+  rowsCacheRef.current ??= createWorktreeAgentRowsCache()
   const repos = useAppStore((s) => s.repos)
   const worktreesByRepo = useAppStore((s) => s.worktreesByRepo)
   const tabsByWorktree = useAppStore((s) => s.tabsByWorktree)

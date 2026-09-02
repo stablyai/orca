@@ -1,72 +1,58 @@
-import React, { useEffect, useId } from 'react'
+import React, { useId } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useAppStore } from '@/store'
 import { translate } from '@/i18n/i18n'
-import { SidebarViewToggle } from './sidebar-view-toggle'
 import { SidebarHeaderActions } from './sidebar-header-actions'
-import { shouldShowAgentsSidebar } from './agents-sidebar-visibility'
-import { Popover, PopoverAnchor, PopoverArrow, PopoverContent } from '@/components/ui/popover'
 import { Button } from '@/components/ui/button'
-import { Sparkles } from 'lucide-react'
-import { toast } from 'sonner'
+import { Popover, PopoverAnchor, PopoverArrow, PopoverContent } from '@/components/ui/popover'
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
+import { Sparkles, Bell } from 'lucide-react'
+import { cn } from '@/lib/utils'
 
 type SidebarHeaderProps = {
   onWorkspaceBoardMenuOpenChange: (open: boolean) => void
-  agentToolbar?: React.ReactNode
-  agentSearchRow?: React.ReactNode
-  showAgentsSidebar?: boolean
+  activityOptionsTarget?: React.Ref<HTMLDivElement>
 }
 
 const SidebarHeader = React.memo(function SidebarHeader({
   onWorkspaceBoardMenuOpenChange,
-  agentToolbar,
-  agentSearchRow,
-  showAgentsSidebar: showAgentsSidebarProp
+  activityOptionsTarget
 }: SidebarHeaderProps) {
   // Subscribe this memoized header to locale changes before using translate().
   useTranslation()
   const sidebarBody = useAppStore((s) => s.sidebarBody ?? 'workspaces')
-  // Why the derived boolean, not s.settings: the settings object gets a new identity on
-  // every write, which would re-render this memoized header subtree each time.
-  const showAgentsSidebarFromStore = useAppStore((s) => shouldShowAgentsSidebar(s.settings))
-  const showAgentsSidebar = showAgentsSidebarProp ?? showAgentsSidebarFromStore
+  const groupBy = useAppStore((s) => s.groupBy)
   const setSidebarBody = useAppStore((s) => s.setSidebarBody)
   const updateSettings = useAppStore((s) => s.updateSettings)
+  const agentsViewActive = sidebarBody === 'agents'
   const agentsSidebarIntroShown = useAppStore((s) => s.settings?.agentsSidebarIntroShown === true)
   const migratedFromExperimental = useAppStore(
     (s) => s.settings?.agentsSidebarMigratedFromExperimental === true
   )
   const introTitleId = useId()
   const introDescriptionId = useId()
-  // Why: settings are null until hydration; deriving intro visibility from the
-  // null default would flash the popover open (and stamp it shown) every launch.
-  const settingsHydrated = useAppStore((s) => s.settings != null)
-  const agentsViewActive = showAgentsSidebar && sidebarBody === 'agents'
-  const introOpen = settingsHydrated && showAgentsSidebar && !agentsSidebarIntroShown
+  // Existing users who opted into the former Experimental Agents view get one explanation.
+  const introOpen = migratedFromExperimental && !agentsSidebarIntroShown
   const acknowledgeIntro = React.useCallback(() => {
     void updateSettings?.({ agentsSidebarIntroShown: true })
   }, [updateSettings])
-  const deferAgentsIntro = React.useCallback(() => {
-    // Hide the new tab; users can re-enable it in Settings.
-    void updateSettings?.({ agentsSidebarIntroShown: true, showAgentsSidebar: false })
-    toast(
-      translate(
-        'agentsSidebarIntro.new.hiddenToast',
-        'Agents tab hidden. Re-enable it in Settings → Experimental.'
-      )
-    )
-  }, [updateSettings])
-
-  useEffect(() => {
-    // Wait for hydration: settings null must not clobber a persisted 'agents' body.
-    if (settingsHydrated && !showAgentsSidebar && sidebarBody === 'agents') {
-      setSidebarBody?.('workspaces')
-    }
-  }, [setSidebarBody, settingsHydrated, showAgentsSidebar, sidebarBody])
+  const sidebarTitle = groupBy === 'repo' ? 'Projects' : 'Workspaces'
+  const activityLabel = translate(
+    agentsViewActive ? 'dashboard.sidebar.closeActivity' : 'dashboard.sidebar.openActivity',
+    agentsViewActive ? 'Turn off activity view' : 'View activity'
+  )
 
   return (
-    <>
-      <div className="mt-2 flex h-9 min-w-0 items-center justify-between gap-1.5 px-2">
+    <div className="mt-2 flex h-8 min-w-0 items-center justify-between gap-1.5 px-2">
+      <div className="flex min-w-0 items-center gap-1">
+        <span
+          className="select-none pl-2 pr-0.5 text-xs font-semibold text-muted-foreground/80"
+          data-sidebar-section-title={groupBy === 'repo' ? 'projects' : 'workspaces'}
+        >
+          {sidebarTitle}
+        </span>
+      </div>
+      <div className="flex shrink-0 items-center gap-1">
         <Popover
           open={introOpen}
           onOpenChange={(open) => {
@@ -75,133 +61,71 @@ const SidebarHeader = React.memo(function SidebarHeader({
             }
           }}
         >
-          <div className="flex h-9 items-center">
-            <SidebarViewToggle
-              ariaLabel={translate('auto.components.sidebar.SidebarHeader.views', 'Sidebar view')}
-              value={agentsViewActive ? 'agents' : 'workspaces'}
-              onSelect={(value) => {
-                // Only stamp the intro as seen when it is actually on screen.
-                if (introOpen) {
-                  acknowledgeIntro()
-                }
-                setSidebarBody?.(value as 'workspaces' | 'agents')
-              }}
-              options={[
-                {
-                  value: 'workspaces',
-                  label: translate('auto.components.sidebar.SidebarHeader.spaces', 'Spaces'),
-                  sectionTitle: 'projects'
-                },
-                ...(showAgentsSidebar
-                  ? [
-                      {
-                        value: 'agents' as const,
-                        label: translate('dashboard.sidebar.label', 'Agents'),
-                        sectionTitle: 'agents' as const,
-                        renderWrapper: (button: React.ReactNode) => (
-                          <PopoverAnchor asChild>{button}</PopoverAnchor>
-                        )
-                      }
-                    ]
-                  : [])
-              ]}
-            />
-          </div>
-          {/* Why: prevent startup terminal/editor auto-focus from dismissing the intro popover. */}
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <span className="inline-flex shrink-0">
+                <PopoverAnchor asChild>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon-xs"
+                    className={cn(
+                      'text-muted-foreground',
+                      agentsViewActive && 'bg-primary/15 text-primary hover:bg-primary/20'
+                    )}
+                    aria-label={activityLabel}
+                    aria-pressed={agentsViewActive}
+                    onClick={() => setSidebarBody?.(agentsViewActive ? 'workspaces' : 'agents')}
+                  >
+                    <Bell className="size-3.5" strokeWidth={2.25} />
+                  </Button>
+                </PopoverAnchor>
+              </span>
+            </TooltipTrigger>
+            <TooltipContent side="bottom" sideOffset={6}>
+              {activityLabel}
+            </TooltipContent>
+          </Tooltip>
           <PopoverContent
             side="bottom"
             align="center"
             sideOffset={8}
-            className="w-72 overflow-visible rounded-xl border border-border bg-popover p-3.5 text-popover-foreground shadow-floating"
+            className="w-72 rounded-xl border border-border bg-popover p-3.5 text-popover-foreground shadow-floating"
             onOpenAutoFocus={(event) => event.preventDefault()}
-            onFocusOutside={(event) => event.preventDefault()}
             aria-labelledby={introTitleId}
             aria-describedby={introDescriptionId}
           >
-            <PopoverArrow asChild width={14} height={7} className="overflow-visible">
-              <svg
-                viewBox="0 0 30 10"
-                preserveAspectRatio="none"
-                className="block overflow-visible"
-              >
-                <polygon points="0,0 30,0 15,10" className="fill-popover" />
-                <path d="M0 0 L15 10 L30 0" fill="none" className="stroke-border stroke-[1.5]" />
-              </svg>
-            </PopoverArrow>
+            <PopoverArrow />
             <div className="space-y-2.5">
-              <svg width="0" height="0" className="absolute pointer-events-none" aria-hidden="true">
-                <defs>
-                  <linearGradient id="agents-intro-aquatic" x1="0%" y1="0%" x2="100%" y2="100%">
-                    <stop offset="0%" stopColor="#10b981" />
-                    <stop offset="45%" stopColor="#06b6d4" />
-                    <stop offset="100%" stopColor="#2563eb" />
-                  </linearGradient>
-                </defs>
-              </svg>
-              <div className="space-y-1">
-                <div className="flex items-center gap-1.5">
-                  <Sparkles
-                    className="size-4 shrink-0"
-                    stroke="url(#agents-intro-aquatic)"
-                    fill="url(#agents-intro-aquatic)"
-                    fillOpacity={0.15}
-                    strokeWidth={2}
-                  />
-                  <h3 id={introTitleId} className="text-sm font-semibold text-foreground">
-                    {migratedFromExperimental
-                      ? translate('agentsSidebarIntro.migrated.title', 'Agents are easier to find')
-                      : translate('agentsSidebarIntro.new.title', 'Meet your Agents tab')}
-                  </h3>
-                </div>
-                <p
-                  id={introDescriptionId}
-                  className="text-xs leading-relaxed text-muted-foreground"
-                >
-                  {migratedFromExperimental
-                    ? translate(
-                        'agentsSidebarIntro.migrated.description',
-                        'Your Agents view is now a dedicated sidebar tab. Your activity and filters are preserved.'
-                      )
-                    : translate(
-                        'agentsSidebarIntro.new.description',
-                        'See what your agents are working on, what is done, and where you need to step in.'
-                      )}
-                </p>
+              <div className="flex items-center gap-1.5">
+                <Sparkles className="size-4 shrink-0 text-primary" aria-hidden="true" />
+                <h3 id={introTitleId} className="text-sm font-semibold text-foreground">
+                  {translate('agentsSidebarIntro.migrated.title', 'Agents are easier to find')}
+                </h3>
               </div>
-              <div className="flex justify-end items-center gap-2 pt-0.5">
-                {!migratedFromExperimental ? (
-                  <Button variant="ghost" size="sm" onClick={deferAgentsIntro}>
-                    {translate('agentsSidebarIntro.new.hide', 'Hide Agents')}
-                  </Button>
-                ) : null}
-                <Button
-                  size="sm"
-                  className="border-0 bg-[linear-gradient(135deg,#10b981_0%,#06b6d4_45%,#2563eb_100%)] text-white font-medium shadow-xs hover:brightness-105 active:scale-[0.98] transition-all"
-                  onClick={() => {
-                    acknowledgeIntro()
-                    setSidebarBody?.('agents')
-                  }}
-                >
-                  {migratedFromExperimental
-                    ? translate('agentsSidebarIntro.migrated.action', 'Open Agents')
-                    : translate('agentsSidebarIntro.new.action', 'Try Agents')}
+              <p id={introDescriptionId} className="text-xs leading-relaxed text-muted-foreground">
+                {translate(
+                  'agentsSidebarIntro.migrated.description',
+                  'Your Agents view is now a dedicated sidebar tab. Your activity and filters are preserved.'
+                )}
+              </p>
+              <div className="flex justify-end pt-0.5">
+                <Button size="sm" onClick={acknowledgeIntro}>
+                  {translate('agentsSidebarIntro.migrated.dismiss', 'Got it')}
                 </Button>
               </div>
             </div>
           </PopoverContent>
         </Popover>
         {agentsViewActive ? (
-          <div className="flex shrink-0 items-center gap-0.5">
-            {/* Do not add an expand action: the full Agents view is deprecated and must not open. */}
-            {agentToolbar}
-          </div>
+          <div ref={activityOptionsTarget} className="flex items-center" />
         ) : null}
-        {!agentsViewActive ? (
-          <SidebarHeaderActions onWorkspaceBoardMenuOpenChange={onWorkspaceBoardMenuOpenChange} />
-        ) : null}
+        <SidebarHeaderActions
+          onWorkspaceBoardMenuOpenChange={onWorkspaceBoardMenuOpenChange}
+          hideWorkspaceOptions={agentsViewActive}
+        />
       </div>
-      {agentsViewActive ? agentSearchRow : null}
-    </>
+    </div>
   )
 })
 

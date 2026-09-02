@@ -13774,6 +13774,35 @@
         }
       },
       "automations": {
+        "AutomationListToolbar": {
+          "runs": "実行"
+        },
+        "AutomationRunsDashboard": {
+          "search": "実行を検索…",
+          "filters": "フィルター",
+          "host": "ホスト",
+          "status": "ステータス",
+          "refresh": "実行を更新",
+          "successful24h": "成功 · 24時間",
+          "failed24h": "失敗 · 24時間",
+          "successful7d": "成功 · 7日間",
+          "failed7d": "失敗 · 7日間",
+          "historyUnavailableOne": "1件の自動化で実行履歴を利用できません。カウントには利用可能な履歴のみが含まれます。",
+          "historyUnavailableMany": "{{count}}件の自動化で実行履歴を利用できません。カウントには利用可能な履歴のみが含まれます。",
+          "automation": "自動化",
+          "triggered": "トリガー済み",
+          "trigger": "トリガー",
+          "loading": "実行を読み込み中…",
+          "noRuns": "実行はまだありません",
+          "emptyDescription": "自動化がトリガーされると、ここに実行が表示されます。",
+          "runs": "実行",
+          "local": "ローカル",
+          "remote": "リモート"
+        },
+        "AutomationsPageBreadcrumb": {
+          "ariaLabel": "自動化のパンくずリスト",
+          "runDetails": "実行の詳細"
+        },
         "AutomationCustomCronPanel": {
           "3e3b2c369f": "クロン式",
           "e81a02d61b": "保存する前に、有効な 5 フィールドの cron を入力してください。",
@@ -14707,10 +14736,7 @@
         "SortableTabContextMenu": {
           "switchToTerminalView": "ターミナルビューに切り替える",
           "switchToChatView": "チャットビューに切り替える",
-          "closeTabsToLeft": "左側のタブを閉じる",
-          "copySessionId": "セッション ID をコピー",
-          "copySessionIdSuccess": "セッション ID をコピーしました",
-          "copySessionIdError": "セッション ID のコピーに失敗しました"
+          "closeTabsToLeft": "左側のタブを閉じる"
         },
         "BrowserTab": {
           "closeOthers": "その他を閉じる",
@@ -14758,6 +14784,13 @@
       "sent": "セッションコンテキストを新規 {{agent}} セッションに送信しました。",
       "deliveryFailed": "新規 {{agent}} セッションは開始しましたが、コンテキストを送信できませんでした。",
       "launchFailed": "新規 {{agent}} セッションを開始できませんでした。"
+    },
+    "terminalPane": {
+      "TerminalContextMenu": {
+        "copySessionId": "セッション ID をコピー",
+        "copySessionIdSuccess": "セッション ID をコピーしました",
+        "copySessionIdError": "セッション ID のコピーに失敗しました"
+      }
     }
   },
   "dashboardPopout": {

@@ -13774,6 +13774,35 @@
         }
       },
       "automations": {
+        "AutomationListToolbar": {
+          "runs": "Ejecuciones"
+        },
+        "AutomationRunsDashboard": {
+          "search": "Buscar ejecuciones…",
+          "filters": "Filtros",
+          "host": "Host",
+          "status": "Estado",
+          "refresh": "Actualizar ejecuciones",
+          "successful24h": "Exitosas · 24 h",
+          "failed24h": "Fallidas · 24 h",
+          "successful7d": "Exitosas · 7 días",
+          "failed7d": "Fallidas · 7 días",
+          "historyUnavailableOne": "El historial de ejecuciones no está disponible para 1 automatización. Los recuentos solo incluyen el historial disponible.",
+          "historyUnavailableMany": "El historial de ejecuciones no está disponible para {{count}} automatizaciones. Los recuentos solo incluyen el historial disponible.",
+          "automation": "Automatización",
+          "triggered": "Activada",
+          "trigger": "Activar",
+          "loading": "Cargando ejecuciones…",
+          "noRuns": "Aún no hay ejecuciones",
+          "emptyDescription": "Las ejecuciones aparecerán aquí después de activar una automatización.",
+          "runs": "Ejecuciones",
+          "local": "Local",
+          "remote": "Remoto"
+        },
+        "AutomationsPageBreadcrumb": {
+          "ariaLabel": "Ruta de navegación de automatizaciones",
+          "runDetails": "Detalles de la ejecución"
+        },
         "AutomationCustomCronPanel": {
           "3e3b2c369f": "expresión cron",
           "e81a02d61b": "Ingrese un cron válido de cinco campos antes de guardar.",
@@ -14707,10 +14736,7 @@
         "SortableTabContextMenu": {
           "switchToTerminalView": "Cambiar a la vista de terminal",
           "switchToChatView": "Cambiar a vista de chat",
-          "closeTabsToLeft": "Cerrar pestañas a la izquierda",
-          "copySessionId": "Copiar ID de sesión",
-          "copySessionIdSuccess": "ID de sesión copiado",
-          "copySessionIdError": "No se pudo copiar el ID de sesión"
+          "closeTabsToLeft": "Cerrar pestañas a la izquierda"
         },
         "BrowserTab": {
           "closeOthers": "Cerrar otras",
@@ -14758,6 +14784,13 @@
       "sent": "El contexto de la sesión se envió a {{agent}} en una sesión nueva.",
       "deliveryFailed": "La nueva sesión de {{agent}} se inició, pero no se pudo enviar su contexto.",
       "launchFailed": "No se pudo iniciar una sesión nueva de {{agent}}."
+    },
+    "terminalPane": {
+      "TerminalContextMenu": {
+        "copySessionId": "Copiar ID de sesión",
+        "copySessionIdSuccess": "ID de sesión copiado",
+        "copySessionIdError": "No se pudo copiar el ID de sesión"
+      }
     }
   },
   "dashboardPopout": {

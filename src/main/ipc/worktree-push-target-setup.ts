@@ -5,53 +5,33 @@
 // repo. The store-aware ownership decision stays with the caller via a predicate.
 
 import type { GitPushTarget } from '../../shared/worktree/types'
-import { parseGitHubOwnerRepo } from '../github/gh-utils'
-import type { GitRemoteExec } from './worktree-push-target-cleanup'
+import { findGitRemoteNameByFetchUrl } from '../../shared/git-remote-url-index'
+import { sameGitHubRemoteUrl, type GitRemoteExec } from './worktree-push-target-cleanup'
 import {
   buildNarrowForkFetchRefspec,
   ensureRemoteTracksBranchNarrowly
 } from '../git/fork-remote-refspec'
 
+// One `git remote -v` replaces `git remote` plus a serial `git remote get-url` per
+// remote -- 59 subprocesses at 58 remotes, on every push-target resolution (#17914).
 export async function findRemoteForUrl(
   execGit: GitRemoteExec,
   repoPath: string,
   remoteUrl: string
 ): Promise<string | null> {
-  const target = parseGitHubOwnerRepo(remoteUrl)
   try {
-    const { stdout } = await execGit(['remote'], repoPath)
-    for (const remote of stdout
-      .split(/\r?\n/)
-      .map((line) => line.trim())
-      .filter(Boolean)) {
-      try {
-        const { stdout: urlStdout } = await execGit(['remote', 'get-url', remote], repoPath)
-        const candidateUrl = urlStdout.trim()
-        const candidate = parseGitHubOwnerRepo(candidateUrl)
-        if (
-          target &&
-          candidate &&
-          target.owner.toLowerCase() === candidate.owner.toLowerCase() &&
-          target.repo.toLowerCase() === candidate.repo.toLowerCase()
-        ) {
-          return remote
-        }
-        if (candidateUrl === remoteUrl) {
-          return remote
-        }
-      } catch {
-        // Ignore a remote that disappeared or has no fetch URL.
-      }
-    }
+    const { stdout } = await execGit(['remote', '-v'], repoPath)
+    return findGitRemoteNameByFetchUrl(stdout, (candidateUrl) =>
+      sameGitHubRemoteUrl(candidateUrl, remoteUrl)
+    )
   } catch {
     return null
   }
-  return null
 }
 
 // O(1) probe used before materializing on demand (push/pull/fetch/fast-forward):
-// a single `remote get-url <name>` avoids the O(remotes) `findRemoteForUrl` scan
-// once a fork remote already exists under its expected name (#17828).
+// a single `remote get-url <name>` skips the whole-remote-table read once a fork
+// remote already exists under its expected name (#17828).
 export async function remoteAlreadyMatchesUrl(
   execGit: GitRemoteExec,
   repoPath: string,
@@ -60,18 +40,7 @@ export async function remoteAlreadyMatchesUrl(
 ): Promise<boolean> {
   try {
     const { stdout } = await execGit(['remote', 'get-url', remoteName], repoPath)
-    const candidateUrl = stdout.trim()
-    if (candidateUrl === remoteUrl) {
-      return true
-    }
-    const target = parseGitHubOwnerRepo(remoteUrl)
-    const candidate = parseGitHubOwnerRepo(candidateUrl)
-    return Boolean(
-      target &&
-      candidate &&
-      target.owner.toLowerCase() === candidate.owner.toLowerCase() &&
-      target.repo.toLowerCase() === candidate.repo.toLowerCase()
-    )
+    return sameGitHubRemoteUrl(stdout.trim(), remoteUrl)
   } catch {
     return false
   }

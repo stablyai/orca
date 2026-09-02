@@ -1,11 +1,11 @@
 import React from 'react'
 import {
-  BellDot,
   Check,
   CheckCheck,
   GitFork,
   Layers,
-  MoreVertical,
+  ListChecks,
+  ListFilter,
   Rows3,
   Search,
   Trash2
@@ -94,13 +94,16 @@ export function ActivityThreadOptionsMenu({
                   'Thread list options'
                 )}
               >
-                <MoreVertical className="size-3.5" strokeWidth={2.25} />
+                <ListFilter className="size-3.5" strokeWidth={2.25} />
               </Button>
             </DropdownMenuTrigger>
           </span>
         </TooltipTrigger>
         <TooltipContent side="bottom">
-          {translate('auto.components.activity.ActivityPrototypePage.a472a14700', 'More options')}
+          {translate(
+            'auto.components.activity.ActivityPrototypePage.activityOptions',
+            'Activity options'
+          )}
         </TooltipContent>
       </Tooltip>
       <DropdownMenuContent
@@ -139,7 +142,7 @@ export function ActivityThreadOptionsMenu({
                     onCheckedChange={() => onToggleUnread()}
                     onSelect={(event) => event.preventDefault()}
                   >
-                    <BellDot className="size-3.5 text-muted-foreground" />
+                    <ListChecks className="size-3.5 text-muted-foreground" />
                     <span className="min-w-0 flex-1 truncate">
                       {translate(
                         'auto.components.activity.ActivityPrototypePage.showUnreadOnly',

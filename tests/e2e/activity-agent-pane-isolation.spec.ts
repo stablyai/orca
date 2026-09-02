@@ -127,7 +127,6 @@ async function enableActivityAgentsView(page: Page): Promise<void> {
     // Why: the Agents tab is on by default, but a fresh profile opens the intro popover
     // over it; stamping it as shown keeps the toggle clickable without dismissing it first.
     const settings = await window.api.settings.set({
-      showAgentsSidebar: true,
       agentsSidebarIntroShown: true
     })
     window.__store?.setState({ settings })

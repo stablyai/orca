@@ -26,6 +26,7 @@ const mocks = vi.hoisted(() => ({
     sessionOptionsSurface?: SessionOptionsSurface | null
     sessionOptionsSnapshot?: SessionOptionDescriptor[]
     attachDisabled?: boolean
+    sendButtonDisabled?: boolean
   } | null,
   modelSwitchOutcome: 'applied' as 'applied' | 'rejected' | 'unknown',
   confirmationObserver: null as {
@@ -38,10 +39,11 @@ const mocks = vi.hoisted(() => ({
   createClaudeModelSwitchConfirmationObserver: vi.fn(),
   discoverCommitMessageModels: vi.fn(),
   draft: 'hello',
-  imageAttachments: [] as { id: string; path: string }[],
+  imageAttachments: [] as { id: string; path: string; pending?: boolean }[],
   getMainBufferSnapshot: vi.fn(),
   sendHandle: { cancel: vi.fn(), settleAfterMs: 500 },
   sendNativeChatMessage: vi.fn(),
+  sendNativeChatMessageWithImageAttachments: vi.fn(),
   sendNativeChatTypedCommand: vi.fn(),
   sendNativeChatMessageVerified: vi.fn(),
   typeNativeChatCommand: vi.fn(),
@@ -81,7 +83,8 @@ vi.mock('./native-chat-runtime-send', () => ({
   submitNativeChatPrompt: vi.fn()
 }))
 vi.mock('./native-chat-runtime-image-send', () => ({
-  sendNativeChatMessageWithImageAttachments: vi.fn()
+  sendNativeChatMessageWithImageAttachments: (...args: unknown[]) =>
+    mocks.sendNativeChatMessageWithImageAttachments(...args)
 }))
 vi.mock('./claude-model-switch-confirmation', () => ({
   createClaudeModelSwitchConfirmationObserver: (...args: unknown[]) =>
@@ -206,6 +209,7 @@ describe('NativeChatComposer', () => {
       ]
     })
     mocks.sendNativeChatMessage.mockReturnValue(mocks.sendHandle)
+    mocks.sendNativeChatMessageWithImageAttachments.mockReturnValue(mocks.sendHandle)
     mocks.sendNativeChatTypedCommand.mockReturnValue(mocks.sendHandle)
     mocks.sendNativeChatMessageVerified.mockResolvedValue(true)
     mocks.typeNativeChatCommand.mockResolvedValue(true)
@@ -339,6 +343,60 @@ describe('NativeChatComposer', () => {
 
     expect(send).toHaveBeenCalledWith('', mocks.imageAttachments)
     expect(mocks.setDraft).toHaveBeenCalledWith('')
+  })
+
+  it('disables Send and blocks a send while an image attachment is still pending', () => {
+    mocks.imageAttachments = [{ id: 'image-1', path: '', pending: true }]
+    render(
+      <NativeChatComposer
+        terminalTabId="tab-1"
+        paneKey="tab-1:leaf-1"
+        targetPtyId="pty-1"
+        agent="codex"
+      />
+    )
+
+    expect(mocks.fieldProps?.sendButtonDisabled).toBe(true)
+
+    act(() => mocks.fieldProps?.onSend?.())
+
+    expect(mocks.sendNativeChatMessage).not.toHaveBeenCalled()
+    expect(mocks.sendNativeChatTypedCommand).not.toHaveBeenCalled()
+    expect(mocks.sendNativeChatMessageWithImageAttachments).not.toHaveBeenCalled()
+  })
+
+  it('enables Send and dispatches once a pending attachment resolves', () => {
+    mocks.imageAttachments = [{ id: 'image-1', path: '', pending: true }]
+    const view = render(
+      <NativeChatComposer
+        terminalTabId="tab-1"
+        paneKey="tab-1:leaf-1"
+        targetPtyId="pty-1"
+        agent="codex"
+      />
+    )
+    expect(mocks.fieldProps?.sendButtonDisabled).toBe(true)
+
+    mocks.imageAttachments = [{ id: 'image-1', path: '/tmp/pasted.png' }]
+    view.rerender(
+      <NativeChatComposer
+        terminalTabId="tab-1"
+        paneKey="tab-1:leaf-1"
+        targetPtyId="pty-1"
+        agent="codex"
+      />
+    )
+    expect(mocks.fieldProps?.sendButtonDisabled).toBe(false)
+
+    act(() => mocks.fieldProps?.onSend?.())
+
+    expect(mocks.sendNativeChatMessageWithImageAttachments).toHaveBeenCalledWith(
+      {},
+      'pty-1',
+      'hello',
+      ['/tmp/pasted.png'],
+      undefined
+    )
   })
 
   it('types Codex slash composer sends instead of pasting them', () => {

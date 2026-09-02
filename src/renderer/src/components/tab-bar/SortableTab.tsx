@@ -17,6 +17,10 @@ import {
   type DropIndicator
 } from './drop-indicator'
 import { preventMiddleButtonDefault } from './middle-button-default-guard'
+import {
+  RENAME_TERMINAL_TAB_EVENT,
+  type RenameTerminalTabDetail
+} from './terminal-tab-rename-request'
 import { SortableTabContextMenu } from './SortableTabContextMenu'
 import { translate } from '@/i18n/i18n'
 import { TAB_CONTAINER_WIDTH_CLASSES, TAB_LABEL_WIDTH_CLASSES } from './tab-width-rules'
@@ -97,8 +101,6 @@ export default function SortableTab({
       terminalLayout: s.terminalLayoutsByTabId?.[tab.id]
     })
   )
-  const renamingTabId = useAppStore((s) => s.renamingTabId)
-  const setRenamingTabId = useAppStore((s) => s.setRenamingTabId)
 
   // Why: shellOverride is stamped at create time, so changing the default shell later won't repaint existing tabs.
   const shellForIcon = tab.shellOverride
@@ -166,14 +168,25 @@ export default function SortableTab({
     })
   }, [])
 
-  // Why: the tab.rename shortcut routes through store renamingTabId; open the editor and clear it so it fires once.
+  // Why the ref: keeps the listener subscribed to tab.id alone, so OSC title churn can't
+  // resubscribe it mid-edit. Written from an Effect, not in render -- a render React discards
+  // must not leave a stale handler behind for the next commit to fire.
+  const handleRenameOpenRef = useRef(handleRenameOpen)
   useEffect(() => {
-    if (renamingTabId !== tab.id) {
-      return
+    handleRenameOpenRef.current = handleRenameOpen
+  }, [handleRenameOpen])
+
+  useEffect(() => {
+    const onRenameRequest = (event: Event): void => {
+      const detail = (event as CustomEvent<RenameTerminalTabDetail | undefined>).detail
+      if (detail?.tabId !== tab.id) {
+        return
+      }
+      handleRenameOpenRef.current()
     }
-    handleRenameOpen()
-    setRenamingTabId(null)
-  }, [renamingTabId, tab.id, handleRenameOpen, setRenamingTabId])
+    window.addEventListener(RENAME_TERMINAL_TAB_EVENT, onRenameRequest)
+    return () => window.removeEventListener(RENAME_TERMINAL_TAB_EVENT, onRenameRequest)
+  }, [tab.id])
 
   useEffect(() => {
     const closeMenu = (): void => setMenuOpen(false)

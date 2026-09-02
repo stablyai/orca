@@ -72,12 +72,20 @@ behavioural engine can be expected to score it low.
 
 ### Every process gets a handle, on a timer
 
-`src/main/windows/windows-process-table.ts` takes a Toolhelp32 snapshot under one
-of two flag sets. Identity (`None | CreationTime`) answers pid/ppid/name from the
-snapshot alone and opens nothing; the detailed set adds `CommandLine`, which
-costs one `OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION)` per process. `Memory`
-is retired — it took a second handle carrying `PROCESS_VM_READ` and never read
-through it.
+`src/main/windows/windows-process-table.ts` takes a Toolhelp32 snapshot under
+**one** flag set, `CommandLine | CreationTime`, shared by every caller. pid, ppid
+and name come out of the snapshot itself and open nothing. `CommandLine` is what
+opens a handle: the addon calls `GetProcessCommandLine` per process, which opens
+`PROCESS_QUERY_INFORMATION | PROCESS_VM_READ` and walks the PEB with three
+`ReadProcessMemory` calls (`src/process_commandline.cc:32,41-47` in the vendored
+`@vscode/windows-process-tree` 0.8.0 source that `config/patches/` patches).
+
+`Memory` is retired as of this change, and that is a real reduction: it made
+`GetProcessMemoryUsage` open a **second** `PROCESS_QUERY_INFORMATION |
+PROCESS_VM_READ` handle per process for a `GetProcessMemoryInfo` call whose
+result no caller read (`src/process.cc:47-63`). Dropping it halves the handles
+opened per snapshot. It does not remove the remote memory read, because the
+command line still performs one.
 
 It exists because seven independent readers used to fork `powershell.exe` for a
 `Get-CimInstance Win32_Process` scan. That cost, measured: a PowerShell
@@ -90,23 +98,41 @@ panes multiplied it (#15036). The native snapshot answers the same question in
 See
 [`windows-process-enumeration.md`](./windows-process-enumeration.md).
 
-Asking for fewer fields is cheaper, and since the split the module does: one
-cache per flag set, so teardown identity and the session owner probe open no
-handle at all (6.3 ms p50) while only the callers that read a command line pay
-for one (12.3 ms p50, at 492 processes). Each cache still single-flights within
-itself, and one gate serializes the native reads because the vendored wrapper
-coalesces the flags of two overlapping calls.
+Asking for fewer fields is cheaper, and the module now asks for the smallest set
+that still answers every caller. There is **no** per-flag-set cache split: one
+TTL-cached snapshot serves everyone, deliberately, because a split would restore
+the per-pane fan-out the cache exists to remove — a 32-wide teardown has to
+collapse into one scan. So the cheap identity-only read is not something any
+caller can select; every read pays for `CommandLine`. An earlier revision of this
+file described a two-cache design with 6.3 ms / 12.3 ms p50 figures at 492
+processes. That design is not in the tree and those numbers describe no code
+path here; the figures that do apply are the module's own, in
+[`windows-process-enumeration.md`](./windows-process-enumeration.md).
 
 **How an EDR reads it:** a cross-process handle plus a remote memory read against
 every process on the box, repeating on a cadence, is the read half of the
 telemetry that credential dumping and process injection produce. MDE surfaced it
-as "suspicious memory activity". The memory read is gone: the command line now
-comes from the kernel, through `NtQueryInformationProcess`'s
-`ProcessCommandLineInformation` class, which needs only
-`PROCESS_QUERY_LIMITED_INFORMATION`. `ReadProcessMemory` is absent from the
-compiled addon, asserted against the binary's import table because the published
-prebuild loads fine and emits byte-identical strings. What is left to declare to
-administrators is the per-process handle itself.
+as "suspicious memory activity".
+
+**That signal is still present.** An earlier revision of this file claimed the
+command line "now comes from the kernel" through `NtQueryInformationProcess`'s
+`ProcessCommandLineInformation` class, needing only
+`PROCESS_QUERY_LIMITED_INFORMATION`, and that `ReadProcessMemory` was absent from
+the compiled addon. None of that is true of the code we ship.
+`process_commandline.cc` calls `NtQueryInformationProcess` with
+`ProcessBasicInformation` only — to locate the PEB — and then issues three
+`ReadProcessMemory` calls against a `PROCESS_VM_READ` handle to read the PEB, the
+`RTL_USER_PROCESS_PARAMETERS`, and the command-line buffer. Nothing asserts an
+import table, and no such assertion would pass.
+
+What this change did remove is the `Memory` flag's second handle and its
+`GetProcessMemoryInfo` call, so the per-process handle count per snapshot halves.
+What remains to declare to administrators is unchanged in kind: one
+`PROCESS_QUERY_INFORMATION | PROCESS_VM_READ` handle and a PEB read against every
+process on the box, at the shared snapshot's cadence. Moving to
+`ProcessCommandLineInformation` (Windows 8.1+, `PROCESS_QUERY_LIMITED_INFORMATION`
+only) would genuinely retire the remote read, but it is an addon patch nobody has
+written; treat it as unclaimed work, not as shipped.
 
 ### Encoded, policy-bypassing PowerShell
 

@@ -30,6 +30,8 @@ type RuntimeTerminalAgentPresenceDependencies = {
 
 export type RuntimeTerminalAgentPresenceOptions = {
   retryForegroundWrappers?: boolean
+  /** Foreground identity the caller already confirmed; skips the provider's cached read. */
+  foregroundProcess?: string | null
 }
 
 export class RuntimeTerminalAgentPresence {
@@ -75,7 +77,7 @@ export class RuntimeTerminalAgentPresence {
       if (!leaf.ptyId) {
         return false
       }
-      const foreground = await this.deps.getForegroundProcess(leaf.ptyId)
+      const foreground = await this.readForegroundProcess(leaf.ptyId, options)
       if (!foreground) {
         return false
       }
@@ -138,7 +140,7 @@ export class RuntimeTerminalAgentPresence {
     ) {
       return true
     }
-    const foreground = await this.deps.getForegroundProcess(pty.ptyId)
+    const foreground = await this.readForegroundProcess(pty.ptyId, options)
     if (!foreground) {
       return false
     }
@@ -155,6 +157,16 @@ export class RuntimeTerminalAgentPresence {
       suppressClaude,
       options.retryForegroundWrappers !== false
     )
+  }
+
+  private async readForegroundProcess(
+    ptyId: string,
+    options: RuntimeTerminalAgentPresenceOptions
+  ): Promise<string | null> {
+    if (options.foregroundProcess !== undefined) {
+      return options.foregroundProcess
+    }
+    return await this.deps.getForegroundProcess(ptyId)
   }
 
   private async isRecognizedForegroundAgentProcess(

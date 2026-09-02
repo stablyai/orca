@@ -6,22 +6,20 @@ import { promisify } from 'node:util'
 import {
   isAgentForegroundWrapperProcess,
   isExpectedAgentProcess,
-  recognizeAgentProcess,
-  recognizeAgentProcessFromCommandLine
+  recognizeAgentProcess
 } from '../shared/agent-process-recognition'
 import { getFirstCommandToken } from '../shared/command-token-scanner'
 import {
-  getProcessTableIndex,
   getProcessTableSnapshot,
-  scoreForegroundCandidateRow,
   type ProcessTableIndex,
   type ProcessTableRow
 } from '../shared/process-table-snapshot'
+import { getProcessTableIndex } from '../shared/process-table-index'
+import { selectForegroundProcessCandidate } from '../shared/foreground-process-selection'
 import {
   resolveOuterWrapperForegroundProcess,
   shouldInspectOuterWrapperForegroundProcess
 } from '../shared/foreground-wrapper-agent'
-import { isShellProcess } from '../shared/shell-process-detection'
 import {
   resolveWindowsAgentForegroundProcess,
   shouldInspectWindowsAgentForeground
@@ -240,9 +238,7 @@ function getForegroundProcessNameFromProcessTable(
   // snapshot no longer each rebuild the parent/child map over every row.
   const index = getProcessTableIndex(rows)
   const root = index.byPid.get(pid)
-  const candidates = collectDescendants(index, pid).sort(
-    (a, b) => scoreForegroundCandidateRow(b) - scoreForegroundCandidateRow(a)
-  )
+  const candidates = collectDescendants(index, pid)
   // Why: SSH relays do not have the daemon's async wrapper cache. Inspect the
   // remote process tree so node/python agent entrypoints become real agents.
   const foregroundIsKnown =
@@ -264,13 +260,12 @@ function getForegroundProcessNameFromProcessTable(
   ) {
     return null
   }
-  for (const candidate of inspectionCandidates) {
-    const recognized = recognizeAgentProcessFromCommandLine(candidate.command)
-    if (recognized) {
-      // Why: return the outer wrapper (omp) rather than the deeper wrapped child
-      // (pi) of a shell→omp→pi tree — see resolveOuterWrapperForegroundProcess.
-      return resolveOuterWrapperForegroundProcess(recognized, candidate, candidates)
-    }
+  const ancestryCandidates = root ? [{ ...root, depth: 0 }, ...candidates] : candidates
+  const selected = selectForegroundProcessCandidate(inspectionCandidates, ancestryCandidates)
+  if (selected) {
+    // Why: return the outer wrapper (omp) rather than a deeper recognized helper
+    // in the same process lineage.
+    return resolveOuterWrapperForegroundProcess(selected.recognized, selected.candidate, candidates)
   }
   return null
 }
@@ -309,10 +304,11 @@ export async function getForegroundProcessName(
         (await resolveWindowsAgentForegroundProcess(pid, fallbackProcess, {})) ?? fallbackProcess
       )
     }
-    if (!isShellProcess(fallbackProcess) && !isAgentForegroundWrapperProcess(fallbackProcess)) {
-      return fallbackProcess
-    }
   }
+  // Why: an unrecognized name is not proof of a non-agent foreground -- macOS p_comm truncates
+  // to the executable basename, which for the native Claude install is its version directory
+  // (`2.1.258`). The TTL-cached table read resolves the real command line; a foreground that
+  // is genuinely not an agent still answers with its own name below.
   const recognized = await getRecognizedForegroundDescendant(pid, fallbackProcess)
   if (recognized) {
     return recognized

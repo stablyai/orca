@@ -229,7 +229,6 @@ describe('SidebarNav', () => {
     setSidebarState({
       settings: {
         ...getDefaultSettings('/tmp'),
-        showAgentsSidebar: false,
         experimentalAgentDashboardPopout: true
       }
     })

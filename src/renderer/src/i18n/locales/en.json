@@ -137,10 +137,6 @@
       "menuBarIcon": {
         "title": "Show Menu Bar Icon",
         "description": "Keep an Orca shortcut and activity indicator in the macOS menu bar."
-      },
-      "agentsSidebar": {
-        "title": "Show Agents Button",
-        "description": "Control whether the Agents tab appears in the left sidebar so you can monitor agent activity."
       }
     },
     "browser": {
@@ -15942,6 +15938,35 @@
           "noProjects": "No projects are set up on {host}. Add one there, or choose another host.",
           "updateRequired": "Update the Orca server on {hosts} to store automations there.",
           "move": "Saving creates this automation on {host} and deletes the original and its run history."
+        },
+        "AutomationListToolbar": {
+          "runs": "Runs"
+        },
+        "AutomationRunsDashboard": {
+          "search": "Search runs…",
+          "filters": "Filters",
+          "host": "Host",
+          "status": "Status",
+          "refresh": "Refresh runs",
+          "successful24h": "Successful · 24h",
+          "failed24h": "Failed · 24h",
+          "successful7d": "Successful · 7d",
+          "failed7d": "Failed · 7d",
+          "historyUnavailableOne": "Run history is unavailable for 1 automation. Counts include available history only.",
+          "historyUnavailableMany": "Run history is unavailable for {{count}} automations. Counts include available history only.",
+          "automation": "Automation",
+          "triggered": "Triggered",
+          "trigger": "Trigger",
+          "loading": "Loading runs…",
+          "noRuns": "No runs yet",
+          "emptyDescription": "Runs appear here after an automation is triggered.",
+          "runs": "Runs",
+          "local": "Local",
+          "remote": "Remote"
+        },
+        "AutomationsPageBreadcrumb": {
+          "ariaLabel": "Automations breadcrumb",
+          "runDetails": "Run details"
         }
       },
       "agent": {
@@ -16714,6 +16739,7 @@
         "removeAttachment": "Remove attachment",
         "pastedImageLabel": "Pasted image",
         "imagePasteFailed": "Image paste failed.",
+        "imageSaving": "Saving pasted image…",
         "worktreeNotReady": "Worktree not ready — try again in a moment.",
         "uploadingAttachments": "Uploading {{value0}} file(s) to remote…",
         "model": "Model",
@@ -16836,10 +16862,7 @@
         "SortableTabContextMenu": {
           "switchToTerminalView": "Switch to terminal view",
           "switchToChatView": "Switch to chat view",
-          "closeTabsToLeft": "Close Tabs To The Left",
-          "copySessionId": "Copy Session ID",
-          "copySessionIdSuccess": "Session ID copied",
-          "copySessionIdError": "Failed to copy Session ID"
+          "closeTabsToLeft": "Close Tabs To The Left"
         },
         "BrowserTab": {
           "closeOthers": "Close Others",
@@ -17127,6 +17150,13 @@
         "hours": "{{value0}}h",
         "days": "{{value0}}d",
         "underOneMinute": "<1m"
+      }
+    },
+    "terminalPane": {
+      "TerminalContextMenu": {
+        "copySessionId": "Copy Session ID",
+        "copySessionIdSuccess": "Session ID copied",
+        "copySessionIdError": "Unable to copy session ID"
       }
     }
   },

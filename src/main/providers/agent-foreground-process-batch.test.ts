@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest'
+import { parseStrictProcessTableRows } from '../../shared/process-table-snapshot'
 import {
   buildProcessTableIndex,
-  parseStrictProcessTableRows,
   type ProcessTableIndexStats
-} from '../../shared/process-table-snapshot'
+} from '../../shared/process-table-index'
 import {
   resolveAgentForegroundProcessesBatch,
   resolveAgentForegroundProcessesFromIndex

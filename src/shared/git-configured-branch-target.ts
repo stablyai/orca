@@ -1,4 +1,5 @@
 import { gitRefTargetsBranchOnRemote } from './git-remote-branch-name'
+import { findGitRemoteNameByFetchUrl } from './git-remote-url-index'
 
 type GitCommandRunner = (args: string[]) => Promise<{ stdout: string }>
 
@@ -25,30 +26,18 @@ function isUrlValuedRemote(remote: string): boolean {
   return /^[A-Za-z][A-Za-z0-9+.-]*:\/\//.test(remote) || /^[^@/:]+@[^:]+:.+/.test(remote)
 }
 
+// `hasConfiguredBranchPushTarget` resolves up to two URL-valued remotes, so the old
+// per-remote `get-url` scan cost up to 2 x (1 + remotes) subprocesses per call.
 async function findRemoteNameForUrl(
   runGit: GitCommandRunner,
   remoteUrl: string
 ): Promise<string | null> {
   try {
-    const { stdout } = await runGit(['remote'])
-    const remotes = stdout
-      .split(/\r?\n/)
-      .map((line) => line.trim())
-      .filter(Boolean)
-    for (const remoteName of remotes) {
-      try {
-        const { stdout: urlStdout } = await runGit(['remote', 'get-url', remoteName])
-        if (urlStdout.trim() === remoteUrl) {
-          return remoteName
-        }
-      } catch {
-        // Ignore a remote that disappeared or has no fetch URL.
-      }
-    }
+    const { stdout } = await runGit(['remote', '-v'])
+    return findGitRemoteNameByFetchUrl(stdout, (candidateUrl) => candidateUrl === remoteUrl)
   } catch {
     return null
   }
-  return null
 }
 
 export async function getConfiguredBranchRemoteUpstream(
@@ -101,11 +90,14 @@ export async function hasConfiguredBranchPushTarget(
   const pushRemoteName = isUrlValuedRemote(remote)
     ? ((await findRemoteNameForUrl(runGit, remote)) ?? remote)
     : remote
-  const branchRemoteName = branchRemote
-    ? isUrlValuedRemote(branchRemote)
-      ? ((await findRemoteNameForUrl(runGit, branchRemote)) ?? branchRemote)
-      : branchRemote
-    : null
+  // The two usually name the same URL; resolving it twice reads the remote table twice.
+  const branchRemoteName = !branchRemote
+    ? null
+    : branchRemote === remote
+      ? pushRemoteName
+      : isUrlValuedRemote(branchRemote)
+        ? ((await findRemoteNameForUrl(runGit, branchRemote)) ?? branchRemote)
+        : branchRemote
   if (gitRefTargetsBranchOnRemote(baseRef, pushRemoteName, branchName)) {
     return false
   }

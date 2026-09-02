@@ -15,6 +15,7 @@ import {
   isUnsupportedWorktreeListZError
 } from './git-worktree-command-capabilities'
 import { gitCredentialPromptGuardEnv } from './git-credential-prompt-env'
+import { parseGitRemoteFetchUrls } from './git-remote-url-index'
 import { GIT_HISTORY_COMMIT_FORMAT, parseGitHistoryLog } from './git-history-log-parser'
 import {
   githubPullRequestHeadLocalRef,
@@ -212,6 +213,41 @@ describeBinaryCompatibility('real Git binary compatibility', () => {
     // commits each side carries.
     const unrelated = (await runGit(['commit-tree', tree, '-m', 'unrelated root'])).stdout.trim()
     await expect(runGit(['merge-base', '--end-of-options', head, unrelated])).rejects.toBeDefined()
+  })
+
+  // Why pin this: Orca answers "which remote has this URL" from one `git remote -v`
+  // instead of one `git remote get-url` per remote. That is only equivalent if both
+  // commands report the same URL — the insteadOf-expanded first `remote.<name>.url`,
+  // which a raw config read does not produce — on every supported Git.
+  it('reports the same fetch URL from remote -v as from remote get-url', async () => {
+    await runGit(['config', 'url.git@example.invalid:.insteadOf', 'https://example.invalid/'])
+    await runGit(['remote', 'add', 'compat-single', 'https://example.invalid/a/repo.git'])
+    await runGit(['remote', 'add', 'compat-multi', 'https://example.invalid/b/repo.git'])
+    await runGit([
+      'config',
+      '--add',
+      'remote.compat-multi.url',
+      'https://example.invalid/b2/repo.git'
+    ])
+    await runGit([
+      'config',
+      'remote.compat-multi.pushurl',
+      'https://push.example.invalid/b/repo.git'
+    ])
+    try {
+      const fetchUrls = parseGitRemoteFetchUrls((await runGit(['remote', '-v'])).stdout)
+      for (const name of ['compat-single', 'compat-multi']) {
+        const getUrl = (await runGit(['remote', 'get-url', name])).stdout.trim()
+        expect(fetchUrls.get(name)).toBe(getUrl)
+      }
+      expect(fetchUrls.get('compat-single')).toBe('git@example.invalid:a/repo.git')
+      // A `pushurl` must not displace the fetch URL the scan compares against.
+      expect(fetchUrls.get('compat-multi')).toBe('git@example.invalid:b/repo.git')
+    } finally {
+      await runGit(['remote', 'remove', 'compat-single'])
+      await runGit(['remote', 'remove', 'compat-multi'])
+      await runGit(['config', '--unset-all', 'url.git@example.invalid:.insteadOf'])
+    }
   })
 
   it('recognizes ref and merge-tree compatibility boundaries', async () => {

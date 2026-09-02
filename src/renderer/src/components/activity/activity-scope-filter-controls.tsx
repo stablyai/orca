@@ -1,7 +1,7 @@
 import React, { useMemo } from 'react'
 import { X } from 'lucide-react'
 import { useAppStore } from '@/store'
-import { DropdownMenuLabel, DropdownMenuSeparator } from '@/components/ui/dropdown-menu'
+import { DropdownMenuSeparator } from '@/components/ui/dropdown-menu'
 import SidebarRepositoryFilterSection from '@/components/sidebar/SidebarRepositoryFilterSection'
 import { SidebarHostScopeMenuSection } from '@/components/sidebar/SidebarHostScopeMenuSection'
 import {
@@ -32,9 +32,6 @@ export function ActivityScopeFilterMenuSections(): React.JSX.Element | null {
   }
   return (
     <>
-      <DropdownMenuLabel>
-        {translate('auto.components.sidebar.SidebarWorkspaceOptionsMenu.showSection', 'Show')}
-      </DropdownMenuLabel>
       {showHostScopeControls ? (
         <SidebarHostScopeMenuSection
           hostVisibilityLabel={getSidebarHostVisibilityLabel(agentsVisibleHostIds, hostOptions)}

@@ -1,20 +1,21 @@
 import {
   isAgentForegroundWrapperProcess,
-  isExpectedAgentProcess,
-  recognizeAgentProcessFromCommandLine
+  isExpectedAgentProcess
 } from '../../shared/agent-process-recognition'
 import { getFirstCommandToken } from '../../shared/command-token-scanner'
 import { resolveOuterWrapperForegroundProcess } from '../../shared/foreground-wrapper-agent'
+import { selectForegroundProcessCandidate } from '../../shared/foreground-process-selection'
 import type { ForegroundProcessEvidence } from '../../shared/foreground-process-evidence'
 import {
-  buildProcessTableIndex,
   getStrictProcessTableSnapshot,
-  lookupProcessTableIndex,
-  scoreForegroundCandidateRow,
   type ProcessTableIndex,
-  type ProcessTableIndexStats,
   type ProcessTableRow
 } from '../../shared/process-table-snapshot'
+import {
+  buildProcessTableIndex,
+  lookupProcessTableIndex,
+  type ProcessTableIndexStats
+} from '../../shared/process-table-index'
 
 export type BatchedForegroundProcessRequest = {
   rootPid: number
@@ -126,23 +127,15 @@ export function resolveAgentForegroundProcessesFromIndex(
     if (wrapperFallback && candidates.length !== 1) {
       return { available: true, processName: null }
     }
-    let bestCandidate: (ProcessTableRow & { depth: number }) | null = null
-    let bestName: ReturnType<typeof recognizeAgentProcessFromCommandLine> = null
-    for (const candidate of candidates) {
-      const recognized = recognizeAgentProcessFromCommandLine(candidate.command)
-      if (
-        recognized &&
-        (bestCandidate === null ||
-          scoreForegroundCandidateRow(candidate) > scoreForegroundCandidateRow(bestCandidate))
-      ) {
-        bestCandidate = candidate
-        bestName = recognized
-      }
-    }
-    if (bestCandidate && bestName) {
+    const selected = selectForegroundProcessCandidate(candidates, allCandidates)
+    if (selected) {
       return {
         available: true,
-        processName: resolveOuterWrapperForegroundProcess(bestName, bestCandidate, allCandidates)
+        processName: resolveOuterWrapperForegroundProcess(
+          selected.recognized,
+          selected.candidate,
+          allCandidates
+        )
       }
     }
     return { available: true, processName: null }

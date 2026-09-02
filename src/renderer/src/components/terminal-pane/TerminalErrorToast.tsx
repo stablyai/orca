@@ -179,6 +179,11 @@ export function TerminalErrorToast({
   const showIssueLink =
     !ssh && !paneOwnerUnverified && !showDaemonRestart && !isExplainedTerminalError(error)
   const displayError = humanizeTerminalError(error)
+  const tint = paneOwnerUnverified
+    ? null
+    : ssh
+      ? 'color-mix(in srgb, var(--color-amber-500) 20%, var(--popover))'
+      : 'color-mix(in srgb, var(--destructive) 20%, var(--popover))'
   const [retrying, setRetrying] = useState(false)
   const [retryFailed, setRetryFailed] = useState(false)
   const [environmentFooter, setEnvironmentFooter] = useState<{
@@ -231,17 +236,14 @@ export function TerminalErrorToast({
         zIndex: 50,
         padding: '10px 14px',
         borderRadius: 6,
-        background: paneOwnerUnverified
-          ? 'var(--popover)'
-          : ssh
-            ? 'rgba(234, 179, 8, 0.12)'
-            : 'rgba(220, 38, 38, 0.15)',
+        background: 'var(--popover)',
+        backgroundImage: tint ? `linear-gradient(${tint}, ${tint})` : undefined,
         border: paneOwnerUnverified
           ? '1px solid var(--color-amber-500)'
           : ssh
             ? '1px solid rgba(234, 179, 8, 0.35)'
             : '1px solid rgba(220, 38, 38, 0.4)',
-        color: paneOwnerUnverified ? 'var(--popover-foreground)' : ssh ? '#fde68a' : '#fca5a5',
+        color: 'var(--popover-foreground)',
         fontSize: 12,
         fontFamily: 'monospace',
         whiteSpace: 'pre-wrap',
@@ -268,7 +270,7 @@ export function TerminalErrorToast({
               )}{' '}
               <a
                 href="https://github.com/stablyai/orca/issues"
-                style={{ color: '#fca5a5', textDecoration: 'underline' }}
+                style={{ color: 'inherit', textDecoration: 'underline' }}
               >
                 {translate(
                   'auto.components.terminal.pane.TerminalErrorToast.a7e2fd2699',
@@ -326,7 +328,7 @@ export function TerminalErrorToast({
           style={{
             background: 'none',
             border: 'none',
-            color: paneOwnerUnverified ? 'var(--popover-foreground)' : ssh ? '#fde68a' : '#fca5a5',
+            color: 'inherit',
             cursor: 'pointer',
             fontSize: 14,
             padding: '0 0 0 8px',

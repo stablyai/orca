@@ -7,7 +7,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import { getDefaultSettings } from '../../../../shared/constants'
 import { ExperimentalPane } from './ExperimentalPane'
-import { getExperimentalPaneSearchEntries, getExperimentalSearchEntry } from './experimental-search'
+import { getExperimentalPaneSearchEntries } from './experimental-search'
 
 vi.mock('../../store', () => ({
   useAppStore: (selector: (state: { settingsSearchQuery: string }) => unknown) =>
@@ -129,23 +129,6 @@ describe('ExperimentalPane', () => {
     expect(markup).toContain('aria-checked="false"')
     expect(getExperimentalPaneSearchEntries().map((entry) => entry.title)).toContain(
       'New card style'
-    )
-  })
-
-  it('renders the Agents sidebar switch in Experimental without stale Appearance copy', () => {
-    const settings = getDefaultSettings('/tmp')
-    const markup = renderToStaticMarkup(
-      <ExperimentalPane settings={settings} updateSettings={vi.fn()} />
-    )
-
-    expect(settings.experimentalAgentDashboardPopout).toBeUndefined()
-    expect(markup).toContain('Show Agents Button')
-    // The visible copy is the search entry's own description, so settings search can't
-    // advertise text the page doesn't show.
-    expect(markup).toContain(getExperimentalSearchEntry().agentsSidebar.description)
-    expect(markup).not.toContain('Window &amp; Sidebar')
-    expect(getExperimentalPaneSearchEntries().map((entry) => entry.title)).toContain(
-      'Show Agents Button'
     )
   })
 

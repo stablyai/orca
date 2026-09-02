@@ -1,20 +1,16 @@
 import React, { useEffect, useMemo } from 'react'
-import { useTranslation } from 'react-i18next'
 import { useAppStore } from '@/store'
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
+import { TooltipProvider } from '@/components/ui/tooltip'
 import { useSidebarResize } from '@/hooks/useSidebarResize'
 import SidebarHeader from './SidebarHeader'
 import SidebarNav from './SidebarNav'
-import { shouldShowAgentsSidebar } from './agents-sidebar-visibility'
 import SetupScriptPromptCard from './SetupScriptPromptCard'
 import WorktreeList from './WorktreeList'
 import SidebarToolbar from './SidebarToolbar'
 import WorkspaceKanbanDrawer from './WorkspaceKanbanDrawer'
 import type { VirtualizedScrollAnchor } from '@/hooks/useVirtualizedScrollAnchor'
 import { cn } from '@/lib/utils'
-import { BellDot, FolderPlus, Loader2, Search } from 'lucide-react'
-import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
+import { FolderPlus, Loader2 } from 'lucide-react'
 import type { ActivityGroupBy, ThreadReadFilter } from '@/components/activity/activity-thread-types'
 import { ActivityThreadCollapseContext } from '@/components/activity/activity-thread-collapse-context'
 import { useSidebarProjectDrop } from './useSidebarProjectDrop'
@@ -23,7 +19,6 @@ import { useWorkspaceRevealBodyRedirect } from './use-workspace-reveal-body-redi
 import { resolveLeftSidebarStyleVariables } from '@/lib/left-sidebar-appearance'
 import { useSystemPrefersDark } from '@/components/terminal-pane/use-system-prefers-dark'
 import { lazyWithRetry } from '@/lib/lazy-with-retry'
-import { translate } from '@/i18n/i18n'
 
 // Why lazy: the Agents list pulls the whole activity pipeline (virtualizer, markdown
 // previews, thread derivation); users on the workspace view should not load or render any of it.
@@ -54,14 +49,6 @@ function Sidebar({
   worktreeScrollOffsetRef,
   worktreeScrollAnchorRef
 }: SidebarProps): React.JSX.Element {
-  // Why: the memoized toolbar/search JSX below is localized, so it needs both a
-  // language subscription here and the locale as a memo dep to refresh on a switch.
-  const { i18n } = useTranslation()
-  const locale = i18n.resolvedLanguage ?? i18n.language
-  const sidebarTranslate = React.useCallback(
-    (key: string, fallback: string): string => translate(key, fallback, { lng: locale }),
-    [locale]
-  )
   const sidebarOpen = useAppStore((s) => s.sidebarOpen)
   const sidebarWidth = useAppStore((s) => s.sidebarWidth)
   const setSidebarWidth = useAppStore((s) => s.setSidebarWidth)
@@ -69,19 +56,12 @@ function Sidebar({
   const startupWorktreeRefreshCompleted = useAppStore((s) => s.startupWorktreeRefreshCompleted)
   const settings = useAppStore((s) => s.settings)
   const sidebarBody = useAppStore((s) => s.sidebarBody ?? 'workspaces')
-  const showAgentsSidebar = shouldShowAgentsSidebar(settings)
   const showAgentDashboard = settings?.experimentalAgentDashboardPopout === true
   const agentDashboardDrawerOpen = useAppStore((s) => s.agentDashboardDrawerOpen)
   const setAgentDashboardDrawerOpen = useAppStore((s) => s.setAgentDashboardDrawerOpen)
   const [agentReadFilter, setAgentReadFilter] = React.useState<ThreadReadFilter>('all')
   const [agentGroupBy, setAgentGroupBy] = React.useState<ActivityGroupBy>('status')
   const [agentQuery, setAgentQuery] = React.useState('')
-  const [agentSearchOpen, setAgentSearchOpen] = React.useState(false)
-  // Why clear on close: the hidden input's query would keep filtering the list with no visible indicator.
-  const closeAgentSearch = React.useCallback(() => {
-    setAgentSearchOpen(false)
-    setAgentQuery('')
-  }, [])
   const [agentOptionsTarget, setAgentOptionsTarget] = React.useState<HTMLDivElement | null>(null)
   const agentsScrollTopRef = React.useRef(0)
   // Held here so collapsed groups (and the layout the saved scrollTop assumes)
@@ -165,106 +145,7 @@ function Sidebar({
     onDraftWidthChange: setLiveSidebarWidth
   })
 
-  // Why memoized: SidebarHeader is React.memo; fresh JSX here on every Sidebar render would
-  // defeat that memo and re-render the header subtree on unrelated store churn.
-  const agentToolbar = useMemo(
-    () => (
-      <div className="flex items-center gap-1 shrink-0">
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon-xs"
-              className={cn(
-                'text-muted-foreground',
-                agentSearchOpen &&
-                  'border border-primary/50 bg-primary/20 text-primary hover:bg-primary/30'
-              )}
-              aria-label={sidebarTranslate(
-                'auto.components.activity.ActivityPrototypePage.search',
-                'Search'
-              )}
-              aria-pressed={agentSearchOpen}
-              onClick={() => {
-                if (agentSearchOpen) {
-                  closeAgentSearch()
-                } else {
-                  setAgentSearchOpen(true)
-                }
-              }}
-            >
-              <Search className="size-3.5" strokeWidth={2.25} />
-            </Button>
-          </TooltipTrigger>
-          <TooltipContent side="bottom" sideOffset={6}>
-            {sidebarTranslate('auto.components.activity.ActivityPrototypePage.search', 'Search')}
-          </TooltipContent>
-        </Tooltip>
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon-xs"
-              aria-pressed={agentReadFilter === 'unread'}
-              onClick={() =>
-                setAgentReadFilter((filter) => (filter === 'unread' ? 'all' : 'unread'))
-              }
-              className={cn(
-                'text-muted-foreground',
-                agentReadFilter === 'unread' &&
-                  'border border-primary/50 bg-primary/20 text-primary hover:bg-primary/30'
-              )}
-              aria-label={sidebarTranslate(
-                'auto.components.activity.ActivityPrototypePage.d1a88df9a8',
-                'Show unread threads only'
-              )}
-            >
-              <BellDot className="size-3.5" strokeWidth={2.25} />
-            </Button>
-          </TooltipTrigger>
-          <TooltipContent side="bottom" sideOffset={6}>
-            {sidebarTranslate(
-              'auto.components.activity.ActivityPrototypePage.d1a88df9a8',
-              'Show unread threads only'
-            )}
-          </TooltipContent>
-        </Tooltip>
-        <div ref={setAgentOptionsTarget} className="flex items-center" />
-      </div>
-    ),
-    [agentReadFilter, agentSearchOpen, closeAgentSearch, sidebarTranslate]
-  )
-  const agentSearchRow = useMemo(
-    () =>
-      agentSearchOpen ? (
-        <div className="shrink-0 border-b border-border px-2 py-1.5">
-          <Input
-            autoFocus
-            value={agentQuery}
-            onChange={(event) => setAgentQuery(event.target.value)}
-            onKeyDown={(event) => {
-              if (event.key === 'Escape') {
-                closeAgentSearch()
-              }
-            }}
-            placeholder={sidebarTranslate(
-              'auto.components.activity.ActivityPrototypePage.795cbf26e2',
-              'Filter...'
-            )}
-            className="h-7 w-full text-[11px]"
-            aria-label={sidebarTranslate(
-              'auto.components.activity.ActivityPrototypePage.search',
-              'Search'
-            )}
-          />
-        </div>
-      ) : null,
-    [agentQuery, agentSearchOpen, closeAgentSearch, sidebarTranslate]
-  )
-
-  useWorkspaceRevealBodyRedirect(sidebarOpen && sidebarBody === 'agents' && showAgentsSidebar)
+  useWorkspaceRevealBodyRedirect(sidebarOpen && sidebarBody === 'agents')
 
   return (
     <TooltipProvider delayDuration={400}>
@@ -281,11 +162,9 @@ function Sidebar({
             <SidebarNav />
             <SidebarHeader
               onWorkspaceBoardMenuOpenChange={setWorkspaceBoardMenuOpen}
-              showAgentsSidebar={showAgentsSidebar}
-              agentToolbar={agentToolbar}
-              agentSearchRow={agentSearchRow}
+              activityOptionsTarget={setAgentOptionsTarget}
             />
-            {sidebarBody === 'agents' && showAgentsSidebar ? (
+            {sidebarBody === 'agents' ? (
               <React.Suspense fallback={<div className="min-h-0 flex-1" />}>
                 <ActivityThreadCollapseContext.Provider value={agentsCollapseState}>
                   <SidebarAgentsList

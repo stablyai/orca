@@ -299,10 +299,34 @@ describe('resolveDefaultCwd', () => {
 })
 
 describe('getForegroundProcessName', () => {
-  it('returns clear non-wrapper foregrounds without process-table enrichment', async () => {
-    await expect(getForegroundProcessName(100, 'vim')).resolves.toBe('vim')
+  it('keeps a non-agent foreground name when the process table shows no agent', async () => {
+    await withProcessPlatform('darwin', async () => {
+      mockExecFile((_command, args) => {
+        if (args[0] === '-axo') {
+          return { stdout: ['100 99 Ss   zsh -l', '101 100 S+   vim notes.md'].join('\n') }
+        }
+        return new Error('unexpected command')
+      })
 
-    expect(execFileMock).not.toHaveBeenCalled()
+      await expect(getForegroundProcessName(100, 'vim')).resolves.toBe('vim')
+    })
+  })
+
+  it('resolves a macOS p_comm basename to the agent that owns the foreground', async () => {
+    // Why: node-pty reports the native Claude binary as its version directory (`2.1.258`);
+    // answering with that name downgrades agent prompts to unframed chunks (STA-4577).
+    await withProcessPlatform('darwin', async () => {
+      mockExecFile((_command, args) => {
+        if (args[0] === '-axo') {
+          return {
+            stdout: ['100 99 Ss   zsh -l', '101 100 S+   claude --model haiku'].join('\n')
+          }
+        }
+        return new Error('unexpected command')
+      })
+
+      await expect(getForegroundProcessName(100, '2.1.258')).resolves.toBe('claude')
+    })
   })
 
   it('recognizes SSH relay node-wrapped agents from descendant command lines', async () => {

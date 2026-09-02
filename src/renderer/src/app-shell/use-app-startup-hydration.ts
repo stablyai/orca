@@ -19,6 +19,7 @@ import {
 } from '../startup/startup-diagnostics'
 import { recoverFromDegradedStartup } from '../startup/startup-degraded-recovery'
 import { restoreSshConnectionsForStartup } from '../startup/startup-ssh-connection-restore'
+import { collectActiveWorkspaceSshTargetIds } from '../startup/active-workspace-ssh-targets'
 import { publishTerminalViewAttributesAtAppStart } from '../components/terminal-pane/terminal-appearance'
 import { getSystemPrefersDark } from '../lib/terminal-theme'
 import {
@@ -155,9 +156,12 @@ export function useAppStartupHydration(onOnboardingLoaded: (state: OnboardingSta
               // Why: disconnected SSH repos hydrate from local metadata; only runtime-owned repos use placeholders.
               parseExecutionHostId(getRepoExecutionHostId(repo))?.kind !== 'runtime'
           )
-          // Why: worktree refresh can spawn host Git; wait for main's shell-PATH generation fence first.
-          await timeRendererStartupStep('first-window-services-await', () =>
-            window.api.app.awaitFirstWindowStartupServices()
+          // Why this barrier and not the first-window one: worktree refresh can spawn host Git,
+          // which needs the shell-PATH generation and the managed WSL CLI registration. It never
+          // needs the daemon PTY provider or the hook-server bind, and `prepare-terminal-startup-restoration`
+          // below still fences those before any terminal is restored.
+          await timeRendererStartupStep('git-environment-barrier-await', () =>
+            window.api.app.awaitGitEnvironmentStartupBarrier()
           )
           await timeRendererStartupStep('fetch-hydration-worktrees', () =>
             mapWithConcurrency(hydrationRepos, WORKTREE_REFRESH_CONCURRENCY, (repo) =>
@@ -198,7 +202,7 @@ export function useAppStartupHydration(onOnboardingLoaded: (state: OnboardingSta
             actions.hydrateBrowserSession(sessionRead.session, sessionHydrationOptions)
             reconcileHydratedWorkspaceTabModels(
               sessionRead.session,
-              useAppStore.getState().reconcileWorktreeTabModel
+              useAppStore.getState().reconcileWorktreeTabModels
             )
           })
           await timeRendererStartupStep('prepare-terminal-startup-restoration', () =>
@@ -213,9 +217,14 @@ export function useAppStartupHydration(onOnboardingLoaded: (state: OnboardingSta
             actions.pruneLastVisitedTimestamps()
             actions.seedActiveWorktreeLastVisitedIfMissing()
           })
-          await timeRendererStartupStep('fetch-browser-session-profiles', () =>
+          // Why started here but not awaited: on a remote runtime this is an RPC with a 15s
+          // timeout, and nothing between here and terminal restoration reads the profile list —
+          // awaiting it put that timeout on the terminal-restoration gate. Starting it at the
+          // original point keeps the profiles landing no later than they did before; the action
+          // swallows its own failures, so the `.catch` only marks the timing wrapper handled.
+          void timeRendererStartupStep('fetch-browser-session-profiles', () =>
             actions.fetchBrowserSessionProfiles()
-          )
+          ).catch(() => {})
           const onboardingState = await onboardingPromise
           if (!cancelled) {
             onOnboardingLoadedRef.current(onboardingState)
@@ -228,9 +237,17 @@ export function useAppStartupHydration(onOnboardingLoaded: (state: OnboardingSta
           )
           if (connectionIds.length > 0) {
             try {
+              // Why scoped: an unreachable host used to hold every restored terminal — local ones
+              // included — for the full reconnect timeout. Only the targets whose panes mount as
+              // soon as the gate opens are worth waiting for; the rest reattach on tab focus.
+              const blockingConnectionIds = collectActiveWorkspaceSshTargetIds(
+                useAppStore.getState()
+              )
               await restoreSshConnectionsForStartup({
                 connectionIds,
+                blockingConnectionIds,
                 setDeferredSshReconnectTargets: actions.setDeferredSshReconnectTargets,
+                removeDeferredSshReconnectTarget: actions.removeDeferredSshReconnectTarget,
                 publishSshConnectionState: actions.setSshConnectionState
               })
             } catch (err) {
@@ -240,7 +257,8 @@ export function useAppStartupHydration(onOnboardingLoaded: (state: OnboardingSta
             logRendererStartupDiagnostic('ssh-reconnect-skipped', { connectionIds: 0 })
           }
 
-          // first-window-services-await already fenced worktree hydration; terminal recovery reuses that ready state.
+          // Why no explicit barrier here: prepare-terminal-startup-restoration above already awaited
+          // the first-window services, and main re-awaits them inside this handler anyway.
           await timeRendererStartupStep('recover-legacy-worker-terminals-pre-reconnect', () =>
             window.api.app.recoverLegacyWorkerTerminalsForRendererStartup()
           )

@@ -11,6 +11,13 @@ export function registerMainProcessIpcHandlers(): void {
       state.managedWslCliStartupBarrierReady
     ])
   })
+  // Why separate from the first-window barrier: host Git needs the shell-PATH
+  // generation and the managed WSL CLI registration, not a daemon PTY provider
+  // or a hook-server bind. Bundling them made worktree hydration wait on a
+  // terminal service it never calls.
+  ipcMain.handle('app:awaitGitEnvironmentStartupBarrier', async () => {
+    await Promise.all([state.shellPathReady, state.managedWslCliStartupBarrierReady])
+  })
   ipcMain.handle('app:prepareTerminalStartupRestoration', async () => {
     await Promise.all([
       state.firstWindowStartupServicesReady,
