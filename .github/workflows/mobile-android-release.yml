@@ -70,11 +70,20 @@ jobs:
       - name: Build Android release APK
         run: cd android && ./gradlew assembleRelease
 
+      # Why: Gradle names every React Native release build `app-release.apk`, so
+      # the file a user sideloads is indistinguishable from any other app once it
+      # lands in Downloads. Rename before any step publishes it.
+      - name: Name the release APK for Orca
+        run: |
+          set -euo pipefail
+          cd android/app/build/outputs/apk/release
+          mv app-release.apk orca-app-release.apk
+
       - name: Upload APK artifact
         uses: actions/upload-artifact@v7
         with:
           name: orca-mobile-apk
-          path: mobile/android/app/build/outputs/apk/release/*.apk
+          path: mobile/android/app/build/outputs/apk/release/orca-app-release.apk
 
       - name: Ensure GitHub release tag
         if: steps.release.outputs.publish_release == 'true' && !startsWith(github.ref, 'refs/tags/mobile-android-v')
@@ -102,7 +111,7 @@ jobs:
             gh release upload "$tag" \
               --repo "$GITHUB_REPOSITORY" \
               --clobber \
-              android/app/build/outputs/apk/release/*.apk
+              android/app/build/outputs/apk/release/orca-app-release.apk
           else
             gh release create "$tag" \
               --repo "$GITHUB_REPOSITORY" \
@@ -110,5 +119,5 @@ jobs:
               --prerelease \
               --latest=false \
               --generate-notes \
-              android/app/build/outputs/apk/release/*.apk
+              android/app/build/outputs/apk/release/orca-app-release.apk
           fi
