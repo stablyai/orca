@@ -9,7 +9,9 @@ import type {
 } from '../../../../shared/ai-vault-types'
 import type { ExecutionHostScope } from '../../../../shared/execution-host'
 import { VaultHostScopeMenu, VaultScopeSwitch, VaultViewMenu } from './AiVaultPanelControls'
+import { AiVaultSearchStatus } from './AiVaultSearchStatus'
 import type { AiVaultHostScopeOption } from './ai-vault-host-scope'
+import type { AiVaultSessionSearchView } from './ai-vault-session-search-results'
 import type { AiVaultSessionLimit } from './ai-vault-session-limit'
 
 type AiVaultPanelHeaderProps = {
@@ -40,6 +42,7 @@ type AiVaultPanelHeaderProps = {
   onSessionLimitChange: (limit: AiVaultSessionLimit) => void
   onReset: () => void
   onRefresh: () => void
+  search: AiVaultSessionSearchView
 }
 
 export function AiVaultPanelHeader({
@@ -69,7 +72,8 @@ export function AiVaultPanelHeader({
   onHideEmptySessionsChange,
   onSessionLimitChange,
   onReset,
-  onRefresh
+  onRefresh,
+  search
 }: AiVaultPanelHeaderProps): React.JSX.Element {
   return (
     <div className="shrink-0 border-b border-sidebar-border px-2.5 py-2">
@@ -194,6 +198,14 @@ export function AiVaultPanelHeader({
           </Button>
         ) : null}
       </div>
+
+      {search.active ? (
+        <AiVaultSearchStatus
+          coverage={search.coverage}
+          newestFirst={search.newestFirst}
+          onNewestFirstChange={search.setNewestFirst}
+        />
+      ) : null}
     </div>
   )
 }

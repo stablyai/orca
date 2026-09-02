@@ -18,10 +18,19 @@ import type {
   AiVaultPrepareSessionResumeArgs,
   AiVaultPrepareSessionResumeResult
 } from '../../shared/ai-vault-resume-preparation'
+import type {
+  AiVaultSearchArgs,
+  AiVaultSearchCoverage,
+  AiVaultSearchResult
+} from '../../shared/ai-vault-search-types'
 
 export type AiVaultApi = {
   listSessions: (args?: AiVaultListArgs) => Promise<AiVaultListResult>
   resolveSessionTitles: (args: AiVaultSessionTitlesArgs) => Promise<AiVaultSessionTitlesResult>
+  /** Full-text search over indexed transcripts on the local host. */
+  searchSessions: (args: AiVaultSearchArgs) => Promise<AiVaultSearchResult>
+  /** How much of the transcript corpus the search index currently covers. */
+  searchCoverage: () => Promise<AiVaultSearchCoverage>
   cancelListSessions: (args: { requestToken: string }) => Promise<void>
   prepareSessionResume: (
     args: AiVaultPrepareSessionResumeArgs

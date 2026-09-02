@@ -1,6 +1,7 @@
 import { useVirtualizer } from '@tanstack/react-virtual'
 import { useCallback, useMemo, useRef, useState } from 'react'
 import type { AgentStatusState } from '../../../../shared/agent-status-types'
+import type { AiVaultSearchEvidence } from '../../../../shared/ai-vault-search-types'
 import type { AiVaultScope, AiVaultSession } from '../../../../shared/ai-vault-types'
 import type { AiVaultResumeStartup } from '@/lib/ai-vault-resume-command'
 import { cn } from '@/lib/utils'
@@ -56,6 +57,7 @@ export function AiVaultSessionVirtualList({
   getWorktreeInfo,
   getSessionResumeState,
   getSessionResumeActions,
+  getSearchEvidence,
   onToggleGroup,
   onJumpToOriginalPane,
   onJumpToWorktree,
@@ -83,6 +85,8 @@ export function AiVaultSessionVirtualList({
   getWorktreeInfo: (session: AiVaultSession) => AiVaultSessionWorktreeInfo | null
   getSessionResumeState: (session: AiVaultSession) => AiVaultSessionResumeState
   getSessionResumeActions: (session: AiVaultSession) => AiVaultSessionResumeActions
+  /** Search results only: the matched transcript line rendered under a row. */
+  getSearchEvidence?: (session: AiVaultSession) => AiVaultSearchEvidence | null
   onToggleGroup: (key: string) => void
   onJumpToOriginalPane: (session: AiVaultSession) => void
   onJumpToWorktree: (worktreeId: string) => void
@@ -219,6 +223,7 @@ export function AiVaultSessionVirtualList({
               getWorktreeInfo={getWorktreeInfo}
               getSessionResumeState={getSessionResumeState}
               getSessionResumeActions={getSessionResumeActions}
+              getSearchEvidence={getSearchEvidence}
               onToggleGroup={onToggleGroup}
               onToggleSessionDetails={toggleSessionDetails}
               onJumpToOriginalPane={onJumpToOriginalPane}
@@ -255,6 +260,7 @@ function AiVaultVirtualRow({
   getWorktreeInfo,
   getSessionResumeState,
   getSessionResumeActions,
+  getSearchEvidence,
   onToggleGroup,
   onToggleSessionDetails,
   onJumpToOriginalPane,
@@ -283,6 +289,8 @@ function AiVaultVirtualRow({
   getWorktreeInfo: (session: AiVaultSession) => AiVaultSessionWorktreeInfo | null
   getSessionResumeState: (session: AiVaultSession) => AiVaultSessionResumeState
   getSessionResumeActions: (session: AiVaultSession) => AiVaultSessionResumeActions
+  /** Search results only: the matched transcript line rendered under a row. */
+  getSearchEvidence?: (session: AiVaultSession) => AiVaultSearchEvidence | null
   onToggleGroup: (key: string) => void
   onToggleSessionDetails: (sessionId: string) => void
   onJumpToOriginalPane: (session: AiVaultSession) => void
@@ -360,6 +368,7 @@ function AiVaultVirtualRow({
           worktreeInfo={worktreeInfo}
           vaultScope={vaultScope}
           detailsExpanded={expandedSessionIds.has(row.session.id)}
+          searchEvidence={getSearchEvidence?.(row.session) ?? null}
           resumeDisabled={resumeGating.resumeDisabled}
           resumeLabel={resumeLabel}
           resumeActions={

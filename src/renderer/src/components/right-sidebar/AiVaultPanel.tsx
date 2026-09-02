@@ -50,6 +50,7 @@ import { usePersistedAiVaultViewOptions } from './use-persisted-ai-vault-view-op
 import { AgentSessionContinuationDialog } from '@/components/agent-session-continuation/AgentSessionContinuationDialog'
 import { AiVaultScanIssueBanners } from './AiVaultScanIssueBanners'
 import { useAiVaultSessionDeleteAction } from './ai-vault-session-delete-action'
+import { useAiVaultSessionSearchResults } from './ai-vault-session-search-results'
 
 export default function AiVaultPanel(): React.JSX.Element {
   const activeWorktreeId = useActiveWorktreeId()
@@ -306,13 +307,25 @@ export default function AiVaultPanel(): React.JSX.Element {
   }, [])
 
   const requestDelete = useAiVaultSessionDeleteAction({ refresh })
+  const search = useAiVaultSessionSearchResults({
+    query,
+    agents,
+    // 'All' must not be narrowed; the scoped views restrict the index the same way they restrict the scan.
+    scopePaths: scope === 'all' ? [] : scope === 'workspace' ? activeWorktreePaths : scopePaths,
+    executionHostScope,
+    sessions,
+    worktrees: allWorktrees,
+    repos
+  })
 
   return (
     <div className="@container/ai-vault flex h-full min-h-0 flex-col bg-sidebar">
       <AiVaultPanelHeader
         query={query}
         loading={loading}
-        shownCount={filteredSessions.length}
+        shownCount={
+          search.active ? search.listCounts.filteredSessionsCount : filteredSessions.length
+        }
         sessionCount={sessions.length}
         hasScanResult={Boolean(scanResult)}
         activeWorktreePath={activeWorktreePath}
@@ -337,28 +350,32 @@ export default function AiVaultPanel(): React.JSX.Element {
         onSessionLimitChange={setSessionLimit}
         onReset={resetViewOptions}
         onRefresh={() => void refresh({ force: true })}
+        search={search}
       />
 
-      {error ? (
+      {(error ?? search.error) ? (
         <div className="border-b border-sidebar-border px-3 py-2 text-xs text-destructive">
-          {error}
+          {error ?? search.error}
         </div>
       ) : null}
 
       <AiVaultScanIssueBanners scanResult={scanResult} />
 
       <AiVaultSessionVirtualList
-        groups={groups}
+        groups={search.active ? search.groups : groups}
         collapsedGroups={collapsedGroups}
-        loading={loading}
-        sessionsCount={sessions.length}
-        filteredSessionsCount={filteredSessions.length}
+        loading={loading || search.loading}
+        sessionsCount={search.active ? search.listCounts.sessionsCount : sessions.length}
+        filteredSessionsCount={
+          search.active ? search.listCounts.filteredSessionsCount : filteredSessions.length
+        }
         noAgentsSelected={agents.length === 0}
         error={error}
         vaultScope={scope}
         buildResumeStartup={launchActions.buildResumeStartup}
         getSessionResumeState={getSessionResumeState}
         getSessionResumeActions={getSessionResumeActions}
+        getSearchEvidence={search.active ? search.evidenceFor : undefined}
         getOriginalPaneTarget={getOriginalPaneTarget}
         getSessionLiveState={getSessionLiveState}
         getWorktreeInfo={getSessionWorktreeInfo}

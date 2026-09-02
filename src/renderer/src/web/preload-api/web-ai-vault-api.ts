@@ -8,6 +8,11 @@ import type {
   AiVaultSessionTitlesArgs,
   AiVaultSessionTitlesResult
 } from '../../../../shared/ai-vault-session-title'
+import type {
+  AiVaultSearchArgs,
+  AiVaultSearchCoverage,
+  AiVaultSearchResult
+} from '../../../../shared/ai-vault-search-types'
 import type { AiVaultListArgs, AiVaultListResult } from '../../../../shared/ai-vault-types'
 import {
   normalizeExecutionHostScope,
@@ -36,6 +41,19 @@ export function createWebAiVaultApi(): NonNullable<Partial<PreloadApi>['aiVault'
         force: args?.force,
         scopePaths: args?.scopePaths,
         executionHostId
+      })
+    },
+    searchSessions: (args: AiVaultSearchArgs) => {
+      const environment = requireActiveEnvironment()
+      return callRuntimeResult<AiVaultSearchResult>('aiVault.searchSessions', {
+        ...args,
+        executionHostId: toRuntimeExecutionHostId(environment.id)
+      })
+    },
+    searchCoverage: () => {
+      const environment = requireActiveEnvironment()
+      return callRuntimeResult<AiVaultSearchCoverage>('aiVault.searchCoverage', {
+        executionHostId: toRuntimeExecutionHostId(environment.id)
       })
     },
     resolveSessionTitles: (args: AiVaultSessionTitlesArgs) => {

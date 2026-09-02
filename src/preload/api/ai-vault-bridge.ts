@@ -11,11 +11,15 @@ import type {
 import type { AiVaultSessionTitlesArgs } from '../../shared/ai-vault-session-title'
 import type { AiVaultPrepareSessionResumeArgs } from '../../shared/ai-vault-resume-preparation'
 import type { PreloadApi } from '../api-types'
+import type { AiVaultSearchArgs } from '../../shared/ai-vault-search-types'
 
 export const aiVaultApi = {
   listSessions: (args?: AiVaultListArgs) => ipcRenderer.invoke('aiVault:listSessions', args),
   resolveSessionTitles: (args: AiVaultSessionTitlesArgs) =>
     ipcRenderer.invoke('aiVault:resolveSessionTitles', args),
+  searchSessions: (args: AiVaultSearchArgs): Promise<unknown> =>
+    ipcRenderer.invoke('aiVault:searchSessions', args),
+  searchCoverage: (): Promise<unknown> => ipcRenderer.invoke('aiVault:searchCoverage'),
   cancelListSessions: (args: { requestToken: string }): Promise<void> =>
     ipcRenderer.invoke('aiVault:cancelListSessions', args),
   prepareSessionResume: (args: AiVaultPrepareSessionResumeArgs) =>
