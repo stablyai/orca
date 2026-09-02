@@ -100,6 +100,29 @@ export function buildWorkItemListRequest(args: {
   return { args: out, offset: (page - 1) * limit }
 }
 
+// Why REST instead of Search for the default (no-query) listing: the Search
+// API answers HTTP 200 with zero items when the authenticated gh account
+// cannot see the repo, so an account switch or re-login silently empties the
+// Tasks list with nothing to act on (#16244). The REST listing fails with a
+// classifiable 403/404 instead, letting the existing error envelope explain
+// the empty state.
+export function buildRecentIssueListRequest(args: {
+  ownerRepo: OwnerRepo
+  limit: number
+  page: number
+}): WorkItemListRequest {
+  const { ownerRepo, limit, page } = args
+  return {
+    args: [
+      'api',
+      '--cache',
+      '120s',
+      `repos/${ownerRepo.owner}/${ownerRepo.repo}/issues?per_page=${limit}&page=${page}&state=open&sort=created&direction=desc`
+    ],
+    offset: 0
+  }
+}
+
 // Why: shared shape so listWorkItems can lift per-side errors (#1076 silent wrongness) into the IPC envelope — a swallowed side reads as end-of-data to pagination (#11485).
 export type PartialWorkItemsResult = {
   items: MainWorkItem[]
