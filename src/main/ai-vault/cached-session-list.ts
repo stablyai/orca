@@ -1,14 +1,22 @@
 import { join } from 'node:path'
 import {
   clearAiVaultBackgroundRestartCircuit,
+  readAiVaultSearchCoverageInBackground,
   resetAiVaultScannerBackgroundForTests,
-  scanAiVaultSessionsInBackground
+  scanAiVaultSessionsInBackground,
+  searchAiVaultSessionsInBackground
 } from './session-scanner-background'
 import { listRunningWslHomeDirsAsync } from '../wsl'
 import { filterPathsToRunningWslDistrosAsync } from '../wsl-running-path-filter'
 import type { AiVaultListArgs, AiVaultListResult } from '../../shared/ai-vault-types'
+import type {
+  AiVaultSearchArgs,
+  AiVaultSearchCoverage,
+  AiVaultSearchResult
+} from '../../shared/ai-vault-search-types'
 import { LOCAL_EXECUTION_HOST_ID } from '../../shared/execution-host'
 import { AiVaultScanCoordinator } from './ai-vault-scan-coordinator'
+import type { AiVaultWorkerScanOptions } from './session-scanner-worker-protocol'
 import {
   aiVaultSessionDepthCovers,
   requestedAiVaultSessionDepth,
@@ -49,6 +57,39 @@ export function configureAiVaultSessionSources(next: AiVaultSessionSources): voi
   sources = next
 }
 
+/** Host-local source roots every scan of this machine shares (managed Codex homes, WSL homes). */
+export async function resolveAiVaultHostScanSources(): Promise<
+  Pick<AiVaultWorkerScanOptions, 'additionalCodexSessionsDirs' | 'wslHomeDirs' | 'executionHostId'>
+> {
+  const configuredCodexHomes = sources.getAdditionalCodexHomePaths?.() ?? []
+  const [additionalCodexHomes, wslHomeDirs] = await Promise.all([
+    filterPathsToRunningWslDistrosAsync(configuredCodexHomes),
+    getAiVaultWslHomeDirs()
+  ])
+  return {
+    additionalCodexSessionsDirs: additionalCodexHomes.map((homePath) => join(homePath, 'sessions')),
+    wslHomeDirs,
+    // Why: this scan is always host-local; callers addressing this host by a
+    // runtime id get the result restamped at the RPC edge, never rescanned.
+    executionHostId: LOCAL_EXECUTION_HOST_ID
+  }
+}
+
+export async function searchAiVaultSessions(
+  args: AiVaultSearchArgs,
+  options: { signal?: AbortSignal } = {}
+): Promise<AiVaultSearchResult> {
+  const roots = await resolveAiVaultHostScanSources()
+  return searchAiVaultSessionsInBackground({ args, roots }, options.signal)
+}
+
+export async function readAiVaultSearchCoverage(
+  options: { signal?: AbortSignal } = {}
+): Promise<AiVaultSearchCoverage> {
+  const roots = await resolveAiVaultHostScanSources()
+  return readAiVaultSearchCoverageInBackground({ roots }, options.signal)
+}
+
 export async function listAiVaultSessions(
   args?: AiVaultListArgs,
   options: { signal?: AbortSignal } = {}
@@ -80,24 +121,12 @@ export async function listAiVaultSessions(
     force: args?.force,
     signal: options.signal,
     start: async (scanSignal) => {
-      const configuredCodexHomes = sources.getAdditionalCodexHomePaths?.() ?? []
-      const [additionalCodexHomes, wslHomeDirs] = await Promise.all([
-        filterPathsToRunningWslDistrosAsync(configuredCodexHomes),
-        getAiVaultWslHomeDirs()
-      ])
-      const additionalCodexSessionsDirs = additionalCodexHomes.map((homePath) =>
-        join(homePath, 'sessions')
-      )
       const result = await scanAiVaultSessionsInBackground(
         {
           limit: args?.limit,
           unlimited: args?.unlimited,
           scopePaths: args?.scopePaths,
-          additionalCodexSessionsDirs,
-          wslHomeDirs,
-          // Why: this scan is always host-local; callers addressing this host by a
-          // runtime id get the result restamped at the RPC edge, never rescanned.
-          executionHostId: LOCAL_EXECUTION_HOST_ID
+          ...(await resolveAiVaultHostScanSources())
         },
         scanSignal
       )

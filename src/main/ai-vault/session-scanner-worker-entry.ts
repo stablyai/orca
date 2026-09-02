@@ -4,6 +4,7 @@ import type {
   AiVaultSessionTitleRequest
 } from '../../shared/ai-vault-session-title'
 import { scanAiVaultSessions } from './session-scanner'
+import { SessionSearchService } from '../ai-vault-search/session-search-service'
 import { initSessionParseCachePersistence } from './session-parse-cache-persistence'
 import { readAiVaultSessionTitlesFromFiles } from './session-title-file-reader'
 import { resolveHostReadableAiVaultTitleRequests } from './session-title-request-paths'
@@ -24,6 +25,7 @@ const data = workerData as AiVaultWorkerData | undefined
 if (data?.sessionParseCache) {
   initSessionParseCachePersistence(data.sessionParseCache)
 }
+const sessionSearch = data?.sessionSearch ? new SessionSearchService(data.sessionSearch) : null
 const controllers = new Map<number, AbortController>()
 const titleIndex = new Map<string, AiVaultSessionTitle>()
 
@@ -65,6 +67,28 @@ async function handleRequest(request: AiVaultWorkerRequest): Promise<AiVaultWork
           }
         })
       }
+    }
+    if (request.kind === 'search' || request.kind === 'searchCoverage') {
+      if (!sessionSearch) {
+        throw new Error('Agent session search is not enabled on this host.')
+      }
+      return request.kind === 'search'
+        ? {
+            id: request.id,
+            ok: true,
+            kind: 'search',
+            value: await sessionSearch.search(
+              request.request.args,
+              request.request.roots,
+              controller.signal
+            )
+          }
+        : {
+            id: request.id,
+            ok: true,
+            kind: 'searchCoverage',
+            value: sessionSearch.coverage(request.request.roots)
+          }
     }
     const startedAt = performance.now()
     const result = await scanAiVaultSessions({ ...request.options, signal: controller.signal })

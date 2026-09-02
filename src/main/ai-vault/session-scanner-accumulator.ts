@@ -23,6 +23,7 @@ import {
   normalizePreviewText,
   timestampMs
 } from './session-scanner-values'
+import { captureIndexableContent, captureIndexableText } from './session-search-content'
 
 const SESSION_PREVIEW_MESSAGE_LIMIT = 5
 
@@ -161,6 +162,8 @@ export function addPreviewMessage(
     // Why: Claude meta/injected turns still preview, but must not seed the
     // copyable first-prompt row.
     seedFirstUserPrompt?: boolean
+    // Set by addPreviewContent, which already captured the search rows.
+    indexedByContent?: boolean
   }
 ): void {
   // Seeded before the preview-empty return so the copy body never depends on
@@ -171,6 +174,11 @@ export function addPreviewMessage(
     () => (args.text ? normalizeFullFirstUserPromptText(args.text) : null),
     args.seedFirstUserPrompt
   )
+  // Search rows ride the same funnel every parser already feeds; the content
+  // path below captures its own richer (tool-aware) rows before reaching here.
+  if (!args.indexedByContent) {
+    captureIndexableText(args.role, args.text, args.timestamp)
+  }
   const text = normalizePreviewText(args.text ?? '')
   if (!text) {
     return
@@ -199,12 +207,14 @@ export function addPreviewContent(
     () => extractFullFirstUserPromptText(content),
     options?.seedFirstUserPrompt
   )
+  captureIndexableContent(role, content, timestamp)
   addPreviewMessage(accumulator, {
     role,
     text: extractPreviewContentText(content),
     timestamp,
     // Content path already seeded above when capture is enabled.
-    seedFirstUserPrompt: false
+    seedFirstUserPrompt: false,
+    indexedByContent: true
   })
 }
 

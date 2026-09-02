@@ -95,7 +95,33 @@ function contentItemText(item: unknown): string | null {
     return null
   }
 
+  if (record.type === 'tool_use') {
+    return toolUseText(record)
+  }
   return nonBlankString(record.text) ?? nonBlankString(record.content)
+}
+
+// Why: a tool call names the command the agent ran; without it an
+// assistant turn that only invokes tools reads as empty, and "which session
+// ran this" is unanswerable. Bounded so a huge Write payload cannot dominate.
+const TOOL_USE_INPUT_SCAN_LIMIT = 512
+
+function toolUseText(record: Record<string, unknown>): string | null {
+  const name = nonBlankString(record.name)
+  const input = objectRecord(record.input)
+  const argument = input
+    ? (nonBlankString(input.command) ??
+      nonBlankString(input.file_path) ??
+      nonBlankString(input.path) ??
+      nonBlankString(input.pattern) ??
+      nonBlankString(input.query) ??
+      nonBlankString(input.description))
+    : null
+  if (!name && !argument) {
+    return null
+  }
+  const argumentText = argument ? sliceAtCodeUnitLimit(argument, TOOL_USE_INPUT_SCAN_LIMIT) : null
+  return name && argumentText ? `${name}: ${argumentText}` : (name ?? argumentText)
 }
 
 function nonBlankString(value: unknown): string | null {

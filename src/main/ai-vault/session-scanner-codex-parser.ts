@@ -29,12 +29,17 @@ import {
   extractModel,
   extractString,
   normalizeCodexUsage,
-  normalizeTitleText,
   parseJsonObject,
   subtractCodexUsage
 } from './session-scanner-values'
 import { remoteSessionContentLines } from './remote-session-content-lines'
 import { readCodexTimelineOnlyRecord } from './session-scanner-codex-record-fast-path'
+import { captureCodexToolRecord } from './session-search-codex-tool-records'
+import { isSessionSearchCaptureActive } from './session-search-capture'
+import {
+  extractCodexSessionMetadataTitle,
+  isCodexWorkerSession
+} from './session-scanner-codex-session-meta'
 
 export async function parseCodexSessionFile(
   file: FileWithMtime,
@@ -167,6 +172,8 @@ function consumeCodexRecordLine(state: CodexSessionParseState, line: string): vo
     return
   }
 
+  captureCodexToolRecord(record.type, payload, record.timestamp, state.historyMode)
+
   if (record.type === 'response_item' && payload.type === 'message') {
     if (state.historyMode === 'paginated') {
       return
@@ -272,7 +279,10 @@ function codexResumeStateFromParseState(
   return {
     consumeLine: (line) => consumeCodexRecordLine(state, line),
     consumeLineBytes: (line) => {
-      const timelineOnlyRecord = readCodexTimelineOnlyRecord(line)
+      // The prefix fast path skips exactly the tool records the search index wants.
+      const timelineOnlyRecord = isSessionSearchCaptureActive()
+        ? null
+        : readCodexTimelineOnlyRecord(line)
       if (timelineOnlyRecord) {
         updateTimeline(state.accumulator, timelineOnlyRecord.timestamp)
       } else {
@@ -313,22 +323,4 @@ async function parseCodexSessionLines(args: {
     executionHostId: args.executionHostId,
     executionHostPlatform: args.executionHostPlatform
   })
-}
-
-function isCodexWorkerSession(payload: Record<string, unknown>): boolean {
-  const threadSource = extractString(payload.thread_source) ?? extractString(payload.threadSource)
-  if (threadSource) {
-    return threadSource.toLowerCase() !== 'user'
-  }
-
-  const source = asRecord(payload.source)
-  return Boolean(asRecord(source?.subagent))
-}
-
-function extractCodexSessionMetadataTitle(payload: Record<string, unknown>): string | null {
-  return (
-    normalizeTitleText(extractString(payload.title) ?? '') ??
-    normalizeTitleText(extractString(payload.thread_name) ?? '') ??
-    normalizeTitleText(extractString(payload.threadName) ?? '')
-  )
 }

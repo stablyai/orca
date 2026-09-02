@@ -13,16 +13,24 @@ import {
   invalidateAiVaultServiceCache,
   listAiVaultSubagentSessionsInService,
   readAiVaultFirstUserPromptInService,
+  readAiVaultSearchCoverageInService,
   resetAiVaultScannerServiceForTests,
   resolveAiVaultSessionTitlesInService,
-  scanAiVaultSessionsInService
+  scanAiVaultSessionsInService,
+  searchAiVaultSessionsInService
 } from './session-scanner-service-spawn'
-import type { AiVaultServiceSubagentRequest } from './session-scanner-service-protocol'
+import type {
+  AiVaultServiceSearchRequest,
+  AiVaultServiceSubagentRequest
+} from './session-scanner-service-protocol'
 import {
+  readAiVaultSearchCoverageInWorker,
   resetAiVaultScannerWorkerForTests,
   resolveAiVaultSessionTitlesInWorker,
-  scanAiVaultSessionsInWorker
+  scanAiVaultSessionsInWorker,
+  searchAiVaultSessionsInWorker
 } from './session-scanner-worker-spawn'
+import type { AiVaultSearchCoverage, AiVaultSearchResult } from '../../shared/ai-vault-search-types'
 import type { AiVaultWorkerScanOptions } from './session-scanner-worker-protocol'
 import { listLocalAiVaultSubagentSessions } from './session-subagent-reader'
 
@@ -76,6 +84,24 @@ export function readAiVaultFirstUserPromptInBackground(
   return shouldUseAiVaultServiceProcess()
     ? readAiVaultFirstUserPromptInService(request)
     : readAiVaultFirstUserPrompt(request)
+}
+
+export function searchAiVaultSessionsInBackground(
+  request: AiVaultServiceSearchRequest,
+  signal?: AbortSignal
+): Promise<AiVaultSearchResult> {
+  return shouldUseAiVaultServiceProcess()
+    ? searchAiVaultSessionsInService(request, signal)
+    : searchAiVaultSessionsInWorker(request, signal)
+}
+
+export function readAiVaultSearchCoverageInBackground(
+  request: Pick<AiVaultServiceSearchRequest, 'roots'>,
+  signal?: AbortSignal
+): Promise<AiVaultSearchCoverage> {
+  return shouldUseAiVaultServiceProcess()
+    ? readAiVaultSearchCoverageInService(request, signal)
+    : readAiVaultSearchCoverageInWorker(request)
 }
 
 export function invalidateAiVaultBackgroundCache(paths: string[]): Promise<void> {

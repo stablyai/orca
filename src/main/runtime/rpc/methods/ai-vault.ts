@@ -3,6 +3,10 @@ import { defineMethod, type RpcMethod } from '../core'
 import { OptionalBoolean } from '../schemas'
 import { restampAiVaultListResult } from '../../../ai-vault/session-list-results'
 import { AI_VAULT_AGENTS, AI_VAULT_SCOPE_PATHS_MAX_COUNT } from '../../../../shared/ai-vault-types'
+import {
+  AI_VAULT_SEARCH_LIMIT_MAX,
+  AI_VAULT_SEARCH_QUERY_MAX_LENGTH
+} from '../../../../shared/ai-vault-search-types'
 import { AI_VAULT_SESSION_TITLE_REQUEST_MAX_COUNT } from '../../../../shared/ai-vault-session-title'
 import type { AiVaultPrepareSessionResumeArgs } from '../../../../shared/ai-vault-resume-preparation'
 import { LOCAL_EXECUTION_HOST_ID, parseExecutionHostId } from '../../../../shared/execution-host'
@@ -80,7 +84,35 @@ export const AiVaultSessionTitlesParams = z.object({
     .max(AI_VAULT_SESSION_TITLE_REQUEST_MAX_COUNT)
 })
 
+export const AiVaultSearchSessionsParams = z.object({
+  query: z.string().trim().min(1).max(AI_VAULT_SEARCH_QUERY_MAX_LENGTH),
+  limit: z.number().int().min(1).max(AI_VAULT_SEARCH_LIMIT_MAX).optional(),
+  agents: z.array(z.enum(AI_VAULT_AGENTS)).max(AI_VAULT_AGENTS.length).optional(),
+  scopePaths: z
+    .array(z.string().min(1).max(AI_VAULT_SCOPE_PATH_MAX_LENGTH))
+    .transform((paths) => paths.slice(0, AI_VAULT_SCOPE_PATHS_MAX_COUNT))
+    .optional(),
+  since: z.string().datetime({ offset: true }).optional(),
+  sort: z.enum(['relevance', 'newest']).optional(),
+  tier: z.enum(['full', 'conversation']).optional(),
+  refresh: OptionalBoolean,
+  executionHostId: executionHostIdSchema.optional()
+})
+
 export const AI_VAULT_METHODS: RpcMethod[] = [
+  defineMethod({
+    name: 'aiVault.searchSessions',
+    params: AiVaultSearchSessionsParams,
+    // Why: the index lives with the transcripts, so this runs on the host the
+    // client addressed; the id only names that host, it never redirects the search.
+    handler: ({ executionHostId: _host, ...params }, { runtime, signal }) =>
+      runtime.searchAiVaultSessions(params, signal)
+  }),
+  defineMethod({
+    name: 'aiVault.searchCoverage',
+    params: z.object({ executionHostId: executionHostIdSchema.optional() }),
+    handler: (_params, { runtime, signal }) => runtime.readAiVaultSearchCoverage(signal)
+  }),
   defineMethod({
     name: 'aiVault.resolveSessionTitles',
     params: AiVaultSessionTitlesParams,

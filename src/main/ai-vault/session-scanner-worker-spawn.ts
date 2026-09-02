@@ -10,6 +10,9 @@ import { withSpan } from '../observability/tracer'
 import { getSessionParseCachePersistenceOptions } from './session-parse-cache-persistence'
 import { AiVaultScannerWorkerClient } from './session-scanner-worker-client'
 import type { AiVaultWorkerData, AiVaultWorkerScanOptions } from './session-scanner-worker-protocol'
+import type { AiVaultServiceSearchRequest } from './session-scanner-service-protocol'
+import { getSessionSearchInitOptions } from '../ai-vault-search/session-search-paths'
+import type { AiVaultSearchCoverage, AiVaultSearchResult } from '../../shared/ai-vault-search-types'
 
 const WORKER_ENTRY_FILENAME = 'session-scanner-worker-entry.js'
 
@@ -20,7 +23,8 @@ function defaultWorkerFactory(): Worker {
   }
   return new Worker(workerPath, {
     workerData: {
-      sessionParseCache: getSessionParseCachePersistenceOptions()
+      sessionParseCache: getSessionParseCachePersistenceOptions(),
+      sessionSearch: getSessionSearchInitOptions()
     } satisfies AiVaultWorkerData
   })
 }
@@ -49,6 +53,19 @@ export function resolveAiVaultSessionTitlesInWorker(
   signal?: AbortSignal
 ): Promise<AiVaultSessionTitlesResult> {
   return getSharedClient().resolveTitles(requests, signal)
+}
+
+export function searchAiVaultSessionsInWorker(
+  request: AiVaultServiceSearchRequest,
+  signal?: AbortSignal
+): Promise<AiVaultSearchResult> {
+  return getSharedClient().search(request, signal)
+}
+
+export function readAiVaultSearchCoverageInWorker(
+  request: Pick<AiVaultServiceSearchRequest, 'roots'>
+): Promise<AiVaultSearchCoverage> {
+  return getSharedClient().searchCoverage(request)
 }
 
 export function resetAiVaultScannerWorkerForTests(): void {

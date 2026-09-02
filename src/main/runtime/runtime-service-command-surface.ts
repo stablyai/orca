@@ -11,6 +11,8 @@ import type { RuntimeSubscriptionRegistry } from './runtime-subscription-registr
 
 export type RuntimeServiceCommandSurface = {
   listAiVaultSessions: RuntimeAiVaultCommands['list']
+  searchAiVaultSessions: RuntimeAiVaultCommands['search']
+  readAiVaultSearchCoverage: RuntimeAiVaultCommands['searchCoverage']
   resolveAiVaultSessionTitles: RuntimeAiVaultCommands['resolveTitles']
   prepareAiVaultSessionResume: RuntimeAiVaultCommands['prepare']
   onClientEvent: RuntimeClientEventBus['on']
@@ -90,6 +92,8 @@ export function installRuntimeServiceCommandSurface(
   const waiters = owners.messageWaiters
   Object.assign(target, {
     listAiVaultSessions: vault.list.bind(vault),
+    searchAiVaultSessions: vault.search.bind(vault),
+    readAiVaultSearchCoverage: vault.searchCoverage.bind(vault),
     resolveAiVaultSessionTitles: vault.resolveTitles.bind(vault),
     prepareAiVaultSessionResume: vault.prepare.bind(vault),
     onClientEvent: events.on.bind(events),

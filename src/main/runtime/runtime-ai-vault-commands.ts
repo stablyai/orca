@@ -7,7 +7,16 @@ import type {
   AiVaultSessionTitlesResult
 } from '../../shared/ai-vault-session-title'
 import type { AiVaultListArgs, AiVaultListResult } from '../../shared/ai-vault-types'
-import { listAiVaultSessions } from '../ai-vault/cached-session-list'
+import {
+  listAiVaultSessions,
+  readAiVaultSearchCoverage,
+  searchAiVaultSessions
+} from '../ai-vault/cached-session-list'
+import type {
+  AiVaultSearchArgs,
+  AiVaultSearchCoverage,
+  AiVaultSearchResult
+} from '../../shared/ai-vault-search-types'
 import { resolveLocalAiVaultSessionTitles } from '../ai-vault/session-title-resolver'
 
 export class RuntimeAiVaultCommands {
@@ -19,6 +28,14 @@ export class RuntimeAiVaultCommands {
 
   list(args?: AiVaultListArgs): Promise<AiVaultListResult> {
     return listAiVaultSessions(args)
+  }
+
+  search(args: AiVaultSearchArgs, signal?: AbortSignal): Promise<AiVaultSearchResult> {
+    return searchAiVaultSessions(args, { signal })
+  }
+
+  searchCoverage(signal?: AbortSignal): Promise<AiVaultSearchCoverage> {
+    return readAiVaultSearchCoverage({ signal })
   }
 
   resolveTitles(

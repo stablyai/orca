@@ -19,6 +19,7 @@ import {
 import { readAiVaultSessionTitlesFromFiles } from './session-title-file-reader'
 import { resolveHostReadableAiVaultTitleRequests } from './session-title-request-paths'
 import { listLocalAiVaultSubagentSessions } from './session-subagent-reader'
+import { SessionSearchService } from '../ai-vault-search/session-search-service'
 
 if (!process.send) {
   throw new Error('AI Vault service requires a parent IPC channel.')
@@ -29,6 +30,7 @@ const cancelled = new Set<number>()
 const pending = new Set<number>()
 const titleIndex = new Map<string, AiVaultSessionTitle>()
 const invalidatedPaths = new Set<string>()
+let sessionSearch: SessionSearchService | null = null
 let initialized = false
 let shuttingDown = false
 let cacheLane = Promise.resolve()
@@ -40,6 +42,13 @@ function send(message: AiVaultServiceChildMessage): void {
 
 function titleKey(request: { agent: string; sessionId: string }): string {
   return `${request.agent}\0${request.sessionId}`
+}
+
+function requireSessionSearch(): SessionSearchService {
+  if (!sessionSearch) {
+    throw new Error('Agent session search is not enabled on this host.')
+  }
+  return sessionSearch
 }
 
 async function executeRequest(request: AiVaultServiceRequest): Promise<AiVaultServiceResultValue> {
@@ -75,6 +84,22 @@ async function executeRequest(request: AiVaultServiceRequest): Promise<AiVaultSe
       return {
         operation: 'firstPrompt',
         value: await readAiVaultFirstUserPrompt(request.request)
+      }
+    }
+    if (request.operation === 'search') {
+      return {
+        operation: 'search',
+        value: await requireSessionSearch().search(
+          request.request.args,
+          request.request.roots,
+          controller.signal
+        )
+      }
+    }
+    if (request.operation === 'searchCoverage') {
+      return {
+        operation: 'searchCoverage',
+        value: requireSessionSearch().coverage(request.request.roots)
       }
     }
     const startedAt = performance.now()
@@ -151,6 +176,7 @@ async function shutdown(): Promise<void> {
   }
   await Promise.allSettled([cacheLane, interactiveLane])
   await flushSessionParseCachePersist()
+  sessionSearch?.dispose()
   process.disconnect?.()
 }
 
@@ -164,6 +190,13 @@ process.on('message', (raw: AiVaultServiceParentMessage) => {
     if (raw.sessionParseCache) {
       initSessionParseCachePersistence(raw.sessionParseCache)
     }
+    if (raw.sessionSearch) {
+      try {
+        sessionSearch = new SessionSearchService(raw.sessionSearch)
+      } catch (error) {
+        console.error('[ai-vault] session search index unavailable:', error)
+      }
+    }
     send({ type: 'ready', protocol: AI_VAULT_SERVICE_PROTOCOL_VERSION, pid: process.pid })
     return
   }
@@ -176,6 +209,7 @@ process.on('message', (raw: AiVaultServiceParentMessage) => {
     return
   }
   if (raw?.type === 'invalidate') {
+    sessionSearch?.invalidate(raw.paths)
     for (const path of raw.paths) {
       invalidatedPaths.delete(path)
       invalidatedPaths.add(path)
