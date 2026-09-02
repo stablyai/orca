@@ -17,7 +17,12 @@ import { createRequire } from 'node:module'
 import path from 'node:path'
 
 import { prepareDevCliTerminalWrappers } from './dev-cli-terminal-wrapper.mjs'
-import { isDevBundleInUse, selectStaleDevBundleDirs } from './dev-electron-bundle-cache.mjs'
+import {
+  DEV_BUNDLE_MARKER_FILENAME,
+  getDevBundleProcessTable,
+  isDevBundleInUse,
+  selectStaleDevBundleDirs
+} from './dev-electron-bundle-cache.mjs'
 import { copyPrivateTree } from './space-sharing-copy.mjs'
 import {
   DEV_BUNDLE_ID,
@@ -117,23 +122,6 @@ function sanitizeMacAppBundleName(value) {
   )
 }
 
-function getDevBundleProcessTable() {
-  // Not pgrep: macOS pgrep has no -a (a Linux procps extension) and silently prints bare PIDs,
-  // which reads as "nothing is running" and deletes a live bundle. -ww keeps the command column
-  // from being truncated. The raw text is searched directly; see dev-electron-bundle-cache.mjs
-  // for why it is deliberately not parsed into paths.
-  try {
-    return execFileSync('/bin/ps', ['-Awwo', 'command='], {
-      encoding: 'utf8',
-      stdio: ['ignore', 'pipe', 'ignore'],
-      timeout: 5000
-    })
-  } catch {
-    // Treating a failure as "nothing live" would risk deleting a running bundle, so skip pruning.
-    return null
-  }
-}
-
 function pruneStaleDevBundles(distDir) {
   const root = path.dirname(distDir)
   let bundles
@@ -144,7 +132,7 @@ function pruneStaleDevBundles(distDir) {
         const dir = path.join(root, entry.name)
         return {
           dir,
-          hasMarker: existsSync(path.join(dir, 'orca-dev-electron-app.json')),
+          hasMarker: existsSync(path.join(dir, DEV_BUNDLE_MARKER_FILENAME)),
           mtimeMs: getMtimeMs(dir)
         }
       })
@@ -204,7 +192,7 @@ function prepareMacDevElectronApp() {
   // and it sits outside the code signature, so varying it does not disturb the cdhash.
   const appBundleName = `${sanitizeMacAppBundleName(title)}.app`
   const appPath = path.join(distDir, appBundleName)
-  const markerPath = path.join(distDir, 'orca-dev-electron-app.json')
+  const markerPath = path.join(distDir, DEV_BUNDLE_MARKER_FILENAME)
   // Why: one stable id for every dev instance. Per-instance ids registered a
   // new macOS Notification Settings entry for each branch × Electron version,
   // piling up "Orca: <branch>" rows forever and breaking the notification

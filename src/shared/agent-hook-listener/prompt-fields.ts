@@ -146,7 +146,15 @@ export function resolveToolState(
     interactivePrompt: update.interactivePrompt,
     lastAssistantMessage: update.clearLastAssistantMessage
       ? undefined
-      : (update.lastAssistantMessage ?? previous.lastAssistantMessage)
+      : (update.lastAssistantMessage ?? previous.lastAssistantMessage),
+    // Why: the provenance flag has to move with the value it describes — inherit it
+    // only when the message itself is inherited, or a later prose turn keeps the
+    // previous tool result's flag and stays suppressed in native chat.
+    lastAssistantMessageIsToolOutput: update.clearLastAssistantMessage
+      ? undefined
+      : update.lastAssistantMessage === undefined
+        ? previous.lastAssistantMessageIsToolOutput
+        : update.lastAssistantMessageIsToolOutput
   }
   state.lastToolByPaneKey.set(paneKey, merged)
   return merged

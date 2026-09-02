@@ -2493,30 +2493,31 @@
         "https://github.com/stablyai/orca/issues/11298",
         "https://github.com/stablyai/orca/pull/11300"
       ],
-      "invariant": "Every accepted runtime socket installs message, pong, close, and error ownership before any heartbeat probe. With uninterrupted timer delivery, the first socket that arms an idle heartbeat is probed immediately and an unresponsive socket is reaped within one interval. Later sockets join the existing shared cadence without another timer or immediate sweep and are reaped within two intervals. Responsive sockets survive, pause recovery grants a fresh probe, and close or error-to-close releases connection listeners and timers.",
-      "oracle": "With one fake clock and exact socket identities, accept the first socket at 0 ms and require an immediate owned probe plus reaping at 100 ms when unresponsive. Keep a responsive first socket, accept an unresponsive later socket at 50 ms, require the same shared timer, its first probe at 100 ms, no early reap, and termination at 200 ms. Inject synchronous message, pong, close, and error events, then require exact heartbeat membership and zero retained timers/listeners after final close. Production transport tests independently cover real socket round trips, pre-auth and capacity bounds, revocation, shutdown, and half-open cleanup.",
+      "invariant": "Every accepted runtime socket installs message, pong, close, and error ownership before any heartbeat probe. Unauthenticated sockets receive no heartbeat control frames during E2EE and are bounded by the pre-auth timeout; authenticated sockets share one periodic cadence, tolerate missed probes and event-loop pause, and release listeners and timers on close or error.",
+      "oracle": "With one fake clock and exact socket identities, accept an authenticated first socket at 0 ms and require its first probe on the 100 ms tick. Accept an unauthenticated later socket at 50 ms and require no probe at the 100 ms tick; authenticate it, then require its first probe on the next shared tick and termination only after the configured consecutive-miss budget. Inject synchronous message, pong, close, and error events, then require exact heartbeat membership and zero retained timers/listeners after final close. Production transport tests independently cover real socket round trips, pre-auth and capacity bounds, revocation, shutdown, and half-open cleanup.",
       "commands": [
-        "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/rpc/ws-transport-accept-order.test.ts src/main/runtime/rpc/remote-runtime-server-heartbeat.test.ts src/main/runtime/rpc/ws-transport.test.ts"
+        "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/rpc/ws-transport-accept-order.test.ts src/main/runtime/rpc/remote-runtime-server-heartbeat.test.ts src/main/runtime/rpc/ws-transport.test.ts src/main/runtime/rpc/ws-transport-transient-packet-loss.test.ts"
       ],
       "testFiles": [
         "src/main/runtime/rpc/ws-transport-accept-order.test.ts",
         "src/main/runtime/rpc/remote-runtime-server-heartbeat.test.ts",
-        "src/main/runtime/rpc/ws-transport.test.ts"
+        "src/main/runtime/rpc/ws-transport.test.ts",
+        "src/main/runtime/rpc/ws-transport-transient-packet-loss.test.ts"
       ],
       "assertionRefs": [
         {
           "file": "src/main/runtime/rpc/ws-transport-accept-order.test.ts",
           "assertions": [
-            "the first synchronous probe observes message, pong, close, and error ownership",
-            "the first unresponsive socket is reaped at one interval",
-            "a later socket keeps the original shared timer, is first probed on the shared tick, and is reaped within two intervals",
+            "the first periodic probe observes message, pong, close, and error ownership",
+            "an authenticated unresponsive socket is reaped on the configured consecutive-miss budget",
+            "an unauthenticated later socket is not probed before authentication, then joins the original shared timer",
             "final close releases heartbeat membership, listeners, and timers"
           ]
         },
         {
           "file": "src/main/runtime/rpc/remote-runtime-server-heartbeat.test.ts",
           "assertions": [
-            "one missed probe reaps only the unresponsive client",
+            "a single missed probe does not reap the unresponsive client",
             "event-loop resume grants clients a fresh probe"
           ]
         },
@@ -2527,6 +2528,12 @@
             "pre-auth, raw TCP, and accepted WebSocket resource bounds remain enforced",
             "error and close races finalize membership once"
           ]
+        },
+        {
+          "file": "src/main/runtime/rpc/ws-transport-transient-packet-loss.test.ts",
+          "assertions": [
+            "an authenticated real WebSocket survives one swallowed pong and responds to later probes"
+          ]
         }
       ],
       "evidenceRuns": [
@@ -2534,10 +2541,10 @@
           "date": "2026-07-29",
           "runner": "local",
           "platform": "macos",
-          "command": "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/rpc/ws-transport-accept-order.test.ts src/main/runtime/rpc/remote-runtime-server-heartbeat.test.ts src/main/runtime/rpc/ws-transport.test.ts",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/rpc/ws-transport-accept-order.test.ts src/main/runtime/rpc/remote-runtime-server-heartbeat.test.ts src/main/runtime/rpc/ws-transport.test.ts src/main/runtime/rpc/ws-transport-transient-packet-loss.test.ts",
           "result": "passed",
           "durationSeconds": 0.91,
-          "summary": "Three runtime transport files and 35 tests passed with deterministic first- and later-socket cadence, exact listener/timer ownership, pause recovery, security bounds, and cleanup."
+          "summary": "Four runtime transport files and 42 tests passed with deterministic authenticated heartbeat cadence, handshake grace for later sockets, exact listener/timer ownership, pause recovery, transient packet-loss tolerance, security bounds, and cleanup."
         }
       ],
       "runtimeBudget": {
@@ -2550,7 +2557,7 @@
       },
       "redGreenEvidence": {
         "status": "complete",
-        "evidence": "On latest main and with the listener-order fix disabled, the first synchronous probe observed no message, pong, close, or error owner. The structural listener-order fix passed those assertions. The published delayed-first-sweep alternative missed the first-socket one-interval cleanup bound. A later-socket oracle now separately pins the intended shared cadence at a 100 ms first probe and 200 ms reap after acceptance at 50 ms."
+        "evidence": "On the candidate before this review fix, an authenticated first socket kept the shared timer alive while an unauthenticated socket accepted at 50 ms was pinged at the 100 ms tick; the new oracle failed. After filtering heartbeat clients to the authenticated transport map, the same byte-identical oracle passes: no pre-auth ping, first post-auth probe on the next shared tick, and bounded cleanup."
       },
       "performanceBudget": {
         "required": true,
@@ -16694,16 +16701,17 @@
       "providers": ["local-daemon"],
       "coveredPlatforms": ["linux"],
       "coveredProviders": ["local-daemon"],
-      "coverageNotes": "An Ubuntu 26.04 amd64 container extracts the packaged AppImage into disposable HOME and XDG directories, leaves APPDIR unset to preserve extracted-AppRun direct serve mode, waits for structured serve readiness, then exercises terminal-style foreground-process-group SIGINT and the documented systemd KillMode=mixed main-PID SIGTERM in separate containers. Local evidence runs under Rosetta on an arm64 Docker host; native amd64 PR CI repeats the same foreground AppRun identity contract.",
+      "coverageNotes": "An Ubuntu 26.04 amd64 container first launches the original AppImage through dbus-run-session and xvfb-run with startup diagnostics, then extracts the packaged AppImage into disposable HOME and XDG directories, leaves APPDIR unset to preserve extracted-AppRun direct serve mode, waits for structured serve readiness, and exercises terminal-style foreground-process-group SIGINT plus the documented systemd KillMode=mixed main-PID SIGTERM in separate containers. Local evidence runs under Rosetta on an arm64 Docker host; native amd64 PR CI repeats the same startup and foreground-AppRun identity contracts.",
       "motivatingLinks": [
         "https://github.com/stablyai/orca/issues/14109",
         "https://linear.app/stably/issue/STA-4051"
       ],
       "invariant": "After packaged foreground headless serve publishes structured readiness, one SIGINT or SIGTERM exits successfully without an Electron fatal trap or core evidence, releases the exact listener and owned Xvfb/process tree, and leaves an unrelated process identity untouched.",
-      "oracle": "For each signal, start a fresh unprivileged Ubuntu 26.04 container with disposable profile and runtime directories, a random loopback port, DISPLAY unset, software GL, and the extracted AppImage in a fresh session. Wait for orca_server_ready schema version 1, record the listener owner, process tree, owned Xvfb, and unrelated canary identities, deliver SIGINT to the foreground process group or the documented KillMode=mixed graceful SIGTERM to the AppRun PID, then require wait status zero, no Failed to shutdown, SIGTRAP, core, listener, recorded descendant, profile/AppImage/Xvfb residue, or changed canary identity. The 30-second bounds are failure deadlines, never success conditions.",
+      "oracle": "First start the original, readable-and-executable AppImage once in a fresh restricted Ubuntu 26.04 container through dbus-run-session -- xvfb-run -a --appimage-extract-and-run with ORCA_STARTUP_DIAGNOSTICS=1, and require the exact updater-setup-done marker within 90 seconds while fencing the launcher and owned Xvfb by PID start ticks. For each signal, start a separate unprivileged container with disposable profile and runtime directories, a random loopback port, DISPLAY unset, software GL, and the extracted AppImage in a fresh session. Wait for orca_server_ready schema version 1, record the listener owner, process tree, owned Xvfb, and unrelated canary identities, deliver SIGINT to the foreground process group or the documented KillMode=mixed graceful SIGTERM to the AppRun PID, then require wait status zero, no Failed to shutdown, SIGTRAP, core, listener, recorded descendant, profile/AppImage/Xvfb residue, or changed canary identity. The 30-second bounds are failure deadlines, never success conditions.",
       "commands": [
         "pnpm exec vitest run --config config/vitest.config.ts src/main/startup/ensure-virtual-display.test.ts config/scripts/headless-serve-shutdown-workflow.test.mjs --reporter=dot",
         "shellcheck config/docker/headless-serve-shutdown/run-signal-case.sh",
+        "shellcheck config/docker/headless-serve-shutdown/run-appimage-desktop-startup-case.sh",
         "node config/scripts/run-headless-serve-shutdown-docker.mjs --appimage dist/orca-linux.AppImage",
         "node config/scripts/run-headless-serve-shutdown-docker.mjs --appimage dist/orca-linux.AppImage --platform linux/amd64"
       ],
@@ -16711,7 +16719,8 @@
         "src/main/startup/ensure-virtual-display.test.ts",
         "config/scripts/headless-serve-shutdown-workflow.test.mjs",
         "config/scripts/run-headless-serve-shutdown-docker.mjs",
-        "config/docker/headless-serve-shutdown/run-signal-case.sh"
+        "config/docker/headless-serve-shutdown/run-signal-case.sh",
+        "config/docker/headless-serve-shutdown/run-appimage-desktop-startup-case.sh"
       ],
       "assertionRefs": [
         {
@@ -16728,15 +16737,19 @@
           "file": "config/scripts/headless-serve-shutdown-workflow.test.mjs",
           "assertions": [
             "PR CI builds an x64 AppImage before invoking the packaged shutdown oracle",
+            "the original AppImage desktop startup oracle is wired before extraction and signal cases",
+            "the bound AppImage is readable and executable before desktop launch and extraction",
             "the documented systemd unit uses KillMode=mixed so graceful TERM targets Orca before its owned Xvfb"
           ]
         },
         {
           "file": "config/scripts/run-headless-serve-shutdown-docker.mjs",
           "assertions": [
+            "the original AppImage startup runs through dbus-run-session and xvfb-run with a bounded diagnostics marker",
             "SIGINT and SIGTERM run in separate disposable containers",
             "both signal failures are reported before the oracle exits",
             "the exact AppImage SHA-256, entrypoint, and signal target are published",
+            "the read-only AppImage bind is checked for read and execute permissions before extraction",
             "the launcher exec overlay isolates the related STA-4017 signal boundary"
           ]
         },
@@ -16746,6 +16759,14 @@
             "SIGINT reaches the isolated foreground process group while owned Xvfb stays in its own group",
             "SIGTERM reaches the exact AppRun PID under the documented systemd KillMode=mixed policy",
             "target and descendant identities are fenced by PID start ticks before signaling and residue checks"
+          ]
+        },
+        {
+          "file": "config/docker/headless-serve-shutdown/run-appimage-desktop-startup-case.sh",
+          "assertions": [
+            "the original AppImage emits the exact updater-setup-done startup marker within 90 seconds",
+            "launcher and owned Xvfb identities are fenced by PID start ticks",
+            "cleanup sends bounded TERM then KILL signals and preserves failure logs"
           ]
         }
       ],
@@ -16767,11 +16788,20 @@
           "result": "passed",
           "durationSeconds": 48,
           "summary": "The extracted candidate AppRun passed process-group SIGINT and systemd-mixed main-PID SIGTERM under Ubuntu 26.04 amd64 emulation with status zero, no fatal evidence, full listener/Xvfb/tree cleanup, and an unchanged canary identity."
+        },
+        {
+          "date": "2026-08-31",
+          "runner": "ci",
+          "platform": "linux",
+          "command": "node config/scripts/run-headless-serve-shutdown-docker.mjs --appimage dist/orca-linux.AppImage --platform linux/amd64",
+          "result": "passed",
+          "durationSeconds": 1336,
+          "summary": "Native-amd64 PR package job https://github.com/stablyai/orca/actions/runs/33360129768/job/99389831915 built AppImage SHA-256 999d43bfe123e87a77fe917a5f46be1efd5c45a5205f99f02998a75136d8a793 and ran the restricted original-AppImage startup oracle before each of the three signal matrices. Each startup reached the exact updater-setup-done marker with stable launcher/Xvfb PID-start-tick identities and bounded TERM/KILL cleanup; SIGINT and SIGTERM then returned wait status 0 with no fatal evidence, listener, descendant, Xvfb, or canary residue. This is CI evidence only; no fresh local Docker oracle is claimed."
         }
       ],
       "runtimeBudget": {
-        "p95Seconds": 240,
-        "scope": "two fresh Ubuntu 26.04 containers, one per foreground signal"
+        "p95Seconds": 1800,
+        "scope": "three AppImage startup/extraction matrices, each with fresh Ubuntu 26.04 INT and TERM containers"
       },
       "flakeHistory": {
         "status": "not-started",
@@ -16797,6 +16827,105 @@
         "The harness exercises foreground headless Linux shutdown and does not replace desktop, updater, SSH, or detached PTY lifecycle coverage."
       ],
       "demotionRule": "Keep experimental or demote if either signal traps, returns nonzero, retains its listener/Xvfb/run-owned process identity, touches the unrelated canary, or the focused gate flakes without an identified product or harness defect."
+    },
+    {
+      "id": "runtime.linux-cli-launch-contract",
+      "title": "Packaged Linux CLI commands run without FUSE, user namespaces, or a display",
+      "maturity": "experimental",
+      "protection": "partial",
+      "owner": "runtime-platform",
+      "layer": "appimage-cli-entrypoint",
+      "surfaces": [
+        "packaged Linux AppImage",
+        "bundled CLI launcher",
+        "extracted direct binary",
+        "desktop launch diagnosis"
+      ],
+      "platforms": ["linux"],
+      "providers": ["local-daemon"],
+      "coveredPlatforms": ["linux"],
+      "coveredProviders": ["local-daemon"],
+      "coverageNotes": "A restricted Ubuntu container stages the extracted AppImage payload with no /dev/fuse and with unprivileged user namespaces denied, then runs eight CLI cases across the bundled launcher and the extracted direct binary. x64 only, because PR CI builds only --x64.",
+      "motivatingLinks": [
+        "https://github.com/stablyai/orca/issues/13719",
+        "https://github.com/stablyai/orca/issues/14229"
+      ],
+      "invariant": "On a host without FUSE and without unprivileged user namespaces, every packaged CLI entrypoint either completes its command or reports a diagnosis, and never terminates on a signal.",
+      "oracle": "Build the image, stage the AppImage payload, and run each case in the restricted container. Assert the preconditions first: unshare -Ur must fail and /dev/fuse must be absent, so a relaxed runner fails the job rather than silently skipping. For each case require the exact expected exit status and an expected substring of the command's own output, with the harness RESULT/CRASHED/PRECONDITION_FAILED control lines excluded so a case name can never satisfy its own assertion. Any status of 128 or above is a crash and fails immediately. The per-case timeout is a failure deadline, never a success condition.",
+      "commands": [
+        "node config/scripts/run-linux-cli-launch-contract-docker.mjs --appimage dist/orca-linux.AppImage",
+        "shellcheck config/docker/cli-launch-contract/run-cli-case.sh"
+      ],
+      "testFiles": [
+        "config/scripts/run-linux-cli-launch-contract-docker.mjs",
+        "config/docker/cli-launch-contract/run-cli-case.sh"
+      ],
+      "assertionRefs": [
+        {
+          "file": "config/scripts/run-linux-cli-launch-contract-docker.mjs",
+          "assertions": [
+            "the bundled launcher serves --help, --version, status, skills --help, and worktree list without Chromium",
+            "a direct binary launch reaching JavaScript runs the command instead of booting a GUI",
+            "a desktop launch with no display reports the missing-display diagnosis instead of trapping",
+            "a stale DISPLAY is diagnosed rather than trusted",
+            "expected output is matched against the command's own output, not the harness control lines"
+          ]
+        },
+        {
+          "file": "config/docker/cli-launch-contract/run-cli-case.sh",
+          "assertions": [
+            "the container refuses to run unless unprivileged user namespaces are denied and /dev/fuse is absent",
+            "an exit status of 128 or above is reported as a crash rather than compared to the expected status"
+          ]
+        }
+      ],
+      "evidenceRuns": [
+        {
+          "date": "2026-08-31",
+          "runner": "ci",
+          "platform": "linux",
+          "command": "node config/scripts/run-linux-cli-launch-contract-docker.mjs --appimage dist/orca-linux.AppImage",
+          "result": "passed",
+          "durationSeconds": 40,
+          "summary": "PR package job https://github.com/stablyai/orca/actions/runs/33360129768/job/99389831915 ran all eight cases to ok on ubuntu-latest. The unshare and /dev/fuse preconditions held under moby's default seccomp profile rather than tripping."
+        },
+        {
+          "date": "2026-09-01",
+          "runner": "local",
+          "platform": "linux",
+          "command": "node config/scripts/run-linux-cli-launch-contract-docker.mjs --appimage dist/orca-linux.AppImage",
+          "result": "passed",
+          "durationSeconds": 60,
+          "summary": "All eight cases passed on Ubuntu 24.04 amd64 hardware against an AppImage built from the stack tip, invoked against a copy of that artifact outside dist/."
+        }
+      ],
+      "runtimeBudget": {
+        "p95Seconds": 300,
+        "scope": "eight CLI launch cases in one restricted Ubuntu container"
+      },
+      "flakeHistory": {
+        "status": "not-started",
+        "evidence": "The harness is new; soak history is not yet available."
+      },
+      "redGreenEvidence": {
+        "status": "complete",
+        "evidence": "The same harness run against a stock release AppImage failed four of eight cases: nofuse-userns-bundled-version at status 93, and all three direct-binary cases crashed at status 133 (SIGTRAP, the uv_close abort of #13719 and #14229). The stack-tip AppImage passed all eight. Corroborated at artifact level: the stack-tip runtime is a static-pie ELF with no PT_INTERP, the stock runtime is dynamically linked. Caveat: the two skills cases previously asserted a substring that the harness's own RESULT line contained, so they passed independently of command output; both now assert the rendered help header, and the green runs above predate that change."
+      },
+      "performanceBudget": {
+        "required": false,
+        "evidence": "The gate is CI-only and adds no product code path."
+      },
+      "promotionCriteria": [
+        "Collect 30 consecutive CI passes or 14 days without an unexplained flake.",
+        "Extend the matrix to arm64 once PR CI builds that architecture.",
+        "Re-run red/green against a stock AppImage after any change to the launcher entrypoint."
+      ],
+      "knownGaps": [
+        "The preconditions depend on moby's default seccomp profile denying unshare(CLONE_NEWUSER) and on /dev/fuse being absent. A runner with a relaxed profile or a mounted /dev/fuse trips PRECONDITION_FAILED and fails the job rather than skipping.",
+        "x64 only: PR CI builds only --x64, so the arm64 launcher path is unexercised.",
+        "The harness covers CLI entrypoints only; it does not exercise a full desktop session."
+      ],
+      "demotionRule": "Keep experimental or demote if any case terminates on a signal, the preconditions stop holding on the CI runner, or an assertion can be satisfied by anything other than the command's own output."
     },
     {
       "id": "ssh-managed-hooks.node18-runtime-compatibility",

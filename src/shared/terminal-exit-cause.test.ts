@@ -109,4 +109,22 @@ describe('isProvenProcessExit', () => {
     // A host shutdown can deliver -1 for every PTY without proving process death.
     expect(isProvenProcessExit(-1)).toBe(false)
   })
+
+  it('answers whether the process ended, not why — so it may differ from the cause on zero', () => {
+    // Deliberate, not an oversight: an unknowable *reason* is not an unknown
+    // *fact of death*. Collapsing these would strand every cleanly-exited pane.
+    expect(resolveUnreportedExitCause(0)).toEqual({ kind: 'unknown', reason: 'cause_unreported' })
+    expect(isProvenProcessExit(0)).toBe(true)
+  })
+
+  it('keeps a shell that a user closed with `exit` tearing down on macOS', () => {
+    // login(1) wraps every macOS local PTY once the TCC preflight passes, so
+    // hostReportsChildExitStatus is false for essentially all of them. login
+    // forks the shell and waits, so its exit still proves the shell died —
+    // routing that evidence through here would leave the pane mounted forever.
+    expect(
+      resolveProcessExitCause({ exitCode: 0, signal: 0, hostReportsChildExitStatus: false }).kind
+    ).toBe('unknown')
+    expect(isProvenProcessExit(0)).toBe(true)
+  })
 })

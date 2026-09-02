@@ -102,23 +102,16 @@ import {
   injectRelayFishHistoryEnv,
   injectRelayHistoryEnv
 } from './terminal-history'
-
-// Why: only Linux compiles node-pty (no prebuilt), so the build-tools remedy is a closable setup gap
-// there and wrong advice anywhere node-pty ships one. The relay only sees an unloadable binding, never
-// why — a skipped compile and a later Node/ABI flip look identical here — so Linux hedges both causes.
-export function formatNodePtyUnavailableMessage(platform: NodeJS.Platform): string {
-  const remedy =
-    platform === 'linux'
-      ? "node-pty's native binding is not loadable on this host. If it is missing the C/C++ build tools needed to compile node-pty, install make, a C++ compiler, and python3 on the remote host, then reconnect. Otherwise reconnect to reinstall the relay's native modules, and check that the remote Node.js version and architecture match the installed binding."
-      : "node-pty's native binding failed to load on this host. Reconnect to reinstall the relay's native modules; if it persists, check that the remote Node.js version and architecture match the installed binding."
-  return `Remote terminals are unavailable: ${remedy}`
-}
+import { isFlattenedNodePtyLoaderMessage } from '../main/orcad/node-pty-loader-diagnosis'
+import { collectNodePtyUnavailableDiagnosis } from './node-pty-binding-survey'
+import {
+  formatNodePtyUnavailableMessage,
+  toTerminalUnavailableCause
+} from './node-pty-unavailable-diagnosis'
+import { TERMINAL_UNAVAILABLE_RPC_ERROR_CODE } from '../shared/terminal-unavailable-cause'
 
 function isMissingNodePtyNativeBinding(error: unknown): boolean {
-  return (
-    error instanceof Error &&
-    /Failed to load native module: (?:conpty|pty)\.node(?:,|$)/.test(error.message)
-  )
+  return error instanceof Error && isFlattenedNodePtyLoaderMessage(error.message)
 }
 
 function parseSourceRecoveryRequest(value: unknown): PtySourceRecoveryRequest | undefined {
@@ -474,6 +467,8 @@ export class PtyHandler {
   private ptyModule: typeof NodePty | null = null
   private ptyModuleLoadPromise: Promise<typeof NodePty | null> | null = null
   private reloadPtyModuleFromDisk = false
+  /** The last thing `require('node-pty')` threw, kept because it is the only cause anyone has. */
+  private lastPtyLoadError: unknown = null
   // Why: single optional slot is intentional — callers compose externally; a throw is swallowed so it can't block cleanup.
   private exitListener: PtyExitListener | null = null
   private surfaceRetiredListener: PtySurfaceRetiredListener | null = null
@@ -547,27 +542,56 @@ export class PtyHandler {
       try {
         this.ptyModule = await import('node-pty')
         return this.ptyModule
-      } catch {
+      } catch (error) {
+        // Why keep it: this is the only place the load error exists. Discarding it here is
+        // what left the relay able to say "unavailable" and never why.
+        this.lastPtyLoadError = error
         this.reloadPtyModuleFromDisk = true
       }
     }
     // Why: tie module resolution to the deployed bundle dir, not cwd.
-    const moduleEntry = join(__dirname, 'node_modules', 'node-pty', 'lib', 'index.js')
+    const moduleEntry = join(this.relayNodePtyDir(), 'lib', 'index.js')
     if (!existsSync(moduleEntry)) {
+      this.lastPtyLoadError = this.lastPtyLoadError ?? new Error(`no node-pty at ${moduleEntry}`)
       return null
     }
     try {
       this.ptyModule = require(moduleEntry) as typeof NodePty
       return this.ptyModule
-    } catch {
+    } catch (error) {
+      this.lastPtyLoadError = error
       return null
     }
+  }
+
+  /** Where the relay's own node-pty lives — the deployed bundle dir, never cwd. */
+  private relayNodePtyDir(): string {
+    return join(__dirname, 'node_modules', 'node-pty')
+  }
+
+  /**
+   * The rejection for a spawn that cannot happen: prose for a human, and the structured
+   * cause for a client that can repair the host instead of printing a paragraph.
+   *
+   * Runs the survey and out-of-process load probe only here, on the failure path, so a
+   * healthy relay never pays for them.
+   */
+  private async nodePtyUnavailableError(spawnError?: unknown): Promise<Error> {
+    const nodePtyDir = this.relayNodePtyDir()
+    const diagnosis = await collectNodePtyUnavailableDiagnosis({
+      nodePtyDir: existsSync(nodePtyDir) ? nodePtyDir : null,
+      error: spawnError ?? this.lastPtyLoadError
+    })
+    return Object.assign(new Error(formatNodePtyUnavailableMessage(diagnosis)), {
+      code: TERMINAL_UNAVAILABLE_RPC_ERROR_CODE,
+      data: toTerminalUnavailableCause(diagnosis)
+    })
   }
 
   private invalidatePtyModuleAfterBindingFailure(): void {
     this.ptyModule = null
     this.reloadPtyModuleFromDisk = true
-    const moduleRoot = join(__dirname, 'node_modules', 'node-pty')
+    const moduleRoot = this.relayNodePtyDir()
     for (const cachedPath of Object.keys(require.cache)) {
       if (isPathInsideOrEqual(moduleRoot, cachedPath)) {
         delete require.cache[cachedPath]
@@ -1718,7 +1742,7 @@ export class PtyHandler {
   }> {
     const pty = await this.loadPty()
     if (!pty) {
-      throw new Error(formatNodePtyUnavailableMessage(process.platform))
+      throw await this.nodePtyUnavailableError()
     }
 
     const cols = (params.cols as number) || 80
@@ -1831,7 +1855,7 @@ export class PtyHandler {
       // Why: Windows loads conpty.node only on first spawn, so handle that late binding failure here.
       if (isMissingNodePtyNativeBinding(error)) {
         this.invalidatePtyModuleAfterBindingFailure()
-        throw new Error(formatNodePtyUnavailableMessage(process.platform))
+        throw await this.nodePtyUnavailableError(error)
       }
       throw error
     }

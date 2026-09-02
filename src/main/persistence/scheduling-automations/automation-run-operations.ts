@@ -1,4 +1,6 @@
 import { randomUUID } from 'node:crypto'
+import { isFinalAutomationRunStatus } from '../../../shared/automations-types'
+import { invalidateLocalWorktreeMetadataPruneInputs } from '../../local-worktree-metadata-prune-gate'
 import type {
   Automation,
   AutomationDispatchResult,
@@ -182,6 +184,10 @@ export function updateAutomationRun(
   operations.state.automationRuns = operations.state.automationRuns.map((run) =>
     run.id === result.runId ? updated : run
   )
+  if (!isFinalAutomationRunStatus(current.status) && isFinalAutomationRunStatus(updated.status)) {
+    // Why: only a non-final run pins its workspace, so finishing releases the claim (#17775).
+    invalidateLocalWorktreeMetadataPruneInputs()
+  }
   touchAutomation(operations.state, updated.automationId, now)
   operations.flush()
   return updated

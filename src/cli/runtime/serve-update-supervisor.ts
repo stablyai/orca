@@ -86,8 +86,8 @@ export async function superviseForegroundServe(
       handoff?.phase !== 'install-requested' ||
       (child.pid !== undefined && handoff.servingPid !== child.pid)
     ) {
-      if (typeof result.code === 'number') {
-        return result.code
+      if (typeof result.code === 'number' || result.signalWasForwarded) {
+        return result.code ?? 0
       }
       throw serveSignalExitError(result.signal)
     }
@@ -114,8 +114,11 @@ function waitForForegroundChild(
   code: number | null
   signal: NodeJS.Signals | null
   readiness: ServeReadiness
+  signalWasForwarded: boolean
 }> {
   return new Promise((resolveWait, reject) => {
+    const forwardsHangup = process.platform === 'linux'
+    const forwardedSignals = new Set<NodeJS.Signals>()
     let forceKillTimer: ReturnType<typeof setTimeout> | null = null
     let readyTimer: ReturnType<typeof setTimeout> | null = null
     let readiness: ServeReadiness = expected ? 'pending' : 'not-expected'
@@ -155,6 +158,7 @@ function waitForForegroundChild(
     const forwardSignal = (signal: NodeJS.Signals): void => {
       // A Windows console delivers Ctrl-C to parent and child; child.kill would terminate the child mid-teardown.
       if (process.platform !== 'win32') {
+        forwardedSignals.add(signal)
         child.kill(signal)
       }
       forceKillTimer ??= setTimeout(() => child.kill('SIGKILL'), SERVE_CHILD_FORCE_KILL_GRACE_MS)
@@ -188,6 +192,9 @@ function waitForForegroundChild(
     const cleanup = (): void => {
       process.off('SIGINT', forwardSignal)
       process.off('SIGTERM', forwardSignal)
+      if (forwardsHangup) {
+        process.off('SIGHUP', forwardSignal)
+      }
       if (typeof child.off === 'function') {
         child.off('message', handleMessage)
       }
@@ -200,6 +207,9 @@ function waitForForegroundChild(
     }
     process.on('SIGINT', forwardSignal)
     process.on('SIGTERM', forwardSignal)
+    if (forwardsHangup) {
+      process.on('SIGHUP', forwardSignal)
+    }
     if (typeof child.on === 'function') {
       child.on('message', handleMessage)
     }
@@ -213,7 +223,8 @@ function waitForForegroundChild(
     const handleExit = (code: number | null, signal: NodeJS.Signals | null): void => {
       childSettled = true
       cleanup()
-      void stateWrite.then(() => resolveWait({ code, signal, readiness }))
+      const signalWasForwarded = signal !== null && forwardedSignals.has(signal)
+      void stateWrite.then(() => resolveWait({ code, signal, readiness, signalWasForwarded }))
     }
     child.once('error', (error) => {
       childSettled = true

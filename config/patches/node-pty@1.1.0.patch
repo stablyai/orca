@@ -176,7 +176,7 @@ index 181ccabbbe9c4948a9725fb1db907a68e9de01fc..67f31facf85562b67adbfbd04ce28ddd
  process.send!({ consoleProcessList });
  process.exit(0);
 diff --git a/src/unix/pty.cc b/src/unix/pty.cc
-index 7b4b9e1f990fbf95b51528bb56dc9717f5b87532..383df0c9c48355547c65e6c9bbba593d15c4dd44 100644
+index 7b4b9e1f990fbf95b51528bb56dc9717f5b87532..2ae787c5bd4f3eba470584dc658a01a52c690e0a 100644
 --- a/src/unix/pty.cc
 +++ b/src/unix/pty.cc
 @@ -23,7 +23,9 @@
@@ -215,7 +215,17 @@ index 7b4b9e1f990fbf95b51528bb56dc9717f5b87532..383df0c9c48355547c65e6c9bbba593d
  /* Some platforms name VWERASE and VDISCARD differently */
  #if !defined(VWERASE) && defined(VWERSE)
  #define VWERASE	VWERSE
-@@ -237,13 +258,23 @@ pty_getproc(int, char *);
+@@ -228,6 +249,9 @@ Napi::Value PtyGetProc(const Napi::CallbackInfo& info);
+ static int
+ pty_nonblock(int);
+ 
++static int
++pty_cloexec(int);
++
+ #if defined(__APPLE__)
+ static char *
+ pty_getproc(int);
+@@ -237,13 +261,23 @@ pty_getproc(int, char *);
  #endif
  
  #if defined(__APPLE__) || defined(__OpenBSD__)
@@ -240,7 +250,7 @@ index 7b4b9e1f990fbf95b51528bb56dc9717f5b87532..383df0c9c48355547c65e6c9bbba593d
  #endif
  
  struct DelBuf {
-@@ -367,10 +398,11 @@ Napi::Value PtyFork(const Napi::CallbackInfo& info) {
+@@ -367,14 +401,18 @@ Napi::Value PtyFork(const Napi::CallbackInfo& info) {
      argv[i + 3] = strdup(arg.c_str());
    }
  
@@ -256,7 +266,48 @@ index 7b4b9e1f990fbf95b51528bb56dc9717f5b87532..383df0c9c48355547c65e6c9bbba593d
    }
    if (pty_nonblock(master) == -1) {
      throw Napi::Error::New(napiEnv, "Could not set master fd to nonblocking.");
-@@ -684,15 +716,73 @@ pty_getproc(int fd, char *tty) {
+   }
++  if (pty_cloexec(master) == -1) {
++    throw Napi::Error::New(napiEnv, "Could not set master fd to close-on-exec.");
++  }
+ #else
+   int argc = argv_.Length();
+   int argl = argc + 2;
+@@ -445,6 +483,9 @@ Napi::Value PtyFork(const Napi::CallbackInfo& info) {
+       if (pty_nonblock(master) == -1) {
+         throw Napi::Error::New(napiEnv, "Could not set master fd to nonblocking.");
+       }
++      if (pty_cloexec(master) == -1) {
++        throw Napi::Error::New(napiEnv, "Could not set master fd to close-on-exec.");
++      }
+   }
+ #endif
+ 
+@@ -586,6 +627,23 @@ pty_nonblock(int fd) {
+   return fcntl(fd, F_SETFL, flags | O_NONBLOCK);
+ }
+ 
++/**
++ * Orca: close-on-exec FD
++ *
++ * forkpty()/posix_openpt() have no atomic O_CLOEXEC, so a master left without
++ * FD_CLOEXEC is inherited by every later child of this process -- including
++ * later pty children -- which keeps its /dev/pts device and buffers alive long
++ * after its own session ends (#8362).
++ */
++
++static int
++pty_cloexec(int fd) {
++  int flags = fcntl(fd, F_GETFD);
++  if (flags == -1) return -1;
++  if (flags & FD_CLOEXEC) return 0;
++  return fcntl(fd, F_SETFD, flags | FD_CLOEXEC);
++}
++
+ /**
+  * pty_getproc
+  * Taken from tmux.
+@@ -684,15 +742,73 @@ pty_getproc(int fd, char *tty) {
  #endif
  
  #if defined(__APPLE__)
@@ -332,7 +383,7 @@ index 7b4b9e1f990fbf95b51528bb56dc9717f5b87532..383df0c9c48355547c65e6c9bbba593d
  
    for (; count < 3; count++) {
      low_fds[count] = posix_openpt(O_RDWR);
-@@ -706,80 +796,118 @@ pty_posix_spawn(char** argv, char** env,
+@@ -706,80 +822,118 @@ pty_posix_spawn(char** argv, char** env,
                POSIX_SPAWN_SETSID;
    *master = posix_openpt(O_RDWR);
    if (*master == -1) {

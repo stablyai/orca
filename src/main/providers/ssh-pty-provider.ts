@@ -23,6 +23,7 @@ import { SshPtySpawnExitRaceTracker } from './ssh-pty-spawn-exit-race'
 import { SshAgentSessionCapabilities } from './ssh-agent-session-capabilities'
 import type { PtyProcessInspection } from './pty-process-inspection'
 import { writeToSshPty, writeToSshPtyWithSettlement } from './ssh-pty-write'
+import { spawnWithTerminalRuntimeRepair, type TerminalRepairHook } from './ssh-pty-spawn-repair'
 
 // Why: sequential relay teardown calls share one absolute budget; convert to the mux-relative timeout only at dispatch.
 function relayTimeoutOptions(deadlineMs: number | undefined): { timeoutMs: number } | undefined {
@@ -38,6 +39,7 @@ export class SshPtyProvider implements IPtyProvider {
   private readonly agentSessionCapabilities: SshAgentSessionCapabilities
   private spawnExitRaces = new SshPtySpawnExitRaceTracker()
   private readonly outputState: SshPtyProviderOutputState
+  private recoverFromTerminalUnavailable: TerminalRepairHook<SshPtyProvider> | null = null
 
   requestHostRpc: NonNullable<IPtyProvider['requestHostRpc']> = (method, params, options) =>
     this.mux.request(method, params as Record<string, unknown>, options)
@@ -76,7 +78,24 @@ export class SshPtyProvider implements IPtyProvider {
 
   private toAppPtyId = (id: string): string => toAppSshPtyId(this.connectionId, id)
 
+  /** Installed by SshRelaySession, which owns the connection, the repair lock and the reconnect. */
+  setTerminalUnavailableRecovery(recover: TerminalRepairHook<SshPtyProvider>): void {
+    this.recoverFromTerminalUnavailable = recover
+  }
+
+  hasLivePtys(): boolean {
+    return this.livePtyIds.size > 0
+  }
+
   async spawn(opts: PtySpawnOptions): Promise<PtySpawnResult> {
+    return await spawnWithTerminalRuntimeRepair<SshPtyProvider, PtySpawnResult>({
+      attempt: () => this.spawnWithoutTerminalRuntimeRepair(opts),
+      recover: this.recoverFromTerminalUnavailable,
+      retry: (provider) => provider.spawnWithoutTerminalRuntimeRepair(opts)
+    })
+  }
+
+  private async spawnWithoutTerminalRuntimeRepair(opts: PtySpawnOptions): Promise<PtySpawnResult> {
     if (opts.agentSessionEnsure && opts.sessionId) {
       throw new Error('agent_session_claim_unavailable')
     }

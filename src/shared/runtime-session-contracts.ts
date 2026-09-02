@@ -217,6 +217,8 @@ export const UNPUBLISHED_WORKTREE_PUBLICATION_EPOCH = 'none'
 
 export type RuntimeMobileSessionTabsSnapshot = {
   worktree: string
+  /** Immutable catalog identity used to fence snapshots across path reuse. */
+  worktreeInstanceId?: string
   publicationEpoch: string
   snapshotVersion: number
   activeGroupId: string | null

@@ -100,6 +100,10 @@ export function NativeChatResolvedView({
   // The agent's in-progress reply preview (hook), shown as a live streaming
   // bubble while it works — before the completed turn flushes to the transcript.
   const hookPreview = useAppStore((s) => s.agentStatusByPaneKey[paneKey]?.lastAssistantMessage)
+  // Tool stdout/errors ride the same field for status-card previews; they are not the reply.
+  const hookPreviewIsToolOutput = useAppStore(
+    (s) => s.agentStatusByPaneKey[paneKey]?.lastAssistantMessageIsToolOutput === true
+  )
   // Why: Stop suppression must clear on a newer working epoch even when status
   // never leaves 'working' (interrupt + immediate next turn coalesced).
   const hookWorkingEpoch = useAppStore(
@@ -246,9 +250,16 @@ export function NativeChatResolvedView({
           ? [...sessionAfterCommandBoundaries.messages, ...pendingMessages]
           : sessionAfterCommandBoundaries.messages,
       previewText: hookPreview,
-      working: liveWorking
+      working: liveWorking,
+      previewIsToolOutput: hookPreviewIsToolOutput
     })
-  }, [sessionAfterCommandBoundaries.messages, pendingMessages, hookPreview, liveWorking])
+  }, [
+    sessionAfterCommandBoundaries.messages,
+    pendingMessages,
+    hookPreview,
+    liveWorking,
+    hookPreviewIsToolOutput
+  ])
   const sessionWithPending = useMemo<typeof session>(() => {
     if (pending.length === 0 && commandMarkers.length === 0 && !streamingText) {
       return sessionAfterCommandBoundaries

@@ -780,6 +780,60 @@ describe('git remote operations', () => {
     ])
   })
 
+  it('drops a stale branch-specific refspec and retries when the fork branch was deleted upstream (#17828)', async () => {
+    let fetchAttempts = 0
+    gitExecFileAsyncMock.mockImplementation(async (args: string[]) => {
+      if (args[0] === 'check-ref-format') {
+        return { stdout: '', stderr: '' }
+      }
+      if (args[0] === 'fetch') {
+        fetchAttempts += 1
+        if (fetchAttempts === 1) {
+          throw Object.assign(new Error("fatal: couldn't find remote ref refs/heads/gone"), {
+            stderr: "fatal: couldn't find remote ref refs/heads/gone\n"
+          })
+        }
+        return { stdout: '', stderr: '' }
+      }
+      if (args[0] === 'config' && args[1] === '--get-all') {
+        return {
+          stdout:
+            '+refs/heads/gone:refs/remotes/fork/gone\n+refs/heads/keep:refs/remotes/fork/keep\n',
+          stderr: ''
+        }
+      }
+      return { stdout: '', stderr: '' }
+    })
+
+    await gitFetch('/repo', { remoteName: 'fork', branchName: 'keep' })
+
+    expect(fetchAttempts).toBe(2)
+    expect(gitExecFileAsyncMock).toHaveBeenCalledWith(
+      ['config', '--unset-all', 'remote.fork.fetch'],
+      { cwd: '/repo' }
+    )
+    expect(gitExecFileAsyncMock).toHaveBeenCalledWith(
+      ['config', '--add', 'remote.fork.fetch', '+refs/heads/keep:refs/remotes/fork/keep'],
+      { cwd: '/repo' }
+    )
+  })
+
+  it('surfaces the original fetch error when it is not a stale-refspec failure', async () => {
+    gitExecFileAsyncMock.mockImplementation(async (args: string[]) => {
+      if (args[0] === 'check-ref-format') {
+        return { stdout: '', stderr: '' }
+      }
+      if (args[0] === 'fetch') {
+        throw new Error('network unreachable')
+      }
+      return { stdout: '', stderr: '' }
+    })
+
+    await expect(gitFetch('/repo', { remoteName: 'fork', branchName: 'keep' })).rejects.toThrow(
+      'network unreachable'
+    )
+  })
+
   it('normalizes fetch authentication errors to a friendly message', async () => {
     gitExecFileAsyncMock.mockRejectedValueOnce(new Error('Authentication failed'))
 

@@ -272,6 +272,7 @@ export type GlobalSettings = {
   keybindings?: KeybindingOverrides
   diffDefaultView: 'inline' | 'side-by-side'
   diffWordWrap: boolean
+  diffShowWhitespace: boolean
   combinedDiffFileTreeVisibleByDefault: boolean
   /** Bot-marked comment-author logins (stored lowercased); escape hatch for review bots on regular accounts that defeat provider metadata/heuristics. */
   prBotAuthorOverrides: string[]

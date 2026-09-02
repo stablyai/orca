@@ -62,6 +62,16 @@ export function DocsFooter() {
                   Discord
                 </a>
               </li>
+              <li>
+                <a
+                  href="https://x.com/orca_build"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="rounded-md px-1 py-0.5 transition-colors hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
+                >
+                  X
+                </a>
+              </li>
             </ul>
           </div>
         </div>

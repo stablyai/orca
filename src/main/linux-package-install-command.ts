@@ -53,6 +53,16 @@ export function resolveTrustedExecutable(name: string): string | null {
 }
 
 /**
+ * Whether this host has any package manager able to install the marker's format. A repackaged
+ * install (AUR, Nix, a container rebuild) inherits the `package-type` marker from the .deb/.rpm it
+ * was built from, so the marker alone never proves the host can act on it.
+ */
+export function hasTrustedPackageManagerFor(packageType: LinuxRootPackageType): boolean {
+  const candidates = packageType === 'deb' ? DEB_PACKAGE_MANAGERS : RPM_PACKAGE_MANAGERS
+  return candidates.some((candidate) => resolveTrustedExecutable(candidate.name) !== null)
+}
+
+/**
  * Builds the interactive command the user pastes into their own terminal. Every token except the
  * package path is a fixed literal, and the path is POSIX-single-quoted — Orca never runs this.
  */

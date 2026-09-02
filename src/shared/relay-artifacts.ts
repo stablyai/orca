@@ -51,6 +51,11 @@ export const RELAY_ARTIFACTS: readonly RelayArtifact[] = [
   // title request with no title and no error.
   { filename: 'wsl-transcript-fs-process-entry.js' },
   { filename: 'node-pty-1.1.0-console-list-agent-patch.cjs', windowsOnly: true },
+  // Only Linux relays run it, but it ships everywhere: the manifest's only
+  // platform axis is Windows, and a second one would buy nothing but a fork in
+  // the hash. Its presence is what moves a host to a fresh relay directory, and
+  // therefore to a re-install that can apply it.
+  { filename: 'node-pty-1.1.0-master-cloexec-patch.cjs' },
   // Optional because only a Windows build machine can compile it. Without it the
   // relay reads the process table through a PowerShell scan instead -- slower,
   // but correct, so a relay built anywhere else is still shippable.

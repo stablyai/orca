@@ -89,6 +89,11 @@ On the computer you want to use as the client:
   caption="On the client: name the server, paste its access link, and add it. The pairing code is redacted in this example."
 />
 
+<ImagePlaceholder
+  src="/docs/remote-server-share-desktop.png"
+  caption="Share an Orca desktop runtime with another client over a private network."
+/>
+
 Adding a server saves it without forcing every new project onto it. Open **Advanced → Active Server** only when you want server-routed projects, terminals, provider checks, and browser or mobile handoff to use that server by default.
 
 ## Use the remote server
@@ -120,6 +125,14 @@ Orca creates a separate, revocable token for each paired client. The server list
 Use `orca serve` when the host should run without the desktop window—for example, a headless Linux server or a service-managed VM. For a MacBook or desktop you can leave signed in, the in-app setup above is simpler.
 
 Install Orca and its bundled CLI on the server, then run:
+
+<Callout title="On Linux, start it with orca-ide serve">
+  The Linux CLI is named `orca-ide`, because GNOME Orca's screen reader already owns
+  `/usr/bin/orca`. A packaged `orca serve` does write a bare `orca` into `~/.local/bin`, but only
+  while it is starting, so that shim can never be the command that starts the server. Read
+  `orca serve` as `orca-ide serve` throughout this page when the host is Linux. See
+  [Install → Linux](/docs/install#linux).
+</Callout>
 
 ```bash
 orca serve --pairing-address <server-tailscale-ip-or-hostname>

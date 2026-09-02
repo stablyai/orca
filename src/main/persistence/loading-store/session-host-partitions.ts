@@ -13,6 +13,7 @@ import { getRepoIdFromWorktreeId } from '../../../shared/worktree/id'
 import { readTerminalScrollbackSnapshotSync } from '../../terminal-scrollback-snapshots'
 import { preserveRuntimeAuthoredWorkspaceSessionFields } from '../runtime-authored-workspace-session-fields'
 import { findWorktreeIdForTab } from '../restoring-sessions/pane-identity-migration'
+import { invalidateLocalWorktreeMetadataPruneInputs } from '../../local-worktree-metadata-prune-gate'
 import {
   removeWorkspaceSessionOwner,
   workspaceSessionPartitionIdsForHost
@@ -132,6 +133,9 @@ export function removeWorkspaceSessionOwnerInPartition(
   if (!session) {
     return
   }
+  // Why: a session was the last thing pinning some dangling metadata row; releasing it is the
+  // evidence the metadata prune waits for, and there is no other signal that it happened (#17775).
+  invalidateLocalWorktreeMetadataPruneInputs()
   if (resolved === LOCAL_EXECUTION_HOST_ID) {
     owner[sessionHostPartitionOperationsContext].runtime.state.workspaceSession = session
   } else {

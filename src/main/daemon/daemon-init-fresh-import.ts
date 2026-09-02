@@ -41,7 +41,8 @@ export async function importFreshDaemonInit(state: DaemonInitMockState) {
     unbindLocalProviderListenersMock,
     rebindLocalProviderListenersMock,
     trackDaemonReplacedMock,
-    trackDaemonRetiredMock
+    trackDaemonRetiredMock,
+    trackDaemonAdoptedMock
   } = state
 
   vi.resetModules()
@@ -64,6 +65,7 @@ export async function importFreshDaemonInit(state: DaemonInitMockState) {
   rebindLocalProviderListenersMock.mockClear()
   trackDaemonReplacedMock.mockClear()
   trackDaemonRetiredMock.mockClear()
+  trackDaemonAdoptedMock.mockClear()
   checkDaemonHealthMock.mockClear()
   checkDaemonHealthMock.mockResolvedValue('healthy')
   healthCheckDaemonMock.mockClear()

@@ -46,6 +46,21 @@ describe('orchestration RPC methods', () => {
   }
 
   describe('orchestration.send', () => {
+    it('does not resolve process incarnation for ordinary messages', async () => {
+      setup()
+      const resolveProcessIncarnation = vi.mocked(runtime.getTerminalProcessIncarnation)
+      resolveProcessIncarnation.mockClear()
+
+      const result = (await call('orchestration.send', {
+        from: 'term_coord',
+        to: `run:${activeRunId}`,
+        subject: 'hello'
+      })) as { message: { type: string } }
+
+      expect(result.message.type).toBe('status')
+      expect(resolveProcessIncarnation).not.toHaveBeenCalled()
+    })
+
     it('sends a message', async () => {
       setup()
       // Why: send notifies arrival so already-idle recipients get push-on-idle

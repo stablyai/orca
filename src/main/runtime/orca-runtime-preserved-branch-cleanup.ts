@@ -38,6 +38,7 @@ import { RuntimeRepositoryForkBackfill } from './runtime-repository-fork-backfil
 import { RuntimeWorkspaceSessionController } from './runtime-workspace-session-controller'
 import { RuntimeAiVaultCommands } from './runtime-ai-vault-commands'
 import { ClaudeAgentTeamsService } from './claude-agent-teams-service'
+import { teardownFolderWorkspacePtys } from './folder-workspace-pty-teardown'
 
 export class OrcaRuntimeWithPreservedBranchCleanup extends OrcaRuntimeWithTerminalDrivers {
   protected readonly preservedBranchCleanup = new RuntimePreservedBranchCleanup(() =>
@@ -203,7 +204,24 @@ export class OrcaRuntimeWithPreservedBranchCleanup extends OrcaRuntimeWithTermin
   protected readonly projectGroups = new RuntimeProjectGroupController({
     getStore: () => this.store,
     resolveRepo: (selector) => this.resolveRepoSelector(selector),
-    notifyReposChanged: () => this.notifyReposChanged()
+    notifyReposChanged: () => this.notifyReposChanged(),
+    resolveFolderConnectionId: (workspace) => this.resolveFolderWorkspaceConnectionId(workspace),
+    teardownFolderWorkspacePtys: (worktreeId, connectionId) =>
+      teardownFolderWorkspacePtys(
+        {
+          runtime: this,
+          getSshProvider: this.getSshProviderFn,
+          getLocalProvider: () => this.getLocalProvider(),
+          onPtyStopped: this.onPtyStopped
+        },
+        worktreeId,
+        connectionId
+      ),
+    cleanupRemovedFolderWorkspaceState: (worktreeId) => {
+      if (this.store) {
+        this.removeWorktreeMetadataAndHistory(this.store, worktreeId)
+      }
+    }
   })
 
   protected readonly nestedRepoImport = new RuntimeNestedRepoImport({

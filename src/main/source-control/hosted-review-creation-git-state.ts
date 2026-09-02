@@ -268,7 +268,7 @@ export async function hasUncommittedChanges(
   if (records.length === 0) {
     return false
   }
-  return await anyRecordIsUserDirt(repoPath, records, options.sharedLinkPaths ?? [])
+  return await anyRecordIsUserDirt(repoPath, records, options)
 }
 
 /** True when any record is real user work rather than a shared symlink Orca put
@@ -280,14 +280,21 @@ export async function hasUncommittedChanges(
 async function anyRecordIsUserDirt(
   worktreePath: string,
   records: readonly PorcelainV1Record[],
-  sharedLinkPaths: readonly string[]
+  options: HostedReviewExecutionOptions
 ): Promise<boolean> {
+  const sharedLinkPaths = options.sharedLinkPaths ?? []
   if (sharedLinkPaths.length === 0 || !records.some((record) => record.xy === '??')) {
     return true
   }
   // Why: only entries that are configured AND really symlinks are excluded, so a
   // regular file the user created at a configured name still blocks creation.
-  const sharedLinks = new Set(await findExistingWorktreeSymlinkPaths(worktreePath, sharedLinkPaths))
+  // Why the distro: git ran in the guest, so an untranslated lstat fails here and this
+  // fail-closed check would block review creation over Orca's own symlink.
+  const sharedLinks = new Set(
+    await findExistingWorktreeSymlinkPaths(worktreePath, sharedLinkPaths, {
+      wslDistro: getHostedReviewLocalGitOptions(options).wslDistro
+    })
+  )
   return records.some((record) => record.xy !== '??' || !sharedLinks.has(record.path))
 }
 

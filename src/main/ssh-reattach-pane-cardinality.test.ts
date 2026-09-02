@@ -2,7 +2,13 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { rmSync, mkdtempSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
-import { testState, createStore, makeTerminalTab, writeDataFile } from './persistence-test-harness'
+import {
+  testState,
+  createStore,
+  makeRepo,
+  makeTerminalTab,
+  writeDataFile
+} from './persistence-test-harness'
 import { TEST_LEAF_1, TEST_LEAF_2 } from './persistence-session-fixtures'
 import { getDefaultPersistedState } from '../shared/constants'
 
@@ -196,6 +202,8 @@ describe('STA-3077: an SSH reattach binds panes without grafting them back', () 
   it('does not clear and rebind a retired surface loaded from an older profile', async () => {
     const paneKey = `${TAB}:${TEST_LEAF_1}`
     const persisted = getDefaultPersistedState(testState.dir)
+    // Registered on purpose: rows owned by an unregistered repo id are swept as orphans on load.
+    persisted.repos = [makeRepo({ id: 'repo1', path: '/repo1' })]
     persisted.workspaceSession = {
       ...persisted.workspaceSession,
       ...sessionWithPane({ tabId: TAB, leafId: TEST_LEAF_1, ptyId: 'pty-1' }),

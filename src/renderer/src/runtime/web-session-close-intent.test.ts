@@ -6,8 +6,10 @@ import {
   isWebSessionCloseIntentPending,
   reconcileWebSessionCloseIntents,
   recordWebSessionCloseIntent,
-  resetWebSessionCloseIntentForTests
+  resetWebSessionCloseIntentForTests,
+  WEB_SESSION_CLOSE_INTENT_TTL_MS
 } from './web-session-close-intent'
+import { WEB_SESSION_TAB_RPC_TIMEOUT_MS } from './web-session-tab-rpc-timeout'
 
 const WT = 'repo::/wt'
 const OWNER = { environmentId: 'runtime-a', pairingRevision: 1 }
@@ -26,7 +28,20 @@ describe('web session close intent', () => {
 
   it('expires a never-confirmed close', () => {
     recordWebSessionCloseIntent(OWNER, WT, 'host-tab-1', 1000)
-    expect(isWebSessionCloseIntentPending(OWNER, WT, 'host-tab-1', 12_000)).toBe(false)
+    expect(
+      isWebSessionCloseIntentPending(
+        OWNER,
+        WT,
+        'host-tab-1',
+        1000 + WEB_SESSION_CLOSE_INTENT_TTL_MS + 1
+      )
+    ).toBe(false)
+  })
+
+  // The durable flip in the tab_not_found path can only reach an entry that is still there, so the
+  // TTL must outlast the RPC that produces that answer. Two independent literals would drift.
+  it('outlives the tab RPC that can still answer tab_not_found', () => {
+    expect(WEB_SESSION_CLOSE_INTENT_TTL_MS).toBeGreaterThan(WEB_SESSION_TAB_RPC_TIMEOUT_MS)
   })
 
   it('scopes intents by owner, pairing revision, and worktree', () => {

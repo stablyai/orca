@@ -16,6 +16,7 @@ import type {
   DirectSshPaneRetryHistory
 } from '../slices/direct-ssh-terminal-recovery'
 import type { NativeChatLaunchDraft, NativeChatLaunchPrompt } from '@/lib/native-chat-launch-prompt'
+import type { HostSessionSlices } from '@/lib/workspace-session-host-split'
 import type { AutomaticAgentResumeClaim, CodexRestartNotice } from './terminal-contracts'
 import type { StateCreator } from 'zustand'
 import type { AppState } from '../types'
@@ -92,6 +93,14 @@ export type TerminalState = {
   /** True after main ownership restoration, renderer PTY adoption, and structured-tab projection settle. */
   terminalStartupRestorationReady: boolean
   restoredRuntimeHostIdByWorkspaceSessionKey: Record<string, ExecutionHostId>
+  /**
+   * Worktree-keyed session rows belonging to hosts that co-publish a workspace id with the host
+   * that owns it here. Never read by the UI: it is the carrier that lets a write for the owning
+   * host round-trip the other hosts' partitions instead of erasing them.
+   */
+  contestedHostWorkspaceSessions: HostSessionSlices
+  /** Partition each restored session key was read from, so a write returns its rows there. */
+  contestedPrimaryHostBySessionKey: Record<string, ExecutionHostId>
   defaultTerminalTabsAppliedByWorktreeId: Record<string, true>
   closedTerminalTabTombstonesByTabId: ClosedTerminalTabTombstonesByTabId
   hydrationSucceeded: boolean

@@ -23,6 +23,7 @@ import { homedir } from 'node:os'
 import { getExplicitWorktreeIdSelector } from './runtime-worktree-selection'
 import { WORKTREE_ID_SEPARATOR } from '../../shared/worktree/id'
 import { WorktreeIdRequiresFullPathError } from './runtime-worktree-lineage-resolution'
+import { triggerTerminalSpawnPushTargetMaterialization } from './runtime-terminal-spawn-push-target-materialization'
 
 export class OrcaRuntimeWithResolveBrowserNetworkExecutionHostForWorktree extends OrcaRuntimeWithTransitionGraphReloadToTerminalState {
   protected resolveBrowserNetworkExecutionHostForWorktree(worktree?: {
@@ -124,6 +125,14 @@ export class OrcaRuntimeWithResolveBrowserNetworkExecutionHostForWorktree extend
     const worktreeSelector = parsed?.type === 'worktree' ? `id:${parsed.worktreeId}` : selector
     const worktree = await this.resolveWorktreeSelector(worktreeSelector)
     const repo = this.store?.getRepo(worktree.repoId) ?? null
+    triggerTerminalSpawnPushTargetMaterialization(
+      worktree.path,
+      worktree.pushTarget,
+      repo,
+      this.store,
+      worktree.repoId,
+      worktree.id
+    )
     return {
       scope: {
         id: worktree.id,

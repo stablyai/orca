@@ -175,6 +175,7 @@ export function getShellLaunchConfig(
       args: [
         '-NoLogo',
         '-NoExit',
+        // Why base64 and not -Command: see powershell-osc133-bootstrap.ts (MDE review).
         '-EncodedCommand',
         encodePowerShellCommand(getPowerShellOsc133Bootstrap())
       ],

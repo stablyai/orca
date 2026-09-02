@@ -373,6 +373,7 @@ export function DiffSectionItem({
           isEditable={isEditable}
           diffEditorFontSize={diffEditorFontSize}
           diffWordWrap={settings?.diffWordWrap}
+          diffShowWhitespace={settings?.diffShowWhitespace}
           editorFontFamily={resolveEditorFontFamily(settings)}
           onCancelComment={() => setPopover(null)}
           onSubmitComment={handleSubmitComment}
