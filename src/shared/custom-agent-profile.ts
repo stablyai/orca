@@ -136,6 +136,20 @@ export function isCustomAgentProfileEnabled(profile: CustomAgentProfile): boolea
   return profile.enabled !== false
 }
 
+export function findEnabledCustomAgentProfile(
+  profiles: unknown,
+  profileId: string | null | undefined,
+  baseAgent: TuiAgent
+): CustomAgentProfile | null {
+  if (!profileId) {
+    return null
+  }
+  const profile = normalizeCustomAgentProfiles(profiles).find((entry) => entry.id === profileId)
+  return profile && isCustomAgentProfileEnabled(profile) && profile.baseAgent === baseAgent
+    ? profile
+    : null
+}
+
 export function getDefaultCustomAgentProfile(profiles: unknown): CustomAgentProfile | null {
   return normalizeCustomAgentProfiles(profiles).find((profile) => profile.isDefault) ?? null
 }
@@ -154,9 +168,10 @@ export function setDefaultCustomAgentProfile(
 
 export function buildCustomAgentLaunch(
   profile: CustomAgentProfile,
-  shell: AgentStartupShell
+  shell: AgentStartupShell,
+  additionalArgs: readonly string[] = []
 ): CustomAgentLaunch {
-  const argv: [string, ...string[]] = [profile.executable, ...profile.args]
+  const argv: [string, ...string[]] = [profile.executable, ...profile.args, ...additionalArgs]
   return shell === 'posix'
     ? { command: buildShellCommandFromArgv(argv, shell) }
     : buildCustomAgentWindowsLaunch(argv, shell)

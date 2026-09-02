@@ -57,6 +57,32 @@ describe('AutomationService', () => {
     rmSync(testState.dir, { recursive: true, force: true })
   })
 
+  it('persists and clears a custom profile without replacing provider identity', async () => {
+    const store = await createStore()
+    store.addRepo(makeRepo())
+    const automation = store.createAutomation({
+      name: 'Luna review',
+      prompt: 'Review the repo',
+      agentId: 'codex',
+      customAgentProfileId: 'codex-luna',
+      projectId: 'r1',
+      workspaceMode: 'existing',
+      workspaceId: 'wt1',
+      timezone: 'UTC',
+      rrule: 'FREQ=DAILY;BYHOUR=9;BYMINUTE=0',
+      dtstart: Date.now()
+    })
+
+    expect(automation).toMatchObject({
+      agentId: 'codex',
+      customAgentProfileId: 'codex-luna'
+    })
+
+    const updated = store.updateAutomation(automation.id, { customAgentProfileId: null })
+    expect(updated.agentId).toBe('codex')
+    expect(updated).not.toHaveProperty('customAgentProfileId')
+  })
+
   it('dispatches an enabled automation when its next run is due', async () => {
     vi.setSystemTime(new Date('2026-05-13T08:59:00'))
     const store = await createStore()

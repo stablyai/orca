@@ -1,4 +1,4 @@
-import AgentCombobox from '@/components/agent/AgentCombobox'
+import AgentCombobox, { type CustomAgentComboboxEntry } from '@/components/agent/AgentCombobox'
 import { cn } from '@/lib/utils'
 import { translate } from '@/i18n/i18n'
 import {
@@ -37,6 +37,7 @@ type AutomationEditorSettingsSidebarProps = {
   settings: GlobalSettings | null
   draft: AutomationDraft
   visibleAgents: AgentCatalogEntry[]
+  visibleCustomAgents: readonly CustomAgentComboboxEntry[]
   pickerTriggerClassName: string
   segmentedGroupClassName: string
   segmentedItemClassName: string
@@ -60,6 +61,7 @@ export function AutomationEditorSettingsSidebar({
   settings,
   draft,
   visibleAgents,
+  visibleCustomAgents,
   pickerTriggerClassName,
   segmentedGroupClassName,
   segmentedItemClassName,
@@ -104,9 +106,24 @@ export function AutomationEditorSettingsSidebar({
                   onValueChange={(agentId) =>
                     agentId && onDraftChange((current) => ({ ...current, agentId }))
                   }
+                  customAgents={visibleCustomAgents}
+                  customValue={draft.customAgentProfileId}
+                  onCustomValueChange={(profileId) =>
+                    onDraftChange((current) => {
+                      const profile = visibleCustomAgents.find((entry) => entry.id === profileId)
+                      return profile
+                        ? {
+                            ...current,
+                            agentId: profile.baseAgent,
+                            customAgentProfileId: profile.id
+                          }
+                        : { ...current, customAgentProfileId: null }
+                    })
+                  }
                   defaultAgent={settings?.defaultTuiAgent ?? null}
                   triggerClassName={`h-9 w-full min-w-0 ${pickerTriggerClassName}`}
                   allowNarrowTrigger
+                  allowBlankTerminal={false}
                 />
               </Field>
             </div>

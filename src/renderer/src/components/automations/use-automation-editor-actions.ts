@@ -32,7 +32,14 @@ export function useAutomationEditorActions({
   destination: AutomationsPageDestinationState
   destinationForm: AutomationsPageDestinationFormState
 }) {
-  const { defaultAgent, worktreesByRepo, repoMap, fetchWorktrees, repos } = store
+  const {
+    defaultAgent,
+    defaultCustomAgentProfileId,
+    worktreesByRepo,
+    repoMap,
+    fetchWorktrees,
+    repos
+  } = store
   const {
     editRequestRef,
     setEditingAutomationId,
@@ -63,6 +70,7 @@ export function useAutomationEditorActions({
       name: '',
       prompt: '',
       agentId: defaultAgent,
+      customAgentProfileId: defaultCustomAgentProfileId,
       projectId: target.projectId,
       workspaceMode: 'existing',
       workspaceId: target.workspaceId,

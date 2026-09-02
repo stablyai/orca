@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   buildCustomAgentLaunch,
+  findEnabledCustomAgentProfile,
   getDefaultCustomAgentProfile,
   normalizeCustomAgentProfile,
   normalizeCustomAgentProfiles,
@@ -126,6 +127,23 @@ describe('custom agent profiles', () => {
         enabled: false
       }
     ])
+  })
+
+  it('finds only enabled profiles with the requested provider identity', () => {
+    const profile = {
+      id: 'luna',
+      name: 'Codex Luna',
+      baseAgent: 'codex',
+      baseAgentExecutable: 'codex',
+      executable: 'codex',
+      args: ['--model', 'luna']
+    } as const
+
+    expect(findEnabledCustomAgentProfile([profile], 'luna', 'codex')).toEqual(profile)
+    expect(findEnabledCustomAgentProfile([profile], 'luna', 'claude')).toBeNull()
+    expect(
+      findEnabledCustomAgentProfile([{ ...profile, enabled: false }], 'luna', 'codex')
+    ).toBeNull()
   })
 
   it('drops malformed, duplicate, and control-character-bearing profiles', () => {

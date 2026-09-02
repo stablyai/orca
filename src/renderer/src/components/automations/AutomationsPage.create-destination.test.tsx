@@ -184,6 +184,47 @@ describe('AutomationsPage create destination', () => {
     })
   })
 
+  it('refuses a client-side custom profile for a runtime destination', async () => {
+    api.automations.list.mockResolvedValue([])
+    scopedList([])
+    runtimeHost([], [])
+    addRuntimeProject()
+    mocks.state.automationHostFilter = RUNTIME_SELF_FILTER
+    const settings = mocks.state.settings as {
+      customAgentProfiles?: unknown[]
+      disabledTuiAgents?: string[]
+    }
+    settings.disabledTuiAgents = ['codex']
+    settings.customAgentProfiles = [
+      {
+        id: 'codex-luna',
+        name: 'Codex Luna',
+        baseAgent: 'codex',
+        baseAgentExecutable: 'codex',
+        executable: 'codex',
+        args: ['--model', 'luna']
+      }
+    ]
+
+    await renderPage()
+    await settleHostQueries()
+    await openCreateDialogFor(RUNTIME_REPO_ID, RUNTIME_WORKSPACE_ID)
+    await act(async () => {
+      mocks.editorDialog?.onDraftChange((current) => ({
+        ...(current as Record<string, unknown>),
+        agentId: 'codex',
+        customAgentProfileId: 'codex-luna'
+      }))
+    })
+    await save()
+
+    expect(runtimeCreateCalls()).toHaveLength(0)
+    expect(api.automations.create).not.toHaveBeenCalled()
+    expect(mocks.toastError).toHaveBeenCalledWith(
+      'Choose a built-in agent for automations stored on a paired Orca host.'
+    )
+  })
+
   it('refuses a desktop project for a runtime destination instead of sending its id', async () => {
     // The repo_not_found bug: the desktop repo id can never resolve on the
     // runtime, so the submit is refused here rather than by the remote host.

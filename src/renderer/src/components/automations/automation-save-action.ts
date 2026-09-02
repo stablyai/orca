@@ -9,6 +9,7 @@ import { parseDraftTime } from './automation-draft-model'
 import { saveHermesAutomation } from './automation-hermes-save'
 import { saveOrcaAutomation } from './automation-orca-save'
 import type { AutomationSaveContext } from './automation-save-context'
+import { findEnabledCustomAgentProfile } from '../../../../shared/custom-agent-profile'
 
 /** Validates editor input then delegates the provider-specific save transaction. */
 export function createAutomationSaveAction(context: AutomationSaveContext) {
@@ -60,9 +61,24 @@ export function createAutomationSaveAction(context: AutomationSaveContext) {
       )
       return
     }
+    const customAgentProfile = findEnabledCustomAgentProfile(
+      settings?.customAgentProfiles,
+      draft.customAgentProfileId,
+      draft.agentId
+    )
+    if (draft.customAgentProfileId && !customAgentProfile) {
+      toast.error(
+        translate(
+          'auto.components.automations.AutomationsPage.customAgentUnavailable',
+          'Choose an available custom agent before saving.'
+        )
+      )
+      return
+    }
     if (
       editingAutomationId === null &&
       !isHermesSave &&
+      !customAgentProfile &&
       !isTuiAgentEnabled(draft.agentId, settings?.disabledTuiAgents)
     ) {
       toast.error(

@@ -1,8 +1,9 @@
-import type { AgentCatalogEntry } from '@/lib/agent-catalog'
 import { isClipboardTextByteLengthOverLimit } from '../../../shared/clipboard-text'
 
-type RankedAgent = {
-  agent: AgentCatalogEntry
+export type AgentPickerSearchEntry = { id: string; label: string; cmd: string }
+
+type RankedAgent<T extends AgentPickerSearchEntry> = {
+  agent: T
   score: number
   index: number
 }
@@ -26,8 +27,8 @@ export function getAgentPickerCommandValue({
 }: {
   blankValue: string
   blankMatchesQuery: boolean
-  currentValue: AgentCatalogEntry['id'] | null
-  filteredAgents: readonly AgentCatalogEntry[]
+  currentValue: string | null
+  filteredAgents: readonly AgentPickerSearchEntry[]
   rawQuery: string
 }): string {
   const query = getAgentPickerSearchQuery(rawQuery)
@@ -43,10 +44,10 @@ export function getAgentPickerCommandValue({
   return filteredAgents[0]?.id ?? ''
 }
 
-export function searchAgentPickerEntries(
-  agents: readonly AgentCatalogEntry[],
+export function searchAgentPickerEntries<T extends AgentPickerSearchEntry>(
+  agents: readonly T[],
   rawQuery: string
-): AgentCatalogEntry[] {
+): T[] {
   const query = getAgentPickerSearchQuery(rawQuery)
   if (query === null) {
     return []
@@ -55,7 +56,7 @@ export function searchAgentPickerEntries(
     return [...agents]
   }
 
-  const matches: RankedAgent[] = []
+  const matches: RankedAgent<T>[] = []
   agents.forEach((agent, index) => {
     const score = scoreAgent(agent, query)
     if (score !== NO_MATCH) {
@@ -83,7 +84,7 @@ export function agentPickerBlankTerminalMatches(rawQuery: string): boolean {
   )
 }
 
-function scoreAgent(agent: AgentCatalogEntry, query: string): number {
+function scoreAgent(agent: AgentPickerSearchEntry, query: string): number {
   return Math.min(
     scoreCandidate(query, agent.label, 0),
     scoreCandidate(query, agent.id, 600),

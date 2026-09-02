@@ -21,6 +21,9 @@ export function initializeMainProcessAutomations(): AutomationService {
     allowRemoteHostScheduling: state.isServeMode,
     headlessDispatcher: state.isServeMode
       ? async ({ automation, run, target }) => {
+          if (automation.customAgentProfileId) {
+            throw new Error('Custom agent automations require the desktop app.')
+          }
           const terminalSnapshotLimit = 2_000
           let terminalHandle: string
           let terminalSessionId: string | null = null
