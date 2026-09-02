@@ -149,6 +149,21 @@ describe('SessionSearchStore', () => {
     expect(store.coverage().filesPending).toBe(0)
   })
 
+  it('drops a stale mark once the backfill indexes the file', async () => {
+    const root = await makeTempDir()
+    const path = join(root, `${SESSION_ID}.jsonl`)
+    await writeFile(path, `${userRecord(0, 'queued behind the backfill')}\n`)
+    registerSessionSearchIndexSink(null)
+    await parse(path)
+    registerSessionSearchIndexSink(store)
+    await parse(path)
+    expect(store.coverage().filesPending).toBe(1)
+
+    await withSessionSearchIndexRequired(() => parse(path))
+    expect(store.coverage()).toMatchObject({ sessionsIndexed: 1, filesPending: 0 })
+    expect(store.takeStale()).toEqual([])
+  })
+
   it('repairs a typo from the index vocabulary', async () => {
     const root = await makeTempDir()
     const path = join(root, `${SESSION_ID}.jsonl`)

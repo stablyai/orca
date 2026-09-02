@@ -58,6 +58,9 @@ export class SessionSearchStore implements SessionSearchIndexSink {
   apply(update: SessionSearchIndexUpdate): void {
     try {
       this.writer.apply(update)
+      // Why: list scans queue every file the backfill has not reached yet; once
+      // it lands, a later search must not re-parse the whole queue (8 s live).
+      this.stale.delete(update.candidate.file.path)
       this.lastIndexedAt = new Date().toISOString()
     } catch (error) {
       this.applyFailures += 1
