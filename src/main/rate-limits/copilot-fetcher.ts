@@ -5,14 +5,27 @@ import { join } from 'node:path'
 import { net } from 'electron'
 import type { ProviderRateLimits, RateLimitWindow } from '../../shared/rate-limit-types'
 
-// Why: GitHub's Copilot token exchange endpoint is shared by every Copilot
-// client (CLI, Chat, Neovim) — see IEntitlementsData/IQuotaSnapshotData in
-// microsoft/vscode's defaultAccount.ts for the authoritative response shape.
-const TOKEN_EXCHANGE_URL = 'https://api.github.com/copilot_internal/v2/token'
+// Why: /copilot_internal/user is the entitlements/usage endpoint every
+// GitHub Copilot editor plugin polls — see IEntitlementsData/IQuotaSnapshotData
+// in microsoft/vscode's defaultAccount.ts for the response shape. GitHub's
+// anti-scraping WAF blanket-403s requests missing a realistic client
+// signature, so the Editor-Version/Editor-Plugin-Version/User-Agent/
+// X-Github-Api-Version headers below are load-bearing, not decorative, and
+// Authorization must use the legacy `token` scheme rather than `Bearer`
+// (verified against a live token and cross-checked with the open-source
+// steipete/CodexBar and getagentseal/codeburn Copilot usage fetchers).
+const USAGE_URL = 'https://api.github.com/copilot_internal/user'
 const API_TIMEOUT_MS = 10_000
 const KEYCHAIN_SERVICE = 'copilot-cli'
 const KEYCHAIN_COMMAND_TIMEOUT_MS = 3_000
 const MONTHLY_WINDOW_MINUTES = 30 * 24 * 60 // 30d
+const USAGE_REQUEST_HEADERS = {
+  Accept: 'application/json',
+  'Editor-Version': 'vscode/1.96.2',
+  'Editor-Plugin-Version': 'copilot-chat/0.26.7',
+  'User-Agent': 'GitHubCopilotChat/0.26.7',
+  'X-Github-Api-Version': '2025-04-01'
+} as const
 
 const OAUTH_TOKEN_KEYS = ['oauth_token', 'oauthToken', 'token', 'access_token', 'accessToken']
 
@@ -126,7 +139,7 @@ async function readOAuthToken(): Promise<CredentialsReadResult> {
 }
 
 // ---------------------------------------------------------------------------
-// Token exchange payload parsing (see IEntitlementsData/IQuotaSnapshotData in
+// Usage payload parsing (see IEntitlementsData/IQuotaSnapshotData in
 // microsoft/vscode's src/vs/workbench/services/accounts/browser/defaultAccount.ts)
 // ---------------------------------------------------------------------------
 
@@ -136,7 +149,7 @@ type CopilotQuotaSnapshot = {
   quota_reset_at?: number
 }
 
-type CopilotTokenExchangeResponse = {
+type CopilotUsageResponse = {
   quota_snapshots?: {
     premium_interactions?: CopilotQuotaSnapshot
   }
@@ -153,9 +166,12 @@ function parseResetDescription(date: Date): string {
 
 function resolveResetTimestamp(
   snapshot: CopilotQuotaSnapshot,
-  data: CopilotTokenExchangeResponse
+  data: CopilotUsageResponse
 ): { resetsAt: number | null; resetDescription: string | null } {
-  if (typeof snapshot.quota_reset_at === 'number') {
+  // A snapshot with no active reset window (e.g. unlimited quota) reports
+  // quota_reset_at: 0 rather than omitting the field — treat 0 as "unset",
+  // not as the Unix epoch, and fall through to the ISO date fields below.
+  if (typeof snapshot.quota_reset_at === 'number' && snapshot.quota_reset_at > 0) {
     const date = new Date(snapshot.quota_reset_at * 1000)
     if (!Number.isNaN(date.getTime())) {
       return { resetsAt: date.getTime(), resetDescription: parseResetDescription(date) }
@@ -171,7 +187,7 @@ function resolveResetTimestamp(
   return { resetsAt: null, resetDescription: null }
 }
 
-function mapMonthlyWindow(data: CopilotTokenExchangeResponse): RateLimitWindow | null {
+function mapMonthlyWindow(data: CopilotUsageResponse): RateLimitWindow | null {
   const snapshot = data.quota_snapshots?.premium_interactions
   if (!snapshot || snapshot.unlimited || typeof snapshot.percent_remaining !== 'number') {
     return null
@@ -185,7 +201,7 @@ function mapMonthlyWindow(data: CopilotTokenExchangeResponse): RateLimitWindow |
   }
 }
 
-function mapTokenExchangeResponse(data: CopilotTokenExchangeResponse): ProviderRateLimits {
+function mapUsageResponse(data: CopilotUsageResponse): ProviderRateLimits {
   const monthly = mapMonthlyWindow(data)
   return {
     provider: 'copilot',
@@ -217,8 +233,8 @@ function result(status: ProviderRateLimits['status'], error: string | null): Pro
  * `copilot-cli`) or in `~/.config/github-copilot/{apps,hosts}.json` on
  * Linux/Windows, and is owned by the Copilot CLI's own login flow. Orca must
  * never write, refresh, or invalidate it. We only read the current token and
- * call the same token-exchange endpoint every Copilot client uses to learn
- * the account's premium-interactions quota.
+ * call the same entitlements endpoint every Copilot editor plugin polls to
+ * learn the account's premium-interactions quota.
  */
 export async function fetchCopilotRateLimits(): Promise<ProviderRateLimits> {
   const readResult = await readOAuthToken()
@@ -230,8 +246,8 @@ export async function fetchCopilotRateLimits(): Promise<ProviderRateLimits> {
   }
 
   try {
-    const res = await net.fetch(TOKEN_EXCHANGE_URL, {
-      headers: { Authorization: `Bearer ${readResult.token}`, Accept: 'application/json' },
+    const res = await net.fetch(USAGE_URL, {
+      headers: { ...USAGE_REQUEST_HEADERS, Authorization: `token ${readResult.token}` },
       signal: AbortSignal.timeout(API_TIMEOUT_MS)
     })
     if (res.status === 401 || res.status === 403) {
@@ -241,7 +257,7 @@ export async function fetchCopilotRateLimits(): Promise<ProviderRateLimits> {
       return result('error', `Copilot usage request failed (HTTP ${res.status})`)
     }
     const data: unknown = await res.json()
-    return mapTokenExchangeResponse(typeof data === 'object' && data !== null ? data : {})
+    return mapUsageResponse(typeof data === 'object' && data !== null ? data : {})
   } catch (err) {
     return result('error', err instanceof Error ? err.message : 'Copilot usage request failed')
   }
