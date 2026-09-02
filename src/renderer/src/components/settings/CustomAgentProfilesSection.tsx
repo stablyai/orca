@@ -180,10 +180,6 @@ export const CustomAgentProfilesSection = forwardRef<
             ) : null}
           </span>
         }
-        description={translate(
-          'auto.components.settings.CustomAgentProfilesSection.description',
-          'Named launch profiles with literal arguments. Codex history comes from Installed → Codex.'
-        )}
         action={
           <Button
             ref={createButtonRef}

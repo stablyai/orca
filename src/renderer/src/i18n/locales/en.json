@@ -11860,7 +11860,6 @@
           "invalidProfile": "The name, executable, and arguments must be literal text without control characters.",
           "limit": "Custom agents are limited to {{value0}} profiles.",
           "title": "Custom agents",
-          "description": "Named launch profiles with literal arguments. Codex history comes from Installed → Codex.",
           "closeEditor": "Close {{value0}} editor",
           "editProfile": "Edit {{value0}}",
           "create": "Create custom agent",
