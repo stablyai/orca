@@ -2,7 +2,7 @@ import { chmod, mkdir, mkdtemp, rm, symlink, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
-import { isCommandOnLocalPath } from './command-path-resolver'
+import { isCommandOnLocalPath, resolveCommandOnLocalPath } from './command-path-resolver'
 
 describe('isCommandOnLocalPath', () => {
   it('returns false for an empty command', async () => {
@@ -29,6 +29,15 @@ describe('isCommandOnLocalPath', () => {
       await expect(
         isCommandOnLocalPath('runme', { platform: 'linux', env: { PATH: dir } })
       ).resolves.toBe(true)
+    })
+
+    it('resolves the absolute path of the executable it found', async () => {
+      await expect(
+        resolveCommandOnLocalPath('runme', { platform: 'linux', env: { PATH: dir } })
+      ).resolves.toBe(path.posix.join(dir, 'runme'))
+      await expect(
+        resolveCommandOnLocalPath('plain', { platform: 'linux', env: { PATH: dir } })
+      ).resolves.toBeNull()
     })
 
     it('rejects a non-executable file on PATH', async () => {
