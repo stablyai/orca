@@ -195,6 +195,59 @@ describe('materializeWorktreePushTargetRemote', () => {
     expect(fetchCalls).toEqual([])
   })
 
+  it("gives a joiner its own branch wiring instead of the minting sibling's target", async () => {
+    // Why (#17828 review): the single flight is keyed on the remote, but the refspec widen,
+    // tracking-ref fetch and upstream link are all per-branch. A sibling worktree joining an
+    // in-flight mint for a *different* branch previously received the minter's target and
+    // skipped all three, leaving its own branch with no upstream.
+    let remoteExists = false
+    let releaseAdd!: () => void
+    const addGate = new Promise<void>((resolve) => {
+      releaseAdd = resolve
+    })
+    gitExecFileAsyncMock.mockImplementation(async (args: string[]) => {
+      if (args[0] === 'remote' && args[1] === 'get-url') {
+        if (!remoteExists) {
+          throw new Error('No such remote')
+        }
+        return { stdout: `${FORK_URL}\n`, stderr: '' }
+      }
+      if (args[0] === 'remote' && args[1] === 'add') {
+        await addGate
+        remoteExists = true
+        return { stdout: '', stderr: '' }
+      }
+      if (args[0] === 'config' && args[1] === '--get-all') {
+        throw new Error('no such section')
+      }
+      if (args[0] === 'symbolic-ref') {
+        return { stdout: 'joiner/branch\n', stderr: '' }
+      }
+      return { stdout: '', stderr: '' }
+    })
+
+    const minter = materializeWorktreePushTargetRemote(REPO_PATH, forkTarget())
+    await Promise.resolve()
+    const joiner = materializeWorktreePushTargetRemote(
+      REPO_PATH,
+      forkTarget({ branchName: 'joiner/branch' })
+    )
+    releaseAdd()
+    const [, joined] = await Promise.all([minter, joiner])
+
+    // The joiner keeps its own branch rather than inheriting the minter's.
+    expect(joined.branchName).toBe('joiner/branch')
+    const calls = gitExecFileAsyncMock.mock.calls.map((call) => call[0] as string[])
+    expect(calls).toContainEqual([
+      'branch',
+      '--set-upstream-to',
+      `${FORK_REMOTE}/joiner/branch`,
+      'joiner/branch'
+    ])
+    // Exactly one mint: the joiner must not have raced a second `remote add`.
+    expect(calls.filter((call) => call[0] === 'remote' && call[1] === 'add')).toHaveLength(1)
+  })
+
   it('persists remoteCreated to the store when a worktreeId is provided and the mint succeeds', async () => {
     // Why (#17828 review follow-up): on-demand materialization never went through the
     // create-time setWorktreeMeta write, so a lazily-minted remote stayed invisible to

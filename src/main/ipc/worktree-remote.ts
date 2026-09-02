@@ -1055,38 +1055,33 @@ export async function materializeWorktreePushTargetRemote(
   }
   const execGit: GitRemoteExec = (args, cwd) => gitExecFileAsync(args, { cwd, ...gitOptions })
   if (await remoteAlreadyMatchesUrl(execGit, repoPath, target.remoteName, target.remoteUrl)) {
-    // Why (review follow-up): the short-circuit is the common case for every call after the
-    // first, and for a sibling worktree reusing the same fork remote under a different branch
-    // -- it must still restore the upstream link and widen the refspec, or both stay stuck at
-    // whatever state create left them in. Previously these only ran inside
-    // prepareWorktreePushTarget, unreachable once the remote already exists.
-    await ensureRemoteTracksBranchNarrowly(execGit, repoPath, target.remoteName, target.branchName)
-    // Why: widening only rewrites config -- it never imports anything. For a sibling
-    // worktree's first materialize of a *new* branch on an already-existing remote, the
-    // branch's tracking ref doesn't exist yet, and `--set-upstream-to` below hard-fails
-    // with "the requested upstream branch does not exist" (verified against real git).
-    // Skip the fetch when the ref is already there so a repeat push/pull materialize
-    // (the common case) stays a local-only probe with no network round-trip.
-    if (
-      !(await forkRemoteTrackingRefExists(execGit, repoPath, target.remoteName, target.branchName))
-    ) {
-      // Why: a network fetch, unlike the local-only probes above -- bound it the same as
-      // the full-mint path's fetch so it can't hang indefinitely (see the timeout constant).
-      await gitExecFileAsync(
-        [
-          'fetch',
-          target.remoteName,
-          buildNarrowForkFetchRefspec(target.remoteName, target.branchName)
-        ],
-        { cwd: repoPath, ...gitOptions, timeout: DEFERRED_PUSH_TARGET_FETCH_TIMEOUT_MS }
-      )
-    }
-    return restoreUpstreamAfterMaterialize(execGit, repoPath, target)
+    return adoptExistingForkRemoteForBranch(
+      execGit,
+      repoPath,
+      target,
+      gitOptions,
+      store,
+      repoId,
+      worktreeId
+    )
   }
   const key = worktreePushTargetMaterializeKey(repoPath, target.remoteName)
   const existing = worktreePushTargetMaterializeInflight.get(key)
   if (existing) {
-    return existing
+    // Why: the single flight is keyed on the *remote*, but everything after the remote add is
+    // per-branch. A joiner waiting on a sibling worktree's mint must not take that sibling's
+    // target -- it would inherit the sibling's branch and silently skip its own refspec widen,
+    // tracking-ref fetch, and upstream link. Wait for the remote to exist, then do its own.
+    await existing.catch(() => {})
+    return adoptExistingForkRemoteForBranch(
+      execGit,
+      repoPath,
+      target,
+      gitOptions,
+      store,
+      repoId,
+      worktreeId
+    )
   }
   const promise = prepareWorktreePushTarget(repoPath, target, store, repoId, gitOptions)
     .then((prepared) => restoreUpstreamAfterMaterialize(execGit, repoPath, prepared))
@@ -1101,6 +1096,53 @@ export async function materializeWorktreePushTargetRemote(
     })
   worktreePushTargetMaterializeInflight.set(key, promise)
   return promise
+}
+
+// Why: the remote already exists -- minted by an earlier call, by create, or by a sibling
+// worktree. Everything left is per-branch, and it must run for *this* target: the refspec
+// widen, the tracking-ref fetch, and the upstream link. Previously these only ran inside
+// prepareWorktreePushTarget, unreachable once the remote was there.
+async function adoptExistingForkRemoteForBranch(
+  execGit: GitRemoteExec,
+  repoPath: string,
+  target: GitPushTarget,
+  gitOptions: { wslDistro?: string },
+  store: WorktreePushTargetStore | undefined,
+  repoId: string | undefined,
+  worktreeId: string | undefined
+): Promise<GitPushTarget> {
+  await ensureRemoteTracksBranchNarrowly(execGit, repoPath, target.remoteName, target.branchName)
+  // Why: widening only rewrites config -- it never imports anything. For a sibling worktree's
+  // first materialize of a *new* branch on an already-existing remote, the branch's tracking
+  // ref doesn't exist yet, and `--set-upstream-to` below hard-fails with "the requested
+  // upstream branch does not exist" (verified against real git). Skip the fetch when the ref
+  // is already there so a repeat push/pull materialize stays a local-only probe.
+  if (
+    !(await forkRemoteTrackingRefExists(execGit, repoPath, target.remoteName, target.branchName))
+  ) {
+    // Why: a network fetch, unlike the local-only probes above -- bound it the same as the
+    // full-mint path's fetch so it can't hang indefinitely.
+    await gitExecFileAsync(
+      [
+        'fetch',
+        target.remoteName,
+        buildNarrowForkFetchRefspec(target.remoteName, target.branchName)
+      ],
+      { cwd: repoPath, ...gitOptions, timeout: DEFERRED_PUSH_TARGET_FETCH_TIMEOUT_MS }
+    )
+  }
+  const restored = await restoreUpstreamAfterMaterialize(execGit, repoPath, target)
+  // Why: a remote another worktree minted is still Orca-owned. Without stamping ownership on
+  // the adopting worktree too, removing the minter leaves the survivor's metadata unowned and
+  // #17842's sweep -- which gates solely on `remoteCreated` -- can never reclaim the remote.
+  const owned =
+    restored.remoteCreated === true ||
+    (store !== undefined &&
+      repoId !== undefined &&
+      isPushTargetRemoteCreatedByKnownWorktree(store, restored, repoId))
+  const adopted = owned ? { ...restored, remoteCreated: true } : restored
+  persistMaterializedPushTargetIfCreated(store, worktreeId, adopted)
+  return adopted
 }
 
 // Why (review follow-up): on-demand materialization never went through the create-time
