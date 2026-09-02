@@ -117,9 +117,35 @@ function yieldToIo(): Promise<void> {
   return new Promise<void>((resolve) => setImmediate(resolve))
 }
 
-async function until(predicate: () => boolean): Promise<void> {
-  for (let attempt = 0; attempt < 200 && !predicate(); attempt += 1) {
+/**
+ * Spins the real event loop until `predicate` holds, so filesystem completions
+ * can land while `setTimeout` is faked. Bounded by wall clock rather than by a
+ * turn count: a loaded CI runner exhausts a fixed number of turns long before
+ * the I/O finishes, which fails as a confusing assertion somewhere else.
+ */
+async function until(predicate: () => boolean, what: string): Promise<void> {
+  const deadline = Date.now() + 10_000
+  while (!predicate() && Date.now() < deadline) {
     await yieldToIo()
+  }
+  if (!predicate()) {
+    throw new Error(`timed out after 10s waiting for ${what}`)
+  }
+}
+
+/**
+ * Like `until`, but for conditions that also need a scheduled retry to fire:
+ * spinning the real loop alone can never satisfy them, because `setTimeout` is
+ * faked. Alternates advancing the fake clock with yielding to real I/O.
+ */
+async function untilWithTimers(predicate: () => boolean, what: string): Promise<void> {
+  const deadline = Date.now() + 10_000
+  while (!predicate() && Date.now() < deadline) {
+    await vi.advanceTimersByTimeAsync(QUIET_MS)
+    await yieldToIo()
+  }
+  if (!predicate()) {
+    throw new Error(`timed out after 10s waiting for ${what}`)
   }
 }
 
@@ -276,14 +302,13 @@ describe('RepoRefMaintenance single-flight and backoff', () => {
     maintenance.arm(target('local::/a/.git', refs, slowPack))
     maintenance.arm(target('local::/b/.git', refs, slowPack))
     await vi.advanceTimersByTimeAsync(QUIET_MS)
-    await until(() => concurrent === 1)
+    await until(() => concurrent === 1, 'a pack to start')
     expect(concurrent).toBe(1)
 
     releases.shift()?.()
     await maintenance.whenAttemptSettled()
-    // The second repo was deferred, so its retry waits a backed-off delay.
-    await vi.advanceTimersByTimeAsync(QUIET_MS * 2)
-    await until(() => concurrent === 1)
+    // The second repo was deferred behind the first, so its retry is on a timer.
+    await untilWithTimers(() => concurrent === 1, 'the second repo to start')
     releases.shift()?.()
     await maintenance.whenAttemptSettled()
 
@@ -324,7 +349,7 @@ describe('RepoRefMaintenance single-flight and backoff', () => {
     expect(finished).toBe(false)
 
     release?.()
-    await until(() => paused)
+    await until(() => paused, 'pause() to resolve')
     // ...and released without the pack ever being cancelled.
     expect(paused).toBe(true)
     expect(finished).toBe(true)
@@ -350,7 +375,7 @@ describe('RepoRefMaintenance single-flight and backoff', () => {
       paused = true
     })
     await vi.advanceTimersByTimeAsync(PACKED_REFS_LOCK_WAIT_MS)
-    await until(() => paused)
+    await until(() => paused, 'pause() to resolve')
 
     expect(paused).toBe(true)
   })
@@ -379,7 +404,12 @@ describe('RepoRefMaintenance single-flight and backoff', () => {
     const refs = await refsDirectoryWith(THRESHOLD + 2)
     const { maintenance, packRefs } = createHarness()
 
-    maintenance.arm(target('local::/a/.git', refs, packRefs))
+    const firstPack = packStartSignal()
+    const observed = target('local::/a/.git', refs, async (lock) => {
+      firstPack.onStart(lock)
+      await packRefs(lock)
+    })
+    maintenance.arm(observed)
     maintenance.arm(target('local::/b/.git', refs, packRefs))
     await vi.advanceTimersByTimeAsync(QUIET_MS - 1)
 
@@ -389,7 +419,7 @@ describe('RepoRefMaintenance single-flight and backoff', () => {
     expect(packRefs).not.toHaveBeenCalled()
 
     await vi.advanceTimersByTimeAsync(QUIET_MS)
-    await until(() => packRefs.mock.calls.length > 0)
+    await firstPack.started
     expect(packRefs).toHaveBeenCalled()
   })
 
