@@ -17,6 +17,13 @@ import {
   resolveAgentPromptEffectTimeoutMs,
   verifyAgentPromptSubmission
 } from './agent-prompt-submission-verification'
+import {
+  AGENT_PROMPT_ECHO_POLL_INTERVAL_MS,
+  AGENT_PROMPT_ECHO_SETTLE_MS,
+  deriveAgentPromptPasteEchoProbe,
+  getAgentPromptPasteEchoTimeoutMs,
+  isAgentPromptPasteEchoObserved
+} from './agent-prompt-paste-echo'
 
 export class OrcaRuntimeWithWriteTerminalAgentPrompt extends OrcaRuntimeWithResolveAuthoritativeTerminalWaitPermission {
   protected async writeTerminalAgentPrompt(
@@ -72,6 +79,19 @@ export class OrcaRuntimeWithWriteTerminalAgentPrompt extends OrcaRuntimeWithReso
       } finally {
         renderGate.dispose()
       }
+      // Why: the gate is a readiness signal for redraw activity, not proof the composer
+      // consumed the paste -- on Windows a Codex pane can still be streaming per-keystroke
+      // redraws past the gate's hard cap, and Enter written mid-burst becomes a stray
+      // newline (agent_prompt_stalled). Poll the pane for the paste tail (or a placeholder
+      // like "[Pasted text #1 +N lines]") before proceeding.
+      await this.waitForAgentPromptPasteEcho(
+        handle,
+        ptyId,
+        generation,
+        pastePayload,
+        writeHostPlatform,
+        options
+      )
     } else {
       await waitForAgentPromptDelay(
         getAgentPromptSubmitDelayMs(writeHostPlatform, pasteByteLength),
@@ -105,5 +125,36 @@ export class OrcaRuntimeWithWriteTerminalAgentPrompt extends OrcaRuntimeWithReso
       signal: options.signal
     })
     return 1
+  }
+
+  /** Polls the pane for the paste tail (or a collapse placeholder) so Enter never overtakes a
+   *  redraw burst the render gate's hard cap already gave up waiting on. Best-effort: on
+   *  timeout it falls back to today's behavior rather than blocking submission indefinitely. */
+  private async waitForAgentPromptPasteEcho(
+    handle: string,
+    ptyId: string,
+    generation: number,
+    pastePayload: string,
+    writeHostPlatform: NodeJS.Platform,
+    options: RuntimeTerminalWriteOptions
+  ): Promise<void> {
+    const probe = deriveAgentPromptPasteEchoProbe(pastePayload)
+    if (probe === null) {
+      return
+    }
+    const deadlineAt = Date.now() + getAgentPromptPasteEchoTimeoutMs(writeHostPlatform)
+    while (Date.now() < deadlineAt) {
+      assertAgentPromptRequestActive(options.signal)
+      this.assertAgentPromptGeneration(ptyId, generation)
+      const waitText = this.getTerminalAgentStatusSnapshot(handle, ptyId).waitText
+      if (isAgentPromptPasteEchoObserved(waitText, probe)) {
+        await waitForAgentPromptDelay(AGENT_PROMPT_ECHO_SETTLE_MS, options.signal)
+        return
+      }
+      await waitForAgentPromptDelay(
+        Math.min(AGENT_PROMPT_ECHO_POLL_INTERVAL_MS, Math.max(0, deadlineAt - Date.now())),
+        options.signal
+      )
+    }
   }
 }
