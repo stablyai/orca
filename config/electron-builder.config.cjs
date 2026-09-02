@@ -18,6 +18,10 @@ const {
   verifyPackagedNodePtyJobOwnership
 } = require('./scripts/verify-packaged-node-pty-job-ownership.cjs')
 const { verifySkillsCliRuntime } = require('./scripts/verify-skills-cli-runtime.cjs')
+const {
+  extendMacElectronNodeHostInfoPlist,
+  macTerminalProtectedFolderUsageDescriptions
+} = require('./mac-electron-node-host-privacy.cjs')
 
 // Why: dev-channel builds must carry the *release* identity — same bundle id,
 // Developer ID signature, and notarization ticket — or Squirrel.Mac refuses to
@@ -255,6 +259,9 @@ module.exports = {
       throw new Error(`Missing packaged resources directory: ${resourcesDir}`)
     }
     if (context.electronPlatformName === 'darwin') {
+      const appPath = join(context.appOutDir, `${context.packager.appInfo.productFilename}.app`)
+      // afterPack runs before signing seals the nested helper bundle.
+      extendMacElectronNodeHostInfoPlist(appPath, context.packager.appInfo.productFilename)
       const architectureByEnum = { 1: 'x64', 3: 'arm64' }
       const architecture = architectureByEnum[context.arch]
       if (!architecture) {
@@ -403,6 +410,7 @@ module.exports = {
     entitlements: 'resources/build/entitlements.mac.plist',
     entitlementsInherit: 'resources/build/entitlements.mac.plist',
     extendInfo: {
+      ...macTerminalProtectedFolderUsageDescriptions,
       NSAppleEventsUsageDescription:
         'Orca allows terminal-launched developer tools to automate local apps when you request it.',
       NSBluetoothAlwaysUsageDescription:
@@ -417,11 +425,7 @@ module.exports = {
       NSMicrophoneUsageDescription: "Application requests access to the device's microphone.",
       NSAudioCaptureUsageDescription:
         'Orca allows terminal-launched developer tools to capture desktop audio when you request it.',
-      NSBonjourServices: ['_http._tcp', '_https._tcp'],
-      NSDocumentsFolderUsageDescription:
-        "Application requests access to the user's Documents folder.",
-      NSDownloadsFolderUsageDescription:
-        "Application requests access to the user's Downloads folder."
+      NSBonjourServices: ['_http._tcp', '_https._tcp']
     },
     // Why: local macOS validation builds should launch without Apple release
     // credentials. Hardened runtime + notarization stay enabled only on the
