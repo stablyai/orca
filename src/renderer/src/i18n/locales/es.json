@@ -10278,6 +10278,12 @@
           "saveFailed": "No se pudieron guardar los valores predeterminados de visibilidad.",
           "updateServer": "Actualiza este servidor para configurar los valores predeterminados de las fuentes.",
           "updateServerDefaults": "Actualiza este servidor para configurar los valores predeterminados de visibilidad."
+        },
+        "EditorKeybindingsSetting": {
+          "78648745bc": "Atajos del editor",
+          "1b23c01cc6": "Predeterminado",
+          "77674e2d1e": "Vim",
+          "a30ca600ee": "Usa los atajos modales de Vim en el editor de código en lugar de la edición estándar."
         }
       },
       "right": {

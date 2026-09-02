@@ -10286,6 +10286,12 @@
           "reviewStepDescription": "최근 실행을 검토하고 필요할 때 언제든지 작업을 계속할 수 있습니다.",
           "openAutomations": "자동화 열기",
           "openAutomationsDescription": "일정을 생성하고 최근 실행을 확인합니다."
+        },
+        "EditorKeybindingsSetting": {
+          "78648745bc": "편집기 키 바인딩",
+          "1b23c01cc6": "기본값",
+          "77674e2d1e": "Vim",
+          "a30ca600ee": "표준 편집 대신 코드 편집기에서 Vim 모달 키 바인딩을 사용합니다."
         }
       },
       "right": {
