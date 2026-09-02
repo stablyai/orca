@@ -185,7 +185,7 @@ export async function createRuntimeLocalGitWorktree(args: {
         )) ?? {})
   let addResult: AddWorktreeResult
   try {
-    const preparedResult =
+    const preparedAttempt =
       sparseDirectories.length === 0 && !args.checkoutExistingBranch
         ? await consumePreparedWorktreeCreate({
             repoPath: args.repo.path,
@@ -197,8 +197,9 @@ export async function createRuntimeLocalGitWorktree(args: {
             ...(preparedWorktreeOptions ? { options: preparedWorktreeOptions } : {})
           })
         : null
-    if (preparedResult) {
-      addResult = preparedResult
+    // This path has no create-span recorder, so the miss reason is only observable on the IPC path.
+    if (preparedAttempt?.status === 'hit') {
+      addResult = preparedAttempt.result
     } else if (sparseDirectories.length > 0) {
       addResult =
         (await (addOptions

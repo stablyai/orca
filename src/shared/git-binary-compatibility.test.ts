@@ -182,6 +182,38 @@ describeBinaryCompatibility('real Git binary compatibility', () => {
     await runGit(['branch', '-D', 'compat-prepared-final'])
   })
 
+  // Why pin this: the prepared-checkout retarget bound reads these as data, and it fails closed,
+  // so a version that printed a different shape would silently stop every retarget rather than
+  // error. Built with `commit-tree` so the check leaves no ref, branch, or worktree behind.
+  it('measures retarget drift identically on every supported Git', async () => {
+    const tree = (await runGit(['rev-parse', 'HEAD^{tree}'])).stdout.trim()
+    const head = (await runGit(['rev-parse', 'HEAD'])).stdout.trim()
+    const ahead1 = (await runGit(['commit-tree', tree, '-p', head, '-m', 'drift 1'])).stdout.trim()
+    const ahead2 = (
+      await runGit(['commit-tree', tree, '-p', ahead1, '-m', 'drift 2'])
+    ).stdout.trim()
+
+    await expect(
+      runGit(['rev-list', '--count', '--max-count=101', '--end-of-options', `${head}..${ahead2}`])
+    ).resolves.toMatchObject({ stdout: '2\n' })
+    // `--max-count` must report the capped number, not the full one: the bound reads it as a
+    // ceiling, so a Git that returned the true count would reject every retarget instead.
+    await expect(
+      runGit(['rev-list', '--count', '--max-count=1', '--end-of-options', `${head}..${ahead2}`])
+    ).resolves.toMatchObject({ stdout: '1\n' })
+    await expect(
+      runGit(['rev-list', '--count', '--max-count=101', '--end-of-options', `${ahead2}..${head}`])
+    ).resolves.toMatchObject({ stdout: '0\n' })
+
+    await expect(runGit(['merge-base', '--end-of-options', head, ahead2])).resolves.toMatchObject({
+      stdout: `${head}\n`
+    })
+    // A parentless commit shares no history, which is the case the bound must reject however few
+    // commits each side carries.
+    const unrelated = (await runGit(['commit-tree', tree, '-m', 'unrelated root'])).stdout.trim()
+    await expect(runGit(['merge-base', '--end-of-options', head, unrelated])).rejects.toBeDefined()
+  })
+
   it('recognizes ref and merge-tree compatibility boundaries', async () => {
     const fetchHeadPath = join(repoPath, '.git', 'FETCH_HEAD')
     await writeFile(fetchHeadPath, 'sentinel\n')
