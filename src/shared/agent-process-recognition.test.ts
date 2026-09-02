@@ -173,6 +173,11 @@ describe('agent process recognition', () => {
         'node /Users/dev/.nvm/versions/node/v26.5.1/lib/node_modules/bobshell/dist/bob.js -p review'
       )
     ).toBeNull()
+    // Why: the package marker needs a segment boundary, the same rule the headless
+    // matcher applies, so a look-alike directory is neither Bob nor a Bob one-shot.
+    expect(
+      recognizeAgentProcessFromCommandLine('node /repo/fake-node_modules/bobshell/dist/bob.js chat')
+    ).toBeNull()
   })
 
   it('recognizes Ante without classifying ante-prefixed path fragments as the agent', () => {
