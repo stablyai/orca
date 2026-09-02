@@ -49,9 +49,9 @@ function status(overrides: Partial<AgentStatusEntry> = {}): AgentStatusEntry {
 
 describe('automation session reuse', () => {
   it('selects the latest completed live session for the same automation and workspace', () => {
-    const session = findReusableAutomationSession({
+    const args = {
       automationId: 'auto-1',
-      agentId: 'claude',
+      agentId: 'claude' as const,
       worktreeId: 'wt-1',
       currentRunId: 'run-current',
       runs: [
@@ -72,9 +72,12 @@ describe('automation session reuse', () => {
           ]
         }
       } as never
-    })
+    }
 
-    expect(session).toEqual({ tabId: 'tab-1', ptyId: 'pty-1', paneKey })
+    expect(findReusableAutomationSession(args)).toEqual({ tabId: 'tab-1', ptyId: 'pty-1', paneKey })
+    expect(
+      findReusableAutomationSession({ ...args, customAgentProfileId: 'claude-sonnet' })
+    ).toBeNull()
   })
 
   it('uses the PTY recorded for the exact split-pane run', () => {

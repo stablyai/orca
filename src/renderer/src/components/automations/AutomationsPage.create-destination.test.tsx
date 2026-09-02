@@ -33,6 +33,7 @@ import { listedRow } from './automations-page-listed-items'
 import { makeAutomation, REPO_ID, WORKSPACE_ID } from './automations-page-fixtures'
 import type { Repo } from '../../../../shared/repo-types'
 import type { ProjectHostSetup } from '../../../../shared/project-types'
+import type { AutomationTemplate } from './automation-templates'
 
 installAutomationsPageHarness()
 
@@ -160,6 +161,45 @@ function runtimeCreateCalls(): unknown[][] {
 }
 
 describe('AutomationsPage create destination', () => {
+  it('clears the default custom agent when a template selects a built-in', async () => {
+    mocks.state.settings = {
+      ...(mocks.state.settings as Record<string, unknown>),
+      customAgentProfiles: [
+        {
+          id: 'codex-luna',
+          name: 'Codex Luna',
+          baseAgent: 'codex',
+          baseAgentExecutable: 'codex',
+          executable: 'codex',
+          args: ['--model', 'luna'],
+          isDefault: true
+        }
+      ]
+    }
+    await renderPage()
+    const openFromTemplate = mocks.listPanel?.openCreateDialog as
+      | ((template: AutomationTemplate) => void)
+      | undefined
+
+    await act(async () => {
+      openFromTemplate?.({
+        id: 'claude-review',
+        category: 'Review',
+        label: 'Claude review',
+        description: 'Review with Claude',
+        name: 'Claude review',
+        prompt: 'Review the repository.',
+        preset: 'daily',
+        agentId: 'claude'
+      })
+    })
+
+    expect(mocks.editorDialog?.draft).toMatchObject({
+      agentId: 'claude',
+      customAgentProfileId: null
+    })
+  })
+
   it('creates on the selected runtime rather than under the desktop authority', async () => {
     api.automations.list.mockResolvedValue([])
     scopedList([])

@@ -7,7 +7,7 @@ import {
   WINDOWS_ARGUMENT_CORPUS,
   WINDOWS_ARGUMENT_CORPUS_ENV
 } from './child-process/__fixtures__/windows-argument-corpus'
-import { buildCustomAgentLaunch } from './custom-agent-profile'
+import { buildCustomAgentLaunch, normalizeCustomAgentProfile } from './custom-agent-profile'
 import { getCmdExePath } from './windows-batch-spawn'
 import { removeTreeSync } from './windows-transient-lock-removal'
 
@@ -221,5 +221,18 @@ describeOnWindows('custom agent Windows argument round-trip', () => {
 
     expect(result.code, JSON.stringify(result)).toBe(0)
     expect(result.stdout).toContain(`${marker}${argument.length}`)
+  })
+
+  it('rejects additional arguments that overflow the Windows environment payload', () => {
+    const profile = normalizeCustomAgentProfile({
+      id: 'additional-argument-overflow',
+      name: 'Additional argument overflow',
+      executable: 'codex',
+      args: ['x'.repeat(16_000)]
+    })!
+
+    expect(() => buildCustomAgentLaunch(profile, 'powershell', ['y'.repeat(9_000)])).toThrow(
+      'Custom agent launch arguments exceed the Windows environment limit.'
+    )
   })
 })

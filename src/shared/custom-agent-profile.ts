@@ -13,6 +13,12 @@ const PROFILE_ID_MAX = 128
 const PROFILE_NAME_MAX = 80
 const EXECUTABLE_MAX = 4096
 const WINDOWS_ENV_VALUE_CHARS_MAX = 32_767
+
+function fitsWindowsEnvironmentValue(argv: readonly string[]): boolean {
+  const bytes = new TextEncoder().encode(JSON.stringify(argv)).byteLength
+  return 4 * Math.ceil(bytes / 3) <= WINDOWS_ENV_VALUE_CHARS_MAX
+}
+
 function hasControlCharacter(value: string): boolean {
   return [...value].some((character) => {
     const codePoint = character.codePointAt(0)!
@@ -76,8 +82,7 @@ export function normalizeCustomAgentProfile(value: unknown): CustomAgentProfile 
   if (!id || !name || !executable || !args) {
     return null
   }
-  const argvBytes = new TextEncoder().encode(JSON.stringify([executable, ...args])).byteLength
-  if (4 * Math.ceil(argvBytes / 3) > WINDOWS_ENV_VALUE_CHARS_MAX) {
+  if (!fitsWindowsEnvironmentValue([executable, ...args])) {
     return null
   }
   const baseAgent =
@@ -172,6 +177,9 @@ export function buildCustomAgentLaunch(
   additionalArgs: readonly string[] = []
 ): CustomAgentLaunch {
   const argv: [string, ...string[]] = [profile.executable, ...profile.args, ...additionalArgs]
+  if (shell !== 'posix' && !fitsWindowsEnvironmentValue(argv)) {
+    throw new RangeError('Custom agent launch arguments exceed the Windows environment limit.')
+  }
   return shell === 'posix'
     ? { command: buildShellCommandFromArgv(argv, shell) }
     : buildCustomAgentWindowsLaunch(argv, shell)

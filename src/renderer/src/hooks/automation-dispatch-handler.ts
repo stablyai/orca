@@ -105,6 +105,7 @@ export async function handleAutomationDispatchRequest({
       const reusableSession = findReusableAutomationSession({
         automationId: automation.id,
         agentId: automation.agentId,
+        customAgentProfileId: automation.customAgentProfileId,
         worktreeId: worktree.id,
         currentRunId: run.id,
         // Why: the dispatch loop only ever executes for the desktop authority,

@@ -95,6 +95,8 @@ export function useAutomationEditorActions({
           time: template.time ?? baseDraft.time,
           dayOfWeek: template.dayOfWeek ?? baseDraft.dayOfWeek,
           agentId: template.agentId ?? baseDraft.agentId,
+          customAgentProfileId:
+            template.agentId === undefined ? baseDraft.customAgentProfileId : null,
           missedRunGraceMinutes: template.missedRunGraceMinutes ?? baseDraft.missedRunGraceMinutes
         }
       : baseDraft
