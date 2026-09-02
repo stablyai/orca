@@ -151,9 +151,7 @@ export default function TerminalSearch({
         size="icon-xs"
         onClick={() => setCaseSensitive((v) => !v)}
         className={`flex size-6 shrink-0 items-center justify-center rounded ${
-          caseSensitive
-            ? 'bg-accent text-accent-foreground'
-            : 'text-muted-foreground hover:text-popover-foreground'
+          caseSensitive ? 'bg-accent text-accent-foreground' : 'text-muted-foreground'
         }`}
         title={translate('auto.components.TerminalSearch.90c61387d9', 'Case sensitive')}
       >
@@ -166,9 +164,7 @@ export default function TerminalSearch({
         size="icon-xs"
         onClick={() => setRegex((v) => !v)}
         className={`flex size-6 shrink-0 items-center justify-center rounded ${
-          regex
-            ? 'bg-accent text-accent-foreground'
-            : 'text-muted-foreground hover:text-popover-foreground'
+          regex ? 'bg-accent text-accent-foreground' : 'text-muted-foreground'
         }`}
         title={translate('auto.components.TerminalSearch.42e466b9f1', 'Regex')}
       >
@@ -182,7 +178,7 @@ export default function TerminalSearch({
         variant="ghost"
         size="icon-xs"
         onClick={findPrevious}
-        className="flex size-6 shrink-0 items-center justify-center rounded text-muted-foreground hover:text-popover-foreground"
+        className="flex size-6 shrink-0 items-center justify-center rounded text-muted-foreground"
         title={translate('auto.components.TerminalSearch.0f3066256e', 'Previous match')}
       >
         <ChevronUp size={14} />
@@ -193,7 +189,7 @@ export default function TerminalSearch({
         variant="ghost"
         size="icon-xs"
         onClick={findNext}
-        className="flex size-6 shrink-0 items-center justify-center rounded text-muted-foreground hover:text-popover-foreground"
+        className="flex size-6 shrink-0 items-center justify-center rounded text-muted-foreground"
         title={translate('auto.components.TerminalSearch.7cb40c04eb', 'Next match')}
       >
         <ChevronDown size={14} />
@@ -206,7 +202,7 @@ export default function TerminalSearch({
         variant="ghost"
         size="icon-xs"
         onClick={onClose}
-        className="flex size-6 shrink-0 items-center justify-center rounded text-muted-foreground hover:text-popover-foreground"
+        className="flex size-6 shrink-0 items-center justify-center rounded text-muted-foreground"
         title={translate('auto.components.TerminalSearch.db234b7519', 'Close')}
       >
         <X size={14} />

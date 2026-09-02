@@ -199,7 +199,7 @@ export default function BrowserFind({
         variant="ghost"
         size="icon-xs"
         onClick={findPrevious}
-        className="flex size-6 shrink-0 items-center justify-center rounded text-muted-foreground hover:text-popover-foreground"
+        className="flex size-6 shrink-0 items-center justify-center rounded text-muted-foreground"
         title={translate('auto.components.browser.pane.BrowserFind.ca7aebbd7f', 'Previous match')}
       >
         <ChevronUp size={14} />
@@ -210,7 +210,7 @@ export default function BrowserFind({
         variant="ghost"
         size="icon-xs"
         onClick={findNext}
-        className="flex size-6 shrink-0 items-center justify-center rounded text-muted-foreground hover:text-popover-foreground"
+        className="flex size-6 shrink-0 items-center justify-center rounded text-muted-foreground"
         title={translate('auto.components.browser.pane.BrowserFind.5c0c02ae76', 'Next match')}
       >
         <ChevronDown size={14} />
@@ -223,7 +223,7 @@ export default function BrowserFind({
         variant="ghost"
         size="icon-xs"
         onClick={onClose}
-        className="flex size-6 shrink-0 items-center justify-center rounded text-muted-foreground hover:text-popover-foreground"
+        className="flex size-6 shrink-0 items-center justify-center rounded text-muted-foreground"
         title={translate('auto.components.browser.pane.BrowserFind.c9d5f63fdc', 'Close')}
       >
         <X size={14} />

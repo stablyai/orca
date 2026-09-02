@@ -127,6 +127,7 @@ describe('SettingsSidebar', () => {
 
     expect(markup).toContain('bg-worktree-sidebar')
     expect(markup).not.toContain('--worktree-sidebar:')
+    expect(markup).not.toContain('--worktree-sidebar-foreground:')
   })
 
   it('reserves install state labels for actionable skill states', () => {
