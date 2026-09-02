@@ -16,7 +16,8 @@ export async function findOpenPRByHeadBase(args: {
   connectionId?: string | null
   options?: HostedReviewExecutionOptions
 }): Promise<{ number: number; url: string } | null> {
-  const context = githubRepoContext(args.repoPath, args.connectionId)
+  const localGitOptions = getHostedReviewLocalGitOptions(args.options)
+  const context = githubRepoContext(args.repoPath, args.connectionId, localGitOptions)
   const { stdout } = await ghExecFileAsync(
     [
       'pr',
@@ -36,7 +37,7 @@ export async function findOpenPRByHeadBase(args: {
     ],
     {
       ...ghRepoExecOptions(context),
-      ...(args.connectionId ? {} : getHostedReviewLocalGitOptions(args.options)),
+      ...(args.connectionId ? {} : localGitOptions),
       ...githubHostExecOptions(args.repo)
     }
   )

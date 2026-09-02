@@ -1,4 +1,5 @@
 import type { RepoIcon } from './repo-icon'
+import type { GhAccountBinding } from './github/account-binding'
 import type { GitHubRepositoryIdentity } from './github/pull-request-types'
 import type { RepoHookSettings } from './orca-yaml-hook-types'
 import type { ForkSyncMode } from './git-fork-sync'
@@ -68,6 +69,12 @@ export type Repo = {
    *  identically to `'auto'`; writers leave it undefined on creation so
    *  existing persisted records stay forward-compatible. */
   issueSourcePreference?: IssueSourcePreference
+  /**
+   * Per-project gh account binding (host + login only — never a token).
+   * At spawn, Orca resolves a short-lived token via `gh auth token --user`
+   * and injects it into that child env only.
+   */
+  ghAccount?: GhAccountBinding
   /** Controls Orca's fork-default-branch sync offer for repos with upstream metadata. */
   forkSyncMode?: ForkSyncMode
   /** Canonical identity for the repo remote Orca should use for provider-level grouping. */

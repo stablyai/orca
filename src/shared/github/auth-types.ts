@@ -2,6 +2,8 @@
  * Shared types for `gh auth status` diagnostics surfaced to the renderer.
  */
 
+import type { GhAccountBinding } from './account-binding'
+
 export type GhAuthAccount = {
   host: string
   user: string
@@ -44,3 +46,26 @@ export type GhAuthDiagnostic = {
   /** Whether gh has any account for `requiredHost`; null without host context. */
   requiredHostAuthenticated: boolean | null
 }
+
+/** Per-runtime support for `gh auth token --user` (gh ≥ 2.40). */
+export type GhMultiAccountCapability = 'supported' | 'unsupported' | 'unknown'
+
+/**
+ * Repo-scoped inventory for Settings binding UI.
+ * Env-token accounts are listed but not bindable; keyring accounts are.
+ */
+export type GhAccountBindingInventory = {
+  capability: GhMultiAccountCapability
+  accounts: GhAuthAccount[]
+}
+
+export type GhAccountBindingValidationError =
+  | 'gh_multi_account_unsupported'
+  | 'gh_multi_account_capability_unknown'
+  | 'gh_bound_account_unavailable'
+  | 'gh_bound_account_not_keyring'
+  | 'invalid_binding'
+
+export type GhAccountBindingValidationResult =
+  | { ok: true; binding: GhAccountBinding }
+  | { ok: false; error: GhAccountBindingValidationError; message?: string }

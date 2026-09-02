@@ -477,6 +477,78 @@ describe('registerHostedReviewHandlers', () => {
     expect(createHostedReviewMock).not.toHaveBeenCalled()
   })
 
+  // Why: these handlers are the Electron path for every hosted-review gh call — without
+  // the binding they silently run as the ambient login while the RPC path honours it.
+  describe('gh account binding', () => {
+    const boundRepo = { ...repo, ghAccount: { host: 'github.com', user: 'octocat' } }
+
+    beforeEach(() => {
+      store.getRepo.mockImplementation((repoId: string) => (repoId === repo.id ? boundRepo : null))
+      store.getRepos.mockReturnValue([boundRepo])
+    })
+
+    it('carries the bound account through creation, stacked creation and branch lookup', async () => {
+      createHostedReviewMock.mockResolvedValueOnce({ ok: true, number: 42, url: 'https://x/42' })
+      createStackedHostedReviewMock.mockResolvedValueOnce({
+        ok: true,
+        number: 43,
+        url: 'https://x/43',
+        stackNumber: 50,
+        parentReview: { number: 42, url: 'https://x/42' }
+      })
+      getHostedReviewForBranchMock.mockResolvedValueOnce(null)
+      registerHostedReviewHandlers(store as never, stats as never)
+
+      const base = { repoPath, repoId: repo.id, worktreePath, provider: 'github', base: 'main' }
+      await handlers['hostedReview:create'](null, { ...base, head: 'feature/pr', title: 'PR' })
+      await handlers['hostedReview:createStacked'](null, {
+        ...base,
+        base: 'stack/parent',
+        head: 'stack/child',
+        title: 'Child'
+      })
+      await handlers['hostedReview:forBranch'](null, {
+        repoPath,
+        repoId: repo.id,
+        branch: 'feature/pr'
+      })
+
+      const expected = {
+        localGitExecOptions: expect.objectContaining({ ghAccount: boundRepo.ghAccount })
+      }
+      expect(createHostedReviewMock).toHaveBeenCalledWith(
+        worktreePath,
+        expect.anything(),
+        'ssh-1',
+        expected
+      )
+      expect(createStackedHostedReviewMock).toHaveBeenCalledWith(
+        worktreePath,
+        expect.anything(),
+        'ssh-1',
+        expected
+      )
+      expect(getHostedReviewForBranchMock).toHaveBeenCalledWith(expect.objectContaining(expected))
+    })
+
+    it('leaves an unbound repo on the ambient account', async () => {
+      store.getRepo.mockImplementation((repoId: string) => (repoId === repo.id ? repo : null))
+      store.getRepos.mockReturnValue([repo])
+      getHostedReviewForBranchMock.mockResolvedValueOnce(null)
+      registerHostedReviewHandlers(store as never, stats as never)
+
+      await handlers['hostedReview:forBranch'](null, {
+        repoPath,
+        repoId: repo.id,
+        branch: 'feature/pr'
+      })
+
+      expect(getHostedReviewForBranchMock.mock.calls[0][0].localGitExecOptions).not.toHaveProperty(
+        'ghAccount'
+      )
+    })
+  })
+
   it('rejects creation when repoId and repoPath point at different registered repos', async () => {
     store.getRepo.mockImplementation((repoId: string) =>
       repoId === repo.id ? { ...repo, path: '/other/repo' } : null

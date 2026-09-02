@@ -9977,6 +9977,8 @@
             "keepForkUpToDateDescription": "Safely fast-forward this fork from upstream.",
             "projectRuntime": "Project Runtime",
             "projectRuntimeDescription": "Choose whether this project runs on Windows or WSL.",
+            "githubAccount": "GitHub Account",
+            "githubAccountDescription": "Bind a keyring gh login for this project’s GitHub API calls.",
             "externalWorktrees": "External worktrees",
             "externalWorktreesDescription": "Override whether worktrees created outside Orca appear for this project."
           }
@@ -11462,6 +11464,24 @@
           "on": "On",
           "auto": "Agent",
           "off": "Off"
+        },
+        "RepositoryGitHubAccountSection": {
+          "unsupported": "This runtime’s GitHub CLI is too old for account binding (needs gh ≥ 2.40).",
+          "capabilityUnknown": "Could not determine whether this runtime’s GitHub CLI supports account binding. Retry.",
+          "envToken": "Environment-token accounts cannot be bound. Use a keyring login.",
+          "invalidBinding": "That GitHub account binding is invalid.",
+          "unavailable": "That GitHub account is unavailable on this runtime.",
+          "saveFailed": "Could not save the GitHub account binding.",
+          "title": "GitHub Account",
+          "description": "Use a specific gh login for this project’s GitHub issue and pull request calls.",
+          "longDescription": "Orca injects a short-lived token from the selected keyring login into each gh call for this project. Project View stays on the ambient login.",
+          "retry": "Retry",
+          "selectLabel": "Account",
+          "ambient": "Default (ambient gh login)",
+          "unavailableOption": "{{user}} @ {{host}} (unavailable)",
+          "capabilityBlocked": "Binding is unavailable until this runtime’s GitHub CLI supports `gh auth token --user` (gh ≥ 2.40).",
+          "capabilityUnknownHint": "Could not determine GitHub CLI account-binding support on this runtime. Clear the binding or retry.",
+          "notEnforced": "Saved, but not enforced by this runtime (mixed-version host)."
         },
         "shareSkills": {
           "title": "Share Skills",

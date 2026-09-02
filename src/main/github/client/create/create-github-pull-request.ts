@@ -99,10 +99,11 @@ export async function createGitHubPullRequest(
       createArgs.push('--draft')
     }
     try {
-      const context = githubRepoContext(repoPath, connectionId)
+      const localGitOptions = getHostedReviewLocalGitOptions(options)
+      const context = githubRepoContext(repoPath, connectionId, localGitOptions)
       const { stdout } = await ghExecFileAsync(createArgs, {
         ...ghRepoExecOptions(context),
-        ...(connectionId ? {} : getHostedReviewLocalGitOptions(options)),
+        ...(connectionId ? {} : localGitOptions),
         ...githubHostExecOptions(ownerRepo),
         timeout: 60_000,
         idempotent: false

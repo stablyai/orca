@@ -30,8 +30,14 @@ export {
 }
 export type { RateLimitBucketKind }
 
-/** gh exec routing shared by the project-view read/write paths. `host` pins
- *  GHES requests to the enterprise server via the runner's host qualifier. */
+/**
+ * gh exec routing shared by the project-view read/write paths. `host` pins
+ * GHES requests to the enterprise server via the runner's host qualifier.
+ *
+ * Intentionally ambient: Project View does not honor `Repo.ghAccount` (Part A).
+ * Work-items drawer / create-worktree search use bound injection; Project View
+ * keeps the process login so host-scoped project boards stay stable.
+ */
 export type ProjectGhExecOptions = { cwd?: string; host?: string }
 
 // Why: owner/project-addressed calls carry only a host (no repo slug), so they
