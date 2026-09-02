@@ -47,22 +47,43 @@ describe('materializeWorktreePushTargetRemote', () => {
     expect(gitExecFileAsyncMock).not.toHaveBeenCalled()
   })
 
-  it('short-circuits on a single named-remote probe when the remote already exists', async () => {
+  it('short-circuits the remote probe but still restores upstream and widens the refspec', async () => {
+    // Why (#17828 review follow-up): the short-circuit is the common case for every call
+    // after the first, and for a sibling worktree reusing the same fork remote under a
+    // different branch -- it must still restore the upstream link and widen the refspec.
     gitExecFileAsyncMock.mockImplementation(async (args: string[]) => {
       if (args[0] === 'remote' && args[1] === 'get-url') {
         return { stdout: `${FORK_URL}\n`, stderr: '' }
       }
-      throw new Error(`unexpected git ${args.join(' ')}`)
+      if (args[0] === 'config' && args[1] === '--get-all') {
+        throw new Error('no such section')
+      }
+      if (args[0] === 'symbolic-ref') {
+        return { stdout: 'contributor/fix\n', stderr: '' }
+      }
+      return { stdout: '', stderr: '' }
     })
     const target = forkTarget()
 
     const result = await materializeWorktreePushTargetRemote(REPO_PATH, target)
 
     expect(result).toBe(target)
-    expect(gitExecFileAsyncMock).toHaveBeenCalledTimes(1)
-    expect(gitExecFileAsyncMock).toHaveBeenCalledWith(['remote', 'get-url', FORK_REMOTE], {
-      cwd: REPO_PATH
-    })
+    const calls = gitExecFileAsyncMock.mock.calls.map((call) => call[0] as string[])
+    expect(calls).toContainEqual(['remote', 'get-url', FORK_REMOTE])
+    expect(calls).toContainEqual([
+      'config',
+      '--add',
+      `remote.${FORK_REMOTE}.fetch`,
+      `+refs/heads/${target.branchName}*:refs/remotes/${FORK_REMOTE}/${target.branchName}*`
+    ])
+    expect(calls).toContainEqual(['config', `remote.${FORK_REMOTE}.tagOpt`, '--no-tags'])
+    expect(calls).toContainEqual(['symbolic-ref', '--short', 'HEAD'])
+    expect(calls).toContainEqual([
+      'branch',
+      '--set-upstream-to',
+      `${FORK_REMOTE}/${target.branchName}`,
+      'contributor/fix'
+    ])
   })
 
   it('materializes the remote (add + provenance + fetch) when the probe misses', async () => {
@@ -95,6 +116,135 @@ describe('materializeWorktreePushTargetRemote', () => {
       `+refs/heads/${target.branchName}*:refs/remotes/${FORK_REMOTE}/${target.branchName}*`
     ])
   })
+
+  it('fetches the missing tracking ref before restoring upstream on the short-circuit path (#17828 sibling worktree)', async () => {
+    // Why: a sibling worktree short-circuiting onto an already-existing remote under a
+    // *new* branch has a widened refspec but no tracking ref yet -- against real git,
+    // `branch --set-upstream-to` hard-fails with "the requested upstream branch does not
+    // exist" unless something fetches that branch first. Verified against a real git
+    // fixture, not just this mock (see PR discussion).
+    gitExecFileAsyncMock.mockImplementation(async (args: string[]) => {
+      if (args[0] === 'remote' && args[1] === 'get-url') {
+        return { stdout: `${FORK_URL}\n`, stderr: '' }
+      }
+      if (args[0] === 'config' && args[1] === '--get-all') {
+        throw new Error('no such section')
+      }
+      if (args[0] === 'rev-parse') {
+        throw new Error('unknown revision')
+      }
+      if (args[0] === 'symbolic-ref') {
+        return { stdout: 'contributor/fix\n', stderr: '' }
+      }
+      return { stdout: '', stderr: '' }
+    })
+    const target = forkTarget()
+
+    const result = await materializeWorktreePushTargetRemote(REPO_PATH, target)
+
+    expect(result).toBe(target)
+    const fetchCalls = gitExecFileAsyncMock.mock.calls.filter(
+      (call) => (call[0] as string[])[0] === 'fetch'
+    )
+    expect(fetchCalls).toEqual([
+      [
+        [
+          'fetch',
+          FORK_REMOTE,
+          `+refs/heads/${target.branchName}*:refs/remotes/${FORK_REMOTE}/${target.branchName}*`
+        ],
+        expect.objectContaining({ timeout: expect.any(Number) })
+      ]
+    ])
+    const calls = gitExecFileAsyncMock.mock.calls.map((call) => call[0] as string[])
+    expect(calls).toContainEqual([
+      'rev-parse',
+      '--verify',
+      '--quiet',
+      `refs/remotes/${FORK_REMOTE}/${target.branchName}`
+    ])
+    expect(calls).toContainEqual([
+      'branch',
+      '--set-upstream-to',
+      `${FORK_REMOTE}/${target.branchName}`,
+      'contributor/fix'
+    ])
+  })
+
+  it('skips the fetch when the tracking ref already exists on the short-circuit path', async () => {
+    gitExecFileAsyncMock.mockImplementation(async (args: string[]) => {
+      if (args[0] === 'remote' && args[1] === 'get-url') {
+        return { stdout: `${FORK_URL}\n`, stderr: '' }
+      }
+      if (args[0] === 'config' && args[1] === '--get-all') {
+        throw new Error('no such section')
+      }
+      if (args[0] === 'symbolic-ref') {
+        return { stdout: 'contributor/fix\n', stderr: '' }
+      }
+      // rev-parse succeeds by default (ref already exists) -- no fetch should follow.
+      return { stdout: '', stderr: '' }
+    })
+    const target = forkTarget()
+
+    await materializeWorktreePushTargetRemote(REPO_PATH, target)
+
+    const fetchCalls = gitExecFileAsyncMock.mock.calls.filter(
+      (call) => (call[0] as string[])[0] === 'fetch'
+    )
+    expect(fetchCalls).toEqual([])
+  })
+
+  it('persists remoteCreated to the store when a worktreeId is provided and the mint succeeds', async () => {
+    // Why (#17828 review follow-up): on-demand materialization never went through the
+    // create-time setWorktreeMeta write, so a lazily-minted remote stayed invisible to
+    // #17842's orphan sweep (which gates solely on the stored remoteCreated flag).
+    gitExecFileAsyncMock.mockImplementation(async (args: string[]) => {
+      if (args[0] === 'remote' && args[1] === 'get-url') {
+        throw new Error('No such remote')
+      }
+      return { stdout: '', stderr: '' }
+    })
+    const target = forkTarget()
+    const setWorktreeMeta = vi.fn()
+    const store: WorktreePushTargetStore = {
+      getAllWorktreeMeta: () => ({}),
+      setWorktreeMeta
+    } as unknown as WorktreePushTargetStore
+
+    const result = await materializeWorktreePushTargetRemote(
+      REPO_PATH,
+      target,
+      store,
+      undefined,
+      {},
+      'worktree-1'
+    )
+
+    expect(result).toEqual({ ...target, remoteCreated: true })
+    expect(setWorktreeMeta).toHaveBeenCalledWith('worktree-1', {
+      pushTarget: { ...target, remoteCreated: true }
+    })
+  })
+
+  it('does not touch the store when no worktreeId is provided', async () => {
+    gitExecFileAsyncMock.mockImplementation(async (args: string[]) => {
+      if (args[0] === 'remote' && args[1] === 'get-url') {
+        throw new Error('No such remote')
+      }
+      return { stdout: '', stderr: '' }
+    })
+    const target = forkTarget()
+    const setWorktreeMeta = vi.fn()
+    const store: WorktreePushTargetStore = {
+      getAllWorktreeMeta: () => ({}),
+      setWorktreeMeta
+    } as unknown as WorktreePushTargetStore
+
+    await materializeWorktreePushTargetRemote(REPO_PATH, target, store)
+
+    expect(setWorktreeMeta).not.toHaveBeenCalled()
+  })
 })
 
 describe('materializeWorktreePushTargetRemoteSsh', () => {
@@ -112,12 +262,18 @@ describe('materializeWorktreePushTargetRemoteSsh', () => {
     expect(exec).not.toHaveBeenCalled()
   })
 
-  it('short-circuits on a single named-remote probe when the remote already exists', async () => {
+  it('short-circuits the remote probe but still restores upstream (refspec widening is a local-only gap)', async () => {
+    // Why: mirrors the local short-circuit's upstream restore. Refspec widening is
+    // intentionally NOT mirrored here -- SSH's bare `remote add` is a pre-existing,
+    // documented gap this fix does not touch.
     const exec = vi.fn(async (args: string[]) => {
       if (args[0] === 'remote' && args[1] === 'get-url') {
         return { stdout: `${FORK_URL}\n`, stderr: '' }
       }
-      throw new Error(`unexpected exec ${args.join(' ')}`)
+      if (args[0] === 'symbolic-ref') {
+        return { stdout: 'contributor/fix\n', stderr: '' }
+      }
+      return { stdout: '', stderr: '' }
     })
     const fetchRemoteTrackingRef = vi.fn()
     const target = forkTarget()
@@ -129,9 +285,64 @@ describe('materializeWorktreePushTargetRemoteSsh', () => {
     )
 
     expect(result).toBe(target)
-    expect(exec).toHaveBeenCalledTimes(1)
-    expect(exec).toHaveBeenCalledWith(['remote', 'get-url', FORK_REMOTE], REPO_PATH)
+    const calls = exec.mock.calls.map((call) => call[0] as string[])
+    expect(calls).toContainEqual(['remote', 'get-url', FORK_REMOTE])
+    expect(calls).toContainEqual(['symbolic-ref', '--short', 'HEAD'])
+    expect(calls).toContainEqual([
+      'branch',
+      '--set-upstream-to',
+      `${FORK_REMOTE}/${target.branchName}`,
+      'contributor/fix'
+    ])
+    expect(calls.some((call) => call[0] === 'config' && String(call[2]).includes('.fetch'))).toBe(
+      false
+    )
     expect(fetchRemoteTrackingRef).not.toHaveBeenCalled()
+  })
+
+  it('fetches the missing tracking ref (one-off, no config write) before restoring upstream on the short-circuit path', async () => {
+    // SSH mirror of the local sibling-worktree fix: refspec widening stays out of scope
+    // here, but the branch must still be fetched once before `--set-upstream-to` can
+    // succeed for a branch this remote has never pulled in.
+    const exec = vi.fn(async (args: string[]) => {
+      if (args[0] === 'remote' && args[1] === 'get-url') {
+        return { stdout: `${FORK_URL}\n`, stderr: '' }
+      }
+      if (args[0] === 'rev-parse') {
+        throw new Error('unknown revision')
+      }
+      if (args[0] === 'symbolic-ref') {
+        return { stdout: 'contributor/fix\n', stderr: '' }
+      }
+      return { stdout: '', stderr: '' }
+    })
+    const fetchRemoteTrackingRef = vi.fn(async () => {})
+    const target = forkTarget()
+
+    const result = await materializeWorktreePushTargetRemoteSsh(
+      { exec, fetchRemoteTrackingRef } as unknown as SshGitProvider,
+      REPO_PATH,
+      target
+    )
+
+    expect(result).toBe(target)
+    expect(fetchRemoteTrackingRef).toHaveBeenCalledWith(
+      REPO_PATH,
+      FORK_REMOTE,
+      target.branchName,
+      `refs/remotes/${FORK_REMOTE}/${target.branchName}`
+    )
+    const calls = exec.mock.calls.map((call) => call[0] as string[])
+    expect(calls).toContainEqual([
+      'branch',
+      '--set-upstream-to',
+      `${FORK_REMOTE}/${target.branchName}`,
+      'contributor/fix'
+    ])
+    // Still no config write -- the fetch is a one-off refspec argument, not a widen.
+    expect(calls.some((call) => call[0] === 'config' && String(call[2]).includes('.fetch'))).toBe(
+      false
+    )
   })
 
   it('materializes the remote (add + provenance + fetch) when the probe misses', async () => {
@@ -163,6 +374,37 @@ describe('materializeWorktreePushTargetRemoteSsh', () => {
       target.branchName,
       `refs/remotes/${FORK_REMOTE}/${target.branchName}`
     )
+  })
+
+  it('persists remoteCreated to the store when a worktreeId is provided and the mint succeeds', async () => {
+    const exec = vi.fn(async (args: string[]) => {
+      if (args[0] === 'remote' && args[1] === 'get-url') {
+        throw new Error('No such remote')
+      }
+      return { stdout: '', stderr: '' }
+    })
+    const fetchRemoteTrackingRef = vi.fn(async () => {})
+    const markRemoteOrcaCreated = vi.fn(async () => {})
+    const target = forkTarget()
+    const setWorktreeMeta = vi.fn()
+    const store: WorktreePushTargetStore = {
+      getAllWorktreeMeta: () => ({}),
+      setWorktreeMeta
+    } as unknown as WorktreePushTargetStore
+
+    const result = await materializeWorktreePushTargetRemoteSsh(
+      { exec, fetchRemoteTrackingRef, markRemoteOrcaCreated } as unknown as SshGitProvider,
+      REPO_PATH,
+      target,
+      store,
+      undefined,
+      'worktree-1'
+    )
+
+    expect(result).toEqual({ ...target, remoteCreated: true })
+    expect(setWorktreeMeta).toHaveBeenCalledWith('worktree-1', {
+      pushTarget: { ...target, remoteCreated: true }
+    })
   })
 
   // Moved from worktrees-ssh-fork-push-target-remote.test.ts: this behavior lives in

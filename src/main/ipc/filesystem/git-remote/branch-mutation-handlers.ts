@@ -24,6 +24,7 @@ export function registerGitRemoteBranchMutationHandlers(context: FilesystemHandl
       _event,
       args: {
         worktreePath: string
+        worktreeId?: string
         publish?: boolean
         forceWithLease?: boolean
         connectionId?: string
@@ -46,7 +47,9 @@ export function registerGitRemoteBranchMutationHandlers(context: FilesystemHandl
               provider,
               args.worktreePath,
               args.pushTarget,
-              store
+              store,
+              undefined,
+              args.worktreeId
             )
           : undefined
         return provider.pushBranch(args.worktreePath, publish, materializedPushTarget, {
@@ -65,7 +68,8 @@ export function registerGitRemoteBranchMutationHandlers(context: FilesystemHandl
             args.pushTarget,
             store,
             undefined,
-            gitOptions
+            gitOptions,
+            args.worktreeId
           )
         : undefined
       if (materializedPushTarget) {
@@ -86,7 +90,12 @@ export function registerGitRemoteBranchMutationHandlers(context: FilesystemHandl
     'git:pull',
     async (
       _event,
-      args: { worktreePath: string; connectionId?: string; pushTarget?: GitPushTarget }
+      args: {
+        worktreePath: string
+        worktreeId?: string
+        connectionId?: string
+        pushTarget?: GitPushTarget
+      }
     ): Promise<void> => {
       if (args.connectionId) {
         if (args.pushTarget) {
@@ -101,7 +110,9 @@ export function registerGitRemoteBranchMutationHandlers(context: FilesystemHandl
               provider,
               args.worktreePath,
               args.pushTarget,
-              store
+              store,
+              undefined,
+              args.worktreeId
             )
           : undefined
         return provider.pullBranch(args.worktreePath, materializedPushTarget)
@@ -118,7 +129,8 @@ export function registerGitRemoteBranchMutationHandlers(context: FilesystemHandl
             args.pushTarget,
             store,
             undefined,
-            gitOptions
+            gitOptions,
+            args.worktreeId
           )
         : undefined
       if (materializedPushTarget) {
@@ -138,7 +150,12 @@ export function registerGitRemoteBranchMutationHandlers(context: FilesystemHandl
     'git:fastForward',
     async (
       _event,
-      args: { worktreePath: string; connectionId?: string; pushTarget?: GitPushTarget }
+      args: {
+        worktreePath: string
+        worktreeId?: string
+        connectionId?: string
+        pushTarget?: GitPushTarget
+      }
     ): Promise<void> => {
       if (args.connectionId) {
         if (args.pushTarget) {
@@ -153,7 +170,9 @@ export function registerGitRemoteBranchMutationHandlers(context: FilesystemHandl
               provider,
               args.worktreePath,
               args.pushTarget,
-              store
+              store,
+              undefined,
+              args.worktreeId
             )
           : undefined
         return provider.fastForwardBranch(args.worktreePath, materializedPushTarget)
@@ -170,7 +189,8 @@ export function registerGitRemoteBranchMutationHandlers(context: FilesystemHandl
             args.pushTarget,
             store,
             undefined,
-            gitOptions
+            gitOptions,
+            args.worktreeId
           )
         : undefined
       if (materializedPushTarget) {

@@ -130,7 +130,8 @@ export class OrcaRuntimeWithResolveBrowserNetworkExecutionHostForWorktree extend
       worktree.pushTarget,
       repo,
       this.store,
-      worktree.repoId
+      worktree.repoId,
+      worktree.id
     )
     return {
       scope: {

@@ -56,7 +56,12 @@ export function registerGitRemoteSyncHandlers(context: FilesystemHandlerContext)
     'git:fetch',
     async (
       _event,
-      args: { worktreePath: string; connectionId?: string; pushTarget?: GitPushTarget }
+      args: {
+        worktreePath: string
+        worktreeId?: string
+        connectionId?: string
+        pushTarget?: GitPushTarget
+      }
     ): Promise<void> => {
       if (args.connectionId) {
         if (args.pushTarget) {
@@ -71,7 +76,9 @@ export function registerGitRemoteSyncHandlers(context: FilesystemHandlerContext)
               provider,
               args.worktreePath,
               args.pushTarget,
-              store
+              store,
+              undefined,
+              args.worktreeId
             )
           : undefined
         return provider.fetchRemote(args.worktreePath, materializedPushTarget)
@@ -88,7 +95,8 @@ export function registerGitRemoteSyncHandlers(context: FilesystemHandlerContext)
             args.pushTarget,
             store,
             undefined,
-            gitOptions
+            gitOptions,
+            args.worktreeId
           )
         : undefined
       if (materializedPushTarget) {

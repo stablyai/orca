@@ -13,10 +13,27 @@ import {
   materializeWorktreePushTargetRemote,
   materializeWorktreePushTargetRemoteSsh
 } from '../ipc/worktree-remote'
-import { localGitOptionsForTarget, type RuntimeGitCommandHost } from './runtime-git-command-target'
+import {
+  localGitOptionsForTarget,
+  type RuntimeGitCommandHost,
+  type RuntimeGitTarget
+} from './runtime-git-command-target'
 
 export class RuntimeGitSyncCommands {
   constructor(private readonly host: RuntimeGitCommandHost) {}
+
+  // Why (#17828 review follow-up): this class deliberately materializes with no store (see
+  // the `undefined` args below) to avoid unrelated ownership-inheritance/refspec-migration
+  // side effects on the RPC path -- so persistence goes through the host callback instead,
+  // using `target.worktree.id` already resolved here rather than threading a store through.
+  private persistMaterializedPushTargetIfCreated(
+    target: RuntimeGitTarget,
+    materialized: GitPushTarget | undefined
+  ): void {
+    if (materialized?.remoteCreated) {
+      this.host.persistMaterializedPushTarget?.(target.worktree.id, materialized)
+    }
+  }
 
   async abortRuntimeGitMerge(worktreeSelector: string): Promise<{ ok: true }> {
     const target = await this.host.resolveRuntimeGitTarget(worktreeSelector)
@@ -80,6 +97,7 @@ export class RuntimeGitSyncCommands {
       const materializedPushTarget = pushTarget
         ? await materializeWorktreePushTargetRemoteSsh(provider, target.worktree.path, pushTarget)
         : undefined
+      this.persistMaterializedPushTargetIfCreated(target, materializedPushTarget)
       await provider.fetchRemote(target.worktree.path, materializedPushTarget)
       return { ok: true }
     }
@@ -92,6 +110,7 @@ export class RuntimeGitSyncCommands {
           localGitOptionsForTarget(target)
         )
       : undefined
+    this.persistMaterializedPushTargetIfCreated(target, materializedPushTarget)
     await gitFetch(target.worktree.path, materializedPushTarget, {
       ...localGitOptionsForTarget(target),
       admissionTier: 'interactive'
@@ -130,6 +149,7 @@ export class RuntimeGitSyncCommands {
       const materializedPushTarget = pushTarget
         ? await materializeWorktreePushTargetRemoteSsh(provider, target.worktree.path, pushTarget)
         : undefined
+      this.persistMaterializedPushTargetIfCreated(target, materializedPushTarget)
       await provider.pullBranch(target.worktree.path, materializedPushTarget)
       return { ok: true }
     }
@@ -142,6 +162,7 @@ export class RuntimeGitSyncCommands {
           localGitOptionsForTarget(target)
         )
       : undefined
+    this.persistMaterializedPushTargetIfCreated(target, materializedPushTarget)
     await gitPull(target.worktree.path, materializedPushTarget, {
       ...localGitOptionsForTarget(target),
       admissionTier: 'interactive'
@@ -162,6 +183,7 @@ export class RuntimeGitSyncCommands {
       const materializedPushTarget = pushTarget
         ? await materializeWorktreePushTargetRemoteSsh(provider, target.worktree.path, pushTarget)
         : undefined
+      this.persistMaterializedPushTargetIfCreated(target, materializedPushTarget)
       await provider.fastForwardBranch(target.worktree.path, materializedPushTarget)
       return { ok: true }
     }
@@ -174,6 +196,7 @@ export class RuntimeGitSyncCommands {
           localGitOptionsForTarget(target)
         )
       : undefined
+    this.persistMaterializedPushTargetIfCreated(target, materializedPushTarget)
     await gitFastForward(target.worktree.path, materializedPushTarget, {
       ...localGitOptionsForTarget(target),
       admissionTier: 'interactive'
@@ -213,6 +236,7 @@ export class RuntimeGitSyncCommands {
       const materializedPushTarget = pushTarget
         ? await materializeWorktreePushTargetRemoteSsh(provider, target.worktree.path, pushTarget)
         : undefined
+      this.persistMaterializedPushTargetIfCreated(target, materializedPushTarget)
       await provider.pushBranch(target.worktree.path, publish === true, materializedPushTarget, {
         forceWithLease: forceWithLease === true
       })
@@ -227,6 +251,7 @@ export class RuntimeGitSyncCommands {
           localGitOptionsForTarget(target)
         )
       : undefined
+    this.persistMaterializedPushTargetIfCreated(target, materializedPushTarget)
     await gitPush(target.worktree.path, publish === true, materializedPushTarget, {
       forceWithLease: forceWithLease === true,
       ...localGitOptionsForTarget(target),

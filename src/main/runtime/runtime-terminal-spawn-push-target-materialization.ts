@@ -18,20 +18,22 @@ export function triggerTerminalSpawnPushTargetMaterialization(
   pushTarget: GitPushTarget | undefined,
   repo: Repo | null | undefined,
   store: Store | undefined,
-  repoId?: string
+  repoId?: string,
+  worktreeId?: string
 ): void {
   if (!pushTarget?.remoteUrl || pushTarget.remoteCreated) {
     return
   }
   const connectionId = repo?.connectionId ?? undefined
   const materialized = connectionId
-    ? materializeOverSsh(connectionId, worktreePath, pushTarget)
+    ? materializeOverSsh(connectionId, worktreePath, pushTarget, store, worktreeId)
     : materializeWorktreePushTargetRemote(
         worktreePath,
         pushTarget,
-        undefined,
+        store,
         repoId,
-        localGitOptionsForTerminalSpawn(store, repo)
+        localGitOptionsForTerminalSpawn(store, repo),
+        worktreeId
       )
   materialized.catch((error: unknown) => {
     console.warn(
@@ -44,14 +46,23 @@ export function triggerTerminalSpawnPushTargetMaterialization(
 function materializeOverSsh(
   connectionId: string,
   worktreePath: string,
-  pushTarget: GitPushTarget
+  pushTarget: GitPushTarget,
+  store: Store | undefined,
+  worktreeId: string | undefined
 ): Promise<GitPushTarget> {
   const provider = getSshGitProvider(connectionId)
   if (!provider) {
     // Why: connection dropped -- the next Orca-driven sync action will retry via its own dispatch.
     return Promise.resolve(pushTarget)
   }
-  return materializeWorktreePushTargetRemoteSsh(provider, worktreePath, pushTarget)
+  return materializeWorktreePushTargetRemoteSsh(
+    provider,
+    worktreePath,
+    pushTarget,
+    store,
+    undefined,
+    worktreeId
+  )
 }
 
 function localGitOptionsForTerminalSpawn(

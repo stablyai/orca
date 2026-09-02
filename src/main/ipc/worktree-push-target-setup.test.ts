@@ -6,7 +6,8 @@ import {
   ensureUniqueRemoteName,
   findRemoteForUrl,
   prepareWorktreePushTargetWithExec,
-  remoteAlreadyMatchesUrl
+  remoteAlreadyMatchesUrl,
+  restoreUpstreamAfterMaterialize
 } from './worktree-push-target-setup'
 
 type ExecMock = Mock<GitRemoteExec>
@@ -16,9 +17,17 @@ const FORK_SSH = 'git@github.com:contributor/orca.git'
 const FORK_HTTPS = 'https://github.com/contributor/orca.git'
 
 // A stateful fake git: `remotes` maps name -> url. `remote add` mutates it so
-// later lookups see the new remote, matching real git behavior.
-function makeRepoExec(remotes: Record<string, string>): ExecMock {
+// later lookups see the new remote, matching real git behavior. Defaults
+// `symbolic-ref --short HEAD` to a real branch name, since a worktree's HEAD
+// always resolves to one (mirrors real git, unlike an empty-stdout stub).
+function makeRepoExec(
+  remotes: Record<string, string>,
+  checkedOutBranch = 'local-branch'
+): ExecMock {
   return vi.fn<GitRemoteExec>(async (args: string[]) => {
+    if (args[0] === 'symbolic-ref' && args[1] === '--short' && args[2] === 'HEAD') {
+      return { stdout: `${checkedOutBranch}\n`, stderr: '' }
+    }
     if (args[0] === 'remote' && args.length === 1) {
       return { stdout: Object.keys(remotes).join('\n'), stderr: '' }
     }
@@ -242,6 +251,46 @@ describe('configureCreatedWorktreePushTargetWithExec', () => {
       ['branch', '--set-upstream-to', 'pr-contributor-orca/contributor/fix', 'local-branch'],
       '/wt/path'
     )
+    expect(result).toBe(target)
+  })
+})
+
+describe('restoreUpstreamAfterMaterialize', () => {
+  it('points the checked-out branch upstream at the fork remote', async () => {
+    const exec = makeRepoExec({}, 'local-branch')
+    const target = forkTarget()
+
+    const result = await restoreUpstreamAfterMaterialize(exec, '/wt/path', target)
+
+    expect(exec).toHaveBeenCalledWith(
+      ['branch', '--set-upstream-to', 'pr-contributor-orca/contributor/fix', 'local-branch'],
+      '/wt/path'
+    )
+    expect(result).toBe(target)
+  })
+
+  it('is a no-op when the target has no remoteUrl', async () => {
+    const exec = makeRepoExec({}, 'local-branch')
+    const target: GitPushTarget = { remoteName: 'origin', branchName: 'feature' }
+
+    const result = await restoreUpstreamAfterMaterialize(exec, '/wt/path', target)
+
+    expect(callsMatching(exec, ['branch', '--set-upstream-to'])).toEqual([])
+    expect(result).toBe(target)
+  })
+
+  it('is a no-op when HEAD is detached (no checked-out branch)', async () => {
+    const exec = vi.fn<GitRemoteExec>(async (args: string[]) => {
+      if (args[0] === 'symbolic-ref') {
+        throw new Error('fatal: ref HEAD is not a symbolic ref')
+      }
+      return { stdout: '', stderr: '' }
+    })
+    const target = forkTarget()
+
+    const result = await restoreUpstreamAfterMaterialize(exec, '/wt/path', target)
+
+    expect(callsMatching(exec, ['branch', '--set-upstream-to'])).toEqual([])
     expect(result).toBe(target)
   })
 })

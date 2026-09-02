@@ -87,7 +87,7 @@ describe('triggerTerminalSpawnPushTargetMaterialization', () => {
     expect(materializeLocalMock).not.toHaveBeenCalled()
   })
 
-  it('materializes over the local transport with resolved WSL git options and repoId, fire-and-forget', () => {
+  it('materializes over the local transport with resolved WSL git options, repoId and worktreeId, fire-and-forget', () => {
     getLocalProjectWorktreeGitOptionsMock.mockReturnValue({ wslDistro: 'Ubuntu' })
     const target = forkTarget()
     const result = triggerTerminalSpawnPushTargetMaterialization(
@@ -95,13 +95,19 @@ describe('triggerTerminalSpawnPushTargetMaterialization', () => {
       target,
       LOCAL_REPO,
       STORE,
-      REPO_ID
+      REPO_ID,
+      'worktree-1'
     )
     expect(result).toBeUndefined()
     expect(getLocalProjectWorktreeGitOptionsMock).toHaveBeenCalledWith(STORE, LOCAL_REPO)
-    expect(materializeLocalMock).toHaveBeenCalledWith(WORKTREE_PATH, target, undefined, REPO_ID, {
-      wslDistro: 'Ubuntu'
-    })
+    expect(materializeLocalMock).toHaveBeenCalledWith(
+      WORKTREE_PATH,
+      target,
+      STORE,
+      REPO_ID,
+      { wslDistro: 'Ubuntu' },
+      'worktree-1'
+    )
     expect(materializeSshMock).not.toHaveBeenCalled()
   })
 
@@ -109,9 +115,23 @@ describe('triggerTerminalSpawnPushTargetMaterialization', () => {
     const provider = { exec: vi.fn() }
     getSshGitProviderMock.mockReturnValue(provider)
     const target = forkTarget()
-    triggerTerminalSpawnPushTargetMaterialization(WORKTREE_PATH, target, SSH_REPO, STORE, REPO_ID)
+    triggerTerminalSpawnPushTargetMaterialization(
+      WORKTREE_PATH,
+      target,
+      SSH_REPO,
+      STORE,
+      REPO_ID,
+      'worktree-1'
+    )
     expect(getSshGitProviderMock).toHaveBeenCalledWith('conn-1')
-    expect(materializeSshMock).toHaveBeenCalledWith(provider, WORKTREE_PATH, target)
+    expect(materializeSshMock).toHaveBeenCalledWith(
+      provider,
+      WORKTREE_PATH,
+      target,
+      STORE,
+      undefined,
+      'worktree-1'
+    )
     expect(materializeLocalMock).not.toHaveBeenCalled()
     expect(getLocalProjectWorktreeGitOptionsMock).not.toHaveBeenCalled()
   })
@@ -131,9 +151,10 @@ describe('triggerTerminalSpawnPushTargetMaterialization', () => {
     expect(materializeLocalMock).toHaveBeenCalledWith(
       WORKTREE_PATH,
       forkTarget(),
+      STORE,
       undefined,
-      undefined,
-      {}
+      {},
+      undefined
     )
     expect(warnSpy).toHaveBeenCalledWith(
       expect.stringContaining('failed to resolve local git options'),

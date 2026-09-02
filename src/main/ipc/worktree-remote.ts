@@ -113,8 +113,14 @@ import {
   ensureUniqueRemoteName,
   findRemoteForUrl,
   prepareWorktreePushTargetWithExec,
-  remoteAlreadyMatchesUrl
+  remoteAlreadyMatchesUrl,
+  restoreUpstreamAfterMaterialize
 } from './worktree-push-target-setup'
+import {
+  buildNarrowForkFetchRefspec,
+  ensureRemoteTracksBranchNarrowly,
+  forkRemoteTrackingRefExists
+} from '../git/fork-remote-refspec'
 import { migrateForkRemoteRefspecs } from './worktree-push-target-refspec-migration'
 import { isENOENT } from './filesystem-path-containment'
 import {
@@ -167,9 +173,36 @@ const SSH_WORKTREE_CREATE_FETCH_FRESHNESS_MS = 30_000
 const SSH_WORKTREE_CREATE_FETCH_CACHE_MAX = 512
 // Why: bound the fallback `git fetch origin` so a Windows credential-manager GUI hang (STA-1292) can't wedge worktree creation forever.
 const CREATE_BASE_FALLBACK_FETCH_TIMEOUT_MS = 60_000
+// Why (#17828 CodeRabbit follow-up): the deferred materialize fetch runs off the main
+// create path (terminal spawn, mid-session sync) with nothing else bounding it -- same
+// STA-1292 hang risk as the create-time fallback above, so mirror its timeout.
+const DEFERRED_PUSH_TARGET_FETCH_TIMEOUT_MS = 60_000
 const sshWorktreeCreateFetchInflight = new Map<string, Promise<void>>()
 const sshWorktreeCreateFetchCompletedAt = new Map<string, number>()
 const sshWorktreeCreateFetchQueueTail = new Map<string, Promise<void>>()
+// Why (#17828 CodeRabbit follow-up): a terminal spawn and an explicit sync action can
+// both call materialize for the same worktree remote at once; without single-flighting,
+// the loser's `remote add` races the winner's fetch and can strand a duplicate remote.
+const worktreePushTargetMaterializeInflight = new Map<string, Promise<GitPushTarget>>()
+const sshWorktreePushTargetMaterializeInflight = new WeakMap<
+  SshGitProvider,
+  Map<string, Promise<GitPushTarget>>
+>()
+
+function worktreePushTargetMaterializeKey(repoPath: string, remoteName: string): string {
+  return `${repoPath}::${remoteName}`
+}
+
+function getSshWorktreePushTargetMaterializeInflight(
+  provider: SshGitProvider
+): Map<string, Promise<GitPushTarget>> {
+  let inflight = sshWorktreePushTargetMaterializeInflight.get(provider)
+  if (!inflight) {
+    inflight = new Map()
+    sshWorktreePushTargetMaterializeInflight.set(provider, inflight)
+  }
+  return inflight
+}
 const sshWorktreeCreateBasePlanInflight = new Map<
   string,
   Promise<RemoteWorktreeCreateBasePlan | null>
@@ -973,7 +1006,14 @@ export async function prepareWorktreePushTarget(
 ): Promise<GitPushTarget> {
   await validateGitPushTarget(repoPath, target, gitOptions)
   const prepared = await prepareWorktreePushTargetWithExec(
-    (args, cwd) => gitExecFileAsync(args, { cwd, ...gitOptions }),
+    // Why: this is only ever reached via the deferred materialize path (#17828) --
+    // bound the network fetch so it can't hang indefinitely (see the timeout constant's comment).
+    (args, cwd) =>
+      gitExecFileAsync(args, {
+        cwd,
+        ...gitOptions,
+        timeout: DEFERRED_PUSH_TARGET_FETCH_TIMEOUT_MS
+      }),
     repoPath,
     target,
     (existingRemote) =>
@@ -997,23 +1037,85 @@ export async function prepareWorktreePushTarget(
 // Why: on-demand twin of `prepareWorktreePushTarget` for push/pull/fetch/
 // fast-forward (#17828) -- a deferred fork remote is materialized the first
 // time it's needed. The cheap named-remote probe keeps every push after the
-// first one down to a single extra subprocess instead of repeating the
-// O(remotes) scan `prepareWorktreePushTargetWithExec` does when it must add.
+// first one down to a handful of extra subprocesses (probe, refspec-widen,
+// upstream-restore) instead of repeating the O(remotes) scan
+// `prepareWorktreePushTargetWithExec` does when it must add.
 export async function materializeWorktreePushTargetRemote(
   repoPath: string,
   target: GitPushTarget,
   store?: WorktreePushTargetStore,
   repoId?: string,
-  gitOptions: { wslDistro?: string } = {}
+  gitOptions: { wslDistro?: string } = {},
+  worktreeId?: string
 ): Promise<GitPushTarget> {
   if (!target.remoteUrl || target.remoteCreated) {
     return target
   }
   const execGit: GitRemoteExec = (args, cwd) => gitExecFileAsync(args, { cwd, ...gitOptions })
   if (await remoteAlreadyMatchesUrl(execGit, repoPath, target.remoteName, target.remoteUrl)) {
-    return target
+    // Why (review follow-up): the short-circuit is the common case for every call after the
+    // first, and for a sibling worktree reusing the same fork remote under a different branch
+    // -- it must still restore the upstream link and widen the refspec, or both stay stuck at
+    // whatever state create left them in. Previously these only ran inside
+    // prepareWorktreePushTarget, unreachable once the remote already exists.
+    await ensureRemoteTracksBranchNarrowly(execGit, repoPath, target.remoteName, target.branchName)
+    // Why: widening only rewrites config -- it never imports anything. For a sibling
+    // worktree's first materialize of a *new* branch on an already-existing remote, the
+    // branch's tracking ref doesn't exist yet, and `--set-upstream-to` below hard-fails
+    // with "the requested upstream branch does not exist" (verified against real git).
+    // Skip the fetch when the ref is already there so a repeat push/pull materialize
+    // (the common case) stays a local-only probe with no network round-trip.
+    if (
+      !(await forkRemoteTrackingRefExists(execGit, repoPath, target.remoteName, target.branchName))
+    ) {
+      // Why: a network fetch, unlike the local-only probes above -- bound it the same as
+      // the full-mint path's fetch so it can't hang indefinitely (see the timeout constant).
+      await gitExecFileAsync(
+        [
+          'fetch',
+          target.remoteName,
+          buildNarrowForkFetchRefspec(target.remoteName, target.branchName)
+        ],
+        { cwd: repoPath, ...gitOptions, timeout: DEFERRED_PUSH_TARGET_FETCH_TIMEOUT_MS }
+      )
+    }
+    return restoreUpstreamAfterMaterialize(execGit, repoPath, target)
   }
-  return prepareWorktreePushTarget(repoPath, target, store, repoId, gitOptions)
+  const key = worktreePushTargetMaterializeKey(repoPath, target.remoteName)
+  const existing = worktreePushTargetMaterializeInflight.get(key)
+  if (existing) {
+    return existing
+  }
+  const promise = prepareWorktreePushTarget(repoPath, target, store, repoId, gitOptions)
+    .then((prepared) => restoreUpstreamAfterMaterialize(execGit, repoPath, prepared))
+    .then((prepared) => {
+      persistMaterializedPushTargetIfCreated(store, worktreeId, prepared)
+      return prepared
+    })
+    .finally(() => {
+      if (worktreePushTargetMaterializeInflight.get(key) === promise) {
+        worktreePushTargetMaterializeInflight.delete(key)
+      }
+    })
+  worktreePushTargetMaterializeInflight.set(key, promise)
+  return promise
+}
+
+// Why (review follow-up): on-demand materialization never went through the create-time
+// `setWorktreeMeta` write, so the store's `pushTarget.remoteCreated` flag stayed stale
+// forever for a lazily-minted remote -- invisible to #17842's orphan sweep
+// (`shouldReclaimPrRemote` gates solely on that flag) and to any SSH host whose relay
+// predates `markRemoteOrcaCreated` (no git-config marker either). `setWorktreeMeta` is
+// optional on `WorktreePushTargetStore` so narrow test/reconciliation stores keep compiling.
+function persistMaterializedPushTargetIfCreated(
+  store: WorktreePushTargetStore | undefined,
+  worktreeId: string | undefined,
+  target: GitPushTarget
+): void {
+  if (!target.remoteCreated || !worktreeId || !store?.setWorktreeMeta) {
+    return
+  }
+  store.setWorktreeMeta(worktreeId, { pushTarget: target })
 }
 
 function isPushTargetRemoteCreatedByKnownWorktree(
@@ -1129,11 +1231,18 @@ export async function prepareWorktreePushTargetSsh(
         }
         throw error
       }
-      // Why: repo-local provenance mirroring the local path (worktree-push-target-setup.ts).
-      // A narrow RPC, not provider.exec: the relay's generic git.exec blocks all config writes.
-      await provider.markRemoteOrcaCreated(repoPath, remoteName)
-      remoteCreated = true
       remoteAddedHere = true
+      try {
+        // Why: repo-local provenance mirroring the local path (worktree-push-target-setup.ts).
+        // A narrow RPC, not provider.exec: the relay's generic git.exec blocks all config writes.
+        await provider.markRemoteOrcaCreated(repoPath, remoteName)
+      } catch (error) {
+        // Why: a remote with no provenance marker is unreclaimable -- cleanup only
+        // runs off that marker, so a failure here must undo the add.
+        await provider.exec(['remote', 'remove', remoteName], repoPath).catch(() => {})
+        throw error
+      }
+      remoteCreated = true
     }
   }
   try {
@@ -1164,16 +1273,55 @@ export async function materializeWorktreePushTargetRemoteSsh(
   repoPath: string,
   target: GitPushTarget,
   store?: WorktreePushTargetStore,
-  repoId?: string
+  repoId?: string,
+  worktreeId?: string
 ): Promise<GitPushTarget> {
   if (!target.remoteUrl || target.remoteCreated) {
     return target
   }
   const execGit: GitRemoteExec = (args, cwd) => provider.exec(args, cwd)
   if (await remoteAlreadyMatchesUrl(execGit, repoPath, target.remoteName, target.remoteUrl)) {
-    return target
+    // Why (review follow-up): mirrors the local short-circuit's upstream restore. Refspec
+    // widening is intentionally NOT mirrored here -- SSH's bare `remote add` (no `-t`/
+    // `--no-tags`, see prepareWorktreePushTargetSsh) is a pre-existing, documented gap this
+    // fix does not touch.
+    //
+    // The tracking ref itself, though, must still exist before `--set-upstream-to` below
+    // can succeed -- a reused remote's wide default refspec covers a future bare fetch,
+    // but imports nothing on its own. Fetch just this branch (a one-off refspec argument,
+    // not a config write) when it isn't already there; skip it otherwise so a repeat
+    // push/pull materialize stays a local-only probe with no relay round-trip.
+    if (
+      !(await forkRemoteTrackingRefExists(execGit, repoPath, target.remoteName, target.branchName))
+    ) {
+      await provider.fetchRemoteTrackingRef(
+        repoPath,
+        target.remoteName,
+        target.branchName,
+        `refs/remotes/${target.remoteName}/${target.branchName}`
+      )
+    }
+    return restoreUpstreamAfterMaterialize(execGit, repoPath, target)
   }
-  return prepareWorktreePushTargetSsh(provider, repoPath, target, store, repoId)
+  const inflight = getSshWorktreePushTargetMaterializeInflight(provider)
+  const key = worktreePushTargetMaterializeKey(repoPath, target.remoteName)
+  const existing = inflight.get(key)
+  if (existing) {
+    return existing
+  }
+  const promise = prepareWorktreePushTargetSsh(provider, repoPath, target, store, repoId)
+    .then((prepared) => restoreUpstreamAfterMaterialize(execGit, repoPath, prepared))
+    .then((prepared) => {
+      persistMaterializedPushTargetIfCreated(store, worktreeId, prepared)
+      return prepared
+    })
+    .finally(() => {
+      if (inflight.get(key) === promise) {
+        inflight.delete(key)
+      }
+    })
+  inflight.set(key, promise)
+  return promise
 }
 
 export async function cleanupUnusedWorktreePushTargetRemoteSsh(

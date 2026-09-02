@@ -141,7 +141,7 @@ export class SshGitWorktreeProvider extends SshGitReviewHeadProvider {
       if (!this.loggedMarkRemoteOrcaCreatedFallback) {
         this.loggedMarkRemoteOrcaCreatedFallback = true
         console.warn(
-          '[ssh-git] Relay does not implement git.markRemoteOrcaCreated; fork remote will lack a git-config provenance marker until reconnect.'
+          "[ssh-git] Relay does not implement git.markRemoteOrcaCreated; this remote will lack a git-config provenance marker permanently (reconnecting does not retroactively add it -- only a newer relay deployment does, for remotes added after that). The store's remoteCreated flag remains the fallback ownership signal for cleanup."
         )
       }
     }
