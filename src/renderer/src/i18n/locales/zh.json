@@ -14580,7 +14580,6 @@
         "startDictation": "开始听写",
         "stopDictation": "停止听写",
         "noSkills": "没有匹配的技能",
-        "localAttachmentUnsupported": "远程会话不支持本地附件。",
         "removeAttachment": "移除附件",
         "pastedImageLabel": "粘贴的图片",
         "imagePasteFailed": "图片粘贴失败。",

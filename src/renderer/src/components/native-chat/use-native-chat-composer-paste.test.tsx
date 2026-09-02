@@ -18,8 +18,8 @@ vi.mock('./native-chat-composer-target', () => ({
 }))
 
 vi.mock('./native-chat-attachment-upload', () => ({
-  nativeChatLocalAttachmentUnsupportedNotice: () =>
-    'Local attachments are not available for remote sessions.',
+  nativeChatAttachmentHostChangedMessage: 'Attachment upload host changed; retry the attach.',
+  nativeChatAttachmentOwnersMatch: (a: unknown, b: unknown) => a === b,
   nativeChatWorktreeNotReadyNotice: () => 'Worktree not ready — try again in a moment.'
 }))
 
@@ -128,6 +128,15 @@ const sshOwner: NativeChatAttachmentOwner = {
   expectedSshConnectionGeneration: 4
 }
 
+const runtimeOwner: NativeChatAttachmentOwner = {
+  kind: 'runtime',
+  runtimeEnvironmentId: 'env-1',
+  worktreeId: 'wt-1',
+  worktreePath: '/srv/wt',
+  connectionId: null,
+  expectedExecutionHostId: 'local'
+}
+
 afterEach(() => {
   root?.unmount()
   root = null
@@ -135,22 +144,61 @@ afterEach(() => {
 })
 
 describe('useNativeChatComposerPaste', () => {
-  it('does not save a clipboard image locally for a remote runtime', async () => {
-    const setNotice = vi.fn()
+  it('saves runtime-owned pastes on the runtime host and attaches the returned path', async () => {
+    mocks.saveClipboardImageAsTempFile.mockResolvedValue('/tmp/orca-paste-remote.png')
     const attachResolvedPaths = vi.fn()
     const probe = await renderProbe({
-      resolveAttachmentOwner: () => ({ kind: 'runtime' }),
+      resolveAttachmentOwner: () => runtimeOwner,
+      attachResolvedPaths
+    })
+    await act(async () => {
+      probe.latest().handlePaste(imagePasteEvent())
+    })
+    expect(mocks.saveClipboardImageAsTempFile).toHaveBeenCalledWith({
+      connectionId: null,
+      runtimeEnvironmentId: 'env-1'
+    })
+    expect(attachResolvedPaths).toHaveBeenCalledWith(['/tmp/orca-paste-remote.png'])
+  })
+
+  it('drops a paste whose pane moved to a different host mid-save', async () => {
+    mocks.saveClipboardImageAsTempFile.mockResolvedValue('/tmp/orca-paste-remote.png')
+    const attachResolvedPaths = vi.fn()
+    const setNotice = vi.fn()
+    // First resolution captures the owner; the post-save re-resolution returns
+    // a different owner object (reference inequality = host changed).
+    const resolveAttachmentOwner = vi
+      .fn<() => NativeChatAttachmentOwner>()
+      .mockReturnValueOnce(runtimeOwner)
+      .mockReturnValue({ ...runtimeOwner, runtimeEnvironmentId: 'env-2' })
+    const probe = await renderProbe({
+      resolveAttachmentOwner,
       attachResolvedPaths,
       setNotice
     })
-
-    await act(async () => probe.latest().pasteFromClipboard())
-
-    expect(setNotice).toHaveBeenCalledWith(
-      'Local attachments are not available for remote sessions.'
-    )
-    expect(mocks.saveClipboardImageAsTempFile).not.toHaveBeenCalled()
+    await act(async () => {
+      probe.latest().handlePaste(imagePasteEvent())
+    })
     expect(attachResolvedPaths).not.toHaveBeenCalled()
+    expect(setNotice).toHaveBeenCalledWith('Attachment upload host changed; retry the attach.')
+  })
+
+  it('passes the server-owned connection for nested runtime worktrees', async () => {
+    mocks.saveClipboardImageAsTempFile.mockResolvedValue('/tmp/orca-paste-jetson.png')
+    const attachResolvedPaths = vi.fn()
+    const nestedOwner: NativeChatAttachmentOwner = { ...runtimeOwner, connectionId: 'conn-1' }
+    const probe = await renderProbe({
+      resolveAttachmentOwner: () => nestedOwner,
+      attachResolvedPaths
+    })
+    await act(async () => {
+      probe.latest().handlePaste(imagePasteEvent())
+    })
+    expect(mocks.saveClipboardImageAsTempFile).toHaveBeenCalledWith({
+      connectionId: 'conn-1',
+      runtimeEnvironmentId: 'env-1'
+    })
+    expect(attachResolvedPaths).toHaveBeenCalledWith(['/tmp/orca-paste-jetson.png'])
   })
 
   it('surfaces a failed SSH image save through the composer notice', async () => {

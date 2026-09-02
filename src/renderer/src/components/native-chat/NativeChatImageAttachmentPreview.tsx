@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { Image as ImageIcon, X } from 'lucide-react'
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog'
 import { translate } from '@/i18n/i18n'
@@ -41,10 +41,25 @@ export function NativeChatImageAttachmentPreview({
     observer.observe(element)
     return () => observer.disconnect()
   }, [])
+  // No store subscription: the owning environment id is pinned on the
+  // attachment, and rebuilding the context identity on unrelated settings
+  // writes would re-run the image-cache effects for every chip.
+  const runtimeContext = useMemo(
+    () =>
+      attachment.runtime
+        ? {
+            settings: { activeRuntimeEnvironmentId: attachment.runtime.runtimeEnvironmentId },
+            worktreeId: attachment.runtime.worktreeId,
+            worktreePath: attachment.runtime.worktreePath
+          }
+        : undefined,
+    [attachment.runtime]
+  )
   const previewSrc = useLocalImageSrc(
     isNearViewport || isOpen ? attachment.path : undefined,
     attachment.path,
-    attachment.connectionId
+    attachment.connectionId,
+    runtimeContext
   )
   const filename = isNativeChatPastedImagePath(attachment.path)
     ? translate('components.native-chat.composer.pastedImageLabel', 'Pasted image')

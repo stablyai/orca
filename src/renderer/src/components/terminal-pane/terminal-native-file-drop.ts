@@ -1,10 +1,10 @@
 import { toast } from 'sonner'
+import { uploadPathsToRuntimeDropDir } from './runtime-drop-dir-upload'
 import { getConnectionId } from '@/lib/connection-context'
 import { extractIpcErrorMessage } from '@/lib/ipc-error'
 import { getLocalProjectExecutionRuntimeContext } from '@/lib/local-preflight-context'
 import { CLIENT_PLATFORM } from '@/lib/new-workspace'
 import type { PaneManager } from '@/lib/pane-manager/pane-manager'
-import { importExternalPathsToRuntime } from '@/runtime/runtime-file-client'
 import { useAppStore } from '@/store'
 import { translate } from '@/i18n/i18n'
 import { isWindowsAbsolutePathLike } from '../../../../shared/cross-platform-path'
@@ -15,7 +15,6 @@ import { reportTerminalDropUploadSkipsAndFailures } from './terminal-drop-upload
 import { captureTerminalDropTarget, getCurrentTerminalDropTransport } from './terminal-drop-target'
 import {
   getTerminalTargetShellForWorktreePath,
-  isTerminalDropWindowsPathLike,
   resolveTerminalDropTargetShell
 } from './terminal-drop-shell'
 import { writeTerminalDropPathsToCapturedTarget } from './terminal-drop-path-writer'
@@ -23,10 +22,7 @@ import { resolveNativeTerminalDropPane } from './terminal-drop-pane-resolution'
 import { getTerminalPasteSshRemotePlatform } from './terminal-paste-ssh-platform'
 import { showTerminalDropWriteFailure } from './terminal-drop-write-failure'
 import { captureDirectSshMutationExpectation } from '@/lib/ssh-mutation-expectation'
-import {
-  joinRuntimeTerminalDropDir,
-  resolveTerminalDropWorktreePath
-} from './terminal-drop-worktree-path'
+import { resolveTerminalDropWorktreePath } from './terminal-drop-worktree-path'
 import { captureRuntimeTerminalDropOwner } from './terminal-drop-runtime-owner'
 
 export type NativeTerminalFileDropArgs = {
@@ -177,46 +173,32 @@ async function uploadRuntimeDropPaths(
   }
 ): Promise<void> {
   const targetShell = getTerminalTargetShellForWorktreePath(args.worktreePath)
-  const destinationDir = joinRuntimeTerminalDropDir(args.worktreePath)
-  const pending = toast.loading(
-    translate(
-      'auto.components.terminal.pane.terminal.drop.handler.29c031b49a',
-      'Uploading {{value0}} file{{value1}} to runtime…',
-      { value0: args.dataPaths.length, value1: args.dataPaths.length === 1 ? '' : 's' }
-    )
+  // Why: uploads into existing worktrees must follow the worktree owner, not
+  // the currently focused host in the sidebar — the shared core scopes its
+  // import context to the owner's environment id.
+  const importedPaths = await uploadPathsToRuntimeDropDir(
+    args.dataPaths,
+    {
+      runtimeEnvironmentId: args.runtimeEnvironmentId,
+      worktreeId: args.worktreeId,
+      worktreePath: args.worktreePath,
+      expectedExecutionHostId: args.expectedExecutionHostId,
+      expectedSshTargetId: args.expectedSshTargetId,
+      expectedSshConnectionGeneration: args.expectedSshConnectionGeneration
+    },
+    {
+      loadingMessage: translate(
+        'auto.components.terminal.pane.terminal.drop.handler.29c031b49a',
+        'Uploading {{value0}} file{{value1}} to runtime…',
+        { value0: args.dataPaths.length, value1: args.dataPaths.length === 1 ? '' : 's' }
+      ),
+      assertCurrent: args.assertCurrent
+    }
   )
-  try {
-    const { results } = await importExternalPathsToRuntime(
-      {
-        // Why: drops into existing worktrees must follow the worktree owner,
-        // not the currently focused host in the sidebar.
-        settings: { ...args.settings, activeRuntimeEnvironmentId: args.runtimeEnvironmentId },
-        worktreeId: args.worktreeId,
-        worktreePath: args.worktreePath,
-        expectedExecutionHostId: args.expectedExecutionHostId,
-        expectedSshTargetId: args.expectedSshTargetId,
-        expectedSshConnectionGeneration: args.expectedSshConnectionGeneration
-      },
-      args.dataPaths,
-      destinationDir,
-      { assertCurrent: args.assertCurrent }
-    )
-    const imported = results.filter((result) => result.status === 'imported')
-    const importedPaths = imported.map((result) =>
-      isTerminalDropWindowsPathLike(args.worktreePath)
-        ? result.destPath.replace(/\//g, '\\')
-        : result.destPath
-    )
-    await pasteResolvedDropPaths({ ...args, paths: importedPaths, targetShell })
-    reportTerminalDropUploadSkipsAndFailures(
-      results.filter((result) => result.status === 'skipped'),
-      results.filter((result) => result.status === 'failed')
-    )
-  } catch (err) {
-    toast.error(extractIpcErrorMessage(err, 'Failed to upload files.'))
-  } finally {
-    toast.dismiss(pending)
+  if (importedPaths === null) {
+    return
   }
+  await pasteResolvedDropPaths({ ...args, paths: importedPaths, targetShell })
 }
 
 async function pasteLocalDropPaths(

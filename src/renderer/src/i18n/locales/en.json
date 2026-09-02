@@ -16603,7 +16603,6 @@
         "skillScopePersonal": "Personal",
         "skillScopeBuiltIn": "Built-in",
         "skillScopePlugin": "Plugin",
-        "localAttachmentUnsupported": "Local attachments are not available for remote sessions.",
         "removeAttachment": "Remove attachment",
         "pastedImageLabel": "Pasted image",
         "imagePasteFailed": "Image paste failed.",

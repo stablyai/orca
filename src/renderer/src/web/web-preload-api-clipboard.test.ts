@@ -303,7 +303,7 @@ describe('web UI preload API', () => {
     writeStoredRuntimeEnvironment(globals.storage)
     const { installWebPreloadApi } = await import('./web-preload-api')
     const { CLIPBOARD_IMAGE_UPLOAD_CHUNK_BASE64_CHARS } =
-      await import('./preload-api/web-clipboard-api')
+      await import('../../../shared/clipboard-image-upload-protocol')
     const contentBase64 = `${'A'.repeat(CLIPBOARD_IMAGE_UPLOAD_CHUNK_BASE64_CHARS)}AAAA`
     installClipboardImageBase64(contentBase64)
     installWebPreloadApi()
@@ -417,7 +417,7 @@ describe('web UI preload API', () => {
     writeStoredRuntimeEnvironment(globals.storage)
     const { installWebPreloadApi } = await import('./web-preload-api')
     const { CLIPBOARD_IMAGE_SINGLE_FRAME_FALLBACK_BASE64_CHARS } =
-      await import('./preload-api/web-clipboard-api')
+      await import('../../../shared/clipboard-image-upload-protocol')
     installClipboardImageBase64('A'.repeat(CLIPBOARD_IMAGE_SINGLE_FRAME_FALLBACK_BASE64_CHARS + 4))
     installWebPreloadApi()
 

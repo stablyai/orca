@@ -14537,7 +14537,6 @@
         "startDictation": "ディクテーションを開始する",
         "stopDictation": "ディクテーションを停止する",
         "noSkills": "一致するスキルがありません",
-        "localAttachmentUnsupported": "ローカル添付ファイルはリモートセッションでは使用できません。",
         "removeAttachment": "添付ファイルを削除する",
         "pastedImageLabel": "貼り付けた画像",
         "imagePasteFailed": "画像の貼り付けに失敗しました。",

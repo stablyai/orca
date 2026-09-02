@@ -4,6 +4,7 @@ import { ImageOff } from 'lucide-react'
 import type { useImeEnterGestureOwnership } from '@/lib/ime-composition-keyboard-event'
 import { cn } from '@/lib/utils'
 import { NATIVE_FILE_DROP_TARGET } from '../../../../shared/native-file-drop'
+import type { NativeChatAttachedHost } from './native-chat-attachment-upload'
 import type { ComposerAutocomplete, NativeChatPickerItem } from './native-chat-composer-state'
 import { NativeChatMentionHint, NativeChatPickerMenu } from './NativeChatAutocompleteMenus'
 import { NativeChatComposerActions } from './NativeChatComposerActions'
@@ -57,6 +58,9 @@ export type NativeChatComposerImageAttachment = {
   id: string
   path: string
   connectionId?: string
+  /** Set for runtime-owned attachments so the preview reads from the runtime,
+   *  not the client filesystem. */
+  runtime?: NonNullable<NativeChatAttachedHost['runtime']>
 }
 
 /**
