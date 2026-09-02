@@ -156,20 +156,19 @@ async function probeEndpoint(ep: AntigravityEndpoint): Promise<ProviderRateLimit
       const usedPercent = Math.min(100, Math.max(0, Math.round((1 - remainingFraction) * 100)))
       const resetsAt = bucket.resetTime ? new Date(bucket.resetTime).getTime() : null
 
-      const bucketLabel =
-        isGeminiGroup
-          ? isWeekly
-            ? 'Gemini Weekly'
-            : is5h
-              ? 'Gemini 5h'
-              : bucket.displayName || bucketId
-          : isThirdParty
-            ? isWeekly
-              ? 'Claude/GPT Weekly'
-              : is5h
-                ? 'Claude/GPT 5h'
-                : bucket.displayName || bucketId
+      const bucketLabel = isGeminiGroup
+        ? isWeekly
+          ? 'Gemini Weekly'
+          : is5h
+            ? 'Gemini 5h'
             : bucket.displayName || bucketId
+        : isThirdParty
+          ? isWeekly
+            ? 'Claude/GPT Weekly'
+            : is5h
+              ? 'Claude/GPT 5h'
+              : bucket.displayName || bucketId
+          : bucket.displayName || bucketId
 
       const rateLimitBucket: RateLimitBucket = {
         name: bucketLabel,
