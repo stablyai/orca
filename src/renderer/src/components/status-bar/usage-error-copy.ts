@@ -90,7 +90,7 @@ export function getProviderUsageStatusLabel(p: ProviderRateLimits): string {
   }
   if (delegatedCliProvider === 'cursor') {
     return translate(
-      'auto.components.status.bar.usage.error.copy.10c0b50ae8',
+      'auto.components.status.bar.usage.error.copy.signInWithCursor',
       'Sign in with Cursor'
     )
   }

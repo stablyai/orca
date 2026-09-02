@@ -218,13 +218,13 @@ export const getAccountsGrokSearchEntries = createLocalizedCatalog(() => [
 
 export const getAccountsCursorSearchEntries = createLocalizedCatalog(() => [
   {
-    title: translate('auto.components.settings.accounts.search.f0d1b8ed98', 'Cursor Usage'),
+    title: translate('auto.components.settings.accounts.search.cursorUsageTitle', 'Cursor Usage'),
     description: translate(
-      'auto.components.settings.accounts.search.5311965b9e',
+      'auto.components.settings.accounts.search.cursorUsageDescription',
       'Read-only Cursor desktop and cursor-agent login for Cursor Models, Other Models, and Grok Bot usage.'
     ),
     keywords: [
-      ...translateSearchKeyword('auto.components.settings.accounts.search.ae41149765', 'cursor'),
+      ...translateSearchKeyword('auto.components.settings.accounts.search.cursorKeyword', 'cursor'),
       ...translateSearchKeyword(
         'auto.components.settings.accounts.search.e949b08ffb',
         'rate limit'

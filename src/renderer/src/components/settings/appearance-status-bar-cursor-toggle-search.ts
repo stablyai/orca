@@ -12,33 +12,33 @@ export function getCursorStatusBarToggleSearchEntry(): {
   return {
     id: 'cursor',
     title: translate(
-      'auto.components.settings.appearance.status.bar.cursor.toggle.search.b7d8e5d878',
+      'auto.components.settings.appearance.status.bar.cursor.toggle.search.title',
       'Cursor Usage'
     ),
     description: translate(
-      'auto.components.settings.appearance.status.bar.cursor.toggle.search.5e2a8cfb86',
+      'auto.components.settings.appearance.status.bar.cursor.toggle.search.description',
       'Show Cursor Models, Other Models, and Grok Bot usage from the signed-in Cursor session.'
     ),
     keywords: [
       ...translateSearchKeyword(
-        'auto.components.settings.appearance.status.bar.cursor.toggle.search.c34d783d64',
+        'auto.components.settings.appearance.status.bar.cursor.toggle.search.keywordStatusBar',
         'status bar'
       ),
       ...translateSearchKeyword(
-        'auto.components.settings.appearance.status.bar.cursor.toggle.search.c9cd9fe8d2',
+        'auto.components.settings.appearance.status.bar.cursor.toggle.search.keywordCursor',
         'cursor'
       ),
       ...translateSearchKeyword(
-        'auto.components.settings.appearance.status.bar.cursor.toggle.search.fbb8436949',
+        'auto.components.settings.appearance.status.bar.cursor.toggle.search.keywordUsage',
         'usage'
       ),
       ...translateSearchKeyword(
-        'auto.components.settings.appearance.status.bar.cursor.toggle.search.6843b85f37',
+        'auto.components.settings.appearance.status.bar.cursor.toggle.search.keywordSubscription',
         'subscription'
       )
     ],
     toggleDescription: translate(
-      'auto.components.settings.appearance.status.bar.cursor.toggle.search.4036697d97',
+      'auto.components.settings.appearance.status.bar.cursor.toggle.search.toggleDescription',
       'Show Cursor subscription usage when signed in with Cursor or cursor-agent.'
     )
   }

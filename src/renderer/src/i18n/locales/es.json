@@ -3302,7 +3302,7 @@
             "codexSignInError": "No se pudo iniciar sesión en Codex. Inténtalo de nuevo."
           },
           "StatusBarVisibilityMenu": {
-            "5d095e229c": "Uso de Cursor"
+            "cursorUsage": "Uso de Cursor"
           },
           "StatusBarUsageEmptyCta": {
             "828c764a79": "Conectar una cuenta",
@@ -3470,7 +3470,7 @@
           "usage": {
             "error": {
               "copy": {
-                "10c0b50ae8": "Iniciar sesión con Cursor"
+                "signInWithCursor": "Iniciar sesión con Cursor"
               }
             }
           },
@@ -7669,14 +7669,14 @@
           "0307677bb9": "Comprobando el registro de la CLI de WSL..."
         },
         "CursorAccountsSection": {
-          "dd3e96043c": "Cursor",
-          "f81b44c027": "Muestra el uso de Cursor Models, Other Models y Grok Bot desde el inicio de sesión de Cursor o cursor-agent en este equipo. Orca no actualiza esa sesión.",
-          "cffcf53d2c": "Documentación de Cursor CLI",
-          "227335c599": "Sesión iniciada",
-          "032e4ab844": "No has iniciado sesión — ejecuta Cursor o cursor-agent login en este equipo",
-          "0035d7210b": "Actualizar uso",
-          "6c4baffae9": "Porcentaje de uso en tiempo real de este grupo de Cursor. Los límites no están codificados.",
-          "6e1fa26404": "Se restablece {{when}}"
+          "title": "Cursor",
+          "description": "Muestra el uso de Cursor Models, Other Models y Grok Bot desde el inicio de sesión de Cursor o cursor-agent en este equipo. Orca no actualiza esa sesión.",
+          "cursorCliDocs": "Documentación de Cursor CLI",
+          "signedInStatus": "Sesión iniciada",
+          "notSignedInInstructions": "No has iniciado sesión — ejecuta Cursor o cursor-agent login en este equipo",
+          "refreshUsage": "Actualizar uso",
+          "poolUsageDescription": "Porcentaje de uso en tiempo real de este grupo de Cursor. Los límites no están codificados.",
+          "resetsWhen": "Se restablece {{when}}"
         },
         "accounts": {
           "search": {
@@ -7732,9 +7732,9 @@
             "c1b5f9d7e0": "xai",
             "b0a4e8c6d9": "OAuth",
             "a9f3d7b5c8": "inicio de sesión",
-            "f0d1b8ed98": "Uso de Cursor",
-            "5311965b9e": "Inicio de sesión de solo lectura de Cursor Desktop y cursor-agent para el uso de Cursor Models, Other Models y Grok Bot.",
-            "ae41149765": "cursor"
+            "cursorUsageTitle": "Uso de Cursor",
+            "cursorUsageDescription": "Inicio de sesión de solo lectura de Cursor Desktop y cursor-agent para el uso de Cursor Models, Other Models y Grok Bot.",
+            "cursorKeyword": "cursor"
           }
         },
         "advanced": {
@@ -7822,13 +7822,13 @@
               "cursor": {
                 "toggle": {
                   "search": {
-                    "b7d8e5d878": "Uso de Cursor",
-                    "5e2a8cfb86": "Muestra el uso de Cursor Models, Other Models y Grok Bot de la sesión iniciada de Cursor.",
-                    "c34d783d64": "barra de estado",
-                    "c9cd9fe8d2": "cursor",
-                    "fbb8436949": "uso",
-                    "6843b85f37": "suscripción",
-                    "4036697d97": "Muestra el uso de la suscripción de Cursor al iniciar sesión con Cursor o cursor-agent."
+                    "title": "Uso de Cursor",
+                    "description": "Muestra el uso de Cursor Models, Other Models y Grok Bot de la sesión iniciada de Cursor.",
+                    "keywordStatusBar": "barra de estado",
+                    "keywordCursor": "cursor",
+                    "keywordUsage": "uso",
+                    "keywordSubscription": "suscripción",
+                    "toggleDescription": "Muestra el uso de la suscripción de Cursor al iniciar sesión con Cursor o cursor-agent."
                   }
                 }
               }

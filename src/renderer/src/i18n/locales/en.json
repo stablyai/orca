@@ -3727,7 +3727,7 @@
             "codexSignInError": "Codex sign-in failed. Please try again."
           },
           "StatusBarVisibilityMenu": {
-            "5d095e229c": "Cursor Usage"
+            "cursorUsage": "Cursor Usage"
           },
           "StatusBarUsageEmptyCta": {
             "828c764a79": "Connect an account",
@@ -3918,7 +3918,7 @@
           "usage": {
             "error": {
               "copy": {
-                "10c0b50ae8": "Sign in with Cursor"
+                "signInWithCursor": "Sign in with Cursor"
               }
             }
           },
@@ -8820,14 +8820,14 @@
           "0307677bb9": "Checking WSL CLI registration..."
         },
         "CursorAccountsSection": {
-          "dd3e96043c": "Cursor",
-          "f81b44c027": "Shows Cursor Models, Other Models, and Grok Bot usage from the Cursor desktop or cursor-agent login on this machine. Orca does not refresh that session.",
-          "cffcf53d2c": "Cursor CLI docs",
-          "227335c599": "Signed in",
-          "032e4ab844": "Not signed in — run Cursor or cursor-agent login on this computer",
-          "0035d7210b": "Refresh usage",
-          "6c4baffae9": "Live percent used for this Cursor pool. Caps are not hardcoded.",
-          "6e1fa26404": "Resets {{when}}"
+          "title": "Cursor",
+          "description": "Shows Cursor Models, Other Models, and Grok Bot usage from the Cursor desktop or cursor-agent login on this machine. Orca does not refresh that session.",
+          "cursorCliDocs": "Cursor CLI docs",
+          "signedInStatus": "Signed in",
+          "notSignedInInstructions": "Not signed in — run Cursor or cursor-agent login on this computer",
+          "refreshUsage": "Refresh usage",
+          "poolUsageDescription": "Live percent used for this Cursor pool. Caps are not hardcoded.",
+          "resetsWhen": "Resets {{when}}"
         },
         "accounts": {
           "search": {
@@ -8888,9 +8888,9 @@
             "3a9b6d2c4e": "api key",
             "5d8f1a3b7c": "china",
             "7e2a4b8c1d": "overseas",
-            "f0d1b8ed98": "Cursor Usage",
-            "5311965b9e": "Read-only Cursor desktop and cursor-agent login for Cursor Models, Other Models, and Grok Bot usage.",
-            "ae41149765": "cursor"
+            "cursorUsageTitle": "Cursor Usage",
+            "cursorUsageDescription": "Read-only Cursor desktop and cursor-agent login for Cursor Models, Other Models, and Grok Bot usage.",
+            "cursorKeyword": "cursor"
           }
         },
         "advanced": {
@@ -8987,13 +8987,13 @@
               "cursor": {
                 "toggle": {
                   "search": {
-                    "b7d8e5d878": "Cursor Usage",
-                    "5e2a8cfb86": "Show Cursor Models, Other Models, and Grok Bot usage from the signed-in Cursor session.",
-                    "c34d783d64": "status bar",
-                    "c9cd9fe8d2": "cursor",
-                    "fbb8436949": "usage",
-                    "6843b85f37": "subscription",
-                    "4036697d97": "Show Cursor subscription usage when signed in with Cursor or cursor-agent."
+                    "title": "Cursor Usage",
+                    "description": "Show Cursor Models, Other Models, and Grok Bot usage from the signed-in Cursor session.",
+                    "keywordStatusBar": "status bar",
+                    "keywordCursor": "cursor",
+                    "keywordUsage": "usage",
+                    "keywordSubscription": "subscription",
+                    "toggleDescription": "Show Cursor subscription usage when signed in with Cursor or cursor-agent."
                   }
                 }
               }

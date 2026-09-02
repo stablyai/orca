@@ -144,7 +144,7 @@ export function StatusBarVisibilityMenu({
           >
             <AgentIcon agent="cursor" size={14} />
             {translate(
-              'auto.components.status.bar.StatusBarVisibilityMenu.5d095e229c',
+              'auto.components.status.bar.StatusBarVisibilityMenu.cursorUsage',
               'Cursor Usage'
             )}
           </DropdownMenuCheckboxItem>

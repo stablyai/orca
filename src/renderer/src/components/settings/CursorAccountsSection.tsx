@@ -43,11 +43,11 @@ export function CursorAccountsSection(): React.JSX.Element {
         <div className="space-y-1">
           <h3 className="flex items-center gap-2 text-sm font-semibold">
             <AgentIcon agent="cursor" size={16} />
-            {translate('auto.components.settings.CursorAccountsSection.dd3e96043c', 'Cursor')}
+            {translate('auto.components.settings.CursorAccountsSection.title', 'Cursor')}
           </h3>
           <p className="text-xs text-muted-foreground">
             {translate(
-              'auto.components.settings.CursorAccountsSection.f81b44c027',
+              'auto.components.settings.CursorAccountsSection.description',
               'Shows Cursor Models, Other Models, and Grok Bot usage from the Cursor desktop or cursor-agent login on this machine. Orca does not refresh that session.'
             )}
           </p>
@@ -59,7 +59,7 @@ export function CursorAccountsSection(): React.JSX.Element {
           className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
         >
           {translate(
-            'auto.components.settings.CursorAccountsSection.cffcf53d2c',
+            'auto.components.settings.CursorAccountsSection.cursorCliDocs',
             'Cursor CLI docs'
           )}
           <ExternalLink className="size-3" />
@@ -84,11 +84,11 @@ export function CursorAccountsSection(): React.JSX.Element {
               ? getProviderUsageStatusLabel(cursorUsage)
               : signedIn
                 ? translate(
-                    'auto.components.settings.CursorAccountsSection.227335c599',
+                    'auto.components.settings.CursorAccountsSection.signedInStatus',
                     'Signed in'
                   )
                 : translate(
-                    'auto.components.settings.CursorAccountsSection.032e4ab844',
+                    'auto.components.settings.CursorAccountsSection.notSignedInInstructions',
                     'Not signed in — run Cursor or cursor-agent login on this computer'
                   )}
           </p>
@@ -124,7 +124,10 @@ export function CursorAccountsSection(): React.JSX.Element {
           ) : (
             <RefreshCw className="size-3" />
           )}
-          {translate('auto.components.settings.CursorAccountsSection.0035d7210b', 'Refresh usage')}
+          {translate(
+            'auto.components.settings.CursorAccountsSection.refreshUsage',
+            'Refresh usage'
+          )}
         </Button>
       </div>
 
@@ -133,7 +136,7 @@ export function CursorAccountsSection(): React.JSX.Element {
           key={item.name}
           title={item.name}
           description={translate(
-            'auto.components.settings.CursorAccountsSection.6c4baffae9',
+            'auto.components.settings.CursorAccountsSection.poolUsageDescription',
             'Live percent used for this Cursor pool. Caps are not hardcoded.'
           )}
           keywords={['cursor', 'usage', 'rate limit', item.name.toLowerCase()]}
@@ -150,7 +153,7 @@ export function CursorAccountsSection(): React.JSX.Element {
                     ? formatResetCountdown(item.resetsAt - now)
                     : item.resetDescription
                       ? translate(
-                          'auto.components.settings.CursorAccountsSection.6e1fa26404',
+                          'auto.components.settings.CursorAccountsSection.resetsWhen',
                           'Resets {{when}}',
                           { when: item.resetDescription }
                         )

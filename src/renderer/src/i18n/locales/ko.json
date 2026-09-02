@@ -3307,7 +3307,7 @@
             "codexSignInError": "Codex 로그인에 실패했습니다. 다시 시도해 주세요."
           },
           "StatusBarVisibilityMenu": {
-            "5d095e229c": "Cursor 사용량"
+            "cursorUsage": "Cursor 사용량"
           },
           "StatusBarUsageEmptyCta": {
             "828c764a79": "계정 연결",
@@ -3475,7 +3475,7 @@
           "usage": {
             "error": {
               "copy": {
-                "10c0b50ae8": "Cursor로 로그인"
+                "signInWithCursor": "Cursor로 로그인"
               }
             }
           },
@@ -7659,14 +7659,14 @@
           "0307677bb9": "WSL CLI 등록 확인 중..."
         },
         "CursorAccountsSection": {
-          "dd3e96043c": "Cursor",
-          "f81b44c027": "이 컴퓨터의 Cursor 데스크톱 또는 cursor-agent 로그인에서 Cursor Models, Other Models, Grok Bot 사용량을 표시합니다. Orca는 해당 세션을 갱신하지 않습니다.",
-          "cffcf53d2c": "Cursor CLI 문서",
-          "227335c599": "로그인됨",
-          "032e4ab844": "로그인되지 않음 — 이 컴퓨터에서 Cursor 또는 cursor-agent login을 실행하세요",
-          "0035d7210b": "사용량 새로 고침",
-          "6c4baffae9": "이 Cursor 풀의 실시간 사용률입니다. 한도는 하드코딩되지 않습니다.",
-          "6e1fa26404": "{{when}}에 초기화"
+          "title": "Cursor",
+          "description": "이 컴퓨터의 Cursor 데스크톱 또는 cursor-agent 로그인에서 Cursor Models, Other Models, Grok Bot 사용량을 표시합니다. Orca는 해당 세션을 갱신하지 않습니다.",
+          "cursorCliDocs": "Cursor CLI 문서",
+          "signedInStatus": "로그인됨",
+          "notSignedInInstructions": "로그인되지 않음 — 이 컴퓨터에서 Cursor 또는 cursor-agent login을 실행하세요",
+          "refreshUsage": "사용량 새로 고침",
+          "poolUsageDescription": "이 Cursor 풀의 실시간 사용률입니다. 한도는 하드코딩되지 않습니다.",
+          "resetsWhen": "{{when}}에 초기화"
         },
         "accounts": {
           "search": {
@@ -7722,9 +7722,9 @@
             "c1b5f9d7e0": "xai",
             "b0a4e8c6d9": "OAuth",
             "a9f3d7b5c8": "로그인",
-            "f0d1b8ed98": "Cursor 사용량",
-            "5311965b9e": "Cursor Models, Other Models, Grok Bot 사용량을 위한 읽기 전용 Cursor 데스크톱 및 cursor-agent 로그인.",
-            "ae41149765": "cursor"
+            "cursorUsageTitle": "Cursor 사용량",
+            "cursorUsageDescription": "Cursor Models, Other Models, Grok Bot 사용량을 위한 읽기 전용 Cursor 데스크톱 및 cursor-agent 로그인.",
+            "cursorKeyword": "cursor"
           }
         },
         "advanced": {
@@ -7812,13 +7812,13 @@
               "cursor": {
                 "toggle": {
                   "search": {
-                    "b7d8e5d878": "Cursor 사용량",
-                    "5e2a8cfb86": "로그인한 Cursor 세션의 Cursor Models, Other Models 및 Grok Bot 사용량을 표시합니다.",
-                    "c34d783d64": "상태 표시줄",
-                    "c9cd9fe8d2": "cursor",
-                    "fbb8436949": "사용량",
-                    "6843b85f37": "구독",
-                    "4036697d97": "Cursor 또는 cursor-agent로 로그인했을 때 Cursor 구독 사용량을 표시합니다."
+                    "title": "Cursor 사용량",
+                    "description": "로그인한 Cursor 세션의 Cursor Models, Other Models 및 Grok Bot 사용량을 표시합니다.",
+                    "keywordStatusBar": "상태 표시줄",
+                    "keywordCursor": "cursor",
+                    "keywordUsage": "사용량",
+                    "keywordSubscription": "구독",
+                    "toggleDescription": "Cursor 또는 cursor-agent로 로그인했을 때 Cursor 구독 사용량을 표시합니다."
                   }
                 }
               }

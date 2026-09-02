@@ -3317,7 +3317,7 @@
             "codexSignInError": "Codex 登录失败，请重试。"
           },
           "StatusBarVisibilityMenu": {
-            "5d095e229c": "Cursor 使用情况"
+            "cursorUsage": "Cursor 使用情况"
           },
           "StatusBarUsageEmptyCta": {
             "828c764a79": "连接账户",
@@ -3485,7 +3485,7 @@
           "usage": {
             "error": {
               "copy": {
-                "10c0b50ae8": "使用 Cursor 登录"
+                "signInWithCursor": "使用 Cursor 登录"
               }
             }
           },
@@ -7720,14 +7720,14 @@
           "0307677bb9": "正在检查 WSL CLI 注册..."
         },
         "CursorAccountsSection": {
-          "dd3e96043c": "Cursor",
-          "f81b44c027": "显示这台机器上 Cursor 桌面版或 cursor-agent 登录会话中的 Cursor Models、Other Models 和 Grok Bot 使用情况。Orca 不会刷新该会话。",
-          "cffcf53d2c": "Cursor CLI 文档",
-          "227335c599": "已登录",
-          "032e4ab844": "未登录 — 请在此计算机上运行 Cursor 或 cursor-agent login",
-          "0035d7210b": "刷新使用情况",
-          "6c4baffae9": "此 Cursor 资源池的实时已用百分比。限额未硬编码。",
-          "6e1fa26404": "重置于 {{when}}"
+          "title": "Cursor",
+          "description": "显示这台机器上 Cursor 桌面版或 cursor-agent 登录会话中的 Cursor Models、Other Models 和 Grok Bot 使用情况。Orca 不会刷新该会话。",
+          "cursorCliDocs": "Cursor CLI 文档",
+          "signedInStatus": "已登录",
+          "notSignedInInstructions": "未登录 — 请在此计算机上运行 Cursor 或 cursor-agent login",
+          "refreshUsage": "刷新使用情况",
+          "poolUsageDescription": "此 Cursor 资源池的实时已用百分比。限额未硬编码。",
+          "resetsWhen": "重置于 {{when}}"
         },
         "accounts": {
           "search": {
@@ -7787,9 +7787,9 @@
             "3a9b6d2c4e": "API 密钥",
             "5d8f1a3b7c": "中国",
             "7e2a4b8c1d": "海外",
-            "f0d1b8ed98": "Cursor 使用情况",
-            "5311965b9e": "用于查看 Cursor Models、Other Models 和 Grok Bot 使用情况的只读 Cursor 桌面版和 cursor-agent 登录。",
-            "ae41149765": "cursor"
+            "cursorUsageTitle": "Cursor 使用情况",
+            "cursorUsageDescription": "用于查看 Cursor Models、Other Models 和 Grok Bot 使用情况的只读 Cursor 桌面版和 cursor-agent 登录。",
+            "cursorKeyword": "cursor"
           }
         },
         "advanced": {
@@ -7877,13 +7877,13 @@
               "cursor": {
                 "toggle": {
                   "search": {
-                    "b7d8e5d878": "Cursor 使用情况",
-                    "5e2a8cfb86": "显示已登录 Cursor 会话中的 Cursor Models、Other Models 和 Grok Bot 使用情况。",
-                    "c34d783d64": "状态栏",
-                    "c9cd9fe8d2": "cursor",
-                    "fbb8436949": "使用情况",
-                    "6843b85f37": "订阅",
-                    "4036697d97": "使用 Cursor 或 cursor-agent 登录时显示 Cursor 订阅使用情况。"
+                    "title": "Cursor 使用情况",
+                    "description": "显示已登录 Cursor 会话中的 Cursor Models、Other Models 和 Grok Bot 使用情况。",
+                    "keywordStatusBar": "状态栏",
+                    "keywordCursor": "cursor",
+                    "keywordUsage": "使用情况",
+                    "keywordSubscription": "订阅",
+                    "toggleDescription": "使用 Cursor 或 cursor-agent 登录时显示 Cursor 订阅使用情况。"
                   }
                 }
               }
