@@ -40,6 +40,16 @@ import {
   type RawItem
 } from './project-view'
 
+describe('itemContentSelection hierarchy schema fallback', () => {
+  it('omits hierarchy fields while preserving the parent selection', () => {
+    const selection = itemContentSelection(true, false)
+    expect(selection).toContain('parent { number title url }')
+    expect(selection).not.toContain('subIssuesSummary')
+    expect(selection).not.toContain('trackedIssues')
+    expect(selection).not.toContain('trackedInIssues')
+  })
+})
+
 describe('classifyProjectError', () => {
   it('classifies HTTP 404 as not_found', () => {
     expect(classifyProjectError('HTTP 404 Not Found', '').type).toBe('not_found')

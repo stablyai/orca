@@ -149,6 +149,24 @@ const ownerTypeCache = new Map<string, GitHubProjectOwnerType | null>()
 // Issue.parent. See bug-scan finding 2.
 const parentFieldRetriedByOwner = new Map<string, true>()
 const parentFieldWarningLoggedByOwner = new Map<string, true>()
+const hierarchyFieldRetriedByOwner = new Map<string, true>()
+const hierarchyFieldProbeInFlight = new Map<string, Promise<void>>()
+
+function markHierarchyFieldRetried(scopeKey: string): void {
+  rememberProjectViewCacheEntry(hierarchyFieldRetriedByOwner, scopeKey, true)
+}
+
+function hasHierarchyFieldRetried(scopeKey: string): boolean {
+  return getProjectViewCacheEntry(hierarchyFieldRetriedByOwner, scopeKey) === true
+}
+
+function errorsIndicateHierarchyFields(errors: GhGraphqlErrorShape[], stderr: string): boolean {
+  const text =
+    `${stderr} ${errors.map((e) => `${e.message ?? ''} ${(e.path ?? []).join('.')}`).join(' ')}`.toLowerCase()
+  return ['subissuessummary', 'trackedissues', 'trackedinissues'].some((field) =>
+    text.includes(field)
+  )
+}
 // Why: concurrent fetchAllItems calls for the same owner all observe the
 // same "not-yet-retried" state, each issuing a duplicate first-page probe
 // and racing to set the flag. Use an in-flight promise per owner so only
@@ -188,6 +206,8 @@ export function _resetProjectViewCachesForTests(): void {
   parentFieldRetriedByOwner.clear()
   parentFieldWarningLoggedByOwner.clear()
   parentFieldProbeInFlight.clear()
+  hierarchyFieldRetriedByOwner.clear()
+  hierarchyFieldProbeInFlight.clear()
 }
 
 export function _getProjectViewCacheSizesForTests(): {
@@ -615,14 +635,17 @@ fragment FieldConfig on ProjectV2FieldConfiguration {
 // Why: Phase 1b — sub-issue progress, tracked issues, and tracked-by issues
 // are read from the linked Issue, not from the field-value union (the union
 // has no corresponding members as of 2026-07-14).
-// TODO(github-projects-hierarchy): only `parent` has a schema-unsupported
-// retry-without path (see parentFieldRetriedByOwner below). subIssuesSummary/
-// trackedIssues/trackedInIssues have none, so an older GHES schema missing
-// any of them fails the whole item fetch instead of degrading. Flagged by
-// review; deferred as its own Phase 1b follow-up (shared retry machinery
-// for all four fields), not bundled into the Phase 3 hierarchy-tree PR.
-export function itemContentSelection(includeParent: boolean): string {
+export function itemContentSelection(
+  includeParent: boolean,
+  includeHierarchyFields = true
+): string {
   const parentFrag = includeParent ? 'parent { number title url }' : ''
+  const hierarchyFrag = includeHierarchyFields
+    ? `
+      subIssuesSummary { total completed percentCompleted }
+      trackedIssues(first: 5) { nodes { number title url } }
+      trackedInIssues(first: 5) { nodes { number title url } }`
+    : ''
   return `
     __typename
     ... on Issue {
@@ -637,9 +660,7 @@ export function itemContentSelection(includeParent: boolean): string {
       labels(first:10) { nodes { name color } }
       issueType { id name color description }
       ${parentFrag}
-      subIssuesSummary { total completed percentCompleted }
-      trackedIssues(first: 5) { nodes { number title url } }
-      trackedInIssues(first: 5) { nodes { number title url } }
+      ${hierarchyFrag}
     }
     ... on PullRequest {
       id
@@ -921,6 +942,7 @@ async function fetchItemsPageWithRaw(args: {
   first: number
   after: string | null
   includeParent: boolean
+  includeHierarchyFields: boolean
 }): Promise<
   | { ok: true; page: RawItemsPage }
   | {
@@ -944,7 +966,7 @@ async function fetchItemsPageWithRaw(args: {
               id
               type
               updatedAt
-              content { ${itemContentSelection(args.includeParent)} }
+              content { ${itemContentSelection(args.includeParent, args.includeHierarchyFields)} }
               ${FIELD_VALUES_SELECTION}
             }
           }
@@ -961,15 +983,9 @@ async function fetchItemsPageWithRaw(args: {
   if (args.after) {
     argsArr.push('-f', `after=${args.after}`)
   }
-
   const guard = rateLimitGuard('graphql')
   if (guard.blocked) {
-    return {
-      ok: false,
-      error: rateLimitedError(guard),
-      rawErrors: [],
-      stderr: ''
-    }
+    return { ok: false, error: rateLimitedError(guard), rawErrors: [], stderr: '' }
   }
   await acquire()
   noteRateLimitSpend('graphql')
@@ -991,16 +1007,8 @@ async function fetchItemsPageWithRaw(args: {
     try {
       parsed = JSON.parse(stdout)
     } catch {
-      // Why: when gh exits non-zero with no parseable JSON on stdout (network,
-      // auth, rate-limit, missing scope), classify against stderr so callers
-      // see the real cause instead of a synthesized drift/not-found.
       if (execFailed) {
-        return {
-          ok: false,
-          error: classifyProjectError(stderr, stdout),
-          rawErrors: [],
-          stderr
-        }
+        return { ok: false, error: classifyProjectError(stderr, stdout), rawErrors: [], stderr }
       }
       return {
         ok: false,
@@ -1009,16 +1017,8 @@ async function fetchItemsPageWithRaw(args: {
         stderr
       }
     }
-    // Why: gh exec rejected but stdout still had a parseable error envelope —
-    // fall through to the parsed.errors branch below. If parsed has neither
-    // data nor errors, surface the stderr classification rather than not_found.
-    if (execFailed && (!parsed.errors || parsed.errors.length === 0) && !parsed.data) {
-      return {
-        ok: false,
-        error: classifyProjectError(stderr, stdout),
-        rawErrors: [],
-        stderr
-      }
+    if (execFailed && !parsed.errors?.length && !parsed.data) {
+      return { ok: false, error: classifyProjectError(stderr, stdout), rawErrors: [], stderr }
     }
     if (parsed.errors && parsed.errors.length > 0) {
       return {
@@ -1061,10 +1061,11 @@ async function fetchAllItems(args: {
   // Issue.parent is supported, await its decision so we don't fire a
   // duplicate with-parent probe. We must re-read the retried flag AFTER
   // awaiting because the probe may have flipped it.
-  const inFlight = parentFieldProbeInFlight.get(scopeKey)
-  if (inFlight) {
-    await inFlight.catch(() => {})
+  const hierarchyInFlight = hierarchyFieldProbeInFlight.get(scopeKey)
+  if (hierarchyInFlight) {
+    await hierarchyInFlight.catch(() => {})
   }
+  let includeHierarchyFields = !hasHierarchyFieldRetried(scopeKey)
   let includeParent = !hasParentFieldRetried(scopeKey)
   let parentFieldDropped = !includeParent
   // First page — single-flight the with-parent attempt PER OWNER so
@@ -1090,7 +1091,8 @@ async function fetchAllItems(args: {
           query: args.query,
           first: ITEM_PAGE_SIZE,
           after: null,
-          includeParent: true
+          includeParent: true,
+          includeHierarchyFields
         })
         // Why: flip parentFieldRetriedByOwner BEFORE resolveProbe()/clearing
         // parentFieldProbeInFlight so siblings that awoke on `inFlight.catch()`
@@ -1116,9 +1118,29 @@ async function fetchAllItems(args: {
       query: args.query,
       first: ITEM_PAGE_SIZE,
       after: null,
-      includeParent
+      includeParent,
+      includeHierarchyFields
     })
   }
+  if (
+    !first.ok &&
+    includeHierarchyFields &&
+    errorsIndicateHierarchyFields(first.rawErrors, first.stderr)
+  ) {
+    markHierarchyFieldRetried(scopeKey)
+    includeHierarchyFields = false
+    first = await fetchItemsPageWithRaw({
+      owner: args.owner,
+      ownerType: args.ownerType,
+      projectNumber: args.projectNumber,
+      query: args.query,
+      first: ITEM_PAGE_SIZE,
+      after: null,
+      includeParent,
+      includeHierarchyFields
+    })
+  }
+
   if (!first.ok && includeParent && errorsIndicateParentField(first.rawErrors, first.stderr)) {
     // Retry the whole table without parent. Mark this owner as retried so
     // subsequent fetches against the same owner skip the probe — but other
@@ -1139,7 +1161,8 @@ async function fetchAllItems(args: {
       query: args.query,
       first: ITEM_PAGE_SIZE,
       after: null,
-      includeParent: false
+      includeParent: false,
+      includeHierarchyFields
     })
   }
   if (!first.ok) {
@@ -1206,7 +1229,8 @@ async function fetchAllItems(args: {
       query: args.query,
       first: ITEM_PAGE_SIZE,
       after: cursor as string,
-      includeParent
+      includeParent,
+      includeHierarchyFields
     })
     if (!next.ok) {
       return { ok: false, error: next.error, totalCount }
