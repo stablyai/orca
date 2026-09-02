@@ -9,6 +9,20 @@ const OAUTH_CREDS_PATH = path.join(homedir(), '.gemini', 'oauth_creds.json')
 const GOOGLE_TOKEN_URL = 'https://oauth2.googleapis.com/token'
 const LOAD_CODE_ASSIST_URL = 'https://cloudcode-pa.googleapis.com/v1internal:loadCodeAssist'
 
+const CREDENTIAL_CANDIDATE_PATHS = [
+  path.join(homedir(), '.gemini', 'antigravity-cli', 'oauth_creds.json'),
+  path.join(homedir(), '.gemini', 'antigravity-cli', 'credentials.json'),
+  path.join(homedir(), '.gemini', 'antigravity-cli', 'auth.json'),
+  path.join(homedir(), '.gemini', 'config', 'oauth_creds.json'),
+  path.join(homedir(), '.gemini', 'config', 'credentials.json'),
+  path.join(homedir(), '.gemini', 'config', 'auth.json'),
+  path.join(homedir(), '.gemini', 'oauth_creds.json'),
+  path.join(homedir(), '.gemini', 'credentials.json'),
+  path.join(homedir(), '.gemini', 'auth.json')
+]
+
+let lastActiveCredsPath = OAUTH_CREDS_PATH
+
 export type GeminiCredentials = {
   access_token: string
   refresh_token: string
@@ -52,35 +66,90 @@ export async function readAuthJson(): Promise<AuthJson | null> {
   return null
 }
 
-export async function readGeminiCredentials(): Promise<GeminiCredentials | null> {
-  try {
-    const raw = await readFile(OAUTH_CREDS_PATH, 'utf-8')
-    const parsed = JSON.parse(raw) as unknown
-    if (
-      parsed &&
-      typeof parsed === 'object' &&
-      'access_token' in parsed &&
-      typeof parsed.access_token === 'string' &&
-      'refresh_token' in parsed &&
-      typeof parsed.refresh_token === 'string' &&
-      'expiry_date' in parsed &&
-      typeof parsed.expiry_date === 'number'
-    ) {
-      return parsed as GeminiCredentials
-    }
+function parseCredentialsObject(parsed: unknown): GeminiCredentials | null {
+  if (!parsed || typeof parsed !== 'object') {
     return null
-  } catch (err) {
-    if (err && typeof err === 'object' && 'code' in err && err.code === 'ENOENT') {
-      return null
-    }
-    throw err
   }
+  const obj = parsed as Record<string, unknown>
+  const creds =
+    (obj.google && typeof obj.google === 'object'
+      ? (obj.google as Record<string, unknown>)
+      : null) ??
+    (obj.oauth && typeof obj.oauth === 'object'
+      ? (obj.oauth as Record<string, unknown>)
+      : null) ??
+    (obj.credentials && typeof obj.credentials === 'object'
+      ? (obj.credentials as Record<string, unknown>)
+      : null) ??
+    obj
+
+  const accessToken =
+    typeof creds.access_token === 'string'
+      ? creds.access_token
+      : typeof creds.accessToken === 'string'
+        ? creds.accessToken
+        : typeof creds.access === 'string'
+          ? creds.access
+          : null
+
+  const refreshToken =
+    typeof creds.refresh_token === 'string'
+      ? creds.refresh_token
+      : typeof creds.refreshToken === 'string'
+        ? creds.refreshToken
+        : typeof creds.refresh === 'string'
+          ? creds.refresh
+          : null
+
+  if (!accessToken || !refreshToken) {
+    return null
+  }
+
+  let expiryDate: number
+  if (typeof creds.expiry_date === 'number') {
+    expiryDate = creds.expiry_date
+  } else if (typeof creds.expiryDate === 'number') {
+    expiryDate = creds.expiryDate
+  } else if (typeof creds.expiresAt === 'number') {
+    expiryDate = creds.expiresAt
+  } else if (typeof creds.expires === 'number') {
+    expiryDate = creds.expires
+  } else if (typeof creds.expires_in === 'number') {
+    expiryDate = Date.now() + creds.expires_in * 1000
+  } else if (typeof creds.expiresIn === 'number') {
+    expiryDate = Date.now() + creds.expiresIn * 1000
+  } else {
+    expiryDate = 0
+  }
+
+  return { access_token: accessToken, refresh_token: refreshToken, expiry_date: expiryDate }
+}
+
+export async function readGeminiCredentials(): Promise<GeminiCredentials | null> {
+  for (const candidatePath of CREDENTIAL_CANDIDATE_PATHS) {
+    try {
+      const raw = await readFile(candidatePath, 'utf-8')
+      const parsed = JSON.parse(raw) as unknown
+      const creds = parseCredentialsObject(parsed)
+      if (creds) {
+        lastActiveCredsPath = candidatePath
+        return creds
+      }
+    } catch (err) {
+      if (err && typeof err === 'object' && 'code' in err && err.code === 'ENOENT') {
+        continue
+      }
+      // malformed file or other error — try next candidate
+    }
+  }
+  return null
 }
 
 export async function saveGeminiCredentials(creds: GeminiCredentials): Promise<void> {
-  const tmpPath = `${OAUTH_CREDS_PATH}.${process.pid}.tmp`
+  const targetPath = lastActiveCredsPath || OAUTH_CREDS_PATH
+  const tmpPath = `${targetPath}.${process.pid}.tmp`
   await writeFile(tmpPath, JSON.stringify(creds, null, 2), 'utf-8')
-  await rename(tmpPath, OAUTH_CREDS_PATH)
+  await rename(tmpPath, targetPath)
 }
 
 export type RefreshTokenResult = {
@@ -122,26 +191,76 @@ export async function refreshAccessToken(
   }
 }
 
+async function tryReadLocalProjectId(): Promise<string | null> {
+  const projectCandidates = [
+    path.join(homedir(), '.gemini', 'antigravity-cli', 'cache', 'default_project_id.txt'),
+    path.join(homedir(), '.gemini', 'config', 'projects', 'default-cli-project.json'),
+    path.join(homedir(), '.gemini', 'projects.json')
+  ]
+
+  for (const candidate of projectCandidates) {
+    try {
+      const raw = (await readFile(candidate, 'utf-8')).trim()
+      if (!raw) {
+        continue
+      }
+      if (candidate.endsWith('.json')) {
+        const parsed = JSON.parse(raw) as Record<string, unknown>
+        const projectId =
+          (typeof parsed.projectId === 'string' && parsed.projectId) ||
+          (typeof parsed.cloudaicompanionProject === 'string' && parsed.cloudaicompanionProject) ||
+          (typeof parsed.defaultProject === 'string' && parsed.defaultProject) ||
+          (typeof parsed.id === 'string' && parsed.id) ||
+          null
+        if (projectId) {
+          return projectId
+        }
+      } else {
+        return raw
+      }
+    } catch {
+      // ignore ENOENT / parse error
+    }
+  }
+  return null
+}
+
 export async function loadProjectId(accessToken: string): Promise<string> {
-  const res = await net.fetch(LOAD_CODE_ASSIST_URL, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${accessToken}`
-    },
-    body: JSON.stringify({ metadata: { ideType: 'GEMINI_CLI', pluginType: 'GEMINI' } }),
-    signal: AbortSignal.timeout(API_TIMEOUT_MS)
-  })
+  // Try Antigravity first, fallback to Gemini CLI metadata
+  const metadataVariants = [
+    { ideType: 'ANTIGRAVITY', pluginType: 'ANTIGRAVITY' },
+    { ideType: 'GEMINI_CLI', pluginType: 'GEMINI' }
+  ]
 
-  if (!res.ok) {
-    throw new Error(`Failed to load Gemini project ID (HTTP ${res.status})`)
+  for (const metadata of metadataVariants) {
+    try {
+      const res = await net.fetch(LOAD_CODE_ASSIST_URL, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${accessToken}`
+        },
+        body: JSON.stringify({ metadata }),
+        signal: AbortSignal.timeout(API_TIMEOUT_MS)
+      })
+
+      if (res.ok) {
+        const data = (await res.json()) as { cloudaicompanionProject?: string }
+        if (typeof data.cloudaicompanionProject === 'string' && data.cloudaicompanionProject) {
+          return data.cloudaicompanionProject
+        }
+      }
+    } catch {
+      // try next variant
+    }
   }
 
-  const data = (await res.json()) as { cloudaicompanionProject?: string }
-  if (typeof data.cloudaicompanionProject !== 'string') {
-    throw new Error('Gemini project ID not found in API response')
+  const localProject = await tryReadLocalProjectId()
+  if (localProject) {
+    return localProject
   }
-  return data.cloudaicompanionProject
+
+  throw new Error('Gemini project ID not found in API response')
 }
 
 // Why: accepts a plain refresh token string so both the oauth_creds.json path
