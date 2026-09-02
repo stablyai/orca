@@ -150,7 +150,6 @@ describe('RoomMessageFeed', () => {
             readerKey: 'user'
           } as unknown as RoomData
         }
-        onReply={() => {}}
       />
     )
     const scroller = container.firstElementChild as HTMLDivElement
@@ -201,7 +200,6 @@ describe('RoomMessageFeed', () => {
               readerKey: 'user'
             } as unknown as RoomData
           }
-          onReply={() => {}}
         />
       )
     ).not.toThrow()

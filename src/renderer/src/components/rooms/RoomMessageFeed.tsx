@@ -106,13 +106,7 @@ export function pendingDeliveryActivities(
   return [...pending.values()]
 }
 
-export function RoomMessageFeed({
-  data,
-  onReply
-}: {
-  data: RoomData
-  onReply: (message: RoomMessage) => void
-}): React.JSX.Element {
+export function RoomMessageFeed({ data }: { data: RoomData }): React.JSX.Element {
   const parentRef = useRef<HTMLDivElement>(null)
   const contentRef = useRef<HTMLDivElement>(null)
   const previousLatestRef = useRef<number | null>(null)
@@ -232,7 +226,7 @@ export function RoomMessageFeed({
                 className="absolute left-0 top-0 w-full px-4 py-2"
                 style={{ transform: `translateY(${row.start}px)` }}
               >
-                <RoomMessageRow data={data} message={item.message} onReply={onReply} />
+                <RoomMessageRow data={data} message={item.message} />
               </div>
             )
           })}

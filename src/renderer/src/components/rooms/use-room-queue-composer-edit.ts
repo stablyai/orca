@@ -1,6 +1,5 @@
 import { useEffect, useRef, type Dispatch, type RefObject, type SetStateAction } from 'react'
 import { buildImageDataUri } from '../../../../shared/image-data-uri'
-import type { RoomMessage } from '../../../../shared/rooms'
 import {
   isPreviewableImage,
   releaseRoomAttachmentPreviews,
@@ -16,7 +15,6 @@ export function useRoomQueueComposerEdit(input: {
   data: RoomData
   editing: RoomQueueComposerEdit | null
   onEditComplete: () => void
-  onReplyChange: (message: RoomMessage | null) => void
   textareaRef: RefObject<HTMLTextAreaElement | null>
   attachmentsRef: RefObject<RoomComposerAttachment[]>
   setText: Dispatch<SetStateAction<string>>
@@ -27,7 +25,6 @@ export function useRoomQueueComposerEdit(input: {
     data,
     editing,
     onEditComplete,
-    onReplyChange,
     textareaRef,
     attachmentsRef,
     setText,
@@ -72,7 +69,6 @@ export function useRoomQueueComposerEdit(input: {
         previewUrl: null
       }))
     )
-    onReplyChange(null)
     const frame = requestAnimationFrame(() => textareaRef.current?.focus())
     let active = true
     void loadPreviews(data.target, editing).then((urls) => {
@@ -95,7 +91,6 @@ export function useRoomQueueComposerEdit(input: {
     attachmentsRef,
     data.target,
     editing,
-    onReplyChange,
     setAttachments,
     setTargetParticipantIds,
     setText,

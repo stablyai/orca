@@ -71,21 +71,24 @@ function AssistantTurnRow({
       : null
   const [activityExpanded, setActivityExpanded] = useState(item.working)
   const latestSteerId = item.segments.findLast((segment) => segment.kind === 'message')?.id
-  const previousSteerId = useRef(latestSteerId)
-  const previousWorking = useRef(item.working)
-
-  useEffect(() => {
-    if (previousWorking.current && !item.working) {
+  const [previousActivity, setPreviousActivity] = useState({
+    working: item.working,
+    latestSteerId
+  })
+  if (
+    previousActivity.working !== item.working ||
+    previousActivity.latestSteerId !== latestSteerId
+  ) {
+    setPreviousActivity({ working: item.working, latestSteerId })
+    if (previousActivity.working && !item.working) {
       setActivityExpanded(false)
-    } else if (item.working && latestSteerId !== previousSteerId.current) {
+    } else if (item.working && latestSteerId !== previousActivity.latestSteerId) {
       setActivityExpanded(true)
     }
-    previousWorking.current = item.working
-    previousSteerId.current = latestSteerId
-  }, [item.working, latestSteerId])
+  }
 
   return (
-    <article className="flex min-w-0 items-start gap-3">
+    <article className="flex min-w-0 items-start gap-3 py-2">
       <div className="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-full border border-border bg-card">
         <AgentIcon agent={iconAgent} size={16} />
       </div>
@@ -136,7 +139,7 @@ function AssistantTurnRow({
             onLinkClick={onLinkClick}
             allowFileUriLinks={allowFileUriLinks}
             imageLoadContext={imageLoadContext}
-                runtimeContext={runtimeContext}
+            runtimeContext={runtimeContext}
             streamingFade={{ id: `native-chat:${item.id}`, start: item.working }}
           />
         ) : null}
@@ -313,7 +316,7 @@ export function NativeChatMessageList({
           ref={contentRef}
           // Why: same max width as the composer column; horizontal inset comes
           // from the scroll container so content aligns with the composer field.
-          className="mx-auto flex w-full max-w-4xl flex-col gap-5"
+          className="mx-auto flex w-full max-w-4xl flex-col gap-1.5"
           // Why: `zoom` scales the chat transcript's text and layout together,
           // scoped to this container so the rest of the app is untouched. It's
           // the desktop analog of the mobile pinch-zoom (Chromium/Electron only).

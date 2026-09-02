@@ -1,7 +1,6 @@
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
 import { roomRpc } from '@/runtime/runtime-rooms-client'
-import type { RoomMessage } from '../../../../shared/rooms'
 import type { RoomComposerAttachment } from './RoomAttachments'
 import { getRoomContinueDeliveryIds } from './room-composer-continue-deliveries'
 import type { RoomQueueComposerEdit } from './room-queue-composer-edit'
@@ -13,7 +12,6 @@ export async function submitRoomComposer(input: {
   text: string
   attachments: RoomComposerAttachment[]
   editing: RoomQueueComposerEdit | null
-  reply: RoomMessage | null
   targetParticipantIds: string[] | null
 }): Promise<boolean> {
   const text = input.text.trim()
@@ -70,7 +68,6 @@ export async function submitRoomComposer(input: {
   await roomRpc(input.data.target, 'rooms.messages.send', {
     roomId: input.data.roomId,
     body: text,
-    replyToId: input.reply?.id ?? null,
     mentions,
     attachmentUploadIds: uploadIds,
     ...(input.data.snapshot?.deliveryQueueVersion === 1 && input.targetParticipantIds

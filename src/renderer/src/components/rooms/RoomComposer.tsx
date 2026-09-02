@@ -1,7 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
-import type { RoomMessage } from '../../../../shared/rooms'
 import type { RoomData } from './use-room-data'
 import { RoomComposerActions } from './RoomComposerActions'
 import { cancelRoomAttachmentUpload, uploadRoomAttachment } from './room-attachment-transfer'
@@ -18,7 +17,6 @@ import { useRoomComposerClipboardPaste } from './room-composer-clipboard-paste'
 import { useRoomComposerWorkControl } from './use-room-composer-work-control'
 import { ComposerPromptTextarea } from '@/components/ComposerPromptTextarea'
 import { RoomComposerQueueTargets } from './RoomComposerQueueTargets'
-import { RoomComposerReply } from './RoomComposerReply'
 import { showRoomActionError } from './room-action-error'
 import type { RoomQueueComposerEdit } from './room-queue-composer-edit'
 import { useRoomQueueComposerEdit } from './use-room-queue-composer-edit'
@@ -36,14 +34,10 @@ const NOOP = (): void => {}
 
 export function RoomComposer({
   data,
-  reply,
-  onReplyChange,
   editing = null,
   onEditComplete = NOOP
 }: {
   data: RoomData
-  reply: RoomMessage | null
-  onReplyChange: (message: RoomMessage | null) => void
   editing?: RoomQueueComposerEdit | null
   onEditComplete?: () => void
 }): React.JSX.Element {
@@ -120,7 +114,6 @@ export function RoomComposer({
     data,
     editing,
     onEditComplete,
-    onReplyChange,
     textareaRef,
     attachmentsRef,
     setText,
@@ -139,7 +132,6 @@ export function RoomComposer({
         text,
         attachments,
         editing,
-        reply,
         targetParticipantIds
       })
       if (!submitted) {
@@ -149,7 +141,6 @@ export function RoomComposer({
       setText('')
       setTargetParticipantIds(null)
       setAttachments([])
-      onReplyChange(null)
       if (editing) {
         onEditComplete()
       }
@@ -243,7 +234,7 @@ export function RoomComposer({
 
   useRoomComposerClipboardPaste(composerRootRef, attach)
 
-  const hasDraft = Boolean(text.trim()) || attachments.length > 0 || uploading || Boolean(reply)
+  const hasDraft = Boolean(text.trim()) || attachments.length > 0 || uploading
   const workControl = useRoomComposerWorkControl({
     data,
     hasDraft,
@@ -296,7 +287,6 @@ export function RoomComposer({
             disabled={Boolean(editing)}
           />
         ) : null}
-        {reply ? <RoomComposerReply reply={reply} onCancel={() => onReplyChange(null)} /> : null}
         <RoomComposerAttachments
           attachments={attachments}
           uploading={uploadingAttachment}

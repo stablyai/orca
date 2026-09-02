@@ -75,7 +75,7 @@ describe('RoomComposer queue targets', () => {
   })
 
   it('makes an @ mention select the same queue target and resets to All', async () => {
-    render(<RoomComposer data={roomData(1)} reply={null} onReplyChange={vi.fn()} />)
+    render(<RoomComposer data={roomData(1)} />)
 
     expect(screen.getByRole('button', { name: 'All' }).getAttribute('aria-pressed')).toBe('true')
 
@@ -96,11 +96,13 @@ describe('RoomComposer queue targets', () => {
         })
       )
     )
+    const params = mocks.rpc.mock.calls.find(([, method]) => method === 'rooms.messages.send')![2]
+    expect(params).not.toHaveProperty('replyToId')
     expect(screen.getByRole('button', { name: 'All' }).getAttribute('aria-pressed')).toBe('true')
   })
 
   it('hides targets and omits the field without queue capability', async () => {
-    render(<RoomComposer data={roomData()} reply={null} onReplyChange={vi.fn()} />)
+    render(<RoomComposer data={roomData()} />)
 
     expect(screen.queryByRole('button', { name: 'All' })).toBeNull()
     fireEvent.change(screen.getByRole('textbox'), { target: { value: 'hello' } })
@@ -121,7 +123,7 @@ describe('RoomComposer queue targets', () => {
     const data = roomData(1)
     data.snapshot!.workState = 'stopped'
     mocks.rpc.mockResolvedValueOnce({ resumed: 0 })
-    render(<RoomComposer data={data} reply={null} onReplyChange={vi.fn()} />)
+    render(<RoomComposer data={data} />)
 
     fireEvent.change(screen.getByRole('textbox'), { target: { value: '/continue' } })
     fireEvent.click(screen.getByRole('button', { name: 'Send' }))

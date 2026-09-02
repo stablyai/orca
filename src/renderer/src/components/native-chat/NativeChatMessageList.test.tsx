@@ -8,6 +8,30 @@ import type { NativeChatLiveSession } from './use-native-chat-live-session'
 import { NativeChatMessageList } from './NativeChatMessageList'
 
 describe('NativeChatMessageList', () => {
+  it('places user actions beside the bubble and assistant actions below the response', () => {
+    render(
+      <NativeChatMessageList
+        session={session([
+          message('user-1', 'user', 'Hello', 1),
+          message('assistant-1', 'assistant', 'Hi', 2, 'final')
+        ])}
+        isWorking={false}
+        expandSignal={false}
+        fontScale={1}
+      />
+    )
+
+    const userBubble = screen.getByText('Hello').closest('.rounded-2xl')
+    expect(userBubble?.previousElementSibling?.querySelector('[aria-label="Copy message"]')).toBe(
+      screen.getAllByRole('button', { name: 'Copy message' })[0]
+    )
+    const assistantRow = screen.getByText('Hi').closest('.group')
+    expect(assistantRow?.lastElementChild?.querySelector('[aria-label="Copy message"]')).toBe(
+      screen.getAllByRole('button', { name: 'Copy message' })[1]
+    )
+    expect(screen.queryByRole('button', { name: 'Reply' })).toBeNull()
+  })
+
   it('shows a non-expandable duration for a completed final-only turn', () => {
     const session: NativeChatLiveSession = {
       agent: 'codex',
