@@ -68,8 +68,16 @@ export async function isCommandOnLocalPath(
   command: string,
   options: ResolveCommandOptions = {}
 ): Promise<boolean> {
+  return (await resolveCommandOnLocalPath(command, options)) !== null
+}
+
+/** The absolute path `isCommandOnLocalPath` would accept, or null when not found. */
+export async function resolveCommandOnLocalPath(
+  command: string,
+  options: ResolveCommandOptions = {}
+): Promise<string | null> {
   if (!command) {
-    return false
+    return null
   }
   const platform = options.platform ?? process.platform
   const env = options.env ?? process.env
@@ -98,9 +106,9 @@ export async function isCommandOnLocalPath(
         continue
       }
       if (await isExecutableFile(candidate, isWin)) {
-        return true
+        return candidate
       }
     }
   }
-  return false
+  return null
 }
