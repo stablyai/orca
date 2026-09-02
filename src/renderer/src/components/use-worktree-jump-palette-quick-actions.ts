@@ -103,7 +103,9 @@ export function useWorktreeJumpPaletteQuickActions({
         activeGroupSnapshot: activeGroupSnapshotRef.current,
         openNewBrowserTab: openNewBrowserTabInActiveWorkspace,
         openNewMarkdownFile: openNewMarkdownInActiveWorkspace,
-        openNewTerminalTab: openNewTerminalTabInActiveWorkspace,
+        openNewTerminalTab: async (groupId) => {
+          await openNewTerminalTabInActiveWorkspace(groupId)
+        },
         openCreateWorkspace: openCreateWorkspaceAction,
         deleteActiveWorkspace: deleteActiveWorkspaceAction,
         openAddQuickCommand: openAddQuickCommandAction

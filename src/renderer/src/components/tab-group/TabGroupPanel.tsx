@@ -1,7 +1,7 @@
 import { Suspense, useMemo } from 'react'
 import { lazyWithRetry as lazy } from '@/lib/lazy-with-retry'
 import { useDroppable } from '@dnd-kit/core'
-import { Ellipsis, X } from 'lucide-react'
+import { Ellipsis, LayoutDashboard, X } from 'lucide-react'
 import { useAppStore } from '../../store'
 import {
   DropdownMenu,
@@ -42,6 +42,7 @@ export default function TabGroupPanel({
   suppressBottomBorder = false,
   reserveClosedExplorerToggleSpace,
   reserveCollapsedSidebarHeaderSpace,
+  onOpenCanvas,
   isTabDragActive = false,
   hoveredTabInsertion = null
 }: {
@@ -58,6 +59,7 @@ export default function TabGroupPanel({
   suppressBottomBorder?: boolean
   reserveClosedExplorerToggleSpace: boolean
   reserveCollapsedSidebarHeaderSpace: boolean
+  onOpenCanvas?: () => void
   isTabDragActive?: boolean
   hoveredTabInsertion?: HoveredTabInsertion | null
 }): React.JSX.Element {
@@ -269,6 +271,30 @@ export default function TabGroupPanel({
             className="ml-1.5 flex shrink-0 items-center gap-0.5"
             style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
           >
+            {onOpenCanvas ? (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <button
+                    type="button"
+                    aria-label={translate(
+                      'auto.components.tab.group.TabGroupCanvasLayout.canvas',
+                      'Canvas'
+                    )}
+                    data-pane-canvas-entry-control="true"
+                    className={menuButtonClassName}
+                    onClick={(event) => {
+                      event.stopPropagation()
+                      onOpenCanvas()
+                    }}
+                  >
+                    <LayoutDashboard className="size-4" />
+                  </button>
+                </TooltipTrigger>
+                <TooltipContent side="bottom" sideOffset={6}>
+                  {translate('auto.components.tab.group.TabGroupCanvasLayout.canvas', 'Canvas')}
+                </TooltipContent>
+              </Tooltip>
+            ) : null}
             <div className={focusedActionChromeClassName}>
               {isFocused ? (
                 <TabBarQuickCommandsButton worktreeId={worktreeId} groupId={groupId} />
@@ -324,7 +350,8 @@ export default function TabGroupPanel({
               className="shrink-0"
               style={
                 {
-                  width: 'calc(40px + var(--window-controls-width, 0px))',
+                  width:
+                    'calc(var(--right-sidebar-toggle-width, 40px) + var(--window-controls-width, 0px))',
                   WebkitAppRegion: 'no-drag'
                 } as React.CSSProperties
               }

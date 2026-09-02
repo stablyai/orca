@@ -1,4 +1,4 @@
-import { useMemo, useRef } from 'react'
+import { useCallback, useMemo, useRef, useState } from 'react'
 import { parseWorkspaceKey } from '../../../shared/workspace-scope'
 import type { TerminalTab } from '../../../shared/terminal-tab-types'
 import { useAppStore } from '../store'
@@ -10,6 +10,46 @@ import { useReusedArrayIdentity } from './sidebar/worktree-list/listing/use-reus
 import { selectPairedRuntimeParkingEnvironmentIds } from './terminal-pane/terminal-hidden-view-parking'
 import { createTerminalWorktreeTopologyProjection } from './terminal-pane/terminal-hidden-worktree-retention'
 import { isMainTerminalSideEffectAuthorityForPty } from './terminal-pane/terminal-side-effect-facts-handler'
+import type { ControlRoomTerminalVisibility } from './control-room/ControlRoomTerminalCanvas'
+
+function haveSameIdSet(left: ReadonlySet<string>, right: ReadonlySet<string>): boolean {
+  if (left.size !== right.size) {
+    return false
+  }
+  for (const id of left) {
+    if (!right.has(id)) {
+      return false
+    }
+  }
+  return true
+}
+
+function haveSameIdsByWorktree(
+  left: Readonly<Record<string, ReadonlySet<string>>>,
+  right: Readonly<Record<string, ReadonlySet<string>>>
+): boolean {
+  const leftIds = Object.keys(left)
+  const rightIds = Object.keys(right)
+  return (
+    leftIds.length === rightIds.length &&
+    leftIds.every(
+      (worktreeId) => right[worktreeId] && haveSameIdSet(left[worktreeId], right[worktreeId])
+    )
+  )
+}
+
+function haveSameControlRoomVisibility(
+  left: ControlRoomTerminalVisibility,
+  right: ControlRoomTerminalVisibility
+): boolean {
+  return (
+    haveSameIdsByWorktree(left.terminalTabIdsByWorktree, right.terminalTabIdsByWorktree) &&
+    haveSameIdsByWorktree(
+      left.visibleTerminalTabIdsByWorktree,
+      right.visibleTerminalTabIdsByWorktree
+    )
+  )
+}
 
 export function useTerminalWorkspaceFoundation() {
   const terminalTopologyProjectionRef = useRef<WorktreeTabBucketProjection<
@@ -59,6 +99,19 @@ export function useTerminalWorkspaceFoundation() {
     [workspaceSurfaceIds]
   )
   const activeView = useAppStore((state) => state.activeView)
+  const [controlRoomVisibility, setControlRoomVisibility] = useState<ControlRoomTerminalVisibility>(
+    {
+      terminalTabIdsByWorktree: {},
+      visibleTerminalTabIdsByWorktree: {}
+    }
+  )
+  const handleControlRoomVisibilityChange = useCallback(
+    (next: ControlRoomTerminalVisibility) =>
+      setControlRoomVisibility((current) =>
+        haveSameControlRoomVisibility(current, next) ? current : next
+      ),
+    []
+  )
   // Why: terminal titles are leaf chrome. The root host only subscribes to
   // mount/parking semantics; a real transition publishes fresh tab objects,
   // while LiveTerminalTabBar reads title-only updates from the active bucket.
@@ -106,6 +159,8 @@ export function useTerminalWorkspaceFoundation() {
     renderedActiveWorktreeId,
     activeWorktreeDeferralHostId,
     activeView,
+    controlRoomVisibility,
+    handleControlRoomVisibilityChange,
     tabsByWorktree,
     pendingStartupByTabId,
     terminalParkingEnabled,

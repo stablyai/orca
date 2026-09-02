@@ -14,4 +14,10 @@ describe('terminal scrollbar styling', () => {
     )
     expect(terminalCss).not.toContain('--xterm-scrollbar-thumb')
   })
+
+  it('keeps terminal wheel input from chaining into surrounding canvases', () => {
+    expect(terminalCss).toMatch(
+      /\.pane-manager-root \.xterm-viewport\s*{[^}]*overscroll-behavior:\s*contain/s
+    )
+  })
 })

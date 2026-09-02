@@ -89,11 +89,13 @@ describe('TabGroupSplitLayout', () => {
   }
 
   function getLeafPanelProps(isWorktreeActive: boolean) {
+    const onOpenCanvas = vi.fn()
     const element = TabGroupSplitLayout({
       layout: { type: 'leaf', groupId: 'group-1' },
       worktreeId: 'wt-1',
       focusedGroupId: 'group-1',
-      isWorktreeActive
+      isWorktreeActive,
+      onOpenCanvas
     })
 
     const tabGroupPanelElement = asElement(getSplitNodeElement(element))
@@ -105,6 +107,7 @@ describe('TabGroupSplitLayout', () => {
       hasSplitGroups: boolean
       reserveClosedExplorerToggleSpace: boolean
       reserveCollapsedSidebarHeaderSpace: boolean
+      onOpenCanvas?: () => void
     }
   }
 
@@ -117,7 +120,8 @@ describe('TabGroupSplitLayout', () => {
         isFocused: false,
         hasSplitGroups: false,
         reserveClosedExplorerToggleSpace: true,
-        reserveCollapsedSidebarHeaderSpace: true
+        reserveCollapsedSidebarHeaderSpace: true,
+        onOpenCanvas: expect.any(Function)
       })
     )
   })
@@ -131,7 +135,8 @@ describe('TabGroupSplitLayout', () => {
         isFocused: true,
         hasSplitGroups: false,
         reserveClosedExplorerToggleSpace: true,
-        reserveCollapsedSidebarHeaderSpace: true
+        reserveCollapsedSidebarHeaderSpace: true,
+        onOpenCanvas: expect.any(Function)
       })
     )
   })
@@ -148,6 +153,7 @@ describe('TabGroupSplitLayout', () => {
   })
 
   it('only reserves top-right header space for the floating explorer toggle', () => {
+    const onOpenCanvas = vi.fn()
     const element = TabGroupSplitLayout({
       layout: {
         type: 'split',
@@ -158,7 +164,8 @@ describe('TabGroupSplitLayout', () => {
       },
       worktreeId: 'wt-1',
       focusedGroupId: 'right-group',
-      isWorktreeActive: true
+      isWorktreeActive: true,
+      onOpenCanvas
     })
 
     const rootElement = asElement(getSplitNodeElement(element))
@@ -168,22 +175,26 @@ describe('TabGroupSplitLayout', () => {
     const leftPanelProps = asElement(invokeComponent(asElement(leftChild))).props as {
       reserveClosedExplorerToggleSpace: boolean
       reserveCollapsedSidebarHeaderSpace: boolean
+      onOpenCanvas?: () => void
     }
     const rightPanelProps = asElement(invokeComponent(asElement(rightChild))).props as {
       reserveClosedExplorerToggleSpace: boolean
       reserveCollapsedSidebarHeaderSpace: boolean
+      onOpenCanvas?: () => void
     }
 
     expect(leftPanelProps).toEqual(
       expect.objectContaining({
         reserveClosedExplorerToggleSpace: false,
-        reserveCollapsedSidebarHeaderSpace: true
+        reserveCollapsedSidebarHeaderSpace: true,
+        onOpenCanvas: undefined
       })
     )
     expect(rightPanelProps).toEqual(
       expect.objectContaining({
         reserveClosedExplorerToggleSpace: true,
-        reserveCollapsedSidebarHeaderSpace: false
+        reserveCollapsedSidebarHeaderSpace: false,
+        onOpenCanvas
       })
     )
   })

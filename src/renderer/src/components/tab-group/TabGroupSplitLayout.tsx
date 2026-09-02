@@ -156,7 +156,8 @@ function SplitNode({
   suppressRightBorder,
   suppressBottomBorder,
   isTabDragActive,
-  hoveredTabInsertion
+  hoveredTabInsertion,
+  onOpenCanvas
 }: {
   node: TabGroupLayoutNode
   nodePath: string
@@ -173,6 +174,7 @@ function SplitNode({
   suppressBottomBorder: boolean
   isTabDragActive: boolean
   hoveredTabInsertion: HoveredTabInsertion | null
+  onOpenCanvas?: () => void
 }): React.JSX.Element {
   const setTabGroupSplitRatio = useAppStore((state) => state.setTabGroupSplitRatio)
   const recordFeatureInteraction = useAppStore((state) => state.recordFeatureInteraction)
@@ -197,6 +199,7 @@ function SplitNode({
         suppressBottomBorder={suppressBottomBorder}
         reserveClosedExplorerToggleSpace={touchesTopEdge && touchesRightEdge}
         reserveCollapsedSidebarHeaderSpace={touchesTopEdge && touchesLeftEdge}
+        onOpenCanvas={touchesTopEdge && touchesRightEdge ? onOpenCanvas : undefined}
         isTabDragActive={isTabDragActive}
         hoveredTabInsertion={
           hoveredTabInsertion?.groupId === node.groupId ? hoveredTabInsertion : null
@@ -232,6 +235,7 @@ function SplitNode({
           suppressBottomBorder={isHorizontal ? suppressBottomBorder : true}
           isTabDragActive={isTabDragActive}
           hoveredTabInsertion={hoveredTabInsertion}
+          onOpenCanvas={onOpenCanvas}
         />
       </div>
       <ResizeHandle
@@ -256,6 +260,7 @@ function SplitNode({
           suppressBottomBorder={suppressBottomBorder}
           isTabDragActive={isTabDragActive}
           hoveredTabInsertion={hoveredTabInsertion}
+          onOpenCanvas={onOpenCanvas}
         />
       </div>
     </div>
@@ -266,12 +271,14 @@ export default function TabGroupSplitLayout({
   layout,
   worktreeId,
   focusedGroupId,
-  isWorktreeActive
+  isWorktreeActive,
+  onOpenCanvas
 }: {
   layout: TabGroupLayoutNode
   worktreeId: string
   focusedGroupId?: string
   isWorktreeActive: boolean
+  onOpenCanvas?: () => void
 }): React.JSX.Element {
   const dragSplit = useTabDragSplit({ worktreeId, enabled: isWorktreeActive })
   const hasSplits = layout.type === 'split'
@@ -334,6 +341,7 @@ export default function TabGroupSplitLayout({
               suppressBottomBorder={false}
               isTabDragActive={dragSplit.activeDrag !== null}
               hoveredTabInsertion={dragSplit.hoveredTabInsertion}
+              onOpenCanvas={onOpenCanvas}
             />
           </div>
         </div>

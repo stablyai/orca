@@ -13,7 +13,8 @@ const createWebRuntimeSessionTerminalMock = vi.hoisted(() => vi.fn())
 
 vi.mock('@/runtime/web-runtime-session', () => ({
   createWebRuntimeSessionBrowserTab: createWebRuntimeSessionBrowserTabMock,
-  createWebRuntimeSessionTerminal: createWebRuntimeSessionTerminalMock
+  createWebRuntimeSessionTerminal: createWebRuntimeSessionTerminalMock,
+  createWebRuntimeSessionTerminalWithIdentity: createWebRuntimeSessionTerminalMock
 }))
 
 vi.mock('@/lib/focus-terminal-tab-surface', () => ({
@@ -250,7 +251,10 @@ describe('Cmd+J lifted creation actions', () => {
 
   it('creates desktop remote-server terminal tabs through the owning runtime', async () => {
     delete pairedWebFlag.__ORCA_WEB_CLIENT__
-    createWebRuntimeSessionTerminalMock.mockResolvedValue(false)
+    createWebRuntimeSessionTerminalMock.mockResolvedValue({
+      outcome: { status: 'created' },
+      terminalTabId: 'web-terminal-1'
+    })
     const store = createTestStore()
     seedActiveWorkspace(store)
     store.setState({
@@ -268,7 +272,7 @@ describe('Cmd+J lifted creation actions', () => {
       settings: { activeRuntimeEnvironmentId: null } as AppState['settings']
     })
 
-    await store.getState().openNewTerminalTabInActiveWorkspace('group-1')
+    const terminalTabId = await store.getState().openNewTerminalTabInActiveWorkspace('group-1')
 
     expect(createWebRuntimeSessionTerminalMock).toHaveBeenCalledWith({
       worktreeId: 'wt-1',
@@ -276,6 +280,7 @@ describe('Cmd+J lifted creation actions', () => {
       targetGroupId: 'group-1',
       activate: true
     })
+    expect(terminalTabId).toBe('web-terminal-1')
     expect(store.getState().tabsByWorktree['wt-1'] ?? []).toEqual([])
   })
 
@@ -313,9 +318,10 @@ describe('Cmd+J lifted creation actions', () => {
       settings: { activeRuntimeEnvironmentId: null } as AppState['settings']
     })
 
-    await store.getState().openNewTerminalTabInActiveWorkspace('group-1')
+    const terminalTabId = await store.getState().openNewTerminalTabInActiveWorkspace('group-1')
 
     expect(createWebRuntimeSessionTerminalMock).not.toHaveBeenCalled()
     expect(store.getState().tabsByWorktree['wt-1'] ?? []).toHaveLength(1)
+    expect(terminalTabId).toBe(store.getState().tabsByWorktree['wt-1'][0].id)
   })
 })

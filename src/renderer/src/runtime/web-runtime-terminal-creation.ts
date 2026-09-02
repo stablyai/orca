@@ -16,6 +16,16 @@ export async function createWebRuntimeSessionTerminal(
   return (await createWebRuntimeSessionTerminalResult(args)).outcome
 }
 
+export async function createWebRuntimeSessionTerminalWithIdentity(
+  args: CreateWebRuntimeSessionTerminalArgs
+): Promise<{ outcome: WebRuntimeTerminalCreateOutcome; terminalTabId?: string }> {
+  const created = await createWebRuntimeSessionTerminalResult(args)
+  return {
+    outcome: created.outcome,
+    ...(created.hostTabId ? { terminalTabId: toWebTerminalSurfaceTabId(created.hostTabId) } : {})
+  }
+}
+
 export async function createWebRuntimeAgentSessionTerminal(
   args: CreateWebRuntimeSessionTerminalArgs & {
     agent: TuiAgent

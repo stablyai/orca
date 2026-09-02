@@ -32,7 +32,7 @@ export function resolveZoomTarget(args: {
       )
     )
 
-  if (activeView !== 'terminal') {
+  if (activeView !== 'terminal' && activeView !== 'control-room') {
     return 'ui'
   }
   if (activeTabType === 'simulator') {

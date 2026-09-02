@@ -3,6 +3,10 @@ import { rewindHistoryIndexPastView } from '../worktree-nav-history'
 
 export function createUiViewActions(set: UISliceSet, get: UISliceGet): Partial<UISlice> {
   return {
+    openControlRoomPage: () => {
+      get().recordViewVisit('control-room')
+      set({ activeView: 'control-room' })
+    },
     openActivityPage: () => {
       set((state) => ({
         activeView: 'activity',

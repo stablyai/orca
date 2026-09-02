@@ -404,7 +404,7 @@ describe('renderer startup runtime routing', () => {
     expect(shellSource).toContain("const Terminal = lazy(() => import('../components/Terminal'))")
     expect(shellSource).not.toContain("from '../components/Terminal'")
     expect(layoutSource).toContain(
-      'const canMountTerminalWorkbenchNow = activeWorktreeId !== null || backgroundTerminalMountRequested'
+      "activeView === 'control-room' || activeWorktreeId !== null || backgroundTerminalMountRequested"
     )
     // Why pin the latch: once the workbench has mounted it must stay mounted, so hidden
     // terminal/browser/editor panes survive activeWorktreeId briefly going null.

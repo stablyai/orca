@@ -1,9 +1,12 @@
-import { memo, useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { useAppStore } from '../../store'
 import { isProvenProcessExit } from '../../../../shared/terminal-exit-cause'
 import { SYNC_FIT_PANES_EVENT } from '@/constants/terminal'
-import { tabGroupBodyAnchorName } from '../tab-group/tab-group-body-anchor'
+import {
+  tabGroupBodyAnchorName,
+  terminalCanvasBodyAnchorName
+} from '../tab-group/tab-group-body-anchor'
 import type { ActivityTerminalPortalTarget } from '../activity/activity-terminal-portal'
 import TerminalPane from './TerminalPane'
 import { closeTerminalTab } from '../terminal/terminal-tab-actions'
@@ -39,11 +42,17 @@ type TerminalOverlaySlotProps = {
   worktreePath: string
   startupCwd: string | undefined
   groupId: string | undefined
+  unifiedTabId?: string
+  canvasTerminalTabId?: string
+  /** Global Canvas cards live outside the owning worktree's containing block, so CSS anchors cannot resolve them. */
+  forceMeasuredCanvasPositioning?: boolean
   isWorktreeActive: boolean
   isVisible: boolean
   isActive: boolean
   activityTerminalPortal: ActivityTerminalPortalTarget | null
   onFocusOwningGroup: ((groupId: string) => void) | undefined
+  onActivateCanvasTerminal?: (terminalTabId: string, unifiedTabId: string, groupId: string) => void
+  roundBottomCorners?: boolean
   consumeSuppressedPtyExit: (ptyId: string) => boolean
   leaveWorktreeIfEmpty: () => void
 }
@@ -55,16 +64,26 @@ export const TerminalOverlaySlot = memo(function TerminalOverlaySlot({
   worktreePath,
   startupCwd,
   groupId,
+  unifiedTabId,
+  canvasTerminalTabId,
+  forceMeasuredCanvasPositioning = false,
   isWorktreeActive,
   isVisible,
   isActive,
   activityTerminalPortal,
   onFocusOwningGroup,
+  onActivateCanvasTerminal,
+  roundBottomCorners = false,
   consumeSuppressedPtyExit,
   leaveWorktreeIfEmpty
 }: TerminalOverlaySlotProps): React.JSX.Element {
-  const anchorName = groupId !== undefined ? tabGroupBodyAnchorName(groupId) : undefined
+  const anchorName = canvasTerminalTabId
+    ? terminalCanvasBodyAnchorName(canvasTerminalTabId)
+    : groupId !== undefined
+      ? tabGroupBodyAnchorName(groupId)
+      : undefined
   const overlayRef = useRef<HTMLDivElement | null>(null)
+  const useCssAnchorPositioning = shouldUseCssAnchorPositioning() && !forceMeasuredCanvasPositioning
   const [measuredFallbackRect, setMeasuredFallbackRect] = useState<MeasuredFallbackRect | null>(
     null
   )
@@ -77,24 +96,36 @@ export const TerminalOverlaySlot = memo(function TerminalOverlaySlot({
     }
   }, [isVisible, shouldMeasureHiddenStartup])
   useLayoutEffect(() => {
-    if (!anchorName || shouldUseCssAnchorPositioning() || !groupId) {
+    const anchorTargetId = canvasTerminalTabId ?? groupId
+    if (!anchorName || useCssAnchorPositioning || !anchorTargetId) {
       return
     }
 
     const findBody = (): HTMLElement | null => {
-      for (const candidate of document.querySelectorAll<HTMLElement>('[data-tab-group-body-id]')) {
-        if (candidate.dataset.tabGroupBodyId === groupId) {
+      const selector = canvasTerminalTabId
+        ? '[data-terminal-canvas-body-id]'
+        : '[data-tab-group-body-id]'
+      for (const candidate of document.querySelectorAll<HTMLElement>(selector)) {
+        const candidateId = canvasTerminalTabId
+          ? candidate.dataset.terminalCanvasBodyId
+          : candidate.dataset.tabGroupBodyId
+        if (candidateId === anchorTargetId) {
           return candidate
         }
       }
       return null
     }
 
+    const body = findBody()
+    if (!body) {
+      setMeasuredFallbackRect(null)
+      return
+    }
+
     const updateRect = (): void => {
       const overlay = overlayRef.current
       const parent = overlay?.parentElement
-      const body = findBody()
-      if (!parent || !body) {
+      if (!parent) {
         setMeasuredFallbackRect(null)
         return
       }
@@ -119,21 +150,52 @@ export const TerminalOverlaySlot = memo(function TerminalOverlaySlot({
     }
 
     updateRect()
-    const body = findBody()
     const parent = overlayRef.current?.parentElement
     const resizeObserver = new ResizeObserver(updateRect)
-    if (body) {
-      resizeObserver.observe(body)
-    }
+    resizeObserver.observe(body)
     if (parent) {
       resizeObserver.observe(parent)
     }
+    const canvasCard = canvasTerminalTabId
+      ? body.closest<HTMLElement>('[data-pane-canvas-terminal-id]')
+      : null
+    const cardStyleObserver = canvasCard ? new MutationObserver(updateRect) : null
+    if (canvasCard && cardStyleObserver) {
+      // Canvas movement changes only the card's inline left/top. ResizeObserver
+      // does not see position changes, so web clients need this targeted style observer.
+      cardStyleObserver.observe(canvasCard, { attributes: true, attributeFilter: ['style'] })
+    }
+    const canvasViewport = canvasTerminalTabId
+      ? body.closest<HTMLElement>('[data-pane-canvas-viewport]')
+      : null
     window.addEventListener('resize', updateRect)
+    canvasViewport?.addEventListener('scroll', updateRect, { passive: true })
     return () => {
       resizeObserver.disconnect()
+      cardStyleObserver?.disconnect()
       window.removeEventListener('resize', updateRect)
+      canvasViewport?.removeEventListener('scroll', updateRect)
     }
-  }, [anchorName, groupId, isVisible])
+  }, [anchorName, canvasTerminalTabId, groupId, isVisible, useCssAnchorPositioning])
+
+  useEffect(() => {
+    const overlay = overlayRef.current
+    if (!overlay || !canvasTerminalTabId) {
+      return
+    }
+    const containReleasedWheel = (event: WheelEvent): void => {
+      // xterm consumes wheel events while its own scroll position changes, but
+      // deliberately releases them at either boundary. A Canvas terminal is
+      // positioned in a sibling overlay, so that released event can otherwise
+      // scroll the Canvas viewport underneath it. React delegates wheel events
+      // through a passive listener in Chromium, so this boundary guard must be
+      // a native non-passive listener for preventDefault() to take effect.
+      event.preventDefault()
+      event.stopPropagation()
+    }
+    overlay.addEventListener('wheel', containReleasedWheel, { passive: false })
+    return () => overlay.removeEventListener('wheel', containReleasedWheel)
+  }, [canvasTerminalTabId])
 
   useLayoutEffect(() => {
     if (!isVisible || !anchorName) {
@@ -172,7 +234,7 @@ export const TerminalOverlaySlot = memo(function TerminalOverlaySlot({
 
   const style: React.CSSProperties = useMemo(
     () =>
-      anchorName && shouldUseCssAnchorPositioning()
+      anchorName && useCssAnchorPositioning
         ? {
             position: 'absolute',
             positionAnchor: anchorName,
@@ -207,14 +269,50 @@ export const TerminalOverlaySlot = memo(function TerminalOverlaySlot({
               display: 'none',
               pointerEvents: 'none'
             },
-    [anchorName, isVisible, measuredFallbackRect, shouldMeasureHiddenStartup]
+    [
+      anchorName,
+      isVisible,
+      measuredFallbackRect,
+      shouldMeasureHiddenStartup,
+      useCssAnchorPositioning
+    ]
   )
   const focusGroup = useCallback(() => {
+    if (
+      canvasTerminalTabId !== undefined &&
+      unifiedTabId !== undefined &&
+      groupId !== undefined &&
+      onActivateCanvasTerminal
+    ) {
+      onActivateCanvasTerminal(canvasTerminalTabId, unifiedTabId, groupId)
+      return
+    }
     if (groupId !== undefined && onFocusOwningGroup) {
       onFocusOwningGroup(groupId)
     }
-  }, [groupId, onFocusOwningGroup])
-
+  }, [canvasTerminalTabId, groupId, onActivateCanvasTerminal, onFocusOwningGroup, unifiedTabId])
+  const focusClickedTerminal = useCallback(
+    (event: React.PointerEvent<HTMLDivElement>) => {
+      focusGroup()
+      const target = event.target
+      const terminalRoot = target instanceof Element ? target.closest('.xterm') : null
+      const terminalInput = terminalRoot?.querySelector<HTMLTextAreaElement>(
+        'textarea.xterm-helper-textarea'
+      )
+      if (!terminalInput) {
+        return
+      }
+      // Why: activating another Canvas group updates the overlay state during
+      // the same pointer event. Reassert focus after that render so the first
+      // keystroke always reaches the terminal that was clicked.
+      requestAnimationFrame(() => {
+        if (terminalInput.isConnected) {
+          terminalInput.focus({ preventScroll: true })
+        }
+      })
+    },
+    [focusGroup]
+  )
   const terminalPane = (
     <TerminalPane
       key={`${terminalTabId}-${terminalGeneration ?? 0}`}
@@ -269,9 +367,12 @@ export const TerminalOverlaySlot = memo(function TerminalOverlaySlot({
   return (
     <div
       ref={overlayRef}
+      className={roundBottomCorners ? 'overflow-hidden rounded-b-md' : undefined}
       style={style}
       data-terminal-overlay-tab-id={terminalTabId}
-      onPointerDown={focusGroup}
+      // xterm consumes pointer input inside its viewport. Capture first so a
+      // Canvas card still becomes Orca's active group before xterm handles it.
+      onPointerDownCapture={focusClickedTerminal}
       onFocusCapture={focusGroup}
     >
       {terminalPane}

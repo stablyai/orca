@@ -913,6 +913,30 @@ html.native-shell .app-layout {
   -webkit-app-region: drag;
 }
 
+/* Keep Canvas toolbar actions clickable while the unused header surface retains
+   the same native window-drag behavior as Orca's ordinary tab strips. */
+[data-pane-canvas-toolbar-control='true'],
+[data-pane-canvas-toolbar-controls='true'] {
+  -webkit-app-region: no-drag;
+}
+
+/* Why: Windows/Linux caption buttons are a fixed overlay above the workspace.
+   Canvas replaces the ordinary tab strip and therefore must reserve the same
+   right-side width whenever it reaches the window edge. On macOS the shared
+   variable is 0px, so this preserves the native traffic-light layout. */
+.pane-canvas-toolbar-window-controls-inset {
+  padding-right: calc(0.5rem + var(--window-controls-width, 0px));
+}
+
+/* Project workspaces also expose the floating right-sidebar toggle immediately
+   before the caption buttons. Match the ordinary tab strip's 40px reservation
+   when that sidebar is closed; open sidebars own the edge and request no inset. */
+.pane-canvas-toolbar-window-controls-and-toggle-inset {
+  padding-right: calc(
+    0.5rem + var(--right-sidebar-toggle-width, 40px) + var(--window-controls-width, 0px)
+  );
+}
+
 /* Why: Electron drag regions swallow renderer pointer events. While regular
    xterm owns focus, make the next top-chrome click observable so it can release
    terminal zoom ownership; after release these surfaces become draggable again. */
@@ -951,7 +975,10 @@ html.native-shell .app-layout {
    the close button clears the minimize button. max(0px, ...) keeps this a no-op
    when the var is 0px and the subtraction would otherwise go negative. */
 .right-sidebar-header-side-inset {
-  padding-right: max(0px, calc(var(--window-controls-width, 0px) - 40px));
+  padding-right: max(
+    0px,
+    calc(var(--window-controls-width, 0px) - var(--right-sidebar-toggle-width, 40px))
+  );
 }
 
 .sidebar-toggle {

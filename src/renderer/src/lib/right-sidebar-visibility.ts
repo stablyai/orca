@@ -5,6 +5,7 @@ import { isFolderRepo } from '../../../shared/repo-kind'
 type ActiveView = AppState['activeView']
 
 const RIGHT_SIDEBAR_SUPPRESSED_VIEWS = new Set<ActiveView>([
+  'control-room',
   'settings',
   'tasks',
   'activity',

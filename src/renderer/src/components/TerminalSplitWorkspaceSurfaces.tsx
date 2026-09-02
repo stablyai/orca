@@ -1,4 +1,5 @@
 import { useAnyBrowserGuestNeedsPaint } from './browser-pane/host-guest/browser-guest-paint-retention'
+import ControlRoomTerminalCanvas from './control-room/ControlRoomTerminalCanvas'
 import { WorktreeSplitSurface } from './TerminalWorktreeSplitSurface'
 import type { TerminalController } from './use-terminal-controller'
 
@@ -14,10 +15,12 @@ export function TerminalSplitWorkspaceSurfaces({
     activityTerminalPortals,
     anyMountedWorktreeHasLayout,
     backgroundMountTabIdsByWorktreeRef,
+    controlRoomVisibility,
     effectiveActiveLayout,
     effectiveParkedTerminalWorktreeIds,
     forceParkedTerminalWorktreeIds,
     getEffectiveLayoutForWorktree,
+    handleControlRoomVisibilityChange,
     measurableBackgroundWorktreeIdsRef,
     mountedWorktreeIdsRef,
     renderedActiveWorktreeId,
@@ -27,19 +30,22 @@ export function TerminalSplitWorkspaceSurfaces({
   // remote controller needs each to drop `hidden` — the per-worktree surface hatch below cannot
   // override an ancestor that stopped compositing.
   const retainBrowserGuestPaint = useAnyBrowserGuestNeedsPaint(!effectiveActiveLayout)
-  if (!anyMountedWorktreeHasLayout) {
+  if (!anyMountedWorktreeHasLayout && activeView !== 'control-room') {
     return null
   }
   return (
     <div
       className={`relative flex flex-1 min-w-0 min-h-0 overflow-hidden${
-        effectiveActiveLayout
+        effectiveActiveLayout || activeView === 'control-room'
           ? ''
           : retainBrowserGuestPaint
             ? ' opacity-0 pointer-events-none'
             : ' hidden'
       }`}
     >
+      {activeView === 'control-room' ? (
+        <ControlRoomTerminalCanvas onTerminalVisibilityChange={handleControlRoomVisibilityChange} />
+      ) : null}
       {workspaceSurfaces
         .filter((workspace) => mountedWorktreeIdsRef.current.has(workspace.id))
         .map((workspace) => {
@@ -47,7 +53,12 @@ export function TerminalSplitWorkspaceSurfaces({
           if (!layout) {
             return null
           }
-          const isVisible = activeView === 'terminal' && workspace.id === renderedActiveWorktreeId
+          const isControlRoomVisible =
+            activeView === 'control-room' &&
+            controlRoomVisibility.terminalTabIdsByWorktree[workspace.id] !== undefined
+          const isVisible =
+            (activeView === 'terminal' && workspace.id === renderedActiveWorktreeId) ||
+            isControlRoomVisible
           const shouldMeasureHiddenWorktree =
             !isVisible && measurableBackgroundWorktreeIdsRef.current.has(workspace.id)
           const shouldColdParkTerminalPanes =
@@ -62,15 +73,28 @@ export function TerminalSplitWorkspaceSurfaces({
               layout={layout}
               focusedGroupId={activeGroupIdByWorktree[workspace.id]}
               isVisible={isVisible}
+              isControlRoomVisible={isControlRoomVisible}
+              controlRoomTerminalTabIds={
+                controlRoomVisibility.terminalTabIdsByWorktree[workspace.id] ?? null
+              }
+              controlRoomVisibleTerminalTabIds={
+                controlRoomVisibility.visibleTerminalTabIdsByWorktree[workspace.id] ?? null
+              }
               shouldMeasureHiddenWorktree={shouldMeasureHiddenWorktree}
               shouldColdParkTerminalPanes={shouldColdParkTerminalPanes}
-              isForceParked={forceParkedTerminalWorktreeIds.has(workspace.id)}
+              isForceParked={
+                !isControlRoomVisible && forceParkedTerminalWorktreeIds.has(workspace.id)
+              }
               activityTerminalPortals={activityTerminalPortals}
               backgroundMountTabIds={
-                backgroundMountTabIdsByWorktreeRef.current.get(workspace.id) ?? null
+                isControlRoomVisible
+                  ? null
+                  : (backgroundMountTabIdsByWorktreeRef.current.get(workspace.id) ?? null)
               }
               activationDeferredMountTabIds={
-                activationDeferredMountTabIdsByWorktreeRef.current.get(workspace.id) ?? null
+                isControlRoomVisible
+                  ? null
+                  : (activationDeferredMountTabIdsByWorktreeRef.current.get(workspace.id) ?? null)
               }
             />
           )

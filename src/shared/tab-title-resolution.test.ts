@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest'
-import { resolveTerminalTabTitle, resolveUnifiedTabLabel } from './tab-title-resolution'
+import {
+  resolveCanvasTerminalLabel,
+  resolveTerminalTabTitle,
+  resolveUnifiedTabLabel
+} from './tab-title-resolution'
 
 describe('tab title resolution', () => {
   it('uses live terminal titles when generated titles are disabled', () => {
@@ -204,5 +208,25 @@ describe('tab title resolution', () => {
         true
       )
     ).toBe('Run build')
+  })
+
+  it('merges terminal title fallbacks consistently for Canvas labels', () => {
+    expect(
+      resolveCanvasTerminalLabel(
+        {
+          customLabel: null,
+          label: '',
+          generatedLabel: null,
+          quickCommandLabel: null
+        },
+        {
+          generatedTitle: 'Generated terminal title',
+          quickCommandLabel: null,
+          defaultTitle: 'Terminal 4',
+          title: 'shell'
+        },
+        true
+      )
+    ).toBe('Generated terminal title')
   })
 })

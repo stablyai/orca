@@ -105,6 +105,7 @@ export type NewWorkspaceDraft = {
 
 export type UiViewHistory =
   | 'terminal'
+  | 'control-room'
   | 'settings'
   | 'tasks'
   | 'activity'
@@ -162,6 +163,7 @@ export type UISliceCore = {
     options?: { recordTasksInteraction?: boolean }
   ) => void
   closeTaskPage: () => void
+  openControlRoomPage: () => void
   openActivityPage: () => void
   closeActivityPage: () => void
   selectedAutomationId: string | null

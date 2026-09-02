@@ -11,14 +11,14 @@ export function TerminalSurface({
 }: {
   controller: TerminalController
 }): React.JSX.Element {
-  const { renderedActiveWorktreeId } = controller
+  const { activeView, renderedActiveWorktreeId } = controller
   const retainBrowserGuestPaint = useAnyBrowserGuestNeedsPaint(!renderedActiveWorktreeId)
   return (
     <div
       // Why: already out of flow via the workbench container when hidden, so retention only
       // has to drop `hidden` — it does not need to leave the flex column a second time.
       className={`flex flex-col flex-1 min-w-0 min-h-0 overflow-hidden${
-        renderedActiveWorktreeId
+        renderedActiveWorktreeId || activeView === 'control-room'
           ? ''
           : retainBrowserGuestPaint
             ? ' opacity-0 pointer-events-none'

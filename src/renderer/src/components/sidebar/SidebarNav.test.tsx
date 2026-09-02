@@ -13,6 +13,7 @@ import { PSEUDO_LOCALIZATION_LOCALE } from '../../i18n/pseudo-localization'
 
 const mocks = vi.hoisted(() => ({
   state: {} as Record<string, unknown>,
+  openControlRoomPage: vi.fn(),
   openTaskPage: vi.fn(),
   openAutomationsPage: vi.fn(),
   openActivityPage: vi.fn(),
@@ -128,6 +129,7 @@ function setSidebarState({
     settings,
     repos,
     activeView: 'worktrees',
+    openControlRoomPage: mocks.openControlRoomPage,
     openTaskPage: mocks.openTaskPage,
     openAutomationsPage: mocks.openAutomationsPage,
     openActivityPage: mocks.openActivityPage,
@@ -216,6 +218,12 @@ describe('SidebarNav', () => {
     mocks.hasPairedMobileDevice = false
     mocks.agentBucketCounts = { attention: 0, working: 0, done: 0, idle: 0 }
     setSidebarState()
+  })
+
+  it('opens the cross-project Control Room from its persistent sidebar entry', async () => {
+    const container = await renderSidebarNav()
+    await clickButton(getButtonByText(container, 'Control Room'))
+    expect(mocks.openControlRoomPage).toHaveBeenCalledTimes(1)
   })
 
   it('keeps the Agent Dashboard row unmounted while its experiment is off', async () => {

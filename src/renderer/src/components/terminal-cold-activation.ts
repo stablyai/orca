@@ -20,9 +20,11 @@ export function applyTerminalColdActivation(controller: TerminalParkingFoundatio
     activeGroupIdByWorktree,
     activeTabId,
     activeTabIdByWorktree,
+    activeView,
     activeWorktreeDeferralHostId,
     activityTerminalPortals,
     backgroundMountTabIdsByWorktreeRef,
+    controlRoomVisibility,
     groupsByWorktree,
     hydrationSucceeded,
     lastActivationWorktreeIdRef,
@@ -151,6 +153,11 @@ export function applyTerminalColdActivation(controller: TerminalParkingFoundatio
     tabsByWorktree,
     activationDeferredMountTabIdsByWorktreeRef.current
   )
+  if (activeView === 'control-room') {
+    for (const worktreeId of Object.keys(controlRoomVisibility.terminalTabIdsByWorktree)) {
+      mountedWorktreeIdsRef.current.add(worktreeId)
+    }
+  }
   for (const id of mountedWorktreeIdsRef.current) {
     if (!workspaceSurfaceIdSet.has(id)) {
       mountedWorktreeIdsRef.current.delete(id)

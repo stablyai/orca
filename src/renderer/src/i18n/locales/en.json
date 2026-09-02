@@ -3298,6 +3298,23 @@
           },
           "TabGroupDropOverlay": {
             "paneColumnLabel": "New split"
+          },
+          "TabGroupCanvasLayout": {
+            "resizePaneWidth": "Resize terminal width",
+            "resizePaneHeight": "Resize terminal height",
+            "movePane": "Move terminal",
+            "newTerminal": "New terminal",
+            "closeTerminal": "Close terminal",
+            "canvas": "Canvas",
+            "splits": "Splits",
+            "arrange": "Arrange",
+            "newTerminalHere": "New terminal here"
+          },
+          "CanvasTerminalCard": {
+            "unpin": "Remove from pinned view",
+            "pin": "Pin to Control Room",
+            "agentCount": "{{value0}} agents",
+            "subagentCount": "+{{value0}} subagents"
           }
         },
         "bar": {
@@ -5268,7 +5285,8 @@
           "fee535205b": "Tasks",
           "d599269755": "Hide from sidebar",
           "artifacts": "Artifacts",
-          "skills": "Skills"
+          "skills": "Skills",
+          "controlRoom": "Control Room"
         },
         "SidebarRepositoryFilterSection": {
           "d3a9c4cea1": "Clear",
@@ -16564,6 +16582,21 @@
         "remoteLabel": "Browsers on {{value0}}",
         "clientNoteLocalStorage": "Imports read this device’s browsers. Cookies are stored locally.",
         "remoteNoteRemoteStorage": "Imports read browsers on {{value0}}. Cookies are stored on that machine, and a permission prompt may appear on its screen."
+      },
+      "control": {
+        "room": {
+          "ControlRoomTerminalCanvas": {
+            "title": "Control Room",
+            "active": "Active agents",
+            "all": "All live sessions",
+            "pinned": "Pinned",
+            "sessionCount": "Sessions in this view: {{value0}}",
+            "sessionCountCompact": "{{value0}}",
+            "noPinned": "No pinned sessions yet",
+            "noAgents": "No agents match this view",
+            "emptyHelp": "Active shows recognized agents. All adds ordinary live terminals. Recognized subagents stay folded into their parent count."
+          }
+        }
       },
       "native": {
         "chat": {

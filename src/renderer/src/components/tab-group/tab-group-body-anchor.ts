@@ -4,6 +4,11 @@
 // heavyweight pane DOM.
 
 const ANCHOR_PREFIX = '--orca-tab-group-body-'
+const CANVAS_TERMINAL_ANCHOR_PREFIX = '--orca-canvas-terminal-body-'
+
+function encodeAnchorId(id: string): string {
+  return Array.from(id, (char) => char.codePointAt(0)?.toString(16) ?? '').join('-') || 'empty'
+}
 
 /**
  * Returns the CSS anchor name for a given tab-group id. Anchor names must be
@@ -11,6 +16,10 @@ const ANCHOR_PREFIX = '--orca-tab-group-body-'
  * the full id into hex code points before appending it to the custom prefix.
  */
 export function tabGroupBodyAnchorName(groupId: string): string {
-  const encoded = Array.from(groupId, (char) => char.codePointAt(0)?.toString(16) ?? '').join('-')
-  return `${ANCHOR_PREFIX}${encoded || 'empty'}`
+  return `${ANCHOR_PREFIX}${encodeAnchorId(groupId)}`
+}
+
+/** Positions a persistent terminal overlay inside its independent Canvas card. */
+export function terminalCanvasBodyAnchorName(terminalTabId: string): string {
+  return `${CANVAS_TERMINAL_ANCHOR_PREFIX}${encodeAnchorId(terminalTabId)}`
 }

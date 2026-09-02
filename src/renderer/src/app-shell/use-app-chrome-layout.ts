@@ -53,7 +53,8 @@ export function useAppChromeLayout() {
     [settings, systemPrefersDark]
   ) as React.CSSProperties | undefined
 
-  const canMountTerminalWorkbenchNow = activeWorktreeId !== null || backgroundTerminalMountRequested
+  const canMountTerminalWorkbenchNow =
+    activeView === 'control-room' || activeWorktreeId !== null || backgroundTerminalMountRequested
   // Why a latch in state, not a ref: the write has to be visible to the next render, and a
   // render-phase ref write would also survive a render React discards. Setting state during
   // render is the supported way to derive it, and the `||` below keeps this render correct.
@@ -70,7 +71,8 @@ export function useAppChromeLayout() {
     hasActivePendingCreation: activePendingCreationExists
   })
   const workspaceChromeActive =
-    activeView === 'terminal' && activeWorktreeId !== null && !creationLayoutActive
+    (activeView === 'terminal' && activeWorktreeId !== null && !creationLayoutActive) ||
+    activeView === 'control-room'
   const hasTabBar = tabCount >= 2
   // Activity/Space are full-page navigation surfaces (like Settings), so the worktree sidebar is hidden there.
   const showSidebar =
@@ -136,7 +138,11 @@ export function useAppChromeLayout() {
     // Full-page navigation surfaces own the whole content area, so suppress right-sidebar controls.
     showRightSidebarControls: !creationLayoutActive && canShowRightSidebarForView(activeView),
     showTitlebarAppName: settings?.showTitlebarAppName !== false,
-    showTitlebarExpandButton: workspaceChromeActive && !hasTabBar && effectiveActiveTabExpanded,
+    showTitlebarExpandButton:
+      activeView === 'terminal' &&
+      workspaceChromeActive &&
+      !hasTabBar &&
+      effectiveActiveTabExpanded,
     sidebarOpen,
     stackedSidebarOpen,
     // Why: the workbench stays mounted while hidden, so visibility tracks the same condition separately.

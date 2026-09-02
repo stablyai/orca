@@ -18,6 +18,7 @@ export function useTerminalWorkspaceProjection(controller: TerminalWorkspaceStor
     activeWorktreeId,
     activityTerminalPortals,
     browserTabsByWorktree,
+    controlRoomVisibility,
     ensureWorktreeRootGroup,
     groupsByWorktree,
     hydrationSucceeded,
@@ -35,8 +36,17 @@ export function useTerminalWorkspaceProjection(controller: TerminalWorkspaceStor
     for (const portal of activityTerminalPortals) {
       ids.add(portal.tabId)
     }
+    if (activeView === 'control-room') {
+      for (const worktreeIds of Object.values(
+        controlRoomVisibility.visibleTerminalTabIdsByWorktree
+      )) {
+        for (const terminalTabId of worktreeIds) {
+          ids.add(terminalTabId)
+        }
+      }
+    }
     return Array.from(ids)
-  }, [activeTabId, activeTabType, activeView, activityTerminalPortals])
+  }, [activeTabId, activeTabType, activeView, activityTerminalPortals, controlRoomVisibility])
 
   useEffect(() => {
     setForegroundTerminalTabIds(foregroundTerminalTabIds)

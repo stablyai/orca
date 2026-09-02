@@ -40,3 +40,19 @@ export function resolveUnifiedTabLabel(
     fallback
   )
 }
+
+export function resolveCanvasTerminalLabel(
+  tab: Pick<Tab, 'customLabel' | 'quickCommandLabel' | 'aiVaultTitle' | 'generatedLabel' | 'label'>,
+  terminal: Pick<TerminalTab, 'quickCommandLabel' | 'generatedTitle' | 'defaultTitle' | 'title'>,
+  generatedTitlesEnabled: boolean
+): string {
+  return resolveUnifiedTabLabel(
+    {
+      ...tab,
+      generatedLabel: tab.generatedLabel ?? terminal.generatedTitle,
+      quickCommandLabel: tab.quickCommandLabel ?? terminal.quickCommandLabel
+    },
+    generatedTitlesEnabled,
+    terminal.defaultTitle ?? terminal.title ?? 'Terminal'
+  )
+}

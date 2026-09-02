@@ -16,6 +16,7 @@ import { AppWorkspaceShell } from './app-shell/AppWorkspaceShell'
 import { WindowControls } from './app-shell/WindowControls'
 import {
   MAC_TRAFFIC_LIGHTS_WIDTH,
+  RIGHT_SIDEBAR_TOGGLE_WIDTH,
   WINDOW_CONTROLS_HEIGHT,
   WINDOW_CONTROLS_WIDTH,
   hasCustomTitleBar
@@ -58,6 +59,7 @@ function App(): React.JSX.Element {
     const root = document.documentElement.style
     root.setProperty('--window-controls-width', WINDOW_CONTROLS_WIDTH)
     root.setProperty('--window-controls-height', WINDOW_CONTROLS_HEIGHT)
+    root.setProperty('--right-sidebar-toggle-width', RIGHT_SIDEBAR_TOGGLE_WIDTH)
     root.setProperty('--mac-traffic-lights-width', MAC_TRAFFIC_LIGHTS_WIDTH)
   }, [])
 
@@ -84,6 +86,8 @@ function App(): React.JSX.Element {
           '--window-controls-width': WINDOW_CONTROLS_WIDTH,
           // Side-position activity bar uses this to push icons below the Windows/Linux window-controls overlay.
           '--window-controls-height': WINDOW_CONTROLS_HEIGHT,
+          // Shared by tab strips and Canvas so the floating right-sidebar toggle has one width contract.
+          '--right-sidebar-toggle-width': RIGHT_SIDEBAR_TOGGLE_WIDTH,
           // Full-bleed surfaces use this to keep the macOS traffic lights uncovered.
           '--mac-traffic-lights-width': MAC_TRAFFIC_LIGHTS_WIDTH
         } as React.CSSProperties

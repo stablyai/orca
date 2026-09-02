@@ -29,14 +29,15 @@ export function createActiveWorkspaceTerminalActions(
         ? worktreeRoute.route.runtimeEnvironmentId
         : getRuntimeEnvironmentIdForWorktree(state, worktreeId)
       if (runtimeEnvironmentId) {
-        const { createWebRuntimeSessionTerminal } = await import('@/runtime/web-runtime-session')
-        await createWebRuntimeSessionTerminal({
+        const { createWebRuntimeSessionTerminalWithIdentity } =
+          await import('@/runtime/web-runtime-session')
+        const created = await createWebRuntimeSessionTerminalWithIdentity({
           worktreeId,
           environmentId: runtimeEnvironmentId,
           targetGroupId: groupId,
           activate: true
         })
-        return
+        return created.terminalTabId
       }
       if (isWebClientLocation() && worktreeId !== FLOATING_TERMINAL_WORKTREE_ID) {
         return
@@ -64,6 +65,7 @@ export function createActiveWorkspaceTerminalActions(
       // Why: Cmd+J shares the titlebar-button creation path, so append the new terminal after mixed editor/browser tabs, not first.
       get().setTabBarOrder(worktreeId, [...base.filter((id) => id !== terminal.id), terminal.id])
       focusTerminalTabSurface(terminal.id)
+      return terminal.id
     }
   }
 }
