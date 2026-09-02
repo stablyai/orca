@@ -37,6 +37,9 @@ export const ptyIncarnations = new Map<string, string>()
 export const ptyAgentSessionIds = new Set<string>()
 // Why: descendant capture is async, so reattach/duplicate shutdown must wait for the original owner, not return a dying PTY.
 export const ptyShutdownOperations = new Map<string, PtyShutdownOperation>()
+// Why: app quit owns PTY cleanup directly; suppress a late node-pty callback from
+// re-entering runtime teardown after stats and renderer services have stopped.
+export const ptyExitCallbacksSuppressed = new Set<string>()
 export const pendingLocalPtySpawns = new Map<string, Set<PendingLocalPtySpawn>>()
 export const ptyShellName = new Map<string, string>()
 export const ptyAgentForegroundContextPaths = new Map<string, string[]>()
@@ -116,6 +119,7 @@ export function clearPtyState(id: string): void {
   ptyProcesses.delete(id)
   ptyIncarnations.delete(id)
   ptyAgentSessionIds.delete(id)
+  ptyExitCallbacksSuppressed.delete(id)
   ptyShellName.delete(id)
   ptyAgentForegroundContextPaths.delete(id)
   ptyLastRecognizedForeground.delete(id)

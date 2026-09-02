@@ -17,6 +17,7 @@ import {
   ptyAgentSessionIds,
   ptyDisposables,
   ptyExitDisposables,
+  ptyExitCallbacksSuppressed,
   ptyIncarnations,
   ptyInitialCwd,
   ptyLoadGeneration,
@@ -133,6 +134,7 @@ export function activateLocalPtySession(args: {
       hostReportsChildExitStatus: ptyReportsChildExitStatus.get(id)
     })
     const wasTerminationRequested = ptyTerminationMode.has(id)
+    const suppressExitCallbacks = ptyExitCallbacksSuppressed.has(id)
     ptyPhysicalExits.get(id)?.markExited()
     // Why: neutralize proc.kill before destroy — node-pty SIGHUPs on socket 'close', which can race here and signal a reaped/recycled pid.
     if (process.platform !== 'win32') {
@@ -145,9 +147,11 @@ export function activateLocalPtySession(args: {
     // Why: release the master ptmx fd on natural exit, else a clean exit leaks the fd until GC. See docs/fix-pty-fd-leak.md.
     destroyPtyProcess(proc, { alreadyKilled: wasTerminationRequested })
     ptyReportsChildExitStatus.delete(id)
-    getOptions().onExit?.(id, exitCode, incarnationId, cause)
-    for (const cb of exitListeners) {
-      cb({ id, code: exitCode, incarnationId, cause })
+    if (!suppressExitCallbacks) {
+      getOptions().onExit?.(id, exitCode, incarnationId, cause)
+      for (const cb of exitListeners) {
+        cb({ id, code: exitCode, incarnationId, cause })
+      }
     }
   })
   if (onExitDisposable) {

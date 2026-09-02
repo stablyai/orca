@@ -389,6 +389,22 @@ describe('startup ordering', () => {
     expect(willQuit.slice(barrierStart)).toContain("{ name: 'browser', promise: browserShutdown }")
   })
 
+  it('joins local PTY descendant cleanup before the committed quit exits', () => {
+    const source = readFileSync(
+      join(process.cwd(), 'src/main/startup/main-process-quit.ts'),
+      'utf8'
+    )
+    const willQuitStart = source.indexOf("app.on('will-quit'")
+    const windowAllClosedStart = source.indexOf("app.on('window-all-closed'", willQuitStart)
+    const willQuit = source.slice(willQuitStart, windowAllClosedStart)
+    const cleanupStart = willQuit.indexOf('const ptyShutdown = killAllPty()')
+    const barrierStart = willQuit.indexOf('settleTeardownWithinDeadline([')
+
+    expect(cleanupStart).toBeGreaterThanOrEqual(0)
+    expect(barrierStart).toBeGreaterThan(cleanupStart)
+    expect(willQuit.slice(barrierStart)).toContain("{ name: 'local-ptys', promise: ptyShutdown }")
+  })
+
   it('registers repeatable serve signal handling before headless startup completes', () => {
     const source = readFileSync(
       join(process.cwd(), 'src/main/startup/main-process-runtime-launch.ts'),
