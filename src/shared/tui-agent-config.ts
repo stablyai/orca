@@ -225,7 +225,6 @@ const TUI_AGENT_CONFIG_SOURCE: Record<TuiAgent, TuiAgentConfigSource> = {
     // and `--auto-approve` is a `chat` option). `--trust` skips the first-launch trust
     // menu that would otherwise consume the injected prompt paste.
     launchCmd: 'bob chat --trust',
-    expectedProcess: 'bob',
     // Why: MordechaiHadad/bob is a Neovim version manager that also installs as `bob`,
     // and any stray script can hold the name too. Neovim in the help text excludes the
     // hit; otherwise Bob Shell's own banner/IBM license line must be present. A failed
