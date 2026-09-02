@@ -26,6 +26,7 @@ import {
 } from './worktree-create-preparation-burst'
 import {
   cleanupStalePreparations,
+  hasPendingStalePreparationCleanup,
   resetStalePreparationCleanupForTests
 } from './worktree-create-preparation-stale-cleanup'
 import { toHostFilesystemPath } from './host-tree-removal'
@@ -63,7 +64,7 @@ const preparations = new Map<string, PreparationEntry>()
 
 /** A prepared checkout is a create that is either in flight or imminent. */
 export function hasPendingWorktreeCreatePreparations(): boolean {
-  return preparations.size > 0 || staleCleanupInFlight.size > 0
+  return preparations.size > 0 || hasPendingStalePreparationCleanup()
 }
 
 function pathOps(path: string): Pick<typeof posix, 'dirname' | 'join' | 'normalize'> {

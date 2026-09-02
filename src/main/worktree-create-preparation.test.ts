@@ -39,6 +39,7 @@ vi.mock('./ipc/worktree-logic', () => ({
 import {
   _resetWorktreeCreatePreparationsForTests,
   consumePreparedWorktreeCreate,
+  hasPendingWorktreeCreatePreparations,
   prepareWorktreeCreateForRepo
 } from './worktree-create-preparation'
 
@@ -476,6 +477,23 @@ describe('worktree create preparation registry', () => {
       baseBranch: 'origin/main'
     })
   }
+
+  it('reports a pending create while a stale-cleanup scan is running', async () => {
+    let releaseListing!: () => void
+    mocks.listWorktreeGraph.mockReturnValueOnce(
+      new Promise((resolve) => {
+        releaseListing = () => resolve([])
+      })
+    )
+    const arming = prepareWorktreeCreateForRepo(store, repo, 'origin/main')
+    await Promise.resolve()
+
+    // Why: the idle gate must not start repo maintenance while crash recovery is mid-scan.
+    expect(hasPendingWorktreeCreatePreparations()).toBe(true)
+
+    releaseListing()
+    await arming
+  })
 
   it('does not re-arm after an isolated create', async () => {
     await prepareWorktreeCreateForRepo(store, repo, 'origin/main')
