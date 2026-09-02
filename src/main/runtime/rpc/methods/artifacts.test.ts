@@ -46,7 +46,7 @@ describe('artifact RPC schemas', () => {
     ).toBe(false)
   })
 
-  it('accepts a 5 MiB UTF-8 artifact at the content boundary', () => {
+  it('accepts a 10 MiB UTF-8 artifact at the content boundary', () => {
     expect(
       writeSchema('artifacts.publish').safeParse({
         ...validRequest,
@@ -56,7 +56,9 @@ describe('artifact RPC schemas', () => {
   })
 
   it('measures the content boundary in UTF-8 bytes', () => {
-    const exact = `${'€'.repeat(Math.floor(ARTIFACT_MAX_CONTENT_BYTES / 3))}aa`
+    const euroCount = Math.floor(ARTIFACT_MAX_CONTENT_BYTES / 3)
+    const asciiBytes = ARTIFACT_MAX_CONTENT_BYTES - euroCount * 3
+    const exact = `${'€'.repeat(euroCount)}${'a'.repeat(asciiBytes)}`
     const oversized = `${exact}€`
     expect(new TextEncoder().encode(exact).byteLength).toBe(ARTIFACT_MAX_CONTENT_BYTES)
     expect(new TextEncoder().encode(oversized).byteLength).toBeGreaterThan(
@@ -70,11 +72,11 @@ describe('artifact RPC schemas', () => {
     ).toBe(false)
   })
 
-  it('allows JSON escaping within the bounded 5 MiB content request', () => {
+  it('allows JSON escaping within the bounded content request', () => {
     expect(
       writeSchema('artifacts.publish').safeParse({
         ...validRequest,
-        content: '"'.repeat(ARTIFACT_MAX_CONTENT_BYTES)
+        content: '"'.repeat(Math.floor(ARTIFACT_MAX_CONTENT_BYTES / 2))
       }).success
     ).toBe(true)
   })

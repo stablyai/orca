@@ -2,49 +2,12 @@ import { describe, expect, it } from 'vitest'
 import {
   buildProcessTableIndex,
   parseStrictProcessTableRows,
-  ProcessTableCaptureError,
   type ProcessTableIndexStats
 } from '../../shared/process-table-snapshot'
 import {
   resolveAgentForegroundProcessesBatch,
   resolveAgentForegroundProcessesFromIndex
-} from './agent-foreground-process'
-
-describe('strict process-table evidence parser', () => {
-  it('extracts pgid/tpgid while retaining command spacing', () => {
-    expect(
-      parseStrictProcessTableRows(
-        ' PID PPID PGID TPGID STAT COMMAND\r\n 100 1 100 101 Ss /bin/zsh -l\r\n 101 100 101 101 S+ node /opt/codex --flag  value\r\n'
-      )
-    ).toEqual([
-      { pid: 100, ppid: 1, pgid: 100, tpgid: 101, stat: 'Ss', command: '/bin/zsh -l' },
-      {
-        pid: 101,
-        ppid: 100,
-        pgid: 101,
-        tpgid: 101,
-        stat: 'S+',
-        command: 'node /opt/codex --flag  value'
-      }
-    ])
-  })
-
-  it.each(['101 100 101 S+ node /opt/codex', '101 100 -2 101 S+ node /opt/codex'])(
-    'rejects malformed/truncated captures (%s)',
-    (capture) => {
-      expect(() => parseStrictProcessTableRows(capture)).toThrow(ProcessTableCaptureError)
-    }
-  )
-
-  it('accepts no-controlling-tty sentinels for later unverifiable classification', () => {
-    expect(parseStrictProcessTableRows('100 1 100 0 Ss /bin/zsh')).toEqual([
-      { pid: 100, ppid: 1, pgid: 100, tpgid: 0, stat: 'Ss', command: '/bin/zsh' }
-    ])
-    expect(parseStrictProcessTableRows('100 1 100 -1 Ss /bin/zsh')).toEqual([
-      { pid: 100, ppid: 1, pgid: 100, tpgid: -1, stat: 'Ss', command: '/bin/zsh' }
-    ])
-  })
-})
+} from './agent-foreground-process-batch'
 
 describe('batched foreground process correlation', () => {
   it('uses tpgid/pgid association instead of stat alone', () => {

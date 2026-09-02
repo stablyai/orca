@@ -45,6 +45,34 @@ function getEntrySearchText(entry: CombinedDiffFileTreeEntry): string {
     .toLowerCase()
 }
 
+/**
+ * Applies filters that describe the file set itself. Viewed state is deliberately not included:
+ * section loading changes viewed flags without changing the tree's path structure.
+ */
+export function getCombinedDiffFileTreeEntriesMatchingStaticFilters({
+  entries,
+  query,
+  excludedExtensions
+}: {
+  entries: readonly CombinedDiffFileTreeEntry[]
+  query: string
+  excludedExtensions: ReadonlySet<string>
+}): readonly CombinedDiffFileTreeEntry[] {
+  if (isCombinedDiffFileTreeQueryTooLarge(query)) {
+    return []
+  }
+  const normalizedQuery = query.trim().toLowerCase()
+  if (normalizedQuery.length === 0 && excludedExtensions.size === 0) {
+    return entries
+  }
+  return entries.filter((entry) => {
+    if (excludedExtensions.has(getEntryExtension(entry))) {
+      return false
+    }
+    return normalizedQuery.length === 0 || getEntrySearchText(entry).includes(normalizedQuery)
+  })
+}
+
 export function getFilteredCombinedDiffFileTreeEntries({
   entries,
   mode,
@@ -60,19 +88,19 @@ export function getFilteredCombinedDiffFileTreeEntries({
   includeViewed: boolean
   viewedSectionKeys: ReadonlySet<string>
 }): CombinedDiffFileTreeEntry[] {
-  if (isCombinedDiffFileTreeQueryTooLarge(query)) {
-    return []
+  const staticFilteredEntries = getCombinedDiffFileTreeEntriesMatchingStaticFilters({
+    entries,
+    query,
+    excludedExtensions
+  })
+  if (includeViewed) {
+    return [...staticFilteredEntries]
   }
-  const trimmedQuery = query.trim()
-  const normalizedQuery = trimmedQuery.toLowerCase()
-  return entries.filter((entry) => {
-    if (excludedExtensions.has(getEntryExtension(entry))) {
-      return false
-    }
+  return staticFilteredEntries.filter((entry) => {
     if (!includeViewed && viewedSectionKeys.has(getCombinedDiffFileTreeSectionKey(mode, entry))) {
       return false
     }
-    return normalizedQuery.length === 0 || getEntrySearchText(entry).includes(normalizedQuery)
+    return true
   })
 }
 

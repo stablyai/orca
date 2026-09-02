@@ -1,6 +1,8 @@
 import { REMOTE_RUNTIME_SHARED_CONTROL_CAPABILITY } from '../../../../shared/protocol-version'
 import type { RuntimeStatus } from '../../../../shared/runtime-types'
 import { unwrapRuntimeRpcResult } from '@/runtime/runtime-rpc-client'
+import { extractRuntimeTransportDiagnostics } from '@/runtime/runtime-status-probe-diagnostics'
+import type { RuntimeEnvironmentStatus } from './runtime-status'
 
 const RECHECK_DELAYS_MS = [3_000, 6_000, 12_000, 30_000, 60_000]
 
@@ -12,15 +14,12 @@ type RecheckState = {
   connectionGeneration: number
   environmentExists: () => boolean
   getConnectionGeneration: () => number
-  publish: (status: RuntimeStatus | null) => void
+  publish: (status: RuntimeEnvironmentStatus) => void
 }
 
 type RuntimeStatusStore = {
   runtimeEnvironments: readonly { id: string }[]
-  setRuntimeEnvironmentStatus: (
-    environmentId: string,
-    status: { status: RuntimeStatus | null; checkedAt: number }
-  ) => void
+  setRuntimeEnvironmentStatus: (environmentId: string, status: RuntimeEnvironmentStatus) => void
 }
 
 const rechecks = new Map<string, RecheckState>()
@@ -31,7 +30,7 @@ export function reconcileRuntimeStatusRecheck(args: {
   connectionGeneration: number
   environmentExists: () => boolean
   getConnectionGeneration: () => number
-  publish: (status: RuntimeStatus | null) => void
+  publish: (status: RuntimeEnvironmentStatus) => void
 }): void {
   if (!shouldRecheck(args.status)) {
     cancelRuntimeStatusRecheck(args.environmentId)
@@ -76,11 +75,7 @@ export function reconcileRuntimeStatusForSlice(
     environmentExists: () =>
       get().runtimeEnvironments.some((environment) => environment.id === environmentId),
     getConnectionGeneration,
-    publish: (nextStatus) =>
-      get().setRuntimeEnvironmentStatus(environmentId, {
-        status: nextStatus,
-        checkedAt: Date.now()
-      })
+    publish: (nextStatus) => get().setRuntimeEnvironmentStatus(environmentId, nextStatus)
   })
 }
 
@@ -143,16 +138,21 @@ async function fireRuntimeStatusRecheck(
     return
   }
   state.inFlight = true
-  let status: RuntimeStatus | null = null
+  let nextEntry: RuntimeEnvironmentStatus
   try {
     const response = await window.api.runtimeEnvironments.getStatus({
       selector: environmentId,
       timeoutMs: 10_000,
       observeOnly: true
     })
-    status = unwrapRuntimeRpcResult<RuntimeStatus>(response)
-  } catch {
-    status = null
+    nextEntry = { status: unwrapRuntimeRpcResult<RuntimeStatus>(response), checkedAt: Date.now() }
+  } catch (error: unknown) {
+    const remoteControl = extractRuntimeTransportDiagnostics(error)
+    nextEntry = {
+      status: null,
+      ...(remoteControl ? { remoteControl } : {}),
+      checkedAt: Date.now()
+    }
   }
   state.inFlight = false
   if (
@@ -163,5 +163,5 @@ async function fireRuntimeStatusRecheck(
   ) {
     return
   }
-  state.publish(status)
+  state.publish(nextEntry)
 }

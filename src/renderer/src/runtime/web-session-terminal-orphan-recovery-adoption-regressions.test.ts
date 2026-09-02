@@ -7,7 +7,7 @@ import {
   makeSnapshot,
   makeState,
   pendingSurface
-} from './web-session-terminal-orphan-recovery-regression-fixtures'
+} from './__fixtures__/web-session-terminal-orphan-recovery-regression-fixtures'
 import {
   clearWebSessionTerminalOrphanRecoveryForTests,
   recoverWebSessionTerminalOrphansBeforeApply

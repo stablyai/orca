@@ -23,10 +23,19 @@ const CHILD_PROCESS_IMPORT_ALLOWLIST: readonly string[] = readFileSync(
   .map((line) => line.trim())
   .filter((line) => line.length > 0 && !line.startsWith('#'))
 
+/**
+ * The true count of files importing child_process directly.
+ *
+ * May only ever be DECREASED, and only by migrating a file off
+ * `node:child_process`. Raising it is never the fix.
+ */
+const DIRECT_IMPORTER_PIN = 160
+
 const IMPORT_PATTERN =
   /(?:from\s+['"]node:child_process['"]|from\s+['"]child_process['"]|require\(\s*['"]node:child_process['"]|require\(\s*['"]child_process['"])/
 
-const OWNER_DIRECTORY = 'src/shared/child-process'
+// Why: trailing slash, so a sibling like src/shared/child-process-foo.ts is scanned, not exempted.
+const OWNER_DIRECTORY = 'src/shared/child-process/'
 const SCANNED_EXTENSIONS = ['.ts', '.tsx']
 const IGNORED_DIRECTORIES = new Set([
   'node_modules',
@@ -110,9 +119,22 @@ describe('child_process import boundary', () => {
     expect(stale, 'Allowlist entry no longer imports child_process — delete the line.').toEqual([])
   })
 
-  it('never grows', () => {
-    // The count is asserted separately from membership so a swap (one file
-    // migrated, one added) still fails loudly.
-    expect(offenders.length).toBeLessThanOrEqual(CHILD_PROCESS_IMPORT_ALLOWLIST.length)
+  it('holds the offender count at the pin', () => {
+    // Bounding by the allowlist's own length proves nothing: the two move
+    // together, so a swap (one file migrated off, one new file added with its
+    // entry) kept the bound satisfied. The pin is a literal for that reason.
+    expect(
+      offenders.length,
+      `${offenders.length} files import child_process directly; the pin is ${DIRECT_IMPORTER_PIN}. ` +
+        'Never raise the pin -- migrate the file to runProcess/spawnProcess from ' +
+        'src/shared/child-process instead.'
+    ).toBeLessThanOrEqual(DIRECT_IMPORTER_PIN)
+    // A pin left above reality is how a ratchet rots: it re-opens room for the
+    // next direct import to land for free.
+    expect(
+      offenders.length,
+      `Only ${offenders.length} files import child_process directly. Lower DIRECT_IMPORTER_PIN to ` +
+        `${offenders.length} to keep the ground you just took.`
+    ).toBeGreaterThanOrEqual(DIRECT_IMPORTER_PIN)
   })
 })

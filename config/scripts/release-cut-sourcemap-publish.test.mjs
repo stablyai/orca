@@ -41,12 +41,22 @@ describe('release-cut source map publication', () => {
     expect(publish.with.command).toContain('runner.temp')
   })
 
-  it('fails the release when no source maps were emitted', () => {
-    // Why: a silent regression of build.sourcemap would ship an undecodable
-    // release rather than an obviously broken one.
+  it('fails only when a map-enabled cut emits no source maps', () => {
+    // Why: legacy tags predate source-map publication, but a newer tag that
+    // enables hidden maps must still fail loudly if the build regresses.
     const bundle = buildSteps[stepIndex('Bundle main-process source maps')]
+    expect(bundle.id).toBe('bundle-main-sourcemaps')
+    expect(bundle.run).toContain('grep -Eq')
+    expect(bundle.run).toContain('sourcemap:[[:space:]]*')
+    expect(bundle.run).toContain('has_maps=false')
+    expect(bundle.run).toContain('has_maps=true')
     expect(bundle.run).toContain('::error::')
     expect(bundle.run).toContain('exit 1')
+  })
+
+  it('skips publication for legacy cut refs without hidden source maps', () => {
+    const publish = buildSteps[stepIndex('Publish main-process source maps')]
+    expect(publish.if).toContain("steps.bundle-main-sourcemaps.outputs.has_maps == 'true'")
   })
 
   it('bundles maps after the build and before packaging strips them', () => {

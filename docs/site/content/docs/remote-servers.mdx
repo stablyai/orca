@@ -3,14 +3,15 @@ title: Remote Orca Servers
 description: Keep Orca running on another computer and connect from your laptop.
 ---
 
-import { Callout, ImagePlaceholder } from '@/components/docs/prose';
+import { Callout, ImagePlaceholder } from '@/components/docs/prose'
 
 A Remote Orca Server lets one computer do the work while another computer provides the UI. The server keeps the projects, worktrees, terminals, tabs, provider accounts, and agent sessions. Your laptop connects to that running Orca instance.
 
 The easiest setup is the Orca desktop app on both computers, connected through [Tailscale](https://tailscale.com/). You do not need to run `orca serve` for this path.
 
 <Callout title="Beta">
-Remote Orca Servers are beta. Keep the server and client on a private network path you control, such as the same Tailscale tailnet or LAN.
+  Remote Orca Servers are beta. Keep the server and client on a private network path you control,
+  such as the same Tailscale tailnet or LAN.
 </Callout>
 
 ## What runs where
@@ -68,7 +69,8 @@ On the computer that should keep the sessions running:
 If the Tailscale address is missing, confirm Tailscale is connected and click the refresh button beside **Connection address**.
 
 <Callout title="Keep the access link private">
-The pairing URL grants access to this Orca runtime. Treat it like a password and send it only to the client you intend to pair.
+  The pairing URL grants access to this Orca runtime. Treat it like a password and send it only to
+  the client you intend to pair.
 </Callout>
 
 ### 2. Add the server on your laptop
@@ -85,6 +87,11 @@ On the computer you want to use as the client:
 <ImagePlaceholder
   src="/docs/remote-server-add-client.png"
   caption="On the client: name the server, paste its access link, and add it. The pairing code is redacted in this example."
+/>
+
+<ImagePlaceholder
+  src="/docs/remote-server-share-desktop.png"
+  caption="Share an Orca desktop runtime with another client over a private network."
 />
 
 Adding a server saves it without forcing every new project onto it. Open **Advanced → Active Server** only when you want server-routed projects, terminals, provider checks, and browser or mobile handoff to use that server by default.
@@ -158,13 +165,13 @@ Keep the phone on the same tailnet, open Orca Mobile, choose **Pair**, and scan 
 
 ## Desktop app or `orca serve`?
 
-| | Desktop app on the server | `orca serve` |
-| --- | --- | --- |
-| Best for | An old laptop, Mac mini, or desktop | A headless Linux box, VM, or managed service |
-| Setup | Settings and buttons | Terminal command and service configuration |
-| Server window | Open | None |
-| Access link | **New Link → Generate Access Link** | Printed in the terminal |
-| Lifetime | While the desktop app is running | While the foreground process or service is running |
+|               | Desktop app on the server           | `orca serve`                                       |
+| ------------- | ----------------------------------- | -------------------------------------------------- |
+| Best for      | An old laptop, Mac mini, or desktop | A headless Linux box, VM, or managed service       |
+| Setup         | Settings and buttons                | Terminal command and service configuration         |
+| Server window | Open                                | None                                               |
+| Access link   | **New Link → Generate Access Link** | Printed in the terminal                            |
+| Lifetime      | While the desktop app is running    | While the foreground process or service is running |
 
 ## Remote Orca Server or SSH?
 

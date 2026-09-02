@@ -2,6 +2,7 @@ import type { RemoteRuntimeSharedConnectionDiagnostics } from '../../../../share
 import type { AppState } from '../types'
 import type { RuntimeEnvironmentStatus } from './runtime-status'
 import * as diagnosticsGeneration from './runtime-status-diagnostics-generation'
+import * as runtimeStatusRecheck from './runtime-status-recheck'
 
 export function updateRuntimeStatusStore(
   state: AppState,
@@ -77,4 +78,29 @@ export function createRuntimeEnvironmentDiagnosticsPublisher(args: {
         }),
       afterPublish: (status) => args.afterPublish(event.environmentId, status)
     })
+}
+
+export function createRuntimeEnvironmentDiagnosticsSlicePublisher(args: {
+  getCurrent: (environmentId: string) => RuntimeEnvironmentStatus | undefined
+  setState: (
+    updater: (state: Map<string, RuntimeEnvironmentStatus>) => Map<string, RuntimeEnvironmentStatus>
+  ) => void
+  getStore: () => AppState
+  getConnectionGeneration: (environmentId: string) => number
+}): (event: {
+  environmentId: string
+  transportGeneration: number
+  diagnostics: RemoteRuntimeSharedConnectionDiagnostics
+}) => void {
+  return createRuntimeEnvironmentDiagnosticsPublisher({
+    getCurrent: args.getCurrent,
+    setState: args.setState,
+    afterPublish: (environmentId, status) =>
+      runtimeStatusRecheck.reconcileRuntimeStatusForSlice(
+        environmentId,
+        status.status,
+        args.getStore,
+        () => args.getConnectionGeneration(environmentId)
+      )
+  })
 }

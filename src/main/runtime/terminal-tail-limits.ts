@@ -1,0 +1,9 @@
+export const MAX_TAIL_LINES = 2000
+export const MAX_TAIL_CHARS = 256 * 1024
+export const MAX_TAIL_PARTIAL_CHARS = 4000
+export const MAX_TAIL_PENDING_ANSI_CHARS = 4096
+export const DEFAULT_TERMINAL_READ_LIMIT = 120
+export const MAX_TERMINAL_READ_LIMIT = 2000
+export const MAX_TERMINAL_PREVIEW_CHARS = 32 * 1024
+export const MAX_PREVIEW_LINES = 6
+export const MAX_PREVIEW_CHARS = 300

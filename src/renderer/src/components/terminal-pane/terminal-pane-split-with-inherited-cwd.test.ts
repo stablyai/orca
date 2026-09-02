@@ -1,7 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { ManagedPane, PaneManager } from '@/lib/pane-manager/pane-manager'
 import type { PtyTransport } from './pty-transport'
+import type { PaneCwdMap } from './resolve-split-cwd'
 import { splitTerminalPaneWithInheritedCwd } from './terminal-pane-split-with-inherited-cwd'
+import { createDeferred } from './pty-connection-test-async'
 
 const mocks = vi.hoisted(() => ({
   recordCreatedTerminalPaneSplit: vi.fn(),
@@ -23,11 +25,6 @@ vi.mock('./terminal-pane-split-completion', () => ({
 
 function makeManager(splitPane: ReturnType<typeof vi.fn>): PaneManager {
   return { splitPane } as unknown as PaneManager
-}
-
-async function flushAsyncSplit(): Promise<void> {
-  await Promise.resolve()
-  await Promise.resolve()
 }
 
 describe('splitTerminalPaneWithInheritedCwd', () => {
@@ -90,37 +87,110 @@ describe('splitTerminalPaneWithInheritedCwd', () => {
     })
   })
 
-  it('uses the live manager after async cwd resolution', async () => {
+  it('creates and records the split before asynchronous cwd resolution settles', async () => {
+    const cwd = createDeferred<string>()
+    const createdPane = { id: 2 }
     const staleSplitPane = vi.fn()
-    const liveSplitPane = vi.fn(() => ({ id: 2 }))
-    mocks.resolveSplitCwd.mockResolvedValue('/resolved')
+    const liveSplitPane = vi.fn(
+      (
+        _paneId: number,
+        _direction: 'vertical' | 'horizontal',
+        _opts?: { cwdPromise?: Promise<string> }
+      ) => createdPane
+    )
+    let cwdSettled = false
+    void cwd.promise.then(() => {
+      cwdSettled = true
+    })
+    mocks.resolveSplitCwd.mockReturnValue(cwd.promise)
 
     splitTerminalPaneWithInheritedCwd({
       worktreeId: 'worktree-1',
       tabId: 'tab-1',
       manager: makeManager(staleSplitPane),
       getManager: () => makeManager(liveSplitPane),
-      paneTransports: new Map<number, PtyTransport>(),
+      paneTransports: new Map([[1, { getPtyId: () => 'pty-1' } as PtyTransport]]),
       paneCwdMap: new Map(),
       fallbackCwd: '/fallback',
       pane: { id: 1, leafId: 'leaf-1' } as ManagedPane,
       direction: 'vertical',
-      source: 'context_menu'
+      source: 'keyboard'
     })
 
-    await flushAsyncSplit()
-
+    expect(cwdSettled).toBe(false)
+    expect(mocks.resolveSplitCwd).toHaveBeenCalledWith({
+      paneCwdMap: expect.any(Map),
+      sourcePaneId: 1,
+      sourcePtyId: 'pty-1',
+      fallbackCwd: '/fallback'
+    })
     expect(staleSplitPane).not.toHaveBeenCalled()
-    expect(liveSplitPane).toHaveBeenCalledWith(1, 'vertical', { cwd: '/resolved' })
-    expect(mocks.recordCreatedTerminalPaneSplit).toHaveBeenCalledWith(
-      { id: 2 },
-      { source: 'context_menu', direction: 'vertical' }
-    )
+    expect(liveSplitPane).toHaveBeenCalledWith(1, 'vertical', { cwdPromise: cwd.promise })
+    expect(mocks.recordCreatedTerminalPaneSplit).toHaveBeenCalledWith(createdPane, {
+      source: 'keyboard',
+      direction: 'vertical'
+    })
+
+    const spawnHints = liveSplitPane.mock.calls[0]?.[2] as
+      | { cwdPromise?: Promise<string> }
+      | undefined
+    cwd.resolve('/resolved')
+
+    await expect(spawnHints?.cwdPromise).resolves.toBe('/resolved')
   })
 
-  it('does not split a stale manager when the live manager is gone', async () => {
+  it('reuses one pending cwd lookup across rapid nested splits', () => {
+    const cwd = createDeferred<string>()
+    const firstCreatedPane = { id: 2, leafId: 'leaf-2' } as ManagedPane
+    const secondCreatedPane = { id: 3, leafId: 'leaf-3' } as ManagedPane
+    const splitPane = vi
+      .fn()
+      .mockReturnValueOnce(firstCreatedPane)
+      .mockReturnValueOnce(secondCreatedPane)
+    const manager = makeManager(splitPane)
+    const paneCwdMap: PaneCwdMap = new Map()
+    mocks.resolveSplitCwd.mockReturnValue(cwd.promise)
+
+    splitTerminalPaneWithInheritedCwd({
+      worktreeId: 'worktree-1',
+      tabId: 'tab-1',
+      manager,
+      paneTransports: new Map([[1, { getPtyId: () => 'pty-1' } as PtyTransport]]),
+      paneCwdMap,
+      fallbackCwd: '/fallback',
+      pane: { id: 1, leafId: 'leaf-1' } as ManagedPane,
+      direction: 'vertical',
+      source: 'keyboard'
+    })
+
+    paneCwdMap.set(firstCreatedPane.id, {
+      cwd: '/fallback',
+      confirmed: false,
+      pendingCwd: cwd.promise
+    })
+    splitTerminalPaneWithInheritedCwd({
+      worktreeId: 'worktree-1',
+      tabId: 'tab-1',
+      manager,
+      paneTransports: new Map(),
+      paneCwdMap,
+      fallbackCwd: '/fallback',
+      pane: firstCreatedPane,
+      direction: 'horizontal',
+      source: 'keyboard'
+    })
+
+    expect(mocks.resolveSplitCwd).toHaveBeenCalledOnce()
+    expect(splitPane).toHaveBeenNthCalledWith(1, 1, 'vertical', {
+      cwdPromise: cwd.promise
+    })
+    expect(splitPane).toHaveBeenNthCalledWith(2, 2, 'horizontal', {
+      cwdPromise: cwd.promise
+    })
+  })
+
+  it('does not resolve cwd or split a stale manager when the live manager is gone', () => {
     const staleSplitPane = vi.fn()
-    mocks.resolveSplitCwd.mockResolvedValue('/resolved')
 
     splitTerminalPaneWithInheritedCwd({
       worktreeId: 'worktree-1',
@@ -135,12 +205,8 @@ describe('splitTerminalPaneWithInheritedCwd', () => {
       source: 'context_menu'
     })
 
-    await flushAsyncSplit()
-
     expect(staleSplitPane).not.toHaveBeenCalled()
-    expect(mocks.recordCreatedTerminalPaneSplit).toHaveBeenCalledWith(undefined, {
-      source: 'context_menu',
-      direction: 'horizontal'
-    })
+    expect(mocks.resolveSplitCwd).not.toHaveBeenCalled()
+    expect(mocks.recordCreatedTerminalPaneSplit).not.toHaveBeenCalled()
   })
 })

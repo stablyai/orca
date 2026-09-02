@@ -316,7 +316,9 @@ describe('PR E2E gate contract', () => {
       selectPrE2eSpecs(['src/renderer/src/hooks/remote-workspace-session-merge.test.ts'])
     ).toEqual([])
     expect(
-      selectPrE2eSpecs(['src/renderer/src/hooks/remote-workspace-target-sync-test-harness.ts'])
+      selectPrE2eSpecs([
+        'src/renderer/src/hooks/__tests__/remote-workspace-target-sync-test-harness.ts'
+      ])
     ).toEqual([])
   })
 

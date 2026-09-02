@@ -19,6 +19,11 @@ function runtimeStatusLabel(state: RuntimeHostConnectionState): string {
   switch (state) {
     case 'connected':
       return translate('auto.components.status.bar.SshStatusSegment.runtime_online', 'Connected')
+    case 'runtime-unavailable':
+      return translate(
+        'auto.components.status.bar.SshStatusSegment.runtime_unavailable_transport_up',
+        'Orca unavailable'
+      )
     case 'workspace-window-closed':
       return translate(
         'auto.components.status.bar.SshStatusSegment.runtime_workspace_window_closed',
@@ -46,6 +51,7 @@ function runtimeDotColor(state: RuntimeHostConnectionState): string {
     case 'workspace-window-closed':
     case 'checking':
     case 'reconnecting':
+    case 'runtime-unavailable':
       return 'bg-yellow-500'
     case 'disconnected':
       return 'bg-muted-foreground/40'
@@ -53,7 +59,12 @@ function runtimeDotColor(state: RuntimeHostConnectionState): string {
 }
 
 function runtimeStatusTone(state: RuntimeHostConnectionState): string {
-  if (state === 'checking' || state === 'reconnecting' || state === 'workspace-window-closed') {
+  if (
+    state === 'checking' ||
+    state === 'reconnecting' ||
+    state === 'workspace-window-closed' ||
+    state === 'runtime-unavailable'
+  ) {
     return 'text-yellow-500'
   }
   return 'text-muted-foreground'
@@ -63,6 +74,7 @@ function runtimeActionLabel(state: RuntimeHostConnectionState): string | null {
   switch (state) {
     case 'connected':
     case 'workspace-window-closed':
+    case 'runtime-unavailable':
       return translate('auto.components.status.bar.SshStatusSegment.59b553e2aa', 'Disconnect')
     case 'disconnected':
       return translate('auto.components.status.bar.SshStatusSegment.63f36455cc', 'Connect')
@@ -83,6 +95,11 @@ function runtimeFailureSummary(state: RuntimeHostConnectionState): string {
       return translate(
         'auto.components.status.bar.RuntimeHostStatusRow.workspace_window_closed',
         'The workspace window is closed'
+      )
+    case 'runtime-unavailable':
+      return translate(
+        'auto.components.status.bar.RuntimeHostStatusRow.runtime_unavailable',
+        'SSH transport is connected, but the Orca runtime is unavailable'
       )
     case 'checking':
       return translate(
@@ -105,6 +122,12 @@ function runtimeFailureSummary(state: RuntimeHostConnectionState): string {
 function runtimeFailureExplanation(state: RuntimeHostConnectionState): string | null {
   if (state === 'connected' || state === 'workspace-window-closed') {
     return null
+  }
+  if (state === 'runtime-unavailable') {
+    return translate(
+      'auto.components.status.bar.RuntimeHostStatusRow.runtime_unavailable_explanation',
+      'The remote host may still be running; only the Orca runtime connection is unavailable.'
+    )
   }
   return translate(
     'auto.components.status.bar.RuntimeHostStatusRow.contact_note',

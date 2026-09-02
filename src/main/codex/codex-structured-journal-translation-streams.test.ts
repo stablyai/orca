@@ -299,6 +299,31 @@ describe('codex journal translation', () => {
     })
   })
 
+  // A frame the classifier declines is intentionally unjournaled. #17720 turned that
+  // into an admission failure, which the notification retry queue escalated to a
+  // provider force-close, so no structured session could survive its first chrome frame.
+  it('admits chrome and suppressed-benign frames without journaling them', () => {
+    const { translator, tap } = translatorWith()
+    translator.handle(TURN_STARTED)
+    const before = tap.rows.length
+    for (const method of [
+      'remoteControl/status/changed',
+      'thread/status/changed',
+      'thread/tokenUsage/updated',
+      'hook/started',
+      'fs/changed',
+      'rawResponse/completed',
+      // Delta-shaped unknown methods reach the same early-out via the name heuristic.
+      'future/somethingDelta'
+    ]) {
+      expect(translator.handle(notification(method, { status: 'disabled' }))).toEqual({
+        accepted: true
+      })
+    }
+    expect(tap.rows.length).toBe(before)
+    expect(tap.publishes()).toBe(0)
+  })
+
   it('bounds generic rows per turn while keeping the suppression visible and countable', () => {
     const { translator, tap, window } = translatorWith()
     translator.handle(TURN_STARTED)
@@ -399,7 +424,9 @@ describe('codex journal translation', () => {
     expect(tap.rows.filter((row) => row.key.includes('provider-frame-suppressed'))).toHaveLength(1)
   })
 
-  it('bounds error-surface provider frames under the generic-row cap', () => {
+  // The cap bounds noise, never evidence. #17720 dropped this exemption (and pinned the
+  // capped behavior in a test), so a noisy turn could silently swallow provider errors.
+  it('exempts error-surface provider frames from the generic-row cap', () => {
     const { translator, tap, window } = translatorWith()
     translator.handle(TURN_STARTED)
     for (let index = 0; index < MAX_CODEX_GENERIC_ROWS_PER_TURN + 3; index += 1) {
@@ -411,11 +438,15 @@ describe('codex journal translation', () => {
     const generic = tap.rows.filter(
       (row) => row.body.kind === 'status' && row.body.providerFrame !== undefined
     )
-    expect(generic).toHaveLength(MAX_CODEX_GENERIC_ROWS_PER_TURN)
+    expect(generic).toHaveLength(MAX_CODEX_GENERIC_ROWS_PER_TURN + 1)
+    expect(generic.at(-1)?.body).toMatchObject({
+      providerFrame: { kind: 'notification:future/failure' }
+    })
+    // Only the 3 capped noise frames reduce to a summary; the error is not counted there.
     expect(tap.rows.filter((row) => row.key.includes('provider-frame-suppressed'))).toHaveLength(1)
-    expect(tap.rows.at(-1)?.body).toEqual({
+    expect(tap.rows.find((row) => row.key.includes('provider-frame-suppressed'))?.body).toEqual({
       kind: 'status',
-      text: '4 more provider notifications not shown for this turn'
+      text: '3 more provider notifications not shown for this turn'
     })
   })
 

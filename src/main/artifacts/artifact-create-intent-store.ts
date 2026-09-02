@@ -207,7 +207,7 @@ export function getOrCreateArtifactCreateIntent(
   body: ArtifactWriteBody
 ): ArtifactCreateIntent {
   if (artifactContentByteLength(body.content) > ARTIFACT_MAX_CONTENT_BYTES) {
-    throw new Error('Artifact content exceeds the 5 MiB limit.')
+    throw new Error('Artifact content exceeds the 10 MiB limit.')
   }
   if (artifactIntentRequestByteLength(sourceKey, body) > ARTIFACT_MAX_REQUEST_BYTES) {
     throw new Error('Artifact create recovery record exceeds the supported size.')

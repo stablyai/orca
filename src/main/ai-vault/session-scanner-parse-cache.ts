@@ -1,7 +1,4 @@
-import {
-  openTranscriptReadStream,
-  readTranscriptSlice
-} from '../native-chat/wsl-transcript-fs-access'
+import { readTranscriptSlice } from '../native-chat/wsl-transcript-fs-access'
 import type { AiVaultSession } from '../../shared/ai-vault-types'
 import { createAntigravitySessionResumeState } from './session-scanner-antigravity-parser'
 import { parseAgentSessionFile } from './session-scanner-agent-parser'
@@ -16,13 +13,12 @@ import { countSubagentTranscripts } from './session-scanner-subagent-transcripts
 import { countOmpSubagentTranscripts } from './session-scanner-omp-subagent-transcripts'
 import type { ResumableSessionParseState, SessionFileCandidate } from './session-scanner-types'
 import { refreshCachedCodexTitle } from './session-scanner-codex-cached-title'
+import { consumeCompleteJsonlLines } from './session-scanner-jsonl-reader'
 
 // Sized past the default recency cap (1000) plus the in-scope cap (2000) so a
 // full steady-state result set stays resident between forced rescans.
 const MAX_CACHE_ENTRIES = 4096
-
 const NEWLINE_BYTE = 0x0a
-const CARRIAGE_RETURN_BYTE = 0x0d
 
 type ResumePoint = {
   state: ResumableSessionParseState
@@ -88,11 +84,15 @@ export type SessionParseStats = {
   reused: number
   incremental: number
   fullParses: number
+  // Transcripts the parser already excluded (Codex workers), re-listed after a
+  // write and dismissed without reading. Counted apart from `incremental` so a
+  // scan span still shows how much work the early stop actually removed.
+  earlyStopped: number
   bytesRead: number
 }
 
 export function createSessionParseStats(): SessionParseStats {
-  return { reused: 0, incremental: 0, fullParses: 0, bytesRead: 0 }
+  return { reused: 0, incremental: 0, fullParses: 0, earlyStopped: 0, bytesRead: 0 }
 }
 
 const cache = new Map<string, SessionParseCacheEntry>()
@@ -264,8 +264,13 @@ async function parseResumableCandidate(args: {
   // or the next resume would double-count the lines applied before the error.
   const state = canResume ? resume.state.clone() : args.stateFactory()
   const startOffset = canResume ? resume.byteOffset : 0
+  // Mirrors the reader's entry guard so a dismissed transcript is not reported
+  // as an incremental parse that read nothing.
+  const stoppedBeforeRead = state.shouldStop?.() === true
   if (args.stats) {
-    if (canResume) {
+    if (stoppedBeforeRead) {
+      args.stats.earlyStopped++
+    } else if (canResume) {
       args.stats.incremental++
     } else {
       args.stats.fullParses++
@@ -275,7 +280,11 @@ async function parseResumableCandidate(args: {
   const readResult = await consumeCompleteJsonlLines({
     path: file.path,
     start: startOffset,
-    onLine: (line) => state.consumeLine(line)
+    onLine: (line) => state.consumeLine(line),
+    // Bound: the optional hooks are declared as methods, so a parser written
+    // with method syntax must not lose `this` on the way into the reader.
+    onLineBytes: state.consumeLineBytes?.bind(state),
+    shouldStop: state.shouldStop?.bind(state)
   })
   if (args.stats) {
     args.stats.bytesRead += readResult.bytesRead
@@ -310,71 +319,4 @@ async function parseResumableCandidate(args: {
 async function endsWithNewlineAt(path: string, offset: number): Promise<boolean> {
   const slice = await readTranscriptSlice(path, offset - 1, 1, 'scan')
   return slice.length === 1 && slice[0] === NEWLINE_BYTE
-}
-
-type JsonlReadResult = {
-  consumedThrough: number
-  trailingPartialLine: string | null
-  bytesRead: number
-}
-
-// Byte-accurate replacement for readline: offsets must count bytes (not
-// UTF-8-decoded characters) so a resumed read starts exactly where the last
-// complete line ended.
-async function consumeCompleteJsonlLines(args: {
-  path: string
-  start: number
-  onLine: (line: string) => void
-}): Promise<JsonlReadResult> {
-  let consumedThrough = args.start
-  let bytesRead = 0
-  // Why a piece list: re-joining the partial line with every chunk made one
-  // oversized record (a big tool result) cost O(record^2). Joining once, when a
-  // newline finally arrives, keeps it linear.
-  let remainderParts: Buffer[] = []
-  let remainderLength = 0
-
-  const stream = openTranscriptReadStream(args.path, { start: args.start }, 'scan')
-  for await (const chunk of stream as AsyncIterable<Buffer>) {
-    bytesRead += chunk.length
-    // Why check the chunk alone: the pieces held over are all mid-line, so none
-    // of them contains a newline.
-    if (!chunk.includes(NEWLINE_BYTE)) {
-      remainderParts.push(chunk)
-      remainderLength += chunk.length
-      continue
-    }
-    const data =
-      remainderLength > 0
-        ? Buffer.concat([...remainderParts, chunk], remainderLength + chunk.length)
-        : chunk
-    remainderParts = []
-    remainderLength = 0
-    let lineStart = 0
-    let newlineIndex = data.indexOf(NEWLINE_BYTE, lineStart)
-    while (newlineIndex !== -1) {
-      let lineEnd = newlineIndex
-      if (lineEnd > lineStart && data[lineEnd - 1] === CARRIAGE_RETURN_BYTE) {
-        lineEnd--
-      }
-      args.onLine(data.toString('utf-8', lineStart, lineEnd))
-      lineStart = newlineIndex + 1
-      newlineIndex = data.indexOf(NEWLINE_BYTE, lineStart)
-    }
-    consumedThrough += lineStart
-    if (lineStart < data.length) {
-      // Copy the tail so retaining it doesn't pin the whole chunk buffer.
-      remainderParts = [Buffer.from(data.subarray(lineStart))]
-      remainderLength = data.length - lineStart
-    }
-  }
-
-  const trailingPartialLine =
-    remainderLength > 0 ? Buffer.concat(remainderParts, remainderLength).toString('utf-8') : null
-
-  return {
-    consumedThrough,
-    trailingPartialLine,
-    bytesRead
-  }
 }

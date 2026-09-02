@@ -7,6 +7,7 @@ import type { ProjectGroup } from '../../src/shared/project-group-types'
 import type { Repo } from '../../src/shared/repo-types'
 import { expect, test } from './helpers/orca-app'
 import { revealPairedClientWindow } from './helpers/paired-client-window-reveal'
+import { forwardRendererConsole } from './helpers/renderer-console-forwarding'
 import {
   createRuntimeDesktopPairingOffer,
   launchPairedElectronClient
@@ -21,11 +22,6 @@ import {
 } from './pr11346-selected-runtime-identity-oracle'
 
 async function selectRuntimeHost(page: Page, runtimeName: string): Promise<Locator> {
-  const crashDialog = page.getByRole('dialog', { name: /recoverable UI error/i })
-  if (await crashDialog.isVisible()) {
-    // Why: same-ID collision fixtures intentionally exceed terminal-workbench invariants.
-    await crashDialog.getByRole('button', { name: /Don't Send/i }).click()
-  }
   await page
     .getByRole('button', { name: /Add Project/i })
     .first()
@@ -100,6 +96,9 @@ async function runSelectedRuntimeAddJourney(
 
   const offer = await createRuntimeDesktopPairingOffer(orcaPage)
   const client = await launchPairedElectronClient(offer, testInfo, runtimeName)
+  // Why: the client renders the workbench under test, and a contained render
+  // crash only names its component stack on the renderer console.
+  forwardRendererConsole(client.page, testInfo)
   const serverUserDataDir = await electronApp.evaluate(({ app }) => app.getPath('userData'))
   const clientUserDataDir = await client.app.evaluate(({ app }) => app.getPath('userData'))
   const serverRuntime = new RuntimeClient(serverUserDataDir)

@@ -25,6 +25,13 @@ export const OXLINT_SCANS = [
 
 const SUPPRESSED_REACT_DOCTOR_DIAGNOSTICS = new Map([
   [
+    'react-doctor(no-adjust-state-on-prop-change)',
+    new Set([
+      'src/renderer/src/components/use-task-page-github-issue-draft.ts',
+      'src/renderer/src/components/use-task-page-jira-creation-state.ts'
+    ])
+  ],
+  [
     'react-doctor(no-derived-state-effect)',
     new Set([
       'src/renderer/src/components/editor/combined-diff/review-controls/use-combined-diff-view-preferences.ts'

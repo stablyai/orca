@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "updatedAt": "2026-08-23",
+  "updatedAt": "2026-08-31",
   "policy": {
     "maturityLevels": ["experimental", "soak", "blocking", "accepted-gap", "deprecated"],
     "blockingPromotion": {
@@ -2493,30 +2493,31 @@
         "https://github.com/stablyai/orca/issues/11298",
         "https://github.com/stablyai/orca/pull/11300"
       ],
-      "invariant": "Every accepted runtime socket installs message, pong, close, and error ownership before any heartbeat probe. With uninterrupted timer delivery, the first socket that arms an idle heartbeat is probed immediately and an unresponsive socket is reaped within one interval. Later sockets join the existing shared cadence without another timer or immediate sweep and are reaped within two intervals. Responsive sockets survive, pause recovery grants a fresh probe, and close or error-to-close releases connection listeners and timers.",
-      "oracle": "With one fake clock and exact socket identities, accept the first socket at 0 ms and require an immediate owned probe plus reaping at 100 ms when unresponsive. Keep a responsive first socket, accept an unresponsive later socket at 50 ms, require the same shared timer, its first probe at 100 ms, no early reap, and termination at 200 ms. Inject synchronous message, pong, close, and error events, then require exact heartbeat membership and zero retained timers/listeners after final close. Production transport tests independently cover real socket round trips, pre-auth and capacity bounds, revocation, shutdown, and half-open cleanup.",
+      "invariant": "Every accepted runtime socket installs message, pong, close, and error ownership before any heartbeat probe. Unauthenticated sockets receive no heartbeat control frames during E2EE and are bounded by the pre-auth timeout; authenticated sockets share one periodic cadence, tolerate missed probes and event-loop pause, and release listeners and timers on close or error.",
+      "oracle": "With one fake clock and exact socket identities, accept an authenticated first socket at 0 ms and require its first probe on the 100 ms tick. Accept an unauthenticated later socket at 50 ms and require no probe at the 100 ms tick; authenticate it, then require its first probe on the next shared tick and termination only after the configured consecutive-miss budget. Inject synchronous message, pong, close, and error events, then require exact heartbeat membership and zero retained timers/listeners after final close. Production transport tests independently cover real socket round trips, pre-auth and capacity bounds, revocation, shutdown, and half-open cleanup.",
       "commands": [
-        "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/rpc/ws-transport-accept-order.test.ts src/main/runtime/rpc/remote-runtime-server-heartbeat.test.ts src/main/runtime/rpc/ws-transport.test.ts"
+        "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/rpc/ws-transport-accept-order.test.ts src/main/runtime/rpc/remote-runtime-server-heartbeat.test.ts src/main/runtime/rpc/ws-transport.test.ts src/main/runtime/rpc/ws-transport-transient-packet-loss.test.ts"
       ],
       "testFiles": [
         "src/main/runtime/rpc/ws-transport-accept-order.test.ts",
         "src/main/runtime/rpc/remote-runtime-server-heartbeat.test.ts",
-        "src/main/runtime/rpc/ws-transport.test.ts"
+        "src/main/runtime/rpc/ws-transport.test.ts",
+        "src/main/runtime/rpc/ws-transport-transient-packet-loss.test.ts"
       ],
       "assertionRefs": [
         {
           "file": "src/main/runtime/rpc/ws-transport-accept-order.test.ts",
           "assertions": [
-            "the first synchronous probe observes message, pong, close, and error ownership",
-            "the first unresponsive socket is reaped at one interval",
-            "a later socket keeps the original shared timer, is first probed on the shared tick, and is reaped within two intervals",
+            "the first periodic probe observes message, pong, close, and error ownership",
+            "an authenticated unresponsive socket is reaped on the configured consecutive-miss budget",
+            "an unauthenticated later socket is not probed before authentication, then joins the original shared timer",
             "final close releases heartbeat membership, listeners, and timers"
           ]
         },
         {
           "file": "src/main/runtime/rpc/remote-runtime-server-heartbeat.test.ts",
           "assertions": [
-            "one missed probe reaps only the unresponsive client",
+            "a single missed probe does not reap the unresponsive client",
             "event-loop resume grants clients a fresh probe"
           ]
         },
@@ -2527,6 +2528,12 @@
             "pre-auth, raw TCP, and accepted WebSocket resource bounds remain enforced",
             "error and close races finalize membership once"
           ]
+        },
+        {
+          "file": "src/main/runtime/rpc/ws-transport-transient-packet-loss.test.ts",
+          "assertions": [
+            "an authenticated real WebSocket survives one swallowed pong and responds to later probes"
+          ]
         }
       ],
       "evidenceRuns": [
@@ -2534,10 +2541,10 @@
           "date": "2026-07-29",
           "runner": "local",
           "platform": "macos",
-          "command": "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/rpc/ws-transport-accept-order.test.ts src/main/runtime/rpc/remote-runtime-server-heartbeat.test.ts src/main/runtime/rpc/ws-transport.test.ts",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/rpc/ws-transport-accept-order.test.ts src/main/runtime/rpc/remote-runtime-server-heartbeat.test.ts src/main/runtime/rpc/ws-transport.test.ts src/main/runtime/rpc/ws-transport-transient-packet-loss.test.ts",
           "result": "passed",
           "durationSeconds": 0.91,
-          "summary": "Three runtime transport files and 35 tests passed with deterministic first- and later-socket cadence, exact listener/timer ownership, pause recovery, security bounds, and cleanup."
+          "summary": "Four runtime transport files and 42 tests passed with deterministic authenticated heartbeat cadence, handshake grace for later sockets, exact listener/timer ownership, pause recovery, transient packet-loss tolerance, security bounds, and cleanup."
         }
       ],
       "runtimeBudget": {
@@ -2550,7 +2557,7 @@
       },
       "redGreenEvidence": {
         "status": "complete",
-        "evidence": "On latest main and with the listener-order fix disabled, the first synchronous probe observed no message, pong, close, or error owner. The structural listener-order fix passed those assertions. The published delayed-first-sweep alternative missed the first-socket one-interval cleanup bound. A later-socket oracle now separately pins the intended shared cadence at a 100 ms first probe and 200 ms reap after acceptance at 50 ms."
+        "evidence": "On the candidate before this review fix, an authenticated first socket kept the shared timer alive while an unauthenticated socket accepted at 50 ms was pinged at the 100 ms tick; the new oracle failed. After filtering heartbeat clients to the authenticated transport map, the same byte-identical oracle passes: no pre-auth ping, first post-auth probe on the next shared tick, and bounded cleanup."
       },
       "performanceBudget": {
         "required": true,
@@ -5723,6 +5730,284 @@
       "demotionRule": "Keep experimental or demote if ownership cardinality flakes, duplicate replay reaches a second renderer, active metadata or authority moves to the wrong leaf, deep normalization regresses, or a supported provider bypasses normalization."
     },
     {
+      "id": "terminal-session.split-activation-ordering",
+      "title": "Terminal splits activate before inherited-CWD lookup settles",
+      "maturity": "experimental",
+      "protection": "partial",
+      "owner": "terminal-renderer-lifecycle",
+      "layer": "renderer-unit-and-local-transport",
+      "surfaces": [
+        "terminal pane split",
+        "inherited working directory",
+        "pre-connect terminal input",
+        "split close cleanup",
+        "pre-bind pane detach"
+      ],
+      "platforms": ["macos", "linux", "windows"],
+      "providers": ["local", "local-daemon", "ssh", "wsl", "remote-runtime"],
+      "coveredPlatforms": ["macos"],
+      "coveredProviders": ["local", "remote-runtime"],
+      "coverageNotes": "Deterministic renderer contracts hold CWD resolution behind an explicit promise, require the new pane to be created synchronously, and prove that close cancels the pending connection. A module-level stable-pane-key handoff preserves the exact CWD promise and bounded pre-connect input across whole-tab remounts, including a tab rehome between worktree buckets; stale owners are fenced, concrete PTY bind and definitive spawn failure clear the record, and explicit pane close discards it. Detach contracts reject cwd-pending and cwd-resolved deferred splits before PTY bind without mutation, carry resolved cwd for other unbound panes, and preserve persisted or live PTY handoff. Local IPC transport contracts exercise the real bounded pre-connect buffer and one live input FIFO across seeded and newly typed ordinary, acknowledged, and immediate writes, concurrent flushes, in-flight teardown, late spawn success or failure, attach failure, failed spawn, same-id reuse, stale-spawn retirement ownership, destroy, and mutable recovery metadata. The handoff registry is capped at 64 records for 15 seconds and shares the existing 1,024-entry/conservative UTF-16 input ceilings. A mocked direct-SSH authority-rotation contract proves a rejected stale spawn releases its deferred-CWD fence. The schema-v2 headful Electron benchmark records exact revision identity and attributes CWD request/settlement, PTY spawn request/result, bind, fixture unlock request/IPC write, fixture readiness, input, and first echo across 3 warmups and 20 measured cold-CWD cycles, requiring a distinct child PTY and observed child pty:exit before the next cycle. Remote-runtime coverage proves delegation remains host-owned; its host-delegated split path does not consume the local pre-connect input options, so remote-runtime input-remount replay and physical local-daemon, SSH, WSL, Linux, Windows, and folder-workspace latency journeys remain gaps.",
+      "motivatingLinks": ["https://github.com/stablyai/orca/commit/572ed1a8882"],
+      "invariant": "A terminal split creates and activates its renderer pane before an inherited-CWD lookup settles, starts its PTY only after the resolved directory is available, and cannot be externally detached while that deferred spawn remains unbound. A whole-tab remount or worktree rehome preserves the same stable pane's CWD promise and admitted local pre-connect bytes in order until a successor binds or the intent is definitively abandoned; stale owners cannot append or clear the successor's record. Other unbound panes preserve resolved cwd as startupCwd when detached. Bounded pre-connect input and later live local input share byte order, and teardown settles acknowledged writes without creating or rebinding a stale PTY. A disconnected or detached pending connect cannot bind its late fresh spawn, report its late failure through current callbacks, or ID-retire a newer same-ID owner; rejecting a stale direct-SSH spawn also releases the matching deferred-CWD fence. Natural exit cannot deliver queued work into a reused PTY id. Bound and remote-runtime splits remain owned by their execution host.",
+      "oracle": "Hold CWD resolution behind a controllable promise, invoke the production split path, and require manager.splitPane plus split telemetry before resolving it. Before PTY bind, require both cwd-pending and cwd-resolved deferred detach attempts to return null without layout, pane, tab, ownership, or focus mutation; separately require resolved cwd on an allowed unbound detach and unchanged persisted/live PTY adoption. Exercise the stable-pane handoff registry through repeated remounts and a worktree rehome, requiring the identical CWD promise, ordered ordinary/acknowledged/immediate seed replay, stale-owner fencing, 64-record/15-second bounds, and discard on bind, failure, or explicit close. Rotate a mocked direct-SSH authority while its delayed spawn is in flight, reject and disconnect the stale PTY claim, then require exactly one deferred-CWD cleanup when the delayed connect settles. At the local IPC PTY boundary, require zero connect calls while pending, the resolved CWD in spawn and local recovery metadata, one shared FIFO across seeded/new pre-connect and live ordinary/acknowledged/immediate input, prompt predecessor acknowledged-promise settlement on teardown, retirement of an unowned late fresh spawn, preservation of a newer same-ID owner, and zero stale delivery after failure, close, destroy, detach, natural exit, or same-id reuse. Capture callback exceptions must not change admission results. In visible Electron, press the real split shortcut for 3 warmup cycles, then after a cold inherited-CWD interval for each of 20 measured cycles, require an exact clean revision identity, complete focus/CWD/spawn/bind/fixture/input/echo attribution, distinct child PTYs, pane count, and child exits for every cycle; a timed-out, missing-event, or cleanup-aborted run must publish no headline latency and fail.",
+      "commands": [
+        "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/terminal-pane/terminal-pane-split-with-inherited-cwd.test.ts src/renderer/src/lib/pane-manager/pane-split-close.test.ts src/renderer/src/components/terminal-pane/resolve-split-cwd.test.ts src/renderer/src/components/terminal-pane/pty-connection-split-cwd-resolution.test.ts src/renderer/src/components/terminal-pane/terminal-pane-tab-detach.test.ts src/renderer/src/components/terminal-pane/pty-preconnect-input-buffer.test.ts src/renderer/src/components/terminal-pane/pty-transport-input-write.test.ts src/renderer/src/components/terminal-pane/deferred-split-pane-handoff.test.ts tests/e2e/terminal-split-activation-latency-artifact.unit.test.ts tests/e2e/terminal-split-activation-latency-main-probe.ts tests/e2e/terminal-split-activation-latency-phases.ts tests/e2e/terminal-split-activation-latency-report.unit.test.ts --reporter=dot",
+        // Historical evidence record retained so its seven-file command remains auditable.
+        "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/terminal-pane/terminal-pane-split-with-inherited-cwd.test.ts src/renderer/src/lib/pane-manager/pane-split-close.test.ts src/renderer/src/components/terminal-pane/resolve-split-cwd.test.ts src/renderer/src/components/terminal-pane/pty-connection-split-cwd-resolution.test.ts src/renderer/src/components/terminal-pane/terminal-pane-tab-detach.test.ts src/renderer/src/components/terminal-pane/pty-preconnect-input-buffer.test.ts src/renderer/src/components/terminal-pane/pty-transport-input-write.test.ts --reporter=dot",
+        // Historical evidence record retained so its nine-file command remains auditable.
+        "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/terminal-pane/terminal-pane-split-with-inherited-cwd.test.ts src/renderer/src/lib/pane-manager/pane-split-close.test.ts src/renderer/src/components/terminal-pane/resolve-split-cwd.test.ts src/renderer/src/components/terminal-pane/pty-connection-split-cwd-resolution.test.ts src/renderer/src/components/terminal-pane/terminal-pane-tab-detach.test.ts src/renderer/src/components/terminal-pane/pty-preconnect-input-buffer.test.ts src/renderer/src/components/terminal-pane/pty-transport-input-write.test.ts src/renderer/src/components/terminal-pane/deferred-split-pane-handoff.test.ts tests/e2e/terminal-split-activation-latency-artifact.unit.test.ts --reporter=dot",
+        // Historical schema-v1 evidence records only; their labels do not verify the checkout or harness.
+        "ORCA_TERMINAL_SPLIT_LATENCY_BENCH=1 ORCA_TERMINAL_SPLIT_LATENCY_LABEL=baseline-df14d1a2983d8339e788d0e521f1c4affd9c6d5f-headful-run1 ORCA_TERMINAL_SPLIT_LATENCY_OUTPUT=/private/tmp/orca-terminal-split-activation-baseline-df14d1a2983d8339e788d0e521f1c4affd9c6d5f-headful-run1.json pnpm exec playwright test tests/e2e/terminal-split-activation-latency.spec.ts --config tests/playwright.config.ts --project electron-headful --workers=1",
+        "ORCA_TERMINAL_SPLIT_LATENCY_BENCH=1 ORCA_TERMINAL_SPLIT_LATENCY_LABEL=candidate-d453ffcdb704764daced1b2917fddee7224389f0-headful-run2 ORCA_TERMINAL_SPLIT_LATENCY_OUTPUT=/private/tmp/orca-terminal-split-activation-candidate-d453ffcdb704764daced1b2917fddee7224389f0-headful-run2.json pnpm exec playwright test tests/e2e/terminal-split-activation-latency.spec.ts --config tests/playwright.config.ts --project electron-headful --workers=1",
+        // Exact-HEAD schema-v1 evidence records use the committed harness but predate revision metadata.
+        "ORCA_TERMINAL_SPLIT_LATENCY_BENCH=1 ORCA_TERMINAL_SPLIT_LATENCY_LABEL=candidate-962faacec8c-headful-current ORCA_TERMINAL_SPLIT_LATENCY_OUTPUT=/private/tmp/orca-terminal-split-activation-962faacec8c-headful.json pnpm exec playwright test tests/e2e/terminal-split-activation-latency.spec.ts --config tests/playwright.config.ts --project electron-headful --workers=1",
+        "ORCA_TERMINAL_SPLIT_LATENCY_BENCH=1 ORCA_TERMINAL_SPLIT_LATENCY_LABEL=candidate-962faacec8c-headful-run2 ORCA_TERMINAL_SPLIT_LATENCY_OUTPUT=/private/tmp/orca-terminal-split-activation-962faacec8c-headful-run2.json pnpm exec playwright test tests/e2e/terminal-split-activation-latency.spec.ts --config tests/playwright.config.ts --project electron-headful --workers=1",
+        // Schema-v2 evidence embeds the exact checkout identity and clean/dirty state.
+        "ORCA_TERMINAL_SPLIT_LATENCY_BENCH=1 ORCA_TERMINAL_SPLIT_LATENCY_LABEL=candidate-073e6c7b0eb-headful-clean ORCA_TERMINAL_SPLIT_LATENCY_OUTPUT=/private/tmp/orca-terminal-split-activation-073e6c7b0eb-headful-clean.json pnpm exec playwright test tests/e2e/terminal-split-activation-latency.spec.ts --config tests/playwright.config.ts --project electron-headful --workers=1"
+      ],
+      "testFiles": [
+        "src/renderer/src/components/terminal-pane/terminal-pane-split-with-inherited-cwd.test.ts",
+        "src/renderer/src/lib/pane-manager/pane-split-close.test.ts",
+        "src/renderer/src/components/terminal-pane/resolve-split-cwd.test.ts",
+        "src/renderer/src/components/terminal-pane/pty-connection-split-cwd-resolution.test.ts",
+        "src/renderer/src/components/terminal-pane/terminal-pane-tab-detach.test.ts",
+        "src/renderer/src/components/terminal-pane/pty-preconnect-input-buffer.test.ts",
+        "src/renderer/src/components/terminal-pane/pty-transport-input-write.test.ts",
+        "src/renderer/src/components/terminal-pane/deferred-split-pane-handoff.test.ts",
+        "tests/e2e/terminal-split-activation-latency-artifact.unit.test.ts",
+        "tests/e2e/terminal-split-activation-latency-main-probe.ts",
+        "tests/e2e/terminal-split-activation-latency-phases.ts",
+        "tests/e2e/terminal-split-activation-latency-report.unit.test.ts",
+        "tests/e2e/terminal-split-activation-latency.spec.ts"
+      ],
+      "assertionRefs": [
+        {
+          "file": "src/renderer/src/components/terminal-pane/terminal-pane-split-with-inherited-cwd.test.ts",
+          "assertions": [
+            "creates and records the split before pending CWD resolution",
+            "passes the resolved CWD promise without reviving a stale manager",
+            "rapid nested splits reuse one pending CWD lookup",
+            "keeps remote-runtime split ownership on its execution host"
+          ]
+        },
+        {
+          "file": "src/renderer/src/lib/pane-manager/pane-split-close.test.ts",
+          "assertions": ["focuses the new pane before publishing an unresolved CWD spawn hint"]
+        },
+        {
+          "file": "src/renderer/src/components/terminal-pane/resolve-split-cwd.test.ts",
+          "assertions": [
+            "preserves a deferred split fence when OSC 7 updates cwd",
+            "clears a settled deferred entry only for matching promise identity",
+            "keeps a newer deferred lookup when an older cleanup callback arrives"
+          ]
+        },
+        {
+          "file": "src/renderer/src/components/terminal-pane/pty-connection-split-cwd-resolution.test.ts",
+          "assertions": [
+            "starts no PTY connection before inherited CWD resolves",
+            "applies the resolved directory to transport options",
+            "disposing the split before resolution cancels the pending spawn",
+            "invokes deferred-CWD cleanup exactly once after an authority-rotated direct-SSH spawn is disconnected and its delayed connect settles"
+          ]
+        },
+        {
+          "file": "src/renderer/src/components/terminal-pane/terminal-pane-tab-detach.test.ts",
+          "assertions": [
+            "rejects a deferred split while inherited CWD is pending without mutation",
+            "continues rejecting after CWD resolves until PTY bind",
+            "carries resolved CWD as startupCwd for an allowed unbound detach",
+            "preserves persisted and live remote PTY detach handoff"
+          ]
+        },
+        {
+          "file": "src/renderer/src/components/terminal-pane/pty-preconnect-input-buffer.test.ts",
+          "assertions": [
+            "concurrent flush calls share one worker and preserve mixed input order",
+            "clear settles an in-flight acknowledged write before its late resolve or reject",
+            "in-flight acknowledged input remains charged to entry and code-unit caps"
+          ]
+        },
+        {
+          "file": "src/renderer/src/components/terminal-pane/pty-transport-input-write.test.ts",
+          "assertions": [
+            "ordinary, acknowledged, and immediate pre-connect input flushes in byte order",
+            "pending acknowledged input settles on connect, destroy, and spawn failure",
+            "disconnect, destroy, and natural exit cancel an in-flight acknowledged write without blocking connect",
+            "live acknowledged input blocks later ordinary and immediate writes at its invocation position",
+            "the preconnect-to-live transition preserves the same input FIFO",
+            "disconnect and detach retire a late fresh spawn and suppress late failures before they reach current callbacks",
+            "natural exit fences queued ordinary and acknowledged chunks across same-id reuse",
+            "buffered exit and attach failure clear retained input",
+            "ordinary and acknowledged write failures drop later input without leaving promises pending",
+            "entry and code-unit ceilings bound pre-connect input retention",
+            "local recovery metadata observes the resolved split CWD",
+            "a stale fresh-spawn completion cannot retire a newer same-ID owner"
+          ]
+        },
+        {
+          "file": "src/renderer/src/components/terminal-pane/deferred-split-pane-handoff.test.ts",
+          "assertions": [
+            "hands the same cwd promise and buffered input to a remounted leaf in order",
+            "keeps input across repeated remounts and fences stale owners",
+            "releases an unmounted owner without dropping its pending handoff",
+            "retains input within the shared preconnect entry and code-unit caps",
+            "evicts the oldest handoff when the record cap is reached",
+            "expires an abandoned handoff after the bounded remount window"
+          ]
+        },
+        {
+          "file": "tests/e2e/terminal-split-activation-latency-artifact.unit.test.ts",
+          "assertions": [
+            "writes a passing benchmark report to the requested artifact path",
+            "fails when the benchmark artifact path cannot be written"
+          ]
+        },
+        {
+          "file": "tests/e2e/terminal-split-activation-latency-main-probe.ts",
+          "assertions": [
+            "attributes CWD and PTY spawn request/settlement events to the source and child PTYs",
+            "captures the fixture unlock carriage return on both ordinary and acknowledged IPC channels",
+            "restores the intercepted IPC handlers and listener when the probe is disposed"
+          ]
+        },
+        {
+          "file": "tests/e2e/terminal-split-activation-latency-phases.ts",
+          "assertions": [
+            "merges main-process events by operation and PTY identity without cross-cycle attribution",
+            "requires every activation, fixture, input, echo, pane, PTY, and cleanup observation for success",
+            "reports each attributed phase distribution with non-negative cross-clock durations"
+          ]
+        },
+        {
+          "file": "tests/e2e/terminal-split-activation-latency-report.unit.test.ts",
+          "assertions": [
+            "attributes main-process phases to the matching source and child PTYs",
+            "embeds schema-v2 revision identity and summarizes the attributed phases",
+            "invalidates a sample when the actual fixture-unlock IPC write is missing"
+          ]
+        },
+        {
+          "file": "tests/e2e/terminal-split-activation-latency.spec.ts",
+          "assertions": [
+            "requires a visible BrowserWindow and visible document before sampling",
+            "records schema-v2 revision identity plus attributed CWD, spawn, bind, fixture-ready, input, and echo phases",
+            "records 3 warmups, then 20 measured real-shortcut cycles after cold inherited-CWD intervals",
+            "requires every split to focus, bind a PTY distinct from its source, and echo immediate input",
+            "observes each closed child PTY exit before starting the next cycle",
+            "publishes headline latency only for a fully successful 3-warmup/20-measured run"
+          ]
+        }
+      ],
+      "evidenceRuns": [
+        {
+          "date": "2026-08-30",
+          "runner": "local",
+          "platform": "macos",
+          "result": "passed",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/terminal-pane/terminal-pane-split-with-inherited-cwd.test.ts src/renderer/src/lib/pane-manager/pane-split-close.test.ts src/renderer/src/components/terminal-pane/resolve-split-cwd.test.ts src/renderer/src/components/terminal-pane/pty-connection-split-cwd-resolution.test.ts src/renderer/src/components/terminal-pane/terminal-pane-tab-detach.test.ts src/renderer/src/components/terminal-pane/pty-preconnect-input-buffer.test.ts src/renderer/src/components/terminal-pane/pty-transport-input-write.test.ts --reporter=dot",
+          "durationSeconds": 56.59,
+          "summary": "Seven focused files and 78 tests passed. Vitest reported 49.92 seconds and the measured wall time was 56.59 seconds; coverage includes split creation and focus ordering, nested CWD lineage, promise-identity and SSH authority-rotation cleanup fencing, full pre-bind detach fencing, resolved-CWD detach handoff, close-cancellation, single-FIFO ordering, late-spawn retirement and error suppression, preservation of a newer same-ID owner, generation fencing, in-flight settlement across explicit teardown and natural exit, attach cleanup, bounded retention, and existing input-write contracts."
+        },
+        {
+          "date": "2026-08-31",
+          "runner": "local",
+          "platform": "macos",
+          "result": "passed",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/terminal-pane/terminal-pane-split-with-inherited-cwd.test.ts src/renderer/src/lib/pane-manager/pane-split-close.test.ts src/renderer/src/components/terminal-pane/resolve-split-cwd.test.ts src/renderer/src/components/terminal-pane/pty-connection-split-cwd-resolution.test.ts src/renderer/src/components/terminal-pane/terminal-pane-tab-detach.test.ts src/renderer/src/components/terminal-pane/pty-preconnect-input-buffer.test.ts src/renderer/src/components/terminal-pane/pty-transport-input-write.test.ts src/renderer/src/components/terminal-pane/deferred-split-pane-handoff.test.ts tests/e2e/terminal-split-activation-latency-artifact.unit.test.ts --reporter=dot",
+          "durationSeconds": 44.43,
+          "summary": "Nine focused files and 96 tests passed. Vitest reported 37.78 seconds and measured wall time was 44.43 seconds; the run adds stable-pane CWD/input handoff, repeated-remount stale-owner fencing, bounded 64-record/15-second retention, seeded-input caps, ordered ordinary/acknowledged/immediate replay, predecessor acknowledged-promise settlement, capture-callback failure containment, and benchmark-artifact write-failure coverage to the existing split, detach, CWD, and local transport contracts."
+        },
+        {
+          "date": "2026-08-31",
+          "runner": "local",
+          "platform": "macos",
+          "result": "passed",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/terminal-pane/terminal-pane-split-with-inherited-cwd.test.ts src/renderer/src/lib/pane-manager/pane-split-close.test.ts src/renderer/src/components/terminal-pane/resolve-split-cwd.test.ts src/renderer/src/components/terminal-pane/pty-connection-split-cwd-resolution.test.ts src/renderer/src/components/terminal-pane/terminal-pane-tab-detach.test.ts src/renderer/src/components/terminal-pane/pty-preconnect-input-buffer.test.ts src/renderer/src/components/terminal-pane/pty-transport-input-write.test.ts src/renderer/src/components/terminal-pane/deferred-split-pane-handoff.test.ts tests/e2e/terminal-split-activation-latency-artifact.unit.test.ts tests/e2e/terminal-split-activation-latency-main-probe.ts tests/e2e/terminal-split-activation-latency-phases.ts tests/e2e/terminal-split-activation-latency-report.unit.test.ts --reporter=dot",
+          "durationSeconds": 4.14,
+          "summary": "The updated twelve-path focused command passed 99 tests (10 runnable test files plus 2 benchmark support modules), including schema-v2 main-process phase attribution, report revision identity, fixture IPC-write validation, stable-pane handoff, ordered pre-connect/live input, cleanup, detach, failure, and same-ID ownership contracts."
+        },
+        {
+          "date": "2026-08-30",
+          "runner": "local",
+          "platform": "macos",
+          "result": "passed",
+          "command": "ORCA_TERMINAL_SPLIT_LATENCY_BENCH=1 ORCA_TERMINAL_SPLIT_LATENCY_LABEL=baseline-df14d1a2983d8339e788d0e521f1c4affd9c6d5f-headful-run1 ORCA_TERMINAL_SPLIT_LATENCY_OUTPUT=/private/tmp/orca-terminal-split-activation-baseline-df14d1a2983d8339e788d0e521f1c4affd9c6d5f-headful-run1.json pnpm exec playwright test tests/e2e/terminal-split-activation-latency.spec.ts --config tests/playwright.config.ts --project electron-headful --workers=1",
+          "durationSeconds": 72,
+          "summary": "At baseline df14d1a2983d8339e788d0e521f1c4affd9c6d5f, the visible BrowserWindow and document completed 3/3 warmups followed by 20/20 measured cold-CWD cycles with every event present, distinct child PTYs, and observed child exits. Shortcut-to-focus p50/p95/max was 65.7/88.7/102.6 ms, PTY bind was 122.8/154.0/159.7 ms, and first echo was 203.8/264.2/332.7 ms. Artifact SHA-256: 6d860cd0cd210f55f2349a197318248af488042117b20c08b6831160950c3277."
+        },
+        {
+          "date": "2026-08-30",
+          "runner": "local",
+          "platform": "macos",
+          "result": "passed",
+          "command": "ORCA_TERMINAL_SPLIT_LATENCY_BENCH=1 ORCA_TERMINAL_SPLIT_LATENCY_LABEL=candidate-d453ffcdb704764daced1b2917fddee7224389f0-headful-run2 ORCA_TERMINAL_SPLIT_LATENCY_OUTPUT=/private/tmp/orca-terminal-split-activation-candidate-d453ffcdb704764daced1b2917fddee7224389f0-headful-run2.json pnpm exec playwright test tests/e2e/terminal-split-activation-latency.spec.ts --config tests/playwright.config.ts --project electron-headful --workers=1",
+          "durationSeconds": 72,
+          "summary": "At candidate d453ffcdb704764daced1b2917fddee7224389f0, the visible BrowserWindow and document completed 3/3 warmups followed by 20/20 measured cold-CWD cycles with every event present, distinct child PTYs, and observed child exits. Shortcut-to-focus p50/p95/max was 12.8/14.4/16.5 ms, PTY bind was 177.0/316.1/333.3 ms, and first echo was 268.6/627.4/710.7 ms. Artifact SHA-256: 9aef7fa842c732eb74f0066a77b2a0336e8f956a06ca61387f9999d6e76213cc."
+        },
+        {
+          "date": "2026-08-31",
+          "runner": "local",
+          "platform": "macos",
+          "result": "passed",
+          "command": "ORCA_TERMINAL_SPLIT_LATENCY_BENCH=1 ORCA_TERMINAL_SPLIT_LATENCY_LABEL=candidate-962faacec8c-headful-current ORCA_TERMINAL_SPLIT_LATENCY_OUTPUT=/private/tmp/orca-terminal-split-activation-962faacec8c-headful.json pnpm exec playwright test tests/e2e/terminal-split-activation-latency.spec.ts --config tests/playwright.config.ts --project electron-headful --workers=1",
+          "durationSeconds": 72,
+          "summary": "At exact HEAD 962faacec8c, the visible BrowserWindow and document completed 3/3 warmups followed by 20/20 measured cold-CWD cycles with every event present, distinct child PTYs, and observed child exits. Shortcut-to-focus p50/p95/max was 12.6/13.7/13.7 ms, PTY bind was 140.5/399.1/464.1 ms, and first echo was 192.0/519.3/2343.1 ms. Artifact SHA-256: 875e9d37dc711472a81438e4bbdbc8cbc7aada8c961d14195c024d8da350b9e2."
+        },
+        {
+          "date": "2026-08-31",
+          "runner": "local",
+          "platform": "macos",
+          "result": "passed",
+          "command": "ORCA_TERMINAL_SPLIT_LATENCY_BENCH=1 ORCA_TERMINAL_SPLIT_LATENCY_LABEL=candidate-962faacec8c-headful-run2 ORCA_TERMINAL_SPLIT_LATENCY_OUTPUT=/private/tmp/orca-terminal-split-activation-962faacec8c-headful-run2.json pnpm exec playwright test tests/e2e/terminal-split-activation-latency.spec.ts --config tests/playwright.config.ts --project electron-headful --workers=1",
+          "durationSeconds": 72,
+          "summary": "At exact HEAD 962faacec8c, the visible BrowserWindow and document completed 3/3 warmups followed by 20/20 measured cold-CWD cycles with every event present, distinct child PTYs, and observed child exits. Shortcut-to-focus p50/p95/max was 12.8/14.0/14.3 ms, PTY bind was 236.5/654.0/687.3 ms, and first echo was 566.8/1191.5/1219.7 ms. Artifact SHA-256: 4f66b93e5c936ade05f880010f4ec027385d5c89893430169af91c7fdfbe1d06."
+        },
+        {
+          "date": "2026-08-31",
+          "runner": "local",
+          "platform": "macos",
+          "result": "passed",
+          "command": "ORCA_TERMINAL_SPLIT_LATENCY_BENCH=1 ORCA_TERMINAL_SPLIT_LATENCY_LABEL=candidate-073e6c7b0eb-headful-clean ORCA_TERMINAL_SPLIT_LATENCY_OUTPUT=/private/tmp/orca-terminal-split-activation-073e6c7b0eb-headful-clean.json pnpm exec playwright test tests/e2e/terminal-split-activation-latency.spec.ts --config tests/playwright.config.ts --project electron-headful --workers=1",
+          "durationSeconds": 87.6,
+          "summary": "At exact clean HEAD 073e6c7b0eb1c0ccbb115db1528b641901997c73, the schema-v2 artifact records dirty=false, a visible BrowserWindow/document, and 3/3 warmups plus 20/20 measured cycles with every missing-event counter at zero, distinct child PTYs, and observed child exits. Measured focus p50/p95/max was 12.0/13.6/14.7 ms; attributed CWD lookup was 40/97/103 ms, CWD-settle to spawn request 1/4/4 ms, spawn request to result 48/120/122 ms, and spawn result to bind 2.1/2.5/2.5 ms. Fixture unlock request to IPC write was 0.5/0.8/0.9 ms, IPC write to fixture-ready parse was 35.1/87.4/141.8 ms, and input to first echo was 1.3/3.5/3.9 ms. Total shortcut-to-bind was 113.5/161.3/162.7 ms and shortcut-to-first-echo was 158.5/240.7/291.2 ms. Artifact SHA-256: 1e7ff9e658b717056273d64ecdf662cc6b5776bb6dae1827ed213b7647e4a5fb."
+        }
+      ],
+      "evidenceProcedure": "Run the benchmark spec in a visible macOS Electron project from a clean primary worktree, complete 3 warmups followed by 20 measured cold-CWD cycles, require zero missing events and successful cleanup, save the schema-v2 JSON report, and record its SHA-256 plus embedded revision identity. The four older records are schema-v1 historical audit records whose labels do not verify the checkout or include phase attribution; the clean schema-v2 record is the current candidate evidence. A paired baseline/final rerun with one revision-verifying harness remains required before promotion or a readiness comparison claim.",
+      "runtimeBudget": {
+        "p95Seconds": 240,
+        "scope": "the full listed gate command set: one current twelve-path focused invocation (ten runnable test files plus two benchmark support modules), one historical nine-file unit invocation, one historical seven-file unit invocation, and five opt-in 3-warmup/20-measured visible Electron benchmark invocations (four schema-v1 historical records plus one clean schema-v2 record)"
+      },
+      "flakeHistory": {
+        "status": "not-started",
+        "evidence": "The focused promise-barrier, remount-handoff, benchmark-artifact, and schema-v2 attribution suite passes locally in 99 tests; the clean visible benchmark passes 3/3 warmups and 20/20 measured cycles with zero missing events. Its first attempt hit a transient warmup cleanup-dialog click timeout, then the exact command passed on retry without a launch, profile, or port workaround. Routed CI and soak history have not started. Historical benchmark labels do not verify the product checkout or embed revision identity."
+      },
+      "redGreenEvidence": {
+        "status": "partial",
+        "evidence": "Before the production seam landed, the split assertion failed with zero manager calls while CWD was pending, and the transport assertion rejected the first pre-connect input. Before the detach fence, a deferred split could be removed after CWD resolved but before PTY bind, dropping its pre-connect input. Before the single-flight hardening, the concurrent-flush oracle delivered ordinary input before the earlier acknowledged write and clear left the in-flight promise pending. Before stale-spawn ownership fencing, the combined deferred-connect and newer same-ID attach fixture called kill on the current PTY. An intentional one-line revert of deferred-CWD cleanup in the stale direct-SSH claim branch failed its focused callback assertion with zero calls instead of one; restoring it passed the prior focused tests. The remount-handoff, transport, artifact-write, and schema-v2 attribution regressions are green in the 99-test twelve-path run, but isolated intentional-revert evidence for each cleanup branch remains outstanding."
+      },
+      "performanceBudget": {
+        "required": true,
+        "evidence": "Pane creation and focus add no timer, polling, provider inventory, or subprocess work. CWD resolution remains one existing bounded request off the visible activation path, and detach admission adds only bounded map and record lookups. The remount handoff adds one module-level map lookup per pane lifecycle, a 64-record cap, and a 15-second expiry; it retains no unbounded payload. Pre-connect input, including an in-flight acknowledged write and remount seed replay, is capped at 1,024 entries and a conservative UTF-16 ceiling derived from the existing terminal-input byte limit, drains through one worker in order, and clears on teardown or failed connect. The historical schema-v1 same-mode pair recorded shortcut-to-focus p50/p95/max changing from 65.7/88.7/102.6 ms to 12.8/14.4/16.5 ms; those labels do not embed revision identity, so the comparison is directional evidence only. The clean schema-v2 candidate attributes focus at 12.0/13.6/14.7 ms while CWD lookup takes 40/97/103 ms and spawn request-to-result takes 48/120/122 ms, demonstrating that provider/process startup follows activation rather than blocking it. In that clean run, shortcut-to-bind is 113.5/161.3/162.7 ms, fixture IPC-write-to-ready is 35.1/87.4/141.8 ms, and input-to-echo is 1.3/3.5/3.9 ms; these readiness phases are diagnostic, one-host descriptive measurements, and no clean schema-v2 baseline exists to support a readiness improvement or regression claim. The n=20 empirical p95 values are descriptive, are not a distribution guarantee, and are not CI-enforced."
+      },
+      "promotionCriteria": [
+        "Record complete red/green evidence for close, remount/rehome handoff, mixed-input ordering, metadata, and failure cleanup.",
+        "Collect 100 consecutive focused CI passes or 14 days without an unexplained flake.",
+        "Run the committed real-shortcut Electron benchmark in routed CI or soak before enforcing a latency budget.",
+        "Collect physical local-daemon, SSH or WSL plus Linux, Windows, and folder-workspace evidence before claiming provider-complete coverage."
+      ],
+      "knownGaps": [
+        "The clean schema-v2 candidate run and the historical schema-v1 comparison records ran on one Apple-silicon macOS host with a synthetic POSIX echo shell and a git-backed workspace; their n=20 empirical p95 values are descriptive and not CI-enforced.",
+        "No physical local-daemon, SSH, WSL, Linux, Windows, or folder-workspace latency journey has run; the synthetic fixture is currently skipped on Windows because it requires a POSIX shell.",
+        "Remote-runtime split creation remains host-delegated and its transport does not consume the local pre-connect seed/capture options; CWD handoff is covered, but remote-runtime pre-connect input replay has no implementation or evidence.",
+        "The four stored schema-v1 artifacts predate the final harness attribution/reporting and do not embed revision identity; the clean schema-v2 candidate artifact is revision-verified, but both product revisions still need a paired schema-v2 rerun with one committed harness before promotion.",
+        "No forced-failure visible benchmark artifact has been recorded; the focused artifact-write and missing-event report contracts verify local failure handling, while failure-report serialization remains unverified by a full visible run.",
+        "No clean schema-v2 baseline phase artifact exists, so the attributed CWD, spawn, fixture-ready, bind, and echo timings diagnose where time is spent but do not establish a shell-readiness improvement or regression."
+      ],
+      "demotionRule": "Keep experimental or demote if pane activation waits on CWD, a deferred split can detach before PTY bind, a remount or rehome loses its stable CWD/input handoff, stale owners mutate a successor record, detached cwd is lost, input reorders or remains pending after cleanup, a closed pane can spawn, stale retirement kills a newer same-ID owner, remote-runtime delegation creates a competing local pane, or the focused suite flakes without an identified product or harness cause."
+    },
+    {
       "id": "terminal-session.kill-all-surface-cleanup",
       "title": "Kill all sessions removes only the confirmed terminal surfaces and current bindings",
       "maturity": "experimental",
@@ -8194,9 +8479,7 @@
       "assertionRefs": [
         {
           "file": "tests/e2e/persisted-session-production-upgrade.spec.ts",
-          "assertions": [
-            "upgrades a legacy daemon session and keeps it stable after relaunch"
-          ]
+          "assertions": ["upgrades a legacy daemon session and keeps it stable after relaunch"]
         }
       ],
       "evidenceRuns": [
@@ -13970,14 +14253,14 @@
       "providers": ["local", "daemon", "ssh"],
       "coveredPlatforms": ["macos"],
       "coveredProviders": ["local", "ssh"],
-      "coverageNotes": "Deterministic renderer and IPC-transport tests prove count and text ceilings, oldest-reply shedding, explicit query-reply source routing, ordinary-input preservation, one-reply-per-write delivery for OSC, DA1, and CPR replies, real xterm OSC reply generation, drain-failure containment, and clear/reuse generation fencing. Remote-runtime tests preserve separate query-reply writes across pending input, async validation, and viewport-claim buffering. Host-contract tests prove a later DA1/CPR reply cannot overtake a deferred OSC reply, including a coalesced legacy-client payload. Live macOS Electron tests cover local PTY OSC replies and interactive typing; a macOS-hosted Docker OpenSSH test proves an upstream-node-pty Linux relay keeps OSC/DA1 replies out of the next fish child's stdin. No live daemon, paired-runtime, WSL, physical Linux/Windows client, or binary mixed-version run is registered.",
+      "coverageNotes": "Deterministic renderer and IPC-transport tests prove count and text ceilings, oldest-reply shedding, explicit query-reply source routing, ordinary-input preservation, acknowledged-write FIFO barriers, single-worker drain reentrancy, one-reply-per-write delivery for OSC, DA1, and CPR replies, real xterm OSC reply generation, drain-failure containment, teardown settlement, and clear/reuse generation fencing. Remote-runtime tests preserve separate query-reply writes across pending input, async validation, and viewport-claim buffering. Host-contract tests prove a later DA1/CPR reply cannot overtake a deferred OSC reply, including a coalesced legacy-client payload. Live macOS Electron tests cover local PTY OSC replies and interactive typing; a macOS-hosted Docker OpenSSH test proves an upstream-node-pty Linux relay keeps OSC/DA1 replies out of the next fish child's stdin. No live daemon, paired-runtime, WSL, physical Linux/Windows client, or binary mixed-version run is registered.",
       "motivatingLinks": [
         "https://github.com/stablyai/orca/issues/13137",
         "https://github.com/stablyai/orca/issues/7329",
         "https://github.com/stablyai/orca/issues/13892"
       ],
-      "invariant": "The desktop PTY input queue retains at most 64 explicitly sourced pending terminal query replies and 4096 UTF-16 code units. Every retained reply reaches the provider as one atomic write, and the host writes each reply the moment it accepts it, so replies reach the PTY in the order they were produced with no queue that could reorder them. A reply's own echo is contained on the output side by projecting its known echo shapes; the ESC-initial verbatim shape is matched only when complete, never held as a partial, so a query torn at its own ESC is still answered. Overflow removes only the oldest query replies, never ordinary input except the documented modified-F3/CPR byte collision, and drain failures cannot clear a newer queue generation.",
-      "oracle": "Synchronously enqueue separate 10,000-entry OSC and DA1 reply floods before the scheduled drain and assert that only the initial immediate reply and newest 64 pending replies are written, each as one provider write, before a trailing keystroke. At the host boundary, defer an OSC reply and assert that separate or legacy-coalesced DA1/CPR replies flush after it in observed query order. At the remote-runtime boundary, preserve separate writes around pending ordinary input, async validation, and viewport-claim buffering. Repeat behind 10,000 ordinary inputs and exercise the text ceiling, real xterm generation, provider-write failure, rejected yield, and clear/reuse generation fencing.",
+      "invariant": "The desktop PTY input queue retains at most 64 explicitly sourced pending terminal query replies and 4096 UTF-16 code units. Every retained reply reaches the provider as one atomic write, and ordinary, acknowledged, and reply input share one invocation-ordered FIFO so no later write overtakes an acknowledged write. Reentrant write callbacks cannot start a second drain worker or strand input admitted after clear/reuse. A reply's own echo is contained on the output side by projecting its known echo shapes; the ESC-initial verbatim shape is matched only when complete, never held as a partial, so a query torn at its own ESC is still answered. Overflow removes only the oldest query replies, never ordinary input except the documented modified-F3/CPR byte collision, and failure or teardown cannot clear a newer queue generation or strand an acknowledged promise.",
+      "oracle": "Synchronously enqueue separate 10,000-entry OSC and DA1 reply floods before the scheduled drain and assert that only the initial immediate reply and newest 64 pending replies are written, each as one provider write, before a trailing keystroke. Stall an acknowledged write between earlier and later ordinary/reply input, then require teardown to settle it and same-id reuse to receive no stale tail. Reenter the queue synchronously from an acknowledged write with both enqueue and clear/reuse, requiring one drain and fresh input delivery only after the stale acknowledged write settles false. At the host boundary, defer an OSC reply and assert that separate or legacy-coalesced DA1/CPR replies flush after it in observed query order. At the remote-runtime boundary, preserve separate writes around pending ordinary input, async validation, and viewport-claim buffering. Repeat behind 10,000 ordinary inputs and exercise the text ceiling, real xterm generation, provider-write failure, rejected yield, and clear/reuse generation fencing.",
       "commands": [
         "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/terminal-pane/pty-input-write-queue.test.ts src/renderer/src/components/terminal-pane/pty-transport-input-write.test.ts src/shared/terminal-query-reply.test.ts src/shared/pty-startup-ingress-live-query-reply.test.ts src/shared/pty-startup-reply-echo-shapes.test.ts",
         "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/terminal-pane/remote-runtime-pty-batching.test.ts src/renderer/src/components/terminal-pane/remote-runtime-pty-query-reply-immediate.test.ts src/renderer/src/components/terminal-pane/remote-runtime-pty-transport-input-coalescing.test.ts",
@@ -14009,14 +14292,20 @@
             "real xterm OSC 10/11 query handlers remain subject to the same retention ceiling",
             "retained OSC, DA1, and CPR replies stay one provider write each and both OSC and DA1 floods remain bounded",
             "provider-write and yield failures settle without unhandled rejection, repeated same-generation admission, or stale-generation clearing",
-            "clear releases saturated reply accounting and fences in-flight validation before later input"
+            "clear releases saturated reply accounting and fences in-flight validation before later input",
+            "acknowledged input is serialized between earlier and later ordinary/reply writes",
+            "clear settles active and pending acknowledged input before same-id queue reuse",
+            "reentrant enqueue cannot start a second drain worker past an unacknowledged write",
+            "reentrant clear captures the stale cancellation and continues draining fresh input"
           ]
         },
         {
           "file": "src/renderer/src/components/terminal-pane/pty-transport-input-write.test.ts",
           "assertions": [
             "sendInputImmediate applies the reply ceiling while sendInput preserves a reply-shaped ordinary payload in exact IPC write order",
-            "a thrown renderer write triggers one owning-transport recovery callback and rejects later input in that queue generation"
+            "a thrown renderer write triggers one owning-transport recovery callback and rejects later input in that queue generation",
+            "live and preconnect acknowledged writes remain FIFO barriers for later ordinary and immediate input",
+            "disconnect, detach, and natural exit settle acknowledged writes and fence same-id stale chunks"
           ]
         },
         {
@@ -14072,13 +14361,13 @@
       ],
       "evidenceRuns": [
         {
-          "date": "2026-08-25",
+          "date": "2026-08-30",
           "runner": "local",
           "platform": "macos",
           "command": "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/terminal-pane/pty-input-write-queue.test.ts src/renderer/src/components/terminal-pane/pty-transport-input-write.test.ts src/shared/terminal-query-reply.test.ts src/shared/pty-startup-ingress-live-query-reply.test.ts src/shared/pty-startup-reply-echo-shapes.test.ts",
           "result": "passed",
-          "durationSeconds": 1.05,
-          "summary": "Five files and 92 tests passed, including the live-pty echo-shape transcript, including explicit IPC reply-source routing, the 10,000-reply count ceiling, text ceiling, 10,000-entry ordinary backlog preservation, real xterm OSC query flood, single-shot drain-failure recovery, one-reply-per-write echo containment, and clear/reuse generation fencing."
+          "durationSeconds": 15,
+          "summary": "Five files and 149 tests passed in 15.16 seconds, including explicit IPC reply-source routing, the 10,000-reply count and text ceilings, 10,000-entry ordinary backlog preservation, acknowledged-write FIFO barriers, synchronous reentrancy fencing, prompt teardown settlement, same-id generation fencing, real xterm OSC query floods, single-shot drain-failure recovery, and one-reply-per-write echo containment."
         },
         {
           "date": "2026-08-09",
@@ -14127,7 +14416,7 @@
       },
       "redGreenEvidence": {
         "status": "partial",
-        "evidence": "Without the branch's admission cap, the 10,000-reply fixture writes all replies before the trailing keystroke. Before the source-routing repair, the queue had no API capable of distinguishing reply-shaped ordinary input; before failure containment, a thrown provider write rejected waitForDrain and Vitest recorded an unhandled rejection; the first containment pass retried a failed generation and invoked recovery twice; before generation fencing, a rejected stale yield cleared fresh input. No saved intentional-break artifact is attached yet."
+        "evidence": "Without the branch's admission cap, the 10,000-reply fixture writes all replies before the trailing keystroke. Before the source-routing repair, the queue had no API capable of distinguishing reply-shaped ordinary input; before failure containment, a thrown provider write rejected waitForDrain and Vitest recorded an unhandled rejection; the first containment pass retried a failed generation and invoked recovery twice; before generation fencing, a rejected stale yield cleared fresh input. Before reentrancy fencing, a synchronous accepted-write callback started a second drain that falsely accepted the pending write; clear/reuse also captured the replacement generation's cancellation and stranded fresh input. No saved intentional-break artifact is attached yet."
       },
       "performanceBudget": {
         "required": true,

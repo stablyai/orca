@@ -238,10 +238,11 @@ describe('createHostedReview', () => {
       if (args[0] === 'status') {
         return { stdout: '', stderr: '' }
       }
-      // Why: base-on-remote probe (Change 2 enforcement) — the default base
-      // resolves to a remote-tracking branch so create-time validation passes.
-      if (args[0] === 'for-each-ref') {
-        return { stdout: 'refs/remotes/origin/main\n', stderr: '' }
+      if (args[0] === 'remote') {
+        return { stdout: 'origin\n', stderr: '' }
+      }
+      if (args[0] === 'show-ref') {
+        return { stdout: 'abc refs/remotes/origin/main\n', stderr: '' }
       }
       if (args[0] === 'log' && args.includes('--pretty=%s')) {
         return { stdout: 'Feature title\n', stderr: '' }
@@ -322,11 +323,13 @@ describe('createHostedReview', () => {
   })
 
   it('blocks creation with actionable copy when the submitted base is local-only', async () => {
-    // for-each-ref falls through to '' → the submitted stacked parent is not on
-    // the remote, so create-time enforcement blocks with actionable copy.
+    // A bulk show-ref probe exits 1 when none of its requested refs exist.
     gitExecFileAsyncMock.mockImplementation(async (args: string[]) => {
       if (args[0] === 'rev-parse') {
         return { stdout: 'feature\n', stderr: '' }
+      }
+      if (args[0] === 'show-ref') {
+        throw Object.assign(new Error('missing ref'), { code: 1 })
       }
       return { stdout: '', stderr: '' }
     })
@@ -550,9 +553,11 @@ describe('createHostedReview', () => {
         if (args[0] === 'rev-parse' && args[1] === '--abbrev-ref' && args[2] === 'HEAD') {
           return { stdout: 'feature\n', stderr: '' }
         }
-        if (args[0] === 'for-each-ref') {
-          // Base-on-remote probe (Change 2) runs on the SSH host; base is pushed.
-          return { stdout: 'refs/remotes/origin/main\n', stderr: '' }
+        if (args[0] === 'remote') {
+          return { stdout: 'origin\n', stderr: '' }
+        }
+        if (args[0] === 'show-ref') {
+          return { stdout: 'abc refs/remotes/origin/main\n', stderr: '' }
         }
         if (args[0] === 'log' && args.includes('--pretty=%s')) {
           return { stdout: 'Feature title\n', stderr: '' }

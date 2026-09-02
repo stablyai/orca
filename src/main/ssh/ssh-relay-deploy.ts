@@ -733,13 +733,25 @@ function missingNativeDepsFromProbe(output: string): RelayNativeDepName[] {
   return RELAY_NATIVE_DEP_NAMES.filter((name) => reported.includes(name))
 }
 
+/**
+ * `ok` — the probe answered and both deps loaded. `blocked` — the probe answered and named deps
+ * that failed to load. `unverifiable` — the probe never answered, which is evidence about the
+ * transport, not about the deps.
+ *
+ * Why `unverifiable` is not `blocked`: repairing on it does `rm -rf node_modules/node-pty` and a
+ * node-gyp source build (no Linux prebuild) against a relay that was never shown to be broken.
+ * Same verdict discipline as `src/main/orcad/node-pty-precondition.ts` and
+ * docs/reference/ssh-execution-boundary.md — loss of contact is not evidence.
+ */
+type RelayNativeDepsProbeStatus = 'ok' | 'blocked' | 'unverifiable'
+
 async function probeRequiredNativeDeps(
   conn: SshConnection,
   remoteDir: string,
   hostPlatform: RemoteHostPlatform,
   nodePath: string,
   signal?: AbortSignal
-): Promise<{ available: boolean; missing: RelayNativeDepName[] }> {
+): Promise<{ status: RelayNativeDepsProbeStatus; missing: RelayNativeDepName[] }> {
   const escapedNode = shellEscape(nodePath)
   const probeJs = nativeDepsProbeJs('ORCA-NATIVE-DEPS-OK')
   try {
@@ -757,11 +769,14 @@ async function probeRequiredNativeDeps(
           `(${escapedNode} -e ${shellEscape(probeJs)} 2>/dev/null || echo MISSING)`
         )
     const probe = await execHostCommand(conn, hostPlatform, command, { signal })
-    const available = probe.includes('ORCA-NATIVE-DEPS-OK')
-    return { available, missing: available ? [] : missingNativeDepsFromProbe(probe) }
+    return probe.includes('ORCA-NATIVE-DEPS-OK')
+      ? { status: 'ok', missing: [] }
+      : { status: 'blocked', missing: missingNativeDepsFromProbe(probe) }
   } catch {
     signal?.throwIfAborted()
-    return { available: false, missing: [...RELAY_NATIVE_DEP_NAMES] }
+    // Why: an unanswered probe says nothing about the deps; reporting MISSING here reset and
+    // recompiled healthy relays, turning one dropped exec channel into a multi-minute reconnect.
+    return { status: 'unverifiable', missing: [] }
   }
 }
 
@@ -810,7 +825,8 @@ async function repairInstalledNativeDeps(
     lockResult === 'busy' || lockResult === 'error'
       ? await acquireRelayLaunchGcFence(conn, remoteDir, hostPlatform, signal)
       : undefined
-  if (initialProbe.available) {
+  // Why: only a probe that answered may trigger repair; an unverifiable one launches as-is and the next reconnect re-probes.
+  if (initialProbe.status !== 'blocked') {
     // Why: even a healthy reconnect stays fenced until launch liveness is observable, or cross-version GC can rename after this probe.
     if (lockResult !== 'acquired') {
       return { ownsInstallLock: false, gcClaimToken }
@@ -847,7 +863,9 @@ async function repairInstalledNativeDeps(
     // Why: older complete relay dirs predate @parcel/watcher; re-probe under the lock so only one reconnect mutates the dir.
     const probe = await probeRequiredNativeDeps(conn, remoteDir, hostPlatform, nodePath, signal)
     let repairNamespace: RelayInstallNamespace | undefined
-    if (!probe.available) {
+    if (probe.status !== 'ok') {
+      // Why: the locked re-probe can only narrow the repair; when it can't answer, the initial probe's answered evidence still stands.
+      const resetDeps = probe.status === 'unverifiable' ? initialProbe.missing : probe.missing
       // Why: only stamp ownership once the locked recheck proves this connection is the one about to write.
       repairNamespace = await createRelayLaunchNamespace(
         conn,
@@ -863,7 +881,7 @@ async function repairInstalledNativeDeps(
         hostPlatform,
         nodePath,
         signal,
-        probe.missing,
+        resetDeps,
         repairNamespace
       )
       await finalizeInstall(conn, remoteDir, hostPlatform, { signal, releaseLock: false })

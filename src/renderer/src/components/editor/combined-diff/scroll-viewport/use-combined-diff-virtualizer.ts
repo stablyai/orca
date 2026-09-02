@@ -3,11 +3,7 @@ import type React from 'react'
 import { elementScroll, useVirtualizer, type Virtualizer } from '@tanstack/react-virtual'
 import type { ProgrammaticScrollMarks } from '@/hooks/programmatic-scroll-marks'
 import type { DiffSection } from '../../diff-section-types'
-import {
-  getDiffSectionEstimatedHeight,
-  isIntrinsicHeightImageDiff,
-  usesLargeDiffFallbackHeight
-} from '../../diff-section-layout'
+import { getDiffSectionRowEstimatedHeight } from '../../diff-section-layout'
 
 const COMBINED_DIFF_OVERSCAN = 5
 
@@ -39,19 +35,7 @@ export function useCombinedDiffVirtualizer({
         return 88
       }
 
-      return getDiffSectionEstimatedHeight({
-        collapsed: section.collapsed,
-        measuredContentHeight: sectionHeights[index],
-        originalContent: section.originalContent,
-        modifiedContent: section.modifiedContent,
-        changedLineCount:
-          section.added === undefined && section.removed === undefined
-            ? undefined
-            : (section.added ?? 0) + (section.removed ?? 0),
-        useIntrinsicImageHeight: isIntrinsicHeightImageDiff(section.diffResult),
-        isLargeDiffLimited: usesLargeDiffFallbackHeight(section),
-        lineCounts: section.largeDiffRenderLimit?.lineCounts ?? undefined
-      })
+      return getDiffSectionRowEstimatedHeight(section, sectionHeights[index])
     },
     overscan: COMBINED_DIFF_OVERSCAN,
     initialOffset: () => scrollOffsetRef.current,

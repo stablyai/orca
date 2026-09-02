@@ -28,6 +28,7 @@ export const realpathMock: IpcMock = vi.fn()
 export const lstatMock: IpcMock = vi.fn()
 export const commitChangesMock: IpcMock = vi.fn()
 export const getStatusMock: IpcMock = vi.fn()
+export const detectConflictOperationMock: IpcMock = vi.fn()
 export const abortMergeMock: IpcMock = vi.fn()
 export const abortRebaseMock: IpcMock = vi.fn()
 export const getDiffMock: IpcMock = vi.fn()
@@ -88,6 +89,7 @@ export const folderPromotionMock = {
 export const gitStatusModuleMock = {
   commitChanges: commitChangesMock,
   getStatus: getStatusMock,
+  detectConflictOperation: detectConflictOperationMock,
   abortMerge: abortMergeMock,
   abortRebase: abortRebaseMock,
   getDiff: getDiffMock,

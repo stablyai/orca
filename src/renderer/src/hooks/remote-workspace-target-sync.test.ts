@@ -18,7 +18,7 @@ import {
   snapshot,
   token,
   worktree
-} from './remote-workspace-target-sync-test-harness'
+} from './__tests__/remote-workspace-target-sync-test-harness'
 
 describe('createRemoteWorkspaceTargetSync', () => {
   it('captures local tabs before get when deciding a revision-zero upload', async () => {

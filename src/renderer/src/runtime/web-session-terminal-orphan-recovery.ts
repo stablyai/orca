@@ -81,6 +81,7 @@ async function recoverTerminalOrphans(
   const localTopologyIsCurrent = (): boolean =>
     !getCurrentState ||
     captureTerminalRecoveryTopologyToken(getCurrentState(), snapshot.worktree) === topologyToken
+  const isRecoveryCurrent = (): boolean => isCurrent() && localTopologyIsCurrent()
   const prepared = prepareTerminalOrphanRecovery(recoveryState, snapshot, environmentId)
   if (
     prepared.candidates.length === 0 &&
@@ -97,10 +98,7 @@ async function recoverTerminalOrphans(
     expectedEnvironmentPairingRevision,
     isCurrent
   })
-  if (!paneResolution || !isCurrent()) {
-    return null
-  }
-  if (!localTopologyIsCurrent()) {
+  if (!paneResolution || !isRecoveryCurrent()) {
     return null
   }
   const candidates = [...prepared.candidates, ...paneResolution.resolved]
@@ -117,10 +115,7 @@ async function recoverTerminalOrphans(
     expectedEnvironmentPairingRevision,
     isCurrent
   })
-  if (!inventory || !isCurrent()) {
-    return null
-  }
-  if (!localTopologyIsCurrent()) {
+  if (!inventory || !isRecoveryCurrent()) {
     return null
   }
   const { retained, removed, claims } = inventory
@@ -220,7 +215,7 @@ async function recoverTerminalOrphans(
 
   const adoptedSnapshot = adoptionResponse.result.snapshot
   const adoptedRows = terminalRowsBySurface(adoptedSnapshot)
-  const missingClaims = claimSurfaces(candidates, claims).filter((surface) => {
+  const missingClaims = claimedSurfaces.filter((surface) => {
     const rows = adoptedRows.get(surfaceKey(surface.tabId, surface.leafId))
     return !rows?.some(isValidReadySurface)
   })

@@ -77,6 +77,8 @@ export type Worktree = {
   /** Checkout ownership for a recipe-provisioned main workspace. */
   ephemeralVmCheckoutMode?: EphemeralVmCheckoutMode
   displayName: string
+  /** Projection of persisted display-name provenance. */
+  displayNameMode?: 'fixed' | 'automatic'
   comment: string
   /** Free-form, provider-agnostic "needs attention" reason set by an external tool
    *  via `orca worktree set --needs-attention`. Opaque caller-provided text, shown

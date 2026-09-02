@@ -13,6 +13,7 @@ import { gitExecFileAsync } from './runner'
 import { runWithGitReadCacheInvalidation } from './status'
 import { deleteBranchAfterWorktreeRemoval } from './worktree-branch-removal'
 import { listWorktreesStrict } from './worktree-listing'
+import { invalidateWslLinkedWorktreeGitRouting } from './wsl-linked-worktree-git-routing'
 import type { RemoveWorktreeOptions } from './worktree-operation-options'
 import {
   WORKTREE_REMOVAL_REGISTRATION_TIMEOUT_MS,
@@ -22,6 +23,7 @@ import {
 import { areWorktreePathsEqual } from './worktree-path-comparison'
 import { assertWorktreeCleanForRemoval } from './worktree-removal-preflight'
 import { bumpWorktreeScanGeneration, listWorktrees } from './worktree-scan-cache'
+import { invalidateSparseCheckoutState } from './worktree-sparse-checkout-cache'
 
 /**
  * Remove a worktree.
@@ -38,6 +40,8 @@ export async function removeWorktree(
       performRemoveWorktree(repoPath, worktreePath, force, options)
     )
   } finally {
+    invalidateWslLinkedWorktreeGitRouting(worktreePath)
+    invalidateSparseCheckoutState(repoPath, worktreePath)
     bumpWorktreeScanGeneration(repoPath)
   }
 }

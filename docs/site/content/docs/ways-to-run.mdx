@@ -3,7 +3,7 @@ title: Ways to run Orca
 description: Local desktop, SSH hosts, self-hosted Orca servers, and on-demand per-workspace VMs — pick the right compute for each task.
 ---
 
-import { Callout, ImagePlaceholder } from '@/components/docs/prose';
+import { Callout, ImagePlaceholder } from '@/components/docs/prose'
 
 Orca is not locked to your laptop. Every worktree runs somewhere — on the machine in front of you, on a box you already own, on a shared always-on server, or on a fresh cloud VM spun up for that one workspace.
 
@@ -11,12 +11,12 @@ This page is the map. Deep dives live on the linked pages.
 
 ## At a glance
 
-| Mode | Where files and agents live | Who owns the machine | Best for |
-| --- | --- | --- | --- |
-| **Local** | Your desktop | You | Day-to-day coding, fast iteration |
-| **SSH target** | A remote host you connect to over SSH | You (or your team) | Dev boxes, GPU hosts, always-on VPS |
-| **Remote Orca Server** | A machine running Orca desktop or `orca serve` | You (or your team) | Persistent shared runtime, mobile, automation |
-| **Cloud VM / per-workspace environment** | A disposable VM/sandbox per workspace | Your cloud account (BYO provider) | Isolated, ephemeral agent compute |
+| Mode                                     | Where files and agents live                    | Who owns the machine              | Best for                                      |
+| ---------------------------------------- | ---------------------------------------------- | --------------------------------- | --------------------------------------------- |
+| **Local**                                | Your desktop                                   | You                               | Day-to-day coding, fast iteration             |
+| **SSH target**                           | A remote host you connect to over SSH          | You (or your team)                | Dev boxes, GPU hosts, always-on VPS           |
+| **Remote Orca Server**                   | A machine running Orca desktop or `orca serve` | You (or your team)                | Persistent shared runtime, mobile, automation |
+| **Cloud VM / per-workspace environment** | A disposable VM/sandbox per workspace          | Your cloud account (BYO provider) | Isolated, ephemeral agent compute             |
 
 Orca does **not** sell managed VPS hosting. Remote modes always use machines and cloud accounts you control.
 
@@ -62,12 +62,12 @@ Full detail: [Remote Orca Servers](/docs/remote-servers).
 
 ### SSH vs Remote Orca Server
 
-| | SSH worktrees | Remote Orca Server |
-| --- | --- | --- |
-| Runtime owner | Laptop Orca | Remote machine (Orca desktop or `orca serve`) |
-| Disconnect | Agents keep running on the host; laptop reattaches | Full session state lives on the server |
-| Multi-client | One laptop drives the host | Laptop, web, mobile, and automation can share the same runtime |
-| Typical setup | Import SSH config, pick **Run on** | Share the server app or run `orca serve`, then pair with a URL |
+|               | SSH worktrees                                      | Remote Orca Server                                             |
+| ------------- | -------------------------------------------------- | -------------------------------------------------------------- |
+| Runtime owner | Laptop Orca                                        | Remote machine (Orca desktop or `orca serve`)                  |
+| Disconnect    | Agents keep running on the host; laptop reattaches | Full session state lives on the server                         |
+| Multi-client  | One laptop drives the host                         | Laptop, web, mobile, and automation can share the same runtime |
+| Typical setup | Import SSH config, pick **Run on**                 | Share the server app or run `orca serve`, then pair with a URL |
 
 ## 4. Cloud VMs (per-workspace environments)
 
@@ -80,6 +80,11 @@ Providers people wire today include Vercel Sandbox, Fly, Modal, plain SSH hosts,
 <ImagePlaceholder
   src="/docs/ways-to-run-per-workspace-env.png"
   caption="Settings → Experimental → Cloud VM — enable the skill, then have an agent set up a recipe for the repo."
+/>
+
+<ImagePlaceholder
+  src="/docs/ways-to-run-local-sidebar.png"
+  caption="Choose a local or remote run target from the workspace sidebar."
 />
 
 **Good fit when:** you want clean isolation per task, disposable compute, or a standard environment every agent boots into.
@@ -100,7 +105,9 @@ Providers people wire today include Vercel Sandbox, Fly, Modal, plain SSH hosts,
 Recipes only show up for workspace create once the `environmentRecipes` entry is on the project's **primary** checkout of `orca.yaml` (not only a feature branch). Doctor and live provision can still run from any branch while you iterate on scripts.
 
 <Callout title="BYO cloud — not an Orca VPS">
-Cloud VMs do not give you an Orca-hosted VPS. You bring the provider (and pay that provider). Orca runs your create/suspend/resume/destroy scripts and connects over the pairing URL or SSH details they print.
+  Cloud VMs do not give you an Orca-hosted VPS. You bring the provider (and pay that provider). Orca
+  runs your create/suspend/resume/destroy scripts and connects over the pairing URL or SSH details
+  they print.
 </Callout>
 
 ## How to choose

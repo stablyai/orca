@@ -178,7 +178,7 @@ export default function CombinedDiffViewer({
     registry,
     requestSectionReload,
     sectionIndexByKeyRef: treeNavigation.sectionIndexByKeyRef,
-    sections,
+    sectionEntries: entrySet.entries,
     shouldAutoReloadFromGitStatus: entrySet.shouldAutoReloadFromGitStatus,
     treeMode: entrySet.treeMode
   })

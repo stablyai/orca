@@ -20,9 +20,18 @@ import {
   unlockPreparedWorktree,
   prepareWorktreeCreateCheckout
 } from './git/worktree-create-preparation'
-import { getLocalProjectWorktreeGitOptions } from './project-runtime-git-options'
-import { computeWorkspaceRoot, getWorktreePathSettings } from './ipc/worktree-logic'
+import {
+  getLocalProjectWorktreeGitOptions,
+  getWorktreeMirrorDistro
+} from './project-runtime-git-options'
+import { computeWorkspaceRootAsync, getWorktreePathSettings } from './ipc/worktree-logic'
 import { toHostFilesystemPath } from './host-tree-removal'
+import {
+  discardPreparationWithRetry,
+  resetPendingPreparationDiscardsForTests,
+  retryPendingPreparationDiscards,
+  trackPreparationDiscard
+} from './worktree-preparation-discard-retry'
 
 export const WORKTREE_CREATE_PREPARATION_TTL_MS = 5 * 60_000
 export const WORKTREE_CREATE_PREPARATION_LIMIT = 3
@@ -79,9 +88,25 @@ function isProcessAlive(pid: number): boolean {
   }
 }
 
+function preparationHostKey(repoPath: string, options: AddWorktreeOptions): string {
+  return `${pathKey(repoPath)}\0${options.wslDistro ?? ''}`
+}
+
 async function discardEntry(entry: PreparationEntry): Promise<void> {
+  // A failed checkout self-discards, but that self-discard is best-effort too, so it can strand the
+  // registration for the same reason the discard here can. Enrol either way.
   await entry.ready.catch(() => {})
-  await discardPreparedWorktree(entry.repoPath, entry.preparedPath, entry.options).catch(() => {})
+  await discardPreparationWithRetry({
+    hostKey: preparationHostKey(entry.repoPath, entry.options),
+    repoPath: entry.repoPath,
+    preparedPath: entry.preparedPath,
+    options: entry.options
+  })
+}
+
+function discardEntryInBackground(entry: PreparationEntry): void {
+  // Tracked, not bare `void`: the test reset must be able to settle it before dropping the registry.
+  trackPreparationDiscard(discardEntry(entry))
 }
 
 function expireEntry(entry: PreparationEntry): void {
@@ -89,7 +114,7 @@ function expireEntry(entry: PreparationEntry): void {
     return
   }
   preparations.delete(entry.key)
-  void discardEntry(entry)
+  discardEntryInBackground(entry)
 }
 
 function enforcePreparationLimit(): void {
@@ -102,7 +127,7 @@ function enforcePreparationLimit(): void {
     }
     preparations.delete(oldest.key)
     clearTimeout(oldest.expiration)
-    void discardEntry(oldest)
+    discardEntryInBackground(oldest)
   }
 }
 
@@ -110,13 +135,16 @@ async function cleanupStalePreparations(
   repoPath: string,
   options: AddWorktreeOptions
 ): Promise<void> {
-  const cleanupKey = `${pathKey(repoPath)}\0${options.wslDistro ?? ''}`
+  const cleanupKey = preparationHostKey(repoPath, options)
   const existing = staleCleanupInFlight.get(cleanupKey)
   if (existing) {
     await existing.catch(() => {})
     return
   }
   const cleanup = (async () => {
+    // Not awaited: the create path awaits this cleanup, and one stranded discard costs an unlock plus
+    // a `worktree remove --force` bounded at 30s each. Reclaiming leaked scratch must not delay create.
+    void retryPendingPreparationDiscards(cleanupKey)
     const worktrees = await listWorktreeGraph(repoPath, {
       ...options,
       includeCreatePreparations: true
@@ -154,18 +182,22 @@ async function cleanupStalePreparations(
   }
 }
 
-export function prepareWorktreeCreateForRepo(
+export async function prepareWorktreeCreateForRepo(
   store: Store,
   repo: Repo,
   baseBranch: string
 ): Promise<void> {
   if (repo.connectionId || isFolderRepo(repo)) {
-    return Promise.resolve()
+    return
   }
   const options = getLocalProjectWorktreeGitOptions(store, repo)
-  const workspaceRoot = computeWorkspaceRoot(
+  // Resolving a WSL repo's root spawns `wsl.exe`, and this runs while the create composer is open,
+  // so it must not block the main thread. Key lookup and insert stay in one sync run after the await.
+  // The mirror distro must be threaded exactly as createLocalWorktree threads it, or the two sides
+  // key on different roots and every prepared checkout is discarded.
+  const workspaceRoot = await computeWorkspaceRootAsync(
     repo.path,
-    getWorktreePathSettings(repo, store.getSettings())
+    getWorktreePathSettings(repo, store.getSettings(), getWorktreeMirrorDistro(store, repo))
   )
   const key = preparationKey(repo.path, workspaceRoot, baseBranch, options)
   const existing = preparations.get(key)
@@ -280,4 +312,5 @@ export async function _resetWorktreeCreatePreparationsForTests(): Promise<void> 
       await discardEntry(entry)
     })
   )
+  await resetPendingPreparationDiscardsForTests()
 }

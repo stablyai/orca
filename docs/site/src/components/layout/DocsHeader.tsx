@@ -1,9 +1,32 @@
 import Link from 'next/link'
 import Image from 'next/image'
-import { GitBranch, MessageCircle, X } from 'lucide-react'
+import { MessageCircle, Star } from 'lucide-react'
 import { ThemeSwitch } from 'fumadocs-ui/layouts/shared/slots/theme-switch'
 
-export function DocsHeader() {
+async function getGithubStars(): Promise<number | undefined> {
+  try {
+    const response = await fetch('https://api.github.com/repos/stablyai/orca', {
+      headers: { Accept: 'application/vnd.github+json' },
+      next: { revalidate: 3600 }
+    })
+    if (!response.ok) {
+      return undefined
+    }
+    const payload = (await response.json()) as { stargazers_count?: unknown }
+    return typeof payload.stargazers_count === 'number' ? payload.stargazers_count : undefined
+  } catch {
+    return undefined
+  }
+}
+
+function formatStars(stars: number): string {
+  return stars >= 1000 ? `${(stars / 1000).toFixed(1).replace(/\.0$/, '')}k` : String(stars)
+}
+
+export async function DocsHeader() {
+  const stars = await getGithubStars()
+  const formattedStars = stars === undefined ? undefined : formatStars(stars)
+
   return (
     <header className="fixed inset-x-0 top-0 z-30 border-b border-border bg-background/95 backdrop-blur-xl supports-[backdrop-filter]:bg-background/85">
       <div className="container mx-auto flex h-14 max-w-[1200px] items-center justify-between gap-4 px-4">
@@ -61,7 +84,9 @@ export function DocsHeader() {
             className="hidden size-8 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50 sm:flex"
             aria-label="Follow Orca on X"
           >
-            <X className="size-4" aria-hidden="true" />
+            <span aria-hidden="true" className="text-[15px] font-semibold leading-none">
+              𝕏
+            </span>
           </a>
           <a
             href="https://github.com/stablyai/orca"
@@ -69,8 +94,13 @@ export function DocsHeader() {
             rel="noopener noreferrer"
             className="inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-[13px] font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
           >
-            <GitBranch className="size-4" aria-hidden="true" />
-            GitHub
+            <Star className="size-3.5 fill-current" aria-hidden="true" />
+            <span>Star</span>
+            {formattedStars && (
+              <span className="rounded-full bg-accent px-1.5 py-0.5 text-[11px] font-semibold text-foreground">
+                {formattedStars}
+              </span>
+            )}
           </a>
         </div>
       </div>

@@ -9,6 +9,8 @@ import type { ForegroundProcessEvidence } from '../../shared/foreground-process-
 import {
   buildProcessTableIndex,
   getStrictProcessTableSnapshot,
+  lookupProcessTableIndex,
+  scoreForegroundCandidateRow,
   type ProcessTableIndex,
   type ProcessTableIndexStats,
   type ProcessTableRow
@@ -59,7 +61,7 @@ export function resolveAgentForegroundProcessesFromIndex(
   const rowsByOwner = new Map<number, (ProcessTableRow & { depth: number })[]>()
   const queue: { row: ProcessTableRow; owner: number; depth: number }[] = []
   for (const rootPid of uniqueRoots) {
-    const root = lookupIndex(index, (value) => value.byPid.get(rootPid))
+    const root = lookupProcessTableIndex(index, (value) => value.byPid.get(rootPid))
     if (root) {
       depthByPid.set(root.pid, 0)
       queue.push({ row: root, owner: root.pid, depth: 0 })
@@ -72,7 +74,10 @@ export function resolveAgentForegroundProcessesFromIndex(
       owned.push({ ...current.row, depth: current.depth })
     }
     rowsByOwner.set(current.owner, owned)
-    const children = lookupIndex(index, (value) => value.childrenByPpid.get(current.row.pid) ?? [])
+    const children = lookupProcessTableIndex(
+      index,
+      (value) => value.childrenByPpid.get(current.row.pid) ?? []
+    )
     for (const child of children) {
       const childOwner = rootsByPid.has(child.pid) ? child.pid : current.owner
       const childDepth = rootsByPid.has(child.pid) ? 0 : current.depth + 1
@@ -86,7 +91,7 @@ export function resolveAgentForegroundProcessesFromIndex(
   }
 
   return requests.map((request) => {
-    const root = lookupIndex(index, (value) => value.byPid.get(request.rootPid))
+    const root = lookupProcessTableIndex(index, (value) => value.byPid.get(request.rootPid))
     if (!root) {
       return {
         available: false,
@@ -127,7 +132,8 @@ export function resolveAgentForegroundProcessesFromIndex(
       const recognized = recognizeAgentProcessFromCommandLine(candidate.command)
       if (
         recognized &&
-        (bestCandidate === null || candidateScore(candidate) > candidateScore(bestCandidate))
+        (bestCandidate === null ||
+          scoreForegroundCandidateRow(candidate) > scoreForegroundCandidateRow(bestCandidate))
       ) {
         bestCandidate = candidate
         bestName = recognized
@@ -141,17 +147,6 @@ export function resolveAgentForegroundProcessesFromIndex(
     }
     return { available: true, processName: null }
   })
-}
-
-function lookupIndex<T>(index: ProcessTableIndex, lookup: (value: ProcessTableIndex) => T): T {
-  if (index.stats) {
-    index.stats.indexLookups += 1
-  }
-  return lookup(index)
-}
-
-function candidateScore(row: ProcessTableRow & { depth: number }): number {
-  return (row.stat.includes('+') ? 10_000 : 0) + row.depth
 }
 
 export function toForegroundProcessEvidence(

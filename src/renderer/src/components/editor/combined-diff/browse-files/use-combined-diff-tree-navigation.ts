@@ -37,10 +37,33 @@ export function useCombinedDiffTreeNavigation({
   toggleSection: (index: number) => void
   treeMode: CombinedDiffFileTreeMode
 }): CombinedDiffTreeNavigation {
-  const sectionIndexByKey = React.useMemo(
-    () => createCombinedDiffSectionIndexMap(sections),
-    [sections]
-  )
+  const sectionIndexCacheRef = useRef<{
+    entrySignature: string
+    sectionCount: number
+    map: Map<string, number>
+    keys: string[]
+  } | null>(null)
+  const sectionIndexByKey = React.useMemo(() => {
+    const previous = sectionIndexCacheRef.current
+    // Section content/loading updates preserve entry order and keys. The entry signature and
+    // count usually change when the navigable structure changes, but compare keys as a guard for
+    // same-sized/reused signatures (and to keep this cache correct if a caller rebuilds sections).
+    if (
+      previous?.entrySignature === entrySignature &&
+      previous.sectionCount === sections.length &&
+      sections.every((section, index) => previous.keys[index] === section.key)
+    ) {
+      return previous.map
+    }
+    const map = createCombinedDiffSectionIndexMap(sections)
+    sectionIndexCacheRef.current = {
+      entrySignature,
+      sectionCount: sections.length,
+      map,
+      keys: sections.map((section) => section.key)
+    }
+    return map
+  }, [entrySignature, sections])
   const sectionIndexByKeyRef = useRef<ReadonlyMap<string, number>>(sectionIndexByKey)
   sectionIndexByKeyRef.current = sectionIndexByKey
 
@@ -54,15 +77,59 @@ export function useCombinedDiffTreeNavigation({
     // Why: the tree highlight belongs to one entry set; reset now so it can't flash on another before an Effect would.
     setActiveTreeSectionState({ entrySignature, key: null })
   }
-  const viewedSectionKeys = React.useMemo(
-    () =>
-      new Set(
+  const viewedSectionCacheRef = useRef<{
+    entrySignature: string
+    sections: DiffSection[]
+    keys: Set<string>
+  } | null>(null)
+  const viewedSectionKeys = React.useMemo(() => {
+    const recomputeAllViewedKeys = (): Set<string> => {
+      const keys = new Set(
         sections
           .filter((section) => isCombinedDiffSectionViewed(section))
           .map((section) => section.key)
-      ),
-    [sections]
-  )
+      )
+      viewedSectionCacheRef.current = { entrySignature, sections, keys }
+      return keys
+    }
+    const previous = viewedSectionCacheRef.current
+    if (
+      previous === null ||
+      previous.entrySignature !== entrySignature ||
+      previous.sections.length !== sections.length
+    ) {
+      return recomputeAllViewedKeys()
+    }
+
+    let keys = previous.keys
+    let copied = false
+    for (let index = 0; index < sections.length; index += 1) {
+      const previousSection = previous.sections[index]
+      const section = sections[index]
+      if (!previousSection || !section) {
+        continue
+      }
+      // Why: reordered keys can't be patched index by index — a later delete would drop an earlier add.
+      if (previousSection.key !== section.key) {
+        return recomputeAllViewedKeys()
+      }
+      const viewed = isCombinedDiffSectionViewed(section)
+      if (isCombinedDiffSectionViewed(previousSection) === viewed) {
+        continue
+      }
+      if (!copied) {
+        keys = new Set(previous.keys)
+        copied = true
+      }
+      if (viewed) {
+        keys.add(section.key)
+      } else {
+        keys.delete(section.key)
+      }
+    }
+    viewedSectionCacheRef.current = { entrySignature, sections, keys }
+    return keys
+  }, [entrySignature, sections])
   const handleTreeNavigate = useCallback(
     (entry: GitStatusEntry | GitBranchChangeEntry) => {
       markDirectScrollInput()

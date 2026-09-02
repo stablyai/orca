@@ -3,11 +3,14 @@ title: Tabs, panes & split layouts
 description: Drag-to-split panes, tab groups, and pinned boundaries.
 ---
 
-import { ImagePlaceholder } from '@/components/docs/prose';
+import { ImagePlaceholder } from '@/components/docs/prose'
 
 Orca's pane system is designed for watching multiple agents work without losing context. Tabs group into panes; panes split into layouts.
 
-<ImagePlaceholder src="/docs/tab-split.gif" caption="Drag a tab to a pane edge to split — terminals, diffs, and browser tabs side by side" />
+<ImagePlaceholder
+  src="/docs/tab-split.gif"
+  caption="Drag a tab to a pane edge to split — terminals, diffs, and browser tabs side by side"
+/>
 
 ## Tabs
 
@@ -22,11 +25,11 @@ Each tab holds one thing: a terminal, an editor buffer, a browser, a diff, a PR.
 
 Default chords on **new installs**:
 
-| Action | macOS | Linux / Windows |
-| --- | --- | --- |
-| Next / previous tab (all types) | `Cmd+Shift+]` / `Cmd+Shift+[` | `Ctrl+Shift+]` / `Ctrl+Shift+[` |
-| Next / previous tab (same type) | `Cmd+Option+]` / `Cmd+Option+[` | `Ctrl+Alt+]` / `Ctrl+Alt+[` |
-| Previous recent tab | `Ctrl+Tab` | `Ctrl+Tab` |
+| Action                          | macOS                           | Linux / Windows                 |
+| ------------------------------- | ------------------------------- | ------------------------------- |
+| Next / previous tab (all types) | `Cmd+Shift+]` / `Cmd+Shift+[`   | `Ctrl+Shift+]` / `Ctrl+Shift+[` |
+| Next / previous tab (same type) | `Cmd+Option+]` / `Cmd+Option+[` | `Ctrl+Alt+]` / `Ctrl+Alt+[`     |
+| Previous recent tab             | `Ctrl+Tab`                      | `Ctrl+Tab`                      |
 
 Remap under [Settings → Shortcuts](/docs/settings). Existing installs keep customized overrides in `~/.orca/keybindings.json`.
 

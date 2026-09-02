@@ -21,9 +21,12 @@ describe('headless PTY registry hydration ordering', () => {
   })
 
   it('hydrates Electron serve after provider and handler readiness but before RPC', () => {
-    const source = readFileSync(join(process.cwd(), 'src/main/index.ts'), 'utf8')
-    const serve = source.indexOf('if (serveOptions) {')
-    const provider = source.indexOf('await localPtyProviderStartupReady', serve)
+    const source = readFileSync(
+      join(process.cwd(), 'src/main/startup/main-process-runtime-launch.ts'),
+      'utf8'
+    )
+    const serve = source.indexOf('async function launchServeMode(')
+    const provider = source.indexOf('await state.localPtyProviderStartupReady', serve)
     const handlersAndHydration = source.indexOf('await registerHeadlessPtyRuntime(', provider)
     const rpc = source.indexOf('await runtimeRpc.start()', handlersAndHydration)
     const readiness = source.indexOf('await printServeReady(serveOptions)', rpc)

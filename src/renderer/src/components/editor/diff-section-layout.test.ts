@@ -3,10 +3,27 @@ import {
   getDiffSectionBodyHeight,
   getLargeDiffFallbackBodyHeight,
   getDiffSectionEstimatedHeight,
+  getDiffSectionRowEstimatedHeight,
   isIntrinsicHeightImageDiff,
   usesLargeDiffFallbackHeight
 } from './diff-section-layout'
+import type { DiffSection } from './diff-section-types'
 import type { GitDiffResult } from '../../../../shared/git-diff-compare-types'
+
+const largeTextSection: DiffSection = {
+  key: 'section',
+  path: 'big.txt',
+  status: 'modified',
+  added: 50_000,
+  removed: 0,
+  originalContent: '',
+  modifiedContent: '',
+  collapsed: false,
+  loading: true,
+  dirty: false,
+  diffResult: null,
+  largeDiffRenderLimit: null
+}
 
 describe('diff section layout', () => {
   it('uses Monaco measured content height for text diffs', () => {
@@ -26,16 +43,28 @@ describe('diff section layout', () => {
 
   it('uses the bounded fallback height for an on-demand diff', () => {
     expect(
-      getDiffSectionEstimatedHeight({
-        collapsed: false,
-        measuredContentHeight: undefined,
-        originalContent: '',
-        modifiedContent: '',
-        changedLineCount: 60_000,
-        useIntrinsicImageHeight: false,
-        isLoadOnDemand: true
-      })
+      getDiffSectionRowEstimatedHeight(
+        { ...largeTextSection, loading: false, loadOnDemand: true },
+        undefined
+      )
     ).toBe(188)
+  })
+
+  // Why: every viewer's virtualizer must estimate the same height DiffSectionItem
+  // renders for these rows, or each large row drifts ~100px per measure pass.
+  it('estimates deferred and in-flight large rows at the rendered fallback height', () => {
+    expect(getDiffSectionRowEstimatedHeight(largeTextSection, undefined)).toBe(188)
+    expect(getDiffSectionRowEstimatedHeight(largeTextSection, 3_800_000)).toBe(188)
+    expect(
+      getDiffSectionRowEstimatedHeight(
+        { ...largeTextSection, added: undefined, removed: undefined, path: 'vendor/blob.bin' },
+        undefined
+      )
+    ).toBe(88)
+  })
+
+  it('estimates a collapsed row as a header, whatever its size', () => {
+    expect(getDiffSectionRowEstimatedHeight({ ...largeTextSection, collapsed: true }, 500)).toBe(28)
   })
 
   it('falls back to line-count height before Monaco has mounted', () => {

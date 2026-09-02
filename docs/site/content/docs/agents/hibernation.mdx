@@ -3,12 +3,13 @@ title: Agent hibernation
 description: Let Orca pause idle background agent terminals and auto-resume them when you reopen the worktree.
 ---
 
-import { Callout } from '@/components/docs/prose';
+import { Callout } from '@/components/docs/prose'
 
 When you keep dozens of worktrees open, idle agents add up — each one is a live PTY holding a model session in memory. Agent hibernation lets Orca quietly stop those terminals once they've been done and untouched long enough, then resume the same session the next time you open the worktree.
 
 <Callout title="Experimental">
-Agent hibernation is off by default. Turn it on under **Settings → Experimental → Agent hibernation** while we keep tuning the safety model.
+  Agent hibernation is off by default. Turn it on under **Settings → Experimental → Agent
+  hibernation** while we keep tuning the safety model.
 </Callout>
 
 ## What gets hibernated

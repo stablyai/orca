@@ -1,21 +1,51 @@
 import { resolveConfiguredRemoteBranchName } from './repo-base-ref-search'
-import { gitExecOptions, type GitExec, type LocalGitExecOptions } from './repo-default-base-ref'
+import { gitExecOptions, type LocalGitExecOptions } from './repo-default-base-ref'
 import { gitExecFileAsync } from './runner'
+import { isSafeGitRefName } from '../../shared/git-status-upstream-ref'
+import {
+  probeAnyExactRef,
+  type ExactRefProbeExec,
+  type ExactRefProbeExecOptions
+} from './exact-ref-probe'
 
 export type BranchConflictKind = 'local' | 'remote'
 
-async function hasGitRefAsync(exec: GitExec, ref: string): Promise<boolean> {
+function runGit(
+  exec: ExactRefProbeExec,
+  args: string[],
+  options: ExactRefProbeExecOptions
+): Promise<{ stdout: string }> {
+  return options.maxBuffer === undefined && options.timeoutMs === undefined
+    ? exec(args)
+    : exec(args, options)
+}
+
+function canQueryRemoteBranchName(branchName: string): boolean {
+  // Validate the complete local ref before interpolating the name into any Git
+  // argument. This rejects glob/control/refspec syntax while retaining valid
+  // slash-containing branch names.
+  return !branchName.startsWith('-') && isSafeGitRefName(`refs/heads/${branchName}`)
+}
+
+async function hasGitRefAsync(
+  exec: ExactRefProbeExec,
+  ref: string,
+  options: ExactRefProbeExecOptions
+): Promise<boolean> {
   try {
-    const { stdout } = await exec(['rev-parse', '--verify', ref])
+    const { stdout } = await runGit(exec, ['rev-parse', '--verify', ref], options)
     return stdout.trim().length > 0
   } catch {
     return false
   }
 }
 
-async function listRemoteNamesViaExec(exec: GitExec): Promise<string[]> {
+async function listRemoteNamesViaExec(
+  exec: ExactRefProbeExec,
+  options: ExactRefProbeExecOptions
+): Promise<string[]> {
   try {
-    const { stdout } = await exec(['remote'])
+    const { stdout } = await runGit(exec, ['remote'], options)
     return stdout
       .split(/\r?\n/)
       .map((line) => line.trim())
@@ -26,26 +56,55 @@ async function listRemoteNamesViaExec(exec: GitExec): Promise<string[]> {
   }
 }
 
+function buildRemoteBranchConflictRefs(
+  remoteNames: readonly string[],
+  branchName: string,
+  allowedBaseRef: string | undefined
+): string[] {
+  const refs = new Set<string>()
+  for (const remoteName of remoteNames) {
+    const ref = `refs/remotes/${remoteName}/${branchName}`
+    if (!isSafeGitRefName(ref)) {
+      continue
+    }
+    // Match the conflict policy's longest-remote-prefix interpretation when
+    // remote names overlap (for example, `foo` and `foo/bar`).
+    if (
+      !isAllowedRemoteBaseRef(ref, allowedBaseRef) &&
+      resolveConfiguredRemoteBranchName(ref, remoteNames) === branchName
+    ) {
+      refs.add(ref)
+    }
+  }
+  return [...refs]
+}
+
 /** Run branch-conflict policy through the host that owns Git execution. */
 export async function getBranchConflictKindViaExec(
-  exec: GitExec,
+  exec: ExactRefProbeExec,
   branchName: string,
-  allowedBaseRef?: string
+  allowedBaseRef?: string,
+  options: ExactRefProbeExecOptions = {}
 ): Promise<BranchConflictKind | null> {
-  if (await hasGitRefAsync(exec, `refs/heads/${branchName}`)) {
+  if (!canQueryRemoteBranchName(branchName)) {
+    return null
+  }
+  // Preserve the host runner's existing output/timeout contract. Exact probes
+  // are quiet, so introducing a smaller implicit cap would only make a large
+  // remote configuration look like a missing conflict.
+  const probeOptions: ExactRefProbeExecOptions = options
+  if (await hasGitRefAsync(exec, `refs/heads/${branchName}`, probeOptions)) {
     return 'local'
   }
 
   try {
-    const remoteNames = await listRemoteNamesViaExec(exec)
-    const { stdout } = await exec(['for-each-ref', '--format=%(refname)', 'refs/remotes'])
-    const hasRemoteConflict = stdout.split(/\r?\n/).some((ref) => {
-      const trimmed = ref.trim()
-      if (isAllowedRemoteBaseRef(trimmed, allowedBaseRef)) {
-        return false
-      }
-      return resolveConfiguredRemoteBranchName(trimmed, remoteNames) === branchName
-    })
+    const remoteNames = await listRemoteNamesViaExec(exec, probeOptions)
+    const candidateRefs = buildRemoteBranchConflictRefs(remoteNames, branchName, allowedBaseRef)
+    if (candidateRefs.length === 0) {
+      return null
+    }
+
+    const { found: hasRemoteConflict } = await probeAnyExactRef(exec, candidateRefs, probeOptions)
 
     return hasRemoteConflict ? 'remote' : null
   } catch {
@@ -61,7 +120,12 @@ export function getBranchConflictKind(
 ): Promise<BranchConflictKind | null> {
   const execOptions = gitExecOptions(path, options)
   return getBranchConflictKindViaExec(
-    (argv) => gitExecFileAsync(argv, execOptions),
+    (argv, commandOptions) =>
+      gitExecFileAsync(argv, {
+        ...execOptions,
+        ...(commandOptions?.maxBuffer === undefined ? {} : { maxBuffer: commandOptions.maxBuffer }),
+        ...(commandOptions?.timeoutMs === undefined ? {} : { timeout: commandOptions.timeoutMs })
+      }),
     branchName,
     allowedBaseRef
   )
