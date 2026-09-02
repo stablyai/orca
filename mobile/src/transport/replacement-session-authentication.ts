@@ -13,8 +13,13 @@ export function waitForAuthenticated(session: RpcClient, timeoutMs: number): Pro
     // Why: armed before subscribing — a synchronous notification during registration
     // must find a timer to clear, or a settled wait leaves it running for 12s.
     const timer = setTimeout(() => {
+      // Why: the bare message cannot distinguish a cell socket that never opened
+      // ('connecting') from an E2EE handshake that stalled after it did
+      // ('handshaking'), and the inner HANDSHAKE_TIMEOUT_MS never surfaces when the
+      // socket is replaced before it fires — so name the phase we timed out in.
+      const phase = session.getState()
       finish()
-      reject(new Error('replacement session authentication timed out'))
+      reject(new Error(`replacement session authentication timed out (phase: ${phase})`))
     }, timeoutMs)
     unsubscribe = session.onStateChange((state) => {
       if (state === 'connected') {

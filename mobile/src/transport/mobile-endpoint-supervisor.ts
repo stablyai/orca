@@ -112,7 +112,7 @@ export class MobileEndpointSupervisor {
       scheduleDirectProbe: () => this.directProbe.schedule(),
       onBookkeepingError: (error) =>
         this.logRelay('relay bookkeeping failed after migration', error.message.slice(0, 80)),
-      onDialFailure: (error) => logRelayDialFailure(this.logRelay, error)
+      onDialFailure: (error, context) => logRelayDialFailure(this.logRelay, error, 'dial', context)
     })
     this.directProbe = new DirectReturnProbe(dependencies, {
       hysteresis: this.hysteresis,
