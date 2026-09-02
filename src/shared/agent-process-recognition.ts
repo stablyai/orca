@@ -11,6 +11,10 @@ import {
   tokenizeCommandLine
 } from './agent-command-line-entrypoint'
 import { isFreshOmpLaunchCommand } from './omp-fresh-launch'
+import {
+  isNodePackageScriptPath,
+  NODE_PACKAGE_SCRIPT_ENTRYPOINTS
+} from './node-package-script-entrypoints'
 
 export type RecognizedAgentProcess = { agent: TuiAgent; processName: string }
 
@@ -35,14 +39,6 @@ function normalizeProcessName(
 }
 
 const FOREGROUND_AGENT_WRAPPER_PROCESS_NAMES = new Set(['node', 'python', 'python3'])
-const NODE_PACKAGE_SCRIPT_ENTRYPOINTS: Record<string, readonly string[]> = {
-  codex: ['node_modules/@openai/codex/'],
-  gemini: ['node_modules/@google/gemini-cli/'],
-  // Why: ZCode's npm bin is `dist/zcode.cjs`, so a package install runs as `node …zcode.cjs`
-  // and never shows `zcode` as the foreground name (a SEA build still matches by name).
-  zcode: ['node_modules/@zcode/cli/'],
-  bob: ['node_modules/bobshell/']
-}
 const PYTHON_SCRIPT_ENTRYPOINT_DIRECTORIES = ['/bin/', '/scripts/', '/site-packages/']
 
 const PROCESS_TO_AGENT = new Map<string, TuiAgent>()
@@ -109,7 +105,7 @@ function recognizeNodeScriptEntrypoint(token: string): RecognizedAgentProcess | 
   if (!markers) {
     return null
   }
-  if (!markers.some((marker) => path.includes(marker))) {
+  if (!isNodePackageScriptPath(path, markers)) {
     return null
   }
   return recognizedAgentForProcess(normalized)
