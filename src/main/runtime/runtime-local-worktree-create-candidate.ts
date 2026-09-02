@@ -137,17 +137,21 @@ export async function resolveRuntimeLocalWorktreeCreateCandidate(args: {
         let existingPR: Awaited<ReturnType<typeof getPRForBranch>> | null = null
         const selectedReview = getSelectedReviewBranch(args.request)
         if (selectedReview?.provider === 'github') {
+          let lookupFailed = false
           try {
             existingPR = await getLocalGitHubPrForBranch(
               args.repo.path,
               branchName,
               args.localWorktreeGitOptions
             )
-          } catch {}
+          } catch {
+            lookupFailed = true
+          }
           if (isMatchingSelectedGitHubPr(existingPR, args.request, branchName)) {
             branchConflictKind = null
             selectedReviewConflictMatched = true
           } else if (
+            !lookupFailed &&
             !existingPR &&
             (await confirmsSelectedGitHubPrByNumber({
               lookupByNumber: (linkedPRNumber) =>
