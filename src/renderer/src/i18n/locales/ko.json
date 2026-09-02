@@ -8778,8 +8778,36 @@
             }
           }
         },
+        "RepositoryWorkspaceTrustSection": {
+          "description": "이 프로젝트 위치에 기록된 신뢰 결정입니다. 신뢰는 상속되므로 폴더에 기록된 결정은 그 안에 중첩된 모든 항목에도 적용됩니다.",
+          "settingDescription": "이 프로젝트 위치에 기록된 신뢰 결정을 검토하거나 변경합니다."
+        },
+        "RepositoryWorkspaceTrustStatus": {
+          "trustedHeading": "신뢰됨",
+          "trustedDescription": "{{path}}를 신뢰했습니다. 이 결정은 해당 위치에 정확히 기록되며 그 안에 중첩된 모든 항목에 적용됩니다.",
+          "inheritedHeading": "{{ancestorPath}}에서 상속된 신뢰",
+          "inheritedDescription": "{{path}} 자체에는 기록된 결정이 없으므로 {{ancestorPath}}에 기록된 결정을 상속합니다.",
+          "untrustedHeading": "신뢰되지 않음",
+          "declinedDescription": "{{path}}에 대한 신뢰를 거부했습니다. 여기에서 변경할 때까지 Orca는 그 결정을 유지합니다.",
+          "undecidedDescription": "{{path}}에 대해 기록된 신뢰 결정이 없습니다. Orca는 기록된 결정이 없는 위치를 신뢰되지 않은 것으로 처리합니다.",
+          "notApplicableHeading": "해당 없음",
+          "notApplicableDescription": "{{path}}는 원격 연결을 통해 접근합니다. 워크스페이스 신뢰는 이 컴퓨터의 위치에 대한 결정만 기록합니다.",
+          "effect": "이 결정은 Orca가 공개 레지스트리 대신 로컬 npm 클라이언트에서 패키지 세부 정보를 읽을지 여부를 결정합니다.",
+          "trustProject": "이 프로젝트 신뢰",
+          "declineProject": "이 프로젝트를 신뢰하지 않음",
+          "revoke": "신뢰 취소",
+          "revokeAncestor": "{{ancestorPath}}의 신뢰 취소"
+        },
         "repository": {
           "search": {
+            "workspaceTrust": "워크스페이스 신뢰",
+            "workspaceTrustDescription": "이 프로젝트 위치에 기록된 신뢰 결정을 검토하거나 변경합니다.",
+            "trust": "신뢰",
+            "workspaceTrustKeyword": "워크스페이스 신뢰",
+            "trusted": "신뢰됨",
+            "untrusted": "신뢰되지 않음",
+            "revokeTrust": "신뢰 취소",
+            "trustedLocation": "신뢰된 위치",
             "bc7e504b8e": ".orca/issue-command",
             "603c68b68c": "orca.yaml",
             "9dc60d7f6d": "GitHub",

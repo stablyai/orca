@@ -10038,8 +10038,36 @@
             }
           }
         },
+        "RepositoryWorkspaceTrustSection": {
+          "description": "The trust decision recorded for this project location. Trust is inheritable, so a decision recorded for a folder also covers everything nested beneath it.",
+          "settingDescription": "Review or change the trust decision recorded for this project location."
+        },
+        "RepositoryWorkspaceTrustStatus": {
+          "trustedHeading": "Trusted",
+          "trustedDescription": "You trusted {{path}}. The decision is recorded for that exact location and covers everything nested beneath it.",
+          "inheritedHeading": "Trust inherited from {{ancestorPath}}",
+          "inheritedDescription": "No decision is recorded for {{path}} itself, so it inherits the one recorded for {{ancestorPath}}.",
+          "untrustedHeading": "Not trusted",
+          "declinedDescription": "You declined trust for {{path}}. Orca keeps that decision until you change it here.",
+          "undecidedDescription": "No trust decision is recorded for {{path}}. Orca treats a location with no recorded decision as not trusted.",
+          "notApplicableHeading": "Not applicable",
+          "notApplicableDescription": "{{path}} is reached over a remote connection. Workspace trust records decisions about locations on this machine only.",
+          "effect": "This decision governs whether Orca reads package details from your local npm client instead of the public registry.",
+          "trustProject": "Trust this project",
+          "declineProject": "Don't trust this project",
+          "revoke": "Revoke trust",
+          "revokeAncestor": "Revoke trust for {{ancestorPath}}"
+        },
         "repository": {
           "search": {
+            "workspaceTrust": "Workspace Trust",
+            "workspaceTrustDescription": "Review or change the trust decision recorded for this project location.",
+            "trust": "trust",
+            "workspaceTrustKeyword": "workspace trust",
+            "trusted": "trusted",
+            "untrusted": "untrusted",
+            "revokeTrust": "revoke trust",
+            "trustedLocation": "trusted location",
             "bc7e504b8e": ".orca/issue-command",
             "603c68b68c": "orca.yaml",
             "9dc60d7f6d": "github",

@@ -8784,8 +8784,36 @@
             }
           }
         },
+        "RepositoryWorkspaceTrustSection": {
+          "description": "La decisión de confianza registrada para la ubicación de este proyecto. La confianza es heredable, por lo que una decisión registrada para una carpeta también cubre todo lo que esté anidado dentro de ella.",
+          "settingDescription": "Revisa o cambia la decisión de confianza registrada para la ubicación de este proyecto."
+        },
+        "RepositoryWorkspaceTrustStatus": {
+          "trustedHeading": "De confianza",
+          "trustedDescription": "Confiaste en {{path}}. La decisión queda registrada para esa ubicación exacta y cubre todo lo que esté anidado dentro de ella.",
+          "inheritedHeading": "Confianza heredada de {{ancestorPath}}",
+          "inheritedDescription": "No hay ninguna decisión registrada para {{path}} en sí, por lo que hereda la registrada para {{ancestorPath}}.",
+          "untrustedHeading": "Sin confianza",
+          "declinedDescription": "Rechazaste la confianza para {{path}}. Orca conserva esa decisión hasta que la cambies aquí.",
+          "undecidedDescription": "No hay ninguna decisión de confianza registrada para {{path}}. Orca trata como no confiable toda ubicación sin decisión registrada.",
+          "notApplicableHeading": "No aplicable",
+          "notApplicableDescription": "Se accede a {{path}} mediante una conexión remota. La confianza del espacio de trabajo solo registra decisiones sobre ubicaciones de esta máquina.",
+          "effect": "Esta decisión determina si Orca lee los detalles de los paquetes desde tu cliente npm local en lugar del registro público.",
+          "trustProject": "Confiar en este proyecto",
+          "declineProject": "No confiar en este proyecto",
+          "revoke": "Revocar la confianza",
+          "revokeAncestor": "Revocar la confianza de {{ancestorPath}}"
+        },
         "repository": {
           "search": {
+            "workspaceTrust": "Confianza del espacio de trabajo",
+            "workspaceTrustDescription": "Revisa o cambia la decisión de confianza registrada para la ubicación de este proyecto.",
+            "trust": "confianza",
+            "workspaceTrustKeyword": "confianza del espacio de trabajo",
+            "trusted": "de confianza",
+            "untrusted": "sin confianza",
+            "revokeTrust": "revocar confianza",
+            "trustedLocation": "ubicación de confianza",
             "bc7e504b8e": ".orca/issue-command",
             "603c68b68c": "orca.yaml",
             "9dc60d7f6d": "github",

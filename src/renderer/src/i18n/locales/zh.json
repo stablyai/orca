@@ -8843,8 +8843,36 @@
             }
           }
         },
+        "RepositoryWorkspaceTrustSection": {
+          "description": "为此项目位置记录的信任决定。信任可继承，因此为某个文件夹记录的决定同样适用于其中嵌套的所有内容。",
+          "settingDescription": "查看或更改为此项目位置记录的信任决定。"
+        },
+        "RepositoryWorkspaceTrustStatus": {
+          "trustedHeading": "已信任",
+          "trustedDescription": "你已信任 {{path}}。该决定记录在这个确切位置上，并适用于其中嵌套的所有内容。",
+          "inheritedHeading": "信任继承自 {{ancestorPath}}",
+          "inheritedDescription": "{{path}} 本身没有记录任何决定，因此继承了为 {{ancestorPath}} 记录的决定。",
+          "untrustedHeading": "未信任",
+          "declinedDescription": "你拒绝了对 {{path}} 的信任。在你于此处更改之前，Orca 会保留该决定。",
+          "undecidedDescription": "尚未为 {{path}} 记录信任决定。Orca 会将没有记录决定的位置视为未信任。",
+          "notApplicableHeading": "不适用",
+          "notApplicableDescription": "{{path}} 通过远程连接访问。工作区信任仅记录关于本机位置的决定。",
+          "effect": "该决定决定 Orca 是否从本地 npm 客户端而不是公共注册表读取软件包详情。",
+          "trustProject": "信任此项目",
+          "declineProject": "不信任此项目",
+          "revoke": "撤销信任",
+          "revokeAncestor": "撤销对 {{ancestorPath}} 的信任"
+        },
         "repository": {
           "search": {
+            "workspaceTrust": "工作区信任",
+            "workspaceTrustDescription": "查看或更改为此项目位置记录的信任决定。",
+            "trust": "信任",
+            "workspaceTrustKeyword": "工作区信任",
+            "trusted": "已信任",
+            "untrusted": "未信任",
+            "revokeTrust": "撤销信任",
+            "trustedLocation": "受信任的位置",
             "bc7e504b8e": ".orca/issue-command",
             "603c68b68c": "orca.yaml",
             "9dc60d7f6d": "GitHub",

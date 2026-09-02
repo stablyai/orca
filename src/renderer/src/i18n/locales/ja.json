@@ -8806,8 +8806,36 @@
             }
           }
         },
+        "RepositoryWorkspaceTrustSection": {
+          "description": "このプロジェクトの場所に記録された信頼の決定です。信頼は継承されるため、フォルダーに記録された決定は、その中にネストされたすべてにも適用されます。",
+          "settingDescription": "このプロジェクトの場所に記録された信頼の決定を確認または変更します。"
+        },
+        "RepositoryWorkspaceTrustStatus": {
+          "trustedHeading": "信頼済み",
+          "trustedDescription": "{{path}} を信頼しました。この決定はその正確な場所に記録され、その中にネストされたすべてに適用されます。",
+          "inheritedHeading": "{{ancestorPath}} から継承された信頼",
+          "inheritedDescription": "{{path}} 自体には決定が記録されていないため、{{ancestorPath}} に記録された決定を継承します。",
+          "untrustedHeading": "信頼されていません",
+          "declinedDescription": "{{path}} の信頼を拒否しました。ここで変更するまで、Orcaはその決定を保持します。",
+          "undecidedDescription": "{{path}} には信頼の決定が記録されていません。Orcaは、決定が記録されていない場所を信頼されていないものとして扱います。",
+          "notApplicableHeading": "対象外",
+          "notApplicableDescription": "{{path}} はリモート接続経由でアクセスします。ワークスペースの信頼は、このマシン上の場所に関する決定のみを記録します。",
+          "effect": "この決定は、Orcaがパッケージの詳細を公開レジストリではなくローカルのnpmクライアントから読み取るかどうかを決めます。",
+          "trustProject": "このプロジェクトを信頼する",
+          "declineProject": "このプロジェクトを信頼しない",
+          "revoke": "信頼を取り消す",
+          "revokeAncestor": "{{ancestorPath}} の信頼を取り消す"
+        },
         "repository": {
           "search": {
+            "workspaceTrust": "ワークスペースの信頼",
+            "workspaceTrustDescription": "このプロジェクトの場所に記録された信頼の決定を確認または変更します。",
+            "trust": "信頼",
+            "workspaceTrustKeyword": "ワークスペースの信頼",
+            "trusted": "信頼済み",
+            "untrusted": "信頼されていない",
+            "revokeTrust": "信頼の取り消し",
+            "trustedLocation": "信頼された場所",
             "bc7e504b8e": ".orca/issue-command",
             "603c68b68c": "orca.yaml",
             "9dc60d7f6d": "GitHub",
