@@ -16713,7 +16713,9 @@
         "SortableTabContextMenu": {
           "switchToTerminalView": "Switch to terminal view",
           "switchToChatView": "Switch to chat view",
-          "closeTabsToLeft": "Close Tabs To The Left"
+          "closeTabsToLeft": "Close Tabs To The Left",
+          "sessionId": "Session ID",
+          "copySessionId": "Copy Session ID"
         },
         "BrowserTab": {
           "closeOthers": "Close Others",

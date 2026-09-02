@@ -111,6 +111,29 @@ export function makeTreeReadOnly(targetPath, chmod = chmodSync) {
 }
 
 /**
+ * Restore owner write permission across a tree.
+ *
+ * The inverse of `makeTreeReadOnly`, for the private copies `copyPrivateTree` returns. Clone and
+ * reflink preserve mode, so a copy taken from the protected shared dist arrives read-only, and every
+ * patch the caller then applies -- plist edits, dropped helpers, codesign -- fails EACCES on a tree
+ * nothing else shares. Only the owner write bit is added, for the same reason the inverse only
+ * clears write bits: a flat mode would strip setuid or the execute bit Electron needs.
+ */
+export function makeTreeWritable(targetPath, chmod = chmodSync) {
+  for (const entry of readdirSync(targetPath, { withFileTypes: true })) {
+    const entryPath = join(targetPath, entry.name)
+    if (entry.isDirectory()) {
+      makeTreeWritable(entryPath, chmod)
+    } else if (!entry.isSymbolicLink()) {
+      const mode = statSync(entryPath, { throwIfNoEntry: false })?.mode
+      chmod(entryPath, mode === undefined ? 0o644 : mode | 0o200)
+    }
+  }
+  const mode = statSync(targetPath, { throwIfNoEntry: false })?.mode
+  chmod(targetPath, mode === undefined ? 0o755 : mode | 0o200)
+}
+
+/**
  * Share storage when possible, otherwise copy the bytes.
  *
  * Never hardlinks: this is for trees the caller goes on to patch, where shared inodes would write

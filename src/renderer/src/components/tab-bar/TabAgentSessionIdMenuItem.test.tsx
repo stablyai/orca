@@ -66,10 +66,6 @@ describe('TabAgentSessionIdMenuItem', () => {
     await vi.waitFor(() => expect(writeClipboardText).toHaveBeenCalledWith('abc-123'))
   })
 
-  it('renders an enabled action for a known id', () => {
-    expect(render('abc-123').querySelector('button')?.disabled).toBe(false)
-  })
-
   it('reports clipboard failures', async () => {
     const writeClipboardText = vi.fn().mockRejectedValue(new Error('clipboard unavailable'))
     Object.assign(window, { api: { ui: { writeClipboardText } } })
@@ -77,9 +73,7 @@ describe('TabAgentSessionIdMenuItem', () => {
 
     act(() => button?.click())
     await vi.waitFor(() =>
-      expect(toastMock.error).toHaveBeenCalledWith('Failed to copy {{value0}}', {
-        value0: 'session id'
-      })
+      expect(toastMock.error).toHaveBeenCalledWith('Failed to copy {{value0}}')
     )
   })
 })

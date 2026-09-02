@@ -23,7 +23,7 @@ import {
   isDevBundleInUse,
   selectStaleDevBundleDirs
 } from './dev-electron-bundle-cache.mjs'
-import { copyPrivateTree } from './space-sharing-copy.mjs'
+import { copyPrivateTree, makeTreeWritable } from './space-sharing-copy.mjs'
 import {
   DEV_BUNDLE_ID,
   getDevBundlePlistPatches,
@@ -290,6 +290,9 @@ function prepareMacDevElectronApp() {
   // Why clone-first: this ~280MB copy is made per branch title x Electron version, and only the
   // plist/helper/codesign bytes patched below ever diverge from the source.
   copyPrivateTree(sourceAppPath, appPath)
+  // Why: the shared dist cache publishes read-only and clone preserves mode, so without this the
+  // plist patches and codesign below fail EACCES on a bundle that is already private.
+  makeTreeWritable(appPath)
   restoreElectronFrameworkSymlinks(appPath)
 
   const plistPath = path.join(appPath, 'Contents', 'Info.plist')
