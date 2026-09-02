@@ -69,6 +69,7 @@ export type ProjectHostSetup = {
 export type ProjectHostSetupExistingFolderArgs = {
   projectId: string
   projectProviderIdentity?: ProjectProviderIdentity
+  projectGitRemoteIdentity?: GitRemoteIdentity
   hostId: ExecutionHostId
   path: string
   kind?: RepoKind

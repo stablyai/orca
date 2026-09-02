@@ -64,7 +64,11 @@ describe('deriveGitRemoteIdentity', () => {
     ).toEqual({
       canonicalKey: 'git.company.test/team/sample-app',
       remoteName: 'upstream',
-      remoteUrl: 'https://git.company.test/team/sample-app.git'
+      remoteUrl: 'https://git.company.test/team/sample-app.git',
+      origin: {
+        canonicalKey: 'git.company.test/forks/sample-app',
+        remoteUrl: 'git@git.company.test:forks/sample-app.git'
+      }
     })
 
     expect(
@@ -80,6 +84,48 @@ describe('deriveGitRemoteIdentity', () => {
       canonicalKey: 'git.company.test/team/sample-app',
       remoteName: 'mirror'
     })
+  })
+
+  it('records the checkout origin when a fork or template remote outranks it', () => {
+    expect(
+      deriveGitRemoteIdentity(
+        [
+          'origin\thttps://github.com/alice/to-svg.com.git (fetch)',
+          'origin\thttps://github.com/alice/to-svg.com.git (push)',
+          'upstream\thttps://github.com/TemplateHQ/site-template.git (fetch)',
+          'upstream\thttps://github.com/TemplateHQ/site-template.git (push)'
+        ].join('\n')
+      )
+    ).toEqual({
+      canonicalKey: 'github.com/TemplateHQ/site-template',
+      remoteName: 'upstream',
+      remoteUrl: 'https://github.com/TemplateHQ/site-template.git',
+      origin: {
+        canonicalKey: 'github.com/alice/to-svg.com',
+        remoteUrl: 'https://github.com/alice/to-svg.com.git'
+      }
+    })
+  })
+
+  it('omits the checkout origin key when the primary pick already is origin', () => {
+    expect(
+      deriveGitRemoteIdentity(
+        [
+          'origin\tgit@github.com:alice/app.git (fetch)',
+          'mirror\tgit@github.com:alice/app-mirror.git (fetch)'
+        ].join('\n')
+      )
+    ).toEqual({
+      canonicalKey: 'github.com/alice/app',
+      remoteName: 'origin',
+      remoteUrl: 'git@github.com:alice/app.git'
+    })
+  })
+
+  it('omits the checkout origin key when the repo has no origin remote', () => {
+    expect(
+      deriveGitRemoteIdentity('upstream\tgit@github.com:team/app.git (fetch)')
+    ).not.toHaveProperty('origin')
   })
 })
 

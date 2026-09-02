@@ -36,6 +36,11 @@ export const MIN_COMPATIBLE_RUNTIME_CLIENT_VERSION = 2
 export const MIN_COMPATIBLE_RUNTIME_SERVER_VERSION = 2
 
 export const PROJECT_HOST_SETUP_RUNTIME_CAPABILITY = 'project-host-setup.v1' as const
+// Why a second capability: a host that predates checkout-keyed project identity aligns an
+// existing folder only through the provider identity, so a client must not send it a project id
+// derived from the checkout's own remote — it would reject every fork/template setup.
+export const PROJECT_HOST_SETUP_CHECKOUT_IDENTITY_RUNTIME_CAPABILITY =
+  'project-host-setup.checkout-identity.v1' as const
 export const TASK_SOURCE_CONTEXT_RUNTIME_CAPABILITY = 'task-source-context.v1' as const
 export const WORKSPACE_RUN_CONTEXT_RUNTIME_CAPABILITY = 'workspace-run-context.v1' as const
 export const WORKTREE_LINKED_WORK_ITEM_CONTEXT_RUNTIME_CAPABILITY =
@@ -204,6 +209,7 @@ export const RUNTIME_CAPABILITIES = [
   'workspace-ports.v1',
   'mobile.tasks.v1',
   PROJECT_HOST_SETUP_RUNTIME_CAPABILITY,
+  PROJECT_HOST_SETUP_CHECKOUT_IDENTITY_RUNTIME_CAPABILITY,
   TASK_SOURCE_CONTEXT_RUNTIME_CAPABILITY,
   WORKSPACE_RUN_CONTEXT_RUNTIME_CAPABILITY,
   WORKTREE_LINKED_WORK_ITEM_CONTEXT_RUNTIME_CAPABILITY,

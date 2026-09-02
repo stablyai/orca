@@ -4,6 +4,12 @@ export type GitRemoteIdentity = {
   canonicalKey: string
   remoteName: string
   remoteUrl: string
+  /**
+   * The checkout's own `origin`, recorded only when the pick above is a different remote (a fork
+   * parent, or the template a site was generated from). `getProjectIdentityKey` keys the project
+   * on this origin; the remote picked above only says where PRs and issues live.
+   */
+  origin?: { canonicalKey: string; remoteUrl: string }
 }
 
 export type GitRemoteKeyParts = {
@@ -91,6 +97,7 @@ export function normalizeGitRemoteUrl(remoteUrl: string): string | null {
   }
 }
 
+/** One entry per remote, from its `(fetch)` line of `git remote -v`; push lines are skipped. */
 export function parseGitRemoteVerboseOutput(stdout: string): GitRemoteEntry[] {
   const entries: GitRemoteEntry[] = []
   for (const rawLine of stdout.split(/\r?\n/)) {
@@ -111,6 +118,7 @@ export function parseGitRemoteVerboseOutput(stdout: string): GitRemoteEntry[] {
   return entries
 }
 
+/** Rank when choosing the identity remote: `upstream`, then `origin`, then the rest by name. */
 function primaryRemoteSortKey(entry: GitRemoteEntry): number {
   if (entry.name === 'upstream') {
     return 0
@@ -121,6 +129,10 @@ function primaryRemoteSortKey(entry: GitRemoteEntry): number {
   return 2
 }
 
+/**
+ * The identity for a `git remote -v` listing: `upstream` outranks `origin`, which outranks the
+ * first remote by name — and when a different remote wins, the checkout's own origin rides along.
+ */
 export function deriveGitRemoteIdentity(stdout: string): GitRemoteIdentity | null {
   const entries = parseGitRemoteVerboseOutput(stdout)
     .map((entry) => ({
@@ -133,11 +145,40 @@ export function deriveGitRemoteIdentity(stdout: string): GitRemoteIdentity | nul
       return priority === 0 ? left.name.localeCompare(right.name) : priority
     })
   const selected = entries[0]
-  return selected
-    ? {
-        canonicalKey: selected.canonicalKey,
-        remoteName: selected.name,
-        remoteUrl: selected.url
-      }
-    : null
+  if (!selected) {
+    return null
+  }
+  const origin = entries.find((entry) => entry.name === 'origin')
+  return {
+    canonicalKey: selected.canonicalKey,
+    remoteName: selected.name,
+    remoteUrl: selected.url,
+    ...(origin && origin.canonicalKey !== selected.canonicalKey
+      ? { origin: { canonicalKey: origin.canonicalKey, remoteUrl: origin.url } }
+      : {})
+  }
+}
+
+/**
+ * True when `carried` is the same remote as `existing` plus the checkout origin `existing`
+ * predates — the shape a row written before the origin field existed has until its next probe.
+ */
+export function addsCheckoutOrigin(
+  existing: GitRemoteIdentity | null | undefined,
+  carried: GitRemoteIdentity
+): boolean {
+  return (
+    !!existing &&
+    !existing.origin &&
+    !!carried.origin &&
+    existing.canonicalKey === carried.canonicalKey
+  )
+}
+
+/** The remote that says which repo this checkout *is*, as opposed to which repo it descends from. */
+export function getCheckoutRemote(identity: GitRemoteIdentity): {
+  canonicalKey: string
+  remoteUrl: string
+} {
+  return identity.origin ?? { canonicalKey: identity.canonicalKey, remoteUrl: identity.remoteUrl }
 }

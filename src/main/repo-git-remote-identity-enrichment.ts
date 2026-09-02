@@ -43,10 +43,15 @@ function getRepoLocationKey(repo: Pick<Repo, 'path' | 'connectionId'>): string {
   return `${repo.connectionId ?? 'local'}\0${repo.path}`
 }
 
+/** The live row for a probed repo: `getRepo` when the store has it, else a scan of the list. */
 function getCurrentRepo(store: RepoIdentityStore, id: string): Repo | undefined {
   return store.getRepo?.(id) ?? store.getRepos().find((repo) => repo.id === id)
 }
 
+/**
+ * Whether the row is still the checkout that was probed: same path and host, and not since turned
+ * into a folder workspace. A probe result must never land on a repo that moved underneath it.
+ */
 function isSameProbedRepo(snapshot: Repo, current: Repo | undefined): current is Repo {
   return (
     !!current &&
@@ -56,6 +61,10 @@ function isSameProbedRepo(snapshot: Repo, current: Repo | undefined): current is
   )
 }
 
+/**
+ * Whether a probe result replaces the stored identity: a resolved identity is never cleared, and
+ * a newly learned checkout origin counts as a change so pre-upgrade rows re-key themselves.
+ */
 function shouldWriteProbedIdentity(current: Repo, probed: Repo['gitRemoteIdentity']): boolean {
   const existing = current.gitRemoteIdentity
   if (!existing) {
@@ -66,9 +75,19 @@ function shouldWriteProbedIdentity(current: Repo, probed: Repo['gitRemoteIdentit
   // Why: a resolved identity is replaced only by a probe that found a genuinely different repo.
   // Failures and no-remote answers must never clear it — consumers read an absent identity as
   // "unknown" and gate permissively, so losing one is worse than carrying a stale one.
-  return !!probed && probed.canonicalKey !== existing.canonicalKey
+  // The checkout origin counts as different: rows resolved before it existed carry a project
+  // identity taken from their fork/template parent until a refresh backfills it.
+  return (
+    !!probed &&
+    (probed.canonicalKey !== existing.canonicalKey ||
+      probed.origin?.canonicalKey !== existing.origin?.canonicalKey)
+  )
 }
 
+/**
+ * Stores a probe result only while the repo is still the one probed and the result is a real
+ * change; returns whether a row was written.
+ */
 function writeIdentity(
   store: RepoIdentityStore,
   snapshot: Repo,

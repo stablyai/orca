@@ -8,6 +8,10 @@ import {
   normalizeWorktreeVisibilitySourcePreferences
 } from '../../../shared/worktree/visibility-sources'
 
+/**
+ * Rebuilds `upstream` from untrusted JSON: `null` stays the settled "no fork parent" marker, a row
+ * missing owner or repo becomes `undefined`, and an absent host stays absent.
+ */
 export function sanitizeRepoUpstream(value: unknown): Repo['upstream'] | undefined {
   if (value === undefined) {
     return undefined
@@ -32,6 +36,10 @@ export function sanitizeRepoUpstream(value: unknown): Repo['upstream'] | undefin
   return host ? { owner, repo, host } : { owner, repo }
 }
 
+/**
+ * Rebuilds a persisted identity from untrusted JSON: `null` stays the settled "no usable remote"
+ * marker, and a row missing a required part becomes `undefined` so the probe runs again.
+ */
 export function sanitizeGitRemoteIdentity(value: unknown): GitRemoteIdentity | null | undefined {
   // Why: `null` is a resolved "no usable remote" marker; dropping it would make
   // a settled repo indistinguishable from one whose identity probe is pending.
@@ -45,16 +53,40 @@ export function sanitizeGitRemoteIdentity(value: unknown): GitRemoteIdentity | n
     canonicalKey?: unknown
     remoteName?: unknown
     remoteUrl?: unknown
+    origin?: unknown
   }
   const canonicalKey =
     typeof candidate.canonicalKey === 'string' ? candidate.canonicalKey.trim() : ''
   const remoteName = typeof candidate.remoteName === 'string' ? candidate.remoteName.trim() : ''
   const remoteUrl = typeof candidate.remoteUrl === 'string' ? candidate.remoteUrl.trim() : ''
+  const origin = sanitizeCheckoutOriginRemote(candidate.origin)
   return canonicalKey && remoteName && remoteUrl
-    ? { canonicalKey, remoteName, remoteUrl }
+    ? {
+        canonicalKey,
+        remoteName,
+        remoteUrl,
+        // Why kept optional: rows written before the checkout origin existed re-acquire it on the
+        // next identity refresh, and repos whose pick already is origin never carry one.
+        ...(origin ? { origin } : {})
+      }
     : undefined
 }
 
+/** A checkout origin only when both of its parts survive as non-empty strings; half an origin is dropped. */
+function sanitizeCheckoutOriginRemote(
+  value: unknown
+): NonNullable<GitRemoteIdentity['origin']> | undefined {
+  if (!value || typeof value !== 'object') {
+    return undefined
+  }
+  const candidate = value as { canonicalKey?: unknown; remoteUrl?: unknown }
+  const canonicalKey =
+    typeof candidate.canonicalKey === 'string' ? candidate.canonicalKey.trim() : ''
+  const remoteUrl = typeof candidate.remoteUrl === 'string' ? candidate.remoteUrl.trim() : ''
+  return canonicalKey && remoteUrl ? { canonicalKey, remoteUrl } : undefined
+}
+
+/** Keeps only a known setup method; anything else becomes `undefined`, not a stray string. */
 export function sanitizeRepoProjectHostSetupMethod(
   value: unknown
 ): RepoProjectHostSetupMethod | undefined {

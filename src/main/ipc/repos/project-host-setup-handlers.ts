@@ -12,7 +12,12 @@ import type {
   ProjectHostSetupUpdateArgs,
   ProjectHostSetupUpdateResult
 } from '../../../shared/project-types'
-import { getProjectIdForProviderIdentity } from '../../../shared/project-host-setup-projection'
+import {
+  getCarriedCheckoutIdentityKey,
+  getProjectIdentityKey,
+  getProjectIdForProviderIdentity
+} from '../../../shared/project-host-setup-projection'
+import { addsCheckoutOrigin } from '../../../shared/git-remote-identity'
 import { getProjectHostSetupForRepo } from '../../../shared/project-host-setup-lookup'
 import { parseExecutionHostId } from '../../../shared/execution-host'
 import { prepareLocalWorktreeRootForRepo } from '../../worktree-root-preparation'
@@ -29,6 +34,10 @@ import {
 import { addLocalRepoFromPath } from './local-repo-registration'
 import { addRemoteRepoFromPath } from './remote-repo-registration'
 
+/**
+ * The IPC reply for a registered repo. A setup whose project row is missing is a store invariant
+ * breach, so it throws instead of replying with a half-built result.
+ */
 function buildProjectHostSetupResult(store: Store, repo: Repo): ProjectHostSetupResult {
   const setup = getProjectHostSetupForRepo(store.getProjectHostSetups(), repo)
   const project = store.getProjects().find((entry) => entry.id === setup.projectId)
@@ -38,34 +47,73 @@ function buildProjectHostSetupResult(store: Store, repo: Repo): ProjectHostSetup
   return { project, setup, repo }
 }
 
+/**
+ * Merges a freshly registered repo into the project the request named — stamping the ancestor
+ * identity or the carried checkout identity — and refuses when no stamp makes the derived id match.
+ */
 function alignRepoWithRequestedProject(
   store: Store,
   repo: Repo,
   projectId: string,
   setupMethod: ProjectHostSetupExistingFolderArgs['setupMethod'] = 'imported-existing-folder',
-  requestedProviderIdentity?: ProjectHostSetupExistingFolderArgs['projectProviderIdentity']
+  requestedProviderIdentity?: ProjectHostSetupExistingFolderArgs['projectProviderIdentity'],
+  requestedGitRemoteIdentity?: ProjectHostSetupExistingFolderArgs['projectGitRemoteIdentity']
 ): ProjectHostSetupResult {
   let setup = getProjectHostSetupForRepo(store.getProjectHostSetups(), repo)
   if (setup.projectId !== projectId) {
     const project = store.getProjects().find((entry) => entry.id === projectId)
     // Why: the selected project can exist only on the source host, so its structured identity travels with the request.
     const identity = project?.providerIdentity ?? requestedProviderIdentity
-    if (!identity || getProjectIdForProviderIdentity(identity) !== projectId) {
-      throw new Error('Imported folder does not match the selected project identity.')
-    }
-    // Why: stamp the selected project's provider identity when the folder lacks upstream, so projection can merge it.
-    const updated = store.updateRepo(repo.id, {
-      upstream: {
+    // Why: mirrors `identity` above for checkout-keyed projects, which have no provider identity —
+    // the target host may not have the project record yet, so the request's copy is the only source.
+    const checkoutIdentity = project?.gitRemoteIdentity ?? requestedGitRemoteIdentity
+    if (identity && getProjectIdForProviderIdentity(identity) === projectId) {
+      const upstream = {
         owner: identity.owner,
         repo: identity.repo,
         ...(identity.host ? { host: identity.host } : {})
       }
-    })
-    if (!updated) {
-      throw new Error(`Project setup repo disappeared before it could be linked: ${repo.id}`)
+      // Why re-check before writing: a stale gitRemoteIdentity on the repo outranks upstream in
+      // getProjectIdentityKey, so stamping first could leave a mismatched upstream behind on throw.
+      if (getProjectIdentityKey({ ...repo, upstream }) !== projectId) {
+        throw new Error('Imported folder does not match the selected project identity.')
+      }
+      // Why: stamp the selected project's provider identity when the folder lacks upstream, so projection can merge it.
+      const updated = store.updateRepo(repo.id, { upstream })
+      if (!updated) {
+        throw new Error(`Project setup repo disappeared before it could be linked: ${repo.id}`)
+      }
+      repo = updated
+    } else if (
+      checkoutIdentity &&
+      (!repo.gitRemoteIdentity || addsCheckoutOrigin(repo.gitRemoteIdentity, checkoutIdentity)) &&
+      getCarriedCheckoutIdentityKey(checkoutIdentity, identity) === projectId
+    ) {
+      // Why both: the checkout remote is what keys the project, and the ancestor metadata is what
+      // qualifies a GHES id with its API port — the recheck below re-derives from the stored row.
+      const updated = store.updateRepo(repo.id, {
+        gitRemoteIdentity: checkoutIdentity,
+        ...(identity
+          ? {
+              upstream: {
+                owner: identity.owner,
+                repo: identity.repo,
+                ...(identity.host ? { host: identity.host } : {})
+              }
+            }
+          : {})
+      })
+      if (!updated) {
+        throw new Error(`Project setup repo disappeared before it could be linked: ${repo.id}`)
+      }
+      repo = updated
+    } else {
+      throw new Error('Imported folder does not match the selected project identity.')
     }
-    repo = updated
     setup = getProjectHostSetupForRepo(store.getProjectHostSetups(), repo)
+    if (getProjectIdentityKey(repo) !== projectId) {
+      throw new Error('Imported folder does not match the selected project identity.')
+    }
   }
   const updated = store.updateRepo(repo.id, { projectHostSetupMethod: setupMethod })
   if (!updated) {
@@ -77,6 +125,10 @@ function alignRepoWithRequestedProject(
   return buildProjectHostSetupResult(store, repo)
 }
 
+/**
+ * Local-host project setup IPC. A setup request carries the selected project's identity, so a
+ * folder can join a project this host holds no record of yet.
+ */
 export function registerProjectHostSetupHandlers(mainWindow: BrowserWindow, store: Store): void {
   ipcMain.handle(
     'projectHostSetups:create',
@@ -172,7 +224,8 @@ export function registerProjectHostSetupHandlers(mainWindow: BrowserWindow, stor
           result.repo,
           args.projectId,
           args.setupMethod,
-          args.projectProviderIdentity
+          args.projectProviderIdentity,
+          args.projectGitRemoteIdentity
         )
       } catch (err) {
         // Why: an import that cannot be linked must not leave a new repo registration or authorization root behind.

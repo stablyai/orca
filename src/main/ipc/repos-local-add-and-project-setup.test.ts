@@ -328,6 +328,103 @@ describe('repos:add + repos:clone', () => {
     expect(result).toHaveProperty('project.id', 'github:github.acme.test/acme/orca')
   })
 
+  /** Applies `updateRepo` calls to `rows` in place and returns a copy of the row, like the store. */
+  function mockRepoUpdatesInto(rows: Record<string, unknown>[]): void {
+    mockStore.updateRepo.mockImplementation((id, updates) => {
+      const repo = rows.find((entry) => entry.id === id)
+      if (!repo) {
+        return null
+      }
+      Object.assign(repo, updates)
+      return { ...repo }
+    })
+  }
+
+  it('links a folder into a checkout-keyed project with the carried git remote identity', async () => {
+    const added: Record<string, unknown>[] = []
+    mockStore.getRepos.mockImplementation(() => added)
+    mockStore.addRepo.mockImplementation((repo: Record<string, unknown>) => added.push(repo))
+    mockRepoUpdatesInto(added)
+    // Why derived from the repo: the target host has no record of the project until the identity is
+    // stamped, so the request's copy is the only source the align step can use.
+    mockStore.getProjects.mockImplementation(() => {
+      const repo = added.find((entry) => 'gitRemoteIdentity' in entry)
+      return repo
+        ? [
+            {
+              id: 'github:alice/site',
+              displayName: 'site',
+              gitRemoteIdentity: repo.gitRemoteIdentity
+            }
+          ]
+        : []
+    })
+
+    const result = await handlers.get('projectHostSetups:setupExistingFolder')!(null, {
+      projectId: 'github:alice/site',
+      projectGitRemoteIdentity: {
+        canonicalKey: 'github.com/TemplateHQ/site-template',
+        remoteName: 'upstream',
+        remoteUrl: 'https://github.com/TemplateHQ/site-template.git',
+        origin: {
+          canonicalKey: 'github.com/alice/site',
+          remoteUrl: 'https://github.com/alice/site.git'
+        }
+      },
+      hostId: 'local',
+      path: '/tmp/site-src',
+      kind: 'git'
+    })
+
+    expect(added[0]?.gitRemoteIdentity).toMatchObject({
+      origin: { canonicalKey: 'github.com/alice/site' }
+    })
+    expect(result).toHaveProperty('project.id', 'github:alice/site')
+    expect(mockStore.removeProject).not.toHaveBeenCalled()
+  })
+
+  it('accepts a carried identity that only adds the origin a pre-upgrade row predates', async () => {
+    const templateIdentity = {
+      canonicalKey: 'github.com/TemplateHQ/site-template',
+      remoteName: 'upstream',
+      remoteUrl: 'https://github.com/TemplateHQ/site-template.git'
+    }
+    // Why pre-upgrade: rows written before the origin field existed carry only the ancestor key
+    // until their next probe, and refusing them would fail the import for hours.
+    const existing = {
+      id: 'repo-pre-upgrade',
+      path: '/tmp/site-src',
+      displayName: 'src',
+      kind: 'git',
+      gitRemoteIdentity: templateIdentity
+    }
+    const repos = [existing as Record<string, unknown>]
+    mockStore.getRepos.mockImplementation(() => repos)
+    mockRepoUpdatesInto(repos)
+    mockStore.getProjects.mockImplementation(() => {
+      const identity = existing.gitRemoteIdentity as { origin?: unknown }
+      return identity.origin
+        ? [{ id: 'github:alice/site', displayName: 'site', gitRemoteIdentity: identity }]
+        : []
+    })
+
+    const result = await handlers.get('projectHostSetups:setupExistingFolder')!(null, {
+      projectId: 'github:alice/site',
+      projectGitRemoteIdentity: {
+        ...templateIdentity,
+        origin: {
+          canonicalKey: 'github.com/alice/site',
+          remoteUrl: 'https://github.com/alice/site.git'
+        }
+      },
+      hostId: 'local',
+      path: existing.path,
+      kind: 'git'
+    })
+
+    expect(result).toHaveProperty('project.id', 'github:alice/site')
+  })
+
   it('rolls back a new repo when the supplied identity does not match the project', async () => {
     const added: Record<string, unknown>[] = []
     mockStore.getRepos.mockImplementation(() => added)

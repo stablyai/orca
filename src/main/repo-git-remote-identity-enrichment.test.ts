@@ -267,6 +267,31 @@ describe('enrichMissingRepoGitRemoteIdentities', () => {
     expect(onChanged).not.toHaveBeenCalled()
   })
 
+  it('backfills the checkout origin key onto an identity resolved before it existed', async () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(1_000)
+    const withOriginKey: GitRemoteIdentity = {
+      ...remoteIdentity,
+      origin: {
+        canonicalKey: 'git.company.test/alice/sample-app',
+        remoteUrl: 'git@git.company.test:alice/sample-app.git'
+      }
+    }
+    vi.mocked(probeGitRemoteIdentity).mockResolvedValue({
+      status: 'resolved',
+      identity: withOriginKey
+    })
+    const repo = makeRepo({ gitRemoteIdentity: remoteIdentity })
+    const store = makeStore(repo)
+
+    await sweep(store)
+    vi.setSystemTime(1_000 + REFRESH_STARTUP_DELAY_MS + 1)
+    enrichMissingRepoGitRemoteIdentities(store)
+    await drainEnrichmentSweep()
+
+    expect(store.updateRepo).toHaveBeenCalledWith('repo-1', { gitRemoteIdentity: withOriginKey })
+  })
+
   it('keeps the existing identity when a re-probe cannot reach the host', async () => {
     vi.useFakeTimers()
     vi.setSystemTime(1_000)

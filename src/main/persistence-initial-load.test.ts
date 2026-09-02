@@ -343,6 +343,38 @@ describe('Store', () => {
     })
   })
 
+  it('keeps the checkout origin key on load and derives the project id from it', async () => {
+    writeDataFile({
+      ...getDefaultPersistedState(testState.dir),
+      repos: [
+        makeRepo({
+          id: 'r1',
+          path: '/repo',
+          displayName: 'App',
+          gitRemoteIdentity: {
+            canonicalKey: 'git.example.com/TemplateHQ/site-template',
+            remoteName: 'upstream',
+            remoteUrl: 'git@git.example.com:TemplateHQ/site-template.git',
+            origin: {
+              canonicalKey: 'git.example.com/alice/app',
+              remoteUrl: 'git@git.example.com:alice/app.git'
+            }
+          }
+        })
+      ]
+    })
+
+    const store = await createStore()
+
+    expect(store.getRepos()[0]?.gitRemoteIdentity?.origin).toEqual({
+      canonicalKey: 'git.example.com/alice/app',
+      remoteUrl: 'git@git.example.com:alice/app.git'
+    })
+    expect(store.getProjects().map((project) => project.id)).toEqual([
+      'git:git.example.com/alice/app'
+    ])
+  })
+
   it('carries project state and independent setups across a repo remote identity change', async () => {
     const originProjectId = 'git:git.example.com/acme/app'
     writeDataFile({

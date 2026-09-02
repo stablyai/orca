@@ -6,7 +6,8 @@ import {
   MERGE_RECONCILIATION_PULL_ARGS,
   normalizeGitErrorMessage,
   pullArgsSpecifyReconciliation,
-  runPullWithDivergenceFallback
+  runPullWithDivergenceFallback,
+  stripCredentialsFromMessage
 } from './git-remote-error'
 
 afterEach(() => {
@@ -93,6 +94,17 @@ describe('normalizeGitErrorMessage', () => {
         (separator instanceof RegExp && separator.source === '\\r?\\n')
     )
     expect(usedLineSplit).toBe(false)
+  })
+})
+
+describe('stripCredentialsFromMessage', () => {
+  it('strips an HTTP(S) user:password pair even when either side is empty', () => {
+    expect(stripCredentialsFromMessage('https://:secret@github.com/a/b.git')).toBe(
+      'https://github.com/a/b.git'
+    )
+    expect(stripCredentialsFromMessage('https://ghp_secret:@github.com/a/b.git')).toBe(
+      'https://github.com/a/b.git'
+    )
   })
 })
 

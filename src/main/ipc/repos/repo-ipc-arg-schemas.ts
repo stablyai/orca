@@ -44,6 +44,19 @@ export const ProjectHostSetupExistingFolderIpcArgs = z.object({
       host: z.string().min(1).optional()
     })
     .optional(),
+  projectGitRemoteIdentity: z
+    .object({
+      canonicalKey: z.string().trim().min(1),
+      remoteName: z.string().trim().min(1),
+      remoteUrl: z.string().trim().min(1),
+      origin: z
+        .object({
+          canonicalKey: z.string().trim().min(1),
+          remoteUrl: z.string().trim().min(1)
+        })
+        .optional()
+    })
+    .optional(),
   hostId: z.string().min(1),
   path: z.string().min(1),
   kind: z.enum(['git', 'folder']).optional(),

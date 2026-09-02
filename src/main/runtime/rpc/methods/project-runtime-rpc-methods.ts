@@ -15,6 +15,21 @@ const ProjectProviderIdentity = z.object({
   host: OptionalString
 })
 
+const ProjectGitRemoteIdentity = z.object({
+  // Why not requiredString: it validates min(1) before trimming, so a whitespace-only value would
+  // pass here but still sanitize away to nothing in the persistence layer (repo-sanitization.ts),
+  // silently dropping `origin` after this schema's pre-write identity check already accepted it.
+  canonicalKey: z.string().trim().min(1, 'Missing git remote canonical key'),
+  remoteName: z.string().trim().min(1, 'Missing git remote name'),
+  remoteUrl: z.string().trim().min(1, 'Missing git remote URL'),
+  origin: z
+    .object({
+      canonicalKey: z.string().trim().min(1, 'Missing git remote origin canonical key'),
+      remoteUrl: z.string().trim().min(1, 'Missing git remote origin URL')
+    })
+    .optional()
+})
+
 // Why: `runtime:<environment-id>` ids are minted by the calling client's own pairing store
 // (addEnvironmentFromPairingCode -> randomUUID), so they name a machine only relative to that
 // client. A client sending one to this runtime is addressing *us*, and runtimes do not proxy
@@ -35,6 +50,7 @@ const RequestedHostId = requiredString('Missing host ID').transform((value, ctx)
 const ProjectHostSetupExistingFolder = z.object({
   projectId: requiredString('Missing project ID'),
   projectProviderIdentity: ProjectProviderIdentity.optional(),
+  projectGitRemoteIdentity: ProjectGitRemoteIdentity.optional(),
   hostId: RequestedHostId,
   path: requiredString('Missing project path'),
   kind: z.enum(['git', 'folder']).optional(),

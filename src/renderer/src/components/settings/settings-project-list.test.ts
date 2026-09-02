@@ -78,6 +78,49 @@ describe('buildSettingsProjectList', () => {
     expect(projects[0].representativeRepoId).toBe('folder-x')
   })
 
+  it('gives each template-derived checkout its own section instead of one shared pane', () => {
+    const templateIdentity = {
+      canonicalKey: 'github.com/TemplateHQ/site-template',
+      remoteName: 'upstream',
+      remoteUrl: 'https://github.com/TemplateHQ/site-template.git'
+    }
+    const repos: Repo[] = [
+      makeRepo({
+        id: 'videotoprompt',
+        displayName: 'VideoToPrompt.org',
+        upstream: { owner: 'TemplateHQ', repo: 'site-template', host: 'github.com' },
+        gitRemoteIdentity: {
+          ...templateIdentity,
+          origin: {
+            canonicalKey: 'github.com/alice/videotoprompt.org',
+            remoteUrl: 'https://github.com/alice/videotoprompt.org.git'
+          }
+        }
+      }),
+      makeRepo({
+        id: 'to-svg',
+        displayName: 'src',
+        upstream: { owner: 'TemplateHQ', repo: 'site-template', host: 'github.com' },
+        gitRemoteIdentity: {
+          ...templateIdentity,
+          origin: {
+            canonicalKey: 'github.com/alice/to-svg.com',
+            remoteUrl: 'https://github.com/alice/to-svg.com.git'
+          }
+        }
+      })
+    ]
+
+    const projects = buildSettingsProjectList(repos)
+    const representatives = buildRepoIdToRepresentative(projects)
+
+    expect(projects).toHaveLength(2)
+    // Why: `repo-<representative>` is the section a Project Settings deep link scrolls to, so a
+    // shared representative is what sent the sidebar's second project to the first project's pane.
+    expect(representatives.get('to-svg')).toBe('to-svg')
+    expect(representatives.get('videotoprompt')).toBe('videotoprompt')
+  })
+
   it('keeps the representative stable when an unrelated host is removed', () => {
     const withRuntime: Repo[] = [
       makeRepo({ id: 'local-1', gitRemoteIdentity: gitRemote }),
