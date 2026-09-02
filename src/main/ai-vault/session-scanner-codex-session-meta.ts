@@ -1,6 +1,8 @@
 import { asRecord, extractString, normalizeTitleText } from './session-scanner-values'
 
-/** Codex writes worker/sub-agent transcripts into the same tree; only user-started threads list. */
+// Field readers for Codex's `session_meta` record, whose key spelling has drifted
+// across Codex releases (snake_case rollouts, camelCase app-server rollouts).
+
 export function isCodexWorkerSession(payload: Record<string, unknown>): boolean {
   const threadSource = extractString(payload.thread_source) ?? extractString(payload.threadSource)
   if (threadSource) {

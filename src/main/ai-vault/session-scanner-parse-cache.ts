@@ -11,7 +11,7 @@ import { createCursorSessionResumeState } from './session-scanner-cursor-parser'
 import { countSubagentTranscripts } from './session-scanner-subagent-transcripts'
 import { countOmpSubagentTranscripts } from './session-scanner-omp-subagent-transcripts'
 import type { ResumableSessionParseState, SessionFileCandidate } from './session-scanner-types'
-import { refreshCachedCodexTitle } from './session-scanner-codex-cached-title'
+import { refreshCachedCodexMetadata } from './session-scanner-codex-cached-metadata'
 import { consumeCompleteJsonlLines, type JsonlReadResult } from './session-scanner-jsonl-reader'
 import { getSessionParseCacheEntry, storeSessionParseCacheEntry } from './session-parse-cache-store'
 import {
@@ -170,7 +170,7 @@ export async function parseAgentSessionFileCached(
     // Codex titles come from session_index.jsonl, which mtime+size can't see.
     // Remote counterpart: remote-session-scanner.ts's reusedCodexTitleRefresh.
     if (entry.session && candidate.agent === 'codex') {
-      entry.session = await refreshCachedCodexTitle(candidate, entry.session)
+      entry.session = await refreshCachedCodexMetadata(candidate, entry.session)
     }
     storeSessionParseCacheEntry(file.path, entry)
     return entry.session
