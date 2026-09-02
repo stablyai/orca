@@ -1,6 +1,7 @@
 import React, { useCallback, useMemo } from 'react'
 import { useAppStore } from '@/store'
 import { useShallow } from 'zustand/react/shallow'
+import { SIDEBAR_PROJECT_GROUP_CREATE_REQUEST_EVENT } from '@/lib/scroll-to-current-workspace-status'
 import {
   useAllWorktrees,
   useProjectHostSetupProjection,
@@ -185,6 +186,19 @@ const WorktreeList = React.memo(function WorktreeList({
     sortBy
   })
   const projectGroupDialogs = useProjectGroupDialogs({ repos, repoMap, projectGroups })
+
+  // Why: the standalone-group entry lives in the header menu, outside this component;
+  // a window event bridges the two without threading a prop through the sidebar tree.
+  const handleCreateStandaloneProjectGroup = projectGroupDialogs.handleCreateStandaloneProjectGroup
+  React.useEffect(() => {
+    const onCreateRequest = (): void => {
+      handleCreateStandaloneProjectGroup()
+    }
+    window.addEventListener(SIDEBAR_PROJECT_GROUP_CREATE_REQUEST_EVENT, onCreateRequest)
+    return () => {
+      window.removeEventListener(SIDEBAR_PROJECT_GROUP_CREATE_REQUEST_EVENT, onCreateRequest)
+    }
+  }, [handleCreateStandaloneProjectGroup])
 
   const handleImmediateWorktreeActivate = useCallback((worktreeId: string, rowKey?: string) => {
     // Why: re-rendering the virtualized sidebar on the pointer path adds visible latency; mutate the row directly and let store state reconcile after.
