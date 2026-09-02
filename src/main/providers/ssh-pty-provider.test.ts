@@ -184,6 +184,24 @@ describe('SshPtyProvider', () => {
     )
   })
 
+  it('shutdown forwards the expected PTY incarnation over the relay', async () => {
+    await provider.shutdown(scopedPty1, {
+      immediate: true,
+      expectedIncarnationId: 'incarnation-1'
+    })
+    expectRequest(
+      mux.request,
+      'pty.shutdown',
+      {
+        id: 'pty-1',
+        immediate: true,
+        keepHistory: false,
+        expectedIncarnationId: 'incarnation-1'
+      },
+      undefined
+    )
+  })
+
   it('shutdown bounds the relay RPC by the teardown deadline', async () => {
     // Why: freeze Date.now() so the leaf conversion deadline -> remaining relative
     // timeout is exact and the mux receives precisely the leftover budget.

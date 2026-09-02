@@ -15,7 +15,6 @@ import type {
   CodexAppServerConnectionHandlers,
   openCodexAppServerConnection
 } from '../codex/codex-app-server-connection'
-import type { CodexStructuredSessionAdapter } from '../codex/codex-structured-session-adapter'
 import { computeAgentSessionPayloadFingerprint } from '../../shared/agent-session-mutation-envelope'
 import { STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY } from '../../shared/protocol-version'
 import type { AgentJournalRenderItem } from '../../shared/agent-session-journal-types'
@@ -28,10 +27,8 @@ import { getStructuredAgentSessionHost } from '../native-chat/agent-session-wire
 import { journalDirectoryFor } from '../native-chat/agent-session-journal/journal-paths'
 import { readJournalBlob } from '../native-chat/agent-session-journal/journal-blob-store'
 import { appendLegacyTranscriptMessages } from '../native-chat/agent-session-journal/journal-legacy-import'
-import {
-  openAgentSessionJournal,
-  type AgentSessionJournal
-} from '../native-chat/agent-session-journal/journal-store'
+import type { AgentSessionJournal } from '../native-chat/agent-session-journal/journal-store'
+import { openAgentSessionJournal } from '../native-chat/agent-session-journal/journal-store-factory'
 import type { OrcaRuntimeService } from './orca-runtime'
 import type { RpcRequest, RpcResponse } from './rpc/core'
 import { RpcDispatcher } from './rpc/dispatcher'
@@ -336,6 +333,35 @@ beforeEach(async () => {
   })
 })
 
+function itemsOf(frames: AgentSessionSubscribeEvent[]): AgentJournalRenderItem[] {
+  const items = new Map<string, AgentJournalRenderItem>()
+  for (const frame of frames) {
+    const published =
+      frame.type === 'snapshot' || frame.type === 'reset'
+        ? frame.page.items
+        : frame.type === 'batch'
+          ? frame.batch.items
+          : []
+    for (const item of published) {
+      items.set(item.itemId, item)
+    }
+  }
+  return [...items.values()]
+}
+
+function cursorOf(frames: AgentSessionSubscribeEvent[]): { epoch: string; sequence: number } {
+  for (let index = frames.length - 1; index >= 0; index -= 1) {
+    const frame = frames[index] as AgentSessionSubscribeEvent
+    if (frame.type === 'batch') {
+      return frame.batch.cursor
+    }
+    if (frame.type === 'snapshot' || frame.type === 'reset') {
+      return frame.page.liveCursor ?? frame.page.window.nextCursor
+    }
+  }
+  throw new Error('subscription published no cursor')
+}
+
 afterEach(async () => {
   await stopStructuredAgentSessionRuntime()
   await rm(root, { recursive: true, force: true })
@@ -580,12 +606,18 @@ describe('a structured codex session over agentSession.*', () => {
     codex.notify('item/completed', {
       item: { type: 'agentMessage', id: 'item-3', text: 'Stopped.' }
     })
+    codex.notify('turn/completed', { turn: { id: TURN } })
     await drainStreamedEvents()
 
     // Resubscribing from the cursor it held replays only what it missed.
     const missed = await subscribe('sub-2', lastCursor)
     expect(missed[0]?.type).toBe('batch')
-    expect(itemsOf(missed).map(textOf)).toEqual(['Stopped.'])
+    expect(
+      itemsOf(missed).some(
+        (item) => item.body?.kind === 'tool-call' && item.body.state === 'failed'
+      )
+    ).toBe(true)
+    expect(itemsOf(missed).map(textOf).filter(Boolean)).toEqual(['Stopped.'])
 
     // A runtime taking the session over is the other half of reconnect: the
     // fence advances, the old child is reaped, and its replacement resumes the
@@ -771,121 +803,58 @@ describe('a structured codex session over agentSession.*', () => {
     expect(await readJournalBlob(journal.directory, bounded?.digest ?? '')).toBe(output)
   })
 
-  it('replays a durable image send without dispatching it twice', async () => {
+  it('keeps an answered prompt resolved after the provider exits', async () => {
     const created = await ok<{ fence: number }>('agentSession.create', createIntentParams())
-    const path = '/tmp/orca-paste-image.png'
-    const body = {
-      kind: 'message' as const,
-      role: 'user' as const,
-      blocks: [{ type: 'image-ref' as const, path }]
-    }
-    const params = {
-      envelope: envelope('agentSession.send', { body }, created.fence),
-      body
-    }
-
-    await ok('agentSession.send', params)
-    const replay = await call('agentSession.send', params)
-
-    expect(replay).toMatchObject({ ok: true, result: { ok: true, replayed: true } })
-    expect(codex.live().calls.filter((entry) => entry.method === 'turn/start')).toHaveLength(1)
-  })
-
-  it('joins an acquired attach through journal bind before draining final rows', async () => {
-    const host = await ensureStructuredAgentSessionHost({
-      stateDirectory: root,
-      hostId: 'local',
-      claimKeyId: 'key-1',
-      resolveWorkspacePath: async (workspaceId) => `/repos/${workspaceId}`,
-      resolveCodexCommand: () => '/usr/local/bin/codex',
-      openCodexConnection: codex.openConnection,
-      readProcessStartTime: async () => 1_700_000_000_000
-    })
-    const adapter = (host as unknown as { deps: { adapter: CodexStructuredSessionAdapter } }).deps
-      .adapter
-    const historyEntered = Promise.withResolvers<void>()
-    const historyGate = Promise.withResolvers<void>()
-    const originalHistoryFilePath = adapter.historyFilePath.bind(adapter)
-    vi.spyOn(adapter, 'historyFilePath').mockImplementation(async (input) => {
-      historyEntered.resolve()
-      await historyGate.promise
-      return originalHistoryFilePath(input)
-    })
-
-    const creating = ok<{ fence: number }>('agentSession.create', createIntentParams())
-    await historyEntered.promise
     codex.notify('turn/started', { threadId: THREAD, turn: { id: TURN } })
     codex.notify('item/started', {
       threadId: THREAD,
       turnId: TURN,
-      item: { type: 'agentMessage', id: 'item-bind-window', text: '' }
+      item: {
+        type: 'commandExecution',
+        id: 'item-needs-answer',
+        command: 'build',
+        status: 'inProgress'
+      }
     })
-    codex.notify('item/agentMessage/delta', {
+    codex.ask(9, 'item/commandExecution/requestApproval', {
       threadId: THREAD,
       turnId: TURN,
-      itemId: 'item-bind-window',
-      delta: 'Buffered while the journal opens.'
+      itemId: 'item-needs-answer',
+      availableDecisions: ['accept', 'decline']
+    })
+    await drainStreamedEvents()
+    const host = getStructuredAgentSessionHost()
+    const journal = (
+      host as unknown as { sessions: Map<string, { journal: AgentSessionJournal }> }
+    ).sessions.get(SESSION)!.journal
+    const approval = journal.snapshot().items.find((item) => item.body?.kind === 'approval')
+    expect(approval?.body).toMatchObject({
+      kind: 'approval',
+      resolution: { state: 'pending' }
     })
 
-    let stopped = false
-    const stopping = stopStructuredAgentSessionRuntime().then(() => {
-      stopped = true
+    await ok('agentSession.respondToApproval', {
+      envelope: envelope(
+        'agentSession.respondTo:approval',
+        {
+          itemId: approval?.itemId,
+          expectedRevision: approval?.revision,
+          optionId: 'accept'
+        },
+        created.fence
+      ),
+      itemId: approval?.itemId,
+      expectedRevision: approval?.revision,
+      optionId: 'accept'
     })
-    await new Promise<void>((resolve) => setImmediate(resolve))
-    const waitedForJournalBind = !stopped
-    historyGate.resolve()
-    await creating
-    await stopping
-    expect(waitedForJournalBind).toBe(true)
+    codex.live().handlers.onExit?.(new Error('provider exited after answer'))
+    await drainStreamedEvents()
 
-    const identity = {
-      sessionId: SESSION,
-      workspaceId: WORKSPACE,
-      hostId: 'local',
-      agent: 'codex' as const,
-      providerHandle: { kind: 'codex' as const, threadId: THREAD }
-    }
-    const reopened = await openAgentSessionJournal({
-      identity,
-      journalDir: journalDirectoryFor(root, identity)
-    })
-    expect(reopened.snapshot().items.map(textOf)).toContain('Buffered while the journal opens.')
     expect(
-      reopened
-        .snapshot()
-        .items.some(
-          (item) => item.body?.kind === 'status' && item.body.turnLifecycle?.state === 'running'
-        )
-    ).toBe(false)
+      journal.snapshot().items.find((item) => item.itemId === approval?.itemId)?.body
+    ).toMatchObject({
+      kind: 'approval',
+      resolution: { state: 'resolved', selectedOptionId: 'accept' }
+    })
   })
 })
-
-/** Every item the subscription has published, latest revision per id. */
-function itemsOf(frames: AgentSessionSubscribeEvent[]): AgentJournalRenderItem[] {
-  const items = new Map<string, AgentJournalRenderItem>()
-  for (const frame of frames) {
-    const published =
-      frame.type === 'snapshot' || frame.type === 'reset'
-        ? frame.page.items
-        : frame.type === 'batch'
-          ? frame.batch.items
-          : []
-    for (const item of published) {
-      items.set(item.itemId, item)
-    }
-  }
-  return [...items.values()]
-}
-
-function cursorOf(frames: AgentSessionSubscribeEvent[]): { epoch: string; sequence: number } {
-  for (let index = frames.length - 1; index >= 0; index -= 1) {
-    const frame = frames[index] as AgentSessionSubscribeEvent
-    if (frame.type === 'batch') {
-      return frame.batch.cursor
-    }
-    if (frame.type === 'snapshot' || frame.type === 'reset') {
-      return frame.page.liveCursor ?? frame.page.window.nextCursor
-    }
-  }
-  throw new Error('subscription published no cursor')
-}

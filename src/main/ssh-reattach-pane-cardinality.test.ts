@@ -2,8 +2,15 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { rmSync, mkdtempSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
-import { testState, createStore, makeTerminalTab } from './persistence-test-harness'
+import {
+  testState,
+  createStore,
+  makeRepo,
+  makeTerminalTab,
+  writeDataFile
+} from './persistence-test-harness'
 import { TEST_LEAF_1, TEST_LEAF_2 } from './persistence-session-fixtures'
+import { getDefaultPersistedState } from '../shared/constants'
 
 vi.mock('electron', () => ({
   app: { getPath: () => testState.dir },
@@ -68,7 +75,8 @@ function relayReattachBinds(
     leafId: args.leafId,
     ptyId: args.ptyId,
     ...(args.incarnationId ? { incarnationId: args.incarnationId } : {}),
-    mayCreate: false
+    mayCreate: false,
+    mayReviveRetiredSurface: false
   })
 }
 
@@ -189,6 +197,44 @@ describe('STA-3077: an SSH reattach binds panes without grafting them back', () 
 
     expect(bound).toBe(true)
     expect(tabIds(store)).toEqual([TAB])
+  })
+
+  it('does not clear and rebind a retired surface loaded from an older profile', async () => {
+    const paneKey = `${TAB}:${TEST_LEAF_1}`
+    const persisted = getDefaultPersistedState(testState.dir)
+    // Registered on purpose: rows owned by an unregistered repo id are swept as orphans on load.
+    persisted.repos = [makeRepo({ id: 'repo1', path: '/repo1' })]
+    persisted.workspaceSession = {
+      ...persisted.workspaceSession,
+      ...sessionWithPane({ tabId: TAB, leafId: TEST_LEAF_1, ptyId: 'pty-1' }),
+      terminalPtyIncarnationsByPaneKey: { [paneKey]: 'inc-1' },
+      terminalSurfaceTombstonesByPaneKey: {
+        [paneKey]: {
+          worktreeId: WORKTREE,
+          parentTabId: TAB,
+          leafId: TEST_LEAF_1,
+          ptyId: 'pty-1',
+          incarnationId: 'inc-1',
+          retiredAt: 1
+        }
+      }
+    }
+    writeDataFile(persisted)
+    const store = await createStore()
+
+    expect(store.getWorkspaceSession().terminalSurfaceTombstonesByPaneKey?.[paneKey]).toBeDefined()
+    expect(
+      relayReattachBinds(store, {
+        tabId: TAB,
+        leafId: TEST_LEAF_1,
+        ptyId: 'pty-1',
+        incarnationId: 'inc-1'
+      })
+    ).toBe(false)
+    expect(store.getWorkspaceSession().terminalSurfaceTombstonesByPaneKey?.[paneKey]).toBeDefined()
+    expect(
+      store.getWorkspaceSession().terminalLayoutsByTabId?.[TAB]?.ptyIdsByLeafId?.[TEST_LEAF_1]
+    ).toBe('pty-1')
   })
 
   it('refuses to graft a second leaf into a tab the reattach does not already own', async () => {

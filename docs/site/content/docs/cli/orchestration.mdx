@@ -1,0 +1,197 @@
+---
+title: Orchestration
+description: Coordinate agents with Runs, tasks, supervised workers, messages, and decision gates.
+---
+
+import { Callout } from '@/components/docs/prose'
+
+Orchestration is Orca's structured multi-agent layer: a **Run** (namespace + coordinator inbox), **Tasks**, **Dispatches**, supervised **workers**, messages, and decision gates.
+
+Use it when you need ownership, completion tracking, or a DAG. For one-off prompts, use `orca terminal send`. For full ownership handoffs without supervision, use worktree/terminal commands from the `orca-cli` skill.
+
+<Callout title="Experimental">
+  Enable orchestration under Settings → Experimental before using these commands. The CLI talks to
+  the running Orca runtime, so `orca status --json` should succeed first.
+</Callout>
+
+<Callout title="Legacy commands retired">
+  `orca orchestration run` and `run-stop` (and `coordinator-start` / `coordinator-stop`) perform
+  **no effects**. They return recovery text pointing at `orca skills get orchestration --full`. Use
+  the Run + worker-start flow below.
+</Callout>
+
+## Core model
+
+- **Run** — durable namespace and home inbox. Never schedules or places workers.
+- **Task** — a work item with a spec, dependencies, and status: `pending`, `ready`, `dispatched`, `completed`, `failed`, or `blocked`.
+- **Dispatch** — one attempt of a task on a terminal; lifecycle authority for `worker_done` / heartbeat.
+- **Message** — inbox mail (`status`, `dispatch`, `worker_done`, `escalation`, `question`, `heartbeat`, …).
+- **Decision gate** — a coordinator-owned question that blocks a task until it is resolved.
+
+Completion authority comes from the active dispatch context. Worker completion and heartbeat messages should include both `taskId` and `dispatchId`.
+
+Task IDs printed in terminals, such as `task_...`, are clickable links. Clicking one asks the Orca runtime for the task's current dispatch and focuses the assigned terminal, including when the task lives in a remote or SSH runtime.
+
+## Preferred supervised loop
+
+```bash
+orca orchestration run-create --objective "Split checkout QA and summarize blockers" --json
+orca orchestration task-create --spec "Audit billing settings for mobile layout" --task-title "Billing audit" --json
+orca orchestration worker-start --task <taskId> --worktree current --agent codex --json
+# or new worktree:
+orca orchestration worker-start --task <taskId> --worktree new-child --name billing-audit --agent codex --setup run --json
+# optional per-worker model / effort (Claude, Codex, Cursor only; not with --terminal):
+orca orchestration worker-start --task <taskId> --worktree current --agent claude --model <opaque-model-id> --effort high --json
+```
+
+`--model` accepts opaque provider model IDs for Claude, Codex, and Cursor. `--effort` requires `--model` and only applies when that agent/model supports the level. Neither flag can combine with `--terminal` (reuse an existing pane). Overrides apply to that launch only and show under `launch.requested` / `launch.effective` in the start receipt. Federated starts need a worker host that advertises launch-preference support.
+
+Wait for completions (process every message in a Delivery, then ack):
+
+```bash
+orca orchestration check --wait --types worker_done,escalation,question --timeout-ms 900000 --json
+orca orchestration check --ack <deliveryId> --wait --types worker_done,escalation,question --timeout-ms 900000 --json
+```
+
+Worker completion (from the worker pane; include injected IDs):
+
+```bash
+orca orchestration send \
+  --type worker_done \
+  --subject "Completed mobile audit" \
+  --body "Fixed footer overlap; no follow-ups." \
+  --task-id <taskId> \
+  --dispatch-id <dispatchId> \
+  --outcome succeeded \
+  --files-modified "src/app/settings/Billing.tsx" \
+  --json
+```
+
+`worker_done` requires `--outcome succeeded|failed`.
+
+Inspect / recover:
+
+```bash
+orca orchestration worker-show --dispatch <dispatchId> --json
+orca orchestration worker-read --dispatch <dispatchId> --limit 50 --json
+orca orchestration worker-stop --dispatch <dispatchId> --json
+# After an accepted worker_done: reuse the same terminal for a follow-up Dispatch, or release it
+# (archives inspectable output, then closes only that coordinator-owned agent terminal):
+orca orchestration worker-release --dispatch <dispatchId> --json
+# Keep a settled worker live for debugging when the user asked to retain it:
+orca orchestration worker-retain --dispatch <dispatchId> --json
+# retry placement is explicit — --retry-of does not inherit --on/worktree:
+orca orchestration worker-start --task <taskId> --retry-of <dispatchId> --worktree current --agent codex --json
+```
+
+Do not leave completed worker terminals open just to re-read output — use `worker-read` after `worker-release`. Do not substitute a broad `terminal close` when release returns `release_pending` or `release_unknown`; follow the receipt's recovery action.
+
+## Federated workers (optional)
+
+```bash
+orca orchestration worker-start \
+  --task <taskId> \
+  --on windows \
+  --worktree new-top-level \
+  --repo <exact_remote_repo_selector> \
+  --name remote-worker \
+  --agent codex \
+  --setup run \
+  --json
+orca orchestration send --to dispatch:<dispatchId> --subject "Follow-up" --body "…" --json
+```
+
+Later commands route by Dispatch ID; do not repeat `--on`.
+
+## Low-level dispatch (custom topology)
+
+```bash
+orca worktree create --name billing-audit --agent codex --json
+orca terminal wait --terminal <workerHandle> --for tui-idle --timeout-ms 60000 --json
+orca orchestration dispatch --task <taskId> --to <workerHandle> --inject --json
+```
+
+## Messaging notes
+
+- Default `check` is the bound Run's oldest unacked Delivery (FIFO). Replay until `--ack`.
+- `--peek` / `--all` do not consume mail.
+- Group addresses: `@all`, `@idle`, `@claude`, `@codex`, `@opencode`, `@gemini`, `@droid`, `@grok`, `@cursor`, `@worktree:<id>` — never for `worker_done` / heartbeat.
+- Quote PowerShell group addresses: `--to "@all"`.
+
+```bash
+orca orchestration send --to @all --subject "Heads up" --body "Pausing dispatches for a review." --json
+orca orchestration send --to @idle --subject "Anyone free?" --json
+orca orchestration send --to @codex --subject "Codex agents only" --json
+```
+
+While a wait is active, the CLI emits small JSON heartbeat lines to stderr every 15 seconds. Stdout remains the final command result.
+
+## Worker contract
+
+Dispatched workers receive a preamble that tells them how to communicate with the coordinator:
+
+- Send `worker_done` exactly once, even on failure, with `--outcome`.
+- Include a short `--body` summary: what was done, what was found, and what remains.
+- Include both task and dispatch IDs so stale retries cannot complete the wrong dispatch.
+- Send `heartbeat` messages during long active work.
+- Use `orca orchestration ask` for blocking questions instead of local TUI prompts.
+
+```bash
+orca orchestration ask \
+  --to <coordinatorHandle> \
+  --question "Should I update the shared component or only this page?" \
+  --options "shared,page-only" \
+  --timeout-ms 600000 \
+  --json
+```
+
+With `--json`, `ask` prints a single JSON object so workers can pipe it to `jq -r .answer`.
+
+## Decision gates
+
+Use `ask` for worker-to-coordinator questions. Use explicit gates when the coordinator has created a task DAG and wants to block a task until a decision is recorded:
+
+```bash
+orca orchestration gate-create \
+  --task <taskId> \
+  --question "Merge the shared button change into the task branch?" \
+  --options '["yes","no"]' \
+  --json
+
+orca orchestration gate-resolve --id <gateId> --resolution "yes" --json
+```
+
+## Recovery
+
+```bash
+orca orchestration dispatch-show --task <taskId> --json
+orca orchestration dispatch-show --task <taskId> --preamble --json
+orca orchestration task-list --json
+orca orchestration task-update --id <taskId> --status blocked --result '{"reason":"waiting on credentials"}' --json
+```
+
+Reset only when you are intentionally abandoning orchestration state:
+
+```bash
+orca orchestration reset --tasks --json
+orca orchestration reset --messages --json
+orca orchestration reset --all --json
+```
+
+`reset` affects runtime-global orchestration state. Do not run it while another coordinator is active unless that is the intended cleanup.
+
+## Choosing the right command
+
+Use `orca terminal send` for a lightweight prompt to an agent you are watching.
+
+Use `orca orchestration worker-start` (or `dispatch --inject`) when a worker must report `worker_done`, ask questions through the coordinator, and be tracked by task ID.
+
+Use `orca orchestration run-create` + tasks + workers when you want a durable Run namespace and supervised multi-agent loop — not the retired `orchestration run` command.
+
+## Full guide
+
+Command flags evolve with the app. After install, agents should run:
+
+```bash
+orca skills get orchestration --full
+```

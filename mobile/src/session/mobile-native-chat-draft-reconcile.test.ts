@@ -47,6 +47,45 @@ describe('mobile native chat image preview reconciliation', () => {
     ])
   })
 
+  it('binds an image echo to the row it was glued into with a following send', () => {
+    // Regression: a send issued while the agent was mid-turn glues onto the input line
+    // with the send beside it, so the landed row's text is the concatenation. Demanding
+    // the whole row equal this echo left it unbound — the phone-local photo never
+    // reached the authoritative row and the echo could never be retired.
+    const messages = [
+      userText('source', '[Image: source: /tmp/a.png]'),
+      userText('prompt', 'look at this[Image #1] is it still working?')
+    ]
+    const preview = { ...pending('pending', ['file:///a.jpg']), text: 'look at this' }
+
+    expect(findLandedImagePreviewEchoes(messages, [preview])).toEqual([
+      { pendingId: 'pending', messageId: 'prompt', images: ['file:///a.jpg'] }
+    ])
+  })
+
+  it('does not bind an image echo to a row that merely shares a word', () => {
+    const messages = [
+      userText('source', '[Image: source: /tmp/a.png]'),
+      userText('prompt', 'totally different[Image #1]')
+    ]
+    const preview = { ...pending('pending', ['file:///a.jpg']), text: 'look at this' }
+
+    expect(findLandedImagePreviewEchoes(messages, [preview])).toEqual([])
+  })
+
+  it('does not bind a glued image echo to an ordinary row with the same prefix', () => {
+    const messages = [
+      userText('ordinary', 'look at this later'),
+      userText('source', '[Image: source: /tmp/a.png]'),
+      userText('prompt', 'look at this[Image #1] is it still working?')
+    ]
+    const preview = { ...pending('pending', ['file:///a.jpg']), text: 'look at this' }
+
+    expect(findLandedImagePreviewEchoes(messages, [preview])).toEqual([
+      { pendingId: 'pending', messageId: 'prompt', images: ['file:///a.jpg'] }
+    ])
+  })
+
   it('reconciles a middle-marker echo without changing its rendered whitespace', () => {
     const messages = [
       userText('source', '[Image: source: /tmp/a.png]'),

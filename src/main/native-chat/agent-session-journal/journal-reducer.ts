@@ -21,6 +21,8 @@ import {
 import { structuredAgentSessionPayloadFingerprint } from '../../../shared/structured-agent-session-mutation'
 import type { JournalRow } from './journal-row-schema'
 
+export const MAX_JOURNAL_APPLIED_SETTLEMENT_IDS = 4_096
+
 export type JournalReducerState = {
   sessionId: string
   epoch: string
@@ -36,6 +38,7 @@ export type JournalReducerState = {
   /** Provider item id → the submission slot that adopted it. Stops an accepted
    *  echo from appending a second copy of the user's own message. */
   aliases: Map<string, string>
+  appliedSettlementIds: Set<string>
 }
 
 export function createJournalReducerState(sessionId: string, epoch: string): JournalReducerState {
@@ -49,7 +52,8 @@ export function createJournalReducerState(sessionId: string, epoch: string): Jou
     tombstones: new Map(),
     submissions: new Map(),
     receipts: new Map(),
-    aliases: new Map()
+    aliases: new Map(),
+    appliedSettlementIds: new Set()
   }
 }
 
@@ -75,11 +79,47 @@ export function applyJournalRow(state: JournalReducerState, row: JournalRow): vo
     removeItem(state, resolveItemId(state, row.itemId), row.revision)
     return
   }
+  if (row.kind === 'lifecycle-batch') {
+    if (state.appliedSettlementIds.has(row.settlementId)) {
+      return
+    }
+    for (const mutation of row.mutations) {
+      if (mutation.kind === 'item') {
+        const itemId = resolveJournalItemId(state, mutation.itemId, mutation.body)
+        upsertItem(state, itemId, mutation.revision, {
+          itemId,
+          revision: mutation.revision,
+          body: mutation.body,
+          sequence: row.seq,
+          observedAt: row.ts,
+          ...(row.recovered ? { recovered: row.recovered } : {})
+        })
+      } else {
+        removeItem(state, resolveItemId(state, mutation.itemId), mutation.revision)
+      }
+    }
+    rememberAppliedSettlementId(state, row.settlementId)
+    return
+  }
   if (row.kind === 'submission') {
     applySubmission(state, row)
     return
   }
   applyDispatch(state, row)
+}
+
+export function rememberAppliedSettlementId(
+  state: JournalReducerState,
+  settlementId: string
+): void {
+  state.appliedSettlementIds.add(settlementId)
+  while (state.appliedSettlementIds.size > MAX_JOURNAL_APPLIED_SETTLEMENT_IDS) {
+    const oldest = state.appliedSettlementIds.values().next().value
+    if (oldest === undefined) {
+      return
+    }
+    state.appliedSettlementIds.delete(oldest)
+  }
 }
 
 export function resolveJournalItemId(

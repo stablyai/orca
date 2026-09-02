@@ -37,11 +37,15 @@ export type LinuxPackageInstallFailureReason =
   | 'authentication-denied'
   | 'package-install-failed'
 
-// Why: the renderer must not infer "no polkit agent" from copy alone — main classifies and the card branches on this discriminant.
+export type LinuxPackageInstallRecoveryReason =
+  | 'manual-install-required'
+  | LinuxPackageInstallFailureReason
+
+// Older paired hosts can still publish classified install failures; the manual reason is additive.
 export type LinuxPackageInstallRecovery = {
   kind: 'linux-package-install'
   packageType: LinuxRootPackageType
-  reason: LinuxPackageInstallFailureReason
+  reason: LinuxPackageInstallRecoveryReason
   version: string
 }
 
@@ -70,6 +74,9 @@ export type UpdateStatus = (
       // three-state ambiguity (undefined vs null vs present) and makes exhaustive
       // checks straightforward.
       changelog: ChangelogData | null
+      /** Linux only: a package manager owns this install, so Orca cannot apply the update itself.
+       *  Additive and optional — older clients simply keep offering their own download. */
+      externallyManaged?: boolean
     }
   | { state: 'not-available'; userInitiated?: boolean }
   | { state: 'downloading'; percent: number; version: string; activeNudgeId?: string }
@@ -77,6 +84,10 @@ export type UpdateStatus = (
   | {
       state: 'error'
       message: string
+      /** Known download/install target; absent for check-time failures and older hosts. */
+      version?: string
+      /** Omitted by older hosts and for failures whose retryability is unknown. */
+      retryable?: boolean
       userInitiated?: boolean
       activeNudgeId?: string
       recovery?: LinuxPackageInstallRecovery

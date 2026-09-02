@@ -99,8 +99,8 @@ function selectReplayTargets(
  *
  *  Re-checks the fence here rather than trusting the selection pass, so the identity proof and the
  *  irreversible call sit next to each other and cannot drift apart if this loop is ever reshaped.
- *  It still cannot be made atomic — `pty.shutdown` carries no incarnation, so only the host could
- *  refuse a stale kill. See the residual risk note in the PR. */
+ *  Current relays enforce that fence atomically at shutdown; older relays ignore the additive field
+ *  and retain this inventory check as their mixed-version fallback. */
 async function deliverReplay(
   args: SshPendingPtyKillReplayArgs,
   entry: SshPendingPtyKillEntry,
@@ -114,7 +114,10 @@ async function deliverReplay(
   }
   args.store.noteSshRemotePtyKillReplayAttempt(args.targetId, entry.ptyId)
   try {
-    await args.provider.shutdown(toAppSshPtyId(args.targetId, entry.ptyId), { immediate: true })
+    await args.provider.shutdown(toAppSshPtyId(args.targetId, entry.ptyId), {
+      immediate: true,
+      expectedIncarnationId: entry.intent.incarnationId
+    })
     return true
   } catch (err) {
     console.warn(
@@ -154,7 +157,8 @@ async function confirmDelivered(
  *  Runs before reattach so a PTY that dies here is never re-adopted as a live pane. Costs nothing
  *  when nothing is pending. When something is, it re-reads the inventory once per wave rather than
  *  once per batch: the fence and the stops it authorises are then never more than one round trip
- *  apart, which is as tight as this can get while `pty.shutdown` carries no incarnation of its own.
+ *  apart, preserving the safest available behavior against older relays that ignore the shutdown
+ *  incarnation field.
  *
  *  Never throws. It is best-effort work on the connect path, and `establish()` treats a throw here
  *  as a failed connection. */

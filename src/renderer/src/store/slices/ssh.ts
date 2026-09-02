@@ -19,6 +19,7 @@ export type RemoteWorkspaceSyncStatus = {
   direction?: 'pull' | 'push'
   revision?: number
   updatedAt?: number
+  hostObservationToken?: string
   lastSyncedAt?: number
   message?: string
 }
@@ -26,7 +27,7 @@ export type RemoteWorkspaceSyncStatus = {
 export type SshCredentialRequest = {
   requestId: string
   targetId: string
-  kind: 'passphrase' | 'password'
+  kind: 'passphrase' | 'password' | 'keyboard-interactive'
   detail: string
 }
 

@@ -677,6 +677,27 @@ describe('shared agent-hook-listener', () => {
       expect(childDriven?.payload.interactivePrompt).toBeUndefined()
     })
 
+    it('preserves tool-output provenance when restoring the lead preview after an answer', () => {
+      claudeEvent({ hook_event_name: 'UserPromptSubmit', prompt: 'inspect and ask' })
+      claudeEvent({
+        hook_event_name: 'PostToolUse',
+        tool_name: 'Bash',
+        tool_response: { content: [{ type: 'text', text: 'raw command output' }] }
+      })
+      claudeEvent({
+        hook_event_name: 'PreToolUse',
+        tool_name: 'AskUserQuestion',
+        tool_input: { questions: [{ question: 'Continue?' }] }
+      })
+
+      clearClaudeAnsweredQuestionWait(state, PANE_KEY)
+
+      expect(state.lastToolByPaneKey.get(PANE_KEY)).toMatchObject({
+        lastAssistantMessage: 'raw command output',
+        lastAssistantMessageIsToolOutput: true
+      })
+    })
+
     it('restores the stashed lead state for an answered child question', () => {
       claudeEvent({ hook_event_name: 'UserPromptSubmit', prompt: 'go' })
       claudeEvent({ hook_event_name: 'SubagentStart', agent_id: 'a1', agent_type: 'probe' })

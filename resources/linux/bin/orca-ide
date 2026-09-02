@@ -38,4 +38,5 @@ export ORCA_NODE_REPL_EXTERNAL_MODULE="${NODE_REPL_EXTERNAL_MODULE-}"
 unset NODE_OPTIONS
 unset NODE_REPL_EXTERNAL_MODULE
 
+# CLI commands run in Electron's Node mode and must never initialize Chromium.
 ELECTRON_RUN_AS_NODE=1 exec "$ELECTRON" "$CLI" "$@"

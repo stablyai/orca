@@ -32,13 +32,17 @@ async function ensureProxyFromEnvironment(): Promise<void> {
   }).catch(() => {})
 }
 
+// Why: the scope name carries the shipped version once a point release exists
+// ("Fable 5.1"), so exact equality would drop the window.
+const FABLE_SCOPE_RE = /^fable\b/
+
 function mapFableWeeklyWindow(data: OAuthUsageResponse): RateLimitWindow | null {
   const scoped = Array.isArray(data.limits)
     ? data.limits.find(
         (limit) =>
           limit?.kind === 'weekly_scoped' &&
           Number.isFinite(limit.percent) &&
-          limit.scope?.model?.display_name?.trim().toLowerCase() === 'fable'
+          FABLE_SCOPE_RE.test(limit.scope?.model?.display_name?.trim().toLowerCase() ?? '')
       )
     : undefined
   return (

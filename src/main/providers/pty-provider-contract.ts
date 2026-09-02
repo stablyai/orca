@@ -199,7 +199,12 @@ export type IPtyProvider = {
   // deadline; each RPC leaf converts to a relative timeout when it actually issues.
   shutdown(
     id: string,
-    opts: { immediate?: boolean; keepHistory?: boolean; deadlineMs?: number }
+    opts: {
+      immediate?: boolean
+      keepHistory?: boolean
+      deadlineMs?: number
+      expectedIncarnationId?: PtyIncarnationId
+    }
   ): Promise<void>
   sendSignal(id: string, signal: string): Promise<void>
   getCwd(id: string): Promise<string>

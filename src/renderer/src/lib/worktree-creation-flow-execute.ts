@@ -99,6 +99,9 @@ export async function executeWorktreeCreation(
         preparedRequest.compareBaseRef,
         {
           ...(preparedRequest.nameWasGenerated ? { nameWasGenerated: true } : {}),
+          ...(preparedRequest.displayNameKind
+            ? { displayNameKind: preparedRequest.displayNameKind }
+            : {}),
           ...(preparedRequest.linkedWorkItem !== undefined
             ? { linkedWorkItem: preparedRequest.linkedWorkItem }
             : {}),

@@ -134,6 +134,36 @@ describe('superviseForegroundServe signal exits', () => {
     expect(vi.getTimerCount()).toBe(0)
   })
 
+  it('forwards Linux terminal hangup and removes the listener after exit', async () => {
+    setPlatform('linux')
+    const listenersBefore = process.listeners('SIGHUP')
+    const child = new FakeChildProcess()
+    const supervised = superviseChild(child)
+
+    expect(process.listeners('SIGHUP')).toHaveLength(listenersBefore.length + 1)
+    process.emit('SIGHUP', 'SIGHUP')
+    expect(child.kill).toHaveBeenCalledWith('SIGHUP')
+
+    child.emit('exit', null, 'SIGHUP')
+    await expect(supervised).resolves.toBe(0)
+    expect(process.listeners('SIGHUP')).toEqual(listenersBefore)
+
+    const killCallsAfterExit = child.kill.mock.calls.length
+    process.emit('SIGHUP', 'SIGHUP')
+    expect(child.kill).toHaveBeenCalledTimes(killCallsAfterExit)
+  })
+
+  it('treats a child exit through the caller-forwarded SIGINT as graceful', async () => {
+    setPlatform('linux')
+    const child = new FakeChildProcess()
+    const supervised = superviseChild(child)
+
+    process.emit('SIGINT', 'SIGINT')
+    child.emit('exit', null, 'SIGINT')
+
+    await expect(supervised).resolves.toBe(0)
+  })
+
   it('does not terminate an exited child when update handoff completion fails late', async () => {
     vi.useFakeTimers()
     const missingParent = await mkdtemp(join(tmpdir(), 'orca-serve-missing-handoff-'))

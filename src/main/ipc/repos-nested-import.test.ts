@@ -59,7 +59,7 @@ describe('projectGroups IPC validation', () => {
     mockWindow.webContents.send.mockReset()
     resetProjectGroupMocks(reposMocks, { isGitRepo, getGitRepoRoot })
 
-    registerRepoHandlers(mockWindow as never, mockStore as never)
+    registerRepoHandlers(mockWindow as never, mockStore as never, {} as never)
   })
 
   it('uses completed scan ids as an allowlist for nested imports', async () => {

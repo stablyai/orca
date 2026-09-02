@@ -139,6 +139,8 @@ export type TerminalActions = {
   ) => void
   /** Reconciles exact exits; bulk clear intentionally retains relay-grace identity. */
   clearTabPtyId: (tabId: string, ptyId?: string) => void
+  /** Protects a tab from orphan cleanup after an unverified PTY loss. */
+  markUnverifiedPtyLoss: (tabId: string) => void
   clearDirectSshTargetPtyBindings: (targetId: string) => number
   invalidateStaleDirectSshTargetPtyBindings: (authority: DirectSshAuthority) => number
   retryDirectSshTargetPanes: (authority: DirectSshAuthority, now?: number) => number

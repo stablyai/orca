@@ -79,6 +79,7 @@ export function buildWorktreePurgeState(
     lastKnownRelayPtyIdByTabId: omitByTabId(s.lastKnownRelayPtyIdByTabId),
     // Why: liveness-authoritative reconnect maps (orphan sweep reads them); drop purged tabs' entries here too so a re-materialized id can't inherit phantom liveness.
     pendingReconnectPtyIdByTabId: omitByTabId(s.pendingReconnectPtyIdByTabId),
+    unverifiedPtyLossTabIds: omitByTabId(s.unverifiedPtyLossTabIds),
     deferredSshSessionIdsByTabId: omitByTabId(s.deferredSshSessionIdsByTabId),
     pendingInitialCwdByTabId: omitByTabId(s.pendingInitialCwdByTabId),
     pendingIssueCommandSplitByTabId: omitByTabId(s.pendingIssueCommandSplitByTabId),

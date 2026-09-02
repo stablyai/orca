@@ -24,6 +24,9 @@ type IpcPtyConnectContext = {
   transportOptions: IpcPtyTransportOptions
   handlers: IpcPtySessionHandlers
   isDestroyed: () => boolean
+  /** True only for the one buffered exit consumed by this connect attempt. */
+  isExpectedExitCurrent: () => boolean
+  ownsPtyId: (id: string) => boolean
   bind: (id: string) => void
   isCurrent: (id: string) => boolean
   setCallbacks: (callbacks: PtyConnectOptions['callbacks']) => void
@@ -44,11 +47,20 @@ export async function connectIpcPty(
   }
   if (options.sessionId && hasPreHandlerPtyExit(options.sessionId)) {
     if (options.admitPtyId && !options.admitPtyId(options.sessionId)) {
-      return { id: options.sessionId }
+      return context.isDestroyed() ? undefined : { id: options.sessionId }
+    }
+    if (context.isDestroyed()) {
+      return
     }
     context.bind(options.sessionId)
     handlers.registerData(options.sessionId)
+    if (context.isDestroyed()) {
+      return
+    }
     handlers.registerExit(options.sessionId)
+    if (!context.isExpectedExitCurrent()) {
+      return
+    }
     return { id: options.sessionId, exitedBeforeAttach: true }
   }
 
@@ -77,7 +89,12 @@ export async function connectIpcPty(
     const priorIncarnationFence = currentPreHandlerPtySequence()
     const spawnResult = await spawnIpcPty(transportOptions, options, admittedSessionId)
     const retireFreshSpawn = async (): Promise<void> => {
-      if (!spawnResult.isReattach && !spawnResult.coldRestore) {
+      // A newer generation may already own a recycled id; an id-only kill would retire its PTY.
+      if (
+        !spawnResult.isReattach &&
+        !spawnResult.coldRestore &&
+        !context.ownsPtyId(spawnResult.id)
+      ) {
         await window.api.pty.kill(spawnResult.id)
       }
     }
@@ -88,10 +105,18 @@ export async function connectIpcPty(
     }
     if (options.admitPtyId && !options.admitPtyId(spawnResult.id)) {
       await retireFreshSpawn()
-      return spawnResult
+      return context.isDestroyed() ? undefined : spawnResult
+    }
+    if (context.isDestroyed()) {
+      await retireFreshSpawn()
+      return
     }
     if (spawnResult.isReattach && !admittedSessionId) {
       context.getCallbacks().onReattachDetermined?.()
+      if (context.isDestroyed()) {
+        await retireFreshSpawn()
+        return
+      }
     }
 
     // Why unconditional: this runs on identity, not timing. Whatever we attached to — fresh,
@@ -106,20 +131,41 @@ export async function connectIpcPty(
     context.bind(spawnResult.id)
     if (!spawnResult.isReattach && !spawnResult.coldRestore) {
       onPtySpawn?.(spawnResult.id)
+      if (context.isDestroyed()) {
+        return
+      }
     }
     handlers.registerData(spawnResult.id)
+    if (context.isDestroyed()) {
+      return
+    }
     const exitedBeforeAttach = handlers.registerExit(spawnResult.id, spawnResult.incarnationId)
     if (exitedBeforeAttach) {
+      if (!context.isExpectedExitCurrent()) {
+        return
+      }
       return { id: spawnResult.id, exitedBeforeAttach: true }
+    }
+    if (context.isDestroyed()) {
+      return
     }
     if (!context.isCurrent(spawnResult.id)) {
       return
     }
 
     context.getCallbacks().onConnect?.()
+    if (context.isDestroyed() || !context.isCurrent(spawnResult.id)) {
+      return
+    }
     context.getCallbacks().onStatus?.('shell')
+    if (context.isDestroyed() || !context.isCurrent(spawnResult.id)) {
+      return
+    }
     return projectIpcPtyConnectResult(spawnResult)
   } catch (error) {
+    if (context.isDestroyed()) {
+      return
+    }
     return handleConnectError(error, options, context)
   }
 }

@@ -21,7 +21,7 @@ import {
   type ProviderHistoryItem,
   type ProviderHistoryWindow
 } from './journal-submission-reconciler'
-import { openAgentSessionJournal } from './journal-store'
+import { openAgentSessionJournal } from './journal-store-factory'
 
 const IDENTITY: AgentSessionJournalIdentity = {
   sessionId: 'session-1',

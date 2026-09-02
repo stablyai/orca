@@ -19,28 +19,32 @@ function readSystemdUnitBlocks(doc: string): Map<string, string[]> {
 }
 
 describe('headless lock-loss exit contract', () => {
-  const source = readFileSync(join(process.cwd(), 'src/main/index.ts'), 'utf8')
+  const preflightSource = readFileSync(
+    join(process.cwd(), 'src/main/startup/main-process-preflight.ts'),
+    'utf8'
+  )
+  const entrySource = readFileSync(join(process.cwd(), 'src/main/index.ts'), 'utf8')
   const doc = readFileSync(join(process.cwd(), 'docs/reference/headless-linux-server.md'), 'utf8')
 
   it('exits the lock-losing launch immediately instead of scheduling a graceful quit', () => {
-    const gateStart = source.indexOf('if (!hasSingleInstanceLock) {')
+    const gateStart = preflightSource.indexOf('if (!hasLock) {')
     // Why: bound the anchor — an unresolved indexOf slices to EOF and passes vacuously.
     expect(gateStart).toBeGreaterThanOrEqual(0)
-    const gateEnd = source.indexOf('\n}', gateStart)
+    const gateEnd = preflightSource.indexOf('\n  }', gateStart)
     expect(gateEnd).toBeGreaterThan(gateStart)
 
-    const gate = source.slice(gateStart, gateEnd)
+    const gate = preflightSource.slice(gateStart, gateEnd)
     expect(gate).toContain('app.exit(SINGLE_INSTANCE_ALREADY_RUNNING_EXIT_CODE)')
     expect(gate).not.toContain('app.quit()')
   })
 
   it('keeps a duplicate serve launch from promoting the live server to a desktop window', () => {
-    const activationStart = source.indexOf('function requestDesktopActivation(')
+    const activationStart = entrySource.indexOf('function requestDesktopActivation(')
     expect(activationStart).toBeGreaterThanOrEqual(0)
-    const activationEnd = source.indexOf('\n}', activationStart)
+    const activationEnd = entrySource.indexOf('\n}', activationStart)
     expect(activationEnd).toBeGreaterThan(activationStart)
 
-    expect(source.slice(activationStart, activationEnd)).toContain(
+    expect(entrySource.slice(activationStart, activationEnd)).toContain(
       'shouldActivateDesktopForSecondInstance(argv)'
     )
   })

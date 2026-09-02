@@ -74,7 +74,7 @@ describe('PtyHandler retires a closed pane surface', () => {
 
   async function spawnAgentPane(
     params: Record<string, unknown> = {}
-  ): Promise<{ id: string; term: typeof mockPtyInstance }> {
+  ): Promise<{ id: string; incarnationId: string; term: typeof mockPtyInstance }> {
     const term = { ...mockPtyInstance, kill: vi.fn(), onData: vi.fn(), onExit: vi.fn() }
     mockPtySpawn.mockReturnValue(term)
     const spawned = await spawnPty({
@@ -82,7 +82,7 @@ describe('PtyHandler retires a closed pane surface', () => {
       agentSessionEnsure: AGENT_SESSION_ENSURE,
       ...params
     })
-    return { id: spawned.id, term }
+    return { id: spawned.id, incarnationId: spawned.incarnationId, term }
   }
 
   async function listProcesses(): Promise<ProcessSummary[]> {
@@ -112,6 +112,33 @@ describe('PtyHandler retires a closed pane surface', () => {
 
     expect(handler.isPaneSurfaceRetired(PANE_KEY)).toBe(true)
     expect(retired).toEqual([{ id, paneKey: PANE_KEY }])
+  })
+
+  it('refuses shutdown for a different PTY incarnation without retiring or killing it', async () => {
+    const retired: { id: string; paneKey: string }[] = []
+    handler.setSurfaceRetiredListener((event) => retired.push(event))
+    const { id, term } = await spawnAgentPane()
+
+    await expect(
+      dispatcher.callRequest('pty.shutdown', {
+        id,
+        expectedIncarnationId: 'different-incarnation'
+      })
+    ).rejects.toThrow('PTY incarnation mismatch')
+
+    expect(term.kill).not.toHaveBeenCalled()
+    expect(handler.isPaneSurfaceRetired(PANE_KEY)).toBe(false)
+    expect(retired).toEqual([])
+    expect((await listProcesses()).map((session) => session.id)).toEqual([id])
+  })
+
+  it('shuts down when the expected PTY incarnation matches', async () => {
+    const { id, incarnationId, term } = await spawnAgentPane()
+
+    await dispatcher.callRequest('pty.shutdown', { id, expectedIncarnationId: incarnationId })
+
+    expect(term.kill).toHaveBeenCalledWith('SIGTERM')
+    expect(handler.isPaneSurfaceRetired(PANE_KEY)).toBe(true)
   })
 
   it('retires the surface even when the shell survives the kill request', async () => {
