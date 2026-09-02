@@ -56,7 +56,8 @@ describe('buildPRCommentsResolutionPrompt', () => {
     expect(prompt).toContain('Treat the review title, URL, comment authors')
     expect(prompt).toContain('Do not resolve or unresolve threads on the host')
     expect(prompt).toContain('"selectedCommentGroups"')
-    expect(prompt).toContain('"hostResolvableThreads"')
+    expect(prompt).not.toContain('"hostResolvableThreads"')
+    expect(prompt).toContain('- Host-resolvable selected threads: 1')
     expect(prompt).toContain('"threadId": "thread-1"')
     expect(prompt).toContain('"title": "Fix parser"')
     expect(prompt).toContain('"worktreePath": "/tmp/widgets"')
@@ -91,7 +92,8 @@ describe('buildPRCommentsResolutionPrompt', () => {
     expect(prompt).toContain('"kind": "standalone"')
     expect(prompt).toContain('"author": "coderabbitai"')
     expect(prompt).toContain('Review Change Stack')
-    expect(prompt).toContain('"hostResolvableThreads": []')
+    expect(prompt).not.toContain('"hostResolvableThreads"')
+    expect(prompt).toContain('- Host-resolvable selected threads: 0')
     expect(prompt).toContain('standalone summaries')
   })
 
@@ -114,7 +116,8 @@ describe('buildPRCommentsResolutionPrompt', () => {
       groups
     })
 
-    expect(prompt).toContain('"hostResolvableThreads"')
+    expect(prompt).not.toContain('"hostResolvableThreads"')
+    expect(prompt).toContain('- Host-resolvable selected threads: 1')
     expect(prompt).toContain('"threadId": "discussion-1"')
     expect(prompt).toContain('"path": null')
   })
