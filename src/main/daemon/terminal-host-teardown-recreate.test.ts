@@ -2,15 +2,29 @@ import { describe, expect, it, vi, type Mock } from 'vitest'
 import type { SubprocessHandle } from './session-subprocess-handle'
 import { TerminalHost, type TerminalHostOptions } from './terminal-host'
 
-type SpawnSubprocess = TerminalHostOptions['spawnSubprocess']
+// Why mocked: the win32 plain-shell teardown sweeps for real, and an unmocked run would put a
+// live process-table probe -- and, on a recycled pid, a taskkill /T /F -- behind these tests.
+const killWithDescendantSweepMock = vi.hoisted(() => vi.fn())
+vi.mock('../pty-descendant-termination', () => ({
+  killWithDescendantSweep: killWithDescendantSweepMock
+}))
 
-/** A shell that only reports its exit after `exitDelayMs`, the way a real one does while the
- *  Windows sweep is still probing and taskkilling its tree. */
-function spawnSubprocessWithSlowExit(exitDelayMs: number): Mock<SpawnSubprocess> {
-  return vi.fn<SpawnSubprocess>(() => {
+type SpawnSubprocess = TerminalHostOptions['spawnSubprocess']
+type ExitableSubprocess = SubprocessHandle & { exit: (code: number) => void }
+
+/** Shells that report their exit only after `exitDelayMs`, holding the teardown claim open the
+ *  way a real one does while the Windows sweep probes and taskkills its tree. Collected so a test
+ *  can retire an intentionally unkillable child instead of leaking its exit waiter. */
+function spawnSubprocessWithSlowExit(exitDelayMs: number): {
+  spawnSubprocess: Mock<SpawnSubprocess>
+  handles: ExitableSubprocess[]
+} {
+  const handles: ExitableSubprocess[] = []
+  const spawnSubprocess = vi.fn<SpawnSubprocess>(() => {
     let onExit: ((code: number) => void) | undefined
-    return {
+    const handle = {
       pid: 4242,
+      exit: (code: number) => onExit?.(code),
       getForegroundProcess: vi.fn(() => null),
       write: vi.fn(),
       resize: vi.fn(),
@@ -27,8 +41,11 @@ function spawnSubprocessWithSlowExit(exitDelayMs: number): Mock<SpawnSubprocess>
         onExit = callback
       }),
       dispose: vi.fn()
-    } as unknown as SubprocessHandle
+    } as unknown as ExitableSubprocess
+    handles.push(handle)
+    return handle
   })
+  return { spawnSubprocess, handles }
 }
 
 const streamClient = (): { onData: Mock; onExit: Mock } => ({
@@ -38,7 +55,7 @@ const streamClient = (): { onData: Mock; onExit: Mock } => ({
 
 describe('TerminalHost recreate during teardown', () => {
   it('recreates a session whose id is still being torn down', async () => {
-    const spawnSubprocess = spawnSubprocessWithSlowExit(40)
+    const { spawnSubprocess } = spawnSubprocessWithSlowExit(40)
     const host = new TerminalHost({ spawnSubprocess })
     const sessionId = 'wt-1@@respawning-pane'
     await host.createOrAttach({ sessionId, cols: 80, rows: 24, streamClient: streamClient() })
@@ -59,7 +76,7 @@ describe('TerminalHost recreate during teardown', () => {
   })
 
   it('still refuses an attach-only respawn onto a session being torn down', async () => {
-    const spawnSubprocess = spawnSubprocessWithSlowExit(40)
+    const { spawnSubprocess } = spawnSubprocessWithSlowExit(40)
     const host = new TerminalHost({ spawnSubprocess })
     const sessionId = 'wt-1@@attaching-pane'
     await host.createOrAttach({ sessionId, cols: 80, rows: 24, streamClient: streamClient() })
@@ -82,7 +99,7 @@ describe('TerminalHost recreate during teardown', () => {
   })
 
   it('refuses a create waiting on teardown once the host is shutting down', async () => {
-    const spawnSubprocess = spawnSubprocessWithSlowExit(40)
+    const { spawnSubprocess } = spawnSubprocessWithSlowExit(40)
     const host = new TerminalHost({ spawnSubprocess })
     const sessionId = 'wt-1@@shutting-down-pane'
     await host.createOrAttach({ sessionId, cols: 80, rows: 24, streamClient: streamClient() })
@@ -105,12 +122,14 @@ describe('TerminalHost recreate during teardown', () => {
   })
 
   it('leaves a canceled create waiting on teardown instead of the full exit budget', async () => {
-    const spawnSubprocess = spawnSubprocessWithSlowExit(30_000)
+    // Why a child that never exits on its own: the create must leave on its abort signal, not on
+    // the teardown settling, so the teardown deliberately outlives the assertion.
+    const { spawnSubprocess, handles } = spawnSubprocessWithSlowExit(30_000)
     const host = new TerminalHost({ spawnSubprocess })
     const sessionId = 'wt-1@@canceled-pane'
     await host.createOrAttach({ sessionId, cols: 80, rows: 24, streamClient: streamClient() })
 
-    void host.kill(sessionId, { immediate: true }).catch(() => {})
+    const killed = host.kill(sessionId, { immediate: true })
     const canceled = new AbortController()
     const create = host.createOrAttach({
       sessionId,
@@ -124,5 +143,9 @@ describe('TerminalHost recreate during teardown', () => {
 
     await expect(create).rejects.toThrow(`Attach canceled for session ${sessionId}`)
     expect(spawnSubprocess).toHaveBeenCalledOnce()
+
+    handles[0].exit(137)
+    await killed
+    await host.dispose()
   })
 })
