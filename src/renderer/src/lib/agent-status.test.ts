@@ -500,7 +500,7 @@ describe('getAgentLabel', () => {
     expect(getAgentLabel('OpenCode ready')).toBe('OpenCode')
     expect(getAgentLabel('claude.exe')).toBe('Claude Code')
     expect(getAgentLabel('openclaude.cmd')).toBe('OpenClaude')
-    expect(getAgentLabel('openzoo claude')).toBe('openzoo')
+    expect(getAgentLabel('openzoo claude')).toBe('OpenZoo')
     expect(getAgentLabel('⠋ Codex')).toBe('Codex')
     expect(getAgentLabel('Aider idle')).toBe('Aider')
     expect(getAgentLabel('Devin working')).toBe('Devin')
@@ -836,7 +836,7 @@ describe('formatAgentTypeLabel', () => {
   })
 
   it("keeps 'openzoo' lowercase, as the project spells it", () => {
-    expect(formatAgentTypeLabel('openzoo')).toBe('openzoo')
+    expect(formatAgentTypeLabel('openzoo')).toBe('OpenZoo')
   })
 
   it("maps 'codex' to 'Codex'", () => {

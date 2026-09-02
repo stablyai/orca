@@ -89,7 +89,7 @@ function computeAgentLabel(title: string): string | null {
   // Why: the shell shows `openzoo claude` as its title until Claude Code takes over; the
   // wrapper name is the identity, the trailing `claude` is its subcommand.
   if (titleHasAgentName(title, 'openzoo')) {
-    return 'openzoo'
+    return 'OpenZoo'
   }
   if (titleHasAgentName(title, 'copilot')) {
     return 'GitHub Copilot'
