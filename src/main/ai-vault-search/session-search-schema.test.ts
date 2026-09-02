@@ -68,8 +68,10 @@ describe('openSessionSearchDatabase', () => {
     expect(schemaVersion(fresh)).toBe(String(SESSION_SEARCH_SCHEMA_VERSION))
     expect(fresh.prepare('SELECT COUNT(*) AS c FROM search_log').get()).toEqual({ c: 0 })
     fresh.close()
-    const after = await stat(path)
-    expect(after.ino).not.toBe(before.ino)
+    // Why not inode: ext4 hands a freed inode straight back to the next create.
+    // The planted sidecar is gone (a fresh WAL is checkpointed away on close).
+    await expect(stat(`${path}-wal`)).rejects.toMatchObject({ code: 'ENOENT' })
+    expect((await stat(path)).mtimeMs).toBeGreaterThanOrEqual(before.mtimeMs)
   })
 
   it('removes the database with every sidecar', async () => {
