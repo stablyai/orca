@@ -146,7 +146,7 @@ export default function PdfFind({
         variant="ghost"
         size="icon-xs"
         onClick={findPrevious}
-        className="flex size-6 shrink-0 items-center justify-center rounded text-muted-foreground hover:text-popover-foreground"
+        className="flex size-6 shrink-0 items-center justify-center rounded text-muted-foreground"
         title={translate('auto.components.editor.PdfFind.30de726ad0', 'Previous match')}
       >
         <ChevronUp size={14} />
@@ -156,7 +156,7 @@ export default function PdfFind({
         variant="ghost"
         size="icon-xs"
         onClick={findNext}
-        className="flex size-6 shrink-0 items-center justify-center rounded text-muted-foreground hover:text-popover-foreground"
+        className="flex size-6 shrink-0 items-center justify-center rounded text-muted-foreground"
         title={translate('auto.components.editor.PdfFind.eeba2547a1', 'Next match')}
       >
         <ChevronDown size={14} />
@@ -167,7 +167,7 @@ export default function PdfFind({
         variant="ghost"
         size="icon-xs"
         onClick={onClose}
-        className="flex size-6 shrink-0 items-center justify-center rounded text-muted-foreground hover:text-popover-foreground"
+        className="flex size-6 shrink-0 items-center justify-center rounded text-muted-foreground"
         title={translate('auto.components.editor.PdfFind.cd65b1d6b0', 'Close')}
       >
         <X size={14} />

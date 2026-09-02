@@ -63,8 +63,18 @@ vi.mock('./SidebarToolbar', () => ({
 }))
 
 vi.mock('./WorkspaceKanbanDrawer', () => ({
-  default: ({ statusBarVisible }: { statusBarVisible: boolean }) => (
-    <div data-testid="workspace-kanban-drawer" data-status-bar-visible={String(statusBarVisible)} />
+  default: ({
+    statusBarVisible,
+    ...props
+  }: {
+    statusBarVisible: boolean
+    leftSidebarStyle?: unknown
+  }) => (
+    <div
+      data-testid="workspace-kanban-drawer"
+      data-status-bar-visible={String(statusBarVisible)}
+      data-has-left-sidebar-style={String('leftSidebarStyle' in props)}
+    />
   )
 }))
 
@@ -149,7 +159,9 @@ describe('Sidebar', () => {
 
     expect(markup).toContain('bg-worktree-sidebar')
     expect(markup).not.toContain('--worktree-sidebar:')
+    expect(markup).not.toContain('--worktree-sidebar-foreground:')
     expect(markup).toContain('data-testid="workspace-kanban-drawer"')
+    expect(markup).toContain('data-has-left-sidebar-style="false"')
   })
 
   it('passes status bar visibility into the workspace board drawer', () => {

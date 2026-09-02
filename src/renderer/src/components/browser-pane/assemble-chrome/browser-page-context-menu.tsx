@@ -15,7 +15,7 @@ import type { BrowserPageContextMenuState } from '../describe-page/browser-page-
 // `focus:` rather than `focus-visible:` — items are only ever focused programmatically
 // while the menu is open, so every focus here is keyboard navigation.
 const MENU_ITEM_CLASS =
-  'relative flex w-full cursor-default items-center gap-2 rounded-[7px] px-2 py-0.5 text-[12px] leading-5 font-medium outline-none select-none hover:bg-accent focus:bg-accent disabled:pointer-events-none disabled:opacity-50'
+  'relative flex w-full cursor-default items-center gap-2 rounded-[7px] px-2 py-0.5 text-[12px] leading-5 font-medium outline-none select-none hover:bg-accent hover:text-accent-foreground focus:bg-accent focus:text-accent-foreground disabled:pointer-events-none disabled:opacity-50'
 
 export function BrowserPageContextMenu({
   browserPageId,
