@@ -76,3 +76,31 @@ export async function parseTranscript(
   )
   return { stats }
 }
+
+function codexLine(record: Record<string, unknown>): string {
+  return JSON.stringify(record)
+}
+
+/** Minimal Codex rollout: meta, one user message, one completed shell command. */
+export function codexRolloutLines(command: string[], output: string, prompt: string): string[] {
+  return [
+    codexLine({
+      timestamp: recordTimestamp(0),
+      type: 'session_meta',
+      payload: { id: CODEX_SESSION_ID, cwd: '/repo/app', git: { branch: 'main' } }
+    }),
+    codexLine({
+      timestamp: recordTimestamp(1),
+      type: 'response_item',
+      payload: { type: 'message', role: 'user', content: prompt }
+    }),
+    codexLine({
+      timestamp: recordTimestamp(2),
+      type: 'event_msg',
+      payload: {
+        type: 'item_completed',
+        item: { type: 'CommandExecution', command, aggregated_output: output }
+      }
+    })
+  ]
+}
