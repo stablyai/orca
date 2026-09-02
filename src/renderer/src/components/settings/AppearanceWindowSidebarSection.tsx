@@ -20,9 +20,10 @@ import {
   getUsagePercentageDisplayEntry
 } from './appearance-search'
 import { USAGE_PERCENTAGE_DISPLAY_SETTING_ID } from './appearance-usage-percentage-search'
-import { LeftSidebarAppearanceSetting } from './LeftSidebarAppearanceSetting'
+import { SidebarAppearanceSetting } from './SidebarAppearanceSetting'
 import {
   getLeftSidebarAppearanceEntry,
+  getRightSidebarAppearanceEntry,
   getShowPinnedWorktreesInGroupsEntry,
   getWorkspaceCardLayoutEntry
 } from './appearance-sidebar-search'
@@ -75,6 +76,7 @@ export function AppearanceWindowSidebarSection({
   const visibleStatusBarToggles = useAvailableStatusBarToggles(getStatusBarToggles())
   const usagePercentageDisplayEntry = getUsagePercentageDisplayEntry()
   const leftSidebarAppearanceEntry = getLeftSidebarAppearanceEntry()
+  const rightSidebarAppearanceEntry = getRightSidebarAppearanceEntry()
   const sidebarEntries = getSidebarEntries()
   const workspaceCardLayoutEntry = getWorkspaceCardLayoutEntry()
   const layoutEntries = getLayoutEntries()
@@ -121,7 +123,25 @@ export function AppearanceWindowSidebarSection({
           className="space-y-2"
           forceVisible={forceVisiblePrimary}
         >
-          <LeftSidebarAppearanceSetting settings={settings} updateSettings={updateSettings} />
+          <SidebarAppearanceSetting
+            side="left"
+            settings={settings}
+            updateSettings={updateSettings}
+          />
+        </SearchableSetting>
+
+        <SearchableSetting
+          title={rightSidebarAppearanceEntry.title}
+          description={rightSidebarAppearanceEntry.description}
+          keywords={rightSidebarAppearanceEntry.keywords}
+          className="space-y-2"
+          forceVisible={forceVisiblePrimary}
+        >
+          <SidebarAppearanceSetting
+            side="right"
+            settings={settings}
+            updateSettings={updateSettings}
+          />
         </SearchableSetting>
 
         <SearchableSetting

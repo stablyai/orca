@@ -33,6 +33,38 @@ export const getLeftSidebarAppearanceEntry = createLocalizedCatalog((): Settings
   ]
 }))
 
+export const getRightSidebarAppearanceEntry = createLocalizedCatalog(
+  (): SettingsSearchEntry => ({
+    title: translate(
+      'auto.components.settings.appearance.search.rightSidebarAppearance.title',
+      'Right Sidebar Appearance'
+    ),
+    description: translate(
+      'auto.components.settings.appearance.search.rightSidebarAppearance.description',
+      'Make the right sidebar match your terminal, stay default, or use a tint.'
+    ),
+    keywords: [
+      ...translateSearchKeyword('auto.components.settings.appearance.search.5bff6a2ef0', 'sidebar'),
+      ...translateSearchKeyword(
+        'auto.components.settings.appearance.search.rightSidebarAppearance.panel',
+        'panel'
+      ),
+      ...translateSearchKeyword(
+        'auto.components.settings.appearance.search.leftSidebarAppearance.terminal',
+        'terminal'
+      ),
+      ...translateSearchKeyword(
+        'auto.components.settings.appearance.search.leftSidebarAppearance.background',
+        'background'
+      ),
+      ...translateSearchKeyword(
+        'auto.components.settings.appearance.search.leftSidebarAppearance.tint',
+        'tint'
+      )
+    ]
+  })
+)
+
 export const getWorkspaceCardLayoutEntry = createLocalizedCatalog((): SettingsSearchEntry => ({
   title: translate(
     'auto.components.settings.appearance.search.workspaceCardLayout.title',

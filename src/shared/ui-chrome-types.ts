@@ -12,7 +12,9 @@ export type OpenInApplication = {
 export type SourceControlViewMode = 'list' | 'tree'
 export type SourceControlGroupOrder = 'changes-first' | 'staged-first' | 'untracked-first'
 
-export type LeftSidebarAppearanceMode = 'default' | 'match-terminal' | 'tinted'
+export type SidebarAppearanceMode = 'default' | 'match-terminal' | 'tinted'
+export type LeftSidebarAppearanceMode = SidebarAppearanceMode
+export type RightSidebarAppearanceMode = SidebarAppearanceMode
 
 /** Strategy for the prefix prepended to worktree branch names. */
 export type BranchPrefixStrategy = 'git-username' | 'custom' | 'none'

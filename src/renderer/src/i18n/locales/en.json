@@ -6545,6 +6545,11 @@
             "tintOpacity": "Tint Strength",
             "tintOpacityDescription": "Controls how strongly the tint is mixed into the sidebar."
           },
+          "rightSidebarAppearance": {
+            "title": "Right Sidebar Appearance",
+            "rowDescription": "Make the right sidebar match your terminal, stay default, or use a tint.",
+            "tintColorDescription": "The color mixed into the right sidebar surface."
+          },
           "workspaceCardLayoutGuidance": "Managed from the workspace sidebar.",
           "interfaceDefaultFont": "Default font",
           "terminalDefaultFont": "Default font",
@@ -8967,6 +8972,11 @@
             "leftSidebarAppearance": {
               "title": "Left Sidebar Appearance",
               "description": "Make the left sidebar match your terminal, stay default, or use a tint."
+            },
+            "rightSidebarAppearance": {
+              "title": "Right Sidebar Appearance",
+              "description": "Make the right sidebar match your terminal, stay default, or use a tint.",
+              "panel": "panel"
             },
             "workspaceCardLayout": {
               "title": "Workspace Card Layout",

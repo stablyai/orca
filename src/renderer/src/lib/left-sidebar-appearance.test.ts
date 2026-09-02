@@ -1,7 +1,7 @@
 import { tmpdir } from 'node:os'
 import { describe, expect, it } from 'vitest'
 import { getDefaultSettings } from '../../../shared/constants'
-import { resolveLeftSidebarStyleVariables } from './left-sidebar-appearance'
+import { resolveLeftSidebarStyleVariables } from './sidebar-appearance'
 
 function settings(overrides = {}) {
   return {

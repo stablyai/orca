@@ -16,7 +16,7 @@ import { SetupGuideProgressRing } from '../setup-guide/SetupGuideProgressRing'
 import { useSettingsSetupGuideProgress } from './settings-setup-guide-progress'
 import type { SettingsSetupGuideProgress } from './settings-setup-guide-progress'
 import { translate } from '@/i18n/i18n'
-import { resolveLeftSidebarStyleVariables } from '@/lib/left-sidebar-appearance'
+import { resolveLeftSidebarStyleVariables } from '@/lib/sidebar-appearance'
 import { useSystemPrefersDark } from '../terminal-pane/use-system-prefers-dark'
 import { useAppStore } from '@/store'
 

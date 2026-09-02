@@ -27,6 +27,8 @@ import { RightSidebarTopActivityBar } from './right-sidebar-top-activity-bar'
 import { useRightSidebarActivityItems } from './use-right-sidebar-activity-items'
 import { useRightSidebarTabRouting } from './use-right-sidebar-tab-routing'
 import { useWindowWidth } from './use-window-width'
+import { resolveRightSidebarStyleVariables } from '@/lib/sidebar-appearance'
+import { useSystemPrefersDark } from '@/components/terminal-pane/use-system-prefers-dark'
 
 const ACTIVITY_BAR_SIDE_WIDTH = 40
 
@@ -43,6 +45,12 @@ function RightSidebarInner(): React.JSX.Element {
   const checksStatus = useAppStore((s) => (s.rightSidebarOpen ? getActiveChecksStatus(s) : null))
   const activityBarPosition = useAppStore((s) => s.activityBarPosition)
   const setActivityBarPosition = useAppStore((s) => s.setActivityBarPosition)
+  const settings = useAppStore((s) => s.settings)
+  const systemPrefersDark = useSystemPrefersDark()
+  const rightSidebarStyle = useMemo(
+    () => resolveRightSidebarStyleVariables(settings, systemPrefersDark),
+    [settings, systemPrefersDark]
+  ) as React.CSSProperties | undefined
   const [topActivityStripWidth, setTopActivityStripWidth] = useState<number | null>(null)
   const {
     visibleItems,
@@ -148,6 +156,7 @@ function RightSidebarInner(): React.JSX.Element {
         // stays mounted for performance — see App.tsx).
         rightSidebarOpen ? 'overflow-visible' : 'overflow-hidden'
       )}
+      style={rightSidebarStyle}
     >
       {/* Panel content area */}
       <div

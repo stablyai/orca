@@ -2,7 +2,7 @@ import { useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from
 import { useShallow } from 'zustand/react/shallow'
 import { SYNC_FIT_PANES_EVENT } from '@/constants/terminal'
 import { canShowRightSidebarForView } from '@/lib/right-sidebar-visibility'
-import { resolveLeftSidebarStyleVariables } from '@/lib/left-sidebar-appearance'
+import { resolveLeftSidebarStyleVariables } from '@/lib/sidebar-appearance'
 import { resolveLeftTitlebarChromeLayout } from '@/lib/titlebar-left-chrome'
 import { shouldShowWorktreeCreationSurface } from '@/lib/worktree-creation-surface'
 import { useAppStore } from '../store'

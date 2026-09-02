@@ -241,6 +241,13 @@ describe('FolderWorkspaceWorktreesPanel', () => {
     expect(container.textContent).toContain('Workspace-key child')
   })
 
+  it('keeps the panel surface on the right-sidebar token', () => {
+    renderPanel()
+
+    expect(container.firstElementChild?.classList.contains('bg-sidebar')).toBe(true)
+    expect(container.firstElementChild?.classList.contains('bg-background')).toBe(false)
+  })
+
   it('renders attached child worktrees as affiliate WorktreeCards in recent order', () => {
     const oldChild = makeWorktree({
       id: 'repo-1::/old',

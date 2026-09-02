@@ -127,7 +127,7 @@ export default function FolderWorkspaceWorktreesPanel(): React.JSX.Element {
   }
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-background">
+    <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-sidebar">
       <div className="border-b border-border px-4 py-3">
         <div className="truncate text-sm font-medium text-foreground">{folderWorkspace.name}</div>
         <div className="mt-1 text-xs text-muted-foreground">

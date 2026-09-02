@@ -10,10 +10,7 @@ import { DEFAULT_OPEN_IN_APPLICATIONS } from './open-in-applications'
 import { DEFAULT_DISABLED_TUI_AGENTS } from './tui-agent-selection'
 import { DEFAULT_TUI_AGENT_ARGS, DEFAULT_TUI_AGENT_ENV } from './tui-agent-launch-defaults'
 import { UI_LANGUAGE_SYSTEM } from './ui-language'
-import {
-  DEFAULT_LEFT_SIDEBAR_TINT_COLOR,
-  DEFAULT_LEFT_SIDEBAR_TINT_OPACITY
-} from './left-sidebar-appearance'
+import { DEFAULT_SIDEBAR_TINT_COLOR, DEFAULT_SIDEBAR_TINT_OPACITY } from './sidebar-appearance'
 import { DEFAULT_SOURCE_CONTROL_GROUP_ORDER } from './source-control-group-order'
 import { DESKTOP_TERMINAL_SCROLLBACK_ROWS_DEFAULT } from './terminal-scrollback-policy'
 
@@ -42,8 +39,11 @@ export function buildDefaultSettings(args: {
     branchPrefixCustom: '',
     theme: 'system',
     leftSidebarAppearanceMode: 'default',
-    leftSidebarTintColor: DEFAULT_LEFT_SIDEBAR_TINT_COLOR,
-    leftSidebarTintOpacity: DEFAULT_LEFT_SIDEBAR_TINT_OPACITY,
+    leftSidebarTintColor: DEFAULT_SIDEBAR_TINT_COLOR,
+    leftSidebarTintOpacity: DEFAULT_SIDEBAR_TINT_OPACITY,
+    rightSidebarAppearanceMode: 'default',
+    rightSidebarTintColor: DEFAULT_SIDEBAR_TINT_COLOR,
+    rightSidebarTintOpacity: DEFAULT_SIDEBAR_TINT_OPACITY,
     uiLanguage: UI_LANGUAGE_SYSTEM,
     appIcon: DEFAULT_APP_ICON_ID,
     appFontFamily: args.appFontFamily,

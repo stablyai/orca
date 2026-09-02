@@ -4,6 +4,8 @@ import { act, cloneElement, isValidElement, type ReactElement, type ReactNode } 
 import { createRoot, type Root } from 'react-dom/client'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { getDefaultSettings } from '../../../../shared/constants'
+import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import RightSidebar from './index'
 import { TopActivityOverflowMenu } from './activity-bar-buttons'
 import {
@@ -27,7 +29,10 @@ const mockAppState = vi.hoisted(() => ({
   } | null,
   listeners: new Set<() => void>(),
   snapshotCache: new Map<(state: Record<string, unknown>) => unknown, unknown>(),
-  cachedWorktree: null as { id: string; repoId: string } | null
+  cachedWorktree: null as { id: string; repoId: string } | null,
+  settings: null as unknown as GlobalSettings & {
+    rightSidebarAppearanceMode?: 'default' | 'match-terminal' | 'tinted'
+  }
 }))
 
 function notifyAppStore(): void {
@@ -59,6 +64,10 @@ vi.mock('@/hooks/useShortcutLabel', () => ({
   useShortcutLabel: (actionId: string) => actionId
 }))
 
+vi.mock('@/components/terminal-pane/use-system-prefers-dark', () => ({
+  useSystemPrefersDark: () => true
+}))
+
 vi.mock('@/store', async () => {
   const React = await vi.importActual<typeof import('react')>('react') // eslint-disable-line @typescript-eslint/consistent-type-imports -- vi.importActual requires inline import()
   const getSnapshot = (selector: (state: Record<string, unknown>) => unknown): unknown => {
@@ -80,7 +89,8 @@ vi.mock('@/store', async () => {
       activityBarPosition: mockAppState.activityBarPosition,
       setActivityBarPosition: vi.fn(),
       checksByWorktreeId: {},
-      keybindings: {}
+      keybindings: {},
+      settings: mockAppState.settings
     })
     mockAppState.snapshotCache.set(selector, selected)
     return selected
@@ -232,6 +242,25 @@ describe('rendered right sidebar titlebar drag regions', () => {
     mockAppState.listeners.clear()
     mockAppState.snapshotCache.clear()
     mockAppState.cachedWorktree = null
+    mockAppState.settings = getDefaultSettings('/tmp')
+  })
+
+  it('applies right sidebar appearance variables to the panel and activity bar surface', () => {
+    mockAppState.settings = {
+      ...getDefaultSettings('/tmp'),
+      rightSidebarAppearanceMode: 'match-terminal',
+      terminalColorOverrides: {
+        background: '#101820',
+        foreground: '#f0f4f8'
+      }
+    }
+
+    const markup = renderToStaticMarkup(<RightSidebar />)
+    const sidebarRoot = openingTag(markup, 'flex-shrink-0')
+
+    expect(sidebarRoot).toContain('--sidebar:#101820')
+    expect(sidebarRoot).toContain('--sidebar-foreground:#f0f4f8')
+    expect(sidebarRoot).not.toContain('--worktree-sidebar')
   })
 
   it('keeps the rendered top activity strip draggable, context-menuable, and only controls no-drag', () => {

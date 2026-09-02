@@ -350,6 +350,33 @@ describe('AppearancePane', () => {
     })
   })
 
+  it('updates the right sidebar appearance independently from sidebar settings', async () => {
+    mocks.state.settingsSearchQuery = 'right sidebar'
+    const updateSettings = vi.fn()
+    const settings = {
+      ...getDefaultSettings('/tmp'),
+      rightSidebarAppearanceMode: 'default' as const
+    }
+
+    const container = await renderAppearancePane(settings, updateSettings)
+    const rightSidebarControl = container.querySelector<HTMLElement>(
+      '[aria-label="Right Sidebar Appearance"]'
+    )
+    const matchTerminalButton = Array.from(
+      rightSidebarControl?.querySelectorAll<HTMLButtonElement>('button[role="radio"]') ?? []
+    ).find((button) => button.textContent === 'Match Terminal')
+
+    expect(matchTerminalButton).toBeDefined()
+
+    await act(async () => {
+      matchTerminalButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    })
+
+    expect(updateSettings).toHaveBeenCalledWith({
+      rightSidebarAppearanceMode: 'match-terminal'
+    })
+  })
+
   it('restores the Automations sidebar button from the sidebar settings switch', async () => {
     const updateSettings = vi.fn()
     const settings = {

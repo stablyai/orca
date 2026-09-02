@@ -1,6 +1,10 @@
 import type { SettingsSearchEntry } from './settings-search'
 import { getTerminalAppearanceSearchEntries } from './terminal-search'
-import { getLeftSidebarAppearanceEntry, getSidebarEntries } from './appearance-sidebar-search'
+import {
+  getLeftSidebarAppearanceEntry,
+  getRightSidebarAppearanceEntry,
+  getSidebarEntries
+} from './appearance-sidebar-search'
 import { createLocalizedCatalog } from '@/i18n/localized-catalog'
 import { translate } from '@/i18n/i18n'
 import { translateSearchKeyword } from './settings-search-keywords'
@@ -171,7 +175,7 @@ export const getStatusBarEntries = createLocalizedCatalog((): SettingsSearchEntr
   }))
 ])
 
-export { getLeftSidebarAppearanceEntry, getSidebarEntries }
+export { getLeftSidebarAppearanceEntry, getRightSidebarAppearanceEntry, getSidebarEntries }
 
 export const getAppIconEntries = createLocalizedCatalog((): SettingsSearchEntry[] => [
   {
@@ -239,6 +243,7 @@ function buildAppearancePaneSearchEntries(
     ...getLayoutEntries(),
     ...getTitlebarEntries(),
     ...getStatusBarEntries(),
+    getRightSidebarAppearanceEntry(),
     ...getSidebarEntries(),
     ...getAppIconEntries(),
     ...getSystemTrayEntries(options),

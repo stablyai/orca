@@ -31,6 +31,7 @@ import type {
   FloatingTerminalTriggerLocation,
   LeftSidebarAppearanceMode,
   OpenInApplication,
+  RightSidebarAppearanceMode,
   SourceControlGroupOrder,
   SourceControlViewMode,
   TaskViewPresetId
@@ -78,6 +79,10 @@ export type GlobalSettings = {
   leftSidebarAppearanceMode: LeftSidebarAppearanceMode
   leftSidebarTintColor?: string
   leftSidebarTintOpacity?: number
+  /** Optional for profiles persisted before right-sidebar appearance was configurable. */
+  rightSidebarAppearanceMode?: RightSidebarAppearanceMode
+  rightSidebarTintColor?: string
+  rightSidebarTintOpacity?: number
   uiLanguage: UiLanguage
   appIcon: AppIconId
   appFontFamily: string

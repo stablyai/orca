@@ -274,6 +274,13 @@ describe('FolderWorkspacePrChecksPanel', () => {
     expect(container.textContent).not.toContain('unknown')
   })
 
+  it('keeps the panel surface on the right-sidebar token', () => {
+    renderPanel()
+
+    expect(container.firstElementChild?.classList.contains('bg-sidebar')).toBe(true)
+    expect(container.firstElementChild?.classList.contains('bg-background')).toBe(false)
+  })
+
   it('summarizes failing and pending rows before the worktree count', () => {
     const repo = mockState.store.repos[0]
     const passingWorktree = mockState.store.worktreesByRepo[repo.id][0]
