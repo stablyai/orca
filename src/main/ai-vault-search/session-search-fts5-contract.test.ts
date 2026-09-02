@@ -1,7 +1,8 @@
-import { mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { mkdtemp, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { removeTree } from '../../shared/windows-transient-lock-removal'
 import type SyncDatabase from '../sqlite/sync-database'
 import { resetSessionParseCacheForTests } from '../ai-vault/session-scanner-parse-cache'
 import { registerSessionSearchIndexSink } from '../ai-vault/session-search-capture'
@@ -23,7 +24,7 @@ beforeEach(() => {
 
 afterEach(async () => {
   registerSessionSearchIndexSink(null)
-  await Promise.all(tempRoots.map((root) => rm(root, { recursive: true, force: true })))
+  await Promise.all(tempRoots.map((root) => removeTree(root)))
   tempRoots = []
 })
 

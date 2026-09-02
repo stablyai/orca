@@ -1,7 +1,8 @@
-import { mkdtemp, rm, stat, writeFile } from 'node:fs/promises'
+import { mkdtemp, stat, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
+import { removeTree } from '../../shared/windows-transient-lock-removal'
 import type SyncDatabase from '../sqlite/sync-database'
 import {
   SESSION_SEARCH_SCHEMA_VERSION,
@@ -12,7 +13,7 @@ import {
 let roots: string[] = []
 
 afterEach(async () => {
-  await Promise.all(roots.map((root) => rm(root, { recursive: true, force: true })))
+  await Promise.all(roots.map((root) => removeTree(root)))
   roots = []
 })
 
