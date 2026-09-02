@@ -1370,8 +1370,25 @@ export class SshRelaySession {
         ...(hostKeyFingerprint ? { hostKeyFingerprint } : {}),
         agents
       }
-      const result = (await mux.request(AGENT_HOOK_INSTALL_MANAGED_HOOKS_METHOD, params)) as {
-        errors?: unknown
+      let result: { errors?: unknown }
+      try {
+        result = (await mux.request(AGENT_HOOK_INSTALL_MANAGED_HOOKS_METHOD, params)) as {
+          errors?: unknown
+        }
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error)
+        const legacyAgents = agents.filter((agent) => agent !== 'zcode')
+        if (
+          !message.includes('invalid_managed_hook_agents') ||
+          legacyAgents.length === agents.length
+        ) {
+          throw error
+        }
+        // Older relays reject the entire allowlist when any target is unknown.
+        result = (await mux.request(AGENT_HOOK_INSTALL_MANAGED_HOOKS_METHOD, {
+          ...params,
+          agents: legacyAgents
+        })) as { errors?: unknown }
       }
       if (typeof result.errors === 'number' && result.errors > 0) {
         console.warn(
