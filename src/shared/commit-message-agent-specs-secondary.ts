@@ -212,16 +212,26 @@ export function buildSecondaryCommitMessageAgentSpecs({
       id: 'antigravity',
       label: 'Antigravity',
       binary: 'agy',
-      promptDelivery: 'stdin',
-      buildArgs: ({ model }) => ['--print', '--sandbox', '--model', model],
+      // Why: agy expects prompt delivery via `--print <prompt>` on argv. Passing
+      // `--print` followed by other flags without a prompt argument causes agy to
+      // parse the next flag (e.g. `--sandbox`) as the prompt value.
+      promptDelivery: 'argv',
+      buildArgs: ({ prompt, model }) => [
+        '--print',
+        prompt,
+        '--sandbox',
+        '--model',
+        model
+      ],
+      singletonOptions: [['--model', '-m']],
       modelSource: 'dynamic',
       modelDiscovery: { binary: 'agy', args: ['models'], parse: parseAntigravityModels },
       models: [
-        { id: 'Gemini 3.5 Flash (Medium)', label: 'Gemini 3.5 Flash (Medium)' },
-        { id: 'Gemini 3.5 Flash (High)', label: 'Gemini 3.5 Flash (High)' },
-        { id: 'Gemini 3.5 Flash (Low)', label: 'Gemini 3.5 Flash (Low)' }
+        { id: 'Gemini 3.7 Flash (High)', label: 'Gemini 3.7 Flash (High)' },
+        { id: 'Gemini 3.7 Flash (Medium)', label: 'Gemini 3.7 Flash (Medium)' },
+        { id: 'Gemini 3.7 Flash (Low)', label: 'Gemini 3.7 Flash (Low)' }
       ],
-      defaultModelId: 'Gemini 3.5 Flash (Medium)'
+      defaultModelId: 'Gemini 3.7 Flash (Medium)'
     }
   }
 }

@@ -574,9 +574,9 @@ describe('buildArgs (Antigravity)', () => {
   const spec = getCommitMessageAgentSpec('antigravity')!
 
   it('runs agy with --print, --sandbox, and --model flags', () => {
-    const args = spec.buildArgs({ prompt: '', model: 'Gemini 3.5 Flash (Medium)' })
-    expect(args).toEqual(['--print', '--sandbox', '--model', 'Gemini 3.5 Flash (Medium)'])
-    expect(spec.promptDelivery).toBe('stdin')
+    const args = spec.buildArgs({ prompt: 'PROMPT', model: 'Gemini 3.7 Flash (Medium)' })
+    expect(args).toEqual(['--print', 'PROMPT', '--sandbox', '--model', 'Gemini 3.7 Flash (Medium)'])
+    expect(spec.promptDelivery).toBe('argv')
   })
 
   it('uses dynamic model discovery via agy models', () => {
@@ -585,7 +585,7 @@ describe('buildArgs (Antigravity)', () => {
     expect(spec.modelDiscovery?.args).toEqual(['models'])
   })
 
-  it('uses Gemini 3.5 Flash (Medium) as default model', () => {
-    expect(COMMIT_MESSAGE_AGENT_SPECS.antigravity?.defaultModelId).toBe('Gemini 3.5 Flash (Medium)')
+  it('uses Gemini 3.7 Flash (Medium) as default model', () => {
+    expect(COMMIT_MESSAGE_AGENT_SPECS.antigravity?.defaultModelId).toBe('Gemini 3.7 Flash (Medium)')
   })
 })

@@ -155,6 +155,32 @@ describe('planCommitMessageGeneration', () => {
     })
   })
 
+  it('plans Antigravity non-interactive generation with prompt on argv and sandbox mode', () => {
+    const result = planCommitMessageGeneration(
+      {
+        agentId: 'antigravity',
+        model: 'Gemini 3.7 Flash (High)'
+      },
+      'PROMPT'
+    )
+
+    expect(result).toEqual({
+      ok: true,
+      plan: {
+        binary: 'agy',
+        args: [
+          '--print',
+          'PROMPT',
+          '--sandbox',
+          '--model',
+          'Gemini 3.7 Flash (High)'
+        ],
+        stdinPayload: null,
+        label: 'Antigravity'
+      }
+    })
+  })
+
   it('plans Codex exec as non-interactive read-only generation with the prompt on stdin only', () => {
     const result = planCommitMessageGeneration(
       {
