@@ -4,6 +4,7 @@ import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { TooltipProvider } from '@/components/ui/tooltip'
+import type { DiffComment } from '../../../../shared/diff-comment-types'
 import type { GitBranchCompareSummary } from '../../../../shared/git-diff-compare-types'
 import {
   clearBranchLineTotalRequestGateForTests,
@@ -41,7 +42,8 @@ const mocks = vi.hoisted(() => {
     isUnread: false,
     isPinned: false,
     sortOrder: 0,
-    lastActivityAt: 0
+    lastActivityAt: 0,
+    diffComments: [] as DiffComment[]
   }
   return {
     activeRepo,
@@ -95,6 +97,7 @@ const readySummary: GitBranchCompareSummary = {
 function resetState(overrides: Partial<Record<string, unknown>> = {}): void {
   vi.clearAllMocks()
   mocks.activeRepo.kind = 'git'
+  mocks.activeWorktree.diffComments = []
   mocks.state = {
     activeWorktreeId: mocks.activeWorktree.id,
     activeGroupIdByWorktree: { [mocks.activeWorktree.id]: 'group-1' },
@@ -160,9 +163,14 @@ function resetState(overrides: Partial<Record<string, unknown>> = {}): void {
     deleteDiffComment: noopAsync(true),
     clearDiffComments: noopAsync(true),
     clearDiffCommentsForFile: noopAsync(true),
+    clearDeliveredDiffComments: noopAsync(true),
     setScrollToDiffCommentId: vi.fn(),
     setRightSidebarOpen: vi.fn(),
     setRightSidebarTab: vi.fn(),
+    agentSendPopoverTargetMode: null,
+    openAgentSendPopoverTargetMode: vi.fn(),
+    closeAgentSendPopoverTargetMode: vi.fn(),
+    consumeDiffNotesSendMenuOpenRequest: vi.fn(),
     allocateCommitMessageGenerationRequestId: vi.fn(() => 'commit-generation-1'),
     setCommitMessageGenerationRecord: vi.fn(),
     updateCommitMessageGenerationRecord: vi.fn(),
@@ -211,6 +219,26 @@ function loadingChip(): HTMLElement | null {
   return container.querySelector<HTMLElement>(
     '[data-testid="source-control-branch-line-total-loading"]'
   )
+}
+
+function folderReviewNote(source: DiffComment['source'] = 'diff'): DiffComment {
+  return {
+    id: 'note-1',
+    worktreeId: mocks.activeWorktree.id,
+    filePath: 'README.md',
+    source,
+    lineNumber: 4,
+    body: 'Please revise this line',
+    createdAt: 1,
+    side: 'modified'
+  }
+}
+
+function renderFolderWithNote(comment = folderReviewNote()): void {
+  resetState()
+  mocks.activeRepo.kind = 'folder'
+  mocks.activeWorktree.diffComments = [comment]
+  renderSourceControl()
 }
 
 describe('SourceControl branch line total request gate', () => {
@@ -271,6 +299,84 @@ describe('SourceControl branch line total request gate', () => {
     act(() => root.render(<TooltipProvider>{null}</TooltipProvider>))
 
     expect(getBranchLineTotalMergeBase(mocks.activeWorktree.id)).toBeUndefined()
+  })
+})
+
+describe('SourceControl folder review notes', () => {
+  it('handles a send-menu shortcut request even though Git controls are unavailable', () => {
+    const comment = folderReviewNote()
+    resetState({
+      diffNotesSendMenuOpenRequest: {
+        worktreeId: mocks.activeWorktree.id,
+        nonce: 1,
+        issuedAt: Date.now()
+      }
+    })
+    mocks.activeRepo.kind = 'folder'
+    mocks.activeWorktree.diffComments = [comment]
+
+    renderSourceControl()
+
+    expect(mocks.state.openAgentSendPopoverTargetMode).toHaveBeenCalledWith(
+      expect.objectContaining({
+        worktreeId: mocks.activeWorktree.id,
+        prompt: expect.stringContaining('Please revise this line')
+      })
+    )
+    expect(mocks.state.consumeDiffNotesSendMenuOpenRequest).toHaveBeenCalledWith(
+      mocks.activeWorktree.id
+    )
+    expect(container.textContent).toContain('Source Control is only available for Git repositories')
+  })
+
+  it('confirms a per-file note clear from the folder notes shelf', async () => {
+    renderFolderWithNote()
+
+    const expandNotes = container.querySelector<HTMLButtonElement>('button[title="Expand notes"]')
+    expect(expandNotes).not.toBeNull()
+    act(() => expandNotes?.click())
+    const clearFile = container.querySelector<HTMLButtonElement>(
+      'button[aria-label="Clear notes for README.md"]'
+    )
+    expect(clearFile).not.toBeNull()
+    act(() => clearFile?.click())
+
+    const confirmClear = Array.from(
+      document.body.querySelectorAll<HTMLButtonElement>('button')
+    ).find((button) => button.textContent?.trim() === 'Clear Notes')
+    expect(confirmClear).toBeDefined()
+    await act(async () => {
+      confirmClear?.click()
+      await Promise.resolve()
+    })
+
+    expect(mocks.state.clearDiffCommentsForFile).toHaveBeenCalledWith(
+      mocks.activeWorktree.id,
+      'README.md'
+    )
+  })
+
+  it('cancels a pending markdown-note reveal when the folder panel unmounts', () => {
+    const requestFrame = vi.spyOn(window, 'requestAnimationFrame').mockReturnValue(42)
+    const cancelFrame = vi.spyOn(window, 'cancelAnimationFrame')
+    try {
+      renderFolderWithNote(folderReviewNote('markdown'))
+      const expandNotes = container.querySelector<HTMLButtonElement>('button[title="Expand notes"]')
+      act(() => expandNotes?.click())
+      const openNote = container.querySelector<HTMLButtonElement>(
+        'button[aria-label="Open note on line 4"]'
+      )
+      expect(openNote).not.toBeNull()
+      act(() => openNote?.click())
+
+      act(() => root.render(<TooltipProvider>{null}</TooltipProvider>))
+
+      expect(requestFrame).toHaveBeenCalledOnce()
+      expect(cancelFrame).toHaveBeenCalledWith(42)
+    } finally {
+      requestFrame.mockRestore()
+      cancelFrame.mockRestore()
+    }
   })
 })
 

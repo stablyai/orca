@@ -1,4 +1,6 @@
 import { translate } from '@/i18n/i18n'
+import { SourceControlPanelNotesClearDialog } from './notes-clear-dialog'
+import { SourceControlPanelNotesShelf } from './notes-shelf'
 import { SourceControlPanelReady } from './panel-ready'
 import { useSourceControlPanelModel } from './use-panel-model'
 
@@ -19,12 +21,19 @@ export function SourceControlPanel() {
   }
   if (isFolder) {
     return (
-      <div className="flex items-center justify-center h-full text-xs text-muted-foreground px-4 text-center">
-        {translate(
-          'auto.components.right.sidebar.SourceControl.e131cd7128',
-          'Source Control is only available for Git repositories'
-        )}
-      </div>
+      <>
+        <div ref={model.setSourceControlRoot} className="flex h-full flex-col overflow-hidden">
+          {/* Why: folder workspaces still support editor review notes even though Git controls are unavailable. The shortcut responder lives in this shelf. */}
+          <SourceControlPanelNotesShelf model={model} />
+          <div className="flex flex-1 items-center justify-center px-4 text-center text-xs text-muted-foreground">
+            {translate(
+              'auto.components.right.sidebar.SourceControl.e131cd7128',
+              'Source Control is only available for Git repositories'
+            )}
+          </div>
+        </div>
+        <SourceControlPanelNotesClearDialog model={model} />
+      </>
     )
   }
 

@@ -40,6 +40,7 @@ describe('getVisibleRightSidebarActivityItems', () => {
   it('shows ports only for SSH repos', () => {
     expect(
       getVisibleRightSidebarActivityItems(items, {
+        hasReviewNotes: false,
         isFolder: false,
         isFolderWorkspace: false,
         isSshRepo: false
@@ -48,6 +49,7 @@ describe('getVisibleRightSidebarActivityItems', () => {
 
     expect(
       getVisibleRightSidebarActivityItems(items, {
+        hasReviewNotes: false,
         isFolder: false,
         isFolderWorkspace: false,
         isSshRepo: true
@@ -58,6 +60,7 @@ describe('getVisibleRightSidebarActivityItems', () => {
   it('shows Workspaces only for folder workspaces and hides git tabs for all folder scopes', () => {
     expect(
       getVisibleRightSidebarActivityItems(items, {
+        hasReviewNotes: false,
         isFolder: true,
         isFolderWorkspace: true,
         isSshRepo: true
@@ -72,10 +75,28 @@ describe('getVisibleRightSidebarActivityItems', () => {
 
     expect(
       getVisibleRightSidebarActivityItems(items, {
+        hasReviewNotes: false,
         isFolder: true,
         isFolderWorkspace: false,
         isSshRepo: true
       }).map((item) => item.id)
     ).toEqual(['explorer', 'ports', 'plugin:orca-samples.my-plugin/dashboard'])
+  })
+
+  it('shows only the Source Control notes surface for a folder with review notes', () => {
+    expect(
+      getVisibleRightSidebarActivityItems(items, {
+        hasReviewNotes: true,
+        isFolder: true,
+        isFolderWorkspace: true,
+        isSshRepo: false
+      }).map((item) => item.id)
+    ).toEqual([
+      'explorer',
+      'workspaces',
+      'pr-checks',
+      'source-control',
+      'plugin:orca-samples.my-plugin/dashboard'
+    ])
   })
 })

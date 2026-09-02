@@ -107,6 +107,8 @@ export default function DiffViewer({
     comments: worktreeId ? diffComments : [],
     commentableLineNumbers,
     addButtonLabel: addLineCommentLabel,
+    enableAddReviewNoteShortcut: true,
+    isAddCommentDraftOpen: popover !== null,
     onAddCommentClick: ({ lineNumber, startLine, top }) =>
       setPopover({
         lineNumber,
