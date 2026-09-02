@@ -9,7 +9,15 @@ import {
   type SystemResolverHealthResult
 } from './types'
 
-const HEALTH_CHECK_TIMEOUT_MS = 3_000
+// Why: this single timer bounds the WHOLE health check, including the daemon's
+// ptySpawnHealth reply. That probe retries once at up to 4s each
+// (PTY_SPAWN_HEALTH_RETRY_ATTEMPTS × PTY_SPAWN_HEALTH_TIMEOUT_MS in
+// pty-subprocess.ts), so a slow/degraded daemon on a busy machine right after
+// an upgrade can take ~8s to answer. The budget must exceed that, plus connect
+// + hello round-trip slack — otherwise the client times out first and
+// mis-classifies a still-live degraded daemon as 'unreachable', so the
+// degraded-new-pty-fallback never engages and fresh terminals freeze (#6814).
+const HEALTH_CHECK_TIMEOUT_MS = 10_000
 const RESOLVER_HEALTH_CHECK_TIMEOUT_MS = 3_000
 // Why: e2e forces the failed-health preserve path without SIGSTOP races —
 // a stopped daemon also blocks listSessions, so the unhealthy guard cannot

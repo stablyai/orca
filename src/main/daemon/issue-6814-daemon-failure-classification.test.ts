@@ -93,6 +93,39 @@ describe('issue #6814 repro: daemon failure-mode classification', () => {
     }
   })
 
+  // Regression for #6866 follow-up: a DEGRADED daemon whose PTY spawn probe is
+  // slow (busy machine right after an upgrade) but still settles must classify
+  // as 'pty-spawn-unhealthy' so the degraded fallback engages — NOT as
+  // 'unreachable'. The PR raised the server probe budget (2s->4s, +1 retry, up
+  // to ~8s) but left the client health-check timeout unchanged, so a probe that
+  // settled past the client budget was mis-bucketed as 'unreachable' and the
+  // degraded rescue never ran (fresh terminals froze on a no-cursor daemon).
+  it('DEGRADED (slow probe): a protocol-alive daemon whose PTY probe settles after the old 3s budget still classifies as pty-spawn-unhealthy', async () => {
+    const server = new DaemonServer({
+      socketPath,
+      tokenPath,
+      // Why: simulate one slow probe on a busy machine that settles in the
+      // 3-4s window — past the old 3000ms client budget but well within the
+      // server's post-diff per-probe budget.
+      ptySpawnHealthCheck: vi.fn(
+        () =>
+          new Promise<void>((_resolve, reject) => {
+            setTimeout(() => reject(new Error('chdir(2) failed.: No such file or directory')), 3_500)
+          })
+      ),
+      spawnSubprocess: () => createMockSubprocess()
+    })
+    await server.start()
+    try {
+      // -> the client must wait long enough to receive the degraded reply and
+      //    mark the daemon degraded, so fresh spawns route to the local
+      //    provider instead of the no-cursor daemon pane.
+      await expect(checkDaemonHealth(socketPath, tokenPath)).resolves.toBe('pty-spawn-unhealthy')
+    } finally {
+      await server.shutdown()
+    }
+  }, 15000)
+
   // The limit of #6830: a fully WEDGED daemon (event loop hung — health RPC
   // never returns) cannot be distinguished by a richer status. It times out
   // and classifies as 'unreachable', the SAME bucket as a dead daemon.
