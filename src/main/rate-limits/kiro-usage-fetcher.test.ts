@@ -1,7 +1,10 @@
 import { describe, expect, it, vi } from 'vitest'
 import { execFile } from 'node:child_process'
+import { chmodSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { getSpawnArgsForWindows } from '../win32-utils'
-import { fetchKiroRateLimits, parseKiroUsageOutput } from './kiro-usage-fetcher'
+import { fetchKiroRateLimits, parseKiroUsageOutput, resolveKiroCommand } from './kiro-usage-fetcher'
 
 vi.mock('node:child_process', () => ({ execFile: vi.fn() }))
 vi.mock('../win32-utils', () => ({ getSpawnArgsForWindows: vi.fn() }))
@@ -10,6 +13,21 @@ const KIRO_USAGE_OUTPUT =
   'Estimated Usage | resets on 2026-09-01 | KIRO PRO\nCredits (10 of 100 covered in plan)\n10%'
 
 describe('Kiro usage fetcher', () => {
+  it('uses the shared CLI resolver for version-manager installs', () => {
+    const homePath = mkdtempSync(join(tmpdir(), 'orca-kiro-command-'))
+    const command = join(homePath, '.volta', 'bin', 'kiro-cli')
+    mkdirSync(join(homePath, '.volta', 'bin'), { recursive: true })
+    writeFileSync(command, '#!/bin/sh\n')
+    chmodSync(command, 0o755)
+    vi.stubEnv('KIRO_CLI_PATH', '')
+    try {
+      expect(resolveKiroCommand({ platform: 'darwin', pathEnv: '', homePath })).toBe(command)
+    } finally {
+      vi.unstubAllEnvs()
+      rmSync(homePath, { recursive: true, force: true })
+    }
+  })
+
   it('parses the official CLI usage command output', () => {
     const result = parseKiroUsageOutput(`
 \u001b[1mEstimated Usage | resets on 2026-09-01 | KIRO PRO+\u001b[0m
@@ -46,12 +64,10 @@ Credits (1233.74 of 2000 covered in plan)
       spawnCmd: 'C:\\Windows\\System32\\cmd.exe',
       spawnArgs: ['/d', '/c', 'C:\\Users\\me\\bin\\kiro-cli.cmd', 'chat']
     })
-    vi.mocked(execFile).mockImplementation(
-      ((_command, _args, _options, callback) => {
-        callback(null, KIRO_USAGE_OUTPUT, '')
-        return undefined as never
-      }) as unknown as typeof execFile
-    )
+    vi.mocked(execFile).mockImplementation(((_command, _args, _options, callback) => {
+      callback(null, KIRO_USAGE_OUTPUT, '')
+      return undefined as never
+    }) as unknown as typeof execFile)
 
     const result = await fetchKiroRateLimits({ command: 'C:\\Users\\me\\bin\\kiro-cli.cmd' })
 

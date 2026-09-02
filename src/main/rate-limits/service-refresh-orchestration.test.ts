@@ -7,6 +7,7 @@ import { fetchGeminiRateLimits } from './gemini-usage-fetcher'
 import { fetchKimiRateLimits } from './kimi-fetcher'
 import { fetchMiniMaxRateLimits } from './minimax-fetcher'
 import { fetchGrokRateLimits } from './grok-fetcher'
+import { fetchKiroRateLimits } from './kiro-usage-fetcher'
 import { readGrokAuthSession } from './grok-auth'
 import { fetchOpenCodeGoRateLimits } from './opencode-go-usage-fetcher'
 import {
@@ -303,6 +304,43 @@ describe('RateLimitService', () => {
 
     const completedState = service.getState()
     expect(completedState.grok?.status).toBe('ok')
+    expect(refreshResolved).toBe(true)
+  })
+
+  it('publishes other provider results before a slow Kiro CLI fetch completes', async () => {
+    const service = new RateLimitService()
+    const kiro = deferred<ProviderRateLimits>()
+    let refreshResolved = false
+
+    vi.mocked(fetchClaudeRateLimits).mockResolvedValueOnce(okProvider('claude', 10, Date.now()))
+    vi.mocked(fetchCodexRateLimits).mockResolvedValueOnce(okProvider('codex', 20, Date.now()))
+    vi.mocked(fetchGeminiRateLimits).mockResolvedValueOnce(okProvider('gemini', 30, Date.now()))
+    vi.mocked(fetchOpenCodeGoRateLimits).mockResolvedValueOnce(
+      okProvider('opencode-go', 40, Date.now())
+    )
+    vi.mocked(fetchKimiRateLimits).mockResolvedValueOnce(okProvider('kimi', 50, Date.now()))
+    vi.mocked(fetchMiniMaxRateLimits).mockResolvedValueOnce(okProvider('minimax', 60, Date.now()))
+    vi.mocked(fetchKiroRateLimits).mockReturnValueOnce(kiro.promise)
+
+    const refresh = service.refresh().then(() => {
+      refreshResolved = true
+    })
+    await flushMicrotasks()
+
+    const pendingKiroState = service.getState()
+    expect(pendingKiroState.claude?.status).toBe('ok')
+    expect(pendingKiroState.codex?.status).toBe('ok')
+    expect(pendingKiroState.gemini?.status).toBe('ok')
+    expect(pendingKiroState.opencodeGo?.status).toBe('ok')
+    expect(pendingKiroState.kimi?.status).toBe('ok')
+    expect(pendingKiroState.minimax?.status).toBe('ok')
+    expect(pendingKiroState.kiro?.status).toBe('fetching')
+    expect(refreshResolved).toBe(false)
+
+    kiro.resolve(okProvider('kiro', 70, Date.now()))
+    await refresh
+
+    expect(service.getState().kiro?.status).toBe('ok')
     expect(refreshResolved).toBe(true)
   })
 

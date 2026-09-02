@@ -1,8 +1,6 @@
 import { execFile } from 'node:child_process'
-import { accessSync, constants } from 'node:fs'
-import { homedir } from 'node:os'
-import { join } from 'node:path'
 import { stripAnsiEscapeSequences } from '../../shared/ansi-escape-sequences'
+import { resolveCliCommand, withCliRuntimeOnPath } from '../../shared/node-cli-command-resolution'
 import type { ProviderRateLimits, RateLimitWindow } from '../../shared/rate-limit-types'
 import { getSpawnArgsForWindows } from '../win32-utils'
 
@@ -39,25 +37,18 @@ function result(
   }
 }
 
-function resolveKiroCommand(): string {
+export function resolveKiroCommand(
+  options: {
+    pathEnv?: string | null
+    platform?: NodeJS.Platform
+    homePath?: string
+  } = {}
+): string {
   const configured = process.env.KIRO_CLI_PATH?.trim()
-  const candidates = [
-    configured,
-    join(homedir(), 'bin', 'kiro-cli'),
-    join(homedir(), '.local', 'bin', 'kiro-cli')
-  ]
-  for (const candidate of candidates) {
-    if (!candidate) {
-      continue
-    }
-    try {
-      accessSync(candidate, constants.X_OK)
-      return candidate
-    } catch {
-      // Continue to the next known install location.
-    }
+  if (configured) {
+    return configured
   }
-  return process.platform === 'win32' ? 'kiro-cli.exe' : 'kiro-cli'
+  return resolveCliCommand('kiro-cli', options)
 }
 
 const runCommand: CommandRunner = (command, args, signal) =>
@@ -65,10 +56,11 @@ const runCommand: CommandRunner = (command, args, signal) =>
     // Why: execFile cannot launch configured .cmd/.bat shims directly on
     // Windows; route them through cmd.exe like the other usage fetchers.
     const { spawnCmd, spawnArgs } = getSpawnArgsForWindows(command, args)
+    const env = withCliRuntimeOnPath(command, { ...process.env })
     execFile(
       spawnCmd,
       spawnArgs,
-      { encoding: 'utf8', timeout: CLI_TIMEOUT_MS, maxBuffer: 1024 * 1024, signal },
+      { encoding: 'utf8', timeout: CLI_TIMEOUT_MS, maxBuffer: 1024 * 1024, signal, env },
       (error, stdout, stderr) => {
         if (error) {
           reject(error)
