@@ -349,13 +349,17 @@ describe('registerWorktreeHandlers', () => {
       ['config', 'remote.pr-contributor-orca.orca-created', 'true'],
       wslRoutingOptions
     )
+    // Why: the mint's fetch is the one call in this sequence that talks to the network --
+    // bounded the same as the deferred short-circuit's fetch (see DEFERRED_PUSH_TARGET_FETCH_TIMEOUT_MS)
+    // so a hung credential prompt can't wedge it forever. Every other call here is local-only
+    // and stays untimed, per `wslRoutingOptions` above.
     expect(gitExecFileAsyncMock).toHaveBeenCalledWith(
       [
         'fetch',
         'pr-contributor-orca',
         '+refs/heads/contributor/wsl-fork*:refs/remotes/pr-contributor-orca/contributor/wsl-fork*'
       ],
-      wslRoutingOptions
+      { ...wslRoutingOptions, timeout: expect.any(Number) }
     )
     // wslDistro threaded through every subprocess this materialize made, not just the adds.
     const distros = new Set(

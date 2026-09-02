@@ -1006,13 +1006,15 @@ export async function prepareWorktreePushTarget(
 ): Promise<GitPushTarget> {
   await validateGitPushTarget(repoPath, target, gitOptions)
   const prepared = await prepareWorktreePushTargetWithExec(
-    // Why: this is only ever reached via the deferred materialize path (#17828) --
-    // bound the network fetch so it can't hang indefinitely (see the timeout constant's comment).
+    // Why: this is only ever reached via the deferred materialize path (#17828) -- bound
+    // just the network fetch so it can't hang indefinitely (see the timeout constant's
+    // comment). The other calls this makes (`remote`, `remote add`, `config`) are local-only
+    // and must stay untimed, matching every other local git call in this file.
     (args, cwd) =>
       gitExecFileAsync(args, {
         cwd,
         ...gitOptions,
-        timeout: DEFERRED_PUSH_TARGET_FETCH_TIMEOUT_MS
+        ...(args[0] === 'fetch' ? { timeout: DEFERRED_PUSH_TARGET_FETCH_TIMEOUT_MS } : {})
       }),
     repoPath,
     target,

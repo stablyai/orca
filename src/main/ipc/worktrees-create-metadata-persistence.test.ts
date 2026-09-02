@@ -427,7 +427,10 @@ describe('registerWorktreeHandlers', () => {
     })
   })
 
-  it('configures a PR push target during local create', async () => {
+  // Was "configures a PR push target during local create": create used to mint the
+  // fork remote up front. It now defers to first sync (#17828); the minting itself is
+  // covered by worktree-remote-push-target-materialization.test.ts.
+  it('defers the fork-PR remote during local create and persists the target unmaterialized', async () => {
     listWorktreesMock.mockResolvedValue([
       {
         path: '/workspace/improve-dashboard',
@@ -449,7 +452,7 @@ describe('registerWorktreeHandlers', () => {
       }
     })
 
-    expect(gitExecFileAsyncMock).toHaveBeenCalledWith(
+    expect(gitExecFileAsyncMock).not.toHaveBeenCalledWith(
       [
         'remote',
         'add',
@@ -461,7 +464,7 @@ describe('registerWorktreeHandlers', () => {
       ],
       { cwd: '/workspace/repo' }
     )
-    expect(gitExecFileAsyncMock).toHaveBeenCalledWith(
+    expect(gitExecFileAsyncMock).not.toHaveBeenCalledWith(
       [
         'fetch',
         'pr-prateek-orca',
@@ -469,7 +472,8 @@ describe('registerWorktreeHandlers', () => {
       ],
       { cwd: '/workspace/repo' }
     )
-    expect(gitExecFileAsyncMock).toHaveBeenCalledWith(
+    // Upstream can only be set once the remote exists, so it defers with the remote.
+    expect(gitExecFileAsyncMock).not.toHaveBeenCalledWith(
       [
         'branch',
         '--set-upstream-to',
@@ -478,20 +482,25 @@ describe('registerWorktreeHandlers', () => {
       ],
       { cwd: '/workspace/improve-dashboard' }
     )
+    // Exact object, not objectContaining: `remoteCreated` must stay absent until
+    // something actually mints the remote.
     expect(store.setWorktreeMeta).toHaveBeenCalledWith(
       'repo-1::/workspace/improve-dashboard',
       expect.objectContaining({
-        pushTarget: expect.objectContaining({
+        pushTarget: {
           remoteName: 'pr-prateek-orca',
           branchName: 'prateek/fix-sidebar-agents-toggle',
-          remoteUrl: 'git@github.com:prateek/orca.git',
-          remoteCreated: true
-        })
+          remoteUrl: 'git@github.com:prateek/orca.git'
+        }
       })
     )
   })
 
-  it('keeps the Orca-created marker when a new worktree reuses an Orca-created fork remote', async () => {
+  // Was "keeps the Orca-created marker ...": create used to inherit the marker while
+  // minting. With minting deferred (#17828) create must not claim ownership it has not
+  // earned; marker inheritance now happens at materialization and is covered by
+  // worktree-push-target-setup.test.ts.
+  it('does not claim the Orca-created marker at create when a sibling worktree minted the fork remote', async () => {
     listWorktreesMock.mockResolvedValue([
       {
         path: '/workspace/improve-dashboard',
@@ -538,12 +547,11 @@ describe('registerWorktreeHandlers', () => {
     expect(store.setWorktreeMeta).toHaveBeenCalledWith(
       'repo-1::/workspace/improve-dashboard',
       expect.objectContaining({
-        pushTarget: expect.objectContaining({
+        pushTarget: {
           remoteName: 'pr-contributor-orca',
           branchName: 'contributor/new-fix',
-          remoteUrl: 'https://github.com/contributor/orca.git',
-          remoteCreated: true
-        })
+          remoteUrl: 'https://github.com/contributor/orca.git'
+        }
       })
     )
   })
