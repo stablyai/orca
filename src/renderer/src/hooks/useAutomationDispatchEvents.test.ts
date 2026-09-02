@@ -572,6 +572,10 @@ describe('useAutomationDispatchEvents setup launch', () => {
 
     await registerAndDispatch()
     launchArgs.onAgentStatus?.({ state: 'done' })
+    await Promise.resolve()
+    expect(mockFinalizeTerminalOwnership).not.toHaveBeenCalled()
+    launchArgs.onAgentStatus?.({ state: 'working' })
+    launchArgs.onAgentStatus?.({ state: 'done' })
     await vi.waitFor(() => expect(mockFinalizeTerminalOwnership).toHaveBeenCalledOnce())
 
     expect(order).toEqual([
@@ -618,6 +622,53 @@ describe('useAutomationDispatchEvents setup launch', () => {
     expect(mockFinalizeTerminalOwnership).not.toHaveBeenCalled()
 
     launchArgs.onAgentStatus?.({ state: 'done' })
+    await Promise.resolve()
+    expect(mockFinalizeTerminalOwnership).not.toHaveBeenCalled()
+    launchArgs.onAgentStatus?.({ state: 'working' })
+    launchArgs.onAgentStatus?.({ state: 'done' })
+    await vi.waitFor(() => expect(mockFinalizeTerminalOwnership).toHaveBeenCalledOnce())
+  })
+
+  it('ignores stale done in the fresh status-store observer until working', async () => {
+    const paneKey = 'agent-tab:7c6fb4e5-3bf1-4ff4-8259-03f7ae81c40d'
+    await registerAndDispatch()
+    if (!latestStoreSubscriber) {
+      throw new Error('agent status observer was not registered')
+    }
+    const startedAt = Date.now() + 1
+    state.agentStatusByPaneKey = {
+      [paneKey]: {
+        paneKey,
+        state: 'done',
+        prompt: 'stale',
+        updatedAt: startedAt,
+        stateStartedAt: startedAt,
+        stateHistory: []
+      }
+    }
+    latestStoreSubscriber()
+    await Promise.resolve()
+    expect(mockFinalizeTerminalOwnership).not.toHaveBeenCalled()
+
+    state.agentStatusByPaneKey[paneKey] = {
+      paneKey,
+      state: 'working',
+      prompt: 'automation',
+      updatedAt: startedAt + 1,
+      stateStartedAt: startedAt + 1,
+      stateHistory: []
+    }
+    latestStoreSubscriber()
+    state.agentStatusByPaneKey[paneKey] = {
+      paneKey,
+      state: 'done',
+      prompt: 'automation',
+      updatedAt: startedAt + 2,
+      stateStartedAt: startedAt + 2,
+      stateHistory: []
+    }
+    latestStoreSubscriber()
+
     await vi.waitFor(() => expect(mockFinalizeTerminalOwnership).toHaveBeenCalledOnce())
   })
 

@@ -164,6 +164,7 @@ export async function handleAutomationDispatchRequest({
         }
       }
     }
+    let backgroundSawWorking = false
     const result = await launchAgentBackgroundSession({
       agent: automation.agentId,
       worktreeId: worktree.id,
@@ -173,8 +174,18 @@ export async function handleAutomationDispatchRequest({
       onData: completion.appendOutput,
       onAgentStatus: (payload) => {
         completion.captureAssistantMessage(payload.lastAssistantMessage)
-        // Why: session-boundary done = launch connect, not run completion (see observeAgentStatus).
-        if (payload.state !== 'done' || payload.sessionBoundary === true) {
+        if (payload.state === 'working') {
+          backgroundSawWorking = true
+          return
+        }
+        // Why: fresh launches can replay a stale non-boundary done before the
+        // submitted automation prompt reaches working. Completion requires the
+        // prompt's own working edge, just like reuse-session dispatches.
+        if (
+          payload.state !== 'done' ||
+          payload.sessionBoundary === true ||
+          !backgroundSawWorking
+        ) {
           return
         }
         completion.handleAgentDone()
@@ -193,7 +204,9 @@ export async function handleAutomationDispatchRequest({
       releaseTerminalOwnership()
     }
     const launchedTabId = result.tabId
-    completion.observeAgentStatus(result.paneKey, dispatchStartedAt)
+    completion.observeAgentStatus(result.paneKey, dispatchStartedAt, {
+      requireWorkingAfterStart: true
+    })
     try {
       await markDispatchResult({
         runId: run.id,
