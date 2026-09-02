@@ -1,4 +1,5 @@
 import { countLooseRefs } from './loose-ref-count'
+import { PackedRefsLockGate } from './packed-refs-lock-gate'
 import {
   LOOSE_REF_PACK_THRESHOLD,
   REF_MAINTENANCE_ATTEMPT_DEADLINE_MS,
@@ -6,7 +7,10 @@ import {
   REF_MAINTENANCE_FAILURE_COOLDOWN_MS,
   REF_MAINTENANCE_PACKED_COOLDOWN_MS,
   REF_MAINTENANCE_QUIET_PERIOD_MS,
+  PACKED_REFS_LOCK_WAIT_MS,
+  REF_MAINTENANCE_LOCKED_COOLDOWN_MS,
   RefMaintenanceInterrupted,
+  RefMaintenanceRepoLocked,
   type RefMaintenanceOutcome,
   type RefMaintenanceSpan,
   type RepoRefMaintenanceOptions,
@@ -54,6 +58,7 @@ export class RepoRefMaintenance {
   // is still running -- an interrupt cancels the work and waits for it to stop.
   private inFlight: Promise<void> | null = null
   private inFlightAbort: AbortController | null = null
+  private readonly lockGate = new PackedRefsLockGate()
   // Why a count, not a flag: several ref-touching operations overlap routinely
   // (a create's fetch inside a create), and the last one out reopens the window.
   private suspensions = 0
@@ -95,19 +100,18 @@ export class RepoRefMaintenance {
   }
 
   /**
-   * Stop any pack that is running and resolve once it really has stopped.
+   * Wait out the `packed-refs` rewrite, if one is in progress.
    *
-   * Callers about to touch refs await this so a collision costs a few hundred
-   * milliseconds instead of failing on `packed-refs.lock`. A no-op, and free,
-   * when nothing is running -- which is almost always.
+   * Deliberately not a kill. The lock is held for 0.03-1.37s of a 23-32s pack;
+   * the rest is the prune phase, during which a concurrent `fetch --prune`,
+   * `branch -D` or `update-ref` measurably succeeds because per-ref locks last
+   * microseconds and Git retries for `core.filesRefLockTimeout`. Signalling the
+   * child there buys nothing and strands a lock file about one time in five.
+   *
+   * Free when no pack is running, which is almost always.
    */
-  interrupt(reason: string): Promise<void> {
-    const running = this.inFlight
-    if (!running) {
-      return Promise.resolve()
-    }
-    this.inFlightAbort?.abort(new RefMaintenanceInterrupted(reason))
-    return running.catch(() => {})
+  awaitPackedRefsLockRelease(): Promise<void> {
+    return this.lockGate.whenReleased(PACKED_REFS_LOCK_WAIT_MS)
   }
 
   /**
@@ -133,17 +137,18 @@ export class RepoRefMaintenance {
   /**
    * Hold the repository open for work that is about to touch refs.
    *
-   * Stronger than `interrupt` alone, which only cancels what is running now: no
-   * attempt can start for any repository until the returned release is called,
-   * so a quiet-period timer cannot fire into the middle of the caller's work.
+   * Two things at once: no *new* attempt can start for any repository until the
+   * returned release is called, and the caller waits out any `packed-refs`
+   * rewrite already in progress. A prune already running is left alone to
+   * finish -- it does not block the caller.
    */
-  async pause(reason: string): Promise<() => void> {
+  async pause(_reason: string): Promise<() => void> {
     this.suspensions += 1
     let released = false
     try {
-      await this.interrupt(reason)
+      await this.awaitPackedRefsLockRelease()
     } catch {
-      // interrupt() never rejects, but a release must exist even if it did.
+      // The wait cannot reject, but a release must exist even if it did.
     }
     return () => {
       if (!released) {
@@ -298,15 +303,18 @@ export class RepoRefMaintenance {
     const startedAt = this.now()
     let partial = false
     try {
-      await tracked.target.packRefs(signal)
+      // No signal: the pack runs to completion. Callers that need the refs wait
+      // out the rewrite window through `pause()` instead of killing it.
+      await tracked.target.packRefs(this.lockGate)
     } catch (error) {
       span.setAttribute('repo.maintenance_error', String(error))
-      if (signal.aborted) {
-        // Orca asked for this, and a killed pack-refs loses nothing.
-        this.yieldTo(key, tracked, span, signal)
+      if (error instanceof RefMaintenanceRepoLocked) {
+        this.settle(key, span, 'locked', REF_MAINTENANCE_LOCKED_COOLDOWN_MS)
         return
       }
       partial = true
+    } finally {
+      this.lockGate.setHeld(false)
     }
     span.setAttribute('git.pack_refs_ms', this.now() - startedAt)
     // Judge by the backlog, not by the exit code. On a machine running several

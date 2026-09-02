@@ -153,7 +153,8 @@ export async function forceDeleteLocalBranch(
   }
   // Why: stale toast actions must not delete a branch that moved; `update-ref -d` deletes only if the ref still == expectedHead.
   try {
-    // A ref deletion needs the packed-refs lock a running idle pack holds while it rewrites.
+    // `update-ref -d` needs the packed-refs lock a running idle pack holds while
+    // it rewrites; waits it out rather than cancelling the pack.
     await withRepoRefMaintenancePaused('branch-delete', () =>
       runGit(['update-ref', '-d', `refs/heads/${branchName}`, expectedHead], repoPath)
     )

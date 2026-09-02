@@ -4,12 +4,13 @@ import { RepoRefMaintenance } from '../../shared/repo-ref-maintenance'
 import {
   PACK_REFS_ARGS,
   PACK_REFS_TIMEOUT_MS,
+  RefMaintenanceRepoLocked,
+  type PackedRefsLockReporter,
   type RepoRefMaintenanceOptions,
   type RepoRefMaintenanceTarget
 } from '../../shared/repo-ref-maintenance-policy'
 import { isWslUncPath, toWindowsWslPath } from '../../shared/wsl-paths'
 import { withSpan } from '../observability/tracer'
-import { subscribeGitAdmissionEvents } from './command-runner/git-subprocess-admission'
 import { PackRefsLockOwnership } from './pack-refs-lock-ownership'
 import { gitExecFileAsync } from './runner'
 import { readRepoCommonDirFromGit } from './worktree-list-reader'
@@ -83,25 +84,29 @@ export function getLocalRepoRefMaintenance(): RepoRefMaintenance {
 }
 
 /**
- * Cancels every armed timer and the running pack, resolving once the pack has
- * really stopped. Awaiting matters at shutdown: a SIGKILL landing mid-rewrite
- * leaves a `packed-refs.lock` Git never removes on its own.
+ * Cancels every armed timer and waits out any `packed-refs` rewrite in progress.
+ *
+ * Deliberately does not kill the child. A pack orphaned by the app quitting
+ * finishes on its own; a pack signalled mid-prune strands a ref lock about one
+ * time in five, and on Windows a force-kill inside the rewrite strands
+ * `packed-refs.lock` every time -- which blocks every later ref deletion.
  */
 export function disposeLocalRepoRefMaintenance(): Promise<void> {
-  const stopping = shared?.interrupt('shutting down') ?? Promise.resolve()
+  const settling = shared?.awaitPackedRefsLockRelease() ?? Promise.resolve()
   shared?.dispose()
   shared = null
   repoBusyProbes.clear()
-  return stopping
+  return settling
 }
 
 /**
  * Hold every repository open while `run` touches refs.
  *
- * A ref deletion needs `packed-refs.lock`, which a running pack holds while it
- * rewrites the file; without this the user's fetch or worktree removal would
- * fail with a lock error and no visible cause. Killing a pack costs only the
- * work already done, so the collision becomes a short wait instead.
+ * A ref deletion needs `packed-refs.lock`, which a running pack holds only while
+ * it rewrites the file -- 0.03-1.37s of a 23-32s run. Waiting that out turns the
+ * collision into a short pause. Cancelling the pack instead would strand a
+ * `refs/**` lock about one time in five, which Git never clears, so the ref
+ * stays undeletable indefinitely.
  */
 export async function withRepoRefMaintenancePaused<T>(
   reason: string,
@@ -120,9 +125,9 @@ export async function withRepoRefMaintenancePaused<T>(
   }
 }
 
-/** Stop a running pack without holding the window open. For shutdown and power loss. */
-export function interruptLocalRepoRefMaintenance(reason: string): Promise<void> {
-  return shared ? shared.interrupt(reason) : Promise.resolve()
+/** Wait out a `packed-refs` rewrite without holding the window open. For shutdown. */
+export function awaitPackedRefsLockRelease(): Promise<void> {
+  return shared ? shared.awaitPackedRefsLockRelease() : Promise.resolve()
 }
 
 /**
@@ -211,8 +216,11 @@ export function createLocalRepoRefMaintenanceTarget(
   // The engine always probes before it packs, so the pack reuses this answer
   // rather than spending a second rev-parse on the same repository.
   let commonDir: string | undefined
-  const resolveCommonDir = async (signal: AbortSignal): Promise<string | undefined> => {
-    commonDir ??= await readRepoCommonDirFromGit(args.repoPath, { ...gitOptions, signal })
+  const resolveCommonDir = async (signal?: AbortSignal): Promise<string | undefined> => {
+    commonDir ??= await readRepoCommonDirFromGit(args.repoPath, {
+      ...gitOptions,
+      ...(signal ? { signal } : {})
+    })
     return commonDir
   }
   return {
@@ -234,35 +242,29 @@ export function createLocalRepoRefMaintenanceTarget(
         return false
       }
     },
-    async packRefs(signal: AbortSignal) {
-      const resolved = await resolveCommonDir(signal)
+    async packRefs(lock: PackedRefsLockReporter) {
+      const resolved = await resolveCommonDir()
       const owner = resolved
         ? new PackRefsLockOwnership(gitCommonDirForMainProcess(resolved, args.wslDistro))
         : null
-      if (owner && !(await owner.claim())) {
-        throw new Error('packed-refs.lock is held by another process')
+      const claim = owner ? await owner.claim() : { ok: true as const }
+      if (!claim.ok) {
+        throw new RefMaintenanceRepoLocked(claim.reason)
       }
-      // Holding a general admission slot is free while nothing else wants one.
-      // The moment something queues behind it, give the slot back: an
-      // interrupted pack costs only the work already done.
-      // Any phase, because the scheduler dequeues a waiter before publishing its
-      // grant: a lone queued command only ever shows up as a non-zero `queued`
-      // on somebody else's event.
-      const unsubscribe = subscribeGitAdmissionEvents((event) => {
-        if (event.queued > 0) {
-          void interruptLocalRepoRefMaintenance('git admission pressure')
-        }
-      })
+      // Report the rewrite window rather than accepting a signal. A pack that is
+      // killed mid-prune strands a `refs/**` lock about one time in five, and
+      // Git never clears those; waiting out the window costs at most ~1.4s.
+      const watch = owner?.watchLock((held) => lock.setHeld(held))
       try {
         await gitExecFileAsync([...PACK_REFS_ARGS], {
           cwd: args.repoPath,
           ...gitOptions,
           admissionTier: 'background',
-          timeout: PACK_REFS_TIMEOUT_MS,
-          signal
+          timeout: PACK_REFS_TIMEOUT_MS
         })
       } finally {
-        unsubscribe()
+        watch?.stop()
+        lock.setHeld(false)
         await owner?.release()
       }
     }

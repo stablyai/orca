@@ -38,6 +38,30 @@ export const REF_MAINTENANCE_CLEAN_COOLDOWN_MS = 6 * 60 * 60_000
 export const REF_MAINTENANCE_FAILURE_COOLDOWN_MS = 6 * 60 * 60_000
 
 /**
+ * A repository whose `packed-refs.lock` is a strand from our own dead process
+ * becomes reclaimable at `PACK_REFS_TIMEOUT_MS`, so retry near that rather than
+ * serving the full failure cooldown -- otherwise a Windows force-kill leaves
+ * every ref deletion in that repo failing for six hours instead of thirty
+ * minutes.
+ */
+export const REF_MAINTENANCE_LOCKED_COOLDOWN_MS = 30 * 60_000
+
+/**
+ * `pack-refs` holds `packed-refs.lock` only while it rewrites the file --
+ * measured at 0.03-1.37s of a 23-32s run, the other ~95% being the prune phase
+ * unlinking loose refs. A caller about to touch refs waits out that window
+ * instead of killing the pack.
+ */
+export const PACKED_REFS_LOCK_POLL_MS = 50
+
+/**
+ * Ceiling on that wait. Past this we stop blocking the user and let Git's own
+ * retry (`core.filesRefLockTimeout`, `core.packedRefsTimeout`) handle it, which
+ * is what happens today without any of this.
+ */
+export const PACKED_REFS_LOCK_WAIT_MS = 5_000
+
+/**
  * `pack-refs --prune` unlinks one file per loose ref. Paying off a 36k-ref
  * backlog measured at ~83s on APFS, so the deadline has to clear a cold repo on
  * a slow disk by a wide margin. A kill mid-run is safe -- git renames
@@ -74,6 +98,7 @@ export type RefMaintenanceOutcome =
   | 'opted_out'
   | 'deferred'
   | 'interrupted'
+  | 'locked'
   | 'timed_out'
   | 'failed'
 
@@ -91,8 +116,18 @@ export type RepoRefMaintenanceTarget = {
   isOptedOut?(signal: AbortSignal): Promise<boolean>
   /** True while work on *this repo* is in flight -- a fetch, a create, a removal. */
   isBusy?(): boolean
-  /** Must stop promptly when `signal` aborts; a killed `pack-refs` loses nothing. */
-  packRefs(signal: AbortSignal): Promise<void>
+  /**
+   * Runs `pack-refs` to completion. Deliberately takes no abort signal: killing
+   * a pack is measurably worse than waiting for it (see `PACKED_REFS_LOCK_*`).
+   * It must report `packed-refs.lock` transitions through `lock` so callers can
+   * wait for the short window that actually blocks them.
+   */
+  packRefs(lock: PackedRefsLockReporter): Promise<void>
+}
+
+/** How `packRefs` tells the scheduler whether the exclusive write window is open. */
+export type PackedRefsLockReporter = {
+  setHeld(held: boolean): void
 }
 
 export type RepoRefMaintenanceOptions = {
@@ -115,5 +150,17 @@ export class RefMaintenanceInterrupted extends Error {
   ) {
     super(`Ref maintenance interrupted: ${reason}`)
     this.name = 'RefMaintenanceInterrupted'
+  }
+}
+
+/**
+ * The repository's `packed-refs.lock` is held by something we must not touch.
+ * Distinct from a failure so a strand our own dead process left can be retried
+ * once it ages into reclaimability, rather than parked for six hours.
+ */
+export class RefMaintenanceRepoLocked extends Error {
+  constructor(detail: string) {
+    super(`packed-refs.lock is held: ${detail}`)
+    this.name = 'RefMaintenanceRepoLocked'
   }
 }

@@ -14,7 +14,7 @@ import { clearRuntimeMetadataIfOwned } from '../runtime/runtime-metadata'
 import { shutdownPairedRuntimeBrowserClientHosts } from '../browser/paired-runtime-browser-client-host-runtime'
 import { browserManager } from '../browser/browser-manager'
 import { stopCodexStateDbBackfillRecoveries } from '../codex/codex-state-db-backfill-recovery'
-import { interruptLocalRepoRefMaintenance } from '../git/local-repo-ref-maintenance'
+import { awaitPackedRefsLockRelease } from '../git/local-repo-ref-maintenance'
 import { settleTeardownWithinDeadline, settleWithinMs } from '../quit-teardown-deadline'
 import { quitTeardownStartGate } from '../quit-teardown-start-gate'
 import { setUnreadDockBadgeCount } from '../dock/unread-badge'
@@ -76,10 +76,10 @@ function installBeforeQuitHandler(): void {
     state.unsubscribeAgentAwakeStatusChanges = null
     state.agentAwakeService?.dispose()
     state.agentAwakeService = null
-    // Why interrupt but not uninstall: a renderer beforeunload can still veto this
+    // Why wait but not uninstall: a renderer beforeunload can still veto this
     // quit, and tearing the sweep down here would kill it for the rest of the
     // session. `isQuitting` already vetoes new attempts; will-quit does the teardown.
-    state.repoMaintenanceShutdown = interruptLocalRepoRefMaintenance('quitting')
+    state.repoMaintenanceShutdown = awaitPackedRefsLockRelease()
     // Why: defer PTY cleanup to will-quit so the renderer captures scrollback before PTY-exit events unmount TerminalPane (dropping its capture callbacks).
     state.rateLimits?.stop()
   })
@@ -130,13 +130,13 @@ function installWillQuitHandler(): void {
     const structuredAgentSessionShutdown = stopStructuredAgentSessionRuntime()
     state.pluginService = null
     setUnreadDockBadgeCount(0)
-    // Why bounded: git clears `packed-refs.lock` on SIGTERM, but only if it is
-    // still alive to receive it, so the quit waits briefly rather than racing it.
+    // Why wait rather than kill: the child finishes fine orphaned, and signalling
+    // it mid-prune strands a ref lock Git never clears. The wait is only for the
+    // short rewrite window, and is bounded so a quit can never hang on it.
     const refMaintenanceShutdown = settleWithinMs(
-      Promise.all([
-        state.repoMaintenanceShutdown,
-        state.uninstallRepoMaintenanceIdleGate?.()
-      ]).then(() => {}),
+      Promise.all([state.repoMaintenanceShutdown, state.uninstallRepoMaintenanceIdleGate?.()]).then(
+        () => {}
+      ),
       REF_MAINTENANCE_QUIT_DEADLINE_MS
     ).then(() => {})
     state.uninstallRepoMaintenanceIdleGate = null

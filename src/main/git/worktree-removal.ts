@@ -38,7 +38,8 @@ export async function removeWorktree(
 ): Promise<RemoveWorktreeResult> {
   try {
     // Removal deletes branches, and a ref deletion needs the packed-refs lock a
-    // running idle pack holds while it rewrites.
+    // running idle pack holds while it rewrites. Waits that window out; the
+    // prune phase that follows it is concurrency-safe and is left to finish.
     return await withRepoRefMaintenancePaused('worktree-remove', () =>
       runWithGitReadCacheInvalidation(() =>
         performRemoveWorktree(repoPath, worktreePath, force, options)

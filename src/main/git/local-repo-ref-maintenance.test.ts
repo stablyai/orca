@@ -2,11 +2,6 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const gitExecFileAsyncMock = vi.hoisted(() => vi.fn())
 const readRepoCommonDirFromGitMock = vi.hoisted(() => vi.fn())
-const subscribeAdmissionMock = vi.hoisted(() =>
-  vi.fn<(listener: (event: { phase: string; queued: number }) => void) => () => void>(
-    () => () => {}
-  )
-)
 
 vi.mock('./runner', async (importOriginal) => ({
   ...((await importOriginal()) as Record<string, unknown>),
@@ -16,11 +11,6 @@ vi.mock('./runner', async (importOriginal) => ({
 vi.mock('./worktree-list-reader', async (importOriginal) => ({
   ...((await importOriginal()) as Record<string, unknown>),
   readRepoCommonDirFromGit: readRepoCommonDirFromGitMock
-}))
-
-vi.mock('./command-runner/git-subprocess-admission', async (importOriginal) => ({
-  ...((await importOriginal()) as Record<string, unknown>),
-  subscribeGitAdmissionEvents: subscribeAdmissionMock
 }))
 
 import { _resetCanonicalRepoKeyCacheForTests } from './canonical-repo-key'
@@ -46,8 +36,6 @@ function target(wslDistro?: string): ReturnType<typeof createLocalRepoRefMainten
 beforeEach(() => {
   gitExecFileAsyncMock.mockReset()
   readRepoCommonDirFromGitMock.mockReset()
-  subscribeAdmissionMock.mockReset()
-  subscribeAdmissionMock.mockImplementation(() => () => {})
   delete process.env.ORCA_DISABLE_REPO_REF_MAINTENANCE
   _resetCanonicalRepoKeyCacheForTests()
   _resetLocalRepoRefMaintenanceForTests()
@@ -60,48 +48,25 @@ afterEach(() => {
 })
 
 describe('local repo ref maintenance target', () => {
-  it('gives its admission slot back as soon as other git queues behind it', async () => {
-    // A `pack-refs` holds a general slot for minutes on a degraded repository.
-    // That is only acceptable while nothing else wants one.
+  it('never hands the pack child an abort signal', async () => {
+    // Killing a `pack-refs` strands a `refs/**` lock about one time in five, and
+    // on Windows a force-kill inside the rewrite strands `packed-refs.lock`
+    // every time. The child must always be allowed to finish.
     readRepoCommonDirFromGitMock.mockResolvedValue('/repo/.git')
-    const interrupt = vi
-      .spyOn(getLocalRepoRefMaintenance(), 'interrupt')
-      .mockResolvedValue(undefined)
-    let listener: ((event: { phase: string; queued: number }) => void) | undefined
-    subscribeAdmissionMock.mockImplementation((fn) => {
-      listener = fn
-      return () => {
-        listener = undefined
-      }
-    })
-    let finish: (() => void) | undefined
-    gitExecFileAsyncMock.mockImplementation(
-      () =>
-        new Promise((resolve) => {
-          finish = () => resolve({ stdout: '', stderr: '' })
-        })
+    gitExecFileAsyncMock.mockResolvedValue({ stdout: '', stderr: '' })
+
+    await target().packRefs({ setHeld: () => {} })
+
+    const packCall = gitExecFileAsyncMock.mock.calls.find(
+      ([argv]) => (argv as string[])[0] === 'pack-refs'
     )
-
-    const packing = target().packRefs(new AbortController().signal)
-    await vi.waitFor(() => expect(listener).toBeDefined())
-
-    // An event with nothing queued is not pressure; the pack keeps its slot.
-    listener?.({ phase: 'release', queued: 0 })
-    expect(interrupt).not.toHaveBeenCalled()
-
-    listener?.({ phase: 'release', queued: 1 })
-    expect(interrupt).toHaveBeenCalledTimes(1)
-
-    finish?.()
-    await packing
-    // The subscription is torn down with the pack, not left dangling.
-    expect(listener).toBeUndefined()
+    expect(packCall?.[1]).not.toHaveProperty('signal')
   })
 
   it('runs pack-refs at the background tier with a long deadline', async () => {
     gitExecFileAsyncMock.mockResolvedValue({ stdout: '', stderr: '' })
 
-    await target().packRefs(new AbortController().signal)
+    await target().packRefs({ setHeld: () => {} })
 
     expect(gitExecFileAsyncMock).toHaveBeenCalledWith(
       ['pack-refs', '--all', '--prune'],

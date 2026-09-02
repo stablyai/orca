@@ -203,44 +203,88 @@ describe('idle ref maintenance against real Git', () => {
 })
 
 describe('yielding the repository to work that deletes refs', () => {
-  it('stops a running pack so a real branch deletion never hits packed-refs.lock', async () => {
-    // The defect this closes: the veto stopped a pack from starting during a
-    // deletion, but nothing stopped a deletion starting during a pack -- and
-    // `update-ref -d` then fails on the lock with no cause the user can see.
+  it('waits for the packed-refs lock and succeeds while the prune continues', async () => {
+    // The pack is never killed. `packed-refs.lock` is held for ~1.4s of a 30s
+    // run; the rest is the prune, during which a concurrent `update-ref -d`
+    // succeeds on its own because per-ref locks last microseconds. Signalling
+    // the child there strands a `refs/**` lock Git never clears.
     const { repoPath } = await createRepo(0)
     git(repoPath, ['branch', 'doomed'])
     const head = git(repoPath, ['rev-parse', 'refs/heads/doomed'])
 
-    let packs = 0
-    let firstPackSignal: AbortSignal | undefined
+    let packing = false
+    let releaseLock: (() => void) | undefined
     _resetLocalRepoRefMaintenanceForTests({ quietPeriodMs: QUIET_MS, looseRefThreshold: 1 })
     setRepoMaintenanceActivityProbe(() => false)
     getLocalRepoRefMaintenance().arm({
       key: `local::${repoPath}`,
       resolveRefsDirectory: async () => join(repoPath, '.git', 'refs'),
-      packRefs: async (signal) => {
-        packs += 1
-        firstPackSignal ??= signal
-        await new Promise<void>((_resolve, reject) => {
-          signal.addEventListener('abort', () => reject(signal.reason as Error))
+      packRefs: async (lock) => {
+        packing = true
+        lock.setHeld(true)
+        // Stands in for the rewrite window, then the long prune that follows it.
+        await new Promise<void>((resolve) => {
+          releaseLock = () => {
+            lock.setHeld(false)
+            resolve()
+          }
         })
       }
     })
-    for (let attempt = 0; attempt < 200 && packs === 0; attempt += 1) {
+    for (let attempt = 0; attempt < 200 && !packing; attempt += 1) {
       await new Promise((resolve) => setTimeout(resolve, QUIET_MS))
     }
-    expect(packs).toBe(1)
+    expect(packing).toBe(true)
 
     // The real deletion path, which routes through withRepoRefMaintenancePaused.
-    await expect(forceDeleteLocalBranch(repoPath, 'doomed', head)).resolves.toBeUndefined()
+    let deleted = false
+    const deletion = forceDeleteLocalBranch(repoPath, 'doomed', head).then(() => {
+      deleted = true
+    })
 
-    // The pack that was running when the deletion arrived was cancelled for it...
-    expect(firstPackSignal?.aborted).toBe(true)
+    // It must still be waiting: the rewrite window is open.
+    await new Promise((resolve) => setTimeout(resolve, QUIET_MS * 4))
+    expect(deleted).toBe(false)
+    expect(git(repoPath, ['branch', '--list', 'doomed'])).toContain('doomed')
+
+    // Releasing the window is enough -- the pack is never cancelled.
+    releaseLock?.()
+    await deletion
+    expect(deleted).toBe(true)
     expect(git(repoPath, ['branch', '--list', 'doomed'])).toBe('')
-    // ...and an interrupt is not a failure, so the sweep comes back on its own.
-    for (let attempt = 0; attempt < 200 && packs < 2; attempt += 1) {
+  }, 30_000)
+
+  it('does not block the caller once the rewrite window has closed', async () => {
+    // The prune phase is concurrency-safe, so a caller arriving during it pays
+    // nothing at all.
+    const { repoPath } = await createRepo(0)
+    git(repoPath, ['branch', 'doomed'])
+    const head = git(repoPath, ['rev-parse', 'refs/heads/doomed'])
+
+    let pruning = false
+    let finishPrune: (() => void) | undefined
+    _resetLocalRepoRefMaintenanceForTests({ quietPeriodMs: QUIET_MS, looseRefThreshold: 1 })
+    setRepoMaintenanceActivityProbe(() => false)
+    getLocalRepoRefMaintenance().arm({
+      key: `local::${repoPath}`,
+      resolveRefsDirectory: async () => join(repoPath, '.git', 'refs'),
+      packRefs: async (lock) => {
+        lock.setHeld(true)
+        lock.setHeld(false)
+        pruning = true
+        await new Promise<void>((resolve) => {
+          finishPrune = resolve
+        })
+      }
+    })
+    for (let attempt = 0; attempt < 200 && !pruning; attempt += 1) {
       await new Promise((resolve) => setTimeout(resolve, QUIET_MS))
     }
-    expect(packs).toBe(2)
+
+    const startedAt = Date.now()
+    await expect(forceDeleteLocalBranch(repoPath, 'doomed', head)).resolves.toBeUndefined()
+    expect(Date.now() - startedAt).toBeLessThan(2_000)
+
+    finishPrune?.()
   }, 30_000)
 })

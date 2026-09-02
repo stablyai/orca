@@ -1,7 +1,7 @@
 import { app, powerMonitor } from 'electron'
 import {
   disposeLocalRepoRefMaintenance,
-  interruptLocalRepoRefMaintenance,
+  postponeRepoRefMaintenance,
   setRepoMaintenanceActivityProbe
 } from './git/local-repo-ref-maintenance'
 import { hasWorktreeRemovalsInFlight } from './ipc/worktrees/worktree-ipc-context'
@@ -34,15 +34,15 @@ export function installRepoMaintenanceIdleGate(
       hasWorktreeRemovalsInFlight() ||
       isOnBatteryPower()
   )
-  // Checking these only at admission would still let a change seconds later buy
-  // a minute of unrequested work: unplugging, or the user coming back to a
-  // window they left. Both stop the pack outright -- it holds a general git
-  // admission slot for its whole run, and nothing it has done is lost.
+  // Do-not-start, never stop-what-is-running. Killing a pack to honour a battery
+  // or focus change would strand a ref lock roughly one time in five to save at
+  // most a couple of minutes of background unlinking; pushing the next attempt
+  // out costs nothing and risks nothing.
   const onBattery = (): void => {
-    void interruptLocalRepoRefMaintenance('on battery')
+    postponeRepoRefMaintenance()
   }
   const onFocus = (): void => {
-    void interruptLocalRepoRefMaintenance('window focused')
+    postponeRepoRefMaintenance()
   }
   powerMonitor.on('on-battery', onBattery)
   app.on('browser-window-focus', onFocus)

@@ -293,8 +293,8 @@ export async function gitFetch(
   options: GitRuntimeOptions = {}
 ): Promise<void> {
   // `--prune` deletes remote-tracking refs, which needs the `packed-refs` lock a
-  // running idle pack holds while it rewrites. This is the user clicking Fetch,
-  // so it must never fail on that lock -- pause maintenance for the duration.
+  // running idle pack holds while it rewrites -- ~1.4s at most. This is the user
+  // clicking Fetch, so wait that window out rather than letting it fail on the lock.
   postponeRepoRefMaintenance()
   try {
     await withRepoRefMaintenancePaused('git-fetch', async () => {

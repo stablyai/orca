@@ -1,4 +1,4 @@
-import { mkdtemp, readFile, rm, stat, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, readFile, rm, stat, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
@@ -47,7 +47,7 @@ describe('packed-refs lock ownership', () => {
     const commonDir = await gitCommonDir()
     const { marker } = paths(commonDir)
 
-    await expect(new PackRefsLockOwnership(commonDir).claim()).resolves.toBe(true)
+    await expect(new PackRefsLockOwnership(commonDir).claim()).resolves.toEqual({ ok: true })
 
     await expect(readFile(marker, 'utf-8')).resolves.toContain(String(process.pid))
   })
@@ -67,7 +67,7 @@ describe('packed-refs lock ownership', () => {
     // A lock with no marker belongs to the user's own git, or to another tool.
     await writeFile(paths(commonDir).lock, 'someone else')
 
-    await expect(new PackRefsLockOwnership(commonDir).claim()).resolves.toBe(false)
+    await expect(new PackRefsLockOwnership(commonDir).claim()).resolves.toMatchObject({ ok: false })
     await expect(exists(paths(commonDir).lock)).resolves.toBe(true)
   })
 
@@ -79,7 +79,7 @@ describe('packed-refs lock ownership', () => {
 
     await expect(
       new PackRefsLockOwnership(commonDir).claim(laterBy(ABANDONED_LOCK_AGE_MS + 1))
-    ).resolves.toBe(false)
+    ).resolves.toMatchObject({ ok: false })
     await expect(exists(lock)).resolves.toBe(true)
   })
 
@@ -94,7 +94,7 @@ describe('packed-refs lock ownership', () => {
       laterBy(ABANDONED_LOCK_AGE_MS + 1)
     )
 
-    expect(claimed).toBe(true)
+    expect(claimed).toEqual({ ok: true })
     await expect(exists(lock)).resolves.toBe(false)
     await expect(readFile(marker, 'utf-8')).resolves.toContain(String(process.pid))
   })
@@ -107,7 +107,7 @@ describe('packed-refs lock ownership', () => {
     await writeFile(marker, JSON.stringify({ pid: DEAD_PID }))
     await writeFile(lock, 'a different git process, started just now')
 
-    await expect(new PackRefsLockOwnership(commonDir).claim()).resolves.toBe(false)
+    await expect(new PackRefsLockOwnership(commonDir).claim()).resolves.toMatchObject({ ok: false })
     await expect(exists(lock)).resolves.toBe(true)
   })
 
@@ -120,11 +120,11 @@ describe('packed-refs lock ownership', () => {
 
     await expect(
       new PackRefsLockOwnership(commonDir).claim(laterBy(ABANDONED_LOCK_AGE_MS + 1))
-    ).resolves.toBe(false)
+    ).resolves.toMatchObject({ ok: false })
 
     await expect(
       new PackRefsLockOwnership(commonDir).claim(laterBy(PID_REUSE_HORIZON_MS + 1))
-    ).resolves.toBe(true)
+    ).resolves.toEqual({ ok: true })
     await expect(exists(lock)).resolves.toBe(false)
   })
 
@@ -136,7 +136,7 @@ describe('packed-refs lock ownership', () => {
 
     await expect(
       new PackRefsLockOwnership(commonDir).claim(laterBy(PID_REUSE_HORIZON_MS + 1))
-    ).resolves.toBe(false)
+    ).resolves.toMatchObject({ ok: false })
     await expect(exists(lock)).resolves.toBe(true)
   })
 
@@ -144,6 +144,49 @@ describe('packed-refs lock ownership', () => {
     const commonDir = await gitCommonDir()
     await writeFile(paths(commonDir).marker, JSON.stringify({ pid: DEAD_PID }))
 
-    await expect(new PackRefsLockOwnership(commonDir).claim()).resolves.toBe(true)
+    await expect(new PackRefsLockOwnership(commonDir).claim()).resolves.toEqual({ ok: true })
+  })
+})
+
+describe('stranded per-ref locks', () => {
+  it('clears the empty refs/**/*.lock files its own dead process left behind', async () => {
+    // `tempfile.c` opens the lock O_EXCL before linking it into the list the
+    // signal handler walks, so a kill in that window leaves a 0-byte file that
+    // Git never clears -- and `update-ref -d` on that ref then fails forever.
+    const commonDir = await gitCommonDir()
+    const namespace = join(commonDir, 'refs', 'remotes', 'origin')
+    await mkdir(namespace, { recursive: true })
+    await writeFile(join(namespace, 'main.lock'), '')
+    await writeFile(join(namespace, 'main'), 'a'.repeat(40))
+    await writeFile(paths(commonDir).marker, JSON.stringify({ pid: DEAD_PID }))
+
+    await new PackRefsLockOwnership(commonDir).claim(laterBy(ABANDONED_LOCK_AGE_MS + 1))
+
+    await expect(exists(join(namespace, 'main.lock'))).resolves.toBe(false)
+    // The ref itself is untouched.
+    await expect(exists(join(namespace, 'main'))).resolves.toBe(true)
+  })
+
+  it('leaves a non-empty ref lock alone, because a live writer is mid-write', async () => {
+    const commonDir = await gitCommonDir()
+    const namespace = join(commonDir, 'refs', 'heads')
+    await mkdir(namespace, { recursive: true })
+    await writeFile(join(namespace, 'busy.lock'), 'b'.repeat(40))
+    await writeFile(paths(commonDir).marker, JSON.stringify({ pid: DEAD_PID }))
+
+    await new PackRefsLockOwnership(commonDir).claim(laterBy(ABANDONED_LOCK_AGE_MS + 1))
+
+    await expect(exists(join(namespace, 'busy.lock'))).resolves.toBe(true)
+  })
+
+  it('leaves ref locks alone when there is no marker naming a dead process', async () => {
+    const commonDir = await gitCommonDir()
+    const namespace = join(commonDir, 'refs', 'heads')
+    await mkdir(namespace, { recursive: true })
+    await writeFile(join(namespace, 'other.lock'), '')
+
+    await new PackRefsLockOwnership(commonDir).claim(laterBy(ABANDONED_LOCK_AGE_MS + 1))
+
+    await expect(exists(join(namespace, 'other.lock'))).resolves.toBe(true)
   })
 })

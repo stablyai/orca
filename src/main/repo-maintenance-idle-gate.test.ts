@@ -5,7 +5,7 @@ const hasPendingPreparationsMock = vi.hoisted(() => vi.fn(() => false))
 const hasRemovalsInFlightMock = vi.hoisted(() => vi.fn(() => false))
 const setProbeMock = vi.hoisted(() => vi.fn())
 const disposeMock = vi.hoisted(() => vi.fn(async () => {}))
-const interruptMock = vi.hoisted(() => vi.fn(async () => {}))
+const postponeMock = vi.hoisted(() => vi.fn())
 const powerListeners = vi.hoisted(() => new Map<string, () => void>())
 const appListeners = vi.hoisted(() => new Map<string, () => void>())
 
@@ -32,7 +32,7 @@ vi.mock('./ipc/worktrees/worktree-ipc-context', () => ({
 vi.mock('./git/local-repo-ref-maintenance', () => ({
   setRepoMaintenanceActivityProbe: setProbeMock,
   disposeLocalRepoRefMaintenance: disposeMock,
-  interruptLocalRepoRefMaintenance: interruptMock
+  postponeRepoRefMaintenance: postponeMock
 }))
 
 import { installRepoMaintenanceIdleGate } from './repo-maintenance-idle-gate'
@@ -52,7 +52,7 @@ beforeEach(() => {
   isOnBatteryPowerMock.mockReturnValue(false)
   hasPendingPreparationsMock.mockReturnValue(false)
   hasRemovalsInFlightMock.mockReturnValue(false)
-  interruptMock.mockClear()
+  postponeMock.mockClear()
   powerListeners.clear()
   appListeners.clear()
   setProbeMock.mockClear()
@@ -103,22 +103,24 @@ describe('repo maintenance idle gate', () => {
     expect(installProbe().probe()).toBe(false)
   })
 
-  it('stops a running pack the moment the machine drops onto battery', () => {
+  it('pushes the next attempt out when the machine drops onto battery', () => {
+    // Do-not-start, never stop-what-is-running: killing a pack to honour a
+    // battery change would strand a ref lock to save a little unlinking.
     installProbe()
 
     powerListeners.get('on-battery')?.()
 
-    expect(interruptMock).toHaveBeenCalledTimes(1)
+    expect(postponeMock).toHaveBeenCalledTimes(1)
   })
 
-  it('stops a running pack the moment the user comes back to the window', () => {
-    // Focus is a preemption trigger, not an admission gate: a window left
-    // focused while the user walks away fires no event and blocks nothing.
+  it('pushes the next attempt out when the user comes back to the window', () => {
+    // A focus transition, not focus itself: a window left focused while the user
+    // walks away fires no event and blocks nothing.
     installProbe()
 
     appListeners.get('browser-window-focus')?.()
 
-    expect(interruptMock).toHaveBeenCalledTimes(1)
+    expect(postponeMock).toHaveBeenCalledTimes(1)
   })
 
   it('cancels armed timers, unsubscribes both sources, and clears the probe when uninstalled', async () => {

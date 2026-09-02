@@ -35,7 +35,9 @@ export class CliCommandInstallation extends CliCommandInspection {
 
     const inspected = await this.inspectStableSymlink(commandPath, launcherPath)
     if (inspected.status.state === 'conflict') {
-      throw new Error(`Refusing to replace non-Orca command at ${commandPath}. Remove it and register again if it is no longer needed.`)
+      throw new Error(
+        `Refusing to replace non-Orca command at ${commandPath}. Remove it and register again if it is no longer needed.`
+      )
     }
     if (inspected.status.state === 'installed') {
       return
@@ -54,7 +56,9 @@ export class CliCommandInstallation extends CliCommandInspection {
 
     if (!(await capturedExpectedEntry(quarantine, inspected))) {
       await this.restoreQuarantinedCommand(quarantine, commandPath)
-      throw new Error(`Refusing to replace non-Orca command at ${commandPath}. Remove it and register again if it is no longer needed.`)
+      throw new Error(
+        `Refusing to replace non-Orca command at ${commandPath}. Remove it and register again if it is no longer needed.`
+      )
     }
 
     try {
