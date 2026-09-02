@@ -68,6 +68,7 @@ describe('feature interactions', () => {
       'claude-account-switching',
       'computer-use-setup',
       'computer-use',
+      'onepassword-skill-setup',
       'codex-account-switching',
       'cookie-import',
       'floating-workspace',

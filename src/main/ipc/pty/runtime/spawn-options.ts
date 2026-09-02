@@ -20,6 +20,7 @@ import { CLAUDE_AUTH_ENV_VARS } from '../../../claude-accounts/environment'
 import { LEGACY_TERMINAL_SHIM_REMOTE_ENV_KEYS } from '../../../pty/legacy-terminal-shim-dir'
 import { resolveStablePaneOwner } from '../pane/stable-owner'
 import { getStartupTerminalColorQueryReplyColors } from '../../terminal-startup-color-query-replies'
+import { maybeWrapStartupCommandWithOpRun } from '../../../pty/op-run-secret-injection'
 import {
   makePaneSpawnReservationKey,
   reservePaneSpawn,
@@ -90,7 +91,13 @@ export async function buildRuntimePtySpawnOptions(
   deleteRequestedEnvKeys(ctx.env, ctx.spawnOptions.envToDelete)
   promoteAgentTeamsShimPath(ctx.env, ctx.requestedAgentTeamsPath)
   if (ctx.launchCommand !== undefined) {
-    ctx.spawnOptions.command = ctx.launchCommand
+    ctx.spawnOptions.command = maybeWrapStartupCommandWithOpRun(ctx.launchCommand, ctx.env, {
+      enabled: ctx.deps.getSettings?.()?.onePasswordSecretsEnabled ?? false,
+      connectionId: args.connectionId,
+      daemonHostSpawn: ctx.isDaemonHostSpawn,
+      // Why: WSL PTYs run a POSIX shell regardless of the win32 host.
+      platform: ctx.codexSelectionTarget.runtime === 'wsl' ? 'linux' : process.platform
+    })
   }
   if (args.commandDelivery !== undefined) {
     ctx.spawnOptions.commandDelivery = args.commandDelivery

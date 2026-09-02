@@ -1,4 +1,5 @@
 import { useAppStore } from '@/store'
+import { getDefaultTabCommandTrustContent } from '../../../shared/default-tab-trust-content'
 import {
   getSettingsForAgentTabRuntimeOwner,
   pasteDraftToAgentPtyWhenReady
@@ -59,17 +60,11 @@ export type SetupConfig = {
 }
 
 function getDefaultTabCommandPreview(yamlHooks: OrcaHooks | null): string {
-  return (yamlHooks?.defaultTabs ?? [])
-    .map((tab, index) => {
-      const command = tab.command?.trim()
-      if (!command) {
-        return null
-      }
-      const label = tab.title ? ` ${tab.title}` : ''
-      return `# defaultTabs[${index + 1}]${label}\n${command}`
-    })
-    .filter((entry): entry is string => entry !== null)
-    .join('\n\n')
+  // Why: preview exactly what the trust gate hashes — a divergent preview hides what is being approved.
+  return getDefaultTabCommandTrustContent({
+    ...(yamlHooks ?? { scripts: {} }),
+    scripts: {}
+  } as OrcaHooks)
 }
 
 function getSetupConfigKind(
@@ -164,7 +159,9 @@ export function getSetupConfig(
     return localSetup ? { source: 'local', command: localSetup, kind: 'setup' } : null
   }
 
-  const yamlCommand = [yamlSetup, yamlDefaultTabCommands].filter(Boolean).join('\n\n')
+  // Why: byte-identical to what the trust gate hashes — a preview that differs from the
+  // approved content misrepresents what the user is approving.
+  const yamlCommand = getDefaultTabCommandTrustContent(yamlHooks)
   if (sourcePolicy === 'run-both' && yamlCommand && localSetup) {
     return {
       source: 'both',

@@ -5,6 +5,7 @@ import {
   GitHubIntegrationCard,
   GitLabIntegrationCard
 } from './source-control-integration-cards'
+import { OnePasswordIntegrationCard } from './one-password-integration-card'
 import { JiraIntegrationCard, LinearIntegrationCard } from './task-tracker-integration-cards'
 import { useIntegrationProviderStatusRefresh } from './use-integration-provider-status-refresh'
 import { translate } from '@/i18n/i18n'
@@ -51,6 +52,23 @@ export function IntegrationsPane(): React.JSX.Element {
         <div className="space-y-3">
           <LinearIntegrationCard />
           <JiraIntegrationCard />
+        </div>
+      </section>
+
+      <section className="space-y-3">
+        <div className="space-y-1">
+          <h3 className="text-sm font-semibold text-foreground">
+            {translate('auto.components.settings.IntegrationsPane.secretsHeading', 'Secrets')}
+          </h3>
+          <p className="text-xs text-muted-foreground">
+            {translate(
+              'auto.components.settings.IntegrationsPane.secretsDescription',
+              'Source credentials for terminal tabs from a secrets manager instead of plaintext files.'
+            )}
+          </p>
+        </div>
+        <div className="space-y-3">
+          <OnePasswordIntegrationCard />
         </div>
       </section>
     </div>

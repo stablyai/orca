@@ -192,6 +192,35 @@ export const getIntegrationsPaneSearchEntries = createLocalizedCatalog(() => [
   },
   {
     title: translate(
+      'auto.components.settings.integrations.search.onePasswordTitle',
+      '1Password Integration'
+    ),
+    description: translate(
+      'auto.components.settings.integrations.search.onePasswordDescription',
+      'Resolve op:// secret references in tab environment variables via the 1Password CLI.'
+    ),
+    keywords: [
+      ...translateSearchKeyword(
+        'auto.components.settings.integrations.search.onePasswordKeyword',
+        '1password'
+      ),
+      ...translateSearchKeyword('auto.components.settings.integrations.search.opKeyword', 'op'),
+      ...translateSearchKeyword(
+        'auto.components.settings.integrations.search.secretsKeyword',
+        'secrets'
+      ),
+      ...translateSearchKeyword(
+        'auto.components.settings.integrations.search.c450244ad7',
+        'integration'
+      ),
+      ...translateSearchKeyword(
+        'auto.components.settings.integrations.search.20540996ef',
+        'credentials'
+      )
+    ]
+  },
+  {
+    title: translate(
       'auto.components.settings.integrations.search.b027b4b318',
       'Linear Integration'
     ),

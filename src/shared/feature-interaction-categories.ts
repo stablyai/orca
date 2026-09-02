@@ -55,6 +55,7 @@ export const FEATURE_INTERACTION_CATEGORY_BY_ID = {
   'ai-pr-generation': 'source_control',
   'claude-account-switching': 'settings',
   'computer-use-setup': 'setup',
+  'onepassword-skill-setup': 'setup',
   'computer-use': 'agent',
   'codex-account-switching': 'settings',
   'cookie-import': 'browser',

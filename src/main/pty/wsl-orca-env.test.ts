@@ -244,4 +244,16 @@ describe('addOrcaWslInteropEnv', () => {
     expect(env.WSLENV).not.toContain('OPENCODE_CONFIG_DIR')
     expect(env.WSLENV).not.toContain('ORCA_OPENCODE_CONFIG_DIR')
   })
+
+  it('passes op:// references into WSL untranslated', () => {
+    const env: Record<string, string> = {
+      ANTHROPIC_API_KEY: 'op://Private/Anthropic/api-key',
+      PLAIN: 'not-a-reference'
+    }
+
+    addOrcaWslInteropEnv(env)
+
+    expect(env.WSLENV?.split(':')).toContain('ANTHROPIC_API_KEY/u')
+    expect(env.WSLENV).not.toContain('PLAIN')
+  })
 })

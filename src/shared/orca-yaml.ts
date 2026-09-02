@@ -71,6 +71,51 @@ function normalizeSharedDirectories(value: unknown): string[] {
   return Array.from(seen)
 }
 
+const ENV_VAR_NAME_RE = /^[A-Za-z_][A-Za-z0-9_]*$/
+// Why: pass the name regex but mutate object internals when assigned as keys.
+const UNSAFE_ENV_KEYS = new Set(['__proto__', 'constructor', 'prototype'])
+
+// Why: the trust content is line-oriented; a control char in a reviewed value forges structure.
+function hasControlCharacter(value: string): boolean {
+  for (let index = 0; index < value.length; index += 1) {
+    const code = value.charCodeAt(index)
+    if (code < 0x20 || code === 0x7f) {
+      return true
+    }
+  }
+  return false
+}
+
+function normalizeTabEnv(value: unknown): Record<string, string> | undefined {
+  const record = asRecord(value)
+  if (!record) {
+    return undefined
+  }
+  const env: Record<string, string> = Object.create(null)
+  let accepted = 0
+  for (const [key, raw] of Object.entries(record)) {
+    // Why: cap accepted entries, not raw ones — invalid entries must not eat the budget.
+    if (accepted >= MAX_ORCA_YAML_COLLECTION_ENTRIES) {
+      break
+    }
+    if (
+      !ENV_VAR_NAME_RE.test(key) ||
+      UNSAFE_ENV_KEYS.has(key) ||
+      typeof raw !== 'string' ||
+      // Why: the trust content is line-oriented, so a CR/LF (or NUL) in a value forges extra
+      // entries — `FOO: "a\nPATH=evil"` would hash identically to a real `PATH: evil`.
+      hasControlCharacter(raw) ||
+      !isOrcaYamlFieldWithinLimit(key) ||
+      !isOrcaYamlFieldWithinLimit(raw)
+    ) {
+      continue
+    }
+    env[key] = raw
+    accepted += 1
+  }
+  return accepted > 0 ? { ...env } : undefined
+}
+
 function normalizeDefaultTabs(value: unknown): OrcaDefaultTabTemplate[] {
   if (!Array.isArray(value) || value.length > MAX_ORCA_YAML_COLLECTION_ENTRIES) {
     return []
@@ -82,17 +127,21 @@ function normalizeDefaultTabs(value: unknown): OrcaDefaultTabTemplate[] {
       if (!record) {
         return null
       }
-      const title = asTrimmedString(record.title)
+      // Why: the title sits on the trust content's header line, so a newline in it forges env lines.
+      const rawTitle = asTrimmedString(record.title)
+      const title = rawTitle && !hasControlCharacter(rawTitle) ? rawTitle : undefined
       const command = asTrimmedString(record.command)
       const color = asTrimmedString(record.color)
       const normalizedColor = color && DEFAULT_TAB_COLOR_RE.test(color) ? color : undefined
-      if (!title && !command && !normalizedColor) {
+      const env = normalizeTabEnv(record.env)
+      if (!title && !command && !normalizedColor && !env) {
         return null
       }
       return {
         ...(title ? { title } : {}),
         ...(normalizedColor ? { color: normalizedColor } : {}),
-        ...(command ? { command } : {})
+        ...(command ? { command } : {}),
+        ...(env ? { env } : {})
       }
     })
     .filter((entry): entry is OrcaDefaultTabTemplate => entry !== null)

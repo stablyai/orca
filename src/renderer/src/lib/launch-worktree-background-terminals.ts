@@ -256,7 +256,9 @@ function getDefaultTabLaunches(
     return {
       ...(tab.title ? { title: tab.title } : {}),
       ...(tab.color ? { color: tab.color } : {}),
-      ...(command && defaultTabs?.runCommands ? { command } : {})
+      ...(command && defaultTabs?.runCommands ? { command } : {}),
+      // Why: committed env rides the same trust gate as committed commands (PATH/op:// injection risk).
+      ...(tab.env && defaultTabs?.runCommands ? { env: tab.env } : {})
     }
   })
 }

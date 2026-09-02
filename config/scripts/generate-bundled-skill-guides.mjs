@@ -10,6 +10,7 @@ const REPO_ROOT = path.resolve(SCRIPT_DIR, '..', '..')
 const CANONICAL_GUIDE_NAMES = [
   'computer-use',
   'linear-tickets',
+  'onepassword',
   'orca-cli',
   'orca-emulator',
   'orca-emulator-android',
@@ -23,6 +24,7 @@ const CANONICAL_GUIDE_NAMES = [
 const GUIDE_ALIASES = {
   'computer-use': [],
   'linear-tickets': [],
+  onepassword: [],
   'orca-cli': [],
   'orca-emulator': [],
   'orca-emulator-android': [],

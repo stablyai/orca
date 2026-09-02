@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
+import { MAX_ORCA_YAML_COLLECTION_ENTRIES } from '../shared/orca-yaml-file-limit'
 import { parseOrcaYaml } from './hooks'
 
 // Mock fs used by loadHooks
@@ -175,6 +176,89 @@ describe('parseOrcaYaml', () => {
     expect(parseOrcaYaml(yaml)).toEqual({
       scripts: {},
       defaultTabs: [{ title: 'Server', command: 'pnpm dev' }]
+    })
+  })
+
+  it('rejects unsafe env keys, oversize values, and caps accepted entries', () => {
+    const bigValue = 'x'.repeat(64 * 1024 + 1)
+    const yaml = [
+      'defaultTabs:',
+      '  - title: Claude',
+      '    command: claude',
+      '    env:',
+      '      __proto__: op://Private/evil/field',
+      '      constructor: nope',
+      `      TOO_BIG: "${bigValue}"`,
+      '      GOOD: keep'
+    ].join('\n')
+
+    expect(parseOrcaYaml(yaml)).toEqual({
+      scripts: {},
+      defaultTabs: [{ title: 'Claude', command: 'claude', env: { GOOD: 'keep' } }]
+    })
+  })
+
+  it('keeps only the first accepted env entries when the cap is exceeded, not counting invalid ones', () => {
+    // Why: an invalid leading entry must not consume the budget (cap counts accepted entries).
+    const entries = ['      "BAD NAME": dropped']
+    for (let i = 0; i < MAX_ORCA_YAML_COLLECTION_ENTRIES + 4; i += 1) {
+      entries.push(`      VAR_${String(i).padStart(3, '0')}: value-${i}`)
+    }
+    const yaml = [
+      'defaultTabs:',
+      '  - title: Claude',
+      '    command: claude',
+      '    env:',
+      ...entries
+    ].join('\n')
+
+    const env = parseOrcaYaml(yaml)?.defaultTabs?.[0]?.env ?? {}
+    expect(Object.keys(env)).toHaveLength(MAX_ORCA_YAML_COLLECTION_ENTRIES)
+    expect(env.VAR_000).toBe('value-0')
+    expect(env[`VAR_${String(MAX_ORCA_YAML_COLLECTION_ENTRIES - 1).padStart(3, '0')}`]).toBe(
+      `value-${MAX_ORCA_YAML_COLLECTION_ENTRIES - 1}`
+    )
+    expect(env[`VAR_${String(MAX_ORCA_YAML_COLLECTION_ENTRIES).padStart(3, '0')}`]).toBeUndefined()
+  })
+
+  it('drops env values containing NUL, which would split into a second variable on Windows', () => {
+    const yaml = [
+      'defaultTabs:',
+      '  - title: Claude',
+      '    command: claude',
+      '    env:',
+      '      SAFE: "x\\0NODE_OPTIONS=--require ./payload.js"',
+      '      GOOD: keep'
+    ].join('\n')
+
+    expect(parseOrcaYaml(yaml)?.defaultTabs?.[0]?.env).toEqual({ GOOD: 'keep' })
+  })
+
+  it('parses default tab env maps, dropping invalid names and non-string values', () => {
+    const yaml = [
+      'defaultTabs:',
+      '  - title: Claude',
+      '    command: claude',
+      '    env:',
+      '      ANTHROPIC_API_KEY: op://Private/Anthropic/api-key',
+      '      PLAIN_VALUE: hello',
+      '      "BAD NAME": nope',
+      '      NUMERIC: 42',
+      '  - title: NoEnv',
+      '    command: pnpm dev',
+      '    env: []'
+    ].join('\n')
+
+    expect(parseOrcaYaml(yaml)).toEqual({
+      scripts: {},
+      defaultTabs: [
+        {
+          title: 'Claude',
+          command: 'claude',
+          env: { ANTHROPIC_API_KEY: 'op://Private/Anthropic/api-key', PLAIN_VALUE: 'hello' }
+        },
+        { title: 'NoEnv', command: 'pnpm dev' }
+      ]
     })
   })
 
@@ -444,5 +528,26 @@ describe('hasUnrecognizedOrcaYamlKeys', () => {
 
     const { hasUnrecognizedOrcaYamlKeys } = await import('./hooks')
     expect(hasUnrecognizedOrcaYamlKeys('/test/repo')).toBe(false)
+  })
+})
+
+describe('trust-content forgery vectors are rejected at parse time', () => {
+  it('drops env values containing CR/LF, which would forge a second env line in the trust hash', () => {
+    const yaml = [
+      'defaultTabs:',
+      '  - title: Claude',
+      '    command: claude',
+      '    env:',
+      '      FOO: "safe\\nPATH=evil"',
+      '      GOOD: keep'
+    ].join('\n')
+
+    expect(parseOrcaYaml(yaml)?.defaultTabs?.[0]?.env).toEqual({ GOOD: 'keep' })
+  })
+
+  it('drops a title containing a newline, which would forge an env line on the header', () => {
+    const yaml = ['defaultTabs:', '  - title: "A\\nFOO=evil"', '    command: claude'].join('\n')
+
+    expect(parseOrcaYaml(yaml)?.defaultTabs?.[0]).toEqual({ command: 'claude' })
   })
 })

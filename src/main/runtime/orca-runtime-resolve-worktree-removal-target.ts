@@ -13,7 +13,10 @@ import { closeClientHostedBrowserPagesForWorktree } from './worktree-browser-cli
 import type { ForceDeleteWorktreeBranchResult } from '../../shared/worktree/create-types'
 import type { RuntimeTerminalRename } from '../../shared/runtime-types'
 import type { TerminalWorkspaceLaunchScope } from './runtime-legacy-worker-terminal-recovery-types'
-import type { TerminalCreateOptions } from './runtime-terminal-contracts'
+import {
+  foldDefaultTabEnv,
+  type TerminalCreateOptions
+} from './runtime-terminal-contracts'
 import { repoIsRemote } from '../../shared/agent-launch-remote'
 import { resolveLocalWindowsAgentStartupShell } from '../../shared/windows-terminal-shell'
 import { isTuiAgentEnabled } from '../../shared/tui-agent-selection'
@@ -144,6 +147,13 @@ export class OrcaRuntimeWithResolveWorktreeRemovalTarget extends OrcaRuntimeWith
   }
 
   protected async resolveAgentTerminalCreateOptions(
+    workspace: TerminalWorkspaceLaunchScope,
+    opts: TerminalCreateOptions
+  ): Promise<TerminalCreateOptions> {
+    return foldDefaultTabEnv(await this.resolveAgentLaunchOptions(workspace, opts))
+  }
+
+  private async resolveAgentLaunchOptions(
     workspace: TerminalWorkspaceLaunchScope,
     opts: TerminalCreateOptions
   ): Promise<TerminalCreateOptions> {
