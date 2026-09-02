@@ -10,6 +10,11 @@ export type WorkspaceTrustEntry = {
   origin: WorkspaceTrustEntryOrigin
 }
 
+/** Ids only, never a path — the renderer names what it added, main resolves the path itself. */
+export type WorkspaceTrustTarget =
+  | { kind: 'repo'; repoId: string }
+  | { kind: 'folderWorkspace'; folderWorkspaceId: string }
+
 export type WorkspaceTrustChangeReason = 'granted' | 'declined' | 'revoked' | 'migrated'
 
 /** Hint only — subscribers must re-query `isWorkspaceTrusted`; a durable process may miss intervening revisions. */
