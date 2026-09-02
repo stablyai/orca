@@ -162,11 +162,11 @@ export const getCommitMessageAiPaneSearchEntries = createLocalizedCatalog(() => 
   {
     title: translate(
       'auto.components.settings.commit.message.ai.search.a8f3c1d2e7',
-      '生成超时'
+      'Generation timeout'
     ),
     description: translate(
       'auto.components.settings.commit.message.ai.search.b2e9d4f5a1',
-      '最大等待时间，超出后 AI 生成 commit 消息、分支名或 PR 详情会中断并返回错误。'
+      'Maximum time to wait for AI to generate commit messages, branch names, or pull request details before aborting.'
     ),
     keywords: [
       ...translateSearchKeyword(
