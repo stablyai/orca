@@ -25,12 +25,14 @@ const TERMINAL_HOST_GONE_PATTERN = new RegExp(TERMINAL_HOST_GONE_SOURCE)
 const TERMINAL_HOST_GONE_REPLACE_PATTERN = new RegExp(TERMINAL_HOST_GONE_SOURCE, 'g')
 const LEGACY_TERMINAL_HOST_GONE_PATTERN =
   /(^|[^a-z])connect (?:ENOENT|ECONNREFUSED) [^\r\n]*orca-terminal-host-v[^\r\n]*/i
-// A reattach the host answered "no such session" for: the SSH provider's expiry token, or the relay's
-// raw not-found string when nothing mapped it. Both carry an internal PTY id, and neither is proof the
-// remote shell died — the copy says only that this pane lost its session. Same lastIndex hazard as above.
+// A reattach the host answered "no such session" for: the SSH provider's expiry token, the relay's
+// raw not-found string when nothing mapped it, or a daemon generation old enough to still refuse a
+// pane respawning onto an id it is tearing down (#18046). None proves the shell died — the copy
+// says only that this pane lost its session. Same lastIndex hazard as above.
 const UNREATTACHABLE_SESSION_SOURCES = [
   'SSH_SESSION_EXPIRED:[ \\t]*\\S*(?:[ \\t]+SSH_PTY_IDENTITY_MISMATCH)?',
-  'PTY "[^"\\r\\n]*" not found(?: \\(identity mismatch\\))?'
+  'PTY "[^"\\r\\n]*" not found(?: \\(identity mismatch\\))?',
+  '(?:SessionNotFoundError: )?Session not found: \\S+'
 ]
 const UNREATTACHABLE_SESSION_PATTERNS = UNREATTACHABLE_SESSION_SOURCES.map(
   (source) => new RegExp(source)

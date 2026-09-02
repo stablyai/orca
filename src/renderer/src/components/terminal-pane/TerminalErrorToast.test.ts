@@ -135,6 +135,18 @@ describe('humanizeTerminalError', () => {
     expect(humanized).toContain('Open a new terminal to continue')
   })
 
+  // A daemon generation old enough to still refuse a pane respawning onto an id it is tearing
+  // down answers with the raw class name; the user must not be told to file an issue for it.
+  it('replaces the daemon session-absence string and its id', () => {
+    const humanized = humanizeTerminalError(
+      "Error invoking remote method 'pty:spawn': SessionNotFoundError: Session not found: wt-1@@pane-a"
+    )
+    expect(humanized).not.toContain('SessionNotFoundError')
+    expect(humanized).not.toContain('wt-1@@pane-a')
+    expect(humanized).toContain('Open a new terminal to continue')
+    expect(isExplainedTerminalError('Session not found: wt-1@@pane-a')).toBe(true)
+  })
+
   it('replaces the identity-mismatch form of PTY-not-found', () => {
     const humanized = humanizeTerminalError('PTY "orca:2f1c@@pty-7" not found (identity mismatch)')
     expect(humanized).not.toContain('identity mismatch')
