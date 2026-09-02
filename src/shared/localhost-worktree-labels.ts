@@ -36,6 +36,12 @@ export function connectableLoopbackHost(hostname: string): string {
   if (bare === '::') {
     return '::1'
   }
+  // Why: URL.hostname returns IPv6 literals in bracketed form ([::1]); net.connect
+  // and http.request treat that bracketed string as a DNS name (getaddrinfo
+  // ENOTFOUND), so strip the brackets before using it as a connect target.
+  if (hostname.startsWith('[') && hostname.endsWith(']')) {
+    return bare
+  }
   return hostname
 }
 
