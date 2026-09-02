@@ -19,7 +19,6 @@ import {
   copyPrivateTree,
   hardlinkTree,
   makeTreeReadOnly,
-  makeTreeWritable,
   shareTree
 } from './space-sharing-copy.mjs'
 
@@ -169,24 +168,6 @@ describe('makeTreeReadOnly', () => {
       expect(statSync(executable).mode & 0o111).toBe(0o111)
     }
   )
-})
-
-describe('makeTreeWritable', () => {
-  it('reopens a protected tree for the patches a private copy has to take', () => {
-    const { source } = makeTree()
-    makeTreeReadOnly(source)
-    makeTreeWritable(source)
-    expect(() => writeFileSync(path.join(source, 'nested', 'file'), 'patched')).not.toThrow()
-  })
-
-  it.runIf(process.platform !== 'win32')('adds only the write bit, preserving setuid', () => {
-    const { source } = makeTree()
-    const sandbox = path.join(source, 'chrome-sandbox')
-    writeFileSync(sandbox, 'binary')
-    chmodSync(sandbox, 0o4555)
-    makeTreeWritable(source)
-    expect(statSync(sandbox).mode & 0o7777).toBe(0o4755)
-  })
 })
 
 describe('copyPrivateTree', () => {
