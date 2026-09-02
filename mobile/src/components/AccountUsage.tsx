@@ -1,6 +1,8 @@
 import { View, Text, StyleSheet, ActivityIndicator } from 'react-native'
 import { colors, spacing, typography } from '../theme/mobile-theme'
 
+const DEFAULT_USAGE_LABEL_WIDTH = 22
+
 // Pure types and selectors live in account-usage-state.ts (no RN imports) so
 // they are unit-testable; re-exported here so existing import sites are stable.
 export type {
@@ -11,11 +13,15 @@ export type {
   CodexAccountSummary,
   AccountsSnapshot,
   ProviderKey,
+  HostUsageProviderKey,
   UsageBarState
 } from './account-usage-state'
 export {
   decodeAccountsSnapshot,
   getActiveProviderRateLimits,
+  getBucketResetLabel,
+  getBucketUsageBarState,
+  getHostProviderRateLimits,
   getInactiveProviderUsage,
   getUsageBarState,
   getWindowResetLabel,
@@ -31,16 +37,20 @@ export function UsageBar({
   usedPercent,
   unavailable,
   loading,
-  resetText
+  resetText,
+  labelWidth
 }: {
   label: string
   usedPercent: number | null
   unavailable: boolean
   loading?: boolean
   resetText?: string | null
+  labelWidth?: number
 }) {
   // Why: round then clamp so bar width, color, and label share one value (desktop parity).
   const used = usedPercent == null ? null : Math.max(0, Math.min(100, Math.round(usedPercent)))
+  // Why: the countdown and track must stay aligned when Cursor uses wider labels.
+  const effectiveLabelWidth = labelWidth ?? DEFAULT_USAGE_LABEL_WIDTH
   // Why: same consumption bands as desktop barColor (green <60, amber <80, red ≥80).
   const barColor =
     used == null
@@ -53,7 +63,7 @@ export function UsageBar({
   return (
     <View style={styles.usageBarColumn}>
       <View style={styles.usageBar}>
-        <Text style={styles.usageLabel}>{label}</Text>
+        <Text style={[styles.usageLabel, { width: effectiveLabelWidth }]}>{label}</Text>
         <View style={styles.usageTrack}>
           <View
             style={[
@@ -76,7 +86,10 @@ export function UsageBar({
         )}
       </View>
       {resetText ? (
-        <Text style={styles.usageResetText} numberOfLines={1}>
+        <Text
+          style={[styles.usageResetText, { marginLeft: effectiveLabelWidth + spacing.xs }]}
+          numberOfLines={1}
+        >
           {resetText}
         </Text>
       ) : null}
@@ -96,8 +109,7 @@ const styles = StyleSheet.create({
   },
   usageLabel: {
     fontSize: typography.metaSize,
-    color: colors.textMuted,
-    width: 22
+    color: colors.textMuted
   },
   usageTrack: {
     flex: 1,
@@ -119,11 +131,8 @@ const styles = StyleSheet.create({
   usageSpinner: {
     width: 36
   },
-  // Why: indented past the window label so the countdown aligns with the
-  // start of the track above it.
   usageResetText: {
     fontSize: typography.metaSize,
-    color: colors.textMuted,
-    marginLeft: 22 + spacing.xs
+    color: colors.textMuted
   }
 })

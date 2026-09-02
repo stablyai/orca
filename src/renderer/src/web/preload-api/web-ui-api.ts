@@ -5,6 +5,8 @@ import { normalizeFeatureInteractions } from '../../../../shared/feature-interac
 import type { FeatureInteractionId } from '../../../../shared/feature-interactions'
 import { omitPairingLocalUiFields } from '../../../../shared/pairing-local-ui-fields'
 import type { PairedUiState } from '../../../../shared/pairing-local-ui-fields'
+import type { PersistedUIState } from '../../../../shared/persisted-ui-state-types'
+import { STATUS_BAR_CURSOR_ITEM_RUNTIME_CAPABILITY } from '../../../../shared/protocol-version'
 import {
   readClipboardImagePngBase64,
   saveClipboardImageAsTempFileInRuntime,
@@ -18,9 +20,36 @@ import {
   mergeWebUIState
 } from './web-preference-normalization'
 import { readLocalWebUIState } from './web-preferences-store'
-import { callRuntimeResult } from './web-runtime-calls'
+import { callRuntimeResult, getRemoteRuntimeStatus } from './web-runtime-calls'
 import { requireActiveEnvironmentOrNull } from './web-runtime-session'
 import { UI_STORAGE_KEY, noopUnsubscribe, writeJson } from './web-storage'
+
+function filterUnsupportedStatusBarItems(
+  updates: Partial<PairedUiState>,
+  capabilities: readonly string[] | undefined
+): Partial<PairedUiState> {
+  if (
+    !updates.statusBarItems ||
+    capabilities?.includes(STATUS_BAR_CURSOR_ITEM_RUNTIME_CAPABILITY)
+  ) {
+    return updates
+  }
+  return {
+    ...updates,
+    statusBarItems: updates.statusBarItems.filter((item) => item !== 'cursor')
+  }
+}
+
+async function prepareHostUiUpdates(
+  updates: Partial<PersistedUIState>
+): Promise<Partial<PairedUiState>> {
+  const hostUpdates = omitPairingLocalUiFields(updates)
+  if (!hostUpdates.statusBarItems?.includes('cursor')) {
+    return hostUpdates
+  }
+  const status = await getRemoteRuntimeStatus()
+  return filterUnsupportedStatusBarItems(hostUpdates, status.capabilities)
+}
 
 export function createWebUiApi(): NonNullable<Partial<PreloadApi>['ui']> {
   let zoomLevel = readLocalWebUIState().uiZoomLevel
@@ -54,8 +83,8 @@ export function createWebUiApi(): NonNullable<Partial<PreloadApi>['ui']> {
       zoomLevel = next.uiZoomLevel
       // Why strip here too when the host also strips: an old host predating that strip would
       // otherwise persist this browser's runtime:web-* keys over the desktop profile's order.
-      const hostUpdates = omitPairingLocalUiFields(updates)
       try {
+        const hostUpdates = await prepareHostUiUpdates(updates)
         await callRuntimeResult('ui.set', hostUpdates, 15_000)
       } catch {
         // Why: unpaired/offline web clients still need local UI persistence.
@@ -68,7 +97,7 @@ export function createWebUiApi(): NonNullable<Partial<PreloadApi>['ui']> {
       const next = mergeWebUIState(readLocalWebUIState(), updates)
       writeJson(UI_STORAGE_KEY, next)
       zoomLevel = next.uiZoomLevel
-      const hostUpdates = omitPairingLocalUiFields(updates)
+      const hostUpdates = await prepareHostUiUpdates(updates)
       await callRuntimeResult('ui.set', hostUpdates, 15_000)
     },
     recordFeatureInteraction: async (id: FeatureInteractionId) => {

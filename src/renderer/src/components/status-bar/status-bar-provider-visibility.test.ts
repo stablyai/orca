@@ -7,6 +7,7 @@ import {
   getVisibleUsageProvider,
   hasUsageProviderSettings,
   hasUsageProviderSettingsForProvider,
+  isCursorStatusBarAvailable,
   isUsageEmptyState,
   isProviderConfigured,
   type UsageProviderSettings
@@ -74,6 +75,7 @@ function usageSettings(overrides: Partial<UsageProviderSettings> = {}): UsagePro
     antigravityUsageConfigured: false,
     minimaxCookieConfigured: false,
     grokAuthConfigured: false,
+    cursorAuthConfigured: false,
     ...overrides
   }
 }
@@ -128,11 +130,20 @@ describe('hasUsageProviderSettings', () => {
     )
     expect(hasUsageProviderSettings(usageSettings({ minimaxCookieConfigured: true }))).toBe(true)
     expect(hasUsageProviderSettings(usageSettings({ grokAuthConfigured: true }))).toBe(true)
+    expect(hasUsageProviderSettings(usageSettings({ cursorAuthConfigured: true }))).toBe(true)
   })
 
   it('does not treat empty or unloaded settings as configured', () => {
     expect(hasUsageProviderSettings(usageSettings())).toBe(false)
     expect(hasUsageProviderSettings(null)).toBe(false)
+  })
+})
+
+describe('isCursorStatusBarAvailable', () => {
+  it('uses desktop auth or a provider snapshot instead of CLI detection', () => {
+    expect(isCursorStatusBarAvailable(undefined, true)).toBe(true)
+    expect(isCursorStatusBarAvailable(provider('ok', { provider: 'cursor' }), false)).toBe(true)
+    expect(isCursorStatusBarAvailable(undefined, false)).toBe(false)
   })
 })
 
@@ -203,6 +214,13 @@ describe('hasUsageProviderSettingsForProvider', () => {
     expect(hasUsageProviderSettingsForProvider('grok', usageSettings())).toBe(false)
     expect(hasUsageProviderSettingsForProvider('grok', null)).toBe(false)
   })
+
+  it('treats cursorAuthConfigured as the durable signal for Cursor', () => {
+    expect(
+      hasUsageProviderSettingsForProvider('cursor', usageSettings({ cursorAuthConfigured: true }))
+    ).toBe(true)
+    expect(hasUsageProviderSettingsForProvider('cursor', usageSettings())).toBe(false)
+  })
 })
 
 describe('getVisibleUsageProvider', () => {
@@ -269,6 +287,12 @@ describe('getVisibleUsageProvider', () => {
     expect(
       getVisibleUsageProvider('grok', undefined, usageSettings({ grokAuthConfigured: true }))
     ).toMatchObject({ provider: 'grok', status: 'fetching' })
+  })
+
+  it('keeps Cursor visible while its read-only auth snapshot is pending', () => {
+    expect(
+      getVisibleUsageProvider('cursor', undefined, usageSettings({ cursorAuthConfigured: true }))
+    ).toMatchObject({ provider: 'cursor', status: 'fetching' })
   })
 
   it('keeps MiniMax visible while the snapshot is pending when a cookie is configured', () => {
@@ -373,7 +397,8 @@ describe('isUsageEmptyState', () => {
           kimi: null,
           antigravity: null,
           minimax: null,
-          grok: null
+          grok: null,
+          cursor: null
         },
         usageSettings()
       )
@@ -391,7 +416,8 @@ describe('isUsageEmptyState', () => {
           kimi: provider('unavailable', { provider: 'kimi' }),
           antigravity: undefined,
           minimax: undefined,
-          grok: undefined
+          grok: undefined,
+          cursor: undefined
         },
         usageSettings()
       )
@@ -409,7 +435,8 @@ describe('isUsageEmptyState', () => {
           kimi: provider('unavailable', { provider: 'kimi' }),
           antigravity: provider('unavailable', { provider: 'antigravity' }),
           minimax: provider('unavailable', { provider: 'minimax' }),
-          grok: provider('unavailable', { provider: 'grok' })
+          grok: provider('unavailable', { provider: 'grok' }),
+          cursor: provider('unavailable', { provider: 'cursor' })
         },
         usageSettings()
       )
@@ -427,7 +454,8 @@ describe('isUsageEmptyState', () => {
           kimi: provider('unavailable', { provider: 'kimi' }),
           antigravity: provider('unavailable', { provider: 'antigravity' }),
           minimax: provider('unavailable', { provider: 'minimax' }),
-          grok: provider('unavailable', { provider: 'grok' })
+          grok: provider('unavailable', { provider: 'grok' }),
+          cursor: provider('unavailable', { provider: 'cursor' })
         },
         usageSettings({
           codexManagedAccounts: [
@@ -456,7 +484,8 @@ describe('isUsageEmptyState', () => {
           kimi: null,
           antigravity: null,
           minimax: null,
-          grok: null
+          grok: null,
+          cursor: null
         },
         null
       )
@@ -474,7 +503,8 @@ describe('isUsageEmptyState', () => {
           kimi: provider('unavailable', { provider: 'kimi' }),
           antigravity: null,
           minimax: provider('unavailable', { provider: 'minimax' }),
-          grok: provider('unavailable', { provider: 'grok' })
+          grok: provider('unavailable', { provider: 'grok' }),
+          cursor: provider('unavailable', { provider: 'cursor' })
         },
         usageSettings()
       )
@@ -492,6 +522,7 @@ describe('isUsageEmptyState', () => {
           kimi: provider('unavailable', { provider: 'kimi' }),
           antigravity: null,
           grok: provider('unavailable', { provider: 'grok' }),
+          cursor: provider('unavailable', { provider: 'cursor' }),
           minimax: provider('unavailable', { provider: 'minimax' })
         },
         usageSettings({ antigravityUsageConfigured: true, geminiCliOAuthEnabled: true })
@@ -512,6 +543,7 @@ describe('isUsageEmptyState', () => {
           kimi: provider('unavailable', { provider: 'kimi' }),
           antigravity: null,
           grok: provider('unavailable', { provider: 'grok' }),
+          cursor: provider('unavailable', { provider: 'cursor' }),
           minimax: provider('unavailable', { provider: 'minimax' })
         },
         usageSettings({ antigravityUsageConfigured: true })

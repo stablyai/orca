@@ -22,6 +22,15 @@ describe('mock account reset state', () => {
     expect(second.rateLimits.codex.rateLimitResetCredits.nextExpiresAt).toBe(
       first.rateLimits.codex.rateLimitResetCredits.nextExpiresAt
     )
+    expect(second.rateLimits.cursor.buckets.map((bucket) => bucket.name)).toEqual([
+      'Cursor Models',
+      'Other Models',
+      'Grok Bot'
+    ])
+    expect(second.rateLimits.cursor.usageMetadata).toEqual({
+      accountEmail: 'dev@example.com',
+      subscriptionStatus: 'active'
+    })
   })
 
   it('resets only the selected account and updates its visible usage', () => {

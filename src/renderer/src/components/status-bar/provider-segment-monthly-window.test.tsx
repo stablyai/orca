@@ -182,6 +182,31 @@ describe('ProviderSegment monthly window', () => {
     expect(markup).toContain('30% used Fable')
     expect(markup).not.toContain('40% used')
   })
+
+  it('shows every Cursor pool in verbose mode', async () => {
+    const { ProviderSegment } = await import('./StatusBar')
+    const limits: ProviderRateLimits = {
+      provider: 'cursor',
+      session: null,
+      weekly: null,
+      buckets: [
+        { name: 'Cursor Models', ...windowOf(100, 43_200) },
+        { name: 'Other Models', ...windowOf(42, 43_200) },
+        { name: 'Grok Bot', ...windowOf(12, 7_102) }
+      ],
+      updatedAt: Date.now(),
+      error: null,
+      status: 'ok'
+    }
+
+    const markup = renderToStaticMarkup(
+      <ProviderSegment p={limits} compact={false} display="used" mode="verbose" />
+    )
+
+    expect(markup).toContain('Cursor Models 100% used')
+    expect(markup).toContain('Other Models 42% used')
+    expect(markup).toContain('Grok Bot 12% used')
+  })
 })
 
 describe('undefined provider window safety (crash d2c1da69 / bb74236c)', () => {

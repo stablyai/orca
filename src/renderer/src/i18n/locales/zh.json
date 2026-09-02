@@ -3315,6 +3315,9 @@
             "codexSignInSuccess": "已登录 Codex",
             "codexSignInError": "Codex 登录失败，请重试。"
           },
+          "StatusBarVisibilityMenu": {
+            "cursorUsage": "Cursor 使用情况"
+          },
           "StatusBarUsageEmptyCta": {
             "828c764a79": "连接账户",
             "caa0f39811": "支持：",
@@ -3477,6 +3480,13 @@
             "d1b7f509ac": "在运行 Orca 的电脑上的终端中运行 grok，并等待其启动。如有提示，请完成登录，然后重试用量检查。您无需发送聊天消息。",
             "f90b3d7a16": "运行 Kimi 以刷新",
             "a37e8c15d4": "在运行 Orca 的电脑上的终端中运行 kimi，等待其启动，然后重试用量检查。"
+          },
+          "usage": {
+            "error": {
+              "copy": {
+                "signInWithCursor": "使用 Cursor 登录"
+              }
+            }
           },
           "SshTargetStatusRow": {
             "sshHost": "SSH 主机"
@@ -7674,6 +7684,16 @@
           "7aa456a460": "在 WSL 内的 ~/.local/bin 中注册 `orca-ide`。",
           "0307677bb9": "正在检查 WSL CLI 注册..."
         },
+        "CursorAccountsSection": {
+          "title": "Cursor",
+          "description": "显示这台机器上 Cursor 桌面版或 cursor-agent 登录会话中的 Cursor Models、Other Models 和 Grok Bot 使用情况。Orca 不会刷新该会话。",
+          "cursorCliDocs": "Cursor CLI 文档",
+          "signedInStatus": "已登录",
+          "notSignedInInstructions": "未登录 — 请在此计算机上运行 Cursor 或 cursor-agent login",
+          "refreshUsage": "刷新使用情况",
+          "poolUsageDescription": "此 Cursor 资源池的实时已用百分比。限额未硬编码。",
+          "resetsWhen": "重置于 {{when}}"
+        },
         "accounts": {
           "search": {
             "86edc96bc9": "状态栏",
@@ -7727,7 +7747,10 @@
             "d2c6a0e8f1": "grok",
             "c1b5f9d7e0": "xai",
             "b0a4e8c6d9": "OAuth",
-            "a9f3d7b5c8": "登录"
+            "a9f3d7b5c8": "登录",
+            "cursorUsageTitle": "Cursor 使用情况",
+            "cursorUsageDescription": "用于查看 Cursor Models、Other Models 和 Grok Bot 使用情况的只读 Cursor 桌面版和 cursor-agent 登录。",
+            "cursorKeyword": "cursor"
           }
         },
         "advanced": {
@@ -7810,6 +7833,23 @@
           }
         },
         "appearance": {
+          "status": {
+            "bar": {
+              "cursor": {
+                "toggle": {
+                  "search": {
+                    "title": "Cursor 使用情况",
+                    "description": "显示已登录 Cursor 会话中的 Cursor Models、Other Models 和 Grok Bot 使用情况。",
+                    "keywordStatusBar": "状态栏",
+                    "keywordCursor": "cursor",
+                    "keywordUsage": "使用情况",
+                    "keywordSubscription": "订阅",
+                    "toggleDescription": "使用 Cursor 或 cursor-agent 登录时显示 Cursor 订阅使用情况。"
+                  }
+                }
+              }
+            }
+          },
           "search": {
             "468448bba4": "水彩",
             "f586abfa35": "蓝色",

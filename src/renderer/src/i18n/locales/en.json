@@ -3673,6 +3673,9 @@
             "codexSignInSuccess": "Signed in to Codex",
             "codexSignInError": "Codex sign-in failed. Please try again."
           },
+          "StatusBarVisibilityMenu": {
+            "cursorUsage": "Cursor Usage"
+          },
           "StatusBarUsageEmptyCta": {
             "828c764a79": "Connect an account",
             "caa0f39811": "Supports:",
@@ -3851,6 +3854,13 @@
             "d1b7f509ac": "Run grok in a terminal on the computer running Orca and wait for it to start. If prompted, complete sign-in, then retry usage. You do not need to send a chat message.",
             "f90b3d7a16": "Run Kimi to refresh",
             "a37e8c15d4": "Run kimi in a terminal on the computer running Orca and wait for it to start, then retry usage."
+          },
+          "usage": {
+            "error": {
+              "copy": {
+                "signInWithCursor": "Sign in with Cursor"
+              }
+            }
           },
           "SshTargetStatusRow": {
             "sshHost": "SSH Host"
@@ -8720,6 +8730,16 @@
           "7aa456a460": "Register `orca-ide` in ~/.local/bin inside WSL.",
           "0307677bb9": "Checking WSL CLI registration..."
         },
+        "CursorAccountsSection": {
+          "title": "Cursor",
+          "description": "Shows Cursor Models, Other Models, and Grok Bot usage from the Cursor desktop or cursor-agent login on this machine. Orca does not refresh that session.",
+          "cursorCliDocs": "Cursor CLI docs",
+          "signedInStatus": "Signed in",
+          "notSignedInInstructions": "Not signed in — run Cursor or cursor-agent login on this computer",
+          "refreshUsage": "Refresh usage",
+          "poolUsageDescription": "Live percent used for this Cursor pool. Caps are not hardcoded.",
+          "resetsWhen": "Resets {{when}}"
+        },
         "accounts": {
           "search": {
             "86edc96bc9": "status bar",
@@ -8773,7 +8793,10 @@
             "d2c6a0e8f1": "grok",
             "c1b5f9d7e0": "xai",
             "b0a4e8c6d9": "oauth",
-            "a9f3d7b5c8": "login"
+            "a9f3d7b5c8": "login",
+            "cursorUsageTitle": "Cursor Usage",
+            "cursorUsageDescription": "Read-only Cursor desktop and cursor-agent login for Cursor Models, Other Models, and Grok Bot usage.",
+            "cursorKeyword": "cursor"
           }
         },
         "advanced": {
@@ -8856,6 +8879,23 @@
           }
         },
         "appearance": {
+          "status": {
+            "bar": {
+              "cursor": {
+                "toggle": {
+                  "search": {
+                    "title": "Cursor Usage",
+                    "description": "Show Cursor Models, Other Models, and Grok Bot usage from the signed-in Cursor session.",
+                    "keywordStatusBar": "status bar",
+                    "keywordCursor": "cursor",
+                    "keywordUsage": "usage",
+                    "keywordSubscription": "subscription",
+                    "toggleDescription": "Show Cursor subscription usage when signed in with Cursor or cursor-agent."
+                  }
+                }
+              }
+            }
+          },
           "search": {
             "9a115966d3": "Minimize to Tray on Close",
             "4d5b9427b5": "When enabled, closing the window keeps Orca running in the system tray instead of quitting.",

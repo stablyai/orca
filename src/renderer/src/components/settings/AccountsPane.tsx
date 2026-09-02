@@ -17,6 +17,7 @@ import {
 import {
   getAccountsClaudeSearchEntries,
   getAccountsCodexSearchEntries,
+  getAccountsCursorSearchEntries,
   getAccountsGeminiSearchEntries,
   getAccountsGrokSearchEntries,
   getAccountsLocationSearchEntries,
@@ -36,6 +37,7 @@ import {
 } from './provider-account-visibility'
 import { Separator } from '../ui/separator'
 import { GrokAccountsSection } from './GrokAccountsSection'
+import { CursorAccountsSection } from './CursorAccountsSection'
 import type {
   AccountsPaneProps,
   AccountsPaneSectionModel,
@@ -365,6 +367,9 @@ export function AccountsPane({
       : null,
     matchesSettingsSearch(searchQuery, getAccountsGrokSearchEntries()) ? (
       <GrokAccountsSection key="grok" />
+    ) : null,
+    matchesSettingsSearch(searchQuery, getAccountsCursorSearchEntries()) ? (
+      <CursorAccountsSection key="cursor" />
     ) : null
   ].filter(Boolean)
 

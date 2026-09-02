@@ -1,6 +1,7 @@
 import { RateLimitServiceFullCyclePreparation } from './service-full-cycle-preparation'
 import { deriveAntigravityRateLimits } from '../antigravity-usage-mirror'
 import type { ProviderRateLimits } from './service-types'
+import { providerResultFromSettled } from './service-settled-provider-result'
 
 export abstract class RateLimitServiceFullCycleApplication extends RateLimitServiceFullCyclePreparation {
   protected async runFetchAllCycle(
@@ -32,7 +33,8 @@ export abstract class RateLimitServiceFullCycleApplication extends RateLimitServ
         geminiResult,
         opencodeGoResult,
         kimiResult,
-        miniMaxResult
+        miniMaxResult,
+        cursorResult
       ],
       grokResultPromise
     } = prepared
@@ -110,20 +112,8 @@ export abstract class RateLimitServiceFullCycleApplication extends RateLimitServ
             status: 'error'
           } satisfies ProviderRateLimits)
 
-    const miniMax =
-      miniMaxResult.status === 'fulfilled'
-        ? miniMaxResult.value
-        : ({
-            provider: 'minimax',
-            session: null,
-            weekly: null,
-            updatedAt: Date.now(),
-            error:
-              miniMaxResult.reason instanceof Error
-                ? miniMaxResult.reason.message
-                : 'Unknown error',
-            status: 'error'
-          } satisfies ProviderRateLimits)
+    const miniMax = providerResultFromSettled('minimax', miniMaxResult)
+    const cursor = providerResultFromSettled('cursor', cursorResult)
 
     const latestCodexHome = this.resolveCodexHome(codexTarget)
     const latestClaudeAuthPreparation = await this.claudeAuthPreparationResolver?.(claudeTarget)
@@ -164,6 +154,7 @@ export abstract class RateLimitServiceFullCycleApplication extends RateLimitServ
     if (shouldApplyMiniMax) {
       this.trackActiveFailureStreak('minimax', miniMax)
     }
+    this.trackActiveFailureStreak('cursor', cursor)
 
     // Why: apply a Codex result only when provenance and generation still match, else a raced in-flight fetch overwrites the new account.
     this.updateState({
@@ -188,24 +179,15 @@ export abstract class RateLimitServiceFullCycleApplication extends RateLimitServ
         ? miniMaxConfigChanged
           ? miniMax
           : this.applyStalePolicy(miniMax, previousState.minimax)
-        : this.state.minimax
+        : this.state.minimax,
+      cursor: this.applyStalePolicy(cursor, previousState.cursor)
     })
 
     const grokResult = await grokResultPromise
     if (signal.aborted) {
       return
     }
-    const grok =
-      grokResult.status === 'fulfilled'
-        ? grokResult.value
-        : ({
-            provider: 'grok',
-            session: null,
-            weekly: null,
-            updatedAt: Date.now(),
-            error: grokResult.reason instanceof Error ? grokResult.reason.message : 'Unknown error',
-            status: 'error'
-          } satisfies ProviderRateLimits)
+    const grok = providerResultFromSettled('grok', grokResult)
     this.trackActiveFailureStreak('grok', grok)
     this.updateState({
       ...this.state,

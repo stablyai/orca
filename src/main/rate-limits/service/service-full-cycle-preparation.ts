@@ -3,6 +3,8 @@ import { fetchCodexRateLimits } from '../codex-fetcher'
 import { fetchGeminiRateLimits } from '../gemini-usage-fetcher'
 import { fetchGrokRateLimits } from '../grok-fetcher'
 import { readGrokAuthSession } from '../grok-auth'
+import { fetchCursorRateLimits } from '../cursor-fetcher'
+import { readCursorAuthSession } from '../cursor-auth'
 import { fetchMiniMaxRateLimits } from '../minimax-fetcher'
 import { fetchOpenCodeGoRateLimits } from '../opencode-go-usage-fetcher'
 import { RateLimitServiceFetchPolicy } from './service-fetch-policy'
@@ -31,6 +33,7 @@ export type FetchAllCyclePrepared = {
   miniMaxGeneration: number
   claudeFetchGated: boolean
   results: [
+    PromiseSettledResult<ProviderRateLimits>,
     PromiseSettledResult<ProviderRateLimits>,
     PromiseSettledResult<ProviderRateLimits>,
     PromiseSettledResult<ProviderRateLimits>,
@@ -84,6 +87,8 @@ export abstract class RateLimitServiceFullCyclePreparation extends RateLimitServ
     // Why: getState() is hot (renderer pushes + mobile snapshots); keep Grok's sync auth-file probe on fetch cycles instead.
     const grokAuthReadResult = readGrokAuthSession()
     this.grokAuthConfigured = grokAuthReadResult.status === 'ok'
+    const cursorAuthReadResult = readCursorAuthSession()
+    this.cursorAuthConfigured = cursorAuthReadResult.status === 'ok'
 
     // Discard stale data on config change — it belongs to a different session/workspace.
     const currentConfigHash = `${cookie}|${workspaceIdOverride}`
@@ -119,7 +124,8 @@ export abstract class RateLimitServiceFullCyclePreparation extends RateLimitServ
       minimax: miniMaxConfigChanged
         ? this.withFetchingStatus(null, 'minimax')
         : this.withFetchingStatus(previousState.minimax, 'minimax'),
-      grok: this.withFetchingStatus(previousState.grok, 'grok')
+      grok: this.withFetchingStatus(previousState.grok, 'grok'),
+      cursor: this.withFetchingStatus(previousState.cursor, 'cursor')
     })
 
     const missingWslCodexHome =
@@ -136,8 +142,15 @@ export abstract class RateLimitServiceFullCyclePreparation extends RateLimitServ
     const claudeFetchGated =
       !options?.force && this.shouldSkipAutomatedClaudeFetch(previousState.claude)
 
-    const [claudeResult, codexResult, geminiResult, opencodeGoResult, kimiResult, miniMaxResult] =
-      await Promise.allSettled([
+    const [
+      claudeResult,
+      codexResult,
+      geminiResult,
+      opencodeGoResult,
+      kimiResult,
+      miniMaxResult,
+      cursorResult
+    ] = await Promise.allSettled([
         claudeFetchGated
           ? Promise.resolve(previousState.claude as ProviderRateLimits)
           : fetchClaudeRateLimits({
@@ -168,7 +181,8 @@ export abstract class RateLimitServiceFullCyclePreparation extends RateLimitServ
               cookie: miniMaxCookie,
               groupId: miniMaxGroupId,
               models: miniMaxModels
-            })
+            }),
+        fetchCursorRateLimits({ signal, authReadResult: cursorAuthReadResult })
       ])
 
     if (signal.aborted) {
@@ -196,7 +210,8 @@ export abstract class RateLimitServiceFullCyclePreparation extends RateLimitServ
         geminiResult,
         opencodeGoResult,
         kimiResult,
-        miniMaxResult
+        miniMaxResult,
+        cursorResult
       ],
       grokResultPromise
     }

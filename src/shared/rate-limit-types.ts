@@ -11,8 +11,10 @@ export type RateLimitWindow = {
 
 export type ProviderRateLimitStatus = 'idle' | 'fetching' | 'ok' | 'error' | 'unavailable'
 
-export type RateLimitBucket = RateLimitWindow & {
+export type RateLimitBucket = Omit<RateLimitWindow, 'windowMinutes'> & {
   name: string
+  /** Window duration when the provider exposes both cycle bounds. */
+  windowMinutes?: number
 }
 
 export type UsageRateLimitSource = 'oauth' | 'cli' | 'web' | 'live-session'
@@ -39,6 +41,10 @@ export type UsageRateLimitMetadata = {
   failureKind?: UsageRateLimitFailureKind
   credentialSource?: string
   authProvenance?: string
+  /** Signed-in account email when the provider exposes one. */
+  accountEmail?: string
+  /** Subscription status when the provider exposes one. */
+  subscriptionStatus?: string
   deferredByLiveClaudeSession?: boolean
   lastSuccessfulSource?: UsageRateLimitSource
   /** Unix ms timestamp before which usage refetches should not be attempted (from HTTP Retry-After). */
@@ -55,6 +61,7 @@ export type ProviderRateLimits = {
     | 'minimax'
     | 'grok'
     | 'antigravity'
+    | 'cursor'
   /** 5-hour session window, null if not available. */
   session: RateLimitWindow | null
   /** 7-day weekly window, null if not available. */
@@ -63,7 +70,7 @@ export type ProviderRateLimits = {
   fableWeekly?: RateLimitWindow | null
   /** 30-day monthly window (OpenCode Go, Grok unified billing), null if not available. */
   monthly?: RateLimitWindow | null
-  /** Named per-model buckets (Gemini only). */
+  /** Named usage buckets (for example Gemini models or Cursor billing pools). */
   buckets?: RateLimitBucket[]
   /** Available earned Codex rate-limit reset credits, if reported. */
   rateLimitResetCredits?: {
@@ -124,6 +131,7 @@ export type RateLimitState = {
   antigravity: ProviderRateLimits | null
   minimax: ProviderRateLimits | null
   grok: ProviderRateLimits | null
+  cursor: ProviderRateLimits | null
   /**
    * True when a MiniMax session cookie is persisted on disk. The cookie lives
    * outside GlobalSettings, so this flag is the durable signal that the
@@ -133,6 +141,8 @@ export type RateLimitState = {
   minimaxCookieConfigured: boolean
   /** True when main finds a Grok CLI session file (~/.grok/auth.json or GROK_HOME). */
   grokAuthConfigured: boolean
+  /** True when main finds a Cursor desktop or CLI access token. */
+  cursorAuthConfigured: boolean
   claudeTarget: RateLimitRuntimeTarget
   codexTarget: RateLimitRuntimeTarget
   inactiveClaudeAccounts: InactiveAccountUsage[]
