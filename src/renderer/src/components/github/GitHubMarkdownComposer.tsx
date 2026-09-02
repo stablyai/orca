@@ -201,7 +201,10 @@ export function GitHubMarkdownComposer({
       return
     }
     editorRef.current = editor
-    editor.setEditable(!disabled)
+    // Why: emitUpdate=false — the default emit fires onUpdate with the editor's stale
+    // content and clobbers a value that changed in the same commit as the disabled toggle
+    // (e.g. AI-generated fields applied while unlocking).
+    editor.setEditable(!disabled, false)
   }, [disabled, editor])
 
   useEffect(() => {
