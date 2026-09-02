@@ -219,7 +219,9 @@ _Ou por um gerenciador de pacotes:_
 
 ```bash
 # macOS (Homebrew)
+# Use sempre o token totalmente qualificado. O `orca` sem prefixo e o cask descontinuado do Plotly, nao o Orca ADE.
 brew install --cask stablyai/orca/orca
+brew upgrade --cask stablyai/orca/orca
 
 # Arch Linux (AUR) — ou stably-orca-git para compilar a partir do código-fonte
 yay -S stably-orca-bin
