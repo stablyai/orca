@@ -31,7 +31,6 @@ import {
   isCommandAvailable,
   shellQuote
 } from '../ipc/preflight-command-exec'
-import { excludeMisidentifiedAgents } from './preflight-agent-identity-exclusion'
 import {
   detectRemoteWindowsTerminalCapabilities,
   type RemoteWindowsTerminalCapabilities
@@ -113,6 +112,7 @@ function preflightCacheKey(wslTarget: WslPreflightTarget | null): string {
 /** @internal - tests need a clean preflight cache between cases. */
 export function _resetPreflightCache(): void {
   cached = null
+  clearIdentityProbeCache()
   cachedByWslDistro.clear()
   preflightInFlight.clear()
   latestPreflightRun.clear()
@@ -197,6 +197,7 @@ export async function refreshShellPathAndDetectAgents(
     // keep reporting a just-installed CLI as absent -- the exact case this
     // function exists to handle.
     invalidateWslGuestEnvironment(wslTarget.distro)
+    clearIdentityProbeCache()
     const agents = await detectInstalledAgents(context)
     return {
       agents,
@@ -209,6 +210,7 @@ export async function refreshShellPathAndDetectAgents(
 
   const hydration = await hydrateShellPath({ force: true })
   const added = hydration.ok ? mergePathSegments(hydration.segments) : []
+  clearIdentityProbeCache()
   const agents = await detectInstalledAgents(context)
   return {
     agents,
