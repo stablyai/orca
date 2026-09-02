@@ -22,6 +22,7 @@ import {
   extractString,
   parseJsonObject
 } from './session-scanner-values'
+import { readCursorChatMeta } from './session-scanner-cursor-chat-meta'
 
 type ParserSessionOptions = {
   executionHostId?: ExecutionHostId
@@ -50,7 +51,8 @@ export async function parseCursorSessionContent(
     file,
     lines: remoteSessionContentLines(content, signal),
     platform,
-    options
+    options,
+    enrichFromChatMeta: false
   })
 }
 
@@ -75,11 +77,34 @@ function consumeCursorRecordLine(accumulator: SessionAccumulator, line: string):
   }
 }
 
-export function createCursorSessionResumeState(file: FileWithMtime): ResumableSessionParseState {
+export function createCursorSessionResumeState(
+  file: FileWithMtime,
+  // Remote hosts stream transcript content only, with no sibling meta.json to read.
+  enrichFromChatMeta = true
+): ResumableSessionParseState {
   return accumulatorFoldResumeState(
     createAccumulator({ agent: 'cursor', file, sessionId: sessionIdFromFileName(file.path) }),
-    consumeCursorRecordLine
+    consumeCursorRecordLine,
+    enrichFromChatMeta ? (accumulator) => applyCursorChatMeta(accumulator, file.path) : undefined
   )
+}
+
+/** Fills only what the transcript never recorded; its own records always win. */
+async function applyCursorChatMeta(
+  accumulator: SessionAccumulator,
+  transcriptPath: string
+): Promise<void> {
+  if (accumulator.cwd && accumulator.createdAt && accumulator.updatedAt && accumulator.title) {
+    return
+  }
+  const meta = await readCursorChatMeta(transcriptPath)
+  if (!meta) {
+    return
+  }
+  accumulator.title ??= meta.title
+  accumulator.cwd ??= meta.cwd
+  accumulator.createdAt ??= meta.createdAt
+  accumulator.updatedAt ??= meta.updatedAt
 }
 
 async function parseCursorSessionLines(args: {
@@ -87,8 +112,9 @@ async function parseCursorSessionLines(args: {
   lines: AsyncIterable<string> | Iterable<string>
   platform: NodeJS.Platform
   options?: ParserSessionOptions
+  enrichFromChatMeta?: boolean
 }): Promise<AiVaultSession | null> {
-  const state = createCursorSessionResumeState(args.file)
+  const state = createCursorSessionResumeState(args.file, args.enrichFromChatMeta ?? true)
   for await (const line of args.lines) {
     state.consumeLine(line)
   }

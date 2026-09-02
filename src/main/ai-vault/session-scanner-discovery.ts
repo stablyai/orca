@@ -14,7 +14,7 @@ export async function discoverFiles(args: {
   issues: AiVaultScanIssue[]
   extensions: string[]
   filePredicate?: (path: string) => boolean
-  contentDependencyPath?: (path: string) => string
+  contentDependencyPath?: (path: string) => string | undefined | Promise<string | undefined>
   directoryPredicate?: (name: string, depth: number) => boolean
 }): Promise<SessionFileDiscovery> {
   let paths: string[]
@@ -42,7 +42,9 @@ export async function discoverFiles(args: {
   for (const path of paths) {
     try {
       const fileStat = await wslGatedStat(path, 'scan')
-      const dependencyStat = await optionalContentDependencyStat(args.contentDependencyPath?.(path))
+      const dependencyStat = await optionalContentDependencyStat(
+        await args.contentDependencyPath?.(path)
+      )
       const mtimeMs = Math.max(fileStat.mtimeMs, dependencyStat?.mtimeMs ?? 0)
       files.push({
         path,

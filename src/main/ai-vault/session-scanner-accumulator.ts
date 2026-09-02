@@ -65,19 +65,29 @@ export function cloneSessionAccumulator(accumulator: SessionAccumulator): Sessio
 // closure state (claude, codex) build their own ResumableSessionParseState.
 export function accumulatorFoldResumeState(
   accumulator: SessionAccumulator,
-  consumeRecordLine: (accumulator: SessionAccumulator, line: string) => void
+  consumeRecordLine: (accumulator: SessionAccumulator, line: string) => void,
+  // Runs per finalize, for agents whose metadata lives in a sibling file the
+  // fold never sees; it may only fill fields the transcript left empty.
+  enrichBeforeFinalize?: (accumulator: SessionAccumulator) => Promise<void>
 ): ResumableSessionParseState {
   return {
     consumeLine: (line) => consumeRecordLine(accumulator, line),
     clone: () =>
-      accumulatorFoldResumeState(cloneSessionAccumulator(accumulator), consumeRecordLine),
+      accumulatorFoldResumeState(
+        cloneSessionAccumulator(accumulator),
+        consumeRecordLine,
+        enrichBeforeFinalize
+      ),
     touchFile: (file) => {
       accumulator.modifiedAt = file.modifiedAt
     },
     // Finalize a snapshot: the live accumulator (and its preview array) keeps
     // accumulating appended lines after this session object is handed out.
-    finalize: (platform, options) =>
-      finalizeSession(cloneSessionAccumulator(accumulator), platform, options)
+    finalize: async (platform, options) => {
+      const snapshot = cloneSessionAccumulator(accumulator)
+      await enrichBeforeFinalize?.(snapshot)
+      return finalizeSession(snapshot, platform, options)
+    }
   }
 }
 
