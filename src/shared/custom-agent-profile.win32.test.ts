@@ -1,4 +1,4 @@
-import { mkdirSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, readdirSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
@@ -9,6 +9,7 @@ import {
 } from './child-process/__fixtures__/windows-argument-corpus'
 import { buildCustomAgentLaunch } from './custom-agent-profile'
 import { getCmdExePath } from './windows-batch-spawn'
+import { removeTreeSync } from './windows-transient-lock-removal'
 
 const describeOnWindows = process.platform === 'win32' ? describe : describe.skip
 
@@ -27,7 +28,7 @@ describeOnWindows('custom agent Windows argument round-trip', () => {
     )
   })
 
-  afterAll(() => rmSync(shimDir, { recursive: true, force: true }))
+  afterAll(() => removeTreeSync(shimDir))
 
   it('delivers the adversarial Windows argument corpus unchanged', async () => {
     const values = WINDOWS_ARGUMENT_CORPUS.map((entry) => entry.value)
