@@ -41,6 +41,11 @@ type PersistMacDockIconOptions = {
   platform?: NodeJS.Platform
 }
 
+type ApplyAppIconOptions = {
+  isDevApp?: boolean
+  platform?: NodeJS.Platform
+}
+
 const MAC_DOCK_ICON_SCRIPT = [
   'use framework "AppKit"',
   'use scripting additions',
@@ -287,12 +292,16 @@ export function persistMacDockIcon(value: unknown, options: PersistMacDockIconOp
   })
 }
 
-export function applyAppIcon(value: unknown): void {
+export function applyAppIcon(value: unknown, options: ApplyAppIconOptions = {}): void {
+  const platform = options.platform ?? process.platform
+  const isDevApp = options.isDevApp ?? (is.dev || !app.isPackaged)
+  const iconId = normalizeAppIconId(value)
   const image = createAppIconImage(value)
   if (image.isEmpty()) {
     return
   }
-  if (process.platform === 'darwin') {
+  if (platform === 'darwin' && (iconId !== 'classic' || isDevApp)) {
+    // Why: a packaged classic build must leave the bundle icon in place so macOS 26 Clear/Tinted appearances from Assets.car/CFBundleIconName apply.
     app.dock?.setIcon(image)
   }
   for (const window of BrowserWindow.getAllWindows()) {
@@ -300,5 +309,5 @@ export function applyAppIcon(value: unknown): void {
       window.setIcon(image)
     }
   }
-  persistMacDockIcon(value)
+  persistMacDockIcon(value, { platform, isDevApp })
 }

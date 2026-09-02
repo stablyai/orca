@@ -1,4 +1,5 @@
 import { cp, mkdir, mkdtemp, readFile, readdir, rm, stat, writeFile } from 'node:fs/promises'
+import { existsSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -274,6 +275,33 @@ describe('electron-builder config', () => {
 
   it('uses the multi-size icon source for Linux packages', () => {
     expect(electronBuilderConfig.linux.icon).toBe('resources/build/icon.icns')
+  })
+
+  it('keeps macOS appearance assets paired with the bundle icon name', () => {
+    const iconAppearanceAssetsExist = existsSync(
+      join(REPO_ROOT, 'resources', 'build', 'Assets.car')
+    )
+    const shipsIconAppearanceAssets = electronBuilderConfig.mac.extraResources.some(
+      ({ from, to }) => from === 'resources/build/Assets.car' && to === 'Assets.car'
+    )
+    const declaresBundleIconName = 'CFBundleIconName' in electronBuilderConfig.mac.extendInfo
+
+    expect(iconAppearanceAssetsExist).toBe(shipsIconAppearanceAssets)
+    expect(shipsIconAppearanceAssets).toBe(declaresBundleIconName)
+  })
+
+  it('uses the stable app icon name for macOS appearance assets', () => {
+    const iconAppearanceAssetsExist = existsSync(
+      join(REPO_ROOT, 'resources', 'build', 'Assets.car')
+    )
+
+    expect(electronBuilderConfig.mac.extendInfo.CFBundleIconName).toBe(
+      iconAppearanceAssetsExist ? 'icon' : undefined
+    )
+  })
+
+  it('uses the legacy icon source for macOS packages', () => {
+    expect(electronBuilderConfig.mac.icon).toBe('resources/build/icon.icns')
   })
 
   it('matches the Linux desktop entry to Electron window class', () => {

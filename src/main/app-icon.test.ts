@@ -16,7 +16,8 @@ const {
 }))
 
 vi.mock('electron', () => ({
-  app: { dock: { setIcon: dockSetIconMock } },
+  // Why: getPath resolves to a non-.app layout so dock-icon cases never reach real bundle persistence.
+  app: { dock: { setIcon: dockSetIconMock }, getPath: () => '/tmp/orca-test/Contents/MacOS/Orca' },
   BrowserWindow: { getAllWindows: browserWindowGetAllWindowsMock },
   nativeImage: { createFromPath: createFromPathMock }
 }))
@@ -105,6 +106,54 @@ describe('app icon selection', () => {
     } else {
       expect(dockSetIconMock).not.toHaveBeenCalled()
     }
+    expect(windowSetIconMock).toHaveBeenCalledWith(image)
+  })
+
+  it('keeps the packaged classic icon on the macOS dock while updating live windows', () => {
+    const image = { isEmpty: () => false }
+    createFromPathMock.mockReturnValue(image)
+    browserWindowGetAllWindowsMock.mockReturnValue([
+      { isDestroyed: () => false, setIcon: windowSetIconMock },
+      { isDestroyed: () => true, setIcon: vi.fn() }
+    ])
+
+    applyAppIcon('classic', { platform: 'darwin', isDevApp: false })
+
+    expect(dockSetIconMock).not.toHaveBeenCalled()
+    expect(windowSetIconMock).toHaveBeenCalledTimes(1)
+    expect(windowSetIconMock).toHaveBeenCalledWith(image)
+  })
+
+  it('applies a custom macOS icon to the dock', () => {
+    const image = { isEmpty: () => false }
+    createFromPathMock.mockReturnValue(image)
+    browserWindowGetAllWindowsMock.mockReturnValue([])
+
+    applyAppIcon('watercolor', { platform: 'darwin', isDevApp: false })
+
+    expect(dockSetIconMock).toHaveBeenCalledWith(image)
+  })
+
+  it('applies the classic icon to the dock for dev macOS builds', () => {
+    const image = { isEmpty: () => false }
+    createFromPathMock.mockReturnValue(image)
+    browserWindowGetAllWindowsMock.mockReturnValue([])
+
+    applyAppIcon('classic', { platform: 'darwin', isDevApp: true })
+
+    expect(dockSetIconMock).toHaveBeenCalledWith(image)
+  })
+
+  it('updates live windows without setting a dock icon off macOS', () => {
+    const image = { isEmpty: () => false }
+    createFromPathMock.mockReturnValue(image)
+    browserWindowGetAllWindowsMock.mockReturnValue([
+      { isDestroyed: () => false, setIcon: windowSetIconMock }
+    ])
+
+    applyAppIcon('watercolor', { platform: 'win32', isDevApp: false })
+
+    expect(dockSetIconMock).not.toHaveBeenCalled()
     expect(windowSetIconMock).toHaveBeenCalledWith(image)
   })
 
