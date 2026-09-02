@@ -144,7 +144,7 @@ export function createSshApi(): NonNullable<Partial<PreloadApi>['ssh']> {
       return state
     },
     disconnect: () => Promise.resolve(),
-    terminateSessions: () => Promise.resolve(),
+    terminateSessions: () => Promise.resolve({ terminated: 0, unverifiable: 0 }),
     resetRelay: () => Promise.resolve(),
     getState: async (args) => {
       if (!requireActiveEnvironmentOrNull()) {

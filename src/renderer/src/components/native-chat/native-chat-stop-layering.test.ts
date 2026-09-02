@@ -9,7 +9,9 @@ function source(path: string): string {
 describe('native chat Stop layering', () => {
   it('keeps a working chat pane above bottom-right product chrome', () => {
     const css = source('src/renderer/src/assets/main.css')
-    const terminalPane = source('src/renderer/src/components/terminal-pane/TerminalPane.tsx')
+    const terminalPane = source(
+      'src/renderer/src/components/terminal-pane/TerminalPaneNativeChatPortal.tsx'
+    )
 
     expect(terminalPane).toContain('native-chat-pane-shell absolute inset-0 z-10')
     expect(css).toMatch(/\[data-sonner-toaster\][^{]*\{[^}]*z-index:\s*40\s*!important;/s)
@@ -28,7 +30,7 @@ describe('native chat Stop layering', () => {
   })
 
   it('owns structured session panes at the retained worktree overlay layer', () => {
-    const terminal = source('src/renderer/src/components/Terminal.tsx')
+    const terminal = source('src/renderer/src/components/TerminalWorktreeSplitSurface.tsx')
     const tabGroup = source('src/renderer/src/components/tab-group/TabGroupPanel.tsx')
 
     expect(terminal).toContain('<StructuredAgentSessionPaneOverlayLayer')

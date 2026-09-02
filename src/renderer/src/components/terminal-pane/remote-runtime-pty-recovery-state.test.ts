@@ -135,11 +135,31 @@ describe('RemoteRuntimePtyRecoveryState', () => {
     expect(state.currentPhase).toBe('disconnected')
     expect(state.isCurrent(epoch)).toBe(false)
     expect(retry).not.toHaveBeenCalled()
+    state.dispose()
+  })
+
+  it('keeps a markDisconnected pane as revivable as the deadline it imitates', async () => {
+    vi.useFakeTimers()
+    const state = new RemoteRuntimePtyRecoveryState()
+    const retry = vi.fn()
+    const epoch = state.begin()
+    state.schedule(epoch, retry)
+
+    state.markDisconnected()
+
+    // Why: the latch stops self-initiated retries only; it must not un-register the pane.
+    await vi.advanceTimersByTimeAsync(300_000)
+    expect(retry).not.toHaveBeenCalled()
+    expect(state.currentPhase).toBe('disconnected')
+
+    expect(retryAllRemoteRuntimePtyRecoveriesNow()).toBe(1)
+    expect(retry).toHaveBeenCalledWith(epoch + 1)
+    expect(state.currentPhase).toBe('recovering')
+    state.dispose()
   })
 
   it.each([
     ['healthy', (state: RemoteRuntimePtyRecoveryState) => state.markHealthy()],
-    ['disconnected', (state: RemoteRuntimePtyRecoveryState) => state.markDisconnected()],
     ['cancelled', (state: RemoteRuntimePtyRecoveryState) => state.cancel()],
     ['disposed', (state: RemoteRuntimePtyRecoveryState) => state.dispose()]
   ])('removes %s panes from the scheduled recovery registry', (_label, finish) => {

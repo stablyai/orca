@@ -27,6 +27,7 @@ const REPORT_FALLBACK_MS = 15_000
 
 export function scheduleSecretProtectionGapReport({
   deferUntilFirstWindow,
+  skipInDevelopment = false,
   ...options
 }: {
   dataFile: string
@@ -40,7 +41,13 @@ export function scheduleSecretProtectionGapReport({
    * the timing serve already had, and the safer of the two.
    */
   deferUntilFirstWindow: boolean
+  /** Development profiles are disposable/isolated and must not trigger OS keychain UI. */
+  skipInDevelopment?: boolean
 }): void {
+  if (skipInDevelopment && !options.force) {
+    return
+  }
+
   if (!deferUntilFirstWindow) {
     reportSecretProtectionGap(options)
     return

@@ -306,7 +306,7 @@ describe('TabBarCreateEntry keyboard navigation', () => {
 
     const input = container.querySelector('input')!
     const placeholder = input.getAttribute('placeholder')
-    expect(placeholder).toBe('Search open tabs, files, URLs, agents\u2026')
+    expect(placeholder).toBe('Search open tabs, history, files, URLs, agents\u2026')
     expect(input.getAttribute('aria-label')).toBe(placeholder)
   })
 

@@ -672,7 +672,14 @@ export function createRemoteRuntimePtyTransport(
           getHostSessionTerminalSurfaces(snapshot, hostTabId, {
             matchRequestedLeaf: false
           }).length > 0
-        return siblingStillExists ? false : null
+        if (siblingStillExists) {
+          return false
+        }
+        // Why: a populated surface list missing only this leaf is positive absence, but a list carrying no
+        // surface at all for the tab is a client-side snapshot of a host that may still be republishing.
+        // Keep polling inside the bounded window and let it expire as unknown liveness, never as removal.
+        nextRequest = 'list'
+        continue
       }
       // Why: a host relaunch republishes the surface unmaterialized, and only activation can mint its PTY — list-only polling waits forever.
       nextRequest = activationOutcomeUnknown ? 'list' : 'activate'

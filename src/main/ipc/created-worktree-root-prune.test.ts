@@ -2,7 +2,7 @@ import type * as NodeFsPromises from 'node:fs/promises'
 import { resolve } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as RepoWorktrees from '../repo-worktrees'
-import { listRepoWorktrees } from '../repo-worktrees'
+import { listRepoWorktreeGraph } from '../repo-worktrees'
 import type { Store } from '../persistence'
 import type { Repo } from '../../shared/repo-types'
 import {
@@ -22,7 +22,7 @@ vi.mock('node:fs/promises', async () => {
 
 vi.mock('../repo-worktrees', async () => {
   const actual = await vi.importActual<typeof RepoWorktrees>('../repo-worktrees')
-  return { ...actual, listRepoWorktrees: vi.fn() }
+  return { ...actual, listRepoWorktreeGraph: vi.fn() }
 })
 
 const repo: Repo = {
@@ -56,10 +56,10 @@ describe('recovered worktree root pruning', () => {
   beforeEach(() => {
     invalidateAuthorizedRootsCache()
     __resetCreatedWorktreeRootsForTests()
-    vi.mocked(listRepoWorktrees).mockReset()
+    vi.mocked(listRepoWorktreeGraph).mockReset()
     // The #16520 outage itself: `listWorktrees` softens every Git failure to `[]`, so the rebuild
     // reports success with the recovered row missing and the probe is the only remaining evidence.
-    vi.mocked(listRepoWorktrees).mockResolvedValue([])
+    vi.mocked(listRepoWorktreeGraph).mockResolvedValue([])
     statMock.mockReset()
     statMock.mockResolvedValue({})
   })

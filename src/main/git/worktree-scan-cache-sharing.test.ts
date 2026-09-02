@@ -98,7 +98,9 @@ describe('listWorktrees in-flight sharing', () => {
     expect(gitExecFileAsyncMock).toHaveBeenCalledTimes(1)
   })
 
-  it('keeps graph and annotated scans separate despite sharing the same Git listing', async () => {
+  // The annotated scan is the graph scan plus a sparse probe, so the two share one `git worktree
+  // list` and only the annotated caller pays the probe. They ran Git twice before.
+  it('runs one git listing for concurrent graph and annotated scans', async () => {
     const resolvers: ((value: { stdout: string }) => void)[] = []
     gitExecFileAsyncMock.mockImplementation(
       () =>
@@ -109,13 +111,34 @@ describe('listWorktrees in-flight sharing', () => {
 
     const graphScan = listWorktreeGraph('/repo')
     const annotatedScan = listWorktrees('/repo')
-    expect(resolvers).toHaveLength(2)
+    expect(resolvers).toHaveLength(1)
 
     for (const resolve of resolvers) {
       resolve({ stdout: 'worktree /repo\nHEAD abc123\nbranch refs/heads/main\n' })
     }
     await Promise.all([graphScan, annotatedScan])
-    expect(gitExecFileAsyncMock).toHaveBeenCalledTimes(2)
+    expect(gitExecFileAsyncMock).toHaveBeenCalledTimes(1)
+  })
+
+  // Order must not matter: whichever runs first owns the listing and the other joins it.
+  it('runs one git listing when the annotated scan starts first', async () => {
+    const resolvers: ((value: { stdout: string }) => void)[] = []
+    gitExecFileAsyncMock.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          resolvers.push(resolve)
+        })
+    )
+
+    const annotatedScan = listWorktrees('/repo')
+    const graphScan = listWorktreeGraph('/repo')
+    expect(resolvers).toHaveLength(1)
+
+    for (const resolve of resolvers) {
+      resolve({ stdout: 'worktree /repo\nHEAD abc123\nbranch refs/heads/main\n' })
+    }
+    await Promise.all([annotatedScan, graphScan])
+    expect(gitExecFileAsyncMock).toHaveBeenCalledTimes(1)
   })
 
   it('keeps graph scans with an AbortSignal isolated from shared callers', async () => {
@@ -352,14 +375,15 @@ describe('listWorktrees in-flight sharing', () => {
     expect(scanResolvers).toHaveLength(1)
 
     await moveWorktree('/repo', '/repo-old', '/repo-new')
-    expect(_getWorktreeScanCacheSizesForTests()).toEqual({ inFlight: 1, generations: 1 })
+    // Two entries per annotated scan: its own, plus the graph listing it shares with probe-free callers.
+    expect(_getWorktreeScanCacheSizesForTests()).toEqual({ inFlight: 2, generations: 1 })
 
     const freshScan = listWorktrees('/repo')
-    expect(_getWorktreeScanCacheSizesForTests()).toEqual({ inFlight: 2, generations: 1 })
+    expect(_getWorktreeScanCacheSizesForTests()).toEqual({ inFlight: 4, generations: 1 })
 
     scanResolvers[1]?.('worktree /repo-new\nHEAD fresh\nbranch refs/heads/main\n')
     expect((await freshScan)[0]?.path).toBe('/repo-new')
-    expect(_getWorktreeScanCacheSizesForTests()).toEqual({ inFlight: 1, generations: 1 })
+    expect(_getWorktreeScanCacheSizesForTests()).toEqual({ inFlight: 2, generations: 1 })
 
     scanResolvers[0]?.('worktree /repo\nHEAD stale\nbranch refs/heads/main\n')
     expect((await staleScan)[0]?.path).toBe('/repo')
@@ -396,7 +420,7 @@ describe('listWorktrees in-flight sharing', () => {
     const newestScan = listWorktrees('/repo')
 
     expect(listCalls).toBe(3)
-    expect(_getWorktreeScanCacheSizesForTests()).toEqual({ inFlight: 3, generations: 1 })
+    expect(_getWorktreeScanCacheSizesForTests()).toEqual({ inFlight: 6, generations: 1 })
 
     scanResolvers[0]?.()
     scanResolvers[2]?.()

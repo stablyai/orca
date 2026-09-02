@@ -89,6 +89,7 @@ export default function CombinedDiffViewer({
   const preferences = useCombinedDiffViewPreferences({
     combinedDiffFileTreeVisibleByDefault: settings?.combinedDiffFileTreeVisibleByDefault,
     diffDefaultView: settings?.diffDefaultView,
+    diffShowWhitespace: settings?.diffShowWhitespace,
     diffWordWrap: settings?.diffWordWrap,
     registry,
     setSections,
@@ -308,6 +309,7 @@ export default function CombinedDiffViewer({
           commitCompare={entrySet.commitCompare}
           diffCommentCount={notes.diffCommentCount}
           diffCommentsForWorktree={diffCommentsForWorktree}
+          diffShowWhitespace={settings?.diffShowWhitespace}
           diffWordWrap={settings?.diffWordWrap}
           file={file}
           fileTreeCollapsed={preferences.fileTreeCollapsed}
@@ -323,6 +325,7 @@ export default function CombinedDiffViewer({
           sectionCount={sections.length}
           setAllSectionsCollapsed={preferences.setAllSectionsCollapsed}
           sideBySide={preferences.sideBySide}
+          toggleDiffShowWhitespace={preferences.toggleDiffShowWhitespace}
           toggleDiffWordWrap={preferences.toggleDiffWordWrap}
           toggleSideBySide={preferences.toggleSideBySide}
         />

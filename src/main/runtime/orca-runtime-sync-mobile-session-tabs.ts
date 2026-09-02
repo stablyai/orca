@@ -11,7 +11,8 @@ export class OrcaRuntimeWithSyncMobileSessionTabs extends OrcaRuntimeWithWriteOr
   protected syncMobileSessionTabs(
     snapshots: RuntimeMobileSessionTabsSnapshot[] | undefined,
     unchangedWorktreeIds?: string[],
-    resyncWorktreeIds = new Set<string>()
+    resyncWorktreeIds = new Set<string>(),
+    rendererGeneration?: string | null
   ): Set<string> {
     const changedWorktreeIds = new Set<string>()
     if (snapshots === undefined) {
@@ -21,6 +22,44 @@ export class OrcaRuntimeWithSyncMobileSessionTabs extends OrcaRuntimeWithWriteOr
     // new object, and the accept gate below drops semantically-unchanged
     // renderer resends before they replace an entry — so reference identity
     // before/after detects exactly the entries that actually changed.
+    const blockedRecreatedWorktreeIds = new Set<string>()
+    const acceptedSnapshots = snapshots.filter((snapshot) => {
+      const fence = this.removedMobileSessionWorktreeIds.get(snapshot.worktree)
+      if (!fence) {
+        return true
+      }
+      const reject = (): false => {
+        blockedRecreatedWorktreeIds.add(snapshot.worktree)
+        fence.rejectedPublication = true
+        return false
+      }
+      const currentMeta = this.store?.getWorktreeMeta(snapshot.worktree)
+      if (!currentMeta) {
+        return reject()
+      }
+      if (snapshot.worktreeInstanceId !== undefined) {
+        // Why: every catalog row carries an instanceId, so a mismatch against the
+        // live meta is exactly "not the current occupant" — no removed-id memory needed.
+        if (snapshot.worktreeInstanceId !== currentMeta.instanceId) {
+          return reject()
+        }
+        // Why: the successor's identity proves the race window closed; the
+        // instanceId mismatch alone fences any later frame from the old occupant.
+        this.removedMobileSessionWorktreeIds.delete(snapshot.worktree)
+        return true
+      }
+      // Identity-less frame: only the live renderer generation can speak for the
+      // successor, and the generation that published the removed occupant never
+      // can — a same-generation recreate stays fenced until the renderer reloads.
+      if (
+        (typeof rendererGeneration === 'string' &&
+          snapshot.publicationEpoch !== rendererGeneration) ||
+        snapshot.publicationEpoch === fence.removedPublicationEpoch
+      ) {
+        return reject()
+      }
+      return true
+    })
     const before = new Map(this.mobileSessionTabsByWorktree)
     this.restoreLivePairedRendererSessionOwnedMobileTerminals(null, {
       missingSnapshotOnly: true,
@@ -31,7 +70,7 @@ export class OrcaRuntimeWithSyncMobileSessionTabs extends OrcaRuntimeWithWriteOr
       this.getWorkspaceSessionHydrationTargets(Boolean(this.offscreenBrowserBackend))
     )
     if (this.offscreenBrowserBackend) {
-      for (const snapshot of snapshots) {
+      for (const snapshot of acceptedSnapshots) {
         if (!worktreeSessionsToHydrate.has(snapshot.worktree)) {
           worktreeSessionsToHydrate.set(snapshot.worktree, null)
         }
@@ -46,7 +85,10 @@ export class OrcaRuntimeWithSyncMobileSessionTabs extends OrcaRuntimeWithWriteOr
       })
     }
     const nextWorktrees = new Set<string>()
-    const incomingWorktreeIds = new Set(snapshots.map((snapshot) => snapshot.worktree))
+    const incomingWorktreeIds = new Set(acceptedSnapshots.map((snapshot) => snapshot.worktree))
+    for (const worktreeId of blockedRecreatedWorktreeIds) {
+      nextWorktrees.add(worktreeId)
+    }
     // Why: the renderer withholds unchanged snapshots to keep the graph payload
     // small, so these worktrees are still live and must not fall into the prune
     // below. Ask for a republish when main no longer holds that accepted renderer
@@ -56,6 +98,12 @@ export class OrcaRuntimeWithSyncMobileSessionTabs extends OrcaRuntimeWithWriteOr
       const accepted = this.acceptedRendererMobileSnapshotByWorktree.get(worktreeId)
       if (existing) {
         nextWorktrees.add(worktreeId)
+      }
+      // Why: a fenced frame stays "published" renderer-side; asking for a
+      // republish would only be fenced again on every sync.
+      if (!existing && this.removedMobileSessionWorktreeIds.get(worktreeId)?.rejectedPublication) {
+        nextWorktrees.add(worktreeId)
+        continue
       }
       if (
         existing &&
@@ -78,7 +126,7 @@ export class OrcaRuntimeWithSyncMobileSessionTabs extends OrcaRuntimeWithWriteOr
       // which outlives the dropped snapshot and would reject the republish.
       this.acceptedRendererMobileSnapshotByWorktree.delete(worktreeId)
     }
-    for (const snapshot of snapshots) {
+    for (const snapshot of acceptedSnapshots) {
       nextWorktrees.add(snapshot.worktree)
       const existing = this.mobileSessionTabsByWorktree.get(snapshot.worktree)
       // Why: judge renderer publication ordering against the renderer's own

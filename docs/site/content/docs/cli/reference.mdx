@@ -9,11 +9,27 @@ The `orca` CLI talks to a running Orca runtime. Use it when a shell script or ag
 
 ## Verify the runtime
 
-Register the CLI under [Settings → General → Orca CLI](/docs/settings), then check that it can reach Orca:
+Register the CLI under [Settings → General → Orca CLI](/docs/settings), then check that it can reach Orca.
+
+<Callout title="On Linux the command is orca-ide">
+  GNOME Orca — the screen reader that ships with most GNOME desktops — already owns `/usr/bin/orca`,
+  so Orca's Linux CLI installs as `orca-ide`. Do not check for it with `command -v orca`: that
+  succeeds on a GNOME desktop and resolves to the screen reader, not to Orca. This page writes
+  `orca` throughout — read it as `orca-ide` on Linux. See [Install → Linux](/docs/install#linux).
+</Callout>
+
+On macOS and Windows:
 
 ```bash
 command -v orca
 orca status --json
+```
+
+On Linux:
+
+```bash
+command -v orca-ide
+orca-ide status --json
 ```
 
 If Orca is not already running:

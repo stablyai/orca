@@ -77,6 +77,11 @@ vi.mock('electron', () => ({
 
 vi.mock('electron-updater', () => ({ autoUpdater: autoUpdaterMock }))
 vi.mock('./electron-updater-loader', () => ({ loadElectronAutoUpdater: () => autoUpdaterMock }))
+vi.mock('./linux-update-package-type', () => ({
+  getLinuxPackageType: () => 'non-root',
+  getLinuxRootPackageType: () => null,
+  isExternallyManagedLinuxInstall: () => false
+}))
 vi.mock('@electron-toolkit/utils', () => ({ is: { dev: false } }))
 vi.mock('./ipc/pty', () => ({ killAllPty: killAllPtyMock }))
 vi.mock('./updater-changelog', () => ({ fetchChangelog: vi.fn().mockResolvedValue(null) }))
@@ -166,6 +171,7 @@ describe('headless serve update install handoff', () => {
 
     checkForUpdatesFromMenu()
     await vi.advanceTimersByTimeAsync(0)
+    autoUpdaterMock.emit('download-progress', { percent: 100 })
     autoUpdaterMock.emit('update-downloaded', { version: pendingInstaller.version })
     const nativeReadyHandler = nativeUpdaterMock.on.mock.calls.find(
       ([event]) => event === 'update-downloaded'

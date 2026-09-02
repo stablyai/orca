@@ -101,7 +101,7 @@ describe('artifact publish flow', () => {
     })
   })
 
-  it('publishes content at the 5 MiB boundary', async () => {
+  it('publishes content at the 10 MiB boundary', async () => {
     mocks.callRuntimeRpc.mockResolvedValue({ status: 'ok', value: published })
     const createRequest = vi.fn().mockResolvedValue({
       ...request,

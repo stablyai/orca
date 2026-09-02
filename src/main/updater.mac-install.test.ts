@@ -134,6 +134,7 @@ describe('updater mac install handoff', () => {
     appMock.isPackaged = true
     isMock.dev = false
     killAllPtyMock.mockReset()
+    autoUpdaterMock.downloadUpdate.mockResolvedValue([])
     vi.unstubAllGlobals()
     vi.useRealTimers()
   })
@@ -145,7 +146,7 @@ describe('updater mac install handoff', () => {
       const mainWindow = { webContents: { send: sendMock } }
 
       autoUpdaterMock.checkForUpdates.mockResolvedValue(undefined)
-      const { setupAutoUpdater } = await loadUpdaterModule()
+      const { setupAutoUpdater, downloadUpdate } = await loadUpdaterModule()
 
       setupAutoUpdater(mainWindow as never)
       await vi.waitFor(() => {
@@ -156,6 +157,7 @@ describe('updater mac install handoff', () => {
       // Why: the update-available handler is now async (it awaits fetchChangelog).
       // Flush microtasks so setAvailableVersion runs before update-downloaded fires.
       await new Promise((r) => setTimeout(r, 0))
+      downloadUpdate()
       autoUpdaterMock.emit('update-downloaded', { version: '1.0.61' })
 
       const preventDefault = vi.fn()
@@ -197,7 +199,7 @@ describe('updater mac install handoff', () => {
       const mainWindow = { webContents: { send: vi.fn() } }
 
       autoUpdaterMock.checkForUpdates.mockResolvedValue(undefined)
-      const { setupAutoUpdater, quitAndInstall } = await loadUpdaterModule()
+      const { setupAutoUpdater, downloadUpdate, quitAndInstall } = await loadUpdaterModule()
 
       setupAutoUpdater(mainWindow as never, { onBeforeQuit })
       await vi.waitFor(() => {
@@ -206,6 +208,7 @@ describe('updater mac install handoff', () => {
       autoUpdaterMock.emit('checking-for-update')
       autoUpdaterMock.emit('update-available', { version: '1.0.61' })
       await vi.advanceTimersByTimeAsync(0)
+      downloadUpdate()
       autoUpdaterMock.emit('update-downloaded', { version: '1.0.61' })
 
       const preventDefault = vi.fn()
@@ -279,7 +282,7 @@ describe('updater mac install handoff', () => {
       const mainWindow = { webContents: { send: sendMock } }
 
       autoUpdaterMock.checkForUpdates.mockResolvedValue(undefined)
-      const { setupAutoUpdater } = await loadUpdaterModule()
+      const { setupAutoUpdater, downloadUpdate } = await loadUpdaterModule()
 
       setupAutoUpdater(mainWindow as never)
       await vi.waitFor(() => {
@@ -290,6 +293,7 @@ describe('updater mac install handoff', () => {
       // Why: the update-available handler is now async (it awaits fetchChangelog).
       // Flush microtasks so setAvailableVersion runs before update-downloaded fires.
       await vi.advanceTimersByTimeAsync(0)
+      downloadUpdate()
       autoUpdaterMock.emit('update-downloaded', { version: '1.0.61' })
 
       const preventDefault = vi.fn()

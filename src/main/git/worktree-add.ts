@@ -4,6 +4,7 @@ import type {
   LocalBaseRefUpdateSuggestion
 } from '../../shared/worktree/base-ref-drift-types'
 import { windowsLongPathGitArgs } from '../../shared/windows-long-path-git-args'
+import { withRepoRefMaintenancePaused } from './local-repo-ref-maintenance'
 import { gitExecFileAsync } from './runner'
 import { runWithGitReadCacheInvalidation } from './status'
 import { invalidateWslLinkedWorktreeGitRouting } from './wsl-linked-worktree-git-routing'
@@ -149,15 +150,17 @@ export async function addWorktree(
   options: AddWorktreeOptions = {}
 ): Promise<AddWorktreeResult> {
   try {
-    return await runWithGitReadCacheInvalidation(() =>
-      performAddWorktree(
-        repoPath,
-        worktreePath,
-        branch,
-        baseBranch,
-        refreshLocalBaseRef,
-        noCheckout,
-        options
+    return await withRepoRefMaintenancePaused('worktree-add', () =>
+      runWithGitReadCacheInvalidation(() =>
+        performAddWorktree(
+          repoPath,
+          worktreePath,
+          branch,
+          baseBranch,
+          refreshLocalBaseRef,
+          noCheckout,
+          options
+        )
       )
     )
   } finally {

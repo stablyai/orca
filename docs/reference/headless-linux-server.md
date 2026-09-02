@@ -8,7 +8,11 @@ Linux, the packaged AppImage still needs the libraries that Electron expects at
 startup. Current Orca builds start Xvfb automatically for `orca serve` when no
 `DISPLAY` is set, but Xvfb must be installed first. A separate D-Bus session is
 not required. When `DISPLAY` is set, Orca uses that display instead of starting
-a competing Xvfb process.
+a competing Xvfb process, provided the display is usable: its socket must exist,
+and if an X lock file is present it must name a running process. A `DISPLAY`
+whose lock names a dead process is refused rather than replaced, and `orca serve`
+exits — unset `DISPLAY` to let Orca start its own Xvfb. A socket published with
+no lock at all (a container bind-mounting `/tmp/.X11-unix`, or WSLg) is accepted.
 
 The supported deployment matrix covers Ubuntu 20.04, 22.04, and 24.04 and
 current Debian stable — anything with glibc 2.31 or newer (see
@@ -56,11 +60,25 @@ of the libraries installed.
 On Ubuntu 20.04 and 22.04, install `libfuse2` to execute the AppImage through
 FUSE. On Ubuntu 24.04 and Debian 13 the package is `libfuse2t64`, though the plain
 `libfuse2` name also resolves there because nothing else provides it. FUSE is
-optional: without it, use the AppImage's supported extraction path:
+optional: without it, use the AppImage's supported extraction path. CLI
+registration does this once automatically, so registered commands do not need
+FUSE.
+
+Download and make the AppImage executable:
+
+```bash
+sudo mkdir -p /opt/orca
+sudo curl -L https://github.com/stablyai/orca/releases/latest/download/orca-linux.AppImage \
+  -o /opt/orca/orca-linux.AppImage
+sudo chmod +x /opt/orca/orca-linux.AppImage
+```
+
+To extract it without FUSE, run the extraction as root because the installation
+directory is root-owned:
 
 ```bash
 cd /opt/orca
-./orca-linux.AppImage --appimage-extract
+sudo ./orca-linux.AppImage --appimage-extract
 sudo chmod -R a+rX /opt/orca/squashfs-root
 /opt/orca/squashfs-root/AppRun serve --port 6768
 ```
@@ -75,15 +93,6 @@ Docker commonly has no FUSE device. Use `--appimage-extract` once or
 extract-and-run wrapper can print extracted paths before Orca starts, so
 automation that requires stdout to contain only the ready JSON should extract
 once and invoke `squashfs-root/AppRun`.
-
-Download and make the AppImage executable:
-
-```bash
-sudo mkdir -p /opt/orca
-sudo curl -L https://github.com/stablyai/orca/releases/latest/download/orca-linux.AppImage \
-  -o /opt/orca/orca-linux.AppImage
-sudo chmod +x /opt/orca/orca-linux.AppImage
-```
 
 If `Xvfb` was installed somewhere other than `/usr/bin`, confirm systemd can
 find it later:
@@ -224,6 +233,10 @@ clients should use.
 `KillMode=mixed` sends the graceful stop signal only to Orca's main process,
 then retains systemd's cgroup-wide `SIGKILL` fallback if shutdown times out.
 This lets Orca keep its owned Xvfb alive until Electron disconnects cleanly.
+It does **not** preserve the detached terminal daemon: the daemon and its PTYs
+remain in `orca-serve.service`'s cgroup and are killed when the stop completes.
+Every `systemctl stop` or `restart` therefore ends live terminals and agent
+processes, even though their persisted layout and terminal history remain.
 
 Exit status `3` means another process already owns this userData profile, so
 `RestartPreventExitStatus=3` stops the unit instead of retrying a launch that
@@ -319,6 +332,14 @@ sudo systemctl enable --now orca-xvfb.service orca-serve.service
 
 ## CLI Install Note
 
+The registered Linux CLI command is `orca-ide`, not `orca`, to avoid shadowing
+the GNOME Orca screen reader. Desktop-managed terminals receive a
+terminal-scoped bare-`orca` shim. A packaged headless `orca serve` also makes a
+best-effort dispatcher at `$HOME/.local/bin/orca` for the service user's own
+shell, so the Claude Teams launcher can resolve its bare command; it does not
+replace another user's `orca`. From an ordinary shell outside that service
+user's managed environment, substitute `orca-ide` for `orca` in commands below.
+
 On a headless host, you do not need to open the desktop UI just to run the
 server. Invoke the AppImage directly:
 
@@ -335,6 +356,21 @@ the command:
 
 This disables a security boundary. Prefer a dedicated unprivileged service
 user, especially when the listener is reachable beyond localhost.
+
+The Linux CLI is named `orca-ide`, not `orca`, so it never shadows the GNOME
+Orca screen reader at `/usr/bin/orca`. The `.deb` and `.rpm` packages put
+`orca-ide` on `PATH` themselves at install time; with the AppImage it arrives
+as `~/.local/bin/orca-ide` when the CLI is registered.
+
+A packaged `orca serve` start also writes a bare `orca` into `~/.local/bin`
+that execs the same launcher, which is why the skills commands below can be
+typed as `orca`. It writes it while starting, so it is never the command that
+starts the server — the first launch is `orca-ide serve`, or the AppImage
+invoked directly as above. The write is best-effort: it is gated on a packaged
+build, it is skipped when no bundled launcher resolves, and it is skipped when
+a file Orca does not own already holds that name (ownership is a marker on the
+second line of the file). A host that really does run the screen reader keeps
+its own `orca`.
 
 ## Pairing troubleshooting
 
@@ -371,7 +407,7 @@ at all — the built-in updater only runs in the desktop GUI, and no paired mobi
 or web client can trigger it remotely. Upgrading is always a deliberate step:
 replace the AppImage and restart the service.
 
-Two facts make this safe and predictable:
+Two facts make the persisted-state transition predictable:
 
 - **State lives in the service user's home, not next to the binary.** Persisted
   data is under `/home/orca/.config/` (Orca uses both an `orca` and an `Orca`
@@ -383,15 +419,37 @@ Two facts make this safe and predictable:
   state into the current schema and writes it back in the current shape, so a
   forward upgrade needs no manual data step.
 
+These guarantees do not preserve live processes. The service restart kills
+every terminal and agent in its cgroup; an agent conversation may be resumable,
+but its current process and any in-flight command are gone.
+
+Immediately before stopping the service, obtain a fresh census as the service's
+OS account and home. Use the installer's absolute launcher path so `sudo`'s
+`secure_path` cannot hide a per-user registration:
+`sudo -Hu orca /home/orca/.local/bin/orca-ide terminal list --json`.
+Replace both `orca` and `/home/orca` with the service account and home used by
+your unit; for an extracted deployment, use its absolute `resources/bin/orca-ide`
+launcher instead. Proceed only when the result is
+untruncated, has an explicit `hostScope`, covers every execution host affected
+by this service stop, and lists no terminals on those hosts. Every
+`omittedHostIds` entry must be explicitly accounted for outside this service's
+execution boundary. A separately paired runtime is outside that boundary; local
+execution and SSH hosts reached through this runtime are not. An affected or
+unknown omission, missing scope, failed request or lost connection is
+`unverifiable`, so defer the restart. Do not allow new work between that census
+and the stop; Orca does not yet provide an atomic census-and-stop fence.
+
 Rolling back is the case that needs care — see [Roll back](#roll-back).
 
 ### Record the version you deploy
 
-Orca has no headless version command: there is no `--version` flag or `version`
-subcommand, and `orca serve` prints only its endpoint. Choose a release tag
-explicitly instead of following the `latest` URL, and record it next to the
-binary so upgrades are auditable. The steps below keep that record in
-`/opt/orca/VERSION`.
+The bundled CLI launcher prints the Orca build with `orca-ide --version`. For an
+extracted deployment, that launcher is
+`squashfs-root/resources/bin/orca-ide`; deb/rpm installs and CLI registration put
+it on `PATH`. Do not use `orca-linux.AppImage --version` for this audit because
+Electron owns the direct binary's version flags and may report its own runtime
+version. For an AppImage service, choose a release tag explicitly and record it
+next to the binary. The steps below keep that record in `/opt/orca/VERSION`.
 
 ### Upgrade steps
 
@@ -872,8 +930,8 @@ refuse to run there and print the command to run on the machine you want.
 - `dlopen(): error loading libfuse.so.2`: install `libfuse2`.
 - `Missing X server or $DISPLAY`: install `xvfb`, or start the managed Xvfb
   service and set `DISPLAY=:99`.
-- `Xvfb not found`: confirm `command -v Xvfb` and use that absolute path in the
-  systemd unit.
+- `[serve] Xvfb failed to start` or `[serve] Could not start Xvfb`: confirm
+  `command -v Xvfb` and that it is on the service `PATH`.
 - GPU or DRI warnings on a VPS: keep `LIBGL_ALWAYS_SOFTWARE=1` in the service
   environment.
 - Chromium sandbox errors: confirm the service is running as the non-root

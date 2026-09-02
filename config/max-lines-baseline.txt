@@ -2,47 +2,15 @@
 # This is a RATCHET: the list may only SHRINK. Do NOT add entries to get CI green —
 # split the oversized file instead (AGENTS.md → "Do Not Disable Max Lines").
 # Regenerate/prune: pnpm check:max-lines-ratchet --prune   (removes stale entries only)
-inline src/main/agent-hooks/server.ts
-inline src/main/browser/agent-browser-bridge.ts
-inline src/main/browser/browser-cookie-import.ts
-inline src/main/browser/browser-manager.ts
-inline src/main/codex-accounts/runtime-home-service.ts
-inline src/main/index.ts
-inline src/main/ipc/filesystem.ts
 inline src/main/ipc/worktree-remote.ts
-inline src/main/rate-limits/service.ts
-inline src/main/runtime/rpc/methods/orchestration.ts
 inline src/main/ssh/ssh-channel-multiplexer.ts
 inline src/main/ssh/ssh-connection.ts
 inline src/main/ssh/ssh-relay-deploy.ts
 inline src/main/ssh/ssh-relay-session.ts
-inline src/main/updater.ts
-inline src/preload/index.ts
 inline src/relay/pty-handler.ts
-inline src/renderer/src/components/TaskPage.tsx
-inline src/renderer/src/components/Terminal.tsx
-inline src/renderer/src/components/WorktreeJumpPalette.tsx
-inline src/renderer/src/components/automations/AutomationsPage.tsx
-inline src/renderer/src/components/editor/MarkdownPreview.tsx
-inline src/renderer/src/components/floating-terminal/FloatingTerminalPanel.tsx
-inline src/renderer/src/components/new-workspace/SmartWorkspaceNameField.tsx
-inline src/renderer/src/components/status-bar/StatusBar.tsx
-inline src/renderer/src/components/status-bar/WorkspaceSpaceManagerPanel.tsx
-inline src/renderer/src/components/terminal-pane/TerminalPane.tsx
 inline src/renderer/src/components/terminal-pane/remote-runtime-pty-transport.ts
-inline src/renderer/src/components/terminal-pane/use-terminal-pane-lifecycle.ts
-inline src/renderer/src/runtime/sync-runtime-graph.ts
-inline src/renderer/src/runtime/web-session-tabs-sync.ts
-inline src/renderer/src/store/slices/agent-status.ts
-inline src/renderer/src/store/slices/browser.ts
-inline src/renderer/src/store/slices/linear.ts
-inline src/renderer/src/store/slices/tabs.ts
-inline src/renderer/src/store/slices/ui.ts
-inline src/shared/keybindings.ts
 mobile-config app/h/*/files/*.tsx
-mobile-config app/h/*/session/*.tsx
 mobile-config app/h/*/source-control/*.tsx
 mobile-config app/index.tsx
 mobile-config scripts/mock-server.ts
-mobile-config src/terminal/terminal-webview-html.ts
 mobile-config src/transport/rpc-client.ts

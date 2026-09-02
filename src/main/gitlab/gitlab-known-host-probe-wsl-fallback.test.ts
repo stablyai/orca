@@ -76,7 +76,11 @@ describe('glab known-hosts probe on Windows', () => {
     expect(execFileMock).toHaveBeenCalledWith(
       'wsl.exe',
       ['-d', 'Ubuntu', '--exec', 'bash', '-c', "'glab' 'auth' 'status'"],
-      expect.objectContaining({ cwd: undefined }),
+      // Why a concrete directory (#16463): `undefined` makes CreateProcessW inherit
+      // Orca's own cwd, a deletable WSL UNC path when it was launched from a
+      // worktree. This probe has no repo directory at all, so nothing about where
+      // it runs changes. The native `glab` assertion above keeps `undefined`.
+      expect.objectContaining({ cwd: expect.any(String) }),
       expect.any(Function)
     )
   })

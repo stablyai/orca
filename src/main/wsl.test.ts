@@ -392,6 +392,40 @@ describe('WSL availability cache', () => {
     })
   })
 
+  // Why this site matters more than the other wsl.exe spawns (#16463): ENOENT is
+  // deliberately non-retryable here, so a spawn that failed only because the
+  // inherited cwd had been deleted was cached as "WSL is not installed" on the
+  // 10-minute definitive TTL with exponential backoff. Git kept working and Orca
+  // reported WSL unavailable -- a worse state than the bug being fixed. Naming
+  // the directory is what keeps ENOENT meaning "wsl.exe is not on PATH".
+  it('names an explicit spawn directory on both probes, so no deleted cwd can read as ENOENT', async () => {
+    execFileSyncMock.mockReturnValueOnce('')
+    execFileMock.mockImplementation((_command, _args, _options, callback) => {
+      callback(null, '', '')
+    })
+
+    withPlatform('win32', () => {
+      expect(isWslAvailable()).toBe(true)
+    })
+    expect(execFileSyncMock).toHaveBeenCalledWith(
+      'wsl.exe',
+      ['--status'],
+      expect.objectContaining({ cwd: expect.any(String) })
+    )
+
+    // The two probes share one cache, so a false ENOENT from either poisons both.
+    _resetWslCachesForTests()
+    await withPlatformAsync('win32', async () => {
+      await expect(isWslAvailableAsync()).resolves.toBe(true)
+    })
+    expect(execFileMock).toHaveBeenCalledWith(
+      'wsl.exe',
+      ['--status'],
+      expect.objectContaining({ cwd: expect.any(String) }),
+      expect.any(Function)
+    )
+  })
+
   it('shares one wsl.exe spawn between concurrent async probes', async () => {
     execFileMock.mockImplementation((_command, _args, _options, callback) => {
       setTimeout(() => callback(null, '', ''), 0)
