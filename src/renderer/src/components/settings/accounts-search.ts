@@ -212,6 +212,27 @@ export const getAccountsGrokSearchEntries = createLocalizedCatalog(() => [
   }
 ])
 
+export const getAccountsCopilotSearchEntries = createLocalizedCatalog(() => [
+  {
+    title: translate('auto.components.settings.accounts.search.9b3e7a1c5f', 'GitHub Copilot Usage'),
+    description: translate(
+      'auto.components.settings.accounts.search.6d0f2b8e4a',
+      'OAuth sign-in via Copilot CLI for premium interactions usage.'
+    ),
+    keywords: [
+      ...translateSearchKeyword('auto.components.settings.accounts.search.8a1c5e9b3d', 'copilot'),
+      ...translateSearchKeyword('auto.components.settings.accounts.search.2c6b8e4f01', 'github'),
+      ...translateSearchKeyword('auto.components.settings.accounts.search.b0a4e8c6d9', 'oauth'),
+      ...translateSearchKeyword('auto.components.settings.accounts.search.a9f3d7b5c8', 'login'),
+      ...translateSearchKeyword(
+        'auto.components.settings.accounts.search.e949b08ffb',
+        'rate limit'
+      ),
+      ...translateSearchKeyword('auto.components.settings.accounts.search.86edc96bc9', 'status bar')
+    ]
+  }
+])
+
 export const getAccountsPaneSearchEntries = createLocalizedCatalog((): SettingsSearchEntry[] => [
   ...getAccountsLocationSearchEntries(),
   ...getAccountsClaudeSearchEntries(),
@@ -219,5 +240,6 @@ export const getAccountsPaneSearchEntries = createLocalizedCatalog((): SettingsS
   ...getAccountsGeminiSearchEntries(),
   ...getAccountsOpencodeSearchEntries(),
   ...getAccountsMiniMaxSearchEntries(),
-  ...getAccountsGrokSearchEntries()
+  ...getAccountsGrokSearchEntries(),
+  ...getAccountsCopilotSearchEntries()
 ])

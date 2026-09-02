@@ -26,6 +26,7 @@ import { readGrokAuthSession } from './grok-auth'
 import { hasMiniMaxSessionCookie } from '../minimax/minimax-cookie-store'
 import { fetchMiniMaxRateLimits } from './minimax-fetcher'
 import { fetchOpenCodeGoRateLimits } from './opencode-go-usage-fetcher'
+import { fetchCopilotRateLimits } from './copilot-fetcher'
 import {
   normalizeCodexAccountSelectionTarget,
   type CodexAccountSelectionTarget,
@@ -100,6 +101,7 @@ type InternalRateLimitState = {
   antigravity: ProviderRateLimits | null
   minimax: ProviderRateLimits | null
   grok: ProviderRateLimits | null
+  copilot: ProviderRateLimits | null
 }
 
 function normalizePollingInterval(ms: number): number {
@@ -134,7 +136,8 @@ export class RateLimitService {
     kimi: null,
     antigravity: null,
     minimax: null,
-    grok: null
+    grok: null,
+    copilot: null
   }
   private grokAuthConfigured = readGrokAuthSession().status === 'ok'
   private pollInterval: number = DEFAULT_POLL_MS
@@ -150,7 +153,8 @@ export class RateLimitService {
     kimi: 0,
     minimax: 0,
     grok: 0,
-    antigravity: 0
+    antigravity: 0,
+    copilot: 0
   }
   private mainWindow: BrowserWindow | null = null
   private detachWindowListeners: (() => void) | null = null
@@ -739,7 +743,8 @@ export class RateLimitService {
       kimi: this.state.kimi,
       minimax: this.state.minimax,
       grok: this.state.grok,
-      antigravity: this.state.antigravity
+      antigravity: this.state.antigravity,
+      copilot: this.state.copilot
     }
     return Object.entries(byProvider).map(([provider, limits]) => ({
       provider: provider as ActiveRateLimitProvider,
@@ -1253,6 +1258,7 @@ export class RateLimitService {
       | 'minimax'
       | 'grok'
       | 'antigravity'
+      | 'copilot'
   ): ProviderRateLimits {
     if (!current) {
       return {
@@ -1330,7 +1336,8 @@ export class RateLimitService {
       minimax: miniMaxConfigChanged
         ? this.withFetchingStatus(null, 'minimax')
         : this.withFetchingStatus(previousState.minimax, 'minimax'),
-      grok: this.withFetchingStatus(previousState.grok, 'grok')
+      grok: this.withFetchingStatus(previousState.grok, 'grok'),
+      copilot: this.withFetchingStatus(previousState.copilot, 'copilot')
     })
 
     const missingWslCodexHome = codexHomePath
@@ -1344,32 +1351,40 @@ export class RateLimitService {
       (reason) => ({ status: 'rejected', reason }) as const
     )
 
-    const [claudeResult, codexResult, geminiResult, opencodeGoResult, kimiResult, miniMaxResult] =
-      await Promise.allSettled([
-        fetchClaudeRateLimits({
-          authPreparation: claudeAuthPreparation,
-          allowPtyFallback: this.shouldAllowClaudePtyFallback(claudeAuthPreparation),
-          allowUsagePanelSupplement: this.shouldAllowClaudeUsagePanelSupplement(),
-          networkProxySettings: this.networkProxySettingsResolver?.(),
+    const [
+      claudeResult,
+      codexResult,
+      geminiResult,
+      opencodeGoResult,
+      kimiResult,
+      miniMaxResult,
+      copilotResult
+    ] = await Promise.allSettled([
+      fetchClaudeRateLimits({
+        authPreparation: claudeAuthPreparation,
+        allowPtyFallback: this.shouldAllowClaudePtyFallback(claudeAuthPreparation),
+        allowUsagePanelSupplement: this.shouldAllowClaudeUsagePanelSupplement(),
+        networkProxySettings: this.networkProxySettingsResolver?.(),
+        signal
+      }),
+      missingWslCodexHome ??
+        fetchCodexRateLimits({
+          codexHomePath,
+          allowPtyFallback: this.shouldAllowCodexPtyFallback(),
           signal
         }),
-        missingWslCodexHome ??
-          fetchCodexRateLimits({
-            codexHomePath,
-            allowPtyFallback: this.shouldAllowCodexPtyFallback(),
-            signal
+      fetchGeminiRateLimits(geminiCliOAuthEnabled),
+      fetchOpenCodeGoRateLimits(cookie, workspaceIdOverride || undefined),
+      fetchKimiRateLimits(),
+      miniMaxConfigResult.error
+        ? Promise.resolve(this.getMiniMaxCredentialError(miniMaxConfigResult.error))
+        : fetchMiniMaxRateLimits({
+            cookie: miniMaxCookie,
+            groupId: miniMaxGroupId,
+            models: miniMaxModels
           }),
-        fetchGeminiRateLimits(geminiCliOAuthEnabled),
-        fetchOpenCodeGoRateLimits(cookie, workspaceIdOverride || undefined),
-        fetchKimiRateLimits(),
-        miniMaxConfigResult.error
-          ? Promise.resolve(this.getMiniMaxCredentialError(miniMaxConfigResult.error))
-          : fetchMiniMaxRateLimits({
-              cookie: miniMaxCookie,
-              groupId: miniMaxGroupId,
-              models: miniMaxModels
-            })
-      ])
+      fetchCopilotRateLimits()
+    ])
 
     if (signal.aborted) {
       return
@@ -1465,6 +1480,22 @@ export class RateLimitService {
             status: 'error'
           } satisfies ProviderRateLimits)
 
+    const copilot =
+      copilotResult.status === 'fulfilled'
+        ? copilotResult.value
+        : ({
+            provider: 'copilot',
+            session: null,
+            weekly: null,
+            monthly: null,
+            updatedAt: Date.now(),
+            error:
+              copilotResult.reason instanceof Error
+                ? copilotResult.reason.message
+                : 'Unknown error',
+            status: 'error'
+          } satisfies ProviderRateLimits)
+
     const latestCodexHomePath = this.codexHomePathResolver?.(codexTarget) ?? null
     const latestClaudeAuthPreparation = await this.claudeAuthPreparationResolver?.(claudeTarget)
     if (signal.aborted) {
@@ -1505,7 +1536,8 @@ export class RateLimitService {
         ? miniMaxConfigChanged
           ? miniMax
           : this.applyStalePolicy(miniMax, previousState.minimax)
-        : this.state.minimax
+        : this.state.minimax,
+      copilot: this.applyStalePolicy(copilot, previousState.copilot)
     })
 
     const grokResult = await grokResultPromise

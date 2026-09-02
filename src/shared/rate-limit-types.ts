@@ -53,13 +53,14 @@ export type ProviderRateLimits = {
     | 'minimax'
     | 'grok'
     | 'antigravity'
+    | 'copilot'
   /** 5-hour session window, null if not available. */
   session: RateLimitWindow | null
   /** 7-day weekly window, null if not available. */
   weekly: RateLimitWindow | null
   /** Claude Fable 7-day weekly window, null if not available. */
   fableWeekly?: RateLimitWindow | null
-  /** 30-day monthly window (OpenCode Go only), null if not available. */
+  /** 30-day monthly window (OpenCode Go, Copilot), null if not available. */
   monthly?: RateLimitWindow | null
   /** Named per-model buckets (Gemini only). */
   buckets?: RateLimitBucket[]
@@ -120,6 +121,7 @@ export type RateLimitState = {
   antigravity: ProviderRateLimits | null
   minimax: ProviderRateLimits | null
   grok: ProviderRateLimits | null
+  copilot: ProviderRateLimits | null
   /**
    * True when a MiniMax session cookie is persisted on disk. The cookie lives
    * outside GlobalSettings, so this flag is the durable signal that the

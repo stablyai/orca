@@ -44,11 +44,13 @@ import {
   getAccountsGeminiSearchEntries,
   getAccountsLocationSearchEntries,
   getAccountsGrokSearchEntries,
+  getAccountsCopilotSearchEntries,
   getAccountsMiniMaxSearchEntries,
   getAccountsOpencodeSearchEntries,
   getAccountsPaneSearchEntries
 } from './accounts-search'
 import { GrokAccountsSection } from './GrokAccountsSection'
+import { CopilotAccountsSection } from './CopilotAccountsSection'
 import { SearchableSetting } from './SearchableSetting'
 import { SettingsRow, SettingsSegmentedControl } from './SettingsFormControls'
 import { matchesSettingsSearch } from './settings-search'
@@ -1810,6 +1812,9 @@ export function AccountsPane({
     ) : null,
     matchesSettingsSearch(searchQuery, getAccountsGrokSearchEntries()) ? (
       <GrokAccountsSection key="grok" />
+    ) : null,
+    matchesSettingsSearch(searchQuery, getAccountsCopilotSearchEntries()) ? (
+      <CopilotAccountsSection key="copilot" />
     ) : null
   ].filter(Boolean)
 

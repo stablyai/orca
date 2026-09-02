@@ -26,6 +26,9 @@ export function getProviderDisplayName(provider: ProviderRateLimits['provider'])
   if (provider === 'grok') {
     return 'Grok'
   }
+  if (provider === 'copilot') {
+    return 'GitHub Copilot'
+  }
   return provider
 }
 

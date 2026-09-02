@@ -104,6 +104,7 @@ export function StatusBarUsageEmptyCta(): React.JSX.Element {
             <GeminiIcon size={13} />
             <OpenCodeGoIcon size={13} />
             <AgentIcon agent="kimi" size={13} />
+            <AgentIcon agent="copilot" size={13} />
           </div>
           <Button
             type="button"

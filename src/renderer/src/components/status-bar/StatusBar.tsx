@@ -1800,7 +1800,9 @@ export function ProviderDetailsMenu({
                             ? 'M'
                             : provider.provider === 'grok'
                               ? 'R'
-                              : 'X'}
+                              : provider.provider === 'copilot'
+                                ? 'P'
+                                : 'X'}
               </span>
             </span>
           ) : (
@@ -1950,7 +1952,8 @@ function StatusBarInner({ floatingTerminalOpen }: StatusBarProps): React.JSX.Ele
     return null
   }
 
-  const { claude, codex, gemini, opencodeGo, kimi, antigravity, minimax, grok } = rateLimits
+  const { claude, codex, gemini, opencodeGo, kimi, antigravity, minimax, grok, copilot } =
+    rateLimits
 
   // Why: a provider earns a bar from either a usable live snapshot or durable
   // setup in Settings. The durable path keeps account switchers visible while
@@ -1980,6 +1983,7 @@ function StatusBarInner({ floatingTerminalOpen }: StatusBarProps): React.JSX.Ele
   const visibleAntigravity = getVisibleUsageProvider('antigravity', antigravity, usageSettings)
   const visibleMiniMax = getVisibleUsageProvider('minimax', minimax, usageSettings)
   const visibleGrok = getVisibleUsageProvider('grok', grok, usageSettings)
+  const visibleCopilot = getVisibleUsageProvider('copilot', copilot, usageSettings)
   const showClaude =
     visibleClaude !== null &&
     statusBarItems.includes('claude') &&
@@ -2007,6 +2011,10 @@ function StatusBarInner({ floatingTerminalOpen }: StatusBarProps): React.JSX.Ele
     visibleGrok !== null &&
     statusBarItems.includes('grok') &&
     isStatusBarItemAvailable('grok', detectedAgentIds)
+  const showCopilot =
+    visibleCopilot !== null &&
+    statusBarItems.includes('copilot') &&
+    isStatusBarItemAvailable('copilot', detectedAgentIds)
   // Why: OpenCode Go is a web/cookie-auth provider, not a CLI on PATH, so
   // detection-gating doesn't apply.
   const visibleOpencodeGo = getVisibleUsageProvider('opencode-go', opencodeGo, usageSettings)
@@ -2027,14 +2035,15 @@ function StatusBarInner({ floatingTerminalOpen }: StatusBarProps): React.JSX.Ele
     showKimi ||
     showAntigravity ||
     showMiniMax ||
-    showGrok
+    showGrok ||
+    showCopilot
   const anyVisible = hasVisibleUsageMeters || showResourceUsage
   // Why: a brand-new user with no provider configured would otherwise see an
   // empty left side of the status bar and wonder what's missing. Settings are
   // included because managed accounts are durable even when live usage
   // snapshots are still hydrating or unavailable after an update.
   const isEmptyUsageState = isUsageEmptyState(
-    { claude, codex, gemini, opencodeGo, kimi, antigravity, minimax, grok },
+    { claude, codex, gemini, opencodeGo, kimi, antigravity, minimax, grok, copilot },
     usageSettings
   )
   // Why: the teaching CTA is a one-time nudge — once the user hides it, keep it
@@ -2048,7 +2057,8 @@ function StatusBarInner({ floatingTerminalOpen }: StatusBarProps): React.JSX.Ele
     kimi?.status === 'fetching' ||
     antigravity?.status === 'fetching' ||
     minimax?.status === 'fetching' ||
-    grok?.status === 'fetching'
+    grok?.status === 'fetching' ||
+    copilot?.status === 'fetching'
 
   const compact = containerWidth < 900
   const iconOnly = containerWidth < 500
@@ -2158,6 +2168,17 @@ function StatusBarInner({ floatingTerminalOpen }: StatusBarProps): React.JSX.Ele
                 ariaLabel={translate(
                   'auto.components.status.bar.StatusBar.grokUsageAria',
                   'Open Grok usage details'
+                )}
+              />
+            )}
+            {showCopilot && (
+              <ProviderDetailsMenu
+                provider={visibleCopilot}
+                compact={compact}
+                iconOnly={iconOnly}
+                ariaLabel={translate(
+                  'auto.components.status.bar.StatusBar.copilotUsageAria',
+                  'Open Copilot usage details'
                 )}
               />
             )}
@@ -2339,6 +2360,18 @@ function StatusBarInner({ floatingTerminalOpen }: StatusBarProps): React.JSX.Ele
             >
               <AgentIcon agent="grok" size={14} />
               {translate('auto.components.status.bar.StatusBar.grokUsageMenu', 'Grok Usage')}
+            </DropdownMenuCheckboxItem>
+          )}
+          {isStatusBarItemAvailable('copilot', detectedAgentIds) && (
+            <DropdownMenuCheckboxItem
+              checked={statusBarItems.includes('copilot')}
+              onCheckedChange={() => {
+                recordFeatureInteraction('usage-tracking')
+                toggleStatusBarItem('copilot')
+              }}
+            >
+              <AgentIcon agent="copilot" size={14} />
+              {translate('auto.components.status.bar.StatusBar.copilotUsageMenu', 'Copilot Usage')}
             </DropdownMenuCheckboxItem>
           )}
           <DropdownMenuCheckboxItem

@@ -30,7 +30,8 @@
         "resourceUsageToggleDescription": "Show the Resource Manager. Click it for CPU, memory, sessions, daemon controls, and workspace disk scans.",
         "portsToggleDescription": "Show live workspace ports. Click it for workspace-scoped ports and external listeners.",
         "antigravityToggleDescription": "Show Antigravity subscription usage for the active workspace.",
-        "grokToggleDescription": "Show Grok subscription credit usage when signed in via Grok CLI."
+        "grokToggleDescription": "Show Grok subscription credit usage when signed in via Grok CLI.",
+        "copilotToggleDescription": "Show GitHub Copilot premium interactions usage when signed in via Copilot CLI."
       }
     }
   },
@@ -3071,7 +3072,9 @@
             "antigravityUsage": "Antigravity Usage",
             "antigravityUsageDetails": "Open Antigravity usage details",
             "grokUsageAria": "Open Grok usage details",
-            "grokUsageMenu": "Grok Usage"
+            "grokUsageMenu": "Grok Usage",
+            "copilotUsageAria": "Open Copilot usage details",
+            "copilotUsageMenu": "Copilot Usage"
           },
           "StatusBarUsageEmptyCta": {
             "828c764a79": "Connect an account",
@@ -7059,7 +7062,9 @@
             "d2c6a0e8f1": "grok",
             "c1b5f9d7e0": "xai",
             "b0a4e8c6d9": "oauth",
-            "a9f3d7b5c8": "login"
+            "a9f3d7b5c8": "login",
+            "9b3e7a1c5f": "GitHub Copilot Usage",
+            "6d0f2b8e4a": "OAuth sign-in via Copilot CLI for premium interactions usage."
           }
         },
         "advanced": {
@@ -7282,7 +7287,9 @@
             "d6c0a9e2f4": "grok",
             "c5b9f8d1e3": "xai",
             "usagePercentageDisplayTitle": "Usage percentages",
-            "usagePercentageDisplayDescription": "Choose whether provider limits show the percentage used or remaining."
+            "usagePercentageDisplayDescription": "Choose whether provider limits show the percentage used or remaining.",
+            "7a1c3f9d2e": "Copilot Usage",
+            "b4e8a2d0c6": "Show GitHub Copilot premium interactions usage in the status bar."
           }
         },
         "auto": {
@@ -9048,6 +9055,20 @@
         "TerminalInteractionSection": {
           "567633ff50": "Right-click pastes the clipboard into the terminal. Control-click to open the context menu.",
           "c64497148a": "Right-click pastes the clipboard. Control-click opens the context menu."
+        },
+        "CopilotAccountsSection": {
+          "a1b2c3d4e5": "GitHub Copilot",
+          "f6e5d4c3b2": "Shows premium interactions usage from your Copilot CLI sign-in.",
+          "0d8e77bc40": "Copilot CLI docs",
+          "ad47a33f72": "Loading…",
+          "b2c3d4e5f6": "Signed in",
+          "c3d4e5f6a7": "Signed in. Orca only reads your Copilot CLI credentials — run copilot again if usage fails.",
+          "e5f6a7b8c9": "Not signed in to Copilot CLI",
+          "f6a7b8c9d0": "In a terminal, run copilot and sign in, then click Refresh usage here.",
+          "3325d996cb": "Refresh usage",
+          "a8f3e2c1b4": "Premium interactions",
+          "b7e2d9f0a3": "Same monthly premium interactions quota shown in your Copilot billing settings.",
+          "c6d1a8f4e2": "Resets {{when}}"
         }
       },
       "right": {

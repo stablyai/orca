@@ -11,6 +11,7 @@ import { fetchCodexRateLimits } from './codex-fetcher'
 import { fetchGeminiRateLimits } from './gemini-usage-fetcher'
 import { fetchKimiRateLimits } from './kimi-fetcher'
 import { fetchMiniMaxRateLimits } from './minimax-fetcher'
+import { fetchCopilotRateLimits } from './copilot-fetcher'
 import { fetchGrokRateLimits } from './grok-fetcher'
 import { readGrokAuthSession } from './grok-auth'
 import { fetchOpenCodeGoRateLimits } from './opencode-go-usage-fetcher'
@@ -39,6 +40,10 @@ vi.mock('./opencode-go-usage-fetcher', () => ({
 
 vi.mock('./minimax-fetcher', () => ({
   fetchMiniMaxRateLimits: vi.fn()
+}))
+
+vi.mock('./copilot-fetcher', () => ({
+  fetchCopilotRateLimits: vi.fn()
 }))
 
 vi.mock('./grok-fetcher', () => ({
@@ -163,6 +168,7 @@ describe('RateLimitService', () => {
     vi.mocked(fetchOpenCodeGoRateLimits).mockResolvedValue(okProvider('opencode-go', 0, Date.now()))
     vi.mocked(fetchKimiRateLimits).mockResolvedValue(okProvider('kimi', 0, Date.now()))
     vi.mocked(fetchMiniMaxRateLimits).mockResolvedValue(okProvider('minimax', 0, Date.now()))
+    vi.mocked(fetchCopilotRateLimits).mockResolvedValue(unavailableProvider('copilot'))
     vi.mocked(fetchGrokRateLimits).mockResolvedValue({
       provider: 'grok',
       session: null,
@@ -1253,6 +1259,80 @@ describe('RateLimitService', () => {
     expect(state.gemini?.status).toBe('error')
     expect(state.gemini?.error).toBe('gemini down')
     expect(state.opencodeGo?.status).toBe('ok')
+  })
+
+  it('fetches Copilot alongside the other providers and maps its monthly window', async () => {
+    const service = new RateLimitService()
+
+    vi.mocked(fetchClaudeRateLimits).mockResolvedValueOnce(okProvider('claude', 10, Date.now()))
+    vi.mocked(fetchCodexRateLimits).mockResolvedValueOnce(okProvider('codex', 20, Date.now()))
+    vi.mocked(fetchCopilotRateLimits).mockResolvedValueOnce({
+      provider: 'copilot',
+      session: null,
+      weekly: null,
+      monthly: {
+        usedPercent: 27.5,
+        windowMinutes: 30 * 24 * 60,
+        resetsAt: null,
+        resetDescription: null
+      },
+      updatedAt: Date.now(),
+      error: null,
+      status: 'ok'
+    })
+
+    await service.refresh()
+
+    expect(fetchCopilotRateLimits).toHaveBeenCalledTimes(1)
+    const state = service.getState()
+    expect(state.copilot?.status).toBe('ok')
+    expect(state.copilot?.monthly?.usedPercent).toBe(27.5)
+  })
+
+  it('isolates a Copilot fetch failure so other providers still update', async () => {
+    const service = new RateLimitService()
+
+    vi.mocked(fetchClaudeRateLimits).mockResolvedValueOnce(okProvider('claude', 10, Date.now()))
+    vi.mocked(fetchCodexRateLimits).mockResolvedValueOnce(okProvider('codex', 20, Date.now()))
+    vi.mocked(fetchCopilotRateLimits).mockRejectedValueOnce(new Error('copilot down'))
+
+    await service.refresh()
+
+    const state = service.getState()
+    expect(state.claude?.status).toBe('ok')
+    expect(state.copilot?.status).toBe('error')
+    expect(state.copilot?.error).toBe('copilot down')
+    expect(state.copilot?.monthly).toBeNull()
+  })
+
+  it('discards stale Copilot data when the account becomes unavailable', async () => {
+    const service = new RateLimitService()
+
+    vi.mocked(fetchClaudeRateLimits).mockResolvedValue(okProvider('claude', 10, Date.now()))
+    vi.mocked(fetchCodexRateLimits).mockResolvedValue(okProvider('codex', 20, Date.now()))
+    vi.mocked(fetchCopilotRateLimits).mockResolvedValueOnce({
+      provider: 'copilot',
+      session: null,
+      weekly: null,
+      monthly: {
+        usedPercent: 27.5,
+        windowMinutes: 30 * 24 * 60,
+        resetsAt: null,
+        resetDescription: null
+      },
+      updatedAt: Date.now(),
+      error: null,
+      status: 'ok'
+    })
+    await service.refresh()
+    expect(service.getState().copilot?.monthly?.usedPercent).toBe(27.5)
+
+    vi.mocked(fetchCopilotRateLimits).mockResolvedValueOnce(unavailableProvider('copilot'))
+    await service.refresh()
+
+    const state = service.getState()
+    expect(state.copilot?.status).toBe('unavailable')
+    expect(state.copilot?.monthly).toBeFalsy()
   })
 
   it('discards stale data when a provider becomes unavailable', async () => {

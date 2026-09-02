@@ -16,6 +16,7 @@ describe('RateLimitState', () => {
       antigravity: null,
       minimax: null,
       grok: null,
+      copilot: null,
       minimaxCookieConfigured: false,
       grokAuthConfigured: false,
       claudeTarget: { runtime: 'host', wslDistro: null },

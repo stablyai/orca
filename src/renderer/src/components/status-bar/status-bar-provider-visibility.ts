@@ -28,6 +28,7 @@ type UsageProviderSnapshots = {
   antigravity: ProviderRateLimits | null
   minimax: ProviderRateLimits | null
   grok: ProviderRateLimits | null
+  copilot: ProviderRateLimits | null
 }
 
 type UsageProviderId = ProviderRateLimits['provider']
@@ -118,7 +119,7 @@ function createPendingProviderSnapshot(providerId: UsageProviderId): ProviderRat
     provider: providerId,
     session: null,
     weekly: null,
-    ...(providerId === 'opencode-go' ? { monthly: null } : {}),
+    ...(providerId === 'opencode-go' || providerId === 'copilot' ? { monthly: null } : {}),
     ...(providerId === 'gemini' ? { buckets: [] } : {}),
     updatedAt: 0,
     error: null,
@@ -163,7 +164,8 @@ export function isUsageEmptyState(
     isProviderSnapshotPending(providers.kimi) ||
     antigravitySnapshotPending ||
     isProviderSnapshotPending(providers.minimax) ||
-    isProviderSnapshotPending(providers.grok)
+    isProviderSnapshotPending(providers.grok) ||
+    isProviderSnapshotPending(providers.copilot)
   ) {
     return false
   }
@@ -176,6 +178,7 @@ export function isUsageEmptyState(
     !isProviderConfigured(providers.kimi) &&
     !isProviderConfigured(providers.antigravity) &&
     !isProviderConfigured(providers.minimax) &&
-    !isProviderConfigured(providers.grok)
+    !isProviderConfigured(providers.grok) &&
+    !isProviderConfigured(providers.copilot)
   )
 }

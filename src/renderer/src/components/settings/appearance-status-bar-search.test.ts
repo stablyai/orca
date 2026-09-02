@@ -43,4 +43,18 @@ describe('getStatusBarToggles', () => {
       expect.arrayContaining(['status bar', 'minimax', 'usage', 'subscription', 'cookie'])
     )
   })
+
+  it('includes Copilot usage so Appearance can toggle the default-on status item', () => {
+    const copilotToggle = getStatusBarToggles().find((entry) => entry.id === 'copilot')
+
+    expect(copilotToggle).toMatchObject({
+      title: 'Copilot Usage',
+      description: 'Show GitHub Copilot premium interactions usage in the status bar.',
+      toggleDescription:
+        'Show GitHub Copilot premium interactions usage when signed in via Copilot CLI.'
+    })
+    expect(copilotToggle?.keywords).toEqual(
+      expect.arrayContaining(['status bar', 'copilot', 'github', 'usage', 'subscription'])
+    )
+  })
 })
