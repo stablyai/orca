@@ -1,16 +1,16 @@
+import type { PRCheckDetail } from '../../../src/shared/github/check-types'
 import type {
   CheckStatus,
   GitHubAssignableUser,
-  GitHubPRCheckSummary,
   GitHubPRMergeMethod,
   GitHubPRMergeMethodSettings,
   GitHubPRReviewSummary,
   GitHubRepositoryIdentity,
-  PRCheckDetail,
   PRMergeableState,
   PRReviewDecision,
-  PRState
-} from '../../../src/shared/types'
+  PRState,
+  ProviderCheckSummary
+} from '../../../src/shared/github/pull-request-types'
 import type { HostedReviewProvider } from '../../../src/shared/hosted-review'
 
 // Primitive + enum value readers shared by the github.* PR parsers. Each narrows
@@ -82,11 +82,14 @@ export function readCheckRunStatus(value: unknown): PRCheckDetail['status'] | nu
   return value === 'queued' || value === 'in_progress' || value === 'completed' ? value : null
 }
 
+// Why: dropping `action_required` here rendered a merge-blocking approval gate as a pending
+// check; the shared classifier counts it as a failure, so it must survive parsing.
 export function readCheckRunConclusion(value: unknown): PRCheckDetail['conclusion'] {
   return value === 'success' ||
     value === 'failure' ||
     value === 'cancelled' ||
     value === 'timed_out' ||
+    value === 'action_required' ||
     value === 'neutral' ||
     value === 'skipped' ||
     value === 'pending'
@@ -123,14 +126,23 @@ export function readReviewSummary(value: unknown): GitHubPRReviewSummary | null 
   if (!isRecord(value)) {
     return null
   }
-  const login = readString(value.login)
+  // Desktop maps latestReviews to top-level `login`. Raw `gh pr view --json`
+  // keeps nested `author.login` — accept both so mobile never drops reviewers.
+  const nestedAuthor = isRecord(value.author) ? value.author : null
+  const login =
+    readString(value.login) ?? (nestedAuthor ? readString(nestedAuthor.login) : undefined)
   if (login === undefined) {
     return null
   }
+  const avatarUrl =
+    readString(value.avatarUrl) ??
+    (nestedAuthor
+      ? (readString(nestedAuthor.avatarUrl) ?? readString(nestedAuthor.avatar_url) ?? null)
+      : null)
   return {
     login,
     state: readString(value.state) ?? null,
-    avatarUrl: readString(value.avatarUrl) ?? null
+    avatarUrl
   }
 }
 
@@ -144,7 +156,10 @@ export function readRepoIdentity(value: unknown): GitHubRepositoryIdentity | und
   if (!owner || !repo) {
     return undefined
   }
-  return { owner, repo }
+  // Why: dropping `host` here would strip the GHES identity before every
+  // subsequent PR RPC, forcing the host to re-derive it per call.
+  const host = readString(value.host)
+  return { owner, repo, ...(host ? { host } : {}) }
 }
 
 function readMergeMethod(value: unknown): GitHubPRMergeMethod | undefined {
@@ -170,12 +185,18 @@ export function readMergeMethodSettings(value: unknown): GitHubPRMergeMethodSett
   }
 }
 
-export function readCheckSummary(value: unknown): GitHubPRCheckSummary | undefined {
+export function readCheckSummary(value: unknown): ProviderCheckSummary | undefined {
   if (!isRecord(value)) {
     return undefined
   }
   const state = value.state
-  if (state !== 'success' && state !== 'failure' && state !== 'pending' && state !== 'none') {
+  if (
+    state !== 'success' &&
+    state !== 'failure' &&
+    state !== 'pending' &&
+    state !== 'neutral' &&
+    state !== 'none'
+  ) {
     return undefined
   }
   return {
@@ -183,6 +204,7 @@ export function readCheckSummary(value: unknown): GitHubPRCheckSummary | undefin
     total: readNumber(value.total) ?? 0,
     passed: readNumber(value.passed) ?? 0,
     failed: readNumber(value.failed) ?? 0,
-    pending: readNumber(value.pending) ?? 0
+    pending: readNumber(value.pending) ?? 0,
+    neutral: readNumber(value.neutral) ?? 0
   }
 }

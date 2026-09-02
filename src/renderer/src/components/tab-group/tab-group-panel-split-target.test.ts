@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { TabGroup, TabGroupLayoutNode } from '../../../../shared/types'
+import type { TabGroup, TabGroupLayoutNode } from '../../../../shared/tab-types'
 import type { TabDragItemData } from './useTabDragSplit'
 import {
   captureTabGroupPanelGeometrySnapshot,

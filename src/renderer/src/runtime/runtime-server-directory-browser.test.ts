@@ -28,7 +28,13 @@ beforeEach(() => {
       ok: true,
       result: {
         resolvedPath: '/home/me',
-        entries: [{ name: 'repo', isDirectory: true, isSymlink: false }]
+        pathFlavor: 'posix',
+        entries: [
+          { name: '100 - file.txt', isDirectory: false, isSymlink: false },
+          { name: '9 - file.txt', isDirectory: false, isSymlink: false },
+          { name: '10 - repo', isDirectory: true, isSymlink: false },
+          { name: '99 - file.txt', isDirectory: false, isSymlink: false }
+        ]
       },
       _meta: { runtimeId: 'remote-runtime' }
     })
@@ -46,7 +52,13 @@ describe('runtime server directory browser', () => {
   it('routes browse requests through the selected runtime environment', async () => {
     await expect(browseRuntimeServerDirectory('env-1', '~')).resolves.toEqual({
       resolvedPath: '/home/me',
-      entries: [{ name: 'repo', isDirectory: true, isSymlink: false }]
+      pathFlavor: 'posix',
+      entries: [
+        { name: '10 - repo', isDirectory: true, isSymlink: false },
+        { name: '9 - file.txt', isDirectory: false, isSymlink: false },
+        { name: '99 - file.txt', isDirectory: false, isSymlink: false },
+        { name: '100 - file.txt', isDirectory: false, isSymlink: false }
+      ]
     })
 
     expect(runtimeEnvironmentCall).toHaveBeenLastCalledWith({

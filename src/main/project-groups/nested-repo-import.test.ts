@@ -4,7 +4,7 @@ import {
   resolveNestedRepoImportPaths,
   resolveNestedRepoSelection
 } from './nested-repo-import'
-import type { ProjectGroup } from '../../shared/types'
+import type { ProjectGroup } from '../../shared/project-group-types'
 
 function createGroupRecorder(): {
   groups: ProjectGroup[]

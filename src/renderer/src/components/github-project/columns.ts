@@ -3,7 +3,7 @@
 // local visibility filter on top. Persisted in localStorage (not settings)
 // because it's purely cosmetic per device and would otherwise bloat the
 // debounced settings write on every checkbox toggle.
-import type { GitHubProjectField, GitHubProjectView } from '../../../../shared/github-project-types'
+import type { GitHubProjectField, GitHubProjectView } from '../../../../shared/github/project-types'
 
 export const TYPE_FIELD_ID = '__type__'
 export const TYPE_FIELD_DATA_TYPE = '__TYPE__'

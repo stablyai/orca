@@ -1,9 +1,8 @@
-/* eslint-disable max-lines -- Why: file RPC routing coverage stays together so
-the dispatcher contract for read, write, mutation, and watch methods is easy to audit. */
 import { describe, expect, it, vi } from 'vitest'
 import { RpcDispatcher } from '../dispatcher'
 import type { RpcRequest } from '../core'
 import type { OrcaRuntimeService } from '../../orca-runtime'
+import { remoteRpcContentBudget } from '../../../../shared/remote-rpc-content-budget'
 import { FILE_METHODS } from './files'
 
 function makeRequest(method: string, params?: unknown): RpcRequest {
@@ -23,10 +22,13 @@ describe('file RPC methods', () => {
       })
     } as unknown as OrcaRuntimeService
     const dispatcher = new RpcDispatcher({ runtime, methods: FILE_METHODS })
+    const controller = new AbortController()
 
-    const response = await dispatcher.dispatch(makeRequest('files.list', { worktree: 'id:wt-1' }))
+    const response = await dispatcher.dispatch(makeRequest('files.list', { worktree: 'id:wt-1' }), {
+      signal: controller.signal
+    })
 
-    expect(runtime.listMobileFiles).toHaveBeenCalledWith('id:wt-1')
+    expect(runtime.listMobileFiles).toHaveBeenCalledWith('id:wt-1', { signal: controller.signal })
     expect(response).toMatchObject({
       ok: true,
       result: { worktree: 'wt-1', files: [] }
@@ -128,10 +130,20 @@ describe('file RPC methods', () => {
       )
 
       await vi.waitFor(() => {
-        expect(replies).toHaveLength(1)
+        expect(replies).toHaveLength(2)
       })
-      expect(runtime.watchFileExplorer).toHaveBeenCalledWith('id:wt-1', expect.any(Function))
+      expect(runtime.watchFileExplorer).toHaveBeenCalledWith(
+        'id:wt-1',
+        expect.any(Function),
+        expect.any(Function),
+        expect.any(AbortSignal)
+      )
       expect(replies[0]).toMatchObject({
+        ok: true,
+        streaming: true,
+        result: { type: 'starting', subscriptionId: expect.stringContaining('files-watch-') }
+      })
+      expect(replies[1]).toMatchObject({
         ok: true,
         streaming: true,
         result: { type: 'ready', subscriptionId: expect.stringContaining('files-watch-') }
@@ -143,11 +155,11 @@ describe('file RPC methods', () => {
       emitWatchChange?.([
         { kind: 'update', absolutePath: '/repo/package.json', isDirectory: false }
       ])
-      expect(replies).toHaveLength(1)
+      expect(replies).toHaveLength(2)
 
       await vi.runOnlyPendingTimersAsync()
 
-      expect(replies[1]).toMatchObject({
+      expect(replies[2]).toMatchObject({
         ok: true,
         streaming: true,
         result: {
@@ -160,11 +172,11 @@ describe('file RPC methods', () => {
         }
       })
 
-      const ready = replies[0] as { result: { subscriptionId: string } }
+      const ready = replies[1] as { result: { subscriptionId: string } }
       cleanups.get(ready.result.subscriptionId)?.()
       await dispatch
 
-      expect(replies[2]).toMatchObject({
+      expect(replies[3]).toMatchObject({
         ok: true,
         streaming: true,
         result: { type: 'end' }
@@ -174,21 +186,77 @@ describe('file RPC methods', () => {
     }
   })
 
+  it('ends a ready file-watch stream when its watcher fails terminally', async () => {
+    let onTerminalError: ((error: Error) => void) | undefined
+    const unwatch = vi.fn()
+    const cleanups = new Map<string, () => void>()
+    let emitWatchChange:
+      | ((events: { kind: 'overflow'; absolutePath: string }[]) => void)
+      | undefined
+    const runtime = {
+      getRuntimeId: () => 'test-runtime',
+      watchFileExplorer: vi.fn(async (_worktree, callback, nextTerminalError) => {
+        emitWatchChange = callback
+        onTerminalError = nextTerminalError
+        return unwatch
+      }),
+      registerSubscriptionCleanup: vi.fn((id, cleanup) => cleanups.set(id, cleanup)),
+      cleanupSubscription: vi.fn((id) => {
+        const cleanup = cleanups.get(id)
+        cleanups.delete(id)
+        cleanup?.()
+      })
+    } as unknown as OrcaRuntimeService
+    const dispatcher = new RpcDispatcher({ runtime, methods: FILE_METHODS })
+    const replies: { result?: { type?: string; message?: string } }[] = []
+
+    const dispatch = dispatcher.dispatchStreaming(
+      makeRequest('files.watch', { worktree: 'id:wt-1' }),
+      (response) => replies.push(JSON.parse(response))
+    )
+    await vi.waitFor(() => expect(replies[1]?.result?.type).toBe('ready'))
+
+    emitWatchChange?.([{ kind: 'overflow', absolutePath: '/repo' }])
+    onTerminalError?.(new Error('file watcher process crashed repeatedly'))
+    await dispatch
+
+    expect(replies.map((reply) => reply.result?.type)).toEqual([
+      'starting',
+      'ready',
+      'changed',
+      'error',
+      'end'
+    ])
+    expect(replies[3]?.result?.message).toContain('crashed repeatedly')
+    expect(unwatch).toHaveBeenCalledTimes(1)
+    expect(cleanups.size).toBe(0)
+  })
+
   it('tears down a file watch that resolves after the connection already closed', async () => {
     type WatchCallback = (
       events: { kind: 'update'; absolutePath: string; isDirectory?: boolean }[]
     ) => void
     const unwatch = vi.fn()
     let resolveWatch: (value: () => void) => void = () => {}
-    const watchFileExplorer = vi.fn((_worktree: string, _callback: WatchCallback) => {
-      return new Promise<() => void>((resolve) => {
-        resolveWatch = resolve
-      })
-    })
+    const watchFileExplorer = vi.fn(
+      (
+        _worktree: string,
+        _callback: WatchCallback,
+        _onTerminalError?: (error: Error) => void,
+        _signal?: AbortSignal
+      ) =>
+        new Promise<() => void>((resolve) => {
+          resolveWatch = resolve
+        })
+    )
+    const cleanups = new Map<string, () => void | Promise<void>>()
     const runtime = {
       getRuntimeId: () => 'test-runtime',
       watchFileExplorer,
-      registerSubscriptionCleanup: vi.fn()
+      registerSubscriptionCleanup: vi.fn((id, cleanup) => cleanups.set(id, cleanup)),
+      cleanupSubscription: vi.fn((id) => {
+        void Promise.resolve(cleanups.get(id)?.())
+      })
     } as unknown as OrcaRuntimeService
     const dispatcher = new RpcDispatcher({ runtime, methods: FILE_METHODS })
     const abortController = new AbortController()
@@ -202,62 +270,39 @@ describe('file RPC methods', () => {
     await vi.waitFor(() => {
       expect(watchFileExplorer).toHaveBeenCalled()
     })
+    const setupSignal = watchFileExplorer.mock.calls[0]?.[3]
+    expect(setupSignal).not.toBe(abortController.signal)
     abortController.abort()
+    expect(setupSignal?.aborted).toBe(true)
     await dispatch
 
     resolveWatch(unwatch)
     await vi.waitFor(() => {
       expect(unwatch).toHaveBeenCalled()
     })
-    expect(runtime.registerSubscriptionCleanup).not.toHaveBeenCalled()
-    expect(replies).toEqual([])
+    expect(runtime.registerSubscriptionCleanup).toHaveBeenCalledTimes(1)
+    expect(replies).toEqual([
+      expect.objectContaining({ result: expect.objectContaining({ type: 'starting' }) }),
+      expect.objectContaining({ result: { type: 'end' } })
+    ])
   })
 
-  it('drops queued file watch events when aborted before setup resolves', async () => {
-    vi.useFakeTimers()
-    try {
-      type WatchCallback = (
-        events: { kind: 'update'; absolutePath: string; isDirectory?: boolean }[]
-      ) => void
-      const unwatch = vi.fn()
-      let resolveWatch: (value: () => void) => void = () => {}
-      const watchFileExplorer = vi.fn((_worktree: string, callback: WatchCallback) => {
-        callback([{ kind: 'update', absolutePath: '/repo/queued.ts', isDirectory: false }])
-        return new Promise<() => void>((resolve) => {
-          resolveWatch = resolve
-        })
-      })
-      const runtime = {
-        getRuntimeId: () => 'test-runtime',
-        watchFileExplorer,
-        registerSubscriptionCleanup: vi.fn()
-      } as unknown as OrcaRuntimeService
-      const dispatcher = new RpcDispatcher({ runtime, methods: FILE_METHODS })
-      const abortController = new AbortController()
-      const replies: unknown[] = []
+  it('reports files.unwatch failure instead of acknowledging incomplete teardown', async () => {
+    const cleanupError = new Error('file watcher process did not exit after termination deadline')
+    const runtime = {
+      getRuntimeId: () => 'test-runtime',
+      cleanupSubscriptionAndWait: vi.fn().mockRejectedValue(cleanupError)
+    } as unknown as OrcaRuntimeService
+    const dispatcher = new RpcDispatcher({ runtime, methods: FILE_METHODS })
 
-      const dispatch = dispatcher.dispatchStreaming(
-        makeRequest('files.watch', { worktree: 'id:wt-1' }),
-        (response) => replies.push(JSON.parse(response)),
-        { connectionId: 'conn-1', signal: abortController.signal }
-      )
-      await vi.waitFor(() => {
-        expect(watchFileExplorer).toHaveBeenCalled()
-      })
+    const response = await dispatcher.dispatch(
+      makeRequest('files.unwatch', { subscriptionId: 'files-watch-inproc-1' })
+    )
 
-      abortController.abort()
-      await dispatch
-      await vi.runOnlyPendingTimersAsync()
-      resolveWatch(unwatch)
-      await vi.waitFor(() => {
-        expect(unwatch).toHaveBeenCalled()
-      })
-
-      expect(runtime.registerSubscriptionCleanup).not.toHaveBeenCalled()
-      expect(replies).toEqual([])
-    } finally {
-      vi.useRealTimers()
-    }
+    expect(response).toMatchObject({
+      ok: false,
+      error: { message: expect.stringContaining(cleanupError.message) }
+    })
   })
 
   it('reads a relative file path for a selected worktree', async () => {
@@ -284,35 +329,59 @@ describe('file RPC methods', () => {
     })
   })
 
-  it('resolves a tapped terminal path for a selected worktree', async () => {
+  it('reads a terminal artifact through a grant-scoped method', async () => {
     const runtime = {
       getRuntimeId: () => 'test-runtime',
-      resolveTerminalPath: vi.fn().mockResolvedValue({
+      readTerminalArtifactFile: vi.fn().mockResolvedValue({
         worktree: 'wt-1',
-        relativePath: 'src/index.ts',
-        exists: true,
-        isDirectory: false
+        relativePath: '/tmp/result.json',
+        content: '{}',
+        truncated: false,
+        byteLength: 2
       })
     } as unknown as OrcaRuntimeService
     const dispatcher = new RpcDispatcher({ runtime, methods: FILE_METHODS })
 
     const response = await dispatcher.dispatch(
-      makeRequest('files.resolveTerminalPath', {
+      makeRequest('files.readTerminalArtifact', {
         worktree: 'id:wt-1',
-        pathText: '/repo/src/index.ts',
-        cwd: '/repo'
+        absolutePath: '/tmp/result.json',
+        grantId: 'grant-1'
       })
     )
 
-    expect(runtime.resolveTerminalPath).toHaveBeenCalledWith(
+    expect(runtime.readTerminalArtifactFile).toHaveBeenCalledWith(
       'id:wt-1',
-      '/repo/src/index.ts',
-      '/repo'
+      'grant-1',
+      '/tmp/result.json',
+      undefined
     )
-    expect(response).toMatchObject({
-      ok: true,
-      result: { relativePath: 'src/index.ts', exists: true, isDirectory: false }
-    })
+    expect(response).toMatchObject({ ok: true, result: { content: '{}' } })
+  })
+
+  it('writes a terminal artifact through a grant-scoped method', async () => {
+    const runtime = {
+      getRuntimeId: () => 'test-runtime',
+      writeTerminalArtifactFile: vi.fn().mockResolvedValue({ ok: true })
+    } as unknown as OrcaRuntimeService
+    const dispatcher = new RpcDispatcher({ runtime, methods: FILE_METHODS })
+
+    await dispatcher.dispatch(
+      makeRequest('files.writeTerminalArtifact', {
+        worktree: 'id:wt-1',
+        absolutePath: '/tmp/result.json',
+        grantId: 'grant-1',
+        content: '{}'
+      })
+    )
+
+    expect(runtime.writeTerminalArtifactFile).toHaveBeenCalledWith(
+      'id:wt-1',
+      'grant-1',
+      '/tmp/result.json',
+      '{}',
+      undefined
+    )
   })
 
   it('reads a preview file for a selected worktree', async () => {
@@ -675,7 +744,7 @@ describe('file RPC methods', () => {
     } as unknown as OrcaRuntimeService
     const dispatcher = new RpcDispatcher({ runtime, methods: FILE_METHODS })
 
-    const response = await dispatcher.dispatch(
+    await dispatcher.dispatch(
       makeRequest('files.delete', {
         worktree: 'id:wt-1',
         relativePath: 'src',
@@ -684,6 +753,34 @@ describe('file RPC methods', () => {
     )
 
     expect(runtime.deleteFileExplorerPath).toHaveBeenCalledWith('id:wt-1', 'src', true)
+  })
+
+  it('forwards the captured SSH target and generation for destructive mutations', async () => {
+    const runtime = {
+      getRuntimeId: () => 'test-runtime',
+      deleteFileExplorerPath: vi.fn().mockResolvedValue({ ok: true })
+    } as unknown as OrcaRuntimeService
+    const dispatcher = new RpcDispatcher({ runtime, methods: FILE_METHODS })
+
+    const response = await dispatcher.dispatch(
+      makeRequest('files.delete', {
+        worktree: 'id:wt-1',
+        relativePath: 'src',
+        recursive: true,
+        expectedExecutionHostId: 'ssh:ssh-1',
+        expectedSshTargetId: 'ssh-1',
+        expectedSshConnectionGeneration: 7
+      })
+    )
+
+    expect(runtime.deleteFileExplorerPath).toHaveBeenCalledWith(
+      'id:wt-1',
+      'src',
+      true,
+      7,
+      'ssh-1',
+      'ssh:ssh-1'
+    )
     expect(response).toMatchObject({ ok: true, result: { ok: true } })
   })
 
@@ -737,6 +834,27 @@ describe('file RPC methods', () => {
       excludePaths: ['/repo/other-worktree']
     })
     expect(response).toMatchObject({ ok: true, result: ['src/index.ts'] })
+  })
+
+  it('passes the request-scoped transport budget to paired Quick Open', async () => {
+    const runtime = {
+      getRuntimeId: () => 'test-runtime',
+      listRuntimeFiles: vi.fn().mockResolvedValue(['src/index.ts'])
+    } as unknown as OrcaRuntimeService
+    const dispatcher = new RpcDispatcher({ runtime, methods: FILE_METHODS })
+    const id = 'paired-quick-open-request'
+    const reply = vi.fn()
+
+    await dispatcher.dispatchStreaming(
+      { ...makeRequest('files.listAll', { worktree: 'id:wt-1' }), id },
+      reply,
+      { clientKind: 'runtime' }
+    )
+
+    expect(runtime.listRuntimeFiles).toHaveBeenCalledWith('id:wt-1', {
+      excludePaths: undefined,
+      maxContentBytes: remoteRpcContentBudget(id)
+    })
   })
 
   it('lists markdown documents for a selected worktree', async () => {

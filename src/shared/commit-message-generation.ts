@@ -1,5 +1,5 @@
 import { cleanGeneratedCommitMessage, truncateDiffForPrompt } from './commit-message-prompt'
-import type { TuiAgent } from './types'
+import type { TuiAgent } from './tui-agent'
 
 export type CommitMessageDraftAgent = TuiAgent | 'custom'
 
@@ -7,14 +7,8 @@ export type CommitMessageDraftContext = {
   branch: string | null
   stagedSummary: string
   stagedPatch: string
-}
-
-export type CommitMessageDraftOptions = {
-  agentId: CommitMessageDraftAgent
-  model: string
-  thinkingLevel?: string
-  customPrompt?: string
-  customAgentCommand?: string
+  /** Workspace-linked GitHub issue number. Omitted entirely when none resolves. */
+  linkedIssue?: number | null
 }
 
 export type GeneratedCommitMessage = {

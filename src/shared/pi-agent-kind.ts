@@ -11,7 +11,19 @@ import { getCommandTokenPathBasename, getFirstCommandToken } from './command-tok
  * (otherwise switching agents in the same workspace silently shadows the
  * other agent's user extensions).
  */
-export type PiAgentKind = 'pi' | 'omp'
+export type PiAgentKind = 'pi' | 'omp' | 'prime-agent'
+
+export const PRIMARY_AGENT_DIR_ENV_BY_KIND: Readonly<Record<PiAgentKind, string>> = {
+  pi: 'PI_CODING_AGENT_DIR',
+  omp: 'PI_CODING_AGENT_DIR',
+  'prime-agent': 'PRIME_AGENT_CODING_AGENT_DIR'
+}
+
+export const SOURCE_AGENT_DIR_ENV_BY_KIND: Readonly<Record<PiAgentKind, string>> = {
+  pi: 'ORCA_PI_SOURCE_AGENT_DIR',
+  omp: 'ORCA_OMP_SOURCE_AGENT_DIR',
+  'prime-agent': 'ORCA_PRIME_AGENT_SOURCE_AGENT_DIR'
+}
 
 /**
  * True when `agentType` names a Pi-compatible (goal/mission) kind. These agents
@@ -21,33 +33,31 @@ export type PiAgentKind = 'pi' | 'omp'
 export function isPiCompatibleAgentType(
   agentType: string | null | undefined
 ): agentType is PiAgentKind {
-  return agentType === 'pi' || agentType === 'omp'
+  return agentType === 'pi' || agentType === 'omp' || agentType === 'prime-agent'
 }
 
-const OMP_LAUNCH_CMD = TUI_AGENT_CONFIG.omp.launchCmd
-
-// Why: regex carved to avoid matching `pi` inside `pip`, `mpi`, `api`,
-// `python`, or `omp` inside `comp`, `omp.sh` (acceptable - that's literally
-// the binary), `omp-foo`, etc. The leading boundary excludes alnum/underscore
-// AND `-`/`.`/`/`/`\\` so that `~/bin/pi` or `./omp` still match but
-// `mpi`/`pomp` do not. Trailing boundary allows whitespace, end-of-string,
-// shell separators, or argv-style flags (`pi -v`, `omp --help`).
-const BOUNDARY_BEFORE = `(?:^|[\\s;&|('"\`])`
-const BOUNDARY_AFTER = `(?:$|[\\s;&|)'"\`])`
-const PATH_PREFIX = `(?:[^\\s;&|('"\`]*[\\\\/])?`
-
-function makeLaunchCmdRegex(launchCmd: string): RegExp {
-  // Why: launchCmd may be a multi-token string ("hermes --tui"); only the
-  // first token is the binary name. Use that for matching.
-  const binary = getCommandTokenPathBasename(getFirstCommandToken(launchCmd))
-  const escaped = binary.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-  return new RegExp(
-    `${BOUNDARY_BEFORE}${PATH_PREFIX}${escaped}(?:\\.cmd|\\.exe|\\.sh)?${BOUNDARY_AFTER}`,
-    'i'
-  )
+function getLaunchBinary(command: string): string {
+  return getCommandTokenPathBasename(getFirstCommandToken(command))
+    .toLowerCase()
+    .replace(/\.(?:cmd|exe|sh)$/, '')
 }
 
-const OMP_REGEX = makeLaunchCmdRegex(OMP_LAUNCH_CMD)
+const PI_LAUNCH_BINARY = getLaunchBinary(TUI_AGENT_CONFIG.pi.launchCmd)
+const OMP_LAUNCH_BINARY = getLaunchBinary(TUI_AGENT_CONFIG.omp.launchCmd)
+const PRIME_AGENT_LAUNCH_BINARY = getLaunchBinary(TUI_AGENT_CONFIG['prime-agent'].launchCmd)
+
+export function detectExplicitPiAgentKindFromCommand(
+  command: string | undefined
+): PiAgentKind | null {
+  const binary = getLaunchBinary(command ?? '')
+  if (binary === OMP_LAUNCH_BINARY) {
+    return 'omp'
+  }
+  if (binary === PRIME_AGENT_LAUNCH_BINARY) {
+    return 'prime-agent'
+  }
+  return binary === PI_LAUNCH_BINARY ? 'pi' : null
+}
 
 /**
  * Identify the Pi-compatible agent kind a launch command targets.
@@ -62,9 +72,11 @@ const OMP_REGEX = makeLaunchCmdRegex(OMP_LAUNCH_CMD)
  * be substituted.
  */
 export function detectPiAgentKindFromCommand(command: string | undefined): PiAgentKind {
-  if (typeof command === 'string' && OMP_REGEX.test(command)) {
-    return 'omp'
+  const explicitKind = detectExplicitPiAgentKindFromCommand(command)
+  if (explicitKind) {
+    return explicitKind
   }
+
   // Why: PI launches and the no-command (bare-shell) fallback both resolve to
   // 'pi'. A bare shell that later invokes `pi` keeps the historical default;
   // if it later invokes `omp`, the status extension re-routes at runtime based

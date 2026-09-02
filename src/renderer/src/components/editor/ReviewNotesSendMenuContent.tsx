@@ -3,7 +3,7 @@ import { toast } from 'sonner'
 import { useShallow } from 'zustand/react/shallow'
 import { useAppStore } from '@/store'
 import { QuickLaunchAgentMenuItems } from '@/components/tab-bar/QuickLaunchButton'
-import { AgentStateDot, agentStateLabel, type AgentDotState } from '@/components/AgentStateDot'
+import { AgentStateDot, agentStateLabel } from '@/components/AgentStateDot'
 import { AgentIcon } from '@/lib/agent-catalog'
 import {
   DropdownMenuItem,
@@ -20,15 +20,19 @@ import {
   deriveNotesSendAgentTargets,
   type NotesSendAgentTarget
 } from '@/lib/notes-send-agent-targets'
-import { agentKindForAgentType, formatAgentTypeLabel } from '@/lib/agent-status'
-import { agentTypeToIconAgent } from '@/lib/agent-status'
+import {
+  agentKindForAgentType,
+  formatAgentTypeLabel,
+  agentTypeToIconAgent
+} from '@/lib/agent-status'
 import { track } from '@/lib/telemetry'
-import { useNow } from '@/components/dashboard/useNow'
+import { useNow } from '@/hooks/use-now'
 import type { DashboardAgentRow as DashboardAgentRowData } from '@/components/dashboard/useDashboardData'
+import { lastEnteredDoneAt } from '@/components/dashboard/agent-finished-timestamp'
 import { selectLivePtyIdsForWorktree } from '@/components/sidebar/worktree-card-status-inputs'
 import { useWorktreeAgentRows } from '@/components/sidebar/useWorktreeAgentRows'
 import type { LaunchSource } from '../../../../shared/telemetry-events'
-import type { AgentStatusState } from '../../../../shared/agent-status-types'
+import { agentRowDotState } from '@/lib/agent-row-dot-state'
 import { translate } from '@/i18n/i18n'
 
 type OrderedSendTarget = {
@@ -120,17 +124,18 @@ export function ReviewNotesSendMenuContent({
 
           toast.message(
             activeAgentNotesSendFailureMessage(result.status, {
-              explicitTarget: options.explicitTarget
+              explicitTarget: options.explicitTarget,
+              code: result.code
             })
           )
         })
-        .catch((error) => {
-          console.error('Failed to send notes:', error)
+        .catch(() => {
+          console.error('Failed to send notes:', { code: 'runtime-unverifiable' })
           toast.error(
-            translate(
-              'auto.components.editor.ReviewNotesSendMenuContent.f5096c6e4e',
-              'Could not send notes.'
-            )
+            activeAgentNotesSendFailureMessage('status-unavailable', {
+              explicitTarget: options.explicitTarget,
+              code: 'runtime-unverifiable'
+            })
           )
         })
         .finally(() => {
@@ -241,8 +246,9 @@ function AgentTargetMenuItem({
   onSend: (target: NotesSendAgentTarget) => void
 }): React.JSX.Element {
   const tabTitle = target.tabTitle.trim()
-  const state = asDotState(agent?.state ?? 'idle')
+  const state = agentRowDotState(agent?.state ?? 'idle', agent?.entry.workingMode)
   const timeAgo = agent ? formatAgentRelativeTime(agent, now) : null
+  const disabledReason = target.status === 'disabled' ? target.disabledReason : undefined
   const secondaryParts = [
     agentStateLabel(state),
     ...(timeAgo ? [timeAgo] : []),
@@ -255,10 +261,16 @@ function AgentTargetMenuItem({
       // Why: surface the ineligibility reason (permission/stale/no-terminal) as a
       // hover tooltip rather than inline text, matching DashboardAgentRow's
       // title-attribute treatment of the same disabledReason.
-      title={target.status === 'disabled' ? target.disabledReason : undefined}
+      title={disabledReason}
       className="min-w-[240px] gap-2 rounded-[7px] px-2 py-1.5 text-[12px] leading-5 font-medium"
     >
-      <AgentStateDot state={state} size="sm" className="shrink-0" />
+      {/* Why: the ancestor's actionable disabled reason must win on every hit area. */}
+      <AgentStateDot
+        state={state}
+        size="sm"
+        className="shrink-0"
+        title={disabledReason ? null : undefined}
+      />
       <AgentIcon agent={agentTypeToIconAgent(target.agentType ?? agent?.agentType)} size={14} />
       <span className="grid min-w-0 flex-1 text-left">
         <span className="truncate">
@@ -298,18 +310,6 @@ function orderSendTargetsByWorktreeAgentRows(
   return ordered
 }
 
-function asDotState(state: AgentStatusState | 'idle'): AgentDotState {
-  switch (state) {
-    case 'working':
-    case 'blocked':
-    case 'waiting':
-    case 'done':
-    case 'idle':
-      return state
-  }
-  return 'idle'
-}
-
 function formatAgentRelativeTime(agent: DashboardAgentRowData, now: number): string | null {
   const doneAt = lastEnteredDoneAt(agent)
   if (doneAt !== null) {
@@ -317,19 +317,6 @@ function formatAgentRelativeTime(agent: DashboardAgentRowData, now: number): str
   }
   const startedAt = agent.startedAt > 0 ? agent.startedAt : agent.entry.stateStartedAt
   return startedAt > 0 ? `${formatTimeAgo(startedAt, now)}` : null
-}
-
-function lastEnteredDoneAt(agent: DashboardAgentRowData): number | null {
-  const entry = agent.entry
-  if (entry.state === 'done') {
-    return entry.stateStartedAt
-  }
-  for (let i = entry.stateHistory.length - 1; i >= 0; i--) {
-    if (entry.stateHistory[i].state === 'done') {
-      return entry.stateHistory[i].startedAt
-    }
-  }
-  return null
 }
 
 function formatTimeAgo(ts: number, now: number): string {

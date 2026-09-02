@@ -1,6 +1,6 @@
 import type { Worktree } from './workspace-list-sections'
 
-// Why: matches desktop's PR_GROUP_META naming from worktree-list-groups.ts.
+// Why: matches desktop's PR_GROUP_META naming from worktree-list/rows/groups.ts.
 // no PR/draft/unknown -> "In Progress", open -> "In Review", merged -> "Done", closed -> "Closed"
 export type PRGroupKey = 'done' | 'in-review' | 'in-progress' | 'closed'
 

@@ -1,6 +1,9 @@
 import { ipcMain } from 'electron'
 import type { Store } from '../persistence'
-import type { WorkspaceSessionPatch, WorkspaceSessionState } from '../../shared/types'
+import type {
+  WorkspaceSessionPatch,
+  WorkspaceSessionState
+} from '../../shared/workspace-session-state-types'
 
 export function registerSessionHandlers(store: Store): void {
   // Why: hostId is an optional second arg so an older renderer that invokes
@@ -16,6 +19,12 @@ export function registerSessionHandlers(store: Store): void {
 
   ipcMain.handle('session:patch', (_event, args: WorkspaceSessionPatch, hostId?: string | null) => {
     store.patchWorkspaceSession(args, hostId)
+  })
+
+  ipcMain.handle('session:flush', () => {
+    // Why: durable lifecycle RPCs must propagate disk failures instead of
+    // returning success through Store.flush(), which intentionally only logs.
+    store.flushOrThrow()
   })
 
   // Synchronous variant for the renderer's beforeunload handler.

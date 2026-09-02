@@ -5,11 +5,13 @@ import { RuntimeClientError } from '../runtime-client'
 import { parseOrcaYaml } from '../../shared/orca-yaml'
 import {
   getEphemeralVmRecipeResultProjectRoot,
-  getEphemeralVmRecipeResultWarnings,
-  redactEphemeralVmRecipeDiagnosticText,
   type EphemeralVmRecipeDoctorCheck,
   type EphemeralVmRecipeDoctorResult
 } from '../../shared/ephemeral-vm-recipes'
+import {
+  getEphemeralVmRecipeResultWarnings,
+  redactEphemeralVmRecipeDiagnosticText
+} from '../../shared/ephemeral-vm-recipe-diagnostics'
 // Why: import directly from the doctor module (not the barrel) — it uses Node
 // fs/path and must stay out of the browser bundle that imports the barrel.
 import { doctorEphemeralVmRecipe } from '../../shared/ephemeral-vm-recipe-doctor'
@@ -17,7 +19,7 @@ import {
   runEphemeralVmRecipeCleanup,
   runEphemeralVmRecipeStart
 } from '../../shared/ephemeral-vm-recipe-runner'
-import type { OrcaVmRecipe } from '../../shared/types'
+import type { OrcaVmRecipe } from '../../shared/orca-yaml-hook-types'
 
 export const VM_HANDLERS: Record<string, CommandHandler> = {
   'vm recipe doctor': async ({ flags, cwd, json }) => {

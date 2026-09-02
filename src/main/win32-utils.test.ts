@@ -3,10 +3,15 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import {
+  getCmdExePath,
+  getRegExePath,
   getSpawnArgsForWindows,
+  wrapWindowsStartWait,
   isPermissionError,
   isWindowsBatchScript,
-  resolveWindowsCommand
+  resolveWindowsCommand,
+  UnsafeWindowsBatchArgumentsError,
+  WINDOWS_BATCH_UNSAFE_CHARACTERS_LABEL
 } from './win32-utils'
 
 function withPlatform<T>(platform: NodeJS.Platform, fn: () => T): T {
@@ -41,6 +46,20 @@ describe('isWindowsBatchScript', () => {
   })
 })
 
+describe('getRegExePath', () => {
+  it('falls back to a local absolute system path for unsafe roots', () => {
+    expect(getRegExePath({ SystemRoot: '' })).toBe('C:\\Windows\\System32\\reg.exe')
+    expect(getRegExePath({ SystemRoot: 'Windows' })).toBe('C:\\Windows\\System32\\reg.exe')
+    expect(getRegExePath({ SystemRoot: '\\\\server\\share' })).toBe(
+      'C:\\Windows\\System32\\reg.exe'
+    )
+  })
+
+  it('uses an absolute custom Windows root', () => {
+    expect(getRegExePath({ SystemRoot: 'D:\\Windows' })).toBe('D:\\Windows\\System32\\reg.exe')
+  })
+})
+
 describe('getSpawnArgsForWindows', () => {
   it('routes .cmd through cmd.exe with /d /c on win32', () => {
     const originalComSpec = process.env.ComSpec
@@ -65,6 +84,115 @@ describe('getSpawnArgsForWindows', () => {
     }
   })
 
+  it('routes GUI Open In .cmd launches through start /B with an inner cmd /c', () => {
+    withPlatform('win32', () => {
+      const { spawnCmd, spawnArgs } = getSpawnArgsForWindows(
+        'C:\\Tools\\idea.cmd',
+        ['C:\\workspaces\\orca'],
+        { detachedGui: true }
+      )
+      expect(spawnCmd).toBe(getCmdExePath())
+      // Why: `start` runs a batch target under a nested `cmd /K` that never
+      // exits; the inner `cmd /d /c` is what keeps the hidden shell from leaking.
+      // Title is empty string so libuv emits `""` — not the two-char `'""'`.
+      expect(spawnArgs).toEqual([
+        '/d',
+        '/c',
+        'start',
+        '',
+        '/B',
+        getCmdExePath(),
+        '/d',
+        '/c',
+        'C:\\Tools\\idea.cmd',
+        'C:\\workspaces\\orca'
+      ])
+      expect(spawnArgs[3]).toBe('')
+      expect(spawnArgs).not.toContain('/K')
+      expect(spawnArgs).not.toContain('""')
+      expect(spawnArgs[spawnArgs.indexOf('/B') + 1]).not.toMatch(/\.(?:cmd|bat)$/i)
+    })
+  })
+
+  it('keeps the waiting form for batch launches without detachedGui', () => {
+    withPlatform('win32', () => {
+      const { spawnArgs } = getSpawnArgsForWindows('C:\\Tools\\idea.cmd', ['C:\\workspaces\\orca'])
+      expect(spawnArgs).toEqual(['/d', '/c', 'C:\\Tools\\idea.cmd', 'C:\\workspaces\\orca'])
+    })
+  })
+
+  it('wraps an interactive login in start /wait with an empty title argv', () => {
+    withPlatform('win32', () => {
+      const { spawnCmd, spawnArgs } = wrapWindowsStartWait(getCmdExePath(), [
+        '/d',
+        '/c',
+        'C:\\Tools\\claude.cmd',
+        'auth',
+        'login',
+        '--claudeai'
+      ])
+      expect(spawnCmd).toBe(getCmdExePath())
+      expect(spawnArgs).toEqual([
+        '/d',
+        '/c',
+        'start',
+        '',
+        '/wait',
+        getCmdExePath(),
+        '/d',
+        '/c',
+        'C:\\Tools\\claude.cmd',
+        'auth',
+        'login',
+        '--claudeai'
+      ])
+      expect(spawnArgs[3]).toBe('')
+      expect(spawnArgs).not.toContain('/B')
+      expect(spawnArgs).not.toContain('""')
+    })
+  })
+
+  it('rejects cmd metacharacters in executable paths passed through start /wait', () => {
+    expect(() => wrapWindowsStartWait('C:\\Users\\A%B\\codex.exe', ['login'])).toThrow(
+      UnsafeWindowsBatchArgumentsError
+    )
+    expect(() => wrapWindowsStartWait('C:\\Tools\\codex.exe', ['log&in'])).toThrow(
+      UnsafeWindowsBatchArgumentsError
+    )
+  })
+
+  it('leaves .exe GUI launches alone even when detachedGui is requested', () => {
+    withPlatform('win32', () => {
+      const { spawnCmd, spawnArgs } = getSpawnArgsForWindows(
+        'C:\\Program Files\\JetBrains\\IntelliJ IDEA\\bin\\idea64.exe',
+        ['C:\\workspaces\\orca'],
+        { detachedGui: true }
+      )
+      expect(spawnCmd).toBe('C:\\Program Files\\JetBrains\\IntelliJ IDEA\\bin\\idea64.exe')
+      expect(spawnArgs).toEqual(['C:\\workspaces\\orca'])
+    })
+  })
+
+  it('preserves VS Code WSL remote arguments with spaces through .cmd launchers', () => {
+    withPlatform('win32', () => {
+      const { spawnCmd, spawnArgs } = getSpawnArgsForWindows('C:\\tools\\code.cmd', [
+        '--remote',
+        'wsl+Ubuntu Preview',
+        '/home/Ada Lovelace/project'
+      ])
+
+      expect(spawnCmd).toBe(getCmdExePath())
+      expect(spawnArgs).toEqual([
+        '/d',
+        '/c',
+        'C:\\tools\\code.cmd',
+        '--remote',
+        'wsl+Ubuntu Preview',
+        '/home/Ada Lovelace/project'
+      ])
+    })
+  })
+
   it('passes .exe through unchanged on win32', () => {
     withPlatform('win32', () => {
       const { spawnCmd, spawnArgs } = getSpawnArgsForWindows('C:\\tools\\codex.exe', ['login'])
@@ -83,9 +211,11 @@ describe('getSpawnArgsForWindows', () => {
 
   it('rejects unsafe args for .cmd scripts on win32', () => {
     withPlatform('win32', () => {
-      expect(() => getSpawnArgsForWindows('C:\\tools\\agent.cmd', ['hello & goodbye'])).toThrow(
-        'UNSAFE_WINDOWS_BATCH_ARGUMENTS'
-      )
+      for (const argument of ['hello & goodbye', 'a | b', 'x > y', '%PATH%', 'a\nb']) {
+        expect(() => getSpawnArgsForWindows('C:\\tools\\agent.cmd', [argument])).toThrow(
+          'UNSAFE_WINDOWS_BATCH_ARGUMENTS'
+        )
+      }
     })
   })
 
@@ -94,6 +224,56 @@ describe('getSpawnArgsForWindows', () => {
       expect(() => getSpawnArgsForWindows('C:\\bad&path\\agent.cmd', ['login'])).toThrow(
         'UNSAFE_WINDOWS_BATCH_ARGUMENTS'
       )
+    })
+  })
+
+  it('allows punctuation that is not a cmd command operator', () => {
+    withPlatform('win32', () => {
+      expect(
+        getSpawnArgsForWindows('C:\\tools\\agent.cmd', ['package,name;version']).spawnArgs
+      ).toEqual(['/d', '/c', 'C:\\tools\\agent.cmd', 'package,name;version'])
+    })
+  })
+
+  // Why: parentheses only group commands and cannot chain one without a separator
+  // the guard already rejects, so paren-bearing paths must stay spawnable.
+  it('spawns .cmd shims under Program Files (x86) and paren-bearing worktrees', () => {
+    withPlatform('win32', () => {
+      const npx = 'C:\\Program Files (x86)\\nodejs\\npx.cmd'
+      expect(getSpawnArgsForWindows(npx, ['C:\\dev\\app (fork)'])).toEqual({
+        spawnCmd: getCmdExePath(),
+        spawnArgs: ['/d', '/c', npx, 'C:\\dev\\app (fork)']
+      })
+      expect(getSpawnArgsForWindows('C:\\tools\\agent.cmd', ['close)', '(open']).spawnArgs).toEqual(
+        ['/d', '/c', 'C:\\tools\\agent.cmd', 'close)', '(open']
+      )
+    })
+  })
+
+  it('still rejects a paren-wrapped command chain', () => {
+    withPlatform('win32', () => {
+      expect(() => getSpawnArgsForWindows('C:\\tools\\agent.cmd', ['(x & calc.exe)'])).toThrow(
+        'UNSAFE_WINDOWS_BATCH_ARGUMENTS'
+      )
+    })
+  })
+
+  it('rejects exactly the characters the message advertises', () => {
+    withPlatform('win32', () => {
+      const advertised = WINDOWS_BATCH_UNSAFE_CHARACTERS_LABEL.split(' ')
+      expect(advertised.length).toBeGreaterThan(0)
+      for (const character of advertised) {
+        expect(() => getSpawnArgsForWindows('C:\\tools\\agent.cmd', [`a${character}b`])).toThrow(
+          'UNSAFE_WINDOWS_BATCH_ARGUMENTS'
+        )
+      }
+      // Why: anything not advertised must pass, or the message misleads the user.
+      for (const character of ['(', ')', ',', ';', '@', '#', '$', "'", '~', '=']) {
+        expect(advertised).not.toContain(character)
+        expect(() =>
+          getSpawnArgsForWindows('C:\\tools\\agent.cmd', [`a${character}b`])
+        ).not.toThrow()
+      }
     })
   })
 })

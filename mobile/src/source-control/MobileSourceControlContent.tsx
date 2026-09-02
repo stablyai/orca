@@ -1,5 +1,13 @@
-import { ActivityIndicator, Pressable, SectionList, Text, TextInput, View } from 'react-native'
-import { GitBranch, Minus, MoreHorizontal, Plus, Sparkles } from 'lucide-react-native'
+import {
+  ActivityIndicator,
+  Pressable,
+  ScrollView,
+  SectionList,
+  Text,
+  TextInput,
+  View
+} from 'react-native'
+import { Minus, MoreHorizontal, Plus, Sparkles } from 'lucide-react-native'
 import { colors, spacing } from '../theme/mobile-theme'
 import { MobileSourceControlCreatePrEntry } from './MobileSourceControlCreatePrEntry'
 import { MobileCommitFailurePanel } from './MobileCommitFailurePanel'
@@ -7,15 +15,18 @@ import { KEYBOARD_COMMIT_BAR_CLEARANCE } from './mobile-source-control-screen-st
 import { makeRenderFileRow, BranchCompareFooter } from './MobileSourceControlFileRows'
 import type { MobileSourceControlState } from './use-mobile-source-control-state'
 import { styles } from './mobile-source-control-styles'
+import { hubStyles } from './mobile-source-control-hub-styles'
 
 type Props = {
   state: MobileSourceControlState
 }
 
-// The ready-state body: summary card, changed-files list, and commit bar.
+// Changes tab: local file changes only — uncommitted (staged/unstaged) plus
+// committed-on-branch vs base. PR conflicts and push status live elsewhere.
 export function MobileSourceControlContent({ state }: Props) {
   const {
     insets,
+    connState,
     busyAction,
     commitMessage,
     setCommitMessage,
@@ -28,23 +39,17 @@ export function MobileSourceControlContent({ state }: Props) {
     keyboardLift,
     openingPath,
     openingBranchPath,
-    status,
     sections,
-    branchEntries,
     hasVisibleChanges,
     stageablePaths,
     unstageablePaths,
     stagedCount,
-    unstagedCount,
-    branchLabel,
-    syncLabel,
     primaryAction,
     createPrAction,
     stageAll,
     unstageAll,
     generateCommitMessage,
     cancelGenerateCommitMessage,
-    abortConflictOperation,
     openFile,
     openBranchDiff,
     runGitAction
@@ -53,44 +58,34 @@ export function MobileSourceControlContent({ state }: Props) {
   const shouldShowGenerateButton = stagedCount > 0 || generatingMessage
   const createPrHeroActive =
     createPrAction.visible && !createPrAction.disabled && !createPrAction.pushFirst
+  const branchCompareFooter = (
+    <BranchCompareFooter
+      state={{
+        shouldShowBranchCompareSection: state.shouldShowBranchCompareSection,
+        branchCompareSummaryText: state.branchCompareSummaryText,
+        branchEntries: state.branchEntries,
+        branchCompareState: state.branchCompareState,
+        branchCompareResult: state.branchCompareResult,
+        busyAction,
+        openBranchDiff,
+        openingBranchPath,
+        openingPath
+      }}
+    />
+  )
 
   return (
     <>
-      <View style={styles.summaryCard}>
-        <View style={styles.summaryHeader}>
-          <View style={styles.branchLine}>
-            <GitBranch size={15} color={colors.textSecondary} strokeWidth={2.1} />
-            <Text style={styles.branchText} numberOfLines={1}>
-              {branchLabel}
-            </Text>
-          </View>
-          {syncLabel ? <Text style={styles.syncText}>{syncLabel}</Text> : null}
+      {connState !== 'connected' ? (
+        // Why: once data has loaded the screen looks alive even when the
+        // desktop link is down, so taps appear to do nothing (STA-1511).
+        // Surface the reconnect state where the user is looking.
+        <View style={styles.reconnectBanner}>
+          <ActivityIndicator size="small" color={colors.statusAmber} />
+          <Text style={styles.reconnectBannerText}>Reconnecting to desktop...</Text>
         </View>
-        <View style={styles.countRow}>
-          <Text style={styles.countText}>{unstagedCount} changed</Text>
-          <Text style={styles.countText}>{stagedCount} staged</Text>
-          {branchEntries.length > 0 ? (
-            <Text style={styles.countText}>{branchEntries.length} on branch</Text>
-          ) : null}
-          {status && status.conflictOperation !== 'unknown' ? (
-            <View style={styles.conflictRow}>
-              <Text style={styles.conflictText}>{status.conflictOperation}</Text>
-              {(status.conflictOperation === 'merge' || status.conflictOperation === 'rebase') && (
-                <Pressable
-                  style={({ pressed }) => [styles.abortButton, pressed && styles.abortPressed]}
-                  disabled={busyAction !== null}
-                  onPress={() => void abortConflictOperation(status.conflictOperation)}
-                >
-                  <Text style={styles.abortText}>
-                    {busyAction === `abort-${status.conflictOperation}`
-                      ? 'Aborting…'
-                      : `Abort ${status.conflictOperation}`}
-                  </Text>
-                </Pressable>
-              )}
-            </View>
-          ) : null}
-        </View>
+      ) : null}
+      <View style={hubStyles.changesControls}>
         {commitFailureRecovery ? (
           <MobileCommitFailurePanel
             failure={commitFailureRecovery}
@@ -155,11 +150,18 @@ export function MobileSourceControlContent({ state }: Props) {
 
       {!hasVisibleChanges ? (
         <View style={styles.state}>
-          <Text style={styles.stateTitle}>No Changes</Text>
+          <Text style={styles.stateTitle}>No local changes</Text>
           <Text style={styles.stateText}>Working tree is clean.</Text>
         </View>
+      ) : sections.length === 0 ? (
+        // Why: RN SectionList with empty `sections` often skips ListFooterComponent,
+        // which hid "Committed on Branch" when only branch files remain.
+        <ScrollView style={hubStyles.tabBody} contentContainerStyle={styles.listContent}>
+          {branchCompareFooter}
+        </ScrollView>
       ) : (
         <SectionList
+          style={hubStyles.tabBody}
           sections={sections}
           renderItem={makeRenderFileRow({
             busyAction,
@@ -176,21 +178,7 @@ export function MobileSourceControlContent({ state }: Props) {
               <Text style={styles.sectionCount}>{section.data.length}</Text>
             </View>
           )}
-          ListFooterComponent={
-            <BranchCompareFooter
-              state={{
-                shouldShowBranchCompareSection: state.shouldShowBranchCompareSection,
-                branchCompareSummaryText: state.branchCompareSummaryText,
-                branchEntries: state.branchEntries,
-                branchCompareState: state.branchCompareState,
-                branchCompareResult: state.branchCompareResult,
-                busyAction,
-                openBranchDiff,
-                openingBranchPath,
-                openingPath
-              }}
-            />
-          }
+          ListFooterComponent={branchCompareFooter}
           stickySectionHeadersEnabled={false}
           contentContainerStyle={styles.listContent}
         />

@@ -1,12 +1,39 @@
-import { describe, expect, it, vi } from 'vitest'
+// @vitest-environment happy-dom
+import React from 'react'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { renderToStaticMarkup } from 'react-dom/server'
-import { CommitArea, ConflictSummaryCard, OperationBanner } from './SourceControl'
+import { fireEvent, render } from '@testing-library/react'
+import {
+  CommitArea,
+  ConflictSummaryCard,
+  handleSourceControlCommitShortcut,
+  OperationBanner
+} from './SourceControl'
 import {
   resolveCommitAreaPrimaryAction,
   type PrimaryActionInputs
 } from './source-control-primary-action'
-import { resolveDropdownItems, type DropdownActionKind } from './source-control-dropdown-items'
+import { resolveDropdownItems } from './source-control-dropdown-items'
+import type { DropdownActionKind } from './source-control-dropdown-item-types'
 import { TooltipProvider } from '@/components/ui/tooltip'
+import { deriveSourceControlPushRecovery } from './source-control/sync/push-recovery'
+
+vi.mock('@/components/ui/tooltip', () => ({
+  Tooltip: ({ children }: { children: React.ReactNode }) => <>{children}</>,
+  TooltipTrigger: ({ children }: { children: React.ReactNode }) => <>{children}</>,
+  TooltipContent: ({ children, className }: { children: React.ReactNode; className?: string }) => (
+    <div className={className}>{children}</div>
+  ),
+  TooltipProvider: ({ children }: { children: React.ReactNode }) => <>{children}</>
+}))
+
+afterEach(() => {
+  vi.unstubAllGlobals()
+})
+
+function setUserAgent(userAgent: string): void {
+  vi.stubGlobal('navigator', { userAgent })
+}
 
 function buildInputs(overrides: Partial<PrimaryActionInputs> = {}): PrimaryActionInputs {
   return {
@@ -31,11 +58,12 @@ function baseProps(overrides: Partial<PrimaryActionInputs> = {}) {
     commitMessage: 'feat: add commit area',
     commitError: null as string | null,
     commitFailureRecoveryPrompt: null as string | null,
+    pushRecovery: null as ReturnType<typeof deriveSourceControlPushRecovery>,
     remoteActionError: null as string | null,
     isCommitting: inputs.isCommitting,
     isFixingCommitFailureWithAI: false,
+    isFixingPushFailureWithAI: false,
     sourceControlAiActionsVisible: true,
-    aiEnabled: false,
     aiAgentConfigured: false,
     isGenerating: false,
     generateError: null as string | null,
@@ -50,9 +78,33 @@ function baseProps(overrides: Partial<PrimaryActionInputs> = {}) {
     onGenerate: vi.fn(),
     onCancelGenerate: vi.fn(),
     onFixCommitFailureWithAI: vi.fn(),
+    onFixPushFailureWithAI: vi.fn(),
     onPrimaryAction: vi.fn(),
     onDropdownAction: vi.fn() as (kind: DropdownActionKind) => void
   }
+}
+
+function buildPushRecovery(
+  rawError: string
+): NonNullable<ReturnType<typeof deriveSourceControlPushRecovery>> {
+  const recovery = deriveSourceControlPushRecovery({
+    actionError: {
+      kind: 'push',
+      message: 'Push blocked',
+      rawError,
+      branchName: 'main',
+      worktreePath: '/repo',
+      entriesSnapshot: [],
+      entriesSnapshotTotalCount: 0,
+      sequence: 1
+    },
+    currentBranchName: 'main',
+    currentSequence: 1
+  })
+  if (!recovery) {
+    throw new Error('push recovery was not derived')
+  }
+  return recovery
 }
 
 function renderCommitArea(props: Parameters<typeof CommitArea>[0]): string {
@@ -64,11 +116,13 @@ function renderCommitArea(props: Parameters<typeof CommitArea>[0]): string {
 }
 
 function firstButton(markup: string): string {
-  const match = markup.match(/<button\b[\s\S]*?<\/button>/)
-  if (!match) {
+  const button = [...markup.matchAll(/<button\b[\s\S]*?<\/button>/g)]
+    .map((match) => match[0])
+    .find((entry) => entry.includes('data-slot="button"'))
+  if (!button) {
     throw new Error('button not found')
   }
-  return match[0]
+  return button
 }
 
 function buttonContaining(markup: string, label: string): string {
@@ -116,6 +170,102 @@ describe('CommitArea', () => {
 
   it('enables the primary button when staged + message + no conflicts', () => {
     expect(hasDisabledAttribute(firstButton(renderCommitArea(baseProps())))).toBe(false)
+  })
+
+  it('renders the Commit shortcut key indicator (⌘Enter) in primary button tooltip on macOS', () => {
+    const props = baseProps()
+    setUserAgent('Macintosh')
+    const markupMac = renderCommitArea({
+      ...props,
+      primaryAction: { kind: 'commit', disabled: false, label: 'Commit', title: 'Commit changes' }
+    })
+    expect(markupMac).toContain('Commit changes')
+    expect(markupMac).toContain('⌘')
+    expect(markupMac).toContain('Enter')
+  })
+
+  it('renders the Commit shortcut key indicator (Ctrl+Enter) in primary button tooltip on Windows/Linux', () => {
+    const props = baseProps()
+    setUserAgent('Windows NT')
+    const markupWin = renderCommitArea({
+      ...props,
+      primaryAction: { kind: 'commit', disabled: false, label: 'Commit', title: 'Commit changes' }
+    })
+    expect(markupWin).toContain('Commit changes')
+    expect(markupWin).toContain('Ctrl')
+    expect(markupWin).toContain('+')
+    expect(markupWin).toContain('Enter')
+  })
+
+  it('only handles Cmd+Enter when focus is within the Source Control sidebar', () => {
+    setUserAgent('Macintosh')
+    const onPrimaryAction = vi.fn()
+    const primaryAction = {
+      kind: 'commit' as const,
+      disabled: false
+    }
+    const { getByTestId } = render(
+      <>
+        <div
+          data-testid="source-control-sidebar"
+          onKeyDown={(event) =>
+            handleSourceControlCommitShortcut(event, primaryAction, onPrimaryAction)
+          }
+        >
+          <button type="button" data-testid="inside-sidebar">
+            Inside
+          </button>
+        </div>
+        <button type="button" data-testid="outside-sidebar">
+          Outside
+        </button>
+      </>
+    )
+
+    const outside = getByTestId('outside-sidebar')
+    outside.focus()
+    fireEvent.keyDown(outside, { key: 'Enter', metaKey: true })
+    expect(onPrimaryAction).not.toHaveBeenCalled()
+
+    const inside = getByTestId('inside-sidebar')
+    inside.focus()
+    fireEvent.keyDown(inside, { key: 'Enter', metaKey: true })
+    expect(onPrimaryAction).toHaveBeenCalledTimes(1)
+  })
+
+  it('handles Ctrl+Enter, but not Cmd+Enter, inside the sidebar on Windows/Linux', () => {
+    setUserAgent('Linux')
+    const onPrimaryAction = vi.fn()
+    const primaryAction = {
+      kind: 'commit' as const,
+      disabled: false
+    }
+    const { getByRole } = render(
+      <button
+        type="button"
+        onKeyDown={(event) =>
+          handleSourceControlCommitShortcut(event, primaryAction, onPrimaryAction)
+        }
+      >
+        Commit scope
+      </button>
+    )
+    const target = getByRole('button', { name: 'Commit scope' })
+
+    fireEvent.keyDown(target, { key: 'Enter', metaKey: true })
+    expect(onPrimaryAction).not.toHaveBeenCalled()
+
+    fireEvent.keyDown(target, { key: 'Enter', ctrlKey: true })
+    expect(onPrimaryAction).toHaveBeenCalledTimes(1)
+  })
+
+  it('does not render the Commit shortcut keys inside the primary button tooltip when the action is not commit', () => {
+    const props = baseProps()
+    const markup = renderCommitArea({
+      ...props,
+      primaryAction: { kind: 'push', disabled: false, label: 'Push', title: 'Push changes' }
+    })
+    expect(markup).not.toContain('Enter')
   })
 
   it('disables the textarea while the commit is in flight', () => {
@@ -240,6 +390,33 @@ describe('CommitArea', () => {
     })
     expect(markup).toContain('Fetch failed. network timeout')
     expect(markup).toContain('commit-area-remote-error')
+  })
+
+  it('shows a compact push hook summary and AI fix action when push fails on a hook', () => {
+    const raw =
+      "error: failed to push some refs to 'origin'\nhusky - pre-push hook exited with code 1\neslint found 2 errors"
+    const markup = renderCommitArea({
+      ...baseProps(),
+      pushRecovery: buildPushRecovery(raw)
+    })
+
+    expect(markup).toContain('id="commit-area-push-error"')
+    expect(markup).toContain('Push blocked')
+    expect(markup).toContain('Lint failed during push.')
+    expect(markup).not.toContain('eslint found 2 errors')
+    expect(markup).toContain('aria-label="Fix push failure with AI"')
+    expect(markup).toContain('Details')
+  })
+
+  it('hides push failure AI actions when Source Control AI actions are hidden', () => {
+    const markup = renderCommitArea({
+      ...baseProps(),
+      pushRecovery: buildPushRecovery('husky - pre-push hook failed'),
+      sourceControlAiActionsVisible: false
+    })
+
+    expect(markup).not.toContain('Fix push failure with AI')
+    expect(markup).toContain('Push blocked')
   })
 
   it('formats pull policy errors with command options', () => {
@@ -394,7 +571,8 @@ describe('CommitArea', () => {
         review: null,
         canCreate: false,
         blockedReason: 'dirty',
-        nextAction: 'commit'
+        nextAction: 'commit',
+        reviewLookupOutcome: 'not_found'
       }
     })
     const markup = renderCommitArea(baseProps(input))
@@ -427,7 +605,8 @@ describe('CommitArea', () => {
         review: null,
         canCreate: false,
         blockedReason: 'needs_push',
-        nextAction: 'push'
+        nextAction: 'push',
+        reviewLookupOutcome: 'not_found'
       }
     })
     const markup = renderCommitArea(baseProps(input))
@@ -444,7 +623,6 @@ describe('CommitArea', () => {
   it('hides the composer generate affordance while Create PR intent is in flight', () => {
     const markup = renderCommitArea({
       ...baseProps(),
-      aiEnabled: true,
       aiAgentConfigured: true,
       isGenerating: true,
       isCreatePrIntentInFlight: true,

@@ -1,22 +1,19 @@
 import type { Editor } from '@tiptap/core'
 import { Fragment, type Node as PmNode } from '@tiptap/pm/model'
 
-/**
- * Why: the `marked` parser (with `breaks: false`, the default) treats consecutive
- * lines without a blank separator as a single paragraph with literal `\n` characters
- * in the text content (e.g. "Line one\nLine two\nLine three").  These `\n` chars are
- * invisible in the rendered HTML (normal `white-space` collapsing), but they cause
- * the block-cut handler to remove the entire multi-line paragraph on Cmd+X instead
- * of just one logical line.
- *
- * This function normalises the ProseMirror document by splitting any paragraph whose
- * text nodes contain `\n` into separate paragraph nodes — one per line — and by
- * giving empty parsed list items a paragraph caret target. Inline marks (bold,
- * italic, links, etc.) are preserved on each resulting paragraph. This is
- * structurally correct for the editing model: each visual line becomes its own block,
- * so the cut handler (and all other block-level operations) work on a per-line basis.
- */
+type NormalizeOptions = {
+  splitSoftBreakParagraphs: boolean
+}
+
+export function normalizeEmptyListItems(editor: Editor): void {
+  normalizeRichMarkdownDocument(editor, { splitSoftBreakParagraphs: false })
+}
+
 export function normalizeSoftBreaks(editor: Editor): void {
+  normalizeRichMarkdownDocument(editor, { splitSoftBreakParagraphs: true })
+}
+
+function normalizeRichMarkdownDocument(editor: Editor, options: NormalizeOptions): void {
   // Why: we read from editor.view.state (not editor.state) so that the doc
   // we traverse and the transaction we later create share the same base state.
   // After setContent(), editor.state can be stale (last React render), while
@@ -51,6 +48,10 @@ export function normalizeSoftBreaks(editor: Editor): void {
 
     if (node.type !== paragraphType) {
       return true // continue descending into container nodes
+    }
+    if (!options.splitSoftBreakParagraphs) {
+      // Document-editor prose reflows soft breaks through CSS, preserving clean diffs.
+      return false
     }
     if (!node.textContent.includes('\n')) {
       return false // no need to descend into inline content

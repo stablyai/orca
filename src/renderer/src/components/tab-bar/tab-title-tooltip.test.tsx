@@ -1,12 +1,10 @@
 import { cloneElement, isValidElement, type ReactElement, type ReactNode } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type {
-  BrowserTab as BrowserTabState,
-  GitFileStatus,
-  TerminalTab,
-  TuiAgent
-} from '../../../../shared/types'
+import type { BrowserTab as BrowserTabState } from '../../../../shared/browser-workspace-types'
+import type { GitFileStatus } from '../../../../shared/git-status-types'
+import type { TerminalTab } from '../../../../shared/terminal-tab-types'
+import type { TuiAgent } from '../../../../shared/tui-agent'
 import type { OpenFile } from '../../store/slices/editor'
 import type { TabDragItemData } from '../tab-group/useTabDragSplit'
 import BrowserTab from './BrowserTab'
@@ -114,7 +112,7 @@ vi.mock('@/store/selectors', () => ({
   useWorktreeById: () => ({ path: '/repo', repoId: 'repo-1' })
 }))
 
-vi.mock('../browser-pane/browser-runtime', () => ({
+vi.mock('../browser-pane/describe-page/live-browser-url-registry', () => ({
   getLiveBrowserUrl: () => 'https://live.example/not-the-tab-label'
 }))
 
@@ -188,11 +186,13 @@ function textSpanHtml(markup: string, text: string): string {
 
 function expectTabContainerWidth(markup: string, root: string): void {
   const container = firstOpeningTag(markup)
-  const widthClasses = 'min-w-[88px] max-w-[280px] flex-[1_1_180px] min-[1280px]:flex-[1_1_220px]'
+  // Why: pinned literally — a definite `w-*` is what stops live title updates from resizing
+  // every tab, so asserting against the constant would let that guarantee be edited away.
+  const widthClasses = 'w-[180px] min-w-[88px] min-[1280px]:w-[220px]'
   expect(container).toContain(widthClasses)
+  expect(root).not.toContain('w-[180px]')
   expect(root).not.toContain('min-w-[88px]')
-  expect(root).not.toContain('max-w-[280px]')
-  expect(root).not.toContain('flex-[1_1_180px]')
+  expect(root).not.toContain('min-[1280px]:w-[220px]')
 }
 
 function expectTooltipContent(markup: string, text: string): void {
@@ -262,6 +262,7 @@ describe('tab title tooltips', () => {
         groupId="group-1"
         tabCount={1}
         hasTabsToRight={false}
+        hasTabsToLeft={false}
         isActive={true}
         isPinned={false}
         isExpanded={false}
@@ -269,6 +270,7 @@ describe('tab title tooltips', () => {
         onClose={vi.fn()}
         onCloseOthers={vi.fn()}
         onCloseToRight={vi.fn()}
+        onCloseToLeft={vi.fn()}
         onSetCustomTitle={vi.fn()}
         onSetTabColor={vi.fn()}
         onTogglePin={vi.fn()}
@@ -295,6 +297,7 @@ describe('tab title tooltips', () => {
         groupId="group-1"
         tabCount={1}
         hasTabsToRight={false}
+        hasTabsToLeft={false}
         isActive={true}
         isPinned={false}
         isExpanded={false}
@@ -302,6 +305,7 @@ describe('tab title tooltips', () => {
         onClose={vi.fn()}
         onCloseOthers={vi.fn()}
         onCloseToRight={vi.fn()}
+        onCloseToLeft={vi.fn()}
         onSetCustomTitle={vi.fn()}
         onSetTabColor={vi.fn()}
         onTogglePin={vi.fn()}
@@ -325,9 +329,13 @@ describe('tab title tooltips', () => {
         isActive={false}
         isPinned={false}
         hasTabsToRight={false}
+        hasTabsToLeft={false}
+        tabCount={1}
         onActivate={vi.fn()}
         onClose={vi.fn()}
+        onCloseOthers={vi.fn()}
         onCloseToRight={vi.fn()}
+        onCloseToLeft={vi.fn()}
         onDuplicate={vi.fn()}
         onTogglePin={vi.fn()}
         dragData={makeDragData('browser', 'browser-1')}
@@ -351,10 +359,14 @@ describe('tab title tooltips', () => {
         isActive={false}
         isPinned={false}
         hasTabsToRight={false}
+        hasTabsToLeft={false}
+        tabCount={1}
         statusByRelativePath={new Map<string, GitFileStatus>()}
         onActivate={vi.fn()}
         onClose={vi.fn()}
+        onCloseOthers={vi.fn()}
         onCloseToRight={vi.fn()}
+        onCloseToLeft={vi.fn()}
         onCloseAll={vi.fn()}
         onMakePermanent={vi.fn()}
         onTogglePin={vi.fn()}

@@ -1,13 +1,49 @@
-function hasPathSeparator(query: string): boolean {
-  return /[\\/]/.test(query)
+import { normalizeAbsolutePath } from '@/lib/terminal-path-normalization'
+import { isAbsolutePathLike } from '../editor/editor-panel-file-mode'
+
+export type TabEntryLocalPlatform = 'posix' | 'windows'
+
+export function isTabEntryAbsolutePathLike(query: string): boolean {
+  return isAbsolutePathLike(query.trim())
 }
 
-function hasFilenameExtension(query: string): boolean {
-  return /(?:^|[\\/])[^\\/]+\.[^\\/]+$/.test(query.trim())
+function assertTabEntryPathHasNoControlCharacters(trimmed: string): void {
+  if (Array.from(trimmed).some((char) => char.charCodeAt(0) < 32 || char.charCodeAt(0) === 127)) {
+    throw new Error('File paths cannot contain control characters.')
+  }
 }
 
-export function isLikelyNewFileIntent(query: string): boolean {
-  return hasPathSeparator(query) || hasFilenameExtension(query)
+export function validateNewTabEntryAbsolutePath(
+  query: string,
+  localPlatform?: TabEntryLocalPlatform
+): string {
+  const trimmed = query.trim()
+  if (!trimmed) {
+    throw new Error('Enter a URL or file path.')
+  }
+  assertTabEntryPathHasNoControlCharacters(trimmed)
+  if (trimmed === '~' || trimmed.startsWith('~/') || trimmed.startsWith('~\\')) {
+    throw new Error('Home-relative paths are not supported here.')
+  }
+  if (/[\\/]$/.test(trimmed)) {
+    throw new Error('Enter a file path, not a directory path.')
+  }
+  if (!isAbsolutePathLike(trimmed)) {
+    throw new Error('Enter an absolute file path.')
+  }
+  const normalized = normalizeAbsolutePath(trimmed)
+  if (!normalized) {
+    throw new Error('Enter an absolute file path.')
+  }
+  const rootMatchesLocalPlatform =
+    localPlatform === undefined ||
+    (localPlatform === 'posix' && normalized.rootKind === 'posix') ||
+    (localPlatform === 'windows' &&
+      (normalized.rootKind === 'windows' || normalized.rootKind === 'unc'))
+  if (!rootMatchesLocalPlatform) {
+    throw new Error('Enter an absolute path for this computer.')
+  }
+  return normalized.normalized
 }
 
 export function validateNewTabEntryRelativePath(query: string): string {
@@ -17,9 +53,7 @@ export function validateNewTabEntryRelativePath(query: string): string {
   if (!trimmed) {
     throw new Error('Enter a URL or file path.')
   }
-  if (Array.from(trimmed).some((char) => char.charCodeAt(0) < 32 || char.charCodeAt(0) === 127)) {
-    throw new Error('File paths cannot contain control characters.')
-  }
+  assertTabEntryPathHasNoControlCharacters(trimmed)
   if (trimmed.startsWith('/')) {
     throw new Error('Enter a relative file path.')
   }

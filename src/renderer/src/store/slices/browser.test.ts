@@ -1,70 +1,24 @@
-/* eslint-disable max-lines -- Why: browser slice behavior shares one mocked store harness; splitting only the tests would duplicate more setup than it saves. */
-import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { create } from 'zustand'
-import { createBrowserSlice } from './browser'
+import { describe, expect, it, vi } from 'vitest'
 import type { AppState } from '../types'
-import {
-  createCompatibleRuntimeStatusResponseIfNeeded,
-  type RuntimeEnvironmentCallRequest
-} from '../../runtime/runtime-compatibility-test-fixture'
 import { GRAB_BUDGET, type BrowserPageAnnotation } from '../../../../shared/browser-grab-types'
-import { clearRuntimeCompatibilityCacheForTests } from '../../runtime/runtime-rpc-client'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
+import {
+  createBrowserMockApi,
+  createTestStore,
+  settingsWithRuntime
+} from './browser-slice-test-harness'
 
 const createWebRuntimeSessionBrowserTabMock = vi.hoisted(() => vi.fn())
-const runtimeEnvironmentCall = vi.fn()
 const runtimeEnvironmentTransportCall = vi.fn()
 
 vi.mock('@/runtime/web-runtime-session', () => ({
   createWebRuntimeSessionBrowserTab: createWebRuntimeSessionBrowserTabMock
 }))
 
-const mockApi = {
-  browser: {
-    sessionListProfiles: vi.fn().mockResolvedValue([]),
-    sessionCreateProfile: vi.fn().mockResolvedValue(null),
-    sessionDeleteProfile: vi.fn().mockResolvedValue(false),
-    sessionImportCookies: vi.fn().mockResolvedValue({ ok: false, reason: 'canceled' }),
-    sessionDetectBrowsers: vi.fn().mockResolvedValue([]),
-    sessionImportFromBrowser: vi.fn().mockResolvedValue({ ok: false, reason: 'canceled' }),
-    sessionClearDefaultCookies: vi.fn().mockResolvedValue(false),
-    notifyActiveTabChanged: vi.fn().mockResolvedValue(undefined)
-  },
-  runtimeEnvironments: {
-    call: runtimeEnvironmentTransportCall
-  }
-}
+const mockApi = createBrowserMockApi(runtimeEnvironmentTransportCall)
 
 // @ts-expect-error test window mock
 globalThis.window = { api: mockApi }
-
-function createTestStore() {
-  return create<AppState>()(
-    (...a) =>
-      ({
-        settings: { activeRuntimeEnvironmentId: null } as AppState['settings'],
-        activeWorktreeId: 'wt-1',
-        browserDefaultUrl: 'about:blank',
-        unifiedTabsByWorktree: {},
-        tabBarOrderByWorktree: {},
-        tabsByWorktree: {},
-        openFiles: [],
-        activeTabType: 'terminal',
-        activeTabTypeByWorktree: {},
-        worktreesByRepo: {},
-        createUnifiedTab: vi.fn(),
-        closeUnifiedTab: vi.fn(),
-        activateTab: vi.fn(),
-        setTabLabel: vi.fn(),
-        recordFeatureInteraction: vi.fn(),
-        ...createBrowserSlice(...a)
-      }) as unknown as AppState
-  )
-}
-
-function settingsWithRuntime(id: string): AppState['settings'] {
-  return { activeRuntimeEnvironmentId: id } as AppState['settings']
-}
 
 function seedUnifiedBrowserTab(
   store: ReturnType<typeof createTestStore>,
@@ -151,6 +105,37 @@ function makeAnnotation(pageId: string, id = 'annotation-1'): BrowserPageAnnotat
 }
 
 describe('createBrowserSlice annotations', () => {
+  it('announces the store-selected browser page before its guest is destroyed', () => {
+    const store = createTestStore()
+    const previous = store.getState().createBrowserTab('wt-1', 'https://previous.example.com')
+    const closing = store.getState().createBrowserTab('wt-1', 'https://closing.example.com')
+    store.getState().setActiveBrowserTab(previous.id)
+    store.getState().setActiveBrowserTab(closing.id)
+    mockApi.browser.notifyActiveTabChanged.mockClear()
+
+    store.getState().closeBrowserTab(closing.id)
+
+    expect(mockApi.browser.notifyActiveTabChanged).toHaveBeenCalledWith({
+      browserPageId: previous.activePageId
+    })
+  })
+
+  it('keeps a requested canonical page identity distinct from its workspace', () => {
+    const store = createTestStore()
+    const tab = store.getState().createBrowserTab('wt-1', 'about:blank', {
+      browserPageId: 'page-canonical'
+    })
+
+    expect(tab.id).not.toBe('page-canonical')
+    expect(tab.activePageId).toBe('page-canonical')
+    expect(store.getState().browserPagesByWorkspace[tab.id]?.[0]?.id).toBe('page-canonical')
+    expect(() =>
+      store.getState().createBrowserTab('wt-1', 'about:blank', {
+        browserPageId: 'page-canonical'
+      })
+    ).toThrow('Browser page page-canonical already exists')
+  })
+
   it('records browser-tab-created only for the explicit new-tab action', async () => {
     const store = createTestStore()
 
@@ -162,6 +147,21 @@ describe('createBrowserSlice annotations', () => {
     await store.getState().openNewBrowserTabInActiveWorkspace('group-1')
 
     expect(store.getState().recordFeatureInteraction).toHaveBeenCalledWith('browser-tab-created')
+  })
+
+  it('opens a local sign-in tab with the imported browser profile', async () => {
+    const store = createTestStore()
+
+    await expect(
+      store
+        .getState()
+        .openBrowserProfileTabInActiveWorkspace('https://accounts.google.com/', 'profile-1')
+    ).resolves.toBe(true)
+
+    expect(store.getState().browserTabsByWorktree['wt-1']?.[0]).toMatchObject({
+      url: 'https://accounts.google.com/',
+      sessionProfileId: 'profile-1'
+    })
   })
 
   it('clears page annotations when the browser page URL changes', () => {
@@ -178,6 +178,64 @@ describe('createBrowserSlice annotations', () => {
     store.getState().setBrowserPageUrl(pageId, 'https://example.com/next')
 
     expect(store.getState().browserAnnotationsByPageId[pageId]).toBeUndefined()
+  })
+
+  it('can commit a navigation URL without hiding an active recovery error', () => {
+    const store = createTestStore()
+    const tab = store.getState().createBrowserTab('wt-1', 'https://example.com')
+    const pageId = tab.activePageId
+    if (!pageId) {
+      throw new Error('Expected a new browser page')
+    }
+    const recoveryError = {
+      code: -720,
+      description: 'Recovery is still pending',
+      validatedUrl: 'https://example.com'
+    }
+
+    store.getState().updateBrowserPageState(pageId, { loadError: recoveryError })
+    store
+      .getState()
+      .setBrowserPageUrl(pageId, 'https://example.com/committed', { preserveLoadError: true })
+
+    const page = store.getState().browserPagesByWorkspace[tab.id]?.find(({ id }) => id === pageId)
+    expect(page).toMatchObject({
+      url: 'https://example.com/committed',
+      loadError: recoveryError
+    })
+  })
+
+  it('keeps certificate challenges transient across navigation, success, and close', () => {
+    const store = createTestStore()
+    const tab = store.getState().createBrowserTab('wt-1', 'https://localhost:3443/')
+    const pageId = tab.activePageId
+    if (!pageId) {
+      throw new Error('Expected a new browser page')
+    }
+    const failure = {
+      challengeId: 'challenge-1',
+      browserPageId: pageId,
+      errorCode: -202,
+      error: 'ERR_CERT_AUTHORITY_INVALID',
+      origin: 'https://localhost:3443',
+      displayHost: 'localhost:3443',
+      canProceed: true,
+      observedAt: 123
+    }
+
+    store.getState().setBrowserPageCertificateFailure(pageId, failure)
+    expect(store.getState().browserCertificateFailuresByPageId[pageId]).toEqual(failure)
+
+    store.getState().setBrowserPageUrl(pageId, 'https://localhost:3443/next')
+    expect(store.getState().browserCertificateFailuresByPageId[pageId]).toBeUndefined()
+
+    store.getState().setBrowserPageCertificateFailure(pageId, failure)
+    store.getState().updateBrowserPageState(pageId, { loadError: null })
+    expect(store.getState().browserCertificateFailuresByPageId[pageId]).toBeUndefined()
+
+    store.getState().setBrowserPageCertificateFailure(pageId, failure)
+    store.getState().closeBrowserTab(tab.id)
+    expect(store.getState().browserCertificateFailuresByPageId[pageId]).toBeUndefined()
   })
 
   it('creates inactive browser unified tabs without stealing the visible tab', () => {
@@ -242,6 +300,53 @@ describe('createBrowserSlice annotations', () => {
 
     expect(store.getState().browserPagesByWorkspace).toBe(browserPagesByWorkspace)
     expect(store.getState().browserTabsByWorktree).toBe(browserTabsByWorktree)
+  })
+
+  it('persists a captured favicon with history and refreshes it with the page state', () => {
+    const store = createTestStore()
+    const tab = store.getState().createBrowserTab('wt-1', 'https://example.com', {
+      title: 'Example'
+    })
+    const pageId = tab.activePageId
+    if (!pageId) {
+      throw new Error('Expected a new browser page')
+    }
+    const initialFavicon = 'https://example.com/favicon.ico'
+    const refreshedFavicon = 'https://cdn.example.com/favicon.png'
+
+    store.getState().addBrowserHistoryEntry('https://example.com', 'Example', initialFavicon)
+    expect(store.getState().browserUrlHistory[0]?.faviconUrl).toBe(initialFavicon)
+
+    store.getState().updateBrowserPageState(pageId, { faviconUrl: refreshedFavicon })
+    expect(store.getState().browserUrlHistory[0]?.faviconUrl).toBe(refreshedFavicon)
+  })
+
+  it('clears a stale history favicon when a page reports none, and keeps it when none is reported', () => {
+    const store = createTestStore()
+    const tab = store.getState().createBrowserTab('wt-1', 'https://example.com', {
+      title: 'Example'
+    })
+    const pageId = tab.activePageId
+    if (!pageId) {
+      throw new Error('Expected a new browser page')
+    }
+    const favicon = 'https://example.com/favicon.ico'
+
+    store.getState().addBrowserHistoryEntry('https://example.com', 'Example', favicon)
+    store.getState().updateBrowserPageState(pageId, { faviconUrl: favicon })
+
+    // An omitted favicon leaves the stored one alone; an explicit null clears it.
+    store.getState().addBrowserHistoryEntry('https://example.com', 'Example')
+    expect(store.getState().browserUrlHistory[0]?.faviconUrl).toBe(favicon)
+
+    store.getState().updateBrowserPageState(pageId, { faviconUrl: null })
+    expect(store.getState().browserUrlHistory[0]?.faviconUrl).toBeNull()
+
+    store.getState().addBrowserHistoryEntry('https://example.com', 'Example', favicon)
+    expect(store.getState().browserUrlHistory[0]?.faviconUrl).toBe(favicon)
+
+    store.getState().addBrowserHistoryEntry('https://example.com', 'Example', null)
+    expect(store.getState().browserUrlHistory[0]?.faviconUrl).toBeNull()
   })
 
   it('repairs a stale active browser unified-tab label on an otherwise unchanged title update', () => {
@@ -409,6 +514,61 @@ describe('createBrowserSlice annotations', () => {
     expect(stored?.comment).toHaveLength(GRAB_BUDGET.annotationCommentMaxLength)
     expect(stored?.payload.screenshot).toBeNull()
   })
+
+  it('updates an existing annotation comment and intent', () => {
+    const store = createTestStore()
+    const tab = store.getState().createBrowserTab('wt-1', 'https://example.com')
+    const pageId = tab.activePageId
+    if (!pageId) {
+      throw new Error('Expected a new browser page')
+    }
+    store.getState().addBrowserPageAnnotation(makeAnnotation(pageId))
+
+    store
+      .getState()
+      .updateBrowserPageAnnotation(pageId, 'annotation-1', { comment: 'Updated', intent: 'change' })
+
+    const stored = store.getState().browserAnnotationsByPageId[pageId]?.[0]
+    expect(stored?.comment).toBe('Updated')
+    expect(stored?.intent).toBe('change')
+  })
+
+  it('sanitizes an oversized comment when updating an annotation', () => {
+    const store = createTestStore()
+    const tab = store.getState().createBrowserTab('wt-1', 'https://example.com')
+    const pageId = tab.activePageId
+    if (!pageId) {
+      throw new Error('Expected a new browser page')
+    }
+    store.getState().addBrowserPageAnnotation(makeAnnotation(pageId))
+    const oversizedComment = 'a'.repeat(GRAB_BUDGET.annotationCommentMaxLength + 10)
+
+    store.getState().updateBrowserPageAnnotation(pageId, 'annotation-1', {
+      comment: oversizedComment,
+      intent: 'fix'
+    })
+
+    const stored = store.getState().browserAnnotationsByPageId[pageId]?.[0]
+    expect(stored?.comment).toHaveLength(GRAB_BUDGET.annotationCommentMaxLength)
+  })
+
+  it('is a no-op when updating an annotation id that does not exist', () => {
+    const store = createTestStore()
+    const tab = store.getState().createBrowserTab('wt-1', 'https://example.com')
+    const pageId = tab.activePageId
+    if (!pageId) {
+      throw new Error('Expected a new browser page')
+    }
+    store.getState().addBrowserPageAnnotation(makeAnnotation(pageId))
+    const stateBefore = store.getState()
+
+    store.getState().updateBrowserPageAnnotation(pageId, 'missing-annotation', {
+      comment: 'Updated',
+      intent: 'change'
+    })
+
+    expect(store.getState()).toBe(stateBefore)
+  })
 })
 
 describe('createBrowserSlice floating tabs', () => {
@@ -458,562 +618,5 @@ describe('createBrowserSlice closed browser workspaces', () => {
       'https://example.com/dashboard'
     ])
     expect(activePage?.title).toBe('Second copy')
-  })
-})
-
-describe('createBrowserSlice runtime guard', () => {
-  beforeEach(() => {
-    vi.clearAllMocks()
-    clearRuntimeCompatibilityCacheForTests()
-    runtimeEnvironmentCall.mockReset()
-    runtimeEnvironmentTransportCall.mockReset()
-    createWebRuntimeSessionBrowserTabMock.mockReset()
-    createWebRuntimeSessionBrowserTabMock.mockResolvedValue(true)
-    runtimeEnvironmentTransportCall.mockImplementation((args: RuntimeEnvironmentCallRequest) => {
-      return createCompatibleRuntimeStatusResponseIfNeeded(args) ?? runtimeEnvironmentCall(args)
-    })
-    runtimeEnvironmentCall.mockResolvedValue({ id: 'rpc-1', ok: true, result: {} })
-  })
-
-  it('fetches browser profiles from the active runtime environment', async () => {
-    const store = createTestStore()
-    runtimeEnvironmentCall.mockResolvedValueOnce({
-      id: 'rpc-1',
-      ok: true,
-      result: {
-        profiles: [
-          {
-            id: 'default',
-            scope: 'default',
-            partition: 'persist:orca-default',
-            label: 'Default',
-            source: null
-          }
-        ]
-      },
-      _meta: { runtimeId: 'runtime-remote' }
-    })
-    store.setState({
-      settings: settingsWithRuntime('env-1'),
-      browserSessionProfiles: []
-    })
-
-    await store.getState().fetchBrowserSessionProfiles()
-
-    expect(mockApi.browser.sessionListProfiles).not.toHaveBeenCalled()
-    expect(runtimeEnvironmentCall).toHaveBeenCalledWith({
-      selector: 'env-1',
-      method: 'browser.profileList',
-      params: undefined,
-      timeoutMs: 15_000
-    })
-    expect(store.getState().browserSessionProfiles).toEqual([
-      {
-        id: 'default',
-        scope: 'default',
-        partition: 'persist:orca-default',
-        label: 'Default',
-        source: null
-      }
-    ])
-    expect(store.getState().browserSessionProfilesByHostId['runtime:env-1']).toEqual([
-      {
-        id: 'default',
-        scope: 'default',
-        partition: 'persist:orca-default',
-        label: 'Default',
-        source: null
-      }
-    ])
-  })
-
-  it('keeps browser profile lists separate per host', async () => {
-    const store = createTestStore()
-    runtimeEnvironmentCall.mockResolvedValueOnce({
-      id: 'rpc-remote',
-      ok: true,
-      result: {
-        profiles: [
-          {
-            id: 'remote-default',
-            scope: 'default',
-            partition: 'persist:orca-remote',
-            label: 'Remote Default',
-            source: null
-          }
-        ]
-      },
-      _meta: { runtimeId: 'runtime-remote' }
-    })
-    store.setState({ settings: settingsWithRuntime('env-1') })
-
-    await store.getState().fetchBrowserSessionProfiles()
-
-    mockApi.browser.sessionListProfiles.mockResolvedValueOnce([
-      {
-        id: 'local-default',
-        scope: 'default',
-        partition: 'persist:orca-local',
-        label: 'Local Default',
-        source: null
-      }
-    ])
-    store.setState({ settings: { activeRuntimeEnvironmentId: null } as AppState['settings'] })
-
-    await store.getState().fetchBrowserSessionProfiles()
-
-    expect(store.getState().browserSessionProfilesByHostId['runtime:env-1']?.[0]?.id).toBe(
-      'remote-default'
-    )
-    expect(store.getState().browserSessionProfilesByHostId.local?.[0]?.id).toBe('local-default')
-    expect(store.getState().browserSessionProfiles[0]?.id).toBe('local-default')
-  })
-
-  it('uses the target worktree host default profile when creating a browser tab', () => {
-    const store = createTestStore()
-    store.setState({
-      settings: { activeRuntimeEnvironmentId: null } as AppState['settings'],
-      repos: [
-        {
-          id: 'repo-1',
-          path: '/repo',
-          displayName: 'Repo',
-          badgeColor: '#000000',
-          addedAt: 1,
-          connectionId: null,
-          executionHostId: 'runtime:env-1'
-        }
-      ],
-      worktreesByRepo: {
-        'repo-1': [
-          {
-            id: 'wt-remote',
-            repoId: 'repo-1',
-            path: '/repo/wt',
-            head: 'abc123',
-            branch: 'feature',
-            isBare: false,
-            isMainWorktree: false,
-            displayName: 'Workspace',
-            comment: '',
-            linkedIssue: null,
-            linkedPR: null,
-            linkedLinearIssue: null,
-            isArchived: false,
-            isUnread: false,
-            isPinned: false,
-            sortOrder: 0,
-            lastActivityAt: 1
-          }
-        ]
-      },
-      defaultBrowserSessionProfileId: 'local-default',
-      defaultBrowserSessionProfileIdByHostId: {
-        local: 'local-default',
-        'runtime:env-1': 'remote-default'
-      }
-    })
-
-    const tab = store.getState().createBrowserTab('wt-remote', 'https://example.com')
-
-    expect(tab.sessionProfileId).toBe('remote-default')
-  })
-
-  it('creates new browser tabs through the owning runtime for desktop remote worktrees', async () => {
-    const store = createTestStore()
-    store.setState({
-      activeWorktreeId: 'wt-remote',
-      settings: { activeRuntimeEnvironmentId: null } as AppState['settings'],
-      browserDefaultUrl: 'about:blank',
-      repos: [
-        {
-          id: 'repo-1',
-          path: '/repo',
-          displayName: 'Repo',
-          badgeColor: '#000000',
-          addedAt: 1,
-          connectionId: null,
-          executionHostId: 'runtime:env-1'
-        }
-      ],
-      worktreesByRepo: {
-        'repo-1': [
-          {
-            id: 'wt-remote',
-            repoId: 'repo-1',
-            path: '/repo/wt',
-            head: 'abc123',
-            branch: 'feature',
-            isBare: false,
-            isMainWorktree: false,
-            displayName: 'Workspace',
-            comment: '',
-            linkedIssue: null,
-            linkedPR: null,
-            linkedLinearIssue: null,
-            isArchived: false,
-            isUnread: false,
-            isPinned: false,
-            sortOrder: 0,
-            lastActivityAt: 1
-          }
-        ]
-      }
-    })
-
-    await store.getState().openNewBrowserTabInActiveWorkspace('group-1')
-
-    expect(createWebRuntimeSessionBrowserTabMock).toHaveBeenCalledWith({
-      worktreeId: 'wt-remote',
-      environmentId: 'env-1',
-      url: 'about:blank',
-      targetGroupId: 'group-1'
-    })
-    expect(store.getState().createUnifiedTab).not.toHaveBeenCalled()
-    expect(store.getState().browserTabsByWorktree['wt-remote']).toBeUndefined()
-    expect(store.getState().recordFeatureInteraction).toHaveBeenCalledWith('browser-tab-created')
-  })
-
-  it('does not create a local fallback tab when remote browser creation fails', async () => {
-    const store = createTestStore()
-    // Why: a remote-owned workspace must stay remote-owned. If the remote host
-    // cannot create the page, we must NOT silently open a local desktop tab —
-    // that produces confusing split ownership (issue #5321 UX requirement).
-    createWebRuntimeSessionBrowserTabMock.mockResolvedValueOnce(false)
-    store.setState({
-      activeWorktreeId: 'wt-remote',
-      settings: { activeRuntimeEnvironmentId: 'env-1' } as AppState['settings']
-    })
-
-    await store.getState().openNewBrowserTabInActiveWorkspace('group-1')
-
-    expect(createWebRuntimeSessionBrowserTabMock).toHaveBeenCalledWith({
-      worktreeId: 'wt-remote',
-      environmentId: 'env-1',
-      url: 'about:blank',
-      targetGroupId: 'group-1'
-    })
-    // No local tab created, no unified tab, no feature interaction recorded.
-    expect(store.getState().browserTabsByWorktree['wt-remote']).toBeUndefined()
-    expect(store.getState().createUnifiedTab).not.toHaveBeenCalled()
-    expect(store.getState().recordFeatureInteraction).not.toHaveBeenCalledWith(
-      'browser-tab-created'
-    )
-  })
-
-  it('does not create a local fallback tab when remote browser creation throws', async () => {
-    const store = createTestStore()
-    createWebRuntimeSessionBrowserTabMock.mockRejectedValueOnce(new Error('remote down'))
-    store.setState({
-      activeWorktreeId: 'wt-remote',
-      settings: { activeRuntimeEnvironmentId: 'env-1' } as AppState['settings']
-    })
-
-    await store.getState().openNewBrowserTabInActiveWorkspace('group-1')
-
-    expect(store.getState().browserTabsByWorktree['wt-remote']).toBeUndefined()
-    expect(store.getState().createUnifiedTab).not.toHaveBeenCalled()
-  })
-
-  it('does not import local browser cookies while a runtime environment is active', async () => {
-    const store = createTestStore()
-    store.setState({ settings: settingsWithRuntime('env-1') })
-
-    const result = await store.getState().importCookiesToProfile('default')
-
-    expect(mockApi.browser.sessionImportCookies).not.toHaveBeenCalled()
-    expect(result.ok).toBe(false)
-    expect(store.getState().browserSessionImportState).toMatchObject({
-      profileId: 'default',
-      status: 'error'
-    })
-  })
-
-  it('uses local browser IPC when no runtime environment is active', async () => {
-    const store = createTestStore()
-    mockApi.browser.sessionListProfiles.mockResolvedValueOnce([
-      {
-        id: 'default',
-        scope: 'default',
-        partition: 'persist:orca-default',
-        label: 'Default',
-        source: null
-      }
-    ])
-
-    await store.getState().fetchBrowserSessionProfiles()
-
-    expect(mockApi.browser.sessionListProfiles).toHaveBeenCalledTimes(1)
-    expect(store.getState().browserSessionProfiles).toEqual([
-      {
-        id: 'default',
-        scope: 'default',
-        partition: 'persist:orca-default',
-        label: 'Default',
-        source: null
-      }
-    ])
-  })
-
-  it('does not notify the local browser manager when selecting tabs under runtime', () => {
-    const store = createTestStore()
-    store.setState({
-      settings: settingsWithRuntime('env-1'),
-      unifiedTabsByWorktree: {},
-      browserTabsByWorktree: {
-        'wt-1': [
-          {
-            id: 'workspace-1',
-            worktreeId: 'wt-1',
-            sessionProfileId: null,
-            activePageId: 'page-1',
-            pageIds: ['page-1'],
-            url: 'about:blank',
-            title: 'New Tab',
-            loading: false,
-            faviconUrl: null,
-            canGoBack: false,
-            canGoForward: false,
-            loadError: null,
-            createdAt: 1
-          }
-        ]
-      }
-    })
-
-    store.getState().setActiveBrowserTab('workspace-1')
-
-    expect(mockApi.browser.notifyActiveTabChanged).not.toHaveBeenCalled()
-  })
-
-  it('closes the mapped remote tab when closing a browser page in the active runtime', async () => {
-    const store = createTestStore()
-    store.setState({
-      settings: settingsWithRuntime('env-1'),
-      browserTabsByWorktree: {
-        'wt-1': [
-          {
-            id: 'workspace-1',
-            worktreeId: 'wt-1',
-            sessionProfileId: null,
-            activePageId: 'page-1',
-            pageIds: ['page-1'],
-            url: 'https://example.com',
-            title: 'Example',
-            loading: false,
-            faviconUrl: null,
-            canGoBack: false,
-            canGoForward: false,
-            loadError: null,
-            createdAt: 1
-          }
-        ]
-      },
-      browserPagesByWorkspace: {
-        'workspace-1': [
-          {
-            id: 'page-1',
-            workspaceId: 'workspace-1',
-            worktreeId: 'wt-1',
-            url: 'https://example.com',
-            title: 'Example',
-            loading: false,
-            faviconUrl: null,
-            canGoBack: false,
-            canGoForward: false,
-            loadError: null,
-            createdAt: 1
-          }
-        ]
-      },
-      remoteBrowserPageHandlesByPageId: {
-        'page-1': { environmentId: 'env-1', remotePageId: 'remote-page-1' }
-      }
-    })
-
-    store.getState().closeBrowserPage('page-1')
-
-    await vi.waitFor(() => {
-      expect(runtimeEnvironmentCall).toHaveBeenCalledWith({
-        selector: 'env-1',
-        method: 'browser.tabClose',
-        params: { worktree: 'id:wt-1', page: 'remote-page-1' },
-        timeoutMs: 15_000
-      })
-    })
-    expect(store.getState().remoteBrowserPageHandlesByPageId['page-1']).toBeUndefined()
-  })
-
-  it('closes mapped remote tabs when closing a browser workspace in the active runtime', async () => {
-    const store = createTestStore()
-    store.setState({
-      settings: settingsWithRuntime('env-1'),
-      browserTabsByWorktree: {
-        'wt-1': [
-          {
-            id: 'workspace-1',
-            worktreeId: 'wt-1',
-            sessionProfileId: null,
-            activePageId: 'page-1',
-            pageIds: ['page-1'],
-            url: 'https://example.com',
-            title: 'Example',
-            loading: false,
-            faviconUrl: null,
-            canGoBack: false,
-            canGoForward: false,
-            loadError: null,
-            createdAt: 1
-          }
-        ]
-      },
-      activeBrowserTabId: 'workspace-1',
-      activeBrowserTabIdByWorktree: { 'wt-1': 'workspace-1' },
-      browserPagesByWorkspace: {
-        'workspace-1': [
-          {
-            id: 'page-1',
-            workspaceId: 'workspace-1',
-            worktreeId: 'wt-1',
-            url: 'https://example.com',
-            title: 'Example',
-            loading: false,
-            faviconUrl: null,
-            canGoBack: false,
-            canGoForward: false,
-            loadError: null,
-            createdAt: 1
-          }
-        ]
-      },
-      remoteBrowserPageHandlesByPageId: {
-        'page-1': { environmentId: 'env-1', remotePageId: 'remote-page-1' }
-      }
-    })
-
-    store.getState().closeBrowserTab('workspace-1')
-
-    await vi.waitFor(() => {
-      expect(runtimeEnvironmentCall).toHaveBeenCalledWith({
-        selector: 'env-1',
-        method: 'browser.tabClose',
-        params: { worktree: 'id:wt-1', page: 'remote-page-1' },
-        timeoutMs: 15_000
-      })
-    })
-    expect(store.getState().remoteBrowserPageHandlesByPageId['page-1']).toBeUndefined()
-  })
-
-  it('closes mapped remote pages in their owning environment after switching local', async () => {
-    const store = createTestStore()
-    store.setState({
-      browserTabsByWorktree: {
-        'wt-1': [
-          {
-            id: 'workspace-1',
-            worktreeId: 'wt-1',
-            sessionProfileId: null,
-            activePageId: 'page-1',
-            pageIds: ['page-1'],
-            url: 'https://example.com',
-            title: 'Example',
-            loading: false,
-            faviconUrl: null,
-            canGoBack: false,
-            canGoForward: false,
-            loadError: null,
-            createdAt: 1
-          }
-        ]
-      },
-      browserPagesByWorkspace: {
-        'workspace-1': [
-          {
-            id: 'page-1',
-            workspaceId: 'workspace-1',
-            worktreeId: 'wt-1',
-            url: 'https://example.com',
-            title: 'Example',
-            loading: false,
-            faviconUrl: null,
-            canGoBack: false,
-            canGoForward: false,
-            loadError: null,
-            createdAt: 1
-          }
-        ]
-      },
-      remoteBrowserPageHandlesByPageId: {
-        'page-1': { environmentId: 'env-1', remotePageId: 'remote-page-1' }
-      }
-    })
-
-    store.getState().closeBrowserPage('page-1')
-
-    await vi.waitFor(() => {
-      expect(runtimeEnvironmentCall).toHaveBeenCalledWith({
-        selector: 'env-1',
-        method: 'browser.tabClose',
-        params: { worktree: 'id:wt-1', page: 'remote-page-1' },
-        timeoutMs: 15_000
-      })
-    })
-  })
-
-  it('closes mapped remote tabs in their owning environment after switching environments', async () => {
-    const store = createTestStore()
-    store.setState({
-      settings: settingsWithRuntime('env-2'),
-      browserTabsByWorktree: {
-        'wt-1': [
-          {
-            id: 'workspace-1',
-            worktreeId: 'wt-1',
-            sessionProfileId: null,
-            activePageId: 'page-1',
-            pageIds: ['page-1'],
-            url: 'https://example.com',
-            title: 'Example',
-            loading: false,
-            faviconUrl: null,
-            canGoBack: false,
-            canGoForward: false,
-            loadError: null,
-            createdAt: 1
-          }
-        ]
-      },
-      browserPagesByWorkspace: {
-        'workspace-1': [
-          {
-            id: 'page-1',
-            workspaceId: 'workspace-1',
-            worktreeId: 'wt-1',
-            url: 'https://example.com',
-            title: 'Example',
-            loading: false,
-            faviconUrl: null,
-            canGoBack: false,
-            canGoForward: false,
-            loadError: null,
-            createdAt: 1
-          }
-        ]
-      },
-      remoteBrowserPageHandlesByPageId: {
-        'page-1': { environmentId: 'env-1', remotePageId: 'remote-page-1' }
-      }
-    })
-
-    store.getState().closeBrowserTab('workspace-1')
-
-    await vi.waitFor(() => {
-      expect(runtimeEnvironmentCall).toHaveBeenCalledWith({
-        selector: 'env-1',
-        method: 'browser.tabClose',
-        params: { worktree: 'id:wt-1', page: 'remote-page-1' },
-        timeoutMs: 15_000
-      })
-    })
   })
 })

@@ -2,11 +2,23 @@ import type { ManagedPaneInternal } from './pane-manager-types'
 import { safeFit } from './pane-tree-ops'
 import {
   attachWebgl,
+  clearTerminalWebglAttachBackoff,
   disposeWebgl,
+  isPaneWebglContextLost,
   markComplexScriptOutput,
+  clearWebglTextureAtlas,
+  presentPaneViewport,
   resetWebglTextureAtlas
 } from './pane-webgl-renderer'
-import { reattachWebglIfNeeded } from './pane-webgl-reattach'
+import {
+  clearPaneWebglContextLossForRetry,
+  rebuildAttachedWebgl,
+  reattachWebglIfNeeded
+} from './pane-webgl-reattach'
+import {
+  releaseHiddenWebglRetention,
+  tryRetainHiddenPanesWebgl
+} from './terminal-webgl-hidden-retention'
 
 export function setPaneGpuRenderingState(
   panes: Map<number, ManagedPaneInternal>,
@@ -41,16 +53,51 @@ export function markPaneComplexScriptOutput(
   }
 }
 
-export function suspendPaneRendering(panes: Iterable<ManagedPaneInternal>): void {
-  for (const pane of panes) {
+export function suspendPaneRendering(
+  panes: Iterable<ManagedPaneInternal>,
+  retention?: { owner: object; livePanes: () => Iterable<ManagedPaneInternal> }
+): void {
+  const suspended = Array.from(panes)
+  // Why: both branches must leave a suspended pane in the same state; only the retention
+  // branch below used to blur. Defence in depth, not a measured cost — display:none and
+  // inert both make Chromium blur the pane itself, and disposeWebgl kills the blink timer
+  // regardless. It only bites under opacity:0 without inert (TerminalOverlaySlot's startup
+  // probe), the one hide mode that keeps focus.
+  for (const pane of suspended) {
     pane.webglAttachmentDeferred = true
+    pane.terminal.blur()
+  }
+  // Keep recent hidden worktrees on live WebGL so switch-back never presents
+  // DOM-fallback frames; evicted/over-cap owners fall back to dispose.
+  if (retention && tryRetainHiddenPanesWebgl(retention.owner, retention.livePanes)) {
+    return
+  }
+  for (const pane of suspended) {
     disposeWebgl(pane)
   }
 }
 
-export function resumePaneRendering(panes: Iterable<ManagedPaneInternal>): void {
+export function resumePaneRendering(
+  panes: Iterable<ManagedPaneInternal>,
+  retentionOwner?: object
+): void {
+  if (retentionOwner) {
+    releaseHiddenWebglRetention(retentionOwner)
+  }
   for (const pane of panes) {
+    clearTerminalWebglAttachBackoff(pane)
+    const rebuildDeferred = pane.webglRebuildDeferred === true
     pane.webglAttachmentDeferred = false
+    // Reveal can retry before the next resume, so both paths share the bounded loss policy.
+    clearPaneWebglContextLossForRetry(pane)
+    pane.webglRebuildDeferred = false
+    if (pane.webglAddon && isPaneWebglContextLost(pane)) {
+      disposeWebgl(pane)
+    }
+    if (rebuildDeferred && pane.webglAddon) {
+      rebuildAttachedWebgl(pane)
+      continue
+    }
     reattachWebglIfNeeded(pane)
   }
 }
@@ -58,5 +105,17 @@ export function resumePaneRendering(panes: Iterable<ManagedPaneInternal>): void 
 export function resetPaneWebglTextureAtlases(panes: Iterable<ManagedPaneInternal>): void {
   for (const pane of panes) {
     resetWebglTextureAtlas(pane)
+  }
+}
+
+export function clearPaneWebglTextureAtlases(panes: Iterable<ManagedPaneInternal>): void {
+  for (const pane of panes) {
+    clearWebglTextureAtlas(pane)
+  }
+}
+
+export function presentPaneViewports(panes: Iterable<ManagedPaneInternal>): void {
+  for (const pane of panes) {
+    presentPaneViewport(pane)
   }
 }

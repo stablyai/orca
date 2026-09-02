@@ -1,65 +1,41 @@
-/* oxlint-disable max-lines -- Why: remote workspace IPC keeps snapshot normalization, relay compatibility, and handler registration together so revision/cache semantics stay auditable. */
-import { randomUUID } from 'node:crypto'
 import { ipcMain, type BrowserWindow } from 'electron'
-import { hostname } from 'node:os'
-import { isDeepStrictEqual } from 'node:util'
 import type { Store } from '../persistence'
 import { getActiveMultiplexer, getSshConnectionStore } from './ssh'
 import { exportRemoteWorkspaceSession } from '../../shared/remote-workspace-session-projection'
 import type {
   RemoteWorkspaceChangedEvent,
-  RemoteWorkspaceConnectedClient,
-  RemoteWorkspacePatchResult,
-  RemoteWorkspaceSession,
-  RemoteWorkspaceSnapshot
+  RemoteWorkspaceObservedPatchResult,
+  RemoteWorkspaceSession
 } from '../../shared/remote-workspace-types'
-import type { SshTarget } from '../../shared/ssh-types'
-import type { WorkspaceSessionState } from '../../shared/types'
-import { getRepoIdFromWorktreeId } from '../../shared/worktree-id'
+import type { WorkspaceSessionState } from '../../shared/workspace-session-state-types'
+import { getRepoIdFromWorktreeId } from '../../shared/worktree/id'
+import { parseExecutionHostId } from '../../shared/execution-host'
 import { getRemoteWorkspaceNamespace } from './remote-workspace-namespace'
 import { registerRemoteWorkspaceNotificationHandler } from './remote-workspace-events'
-
-const CLIENT_ID = randomUUID()
-const CLIENT_NAME = hostname() || 'This device'
-const SNAPSHOT_SCHEMA_VERSION = 1
-export const REMOTE_WORKSPACE_SNAPSHOT_CACHE_MAX_ENTRIES = 64
+import { CLIENT_ID } from './remote-workspace-client-identity'
+import { listRemoteWorkspaceConnectedClients } from './remote-workspace-connected-clients'
+import {
+  clearRemoteWorkspacePatchTails,
+  getRemoteWorkspacePatchTailCount,
+  queueRemoteWorkspacePatch
+} from './remote-workspace-patch-queue'
+import { getRemoteSnapshot, patchRemoteWorkspaceSession } from './remote-workspace-relay-sync'
+import {
+  cachedRemoteWorkspaceSnapshotAuthorizesRevision,
+  clearRemoteWorkspaceSnapshotCache,
+  getCachedRemoteWorkspaceSnapshot,
+  getRemoteWorkspaceSnapshotCacheSize,
+  rememberLocallyPatchedRemoteWorkspaceSnapshot,
+  rememberRemoteWorkspaceSnapshot
+} from './remote-workspace-snapshot-cache'
+import { normalizeSnapshot } from './remote-workspace-snapshot-normalization'
 
 let mainWindowGetter: (() => BrowserWindow | null) | null = null
-const latestSnapshotByTargetId = new Map<string, RemoteWorkspaceSnapshot>()
-const remoteWorkspacePatchTailByTargetId = new Map<string, Promise<void>>()
 let unregisterRemoteWorkspaceNotifications: (() => void) | null = null
 
-function rememberRemoteWorkspaceSnapshot(
-  targetId: string,
-  snapshot: RemoteWorkspaceSnapshot
-): void {
-  if (latestSnapshotByTargetId.has(targetId)) {
-    latestSnapshotByTargetId.delete(targetId)
-  }
-  latestSnapshotByTargetId.set(targetId, snapshot)
-  while (latestSnapshotByTargetId.size > REMOTE_WORKSPACE_SNAPSHOT_CACHE_MAX_ENTRIES) {
-    const oldest = latestSnapshotByTargetId.keys().next()
-    if (oldest.done) {
-      break
-    }
-    latestSnapshotByTargetId.delete(oldest.value)
-  }
-}
-
-function getCachedRemoteWorkspaceSnapshot(targetId: string): RemoteWorkspaceSnapshot | undefined {
-  const snapshot = latestSnapshotByTargetId.get(targetId)
-  if (!snapshot) {
-    return undefined
-  }
-  // Why: remote workspace snapshots can contain the whole tab/layout session
-  // for a target. Touch cache hits so deleted or rarely used targets age out.
-  rememberRemoteWorkspaceSnapshot(targetId, snapshot)
-  return snapshot
-}
-
 export function _resetRemoteWorkspaceCachesForTests(): void {
-  latestSnapshotByTargetId.clear()
-  remoteWorkspacePatchTailByTargetId.clear()
+  clearRemoteWorkspaceSnapshotCache()
+  clearRemoteWorkspacePatchTails()
 }
 
 export function _getRemoteWorkspaceCacheSizesForTests(): {
@@ -67,146 +43,9 @@ export function _getRemoteWorkspaceCacheSizesForTests(): {
   patchTails: number
 } {
   return {
-    snapshots: latestSnapshotByTargetId.size,
-    patchTails: remoteWorkspacePatchTailByTargetId.size
+    snapshots: getRemoteWorkspaceSnapshotCacheSize(),
+    patchTails: getRemoteWorkspacePatchTailCount()
   }
-}
-
-/** @internal - exposed for cache-bound tests only. */
-export function _rememberRemoteWorkspaceSnapshotForTests(
-  targetId: string,
-  snapshot: RemoteWorkspaceSnapshot
-): void {
-  rememberRemoteWorkspaceSnapshot(targetId, snapshot)
-}
-
-/** @internal - exposed for cache-bound tests only. */
-export function _getRemoteWorkspaceSnapshotForTests(
-  targetId: string
-): RemoteWorkspaceSnapshot | undefined {
-  return getCachedRemoteWorkspaceSnapshot(targetId)
-}
-
-function emptyRemoteSession(): RemoteWorkspaceSession {
-  return {
-    activeWorktreePath: null,
-    activeTabId: null,
-    tabsByWorktreePath: {},
-    terminalLayoutsByTabId: {}
-  }
-}
-
-function normalizeOptionalStringArray(value: unknown): string[] | undefined {
-  if (!Array.isArray(value)) {
-    return undefined
-  }
-  const normalized = value.filter((entry): entry is string => typeof entry === 'string')
-  return normalized.length > 0 ? normalized : undefined
-}
-
-function normalizeOptionalRecord<T extends Record<string, unknown>>(value: unknown): T | undefined {
-  if (!value || typeof value !== 'object' || Array.isArray(value)) {
-    return undefined
-  }
-  return Object.keys(value).length > 0 ? (value as T) : undefined
-}
-
-function normalizeRemoteSession(raw: unknown): RemoteWorkspaceSession {
-  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
-    return emptyRemoteSession()
-  }
-  const input = raw as Partial<RemoteWorkspaceSession>
-  return {
-    activeWorktreePath:
-      typeof input.activeWorktreePath === 'string' ? input.activeWorktreePath : null,
-    activeTabId: typeof input.activeTabId === 'string' ? input.activeTabId : null,
-    tabsByWorktreePath:
-      input.tabsByWorktreePath &&
-      typeof input.tabsByWorktreePath === 'object' &&
-      !Array.isArray(input.tabsByWorktreePath)
-        ? input.tabsByWorktreePath
-        : {},
-    terminalLayoutsByTabId:
-      input.terminalLayoutsByTabId &&
-      typeof input.terminalLayoutsByTabId === 'object' &&
-      !Array.isArray(input.terminalLayoutsByTabId)
-        ? input.terminalLayoutsByTabId
-        : {},
-    activeWorktreePathsOnShutdown: normalizeOptionalStringArray(
-      input.activeWorktreePathsOnShutdown
-    ),
-    activeTabIdByWorktreePath: normalizeOptionalRecord<Record<string, string | null>>(
-      input.activeTabIdByWorktreePath
-    ),
-    remoteSessionIdsByTabId: normalizeOptionalRecord<Record<string, string>>(
-      input.remoteSessionIdsByTabId
-    ),
-    lastVisitedAtByWorktreePath: normalizeOptionalRecord<Record<string, number>>(
-      input.lastVisitedAtByWorktreePath
-    )
-  }
-}
-
-function normalizeSnapshot(raw: unknown, fallbackNamespace: string): RemoteWorkspaceSnapshot {
-  const input = raw as Partial<RemoteWorkspaceSnapshot> | null
-  return {
-    namespace: typeof input?.namespace === 'string' ? input.namespace : fallbackNamespace,
-    revision:
-      typeof input?.revision === 'number' && Number.isFinite(input.revision) ? input.revision : 0,
-    updatedAt:
-      typeof input?.updatedAt === 'number' && Number.isFinite(input.updatedAt)
-        ? input.updatedAt
-        : 0,
-    schemaVersion:
-      typeof input?.schemaVersion === 'number' && Number.isFinite(input.schemaVersion)
-        ? input.schemaVersion
-        : SNAPSHOT_SCHEMA_VERSION,
-    session: normalizeRemoteSession(input?.session)
-  }
-}
-
-export function remoteWorkspaceSessionMatchesSnapshot(
-  snapshot: RemoteWorkspaceSnapshot | undefined,
-  session: RemoteWorkspaceSession
-): boolean {
-  if (!snapshot) {
-    return false
-  }
-  return isDeepStrictEqual(
-    normalizeRemoteSession(snapshot.session),
-    normalizeRemoteSession(session)
-  )
-}
-
-function normalizeConnectedClients(
-  raw: unknown,
-  currentClientId: string
-): RemoteWorkspaceConnectedClient[] {
-  const clients = (raw as { clients?: unknown } | null)?.clients
-  if (!Array.isArray(clients)) {
-    return []
-  }
-  return clients
-    .map((entry): RemoteWorkspaceConnectedClient | null => {
-      const item = entry as Partial<RemoteWorkspaceConnectedClient> | null
-      const clientId = typeof item?.clientId === 'string' ? item.clientId.trim() : ''
-      if (!clientId || clientId.length > 200) {
-        return null
-      }
-      return {
-        clientId,
-        name:
-          typeof item?.name === 'string' && item.name.trim()
-            ? item.name.replace(/\s+/g, ' ').trim().slice(0, 80)
-            : 'Unknown device',
-        lastSeenAt:
-          typeof item?.lastSeenAt === 'number' && Number.isFinite(item.lastSeenAt)
-            ? item.lastSeenAt
-            : 0,
-        isCurrent: clientId === currentClientId
-      }
-    })
-    .filter((entry): entry is RemoteWorkspaceConnectedClient => entry !== null)
 }
 
 function getExplicitHydratedTargetIds(value: unknown): Set<string> | null {
@@ -220,7 +59,51 @@ function getExplicitHydratedTargetIds(value: unknown): Set<string> | null {
   return new Set(value)
 }
 
-function targetForWorktree(store: Store, worktreeId: string): string | null {
+function getExpectedTargetRevisions(
+  value: unknown,
+  targetIds: ReadonlySet<string>
+): Map<string, number> | null {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    return null
+  }
+  const revisions = new Map<string, number>()
+  for (const targetId of targetIds) {
+    const revision = (value as Record<string, unknown>)[targetId]
+    if (typeof revision !== 'number' || !Number.isSafeInteger(revision) || revision < 0) {
+      return null
+    }
+    revisions.set(targetId, revision)
+  }
+  return revisions
+}
+
+function getExpectedHostObservationTokens(
+  value: unknown,
+  targetIds: ReadonlySet<string>
+): Map<string, string> | null {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    return null
+  }
+  const tokens = new Map<string, string>()
+  for (const targetId of targetIds) {
+    const token = (value as Record<string, unknown>)[targetId]
+    if (typeof token !== 'string' || token.length === 0 || token.length > 128) {
+      return null
+    }
+    tokens.set(targetId, token)
+  }
+  return tokens
+}
+
+function targetForWorktree(
+  store: Store,
+  worktreeId: string,
+  executionHostId?: string
+): string | null {
+  const parsedHostId = parseExecutionHostId(executionHostId)
+  if (parsedHostId?.kind === 'ssh') {
+    return parsedHostId.targetId
+  }
   const repoId = getRepoIdFromWorktreeId(worktreeId)
   return store.getRepo(repoId)?.connectionId ?? null
 }
@@ -231,127 +114,9 @@ function exportSessionForTarget(
   session: WorkspaceSessionState
 ): RemoteWorkspaceSession {
   return exportRemoteWorkspaceSession(session, {
-    isTargetWorktree: (worktreeId) => targetForWorktree(store, worktreeId) === targetId
+    isTargetWorktree: (worktreeId, executionHostId) =>
+      targetForWorktree(store, worktreeId, executionHostId) === targetId
   })
-}
-
-async function getRemoteSnapshot(target: SshTarget): Promise<RemoteWorkspaceSnapshot | null> {
-  const mux = getActiveMultiplexer(target.id)
-  if (!mux) {
-    return null
-  }
-  const namespace = getRemoteWorkspaceNamespace(target)
-  try {
-    const raw = await mux.request('workspace.get', { namespace })
-    const snapshot = normalizeSnapshot(raw, namespace)
-    rememberRemoteWorkspaceSnapshot(target.id, snapshot)
-    return snapshot
-  } catch (err) {
-    if ((err as { code?: unknown })?.code === -32601) {
-      return null
-    }
-    throw err
-  }
-}
-
-async function queueRemoteWorkspacePatch<T>(
-  targetId: string,
-  operation: () => Promise<T>
-): Promise<T> {
-  const previous = remoteWorkspacePatchTailByTargetId.get(targetId) ?? Promise.resolve()
-  let release!: () => void
-  const tail = new Promise<void>((resolve) => {
-    release = resolve
-  })
-  const queued = previous.catch(() => {}).then(() => tail)
-  remoteWorkspacePatchTailByTargetId.set(targetId, queued)
-
-  await previous.catch(() => {})
-  try {
-    return await operation()
-  } finally {
-    release()
-    if (remoteWorkspacePatchTailByTargetId.get(targetId) === queued) {
-      remoteWorkspacePatchTailByTargetId.delete(targetId)
-    }
-  }
-}
-
-async function patchRemoteWorkspaceSession(
-  target: SshTarget,
-  session: RemoteWorkspaceSession
-): Promise<RemoteWorkspacePatchResult | null> {
-  const mux = getActiveMultiplexer(target.id)
-  if (!mux) {
-    return null
-  }
-  const namespace = getRemoteWorkspaceNamespace(target)
-  const current =
-    getCachedRemoteWorkspaceSnapshot(target.id) ?? (await getRemoteSnapshot(target)) ?? undefined
-  if (current && remoteWorkspaceSessionMatchesSnapshot(current, session)) {
-    // Why: a pulled workspace snapshot rehydrates local state and can trigger
-    // session persistence. Identical target sessions must stay a local no-op or
-    // two clients will echo revisions indefinitely.
-    return { ok: true, snapshot: current }
-  }
-
-  const requestPatch = async (
-    baseRevision: number | undefined
-  ): Promise<RemoteWorkspacePatchResult> => {
-    try {
-      return (await mux.request('workspace.patch', {
-        namespace,
-        baseRevision: baseRevision ?? 0,
-        clientId: CLIENT_ID,
-        patch: { kind: 'replace-session', session }
-      })) as RemoteWorkspacePatchResult
-    } catch (err) {
-      return (err as { code?: unknown })?.code === -32601
-        ? {
-            ok: false,
-            reason: 'unavailable',
-            message: 'Remote workspace sync is unavailable on this relay'
-          }
-        : {
-            ok: false,
-            reason: 'unavailable',
-            message: err instanceof Error ? err.message : 'Remote workspace sync failed'
-          }
-    }
-  }
-
-  const result = await requestPatch(current?.revision)
-  if (result.ok) {
-    rememberRemoteWorkspaceSnapshot(target.id, result.snapshot)
-    return result
-  }
-  if (result.snapshot) {
-    rememberRemoteWorkspaceSnapshot(target.id, result.snapshot)
-  }
-
-  if (
-    result.reason === 'stale-revision' &&
-    current &&
-    result.snapshot &&
-    result.snapshot.revision < current.revision
-  ) {
-    if (remoteWorkspaceSessionMatchesSnapshot(result.snapshot, session)) {
-      return { ok: true, snapshot: result.snapshot }
-    }
-    // Why: a relay reset can legitimately move the remote snapshot revision
-    // backwards while this process still has the old cached revision. Retrying
-    // only for backwards revisions restores the blank-slate target without
-    // overwriting a newer snapshot from another device.
-    const retry = await requestPatch(result.snapshot.revision)
-    if (retry.ok) {
-      rememberRemoteWorkspaceSnapshot(target.id, retry.snapshot)
-    } else if (retry.snapshot) {
-      rememberRemoteWorkspaceSnapshot(target.id, retry.snapshot)
-    }
-    return retry
-  }
-
-  return result
 }
 
 export function handleRemoteWorkspaceNotification(
@@ -368,11 +133,16 @@ export function handleRemoteWorkspaceNotification(
   }
   const namespace = getRemoteWorkspaceNamespace(target)
   const snapshot = normalizeSnapshot(params.snapshot, namespace)
-  rememberRemoteWorkspaceSnapshot(targetId, snapshot)
+  const sourceClientId =
+    typeof params.sourceClientId === 'string' ? params.sourceClientId : undefined
+  const observedSnapshot =
+    sourceClientId === CLIENT_ID
+      ? rememberLocallyPatchedRemoteWorkspaceSnapshot(targetId, snapshot)
+      : rememberRemoteWorkspaceSnapshot(targetId, snapshot)
   const event: RemoteWorkspaceChangedEvent = {
     targetId,
-    snapshot,
-    sourceClientId: typeof params.sourceClientId === 'string' ? params.sourceClientId : undefined
+    snapshot: observedSnapshot,
+    sourceClientId
   }
   const win = mainWindowGetter?.()
   if (win && !win.isDestroyed()) {
@@ -405,11 +175,33 @@ export function registerRemoteWorkspaceHandlers(
 
   ipcMain.handle(
     'remoteWorkspace:setForConnectedTargets',
-    async (_event, args: { session?: WorkspaceSessionState; hydratedTargetIds?: unknown }) => {
+    async (
+      _event,
+      args: {
+        session?: WorkspaceSessionState
+        hydratedTargetIds?: unknown
+        expectedRevisionsByTargetId?: unknown
+        expectedHostObservationTokensByTargetId?: unknown
+      }
+    ) => {
       const hydratedTargetIds = getExplicitHydratedTargetIds(args.hydratedTargetIds)
       if (!hydratedTargetIds) {
         // Why: an omitted hydration set used to broadcast one session to every
         // SSH target, overwriting unrelated remote workspace snapshots.
+        return []
+      }
+      const expectedRevisions = getExpectedTargetRevisions(
+        args.expectedRevisionsByTargetId,
+        hydratedTargetIds
+      )
+      if (!expectedRevisions) {
+        return []
+      }
+      const expectedHostObservationTokens = getExpectedHostObservationTokens(
+        args.expectedHostObservationTokensByTargetId,
+        hydratedTargetIds
+      )
+      if (!expectedHostObservationTokens) {
         return []
       }
       const targets =
@@ -425,14 +217,31 @@ export function registerRemoteWorkspaceHandlers(
           // Why: each target has its own revision stream. Keep same-target
           // writes queued, but do not let one slow relay block others.
           const session = exportSessionForTarget(store, target.id, workspaceSession)
-          const result = await queueRemoteWorkspacePatch(target.id, () =>
-            patchRemoteWorkspaceSession(target, session)
-          )
+          const result = await queueRemoteWorkspacePatch(target.id, async () => {
+            const current =
+              getCachedRemoteWorkspaceSnapshot(target.id) ?? (await getRemoteSnapshot(target))
+            const expectedRevision = expectedRevisions.get(target.id)
+            const expectedHostObservationToken = expectedHostObservationTokens.get(target.id)
+            if (
+              !current ||
+              expectedRevision === undefined ||
+              expectedHostObservationToken === undefined ||
+              current.hostObservationToken !== expectedHostObservationToken ||
+              !cachedRemoteWorkspaceSnapshotAuthorizesRevision(target.id, expectedRevision)
+            ) {
+              const latest = getCachedRemoteWorkspaceSnapshot(target.id) ?? current
+              return latest
+                ? ({ ok: false, reason: 'stale-revision', snapshot: latest } as const)
+                : null
+            }
+            return patchRemoteWorkspaceSession(target, session)
+          })
           return result ? { targetId: target.id, result } : null
         })
       )
       return results.filter(
-        (entry): entry is { targetId: string; result: RemoteWorkspacePatchResult } => entry !== null
+        (entry): entry is { targetId: string; result: RemoteWorkspaceObservedPatchResult } =>
+          entry !== null
       )
     }
   )
@@ -448,39 +257,7 @@ export function registerRemoteWorkspaceHandlers(
 
   ipcMain.handle(
     'remoteWorkspace:listConnectedClients',
-    async (_event, args?: { targetIds?: string[] }) => {
-      const requestedTargetIds = Array.isArray(args?.targetIds) ? new Set(args.targetIds) : null
-      const targets =
-        getSshConnectionStore()
-          ?.listTargets()
-          .filter(
-            (target) =>
-              getActiveMultiplexer(target.id) &&
-              (!requestedTargetIds || requestedTargetIds.has(target.id))
-          ) ?? []
-      const results: { targetId: string; clients: RemoteWorkspaceConnectedClient[] }[] = []
-      for (const target of targets) {
-        const mux = getActiveMultiplexer(target.id)
-        if (!mux) {
-          continue
-        }
-        const namespace = getRemoteWorkspaceNamespace(target)
-        try {
-          const raw = await mux.request('workspace.presence', {
-            namespace,
-            clientId: CLIENT_ID,
-            clientName: CLIENT_NAME
-          })
-          results.push({
-            targetId: target.id,
-            clients: normalizeConnectedClients(raw, CLIENT_ID)
-          })
-        } catch {
-          results.push({ targetId: target.id, clients: [] })
-        }
-      }
-      return results
-    }
+    async (_event, args?: { targetIds?: string[] }) => listRemoteWorkspaceConnectedClients(args)
   )
 
   ipcMain.handle('remoteWorkspace:clientId', () => CLIENT_ID)

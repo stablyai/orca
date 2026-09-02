@@ -1,6 +1,8 @@
 import { focusTerminalTabSurface } from '@/lib/focus-terminal-tab-surface'
 import { launchAgentInNewTab } from '@/lib/launch-agent-in-new-tab'
-import type { GlobalSettings, Repo, TuiAgent } from '../../../../shared/types'
+import type { GlobalSettings } from '../../../../shared/global-settings-types'
+import type { Repo } from '../../../../shared/repo-types'
+import type { TuiAgent } from '../../../../shared/tui-agent'
 import type { LaunchSource } from '../../../../shared/telemetry-events'
 import type {
   SourceControlActionRecipe,
@@ -37,6 +39,15 @@ type RunSourceControlAgentActionStartArgs = {
     actionId: SourceControlLaunchActionId,
     recipe: SourceControlActionRecipe
   ) => void | Promise<void>
+  /**
+   * Fires as soon as the agent tab/session is created, before deferred
+   * submit-after-ready prompt delivery finishes. Reversible bookkeeping only —
+   * irreversible side effects (posting host replies, resolving threads) belong in
+   * onLaunched, which only fires once the prompt actually reached the agent.
+   */
+  onLaunchAccepted?: () => void
+  /** Fires when a launch that already reported onLaunchAccepted failed to deliver its prompt. */
+  onLaunchAborted?: () => void
   onLaunched?: () => void
   onClose: () => void
 }
@@ -58,16 +69,30 @@ export async function runSourceControlAgentActionStart({
   launchSource,
   onStart,
   onSaveAgentDefault,
+  onLaunchAccepted,
+  onLaunchAborted,
   onLaunched,
   onClose
 }: RunSourceControlAgentActionStartArgs): Promise<boolean> {
   let launched = false
+  let launchFailureNotified = false
+  let launchAcceptedNotified = false
+  const notifyLaunchAccepted = (): void => {
+    if (launchAcceptedNotified) {
+      return
+    }
+    launchAcceptedNotified = true
+    onLaunchAccepted?.()
+  }
   if (onStart) {
     launched = await onStart({
       agent: selectedAgent,
       commandInput: trimmedCommandInput,
       agentArgs
     })
+    if (launched) {
+      notifyLaunchAccepted()
+    }
   } else if (worktreeId) {
     const result = launchAgentInNewTab({
       agent: selectedAgent,
@@ -83,14 +108,34 @@ export async function runSourceControlAgentActionStart({
     if (result?.tabId) {
       focusTerminalTabSurface(result.tabId)
     }
+    // Why: lets callers park launch-scoped state before submit-after-ready finishes
+    // (can take tens of seconds); host mutations still wait for delivery below.
+    if (launched) {
+      notifyLaunchAccepted()
+    }
+    if (result?.promptDeliveryResult) {
+      try {
+        const deliveryResult = await result.promptDeliveryResult
+        launched = deliveryResult.delivered
+        launchFailureNotified = deliveryResult.failureNotified
+      } catch (error) {
+        console.error('promptDeliveryResult rejected', error)
+        launched = false
+      }
+    }
   }
   if (!launched) {
-    toast.error(
-      translate(
-        'auto.components.right.sidebar.SourceControlAgentActionDialog.8e856842d1',
-        'Could not start the selected agent.'
+    if (launchAcceptedNotified) {
+      onLaunchAborted?.()
+    }
+    if (!launchFailureNotified) {
+      toast.error(
+        translate(
+          'auto.components.right.sidebar.SourceControlAgentActionDialog.8e856842d1',
+          'Could not start the selected agent.'
+        )
       )
-    )
+    }
     return false
   }
 
@@ -111,7 +156,13 @@ export async function runSourceControlAgentActionStart({
     })
   )
   if (saveTarget && onSaveAgentDefault && !launchRecipeAlreadySaved) {
-    await onSaveAgentDefault(saveTarget, actionId, launchRecipe)
+    try {
+      await onSaveAgentDefault(saveTarget, actionId, launchRecipe)
+    } catch (error) {
+      // Why: the prompt already reached the agent; a failed recipe save must not strand the
+      // caller's accepted-launch bookkeeping (neither onLaunched nor onLaunchAborted would fire).
+      console.error('onSaveAgentDefault failed', error)
+    }
   }
   onLaunched?.()
   onClose()

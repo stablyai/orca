@@ -50,15 +50,29 @@ vi.mock('@/components/ui/dropdown-menu', () => ({
 }))
 
 vi.mock('lucide-react', () => ({
+  ArrowDown: () => null,
+  ArrowLeft: () => null,
+  ArrowRight: () => null,
+  ArrowUp: () => null,
+  Columns2: () => null,
+  Copy: () => null,
+  ListX: () => null,
+  MessageSquare: () => null,
   PanelBottomClose: () => null,
+  PanelLeftClose: () => null,
   PanelRightClose: () => null,
+  Pencil: () => null,
   Pin: () => null,
-  PinOff: () => null
+  PinOff: () => null,
+  SquareTerminal: () => null,
+  X: () => null
 }))
 
 vi.mock('@/i18n/i18n', () => ({
   translate: (_key: string, fallback: string) => fallback
 }))
+
+vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn() } }))
 
 vi.mock('../../store', () => ({
   useAppStore: Object.assign(
@@ -100,12 +114,14 @@ function renderMenu(overrides: Partial<ComponentProps<typeof SortableTabContextM
         point={{ x: 0, y: 0 }}
         tabCount={2}
         hasTabsToRight
+        hasTabsToLeft
         isPinned={false}
         onOpenChange={vi.fn()}
         onActivate={onActivate}
         onClose={vi.fn()}
         onCloseOthers={vi.fn()}
         onCloseToRight={vi.fn()}
+        onCloseToLeft={vi.fn()}
         onRenameOpen={vi.fn()}
         onSetTabColor={vi.fn()}
         onTogglePin={vi.fn()}
@@ -194,6 +210,13 @@ describe('requestActiveTerminalPaneSplit', () => {
 })
 
 describe('SortableTabContextMenu', () => {
+  it('does not expose a native/terminal view switch', () => {
+    const { container } = renderMenu()
+
+    expect(container.textContent).not.toContain('Switch to terminal view')
+    expect(container.textContent).not.toContain('Switch to chat view')
+  })
+
   it('dispatches split requests and activates inactive terminal tabs first', () => {
     const dispatchSpy = vi.spyOn(window, 'dispatchEvent')
     const { container, onActivate } = renderMenu({ isActive: false })
@@ -218,6 +241,7 @@ describe('SortableTabContextMenu', () => {
     const { container } = renderMenu()
 
     expect(container.textContent).toContain('Move Tab to Split')
+    expect(container.textContent).toContain('Split terminal')
 
     act(() => getButton(container, 'Right').click())
     expect(storeMock.dropUnifiedTab).toHaveBeenCalledWith('tab-1', {
@@ -226,7 +250,30 @@ describe('SortableTabContextMenu', () => {
     })
   })
 
-  it('hides split actions for a single-tab group', () => {
+  it('routes the directional close actions to their handlers with the tab id', () => {
+    const onCloseOthers = vi.fn()
+    const onCloseToRight = vi.fn()
+    const onCloseToLeft = vi.fn()
+    const { container } = renderMenu({ onCloseOthers, onCloseToRight, onCloseToLeft })
+
+    act(() => getButton(container, 'Close Others').click())
+    expect(onCloseOthers).toHaveBeenCalledWith('term-1')
+
+    act(() => getButton(container, 'Close Tabs To The Right').click())
+    expect(onCloseToRight).toHaveBeenCalledWith('term-1')
+
+    act(() => getButton(container, 'Close Tabs To The Left').click())
+    expect(onCloseToLeft).toHaveBeenCalledWith('term-1')
+  })
+
+  it('disables directional closes when no tabs exist on that side', () => {
+    const { container } = renderMenu({ hasTabsToLeft: false, hasTabsToRight: false })
+
+    expect(getButton(container, 'Close Tabs To The Left').disabled).toBe(true)
+    expect(getButton(container, 'Close Tabs To The Right').disabled).toBe(true)
+  })
+
+  it('hides move-tab split actions for a single-tab group', () => {
     storeMock.state = {
       ...storeMock.state,
       groupsByWorktree: {
@@ -243,5 +290,62 @@ describe('SortableTabContextMenu', () => {
     const { container } = renderMenu()
 
     expect(container.textContent).not.toContain('Move Tab to Split')
+    expect(container.textContent).toContain('Split terminal right')
+  })
+
+  describe('copy session id', () => {
+    const LEAF = '11111111-1111-4111-8111-111111111111'
+
+    function withLiveAgent(sessionId: string | null): void {
+      storeMock.state = {
+        ...storeMock.state,
+        terminalLayoutsByTabId: {
+          'term-1': { root: { type: 'leaf', leafId: LEAF }, activeLeafId: LEAF }
+        },
+        agentStatusByPaneKey: {
+          [`term-1:${LEAF}`]: {
+            state: 'done',
+            prompt: '',
+            updatedAt: 1,
+            stateStartedAt: 1,
+            paneKey: `term-1:${LEAF}`,
+            agentType: 'claude',
+            stateHistory: [],
+            ...(sessionId ? { providerSession: { key: 'session_id', id: sessionId } } : {})
+          }
+        },
+        paneForegroundAgentByPaneKey: {}
+      }
+    }
+
+    it('omits the item for a tab with no agent', () => {
+      const { container } = renderMenu()
+
+      expect(container.textContent).not.toContain('Copy Session ID')
+    })
+
+    it('omits the item until the active agent reports a session id', () => {
+      withLiveAgent(null)
+      const { container } = renderMenu()
+
+      expect(container.textContent).not.toContain('Copy Session ID')
+    })
+
+    it('copies the active pane session id', async () => {
+      const writeClipboardText = vi.fn().mockResolvedValue(undefined)
+      Object.assign(window, { api: { ui: { writeClipboardText } } })
+      withLiveAgent('session-abc')
+      const { container } = renderMenu()
+
+      act(() => getButton(container, 'Copy Session ID').click())
+      await vi.waitFor(() => expect(writeClipboardText).toHaveBeenCalledWith('session-abc'))
+    })
+
+    it('does not resolve a session id while the menu is closed', () => {
+      withLiveAgent('session-abc')
+      const { container } = renderMenu({ open: false })
+
+      expect(container.textContent).not.toContain('Copy Session ID')
+    })
   })
 })

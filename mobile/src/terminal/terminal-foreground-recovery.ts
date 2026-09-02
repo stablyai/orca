@@ -4,6 +4,11 @@ import type { TerminalWebViewHandle } from './TerminalWebView'
 
 export const TERMINAL_FOREGROUND_RECOVERY_DELAY_MS = 120
 
+// 'deferred' = the socket wasn't connected at the foreground edge (it usually
+// dies after ~60-80s of background); the caller must re-run recovery once the
+// connection is back or a blanked WKWebView stays stale until a tab switch.
+export type TerminalForegroundRecoveryOutcome = 'recovered' | 'deferred' | 'skipped'
+
 type TerminalForegroundRecoveryOptions = {
   activeHandleRef: RefObject<string | null>
   terminalRefs: RefObject<Map<string, TerminalWebViewHandle>>
@@ -36,15 +41,15 @@ export function recoverActiveTerminalAfterForeground({
   subscribeToTerminal,
   schedule,
   delayMs = TERMINAL_FOREGROUND_RECOVERY_DELAY_MS
-}: TerminalForegroundRecoveryOptions): boolean {
+}: TerminalForegroundRecoveryOptions): TerminalForegroundRecoveryOutcome {
   if (connStateRef.current !== 'connected') {
-    return false
+    return 'deferred'
   }
   const initializedMountedHandles = Array.from(initializedHandlesRef.current).filter((handle) =>
     terminalRefs.current.has(handle)
   )
   if (initializedMountedHandles.length === 0) {
-    return false
+    return 'skipped'
   }
   const handle = activeHandleRef.current
   const shouldRecoverActive =
@@ -57,7 +62,7 @@ export function recoverActiveTerminalAfterForeground({
   }
 
   if (!shouldRecoverActive || !handle) {
-    return true
+    return 'recovered'
   }
 
   unsubscribeTerminal(handle)
@@ -70,5 +75,5 @@ export function recoverActiveTerminalAfterForeground({
     }
     subscribeToTerminal(handle)
   }, delayMs)
-  return true
+  return 'recovered'
 }

@@ -1,4 +1,5 @@
-import type { GlobalSettings, SetupScriptLaunchMode } from '../../../../shared/types'
+import type { GlobalSettings } from '../../../../shared/global-settings-types'
+import type { SetupScriptLaunchMode } from '../../../../shared/worktree/launch-types'
 import { ToggleGroup, ToggleGroupItem } from '../ui/toggle-group'
 import { SettingsRow, SettingsSubsectionHeader } from './SettingsFormControls'
 import { SearchableSetting } from './SearchableSetting'

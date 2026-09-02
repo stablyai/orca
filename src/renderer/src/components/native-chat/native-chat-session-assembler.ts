@@ -6,7 +6,13 @@ import {
   type NativeChatSession,
   type NativeChatSessionStatus
 } from '../../../../shared/native-chat-types'
-import { normalizeImageTranscriptMessages } from './native-chat-image-transcript-markers'
+import { NATIVE_CHAT_STREAMING_ID } from '../../../../shared/native-chat-streaming'
+import {
+  hasImagePromptMarker,
+  isImageSourceUserTurn,
+  normalizeImageTranscriptMessages
+} from '../../../../shared/native-chat-image-transcript-markers'
+import { isLaunchPromptMessageId, isPendingMessageId } from './native-chat-pending'
 
 /** Messages grouped by source. Higher-priority sources (transcript > hook >
  *  scrape) supersede lower ones when they describe the same turn. */
@@ -84,10 +90,29 @@ function supersedes(candidate: NativeChatMessage, existing: NativeChatMessage): 
   return candidateRank > existingRank
 }
 
+// Why: the tail bubbles form fixed tiers that timestamps alone can't express.
+// The streaming preview (null timestamp) must follow real content but sit ahead
+// of the optimistic composer echoes, which carry finite `sentAt` timestamps that
+// would otherwise sort past it. Rank first, then timestamp within a tier.
+function messageSortRank(message: NativeChatMessage): number {
+  if (message.id === NATIVE_CHAT_STREAMING_ID) {
+    return 1
+  }
+  if (isPendingMessageId(message.id) || isLaunchPromptMessageId(message.id)) {
+    return 2
+  }
+  return 0
+}
+
 // Why: null timestamps (sources that can't supply one, e.g. scrape segments)
-// sort before any real timestamp so they don't jump to the end. Ties break on
-// id for a stable, deterministic order.
+// sort before any real timestamp within their tier so they don't jump to the
+// end. Ties break on id for a stable, deterministic order.
 export function compareMessages(a: NativeChatMessage, b: NativeChatMessage): number {
+  const ar = messageSortRank(a)
+  const br = messageSortRank(b)
+  if (ar !== br) {
+    return ar - br
+  }
   const at = a.timestamp ?? Number.NEGATIVE_INFINITY
   const bt = b.timestamp ?? Number.NEGATIVE_INFINITY
   if (at !== bt) {
@@ -114,13 +139,14 @@ export function assembleNativeChatSession(
   const { sources, sessionId, agent, status, error } = input
 
   // Process highest priority first so a later, lower-priority duplicate is
-  // dropped rather than overwriting. Within a source, order is preserved.
+  // dropped rather than overwriting. Sort each source before image folding so
+  // equal-timestamp companion/prompt rows retain semantic order.
   const ordered: NativeChatMessage[] = [
-    ...normalizeImageTranscriptMessages(sources.transcript ?? []),
+    ...normalizeImageTranscriptMessages(sortForImageNormalization(sources.transcript ?? [])),
     ...(sources.hook ?? []),
     // Scrape segments carry the same raw `[Image: source: …]` markers (e.g. from
     // scrollback before the transcript loads), so normalize them too.
-    ...normalizeImageTranscriptMessages(sources.scrape ?? [])
+    ...normalizeImageTranscriptMessages(sortForImageNormalization(sources.scrape ?? []))
   ]
 
   const byId = new Map<string, NativeChatMessage>()
@@ -141,6 +167,76 @@ export function assembleNativeChatSession(
     agent,
     ...(error ? { error } : {})
   }
+}
+
+type ImageNormalizationUnit = {
+  messages: NativeChatMessage[]
+  sortKey: NativeChatMessage
+}
+
+// Keep only adjacent companion/prompt rows atomic; ranking every companion first
+// can cross-fold distinct turns that share a timestamp.
+export function sortForImageNormalization(
+  messages: readonly NativeChatMessage[]
+): readonly NativeChatMessage[] {
+  const units: ImageNormalizationUnit[] = []
+  for (let index = 0; index < messages.length; index += 1) {
+    const message = messages[index]!
+    const companions: NativeChatMessage[] = []
+    let prompt: NativeChatMessage | undefined
+
+    if (isImageSourceUserTurn(message)) {
+      let nextIndex = index
+      while (
+        nextIndex < messages.length &&
+        messages[nextIndex]?.source === message.source &&
+        isImageSourceUserTurn(messages[nextIndex]!)
+      ) {
+        companions.push(messages[nextIndex]!)
+        nextIndex += 1
+      }
+      const candidate = messages[nextIndex]
+      if (
+        candidate?.role === 'user' &&
+        candidate.source === message.source &&
+        hasImagePromptMarker(candidate)
+      ) {
+        prompt = candidate
+        index = nextIndex
+      } else {
+        companions.length = 0
+      }
+    } else {
+      const candidate = messages[index + 1]
+      if (
+        message.role === 'user' &&
+        hasImagePromptMarker(message) &&
+        candidate?.source === message.source &&
+        candidate.timestamp === message.timestamp &&
+        isImageSourceUserTurn(candidate)
+      ) {
+        let nextIndex = index + 1
+        while (
+          nextIndex < messages.length &&
+          messages[nextIndex]?.source === message.source &&
+          messages[nextIndex]?.timestamp === message.timestamp &&
+          isImageSourceUserTurn(messages[nextIndex]!)
+        ) {
+          companions.push(messages[nextIndex]!)
+          nextIndex += 1
+        }
+        prompt = message
+        index = nextIndex - 1
+      }
+    }
+
+    const unitMessages = prompt ? [...companions, prompt] : [message]
+    units.push({ messages: unitMessages, sortKey: prompt ?? message })
+  }
+
+  units.sort((a, b) => compareMessages(a.sortKey, b.sortKey))
+  const sorted = units.flatMap((unit) => unit.messages)
+  return sorted.every((message, index) => message === messages[index]) ? messages : sorted
 }
 
 /**

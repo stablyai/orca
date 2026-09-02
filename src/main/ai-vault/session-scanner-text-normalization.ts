@@ -42,6 +42,15 @@ export function normalizePreviewText(value: string): string | null {
   return finalizeNormalizedText(normalizeStringText(value, SESSION_PREVIEW_TEXT_LIMIT))
 }
 
+/** Cut to `limit` UTF-16 code units without splitting a trailing surrogate pair. */
+export function sliceAtCodeUnitLimit(value: string, limit: number): string {
+  if (value.length <= limit) {
+    return value
+  }
+  const end = limit > 0 && isHighSurrogate(value.charCodeAt(limit - 1)) ? limit - 1 : limit
+  return value.slice(0, end)
+}
+
 function normalizeContentText(value: unknown, limit: number): string | null {
   if (typeof value === 'string') {
     return finalizeNormalizedText(normalizeStringText(value, limit))
@@ -112,15 +121,18 @@ function appendInterPartSpace(builder: TextBuilder): void {
   }
 }
 
-function appendNormalizedString(builder: TextBuilder, value: string): void {
+function appendNormalizedString(builder: TextBuilder, value: string, maxScanLength?: number): void {
+  const scanEnd = maxScanLength == null ? value.length : Math.min(value.length, maxScanLength)
   let index = 0
-  while (index < value.length && !builder.truncated) {
+  while (index < scanEnd && !builder.truncated) {
     const hiddenBlockEnd = hiddenTextBlockEnd(value, index)
     if (hiddenBlockEnd !== null) {
       if (builder.text.length > 0) {
         builder.pendingSpace = true
       }
-      index = hiddenBlockEnd
+      // Why: hidden blocks may jump past the scan budget; clamp so multi-MB
+      // suppressed context cannot keep the first-prompt path busy.
+      index = Math.min(hiddenBlockEnd, scanEnd)
       continue
     }
 
@@ -142,8 +154,16 @@ function appendNormalizedString(builder: TextBuilder, value: string): void {
     }
 
     const charLength = codePointLength(value, index)
+    // Why: do not read past scanEnd mid code-point when the budget lands inside
+    // a surrogate pair — drop the incomplete char instead.
+    if (index + charLength > scanEnd) {
+      break
+    }
     appendVisibleText(builder, value.slice(index, index + charLength))
     index += charLength
+  }
+  if (!builder.truncated && scanEnd < value.length && builder.text.length > 0) {
+    builder.truncated = true
   }
 }
 
@@ -230,9 +250,7 @@ function isSuppressedContextPrefix(value: string): boolean {
 }
 
 function truncateWithEllipsis(value: string, limit: number): string {
-  const end = Math.max(0, limit - ELLIPSIS.length)
-  const safeEnd = end > 0 && isHighSurrogate(value.charCodeAt(end - 1)) ? end - 1 : end
-  return `${value.slice(0, safeEnd)}${ELLIPSIS}`
+  return `${sliceAtCodeUnitLimit(value, Math.max(0, limit - ELLIPSIS.length))}${ELLIPSIS}`
 }
 
 function objectRecord(value: unknown): Record<string, unknown> | null {

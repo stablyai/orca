@@ -3,7 +3,7 @@ import { cn } from '@/lib/utils'
 import { isEditableTarget } from '@/lib/editable-target'
 import { getScreenSubmitModifierLabel, isScreenSubmitShortcut } from '@/lib/screen-submit-shortcut'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
-import type { OnboardingState } from '../../../../shared/types'
+import type { OnboardingState } from '../../../../shared/onboarding-state-types'
 import { AgentStep } from './AgentStep'
 import { ThemeStep } from './ThemeStep'
 import { NotificationStep } from './NotificationStep'
@@ -100,15 +100,13 @@ const stepTooltipLabels = {
 type OnboardingFlowProps = {
   onboarding: OnboardingState
   onOnboardingChange: (state: OnboardingState) => void
-  onSettingsDetourStart?: () => void
 }
 
 export default function OnboardingFlow({
   onboarding,
-  onOnboardingChange,
-  onSettingsDetourStart
+  onOnboardingChange
 }: OnboardingFlowProps): React.JSX.Element {
-  const flow = useOnboardingFlow(onboarding, onOnboardingChange, { onSettingsDetourStart })
+  const flow = useOnboardingFlow(onboarding, onOnboardingChange)
   const continueShortcutModifierLabel = getScreenSubmitModifierLabel()
   const { currentStep, stepIndex, busyLabel } = flow
   const copy = stepCopy[currentStep.id]
@@ -116,22 +114,21 @@ export default function OnboardingFlow({
   const shouldShowFooterBusy = Boolean(busyLabel)
   const footerPrimaryLabel =
     busyLabel ?? (currentStep.id === 'notifications' ? 'Add your first project' : 'Continue')
-  const canDismissCurrentStep = currentStep.id !== 'notifications'
   const [skipConfirmOpen, setSkipConfirmOpen] = useState(false)
   const skipConfirmAdvancedViaRef = useRef<'button' | 'keyboard'>('button')
   const { next: flowNext, dismissOnboarding: flowDismissOnboarding } = flow
 
   const requestSkipConfirmation = useCallback(
     (advancedVia: 'button' | 'keyboard') => {
-      // Why: the final notifications step hands off to Add Project, so all
-      // dismiss paths are disabled there, not just the visible Skip button.
-      if (!canDismissCurrentStep || busyLabel || skipConfirmOpen) {
+      // Why: click-off / Escape dismissal stays available on every step,
+      // including the final notifications step, so the modal never feels stuck.
+      if (busyLabel || skipConfirmOpen) {
         return
       }
       skipConfirmAdvancedViaRef.current = advancedVia
       setSkipConfirmOpen(true)
     },
-    [busyLabel, canDismissCurrentStep, skipConfirmOpen]
+    [busyLabel, skipConfirmOpen]
   )
 
   const confirmSkipOnboarding = useCallback(() => {
@@ -218,7 +215,7 @@ export default function OnboardingFlow({
             </div>
 
             <div className="mt-10 flex items-center gap-2 transition-[margin-top] duration-[760ms] ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:transition-none">
-              {flow.progressSteps.map(({ step, index: realStepIndex, isSkipped }, progressIdx) => {
+              {flow.progressSteps.map(({ step, index: realStepIndex }, progressIdx) => {
                 const isActive = realStepIndex === stepIndex
                 const isDone = realStepIndex < stepIndex
                 return (
@@ -234,8 +231,7 @@ export default function OnboardingFlow({
                             ? 'w-10 bg-foreground'
                             : isDone
                               ? 'w-6 bg-muted-foreground/70 hover:bg-foreground/80'
-                              : 'w-6 bg-muted-foreground/25 hover:bg-muted-foreground/45',
-                          isSkipped && 'cursor-default hover:bg-muted-foreground/25'
+                              : 'w-6 bg-muted-foreground/25 hover:bg-muted-foreground/45'
                         )}
                         aria-label={translate(
                           'auto.components.onboarding.OnboardingFlow.adaa0aa627',
@@ -243,7 +239,6 @@ export default function OnboardingFlow({
                           { value0: progressIdx + 1, value1: stepTooltipLabels[step.id] }
                         )}
                         aria-current={isActive ? 'step' : undefined}
-                        disabled={isSkipped}
                         onClick={() => flow.jumpToStep(realStepIndex)}
                       />
                     </TooltipTrigger>
@@ -324,7 +319,7 @@ export default function OnboardingFlow({
               busyLabel={busyLabel}
               onSkipToRepo={() => void flow.skipToRepo()}
               stepIndex={stepIndex}
-              onBack={flow.nestedScan ? flow.cancelNested : flow.back}
+              onBack={flow.back}
               showPrimary
               primaryBusy={shouldShowFooterBusy}
               primaryLabel={footerPrimaryLabel}

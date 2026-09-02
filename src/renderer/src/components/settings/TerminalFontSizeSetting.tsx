@@ -1,5 +1,5 @@
 import { Minus, Plus } from 'lucide-react'
-import type { GlobalSettings } from '../../../../shared/types'
+import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import { Button } from '../ui/button'
 import { Input } from '../ui/input'
 import { SettingsRow } from './SettingsFormControls'
@@ -45,18 +45,19 @@ export function TerminalFontSizeSetting({
             >
               <Minus className="size-3" />
             </Button>
+            {/* Why: native spin buttons overlap the value and duplicate the −/+ steppers. */}
             <Input
               type="number"
               min={10}
               max={24}
               value={settings.terminalFontSize}
               onChange={(e) => {
-                const value = parseInt(e.target.value, 10)
+                const value = Number.parseInt(e.target.value, 10)
                 if (!Number.isNaN(value) && value >= 10 && value <= 24) {
                   updateSettings({ terminalFontSize: value })
                 }
               }}
-              className="w-14 text-center tabular-nums"
+              className="number-input-clean w-14 text-center tabular-nums"
             />
             <Button
               variant="outline"

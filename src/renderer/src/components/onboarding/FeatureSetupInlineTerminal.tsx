@@ -1,7 +1,16 @@
 import { useCallback, useMemo, useRef, type KeyboardEvent } from 'react'
 import { track } from '@/lib/telemetry'
 import { notifyInstalledAgentSkillsChanged } from '@/hooks/useInstalledAgentSkills'
+import { useActiveProjectSkillRuntime } from '@/hooks/useActiveProjectSkillRuntime'
+import {
+  buildSkillCommandForRuntime,
+  buildSkillSetupTerminalCommand
+} from '../settings/CliSkillRuntimeSetup'
 import { OnboardingInlineCommandTerminal } from './OnboardingInlineCommandTerminal'
+import {
+  getOnboardingFeatureSetupAgentRuntime,
+  type OnboardingFeatureSetupRuntimeContext
+} from './onboarding-feature-setup-runtime'
 import {
   onboardingFeatureSetupTelemetrySelection,
   type OnboardingFeatureSetupSelection
@@ -10,15 +19,26 @@ import { translate } from '@/i18n/i18n'
 
 type FeatureSetupInlineTerminalProps = {
   command: string
+  runtimeContext?: OnboardingFeatureSetupRuntimeContext
   selection: OnboardingFeatureSetupSelection
 }
 
 export function FeatureSetupInlineTerminal({
   command,
+  runtimeContext,
   selection
 }: FeatureSetupInlineTerminalProps): React.JSX.Element {
   const terminalOpenedTrackedRef = useRef(false)
   const terminalInteractedTrackedRef = useRef(false)
+  const activeSkillRuntime = useActiveProjectSkillRuntime()
+  const setupRuntime = runtimeContext ?? activeSkillRuntime
+  const agentRuntime = getOnboardingFeatureSetupAgentRuntime(setupRuntime)
+  const copiedCommand = buildSkillCommandForRuntime(command, agentRuntime)
+  const prepareCommandForShell = useCallback(
+    (terminalCommand: string, effectiveShell: string | undefined) =>
+      buildSkillSetupTerminalCommand(terminalCommand, effectiveShell, agentRuntime),
+    [agentRuntime]
+  )
 
   const selectionTelemetry = useMemo(
     () => onboardingFeatureSetupTelemetrySelection(selection),
@@ -56,7 +76,10 @@ export function FeatureSetupInlineTerminal({
 
   return (
     <OnboardingInlineCommandTerminal
-      command={command}
+      command={copiedCommand}
+      prepareCommandForShell={prepareCommandForShell}
+      shellOverride={setupRuntime.terminalShellOverride}
+      forceHostRuntime={Boolean(setupRuntime.installDisabledReason)}
       title={translate(
         'auto.components.onboarding.FeatureSetupInlineTerminal.c767ab7061',
         'Skill setup'

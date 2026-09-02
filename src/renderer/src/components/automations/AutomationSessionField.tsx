@@ -1,24 +1,26 @@
-import React from 'react'
 import { Info } from 'lucide-react'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
-import { Field } from './automation-page-parts'
+import { AUTOMATION_EDITOR_SECTION_LABEL_CLASS, Field } from './automation-page-parts'
 import type { AutomationDraft } from './AutomationEditorDialog'
 import { translate } from '@/i18n/i18n'
 
 type AutomationSessionFieldProps = {
   draft: AutomationDraft
+  toggleGroupClassName: string
   toggleItemClassName: string
   onDraftChange: (updater: (current: AutomationDraft) => AutomationDraft) => void
 }
 
 export function AutomationSessionField({
   draft,
+  toggleGroupClassName,
   toggleItemClassName,
   onDraftChange
 }: AutomationSessionFieldProps): React.JSX.Element {
   return (
     <Field
+      labelClassName={AUTOMATION_EDITOR_SECTION_LABEL_CLASS}
       label={
         <span className="inline-flex items-center gap-1">
           {translate('auto.components.automations.AutomationSessionField.5ad314118e', 'Session')}
@@ -47,6 +49,7 @@ export function AutomationSessionField({
     >
       <ToggleGroup
         type="single"
+        spacing={1}
         value={draft.workspaceMode === 'existing' && draft.reuseSession ? 'reuse' : 'fresh'}
         onValueChange={(value) => {
           if (!value) {
@@ -58,9 +61,8 @@ export function AutomationSessionField({
             workspaceMode: value === 'reuse' ? 'existing' : current.workspaceMode
           }))
         }}
-        variant="outline"
         size="sm"
-        className="grid w-full grid-cols-2"
+        className={toggleGroupClassName}
       >
         <ToggleGroupItem value="fresh" className={toggleItemClassName}>
           {translate('auto.components.automations.AutomationSessionField.c90888ee94', 'Fresh')}

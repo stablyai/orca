@@ -1,4 +1,4 @@
-import type { DirEntry } from '../../../../shared/types'
+import type { DirEntry } from '../../../../shared/filesystem-entry-types'
 
 export function shouldIncludeFileExplorerEntry(entry: DirEntry): boolean {
   return entry.name !== '.git' && entry.name !== 'node_modules'

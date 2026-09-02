@@ -1,12 +1,14 @@
 import type { SshChannelMultiplexer } from './ssh-channel-multiplexer'
 import { STREAM_CHUNK_SIZE, JsonRpcErrorCode, RelayErrorCode } from './relay-protocol'
-import type { FileReadResult } from '../providers/types'
+import type { FileReadLimits, FileReadResult } from '../providers/types'
+import {
+  createSshFileStreamInactivityDeadline,
+  SSH_FILE_STREAM_INACTIVITY_TIMEOUT_MS
+} from './ssh-file-stream-inactivity-deadline'
+import { sshFileStreamReadCap } from './ssh-file-stream-read-cap'
 
 const RESULT_ENCODING_BASE64 = 'base64'
 const SENTINEL_STREAM_ID = -1
-
-const MAX_PREVIEWABLE_BINARY_SIZE = 50 * 1024 * 1024
-const MAX_TEXT_FILE_SIZE = 10 * 1024 * 1024
 
 type StreamMetadataResponse = {
   streamId?: number
@@ -33,9 +35,14 @@ export class StreamProtocolError extends Error {
   }
 }
 
+// Why: exceeding a cap the caller itself set is a size verdict, not a protocol fault — callers
+// translate it into their own too-large error rather than leaking the raw stream message.
+export class FileReadCapExceededError extends StreamProtocolError {}
+
 export async function readFileViaStream(
   mux: SshChannelMultiplexer,
-  filePath: string
+  filePath: string,
+  limits?: FileReadLimits
 ): Promise<FileReadResult> {
   // Why: subscribe BEFORE awaiting the metadata response so a chunk arriving
   // immediately after the response cannot beat the listener registration.
@@ -76,6 +83,14 @@ export async function readFileViaStream(
     const pending: PendingFrame[] = []
     let metadataReady = false
 
+    const inactivity = createSshFileStreamInactivityDeadline(() => {
+      fail(
+        new StreamProtocolError(
+          `File stream stalled (>${SSH_FILE_STREAM_INACTIVITY_TIMEOUT_MS}ms without data)`
+        )
+      )
+    })
+
     const cancel = (): void => {
       if (streamIdRef.current !== SENTINEL_STREAM_ID && !mux.isDisposed()) {
         try {
@@ -91,6 +106,7 @@ export async function readFileViaStream(
         return
       }
       settled = true
+      inactivity.clear()
       cancel()
       cleanup()
       reject(err)
@@ -101,6 +117,7 @@ export async function readFileViaStream(
         return
       }
       settled = true
+      inactivity.clear()
       cleanup()
       resolve(value)
     }
@@ -148,6 +165,11 @@ export async function readFileViaStream(
       expectedSeq += 1
       receivedChunks += 1
       bytesReceived += decoded.length
+      inactivity.reset()
+      // Why: credit-based flow control — the relay caps unacked chunks so bulk
+      // stream frames cannot queue unbounded ahead of interactive pty.data
+      // frames on the shared SSH channel. Old relays ignore this notification.
+      mux.notify('fs.streamAck', { streamId: id, seq })
     }
 
     const handleEnd = (params: Record<string, unknown>): void => {
@@ -260,7 +282,9 @@ export async function readFileViaStream(
     unsubscribers.push(onDispose)
 
     void mux
-      .request('fs.readFileStream', { filePath })
+      // Why: flowControl declares this client acks each chunk, letting a new
+      // relay pace the pump. Old relays ignore the extra param and flood.
+      .request('fs.readFileStream', { filePath, flowControl: 'ack' })
       .then((rawMetadata) => {
         if (settled) {
           return
@@ -286,11 +310,11 @@ export async function readFileViaStream(
           return
         }
 
-        const cap = metadata.isBinary ? MAX_PREVIEWABLE_BINARY_SIZE : MAX_TEXT_FILE_SIZE
+        const cap = sshFileStreamReadCap(metadata.isBinary, limits)
         if (metadata.totalSize < 0 || metadata.totalSize > cap) {
           streamIdRef.current = metadata.streamId
           fail(
-            new StreamProtocolError(
+            new FileReadCapExceededError(
               `Reported totalSize ${metadata.totalSize} exceeds client cap ${cap}`
             )
           )
@@ -308,6 +332,7 @@ export async function readFileViaStream(
         }
         streamIdRef.current = metadata.streamId
         metadataReady = true
+        inactivity.reset()
         drainPending()
       })
       .catch((err) => {

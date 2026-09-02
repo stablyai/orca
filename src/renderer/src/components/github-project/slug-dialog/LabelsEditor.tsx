@@ -2,12 +2,13 @@ import React, { useState } from 'react'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { cn } from '@/lib/utils'
 import { useRepoLabelsBySlug } from '@/hooks/useGitHubSlugMetadata'
-import type { GlobalSettings } from '../../../../../shared/types'
+import type { GlobalSettings } from '../../../../../shared/global-settings-types'
 import { translate } from '@/i18n/i18n'
 
 export function LabelsEditor({
   owner,
   repo,
+  host,
   selected,
   disabled,
   sourceSettings,
@@ -15,13 +16,19 @@ export function LabelsEditor({
 }: {
   owner: string
   repo: string
+  host?: string
   selected: string[]
   disabled?: boolean
   sourceSettings: Pick<GlobalSettings, 'activeRuntimeEnvironmentId'> | null | undefined
   onChange: (add: string[], remove: string[]) => void | Promise<void>
 }): React.JSX.Element {
   const [open, setOpen] = useState(false)
-  const metadata = useRepoLabelsBySlug(open ? owner : null, open ? repo : null, sourceSettings)
+  const metadata = useRepoLabelsBySlug(
+    open ? owner : null,
+    open ? repo : null,
+    sourceSettings,
+    host
+  )
   return (
     <Popover open={open} onOpenChange={(o) => !disabled && setOpen(o)}>
       <PopoverTrigger asChild>

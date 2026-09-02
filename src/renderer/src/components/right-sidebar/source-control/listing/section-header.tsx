@@ -1,0 +1,54 @@
+import React from 'react'
+import { ChevronDown } from 'lucide-react'
+import { cn } from '@/lib/utils'
+import { translate } from '@/i18n/i18n'
+
+export function SectionHeader({
+  label,
+  count,
+  countTitle,
+  conflictCount = 0,
+  isCollapsed,
+  onToggle,
+  actions
+}: {
+  label: string
+  count: number
+  /** Spells out what the count measures — e.g. files changed against a compare base. */
+  countTitle?: string
+  conflictCount?: number
+  isCollapsed: boolean
+  onToggle: () => void
+  actions?: React.ReactNode
+}): React.JSX.Element {
+  // Why: shared rounded container so the hover background spans the whole row instead of clipping around the label.
+  return (
+    <div className="pl-1 pr-3 pt-3 pb-1">
+      <div className="group/section flex items-center rounded-md pr-1 hover:bg-accent hover:text-accent-foreground">
+        <button
+          type="button"
+          className="flex flex-1 items-center gap-1 px-0.5 py-0.5 text-left text-xs font-semibold uppercase tracking-wider text-foreground/70 group-hover/section:text-accent-foreground"
+          onClick={onToggle}
+        >
+          <ChevronDown
+            className={cn('size-3.5 shrink-0 transition-transform', isCollapsed && '-rotate-90')}
+          />
+          <span>{label}</span>
+          {/* Why: no aria-label here — inside the toggle button it would rewrite the
+              button's accessible name; the explanation stays a hover-only title. */}
+          <span className="text-[11px] font-medium tabular-nums" title={countTitle}>
+            {count}
+          </span>
+          {conflictCount > 0 && (
+            <span className="text-[11px] font-medium text-destructive/80">
+              · {conflictCount}{' '}
+              {translate('auto.components.right.sidebar.SourceControl.413a3ba113', 'conflict')}
+              {conflictCount === 1 ? '' : 's'}
+            </span>
+          )}
+        </button>
+        <div className="shrink-0 flex items-center">{actions}</div>
+      </div>
+    </div>
+  )
+}

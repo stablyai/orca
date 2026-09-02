@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { Repo } from '../../../shared/types'
+import type { Repo } from '../../../shared/repo-types'
 import type { WorkspaceSessionSnapshot } from './workspace-session'
 import { buildWorkspaceSessionPatch } from './workspace-session-patch'
 
@@ -54,6 +54,7 @@ function createSnapshot(
     activeTabTypeByWorktree: { 'wt-1': 'editor', 'wt-2': 'terminal' },
     browserTabsByWorktree: {},
     browserPagesByWorkspace: {},
+    remoteBrowserPageHandlesByPageId: {},
     activeBrowserTabIdByWorktree: {},
     browserUrlHistory: [],
     unifiedTabsByWorktree: {},
@@ -205,6 +206,10 @@ describe('buildWorkspaceSessionPatch', () => {
 
     expect(Object.keys(patch).sort()).toEqual(
       [
+        // Why: the reconnect list derives from remote session ids, so any
+        // patch that rewrites remoteSessionIdsByTabId must carry it too —
+        // otherwise a crash between patches strands a stale target on disk.
+        'activeConnectionIdsAtShutdown',
         'activeWorktreeIdsOnShutdown',
         'remoteSessionIdsByTabId',
         'tabsByWorktree',
@@ -223,6 +228,25 @@ describe('buildWorkspaceSessionPatch', () => {
 
     expect(Object.hasOwn(patch, 'activeConnectionIdsAtShutdown')).toBe(true)
     expect(patch.activeConnectionIdsAtShutdown).toBeUndefined()
+  })
+
+  it('derives reconnect targets from surviving relay session ids in terminal-field patches', () => {
+    const patch = buildWorkspaceSessionPatch(
+      createSnapshot({
+        tabsByWorktree: {
+          'wt-ssh': [{ id: 'tab-ssh', title: 'remote', ptyId: null, worktreeId: 'wt-ssh' } as never]
+        },
+        ptyIdsByTabId: { 'tab-ssh': [] },
+        lastKnownRelayPtyIdByTabId: { 'tab-ssh': 'ssh:conn-1@@pty-42' },
+        sshConnectionStates: new Map([['conn-1', { status: 'reconnecting' } as never]]),
+        repos: [createRepo('repo-ssh', 'conn-1')],
+        worktreesByRepo: { 'repo-ssh': [{ id: 'wt-ssh', repoId: 'repo-ssh' } as never] }
+      }),
+      ['lastKnownRelayPtyIdByTabId']
+    )
+
+    expect(patch.remoteSessionIdsByTabId).toEqual({ 'tab-ssh': 'ssh:conn-1@@pty-42' })
+    expect(patch.activeConnectionIdsAtShutdown).toEqual(['conn-1'])
   })
 
   it('patches tab chrome as a sanitized bundle when split groups change', () => {
@@ -312,5 +336,128 @@ describe('buildWorkspaceSessionPatch', () => {
 
     expect(Object.hasOwn(patch, 'sleepingAgentSessionsByPaneKey')).toBe(true)
     expect(patch.sleepingAgentSessionsByPaneKey).toBeUndefined()
+  })
+
+  it('keeps a staged browser tab out of incremental patches too', () => {
+    const patch = buildWorkspaceSessionPatch(
+      createSnapshot({
+        browserTabsByWorktree: {
+          'wt-1': [
+            {
+              id: 'staged-1',
+              activePageId: 'staged-page',
+              pageIds: ['staged-page'],
+              worktreeId: 'wt-1'
+            } as never
+          ]
+        },
+        browserPagesByWorkspace: {
+          'staged-1': [{ id: 'staged-page', workspaceId: 'staged-1', worktreeId: 'wt-1' } as never]
+        },
+        remoteBrowserPageHandlesByPageId: {
+          'staged-page': { environmentId: 'env-1', remotePageId: 'staged-page', staged: true }
+        },
+        activeBrowserTabIdByWorktree: { 'wt-1': 'staged-1' }
+      }),
+      ['browserTabsByWorktree', 'browserPagesByWorkspace', 'activeBrowserTabIdByWorktree']
+    )
+
+    expect(patch.browserTabsByWorktree).toEqual({ 'wt-1': [] })
+    expect(patch.browserPagesByWorkspace).toEqual({})
+    expect(patch.activeBrowserTabIdByWorktree).toEqual({ 'wt-1': null })
+  })
+
+  // Why: adoption can leave every browser row byte-identical and only clear the staged flag, so
+  // the handle map is the sole signal that the tab just became persistable.
+  it('persists an adopted browser tab when only the handle map changed', () => {
+    const patch = buildWorkspaceSessionPatch(
+      createSnapshot({
+        browserTabsByWorktree: {
+          'wt-1': [
+            {
+              id: 'adopted-1',
+              activePageId: 'adopted-page',
+              pageIds: ['adopted-page'],
+              worktreeId: 'wt-1'
+            } as never
+          ]
+        },
+        browserPagesByWorkspace: {
+          'adopted-1': [
+            { id: 'adopted-page', workspaceId: 'adopted-1', worktreeId: 'wt-1' } as never
+          ]
+        },
+        remoteBrowserPageHandlesByPageId: {
+          'adopted-page': { environmentId: 'env-1', remotePageId: 'host-page-1' }
+        },
+        activeBrowserTabIdByWorktree: { 'wt-1': 'adopted-1' },
+        unifiedTabsByWorktree: {
+          'wt-1': [
+            {
+              id: 'unified-1',
+              entityId: 'adopted-1',
+              contentType: 'browser',
+              worktreeId: 'wt-1',
+              groupId: 'group-1'
+            } as never
+          ]
+        },
+        groupsByWorktree: {
+          'wt-1': [
+            { id: 'group-1', worktreeId: 'wt-1', activeTabId: 'unified-1', tabOrder: ['unified-1'] }
+          ] as never
+        },
+        layoutByWorktree: { 'wt-1': { type: 'leaf', groupId: 'group-1' } }
+      }),
+      ['remoteBrowserPageHandlesByPageId']
+    )
+
+    expect(patch.browserTabsByWorktree?.['wt-1']).toHaveLength(1)
+    expect(patch.browserPagesByWorkspace?.['adopted-1']).toHaveLength(1)
+    expect(patch.activeBrowserTabIdByWorktree).toEqual({ 'wt-1': 'adopted-1' })
+    expect(patch.unifiedTabs?.['wt-1']).toHaveLength(1)
+  })
+
+  // Why: the incremental writer is the one that runs on quit, so a remote page identity the full
+  // payload stamps but the patch drops never reaches disk in the case this exists for.
+  it('stamps the remote page identity onto incrementally patched browser page rows', () => {
+    const patch = buildWorkspaceSessionPatch(
+      createSnapshot({
+        browserTabsByWorktree: {
+          'wt-1': [
+            {
+              id: 'adopted-1',
+              activePageId: 'adopted-page',
+              pageIds: ['adopted-page'],
+              worktreeId: 'wt-1'
+            } as never
+          ]
+        },
+        browserPagesByWorkspace: {
+          'adopted-1': [
+            { id: 'adopted-page', workspaceId: 'adopted-1', worktreeId: 'wt-1' } as never
+          ]
+        },
+        remoteBrowserPageHandlesByPageId: {
+          'adopted-page': {
+            environmentId: 'env-1',
+            remotePageId: 'host-page-1',
+            placement: {
+              kind: 'client',
+              browserHostClientId: 'host-a',
+              browserHostGeneration: 1,
+              pageHostGeneration: 1
+            }
+          }
+        },
+        activeBrowserTabIdByWorktree: { 'wt-1': 'adopted-1' }
+      }),
+      ['browserPagesByWorkspace']
+    )
+
+    expect(patch.browserPagesByWorkspace?.['adopted-1']?.[0]).toMatchObject({
+      remoteBrowserPageId: 'host-page-1',
+      remoteBrowserPageClientHosted: true
+    })
   })
 })

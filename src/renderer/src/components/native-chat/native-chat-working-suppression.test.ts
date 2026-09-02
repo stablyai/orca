@@ -9,8 +9,7 @@ describe('native chat working suppression', () => {
     expect(
       shouldShowNativeChatWorking({
         isConversation: true,
-        viewWorking: true,
-        hookWorking: true,
+        working: true,
         interrupted: true
       })
     ).toBe(false)
@@ -20,19 +19,33 @@ describe('native chat working suppression', () => {
     expect(
       shouldShowNativeChatWorking({
         isConversation: true,
-        viewWorking: false,
-        hookWorking: true,
+        working: true,
         interrupted: false
       })
     ).toBe(true)
   })
 
-  it('clears suppression only after all working signals clear', () => {
-    expect(shouldClearNativeChatWorkingSuppression({ viewWorking: true, hookWorking: false })).toBe(
-      false
-    )
+  it('clears suppression after reconciled working clears', () => {
+    expect(shouldClearNativeChatWorkingSuppression({ working: true })).toBe(false)
+    expect(shouldClearNativeChatWorkingSuppression({ working: false })).toBe(true)
+  })
+
+  it('clears suppression when a newer working epoch starts while interrupted', () => {
     expect(
-      shouldClearNativeChatWorkingSuppression({ viewWorking: false, hookWorking: false })
+      shouldClearNativeChatWorkingSuppression({
+        working: true,
+        interrupted: true,
+        workingEpoch: 20,
+        previousWorkingEpoch: 10
+      })
     ).toBe(true)
+    expect(
+      shouldClearNativeChatWorkingSuppression({
+        working: true,
+        interrupted: true,
+        workingEpoch: 10,
+        previousWorkingEpoch: 10
+      })
+    ).toBe(false)
   })
 })

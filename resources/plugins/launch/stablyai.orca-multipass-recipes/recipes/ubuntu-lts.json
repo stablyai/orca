@@ -1,0 +1,10 @@
+{
+  "schemaVersion": 1,
+  "id": "multipass-ubuntu-lts",
+  "name": "Multipass Ubuntu LTS",
+  "description": "Creates a four-CPU disposable Ubuntu workspace with Multipass.",
+  "create": "multipass launch 24.04 --name \"$ORCA_VM_NAME\" --cpus 4 --memory 8G --disk 40G",
+  "suspend": "multipass suspend \"$ORCA_VM_NAME\"",
+  "resume": "multipass start \"$ORCA_VM_NAME\"",
+  "destroy": "multipass delete \"$ORCA_VM_NAME\" --purge"
+}

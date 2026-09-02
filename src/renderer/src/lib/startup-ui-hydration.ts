@@ -4,7 +4,7 @@ import {
   DEFAULT_STATUS_BAR_ITEMS,
   DEFAULT_WORKTREE_CARD_PROPERTIES
 } from '../../../shared/constants'
-import type { PersistedUIState } from '../../../shared/types'
+import type { PersistedUIState } from '../../../shared/persisted-ui-state-types'
 
 export function hydratePersistedUIAfterStartupRead({
   persistedUI,
@@ -13,13 +13,13 @@ export function hydratePersistedUIAfterStartupRead({
 }: {
   persistedUI: PersistedUIState
   cancelled: boolean
-  hydratePersistedUI: (ui: PersistedUIState) => void
+  hydratePersistedUI: (ui: PersistedUIState, source?: 'startup' | 'sync') => void
 }): boolean {
   if (cancelled) {
     return false
   }
 
-  hydratePersistedUI(persistedUI)
+  hydratePersistedUI(persistedUI, 'startup')
   return true
 }
 
@@ -34,12 +34,14 @@ export function getStartupErrorFallbackUI(uiHydrated: boolean): PersistedUIState
   return {
     lastActiveRepoId: null,
     lastActiveWorktreeId: null,
+    activeView: 'terminal',
     sidebarWidth: 280,
     rightSidebarOpen: true,
     rightSidebarTab: 'explorer',
     rightSidebarExplorerView: 'files',
     rightSidebarWidth: 350,
     markdownTocPanelWidth: 240,
+    combinedDiffFileTreeWidth: 256,
     groupBy: 'repo',
     sortBy: 'name',
     projectOrderBy: 'manual',
@@ -47,6 +49,9 @@ export function getStartupErrorFallbackUI(uiHydrated: boolean): PersistedUIState
     hideSleepingWorkspaces: DEFAULT_HIDE_SLEEPING_WORKSPACES,
     showSleepingWorkspaces: DEFAULT_SHOW_SLEEPING_WORKSPACES,
     hideDefaultBranchWorkspace: false,
+    hideCliCreatedWorkspaces: false,
+    hideDetachedHeadWorkspaces: false,
+    alwaysShowDefaultBranchWorkspace: true,
     hideAutomationGeneratedWorkspaces: false,
     filterRepoIds: [],
     collapsedGroups: [],

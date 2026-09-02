@@ -2,7 +2,8 @@ import type {
   AddRepoExistingWorkspaceSource,
   EventProps
 } from '../../../../shared/telemetry-events'
-import type { Worktree } from '../../../../shared/types'
+import type { Worktree } from '../../../../shared/worktree/types'
+import { compareWorktreeDisplayName } from '@/lib/worktree-display-name-order'
 
 type ExistingWorkspacesDetectedProps = EventProps<'add_repo_existing_workspaces_detected'>
 
@@ -21,8 +22,7 @@ function pathBasename(pathValue: string): string {
     pathValue
       .replace(/[\\/]+$/, '')
       .split(/[\\/]/)
-      .filter(Boolean)
-      .at(-1) ?? ''
+      .findLast(Boolean) ?? ''
   )
 }
 
@@ -68,7 +68,7 @@ export function buildAddRepoExistingWorkspacesDetectedEvent(
     if (a.lastActivityAt !== b.lastActivityAt) {
       return b.lastActivityAt - a.lastActivityAt
     }
-    return a.displayName.localeCompare(b.displayName)
+    return compareWorktreeDisplayName(a, b)
   })
   const payload = buildAddRepoExistingWorkspacesTelemetry(source, sortedWorktrees)
   return payload && shouldTrackAddRepoExistingWorkspacesDetected(payload) ? payload : null

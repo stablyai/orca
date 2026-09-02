@@ -33,6 +33,64 @@ async function createRepoWithNewlineWorktree(): Promise<{
   }
 }
 
+async function createRepoWithLockedDeletedWorktree(): Promise<{
+  repoPath: string
+  worktreePath: string
+}> {
+  const root = await mkdtemp(path.join(tmpdir(), 'orca-worktree-locked-delete-'))
+  tempRoots.push(root)
+  const repoPath = path.join(root, 'repo')
+  const requestedWorktreePath = path.join(root, 'locked deleted worktree')
+
+  execFileSync('git', ['init', '--quiet', repoPath])
+  git(repoPath, ['symbolic-ref', 'HEAD', 'refs/heads/main'])
+  git(repoPath, ['config', 'user.email', 'test@example.com'])
+  git(repoPath, ['config', 'user.name', 'Test User'])
+  git(repoPath, ['commit', '--allow-empty', '--quiet', '-m', 'initial'])
+  git(repoPath, [
+    'worktree',
+    'add',
+    '--quiet',
+    '-b',
+    'feature/locked-delete',
+    requestedWorktreePath
+  ])
+  git(repoPath, ['worktree', 'lock', '--reason', 'orca locked stale repro', requestedWorktreePath])
+
+  const worktreePath = await realpath(requestedWorktreePath)
+  await rm(worktreePath, { recursive: true, force: true })
+
+  return {
+    repoPath: await realpath(repoPath),
+    worktreePath
+  }
+}
+
+async function createRepoWithPrunableWorktree(): Promise<{
+  repoPath: string
+  worktreePath: string
+}> {
+  const root = await mkdtemp(path.join(tmpdir(), 'orca-worktree-prunable-'))
+  tempRoots.push(root)
+  const repoPath = path.join(root, 'repo')
+  const requestedWorktreePath = path.join(root, 'stale-worktree')
+
+  execFileSync('git', ['init', '--quiet', repoPath])
+  git(repoPath, ['symbolic-ref', 'HEAD', 'refs/heads/main'])
+  git(repoPath, ['config', 'user.email', 'test@example.com'])
+  git(repoPath, ['config', 'user.name', 'Test User'])
+  git(repoPath, ['commit', '--allow-empty', '--quiet', '-m', 'initial'])
+  git(repoPath, ['worktree', 'add', '--quiet', '-b', 'feature/stale', requestedWorktreePath])
+
+  const worktreePath = await realpath(requestedWorktreePath)
+  await rm(worktreePath, { recursive: true, force: true })
+
+  return {
+    repoPath: await realpath(repoPath),
+    worktreePath
+  }
+}
+
 function branchExists(repoPath: string, branchName: string): boolean {
   try {
     git(repoPath, ['show-ref', '--verify', '--quiet', `refs/heads/${branchName}`])
@@ -68,4 +126,30 @@ describe('git worktree paths', () => {
       expect(branchExists(repoPath, 'feature/newline')).toBe(false)
     }
   )
+
+  it('annotates a worktree whose directory was deleted as prunable', async () => {
+    // Why: an un-pruned registration with a deleted directory must not surface
+    // as a live workspace (issue #8389).
+    const { repoPath, worktreePath } = await createRepoWithPrunableWorktree()
+
+    const worktrees = await listWorktrees(repoPath)
+    const stale = worktrees.find(
+      (worktree) => worktree.path.replaceAll('\\', '/') === worktreePath.replaceAll('\\', '/')
+    )
+
+    expect(stale).toMatchObject({ prunable: true })
+  })
+
+  it('preserves a locked worktree whose directory was deleted manually', async () => {
+    const { repoPath, worktreePath } = await createRepoWithLockedDeletedWorktree()
+
+    await expect(removeWorktree(repoPath, worktreePath, true)).rejects.toThrow(
+      'Worktree is locked by Git'
+    )
+
+    expect(git(repoPath, ['worktree', 'list', '--porcelain'])).toContain(
+      worktreePath.replaceAll('\\', '/')
+    )
+    expect(branchExists(repoPath, 'feature/locked-delete')).toBe(true)
+  })
 })

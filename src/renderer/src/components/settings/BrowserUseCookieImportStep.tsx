@@ -1,7 +1,10 @@
 import { Import, Loader2 } from 'lucide-react'
 import { toast } from 'sonner'
+import { emitBrowserCookieImportToast } from '@/lib/browser-cookie-import-toast'
 import { cn } from '@/lib/utils'
 import { Button } from '../ui/button'
+import { BrowserCookieImportDisclosure } from '../BrowserCookieImportDisclosure'
+import { BrowserCookieImportMachineNotice } from '../BrowserCookieImportMachineNotice'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -15,7 +18,7 @@ import {
 } from '../ui/dropdown-menu'
 import { useAppStore } from '../../store'
 import { SearchableSetting } from './SearchableSetting'
-import { StepBadge } from './BrowserUseStepBadge'
+import { StepBadge } from './SetupStepBadge'
 import { getBrowserUsePaneSearchEntries } from './browser-use-search'
 import { translate } from '@/i18n/i18n'
 
@@ -47,7 +50,8 @@ export function BrowserUseCookieImportStep({
       .importCookiesFromBrowser(profileId, browserFamily, browserProfile)
     if (result.ok) {
       const browser = detectedBrowsers.find((b) => b.family === browserFamily)
-      toast.success(
+      emitBrowserCookieImportToast(
+        result.summary,
         translate(
           'auto.components.settings.BrowserUsePane.2ea4617e3a',
           'Imported {{value0}} cookies from {{value1}}{{value2}}.',
@@ -56,7 +60,8 @@ export function BrowserUseCookieImportStep({
             value1: browser?.label ?? browserFamily,
             value2: browserProfile ? ` (${browserProfile})` : ''
           }
-        )
+        ),
+        result
       )
     } else {
       toast.error(result.reason)
@@ -66,12 +71,14 @@ export function BrowserUseCookieImportStep({
   const handleImportFromFile = async (): Promise<void> => {
     const result = await useAppStore.getState().importCookiesToProfile('default')
     if (result.ok) {
-      toast.success(
+      emitBrowserCookieImportToast(
+        result.summary,
         translate(
           'auto.components.settings.BrowserUsePane.8f2675c2f3',
           'Imported {{value0}} cookies from file.',
           { value0: result.summary.importedCookies }
-        )
+        ),
+        result
       )
     } else if (result.reason !== 'canceled') {
       toast.error(result.reason)
@@ -116,9 +123,9 @@ export function BrowserUseCookieImportStep({
             <p className="text-[11px] text-muted-foreground">
               {translate(
                 'auto.components.settings.BrowserUsePane.112f70adc4',
-                'Last imported from'
+                'Last imported from {{value0}}',
+                { value0: sourceLabel }
               )}
-              {sourceLabel}
             </p>
           ) : null}
           {onConfigureMoreBrowsers ? (
@@ -159,12 +166,16 @@ export function BrowserUseCookieImportStep({
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
+            <BrowserCookieImportMachineNotice />
             {detectedBrowsers.map((browser) =>
               browser.profiles.length > 1 ? (
                 <DropdownMenuSub key={browser.family}>
                   <DropdownMenuSubTrigger>
-                    {translate('auto.components.settings.BrowserUsePane.e44c5d681e', 'From')}
-                    {browser.label}
+                    {translate(
+                      'auto.components.settings.BrowserUsePane.5301857d88',
+                      'From {{value0}}',
+                      { value0: browser.label }
+                    )}
                   </DropdownMenuSubTrigger>
                   <DropdownMenuPortal>
                     <DropdownMenuSubContent>
@@ -186,8 +197,11 @@ export function BrowserUseCookieImportStep({
                   key={browser.family}
                   onSelect={() => void handleImportFromBrowser(browser.family)}
                 >
-                  {translate('auto.components.settings.BrowserUsePane.e44c5d681e', 'From')}
-                  {browser.label}
+                  {translate(
+                    'auto.components.settings.BrowserUsePane.5301857d88',
+                    'From {{value0}}',
+                    { value0: browser.label }
+                  )}
                 </DropdownMenuItem>
               )
             )}
@@ -195,6 +209,7 @@ export function BrowserUseCookieImportStep({
             <DropdownMenuItem onSelect={() => void handleImportFromFile()}>
               {translate('auto.components.settings.BrowserUsePane.be6df68384', 'From File…')}
             </DropdownMenuItem>
+            <BrowserCookieImportDisclosure />
           </DropdownMenuContent>
         </DropdownMenu>
       </div>

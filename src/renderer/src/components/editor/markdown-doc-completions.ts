@@ -1,4 +1,4 @@
-import type { MarkdownDocument } from '../../../../shared/types'
+import type { MarkdownDocument } from '../../../../shared/filesystem-entry-types'
 import { isClipboardTextByteLengthOverLimit } from '../../../../shared/clipboard-text'
 
 export type MarkdownDocCompletionContext = {

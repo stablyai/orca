@@ -16,10 +16,19 @@ import { useMountedRef } from '@/hooks/useMountedRef'
 import {
   formatCrashReportText,
   isReactErrorBoundaryReport,
+  MAX_USER_NOTES_LENGTH,
+  type CrashReportDiagnosticBundle,
   type CrashReportRecord
 } from '../../../../shared/crash-reporting'
-import type { GitHubViewer } from '../../../../shared/types'
+import type { GitHubViewer } from '../../../../shared/github/pull-request-types'
 import { translate } from '@/i18n/i18n'
+import {
+  CRASH_REPORT_SUBMIT_FAILURE_TOAST_ID,
+  getCrashReportCopySubmissionFailure,
+  getCrashReportSubmitFailureNotice,
+  getCrashReportSubmitWarningNotice
+} from './crash-report-submit-notice'
+import { useCrashReportCopy } from './use-crash-report-copy'
 
 function formatSummary(report: CrashReportRecord): string {
   if (isReactErrorBoundaryReport(report)) {
@@ -88,6 +97,7 @@ export function CrashReportDialogSurface({
     () => (report ? formatCrashReportText(report, deferredNotes) : ''),
     [deferredNotes, report]
   )
+  const copyCrashReportDetails = useCrashReportCopy(report, notes)
 
   const clearViewer = useCallback((): void => {
     viewerRequestIdRef.current += 1
@@ -121,17 +131,25 @@ export function CrashReportDialogSurface({
     loadViewerForOpenDialog()
   }, [clearViewer, loadViewerForOpenDialog, open])
 
-  const handleCopy = async (): Promise<void> => {
-    const result = await window.api.crashReports.copyLatestDiagnostics(
-      report ? { reportId: report.id, notes } : { notes }
-    )
-    if (!result.ok) {
-      toast.error(result.error)
-      return
-    }
-    toast.success(
-      translate('auto.components.crash.report.CrashReportDialog.8b8473c544', 'Crash report copied.')
-    )
+  const showSubmitFailure = (
+    error: unknown,
+    diagnosticBundle?: CrashReportDiagnosticBundle
+  ): void => {
+    const failure = { error, ...(diagnosticBundle ? { diagnosticBundle } : {}) }
+    const notice = getCrashReportSubmitFailureNotice(failure, includeDiagnosticLogs)
+    const copyFailure = getCrashReportCopySubmissionFailure(failure)
+    toast.error(notice.title, {
+      id: CRASH_REPORT_SUBMIT_FAILURE_TOAST_ID,
+      description: notice.description,
+      duration: Infinity,
+      dismissible: true,
+      action: {
+        label: notice.actionLabel,
+        onClick: () => {
+          void copyCrashReportDetails(copyFailure)
+        }
+      }
+    })
   }
 
   const dismissReportIfNeeded = async (): Promise<void> => {
@@ -164,22 +182,7 @@ export function CrashReportDialogSurface({
         githubEmail: null
       })
       if (!result.ok) {
-        if (result.diagnosticBundle?.status === 'uploaded') {
-          toast.error(
-            translate(
-              'auto.components.crash.report.CrashReportDialog.b2e36f53a1',
-              'Failed to send crash report. Diagnostic ticket {{value0}} was uploaded but not linked.',
-              { value0: result.diagnosticBundle.ticketId }
-            )
-          )
-        } else {
-          toast.error(
-            translate(
-              'auto.components.crash.report.CrashReportDialog.56a3dfa283',
-              'Failed to send crash report.'
-            )
-          )
-        }
+        showSubmitFailure(result.error, result.diagnosticBundle)
         console.error('Failed to submit crash report:', result.error)
         return
       }
@@ -188,17 +191,21 @@ export function CrashReportDialogSurface({
       }
       onReportChange(result.report)
       setNotes('')
-      toast.success(
-        translate('auto.components.crash.report.CrashReportDialog.8e24fe4f75', 'Crash report sent.')
-      )
+      toast.dismiss(CRASH_REPORT_SUBMIT_FAILURE_TOAST_ID)
+      const warningNotice = getCrashReportSubmitWarningNotice(result, includeDiagnosticLogs)
+      if (warningNotice) {
+        toast.warning(warningNotice.title, { description: warningNotice.description })
+      } else {
+        toast.success(
+          translate(
+            'auto.components.crash.report.CrashReportDialog.8e24fe4f75',
+            'Crash report sent.'
+          )
+        )
+      }
       onOpenChange(false)
     } catch (error) {
-      toast.error(
-        translate(
-          'auto.components.crash.report.CrashReportDialog.56a3dfa283',
-          'Failed to send crash report.'
-        )
-      )
+      showSubmitFailure(error)
       console.error('Failed to submit crash report:', error)
     } finally {
       if (mountedRef.current) {
@@ -235,7 +242,7 @@ export function CrashReportDialogSurface({
           <DialogDescription className="text-xs">{getDialogDescription(report)}</DialogDescription>
         </DialogHeader>
 
-        <div className="space-y-3">
+        <div className="min-w-0 space-y-3">
           {report ? (
             <>
               <div className="rounded-md border border-border/70 bg-muted/30 p-3 text-xs">
@@ -246,14 +253,14 @@ export function CrashReportDialogSurface({
                   {report.appVersion}
                 </div>
               </div>
-              <div className="space-y-1.5">
+              <div className="min-w-0 space-y-1.5">
                 <div className="text-[11px] font-medium text-muted-foreground">
                   {translate(
                     'auto.components.crash.report.CrashReportDialog.6d3ebe216a',
                     'Diagnostic text'
                   )}
                 </div>
-                <pre className="max-h-44 overflow-auto whitespace-pre-wrap break-words rounded-md border border-border bg-muted/20 p-3 font-mono text-[11px] leading-5 text-muted-foreground scrollbar-sleek">
+                <pre className="max-h-44 overflow-auto whitespace-pre-wrap [overflow-wrap:anywhere] rounded-md border border-border bg-muted/20 p-3 font-mono text-[11px] leading-5 text-muted-foreground scrollbar-sleek">
                   {diagnosticText}
                 </pre>
               </div>
@@ -271,13 +278,23 @@ export function CrashReportDialogSurface({
                   )}
             </div>
           )}
-          <textarea
-            value={notes}
-            onChange={(event) => setNotes(event.target.value)}
-            rows={4}
-            placeholder={getNotesPlaceholder(report)}
-            className="min-h-24 w-full rounded-md border border-border bg-background px-3 py-2 text-sm outline-none ring-offset-background placeholder:text-muted-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-          />
+          <div className="space-y-1">
+            <textarea
+              value={notes}
+              onChange={(event) => setNotes(event.target.value)}
+              rows={4}
+              // Keep the UI and formatter on the same input budget.
+              maxLength={MAX_USER_NOTES_LENGTH}
+              placeholder={getNotesPlaceholder(report)}
+              className="min-h-24 w-full rounded-md border border-border bg-background px-3 py-2 text-sm outline-none ring-offset-background placeholder:text-muted-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+            />
+            <div
+              aria-hidden="true"
+              className="text-right text-[11px] tabular-nums text-muted-foreground"
+            >
+              {notes.length.toLocaleString()} / {MAX_USER_NOTES_LENGTH.toLocaleString()}
+            </div>
+          </div>
           <div className="flex items-start gap-2 rounded-md border border-border/70 bg-muted/20 p-3">
             <Checkbox
               id="crash-report-attach-diagnostics"
@@ -304,7 +321,13 @@ export function CrashReportDialogSurface({
         </div>
 
         <DialogFooter className="gap-2">
-          <Button type="button" variant="outline" size="sm" onClick={handleCopy} disabled={loading}>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={() => void copyCrashReportDetails()}
+            disabled={loading}
+          >
             <Clipboard className="size-3.5" />
             {translate('auto.components.crash.report.CrashReportDialog.50b00dc327', 'Copy Details')}
           </Button>

@@ -1,8 +1,16 @@
 import { describe, expect, it, vi } from 'vitest'
 import * as path from 'node:path'
+import { GitCapabilityCache } from '../shared/git-capability-cache'
 import type { GitExec } from './git-handler-ops'
 import { removeWorktreeOp } from './git-handler-worktree-ops'
 import { forceDeletePreservedRelayBranch } from './git-handler-branch-cleanup'
+
+function removeWorktreeWithCapabilityCache(
+  git: GitExec,
+  params: Parameters<typeof removeWorktreeOp>[1]
+) {
+  return removeWorktreeOp(git, params, new GitCapabilityCache())
+}
 
 function worktreeList(...entries: { path: string; branch?: string }[]): string {
   return entries
@@ -183,6 +191,9 @@ describe('removeWorktreeOp branch cleanup', () => {
       if (args[0] === 'rev-parse' && args.includes('refs/remotes/origin/main^{commit}')) {
         return { stdout: 'base123\n', stderr: '' }
       }
+      if (args[0] === 'rev-parse' && args.includes('HEAD^{commit}')) {
+        return { stdout: 'base123\n', stderr: '' }
+      }
       if (args[0] === 'merge-tree') {
         return { stdout: 'tree123\n', stderr: '' }
       }
@@ -192,7 +203,9 @@ describe('removeWorktreeOp branch cleanup', () => {
       return { stdout: '', stderr: '' }
     })
 
-    await expect(removeWorktreeOp(git, { worktreePath: '/repo-feature' })).resolves.toEqual({})
+    await expect(
+      removeWorktreeWithCapabilityCache(git, { worktreePath: '/repo-feature' })
+    ).resolves.toEqual({})
 
     expect(git).toHaveBeenCalledWith(['branch', '-d', '--', 'feature/test'], expect.any(String))
     expect(git).toHaveBeenCalledWith(
@@ -207,6 +220,7 @@ describe('removeWorktreeOp branch cleanup', () => {
       ['config', '--remove-section', 'branch.feature/test'],
       expect.any(String)
     )
+    expect(git).not.toHaveBeenCalledWith(['remote'], expect.any(String))
   })
 
   it('deletes a squash-merged SSH branch with branch-only merge commits via expected head', async () => {
@@ -279,7 +293,9 @@ describe('removeWorktreeOp branch cleanup', () => {
       return { stdout: '', stderr: '' }
     })
 
-    await expect(removeWorktreeOp(git, { worktreePath: '/repo-feature' })).resolves.toEqual({})
+    await expect(
+      removeWorktreeWithCapabilityCache(git, { worktreePath: '/repo-feature' })
+    ).resolves.toEqual({})
 
     expect(git).toHaveBeenCalledWith(
       ['update-ref', '-d', 'refs/heads/feature/test', '1'],
@@ -341,22 +357,24 @@ describe('removeWorktreeOp branch cleanup', () => {
       return { stdout: '', stderr: '' }
     })
 
-    await expect(removeWorktreeOp(git, { worktreePath: '/repo-feature' })).resolves.toEqual({})
+    await expect(
+      removeWorktreeWithCapabilityCache(git, { worktreePath: '/repo-feature' })
+    ).resolves.toEqual({})
 
     const commandIndex = (expectedArgs: string[]) =>
       calls.findIndex(({ args }) => JSON.stringify(args) === JSON.stringify(expectedArgs))
     const fetchIndex = commandIndex(['fetch', '--prune', 'origin'])
-    const mergeTreeIndex = commandIndex([
-      'merge-tree',
-      '--write-tree',
-      'base123',
-      'refs/heads/feature/test'
-    ])
+    const mergeTreeArgs = ['merge-tree', '--write-tree', 'base123', 'refs/heads/feature/test']
+    const mergeTreeIndexes = calls.flatMap(({ args }, index) =>
+      JSON.stringify(args) === JSON.stringify(mergeTreeArgs) ? [index] : []
+    )
     const updateRefIndex = commandIndex(['update-ref', '-d', 'refs/heads/feature/test', '1'])
 
     expect(fetchIndex).toBeGreaterThanOrEqual(0)
     expect(calls[fetchIndex]?.cwd).toBe(resolvedRepoPath())
-    expect(fetchIndex).toBeLessThan(mergeTreeIndex)
+    expect(mergeTreeIndexes).toHaveLength(1)
+    expect(fetchIndex).toBeLessThan(mergeTreeIndexes[0])
+    expect(mergeTreeIndexes[0]).toBeLessThan(updateRefIndex)
     expect(fetchIndex).toBeLessThan(updateRefIndex)
   })
 
@@ -404,7 +422,9 @@ describe('removeWorktreeOp branch cleanup', () => {
       return { stdout: '', stderr: '' }
     })
 
-    await expect(removeWorktreeOp(git, { worktreePath: '/repo-feature' })).resolves.toEqual({
+    await expect(
+      removeWorktreeWithCapabilityCache(git, { worktreePath: '/repo-feature' })
+    ).resolves.toEqual({
       preservedBranch: { branchName: 'feature/test', head: '1' }
     })
 

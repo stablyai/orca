@@ -7,12 +7,14 @@ import { Input } from '../ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select'
 
 export function HostSetupStartActions({
-  disabled,
+  pathActionsDisabled,
+  planDisabled,
   onBrowse,
   onClone,
   onPlan
 }: {
-  disabled: boolean
+  pathActionsDisabled: boolean
+  planDisabled: boolean
   onBrowse: () => void
   onClone: () => void
   onPlan: () => void
@@ -26,7 +28,7 @@ export function HostSetupStartActions({
           'auto.components.settings.RepositoryPane.browseFolderHelp',
           'Use an existing checkout or folder on this host.'
         )}
-        disabled={disabled}
+        disabled={pathActionsDisabled}
         selected
         onClick={onBrowse}
       />
@@ -45,7 +47,7 @@ export function HostSetupStartActions({
               'auto.components.settings.RepositoryPane.cloneFromUrlHelp',
               'Clone this repository onto the selected host.'
             )}
-            disabled={disabled}
+            disabled={pathActionsDisabled}
             onClick={onClone}
             className="rounded-t-md"
           />
@@ -59,7 +61,7 @@ export function HostSetupStartActions({
               'auto.components.settings.RepositoryPane.addPlannedHostHelp',
               'Remember this host and finish adding the project later.'
             )}
-            disabled={disabled}
+            disabled={planDisabled}
             onClick={onPlan}
             className="rounded-b-md border-t border-border/70"
           />

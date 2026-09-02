@@ -1,4 +1,3 @@
-/* eslint-disable max-lines -- Why: this file groups every CLI browser-command test (page targeting, profiles, waits, viewport) so test-fixture imports and the runtime-client mock stay shared in one place. */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const callMock = vi.fn()
@@ -184,6 +183,27 @@ describe('orca cli browser page targeting', () => {
     )
   })
 
+  it('opens browser-launch URLs on the client hosting the current worktree', async () => {
+    queueFixtures(
+      callMock,
+      worktreeListFixture([buildWorktree('/tmp/repo/feature', 'feature/foo')]),
+      okFixture('req_open_url', { browserPageId: 'page-local' })
+    )
+    vi.spyOn(console, 'log').mockImplementation(() => {})
+
+    await main(['open-url', '--url', 'https://example.com/login', '--json'], '/tmp/repo/feature')
+
+    expect(callMock).toHaveBeenNthCalledWith(
+      2,
+      'browser.openUrl',
+      {
+        url: 'https://example.com/login',
+        worktree: 'id:repo::/tmp/repo/feature'
+      },
+      { timeoutMs: 60_000 }
+    )
+  })
+
   it('passes tab profile updates through by page id', async () => {
     queueFixtures(
       callMock,
@@ -294,7 +314,7 @@ describe('orca cli browser page targeting', () => {
   })
 })
 
-describe('orca cli browser tab profiles', () => {
+describe('orca cli browser profile management', () => {
   beforeEach(() => {
     callMock.mockReset()
   })
@@ -415,6 +435,29 @@ describe('orca cli browser tab profiles', () => {
     expect(logSpy).toHaveBeenCalledWith('No browser profiles found.')
   })
 
+  it('marks native-UA profiles in text output', async () => {
+    queueFixtures(
+      callMock,
+      okFixture('req_profiles_native_ua', {
+        profiles: [
+          {
+            id: 'google',
+            scope: 'isolated',
+            label: 'Google',
+            partition: 'persist:orca-browser-session-google',
+            source: null,
+            userAgentMode: 'native'
+          }
+        ]
+      })
+    )
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+
+    await main(['tab', 'profile', 'list'], '/tmp/not-an-orca-worktree')
+
+    expect(logSpy).toHaveBeenCalledWith(expect.stringContaining('ua:native'))
+  })
+
   it('creates isolated browser tab profiles by default', async () => {
     queueFixtures(
       callMock,
@@ -463,6 +506,33 @@ describe('orca cli browser tab profiles', () => {
     expect(callMock).toHaveBeenCalledWith('browser.profileCreate', {
       label: 'From Chrome',
       scope: 'imported'
+    })
+  })
+
+  it('creates a profile with the native user agent when requested', async () => {
+    queueFixtures(
+      callMock,
+      okFixture('req_profile_native_ua', {
+        profile: {
+          id: 'google',
+          scope: 'isolated',
+          label: 'Google',
+          partition: 'persist:orca-browser-session-google',
+          userAgentMode: 'native'
+        }
+      })
+    )
+    vi.spyOn(console, 'log').mockImplementation(() => {})
+
+    await main(
+      ['tab', 'profile', 'create', '--label', 'Google', '--no-ua-spoof', '--json'],
+      '/tmp/not-an-orca-worktree'
+    )
+
+    expect(callMock).toHaveBeenCalledWith('browser.profileCreate', {
+      label: 'Google',
+      scope: 'isolated',
+      userAgentMode: 'native'
     })
   })
 

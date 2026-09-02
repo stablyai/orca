@@ -6,6 +6,55 @@ const API_VERSION = '2022-11-28'
 const MAX_RELEASE_BODY_LENGTH = 120_000
 const TRUNCATION_NOTICE =
   '\n\n---\nRelease notes were truncated because GitHub release bodies are limited to 125,000 characters.'
+const DESKTOP_RELEASE_TAG_PATTERN = /^v(\d+)\.(\d+)\.(\d+)(?:-rc\.(\d+))?$/
+
+export function parseDesktopReleaseTag(tag) {
+  const match = DESKTOP_RELEASE_TAG_PATTERN.exec(tag)
+  if (!match) {
+    return null
+  }
+  return {
+    tag,
+    major: Number(match[1]),
+    minor: Number(match[2]),
+    patch: Number(match[3]),
+    rc: match[4] === undefined ? null : Number(match[4])
+  }
+}
+
+function compareDesktopReleaseTags(a, b) {
+  const versionDiff = a.major - b.major || a.minor - b.minor || a.patch - b.patch
+  if (versionDiff !== 0) {
+    return versionDiff
+  }
+  if (a.rc === b.rc) {
+    return 0
+  }
+  if (a.rc === null) {
+    return 1
+  }
+  if (b.rc === null) {
+    return -1
+  }
+  return a.rc - b.rc
+}
+
+export function latestPreviousPublishedDesktopReleaseTag(releases, tag) {
+  const current = parseDesktopReleaseTag(tag)
+  if (!current) {
+    return ''
+  }
+  const previousReleases = releases
+    .filter((release) => release?.draft === false && typeof release.tag_name === 'string')
+    .map((release) => parseDesktopReleaseTag(release.tag_name))
+    .filter((candidate) => candidate && candidate.tag !== current.tag)
+    .filter((candidate) => compareDesktopReleaseTags(candidate, current) < 0)
+    // Why: public changelogs should be bounded by releases users could see;
+    // stable releases summarize since the prior stable, not the latest RC.
+    .filter((candidate) => current.rc !== null || candidate.rc === null)
+    .sort(compareDesktopReleaseTags)
+  return previousReleases.at(-1)?.tag ?? ''
+}
 
 function githubHeaders(token) {
   return {
@@ -28,6 +77,25 @@ async function githubJson(fetchImpl, url, token, options = {}) {
     throw new Error(`GitHub request failed ${res.status} ${res.statusText}: ${body.slice(0, 300)}`)
   }
   return res.json()
+}
+
+async function fetchRepoReleases(repo, token, fetchImpl) {
+  const releases = []
+  for (let page = 1; ; page += 1) {
+    const pageReleases = await githubJson(
+      fetchImpl,
+      `https://api.github.com/repos/${repo}/releases?per_page=100&page=${page}`,
+      token
+    )
+    if (!Array.isArray(pageReleases)) {
+      throw new Error(`GitHub releases response page ${page} for ${repo} was not an array`)
+    }
+    releases.push(...pageReleases)
+    if (pageReleases.length < 100) {
+      break
+    }
+  }
+  return releases
 }
 
 export function truncateReleaseBody(body, maxLength = MAX_RELEASE_BODY_LENGTH) {
@@ -60,16 +128,25 @@ export async function createDraftRelease({
     throw new Error('token is required')
   }
 
+  const previousTag = latestPreviousPublishedDesktopReleaseTag(
+    await fetchRepoReleases(repo, token, fetchImpl),
+    tag
+  )
+  const generateNotesBody = {
+    tag_name: tag,
+    target_commitish: tag,
+    ...(previousTag ? { previous_tag_name: previousTag } : {})
+  }
+
+  // Why: GitHub's generate-notes baseline ignores draft releases, so pass the
+  // previous public changelog boundary explicitly.
   const releaseNotes = await githubJson(
     fetchImpl,
     `https://api.github.com/repos/${repo}/releases/generate-notes`,
     token,
     {
       method: 'POST',
-      body: JSON.stringify({
-        tag_name: tag,
-        target_commitish: tag
-      })
+      body: JSON.stringify(generateNotesBody)
     }
   )
 

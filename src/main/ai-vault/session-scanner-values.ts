@@ -1,6 +1,10 @@
 import { homedir } from 'node:os'
-import { basename, dirname, join } from 'node:path'
-import { readFile } from 'node:fs/promises'
+import { basename, dirname, isAbsolute, join } from 'node:path'
+import { wslGatedReadFile } from '../native-chat/wsl-transcript-fs-access'
+import { WslTranscriptFsError } from '../native-chat/wsl-transcript-fs-gate'
+import { asRecord } from './session-scanner-record-value'
+
+export { asRecord }
 
 export function timestampMs(value: unknown): number {
   if (typeof value === 'string') {
@@ -23,12 +27,6 @@ export function parseJsonObject(line: string): Record<string, unknown> | null {
   } catch {
     return null
   }
-}
-
-export function asRecord(value: unknown): Record<string, unknown> | null {
-  return value && typeof value === 'object' && !Array.isArray(value)
-    ? (value as Record<string, unknown>)
-    : null
 }
 
 export function extractString(value: unknown): string | null {
@@ -58,8 +56,14 @@ export {
   extractMessageText,
   extractPreviewContentText,
   normalizePreviewText,
-  normalizeTitleText
+  normalizeTitleText,
+  sliceAtCodeUnitLimit
 } from './session-scanner-text-normalization'
+export {
+  extractFullFirstUserPromptText,
+  normalizeFullFirstUserPromptText,
+  shouldCaptureFullFirstUserPrompt
+} from './session-scanner-first-user-prompt'
 
 export function extractGitBranch(value: unknown): string | null {
   const git = asRecord(value)
@@ -73,8 +77,15 @@ export async function readJsonObjectIfExists(
   filePath: string
 ): Promise<Record<string, unknown> | null> {
   try {
-    return asRecord(JSON.parse(await readFile(filePath, 'utf-8')) as unknown)
-  } catch {
+    return asRecord(JSON.parse(await wslGatedReadFile(filePath, 'utf-8', 'scan')) as unknown)
+  } catch (error) {
+    // A missing or malformed file is genuinely "no enrichment", but a gate
+    // refusal must reach `parseSessionCandidate` as an issue — degrading it to
+    // null caches the un-enriched session under an unchanged mtime, and the
+    // non-resumable agents that use this never re-read it.
+    if (error instanceof WslTranscriptFsError) {
+      throw error
+    }
     return null
   }
 }
@@ -126,10 +137,15 @@ export function findOpenCodeStorageRoot(filePath: string): string | null {
   return dirname(sessionRoot)
 }
 
-export function normalizePiSessionsDir(rawValue: string): string {
+// Pi and OMP (a Pi fork) both store transcripts under
+// <home>/<agentHomeDirName>/agent/sessions; accept any prefix of that path.
+export function normalizeAgentSessionsDir(
+  rawValue: string,
+  agentHomeDirName: '.pi' | '.omp'
+): string {
   const trimmed = rawValue.trim()
   if (!trimmed) {
-    return join(homedir(), '.pi', 'agent', 'sessions')
+    return join(homedir(), agentHomeDirName, 'agent', 'sessions')
   }
   const normalized = trimmed.replace(/[\\/]+$/, '')
   const leaf = basename(normalized)
@@ -139,10 +155,45 @@ export function normalizePiSessionsDir(rawValue: string): string {
   if (leaf === 'agent') {
     return join(normalized, 'sessions')
   }
-  if (leaf === '.pi') {
+  if (leaf === agentHomeDirName) {
     return join(normalized, 'agent', 'sessions')
   }
   return normalized
+}
+
+function defaultPrimeAgentSessionsDir(): string {
+  return join(homedir(), '.prime', 'agent', 'sessions')
+}
+
+// Why: the CLI expands a leading `~` itself, so a value set outside a shell
+// (config file, plist, quoted assignment) still resolves against the home dir.
+// Returns null for anything that is not an absolute root, since a relative value
+// ('', '.', '..', 'sessions') would resolve against the main-process cwd.
+function absoluteConfiguredDir(rawValue: string): string | null {
+  const expanded = rawValue === '~' ? homedir() : rawValue.replace(/^~(?=[\\/])/, homedir())
+  const normalized = expanded.replace(/[\\/]+$/, '')
+  return normalized && isAbsolute(normalized) ? normalized : null
+}
+
+// Prime Agent takes PRIME_AGENT_CODING_AGENT_DIR verbatim as its agent config dir
+// (no `/agent` suffixing) and always writes transcripts to `<agentDir>/sessions` —
+// unconditionally, so a root that is itself named `sessions` still nests one deeper.
+export function normalizePrimeAgentSessionsDir(rawAgentDir: string): string {
+  const agentDir = absoluteConfiguredDir(rawAgentDir.trim())
+  return agentDir ? join(agentDir, 'sessions') : defaultPrimeAgentSessionsDir()
+}
+
+// PRIME_AGENT_SESSION_DIR (and its legacy PRIME_AGENT_CODING_AGENT_SESSION_DIR alias)
+// point straight at the transcripts root and outrank the agent dir upstream, so they
+// are used verbatim with no `sessions` child.
+export function primeAgentSessionsDirFromEnv(env: NodeJS.ProcessEnv = process.env): string {
+  const sessionDir =
+    env.PRIME_AGENT_SESSION_DIR?.trim() || env.PRIME_AGENT_CODING_AGENT_SESSION_DIR?.trim()
+  if (sessionDir) {
+    return absoluteConfiguredDir(sessionDir) ?? defaultPrimeAgentSessionsDir()
+  }
+  const agentDir = env.PRIME_AGENT_CODING_AGENT_DIR?.trim()
+  return agentDir ? normalizePrimeAgentSessionsDir(agentDir) : defaultPrimeAgentSessionsDir()
 }
 
 export function clampPositiveInteger(value: number | undefined, fallback: number): number {
@@ -154,6 +205,7 @@ export function errorMessage(err: unknown): string {
 }
 
 export {
+  addCodexUsage,
   claudeUsageTotal,
   copilotModelMetricsTotal,
   normalizeCodexUsage,

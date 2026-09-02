@@ -1,5 +1,10 @@
 import { powerMonitor, powerSaveBlocker } from 'electron'
 import type { AgentStatusState } from '../shared/agent-status-types'
+import {
+  normalizeComputerAwakeMode,
+  type ComputerAwakeMode,
+  type ComputerAwakeStatus
+} from '../shared/computer-awake-mode'
 import { LinuxLidSleepAssertion } from './linux-lid-sleep-assertion'
 import { MacosSystemSleepAssertion } from './macos-system-sleep-assertion'
 
@@ -18,7 +23,7 @@ type PowerSaveBlocker = {
 }
 
 type PlatformAwakeAssertion = {
-  start: (reason: string) => void
+  start: (reason: string) => boolean | void
   stop: (reason: string) => void
   dispose: () => void
 }
@@ -36,18 +41,22 @@ type AgentAwakeServiceOptions = {
   logger?: Logger
   macosAssertion?: PlatformAwakeAssertion
   now?: () => number
+  platform?: NodeJS.Platform
   powerMonitor?: PowerMonitorEventSource | null
 }
 
 export class AgentAwakeService {
-  private enabled = false
+  private mode: ComputerAwakeMode = 'off'
   private statuses: AgentAwakeStatus[] = []
   private blockerId: number | null = null
   private staleTimer: ReturnType<typeof setTimeout> | null = null
+  private readonly statusListeners = new Set<(status: ComputerAwakeStatus) => void>()
+  private lastPublishedStatus: ComputerAwakeStatus | null = null
   private readonly blocker: PowerSaveBlocker
   private readonly linuxAssertion: PlatformAwakeAssertion
   private readonly logger: Logger
   private readonly macosAssertion: PlatformAwakeAssertion
+  private readonly platform: NodeJS.Platform
   private readonly now: () => number
   private readonly unsubscribeResume: (() => void) | null
 
@@ -71,6 +80,7 @@ export class AgentAwakeService {
         now: this.now,
         onUnexpectedFailure: (reason) => this.refresh(reason)
       })
+    this.platform = options.platform ?? process.platform
     const resumeSource = options.powerMonitor === undefined ? powerMonitor : options.powerMonitor
     if (resumeSource) {
       const onResume = () => this.refresh('power-resume')
@@ -82,16 +92,39 @@ export class AgentAwakeService {
   }
 
   setEnabled(enabled: boolean): void {
-    if (this.enabled === enabled) {
+    this.setMode(enabled ? 'auto' : 'off')
+  }
+
+  setMode(mode: ComputerAwakeMode): void {
+    const normalized = normalizeComputerAwakeMode(mode)
+    if (this.mode === normalized) {
       return
     }
-    this.enabled = enabled
+    this.mode = normalized
     this.refresh('settings-change')
   }
 
   setStatuses(statuses: AgentAwakeStatus[]): void {
     this.statuses = statuses.map((status) => ({ ...status }))
     this.refresh('status-change')
+  }
+
+  getStatus(): ComputerAwakeStatus {
+    const workingAgentCount = this.getEligibleRunningStatusCount()
+    return {
+      mode: this.mode,
+      active: this.mode === 'on' || (this.mode === 'auto' && workingAgentCount > 0)
+    }
+  }
+
+  /** Agents this runtime has seen working recently, independent of the awake setting. */
+  getWorkingAgentCount(): number {
+    return this.getEligibleRunningStatusCount()
+  }
+
+  subscribe(listener: (status: ComputerAwakeStatus) => void): () => void {
+    this.statusListeners.add(listener)
+    return () => this.statusListeners.delete(listener)
   }
 
   dispose(): void {
@@ -105,15 +138,34 @@ export class AgentAwakeService {
   private refresh(reason: string): void {
     this.scheduleStaleTimer()
     const runningStatusCount = this.getEligibleRunningStatusCount()
-    const shouldBlock = this.enabled && runningStatusCount > 0
+    const shouldBlock = this.mode === 'on' || (this.mode === 'auto' && runningStatusCount > 0)
     if (shouldBlock) {
-      this.startBlocker(reason, runningStatusCount)
-      this.startMacosAssertion(reason)
+      const macosAssertionActive = this.startMacosAssertion(reason)
+      if (this.platform !== 'darwin' || !macosAssertionActive) {
+        this.startBlocker(reason, runningStatusCount)
+      } else {
+        this.stopBlocker('macos-assertion-active', runningStatusCount)
+      }
       this.startLinuxAssertion(reason)
     } else {
       this.stopBlocker(reason, runningStatusCount)
       this.stopMacosAssertion(reason)
       this.stopLinuxAssertion(reason)
+    }
+    this.publishStatus(shouldBlock)
+  }
+
+  private publishStatus(active: boolean): void {
+    const status = { mode: this.mode, active }
+    if (
+      this.lastPublishedStatus?.mode === status.mode &&
+      this.lastPublishedStatus.active === status.active
+    ) {
+      return
+    }
+    this.lastPublishedStatus = status
+    for (const listener of this.statusListeners) {
+      listener(status)
     }
   }
 
@@ -182,22 +234,23 @@ export class AgentAwakeService {
     } catch (err) {
       this.logger.warn('[agent-awake] failed to start blocker', {
         reason,
-        enabled: this.enabled,
+        mode: this.mode,
         runningStatusCount,
         error: err
       })
     }
   }
 
-  private startMacosAssertion(reason: string): void {
+  private startMacosAssertion(reason: string): boolean {
     try {
-      this.macosAssertion.start(reason)
+      return this.macosAssertion.start(reason) !== false
     } catch (err) {
       this.logger.warn('[agent-awake] failed to start macOS system sleep assertion', {
         reason,
-        enabled: this.enabled,
+        mode: this.mode,
         error: err
       })
+      return false
     }
   }
 
@@ -207,7 +260,7 @@ export class AgentAwakeService {
     } catch (err) {
       this.logger.warn('[agent-awake] failed to start Linux lid sleep assertion', {
         reason,
-        enabled: this.enabled,
+        mode: this.mode,
         error: err
       })
     }
@@ -219,7 +272,7 @@ export class AgentAwakeService {
     } catch (err) {
       this.logger.warn('[agent-awake] failed to stop macOS system sleep assertion', {
         reason,
-        enabled: this.enabled,
+        mode: this.mode,
         error: err
       })
     }
@@ -231,7 +284,7 @@ export class AgentAwakeService {
     } catch (err) {
       this.logger.warn('[agent-awake] failed to stop Linux lid sleep assertion', {
         reason,
-        enabled: this.enabled,
+        mode: this.mode,
         error: err
       })
     }
@@ -247,7 +300,7 @@ export class AgentAwakeService {
     } catch (err) {
       this.logger.warn('[agent-awake] failed to stop blocker', {
         reason,
-        enabled: this.enabled,
+        mode: this.mode,
         runningStatusCount,
         blockerId: id,
         error: err

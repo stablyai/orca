@@ -1,11 +1,22 @@
 import type { PairingOffer } from '../../shared/pairing'
-import type { RuntimeRpcResponse } from '../../shared/runtime-rpc-envelope'
+import { ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES } from '../../shared/protocol-version'
+import type {
+  RuntimeOrchestrationEnvelope,
+  RuntimeRpcResponse
+} from '../../shared/runtime-rpc-envelope'
 import { RemoteRuntimeRequestConnection } from '../../shared/remote-runtime-request-connection'
 import { RemoteRuntimeSharedControlConnection } from '../../shared/remote-runtime-shared-control-connection'
 import type {
   RemoteRuntimeSharedConnectionDiagnostics,
   RemoteRuntimeSharedSubscription
 } from '../../shared/remote-runtime-shared-control-types'
+import { isRuntimeEnvironmentCapabilityPaused } from './runtime-environment-capability-evidence'
+import { isRuntimeEnvironmentManuallyDisconnected } from './runtime-environment-manual-disconnect'
+import { publishRuntimeEnvironmentDiagnostics } from './runtime-environment-diagnostics-broadcast'
+import {
+  advanceRuntimeEnvironmentTransportGeneration,
+  getRuntimeEnvironmentTransportGeneration
+} from './runtime-environment-transport-generation'
 
 type CachedRuntimeConnection = {
   pairingKey: string
@@ -25,7 +36,8 @@ export function sendRemoteRuntimeConnectionRequest<TResult>(
   pairing: PairingOffer,
   method: string,
   params: unknown,
-  timeoutMs: number
+  timeoutMs: number,
+  signal?: AbortSignal
 ): Promise<RuntimeRpcResponse<TResult>> {
   const pairingKey = getPairingKey(pairing)
   let cached = requestConnections.get(environmentId)
@@ -33,11 +45,14 @@ export function sendRemoteRuntimeConnectionRequest<TResult>(
     cached?.connection.close()
     cached = {
       pairingKey,
-      connection: new RemoteRuntimeRequestConnection(pairing)
+      connection: new RemoteRuntimeRequestConnection(
+        pairing,
+        ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES
+      )
     }
     requestConnections.set(environmentId, cached)
   }
-  return cached.connection.request(method, params, timeoutMs)
+  return cached.connection.request(method, params, timeoutMs, signal)
 }
 
 export function closeRemoteRuntimeRequestConnection(environmentId: string): void {
@@ -47,23 +62,22 @@ export function closeRemoteRuntimeRequestConnection(environmentId: string): void
   closeRemoteRuntimeSharedControlConnection(environmentId)
 }
 
-export function closeAllRemoteRuntimeRequestConnections(): void {
-  for (const environmentId of Array.from(requestConnections.keys())) {
-    closeRemoteRuntimeRequestConnection(environmentId)
-  }
-  for (const environmentId of Array.from(sharedControlConnections.keys())) {
-    closeRemoteRuntimeSharedControlConnection(environmentId)
-  }
-}
-
 export function sendRemoteRuntimeSharedControlRequest<TResult>(
   environmentId: string,
   pairing: PairingOffer,
   method: string,
   params: unknown,
-  timeoutMs: number
+  timeoutMs: number,
+  envelope?: RuntimeOrchestrationEnvelope,
+  signal?: AbortSignal
 ): Promise<RuntimeRpcResponse<TResult>> {
-  return getSharedControlConnection(environmentId, pairing).request(method, params, timeoutMs)
+  return getSharedControlConnection(environmentId, pairing).request(
+    method,
+    params,
+    timeoutMs,
+    envelope,
+    signal
+  )
 }
 
 export function subscribeRemoteRuntimeSharedControlRequest<TResult>(
@@ -99,6 +113,33 @@ export function getRemoteRuntimeSharedControlDiagnostics(
   return sharedControlConnections.get(environmentId)?.connection.getDiagnostics() ?? null
 }
 
+export function reconnectRemoteRuntimeSharedControlConnection(environmentId: string): void {
+  sharedControlConnections.get(environmentId)?.connection.reconnectNow()
+}
+
+export function retryRemoteRuntimeSharedControlConnectionNow(environmentId: string): void {
+  sharedControlConnections.get(environmentId)?.connection.retryNow()
+}
+
+export function pauseRemoteRuntimeSharedControlRetry(environmentId: string): void {
+  sharedControlConnections.get(environmentId)?.connection.pauseStandingRetry()
+}
+
+export function ensureRemoteRuntimeSharedControlConnection(
+  environmentId: string,
+  pairing: PairingOffer
+): void {
+  if (!isRuntimeEnvironmentManuallyDisconnected(environmentId)) {
+    getSharedControlConnection(environmentId, pairing)
+  }
+}
+
+export function retryRemoteRuntimeSharedControlConnectionsNow(): void {
+  for (const { connection } of sharedControlConnections.values()) {
+    connection.retryNow()
+  }
+}
+
 function getSharedControlConnection(
   environmentId: string,
   pairing: PairingOffer
@@ -106,10 +147,27 @@ function getSharedControlConnection(
   const pairingKey = getPairingKey(pairing)
   let cached = sharedControlConnections.get(environmentId)
   if (!cached || cached.pairingKey !== pairingKey) {
+    advanceRuntimeEnvironmentTransportGeneration(environmentId)
     cached?.connection.close()
+    const transportGeneration = getRuntimeEnvironmentTransportGeneration(environmentId)
     cached = {
       pairingKey,
-      connection: new RemoteRuntimeSharedControlConnection(pairing, { environmentId })
+      connection: new RemoteRuntimeSharedControlConnection(pairing, {
+        environmentId,
+        clientCapabilities: ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES,
+        isManuallyDisconnected: () => isRuntimeEnvironmentManuallyDisconnected(environmentId),
+        isCapabilityPaused: () => isRuntimeEnvironmentCapabilityPaused(environmentId),
+        onDiagnosticsChanged: (diagnostics) => {
+          if (getRuntimeEnvironmentTransportGeneration(environmentId) !== transportGeneration) {
+            return
+          }
+          publishRuntimeEnvironmentDiagnostics({
+            environmentId,
+            transportGeneration,
+            diagnostics
+          })
+        }
+      })
     }
     sharedControlConnections.set(environmentId, cached)
   }

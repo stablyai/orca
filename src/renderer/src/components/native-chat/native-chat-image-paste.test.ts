@@ -19,6 +19,14 @@ describe('image paste agent map', () => {
     })
   })
 
+  it('grok attaches image paths like other vision-capable TUIs', () => {
+    expect(getAgentImageHandling('grok')).toBe('attachment')
+    expect(resolveImagePaste('grok', '/tmp/orca-paste-1.png')).toEqual({
+      kind: 'attach',
+      path: '/tmp/orca-paste-1.png'
+    })
+  })
+
   it('unknown/custom agent is unsupported', () => {
     expect(getAgentImageHandling('some-custom-agent')).toBe('unsupported')
     expect(resolveImagePaste('some-custom-agent', '/tmp/x.png')).toEqual({

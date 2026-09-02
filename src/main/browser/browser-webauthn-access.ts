@@ -1,7 +1,17 @@
 import type { Session } from 'electron'
+import {
+  cancelBrowserWebAuthnAccountRequestsForSession,
+  requestBrowserWebAuthnAccount
+} from './browser-webauthn-account-picker'
 
 const FIDO_HID_USAGE_PAGE = 0xf1d0
 const LOCALHOST_HOSTNAMES = new Set(['localhost', '127.0.0.1', '::1', '[::1]'])
+type SelectWebAuthnAccountHandler = (
+  event: Electron.Event,
+  details: Electron.SelectWebauthnAccountDetails,
+  callback: (credentialId?: string | null) => void
+) => Promise<void>
+const selectWebAuthnAccountHandlers = new WeakMap<Session, SelectWebAuthnAccountHandler>()
 
 function isSecureBrowserOrigin(rawOrigin: string | undefined): boolean {
   if (!rawOrigin) {
@@ -15,7 +25,7 @@ function isSecureBrowserOrigin(rawOrigin: string | undefined): boolean {
   }
 }
 
-function isFidoHidDevice(device: Electron.HIDDevice | unknown): device is Electron.HIDDevice {
+function isFidoHidDevice(device: unknown): device is Electron.HIDDevice {
   if (!device || typeof device !== 'object') {
     return false
   }
@@ -53,15 +63,23 @@ function handleBrowserSelectHidDevice(
   callback(selectedDevice?.deviceId)
 }
 
-function handleBrowserSelectWebAuthnAccount(
+async function handleBrowserSelectWebAuthnAccount(
+  browserSession: Session,
   event: Electron.Event,
   details: Electron.SelectWebauthnAccountDetails,
   callback: (credentialId?: string | null) => void
-): void {
+): Promise<void> {
   event.preventDefault()
-  // Why: Electron cancels discoverable WebAuthn when no listener exists. Pick
-  // only the unambiguous single-account case until Orca has account-picker UI.
-  callback(details.accounts.length === 1 ? details.accounts[0].credentialId : null)
+  if (details.accounts.length <= 1) {
+    callback(details.accounts[0]?.credentialId ?? null)
+    return
+  }
+  let credentialId: string | null = null
+  try {
+    credentialId = await requestBrowserWebAuthnAccount(details, browserSession)
+  } finally {
+    callback(credentialId)
+  }
 }
 
 export function installBrowserWebAuthnAccessHandlers(browserSession: Session): void {
@@ -74,12 +92,23 @@ export function installBrowserWebAuthnAccessHandlers(browserSession: Session): v
   })
   browserSession.removeListener('select-hid-device', handleBrowserSelectHidDevice)
   browserSession.on('select-hid-device', handleBrowserSelectHidDevice)
-  browserSession.removeListener('select-webauthn-account', handleBrowserSelectWebAuthnAccount)
-  browserSession.on('select-webauthn-account', handleBrowserSelectWebAuthnAccount)
+  const previousHandler = selectWebAuthnAccountHandlers.get(browserSession)
+  if (previousHandler) {
+    browserSession.removeListener('select-webauthn-account', previousHandler)
+  }
+  const selectWebAuthnAccountHandler: SelectWebAuthnAccountHandler = (event, details, callback) =>
+    handleBrowserSelectWebAuthnAccount(browserSession, event, details, callback)
+  selectWebAuthnAccountHandlers.set(browserSession, selectWebAuthnAccountHandler)
+  browserSession.on('select-webauthn-account', selectWebAuthnAccountHandler)
 }
 
 export function clearBrowserWebAuthnAccessHandlers(browserSession: Session): void {
   browserSession.removeListener('select-hid-device', handleBrowserSelectHidDevice)
-  browserSession.removeListener('select-webauthn-account', handleBrowserSelectWebAuthnAccount)
+  const selectWebAuthnAccountHandler = selectWebAuthnAccountHandlers.get(browserSession)
+  if (selectWebAuthnAccountHandler) {
+    browserSession.removeListener('select-webauthn-account', selectWebAuthnAccountHandler)
+    selectWebAuthnAccountHandlers.delete(browserSession)
+  }
   browserSession.setDevicePermissionHandler(null)
+  cancelBrowserWebAuthnAccountRequestsForSession(browserSession)
 }

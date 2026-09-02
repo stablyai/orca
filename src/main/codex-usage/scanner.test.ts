@@ -10,7 +10,8 @@ vi.mock('electron', () => ({
   }
 }))
 
-import { attributeCodexUsageEvent, parseCodexUsageRecord } from './scanner'
+import { attributeCodexUsageEvent } from './codex-usage-event-attribution'
+import { parseCodexUsageRecord } from './codex-usage-record-parser'
 
 describe('parseCodexUsageRecord', () => {
   it('uses token totals only as a duplicate baseline', () => {
@@ -99,6 +100,7 @@ describe('parseCodexUsageRecord', () => {
     expect(first).toEqual({
       sessionId: 'session-1',
       timestamp: '2026-04-09T10:00:00.000Z',
+      eventKey: expect.any(String),
       cwd: '/workspace/repo/packages/app',
       model: 'gpt-5.2-codex',
       hasInferredPricing: false,
@@ -196,6 +198,7 @@ describe('attributeCodexUsageEvent', () => {
       {
         sessionId: 'session-1',
         timestamp: '2026-04-09T10:00:00.000Z',
+        eventKey: 'event-1',
         cwd: '/workspace/repo/app2/subdir',
         model: 'gpt-5.2-codex',
         hasInferredPricing: false,
@@ -233,6 +236,7 @@ describe('attributeCodexUsageEvent', () => {
       {
         sessionId: 'session-1',
         timestamp: '2026-04-09T10:00:00.000Z',
+        eventKey: 'event-1',
         cwd: '/workspace/repo/..fixtures/session',
         model: 'gpt-5.2-codex',
         hasInferredPricing: false,
@@ -263,6 +267,7 @@ describe('attributeCodexUsageEvent', () => {
       {
         sessionId: 'session-1',
         timestamp: '2026-04-09T10:00:00.000Z',
+        eventKey: 'event-1',
         cwd: '/workspace/repo/../other/session',
         model: 'gpt-5.2-codex',
         hasInferredPricing: false,
@@ -292,6 +297,7 @@ describe('attributeCodexUsageEvent', () => {
       {
         sessionId: 'session-1',
         timestamp: '2026-04-09T10:00:00.000Z',
+        eventKey: 'event-1',
         cwd: 'D:\\other\\repo',
         model: 'gpt-5.2-codex',
         hasInferredPricing: false,

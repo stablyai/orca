@@ -4,19 +4,17 @@ import { act, type ReactNode } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { HostedReviewInfo } from '../../../../shared/hosted-review'
-import type {
-  Repo,
-  Worktree,
-  WorktreeCardProperty,
-  WorktreeLineage
-} from '../../../../shared/types'
+import type { Repo } from '../../../../shared/repo-types'
+import type { WorktreeCardProperty } from '../../../../shared/ui-chrome-types'
+import type { WorktreeLineage } from '../../../../shared/worktree/lineage-types'
+import type { Worktree } from '../../../../shared/worktree/types'
 import {
   FLUSH_CARD_MIN_CONTENT_INSET,
   LINEAGE_CHILDREN_INLINE_OFFSET,
   LINEAGE_IMMEDIATE_PARENT_STEP,
   LINEAGE_NESTED_ROW_SURFACE_INSET,
   WORKTREE_CARD_SURFACE_MARGIN
-} from './worktree-list-indentation'
+} from './worktree-list/rows/indentation'
 
 globalThis.IS_REACT_ACT_ENVIRONMENT = true
 
@@ -140,10 +138,6 @@ vi.mock('./WorktreeCardAgents', () => ({
     <div data-agent-worktree-id={worktreeId}>Agent row</div>
   ),
   SUPPRESS_WORKTREE_LIST_SCROLL_ADJUSTMENT_EVENT: 'orca:test-suppress-scroll-adjustment'
-}))
-
-vi.mock('./SshDisconnectedDialog', () => ({
-  SshDisconnectedDialog: () => null
 }))
 
 vi.mock('./WorktreeContextMenu', () => ({
@@ -404,7 +398,7 @@ describe('WorktreeList real child WorktreeCard integration', () => {
 
   it('renders GitLab MR metadata from a child through the real WorktreeCard path', async () => {
     const container = await renderWorktreeList()
-    const childOption = container.querySelector('[id="worktree-list-option-all%3Achild"]')
+    const childOption = container.querySelector('[id="worktree-list-option-all%3A%7Cchild"]')
 
     expect(childOption?.textContent).toContain('MR #42')
     expect(childOption?.textContent).toContain('Child GitLab MR')
@@ -428,9 +422,11 @@ describe('WorktreeList real child WorktreeCard integration', () => {
     const wrappers = [
       ...container.querySelectorAll<HTMLElement>('[data-worktree-lineage-children]')
     ]
-    const childRow = container.querySelector<HTMLElement>('[id="worktree-list-option-all%3Achild"]')
+    const childRow = container.querySelector<HTMLElement>(
+      '[id="worktree-list-option-all%3A%7Cchild"]'
+    )
     const grandchildRow = container.querySelector<HTMLElement>(
-      '[id="worktree-list-option-all%3Agrandchild"]'
+      '[id="worktree-list-option-all%3A%7Cgrandchild"]'
     )
     const childSurface = childRow?.querySelector<HTMLElement>('[data-worktree-card-surface="true"]')
     const grandchildSurface = grandchildRow?.querySelector<HTMLElement>(
@@ -462,7 +458,7 @@ describe('WorktreeList real child WorktreeCard integration', () => {
   it('double-clicking a nested child opens edit metadata for the child only', async () => {
     const container = await renderWorktreeList()
     const childCard = container.querySelector<HTMLElement>(
-      '[id="worktree-list-option-all%3Achild"] [data-worktree-card-surface="true"]'
+      '[id="worktree-list-option-all%3A%7Cchild"] [data-worktree-card-surface="true"]'
     )
 
     expect(childCard).not.toBeNull()
@@ -489,7 +485,7 @@ describe('WorktreeList real child WorktreeCard integration', () => {
     setLineageState({ deletingChild: true })
     const container = await renderWorktreeList()
     const childCard = container.querySelector<HTMLElement>(
-      '[id="worktree-list-option-all%3Achild"] [data-worktree-card-surface="true"]'
+      '[id="worktree-list-option-all%3A%7Cchild"] [data-worktree-card-surface="true"]'
     )
 
     expect(childCard?.textContent).toContain('Deleting')

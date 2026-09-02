@@ -3,7 +3,11 @@ import path from 'node:path'
 import { pathToFileURL } from 'node:url'
 import process from 'node:process'
 
-import ts from 'typescript'
+// TypeScript 7 is a native CLI; AST consumers still need the legacy JavaScript API.
+import ts from 'typescript-api'
+
+import { canonicalGenericRenderings } from './locale-generic-ui-terms.mjs'
+import { repairTranslatedValue } from './locale-translation-policy.mjs'
 
 const SOURCE_EXTENSIONS = new Set(['.ts', '.tsx', '.js', '.jsx', '.mts', '.cts'])
 const SKIP_PATH_PARTS = new Set(['.git', 'dist', 'node_modules', 'out', '__snapshots__', 'assets'])
@@ -226,44 +230,6 @@ function setCatalogEntry(catalog, key, value) {
   cursor[parts.at(-1)] = value
 }
 
-function deleteCatalogEntry(catalog, key) {
-  const parts = key.split('.')
-  const stack = []
-  let cursor = catalog
-
-  for (const part of parts.slice(0, -1)) {
-    if (
-      typeof cursor?.[part] !== 'object' ||
-      cursor[part] === null ||
-      Array.isArray(cursor[part])
-    ) {
-      return false
-    }
-    stack.push([cursor, part])
-    cursor = cursor[part]
-  }
-
-  const leafKey = parts.at(-1)
-  if (!Object.hasOwn(cursor, leafKey)) {
-    return false
-  }
-
-  delete cursor[leafKey]
-  for (let index = stack.length - 1; index >= 0; index -= 1) {
-    const [parent, part] = stack[index]
-    const child = parent[part]
-    if (
-      typeof child === 'object' &&
-      child !== null &&
-      !Array.isArray(child) &&
-      Object.keys(child).length === 0
-    ) {
-      delete parent[part]
-    }
-  }
-  return true
-}
-
 function collectLocaleParityIssues(enCatalog, localeCatalog) {
   const enEntries = flattenCatalogEntries(enCatalog)
   const localeEntries = flattenCatalogEntries(localeCatalog)
@@ -283,30 +249,6 @@ function collectLocaleParityIssues(enCatalog, localeCatalog) {
   }
 
   return { enEntries, localeEntries, missingInLocale, extraInLocale, interpolationMismatches }
-}
-
-function repairLocaleParity(enCatalog, localeCatalog) {
-  const { enEntries, missingInLocale, extraInLocale, interpolationMismatches } =
-    collectLocaleParityIssues(enCatalog, localeCatalog)
-  let changed = 0
-
-  for (const key of missingInLocale) {
-    setCatalogEntry(localeCatalog, key, enEntries.get(key))
-    changed += 1
-  }
-
-  for (const key of extraInLocale) {
-    if (deleteCatalogEntry(localeCatalog, key)) {
-      changed += 1
-    }
-  }
-
-  for (const key of interpolationMismatches) {
-    setCatalogEntry(localeCatalog, key, enEntries.get(key))
-    changed += 1
-  }
-
-  return changed
 }
 
 function referencesMissingFallbacks(missing) {
@@ -343,23 +285,64 @@ function applyMissingEnglishEntries(catalog, missing) {
   return changed
 }
 
-function verifyLocaleParity(enCatalog, localeName, localeCatalog) {
-  const { localeEntries, missingInLocale, extraInLocale, interpolationMismatches } =
-    collectLocaleParityIssues(enCatalog, localeCatalog)
+// Why: #12113 — parity checks pass while repair-locale-catalog rewrites translated generic terms
+// back to English, so drift only surfaces when someone regenerates the catalog.
+export function collectGenericTermRegressions(enEntries, localeEntries, localeName) {
+  const renderings = canonicalGenericRenderings(localeName)
+  if (renderings.length === 0) {
+    return []
+  }
 
-  if (
-    missingInLocale.length > 0 ||
-    extraInLocale.length > 0 ||
-    interpolationMismatches.length > 0
-  ) {
-    console.error(`Locale catalog parity failed for ${localeName}.json.`)
-    if (missingInLocale.length > 0) {
-      console.error('')
-      console.error(formatMissingKeys('missing', missingInLocale.slice(0, 20)))
-      if (missingInLocale.length > 20) {
-        console.error(`...and ${missingInLocale.length - 20} more missing keys`)
+  const regressions = []
+  for (const [key, enValue] of enEntries) {
+    const localeValue = localeEntries.get(key)
+    if (typeof enValue !== 'string' || typeof localeValue !== 'string') {
+      continue
+    }
+    const repaired = repairTranslatedValue({ key, enValue, localeValue, locale: localeName })
+    if (repaired === localeValue) {
+      continue
+    }
+    // Why: {{agent}} is an interpolation name, not English copy the reader sees.
+    const repairedCopy = repaired.replace(PLACEHOLDER_RE, '')
+    for (const { form, terms } of renderings) {
+      if (!localeValue.includes(form) || repaired.includes(form)) {
+        continue
+      }
+      if (
+        terms.some((term) => new RegExp(`(^|[^A-Za-z])${term}($|[^A-Za-z])`).test(repairedCopy))
+      ) {
+        regressions.push({ key, form, localeValue, repaired })
+        break
       }
     }
+  }
+  return regressions
+}
+
+function formatGenericTermRegressions(regressions) {
+  return regressions
+    .map((entry) => `${entry.key}: ${entry.form} -> English (${entry.repaired})`)
+    .join('\n')
+}
+
+function verifyLocaleCatalog(enCatalog, localeName, localeCatalog) {
+  const { enEntries, localeEntries, missingInLocale, extraInLocale, interpolationMismatches } =
+    collectLocaleParityIssues(enCatalog, localeCatalog)
+  const genericTermRegressions = collectGenericTermRegressions(enEntries, localeEntries, localeName)
+
+  // Why: feature PRs own English declarations; absent target leaves deliberately
+  // use i18next's existing English fallback until a localization PR supplies them.
+  console.log(
+    `${localeName}.json coverage: ${enEntries.size - missingInLocale.length}/${enEntries.size} translated, ${missingInLocale.length} missing.`
+  )
+
+  if (
+    extraInLocale.length > 0 ||
+    interpolationMismatches.length > 0 ||
+    genericTermRegressions.length > 0
+  ) {
+    console.error(`Locale catalog validation failed for ${localeName}.json.`)
     if (extraInLocale.length > 0) {
       console.error('')
       console.error(formatMissingKeys('extra', extraInLocale.slice(0, 20)))
@@ -376,23 +359,99 @@ function verifyLocaleParity(enCatalog, localeName, localeCatalog) {
         console.error(`...and ${interpolationMismatches.length - 20} more interpolation mismatches`)
       }
     }
+    if (genericTermRegressions.length > 0) {
+      console.error('')
+      console.error(
+        'repair-locale-catalog would rewrite these translated terms back to English.',
+        'Treat the term as generic in config/scripts/locale-generic-ui-terms.mjs',
+        'instead of listing its translation as a mistranslation.'
+      )
+      console.error(formatGenericTermRegressions(genericTermRegressions.slice(0, 20)))
+      if (genericTermRegressions.length > 20) {
+        console.error(`...and ${genericTermRegressions.length - 20} more generic term regressions`)
+      }
+    }
     return 1
   }
 
-  console.log(`Verified locale parity for ${localeName}.json (${localeEntries.size} keys).`)
+  console.log(`Verified ${localeEntries.size} existing ${localeName}.json entries.`)
   return 0
 }
 
 function parseArgs(argv) {
-  return {
-    fix: argv.includes('--fix')
+  const pluginCatalogs = []
+  for (let index = 0; index < argv.length; index += 1) {
+    const argument = argv[index]
+    if (argument === '--plugin-catalog') {
+      const catalogPath = argv[index + 1]
+      if (!catalogPath || catalogPath.startsWith('--')) {
+        throw new Error('--plugin-catalog requires a JSON catalog path')
+      }
+      pluginCatalogs.push(catalogPath)
+      index += 1
+    } else if (argument.startsWith('--plugin-catalog=')) {
+      pluginCatalogs.push(argument.slice('--plugin-catalog='.length))
+    }
   }
+  return {
+    fix: argv.includes('--fix'),
+    pluginCatalogs
+  }
+}
+
+async function reportPluginCatalog(root, catalog, pluginCatalogPath) {
+  const resolvedPath = path.resolve(root, pluginCatalogPath)
+  let pluginCatalog
+  try {
+    pluginCatalog = JSON.parse(await fs.readFile(resolvedPath, 'utf8'))
+  } catch (error) {
+    console.error(
+      `Could not read plugin catalog ${normalizePath(root, resolvedPath)}: ${error instanceof Error ? error.message : String(error)}`
+    )
+    return 1
+  }
+  const { enEntries, localeEntries, missingInLocale, extraInLocale, interpolationMismatches } =
+    collectLocaleParityIssues(catalog, pluginCatalog)
+  const translated = enEntries.size - missingInLocale.length - interpolationMismatches.length
+  const coverage = enEntries.size === 0 ? 100 : (translated / enEntries.size) * 100
+  console.log(
+    `Plugin catalog ${normalizePath(root, resolvedPath)}: ${translated}/${enEntries.size} core keys (${coverage.toFixed(1)}% coverage), ${localeEntries.size} catalog entries.`
+  )
+  if (missingInLocale.length > 0) {
+    console.log(formatMissingKeys('missing', missingInLocale.slice(0, 20)))
+    if (missingInLocale.length > 20) {
+      console.log(`...and ${missingInLocale.length - 20} more missing keys`)
+    }
+  }
+  if (extraInLocale.length > 0) {
+    console.log(formatMissingKeys('extra', extraInLocale.slice(0, 20)))
+  }
+  if (interpolationMismatches.length > 0) {
+    console.log(formatMissingKeys('interpolation mismatch', interpolationMismatches.slice(0, 20)))
+  }
+  // Why: absent plugin translations safely fall back to English, but a present
+  // value with different variables can render broken or misleading UI.
+  return interpolationMismatches.length > 0 ? 1 : 0
 }
 
 export async function main(root = process.cwd(), options = parseArgs(process.argv.slice(2))) {
   const localesDir = path.join(root, LOCALES_RELATIVE_DIR)
   const catalogPath = path.join(localesDir, 'en.json')
   const catalog = JSON.parse(await fs.readFile(catalogPath, 'utf8'))
+  const pluginCatalogs = options.pluginCatalogs ?? []
+  if (pluginCatalogs.length > 0) {
+    if (options.fix) {
+      console.error('--fix cannot be combined with --plugin-catalog')
+      return 1
+    }
+    for (const pluginCatalogPath of pluginCatalogs) {
+      const result = await reportPluginCatalog(root, catalog, pluginCatalogPath)
+      if (result !== 0) {
+        return result
+      }
+    }
+    return 0
+  }
   let catalogKeys = new Set(flattenCatalogKeys(catalog))
   const sourceRoots = SOURCE_RELATIVE_ROOTS.map((sourceRoot) => path.join(root, sourceRoot))
   const references = []
@@ -462,19 +521,10 @@ export async function main(root = process.cwd(), options = parseArgs(process.arg
     const localeName = fileName.replace(/\.json$/, '')
     const localeCatalogPath = path.join(localesDir, fileName)
     const localeCatalog = JSON.parse(await fs.readFile(localeCatalogPath, 'utf8'))
-    if (options.fix) {
-      const repaired = repairLocaleParity(catalog, localeCatalog)
-      if (repaired > 0) {
-        await fs.writeFile(localeCatalogPath, `${JSON.stringify(localeCatalog, null, 2)}\n`, 'utf8')
-        console.log(`Repaired ${fileName} parity (${repaired} key update(s)).`)
-      }
-    }
-    const exitCode = verifyLocaleParity(catalog, localeName, localeCatalog)
+    const exitCode = verifyLocaleCatalog(catalog, localeName, localeCatalog)
     if (exitCode !== 0) {
-      if (!options.fix) {
-        console.error('')
-        console.error('Run `pnpm run sync:localization-catalog` to repair locale parity.')
-      }
+      console.error('')
+      console.error('Fix or retire the existing target entry in a localization PR.')
       return exitCode
     }
   }

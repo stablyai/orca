@@ -1,5 +1,5 @@
 import type { ProviderRateLimits } from '../../../../shared/rate-limit-types'
-import type { GlobalSettings } from '../../../../shared/types'
+import type { GlobalSettings } from '../../../../shared/global-settings-types'
 
 export type UsageProviderSettings = Pick<
   GlobalSettings,
@@ -7,14 +7,27 @@ export type UsageProviderSettings = Pick<
   | 'claudeManagedAccounts'
   | 'opencodeSessionCookie'
   | 'geminiCliOAuthEnabled'
->
+> & {
+  // Why: Antigravity has no separate persisted usage credential in Orca. The
+  // checked status-bar item is the durable user signal; StatusBar only sets
+  // this after PATH detection says the agent is available. Durability further
+  // requires geminiCliOAuthEnabled — the snapshot mirrors the Gemini fetch,
+  // which never yields data while that opt-in is off.
+  antigravityUsageConfigured: boolean
+  // Why: MiniMax/Grok sign-in live on disk, not in settings; main sets these each poll.
+  minimaxCookieConfigured: boolean
+  grokAuthConfigured: boolean
+}
 
 type UsageProviderSnapshots = {
-  claude: ProviderRateLimits | null
-  codex: ProviderRateLimits | null
-  gemini: ProviderRateLimits | null
-  opencodeGo: ProviderRateLimits | null
-  kimi: ProviderRateLimits | null
+  claude: ProviderRateLimits | null | undefined
+  codex: ProviderRateLimits | null | undefined
+  gemini: ProviderRateLimits | null | undefined
+  opencodeGo: ProviderRateLimits | null | undefined
+  kimi: ProviderRateLimits | null | undefined
+  antigravity: ProviderRateLimits | null | undefined
+  minimax: ProviderRateLimits | null | undefined
+  grok: ProviderRateLimits | null | undefined
 }
 
 type UsageProviderId = ProviderRateLimits['provider']
@@ -23,13 +36,14 @@ function hasUsageData(provider: ProviderRateLimits): boolean {
   return Boolean(
     provider.session ||
     provider.weekly ||
+    provider.fableWeekly ||
     provider.monthly ||
     (provider.buckets && provider.buckets.length > 0)
   )
 }
 
-function isProviderSnapshotPending(provider: ProviderRateLimits | null): boolean {
-  return provider === null || (provider.status === 'fetching' && !hasUsageData(provider))
+function isProviderSnapshotPending(provider: ProviderRateLimits | null | undefined): boolean {
+  return provider == null || (provider.status === 'fetching' && !hasUsageData(provider))
 }
 
 // Why: a provider that returns `unavailable` is explicitly not configured
@@ -39,9 +53,11 @@ function isProviderSnapshotPending(provider: ProviderRateLimits | null): boolean
 // — that's a *configured* provider failing transiently, and hiding it would
 // make the bar flap on every refresh hiccup.
 export function isProviderConfigured(
-  provider: ProviderRateLimits | null
+  provider: ProviderRateLimits | null | undefined
 ): provider is ProviderRateLimits {
-  if (provider === null || provider.status === 'unavailable') {
+  // Why: renderer HMR can briefly run against an older main process whose rate-limit
+  // payload predates newer provider keys, so missing snapshots arrive as undefined.
+  if (provider == null || provider.status === 'unavailable') {
     return false
   }
   if (provider.status === 'fetching' && !hasUsageData(provider)) {
@@ -57,7 +73,11 @@ export function hasUsageProviderSettings(
     (settings?.codexManagedAccounts?.length ?? 0) > 0 ||
     (settings?.claudeManagedAccounts?.length ?? 0) > 0 ||
     settings?.geminiCliOAuthEnabled === true ||
-    Boolean(settings?.opencodeSessionCookie?.trim())
+    Boolean(settings?.opencodeSessionCookie?.trim()) ||
+    // Antigravity's durable signal requires geminiCliOAuthEnabled, so it is
+    // already covered by the gemini term above.
+    settings?.minimaxCookieConfigured === true ||
+    settings?.grokAuthConfigured === true
   )
 }
 
@@ -80,6 +100,18 @@ export function hasUsageProviderSettingsForProvider(
   if (providerId === 'opencode-go') {
     return Boolean(settings.opencodeSessionCookie?.trim())
   }
+  if (providerId === 'antigravity') {
+    // Why: the Antigravity snapshot mirrors the Gemini fetch, which stays
+    // 'unavailable' until the user opts into Gemini CLI OAuth. Without that
+    // gate the default-on checked item would pin a permanently dead bar.
+    return settings.antigravityUsageConfigured === true && settings.geminiCliOAuthEnabled === true
+  }
+  if (providerId === 'minimax') {
+    return settings.minimaxCookieConfigured === true
+  }
+  if (providerId === 'grok') {
+    return settings.grokAuthConfigured === true
+  }
   return false
 }
 
@@ -98,7 +130,7 @@ function createPendingProviderSnapshot(providerId: UsageProviderId): ProviderRat
 
 export function getVisibleUsageProvider(
   providerId: UsageProviderId,
-  provider: ProviderRateLimits | null,
+  provider: ProviderRateLimits | null | undefined,
   settings: Partial<UsageProviderSettings> | null | undefined
 ): ProviderRateLimits | null {
   if (isProviderConfigured(provider)) {
@@ -122,12 +154,18 @@ export function isUsageEmptyState(
   // Why: system-default Claude/Codex accounts have no persisted account row;
   // their first durable signal is the usage snapshot, so wait for snapshots to
   // settle before teaching the user to connect an account.
+  const antigravitySnapshotPending =
+    hasUsageProviderSettingsForProvider('antigravity', settings) &&
+    isProviderSnapshotPending(providers.antigravity)
   if (
     isProviderSnapshotPending(providers.claude) ||
     isProviderSnapshotPending(providers.codex) ||
     isProviderSnapshotPending(providers.gemini) ||
     isProviderSnapshotPending(providers.opencodeGo) ||
-    isProviderSnapshotPending(providers.kimi)
+    isProviderSnapshotPending(providers.kimi) ||
+    antigravitySnapshotPending ||
+    isProviderSnapshotPending(providers.minimax) ||
+    isProviderSnapshotPending(providers.grok)
   ) {
     return false
   }
@@ -137,6 +175,9 @@ export function isUsageEmptyState(
     !isProviderConfigured(providers.codex) &&
     !isProviderConfigured(providers.gemini) &&
     !isProviderConfigured(providers.opencodeGo) &&
-    !isProviderConfigured(providers.kimi)
+    !isProviderConfigured(providers.kimi) &&
+    !isProviderConfigured(providers.antigravity) &&
+    !isProviderConfigured(providers.minimax) &&
+    !isProviderConfigured(providers.grok)
   )
 }

@@ -8,6 +8,7 @@ import {
   saveMobileClipboardImageAsTempFile
 } from './mobile-clipboard-image'
 import type { RpcClient } from '../transport/rpc-client'
+import { LogicalClientCutoverError } from '../transport/stable-logical-rpc-client'
 import type { RpcFailure, RpcResponse, RpcSuccess } from '../transport/types'
 
 function ok(id: string, result: unknown): RpcSuccess {
@@ -122,6 +123,30 @@ describe('mobile clipboard image paste helpers', () => {
       method: 'clipboard.abortImageUpload',
       params: { uploadId: 'upload-1' }
     })
+  })
+
+  it('restarts the upload after a logical connection cutover', async () => {
+    const sendRequest = vi
+      .fn()
+      .mockResolvedValueOnce(ok('start-1', { uploadId: 'upload-1' }))
+      .mockRejectedValueOnce(new LogicalClientCutoverError())
+      .mockResolvedValueOnce(ok('abort-1', { aborted: true }))
+      .mockResolvedValueOnce(ok('start-2', { uploadId: 'upload-2' }))
+      .mockResolvedValueOnce(ok('append-2', { receivedBase64Length: 8 }))
+      .mockResolvedValueOnce(ok('commit-2', '/tmp/orca-paste-image.png'))
+
+    await expect(saveMobileClipboardImageAsTempFile({ sendRequest }, 'aGVsbG8=')).resolves.toBe(
+      '/tmp/orca-paste-image.png'
+    )
+
+    expect(sendRequest.mock.calls.map(([method]) => method)).toEqual([
+      'clipboard.startImageUpload',
+      'clipboard.appendImageUploadChunk',
+      'clipboard.abortImageUpload',
+      'clipboard.startImageUpload',
+      'clipboard.appendImageUploadChunk',
+      'clipboard.commitImageUpload'
+    ])
   })
 
   it('brackets generated image paths before sending to the terminal', () => {

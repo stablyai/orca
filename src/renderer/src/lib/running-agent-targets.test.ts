@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { AppState } from '@/store/types'
 import type { AgentStatusEntry, AgentStatusState } from '../../../shared/agent-status-types'
-import type { TerminalTab } from '../../../shared/types'
+import type { TerminalTab } from '../../../shared/terminal-tab-types'
 import { makePaneKey } from '../../../shared/stable-pane-id'
 import {
   deriveRunningAgentSendTargets,
@@ -205,7 +205,157 @@ describe('running agent send targets', () => {
     ])
   })
 
-  it('disables stale agent status rows even when the pane still has a leaf PTY', () => {
+  it('keeps stale agent status rows disabled when no live title proves the agent is sendable', () => {
+    const stalePaneKey = makePaneKey(TAB_ID, RIGHT_LEAF_ID)
+    const target = resolveRunningAgentSendTarget(
+      state({
+        agentStatusByPaneKey: {
+          [stalePaneKey]: entry(stalePaneKey, 'waiting', NOW - 31 * 60 * 1000)
+        },
+        terminalLayoutsByTabId: {
+          [TAB_ID]: {
+            root: { type: 'leaf', leafId: RIGHT_LEAF_ID },
+            activeLeafId: RIGHT_LEAF_ID,
+            expandedLeafId: null,
+            ptyIdsByLeafId: { [RIGHT_LEAF_ID]: 'pty-right' }
+          }
+        }
+      }),
+      WORKTREE_ID,
+      stalePaneKey,
+      NOW
+    )
+
+    expect(target).toMatchObject({
+      paneKey: stalePaneKey,
+      ptyId: 'pty-right',
+      status: 'disabled',
+      disabledReason: 'Agent status is stale'
+    })
+  })
+
+  it('keeps stale agent status rows disabled when only a bare agent title remains', () => {
+    const stalePaneKey = makePaneKey(TAB_ID, RIGHT_LEAF_ID)
+    const target = resolveRunningAgentSendTarget(
+      state({
+        agentStatusByPaneKey: {
+          [stalePaneKey]: entry(stalePaneKey, 'done', NOW - 31 * 60 * 1000)
+        },
+        tabsByWorktree: { [WORKTREE_ID]: [{ ...tab(TAB_ID), title: 'Codex' }] },
+        terminalLayoutsByTabId: {
+          [TAB_ID]: {
+            root: { type: 'leaf', leafId: RIGHT_LEAF_ID },
+            activeLeafId: RIGHT_LEAF_ID,
+            expandedLeafId: null,
+            ptyIdsByLeafId: { [RIGHT_LEAF_ID]: 'pty-right' }
+          }
+        }
+      }),
+      WORKTREE_ID,
+      stalePaneKey,
+      NOW
+    )
+
+    expect(target).toMatchObject({
+      paneKey: stalePaneKey,
+      ptyId: 'pty-right',
+      status: 'disabled',
+      disabledReason: 'Agent status is stale'
+    })
+  })
+
+  it('promotes stale agent status rows when a live pane title proves the agent is sendable', () => {
+    const stalePaneKey = makePaneKey(TAB_ID, RIGHT_LEAF_ID)
+    const target = resolveRunningAgentSendTarget(
+      state({
+        agentStatusByPaneKey: {
+          [stalePaneKey]: entry(stalePaneKey, 'done', NOW - 31 * 60 * 1000)
+        },
+        terminalLayoutsByTabId: {
+          [TAB_ID]: {
+            root: { type: 'leaf', leafId: RIGHT_LEAF_ID },
+            activeLeafId: RIGHT_LEAF_ID,
+            expandedLeafId: null,
+            ptyIdsByLeafId: { [RIGHT_LEAF_ID]: 'pty-right' }
+          }
+        },
+        runtimePaneTitlesByTabId: { [TAB_ID]: { 1: 'Codex ready' } }
+      }),
+      WORKTREE_ID,
+      stalePaneKey,
+      NOW
+    )
+
+    expect(target).toMatchObject({
+      paneKey: stalePaneKey,
+      ptyId: 'pty-right',
+      status: 'eligible'
+    })
+    expect(target).not.toHaveProperty('disabledReason')
+  })
+
+  it('does not promote an unconfirmed restored row from its preserved title', () => {
+    const paneKey = makePaneKey(TAB_ID, RIGHT_LEAF_ID)
+    const target = resolveRunningAgentSendTarget(
+      state({
+        agentStatusByPaneKey: {
+          [paneKey]: { ...entry(paneKey, 'working'), restoredUnconfirmed: true }
+        },
+        terminalLayoutsByTabId: {
+          [TAB_ID]: {
+            root: { type: 'leaf', leafId: RIGHT_LEAF_ID },
+            activeLeafId: RIGHT_LEAF_ID,
+            expandedLeafId: null,
+            ptyIdsByLeafId: { [RIGHT_LEAF_ID]: 'pty-right' }
+          }
+        },
+        runtimePaneTitlesByTabId: { [TAB_ID]: { 1: 'Codex ready' } }
+      }),
+      WORKTREE_ID,
+      paneKey,
+      NOW
+    )
+
+    expect(target).toMatchObject({
+      paneKey,
+      ptyId: 'pty-right',
+      status: 'disabled',
+      disabledReason: 'Agent status is stale'
+    })
+  })
+
+  it('treats a missing tab title as absent live title evidence', () => {
+    const paneKey = makePaneKey(TAB_ID, RIGHT_LEAF_ID)
+    const target = resolveRunningAgentSendTarget(
+      state({
+        agentStatusByPaneKey: {
+          [paneKey]: entry(paneKey, 'done')
+        },
+        tabsByWorktree: {
+          [WORKTREE_ID]: [{ ...tab(TAB_ID), title: undefined } as unknown as TerminalTab]
+        },
+        terminalLayoutsByTabId: {
+          [TAB_ID]: {
+            root: { type: 'leaf', leafId: RIGHT_LEAF_ID },
+            activeLeafId: RIGHT_LEAF_ID,
+            expandedLeafId: null,
+            ptyIdsByLeafId: { [RIGHT_LEAF_ID]: 'pty-right' }
+          }
+        }
+      }),
+      WORKTREE_ID,
+      paneKey,
+      NOW
+    )
+
+    expect(target).toMatchObject({
+      paneKey,
+      ptyId: 'pty-right',
+      status: 'eligible'
+    })
+  })
+
+  it('keeps stale agent status rows disabled when the live pane title needs permission', () => {
     const stalePaneKey = makePaneKey(TAB_ID, RIGHT_LEAF_ID)
     const target = resolveRunningAgentSendTarget(
       state({
@@ -231,7 +381,7 @@ describe('running agent send targets', () => {
       paneKey: stalePaneKey,
       ptyId: 'pty-right',
       status: 'disabled',
-      disabledReason: 'Agent status is stale'
+      disabledReason: 'Agent needs permission'
     })
   })
 

@@ -1,6 +1,6 @@
 import { useAppStore } from '@/store'
 import { resolveUnifiedTabLabel } from '../../../shared/tab-title-resolution'
-import { getRepoIdFromWorktreeId } from '../../../shared/worktree-id'
+import { getRepoIdFromWorktreeId } from '../../../shared/worktree/id'
 import type { AppState } from './types'
 
 /** Resolves the displayed tab-strip label for the destructive confirmation. */
@@ -22,6 +22,13 @@ export function isUnifiedTabPinned(state: AppState, worktreeId: string, tabId: s
   return (state.unifiedTabsByWorktree?.[worktreeId] ?? []).some(
     (tab) => (tab.id === tabId || tab.entityId === tabId) && tab.isPinned === true
   )
+}
+
+/** Whether a pinned close will actually raise the pin dialog. Callers that let the pin
+ *  prompt supersede another confirmation must know this: with the setting off the pin
+ *  has nothing to say, so it must not swallow the other prompt (#10142). */
+export function shouldConfirmPinnedTabClose(state: AppState): boolean {
+  return state.settings?.confirmClosePinnedTab ?? true
 }
 
 /** Whether this terminal tab is the repo's Spotlight server terminal while
@@ -53,14 +60,14 @@ export function guardPinnedTabClose(params: {
   onCancel?: () => void
   worktreeId?: string
   terminalTabId?: string
-}): void {
+}): (() => void) | undefined {
   const { isPinned, tabLabel, onClose, onCancel, worktreeId, terminalTabId } = params
   const state = useAppStore.getState()
 
   if (worktreeId && terminalTabId && isSpotlightProtectedTab(state, worktreeId, terminalTabId)) {
-    state.requestPinnedTabCloseConfirm({
+    const request = {
       tabLabel,
-      kind: 'spotlight',
+      kind: 'spotlight' as const,
       onConfirm: () => {
         const repoId = getRepoIdFromWorktreeId(worktreeId)
         // Close the tab regardless of the deactivate outcome. Closing a
@@ -75,24 +82,26 @@ export function guardPinnedTabClose(params: {
           .finally(() => onClose())
       },
       ...(onCancel ? { onCancel } : {})
-    })
-    return
+    }
+    state.requestPinnedTabCloseConfirm(request)
+    return () => state.cancelPinnedTabCloseRequest(request)
   }
 
   if (!isPinned) {
     onClose()
-    return
+    return undefined
   }
 
-  const shouldConfirm = state.settings?.confirmClosePinnedTab ?? true
-  if (!shouldConfirm) {
+  if (!shouldConfirmPinnedTabClose(state)) {
     onClose()
-    return
+    return undefined
   }
 
-  state.requestPinnedTabCloseConfirm({
+  const request = {
     tabLabel,
     onConfirm: onClose,
     ...(onCancel ? { onCancel } : {})
-  })
+  }
+  state.requestPinnedTabCloseConfirm(request)
+  return () => state.cancelPinnedTabCloseRequest(request)
 }

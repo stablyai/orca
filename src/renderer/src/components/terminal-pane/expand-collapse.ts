@@ -1,3 +1,4 @@
+import { useMemo } from 'react'
 import type { PaneManager } from '@/lib/pane-manager/pane-manager'
 import { safeFit } from '@/lib/pane-manager/pane-tree-ops'
 
@@ -204,4 +205,45 @@ export function createExpandCollapseActions(state: ExpandCollapseState) {
     syncExpandedLayout,
     toggleExpandPane
   }
+}
+
+// Why: four of these actions are deps of the terminal keyboard effect; unstable
+// identities would tear down and re-register its window listeners every render.
+export function useExpandCollapseActions(state: ExpandCollapseState) {
+  const {
+    expandedPaneIdRef,
+    expandedStyleSnapshotRef,
+    containerRef,
+    managerRef,
+    setExpandedPaneId,
+    setTabPaneExpanded,
+    pendingPaneSizeRefreshFrameIdsRef,
+    tabId,
+    persistLayoutSnapshot
+  } = state
+  return useMemo(
+    () =>
+      createExpandCollapseActions({
+        expandedPaneIdRef,
+        expandedStyleSnapshotRef,
+        containerRef,
+        managerRef,
+        setExpandedPaneId,
+        setTabPaneExpanded,
+        pendingPaneSizeRefreshFrameIdsRef,
+        tabId,
+        persistLayoutSnapshot
+      }),
+    [
+      expandedPaneIdRef,
+      expandedStyleSnapshotRef,
+      containerRef,
+      managerRef,
+      setExpandedPaneId,
+      setTabPaneExpanded,
+      pendingPaneSizeRefreshFrameIdsRef,
+      tabId,
+      persistLayoutSnapshot
+    ]
+  )
 }

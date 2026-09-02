@@ -1,31 +1,37 @@
-/* eslint-disable max-lines -- Why: scan and IPC process-liveness tests share
-   hoisted Electron/git provider mocks; splitting would duplicate brittle setup. */
+import path from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { ipcMain } from 'electron'
 import type { Store } from '../persistence'
-import type {
-  DiffComment,
-  GitStatusResult,
-  GitWorktreeInfo,
-  Repo,
-  WorktreeMeta
-} from '../../shared/types'
+import type { DiffComment } from '../../shared/diff-comment-types'
+import type { GitStatusResult } from '../../shared/git-status-types'
+import type { Repo } from '../../shared/repo-types'
+import type { WorktreeMeta } from '../../shared/worktree/meta-types'
+import type { GitWorktreeInfo } from '../../shared/worktree/types'
 import type { WorkspaceCleanupScanProgress } from '../../shared/workspace-cleanup'
 
 const {
+  lstatMock,
+  readFileMock,
   listRepoWorktreesMock,
   getStatusMock,
   gitExecFileAsyncMock,
+  getLocalProjectWorktreeGitOptionsMock,
   getSshGitProviderMock,
-  getSshPtyProviderMock,
   listRegisteredPtysMock
 } = vi.hoisted(() => ({
+  lstatMock: vi.fn(),
+  readFileMock: vi.fn(),
   listRepoWorktreesMock: vi.fn(),
   getStatusMock: vi.fn(),
   gitExecFileAsyncMock: vi.fn(),
+  getLocalProjectWorktreeGitOptionsMock: vi.fn(),
   getSshGitProviderMock: vi.fn(),
-  getSshPtyProviderMock: vi.fn(),
   listRegisteredPtysMock: vi.fn()
+}))
+
+vi.mock('node:fs/promises', () => ({
+  lstat: lstatMock,
+  readFile: readFileMock
 }))
 
 vi.mock('electron', () => ({
@@ -52,15 +58,25 @@ vi.mock('../providers/ssh-git-dispatch', () => ({
   getSshGitProvider: getSshGitProviderMock
 }))
 
+vi.mock('../project-runtime-git-options', () => ({
+  getLocalProjectWorktreeGitOptions: getLocalProjectWorktreeGitOptionsMock
+}))
+
 vi.mock('../memory/pty-registry', () => ({
   listRegisteredPtys: listRegisteredPtysMock
 }))
 
 vi.mock('./pty', () => ({
-  getSshPtyProvider: getSshPtyProviderMock
+  getSshPtyProvider: vi.fn()
 }))
 
-import { registerWorkspaceCleanupHandlers, scanWorkspaceCleanup } from './workspace-cleanup'
+// Why: snapshot persistence does real file I/O; covered in workspace-cleanup-snapshot-ipc.test.ts.
+vi.mock('../workspace-cleanup-scan-snapshot', () => ({
+  persistWorkspaceCleanupScanResult: vi.fn(async () => undefined),
+  readWorkspaceCleanupScanSnapshot: vi.fn(async () => null)
+}))
+
+import { scanWorkspaceCleanup } from './workspace-cleanup'
 
 const NOW = 1_700_000_000_000
 const REPO: Repo = {
@@ -68,7 +84,8 @@ const REPO: Repo = {
   path: '/repo',
   displayName: 'Repo',
   badgeColor: '#000',
-  addedAt: NOW
+  addedAt: NOW,
+  symlinkPaths: ['node_modules']
 }
 const LARGE_WORKTREE_COUNT = 150_000
 
@@ -92,6 +109,22 @@ function buildWorktreeIds(repoId: string, count: number): string[] {
     worktreeIds.push(`${repoId}::/repo-feature-${index}`)
   }
   return worktreeIds
+}
+
+function makeWorktreeMeta(overrides: Partial<WorktreeMeta> = {}): WorktreeMeta {
+  return {
+    displayName: 'Feature',
+    comment: '',
+    linkedIssue: null,
+    linkedPR: null,
+    linkedLinearIssue: null,
+    isArchived: false,
+    isUnread: false,
+    isPinned: false,
+    sortOrder: 0,
+    lastActivityAt: NOW,
+    ...overrides
+  }
 }
 
 function makeStore(
@@ -125,13 +158,17 @@ describe('workspace cleanup scan', () => {
   beforeEach(() => {
     vi.useFakeTimers()
     vi.setSystemTime(NOW)
+    lstatMock.mockReset()
+    readFileMock.mockReset()
     listRepoWorktreesMock.mockReset()
     getStatusMock.mockReset()
     gitExecFileAsyncMock.mockReset()
+    getLocalProjectWorktreeGitOptionsMock.mockReset().mockReturnValue({})
     getSshGitProviderMock.mockReset()
-    getSshPtyProviderMock.mockReset()
     listRegisteredPtysMock.mockReset()
     listRegisteredPtysMock.mockReturnValue([])
+    lstatMock.mockResolvedValue({ mtimeMs: 0 })
+    readFileMock.mockRejectedValue(new Error('not a gitdir pointer'))
     vi.mocked(ipcMain.handle).mockReset()
     vi.mocked(ipcMain.removeHandler).mockReset()
     listRepoWorktreesMock.mockResolvedValue([
@@ -159,7 +196,11 @@ describe('workspace cleanup scan', () => {
   it('default-selects inactive workspaces when git status is clean', async () => {
     const result = await scanWorkspaceCleanup(makeStore())
 
-    expect(getStatusMock).toHaveBeenCalledTimes(1)
+    expect(getStatusMock).toHaveBeenCalledWith('/repo-feature', {
+      includeLineStats: false,
+      signal: expect.any(AbortSignal),
+      sharedLinkPaths: ['node_modules']
+    })
     expect(result.candidates).toHaveLength(1)
     expect(result.candidates[0]).toMatchObject({
       tier: 'ready',
@@ -201,7 +242,7 @@ describe('workspace cleanup scan', () => {
     expect(progress[0]).toMatchObject({
       scanId: 'scan-1',
       scannedWorktreeCount: 0,
-      totalWorktreeCount: 2,
+      totalWorktreeCount: 1,
       candidates: []
     })
     const candidateProgress = progress.filter(
@@ -209,11 +250,11 @@ describe('workspace cleanup scan', () => {
         (event as WorkspaceCleanupScanProgress).candidateMode === 'append' &&
         (event as WorkspaceCleanupScanProgress).candidates.length > 0
     )
-    expect(candidateProgress).toHaveLength(2)
-    expect(candidateProgress.every((event) => event.candidates.length === 1)).toBe(true)
+    expect(candidateProgress.length).toBeLessThanOrEqual(2)
     const progressWorktreeIds = candidateProgress.flatMap((event) =>
       event.candidates.map((candidate) => candidate.worktreeId)
     )
+    expect(progressWorktreeIds).toHaveLength(2)
     expect(progressWorktreeIds).toEqual(
       expect.arrayContaining(['repo-1::/repo-feature-a', 'repo-1::/repo-feature-b'])
     )
@@ -222,6 +263,55 @@ describe('workspace cleanup scan', () => {
       scannedWorktreeCount: 2,
       totalWorktreeCount: 2
     })
+  })
+
+  it('emits ready rows while another activity metadata read is stalled', async () => {
+    listRepoWorktreesMock.mockResolvedValue([
+      {
+        path: '/repo-feature-a',
+        head: 'abc123',
+        branch: 'refs/heads/feature-a',
+        isBare: false,
+        isMainWorktree: false
+      },
+      {
+        path: '/repo-feature-b',
+        head: 'def456',
+        branch: 'refs/heads/feature-b',
+        isBare: false,
+        isMainWorktree: false
+      }
+    ])
+    lstatMock.mockImplementation((targetPath: string) => {
+      if (targetPath.startsWith('/repo-feature-a')) {
+        return new Promise(() => undefined)
+      }
+      return Promise.resolve({ mtimeMs: 0 })
+    })
+    const progress: WorkspaceCleanupScanProgress[] = []
+
+    const scanPromise = scanWorkspaceCleanup(
+      makeStore(),
+      { scanId: 'scan-1' },
+      { onProgress: (event) => progress.push(event) }
+    )
+
+    await vi.waitFor(() => {
+      expect(
+        progress.some((event) => event.candidates[0]?.worktreeId === 'repo-1::/repo-feature-b')
+      ).toBe(true)
+    })
+    expect(progress.at(-1)).toMatchObject({
+      scannedWorktreeCount: 1,
+      totalWorktreeCount: 1
+    })
+
+    await vi.advanceTimersByTimeAsync(8_000)
+    const result = await scanPromise
+
+    expect(result.candidates.map((candidate) => candidate.worktreeId)).toEqual(
+      expect.arrayContaining(['repo-1::/repo-feature-a', 'repo-1::/repo-feature-b'])
+    )
   })
 
   it('keeps raw scan errors out of renderer-facing results', async () => {
@@ -233,6 +323,7 @@ describe('workspace cleanup scan', () => {
       {
         repoId: 'repo-1',
         repoName: 'Repo',
+        executionHostId: 'local',
         message: 'Git could not list worktrees.'
       }
     ])
@@ -255,6 +346,7 @@ describe('workspace cleanup scan', () => {
         {
           repoId: 'repo-1',
           repoName: 'Repo',
+          executionHostId: 'local',
           message: 'Timed out listing worktrees.'
         }
       ]
@@ -275,18 +367,10 @@ describe('workspace cleanup scan', () => {
 
   it('uses direct metadata lookup for focused disconnected remote preflight', async () => {
     const targetWorktreeId = 'repo-1::/remote/repo-feature'
-    const targetMeta: WorktreeMeta = {
+    const targetMeta = makeWorktreeMeta({
       displayName: 'Remote Feature',
-      comment: '',
-      linkedIssue: null,
-      linkedPR: null,
-      linkedLinearIssue: null,
-      isArchived: false,
-      isUnread: false,
-      isPinned: false,
-      sortOrder: 0,
       lastActivityAt: NOW - 2 * 24 * 60 * 60 * 1000
-    }
+    })
     const getWorktreeMeta = vi.fn((worktreeId: string) =>
       worktreeId === targetWorktreeId ? targetMeta : undefined
     )
@@ -313,6 +397,35 @@ describe('workspace cleanup scan', () => {
         checkedAt: null
       }
     })
+  })
+
+  it('stats only the requested worktree during focused local preflight scans', async () => {
+    listRepoWorktreesMock.mockResolvedValue([
+      {
+        path: '/repo-feature-a',
+        head: 'abc123',
+        branch: 'refs/heads/feature-a',
+        isBare: false,
+        isMainWorktree: false
+      },
+      {
+        path: '/repo-feature-b',
+        head: 'def456',
+        branch: 'refs/heads/feature-b',
+        isBare: false,
+        isMainWorktree: false
+      }
+    ])
+
+    const result = await scanWorkspaceCleanup(makeStore(), {
+      worktreeId: 'repo-1::/repo-feature-b'
+    })
+
+    expect(result.candidates).toHaveLength(1)
+    expect(result.candidates[0]?.worktreeId).toBe('repo-1::/repo-feature-b')
+    expect(lstatMock).toHaveBeenCalledTimes(2)
+    expect(lstatMock).toHaveBeenCalledWith('/repo-feature-b')
+    expect(lstatMock).toHaveBeenCalledWith(path.join('/repo-feature-b', '.git'))
   })
 
   it('scans connected remote workspaces through the SSH git provider', async () => {
@@ -344,6 +457,7 @@ describe('workspace cleanup scan', () => {
       signal: expect.any(AbortSignal)
     })
     expect(provider.getStatus).toHaveBeenCalledWith('/remote/repo-feature', {
+      includeLineStats: false,
       signal: expect.any(AbortSignal)
     })
     expect(result.errors).toEqual([])
@@ -385,6 +499,116 @@ describe('workspace cleanup scan', () => {
     expect(getStatusMock).not.toHaveBeenCalled()
     expect(gitExecFileAsyncMock).not.toHaveBeenCalled()
     expect(result.candidates).toEqual([])
+  })
+
+  it('stats only broad-scan rows that remain possible cleanup candidates', async () => {
+    listRepoWorktreesMock.mockResolvedValue([
+      {
+        path: '/repo',
+        head: 'main123',
+        branch: 'refs/heads/main',
+        isBare: false,
+        isMainWorktree: true
+      },
+      {
+        path: '/repo-old',
+        head: 'old123',
+        branch: 'refs/heads/old',
+        isBare: false,
+        isMainWorktree: false
+      },
+      {
+        path: '/repo-recent',
+        head: 'recent123',
+        branch: 'refs/heads/recent',
+        isBare: false,
+        isMainWorktree: false
+      },
+      {
+        path: '/repo-new-created',
+        head: 'created123',
+        branch: 'refs/heads/created',
+        isBare: false,
+        isMainWorktree: false
+      }
+    ])
+    const metadataByWorktreeId: Record<string, WorktreeMeta> = {
+      'repo-1::/repo-old': makeWorktreeMeta({
+        lastActivityAt: NOW - 40 * 24 * 60 * 60 * 1000,
+        baseRef: 'origin/main'
+      }),
+      'repo-1::/repo-recent': makeWorktreeMeta({
+        lastActivityAt: NOW - 2 * 24 * 60 * 60 * 1000,
+        baseRef: 'origin/main'
+      }),
+      'repo-1::/repo-new-created': makeWorktreeMeta({
+        createdAt: NOW - 1_000,
+        lastActivityAt: NOW - 40 * 24 * 60 * 60 * 1000,
+        baseRef: 'origin/main'
+      })
+    }
+    const store = {
+      ...makeStore(),
+      getWorktreeMeta: (worktreeId: string) => metadataByWorktreeId[worktreeId]
+    } as unknown as Store
+
+    const result = await scanWorkspaceCleanup(store)
+
+    expect(result.candidates.map((candidate) => candidate.worktreeId)).toEqual([
+      'repo-1::/repo-old'
+    ])
+    expect(lstatMock).toHaveBeenCalledTimes(2)
+    expect(lstatMock).toHaveBeenCalledWith('/repo-old')
+    expect(lstatMock).toHaveBeenCalledWith(path.join('/repo-old', '.git'))
+    expect(getStatusMock).toHaveBeenCalledTimes(1)
+  })
+
+  it('falls back when broad-scan activity metadata stalls', async () => {
+    lstatMock.mockReturnValue(new Promise(() => undefined))
+    const progress: unknown[] = []
+
+    const scanPromise = scanWorkspaceCleanup(
+      makeStore(),
+      { scanId: 'scan-1' },
+      { onProgress: (event) => progress.push(event) }
+    )
+    await vi.advanceTimersByTimeAsync(8_000)
+
+    const result = await scanPromise
+
+    expect(result.candidates).toHaveLength(1)
+    expect(result.candidates[0]?.worktreeId).toBe('repo-1::/repo-feature')
+    expect(progress[0]).toMatchObject({
+      scanId: 'scan-1',
+      scannedWorktreeCount: 0,
+      totalWorktreeCount: 1
+    })
+    expect(progress.at(-1)).toMatchObject({
+      scanId: 'scan-1',
+      scannedWorktreeCount: 1,
+      totalWorktreeCount: 1
+    })
+  })
+
+  it('stops statting a repo after the first activity metadata timeout', async () => {
+    listRepoWorktreesMock.mockResolvedValue(
+      ['/repo-a', '/repo-b', '/repo-c', '/repo-d'].map((worktreePath, index) => ({
+        path: worktreePath,
+        head: `head-${index}`,
+        branch: `refs/heads/branch-${index}`,
+        isBare: false,
+        isMainWorktree: false
+      }))
+    )
+    lstatMock.mockReturnValue(new Promise(() => undefined))
+
+    const scanPromise = scanWorkspaceCleanup(makeStore())
+    await vi.advanceTimersByTimeAsync(8_000)
+    const result = await scanPromise
+
+    expect(result.candidates).toHaveLength(4)
+    expect(lstatMock).not.toHaveBeenCalledWith('/repo-d')
+    expect(lstatMock).not.toHaveBeenCalledWith(path.join('/repo-d', '.git'))
   })
 
   it('includes focused remove preflight rows even when they are recent', async () => {
@@ -545,18 +769,15 @@ describe('workspace cleanup scan', () => {
   })
 
   it('summarizes large diff-note lists without hitting argument limits', async () => {
-    const diffComments = Array.from(
-      { length: 150_000 },
-      (_, index): DiffComment => ({
-        id: `comment-${index}`,
-        worktreeId: 'repo-1::/repo-feature',
-        filePath: 'src/file.ts',
-        lineNumber: 12,
-        body: 'Follow up before deleting',
-        createdAt: NOW - index,
-        side: 'modified'
-      })
-    )
+    const diffComments = Array.from({ length: 150_000 }, (_, index): DiffComment => ({
+      id: `comment-${index}`,
+      worktreeId: 'repo-1::/repo-feature',
+      filePath: 'src/file.ts',
+      lineNumber: 12,
+      body: 'Follow up before deleting',
+      createdAt: NOW - index,
+      side: 'modified'
+    }))
 
     const result = await scanWorkspaceCleanup(
       makeStore({
@@ -611,62 +832,5 @@ describe('workspace cleanup scan', () => {
       reasons: ['idle-clean']
     })
     expect(result.candidates[0]).not.toHaveProperty('linkedPR')
-  })
-
-  it('reports local processes that workspace deletion would kill', async () => {
-    const localProvider = {
-      listProcesses: vi.fn().mockResolvedValue([
-        {
-          id: 'repo-1::/repo-feature@@session-1',
-          cwd: '/repo-feature',
-          title: 'zsh'
-        }
-      ])
-    }
-    registerWorkspaceCleanupHandlers(makeStore(), {
-      runtime: {
-        hasTerminalsForWorktree: vi.fn().mockResolvedValue(false)
-      } as never,
-      getLocalPtyProvider: () => localProvider as never
-    })
-
-    const handler = vi
-      .mocked(ipcMain.handle)
-      .mock.calls.find(([channel]) => channel === 'workspaceCleanup:hasKillableLocalProcesses')?.[1]
-
-    await expect(handler?.({} as never, { worktreeId: 'repo-1::/repo-feature' })).resolves.toEqual({
-      hasKillableProcesses: true
-    })
-  })
-
-  it('reports SSH processes inside the remote workspace path', async () => {
-    getSshPtyProviderMock.mockReturnValue({
-      listProcesses: vi.fn().mockResolvedValue([
-        {
-          id: 'remote-session-1',
-          cwd: '/remote/repo-feature/subdir',
-          title: 'codex'
-        }
-      ])
-    })
-    registerWorkspaceCleanupHandlers(makeStore(), {
-      runtime: {
-        hasTerminalsForWorktree: vi.fn().mockResolvedValue(false)
-      } as never
-    })
-
-    const handler = vi
-      .mocked(ipcMain.handle)
-      .mock.calls.find(([channel]) => channel === 'workspaceCleanup:hasKillableLocalProcesses')?.[1]
-
-    await expect(
-      handler?.({} as never, {
-        worktreeId: 'repo-ssh::/remote/repo-feature',
-        connectionId: 'ssh-1',
-        worktreePath: '/remote/repo-feature'
-      })
-    ).resolves.toEqual({
-      hasKillableProcesses: true
-    })
   })
 })

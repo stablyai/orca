@@ -1,4 +1,3 @@
-/* oxlint-disable max-lines -- Why: diagnostics IPC tests share mocked Electron handler setup; splitting would duplicate brittle IPC wiring. */
 import { readFileSync, writeFileSync } from 'node:fs'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { CollectedBundle } from '../observability/bundle'

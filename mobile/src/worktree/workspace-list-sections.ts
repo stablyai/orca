@@ -1,4 +1,4 @@
-import type { WorkspaceStatusDefinition } from '../../../src/shared/types'
+import type { WorkspaceStatusDefinition } from '../../../src/shared/worktree/types'
 import {
   DEFAULT_MOBILE_WORKSPACE_STATUSES,
   coerceMobileWorkspaceStatuses,
@@ -9,8 +9,11 @@ import { applyMobileWorkspaceLineage } from './mobile-workspace-lineage'
 import { getPRGroupKey, PR_GROUP_LABELS, PR_GROUP_ORDER } from './workspace-pr-status-groups'
 import type { FilterState, Section, Worktree } from './workspace-list-types'
 import type { MobileGroupMode, MobileSortMode } from './workspace-view-settings'
+import { sortWorktrees } from './workspace-list-ordering'
+import { getWorktreeRowIdentity } from './worktree-host-row-identity'
 
 export type { FilterState, Section, Worktree } from './workspace-list-types'
+export { CREATE_GRACE_MS, getWorktreeStatus, sortWorktrees } from './workspace-list-ordering'
 
 function makeSection(
   key: string,
@@ -26,32 +29,9 @@ function makeSection(
     ...(icon ? { icon } : {}),
     data: rows.map((worktree) => ({
       ...worktree,
-      sectionListKey: `${key}:${worktree.worktreeId}`
+      sectionListKey: `${key}:${getWorktreeRowIdentity(worktree)}`
     }))
   }
-}
-
-export function getWorktreeStatus(
-  w: Worktree
-): 'working' | 'active' | 'permission' | 'done' | 'inactive' {
-  // Why: desktop's sidebar activity is the parity source. Runtime status may
-  // still report retained/background PTYs as active after desktop hides them.
-  if (w.hasHostSidebarActivity === false) {
-    return 'inactive'
-  }
-  if (w.status && w.status !== 'inactive') {
-    return w.status
-  }
-  if (w.hasHostSidebarActivity === true) {
-    return 'active'
-  }
-  if (w.status) {
-    return w.status
-  }
-  if (w.liveTerminalCount > 0) {
-    return 'active'
-  }
-  return 'inactive'
 }
 
 // Why: the previous 10-minute lastOutputAt window was too strict — most
@@ -86,54 +66,25 @@ function isDefaultBranchWorkspace(w: Worktree): boolean {
   return branch === 'main' || branch === 'master'
 }
 
-function getManualSortRank(worktree: Worktree): number | null {
-  const rank = worktree.manualOrder ?? worktree.sortOrder
-  return typeof rank === 'number' && Number.isFinite(rank) ? rank : null
+/**
+ * Whether "Hide sleeping" must keep this row — the project's entry point (#8873).
+ * Falls back to the branch heuristic for hosts that predate isMainWorktree; a
+ * folder workspace is always its project's entry point, and isDefaultBranchWorkspace
+ * rejects it by design, so it needs its own legacy arm or #8873 still reproduces.
+ */
+function isSleepingSweepExempt(w: Worktree, alwaysShowDefaultBranch: boolean | undefined): boolean {
+  if (alwaysShowDefaultBranch === false) {
+    return false
+  }
+  return w.isMainWorktree ?? (w.workspaceKind === 'folder-workspace' || isDefaultBranchWorkspace(w))
 }
 
-export function sortWorktrees(worktrees: Worktree[], mode: MobileSortMode): Worktree[] {
-  if (mode === 'manual') {
-    return [...worktrees].sort((a, b) => {
-      const aRank = getManualSortRank(a)
-      const bRank = getManualSortRank(b)
-      if (aRank !== null && bRank !== null && aRank !== bRank) {
-        // Why: desktop assigns higher sort/manual ranks to earlier list positions.
-        return bRank - aRank
-      }
-      if (aRank !== null && bRank === null) {
-        return -1
-      }
-      if (aRank === null && bRank !== null) {
-        return 1
-      }
-      return 0
-    })
+function orderMainWorktreeFirst(worktrees: Worktree[]): Worktree[] {
+  const mainWorktrees = worktrees.filter((worktree) => worktree.isMainWorktree)
+  if (mainWorktrees.length === 0) {
+    return worktrees
   }
-  return [...worktrees].sort((a, b) => {
-    if (mode === 'name') {
-      return (a.displayName || a.repo).localeCompare(b.displayName || b.repo)
-    }
-    if (mode === 'recent') {
-      return (b.lastOutputAt ?? 0) - (a.lastOutputAt ?? 0)
-    }
-    if (mode === 'repo') {
-      const repoComparison = a.repo.localeCompare(b.repo, undefined, { sensitivity: 'base' })
-      return repoComparison || (a.displayName || a.repo).localeCompare(b.displayName || b.repo)
-    }
-    if (a.unread !== b.unread) {
-      return a.unread ? -1 : 1
-    }
-    const aStatus = getWorktreeStatus(a)
-    const bStatus = getWorktreeStatus(b)
-    const statusOrder = { permission: 0, working: 1, done: 2, active: 3, inactive: 4 }
-    if (statusOrder[aStatus] !== statusOrder[bStatus]) {
-      return statusOrder[aStatus] - statusOrder[bStatus]
-    }
-    if ((a.lastOutputAt ?? 0) !== (b.lastOutputAt ?? 0)) {
-      return (b.lastOutputAt ?? 0) - (a.lastOutputAt ?? 0)
-    }
-    return (a.displayName || a.repo).localeCompare(b.displayName || b.repo)
-  })
+  return [...mainWorktrees, ...worktrees.filter((worktree) => !worktree.isMainWorktree)]
 }
 
 export function filterWorktrees(
@@ -143,7 +94,9 @@ export function filterWorktrees(
 ): Worktree[] {
   let result = worktrees.filter((w) => !w.isArchived)
   if (filters.hideSleeping) {
-    result = result.filter(isWorktreeActive)
+    result = result.filter(
+      (w) => isSleepingSweepExempt(w, filters.alwaysShowDefaultBranch) || isWorktreeActive(w)
+    )
   }
   if (filters.hideDefaultBranch) {
     result = result.filter((w) => !isDefaultBranchWorkspace(w))
@@ -155,7 +108,7 @@ export function filterWorktrees(
     const q = search.toLowerCase()
     result = result.filter(
       (w) =>
-        (w.displayName || w.repo).toLowerCase().includes(q) ||
+        w.displayName.toLowerCase().includes(q) ||
         w.branch.toLowerCase().includes(q) ||
         w.repo.toLowerCase().includes(q)
     )
@@ -182,12 +135,9 @@ export function buildSections(
   const sorted = sortWorktrees(filtered, sortMode)
 
   const pinned = sorted.filter((w) => isWorktreePinned(w, pinnedIds))
-  const unpinned = sorted.filter((w) => !isWorktreePinned(w, pinnedIds))
-  // Why: mobile shows pinned workspaces once in the pinned section; duplicating
-  // them in status/project sections makes the phone list harder to scan.
-  const canonicalGroupWorktrees = unpinned
-  const active = canonicalGroupWorktrees.filter(isWorktreeActive)
-  const inactive = canonicalGroupWorktrees.filter((w) => !isWorktreeActive(w))
+  // Why: desktop treats Pinned as an overlay. Keeping pinned rows in canonical
+  // groups preserves exact cross-surface order and literal section counts.
+  const canonicalGroupWorktrees = sorted
 
   const sections: Section[] = []
   if (pinned.length > 0) {
@@ -195,19 +145,8 @@ export function buildSections(
   }
 
   if (groupMode === 'none') {
-    if (active.length > 0) {
-      sections.push(makeSection('all-active', 'Active', active, undefined, collapsedGroups))
-    }
-    if (inactive.length > 0) {
-      sections.push(
-        makeSection(
-          'all',
-          pinned.length > 0 || active.length > 0 ? 'All' : '',
-          inactive,
-          undefined,
-          collapsedGroups
-        )
-      )
+    if (canonicalGroupWorktrees.length > 0) {
+      sections.push(makeSection('all', 'All', canonicalGroupWorktrees, undefined, collapsedGroups))
     }
   } else if (groupMode === 'repo') {
     const byRepo = new Map<string, Worktree[]>()
@@ -238,7 +177,9 @@ export function buildSections(
     }
     for (const [repo, items] of byRepo) {
       const key = `repo:${repoIdsByName.get(repo) ?? repo}`
-      sections.push(makeSection(key, repo, items, undefined, collapsedGroups))
+      sections.push(
+        makeSection(key, repo, orderMainWorktreeFirst(items), undefined, collapsedGroups)
+      )
     }
   } else if (groupMode === 'workspaceStatus') {
     const renderableWorkspaceStatuses = coerceMobileWorkspaceStatuses(workspaceStatuses)

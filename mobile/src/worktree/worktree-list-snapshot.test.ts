@@ -96,6 +96,31 @@ describe('areWorktreeListsEqual', () => {
     ).toBe(false)
   })
 
+  it('detects desktop ordering field changes', () => {
+    expect(
+      areWorktreeListsEqual(
+        [worktree({ lastActivityAt: 10, createdAt: 1 })],
+        [worktree({ lastActivityAt: 20, createdAt: 1 })]
+      )
+    ).toBe(false)
+    expect(
+      areWorktreeListsEqual(
+        [worktree({ lastActivityAt: 10, createdAt: 1 })],
+        [worktree({ lastActivityAt: 10, createdAt: 2 })]
+      )
+    ).toBe(false)
+  })
+
+  it('detects resume host and terminal platform changes', () => {
+    expect(areWorktreeListsEqual([worktree()], [worktree({ hostId: 'ssh:box' })])).toBe(false)
+    expect(
+      areWorktreeListsEqual(
+        [worktree({ terminalPlatform: 'win32' })],
+        [worktree({ terminalPlatform: 'linux' })]
+      )
+    ).toBe(false)
+  })
+
   it('detects lineage changes', () => {
     const base = worktree({ worktreeId: 'child', parentWorktreeId: 'parent-a' })
     const changedParent = worktree({ worktreeId: 'child', parentWorktreeId: 'parent-b' })
@@ -109,9 +134,42 @@ describe('areWorktreeListsEqual', () => {
     expect(areWorktreeListsEqual([base], [changedChildren])).toBe(false)
   })
 
+  it('detects lineage instance changes', () => {
+    const base = worktree({
+      worktreeId: 'child',
+      parentWorktreeId: 'parent',
+      worktreeInstanceId: 'child-instance',
+      lineageWorktreeInstanceId: 'child-instance',
+      parentWorktreeInstanceId: 'parent-instance'
+    })
+    const changedParentInstance = worktree({
+      worktreeId: 'child',
+      parentWorktreeId: 'parent',
+      worktreeInstanceId: 'child-instance',
+      lineageWorktreeInstanceId: 'child-instance',
+      parentWorktreeInstanceId: 'new-parent-instance'
+    })
+
+    expect(areWorktreeListsEqual([base], [changedParentInstance])).toBe(false)
+  })
+
   it('detects agent status changes', () => {
     const first = [worktree({ agents: [agent({ state: 'working' })] })]
     const second = [worktree({ agents: [agent({ state: 'waiting' })] })]
+
+    expect(areWorktreeListsEqual(first, second)).toBe(false)
+  })
+
+  it('detects monitoring mode changes within working', () => {
+    const first = [worktree({ agents: [agent({ state: 'working' })] })]
+    const second = [worktree({ agents: [agent({ state: 'working', workingMode: 'monitoring' })] })]
+
+    expect(areWorktreeListsEqual(first, second)).toBe(false)
+  })
+
+  it('detects workspace monitoring mode changes within working', () => {
+    const first = [worktree({ status: 'working' })]
+    const second = [worktree({ status: 'working', workingMode: 'monitoring' })]
 
     expect(areWorktreeListsEqual(first, second)).toBe(false)
   })

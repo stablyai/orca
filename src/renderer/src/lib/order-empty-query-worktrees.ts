@@ -1,8 +1,14 @@
-import type { Worktree } from '../../../shared/types'
+import type { ExecutionHostId } from '../../../shared/execution-host'
+import type { Worktree } from '../../../shared/worktree/types'
+import { isPaletteCurrentWorktree } from './palette-repo-resolution'
+import { compareWorktreeDisplayName } from './worktree-display-name-order'
+import { getWorktreeVisitTimestamp } from './worktree-visit-recency'
 
 export type OrderEmptyQueryInputs = {
   visibleWorktrees: readonly Worktree[]
   activeWorktreeId: string | null
+  /** Host of the active workspace. Omit to fall back to bare-id matching (STA-4343). */
+  activeWorkspaceExecutionHostId?: ExecutionHostId | null
   lastVisitedAtByWorktreeId: Record<string, number>
 }
 
@@ -28,8 +34,17 @@ export type OrderEmptyQueryResult = {
  * visibleWorktreesForState so empty-state logic isn't affected.
  */
 export function orderEmptyQueryWorktrees(inputs: OrderEmptyQueryInputs): OrderEmptyQueryResult {
-  const { visibleWorktrees, activeWorktreeId, lastVisitedAtByWorktreeId } = inputs
-  const switchable = visibleWorktrees.filter((w) => w.id !== activeWorktreeId)
+  const {
+    visibleWorktrees,
+    activeWorktreeId,
+    activeWorkspaceExecutionHostId,
+    lastVisitedAtByWorktreeId
+  } = inputs
+  // Why the host too (STA-4343): `repoId::path` repeats across hosts, so filtering on the
+  // bare id drops BOTH same-id rows as "current" and the other host becomes unreachable.
+  const switchable = visibleWorktrees.filter(
+    (w) => !isPaletteCurrentWorktree(w, activeWorktreeId, activeWorkspaceExecutionHostId)
+  )
   // Why: a visited worktree must always outrank a never-visited one,
   // even when the never-visited worktree has a newer lastActivityAt.
   // Mixing the two signals into a single numeric score would let
@@ -37,8 +52,8 @@ export function orderEmptyQueryWorktrees(inputs: OrderEmptyQueryInputs): OrderEm
   // visited SSH worktree below the fold — the exact bug the feature
   // fixes. Compare presence first, then value within each tier.
   const sorted = [...switchable].sort((a, b) => {
-    const aVisited = lastVisitedAtByWorktreeId[a.id]
-    const bVisited = lastVisitedAtByWorktreeId[b.id]
+    const aVisited = getWorktreeVisitTimestamp(lastVisitedAtByWorktreeId, a)
+    const bVisited = getWorktreeVisitTimestamp(lastVisitedAtByWorktreeId, b)
     if (aVisited != null && bVisited != null) {
       if (bVisited !== aVisited) {
         return bVisited - aVisited
@@ -50,7 +65,7 @@ export function orderEmptyQueryWorktrees(inputs: OrderEmptyQueryInputs): OrderEm
     } else if (b.lastActivityAt !== a.lastActivityAt) {
       return b.lastActivityAt - a.lastActivityAt
     }
-    return a.displayName.localeCompare(b.displayName)
+    return compareWorktreeDisplayName(a, b)
   })
   return {
     visibleWorktreesForState: visibleWorktrees,

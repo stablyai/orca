@@ -8,8 +8,8 @@ import type {
   GitHubProjectSort,
   GitHubProjectTable,
   GitHubProjectView
-} from '../../../../shared/github-project-types'
-import { sortRows, groupRows } from '../../../../shared/github-project-group-sort'
+} from '../../../../shared/github/project-types'
+import { sortRows, groupRows } from '../../../../shared/github/project-group-sort'
 
 const singleSelectField: GitHubProjectField = {
   kind: 'single-select',
@@ -31,6 +31,27 @@ const iterationField: GitHubProjectField = {
     { id: 'iter_1', title: 'Sprint 1', startDate: '2026-01-01', duration: 14, completed: false },
     { id: 'iter_2', title: 'Sprint 2', startDate: '2026-01-15', duration: 14, completed: false }
   ]
+}
+
+const assigneesField: GitHubProjectField = {
+  kind: 'field',
+  id: 'F_assignees',
+  name: 'Assignees',
+  dataType: 'ASSIGNEES'
+}
+
+const labelsField: GitHubProjectField = {
+  kind: 'field',
+  id: 'F_labels',
+  name: 'Labels',
+  dataType: 'LABELS'
+}
+
+const textField: GitHubProjectField = {
+  kind: 'field',
+  id: 'F_text',
+  name: 'Notes',
+  dataType: 'TEXT'
 }
 
 function makeRow(
@@ -206,6 +227,66 @@ describe('sortRows', () => {
     expect(sorted.map((r) => r.id)).toEqual(['rHas', 'rEmpty'])
   })
 
+  it('sorts an empty user list last in both directions, like a missing value', () => {
+    // Why: the DESC flip negated the empty branch, sending unassigned rows to the top.
+    const rows = [
+      makeRow('empty-list', 0, {
+        F_assignees: { kind: 'users', fieldId: 'F_assignees', users: [] }
+      }),
+      makeRow('alice', 1, {
+        F_assignees: {
+          kind: 'users',
+          fieldId: 'F_assignees',
+          users: [{ login: 'alice', name: null, avatarUrl: null }]
+        }
+      }),
+      makeRow('no-value', 2, {})
+    ]
+
+    for (const direction of ['ASC', 'DESC'] as const) {
+      const view = makeView(assigneesField, { direction, field: assigneesField })
+      const sorted = sortRows(makeTable(view, rows), rows)
+      expect(sorted.map((r) => r.id)).toEqual(['alice', 'empty-list', 'no-value'])
+    }
+  })
+
+  it('sorts an empty label list last in both directions, like a missing value', () => {
+    const rows = [
+      makeRow('empty-list', 0, {
+        F_labels: { kind: 'labels', fieldId: 'F_labels', labels: [] }
+      }),
+      makeRow('bug', 1, {
+        F_labels: {
+          kind: 'labels',
+          fieldId: 'F_labels',
+          labels: [{ name: 'bug', color: 'ff0000' }]
+        }
+      }),
+      makeRow('no-value', 2, {})
+    ]
+
+    for (const direction of ['ASC', 'DESC'] as const) {
+      const view = makeView(labelsField, { direction, field: labelsField })
+      const sorted = sortRows(makeTable(view, rows), rows)
+      expect(sorted.map((r) => r.id)).toEqual(['bug', 'empty-list', 'no-value'])
+    }
+  })
+
+  it('sorts a blank text value last in both directions, like a missing value', () => {
+    // Why reachable: the normalizer turns a null GitHub text/date into ''.
+    const rows = [
+      makeRow('blank', 0, { F_text: { kind: 'text', fieldId: 'F_text', text: '' } }),
+      makeRow('alpha', 1, { F_text: { kind: 'text', fieldId: 'F_text', text: 'alpha' } }),
+      makeRow('no-value', 2, {})
+    ]
+
+    for (const direction of ['ASC', 'DESC'] as const) {
+      const view = makeView(textField, { direction, field: textField })
+      const sorted = sortRows(makeTable(view, rows), rows)
+      expect(sorted.map((r) => r.id)).toEqual(['alpha', 'blank', 'no-value'])
+    }
+  })
+
   it('keeps sort fallback finite when row positions are absent', () => {
     const view = makeView(singleSelectField)
     const rows = [
@@ -220,6 +301,31 @@ describe('sortRows', () => {
 })
 
 describe('groupRows', () => {
+  it('groups a present-but-empty user list with the missing-value rows', () => {
+    // Why: an empty list fell through to a blank-label group, which renders as "All".
+    const view = { ...makeView(assigneesField), groupByFields: [assigneesField] }
+    const rows = [
+      makeRow('empty-list', 0, {
+        F_assignees: { kind: 'users', fieldId: 'F_assignees', users: [] }
+      }),
+      makeRow('alice', 1, {
+        F_assignees: {
+          kind: 'users',
+          fieldId: 'F_assignees',
+          users: [{ login: 'alice', name: null, avatarUrl: null }]
+        }
+      }),
+      makeRow('no-value', 2, {})
+    ]
+
+    const groups = groupRows(makeTable(view, rows), rows)
+
+    expect(groups.map((group) => [group.label, group.rows.map((r) => r.id)])).toEqual([
+      ['alice', ['alice']],
+      ['No Assignees', ['empty-list', 'no-value']]
+    ])
+  })
+
   it('places the empty group last', () => {
     const view = {
       ...makeView(singleSelectField),

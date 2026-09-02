@@ -12,7 +12,9 @@ import type { AutomationHostTarget } from './automation-host-client'
 import type { SshConnectionState } from '../../../../shared/ssh-types'
 import type { TaskSourceContext } from '../../../../shared/task-source-context'
 import type { RuntimeStatus } from '../../../../shared/runtime-types'
-import type { ProjectHostSetup, Repo, Worktree } from '../../../../shared/types'
+import type { ProjectHostSetup } from '../../../../shared/project-types'
+import type { Repo } from '../../../../shared/repo-types'
+import type { Worktree } from '../../../../shared/worktree/types'
 import type { TaskSourceHostAvailability } from '../task-source-context-summary'
 
 export type AutomationTargetAvailability =
@@ -70,6 +72,7 @@ export function getAutomationTargetAvailability({
   if (!repo) {
     return unavailable('missing-project', 'The target project is no longer available.')
   }
+
   if (automation.runContext) {
     const parsedHost = parseExecutionHostId(automation.runContext.hostId)
     if (parsedHost?.kind === 'runtime') {
@@ -96,8 +99,10 @@ export function getAutomationTargetAvailability({
         `Project setup on the selected automation host is ${setup.setupState}.`
       )
     }
+    // Why: projectId is a derived identity that upgrades over time (repo:→git:→github:);
+    // matching on it strands automations created before their repo's identity resolved.
+    // Anchor on repoId/path/host instead — the durable, stable target identity.
     const setupMatchesContext =
-      setup.projectId === automation.runContext.projectId &&
       setup.repoId === automation.runContext.repoId &&
       setup.path === automation.runContext.path &&
       setupHostMatchesRunContext(setup.hostId, automation.runContext.hostId, automationHostTarget)
@@ -260,7 +265,7 @@ function getAutomationSourceProviderLabel(provider: TaskSourceContext['provider'
   }
 }
 
-function getRuntimeAutomationAvailability(
+export function getRuntimeAutomationAvailability(
   environmentId: string,
   runtimeStatusByEnvironmentId:
     | ReadonlyMap<string, { status: RuntimeStatus | null; checkedAt: number }>

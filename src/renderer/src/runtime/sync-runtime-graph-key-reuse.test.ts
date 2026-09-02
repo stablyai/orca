@@ -189,4 +189,69 @@ describe('mobile session snapshot reuse', () => {
 
     expect(draftSpy).not.toHaveBeenCalled()
   })
+
+  it('keeps (publicationEpoch, snapshotVersion) stable for byte-identical worktree content', () => {
+    const state = makeState({
+      tabsByWorktree: {
+        'wt-stable': [{ id: 'term-1', title: 'Codex working', customTitle: null }]
+      } as unknown as AppState['tabsByWorktree'],
+      terminalLayoutsByTabId: {
+        'term-1': {
+          root: { type: 'leaf', leafId: '11111111-1111-4111-8111-111111111111' },
+          activeLeafId: '11111111-1111-4111-8111-111111111111',
+          expandedLeafId: null
+        }
+      } as unknown as AppState['terminalLayoutsByTabId']
+    })
+
+    const first = buildMobileSessionTabSnapshots(state)[0]
+    const second = buildMobileSessionTabSnapshots(state)[0]
+
+    // Why: main gates per-worktree mobile fanout on this pair; a no-op rebuild
+    // must not mint a fresh version or every graph sync fans out every worktree.
+    expect(second?.publicationEpoch).toBe(first?.publicationEpoch)
+    expect(second?.snapshotVersion).toBe(first?.snapshotVersion)
+  })
+
+  it('bumps only the changed worktree version when a sibling stays byte-identical', () => {
+    const makeTwoWorktreeState = (title: string): AppState =>
+      makeState({
+        tabsByWorktree: {
+          'wt-changed': [{ id: 'term-a', title, customTitle: null }],
+          'wt-stable-sibling': [{ id: 'term-b', title: 'Idle agent', customTitle: null }]
+        } as unknown as AppState['tabsByWorktree'],
+        terminalLayoutsByTabId: {
+          'term-a': {
+            root: { type: 'leaf', leafId: '22222222-2222-4222-8222-222222222222' },
+            activeLeafId: '22222222-2222-4222-8222-222222222222',
+            expandedLeafId: null
+          },
+          'term-b': {
+            root: { type: 'leaf', leafId: '33333333-3333-4333-8333-333333333333' },
+            activeLeafId: '33333333-3333-4333-8333-333333333333',
+            expandedLeafId: null
+          }
+        } as unknown as AppState['terminalLayoutsByTabId']
+      })
+
+    const before = new Map(
+      buildMobileSessionTabSnapshots(makeTwoWorktreeState('Codex working')).map((snapshot) => [
+        snapshot.worktree,
+        snapshot
+      ])
+    )
+    const after = new Map(
+      buildMobileSessionTabSnapshots(makeTwoWorktreeState('Codex done')).map((snapshot) => [
+        snapshot.worktree,
+        snapshot
+      ])
+    )
+
+    expect(after.get('wt-changed')?.snapshotVersion).toBeGreaterThan(
+      before.get('wt-changed')?.snapshotVersion ?? Number.POSITIVE_INFINITY
+    )
+    expect(after.get('wt-stable-sibling')?.snapshotVersion).toBe(
+      before.get('wt-stable-sibling')?.snapshotVersion
+    )
+  })
 })

@@ -77,6 +77,15 @@ export const getTerminalClipboardSearchEntries = createLocalizedCatalog(() => [
         'auto.components.settings.terminal.clipboard.search.10d73e22d3',
         'clipboard'
       ),
+      // englishOnly: a product name; localizing it would index a word nobody types.
+      ...translateSearchKeyword(
+        'auto.components.settings.terminal.clipboard.search.zellij',
+        'zellij',
+        { englishOnly: true }
+      ),
+      ...translateSearchKeyword('auto.components.settings.terminal.clipboard.search.grok', 'grok', {
+        englishOnly: true
+      }),
       ...translateSearchKeyword(
         'auto.components.settings.terminal.clipboard.search.5ffcd13c90',
         'tmux'

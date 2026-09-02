@@ -1,8 +1,10 @@
-import { readFileSync } from 'node:fs'
-import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
+import { readWorktreeJumpPaletteSource } from './worktree-jump-palette-source.test-support'
 
-const source = readFileSync(join(__dirname, 'WorktreeJumpPalette.tsx'), 'utf8')
+const source = [
+  readWorktreeJumpPaletteSource('use-worktree-jump-palette-create-action.ts'),
+  readWorktreeJumpPaletteSource('worktree-jump-palette-create-worktree.ts')
+].join('\n')
 
 function sourceBetween(startPattern: string, endPattern: string): string {
   const start = source.indexOf(startPattern)
@@ -13,14 +15,18 @@ function sourceBetween(startPattern: string, endPattern: string): string {
 }
 
 describe('WorktreeJumpPalette source-context boundaries', () => {
-  it('resolves typed GitHub issue/PR entries through the lookup repo source host', () => {
-    expect(source).toContain('buildTaskSourceContextFromRepo')
+  it('defers pasted GitHub URL resolution to the composer so cross-project detection runs', () => {
+    // Why: pasting a cross-project URL must surface the same "Switch project?"
+    // prompt as Cmd+N. The palette hands the raw URL to the composer's name
+    // field instead of pre-resolving it against an arbitrary repo, which
+    // silently linked cross-project items to the wrong project.
+    const githubLinkSection = sourceBetween('if (ghLink) {', 'if (ghNumber !== null) {')
+    expect(githubLinkSection).toContain('prefilledName: trimmed')
+    expect(githubLinkSection).not.toContain('lookupGitHubWorkItemByOwnerRepoForSource')
+  })
 
-    const githubLinkSection = sourceBetween(
-      'void lookupGitHubWorkItemByOwnerRepoForSource({',
-      '// Case 2: user typed a raw issue number.'
-    )
-    expect(githubLinkSection).toContain('sourceContext')
+  it('resolves typed raw issue/PR numbers through the lookup repo source host', () => {
+    expect(source).toContain('buildTaskSourceContextFromRepo')
 
     const rawNumberSection = sourceBetween(
       'void lookupGitHubWorkItemForSource({',

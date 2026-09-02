@@ -4,10 +4,17 @@
  * Why extracted: keeps AddRepoSteps.tsx under the 400-line oxlint limit
  * while isolating the inline-connect interaction logic.
  */
-import React, { useCallback, useRef, useState } from 'react'
+import React from 'react'
 import { Loader2 } from 'lucide-react'
 import type { SshTarget, SshConnectionState } from '../../../../shared/ssh-types'
 import { translate } from '@/i18n/i18n'
+import { isConnectingSshStatus } from '@/ssh/ssh-connection-recoverability'
+import {
+  beginSshConnect,
+  endSshConnect,
+  isSshConnectInFlight,
+  useSshConnectInFlight
+} from '@/ssh/ssh-connect-in-flight'
 
 type Props = {
   target: SshTarget & { state?: SshConnectionState }
@@ -22,15 +29,12 @@ export function SshTargetRow({
   onSelect,
   onConnect
 }: Props): React.JSX.Element {
-  const [connecting, setConnecting] = useState(false)
-  const mountedRef = useRef(true)
+  // Why: the shared registry replaces local state — every SSH surface dials one connection
+  // per target, and it survives this row unmounting mid-connect.
+  const connecting = useSshConnectInFlight(target.id)
   const status = target.state?.status ?? 'disconnected'
   const isConnected = status === 'connected'
-  const isBusy =
-    connecting ||
-    status === 'connecting' ||
-    status === 'deploying-relay' ||
-    status === 'reconnecting'
+  const isBusy = connecting || isConnectingSshStatus(status)
   const dotColor = isConnected
     ? 'bg-green-500'
     : isBusy
@@ -47,26 +51,17 @@ export function SshTargetRow({
     // Why: prevent the row's onClick from also firing and treating the click
     // as a selection when the target is disconnected.
     e.stopPropagation()
-    if (isBusy) {
+    if (isBusy || isSshConnectInFlight(target.id)) {
       return
     }
-    setConnecting(true)
+    beginSshConnect(target.id)
     void onConnect(target.id).finally(() => {
-      if (mountedRef.current) {
-        setConnecting(false)
-      }
+      endSshConnect(target.id)
     })
   }
 
-  const handleRowRootRef = useCallback((node: HTMLDivElement | null): void => {
-    // Why: SSH connects can resolve after this row is removed; the row ref
-    // gives the async completion the same guard without a mount-only Effect.
-    mountedRef.current = node !== null
-  }, [])
-
   return (
     <div
-      ref={handleRowRootRef}
       role={isConnected ? 'button' : undefined}
       tabIndex={isConnected ? 0 : undefined}
       className={`w-full flex items-center gap-2 px-3 py-2 rounded-md border text-xs transition-colors ${

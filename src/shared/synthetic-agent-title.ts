@@ -1,12 +1,25 @@
 import type { AgentStatusState, AgentType } from './agent-status-types'
+import type { TuiAgent } from './tui-agent'
 
 export type SyntheticAgentTitleProfile = {
   workingLabel: string
   permissionLabel: string
   idleLabel: string
   titleIdentityGroup?: string
+  synthesizeTerminalTitle?: boolean
   synthesizeWorkingTitle?: boolean
 }
+
+export const SYNTHETIC_AGENT_TITLE_AGENTS = [
+  'codex',
+  'cursor',
+  'opencode',
+  'pi',
+  'omp',
+  'droid',
+  'hermes',
+  'devin'
+] as const satisfies readonly TuiAgent[]
 
 export const SYNTHETIC_AGENT_TITLE_PROFILES: Record<string, SyntheticAgentTitleProfile> = {
   codex: {
@@ -25,19 +38,28 @@ export const SYNTHETIC_AGENT_TITLE_PROFILES: Record<string, SyntheticAgentTitleP
   opencode: {
     workingLabel: 'OpenCode',
     permissionLabel: 'OpenCode - action required',
-    idleLabel: 'OpenCode ready'
+    idleLabel: 'OpenCode ready',
+    // Why: OpenCode owns semantic OSC session titles; hook status must not replace them.
+    synthesizeTerminalTitle: false
   },
   pi: {
     workingLabel: 'Pi',
     permissionLabel: 'Pi - action required',
     idleLabel: 'Pi ready',
-    titleIdentityGroup: 'pi-compatible'
+    titleIdentityGroup: 'pi-compatible',
+    // Why: Pi owns its working OSC title (`π ⠋ <session>`) and animates it itself. Synthesizing
+    // over it replaced the session label and fought its frames at 80ms. Terminal states still
+    // synthesize: they carry the pane's agent identity downstream, and Pi is quiet at rest.
+    synthesizeWorkingTitle: false
   },
   omp: {
     workingLabel: 'OMP',
     permissionLabel: 'OMP - action required',
     idleLabel: 'OMP ready',
-    titleIdentityGroup: 'pi-compatible'
+    titleIdentityGroup: 'pi-compatible',
+    // Why: on an Orca-hosted pane it is Orca's own injected titlebar extension writing the
+    // working title (src/main/pi/titlebar-extension-source.ts). See pi above.
+    synthesizeWorkingTitle: false
   },
   droid: {
     workingLabel: 'Droid',
@@ -70,7 +92,7 @@ export function getSyntheticAgentTerminalTitle(
   state: AgentStatusState
 ): string | null {
   const profile = getSyntheticAgentTitleProfile(agentType)
-  if (!profile || state === 'working') {
+  if (!profile || profile.synthesizeTerminalTitle === false || state === 'working') {
     return null
   }
   return state === 'blocked' || state === 'waiting' ? profile.permissionLabel : profile.idleLabel
@@ -81,7 +103,7 @@ export function shouldDriveSyntheticAgentTitleFromHook(
   state: AgentStatusState
 ): boolean {
   const profile = getSyntheticAgentTitleProfile(agentType)
-  if (!profile) {
+  if (!profile || profile.synthesizeTerminalTitle === false) {
     return false
   }
   return state !== 'working' || profile.synthesizeWorkingTitle !== false

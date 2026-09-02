@@ -1,6 +1,13 @@
+import { assertJsonTextStructureWithinLimits } from './json-text-structure-limit'
+
 const TERMINAL_STREAM_KIND = 0x74
 const TERMINAL_STREAM_VERSION = 1
 const HEADER_BYTES = 16
+export const TERMINAL_STREAM_JSON_MAX_BYTES = 8 * 1024 * 1024
+export const TERMINAL_STREAM_JSON_STRUCTURE_LIMITS = {
+  structuralTokens: 256 * 1024,
+  nestingDepth: 32
+} as const
 
 export enum TerminalStreamOpcode {
   Output = 1,
@@ -13,7 +20,19 @@ export enum TerminalStreamOpcode {
   Resize = 8,
   Subscribe = 9,
   Unsubscribe = 10,
-  SnapshotRequest = 11
+  SnapshotRequest = 11,
+  Metadata = 12,
+  // Why 13: Metadata=12 shipped to mobile clients in v1.4.120; Ack (branch-only
+  // remote-multiplex flow control) renumbers to stay wire-compatible.
+  Ack = 13,
+  // Why 14: Ack already occupies 13 on current clients; older runtimes ignore
+  // this opcode and still receive the compatibility Resize frame behind it.
+  ClaimViewport = 14,
+  OutputSpan = 15,
+  // Negotiated per stream; older hosts reject unknown opcodes, so clients send only after capability confirmation.
+  SetOutputPaused = 16,
+  // Negotiated per stream because older clients reject unknown opcodes.
+  WriteUnavailable = 17
 }
 
 export type TerminalStreamFrame = {
@@ -65,8 +84,13 @@ export function encodeTerminalStreamJson(value: unknown): Uint8Array {
 }
 
 export function decodeTerminalStreamJson<T>(payload: Uint8Array): T | null {
+  if (payload.byteLength > TERMINAL_STREAM_JSON_MAX_BYTES) {
+    return null
+  }
   try {
-    return JSON.parse(new TextDecoder().decode(payload)) as T
+    const content = new TextDecoder().decode(payload)
+    assertJsonTextStructureWithinLimits(content, TERMINAL_STREAM_JSON_STRUCTURE_LIMITS)
+    return JSON.parse(content) as T
   } catch {
     return null
   }
@@ -92,6 +116,12 @@ function isTerminalStreamOpcode(value: number): value is TerminalStreamOpcode {
     value === TerminalStreamOpcode.Resize ||
     value === TerminalStreamOpcode.Subscribe ||
     value === TerminalStreamOpcode.Unsubscribe ||
-    value === TerminalStreamOpcode.SnapshotRequest
+    value === TerminalStreamOpcode.SnapshotRequest ||
+    value === TerminalStreamOpcode.Metadata ||
+    value === TerminalStreamOpcode.Ack ||
+    value === TerminalStreamOpcode.ClaimViewport ||
+    value === TerminalStreamOpcode.OutputSpan ||
+    value === TerminalStreamOpcode.SetOutputPaused ||
+    value === TerminalStreamOpcode.WriteUnavailable
   )
 }

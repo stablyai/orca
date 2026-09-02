@@ -28,6 +28,7 @@ const RUNTIME_BULK_DIR = join(RUNTIME_SESSIONS_ROOT, 'bulk')
 
 vi.mock('../codex/codex-home-paths', () => ({
   getOrcaManagedCodexHomePath: () => join(FAKE_ROOT, 'runtime'),
+  getOrcaUserDataPath: () => FAKE_ROOT,
   getSystemCodexHomePath: () => join(FAKE_ROOT, 'system')
 }))
 
@@ -77,7 +78,7 @@ describe('listCodexSessionFiles large directories', () => {
       } as Stats
     })
 
-    const { listCodexSessionFiles } = await import('./scanner')
+    const { listCodexSessionFiles } = await import('./codex-session-file-discovery')
 
     await expect(listCodexSessionFiles()).resolves.toHaveLength(FILE_COUNT)
     expect(getLegacyCopiedCodexSessionBridgeScanPreferenceMock).not.toHaveBeenCalled()

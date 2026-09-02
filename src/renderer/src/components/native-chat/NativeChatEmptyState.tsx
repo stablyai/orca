@@ -1,6 +1,7 @@
 import { MessageSquare, TriangleAlert } from 'lucide-react'
 import { translate } from '@/i18n/i18n'
 import { formatAgentTypeLabel } from '@/lib/agent-status'
+import { NATIVE_CHAT_EMPTY_STATE_COPY } from '../../../../shared/native-chat-empty-state'
 import type { NativeChatSession } from '../../../../shared/native-chat-types'
 
 export function NativeChatEmptyState({
@@ -44,28 +45,37 @@ function emptyStateCopy(
   switch (kind) {
     case 'loading':
       return {
-        title: translate('components.native-chat.state.loading.title', 'Loading conversation…'),
+        title: translate(
+          'components.native-chat.state.loading.title',
+          NATIVE_CHAT_EMPTY_STATE_COPY.loading.title
+        ),
         subtitle: translate(
           'components.native-chat.state.loading.subtitle',
-          'Reading the agent transcript.'
+          NATIVE_CHAT_EMPTY_STATE_COPY.loading.subtitle
         )
       }
     case 'error':
       return {
-        title: translate('components.native-chat.state.error.title', 'Could not load conversation'),
+        title: translate(
+          'components.native-chat.state.error.title',
+          NATIVE_CHAT_EMPTY_STATE_COPY.error.title
+        ),
         subtitle:
           message ??
           translate(
             'components.native-chat.state.error.subtitle',
-            'The transcript could not be read. Toggle back to the terminal to keep working.'
+            NATIVE_CHAT_EMPTY_STATE_COPY.error.subtitle
           )
       }
     case 'not-agent':
       return {
-        title: translate('components.native-chat.state.notAgent.title', 'No conversation here'),
+        title: translate(
+          'components.native-chat.state.notAgent.title',
+          NATIVE_CHAT_EMPTY_STATE_COPY.notAgent.title
+        ),
         subtitle: translate(
           'components.native-chat.state.notAgent.subtitle',
-          'This terminal is not running a recognized coding agent.'
+          NATIVE_CHAT_EMPTY_STATE_COPY.notAgent.subtitle
         )
       }
     case 'empty': {
@@ -73,12 +83,12 @@ function emptyStateCopy(
       return {
         title: translate(
           'components.native-chat.state.empty.title',
-          'Start a chat with {{value0}}',
+          NATIVE_CHAT_EMPTY_STATE_COPY.empty.title,
           { value0: agentName }
         ),
         subtitle: translate(
           'components.native-chat.state.empty.subtitle',
-          'Ask {{value0}} to inspect code, explain output, or make a change.',
+          NATIVE_CHAT_EMPTY_STATE_COPY.empty.subtitle,
           { value0: agentName }
         )
       }

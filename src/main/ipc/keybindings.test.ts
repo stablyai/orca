@@ -75,6 +75,23 @@ describe('registerKeybindingHandlers', () => {
     expect(authorizeExternalPathMock).toHaveBeenCalledWith(snapshot.path)
   })
 
+  it('reconciles plugin command conflicts after a shortcut edit', () => {
+    const onChanged = vi.fn()
+    const setActionBindings = vi.fn(() => snapshot)
+    registerKeybindingHandlers({ setActionBindings } as never, onChanged)
+
+    expect(
+      getHandler('keybindings:setAction')(
+        {},
+        {
+          actionId: 'plugin:orca-samples.tasks/open',
+          bindings: ['Mod+Shift+T']
+        }
+      )
+    ).toBe(snapshot)
+    expect(onChanged).toHaveBeenCalledOnce()
+  })
+
   it('authorizes the keybindings file before opening it outside Orca', async () => {
     openPathMock.mockResolvedValue('')
     registerKeybindingHandlers({ ensureFile: vi.fn(() => snapshot) } as never)

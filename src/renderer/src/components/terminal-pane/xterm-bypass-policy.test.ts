@@ -1,23 +1,10 @@
 import { describe, expect, it } from 'vitest'
 import {
   shouldBypassXtermKeyboardEvent,
-  shouldSuppressTerminalImeKeyboardEvent,
-  type XtermBypassEvent
+  shouldPreventDefaultTerminalImeCandidateKey,
+  shouldSuppressTerminalImeKeyboardEvent
 } from './xterm-bypass-policy'
-
-function event(overrides: Partial<XtermBypassEvent>): XtermBypassEvent {
-  return {
-    type: 'keydown',
-    key: '',
-    code: '',
-    defaultPrevented: false,
-    metaKey: false,
-    ctrlKey: false,
-    altKey: false,
-    shiftKey: false,
-    ...overrides
-  }
-}
+import { event } from './xterm-bypass-event-fixture'
 
 describe('shouldBypassXtermKeyboardEvent — macOS', () => {
   const opts = { isMac: true, hasSelection: true }
@@ -57,8 +44,8 @@ describe('shouldBypassXtermKeyboardEvent — macOS', () => {
     // Why: this policy is narrowly scoped to clipboard chords. Cmd+F, Cmd+D,
     // Cmd+K, Cmd+W, Cmd+Arrow, Cmd+Backspace are handled in keyboard-handlers.ts
     // with stopImmediatePropagation before xterm's textarea listener fires.
-    // Cmd+A flows through xterm's legacy evaluator which correctly produces
-    // type=1 (selectAll), so we must not swallow it here.
+    // Cmd+A is claimed by keyboard-handlers.ts before xterm, including when
+    // Kitty keyboard reporting replaces xterm's legacy select-all evaluator.
     const cases = [
       event({ key: 'a', code: 'KeyA', metaKey: true }),
       event({ key: 't', code: 'KeyT', metaKey: true })
@@ -132,6 +119,23 @@ describe('shouldBypassXtermKeyboardEvent — macOS', () => {
     expect(shouldBypassXtermKeyboardEvent(event({ key: 'c', code: 'KeyC' }), opts)).toBe(false)
   })
 
+  it('no longer special-cases Backslash — the native-text forwarder owns it', () => {
+    // Why: this policy carried a `code === 'Backslash'` bypass because the old
+    // forwarder only claimed keys for input sources on a hardcoded allowlist.
+    // The structural claim covers every printable key, so the exception is gone
+    // and the physical key is no longer named anywhere in this file.
+    for (const type of ['keydown', 'keyup', 'keypress']) {
+      for (const kittyKeyboardFlags of [0, 1]) {
+        expect(
+          shouldBypassXtermKeyboardEvent(event({ type, key: '\\', code: 'Backslash' }), {
+            ...noSel,
+            kittyKeyboardFlags
+          })
+        ).toBe(false)
+      }
+    }
+  })
+
   it('bubbles Shift+non-ASCII printable text so the active keyboard layout wins', () => {
     expect(
       shouldBypassXtermKeyboardEvent(event({ key: 'Ф', code: 'KeyA', shiftKey: true }), opts)
@@ -161,55 +165,114 @@ describe('shouldBypassXtermKeyboardEvent — macOS', () => {
       shouldBypassXtermKeyboardEvent(event({ key: 'A', code: 'KeyA', shiftKey: true }), opts)
     ).toBe(false)
   })
+
+  it('leaves ordinary Shift+Space available to the terminal', () => {
+    expect(
+      shouldBypassXtermKeyboardEvent(event({ key: ' ', code: 'Space', shiftKey: true }), opts)
+    ).toBe(false)
+  })
 })
 
 describe('shouldSuppressTerminalImeKeyboardEvent — macOS', () => {
+  const idle = {
+    isMac: true,
+    isLinux: false,
+    compositionActive: false,
+    candidateKeyGuardActive: false,
+    pendingCandidateKeyReleaseActive: false
+  }
+  const composing = {
+    isMac: true,
+    isLinux: false,
+    compositionActive: true,
+    candidateKeyGuardActive: true,
+    pendingCandidateKeyReleaseActive: false
+  }
+
   it('suppresses keyboard events while Chromium reports active IME composition', () => {
     expect(
       shouldSuppressTerminalImeKeyboardEvent(
-        event({ key: 'Backspace', code: 'Backspace', isComposing: true })
+        event({ key: 'Backspace', code: 'Backspace', isComposing: true }),
+        idle
       )
     ).toBe(true)
   })
 
-  it('suppresses Windows IME Process keys', () => {
+  it('lets standalone Process keys reach xterm so its CompositionHelper can diff text', () => {
     expect(
-      shouldSuppressTerminalImeKeyboardEvent(event({ key: 'Process', code: 'KeyN', keyCode: 229 }))
+      shouldSuppressTerminalImeKeyboardEvent(
+        event({ key: 'Process', code: 'KeyN', keyCode: 229 }),
+        idle
+      )
+    ).toBe(false)
+  })
+
+  it('suppresses standalone Process keyups so kitty release reporting cannot leak', () => {
+    expect(
+      shouldSuppressTerminalImeKeyboardEvent(
+        event({ type: 'keyup', key: 'Process', code: 'KeyN', keyCode: 229 }),
+        idle
+      )
+    ).toBe(true)
+  })
+
+  it('suppresses Process keys while the terminal composition tracker is active', () => {
+    expect(
+      shouldSuppressTerminalImeKeyboardEvent(
+        event({ key: 'Process', code: 'KeyN', keyCode: 229 }),
+        composing
+      )
     ).toBe(true)
   })
 
   it('does not suppress ordinary Backspace outside IME composition', () => {
     expect(
-      shouldSuppressTerminalImeKeyboardEvent(event({ key: 'Backspace', code: 'Backspace' }))
+      shouldSuppressTerminalImeKeyboardEvent(event({ key: 'Backspace', code: 'Backspace' }), idle)
     ).toBe(false)
   })
 
   it('suppresses IME-owned editing keys while composition is active', () => {
     expect(
-      shouldSuppressTerminalImeKeyboardEvent(event({ key: 'Backspace', code: 'Backspace' }), {
-        compositionActive: true
-      })
+      shouldSuppressTerminalImeKeyboardEvent(
+        event({ key: 'Backspace', code: 'Backspace' }),
+        composing
+      )
     ).toBe(true)
     expect(
-      shouldSuppressTerminalImeKeyboardEvent(event({ key: 'ArrowDown', code: 'ArrowDown' }), {
-        compositionActive: true
-      })
+      shouldSuppressTerminalImeKeyboardEvent(
+        event({ key: 'ArrowDown', code: 'ArrowDown' }),
+        composing
+      )
     ).toBe(true)
   })
 
   it('does not suppress ordinary text keys solely because composition is active', () => {
     expect(
-      shouldSuppressTerminalImeKeyboardEvent(event({ key: 'a', code: 'KeyA' }), {
-        compositionActive: true
-      })
+      shouldSuppressTerminalImeKeyboardEvent(event({ key: 'a', code: 'KeyA' }), composing)
     ).toBe(false)
   })
 
   it('does not suppress keypress events because they carry committed text', () => {
     expect(
       shouldSuppressTerminalImeKeyboardEvent(
-        event({ type: 'keypress', key: '中', code: '', isComposing: true })
+        event({ type: 'keypress', key: '中', code: '', isComposing: true }),
+        idle
       )
+    ).toBe(false)
+  })
+
+  it('does not apply the Linux/Sogou candidate guard to macOS', () => {
+    expect(
+      shouldSuppressTerminalImeKeyboardEvent(event({ key: ' ', code: 'Space' }), composing)
+    ).toBe(false)
+    expect(
+      shouldSuppressTerminalImeKeyboardEvent(
+        event({ type: 'keypress', key: '2', code: 'Digit2' }),
+        composing
+      )
+    ).toBe(false)
+    expect(
+      shouldPreventDefaultTerminalImeCandidateKey(event({ key: ' ', code: 'Space' }), composing)
     ).toBe(false)
   })
 })

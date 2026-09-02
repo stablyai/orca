@@ -1,0 +1,360 @@
+# Orca relay bash overlay wrapper
+_orca_shell_features=",${ORCA_SHELL_FEATURES:-},"
+builtin unset ORCA_SHELL_FEATURES
+__orca_has_feature() { [[ "$_orca_shell_features" == *",$1,"* ]]; }
+__orca_has_feature identity && printf "\033]777;orca-shell-start:%s\007" "$$"
+# Why a plain variable: the channel is consumed and destroyed in these first
+# lines, so nothing this shell later spawns can see or inherit the selection.
+__orca_ready_marker=""
+__orca_has_feature ready && __orca_ready_marker=1
+unset _orca_shell_features
+unset -f __orca_has_feature
+[[ -f /etc/profile ]] && source /etc/profile
+if [[ -f "$HOME/.bash_profile" ]]; then
+  source "$HOME/.bash_profile"
+elif [[ -f "$HOME/.bash_login" ]]; then
+  source "$HOME/.bash_login"
+elif [[ -f "$HOME/.profile" ]]; then
+  source "$HOME/.profile"
+fi
+# Why: enable bracketed paste so Orca can deliver a multiline startup prompt as
+# a single literal paste (ESC[200~…ESC[201~); without it, older readline builds
+# treat each embedded newline as Enter and mangle the prompt into PS2
+# continuation. Modern readline defaults this on; force it for the rest.
+[[ $- == *i* ]] && bind 'set enable-bracketed-paste on' 2>/dev/null
+# Why: remote startup files can re-export user defaults after relay spawn.
+[[ -n "${ORCA_OPENCODE_CONFIG_DIR:-}" ]] && export OPENCODE_CONFIG_DIR="${ORCA_OPENCODE_CONFIG_DIR}"
+[[ -n "${ORCA_MIMOCODE_HOME:-}" ]] && export MIMOCODE_HOME="${ORCA_MIMOCODE_HOME}"
+[[ -n "${ORCA_REMOTE_CLI_BIN_DIR:-}" ]] && case ":$PATH:" in *:"${ORCA_REMOTE_CLI_BIN_DIR}":*) ;; *) export PATH="${ORCA_REMOTE_CLI_BIN_DIR}:$PATH" ;; esac
+# Why: OMP does not auto-load Orca's managed status extension; wrap only
+# interactive launch invocations so subcommands such as `omp config` keep
+# their normal argv shape.
+__orca_omp_should_skip_extension() {
+  case "${1:-}" in
+    help|--help|-h|--version|-v) return 0 ;;
+    __complete|acp|agents|auth-broker|auth-gateway|bench|commit|completions|config|dry-balance|gallery|grep|grievances|install|join|models|plugin|read|say|search|setup|shell|ssh|stats|tiny-models|token|ttsr|update|usage|worktree|q|wt) return 0 ;;
+  esac
+  return 1
+}
+__orca_omp_cwd_is_usable() {
+  local __orca_physical_cwd
+  [[ -x . ]] || return 1
+  if [[ -n "${PWD:-}" && -d "${PWD:-}" ]]; then
+    [[ "${PWD}" -ef . ]]
+  else
+    # Why compare the path: shell builtins can print a cached path for a deleted cwd.
+    __orca_physical_cwd="$(builtin pwd -P 2>/dev/null)" || return 1
+    [[ -d "$__orca_physical_cwd" && "$__orca_physical_cwd" -ef . ]]
+  fi
+}
+__orca_omp_invoke() {
+  local __orca_use_extension="$1"
+  shift
+  if [[ $__orca_use_extension -eq 1 && -n "${ORCA_OMP_STATUS_EXTENSION:-}" && -f "${ORCA_OMP_STATUS_EXTENSION}" ]]; then
+    if [[ "${1:-}" == "launch" ]]; then
+      shift
+      command omp launch --extension "${ORCA_OMP_STATUS_EXTENSION}" "$@"
+    else
+      command omp --extension "${ORCA_OMP_STATUS_EXTENSION}" "$@"
+    fi
+  else
+    command omp "$@"
+  fi
+}
+__orca_omp() {
+  local __orca_use_extension=1
+  __orca_omp_should_skip_extension "${1:-}" && __orca_use_extension=0
+  if ! __orca_omp_cwd_is_usable; then
+    local __orca_logical_cwd="${PWD:-${ORCA_WORKTREE_PATH:-${ORCA_ROOT_PATH:-}}}"
+    # Why: a restored shell can retain the deleted directory inode after its path is recreated.
+    (
+      if [[ -z "$__orca_logical_cwd" ]]; then
+        printf 'Orca: OMP cannot start because no terminal working directory is available. Open a new terminal in an existing directory.\n' >&2
+        return 1
+      fi
+      if ! builtin cd -P -- "$__orca_logical_cwd" 2>/dev/null; then
+        printf 'Orca: OMP cannot access the terminal working directory "%s". Open a new terminal in an existing directory.\n' "$__orca_logical_cwd" >&2
+        return 1
+      fi
+      __orca_omp_invoke "$__orca_use_extension" "$@"
+    )
+  else
+    __orca_omp_invoke "$__orca_use_extension" "$@"
+  fi
+}
+if [[ -n "${ORCA_OMP_STATUS_EXTENSION:-}" ]]; then
+  # Why the function reserved word: it suppresses alias expansion of the name, which
+  # an `alias omp` otherwise rewrites at parse time, aborting the rest of the file.
+  function omp { __orca_omp "$@"; }
+fi
+
+if [[ -n "${ORCA_HISTFILE:-}" ]]; then
+  HISTFILE="$ORCA_HISTFILE"
+  builtin unset ORCA_HISTFILE
+elif [[ "${HISTFILE:-}" == "$ZDOTDIR/.zsh_history" ]]; then
+  # Why also when Orca injected nothing: /etc/zshrc derived this from Orca's
+  # wrapper ZDOTDIR, so history would accumulate INSIDE the wrapper dir and the
+  # user's real history would be invisible — the plain #11044 bug, with no
+  # per-worktree scoping involved. Matching the exact clobbered value means a
+  # HISTFILE the user set deliberately is never touched.
+  HISTFILE="${ORCA_ORIG_ZDOTDIR:-$HOME}/.zsh_history"
+fi
+# Why: SSH bash sessions need the same command lifecycle markers as local
+# bash so agent rows stop showing "working" when the foreground command exits.
+__orca_initializing_wrapper=1
+__orca_osc133_precmd() {
+  local exit_code=$?
+  __orca_in_prompt_command=1
+  if [[ -n "${__orca_in_command:-}" ]]; then
+    printf "\033]133;D;%s\007" "$exit_code"
+    unset __orca_in_command
+  fi
+  printf "\033]133;A\007"
+  return "$exit_code"
+}
+__orca_osc133_prompt_done() {
+  unset __orca_in_prompt_command; __orca_adopt_outer_debug_trap
+  trap '__orca_osc133_preexec' DEBUG
+}
+__orca_osc133_preexec() {
+  if [[ -n "${__orca_prompt_status_capture_command:-}" && "$BASH_COMMAND" == "$__orca_prompt_status_capture_command" ]]; then
+    unset __orca_initial_prompt
+    __orca_in_legacy_prompt_wrapper=1
+    return 0
+  fi
+  if [[ -n "${__orca_initializing_wrapper:-}${__orca_in_debug_capture:-}${__orca_initial_prompt:-}${__orca_in_prompt_dispatch:-}${__orca_in_legacy_prompt_wrapper:-}${__orca_in_prompt_command:-}" ]]; then
+    [[ -z "${__orca_initializing_wrapper:-}${__orca_in_debug_capture:-}" ]] || return 0
+    if [[ -n "${__orca_initial_prompt:-}" && "$BASH_COMMAND" == "__orca_osc133_precmd" ]]; then
+      unset __orca_initial_prompt; return 0
+    fi
+    if [[ -n "${__orca_in_prompt_dispatch:-}" ]]; then
+      [[ -n "${__orca_dispatching_user_prompt_command:-}" ]] || return 0
+      if [[ "${FUNCNAME[1]:-}" == "__orca_run_prompt_command_array" ]]; then
+        case "$BASH_COMMAND" in
+          '(( __orca_exit_code == 0 ))'|'__orca_restore_prompt_status "$__orca_exit_code"'|'eval "$__orca_prompt_part"'|'eval "$__orca_final_prompt_command"'|__orca_dispatching_user_prompt_command=*|__orca_osc133_precmd|__orca_osc133_prompt_done|__orca_prompt_mark) return 0 ;;
+        esac
+      fi
+    elif [[ "${FUNCNAME[1]:-}" == "__orca_run_prompt_command_array" || "$BASH_COMMAND" == "__orca_run_prompt_command_array" ]]; then
+      return 0
+    fi
+    [[ -z "${__orca_in_legacy_prompt_wrapper:-}" || -n "${__orca_dispatching_user_prompt_command:-}" ]] || return 0
+    if [[ -n "${__orca_in_prompt_command:-}" && "$BASH_COMMAND" == "__orca_in_debug_capture=1" ]]; then
+      return 0
+    fi
+  fi
+  case "${FUNCNAME[1]:-}" in __orca_osc133_*|__orca_prompt_mark|__orca_restore_prompt_status) return 0 ;; esac
+  case "$BASH_COMMAND" in __orca_osc133_precmd|__orca_osc133_prompt_done|__orca_prompt_mark) return 0 ;; esac
+  __orca_run_user_debug_trap
+  [[ -z "${__orca_in_prompt_command:-}" ]] || return 0
+  [[ -z "${__orca_in_command:-}" ]] || return 0
+  printf "\033]133;C\007"
+  __orca_in_command=1
+}
+__orca_normalize_prompt_command_part() {
+  local __orca_value="$1" __orca_output_name="$2" __orca_character __orca_chunk
+  local __orca_value_length=${#1} __orca_suffix_length=0 __orca_backslash_length=0
+  local __orca_output_length __orca_scan_start
+  while (( __orca_value_length - __orca_suffix_length >= 1024 )); do
+    __orca_scan_start=$(( __orca_value_length - __orca_suffix_length - 1024 ))
+    __orca_chunk="${__orca_value:__orca_scan_start:1024}"
+    case "$__orca_chunk" in
+      *[!$' \t\n;']*) break ;;
+      *) __orca_suffix_length=$(( __orca_suffix_length + 1024 )) ;;
+    esac
+  done
+  while (( __orca_suffix_length < __orca_value_length )); do
+    __orca_character="${__orca_value: -__orca_suffix_length - 1:1}"
+    case "$__orca_character" in
+      ' '|$'\t'|$'\n'|';') __orca_suffix_length=$(( __orca_suffix_length + 1 )) ;;
+      *) break ;;
+    esac
+  done
+  __orca_output_length=$(( ${#__orca_value} - __orca_suffix_length ))
+  while (( __orca_output_length - __orca_backslash_length >= 1024 )); do
+    __orca_scan_start=$(( __orca_output_length - __orca_backslash_length - 1024 ))
+    __orca_chunk="${__orca_value:__orca_scan_start:1024}"
+    case "$__orca_chunk" in
+      *[!\\]*) break ;;
+      *) __orca_backslash_length=$(( __orca_backslash_length + 1024 )) ;;
+    esac
+  done
+  while (( __orca_backslash_length < __orca_output_length )); do
+    __orca_character="${__orca_value:__orca_output_length - __orca_backslash_length - 1:1}"
+    [[ "$__orca_character" == '\' ]] || break
+    __orca_backslash_length=$(( __orca_backslash_length + 1 ))
+  done
+  # Preserve the first separator when an odd backslash run escapes it.
+  if (( __orca_suffix_length > 0 && __orca_backslash_length % 2 == 1 )); then
+    __orca_suffix_length=$(( __orca_suffix_length - 1 ))
+    __orca_backslash_length=0
+  fi
+  __orca_output_length=$(( ${#__orca_value} - __orca_suffix_length ))
+  __orca_value="${__orca_value:0:__orca_output_length}"
+  # Bash 4.4-5.0 scalar prompt evaluation preserves an odd terminal backslash.
+  if (( __orca_suffix_length == 0 && ((BASH_VERSINFO[0] == 4 && BASH_VERSINFO[1] >= 4) || (BASH_VERSINFO[0] == 5 && BASH_VERSINFO[1] == 0)) && __orca_backslash_length % 2 == 1 )); then
+    __orca_value="$__orca_value\\"
+  fi
+  printf -v "$__orca_output_name" '%s' "$__orca_value"
+}
+__orca_restore_prompt_status() {
+  return "$1"
+}
+__orca_update_user_debug_trap() {
+  local __orca_debug_trap_spec="$1" __orca_unchanged_debug_trap_spec="$2"
+  local __orca_debug_trap_command
+  [[ "$__orca_debug_trap_spec" != "$__orca_unchanged_debug_trap_spec" ]] || return 0
+  [[ "$__orca_debug_trap_spec" != "trap -- '__orca_osc133_preexec' DEBUG" ]] || return 0
+  if [[ -z "$__orca_debug_trap_spec" ]]; then
+    __orca_user_debug_trap=""
+    unset __orca_chained_debug_trap
+    return 0
+  fi
+  __orca_debug_trap_command="${__orca_debug_trap_spec#trap -- }"
+  __orca_debug_trap_command="${__orca_debug_trap_command% DEBUG}"
+  eval "__orca_user_debug_trap=$__orca_debug_trap_command"
+  unset __orca_chained_debug_trap
+}
+__orca_run_user_debug_trap() {
+  if [[ -n "${__orca_user_debug_trap:-}" ]]; then
+    eval "$__orca_user_debug_trap" || true
+  fi
+}
+__orca_adopt_outer_debug_trap() {
+  local __orca_debug_trap_spec="${__orca_outer_debug_trap_spec:-}"
+  unset __orca_outer_debug_trap_spec
+  __orca_update_user_debug_trap "$__orca_debug_trap_spec" "trap -- '__orca_osc133_preexec' DEBUG"
+}
+__orca_run_prompt_command_array() {
+  local __orca_exit_code="${__orca_prompt_status:-$?}" __orca_prompt_part __orca_prompt_index __orca_user_count
+  local __orca_suffix_part
+  local __orca_final_prompt_command
+  local __orca_in_prompt_dispatch=1 __orca_dispatching_user_prompt_command=""
+  unset __orca_prompt_status
+  __orca_adopt_outer_debug_trap
+  trap '__orca_osc133_preexec' DEBUG
+  for __orca_prompt_part in "${__orca_prompt_command_prefix[@]+"${__orca_prompt_command_prefix[@]}"}"; do
+    if (( __orca_exit_code == 0 )); then
+      eval "$__orca_prompt_part"
+    else
+      __orca_restore_prompt_status "$__orca_exit_code" || eval "$__orca_prompt_part"
+    fi
+  done
+  __orca_user_count=0
+  for __orca_prompt_part in "${__orca_prompt_command_array[@]+"${__orca_prompt_command_array[@]}"}"; do
+    __orca_user_count=$(( __orca_user_count + 1 ))
+  done
+  for (( __orca_prompt_index = 0; __orca_prompt_index + 1 < __orca_user_count; __orca_prompt_index++ )); do
+    __orca_prompt_part="${__orca_prompt_command_array[__orca_prompt_index]}"
+    __orca_dispatching_user_prompt_command=1
+    if (( __orca_exit_code == 0 )); then
+      eval "$__orca_prompt_part"
+    else
+      __orca_restore_prompt_status "$__orca_exit_code" || eval "$__orca_prompt_part"
+    fi
+    __orca_dispatching_user_prompt_command=""
+  done
+  if (( __orca_user_count > 0 )); then
+    __orca_prompt_part="${__orca_prompt_command_array[__orca_user_count - 1]}"
+    # Why: keep the final user hook and Orca suffixes in one status-preserving eval.
+    __orca_final_prompt_command='eval "$__orca_prompt_part"'
+    for __orca_suffix_part in "${__orca_prompt_command_suffix[@]+"${__orca_prompt_command_suffix[@]}"}"; do
+      __orca_final_prompt_command+=$'\n'"$__orca_suffix_part"
+    done
+    __orca_dispatching_user_prompt_command=1
+    if (( __orca_exit_code == 0 )); then
+      eval "$__orca_final_prompt_command"
+    else
+      __orca_restore_prompt_status "$__orca_exit_code" || eval "$__orca_final_prompt_command"
+    fi
+    __orca_dispatching_user_prompt_command=""
+  else
+    for __orca_prompt_part in "${__orca_prompt_command_suffix[@]+"${__orca_prompt_command_suffix[@]}"}"; do
+      if (( __orca_exit_code == 0 )); then
+        eval "$__orca_prompt_part"
+      else
+        __orca_restore_prompt_status "$__orca_exit_code" || eval "$__orca_prompt_part"
+      fi
+    done
+  fi
+  return "$__orca_exit_code"
+}
+__orca_finish_legacy_prompt_dispatch() {
+  local __orca_suffix_part
+  if [[ -n "${__orca_in_prompt_command:-}" ]]; then
+    for __orca_suffix_part in "${__orca_prompt_command_suffix[@]+"${__orca_prompt_command_suffix[@]}"}"; do
+      eval "$__orca_suffix_part"
+    done
+  fi
+  trap '__orca_osc133_preexec' DEBUG
+  unset __orca_in_legacy_prompt_wrapper
+}
+__orca_normalize_prompt_command() {
+  [[ -z "${__orca_prompt_command_normalized:-}" ]] || return 0
+  local __orca_prompt_part
+  local -a __orca_normalized=()
+  for __orca_prompt_part in "${PROMPT_COMMAND[@]+"${PROMPT_COMMAND[@]}"}"; do
+    __orca_normalize_prompt_command_part "$__orca_prompt_part" __orca_prompt_part
+    [[ -n "$__orca_prompt_part" ]] && __orca_normalized+=("$__orca_prompt_part")
+  done
+  __orca_prompt_command_normalized=1
+  if (( BASH_VERSINFO[0] > 5 || (BASH_VERSINFO[0] == 5 && BASH_VERSINFO[1] >= 1) )); then
+    PROMPT_COMMAND=("${__orca_normalized[@]+"${__orca_normalized[@]}"}")
+  else
+    __orca_prompt_command_array=("${__orca_normalized[@]+"${__orca_normalized[@]}"}")
+    __orca_prompt_command_prefix=()
+    __orca_prompt_command_suffix=()
+    unset PROMPT_COMMAND
+    # Why: PID scope distinguishes legacy prompt dispatch from ordinary user command text.
+    __orca_prompt_status_variable="__orca_prompt_status_$$"
+    __orca_prompt_status_capture_command="$__orca_prompt_status_variable=\$?"
+    __orca_prompt_status_value="\${$__orca_prompt_status_variable}"
+    PROMPT_COMMAND="$__orca_prompt_status_capture_command; __orca_prompt_status=$__orca_prompt_status_value"'; __orca_prompt_had_functrace=""; if [[ -o functrace ]]; then __orca_prompt_had_functrace=1; set +T; fi; __orca_outer_debug_trap_spec="$(trap -p DEBUG)"; [[ -z "$__orca_prompt_had_functrace" ]] || set -T; unset __orca_prompt_had_functrace; __orca_run_prompt_command_array; __orca_finish_legacy_prompt_dispatch'
+  fi
+}
+__orca_prepend_prompt_command() {
+  local command="$1"
+  __orca_normalize_prompt_command
+  if (( BASH_VERSINFO[0] > 5 || (BASH_VERSINFO[0] == 5 && BASH_VERSINFO[1] >= 1) )); then
+    PROMPT_COMMAND=("$command" "${PROMPT_COMMAND[@]+"${PROMPT_COMMAND[@]}"}")
+  else
+    __orca_prompt_command_prefix=("$command" "${__orca_prompt_command_prefix[@]+"${__orca_prompt_command_prefix[@]}"}")
+  fi
+}
+__orca_append_prompt_command() {
+  local command="$1"
+  __orca_normalize_prompt_command
+  if (( BASH_VERSINFO[0] > 5 || (BASH_VERSINFO[0] == 5 && BASH_VERSINFO[1] >= 1) )); then
+    PROMPT_COMMAND+=("$command")
+  else
+    __orca_prompt_command_suffix+=("$command")
+  fi
+}
+__orca_prepend_prompt_command "__orca_osc133_precmd"
+# Why: SSH startup commands are renderer-delivered; emit the same internal
+# readiness marker as local shells only when that delivery mode asks for it.
+if [[ -n "$__orca_ready_marker" ]]; then
+  __orca_prompt_mark() {
+    printf "\033]777;orca-shell-ready\007"
+  }
+  __orca_append_prompt_command "__orca_prompt_mark"
+fi
+__orca_append_prompt_command '__orca_in_debug_capture=1; __orca_prompt_had_functrace=""; if [[ -o functrace ]]; then __orca_prompt_had_functrace=1; set +T; fi; __orca_outer_debug_trap_spec="$(trap -p DEBUG)"; [[ -z "$__orca_prompt_had_functrace" ]] || set -T; unset __orca_prompt_had_functrace __orca_in_debug_capture'
+__orca_append_prompt_command "__orca_osc133_prompt_done"
+__orca_had_functrace=""
+[[ -o functrace ]] && __orca_had_functrace=1
+set +T
+__orca_debug_trap_spec="$(trap -p DEBUG)"
+[[ -z "$__orca_had_functrace" ]] || set -T
+if [[ -n "$__orca_debug_trap_spec" && "$__orca_debug_trap_spec" != "trap -- '__orca_osc133_preexec' DEBUG" ]]; then
+  __orca_debug_trap_command="${__orca_debug_trap_spec#trap -- }"
+  __orca_debug_trap_command="${__orca_debug_trap_command% DEBUG}"
+  eval "__orca_user_debug_trap=$__orca_debug_trap_command"
+fi
+unset __orca_debug_trap_spec __orca_debug_trap_command __orca_had_functrace
+unset -f __orca_normalize_prompt_command_part __orca_normalize_prompt_command __orca_prepend_prompt_command __orca_append_prompt_command
+unset __orca_prompt_command_normalized
+# Why: arm DEBUG after wrapper setup so the relay rcfile itself does not emit
+# fake command-start/end markers before the first prompt.
+__orca_initial_prompt=1
+trap '__orca_osc133_preexec' DEBUG
+unset __orca_initializing_wrapper

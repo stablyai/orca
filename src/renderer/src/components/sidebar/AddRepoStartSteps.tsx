@@ -69,6 +69,7 @@ type AddRepoLocalStartStepProps = {
   hostSelector?: ReactNode
   showRemoteAction?: boolean
   canCreateProject?: boolean
+  actionsDisabled?: boolean
   browseHostKind?: 'local' | 'ssh' | 'runtime'
   onBrowse: () => void
   onOpenCloneStep: () => void
@@ -87,6 +88,7 @@ export function AddRepoLocalStartStep({
   hostSelector,
   showRemoteAction = true,
   canCreateProject = true,
+  actionsDisabled = false,
   browseHostKind = 'local',
   onBrowse,
   onOpenCloneStep,
@@ -96,6 +98,7 @@ export function AddRepoLocalStartStep({
 }: AddRepoLocalStartStepProps): React.JSX.Element {
   const browseActionRef = useRef<HTMLButtonElement | null>(null)
   const actionsRef = useRef<HTMLDivElement | null>(null)
+  const actionsUnavailable = isAdding || actionsDisabled
   const { primaryAction, secondaryActions } = getAddRepoLocalStartActions({
     isSshLikely,
     onBrowse,
@@ -111,16 +114,13 @@ export function AddRepoLocalStartStep({
   // it follows keyboard focus so Enter always activates the highlighted action. Browse is
   // autofocused on open, so it starts selected; Tab and ↑/↓ move the highlight.
   const [selectedKind, setSelectedKind] = useState<string | null>(primaryAction.kind)
+  const visibleSelectedKind = actionsUnavailable ? null : selectedKind
 
   useEffect(() => {
-    if (isAdding) {
-      setSelectedKind(null)
-      return
-    }
-    if (!isAdding) {
+    if (!actionsUnavailable) {
       browseActionRef.current?.focus()
     }
-  }, [isAdding])
+  }, [actionsUnavailable])
 
   // ↑/↓ rove focus across the action buttons in visual order; focus drives the selection.
   const handleArrowNavigation = (event: React.KeyboardEvent<HTMLDivElement>): void => {
@@ -133,7 +133,7 @@ export function AddRepoLocalStartStep({
     if (buttons.length === 0) {
       return
     }
-    const currentIndex = buttons.findIndex((button) => button === document.activeElement)
+    const currentIndex = buttons.indexOf(document.activeElement as HTMLButtonElement)
     const delta = event.key === 'ArrowDown' ? 1 : -1
     const nextIndex = (currentIndex + delta + buttons.length) % buttons.length
     event.preventDefault()
@@ -177,8 +177,8 @@ export function AddRepoLocalStartStep({
           icon={primaryAction.icon}
           title={primaryAction.title}
           description={primaryAction.description}
-          disabled={isAdding}
-          selected={selectedKind === primaryAction.kind}
+          disabled={actionsUnavailable}
+          selected={visibleSelectedKind === primaryAction.kind}
           buttonRef={browseActionRef}
           onClick={primaryAction.onClick}
           onFocus={() => setSelectedKind(primaryAction.kind)}
@@ -199,8 +199,8 @@ export function AddRepoLocalStartStep({
                 icon={action.icon}
                 title={action.title}
                 description={action.description}
-                disabled={isAdding || Boolean(action.disabled)}
-                selected={selectedKind === action.kind}
+                disabled={actionsUnavailable || Boolean(action.disabled)}
+                selected={visibleSelectedKind === action.kind}
                 onClick={action.onClick}
                 onFocus={() => setSelectedKind(action.kind)}
                 className={cn(

@@ -13,6 +13,7 @@ describe('smart-workspace-localized-options', () => {
       'Smart',
       'GitHub',
       'Linear',
+      'Jira',
       'GitLab',
       'Branch',
       'Name'
@@ -24,9 +25,10 @@ describe('smart-workspace-localized-options', () => {
       '智能',
       'GitHub',
       'Linear',
+      'Jira',
       'GitLab',
       '分支',
-      '姓名'
+      '名称'
     ])
 
     await i18n.changeLanguage('en')
@@ -35,6 +37,7 @@ describe('smart-workspace-localized-options', () => {
       'Smart',
       'GitHub',
       'Linear',
+      'Jira',
       'GitLab',
       'Branch',
       'Name'
@@ -52,7 +55,7 @@ describe('smart-workspace-localized-options', () => {
     await i18n.changeLanguage('zh')
 
     expect(getMrStateFilters().map((filter) => filter.label)).toEqual([
-      '进行中',
+      '开放',
       '合并',
       '已关闭',
       '全部'

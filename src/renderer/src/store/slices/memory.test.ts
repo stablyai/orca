@@ -2,7 +2,7 @@ import { create } from 'zustand'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { createMemorySlice } from './memory'
 import type { AppState } from '../types'
-import type { MemorySnapshot } from '../../../../shared/types'
+import type { MemorySnapshot } from '../../../../shared/process-stats-types'
 
 function makeMemorySnapshot(overrides: Partial<MemorySnapshot> = {}): MemorySnapshot {
   return {
@@ -18,11 +18,14 @@ function makeMemorySnapshot(overrides: Partial<MemorySnapshot> = {}): MemorySnap
     host: {
       totalMemory: 8192,
       freeMemory: 4096,
+      availableMemory: 4096,
+      availableMemorySource: 'free-memory',
       usedMemory: 4096,
       memoryUsagePercent: 50,
       cpuCoreCount: 8,
       loadAverage1m: 1
     },
+    processMemoryMetric: 'rss',
     totalCpu: 1,
     totalMemory: 1024,
     collectedAt: 1,

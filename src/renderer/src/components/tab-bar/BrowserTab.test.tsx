@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type { BrowserTab as BrowserTabState } from '../../../../shared/types'
+import type { BrowserTab as BrowserTabState } from '../../../../shared/browser-workspace-types'
 
 const reactHookRuntime = vi.hoisted(() => ({
   states: [] as unknown[],
@@ -11,6 +11,11 @@ vi.mock('react', async () => {
   return {
     ...actual,
     useEffect: () => {},
+    // Why: this shallow harness calls the component as a plain function (no React
+    // render), so ref/callback hooks must be stubbed like useState/useEffect. The
+    // favicon tests never fire pointer events, so non-persistent refs are fine.
+    useRef: <T,>(initial: T) => ({ current: initial }),
+    useCallback: <T,>(fn: T) => fn,
     useState<T>(initial: T | (() => T)) {
       const stateIndex = reactHookRuntime.index++
       if (!(stateIndex in reactHookRuntime.states)) {
@@ -37,11 +42,26 @@ vi.mock('@dnd-kit/sortable', () => ({
 }))
 
 vi.mock('lucide-react', () => ({
+  ArrowDown: function ArrowDown(props: Record<string, unknown>) {
+    return { type: 'ArrowDown', props }
+  },
+  ArrowLeft: function ArrowLeft(props: Record<string, unknown>) {
+    return { type: 'ArrowLeft', props }
+  },
+  ArrowRight: function ArrowRight(props: Record<string, unknown>) {
+    return { type: 'ArrowRight', props }
+  },
+  ArrowUp: function ArrowUp(props: Record<string, unknown>) {
+    return { type: 'ArrowUp', props }
+  },
   Columns2: function Columns2(props: Record<string, unknown>) {
     return { type: 'Columns2', props }
   },
   Copy: function Copy(props: Record<string, unknown>) {
     return { type: 'Copy', props }
+  },
+  CopyX: function CopyX(props: Record<string, unknown>) {
+    return { type: 'CopyX', props }
   },
   ExternalLink: function ExternalLink(props: Record<string, unknown>) {
     return { type: 'ExternalLink', props }
@@ -54,6 +74,12 @@ vi.mock('lucide-react', () => ({
   },
   PinOff: function PinOff(props: Record<string, unknown>) {
     return { type: 'PinOff', props }
+  },
+  PanelLeftClose: function PanelLeftClose(props: Record<string, unknown>) {
+    return { type: 'PanelLeftClose', props }
+  },
+  PanelRightClose: function PanelRightClose(props: Record<string, unknown>) {
+    return { type: 'PanelRightClose', props }
   },
   Rows2: function Rows2(props: Record<string, unknown>) {
     return { type: 'Rows2', props }
@@ -108,7 +134,7 @@ vi.mock('@/components/ui/tooltip', () => ({
   }
 }))
 
-vi.mock('../browser-pane/browser-runtime', () => ({
+vi.mock('../browser-pane/describe-page/live-browser-url-registry', () => ({
   getLiveBrowserUrl: () => null
 }))
 
@@ -145,9 +171,13 @@ async function renderBrowserTab(tab: BrowserTabState): Promise<unknown> {
     isActive: true,
     isPinned: false,
     hasTabsToRight: false,
+    hasTabsToLeft: false,
+    tabCount: 1,
     onActivate: () => {},
     onClose: () => {},
+    onCloseOthers: () => {},
     onCloseToRight: () => {},
+    onCloseToLeft: () => {},
     onDuplicate: () => {},
     onTogglePin: () => {},
     dragData: {
@@ -226,7 +256,9 @@ describe('BrowserTab favicon', { timeout: 30_000 }, () => {
     expect(images[0].props.alt).toBe('')
     expect(images[0].props['aria-hidden']).toBe(true)
     expect(images[0].props.draggable).toBe(false)
-    expect(images[0].props.className).toContain('size-3 mr-1 shrink-0')
+    expect(images[0].props.className).toContain('size-3')
+    expect(images[0].props.className).toContain('mr-1')
+    expect(images[0].props.className).toContain('shrink-0')
     expect(images[0].props.className).toContain('object-contain')
     expect(images[0].props.className).toContain('drop-shadow-[0_0_1px_var(--foreground)]')
     expect(findElementsByType(element, 'Globe')).toHaveLength(0)
@@ -244,7 +276,9 @@ describe('BrowserTab favicon', { timeout: 30_000 }, () => {
     expect(findElementsByType(element, 'img')).toHaveLength(0)
     const globes = findElementsByType(element, 'Globe')
     expect(globes).toHaveLength(1)
-    expect(globes[0].props.className).toContain('size-3 mr-1 shrink-0')
+    expect(globes[0].props.className).toContain('size-3')
+    expect(globes[0].props.className).toContain('mr-1')
+    expect(globes[0].props.className).toContain('shrink-0')
     expect(globes[0].props.className).toContain('text-blue-500')
   })
 
@@ -278,5 +312,31 @@ describe('BrowserTab favicon', { timeout: 30_000 }, () => {
     expect(images).toHaveLength(1)
     expect(images[0].props.src).toBe(nextIconUrl)
     expect(findElementsByType(resetRender, 'Globe')).toHaveLength(0)
+  })
+
+  it('retries a failed favicon after a navigation clears and restores the same url', async () => {
+    const iconUrl = 'https://example.com/favicon.ico'
+    const tab = baseBrowserTab({ faviconUrl: iconUrl })
+    const firstRender = await renderExpandedBrowserTab(tab)
+    const image = findElementsByType(firstRender, 'img')[0]
+
+    ;(image.props.onError as () => void)()
+    const failedRender = await renderExpandedBrowserTab(tab)
+    expect(findElementsByType(failedRender, 'Globe')).toHaveLength(1)
+
+    // A load clears the favicon, then the same site reports it again.
+    const loadingRender = await renderExpandedBrowserTab(
+      baseBrowserTab({ id: tab.id, faviconUrl: null })
+    )
+    expect(findElementsByType(loadingRender, 'Globe')).toHaveLength(1)
+
+    const retryRender = await renderExpandedBrowserTab(
+      baseBrowserTab({ id: tab.id, faviconUrl: iconUrl })
+    )
+
+    const images = findElementsByType(retryRender, 'img')
+    expect(images).toHaveLength(1)
+    expect(images[0].props.src).toBe(iconUrl)
+    expect(findElementsByType(retryRender, 'Globe')).toHaveLength(0)
   })
 })

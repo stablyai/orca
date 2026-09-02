@@ -1,11 +1,11 @@
-import type { Repo } from '../../shared/types'
+import type { Repo } from '../../shared/repo-types'
 import type { SpotlightError, SpotlightRepoState } from '../../shared/spotlight'
 import type {
   SpotlightActivateOutcome,
   SpotlightGitContext,
   SpotlightSyncOutcome
 } from '../../shared/spotlight-sync-core'
-import { splitWorktreeId } from '../../shared/worktree-id'
+import { splitWorktreeId } from '../../shared/worktree/id'
 import { normalizeRuntimePathForComparison } from '../../shared/cross-platform-path'
 import { SpotlightCoreError } from '../../shared/spotlight-sync-core'
 import { isFolderRepo } from '../../shared/repo-kind'

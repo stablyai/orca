@@ -1,0 +1,50 @@
+# The desktop app is a single-project install. `mobile/` is a separate workspace
+# with its own pnpm-workspace.yaml and lockfile, so keep it out of the root
+# package graph. Without this file `pnpm -r` auto-discovers mobile/ and its
+# nested package, and the root's patchedDependencies fail as ERR_PNPM_UNUSED_PATCH.
+packages: []
+
+minimumReleaseAge: 4320
+# 6.3.289 was published 2026-08-29T12:48Z; it clears the 3-day gate on 2026-09-01T12:48Z.
+# zod 4.5.4 was published 2026-08-29T17:55Z; it clears the 3-day gate on 2026-09-01T17:55Z.
+minimumReleaseAgeExclude:
+  - pdfjs-dist@6.3.289
+  - zod@4.5.4
+shamefullyHoist: true
+
+supportedArchitectures:
+  os:
+    - current
+    - darwin
+    - linux
+    - win32
+  cpu:
+    - current
+    - x64
+    - arm64
+
+allowBuilds:
+  '@parcel/watcher': true
+  '@swc/core': false
+  '@vscode/windows-process-tree': false
+  agent-browser: false
+  cpu-features: true
+  electron-winstaller: false
+  esbuild: true
+  msw: false
+  node-pty: true
+  sherpa-onnx: true
+  ssh2: false
+  windows-native-registry: false
+
+overrides:
+  monaco-editor>dompurify: 3.4.13
+
+patchedDependencies:
+  node-pty@1.1.0: config/patches/node-pty@1.1.0.patch
+  '@xterm/addon-ligatures@0.11.0-beta.300': config/patches/@xterm__addon-ligatures@0.11.0-beta.300.patch
+  '@xterm/addon-webgl@0.20.0-beta.299': config/patches/@xterm__addon-webgl@0.20.0-beta.299.patch
+  '@xterm/addon-serialize@0.15.0-beta.300': config/patches/@xterm__addon-serialize@0.15.0-beta.300.patch
+  '@xterm/xterm@6.1.0-beta.303': config/patches/@xterm__xterm@6.1.0-beta.303.patch
+  lint-staged@16.4.0: config/patches/lint-staged@16.4.0.patch
+  '@vscode/windows-process-tree@0.8.0': config/patches/@vscode__windows-process-tree@0.8.0.patch

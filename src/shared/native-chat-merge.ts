@@ -1,13 +1,10 @@
-// Pure id-dedup merge for native-chat message windows, shared by the desktop
-// renderer live path. Mobile keeps a parity-locked twin of this algorithm
-// (mobile/src/session/mobile-native-chat-merge.ts) because Metro can't resolve
-// runtime values outside the mobile package — the cross-surface parity test
-// (native-chat-merge-parity.test.ts) pins the two implementations together.
-//
-// The algorithm is parameterized on a source-priority map so the single body
-// works for any caller that supplies NATIVE_CHAT_SOURCE_PRIORITY.
+// Pure id-dedup and windowing for both desktop and mobile native-chat streams.
 
-import type { NativeChatMessage, NativeChatSource } from './native-chat-types'
+import {
+  NATIVE_CHAT_SOURCE_PRIORITY,
+  type NativeChatMessage,
+  type NativeChatSource
+} from './native-chat-types'
 
 export type NativeChatSourcePriority = Record<NativeChatSource, number>
 
@@ -29,6 +26,13 @@ export function mergeNativeChatMessagesWith(
   merged.forEach((message, index) => indexById.set(message.id, index))
   applyIncoming(merged, indexById, incoming, priority)
   return merged
+}
+
+export function mergeNativeChatMessages(
+  existing: readonly NativeChatMessage[],
+  incoming: readonly NativeChatMessage[]
+): NativeChatMessage[] {
+  return mergeNativeChatMessagesWith(existing, incoming, NATIVE_CHAT_SOURCE_PRIORITY)
 }
 
 /** Cap a message list to its most-recent `limit` entries. The base read is
@@ -56,7 +60,9 @@ export type NativeChatMerger = {
   readonly priority: NativeChatSourcePriority
 }
 
-export function createNativeChatMerger(priority: NativeChatSourcePriority): NativeChatMerger {
+export function createNativeChatMerger(
+  priority: NativeChatSourcePriority = NATIVE_CHAT_SOURCE_PRIORITY
+): NativeChatMerger {
   return { list: [], indexById: new Map(), priority }
 }
 
@@ -73,13 +79,20 @@ export function replaceList(merger: NativeChatMerger, list: readonly NativeChatM
  *  index incrementally — O(incoming), never re-scanning the existing list. */
 export function applyAppend(
   merger: NativeChatMerger,
-  incoming: readonly NativeChatMessage[]
+  incoming: readonly NativeChatMessage[],
+  limit?: number
 ): NativeChatMessage[] {
   if (incoming.length === 0) {
     return merger.list
   }
   const next = [...merger.list]
   applyIncoming(next, merger.indexById, incoming, merger.priority)
+  const bounded = limit === undefined ? next : boundNativeChatWindow(next, limit)
+  if (bounded !== next) {
+    // Why: trimming shifts every cached index, so rebuild at the window boundary.
+    replaceList(merger, bounded)
+    return merger.list
+  }
   merger.list = next
   return next
 }

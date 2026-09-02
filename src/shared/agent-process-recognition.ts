@@ -1,6 +1,7 @@
 import { getTuiAgentDetectCommands, TUI_AGENT_CONFIG } from './tui-agent-config'
+import { EXACT_NODE_ENTRYPOINT_IDENTITIES } from './agent-node-entrypoint-identities'
 import type { AgentType } from './agent-status-types'
-import type { TuiAgent } from './types'
+import type { TuiAgent } from './tui-agent'
 import { filterHeadlessOneShotAgentCommand } from './agent-headless-command'
 import { getFirstCommandToken } from './command-token-scanner'
 
@@ -95,6 +96,11 @@ function agentForNormalizedProcess(normalized: string): TuiAgent | undefined {
   return undefined
 }
 
+function recognizedAgentForProcess(normalized: string): RecognizedAgentProcess | null {
+  const agent = agentForNormalizedProcess(normalized)
+  return agent ? { agent, processName: normalized } : null
+}
+
 function tokenizeCommandLine(commandLine: string): string[] {
   const tokens: string[] = []
   let current = ''
@@ -155,14 +161,9 @@ function isInterpreterProcessName(normalized: string): boolean {
   return STATIC_INTERPRETER_PROCESS_NAMES.has(normalized) || PYTHON_PROCESS_RE.test(normalized)
 }
 
-function isPythonProcessName(normalized: string): boolean {
-  return PYTHON_PROCESS_RE.test(normalized)
-}
+const isPythonProcessName = (normalized: string): boolean => PYTHON_PROCESS_RE.test(normalized)
 
-function optionName(token: string): string {
-  const eq = token.indexOf('=')
-  return eq === -1 ? token : token.slice(0, eq)
-}
+const optionName = (token: string): string => token.split('=', 1)[0] ?? ''
 
 function findInterpreterEntrypointToken(tokens: string[], firstNormalized: string): string | null {
   if (!isInterpreterProcessName(firstNormalized)) {
@@ -202,20 +203,21 @@ function comparablePath(token: string): string {
 }
 
 function recognizeNodeScriptEntrypoint(token: string): RecognizedAgentProcess | null {
+  const path = comparablePath(token)
+  for (const identity of EXACT_NODE_ENTRYPOINT_IDENTITIES) {
+    if (identity.pattern.test(path)) {
+      return { agent: identity.agent, processName: identity.processName }
+    }
+  }
   const normalized = normalizeProcessName(token, { stripInterpreterScriptExtension: true })
   const markers = NODE_PACKAGE_SCRIPT_ENTRYPOINTS[normalized]
   if (!markers) {
     return null
   }
-  const path = comparablePath(token)
   if (!markers.some((marker) => path.includes(marker))) {
     return null
   }
-  const agent = agentForNormalizedProcess(normalized)
-  if (!agent) {
-    return null
-  }
-  return { agent, processName: normalized }
+  return recognizedAgentForProcess(normalized)
 }
 
 function recognizePythonModule(
@@ -225,11 +227,7 @@ function recognizePythonModule(
     return null
   }
   const normalized = moduleName.split('.', 1)[0]?.toLowerCase() ?? ''
-  const agent = agentForNormalizedProcess(normalized)
-  if (!agent) {
-    return null
-  }
-  return { agent, processName: normalized }
+  return recognizedAgentForProcess(normalized)
 }
 
 function recognizePythonScriptEntrypoint(token: string): RecognizedAgentProcess | null {
@@ -242,18 +240,14 @@ function recognizePythonScriptEntrypoint(token: string): RecognizedAgentProcess 
   }
   const basename = path.split('/').pop() ?? ''
   const normalized = basename.replace(PYTHON_SCRIPT_EXTENSION_RE, '')
-  const agent = agentForNormalizedProcess(normalized)
-  if (!agent) {
-    return null
-  }
-  return { agent, processName: normalized }
+  return recognizedAgentForProcess(normalized)
 }
 
 function recognizePythonEntrypoint(
   tokens: string[],
   entrypoint: string
 ): RecognizedAgentProcess | null {
-  const moduleFlagIndex = tokens.findIndex((token) => token === '-m')
+  const moduleFlagIndex = tokens.indexOf('-m')
   if (moduleFlagIndex > 0) {
     return recognizePythonModule(tokens[moduleFlagIndex + 1])
   }
@@ -279,24 +273,28 @@ export function recognizeAgentProcess(
   processName: string | null | undefined
 ): RecognizedAgentProcess | null {
   const normalized = normalizeProcessName(processName)
-  const agent = agentForNormalizedProcess(normalized)
-  if (!agent) {
-    return null
-  }
-  return { agent, processName: normalized }
+  return recognizedAgentForProcess(normalized)
 }
+
 export function recognizeAgentProcessFromCommandLine(
-  commandLine: string | null | undefined
+  commandLine: string | null | undefined,
+  // Why: TUI consumers (status hooks, shell shadows) filter out headless
+  // one-shots (`claude -p …`); non-interactivity guards include them — a
+  // one-shot agent can't answer a prompt either.
+  options?: { includeHeadlessOneShot?: boolean }
 ): RecognizedAgentProcess | null {
   if (!commandLine) {
     return null
   }
+  const keep = options?.includeHeadlessOneShot === true
   const tokens = tokenizeCommandLine(commandLine)
   const firstNormalized = normalizeProcessName(tokens[0])
-  const directRecognition = filterHeadlessOneShotAgentCommand(
-    recognizeAgentProcess(tokens[0]),
-    tokens
-  )
+  let direct = recognizeAgentProcess(tokens[0])
+  // Why: the generic Orca CLI is not an agent; only this subcommand launches its TUI mode.
+  if (direct?.agent === 'claude-agent-teams' && tokens[1]?.toLowerCase() !== 'claude-teams') {
+    direct = null
+  }
+  const directRecognition = keep ? direct : filterHeadlessOneShotAgentCommand(direct, tokens)
   if (directRecognition) {
     return directRecognition
   }
@@ -304,10 +302,16 @@ export function recognizeAgentProcessFromCommandLine(
   if (!entrypoint) {
     return null
   }
-  const entrypointRecognition = isPythonProcessName(firstNormalized)
+  const viaEntrypoint = isPythonProcessName(firstNormalized)
     ? recognizePythonEntrypoint(tokens, entrypoint)
     : (recognizeAgentProcess(entrypoint) ?? recognizeNodeScriptEntrypoint(entrypoint))
-  return filterHeadlessOneShotAgentCommand(entrypointRecognition, tokens)
+  if (
+    viaEntrypoint?.agent === 'claude-agent-teams' &&
+    tokens[tokens.indexOf(entrypoint, 1) + 1]?.toLowerCase() !== 'claude-teams'
+  ) {
+    return null
+  }
+  return keep ? viaEntrypoint : filterHeadlessOneShotAgentCommand(viaEntrypoint, tokens)
 }
 export function isAgentForegroundWrapperProcess(processName: string | null | undefined): boolean {
   const normalized = normalizeProcessName(processName)

@@ -1,14 +1,14 @@
-import { shouldForcePushWithLeaseForUpstream } from './git-upstream-status'
+import { isBehindOnlyUpstream, shouldForcePushWithLeaseForUpstream } from './git-upstream-status'
 import type { HostedReviewCreationEligibility } from './hosted-review'
 import { supportsHostedReviewCreation } from './hosted-review-creation-providers'
 import type { GitUpstreamStatus } from './git-status-types'
-import type { SourceControlPrimaryActionDecision } from './source-control-primary-action-decision-types'
 
 export type CreateReviewIntentKind =
   | 'dirty'
   | 'message_required'
   | 'no_upstream'
   | 'needs_push'
+  | 'needs_sync'
   | 'force_push'
 
 export type CreateReviewIntentEligibility = {
@@ -45,6 +45,15 @@ export function resolveCreateReviewIntentEligibility({
     return { eligible: false, kind: null }
   }
 
+  if (
+    hostedReviewCreation.reviewLookupOutcome === 'unavailable' &&
+    !hostedReviewCreation.defaultBaseRef?.trim()
+  ) {
+    return { eligible: false, kind: null }
+  }
+
+  // Why: safe branch preparation can continue without lookup authority; the
+  // main create preflight still fails closed before creating a duplicate.
   if (hostedReviewCreation.blockedReason === 'dirty') {
     if (stagedCount > 0 && !hasMessage) {
       return { eligible: true, kind: 'message_required' }
@@ -71,15 +80,13 @@ export function resolveCreateReviewIntentEligibility({
     return { eligible: true, kind: 'force_push' }
   }
 
-  return { eligible: false, kind: null }
-}
+  // Why: a behind-only branch is safe to prepare with `git pull --ff-only`, so
+  // the intent flow can handle it in one click. A genuinely diverged branch
+  // stays ineligible — auto-merging would reconcile without consent, so the
+  // user keeps the explicit sync-first step.
+  if (hostedReviewCreation.blockedReason === 'needs_sync' && isBehindOnlyUpstream(upstreamStatus)) {
+    return { eligible: true, kind: 'needs_sync' }
+  }
 
-export function resolveVisibleCreateReviewHeaderAction({
-  createPrHeaderAction
-}: {
-  createPrHeaderAction: SourceControlPrimaryActionDecision | null
-}): SourceControlPrimaryActionDecision | null {
-  // Why: keep a stable header anchor; disable Create Review when the branch is
-  // not ready instead of hiding it and shifting toolbar layout.
-  return createPrHeaderAction
+  return { eligible: false, kind: null }
 }

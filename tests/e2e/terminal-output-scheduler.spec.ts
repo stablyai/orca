@@ -1,4 +1,3 @@
-/* eslint-disable max-lines -- Scheduler E2E coverage shares one booted Electron app and debug API. */
 /**
  * E2E repro for terminal output bursts from many background tabs.
  *
@@ -27,6 +26,7 @@ type SchedulerDebugSnapshot = {
   flushWriteCount: number
   scheduledDrainCount: number
   drainWrites: number[]
+  drainHighPriority: boolean[]
 }
 
 type SchedulerDebugWindow = Window & {
@@ -279,8 +279,9 @@ test.describe('Terminal output scheduler', () => {
 
     const debug = await getSchedulerDebug(orcaPage)
     expect(debug.foregroundWriteCount).toBeGreaterThan(0)
-    if (debug.drainWrites.length > 0) {
-      expect(Math.max(...debug.drainWrites)).toBeLessThanOrEqual(2)
+    expect(debug.drainHighPriority).toHaveLength(debug.drainWrites.length)
+    for (const [index, writes] of debug.drainWrites.entries()) {
+      expect(writes).toBeLessThanOrEqual(debug.drainHighPriority[index] ? 8 : 2)
     }
 
     const firstBackground = backgroundCommands[0]

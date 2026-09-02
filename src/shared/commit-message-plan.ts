@@ -1,10 +1,11 @@
+import type { CommandTemplateBackslash } from './commit-message-prompt'
 import {
   getCommitMessageAgentSpec,
   getCommitMessageModel,
   isCustomAgentId
 } from './commit-message-agent-spec'
 import { planCustomCommand, tokenizeCustomCommandTemplate } from './commit-message-prompt'
-import type { TuiAgent } from './types'
+import type { TuiAgent } from './tui-agent'
 
 // Why: planning is a pure transformation from "user request + prompt text"
 // into "spawn-ready binary + argv". Keeping it in shared lets both the local
@@ -14,6 +15,10 @@ import type { TuiAgent } from './types'
 
 export type CommitMessagePlanInput = {
   agentId: TuiAgent | 'custom'
+  /** How to read `\` in the user's command override / args / custom command.
+   *  Defaults to POSIX escaping; pass `'literal'` only when the command is known
+   *  to run on native Windows, where `\` is the path separator (#11375). */
+  backslash?: CommandTemplateBackslash
   model: string
   thinkingLevel?: string
   customAgentCommand?: string
@@ -36,14 +41,15 @@ export type CommitMessagePlanResult =
 
 export function planAgentBinary(
   defaultBinary: string,
-  commandOverride: string | undefined
+  commandOverride: string | undefined,
+  backslash: CommandTemplateBackslash = 'escape'
 ): { ok: true; binary: string; prefixArgs: string[] } | { ok: false; error: string } {
   const command = commandOverride?.trim()
   if (!command) {
     return { ok: true, binary: defaultBinary, prefixArgs: [] }
   }
 
-  const tokenized = tokenizeCustomCommandTemplate(command)
+  const tokenized = tokenizeCustomCommandTemplate(command, backslash)
   if (!tokenized.ok) {
     return { ok: false, error: `Agent command override is invalid: ${tokenized.error}` }
   }
@@ -55,17 +61,152 @@ export function planAgentBinary(
 }
 
 function planAdditionalAgentArgs(
-  agentArgs: string | null | undefined
+  agentArgs: string | null | undefined,
+  backslash: CommandTemplateBackslash = 'escape'
 ): { ok: true; args: string[] } | { ok: false; error: string } {
   const trimmed = agentArgs?.trim()
   if (!trimmed) {
     return { ok: true, args: [] }
   }
-  const tokenized = tokenizeCustomCommandTemplate(trimmed)
+  const tokenized = tokenizeCustomCommandTemplate(trimmed, backslash)
   if (!tokenized.ok) {
     return { ok: false, error: `CLI arguments are invalid: ${tokenized.error}` }
   }
   return { ok: true, args: tokenized.tokens }
+}
+
+const DEFAULT_SINGLETON_OPTIONS: readonly (readonly string[])[] = [['--model']]
+
+function matchesOption(token: string, aliases: readonly string[]): boolean {
+  return aliases.some(
+    (alias) =>
+      token === alias ||
+      token.startsWith(`${alias}=`) ||
+      (alias.startsWith('-') &&
+        !alias.startsWith('--') &&
+        token.startsWith(alias) &&
+        token.length > alias.length)
+  )
+}
+
+function findOptionOccurrence(
+  tokens: string[],
+  aliases: readonly string[],
+  stopAtTerminator: boolean
+): { index: number; consumed: number } | null {
+  for (let index = 0; index < tokens.length; index += 1) {
+    const token = tokens[index]
+    if (stopAtTerminator && token === '--') {
+      break
+    }
+    if (!matchesOption(token, aliases)) {
+      continue
+    }
+    const nextToken = tokens[index + 1]
+    const consumesNext =
+      aliases.includes(token) && nextToken !== undefined && !nextToken.startsWith('-')
+    return { index, consumed: consumesNext ? 2 : 1 }
+  }
+  return null
+}
+
+function applyRecipeOptionOverride(args: {
+  generatedArgs: string[]
+  recipeArgs: string[]
+  aliases: readonly string[]
+}): { generatedArgs: string[]; recipeArgs: string[] } {
+  const recipeOption = findOptionOccurrence(args.recipeArgs, args.aliases, true)
+  const generatedOption = findOptionOccurrence(args.generatedArgs, args.aliases, false)
+  if (!recipeOption || !generatedOption) {
+    return { generatedArgs: args.generatedArgs, recipeArgs: args.recipeArgs }
+  }
+
+  const overrideTokens = args.recipeArgs.slice(
+    recipeOption.index,
+    recipeOption.index + recipeOption.consumed
+  )
+  return {
+    generatedArgs: [
+      ...args.generatedArgs.slice(0, generatedOption.index),
+      ...overrideTokens,
+      ...args.generatedArgs.slice(generatedOption.index + generatedOption.consumed)
+    ],
+    recipeArgs: [
+      ...args.recipeArgs.slice(0, recipeOption.index),
+      ...args.recipeArgs.slice(recipeOption.index + recipeOption.consumed)
+    ]
+  }
+}
+
+function removeAllOptionOccurrences(tokens: string[], aliases: readonly string[]): string[] {
+  let result = tokens
+  while (true) {
+    const found = findOptionOccurrence(result, aliases, true)
+    if (!found) {
+      return result
+    }
+    result = [...result.slice(0, found.index), ...result.slice(found.index + found.consumed)]
+  }
+}
+
+/** Drops every occurrence after the first, so a user who types the same singleton
+ *  twice in one field still gets a single flag rather than a rejected argv. */
+function keepFirstOptionOccurrence(tokens: string[], aliases: readonly string[]): string[] {
+  let result = tokens
+  while (true) {
+    const first = findOptionOccurrence(result, aliases, true)
+    if (!first) {
+      return result
+    }
+    const tail = result.slice(first.index + first.consumed)
+    const duplicate = findOptionOccurrence(tail, aliases, true)
+    if (!duplicate) {
+      return result
+    }
+    const offset = first.index + first.consumed
+    result = [
+      ...result.slice(0, offset + duplicate.index),
+      ...result.slice(offset + duplicate.index + duplicate.consumed)
+    ]
+  }
+}
+
+/** Removes generated singleton options shadowed by user input. Recipe args
+ *  outrank a command-override prefix, which outranks Orca's generated value. */
+function applySingletonOptionOverrides(args: {
+  generatedArgs: string[]
+  prefixArgs: string[]
+  recipeArgs: string[]
+  singletonOptions: readonly (readonly string[])[]
+}): { generatedArgs: string[]; prefixArgs: string[]; recipeArgs: string[] } {
+  let generatedArgs = args.generatedArgs
+  let prefixArgs = args.prefixArgs
+  let recipeArgs = args.recipeArgs
+
+  for (const aliases of args.singletonOptions) {
+    recipeArgs = keepFirstOptionOccurrence(recipeArgs, aliases)
+    prefixArgs = keepFirstOptionOccurrence(prefixArgs, aliases)
+    const recipeOption = findOptionOccurrence(recipeArgs, aliases, true)
+    const prefixOption = findOptionOccurrence(prefixArgs, aliases, true)
+    const prefixHasTerminator = prefixArgs.includes('--')
+    if (recipeOption && !prefixHasTerminator) {
+      prefixArgs = removeAllOptionOccurrences(prefixArgs, aliases)
+    } else if (prefixOption && !prefixHasTerminator) {
+      const generatedOption = findOptionOccurrence(generatedArgs, aliases, false)
+      if (generatedOption) {
+        generatedArgs = [
+          ...generatedArgs.slice(0, generatedOption.index),
+          ...generatedArgs.slice(generatedOption.index + generatedOption.consumed)
+        ]
+      }
+      continue
+    }
+    const withRecipe = applyRecipeOptionOverride({ generatedArgs, recipeArgs, aliases })
+    generatedArgs = withRecipe.generatedArgs
+    recipeArgs = withRecipe.recipeArgs
+  }
+
+  return { generatedArgs, prefixArgs, recipeArgs }
 }
 
 function insertAdditionalAgentArgs(args: {
@@ -105,11 +246,11 @@ export function planCommitMessageGeneration(
         error: 'Custom command is empty. Add one in Settings → Git → AI Commit Messages.'
       }
     }
-    const planned = planCustomCommand(command, prompt)
+    const planned = planCustomCommand(command, prompt, input.backslash)
     if (!planned.ok) {
       return { ok: false, error: planned.error }
     }
-    const agentArgs = planAdditionalAgentArgs(input.agentArgs)
+    const agentArgs = planAdditionalAgentArgs(input.agentArgs, input.backslash)
     if (!agentArgs.ok) {
       return agentArgs
     }
@@ -160,25 +301,33 @@ export function planCommitMessageGeneration(
     model: input.model,
     thinkingLevel: input.thinkingLevel
   })
-  const agentArgs = planAdditionalAgentArgs(input.agentArgs)
+  const agentArgs = planAdditionalAgentArgs(input.agentArgs, input.backslash)
   if (!agentArgs.ok) {
     return agentArgs
   }
-  const args = insertAdditionalAgentArgs({
-    baseArgs,
-    agentArgs: agentArgs.args,
-    promptDelivery: spec.promptDelivery,
-    prompt: argvPrompt
-  })
-  const command = planAgentBinary(spec.binary, input.agentCommandOverride)
+  const command = planAgentBinary(spec.binary, input.agentCommandOverride, input.backslash)
   if (!command.ok) {
     return { ok: false, error: command.error }
   }
+  // Why: repeating a singleton flag makes yargs-based CLIs parse it as an array and
+  // crash (OpenCode's `model.split('/')`). User values replace Orca's, never stack.
+  const merged = applySingletonOptionOverrides({
+    generatedArgs: baseArgs,
+    prefixArgs: command.prefixArgs,
+    recipeArgs: agentArgs.args,
+    singletonOptions: spec.singletonOptions ?? DEFAULT_SINGLETON_OPTIONS
+  })
+  const args = insertAdditionalAgentArgs({
+    baseArgs: merged.generatedArgs,
+    agentArgs: merged.recipeArgs,
+    promptDelivery: spec.promptDelivery,
+    prompt: argvPrompt
+  })
   return {
     ok: true,
     plan: {
       binary: command.binary,
-      args: [...command.prefixArgs, ...args],
+      args: [...merged.prefixArgs, ...args],
       stdinPayload: spec.promptDelivery === 'stdin' ? prompt : null,
       label: spec.label
     }

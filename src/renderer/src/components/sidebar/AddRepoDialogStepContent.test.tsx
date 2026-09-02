@@ -4,7 +4,7 @@ import type { ComponentProps } from 'react'
 import { Dialog } from '@/components/ui/dialog'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { AddRepoDialogStepContent } from './AddRepoDialogStepContent'
-import type { NestedRepoScanResult } from '../../../../shared/types'
+import type { NestedRepoScanResult } from '../../../../shared/project-group-types'
 
 const nestedScan: NestedRepoScanResult = {
   selectedPath: '/workspace/platform',
@@ -79,6 +79,7 @@ function renderStepContent(overrides: Partial<StepContentProps>): string {
     onNestedGroupNameChange: vi.fn(),
     onNestedSelectedPathsChange: vi.fn(),
     onImportNestedRepos: vi.fn(),
+    onOpenNestedRootFolder: vi.fn(),
     onCreateNameChange: vi.fn(),
     onCreateParentChange: vi.fn(),
     onPickCreateParent: vi.fn(),
@@ -118,6 +119,15 @@ describe('AddRepoDialogStepContent nested imports', () => {
     expect(html).toContain('Yes, import as group')
     expect(html).toContain('No, import separately')
     expect(html).not.toContain('>Import</button>')
+  })
+
+  it('offers opening the parent folder when nested import selection is empty', () => {
+    const html = renderStepContent({ nestedSelectedPaths: new Set() })
+
+    expect(html).toContain('No repositories are selected')
+    expect(html).toContain('Open as Folder')
+    expect(html).toMatch(/<button[^>]*disabled=""[^>]*>No, import separately<\/button>/)
+    expect(html).toMatch(/<button[^>]*disabled=""[^>]*>Yes, import as group<\/button>/)
   })
 
   it('offers host browsing for remote create project locations', () => {
@@ -270,5 +280,17 @@ describe('AddRepoDialogStepContent nested imports', () => {
     expect(html).not.toContain('Browse host')
     expect(html).not.toContain('Create on host')
     expect(html).not.toContain('Want to import many repos at once?')
+  })
+
+  it('opens the in-app filesystem browser for a paired runtime', () => {
+    const html = renderStepContent({
+      step: 'server-path',
+      isRuntimeEnvironmentActive: true,
+      activeRuntimeEnvironmentId: 'paired-host'
+    })
+
+    expect(html).toContain('Browse host filesystem')
+    expect(html).toContain('Navigate to a directory and click Select to choose it.')
+    expect(html).toContain('Select folder')
   })
 })

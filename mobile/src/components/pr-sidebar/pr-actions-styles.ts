@@ -5,6 +5,19 @@ import { colors, radii, spacing, typography } from '../../theme/mobile-theme'
 // line). Split out of mobile-pr-sidebar-styles to keep that file under the
 // 300-line cap.
 export const prActionsStyles = StyleSheet.create({
+  // Bare block when identity + actions share one section card.
+  actionsBlock: {
+    gap: spacing.sm
+  },
+  // Close/Reopen + Unlink share a row so secondary actions don't stack full-width.
+  secondaryRow: {
+    flexDirection: 'row',
+    alignItems: 'stretch',
+    gap: spacing.sm
+  },
+  secondaryButton: {
+    flex: 1
+  },
   // Primary CTA (merge) and secondary action buttons (close/reopen/rerun/add).
   actionButton: {
     minHeight: 44,

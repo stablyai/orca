@@ -1,8 +1,9 @@
 import * as path from 'node:path'
-import { resolveWorktreeAddBaseRef } from '../shared/worktree-base-ref'
+import { resolveWorktreeAddBaseRef } from '../shared/worktree/base-ref'
+import { windowsLongPathGitArgs } from '../shared/windows-long-path-git-args'
 import type { GitExec } from './git-handler-ops'
-import { isUnsupportedWorktreeListZError, parseWorktreeList } from './git-handler-utils'
 export { removeWorktreeOp } from './git-handler-worktree-remove'
+export { readRelayWorktreeList } from './git-handler-worktree-list'
 
 async function persistRelayWorktreeCreationBase(
   git: GitExec,
@@ -28,7 +29,12 @@ async function persistRelayWorktreeCreationBase(
   }
 }
 
-export async function addWorktreeOp(git: GitExec, params: Record<string, unknown>): Promise<void> {
+export async function addWorktreeOp(
+  git: GitExec,
+  params: Record<string, unknown>,
+  // Why: only the execution host's OS matters here — the client may be macOS while the SSH host is Windows.
+  platform: NodeJS.Platform = process.platform
+): Promise<void> {
   const repoPath = params.repoPath as string
   const branchName = params.branchName as string
   const targetDir = params.targetDir as string
@@ -62,11 +68,14 @@ export async function addWorktreeOp(git: GitExec, params: Record<string, unknown
         })
       : undefined
 
+  // Why: a Windows SSH host hits the same MAX_PATH ceiling as a local Windows checkout.
+  const longPathArgs = windowsLongPathGitArgs(targetDir, platform)
   const args = checkoutExistingBranch
-    ? ['worktree', 'add', targetDir, branchName]
-    : ['worktree', 'add', '--no-track', '-b', branchName, targetDir]
+    ? [...longPathArgs, 'worktree', 'add', targetDir, branchName]
+    : [...longPathArgs, 'worktree', 'add', '--no-track', '-b', branchName, targetDir]
   if (!checkoutExistingBranch && noCheckout) {
-    args.splice(3, 0, '--no-checkout')
+    // Why: offset by the global-option prefix so --no-checkout still lands before -b.
+    args.splice(longPathArgs.length + 3, 0, '--no-checkout')
   }
   if (effectiveBase) {
     args.push(effectiveBase)
@@ -109,40 +118,6 @@ export async function addWorktreeOp(git: GitExec, params: Record<string, unknown
   } catch (error) {
     console.warn(`relay addWorktree: failed to set push.autoSetupRemote for ${targetDir}`, error)
   }
-}
-
-type RelayWorktreeInfo = {
-  path: string
-  branch?: string
-  head?: string
-}
-
-export async function readRelayWorktreeList(
-  git: GitExec,
-  repoPath: string
-): Promise<RelayWorktreeInfo[]> {
-  try {
-    const { stdout } = await git(['worktree', 'list', '--porcelain', '-z'], repoPath)
-    return normalizeRelayWorktrees(parseWorktreeList(stdout, { nulDelimited: true }))
-  } catch (error) {
-    if (!isUnsupportedWorktreeListZError(error)) {
-      throw error
-    }
-  }
-
-  // Why: `-z` preserves newlines; fallback keeps Git <2.36 compatible.
-  const { stdout } = await git(['worktree', 'list', '--porcelain'], repoPath)
-  return normalizeRelayWorktrees(parseWorktreeList(stdout))
-}
-
-function normalizeRelayWorktrees(worktrees: Record<string, unknown>[]): RelayWorktreeInfo[] {
-  return worktrees
-    .map((worktree) => ({
-      path: typeof worktree.path === 'string' ? worktree.path : '',
-      head: typeof worktree.head === 'string' ? worktree.head : undefined,
-      branch: typeof worktree.branch === 'string' ? worktree.branch : undefined
-    }))
-    .filter((worktree) => worktree.path.length > 0)
 }
 
 function isPosixAbsolutePath(value: string): boolean {

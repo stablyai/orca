@@ -1,4 +1,6 @@
 import type { editor } from 'monaco-editor'
+import { yieldToEventLoop } from '../../../../shared/event-loop-yield'
+import { getUtf8ChunkEndIndex } from '../../../../shared/utf8-byte-limits'
 import {
   measureTextControlPasteByteLength,
   measureTextControlPasteByteLengthWithYield
@@ -72,39 +74,6 @@ function getPlainTextFromPasteEvent(event: ClipboardEvent): string {
   return event.clipboardData?.getData('text/plain') ?? ''
 }
 
-function getCodePointUtf8ByteLength(codePoint: number): number {
-  if (codePoint <= 0x7f) {
-    return 1
-  }
-  if (codePoint <= 0x7ff) {
-    return 2
-  }
-  if (codePoint <= 0xffff) {
-    return 3
-  }
-  return 4
-}
-
-function getNextChunkBoundary(text: string, startIndex: number, maxBytes: number): number {
-  let byteLength = 0
-  let index = startIndex
-
-  while (index < text.length) {
-    const codePoint = text.codePointAt(index) ?? 0
-    const codeUnitLength = codePoint > 0xffff ? 2 : 1
-    const nextByteLength = getCodePointUtf8ByteLength(codePoint)
-
-    if (byteLength > 0 && byteLength + nextByteLength > maxBytes) {
-      break
-    }
-
-    byteLength += nextByteLength
-    index += codeUnitLength
-  }
-
-  return index
-}
-
 function getEndPositionAfterInsert(start: Position, text: string): Position {
   let lineNumber = start.lineNumber
   let column = start.column
@@ -158,10 +127,6 @@ function setCollapsedSelection(monacoEditor: MonacoPasteEditor, position: Positi
   })
 }
 
-function yieldToEventLoop(): Promise<void> {
-  return new Promise((resolve) => globalThis.setTimeout(resolve, 0))
-}
-
 async function insertMonacoTextInChunks(
   monacoEditor: MonacoPasteEditor,
   text: string,
@@ -190,7 +155,7 @@ async function insertMonacoTextInChunks(
       return { status: 'cancelled', reason: 'target-unavailable', byteLength, chunksWritten }
     }
 
-    const nextIndex = getNextChunkBoundary(text, textIndex, chunkMaxBytes)
+    const nextIndex = getUtf8ChunkEndIndex(text, textIndex, chunkMaxBytes)
     const chunk = text.slice(textIndex, nextIndex)
     const endPosition = getEndPositionAfterInsert(
       { lineNumber: selection.startLineNumber, column: selection.startColumn },

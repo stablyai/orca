@@ -67,9 +67,9 @@ A common point of drift. Use these conventions for any list-style row (worktrees
 
 - **Idle:** transparent background.
 - **Hover:** `bg-accent` (in the worktree sidebar, `bg-sidebar-accent`).
-- **Keyboard-selected (cmdk highlight):** `data-[selected=true]:bg-accent` plus a `border-border` outline so the active row stays visible while the user types. The `data-selected` attribute is set by `cmdk` automatically.
+- **Keyboard-selected (cmdk highlight):** do **not** rely on flat `bg-accent` alone on light popover/dialog surfaces — `--accent` (#f5f5f5) is nearly identical to `--background` (#fff), so the cursor vanishes. Use the jump-palette recipe in `main.css` (`.jump-palette-item[data-selected='true']`): `color-mix` foreground into background (~12%) plus an inset ring. Expose the mix as `--jump-palette-selection-surface` when nested cutouts (status pips) must match. The `data-selected` attribute is set by `cmdk` automatically.
 - **Persistent "current" / "active" row** (e.g. the worktree the user is viewing): also `bg-accent`, _plus_ a `data-current="true"` attribute so CSS or future styling can distinguish it from the cmdk highlight.
-- **Don't:** hardcode `bg-[#ededed]` / `bg-[#333333]` or invent a "selected" color. The accent token already adapts to light/dark and matches the rest of the app.
+- **Don't:** hardcode `bg-[#ededed]` / `bg-[#333333]` or invent a "selected" color. Mix from existing tokens (`foreground`/`background`/`accent`) so light/dark stay aligned.
 
 ### Color mixing
 
@@ -102,7 +102,7 @@ Orca uses shadows sparingly. Three levels in practice:
 
 1. **Inset hairline** — `border` + `border` token. The default. Almost everything sits at this level.
 2. **Subtle lift** — `shadow-xs` + a single-token border. Outline buttons, embedded cards.
-3. **Floating** — `0 10px 24px rgba(0, 0, 0, 0.18)`. Popovers, popups that escape the editor surface. Reserved.
+3. **Floating** — `shadow-floating` (`0 10px 24px rgba(0, 0, 0, 0.18)`). Popovers, popups that escape the editor surface. Reserved.
 
 Don't add a fourth level. If something needs more emphasis than "floating," you're probably reaching for the focus `ring` instead.
 
@@ -110,7 +110,7 @@ Don't add a fourth level. If something needs more emphasis than "floating," you'
 
 Use the shadcn primitives in `src/renderer/src/components/ui/` before writing anything custom. The shadcn-style wrappers in this folder follow a consistent pattern:
 
-- Most carry a `data-slot="<name>"` attribute on their root for CSS targeting — do not strip it. (The non-shadcn helpers in this folder — `sonner`, `repo-multi-combobox`, `team-multi-combobox` — don't follow this pattern and shouldn't be modeled when adding new primitives that should.)
+- Most carry a `data-slot="<name>"` attribute on their root for CSS targeting — do not strip it. (The non-shadcn helpers in this folder — `sonner` and `repo-multi-combobox` — don't follow this pattern and shouldn't be modeled when adding new primitives that should.)
 - Use `cn()` for class merging. Pass user `className` last so callers can override.
 - Use `class-variance-authority` (CVA) for variants when there are multiple.
 
@@ -137,20 +137,20 @@ Browse `src/renderer/src/components/ui/` for the full list. Most wrap a Radix UI
 
 When a control has multiple plausible primitives, use this fork:
 
-| You want…                                                    | Reach for                                                            | Don't use                             |
-| ------------------------------------------------------------ | -------------------------------------------------------------------- | ------------------------------------- |
-| Hover-only label on an icon-only button                      | `Tooltip`                                                            | `HoverCard` (too heavy), title attr   |
-| Hover preview of richer content (avatar + summary)           | `HoverCard`                                                          | `Tooltip` (no rich content)           |
-| Click-revealed menu with actions                             | `DropdownMenu`                                                       | `Popover` with hand-rolled list       |
-| Right-click contextual actions                               | `ContextMenu`                                                        | `DropdownMenu` (different invocation) |
-| Click-revealed surface with arbitrary content (form, picker) | `Popover`                                                            | `Dialog` (it traps focus and dims)    |
-| Modal that demands a decision before you continue            | `Dialog`                                                             | `Popover`, inline overlay             |
-| Drawer / panel sliding in from an edge                       | `Sheet`                                                              | `Dialog` centered                     |
-| Single choice from a known list                              | `Select`                                                             | Custom listbox                        |
-| Single choice with search / fuzzy filtering                  | `Command` inside `Popover`                                           | `Select` (no search)                  |
-| Multi-select with search                                     | `repo-multi-combobox` / `team-multi-combobox` (mirror their pattern) | Roll a new one                        |
-| Transient confirmation ("Saved", "Copied")                   | `sonner` toast                                                       | `Dialog`, inline banner               |
-| Persistent inline status ("3 errors")                        | inline text + `Badge`                                                | toast (toasts disappear)              |
+| You want…                                                    | Reach for                                  | Don't use                             |
+| ------------------------------------------------------------ | ------------------------------------------ | ------------------------------------- |
+| Hover-only label on an icon-only button                      | `Tooltip`                                  | `HoverCard` (too heavy), title attr   |
+| Hover preview of richer content (avatar + summary)           | `HoverCard`                                | `Tooltip` (no rich content)           |
+| Click-revealed menu with actions                             | `DropdownMenu`                             | `Popover` with hand-rolled list       |
+| Right-click contextual actions                               | `ContextMenu`                              | `DropdownMenu` (different invocation) |
+| Click-revealed surface with arbitrary content (form, picker) | `Popover`                                  | `Dialog` (it traps focus and dims)    |
+| Modal that demands a decision before you continue            | `Dialog`                                   | `Popover`, inline overlay             |
+| Drawer / panel sliding in from an edge                       | `Sheet`                                    | `Dialog` centered                     |
+| Single choice from a known list                              | `Select`                                   | Custom listbox                        |
+| Single choice with search / fuzzy filtering                  | `Command` inside `Popover`                 | `Select` (no search)                  |
+| Multi-select with search                                     | `repo-multi-combobox` (mirror its pattern) | Roll a new one                        |
+| Transient confirmation ("Saved", "Copied")                   | `sonner` toast                             | `Dialog`, inline banner               |
+| Persistent inline status ("3 errors")                        | inline text + `Badge`                      | toast (toasts disappear)              |
 
 If you find yourself styling around a primitive (`<Popover>` to act like a `<Dialog>`, or vice versa), stop and reconsider — the focus-management semantics differ and a future contributor will be misled by the mismatch.
 
@@ -225,7 +225,7 @@ Three scrollbar classes are defined globally in `main.css`:
 
 - **`.scrollbar-sleek`** — the default thin, neutral scrollbar for sidebars, lists, popovers. Pair with `.scrollbar-sleek-parent` on a hover-target ancestor if you want the thumb to fade in only on parent hover.
 - **`.scrollbar-editor`** — slightly heavier, used inside Monaco-adjacent surfaces.
-- **`.worktree-sidebar-scrollbar`** — reserves the gutter but keeps the thumb invisible until the parent (`.scrollbar-sleek-parent`) is hovered. Used only in the worktree sidebar so the chrome stays still.
+- **`.worktree-sidebar-scrollbar`** — no reserved gutter: paired with `overflow-y-auto`, the scrollbar (and its width) exists only while content actually overflows, so a short list stays flush with the fixed header controls and classic-scrollbar Windows shows no arrow buttons on empty lists. The thumb stays invisible until the parent (`.scrollbar-sleek-parent`) is hovered. Used only in the worktree sidebar.
 
 Apply one of these to overflow containers; don't write a fourth style.
 

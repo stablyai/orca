@@ -1,5 +1,5 @@
 import { useCallback, useMemo, useRef, useState } from 'react'
-import type { PRComment } from '../../../src/shared/types'
+import type { PRComment } from '../../../src/shared/github/comment-types'
 import type { ConnectionState } from '../transport/types'
 import type { RpcClient } from '../transport/rpc-client'
 import type { GitHubPrRepoSlug } from './github-pr-rpc'
@@ -30,7 +30,11 @@ export type PrCommentMutations = {
     line?: number
     prRepo?: GitHubPrRepoSlug | null
   }) => Promise<GitHubPrMutationOutcome>
-  resolveThread: (args: { threadId: string; resolve: boolean }) => Promise<GitHubPrMutationOutcome>
+  resolveThread: (args: {
+    threadId: string
+    resolve: boolean
+    prRepo?: GitHubPrRepoSlug | null
+  }) => Promise<GitHubPrMutationOutcome>
   addRootComment: (args: {
     prNumber: number
     body: string
@@ -39,12 +43,14 @@ export type PrCommentMutations = {
   editComment: (args: {
     owner: string
     repo: string
+    host?: string
     commentId: number
     body: string
   }) => Promise<GitHubPrMutationOutcome>
   deleteComment: (args: {
     owner: string
     repo: string
+    host?: string
     commentId: number
   }) => Promise<GitHubPrMutationOutcome>
 }
@@ -169,9 +175,9 @@ export function useMobilePrCommentActions(input: PrCommentActionsInput) {
       if (!mutations || !params) {
         return Promise.resolve(false)
       }
-      return run(resolveKey(params.threadId), () => mutations.resolveThread(params))
+      return run(resolveKey(params.threadId), () => mutations.resolveThread({ ...params, prRepo }))
     },
-    [mutations, run]
+    [mutations, prRepo, run]
   )
 
   const addRootComment = useCallback(

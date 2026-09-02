@@ -29,4 +29,12 @@ describe('getSettingOwnershipSummary', () => {
     expect(getSettingOwnershipSummary('workspaceDirectory').ownership).toBe('host-override')
     expect(getSettingOwnershipSummary('providerAccounts').ownership).toBe('provider-host')
   })
+
+  it('documents quick commands as host-owned collections', () => {
+    const summary = getSettingOwnershipSummary('terminalQuickCommands')
+
+    expect(summary.ownership).toBe('host-collection')
+    expect(summary.description).toContain('selected Orca host')
+    expect(summary.description).toContain('remain available in remote workspaces')
+  })
 })

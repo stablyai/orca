@@ -5,7 +5,9 @@ import { createRoot, type Root } from 'react-dom/client'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { getDefaultSettings } from '../../../../shared/constants'
-import type { Project, Repo, TerminalTab } from '../../../../shared/types'
+import type { Project } from '../../../../shared/project-types'
+import type { Repo } from '../../../../shared/repo-types'
+import type { TerminalTab } from '../../../../shared/terminal-tab-types'
 import type { AgentStatusEntry } from '../../../../shared/agent-status-types'
 import { useAppStore } from '../../store'
 import {
@@ -69,6 +71,12 @@ beforeEach(() => {
   container = document.createElement('div')
   document.body.appendChild(container)
   root = createRoot(container)
+  // WorktreeSymlinksSection reads window.api.fs on mount to suggest directory
+  // paths; provide a minimal renderer bridge so mounting the full pane doesn't
+  // throw in the test environment.
+  ;(window as unknown as { api: unknown }).api = {
+    fs: { readDir: () => Promise.resolve([]) }
+  }
 })
 
 afterEach(() => {
@@ -76,6 +84,7 @@ afterEach(() => {
     root.unmount()
   })
   container.remove()
+  delete (window as unknown as { api?: unknown }).api
   useAppStore.setState(useAppStore.getInitialState(), true)
 })
 
@@ -95,6 +104,13 @@ describe('RepositoryPane search entries', () => {
     expect(matchesSettingsSearch('local settings scripts', entries)).toBe(true)
     expect(matchesSettingsSearch('../worktrees', entries)).toBe(true)
     expect(matchesSettingsSearch('worktree path', entries)).toBe(true)
+  })
+
+  it('includes each project search section once', () => {
+    const entries = getRepositoryPaneSearchEntries(repo)
+
+    expect(entries.filter(({ title }) => title === 'Project Icon')).toHaveLength(1)
+    expect(entries.filter(({ title }) => title === 'Default Worktree Base')).toHaveLength(1)
   })
 
   it('omits project runtime search for remote or unsupported repos', () => {

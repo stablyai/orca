@@ -1,11 +1,13 @@
 // @vitest-environment happy-dom
 
-import { act } from 'react'
+import { act, Profiler } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AgentStatusEntry } from '../../../../shared/agent-status-types'
 import { useAppStore } from '@/store'
 import { StarNagAgentValueMomentObserver } from './StarNagAgentValueMomentObserver'
+
+globalThis.IS_REACT_ACT_ENVIRONMENT = true
 
 type StarNagApi = {
   agentValueMoment: ReturnType<typeof vi.fn>
@@ -36,6 +38,25 @@ function renderObserver(): { root: Root; container: HTMLDivElement } {
     root.render(<StarNagAgentValueMomentObserver />)
   })
   return { root, container }
+}
+
+function renderObserverWithProfiler(): {
+  root: Root
+  container: HTMLDivElement
+  getRenderCount: () => number
+} {
+  const container = document.createElement('div')
+  document.body.appendChild(container)
+  const root = createRoot(container)
+  let renderCount = 0
+  act(() => {
+    root.render(
+      <Profiler id="star-nag-observer" onRender={() => (renderCount += 1)}>
+        <StarNagAgentValueMomentObserver />
+      </Profiler>
+    )
+  })
+  return { root, container, getRenderCount: () => renderCount }
 }
 
 function setAgentEntries(entries: Record<string, AgentStatusEntry>): void {
@@ -95,6 +116,52 @@ describe('StarNagAgentValueMomentObserver', () => {
 
     expect(agentValueMoment).toHaveBeenCalledTimes(1)
     expect(showAgentValueMoment).toHaveBeenCalledTimes(1)
+  })
+
+  it('does not scan 500 agent statuses on 50 same-state working pings', () => {
+    const entries = Object.fromEntries(
+      Array.from({ length: 500 }, (_unused, index) => [
+        `pane-${index}`,
+        entry({ paneKey: `tab-${index}:leaf-1` })
+      ])
+    )
+    useAppStore.setState({ agentStatusByPaneKey: entries, agentStatusEpoch: 1 })
+    const rendered = renderObserverWithProfiler()
+    root = rendered.root
+    container = rendered.container
+    const initialRenders = rendered.getRenderCount()
+
+    // Why: separate acts model separate hook pings; main produced 50 renders and
+    // 25,000 completion-scan entry visits for this exact 500 x 50 scenario.
+    for (let ping = 0; ping < 50; ping += 1) {
+      act(() => {
+        useAppStore.setState((state) => ({
+          agentStatusByPaneKey: {
+            ...state.agentStatusByPaneKey,
+            'pane-0': entry({ paneKey: 'tab-0:leaf-1', updatedAt: ping + 2 })
+          }
+        }))
+      })
+    }
+    expect(rendered.getRenderCount()).toBe(initialRenders)
+
+    // A real transition bumps the epoch and must re-render.
+    setAgentEntries({ pane: entry({ state: 'done', updatedAt: 100 }) })
+    expect(rendered.getRenderCount()).toBeGreaterThan(initialRenders)
+  })
+
+  it('does not treat a removed and reused pane key as one completion transition', () => {
+    ;({ root, container } = renderObserver())
+
+    setAgentEntries({ pane: entry({ state: 'working' }) })
+    setAgentEntries({})
+    setAgentEntries({ pane: entry({ state: 'done', updatedAt: 2 }) })
+    act(() => {
+      vi.advanceTimersByTime(2400)
+    })
+
+    expect(agentValueMoment).not.toHaveBeenCalled()
+    expect(showAgentValueMoment).not.toHaveBeenCalled()
   })
 
   it('ignores interrupted or empty-prompt completions', () => {

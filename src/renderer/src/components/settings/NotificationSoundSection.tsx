@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { toast } from 'sonner'
-import type { GlobalSettings } from '../../../../shared/types'
+import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import { Label } from '../ui/label'
 import { Slider } from '../ui/slider'
 import {
@@ -159,7 +159,7 @@ export function NotificationSoundSection({
           className="truncate font-mono text-[11px] text-muted-foreground"
           title={notificationSettings.customSoundPath}
         >
-          {translate('auto.components.settings.NotificationsPane.4aa5085cd7', 'Custom:')}
+          {translate('auto.components.settings.NotificationsPane.4aa5085cd7', 'Custom:')}{' '}
           {notificationSettings.customSoundPath}
         </p>
       ) : null}

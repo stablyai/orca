@@ -1,4 +1,4 @@
-import { ipcMain, BrowserWindow, systemPreferences, app } from 'electron'
+import { ipcMain, BrowserWindow, systemPreferences } from 'electron'
 import { join } from 'node:path'
 import { writeFile, unlink } from 'node:fs/promises'
 import { createHash } from 'node:crypto'
@@ -80,7 +80,9 @@ export function registerSpeechHandlers(store: Store): void {
 
   const getHotwordsFilePath = (content: string): string => {
     const digest = createHash('sha256').update(content).digest('hex').slice(0, 12)
-    return join(app.getPath('userData'), `speech-hotwords-${digest}.txt`)
+    // Why: sherpa-onnx cannot read non-ASCII Windows paths, so co-locate the
+    // hotwords file with the ASCII-safe model cache instead of userData.
+    return join(getSpeechModelManager(store).getModelsDir(), `speech-hotwords-${digest}.txt`)
   }
 
   const getDesktopOwner = (senderId: number, sessionId: string): string =>

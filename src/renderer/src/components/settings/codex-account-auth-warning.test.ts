@@ -38,6 +38,32 @@ describe('codex account auth warning', () => {
     ).toBe(false)
   })
 
+  it('warns re-auth when the app-server quits over a dead refresh token', () => {
+    expect(
+      getCodexAccountAuthWarning({
+        limits: codexLimits('Your ChatGPT session could not be refreshed. Please sign in again.'),
+        target: { runtime: 'host', wslDistro: null },
+        runtime: { runtime: 'host' },
+        activeAccountId: 'account-1',
+        accountId: 'account-1'
+      })
+    ).toBe('stale-sign-in')
+  })
+
+  it('does not warn re-auth when the app-server quits over bad argv', () => {
+    expect(
+      getCodexAccountAuthWarning({
+        limits: codexLimits(
+          "Codex RPC process exited (exit code 2): error: invalid value 'untrusted' for '--ask-for-approval <APPROVAL_POLICY>'"
+        ),
+        target: { runtime: 'host', wslDistro: null },
+        runtime: { runtime: 'host' },
+        activeAccountId: 'account-1',
+        accountId: 'account-1'
+      })
+    ).toBeNull()
+  })
+
   it('matches the active host account on the current rate-limit target', () => {
     expect(
       getCodexAccountAuthWarning({
@@ -49,7 +75,22 @@ describe('codex account auth warning', () => {
         activeAccountId: 'account-1',
         accountId: 'account-1'
       })
-    ).toContain('access token could not be refreshed')
+    ).toBe('stale-sign-in')
+  })
+
+  it('preserves stale-sign-in warnings for an OAuth system default', () => {
+    expect(
+      getCodexAccountAuthWarning({
+        limits: codexLimits(
+          'Your access token could not be refreshed. Please log out and sign in again.'
+        ),
+        target: { runtime: 'host', wslDistro: null },
+        runtime: { runtime: 'host' },
+        activeAccountId: null,
+        accountId: null,
+        authKind: 'oauth'
+      })
+    ).toBe('stale-sign-in')
   })
 
   it('does not warn for inactive accounts or a different runtime', () => {
@@ -73,6 +114,46 @@ describe('codex account auth warning', () => {
         runtime: { runtime: 'host' },
         activeAccountId: 'account-1',
         accountId: 'account-1'
+      })
+    ).toBeNull()
+  })
+
+  it('does not mislabel an API-key system default as needing re-authentication', () => {
+    expect(
+      getCodexAccountAuthWarning({
+        limits: codexLimits('chatgpt authentication required to read rate limits'),
+        target: { runtime: 'host', wslDistro: null },
+        runtime: { runtime: 'host' },
+        activeAccountId: null,
+        accountId: null,
+        authKind: 'api-key'
+      })
+    ).toBeNull()
+  })
+
+  it('warns only when the active system default has no usable login', () => {
+    const getWarning = (authKind: 'none' | 'api-key' | 'oauth') =>
+      getCodexAccountAuthWarning({
+        limits: null,
+        target: { runtime: 'host', wslDistro: null },
+        runtime: { runtime: 'host' },
+        activeAccountId: null,
+        accountId: null,
+        authKind
+      })
+
+    expect(getWarning('none')).toBe('missing-sign-in')
+    expect(getWarning('api-key')).toBeNull()
+    expect(getWarning('oauth')).toBeNull()
+
+    expect(
+      getCodexAccountAuthWarning({
+        limits: null,
+        target: { runtime: 'host', wslDistro: null },
+        runtime: { runtime: 'host' },
+        activeAccountId: 'account-1',
+        accountId: null,
+        authKind: 'none'
       })
     ).toBeNull()
   })

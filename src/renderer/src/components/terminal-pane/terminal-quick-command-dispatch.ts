@@ -1,4 +1,4 @@
-import type { TerminalQuickCommand } from '../../../../shared/types'
+import type { TerminalQuickCommand } from '../../../../shared/terminal-quick-command-types'
 import {
   buildTerminalQuickCommandInput,
   flattenTerminalQuickCommand,

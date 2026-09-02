@@ -3,7 +3,7 @@ import {
   COMMIT_FAILURE_SUMMARY_SCAN_CODE_UNITS,
   hasExpandedCommitFailureDetails,
   summarizeCommitFailure
-} from './commit-failure-summary'
+} from './source-control/commit/commit-failure-summary'
 
 afterEach(() => {
   vi.restoreAllMocks()

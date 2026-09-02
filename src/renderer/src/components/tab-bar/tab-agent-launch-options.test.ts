@@ -14,6 +14,30 @@ describe('tab agent launch options', () => {
     ])
   })
 
+  it('excludes disabled agents from the launch list', () => {
+    expect(orderTabLaunchAgents(null, ['claude', 'codex', 'openclaude'], ['openclaude'])).toEqual([
+      'claude',
+      'codex'
+    ])
+  })
+
+  it('drops a disabled default agent instead of surfacing it first', () => {
+    const ordered = orderTabLaunchAgents(
+      'openclaude',
+      ['claude', 'codex', 'openclaude'],
+      ['openclaude']
+    )
+    expect(ordered).not.toContain('openclaude')
+    expect(ordered).toEqual(['claude', 'codex'])
+  })
+
+  it('keeps a disabled agent out of new-tab search results', () => {
+    const options = buildTabAgentLaunchOptions(
+      orderTabLaunchAgents('codex', ['claude', 'codex', 'openclaude'], ['openclaude'])
+    )
+    expect(findMatchingTabAgentLaunchOptions('open', options).map((o) => o.agent)).toEqual([])
+  })
+
   it('matches detected agents by id, label, command, and command override', () => {
     const options = buildTabAgentLaunchOptions(['claude', 'codex', 'antigravity'], {
       codex: 'codex-beta'

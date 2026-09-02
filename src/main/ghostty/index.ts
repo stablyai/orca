@@ -1,10 +1,11 @@
 import { readFile, stat } from 'node:fs/promises'
 import { platform } from 'node:os'
-import type { GlobalSettings, GhosttyImportPreview } from '../../shared/types'
+import type { GhosttyImportPreview, GlobalSettings } from '../../shared/global-settings-types'
 import type { Store } from '../persistence'
 import { findGhosttyConfigPaths } from './discovery'
 import { parseGhosttyConfig } from './parser'
 import { mapGhosttyToOrca } from './mapper'
+import { resolveGhosttyThemeColors } from './theme-resolution'
 
 // Why: defensive upper bound on the Ghostty config size we're willing to read
 // into memory on the main process. Real configs are a few KB; anything past
@@ -61,6 +62,44 @@ function mergeParsedConfig(
   }
 }
 
+function usesConditionalThemePair(themeName: string): boolean {
+  return themeName
+    .split(',')
+    .map((part) => part.trim())
+    .some((part) => part.startsWith('light:') || part.startsWith('dark:'))
+}
+
+// Why: `theme = <name>` is how most Ghostty configs pick their colors, so
+// dropping it silently loses the entire palette. Resolve the referenced theme
+// file and merge its colors as defaults: explicit config keys win, and config
+// palette entries are appended after the theme's so per-index overrides apply.
+async function applyThemeReference(parsed: Record<string, string | string[]>): Promise<string[]> {
+  const rawTheme = parsed['theme']
+  if (rawTheme === undefined) {
+    return []
+  }
+  delete parsed['theme']
+
+  const themeName = (Array.isArray(rawTheme) ? (rawTheme.at(-1) ?? '') : rawTheme).trim()
+  if (usesConditionalThemePair(themeName)) {
+    return ['theme (light:/dark: pairs not supported)']
+  }
+
+  const themeColors = await resolveGhosttyThemeColors(themeName)
+  if (themeColors === null) {
+    return ['theme (theme file not found)']
+  }
+
+  for (const [key, value] of Object.entries(themeColors)) {
+    if (key === 'palette') {
+      parsed[key] = [...asArray(value), ...asArray(parsed[key])]
+    } else if (parsed[key] === undefined) {
+      parsed[key] = value
+    }
+  }
+  return []
+}
+
 export async function previewGhosttyImport(store: Store): Promise<GhosttyImportPreview> {
   const configPaths = await findGhosttyConfigPaths()
   if (configPaths.length === 0) {
@@ -68,32 +107,46 @@ export async function previewGhosttyImport(store: Store): Promise<GhosttyImportP
   }
 
   const parsed: Record<string, string | string[]> = {}
+  const readPaths: string[] = []
+  let firstError: string | null = null
   for (const configPath of configPaths) {
     let content: string
     try {
       const info = await stat(configPath)
       if (info.size > MAX_CONFIG_BYTES) {
-        return {
-          found: false,
-          diff: {},
-          unsupportedKeys: [],
-          error: `Config file is too large to import (${info.size} bytes, limit ${MAX_CONFIG_BYTES}).`
+        if (firstError === null) {
+          firstError = `Config file is too large to import (${info.size} bytes, limit ${MAX_CONFIG_BYTES}).`
         }
+        continue
       }
       content = await readFile(configPath, 'utf-8')
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Could not read config file'
-      return {
-        found: false,
-        diff: {},
-        unsupportedKeys: [],
-        error: `Could not read config: ${message}`
+      if (firstError === null) {
+        firstError = `Could not read config: ${message}`
       }
+      continue
     }
     mergeParsedConfig(parsed, parseGhosttyConfig(content))
+    readPaths.push(configPath)
   }
 
-  const { diff: rawDiff, unsupportedKeys } = mapGhosttyToOrca(parsed, platform() === 'darwin')
+  if (readPaths.length === 0) {
+    return {
+      found: false,
+      diff: {},
+      unsupportedKeys: [],
+      error: firstError ?? 'Could not read config'
+    }
+  }
+
+  const themeUnsupportedKeys = await applyThemeReference(parsed)
+
+  const { diff: rawDiff, unsupportedKeys: mappedUnsupportedKeys } = mapGhosttyToOrca(
+    parsed,
+    platform() === 'darwin'
+  )
+  const unsupportedKeys = [...mappedUnsupportedKeys, ...themeUnsupportedKeys]
 
   const currentSettings = store.getSettings()
   const actualDiff: Partial<typeof rawDiff> = {}
@@ -108,8 +161,8 @@ export async function previewGhosttyImport(store: Store): Promise<GhosttyImportP
 
   return {
     found: true,
-    configPath: configPaths[0],
-    configPaths,
+    configPath: readPaths[0],
+    configPaths: readPaths,
     diff: actualDiff,
     unsupportedKeys
   }

@@ -1,7 +1,17 @@
-import type { GitHubProjectRow, GitHubProjectTable } from '../../../../shared/github-project-types'
-import type { Repo } from '../../../../shared/types'
+import type { GitHubProjectRow, GitHubProjectTable } from '../../../../shared/github/project-types'
+import type { Repo } from '../../../../shared/repo-types'
 
-export type ProjectRowSlugLookup = (slug: string | null | undefined) => readonly Repo[]
+export type ProjectRowSlugLookup = (
+  slug: string | null | undefined,
+  host?: string
+) => readonly Repo[]
+
+/** Origin matches own the slug through their own remote; upstream matches are
+ *  forks whose parent the row names. */
+export type ProjectRowSlugMatchLookup = (
+  slug: string | null | undefined,
+  host?: string
+) => { origin: readonly Repo[]; upstream: readonly Repo[] }
 
 export type SelectedProjectRowResolution =
   | { status: 'loading' }
@@ -17,7 +27,8 @@ export type SelectedProjectRowResolution =
 
 export function resolveSelectedProjectRowRepo(input: {
   row: GitHubProjectRow
-  lookupSlug: ProjectRowSlugLookup
+  lookupSlugMatches: ProjectRowSlugMatchLookup
+  host?: string
   slugIndexReady: boolean
   selectedRepoIds: ReadonlySet<string>
 }): SelectedProjectRowResolution {
@@ -34,12 +45,20 @@ export function resolveSelectedProjectRowRepo(input: {
     return { status: 'invalid_slug' }
   }
 
-  const globalMatches = input.lookupSlug(repository)
+  const { origin, upstream } = input.lookupSlugMatches(repository, input.host)
+  const globalMatches = [...origin, ...upstream]
   if (globalMatches.length === 0) {
     return { status: 'no_global_match' }
   }
 
-  const selectedMatches = globalMatches.filter((match) => input.selectedRepoIds.has(match.id))
+  // Why: prefer origin only among repos the user actually selected. Applying
+  // that preference globally let an open-but-unselected clone of the upstream
+  // repo hide the selected fork, reproducing #12647 for anyone holding both.
+  const selectedOrigin = origin.filter((match) => input.selectedRepoIds.has(match.id))
+  const selectedMatches =
+    selectedOrigin.length > 0
+      ? selectedOrigin
+      : upstream.filter((match) => input.selectedRepoIds.has(match.id))
   if (selectedMatches.length === 0) {
     return { status: 'unselected_match', globalMatches }
   }
@@ -51,16 +70,19 @@ export function resolveSelectedProjectRowRepo(input: {
 
 export function projectRowHasOpenRepo(
   row: GitHubProjectRow,
-  lookupSlug: ProjectRowSlugLookup
+  lookupSlug: ProjectRowSlugLookup,
+  host?: string
 ): boolean {
-  return lookupSlug(row.content.repository).length > 0
+  return lookupSlug(row.content.repository, host).length > 0
 }
 
 export function filterProjectTableRowsByOpenRepos(
   table: GitHubProjectTable,
   lookupSlug: ProjectRowSlugLookup
 ): GitHubProjectTable {
-  const rows = table.rows.filter((row) => projectRowHasOpenRepo(row, lookupSlug))
+  const rows = table.rows.filter((row) =>
+    projectRowHasOpenRepo(row, lookupSlug, table.project.host)
+  )
   if (rows.length === table.rows.length && table.totalCount === rows.length) {
     return table
   }
@@ -69,14 +91,15 @@ export function filterProjectTableRowsByOpenRepos(
 
 export function filterProjectTableRowsBySelectedRepos(
   table: GitHubProjectTable,
-  lookupSlug: ProjectRowSlugLookup,
+  lookupSlugMatches: ProjectRowSlugMatchLookup,
   slugIndexReady: boolean,
   selectedRepoIds: ReadonlySet<string>
 ): GitHubProjectTable {
   const rows = table.rows.filter((row) => {
     const resolution = resolveSelectedProjectRowRepo({
       row,
-      lookupSlug,
+      lookupSlugMatches,
+      host: table.project.host,
       slugIndexReady,
       selectedRepoIds
     })

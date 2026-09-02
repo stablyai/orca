@@ -1,5 +1,9 @@
-import { readShellStartupEnvVar } from '../main/pty/shell-startup-env'
-import type { PiAgentKind } from '../shared/pi-agent-kind'
+import { readSessionShellStartupEnvVar } from '../main/pty/shell-startup-env'
+import {
+  PRIMARY_AGENT_DIR_ENV_BY_KIND,
+  SOURCE_AGENT_DIR_ENV_BY_KIND,
+  type PiAgentKind
+} from '../shared/pi-agent-kind'
 
 function firstNonEmpty(...values: (string | undefined)[]): string | undefined {
   return values.find((value) => typeof value === 'string' && value.length > 0)
@@ -10,7 +14,9 @@ function readStartupEnv(
   env: Record<string, string>,
   shell: string | undefined
 ): string | undefined {
-  return readShellStartupEnvVar(name, env.HOME ?? process.env.HOME, shell ?? env.SHELL)
+  // Why the session env first: it is closer to the user's shell than the relay
+  // process env, and fish config lives under its XDG_CONFIG_HOME.
+  return readSessionShellStartupEnvVar(name, env, shell)
 }
 
 export function resolveOpenCodeSourceConfigDir(
@@ -29,29 +35,35 @@ export function resolvePiSourceAgentDir(
   shell: string | undefined,
   kind: PiAgentKind
 ): string | undefined {
-  const sourceKey = kind === 'omp' ? 'ORCA_OMP_SOURCE_AGENT_DIR' : 'ORCA_PI_SOURCE_AGENT_DIR'
-  const overlayKey = kind === 'omp' ? 'ORCA_OMP_CODING_AGENT_DIR' : 'ORCA_PI_CODING_AGENT_DIR'
-  const otherOverlayKey = kind === 'omp' ? 'ORCA_PI_CODING_AGENT_DIR' : 'ORCA_OMP_CODING_AGENT_DIR'
+  const sourceKey = SOURCE_AGENT_DIR_ENV_BY_KIND[kind]
+  const primaryKey = PRIMARY_AGENT_DIR_ENV_BY_KIND[kind]
 
   const sourceDir = firstNonEmpty(env[sourceKey])
   if (sourceDir) {
     return sourceDir
   }
 
-  const startupDir = readStartupEnv('PI_CODING_AGENT_DIR', env, shell)
+  const startupDir = readStartupEnv(primaryKey, env, shell)
   if (startupDir) {
     return startupDir
   }
+
+  if (kind === 'prime-agent') {
+    return firstNonEmpty(env[primaryKey])
+  }
+
+  const overlayKey = kind === 'omp' ? 'ORCA_OMP_CODING_AGENT_DIR' : 'ORCA_PI_CODING_AGENT_DIR'
+  const otherOverlayKey = kind === 'omp' ? 'ORCA_PI_CODING_AGENT_DIR' : 'ORCA_OMP_CODING_AGENT_DIR'
 
   // Why: a mismatched Orca overlay shadow means this shell inherited the other
   // Pi-compatible agent's PTY overlay. Do not remirror that overlay into this
   // launch; let plugin-overlay default to the selected kind's own home dir.
   if (
-    env.PI_CODING_AGENT_DIR &&
-    env.PI_CODING_AGENT_DIR !== env[overlayKey] &&
-    env.PI_CODING_AGENT_DIR !== env[otherOverlayKey]
+    env[primaryKey] &&
+    env[primaryKey] !== env[overlayKey] &&
+    env[primaryKey] !== env[otherOverlayKey]
   ) {
-    return env.PI_CODING_AGENT_DIR
+    return env[primaryKey]
   }
   return undefined
 }

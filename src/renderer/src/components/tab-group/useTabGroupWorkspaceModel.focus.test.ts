@@ -10,9 +10,12 @@ const mocks = vi.hoisted(() => ({
   closeTab: vi.fn(),
   closeUnifiedTab: vi.fn(),
   closeWebRuntimeSessionTab: vi.fn(),
+  callRuntimeRpc: vi.fn(),
+  runtimeEnvironmentSupportsCapability: vi.fn(),
   createBrowserTab: vi.fn(),
   createEmptySplitGroup: vi.fn(),
   createTab: vi.fn(),
+  createWebRuntimeSessionTerminal: vi.fn(),
   destroyWorkspaceWebviews: vi.fn(),
   dispatchEvent: vi.fn(),
   dropUnifiedTab: vi.fn(),
@@ -71,8 +74,22 @@ vi.mock('../../runtime/web-runtime-session', () => ({
   activateWebRuntimeSessionTab: mocks.activateWebRuntimeSessionTab,
   closeWebRuntimeSessionTab: mocks.closeWebRuntimeSessionTab,
   createWebRuntimeSessionBrowserTab: vi.fn(),
-  createWebRuntimeSessionTerminal: vi.fn(),
-  isWebRuntimeSessionActive: mocks.isWebRuntimeSessionActive
+  createWebRuntimeSessionTerminal: mocks.createWebRuntimeSessionTerminal,
+  isWebRuntimeSessionActive: mocks.isWebRuntimeSessionActive,
+  toHostSessionTabId: (tabId: string) => tabId
+}))
+
+vi.mock('@/runtime/runtime-rpc-client', () => ({
+  callRuntimeRpc: mocks.callRuntimeRpc,
+  getActiveRuntimeTarget: ({
+    activeRuntimeEnvironmentId
+  }: {
+    activeRuntimeEnvironmentId?: string | null
+  }) =>
+    activeRuntimeEnvironmentId
+      ? { kind: 'environment', environmentId: activeRuntimeEnvironmentId }
+      : { kind: 'local' },
+  runtimeEnvironmentSupportsCapability: mocks.runtimeEnvironmentSupportsCapability
 }))
 
 vi.mock('../../store/slices/browser-webview-cleanup', () => ({
@@ -141,6 +158,7 @@ function resetStore(): void {
     closeFile: mocks.closeFile,
     closeTab: mocks.closeTab,
     closeUnifiedTab: mocks.closeUnifiedTab,
+    recordClientHostedBrowserCloseIntents: vi.fn(),
     createBrowserTab: mocks.createBrowserTab,
     createEmptySplitGroup: mocks.createEmptySplitGroup,
     createTab: mocks.createTab,
@@ -163,6 +181,12 @@ function resetStore(): void {
 describe('useTabGroupWorkspaceModel terminal activation focus', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    mocks.createWebRuntimeSessionTerminal.mockResolvedValue({
+      status: 'failed',
+      message: 'The workspace is not connected to a remote Orca host.'
+    })
+    mocks.callRuntimeRpc.mockResolvedValue({ ok: true })
+    mocks.runtimeEnvironmentSupportsCapability.mockResolvedValue(true)
     resetStore()
     vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) => {
       callback(0)
@@ -188,6 +212,67 @@ describe('useTabGroupWorkspaceModel terminal activation focus', () => {
     expect(mocks.setActiveTab).toHaveBeenCalledWith('terminal-1')
     expect(mocks.setActiveTabType).toHaveBeenCalledWith('terminal')
     expect(mocks.focusTerminalTabSurface).toHaveBeenCalledWith('terminal-1', null)
+  })
+
+  it('closes the durable native owner from the real structured tab close action', async () => {
+    const agentTab = {
+      id: 'structured-agent-session-codex-session-1',
+      entityId: 'codex-session-1',
+      groupId: 'group-1',
+      worktreeId: 'wt-1',
+      contentType: 'agent-session',
+      agentSessionAgent: 'codex',
+      label: 'Codex Chat',
+      customLabel: null,
+      color: null,
+      sortOrder: 0,
+      createdAt: 1
+    }
+    storeBox.state = {
+      ...storeBox.state,
+      tabsByWorktree: { 'wt-1': [] },
+      unifiedTabsByWorktree: { 'wt-1': [agentTab] },
+      groupsByWorktree: {
+        'wt-1': [
+          {
+            id: 'group-1',
+            worktreeId: 'wt-1',
+            activeTabId: agentTab.id,
+            tabOrder: [agentTab.id]
+          }
+        ]
+      }
+    }
+    const { useTabGroupWorkspaceModel } = await import('./useTabGroupWorkspaceModel')
+    const model = useTabGroupWorkspaceModel({ groupId: 'group-1', worktreeId: 'wt-1' })
+
+    model.commands.closeItem(agentTab.id)
+
+    await vi.waitFor(() => expect(mocks.closeUnifiedTab).toHaveBeenCalledWith(agentTab.id))
+    expect(mocks.callRuntimeRpc.mock.calls).toEqual([
+      [{ kind: 'local' }, 'agentSession.close', { sessionId: 'codex-session-1' }],
+      [
+        { kind: 'local' },
+        'session.tabs.close',
+        {
+          worktree: 'id:wt-1',
+          tabId: 'agent-session:codex-session-1',
+          reason: 'user'
+        }
+      ]
+    ])
+  })
+
+  it('falls back to a local shell when the typed remote-create outcome is unavailable', async () => {
+    mocks.createTab.mockReturnValue({ id: 'terminal-new' })
+    const { useTabGroupWorkspaceModel } = await import('./useTabGroupWorkspaceModel')
+    const model = useTabGroupWorkspaceModel({ groupId: 'group-1', worktreeId: 'wt-1' })
+
+    model.commands.newTerminalWithShell('zsh')
+    await vi.waitFor(() => expect(mocks.createTab).toHaveBeenCalled())
+
+    expect(mocks.createTab).toHaveBeenCalledWith('wt-1', 'group-1', 'zsh')
+    expect(mocks.setActiveTab).toHaveBeenCalledWith('terminal-new')
   })
 
   it('returns keyboard focus to the active split pane leaf when a terminal tab is activated', async () => {
@@ -231,6 +316,73 @@ describe('useTabGroupWorkspaceModel terminal activation focus', () => {
     const event = mocks.dispatchEvent.mock.calls[0]?.[0] as CustomEvent<{ tabId: string }>
     expect(event.type).toBe(TOGGLE_TERMINAL_PANE_EXPAND_EVENT)
     expect(event.detail).toEqual({ tabId: 'terminal-1' })
+  })
+
+  it('revokes local terminal state before paired-host bulk close', async () => {
+    const secondTerminal = {
+      id: 'terminal-2',
+      ptyId: 'remote:env-1@@pty-2',
+      worktreeId: 'wt-1',
+      title: 'Terminal 2',
+      defaultTitle: 'Terminal 2',
+      customTitle: null,
+      color: null,
+      sortOrder: 1,
+      createdAt: 1
+    }
+    const secondUnified = {
+      id: 'unified-terminal-2',
+      entityId: secondTerminal.id,
+      groupId: 'group-1',
+      worktreeId: 'wt-1',
+      contentType: 'terminal',
+      label: 'Terminal 2',
+      customLabel: null,
+      color: null,
+      sortOrder: 1,
+      createdAt: 1
+    }
+    const currentState = storeBox.state as {
+      tabsByWorktree: Record<string, unknown[]>
+      unifiedTabsByWorktree: Record<string, { id: string }[]>
+    }
+    const firstUnified = currentState.unifiedTabsByWorktree['wt-1'][0]
+    storeBox.state = {
+      ...storeBox.state,
+      settings: { activeRuntimeEnvironmentId: 'env-1' },
+      tabsByWorktree: {
+        'wt-1': [...currentState.tabsByWorktree['wt-1'], secondTerminal]
+      },
+      unifiedTabsByWorktree: {
+        'wt-1': [firstUnified, secondUnified]
+      },
+      groupsByWorktree: {
+        'wt-1': [
+          {
+            id: 'group-1',
+            worktreeId: 'wt-1',
+            activeTabId: firstUnified.id,
+            tabOrder: [firstUnified.id, secondUnified.id]
+          }
+        ]
+      }
+    }
+    mocks.isWebRuntimeSessionActive.mockReturnValue(true)
+    const { useTabGroupWorkspaceModel } = await import('./useTabGroupWorkspaceModel')
+    const model = useTabGroupWorkspaceModel({ groupId: 'group-1', worktreeId: 'wt-1' })
+
+    model.commands.closeOthers(firstUnified.id)
+
+    expect(mocks.closeTab).toHaveBeenCalledWith(
+      'terminal-2',
+      expect.objectContaining({ remoteCloseOwnedByHost: true })
+    )
+    expect(mocks.closeWebRuntimeSessionTab).toHaveBeenCalledWith({
+      worktreeId: 'wt-1',
+      tabId: 'terminal-2',
+      environmentId: 'env-1',
+      reason: 'user'
+    })
   })
 
   it('records terminal split completion when splitting a single terminal tab group', async () => {
@@ -369,7 +521,162 @@ describe('useTabGroupWorkspaceModel terminal activation focus', () => {
       storeBox.state.browserPagesByWorkspace,
       'browser-workspace-1'
     )
-    expect(mocks.closeBrowserTab).toHaveBeenCalledWith('browser-workspace-1')
+    expect(mocks.closeBrowserTab).toHaveBeenCalledWith('browser-workspace-1', undefined)
+  })
+
+  it('retains a remote-owned browser guest until the host close settles', async () => {
+    mocks.isWebRuntimeSessionActive.mockReturnValue(true)
+    storeBox.state = {
+      ...storeBox.state,
+      browserPagesByWorkspace: {
+        'browser-workspace-1': [
+          {
+            id: 'browser-page-1',
+            workspaceId: 'browser-workspace-1',
+            worktreeId: 'wt-1',
+            url: 'https://example.com',
+            browserRuntimeEnvironmentId: 'remote-runtime'
+          }
+        ]
+      },
+      browserTabsByWorktree: { 'wt-1': [] },
+      groupsByWorktree: {
+        'wt-1': [
+          {
+            id: 'group-1',
+            worktreeId: 'wt-1',
+            activeTabId: 'browser-unified-1',
+            tabOrder: ['browser-unified-1']
+          }
+        ]
+      },
+      remoteBrowserPageHandlesByPageId: {
+        'browser-page-1': {
+          environmentId: 'remote-runtime',
+          remotePageId: 'host-page-1',
+          placement: {
+            kind: 'client',
+            browserHostClientId: 'desktop-1',
+            browserHostGeneration: 1,
+            pageHostGeneration: 1
+          }
+        }
+      },
+      settings: { activeRuntimeEnvironmentId: 'remote-runtime' },
+      tabsByWorktree: { 'wt-1': [] },
+      unifiedTabsByWorktree: {
+        'wt-1': [
+          {
+            id: 'browser-unified-1',
+            entityId: 'browser-workspace-1',
+            groupId: 'group-1',
+            worktreeId: 'wt-1',
+            contentType: 'browser',
+            label: 'Example',
+            customLabel: null,
+            color: null,
+            sortOrder: 0,
+            createdAt: 1
+          }
+        ]
+      }
+    }
+    const { useTabGroupWorkspaceModel } = await import('./useTabGroupWorkspaceModel')
+    const model = useTabGroupWorkspaceModel({ groupId: 'group-1', worktreeId: 'wt-1' })
+
+    model.commands.closeItem('browser-unified-1')
+
+    expect(mocks.closeWebRuntimeSessionTab).toHaveBeenCalledWith({
+      worktreeId: 'wt-1',
+      tabId: 'browser-unified-1',
+      environmentId: 'remote-runtime',
+      reason: 'user'
+    })
+    expect(mocks.destroyWorkspaceWebviews).not.toHaveBeenCalled()
+    expect(mocks.closeBrowserTab).not.toHaveBeenCalled()
+    expect(mocks.closeUnifiedTab).not.toHaveBeenCalled()
+
+    mocks.closeWebRuntimeSessionTab.mockClear()
+    const browserPagesByWorkspace = storeBox.state.browserPagesByWorkspace as Record<
+      string,
+      Record<string, unknown>[]
+    >
+    const remoteBrowserPageHandlesByPageId = storeBox.state
+      .remoteBrowserPageHandlesByPageId as Record<string, unknown>
+    storeBox.state = {
+      ...storeBox.state,
+      browserPagesByWorkspace: {
+        ...browserPagesByWorkspace,
+        'browser-workspace-1': [
+          ...browserPagesByWorkspace['browser-workspace-1']!,
+          {
+            id: 'browser-page-2',
+            workspaceId: 'browser-workspace-1',
+            worktreeId: 'wt-1',
+            url: 'https://example.net',
+            browserRuntimeEnvironmentId: 'other-runtime'
+          }
+        ]
+      },
+      remoteBrowserPageHandlesByPageId: {
+        ...remoteBrowserPageHandlesByPageId,
+        'browser-page-2': {
+          environmentId: 'other-runtime',
+          remotePageId: 'host-page-2',
+          placement: { kind: 'server' }
+        }
+      }
+    }
+
+    model.commands.closeItem('browser-unified-1')
+
+    // Why: a workspace whose pages span two environments has a tab mirror on each host. This
+    // used to resolve as "ambiguous" and close nothing at all, leaving the X inert.
+    expect(
+      mocks.closeWebRuntimeSessionTab.mock.calls
+        .map((call) => (call[0] as { environmentId: string }).environmentId)
+        .sort()
+    ).toEqual(['other-runtime', 'remote-runtime'])
+    expect(mocks.destroyWorkspaceWebviews).not.toHaveBeenCalled()
+    expect(mocks.closeBrowserTab).not.toHaveBeenCalled()
+    expect(mocks.closeUnifiedTab).not.toHaveBeenCalled()
+  })
+
+  it('preserves the stored session partition when duplicating a local browser tab', async () => {
+    storeBox.state = {
+      ...storeBox.state,
+      browserTabsByWorktree: {
+        'wt-1': [
+          {
+            id: 'browser-workspace-1',
+            worktreeId: 'wt-1',
+            sessionProfileId: 'profile-1',
+            sessionPartition: 'persist:orca-browser-session-profile-1',
+            activePageId: 'browser-page-1',
+            pageIds: ['browser-page-1'],
+            url: 'https://example.com',
+            title: 'Example',
+            loading: false,
+            faviconUrl: null,
+            canGoBack: false,
+            canGoForward: false,
+            loadError: null,
+            createdAt: 1
+          }
+        ]
+      }
+    }
+    const { useTabGroupWorkspaceModel } = await import('./useTabGroupWorkspaceModel')
+    const model = useTabGroupWorkspaceModel({ groupId: 'group-1', worktreeId: 'wt-1' })
+
+    model.commands.duplicateBrowserTab('browser-workspace-1')
+
+    expect(mocks.createBrowserTab).toHaveBeenCalledWith('wt-1', 'https://example.com', {
+      title: 'Example',
+      sessionProfileId: 'profile-1',
+      sessionPartition: 'persist:orca-browser-session-profile-1',
+      targetGroupId: 'group-1'
+    })
   })
 
   it('closes a host-mirrored browser with an empty page list via the host (no dead-end)', async () => {
@@ -422,6 +729,6 @@ describe('useTabGroupWorkspaceModel terminal activation focus', () => {
     expect(mocks.closeWebRuntimeSessionTab).toHaveBeenCalledWith(
       expect.objectContaining({ worktreeId: 'wt-1', tabId: 'browser-unified-1' })
     )
-    expect(mocks.closeUnifiedTab).toHaveBeenCalledWith('browser-unified-1')
+    expect(mocks.closeUnifiedTab).toHaveBeenCalledWith('browser-unified-1', undefined)
   })
 })

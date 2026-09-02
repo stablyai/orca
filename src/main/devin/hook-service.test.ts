@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { parse as parseJsonc } from 'jsonc-parser'
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
@@ -64,6 +65,11 @@ describe('DevinHookService', () => {
     }
     const script = readFileSync(getDevinManagedScriptPath(), 'utf8')
     expect(script).toContain('/hook/devin')
+    // Why: payload is piped to curl via stdin (`payload@-`) so it never lands
+    // on the curl command line (EDR oversized-command-line false positive).
+    expect(script).toContain('printf \'%s\' "$payload" | curl')
+    expect(script).toContain('--data-urlencode "payload@-"')
+    expect(script).not.toContain('--data-urlencode "payload=${payload}"')
   })
 
   it('preserves unrelated keys in Devin config when installing hooks', () => {
@@ -99,7 +105,45 @@ describe('DevinHookService', () => {
     const status = new DevinHookService().install()
 
     expect(status.state).toBe('installed')
-    expect(JSON.parse(readFileSync(configPath, 'utf8')).hooks.UserPromptSubmit).toBeDefined()
+    // Why: parse as JSONC, not JSON — asserting with JSON.parse would only pass once the
+    // comment had been stripped, which is the regression this test exists to catch.
+    expect(parseJsonc(readFileSync(configPath, 'utf8')).hooks.UserPromptSubmit).toBeDefined()
+  })
+
+  it('keeps user comments and unrelated formatting when installing and removing', () => {
+    const configPath = getDevinConfigPath()
+    mkdirSync(dirname(configPath), { recursive: true })
+    writeFileSync(
+      configPath,
+      `{
+  // keep me: chosen deliberately
+  "permissions": { "mode": "normal" },
+  /* block comment */
+  "hooks": {
+    // the user's own hook
+    "SessionEnd": [{ "hooks": [{ "type": "command", "command": "mine.sh" }] }]
+  }
+}
+`
+    )
+
+    const service = new DevinHookService()
+    service.install()
+
+    const installed = readFileSync(configPath, 'utf8')
+    expect(installed).toContain('// keep me: chosen deliberately')
+    expect(installed).toContain('/* block comment */')
+    expect(installed).toContain("// the user's own hook")
+    expect(installed).toContain('mine.sh')
+    expect(parseJsonc(installed).permissions.mode).toBe('normal')
+    expect(parseJsonc(installed).hooks.UserPromptSubmit).toBeDefined()
+
+    service.remove()
+
+    const removed = readFileSync(configPath, 'utf8')
+    expect(removed).toContain('// keep me: chosen deliberately')
+    expect(removed).toContain('mine.sh')
+    expect(parseJsonc(removed).hooks.UserPromptSubmit).toBeUndefined()
   })
 
   it('surfaces read_config_from overlap in status detail', () => {
@@ -121,9 +165,12 @@ describe('DevinHookService', () => {
     Object.defineProperty(process, 'platform', { value: 'win32' })
     try {
       const scriptPath = 'C:\\Users\\Ada Lovelace\\.orca\\agent-hooks\\devin-hook.cmd'
-      expect(getDevinManagedCommand(scriptPath)).toBe(
-        'cmd /d /s /c ""C:\\Users\\Ada Lovelace\\.orca\\agent-hooks\\devin-hook.cmd""'
-      )
+      const command = getDevinManagedCommand(scriptPath)
+      const encoded = command.match(/ -EncodedCommand (\S+)$/)?.[1]
+      expect(encoded).toBeDefined()
+      const decoded = Buffer.from(encoded!, 'base64').toString('utf16le')
+      expect(decoded).toContain(`Test-Path -LiteralPath '${scriptPath}' -PathType Leaf`)
+      expect(decoded).toContain('[Console]::In.ReadToEnd() | Out-Null')
     } finally {
       Object.defineProperty(process, 'platform', { value: previous })
     }

@@ -1,6 +1,6 @@
 import { readdir } from 'node:fs/promises'
 import { basename as pathBasename, extname, isAbsolute, join, relative, resolve } from 'node:path'
-import type { MarkdownDocument } from '../../shared/types'
+import type { MarkdownDocument } from '../../shared/filesystem-entry-types'
 
 function normalizeRelativePath(path: string): string {
   return path.replace(/[\\/]+/g, '/').replace(/^\/+/, '')

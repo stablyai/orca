@@ -1,0 +1,93 @@
+{
+  "$schemaNote": "Consumed by config/scripts/regenerate-xterm-patches.mjs. See docs/reference/xterm-patch-regeneration.md.",
+  "upstream": {
+    "repository": "https://github.com/xtermjs/xterm.js.git",
+    "commit": "d3e32b344dfe7dd6015cff6a9aeaaeaeccdc2789",
+    "commitSource": "bin/publish.js stamps package.json.commit before npm publish, so the published tarball names its own commit. The generator asserts the two agree."
+  },
+  "sourcemaps": {
+    "policy": "include",
+    "why": "terminal-ime-xterm-transaction-events.test.ts reads lib/*.map and asserts the mapped Version.ts matches the runtime version, so the maps have to move with the bundles rather than be dropped. Patching them costs ~5.8MB of the emitted patch; the alternative, deleting them, is only available again once nothing reads them."
+  },
+  "toolchain": {
+    "why": "Pinned by the upstream package-lock at the commit above. The generator asserts these resolve as expected so a silent upstream resolution change surfaces as a toolchain error rather than a mystery patch diff.",
+    "esbuild": "0.28.1",
+    "webpack": "5.107.0",
+    "terser": "5.47.1",
+    "@typescript/native-preview": "7.0.0-dev.20260521.1"
+  },
+  "packages": [
+    {
+      "name": "@xterm/xterm",
+      "version": "6.1.0-beta.303",
+      "packageDir": ".",
+      "versionStampFile": "src/common/Version.ts",
+      "sourcePatch": "config/patches/xterm-src/@xterm__xterm@6.1.0-beta.303.src.patch",
+      "patch": "config/patches/@xterm__xterm@6.1.0-beta.303.patch",
+      "generatedPaths": ["lib/"],
+      "build": [
+        {
+          "cwd": ".",
+          "command": "npm",
+          "args": ["run", "package"]
+        }
+      ]
+    },
+    {
+      "name": "@xterm/addon-webgl",
+      "version": "0.20.0-beta.299",
+      "packageDir": "addons/addon-webgl",
+      "$note": "No versionStampFile: publish.js stamps the addon's package.json, which overlayBuildOutput never patches. The root `build` is required because the addon's own tsgo -p . has empty files/include and only project references, so it emits nothing on its own; `package` is the addon's webpack (CJS half) and the root `esbuild-package` emits the ESM half.",
+      "sourcePatch": "config/patches/xterm-src/@xterm__addon-webgl@0.20.0-beta.299.src.patch",
+      "patch": "config/patches/@xterm__addon-webgl@0.20.0-beta.299.patch",
+      "generatedPaths": ["lib/"],
+      "build": [
+        {
+          "cwd": "../..",
+          "command": "npm",
+          "args": ["run", "build"]
+        },
+        {
+          "cwd": ".",
+          "command": "npm",
+          "args": ["run", "package"]
+        },
+        {
+          "cwd": "../..",
+          "command": "npm",
+          "args": ["run", "esbuild-package"]
+        }
+      ]
+    },
+    {
+      "name": "@xterm/addon-serialize",
+      "version": "0.15.0-beta.300",
+      "packageDir": "addons/addon-serialize",
+      "$note": "No versionStampFile: publish.js stamps the addon's package.json, which overlayBuildOutput never patches. The root `build` is required because the addon's own tsgo -p . has empty files/include and only project references, so it emits nothing on its own; `package` is the addon's webpack (CJS half) and the root `esbuild-package` emits the ESM half.",
+      "sourcePatch": "config/patches/xterm-src/@xterm__addon-serialize@0.15.0-beta.300.src.patch",
+      "patch": "config/patches/@xterm__addon-serialize@0.15.0-beta.300.patch",
+      "generatedPaths": ["lib/"],
+      "build": [
+        {
+          "cwd": "../..",
+          "command": "npm",
+          "args": ["run", "build"]
+        },
+        {
+          "cwd": ".",
+          "command": "npm",
+          "args": ["run", "package"]
+        },
+        {
+          "cwd": "../..",
+          "command": "npm",
+          "args": ["run", "esbuild-package"]
+        }
+      ]
+    }
+  ],
+  "forbiddenBuildScripts": {
+    "why": "`npm run setup` runs a development esbuild (minify:false), so calling it after the packaging build overwrites lib/*.mjs with an unminified bundle and a mismatched map. The packaging scripts are `package` and `esbuild-package`; nothing here may run a development pass after them.",
+    "scripts": ["setup", "presetup", "postsetup", "esbuild", "esbuild-watch", "dev"]
+  }
+}

@@ -1,0 +1,11 @@
+allowBuilds:
+  esbuild: true
+
+minimumReleaseAge: 4320
+
+overrides:
+  xcode>uuid: 11.1.1
+
+patchedDependencies:
+  react-native-webview@13.16.2: patches/react-native-webview@13.16.2.patch
+  react-native@0.83.10: patches/react-native@0.83.10.patch

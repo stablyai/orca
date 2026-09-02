@@ -6,6 +6,7 @@ import Database from '../sqlite/sync-database'
 import { buildOpenCodeSqliteCandidatePath } from './session-scanner-opencode-sqlite-paths'
 import { listOpenCodeSqliteSessions } from './session-scanner-opencode-sqlite-discovery'
 import { parseOpenCodeSqliteSession } from './session-scanner-opencode-sqlite'
+import { withFullFirstUserPromptCapture } from './session-scanner-first-user-prompt-capture'
 import type { AiVaultScanIssue } from '../../shared/ai-vault-types'
 
 let tempDirs: string[] = []
@@ -495,5 +496,108 @@ describe('parseOpenCodeSqliteSession', () => {
     })
     expect(session).not.toBeNull()
     expect(session!.model).toBe('claude-sonnet-4-5')
+  })
+
+  it('captures every text part of the earliest user message and no later turn', async () => {
+    const { db, path } = createTempDb()
+    applyOpenCodeSchema(db)
+    insertSession(db, {
+      id: 'ses_fp',
+      timeCreated: 1_777_634_000_000,
+      timeUpdated: 1_777_634_900_000
+    })
+    insertMessage(db, {
+      id: 'msg_1',
+      sessionId: 'ses_fp',
+      role: 'user',
+      timeCreated: 1_777_634_000_000
+    })
+    insertPart(db, {
+      id: 'part_1a',
+      messageId: 'msg_1',
+      sessionId: 'ses_fp',
+      timeCreated: 10,
+      text: 'first ask line one'
+    })
+    insertPart(db, {
+      id: 'part_1b',
+      messageId: 'msg_1',
+      sessionId: 'ses_fp',
+      timeCreated: 20,
+      text: 'first ask line two'
+    })
+    // Non-text parts of the same message must not leak into the copied prompt.
+    insertPart(db, {
+      id: 'part_1c',
+      messageId: 'msg_1',
+      sessionId: 'ses_fp',
+      timeCreated: 30,
+      type: 'tool',
+      text: 'tool output blob'
+    })
+    insertMessage(db, {
+      id: 'msg_2',
+      sessionId: 'ses_fp',
+      role: 'user',
+      timeCreated: 1_777_634_500_000
+    })
+    insertPart(db, {
+      id: 'part_2a',
+      messageId: 'msg_2',
+      sessionId: 'ses_fp',
+      timeCreated: 40,
+      text: 'a later ask'
+    })
+    db.close()
+
+    const session = await withFullFirstUserPromptCapture(() =>
+      parseOpenCodeSqliteSession({ dbPath: path, sessionId: 'ses_fp', platform: 'darwin' })
+    )
+
+    expect(session!.firstUserPrompt).toBe('first ask line one\nfirst ask line two')
+  })
+
+  it('skips an earliest user message that has no text parts', async () => {
+    const { db, path } = createTempDb()
+    applyOpenCodeSchema(db)
+    insertSession(db, {
+      id: 'ses_fp2',
+      timeCreated: 1_777_634_000_000,
+      timeUpdated: 1_777_634_900_000
+    })
+    insertMessage(db, {
+      id: 'msg_1',
+      sessionId: 'ses_fp2',
+      role: 'user',
+      timeCreated: 1_777_634_000_000
+    })
+    insertPart(db, {
+      id: 'part_1a',
+      messageId: 'msg_1',
+      sessionId: 'ses_fp2',
+      timeCreated: 10,
+      type: 'tool',
+      text: 'tool only'
+    })
+    insertMessage(db, {
+      id: 'msg_2',
+      sessionId: 'ses_fp2',
+      role: 'user',
+      timeCreated: 1_777_634_500_000
+    })
+    insertPart(db, {
+      id: 'part_2a',
+      messageId: 'msg_2',
+      sessionId: 'ses_fp2',
+      timeCreated: 40,
+      text: 'the real typed ask'
+    })
+    db.close()
+
+    const session = await withFullFirstUserPromptCapture(() =>
+      parseOpenCodeSqliteSession({ dbPath: path, sessionId: 'ses_fp2', platform: 'darwin' })
+    )
+
+    expect(session!.firstUserPrompt).toBe('the real typed ask')
   })
 })

@@ -1,4 +1,4 @@
-import type { TuiAgent } from '../../../src/shared/types'
+import type { TuiAgent } from '../../../src/shared/tui-agent'
 import { MOBILE_AGENT_CATALOG } from '../tasks/mobile-agent-catalog'
 import { isMobileTuiAgentEnabled } from '../tasks/mobile-tui-agents'
 import { pickWorkspaceAgent } from '../tasks/workspace-agent-selection'

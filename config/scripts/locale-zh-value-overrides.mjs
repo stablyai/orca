@@ -42,6 +42,8 @@ export const ZH_VALUE_OVERRIDES = {
   'Open the PR details to view current reviewers.': '打开 PR 详情以查看当前评审人。',
   'Review comment added.': '已添加评审评论。',
   'Loading labels': '加载标签',
+  // Why: MT rendered the "Pin Tab" action as "引脚标签" (noun reading of "pin"); pair it with 取消固定标签.
+  'Pin Tab': '固定标签',
   Approved: '已批准',
   Strike: '删除线',
   Bold: '粗体',
@@ -65,8 +67,8 @@ export const ZH_VALUE_OVERRIDES = {
   Inline: '内联',
   thread: '帖子串',
   destructive: 'destructive',
-  sheet: 'sheet',
-  page: 'page',
+  sheet: '面板',
+  page: '页面',
   Annotation: '批注',
   'check #': '检查 #',
   by: '由',
@@ -90,16 +92,18 @@ export const ZH_VALUE_OVERRIDES = {
     '仓库操作方案。在此仓库自定义之前，将使用全局设置。',
   'Adds action recipes for Source Control commit, pull request, branch-name, and fix actions.':
     '为源代码管理的提交、拉取请求、分支命名和修复操作添加操作方案。',
-  Play: 'Play',
-  Flag: 'Flag',
-  Zinc: 'Zinc',
-  Rose: 'Rose',
-  Emerald: 'Emerald',
-  Amber: 'Amber',
-  Violet: 'Violet',
-  Sky: 'Sky',
-  Blue: 'Blue',
-  Neutral: 'Neutral',
+  // Workspace status icon and color swatch labels; siblings below are translated, so English
+  // pins here would leave the picker half-Chinese on the next catalog regeneration.
+  Play: '播放',
+  Flag: '标记',
+  Zinc: '锌灰',
+  Rose: '玫瑰',
+  Emerald: '翡翠',
+  Amber: '琥珀',
+  Violet: '紫罗兰',
+  Sky: '天蓝',
+  Blue: '蓝色',
+  Neutral: '中性',
   Dashed: '虚线',
   Dot: '圆点',
   Circle: '圆形',
@@ -140,7 +144,6 @@ export const ZH_VALUE_OVERRIDES = {
   'Expand Orca': '展开 Orca',
   'Support Orca': '支持 Orca',
   'Restarting Orca…': '正在重启 Orca…',
-  'Orca Attribution': 'Orca 归因',
   'Show Orca Mobile Button': '显示 Orca Mobile 按钮',
   'Codex Accounts': 'Codex 账户',
   'Codex Account': 'Codex 账户',
@@ -182,8 +185,7 @@ export const ZH_VALUE_OVERRIDES = {
   "Give agents direct access to Orca's browser so they can test pages, capture screenshots, and act on what they see.":
     '让代理直接访问 Orca 的浏览器，以便测试页面、捕获屏幕截图并根据所见内容执行操作。',
   'X finishes, send it the review task.”': 'X 完成后，把评审任务发给它。”',
-  'Branch naming, base refs, attribution, and Git AI Author.':
-    '分支命名、基础引用、归因和 Git AI Author。',
+  'Branch naming, base refs, and Git AI Author.': '分支命名、基础引用和 Git AI Author。',
   'You have unsaved Git AI Author changes. Leaving will discard them.':
     '您有未保存的 Git AI Author 更改。离开将丢弃它们。',
   'Discard unsaved Git AI Author changes?': '放弃未保存的 Git AI Author 更改？',
@@ -199,8 +201,7 @@ export const ZH_VALUE_OVERRIDES = {
     '每个已连接的 Linear 工作区都有一个由活动运行时存储的密钥。全权限密钥可覆盖密钥所有者可访问的所有团队；受限密钥可随时更换。',
   'Show Linear in the Tasks source picker and sidebar shortcuts.':
     '在任务源选择器和侧边栏快捷方式中显示 Linear。',
-  'Local project, Git repo, or folder with many repos':
-    '本地项目、Git repo 或包含多个 repos 的文件夹',
+  'Local project, Git repo, or folder with many repos': '本地项目、Git 仓库或包含多个仓库的文件夹',
   'Staged Changes': '已暂存的更改',
   Changes: '更改',
   'Untracked Files': '未跟踪文件',
@@ -208,8 +209,8 @@ export const ZH_VALUE_OVERRIDES = {
   'Split Down': '向下拆分',
   'Split Left': '向左拆分',
   'Split Right': '向右拆分',
-  'Split Terminal Down': '向下拆分 Terminal',
-  'Split Terminal Right': '向右拆分 Terminal',
+  'Split Terminal Down': '向下拆分终端',
+  'Split Terminal Right': '向右拆分终端',
   'Optional account switching for Claude while preserving shared chat context.':
     'Claude 的可选账户切换，同时保留共享聊天上下文。',
   'Countdown timer showing time until prompt cache expires (Claude agents).':

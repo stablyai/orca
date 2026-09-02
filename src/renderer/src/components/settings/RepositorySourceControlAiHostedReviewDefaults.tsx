@@ -82,7 +82,7 @@ export function RepositorySourceControlAiHostedReviewDefaults({
                   {translate(
                     'auto.components.settings.RepositorySourceControlAiHostedReviewDefaults.a68849a859',
                     'Global default is'
-                  )}
+                  )}{' '}
                   {inherited}.
                 </span>
               </span>

@@ -1,67 +1,23 @@
-/* eslint-disable max-lines -- Why: marquee selection coordinates pointer capture, lane-scroll refresh, auto-scroll, preview cleanup, and final commit against one drag state. Splitting those phases would make the interaction easier to desynchronize. */
 import React, { useCallback, useEffect, useRef } from 'react'
+import { getAreaSelectionCardRects } from './workspace-kanban-area-selection-card-rects'
 import {
   clearPreviewSelection,
   getAreaSelectionAutoScrollDelta,
   getAreaSelectionCardIds,
-  getAreaSelectionCardRects,
   getAreaSelectionRect,
   getAreaSelectionScrollContainer,
   getAreaSelectionScrollStartContentYByElement,
   isScrollbarPointerDown,
   setOverlayRect,
   shouldIgnoreAreaSelectionStart,
-  updatePreviewSelection,
-  type AreaSelectionCardRect
+  updatePreviewSelection
 } from './workspace-kanban-area-selection-dom'
-
-type AreaSelectionDragState = {
-  startX: number
-  startY: number
-  currentX: number
-  currentY: number
-  additive: boolean
-  baseSelectedIds: Set<string>
-  baseAnchorId: string | null
-  boardRect: DOMRect
-  cardRects: readonly AreaSelectionCardRect[]
-  scrollStartContentYByElement: ReadonlyMap<HTMLElement, number>
-  previewIds: Set<string>
-  finalAreaIds: string[]
-  started: boolean
-  frameId: number | null
-  scrollFrameId: number | null
-}
-
-type UpdateSelectionForArea = (
-  areaIds: readonly string[],
-  additive: boolean,
-  baseSelectedIds?: ReadonlySet<string>,
-  baseAnchorId?: string | null
-) => void
-
-type UseWorkspaceKanbanAreaSelectionParams = {
-  open: boolean
-  boardRef: React.RefObject<HTMLDivElement | null>
-  overlayRef: React.RefObject<HTMLDivElement | null>
-  selectedWorktreeIds: ReadonlySet<string>
-  selectionAnchorId: string | null
-  updateSelectionForArea: UpdateSelectionForArea
-}
-
-const AREA_SELECTION_DRAG_THRESHOLD = 4
-
-export function shouldCommitWorkspaceKanbanAreaSelection({
-  additive,
-  started
-}: {
-  additive: boolean
-  started: boolean
-}): boolean {
-  // Why: a plain click on empty board space is the user's "click off" gesture;
-  // modifier-clicking empty space should not accidentally drop a selected batch.
-  return started || !additive
-}
+import {
+  AREA_SELECTION_DRAG_THRESHOLD,
+  shouldCommitWorkspaceKanbanAreaSelection,
+  type AreaSelectionDragState,
+  type UseWorkspaceKanbanAreaSelectionParams
+} from './workspace-kanban-area-selection-state'
 
 export function useWorkspaceKanbanAreaSelection({
   open,
@@ -110,6 +66,20 @@ export function useWorkspaceKanbanAreaSelection({
 
     state.started = true
 
+    // Why: deferred card mount can start a marquee against empty rects; pick up
+    // virtual layout once lanes register without waiting for a scroll event.
+    if (state.cardRects.length === 0) {
+      const board = boardRef.current
+      if (board) {
+        state.boardRect = board.getBoundingClientRect()
+        state.cardRects = getAreaSelectionCardRects(board)
+        state.scrollStartContentYByElement = getAreaSelectionScrollStartContentYByElement(
+          board,
+          state.startY
+        )
+      }
+    }
+
     const viewportRect = getAreaSelectionRect(
       state.startX,
       state.startY,
@@ -153,7 +123,7 @@ export function useWorkspaceKanbanAreaSelection({
       state.additive,
       areaIds
     )
-  }, [overlayRef])
+  }, [boardRef, overlayRef])
 
   const refreshAreaSelectionMeasurements = useCallback(() => {
     const state = dragRef.current
@@ -233,6 +203,7 @@ export function useWorkspaceKanbanAreaSelection({
         window.cancelAnimationFrame(state.scrollFrameId)
         state.scrollFrameId = null
       }
+      refreshAreaSelectionMeasurements()
       flushAreaSelectionDrag()
       if (shouldCommitWorkspaceKanbanAreaSelection(state)) {
         updateSelectionForAreaRef.current(
@@ -246,7 +217,7 @@ export function useWorkspaceKanbanAreaSelection({
       dragRef.current = null
       setOverlayRect(overlayRef.current, null)
     },
-    [flushAreaSelectionDrag, overlayRef]
+    [flushAreaSelectionDrag, overlayRef, refreshAreaSelectionMeasurements]
   )
 
   const handleAreaSelectionPointerDown = useCallback(

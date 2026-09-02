@@ -1,5 +1,11 @@
 import { describe, expect, it, vi } from 'vitest'
-import { encodeNdjson, createNdjsonParser, NDJSON_MAX_LINE_BYTES } from './ndjson'
+import {
+  encodeNdjson,
+  createNdjsonParser,
+  NDJSON_MAX_LINE_BYTES,
+  NdjsonLineTooLongError
+} from './ndjson'
+import { createIncrementalNdjsonFramer } from '../../shared/main-process-ndjson-framer'
 
 describe('encodeNdjson', () => {
   it('encodes an object as a JSON line ending with newline', () => {
@@ -12,6 +18,20 @@ describe('encodeNdjson', () => {
     const result = encodeNdjson(msg)
     expect(result.endsWith('\n')).toBe(true)
     expect(JSON.parse(result.trim())).toEqual(msg)
+  })
+
+  it('accepts the exact line-byte limit and rejects one byte more', () => {
+    const emptyBytes = Buffer.byteLength(JSON.stringify({ data: '' }), 'utf8')
+    expect(encodeNdjson({ data: 'abc' }, emptyBytes + 3)).toBe('{"data":"abc"}\n')
+    expect(() => encodeNdjson({ data: 'abcd' }, emptyBytes + 3)).toThrow(NdjsonLineTooLongError)
+  })
+
+  // Why: the cap is UTF-8 bytes, not characters — a code-unit count would let a 4-byte emoji slip past.
+  it('measures multibyte payloads in UTF-8 bytes, not characters', () => {
+    const emptyBytes = Buffer.byteLength(JSON.stringify({ data: '' }), 'utf8')
+    expect(encodeNdjson({ data: '🐙' }, emptyBytes + 4)).toBe('{"data":"🐙"}\n')
+    expect(() => encodeNdjson({ data: '🐙' }, emptyBytes + 3)).toThrow(NdjsonLineTooLongError)
+    expect(() => encodeNdjson({ data: 'é' }, emptyBytes + 1)).toThrow(NdjsonLineTooLongError)
   })
 })
 
@@ -151,5 +171,118 @@ describe('createNdjsonParser', () => {
 
     expect(onMessage).toHaveBeenCalledOnce()
     expect(onMessage).toHaveBeenCalledWith({ fresh: true })
+  })
+
+  it('retains a valid suffix when paused input overflows after an oversized partial line', () => {
+    const records: unknown[] = []
+    const rejected: unknown[] = []
+    let paused = true
+    const framer = createIncrementalNdjsonFramer(
+      (record) => records.push(record),
+      (error) => rejected.push(error),
+      { maxLineBytes: 32, shouldPause: () => paused }
+    )
+
+    // The first record leaves a partial line in the paused remainder.
+    framer.feed('{}\nx')
+    framer.feed(`${'y'.repeat(70_000)}\n{"good":true}\n`)
+
+    paused = false
+    framer.resume()
+
+    expect(rejected).toHaveLength(1)
+    expect(records).toEqual([{}, { good: true }])
+  })
+
+  it('queues many complete records while paused without treating them as one oversized suffix', () => {
+    const records: unknown[] = []
+    let paused = true
+    const framer = createIncrementalNdjsonFramer(
+      (record) => records.push(record),
+      () => {
+        throw new Error('complete records should not be rejected')
+      },
+      { shouldPause: () => paused }
+    )
+    const count = 100_000
+    framer.feed(`${JSON.stringify({ index: 0 })}\n`)
+    framer.feed(
+      Array.from({ length: count }, (_, index) => `${JSON.stringify({ index: index + 1 })}\n`).join(
+        ''
+      )
+    )
+
+    paused = false
+    framer.resume()
+
+    expect(records).toHaveLength(count + 1)
+    expect(records.at(-1)).toEqual({ index: count })
+  })
+
+  it('does not drop data fed after queued records when the consumer resumes', () => {
+    const records: unknown[] = []
+    let paused = true
+    const framer = createIncrementalNdjsonFramer(
+      (record) => records.push(record),
+      (error) => {
+        throw error
+      },
+      { shouldPause: () => paused }
+    )
+
+    framer.feed('{"queued":true}\n')
+    paused = false
+    framer.feed('{"after":true}\n')
+
+    expect(records).toEqual([{ queued: true }, { after: true }])
+  })
+
+  it('does not dispatch a pending suffix ahead of queued records after re-pause', () => {
+    const records: unknown[] = []
+    let paused = true
+    const framer = createIncrementalNdjsonFramer(
+      (record) => {
+        records.push(record)
+        if ((record as { index?: number }).index === 1) {
+          paused = true
+        }
+      },
+      (error) => {
+        throw new Error(`unexpected rejection: ${JSON.stringify(error)}`)
+      },
+      { shouldPause: () => paused }
+    )
+
+    framer.feed('{"index":0}\n{"index":1}\n{"index":2}\n{"index":')
+    paused = false
+    framer.resume()
+
+    expect(records).toEqual([{ index: 0 }, { index: 1 }])
+    paused = false
+    framer.resume()
+    expect(records).toEqual([{ index: 0 }, { index: 1 }, { index: 2 }])
+
+    framer.feed('3}\n')
+    expect(records).toEqual([{ index: 0 }, { index: 1 }, { index: 2 }, { index: 3 }])
+  })
+
+  it('caps an actually incomplete paused suffix and recovers at the next delimiter', () => {
+    const records: unknown[] = []
+    const rejected: unknown[] = []
+    let paused = true
+    const framer = createIncrementalNdjsonFramer(
+      (record) => records.push(record),
+      (error) => rejected.push(error),
+      { maxLineBytes: 32, shouldPause: () => paused }
+    )
+
+    framer.feed('{}\nx')
+    framer.feed('y'.repeat(70_000))
+    paused = false
+    framer.resume()
+    framer.feed('\n{"recovered":true}\n')
+
+    expect(rejected).toHaveLength(1)
+    expect(records).toEqual([{}, { recovered: true }])
   })
 })

@@ -1,7 +1,7 @@
 import type { Dispatch, SetStateAction } from 'react'
 import type { Editor } from '@tiptap/react'
 import type { JSONContent } from '@tiptap/core'
-import type { DiffComment } from '../../../../shared/types'
+import type { DiffComment } from '../../../../shared/diff-comment-types'
 import type { RichMarkdownAnnotationHighlightRange } from './rich-markdown-annotation-highlight'
 import {
   getRichMarkdownLineRangeFromBlocks,
@@ -9,6 +9,9 @@ import {
 } from './rich-markdown-range-bounds'
 import type { RichMarkdownReviewNotePosition } from './rich-markdown-review-note-layout'
 import { findRichMarkdownSelectedTextRanges } from './rich-markdown-review-text-ranges'
+import { getRichMarkdownSelectionVisibleText } from './rich-markdown-visible-text-map'
+import { countRichMarkdownReviewMarkdownLines } from './rich-markdown-review-line-count'
+export { countRichMarkdownReviewMarkdownLines } from './rich-markdown-review-line-count'
 
 const RICH_MARKDOWN_ANNOTATION_BUTTON_SIZE_PX = 24
 const RICH_MARKDOWN_ANNOTATION_EDGE_PADDING_PX = 8
@@ -40,27 +43,6 @@ export type RichMarkdownAnnotationTarget = RichMarkdownComposerState & {
   left?: number
   buttonTop: number
   buttonLeft: number
-}
-
-export function countRichMarkdownReviewMarkdownLines(value: string): number {
-  if (value.length === 0) {
-    return 1
-  }
-  let lineCount = 1
-  for (let index = 0; index < value.length; index += 1) {
-    const charCode = value.charCodeAt(index)
-    if (charCode === 13) {
-      lineCount += 1
-      if (value.charCodeAt(index + 1) === 10) {
-        index += 1
-      }
-      continue
-    }
-    if (charCode === 10) {
-      lineCount += 1
-    }
-  }
-  return lineCount
 }
 
 function serializeRichMarkdownJson(editor: Editor, content: JSONContent[]): string {
@@ -137,17 +119,29 @@ export function getRichMarkdownAnnotationHighlightRanges(
   comments: readonly DiffComment[],
   markdownSourceLineOffset: number
 ): RichMarkdownAnnotationHighlightRange[] {
+  if (comments.length === 0) {
+    return []
+  }
+  // Why once: block resolution re-serializes the doc; per comment it was O(n*doc).
+  const blocks = buildRichMarkdownCommentBlocks(editor)
   return comments.flatMap((comment) =>
-    getRichMarkdownAnnotationHighlightRangesForComment(editor, comment, markdownSourceLineOffset)
+    getRichMarkdownAnnotationHighlightRangesForComment(
+      editor,
+      comment,
+      markdownSourceLineOffset,
+      blocks
+    )
   )
 }
 
 export function getRichMarkdownAnnotationHighlightRangesForComment(
   editor: Editor,
   comment: DiffComment,
-  markdownSourceLineOffset: number
+  markdownSourceLineOffset: number,
+  // Why optional: callers looping over comments pass one shared build.
+  prebuiltBlocks?: RichMarkdownCommentBlock[]
 ): RichMarkdownAnnotationHighlightRange[] {
-  const blocks = buildRichMarkdownCommentBlocks(editor)
+  const blocks = prebuiltBlocks ?? buildRichMarkdownCommentBlocks(editor)
   const selectedText = comment.selectedText?.trim()
   if (!selectedText) {
     return []
@@ -176,12 +170,17 @@ export function getRichMarkdownCommentAtPos(
   markdownSourceLineOffset: number,
   pos: number
 ): DiffComment | null {
+  if (comments.length === 0) {
+    return null
+  }
+  const blocks = buildRichMarkdownCommentBlocks(editor)
   return (
     comments.find((comment) =>
       getRichMarkdownAnnotationHighlightRangesForComment(
         editor,
         comment,
-        markdownSourceLineOffset
+        markdownSourceLineOffset,
+        blocks
       ).some((range) => range.from <= pos && pos <= range.to)
     ) ?? null
   )
@@ -293,7 +292,7 @@ export function getRichMarkdownAnnotationTarget(
   if (!rect) {
     return null
   }
-  const selectedText = window.getSelection()?.toString().trim() ?? ''
+  const selectedText = getRichMarkdownSelectionVisibleText(editor.state)
   if (!selectedText) {
     return null
   }

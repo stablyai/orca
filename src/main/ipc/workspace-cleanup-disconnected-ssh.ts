@@ -1,43 +1,63 @@
 import { basename } from 'node:path'
+import { getRepoExecutionHostId, normalizeExecutionHostId } from '../../shared/execution-host'
 import type { Store } from '../persistence'
-import type { Repo, WorktreeMeta } from '../../shared/types'
+import type { Repo } from '../../shared/repo-types'
+import type { WorktreeMeta } from '../../shared/worktree/meta-types'
 import {
   applyWorkspaceCleanupPolicy,
   createWorkspaceCleanupFingerprint,
   type WorkspaceCleanupCandidate
 } from '../../shared/workspace-cleanup'
-import { splitWorktreeId } from '../../shared/worktree-id'
+import { splitWorktreeIdForFilesystem } from '../../shared/worktree/id'
 import {
   getNewestWorkspaceCleanupDiffCommentAt,
   getWorkspaceCleanupInactivityReasonsForWorkspace,
   isWorkspaceInactiveForCleanup
 } from './workspace-cleanup-candidate'
+import { getRepoOwnedWorktreeMeta, isWorktreeMetaOwnedByRepo } from '../worktree-metadata-ownership'
+import {
+  readAllWorktreeMetaForHost,
+  readWorktreeMetaForHost
+} from '../persistence/host-qualified-worktree-meta'
 
 export function synthesizeDisconnectedSshCleanupCandidates(
   store: Store,
   repo: Repo,
   scannedAt: number,
-  targetWorktreeId?: string
+  repoOwnerCount: number,
+  targetWorktreeIds?: ReadonlySet<string>,
+  includeAllWorkspaces = false
 ): WorkspaceCleanupCandidate[] {
   const repoWorktreePrefix = `${repo.id}::`
-  if (targetWorktreeId) {
-    if (!targetWorktreeId.startsWith(repoWorktreePrefix)) {
-      return []
-    }
-    // Why: focused delete preflight names one workspace already; walking all
+  const executionHostId = getRepoExecutionHostId(repo)
+  if (targetWorktreeIds) {
+    const candidates: WorkspaceCleanupCandidate[] = []
+    // Why: targeted refreshes name their workspaces already; walking all
     // persisted metadata is unnecessary for disconnected SSH repos.
-    const meta = store.getWorktreeMeta(targetWorktreeId)
-    return meta ? [createDisconnectedSshCandidate(repo, scannedAt, targetWorktreeId, meta)] : []
+    for (const worktreeId of targetWorktreeIds) {
+      if (!worktreeId.startsWith(repoWorktreePrefix)) {
+        continue
+      }
+      const meta =
+        readWorktreeMetaForHost(store, worktreeId, executionHostId) ??
+        (typeof store.getWorktreeMetaForHost === 'function'
+          ? undefined
+          : store.getWorktreeMeta(worktreeId))
+      if (isWorktreeMetaOwnedByRepo(repo, meta, repoOwnerCount)) {
+        candidates.push(createDisconnectedSshCandidate(repo, scannedAt, worktreeId, meta))
+      }
+    }
+    return candidates
   }
 
   const candidates: WorkspaceCleanupCandidate[] = []
-  const allMeta = store.getAllWorktreeMeta()
+  const allMeta = readAllWorktreeMetaForHost(store, executionHostId)
   for (const worktreeId in allMeta) {
     if (!Object.hasOwn(allMeta, worktreeId) || !worktreeId.startsWith(repoWorktreePrefix)) {
       continue
     }
-    const meta = allMeta[worktreeId]
-    if (!meta || !isWorkspaceInactiveForCleanup(meta, scannedAt)) {
+    const meta = getRepoOwnedWorktreeMeta(repo, worktreeId, allMeta, repoOwnerCount)
+    if (!meta || (!includeAllWorkspaces && !isWorkspaceInactiveForCleanup(meta, scannedAt))) {
       continue
     }
     candidates.push(createDisconnectedSshCandidate(repo, scannedAt, worktreeId, meta))
@@ -51,7 +71,7 @@ function createDisconnectedSshCandidate(
   worktreeId: string,
   meta: WorktreeMeta
 ): WorkspaceCleanupCandidate {
-  const parsed = splitWorktreeId(worktreeId)
+  const parsed = splitWorktreeIdForFilesystem(worktreeId)
   const path = parsed?.worktreePath ?? worktreeId
   const reasons = getWorkspaceCleanupInactivityReasonsForWorkspace(meta, scannedAt)
   return applyWorkspaceCleanupPolicy({
@@ -59,11 +79,10 @@ function createDisconnectedSshCandidate(
     repoId: repo.id,
     repoName: repo.displayName,
     connectionId: repo.connectionId ?? null,
+    executionHostId: normalizeExecutionHostId(meta.hostId) ?? getRepoExecutionHostId(repo),
     displayName: meta.displayName || basename(path),
     branch: basename(path),
     path,
-    tier: 'protected',
-    selectedByDefault: false,
     reasons,
     blockers: ['ssh-disconnected'],
     lastActivityAt: meta.lastActivityAt,

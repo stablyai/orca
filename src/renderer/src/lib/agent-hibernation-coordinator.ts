@@ -1,5 +1,6 @@
 import { useAppStore } from '@/store'
 import {
+  getEffectiveAgentHibernationIdleMs,
   planAgentHibernationCandidates,
   type AgentHibernationCandidate,
   type AgentHibernationPlannerSnapshot
@@ -15,6 +16,12 @@ import {
   getForegroundTerminalTabLastSeenAtById
 } from './foreground-terminal-tabs'
 import { getAgentHibernationOutputSignature } from './agent-hibernation-output-activity'
+import {
+  getHibernationBoundaryResolvedAtByPaneKey,
+  getHibernationPtyBindingFirstSeenAtByPaneKey,
+  observeHibernationPtyBindings
+} from './agent-hibernation-pane-age'
+import { mergePendingTerminalInputActivity } from './terminal-input-activity-coalescing'
 import { getRuntimeEnvironmentIdForWorktree } from './worktree-runtime-owner'
 import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
 import { toRuntimeWorktreeSelector } from '@/runtime/runtime-worktree-selector'
@@ -56,13 +63,16 @@ type RuntimePtyLivenessSample = {
 function snapshotFromState(
   state: AppState,
   now: number,
-  runtimeLiveness: RuntimePtyLivenessSample
+  runtimeLiveness: RuntimePtyLivenessSample,
+  targetWorktreeId?: string
 ): AgentHibernationPlannerSnapshot {
   return {
     settings: state.settings,
     activeWorktreeId: state.activeWorktreeId,
     foregroundTerminalTabIds: getForegroundTerminalTabIds(),
-    tabsByWorktree: state.tabsByWorktree,
+    tabsByWorktree: targetWorktreeId
+      ? { [targetWorktreeId]: state.tabsByWorktree[targetWorktreeId] ?? [] }
+      : state.tabsByWorktree,
     terminalLayoutsByTabId: state.terminalLayoutsByTabId,
     ptyIdsByTabId: state.ptyIdsByTabId,
     runtimeLivePtyIdsByWorktreeId: runtimeLiveness.runtimeLivePtyIdsByWorktreeId,
@@ -72,15 +82,28 @@ function snapshotFromState(
       .map(([ptyId]) => ptyId),
     agentStatusByPaneKey: state.agentStatusByPaneKey,
     sleepingAgentSessionsByPaneKey: state.sleepingAgentSessionsByPaneKey,
-    lastTerminalInputAtByPaneKey: state.lastTerminalInputAtByPaneKey,
+    // Why: input stamps are coalesced, so planning must see the not-yet-flushed keystroke.
+    lastTerminalInputAtByPaneKey: mergePendingTerminalInputActivity(
+      state.lastTerminalInputAtByPaneKey
+    ),
     foregroundTerminalLastSeenAtByTabId: getForegroundTerminalTabLastSeenAtById(),
+    ptyBindingFirstSeenAtByPaneKey: getHibernationPtyBindingFirstSeenAtByPaneKey(),
+    boundaryResolvedAtByPaneKey: getHibernationBoundaryResolvedAtByPaneKey(),
     now
   }
 }
 
-function getRuntimeLivenessTargetWorktrees(state: AppState): Map<string, string> {
+function getRuntimeLivenessTargetWorktrees(
+  state: AppState,
+  targetWorktreeId?: string
+): Map<string, string> {
   const targets = new Map<string, string>()
-  for (const worktreeId of Object.keys(state.tabsByWorktree)) {
+  const worktreeIds = targetWorktreeId
+    ? Object.hasOwn(state.tabsByWorktree, targetWorktreeId)
+      ? [targetWorktreeId]
+      : []
+    : Object.keys(state.tabsByWorktree)
+  for (const worktreeId of worktreeIds) {
     const runtimeEnvironmentId = getRuntimeEnvironmentIdForWorktree(state, worktreeId)
     if (runtimeEnvironmentId) {
       targets.set(worktreeId, runtimeEnvironmentId)
@@ -99,8 +122,11 @@ function getTypedRuntimePtyId(terminal: RuntimeTerminalSummary): string | null {
   return null
 }
 
-async function collectRuntimePtyLiveness(state: AppState): Promise<RuntimePtyLivenessSample> {
-  const targets = getRuntimeLivenessTargetWorktrees(state)
+async function collectRuntimePtyLiveness(
+  state: AppState,
+  targetWorktreeId?: string
+): Promise<RuntimePtyLivenessSample> {
+  const targets = getRuntimeLivenessTargetWorktrees(state, targetWorktreeId)
   const runtimeLivePtyIdsByWorktreeId: Record<string, string[]> = {}
   const runtimeLivenessRequiredWorktreeIds = [...targets.keys()]
   await Promise.all(
@@ -112,7 +138,8 @@ async function collectRuntimePtyLiveness(state: AppState): Promise<RuntimePtyLiv
           {
             worktree: toRuntimeWorktreeSelector(worktreeId),
             limit: 10_000,
-            requireFreshPtyLiveness: true
+            requireFreshPtyLiveness: true,
+            includeVisualLayouts: false
           },
           { timeoutMs: 10_000 }
         )
@@ -139,10 +166,20 @@ async function collectRuntimePtyLiveness(state: AppState): Promise<RuntimePtyLiv
   return { runtimeLivePtyIdsByWorktreeId, runtimeLivenessRequiredWorktreeIds }
 }
 
-async function currentCandidates(now: number) {
-  const runtimeLiveness = await collectRuntimePtyLiveness(useAppStore.getState())
+async function currentCandidates(now: number, targetWorktreeId?: string) {
+  const runtimeLiveness = await collectRuntimePtyLiveness(useAppStore.getState(), targetWorktreeId)
   const freshState = useAppStore.getState()
-  return planAgentHibernationCandidates(snapshotFromState(freshState, now, runtimeLiveness))
+  // Why: age the PTY bindings from the same state the plan is built from, so a pane
+  // observed for the first time this pass cannot also be judged long-idle in it.
+  observeHibernationPtyBindings({
+    tabsByWorktree: freshState.tabsByWorktree,
+    terminalLayoutsByTabId: freshState.terminalLayoutsByTabId,
+    now,
+    idleMs: getEffectiveAgentHibernationIdleMs(freshState.settings?.agentHibernationIdleMs)
+  })
+  return planAgentHibernationCandidates(
+    snapshotFromState(freshState, now, runtimeLiveness, targetWorktreeId)
+  )
     .filter((candidate) => {
       const runtimeEnvironmentId = getRuntimeEnvironmentIdForWorktree(
         freshState,
@@ -165,7 +202,9 @@ async function hibernatePaneIfStillEligible(
   if (coordinator.shuttingDownCandidateIds.has(id)) {
     return
   }
-  const candidates = await currentCandidates(coordinator.now())
+  // Why: the confirmed pane can only be authorized by its owning worktree. A
+  // global sweep here made C pane teardowns issue C×W fresh runtime listings.
+  const candidates = await currentCandidates(coordinator.now(), worktreeId)
   const stillEligible = candidates.some(
     (candidate) =>
       candidate.id === confirmedCandidate.id && candidate.signature === confirmedCandidate.signature
@@ -204,8 +243,15 @@ export async function runAgentHibernationTick(): Promise<void> {
       await currentCandidates(coordinator.now())
     )
     coordinator.confirmationState = plan.confirmationState
+    // Why: drain sequentially. Each shutdown re-runs a full runtime-liveness sweep and
+    // then a stopExact RPC, so firing the whole confirmed set at once meant ~100
+    // concurrent sweeps plus ~100 concurrent stops on the first pass after a backlog —
+    // hundreds of near-simultaneous RPCs on an SSH runtime. Awaiting also makes
+    // `tickInFlight` actually cover the drain; unawaited, it was cleared the moment the
+    // promises were launched. Each candidate re-validates against a fresh plan at its own
+    // turn, so a slow drain cannot act on stale confirmation.
     for (const candidate of plan.candidates) {
-      void hibernatePaneIfStillEligible(candidate)
+      await hibernatePaneIfStillEligible(candidate)
     }
   } finally {
     coordinator.tickInFlight = false
@@ -230,10 +276,6 @@ export function stopAgentHibernationCoordinator(): void {
     coordinator.interval = null
   }
   coordinator.confirmationState = {}
-}
-
-export function isAgentHibernationCoordinatorRunning(): boolean {
-  return coordinator.interval !== null
 }
 
 export function resetAgentHibernationCoordinatorForTests(): void {

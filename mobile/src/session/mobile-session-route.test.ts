@@ -1,0 +1,114 @@
+import { readFileSync } from 'node:fs'
+import { describe, expect, it, vi } from 'vitest'
+import { mobileSessionRouteTarget } from './mobile-session-route'
+import {
+  hostStackHostRoute,
+  navigateToHostStackRoute,
+  type HostStackNavigationState
+} from '../navigation/host-stack-navigation'
+
+const homeSource = readFileSync(new URL('../home/MobileHomeScreen.tsx', import.meta.url), 'utf8')
+
+function navigationHarness(initialState: HostStackNavigationState) {
+  const stateListeners = new Set<() => void>()
+  let state = initialState
+  const navigation = {
+    addListener: vi.fn((_event: 'state', listener: () => void) => {
+      stateListeners.add(listener)
+      return () => stateListeners.delete(listener)
+    }),
+    dispatch: vi.fn(),
+    getState: () => state
+  }
+  return {
+    navigation,
+    setState(nextState: HostStackNavigationState) {
+      state = nextState
+      for (const listener of stateListeners) {
+        listener()
+      }
+    }
+  }
+}
+
+function mountedHostState(hostId: string): HostStackNavigationState {
+  return {
+    index: 1,
+    routes: [
+      { name: 'index' },
+      {
+        name: 'h',
+        state: {
+          key: '/h',
+          index: 0,
+          routes: [{ key: 'host-index', name: '[hostId]/index', params: { hostId } }]
+        }
+      }
+    ]
+  }
+}
+
+describe('mobile session route', () => {
+  it('keeps dynamic route identities raw for the navigator to encode', () => {
+    expect(
+      mobileSessionRouteTarget({
+        hostId: 'host/one',
+        worktreeId: 'repo::/Users/ada/orca/workspaces/fix #1',
+        name: 'Fix #1'
+      })
+    ).toEqual({
+      name: '[hostId]/session/[worktreeId]',
+      params: {
+        hostId: 'host/one',
+        worktreeId: 'repo::/Users/ada/orca/workspaces/fix #1',
+        name: 'Fix #1'
+      }
+    })
+  })
+
+  it('omits an absent workspace name instead of sending an empty param', () => {
+    expect(
+      mobileSessionRouteTarget({ hostId: 'host-1', worktreeId: 'repo::/tmp/wt' }).params
+    ).toEqual({ hostId: 'host-1', worktreeId: 'repo::/tmp/wt' })
+  })
+
+  it('mounts the host before replacing it with the session route', () => {
+    const harness = navigationHarness({ index: 0, routes: [{ name: 'index' }] })
+    const push = vi.fn()
+    const target = mobileSessionRouteTarget({
+      hostId: 'host/one',
+      worktreeId: 'repo::/Users/ada/orca/workspaces/fix #1',
+      name: 'Fix #1'
+    })
+
+    navigateToHostStackRoute(harness.navigation, { push, replace: vi.fn() }, 'host/one', target)
+
+    expect(push).toHaveBeenCalledWith(hostStackHostRoute('host/one'))
+    expect(harness.navigation.dispatch).not.toHaveBeenCalled()
+
+    harness.setState(mountedHostState('host/one'))
+
+    expect(harness.navigation.dispatch).toHaveBeenCalledWith({
+      type: 'REPLACE',
+      target: '/h',
+      source: 'host-index',
+      payload: target
+    })
+  })
+
+  it('routes the home Resume card through the cold-navigator-safe transition', () => {
+    expect(homeSource).toContain('onOpenResume={openResume}')
+
+    // The tap handler itself must go through the coordinated transition; its only
+    // direct push is the shallow noticed host-index route for a proven-missing target.
+    const handlerStart = homeSource.indexOf('const openResume = useCallback(')
+    const handlerEnd = homeSource.indexOf('[data.router, openMobileSession]', handlerStart)
+    expect(handlerStart).toBeGreaterThanOrEqual(0)
+    expect(handlerEnd).toBeGreaterThan(handlerStart)
+
+    const openResume = homeSource.slice(handlerStart, handlerEnd)
+    expect(openResume).toContain('openMobileSession({')
+    expect(openResume.match(/router\.push\(/g)).toHaveLength(1)
+    expect(openResume).toContain('data.router.push(hostRouteWithNotice(')
+  })
+})

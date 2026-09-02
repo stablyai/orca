@@ -1,6 +1,11 @@
 import { z } from 'zod'
-import { normalizeAgentProviderSession, RESUMABLE_TUI_AGENTS } from './agent-session-resume'
+import {
+  getAgentResumeArgv,
+  normalizeAgentProviderSession,
+  RESUMABLE_TUI_AGENTS
+} from './agent-session-resume'
 import { isValidTerminalTabId } from './terminal-tab-id'
+import { salvagingRecord } from './zod-salvage'
 
 const terminalTabIdSchema = z
   .string()
@@ -11,7 +16,10 @@ const agentProviderSessionSchema = z.preprocess(
   (raw) => normalizeAgentProviderSession(raw) ?? undefined,
   z.object({
     key: z.enum(['session_id', 'conversation_id']),
-    id: z.string().min(1).max(512)
+    id: z.string().min(1).max(512),
+    // Why: Pi resumes by its authoritative session file, so dropping this
+    // field during hydration makes an otherwise valid record unusable.
+    transcriptPath: z.string().min(1).optional()
   })
 )
 
@@ -57,7 +65,16 @@ const sleepingAgentLaunchEnvSchema = z.preprocess(
 const sleepingAgentLaunchConfigBaseSchema = z.object({
   agentCommand: z.string().optional(),
   agentArgs: z.string(),
-  agentEnv: sleepingAgentLaunchEnvSchema
+  agentEnv: sleepingAgentLaunchEnvSchema,
+  // Why: AI Vault can scan arbitrary OMP roots, so cold restore must retain
+  // the exact provider resume locator instead of reconstructing its store.
+  ompResumeFilePath: z
+    .string()
+    .trim()
+    .min(1)
+    .max(32 * 1024)
+    .refine((value) => !hasUnsafeLaunchEnvChars(value))
+    .optional()
 })
 
 export const sleepingAgentLaunchConfigSchema = z.preprocess((raw) => {
@@ -65,41 +82,35 @@ export const sleepingAgentLaunchConfigSchema = z.preprocess((raw) => {
   return parsed.success ? parsed.data : undefined
 }, sleepingAgentLaunchConfigBaseSchema.optional())
 
-const sleepingAgentSessionRecordSchema = z.object({
-  paneKey: z.string().refine((value) => value.length > 0),
-  tabId: terminalTabIdSchema.optional(),
-  worktreeId: z.string().min(1),
-  agent: z.enum(RESUMABLE_TUI_AGENTS),
-  providerSession: agentProviderSessionSchema,
-  prompt: z.string(),
-  state: z.enum(['working', 'blocked', 'waiting', 'done']),
-  capturedAt: z.number().finite().positive(),
-  updatedAt: z.number().finite().positive(),
-  terminalTitle: z.string().optional(),
-  lastAssistantMessage: z.string().optional(),
-  interrupted: z.boolean().optional(),
-  connectionId: z.string().nullable().optional(),
-  launchConfig: sleepingAgentLaunchConfigSchema.optional(),
-  origin: z.enum(['worktree-sleep', 'quit', 'live']).optional()
-})
-
-export const sleepingAgentSessionsByPaneKeySchema = z.preprocess((raw) => {
-  if (raw == null || typeof raw !== 'object' || Array.isArray(raw)) {
-    return undefined
-  }
-
-  const cleaned: Record<string, z.infer<typeof sleepingAgentSessionRecordSchema>> = Object.create(
-    null
+const sleepingAgentSessionRecordSchema = z
+  .object({
+    paneKey: z.string().refine((value) => value.length > 0),
+    tabId: terminalTabIdSchema.optional(),
+    worktreeId: z.string().min(1),
+    agent: z.enum(RESUMABLE_TUI_AGENTS),
+    providerSession: agentProviderSessionSchema,
+    prompt: z.string(),
+    state: z.enum(['working', 'blocked', 'waiting', 'done']),
+    capturedAt: z.number().finite().positive(),
+    updatedAt: z.number().finite().positive(),
+    terminalTitle: z.string().optional(),
+    lastAssistantMessage: z.string().optional(),
+    interrupted: z.boolean().optional(),
+    connectionId: z.string().nullable().optional(),
+    launchConfig: sleepingAgentLaunchConfigSchema.optional(),
+    origin: z.enum(['worktree-sleep', 'quit', 'live']).optional(),
+    automaticResumeBlockedBy: z.enum(['legacy-orchestration-worker']).optional(),
+    restoreOnTabOpenOnly: z.boolean().optional()
+  })
+  .refine(
+    (record) => getAgentResumeArgv(record.agent, record.providerSession) !== null,
+    // Why: a hydrated record must be directly resumable; Pi additionally needs
+    // its persisted transcript path and agents must use their supported key.
+    { message: 'provider session is not resumable for this agent', path: ['providerSession'] }
   )
-  for (const [paneKey, value] of Object.entries(raw as Record<string, unknown>)) {
-    if (isUnsafeObjectKey(paneKey)) {
-      continue
-    }
-    const parsed = sleepingAgentSessionRecordSchema.safeParse(value)
-    if (parsed.success && parsed.data.paneKey === paneKey) {
-      cleaned[paneKey] = parsed.data
-    }
-  }
 
-  return Object.keys(cleaned).length > 0 ? { ...cleaned } : undefined
-}, z.record(z.string(), sleepingAgentSessionRecordSchema).optional())
+export const sleepingAgentSessionsByPaneKeySchema = salvagingRecord(
+  z.string().refine((paneKey) => !isUnsafeObjectKey(paneKey)),
+  sleepingAgentSessionRecordSchema,
+  (paneKey, record) => record.paneKey === paneKey
+).transform((records) => (Object.keys(records).length > 0 ? records : undefined))

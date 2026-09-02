@@ -2,7 +2,7 @@ import fs from 'node:fs/promises'
 import path from 'node:path'
 import { randomUUID } from 'node:crypto'
 
-import { app } from 'electron'
+import { getAppEnvironment } from '../../shared/app-environment'
 import { requireSshFilesystemProvider } from '../providers/ssh-filesystem-dispatch'
 import { isWindowsAbsolutePathLike } from '../../shared/cross-platform-path'
 import { assertClipboardImageByteLengthWithinLimit } from '../../shared/clipboard-image'
@@ -39,7 +39,7 @@ export async function saveClipboardImageBufferAsTempFile(
     return remotePath
   }
 
-  const tempPath = path.join(app.getPath('temp'), fileName)
+  const tempPath = path.join(getAppEnvironment().getPath('temp'), fileName)
   await fs.writeFile(tempPath, buffer)
   return tempPath
 }

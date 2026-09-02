@@ -5,6 +5,12 @@ import type { SimulatorDevice } from './simctl-simulator-devices'
 import type { EmulatorBridgeOptions } from './emulator-bridge-types'
 import type { EmulatorGesturePoint } from './emulator-gesture-sender'
 import { EmulatorSessionRegistry } from './emulator-session-registry'
+import {
+  EmulatorStartLeaseRegistry,
+  type EmulatorStartLease
+} from './emulator-start-lease-registry'
+import { listAvailableEmulatorDevices } from './emulator-device-inventory'
+import { deriveAxUrlFromStreamUrl } from './serve-sim-detached-session'
 import { IosEmulatorBackend } from './backends/ios-emulator-backend'
 import { AndroidEmulatorBackend } from './backends/android-emulator-backend'
 import type {
@@ -21,6 +27,7 @@ import type {
 // backend a command targets (by the session's recorded backend, else by device).
 export class EmulatorBridge {
   private readonly sessionRegistry = new EmulatorSessionRegistry()
+  private readonly startLeases = new EmulatorStartLeaseRegistry()
   private readonly backends: EmulatorBackend[]
   private readonly iosBackend: IosEmulatorBackend
   private readonly androidBackend: AndroidEmulatorBackend
@@ -40,19 +47,7 @@ export class EmulatorBridge {
   // Aggregated device list across host-supported backends (iOS simulators +
   // Android devices/AVDs), for the unified `orca emulator list`.
   async listAllDevices(): Promise<EmulatorDevice[]> {
-    const perBackend = await Promise.all(
-      this.backends.map(async (backend) => {
-        if (!backend.isSupportedOnHost()) {
-          return []
-        }
-        try {
-          return await backend.listDevices()
-        } catch {
-          return []
-        }
-      })
-    )
-    return perBackend.flat()
+    return listAvailableEmulatorDevices(this.backends)
   }
 
   // iOS-specific passthroughs kept for back-compat with the runtime + availability code.
@@ -84,14 +79,10 @@ export class EmulatorBridge {
     return this.sessionRegistry.getActiveForWorktree(worktreeId)
   }
 
-  getActiveBackendKind(worktreeId: string): EmulatorBackendKind | null {
-    return this.backendForActiveWorktree(worktreeId)?.kind ?? null
-  }
-
   // On a device switch, keep slow-to-boot Android emulators running for instant
   // switch-back; shut down other backends' devices so they are not leaked.
   async stopActiveForSwitch(worktreeId: string): Promise<string | null> {
-    const keepAlive = this.getActiveBackendKind(worktreeId) === 'android'
+    const keepAlive = this.backendForActiveWorktree(worktreeId)?.kind === 'android'
     return this.stopActiveForWorktreeInternal(worktreeId, { shutdownDevice: !keepAlive })
   }
 
@@ -145,18 +136,26 @@ export class EmulatorBridge {
     if (!session || (options.managedOnly && !session.managed)) {
       return null
     }
+    if (this.sessionRegistry.hasActiveWorktreeForSession(key)) {
+      return session.deviceUdid
+    }
     const backend = this.backendForKind(session.backend)
     if (!backend) {
       return null
     }
-    await backend.stopHelperForDevice(session.deviceUdid, {
-      helperPid: session.pid,
-      includeOrphaned: !options.managedOnly
-    })
-    if (options.shutdownDevice) {
-      await backend.shutdownDevice(session.deviceUdid).catch(() => {})
+    const sessionInfo = this.sessionRegistry.toSessionInfo(session)
+    await this.startLeases.cleanupWhenIdle(
+      backend,
+      sessionInfo,
+      (info) => this.sessionRegistry.hasActiveWorktreeForSession(info.deviceUdid),
+      {
+        includeOrphaned: !options.managedOnly,
+        shutdownDevice: options.shutdownDevice
+      }
+    )
+    if (!this.sessionRegistry.hasActiveWorktreeForSession(key)) {
+      this.sessionRegistry.clearSessionAndWorktrees(key)
     }
-    this.sessionRegistry.clearSessionAndWorktrees(key)
     return session.deviceUdid
   }
 
@@ -199,6 +198,32 @@ export class EmulatorBridge {
     return backend.exec(device, command)
   }
 
+  async accessibilityTree(opts?: EmulatorTargetOpts): Promise<unknown> {
+    return this.runCapability('accessibilityTree', opts, async (backend, device) => {
+      if (backend.kind !== 'ios') {
+        return backend.accessibilityTree!(device)
+      }
+      const udid = await backend.resolveDeviceId(device)
+      const worktreeId = opts?.worktreeId
+      // Fall back to the udid-keyed session so an explicit --device read works
+      // from a worktree with no active emulator (matching tap/type reachability);
+      // sessions are stored once per udid, so both lookups hit the same state.
+      const session =
+        (worktreeId ? this.getActiveForWorktree(worktreeId) : null) ??
+        this.sessionRegistry.getSession(udid)
+      if (worktreeId && session && session.deviceUdid !== udid) {
+        throw new EmulatorError(
+          'emulator_no_active',
+          `iOS simulator ${udid} is not active for this worktree (active: ${session.deviceUdid}); attach the requested simulator first.`
+        )
+      }
+      // Heal sessions registered without an axUrl (parse-time derivation only
+      // covers fresh --detach output) by deriving it from the mjpeg stream URL.
+      const axUrl = session?.axUrl ?? deriveAxUrlFromStreamUrl(session?.streamUrl)
+      return backend.accessibilityTree!(udid, axUrl)
+    })
+  }
+
   // Runs a capability-gated verb against the resolved target, rejecting backends
   // that do not advertise the capability (e.g. install/logcat on iOS).
   async runCapability<T>(
@@ -216,9 +241,11 @@ export class EmulatorBridge {
     return run(backend, device)
   }
 
-  async startHelperForDevice(device: string): Promise<EmulatorSessionInfo> {
+  async acquireHelperForDevice(device: string): Promise<EmulatorStartLease> {
     const backend = await this.backendForDevice(device)
-    return backend.startSession(device)
+    return this.startLeases.acquire(backend, device, (info) =>
+      this.sessionRegistry.hasActiveWorktreeForSession(info.deviceUdid)
+    )
   }
 
   async kill(device?: string, worktreeId?: string): Promise<string> {

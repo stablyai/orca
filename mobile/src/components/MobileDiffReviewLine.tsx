@@ -1,6 +1,6 @@
 import { Pressable, StyleSheet, Text, View } from 'react-native'
 import { MessageSquare } from 'lucide-react-native'
-import type { DiffComment } from '../../../src/shared/types'
+import type { DiffComment } from '../../../src/shared/diff-comment-types'
 import type { MobileDiffLine } from '../session/mobile-diff-lines'
 import type { MobileHighlightedDiffLine } from '../session/mobile-file-syntax'
 import { mobileDiffLineNumber, mobileDiffLinePrefix } from '../source-control/mobile-diff-format'
@@ -92,9 +92,10 @@ export function MobileDiffReviewLine({
   )
 }
 
+// Row height comes from the 18px code lineHeight alone (no vertical padding or
+// minHeight) so mobile diff density matches the desktop diff editor (STA-1239).
 const styles = StyleSheet.create({
   row: {
-    minHeight: 32,
     flexDirection: 'row',
     alignItems: 'stretch',
     borderBottomWidth: StyleSheet.hairlineWidth,
@@ -112,25 +113,24 @@ const styles = StyleSheet.create({
   },
   prefix: {
     width: 18,
-    paddingTop: spacing.sm,
     textAlign: 'center',
     color: colors.textMuted,
     fontFamily: typography.monoFamily,
-    fontSize: typography.metaSize
+    fontSize: typography.metaSize,
+    lineHeight: 18
   },
   lineNumber: {
     width: 44,
-    paddingTop: spacing.sm,
     paddingRight: spacing.xs,
     textAlign: 'right',
     color: colors.textMuted,
     fontFamily: typography.monoFamily,
-    fontSize: typography.metaSize
+    fontSize: typography.metaSize,
+    lineHeight: 18
   },
   code: {
     flex: 1,
     minWidth: 0,
-    paddingVertical: spacing.sm,
     paddingHorizontal: spacing.sm
   },
   codePressed: {

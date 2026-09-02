@@ -136,6 +136,9 @@ export function decodeTerminalHistoryLog(buffer: Buffer): TerminalHistoryLogCont
         rows: buffer.readUInt16LE(payloadStart + 2)
       })
     } else if (kind === FRAME_CLEAR) {
+      if (payloadLength !== 0) {
+        return null
+      }
       current.records.push({ kind: 'clear' })
     } else {
       return null

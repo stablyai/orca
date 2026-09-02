@@ -1,4 +1,4 @@
-import type { TerminalLayoutSnapshot, TerminalTab } from './types'
+import type { TerminalLayoutSnapshot, TerminalTab } from './terminal-tab-types'
 
 export type RemoteWorkspaceTerminalTab = Omit<TerminalTab, 'worktreeId'> & {
   worktreePath: string
@@ -24,16 +24,15 @@ export type RemoteWorkspaceSnapshot = {
   session: RemoteWorkspaceSession
 }
 
+export type RemoteWorkspaceObservedSnapshot = RemoteWorkspaceSnapshot & {
+  hostObservationToken: string
+}
+
 export type RemoteWorkspaceConnectedClient = {
   clientId: string
   name: string
   lastSeenAt: number
   isCurrent?: boolean
-}
-
-export type RemoteWorkspacePatch = {
-  kind: 'replace-session'
-  session: RemoteWorkspaceSession
 }
 
 export type RemoteWorkspacePatchResult =
@@ -48,8 +47,20 @@ export type RemoteWorkspacePatchResult =
       message?: string
     }
 
+export type RemoteWorkspaceObservedPatchResult =
+  | {
+      ok: true
+      snapshot: RemoteWorkspaceObservedSnapshot
+    }
+  | {
+      ok: false
+      reason: 'stale-revision' | 'unavailable'
+      snapshot?: RemoteWorkspaceObservedSnapshot
+      message?: string
+    }
+
 export type RemoteWorkspaceChangedEvent = {
   targetId: string
-  snapshot: RemoteWorkspaceSnapshot
+  snapshot: RemoteWorkspaceObservedSnapshot
   sourceClientId?: string
 }

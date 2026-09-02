@@ -10,8 +10,16 @@ import {
   type NestedRepoTelemetryRuntimeKind
 } from '../../../../shared/nested-repo-telemetry'
 import type { AddRepoExistingWorkspaceSource } from '../../../../shared/telemetry-events'
-import type { NestedRepoScanResult, ProjectGroupImportResult } from '../../../../shared/types'
+import type {
+  NestedRepoScanResult,
+  ProjectGroupImportResult
+} from '../../../../shared/project-group-types'
+import type { WorktreeFetchOptions } from '@/store/slices/worktree-helpers'
 import { translate } from '@/i18n/i18n'
+import { worktreeRefreshOptions, type CapturedRuntimeOwner } from './add-repo-runtime-owner'
+import { completeNestedFolderOpen } from './complete-nested-folder-open'
+import { defaultProjectGroupNameForPath } from './add-repo-dialog-types'
+import type { ExecutionHostId } from '../../../../shared/execution-host'
 
 export function useAddRepoNestedImportFlow({
   nestedAttemptId,
@@ -21,7 +29,9 @@ export function useAddRepoNestedImportFlow({
   nestedConnectionId,
   nestedGroupName,
   nestedImportScanId,
+  nestedRuntimeEnvironmentId,
   activeRuntimeEnvironmentId,
+  closeModal,
   fetchWorktrees,
   importNestedRepos,
   getNestedRepoRuntimeKind,
@@ -35,30 +45,36 @@ export function useAddRepoNestedImportFlow({
   nestedConnectionId: string | null
   nestedGroupName: string
   nestedImportScanId: string | null
+  nestedRuntimeEnvironmentId?: CapturedRuntimeOwner
   activeRuntimeEnvironmentId: string | null | undefined
-  fetchWorktrees: (repoId: string, options?: { requireAuthoritative?: boolean }) => Promise<unknown>
+  closeModal: () => void
+  fetchWorktrees: (repoId: string, options?: WorktreeFetchOptions) => Promise<unknown>
   importNestedRepos: (args: {
     parentPath: string
     groupName: string
     projectPaths: string[]
     connectionId?: string
     scanId?: string
+    runtimeEnvironmentId?: string | null
     mode: 'group' | 'separate'
   }) => Promise<ProjectGroupImportResult | null>
   getNestedRepoRuntimeKind: (connectionId: string | null) => NestedRepoTelemetryRuntimeKind
-  onGitRepoReady: (repoId: string, source: AddRepoExistingWorkspaceSource) => Promise<void>
+  onGitRepoReady: (
+    repoId: string,
+    source: AddRepoExistingWorkspaceSource,
+    executionHostId?: ExecutionHostId
+  ) => Promise<void>
   setIsAdding: (isAdding: boolean) => void
 }): {
   handleImportNestedRepos: (mode: 'group' | 'separate') => Promise<void>
+  handleOpenNestedRootFolder: () => Promise<void>
   resetNestedImportFlow: () => void
   trackNestedBackAction: () => void
 } {
   const nestedImportGenRef = useRef(0)
-
   const resetNestedImportFlow = useCallback((): void => {
     nestedImportGenRef.current++
   }, [])
-
   const trackNestedBackAction = useCallback((): void => {
     if (!nestedScan || !nestedAttemptId) {
       return
@@ -121,11 +137,10 @@ export function useAddRepoNestedImportFlow({
         const result = await importNestedRepos({
           parentPath: nestedScan.selectedPath,
           groupName: nestedGroupName,
-          // Why: Set insertion order can drift after deselect/reselect; import
-          // ordering should match the visible scan order users reviewed.
           projectPaths: selectedProjectPaths,
           ...(nestedConnectionId ? { connectionId: nestedConnectionId } : {}),
           ...(nestedImportScanId ? { scanId: nestedImportScanId } : {}),
+          runtimeEnvironmentId: nestedRuntimeEnvironmentId,
           mode
         })
         track(
@@ -163,10 +178,10 @@ export function useAddRepoNestedImportFlow({
           }
           return
         }
+        const completionOwner = nestedConnectionId === null ? nestedRuntimeEnvironmentId : undefined
+        const completionOwnerOptions = worktreeRefreshOptions(completionOwner, nestedConnectionId)
         for (const projectId of importedRepoIds) {
-          // Why: imported repos are already persisted; non-authoritative SSH
-          // refreshes should not block revealing the first imported project.
-          await fetchWorktrees(projectId, { requireAuthoritative: true })
+          await fetchWorktrees(projectId, completionOwnerOptions)
         }
         if (gen !== nestedImportGenRef.current) {
           return
@@ -193,7 +208,7 @@ export function useAddRepoNestedImportFlow({
             : activeRuntimeEnvironmentId?.trim()
               ? 'runtime_server_path'
               : 'local_folder_picker'
-          await onGitRepoReady(repo.id, source)
+          await onGitRepoReady(repo.id, source, completionOwnerOptions.executionHostId)
         }
       } catch (err) {
         if (gen === nestedImportGenRef.current) {
@@ -227,6 +242,7 @@ export function useAddRepoNestedImportFlow({
       nestedConnectionId,
       nestedGroupName,
       nestedImportScanId,
+      nestedRuntimeEnvironmentId,
       nestedRuntimeKind,
       nestedScan,
       nestedSelectedPaths,
@@ -235,6 +251,48 @@ export function useAddRepoNestedImportFlow({
       setIsAdding
     ]
   )
-
-  return { handleImportNestedRepos, resetNestedImportFlow, trackNestedBackAction }
+  const handleOpenNestedRootFolder = useCallback(() => {
+    if (!nestedScan) {
+      return Promise.resolve()
+    }
+    const generation = ++nestedImportGenRef.current
+    // Why: only an edited name overrides host naming, so an untouched prefill still lets the host
+    // pick (e.g. the SSH target label for `~`).
+    const enteredName = nestedGroupName.trim()
+    const displayName =
+      enteredName && enteredName !== defaultProjectGroupNameForPath(nestedScan.selectedPath)
+        ? enteredName
+        : undefined
+    return completeNestedFolderOpen({
+      scan: nestedScan,
+      generation,
+      currentGeneration: () => nestedImportGenRef.current,
+      attemptId: nestedAttemptId,
+      runtimeKind: nestedRuntimeKind,
+      connectionId: nestedConnectionId,
+      selectedCount: nestedSelectedPaths.size,
+      getRuntimeKind: getNestedRepoRuntimeKind,
+      owner: nestedRuntimeEnvironmentId,
+      ...(displayName ? { displayName } : {}),
+      closeModal,
+      setIsAdding
+    })
+  }, [
+    closeModal,
+    getNestedRepoRuntimeKind,
+    nestedAttemptId,
+    nestedConnectionId,
+    nestedGroupName,
+    nestedRuntimeKind,
+    nestedRuntimeEnvironmentId,
+    nestedScan,
+    nestedSelectedPaths.size,
+    setIsAdding
+  ])
+  return {
+    handleImportNestedRepos,
+    handleOpenNestedRootFolder,
+    resetNestedImportFlow,
+    trackNestedBackAction
+  }
 }

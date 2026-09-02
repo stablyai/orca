@@ -22,6 +22,7 @@ type PasteTerminalClipboardDeps = {
   connectionId?: string | null
   runtimeEnvironmentId?: string | null
   forceBracketedMultilineTextPaste?: boolean
+  protectedMultilineTextPasteOptions?: TerminalPasteTextOptions
   onTextPasteError?: (error: unknown) => void
   onImagePasteError?: (error: unknown) => void
 }
@@ -46,6 +47,7 @@ export async function pasteTerminalClipboard({
   connectionId,
   runtimeEnvironmentId,
   forceBracketedMultilineTextPaste = false,
+  protectedMultilineTextPasteOptions,
   onTextPasteError,
   onImagePasteError
 }: PasteTerminalClipboardDeps): Promise<TerminalClipboardPasteResult> {
@@ -62,9 +64,10 @@ export async function pasteTerminalClipboard({
   }
   if (text) {
     try {
-      const result = await (forceBracketedMultilineTextPaste
-        ? pasteText(text, { forceBracketedPasteForMultiline: true })
-        : pasteText(text))
+      const textOptions =
+        protectedMultilineTextPasteOptions ??
+        (forceBracketedMultilineTextPaste ? { forceBracketedPasteForMultiline: true } : undefined)
+      const result = await (textOptions ? pasteText(text, textOptions) : pasteText(text))
       if (result === false) {
         return { status: 'skipped', reason: 'text-paste-rejected' }
       }

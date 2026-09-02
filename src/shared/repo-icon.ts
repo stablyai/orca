@@ -1,3 +1,5 @@
+import { validateRasterImageDataUri } from './image-data-uri'
+
 export type RepoIconImageSource = 'upload' | 'file' | 'favicon' | 'github'
 
 export type RepoIcon =
@@ -29,20 +31,67 @@ export function faviconUrlFromWebsite(rawUrl: string): string | null {
   }
 }
 
-// Why: the GitHub owner avatar is the default repo icon, built the same way in
-// main (auto-detect) and renderer (picker); keep the URL and label in one place.
-export function githubAvatarIcon(slug: { owner: string; repo: string }): RepoIcon {
+type GitHubAvatarSlug = { owner: string; repo: string; host?: string }
+
+/**
+ * Pick the owner whose avatar represents a repo, given its `origin` and fork parent.
+ * Why: a same-name fork is a personal copy, so it reads as the parent project; a
+ * renamed fork is its own project and keeps its own owner.
+ */
+export function githubAvatarSlug(
+  origin: GitHubAvatarSlug | null | undefined,
+  upstream: GitHubAvatarSlug | null | undefined
+): GitHubAvatarSlug | null {
+  const renamedFork =
+    origin && upstream && origin.repo.toLowerCase() !== upstream.repo.toLowerCase()
+  return renamedFork ? origin : (upstream ?? origin ?? null)
+}
+
+// Why: shared default icon URL/label for main auto-detect and the renderer picker.
+export function githubAvatarIcon(slug: GitHubAvatarSlug): RepoIcon {
+  // Why: GHES uses the same /<login>.png avatar path as github.com.
+  const host = normalizeGitHubAvatarHost(slug.host)
   return {
     type: 'image',
-    src: `https://github.com/${encodeURIComponent(slug.owner)}.png?size=64`,
+    src: `https://${host}/${encodeURIComponent(slug.owner)}.png?size=64`,
     source: 'github',
     label: `${slug.owner}/${slug.repo}`
   }
 }
 
+function normalizeGitHubAvatarHost(rawHost?: string): string {
+  const candidate = rawHost?.trim().toLowerCase() || 'github.com'
+  try {
+    const url = new URL(`https://${candidate}`)
+    // Why: only bare hostnames — reject credentials, paths, query, or hash.
+    // Explicit default port 443 is stripped by URL serialization, so accept the
+    // canonical `hostname:443` form too or valid GHES avatars on 443 fall back.
+    return !url.username &&
+      !url.password &&
+      (url.host === candidate || `${url.host}:443` === candidate) &&
+      url.pathname === '/' &&
+      !url.search &&
+      !url.hash
+      ? url.host
+      : 'github.com'
+  } catch {
+    return 'github.com'
+  }
+}
+
 function isSupportedImageSrc(src: string, source: RepoIconImageSource): boolean {
-  if (source === 'upload' || source === 'file') {
-    return /^data:image\/png;base64,[A-Za-z0-9+/=\s]+$/i.test(src)
+  if (source === 'upload') {
+    return (
+      /^data:image\/png;base64,[A-Za-z0-9+/=\s]+$/i.test(src) &&
+      validateRasterImageDataUri(src) !== null
+    )
+  }
+
+  if (source === 'file') {
+    return (
+      /^data:image\/(?:png|webp);base64,[A-Za-z0-9+/=\s]+$/i.test(src) &&
+      validateRasterImageDataUri(src) !== null
+    )
   }
 
   let url: URL
@@ -56,7 +105,8 @@ function isSupportedImageSrc(src: string, source: RepoIconImageSource): boolean 
   }
 
   if (source === 'github') {
-    return url.hostname === 'github.com' && /^\/[^/?#]+\.png$/i.test(url.pathname)
+    // Why: only owner-avatar paths; no credentials (GHES hosts may be internal).
+    return !url.username && !url.password && /^\/[^/?#]+\.png$/i.test(url.pathname)
   }
 
   return url.hostname === 'www.google.com' && url.pathname === '/s2/favicons'

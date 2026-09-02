@@ -115,6 +115,64 @@ describe('buildAgentStartupPlan', () => {
     })
   })
 
+  it('passes the prompt to Trae as a positional argv behind a `--` separator', () => {
+    expect(
+      buildAgentStartupPlan({
+        agent: 'trae',
+        prompt: 'Summarize the failing tests',
+        cmdOverrides: {},
+        platform: 'linux'
+      })
+    ).toEqual({
+      agent: 'trae',
+      launchCommand: "traecli -- 'Summarize the failing tests'",
+      expectedProcess: 'traecli',
+      followupPrompt: null,
+      launchConfig: emptyLaunchConfig('traecli')
+    })
+  })
+
+  // Why: without the separator these dispatch to Trae's `help`/`config` subcommands instead.
+  it('keeps subcommand-shaped Trae prompts as the positional prompt', () => {
+    expect(
+      buildAgentStartupPlan({
+        agent: 'trae',
+        prompt: 'help me name this config',
+        cmdOverrides: {},
+        platform: 'linux'
+      })?.launchCommand
+    ).toBe("traecli -- 'help me name this config'")
+  })
+
+  it('passes the prompt to Prime Agent as a positional argv behind a `--` separator', () => {
+    expect(
+      buildAgentStartupPlan({
+        agent: 'prime-agent',
+        prompt: 'Summarize the failing tests',
+        cmdOverrides: {},
+        platform: 'linux'
+      })
+    ).toEqual({
+      agent: 'prime-agent',
+      launchCommand: "prime-agent -- 'Summarize the failing tests'",
+      expectedProcess: 'prime-agent',
+      followupPrompt: null,
+      launchConfig: emptyLaunchConfig('prime-agent')
+    })
+  })
+
+  // Why: without the separator these dispatch to Prime Agent's `help`/`agents` subcommands instead.
+  it('keeps subcommand-shaped Prime Agent prompts as the positional prompt', () => {
+    expect(
+      buildAgentStartupPlan({
+        agent: 'prime-agent',
+        prompt: 'help me name this config',
+        cmdOverrides: {},
+        platform: 'linux'
+      })?.launchCommand
+    ).toBe("prime-agent -- 'help me name this config'")
+  })
+
   it('uses cursor-agent as the actual launch binary', () => {
     expect(
       buildAgentStartupPlan({
@@ -166,7 +224,7 @@ describe('buildAgentStartupPlan', () => {
     })
   })
 
-  it('launches Grok first and injects the prompt after startup', () => {
+  it('launches Grok with the prompt as a positional argv', () => {
     expect(
       buildAgentStartupPlan({
         agent: 'grok',
@@ -176,9 +234,9 @@ describe('buildAgentStartupPlan', () => {
       })
     ).toEqual({
       agent: 'grok',
-      launchCommand: 'grok',
+      launchCommand: "grok -- 'Trace the failing test'",
       expectedProcess: 'grok',
-      followupPrompt: 'Trace the failing test',
+      followupPrompt: null,
       launchConfig: emptyLaunchConfig('grok')
     })
   })
@@ -294,7 +352,7 @@ describe('buildAgentDraftLaunchPlan', () => {
       })
     ).toEqual({
       agent: 'pi',
-      launchCommand: 'pi; unset ORCA_PI_PREFILL',
+      launchCommand: `pi; command test -n "$fish_pid" && set --erase -g ORCA_PI_PREFILL; command test -z "$fish_pid" && unset ORCA_PI_PREFILL; true`,
       expectedProcess: 'pi',
       env: { ORCA_PI_PREFILL: 'https://github.com/acme/repo/issues/42' },
       launchConfig: emptyLaunchConfig('pi')

@@ -1,10 +1,9 @@
-import type { GitPushTarget } from '../../shared/types'
+import type { GitPushTarget } from '../../shared/worktree/types'
 import { assertGitPushTargetShape } from '../../shared/git-push-target-validation'
 import { gitExecFileAsync } from './runner'
+import type { GitExecOptions as GitCommandExecOptions } from './command-runner/git-exec-options'
 
-type GitExecOptions = {
-  wslDistro?: string
-}
+type GitExecOptions = Pick<GitCommandExecOptions, 'wslDistro' | 'admissionTier'>
 
 export async function validateGitPushTarget(
   repoPath: string,

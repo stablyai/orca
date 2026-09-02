@@ -1,5 +1,5 @@
 import type { Issue, IssueSearchResult } from '@linear/sdk'
-import type { LinearIssue, LinearIssueChildSummary } from '../../shared/types'
+import type { LinearIssue, LinearIssueChildSummary } from '../../shared/linear/issue-types'
 
 type IssueWithChildren = Issue & {
   children: Issue['children']
@@ -75,6 +75,10 @@ export async function mapLinearIssue(
     id: issue.id,
     identifier: issue.identifier,
     title: issue.title,
+    branchName:
+      'branchName' in issue
+        ? ((issue.branchName as string | null | undefined) ?? undefined)
+        : undefined,
     description: issue.description ?? undefined,
     url: issue.url,
     state: {

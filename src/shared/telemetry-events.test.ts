@@ -1,5 +1,3 @@
-/* eslint-disable max-lines -- Why: telemetry schema tests keep related event
-   invariants together so cross-event payload rules stay easy to audit. */
 // Schema round-trip coverage for the event map. Fail-closed invariants that
 // must hold: agent_error is enum-only (error_message / error_stack rejected
 // by `.strict()`), unknown enum values fail, and any well-formed payload
@@ -340,6 +338,82 @@ describe('agent_error schema', () => {
   })
 })
 
+describe('daemon_lifecycle schema', () => {
+  it('round-trips a startup replace payload', () => {
+    const parsed = eventSchemas.daemon_lifecycle.safeParse({
+      transition: 'replaced',
+      reason: 'stale_bundle',
+      live_session_count_bucket: '0'
+    })
+    expect(parsed.success).toBe(true)
+  })
+
+  it('round-trips a retirement payload', () => {
+    const parsed = eventSchemas.daemon_lifecycle.safeParse({
+      transition: 'retired',
+      reason: 'died_respawn',
+      live_session_count_bucket: 'unknown'
+    })
+    expect(parsed.success).toBe(true)
+  })
+
+  // Core privacy invariant: enum-only + bucketed counts. If this flips, the lane is leaking
+  // paths/versions/exact counts — revert the offending schema change (STA-2376).
+  // Both union members, so neither can lose .strict() unnoticed.
+  it('rejects raw paths, versions, and unbucketed counts via .strict()', () => {
+    const bases = [
+      { transition: 'replaced', reason: 'failed_health_check', live_session_count_bucket: '2-5' },
+      { transition: 'retired', reason: 'died_respawn', live_session_count_bucket: 'unknown' }
+    ]
+    for (const base of bases) {
+      for (const leak of [
+        { daemon_path: '/Users/alice/Orca.app' },
+        { daemon_app_version: '1.4.129' },
+        { live_session_count: 3 }
+      ]) {
+        const parsed = eventSchemas.daemon_lifecycle.safeParse({ ...base, ...leak })
+        expect(parsed.success).toBe(false)
+      }
+      // Sanity: the base itself must be valid, so the rejections above are the leak, not the base.
+      expect(eventSchemas.daemon_lifecycle.safeParse(base).success).toBe(true)
+    }
+  })
+
+  it('rejects unknown reason and bucket enum values', () => {
+    expect(
+      eventSchemas.daemon_lifecycle.safeParse({
+        transition: 'replaced',
+        reason: 'made_up_reason',
+        live_session_count_bucket: '0'
+      }).success
+    ).toBe(false)
+    expect(
+      eventSchemas.daemon_lifecycle.safeParse({
+        transition: 'replaced',
+        reason: 'stale_bundle',
+        live_session_count_bucket: '99'
+      }).success
+    ).toBe(false)
+  })
+
+  it('rejects reasons and fields that do not belong to the transition', () => {
+    expect(
+      eventSchemas.daemon_lifecycle.safeParse({
+        transition: 'replaced',
+        reason: 'died_respawn',
+        live_session_count_bucket: 'unknown'
+      }).success
+    ).toBe(false)
+    expect(
+      eventSchemas.daemon_lifecycle.safeParse({
+        transition: 'retired',
+        reason: 'failed_health_check',
+        live_session_count_bucket: 'unknown'
+      }).success
+    ).toBe(false)
+  })
+})
+
 describe('workspace_created schema', () => {
   it('rejects unknown source', () => {
     const parsed = eventSchemas.workspace_created.safeParse({
@@ -502,6 +576,15 @@ describe('workspace_create_failed schema', () => {
 })
 
 describe('settings_changed schema', () => {
+  it('accepts structured native chat as a boolean adoption signal', () => {
+    expect(
+      eventSchemas.settings_changed.safeParse({
+        setting_key: 'experimentalStructuredNativeChat',
+        value_kind: 'bool'
+      }).success
+    ).toBe(true)
+  })
+
   it('accepts whitelisted setting keys', () => {
     for (const key of SETTINGS_CHANGED_WHITELIST) {
       const parsed = eventSchemas.settings_changed.safeParse({
@@ -536,5 +619,25 @@ describe('exported enum schemas', () => {
     for (const key of SETTINGS_CHANGED_WHITELIST) {
       expect(settingsChangedKeySchema.safeParse(key).success).toBe(true)
     }
+  })
+})
+
+describe('remote_outbound_budget_close schema', () => {
+  it('round-trips every emitter', () => {
+    for (const emitter of ['size', 'queue']) {
+      expect(eventSchemas.remote_outbound_budget_close.safeParse({ emitter }).success).toBe(true)
+    }
+  })
+
+  it('rejects an unknown emitter and any payload-describing extra key', () => {
+    expect(eventSchemas.remote_outbound_budget_close.safeParse({ emitter: 'other' }).success).toBe(
+      false
+    )
+    expect(
+      eventSchemas.remote_outbound_budget_close.safeParse({
+        emitter: 'size',
+        byte_length: 4194305
+      }).success
+    ).toBe(false)
   })
 })

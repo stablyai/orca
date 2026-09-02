@@ -1,4 +1,3 @@
-/* eslint-disable max-lines -- Why: one routing test exercises the full GitLab RPC surface so provider parity regressions show up in a single contract fixture. */
 import { describe, expect, it, vi } from 'vitest'
 import { RpcDispatcher } from '../dispatcher'
 import type { RpcRequest } from '../core'
@@ -65,7 +64,8 @@ describe('gitlab RPC methods', () => {
         repo: 'id:repo-1',
         state: 'opened',
         assignee: '@me',
-        limit: 50
+        limit: 50,
+        page: 2
       })
     )
     await dispatcher.dispatch(
@@ -203,7 +203,7 @@ describe('gitlab RPC methods', () => {
       25,
       'bug'
     )
-    expect(runtime.listGitLabRepoIssues).toHaveBeenCalledWith('id:repo-1', 'opened', '@me', 50)
+    expect(runtime.listGitLabRepoIssues).toHaveBeenCalledWith('id:repo-1', 'opened', '@me', 50, 2)
     expect(runtime.createGitLabRepoIssue).toHaveBeenCalledWith('id:repo-1', 'Fix bug', 'Details')
     expect(runtime.listGitLabRepoTodos).toHaveBeenCalledWith('id:repo-1')
     expect(runtime.listGitLabRepoLabels).toHaveBeenCalledWith('id:repo-1')
@@ -281,6 +281,30 @@ describe('gitlab RPC methods', () => {
     )
   })
 
+  it('accepts the negotiated ready-for-review update field', async () => {
+    const runtime = {
+      getRuntimeId: () => 'test-runtime',
+      updateGitLabRepoMR: vi.fn().mockResolvedValue({ ok: true })
+    } as unknown as OrcaRuntimeService
+    const dispatcher = new RpcDispatcher({ runtime, methods: GITLAB_METHODS })
+
+    const response = await dispatcher.dispatch(
+      makeRequest('gitlab.updateMR', {
+        repo: 'id:repo-1',
+        iid: 8,
+        updates: { readyForReview: true }
+      })
+    )
+
+    expect(runtime.updateGitLabRepoMR).toHaveBeenCalledWith(
+      'id:repo-1',
+      8,
+      { readyForReview: true },
+      undefined
+    )
+    expect(response).toMatchObject({ ok: true, result: { ok: true } })
+  })
+
   it('normalizes GitLab issue list arguments to match desktop preload behavior', async () => {
     const runtime = {
       getRuntimeId: () => 'test-runtime',
@@ -310,8 +334,44 @@ describe('gitlab RPC methods', () => {
       'id:repo-1',
       'closed',
       undefined,
-      100
+      100,
+      1
     )
-    expect(runtime.listGitLabRepoIssues).toHaveBeenNthCalledWith(2, 'id:repo-1', 'opened', '@me', 1)
+    expect(runtime.listGitLabRepoIssues).toHaveBeenNthCalledWith(
+      2,
+      'id:repo-1',
+      'opened',
+      '@me',
+      1,
+      1
+    )
+  })
+
+  // Regression for #7732: the WS/relay transports close the connection on frames
+  // over 1 MB, so the excerpt must be produced before the response is serialised.
+  it('bounds the job trace before it crosses the transport when logExcerpt is set', async () => {
+    const noisyTrace = [
+      'section_start:1699000000:build\r\u001b[0K$ pnpm build',
+      ...Array.from({ length: 400 }, (_, index) => `line ${index}`),
+      'ERROR: Job failed: exit code 1'
+    ].join('\n')
+    const runtime = {
+      getRuntimeId: () => 'test-runtime',
+      getGitLabRepoJobTrace: vi.fn().mockResolvedValue({ ok: true, trace: noisyTrace })
+    } as unknown as OrcaRuntimeService
+    const dispatcher = new RpcDispatcher({ runtime, methods: GITLAB_METHODS })
+
+    const raw = await dispatcher.dispatch(
+      makeRequest('gitlab.jobTrace', { repo: 'id:repo-1', jobId: 99 })
+    )
+    const excerpt = await dispatcher.dispatch(
+      makeRequest('gitlab.jobTrace', { repo: 'id:repo-1', jobId: 99, logExcerpt: true })
+    )
+
+    expect((raw as { result: { trace: string } }).result.trace).toBe(noisyTrace)
+    const bounded = (excerpt as { result: { trace: string } }).result.trace
+    expect(bounded).toContain('ERROR: Job failed: exit code 1')
+    expect(bounded).not.toContain('section_start')
+    expect(bounded).not.toContain('line 0\n')
   })
 })

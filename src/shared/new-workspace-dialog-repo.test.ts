@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { Repo } from './types'
+import type { Repo } from './repo-types'
 import {
   getNewWorkspaceDialogEligibleRepos,
   resolveNewWorkspaceDialogGitRepoId,

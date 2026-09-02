@@ -1,13 +1,11 @@
 import { useCallback } from 'react'
 import { useAppStore } from '@/store'
-import type { WorkspaceStatus } from '../../../../shared/types'
+import type { WorkspaceStatus } from '../../../../shared/worktree/types'
 
 export function useWorkspaceKanbanCreateWorktree(): {
-  canCreateWorktree: boolean
   createWorktreeForStatus: (workspaceStatus: WorkspaceStatus) => void
 } {
   const openModal = useAppStore((s) => s.openModal)
-  const canCreateWorktree = useAppStore((s) => s.repos.length > 0)
 
   const createWorktreeForStatus = useCallback(
     (workspaceStatus: WorkspaceStatus) => {
@@ -19,5 +17,5 @@ export function useWorkspaceKanbanCreateWorktree(): {
     [openModal]
   )
 
-  return { canCreateWorktree, createWorktreeForStatus }
+  return { createWorktreeForStatus }
 }

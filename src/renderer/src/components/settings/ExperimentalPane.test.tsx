@@ -4,10 +4,10 @@ import { act } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { GlobalSettings } from '../../../../shared/types'
+import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import { getDefaultSettings } from '../../../../shared/constants'
 import { ExperimentalPane } from './ExperimentalPane'
-import { getExperimentalPaneSearchEntries } from './experimental-search'
+import { getExperimentalPaneSearchEntries, getExperimentalSearchEntry } from './experimental-search'
 
 vi.mock('../../store', () => ({
   useAppStore: (selector: (state: { settingsSearchQuery: string }) => unknown) =>
@@ -15,9 +15,7 @@ vi.mock('../../store', () => ({
 }))
 
 vi.mock('./EphemeralVmsPane', () => ({
-  EphemeralVmsPane: () => (
-    <div data-testid="ephemeral-vms-pane">Per-Workspace Environments pane</div>
-  )
+  EphemeralVmsPane: () => <div data-testid="ephemeral-vms-pane">Cloud VM pane</div>
 }))
 
 vi.mock('../ui/select', async () => {
@@ -134,23 +132,83 @@ describe('ExperimentalPane', () => {
     )
   })
 
-  it('renders per-workspace environments as an off-by-default experimental subsection', () => {
+  it('renders the Agents sidebar switch in Experimental without stale Appearance copy', () => {
+    const settings = getDefaultSettings('/tmp')
+    const markup = renderToStaticMarkup(
+      <ExperimentalPane settings={settings} updateSettings={vi.fn()} />
+    )
+
+    expect(settings.experimentalAgentDashboardPopout).toBeUndefined()
+    expect(markup).toContain('Show Agents Button')
+    // The visible copy is the search entry's own description, so settings search can't
+    // advertise text the page doesn't show.
+    expect(markup).toContain(getExperimentalSearchEntry().agentsSidebar.description)
+    expect(markup).not.toContain('Window &amp; Sidebar')
+    expect(getExperimentalPaneSearchEntries().map((entry) => entry.title)).toContain(
+      'Show Agents Button'
+    )
+  })
+
+  it('renders the agent dashboard as an off-by-default searchable experiment', () => {
+    const settings = getDefaultSettings('/tmp')
+    const markup = renderToStaticMarkup(
+      <ExperimentalPane settings={settings} updateSettings={vi.fn()} />
+    )
+
+    expect(settings.experimentalAgentDashboardPopout).toBeUndefined()
+    expect(markup).toContain('Agent Dashboard')
+    expect(markup).toContain('Monitor agents that need you, are working, or are done')
+    expect(getExperimentalPaneSearchEntries().map((entry) => entry.title)).toContain(
+      'Agent Dashboard'
+    )
+  })
+
+  it('enables the agent dashboard through its experimental switch', async () => {
+    const updateSettings = vi.fn()
+    const { root, container } = await renderExperimentalPane({ updateSettings })
+    const switchButton = container.querySelector<HTMLButtonElement>(
+      '#experimental-agent-dashboard button[role="switch"]'
+    )
+    if (!switchButton) {
+      throw new Error('Agent Dashboard switch was not rendered')
+    }
+
+    await act(async () => {
+      switchButton.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    })
+
+    expect(updateSettings).toHaveBeenCalledWith({ experimentalAgentDashboardPopout: true })
+    root.unmount()
+  })
+
+  it('keeps idle-agent visibility out of global settings', () => {
+    const markup = renderToStaticMarkup(
+      <ExperimentalPane
+        settings={{ ...getDefaultSettings('/tmp'), experimentalAgentDashboardPopout: true }}
+        updateSettings={vi.fn()}
+      />
+    )
+
+    expect(markup).not.toContain('Show idle agents')
+  })
+
+  it('renders Cloud VM as an off-by-default experimental subsection', () => {
     const settings = getDefaultSettings('/tmp')
     const markup = renderToStaticMarkup(
       <ExperimentalPane settings={settings} updateSettings={vi.fn()} />
     )
     const entry = getExperimentalPaneSearchEntries().find(
-      (searchEntry) => searchEntry.title === 'Per-Workspace Environments'
+      (searchEntry) => searchEntry.title === 'Cloud VM'
     )
 
     expect(settings.experimentalEphemeralVms).toBe(false)
-    expect(markup).toContain('Per-Workspace Environments')
+    expect(markup).toContain('Cloud VM')
     expect(markup).toContain('aria-checked="false"')
-    expect(markup).not.toContain('Per-Workspace Environments pane')
+    expect(markup).not.toContain('Cloud VM pane')
     expect(entry?.targetSectionId).toBe('ephemeral-vms')
   })
 
-  it('enables per-workspace environments through the experimental switch', async () => {
+  it('enables Cloud VM through the experimental switch', async () => {
     const updateSettings = vi.fn()
     const { root, container } = await renderExperimentalPane({ updateSettings })
 
@@ -158,7 +216,7 @@ describe('ExperimentalPane', () => {
       '#ephemeral-vms button[role="switch"]'
     )
     if (!switchButton) {
-      throw new Error('Per-workspace environments switch was not rendered')
+      throw new Error('Cloud VM switch was not rendered')
     }
 
     await act(async () => {
@@ -169,7 +227,7 @@ describe('ExperimentalPane', () => {
     root.unmount()
   })
 
-  it('shows per-workspace environment setup controls when enabled', () => {
+  it('shows Cloud VM setup controls when enabled', () => {
     const markup = renderToStaticMarkup(
       <ExperimentalPane
         settings={{ ...getDefaultSettings('/tmp'), experimentalEphemeralVms: true }}
@@ -177,17 +235,105 @@ describe('ExperimentalPane', () => {
       />
     )
 
-    expect(markup).toContain('Per-Workspace Environments pane')
+    expect(markup).toContain('Cloud VM pane')
     expect(markup).toContain('aria-checked="true"')
   })
 
-  it('shows native chat default-mode as a child setting only when native chat is enabled', async () => {
+  it('shows the structured-native-chat child setting only when Chat UI is the default view', async () => {
     const updateSettings = vi.fn()
     const disabledSettings = getDefaultSettings('/tmp')
     const disabledMarkup = renderToStaticMarkup(
       <ExperimentalPane settings={disabledSettings} updateSettings={vi.fn()} />
     )
-    expect(disabledMarkup).toContain('Native chat')
+    expect(disabledMarkup).toContain('Chat UI')
+    expect(disabledMarkup).not.toContain('Use updated structured native chat')
+    expect(disabledMarkup).not.toContain('Default view')
+
+    const terminalDefault = {
+      ...getDefaultSettings('/tmp'),
+      experimentalNativeChat: true,
+      experimentalStructuredNativeChat: false,
+      openAgentTabsInChatByDefault: false
+    }
+    const terminalRender = await renderExperimentalPane({
+      updateSettings,
+      settings: terminalDefault
+    })
+
+    // The default-view control is a sibling of the Chat UI toggle, never replaced by the opt-in.
+    expect(terminalRender.container.textContent).toContain('Default view')
+    expect(
+      terminalRender.container.querySelector('[data-slot="native-chat-default-view-select"]')
+    ).not.toBeNull()
+    // Structured chat has no entry path under Terminal chat, so its opt-in is not offered.
+    expect(terminalRender.container.textContent).not.toContain('Use updated structured native chat')
+    terminalRender.root.unmount()
+
+    const { root, container } = await renderExperimentalPane({
+      updateSettings,
+      settings: { ...terminalDefault, openAgentTabsInChatByDefault: true }
+    })
+
+    expect(container.textContent).toContain('Use updated structured native chat')
+    expect(container.textContent).toContain(
+      'Local macOS and Linux sessions only for now. Windows, WSL, and remote execution hosts (including SSH) continue to use terminal chat.'
+    )
+    expect(container.textContent).toContain('Default view')
+    root.unmount()
+  })
+
+  it('hides a stale structured opt-in under Terminal chat without clearing it', async () => {
+    const updateSettings = vi.fn()
+    const settings = {
+      ...getDefaultSettings('/tmp'),
+      experimentalNativeChat: true,
+      experimentalStructuredNativeChat: true,
+      openAgentTabsInChatByDefault: true
+    }
+    const { root, container } = await renderExperimentalPane({ updateSettings, settings })
+
+    expect(container.textContent).toContain('Use updated structured native chat')
+
+    const terminalChatOption = Array.from(
+      container.querySelectorAll<HTMLButtonElement>('[data-slot="select-item"]')
+    ).find((button) => button.getAttribute('data-value') === 'terminal-chat')
+    if (!terminalChatOption) {
+      throw new Error('Terminal chat default-view option was not rendered')
+    }
+
+    await act(async () => {
+      terminalChatOption.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    })
+
+    // Switching the default view must not clobber the persisted opt-in — only hide its control.
+    expect(updateSettings).toHaveBeenCalledWith({ openAgentTabsInChatByDefault: false })
+    expect(updateSettings).toHaveBeenCalledTimes(1)
+    root.unmount()
+
+    const hidden = await renderExperimentalPane({
+      updateSettings,
+      settings: { ...settings, openAgentTabsInChatByDefault: false }
+    })
+
+    expect(hidden.container.textContent).not.toContain('Use updated structured native chat')
+    hidden.root.unmount()
+
+    // Returning to Chat UI restores the control still switched on.
+    const restored = await renderExperimentalPane({ updateSettings, settings })
+    const structuredSwitch = restored.container.querySelector<HTMLButtonElement>(
+      '#experimental-native-chat button[role="switch"][aria-label="Toggle updated structured native chat"]'
+    )
+    expect(structuredSwitch?.getAttribute('aria-checked')).toBe('true')
+    restored.root.unmount()
+  })
+
+  it('shows Chat UI default-mode as a child setting only when Chat UI is enabled', async () => {
+    const updateSettings = vi.fn()
+    const disabledSettings = getDefaultSettings('/tmp')
+    const disabledMarkup = renderToStaticMarkup(
+      <ExperimentalPane settings={disabledSettings} updateSettings={vi.fn()} />
+    )
+    expect(disabledMarkup).toContain('Chat UI')
     expect(disabledMarkup).not.toContain('Default view')
 
     const settings = {
@@ -199,7 +345,7 @@ describe('ExperimentalPane', () => {
 
     expect(container.textContent).toContain('Default view')
     expect(container.textContent).toContain('Terminal chat')
-    expect(container.textContent).toContain('Native chat')
+    expect(container.textContent).toContain('Chat UI')
     expect(
       container
         .querySelector('[data-slot="native-chat-default-view-select"]')
@@ -210,7 +356,7 @@ describe('ExperimentalPane', () => {
       container.querySelectorAll<HTMLButtonElement>('[data-slot="select-item"]')
     ).find((button) => button.getAttribute('data-value') === 'native-chat')
     if (!nativeChatOption) {
-      throw new Error('Native chat default-view option was not rendered')
+      throw new Error('Chat UI default-view option was not rendered')
     }
 
     await act(async () => {
@@ -250,6 +396,46 @@ describe('ExperimentalPane', () => {
     expect(updateSettings).toHaveBeenCalledWith({ openAgentTabsInChatByDefault: false })
 
     secondRender.root.unmount()
+  })
+
+  // The two controls are nested, but each still writes only its own key.
+  it('never writes one Chat UI child setting while changing the other', async () => {
+    const updateSettings = vi.fn()
+    const settings = {
+      ...getDefaultSettings('/tmp'),
+      experimentalNativeChat: true,
+      experimentalStructuredNativeChat: false,
+      openAgentTabsInChatByDefault: true
+    }
+    const { root, container } = await renderExperimentalPane({ updateSettings, settings })
+
+    const structuredSwitch = container.querySelector<HTMLButtonElement>(
+      '#experimental-native-chat button[role="switch"][aria-label="Toggle updated structured native chat"]'
+    )
+    if (!structuredSwitch) {
+      throw new Error('Structured native chat switch was not rendered')
+    }
+
+    await act(async () => {
+      structuredSwitch.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    })
+
+    expect(updateSettings).toHaveBeenCalledWith({ experimentalStructuredNativeChat: true })
+
+    const terminalChatOption = Array.from(
+      container.querySelectorAll<HTMLButtonElement>('[data-slot="select-item"]')
+    ).find((button) => button.getAttribute('data-value') === 'terminal-chat')
+    if (!terminalChatOption) {
+      throw new Error('Terminal chat default-view option was not rendered')
+    }
+
+    await act(async () => {
+      terminalChatOption.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    })
+
+    expect(updateSettings).toHaveBeenCalledWith({ openAgentTabsInChatByDefault: false })
+    expect(updateSettings).toHaveBeenCalledTimes(2)
+    root.unmount()
   })
 
   it('renders the agent sleep idle duration as configurable minutes', async () => {

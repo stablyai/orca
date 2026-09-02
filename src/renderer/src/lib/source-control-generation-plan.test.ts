@@ -50,6 +50,44 @@ describe('planSourceControlCommitMessageGeneration', () => {
     expect(result.ok && result.commandLabel).toContain('codex exec')
   })
 
+  it('expands linkedIssue when validating commit and pull-request recipes', () => {
+    for (const actionId of ['commitMessage', 'pullRequest'] as const) {
+      // Why: `{prompt}` puts the rendered template in argv, so commandLabel shows it.
+      const result = planSourceControlTextGeneration(actionId, {
+        agentId: 'custom',
+        model: '',
+        customAgentCommand: 'echo {prompt}',
+        commandInputTemplate: 'Fixes #{linkedIssue}'
+      })
+
+      expect(result.ok && result.commandLabel).toBe('echo Fixes #123')
+    }
+  })
+
+  it('accepts a bare {linkedIssue} recipe, which is only empty per workspace', () => {
+    // Why: the recipe is saved repo- or globally scoped, so validation must not depend on
+    // whichever workspace happens to be active — an unlinked one must not fail the plan.
+    const result = planSourceControlTextGeneration('commitMessage', {
+      agentId: 'custom',
+      model: '',
+      customAgentCommand: 'echo {prompt}',
+      commandInputTemplate: '{linkedIssue}'
+    })
+
+    expect(result).toEqual(expect.objectContaining({ ok: true, commandLabel: 'echo 123' }))
+  })
+
+  it('leaves linkedIssue literal when validating branch-name recipes', () => {
+    const result = planSourceControlTextGeneration('branchName', {
+      agentId: 'custom',
+      model: '',
+      customAgentCommand: 'echo {prompt}',
+      commandInputTemplate: 'issue {linkedIssue}'
+    })
+
+    expect(result.ok && result.commandLabel).toBe('echo issue {linkedIssue}')
+  })
+
   it('shows per-action CLI arguments in dry-run command labels', () => {
     const result = planSourceControlTextGeneration('pullRequest', {
       agentId: 'codex',

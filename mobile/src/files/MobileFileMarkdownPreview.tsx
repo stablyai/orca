@@ -14,10 +14,26 @@ type Props = {
   content: string
   truncated: boolean
   byteLength: number
+  initialLine?: number
 }
 
-export function MobileFileMarkdownPreview({ relativePath, content, truncated, byteLength }: Props) {
-  const [mode, setMode] = useState<'preview' | 'source'>('preview')
+export function MobileFileMarkdownPreview({
+  relativePath,
+  content,
+  truncated,
+  byteLength,
+  initialLine
+}: Props) {
+  const [mode, setMode] = useState<'preview' | 'source'>(() => (initialLine ? 'source' : 'preview'))
+  const [previousRelativePath, setPreviousRelativePath] = useState(relativePath)
+  const [previousInitialLine, setPreviousInitialLine] = useState(initialLine)
+  // Why: opening a different file or line target must switch modes before paint,
+  // never briefly retain the prior file's manually selected mode.
+  if (relativePath !== previousRelativePath || initialLine !== previousInitialLine) {
+    setPreviousRelativePath(relativePath)
+    setPreviousInitialLine(initialLine)
+    setMode(initialLine ? 'source' : 'preview')
+  }
   const previewSelected = mode === 'preview'
   const sourceSelected = mode === 'source'
 
@@ -62,6 +78,7 @@ export function MobileFileMarkdownPreview({ relativePath, content, truncated, by
           content={content}
           truncated={truncated}
           byteLength={byteLength}
+          initialLine={initialLine}
         />
       )}
     </View>

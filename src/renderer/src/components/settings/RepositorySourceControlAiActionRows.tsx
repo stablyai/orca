@@ -1,6 +1,6 @@
 import type React from 'react'
 import { Terminal } from 'lucide-react'
-import type { TuiAgent } from '../../../../shared/types'
+import type { TuiAgent } from '../../../../shared/tui-agent'
 import { CUSTOM_AGENT_ID } from '../../../../shared/commit-message-agent-spec'
 import type {
   RepoSourceControlAiOverrides,
@@ -13,6 +13,7 @@ import {
 } from '../../../../shared/source-control-ai-actions'
 import { Input } from '../ui/input'
 import { Label } from '../ui/label'
+import { Button } from '../ui/button'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select'
 import { AgentIcon } from '@/lib/agent-catalog'
 import { SourceControlActionVariableChips } from '../source-control/SourceControlActionVariableChips'
@@ -37,9 +38,11 @@ import {
   resolveAgentArgsPlaceholderAgent
 } from './repository-source-control-ai-labels'
 import { hasOwnActionOverride } from './repository-source-control-ai-draft'
+import { getRepositorySourceControlAiActionRecipeSectionId } from './repository-settings-targets'
 import { translate } from '@/i18n/i18n'
 
 type RepositorySourceControlAiActionRowsProps = {
+  repoId: string
   repoAi: RepoSourceControlAiOverrides
   source: SourceControlAiSettings
   defaultTuiAgent: TuiAgent | 'blank' | null | undefined
@@ -48,9 +51,15 @@ type RepositorySourceControlAiActionRowsProps = {
   onActionTemplateChange: (actionId: SourceControlActionId, value: string) => void
   onActionAgentArgsChange: (actionId: SourceControlActionId, value: string) => void
   onAppendVariable: (actionId: SourceControlActionId, variable: string) => void
+  /** Per-action saving state for CLI args + command template (matches global recipes). */
+  savingActionIds: Partial<Record<SourceControlActionId, boolean>>
+  actionDirtyById: Record<SourceControlActionId, boolean>
+  onActionDiscard: (actionId: SourceControlActionId) => void
+  onActionSave: (actionId: SourceControlActionId) => void
 }
 
 export function RepositorySourceControlAiActionRows({
+  repoId,
   repoAi,
   source,
   defaultTuiAgent,
@@ -58,7 +67,11 @@ export function RepositorySourceControlAiActionRows({
   onActionAgentChange,
   onActionTemplateChange,
   onActionAgentArgsChange,
-  onAppendVariable
+  onAppendVariable,
+  savingActionIds,
+  actionDirtyById,
+  onActionDiscard,
+  onActionSave
 }: RepositorySourceControlAiActionRowsProps): React.JSX.Element {
   return (
     <div className="space-y-3">
@@ -90,8 +103,18 @@ export function RepositorySourceControlAiActionRows({
         const agentOptions = getAgentCatalogForAction(actionId, effectiveAgent)
         const agentWarningText = getSourceControlActionAgentWarningText(actionId, effectiveAgent)
         const agentSupportText = getSourceControlActionAgentSupportText(actionId)
+        const actionDirty = actionDirtyById[actionId]
+        const isSavingAction = savingActionIds[actionId] === true
         return (
-          <div key={actionId} className="space-y-3 rounded-md border border-border px-3 py-3">
+          <div
+            key={actionId}
+            id={getRepositorySourceControlAiActionRecipeSectionId(repoId, actionId)}
+            data-settings-section={getRepositorySourceControlAiActionRecipeSectionId(
+              repoId,
+              actionId
+            )}
+            className="scroll-mt-8 space-y-3 rounded-md border border-border px-3 py-3"
+          >
             <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
               <div className="min-w-0 space-y-0.5">
                 <p className="text-xs font-medium text-foreground">
@@ -227,6 +250,54 @@ export function RepositorySourceControlAiActionRows({
                 />
               </div>
             </div>
+            {hasOverride ? (
+              <div className="mt-3 flex items-center justify-between gap-3">
+                <p className="text-[11px] text-muted-foreground">
+                  {actionDirty
+                    ? translate(
+                        'auto.components.settings.SourceControlAiActionRecipeDefaults.817128d94e',
+                        'Unsaved changes'
+                      )
+                    : translate(
+                        'auto.components.settings.SourceControlAiActionRecipeDefaults.9d3cc627f8',
+                        'Saved'
+                      )}
+                </p>
+                <div className="flex items-center gap-2">
+                  {actionDirty ? (
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="xs"
+                      onClick={() => onActionDiscard(actionId)}
+                      disabled={isSavingAction}
+                    >
+                      {translate(
+                        'auto.components.settings.SourceControlAiActionRecipeDefaults.b3914ecbbc',
+                        'Discard'
+                      )}
+                    </Button>
+                  ) : null}
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    size="xs"
+                    onClick={() => onActionSave(actionId)}
+                    disabled={!actionDirty || isSavingAction}
+                  >
+                    {isSavingAction
+                      ? translate(
+                          'auto.components.settings.SourceControlAiActionRecipeDefaults.4f549a5fa8',
+                          'Saving...'
+                        )
+                      : translate(
+                          'auto.components.settings.SourceControlAiActionRecipeDefaults.d18d665e12',
+                          'Save'
+                        )}
+                  </Button>
+                </div>
+              </div>
+            ) : null}
           </div>
         )
       })}

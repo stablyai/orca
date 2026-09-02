@@ -1,4 +1,4 @@
-import type { JSX } from 'react'
+import type { JSX, Ref } from 'react'
 import { Loader2 } from 'lucide-react'
 import type { FeatureTip, FeatureTipAction } from '../../../../shared/feature-tips'
 import { Button } from '@/components/ui/button'
@@ -17,7 +17,8 @@ export function FeatureTipActions({
   onPrimaryAction,
   onSkip,
   showSkip = true,
-  fullWidth = false
+  fullWidth = false,
+  primaryButtonRef
 }: {
   currentTip: FeatureTip
   primaryBusy: boolean
@@ -25,6 +26,7 @@ export function FeatureTipActions({
   onSkip: () => void
   showSkip?: boolean
   fullWidth?: boolean
+  primaryButtonRef?: Ref<HTMLButtonElement>
 }): JSX.Element {
   return (
     <>
@@ -34,6 +36,7 @@ export function FeatureTipActions({
         </Button>
       ) : null}
       <Button
+        ref={primaryButtonRef}
         className={fullWidth ? 'w-full' : undefined}
         onClick={onPrimaryAction}
         disabled={primaryBusy}

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { GitHubProjectTable } from '../../../../shared/github-project-types'
+import type { GitHubProjectTable } from '../../../../shared/github/project-types'
 import {
   getSelectedRepoFingerprint,
   getNextVisibleProjectTableCache,

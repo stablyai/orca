@@ -8,9 +8,11 @@ import * as Linking from 'expo-linking'
 import { colors } from '../src/theme/mobile-theme'
 import { OrcaLogo } from '../src/components/OrcaLogo'
 import { RpcClientProvider } from '../src/transport/client-context'
-import { getNotificationNavigationPath } from '../src/notifications/notification-routing'
-import { loadHosts } from '../src/transport/host-store'
+import { getNotificationNavigationTarget } from '../src/notifications/notification-routing'
+import { useOpenNotificationRoute } from '../src/notifications/use-open-notification-route'
+import { loadHostCatalog } from '../src/transport/host-store'
 import { extractPairingCodeFromUrl } from '../src/transport/pairing'
+import { recoverMobileRelayPairing } from '../src/transport/mobile-relay-pairing-recovery'
 
 // Why: keeps the native splash screen visible until the React tree is mounted
 // and ready to render. Without this the user sees a blank white/black frame
@@ -33,7 +35,14 @@ Notifications.setNotificationHandler({
 
 export default function RootLayout() {
   const router = useRouter()
+  const openNotificationRoute = useOpenNotificationRoute()
   const handledNotificationIdsRef = useRef<Set<string>>(new Set())
+
+  useEffect(() => {
+    // Why: pairing publication is journaled across process death; startup must
+    // reconcile the server result before another scan can replace that journal.
+    void recoverMobileRelayPairing()
+  }, [])
 
   // Why: route `orca://pair?...` deep links to the confirm screen so
   // the same pairing flow runs whether the link arrived via QR scan,
@@ -61,6 +70,7 @@ export default function RootLayout() {
     return () => sub.remove()
   }, [router])
 
+  // ─── Notification tap routing ───
   // Why: iOS delivers local notification taps through expo-notifications,
   // not Linking. Route both cold-start and warm-start responses to the host
   // and worktree that scheduled the notification.
@@ -84,10 +94,13 @@ export default function RootLayout() {
       }
     }
 
-    async function getNavigationPath(data: unknown): Promise<string | null> {
-      const hosts = await loadHosts().catch(() => null)
-      return getNotificationNavigationPath(data, {
-        knownHostIds: hosts ? new Set(hosts.map((host) => host.id)) : undefined
+    async function getNavigationTarget(data: unknown) {
+      const hosts = await loadHostCatalog().catch(() => null)
+      return getNotificationNavigationTarget(data, {
+        knownHostIds: hosts ? new Set(hosts.map((host) => host.id)) : undefined,
+        credentialStatusByHostId: hosts
+          ? new Map(hosts.map((host) => [host.id, host.credentialStatus]))
+          : undefined
       })
     }
 
@@ -102,14 +115,22 @@ export default function RootLayout() {
         return
       }
       handledNotificationIdsRef.current.add(notificationId)
+      // Why: RootLayout never unmounts, so cap this tap-dedup set (FIFO) rather
+      // than letting it grow one id per notification tapped for the app's life.
+      if (handledNotificationIdsRef.current.size > 256) {
+        const oldest = handledNotificationIdsRef.current.values().next().value
+        if (oldest !== undefined) {
+          handledNotificationIdsRef.current.delete(oldest)
+        }
+      }
 
-      const path = await getNavigationPath(response.notification.request.content.data)
+      const target = await getNavigationTarget(response.notification.request.content.data)
       clearLastNotificationResponse()
       if (disposed) {
         return
       }
-      if (path) {
-        router.push(path)
+      if (target) {
+        openNotificationRoute(target)
       }
     }
 
@@ -125,7 +146,8 @@ export default function RootLayout() {
       disposed = true
       sub.remove()
     }
-  }, [router])
+  }, [openNotificationRoute])
+  // ─── End notification tap routing ───
 
   // Why: hide the native splash only once the navigation Stack has been laid
   // out — this is the earliest moment the user will see actual app content.
@@ -163,12 +185,18 @@ export default function RootLayout() {
           <Stack.Screen name="pair-scan" options={{ headerShown: false }} />
           <Stack.Screen name="pair" options={{ headerShown: false }} />
           <Stack.Screen name="pair-confirm" options={{ headerShown: false }} />
+          <Stack.Screen
+            name="mobile-onboarding"
+            options={{ headerShown: false, presentation: 'modal', gestureEnabled: false }}
+          />
           <Stack.Screen name="settings" options={{ headerShown: false }} />
           <Stack.Screen name="terminal-settings" options={{ headerShown: false }} />
+          <Stack.Screen name="native-chat-settings" options={{ headerShown: false }} />
           <Stack.Screen name="browser-settings" options={{ headerShown: false }} />
           <Stack.Screen name="voice-settings" options={{ headerShown: false }} />
           <Stack.Screen name="notifications" options={{ headerShown: false }} />
           <Stack.Screen name="troubleshoot" options={{ headerShown: false }} />
+          <Stack.Screen name="connection-log" options={{ headerShown: false }} />
           <Stack.Screen name="about" options={{ headerShown: false }} />
           <Stack.Screen name="h" options={{ headerShown: false }} />
         </Stack>

@@ -18,6 +18,7 @@ export function IntegrationCardShell(props: {
   statusTone: IntegrationCardStatusTone
   checking?: boolean
   className?: string
+  settingsSectionId?: string
   actions?: React.ReactNode
   children?: React.ReactNode
 }): React.JSX.Element {
@@ -36,7 +37,7 @@ export function IntegrationCardShell(props: {
   )
 
   return (
-    <div className={shellClass}>
+    <div className={shellClass} data-settings-section={props.settingsSectionId}>
       <div className="flex flex-wrap items-start gap-3">
         <span className="shrink-0 text-muted-foreground">{props.icon}</span>
         <div className="min-w-0 flex-1 basis-[16rem] space-y-0.5">

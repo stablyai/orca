@@ -6,6 +6,7 @@ import { SettingsSubsectionHeader } from './SettingsFormControls'
 import { showDeleteWorktreeFailureToast } from '../sidebar/delete-worktree-failure-toast'
 import { showLocalBaseRefUpdateSuggestionToast } from '../sidebar/local-base-ref-suggestion-toast'
 import { translate } from '@/i18n/i18n'
+import { useAppStore } from '@/store'
 import type { AppState } from '@/store/types'
 
 const LONG_WORKSPACE_NAME = 'feature/dev-toast-layout-with-a-long-workspace-name'
@@ -99,6 +100,7 @@ function showDeleteFailureToast(): void {
       'branch has changes'
     ),
     canForceDelete: true,
+    forceDeleteReason: 'dirty',
     onViewChanges: () =>
       toast.message(
         translate(
@@ -122,6 +124,85 @@ function showDeleteFailureToast(): void {
     worktreeId: 'dev-toast-worktree',
     worktreeName: LONG_WORKSPACE_NAME
   })
+}
+
+// Dev-only preview of the first-party Orca Cloud sign-in. The sidebar/titlebar
+// account switcher is hidden in packaged builds while the feature is in
+// progress; this surfaces it (and its status) in dev when the env vars are set.
+function OrcaCloudDevSubsection(): React.JSX.Element {
+  const authStatus = useAppStore((s) => s.orcaProfileAuthStatus)
+  const connecting = useAppStore((s) => s.orcaProfileConnecting)
+  const connect = useAppStore((s) => s.connectCurrentOrcaProfile)
+  const signOut = useAppStore((s) => s.signOutCurrentOrcaProfile)
+  const refresh = useAppStore((s) => s.fetchOrcaProfileAuthStatus)
+  const configured = authStatus?.configured === true
+  const connected = authStatus?.state === 'connected'
+
+  return (
+    <section className="space-y-3">
+      <div className="flex items-start justify-between gap-3">
+        <SettingsSubsectionHeader
+          title={translate('auto.components.settings.DevToolsPane.orcaCloud', 'Orca Cloud')}
+          description={translate(
+            'auto.components.settings.DevToolsPane.orcaCloudDescription',
+            'Dev-only preview of first-party cloud sign-in. Hidden in production; in dev it also appears in the sidebar account switcher once ORCA_CLOUD_API_URL and ORCA_CLOUD_CLIENT_ID are set.'
+          )}
+        />
+        <Badge variant="outline" className="mt-0.5">
+          {translate('auto.components.settings.DevToolsPane.devOnly', 'Dev only')}
+        </Badge>
+      </div>
+
+      {configured ? (
+        <div className="space-y-2">
+          <p className="text-xs text-muted-foreground">
+            {translate('auto.components.settings.DevToolsPane.orcaCloudStatus', 'Status')}:{' '}
+            <span className="font-medium text-foreground">{authStatus?.state}</span>
+          </p>
+          <div className="flex flex-wrap gap-2">
+            {connected ? (
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                disabled={connecting}
+                onClick={() => void signOut()}
+              >
+                {translate('auto.components.settings.DevToolsPane.orcaCloudSignOut', 'Sign out')}
+              </Button>
+            ) : (
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                disabled={connecting}
+                onClick={() => void connect()}
+              >
+                {translate(
+                  'auto.components.settings.DevToolsPane.orcaCloudConnect',
+                  'Connect profile'
+                )}
+              </Button>
+            )}
+            <Button type="button" variant="ghost" size="sm" onClick={() => void refresh()}>
+              {translate(
+                'auto.components.settings.DevToolsPane.orcaCloudRefresh',
+                'Refresh status'
+              )}
+            </Button>
+          </div>
+        </div>
+      ) : (
+        <p className="text-xs text-muted-foreground">
+          {authStatus?.setupMessage ??
+            translate(
+              'auto.components.settings.DevToolsPane.orcaCloudNotConfigured',
+              'Set ORCA_CLOUD_API_URL and ORCA_CLOUD_CLIENT_ID to preview Orca Cloud sign-in in this dev build.'
+            )}
+        </p>
+      )}
+    </section>
+  )
 }
 
 export function DevToolsPane(): React.JSX.Element {
@@ -221,28 +302,32 @@ export function DevToolsPane(): React.JSX.Element {
   ]
 
   return (
-    <section className="space-y-3">
-      <div className="flex items-start justify-between gap-3">
-        <SettingsSubsectionHeader
-          title={translate(
-            'auto.components.settings.DevToolsPane.notificationPlayground',
-            'Notification playground'
-          )}
-          description={translate(
-            'auto.components.settings.DevToolsPane.notificationPlaygroundDescription',
-            'Dev-only triggers for checking toast layout, recovery actions, and long-copy wrapping.'
-          )}
-        />
-        <Badge variant="outline" className="mt-0.5">
-          {translate('auto.components.settings.DevToolsPane.devOnly', 'Dev only')}
-        </Badge>
-      </div>
+    <div className="space-y-8">
+      <section className="space-y-3">
+        <div className="flex items-start justify-between gap-3">
+          <SettingsSubsectionHeader
+            title={translate(
+              'auto.components.settings.DevToolsPane.notificationPlayground',
+              'Notification playground'
+            )}
+            description={translate(
+              'auto.components.settings.DevToolsPane.notificationPlaygroundDescription',
+              'Dev-only triggers for checking toast layout, recovery actions, and long-copy wrapping.'
+            )}
+          />
+          <Badge variant="outline" className="mt-0.5">
+            {translate('auto.components.settings.DevToolsPane.devOnly', 'Dev only')}
+          </Badge>
+        </div>
 
-      <div className="grid gap-2 sm:grid-cols-2">
-        {actions.map((action) => (
-          <DevToastActionButton key={action.title} action={action} />
-        ))}
-      </div>
-    </section>
+        <div className="grid gap-2 sm:grid-cols-2">
+          {actions.map((action) => (
+            <DevToastActionButton key={action.title} action={action} />
+          ))}
+        </div>
+      </section>
+
+      <OrcaCloudDevSubsection />
+    </div>
   )
 }

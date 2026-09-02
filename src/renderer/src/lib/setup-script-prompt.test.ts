@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { SetupScriptImportCandidate } from '../../../shared/setup-script-imports'
-import type { Repo } from '../../../shared/types'
+import type { Repo } from '../../../shared/repo-types'
+import { getRepoHostIdentityForParts } from '@/store/slices/repo-host-identity'
 import {
   buildImportedHookSettings,
   filterSetupScriptPromptDismissalsToValidRepos,
@@ -177,24 +178,101 @@ describe('setup script prompt inspection', () => {
   })
 
   it('ignores legacy prompt dismissals and honors the generation prompt version', () => {
-    expect(isSetupScriptPromptDismissed('repo-1', ['repo-1'])).toBe(false)
+    const localIdentity = getRepoHostIdentityForParts('repo-1', 'local')
+    expect(isSetupScriptPromptDismissed(localIdentity, ['repo-1'])).toBe(false)
     expect(
-      isSetupScriptPromptDismissed('repo-1', [getSetupScriptPromptDismissalKey('repo-1')])
+      isSetupScriptPromptDismissed(localIdentity, [getSetupScriptPromptDismissalKey(localIdentity)])
     ).toBe(true)
   })
 
-  it('keeps only current-version prompt dismissals for valid repos', () => {
+  it('keeps prompt dismissals only for valid repo hosts and migrates unambiguous repo ids', () => {
+    const localIdentity = getRepoHostIdentityForParts('repo-1', 'local')
+    const remoteIdentity = getRepoHostIdentityForParts('repo-1', 'runtime:windows')
     expect(
       filterSetupScriptPromptDismissalsToValidRepos(
         [
           'repo-1',
           getSetupScriptPromptDismissalKey('repo-1'),
-          getSetupScriptPromptDismissalKey('repo-1'),
-          getSetupScriptPromptDismissalKey('repo-2')
+          getSetupScriptPromptDismissalKey(localIdentity),
+          getSetupScriptPromptDismissalKey(localIdentity),
+          getSetupScriptPromptDismissalKey(remoteIdentity)
         ],
-        new Set(['repo-1'])
+        new Set([localIdentity])
       )
-    ).toEqual([getSetupScriptPromptDismissalKey('repo-1')])
+    ).toEqual([getSetupScriptPromptDismissalKey(localIdentity)])
+  })
+
+  it('reuses the input array when it is empty', () => {
+    const input: string[] = []
+    expect(
+      filterSetupScriptPromptDismissalsToValidRepos(
+        input,
+        new Set([getRepoHostIdentityForParts('repo-1', 'local')])
+      )
+    ).toBe(input)
+  })
+
+  it('reuses the input array when every dismissal is already a valid host-identity key', () => {
+    const localIdentity = getRepoHostIdentityForParts('repo-1', 'local')
+    const remoteIdentity = getRepoHostIdentityForParts('repo-2', 'ssh:host-a')
+    const input = [
+      getSetupScriptPromptDismissalKey(localIdentity),
+      getSetupScriptPromptDismissalKey(remoteIdentity)
+    ]
+    expect(
+      filterSetupScriptPromptDismissalsToValidRepos(input, new Set([localIdentity, remoteIdentity]))
+    ).toBe(input)
+  })
+
+  it('allocates when a legacy repo-id dismissal is rewritten to a host identity', () => {
+    const localIdentity = getRepoHostIdentityForParts('repo-1', 'local')
+    const input = [getSetupScriptPromptDismissalKey('repo-1')]
+    const result = filterSetupScriptPromptDismissalsToValidRepos(input, new Set([localIdentity]))
+    expect(result).not.toBe(input)
+    expect(result).toEqual([getSetupScriptPromptDismissalKey(localIdentity)])
+  })
+
+  it('allocates when a stale dismissal is dropped', () => {
+    const localIdentity = getRepoHostIdentityForParts('repo-1', 'local')
+    const input = [
+      getSetupScriptPromptDismissalKey(localIdentity),
+      getSetupScriptPromptDismissalKey(getRepoHostIdentityForParts('gone', 'local'))
+    ]
+    const result = filterSetupScriptPromptDismissalsToValidRepos(input, new Set([localIdentity]))
+    expect(result).not.toBe(input)
+    expect(result).toEqual([getSetupScriptPromptDismissalKey(localIdentity)])
+  })
+
+  it('allocates when a duplicate valid dismissal is deduped', () => {
+    const localIdentity = getRepoHostIdentityForParts('repo-1', 'local')
+    const key = getSetupScriptPromptDismissalKey(localIdentity)
+    const input = [key, key]
+    const result = filterSetupScriptPromptDismissalsToValidRepos(input, new Set([localIdentity]))
+    expect(result).not.toBe(input)
+    expect(result).toEqual([key])
+  })
+
+  it('drops a legacy repo-id dismissal when that id exists on multiple hosts', () => {
+    const localIdentity = getRepoHostIdentityForParts('repo-1', 'local')
+    const remoteIdentity = getRepoHostIdentityForParts('repo-1', 'runtime:windows')
+
+    expect(
+      filterSetupScriptPromptDismissalsToValidRepos(
+        [getSetupScriptPromptDismissalKey('repo-1')],
+        new Set([localIdentity, remoteIdentity])
+      )
+    ).toEqual([])
+  })
+
+  it('does not reuse a setup prompt dismissal on another host with the same repo id', () => {
+    const localIdentity = getRepoHostIdentityForParts('repo-1', 'local')
+    const remoteIdentity = getRepoHostIdentityForParts('repo-1', 'runtime:windows')
+
+    expect(
+      isSetupScriptPromptDismissed(remoteIdentity, [
+        getSetupScriptPromptDismissalKey(localIdentity)
+      ])
+    ).toBe(false)
   })
 
   it('formats setup candidate provenance for sidebar review copy', () => {

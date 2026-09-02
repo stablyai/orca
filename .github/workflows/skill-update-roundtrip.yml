@@ -1,0 +1,58 @@
+name: Skill update round trip
+
+# Why the same paths on push as pull_request: GitHub evaluates each event's
+# filters independently. The PR already skipped README-only changes, but the
+# unfiltered `push` to main still started the 13-job matrix. Cancelling that
+# run marks the default-branch tip failed, so the repo shows a red X.
+on:
+  pull_request:
+    paths: &skill-roundtrip-paths
+      - 'skills/**'
+      - 'resources/skills/**'
+      - 'config/scripts/verify-skill-update-roundtrip.mjs'
+      - 'config/scripts/skill-update-roundtrip-workflow.test.mjs'
+      - 'src/main/skills/skill-freshness-eligibility.ts'
+      - 'src/shared/skill-freshness.ts'
+      - '.github/workflows/skill-update-roundtrip.yml'
+  # Why unfiltered: GitHub ignores `paths` on merge_group. We do not run a merge
+  # queue today; if one is added, gate the matrix on a path job first.
+  merge_group:
+  push:
+    branches:
+      - main
+    paths: *skill-roundtrip-paths
+
+jobs:
+  roundtrip:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-latest, ubuntu-latest, windows-latest]
+        shape: [symlink, copy]
+        autocrlf: ['false', 'true']
+        skills-cli: ['1.5.17']
+        include:
+          - os: ubuntu-latest
+            shape: symlink
+            autocrlf: 'false'
+            skills-cli: latest
+    continue-on-error: ${{ matrix.skills-cli == 'latest' }}
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@v6
+        with:
+          node-version-file: package.json
+      - name: Verify targeted update convergence and copy behavior
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          SKILL_UPDATE_SOURCE: ${{ github.event.pull_request.head.repo.full_name || github.repository }}
+          SKILL_UPDATE_REF: ${{ github.head_ref || github.ref_name }}
+        run: >-
+          node config/scripts/verify-skill-update-roundtrip.mjs
+          --cli=${{ matrix.skills-cli }}
+          --autocrlf=${{ matrix.autocrlf }}
+          --shape=${{ matrix.shape }}

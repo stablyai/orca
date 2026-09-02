@@ -3,7 +3,8 @@ export type ComputerUseErrorRecoveryData = {
 }
 
 export function computerUseErrorRecoveryData(
-  code: string
+  code: string,
+  message?: string
 ): ComputerUseErrorRecoveryData | undefined {
   switch (code) {
     case 'app_not_found':
@@ -24,6 +25,12 @@ export function computerUseErrorRecoveryData(
         'If no window is listed, open or focus the app first; `orca computer` does not launch closed desktop apps.'
       )
     case 'window_not_focused':
+      if (message?.includes('may already have been delivered')) {
+        return recoverWith(
+          'Run `orca computer get-app-state --app <app> --json` and verify whether the intended action already occurred before retrying.',
+          'Do not retry the click if it already took effect; otherwise bring the target window forward and use fresh state before trying again.'
+        )
+      }
       return recoverWith(
         'Retry once with `--restore-window`.',
         'If `--restore-window` was already used, stop retrying restore; bring the app forward manually, check permissions, or prefer `set-value` for editable fields.'

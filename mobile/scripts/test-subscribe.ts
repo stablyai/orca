@@ -139,7 +139,7 @@ async function chooseWorktree(ws: WebSocket): Promise<string> {
 }
 
 async function chooseTerminal(ws: WebSocket, worktree: string): Promise<string> {
-  const list = await send(ws, 'terminal.list', { worktree })
+  const list = await send(ws, 'terminal.list', { worktree, includeVisualLayouts: false })
   if (!list.ok) {
     throw new Error(`terminal.list failed: ${formatResponse(list)}`)
   }

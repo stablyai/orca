@@ -3,6 +3,7 @@ import { translate } from '@/i18n/i18n'
 export type SettingOwnership =
   | 'client-default'
   | 'host-override'
+  | 'host-collection'
   | 'project-host-setup'
   | 'provider-host'
 
@@ -42,14 +43,14 @@ function buildSummaries(): Record<string, SettingOwnershipSummary> {
       )
     },
     terminalQuickCommands: {
-      ownership: 'client-default',
+      ownership: 'host-collection',
       label: translate(
-        'auto.components.settings.settingOwnership.clientDefaultProjectScopes',
-        'Client default + project scopes'
+        'auto.components.settings.settingOwnership.hostCollectionProjectScopes',
+        'Host collection + project scopes'
       ),
       description: translate(
-        'auto.components.settings.settingOwnership.terminalQuickCommands',
-        'Commands are saved on this client, then scoped globally or to a project setup so they run from the selected terminal context.'
+        'auto.components.settings.settingOwnership.terminalQuickCommandHostCollections',
+        'Commands are saved on the selected Orca host, then scoped globally or to a project setup. Commands from this device also remain available in remote workspaces.'
       )
     },
     workspaceDirectory: {

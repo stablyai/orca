@@ -8,6 +8,8 @@ import {
 
 export type RemoteRuntimePtyBatcher = {
   push: (data: string) => boolean
+  hasPendingValidation: () => boolean
+  enqueueAfterValidation: (action: () => void) => void
   drain: () => Promise<void>
   takePending: () => string
   flush: () => void
@@ -126,6 +128,24 @@ export function createRemoteRuntimePtyTextBatcher(
     }
   }
 
+  const enqueueAfterValidation = (action: () => void): void => {
+    const queuedVersion = validationVersion
+    const previousTail = validationTail ?? Promise.resolve()
+    const guardedTail = previousTail.then(() => {
+      if (validationVersion === queuedVersion) {
+        action()
+      }
+    })
+    const nextTail = guardedTail
+      .catch(() => {})
+      .finally(() => {
+        if (validationTail === nextTail) {
+          validationTail = null
+        }
+      })
+    validationTail = nextTail
+  }
+
   return {
     push(data: string): boolean {
       if (!data) {
@@ -145,6 +165,11 @@ export function createRemoteRuntimePtyTextBatcher(
       enqueueValidatedInput(data, tooLarge)
       return true
     },
+    // Why: earlier input can be mid async byte-length validation and not yet in
+    // `pending`. `takePending()` cannot see it, so callers that must preserve
+    // byte order (sendInputImmediate) check this before bypassing the queue.
+    hasPendingValidation: (): boolean => validationTail !== null,
+    enqueueAfterValidation,
     drain,
     takePending,
     flush,
@@ -168,6 +193,9 @@ export function createRemoteRuntimeViewportBatcher(
       clearTimeout(timer)
       timer = null
     }
+    // Why: also drop the queued viewport so a later flush()/reuse can't emit a
+    // stale resize after the batcher was cleared on teardown/resubscribe.
+    pending = null
   }
 
   const flush = (): void => {

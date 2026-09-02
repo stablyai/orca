@@ -6,7 +6,9 @@ import {
   DESKTOP_TERMINAL_SCROLLBACK_ROWS_MIN,
   legacyTerminalScrollbackBytesToRows,
   normalizeDesktopTerminalScrollbackRows,
-  normalizeDesktopTerminalSnapshotRows
+  normalizeDesktopTerminalSnapshotRows,
+  TERMINAL_OUTPUT_BACKLOG_MIN_CAP_CHARS,
+  terminalOutputBacklogCapChars
 } from './terminal-scrollback-policy'
 
 describe('terminal scrollback policy', () => {
@@ -33,6 +35,18 @@ describe('terminal scrollback policy', () => {
     expect(normalizeDesktopTerminalSnapshotRows(-1)).toBe(0)
     expect(normalizeDesktopTerminalSnapshotRows(25_000.9)).toBe(25_000)
     expect(normalizeDesktopTerminalSnapshotRows(100_000)).toBe(50_000)
+  })
+
+  it('scales the output backlog cap with scrollback rows above a 2 MB floor', () => {
+    // Default and small scrollbacks stay on the floor; large scrollbacks get
+    // proportionally more so the cap never drops lines scrollback would keep.
+    expect(terminalOutputBacklogCapChars(undefined)).toBe(TERMINAL_OUTPUT_BACKLOG_MIN_CAP_CHARS)
+    expect(terminalOutputBacklogCapChars(5_000)).toBe(TERMINAL_OUTPUT_BACKLOG_MIN_CAP_CHARS)
+    expect(terminalOutputBacklogCapChars('garbage')).toBe(TERMINAL_OUTPUT_BACKLOG_MIN_CAP_CHARS)
+    expect(terminalOutputBacklogCapChars(25_000)).toBe(3_000_000)
+    expect(terminalOutputBacklogCapChars(50_000)).toBe(6_000_000)
+    // Values beyond the settings max clamp like the setting itself does.
+    expect(terminalOutputBacklogCapChars(1_000_000)).toBe(6_000_000)
   })
 
   it('migrates legacy decimal MB buckets by intent, not byte-to-row math', () => {

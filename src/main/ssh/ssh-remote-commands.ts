@@ -1,3 +1,12 @@
+import {
+  RELAY_INSTALL_COMPLETE_FILENAME,
+  relayArtifactFilenames
+} from '../../shared/relay-artifacts'
+import {
+  RELAY_INSTALL_MODEL,
+  remoteInstallListingRegexSource,
+  type RemoteInstallModel
+} from './remote-install-model'
 import type { RemoteHostPlatform } from './ssh-remote-platform'
 import { isWindowsRemoteHost, joinRemotePath, remoteDirname } from './ssh-remote-platform'
 import { powerShellCommand, powerShellLiteral, powerShellNativeArg } from './ssh-remote-powershell'
@@ -45,6 +54,37 @@ export function removeRemoteTreeCommand(host: RemoteHostPlatform, remotePath: st
   )
 }
 
+export function moveRemoteTreeCommand(
+  host: RemoteHostPlatform,
+  sourcePath: string,
+  destinationPath: string
+): string {
+  if (!isWindowsRemoteHost(host)) {
+    return `mv ${shellEscape(sourcePath)} ${shellEscape(destinationPath)} 2>&1 && echo MOVED || echo BUSY`
+  }
+  return powerShellCommand(
+    [
+      'try {',
+      `Move-Item -LiteralPath ${powerShellLiteral(sourcePath)} -Destination ${powerShellLiteral(destinationPath)} -ErrorAction Stop`,
+      "'MOVED'",
+      `} catch { 'BUSY' }`
+    ].join('; ')
+  )
+}
+
+export function promoteRemoteTreeContentsCommand(
+  host: RemoteHostPlatform,
+  sourcePath: string,
+  destinationPath: string
+): string {
+  if (!isWindowsRemoteHost(host)) {
+    return `cp -a ${shellEscape(sourcePath)}/. ${shellEscape(destinationPath)}/ && rm -rf ${shellEscape(sourcePath)}`
+  }
+  return powerShellCommand(
+    `$ErrorActionPreference = 'Stop'; Get-ChildItem -LiteralPath ${powerShellLiteral(sourcePath)} -Force -ErrorAction Stop | Copy-Item -Destination ${powerShellLiteral(destinationPath)} -Recurse -Force -ErrorAction Stop; Remove-Item -LiteralPath ${powerShellLiteral(sourcePath)} -Recurse -Force -ErrorAction Stop`
+  )
+}
+
 export function writeRemoteEmptyFileCommand(host: RemoteHostPlatform, remotePath: string): string {
   if (!isWindowsRemoteHost(host)) {
     return `touch ${shellEscape(remotePath)}`
@@ -54,71 +94,91 @@ export function writeRemoteEmptyFileCommand(host: RemoteHostPlatform, remotePath
   )
 }
 
+/**
+ * A partial install must read as MISSING, so every file the manifest ships is
+ * probed — not a hand-kept subset. A relay that advertises the AI Vault title
+ * service but lacks the WSL transcript helper would otherwise pass this probe
+ * and then answer WSL title requests with silence.
+ */
 export function probeRelayInstalledCommand(
   host: RemoteHostPlatform,
   remoteRelayDir: string
 ): string {
-  const relayJs = joinRemotePath(host, remoteRelayDir, 'relay.js')
-  const installComplete = joinRemotePath(host, remoteRelayDir, '.install-complete')
+  return probeRemoteInstallCompleteCommand(host, remoteRelayDir, [
+    ...relayArtifactFilenames(isWindowsRemoteHost(host)),
+    RELAY_INSTALL_COMPLETE_FILENAME
+  ])
+}
+
+/**
+ * The model-agnostic form: any install is complete when its directory exists and every
+ * named artifact is a regular file inside it.
+ *
+ * Why the caller passes the list: orcad and the relay ship different artifacts, and a probe
+ * that checked a shared subset would call a torn install complete.
+ */
+export function probeRemoteInstallCompleteCommand(
+  host: RemoteHostPlatform,
+  remoteInstallDir: string,
+  requiredFilenames: readonly string[]
+): string {
+  const remoteRelayDir = remoteInstallDir
+  const required = requiredFilenames.map((filename) =>
+    joinRemotePath(host, remoteRelayDir, filename)
+  )
   if (!isWindowsRemoteHost(host)) {
-    return (
-      `test -d ${shellEscape(remoteRelayDir)} ` +
-      `&& test -f ${shellEscape(relayJs)} ` +
-      `&& test -f ${shellEscape(installComplete)} ` +
-      `&& echo OK || echo MISSING`
-    )
+    const fileTests = required.map((path) => `&& test -f ${shellEscape(path)} `).join('')
+    return `test -d ${shellEscape(remoteRelayDir)} ${fileTests}&& echo OK || echo MISSING`
   }
   return powerShellCommand(
     [
       `$dir = ${powerShellLiteral(remoteRelayDir)}`,
-      `$relay = ${powerShellLiteral(relayJs)}`,
-      `$complete = ${powerShellLiteral(installComplete)}`,
-      "if ((Test-Path -LiteralPath $dir -PathType Container) -and (Test-Path -LiteralPath $relay -PathType Leaf) -and (Test-Path -LiteralPath $complete -PathType Leaf)) { 'OK' } else { 'MISSING' }"
+      `$required = @(${required.map((path) => powerShellLiteral(path)).join(', ')})`,
+      '$ok = Test-Path -LiteralPath $dir -PathType Container',
+      'foreach ($f in $required) { if (-not (Test-Path -LiteralPath $f -PathType Leaf)) { $ok = $false } }',
+      "if ($ok) { 'OK' } else { 'MISSING' }"
     ].join('; ')
   )
 }
 
-export function acquireInstallLockParentCommand(
-  host: RemoteHostPlatform,
-  remoteRelayDir: string
-): string {
-  return makeRemoteDirectoryCommand(host, remoteRelayDir)
-}
-
-export function tryCreateInstallLockCommand(host: RemoteHostPlatform, lockDir: string): string {
-  if (!isWindowsRemoteHost(host)) {
-    return `mkdir ${shellEscape(lockDir)} 2>&1 && echo OK || echo BUSY`
-  }
-  // New-Item has no -LiteralPath parameter; using it breaks stock Windows PowerShell.
-  return powerShellCommand(
-    `$ErrorActionPreference = "Stop"; try { $null = New-Item -ItemType Directory -Path ${powerShellLiteral(lockDir)}; 'OK' } catch { 'BUSY' }`
-  )
-}
-
-export function lockMtimeEpochCommand(host: RemoteHostPlatform, lockDir: string): string {
-  if (!isWindowsRemoteHost(host)) {
-    return `stat -c %Y ${shellEscape(lockDir)} 2>/dev/null || stat -f %m ${shellEscape(lockDir)} 2>/dev/null || echo`
-  }
-  return powerShellCommand(
-    [
-      `$item = Get-Item -LiteralPath ${powerShellLiteral(lockDir)} -ErrorAction Stop`,
-      '$dto = [DateTimeOffset]$item.LastWriteTimeUtc',
-      'Write-Output $dto.ToUnixTimeSeconds()'
-    ].join('; ')
-  )
-}
+export const MAX_RELAY_GC_LISTING_ENTRIES = 64
 
 export function listRelayBaseDirsCommand(host: RemoteHostPlatform, baseDir: string): string {
+  return listRemoteInstallBaseDirsCommand(host, baseDir, RELAY_INSTALL_MODEL)
+}
+
+/**
+ * List one model's version dirs (and its own tombstones) under `~/.orca-remote/`.
+ *
+ * The model scopes BOTH the `find`/`Get-ChildItem` glob and the validating regex. That
+ * double filter is the on-the-wire half of the GC ownership rule: an orcad GC pass never
+ * even receives a relay directory name, so it cannot delete one through a later bug.
+ */
+export function listRemoteInstallBaseDirsCommand(
+  host: RemoteHostPlatform,
+  baseDir: string,
+  model: RemoteInstallModel
+): string {
+  const namePattern = remoteInstallListingRegexSource(model)
   if (!isWindowsRemoteHost(host)) {
-    return `ls -1 ${shellEscape(baseDir)} 2>/dev/null || true`
+    const statusPrefix = '__ORCA_RELAY_GC_FIND_STATUS__'
+    return [
+      `base=${shellEscape(baseDir)}; [ -d "$base" ] || exit 0;`,
+      `{ find "$base" -mindepth 1 -maxdepth 1 -type d -name '${model.dirPrefix}-*' -print; status=$?; printf '\n${statusPrefix}%s\n' "$status"; } |`,
+      String.raw`awk 'BEGIN { count=0; status=-1 } /^${statusPrefix}[0-9]+$/ { status=substr($0, ${statusPrefix.length + 1}); next } { name=$0; sub(/^.*\//, "", name); if (name ~ /${namePattern}/ && count < ${MAX_RELAY_GC_LISTING_ENTRIES}) { entries[count++]=name } } END { if (status != 0) exit 1; for (i=0; i<count; i++) print entries[i] }'`
+    ].join(' ')
   }
   return powerShellCommand(
     [
+      "$ErrorActionPreference = 'Stop'",
       `$base = ${powerShellLiteral(baseDir)}`,
       'if (Test-Path -LiteralPath $base -PathType Container) {',
-      'Get-ChildItem -LiteralPath $base -Directory | ForEach-Object { $_.Name }',
+      // Why the pattern goes in verbatim: a single-quoted PowerShell string is already
+      // literal, so `\.` reaches `-match` as the regex escape it is meant to be.
+      `Get-ChildItem -LiteralPath $base -Directory -Filter '${model.dirPrefix}-*' -ErrorAction Stop | Where-Object { $_.Name -match '${namePattern}' } | Select-Object -First ` +
+        `${MAX_RELAY_GC_LISTING_ENTRIES} | ForEach-Object { $_.Name }`,
       '}'
-    ].join(' ')
+    ].join('\n')
   )
 }
 
@@ -152,9 +212,9 @@ export function relayLivenessProbeCommand(
 ): string {
   if (!isWindowsRemoteHost(host)) {
     return (
-      `for f in ${shellEscape(dir)}/relay-*.sock ${shellEscape(dir)}/relay.sock; do ` +
-      `[ -S "$f" ] && echo ALIVE && break; ` +
-      'done; true'
+      `state=DEAD; for f in ${shellEscape(dir)}/relay-*.sock ${shellEscape(dir)}/relay.sock; do ` +
+      `[ -S "$f" ] && state=ALIVE && break; ` +
+      'done; echo "$state"'
     )
   }
   if (!windowsOptions) {

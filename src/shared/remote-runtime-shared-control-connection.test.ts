@@ -1,48 +1,31 @@
 import path from 'node:path'
-import type { AddressInfo } from 'node:net'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { WebSocketServer, type WebSocket } from 'ws'
 import {
-  decrypt,
-  deriveSharedKey,
-  encrypt,
-  generateKeyPair,
-  publicKeyFromBase64,
-  publicKeyToBase64
-} from './e2ee-crypto'
-import { encodePairingOffer, parsePairingCode, type PairingOffer } from './pairing'
+  REMOTE_RUNTIME_MAX_PENDING_RPC_BYTES,
+  retainedRemoteRuntimeJsonStringBytes,
+  serializeRemoteRuntimeRpcRequest
+} from './remote-runtime-memory-limits'
+import { getRemoteRuntimeRequestAdmissionEvidence } from './remote-runtime-prepared-request-admission'
+import { remoteRuntimeClientCapabilities } from './remote-runtime-client-capabilities'
 import { RemoteRuntimeSharedControlConnection } from './remote-runtime-shared-control-connection'
 import * as sharedControlProtocol from './remote-runtime-shared-control-protocol'
+import { isRuntimeSubscriptionReplayResponse } from './runtime-subscription-replay'
+import {
+  closeSharedControlTestServers,
+  createSharedControlTestServer as createServer
+} from './remote-runtime-shared-control-test-server'
 
 const TEST_PROJECT_PATH = path.join('tmp', 'project')
 
-type TestServer = {
-  pairing: PairingOffer
-  requests: { id: string; method: string; params?: unknown }[]
-  connectionCount: () => number
-  flushDelayedResponses: () => void
-}
-
-const servers: WebSocketServer[] = []
-
-afterEach(async () => {
-  await Promise.all(
-    servers.splice(0).map(
-      (server) =>
-        new Promise<void>((resolve) => {
-          for (const client of server.clients) {
-            client.close()
-          }
-          server.close(() => resolve())
-        })
-    )
-  )
-})
+afterEach(closeSharedControlTestServers)
 
 describe('RemoteRuntimeSharedControlConnection', () => {
   it('routes multiple one-shot RPCs over one authenticated WebSocket', async () => {
     const server = await createServer()
-    const connection = new RemoteRuntimeSharedControlConnection(server.pairing)
+    const states: string[] = []
+    const connection = new RemoteRuntimeSharedControlConnection(server.pairing, {
+      onDiagnosticsChanged: ({ state }) => states.push(state)
+    })
 
     const first = await connection.request('worktree.ps', undefined, 1000)
     const second = await connection.request('session.tabs.listAll', null, 1000)
@@ -50,16 +33,138 @@ describe('RemoteRuntimeSharedControlConnection', () => {
     expect(first).toMatchObject({ ok: true, result: { method: 'worktree.ps' } })
     expect(second).toMatchObject({ ok: true, result: { method: 'session.tabs.listAll' } })
     expect(server.connectionCount()).toBe(1)
+    expect(server.auths).toContainEqual({
+      type: 'e2ee_auth',
+      deviceToken: 'device-token',
+      clientCapabilities: remoteRuntimeClientCapabilities()
+    })
     expect(server.requests.map((request) => request.method)).toEqual([
       'worktree.ps',
       'session.tabs.listAll'
     ])
+    expect((connection.close(), states)).toEqual(
+      expect.arrayContaining(['awaiting_ready', 'ready', 'closed'])
+    )
+  })
 
+  it('preserves orchestration authority fields on shared-control requests', async () => {
+    const server = await createServer()
+    const connection = new RemoteRuntimeSharedControlConnection(server.pairing)
+    const envelope = {
+      orchestrationCapability: 'capability',
+      orchestrationContractVersion: 1,
+      orchestrationRequestId: 'request-1',
+      compatibilityInvocationId: 'compatibility-1',
+      orchestrationCompatibilityEvidence: {
+        terminalHandle: 'term-1',
+        paneKey: 'pane-1',
+        launchToken: 'launch-1'
+      },
+      id: 'forged-id',
+      deviceToken: 'forged-token',
+      method: 'orchestration.federationAck',
+      params: { dispatchId: 'forged-dispatch' }
+    }
+
+    await connection.request('orchestration.federationPull', {}, 1000, envelope)
+
+    expect(server.requests).toContainEqual({
+      ...envelope,
+      id: expect.any(String),
+      deviceToken: 'device-token',
+      method: 'orchestration.federationPull',
+      params: {}
+    })
     connection.close()
   })
 
   it('does not expose a binary sender on the shared control protocol surface', () => {
     expect('sendSharedControlEncryptedBinary' in sharedControlProtocol).toBe(false)
+  })
+
+  it('releases a pending request when the socket send throws', async () => {
+    const connection = new RemoteRuntimeSharedControlConnection({
+      v: 2,
+      endpoint: 'ws://127.0.0.1:1',
+      deviceToken: 'token',
+      publicKeyB64: Buffer.from(new Uint8Array(32).fill(1)).toString('base64')
+    })
+    const unsafe = connection as unknown as {
+      state: string
+      ws: { readyState: number; send: () => void; close: () => void } | null
+      sharedKey: Uint8Array | null
+      pendingRequests: Map<string, unknown>
+    }
+    unsafe.state = 'ready'
+    unsafe.ws = {
+      readyState: 1,
+      send: () => {
+        throw new Error('send failed')
+      },
+      close: vi.fn()
+    }
+    unsafe.sharedKey = new Uint8Array(32).fill(2)
+
+    await expect(connection.request('worktree.ps', undefined, 1000)).rejects.toMatchObject({
+      code: 'remote_runtime_unavailable'
+    })
+    expect(unsafe.pendingRequests.size).toBe(0)
+    expect(getRemoteRuntimeRequestAdmissionEvidence()).toEqual({
+      pendingRequestCount: 0,
+      retainedBytes: 0
+    })
+    connection.close()
+  })
+
+  it('replaces a stuck pre-ready socket when a one-shot probe proves reachability', () => {
+    const connection = new RemoteRuntimeSharedControlConnection({
+      v: 2,
+      endpoint: 'ws://127.0.0.1:1',
+      deviceToken: 'token',
+      publicKeyB64: Buffer.from(new Uint8Array(32).fill(1)).toString('base64')
+    })
+    const close = vi.fn()
+    const cleanup = vi.fn()
+    const open = vi.fn()
+    const unsafe = connection as unknown as {
+      state: string
+      ws: { readyState: number; close: () => void } | null
+      socketCleanup: (() => void) | null
+      open: () => void
+    }
+    unsafe.state = 'awaiting_ready'
+    unsafe.ws = { readyState: 0, close }
+    unsafe.socketCleanup = cleanup
+    unsafe.open = open
+
+    connection.reconnectNow()
+
+    expect(cleanup).toHaveBeenCalledOnce()
+    expect(close).toHaveBeenCalledOnce()
+    expect(open).toHaveBeenCalledOnce()
+  })
+
+  it('keeps a waiting request alive when a reachability probe replaces its pre-ready socket', async () => {
+    const server = await createServer({ suppressReadyFrameCount: 1 })
+    const connection = new RemoteRuntimeSharedControlConnection(server.pairing)
+
+    const response = connection.request('worktree.ps', undefined, 1000)
+    await vi.waitFor(() => expect(server.connectionCount()).toBe(1))
+
+    connection.reconnectNow()
+
+    await expect(response).resolves.toMatchObject({
+      ok: true,
+      result: { method: 'worktree.ps' }
+    })
+    expect(server.connectionCount()).toBe(2)
+    expect(server.requests.map(({ method }) => method)).toEqual(['worktree.ps'])
+    expect(connection.getDiagnostics().pendingRequestCount).toBe(0)
+    expect(getRemoteRuntimeRequestAdmissionEvidence()).toEqual({
+      pendingRequestCount: 0,
+      retainedBytes: 0
+    })
+    connection.close()
   })
 
   it('logs unknown response ids without breaking pending requests', async () => {
@@ -171,10 +276,11 @@ describe('RemoteRuntimeSharedControlConnection', () => {
     const server = await createServer({ closeAfterFirstStreamingResponse: true })
     const connection = new RemoteRuntimeSharedControlConnection(server.pairing)
     const onClose = vi.fn()
+    const onError = vi.fn()
 
     await connection.subscribe('runtime.clientEvents.subscribe', null, 1000, {
       onResponse: vi.fn(),
-      onError: vi.fn(),
+      onError,
       onClose
     })
 
@@ -185,22 +291,30 @@ describe('RemoteRuntimeSharedControlConnection', () => {
         'runtime.clientEvents.subscribe'
       ])
     )
+    expect(onError).toHaveBeenCalledTimes(1)
     expect(onClose).not.toHaveBeenCalled()
+    expect(connection.getDiagnostics()).toMatchObject({
+      state: 'ready',
+      lastError: null,
+      lastClose: null
+    })
 
     connection.close()
   })
 
-  it('emits one final close when reconnect attempts are exhausted', async () => {
+  it('keeps passive subscriptions alive after reaching the capped reconnect delay', async () => {
     const server = await createServer()
     const connection = new RemoteRuntimeSharedControlConnection(server.pairing)
     const onClose = vi.fn()
 
     const unsafe = connection as unknown as {
-      reconnectAttempt: number
+      reconnect: {
+        attempt: number
+        scheduleWithDefaultBackoff: (intentionallyClosed: boolean, open: () => void) => void
+      }
       subscriptions: Map<string, unknown>
-      scheduleReconnect: () => void
     }
-    unsafe.reconnectAttempt = 7
+    unsafe.reconnect.attempt = 7
     unsafe.subscriptions.set('sub-1', {
       requestId: 'sub-1',
       method: 'runtime.clientEvents.subscribe',
@@ -212,13 +326,13 @@ describe('RemoteRuntimeSharedControlConnection', () => {
       remoteSubscriptionId: null
     })
 
-    unsafe.scheduleReconnect()
+    unsafe.reconnect.scheduleWithDefaultBackoff(false, () => {})
 
-    expect(onClose).toHaveBeenCalledTimes(1)
+    expect(onClose).not.toHaveBeenCalled()
     expect(connection.getDiagnostics()).toMatchObject({
-      state: 'closed',
-      reconnectAttempt: 7,
-      subscriptionCount: 0
+      state: 'reconnecting',
+      reconnectAttempt: 8,
+      subscriptionCount: 1
     })
 
     connection.close()
@@ -233,7 +347,7 @@ describe('RemoteRuntimeSharedControlConnection', () => {
     await expect(connection.request('worktree.ps', undefined, 1000)).resolves.toMatchObject({
       ok: true
     })
-    ;(connection as unknown as { reconnectAttempt: number }).reconnectAttempt = 3
+    ;(connection as unknown as { reconnect: { attempt: number } }).reconnect.attempt = 3
 
     await vi.waitFor(() =>
       expect(connection.getDiagnostics()).toMatchObject({ reconnectAttempt: 0 })
@@ -345,18 +459,18 @@ describe('RemoteRuntimeSharedControlConnection', () => {
     connection.close()
   })
 
-  it('refreshes pending request timeouts when keepalive frames show server progress', async () => {
+  it('times out a stuck short RPC on its absolute deadline despite keepalive frames', async () => {
+    // Why: a keepalive on the shared socket is armed by an unrelated long-poll,
+    // not by this request. It must NOT extend a stuck short RPC's deadline —
+    // otherwise a hung server call hangs the caller forever (#7948).
     const server = await createServer({
+      silentMethods: ['worktree.hang'],
       sendKeepaliveBeforeResponse: true,
-      keepaliveDelayMs: 25,
-      responseDelayMs: 60
+      keepaliveDelayMs: 20
     })
     const connection = new RemoteRuntimeSharedControlConnection(server.pairing)
 
-    await expect(connection.request('worktree.ps', undefined, 50)).resolves.toMatchObject({
-      ok: true,
-      result: { method: 'worktree.ps' }
-    })
+    await expect(connection.request('worktree.hang', undefined, 60)).rejects.toThrow('Timed out')
 
     connection.close()
   })
@@ -406,7 +520,158 @@ describe('RemoteRuntimeSharedControlConnection', () => {
     connection.close()
   })
 
-  it('rejects pending requests and records close diagnostics when the socket closes', async () => {
+  it('detects a half-open socket via client liveness, reconnects, and tags the replayed response', async () => {
+    // Why: the server keeps the TCP connection open but stops answering —
+    // no close frame, no pongs (autoPong disabled), no responses. This is the
+    // half-open devtunnel scenario from #7718: edge-triggered reconnect never
+    // fires, so client liveness must terminate the socket itself.
+    const server = await createServer({ disableAutoPong: true })
+    const connection = new RemoteRuntimeSharedControlConnection(server.pairing, {
+      liveness: { pingIntervalMs: 50, livenessTimeoutMs: 200 }
+    })
+    const onResponse = vi.fn()
+    const onClose = vi.fn()
+
+    await connection.subscribe('runtime.clientEvents.subscribe', null, 1000, {
+      onResponse,
+      onError: vi.fn(),
+      onClose
+    })
+    await vi.waitFor(() => expect(onResponse).toHaveBeenCalled())
+    expect(isRuntimeSubscriptionReplayResponse(onResponse.mock.calls[0]?.[0])).toBe(false)
+
+    // Liveness terminates the silent socket and the reconnect path replays
+    // the subscription on a fresh connection.
+    await vi.waitFor(() => expect(server.connectionCount()).toBeGreaterThanOrEqual(2), {
+      timeout: 5000
+    })
+    await vi.waitFor(
+      () =>
+        expect(
+          server.requests.filter((request) => request.method === 'runtime.clientEvents.subscribe')
+            .length
+        ).toBeGreaterThanOrEqual(2),
+      { timeout: 5000 }
+    )
+    // The first response after the reconnect replay carries the replay tag so
+    // snapshot freshness gates can accept the re-emitted snapshot.
+    await vi.waitFor(
+      () =>
+        expect(
+          onResponse.mock.calls.some(([response]) => isRuntimeSubscriptionReplayResponse(response))
+        ).toBe(true),
+      { timeout: 5000 }
+    )
+    expect(onClose).not.toHaveBeenCalled()
+
+    connection.close()
+  })
+
+  it('keeps unrelated pending requests alive when one request times out', async () => {
+    const server = await createServer({
+      silentMethods: ['worktree.hang'],
+      delayedMethods: ['worktree.ps']
+    })
+    const connection = new RemoteRuntimeSharedControlConnection(server.pairing)
+    const unsafe = connection as unknown as {
+      pendingRequests: Map<
+        string,
+        {
+          method: string
+          preparedRequest?: { retainedBytes: number; serializedRequest: string | null } | null
+        }
+      >
+    }
+
+    const timedOut = connection.request('worktree.hang', undefined, 250)
+    void timedOut.catch(() => undefined)
+    await vi.waitFor(() =>
+      expect(server.requests.map(({ method }) => method)).toContain('worktree.hang')
+    )
+    const survivor = connection.request('worktree.ps', undefined, 1000).then(
+      (response) => ({ ok: true as const, response }),
+      (error: unknown) => ({ ok: false as const, error })
+    )
+    await vi.waitFor(() =>
+      expect(server.requests.map(({ method }) => method)).toContain('worktree.ps')
+    )
+    expect(
+      Array.from(unsafe.pendingRequests.values()).every(
+        (pending) =>
+          pending.preparedRequest?.serializedRequest === null &&
+          pending.preparedRequest.retainedBytes > 0
+      )
+    ).toBe(true)
+    expect(getRemoteRuntimeRequestAdmissionEvidence().pendingRequestCount).toBe(2)
+
+    await expect(timedOut).rejects.toThrow('Timed out')
+    // Why: a single slow method is not evidence that a shared socket is dead;
+    // liveness monitoring owns connection-wide failure detection.
+    expect(connection.getDiagnostics()).toMatchObject({ state: 'ready', pendingRequestCount: 1 })
+    expect(getRemoteRuntimeRequestAdmissionEvidence().pendingRequestCount).toBe(1)
+
+    server.flushDelayedResponses()
+    await expect(survivor).resolves.toMatchObject({
+      ok: true,
+      response: { ok: true, result: { method: 'worktree.ps' } }
+    })
+    expect(unsafe.pendingRequests.size).toBe(0)
+    expect(getRemoteRuntimeRequestAdmissionEvidence()).toEqual({
+      pendingRequestCount: 0,
+      retainedBytes: 0
+    })
+    expect(server.connectionCount()).toBe(1)
+
+    connection.close()
+  })
+
+  it('keeps sent request bytes admitted while a ready socket stops responding', async () => {
+    const server = await createServer({ silentMethods: ['worktree.large'] })
+    const connection = new RemoteRuntimeSharedControlConnection(server.pairing)
+    const params = { value: 'x'.repeat(3 * 1024 * 1024) }
+    const retainedBytes = retainedRemoteRuntimeJsonStringBytes(
+      serializeRemoteRuntimeRpcRequest({
+        requestId: '00000000-0000-4000-8000-000000000000',
+        deviceToken: server.pairing.deviceToken,
+        method: 'worktree.large',
+        params
+      })
+    )
+    const admittedCount = Math.floor(REMOTE_RUNTIME_MAX_PENDING_RPC_BYTES / retainedBytes)
+    const pendingRequests = (
+      connection as unknown as {
+        pendingRequests: Map<
+          string,
+          { preparedRequest?: { serializedRequest: string | null } | null }
+        >
+      }
+    ).pendingRequests
+    const requests = Array.from({ length: admittedCount }, () =>
+      connection.request('worktree.large', params, 60_000).catch(() => undefined)
+    )
+    await vi.waitFor(() => expect(server.requests).toHaveLength(admittedCount))
+
+    expect(
+      Array.from(pendingRequests.values()).every(
+        (pending) => pending.preparedRequest?.serializedRequest === null
+      )
+    ).toBe(true)
+    await expect(connection.request('worktree.large', params, 60_000)).rejects.toMatchObject({
+      code: 'remote_runtime_busy'
+    })
+    expect(getRemoteRuntimeRequestAdmissionEvidence().retainedBytes).toBeLessThanOrEqual(
+      REMOTE_RUNTIME_MAX_PENDING_RPC_BYTES
+    )
+
+    connection.close()
+    await Promise.all(requests)
+    expect(getRemoteRuntimeRequestAdmissionEvidence()).toEqual({
+      pendingRequestCount: 0,
+      retainedBytes: 0
+    })
+  })
+
+  it('rejects pending requests and schedules standing recovery when the socket closes', async () => {
     const server = await createServer({ closeBeforeResponse: true })
     const connection = new RemoteRuntimeSharedControlConnection(server.pairing)
 
@@ -414,188 +679,12 @@ describe('RemoteRuntimeSharedControlConnection', () => {
       'Remote Orca runtime closed the connection'
     )
     expect(connection.getDiagnostics()).toMatchObject({
-      state: 'closed',
+      state: 'reconnecting',
       pendingRequestCount: 0,
       lastClose: { code: 4001, reason: 'test close' }
     })
-
+    connection.pauseStandingRetry()
+    expect(connection.getDiagnostics()).toMatchObject({ state: 'closed' })
     connection.close()
   })
 })
-
-async function createServer(
-  options: {
-    delaySubscriptionReady?: boolean
-    sendKeepaliveBeforeResponse?: boolean
-    keepaliveDelayMs?: number
-    responseDelayMs?: number
-    sendBinaryAfterAuth?: boolean
-    sendUnknownResponseBeforeResponse?: boolean
-    closeAfterFirstStreamingResponse?: boolean
-    closeBeforeResponse?: boolean
-    suppressReadyFrame?: boolean
-  } = {}
-): Promise<TestServer> {
-  const serverKeyPair = generateKeyPair()
-  const requests: TestServer['requests'] = []
-  const delayedResponses: (() => void)[] = []
-  let connectionCount = 0
-  let closedAfterFirstStreamingResponse = false
-  const wss = new WebSocketServer({ port: 0 })
-  servers.push(wss)
-
-  wss.on('connection', (ws) => {
-    connectionCount += 1
-    let sharedKey: Uint8Array | null = null
-    let authenticated = false
-    ws.on('message', (data, isBinary) => {
-      if (isBinary) {
-        return
-      }
-      const frame = data.toString()
-      if (!sharedKey) {
-        const hello = JSON.parse(frame) as { publicKeyB64: string }
-        sharedKey = deriveSharedKey(
-          serverKeyPair.secretKey,
-          publicKeyFromBase64(hello.publicKeyB64)
-        )
-        if (options.suppressReadyFrame) {
-          return
-        }
-        ws.send(JSON.stringify({ type: 'e2ee_ready' }))
-        return
-      }
-      const plaintext = decrypt(frame, sharedKey)
-      if (!plaintext) {
-        return
-      }
-      if (!authenticated) {
-        authenticated = true
-        sendEncrypted(ws, sharedKey, { type: 'e2ee_authenticated' })
-        if (options.sendBinaryAfterAuth) {
-          ws.send(Buffer.from([1, 2, 3]), { binary: true })
-        }
-        return
-      }
-      handleRequest(
-        ws,
-        sharedKey,
-        requests,
-        JSON.parse(plaintext),
-        {
-          ...options,
-          closeAfterStreamingResponse: () => {
-            if (!options.closeAfterFirstStreamingResponse || closedAfterFirstStreamingResponse) {
-              return false
-            }
-            closedAfterFirstStreamingResponse = true
-            return true
-          }
-        },
-        delayedResponses
-      )
-    })
-  })
-
-  await new Promise<void>((resolve) => wss.once('listening', resolve))
-  const address = wss.address() as AddressInfo
-  const pairing = parsePairingCode(
-    encodePairingOffer({
-      v: 2,
-      endpoint: `ws://127.0.0.1:${address.port}`,
-      deviceToken: 'device-token',
-      publicKeyB64: publicKeyToBase64(serverKeyPair.publicKey)
-    })
-  )
-  if (!pairing) {
-    throw new Error('Failed to create test pairing')
-  }
-  return {
-    pairing,
-    requests,
-    connectionCount: () => connectionCount,
-    flushDelayedResponses: () => delayedResponses.splice(0).forEach((send) => send())
-  }
-}
-
-function handleRequest(
-  ws: WebSocket,
-  sharedKey: Uint8Array,
-  requests: TestServer['requests'],
-  request: { id: string; method: string; params?: unknown },
-  options: {
-    delaySubscriptionReady?: boolean
-    sendKeepaliveBeforeResponse?: boolean
-    keepaliveDelayMs?: number
-    responseDelayMs?: number
-    sendUnknownResponseBeforeResponse?: boolean
-    closeAfterStreamingResponse?: () => boolean
-    closeBeforeResponse?: boolean
-  },
-  delayedResponses: (() => void)[]
-): void {
-  requests.push(request)
-  if (options.closeBeforeResponse) {
-    ws.close(4001, 'test close')
-    return
-  }
-  const streaming = isStreamingMethod(request.method)
-  const result = streaming
-    ? { type: 'ready', subscriptionId: `${request.method}:subscription` }
-    : { method: request.method }
-  const sendResponse = (): void => {
-    if (options.sendUnknownResponseBeforeResponse) {
-      sendEncrypted(ws, sharedKey, {
-        id: 'unknown-response-id',
-        ok: true,
-        result: { method: 'unknown' },
-        _meta: { runtimeId: 'runtime-test' }
-      })
-    }
-    sendEncrypted(ws, sharedKey, {
-      id: request.id,
-      ok: true,
-      result,
-      streaming: streaming ? true : undefined,
-      _meta: { runtimeId: 'runtime-test' }
-    })
-  }
-  const closeAfterResponse = streaming && options.closeAfterStreamingResponse?.() === true
-  if (options.sendKeepaliveBeforeResponse) {
-    const sendKeepalive = (): void => sendEncrypted(ws, sharedKey, { _keepalive: true })
-    if (options.keepaliveDelayMs !== undefined) {
-      setTimeout(sendKeepalive, options.keepaliveDelayMs)
-    } else {
-      sendKeepalive()
-    }
-  }
-  if (options.delaySubscriptionReady && streaming) {
-    delayedResponses.push(sendResponse)
-    return
-  }
-  if (options.responseDelayMs !== undefined) {
-    setTimeout(() => {
-      sendResponse()
-      if (closeAfterResponse) {
-        setTimeout(() => ws.close(), 0)
-      }
-    }, options.responseDelayMs)
-    return
-  }
-  sendResponse()
-  if (closeAfterResponse) {
-    setTimeout(() => ws.close(), 0)
-  }
-}
-
-function isStreamingMethod(method: string): boolean {
-  return (
-    method.endsWith('.subscribe') ||
-    method === 'session.tabs.subscribeAll' ||
-    method === 'files.watch'
-  )
-}
-
-function sendEncrypted(ws: WebSocket, sharedKey: Uint8Array, message: unknown): void {
-  ws.send(encrypt(JSON.stringify(message), sharedKey))
-}

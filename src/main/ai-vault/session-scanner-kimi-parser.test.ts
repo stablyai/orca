@@ -3,7 +3,12 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import { parseKimiSessionFile } from './session-scanner-kimi-parser'
-import { clearKimiSessionIndexCache } from './session-scanner-kimi-paths'
+import {
+  clearKimiSessionIndexCache,
+  hasKimiSessionIndexCacheEntryForTests,
+  KIMI_WORK_DIR_CACHE_MAX_INDEX_PATHS,
+  readKimiWorkDirBySessionId
+} from './session-scanner-kimi-paths'
 import type { FileWithMtime } from './session-scanner-types'
 
 let tempDirs: string[] = []
@@ -217,5 +222,35 @@ describe('parseKimiSessionFile', () => {
     })
     const session = await parseKimiSessionFile(file, 'darwin')
     expect(session?.title).toBe('do the thing')
+  })
+
+  it('caps cached session index maps by recent index path', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'orca-kimi-cache-'))
+    tempDirs.push(root)
+    const indexPaths: string[] = []
+
+    for (let index = 0; index <= KIMI_WORK_DIR_CACHE_MAX_INDEX_PATHS; index += 1) {
+      const home = join(root, `home-${index}`)
+      await mkdir(home, { recursive: true })
+      const indexPath = join(home, 'session_index.jsonl')
+      await writeFile(
+        indexPath,
+        `${JSON.stringify({ sessionId: `session_${index}`, workDir: `/tmp/kimi-${index}` })}\n`
+      )
+      indexPaths.push(indexPath)
+    }
+
+    for (const indexPath of indexPaths.slice(0, KIMI_WORK_DIR_CACHE_MAX_INDEX_PATHS)) {
+      await readKimiWorkDirBySessionId(indexPath)
+    }
+    const refreshedFirst = await readKimiWorkDirBySessionId(indexPaths[0])
+    expect(refreshedFirst.get('session_0')).toBe('/tmp/kimi-0')
+    await readKimiWorkDirBySessionId(indexPaths[KIMI_WORK_DIR_CACHE_MAX_INDEX_PATHS])
+
+    expect(hasKimiSessionIndexCacheEntryForTests(indexPaths[0])).toBe(true)
+    expect(hasKimiSessionIndexCacheEntryForTests(indexPaths[1])).toBe(false)
+    expect(
+      hasKimiSessionIndexCacheEntryForTests(indexPaths[KIMI_WORK_DIR_CACHE_MAX_INDEX_PATHS])
+    ).toBe(true)
   })
 })

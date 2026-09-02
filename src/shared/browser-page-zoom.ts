@@ -23,7 +23,7 @@ export function normalizeBrowserPageZoomLevel(value: unknown): number {
 export function browserPageZoomLevelToPercent(level: number): number {
   // Why: Electron zoom levels are exponential; show the same percentage users
   // expect from Chromium browser zoom controls.
-  return Math.round(100 * Math.pow(1.2, normalizeBrowserPageZoomLevel(level)))
+  return Math.round(100 * 1.2 ** normalizeBrowserPageZoomLevel(level))
 }
 
 export function nextBrowserPageZoomLevel(

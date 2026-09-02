@@ -1,9 +1,7 @@
-import type {
-  GlobalSettings,
-  TerminalColorOverrides,
-  GhosttyImportPreview
-} from '../../shared/types'
+import type { GhosttyImportPreview, GlobalSettings } from '../../shared/global-settings-types'
+import type { TerminalColorOverrides } from '../../shared/terminal-color-overrides'
 import { HEX_COLOR_RE } from '../../shared/color-validation'
+import { parsePaddingValue, parseStrictInt } from './numeric-config-values'
 
 const PALETTE_INDEX_MAP: Record<number, keyof TerminalColorOverrides> = {
   0: 'black',
@@ -33,18 +31,6 @@ type FieldResult =
   | null
 
 const normalizeHex = (v: string): string => (v.startsWith('#') ? v : `#${v}`)
-
-// Why: `Number("1e10")` succeeds and passes `Number.isInteger`, so a Ghostty
-// config with `window-padding-x = 1e9` would sail through the mapper and land
-// an absurd value in the store. Restrict to plain decimal integers.
-const STRICT_INT_RE = /^-?\d+$/
-const parseStrictInt = (v: string): number | null => {
-  if (!STRICT_INT_RE.test(v)) {
-    return null
-  }
-  const num = Number(v)
-  return Number.isFinite(num) ? num : null
-}
 
 type FieldParser = (value: string, rawValue: string | string[]) => FieldResult
 
@@ -129,7 +115,7 @@ export function mapGhosttyToOrca(
         }
         const idxStr = entry.slice(0, eqIdx).trim()
         const color = entry.slice(eqIdx + 1).trim()
-        const index = parseInt(idxStr, 10)
+        const index = Number.parseInt(idxStr, 10)
         if (Number.isNaN(index) || !HEX_COLOR_RE.test(color)) {
           continue
         }
@@ -171,19 +157,36 @@ export function mapGhosttyToOrca(
     },
 
     'window-padding-x': (v) => {
-      const num = parseStrictInt(v)
-      if (num === null || num < 0 || num > 512) {
+      const num = parsePaddingValue(v)
+      if (num === null) {
         return null
       }
       return { key: 'terminalPaddingX', value: num }
     },
 
     'window-padding-y': (v) => {
-      const num = parseStrictInt(v)
-      if (num === null || num < 0 || num > 512) {
+      const num = parsePaddingValue(v)
+      if (num === null) {
         return null
       }
       return { key: 'terminalPaddingY', value: num }
+    },
+
+    // Why: only percentages translate to xterm's line-height ratio; Ghostty's
+    // pixel form depends on the rendered cell height, which we can't know here.
+    // The settings UI clamps terminalLineHeight to [1, 3], so reject outside it.
+    'adjust-cell-height': (v) => {
+      const match = /^\+?(\d+(?:\.\d+)?)%$/.exec(v.trim())
+      if (!match) {
+        return null
+      }
+      const percent = Number(match[1])
+      const rawLineHeight = 1 + percent / 100
+      if (rawLineHeight > 3) {
+        return null
+      }
+      const lineHeight = Math.round(100 + percent) / 100
+      return { key: 'terminalLineHeight', value: lineHeight }
     },
 
     'cursor-text': (v) => {
@@ -191,13 +194,6 @@ export function mapGhosttyToOrca(
         return null
       }
       return { colorOverrides: { cursorAccent: normalizeHex(v) } }
-    },
-
-    'bold-color': (v) => {
-      if (!HEX_COLOR_RE.test(v)) {
-        return null
-      }
-      return { colorOverrides: { bold: normalizeHex(v) } }
     },
 
     'mouse-hide-while-typing': (v) => {
@@ -279,6 +275,13 @@ export function mapGhosttyToOrca(
     // Passing the same string inverts the semantics, and correctly inverting a
     // character set is non-trivial. Treat as unsupported to avoid silent misbehavior.
     if (key === 'selection-word-chars') {
+      unsupportedKeys.push(key)
+      continue
+    }
+
+    // Why: xterm.js ITheme has no bold color slot (xtermjs/xterm.js#6032), so importing
+    // bold-color would render as a no-op; report it as unsupported instead of silently dropping.
+    if (key === 'bold-color') {
       unsupportedKeys.push(key)
       continue
     }

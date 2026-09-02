@@ -1,4 +1,5 @@
-import type { DirEntry, GlobalSettings } from '../../../shared/types'
+import type { DirEntry } from '../../../shared/filesystem-entry-types'
+import type { GlobalSettings } from '../../../shared/global-settings-types'
 import type { RuntimeFileOperationArgs } from '@/runtime/runtime-file-client'
 import {
   readRuntimeDirectory,
@@ -126,7 +127,7 @@ export function applyMarkdownTemplatePlaceholders(
   }
 
   return content.replace(/\{\{\s*([a-zA-Z][a-zA-Z0-9_-]*)\s*\}\}/g, (match, key: string) => {
-    return Object.prototype.hasOwnProperty.call(replacements, key) ? replacements[key] : match
+    return Object.hasOwn(replacements, key) ? replacements[key] : match
   })
 }
 

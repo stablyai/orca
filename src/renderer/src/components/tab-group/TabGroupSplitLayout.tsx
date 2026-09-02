@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { DndContext, DragOverlay } from '@dnd-kit/core'
-import type { TabGroupLayoutNode } from '../../../../shared/types'
+import type { TabGroupLayoutNode } from '../../../../shared/tab-types'
 import { useAppStore } from '../../store'
 import TabGroupPanel from './TabGroupPanel'
 import TabDragPreview from '../tab-bar/TabDragPreview'
@@ -34,25 +34,45 @@ function ResizeHandle({
   const onPointerDown = useCallback(
     (event: React.PointerEvent<HTMLDivElement>) => {
       event.preventDefault()
+      // Why: a second pointer must not steal or finalize the active gesture.
+      if (activeResizeCleanupRef.current) {
+        return
+      }
       const handle = event.currentTarget
       const container = handle.parentElement
       if (!container) {
         return
       }
-      activeResizeCleanupRef.current?.()
+      const firstPane = handle.previousElementSibling as HTMLElement | null
+      const secondPane = handle.nextElementSibling as HTMLElement | null
+      if (!firstPane || !secondPane) {
+        return
+      }
       onResizeStart()
       setDragging(true)
       handle.setPointerCapture(event.pointerId)
+      // Why: measure outside pointermove so pane writes never force a readback.
+      let rect = container.getBoundingClientRect()
+      const resizeObserver = new ResizeObserver(() => {
+        rect = container.getBoundingClientRect()
+      })
+      resizeObserver.observe(container)
+      let draggedRatio: number | null = null
 
       const onPointerMove = (moveEvent: PointerEvent): void => {
-        if (!handle.hasPointerCapture(event.pointerId)) {
+        if (moveEvent.pointerId !== event.pointerId || !handle.hasPointerCapture(event.pointerId)) {
           return
         }
-        const rect = container.getBoundingClientRect()
         const ratio = isHorizontal
           ? (moveEvent.clientX - rect.left) / rect.width
           : (moveEvent.clientY - rect.top) / rect.height
-        onRatioChange(Math.min(MAX_RATIO, Math.max(MIN_RATIO, ratio)))
+        const clamped = Math.min(MAX_RATIO, Math.max(MIN_RATIO, ratio))
+        draggedRatio = clamped
+        // Why: direct style writes keep the drag off the store — a commit per
+        // pointermove published 60-120 global store updates/s against every
+        // subscriber (STA-3328). React re-applies identical flex on commit.
+        firstPane.style.flex = `${clamped} 1 0%`
+        secondPane.style.flex = `${1 - clamped} 1 0%`
       }
 
       let cleaned = false
@@ -61,6 +81,10 @@ function ResizeHandle({
           return
         }
         cleaned = true
+        resizeObserver.disconnect()
+        if (draggedRatio !== null) {
+          onRatioChange(draggedRatio)
+        }
         if (updateDragging) {
           setDragging(false)
         }
@@ -80,16 +104,22 @@ function ResizeHandle({
         }
       }
 
-      const onPointerUp = (): void => {
-        cleanup()
+      const onPointerUp = (upEvent: PointerEvent): void => {
+        if (upEvent.pointerId === event.pointerId) {
+          cleanup()
+        }
       }
 
-      const onPointerCancel = (): void => {
-        cleanup()
+      const onPointerCancel = (cancelEvent: PointerEvent): void => {
+        if (cancelEvent.pointerId === event.pointerId) {
+          cleanup()
+        }
       }
 
-      const onLostPointerCapture = (): void => {
-        cleanup()
+      const onLostPointerCapture = (lostEvent: PointerEvent): void => {
+        if (lostEvent.pointerId === event.pointerId) {
+          cleanup()
+        }
       }
 
       handle.addEventListener('pointermove', onPointerMove)
@@ -103,9 +133,9 @@ function ResizeHandle({
 
   return (
     <div
-      className={`shrink-0 ${
-        isHorizontal ? 'w-1 cursor-col-resize' : 'h-1 cursor-row-resize'
-      } ${dragging ? 'bg-accent' : 'bg-border hover:bg-accent/50'}`}
+      className={`tab-group-split-resize-handle ${
+        isHorizontal ? 'is-vertical' : 'is-horizontal'
+      }${dragging ? ' is-dragging' : ''}`}
       onPointerDown={onPointerDown}
     />
   )
@@ -121,6 +151,10 @@ function SplitNode({
   touchesTopEdge,
   touchesRightEdge,
   touchesLeftEdge,
+  touchesBottomEdge,
+  suppressLeftBorder,
+  suppressRightBorder,
+  suppressBottomBorder,
   isTabDragActive,
   hoveredTabInsertion
 }: {
@@ -133,6 +167,10 @@ function SplitNode({
   touchesTopEdge: boolean
   touchesRightEdge: boolean
   touchesLeftEdge: boolean
+  touchesBottomEdge: boolean
+  suppressLeftBorder: boolean
+  suppressRightBorder: boolean
+  suppressBottomBorder: boolean
   isTabDragActive: boolean
   hoveredTabInsertion: HoveredTabInsertion | null
 }): React.JSX.Element {
@@ -144,6 +182,7 @@ function SplitNode({
       <TabGroupPanel
         groupId={node.groupId}
         worktreeId={worktreeId}
+        isVisible={isWorktreeActive}
         // Why: hidden worktrees stay mounted so their PTYs and split layouts
         // survive worktree switches, but only the visible worktree may own the
         // global terminal shortcuts. If an offscreen group's pane stays
@@ -152,6 +191,10 @@ function SplitNode({
         hasSplitGroups={hasSplitGroups}
         touchesRightEdge={touchesRightEdge}
         touchesLeftEdge={touchesLeftEdge}
+        touchesBottomEdge={touchesBottomEdge}
+        suppressLeftBorder={suppressLeftBorder}
+        suppressRightBorder={suppressRightBorder}
+        suppressBottomBorder={suppressBottomBorder}
         reserveClosedExplorerToggleSpace={touchesTopEdge && touchesRightEdge}
         reserveCollapsedSidebarHeaderSpace={touchesTopEdge && touchesLeftEdge}
         isTabDragActive={isTabDragActive}
@@ -181,6 +224,12 @@ function SplitNode({
           touchesTopEdge={touchesTopEdge}
           touchesRightEdge={isHorizontal ? false : touchesRightEdge}
           touchesLeftEdge={touchesLeftEdge}
+          touchesBottomEdge={isHorizontal ? touchesBottomEdge : false}
+          suppressLeftBorder={suppressLeftBorder}
+          // Why: the resize handle paints the inner seam — pane borders here
+          // stack into a triple-line bar beside the divider.
+          suppressRightBorder={isHorizontal ? true : suppressRightBorder}
+          suppressBottomBorder={isHorizontal ? suppressBottomBorder : true}
           isTabDragActive={isTabDragActive}
           hoveredTabInsertion={hoveredTabInsertion}
         />
@@ -201,6 +250,10 @@ function SplitNode({
           touchesTopEdge={isHorizontal ? touchesTopEdge : false}
           touchesRightEdge={touchesRightEdge}
           touchesLeftEdge={isHorizontal ? false : touchesLeftEdge}
+          touchesBottomEdge={touchesBottomEdge}
+          suppressLeftBorder={isHorizontal ? true : suppressLeftBorder}
+          suppressRightBorder={suppressRightBorder}
+          suppressBottomBorder={suppressBottomBorder}
           isTabDragActive={isTabDragActive}
           hoveredTabInsertion={hoveredTabInsertion}
         />
@@ -275,6 +328,10 @@ export default function TabGroupSplitLayout({
               touchesTopEdge={true}
               touchesRightEdge={true}
               touchesLeftEdge={true}
+              touchesBottomEdge={false}
+              suppressLeftBorder={false}
+              suppressRightBorder={false}
+              suppressBottomBorder={false}
               isTabDragActive={dragSplit.activeDrag !== null}
               hoveredTabInsertion={dragSplit.hoveredTabInsertion}
             />

@@ -2,8 +2,15 @@ import { mkdtemp, mkdir, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { AI_VAULT_AGENTS, buildAiVaultResumeCommand } from '../../shared/ai-vault-types'
+import { AI_VAULT_AGENTS } from '../../shared/ai-vault-types'
 import { scanAiVaultSessions } from './session-scanner'
+import {
+  isolatedScanRoots,
+  jsonLines,
+  writeAntigravityScannerFixture,
+  writeOmpScannerFixture,
+  writePrimeAgentScannerFixture
+} from './session-scanner-test-fixtures'
 
 let tempRoots: string[] = []
 
@@ -12,34 +19,6 @@ afterEach(async () => {
   await Promise.all(tempRoots.map((root) => rm(root, { recursive: true, force: true })))
   tempRoots = []
 })
-
-function isolatedScanRoots(root: string) {
-  return {
-    claudeProjectsDir: join(root, 'claude-projects'),
-    codexSessionsDir: join(root, 'codex-sessions'),
-    geminiSessionsDir: join(root, 'gemini-sessions'),
-    copilotSessionsDir: join(root, 'copilot-sessions'),
-    cursorProjectsDir: join(root, 'cursor-projects'),
-    opencodeStorageDir: join(root, 'opencode-storage'),
-    // Why: prevent the SQLite scanner from picking up the real
-    // ~/.local/share/opencode/opencode.db during tests.
-    opencodeDbPaths: [] as readonly string[],
-    grokSessionsDir: join(root, 'grok-sessions'),
-    devinTranscriptsDir: join(root, 'devin-transcripts'),
-    hermesSessionsDir: join(root, 'hermes-sessions'),
-    rovoSessionsDir: join(root, 'rovo-sessions'),
-    openclawStateDir: join(root, 'openclaw-state'),
-    openclawLegacyStateDir: join(root, 'openclaw-legacy-state'),
-    piSessionsDir: join(root, 'pi-sessions'),
-    droidSessionsDir: join(root, 'droid-sessions'),
-    droidProjectsDir: join(root, 'droid-projects'),
-    kimiSessionsDir: join(root, 'kimi-sessions')
-  }
-}
-
-function jsonLines(records: unknown[]): string {
-  return records.map((record) => JSON.stringify(record)).join('\n')
-}
 
 describe('scanAiVaultSessions', () => {
   it('indexes Claude and Codex transcripts with resume commands', async () => {
@@ -177,7 +156,9 @@ describe('scanAiVaultSessions', () => {
 
     const result = await scanAiVaultSessions({
       ...roots,
-      platform: 'darwin'
+      platform: 'darwin',
+      limit: 1,
+      unlimited: true
     })
 
     expect(result.issues).toEqual([])
@@ -186,7 +167,6 @@ describe('scanAiVaultSessions', () => {
       'Indexed Codex resume picker title',
       'Vault polish pass'
     ])
-
     const claude = result.sessions.find((session) => session.agent === 'claude')
     expect(claude).toMatchObject({
       sessionId: 'claude-session',
@@ -197,6 +177,8 @@ describe('scanAiVaultSessions', () => {
       totalTokens: 155,
       resumeCommand: "cd '/repo/app' && claude --resume 'claude-session'"
     })
+    // Why: list scans omit firstUserPrompt so the vault payload stays bounded.
+    expect(claude?.firstUserPrompt).toBeUndefined()
 
     const codex = result.sessions.find((session) => session.agent === 'codex')
     expect(codex).toMatchObject({
@@ -208,6 +190,7 @@ describe('scanAiVaultSessions', () => {
       totalTokens: 625,
       resumeCommand: `cd '/repo/app/packages/web' && CODEX_HOME='${root}' codex resume '019f0000-1111-7222-8333-444444444444'`
     })
+    expect(codex?.firstUserPrompt).toBeUndefined()
   })
 
   it('indexes Codex sessions from Orca runtime homes with resumable commands', async () => {
@@ -450,6 +433,9 @@ describe('scanAiVaultSessions', () => {
       })
     )
 
+    const antigravitySessionId = 'aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee'
+    await writeAntigravityScannerFixture(roots.antigravityBrainDir, antigravitySessionId)
+
     await mkdir(roots.copilotSessionsDir, { recursive: true })
     await writeFile(
       join(roots.copilotSessionsDir, 'copilot-session.jsonl'),
@@ -611,6 +597,9 @@ describe('scanAiVaultSessions', () => {
       ])
     )
 
+    const ompSessionFile = await writeOmpScannerFixture(roots.ompSessionsDir)
+    const primeAgentSessionFile = await writePrimeAgentScannerFixture(roots.primeAgentSessionsDir)
+
     await mkdir(roots.devinTranscriptsDir, { recursive: true })
     await writeFile(
       join(roots.devinTranscriptsDir, 'devin-session.json'),
@@ -656,6 +645,26 @@ describe('scanAiVaultSessions', () => {
           usage: { input_tokens: 2, output_tokens: 3 }
         }
       ])
+    )
+
+    const clineSessionId = 'cline-session'
+    const clineSessionDir = join(roots.clineSessionsDir, clineSessionId)
+    await mkdir(clineSessionDir, { recursive: true })
+    await writeFile(
+      join(clineSessionDir, `${clineSessionId}.json`),
+      JSON.stringify({
+        session_id: clineSessionId,
+        started_at: '2026-05-01T10:10:30.000Z',
+        model: 'cline-model',
+        cwd: '/tmp/cline'
+      })
+    )
+    await writeFile(
+      join(clineSessionDir, `${clineSessionId}.messages.json`),
+      JSON.stringify({
+        updated_at: '2026-05-01T10:10:31.000Z',
+        messages: [{ role: 'user', content: [{ type: 'text', text: 'Cline vault title' }] }]
+      })
     )
 
     // Kimi: <sessions>/wd_*/session_*/state.json + sibling agents/main/wire.jsonl,
@@ -707,11 +716,7 @@ describe('scanAiVaultSessions', () => {
       ])
     )
 
-    const result = await scanAiVaultSessions({
-      ...roots,
-      platform: 'darwin',
-      limit: 20
-    })
+    const result = await scanAiVaultSessions({ ...roots, platform: 'darwin', limit: 20 })
 
     expect(result.issues).toEqual([])
     expect(new Set(result.sessions.map((session) => session.agent))).toEqual(
@@ -728,6 +733,7 @@ describe('scanAiVaultSessions', () => {
       `cd '/tmp/codex' && CODEX_HOME='${root}' codex resume 'codex-session'`
     )
     expect(commandByAgent.get('gemini')).toBe("gemini --resume 'gemini-session'")
+    expect(commandByAgent.get('antigravity')).toBe(`agy --conversation '${antigravitySessionId}'`)
     expect(commandByAgent.get('copilot')).toBe(
       "cd '/tmp/copilot' && copilot --resume='copilot-session'"
     )
@@ -746,11 +752,59 @@ describe('scanAiVaultSessions', () => {
       "cd '/tmp/openclaw' && openclaw --resume 'openclaw-session'"
     )
     expect(commandByAgent.get('pi')).toBe("cd '/tmp/pi' && pi --session 'pi-session'")
+    // OMP resumes by absolute transcript path, not by internal session id.
+    expect(commandByAgent.get('omp')).toBe(`cd '/tmp/omp' && omp --resume '${ompSessionFile}'`)
+    // Prime Agent's `--resume <path|id>` takes the same absolute-path form as OMP.
+    expect(commandByAgent.get('prime-agent')).toBe(
+      `cd '/tmp/prime-agent' && prime-agent --resume '${primeAgentSessionFile}'`
+    )
+    expect(commandByAgent.get('cline')).toBe("cd '/tmp/cline' && cline --id 'cline-session'")
     expect(commandByAgent.get('devin')).toBe("cd '/tmp/devin' && devin --resume 'devin-session'")
     expect(commandByAgent.get('droid')).toBe("cd '/tmp/droid' && droid --resume 'droid-session'")
     expect(commandByAgent.get('kimi')).toBe(
       "cd '/tmp/kimi' && kimi --session 'session_kimi-session'"
     )
+
+    const ompSession = result.sessions.find((session) => session.agent === 'omp')
+    expect(ompSession?.model).toBe('gpt-5.4-mini')
+    expect(ompSession?.totalTokens).toBe(160)
+
+    // Prime Agent keeps Pi's `model_change.modelId` key, so the pre-reply model
+    // must come through even though no assistant message was written yet.
+    const primeAgentSession = result.sessions.find((session) => session.agent === 'prime-agent')
+    expect(primeAgentSession?.model).toBe('inference/big-model')
+    expect(primeAgentSession?.title).toBe('Prime Agent title')
+  })
+
+  it('captures an in-progress OMP model from model_change before any assistant reply', async () => {
+    // OMP writes the model on `model_change.model` (not Pi's `modelId`). With no
+    // assistant message yet, the model must still come through — proving the
+    // model_change fallback rather than assistant-message capture.
+    const root = await mkdtemp(join(tmpdir(), 'orca-ai-vault-omp-mc-'))
+    tempRoots.push(root)
+    const roots = isolatedScanRoots(root)
+    await mkdir(roots.ompSessionsDir, { recursive: true })
+    await writeFile(
+      join(roots.ompSessionsDir, 'omp-in-progress.jsonl'),
+      jsonLines([
+        {
+          type: 'session',
+          id: 'omp-in-progress',
+          timestamp: '2026-05-01T10:00:00.000Z',
+          cwd: '/tmp/omp'
+        },
+        { type: 'model_change', model: 'omp-mc-only-model', timestamp: '2026-05-01T10:00:01.000Z' },
+        {
+          type: 'message',
+          timestamp: '2026-05-01T10:00:02.000Z',
+          message: { role: 'user', content: [{ type: 'text', text: 'first prompt' }] }
+        }
+      ])
+    )
+
+    const result = await scanAiVaultSessions({ ...roots, platform: 'darwin', limit: 5 })
+    const session = result.sessions.find((s) => s.agent === 'omp')
+    expect(session?.model).toBe('omp-mc-only-model')
   })
 
   it('strips newline-heavy Grok user_query envelopes without regex matching', async () => {
@@ -794,44 +848,5 @@ describe('scanAiVaultSessions', () => {
         pattern.source.includes('[\\s\\S]')
     )
     expect(usedGrokWrapperMatch).toBe(false)
-  })
-})
-
-describe('buildAiVaultResumeCommand', () => {
-  it('wraps Windows cwd changes in cmd so PowerShell and cmd launch the same resume command', () => {
-    expect(
-      buildAiVaultResumeCommand({
-        agent: 'codex',
-        sessionId: 'session-1',
-        cwd: 'C:\\Users\\Ada Lovelace\\repo',
-        platform: 'win32'
-      })
-    ).toBe('cmd /d /s /c "cd /d ""C:\\Users\\Ada Lovelace\\repo"" && codex resume ""session-1"""')
-  })
-
-  it('carries non-default Codex homes in copied resume commands', () => {
-    expect(
-      buildAiVaultResumeCommand({
-        agent: 'codex',
-        sessionId: 'session-1',
-        cwd: '/repo/app',
-        platform: 'darwin',
-        codexHome: '/Users/ada/Library/Application Support/Orca/codex-runtime-home/home'
-      })
-    ).toBe(
-      "cd '/repo/app' && CODEX_HOME='/Users/ada/Library/Application Support/Orca/codex-runtime-home/home' codex resume 'session-1'"
-    )
-
-    expect(
-      buildAiVaultResumeCommand({
-        agent: 'codex',
-        sessionId: 'session-1',
-        cwd: 'C:\\Users\\Ada Lovelace\\repo',
-        platform: 'win32',
-        codexHome: 'C:\\Users\\Ada\\AppData\\Roaming\\Orca\\codex-runtime-home\\home'
-      })
-    ).toBe(
-      'cmd /d /s /c "cd /d ""C:\\Users\\Ada Lovelace\\repo"" && set ""CODEX_HOME=C:\\Users\\Ada\\AppData\\Roaming\\Orca\\codex-runtime-home\\home"" && codex resume ""session-1"""'
-    )
   })
 })

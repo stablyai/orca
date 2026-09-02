@@ -84,4 +84,22 @@ describe('project skill runtime helpers', () => {
       )
     ).toBe('powershell.exe')
   })
+
+  it('forces PowerShell for host setup when the terminal shell is Git Bash', () => {
+    // Git Bash rewrites the leading /d /s /c arguments of the generated command as MSYS paths.
+    expect(
+      getProjectAgentSkillTerminalShellOverride(
+        'win32',
+        { terminalWindowsShell: 'git-bash' },
+        getProjectAgentSkillRuntime(hostRuntime, 'win32')
+      )
+    ).toBe('powershell.exe')
+    expect(
+      getProjectAgentSkillTerminalShellOverride(
+        'win32',
+        { terminalWindowsShell: 'cmd.exe' },
+        getProjectAgentSkillRuntime(hostRuntime, 'win32')
+      )
+    ).toBeUndefined()
+  })
 })

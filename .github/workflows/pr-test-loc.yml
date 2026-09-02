@@ -1,0 +1,42 @@
+name: PR test LoC
+
+on:
+  pull_request:
+    types:
+      - opened
+      - synchronize
+      - reopened
+      - ready_for_review
+
+concurrency:
+  group: pr-test-loc-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  loc:
+    name: test vs non-test LoC
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      # Why no checkout: the Files API already has per-file additions/deletions.
+      # Why the default branch and never pull/<n>/head: this job holds a write-scoped
+      # GITHUB_TOKEN, so it may only execute reviewed code. A PR that edits these
+      # scripts takes effect once merged.
+      - name: Count test vs non-test LoC
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          TRUSTED_REF: ${{ github.event.repository.default_branch }}
+        run: |
+          set -euo pipefail
+          for script in pr-test-loc-table.mjs pr-test-loc-summary.mjs; do
+            gh api "repos/${GITHUB_REPOSITORY}/contents/.github/scripts/${script}?ref=${TRUSTED_REF}" \
+              --jq .content | base64 --decode > "$RUNNER_TEMP/${script}"
+          done
+          node "$RUNNER_TEMP/pr-test-loc-summary.mjs" --update-pr "$PR_NUMBER"

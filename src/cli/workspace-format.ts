@@ -1,7 +1,3 @@
-import type { Automation, AutomationRun } from '../shared/automations-types'
-import { getAutomationLegacyRepoId } from '../shared/automation-run-identity'
-import { formatAutomationPrecheckTimeout } from '../shared/automation-precheck'
-import { formatAutomationSchedule } from '../shared/automation-schedules'
 import type { PublicKnownRuntimeEnvironment } from '../shared/runtime-environments'
 import type {
   RuntimeRepoList,
@@ -10,19 +6,24 @@ import type {
   RuntimeWorktreePsResult,
   RuntimeWorktreeRecord
 } from '../shared/runtime-types'
-import type { MemorySnapshot, WorktreeMemory } from '../shared/types'
+import type { MemorySnapshot, WorktreeMemory } from '../shared/process-stats-types'
 
 export function formatMemorySnapshot(snapshot: MemorySnapshot): string {
   const topWorktrees = [...snapshot.worktrees].sort((a, b) => b.memory - a.memory).slice(0, 10)
+  const hostAvailable = snapshot.host.availableMemory ?? snapshot.host.freeMemory
+  const hostAvailableSource = snapshot.host.availableMemorySource ?? 'free-memory'
   const lines = [
     `collectedAt: ${new Date(snapshot.collectedAt).toISOString()}`,
     `totalMemory: ${formatByteCount(snapshot.totalMemory)}`,
+    `processMemoryMetric: ${formatProcessMemoryMetric(snapshot.processMemoryMetric)}`,
+    ...formatCommitLines(snapshot),
     `totalCpu: ${formatCpu(snapshot.totalCpu)}`,
     [
       `hostUsed: ${formatByteCount(snapshot.host.usedMemory)}`,
       `/ ${formatByteCount(snapshot.host.totalMemory)}`,
       `(${snapshot.host.memoryUsagePercent.toFixed(1)}%)`
     ].join(' '),
+    [`hostAvailable: ${formatByteCount(hostAvailable)}`, `(${hostAvailableSource})`].join(' '),
     [
       `app: ${formatByteCount(snapshot.app.memory)}`,
       `(main ${formatByteCount(snapshot.app.main.memory)},`,
@@ -51,13 +52,40 @@ function formatWorktreeMemoryLine(worktree: WorktreeMemory): string {
   return [
     `- ${worktree.worktreeName}`,
     `${formatByteCount(worktree.memory)}`,
+    ...(worktree.privateMemory === undefined
+      ? []
+      : [`${formatByteCount(worktree.privateMemory)} committed`]),
     `${formatCpu(worktree.cpu)}`,
     `${worktree.sessions.length} session${worktree.sessions.length === 1 ? '' : 's'}`
   ].join('  ')
 }
 
+// Why omitted rather than zeroed: a host that predates the field, or cannot read
+// commit at all, must not be printed as agents committing nothing.
+function formatCommitLines(snapshot: MemorySnapshot): string[] {
+  if (typeof snapshot.totalPrivateMemory !== 'number') {
+    return []
+  }
+  return [
+    `totalPrivateMemory: ${formatByteCount(snapshot.totalPrivateMemory)}`,
+    `processCommitMetric: ${formatProcessCommitMetric(snapshot.processCommitMetric)}`
+  ]
+}
+
+function formatProcessCommitMetric(metric: MemorySnapshot['processCommitMetric']): string {
+  return metric === 'private-bytes'
+    ? 'summed private bytes; committed memory, counted whether resident or paged out'
+    : `summed ${metric ?? 'unknown'}`
+}
+
 function formatCpu(cpu: number): string {
   return `${cpu.toFixed(1)}%`
+}
+
+function formatProcessMemoryMetric(metric: MemorySnapshot['processMemoryMetric']): string {
+  return metric === 'working-set'
+    ? 'summed working set; shared pages may repeat'
+    : 'summed RSS; shared or aliased pages may repeat'
 }
 
 function formatByteCount(bytes: number): string {
@@ -163,100 +191,4 @@ export function formatWorktreeShow(result: { worktree: RuntimeWorktreeRecord }):
         `${key}: ${typeof value === 'object' ? JSON.stringify(value) : String(value)}`
     )
     .join('\n')
-}
-
-export function formatAutomationList(result: { automations: Automation[] }): string {
-  if (result.automations.length === 0) {
-    return 'No automations found.'
-  }
-  return result.automations
-    .map((automation) => {
-      const status = automation.enabled ? 'enabled' : 'disabled'
-      return `${automation.id}  ${automation.name}  ${automation.agentId}  ${status}\n${formatAutomationSchedule(automation.rrule)}  next: ${new Date(automation.nextRunAt).toISOString()}`
-    })
-    .join('\n\n')
-}
-
-export function formatAutomationShow(result: { automation: Automation }): string {
-  const automation = result.automation
-  const runContext = automation.runContext ?? null
-  const projectLines = runContext
-    ? [
-        `runProjectId: ${runContext.projectId}`,
-        `runHostId: ${runContext.hostId}`,
-        `projectHostSetupId: ${runContext.projectHostSetupId}`,
-        `runRepoId: ${runContext.repoId}`,
-        `runPath: ${runContext.path}`,
-        `legacyRepoId: ${getAutomationLegacyRepoId(automation)}`
-      ]
-    : [`legacyRepoId: ${getAutomationLegacyRepoId(automation)}`]
-  return [
-    `id: ${automation.id}`,
-    `name: ${automation.name}`,
-    `provider: ${automation.agentId}`,
-    `enabled: ${automation.enabled}`,
-    `schedule: ${formatAutomationSchedule(automation.rrule)}`,
-    `rrule: ${automation.rrule}`,
-    `precheck: ${
-      automation.precheck
-        ? `${automation.precheck.command} (timeout ${formatAutomationPrecheckTimeout(
-            automation.precheck.timeoutSeconds
-          )})`
-        : 'none'
-    }`,
-    `nextRunAt: ${new Date(automation.nextRunAt).toISOString()}`,
-    ...projectLines,
-    `workspaceMode: ${automation.workspaceMode}`,
-    `workspaceId: ${automation.workspaceId ?? 'null'}`,
-    `baseBranch: ${automation.baseBranch ?? 'null'}`,
-    `reuseSession: ${automation.reuseSession}`,
-    `target: ${automation.executionTargetType}:${automation.executionTargetId}`,
-    `prompt: ${automation.prompt}`
-  ].join('\n')
-}
-
-export function formatAutomationRemoved(result: { removed: boolean; id: string }): string {
-  return result.removed
-    ? `Removed automation ${result.id}.`
-    : `Automation ${result.id} not removed.`
-}
-
-export function formatAutomationRun(result: { run: AutomationRun }): string {
-  return [
-    `id: ${result.run.id}`,
-    `automationId: ${result.run.automationId}`,
-    `title: ${result.run.title}`,
-    `status: ${result.run.status}`,
-    `trigger: ${result.run.trigger}`,
-    `scheduledFor: ${new Date(result.run.scheduledFor).toISOString()}`,
-    `workspaceId: ${result.run.workspaceId ?? 'null'}`,
-    `precheck: ${formatAutomationRunPrecheck(result.run)}`,
-    `error: ${result.run.error ?? 'null'}`
-  ].join('\n')
-}
-
-function formatAutomationRunPrecheck(run: AutomationRun): string {
-  const result = run.precheckResult
-  if (!result) {
-    return 'none'
-  }
-  const outcome = result.timedOut
-    ? 'timed out'
-    : result.error
-      ? 'error'
-      : `exit ${result.exitCode ?? 'unknown'}`
-  const output = result.stderr.trim() || result.stdout.trim()
-  return output ? `${outcome}; ${output}` : outcome
-}
-
-export function formatAutomationRuns(result: { runs: AutomationRun[] }): string {
-  if (result.runs.length === 0) {
-    return 'No automation runs found.'
-  }
-  return result.runs
-    .map(
-      (run) =>
-        `${run.id}  ${run.automationId}  ${run.status}  ${run.trigger}  ${new Date(run.scheduledFor).toISOString()}\n${run.title}${run.precheckResult ? `\nprecheck: ${formatAutomationRunPrecheck(run)}` : ''}${run.error ? `\nerror: ${run.error}` : ''}`
-    )
-    .join('\n\n')
 }

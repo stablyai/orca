@@ -20,6 +20,7 @@ vi.mock('electron', () => ({
 }))
 
 import {
+  _getNativeChatSenderCleanupCountForTest,
   clearNativeChatSubscriptions,
   clearNativeChatTranscriptCache,
   registerNativeChatHandlers
@@ -57,6 +58,7 @@ async function invokeReadSession(args: {
   agent: string
   sessionId: string
   limit?: number
+  transcriptPath?: string
 }): Promise<unknown> {
   registerNativeChatHandlers()
   const handler = handlers.get('nativeChat:readSession')
@@ -67,6 +69,17 @@ async function invokeReadSession(args: {
 }
 
 describe('nativeChat:readSession handler', () => {
+  it('preserves notFound so a just-created session stays in retry/loading', async () => {
+    const result = (await invokeReadSession({
+      agent: 'claude',
+      sessionId: 'missing-session',
+      transcriptPath: join(tmpdir(), 'orca-native-chat-ipc-does-not-exist.jsonl')
+    })) as { error?: string; notFound?: true }
+
+    expect(result.error).toBeDefined()
+    expect(result.notFound).toBe(true)
+  })
+
   it('resolves a Claude transcript and returns the full conversation', async () => {
     const root = await mkdtemp(join(tmpdir(), 'orca-native-chat-ipc-'))
     tempRoots.push(root)
@@ -151,7 +164,7 @@ describe('nativeChat:readSession handler', () => {
     }
   })
 
-  it('emits appended messages over nativeChat:appended and tears down on destroy', async () => {
+  it('emits snapshot and appended frames and tears down on destroy', async () => {
     const root = await mkdtemp(join(tmpdir(), 'orca-native-chat-ipc-sub-'))
     tempRoots.push(root)
     const projectsDir = join(root, '.claude', 'projects')
@@ -213,13 +226,14 @@ describe('nativeChat:readSession handler', () => {
         })}\n`
       )
 
-      // Seed-at-0 means the first appended event carries the whole-file re-read;
-      // the new turn 'a-1' arrives across one of the appended events. Collect ids
-      // from every appended event and assert the new turn shows up.
+      // The first frame is a bounded snapshot and later frames are appends.
+      // Collect ids across both and assert the new turn shows up.
       const appendedIds = (): string[] =>
         sent
           .filter((s) => s.channel === 'nativeChat:appended')
-          .flatMap((s) => (s.payload as { messages: { id: string }[] }).messages.map((m) => m.id))
+          .flatMap((s) =>
+            (s.payload as { frame: { messages: { id: string }[] } }).frame.messages.map((m) => m.id)
+          )
       await waitFor(() => appendedIds().includes('a-1'))
       const appendedEvent = sent.find((s) => s.channel === 'nativeChat:appended')!
       const payload = appendedEvent.payload as { subscriptionId: string }
@@ -229,6 +243,115 @@ describe('nativeChat:readSession handler', () => {
       // Destroyed window tears down the watcher without error.
       expect(destroyedCb).toBeDefined()
       destroyedCb!()
+    } finally {
+      if (previousHome === undefined) {
+        delete process.env.HOME
+      } else {
+        process.env.HOME = previousHome
+      }
+    }
+  })
+
+  it('settles the view with a pending frame while the transcript is unflushed', async () => {
+    // The user-visible bug: a session that has not been prompted never writes
+    // its JSONL, so with no frame at all the chat view spins indefinitely.
+    const root = await mkdtemp(join(tmpdir(), 'orca-native-chat-ipc-unflushed-'))
+    tempRoots.push(root)
+    await mkdir(join(root, '.claude', 'projects', '-repo'), { recursive: true })
+
+    registerNativeChatHandlers()
+    const subscribe = listeners.get('nativeChat:subscribe')
+    expect(subscribe).toBeDefined()
+
+    const sent: { channel: string; payload: unknown }[] = []
+    let destroyedCb: (() => void) | undefined
+    const sender = {
+      id: 7,
+      isDestroyed: () => false,
+      once: (event: string, cb: () => void) => {
+        if (event === 'destroyed') {
+          destroyedCb = cb
+        }
+      },
+      send: (channel: string, payload: unknown) => sent.push({ channel, payload })
+    }
+
+    const previousHome = process.env.HOME
+    process.env.HOME = root
+    try {
+      subscribe!({ sender }, { subscriptionId: 'sub-pending', agent: 'claude', sessionId: 'ghost' })
+
+      await waitFor(() => sent.some((s) => s.channel === 'nativeChat:appended'), 6_000)
+      expect(sent[0]).toMatchObject({
+        channel: 'nativeChat:appended',
+        payload: {
+          subscriptionId: 'sub-pending',
+          frame: { type: 'snapshot', messages: [], hasMore: false, pending: true }
+        }
+      })
+
+      destroyedCb!()
+    } finally {
+      if (previousHome === undefined) {
+        delete process.env.HOME
+      } else {
+        process.env.HOME = previousHome
+      }
+    }
+  })
+
+  it('drops cleanup registration when sender is destroyed before subscribe completes', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'orca-native-chat-ipc-destroy-race-'))
+    tempRoots.push(root)
+    const projectDir = join(root, '.claude', 'projects', '-repo')
+    await mkdir(projectDir, { recursive: true })
+    await writeFile(
+      join(projectDir, 'sess-race.jsonl'),
+      `${jsonLines([
+        {
+          type: 'user',
+          uuid: 'u-race',
+          timestamp: '2026-06-01T10:00:00.000Z',
+          message: { role: 'user', content: 'Race' }
+        }
+      ])}\n`
+    )
+
+    registerNativeChatHandlers()
+    const subscribe = listeners.get('nativeChat:subscribe')
+    expect(subscribe).toBeDefined()
+
+    let destroyed = false
+    let destroyedCb: (() => void) | undefined
+    const sender = {
+      id: 41,
+      isDestroyed: () => destroyed,
+      once: (event: string, cb: () => void) => {
+        if (event === 'destroyed') {
+          destroyedCb = cb
+        }
+      },
+      send: vi.fn()
+    }
+
+    const previousHome = process.env.HOME
+    process.env.HOME = root
+    try {
+      subscribe!(
+        { sender },
+        {
+          subscriptionId: 'sub-race',
+          agent: 'claude',
+          sessionId: 'sess-race'
+        }
+      )
+
+      expect(destroyedCb).toBeDefined()
+      destroyed = true
+      destroyedCb!()
+
+      await waitFor(() => _getNativeChatSenderCleanupCountForTest() === 0)
+      expect(sender.send).not.toHaveBeenCalled()
     } finally {
       if (previousHome === undefined) {
         delete process.env.HOME

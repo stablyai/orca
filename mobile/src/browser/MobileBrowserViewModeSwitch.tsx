@@ -1,5 +1,6 @@
-import { Pressable, StyleSheet, Text, View } from 'react-native'
-import { colors, radii, spacing } from '../theme/mobile-theme'
+import { Pressable, StyleSheet, View } from 'react-native'
+import { Monitor, Smartphone, type LucideIcon } from 'lucide-react-native'
+import { colors, radii } from '../theme/mobile-theme'
 import type { MobileBrowserViewMode } from './browser-screencast-request'
 
 type Props = {
@@ -8,9 +9,9 @@ type Props = {
   onChange: (mode: MobileBrowserViewMode) => void
 }
 
-const VIEW_MODES: { id: MobileBrowserViewMode; label: string }[] = [
-  { id: 'web', label: 'Web' },
-  { id: 'mobile', label: 'Mobile' }
+const VIEW_MODES: { id: MobileBrowserViewMode; label: string; icon: LucideIcon }[] = [
+  { id: 'web', label: 'Web', icon: Monitor },
+  { id: 'mobile', label: 'Mobile', icon: Smartphone }
 ]
 
 export function MobileBrowserViewModeSwitch({
@@ -23,6 +24,7 @@ export function MobileBrowserViewModeSwitch({
       {VIEW_MODES.map((mode) => (
         <ViewModeButton
           key={mode.id}
+          Icon={mode.icon}
           label={mode.label}
           selected={value === mode.id}
           disabled={disabled}
@@ -34,11 +36,13 @@ export function MobileBrowserViewModeSwitch({
 }
 
 function ViewModeButton({
+  Icon,
   disabled,
   label,
   onPress,
   selected
 }: {
+  Icon: LucideIcon
   disabled?: boolean
   label: string
   onPress: () => void
@@ -58,7 +62,7 @@ function ViewModeButton({
       accessibilityState={{ selected, disabled }}
       accessibilityLabel={`Show ${label.toLowerCase()} website view`}
     >
-      <Text style={[styles.buttonText, selected && styles.buttonTextSelected]}>{label}</Text>
+      <Icon size={14} color={selected ? colors.bgBase : colors.textSecondary} />
     </Pressable>
   )
 }
@@ -74,25 +78,16 @@ const styles = StyleSheet.create({
   },
   button: {
     minHeight: 24,
-    minWidth: 52,
+    width: 32,
     alignItems: 'center',
     justifyContent: 'center',
-    borderRadius: radii.button,
-    paddingHorizontal: spacing.sm
+    borderRadius: radii.button
   },
   buttonPressed: {
     backgroundColor: colors.borderSubtle
   },
   buttonSelected: {
     backgroundColor: colors.textPrimary
-  },
-  buttonText: {
-    color: colors.textSecondary,
-    fontSize: 12,
-    fontWeight: '600'
-  },
-  buttonTextSelected: {
-    color: colors.bgBase
   },
   disabled: {
     opacity: 0.35

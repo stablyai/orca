@@ -1,8 +1,7 @@
-/* oxlint-disable max-lines */
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { TerminalHost } from './terminal-host'
 import { HeadlessEmulator } from './headless-emulator'
-import type { SubprocessHandle } from './session'
+import type { SubprocessHandle } from './session-subprocess-handle'
 
 function createMockSubprocess(): SubprocessHandle & {
   simulateData: (data: string) => void
@@ -16,6 +15,7 @@ function createMockSubprocess(): SubprocessHandle & {
     write: vi.fn(),
     resize: vi.fn(),
     kill: vi.fn(() => setTimeout(() => onExitCb?.(0), 5)),
+    terminateOwnedTree: () => 'unavailable' as const,
     forceKill: vi.fn(),
     signal: vi.fn(),
     onData(cb) {
@@ -38,7 +38,7 @@ function createMockSubprocess(): SubprocessHandle & {
 // for a reattach. Alt-screen sessions include the full ANSI snapshot because
 function buildReattachPayload(snapshot: ReturnType<HeadlessEmulator['getSnapshot']>) {
   const isAltScreen = snapshot.modes.alternateScreen
-  const fullPayload = snapshot.rehydrateSequences + snapshot.snapshotAnsi
+  const fullPayload = snapshot.scrollbackAnsi + snapshot.rehydrateSequences + snapshot.snapshotAnsi
   return {
     rehydrateSequences: snapshot.rehydrateSequences,
     snapshotAnsi: snapshot.snapshotAnsi,
@@ -273,6 +273,24 @@ describe('reattach snapshot flow', () => {
       expect(payload.rehydrateSequences).toContain('\x1b[?2004h')
       expect(payload.snapshotAnsi).toContain('Codex TUI content')
       expect(payload.fullPayload).toContain('Codex TUI content')
+    })
+
+    it('returns to preserved shell history after the reattached TUI exits', async () => {
+      const emulator = new HeadlessEmulator({ cols: 80, rows: 10 })
+      await emulator.write('shell output before Codex\r\n$ codex')
+      await emulator.write('\x1b[?1049h\x1b[2J\x1b[HCodex TUI content')
+      const payload = buildReattachPayload(emulator.getSnapshot())
+      emulator.dispose()
+
+      const replay = new HeadlessEmulator({ cols: 80, rows: 10 })
+      try {
+        await replay.write(payload.fullPayload)
+        expect(replay.getVisibleLines().join('\n')).toContain('Codex TUI content')
+        await replay.write('\x1b[?1049l')
+        expect(replay.getVisibleLines().join('\n')).toContain('shell output before Codex')
+      } finally {
+        replay.dispose()
+      }
     })
 
     it('SIGWINCH repaint after rehydrate produces clean single render', async () => {

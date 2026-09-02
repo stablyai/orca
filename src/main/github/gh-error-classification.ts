@@ -1,9 +1,17 @@
-import type { ClassifiedError } from '../../shared/types'
+import type { ClassifiedError } from '../../shared/classified-error'
 
 // Why: gh CLI surfaces API errors as unstructured stderr. Map known
 // patterns to typed errors so callers can show user-friendly messages.
 export function classifyGhError(stderr: string): ClassifiedError {
   const s = stderr.toLowerCase()
+  // Why: primary rate-limit errors also carry "HTTP 403" — check rate limit
+  // first so they don't misclassify as a token-scope problem.
+  if (s.includes('rate limit')) {
+    return {
+      type: 'rate_limited',
+      message: 'GitHub rate limit hit. Try again in a few minutes.'
+    }
+  }
   if (s.includes('http 403') || s.includes('resource not accessible')) {
     return {
       type: 'permission_denied',
@@ -18,12 +26,6 @@ export function classifyGhError(stderr: string): ClassifiedError {
   }
   if (s.includes('http 422') || s.includes('validation failed')) {
     return { type: 'validation_error', message: `Invalid update — ${stderr.trim()}` }
-  }
-  if (s.includes('rate limit')) {
-    return {
-      type: 'rate_limited',
-      message: 'GitHub rate limit hit. Try again in a few minutes.'
-    }
   }
   if (
     s.includes('timeout') ||
@@ -52,4 +54,48 @@ export function classifyListIssuesError(stderr: string): ClassifiedError {
     unknown: `Failed to load issues: ${trimmed}`
   }
   return { type: c.type, message: readMessages[c.type] }
+}
+
+// Why: classifyGhError's copy names an "issue"; PR mutations reuse the same
+// classification but must not tell the user their pull request is an issue.
+export function classifyPullRequestUpdateError(stderr: string): ClassifiedError {
+  const c = classifyGhError(stderr)
+  const trimmed = stderr.trim()
+  const pullRequestMessages: Record<ClassifiedError['type'], string> = {
+    permission_denied:
+      "You don't have permission to edit this pull request. Check your GitHub token scopes.",
+    not_found: 'Pull request not found — it may have been deleted.',
+    issues_disabled: c.message,
+    validation_error: `Invalid update — ${trimmed}`,
+    rate_limited: c.message,
+    network_error: c.message,
+    unknown: `Failed to update pull request: ${trimmed}`
+  }
+  return { type: c.type, message: pullRequestMessages[c.type] }
+}
+
+// Why: PR-side list failures need the same read-op classification — pagination
+// decisions key on the type, and swallowing them made failures look like
+// end-of-data (#11485).
+export function classifyListPrsError(stderr: string): ClassifiedError {
+  const c = classifyGhError(stderr)
+  return { type: c.type, message: `Failed to load pull requests: ${stderr.trim()}` }
+}
+
+// Why: classifyGhError's copy names an "issue"; a failed check rerun must name
+// the operation the user actually triggered.
+export function classifyRerunChecksError(stderr: string): ClassifiedError {
+  const c = classifyGhError(stderr)
+  const trimmed = stderr.trim()
+  const rerunMessages: Record<ClassifiedError['type'], string> = {
+    permission_denied:
+      "You don't have permission to rerun checks on this repository. Check your GitHub token scopes.",
+    not_found: 'GitHub resource to rerun was not found — it may have expired or been deleted.',
+    issues_disabled: `Failed to rerun checks: ${trimmed}`,
+    validation_error: `Could not rerun checks — ${trimmed}`,
+    rate_limited: c.message,
+    network_error: c.message,
+    unknown: `Failed to rerun checks: ${trimmed}`
+  }
+  return { type: c.type, message: rerunMessages[c.type] }
 }

@@ -4,7 +4,9 @@ import { dirname, basename } from '@/lib/path'
 import { getConnectionId } from '@/lib/connection-context'
 import { useAppStore } from '@/store'
 import { importExternalPathsToRuntime } from '@/runtime/runtime-file-client'
+import { getEditorFileOperationContext } from '@/lib/editor-file-operation-owner'
 import { settingsForRuntimeOwner } from '@/runtime/runtime-rpc-client'
+import { captureDirectSshMutationExpectation } from '@/lib/ssh-mutation-expectation'
 import { translate } from '@/i18n/i18n'
 import { parseWorkspaceKey } from '../../../../shared/workspace-scope'
 import { extractIpcErrorMessage } from './rich-markdown-ipc-error-message'
@@ -29,9 +31,30 @@ export async function insertRichMarkdownImageFromPath({
   canInsert
 }: RichMarkdownImageInsertArgs): Promise<void> {
   try {
-    const connectionId = getConnectionId(worktreeId) ?? undefined
-    const settings = settingsForRuntimeOwner(useAppStore.getState().settings, runtimeEnvironmentId)
+    const state = useAppStore.getState()
     const worktreePath = getWorktreePath(worktreeId)
+    const parsedWorkspace = worktreeId ? parseWorkspaceKey(worktreeId) : null
+    const resolvedConnectionId = getConnectionId(worktreeId)
+    if (parsedWorkspace?.type === 'folder' && resolvedConnectionId === undefined) {
+      throw new Error("Couldn't verify which host owns this file. Reopen the file and try again.")
+    }
+    const connectionId = resolvedConnectionId ?? undefined
+    const fileContext =
+      worktreeId && parsedWorkspace?.type !== 'folder'
+        ? getEditorFileOperationContext(state, { worktreeId, runtimeEnvironmentId }, worktreePath)
+        : {
+            settings: settingsForRuntimeOwner(state.settings, runtimeEnvironmentId),
+            worktreeId,
+            worktreePath,
+            connectionId,
+            expectedExecutionHostId: connectionId
+              ? (`ssh:${encodeURIComponent(connectionId)}` as const)
+              : ('local' as const),
+            ...(connectionId
+              ? captureDirectSshMutationExpectation(state, connectionId, runtimeEnvironmentId)
+              : {})
+          }
+    const settings = fileContext.settings
     if (settings?.activeRuntimeEnvironmentId?.trim() && !worktreePath) {
       toast.error(
         translate(
@@ -45,12 +68,7 @@ export async function insertRichMarkdownImageFromPath({
     // Why: image bytes should live beside the note instead of inside markdown;
     // this keeps rich-mode size checks based on document text, not binary data.
     const { results } = await importExternalPathsToRuntime(
-      {
-        settings,
-        worktreeId,
-        worktreePath,
-        connectionId
-      },
+      fileContext,
       [sourcePath],
       dirname(filePath)
     )

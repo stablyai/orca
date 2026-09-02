@@ -3,9 +3,9 @@ import { readNativeChatDraftCache, writeNativeChatDraftCache } from './native-ch
 
 /**
  * Composer draft state backed by the scope cache so a typed-but-unsent message
- * survives the composer unmounting on a TUI/GUI toggle. `scopeKey` is the same
- * key used for image attachments (targetPtyId ?? terminalTabId); when it changes
- * (the composer is reused for a different pane) the cached draft is reloaded.
+ * survives the composer unmounting on a TUI/GUI toggle. `scopeKey` is the stable
+ * pane key also used for image attachments; when it changes (the composer is
+ * reused for a different pane) the cached draft is reloaded.
  */
 export function useNativeChatDraft(scopeKey: string): {
   draft: string

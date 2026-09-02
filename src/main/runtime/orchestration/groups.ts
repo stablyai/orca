@@ -1,4 +1,5 @@
 import type { RuntimeTerminalSummary } from '../../../shared/runtime-types'
+import type { TuiAgent } from '../../../shared/tui-agent'
 
 // Why: group addresses enable broadcast messaging to logical groups of agents.
 // Resolution is done at send-time: one message record per recipient, same thread_id,
@@ -11,26 +12,47 @@ const AGENT_NAME_GROUPS = [
   'opencode',
   'mimo',
   'gemini',
-  'droid'
+  'droid',
+  'grok',
+  'cursor'
 ] as const
 
-export type GroupAddress =
-  | '@all'
-  | '@idle'
-  | `@${(typeof AGENT_NAME_GROUPS)[number]}`
-  | `@worktree:${string}`
+type AgentNameGroup = (typeof AGENT_NAME_GROUPS)[number]
 
 export function isGroupAddress(to: string): boolean {
   return to.startsWith('@')
 }
 
-function escapeRegExp(value: string): string {
-  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+/** Group name to the agent id the host publishes for a pane. */
+const GROUP_AGENT_IDS: Record<AgentNameGroup, TuiAgent> = {
+  claude: 'claude',
+  openclaude: 'openclaude',
+  codex: 'codex',
+  opencode: 'opencode',
+  mimo: 'mimo-code',
+  gemini: 'gemini',
+  droid: 'droid',
+  grok: 'grok',
+  cursor: 'cursor'
 }
 
-function titleMatchesAgentNameGroup(title: string, agentName: string): boolean {
-  const tokenRe = new RegExp(`(?<![\\w./\\\\-])${escapeRegExp(agentName)}(?![\\w./\\\\-])`, 'i')
-  return tokenRe.test(title)
+/**
+ * Whether this terminal IS the addressed agent.
+ *
+ * Why the host's resolved identity and not the title: a terminal title is a decoration channel
+ * that routinely contains other agents' names, because people describe agent work in their task
+ * titles. Matching `@claude` against the title delivered the message to any pane whose task text
+ * happened to say "claude" — a Codex pane reviewing a Claude PR received Claude's instructions.
+ * Recorded titles like "Switch Claude and Codex off the load balancer… - grok" are the ordinary
+ * case, not a contrived one.
+ *
+ * Why an absent identity means NO: `agentIdentity` is absent when the host predates the field or
+ * had no evidence beyond the title. Delivery is an action, so unknown fails closed. Not
+ * delivering is visible and recoverable — the sender sees no recipients; delivering to the wrong
+ * agent is neither.
+ */
+function terminalIsAgent(terminal: RuntimeTerminalSummary, agentName: AgentNameGroup): boolean {
+  return terminal.agentIdentity === GROUP_AGENT_IDS[agentName]
 }
 
 export function resolveGroupAddress(
@@ -66,9 +88,9 @@ export function resolveGroupAddress(
       .map((t) => t.handle)
   }
 
-  // Why: agent-name groups (@claude, @droid, etc.) match by terminal title so
-  // the sender can address all instances of a particular agent type without
-  // knowing their handles.
+  // Why: agent-name groups (@claude, @droid, etc.) resolve against the identity the HOST
+  // published for each pane, so the sender can address every instance of an agent without
+  // knowing their handles — and without a task title being able to redirect the message.
   const agentName = group.slice(1) // remove @
   if ((AGENT_NAME_GROUPS as readonly string[]).includes(agentName)) {
     return terminals
@@ -76,7 +98,7 @@ export function resolveGroupAddress(
         if (t.handle === senderHandle) {
           return false
         }
-        return titleMatchesAgentNameGroup(t.title ?? '', agentName)
+        return terminalIsAgent(t, agentName as AgentNameGroup)
       })
       .map((t) => t.handle)
   }

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { getScrollTopToRevealBounds } from './WorktreeList'
+import { getScrollTopToRevealBounds } from './worktree-sidebar-reveal'
 
 describe('getScrollTopToRevealBounds', () => {
   const makeContainer = (scrollTop: number, clientHeight: number) =>

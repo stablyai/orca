@@ -1,0 +1,54 @@
+/*
+ * View-transition tuning for the agent board. Each card carries a unique
+ * `view-transition-name` (agentcard-…), so when a card changes column the
+ * browser morphs it from its old position to the new one. Only loaded in the
+ * pop-out (imported by AgentKanbanBoard), so these document-global pseudo rules
+ * never affect the main window.
+ */
+
+/* Card move/resize easing (applies to every transition group). */
+::view-transition-group(*) {
+  animation-duration: 260ms;
+  animation-timing-function: cubic-bezier(0.2, 0, 0, 1);
+}
+
+/* The columns/background don't move, so skip the root cross-fade — it would
+ * otherwise briefly double-image the lane heights as a card leaves/joins. */
+::view-transition-old(root),
+::view-transition-new(root) {
+  animation-duration: 0s;
+}
+
+/*
+ * Enter/exit. A card that MOVES columns has both an old and a new image, so it
+ * is not `:only-child` and just morphs position (above). A genuinely new or
+ * removed card has only one image (`:only-child`) — fade + scale it.
+ */
+@keyframes agent-card-enter {
+  from {
+    opacity: 0;
+    transform: scale(0.96);
+  }
+}
+@keyframes agent-card-exit {
+  to {
+    opacity: 0;
+    transform: scale(0.96);
+  }
+}
+::view-transition-new(*):only-child {
+  animation: 240ms cubic-bezier(0.2, 0, 0, 1) both agent-card-enter;
+}
+::view-transition-old(*):only-child {
+  animation: 180ms cubic-bezier(0.4, 0, 1, 1) both agent-card-exit;
+}
+
+/* Respect reduced-motion — the JS also skips startViewTransition, but guard the
+ * pseudo animations too. */
+@media (prefers-reduced-motion: reduce) {
+  ::view-transition-group(*),
+  ::view-transition-old(*),
+  ::view-transition-new(*) {
+    animation: none !important;
+  }
+}

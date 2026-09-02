@@ -1,10 +1,13 @@
-/* eslint-disable max-lines -- Why: this proxy owns HTTP discovery, websocket client lifecycle, and CDP debugger forwarding together. */
-import { WebSocketServer, WebSocket } from 'ws'
-import { createServer, type Server, type IncomingMessage, type ServerResponse } from 'node:http'
+import { WebSocketServer, type WebSocket } from 'ws'
+import { createServer, type Server } from 'node:http'
 import type { WebContents } from 'electron'
-import { captureScreenshot } from './cdp-screenshot'
-import { ANTI_DETECTION_SCRIPT } from './anti-detection'
-import { acquireElectronDebugger, type ElectronDebuggerLease } from './electron-debugger-lease'
+import { CdpClientResponseWriter } from './cdp-client-response-writer'
+import { CdpSyntheticSessionRegistry } from './cdp-synthetic-session-registry'
+import { CdpTargetDiscovery } from './cdp-target-discovery'
+import { CdpDebuggerChannel } from './cdp-debugger-channel'
+import { CdpPageNavigationCommands } from './cdp-page-navigation-commands'
+import { CdpDomFocusReplay } from './cdp-dom-focus-replay'
+import { CdpPageCaptureCommands } from './cdp-page-capture-commands'
 
 export class CdpWsProxy {
   private httpServer: Server | null = null
@@ -12,19 +15,42 @@ export class CdpWsProxy {
   private client: WebSocket | null = null
   private detachClientListeners: (() => void) | null = null
   private port = 0
-  private debuggerMessageHandler: ((...args: unknown[]) => void) | null = null
-  private debuggerDetachHandler: ((...args: unknown[]) => void) | null = null
-  private debuggerLease: ElectronDebuggerLease | null = null
-  private attached = false
-  // Why: agent-browser filters events by sessionId from Target.attachToTarget.
-  private clientSessionId: string | undefined = undefined
+  private readonly responder = new CdpClientResponseWriter(() => this.client)
+  private readonly sessions = new CdpSyntheticSessionRegistry()
+  private readonly discovery: CdpTargetDiscovery
+  private readonly debuggerChannel: CdpDebuggerChannel
+  private readonly navigation: CdpPageNavigationCommands
+  private readonly domFocusReplay: CdpDomFocusReplay
+  private readonly pageCapture: CdpPageCaptureCommands
 
-  constructor(private readonly webContents: WebContents) {}
+  constructor(private readonly webContents: WebContents) {
+    this.discovery = new CdpTargetDiscovery(
+      webContents,
+      this.responder,
+      this.sessions,
+      () => this.port
+    )
+    this.debuggerChannel = new CdpDebuggerChannel(
+      webContents,
+      this.responder,
+      this.sessions,
+      () => this.client,
+      () => this.stop()
+    )
+    this.navigation = new CdpPageNavigationCommands(
+      webContents,
+      this.responder,
+      this.sessions,
+      this.debuggerChannel
+    )
+    this.domFocusReplay = new CdpDomFocusReplay(webContents, this.responder, this.debuggerChannel)
+    this.pageCapture = new CdpPageCaptureCommands(webContents, this.responder)
+  }
 
   async start(): Promise<string> {
-    await this.attachDebugger()
+    await this.debuggerChannel.attachDebugger()
     return new Promise<string>((resolve, reject) => {
-      this.httpServer = createServer((req, res) => this.handleHttpRequest(req, res))
+      this.httpServer = createServer((req, res) => this.discovery.handleHttpRequest(req, res))
       this.wss = new WebSocketServer({ server: this.httpServer })
       const failStart = (error: Error): void => {
         this.httpServer?.removeListener('error', onListenError)
@@ -34,7 +60,7 @@ export class CdpWsProxy {
         this.httpServer = null
         // Why: a bind failure happens after debugger attach; release it here
         // because callers cannot safely call stop() on a failed start.
-        this.detachDebugger()
+        this.debuggerChannel.detachDebugger()
         reject(error)
       }
       const onListenError = (error: Error): void => {
@@ -49,6 +75,7 @@ export class CdpWsProxy {
         const onClose = (): void => {
           detach()
           if (this.client === ws) {
+            this.clearClientState()
             this.client = null
           }
         }
@@ -78,7 +105,7 @@ export class CdpWsProxy {
   }
 
   async stop(): Promise<void> {
-    this.detachDebugger()
+    this.debuggerChannel.detachDebugger()
     this.closeClient()
     if (this.wss) {
       this.wss.close()
@@ -99,133 +126,18 @@ export class CdpWsProxy {
     this.detachClientListeners?.()
     this.detachClientListeners = null
     this.client = null
+    this.clearClientState()
+    if (client) {
+      this.responder.forgetClient(client)
+    }
     client?.close()
   }
 
-  private send(payload: unknown, client = this.client): void {
-    if (client?.readyState === WebSocket.OPEN) {
-      client.send(JSON.stringify(payload))
-    }
-  }
-
-  private sendResult(clientId: number, result: unknown, client = this.client): void {
-    this.send({ id: clientId, result }, client)
-  }
-
-  private sendError(clientId: number, message: string, client = this.client): void {
-    this.send({ id: clientId, error: { code: -32000, message } }, client)
-  }
-
-  private buildTargetInfo(): Record<string, unknown> {
-    const destroyed = this.webContents.isDestroyed()
-    return {
-      targetId: 'orca-proxy-target',
-      type: 'page',
-      title: destroyed ? '' : this.webContents.getTitle(),
-      url: destroyed ? '' : this.webContents.getURL(),
-      attached: true,
-      canAccessOpener: false
-    }
-  }
-
-  private handleHttpRequest(req: IncomingMessage, res: ServerResponse): void {
-    const url = req.url ?? ''
-    if (url === '/json/version' || url === '/json/version/') {
-      res.writeHead(200, { 'Content-Type': 'application/json' })
-      // Why: agent-browser reads this endpoint to identify the browser. Returning
-      // "Orca/CdpWsProxy" leaks that this is an embedded automation surface, which
-      // could affect downstream detection heuristics.
-      // Why: process.versions.chrome contains the exact Chromium version
-      // bundled with Electron, producing a realistic version string.
-      const chromeVersion = process.versions.chrome ?? '134.0.0.0'
-      res.end(
-        JSON.stringify({
-          Browser: `Chrome/${chromeVersion}`,
-          'Protocol-Version': '1.3',
-          webSocketDebuggerUrl: `ws://127.0.0.1:${this.port}`
-        })
-      )
-      return
-    }
-    if (url === '/json' || url === '/json/' || url === '/json/list' || url === '/json/list/') {
-      res.writeHead(200, { 'Content-Type': 'application/json' })
-      res.end(
-        JSON.stringify([
-          {
-            ...this.buildTargetInfo(),
-            id: 'orca-proxy-target',
-            webSocketDebuggerUrl: `ws://127.0.0.1:${this.port}`
-          }
-        ])
-      )
-      return
-    }
-    res.writeHead(404)
-    res.end()
-  }
-
-  private async attachDebugger(): Promise<void> {
-    if (this.attached) {
-      return
-    }
-    try {
-      this.debuggerLease = acquireElectronDebugger(this.webContents)
-    } catch {
-      throw new Error('Could not attach debugger. DevTools may already be open for this tab.')
-    }
-    this.attached = true
-
-    // Why: attaching the CDP debugger sets navigator.webdriver = true and
-    // exposes other automation signals that Cloudflare Turnstile checks.
-    // Inject before any page loads so challenges succeed.
-    try {
-      await this.webContents.debugger.sendCommand('Page.enable', {})
-      await this.webContents.debugger.sendCommand('Page.addScriptToEvaluateOnNewDocument', {
-        source: ANTI_DETECTION_SCRIPT
-      })
-    } catch {
-      /* best-effort — page domain may not be ready yet */
-    }
-
-    this.debuggerMessageHandler = (_event: unknown, ...rest: unknown[]) => {
-      const [method, params, sessionId] = rest as [
-        string,
-        Record<string, unknown>,
-        string | undefined
-      ]
-      if (!this.client || this.client.readyState !== WebSocket.OPEN) {
-        return
-      }
-      // Why: Electron passes empty string (not undefined) for root-session events, but
-      // agent-browser filters events by the sessionId from Target.attachToTarget.
-      const msg: Record<string, unknown> = { method, params }
-      msg.sessionId = sessionId || this.clientSessionId
-      this.client.send(JSON.stringify(msg))
-    }
-    this.debuggerDetachHandler = () => {
-      this.attached = false
-      const lease = this.debuggerLease
-      this.debuggerLease = null
-      lease?.release()
-      this.stop()
-    }
-    this.webContents.debugger.on('message', this.debuggerMessageHandler as never)
-    this.webContents.debugger.on('detach', this.debuggerDetachHandler as never)
-  }
-
-  private detachDebugger(): void {
-    if (this.debuggerMessageHandler) {
-      this.webContents.debugger.removeListener('message', this.debuggerMessageHandler as never)
-      this.debuggerMessageHandler = null
-    }
-    if (this.debuggerDetachHandler) {
-      this.webContents.debugger.removeListener('detach', this.debuggerDetachHandler as never)
-      this.debuggerDetachHandler = null
-    }
-    const lease = this.debuggerLease
-    this.debuggerLease = null
-    lease?.release()
-    this.attached = false
+  private clearClientState(): void {
+    // Why: session and focus state belongs to one websocket and must not cross client replacement.
+    this.domFocusReplay.clear()
+    this.pageCapture.clear()
+    this.sessions.clear()
   }
 
   private handleClientMessage(client: WebSocket, raw: string): void {
@@ -239,53 +151,51 @@ export class CdpWsProxy {
       return
     }
     const clientId = msg.id
+    this.responder.recordRequestSessionId(client, clientId, msg)
 
-    if (msg.method === 'Target.getTargets') {
-      this.sendResult(clientId, { targetInfos: [this.buildTargetInfo()] }, client)
+    if (this.discovery.handleCommand(client, clientId, msg)) {
       return
     }
-    if (msg.method === 'Target.getTargetInfo') {
-      this.sendResult(clientId, { targetInfo: this.buildTargetInfo() }, client)
-      return
-    }
-    if (msg.method === 'Target.setDiscoverTargets' || msg.method === 'Target.detachFromTarget') {
-      if (msg.method === 'Target.detachFromTarget') {
-        this.clientSessionId = undefined
-      }
-      this.sendResult(clientId, {}, client)
-      return
-    }
-    if (msg.method === 'Target.attachToTarget') {
-      this.clientSessionId = 'orca-proxy-session'
-      this.sendResult(clientId, { sessionId: this.clientSessionId }, client)
-      return
-    }
-    if (msg.method === 'Browser.getVersion') {
-      // Why: returning "Orca/Electron" identifies this as an embedded automation
-      // surface to agent-browser. Use a generic Chrome product string instead.
-      const chromeVersion = process.versions.chrome ?? '134.0.0.0'
-      this.sendResult(
-        clientId,
-        {
-          protocolVersion: '1.3',
-          product: `Chrome/${chromeVersion}`,
-          userAgent: '',
-          jsVersion: ''
-        },
-        client
-      )
-      return
-    }
+    const effectiveSessionId = this.sessions.resolveDebuggerSessionId(msg.sessionId)
+    this.domFocusReplay.invalidateForMethod(msg.method, effectiveSessionId)
     if (msg.method === 'Page.bringToFront') {
       if (!this.webContents.isDestroyed()) {
         this.webContents.focus()
       }
-      this.sendResult(clientId, {}, client)
+      this.responder.sendResult(clientId, {}, client)
+      return
+    }
+    if (msg.method === 'DOM.focus') {
+      this.domFocusReplay.forwardDomFocus(client, clientId, msg.params ?? {}, effectiveSessionId)
       return
     }
     // Why: Page.captureScreenshot via debugger.sendCommand hangs on Electron webview guests.
     if (msg.method === 'Page.captureScreenshot') {
-      this.handleScreenshot(client, clientId, msg.params)
+      this.pageCapture.handleScreenshot(client, clientId, msg.params)
+      return
+    }
+    // Why: CDP Page.printToPDF is not available for Electron webview guests.
+    // Electron's native printToPDF path is the reliable equivalent.
+    if (msg.method === 'Page.printToPDF') {
+      void this.pageCapture.handlePrintToPdf(client, clientId, msg.params ?? {})
+      return
+    }
+    if (msg.method === 'IO.read') {
+      const params = msg.params ?? {}
+      if (this.pageCapture.ownsHandle(params)) {
+        this.pageCapture.handleStreamRead(client, clientId, params)
+        return
+      }
+      this.debuggerChannel.forwardCommand(client, clientId, msg.method, params, msg.sessionId)
+      return
+    }
+    if (msg.method === 'IO.close') {
+      const params = msg.params ?? {}
+      if (this.pageCapture.ownsHandle(params)) {
+        this.pageCapture.handleStreamClose(client, clientId, params)
+        return
+      }
+      this.debuggerChannel.forwardCommand(client, clientId, msg.method, params, msg.sessionId)
       return
     }
     // Why: Input.insertText can still require native focus in Electron webviews.
@@ -295,69 +205,33 @@ export class CdpWsProxy {
     // is running.
     if (msg.method === 'Input.insertText' && !this.webContents.isDestroyed()) {
       this.webContents.focus()
+      void this.domFocusReplay.forwardInsertText(
+        client,
+        clientId,
+        msg.params ?? {},
+        effectiveSessionId
+      )
+      return
     }
     // Why: agent-browser waits for network idle to detect navigation completion.
     // Electron webview CDP subscriptions silently lapse after cross-process swaps.
+    // Page.reload needs the same priming: forwarding it unprimed closed the tab (#7031).
     if (msg.method === 'Page.navigate' && !this.webContents.isDestroyed()) {
-      void this.navigateWithLifecycleEnsured(client, clientId, msg.params ?? {})
+      void this.navigation.navigateWithLifecycle(client, clientId, msg.params ?? {}, msg.sessionId)
       return
     }
-    this.forwardCommand(client, clientId, msg.method, msg.params ?? {}, msg.sessionId)
-  }
-
-  private forwardCommand(
-    client: WebSocket,
-    clientId: number,
-    method: string,
-    params: Record<string, unknown>,
-    msgSessionId?: string
-  ): void {
-    if (this.webContents.isDestroyed()) {
-      this.sendError(clientId, 'Browser tab is no longer available', client)
+    // Why: CDP Page.reload can destroy Electron webview targets during process swaps.
+    // Use the same direct webContents reload path as Orca's own browser.reload.
+    if (msg.method === 'Page.reload' && !this.webContents.isDestroyed()) {
+      void this.navigation.reloadWithLifecycle(client, clientId, msg.params ?? {}, msg.sessionId)
       return
     }
-    const sessionId =
-      msgSessionId && msgSessionId !== this.clientSessionId ? msgSessionId : undefined
-    try {
-      Promise.resolve(this.webContents.debugger.sendCommand(method, params, sessionId))
-        .then((result) => {
-          this.sendResult(clientId, result, client)
-        })
-        .catch((err: Error) => {
-          this.sendError(clientId, err.message, client)
-        })
-    } catch (err) {
-      this.sendError(clientId, err instanceof Error ? err.message : String(err), client)
-    }
-  }
-
-  private async navigateWithLifecycleEnsured(
-    client: WebSocket,
-    clientId: number,
-    params: Record<string, unknown>
-  ): Promise<void> {
-    try {
-      const dbg = this.webContents.debugger
-      // Why: without Network.enable, agent-browser never sees network idle → goto times out.
-      await dbg.sendCommand('Network.enable', {})
-      await dbg.sendCommand('Page.enable', {})
-      await dbg.sendCommand('Page.setLifecycleEventsEnabled', { enabled: true })
-    } catch {
-      /* best-effort */
-    }
-    this.forwardCommand(client, clientId, 'Page.navigate', params)
-  }
-
-  private handleScreenshot(
-    client: WebSocket,
-    clientId: number,
-    params?: Record<string, unknown>
-  ): void {
-    captureScreenshot(
-      this.webContents,
-      params,
-      (result) => this.sendResult(clientId, result, client),
-      (message) => this.sendError(clientId, message, client)
+    this.debuggerChannel.forwardCommand(
+      client,
+      clientId,
+      msg.method,
+      msg.params ?? {},
+      msg.sessionId
     )
   }
 }

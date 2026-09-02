@@ -1,0 +1,98 @@
+name: Release Policy
+
+on:
+  release:
+    types:
+      - published
+      - edited
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-policy
+  cancel-in-progress: false
+
+jobs:
+  enforce:
+    if: github.repository == 'stablyai/orca'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Enforce release policy
+        uses: actions/github-script@v8
+        with:
+          script: |
+            const release = context.payload.release;
+            const tag = release.tag_name;
+            const author = release.author?.login;
+            const number = "(?:0|[1-9][0-9]*)";
+            const version = `${number}\\.${number}\\.${number}`;
+            const stableTag = new RegExp(`^v${version}$`);
+            const prereleaseTag = new RegExp(
+              `^(?:v${version}-rc\\.${number}(?:\\.[0-9A-Za-z]+)?|mobile(?:-android)?-v${version})$`,
+            );
+            const expectedPrerelease = prereleaseTag.test(tag);
+            const allowed = author === "github-actions[bot]" &&
+              (stableTag.test(tag) || expectedPrerelease);
+            const { owner, repo } = context.repo;
+
+            async function restoreLatestStable() {
+              const releases = await github.paginate(github.rest.repos.listReleases, {
+                owner,
+                repo,
+                per_page: 100,
+              });
+              const stable = releases
+                .filter((candidate) =>
+                  !candidate.draft &&
+                  !candidate.prerelease &&
+                  candidate.author?.login === "github-actions[bot]" &&
+                  stableTag.test(candidate.tag_name),
+                )
+                .sort((left, right) => {
+                  const a = left.tag_name.slice(1).split(".").map(Number);
+                  const b = right.tag_name.slice(1).split(".").map(Number);
+                  return a.reduce((result, part, index) => result || part - b[index], 0);
+                })
+                .at(-1);
+              if (stable) {
+                await github.rest.repos.updateRelease({
+                  owner,
+                  repo,
+                  release_id: stable.id,
+                  make_latest: "true",
+                });
+              }
+            }
+
+            if (allowed) {
+              if (release.prerelease !== expectedPrerelease) {
+                await github.rest.repos.updateRelease({
+                  owner,
+                  repo,
+                  release_id: release.id,
+                  prerelease: expectedPrerelease,
+                  make_latest: expectedPrerelease ? "false" : "legacy",
+                });
+              }
+              await restoreLatestStable();
+              return;
+            }
+
+            await github.rest.repos.updateRelease({
+              owner,
+              repo,
+              release_id: release.id,
+              draft: true,
+              prerelease: true,
+              make_latest: "false",
+            });
+            await restoreLatestStable();
+            await github.rest.repos.deleteRelease({ owner, repo, release_id: release.id });
+            try {
+              await github.rest.git.deleteRef({ owner, repo, ref: `tags/${tag}` });
+            } catch (error) {
+              if (error.status !== 404) throw error;
+            }
+            core.warning(`Deleted unauthorized release ${tag} created by ${author || "unknown"}.`);

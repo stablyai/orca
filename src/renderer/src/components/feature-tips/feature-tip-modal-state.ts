@@ -1,4 +1,4 @@
-import type { GlobalSettings } from '../../../../shared/types'
+import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import type { FeatureInteractionState } from '../../../../shared/feature-interactions'
 import {
   FEATURE_TIPS,

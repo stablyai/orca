@@ -33,6 +33,12 @@ export function acceptSessionSnapshot(
   return true
 }
 
+export function confirmsMirroredTabSelection(publicationEpoch?: string): boolean {
+  // Why: phone-local persistence acknowledges the mutation, not host focus;
+  // keep the pending guard until any host publication confirms the selection.
+  return !publicationEpoch?.startsWith('mobile-local:')
+}
+
 /**
  * Drops tabs the user just closed locally (tombstoned) until the publisher's
  * snapshot also drops them or the tombstone expires. Mutates `tombstones`,

@@ -8,6 +8,24 @@ const MAX_LABEL_LENGTH = 80
 
 export type DevInstanceIdentity = AppIdentity & {
   appUserModelId: string
+  // Why: drives app.setName → the macOS safeStorage Keychain item name
+  // ("<appName> Safe Storage"). Kept stable across dev branches (unlike the
+  // per-branch `name`) so every dev instance shares one Keychain key instead of
+  // creating a new one per branch and re-prompting. Distinct from prod's 'Orca'.
+  appName: string
+}
+
+/**
+ * Whether app.setName must be applied before the `ready` event.
+ *
+ * Why: Electron resolves the macOS safeStorage Keychain service name
+ * ("<app name> Safe Storage") before `ready`, so a post-ready setName cannot move it.
+ * Dev-only on purpose — a packaged build must keep deriving its key from its own
+ * CFBundleName, which downstream forks ship differently ("Orca ALab Edition").
+ * Renaming it pre-ready would orphan their encrypted secrets.
+ */
+export function shouldApplyPreReadyAppName(identity: Pick<AppIdentity, 'isDev'>): boolean {
+  return identity.isDev
 }
 
 function cleanEnvValue(value: string | undefined): string | null {
@@ -22,7 +40,7 @@ function cleanEnvValue(value: string | undefined): string | null {
 
 function lastPathSegment(value: string): string {
   const normalized = value.replace(/\\/g, '/')
-  return normalized.split('/').filter(Boolean).at(-1) ?? value
+  return normalized.split('/').findLast(Boolean) ?? value
 }
 
 function formatLabel(branch: string | null, worktreeName: string | null): string | null {
@@ -50,6 +68,7 @@ export function getDevInstanceIdentity(
   if (!isDev) {
     return {
       name: BASE_APP_NAME,
+      appName: BASE_APP_NAME,
       isDev: false,
       devLabel: null,
       devBranch: null,
@@ -71,6 +90,10 @@ export function getDevInstanceIdentity(
 
   return {
     name: dockTitle,
+    // Why: one stable Keychain key ('Orca Dev Safe Storage') for all dev
+    // branches; the per-branch identity still shows via `name` (window title,
+    // app menu, renderer label).
+    appName: `${BASE_APP_NAME} Dev`,
     isDev: true,
     devLabel,
     devBranch: branch,

@@ -186,10 +186,18 @@ describe('DesktopScriptProviderClient actions', () => {
       ok: true,
       capabilities: sampleCapabilities()
     })
-    mockBridgeResponse({
-      ok: true,
-      snapshot: sampleBridgeSnapshot('Text Editor', 'initial')
-    })
+    mockBridgeResponse(
+      {
+        ok: true,
+        snapshot: sampleBridgeSnapshot('Text Editor', 'initial')
+      },
+      (operation) => {
+        expect(operation).toMatchObject({
+          tool: 'click',
+          modifiers: 'CmdOrCtrl+Shift'
+        })
+      }
+    )
 
     const client = await createDesktopScriptProviderClient('linux', '/tmp/runtime.py')
 
@@ -197,6 +205,7 @@ describe('DesktopScriptProviderClient actions', () => {
     const result = await client.action('click', {
       app: 'Text Editor',
       elementIndex: 0,
+      modifiers: 'CmdOrCtrl+Shift',
       noScreenshot: true
     })
 

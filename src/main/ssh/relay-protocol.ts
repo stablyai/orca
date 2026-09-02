@@ -2,17 +2,33 @@
 // 13-byte framing header matching VS Code's PersistentProtocol wire format.
 // See design-ssh-support.md § JSON-RPC Protocol Specification.
 
-import { DEFAULT_SSH_RELAY_GRACE_PERIOD_SECONDS } from '../../shared/ssh-types'
+import {
+  FrameDecoder,
+  FrameDecoderContinuationError,
+  HEADER_LENGTH,
+  MAX_MESSAGE_SIZE,
+  FRAME_DECODER_MAX_FRAMES_PER_TURN,
+  FRAME_DECODER_MAX_BYTES_PER_TURN,
+  FRAME_DECODER_MAX_TURN_MS,
+  FRAME_DECODER_MAX_RETAINED_BYTES
+} from '../../shared/relay-frame-decoder'
+
+export {
+  FrameDecoder,
+  FrameDecoderContinuationError,
+  HEADER_LENGTH,
+  MAX_MESSAGE_SIZE,
+  FRAME_DECODER_MAX_FRAMES_PER_TURN,
+  FRAME_DECODER_MAX_BYTES_PER_TURN,
+  FRAME_DECODER_MAX_TURN_MS,
+  FRAME_DECODER_MAX_RETAINED_BYTES
+}
+export type { DecodedFrame, FrameDecoderOptions } from '../../shared/relay-frame-decoder'
 
 export const RELAY_VERSION = '0.1.0'
 export const RELAY_SENTINEL = `ORCA-RELAY v${RELAY_VERSION} READY\n`
 export const RELAY_SENTINEL_TIMEOUT_MS = 10_000
 export const RELAY_REMOTE_DIR = '.orca-remote'
-
-// ── Framing constants (VS Code ProtocolConstants) ───────────────────
-
-export const HEADER_LENGTH = 13
-export const MAX_MESSAGE_SIZE = 16 * 1024 * 1024 // 16 MB
 
 /** Message type byte. */
 export const MessageType = {
@@ -23,9 +39,6 @@ export const MessageType = {
 /** Keepalive/timeout (VS Code ProtocolConstants). */
 export const KEEPALIVE_SEND_MS = 5_000
 export const TIMEOUT_MS = 20_000
-
-/** Reconnection grace period (default, overridable by relay --grace-time). */
-export const DEFAULT_GRACE_TIME_MS = DEFAULT_SSH_RELAY_GRACE_PERIOD_SECONDS * 1000
 
 // ── Relay error codes ───────────────────────────────────────────────
 
@@ -50,10 +63,33 @@ export const JsonRpcErrorCode = {
  * 256KB raw → ~340KB base64, well under MAX_MESSAGE_SIZE. */
 export const STREAM_CHUNK_SIZE = 256 * 1024
 
-/** Cap on concurrent in-flight streams per relay; mirrors fs.watch's
- * 20-watcher cap idiom. Prevents file-descriptor exhaustion from a buggy
- * client. */
-export const MAX_CONCURRENT_STREAMS = 16
+// ── Git response streaming (see docs/relay-git-response-stream-design.md) ──
+
+/** Sentinel the relay returns as the RPC result when the real payload streams
+ * as git.responseChunk frames. Absent from old relays, so a new client falls
+ * back to the plain result they return. */
+export type GitResponseStreamMarker = {
+  __orcaGitResponseStream: { streamId: number; totalBytes: number; chunkCount: number }
+}
+
+export function isGitResponseStreamMarker(value: unknown): value is GitResponseStreamMarker {
+  if (typeof value !== 'object' || value === null || !('__orcaGitResponseStream' in value)) {
+    return false
+  }
+  const marker = (value as { __orcaGitResponseStream?: unknown }).__orcaGitResponseStream
+  if (typeof marker !== 'object' || marker === null) {
+    return false
+  }
+  const fields = marker as Record<string, unknown>
+  return (
+    Number.isInteger(fields.streamId) &&
+    (fields.streamId as number) > 0 &&
+    Number.isInteger(fields.totalBytes) &&
+    (fields.totalBytes as number) >= 0 &&
+    Number.isInteger(fields.chunkCount) &&
+    (fields.chunkCount as number) >= 0
+  )
+}
 
 // ── JSON-RPC types ──────────────────────────────────────────────────
 
@@ -78,6 +114,13 @@ export type JsonRpcNotification = {
 }
 
 export type JsonRpcMessage = JsonRpcRequest | JsonRpcResponse | JsonRpcNotification
+
+const JSON_RPC_PAYLOAD_BYTES = Symbol('jsonRpcPayloadBytes')
+
+export type PreparedJsonRpcPayload = Readonly<{
+  byteLength: number
+  [JSON_RPC_PAYLOAD_BYTES]: Buffer
+}>
 
 // ── Framing: encode / decode ────────────────────────────────────────
 
@@ -105,89 +148,34 @@ export function encodeFrame(
 }
 
 export function encodeJsonRpcFrame(msg: JsonRpcMessage, id: number, ack: number): Buffer {
+  return encodePreparedJsonRpcFrame(prepareJsonRpcPayload(msg), id, ack)
+}
+
+export function prepareJsonRpcPayload(msg: JsonRpcMessage): PreparedJsonRpcPayload {
   const payload = Buffer.from(JSON.stringify(msg), 'utf-8')
   if (payload.length > MAX_MESSAGE_SIZE) {
     throw new Error(`Message too large: ${payload.length} bytes (max ${MAX_MESSAGE_SIZE})`)
   }
-  return encodeFrame(MessageType.Regular, id, ack, payload)
+  return Object.freeze({ byteLength: payload.length, [JSON_RPC_PAYLOAD_BYTES]: payload })
+}
+
+export function encodePreparedJsonRpcFrame(
+  payload: PreparedJsonRpcPayload,
+  id: number,
+  ack: number
+): Buffer {
+  return encodeFrame(MessageType.Regular, id, ack, payload[JSON_RPC_PAYLOAD_BYTES])
 }
 
 export function encodeKeepAliveFrame(id: number, ack: number): Buffer {
   return encodeFrame(MessageType.KeepAlive, id, ack, Buffer.alloc(0))
 }
 
-export type DecodedFrame = {
-  type: number
-  id: number
-  ack: number
-  payload: Buffer
-}
-
-/**
- * Incremental frame parser. Feed it chunks of data; it emits complete frames.
- */
-export class FrameDecoder {
-  private buffer = Buffer.alloc(0)
-  private onFrame: (frame: DecodedFrame) => void
-  private onError: ((err: Error) => void) | null
-
-  constructor(onFrame: (frame: DecodedFrame) => void, onError?: (err: Error) => void) {
-    this.onFrame = onFrame
-    this.onError = onError ?? null
-  }
-
-  feed(chunk: Buffer | Uint8Array): void {
-    this.buffer = Buffer.concat([this.buffer, chunk])
-
-    while (this.buffer.length >= HEADER_LENGTH) {
-      const length = this.buffer.readUInt32BE(9)
-      const totalLength = HEADER_LENGTH + length
-
-      // Why: throwing here would leave the buffer in a partially consumed
-      // state — subsequent feed() calls would try to parse leftover payload
-      // bytes as a new header, corrupting every future frame. Instead we
-      // skip the entire oversized frame so the decoder stays synchronized.
-      if (length > MAX_MESSAGE_SIZE) {
-        if (this.buffer.length < totalLength) {
-          break
-        }
-        this.buffer = this.buffer.subarray(totalLength)
-        const err = new Error(`Frame payload too large: ${length} bytes — discarded`)
-        if (this.onError) {
-          this.onError(err)
-        }
-        continue
-      }
-
-      if (this.buffer.length < totalLength) {
-        break
-      }
-
-      const frame: DecodedFrame = {
-        type: this.buffer[0],
-        id: this.buffer.readUInt32BE(1),
-        ack: this.buffer.readUInt32BE(5),
-        payload: this.buffer.subarray(HEADER_LENGTH, totalLength)
-      }
-
-      this.buffer = this.buffer.subarray(totalLength)
-      this.onFrame(frame)
-    }
-  }
-
-  reset(): void {
-    this.buffer = Buffer.alloc(0)
-  }
-}
-
-/**
- * Parse a JSON-RPC message from a frame payload.
- */
 export function parseJsonRpcMessage(payload: Buffer): JsonRpcMessage {
   const text = payload.toString('utf-8')
   const msg = JSON.parse(text) as JsonRpcMessage
   if (msg.jsonrpc !== '2.0') {
-    throw new Error(`Invalid JSON-RPC version: ${(msg as Record<string, unknown>).jsonrpc}`)
+    throw new Error(`Invalid JSON-RPC version: ${String((msg as Record<string, unknown>).jsonrpc)}`)
   }
   return msg
 }

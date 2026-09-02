@@ -1,7 +1,7 @@
 import { useEffect } from 'react'
 import { useAppStore } from '@/store'
 import { shouldRefreshGitStatusForFileChange } from '@/components/right-sidebar/git-status-file-watch-refresh'
-import { splitWorktreeId } from '../../../shared/worktree-id'
+import { splitWorktreeId } from '../../../shared/worktree/id'
 import { normalizeRuntimePathForComparison } from '../../../shared/cross-platform-path'
 import {
   ORCA_WORKTREE_FILE_CHANGE_EVENT,

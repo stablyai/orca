@@ -6,7 +6,7 @@ import { mkdir } from 'node:fs/promises'
 import path from 'node:path'
 import type { SpotlightRepoState } from '../../shared/spotlight'
 import { SPOTLIGHT_STATE_RELATIVE_PATH } from '../../shared/spotlight'
-import { getWorktreePathBasenameFromId, splitWorktreeId } from '../../shared/worktree-id'
+import { getWorktreePathBasenameFromId, splitWorktreeId } from '../../shared/worktree/id'
 import { writeFileAtomically } from '../codex-accounts/fs-utils'
 
 export async function writeSpotlightStateFile(

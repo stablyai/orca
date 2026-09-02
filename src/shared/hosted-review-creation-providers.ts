@@ -1,6 +1,11 @@
 import type { HostedReviewProvider } from './hosted-review'
 
-export type HostedReviewCreationProvider = 'github' | 'gitlab' | 'azure-devops' | 'gitea'
+export type HostedReviewCreationProvider =
+  | 'github'
+  | 'gitlab'
+  | 'bitbucket'
+  | 'azure-devops'
+  | 'gitea'
 
 export function supportsHostedReviewCreation(
   provider: HostedReviewProvider | null | undefined
@@ -8,6 +13,7 @@ export function supportsHostedReviewCreation(
   return (
     provider === 'github' ||
     provider === 'gitlab' ||
+    provider === 'bitbucket' ||
     provider === 'azure-devops' ||
     provider === 'gitea'
   )

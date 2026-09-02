@@ -1,24 +1,25 @@
-import { mkdir, mkdtemp, readFile, readdir, rm, stat, writeFile } from 'node:fs/promises'
+import { chmod, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { createRequire } from 'node:module'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 
+const REPO_ROOT = join(import.meta.dirname, '..', '..')
+const SRC_MAIN_DIR = join(REPO_ROOT, 'src', 'main')
+
 const require = createRequire(import.meta.url)
 const electronBuilderConfig = require('../electron-builder.config.cjs')
+const { FileMatcher } = require('app-builder-lib/out/fileMatcher')
+const FpmTarget = require('app-builder-lib/out/targets/FpmTarget').default
 const electronBuilderNativeRebuild = require('./electron-builder-native-rebuild.cjs')
-const {
-  createPackagedRuntimeNodeModuleResources,
-  findAsarEntry,
-  prunePackagedNodePty,
-  prunePackagedParcelWatcher,
-  prunePackagedSherpaOnnx,
-  prunePackagedRuntimeTypeDeclarations,
-  prunePackagedZodSources,
-  verifyPackagedMainRuntimeDeps
-} = require('../packaged-runtime-node-modules.cjs')
 
 describe('electron-builder config', () => {
+  it('keeps the packaged app identity aligned with local-build validation', () => {
+    expect(electronBuilderConfig.appId).toBe(
+      require('../../src/shared/local-build-compatibility-contract.json').appId
+    )
+  })
+
   it('excludes repo-only source trees from app.asar', () => {
     expect(electronBuilderConfig.files).toEqual(
       expect.arrayContaining([
@@ -28,15 +29,94 @@ describe('electron-builder config', () => {
         '!mobile{,/**/*}',
         '!native{,/**/*}',
         '!skills{,/**/*}',
+        '!skill-guides{,/**/*}',
+        '!skill-stubs{,/**/*}',
+        '!resources/skills/**',
         '!tests{,/**/*}',
+        '!examples{,/**/*}',
+        '!pr-evidence{,/**/*}',
+        '!{.claude,.grok,.agents,.codex}{,/**/*}',
         '!Casks{,/**/*}',
-        '!{AGENTS.md,CLAUDE.md,DEVELOPING.md,bundle-size-progress.md}',
-        '!out/**/*.test.js'
+        '!{AGENTS.md,CLAUDE.md,DEVELOPING.md,bundle-size-progress.md,ORCHESTRATION_IMPLEMENTATION_CHECKLIST.md,ORCHESTRATION_STRUCTURED_OUTPUT_DESIGN.md}',
+        '!out/**/*.test.js',
+        '!resources/plugins/launch/**'
       ])
     )
   })
 
+  it('keeps local agent tooling out of app.asar', () => {
+    const matcher = new FileMatcher('/app', '/dest', (value) => value, electronBuilderConfig.files)
+    matcher.prependPattern('**/*')
+    const isPacked = matcher.createFilter()
+    const packs = (repoPath) => isPacked(join('/app', repoPath), { isDirectory: () => false })
+
+    for (const toolingPath of [
+      '.grok/skills/review-and-submit/review-and-submit/SKILL.md',
+      '.claude/skills/review-and-submit/review-and-submit/SKILL.md',
+      '.agents/skills/electron/SKILL.md',
+      '.codex/sessions/session.json'
+    ]) {
+      expect(packs(toolingPath)).toBe(false)
+    }
+    expect(packs('out/main/index.js')).toBe(true)
+  })
+
+  // Why: `files` is an all-negation list, so electron-builder's default `**/*` packs
+  // anything without an explicit `!` entry — examples/ landed without one and shipped
+  // hostile-panel, the adversarial containment fixture, into 1.4.160-rc.3's app.asar.
+  // Drive the real matcher: pinning the pattern string cannot prove it excludes the tree.
+  it('keeps plugin authoring examples out of app.asar', () => {
+    const matcher = new FileMatcher('/app', '/dest', (value) => value, electronBuilderConfig.files)
+    // copyFiles() prepends this itself once the pattern list is all-negation.
+    matcher.prependPattern('**/*')
+    const isPacked = matcher.createFilter()
+    const packs = (repoPath) => isPacked(join('/app', repoPath), { isDirectory: () => false })
+
+    for (const authoringOnly of [
+      'examples/plugins/hostile-panel/panel.html',
+      'examples/plugins/hostile-panel/orca-plugin.json',
+      'examples/plugins/hello-orca/main.mjs',
+      'examples/plugins/hello-orca/orca-plugin.json'
+    ]) {
+      expect(packs(authoringOnly)).toBe(false)
+    }
+    // The negation stays anchored at the app root, so nested `examples` segments still ship.
+    expect(packs('out/main/examples/index.js')).toBe(true)
+  })
+
+  // Why: out/electron-dev holds `pnpm dev`'s cached Electron.app copies (~270MB per branch).
+  // CI never creates it, so only a local package would have hit this -- silently, as bulk.
+  it('keeps cached dev Electron bundles out of app.asar', () => {
+    const matcher = new FileMatcher('/app', '/dest', (value) => value, electronBuilderConfig.files)
+    matcher.prependPattern('**/*')
+    const isPacked = matcher.createFilter()
+    const packs = (repoPath) => isPacked(join('/app', repoPath), { isDirectory: () => false })
+
+    for (const devBundlePath of [
+      'out/electron-dev/1a2b3c4d5e6f/Orca: dev.app/Contents/MacOS/Electron',
+      'out/electron-dev/1a2b3c4d5e6f/orca-dev-electron-app.json'
+    ]) {
+      expect(packs(devBundlePath)).toBe(false)
+    }
+    // The real build outputs sit beside it under out/ and must still ship.
+    expect(packs('out/main/index.js')).toBe(true)
+    expect(packs('out/renderer/index.html')).toBe(true)
+  })
+
   it('keeps runtime resources available through extraResources', () => {
+    const bundledPluginResources = expect.objectContaining({
+      from: 'resources/plugins/launch',
+      to: 'plugins/launch'
+    })
+    for (const platform of ['mac', 'linux', 'win']) {
+      expect(electronBuilderConfig[platform].extraResources).toContainEqual({
+        from: 'resources/skills',
+        to: 'skills'
+      })
+      expect(electronBuilderConfig[platform].extraResources).toEqual(
+        expect.arrayContaining([bundledPluginResources])
+      )
+    }
     expect(electronBuilderConfig.mac.extraResources).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
@@ -58,14 +138,128 @@ describe('electron-builder config', () => {
         expect.objectContaining({
           from: 'native/computer-use-windows/runtime.ps1',
           to: 'computer-use-windows/runtime.ps1'
+        }),
+        expect.objectContaining({
+          from: 'native/windows-cli-launcher/.build/orca.exe',
+          to: 'bin/orca.exe'
         })
       ])
     )
   })
 
+  it('ships one macOS serve-sim package through the runtime closure', () => {
+    const serveSimResources = electronBuilderConfig.mac.extraResources.filter((resource) =>
+      [join('node_modules', 'serve-sim'), 'serve-sim'].includes(resource.to)
+    )
+
+    expect(serveSimResources).toEqual([
+      expect.objectContaining({ to: join('node_modules', 'serve-sim') })
+    ])
+  })
+
+  // Why: the Windows CLI shim is delivered only via extraResources to
+  // resources/bin/orca.cmd (beside the native resources/bin/orca.exe). If the
+  // source tree is also packed into app.asar it gets extracted by
+  // asarUnpack:['resources/**'] to app.asar.unpacked/resources/win32/bin/orca.cmd,
+  // a duplicate with no adjacent orca.exe that fails to launch (#7351).
+  it('keeps the Windows CLI shim source tree out of app.asar', () => {
+    expect(electronBuilderConfig.files).toEqual(
+      expect.arrayContaining(['!resources/win32{,/**/*}'])
+    )
+    // Regression guard: the working shim must still ship via extraResources.
+    expect(electronBuilderConfig.win.extraResources).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          from: 'resources/win32/bin/orca.cmd',
+          to: 'bin/orca.cmd'
+        })
+      ])
+    )
+  })
+
+  // Why: on macOS 26 UNUserNotificationCenter aborts for executables launched
+  // from Contents/Resources, so the helper must ship in Contents/MacOS (#7929).
+  it('ships the mac notification-status helper in Contents/MacOS, not Resources', () => {
+    expect(electronBuilderConfig.mac.extraFiles).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          from: 'native/notification-status-macos/.build/release/orca-notification-status',
+          to: 'MacOS/orca-notification-status'
+        })
+      ])
+    )
+    expect(electronBuilderConfig.mac.extraResources).not.toEqual(
+      expect.arrayContaining([expect.objectContaining({ to: 'orca-notification-status' })])
+    )
+  })
+
+  it('ships the mac keyboard-layout helper in Contents/MacOS, not Resources', () => {
+    expect(electronBuilderConfig.mac.extraFiles).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          from: 'native/keyboard-layout-macos/.build/release/orca-keyboard-layout',
+          to: 'MacOS/orca-keyboard-layout'
+        })
+      ])
+    )
+    expect(electronBuilderConfig.mac.extraResources).not.toEqual(
+      expect.arrayContaining([expect.objectContaining({ to: 'orca-keyboard-layout' })])
+    )
+  })
+
   it('unpacks the compiled CommonJS boundary with CLI runtime files', () => {
     expect(electronBuilderConfig.asarUnpack).toEqual(
-      expect.arrayContaining(['out/package.json', 'out/cli/**', 'out/shared/**'])
+      expect.arrayContaining([
+        'out/package.json',
+        'out/cli/**',
+        'out/shared/**',
+        'out/main/claude-accounts/keychain.js'
+      ])
+    )
+  })
+
+  // Why: without the unpacked entry the watcher client silently falls back to
+  // in-process @parcel/watcher, reintroducing the #7547 main-process crash.
+  it('unpacks the forked parcel-watcher process entry', () => {
+    expect(electronBuilderConfig.asarUnpack).toEqual(
+      expect.arrayContaining(['out/main/parcel-watcher-process-entry.js'])
+    )
+  })
+
+  it('unpacks the replaceable WSL transcript filesystem process entry', async () => {
+    const entryFilename = 'wsl-transcript-fs-process-entry.js'
+    expect(electronBuilderConfig.asarUnpack).toContain(`out/main/${entryFilename}`)
+
+    const viteConfig = await readFile(join(REPO_ROOT, 'electron.vite.config.ts'), 'utf8')
+    expect(viteConfig).toMatch(new RegExp(`'${entryFilename.replace(/\.js$/, '')}':\\s*resolve\\(`))
+  })
+
+  // Why: the scanner service is forked with ELECTRON_RUN_AS_NODE, so asar is
+  // invisible to it and a packed worker entry fails closed — dropping every
+  // OpenCode session in packaged builds while dev stays green. Three legs must
+  // agree on the filename, so all three are read rather than hardcoded.
+  it('unpacks the OpenCode SQLite worker entry the scanner service forks', async () => {
+    const spawnSource = await readFile(
+      join(SRC_MAIN_DIR, 'ai-vault', 'session-scanner-opencode-sqlite-worker-spawn.ts'),
+      'utf8'
+    )
+    const entryFilename = spawnSource.match(/WORKER_ENTRY_FILENAME = '([^']+)'/)?.[1]
+
+    expect(entryFilename).toBeDefined()
+    expect(electronBuilderConfig.asarUnpack).toContain(`out/main/${entryFilename}`)
+
+    // Why: the emitted path comes from the rollup input key under
+    // entryFileNames '[name].js', not from the source filename — renaming the
+    // key alone would leave the other two legs agreeing on a file that no
+    // longer exists.
+    const viteConfig = await readFile(join(REPO_ROOT, 'electron.vite.config.ts'), 'utf8')
+    expect(viteConfig).toContain("entryFileNames: '[name].js'")
+    expect(viteConfig).toMatch(new RegExp(`'${entryFilename.replace(/\.js$/, '')}':\\s*resolve\\(`))
+  })
+
+  it('keeps the worker-thread hang watchdog inside app.asar', () => {
+    expect(electronBuilderConfig.asarUnpack).not.toContain(
+      'out/main/main-thread-hang-watchdog-entry.js'
     )
   })
 
@@ -77,8 +271,9 @@ describe('electron-builder config', () => {
     expect(electronBuilderConfig.linux.desktop.entry.StartupWMClass).toBe('orca')
   })
 
-  it('uses AppImage and deb as local Linux targets without changing existing artifact names', () => {
-    expect(electronBuilderConfig.linux.target).toEqual(['AppImage', 'deb'])
+  it('uses the release artifact set as local Linux targets without changing existing names', () => {
+    expect(electronBuilderConfig.linux.target).toEqual(['AppImage', 'deb', 'rpm'])
+    expect(electronBuilderConfig.toolsets).toEqual({ appimage: '1.0.3' })
     expect(electronBuilderConfig.appImage.artifactName).toBe('orca-linux.${ext}')
     expect(electronBuilderConfig.deb.artifactName).toBe('orca-ide_${version}_${arch}.${ext}')
     expect(electronBuilderConfig.rpm).toMatchObject({
@@ -87,6 +282,33 @@ describe('electron-builder config', () => {
     })
   })
 
+  it('retains electron-builder runtime dependencies in deb and rpm packages', () => {
+    for (const target of ['deb', 'rpm']) {
+      const dependencies = electronBuilderConfig[target].depends
+      expect(dependencies).toEqual(
+        expect.arrayContaining(FpmTarget.prototype.getDefaultDepends(target))
+      )
+      expect(new Set(dependencies).size).toBe(dependencies.length)
+    }
+  })
+
+  it('validates each AppImage before electron-builder publishes it', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'orca-electron-builder-appimage-'))
+    try {
+      const appImage = join(root, 'orca-linux.AppImage')
+      await writeFile(appImage, 'not an ELF')
+      await chmod(appImage, 0o755)
+
+      expect(() =>
+        electronBuilderConfig.artifactBuildCompleted({ file: appImage, arch: 1 })
+      ).toThrow(/ELF header is outside/)
+      expect(() =>
+        electronBuilderConfig.artifactBuildCompleted({ file: join(root, 'orca-ide.deb') })
+      ).not.toThrow()
+    } finally {
+      await rm(root, { recursive: true, force: true })
+    }
+  })
   it('uses a distinct AppImage name for Linux arm64 release uploads', () => {
     const configPath = require.resolve('../electron-builder.config.cjs')
     const original = process.env.ORCA_LINUX_ARM64_RELEASE
@@ -107,239 +329,107 @@ describe('electron-builder config', () => {
     }
   })
 
+  it('overrides packaged semver only for local macOS builds', () => {
+    const configPath = require.resolve('../electron-builder.config.cjs')
+    const original = process.env.ORCA_LOCAL_BUILD_VERSION
+    const originalMacRelease = process.env.ORCA_MAC_RELEASE
+    try {
+      delete require.cache[configPath]
+      delete process.env.ORCA_MAC_RELEASE
+      process.env.ORCA_LOCAL_BUILD_VERSION = '1.4.159-rc.0.local.123.abc'
+      expect(require('../electron-builder.config.cjs').extraMetadata).toEqual({
+        version: '1.4.159-rc.0.local.123.abc'
+      })
+    } finally {
+      if (originalMacRelease === undefined) {
+        delete process.env.ORCA_MAC_RELEASE
+      } else {
+        process.env.ORCA_MAC_RELEASE = originalMacRelease
+      }
+      if (original === undefined) {
+        delete process.env.ORCA_LOCAL_BUILD_VERSION
+      } else {
+        process.env.ORCA_LOCAL_BUILD_VERSION = original
+      }
+      delete require.cache[configPath]
+      require('../electron-builder.config.cjs')
+    }
+  })
+
+  it('never applies local semver to release packaging', () => {
+    const configPath = require.resolve('../electron-builder.config.cjs')
+    const originalLocalVersion = process.env.ORCA_LOCAL_BUILD_VERSION
+    const originalMacRelease = process.env.ORCA_MAC_RELEASE
+    try {
+      delete require.cache[configPath]
+      process.env.ORCA_LOCAL_BUILD_VERSION = '1.4.159-local.123.abc'
+      process.env.ORCA_MAC_RELEASE = '1'
+      expect(require('../electron-builder.config.cjs').extraMetadata).toBeUndefined()
+    } finally {
+      if (originalLocalVersion === undefined) {
+        delete process.env.ORCA_LOCAL_BUILD_VERSION
+      } else {
+        process.env.ORCA_LOCAL_BUILD_VERSION = originalLocalVersion
+      }
+      if (originalMacRelease === undefined) {
+        delete process.env.ORCA_MAC_RELEASE
+      } else {
+        process.env.ORCA_MAC_RELEASE = originalMacRelease
+      }
+      delete require.cache[configPath]
+      require('../electron-builder.config.cjs')
+    }
+  })
+
   it('uses Orca native rebuild hook instead of electron-builder default rebuild', () => {
     expect(electronBuilderConfig.beforeBuild).toBe(electronBuilderNativeRebuild)
     expect(electronBuilderConfig.npmRebuild).toBe(true)
   })
 
-  it('verifies packaged main runtime deps from Windows-style asar entries', async () => {
-    const resourcesDir = await mkdtemp(join(tmpdir(), 'orca-runtime-deps-'))
-    try {
-      await writeFile(join(resourcesDir, 'app.asar'), '', 'utf8')
-      await mkdir(join(resourcesDir, 'node_modules', 'yaml'), { recursive: true })
-      await mkdir(join(resourcesDir, 'node_modules', 'zod'), { recursive: true })
-
-      const sources = new Map([
-        ['out\\main\\index.js', 'const z = require("zod")'],
-        ['out\\main\\agent-hooks\\managed-agent-hook-controls.js', 'const YAML = require("yaml")']
-      ])
-      const asar = {
-        listPackage: () => [...sources.keys()].map((entry) => `\\${entry}`),
-        extractFile: (_asarPath, internalPath) => Buffer.from(sources.get(internalPath), 'utf8')
-      }
-
-      expect(() => verifyPackagedMainRuntimeDeps(resourcesDir, asar)).not.toThrow()
-    } finally {
-      await rm(resourcesDir, { recursive: true, force: true })
-    }
-  })
-
-  it('normalizes host-specific asar entry separators', () => {
-    expect(findAsarEntry(['\\out\\main\\index.js'], 'out/main/index.js')).toBe(
-      '\\out\\main\\index.js'
+  // Why: the .deb/.rpm update-recovery path keys entirely off the resources/package-type marker that
+  // app-builder-lib's FpmTarget writes. If packaging silently stops shipping an fpm target, or adds
+  // one the recovery path does not cover, getLinuxRootPackageType() returns null, autoInstallOnAppQuit
+  // quietly goes back to true, and no unit test notices.
+  describe('linux root-package update recovery contract', () => {
+    // FpmTarget writes resources/package-type only for targets it supports auto-update for.
+    const MARKER_TARGETS = new Set(['deb', 'rpm', 'pacman'])
+    const RECOVERABLE_TARGETS = new Set(['deb', 'rpm'])
+    const linuxTargets = electronBuilderConfig.linux.target.map((entry) =>
+      typeof entry === 'string' ? entry : entry.target
     )
-    expect(findAsarEntry(['/out/main/index.js'], 'out/main/index.js')).toBe('/out/main/index.js')
-  })
 
-  it('prunes non-target node-pty prebuilds from packaged runtime resources', async () => {
-    const resourcesDir = await mkdtemp(join(tmpdir(), 'orca-node-pty-prune-'))
-    try {
-      const prebuildsDir = join(resourcesDir, 'node_modules', 'node-pty', 'prebuilds')
-      await mkdir(join(prebuildsDir, 'darwin-arm64'), { recursive: true })
-      await mkdir(join(prebuildsDir, 'darwin-x64'), { recursive: true })
-      await mkdir(join(prebuildsDir, 'linux-x64'), { recursive: true })
-      await mkdir(join(prebuildsDir, 'win32-x64'), { recursive: true })
-      await mkdir(join(resourcesDir, 'node_modules', 'node-pty', 'third_party', 'conpty'), {
-        recursive: true
-      })
-      await mkdir(join(resourcesDir, 'node_modules', 'node-pty', 'deps', 'winpty'), {
-        recursive: true
-      })
+    it('still ships an AppImage plus at least one root-package target', () => {
+      expect(linuxTargets).toContain('AppImage')
+      expect(linuxTargets.some((target) => MARKER_TARGETS.has(target))).toBe(true)
+    })
 
-      prunePackagedNodePty(resourcesDir, 'darwin')
-
-      await expect(readdir(prebuildsDir).then((entries) => entries.sort())).resolves.toEqual([
-        'darwin-arm64',
-        'darwin-x64'
-      ])
-      await expect(
-        readdir(join(resourcesDir, 'node_modules', 'node-pty', 'third_party'))
-      ).resolves.toEqual([])
-      await expect(
-        readdir(join(resourcesDir, 'node_modules', 'node-pty', 'deps'))
-      ).resolves.toEqual([])
-    } finally {
-      await rm(resourcesDir, { recursive: true, force: true })
-    }
-  })
-
-  it('copies the Windows node-pty ConPTY runtime beside the rebuilt addon', async () => {
-    for (const arch of ['x64', 'arm64']) {
-      const resourcesDir = await mkdtemp(join(tmpdir(), `orca-node-pty-conpty-${arch}-`))
-      try {
-        const nodePtyDir = join(resourcesDir, 'node_modules', 'node-pty')
-        const releaseDir = join(nodePtyDir, 'build', 'Release')
-        const conptyRoot = join(nodePtyDir, 'third_party', 'conpty', '0.1.0')
-        await mkdir(releaseDir, { recursive: true })
-        await writeFile(join(releaseDir, 'conpty.node'), 'native addon placeholder', 'utf8')
-        for (const sourceArch of ['x64', 'arm64']) {
-          const sourceDir = join(conptyRoot, `win10-${sourceArch}`)
-          await mkdir(sourceDir, { recursive: true })
-          await writeFile(join(sourceDir, 'conpty.dll'), `dll payload ${sourceArch}`, 'utf8')
-          await writeFile(
-            join(sourceDir, 'OpenConsole.exe'),
-            `console payload ${sourceArch}`,
-            'utf8'
-          )
-        }
-
-        prunePackagedNodePty(resourcesDir, 'win32', arch)
-
-        await expect(readFile(join(releaseDir, 'conpty', 'conpty.dll'), 'utf8')).resolves.toBe(
-          `dll payload ${arch}`
-        )
-        await expect(readFile(join(releaseDir, 'conpty', 'OpenConsole.exe'), 'utf8')).resolves.toBe(
-          `console payload ${arch}`
-        )
-      } finally {
-        await rm(resourcesDir, { recursive: true, force: true })
-      }
-    }
-  })
-
-  it('includes @parcel/watcher in the packaged runtime closure', () => {
-    // Why: the main process imports '@parcel/watcher' for filesystem change
-    // events; if it is absent from the packaged closure the serve host silently
-    // stops propagating file changes to clients (regression guard for #4851).
-    const packaged = createPackagedRuntimeNodeModuleResources()
-    const packagedTargets = packaged.map((resource) => resource.to)
-    expect(packagedTargets).toContain(join('node_modules', '@parcel', 'watcher'))
-    expect(
-      packagedTargets.some((target) =>
-        target.startsWith(join('node_modules', '@parcel', 'watcher-'))
+    it('ships no root-package target the recovery path cannot recover', () => {
+      const unrecoverable = linuxTargets.filter(
+        (target) => MARKER_TARGETS.has(target) && !RECOVERABLE_TARGETS.has(target)
       )
-    ).toBe(true)
-  })
+      expect(unrecoverable).toEqual([])
+    })
 
-  it('prunes non-target @parcel/watcher platform subpackages from packaged runtime resources', async () => {
-    const resourcesDir = await mkdtemp(join(tmpdir(), 'orca-parcel-watcher-prune-'))
-    try {
-      const parcelDir = join(resourcesDir, 'node_modules', '@parcel')
-      await mkdir(join(parcelDir, 'watcher'), { recursive: true })
-      await mkdir(join(parcelDir, 'watcher-darwin-arm64'), { recursive: true })
-      await mkdir(join(parcelDir, 'watcher-darwin-x64'), { recursive: true })
-      await mkdir(join(parcelDir, 'watcher-linux-x64-glibc'), { recursive: true })
-      await mkdir(join(parcelDir, 'watcher-linux-arm64-glibc'), { recursive: true })
-      await mkdir(join(parcelDir, 'watcher-win32-x64'), { recursive: true })
-
-      prunePackagedParcelWatcher(resourcesDir, 'linux')
-
-      await expect(readdir(parcelDir).then((entries) => entries.sort())).resolves.toEqual([
-        'watcher',
-        'watcher-linux-arm64-glibc',
-        'watcher-linux-x64-glibc'
-      ])
-    } finally {
-      await rm(resourcesDir, { recursive: true, force: true })
-    }
-  })
-
-  it('leaves unrelated @parcel/* runtime deps untouched when pruning the watcher', async () => {
-    const resourcesDir = await mkdtemp(join(tmpdir(), 'orca-parcel-watcher-prune-unrelated-'))
-    try {
-      const parcelDir = join(resourcesDir, 'node_modules', '@parcel')
-      await mkdir(join(parcelDir, 'watcher'), { recursive: true })
-      await mkdir(join(parcelDir, 'watcher-darwin-arm64'), { recursive: true })
-      await mkdir(join(parcelDir, 'watcher-linux-x64-glibc'), { recursive: true })
-      // A hypothetical future @parcel/* runtime dep that is NOT a watcher subpackage.
-      await mkdir(join(parcelDir, 'transformer-js'), { recursive: true })
-
-      prunePackagedParcelWatcher(resourcesDir, 'linux')
-
-      await expect(readdir(parcelDir).then((entries) => entries.sort())).resolves.toEqual([
-        'transformer-js',
-        'watcher',
-        'watcher-linux-x64-glibc'
-      ])
-    } finally {
-      await rm(resourcesDir, { recursive: true, force: true })
-    }
-  })
-
-  it('prunes type declaration artifacts from packaged runtime node_modules', async () => {
-    const resourcesDir = await mkdtemp(join(tmpdir(), 'orca-runtime-type-prune-'))
-    try {
-      const packageDir = join(resourcesDir, 'node_modules', 'example-package')
-      await mkdir(join(packageDir, 'dist'), { recursive: true })
-      await writeFile(join(packageDir, 'dist', 'index.cjs'), 'module.exports = {}', 'utf8')
-      await writeFile(join(packageDir, 'dist', 'index.d.ts'), 'export type Value = string', 'utf8')
-      await writeFile(join(packageDir, 'dist', 'index.d.cts'), 'export type Value = string', 'utf8')
-      await writeFile(join(packageDir, 'dist', 'index.d.mts.map'), '{}', 'utf8')
-
-      prunePackagedRuntimeTypeDeclarations(resourcesDir)
-
-      await expect(readdir(join(packageDir, 'dist'))).resolves.toEqual(['index.cjs'])
-    } finally {
-      await rm(resourcesDir, { recursive: true, force: true })
-    }
-  })
-
-  it('prunes duplicate darwin sherpa-onnx runtime dylib aliases', async () => {
-    const resourcesDir = await mkdtemp(join(tmpdir(), 'orca-sherpa-prune-'))
-    try {
-      const packageDir = join(resourcesDir, 'node_modules', 'sherpa-onnx-darwin-arm64')
-      await mkdir(packageDir, { recursive: true })
-      await writeFile(join(packageDir, 'sherpa-onnx.node'), '', 'utf8')
-      await writeFile(join(packageDir, 'libonnxruntime.1.23.2.dylib'), '', 'utf8')
-      await writeFile(join(packageDir, 'libonnxruntime.dylib'), '', 'utf8')
-
-      prunePackagedSherpaOnnx(resourcesDir, 'darwin')
-
-      await expect(readdir(packageDir).then((entries) => entries.sort())).resolves.toEqual([
-        'libonnxruntime.1.23.2.dylib',
-        'sherpa-onnx.node'
-      ])
-    } finally {
-      await rm(resourcesDir, { recursive: true, force: true })
-    }
-  })
-
-  it('prunes zod TypeScript sources from packaged runtime resources', async () => {
-    const resourcesDir = await mkdtemp(join(tmpdir(), 'orca-zod-prune-'))
-    try {
-      const packageDir = join(resourcesDir, 'node_modules', 'zod')
-      await mkdir(join(packageDir, 'src'), { recursive: true })
-      await writeFile(join(packageDir, 'index.cjs'), 'module.exports = {}', 'utf8')
-      await writeFile(join(packageDir, 'src', 'index.ts'), 'export const value = true', 'utf8')
-
-      prunePackagedZodSources(resourcesDir)
-
-      await expect(readdir(packageDir)).resolves.toEqual(['index.cjs'])
-    } finally {
-      await rm(resourcesDir, { recursive: true, force: true })
-    }
-  })
-
-  it.skipIf(process.platform === 'win32')(
-    'marks packaged Unix CLI launchers executable',
-    async () => {
-      const root = await mkdtemp(join(tmpdir(), 'orca-electron-builder-config-'))
-      try {
-        const resourcesDir = join(root, 'linux-unpacked', 'resources')
-        const launcherPath = join(resourcesDir, 'bin', 'orca-ide')
-        await mkdir(join(resourcesDir, 'bin'), { recursive: true })
-        await mkdir(join(resourcesDir, 'node_modules', 'zod', 'src'), { recursive: true })
-        await writeFile(launcherPath, '#!/usr/bin/env bash\n', { encoding: 'utf8', mode: 0o644 })
-
-        await electronBuilderConfig.afterPack({
-          appOutDir: join(root, 'linux-unpacked'),
-          electronPlatformName: 'linux'
-        })
-
-        expect((await stat(launcherPath)).mode & 0o111).not.toBe(0)
-      } finally {
-        await rm(root, { recursive: true, force: true })
+    it('accepts exactly the markers electron-updater maps to a root-package updater', async () => {
+      const source = await readFile(
+        new URL('../../src/main/linux-update-package-type.ts', import.meta.url),
+        'utf8'
+      )
+      for (const target of linuxTargets.filter((entry) => RECOVERABLE_TARGETS.has(entry))) {
+        expect(source).toContain(`value === '${target}'`)
       }
-    }
-  )
+    })
+
+    it('keeps the pinned FpmTarget overwrite for configured deb and rpm artifacts', async () => {
+      const source = await readFile(
+        require.resolve('app-builder-lib/out/targets/FpmTarget'),
+        'utf8'
+      )
+
+      expect(source).toContain('path.join(resourceDir, "package-type"), target')
+      for (const target of RECOVERABLE_TARGETS) {
+        expect(electronBuilderConfig[target]).toBeDefined()
+      }
+    })
+  })
 })

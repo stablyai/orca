@@ -1,0 +1,61 @@
+---
+title: Jira items drawer
+description: Browse, edit, and link Jira Cloud or self-hosted Server/Data Center issues to worktrees the same way you link Linear or GitHub items.
+---
+
+import { Callout } from '@/components/docs/prose'
+
+Jira sits next to GitHub and Linear in the task drawer. Browse Jira issues, update them, and create a worktree from any issue without leaving Orca.
+
+## Connect a Jira site
+
+1. Open the **Tasks** sidebar entry and pick **Jira** from the source picker — Jira sits next to GitHub and Linear by default, even before any credentials are saved.
+2. Click **Connect Jira**. The **Connect Jira site** dialog appears.
+3. Choose **Cloud** or **Self-hosted (Server / Data Center)**.
+
+**Cloud**
+
+- **Jira Cloud site URL** — e.g. `https://example.atlassian.net`.
+- **Atlassian email** — the address on your Atlassian account.
+- **Atlassian API token** — create one at [id.atlassian.com → Security → API tokens](https://id.atlassian.com/manage-profile/security/api-tokens).
+
+**Self-hosted**
+
+- **Jira base URL** — your Server/DC base (including path if Jira is not at `/`).
+- Auth method:
+  - **Personal access token** — Bearer PAT (preferred on modern Server/DC).
+  - **Username and password** — Basic auth for older instances without PATs.
+
+<Callout title="Use HTTPS">
+  Use an `https://` URL for Cloud and self-hosted Jira whenever possible. Orca sends credentials in
+  the `Authorization` header; plain HTTP can expose them on the network. If a server only offers
+  HTTP, put it behind a trusted HTTPS tunnel or VPN before connecting.
+</Callout>
+
+4. Click **Connect**. Orca verifies the credentials and loads your sites.
+
+You can connect more than one Atlassian site. The Tasks header has a site picker once a site is connected; choose **All sites** to combine issues across them.
+
+If you don't use Jira at all, hide it from the source picker via [Settings → Tasks](/docs/settings).
+
+## Using Jira
+
+- The task drawer shows GitHub, Linear, and Jira issues in a unified list once each source is enabled.
+- Open an issue to see the full description, comments, and metadata in a side drawer. Edit status (via available transitions), priority, assignee, and custom fields inline.
+- Add a comment from the drawer's comment composer.
+- **New Jira issue** keeps title and description if you dismiss the dialog by accident — Escape, Cancel, outside click, or close. Text restores when you reopen the dialog in the same app session; drafts clear after a successful create and do not survive an app restart. Issue type and other pickers still use their usual open-time defaults.
+- Creating a worktree from a Jira issue pre-fills the task name and links the worktree to the issue, so the review and the issue stay tied together.
+- From the **Create workspace** dialog you can also paste a Jira issue URL (`https://…/browse/ABC-123`) into the name field, or switch the field to **Jira** search and pick an issue by text. Orca fills the workspace name, links the issue, and shows the key + summary on the worktree card with **View on Jira**. Paste is multi-site aware: when more than one connected site matches the URL origin, Orca asks which site to use; when none match, it says the site is not connected.
+- Orca remembers your last-used task source per repo, so a Jira-driven repo defaults to Jira on next open.
+
+<Callout title="Where credentials live">
+  Your Atlassian API token or self-hosted credentials are encrypted via the OS keychain and stored
+  locally — they're only used to call your configured Jira site. Revoke tokens from Atlassian
+  account settings if you stop using Orca.
+</Callout>
+
+## Next steps
+
+- [Linear items drawer](/docs/review/linear) — same flow against Linear.
+- [Hosted reviews, issues & Actions](/docs/review/github) — hand off the worktree to a hosted review once the Jira issue is in progress.
+- [Commit & push from Orca](/docs/review/commit-push) — ship the branch without leaving Orca.

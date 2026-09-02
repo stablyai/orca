@@ -1,3 +1,4 @@
+import { isConnectingSshStatus } from '@/ssh/ssh-connection-recoverability'
 import { isRuntimeOwnedSshTargetId } from '../../../shared/execution-host'
 import type { SshConnectionStatus } from '../../../shared/ssh-types'
 
@@ -9,7 +10,7 @@ export type SelectedRepoSshGate = {
 }
 
 export function isSshConnectInProgress(status: SshConnectionStatus | null): boolean {
-  return status === 'connecting' || status === 'deploying-relay' || status === 'reconnecting'
+  return isConnectingSshStatus(status)
 }
 
 export function getSelectedRepoSshGate(input: {

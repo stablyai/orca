@@ -1,6 +1,7 @@
 import { Flashlight, Loader2, ScrollText, X } from 'lucide-react'
 import { useShallow } from 'zustand/react/shallow'
-import type { Repo, Worktree } from '../../../../shared/types'
+import type { Repo } from '../../../../shared/repo-types'
+import type { Worktree } from '../../../../shared/worktree/types'
 import { useAppStore } from '@/store'
 import { Badge } from '../ui/badge'
 import { Tooltip, TooltipContent, TooltipTrigger } from '../ui/tooltip'

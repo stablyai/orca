@@ -1,7 +1,6 @@
 import { Sparkles } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { DialogHeader, DialogTitle } from '@/components/ui/dialog'
-import { Input } from '@/components/ui/input'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 import type { AutomationCreateTarget } from './AutomationEditorDialog'
@@ -14,13 +13,11 @@ type AutomationEditorDialogHeaderProps = {
   isHermesCreate: boolean
   isCreateMode: boolean
   createTarget: AutomationCreateTarget
-  draftName: string
   templateOpen: boolean
   templates: AutomationTemplate[]
-  modeToggleItemClassName: string
-  pickerTriggerClassName: string
+  segmentedGroupClassName: string
+  segmentedItemClassName: string
   onCreateTargetChange: (target: AutomationCreateTarget) => void
-  onDraftNameChange: (name: string) => void
   onTemplateOpenChange: (open: boolean) => void
   onApplyTemplate: (template: AutomationTemplate) => void
 }
@@ -47,116 +44,103 @@ function AutomationTemplateCard({
   )
 }
 
+function getEditorTitle(args: {
+  isEditing: boolean
+  isEditingExternal: boolean
+  isHermesCreate: boolean
+}): string {
+  if (args.isEditing) {
+    return translate(
+      'auto.components.automations.AutomationEditorDialogHeader.17086b48ee',
+      'Edit automation'
+    )
+  }
+  if (args.isEditingExternal) {
+    return translate(
+      'auto.components.automations.AutomationEditorDialogHeader.03142e7721',
+      'Edit Hermes automation'
+    )
+  }
+  if (args.isHermesCreate) {
+    return translate(
+      'auto.components.automations.AutomationEditorDialogHeader.0a75e5e2fa',
+      'Create Hermes automation'
+    )
+  }
+  return translate(
+    'auto.components.automations.AutomationEditorDialogHeader.4133d33862',
+    'Create automation'
+  )
+}
+
 export function AutomationEditorDialogHeader({
   isEditing,
   isEditingExternal,
   isHermesCreate,
   isCreateMode,
   createTarget,
-  draftName,
   templateOpen,
   templates,
-  modeToggleItemClassName,
-  pickerTriggerClassName,
+  segmentedGroupClassName,
+  segmentedItemClassName,
   onCreateTargetChange,
-  onDraftNameChange,
   onTemplateOpenChange,
   onApplyTemplate
 }: AutomationEditorDialogHeaderProps): React.JSX.Element {
+  const title = getEditorTitle({ isEditing, isEditingExternal, isHermesCreate })
+
   return (
-    <DialogHeader className="border-b border-border/50 px-5 py-4 pr-12">
-      <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0 flex-1 space-y-2">
-          <DialogTitle className="text-sm font-medium">
-            {isEditing
-              ? translate(
-                  'auto.components.automations.AutomationEditorDialogHeader.17086b48ee',
-                  'Edit automation'
-                )
-              : isEditingExternal
-                ? translate(
-                    'auto.components.automations.AutomationEditorDialogHeader.03142e7721',
-                    'Edit Hermes automation'
-                  )
-                : isHermesCreate
-                  ? translate(
-                      'auto.components.automations.AutomationEditorDialogHeader.0a75e5e2fa',
-                      'Create Hermes automation'
-                    )
-                  : translate(
-                      'auto.components.automations.AutomationEditorDialogHeader.4133d33862',
-                      'Create automation'
-                    )}
-          </DialogTitle>
-          <Input
-            value={draftName}
-            placeholder={translate(
-              'auto.components.automations.AutomationEditorDialogHeader.1d9826933e',
-              'Weekday repo audit'
-            )}
-            aria-label={translate(
-              'auto.components.automations.AutomationEditorDialogHeader.58f56b73d9',
-              'Automation name'
-            )}
-            className="h-10 max-w-md border-input bg-input/30 px-3 text-lg font-semibold text-foreground shadow-xs placeholder:text-muted-foreground dark:bg-input/30"
-            onChange={(event) => onDraftNameChange(event.target.value)}
-          />
+    <DialogHeader className="flex-row items-center justify-between gap-3 border-b border-border/50 px-5 py-2.5 pr-12 text-left">
+      <DialogTitle className="min-w-0 truncate text-sm font-medium">{title}</DialogTitle>
+      {isCreateMode ? (
+        <div className="flex shrink-0 items-center gap-2">
+          <ToggleGroup
+            type="single"
+            spacing={1}
+            value={createTarget}
+            onValueChange={(value) =>
+              value && onCreateTargetChange(value as AutomationCreateTarget)
+            }
+            size="sm"
+            className={segmentedGroupClassName}
+          >
+            <ToggleGroupItem value="orca" className={segmentedItemClassName}>
+              {translate(
+                'auto.components.automations.AutomationEditorDialogHeader.6f309eef8d',
+                'Orca'
+              )}
+            </ToggleGroupItem>
+            <ToggleGroupItem value="hermes" className={segmentedItemClassName}>
+              {translate(
+                'auto.components.automations.AutomationEditorDialogHeader.7e35393632',
+                'Hermes'
+              )}
+            </ToggleGroupItem>
+          </ToggleGroup>
+          <Popover open={templateOpen} onOpenChange={onTemplateOpenChange}>
+            <PopoverTrigger asChild>
+              <Button type="button" variant="ghost" size="sm">
+                <Sparkles className="size-4" />
+                {translate(
+                  'auto.components.automations.AutomationEditorDialogHeader.31f9253920',
+                  'Use template'
+                )}
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent align="end" className="w-96 p-3">
+              <div className="grid gap-2">
+                {templates.map((template) => (
+                  <AutomationTemplateCard
+                    key={template.id}
+                    template={template}
+                    onSelect={() => onApplyTemplate(template)}
+                  />
+                ))}
+              </div>
+            </PopoverContent>
+          </Popover>
         </div>
-        {isCreateMode ? (
-          <div className="flex shrink-0 items-center gap-2">
-            <ToggleGroup
-              type="single"
-              value={createTarget}
-              onValueChange={(value) =>
-                value && onCreateTargetChange(value as AutomationCreateTarget)
-              }
-              variant="outline"
-              size="sm"
-              className="grid grid-cols-2"
-            >
-              <ToggleGroupItem value="orca" className={modeToggleItemClassName}>
-                {translate(
-                  'auto.components.automations.AutomationEditorDialogHeader.6f309eef8d',
-                  'Orca'
-                )}
-              </ToggleGroupItem>
-              <ToggleGroupItem value="hermes" className={modeToggleItemClassName}>
-                {translate(
-                  'auto.components.automations.AutomationEditorDialogHeader.7e35393632',
-                  'Hermes'
-                )}
-              </ToggleGroupItem>
-            </ToggleGroup>
-            <Popover open={templateOpen} onOpenChange={onTemplateOpenChange}>
-              <PopoverTrigger asChild>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  className={pickerTriggerClassName}
-                >
-                  <Sparkles className="size-4" />
-                  {translate(
-                    'auto.components.automations.AutomationEditorDialogHeader.31f9253920',
-                    'Use template'
-                  )}
-                </Button>
-              </PopoverTrigger>
-              <PopoverContent align="end" className="w-96 p-3">
-                <div className="grid gap-2">
-                  {templates.map((template) => (
-                    <AutomationTemplateCard
-                      key={template.id}
-                      template={template}
-                      onSelect={() => onApplyTemplate(template)}
-                    />
-                  ))}
-                </div>
-              </PopoverContent>
-            </Popover>
-          </div>
-        ) : null}
-      </div>
+      ) : null}
     </DialogHeader>
   )
 }

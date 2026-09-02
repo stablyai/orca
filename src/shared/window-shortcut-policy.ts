@@ -41,6 +41,7 @@ export type WindowShortcutAction =
   | { type: 'deleteCurrentWorkspace' }
   | { type: 'openWorkspaceBoard' }
   | { type: 'openTasks' }
+  | { type: 'toggleAgentDashboard' }
   | { type: 'switchRecentTab' }
   | { type: 'jumpToWorktreeIndex'; index: number }
   | { type: 'jumpToTabIndex'; index: number }
@@ -133,6 +134,38 @@ function actionMatches(
   return keybindingMatchesAction(actionId, input, platform, keybindings, options)
 }
 
+export function nativeZoomCommandMatchesKeybindings(
+  direction: 'in' | 'out',
+  platform: NodeJS.Platform,
+  keybindings?: KeybindingOverrides,
+  options: KeybindingMatchOptions = {}
+): boolean {
+  const primary =
+    platform === 'darwin' ? { meta: true, control: false } : { meta: false, control: true }
+  const actionId = direction === 'in' ? 'zoom.in' : 'zoom.out'
+  const candidates =
+    direction === 'in'
+      ? [
+          { key: '=', code: 'Equal', shift: false },
+          { key: '+', code: 'Equal', shift: true },
+          { key: 'Add', code: 'NumpadAdd', shift: false }
+        ]
+      : [
+          { key: '-', code: 'Minus', shift: false },
+          { key: 'Subtract', code: 'NumpadSubtract', shift: false }
+        ]
+
+  return candidates.some((candidate) =>
+    keybindingMatchesAction(
+      actionId,
+      { ...primary, alt: false, ...candidate },
+      platform,
+      keybindings,
+      options
+    )
+  )
+}
+
 export function resolveWindowShortcutAction(
   input: WindowShortcutInput,
   platform: NodeJS.Platform,
@@ -219,6 +252,10 @@ export function resolveWindowShortcutAction(
     return { type: 'openTasks' }
   }
 
+  if (actionMatches('dashboard.toggle', input, platform, keybindings, options)) {
+    return { type: 'toggleAgentDashboard' }
+  }
+
   if (actionMatches('tab.previousRecent', input, platform, keybindings, options)) {
     return { type: 'switchRecentTab' }
   }
@@ -292,6 +329,8 @@ export function getWindowShortcutActionId(action: WindowShortcutAction): Keybind
       return 'workspace.openBoard'
     case 'openTasks':
       return 'view.tasks'
+    case 'toggleAgentDashboard':
+      return 'dashboard.toggle'
     case 'switchRecentTab':
       return 'tab.previousRecent'
     case 'worktreeHistoryNavigate':

@@ -92,10 +92,14 @@ function CommandInput({
   className,
   wrapperClassName,
   iconClassName,
+  trailing,
+  ref,
   ...props
 }: React.ComponentProps<typeof CommandPrimitive.Input> & {
   wrapperClassName?: string
   iconClassName?: string
+  /** Rendered after the field, inside the input frame (e.g. a filter control). */
+  trailing?: React.ReactNode
 }) {
   return (
     <div
@@ -107,6 +111,7 @@ function CommandInput({
     >
       <SearchIcon className={cn('mr-2 h-4 w-4 shrink-0 opacity-50', iconClassName)} />
       <CommandPrimitive.Input
+        ref={ref}
         data-slot="command-input"
         className={cn(
           'flex h-10 w-full rounded-md bg-transparent py-3 text-sm outline-none placeholder:text-muted-foreground disabled:cursor-not-allowed disabled:opacity-50',
@@ -114,6 +119,7 @@ function CommandInput({
         )}
         {...props}
       />
+      {trailing}
     </div>
   )
 }
@@ -201,9 +207,14 @@ function CommandGroup({
   )
 }
 
-function CommandItem({ className, ...props }: React.ComponentProps<typeof CommandPrimitive.Item>) {
+function CommandItem({
+  className,
+  ref,
+  ...props
+}: React.ComponentProps<typeof CommandPrimitive.Item>) {
   return (
     <CommandPrimitive.Item
+      ref={ref}
       data-slot="command-item"
       className={cn(
         'relative flex cursor-default gap-2 select-none items-center rounded-sm px-2 py-1.5 text-sm outline-none data-[selected=true]:bg-accent data-[selected=true]:text-accent-foreground data-[disabled=true]:pointer-events-none data-[disabled=true]:opacity-50 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*="size-"])]:size-4',

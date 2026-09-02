@@ -1,6 +1,8 @@
+import { memo } from 'react'
 import { Bell, ChevronDown, ChevronRight, GitBranch, GitPullRequest } from 'lucide-react-native'
 import { Pressable, StyleSheet, Text, View } from 'react-native'
 import type { RepoIcon } from '../../../src/shared/repo-icon'
+import type { AgentWorkingMode } from '../../../src/shared/agent-status-types'
 import type { RuntimeWorktreeAgentRow } from '../../../src/shared/runtime-types'
 import { triggerMediumImpact } from '../platform/haptics'
 import { colors, radii, spacing, typography } from '../theme/mobile-theme'
@@ -38,6 +40,7 @@ export type WorktreeListRowItem = {
   lineageChildCount?: number
   lineageCollapsed?: boolean
   agents?: RuntimeWorktreeAgentRow[]
+  workingMode?: AgentWorkingMode
 }
 
 type WorktreeRollupStatus = 'working' | 'active' | 'permission' | 'done' | 'inactive'
@@ -57,7 +60,7 @@ type Props<T extends WorktreeListRowItem> = {
   onToggleLineage?: (item: T) => void
 }
 
-export function WorktreeListRow<T extends WorktreeListRowItem>({
+function WorktreeListRowComponent<T extends WorktreeListRowItem>({
   item,
   isReadOnly,
   now,
@@ -96,7 +99,7 @@ export function WorktreeListRow<T extends WorktreeListRowItem>({
       delayLongPress={400}
     >
       <View style={styles.indicatorCol}>
-        <AgentSpinner status={status} />
+        <AgentSpinner status={status} workingMode={item.workingMode} />
         {item.unread && (
           <Bell
             size={10}
@@ -194,6 +197,8 @@ export function WorktreeListRow<T extends WorktreeListRowItem>({
     </Pressable>
   )
 }
+
+export const WorktreeListRow = memo(WorktreeListRowComponent) as typeof WorktreeListRowComponent
 
 const styles = StyleSheet.create({
   worktreeRow: {

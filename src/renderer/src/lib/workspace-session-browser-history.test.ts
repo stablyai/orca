@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { BrowserHistoryEntry } from '../../../shared/types'
+import type { BrowserHistoryEntry } from '../../../shared/browser-workspace-types'
 import { MAX_BROWSER_HISTORY_ENTRIES } from '../../../shared/workspace-session-browser-history'
 import { buildWorkspaceSessionPayload, type WorkspaceSessionSnapshot } from './workspace-session'
 
@@ -20,8 +20,10 @@ function createSnapshot(browserUrlHistory: BrowserHistoryEntry[]): WorkspaceSess
     activeTabTypeByWorktree: {},
     browserTabsByWorktree: {},
     browserPagesByWorkspace: {},
+    remoteBrowserPageHandlesByPageId: {},
     activeBrowserTabIdByWorktree: {},
     browserUrlHistory,
+    workspaceDocHistory: [],
     unifiedTabsByWorktree: {},
     groupsByWorktree: {},
     layoutByWorktree: {},
@@ -31,7 +33,8 @@ function createSnapshot(browserUrlHistory: BrowserHistoryEntry[]): WorkspaceSess
     worktreesByRepo: {},
     lastKnownRelayPtyIdByTabId: {},
     lastVisitedAtByWorktreeId: {},
-    defaultTerminalTabsAppliedByWorktreeId: {}
+    defaultTerminalTabsAppliedByWorktreeId: {},
+    closedTerminalTabTombstonesByTabId: {}
   }
 }
 

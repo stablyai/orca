@@ -1,7 +1,6 @@
 // @vitest-environment happy-dom
 
-import { useRef } from 'react'
-import { act } from 'react'
+import { useRef, act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { useSessionRestoredBannerDismiss } from './useSessionRestoredBannerDismiss'

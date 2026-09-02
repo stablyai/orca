@@ -61,7 +61,8 @@ const compatibleStatus = {
   runtimeId: 'runtime-1',
   graphStatus: 'ready',
   runtimeProtocolVersion: RUNTIME_PROTOCOL_VERSION,
-  minCompatibleRuntimeClientVersion: MIN_COMPATIBLE_RUNTIME_CLIENT_VERSION
+  minCompatibleRuntimeClientVersion: MIN_COMPATIBLE_RUNTIME_CLIENT_VERSION,
+  capabilities: ['browser.screencast.v1']
 }
 
 const localScan = vi.fn()
@@ -318,7 +319,7 @@ describe('PortsPanel runtime routing', () => {
     ).toEqual(['runtime-repo::/srv/app', 'repo::/workspace/app'])
   })
 
-  it('opens remote workspace ports in the server-side browser and binds the local page handle', async () => {
+  it('reuses the capability verdict across remote port opens', async () => {
     runtimeEnvironmentCall.mockImplementation(({ method }: { method: string }) =>
       Promise.resolve({
         id: method,
@@ -339,10 +340,23 @@ describe('PortsPanel runtime routing', () => {
         setRemoteBrowserPageHandle: setRemoteBrowserPageHandle as never
       })
     ).resolves.toEqual({ ok: true })
+    await expect(
+      openWorkspacePortInBrowser({
+        port: workspacePort,
+        runtimeTarget: { kind: 'environment', environmentId: 'env-1' },
+        createBrowserTab: createBrowserTab as never,
+        setRemoteBrowserPageHandle: setRemoteBrowserPageHandle as never
+      })
+    ).resolves.toEqual({ ok: true })
 
-    expect(activateAndRevealWorktreeMock).toHaveBeenCalledWith('repo::/workspace/app')
+    expect(activateAndRevealWorktreeMock).toHaveBeenCalledTimes(2)
+    // Why: the browser tab is the surface — port opens must not re-seed a shell.
+    expect(activateAndRevealWorktreeMock).toHaveBeenCalledWith('repo::/workspace/app', {
+      providesInitialSurface: true
+    })
     expect(runtimeEnvironmentCall.mock.calls.map((call) => call[0].method)).toEqual([
       'status.get',
+      'browser.tabCreate',
       'browser.tabCreate'
     ])
     expect(runtimeEnvironmentCall.mock.calls[1][0].params).toEqual({
@@ -353,13 +367,42 @@ describe('PortsPanel runtime routing', () => {
       'repo::/workspace/app',
       'http://127.0.0.1:63468',
       {
-        activate: true
+        activate: true,
+        browserRuntimeEnvironmentId: 'env-1'
       }
     )
     expect(setRemoteBrowserPageHandle).toHaveBeenCalledWith('local-page-1', {
       environmentId: 'env-1',
       remotePageId: 'remote-browser-page-1'
     })
+  })
+
+  it('rejects remote port browser creation before RPC without the screencast provider', async () => {
+    runtimeEnvironmentCall.mockImplementation(({ method }: { method: string }) =>
+      Promise.resolve({
+        id: method,
+        ok: true,
+        result: { ...compatibleStatus, capabilities: [] },
+        _meta: { runtimeId: 'runtime-1' }
+      })
+    )
+    const createBrowserTab = vi.fn()
+
+    await expect(
+      openWorkspacePortInBrowser({
+        port: workspacePort,
+        runtimeTarget: { kind: 'environment', environmentId: 'env-1' },
+        createBrowserTab: createBrowserTab as never,
+        setRemoteBrowserPageHandle: vi.fn() as never
+      })
+    ).resolves.toEqual({
+      ok: false,
+      reason:
+        'Managed browser tabs are unavailable because the paired runtime does not support browser streaming.'
+    })
+
+    expect(runtimeEnvironmentCall.mock.calls.map((call) => call[0].method)).toEqual(['status.get'])
+    expect(createBrowserTab).not.toHaveBeenCalled()
   })
 
   it('opens workspace ports in the system browser when link routing is off', async () => {
@@ -579,7 +622,7 @@ describe('PortsPanel runtime routing', () => {
     expect(createBrowserTab).toHaveBeenCalledWith(
       'repo::/workspace/app',
       'http://127.0.0.1:63468',
-      { activate: true }
+      { activate: true, browserRuntimeEnvironmentId: 'env-1' }
     )
     expect(setRemoteBrowserPageHandle).toHaveBeenCalledWith('local-page-1', {
       environmentId: 'env-1',

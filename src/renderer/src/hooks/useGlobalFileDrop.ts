@@ -12,13 +12,14 @@ import {
   statRuntimePath,
   type RuntimeFileOperationArgs
 } from '@/runtime/runtime-file-client'
-import type { GlobalSettings } from '../../../shared/types'
+import type { GlobalSettings } from '../../../shared/global-settings-types'
 import { translate } from '@/i18n/i18n'
 import type { WorktreeRuntimeOwnerState } from '@/lib/worktree-runtime-owner'
 import {
   NATIVE_FILE_DROP_MAX_PATHS,
   type NativeFileDropRejectedPayload
 } from '../../../shared/native-file-drop'
+import { captureWorktreeSshMutationExpectation } from '@/lib/ssh-mutation-expectation'
 
 export function getEditorFileDropSettingsForWorktree(
   store: WorktreeRuntimeOwnerState,
@@ -75,12 +76,21 @@ export function useGlobalFileDrop(): void {
       const activeWorktree = store.getKnownWorktreeById(activeWorktreeId)
       const worktreePath = activeWorktree?.path
       const connectionId = getConnectionId(activeWorktreeId) ?? undefined
-      const fileContext = getEditorFileDropOperationContext(
-        store,
-        activeWorktreeId,
-        worktreePath,
-        connectionId
-      )
+      let fileContext: RuntimeFileOperationArgs
+      try {
+        fileContext = {
+          ...getEditorFileDropOperationContext(store, activeWorktreeId, worktreePath, connectionId),
+          ...captureWorktreeSshMutationExpectation(store, activeWorktreeId)
+        }
+      } catch {
+        toast.error(
+          translate(
+            'auto.hooks.useGlobalFileDrop.ownerChanged',
+            "Couldn't verify which host owns this workspace. Try again after it reconnects."
+          )
+        )
+        return
+      }
       const dropSettings = fileContext.settings
       const runtimeEnvironmentId = dropSettings?.activeRuntimeEnvironmentId ?? null
       if (shouldUploadRemoteEditorFileDrop(dropSettings, connectionId)) {

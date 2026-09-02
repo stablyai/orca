@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import type * as GitUsernameModule from '../git/git-username'
 
 const {
   handleMock,
@@ -7,8 +8,9 @@ const {
   assertWorktreeCleanForRemovalMock,
   addWorktreeMock,
   removeWorktreeMock,
-  getGitUsernameMock,
+  resolveLocalGitUsernameMock,
   getDefaultBaseRefMock,
+  resolveDefaultBaseRefWithLocalGitMock,
   resolveDefaultBaseRefViaExecMock,
   getBranchConflictKindMock,
   getPRForBranchMock,
@@ -18,6 +20,7 @@ const {
   getDefaultTabsLaunchMock,
   createIssueCommandRunnerScriptMock,
   createSetupRunnerScriptMock,
+  resolveSetupRunnerShellMock,
   shouldRunSetupForCreateMock,
   runHookMock,
   hasHooksFileMock,
@@ -35,8 +38,9 @@ const {
   assertWorktreeCleanForRemovalMock: vi.fn(),
   addWorktreeMock: vi.fn(),
   removeWorktreeMock: vi.fn(),
-  getGitUsernameMock: vi.fn(),
+  resolveLocalGitUsernameMock: vi.fn(),
   getDefaultBaseRefMock: vi.fn(),
+  resolveDefaultBaseRefWithLocalGitMock: vi.fn(),
   resolveDefaultBaseRefViaExecMock: vi.fn(),
   getBranchConflictKindMock: vi.fn(),
   getPRForBranchMock: vi.fn(),
@@ -46,6 +50,7 @@ const {
   getDefaultTabsLaunchMock: vi.fn(),
   createIssueCommandRunnerScriptMock: vi.fn(),
   createSetupRunnerScriptMock: vi.fn(),
+  resolveSetupRunnerShellMock: vi.fn(),
   shouldRunSetupForCreateMock: vi.fn(),
   runHookMock: vi.fn(),
   hasHooksFileMock: vi.fn(),
@@ -68,6 +73,8 @@ vi.mock('electron', () => ({
 vi.mock('../git/worktree', () => ({
   listWorktrees: listWorktreesMock,
   listWorktreesStrict: listWorktreesMock,
+  listWorktreesSharedStrict: listWorktreesMock,
+  describeCreatedWorktree: vi.fn().mockResolvedValue(undefined),
   assertWorktreeCleanForRemoval: assertWorktreeCleanForRemovalMock,
   addWorktree: addWorktreeMock,
   removeWorktree: removeWorktreeMock
@@ -82,11 +89,16 @@ vi.mock('../git/runner', () => ({
 }))
 
 vi.mock('../git/repo', () => ({
-  getGitUsername: getGitUsernameMock,
   getDefaultBaseRef: getDefaultBaseRefMock,
+  resolveDefaultBaseRefWithLocalGit: resolveDefaultBaseRefWithLocalGitMock,
   resolveDefaultBaseRefViaExec: resolveDefaultBaseRefViaExecMock,
   getBranchConflictKind: getBranchConflictKindMock
 }))
+
+vi.mock('../git/git-username', async () => {
+  const actual = await vi.importActual<typeof GitUsernameModule>('../git/git-username')
+  return { ...actual, resolveLocalGitUsername: resolveLocalGitUsernameMock }
+})
 
 vi.mock('../github/client', () => ({
   getPRForBranch: getPRForBranchMock,
@@ -94,14 +106,21 @@ vi.mock('../github/client', () => ({
 }))
 
 vi.mock('../hooks', () => ({
-  createIssueCommandRunnerScript: createIssueCommandRunnerScriptMock,
-  createSetupRunnerScript: createSetupRunnerScriptMock,
   getEffectiveHooks: getEffectiveHooksMock,
-  getEffectiveHooksFromConfig: getEffectiveHooksFromConfigMock,
-  getDefaultTabsLaunch: getDefaultTabsLaunchMock,
   loadHooks: loadHooksMock,
   runHook: runHookMock,
-  hasHooksFile: hasHooksFileMock,
+  hasHooksFile: hasHooksFileMock
+}))
+
+vi.mock('../worktree-runner-script', () => ({
+  createIssueCommandRunnerScript: createIssueCommandRunnerScriptMock,
+  createSetupRunnerScript: createSetupRunnerScriptMock,
+  resolveSetupRunnerShell: resolveSetupRunnerShellMock
+}))
+
+vi.mock('../effective-hook-config', () => ({
+  getEffectiveHooksFromConfig: getEffectiveHooksFromConfigMock,
+  getDefaultTabsLaunch: getDefaultTabsLaunchMock,
   shouldRunSetupForCreate: shouldRunSetupForCreateMock
 }))
 
@@ -114,7 +133,7 @@ vi.mock('./pty', () => ({
   getLocalPtyProvider: getLocalPtyProviderMock
 }))
 
-vi.mock('../terminal-history', () => ({
+vi.mock('../terminal-history-deletion', () => ({
   deleteWorktreeHistoryDir: deleteWorktreeHistoryDirMock
 }))
 
@@ -128,6 +147,7 @@ vi.mock('./worktree-logic', async (importOriginal) => {
 })
 
 import { registerWorktreeHandlers } from './worktrees'
+import { resetRetirementCollisionKeyCacheForTests } from '../worktree-name-retirement'
 
 type HandlerMap = Record<string, (_event: unknown, args: unknown) => unknown>
 
@@ -140,14 +160,20 @@ describe('registerWorktreeHandlers – Windows path handling', () => {
     }
   }
   const store = {
+    getProfileStorageDirectory: vi.fn(() => '/profile-a'),
     getRepos: vi.fn(),
     getRepo: vi.fn(),
     getProjects: vi.fn(),
     getProjectHostSetups: vi.fn(),
     getSettings: vi.fn(),
     getWorktreeMeta: vi.fn(),
+    getAllWorktreeMeta: vi.fn(),
+    captureNativeLocalWorktreeMetadataScanExpectation: vi.fn(),
     setWorktreeMeta: vi.fn(),
-    removeWorktreeMeta: vi.fn()
+    removeWorktreeMeta: vi.fn(),
+    addRetiredWorktreeName: vi.fn(),
+    getRetiredWorktreeNameRegistry: vi.fn(),
+    mergeRetiredWorktreeNames: vi.fn()
   }
 
   beforeEach(() => {
@@ -157,8 +183,9 @@ describe('registerWorktreeHandlers – Windows path handling', () => {
     assertWorktreeCleanForRemovalMock.mockReset()
     addWorktreeMock.mockReset()
     removeWorktreeMock.mockReset()
-    getGitUsernameMock.mockReset()
+    resolveLocalGitUsernameMock.mockReset()
     getDefaultBaseRefMock.mockReset()
+    resolveDefaultBaseRefWithLocalGitMock.mockReset()
     resolveDefaultBaseRefViaExecMock.mockReset()
     getBranchConflictKindMock.mockReset()
     getPRForBranchMock.mockReset()
@@ -168,6 +195,7 @@ describe('registerWorktreeHandlers – Windows path handling', () => {
     getDefaultTabsLaunchMock.mockReset()
     createIssueCommandRunnerScriptMock.mockReset()
     createSetupRunnerScriptMock.mockReset()
+    resolveSetupRunnerShellMock.mockReset()
     shouldRunSetupForCreateMock.mockReset()
     runHookMock.mockReset()
     hasHooksFileMock.mockReset()
@@ -185,8 +213,14 @@ describe('registerWorktreeHandlers – Windows path handling', () => {
     store.getProjectHostSetups.mockReset()
     store.getSettings.mockReset()
     store.getWorktreeMeta.mockReset()
+    store.getAllWorktreeMeta.mockReset()
+    store.captureNativeLocalWorktreeMetadataScanExpectation.mockReset()
     store.setWorktreeMeta.mockReset()
     store.removeWorktreeMeta.mockReset()
+    store.addRetiredWorktreeName.mockReset()
+    store.getRetiredWorktreeNameRegistry.mockReset()
+    store.mergeRetiredWorktreeNames.mockReset()
+    resetRetirementCollisionKeyCacheForTests()
 
     for (const key of Object.keys(handlers)) {
       delete handlers[key]
@@ -221,10 +255,28 @@ describe('registerWorktreeHandlers – Windows path handling', () => {
       refreshLocalBaseRefOnWorktreeCreate: false,
       workspaceDir: 'C:\\workspaces'
     })
+    resolveSetupRunnerShellMock.mockReturnValue(undefined)
     store.getWorktreeMeta.mockReturnValue(undefined)
+    store.getAllWorktreeMeta.mockReturnValue({})
+    store.captureNativeLocalWorktreeMetadataScanExpectation.mockImplementation((repo) => ({
+      repo: {
+        id: repo.id,
+        path: repo.path,
+        kind: 'git',
+        expectedRepo: repo
+      },
+      routing: {
+        expectedProject: undefined,
+        expectedProjectUpdatedAt: undefined,
+        expectedSettings: store.getSettings()
+      },
+      metadata: []
+    }))
+    store.getRetiredWorktreeNameRegistry.mockReturnValue({ exhaustedTiers: 0, names: [] })
     store.setWorktreeMeta.mockReturnValue({})
-    getGitUsernameMock.mockReturnValue('')
+    resolveLocalGitUsernameMock.mockResolvedValue('')
     getDefaultBaseRefMock.mockReturnValue('origin/main')
+    resolveDefaultBaseRefWithLocalGitMock.mockResolvedValue('origin/main')
     resolveDefaultBaseRefViaExecMock.mockResolvedValue('origin/main')
     getBranchConflictKindMock.mockResolvedValue(null)
     getPRForBranchMock.mockResolvedValue(null)
@@ -254,7 +306,11 @@ describe('registerWorktreeHandlers – Windows path handling', () => {
       emitWorktreeBaseStatus: vi.fn(),
       recordOptimisticReconcileToken: vi.fn().mockReturnValue('token-1'),
       reconcileWorktreeBaseStatus: vi.fn(),
-      clearOptimisticReconcileToken: vi.fn()
+      clearOptimisticReconcileToken: vi.fn(),
+      closeFileWatchersForRemoval: vi.fn().mockResolvedValue(undefined),
+      acquireFileWatcherRemoval: vi.fn().mockResolvedValue({
+        finish: vi.fn().mockResolvedValue(undefined)
+      })
     }
     registerWorktreeHandlers(mainWindow as never, store as never, runtimeStub as never)
   })
@@ -282,6 +338,9 @@ describe('registerWorktreeHandlers – Windows path handling', () => {
       'origin/main',
       false
     )
+    expect(resolveLocalGitUsernameMock).not.toHaveBeenCalled()
+    // A name the user typed is never retired — the pool holds ordinary words people choose.
+    expect(store.addRetiredWorktreeName).not.toHaveBeenCalled()
     expect(store.setWorktreeMeta).toHaveBeenCalledWith(
       'repo-1::C:/workspaces/improve-dashboard',
       expect.objectContaining({
@@ -294,6 +353,146 @@ describe('registerWorktreeHandlers – Windows path handling', () => {
         path: 'C:/workspaces/improve-dashboard',
         branch: 'refs/heads/improve-dashboard'
       })
+    })
+  })
+
+  it('skips a retired generated name when the physical leaf is decorated', async () => {
+    store.getRetiredWorktreeNameRegistry.mockReturnValue({ exhaustedTiers: 0, names: ['nautilus'] })
+    computeWorktreePathMock.mockReturnValue('C:\\workspaces\\repo-nautilus-2')
+    ensurePathWithinWorkspaceMock.mockReturnValue('C:\\workspaces\\repo-nautilus-2')
+    listWorktreesMock.mockResolvedValue([
+      {
+        path: 'C:/workspaces/repo-nautilus-2',
+        head: 'abc123',
+        branch: 'refs/heads/nautilus-2',
+        isBare: false,
+        isMainWorktree: false
+      }
+    ])
+
+    await handlers['worktrees:create'](null, {
+      repoId: 'repo-1',
+      name: 'nautilus',
+      nameWasGenerated: true
+    })
+
+    expect(store.addRetiredWorktreeName).toHaveBeenCalledWith('repo-1', 'nautilus-2')
+  })
+
+  it('leaves a user-typed name reusable even when the same name is retired', async () => {
+    // Why: the creature pool contains ordinary words ("orca", "runner", "molly"). Silently
+    // renaming a deliberate `nautilus` to `nautilus-2` — and burning it — is the wrong trade.
+    store.getRetiredWorktreeNameRegistry.mockReturnValue({ exhaustedTiers: 0, names: ['nautilus'] })
+    computeWorktreePathMock.mockReturnValue('C:\\workspaces\\nautilus')
+    ensurePathWithinWorkspaceMock.mockReturnValue('C:\\workspaces\\nautilus')
+    listWorktreesMock.mockResolvedValue([
+      {
+        path: 'C:/workspaces/nautilus',
+        head: 'abc123',
+        branch: 'refs/heads/nautilus',
+        isBare: false,
+        isMainWorktree: false
+      }
+    ])
+
+    await handlers['worktrees:create'](null, { repoId: 'repo-1', name: 'nautilus' })
+
+    expect(addWorktreeMock).toHaveBeenCalledWith(
+      'C:\\repo',
+      'C:\\workspaces\\nautilus',
+      'nautilus',
+      'origin/main',
+      false
+    )
+    expect(store.addRetiredWorktreeName).not.toHaveBeenCalled()
+  })
+
+  it('resolves the Git username when the configured prefix consumes it', async () => {
+    store.getSettings.mockReturnValue({
+      branchPrefix: 'git-username',
+      nestWorkspaces: false,
+      refreshLocalBaseRefOnWorktreeCreate: false,
+      workspaceDir: 'C:\\workspaces'
+    })
+    resolveLocalGitUsernameMock.mockResolvedValue('octocat')
+    listWorktreesMock.mockResolvedValue([
+      {
+        path: 'C:/workspaces/improve-dashboard',
+        head: 'abc123',
+        branch: 'refs/heads/octocat/improve-dashboard',
+        isBare: false,
+        isMainWorktree: false
+      }
+    ])
+
+    await handlers['worktrees:create'](null, {
+      repoId: 'repo-1',
+      name: 'improve-dashboard'
+    })
+
+    expect(resolveLocalGitUsernameMock).toHaveBeenCalledWith('C:\\repo')
+    expect(addWorktreeMock).toHaveBeenCalledWith(
+      'C:\\repo',
+      'C:\\workspaces\\improve-dashboard',
+      'octocat/improve-dashboard',
+      'origin/main',
+      false
+    )
+  })
+
+  it('passes the configured Windows setup shell into local setup runner generation', async () => {
+    const setupShell = { family: 'posix' as const }
+    store.getSettings.mockReturnValue({
+      branchPrefix: 'none',
+      nestWorkspaces: false,
+      refreshLocalBaseRefOnWorktreeCreate: false,
+      terminalWindowsShell: 'git-bash',
+      workspaceDir: 'C:\\workspaces'
+    })
+    resolveSetupRunnerShellMock.mockReturnValue(setupShell)
+    listWorktreesMock.mockResolvedValue([
+      {
+        path: 'C:/workspaces/improve-dashboard',
+        head: 'abc123',
+        branch: 'refs/heads/improve-dashboard',
+        isBare: false,
+        isMainWorktree: false
+      }
+    ])
+    getEffectiveHooksMock.mockReturnValue({ scripts: { setup: 'pnpm install' } })
+    getEffectiveHooksFromConfigMock.mockReturnValue({ scripts: { setup: 'pnpm install' } })
+    shouldRunSetupForCreateMock.mockReturnValue(true)
+    createSetupRunnerScriptMock.mockReturnValue({
+      runnerScriptPath: 'C:\\repo\\.git\\orca\\setup-runner.sh',
+      shell: setupShell,
+      envVars: {
+        ORCA_ROOT_PATH: 'C:\\repo',
+        ORCA_WORKTREE_PATH: 'C:\\workspaces\\improve-dashboard'
+      }
+    })
+
+    const result = await handlers['worktrees:create'](null, {
+      repoId: 'repo-1',
+      name: 'improve-dashboard',
+      setupDecision: 'run'
+    })
+
+    expect(resolveSetupRunnerShellMock).toHaveBeenCalledWith(
+      expect.objectContaining({ terminalWindowsShell: 'git-bash' })
+    )
+    expect(createSetupRunnerScriptMock).toHaveBeenCalledWith(
+      expect.objectContaining({ id: 'repo-1' }),
+      'C:\\workspaces\\improve-dashboard',
+      'pnpm install',
+      undefined,
+      setupShell,
+      undefined
+    )
+    expect(result).toMatchObject({
+      setup: {
+        runnerScriptPath: 'C:\\repo\\.git\\orca\\setup-runner.sh',
+        shell: setupShell
+      }
     })
   })
 
@@ -324,6 +523,14 @@ describe('registerWorktreeHandlers – Windows path handling', () => {
           }
         : undefined
     )
+    store.getAllWorktreeMeta.mockReturnValue({
+      'repo-1::C:/workspaces/improve-dashboard': {
+        lastActivityAt: 123,
+        displayName: 'Improve Dashboard',
+        linkedIssue: 123,
+        linkedPR: 456
+      }
+    })
 
     await handlers['worktrees:create'](null, {
       repoId: 'repo-1',
@@ -379,9 +586,41 @@ describe('registerWorktreeHandlers – Windows path handling', () => {
         knownRemovedWorktree: registeredWorktree
       })
     )
-    expect(store.removeWorktreeMeta).toHaveBeenCalledWith('repo-1::C:/workspaces/improve-dashboard')
+    expect(store.removeWorktreeMeta).toHaveBeenCalledWith(
+      'repo-1::C:/workspaces/improve-dashboard',
+      'local'
+    )
+    // Windows history lives under a path-derived hash, so scheduling must not regress on this path only.
+    expect(deleteWorktreeHistoryDirMock).toHaveBeenCalledWith(
+      'repo-1::C:/workspaces/improve-dashboard'
+    )
     expect(mainWindow.webContents.send).toHaveBeenCalledWith('worktrees:changed', {
       repoId: 'repo-1'
     })
+  })
+  it('gives the issue-command runner the same setup shell as the setup runner', () => {
+    // Regression (C4): native Windows issue runners stayed .cmd even when setup
+    // resolved to Git Bash, so same-session bash issue templates broke.
+    resolveSetupRunnerShellMock.mockReturnValue({ family: 'posix' })
+    createIssueCommandRunnerScriptMock.mockReturnValue({
+      runnerScriptPath: 'C:\\repo\\.git\\orca\\issue-command-runner.sh',
+      envVars: {},
+      shell: { family: 'posix' }
+    })
+
+    handlers['hooks:createIssueCommandRunner'](null, {
+      repoId: 'repo-1',
+      worktreePath: 'C:\\workspaces\\improve-dashboard',
+      command: 'gh issue view 42'
+    })
+
+    expect(resolveSetupRunnerShellMock).toHaveBeenCalledWith(store.getSettings())
+    expect(createIssueCommandRunnerScriptMock).toHaveBeenCalledWith(
+      expect.objectContaining({ id: 'repo-1' }),
+      'C:\\workspaces\\improve-dashboard',
+      'gh issue view 42',
+      expect.anything(),
+      { family: 'posix' }
+    )
   })
 })

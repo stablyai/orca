@@ -1,6 +1,15 @@
 import { describe, expect, it, vi } from 'vitest'
 import { getDefaultUIState } from '../../../../shared/constants'
-import type { PersistedUIState } from '../../../../shared/types'
+import { omitPairingLocalUiFields } from '../../../../shared/pairing-local-ui-fields'
+import {
+  MAX_QUICK_COMMAND_AGENT_PROMPT_LENGTH,
+  MAX_QUICK_COMMAND_ID_LENGTH,
+  MAX_QUICK_COMMAND_LABEL_LENGTH,
+  MAX_QUICK_COMMAND_REPO_ID_LENGTH,
+  MAX_QUICK_COMMAND_TERMINAL_TEXT_LENGTH
+} from '../../../../shared/terminal-quick-commands'
+import { DEFAULT_WORKTREE_CARD_PROPERTIES } from '../../../../shared/worktree/card-properties'
+import type { PersistedUIState } from '../../../../shared/persisted-ui-state-types'
 import type { OrcaRuntimeService } from '../../orca-runtime'
 import type { RpcRequest } from '../core'
 import { RpcDispatcher } from '../dispatcher'
@@ -13,6 +22,7 @@ function makeRequest(method: string, params?: unknown): RpcRequest {
 describe('client UI RPC methods', () => {
   it('returns the runtime host agent settings needed by mobile create flows', async () => {
     const settings = {
+      worktreeVisibilityDefaults: { external: 'show' as const },
       defaultTuiAgent: 'codex',
       disabledTuiAgents: ['claude'],
       agentCmdOverrides: { codex: 'codex --profile work' },
@@ -22,8 +32,17 @@ describe('client UI RPC methods', () => {
       defaultRepoSelection: ['repo-1'],
       defaultLinearTeamSelection: ['team-1'],
       compactWorktreeCards: true,
+      minimaxGroupId: 'group-42',
+      minimaxUsageModels: 'general,abab6.5',
       githubProjects: {
-        pinned: [],
+        pinned: [
+          {
+            owner: 'stablyai',
+            ownerType: 'organization' as const,
+            number: 1,
+            host: 'ghe.example:8443'
+          }
+        ],
         recent: [],
         lastViewByProject: {},
         activeProject: null
@@ -59,7 +78,12 @@ describe('client UI RPC methods', () => {
         lastViewByProject: {
           'organization:stablyai:1': { viewId: 'view-1' }
         },
-        activeProject: { owner: 'stablyai', ownerType: 'organization', number: 1 }
+        activeProject: {
+          owner: 'stablyai',
+          ownerType: 'organization' as const,
+          number: 1,
+          host: 'ghe.example:8443'
+        }
       }
     }
     const runtime = {
@@ -70,6 +94,17 @@ describe('client UI RPC methods', () => {
 
     const response = await dispatcher.dispatch(
       makeRequest('settings.update', {
+        worktreeVisibilityDefaults: {
+          external: 'show',
+          customSources: [
+            { id: 'team', rootPath: ' /srv/team ' },
+            { id: 'invalid', rootPath: '../relative' }
+          ],
+          sourcePreferences: {
+            builtIn: { claude: 'show', unknown: 'show' },
+            custom: { team: 'hide', 'bad id': 'show' }
+          }
+        },
         defaultTuiAgent: 'codex',
         disabledTuiAgents: ['claude', 'not-real', 'claude'],
         defaultTaskSource: 'linear',
@@ -77,6 +112,8 @@ describe('client UI RPC methods', () => {
         defaultTaskViewPreset: 'my-prs',
         experimentalNewWorktreeCardStyle: true,
         compactWorktreeCards: true,
+        minimaxGroupId: 'group-42',
+        minimaxUsageModels: 'general,abab6.5',
         defaultRepoSelection: settings.defaultRepoSelection,
         defaultLinearTeamSelection: ['team-1', 'team-2'],
         githubProjects: settings.githubProjects
@@ -84,6 +121,14 @@ describe('client UI RPC methods', () => {
     )
 
     expect(runtime.updateClientSettings).toHaveBeenCalledWith({
+      worktreeVisibilityDefaults: {
+        external: 'show',
+        customSources: [{ id: 'team', rootPath: '/srv/team' }],
+        sourcePreferences: {
+          builtIn: { claude: 'show' },
+          custom: { team: 'hide' }
+        }
+      },
       defaultTuiAgent: 'codex',
       disabledTuiAgents: ['claude'],
       defaultTaskSource: 'linear',
@@ -91,6 +136,8 @@ describe('client UI RPC methods', () => {
       defaultTaskViewPreset: 'my-prs',
       experimentalNewWorktreeCardStyle: true,
       compactWorktreeCards: true,
+      minimaxGroupId: 'group-42',
+      minimaxUsageModels: 'general,abab6.5',
       defaultRepoSelection: settings.defaultRepoSelection,
       defaultLinearTeamSelection: ['team-1', 'team-2'],
       githubProjects: settings.githubProjects
@@ -111,6 +158,207 @@ describe('client UI RPC methods', () => {
     })
   })
 
+  it('normalizes manual bot-author overrides before persisting', async () => {
+    const runtime = {
+      getRuntimeId: () => 'test-runtime',
+      updateClientSettings: vi.fn(() => ({}))
+    } as unknown as OrcaRuntimeService
+    const dispatcher = new RpcDispatcher({ runtime, methods: CLIENT_UI_METHODS })
+
+    await dispatcher.dispatch(
+      makeRequest('settings.update', {
+        prBotAuthorOverrides: [' GretelFlux ', 'gretelflux', 42, '', 'another-bot']
+      })
+    )
+
+    expect(runtime.updateClientSettings).toHaveBeenCalledWith({
+      prBotAuthorOverrides: ['another-bot', 'gretelflux']
+    })
+  })
+
+  it('loads and normalizes quick commands through the targeted payload', async () => {
+    const commands = [
+      {
+        id: 'review',
+        label: 'Review',
+        action: 'agent-prompt' as const,
+        agent: 'codex' as const,
+        prompt: 'Review this diff',
+        scope: { type: 'global' as const }
+      }
+    ]
+    const runtime = {
+      getRuntimeId: () => 'test-runtime',
+      getClientTerminalQuickCommands: vi.fn(() => commands),
+      updateClientTerminalQuickCommands: vi.fn(() => commands)
+    } as unknown as OrcaRuntimeService
+    const dispatcher = new RpcDispatcher({ runtime, methods: CLIENT_UI_METHODS })
+
+    const getResponse = await dispatcher.dispatch(makeRequest('settings.getTerminalQuickCommands'))
+    const updateResponse = await dispatcher.dispatch(
+      makeRequest('settings.updateTerminalQuickCommands', {
+        mutation: {
+          type: 'upsert',
+          command: {
+            id: ' review ',
+            label: ' Review ',
+            action: 'agent-prompt',
+            agent: 'codex',
+            prompt: 'Review this diff\n',
+            scope: { type: 'global' }
+          }
+        }
+      })
+    )
+
+    expect(getResponse).toMatchObject({ ok: true, result: { terminalQuickCommands: commands } })
+    expect(runtime.updateClientTerminalQuickCommands).toHaveBeenCalledWith({
+      type: 'upsert',
+      command: commands[0]
+    })
+    expect(updateResponse).toMatchObject({
+      ok: true,
+      result: { terminalQuickCommands: commands }
+    })
+
+    await dispatcher.dispatch(
+      makeRequest('settings.updateTerminalQuickCommands', {
+        mutation: { type: 'delete', id: 'review' }
+      })
+    )
+    expect(runtime.updateClientTerminalQuickCommands).toHaveBeenLastCalledWith({
+      type: 'delete',
+      id: 'review'
+    })
+  })
+
+  it('rejects malformed quick-command mutations instead of changing persisted commands', async () => {
+    const runtime = {
+      getRuntimeId: () => 'test-runtime',
+      updateClientTerminalQuickCommands: vi.fn()
+    } as unknown as OrcaRuntimeService
+    const dispatcher = new RpcDispatcher({ runtime, methods: CLIENT_UI_METHODS })
+
+    for (const mutation of [
+      null,
+      'not-a-mutation',
+      { type: 'delete', id: '' },
+      { type: 'upsert', command: null },
+      { type: 'upsert', command: { id: 'incomplete' } },
+      {
+        type: 'upsert',
+        command: {
+          id: 'unsupported-agent',
+          label: 'Unsupported agent',
+          action: 'agent-prompt',
+          agent: 'aider',
+          prompt: 'Review this diff'
+        }
+      },
+      {
+        type: 'upsert',
+        command: {
+          id: 'oversized-command',
+          label: 'Oversized command',
+          action: 'terminal-command',
+          command: 'x'.repeat(MAX_QUICK_COMMAND_TERMINAL_TEXT_LENGTH + 1),
+          appendEnter: true
+        }
+      },
+      {
+        type: 'upsert',
+        command: {
+          id: 'x'.repeat(MAX_QUICK_COMMAND_ID_LENGTH + 1),
+          label: 'Oversized id',
+          action: 'terminal-command',
+          command: 'true',
+          appendEnter: true
+        }
+      },
+      {
+        type: 'upsert',
+        command: {
+          id: 'oversized-label',
+          label: 'x'.repeat(MAX_QUICK_COMMAND_LABEL_LENGTH + 1),
+          action: 'terminal-command',
+          command: 'true',
+          appendEnter: true
+        }
+      },
+      {
+        type: 'upsert',
+        command: {
+          id: 'oversized-repo',
+          label: 'Oversized repo',
+          action: 'terminal-command',
+          command: 'true',
+          appendEnter: true,
+          scope: { type: 'repo', repoId: 'x'.repeat(MAX_QUICK_COMMAND_REPO_ID_LENGTH + 1) }
+        }
+      },
+      {
+        type: 'upsert',
+        command: {
+          id: 'oversized-prompt',
+          label: 'Oversized prompt',
+          action: 'agent-prompt',
+          agent: 'codex',
+          prompt: 'x'.repeat(MAX_QUICK_COMMAND_AGENT_PROMPT_LENGTH + 1)
+        }
+      },
+      { type: 'upsert', command: { id: 'default-pwd', label: 'Removed', command: 'pwd' } }
+    ]) {
+      const response = await dispatcher.dispatch(
+        makeRequest('settings.updateTerminalQuickCommands', { mutation })
+      )
+
+      expect(response).toMatchObject({
+        ok: false,
+        error: { code: 'invalid_argument' }
+      })
+    }
+    expect(runtime.updateClientTerminalQuickCommands).not.toHaveBeenCalled()
+  })
+
+  it('caps oversized bot-author override payloads', async () => {
+    const runtime = {
+      getRuntimeId: () => 'test-runtime',
+      updateClientSettings: vi.fn(() => ({}))
+    } as unknown as OrcaRuntimeService
+    const dispatcher = new RpcDispatcher({ runtime, methods: CLIENT_UI_METHODS })
+
+    await dispatcher.dispatch(
+      makeRequest('settings.update', {
+        prBotAuthorOverrides: Array.from(
+          { length: 600 },
+          (_, i) => `bot-${String(i).padStart(4, '0')}`
+        )
+      })
+    )
+
+    const [update] = vi.mocked(runtime.updateClientSettings).mock.calls[0]!
+    expect((update as { prBotAuthorOverrides: string[] }).prBotAuthorOverrides).toHaveLength(500)
+  })
+
+  it('routes bot-author deltas to the runtime-owned atomic update', async () => {
+    const settings = { prBotAuthorOverrides: ['alice', 'bob'] }
+    const runtime = {
+      getRuntimeId: () => 'test-runtime',
+      updateClientPRBotAuthorOverride: vi.fn(() => settings)
+    } as unknown as OrcaRuntimeService
+    const dispatcher = new RpcDispatcher({ runtime, methods: CLIENT_UI_METHODS })
+
+    const response = await dispatcher.dispatch(
+      makeRequest('settings.updatePRBotAuthorOverride', { author: ' Bob ', isBot: true })
+    )
+
+    expect(runtime.updateClientPRBotAuthorOverride).toHaveBeenCalledWith({
+      author: ' Bob ',
+      isBot: true
+    })
+    expect(response).toMatchObject({ ok: true, result: { settings } })
+  })
+
   it('returns the runtime host persisted UI state', async () => {
     const ui: PersistedUIState = {
       ...getDefaultUIState(),
@@ -128,7 +376,7 @@ describe('client UI RPC methods', () => {
     const response = await dispatcher.dispatch(makeRequest('ui.get'))
 
     expect(runtime.getUIState).toHaveBeenCalledTimes(1)
-    expect(response).toMatchObject({ ok: true, result: { ui } })
+    expect(response).toMatchObject({ ok: true, result: { ui: omitPairingLocalUiFields(ui) } })
   })
 
   it('persists UI updates on the runtime host and returns the updated state', async () => {
@@ -168,7 +416,49 @@ describe('client UI RPC methods', () => {
       hideAutomationGeneratedWorkspaces: true,
       filterRepoIds: ['repo-1']
     })
-    expect(response).toMatchObject({ ok: true, result: { ui: updated } })
+    expect(response).toMatchObject({ ok: true, result: { ui: omitPairingLocalUiFields(updated) } })
+  })
+
+  it('lets a paired client clear the OSC 52 default-on notice', async () => {
+    // Why pin this key: the update schema is strict, so an omitted field does not get
+    // stripped — it rejects the whole call. The renderer only logs that failure, so the
+    // one-shot notice would re-toast on every launch of every web/SSH/relay client.
+    const updated: PersistedUIState = {
+      ...getDefaultUIState(),
+      osc52ClipboardDefaultOnNoticePending: false
+    }
+    const runtime = {
+      getRuntimeId: () => 'test-runtime',
+      updateUIState: vi.fn(() => updated)
+    } as unknown as OrcaRuntimeService
+    const dispatcher = new RpcDispatcher({ runtime, methods: CLIENT_UI_METHODS })
+
+    const response = await dispatcher.dispatch(
+      makeRequest('ui.set', { osc52ClipboardDefaultOnNoticePending: false })
+    )
+
+    expect(response).toMatchObject({ ok: true })
+    expect(runtime.updateUIState).toHaveBeenCalledWith({
+      osc52ClipboardDefaultOnNoticePending: false
+    })
+  })
+
+  it('does not let a paired client replace the host workspace origin filter', async () => {
+    const runtime = {
+      getRuntimeId: () => 'test-runtime',
+      updateUIState: vi.fn(() => getDefaultUIState())
+    } as unknown as OrcaRuntimeService
+    const dispatcher = new RpcDispatcher({ runtime, methods: CLIENT_UI_METHODS })
+
+    const response = await dispatcher.dispatch(
+      makeRequest('ui.set', {
+        hideWorkspacesFromOtherDevices: true,
+        sidebarWidth: 280
+      })
+    )
+
+    expect(response).toMatchObject({ ok: true })
+    expect(runtime.updateUIState).toHaveBeenCalledWith({ sidebarWidth: 280 })
   })
 
   it('accepts persisted literal UI arrays and nested UI state', async () => {
@@ -176,13 +466,27 @@ describe('client UI RPC methods', () => {
       ...getDefaultUIState(),
       worktreeCardProperties: ['status', 'branch', 'automation', 'inline-agents'],
       _worktreeCardModeDefaulted: true,
-      statusBarItems: ['codex'],
+      statusBarItems: ['codex', 'kimi', 'minimax', 'grok', 'antigravity', 'ports'],
+      _portsStatusBarDefaultAdded: true,
+      _kimiStatusBarDefaultAdded: true,
+      _minimaxStatusBarDefaultAdded: true,
+      _grokStatusBarDefaultAdded: true,
+      _antigravityStatusBarDefaultAdded: true,
       taskResumeState: {
         githubMode: 'items',
         githubItemsQuery: 'is:open',
         githubProjectHiddenFieldIdsByView: {
           'project-1:view-1': ['field-1']
-        }
+        },
+        linearMode: 'projects',
+        linearContext: {
+          kind: 'project',
+          id: 'project-9',
+          workspaceId: 'workspace-1',
+          model: 'project'
+        },
+        jiraPreset: 'assigned',
+        jiraQuery: 'ENG'
       },
       workspaceCleanup: {
         dismissals: {
@@ -201,7 +505,8 @@ describe('client UI RPC methods', () => {
       contextualToursSeenIds: ['tasks'],
       contextualToursAutoEligible: true,
       usageEmptyStateDismissed: true,
-      browserDefaultZoomLevel: 1.5
+      browserDefaultZoomLevel: 1.5,
+      manualRepoOrder: [{ hostId: 'runtime:node-b', repoId: 'repo-b' }]
     }
     const runtime = {
       getRuntimeId: () => 'test-runtime',
@@ -212,13 +517,27 @@ describe('client UI RPC methods', () => {
     const payload = {
       worktreeCardProperties: ['status', 'branch', 'automation', 'inline-agents'],
       _worktreeCardModeDefaulted: true,
-      statusBarItems: ['codex'],
+      statusBarItems: ['codex', 'kimi', 'minimax', 'grok', 'antigravity', 'ports'],
+      _portsStatusBarDefaultAdded: true,
+      _kimiStatusBarDefaultAdded: true,
+      _minimaxStatusBarDefaultAdded: true,
+      _grokStatusBarDefaultAdded: true,
+      _antigravityStatusBarDefaultAdded: true,
       taskResumeState: {
         githubMode: 'items',
         githubItemsQuery: 'is:open',
         githubProjectHiddenFieldIdsByView: {
           'project-1:view-1': ['field-1']
-        }
+        },
+        linearMode: 'projects',
+        linearContext: {
+          kind: 'project',
+          id: 'project-9',
+          workspaceId: 'workspace-1',
+          model: 'project'
+        },
+        jiraPreset: 'assigned',
+        jiraQuery: 'ENG'
       },
       workspaceCleanup: {
         dismissals: {
@@ -237,15 +556,93 @@ describe('client UI RPC methods', () => {
       contextualToursSeenIds: ['tasks'],
       contextualToursAutoEligible: true,
       usageEmptyStateDismissed: true,
-      browserDefaultZoomLevel: 1.5
+      browserDefaultZoomLevel: 1.5,
+      manualRepoOrder: [{ hostId: 'runtime:node-b', repoId: 'repo-b' }]
     }
     const response = await dispatcher.dispatch(makeRequest('ui.set', payload))
 
+    const { manualRepoOrder: _desktopOwnedOrder, ...forwarded } = payload
     expect(runtime.updateUIState).toHaveBeenCalledWith({
-      ...payload,
+      ...forwarded,
       worktreeCardProperties: ['status', 'unread', 'branch', 'automation', 'inline-agents']
     })
-    expect(response).toMatchObject({ ok: true, result: { ui: updated } })
+    expect(response).toMatchObject({ ok: true, result: { ui: omitPairingLocalUiFields(updated) } })
+  })
+
+  // Why one case per field: the schema is strict, so a single unlisted key makes
+  // the dispatcher reject the ENTIRE ui.set payload with invalid_argument instead
+  // of stripping it. A combined payload would pass as soon as any one field were
+  // restored, hiding the rest of the drift.
+  it.each([
+    ['taskResumeState.linearMode', { taskResumeState: { linearMode: 'projects' } }],
+    [
+      'taskResumeState.linearContext',
+      {
+        taskResumeState: {
+          linearContext: { kind: 'project', id: 'project-9', workspaceId: 'workspace-1' }
+        }
+      }
+    ],
+    ['taskResumeState.jiraPreset', { taskResumeState: { jiraPreset: 'assigned' } }],
+    ['taskResumeState.jiraQuery', { taskResumeState: { jiraQuery: 'ENG' } }],
+    ['activeView', { activeView: 'tasks' }],
+    ['showDotfilesByWorktree', { showDotfilesByWorktree: { 'repo::/worktree': true } }],
+    ['setupGuideSidebarDismissed', { setupGuideSidebarDismissed: true }],
+    ['setupGuideBrowserMilestoneMigrated', { setupGuideBrowserMilestoneMigrated: true }],
+    [
+      'setupGuideBrowserMilestoneLegacyComplete',
+      { setupGuideBrowserMilestoneLegacyComplete: true }
+    ],
+    ['browserImportHintHidden', { browserImportHintHidden: true }],
+    ['mobileEmulatorTabIntroDismissed', { mobileEmulatorTabIntroDismissed: true }],
+    ['mobileEmulatorAgentSetupDismissed', { mobileEmulatorAgentSetupDismissed: true }],
+    ['alwaysShowDefaultBranchWorkspace', { alwaysShowDefaultBranchWorkspace: false }]
+  ])('accepts %s, which the renderer persists through ui.set', async (_label, payload) => {
+    const runtime = {
+      getRuntimeId: () => 'test-runtime',
+      updateUIState: vi.fn(() => getDefaultUIState())
+    } as unknown as OrcaRuntimeService
+    const dispatcher = new RpcDispatcher({ runtime, methods: CLIENT_UI_METHODS })
+
+    const response = await dispatcher.dispatch(makeRequest('ui.set', payload))
+
+    expect(response).toMatchObject({ ok: true })
+    expect(runtime.updateUIState).toHaveBeenCalledWith(payload)
+  })
+
+  it('accepts the whole debounced App writer payload', async () => {
+    const runtime = {
+      getRuntimeId: () => 'test-runtime',
+      updateUIState: vi.fn(() => getDefaultUIState())
+    } as unknown as OrcaRuntimeService
+    const dispatcher = new RpcDispatcher({ runtime, methods: CLIENT_UI_METHODS })
+    // Mirrors App.tsx's 150ms writer: one unlisted key here dropped every other
+    // preference in the same call for paired web/SSH/relay clients.
+    const payload = {
+      sidebarWidth: 280,
+      rightSidebarOpen: true,
+      rightSidebarTab: 'explorer',
+      rightSidebarExplorerView: 'files',
+      rightSidebarWidth: 320,
+      markdownTocPanelWidth: 200,
+      groupBy: 'repo',
+      sortBy: 'smart',
+      projectOrderBy: 'manual',
+      showActiveOnly: false,
+      hideSleepingWorkspaces: false,
+      showSleepingWorkspaces: true,
+      hideDefaultBranchWorkspace: false,
+      hideAutomationGeneratedWorkspaces: false,
+      alwaysShowDefaultBranchWorkspace: true,
+      showDotfilesByWorktree: { 'repo::/worktree': true },
+      filterRepoIds: ['repo-1'],
+      acknowledgedAgentsByPaneKey: { 'pane-1': 123 }
+    }
+
+    const response = await dispatcher.dispatch(makeRequest('ui.set', payload))
+
+    expect(response).toMatchObject({ ok: true })
+    expect(runtime.updateUIState).toHaveBeenCalledWith(payload)
   })
 
   it('records a feature interaction through the runtime host', async () => {
@@ -264,7 +661,7 @@ describe('client UI RPC methods', () => {
     const response = await dispatcher.dispatch(makeRequest('ui.recordFeatureInteraction', 'tasks'))
 
     expect(runtime.recordFeatureInteraction).toHaveBeenCalledWith('tasks')
-    expect(response).toMatchObject({ ok: true, result: { ui: updated } })
+    expect(response).toMatchObject({ ok: true, result: { ui: omitPairingLocalUiFields(updated) } })
   })
 
   it('rejects unknown and malformed UI update fields', async () => {
@@ -282,20 +679,89 @@ describe('client UI RPC methods', () => {
     expect(runtime.updateUIState).not.toHaveBeenCalled()
   })
 
-  it('rejects unknown worktree card properties', async () => {
+  // Why the contract flipped: an unknown VALUE used to fail the whole batch, so
+  // one drifted enum member took sidebar widths, filters and agent acks down
+  // with it. Unknown KEYS still reject — the parity assertions catch those.
+  it.each([
+    ['worktree card property', { worktreeCardProperties: ['status', 'pr-status'] }],
+    ['feature interaction id', { featureInteractions: { unknown: { firstInteractedAt: 100 } } }],
+    ['feature tip id', { featureTipsSeenIds: ['voice-dictation', 'unknown-tip'] }],
+    ['right sidebar tab', { rightSidebarTab: 'not-a-tab' }]
+  ])('drops an unknown %s instead of rejecting the batch around it', async (_label, drifted) => {
     const runtime = {
       getRuntimeId: () => 'test-runtime',
-      updateUIState: vi.fn()
+      updateUIState: vi.fn(() => getDefaultUIState())
     } as unknown as OrcaRuntimeService
     const dispatcher = new RpcDispatcher({ runtime, methods: CLIENT_UI_METHODS })
 
     const response = await dispatcher.dispatch(
-      makeRequest('ui.set', { worktreeCardProperties: ['status', 'pr-status'] })
+      makeRequest('ui.set', { ...drifted, sidebarWidth: 280, filterRepoIds: ['repo-1'] })
     )
 
-    expect(response).toMatchObject({ ok: false, error: { code: 'invalid_argument' } })
-    expect(runtime.updateUIState).not.toHaveBeenCalled()
+    expect(response).toMatchObject({ ok: true })
+    expect(runtime.updateUIState).toHaveBeenCalledWith({
+      sidebarWidth: 280,
+      filterRepoIds: ['repo-1']
+    })
   })
+
+  it('accepts the Jira issue card property across the runtime UI boundary', async () => {
+    const updated: PersistedUIState = {
+      ...getDefaultUIState(),
+      worktreeCardProperties: ['status', 'unread', 'jira-issue']
+    }
+    const runtime = {
+      getRuntimeId: () => 'test-runtime',
+      updateUIState: vi.fn(() => updated)
+    } as unknown as OrcaRuntimeService
+    const dispatcher = new RpcDispatcher({ runtime, methods: CLIENT_UI_METHODS })
+
+    const response = await dispatcher.dispatch(
+      makeRequest('ui.set', { worktreeCardProperties: ['status', 'jira-issue'] })
+    )
+
+    expect(runtime.updateUIState).toHaveBeenCalledWith({
+      worktreeCardProperties: ['status', 'unread', 'jira-issue']
+    })
+    expect(response).toMatchObject({ ok: true, result: { ui: omitPairingLocalUiFields(updated) } })
+  })
+
+  it('accepts every worktree card property the shared union defines', async () => {
+    const runtime = {
+      getRuntimeId: () => 'test-runtime',
+      updateUIState: vi.fn(() => getDefaultUIState())
+    } as unknown as OrcaRuntimeService
+    const dispatcher = new RpcDispatcher({ runtime, methods: CLIENT_UI_METHODS })
+
+    // 'cli' was missing from the schema, so Settings → Default card mode sent a
+    // payload the host rejected outright.
+    const response = await dispatcher.dispatch(
+      makeRequest('ui.set', { worktreeCardProperties: [...DEFAULT_WORKTREE_CARD_PROPERTIES] })
+    )
+
+    expect(response).toMatchObject({ ok: true })
+    expect(runtime.updateUIState).toHaveBeenCalledWith({
+      worktreeCardProperties: [...DEFAULT_WORKTREE_CARD_PROPERTIES]
+    })
+  })
+
+  it.each(['workspaces', 'pr-checks', 'plugin:acme.tools/inspector'])(
+    'accepts the %s right sidebar tab a paired client can be sitting on',
+    async (rightSidebarTab) => {
+      const runtime = {
+        getRuntimeId: () => 'test-runtime',
+        updateUIState: vi.fn(() => getDefaultUIState())
+      } as unknown as OrcaRuntimeService
+      const dispatcher = new RpcDispatcher({ runtime, methods: CLIENT_UI_METHODS })
+
+      const response = await dispatcher.dispatch(
+        makeRequest('ui.set', { rightSidebarTab, sidebarWidth: 280 })
+      )
+
+      expect(response).toMatchObject({ ok: true })
+      expect(runtime.updateUIState).toHaveBeenCalledWith({ rightSidebarTab, sidebarWidth: 280 })
+    }
+  )
 
   it('rejects star-nag persisted state mutations from remote clients', async () => {
     const runtime = {
@@ -337,7 +803,7 @@ describe('client UI RPC methods', () => {
     expect(runtime.updateUIState).toHaveBeenCalledWith({
       worktreeCardProperties: ['status', 'unread', 'ci', 'issue', 'pr']
     })
-    expect(response).toMatchObject({ ok: true, result: { ui: updated } })
+    expect(response).toMatchObject({ ok: true, result: { ui: omitPairingLocalUiFields(updated) } })
   })
 
   it('rejects each star-nag persisted state mutation field from remote clients', async () => {
@@ -359,40 +825,6 @@ describe('client UI RPC methods', () => {
       const response = await dispatcher.dispatch(makeRequest('ui.set', payload))
       expect(response).toMatchObject({ ok: false, error: { code: 'invalid_argument' } })
     }
-    expect(runtime.updateUIState).not.toHaveBeenCalled()
-  })
-
-  it('rejects unknown feature interaction ids', async () => {
-    const runtime = {
-      getRuntimeId: () => 'test-runtime',
-      updateUIState: vi.fn()
-    } as unknown as OrcaRuntimeService
-    const dispatcher = new RpcDispatcher({ runtime, methods: CLIENT_UI_METHODS })
-
-    const response = await dispatcher.dispatch(
-      makeRequest('ui.set', {
-        featureInteractions: {
-          unknown: { firstInteractedAt: 100 }
-        }
-      })
-    )
-
-    expect(response).toMatchObject({ ok: false, error: { code: 'invalid_argument' } })
-    expect(runtime.updateUIState).not.toHaveBeenCalled()
-  })
-
-  it('rejects unknown feature tip ids', async () => {
-    const runtime = {
-      getRuntimeId: () => 'test-runtime',
-      updateUIState: vi.fn()
-    } as unknown as OrcaRuntimeService
-    const dispatcher = new RpcDispatcher({ runtime, methods: CLIENT_UI_METHODS })
-
-    const response = await dispatcher.dispatch(
-      makeRequest('ui.set', { featureTipsSeenIds: ['voice-dictation', 'unknown-tip'] })
-    )
-
-    expect(response).toMatchObject({ ok: false, error: { code: 'invalid_argument' } })
     expect(runtime.updateUIState).not.toHaveBeenCalled()
   })
 

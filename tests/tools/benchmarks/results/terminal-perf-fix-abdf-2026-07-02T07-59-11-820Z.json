@@ -1,0 +1,1058 @@
+{
+  "label": "fix-abdf",
+  "startedAt": "2026-07-02T07:59:11.820Z",
+  "platform": "win32 10.0.26200",
+  "shell": "default",
+  "args": {
+    "iterations": 8,
+    "switches": 24,
+    "cycles": 12
+  },
+  "scenarios": {
+    "tab-create": {
+      "samples": [
+        {
+          "index": 0,
+          "storeCreateMs": 3.299999952316284,
+          "ptyBindMs": 4816.899999976158,
+          "firstOutputMs": 4856.899999976158,
+          "paintSettleMs": 4864,
+          "timedOut": false
+        },
+        {
+          "index": 1,
+          "storeCreateMs": 2.800000011920929,
+          "ptyBindMs": 529,
+          "firstOutputMs": 554.5,
+          "paintSettleMs": 556.8000000119209,
+          "timedOut": false
+        },
+        {
+          "index": 2,
+          "storeCreateMs": 2.400000035762787,
+          "ptyBindMs": 423.10000002384186,
+          "firstOutputMs": 464.80000001192093,
+          "paintSettleMs": 470,
+          "timedOut": false
+        },
+        {
+          "index": 3,
+          "storeCreateMs": 1.800000011920929,
+          "ptyBindMs": 438.4000000357628,
+          "firstOutputMs": 453.69999998807907,
+          "paintSettleMs": 455.80000001192093,
+          "timedOut": false
+        },
+        {
+          "index": 4,
+          "storeCreateMs": 1.600000023841858,
+          "ptyBindMs": 497.10000002384186,
+          "firstOutputMs": 508.80000001192093,
+          "paintSettleMs": 515.8999999761581,
+          "timedOut": false
+        },
+        {
+          "index": 5,
+          "storeCreateMs": 1.9000000357627869,
+          "ptyBindMs": 471.80000001192093,
+          "firstOutputMs": 488.10000002384186,
+          "paintSettleMs": 491.30000001192093,
+          "timedOut": false
+        },
+        {
+          "index": 6,
+          "storeCreateMs": 1.199999988079071,
+          "ptyBindMs": 512.6999999880791,
+          "firstOutputMs": 524.2999999523163,
+          "paintSettleMs": 531.6999999880791,
+          "timedOut": false
+        },
+        {
+          "index": 7,
+          "storeCreateMs": 1.5,
+          "ptyBindMs": 468.10000002384186,
+          "firstOutputMs": 483.19999998807907,
+          "paintSettleMs": 484.19999998807907,
+          "timedOut": false
+        }
+      ],
+      "longtasks": [
+        52, 397, 67, 187, 133, 214, 192, 152, 196, 90, 154, 255, 61, 71, 296, 76, 68, 258, 92, 68,
+        244, 161, 63, 176, 178, 137
+      ]
+    },
+    "tab-switch": {
+      "samples": [
+        {
+          "index": 0,
+          "targetTabId": "aa62c8e8-2ef4-4aa3-ac4d-b9063cfa527e",
+          "storeMs": 1.9000000357627869,
+          "paneVisibleMs": 1.9000000357627869,
+          "paintSettleMs": 76.20000004768372,
+          "timedOut": false
+        },
+        {
+          "index": 1,
+          "targetTabId": "66083463-228e-4fb0-90c5-231dc75e8da6",
+          "storeMs": 1.0999999642372131,
+          "paneVisibleMs": 1.0999999642372131,
+          "paintSettleMs": 113.19999998807907,
+          "timedOut": false
+        },
+        {
+          "index": 2,
+          "targetTabId": "b99bb441-7027-40a9-beb2-a558ece6f979",
+          "storeMs": 2.5,
+          "paneVisibleMs": 2.5,
+          "paintSettleMs": 130.9000000357628,
+          "timedOut": false
+        },
+        {
+          "index": 3,
+          "targetTabId": "490084ae-1bdb-4359-bb86-097e26902f98",
+          "storeMs": 2.099999964237213,
+          "paneVisibleMs": 2.099999964237213,
+          "paintSettleMs": 70.09999996423721,
+          "timedOut": false
+        },
+        {
+          "index": 4,
+          "targetTabId": "aa62c8e8-2ef4-4aa3-ac4d-b9063cfa527e",
+          "storeMs": 1.899999976158142,
+          "paneVisibleMs": 1.899999976158142,
+          "paintSettleMs": 54.19999998807907,
+          "timedOut": false
+        },
+        {
+          "index": 5,
+          "targetTabId": "66083463-228e-4fb0-90c5-231dc75e8da6",
+          "storeMs": 2.5,
+          "paneVisibleMs": 2.5,
+          "paintSettleMs": 52.69999998807907,
+          "timedOut": false
+        },
+        {
+          "index": 6,
+          "targetTabId": "b99bb441-7027-40a9-beb2-a558ece6f979",
+          "storeMs": 1.699999988079071,
+          "paneVisibleMs": 1.699999988079071,
+          "paintSettleMs": 119.30000001192093,
+          "timedOut": false
+        },
+        {
+          "index": 7,
+          "targetTabId": "490084ae-1bdb-4359-bb86-097e26902f98",
+          "storeMs": 1.399999976158142,
+          "paneVisibleMs": 1.399999976158142,
+          "paintSettleMs": 104.29999995231628,
+          "timedOut": false
+        },
+        {
+          "index": 8,
+          "targetTabId": "aa62c8e8-2ef4-4aa3-ac4d-b9063cfa527e",
+          "storeMs": 2.399999976158142,
+          "paneVisibleMs": 2.5,
+          "paintSettleMs": 78.39999997615814,
+          "timedOut": false
+        },
+        {
+          "index": 9,
+          "targetTabId": "66083463-228e-4fb0-90c5-231dc75e8da6",
+          "storeMs": 1.699999988079071,
+          "paneVisibleMs": 1.699999988079071,
+          "paintSettleMs": 49.59999996423721,
+          "timedOut": false
+        },
+        {
+          "index": 10,
+          "targetTabId": "b99bb441-7027-40a9-beb2-a558ece6f979",
+          "storeMs": 1.300000011920929,
+          "paneVisibleMs": 1.300000011920929,
+          "paintSettleMs": 47.10000002384186,
+          "timedOut": false
+        },
+        {
+          "index": 11,
+          "targetTabId": "490084ae-1bdb-4359-bb86-097e26902f98",
+          "storeMs": 3.100000023841858,
+          "paneVisibleMs": 3.100000023841858,
+          "paintSettleMs": 120.30000001192093,
+          "timedOut": false
+        },
+        {
+          "index": 12,
+          "targetTabId": "aa62c8e8-2ef4-4aa3-ac4d-b9063cfa527e",
+          "storeMs": 1.600000023841858,
+          "paneVisibleMs": 1.699999988079071,
+          "paintSettleMs": 108.19999998807907,
+          "timedOut": false
+        },
+        {
+          "index": 13,
+          "targetTabId": "66083463-228e-4fb0-90c5-231dc75e8da6",
+          "storeMs": 1.699999988079071,
+          "paneVisibleMs": 1.699999988079071,
+          "paintSettleMs": 51.69999998807907,
+          "timedOut": false
+        },
+        {
+          "index": 14,
+          "targetTabId": "b99bb441-7027-40a9-beb2-a558ece6f979",
+          "storeMs": 1.600000023841858,
+          "paneVisibleMs": 1.600000023841858,
+          "paintSettleMs": 45.30000001192093,
+          "timedOut": false
+        },
+        {
+          "index": 15,
+          "targetTabId": "490084ae-1bdb-4359-bb86-097e26902f98",
+          "storeMs": 1.699999988079071,
+          "paneVisibleMs": 1.699999988079071,
+          "paintSettleMs": 44.69999998807907,
+          "timedOut": false
+        },
+        {
+          "index": 16,
+          "targetTabId": "aa62c8e8-2ef4-4aa3-ac4d-b9063cfa527e",
+          "storeMs": 1.399999976158142,
+          "paneVisibleMs": 1.399999976158142,
+          "paintSettleMs": 58.69999998807907,
+          "timedOut": false
+        },
+        {
+          "index": 17,
+          "targetTabId": "66083463-228e-4fb0-90c5-231dc75e8da6",
+          "storeMs": 1.899999976158142,
+          "paneVisibleMs": 1.899999976158142,
+          "paintSettleMs": 136.5999999642372,
+          "timedOut": false
+        },
+        {
+          "index": 18,
+          "targetTabId": "b99bb441-7027-40a9-beb2-a558ece6f979",
+          "storeMs": 2,
+          "paneVisibleMs": 2,
+          "paintSettleMs": 136.0999999642372,
+          "timedOut": false
+        },
+        {
+          "index": 19,
+          "targetTabId": "490084ae-1bdb-4359-bb86-097e26902f98",
+          "storeMs": 1.600000023841858,
+          "paneVisibleMs": 1.600000023841858,
+          "paintSettleMs": 53.80000001192093,
+          "timedOut": false
+        },
+        {
+          "index": 20,
+          "targetTabId": "aa62c8e8-2ef4-4aa3-ac4d-b9063cfa527e",
+          "storeMs": 2.100000023841858,
+          "paneVisibleMs": 2.100000023841858,
+          "paintSettleMs": 51.5,
+          "timedOut": false
+        },
+        {
+          "index": 21,
+          "targetTabId": "66083463-228e-4fb0-90c5-231dc75e8da6",
+          "storeMs": 1.800000011920929,
+          "paneVisibleMs": 1.800000011920929,
+          "paintSettleMs": 122.40000003576279,
+          "timedOut": false
+        },
+        {
+          "index": 22,
+          "targetTabId": "b99bb441-7027-40a9-beb2-a558ece6f979",
+          "storeMs": 1.699999988079071,
+          "paneVisibleMs": 1.699999988079071,
+          "paintSettleMs": 118.5,
+          "timedOut": false
+        },
+        {
+          "index": 23,
+          "targetTabId": "490084ae-1bdb-4359-bb86-097e26902f98",
+          "storeMs": 2.300000011920929,
+          "paneVisibleMs": 2.300000011920929,
+          "paintSettleMs": 62.69999998807907,
+          "timedOut": false
+        }
+      ],
+      "longtasks": [66, 102, 123, 64, 115, 96, 74, 113, 102, 52, 125, 130, 117, 110, 53]
+    },
+    "workspace-switch": {
+      "samples": [
+        {
+          "index": 0,
+          "worktreeId": "cd78ddb3-9689-4d21-b87b-8e38f92d2e7b::C:/Users/jinwo/AppData/Local/Temp/orca-termperf-IyoYoT/repo",
+          "ptyId": "cd78ddb3-9689-4d21-b87b-8e38f92d2e7b::C:/Users/jinwo/AppData/Local/Temp/orca-termperf-IyoYoT/repo@@5810ae88",
+          "activationMs": 217,
+          "ptyBindMs": 219,
+          "paintSettleMs": 233
+        },
+        {
+          "index": 1,
+          "worktreeId": "cd78ddb3-9689-4d21-b87b-8e38f92d2e7b::C:/Users/jinwo/AppData/Local/Temp/orca-termperf-IyoYoT/wt-one",
+          "ptyId": "cd78ddb3-9689-4d21-b87b-8e38f92d2e7b::C:/Users/jinwo/AppData/Local/Temp/orca-termperf-IyoYoT/wt-one@@c450cf26",
+          "activationMs": 480,
+          "ptyBindMs": 575,
+          "paintSettleMs": 601
+        },
+        {
+          "index": 2,
+          "worktreeId": "cd78ddb3-9689-4d21-b87b-8e38f92d2e7b::C:/Users/jinwo/AppData/Local/Temp/orca-termperf-IyoYoT/wt-two",
+          "ptyId": "cd78ddb3-9689-4d21-b87b-8e38f92d2e7b::C:/Users/jinwo/AppData/Local/Temp/orca-termperf-IyoYoT/wt-two@@ae6fdb06",
+          "activationMs": 382,
+          "ptyBindMs": 557,
+          "paintSettleMs": 573
+        },
+        {
+          "index": 3,
+          "worktreeId": "cd78ddb3-9689-4d21-b87b-8e38f92d2e7b::C:/Users/jinwo/AppData/Local/Temp/orca-termperf-IyoYoT/repo",
+          "ptyId": "cd78ddb3-9689-4d21-b87b-8e38f92d2e7b::C:/Users/jinwo/AppData/Local/Temp/orca-termperf-IyoYoT/repo@@5810ae88",
+          "activationMs": 268,
+          "ptyBindMs": 295,
+          "paintSettleMs": 299
+        },
+        {
+          "index": 4,
+          "worktreeId": "cd78ddb3-9689-4d21-b87b-8e38f92d2e7b::C:/Users/jinwo/AppData/Local/Temp/orca-termperf-IyoYoT/wt-one",
+          "ptyId": "cd78ddb3-9689-4d21-b87b-8e38f92d2e7b::C:/Users/jinwo/AppData/Local/Temp/orca-termperf-IyoYoT/wt-one@@c450cf26",
+          "activationMs": 154,
+          "ptyBindMs": 178,
+          "paintSettleMs": 184
+        },
+        {
+          "index": 5,
+          "worktreeId": "cd78ddb3-9689-4d21-b87b-8e38f92d2e7b::C:/Users/jinwo/AppData/Local/Temp/orca-termperf-IyoYoT/wt-two",
+          "ptyId": "cd78ddb3-9689-4d21-b87b-8e38f92d2e7b::C:/Users/jinwo/AppData/Local/Temp/orca-termperf-IyoYoT/wt-two@@ae6fdb06",
+          "activationMs": 145,
+          "ptyBindMs": 166,
+          "paintSettleMs": 178
+        },
+        {
+          "index": 6,
+          "worktreeId": "cd78ddb3-9689-4d21-b87b-8e38f92d2e7b::C:/Users/jinwo/AppData/Local/Temp/orca-termperf-IyoYoT/repo",
+          "ptyId": "cd78ddb3-9689-4d21-b87b-8e38f92d2e7b::C:/Users/jinwo/AppData/Local/Temp/orca-termperf-IyoYoT/repo@@5810ae88",
+          "activationMs": 159,
+          "ptyBindMs": 184,
+          "paintSettleMs": 192
+        },
+        {
+          "index": 7,
+          "worktreeId": "cd78ddb3-9689-4d21-b87b-8e38f92d2e7b::C:/Users/jinwo/AppData/Local/Temp/orca-termperf-IyoYoT/wt-one",
+          "ptyId": "cd78ddb3-9689-4d21-b87b-8e38f92d2e7b::C:/Users/jinwo/AppData/Local/Temp/orca-termperf-IyoYoT/wt-one@@c450cf26",
+          "activationMs": 328,
+          "ptyBindMs": 349,
+          "paintSettleMs": 354
+        },
+        {
+          "index": 8,
+          "worktreeId": "cd78ddb3-9689-4d21-b87b-8e38f92d2e7b::C:/Users/jinwo/AppData/Local/Temp/orca-termperf-IyoYoT/wt-two",
+          "ptyId": "cd78ddb3-9689-4d21-b87b-8e38f92d2e7b::C:/Users/jinwo/AppData/Local/Temp/orca-termperf-IyoYoT/wt-two@@ae6fdb06",
+          "activationMs": 139,
+          "ptyBindMs": 158,
+          "paintSettleMs": 167
+        },
+        {
+          "index": 9,
+          "worktreeId": "cd78ddb3-9689-4d21-b87b-8e38f92d2e7b::C:/Users/jinwo/AppData/Local/Temp/orca-termperf-IyoYoT/repo",
+          "ptyId": "cd78ddb3-9689-4d21-b87b-8e38f92d2e7b::C:/Users/jinwo/AppData/Local/Temp/orca-termperf-IyoYoT/repo@@5810ae88",
+          "activationMs": 150,
+          "ptyBindMs": 177,
+          "paintSettleMs": 183
+        },
+        {
+          "index": 10,
+          "worktreeId": "cd78ddb3-9689-4d21-b87b-8e38f92d2e7b::C:/Users/jinwo/AppData/Local/Temp/orca-termperf-IyoYoT/wt-one",
+          "ptyId": "cd78ddb3-9689-4d21-b87b-8e38f92d2e7b::C:/Users/jinwo/AppData/Local/Temp/orca-termperf-IyoYoT/wt-one@@c450cf26",
+          "activationMs": 150,
+          "ptyBindMs": 169,
+          "paintSettleMs": 179
+        },
+        {
+          "index": 11,
+          "worktreeId": "cd78ddb3-9689-4d21-b87b-8e38f92d2e7b::C:/Users/jinwo/AppData/Local/Temp/orca-termperf-IyoYoT/wt-two",
+          "ptyId": "cd78ddb3-9689-4d21-b87b-8e38f92d2e7b::C:/Users/jinwo/AppData/Local/Temp/orca-termperf-IyoYoT/wt-two@@ae6fdb06",
+          "activationMs": 134,
+          "ptyBindMs": 166,
+          "paintSettleMs": 182
+        }
+      ]
+    }
+  },
+  "summaries": [
+    {
+      "name": "tab-create",
+      "samples": 8,
+      "timedOut": 0,
+      "fields": {
+        "storeCreateMs": {
+          "count": 8,
+          "median": 2,
+          "p95": 3,
+          "max": 3
+        },
+        "ptyBindMs": {
+          "count": 8,
+          "median": 497,
+          "p95": 4817,
+          "max": 4817
+        },
+        "firstOutputMs": {
+          "count": 8,
+          "median": 509,
+          "p95": 4857,
+          "max": 4857
+        },
+        "paintSettleMs": {
+          "count": 8,
+          "median": 516,
+          "p95": 4864,
+          "max": 4864
+        }
+      },
+      "longtaskCount": 26,
+      "longtaskMaxMs": 397
+    },
+    {
+      "name": "tab-switch",
+      "samples": 24,
+      "timedOut": 0,
+      "fields": {
+        "storeMs": {
+          "count": 24,
+          "median": 2,
+          "p95": 3,
+          "max": 3
+        },
+        "paneVisibleMs": {
+          "count": 24,
+          "median": 2,
+          "p95": 3,
+          "max": 3
+        },
+        "paintSettleMs": {
+          "count": 24,
+          "median": 76,
+          "p95": 136,
+          "max": 137
+        }
+      },
+      "longtaskCount": 15,
+      "longtaskMaxMs": 130
+    },
+    {
+      "name": "workspace-switch",
+      "samples": 12,
+      "timedOut": 0,
+      "fields": {
+        "activationMs": {
+          "count": 12,
+          "median": 159,
+          "p95": 382,
+          "max": 480
+        },
+        "ptyBindMs": {
+          "count": 12,
+          "median": 184,
+          "p95": 557,
+          "max": 575
+        },
+        "paintSettleMs": {
+          "count": 12,
+          "median": 192,
+          "p95": 573,
+          "max": 601
+        }
+      },
+      "longtaskCount": 0,
+      "longtaskMaxMs": 0
+    }
+  ],
+  "finalDiagnostics": {
+    "hasStore": true,
+    "workspaceSessionReady": true,
+    "hydrationSucceeded": true,
+    "activeView": "terminal",
+    "activeRepoId": "cd78ddb3-9689-4d21-b87b-8e38f92d2e7b",
+    "activeWorktreeId": "cd78ddb3-9689-4d21-b87b-8e38f92d2e7b::C:/Users/jinwo/AppData/Local/Temp/orca-termperf-IyoYoT/wt-two",
+    "activeTabType": "terminal",
+    "activeTabId": "15055907-3232-4ca1-8814-e5484ba78a5b",
+    "terminalGpuAcceleration": "auto",
+    "repoCount": 1,
+    "worktreeCountsByRepo": {
+      "cd78ddb3-9689-4d21-b87b-8e38f92d2e7b": 3
+    },
+    "ptyIdsByTabId": [
+      "cd78ddb3-9689-4d21-b87b-8e38f92d2e7b::C:/Users/jinwo/AppData/Local/Temp/orca-termperf-IyoYoT/wt-two@@ae6fdb06"
+    ],
+    "paneManagerCount": 3,
+    "activePane": {
+      "id": 1,
+      "leafId": "78b7478c-39a9-4111-aed8-1e2ddf568c24",
+      "ptyId": "cd78ddb3-9689-4d21-b87b-8e38f92d2e7b::C:/Users/jinwo/AppData/Local/Temp/orca-termperf-IyoYoT/wt-two@@ae6fdb06",
+      "cols": 175,
+      "rows": 73,
+      "buffer": {
+        "baseY": 0,
+        "viewportY": 0,
+        "cursorY": 0,
+        "length": 73
+      }
+    },
+    "renderingDiagnostics": [
+      {
+        "paneId": 1,
+        "terminalGpuAcceleration": "auto",
+        "gpuRenderingEnabled": true,
+        "webglAttachmentDeferred": false,
+        "webglDisabledAfterContextLoss": false,
+        "hasComplexScriptOutput": false,
+        "terminalWebglAutoDecision": {
+          "allowWebgl": true,
+          "reason": "non-linux",
+          "renderer": null,
+          "vendor": null
+        },
+        "hasWebgl": true
+      }
+    ],
+    "allPaneManagersDiagnostics": [
+      {
+        "tabId": "c46e04e4-af5f-4674-9a38-72253480baef",
+        "diagnostics": [
+          {
+            "paneId": 1,
+            "terminalGpuAcceleration": "auto",
+            "gpuRenderingEnabled": true,
+            "webglAttachmentDeferred": true,
+            "webglDisabledAfterContextLoss": false,
+            "hasComplexScriptOutput": false,
+            "terminalWebglAutoDecision": {
+              "allowWebgl": true,
+              "reason": "non-linux",
+              "renderer": null,
+              "vendor": null
+            },
+            "hasWebgl": true
+          }
+        ]
+      },
+      {
+        "tabId": "769013c6-b5b8-4be9-b188-4444a6094567",
+        "diagnostics": [
+          {
+            "paneId": 1,
+            "terminalGpuAcceleration": "auto",
+            "gpuRenderingEnabled": true,
+            "webglAttachmentDeferred": true,
+            "webglDisabledAfterContextLoss": false,
+            "hasComplexScriptOutput": false,
+            "terminalWebglAutoDecision": {
+              "allowWebgl": true,
+              "reason": "non-linux",
+              "renderer": null,
+              "vendor": null
+            },
+            "hasWebgl": true
+          }
+        ]
+      },
+      {
+        "tabId": "15055907-3232-4ca1-8814-e5484ba78a5b",
+        "diagnostics": [
+          {
+            "paneId": 1,
+            "terminalGpuAcceleration": "auto",
+            "gpuRenderingEnabled": true,
+            "webglAttachmentDeferred": false,
+            "webglDisabledAfterContextLoss": false,
+            "hasComplexScriptOutput": false,
+            "terminalWebglAutoDecision": {
+              "allowWebgl": true,
+              "reason": "non-linux",
+              "renderer": null,
+              "vendor": null
+            },
+            "hasWebgl": true
+          }
+        ]
+      }
+    ],
+    "webglContextCounts": {
+      "attachedWebglCount": 3,
+      "deferredWebglCount": 2,
+      "managerCount": 3,
+      "paneCount": 3
+    },
+    "webglIdentity": {
+      "available": true,
+      "vendor": "Google Inc. (Intel)",
+      "renderer": "ANGLE (Intel, Intel(R) Arc(TM) Graphics (0x00007D55) Direct3D11 vs_5_0 ps_5_0, D3D11)"
+    },
+    "rendererProbe": {
+      "intervalMs": 50,
+      "last": 35644.5,
+      "maxDriftMs": 413.89999997615814,
+      "samples": 309,
+      "startedAt": 11829.5,
+      "lastTickAt": 35644.5
+    },
+    "ptySessions": {
+      "value": [
+        {
+          "id": "cd78ddb3-9689-4d21-b87b-8e38f92d2e7b::C:/Users/jinwo/AppData/Local/Temp/orca-termperf-IyoYoT/repo@@5810ae88",
+          "cwd": "",
+          "title": "shell"
+        },
+        {
+          "id": "cd78ddb3-9689-4d21-b87b-8e38f92d2e7b::C:/Users/jinwo/AppData/Local/Temp/orca-termperf-IyoYoT/wt-one@@c450cf26",
+          "cwd": "",
+          "title": "shell"
+        },
+        {
+          "id": "cd78ddb3-9689-4d21-b87b-8e38f92d2e7b::C:/Users/jinwo/AppData/Local/Temp/orca-termperf-IyoYoT/wt-two@@ae6fdb06",
+          "cwd": "",
+          "title": "shell"
+        }
+      ]
+    },
+    "rendererDeliveryDebug": {
+      "value": {
+        "pendingPtyCount": 0,
+        "pendingChars": 0,
+        "maxPendingCharsByPty": 0,
+        "rendererInFlightPtyCount": 0,
+        "rendererInFlightChars": 0,
+        "maxRendererInFlightCharsByPty": 0,
+        "activeRendererPtyCount": 1,
+        "flushScheduled": false,
+        "peakPendingChars": 82,
+        "peakMaxPendingCharsByPty": 82,
+        "peakRendererInFlightChars": 82,
+        "peakMaxRendererInFlightCharsByPty": 82,
+        "ackGatedFlushSkipCount": 0
+      }
+    }
+  },
+  "cleanupErrors": [],
+  "elapsedMs": 50234,
+  "appLogsTail": [
+    {
+      "source": "stderr",
+      "line": "[startup] renderer-fetch-folder-workspaces-done t=13833 rendererT=11239 durationMs=53",
+      "at": 1782979177594
+    },
+    {
+      "source": "stderr",
+      "line": "[startup] renderer-fetch-worktrees-done t=13833 rendererT=11240 durationMs=1",
+      "at": 1782979177594
+    },
+    {
+      "source": "stderr",
+      "line": "[startup] renderer-fetch-folder-workspaces-done t=13835 rendererT=11241 durationMs=55",
+      "at": 1782979177596
+    },
+    {
+      "source": "stderr",
+      "line": "[startup] renderer-fetch-worktrees-done t=13835 rendererT=11242 durationMs=0",
+      "at": 1782979177596
+    },
+    {
+      "source": "stderr",
+      "line": "[startup] renderer-fetch-worktree-lineage-done t=13838 rendererT=11246 durationMs=6",
+      "at": 1782979177599
+    },
+    {
+      "source": "stderr",
+      "line": "[startup] renderer-fetch-worktree-lineage-done t=13841 rendererT=11249 durationMs=8",
+      "at": 1782979177602
+    },
+    {
+      "source": "stderr",
+      "line": "[startup] renderer-ui-get-done t=13842 rendererT=11250 durationMs=4",
+      "at": 1782979177603
+    },
+    {
+      "source": "stderr",
+      "line": "[startup] renderer-hydrate-persisted-ui-done t=13842 rendererT=11250 durationMs=0",
+      "at": 1782979177603
+    },
+    {
+      "source": "stderr",
+      "line": "[startup] renderer-ui-get-done t=13844 rendererT=11251 durationMs=2",
+      "at": 1782979177605
+    },
+    {
+      "source": "stderr",
+      "line": "[startup] renderer-hydrate-persisted-ui-done t=13844 rendererT=11251 durationMs=0",
+      "at": 1782979177605
+    },
+    {
+      "source": "stderr",
+      "line": "[startup] renderer-session-get-done t=13844 rendererT=11252 durationMs=2",
+      "at": 1782979177605
+    },
+    {
+      "source": "stderr",
+      "line": "[startup] renderer-session-get-done t=13846 rendererT=11254 durationMs=3",
+      "at": 1782979177607
+    },
+    {
+      "source": "stderr",
+      "line": "[startup] renderer-fetch-keybindings-done t=14263 rendererT=11346 durationMs=94",
+      "at": 1782979178024
+    },
+    {
+      "source": "stderr",
+      "line": "[startup] renderer-fetch-keybindings-done t=14263 rendererT=11426 durationMs=172",
+      "at": 1782979178024
+    },
+    {
+      "source": "stderr",
+      "line": "[startup] renderer-hydrate-session-stores-done t=14263 rendererT=11430 durationMs=4",
+      "at": 1782979178024
+    },
+    {
+      "source": "stderr",
+      "line": "[startup] renderer-visit-timestamp-prune-done t=14263 rendererT=11431 durationMs=1",
+      "at": 1782979178024
+    },
+    {
+      "source": "stderr",
+      "line": "[startup] renderer-fetch-browser-session-profiles-done t=14277 rendererT=11685 durationMs=255",
+      "at": 1782979178038
+    },
+    {
+      "source": "stderr",
+      "line": "[startup] renderer-onboarding-get-done t=14282 rendererT=11691 durationMs=5",
+      "at": 1782979178043
+    },
+    {
+      "source": "stderr",
+      "line": "[startup] renderer-ssh-reconnect-skipped t=14283 rendererT=11691 connectionIds=0",
+      "at": 1782979178044
+    },
+    {
+      "source": "stderr",
+      "line": "[startup] renderer-first-window-services-await-done t=14324 rendererT=11732 durationMs=41",
+      "at": 1782979178085
+    },
+    {
+      "source": "stderr",
+      "line": "[startup] renderer-reconnect-terminals-done t=14366 rendererT=11774 durationMs=42",
+      "at": 1782979178127
+    },
+    {
+      "source": "stderr",
+      "line": "[startup] renderer-startup-hydration-done t=14367 rendererT=11775 durationMs=1992",
+      "at": 1782979178128
+    },
+    {
+      "source": "stderr",
+      "line": "[startup] event-loop-stall t=14580 maxGapMs=453",
+      "at": 1782979178342
+    },
+    {
+      "source": "stderr",
+      "line": "[startup] event-loop-stall t=16597 maxGapMs=336",
+      "at": 1782979180358
+    },
+    {
+      "source": "stderr",
+      "line": "[startup] event-loop-stall t=18612 maxGapMs=15",
+      "at": 1782979182373
+    },
+    {
+      "source": "stderr",
+      "line": "[47624:0702/035942.829:INFO:CONSOLE:479] \"[pty-connect] pane=1 tab=c46e04e4-af5f-4674-9a38-72253480baef restored=null existing=null detached=null reattach=null hasTransport=false pendingKey=c46e04e4-af5f-4674-9a38-72253480baef:8089e7c5-e739-4785-b3b4-6844f99c0a86\", source: http://localhost:5173/src/components/terminal-pane/pty-connection.ts (479)",
+      "at": 1782979182829
+    },
+    {
+      "source": "stderr",
+      "line": "[47624:0702/035942.829:INFO:CONSOLE:479] \"[pty-connect] pane=1 -> FRESH SPAWN\", source: http://localhost:5173/src/components/terminal-pane/pty-connection.ts (479)",
+      "at": 1782979182829
+    },
+    {
+      "source": "stderr",
+      "line": "[47624:0702/035942.876:INFO:CONSOLE:479] \"[pty-connect] pane=1 tab=e62346f1-a808-4397-8be7-422efa0aaebb restored=null existing=null detached=null reattach=null hasTransport=false pendingKey=e62346f1-a808-4397-8be7-422efa0aaebb:e9b9d9ce-241c-458b-be93-01a657de7fd7\", source: http://localhost:5173/src/components/terminal-pane/pty-connection.ts (479)",
+      "at": 1782979182877
+    },
+    {
+      "source": "stderr",
+      "line": "[47624:0702/035942.876:INFO:CONSOLE:479] \"[pty-connect] pane=1 -> FRESH SPAWN\", source: http://localhost:5173/src/components/terminal-pane/pty-connection.ts (479)",
+      "at": 1782979182877
+    },
+    {
+      "source": "stdout",
+      "line": "[pty-spawn-timing] id=cd78ddb3-9689-4d21-b87b-8e38f92d2e7b::C:/Users/jinwo/AppData/Local/Temp/orca-termperf-IyoYoT/repo@@5810ae88 total=1300ms preflight=0ms auth=1ms host_env=44ms options=0ms provider_spawn=1255ms daemon=true reattach=false",
+      "at": 1782979184130
+    },
+    {
+      "source": "stdout",
+      "line": "[pty-spawn-timing] id=cd78ddb3-9689-4d21-b87b-8e38f92d2e7b::C:/Users/jinwo/AppData/Local/Temp/orca-termperf-IyoYoT/repo@@2c485ebc total=1308ms preflight=0ms auth=0ms host_env=49ms options=0ms provider_spawn=1259ms daemon=true reattach=false",
+      "at": 1782979184185
+    },
+    {
+      "source": "stderr",
+      "line": "[startup] event-loop-stall t=20628 maxGapMs=48",
+      "at": 1782979184389
+    },
+    {
+      "source": "stderr",
+      "line": "[47624:0702/035945.089:INFO:CONSOLE:479] \"[pty-connect] pane=1 tab=894d9793-e2ae-40bf-864e-eef357f271c1 restored=null existing=null detached=null reattach=null hasTransport=false pendingKey=894d9793-e2ae-40bf-864e-eef357f271c1:1b683a77-2230-4238-96eb-5118ea595604\", source: http://localhost:5173/src/components/terminal-pane/pty-connection.ts (479)",
+      "at": 1782979185089
+    },
+    {
+      "source": "stderr",
+      "line": "[47624:0702/035945.089:INFO:CONSOLE:479] \"[pty-connect] pane=1 -> FRESH SPAWN\", source: http://localhost:5173/src/components/terminal-pane/pty-connection.ts (479)",
+      "at": 1782979185089
+    },
+    {
+      "source": "stdout",
+      "line": "[pty-spawn-timing] id=cd78ddb3-9689-4d21-b87b-8e38f92d2e7b::C:/Users/jinwo/AppData/Local/Temp/orca-termperf-IyoYoT/repo@@c3018b1f total=108ms preflight=0ms auth=0ms host_env=47ms options=0ms provider_spawn=61ms daemon=true reattach=false",
+      "at": 1782979185197
+    },
+    {
+      "source": "stderr",
+      "line": "[47624:0702/035946.036:INFO:CONSOLE:479] \"[pty-connect] pane=1 tab=8fd459b0-a0a8-416d-b698-521da990ace3 restored=null existing=null detached=null reattach=null hasTransport=false pendingKey=8fd459b0-a0a8-416d-b698-521da990ace3:74040bad-c0d6-42c6-af48-21150176be1c\", source: http://localhost:5173/src/components/terminal-pane/pty-connection.ts (479)",
+      "at": 1782979186035
+    },
+    {
+      "source": "stderr",
+      "line": "[47624:0702/035946.036:INFO:CONSOLE:479] \"[pty-connect] pane=1 -> FRESH SPAWN\", source: http://localhost:5173/src/components/terminal-pane/pty-connection.ts (479)",
+      "at": 1782979186035
+    },
+    {
+      "source": "stdout",
+      "line": "[pty-spawn-timing] id=cd78ddb3-9689-4d21-b87b-8e38f92d2e7b::C:/Users/jinwo/AppData/Local/Temp/orca-termperf-IyoYoT/repo@@59074e83 total=123ms preflight=0ms auth=0ms host_env=50ms options=0ms provider_spawn=73ms daemon=true reattach=false",
+      "at": 1782979186159
+    },
+    {
+      "source": "stderr",
+      "line": "[startup] event-loop-stall t=22635 maxGapMs=34",
+      "at": 1782979186396
+    },
+    {
+      "source": "stderr",
+      "line": "[47624:0702/035946.971:INFO:CONSOLE:479] \"[pty-connect] pane=1 tab=6559b19f-a2e8-4691-8057-2efd9ba67d0e restored=null existing=null detached=null reattach=null hasTransport=false pendingKey=6559b19f-a2e8-4691-8057-2efd9ba67d0e:8b41e717-29fe-49fb-a710-c96e41a1d112\", source: http://localhost:5173/src/components/terminal-pane/pty-connection.ts (479)",
+      "at": 1782979186971
+    },
+    {
+      "source": "stderr",
+      "line": "[47624:0702/035946.971:INFO:CONSOLE:479] \"[pty-connect] pane=1 -> FRESH SPAWN\", source: http://localhost:5173/src/components/terminal-pane/pty-connection.ts (479)",
+      "at": 1782979186971
+    },
+    {
+      "source": "stdout",
+      "line": "[pty-spawn-timing] id=cd78ddb3-9689-4d21-b87b-8e38f92d2e7b::C:/Users/jinwo/AppData/Local/Temp/orca-termperf-IyoYoT/repo@@562113d2 total=111ms preflight=0ms auth=0ms host_env=51ms options=0ms provider_spawn=60ms daemon=true reattach=false",
+      "at": 1782979187082
+    },
+    {
+      "source": "stderr",
+      "line": "[47624:0702/035947.872:INFO:CONSOLE:479] \"[pty-connect] pane=1 tab=04620d6d-4629-40b3-8150-c7eec447d262 restored=null existing=null detached=null reattach=null hasTransport=false pendingKey=04620d6d-4629-40b3-8150-c7eec447d262:5992fb07-187a-43c3-9434-d424f1312155\", source: http://localhost:5173/src/components/terminal-pane/pty-connection.ts (479)",
+      "at": 1782979187872
+    },
+    {
+      "source": "stderr",
+      "line": "[47624:0702/035947.873:INFO:CONSOLE:479] \"[pty-connect] pane=1 -> FRESH SPAWN\", source: http://localhost:5173/src/components/terminal-pane/pty-connection.ts (479)",
+      "at": 1782979187873
+    },
+    {
+      "source": "stdout",
+      "line": "[pty-spawn-timing] id=cd78ddb3-9689-4d21-b87b-8e38f92d2e7b::C:/Users/jinwo/AppData/Local/Temp/orca-termperf-IyoYoT/repo@@b5230dba total=105ms preflight=0ms auth=0ms host_env=48ms options=0ms provider_spawn=57ms daemon=true reattach=false",
+      "at": 1782979187978
+    },
+    {
+      "source": "stderr",
+      "line": "[startup] event-loop-stall t=24659 maxGapMs=46",
+      "at": 1782979188420
+    },
+    {
+      "source": "stderr",
+      "line": "[47624:0702/035948.434:INFO:CONSOLE:397] \"Tooltip is changing from controlled to uncontrolled. Components should not switch from controlled to uncontrolled (or vice versa). Decide between using a controlled or uncontrolled value for the lifetime of the component.\", source: http://localhost:5173/@fs/C:/Users/jinwo/orca/workspaces/orca/windows-performance-improvement/node_modules/.vite/deps/chunk-22L5D3A7.js?v=43681c89 (397)",
+      "at": 1782979188434
+    },
+    {
+      "source": "stderr",
+      "line": "[47624:0702/035948.761:INFO:CONSOLE:479] \"[pty-connect] pane=1 tab=bc4db6bc-b408-472a-9c15-77a428f98d99 restored=null existing=null detached=null reattach=null hasTransport=false pendingKey=bc4db6bc-b408-472a-9c15-77a428f98d99:11ff82bf-57d3-4e85-9293-77c0935f7d08\", source: http://localhost:5173/src/components/terminal-pane/pty-connection.ts (479)",
+      "at": 1782979188761
+    },
+    {
+      "source": "stderr",
+      "line": "[47624:0702/035948.762:INFO:CONSOLE:479] \"[pty-connect] pane=1 -> FRESH SPAWN\", source: http://localhost:5173/src/components/terminal-pane/pty-connection.ts (479)",
+      "at": 1782979188761
+    },
+    {
+      "source": "stdout",
+      "line": "[pty-spawn-timing] id=cd78ddb3-9689-4d21-b87b-8e38f92d2e7b::C:/Users/jinwo/AppData/Local/Temp/orca-termperf-IyoYoT/repo@@95bb2f74 total=101ms preflight=0ms auth=0ms host_env=47ms options=0ms provider_spawn=54ms daemon=true reattach=false",
+      "at": 1782979188862
+    },
+    {
+      "source": "stderr",
+      "line": "[47624:0702/035949.641:INFO:CONSOLE:479] \"[pty-connect] pane=1 tab=57b2a6d7-7fd2-41b2-9772-44e39bc9cee6 restored=null existing=null detached=null reattach=null hasTransport=false pendingKey=57b2a6d7-7fd2-41b2-9772-44e39bc9cee6:d186da0c-c1c4-45ca-90f1-e1f3b8fa4505\", source: http://localhost:5173/src/components/terminal-pane/pty-connection.ts (479)",
+      "at": 1782979189640
+    },
+    {
+      "source": "stderr",
+      "line": "[47624:0702/035949.641:INFO:CONSOLE:479] \"[pty-connect] pane=1 -> FRESH SPAWN\", source: http://localhost:5173/src/components/terminal-pane/pty-connection.ts (479)",
+      "at": 1782979189640
+    },
+    {
+      "source": "stdout",
+      "line": "[pty-spawn-timing] id=cd78ddb3-9689-4d21-b87b-8e38f92d2e7b::C:/Users/jinwo/AppData/Local/Temp/orca-termperf-IyoYoT/repo@@09fc3731 total=94ms preflight=0ms auth=0ms host_env=41ms options=0ms provider_spawn=53ms daemon=true reattach=false",
+      "at": 1782979189734
+    },
+    {
+      "source": "stderr",
+      "line": "[startup] event-loop-stall t=26688 maxGapMs=39",
+      "at": 1782979190449
+    },
+    {
+      "source": "stderr",
+      "line": "[47624:0702/035950.510:INFO:CONSOLE:479] \"[pty-connect] pane=1 tab=6883a556-63dd-4c0a-87fa-9682db6f4cf0 restored=null existing=null detached=null reattach=null hasTransport=false pendingKey=6883a556-63dd-4c0a-87fa-9682db6f4cf0:e0e844db-da79-459b-b791-52ea58bab4da\", source: http://localhost:5173/src/components/terminal-pane/pty-connection.ts (479)",
+      "at": 1782979190509
+    },
+    {
+      "source": "stderr",
+      "line": "[47624:0702/035950.510:INFO:CONSOLE:479] \"[pty-connect] pane=1 -> FRESH SPAWN\", source: http://localhost:5173/src/components/terminal-pane/pty-connection.ts (479)",
+      "at": 1782979190510
+    },
+    {
+      "source": "stdout",
+      "line": "[pty-spawn-timing] id=cd78ddb3-9689-4d21-b87b-8e38f92d2e7b::C:/Users/jinwo/AppData/Local/Temp/orca-termperf-IyoYoT/repo@@fceb8b39 total=91ms preflight=0ms auth=0ms host_env=39ms options=1ms provider_spawn=51ms daemon=true reattach=false",
+      "at": 1782979190601
+    },
+    {
+      "source": "stderr",
+      "line": "[47624:0702/035951.407:INFO:CONSOLE:479] \"[pty-connect] pane=1 tab=aa62c8e8-2ef4-4aa3-ac4d-b9063cfa527e restored=null existing=null detached=null reattach=null hasTransport=false pendingKey=aa62c8e8-2ef4-4aa3-ac4d-b9063cfa527e:c2c02ac2-e421-4c29-a8b6-4c97c11bf1dc\", source: http://localhost:5173/src/components/terminal-pane/pty-connection.ts (479)",
+      "at": 1782979191407
+    },
+    {
+      "source": "stderr",
+      "line": "[47624:0702/035951.407:INFO:CONSOLE:479] \"[pty-connect] pane=1 -> FRESH SPAWN\", source: http://localhost:5173/src/components/terminal-pane/pty-connection.ts (479)",
+      "at": 1782979191407
+    },
+    {
+      "source": "stdout",
+      "line": "[pty-spawn-timing] id=cd78ddb3-9689-4d21-b87b-8e38f92d2e7b::C:/Users/jinwo/AppData/Local/Temp/orca-termperf-IyoYoT/repo@@badd8d38 total=104ms preflight=0ms auth=0ms host_env=47ms options=0ms provider_spawn=56ms daemon=true reattach=false",
+      "at": 1782979191511
+    },
+    {
+      "source": "stderr",
+      "line": "[47624:0702/035951.824:INFO:CONSOLE:479] \"[pty-connect] pane=1 tab=66083463-228e-4fb0-90c5-231dc75e8da6 restored=null existing=null detached=null reattach=null hasTransport=false pendingKey=66083463-228e-4fb0-90c5-231dc75e8da6:e4fc0e83-57a8-44f0-9732-936e2914292b\", source: http://localhost:5173/src/components/terminal-pane/pty-connection.ts (479)",
+      "at": 1782979191824
+    },
+    {
+      "source": "stderr",
+      "line": "[47624:0702/035951.824:INFO:CONSOLE:479] \"[pty-connect] pane=1 -> FRESH SPAWN\", source: http://localhost:5173/src/components/terminal-pane/pty-connection.ts (479)",
+      "at": 1782979191824
+    },
+    {
+      "source": "stdout",
+      "line": "[pty-spawn-timing] id=cd78ddb3-9689-4d21-b87b-8e38f92d2e7b::C:/Users/jinwo/AppData/Local/Temp/orca-termperf-IyoYoT/repo@@ad09f3fe total=102ms preflight=0ms auth=0ms host_env=38ms options=0ms provider_spawn=64ms daemon=true reattach=false",
+      "at": 1782979191926
+    },
+    {
+      "source": "stderr",
+      "line": "[47624:0702/035952.310:INFO:CONSOLE:479] \"[pty-connect] pane=1 tab=b99bb441-7027-40a9-beb2-a558ece6f979 restored=null existing=null detached=null reattach=null hasTransport=false pendingKey=b99bb441-7027-40a9-beb2-a558ece6f979:f5f1c1e2-72ac-4152-958b-b0b80e1213cc\", source: http://localhost:5173/src/components/terminal-pane/pty-connection.ts (479)",
+      "at": 1782979192310
+    },
+    {
+      "source": "stderr",
+      "line": "[47624:0702/035952.311:INFO:CONSOLE:479] \"[pty-connect] pane=1 -> FRESH SPAWN\", source: http://localhost:5173/src/components/terminal-pane/pty-connection.ts (479)",
+      "at": 1782979192310
+    },
+    {
+      "source": "stdout",
+      "line": "[pty-spawn-timing] id=cd78ddb3-9689-4d21-b87b-8e38f92d2e7b::C:/Users/jinwo/AppData/Local/Temp/orca-termperf-IyoYoT/repo@@0bb8c245 total=112ms preflight=0ms auth=0ms host_env=48ms options=0ms provider_spawn=64ms daemon=true reattach=false",
+      "at": 1782979192422
+    },
+    {
+      "source": "stderr",
+      "line": "[startup] event-loop-stall t=28705 maxGapMs=52",
+      "at": 1782979192466
+    },
+    {
+      "source": "stderr",
+      "line": "[47624:0702/035952.723:INFO:CONSOLE:479] \"[pty-connect] pane=1 tab=490084ae-1bdb-4359-bb86-097e26902f98 restored=null existing=null detached=null reattach=null hasTransport=false pendingKey=490084ae-1bdb-4359-bb86-097e26902f98:c3647cbf-2f6e-4b4b-89c1-8bea8b949d66\", source: http://localhost:5173/src/components/terminal-pane/pty-connection.ts (479)",
+      "at": 1782979192723
+    },
+    {
+      "source": "stderr",
+      "line": "[47624:0702/035952.723:INFO:CONSOLE:479] \"[pty-connect] pane=1 -> FRESH SPAWN\", source: http://localhost:5173/src/components/terminal-pane/pty-connection.ts (479)",
+      "at": 1782979192723
+    },
+    {
+      "source": "stdout",
+      "line": "[pty-spawn-timing] id=cd78ddb3-9689-4d21-b87b-8e38f92d2e7b::C:/Users/jinwo/AppData/Local/Temp/orca-termperf-IyoYoT/repo@@3ef141e6 total=152ms preflight=0ms auth=0ms host_env=41ms options=0ms provider_spawn=111ms daemon=true reattach=false",
+      "at": 1782979192875
+    },
+    {
+      "source": "stderr",
+      "line": "[startup] event-loop-stall t=30719 maxGapMs=43",
+      "at": 1782979194480
+    },
+    {
+      "source": "stderr",
+      "line": "[startup] event-loop-stall t=32744 maxGapMs=12",
+      "at": 1782979196505
+    },
+    {
+      "source": "stderr",
+      "line": "[startup] event-loop-stall t=34767 maxGapMs=14",
+      "at": 1782979198528
+    },
+    {
+      "source": "stderr",
+      "line": "[47624:0702/035959.350:INFO:CONSOLE:479] \"[pty-connect] pane=1 tab=769013c6-b5b8-4be9-b188-4444a6094567 restored=null existing=null detached=null reattach=null hasTransport=false pendingKey=769013c6-b5b8-4be9-b188-4444a6094567:2a72038c-911c-4095-9fe8-0cd8c7f4978b\", source: http://localhost:5173/src/components/terminal-pane/pty-connection.ts (479)",
+      "at": 1782979199349
+    },
+    {
+      "source": "stderr",
+      "line": "[47624:0702/035959.350:INFO:CONSOLE:479] \"[pty-connect] pane=1 -> FRESH SPAWN\", source: http://localhost:5173/src/components/terminal-pane/pty-connection.ts (479)",
+      "at": 1782979199349
+    },
+    {
+      "source": "stdout",
+      "line": "[pty-spawn-timing] id=cd78ddb3-9689-4d21-b87b-8e38f92d2e7b::C:/Users/jinwo/AppData/Local/Temp/orca-termperf-IyoYoT/wt-one@@c450cf26 total=113ms preflight=0ms auth=0ms host_env=47ms options=0ms provider_spawn=66ms daemon=true reattach=false",
+      "at": 1782979199463
+    },
+    {
+      "source": "stderr",
+      "line": "[47624:0702/035959.852:INFO:CONSOLE:479] \"[pty-connect] pane=1 tab=15055907-3232-4ca1-8814-e5484ba78a5b restored=null existing=null detached=null reattach=null hasTransport=false pendingKey=15055907-3232-4ca1-8814-e5484ba78a5b:78b7478c-39a9-4111-aed8-1e2ddf568c24\", source: http://localhost:5173/src/components/terminal-pane/pty-connection.ts (479)",
+      "at": 1782979199852
+    },
+    {
+      "source": "stderr",
+      "line": "[47624:0702/035959.853:INFO:CONSOLE:479] \"[pty-connect] pane=1 -> FRESH SPAWN\", source: http://localhost:5173/src/components/terminal-pane/pty-connection.ts (479)",
+      "at": 1782979199853
+    },
+    {
+      "source": "stdout",
+      "line": "[pty-spawn-timing] id=cd78ddb3-9689-4d21-b87b-8e38f92d2e7b::C:/Users/jinwo/AppData/Local/Temp/orca-termperf-IyoYoT/wt-two@@ae6fdb06 total=104ms preflight=0ms auth=0ms host_env=43ms options=0ms provider_spawn=61ms daemon=true reattach=false",
+      "at": 1782979199957
+    },
+    {
+      "source": "stderr",
+      "line": "[startup] event-loop-stall t=36789 maxGapMs=49",
+      "at": 1782979200550
+    }
+  ],
+  "ptySpawnTimings": [
+    "[pty-spawn-timing] id=cd78ddb3-9689-4d21-b87b-8e38f92d2e7b::C:/Users/jinwo/AppData/Local/Temp/orca-termperf-IyoYoT/repo@@5810ae88 total=1300ms preflight=0ms auth=1ms host_env=44ms options=0ms provider_spawn=1255ms daemon=true reattach=false",
+    "[pty-spawn-timing] id=cd78ddb3-9689-4d21-b87b-8e38f92d2e7b::C:/Users/jinwo/AppData/Local/Temp/orca-termperf-IyoYoT/repo@@2c485ebc total=1308ms preflight=0ms auth=0ms host_env=49ms options=0ms provider_spawn=1259ms daemon=true reattach=false",
+    "[pty-spawn-timing] id=cd78ddb3-9689-4d21-b87b-8e38f92d2e7b::C:/Users/jinwo/AppData/Local/Temp/orca-termperf-IyoYoT/repo@@c3018b1f total=108ms preflight=0ms auth=0ms host_env=47ms options=0ms provider_spawn=61ms daemon=true reattach=false",
+    "[pty-spawn-timing] id=cd78ddb3-9689-4d21-b87b-8e38f92d2e7b::C:/Users/jinwo/AppData/Local/Temp/orca-termperf-IyoYoT/repo@@59074e83 total=123ms preflight=0ms auth=0ms host_env=50ms options=0ms provider_spawn=73ms daemon=true reattach=false",
+    "[pty-spawn-timing] id=cd78ddb3-9689-4d21-b87b-8e38f92d2e7b::C:/Users/jinwo/AppData/Local/Temp/orca-termperf-IyoYoT/repo@@562113d2 total=111ms preflight=0ms auth=0ms host_env=51ms options=0ms provider_spawn=60ms daemon=true reattach=false",
+    "[pty-spawn-timing] id=cd78ddb3-9689-4d21-b87b-8e38f92d2e7b::C:/Users/jinwo/AppData/Local/Temp/orca-termperf-IyoYoT/repo@@b5230dba total=105ms preflight=0ms auth=0ms host_env=48ms options=0ms provider_spawn=57ms daemon=true reattach=false",
+    "[pty-spawn-timing] id=cd78ddb3-9689-4d21-b87b-8e38f92d2e7b::C:/Users/jinwo/AppData/Local/Temp/orca-termperf-IyoYoT/repo@@95bb2f74 total=101ms preflight=0ms auth=0ms host_env=47ms options=0ms provider_spawn=54ms daemon=true reattach=false",
+    "[pty-spawn-timing] id=cd78ddb3-9689-4d21-b87b-8e38f92d2e7b::C:/Users/jinwo/AppData/Local/Temp/orca-termperf-IyoYoT/repo@@09fc3731 total=94ms preflight=0ms auth=0ms host_env=41ms options=0ms provider_spawn=53ms daemon=true reattach=false",
+    "[pty-spawn-timing] id=cd78ddb3-9689-4d21-b87b-8e38f92d2e7b::C:/Users/jinwo/AppData/Local/Temp/orca-termperf-IyoYoT/repo@@fceb8b39 total=91ms preflight=0ms auth=0ms host_env=39ms options=1ms provider_spawn=51ms daemon=true reattach=false",
+    "[pty-spawn-timing] id=cd78ddb3-9689-4d21-b87b-8e38f92d2e7b::C:/Users/jinwo/AppData/Local/Temp/orca-termperf-IyoYoT/repo@@badd8d38 total=104ms preflight=0ms auth=0ms host_env=47ms options=0ms provider_spawn=56ms daemon=true reattach=false",
+    "[pty-spawn-timing] id=cd78ddb3-9689-4d21-b87b-8e38f92d2e7b::C:/Users/jinwo/AppData/Local/Temp/orca-termperf-IyoYoT/repo@@ad09f3fe total=102ms preflight=0ms auth=0ms host_env=38ms options=0ms provider_spawn=64ms daemon=true reattach=false",
+    "[pty-spawn-timing] id=cd78ddb3-9689-4d21-b87b-8e38f92d2e7b::C:/Users/jinwo/AppData/Local/Temp/orca-termperf-IyoYoT/repo@@0bb8c245 total=112ms preflight=0ms auth=0ms host_env=48ms options=0ms provider_spawn=64ms daemon=true reattach=false",
+    "[pty-spawn-timing] id=cd78ddb3-9689-4d21-b87b-8e38f92d2e7b::C:/Users/jinwo/AppData/Local/Temp/orca-termperf-IyoYoT/repo@@3ef141e6 total=152ms preflight=0ms auth=0ms host_env=41ms options=0ms provider_spawn=111ms daemon=true reattach=false",
+    "[pty-spawn-timing] id=cd78ddb3-9689-4d21-b87b-8e38f92d2e7b::C:/Users/jinwo/AppData/Local/Temp/orca-termperf-IyoYoT/wt-one@@c450cf26 total=113ms preflight=0ms auth=0ms host_env=47ms options=0ms provider_spawn=66ms daemon=true reattach=false",
+    "[pty-spawn-timing] id=cd78ddb3-9689-4d21-b87b-8e38f92d2e7b::C:/Users/jinwo/AppData/Local/Temp/orca-termperf-IyoYoT/wt-two@@ae6fdb06 total=104ms preflight=0ms auth=0ms host_env=43ms options=0ms provider_spawn=61ms daemon=true reattach=false"
+  ]
+}

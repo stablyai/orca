@@ -1,7 +1,47 @@
+import { isUnresolvedSshHostAlias } from './git-remote-host-alias'
+
 export type GitRemoteIdentity = {
   canonicalKey: string
   remoteName: string
   remoteUrl: string
+}
+
+export type GitRemoteKeyParts = {
+  host: string
+  tail: string
+}
+
+/** Split a `canonicalKey` into `host` + path tail so the host can be alias-normalized. */
+export function splitGitRemoteKey(
+  canonicalKey: string | null | undefined,
+  normalizeHost: (host: string) => string
+): GitRemoteKeyParts | null {
+  const key = canonicalKey?.trim().replace(/\/+$/, '').toLowerCase() ?? ''
+  const separator = key.indexOf('/')
+  if (separator <= 0 || separator === key.length - 1) {
+    return null
+  }
+  return {
+    host: normalizeHost(key.slice(0, separator).replace(/:\d+$/, '')),
+    tail: key.slice(separator + 1)
+  }
+}
+
+/**
+ * Compare a probed remote against a pasted URL. A host-only mismatch is `'unknown'` when the
+ * probed host is an SSH alias, since `git remote -v` reports it unexpanded.
+ */
+export function matchGitRemoteKeyParts(
+  identity: GitRemoteKeyParts,
+  target: GitRemoteKeyParts
+): boolean | 'unknown' {
+  if (identity.tail !== target.tail) {
+    return false
+  }
+  if (identity.host === target.host) {
+    return true
+  }
+  return isUnresolvedSshHostAlias(identity.host) ? 'unknown' : false
 }
 
 type GitRemoteEntry = {

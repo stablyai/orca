@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const mocks = vi.hoisted(() => ({
   activateAndRevealFolderWorkspace: vi.fn(),
@@ -16,6 +16,10 @@ describe('sidebar worktree activation', () => {
   beforeEach(() => {
     mocks.activateAndRevealWorktree.mockClear()
     mocks.activateAndRevealFolderWorkspace.mockClear()
+  })
+
+  afterEach(() => {
+    vi.unstubAllGlobals()
   })
 
   it('activates a clicked worktree without sidebar reveal', async () => {
@@ -36,6 +40,29 @@ describe('sidebar worktree activation', () => {
     expect(mocks.activateAndRevealWorktree).toHaveBeenCalledWith('wt-slept', {
       revealInSidebar: false
     })
+  })
+
+  it('switches immediately while an ephemeral runtime wake is pending', async () => {
+    let resolveResume: ((value: null) => void) | undefined
+    const resumeWorkspace = vi.fn(
+      () =>
+        new Promise<null>((resolve) => {
+          resolveResume = resolve
+        })
+    )
+    vi.stubGlobal('window', {
+      api: { ephemeralVm: { resumeWorkspace } }
+    })
+
+    const activation = activateWorktreeFromSidebar('wt-vm')
+
+    expect(mocks.activateAndRevealWorktree).toHaveBeenCalledWith('wt-vm', {
+      revealInSidebar: false
+    })
+    expect(resumeWorkspace).toHaveBeenCalledWith({ workspaceId: 'wt-vm' })
+
+    resolveResume?.(null)
+    await activation
   })
 
   it('routes folder workspace activation through the guarded folder path', async () => {

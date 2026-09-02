@@ -1,4 +1,4 @@
-import type { TerminalColorOverrides } from '../../../../shared/types'
+import type { TerminalColorOverrides } from '../../../../shared/terminal-color-overrides'
 import { translate } from '@/i18n/i18n'
 
 export const COLOR_OVERRIDE_GROUPS: {
@@ -103,9 +103,11 @@ export const COLOR_OVERRIDE_GROUPS: {
           return translate('auto.components.settings.TerminalWindowSection.862e463f7f', 'Bold Text')
         },
         get description() {
+          // Why: xterm.js ITheme has no bold color slot (xtermjs/xterm.js#6032); the value is
+          // preserved but the terminal renderer does not apply it yet. Keep the copy honest.
           return translate(
-            'auto.components.settings.TerminalWindowSection.fb8c6f1967',
-            'Color for bold text. Falls back to the normal color if not set.'
+            'auto.components.settings.TerminalWindowSection.605a35d600',
+            'Not applied by the terminal renderer yet — xterm.js has no bold color slot. A saved value is preserved.'
           )
         }
       }

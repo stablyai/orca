@@ -2,7 +2,7 @@ import type {
   NestedRepoScanResult,
   ProjectGroupImportMode,
   ProjectGroupImportResult
-} from './types'
+} from './project-group-types'
 
 export const NESTED_REPO_TELEMETRY_MAX_REPO_COUNT = 500
 
@@ -20,7 +20,12 @@ export const NESTED_REPO_SCAN_RESULTS = [
 ] as const
 export type NestedRepoScanTelemetryResult = (typeof NESTED_REPO_SCAN_RESULTS)[number]
 
-export const NESTED_REPO_IMPORT_ACTIONS = ['import_group', 'import_separate', 'back'] as const
+export const NESTED_REPO_IMPORT_ACTIONS = [
+  'import_group',
+  'import_separate',
+  'open_as_folder',
+  'back'
+] as const
 export type NestedRepoImportTelemetryAction = (typeof NESTED_REPO_IMPORT_ACTIONS)[number]
 
 export const NESTED_REPO_IMPORT_OUTCOMES = ['success', 'partial_failure', 'failed'] as const

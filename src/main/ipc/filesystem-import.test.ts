@@ -1,5 +1,3 @@
-/* eslint-disable max-lines -- Why: import tests cover local copy, SSH routing,
-symlink safety, and runtime-upload staging against one shared IPC fixture. */
 import path from 'node:path'
 import { constants } from 'node:fs'
 import { Readable, Writable } from 'node:stream'
@@ -647,7 +645,7 @@ describe('fs:importExternalPaths', () => {
     )
     const mib = 1024 * 1024
     const regularSize = 25 * mib
-    const overflowSize = 1 * mib
+    const overflowSize = Number(mib)
     const readFileMock = vi.fn().mockResolvedValue(Buffer.from('chunk'))
 
     lstatMock.mockImplementation(async (p: string) => {
@@ -685,7 +683,7 @@ describe('fs:importExternalPaths', () => {
     )
     openMock.mockImplementation(async (p: string) => {
       const fileIndex = filePaths.indexOf(p)
-      if (fileIndex >= 0 && fileIndex < filePaths.length - 1) {
+      if (fileIndex !== -1 && fileIndex < filePaths.length - 1) {
         return {
           stat: vi.fn().mockResolvedValue({
             size: regularSize,

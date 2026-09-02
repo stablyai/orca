@@ -1,0 +1,174 @@
+name: Install Node dependencies
+description: Installs the Node toolchain and repository dependencies for CI jobs, with optional Electron archive caching.
+
+inputs:
+  native-runtime:
+    description: Native runtime to prepare after the script-free install (none, node, or electron).
+    required: false
+    default: none
+  node-version:
+    description: Node.js version override; defaults to the version declared in package.json.
+    required: false
+    default: ''
+  persist-native-cache:
+    description: Save restored native modules at job end. Set false when a later step overwrites the same path with a different ABI.
+    required: false
+    default: 'true'
+  cache-electron-package:
+    description: Cache the Electron package archive and export ELECTRON_CACHE for following steps.
+    required: false
+    default: 'false'
+
+outputs:
+  node-version:
+    description: Resolved Node.js version used for the install.
+    value: ${{ steps.requested-node.outputs.node-version || steps.default-node.outputs.node-version }}
+  native-cache-scope:
+    description: Operating-system image scope used by the native module cache.
+    value: ${{ steps.native-cache-scope.outputs.scope }}
+  native-cache-hit:
+    description: Whether the compiled native module cache was restored.
+    value: ${{ steps.native-cache-restore.outputs.cache-hit || steps.native-cache-restore-only.outputs.cache-hit }}
+
+runs:
+  using: composite
+  steps:
+    # setup-node needs pnpm on PATH to locate and restore its store.
+    - name: Setup pnpm
+      uses: pnpm/setup@v2
+      with:
+        install: false
+
+    - name: Setup Node.js
+      id: default-node
+      if: inputs.node-version == ''
+      uses: actions/setup-node@v6
+      with:
+        node-version-file: package.json
+        cache: pnpm
+
+    - name: Setup requested Node.js
+      id: requested-node
+      if: inputs.node-version != ''
+      uses: actions/setup-node@v6
+      with:
+        node-version: ${{ inputs.node-version }}
+        cache: pnpm
+
+    - name: Validate native runtime
+      shell: bash
+      env:
+        NATIVE_RUNTIME: ${{ inputs.native-runtime }}
+      run: |
+        case "$NATIVE_RUNTIME" in
+          none|node|electron) ;;
+          *)
+            echo "::error::native-runtime must be none, node, or electron"
+            exit 2
+            ;;
+        esac
+
+    # pnpm's bundled gyp_main.py is not executable on fresh Linux runners.
+    - name: Use external node-gyp
+      if: runner.os == 'Linux' && inputs.native-runtime != 'none'
+      shell: bash
+      run: |
+        npm install -g node-gyp@11.5.0
+        echo "npm_config_node_gyp=$(npm root -g)/node-gyp/bin/node-gyp.js" >> "$GITHUB_ENV"
+
+    - name: Prepare dependency install
+      shell: bash
+      run: |
+        if [ -e node_modules ]; then
+          ls -ld node_modules
+          rm -rf node_modules
+        fi
+
+    # Why --frozen-lockfile: re-resolving pulls ~62 MB of registry packuments per job
+    # (measured) to recompute what the lockfile already pins, and the `git diff` guard
+    # below fails the run whenever that recomputation would have changed anything. The
+    # guard stays so a stale lockfile still fails by name rather than by resolver error.
+    - name: Install dependencies
+      shell: bash
+      run: |
+        pnpm install --frozen-lockfile --ignore-scripts
+        # Job containers can run composite steps from a source mirror without .git.
+        if [ "$(git -C "$GITHUB_WORKSPACE" rev-parse --is-inside-work-tree 2>/dev/null)" = true ]; then
+          git -C "$GITHUB_WORKSPACE" diff --exit-code -- package.json pnpm-lock.yaml pnpm-workspace.yaml
+        fi
+
+    - name: Resolve Electron package cache
+      id: electron-package-cache
+      if: inputs.native-runtime == 'electron' || inputs.cache-electron-package == 'true'
+      shell: bash
+      run: |
+        set -euo pipefail
+        case "$RUNNER_OS" in
+          Linux) cache_root="$HOME/.cache/electron" ;;
+          macOS) cache_root="$HOME/Library/Caches/electron" ;;
+          Windows) cache_root="${LOCALAPPDATA:-$HOME/AppData/Local}/electron/Cache" ;;
+          *)
+            echo "::error::Unsupported runner OS for Electron cache: $RUNNER_OS"
+            exit 2
+            ;;
+        esac
+        printf 'cache-root=%s\n' "$cache_root" >> "$GITHUB_OUTPUT"
+        printf 'ELECTRON_CACHE=%s\n' "$cache_root" >> "$GITHUB_ENV"
+        printf 'version=%s\n' "$(node -p "require('./node_modules/electron/package.json').version")" >> "$GITHUB_OUTPUT"
+
+    - name: Cache Electron package archive
+      if: inputs.native-runtime == 'electron' || inputs.cache-electron-package == 'true'
+      uses: actions/cache@v5
+      with:
+        path: ${{ steps.electron-package-cache.outputs.cache-root }}
+        key: electron-package-${{ runner.os }}-${{ runner.arch }}-${{ steps.electron-package-cache.outputs.version }}
+
+    # Why cached: `--ignore-scripts` leaves node-pty without build/Release, so
+    # ensure-native-runtime node-gyp-compiles it in every job that asks for a runtime.
+    # The artifacts are ABI-bound, so the key carries the target runtime, the resolved
+    # Node version, and the patch whose contents the build has to match.
+    # Windows extra globs are empty on Linux. No restore-keys: a partial-match key is
+    # an ABI-mismatched build, and ensure-native-runtime would recompile it anyway.
+    # Native addons built on a newer Linux image can require glibc symbols
+    # missing from an older runner/container. ImageOS distinguishes hosted
+    # Windows/macOS images; /etc/os-release also distinguishes Linux containers.
+    - name: Resolve native cache scope
+      id: native-cache-scope
+      if: inputs.native-runtime != 'none'
+      shell: bash
+      run: |
+        scope="${ImageOS:-$RUNNER_OS}"
+        if [ -r /etc/os-release ]; then
+          . /etc/os-release
+          scope="${ID:-linux}-${VERSION_ID:-unknown}"
+        fi
+        echo "scope=$scope" >> "$GITHUB_OUTPUT"
+
+    - name: Restore compiled native modules
+      id: native-cache-restore
+      if: inputs.native-runtime != 'none' && inputs.persist-native-cache != 'false'
+      uses: actions/cache@v5
+      with:
+        path: |
+          node_modules/.pnpm/node-pty@*/node_modules/node-pty/build
+          node_modules/.pnpm/windows-native-registry@*/node_modules/windows-native-registry/build
+          node_modules/.pnpm/@vscode+windows-process-tree@*/node_modules/@vscode/windows-process-tree/build
+        key: native-modules-${{ runner.os }}-${{ steps.native-cache-scope.outputs.scope }}-${{ runner.arch }}-${{ inputs.native-runtime }}-node${{ steps.requested-node.outputs.node-version || steps.default-node.outputs.node-version }}-${{ hashFiles('pnpm-lock.yaml', '.github/actions/install-node-dependencies/action.yml', 'config/scripts/ensure-native-runtime.mjs', 'config/scripts/rebuild-native-deps.mjs', 'config/patches/node-pty@1.1.0.patch', 'config/patches/@vscode__windows-process-tree@0.8.0.patch') }}
+
+    - name: Restore compiled native modules without saving
+      id: native-cache-restore-only
+      if: inputs.native-runtime != 'none' && inputs.persist-native-cache == 'false'
+      uses: actions/cache/restore@v5
+      with:
+        path: |
+          node_modules/.pnpm/node-pty@*/node_modules/node-pty/build
+          node_modules/.pnpm/windows-native-registry@*/node_modules/windows-native-registry/build
+          node_modules/.pnpm/@vscode+windows-process-tree@*/node_modules/@vscode/windows-process-tree/build
+        key: native-modules-${{ runner.os }}-${{ steps.native-cache-scope.outputs.scope }}-${{ runner.arch }}-${{ inputs.native-runtime }}-node${{ steps.requested-node.outputs.node-version || steps.default-node.outputs.node-version }}-${{ hashFiles('pnpm-lock.yaml', '.github/actions/install-node-dependencies/action.yml', 'config/scripts/ensure-native-runtime.mjs', 'config/scripts/rebuild-native-deps.mjs', 'config/patches/node-pty@1.1.0.patch', 'config/patches/@vscode__windows-process-tree@0.8.0.patch') }}
+
+    - name: Prepare native runtime
+      if: inputs.native-runtime != 'none'
+      shell: bash
+      env:
+        NATIVE_RUNTIME: ${{ inputs.native-runtime }}
+      run: node config/scripts/ensure-native-runtime.mjs --runtime="$NATIVE_RUNTIME"

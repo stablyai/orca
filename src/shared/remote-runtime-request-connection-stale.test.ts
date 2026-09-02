@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import WebSocket from 'ws'
 import type { PairingOffer } from './pairing'
 import { decrypt, encrypt } from './e2ee-crypto'
+import { getRemoteRuntimeRequestAdmissionEvidence } from './remote-runtime-prepared-request-admission'
 import type { RemoteRuntimeWebSocketCallbacks } from './remote-runtime-request-websocket'
 
 const opens: FakeOpenedSocket[] = []
@@ -87,6 +88,33 @@ describe('RemoteRuntimeRequestConnection stale socket callbacks', () => {
     expect(socket.ws.close).toHaveBeenCalledTimes(1)
   })
 
+  it('releases a pending request when the cached socket send throws', async () => {
+    const { RemoteRuntimeRequestConnection } =
+      await import('./remote-runtime-request-connection.js')
+    const connection = new RemoteRuntimeRequestConnection({
+      v: 2,
+      endpoint: 'ws://127.0.0.1:6768',
+      deviceToken: 'device-token',
+      publicKeyB64: Buffer.from(new Uint8Array(32).fill(9)).toString('base64')
+    })
+    const request = connection.request('status.get', undefined, 1000)
+    const socket = opens[0]!
+    authenticate(socket)
+    socket.ws.send = (() => {
+      throw new Error('send failed')
+    }) as WebSocket['send']
+
+    await expect(request).rejects.toThrow('send failed')
+    expect(
+      (connection as unknown as { pendingRequests: Map<string, unknown> }).pendingRequests.size
+    ).toBe(0)
+    expect(getRemoteRuntimeRequestAdmissionEvidence()).toEqual({
+      pendingRequestCount: 0,
+      retainedBytes: 0
+    })
+    connection.close()
+  })
+
   it('ignores stale socket errors and text frames after a replacement socket opens', async () => {
     vi.useFakeTimers()
     try {
@@ -104,6 +132,10 @@ describe('RemoteRuntimeRequestConnection stale socket callbacks', () => {
       const firstRejected = expect(first).rejects.toThrow('Timed out')
       await vi.advanceTimersByTimeAsync(11)
       await firstRejected
+      expect(getRemoteRuntimeRequestAdmissionEvidence()).toEqual({
+        pendingRequestCount: 0,
+        retainedBytes: 0
+      })
 
       const second = connection.request('status.get', undefined, 1000)
       authenticate(opens[1]!)
@@ -132,6 +164,10 @@ describe('RemoteRuntimeRequestConnection stale socket callbacks', () => {
       await expect(second).resolves.toMatchObject({
         ok: true,
         result: { state: 'ok' }
+      })
+      expect(getRemoteRuntimeRequestAdmissionEvidence()).toEqual({
+        pendingRequestCount: 0,
+        retainedBytes: 0
       })
     } finally {
       vi.useRealTimers()

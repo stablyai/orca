@@ -1,3 +1,5 @@
+import type { SshPendingPtyKill } from './ssh-pending-pty-kill'
+
 // ─── SSH Connection Types ───────────────────────────────────────────
 
 export const MIN_SSH_RELAY_GRACE_PERIOD_SECONDS = 60
@@ -24,6 +26,10 @@ export type SshTarget = {
   identityAgent?: string
   /** Whether OpenSSH IdentitiesOnly should limit public-key auth attempts. */
   identitiesOnly?: boolean
+  /** Whether the host's SSH config explicitly requests GSSAPIAuthentication
+   *  (Kerberos). ssh2 has no gssapi-with-mic support, so these targets try the
+   *  system OpenSSH transport first. */
+  gssapiAuthentication?: boolean
   /** ProxyCommand from SSH config, if any. */
   proxyCommand?: string
   /** Jump host (ProxyJump), if any. */
@@ -46,6 +52,102 @@ export type SshTarget = {
   /** Port forwards to auto-restore on connect/reconnect. Persisted so
    *  forwards survive app restarts. */
   portForwards?: SavedPortForward[]
+  /** Reuse a system OpenSSH connection across setup commands. Undefined means
+   *  enabled; false is an explicit per-target compatibility opt-out. */
+  systemSshConnectionReuse?: boolean
+  /** Durable registration incarnation. Advances on create / re-create / explicit
+   *  re-adopt only, so automations fenced on an old registration cannot run on a
+   *  later target that happens to reuse the id. Never advanced by connect state. */
+  generation?: number
+}
+
+/** Renderer-authored target fields; registration generations are allocated and owned by main. */
+export type SshTargetCreateInput = Omit<SshTarget, 'id' | 'generation'>
+export type SshTargetUpdateInput = Partial<SshTargetCreateInput>
+
+/** Public target identity safe to mirror to a paired client. */
+export type SshTargetSummary = Pick<SshTarget, 'id' | 'label' | 'generation'>
+
+/** Identity of a removed SSH target, recorded so that re-adding the same host
+ *  can re-point orphaned repos/worktrees from the old (deleted) target id to
+ *  the new one. Repos store only the target id, so without this record the old
+ *  workspaces are stranded on a dead id when the target is removed. */
+export type RemovedSshTargetTombstone = {
+  /** The id the removed target had — what orphaned repos/worktrees still point at. */
+  oldTargetId: string
+  /** ssh-config alias, if any — the most stable re-adoption key. */
+  configHost?: string
+  host: string
+  port: number
+  username: string
+  label: string
+  /** ms epoch when the target was removed, for pruning old tombstones. */
+  removedAt: number
+}
+
+/** Exact repo ownership changes made while re-adopting a removed SSH host. */
+export type SshRepoReadoption = {
+  oldTargetId: string
+  newTargetId: string
+  repoIds: string[]
+}
+
+export type SshTargetAddResult = {
+  target: SshTarget
+  repoReadoptions: SshRepoReadoption[]
+}
+
+export type SshConfigImportResult = {
+  targets: SshTarget[]
+  repoReadoptions: SshRepoReadoption[]
+}
+
+/** Concrete Host entry from ~/.ssh/config, for pickers that prefill the add-host form. */
+export type SshConfigHostSummary = {
+  alias: string
+  hostname: string
+  port: number
+  username: string
+  identityFile?: string
+  proxyCommand?: string
+  jumpHost?: string
+  /** True when an Orca SSH target already uses this config alias. */
+  alreadyInOrca: boolean
+  /**
+   * True when the user deleted this alias from Orca (tombstone). Still listed so they
+   * can re-pick it; passive import and "Add all" keep it out until re-adopt / save.
+   */
+  previouslyRemoved?: boolean
+}
+
+/** Max hosts one picker query returns; shared so the renderer's copy cannot drift. */
+export const SSH_CONFIG_HOST_RESULT_LIMIT = 100
+
+export type SshConfigHostListResult = {
+  hosts: SshConfigHostSummary[]
+  totalHostCount: number
+  newHostCount: number
+  matchCount: number
+  hasMore: boolean
+}
+
+/** `refresh` re-reads ~/.ssh/config; filter keystrokes reuse the cached parse. */
+export type SshConfigHostListArgs = { query?: string; refresh?: boolean }
+
+/** Effective OpenSSH values used to prefill one manually managed target. */
+export type SshConfigHostResolution = {
+  alias: string
+  hostname: string
+  port: number
+  username: string
+  identityFiles: string[]
+  identityAgent?: string
+  identitiesOnly: boolean
+  forwardAgent: boolean
+  gssapiAuthentication?: boolean
+  proxyCommand?: string
+  proxyUseFdpass: boolean
+  jumpHost?: string
 }
 
 export type SavedPortForward = {
@@ -67,14 +169,35 @@ export type SshConnectionStatus =
 
 export type SshRemotePlatform = 'linux' | 'darwin' | 'win32'
 
+export type SshProviderEpoch = string & { readonly __sshProviderEpoch: unique symbol }
+
+export type DirectSshAuthority = {
+  targetId: string
+  providerEpoch: SshProviderEpoch
+  connectionGeneration: number
+}
+
 export type SshConnectionState = {
   targetId: string
   status: SshConnectionStatus
   error: string | null
   /** Number of reconnection attempts since last disconnect. */
   reconnectAttempt: number
+  /** Opaque provider-incarnation token issued by main. */
+  providerEpoch?: SshProviderEpoch | null
+  /** Non-secret owner token used to reject mutations captured for an obsolete SSH session. */
+  connectionGeneration?: number
+  /** Folder downloads require ssh2 SFTP and are unavailable on system SSH. */
+  supportsFolderDownload?: boolean
   /** Remote OS detected by the SSH relay once available. */
   remotePlatform?: SshRemotePlatform
+}
+
+/** Non-secret mutation provenance. Both fields are required when an SSH provider is selected. */
+export type SshMutationExpectation = {
+  expectedExecutionHostId?: 'local' | `ssh:${string}`
+  expectedSshTargetId?: string
+  expectedSshConnectionGeneration?: number
 }
 
 export type SshRemotePtyLeaseState = 'attached' | 'detached' | 'terminated' | 'expired'
@@ -90,6 +213,23 @@ export type SshRemotePtyLease = {
   updatedAt: number
   lastAttachedAt?: number
   lastDetachedAt?: number
+  /** A stop this client asked for and could not confirm, replayed on the next handshake to this
+   *  same target. See `shared/ssh-pending-pty-kill.ts`. Never on the wire — client-local. */
+  pendingKill?: SshPendingPtyKill
+}
+
+/** Main-owned relay lease needed to reclaim PTY delivery after a desktop restart. */
+export type SshPtyConsumerRecovery = {
+  targetId: string
+  clientInstanceId: string
+  serverBuildId: string
+  clientGeneration: number
+  ownerGeneration: number
+  ownerLease: string
+  outputFlowControl?: {
+    version: 1
+    windowSu: number
+  }
 }
 
 // ─── Port Forwarding Types ─────────────────────────────────────────
@@ -125,4 +265,14 @@ export type DetectedPort = {
 export type EnrichedDetectedPort = DetectedPort & {
   advertisedUrl?: string
   advertisedProtocol?: 'http' | 'https'
+}
+
+/** Outcome of `ssh:terminateSessions`. Uses the fixed verdict vocabulary from
+ *  docs/reference/ssh-execution-boundary.md: a host we could not reach yields `unverifiable`,
+ *  never `exited`, so an offline sweep can never be read as a successful remote kill (issue #12661). */
+export type SshTerminateSessionsResult = {
+  /** Remote PTYs the host acknowledged stopping. */
+  terminated: number
+  /** Leases whose remote shells were never reached because the relay was offline. */
+  unverifiable: number
 }

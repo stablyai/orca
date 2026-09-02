@@ -1,7 +1,5 @@
-/* eslint-disable max-lines -- Why: work-items coverage stays in one file so
-the fan-out mock plumbing (issue + PR gh calls, allSettled handling) does
-not drift across split files. */
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import type * as GithubApiRepositoryModule from './github-api-repository'
 
 const {
   execFileAsyncMock,
@@ -23,7 +21,7 @@ const {
   getOwnerRepoForRemoteMock: vi.fn(),
   resolveIssueSourceMock: vi.fn(),
   gitExecFileAsyncMock: vi.fn(),
-  rateLimitGuardMock: vi.fn(() => ({ blocked: false })),
+  rateLimitGuardMock: vi.fn((_bucket?: unknown) => ({ blocked: false })),
   noteRateLimitSpendMock: vi.fn(),
   acquireMock: vi.fn(),
   releaseMock: vi.fn()
@@ -57,7 +55,8 @@ vi.mock('./gh-utils', () => ({
   release: releaseMock,
   _resetOwnerRepoCache: vi.fn(),
   classifyGhError: (stderr: string) => ({ type: 'unknown', message: stderr }),
-  classifyListIssuesError: (stderr: string) => ({ type: 'unknown', message: stderr })
+  classifyListIssuesError: (stderr: string) => ({ type: 'unknown', message: stderr }),
+  classifyListPrsError: (stderr: string) => ({ type: 'unknown', message: stderr })
 }))
 
 vi.mock('../git/runner', () => ({
@@ -66,8 +65,46 @@ vi.mock('../git/runner', () => ({
 
 vi.mock('./rate-limit', () => ({
   rateLimitGuard: rateLimitGuardMock,
-  noteRateLimitSpend: noteRateLimitSpendMock
+  noteRateLimitSpend: noteRateLimitSpendMock,
+  getRateLimit: vi.fn(async () => ({ ok: false, error: 'not probed in tests' })),
+  // Mirror production: shared-scope calls delegate to the global guard/spend.
+  repositoryRateLimitGuard: vi.fn((_repo: unknown, bucket: string) => rateLimitGuardMock(bucket)),
+  noteRepositoryRateLimitSpend: vi.fn((_repo: unknown, bucket: string, cost?: number) =>
+    noteRateLimitSpendMock(bucket, cost)
+  ),
+  spendsSharedGitHubComQuota: () => true
 }))
+
+vi.mock('./github-api-repository', async (importOriginal) => {
+  const actual = await importOriginal<typeof GithubApiRepositoryModule>()
+  return {
+    ...actual,
+    // Why: these suites drive source resolution through the legacy gh-utils
+    // mocks; bridge the hosted seams onto the same mocks.
+    resolveIssueGitHubApiRepositorySource: (
+      repoPath: string,
+      preference: unknown,
+      connectionId?: string | null,
+      localGitOptions?: unknown
+    ) => resolveIssueSourceMock(repoPath, preference, connectionId, localGitOptions),
+    getIssueGitHubApiRepository: (repoPath: string, connectionId?: string | null) =>
+      getIssueOwnerRepoMock(repoPath, connectionId),
+    getOriginGitHubApiRepository: (
+      repoPath: string,
+      connectionId?: string | null,
+      localGitOptions?: unknown
+    ) => getOwnerRepoMock(repoPath, connectionId, localGitOptions),
+    getGitHubApiRepositoryForRemote: (
+      repoPath: string,
+      remoteName: string,
+      connectionId?: string | null,
+      localGitOptions?: unknown
+    ) =>
+      remoteName === 'origin'
+        ? getOwnerRepoMock(repoPath, connectionId, localGitOptions)
+        : getOwnerRepoForRemoteMock(repoPath, remoteName, connectionId, localGitOptions)
+  }
+})
 
 import {
   countWorkItems,
@@ -75,7 +112,15 @@ import {
   _resetMergeQueueCacheForTests,
   _resetOwnerRepoCache
 } from './client'
-import { GITHUB_WORK_ITEMS_QUERY_MAX_BYTES } from '../../shared/github-work-items-query-bounds'
+import { GITHUB_WORK_ITEMS_QUERY_MAX_BYTES } from '../../shared/github/work-items-query-bounds'
+
+import { _resetOriginGitHubApiRepositoryCache } from './github-api-repository'
+
+// The origin-repository cache is module-level state; reset it so slugs
+// resolved by one test cannot leak into the next.
+beforeEach(() => {
+  _resetOriginGitHubApiRepositoryCache()
+})
 
 describe('listWorkItems', () => {
   beforeEach(() => {
@@ -99,9 +144,63 @@ describe('listWorkItems', () => {
       source: await getIssueOwnerRepoMock(),
       fellBack: false
     }))
-    getOwnerRepoForRemoteMock.mockResolvedValue(null)
+    // Why: since #7331 `resolvePrWorkItemSource` fetches origin through
+    // `getOwnerRepoForRemote` (getOwnerRepo became upstream-first). Delegate
+    // the origin probe to `getOwnerRepoMock` so existing tests keep defining
+    // the PR-side origin through it; default upstream to null.
+    getOwnerRepoForRemoteMock.mockImplementation(
+      async (repoPath: string, remoteName: string, connectionId?: string | null, opts = {}) =>
+        remoteName === 'origin' ? getOwnerRepoMock(repoPath, connectionId, opts) : null
+    )
     _resetOwnerRepoCache()
     _resetMergeQueueCacheForTests()
+  })
+
+  it('routes GHES work-item listing through the Enterprise host', async () => {
+    const ghes = { owner: 'team', repo: 'orca', host: 'github.acme-corp.com' }
+    getIssueOwnerRepoMock.mockResolvedValue(ghes)
+    getOwnerRepoMock.mockResolvedValue(ghes)
+    ghExecFileAsyncMock.mockResolvedValue({ stdout: '[]' })
+
+    await listWorkItems('/repo-root', 10)
+
+    const calls = ghExecFileAsyncMock.mock.calls
+    expect(calls.length).toBeGreaterThan(0)
+    // Why: every list spawn must pin options.host so the runner targets the
+    // Enterprise server instead of gh's default host.
+    expect(calls.every(([, options]) => options?.host === 'github.acme-corp.com')).toBe(true)
+  })
+
+  it('does not run unscoped work-item queries when a local repository has no GitHub source', async () => {
+    getIssueOwnerRepoMock.mockResolvedValue(null)
+    getOwnerRepoMock.mockResolvedValue(null)
+
+    // Why: unresolved sources must return empty null-source envelopes (not throw, not query) so the renderer can
+    // distinguish "no GitHub source detected" from genuine zero via `sources` (#9660 follow-up).
+    await expect(listWorkItems('/private-repo', 36)).resolves.toMatchObject({
+      items: [],
+      sources: { issues: null, prs: null }
+    })
+    await expect(listWorkItems('/private-repo', 36, 'is:open')).resolves.toMatchObject({
+      items: [],
+      sources: { issues: null, prs: null }
+    })
+
+    expect(ghExecFileAsyncMock).not.toHaveBeenCalled()
+  })
+
+  it('queries only the resolved PR source when the issue source is unavailable', async () => {
+    getIssueOwnerRepoMock.mockResolvedValue(null)
+    getOwnerRepoMock.mockResolvedValue({ owner: 'acme', repo: 'widgets' })
+    ghExecFileAsyncMock.mockResolvedValue({ stdout: '[]' })
+
+    await expect(listWorkItems('/private-repo', 36)).resolves.toMatchObject({ items: [] })
+
+    expect(ghExecFileAsyncMock).toHaveBeenCalledTimes(1)
+    expect(ghExecFileAsyncMock).toHaveBeenCalledWith(
+      expect.arrayContaining(['pr', 'list', '--repo', 'acme/widgets']),
+      { cwd: '/private-repo' }
+    )
   })
 
   it('runs both issue and PR GitHub searches for a mixed query and merges the results by recency', async () => {
@@ -162,16 +261,12 @@ describe('listWorkItems', () => {
     expect(ghExecFileAsyncMock).toHaveBeenNthCalledWith(
       1,
       [
-        'issue',
-        'list',
-        '--limit',
-        '10',
-        '--json',
-        'number,title,state,url,labels,updatedAt,author,assignees',
-        '--repo',
-        'acme/widgets',
-        '--assignee',
-        '@me'
+        'api',
+        '--cache',
+        '120s',
+        `search/issues?q=${encodeURIComponent('repo:acme/widgets is:issue assignee:@me')}&sort=created&order=desc&per_page=10&page=1`,
+        '--jq',
+        '.items'
       ],
       { cwd: '/repo-root' }
     )
@@ -182,12 +277,14 @@ describe('listWorkItems', () => {
         'list',
         '--limit',
         '10',
+        '--state',
+        'all',
         '--json',
         'number,title,state,url,labels,updatedAt,author,isDraft,headRefName,baseRefName,headRefOid,headRepositoryOwner,reviewRequests',
         '--repo',
         'acme/widgets',
-        '--assignee',
-        '@me'
+        '--search',
+        'is:pr assignee:@me sort:created-desc'
       ],
       { cwd: '/repo-root' }
     )
@@ -196,24 +293,6 @@ describe('listWorkItems', () => {
     expect(prListFields).toContain('reviewRequests')
     expect(prListFields).not.toContain('mergeStateStatus')
     expect(items).toEqual([
-      {
-        id: 'issue:12',
-        type: 'issue',
-        number: 12,
-        title: 'Fix bug',
-        state: 'open',
-        url: 'https://github.com/acme/widgets/issues/12',
-        labels: [],
-        updatedAt: '2026-03-29T00:00:00Z',
-        author: 'octocat',
-        assignees: [
-          {
-            login: 'test-assignee',
-            name: 'Test Assignee',
-            avatarUrl: 'https://avatars.githubusercontent.com/u/1?v=4'
-          }
-        ]
-      },
       {
         id: 'pr:42',
         type: 'pr',
@@ -235,6 +314,24 @@ describe('listWorkItems', () => {
             avatarUrl: 'https://avatars.githubusercontent.com/u/1?v=4'
           }
         ]
+      },
+      {
+        id: 'issue:12',
+        type: 'issue',
+        number: 12,
+        title: 'Fix bug',
+        state: 'open',
+        url: 'https://github.com/acme/widgets/issues/12',
+        labels: [],
+        updatedAt: '2026-03-29T00:00:00Z',
+        author: 'octocat',
+        assignees: [
+          {
+            login: 'test-assignee',
+            name: 'Test Assignee',
+            avatarUrl: 'https://avatars.githubusercontent.com/u/1?v=4'
+          }
+        ]
       }
     ])
   })
@@ -246,7 +343,10 @@ describe('listWorkItems', () => {
       fellBack: false
     })
     getOwnerRepoMock.mockResolvedValue({ owner: 'acme', repo: 'widgets' })
-    getOwnerRepoForRemoteMock.mockResolvedValue(null)
+    getOwnerRepoForRemoteMock.mockImplementation(
+      async (repoPath: string, remoteName: string, connectionId?: string | null, opts = {}) =>
+        remoteName === 'origin' ? getOwnerRepoMock(repoPath, connectionId, opts) : null
+    )
     ghExecFileAsyncMock.mockResolvedValue({ stdout: '[]' })
 
     await listWorkItems(
@@ -266,6 +366,8 @@ describe('listWorkItems', () => {
       null,
       localGitOptions
     )
+    // Why: the suite bridge routes origin through getOwnerRepoMock and non-origin
+    // remotes through getOwnerRepoForRemoteMock.
     expect(getOwnerRepoMock).toHaveBeenCalledWith('/repo-root', null, localGitOptions)
     expect(getOwnerRepoForRemoteMock).toHaveBeenCalledWith(
       '/repo-root',
@@ -382,13 +484,14 @@ describe('listWorkItems', () => {
         'list',
         '--limit',
         '10',
+        '--state',
+        'all',
         '--json',
         'number,title,state,url,labels,updatedAt,author,isDraft,headRefName,baseRefName,headRefOid,headRepositoryOwner,reviewRequests',
         '--repo',
         'acme/widgets',
-        '--state',
-        'open',
-        '--draft'
+        '--search',
+        'is:pr is:open draft:true sort:created-desc'
       ],
       { cwd: '/repo-root' }
     )
@@ -441,12 +544,14 @@ describe('listWorkItems', () => {
         'list',
         '--limit',
         '10',
+        '--state',
+        'all',
         '--json',
         'number,title,state,url,labels,updatedAt,author,isDraft,headRefName,baseRefName,headRefOid,headRepositoryOwner,reviewRequests',
         '--repo',
         'acme/widgets',
-        '--state',
-        'merged'
+        '--search',
+        'is:pr is:merged sort:created-desc'
       ],
       { cwd: '/repo-root' }
     )
@@ -510,7 +615,12 @@ describe('listWorkItems', () => {
     const { items } = await listWorkItems('/repo-root', 10, 'is:pr is:closed')
 
     expect(ghExecFileAsyncMock).toHaveBeenCalledWith(
-      expect.arrayContaining(['--state', 'closed', '--search', '-is:merged']),
+      expect.arrayContaining([
+        '--state',
+        'all',
+        '--search',
+        'is:pr is:closed -is:merged sort:created-desc'
+      ]),
       { cwd: '/repo-root' }
     )
     expect(items).toMatchObject([{ id: 'pr:9', type: 'pr', state: 'closed' }])
@@ -540,36 +650,20 @@ describe('listWorkItems', () => {
     expect(apiPath).not.toContain('-is:merged')
   })
 
-  it('returns zero for oversized count queries before resolving repo sources', async () => {
-    const secret = 'main-github-work-items-secret'
-    const oversizedQuery = secret + 'x'.repeat(GITHUB_WORK_ITEMS_QUERY_MAX_BYTES)
-
-    await expect(countWorkItems('/repo-root', oversizedQuery)).resolves.toBe(0)
-
-    expect(resolveIssueSourceMock).not.toHaveBeenCalled()
-    expect(getIssueOwnerRepoMock).not.toHaveBeenCalled()
-    expect(getOwnerRepoMock).not.toHaveBeenCalled()
-    expect(ghExecFileAsyncMock).not.toHaveBeenCalled()
-    expect(acquireMock).not.toHaveBeenCalled()
-    expect(releaseMock).not.toHaveBeenCalled()
-  })
-
-  it('passes review-requested as a --search qualifier (gh CLI has no dedicated flag)', async () => {
+  it('returns zero without spawning gh when the search bucket is rate-limit blocked', async () => {
     getIssueOwnerRepoMock.mockResolvedValueOnce({ owner: 'acme', repo: 'widgets' })
     getOwnerRepoMock.mockResolvedValueOnce({ owner: 'acme', repo: 'widgets' })
-    ghExecFileAsyncMock.mockResolvedValueOnce({ stdout: '[]' })
+    rateLimitGuardMock.mockReturnValue({
+      blocked: true,
+      remaining: 0,
+      limit: 30,
+      resetAt: Math.floor(Date.now() / 1000) + 60
+    } as unknown as { blocked: boolean })
 
-    await listWorkItems('/repo-root', 10, 'review-requested:@me is:open')
+    await expect(countWorkItems('/repo-root', 'is:issue is:open')).resolves.toBe(0)
 
-    expect(ghExecFileAsyncMock).toHaveBeenCalledTimes(1)
-    expect(ghExecFileAsyncMock).toHaveBeenCalledWith(
-      expect.arrayContaining(['--search', 'review-requested:@me']),
-      { cwd: '/repo-root' }
-    )
-    expect(ghExecFileAsyncMock).not.toHaveBeenCalledWith(
-      expect.arrayContaining(['--review-requested']),
-      expect.anything()
-    )
+    expect(rateLimitGuardMock).toHaveBeenCalledWith('search')
+    expect(ghExecFileAsyncMock).not.toHaveBeenCalled()
   })
 
   it('returns open issues and PRs for the all-open preset query', async () => {
@@ -609,16 +703,12 @@ describe('listWorkItems', () => {
     const { items } = await listWorkItems('/repo-root', 10, 'is:open')
     expect(ghExecFileAsyncMock).toHaveBeenCalledWith(
       [
-        'issue',
-        'list',
-        '--limit',
-        '10',
-        '--json',
-        'number,title,state,url,labels,updatedAt,author,assignees',
-        '--repo',
-        'acme/widgets',
-        '--state',
-        'open'
+        'api',
+        '--cache',
+        '120s',
+        `search/issues?q=${encodeURIComponent('repo:acme/widgets is:issue is:open')}&sort=created&order=desc&per_page=10&page=1`,
+        '--jq',
+        '.items'
       ],
       { cwd: '/repo-root' }
     )
@@ -628,27 +718,18 @@ describe('listWorkItems', () => {
         'list',
         '--limit',
         '10',
+        '--state',
+        'all',
         '--json',
         'number,title,state,url,labels,updatedAt,author,isDraft,headRefName,baseRefName,headRefOid,headRepositoryOwner,reviewRequests',
         '--repo',
         'acme/widgets',
-        '--state',
-        'open'
+        '--search',
+        'is:pr is:open sort:created-desc'
       ],
       { cwd: '/repo-root' }
     )
     expect(items).toEqual([
-      {
-        id: 'issue:1',
-        type: 'issue',
-        number: 1,
-        title: 'Open issue',
-        state: 'open',
-        url: 'https://github.com/acme/widgets/issues/1',
-        labels: [],
-        updatedAt: '2026-03-31T00:00:00Z',
-        author: 'octocat'
-      },
       {
         id: 'pr:2',
         type: 'pr',
@@ -663,6 +744,17 @@ describe('listWorkItems', () => {
         baseRefName: 'main',
         headSha: 'head-2',
         prRepo: { owner: 'acme', repo: 'widgets' }
+      },
+      {
+        id: 'issue:1',
+        type: 'issue',
+        number: 1,
+        title: 'Open issue',
+        state: 'open',
+        url: 'https://github.com/acme/widgets/issues/1',
+        labels: [],
+        updatedAt: '2026-03-31T00:00:00Z',
+        author: 'octocat'
       }
     ])
   })

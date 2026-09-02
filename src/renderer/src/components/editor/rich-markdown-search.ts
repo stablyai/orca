@@ -6,11 +6,19 @@ import {
   isMarkdownPreviewSearchQueryTooLarge,
   type TextMatchOptions
 } from './markdown-preview-search'
+import {
+  createRichMarkdownVisibleTextMap,
+  type RichMarkdownVisibleTextSegment
+} from './rich-markdown-visible-text-map'
 
 export type RichMarkdownSearchMatch = {
   from: number
   to: number
+  touchesReadOnlyAtom?: boolean
+  decorationRanges?: { from: number; to: number; kind: 'inline' | 'node' }[]
 }
+
+export type RichMarkdownSearchStats = { segmentVisits: number }
 
 type RichMarkdownSearchState = {
   activeIndex: number
@@ -31,7 +39,8 @@ export const richMarkdownSearchPluginKey = new PluginKey<RichMarkdownSearchState
 export function findRichMarkdownSearchMatches(
   doc: ProseMirrorNode,
   query: string,
-  options?: TextMatchOptions
+  options?: TextMatchOptions,
+  stats?: RichMarkdownSearchStats
 ): RichMarkdownSearchMatch[] {
   if (!query) {
     return []
@@ -41,26 +50,78 @@ export function findRichMarkdownSearchMatches(
   }
 
   const matches: RichMarkdownSearchMatch[] = []
-  doc.descendants((node, pos) => {
-    if (!node.isText) {
-      return
+  const visibleMap = createRichMarkdownVisibleTextMap(doc)
+  const ranges = findTextMatchRanges(visibleMap.text, query, options)
+  let segmentIndex = 0
+  for (const range of ranges) {
+    while (
+      segmentIndex < visibleMap.segments.length &&
+      visibleMap.segments[segmentIndex]!.visibleTo <= range.start
+    ) {
+      if (stats) {
+        stats.segmentVisits += 1
+      }
+      segmentIndex += 1
     }
-
-    const text = node.text ?? ''
-    if (!text.trim()) {
-      return
+    const firstSegmentIndex = segmentIndex
+    let lastSegmentIndex = firstSegmentIndex - 1
+    let touchesReadOnlyAtom = false
+    let segmentsAreContiguous = true
+    let touchesSeparator = false
+    while (
+      lastSegmentIndex + 1 < visibleMap.segments.length &&
+      visibleMap.segments[lastSegmentIndex + 1]!.visibleFrom < range.end
+    ) {
+      lastSegmentIndex += 1
+      if (stats) {
+        stats.segmentVisits += 1
+      }
+      touchesReadOnlyAtom ||= visibleMap.segments[lastSegmentIndex]!.kind === 'read-only-atom'
+      touchesSeparator ||= visibleMap.segments[lastSegmentIndex]!.kind === 'separator'
+      const previous = visibleMap.segments[lastSegmentIndex - 1]
+      const current = visibleMap.segments[lastSegmentIndex]!
+      if (lastSegmentIndex > firstSegmentIndex && previous?.to !== current.from) {
+        segmentsAreContiguous = false
+      }
     }
-
-    const ranges = findTextMatchRanges(text, query, options)
-    for (const range of ranges) {
-      matches.push({
-        from: pos + range.start,
-        to: pos + range.end
-      })
+    const first = visibleMap.segments[firstSegmentIndex]
+    const last = visibleMap.segments[lastSegmentIndex]
+    if (!first || !last || !segmentsAreContiguous || touchesSeparator) {
+      continue
     }
-  })
+    const from = mapSegmentStart(first, range.start)
+    const to = mapSegmentEnd(last, range.end)
+    matches.push(
+      touchesReadOnlyAtom
+        ? {
+            from,
+            to,
+            touchesReadOnlyAtom: true,
+            decorationRanges: visibleMap.segments
+              .slice(firstSegmentIndex, lastSegmentIndex + 1)
+              .map((segment) => ({
+                from: mapSegmentStart(segment, range.start),
+                to: mapSegmentEnd(segment, range.end),
+                kind: segment.kind === 'text' ? ('inline' as const) : ('node' as const)
+              }))
+          }
+        : { from, to }
+    )
+  }
 
   return matches
+}
+
+function mapSegmentStart(segment: RichMarkdownVisibleTextSegment, visibleFrom: number): number {
+  return segment.kind === 'text'
+    ? segment.from + Math.max(0, visibleFrom - segment.visibleFrom)
+    : segment.from
+}
+
+function mapSegmentEnd(segment: RichMarkdownVisibleTextSegment, visibleTo: number): number {
+  return segment.kind === 'text'
+    ? segment.from + Math.min(segment.text.length, visibleTo - segment.visibleFrom)
+    : segment.to
 }
 
 export function createRichMarkdownSearchPlugin(): Plugin<RichMarkdownSearchState> {
@@ -126,11 +187,18 @@ function buildSearchDecorationsFromMatches(
     return DecorationSet.empty
   }
 
-  const decorations = matches.map((match, index) =>
-    Decoration.inline(match.from, match.to, {
-      class: 'rich-markdown-search-match',
-      'data-active': index === activeIndex ? 'true' : undefined
-    })
+  const decorations = matches.flatMap((match, index) =>
+    (match.decorationRanges ?? [{ from: match.from, to: match.to, kind: 'inline' as const }]).map(
+      (range) => {
+        const attrs = {
+          class: 'rich-markdown-search-match',
+          'data-active': index === activeIndex ? 'true' : undefined
+        }
+        return range.kind === 'node'
+          ? Decoration.node(range.from, range.to, attrs)
+          : Decoration.inline(range.from, range.to, attrs)
+      }
+    )
   )
 
   return DecorationSet.create(doc, decorations)

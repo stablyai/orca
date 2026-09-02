@@ -1,0 +1,16 @@
+# Files/globs currently allowed to exceed the oxlint `max-lines` budget.
+# This is a RATCHET: the list may only SHRINK. Do NOT add entries to get CI green —
+# split the oversized file instead (AGENTS.md → "Do Not Disable Max Lines").
+# Regenerate/prune: pnpm check:max-lines-ratchet --prune   (removes stale entries only)
+inline src/main/ipc/worktree-remote.ts
+inline src/main/ssh/ssh-channel-multiplexer.ts
+inline src/main/ssh/ssh-connection.ts
+inline src/main/ssh/ssh-relay-deploy.ts
+inline src/main/ssh/ssh-relay-session.ts
+inline src/relay/pty-handler.ts
+inline src/renderer/src/components/terminal-pane/remote-runtime-pty-transport.ts
+mobile-config app/h/*/files/*.tsx
+mobile-config app/h/*/source-control/*.tsx
+mobile-config app/index.tsx
+mobile-config scripts/mock-server.ts
+mobile-config src/transport/rpc-client.ts

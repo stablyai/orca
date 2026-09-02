@@ -27,7 +27,9 @@ vi.mock('net', () => ({
 
 import {
   SYSTEM_SSH_FORWARD_LISTENER_PROBE_INTERVAL_MS,
+  SYSTEM_SSH_FORWARD_POST_KILL_TIMEOUT_MS,
   SYSTEM_SSH_FORWARD_STARTUP_GRACE_MS,
+  SYSTEM_SSH_FORWARD_STOP_TIMEOUT_MS,
   spawnSystemSshPortForward,
   startSystemSshPortForwardProcess,
   waitForSystemSshForwardStartup,
@@ -59,6 +61,12 @@ function createTarget(overrides?: Partial<SshTarget>): SshTarget {
     username: 'deploy',
     ...overrides
   }
+}
+
+function expectNoOrcaControlMasterArgs(args: string[]): void {
+  expect(args).not.toContain('ControlMaster=auto')
+  expect(args.some((arg) => arg.startsWith('ControlPath='))).toBe(false)
+  expect(args).not.toContain('ControlPersist=300')
 }
 
 function createFakeProcess(): FakeChildProcess {
@@ -112,22 +120,81 @@ describe('system SSH forward process', () => {
 
     spawnSystemSshPortForward(createTarget({ configHost: 'fdpass-host' }), 5173, '127.0.0.1', 3000)
 
+    const args = spawnMock.mock.calls[0][1] as string[]
+    const terminatorIdx = args.indexOf('--')
+    const forwardFlagIdx = args.indexOf('-N')
+    const localForwardIdx = args.indexOf('-L')
+    const exitOnForwardFailureIdx = args.indexOf('ExitOnForwardFailure=yes')
+    const standaloneControlIdx = args.indexOf('-S')
+
+    expect(terminatorIdx).toBeGreaterThan(-1)
+    expect(forwardFlagIdx).toBeGreaterThan(-1)
+    expect(localForwardIdx).toBeGreaterThan(-1)
+    expect(exitOnForwardFailureIdx).toBeGreaterThan(-1)
+    // Why: -N and -L must appear before -- or OpenSSH treats them as remote command args.
+    expect(forwardFlagIdx).toBeLessThan(terminatorIdx)
+    expect(localForwardIdx).toBeLessThan(terminatorIdx)
+    expect(args[exitOnForwardFailureIdx - 1]).toBe('-o')
+    expect(exitOnForwardFailureIdx).toBeLessThan(terminatorIdx)
+    expect(standaloneControlIdx).toBe(-1)
+    expectNoOrcaControlMasterArgs(args)
+    expect(args).toContain('127.0.0.1:5173:127.0.0.1:3000')
+    expect(args[terminatorIdx + 1]).toBe('fdpass-host')
     expect(spawnMock).toHaveBeenCalledWith(
       SYSTEM_SSH_PATH,
-      [
-        '-o',
-        'BatchMode=no',
-        '-T',
-        '-N',
-        '-o',
-        'ExitOnForwardFailure=yes',
-        '-L',
-        '127.0.0.1:5173:127.0.0.1:3000',
-        '--',
-        'deploy@fdpass-host'
-      ],
+      expect.any(Array),
       expect.objectContaining({ stdio: ['ignore', 'ignore', 'pipe'] })
     )
+  })
+
+  it('suppresses Orca mux flags for port forwards without disabling ssh_config muxing', () => {
+    spawnMock.mockReturnValue(createFakeProcess())
+
+    spawnSystemSshPortForward(createTarget(), 5173, '127.0.0.1', 3000, {
+      resolvedConfig: {
+        hostname: 'example.com',
+        port: 22,
+        identityFile: [],
+        forwardAgent: false,
+        identitiesOnly: false,
+        proxyUseFdpass: false,
+        controlMaster: 'no',
+        controlPersist: 'no'
+      }
+    })
+
+    const args = spawnMock.mock.calls[0][1] as string[]
+    expect(args.indexOf('-S')).toBe(-1)
+    expectNoOrcaControlMasterArgs(args)
+  })
+
+  it('preserves user-configured muxing for port forwards', () => {
+    spawnMock.mockReturnValue(createFakeProcess())
+
+    spawnSystemSshPortForward(
+      createTarget({ configHost: 'workbox', source: 'ssh-config' }),
+      5173,
+      '127.0.0.1',
+      3000,
+      {
+        resolvedConfig: {
+          hostname: 'workbox.internal',
+          port: 22,
+          identityFile: [],
+          forwardAgent: false,
+          identitiesOnly: false,
+          proxyUseFdpass: false,
+          controlMaster: 'auto',
+          controlPath: '/Users/me/.ssh/cm/%r@%h:%p',
+          controlPersist: '10m'
+        }
+      }
+    )
+
+    const args = spawnMock.mock.calls[0][1] as string[]
+    expect(args.indexOf('-S')).toBe(-1)
+    expectNoOrcaControlMasterArgs(args)
+    expect(args).toContain('workbox')
   })
 
   it('preserves manual target port and identity options in the forwarded ssh command', () => {
@@ -251,5 +318,67 @@ describe('system SSH forward process', () => {
     child.emit('exit', null)
     await pending
     expect(resolved).toBe(true)
+  })
+
+  it('resolves stop after the post-kill bound when the child never reports exit', async () => {
+    vi.useFakeTimers()
+    const child = createFakeProcess()
+
+    let resolved = false
+    const pending = waitForSystemSshForwardStop(child as never).then(() => {
+      resolved = true
+    })
+
+    await vi.advanceTimersByTimeAsync(SYSTEM_SSH_FORWARD_STOP_TIMEOUT_MS)
+    expect(child.kill).toHaveBeenNthCalledWith(2, 'SIGKILL')
+    await vi.advanceTimersByTimeAsync(SYSTEM_SSH_FORWARD_POST_KILL_TIMEOUT_MS - 1)
+    expect(resolved).toBe(false)
+
+    await vi.advanceTimersByTimeAsync(1)
+
+    // Why asserted before awaiting `pending`: dropping the post-kill bound is the regression this
+    // test exists to catch, and awaiting a promise that then never settles reports it as a 30s suite
+    // timeout instead of a failed assertion.
+    // Why this is not a death claim: the promise resolving bounds teardown; nothing here records the
+    // child as gone or drops state that assumes it is.
+    expect(resolved).toBe(true)
+    expect(child.kill).toHaveBeenCalledTimes(2)
+    await pending
+  })
+
+  it('clears the post-kill timer once the child exits after SIGKILL', async () => {
+    vi.useFakeTimers()
+    const child = createFakeProcess()
+
+    const pending = waitForSystemSshForwardStop(child as never)
+    await vi.advanceTimersByTimeAsync(SYSTEM_SSH_FORWARD_STOP_TIMEOUT_MS)
+    child.emit('exit', null)
+    await expect(pending).resolves.toBeUndefined()
+
+    expect(vi.getTimerCount()).toBe(0)
+  })
+
+  it('sends no signal to a child that already exited', async () => {
+    vi.useFakeTimers()
+    const child = createFakeProcess()
+    child.exitCode = 0
+
+    await expect(waitForSystemSshForwardStop(child as never)).resolves.toBeUndefined()
+
+    expect(child.kill).not.toHaveBeenCalled()
+    expect(vi.getTimerCount()).toBe(0)
+  })
+
+  it('sends no SIGKILL or post-kill timer when the child exits after SIGTERM', async () => {
+    vi.useFakeTimers()
+    const child = createFakeProcess()
+
+    const pending = waitForSystemSshForwardStop(child as never)
+    await vi.advanceTimersByTimeAsync(SYSTEM_SSH_FORWARD_STOP_TIMEOUT_MS - 1)
+    child.emit('exit', null)
+    await expect(pending).resolves.toBeUndefined()
+
+    expect(child.kill).toHaveBeenCalledExactlyOnceWith('SIGTERM')
+    expect(vi.getTimerCount()).toBe(0)
   })
 })

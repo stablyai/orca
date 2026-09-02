@@ -3,26 +3,31 @@ import { renderToStaticMarkup } from 'react-dom/server'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { QuickLaunchAgentMenuItems, shouldShowLaunchWatchdogTimeout } from './QuickLaunchButton'
 
-const { shortcutLabelMock, storeState, openSettingsPageMock, openSettingsTargetMock } = vi.hoisted(
-  () => ({
-    shortcutLabelMock: vi.fn<() => string | null>(),
-    storeState: {
-      settings: {
-        defaultTuiAgent: 'codex' as 'claude' | 'codex' | 'gemini' | 'blank' | null,
-        disabledTuiAgents: [] as string[]
-      },
-      worktreesByRepo: {},
-      repos: [],
-      openSettingsPage: vi.fn(),
-      openSettingsTarget: vi.fn()
+const {
+  shortcutLabelMock,
+  storeState,
+  openSettingsPageMock,
+  openSettingsTargetMock,
+  useDetectedAgentsMock
+} = vi.hoisted(() => ({
+  shortcutLabelMock: vi.fn<() => string | null>(),
+  storeState: {
+    settings: {
+      defaultTuiAgent: 'codex' as 'claude' | 'codex' | 'gemini' | 'blank' | null,
+      disabledTuiAgents: [] as string[]
     },
-    openSettingsPageMock: vi.fn(),
-    openSettingsTargetMock: vi.fn()
-  })
-)
+    worktreesByRepo: {} as Record<string, unknown[]>,
+    repos: [] as unknown[],
+    openSettingsPage: vi.fn(),
+    openSettingsTarget: vi.fn()
+  },
+  openSettingsPageMock: vi.fn(),
+  openSettingsTargetMock: vi.fn(),
+  useDetectedAgentsMock: vi.fn(() => ({ detectedIds: ['claude', 'codex', 'gemini'] }))
+}))
 
 vi.mock('@/hooks/useDetectedAgents', () => ({
-  useDetectedAgents: () => ({ detectedIds: ['claude', 'codex', 'gemini'] })
+  useDetectedAgents: useDetectedAgentsMock
 }))
 
 vi.mock('@/hooks/useShortcutLabel', () => ({
@@ -111,6 +116,7 @@ function rowMarkup(html: string, label: string): string {
 beforeEach(() => {
   shortcutLabelMock.mockReset()
   shortcutLabelMock.mockReturnValue(null)
+  useDetectedAgentsMock.mockClear()
   openSettingsPageMock.mockReset()
   openSettingsTargetMock.mockReset()
   storeState.settings.defaultTuiAgent = 'codex'
@@ -139,6 +145,56 @@ describe('QuickLaunchAgentMenuItems', () => {
     const html = renderAgentMenuItems()
 
     expect(html).not.toContain('data-dropdown-shortcut="true"')
+  })
+
+  it('routes agent detection to the worktree-owning runtime host, not the local client', () => {
+    // Repro for the "Remote Server lists local agents" bug: a worktree owned by
+    // a paired runtime must probe that runtime, never the client's PATH.
+    storeState.worktreesByRepo = {
+      'repo-1': [{ id: 'worktree-1', repoId: 'repo-1', hostId: 'runtime:env-1' }]
+    }
+    storeState.repos = [{ id: 'repo-1' }]
+
+    renderAgentMenuItems()
+
+    expect(useDetectedAgentsMock).toHaveBeenLastCalledWith({
+      kind: 'runtime',
+      environmentId: 'env-1'
+    })
+  })
+
+  it('prefers the paired runtime owner over its server-side SSH connection', () => {
+    storeState.worktreesByRepo = {
+      'repo-1': [{ id: 'worktree-1', repoId: 'repo-1' }]
+    }
+    storeState.repos = [
+      {
+        id: 'repo-1',
+        connectionId: 'server-only-ssh-target',
+        executionHostId: 'runtime:env-1'
+      }
+    ]
+
+    renderAgentMenuItems()
+
+    expect(useDetectedAgentsMock).toHaveBeenLastCalledWith({
+      kind: 'runtime',
+      environmentId: 'env-1'
+    })
+  })
+
+  it('routes agent detection to the owning SSH host', () => {
+    storeState.worktreesByRepo = {
+      'repo-1': [{ id: 'worktree-1', repoId: 'repo-1' }]
+    }
+    storeState.repos = [{ id: 'repo-1', connectionId: 'ssh-target-1' }]
+
+    renderAgentMenuItems()
+
+    expect(useDetectedAgentsMock).toHaveBeenLastCalledWith({
+      kind: 'ssh',
+      connectionId: 'ssh-target-1'
+    })
   })
 
   it('does not label an auto-picked or blank default as configured', () => {

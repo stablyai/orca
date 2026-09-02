@@ -1,10 +1,9 @@
-/* eslint-disable max-lines */
-
 import { createStore, type StoreApi } from 'zustand/vanilla'
 import { describe, expect, it } from 'vitest'
 import { createEditorSlice } from './editor'
 import type { AppState } from '../types'
-import type { BrowserTab, Tab, TabContentType, TabGroup } from '../../../../shared/types'
+import type { BrowserTab } from '../../../../shared/browser-workspace-types'
+import type { Tab, TabContentType, TabGroup } from '../../../../shared/tab-types'
 
 function createEditorStore(overrides?: Partial<AppState>): StoreApi<AppState> {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any

@@ -11,6 +11,7 @@ import {
 const pickFirst = () => 0
 // Suggestions are lowercased (branch-name convention), so expectations are too.
 const lower = (index: number) => MARINE_CREATURES[index].toLowerCase()
+const retiring = (...names: string[]) => ({ exhaustedTiers: 0, names })
 
 describe('getSuggestedCreatureName', () => {
   it('picks the first unused name when the RNG selects index 0', () => {
@@ -54,6 +55,36 @@ describe('getSuggestedCreatureName', () => {
     const usedWorktrees = MARINE_CREATURES.map((name) => ({ path: `/tmp/worktrees/${name}` }))
 
     expect(getSuggestedCreatureName({ 'repo-1': usedWorktrees }, pickFirst)).toBe(`${lower(0)}-2`)
+  })
+
+  it('never reissues a retired name whose workspace is already deleted', () => {
+    // The bug this guards: the deleted workspace's path still holds agent conversation
+    // history, so handing the name out again gives the next occupant someone else's chat.
+    expect(getSuggestedCreatureName({}, pickFirst, retiring(MARINE_CREATURES[0]))).toBe(lower(1))
+  })
+
+  it('treats retired names case-insensitively', () => {
+    expect(
+      getSuggestedCreatureName({}, pickFirst, retiring(MARINE_CREATURES[0].toUpperCase()))
+    ).toBe(lower(1))
+  })
+
+  it('retires names on top of live worktrees rather than replacing that check', () => {
+    expect(
+      getSuggestedCreatureName(
+        { 'repo-1': [{ path: `/tmp/worktrees/${MARINE_CREATURES[0]}` }] },
+        pickFirst,
+        retiring(MARINE_CREATURES[1])
+      )
+    ).toBe(lower(2))
+  })
+
+  it('skips a retired suffixed variant when falling back past an exhausted pool', () => {
+    // Tier numbering must not rewind onto a spent variant after its workspace is deleted.
+    const allUsed = MARINE_CREATURES.map((name) => ({ path: `/tmp/worktrees/${name}` }))
+    expect(
+      getSuggestedCreatureName({ 'repo-1': allUsed }, pickFirst, retiring(`${lower(0)}-2`))
+    ).toBe(`${lower(1)}-2`)
   })
 
   it('treats used names case-insensitively', () => {

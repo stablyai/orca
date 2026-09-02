@@ -4,15 +4,22 @@ import { dirname, join } from 'node:path'
 import { randomUUID } from 'node:crypto'
 import type { CommandHandler } from '../dispatch'
 import { printResult } from '../format'
-import { RuntimeClientError, type RuntimeClient, type RuntimeRpcSuccess } from '../runtime-client'
+import {
+  RuntimeClientError,
+  type RuntimeClient,
+  type RuntimeRpcSuccess,
+  getDefaultUserDataPath
+} from '../runtime-client'
 import type { AgentHookInstallStatus } from '../../shared/agent-hook-types'
 import { getDefaultPersistedState } from '../../shared/constants'
-import type { PersistedState } from '../../shared/types'
+import { normalizeDisabledTuiAgents } from '../../shared/tui-agent-selection'
+import type { GlobalSettings } from '../../shared/global-settings-types'
+import type { PersistedState } from '../../shared/persisted-state-types'
 import {
   applyAgentStatusHooksEnabled,
-  getManagedAgentHookStatuses
+  getManagedAgentHookStatuses,
+  prepareManagedCodexHomeBeforeShellLaunch
 } from '../../main/agent-hooks/managed-agent-hook-controls'
-import { getDefaultUserDataPath } from '../runtime-client'
 
 type AgentHookCommandResult = {
   enabled: boolean
@@ -21,8 +28,31 @@ type AgentHookCommandResult = {
   statuses: AgentHookInstallStatus[]
 }
 
+// Covers managed-home verification, WSL identity, trust grant, and bounded app-server reap.
+const WSL_CODEX_PREPARE_TIMEOUT_MS = 50_000
+
 function getDataPath(): string {
-  return join(getDefaultUserDataPath(), 'orca-data.json')
+  const userDataPath = getDefaultUserDataPath()
+  const indexPath = join(userDataPath, 'orca-profile-index.json')
+  for (const candidate of [indexPath, `${indexPath}.bak`]) {
+    try {
+      const parsed: unknown = JSON.parse(readFileSync(candidate, 'utf-8'))
+      if (!isRecord(parsed) || !Array.isArray(parsed.profiles)) {
+        continue
+      }
+      const profileId = parsed.activeProfileId
+      if (
+        typeof profileId === 'string' &&
+        /^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$/.test(profileId) &&
+        parsed.profiles.some((profile) => isRecord(profile) && profile.id === profileId)
+      ) {
+        return join(userDataPath, 'profiles', profileId, 'orca-data.json')
+      }
+    } catch {
+      // Try the profile-index backup, then the legacy pre-profile path.
+    }
+  }
+  return join(userDataPath, 'orca-data.json')
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -31,16 +61,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 function readPersistedState(dataPath: string): PersistedState {
   if (!existsSync(dataPath)) {
-    const defaults = getDefaultPersistedState(homedir())
-    return {
-      ...defaults,
-      settings: {
-        ...defaults.settings,
-        // Why: offline CLI can create the first profile before desktop load;
-        // match the Store fresh-install default instead of pinning old cards.
-        experimentalNewWorktreeCardStyle: true
-      }
-    }
+    return getDefaultPersistedState(homedir())
   }
   try {
     const parsed = JSON.parse(readFileSync(dataPath, 'utf-8'))
@@ -75,26 +96,56 @@ function writePersistedState(dataPath: string, state: PersistedState): void {
   }
 }
 
-function readEnabledFromDisk(): boolean {
+function readHookSettingsFromDisk(): Pick<
+  GlobalSettings,
+  'agentStatusHooksEnabled' | 'disabledTuiAgents'
+> {
   const state = readPersistedState(getDataPath())
-  return state.settings?.agentStatusHooksEnabled !== false
+  return {
+    agentStatusHooksEnabled: state.settings?.agentStatusHooksEnabled !== false,
+    disabledTuiAgents: normalizeDisabledTuiAgents(state.settings?.disabledTuiAgents)
+  }
 }
 
-function updateEnabledOnDisk(enabled: boolean): string {
+async function readHookSettings(
+  client: RuntimeClient
+): Promise<Pick<GlobalSettings, 'agentStatusHooksEnabled' | 'disabledTuiAgents'>> {
+  try {
+    const response = await client.call<{
+      settings?: Pick<GlobalSettings, 'agentStatusHooksEnabled' | 'disabledTuiAgents'>
+    }>('settings.get', undefined, { timeoutMs: 1_000 })
+    const settings = response.result.settings
+    if (settings && typeof settings.agentStatusHooksEnabled === 'boolean') {
+      return {
+        agentStatusHooksEnabled: settings.agentStatusHooksEnabled,
+        disabledTuiAgents: normalizeDisabledTuiAgents(settings.disabledTuiAgents)
+      }
+    }
+  } catch {
+    // The active profile on disk is the offline fallback.
+  }
+  return readHookSettingsFromDisk()
+}
+
+function updateEnabledOnDisk(enabled: boolean): {
+  settingsPath: string
+  settings: Pick<GlobalSettings, 'agentCmdOverrides' | 'disabledTuiAgents'>
+} {
   const dataPath = getDataPath()
   const state = readPersistedState(dataPath)
-  const experimentalNewWorktreeCardStyle =
-    state.settings?.experimentalNewWorktreeCardStyle ?? state.onboarding?.closedAt === null
   state.settings = {
     ...getDefaultPersistedState(homedir()).settings,
     ...state.settings,
-    // Why: offline CLI can run before Store.load(); mirror its open-onboarding
-    // default without overriding a saved user opt-out.
-    experimentalNewWorktreeCardStyle,
     agentStatusHooksEnabled: enabled
   }
   writePersistedState(dataPath, state)
-  return dataPath
+  return {
+    settingsPath: dataPath,
+    settings: {
+      agentCmdOverrides: state.settings.agentCmdOverrides ?? {},
+      disabledTuiAgents: state.settings.disabledTuiAgents ?? []
+    }
+  }
 }
 
 async function updateRunningRuntime(client: RuntimeClient, enabled: boolean): Promise<boolean> {
@@ -144,10 +195,11 @@ async function setAgentHooksEnabled(
   enabled: boolean
 ): Promise<AgentHookCommandResult> {
   const updatedRuntime = await updateRunningRuntime(client, enabled)
-  const settingsPath = updatedRuntime ? getDataPath() : updateEnabledOnDisk(enabled)
+  const offlineUpdate = updatedRuntime ? null : updateEnabledOnDisk(enabled)
+  const settingsPath = offlineUpdate?.settingsPath ?? getDataPath()
   const statuses = updatedRuntime
     ? getManagedAgentHookStatuses()
-    : applyAgentStatusHooksEnabled(enabled)
+    : await applyAgentStatusHooksEnabled(enabled, offlineUpdate?.settings)
   return {
     enabled,
     settingsPath,
@@ -157,9 +209,33 @@ async function setAgentHooksEnabled(
 }
 
 export const AGENT_HOOK_HANDLERS: Record<string, CommandHandler> = {
+  'agent hooks prepare-codex': async ({ client }) => {
+    if (process.env.WSL_DISTRO_NAME?.trim()) {
+      try {
+        await client.call(
+          'agentHooks.prepareCodexForWslPane',
+          {
+            codexHome: process.env.CODEX_HOME ?? '',
+            orcaCodexHome: process.env.ORCA_CODEX_HOME ?? '',
+            wslDistro: process.env.WSL_DISTRO_NAME
+          },
+          { timeoutMs: WSL_CODEX_PREPARE_TIMEOUT_MS }
+        )
+      } catch {
+        // Best effort: old or unavailable runtimes must not block Codex launch.
+      }
+      return
+    }
+    const settings = await readHookSettings(client)
+    await prepareManagedCodexHomeBeforeShellLaunch({
+      userDataPath: getDefaultUserDataPath(),
+      hooksEnabled:
+        settings.agentStatusHooksEnabled && !settings.disabledTuiAgents.includes('codex')
+    })
+  },
   'agent hooks status': async ({ json }) => {
     const result: AgentHookCommandResult = {
-      enabled: readEnabledFromDisk(),
+      enabled: readHookSettingsFromDisk().agentStatusHooksEnabled,
       settingsPath: getDataPath(),
       appliedBy: 'offline',
       statuses: getManagedAgentHookStatuses()

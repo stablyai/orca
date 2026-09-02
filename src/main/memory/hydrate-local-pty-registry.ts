@@ -1,173 +1,279 @@
-/**
- * Boot-time hydration of `pty-registry` from the live daemon.
- *
- * Why: the registry is normally populated by the `pty:spawn` IPC
- * handler. On warm reattach (a fresh Orca process bound to a
- * still-running daemon), the renderer hasn't re-mounted every pane
- * yet, so `pty:spawn` hasn't fired for those sessions and the memory
- * collector's snapshot omits them. The renderer then unions in
- * `pty.listSessions()` results with `hasLocalSamples: false`, which
- * the chip predicate rendered as "REMOTE" — even though the sessions
- * are local.
- *
- * This module fills the gap once at boot: ask the daemon for every live
- * session, reattribute each one to its repo via the minted session-id
- * format, and only register sessions whose repo has no `connectionId`
- * (i.e. truly local). Truly remote (SSH) sessions stay out of the
- * registry, mirroring the spawn-time gate (the `if (!args.connectionId)` block around the `registerPty` call in `src/main/ipc/pty.ts`).
- */
-
-import { getDaemonProvider } from '../daemon/daemon-init'
-import { DaemonPtyRouter } from '../daemon/daemon-pty-router'
-import { DegradedDaemonPtyProvider } from '../daemon/degraded-daemon-pty-provider'
-import type { DaemonPtyAdapter } from '../daemon/daemon-pty-adapter'
-import type { SessionInfo } from '../daemon/types'
-import { listRegisteredPtys, registerPty } from './pty-registry'
-import { listRepoWorktrees } from '../repo-worktrees'
+import { getRepoExecutionHostId, LOCAL_EXECUTION_HOST_ID } from '../../shared/execution-host'
+import { throwIfSignalAborted, waitForPromiseWithSignal } from '../../shared/abort-signal-reason'
+import { mapSettledWithConcurrency } from '../../shared/map-with-concurrency'
 import { parsePtySessionId } from '../../shared/pty-session-id-format'
+import { isFolderRepo } from '../../shared/repo-kind'
+import type { Repo } from '../../shared/repo-types'
+import { splitWorktreeId, worktreeIdComparisonKey } from '../../shared/worktree/id'
+import { getDaemonProvider } from '../daemon/daemon-init'
+import type { DaemonPtyAdapter } from '../daemon/daemon-pty-adapter'
+import type { DaemonPtyRouter } from '../daemon/daemon-pty-router'
+import type { DegradedDaemonPtyProvider } from '../daemon/degraded-daemon-pty-provider'
+import type { SessionInfo } from '../daemon/types'
+import { isFolderWorkspaceIdForRepo } from '../ipc/worktrees/folder-workspace-model'
 import type { Store } from '../persistence'
+import { readAllWorktreeMetaForHost } from '../persistence/host-qualified-worktree-meta'
+import { getLocalProjectWorktreeGitOptions } from '../project-runtime-git-options'
+import { listLocalRepoWorktreesStrict } from '../repo-worktrees'
+import { listRegisteredPtys, registerPty } from './pty-registry'
 
-// Why: `attachMainWindowServices` runs on every macOS dock re-activation
-// (see `app.on('activate', ...)` in src/main/index.ts), so this module
-// guards against re-running git I/O + daemon RPC after the first pass.
-// Stays false until we actually have a daemon provider, so a boot where
-// the daemon socket isn't up yet remains retry-eligible on later
-// re-activations.
+type HydrationStore = Store
+
+type DaemonInventory = {
+  complete: boolean
+  sessions: SessionInfo[]
+}
+
+type LocalRepoCatalog = {
+  byId: Map<string, Repo>
+  ownerCountById: Map<string, number>
+}
+
+// Why: matches existing local Git/read startup budgets while allowing for Defender-heavy repos.
+export const LOCAL_PTY_REGISTRY_BOOT_HYDRATION_DEADLINE_MS = 5_000
+export const LOCAL_PTY_REGISTRY_GIT_ENUMERATION_CONCURRENCY = 4
+
 let hasHydrated = false
+let hydrationInFlight: Promise<void> | null = null
 
-/**
- * Read the live daemon session list and register every local session
- * the registry doesn't already know about.
- *
- * Once-per-process when the daemon is reachable on first call:
- * `attachMainWindowServices` fires on every macOS dock re-activation, so
- * the module-level `hasHydrated` guard ensures the git-worktree
- * enumeration and `listSessions` daemon RPC only run on the first
- * successful invocation. If the daemon is offline at first call (no
- * provider yet), the function returns without flipping the flag so a
- * later macOS re-activation can retry; once a provider is obtained the
- * flag flips and subsequent calls are a no-op.
- *
- * Wrapped in `try/catch` because the daemon socket may be unreachable
- * at boot (process not yet started, or just died); the renderer-side
- * union still covers that case until the daemon comes back. Any failure
- * here is a coverage degradation, not a correctness regression.
- */
-export async function hydrateLocalPtyRegistryAtBoot(store: Pick<Store, 'getRepos'>): Promise<void> {
-  try {
-    if (hasHydrated) {
-      return
-    }
-    const provider = getDaemonProvider()
-    if (!provider) {
-      // Why: leave hasHydrated false so a later activation (after the
-      // daemon comes up) can retry.
-      return
-    }
-    // Why: flip only once we have a provider — committed to either
-    // succeeding or failing on a daemon RPC. Retrying after an RPC
-    // throw uses the same socket and is unlikely to help; the
-    // renderer-side union still covers that case.
-    hasHydrated = true
+export function hydrateLocalPtyRegistryAtBoot(store: HydrationStore): Promise<void> {
+  if (hasHydrated) {
+    return Promise.resolve()
+  }
+  if (hydrationInFlight) {
+    return hydrationInFlight
+  }
 
-    // Why: build a worktree-id → connectionId map so we can SSH-gate each
-    // session before registering. Live git enumeration matches the path
-    // shape used by `mintPtySessionId` (`${repoId}::${path}`).
-    const repos = store.getRepos()
-    const repoConnectionIdByWorktreeId = new Map<string, string | null>()
-
-    for (const repo of repos) {
-      const connectionId = repo.connectionId ?? null
-      if (connectionId) {
-        // Why: SSH PTYs are never registered for local process sampling, so
-        // avoid startup SSH/git enumeration for repos we will skip anyway.
-        continue
+  const controller = new AbortController()
+  const deadline = setTimeout(() => {
+    controller.abort(new Error('Boot-time pty-registry hydration deadline expired'))
+  }, LOCAL_PTY_REGISTRY_BOOT_HYDRATION_DEADLINE_MS)
+  let attempt!: Promise<void>
+  attempt = waitForPromiseWithSignal(
+    hydrateLocalPtyRegistry(store, controller.signal),
+    controller.signal
+  )
+    .then((complete) => {
+      if (complete) {
+        hasHydrated = true
       }
-      const worktrees = await listRepoWorktrees(repo)
-      for (const wt of worktrees) {
-        const worktreeId = `${repo.id}::${wt.path}`
-        repoConnectionIdByWorktreeId.set(worktreeId, connectionId)
+    })
+    .catch((error) => {
+      console.warn(
+        '[memory] Boot-time pty-registry hydration failed:',
+        error instanceof Error ? error.message : String(error)
+      )
+    })
+    .finally(() => {
+      clearTimeout(deadline)
+      if (hydrationInFlight === attempt) {
+        hydrationInFlight = null
       }
-    }
+    })
+  hydrationInFlight = attempt
+  return attempt
+}
 
-    // Why: SessionInfo is read through the adapter's listSessions() so we
-    // get the pid alongside each id. Routing through every adapter
-    // (current + legacy) keeps protocol coverage symmetric with the
-    // orphan-cleanup path.
-    const sessionInfos = await collectSessionInfos(provider)
+async function hydrateLocalPtyRegistry(
+  store: HydrationStore,
+  signal: AbortSignal
+): Promise<boolean> {
+  throwIfSignalAborted(signal)
+  const provider = getDaemonProvider()
+  if (!provider) {
+    return false
+  }
 
-    const alreadyRegistered = new Set(listRegisteredPtys().map((p) => p.ptyId))
+  const repoCatalog = getLocalRepoCatalog(store.getRepos())
+  const reposById = repoCatalog.byId
+  const verifiedFolderWorktreeIds = getVerifiedFolderWorktreeIds(store, repoCatalog)
+  const liveGitWorktreeIdsByKey = new Map<string, string | null>()
+  const resolvedRepoIds = new Set<string>()
+  let inventory = await collectSessionInfos(provider, signal)
+  let complete = inventory.complete
+  let alreadyRegistered = new Set(listRegisteredPtys().map((pty) => pty.ptyId))
 
-    for (const info of sessionInfos) {
-      // Why: pid-write ordering — `pty:spawn` is the authoritative
-      // writer for in-session sessions; if that fired before this loop
-      // started, we must not overwrite a known-good pid with a stale one
-      // from listSessions(). Skip if the entry already exists.
+  for (;;) {
+    const referencedRepos = new Map<string, Repo>()
+    for (const info of inventory.sessions) {
       if (alreadyRegistered.has(info.sessionId)) {
         continue
       }
-      const { worktreeId } = parsePtySessionId(info.sessionId)
-      if (!worktreeId) {
+      const parsed = splitWorktreeId(parsePtySessionId(info.sessionId).worktreeId ?? '')
+      if (!parsed || resolvedRepoIds.has(parsed.repoId)) {
         continue
       }
-      // Why: SSH sessions must stay out of the registry — mirrors the
-      // spawn-time `if (!args.connectionId)` gate around `registerPty` in
-      // `src/main/ipc/pty.ts`. If the repo isn't in the store, skip the
-      // session: we can't prove it's local, and the renderer-side union
-      // still surfaces the session at the cost of a missing pid sample.
-      if (!repoConnectionIdByWorktreeId.has(worktreeId)) {
+      const repo = reposById.get(parsed.repoId)
+      if (!repo || isFolderRepo(repo)) {
+        resolvedRepoIds.add(parsed.repoId)
         continue
       }
-      if (repoConnectionIdByWorktreeId.get(worktreeId)) {
-        continue
-      }
-      registerPty({
-        ptyId: info.sessionId,
-        worktreeId,
-        sessionId: info.sessionId,
-        paneKey: null,
-        pid:
-          typeof info.pid === 'number' && Number.isFinite(info.pid) && info.pid > 0
-            ? info.pid
-            : null
-      })
+      referencedRepos.set(repo.id, repo)
     }
-  } catch (err) {
-    console.warn(
-      '[memory] Boot-time pty-registry hydration failed:',
-      err instanceof Error ? err.message : String(err)
+    if (referencedRepos.size === 0) {
+      break
+    }
+    for (const repo of referencedRepos.values()) {
+      resolvedRepoIds.add(repo.id)
+    }
+
+    const worktreeResults = await mapSettledWithConcurrency(
+      [...referencedRepos.values()],
+      LOCAL_PTY_REGISTRY_GIT_ENUMERATION_CONCURRENCY,
+      async (repo) => {
+        throwIfSignalAborted(signal)
+        const worktrees = await waitForPromiseWithSignal(
+          listLocalRepoWorktreesStrict(repo, {
+            ...getLocalProjectWorktreeGitOptions(store, repo),
+            signal
+          }),
+          signal
+        )
+        throwIfSignalAborted(signal)
+        return { repo, worktrees }
+      }
     )
+    throwIfSignalAborted(signal)
+
+    for (const result of worktreeResults) {
+      if (result.status === 'rejected') {
+        complete = false
+        console.warn(
+          '[memory] Worktree enumeration failed during pty-registry hydration:',
+          result.reason instanceof Error ? result.reason.message : String(result.reason)
+        )
+        continue
+      }
+      const { repo, worktrees } = result.value
+      for (const worktree of worktrees) {
+        const worktreeId = `${repo.id}::${worktree.path}`
+        const key = worktreeIdComparisonKey(worktreeId)
+        if (key) {
+          const existing = liveGitWorktreeIdsByKey.get(key)
+          liveGitWorktreeIdsByKey.set(
+            key,
+            existing === undefined || existing === worktreeId ? worktreeId : null
+          )
+        }
+      }
+    }
+
+    inventory = await collectSessionInfos(provider, signal)
+    complete = complete && inventory.complete
+    alreadyRegistered = new Set(listRegisteredPtys().map((pty) => pty.ptyId))
+  }
+
+  throwIfSignalAborted(signal)
+  for (const info of inventory.sessions) {
+    throwIfSignalAborted(signal)
+    if (alreadyRegistered.has(info.sessionId)) {
+      continue
+    }
+    const { worktreeId } = parsePtySessionId(info.sessionId)
+    if (!worktreeId || !isVerifiedLocalWorktree(worktreeId)) {
+      continue
+    }
+    registerPty({
+      ptyId: info.sessionId,
+      worktreeId,
+      sessionId: info.sessionId,
+      paneKey: null,
+      pid:
+        typeof info.pid === 'number' && Number.isFinite(info.pid) && info.pid > 0 ? info.pid : null
+    })
+  }
+  return complete
+
+  function isVerifiedLocalWorktree(worktreeId: string): boolean {
+    if (verifiedFolderWorktreeIds.has(worktreeId)) {
+      return true
+    }
+    const key = worktreeIdComparisonKey(worktreeId)
+    return key !== null && typeof liveGitWorktreeIdsByKey.get(key) === 'string'
   }
 }
 
-async function collectSessionInfos(
-  provider: DaemonPtyRouter | DaemonPtyAdapter | DegradedDaemonPtyProvider
-): Promise<SessionInfo[]> {
-  // Why: the router fans `listSessions` out across current + legacy adapters
-  // so we get every protocol-version daemon's sessions; the bare-adapter
-  // fallback is only the in-process restart edge case.
-  const adapters: readonly DaemonPtyAdapter[] =
-    provider instanceof DaemonPtyRouter || provider instanceof DegradedDaemonPtyProvider
-      ? provider.getAllAdapters()
-      : [provider]
-  const out: SessionInfo[] = []
-  for (const adapter of adapters) {
-    try {
-      const sessions = await adapter.listSessions()
-      // Why: warm reattach can discover many daemon sessions at once; spreading
-      // listSessions() into push can exceed JavaScript's argument limit.
-      for (const session of sessions) {
-        out.push(session)
-      }
-    } catch (err) {
-      // Why: a single adapter failing should not abort hydration of the
-      // others — the current adapter and any legacy daemons each have
-      // their own socket and one being unreachable is normal.
-      console.warn(
-        '[memory] listSessions failed for one adapter during hydration:',
-        err instanceof Error ? err.message : String(err)
-      )
+function getLocalRepoCatalog(repos: Repo[]): LocalRepoCatalog {
+  const byId = new Map<string, Repo>()
+  const ownerCountById = new Map<string, number>()
+  const ambiguousIds = new Set<string>()
+  for (const repo of repos) {
+    ownerCountById.set(repo.id, (ownerCountById.get(repo.id) ?? 0) + 1)
+    if (getRepoExecutionHostId(repo) !== LOCAL_EXECUTION_HOST_ID) {
+      continue
+    }
+    if (byId.has(repo.id)) {
+      ambiguousIds.add(repo.id)
+    } else {
+      byId.set(repo.id, repo)
     }
   }
-  return out
+  for (const repoId of ambiguousIds) {
+    byId.delete(repoId)
+  }
+  return { byId, ownerCountById }
+}
+
+function getVerifiedFolderWorktreeIds(
+  store: HydrationStore,
+  repoCatalog: LocalRepoCatalog
+): Set<string> {
+  const verified = new Set<string>()
+  const metadata = readAllWorktreeMetaForHost(store, LOCAL_EXECUTION_HOST_ID)
+  for (const [worktreeId, meta] of Object.entries(metadata)) {
+    const parsed = splitWorktreeId(worktreeId)
+    const repo = parsed ? repoCatalog.byId.get(parsed.repoId) : undefined
+    const hasLocalAuthority =
+      meta.hostId === LOCAL_EXECUTION_HOST_ID ||
+      (meta.hostId === undefined && repoCatalog.ownerCountById.get(parsed?.repoId ?? '') === 1)
+    if (
+      repo &&
+      isFolderRepo(repo) &&
+      hasLocalAuthority &&
+      isFolderWorkspaceIdForRepo(repo, worktreeId)
+    ) {
+      verified.add(worktreeId)
+    }
+  }
+  return verified
+}
+
+async function collectSessionInfos(
+  provider: DaemonPtyRouter | DaemonPtyAdapter | DegradedDaemonPtyProvider,
+  signal: AbortSignal
+): Promise<DaemonInventory> {
+  const adapters =
+    'getAllAdapters' in provider && typeof provider.getAllAdapters === 'function'
+      ? provider.getAllAdapters()
+      : [provider]
+  const results = await Promise.all(
+    adapters.map(async (adapter) => {
+      try {
+        throwIfSignalAborted(signal)
+        const sessions = await waitForPromiseWithSignal<SessionInfo[]>(
+          adapter.listSessions(),
+          signal
+        )
+        throwIfSignalAborted(signal)
+        return { complete: true, sessions }
+      } catch (error) {
+        throwIfSignalAborted(signal)
+        console.warn(
+          '[memory] listSessions failed for one adapter during hydration:',
+          error instanceof Error ? error.message : String(error)
+        )
+        return { complete: false, sessions: [] }
+      }
+    })
+  )
+  const sessions: SessionInfo[] = []
+  for (const result of results) {
+    for (const session of result.sessions) {
+      sessions.push(session)
+    }
+  }
+  return {
+    complete: results.length > 0 && results.every((result) => result.complete),
+    sessions
+  }
 }

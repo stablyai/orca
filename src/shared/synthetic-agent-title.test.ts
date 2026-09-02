@@ -15,6 +15,14 @@ describe('synthetic agent titles', () => {
     expect(shouldDriveSyntheticAgentTitleFromHook('codex', 'done')).toBe(true)
   })
 
+  it('does not synthesize OpenCode titles over native session titles', () => {
+    expect(getSyntheticAgentTerminalTitle('opencode', 'done')).toBeNull()
+    expect(getSyntheticAgentTerminalTitle('opencode', 'waiting')).toBeNull()
+    expect(shouldDriveSyntheticAgentTitleFromHook('opencode', 'working')).toBe(false)
+    expect(shouldDriveSyntheticAgentTitleFromHook('opencode', 'done')).toBe(false)
+    expect(shouldDriveSyntheticAgentTitleFromHook('opencode', 'waiting')).toBe(false)
+  })
+
   it('provides Devin titles for hook-driven status updates', () => {
     expect(getSyntheticAgentTerminalTitle('devin', 'done')).toBe('Devin ready')
     expect(getSyntheticAgentTerminalTitle('devin', 'waiting')).toBe('Devin - action required')
@@ -24,12 +32,13 @@ describe('synthetic agent titles', () => {
   it('provides Pi-compatible OMP titles for hook-driven status updates', () => {
     expect(getSyntheticAgentTerminalTitle('omp', 'done')).toBe('OMP ready')
     expect(getSyntheticAgentTerminalTitle('omp', 'waiting')).toBe('OMP - action required')
-    expect(shouldDriveSyntheticAgentTitleFromHook('omp', 'working')).toBe(true)
+    // Why: the native π working title carries session name/cwd; synthesizing would clobber it.
+    expect(shouldDriveSyntheticAgentTitleFromHook('omp', 'working')).toBe(false)
   })
 
   it('provides Pi titles for hook-driven status updates', () => {
     expect(getSyntheticAgentTerminalTitle('pi', 'done')).toBe('Pi ready')
     expect(getSyntheticAgentTerminalTitle('pi', 'waiting')).toBe('Pi - action required')
-    expect(shouldDriveSyntheticAgentTitleFromHook('pi', 'working')).toBe(true)
+    expect(shouldDriveSyntheticAgentTitleFromHook('pi', 'working')).toBe(false)
   })
 })

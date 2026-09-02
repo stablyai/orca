@@ -90,6 +90,12 @@ export function isMobileGitDiscardableEntry(entry: MobileGitStatusEntry): boolea
   return entry.conflictStatus !== 'unresolved' && entry.conflictStatus !== 'resolved_locally'
 }
 
+// Why: unresolved conflicts are not a stable file to open. Deletions are —
+// git.diff still returns the pre-delete side (text or image via modifiedDeleted).
+export function canOpenMobileGitStatusEntry(entry: MobileGitStatusEntry): boolean {
+  return entry.conflictStatus !== 'unresolved'
+}
+
 export function isMobileGitUnavailable(code: string | undefined, message: string | undefined) {
   return (
     code === 'forbidden' ||

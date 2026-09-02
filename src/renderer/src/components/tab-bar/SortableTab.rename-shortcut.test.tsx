@@ -10,6 +10,7 @@ const storeState = vi.hoisted(
     agentStatusByPaneKey: Record<string, unknown>
     clearTabLaunchAgent: ReturnType<typeof vi.fn>
     ptyIdsByTabId: Record<string, string[]>
+    retainedAgentsByPaneKey: Record<string, unknown>
     renamingTabId: string | null
     keybindings: Record<string, unknown>
     repos: unknown[]
@@ -21,6 +22,7 @@ const storeState = vi.hoisted(
     agentStatusByPaneKey: {},
     clearTabLaunchAgent: vi.fn(),
     ptyIdsByTabId: {} as Record<string, string[]>,
+    retainedAgentsByPaneKey: {},
     renamingTabId: null as string | null,
     keybindings: {},
     repos: [],
@@ -72,6 +74,18 @@ vi.mock('@dnd-kit/sortable', () => ({
 }))
 
 vi.mock('lucide-react', () => ({
+  ArrowDown: function ArrowDown(props: Record<string, unknown>) {
+    return { type: 'ArrowDown', props }
+  },
+  ArrowLeft: function ArrowLeft(props: Record<string, unknown>) {
+    return { type: 'ArrowLeft', props }
+  },
+  ArrowRight: function ArrowRight(props: Record<string, unknown>) {
+    return { type: 'ArrowRight', props }
+  },
+  ArrowUp: function ArrowUp(props: Record<string, unknown>) {
+    return { type: 'ArrowUp', props }
+  },
   Columns2: function Columns2(props: Record<string, unknown>) {
     return { type: 'Columns2', props }
   },
@@ -81,8 +95,20 @@ vi.mock('lucide-react', () => ({
   PanelBottomClose: function PanelBottomClose(props: Record<string, unknown>) {
     return { type: 'PanelBottomClose', props }
   },
+  PanelLeftClose: function PanelLeftClose(props: Record<string, unknown>) {
+    return { type: 'PanelLeftClose', props }
+  },
   PanelRightClose: function PanelRightClose(props: Record<string, unknown>) {
     return { type: 'PanelRightClose', props }
+  },
+  ListX: function ListX(props: Record<string, unknown>) {
+    return { type: 'ListX', props }
+  },
+  MessageSquare: function MessageSquare(props: Record<string, unknown>) {
+    return { type: 'MessageSquare', props }
+  },
+  Pencil: function Pencil(props: Record<string, unknown>) {
+    return { type: 'Pencil', props }
   },
   Pin: function Pin(props: Record<string, unknown>) {
     return { type: 'Pin', props }
@@ -95,6 +121,9 @@ vi.mock('lucide-react', () => ({
   },
   X: function X(props: Record<string, unknown>) {
     return { type: 'X', props }
+  },
+  SquareTerminal: function SquareTerminal(props: Record<string, unknown>) {
+    return { type: 'SquareTerminal', props }
   }
 }))
 
@@ -208,7 +237,11 @@ function makeTerminalTab() {
   }
 }
 
-async function renderSortableTab(): Promise<unknown> {
+async function renderSortableTab({
+  onSetCustomTitle = vi.fn()
+}: {
+  onSetCustomTitle?: (tabId: string, title: string | null) => void
+} = {}): Promise<unknown> {
   reactHookRuntime.index = 0
   const module = await import('./SortableTab')
   return module.default({
@@ -217,6 +250,7 @@ async function renderSortableTab(): Promise<unknown> {
     groupId: 'group-1',
     tabCount: 1,
     hasTabsToRight: false,
+    hasTabsToLeft: false,
     isActive: true,
     isPinned: false,
     isExpanded: false,
@@ -224,7 +258,8 @@ async function renderSortableTab(): Promise<unknown> {
     onClose: vi.fn(),
     onCloseOthers: vi.fn(),
     onCloseToRight: vi.fn(),
-    onSetCustomTitle: vi.fn(),
+    onCloseToLeft: vi.fn(),
+    onSetCustomTitle,
     onSetTabColor: vi.fn(),
     onTogglePin: vi.fn(),
     onToggleExpand: vi.fn(),
@@ -282,6 +317,25 @@ function findElementsByType(node: unknown, typeName: string): ReactElementLike[]
   return results
 }
 
+function pressInputKey(
+  input: ReactElementLike,
+  key: string,
+  options?: { isComposing?: boolean; keyCode?: number }
+): {
+  preventDefault: ReturnType<typeof vi.fn>
+} {
+  const event = {
+    key,
+    nativeEvent: {
+      isComposing: options?.isComposing ?? false,
+      keyCode: options?.keyCode ?? 13
+    },
+    preventDefault: vi.fn()
+  }
+  ;(input.props.onKeyDown as (nextEvent: typeof event) => void)(event)
+  return event
+}
+
 describe('SortableTab rename shortcut signal', () => {
   beforeEach(() => {
     reactHookRuntime.states = []
@@ -311,5 +365,27 @@ describe('SortableTab rename shortcut signal', () => {
     expect(inputs).toHaveLength(1)
     expect(inputs[0].props.value).toBe('Runtime terminal title')
     expect(inputs[0].props['data-tab-rename-input']).toBe('true')
+  })
+
+  it('ignores IME composition Enter before committing the custom tab title', async () => {
+    const onSetCustomTitle = vi.fn()
+
+    await renderSortableTab({ onSetCustomTitle })
+    let rerender = expandNode(await renderSortableTab({ onSetCustomTitle }))
+    let input = findElementsByType(rerender, 'input')[0]
+    ;(input.props.onChange as (event: { target: { value: string } }) => void)({
+      target: { value: '日本語 terminal' }
+    })
+    rerender = expandNode(await renderSortableTab({ onSetCustomTitle }))
+    input = findElementsByType(rerender, 'input')[0]
+
+    const composingEvent = pressInputKey(input, 'Enter', { isComposing: true })
+
+    expect(composingEvent.preventDefault).not.toHaveBeenCalled()
+    expect(onSetCustomTitle).not.toHaveBeenCalled()
+
+    pressInputKey(input, 'Enter')
+
+    expect(onSetCustomTitle).toHaveBeenCalledWith('terminal-tab-1', '日本語 terminal')
   })
 })

@@ -1,5 +1,12 @@
-import type { DropZone, ManagedPane, ManagedPaneInternal } from './pane-manager-types'
-import type { PaneStyleOptions } from './pane-manager-types'
+import type {
+  DropZone,
+  ManagedPane,
+  ManagedPaneInternal,
+  PaneExternalDropHandler,
+  PaneExternalDropResolver,
+  PaneExternalDropTarget,
+  PaneStyleOptions
+} from './pane-manager-types'
 import { detachPaneFromTree, findPaneChildren, insertPaneNextTo } from './pane-tree-ops'
 
 // ---------------------------------------------------------------------------
@@ -10,6 +17,7 @@ export type DragReorderState = {
   dragSourcePaneId: number | null
   dropOverlay: HTMLElement | null
   currentDropTarget: { paneId: number; zone: DropZone } | null
+  currentExternalDropTarget: PaneExternalDropTarget | null
   cleanupActiveDrag: ((commitDrop: boolean) => void) | null
 }
 
@@ -25,6 +33,8 @@ export type DragReorderCallbacks = {
   requestPaneReparentFrame?: (callback: FrameRequestCallback) => void
   onLayoutChanged?: () => void
   onDragActiveChange?: (active: boolean) => void
+  resolveExternalDropTarget?: PaneExternalDropResolver
+  onExternalPaneDrop?: PaneExternalDropHandler
 }
 
 export function createDragReorderState(): DragReorderState {
@@ -32,6 +42,7 @@ export function createDragReorderState(): DragReorderState {
     dragSourcePaneId: null,
     dropOverlay: null,
     currentDropTarget: null,
+    currentExternalDropTarget: null,
     cleanupActiveDrag: null
   }
 }
@@ -44,6 +55,7 @@ export function cancelActivePaneDrag(state: DragReorderState): void {
   hideDropOverlay(state)
   state.dragSourcePaneId = null
   state.currentDropTarget = null
+  state.currentExternalDropTarget = null
 }
 
 /** True when dropping source onto target in zone would leave pane order unchanged. */

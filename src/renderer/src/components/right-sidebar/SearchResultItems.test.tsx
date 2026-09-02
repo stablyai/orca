@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import { Button } from '@/components/ui/button'
 import { FileResultRow } from './SearchResultItems'
-import type { SearchFileResult } from '../../../../shared/types'
+import type { SearchFileResult } from '../../../../shared/code-search-types'
 
 type ReactElementLike = {
   type: unknown

@@ -1,4 +1,4 @@
-import { useEffect, useId, useState } from 'react'
+import { useId, useState } from 'react'
 import {
   Dialog,
   DialogContent,
@@ -17,24 +17,48 @@ export type CloseTerminalDialogCopyKind = 'command' | 'agent'
 export default function CloseTerminalDialog({
   open,
   copyKind = 'command',
+  tabLabel,
+  subjectKey,
   onCancel,
   onConfirm
 }: {
   open: boolean
   copyKind?: CloseTerminalDialogCopyKind
+  /** Names the tab when the prompt can target a tab the user is not looking at
+   *  (tab-strip X, middle-click). Omitted for the focused-pane keyboard path. */
+  tabLabel?: string
+  /** Identifies what is being closed, for hosts that reuse one open dialog across a queue
+   *  of confirmations. Changing it clears the previous subject's "don't ask again" tick. */
+  subjectKey?: string
   onCancel: () => void
   onConfirm: (dontAskAgain: boolean) => void
 }): React.JSX.Element {
   const checkboxId = useId()
   const [dontAskAgain, setDontAskAgain] = useState(false)
+  const [previousOpen, setPreviousOpen] = useState(open)
+  const [previousSubjectKey, setPreviousSubjectKey] = useState(subjectKey)
 
-  useEffect(() => {
+  // Why: each reopen represents a fresh confirmation, so clear the old choice
+  // during render rather than briefly painting it while the dialog opens.
+  if (open !== previousOpen) {
+    setPreviousOpen(open)
     if (open) {
       setDontAskAgain(false)
     }
-  }, [open])
+  }
+
+  // Why: a queued confirmation swaps the subject without ever closing the dialog, so the
+  // reopen reset above never fires. Ignore the swap to undefined as the dialog closes —
+  // clearing the tick mid-exit-animation would be visible for no reason.
+  if (subjectKey !== previousSubjectKey) {
+    setPreviousSubjectKey(subjectKey)
+    if (subjectKey !== undefined) {
+      setDontAskAgain(false)
+    }
+  }
 
   const isAgent = copyKind === 'agent'
+  const trimmedTabLabel = tabLabel?.trim()
 
   return (
     <Dialog
@@ -70,6 +94,11 @@ export default function CloseTerminalDialog({
                 )}
           </DialogDescription>
         </DialogHeader>
+        {trimmedTabLabel ? (
+          <p className="truncate text-xs font-medium text-foreground" title={trimmedTabLabel}>
+            {trimmedTabLabel}
+          </p>
+        ) : null}
         <div className="flex items-center gap-2">
           <Checkbox
             id={checkboxId}

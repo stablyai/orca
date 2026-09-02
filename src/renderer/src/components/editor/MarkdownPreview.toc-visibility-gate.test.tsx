@@ -28,6 +28,9 @@ const storeState = {
   clearDeliveredDiffComments: vi.fn(),
   keybindings: {},
   worktreesByRepo: {},
+  repos: [],
+  folderWorkspaces: [],
+  projectGroups: [],
   openFiles: [],
   activeFileIdByWorktree: {},
   settings: { openLinksInApp: true },
@@ -48,7 +51,10 @@ vi.mock('@/runtime/runtime-rpc-client', () => ({
 vi.mock('@/runtime/runtime-file-client', () => ({
   statRuntimePath: vi.fn(async () => ({ isDirectory: false }))
 }))
-vi.mock('@/lib/connection-context', () => ({ getConnectionId: () => null }))
+vi.mock('@/lib/connection-context', () => ({ getConnectionIdForFile: () => null }))
+vi.mock('@/lib/connection-owner-resolution', () => ({
+  createConnectionIdForFileSelector: () => () => null
+}))
 vi.mock('@/i18n/i18n', () => ({ translate: (_key: string, fallback: string) => fallback }))
 vi.mock('./useLocalImageSrc', () => ({ useLocalImageSrc: (src?: string) => src }))
 vi.mock('./MermaidBlock', () => ({ default: () => null }))

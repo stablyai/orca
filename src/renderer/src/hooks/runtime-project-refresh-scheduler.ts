@@ -1,3 +1,5 @@
+import { toRuntimeExecutionHostId, type ExecutionHostId } from '../../../shared/execution-host'
+
 export type RuntimeProjectRefreshSchedulerDeps = {
   refresh: (environmentId: string) => Promise<void>
   debounceMs?: number
@@ -20,6 +22,87 @@ type RefreshEntry = {
 
 const DEFAULT_DEBOUNCE_MS = 250
 const DEFAULT_MIN_INTERVAL_MS = 5_000
+const DEFAULT_REFRESH_CONCURRENCY = 5
+/** Connect is one-shot and the user is waiting, so it cannot storm the way the coalesced event lane can. */
+export const INTERACTIVE_CONNECT_REFRESH_CONCURRENCY = 15
+
+export async function refreshRuntimeProjectWorktrees(
+  environmentId: string,
+  repos: readonly { id: string }[],
+  fetchWorktrees: (
+    repoId: string,
+    options: {
+      executionHostId: ExecutionHostId
+      suppressRemoteLineageRefresh: true
+    }
+  ) => Promise<unknown>,
+  concurrency = DEFAULT_REFRESH_CONCURRENCY
+): Promise<void> {
+  let nextIndex = 0
+  const failures: { repoId: string; error: unknown }[] = []
+  const repoIds = [...new Set(repos.map((repo) => repo.id))]
+  const workerCount = Math.min(concurrency, repoIds.length)
+  const executionHostId = toRuntimeExecutionHostId(environmentId)
+
+  // Why: one coalesced event can represent many repos; bound probes without dropping host identity.
+  await Promise.all(
+    Array.from({ length: workerCount }, async () => {
+      while (nextIndex < repoIds.length) {
+        const index = nextIndex
+        nextIndex += 1
+        const repoId = repoIds[index]
+        try {
+          await fetchWorktrees(repoId, {
+            executionHostId,
+            suppressRemoteLineageRefresh: true
+          })
+        } catch (error) {
+          failures.push({ repoId, error })
+        }
+      }
+    })
+  )
+  if (failures.length > 0) {
+    throw new AggregateError(
+      failures.map((failure) => failure.error),
+      `Failed to refresh ${failures.length} runtime project worktree(s): ${failures
+        .map((failure) => failure.repoId)
+        .join(', ')}`
+    )
+  }
+}
+
+/** Interactive connect: probes the catalog, then applies one host-wide lineage snapshot. */
+export async function refreshRuntimeProjectWorktreesAndLineage(
+  environmentId: string,
+  repos: readonly { id: string }[],
+  fetchWorktrees: Parameters<typeof refreshRuntimeProjectWorktrees>[2],
+  fetchWorktreeLineage: (options: { executionHostId: ExecutionHostId }) => Promise<unknown>,
+  concurrency = INTERACTIVE_CONNECT_REFRESH_CONCURRENCY
+): Promise<void> {
+  const executionHostId = toRuntimeExecutionHostId(environmentId)
+  let worktreeFailure: { error: unknown } | null = null
+  try {
+    await refreshRuntimeProjectWorktrees(environmentId, repos, fetchWorktrees, concurrency)
+  } catch (error) {
+    worktreeFailure = { error }
+  }
+  // Why: a failed repo refresh must not strand the host-wide lineage snapshot.
+  try {
+    await fetchWorktreeLineage({ executionHostId })
+  } catch (lineageError) {
+    if (!worktreeFailure) {
+      throw lineageError
+    }
+    throw new AggregateError(
+      [worktreeFailure.error, lineageError],
+      'Failed to refresh runtime project worktrees and lineage'
+    )
+  }
+  if (worktreeFailure) {
+    throw worktreeFailure.error
+  }
+}
 
 export function createRuntimeProjectRefreshScheduler(
   deps: RuntimeProjectRefreshSchedulerDeps

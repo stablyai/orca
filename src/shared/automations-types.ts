@@ -1,4 +1,5 @@
-import type { SetupDecision, TuiAgent } from './types'
+import type { TuiAgent } from './tui-agent'
+import type { SetupDecision } from './worktree/create-types'
 import type { TaskSourceContext, WorkspaceRunContext } from './task-source-context'
 
 export type AutomationWorkspaceMode = 'existing' | 'new_per_run'
@@ -16,6 +17,18 @@ export type AutomationRunStatus =
   | 'skipped_needs_interactive_auth'
   | 'dispatch_failed'
 export type AutomationRunTrigger = 'scheduled' | 'manual'
+
+/** Statuses a run can never leave; only these are safe to evict from history. */
+export function isFinalAutomationRunStatus(status: AutomationRunStatus): boolean {
+  return (
+    status === 'completed' ||
+    status === 'dispatch_failed' ||
+    status === 'skipped_precheck' ||
+    status === 'skipped_missed' ||
+    status === 'skipped_unavailable' ||
+    status === 'skipped_needs_interactive_auth'
+  )
+}
 
 export type AutomationSchedulePreset = 'hourly' | 'daily' | 'weekdays' | 'weekly' | 'custom'
 export type AutomationRunUsageProvider = 'claude' | 'codex'
@@ -77,6 +90,8 @@ export type AutomationPrecheckResult = {
 
 export type Automation = {
   id: string
+  /** Optional client request key used to make cross-authority creates retry-safe. */
+  creationKey?: string
   name: string
   prompt: string
   precheck: AutomationPrecheck | null
@@ -95,6 +110,10 @@ export type Automation = {
   projectId: string
   executionTargetType: AutomationExecutionTargetType
   executionTargetId: string
+  /** Why: pins the SSH registration incarnation this record was attached to, so a
+   *  removed-and-re-added target reusing the id can't silently adopt it. Absent on
+   *  local records, on legacy records, and on orphans whose target is gone. */
+  executionTargetGeneration?: number
   schedulerOwner: AutomationSchedulerOwner
   workspaceMode: AutomationWorkspaceMode
   workspaceId: string | null
@@ -140,9 +159,20 @@ export type AutomationRun = {
   startedAt: number | null
   dispatchedAt: number | null
   createdAt: number
+  /** Why: run titles must stay unique once retention prunes old runs, so the
+   *  number can no longer be derived from how many runs are currently kept. */
+  runNumber?: number
+  /** Why: a target that cannot resolve refuses every occurrence, so consecutive
+   *  identical refusals fold into this record instead of one row each. Counts the
+   *  occurrences the record stands for; absent means one. */
+  occurrenceCount?: number
+  /** `scheduledFor` of the most recently folded occurrence; absent until one folds. */
+  lastOccurrenceAt?: number
 }
 
 export type AutomationCreateInput = {
+  /** Optional idempotency key; repeated creates return the original record. */
+  creationKey?: string
   name: string
   prompt: string
   precheck?: AutomationPrecheck | null
@@ -238,6 +268,7 @@ export type ExternalAutomationJob = {
   lastError: string | null
   workdir: string | null
   runCount: number
+  runCountSaturated?: true
   runs: ExternalAutomationRun[]
 }
 
@@ -262,6 +293,7 @@ export type ExternalAutomationRunsPage = {
   page: number
   pageSize: number
   total: number
+  totalSaturated?: true
   runs: ExternalAutomationRun[]
 }
 

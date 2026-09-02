@@ -3,16 +3,8 @@
  * based on current view, tab type, and focused element.
  */
 export function resolveZoomTarget(args: {
-  activeView:
-    | 'terminal'
-    | 'settings'
-    | 'tasks'
-    | 'activity'
-    | 'automations'
-    | 'space'
-    | 'skills'
-    | 'mobile'
-  activeTabType: 'terminal' | 'editor' | 'browser' | 'simulator'
+  activeView: TopLevelView
+  activeTabType: WorkspaceVisibleTabType
   activeElement: unknown
 }): 'terminal' | 'editor' | 'simulator' | 'ui' {
   const { activeView, activeTabType, activeElement } = args
@@ -62,3 +54,5 @@ export function resolveZoomTarget(args: {
   }
   return 'ui'
 }
+import type { TopLevelView } from '../../../shared/ui-chrome-types'
+import type { WorkspaceVisibleTabType } from '../../../shared/tab-types'

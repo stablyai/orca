@@ -124,4 +124,33 @@ describe('localhost worktree label proxy', () => {
 
     expect(result.status).toBe(404)
   })
+
+  it('drops a worktree label routes on unregisterWorktree, leaving others intact', async () => {
+    const port = await startUpstream((_request, response) => {
+      response.writeHead(200, { 'content-type': 'text/plain' })
+      response.end('ok')
+    })
+    const proxy = new LocalhostWorktreeLabelProxy()
+    const a = await proxy.registerRoute({
+      targetUrl: `http://localhost:${port}/`,
+      projectName: 'Snap Studio',
+      worktreeName: 'feature-a',
+      worktreeId: 'wt-a'
+    })
+    const b = await proxy.registerRoute({
+      targetUrl: `http://localhost:${port}/`,
+      projectName: 'Snap Studio',
+      worktreeName: 'feature-b',
+      worktreeId: 'wt-b'
+    })
+
+    expect((await fetchThroughProxy(a.url)).status).toBe(200)
+    expect((await fetchThroughProxy(b.url)).status).toBe(200)
+
+    proxy.unregisterWorktree('wt-a')
+
+    // The removed worktree's label no longer routes; the other worktree is unaffected.
+    expect((await fetchThroughProxy(a.url)).status).toBe(404)
+    expect((await fetchThroughProxy(b.url)).status).toBe(200)
+  })
 })

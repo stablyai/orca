@@ -1,26 +1,38 @@
-/* eslint-disable max-lines -- Why: daemon handshake, RPC, stream events, and reconnect cleanup share one socket lifecycle. */
-import { connect, type Socket } from 'node:net'
+import type { Socket } from 'node:net'
 import { readFileSync } from 'node:fs'
 import { randomUUID } from 'node:crypto'
-import { StringDecoder } from 'node:string_decoder'
-import { encodeNdjson, createNdjsonParser } from './ndjson'
-import { PROTOCOL_VERSION, NOTIFY_PREFIX, DaemonProtocolError } from './types'
-import type { HelloMessage, HelloResponse, RpcResponse, DaemonEvent } from './types'
-import { addNodePtyRecoveryHint } from './node-pty-error-hints'
+import { encodeNdjson } from './ndjson'
+import {
+  PROTOCOL_VERSION,
+  NOTIFY_PREFIX,
+  DaemonConnectionLostError,
+  DaemonProtocolError
+} from './types'
+import type { DaemonEndpointIdentity } from './types'
+import {
+  armDaemonSocketCloseHandlers,
+  connectDaemonSocket,
+  waitForDaemonConnectionAttempt
+} from './daemon-client-socket-connect'
+import { DaemonClientListeners } from './daemon-client-listener-registry'
+import { sameDaemonIdentity, sendDaemonHello } from './daemon-client-hello-handshake'
+import { DaemonPendingRequests } from './daemon-client-pending-requests'
+import {
+  attachControlResponseReader,
+  attachStreamEventReader
+} from './daemon-client-ndjson-readers'
+import { writeNotifyWithSettlement } from './daemon-client-notify-settlement'
+import { requestDaemonRpc } from './daemon-client-rpc-request'
 
 const CONNECT_TIMEOUT_MS = 5000
+const CONNECTION_ATTEMPT_WAIT_MS = CONNECT_TIMEOUT_MS * 4
 const REQUEST_TIMEOUT_MS = 30000
+const NOTIFY_SETTLEMENT_TIMEOUT_MS = 5000
 
 export type DaemonClientOptions = {
   socketPath: string
   tokenPath: string
   protocolVersion?: number
-}
-
-type PendingRequest = {
-  resolve: (value: unknown) => void
-  reject: (reason: Error) => void
-  timer: ReturnType<typeof setTimeout>
 }
 
 export class DaemonClient {
@@ -42,10 +54,13 @@ export class DaemonClient {
   // all call ensureConnected(). Without a lock, each starts a separate
   // connection attempt, overwriting sockets and triggering "Connection lost".
   private connectingPromise: Promise<void> | null = null
+  private connectionAttemptGeneration = 0
+  private daemonIdentity: DaemonEndpointIdentity | null = null
+  private observedAuthenticatedDisconnect = false
 
-  private pendingRequests = new Map<string, PendingRequest>()
-  private eventListeners: ((event: unknown) => void)[] = []
-  private disconnectedListeners: (() => void)[] = []
+  private pendingRequests = new DaemonPendingRequests()
+  private eventListeners = new DaemonClientListeners<(event: unknown) => void>()
+  private disconnectedListeners = new DaemonClientListeners<() => void>()
   private requestCounter = 0
   private cleanupSocketListeners: (() => void) | null = null
 
@@ -59,15 +74,38 @@ export class DaemonClient {
     return this.connected
   }
 
+  getDaemonIdentity(): DaemonEndpointIdentity | null {
+    return this.daemonIdentity ? { ...this.daemonIdentity } : null
+  }
+
+  hasObservedAuthenticatedDisconnect(): boolean {
+    return this.observedAuthenticatedDisconnect
+  }
+
   async ensureConnected(): Promise<void> {
+    return this.ensureConnectedWithTimeout(CONNECT_TIMEOUT_MS, false)
+  }
+
+  async ensureConnectedWithin(timeoutMs: number): Promise<void> {
+    return this.ensureConnectedWithTimeout(timeoutMs, true)
+  }
+
+  private async ensureConnectedWithTimeout(
+    timeoutMs: number,
+    sharedBudget: boolean
+  ): Promise<void> {
     if (this.connected) {
       return
     }
     if (this.connectingPromise) {
-      return this.connectingPromise
+      // Why: a normal connection may legitimately consume one timeout for each
+      // socket and hello; bounded teardown calls instead keep their one shared budget.
+      const waiterTimeoutMs = sharedBudget ? timeoutMs : CONNECTION_ATTEMPT_WAIT_MS
+      return waitForDaemonConnectionAttempt(this.connectingPromise, waiterTimeoutMs)
     }
 
-    this.connectingPromise = this.doConnect()
+    const attemptGeneration = this.connectionAttemptGeneration
+    this.connectingPromise = this.doConnect(timeoutMs, attemptGeneration, sharedBudget)
     try {
       await this.connectingPromise
     } finally {
@@ -75,8 +113,27 @@ export class DaemonClient {
     }
   }
 
-  private async doConnect(): Promise<void> {
-    const token = readFileSync(this.tokenPath, 'utf-8').trim()
+  // Why: a missing token must not preempt the connect that proves whether the endpoint is gone.
+  private readToken(): string {
+    try {
+      return readFileSync(this.tokenPath, 'utf-8').trim()
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException | null)?.code === 'ENOENT') {
+        return ''
+      }
+      throw error
+    }
+  }
+
+  private async doConnect(
+    timeoutMs: number,
+    attemptGeneration: number,
+    sharedBudget: boolean
+  ): Promise<void> {
+    const token = this.readToken()
+    const deadlineMs = Date.now() + timeoutMs
+    const remainingMs = (): number =>
+      sharedBudget ? Math.max(1, deadlineMs - Date.now()) : timeoutMs
     const pendingListenerCleanups: (() => void)[] = []
     const cleanupPendingListeners = (): void => {
       for (const cleanup of pendingListenerCleanups.splice(0)) {
@@ -86,32 +143,49 @@ export class DaemonClient {
 
     try {
       // Sequential: control first, then stream
-      this.controlSocket = await this.connectSocket()
-      await this.sendHello(this.controlSocket, token, 'control')
-      pendingListenerCleanups.push(this.setupControlParser(this.controlSocket))
+      const pendingControlSocket = await connectDaemonSocket(this.socketPath, remainingMs())
+      this.assertConnectionAttemptCurrent(attemptGeneration, pendingControlSocket)
+      this.controlSocket = pendingControlSocket
+      const controlIdentity = await this.sendHello(
+        this.controlSocket,
+        token,
+        'control',
+        remainingMs()
+      )
+      this.assertConnectionAttemptCurrent(attemptGeneration, this.controlSocket)
+      pendingListenerCleanups.push(
+        attachControlResponseReader(this.controlSocket, (response) =>
+          this.pendingRequests.settle(response)
+        )
+      )
 
-      this.streamSocket = await this.connectSocket()
-      await this.sendHello(this.streamSocket, token, 'stream')
-      pendingListenerCleanups.push(this.setupStreamParser(this.streamSocket))
+      const pendingStreamSocket = await connectDaemonSocket(this.socketPath, remainingMs())
+      this.assertConnectionAttemptCurrent(attemptGeneration, pendingStreamSocket)
+      this.streamSocket = pendingStreamSocket
+      const streamIdentity = await this.sendHello(this.streamSocket, token, 'stream', remainingMs())
+      this.assertConnectionAttemptCurrent(attemptGeneration, this.streamSocket)
+      if (!sameDaemonIdentity(controlIdentity, streamIdentity)) {
+        throw new DaemonProtocolError('Daemon identity changed during connection')
+      }
+      pendingListenerCleanups.push(
+        attachStreamEventReader(this.streamSocket, (event) => {
+          this.eventListeners.each((listener) => listener(event))
+        })
+      )
 
+      this.assertConnectionAttemptCurrent(attemptGeneration)
       this.connected = true
+      this.observedAuthenticatedDisconnect = false
+      this.daemonIdentity = controlIdentity
       this.disconnectArmed = true
       this.connectionGeneration++
 
       const gen = this.connectionGeneration
-      const handleClose = () => this.handleDisconnect(gen)
-      const controlSocket = this.controlSocket
-      const streamSocket = this.streamSocket
-      controlSocket.on('close', handleClose)
-      controlSocket.on('error', handleClose)
-      streamSocket.on('close', handleClose)
-      streamSocket.on('error', handleClose)
-      pendingListenerCleanups.push(() => {
-        controlSocket.off('close', handleClose)
-        controlSocket.off('error', handleClose)
-        streamSocket.off('close', handleClose)
-        streamSocket.off('error', handleClose)
-      })
+      pendingListenerCleanups.push(
+        armDaemonSocketCloseHandlers(this.controlSocket, this.streamSocket, () =>
+          this.handleDisconnect(gen)
+        )
+      )
       this.cleanupSocketListeners = cleanupPendingListeners
     } catch (error) {
       cleanupPendingListeners()
@@ -120,75 +194,102 @@ export class DaemonClient {
       this.controlSocket = null
       this.streamSocket = null
       this.connected = false
+      this.daemonIdentity = null
       this.disconnectArmed = false
       throw error
     }
   }
 
-  async request<T = unknown>(type: string, payload: unknown): Promise<T> {
+  async request<T = unknown>(
+    type: string,
+    payload: unknown,
+    timeoutMs = REQUEST_TIMEOUT_MS,
+    signal?: AbortSignal
+  ): Promise<T> {
     if (!this.connected || !this.controlSocket) {
-      throw new DaemonProtocolError('Not connected')
+      // Why: there is no socket to talk on, so this is a transport failure, not a
+      // refusal by the daemon — see settleCreateCancellation's caller.
+      throw new DaemonConnectionLostError('Not connected')
     }
+    const generation = this.connectionGeneration
 
-    const id = `req-${++this.requestCounter}`
-    const msg = { id, type, ...(payload !== undefined ? { payload } : {}) }
-
-    return new Promise<T>((resolve, reject) => {
-      const timer = setTimeout(() => {
-        this.pendingRequests.delete(id)
-        reject(new DaemonProtocolError(`Request ${type} timed out after ${REQUEST_TIMEOUT_MS}ms`))
-      }, REQUEST_TIMEOUT_MS)
-
-      this.pendingRequests.set(id, {
-        resolve: resolve as (value: unknown) => void,
-        reject,
-        timer
-      })
-
-      this.controlSocket!.write(encodeNdjson(msg))
+    return requestDaemonRpc<T>({
+      socket: this.controlSocket,
+      pendingRequests: this.pendingRequests,
+      id: `req-${++this.requestCounter}`,
+      type,
+      payload,
+      timeoutMs,
+      ...(signal ? { signal } : {}),
+      unmatchedCancelGraceMs: NOTIFY_SETTLEMENT_TIMEOUT_MS,
+      onCreateCancellationFailure: () => this.handleDisconnect(generation),
+      settleCreateCancellation: (sessionId, requestId) =>
+        this.request<{ canceled: boolean }>(
+          'cancelCreateOrAttach',
+          { sessionId, requestId },
+          NOTIFY_SETTLEMENT_TIMEOUT_MS
+        )
     })
   }
 
-  notify(type: string, payload: unknown): void {
+  // Why: fire-and-forget writes need a local delivery signal to trigger dead-endpoint recovery.
+  notify(type: string, payload: unknown): boolean {
     if (!this.connected || !this.controlSocket) {
-      return
+      return false
     }
 
     const id = `${NOTIFY_PREFIX}${++this.requestCounter}`
     const msg = { id, type, ...(payload !== undefined ? { payload } : {}) }
-    this.controlSocket.write(encodeNdjson(msg))
+    try {
+      this.controlSocket.write(encodeNdjson(msg))
+      return true
+    } catch {
+      // Notifications are best-effort; an oversized payload must not tear down the caller.
+      return false
+    }
+  }
+
+  async notifyWithSettlement(
+    type: string,
+    payload: unknown,
+    timeoutMs = NOTIFY_SETTLEMENT_TIMEOUT_MS
+  ): Promise<boolean> {
+    if (!this.connected || !this.controlSocket) {
+      return false
+    }
+
+    const id = `${NOTIFY_PREFIX}${++this.requestCounter}`
+    const msg = { id, type, ...(payload !== undefined ? { payload } : {}) }
+    const socket = this.controlSocket
+    const generation = this.connectionGeneration
+    return await writeNotifyWithSettlement({
+      socket,
+      message: msg,
+      timeoutMs,
+      onUndeliverable: () => {
+        if (this.controlSocket === socket && this.connectionGeneration === generation) {
+          this.handleDisconnect(generation)
+        }
+      }
+    })
   }
 
   onEvent(listener: (event: unknown) => void): () => void {
-    this.eventListeners.push(listener)
-    return () => {
-      const idx = this.eventListeners.indexOf(listener)
-      if (idx !== -1) {
-        this.eventListeners.splice(idx, 1)
-      }
-    }
+    return this.eventListeners.add(listener)
   }
 
   onDisconnected(listener: () => void): () => void {
-    this.disconnectedListeners.push(listener)
-    return () => {
-      const idx = this.disconnectedListeners.indexOf(listener)
-      if (idx !== -1) {
-        this.disconnectedListeners.splice(idx, 1)
-      }
-    }
+    return this.disconnectedListeners.add(listener)
   }
 
   disconnect(): void {
+    this.connectionAttemptGeneration++
     this.connected = false
+    this.daemonIdentity = null
     this.disconnectArmed = false
     this.cleanupActiveSocketListeners()
 
-    for (const [id, pending] of this.pendingRequests) {
-      clearTimeout(pending.timer)
-      pending.reject(new DaemonProtocolError('Disconnected'))
-      this.pendingRequests.delete(id)
-    }
+    this.pendingRequests.rejectAll('Disconnected')
 
     this.controlSocket?.destroy()
     this.streamSocket?.destroy()
@@ -196,155 +297,28 @@ export class DaemonClient {
     this.streamSocket = null
   }
 
-  private connectSocket(): Promise<Socket> {
-    return new Promise((resolve, reject) => {
-      const socket = connect(this.socketPath)
-      const cleanup = (): void => {
-        clearTimeout(timer)
-        socket.removeListener('connect', onConnect)
-        socket.removeListener('error', onError)
-      }
-      const onConnect = (): void => {
-        cleanup()
-        resolve(socket)
-      }
-      const onError = (err: Error): void => {
-        cleanup()
-        reject(err)
-      }
-      const timer = setTimeout(() => {
-        cleanup()
-        socket.destroy()
-        reject(new DaemonProtocolError('Connection timed out'))
-      }, CONNECT_TIMEOUT_MS)
+  private assertConnectionAttemptCurrent(attemptGeneration: number, socket?: Socket): void {
+    if (attemptGeneration === this.connectionAttemptGeneration) {
+      return
+    }
+    socket?.destroy()
+    throw new DaemonProtocolError('Disconnected')
+  }
 
-      socket.on('connect', onConnect)
-      socket.on('error', onError)
+  private sendHello(
+    socket: Socket,
+    token: string,
+    role: 'control' | 'stream',
+    timeoutMs: number
+  ): Promise<DaemonEndpointIdentity | null> {
+    return sendDaemonHello({
+      socket,
+      token,
+      role,
+      timeoutMs,
+      protocolVersion: this.protocolVersion,
+      clientId: this.clientId
     })
-  }
-
-  private sendHello(socket: Socket, token: string, role: 'control' | 'stream'): Promise<void> {
-    return new Promise((resolve, reject) => {
-      const hello: HelloMessage = {
-        type: 'hello',
-        version: this.protocolVersion,
-        token,
-        clientId: this.clientId,
-        role
-      }
-
-      let buffer = ''
-      let settled = false
-      let timer: ReturnType<typeof setTimeout> | null = null
-      const cleanup = (): void => {
-        if (timer) {
-          clearTimeout(timer)
-          timer = null
-        }
-        socket.removeListener('data', onData)
-        socket.removeListener('error', onError)
-        socket.removeListener('close', onClose)
-      }
-      const finish = (error?: Error): void => {
-        if (settled) {
-          return
-        }
-        settled = true
-        cleanup()
-        if (error) {
-          reject(error)
-          return
-        }
-        resolve()
-      }
-      // Why: daemon socket chunks can split emoji/box-drawing UTF-8 bytes.
-      // Decoding each Buffer independently would permanently inject U+FFFD.
-      const decoder = new StringDecoder('utf8')
-      const onData = (chunk: Buffer): void => {
-        buffer += decoder.write(chunk)
-        const newlineIdx = buffer.indexOf('\n')
-        if (newlineIdx === -1) {
-          return
-        }
-
-        const line = buffer.slice(0, newlineIdx)
-        try {
-          const response = JSON.parse(line) as HelloResponse
-          if (response.ok) {
-            finish()
-          } else {
-            finish(
-              new DaemonProtocolError(addNodePtyRecoveryHint(response.error ?? 'Hello rejected'))
-            )
-          }
-        } catch {
-          finish(new DaemonProtocolError('Invalid hello response'))
-        }
-      }
-      const onError = (error: Error): void => finish(error)
-      const onClose = (): void =>
-        finish(new DaemonProtocolError('Connection closed before hello response'))
-
-      timer = setTimeout(() => {
-        // Why: a stale daemon can accept the socket but never answer hello;
-        // without a handshake timeout, startup waits forever on ensureConnected().
-        finish(new DaemonProtocolError('Hello response timed out'))
-        socket.destroy()
-      }, CONNECT_TIMEOUT_MS)
-      socket.on('data', onData)
-      socket.on('error', onError)
-      socket.on('close', onClose)
-      socket.write(encodeNdjson(hello))
-    })
-  }
-
-  private setupControlParser(socket: Socket): () => void {
-    // Why: control responses may contain terminal/startup data with multibyte
-    // text; keep incomplete UTF-8 bytes until the next socket chunk.
-    const decoder = new StringDecoder('utf8')
-    const parser = createNdjsonParser(
-      (msg) => {
-        const response = msg as RpcResponse
-        if (response.id) {
-          const pending = this.pendingRequests.get(response.id)
-          if (pending) {
-            this.pendingRequests.delete(response.id)
-            clearTimeout(pending.timer)
-            if (response.ok) {
-              pending.resolve(response.payload)
-            } else {
-              pending.reject(new DaemonProtocolError(addNodePtyRecoveryHint(response.error)))
-            }
-          }
-        }
-      },
-      () => {} // Ignore parse errors on control socket
-    )
-
-    const onData = (chunk: Buffer) => parser.feed(decoder.write(chunk))
-    socket.on('data', onData)
-    return () => socket.off('data', onData)
-  }
-
-  private setupStreamParser(socket: Socket): () => void {
-    // Why: PTY output streams include emoji/box-drawing tables; socket chunks
-    // can split those UTF-8 sequences across packets.
-    const decoder = new StringDecoder('utf8')
-    const parser = createNdjsonParser(
-      (msg) => {
-        const event = msg as DaemonEvent
-        if (event.type === 'event') {
-          for (const listener of this.eventListeners) {
-            listener(event)
-          }
-        }
-      },
-      () => {} // Ignore parse errors on stream socket
-    )
-
-    const onData = (chunk: Buffer) => parser.feed(decoder.write(chunk))
-    socket.on('data', onData)
-    return () => socket.off('data', onData)
   }
 
   private handleDisconnect(generation: number): void {
@@ -352,23 +326,22 @@ export class DaemonClient {
       return
     }
     this.disconnectArmed = false
+    this.connectionAttemptGeneration++
+    if (this.daemonIdentity) {
+      this.observedAuthenticatedDisconnect = true
+    }
     this.connected = false
+    this.daemonIdentity = null
     this.cleanupActiveSocketListeners()
 
-    for (const [id, pending] of this.pendingRequests) {
-      clearTimeout(pending.timer)
-      pending.reject(new DaemonProtocolError('Connection lost'))
-      this.pendingRequests.delete(id)
-    }
+    this.pendingRequests.rejectAll('Connection lost')
 
     this.controlSocket?.destroy()
     this.streamSocket?.destroy()
     this.controlSocket = null
     this.streamSocket = null
 
-    for (const listener of this.disconnectedListeners) {
-      listener()
-    }
+    this.disconnectedListeners.each((listener) => listener())
   }
 
   private cleanupActiveSocketListeners(): void {

@@ -3,7 +3,7 @@ import {
   getBrokenChecks
 } from '../../../src/shared/pr-checks-fix-prompt'
 import { buildResolvePullRequestConflictsPrompt } from '../../../src/shared/source-control-conflict-prompts'
-import type { PRCheckDetail } from '../../../src/shared/types'
+import type { PRCheckDetail } from '../../../src/shared/github/check-types'
 
 // Pure prompt builders for the mobile PR sidebar's "Fix checks with AI" /
 // "Resolve conflicts with AI" triage actions. Kept free of React/native imports

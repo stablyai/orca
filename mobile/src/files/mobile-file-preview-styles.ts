@@ -73,6 +73,17 @@ export const filePreviewStyles = StyleSheet.create({
     fontSize: typography.bodySize,
     fontWeight: '600'
   },
+  saveButton: {
+    width: 36,
+    height: 36,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: radii.button,
+    backgroundColor: colors.bgRaised
+  },
+  saveButtonDisabled: {
+    opacity: 0.42
+  },
   scroll: {
     flex: 1,
     backgroundColor: colors.editorSurface
@@ -136,5 +147,23 @@ export const filePreviewStyles = StyleSheet.create({
   },
   image: {
     backgroundColor: colors.editorSurface
+  },
+  editContainer: {
+    flex: 1,
+    backgroundColor: colors.editorSurface,
+    padding: spacing.md
+  },
+  saveErrorText: {
+    marginBottom: spacing.sm,
+    color: colors.statusRed,
+    fontSize: typography.metaSize
+  },
+  editInput: {
+    flex: 1,
+    color: colors.textPrimary,
+    fontFamily: typography.monoFamily,
+    fontSize: 13,
+    lineHeight: 19,
+    padding: 0
   }
 })

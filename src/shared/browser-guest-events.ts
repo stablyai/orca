@@ -39,6 +39,8 @@ export type BrowserDownloadFinishedEvent = {
   downloadId: string
   status: 'completed' | 'canceled' | 'failed'
   savePath: string | null
+  /** Present only when a client-hosted page's download was written to the remote workspace instead. */
+  remoteDestination?: { workspaceRelativePath: string; hostLabel: string }
   /** Human-readable UI copy only; must never contain secrets. */
   error: string | null
 }
@@ -51,6 +53,7 @@ export type BrowserContextMenuRequestedEvent = {
   screenY: number
   pageUrl: string
   linkUrl: string | null
+  selectionText: string
   canGoBack: boolean
   canGoForward: boolean
 }

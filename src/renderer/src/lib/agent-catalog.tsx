@@ -1,7 +1,7 @@
 import type React from 'react'
 import { ClaudeIcon, DroidIcon, OpenAIIcon } from '@/components/status-bar/icons'
 import openClaudeLogoUrl from '../../../../resources/openclaude-logo.png?url'
-import type { TuiAgent } from '../../../shared/types'
+import type { TuiAgent } from '../../../shared/tui-agent'
 import { getTuiAgentLaunchCommand, TUI_AGENT_CONFIG } from '../../../shared/tui-agent-config'
 import {
   AgentLetterIcon,
@@ -9,10 +9,12 @@ import {
   CopilotIcon,
   KiloIcon,
   OmpIcon,
+  OpenCodeIcon,
   PiIcon
 } from './agent-icon-glyphs'
 import { translate } from '@/i18n/i18n'
 import { createLocalizedCatalog } from '@/i18n/localized-catalog'
+import { AGENT_FAVICON_ASSETS } from './agent-favicon-assets'
 
 export type AgentCatalogEntry = {
   id: TuiAgent
@@ -46,13 +48,13 @@ export const getAgentCatalog = createLocalizedCatalog((): AgentCatalogEntry[] =>
     id: 'claude',
     label: translate('auto.lib.agent.catalog.0708ed89f1', 'Claude'),
     cmd: 'claude',
-    homepageUrl: 'https://docs.anthropic.com/claude/docs/claude-code'
+    homepageUrl: 'https://code.claude.com/docs'
   },
   {
     id: 'claude-agent-teams',
     label: translate('auto.lib.agent.catalog.bf53f09bf8', 'Claude Agent Teams'),
     cmd: getTuiAgentLaunchCommand(TUI_AGENT_CONFIG['claude-agent-teams'], getCatalogPlatform()),
-    homepageUrl: 'https://code.claude.com/docs/agent-teams'
+    homepageUrl: 'https://code.claude.com/docs/en/agent-teams'
   },
   {
     id: 'openclaude',
@@ -86,7 +88,6 @@ export const getAgentCatalog = createLocalizedCatalog((): AgentCatalogEntry[] =>
     id: 'opencode',
     label: translate('auto.lib.agent.catalog.e7a4ca5103', 'OpenCode'),
     cmd: 'opencode',
-    faviconDomain: 'opencode.ai',
     homepageUrl: 'https://opencode.ai/docs/cli/'
   },
   {
@@ -104,6 +105,15 @@ export const getAgentCatalog = createLocalizedCatalog((): AgentCatalogEntry[] =>
     homepageUrl: 'https://github.com/AntigmaLabs/ante-preview'
   },
   {
+    id: 'trae',
+    label: translate('auto.lib.agent.catalog.060d152fb5', 'Trae'),
+    // Why: matches TUI_AGENT_CONFIG.trae.detectCmd, not the ambiguous `trae-cli` — see the Why there.
+    cmd: 'traecli',
+    // Why: bare `trae.cn` 404s on Google's favicon service.
+    faviconDomain: 'www.trae.cn',
+    homepageUrl: 'https://docs.trae.cn/cli_get-started-with-trae-cli'
+  },
+  {
     id: 'pi',
     label: translate('auto.lib.agent.catalog.302934c5d9', 'Pi'),
     cmd: 'pi',
@@ -113,8 +123,16 @@ export const getAgentCatalog = createLocalizedCatalog((): AgentCatalogEntry[] =>
     id: 'omp',
     label: translate('auto.lib.agent.catalog.09973b4d84', 'OMP'),
     cmd: 'omp',
-    faviconDomain: 'omp.sh',
+    // Why: no faviconDomain — omp renders the hand-authored OmpIcon glyph, so a
+    // favicon fallback would never be reached.
     homepageUrl: 'https://omp.sh'
+  },
+  {
+    id: 'prime-agent',
+    label: translate('auto.lib.agent.catalog.d443a47995', 'Prime Agent'),
+    cmd: 'prime-agent',
+    faviconDomain: 'primeintellect.ai',
+    homepageUrl: 'https://github.com/PrimeIntellect-ai/prime-agent'
   },
   {
     id: 'gemini',
@@ -336,21 +354,33 @@ export function AgentIcon({
   if (agent === 'copilot') {
     return <CopilotIcon size={size} />
   }
+  if (agent === 'opencode') {
+    return <OpenCodeIcon size={size} />
+  }
   const catalogEntry = getAgentCatalog().find((a) => a.id === agent)
-  if (catalogEntry?.iconUrl) {
+  // Why: prefer the favicon bundled at build time so the icon renders without a
+  // live network request — Google's favicon service is unreachable in some
+  // regions and offline, which left these icons broken (#8451).
+  const bundledFaviconUrl = AGENT_FAVICON_ASSETS[agent]
+  // Why: one resolved src for guard + attribute so empty `iconUrl` cannot pass
+  // a truthy `||` check while `??` still renders a broken `<img src="">`.
+  const iconSrc = catalogEntry?.iconUrl ?? bundledFaviconUrl
+  if (iconSrc) {
     return (
       <img
-        src={catalogEntry.iconUrl}
+        src={iconSrc}
         width={size}
         height={size}
         alt=""
+        aria-hidden
         style={{ borderRadius: 2 }}
       />
     )
   }
   if (catalogEntry?.faviconDomain) {
-    // Why: agents without a published SVG icon use their site favicon via
-    // Google's favicon service — same source the README uses for the agent badge list.
+    // Why: agents without a published SVG icon or bundled favicon fall back to
+    // their site favicon via Google's favicon service — same source the README
+    // uses for the agent badge list.
     return (
       <img
         src={`https://www.google.com/s2/favicons?domain=${catalogEntry.faviconDomain}&sz=64`}

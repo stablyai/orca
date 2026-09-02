@@ -1,5 +1,5 @@
 import type React from 'react'
-import type { GlobalSettings } from '../../../../shared/types'
+import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import { useAppStore } from '../../store'
 import { Separator } from '../ui/separator'
 import { CliSection } from './CliSection'
@@ -23,12 +23,13 @@ import { SearchableSetting } from './SearchableSetting'
 import { SettingsSubsectionHeader, SettingsSwitchRow } from './SettingsFormControls'
 import { translate } from '@/i18n/i18n'
 import { DefaultWindowsProjectRuntimeSetting } from './DefaultWindowsProjectRuntimeSetting'
+import { getActiveRuntimeTarget } from '@/runtime/runtime-rpc-client'
 
 export {
   createAutoSaveDelayDraftState,
   updateAutoSaveDelayDraftState,
   type AutoSaveDelayDraftState
-} from './GeneralEditorSettingsSection'
+} from './auto-save-delay-draft'
 export { shouldCommitOpenInApplicationsDraft } from './OpenInMenuSetting'
 
 type GeneralSearchEntry = ReturnType<typeof getGeneralNavigationSearchEntries>[number]
@@ -79,6 +80,9 @@ const EMPTY_WSL_DISTROS: string[] = []
 type GeneralPaneProps = {
   settings: GlobalSettings
   updateSettings: (updates: Partial<GlobalSettings>) => void
+  updateSettingsOrThrow?: (updates: Partial<GlobalSettings>) => void | Promise<void>
+  fontSuggestions: string[]
+  onRequestFontSuggestions?: () => void
   wslSupportedPlatform?: boolean
   wslAvailable?: boolean
   wslDistros?: string[]
@@ -88,12 +92,29 @@ type GeneralPaneProps = {
 export function GeneralPane({
   settings,
   updateSettings,
+  updateSettingsOrThrow,
+  fontSuggestions,
+  onRequestFontSuggestions,
   wslSupportedPlatform,
   wslAvailable,
   wslDistros = EMPTY_WSL_DISTROS,
   wslCapabilitiesLoading
 }: GeneralPaneProps): React.JSX.Element {
   const searchQuery = useAppStore((s) => s.settingsSearchQuery)
+  const sourceDefaultsSupportedRuntimeEnvironmentId = useAppStore(
+    (s) => s.worktreeVisibilitySourceDefaultsSupportedRuntimeEnvironmentId
+  )
+  const defaultsSupportedRuntimeEnvironmentId = useAppStore(
+    (s) => s.worktreeVisibilityDefaultsSupportedRuntimeEnvironmentId
+  )
+  const activeRuntimeTarget = getActiveRuntimeTarget(settings)
+  const defaultsSupported =
+    activeRuntimeTarget.kind === 'local' ||
+    activeRuntimeTarget.environmentId === defaultsSupportedRuntimeEnvironmentId
+  const sourceDefaultsSupported =
+    defaultsSupported &&
+    (activeRuntimeTarget.kind === 'local' ||
+      activeRuntimeTarget.environmentId === sourceDefaultsSupportedRuntimeEnvironmentId)
   const generalNavigationSearchEntries = getGeneralNavigationSearchEntries()
   const tabOrderKeywords = getTabOrderControlSearchKeywords(generalNavigationSearchEntries)
   const projectRuntimeSearchEntries = wslSupportedPlatform
@@ -144,6 +165,9 @@ export function GeneralPane({
         key="workspace"
         settings={settings}
         updateSettings={updateSettings}
+        updateSettingsOrThrow={updateSettingsOrThrow}
+        defaultsSupported={defaultsSupported}
+        sourceDefaultsSupported={sourceDefaultsSupported}
       />
     ) : null,
     shouldShowProjectRuntimeSection(
@@ -177,6 +201,8 @@ export function GeneralPane({
         key="editor"
         settings={settings}
         updateSettings={updateSettings}
+        fontSuggestions={fontSuggestions}
+        onRequestFontSuggestions={onRequestFontSuggestions}
       />
     ) : null,
     matchesSettingsSearch(searchQuery, getGeneralCliSearchEntries()) ? (

@@ -5,11 +5,8 @@ import { cn } from '@/lib/utils'
 import { track } from '@/lib/telemetry'
 import { useMountedRef } from '@/hooks/useMountedRef'
 import { GhosttyDiscoveryRow } from './GhosttyDiscoveryRow'
-import type {
-  DiscoveryStatusEmitted,
-  GhosttyImportPreview,
-  GlobalSettings
-} from '../../../../shared/types'
+import type { GhosttyImportPreview, GlobalSettings } from '../../../../shared/global-settings-types'
+import type { DiscoveryStatusEmitted } from '../../../../shared/onboarding-state-types'
 import { translate } from '@/i18n/i18n'
 import { ChromePreview } from './theme-chrome-preview'
 

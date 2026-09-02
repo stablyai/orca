@@ -4,7 +4,10 @@ import { cn } from '@/lib/utils'
 import { installWindowVisibilityInterval } from '@/lib/window-visibility-interval'
 import { useAppStore } from '@/store'
 import { callRuntimeRpc, getActiveRuntimeTarget } from '@/runtime/runtime-rpc-client'
-import type { GetRateLimitResult, GitHubRateLimitSnapshot } from '../../../../shared/types'
+import type {
+  GetRateLimitResult,
+  GitHubRateLimitSnapshot
+} from '../../../../shared/github/rate-limit-types'
 import { getProviderRateLimitScope } from '@/components/settings/provider-account-scope'
 import { ProviderHostScopeControl } from '@/components/settings/ProviderHostScopeControl'
 import { translate } from '@/i18n/i18n'
@@ -154,12 +157,12 @@ function GitHubRateLimitRows({
               )}
             >
               {v.remaining}{' '}
-              {translate('auto.components.github.github.rate.limit.display.f42790d150', 'of')}
+              {translate('auto.components.github.github.rate.limit.display.f42790d150', 'of')}{' '}
               {v.limit}{' '}
               {translate(
                 'auto.components.github.github.rate.limit.display.6da1858354',
                 'left · resets in'
-              )}
+              )}{' '}
               {formatGitHubRateLimitReset(v.resetAt)}
             </span>
           </div>

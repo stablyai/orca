@@ -1,4 +1,4 @@
-import type { Repo } from '../../shared/types'
+import type { Repo } from '../../shared/repo-types'
 import type { SpotlightGitContext } from '../../shared/spotlight-sync-core'
 import type { Store } from '../persistence'
 import { getLocalProjectGitExecOptions } from '../project-runtime-git-options'

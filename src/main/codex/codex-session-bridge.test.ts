@@ -215,6 +215,51 @@ describe('syncSystemCodexSessionsIntoManagedHome', () => {
     ).toBe(false)
   })
 
+  it('bridges from a custom source home override instead of ~/.codex', () => {
+    // Why: users with a custom CODEX_HOME point history discovery at that
+    // folder; the default ~/.codex must be ignored when an override is given.
+    const customSourceHome = join(fakeHomeDir, 'custom-codex')
+    const customSessionPath = join(
+      customSourceHome,
+      'sessions',
+      '2026',
+      '05',
+      '26',
+      'rollout-custom.jsonl'
+    )
+    mkdirSync(dirname(customSessionPath), { recursive: true })
+    writeFileSync(customSessionPath, '{"id":"custom"}\n', 'utf-8')
+
+    // A session under the default ~/.codex should NOT be bridged when overridden.
+    const defaultSessionPath = join(
+      getSystemCodexHomePath(),
+      'sessions',
+      '2026',
+      '05',
+      '26',
+      'rollout-default.jsonl'
+    )
+    mkdirSync(dirname(defaultSessionPath), { recursive: true })
+    writeFileSync(defaultSessionPath, '{"id":"default"}\n', 'utf-8')
+
+    syncSystemCodexSessionsIntoManagedHome(customSourceHome)
+
+    const bridgedCustomPath = join(
+      getRuntimeCodexHomePath(),
+      'sessions',
+      '2026',
+      '05',
+      '26',
+      'rollout-custom.jsonl'
+    )
+    expect(readFileSync(bridgedCustomPath, 'utf-8')).toBe('{"id":"custom"}\n')
+    expect(
+      existsSync(
+        join(getRuntimeCodexHomePath(), 'sessions', '2026', '05', '26', 'rollout-default.jsonl')
+      )
+    ).toBe(false)
+  })
+
   it('falls back to symlinks when hardlinks are unavailable', () => {
     fsMockState.failLink = true
     const systemSessionPath = join(

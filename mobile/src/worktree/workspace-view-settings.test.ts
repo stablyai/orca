@@ -2,10 +2,12 @@ import { describe, expect, it } from 'vitest'
 import { DEFAULT_MOBILE_WORKSPACE_STATUSES } from './mobile-workspace-statuses'
 import {
   applyDesktopViewSettings,
+  buildWorkspaceViewSettingsUpdate,
   groupModeFromDesktop,
   groupModeToDesktop,
   sortModeFromDesktop,
-  type MobileViewState
+  type MobileViewState,
+  type WorkspaceViewSettings
 } from './workspace-view-settings'
 
 const base: MobileViewState = {
@@ -66,50 +68,67 @@ describe('applyDesktopViewSettings', () => {
     expect(next.workspaceStatuses).toBe(DEFAULT_MOBILE_WORKSPACE_STATUSES)
   })
 
-  it('preserves current host visibility when desktop omits host fields', () => {
-    const current: MobileViewState = {
-      ...base,
+  it('ignores desktop workspace host scope so mobile always shows all hosts', () => {
+    // Mobile has no host-scope UI; honoring the synced scope would silently hide
+    // workspaces the user cannot unhide. See mobile-show-all-workspace.
+    const next = applyDesktopViewSettings(base, {
       workspaceHostScope: 'runtime:devbox',
       visibleWorkspaceHostIds: ['local']
-    }
+    } as unknown as WorkspaceViewSettings)
 
-    expect(applyDesktopViewSettings(current, {})).toEqual(current)
-  })
-
-  it('syncs desktop workspace host visibility fields', () => {
-    expect(
-      applyDesktopViewSettings(base, {
-        workspaceHostScope: 'runtime:devbox',
-        visibleWorkspaceHostIds: ['local']
-      })
-    ).toEqual({
-      ...base,
-      workspaceHostScope: 'runtime:devbox',
-      visibleWorkspaceHostIds: ['local']
-    })
-  })
-
-  it('accepts explicit null visible workspace host ids from desktop', () => {
-    const current: MobileViewState = {
-      ...base,
-      workspaceHostScope: 'runtime:devbox',
-      visibleWorkspaceHostIds: ['local']
-    }
-
-    expect(
-      applyDesktopViewSettings(current, {
-        workspaceHostScope: 'all',
-        visibleWorkspaceHostIds: null
-      })
-    ).toEqual({
-      ...base,
-      workspaceHostScope: 'all',
-      visibleWorkspaceHostIds: null
-    })
+    expect(next).toEqual(base)
   })
 
   it('ignores an unrecognized groupBy rather than blanking the mode', () => {
     const next = applyDesktopViewSettings(base, { groupBy: 'mystery' as never })
     expect(next.groupMode).toBe('repo')
+  })
+})
+
+describe('buildWorkspaceViewSettingsUpdate', () => {
+  const next: MobileViewState = {
+    ...base,
+    alwaysShowDefaultBranch: true,
+    groupMode: 'workspaceStatus',
+    sortMode: 'name',
+    hideSleeping: true,
+    hideDefaultBranch: true,
+    filterRepoIds: ['repo-1'],
+    collapsedGroups: ['g1']
+  }
+
+  it('carries only the fields the patch touched (STA-5781)', () => {
+    expect(buildWorkspaceViewSettingsUpdate({ hideSleeping: true }, next)).toEqual({
+      hideSleepingWorkspaces: true
+    })
+    expect(buildWorkspaceViewSettingsUpdate({ groupMode: 'workspaceStatus' }, next)).toEqual({
+      groupBy: 'workspace-status'
+    })
+    expect(buildWorkspaceViewSettingsUpdate({ collapsedGroups: ['g1'] }, next)).toEqual({
+      collapsedGroups: ['g1']
+    })
+  })
+
+  it('maps a multi-field reset patch without dragging untouched siblings along', () => {
+    const update = buildWorkspaceViewSettingsUpdate(
+      { hideSleeping: false, hideDefaultBranch: false, filterRepoIds: [] },
+      { ...next, hideSleeping: false, hideDefaultBranch: false, filterRepoIds: [] }
+    )
+    expect(update).toEqual({
+      hideSleepingWorkspaces: false,
+      hideDefaultBranchWorkspace: false,
+      filterRepoIds: []
+    })
+  })
+
+  it('never invents alwaysShowDefaultBranchWorkspace for patches that omit it (#8873)', () => {
+    expect(
+      'alwaysShowDefaultBranchWorkspace' in
+        buildWorkspaceViewSettingsUpdate({ hideSleeping: true }, next)
+    ).toBe(false)
+  })
+
+  it('returns an empty update for an empty patch', () => {
+    expect(buildWorkspaceViewSettingsUpdate({}, next)).toEqual({})
   })
 })

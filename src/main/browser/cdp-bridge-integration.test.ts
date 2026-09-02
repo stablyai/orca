@@ -1,5 +1,6 @@
-/* eslint-disable max-lines -- Why: integration test covering the full browser automation pipeline end-to-end. */
 import { mkdtempSync } from 'node:fs'
+import { RuntimeBrowserCommands } from '../runtime/orca-runtime-browser'
+import { setRuntimeBrowserCommandsFactory } from '../runtime/runtime-browser-commands-factory'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { createConnection } from 'node:net'
@@ -50,7 +51,7 @@ function axNode(
 ): AXNode {
   return {
     nodeId: id,
-    backendDOMNodeId: opts?.backendDOMNodeId ?? parseInt(id, 10) * 100,
+    backendDOMNodeId: opts?.backendDOMNodeId ?? Number.parseInt(id, 10) * 100,
     role: { type: 'role', value: role },
     name: { type: 'computedString', value: name },
     childIds: opts?.childIds
@@ -213,7 +214,7 @@ function createMockGuest(
       removeListener: vi.fn((event: string, handler: (...args: unknown[]) => void) => {
         const handlers = debuggerListeners.get(event) ?? []
         const idx = handlers.indexOf(handler)
-        if (idx >= 0) {
+        if (idx !== -1) {
           handlers.splice(idx, 1)
         }
       }),
@@ -251,7 +252,7 @@ async function sendRequest(
     let buffer = ''
     socket.setEncoding('utf8')
     socket.once('error', reject)
-    socket.on('data', (chunk) => {
+    socket.on('data', (chunk: string) => {
       buffer += chunk
       const newlineIndex = buffer.indexOf('\n')
       if (newlineIndex === -1) {
@@ -281,6 +282,10 @@ describe('Browser automation pipeline (integration)', () => {
   const RENDERER_WC_ID = 1
 
   beforeEach(async () => {
+    // Why: constructing the browser commands is what pulls the Chromium cluster in, so
+    // production installs this at the Electron entry. Suites that exercise browser
+    // automation install it too; a Node host installs none and the RPCs reject.
+    setRuntimeBrowserCommandsFactory((host) => new RuntimeBrowserCommands(host))
     activeGuestHarness = createMockGuest(GUEST_WC_ID, 'https://example.com', 'Example Domain')
     const { guest } = activeGuestHarness
     activeGuest = guest

@@ -3,6 +3,7 @@ import {
   DEFAULT_SSH_RELAY_GRACE_PERIOD_SECONDS,
   MAX_SSH_RELAY_GRACE_PERIOD_SECONDS,
   MIN_SSH_RELAY_GRACE_PERIOD_SECONDS,
+  type SshConfigHostResolution,
   type SshTarget
 } from '../../../../shared/ssh-types'
 
@@ -13,8 +14,10 @@ export type EditingTarget = {
   port: string
   username: string
   identityFile: string
+  gssapiAuthentication: boolean
   proxyCommand: string
   jumpHost: string
+  systemSshConnectionReuse: boolean
   relayGracePeriodSeconds: string
   relayKeepAliveUntilReset: boolean
 }
@@ -26,8 +29,10 @@ export const EMPTY_FORM: EditingTarget = {
   port: '22',
   username: '',
   identityFile: '',
+  gssapiAuthentication: false,
   proxyCommand: '',
   jumpHost: '',
+  systemSshConnectionReuse: true,
   relayGracePeriodSeconds: String(DEFAULT_BOUNDED_SSH_RELAY_GRACE_PERIOD_SECONDS),
   relayKeepAliveUntilReset: DEFAULT_SSH_RELAY_GRACE_PERIOD_SECONDS === 0
 }
@@ -43,8 +48,10 @@ export function getEditingTargetForSshTarget(target: SshTarget): EditingTarget {
     port: String(target.port),
     username: target.username,
     identityFile: target.identityFile ?? '',
+    gssapiAuthentication: target.gssapiAuthentication === true,
     proxyCommand: target.proxyCommand ?? '',
     jumpHost: target.jumpHost ?? '',
+    systemSshConnectionReuse: target.systemSshConnectionReuse !== false,
     relayGracePeriodSeconds: String(
       target.relayGracePeriodSeconds === 0
         ? DEFAULT_BOUNDED_SSH_RELAY_GRACE_PERIOD_SECONDS
@@ -52,6 +59,26 @@ export function getEditingTargetForSshTarget(target: SshTarget): EditingTarget {
     ),
     relayKeepAliveUntilReset:
       (target.relayGracePeriodSeconds ?? DEFAULT_SSH_RELAY_GRACE_PERIOD_SECONDS) === 0
+  }
+}
+
+/** Prefill the add-host form from a ~/.ssh/config Host entry (does not save). */
+export function getEditingTargetFromSshConfigHost(host: SshConfigHostResolution): EditingTarget {
+  const configHost = host.alias !== host.hostname ? host.alias : ''
+  return {
+    ...EMPTY_FORM,
+    label: host.alias,
+    configHost,
+    // Why: keep the config alias in Host when there is no HostName so OpenSSH
+    // still resolves User/Port/Identity from ~/.ssh/config on connect.
+    host: host.hostname,
+    port: String(host.port),
+    username: host.username,
+    // Why: no scalar override lets connection-time ssh -G retain every IdentityFile.
+    identityFile: '',
+    gssapiAuthentication: host.gssapiAuthentication === true,
+    proxyCommand: host.proxyCommand ?? '',
+    jumpHost: host.jumpHost ?? ''
   }
 }
 
@@ -118,7 +145,7 @@ export function getSshTargetDraftConnectionFields(draft: EditingTarget): {
   const host = parsed?.host ?? draft.host.trim()
   const configHost = draft.configHost.trim() || parsed?.configHost || host
   const username = draft.username.trim() || parsed?.username || ''
-  const parsedPort = parseInt(draft.port, 10)
+  const parsedPort = Number.parseInt(draft.port, 10)
   const port =
     parsed?.invalidPort === true
       ? Number.NaN
@@ -134,14 +161,39 @@ export function getSshTargetDraftConnectionFields(draft: EditingTarget): {
   }
 }
 
+export function hasAdvancedConnectionValues(form: EditingTarget): boolean {
+  return (
+    form.proxyCommand.trim().length > 0 ||
+    form.jumpHost.trim().length > 0 ||
+    !form.systemSshConnectionReuse
+  )
+}
+
+export function isSshTargetFormDirty(current: EditingTarget, baseline: EditingTarget): boolean {
+  return (
+    current.label !== baseline.label ||
+    current.configHost !== baseline.configHost ||
+    current.host !== baseline.host ||
+    current.port !== baseline.port ||
+    current.username !== baseline.username ||
+    current.identityFile !== baseline.identityFile ||
+    current.gssapiAuthentication !== baseline.gssapiAuthentication ||
+    current.proxyCommand !== baseline.proxyCommand ||
+    current.jumpHost !== baseline.jumpHost ||
+    current.systemSshConnectionReuse !== baseline.systemSshConnectionReuse ||
+    current.relayGracePeriodSeconds !== baseline.relayGracePeriodSeconds ||
+    current.relayKeepAliveUntilReset !== baseline.relayKeepAliveUntilReset
+  )
+}
+
 export function parseRelayGracePeriodSeconds(draft: EditingTarget): number {
-  return draft.relayKeepAliveUntilReset ? 0 : parseInt(draft.relayGracePeriodSeconds, 10)
+  return draft.relayKeepAliveUntilReset ? 0 : Number.parseInt(draft.relayGracePeriodSeconds, 10)
 }
 
 export function isRelayGracePeriodValid(draft: EditingTarget, graceSeconds: number): boolean {
   return (
     draft.relayKeepAliveUntilReset ||
-    (!isNaN(graceSeconds) &&
+    (!Number.isNaN(graceSeconds) &&
       graceSeconds >= MIN_SSH_RELAY_GRACE_PERIOD_SECONDS &&
       graceSeconds <= MAX_SSH_RELAY_GRACE_PERIOD_SECONDS)
   )

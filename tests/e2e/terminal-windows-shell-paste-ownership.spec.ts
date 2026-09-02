@@ -26,7 +26,7 @@ function hasWslNodeRuntime(): boolean {
     return false
   }
   try {
-    execFileSync('wsl.exe', ['--', 'sh', '-lc', 'command -v node'], {
+    execFileSync('wsl.exe', ['--exec', 'sh', '-lc', 'command -v node'], {
       encoding: 'utf8',
       stdio: 'pipe',
       timeout: 15_000

@@ -3,8 +3,11 @@ import path from 'node:path'
 
 import { app } from 'electron'
 
-const MAX_BROWSER_DOWNLOAD_COLLISION_ATTEMPTS = 1_000
-const WINDOWS_RESERVED_FILENAME_CHARS = new Set(['<', '>', ':', '"', '|', '?', '*'])
+import {
+  buildBrowserDownloadCollisionCandidate,
+  MAX_BROWSER_DOWNLOAD_COLLISION_ATTEMPTS,
+  normalizeBrowserDownloadFilename
+} from '../../shared/browser-download-filename'
 
 export type BrowserDownloadDestination = {
   filename: string
@@ -16,32 +19,6 @@ type BrowserDownloadDestinationOptions = {
   downloadsPath?: string
   pathExists?: (filePath: string) => boolean
   platform?: NodeJS.Platform
-}
-
-function normalizeFilename(filename: string): string {
-  // Normalize separators first so basename strips paths from any platform.
-  const normalizedSeparators = filename.replace(/\\/g, '/')
-  const rawBasename = path.posix.basename(normalizedSeparators).trim()
-  const safeName = [...rawBasename]
-    .map((char) => {
-      if (char.charCodeAt(0) < 32 || WINDOWS_RESERVED_FILENAME_CHARS.has(char)) {
-        return '_'
-      }
-      return char
-    })
-    .join('')
-    .replace(/[. ]+$/g, '')
-    .trim()
-  return safeName || 'download'
-}
-
-function buildCollisionCandidate(filename: string, suffix: number): string {
-  if (suffix === 0) {
-    return filename
-  }
-  const extension = path.extname(filename)
-  const stem = extension ? filename.slice(0, -extension.length) : filename
-  return `${stem} (${suffix})${extension}`
 }
 
 function normalizeReservationKey(filePath: string, platform: NodeJS.Platform): string {
@@ -65,11 +42,11 @@ export class BrowserDownloadDestinationReservations {
   }
 
   reserve(filename: string): BrowserDownloadDestination {
-    const safeFilename = normalizeFilename(filename)
+    const safeFilename = normalizeBrowserDownloadFilename(filename, this.platform)
     const downloadsPath = this.downloadsPath()
 
     for (let attempt = 0; attempt < MAX_BROWSER_DOWNLOAD_COLLISION_ATTEMPTS; attempt += 1) {
-      const candidateFilename = buildCollisionCandidate(safeFilename, attempt)
+      const candidateFilename = buildBrowserDownloadCollisionCandidate(safeFilename, attempt)
       const savePath = path.join(downloadsPath, candidateFilename)
       const reservationKey = normalizeReservationKey(savePath, this.platform)
       if (this.reservedPathKeys.has(reservationKey) || this.pathExists(savePath)) {

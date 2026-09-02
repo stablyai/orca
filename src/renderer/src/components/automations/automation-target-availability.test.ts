@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import type { Automation } from '../../../../shared/automations-types'
 import type { RuntimeStatus } from '../../../../shared/runtime-types'
-import type { ProjectHostSetup, Repo, Worktree } from '../../../../shared/types'
+import type { ProjectHostSetup } from '../../../../shared/project-types'
+import type { Repo } from '../../../../shared/repo-types'
+import type { Worktree } from '../../../../shared/worktree/types'
 import { getAutomationTargetAvailability } from './automation-target-availability'
 
 function makeAutomation(overrides: Partial<Automation> = {}): Automation {
@@ -135,6 +137,72 @@ describe('automation target availability', () => {
         repo: makeRepo(),
         workspace: makeWorkspace(),
         projectHostSetups: [makeProjectHostSetup()],
+        sshConnectionStates: new Map()
+      }).reason
+    ).toBe('host-mismatch')
+  })
+
+  it('allows a run context whose derived projectId tier drifted but repo/host/path still match', () => {
+    expect(
+      getAutomationTargetAvailability({
+        automation: makeAutomation({
+          runContext: {
+            kind: 'workspace-run',
+            // Snapshotted at the repo: tier before the setup climbed to github:.
+            projectId: 'repo:repo-1',
+            hostId: 'local',
+            projectHostSetupId: 'setup-1',
+            repoId: 'repo-1',
+            path: '/repo'
+          }
+        }),
+        repo: makeRepo(),
+        workspace: makeWorkspace(),
+        projectHostSetups: [makeProjectHostSetup({ projectId: 'github:o/r' })],
+        sshConnectionStates: new Map()
+      })
+    ).toEqual({ canRunNow: true, reason: 'available', message: null })
+  })
+
+  it('still blocks a run context whose repoId no longer matches despite projectId drift', () => {
+    expect(
+      getAutomationTargetAvailability({
+        automation: makeAutomation({
+          runContext: {
+            kind: 'workspace-run',
+            projectId: 'repo:repo-2',
+            hostId: 'local',
+            projectHostSetupId: 'setup-1',
+            repoId: 'repo-2',
+            path: '/repo'
+          }
+        }),
+        repo: makeRepo(),
+        workspace: makeWorkspace(),
+        projectHostSetups: [makeProjectHostSetup({ projectId: 'github:o/r', repoId: 'repo-2' })],
+        sshConnectionStates: new Map()
+      }).reason
+    ).toBe('host-mismatch')
+  })
+
+  it('still blocks when the setup repoId drifts even though the live repo still matches', () => {
+    // Live repo matches runContext.repoId (repoMatchesContext passes), so this
+    // isolates the setup-side repoId clause that survives the projectId removal.
+    expect(
+      getAutomationTargetAvailability({
+        automation: makeAutomation({
+          runContext: {
+            kind: 'workspace-run',
+            projectId: 'repo:repo-1',
+            hostId: 'local',
+            projectHostSetupId: 'setup-1',
+            repoId: 'repo-1',
+            path: '/repo'
+          }
+        }),
+        repo: makeRepo(),
+        workspace: makeWorkspace(),
+        projectHostSetups: [makeProjectHostSetup({ projectId: 'github:o/r', repoId: 'repo-2' })],
         sshConnectionStates: new Map()
       }).reason
     ).toBe('host-mismatch')

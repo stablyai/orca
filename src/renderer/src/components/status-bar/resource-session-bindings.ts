@@ -1,10 +1,18 @@
-import type { TerminalLayoutSnapshot, TerminalTab } from '../../../../shared/types'
+import type { TerminalLayoutSnapshot, TerminalTab } from '../../../../shared/terminal-tab-types'
+import { mayDestroyWithoutOwnerEvidence } from '../../../../shared/pty-listed-session'
 import type { DaemonSession } from './resource-usage-merge-types'
 
 export type ResourceSessionBindingInputs = {
   tabsByWorktree: Record<string, TerminalTab[]>
   ptyIdsByTabId: Record<string, string[]>
   terminalLayoutsByTabId?: Record<string, TerminalLayoutSnapshot>
+  /**
+   * Sessions restore knows exist on an SSH host but has not reattached yet, keyed by tab. Restore
+   * skips reattach while the relay is not connected (`terminals.ts` reconnectPersistedTerminals),
+   * so these are live remote sessions no other binding source can see. Omitting them is what let
+   * Resource Manager classify live agent sessions as orphans and force-kill them (#8459).
+   */
+  deferredSshSessionIdsByTabId?: Record<string, string>
   workspaceSessionReady: boolean
 }
 
@@ -61,6 +69,15 @@ export function buildResourceSessionBindingIndex(
     }
   }
 
+  // Why last: a deferred reattach is the one case where the session is known live but has no
+  // live-PTY, tab, or layout binding to find it by.
+  for (const [tabId, sessionId] of Object.entries(inputs.deferredSshSessionIdsByTabId ?? {})) {
+    if (!tabIdToWorktreeId.has(tabId)) {
+      continue
+    }
+    addBinding(ptyIdToTabId, tabId, sessionId)
+  }
+
   return {
     ptyIdToTabId,
     tabIdToWorktreeId,
@@ -68,19 +85,29 @@ export function buildResourceSessionBindingIndex(
   }
 }
 
+/**
+ * The sessions Resource Manager may offer for bulk destruction: unbound in this renderer *and*
+ * unclaimed by any agent. Single source of truth so the advertised count and the set actually
+ * killed cannot diverge — that divergence would be live agent sessions (#8459).
+ */
+export function selectUnboundDaemonSessions(
+  sessions: readonly DaemonSession[],
+  inputs: ResourceSessionBindingInputs
+): DaemonSession[] {
+  if (!inputs.workspaceSessionReady) {
+    return []
+  }
+  const { boundPtyIds } = buildResourceSessionBindingIndex(inputs)
+  // Why the ownership check: this renderer's binding map is empty during restore, so it cannot
+  // decide alone. Only proven absence of an owner qualifies — 'unknown' protects.
+  return sessions.filter(
+    (session) => !boundPtyIds.has(session.id) && mayDestroyWithoutOwnerEvidence(session)
+  )
+}
+
 export function countUnboundDaemonSessions(
   sessions: readonly DaemonSession[],
   inputs: ResourceSessionBindingInputs
 ): number {
-  if (!inputs.workspaceSessionReady) {
-    return 0
-  }
-  const { boundPtyIds } = buildResourceSessionBindingIndex(inputs)
-  let count = 0
-  for (const session of sessions) {
-    if (!boundPtyIds.has(session.id)) {
-      count += 1
-    }
-  }
-  return count
+  return selectUnboundDaemonSessions(sessions, inputs).length
 }

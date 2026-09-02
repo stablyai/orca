@@ -47,6 +47,22 @@ describe('deriveNativeChatStreamingText', () => {
     ).toBe('Working on it')
   })
 
+  it('treats an optimistic user echo as the active streaming-turn boundary', () => {
+    const optimistic = {
+      ...user('new prompt'),
+      id: 'pending:send-1',
+      timestamp: 20,
+      source: 'scrape' as const
+    }
+    expect(
+      deriveNativeChatStreamingText({
+        messages: [assistant('A much longer answer from the completed prior turn'), optimistic],
+        previewText: 'New reply',
+        working: true
+      })
+    ).toBe('New reply')
+  })
+
   it('drops the preview once the real assistant turn contains it (no duplicate)', () => {
     expect(
       deriveNativeChatStreamingText({
@@ -65,6 +81,31 @@ describe('deriveNativeChatStreamingText', () => {
         working: true
       })
     ).toBeNull()
+  })
+
+  it('drops a preview flagged as tool output even when it leads the transcript', () => {
+    // Regression: providers publish a tool's stdout as `lastAssistantMessage` for status
+    // cards. It leads every transcript assistant turn and never appears in one, so without
+    // this gate it rendered as the reply and no catch-up rule could ever retire it.
+    expect(
+      deriveNativeChatStreamingText({
+        messages: [assistant('Partial')],
+        previewText: 'Exit code 1\nimport { Foo } from "./foo"\nexport function bar() {}',
+        working: true,
+        previewIsToolOutput: true
+      })
+    ).toBeNull()
+  })
+
+  it('still shows a leading preview when it is not tool output', () => {
+    expect(
+      deriveNativeChatStreamingText({
+        messages: [assistant('Partial')],
+        previewText: 'Partial answer that is now much longer than before',
+        working: true,
+        previewIsToolOutput: false
+      })
+    ).toBe('Partial answer that is now much longer than before')
   })
 
   it('keeps showing while the preview still leads (grows past the last turn)', () => {

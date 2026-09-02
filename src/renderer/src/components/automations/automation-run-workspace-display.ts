@@ -1,5 +1,5 @@
 import type { AutomationRun } from '../../../../shared/automations-types'
-import type { Worktree } from '../../../../shared/types'
+import type { Worktree } from '../../../../shared/worktree/types'
 
 export type AutomationRunWorkspaceDisplay = {
   rowLabel: string

@@ -3,10 +3,9 @@ import {
   registerLivePaneManager,
   unregisterLivePaneManager
 } from '@/lib/pane-manager/pane-manager-registry'
-import {
-  scheduleImagePasteWebglAtlasRecovery,
-  scheduleTerminalWebglAtlasRecovery
-} from './terminal-webgl-atlas-recovery'
+import * as terminalWebglAtlasRecovery from './terminal-webgl-atlas-recovery'
+
+const { scheduleImagePasteWebglAtlasRecovery } = terminalWebglAtlasRecovery
 
 describe('terminal WebGL atlas recovery', () => {
   const registeredManagers: { resetWebglTextureAtlases(): void }[] = []
@@ -14,10 +13,12 @@ describe('terminal WebGL atlas recovery', () => {
   function registerManager(): {
     resetWebglTextureAtlases: Mock<() => void>
     refreshAllPanes: Mock<() => void>
+    scheduleRevealPresent: Mock<() => void>
   } {
     const manager = {
       resetWebglTextureAtlases: vi.fn<() => void>(),
-      refreshAllPanes: vi.fn<() => void>()
+      refreshAllPanes: vi.fn<() => void>(),
+      scheduleRevealPresent: vi.fn<() => void>()
     }
     registerLivePaneManager(manager)
     registeredManagers.push(manager)
@@ -28,8 +29,13 @@ describe('terminal WebGL atlas recovery', () => {
     for (const manager of registeredManagers.splice(0)) {
       unregisterLivePaneManager(manager)
     }
+    vi.clearAllTimers()
     vi.useRealTimers()
     vi.unstubAllGlobals()
+  })
+
+  it('limits atlas recovery to explicit renderer lifecycle events', () => {
+    expect(terminalWebglAtlasRecovery).not.toHaveProperty('scheduleTerminalWebglAtlasRecovery')
   })
 
   it('clears atlases and refreshes panes through the post-paste redraw window', () => {
@@ -143,39 +149,5 @@ describe('terminal WebGL atlas recovery', () => {
     expect(healthyManager.resetWebglTextureAtlases).toHaveBeenCalledTimes(3)
     expect(healthyManager.refreshAllPanes).toHaveBeenCalledTimes(3)
     expect(manager.refreshAllPanes).not.toHaveBeenCalled()
-  })
-
-  it('coalesces terminal-output atlas recovery across a redraw burst', () => {
-    vi.useFakeTimers()
-    vi.stubGlobal(
-      'requestAnimationFrame',
-      vi.fn((callback: FrameRequestCallback) => {
-        callback(0)
-        return 1
-      })
-    )
-    const manager = registerManager()
-
-    scheduleTerminalWebglAtlasRecovery()
-    scheduleTerminalWebglAtlasRecovery()
-    scheduleTerminalWebglAtlasRecovery()
-
-    expect(manager.resetWebglTextureAtlases).toHaveBeenCalledTimes(1)
-    expect(manager.refreshAllPanes).toHaveBeenCalledTimes(1)
-    vi.advanceTimersByTime(120)
-    expect(manager.resetWebglTextureAtlases).toHaveBeenCalledTimes(2)
-    expect(manager.refreshAllPanes).toHaveBeenCalledTimes(2)
-    scheduleTerminalWebglAtlasRecovery()
-    expect(manager.resetWebglTextureAtlases).toHaveBeenCalledTimes(2)
-    vi.advanceTimersByTime(380)
-    expect(manager.resetWebglTextureAtlases).toHaveBeenCalledTimes(3)
-    expect(manager.refreshAllPanes).toHaveBeenCalledTimes(3)
-
-    scheduleTerminalWebglAtlasRecovery()
-    expect(manager.resetWebglTextureAtlases).toHaveBeenCalledTimes(4)
-    expect(manager.refreshAllPanes).toHaveBeenCalledTimes(4)
-    vi.advanceTimersByTime(500)
-    expect(manager.resetWebglTextureAtlases).toHaveBeenCalledTimes(6)
-    expect(manager.refreshAllPanes).toHaveBeenCalledTimes(6)
   })
 })

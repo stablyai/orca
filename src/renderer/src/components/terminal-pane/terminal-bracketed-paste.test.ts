@@ -89,6 +89,17 @@ describe('terminal bracketed paste policy', () => {
     expect(terminal.options.ignoreBracketedPasteMode).toBe(false)
   })
 
+  it('normalizes forced Windows multiline paste like xterm native paste', () => {
+    const terminal = createTerminal(false)
+
+    pasteTerminalText(terminal, 'one\r\ntwo\nthree', {
+      forceBracketedPaste: true
+    })
+
+    expect(terminal.input).toHaveBeenCalledWith('\x1b[200~one\rtwo\rthree\x1b[201~')
+    expect(terminal.paste).not.toHaveBeenCalled()
+  })
+
   it('renders embedded escape bytes inert when forcing bracketed paste', () => {
     const terminal = createTerminal(false)
 
@@ -97,6 +108,17 @@ describe('terminal bracketed paste policy', () => {
     })
 
     expect(terminal.input).toHaveBeenCalledWith('\x1b[200~/tmp/before\u241b[201~after.png\x1b[201~')
+    expect(terminal.paste).not.toHaveBeenCalled()
+  })
+
+  it('encodes Windows input-record newlines atomically and sanitizes escape bytes', () => {
+    const terminal = createTerminal(false)
+
+    pasteTerminalText(terminal, '\none\r\ntwo\x1b[201~', {
+      windowsInputRecordNewline: 'alt-enter'
+    })
+
+    expect(terminal.input).toHaveBeenCalledWith('\x1b\rone\x1b\rtwo␛[201~')
     expect(terminal.paste).not.toHaveBeenCalled()
   })
 

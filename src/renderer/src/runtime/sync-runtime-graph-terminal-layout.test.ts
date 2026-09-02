@@ -1,5 +1,3 @@
-/* eslint-disable max-lines -- Why: this file keeps terminal session publication
- * fixtures together so split-pane and split-tab parity assertions do not drift. */
 import { describe, expect, it } from 'vitest'
 import { buildMobileSessionTabSnapshots } from './sync-runtime-graph'
 import type { AppState } from '../store/types'
@@ -18,6 +16,7 @@ function makeState(overrides: Partial<AppState> = {}): AppState {
     activeBrowserTabIdByWorktree: {},
     browserTabsByWorktree: {},
     browserPagesByWorkspace: {},
+    browserCertificateFailuresByPageId: {},
     openFiles: [],
     editorDrafts: {},
     activeTabId: null,
@@ -553,5 +552,33 @@ describe('terminal mobile session layout publication', () => {
     expect(buildMobileSessionTabSnapshots(state)[0]?.tabs[0]).not.toHaveProperty(
       'parentLayout.titlesByLeafId'
     )
+  })
+
+  it('keeps pane-owned titles across split parking', () => {
+    const firstLeaf = '11111111-1111-4111-8111-111111111111'
+    const secondLeaf = '22222222-2222-4222-8222-222222222222'
+    const splitState = makeState({
+      tabsByWorktree: {
+        'wt-1': [{ id: 'term-1', title: 'Leaked tab title', customTitle: null }]
+      } as unknown as AppState['tabsByWorktree'],
+      terminalLayoutsByTabId: {
+        'term-1': {
+          root: {
+            type: 'split',
+            direction: 'horizontal',
+            first: { type: 'leaf', leafId: firstLeaf },
+            second: { type: 'leaf', leafId: secondLeaf }
+          },
+          activeLeafId: firstLeaf,
+          expandedLeafId: null,
+          titlesByLeafId: { [firstLeaf]: 'agent pane', [secondLeaf]: 'shell pane' }
+        }
+      } as AppState['terminalLayoutsByTabId']
+    })
+
+    expect(buildMobileSessionTabSnapshots(splitState)[0]?.tabs).toMatchObject([
+      { leafId: firstLeaf, title: 'agent pane' },
+      { leafId: secondLeaf, title: 'shell pane' }
+    ])
   })
 })

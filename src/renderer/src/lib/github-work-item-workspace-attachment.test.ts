@@ -3,11 +3,9 @@ import { describe, expect, it } from 'vitest'
 import {
   findGithubIssueWorkspaceAttachment,
   findGithubPrWorkspaceAttachment,
-  findGithubWorkItemWorkspaceAttachment,
-  getGithubWorkItemWorkspaceAttachmentLabel,
-  getGithubPrWorkspaceAttachmentLabel
+  findGithubWorkItemWorkspaceAttachment
 } from './github-work-item-workspace-attachment'
-import type { Worktree } from '../../../shared/types'
+import type { Worktree } from '../../../shared/worktree/types'
 
 function worktree(overrides: Partial<Worktree> = {}): Worktree {
   return {
@@ -94,21 +92,5 @@ describe('GitHub work-item workspace attachment', () => {
 
     expect(findGithubPrWorkspaceAttachment([gitlabOnly], 'repo-1', 42)).toBeNull()
     expect(findGithubIssueWorkspaceAttachment([gitlabOnly], 'repo-1', 42)).toBeNull()
-  })
-
-  it('labels attachments without exposing a full path when display or branch is available', () => {
-    expect(
-      getGithubWorkItemWorkspaceAttachmentLabel(worktree({ displayName: '  Named GH  ' }))
-    ).toBe('Named GH')
-    expect(
-      getGithubWorkItemWorkspaceAttachmentLabel(
-        worktree({ displayName: '', branch: 'refs/heads/fix-ci' })
-      )
-    ).toBe('fix-ci')
-    expect(
-      getGithubPrWorkspaceAttachmentLabel(
-        worktree({ displayName: '', branch: '', path: 'C:\\repo\\workspace-tail' })
-      )
-    ).toBe('workspace-tail')
   })
 })

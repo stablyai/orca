@@ -13,7 +13,7 @@ import { canConnectAddRepoHost, canSelectAddRepoHost } from './add-repo-host-ava
 
 type AddRepoHostSelectorProps = {
   hosts: SidebarHostOption[]
-  selectedHostId: ExecutionHostId
+  selectedHostId: ExecutionHostId | null
   open: boolean
   onOpenChange: (open: boolean) => void
   onSelectHost: (hostId: ExecutionHostId) => void

@@ -12,6 +12,18 @@ function matchesRemoteCommand(commandPath: string[], ...command: string[]): bool
 
 export function getRemoteLinearWriteHelp(parsed: ParsedRemoteCli): string | null {
   const path = parsed.commandPath
+  if (matchesRemoteCommand(path, 'linear', 'save-issue')) {
+    return LINEAR_SAVE_ISSUE_HELP
+  }
+  if (matchesRemoteCommand(path, 'linear', 'relation', 'add')) {
+    return LINEAR_RELATION_ADD_HELP
+  }
+  if (
+    matchesRemoteCommand(path, 'linear', 'relation', 'remove') ||
+    matchesRemoteCommand(path, 'linear', 'relation', 'rm')
+  ) {
+    return LINEAR_RELATION_REMOVE_HELP
+  }
   if (matchesRemoteCommand(path, 'linear', 'status', 'set')) {
     return LINEAR_STATUS_HELP
   }
@@ -59,6 +71,10 @@ export function getRemoteLinearWriteHelp(parsed: ParsedRemoteCli): string | null
   }
   return null
 }
+
+const LINEAR_SAVE_ISSUE_HELP = `orca linear save-issue\n\nUsage: orca linear save-issue [<id>] [--current] [--team <key|id>] [--title <title>] [--description <text> | --body-file -] [--state <state>] [--assignee me|<user>|null] [--priority none|low|medium|high|urgent] [--estimate <number>|null] [--due-date <yyyy-mm-dd>|null] [--label <label>...] [--project <project>|null] [--parent-id <issue>|null] [--write-id <uuid>] [--workspace <id>] [--json]\n\nCreate or update a Linear issue`
+const LINEAR_RELATION_ADD_HELP = `orca linear relation add\n\nUsage: orca linear relation add [<id>] [--current] --related <issue> --type blocks|blocked-by|related|duplicate-of [--workspace <id>] [--json]\n\nAdd a Linear issue relation`
+const LINEAR_RELATION_REMOVE_HELP = `orca linear relation remove\n\nUsage: orca linear relation remove [<id>] [--current] --related <issue> --type blocks|blocked-by|related|duplicate-of [--workspace <id>] [--json]\n\nRemove a Linear issue relation`
 
 const LINEAR_STATUS_HELP = `orca linear status set\n\nUsage: orca linear status set [<id>] [--current] --to <state> [--workspace <id>] [--json]\n\nSet a Linear issue status`
 const LINEAR_ASSIGNEE_SET_HELP = `orca linear assignee set\n\nUsage: orca linear assignee set [<id>] [--current] (--me | --to-id <userId>) [--workspace <id>] [--json]\n\nSet a Linear issue assignee`

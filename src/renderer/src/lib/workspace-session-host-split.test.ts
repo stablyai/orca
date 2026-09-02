@@ -6,13 +6,10 @@ import {
 } from './workspace-session-host-split'
 import { getDefaultWorkspaceSession } from '../../../shared/constants'
 import { LOCAL_EXECUTION_HOST_ID, type ExecutionHostId } from '../../../shared/execution-host'
-import type {
-  BrowserPage,
-  Tab,
-  TerminalLayoutSnapshot,
-  TerminalTab,
-  WorkspaceSessionState
-} from '../../../shared/types'
+import type { BrowserPage } from '../../../shared/browser-workspace-types'
+import type { Tab } from '../../../shared/tab-types'
+import type { TerminalLayoutSnapshot, TerminalTab } from '../../../shared/terminal-tab-types'
+import type { WorkspaceSessionState } from '../../../shared/workspace-session-state-types'
 
 const RUNTIME_A: ExecutionHostId = 'runtime:env-a'
 const RUNTIME_B: ExecutionHostId = 'runtime:env-b'
@@ -114,6 +111,32 @@ describe('splitWorkspaceSessionByHost', () => {
     expect(Object.keys(slices[LOCAL_EXECUTION_HOST_ID]?.tabsByWorktree ?? {})).toEqual(['local-wt'])
     expect(Object.keys(slices[RUNTIME_A]?.tabsByWorktree ?? {})).toEqual(['a-wt'])
     expect(Object.keys(slices[RUNTIME_B]?.tabsByWorktree ?? {})).toEqual(['b-wt'])
+  })
+
+  it('keeps ssh-qualified visit recency in the local slice and routes runtime-qualified keys to their partition', () => {
+    const state: WorkspaceSessionState = {
+      ...getDefaultWorkspaceSession(),
+      lastVisitedAtByWorktreeId: {
+        'local-wt': 1,
+        'a-wt': 2,
+        'ssh:builder|ssh-wt': 3,
+        'runtime:env-a|a-wt': 4
+      }
+    }
+
+    const slices = splitWorkspaceSessionByHost(state, ownerByPrefix())
+
+    // Why local for ssh: boot hydration reads only local + runtime:* partitions,
+    // so an ssh partition would strand the recency across restarts.
+    expect(slices[LOCAL_EXECUTION_HOST_ID]?.lastVisitedAtByWorktreeId).toEqual({
+      'local-wt': 1,
+      'ssh:builder|ssh-wt': 3
+    })
+    expect(slices[RUNTIME_A]?.lastVisitedAtByWorktreeId).toEqual({
+      'a-wt': 2,
+      'runtime:env-a|a-wt': 4
+    })
+    expect(slices['ssh:builder' as ExecutionHostId]).toBeUndefined()
   })
 
   it('routes tab-keyed maps via the owning tab worktree (legacy + unified)', () => {
@@ -219,6 +242,44 @@ describe('splitWorkspaceSessionByHost', () => {
 
     expect(slices[RUNTIME_A]?.sleepingAgentSessionsByPaneKey).toHaveProperty('pane-a')
   })
+
+  it('routes terminal incarnation authority with its owning surface', () => {
+    const state: WorkspaceSessionState = {
+      ...getDefaultWorkspaceSession(),
+      tabsByWorktree: { 'a-wt': [makeTab('tab-a', 'a-wt')] },
+      terminalPtyIncarnationsByPaneKey: { 'tab-a:leaf-a': 'inc-a' },
+      terminalSurfaceTombstonesByPaneKey: {
+        'tab-b:leaf-b': {
+          worktreeId: 'b-wt',
+          parentTabId: 'tab-b',
+          leafId: 'leaf-b',
+          ptyId: 'pty-b',
+          incarnationId: 'inc-b',
+          retiredAt: 1
+        }
+      }
+    }
+
+    const slices = splitWorkspaceSessionByHost(state, ownerByPrefix())
+
+    expect(slices[RUNTIME_A]?.terminalPtyIncarnationsByPaneKey).toEqual({
+      'tab-a:leaf-a': 'inc-a'
+    })
+    expect(slices[RUNTIME_B]?.terminalSurfaceTombstonesByPaneKey).toHaveProperty('tab-b:leaf-b')
+  })
+
+  it('does not send host-private topology authority through renderer partitions', () => {
+    const state: WorkspaceSessionState = {
+      ...getDefaultWorkspaceSession(),
+      tabsByWorktree: { 'a-wt': [makeTab('tab-a', 'a-wt')] },
+      terminalTopologyRevisionByRepoId: { 'a-repo': 7 }
+    }
+
+    const slices = splitWorkspaceSessionByHost(state, ownerByPrefix())
+
+    expect(slices[LOCAL_EXECUTION_HOST_ID]?.terminalTopologyRevisionByRepoId).toBeUndefined()
+    expect(slices[RUNTIME_A]?.terminalTopologyRevisionByRepoId).toBeUndefined()
+  })
 })
 
 describe('mergeWorkspaceSessionsFromHosts', () => {
@@ -255,6 +316,21 @@ describe('mergeWorkspaceSessionsFromHosts', () => {
     const merged = mergeWorkspaceSessionsFromHosts({})
     expect(merged.tabsByWorktree).toBeUndefined()
     expect(() => mergeWorkspaceSessionsFromHosts({ [RUNTIME_A]: undefined })).not.toThrow()
+  })
+
+  it('does not merge host-private topology authority into unified renderer state', () => {
+    const merged = mergeWorkspaceSessionsFromHosts({
+      [LOCAL_EXECUTION_HOST_ID]: {
+        ...getDefaultWorkspaceSession(),
+        terminalTopologyRevisionByRepoId: { duplicate: 3 }
+      },
+      [RUNTIME_A]: {
+        ...getDefaultWorkspaceSession(),
+        terminalTopologyRevisionByRepoId: { duplicate: 9 }
+      }
+    })
+
+    expect(merged.terminalTopologyRevisionByRepoId).toBeUndefined()
   })
 })
 

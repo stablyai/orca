@@ -1,5 +1,7 @@
-import { describe, expect, it, vi, beforeEach } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { SshFilesystemProvider } from './ssh-filesystem-provider'
+import { SSH_FILE_STREAM_INACTIVITY_TIMEOUT_MS } from '../ssh/ssh-file-stream-inactivity-deadline'
+import { publishSystemResume, publishSystemSuspend } from '../system-power-lifecycle'
 
 type MockMultiplexer = {
   request: ReturnType<typeof vi.fn>
@@ -10,10 +12,12 @@ type MockMultiplexer = {
   dispose: ReturnType<typeof vi.fn>
   isDisposed: ReturnType<typeof vi.fn>
   _emitMethod: (method: string, params: Record<string, unknown>) => void
+  _listenerCount: () => number
 }
 
 function createMockMux(): MockMultiplexer {
   const methodHandlers = new Map<string, Set<(params: Record<string, unknown>) => void>>()
+  const disposeHandlers = new Set<(reason: 'shutdown' | 'connection_lost') => void>()
   return {
     request: vi.fn().mockResolvedValue(undefined),
     notify: vi.fn(),
@@ -29,7 +33,12 @@ function createMockMux(): MockMultiplexer {
         return () => set!.delete(handler)
       }
     ),
-    onDispose: vi.fn(() => () => {}),
+    onDispose: vi.fn((handler: (reason: 'shutdown' | 'connection_lost') => void) => {
+      disposeHandlers.add(handler)
+      return () => {
+        disposeHandlers.delete(handler)
+      }
+    }),
     dispose: vi.fn(),
     isDisposed: vi.fn().mockReturnValue(false),
     _emitMethod: (method, params) => {
@@ -39,7 +48,10 @@ function createMockMux(): MockMultiplexer {
           handler(params)
         }
       }
-    }
+    },
+    _listenerCount: () =>
+      disposeHandlers.size +
+      [...methodHandlers.values()].reduce((count, handlers) => count + handlers.size, 0)
   }
 }
 
@@ -48,8 +60,13 @@ describe('SshFilesystemProvider readFile streaming', () => {
   let provider: SshFilesystemProvider
 
   beforeEach(() => {
+    publishSystemResume()
     mux = createMockMux()
     provider = new SshFilesystemProvider('conn-1', mux as never)
+  })
+
+  afterEach(() => {
+    vi.useRealTimers()
   })
 
   it('streams via fs.readFileStream and reassembles utf-8 text', async () => {
@@ -80,7 +97,8 @@ describe('SshFilesystemProvider readFile streaming', () => {
 
     const result = await provider.readFile('/home/user/file.txt')
     expect(mux.request).toHaveBeenCalledWith('fs.readFileStream', {
-      filePath: '/home/user/file.txt'
+      filePath: '/home/user/file.txt',
+      flowControl: 'ack'
     })
     expect(result).toEqual({ content: text, isBinary: false })
   })
@@ -137,6 +155,21 @@ describe('SshFilesystemProvider readFile streaming', () => {
     expect(mux.notify).toHaveBeenCalledWith('fs.cancelStream', { streamId: 1 })
   })
 
+  it('applies a caller binary cap before allocating the stream buffer', async () => {
+    mux.request.mockResolvedValue({
+      streamId: 2,
+      totalSize: 2,
+      isBinary: true,
+      chunkEncoding: 'base64',
+      resultEncoding: 'base64'
+    })
+
+    await expect(provider.readFile('/home/x.bin', { maxBinaryBytes: 1 })).rejects.toThrow(
+      /exceeds client cap/i
+    )
+    expect(mux.notify).toHaveBeenCalledWith('fs.cancelStream', { streamId: 2 })
+  })
+
   it('rejects on fs.streamError notification', async () => {
     const totalSize = 1024
     mux.request.mockImplementation(async () => {
@@ -156,6 +189,123 @@ describe('SshFilesystemProvider readFile streaming', () => {
       }
     })
     await expect(provider.readFile('/home/x.txt')).rejects.toThrow(/gone/)
+  })
+
+  it('cancels and cleans up a stream that stalls after metadata', async () => {
+    vi.useFakeTimers()
+    mux.request.mockResolvedValue({
+      streamId: 9,
+      totalSize: 1,
+      isBinary: false,
+      resultEncoding: 'utf-8'
+    })
+
+    const read = provider.readFile('/home/x.txt')
+    const rejection = expect(read).rejects.toThrow(/file stream stalled/i)
+    await vi.advanceTimersByTimeAsync(SSH_FILE_STREAM_INACTIVITY_TIMEOUT_MS)
+
+    await rejection
+    expect(mux.notify).toHaveBeenCalledWith('fs.cancelStream', { streamId: 9 })
+    expect(mux._listenerCount()).toBe(0)
+    expect(vi.getTimerCount()).toBe(0)
+  })
+
+  it('keeps a long stream alive while chunks continue arriving', async () => {
+    vi.useFakeTimers()
+    const chunkSize = 256 * 1024
+    mux.request.mockResolvedValue({
+      streamId: 10,
+      totalSize: chunkSize + 1,
+      isBinary: true,
+      resultEncoding: 'base64'
+    })
+
+    const read = provider.readFile('/home/x.bin')
+    await vi.advanceTimersByTimeAsync(SSH_FILE_STREAM_INACTIVITY_TIMEOUT_MS - 1)
+    mux._emitMethod('fs.streamChunk', {
+      streamId: 10,
+      seq: 0,
+      data: Buffer.alloc(chunkSize).toString('base64')
+    })
+    await vi.advanceTimersByTimeAsync(SSH_FILE_STREAM_INACTIVITY_TIMEOUT_MS - 1)
+    mux._emitMethod('fs.streamChunk', {
+      streamId: 10,
+      seq: 1,
+      data: Buffer.alloc(1).toString('base64')
+    })
+    mux._emitMethod('fs.streamEnd', { streamId: 10 })
+
+    await expect(read).resolves.toEqual({
+      content: Buffer.alloc(chunkSize + 1).toString('base64'),
+      isBinary: true
+    })
+    expect(mux.notify).not.toHaveBeenCalledWith('fs.cancelStream', expect.anything())
+    expect(mux._listenerCount()).toBe(0)
+    expect(vi.getTimerCount()).toBe(0)
+  })
+
+  it('grants an active stream a fresh inactivity window after system resume', async () => {
+    vi.useFakeTimers()
+    mux.request.mockResolvedValue({
+      streamId: 11,
+      totalSize: 1,
+      isBinary: false,
+      resultEncoding: 'utf-8'
+    })
+
+    const read = provider.readFile('/home/x.txt')
+    await vi.advanceTimersByTimeAsync(SSH_FILE_STREAM_INACTIVITY_TIMEOUT_MS - 1)
+    publishSystemSuspend()
+    vi.setSystemTime(Date.now() + 60 * 60_000)
+    publishSystemResume()
+    await vi.advanceTimersByTimeAsync(SSH_FILE_STREAM_INACTIVITY_TIMEOUT_MS - 1)
+
+    expect(mux.notify).not.toHaveBeenCalledWith('fs.cancelStream', expect.anything())
+    mux._emitMethod('fs.streamChunk', {
+      streamId: 11,
+      seq: 0,
+      data: Buffer.from('x').toString('base64')
+    })
+    mux._emitMethod('fs.streamEnd', { streamId: 11 })
+    await expect(read).resolves.toEqual({ content: 'x', isBinary: false })
+
+    publishSystemResume()
+    expect(mux._listenerCount()).toBe(0)
+    expect(vi.getTimerCount()).toBe(0)
+  })
+
+  it('keeps metadata received during suspend paused until resume', async () => {
+    vi.useFakeTimers()
+    mux.request.mockResolvedValue({
+      streamId: 12,
+      totalSize: 1,
+      isBinary: false,
+      resultEncoding: 'utf-8'
+    })
+
+    publishSystemSuspend()
+    const read = provider.readFile('/home/x.txt')
+    const outcome = vi.fn()
+    void read.then(
+      () => outcome('resolved'),
+      () => outcome('rejected')
+    )
+    await vi.advanceTimersByTimeAsync(60 * 60_000)
+
+    expect(outcome).not.toHaveBeenCalled()
+    expect(mux.notify).not.toHaveBeenCalledWith('fs.cancelStream', expect.anything())
+    publishSystemResume()
+    await vi.advanceTimersByTimeAsync(SSH_FILE_STREAM_INACTIVITY_TIMEOUT_MS - 1)
+    mux._emitMethod('fs.streamChunk', {
+      streamId: 12,
+      seq: 0,
+      data: Buffer.from('x').toString('base64')
+    })
+    mux._emitMethod('fs.streamEnd', { streamId: 12 })
+
+    await expect(read).resolves.toEqual({ content: 'x', isBinary: false })
+    expect(mux._listenerCount()).toBe(0)
+    expect(vi.getTimerCount()).toBe(0)
   })
 
   it('rejects on chunk count mismatch at streamEnd', async () => {

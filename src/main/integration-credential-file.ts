@@ -1,5 +1,14 @@
-import { statSync } from 'node:fs'
-import { safeStorage } from 'electron'
+import {
+  chmodSync,
+  closeSync,
+  fsyncSync,
+  openSync,
+  renameSync,
+  statSync,
+  unlinkSync,
+  writeSync
+} from 'node:fs'
+import { getSecretStore } from '../shared/secret-store'
 import {
   credentialDecryptionMessage,
   type IntegrationCredentialService
@@ -12,6 +21,75 @@ export function credentialFileHasContent(path: string): boolean {
     return statSync(path).size > 0
   } catch {
     return false
+  }
+}
+
+// Falls back to 0600 plaintext when the OS keyring is unavailable, matching the
+// Linear/Jira token writers so a keyring-less box still connects.
+export function writeEncryptedCredential(
+  service: IntegrationCredentialService,
+  path: string,
+  value: string
+): void {
+  if (getSecretStore().isEncryptionAvailable()) {
+    writeCredentialFileAtomic(path, getSecretStore().encryptString(value))
+    return
+  }
+  console.warn(
+    `[${service.toLowerCase()}] secret encryption unavailable — storing credential in plaintext`
+  )
+  writeCredentialFileAtomic(path, Buffer.from(value, 'utf-8'))
+}
+
+// Why (STA-3941): a direct write can truncate the previous credential if it
+// fails or the app dies mid-write, leaving nothing to authenticate with. Write
+// a sibling temp file, fsync it, then rename — readers only ever observe the
+// old bytes or the complete new ones.
+export function writeCredentialFileAtomic(path: string, data: Buffer): void {
+  const tempPath = `${path}.tmp`
+  let handle: number | null = null
+  try {
+    handle = openSync(tempPath, 'w', 0o600)
+    // Why: write(2) is allowed to return a short count, so a single writeSync
+    // could publish a truncated credential — the very corruption this avoids.
+    let written = 0
+    while (written < data.length) {
+      const bytes = writeSync(handle, data, written, data.length - written)
+      if (bytes <= 0) {
+        throw new Error(`Credential write stalled at ${written}/${data.length} bytes`)
+      }
+      written += bytes
+    }
+    fsyncSync(handle)
+    closeSync(handle)
+    handle = null
+    renameSync(tempPath, path)
+    restrictCredentialFileToOwner(path)
+  } catch (error) {
+    if (handle !== null) {
+      try {
+        closeSync(handle)
+      } catch {
+        // Already closed or invalid; the unlink below is what matters.
+      }
+    }
+    try {
+      unlinkSync(tempPath)
+    } catch {
+      // Nothing to clean up.
+    }
+    throw error
+  }
+}
+
+// Why: writeFileSync's `mode` only applies when it creates the file, so
+// rewriting an existing credential would silently keep looser permissions.
+// Best-effort: Windows has no POSIX modes, so chmod is a documented no-op there.
+export function restrictCredentialFileToOwner(path: string): void {
+  try {
+    chmodSync(path, 0o600)
+  } catch {
+    // Best-effort hardening; the write itself already succeeded.
   }
 }
 
@@ -33,9 +111,9 @@ export function readStoredCredentialToken(
     return null
   }
 
-  if (safeStorage.isEncryptionAvailable()) {
+  if (getSecretStore().isEncryptionAvailable()) {
     try {
-      return usableToken(safeStorage.decryptString(raw))
+      return usableToken(getSecretStore().decryptString(raw))
     } catch {
       return readPlaintextLegacyCredential(service, raw)
     }
@@ -49,7 +127,7 @@ function readPlaintextLegacyCredential(
   raw: Buffer
 ): string | null {
   const plaintext = decodeUtf8(raw)
-  // Why: legacy plaintext tokens are printable UTF-8; safeStorage ciphertext
+  // Why: legacy plaintext tokens are printable UTF-8; sealed ciphertext
   // such as macOS v10 blobs must not be decoded into auth-header junk.
   if (plaintext === null || hasControlCharacter(plaintext)) {
     throw new CredentialDecryptionError(service)

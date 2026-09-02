@@ -1,4 +1,4 @@
-import type { TabGroup, TabGroupLayoutNode } from '../../../../shared/types'
+import type { TabGroup, TabGroupLayoutNode } from '../../../../shared/tab-types'
 
 /**
  * Derive the effective layout for a worktree: either its explicit layout

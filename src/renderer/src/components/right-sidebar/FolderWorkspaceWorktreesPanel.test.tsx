@@ -3,12 +3,14 @@
 import { act, type CSSProperties, type MouseEvent, type ReactNode } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { Repo, Worktree, WorktreeLineage, WorkspaceLineage } from '../../../../shared/types'
+import type { Repo } from '../../../../shared/repo-types'
+import type { WorkspaceLineage, WorktreeLineage } from '../../../../shared/worktree/lineage-types'
+import type { Worktree } from '../../../../shared/worktree/types'
 import { folderWorkspaceKey, worktreeWorkspaceKey } from '../../../../shared/workspace-scope'
 import {
   LINEAGE_CHILDREN_INLINE_OFFSET,
   getLineageChildrenInlineStyle
-} from '@/components/sidebar/worktree-list-indentation'
+} from '@/components/sidebar/worktree-list/rows/indentation'
 
 type MockStoreState = {
   activeWorktreeId: string | null

@@ -3,7 +3,10 @@ import { LoaderCircle } from 'lucide-react'
 import { toast } from 'sonner'
 import { Input } from '@/components/ui/input'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
+import { WorkspaceEmojiSuggestionPopover } from '@/components/workspace-emoji/WorkspaceEmojiSuggestionPopover'
+import { useWorkspaceEmojiShortcodeInput } from '@/components/workspace-emoji/useWorkspaceEmojiShortcodeInput'
 import { cn } from '@/lib/utils'
+import { isImeCompositionKeyDown } from '@/lib/ime-composition-keyboard-event'
 import { translate } from '@/i18n/i18n'
 
 export type WorktreeTitleRenameCommit = { kind: 'cancel' } | { kind: 'save'; displayName: string }
@@ -30,10 +33,12 @@ type WorktreeTitleInlineRenameProps = {
   disabled?: boolean
   showUnreadEmphasis?: boolean
   dimReadTitle?: boolean
+  editingPresentation?: 'text' | 'field'
   className?: string
   editingClassName?: string
   inputClassName?: string
   titleWrapper?: (title: React.ReactElement) => React.ReactElement
+  wrapTitle?: boolean
   onEditingChange?: (editing: boolean) => void
   onRename: (displayName: string) => Promise<void> | void
   // Why: lets a parent (e.g. the workspace.rename shortcut via WorktreeCard)
@@ -48,10 +53,12 @@ export function WorktreeTitleInlineRename({
   disabled = false,
   showUnreadEmphasis = false,
   dimReadTitle = false,
+  editingPresentation = 'text',
   className,
   editingClassName,
   inputClassName,
   titleWrapper,
+  wrapTitle = false,
   onEditingChange,
   onRename,
   beginEditing = false,
@@ -63,10 +70,17 @@ export function WorktreeTitleInlineRename({
   const titleElementRef = useRef<HTMLSpanElement | null>(null)
   const titleResizeObserverRef = useRef<ResizeObserver | null>(null)
   const removeTitleResizeListenerRef = useRef<(() => void) | null>(null)
+  const inputElementRef = useRef<HTMLInputElement | null>(null)
   const [editing, setEditing] = useState(false)
   const [value, setValue] = useState(displayName)
   const [saving, setSaving] = useState(false)
   const [titleTruncated, setTitleTruncated] = useState(false)
+  const emojiInput = useWorkspaceEmojiShortcodeInput({
+    disabled: saving,
+    inputRef: inputElementRef,
+    onValueChange: setValue,
+    value
+  })
 
   const measureTitleTruncated = useCallback((element: HTMLSpanElement | null) => {
     const nextTruncated = element ? isWorktreeTitleTruncated(element) : false
@@ -84,7 +98,9 @@ export function WorktreeTitleInlineRename({
       // root owns that stale-write guard without a mount-only Effect.
       mountedRef.current = node !== null
       titleElementRef.current = node
-      if (!node || editingRef.current) {
+      // Why: wrapped titles render in full and never truncate, so skip the measure +
+      // ResizeObserver entirely — for that mode it could only churn unused state.
+      if (!node || editingRef.current || wrapTitle) {
         measureTitleTruncated(null)
         return
       }
@@ -104,10 +120,20 @@ export function WorktreeTitleInlineRename({
       observer.observe(node)
       titleResizeObserverRef.current = observer
     },
-    [measureTitleTruncated]
+    [measureTitleTruncated, wrapTitle]
   )
 
+  // Why: remounts the rendered title so truncation is measured again. The editor must
+  // not share it — an unread flip would remount the input and reselect what was typed.
   const titleElementKey = `${displayName}:${showUnreadEmphasis ? 'unread' : 'read'}`
+  // Why: the sidebar row needs a text-only editor to avoid layout jumps; the
+  // hovercard can use a compact field that reads more like native rename UI.
+  const editingInputClassName =
+    editingPresentation === 'field'
+      ? 'h-6 rounded-sm border border-input bg-input/40 px-1.5 py-0 shadow-xs selection:bg-[Highlight] selection:text-[HighlightText] focus-visible:border-ring focus-visible:ring-[1px] focus-visible:ring-ring/50 dark:bg-input/30'
+      : 'h-[1lh] rounded-none border-0 !border-transparent !bg-transparent p-0 !shadow-none focus-visible:border-transparent focus-visible:ring-0 focus-visible:outline-none dark:!bg-transparent'
+  const savingInputClassName = editingPresentation === 'field' ? 'pr-6' : 'pr-4'
+  const savingSpinnerClassName = editingPresentation === 'field' ? 'right-1.5' : 'right-0'
 
   const setEditingMode = useCallback(
     (nextEditing: boolean) => {
@@ -125,7 +151,14 @@ export function WorktreeTitleInlineRename({
     [measureTitleTruncated, onEditingChange]
   )
 
+  // Why: double-click and the shortcut both open here, so neither can skip a step.
+  const openRenameEditor = useCallback(() => {
+    setValue(displayName)
+    setEditingMode(true)
+  }, [displayName, setEditingMode])
+
   const handleInputRef = useCallback((input: HTMLInputElement | null) => {
+    inputElementRef.current = input
     if (!input) {
       return
     }
@@ -145,9 +178,8 @@ export function WorktreeTitleInlineRename({
     if (disabled || editing) {
       return
     }
-    setValue(displayName)
-    setEditing(true)
-  }, [beginEditing, disabled, editing, displayName, onBeginEditingConsumed])
+    openRenameEditor()
+  }, [beginEditing, disabled, editing, onBeginEditingConsumed, openRenameEditor])
 
   const stopCardEvent = useCallback((event: React.SyntheticEvent) => {
     event.stopPropagation()
@@ -160,16 +192,16 @@ export function WorktreeTitleInlineRename({
       }
       event.preventDefault()
       event.stopPropagation()
-      setValue(displayName)
-      setEditingMode(true)
+      openRenameEditor()
     },
-    [disabled, displayName, setEditingMode]
+    [disabled, openRenameEditor]
   )
 
   const cancelRename = useCallback(() => {
+    emojiInput.close()
     setValue(displayName)
     setEditingMode(false)
-  }, [displayName, setEditingMode])
+  }, [displayName, emojiInput, setEditingMode])
 
   const commitRename = useCallback(async () => {
     if (savingRef.current) {
@@ -211,6 +243,14 @@ export function WorktreeTitleInlineRename({
   const handleKeyDown = useCallback(
     (event: React.KeyboardEvent<HTMLInputElement>) => {
       event.stopPropagation()
+      if (emojiInput.handleKeyDown(event)) {
+        return
+      }
+      // Why: an Enter that only confirms a CJK IME candidate must not commit the
+      // rename; wait for a non-composition Enter.
+      if (isImeCompositionKeyDown(event)) {
+        return
+      }
       if (event.key === 'Enter') {
         event.preventDefault()
         void commitRename()
@@ -219,55 +259,80 @@ export function WorktreeTitleInlineRename({
         cancelRename()
       }
     },
-    [cancelRename, commitRename]
+    [cancelRename, commitRename, emojiInput]
   )
 
   if (editing) {
     return (
-      <span
-        key={`editing:${titleElementKey}`}
-        ref={handleRootRef}
-        className={cn(
-          'relative grid min-w-0 truncate leading-tight text-foreground',
-          showUnreadEmphasis ? 'font-semibold' : 'font-normal',
-          className,
-          editingClassName
-        )}
-        data-worktree-title-inline-rename="editing"
-      >
+      <>
         <span
-          className="invisible col-start-1 row-start-1 min-w-0 truncate whitespace-pre"
-          aria-hidden="true"
-        >
-          {displayName}
-        </span>
-        <Input
-          ref={handleInputRef}
-          value={value}
-          style={{ font: 'inherit' }}
-          disabled={saving}
-          aria-label={translate(
-            'auto.components.sidebar.WorktreeTitleInlineRename.bff3bdd00c',
-            'Rename workspace'
-          )}
-          data-worktree-title-rename-input="true"
-          onChange={(event) => setValue(event.target.value)}
-          onBlur={() => void commitRename()}
-          onClick={stopCardEvent}
-          onDoubleClick={stopCardEvent}
-          onPointerDown={stopCardEvent}
-          onKeyDown={handleKeyDown}
+          ref={handleRootRef}
           className={cn(
-            'col-start-1 row-start-1 h-[1lh] min-w-0 select-text truncate rounded-none border-0 !border-transparent !bg-transparent p-0 text-foreground !shadow-none outline-none dark:!bg-transparent',
-            'focus-visible:border-transparent focus-visible:ring-0 focus-visible:outline-none',
-            saving && 'pr-4',
-            inputClassName
+            'relative grid min-w-0 truncate leading-tight text-foreground',
+            showUnreadEmphasis ? 'font-semibold' : 'font-normal',
+            className,
+            editingClassName
           )}
+          data-worktree-title-inline-rename="editing"
+        >
+          <span
+            className="invisible col-start-1 row-start-1 min-w-0 truncate whitespace-pre"
+            aria-hidden="true"
+          >
+            {displayName}
+          </span>
+          <Input
+            ref={handleInputRef}
+            value={value}
+            style={{ font: 'inherit' }}
+            disabled={saving}
+            spellCheck={false}
+            aria-label={translate(
+              'auto.components.sidebar.WorktreeTitleInlineRename.bff3bdd00c',
+              'Rename workspace'
+            )}
+            data-worktree-title-rename-input="true"
+            onChange={(event) =>
+              emojiInput.handleValueChange(event.target.value, event.target.selectionStart)
+            }
+            onSelect={(event) => emojiInput.syncCursor(event.currentTarget)}
+            onBlur={() => void commitRename()}
+            onClick={stopCardEvent}
+            onDoubleClick={stopCardEvent}
+            onPointerDown={stopCardEvent}
+            onKeyDown={handleKeyDown}
+            className={cn(
+              'col-start-1 row-start-1 min-w-0 select-text truncate text-foreground outline-none',
+              editingInputClassName,
+              saving && savingInputClassName,
+              inputClassName
+            )}
+          />
+          {saving ? (
+            <LoaderCircle
+              className={cn(
+                'pointer-events-none absolute top-1/2 size-3 -translate-y-1/2 animate-spin text-muted-foreground',
+                savingSpinnerClassName
+              )}
+            />
+          ) : null}
+        </span>
+        <WorkspaceEmojiSuggestionPopover
+          anchorRef={inputElementRef}
+          open={emojiInput.open}
+          commandValue={emojiInput.commandValue}
+          heading={translate(
+            'auto.components.new.workspace.SmartWorkspaceNameField.emoji',
+            'Emoji'
+          )}
+          suggestions={emojiInput.suggestions}
+          onCommandValueChange={emojiInput.onCommandValueChange}
+          onSelect={emojiInput.selectSuggestion}
+          onOpenChange={(open) => !open && emojiInput.close()}
+          side="right"
+          contentClassName="w-56"
         />
-        {saving ? (
-          <LoaderCircle className="pointer-events-none absolute right-0 top-1/2 size-3 -translate-y-1/2 animate-spin text-muted-foreground" />
-        ) : null}
-      </span>
+      </>
     )
   }
 
@@ -282,7 +347,8 @@ export function WorktreeTitleInlineRename({
       key={`title:${titleElementKey}`}
       ref={handleRootRef}
       className={cn(
-        'block min-w-0 truncate leading-tight focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-worktree-sidebar-ring',
+        'block min-w-0 leading-tight focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-worktree-sidebar-ring',
+        wrapTitle ? 'break-words whitespace-normal' : 'truncate',
         titleEmphasisClassName,
         className
       )}
@@ -304,7 +370,7 @@ export function WorktreeTitleInlineRename({
     return titleWrapper(title)
   }
 
-  if (!titleTruncated) {
+  if (wrapTitle || !titleTruncated) {
     return title
   }
 

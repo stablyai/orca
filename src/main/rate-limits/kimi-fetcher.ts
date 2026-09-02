@@ -1,8 +1,17 @@
-import { existsSync, readFileSync } from 'node:fs'
-import { homedir } from 'node:os'
-import { join } from 'node:path'
+import { readFile } from 'node:fs/promises'
+import { join, win32 as pathWin32 } from 'node:path'
 import { net } from 'electron'
-import type { ProviderRateLimits, RateLimitWindow } from '../../shared/rate-limit-types'
+import type {
+  ProviderRateLimits,
+  RateLimitWindow,
+  UsageRateLimitMetadata
+} from '../../shared/rate-limit-types'
+import { parseWslUncPath } from '../../shared/wsl-paths'
+import { getHostKimiHome, type KimiHomeResolution } from '../kimi/kimi-runtime-home'
+import {
+  createAuthFilesystemOperation,
+  type SharedAuthFilesystemOperation
+} from './auth-filesystem-operation'
 
 // Why: Kimi Code's managed coding plan exposes subscription usage at
 // `${base}/usages` (see packages/oauth/src/managed-usage.ts in the CLI bundle).
@@ -10,18 +19,16 @@ import type { ProviderRateLimits, RateLimitWindow } from '../../shared/rate-limi
 // stays aligned with a user's self-hosted/staging config.
 const KIMI_BASE_URL = process.env.KIMI_CODE_BASE_URL ?? 'https://api.kimi.com/coding/v1'
 const API_TIMEOUT_MS = 10_000
+const CREDENTIALS_READ_TIMEOUT_MS = 5_000
 
 const SESSION_WINDOW_MINUTES = 300 // 5h
 const WEEKLY_WINDOW_MINUTES = 10080 // 7d
 
-function getKimiHome(): string {
-  // Why: match the CLI's `KIMI_CODE_HOME ?? ~/.kimi-code` resolution so we read
-  // the same OAuth credentials the running Kimi CLI writes.
-  return process.env.KIMI_CODE_HOME ?? join(homedir(), '.kimi-code')
-}
-
-function getCredentialsPath(): string {
-  return join(getKimiHome(), 'credentials', 'kimi-code.json')
+function getCredentialsPath(kimiHome: string): string {
+  // WSL homes arrive as `\\wsl.localhost\<distro>\...`, which only win32 join keeps intact.
+  return parseWslUncPath(kimiHome)
+    ? pathWin32.join(kimiHome, 'credentials', 'kimi-code.json')
+    : join(kimiHome, 'credentials', 'kimi-code.json')
 }
 
 type KimiCredentials = {
@@ -48,22 +55,65 @@ function parseCredentials(value: unknown): KimiCredentials | null {
   return credentials
 }
 
-function readCredentials(): CredentialsReadResult {
-  const path = getCredentialsPath()
-  if (!existsSync(path)) {
-    return { status: 'missing' }
+const credentialsReadByPath = new Map<
+  string,
+  SharedAuthFilesystemOperation<CredentialsReadResult>
+>()
+
+function isMissingPathError(error: unknown): boolean {
+  const code = (error as NodeJS.ErrnoException | null)?.code
+  return code === 'ENOENT' || code === 'ENOTDIR'
+}
+
+function readErrorMessage(err: unknown): string {
+  // Why: AbortSignal timeouts reject with a DOMException, not an Error.
+  const message = (err as { message?: unknown } | null)?.message
+  return typeof message === 'string' ? message : 'Unable to read Kimi credentials'
+}
+
+function getCredentialsRead(path: string): SharedAuthFilesystemOperation<CredentialsReadResult> {
+  const existing = credentialsReadByPath.get(path)
+  if (existing) {
+    return existing
   }
-  try {
-    const parsed: unknown = JSON.parse(readFileSync(path, 'utf-8'))
-    const credentials = parseCredentials(parsed)
-    return credentials
-      ? { status: 'ok', credentials }
-      : { status: 'error', error: 'Kimi credentials file is invalid' }
-  } catch (err) {
-    return {
-      status: 'error',
-      error: err instanceof Error ? err.message : 'Unable to read Kimi credentials'
+  // Why: aborting an fs promise does not cancel an already issued UNC request, so
+  // share one raw read per path until it settles (mirrors codex-fetcher's auth read).
+  const read = createAuthFilesystemOperation(path, async (): Promise<CredentialsReadResult> => {
+    let raw: string
+    try {
+      raw = await readFile(path, 'utf-8')
+    } catch (err) {
+      return isMissingPathError(err)
+        ? { status: 'missing' }
+        : { status: 'error', error: readErrorMessage(err) }
     }
+    try {
+      const credentials = parseCredentials(JSON.parse(raw))
+      return credentials
+        ? { status: 'ok', credentials }
+        : { status: 'error', error: 'Kimi credentials file is invalid' }
+    } catch (err) {
+      return { status: 'error', error: readErrorMessage(err) }
+    }
+  })
+  credentialsReadByPath.set(path, read)
+  const clearRead = (): void => {
+    if (credentialsReadByPath.get(path) === read) {
+      credentialsReadByPath.delete(path)
+    }
+  }
+  void read.result.then(clearRead, clearRead)
+  return read
+}
+
+async function readCredentials(kimiHome: string): Promise<CredentialsReadResult> {
+  const path = getCredentialsPath(kimiHome)
+  try {
+    // Why: a stopped distro parks a UNC read for minutes; bound it so a WSL home
+    // degrades to an error instead of stalling the poll cycle.
+    return await getCredentialsRead(path).wait(AbortSignal.timeout(CREDENTIALS_READ_TIMEOUT_MS))
+  } catch (err) {
+    return { status: 'error', error: readErrorMessage(err) }
   }
 }
 
@@ -142,7 +192,7 @@ function parseResetDescription(isoString: string | undefined): string | null {
     return null
   }
   const date = new Date(isoString)
-  if (isNaN(date.getTime())) {
+  if (Number.isNaN(date.getTime())) {
     return null
   }
   const isToday = date.toDateString() === new Date().toDateString()
@@ -208,14 +258,43 @@ function mapUsageResponse(data: KimiUsageResponse): ProviderRateLimits {
   }
 }
 
-function result(status: ProviderRateLimits['status'], error: string | null): ProviderRateLimits {
-  return { provider: 'kimi', session: null, weekly: null, updatedAt: Date.now(), error, status }
+// A bare "operation was aborted due to timeout" hides which machine stalled.
+function readErrorContext(home: KimiHomeResolution, error: string): string {
+  return home.runtime === 'wsl' ? `${error} (WSL ${home.wslDistro ?? 'default distro'})` : error
+}
+
+function expiredSessionMessage(home: KimiHomeResolution): string {
+  const where =
+    home.runtime === 'wsl'
+      ? `inside WSL (${home.wslDistro ?? 'default distro'})`
+      : 'on the computer running Orca'
+  return `Kimi session expired — run kimi ${where}, then retry usage.`
+}
+
+function result(
+  status: ProviderRateLimits['status'],
+  error: string | null,
+  usageMetadata?: UsageRateLimitMetadata
+): ProviderRateLimits {
+  return {
+    provider: 'kimi',
+    session: null,
+    weekly: null,
+    updatedAt: Date.now(),
+    error,
+    status,
+    ...(usageMetadata ? { usageMetadata } : {})
+  }
 }
 
 /**
  * Read-only subscription usage for Kimi Code.
  *
- * Why read-only: the access token lives in `~/.kimi-code/credentials/kimi-code.json`
+ * `home` selects which machine's credentials to read: on Windows the Kimi CLI
+ * often runs inside WSL, and only that copy is refreshed (#12370). Defaults to
+ * the host home.
+ *
+ * Why read-only: the access token lives in `<kimi home>/credentials/kimi-code.json`
  * and is refreshed by the Kimi CLI itself (15-min TTL, refresh-token rotation).
  * Orca must NEVER refresh or rewrite that file — a rotated refresh token would
  * log out a live `kimi` session. We only read the current token and call the
@@ -223,13 +302,23 @@ function result(status: ProviderRateLimits['status'], error: string | null): Pro
  * `/usage` command uses. The completion endpoint (the one Moonshot gates to
  * approved coding agents) is never touched here.
  */
-export async function fetchKimiRateLimits(): Promise<ProviderRateLimits> {
-  const readResult = readCredentials()
+export async function fetchKimiRateLimits(options?: {
+  home?: KimiHomeResolution
+}): Promise<ProviderRateLimits> {
+  const home: KimiHomeResolution = options?.home ?? {
+    runtime: 'host',
+    wslDistro: null,
+    path: getHostKimiHome()
+  }
+  if (home.path === null) {
+    return result('error', `WSL Kimi home unavailable for ${home.wslDistro ?? 'default distro'}`)
+  }
+  const readResult = await readCredentials(home.path)
   if (readResult.status === 'missing') {
     return result('unavailable', 'Not signed in to Kimi Code')
   }
   if (readResult.status === 'error') {
-    return result('error', readResult.error)
+    return result('error', readErrorContext(home, readResult.error))
   }
   const creds = readResult.credentials
   if (typeof creds.access_token !== 'string' || creds.access_token.length === 0) {
@@ -239,17 +328,18 @@ export async function fetchKimiRateLimits(): Promise<ProviderRateLimits> {
     // Why: don't refresh — the CLI owns the token lifecycle. Report a transient
     // error so the rate-limit service keeps the last good snapshot (stale
     // policy) until the user next runs Kimi and the CLI refreshes the file.
-    return result('error', 'Kimi token expired — open Kimi to refresh')
+    return result('error', expiredSessionMessage(home), {
+      failureKind: 'delegated-refresh-required',
+      source: 'oauth'
+    })
   }
 
-  const controller = new AbortController()
-  const timeout = setTimeout(() => controller.abort(), API_TIMEOUT_MS)
   try {
     const res = await net.fetch(`${KIMI_BASE_URL.replace(/\/$/, '')}/usages`, {
       // Why: identical to the CLI's fetchManagedUsage — bearer token + Accept.
       // No extra User-Agent: the usages endpoint authenticates by token only.
       headers: { Authorization: `Bearer ${creds.access_token}`, Accept: 'application/json' },
-      signal: controller.signal
+      signal: AbortSignal.timeout(API_TIMEOUT_MS)
     })
     if (res.status === 401 || res.status === 403) {
       return result('error', `Kimi usage request unauthorized (HTTP ${res.status})`)
@@ -261,7 +351,5 @@ export async function fetchKimiRateLimits(): Promise<ProviderRateLimits> {
     return mapUsageResponse(typeof data === 'object' && data !== null ? data : {})
   } catch (err) {
     return result('error', err instanceof Error ? err.message : 'Kimi usage request failed')
-  } finally {
-    clearTimeout(timeout)
   }
 }

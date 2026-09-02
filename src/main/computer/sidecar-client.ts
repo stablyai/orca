@@ -1,4 +1,5 @@
 import { fork, type ChildProcess } from 'node:child_process'
+import { getAppEnvironment, hasAppEnvironment } from '../../shared/app-environment'
 import { join } from 'node:path'
 import type {
   ComputerActionResult,
@@ -107,12 +108,15 @@ function getComputerSidecarEntryPath(): string {
   return join(basePath, 'out', 'main', 'computer-sidecar.js')
 }
 
+// Why the port and not require('electron'): the literal text fails the plain-Node
+// entry guard even inside a try/catch, and hasAppEnvironment() gives the same
+// "no app root here" answer without it.
 function loadElectronApp(): { getAppPath(): string; isPackaged: boolean } | null {
-  try {
-    return require('electron').app
-  } catch {
+  if (!hasAppEnvironment()) {
     return null
   }
+  const environment = getAppEnvironment()
+  return { getAppPath: () => environment.getAppPath(), isPackaged: environment.isPackaged() }
 }
 
 class ComputerSidecarProcess {

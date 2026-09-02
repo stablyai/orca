@@ -1,9 +1,11 @@
 import { describe, expect, it } from 'vitest'
 import {
+  getComposerRepoWorktreeBranches,
   isBranchCheckedOutInWorktrees,
   resolveComposerBranchNameOverrideForCreate,
   resolveComposerBranchReuse,
   resolveComposerBranchSelection,
+  resolveComposerManualBranchNameChange,
   resolveComposerReuseOverride
 } from './composer-branch-selection'
 
@@ -57,15 +59,28 @@ describe('resolveComposerBranchSelection', () => {
     })
   })
 
-  it('keeps resolver-provided PR branch overrides when the workspace name changes', () => {
+  it('keeps manual branch-name overrides when preserving workspace edits', () => {
     expect(
       resolveComposerBranchNameOverrideForCreate({
-        branchNameOverride: 'feature/fix',
-        branchAutoName: '',
+        branchNameOverride: 'feature/manual',
+        branchAutoName: 'feature/auto',
         workspaceName: 'edited display name',
         preserveWorkspaceNameEdits: true
       })
-    ).toBe('feature/fix')
+    ).toBe('feature/manual')
+  })
+
+  it('drops empty or missing branch-name overrides even when preserving workspace edits', () => {
+    for (const branchNameOverride of [undefined, '']) {
+      expect(
+        resolveComposerBranchNameOverrideForCreate({
+          branchNameOverride,
+          branchAutoName: 'feature/fix',
+          workspaceName: 'edited display name',
+          preserveWorkspaceNameEdits: true
+        })
+      ).toBeUndefined()
+    }
   })
 
   it('keeps existing branch picker override behavior tied to the auto-name', () => {
@@ -78,6 +93,110 @@ describe('resolveComposerBranchSelection', () => {
       })
     ).toBeUndefined()
   })
+
+  it('uses a slash-containing typed branch name as the create override in branch mode', () => {
+    expect(
+      resolveComposerBranchNameOverrideForCreate({
+        branchNameOverride: undefined,
+        branchAutoName: '',
+        workspaceName: 'feature/user-profile',
+        preserveWorkspaceNameEdits: false,
+        createBranchFromWorkspaceName: true
+      })
+    ).toBe('feature/user-profile')
+  })
+
+  it('keeps plain typed branch names on the existing sanitized-name path', () => {
+    expect(
+      resolveComposerBranchNameOverrideForCreate({
+        branchNameOverride: undefined,
+        branchAutoName: '',
+        workspaceName: 'feature-user-profile',
+        preserveWorkspaceNameEdits: false,
+        createBranchFromWorkspaceName: true
+      })
+    ).toBeUndefined()
+  })
+
+  it('does not preserve a slash typed name outside branch mode (gate off)', () => {
+    // Why: only branch mode opts into slash preservation; every other mode keeps
+    // deriving the branch from the sanitized workspace name.
+    expect(
+      resolveComposerBranchNameOverrideForCreate({
+        branchNameOverride: undefined,
+        branchAutoName: '',
+        workspaceName: 'feature/user-profile',
+        preserveWorkspaceNameEdits: false,
+        createBranchFromWorkspaceName: false
+      })
+    ).toBeUndefined()
+  })
+
+  it('keeps a resolver-provided override even in branch mode with a slash name', () => {
+    // Why: a picked branch (override set) wins over the typed slash name so the
+    // branch-mode gate never hijacks an explicit branch selection.
+    expect(
+      resolveComposerBranchNameOverrideForCreate({
+        branchNameOverride: 'feature/picked',
+        branchAutoName: 'feature/picked',
+        workspaceName: 'feature/user-profile',
+        preserveWorkspaceNameEdits: true,
+        createBranchFromWorkspaceName: true
+      })
+    ).toBe('feature/picked')
+  })
+})
+
+describe('resolveComposerManualBranchNameChange', () => {
+  const forkPushTarget = {
+    remoteName: 'contributor',
+    branchName: 'feature/from-pr',
+    remoteUrl: 'https://example.com/contributor/repo.git'
+  }
+
+  it('clears a PR-derived push target when the manual branch changes to a different branch', () => {
+    expect(
+      resolveComposerManualBranchNameChange({
+        value: 'feature/manual',
+        pushTarget: forkPushTarget,
+        forkPushWarning: 'Cannot push to fork'
+      })
+    ).toEqual({
+      branchNameOverride: 'feature/manual',
+      pushTarget: undefined,
+      forkPushWarning: null
+    })
+  })
+
+  it('clears a PR-derived push target when manual branch input is empty or whitespace', () => {
+    for (const value of ['', '   ']) {
+      expect(
+        resolveComposerManualBranchNameChange({
+          value,
+          pushTarget: forkPushTarget,
+          forkPushWarning: 'Cannot push to fork'
+        })
+      ).toEqual({
+        branchNameOverride: undefined,
+        pushTarget: undefined,
+        forkPushWarning: null
+      })
+    }
+  })
+
+  it('preserves a PR-derived push target when the manual branch exactly matches its branch', () => {
+    expect(
+      resolveComposerManualBranchNameChange({
+        value: 'feature/from-pr',
+        pushTarget: forkPushTarget,
+        forkPushWarning: 'Cannot push to fork'
+      })
+    ).toEqual({
+      branchNameOverride: 'feature/from-pr',
+      pushTarget: forkPushTarget,
+      forkPushWarning: 'Cannot push to fork'
+    })
+  })
 })
 
 describe('isBranchCheckedOutInWorktrees', () => {
@@ -88,6 +207,20 @@ describe('isBranchCheckedOutInWorktrees', () => {
     expect(isBranchCheckedOutInWorktrees('feature-x', ['feature-x'])).toBe(true)
     expect(isBranchCheckedOutInWorktrees('feature-x', ['refs/heads/main', ''])).toBe(false)
     expect(isBranchCheckedOutInWorktrees('feature-x', [])).toBe(false)
+  })
+})
+
+describe('getComposerRepoWorktreeBranches', () => {
+  it('supplies only the selected repo branches to reuse eligibility', () => {
+    expect(
+      getComposerRepoWorktreeBranches(
+        [
+          { repoId: 'repo-a', branch: 'feature/a' },
+          { repoId: 'repo-b', branch: 'feature/b' }
+        ],
+        'repo-a'
+      )
+    ).toEqual(['feature/a'])
   })
 })
 

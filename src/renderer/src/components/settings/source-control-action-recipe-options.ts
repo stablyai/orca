@@ -1,4 +1,4 @@
-import type { TuiAgent } from '../../../../shared/types'
+import type { TuiAgent } from '../../../../shared/tui-agent'
 import {
   SOURCE_CONTROL_TEXT_ACTION_IDS,
   type SourceControlActionId
@@ -36,6 +36,10 @@ export const getActionDescriptions = createLocalizedCatalog(
     fixCommitFailure: translate(
       'auto.components.settings.source.control.action.recipe.options.fixCommitFailure',
       'Start an agent when a commit hook or git commit fails.'
+    ),
+    fixPushFailure: translate(
+      'auto.components.settings.source.control.action.recipe.options.fixPushFailure',
+      'Start an agent when a pre-push hook or git push fails.'
     ),
     fixChecks: translate(
       'auto.components.settings.source.control.action.recipe.options.fixChecks',

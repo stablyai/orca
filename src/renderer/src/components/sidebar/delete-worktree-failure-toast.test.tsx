@@ -55,6 +55,7 @@ describe('showDeleteWorktreeFailureToast', () => {
     showDeleteWorktreeFailureToast({
       error: 'branch has changes',
       canForceDelete: true,
+      forceDeleteReason: 'dirty',
       onViewChanges,
       onForceDelete,
       worktreeId: 'wt-1',
@@ -93,6 +94,7 @@ describe('showDeleteWorktreeFailureToast', () => {
     showDeleteWorktreeFailureToast({
       error: 'permission denied',
       canForceDelete: false,
+      forceDeleteReason: null,
       onViewChanges,
       onForceDelete: vi.fn(),
       worktreeId: 'wt-2',
@@ -115,5 +117,46 @@ describe('showDeleteWorktreeFailureToast', () => {
     clickButton(body, 'View')
     expect(toast.dismiss).toHaveBeenCalledWith('delete-worktree-failure:wt-2')
     expect(onViewChanges).toHaveBeenCalled()
+  })
+
+  it('offers neither force delete nor View for a locked workspace', () => {
+    const onViewChanges = vi.fn()
+
+    showDeleteWorktreeFailureToast({
+      error: 'Worktree is locked by Git.',
+      canForceDelete: false,
+      forceDeleteReason: null,
+      onViewChanges,
+      onForceDelete: vi.fn(),
+      worktreeId: 'wt-locked',
+      worktreeName: 'feature/locked'
+    })
+
+    const body = renderToastBody('info')
+    expect(body.textContent).toContain('This workspace is locked by Git.')
+    expect(body.textContent).toContain(
+      'Run git worktree unlock <worktree-path> from its repository, then retry deletion'
+    )
+    expect(body.textContent).not.toContain('Force Delete')
+    expect(body.textContent).not.toContain('View')
+    expect(onViewChanges).not.toHaveBeenCalled()
+  })
+
+  it('keeps View for a locked workspace when changed files are known', () => {
+    showDeleteWorktreeFailureToast({
+      error: 'Worktree is locked by Git.',
+      canForceDelete: false,
+      forceDeleteReason: null,
+      lockReason: 'active agent session',
+      hasKnownChanges: true,
+      onViewChanges: vi.fn(),
+      onForceDelete: vi.fn(),
+      worktreeId: 'wt-locked-dirty',
+      worktreeName: 'feature/locked-dirty'
+    })
+
+    const body = renderToastBody('info')
+    expect(body.textContent).toContain('Git reported: active agent session')
+    expect(body.textContent).toContain('View')
   })
 })

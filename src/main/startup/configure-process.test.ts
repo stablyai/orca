@@ -1,4 +1,4 @@
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { homedir, tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -77,6 +77,66 @@ describe('patchPackagedProcessPath', () => {
     expect(segments).toContain(join('/Users/tester', 'bin'))
   })
 
+  it('omits Linux-only snap/Linuxbrew dirs but keeps Nix on packaged darwin runs', async () => {
+    const { app } = await import('electron')
+    const { patchPackagedProcessPath } = await import('./configure-process')
+
+    setPlatform('darwin')
+    Object.defineProperty(app, 'isPackaged', { configurable: true, value: true })
+    process.env.HOME = '/Users/tester'
+    process.env.PATH = '/usr/bin:/bin'
+
+    patchPackagedProcessPath()
+
+    const segments = (process.env.PATH ?? '').split(':')
+    // Why: neither has a macOS installer, so both are phantom PATH entries.
+    expect(segments).not.toContain('/snap/bin')
+    expect(segments).not.toContain('/home/linuxbrew/.linuxbrew/bin')
+    // Why: Nix does ship a macOS default profile, so it stays seeded.
+    expect(segments).toContain('/nix/var/nix/profiles/default/bin')
+    expect(segments).toContain('/opt/homebrew/bin')
+    expect(segments).toContain('/usr/local/bin')
+  })
+
+  it('keeps snap, Linuxbrew, and Nix dirs for packaged linux runs', async () => {
+    const { app } = await import('electron')
+    const { patchPackagedProcessPath } = await import('./configure-process')
+
+    setPlatform('linux')
+    Object.defineProperty(app, 'isPackaged', { configurable: true, value: true })
+    process.env.HOME = '/home/tester'
+    process.env.PATH = '/usr/bin:/bin'
+
+    patchPackagedProcessPath()
+
+    const segments = (process.env.PATH ?? '').split(':')
+    expect(segments).toContain('/snap/bin')
+    expect(segments).toContain('/home/linuxbrew/.linuxbrew/bin')
+    expect(segments).toContain('/nix/var/nix/profiles/default/bin')
+    expect(segments.indexOf('/usr/local/sbin')).toBeLessThan(segments.indexOf('/snap/bin'))
+    expect(segments.indexOf('/home/linuxbrew/.linuxbrew/bin')).toBeLessThan(
+      segments.indexOf('/nix/var/nix/profiles/default/bin')
+    )
+  })
+
+  it('omits snap/Linuxbrew but keeps Nix on non-Linux POSIX platforms', async () => {
+    const { app } = await import('electron')
+    const { patchPackagedProcessPath } = await import('./configure-process')
+
+    setPlatform('freebsd')
+    Object.defineProperty(app, 'isPackaged', { configurable: true, value: true })
+    process.env.HOME = '/home/tester'
+    process.env.PATH = '/usr/bin:/bin'
+
+    patchPackagedProcessPath()
+
+    const segments = (process.env.PATH ?? '').split(':')
+    expect(segments).not.toContain('/snap/bin')
+    expect(segments).not.toContain('/home/linuxbrew/.linuxbrew/bin')
+    expect(segments).toContain('/nix/var/nix/profiles/default/bin')
+    expect(segments).toContain('/usr/local/bin')
+  })
+
   it('leaves PATH untouched when the app is not packaged', async () => {
     const { app } = await import('electron')
     const { patchPackagedProcessPath } = await import('./configure-process')
@@ -110,6 +170,74 @@ describe('patchPackagedProcessPath', () => {
 })
 
 describe('configureDevUserDataPath', () => {
+  it('forces Electron home into the disposable E2E profile', async () => {
+    const { app } = await import('electron')
+    const { configureDevUserDataPath } = await import('./configure-process')
+    const originalE2EUserDataDir = process.env.ORCA_E2E_USER_DATA_DIR
+    const originalE2EHomeDir = process.env.ORCA_E2E_HOME_DIR
+    const originalHome = process.env.HOME
+    const originalUserProfile = process.env.USERPROFILE
+    const tempRoot = mkdtempSync(join(tmpdir(), 'orca-configure-e2e-home-'))
+    const e2eRoot = join(tempRoot, 'user-data')
+    const e2eHome = join(tempRoot, 'home')
+    process.env.ORCA_E2E_USER_DATA_DIR = e2eRoot
+    process.env.ORCA_E2E_HOME_DIR = e2eHome
+    process.env.HOME = e2eHome
+    process.env.USERPROFILE = e2eHome
+
+    try {
+      configureDevUserDataPath(true)
+    } finally {
+      rmSync(tempRoot, { recursive: true, force: true })
+      if (originalE2EUserDataDir === undefined) {
+        delete process.env.ORCA_E2E_USER_DATA_DIR
+      } else {
+        process.env.ORCA_E2E_USER_DATA_DIR = originalE2EUserDataDir
+      }
+      if (originalE2EHomeDir === undefined) {
+        delete process.env.ORCA_E2E_HOME_DIR
+      } else {
+        process.env.ORCA_E2E_HOME_DIR = originalE2EHomeDir
+      }
+      if (originalHome === undefined) {
+        delete process.env.HOME
+      } else {
+        process.env.HOME = originalHome
+      }
+      if (originalUserProfile === undefined) {
+        delete process.env.USERPROFILE
+      } else {
+        process.env.USERPROFILE = originalUserProfile
+      }
+    }
+
+    expect(app.setPath).toHaveBeenCalledWith('home', e2eHome)
+    expect(app.setPath).toHaveBeenCalledWith('userData', e2eRoot)
+  })
+
+  it('rejects an E2E launch whose Node home escaped the disposable profile', async () => {
+    const { configureDevUserDataPath } = await import('./configure-process')
+    const originalE2EUserDataDir = process.env.ORCA_E2E_USER_DATA_DIR
+    const originalE2EHomeDir = process.env.ORCA_E2E_HOME_DIR
+    const originalHome = process.env.HOME
+    const originalUserProfile = process.env.USERPROFILE
+    const e2eRoot = mkdtempSync(join(tmpdir(), 'orca-configure-e2e-escape-'))
+    process.env.ORCA_E2E_USER_DATA_DIR = e2eRoot
+    process.env.ORCA_E2E_HOME_DIR = join(e2eRoot, 'home')
+    process.env.HOME = join(e2eRoot, 'escaped-home')
+    process.env.USERPROFILE = join(e2eRoot, 'escaped-home')
+
+    try {
+      expect(() => configureDevUserDataPath(true)).toThrow(/disposable home boundary/)
+    } finally {
+      rmSync(e2eRoot, { recursive: true, force: true })
+      restoreEnv('ORCA_E2E_USER_DATA_DIR', originalE2EUserDataDir)
+      restoreEnv('ORCA_E2E_HOME_DIR', originalE2EHomeDir)
+      restoreEnv('HOME', originalHome)
+      restoreEnv('USERPROFILE', originalUserProfile)
+    }
+  })
+
   it('uses an explicit dev userData override when provided', async () => {
     const { app } = await import('electron')
     const { configureDevUserDataPath } = await import('./configure-process')
@@ -151,6 +279,14 @@ describe('configureDevUserDataPath', () => {
     expect(app.setPath).not.toHaveBeenCalled()
   })
 })
+
+function restoreEnv(key: string, value: string | undefined): void {
+  if (value === undefined) {
+    delete process.env[key]
+  } else {
+    process.env[key] = value
+  }
+}
 
 describe('configureOrcaUserDataPathEnv', () => {
   it('overwrites stale inherited ORCA_USER_DATA_PATH with Electron userData', async () => {
@@ -260,6 +396,81 @@ describe('configureElectronNetworkCompatibility', () => {
   })
 })
 
+const EXPECTED_DISABLED_FEATURES =
+  'FedCm,DirectSockets,DirectSocketsInSharedWorkers,DirectSocketsInServiceWorkers'
+
+describe('disableUnsupportedChromiumFeatures', () => {
+  it('matches the shared list the real-Electron egress probes launch with', async () => {
+    const { DISABLED_CHROMIUM_FEATURES } = await import('./disabled-chromium-features')
+
+    expect(DISABLED_CHROMIUM_FEATURES.join(',')).toBe(EXPECTED_DISABLED_FEATURES)
+  })
+
+  it('disables FedCM before Chromium sessions are created', async () => {
+    const { app } = await import('electron')
+    const { disableUnsupportedChromiumFeatures } = await import('./configure-process')
+
+    vi.mocked(app.commandLine.appendSwitch).mockClear()
+    disableUnsupportedChromiumFeatures()
+
+    expect(app.commandLine.appendSwitch).toHaveBeenCalledWith(
+      'disable-features',
+      EXPECTED_DISABLED_FEATURES
+    )
+  })
+
+  it('disables every Direct Sockets surface so a hostile page cannot kill its renderer', async () => {
+    const { app } = await import('electron')
+    const { disableUnsupportedChromiumFeatures } = await import('./configure-process')
+
+    vi.mocked(app.commandLine.appendSwitch).mockClear()
+    disableUnsupportedChromiumFeatures()
+
+    const disabled = vi
+      .mocked(app.commandLine.appendSwitch)
+      .mock.calls.find(([name]) => name === 'disable-features')?.[1]
+      ?.split(',')
+
+    expect(disabled).toEqual(
+      expect.arrayContaining([
+        'DirectSockets',
+        'DirectSocketsInSharedWorkers',
+        'DirectSocketsInServiceWorkers'
+      ])
+    )
+  })
+
+  it('preserves existing disabled Chromium features', async () => {
+    const { app } = await import('electron')
+    const { disableUnsupportedChromiumFeatures } = await import('./configure-process')
+
+    vi.mocked(app.commandLine.getSwitchValue).mockReturnValueOnce('ExistingFeature')
+    vi.mocked(app.commandLine.appendSwitch).mockClear()
+    disableUnsupportedChromiumFeatures()
+
+    expect(app.commandLine.appendSwitch).toHaveBeenCalledWith(
+      'disable-features',
+      `${EXPECTED_DISABLED_FEATURES},ExistingFeature`
+    )
+  })
+
+  it('does not duplicate features when disable-features already includes them', async () => {
+    const { app } = await import('electron')
+    const { disableUnsupportedChromiumFeatures } = await import('./configure-process')
+
+    vi.mocked(app.commandLine.getSwitchValue).mockReturnValueOnce(
+      `${EXPECTED_DISABLED_FEATURES},ExistingFeature`
+    )
+    vi.mocked(app.commandLine.appendSwitch).mockClear()
+    disableUnsupportedChromiumFeatures()
+
+    expect(app.commandLine.appendSwitch).toHaveBeenCalledWith(
+      'disable-features',
+      `${EXPECTED_DISABLED_FEATURES},ExistingFeature`
+    )
+  })
+})
+
 describe('enableMainProcessGpuFeatures', () => {
   const originalPlatform = Object.getOwnPropertyDescriptor(process, 'platform')
   const originalE2EUserDataDir = process.env.ORCA_E2E_USER_DATA_DIR
@@ -295,6 +506,40 @@ describe('enableMainProcessGpuFeatures', () => {
       'EarlyEstablishGpuChannel,EstablishGpuChannelAsync'
     )
     expect(app.commandLine.appendSwitch).not.toHaveBeenCalledWith('enable-unsafe-webgpu')
+  })
+
+  it('raises the WebGL context budget above the 16-context Blink default', async () => {
+    const { app } = await import('electron')
+    const { enableMainProcessGpuFeatures } = await import('./configure-process')
+
+    delete process.env.ORCA_E2E_USER_DATA_DIR
+    vi.mocked(app.commandLine.appendSwitch).mockClear()
+    enableMainProcessGpuFeatures()
+
+    expect(app.commandLine.appendSwitch).toHaveBeenCalledWith('max-active-webgl-contexts', '128')
+  })
+
+  it('disables Skia Graphite only on macOS without disabling hardware acceleration', async () => {
+    const { app } = await import('electron')
+    const { enableMainProcessGpuFeatures } = await import('./configure-process')
+
+    delete process.env.ORCA_E2E_USER_DATA_DIR
+    vi.mocked(app.disableHardwareAcceleration).mockClear()
+
+    for (const platform of ['darwin', 'linux', 'win32'] as const) {
+      setPlatform(platform)
+      vi.mocked(app.commandLine.appendSwitch).mockClear()
+
+      enableMainProcessGpuFeatures()
+
+      if (platform === 'darwin') {
+        expect(app.commandLine.appendSwitch).toHaveBeenCalledWith('disable-skia-graphite')
+      } else {
+        expect(app.commandLine.appendSwitch).not.toHaveBeenCalledWith('disable-skia-graphite')
+      }
+    }
+
+    expect(app.disableHardwareAcceleration).not.toHaveBeenCalled()
   })
 
   it('disables the GPU sandbox on Linux Wayland without disabling acceleration', async () => {
@@ -447,6 +692,10 @@ describe('enableMainProcessGpuFeatures', () => {
       'enable-features',
       expect.any(String)
     )
+    expect(app.commandLine.appendSwitch).not.toHaveBeenCalledWith(
+      'max-active-webgl-contexts',
+      expect.any(String)
+    )
   })
 
   it('preserves existing enable-features switches', async () => {
@@ -489,5 +738,85 @@ describe('enableMainProcessGpuFeatures', () => {
 
     expect(app.commandLine.appendSwitch).toHaveBeenCalledWith('disable-gpu-sandbox')
     expect(app.commandLine.appendSwitch).toHaveBeenCalledWith('enable-features', 'ExistingFeature')
+  })
+})
+
+describe('safe graphics mode startup switches', () => {
+  const originalE2EUserDataDir = process.env.ORCA_E2E_USER_DATA_DIR
+
+  afterEach(() => {
+    if (originalE2EUserDataDir === undefined) {
+      delete process.env.ORCA_E2E_USER_DATA_DIR
+    } else {
+      process.env.ORCA_E2E_USER_DATA_DIR = originalE2EUserDataDir
+    }
+  })
+
+  function disabledFeaturesFrom(appendSwitch: ReturnType<typeof vi.fn>): string[] {
+    return appendSwitch.mock.calls
+      .filter(([name]) => name === 'disable-features')
+      .flatMap(([, value]) => String(value ?? '').split(','))
+      .filter(Boolean)
+  }
+
+  it('opts hidden pages out of intensive wake-up throttling', async () => {
+    const { app } = await import('electron')
+    const { optOutOfHiddenPageWakeUpThrottling } = await import('./configure-process')
+
+    vi.mocked(app.commandLine.appendSwitch).mockClear()
+    optOutOfHiddenPageWakeUpThrottling()
+
+    expect(app.commandLine.appendSwitch).toHaveBeenCalledWith(
+      'disable-features',
+      'IntensiveWakeUpThrottling'
+    )
+  })
+
+  // Why: the defect was the call site, not the switch — a win32 safe-graphics launch runs
+  // `if (!gpuFallbackActiveThisLaunch) enableMainProcessGpuFeatures()` and skips everything
+  // parked inside it, so only an unconditional call site reaches the users a GPU crash already hit.
+  it('calls the throttling opt-out outside the GPU-fallback gate in preflight', () => {
+    const mainSource = readFileSync(join(__dirname, 'main-process-preflight.ts'), 'utf8')
+    const gateStart = mainSource.indexOf('if (!state.gpuFallbackActiveThisLaunch) {')
+    expect(gateStart).toBeGreaterThanOrEqual(0)
+    const gateEnd = mainSource.indexOf('\n  }', gateStart)
+    expect(gateEnd).toBeGreaterThan(gateStart)
+
+    expect(mainSource.match(/\boptOutOfHiddenPageWakeUpThrottling\(\)/g)).toHaveLength(1)
+    expect(mainSource.slice(gateStart, gateEnd)).not.toContain('optOutOfHiddenPageWakeUpThrottling')
+  })
+
+  // Why: Chromium consumes the command line at ready, so this must stay in the pre-ready
+  // top-level block and never move into the whenReady callback, where appendSwitch is a silent
+  // no-op — the same invisible failure as parking it behind the GPU gate.
+  it('appends the throttling opt-out before app ready in preflight', () => {
+    const mainSource = readFileSync(join(__dirname, 'main-process-preflight.ts'), 'utf8')
+    const entrySource = readFileSync(join(__dirname, '..', 'index.ts'), 'utf8')
+    const preflightEnd = mainSource.indexOf('\n  return true')
+    const readyStart = entrySource.indexOf('void app.whenReady()')
+    const preflightCall = entrySource.indexOf('runMainProcessPreflight({')
+    expect(preflightEnd).toBeGreaterThan(0)
+    expect(readyStart).toBeGreaterThan(0)
+    expect(preflightCall).toBeGreaterThanOrEqual(0)
+    expect(preflightCall).toBeLessThan(readyStart)
+
+    const callIndex = mainSource.indexOf('optOutOfHiddenPageWakeUpThrottling()')
+    expect(callIndex).toBeGreaterThan(0)
+    expect(callIndex).toBeLessThan(preflightEnd)
+  })
+
+  // Why: Chromium enables IntensiveWakeUpThrottling on every desktop platform, so the opt-out
+  // must never become reachable only through the GPU-feature path again.
+  it('does not couple the throttling opt-out to GPU feature setup', async () => {
+    const { app } = await import('electron')
+    const { enableMainProcessGpuFeatures } = await import('./configure-process')
+
+    delete process.env.ORCA_E2E_USER_DATA_DIR
+    vi.mocked(app.commandLine.appendSwitch).mockClear()
+    enableMainProcessGpuFeatures()
+
+    expect(disabledFeaturesFrom(vi.mocked(app.commandLine.appendSwitch))).not.toContain(
+      'IntensiveWakeUpThrottling'
+    )
   })
 })

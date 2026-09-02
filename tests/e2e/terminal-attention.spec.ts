@@ -12,7 +12,7 @@ import {
   waitForSessionReady
 } from './helpers/store'
 import { getRendererTitleLog, installRendererTitleLog } from './helpers/terminal-title-log'
-import { POST_REPLAY_MODE_RESET } from '../../src/renderer/src/components/terminal-pane/layout-serialization'
+import { POST_REPLAY_MODE_RESET } from '../../src/shared/terminal-mode-reset-profiles'
 import { waitForPtyShellEcho } from './terminal-pty-readiness'
 
 test.describe.configure({ mode: 'serial' })
@@ -353,7 +353,7 @@ test.describe('Terminal attention', () => {
   // even though the underlying shell is fresh. Pane clicks then emit
   // `\e[I` / `\e[O` into zsh, which rings the bell as unbound-key input.
   //
-  // POST_REPLAY_MODE_RESET (in layout-serialization.ts) clears these mode
+  // POST_REPLAY_MODE_RESET (in shared/terminal-mode-reset-profiles.ts) clears these mode
   // bits after every scrollback replay so the mode state matches the fresh
   // shell. This test pins that fix: after writing a DECSET 1004 byte into
   // the terminal, focus events should NOT be emitted back to the PTY.

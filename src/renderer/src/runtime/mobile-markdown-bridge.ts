@@ -246,7 +246,8 @@ async function readFileContent(file: OpenFile): Promise<string> {
     filePath: file.filePath,
     relativePath: file.relativePath,
     worktreeId: file.worktreeId,
-    connectionId
+    connectionId,
+    expectedExternalSshTargetId: file.externalSshTargetId
   })) as FileContent
   if (result.isBinary) {
     throw new Error('binary_file')

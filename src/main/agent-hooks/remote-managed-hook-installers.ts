@@ -1,5 +1,5 @@
 import type { SFTPWrapper } from 'ssh2'
-import type { AgentHookInstallStatus } from '../../shared/agent-hook-types'
+import type { AgentHookInstallStatus, AgentHookTarget } from '../../shared/agent-hook-types'
 import { ampHookService } from '../amp/hook-service'
 import { claudeHookService } from '../claude/hook-service'
 import { codexHookService } from '../codex/hook-service'
@@ -7,40 +7,93 @@ import { geminiHookService } from '../gemini/hook-service'
 import { antigravityHookService } from '../antigravity/hook-service'
 import { cursorHookService } from '../cursor/hook-service'
 import { commandCodeHookService } from '../command-code/hook-service'
+import { copilotHookService } from '../copilot/hook-service'
 import { devinHookService } from '../devin/hook-service'
+import { droidHookService } from '../droid/hook-service'
 import { grokHookService } from '../grok/hook-service'
 import { hermesHookService } from '../hermes/hook-service'
 import { kimiHookService } from '../kimi/hook-service'
 import { openClaudeHookService } from '../openclaude/hook-service'
 
+export type RemoteManagedHookInstallOptions = {
+  /** Explicit CODEX_HOME dir for redirected runtimes (for example WSL's managed runtime home). */
+  codexHomeDir?: string
+  /** Skip the trust write when a redirected runtime config is seeded by the launch path. */
+  deferTrustUntilConfigToml?: boolean
+  /** Explicit GROK_HOME for remote runtimes that redirect Grok's config. */
+  grokHomeDir?: string
+  /** Stops before starting the next installer when the owning relay request
+   *  is cancelled. Individual filesystem mutations remain atomic. */
+  signal?: AbortSignal
+  /** Positively detected and enabled agents allowed to mutate config.
+   *  Required for any install: omit/empty fails closed (no config mutation). */
+  agents?: readonly AgentHookTarget[]
+}
+
 type RemoteManagedHookInstaller = readonly [
   AgentHookInstallStatus['agent'],
-  (sftp: SFTPWrapper, remoteHome: string) => Promise<AgentHookInstallStatus>
+  (
+    sftp: SFTPWrapper,
+    remoteHome: string,
+    options?: RemoteManagedHookInstallOptions
+  ) => Promise<AgentHookInstallStatus>
 ]
 
 const REMOTE_MANAGED_HOOK_INSTALLERS: readonly RemoteManagedHookInstaller[] = [
   ['claude', (sftp, remoteHome) => claudeHookService.installRemote(sftp, remoteHome)],
   ['openclaude', (sftp, remoteHome) => openClaudeHookService.installRemote(sftp, remoteHome)],
-  ['codex', (sftp, remoteHome) => codexHookService.installRemote(sftp, remoteHome)],
+  [
+    'codex',
+    (sftp, remoteHome, options) =>
+      codexHookService.installRemote(sftp, remoteHome, {
+        codexHomeDir: options?.codexHomeDir,
+        deferTrustUntilConfigToml: options?.deferTrustUntilConfigToml
+      })
+  ],
   ['gemini', (sftp, remoteHome) => geminiHookService.installRemote(sftp, remoteHome)],
   ['antigravity', (sftp, remoteHome) => antigravityHookService.installRemote(sftp, remoteHome)],
   ['amp', (sftp, remoteHome) => ampHookService.installRemote(sftp, remoteHome)],
   ['cursor', (sftp, remoteHome) => cursorHookService.installRemote(sftp, remoteHome)],
   ['command-code', (sftp, remoteHome) => commandCodeHookService.installRemote(sftp, remoteHome)],
-  ['grok', (sftp, remoteHome) => grokHookService.installRemote(sftp, remoteHome)],
+  ['copilot', (sftp, remoteHome) => copilotHookService.installRemote(sftp, remoteHome)],
+  [
+    'grok',
+    (sftp, remoteHome, options) =>
+      grokHookService.installRemote(sftp, remoteHome, options?.grokHomeDir)
+  ],
+  ['droid', (sftp, remoteHome) => droidHookService.installRemote(sftp, remoteHome)],
   ['hermes', (sftp, remoteHome) => hermesHookService.installRemote(sftp, remoteHome)],
   ['devin', (sftp, remoteHome) => devinHookService.installRemote(sftp, remoteHome)],
   ['kimi', (sftp, remoteHome) => kimiHookService.installRemote(sftp, remoteHome)]
 ]
 
+/** Agents wired into the remote (SSH) hook installer. Exported so an invariant
+ *  test can assert every locally-managed agent that implements `installRemote`
+ *  is registered here — the omission that hid Droid/Copilot status over SSH. */
+export const REMOTE_MANAGED_HOOK_INSTALLER_AGENTS: readonly AgentHookInstallStatus['agent'][] =
+  REMOTE_MANAGED_HOOK_INSTALLERS.map(([agent]) => agent)
+
 export async function installRemoteManagedAgentHooks(
   sftp: SFTPWrapper,
-  remoteHome: string
+  remoteHome: string,
+  options?: RemoteManagedHookInstallOptions
 ): Promise<AgentHookInstallStatus[]> {
+  // Why: omit/empty allowlist must never mean "install every agent" — that
+  // recreates config homes for CLIs the user never installed (issue #11641).
+  const allowedAgents = new Set(options?.agents ?? [])
+  if (allowedAgents.size === 0) {
+    return []
+  }
   const results: AgentHookInstallStatus[] = []
   for (const [agent, install] of REMOTE_MANAGED_HOOK_INSTALLERS) {
+    if (!allowedAgents.has(agent)) {
+      continue
+    }
+    // Why: relay requests can disappear during reconnect; do not start more
+    // user-config mutations after their client has gone away.
+    options?.signal?.throwIfAborted()
     try {
-      const result = await install(sftp, remoteHome)
+      const result = await install(sftp, remoteHome, options)
       results.push(result)
       if (result.state === 'error') {
         console.warn(

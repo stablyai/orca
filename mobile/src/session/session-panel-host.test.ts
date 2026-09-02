@@ -4,6 +4,7 @@ import {
   nextActivePanel,
   resolvePanelAction,
   panelRouteDescriptor,
+  shouldShowSessionHeaderChecksAction,
   type ActivePanel
 } from './session-panel-host'
 
@@ -77,6 +78,48 @@ describe('canDockSessionPanel', () => {
   })
 })
 
+describe('shouldShowSessionHeaderChecksAction', () => {
+  it('shows Checks on git worktree routes once a checks-capable provider is confirmed', () => {
+    expect(
+      shouldShowSessionHeaderChecksAction({
+        isFolderWorkspaceRoute: false,
+        repoContextLoaded: true,
+        hostedChecksSupported: true
+      })
+    ).toBe(true)
+  })
+
+  it('hides Checks for providers without hosted checks (pr-panel guard would no-op it)', () => {
+    expect(
+      shouldShowSessionHeaderChecksAction({
+        isFolderWorkspaceRoute: false,
+        repoContextLoaded: true,
+        hostedChecksSupported: false
+      })
+    ).toBe(false)
+  })
+
+  it('hides Checks until the provider probe resolves', () => {
+    expect(
+      shouldShowSessionHeaderChecksAction({
+        isFolderWorkspaceRoute: false,
+        repoContextLoaded: false,
+        hostedChecksSupported: false
+      })
+    ).toBe(false)
+  })
+
+  it('hides Checks on folder workspace session routes', () => {
+    expect(
+      shouldShowSessionHeaderChecksAction({
+        isFolderWorkspaceRoute: true,
+        repoContextLoaded: true,
+        hostedChecksSupported: true
+      })
+    ).toBe(false)
+  })
+})
+
 describe('panelRouteDescriptor', () => {
   it('maps each panel to its expo-router pathname', () => {
     expect(panelRouteDescriptor('sourceControl')).toEqual({
@@ -86,7 +129,8 @@ describe('panelRouteDescriptor', () => {
       pathname: '/h/[hostId]/files/[worktreeId]'
     })
     expect(panelRouteDescriptor('pr')).toEqual({
-      pathname: '/h/[hostId]/pr/[worktreeId]'
+      pathname: '/h/[hostId]/source-control/[worktreeId]',
+      params: { tab: 'pr' }
     })
   })
 })

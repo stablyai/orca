@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
 import { XTERM_HTML } from './terminal-webview-html'
+import { readTerminalWebViewHtmlSource } from './terminal-webview-html-source.test-support'
 
 // The reflow logic lives as injected in-WebView JS; the message dispatch and
 // handle wiring live in terminal-webview-html.ts / TerminalWebView.tsx. Assert
@@ -9,7 +10,8 @@ const reflowSource = readFileSync(
   new URL('./terminal-webview-reflow-injected.ts', import.meta.url),
   'utf8'
 )
-const htmlSource = readFileSync(new URL('./terminal-webview-html.ts', import.meta.url), 'utf8')
+// Use the assembled document so the test covers the fragments that run in the WebView.
+const htmlSource = readTerminalWebViewHtmlSource()
 const handleSource = readFileSync(new URL('./TerminalWebView.tsx', import.meta.url), 'utf8')
 
 function reflowFnBody(): string {

@@ -2,18 +2,22 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as fs from 'node:fs'
 import type { Stats } from 'node:fs'
 
-const { existsSyncMock, statSyncMock, wslUncDirectoryExistsMock } = vi.hoisted(() => ({
-  existsSyncMock: vi.fn(),
-  statSyncMock: vi.fn(),
-  wslUncDirectoryExistsMock: vi.fn()
-}))
+const { existsSyncMock, statSyncMock, accessSyncMock, wslUncDirectoryExistsMock, wrapSpawnMock } =
+  vi.hoisted(() => ({
+    existsSyncMock: vi.fn(),
+    statSyncMock: vi.fn(),
+    accessSyncMock: vi.fn(),
+    wslUncDirectoryExistsMock: vi.fn(),
+    wrapSpawnMock: vi.fn()
+  }))
 
 vi.mock('fs', async (importOriginal) => {
   const actual = await importOriginal<typeof fs>()
   return {
     ...actual,
     existsSync: existsSyncMock,
-    statSync: statSyncMock
+    statSync: statSyncMock,
+    accessSync: accessSyncMock
   }
 })
 
@@ -25,7 +29,16 @@ vi.mock('../wsl', () => ({
   wslUncDirectoryExists: wslUncDirectoryExistsMock
 }))
 
-import { validateWorkingDirectory } from './local-pty-utils'
+vi.mock('./macos-tcc-login-shell', () => ({
+  wrapShellSpawnForMacosTccAttribution: wrapSpawnMock,
+  hostReportsChildExitStatus: (file: string) => file !== '/usr/bin/login'
+}))
+
+import {
+  resolveUnixShellPath,
+  spawnShellWithFallback,
+  validateWorkingDirectory
+} from './local-pty-utils'
 
 const WSL_UNC_DIR = '\\\\wsl.localhost\\Ubuntu\\home\\jin\\repo'
 const NATIVE_DIR = 'C:\\Users\\jin\\repo'
@@ -81,9 +94,21 @@ describe('validateWorkingDirectory', () => {
 
   it('rejects a missing native Windows path', () => {
     existsSyncMock.mockReturnValue(false)
+    const previousVersion = process.env.ORCA_APP_VERSION
+    process.env.ORCA_APP_VERSION = '1.4.178-test'
 
-    expect(() => validateWorkingDirectory(NATIVE_DIR)).toThrow(/does not exist/)
-    expect(wslUncDirectoryExistsMock).not.toHaveBeenCalled()
+    try {
+      expect(() => validateWorkingDirectory(NATIVE_DIR)).toThrow(
+        /does not exist.*orca: 1\.4\.178-test/
+      )
+      expect(wslUncDirectoryExistsMock).not.toHaveBeenCalled()
+    } finally {
+      if (previousVersion === undefined) {
+        delete process.env.ORCA_APP_VERSION
+      } else {
+        process.env.ORCA_APP_VERSION = previousVersion
+      }
+    }
   })
 
   it('rejects a native Windows path that exists but is not a directory', () => {
@@ -91,5 +116,197 @@ describe('validateWorkingDirectory', () => {
     statSyncMock.mockReturnValue(dirStats(false))
 
     expect(() => validateWorkingDirectory(NATIVE_DIR)).toThrow(/is not a directory/)
+  })
+})
+
+describe('resolveUnixShellPath', () => {
+  beforeEach(() => {
+    existsSyncMock.mockReset()
+    accessSyncMock.mockReset()
+  })
+
+  it('preserves non-absolute shells for execvp PATH and cwd resolution', () => {
+    expect(resolveUnixShellPath('bash')).toBe('bash')
+    expect(resolveUnixShellPath('./bin/custom-shell')).toBe('./bin/custom-shell')
+    expect(existsSyncMock).not.toHaveBeenCalled()
+  })
+
+  it('selects an executable fallback before node-pty can fork a missing shell', () => {
+    existsSyncMock.mockImplementation((path) => path === '/bin/sh')
+    accessSyncMock.mockReturnValue(undefined)
+
+    expect(resolveUnixShellPath('/missing/zsh')).toBe('/bin/sh')
+    expect(existsSyncMock.mock.calls.map(([path]) => path)).toEqual([
+      '/missing/zsh',
+      '/bin/zsh',
+      '/bin/bash',
+      '/bin/sh'
+    ])
+  })
+
+  it('reports every attempted shell when no executable candidate exists', () => {
+    existsSyncMock.mockReturnValue(false)
+
+    expect(() => resolveUnixShellPath('/missing/zsh')).toThrow(
+      'No executable Unix shell found (tried: /missing/zsh, /bin/zsh, /bin/bash, /bin/sh)'
+    )
+  })
+
+  it('dedupes a preferred shell that is already a fallback candidate', () => {
+    existsSyncMock.mockImplementation((path) => path === '/bin/sh')
+    accessSyncMock.mockReturnValue(undefined)
+
+    expect(resolveUnixShellPath('/bin/sh')).toBe('/bin/sh')
+    expect(existsSyncMock.mock.calls.map(([path]) => path)).toEqual(['/bin/sh'])
+  })
+})
+
+describe('spawnShellWithFallback macOS TCC login wrapping', () => {
+  let origPlatform: PropertyDescriptor | undefined
+
+  beforeEach(() => {
+    origPlatform = Object.getOwnPropertyDescriptor(process, 'platform')
+    Object.defineProperty(process, 'platform', { configurable: true, value: 'darwin' })
+    existsSyncMock.mockReturnValue(true)
+    statSyncMock.mockReturnValue(dirStats(true))
+    accessSyncMock.mockReturnValue(undefined)
+    wrapSpawnMock.mockImplementation((file: string, args: string[]) => ({
+      file: '/wrapped/login',
+      args: ['wrapped', file, ...args]
+    }))
+  })
+
+  afterEach(() => {
+    if (origPlatform) {
+      Object.defineProperty(process, 'platform', origPlatform)
+    }
+    vi.restoreAllMocks()
+  })
+
+  it('spawns the primary shell through the login wrapper', () => {
+    const ptySpawn = vi.fn().mockReturnValue({ pid: 1 })
+
+    const result = spawnShellWithFallback({
+      shellPath: '/bin/zsh',
+      shellArgs: ['-l'],
+      cols: 80,
+      rows: 24,
+      cwd: '/work',
+      env: {},
+      ptySpawn: ptySpawn as never
+    })
+
+    expect(wrapSpawnMock).toHaveBeenCalledWith('/bin/zsh', ['-l'], expect.any(Object))
+    expect(ptySpawn).toHaveBeenCalledWith(
+      '/wrapped/login',
+      ['wrapped', '/bin/zsh', '-l'],
+      expect.objectContaining({ cwd: '/work', cols: 80, rows: 24 })
+    )
+    // The reported shellPath stays the real shell so identity/name logic is intact.
+    expect(result.shellPath).toBe('/bin/zsh')
+  })
+
+  it('wraps fallback shells too when the primary fails to spawn', () => {
+    const ptySpawn = vi
+      .fn()
+      .mockImplementationOnce(() => {
+        throw new Error('primary boom')
+      })
+      .mockReturnValue({ pid: 2 })
+
+    const result = spawnShellWithFallback({
+      shellPath: '/bin/zsh',
+      shellArgs: ['-l'],
+      cols: 80,
+      rows: 24,
+      cwd: '/work',
+      env: {},
+      ptySpawn: ptySpawn as never
+    })
+
+    // First fallback candidate after /bin/zsh is /bin/bash, also login-wrapped.
+    // The wrapper must see the fallback-corrected env so SHELL survives login(1).
+    expect(wrapSpawnMock).toHaveBeenLastCalledWith(
+      '/bin/bash',
+      ['-l'],
+      expect.objectContaining({ SHELL: '/bin/bash' })
+    )
+    expect(ptySpawn).toHaveBeenLastCalledWith(
+      '/wrapped/login',
+      ['wrapped', '/bin/bash', '-l'],
+      expect.objectContaining({ cwd: '/work' })
+    )
+    expect(result.shellPath).toBe('/bin/bash')
+  })
+
+  it('drops the primary shell’s launch env when an unwrapped fallback takes over', () => {
+    // Why: nothing in an unwrapped bash pane consumes the feature channel, so a
+    // leftover ZDOTDIR would point a nested zsh at Orca's wrapper and turn on
+    // features Orca never selected for it.
+    const zshLaunchEnv = {
+      ZDOTDIR: '/userdata/shell-ready/zsh',
+      ORCA_ORIG_ZDOTDIR: '/home/jin',
+      ORCA_SHELL_FEATURES: 'history'
+    }
+    const env: Record<string, string> = { HOME: '/home/jin', ...zshLaunchEnv }
+    const ptySpawn = vi
+      .fn()
+      .mockImplementationOnce(() => {
+        throw new Error('primary boom')
+      })
+      .mockReturnValue({ pid: 3 })
+
+    spawnShellWithFallback({
+      shellPath: '/bin/zsh',
+      shellArgs: ['-l'],
+      cols: 80,
+      rows: 24,
+      cwd: '/work',
+      env,
+      ptySpawn: ptySpawn as never,
+      launchEnvKeys: Object.keys(zshLaunchEnv),
+      getShellReadyConfig: (shell) =>
+        shell === '/bin/zsh' ? { args: ['-l'], env: zshLaunchEnv } : { args: null, env: {} }
+    })
+
+    expect(env.ORCA_SHELL_FEATURES).toBeUndefined()
+    expect(env.ZDOTDIR).toBeUndefined()
+    expect(env.ORCA_ORIG_ZDOTDIR).toBeUndefined()
+    expect(env.HOME).toBe('/home/jin')
+  })
+
+  it('drops the first fallback’s launch env when a second fallback takes over', () => {
+    // Why: the keys to scrub are the ones the LAST attempt wrote. Computed once
+    // from the primary, a wrapped first fallback leaks its own ZDOTDIR and
+    // feature channel into the shell that finally starts.
+    const bashLaunchEnv = { ORCA_SHELL_FEATURES: 'markers', BASH_ENV: '/userdata/bash/rcfile' }
+    const env: Record<string, string> = { HOME: '/home/jin', ZDOTDIR: '/userdata/shell-ready/zsh' }
+    const ptySpawn = vi
+      .fn()
+      .mockImplementationOnce(() => {
+        throw new Error('primary boom')
+      })
+      .mockImplementationOnce(() => {
+        throw new Error('first fallback boom')
+      })
+      .mockReturnValue({ pid: 4 })
+
+    spawnShellWithFallback({
+      shellPath: '/bin/zsh',
+      shellArgs: ['-l'],
+      cols: 80,
+      rows: 24,
+      cwd: '/work',
+      env,
+      ptySpawn: ptySpawn as never,
+      launchEnvKeys: ['ZDOTDIR'],
+      getShellReadyConfig: (shell) =>
+        shell === '/bin/bash' ? { args: ['--rcfile', '/rc'], env: bashLaunchEnv } : null
+    })
+
+    expect(env.ORCA_SHELL_FEATURES).toBeUndefined()
+    expect(env.BASH_ENV).toBeUndefined()
+    expect(env.ZDOTDIR).toBeUndefined()
+    expect(env.HOME).toBe('/home/jin')
   })
 })

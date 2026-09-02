@@ -1,10 +1,14 @@
 import { describe, expect, it } from 'vitest'
 import { shallow } from 'zustand/shallow'
 
-import { workItemsCacheKey, type CacheEntry } from '@/store/slices/github'
-import type { GitHubWorkItem, LinearCollectionResult, LinearIssue } from '../../../shared/types'
+import { workItemsCacheKey } from '@/store/github/cache-identity'
+import type { CacheEntry } from '@/store/github/cache-model'
+import type { GitHubWorkItem } from '../../../shared/github/work-item-types'
+import type { LinearIssue } from '../../../shared/linear/issue-types'
+import type { LinearCollectionResult } from '../../../shared/linear/workspace-types'
 import {
   buildTaskPageRepoSourceState,
+  selectTaskPageUnresolvedSourceRepos,
   deriveTaskPageGitHubWorkItemsFetchOptions,
   findTaskPageDialogWorkItem,
   findTaskPageLinearDrawerIssue,
@@ -45,6 +49,32 @@ describe('task page cache selectors', () => {
     })
   })
 
+  it('reconciles a changed neutral check count', () => {
+    const current = {
+      ...workItem('pr-1', 'repo-1'),
+      checksSummary: {
+        state: 'neutral' as const,
+        total: 1,
+        passed: 1,
+        failed: 0,
+        pending: 0,
+        neutral: 0
+      }
+    }
+    const refreshed = {
+      ...current,
+      checksSummary: {
+        state: 'neutral' as const,
+        total: 2,
+        passed: 1,
+        failed: 0,
+        pending: 0,
+        neutral: 1
+      }
+    }
+    expect(reconcileTaskPageItemsAfterLandingRefresh([current], [refreshed])).toEqual([refreshed])
+  })
+
   it('keeps the selected work-item cache slice shallow-equal across unrelated cache writes', () => {
     const repo = { id: 'repo-1', path: '/repo/one' }
     const selectedEntry = entry<GitHubWorkItem[]>([workItem('issue-1', 'repo-1')])
@@ -71,6 +101,54 @@ describe('task page cache selectors', () => {
         error: null
       }
     ])
+  })
+
+  it('flags fetched repos that resolved neither an issue nor a PR GitHub source', () => {
+    const sourcesEntry = (
+      sources: { issues: unknown; prs: unknown } | null
+    ): CacheEntry<GitHubWorkItem[]> =>
+      ({
+        data: [],
+        fetchedAt: 1,
+        ...(sources
+          ? { sources: { originCandidate: null, upstreamCandidate: null, ...sources } }
+          : {})
+      }) as CacheEntry<GitHubWorkItem[]>
+
+    const repos = [
+      { id: 'unresolved', path: '/repos/unresolved', displayName: 'unresolved-repo' },
+      { id: 'issues-ok', path: '/repos/issues-ok', displayName: 'issues-repo' },
+      { id: 'prs-ok', path: '/repos/prs-ok', displayName: 'prs-repo' },
+      { id: 'no-name', path: '/repos/no-name' },
+      { id: 'not-fetched', path: '/repos/not-fetched', displayName: 'pending-repo' }
+    ]
+    const entries = [
+      sourcesEntry({ issues: null, prs: null }),
+      sourcesEntry({ issues: { owner: 'acme', repo: 'issues-ok' }, prs: null }),
+      sourcesEntry({ issues: null, prs: { owner: 'acme', repo: 'prs-ok' } }),
+      sourcesEntry({ issues: null, prs: null }),
+      sourcesEntry(null)
+    ]
+    const sourceState = buildTaskPageRepoSourceState(repos, entries)
+
+    // Only both-null fetched repos are flagged; label falls back to path when displayName is absent.
+    expect(selectTaskPageUnresolvedSourceRepos(repos, sourceState)).toEqual([
+      { repoId: 'unresolved', sourceKey: 'unresolved::local', label: 'unresolved-repo' },
+      { repoId: 'no-name', sourceKey: 'no-name::local', label: '/repos/no-name' }
+    ])
+  })
+
+  it('does not flag an unresolved-source repo that already carries a per-repo error', () => {
+    const repos = [{ id: 'errored', path: '/repos/errored', displayName: 'errored-repo' }]
+    const erroredEntry = {
+      data: [],
+      fetchedAt: 1,
+      sources: { issues: null, prs: null, originCandidate: null, upstreamCandidate: null },
+      error: { type: 'rate_limited', message: 'slow down', source: { owner: 'acme', repo: 'x' } }
+    } as unknown as CacheEntry<GitHubWorkItem[]>
+    const sourceState = buildTaskPageRepoSourceState(repos, [erroredEntry])
+
+    expect(selectTaskPageUnresolvedSourceRepos(repos, sourceState)).toEqual([])
   })
 
   it('scopes repo source rows by source cache scope for retry ownership', () => {
@@ -146,8 +224,8 @@ describe('task page cache selectors', () => {
       entry<GitHubWorkItem[]>([patched])
     ])
 
-    expect(nextPages[0][0]).toBe(patched)
-    expect(nextPages[0][1]).toBe(otherRepoSameId)
+    expect(nextPages[0]?.[0]).toBe(patched)
+    expect(nextPages[0]?.[1]).toBe(otherRepoSameId)
   })
 
   it('merges landing refresh status changes without reordering GitHub rows', () => {

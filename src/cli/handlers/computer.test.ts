@@ -2,36 +2,18 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const callMock = vi.fn()
 
-vi.mock('../runtime-client', () => {
+vi.mock('../runtime-client', async () => {
   class RuntimeClient {
     call = callMock
     getCliStatus = vi.fn()
     openOrca = vi.fn()
   }
 
-  class RuntimeClientError extends Error {
-    readonly code: string
-
-    constructor(code: string, message: string) {
-      super(message)
-      this.code = code
-    }
-  }
-
-  class RuntimeRpcFailureError extends RuntimeClientError {
-    readonly response: unknown
-
-    constructor(response: unknown) {
-      super('runtime_error', 'runtime_error')
-      this.response = response
-    }
-  }
-
-  return {
-    RuntimeClient,
-    RuntimeClientError,
-    RuntimeRpcFailureError
-  }
+  // Why: re-export the REAL error classes; format.ts narrows with `instanceof`
+  // against ./runtime/types, so a look-alike would collapse every CLI error
+  // code into the generic `runtime_error` shape.
+  const { RuntimeClientError, RuntimeRpcFailureError } = await import('../runtime/types.js')
+  return { RuntimeClient, RuntimeClientError, RuntimeRpcFailureError }
 })
 
 import { main } from '../index'
@@ -88,6 +70,14 @@ describe('orca computer observation CLI handlers', () => {
     const pressKeyOutput = vi.mocked(console.log).mock.calls[0][0]
     expect(pressKeyOutput).toContain('--key <key>')
     expect(pressKeyOutput).toContain('Single key, e.g. Return, Escape, Tab, Left, or PageUp')
+  })
+
+  it('documents atomic modified clicks', async () => {
+    await main(['computer', 'click', '--help'], '/tmp/repo')
+
+    const output = vi.mocked(console.log).mock.calls[0][0]
+    expect(output).toContain('--modifiers <chord>')
+    expect(output).toContain('Modifier keys held only for this click')
   })
 
   it('passes list-apps through without resolving a worktree', async () => {

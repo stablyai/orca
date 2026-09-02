@@ -1,28 +1,19 @@
-/* oxlint-disable max-lines -- Why: this is the single source of truth for
- * rg arg construction, rg --json parsing, git-grep submatch parsing, and
- * relative-path normalization, shared by both the local main process and
- * the SSH relay. The prior divergence between those two implementations
- * caused the maxBuffer footgun the design doc calls out; re-splitting the
- * file would re-introduce that failure mode. */
 /**
  * Shared, pure text-search helpers used by both the local main process and the
- * SSH relay. No Electron, no child_process, no fs — the caller owns process
+ * SSH relay. No Electron, child_process, or fs — the caller owns process
  * execution and transport-specific path translation (WSL).
  *
- * Why this module exists (design doc: docs/design/share-text-search.md):
- * Before extraction, the local (`src/main/ipc/filesystem.ts`,
- * `filesystem-search-git.ts`) and relay (`src/relay/fs-handler-utils.ts`,
- * `fs-handler-git-fallback.ts`) search implementations had diverged on
- * rg arg construction, rg --json parsing, the git-grep submatch regex,
- * relative-path normalization, and — most consequentially — the relay's
- * `execFile` + `maxBuffer: 50MB` footgun that silently dropped matches on
- * large repos. Centralizing the policy prevents future drift. Both call
- * sites must use this module; see filesystem.ts and relay/fs-handler.ts.
+ * Centralizes rg/git-grep arg construction and parsing so the local and relay paths
+ * can't re-diverge (notably the relay's old execFile maxBuffer that dropped matches).
+ * Design doc: docs/design/share-text-search.md.
  */
-import { posix, win32 } from 'node:path'
+import { assertJsonTextStructureWithinLimits } from './json-text-structure-limit'
 import { normalizeSearchResult } from './search-match-count'
 import { escapeRegex } from './string-utils'
-import type { SearchFileResult, SearchMatch, SearchOptions, SearchResult } from './types'
+import type { SearchFileResult, SearchOptions, SearchResult } from './code-search-types'
+import { pushSearchMatch } from './text-search-match-accumulator'
+import { splitSearchGlobPatterns, toGitGlobPathspec } from './text-search-glob-patterns'
+import { joinSearchRoot, normalizeRelativePath, relativeToSearchRoot } from './text-search-paths'
 
 export type SearchAccumulator = {
   fileMap: Map<string, SearchFileResult>
@@ -34,125 +25,21 @@ export function createAccumulator(): SearchAccumulator {
   return { fileMap: new Map(), totalMatches: 0, truncated: false }
 }
 
-function acceptMatch(fileResult: SearchFileResult): void {
-  fileResult.matchCount = (fileResult.matchCount ?? 0) + 1
-}
-
-// Why: collapse mixed separators and strip leading slashes so results are
-// stable across Windows/Linux and never start with `/` (which would break
-// `join(rootPath, relPath)` in callers).
-export function normalizeRelativePath(path: string): string {
-  return path.replace(/[\\/]+/g, '/').replace(/^\/+/, '')
-}
-
-function pathFlavor(rootPath: string): typeof posix | typeof win32 {
-  if (/^[a-zA-Z]:[\\/]/.test(rootPath) || rootPath.startsWith('\\\\')) {
-    return win32
-  }
-  return posix
-}
-
-function relativeToSearchRoot(rootPath: string, absPath: string): string {
-  return pathFlavor(rootPath).relative(rootPath, absPath)
-}
-
-function joinSearchRoot(rootPath: string, relPath: string): string {
-  return pathFlavor(rootPath).join(rootPath, relPath)
-}
-
 // ─── Constants shared by both callers ────────────────────────────────
 
 export const MAX_MATCHES_PER_FILE = 100
 export const DEFAULT_SEARCH_MAX_RESULTS = 2000
 export const SEARCH_TIMEOUT_MS = 15_000
+export const SEARCH_JSON_STRUCTURE_LIMITS = {
+  structuralTokens: 32 * 1024,
+  nestingDepth: 16
+} as const
 
-// Why: search should stay cheaper than opening a file in the editor. The
-// editor read path has a larger cap and relies on Monaco large-file handling.
+// Why: keep search cheaper than opening a file; the editor read path has a larger cap (Monaco large-file handling).
 const SEARCH_MAX_FILE_SIZE = 5 * 1024 * 1024
 
-// Why: `lineContent` is carried per-match to the renderer. Minified bundles
-// and generated files can have single lines in the megabytes; at 2000-match
-// caps that serializes into frames that blow past the 16MB SSH relay
-// `MAX_MESSAGE_SIZE`, producing "Message too large" errors on fs:search for
-// large folders (and bloats local IPC unnecessarily). Clamping to a window
-// around each match keeps the payload bounded while preserving enough
-// context for the sidebar to render the highlight.
+// Why: mega-byte lines (minified/generated files) × 2000-match caps blow past the 16MB SSH relay MAX_MESSAGE_SIZE; clamp each match's context.
 export const MAX_LINE_CONTENT_LENGTH = 500
-const TRUNCATION_MARKER = '…'
-
-function clampLineContext(
-  text: string,
-  matchStart: number,
-  matchLength: number
-): {
-  lineContent: string
-  column: number
-  matchLength: number
-  displayColumn?: number
-  displayMatchLength?: number
-} {
-  if (text.length <= MAX_LINE_CONTENT_LENGTH) {
-    return { lineContent: text, column: matchStart + 1, matchLength }
-  }
-  // Clamp the match itself first so a pathological multi-MB regex hit
-  // cannot defeat the windowing below.
-  const clampedMatchLength = Math.min(matchLength, MAX_LINE_CONTENT_LENGTH)
-  const remaining = MAX_LINE_CONTENT_LENGTH - clampedMatchLength
-  const leftBudget = Math.floor(remaining / 2)
-  let windowStart = Math.max(0, matchStart - leftBudget)
-  let windowEnd = Math.min(text.length, windowStart + MAX_LINE_CONTENT_LENGTH)
-  windowStart = Math.max(0, windowEnd - MAX_LINE_CONTENT_LENGTH)
-
-  let snippet = text.slice(windowStart, windowEnd)
-  let column = matchStart - windowStart + 1
-  if (windowStart > 0) {
-    snippet = TRUNCATION_MARKER + snippet
-    column += TRUNCATION_MARKER.length
-  }
-  if (windowEnd < text.length) {
-    snippet = snippet + TRUNCATION_MARKER
-  }
-  return {
-    lineContent: snippet,
-    column: matchStart + 1,
-    matchLength,
-    displayColumn: column,
-    displayMatchLength: clampedMatchLength
-  }
-}
-
-// Why: rg and git-grep share this append-and-cap step; keeping it in one
-// place preserves the synchronous truncation ordering required by callers.
-function pushMatch(
-  fileResult: SearchFileResult,
-  acc: SearchAccumulator,
-  clamped: ReturnType<typeof clampLineContext>,
-  lineNumber: number,
-  maxResults: number
-): 'continue' | 'stop' {
-  // Why: direct assignment avoids conditional-spread allocations on the
-  // per-match hot path while preserving optional display fields.
-  const match: SearchMatch = {
-    line: lineNumber,
-    column: clamped.column,
-    matchLength: clamped.matchLength,
-    lineContent: clamped.lineContent
-  }
-  if (clamped.displayColumn !== undefined) {
-    match.displayColumn = clamped.displayColumn
-  }
-  if (clamped.displayMatchLength !== undefined) {
-    match.displayMatchLength = clamped.displayMatchLength
-  }
-  fileResult.matches.push(match)
-  acceptMatch(fileResult)
-  acc.totalMatches++
-  if (acc.totalMatches >= maxResults) {
-    acc.truncated = true
-    return 'stop'
-  }
-  return 'continue'
-}
 
 // ─── rg ─────────────────────────────────────────────────────────────
 
@@ -161,49 +48,11 @@ export type SearchOptionsLike = Pick<
   'caseSensitive' | 'wholeWord' | 'useRegex' | 'includePattern' | 'excludePattern'
 >
 
-export function splitSearchGlobPatterns(patterns: string): string[] {
-  const out: string[] = []
-  let current = ''
-  let escaping = false
-  for (const ch of patterns) {
-    if (escaping) {
-      current += `\\${ch}`
-      escaping = false
-      continue
-    }
-    if (ch === '\\') {
-      escaping = true
-      continue
-    }
-    if (ch === ',') {
-      const trimmed = current.trim()
-      if (trimmed) {
-        out.push(trimmed)
-      }
-      current = ''
-      continue
-    }
-    current += ch
-  }
-  if (escaping) {
-    current += '\\'
-  }
-  const trimmed = current.trim()
-  if (trimmed) {
-    out.push(trimmed)
-  }
-  return out
-}
-
 /**
- * Build the rg argv used by both callers. The returned array is the COMPLETE
- * argv (flags + `--` + query + target); the caller spawns rg with it as-is.
+ * Build the complete rg argv (flags + `--` + query + target) for both callers to spawn as-is.
  *
- * Both callers pass `rootPath` unchanged as `target` — do NOT translate the
- * target to a WSL-native path on the local side. On Windows/WSL, only the
- * rg *invocation* is routed through `wslAwareSpawn`; the target string keeps
- * its original shape, and rg's output paths are translated back to Windows
- * paths via the `transformAbsPath` callback in `ingestRgJsonLine`.
+ * Constraint: pass `rootPath` unchanged as `target` — do NOT WSL-translate it; only the rg
+ * invocation is routed through `wslAwareSpawn`, and output paths are translated back in `ingestRgJsonLine`.
  */
 export function buildRgArgs(query: string, target: string, opts: SearchOptionsLike): string[] {
   const args: string[] = [
@@ -240,17 +89,12 @@ export function buildRgArgs(query: string, target: string, opts: SearchOptionsLi
 }
 
 /**
- * Ingest a single line of rg `--json` stdout. Mutates `acc`. Returns 'stop'
- * when `maxResults` is reached so the caller can kill the child; 'continue'
- * otherwise. `transformAbsPath` lets the local caller apply WSL translation
- * (parseWslPath + toWindowsWslPath); the relay passes no transform.
+ * Ingest a single line of rg `--json` stdout, mutating `acc`. Returns 'stop' when
+ * `maxResults` is reached (so the caller can kill the child), else 'continue'.
+ * `transformAbsPath` lets the local caller apply WSL translation; the relay passes none.
  *
- * Truncation ordering invariant (see design doc): this function sets
- * `acc.truncated = true` SYNCHRONOUSLY in the same tick it returns 'stop',
- * before any child-kill. Callers must NOT flip `truncated` in their own
- * code and must NOT resolve the promise before the 'stop'-return tick has
- * completed. Breaking that ordering re-introduces the silent-truncation
- * bug the relay had with execFile's maxBuffer overflow.
+ * Invariant: sets `acc.truncated = true` synchronously in the same tick it returns
+ * 'stop'; callers must not flip `truncated` or resolve before that tick (see design doc).
  */
 export function ingestRgJsonLine(
   line: string,
@@ -275,6 +119,7 @@ export function ingestRgJsonLine(
     }
   }
   try {
+    assertJsonTextStructureWithinLimits(line, SEARCH_JSON_STRUCTURE_LIMITS)
     msg = JSON.parse(line)
   } catch {
     return 'continue'
@@ -293,8 +138,7 @@ export function ingestRgJsonLine(
   const lineNumber = data.line_number ?? 0
   let submatches = data.submatches ?? []
   if (submatches.length === 0) {
-    // Why: some rg regex matches report the line but no submatch ranges.
-    // Surface a navigable line-level result instead of a file row with count 0.
+    // Why: some rg matches report a line but no submatch ranges; surface a navigable line-level result instead of a count-0 row.
     submatches = [{ start: 0, end: lineContent.length > 0 ? 1 : 0 }]
   }
 
@@ -304,8 +148,17 @@ export function ingestRgJsonLine(
       fileResult = { filePath: absPath, relativePath: relPath, matches: [], matchCount: 0 }
       acc.fileMap.set(absPath, fileResult)
     }
-    const clamped = clampLineContext(lineContent, sub.start, sub.end - sub.start)
-    if (pushMatch(fileResult, acc, clamped, lineNumber, maxResults) === 'stop') {
+    if (
+      pushSearchMatch({
+        fileResult,
+        accumulator: acc,
+        lineContent,
+        matchStart: sub.start,
+        matchLength: sub.end - sub.start,
+        lineNumber,
+        maxResults
+      }) === 'stop'
+    ) {
       return 'stop'
     }
   }
@@ -314,27 +167,8 @@ export function ingestRgJsonLine(
 
 // ─── git grep ───────────────────────────────────────────────────────
 
-/**
- * Convert a user-facing glob pattern into a git pathspec.
- *
- * Why: rg globs like `*.ts` match at any directory depth, but a bare git
- * pathspec `*.ts` only matches in the repo root. Wrapping with `:(glob)` and
- * prepending `**\/` for patterns without a path separator replicates rg's
- * recursive-by-default behaviour.
- */
-export function toGitGlobPathspec(glob: string, exclude?: boolean): string {
-  const needsRecursive = !glob.includes('/')
-  const pattern = needsRecursive ? `**/${glob}` : glob
-  return exclude ? `:(exclude,glob)${pattern}` : `:(glob)${pattern}`
-}
-
 export function buildGitGrepArgs(query: string, opts: SearchOptionsLike): string[] {
-  // Why: --untracked searches untracked (but not ignored) files in addition
-  // to tracked ones, matching rg's default behaviour of respecting gitignore.
-  // -I skips binary files; --null uses \0 as filename delimiter so filenames
-  // with colons parse unambiguously. --no-recurse-submodules is needed because
-  // users may have submodule.recurse=true in their git config, which conflicts
-  // with --untracked and would cause git grep to fail.
+  // Why: --no-recurse-submodules avoids failing when submodule.recurse=true conflicts with --untracked; --null disambiguates colon-containing filenames.
   const gitArgs: string[] = [
     '-c',
     'submodule.recurse=false',
@@ -373,8 +207,7 @@ export function buildGitGrepArgs(query: string, opts: SearchOptionsLike): string
       hasPathspecs = true
     }
   }
-  // Why: when no include patterns are given, git grep needs a pathspec to
-  // search the working tree. '.' means "everything under cwd".
+  // Why: git grep needs a pathspec to search the working tree; '.' means everything under cwd.
   if (!hasPathspecs) {
     gitArgs.push('.')
   }
@@ -382,15 +215,11 @@ export function buildGitGrepArgs(query: string, opts: SearchOptionsLike): string
 }
 
 /**
- * Build the JS regex used to locate all submatch column positions within a
- * matched line. git grep only reports the first hit per line; we need this
- * to populate SearchMatch[] for every occurrence.
+ * Build the JS regex to locate all submatch column positions in a matched line
+ * (git grep reports only the first hit per line).
  *
- * Returns `null` when `useRegex` is true and the query is valid ERE for git
- * grep but not a valid JS `RegExp` (common mismatches: POSIX classes like
- * `[[:alpha:]]`, back-reference numbering differences, `\<` / `\>` word
- * anchors). Callers fall back to a whole-line highlight so git-reported
- * hits still appear in results instead of silently failing the request.
+ * @returns `null` when the query is valid git-grep ERE but not a valid JS RegExp
+ * (POSIX classes, back-ref numbering, `\<`/`\>` anchors); callers then fall back to a whole-line highlight.
  */
 export function buildSubmatchRegex(
   query: string,
@@ -421,9 +250,7 @@ export function ingestGitGrepLine(
     return 'continue'
   }
 
-  // Why: with --null -n, modern git emits filename\0linenum\0content.
-  // Keep the older colon parser too so relay hosts with different git output
-  // remain searchable.
+  // Why: modern git with --null -n emits filename\0linenum\0content; keep the colon parser too for hosts with older git output.
   const nullIdx = line.indexOf('\0')
   if (nullIdx === -1) {
     return 'continue'
@@ -433,7 +260,7 @@ export function ingestGitGrepLine(
   const secondNullIdx = rest.indexOf('\0')
   let lineNumberText: string
   let lineContent: string
-  if (secondNullIdx >= 0) {
+  if (secondNullIdx !== -1) {
     lineNumberText = rest.substring(0, secondNullIdx)
     lineContent = rest.substring(secondNullIdx + 1).replace(/\n$/, '')
   } else {
@@ -459,24 +286,37 @@ export function ingestGitGrepLine(
     return fileResult
   }
 
-  // Why: git grep already confirmed the line matched — if we can't build a
-  // JS-side regex to find exact submatch positions (e.g. user typed a POSIX
-  // class that git accepts but JS RegExp rejects), fall back to a single
-  // whole-line highlight so the result still shows up in the UI.
+  // Why: no JS-side submatch regex (git accepts patterns JS RegExp rejects); fall back to whole-line highlight so the hit still shows.
   if (submatchRegex === null) {
-    const clamped = clampLineContext(lineContent, 0, lineContent.length)
     const fileResult = getFileResult()
-    return pushMatch(fileResult, acc, clamped, lineNum, maxResults)
+    return pushSearchMatch({
+      fileResult,
+      accumulator: acc,
+      lineContent,
+      matchStart: 0,
+      matchLength: lineContent.length,
+      lineNumber: lineNum,
+      maxResults
+    })
   }
 
   submatchRegex.lastIndex = 0
   let m: RegExpExecArray | null
   let acceptedLineMatch = false
   while ((m = submatchRegex.exec(lineContent)) !== null) {
-    const clamped = clampLineContext(lineContent, m.index, m[0].length)
     const fileResult = getFileResult()
     acceptedLineMatch = true
-    if (pushMatch(fileResult, acc, clamped, lineNum, maxResults) === 'stop') {
+    if (
+      pushSearchMatch({
+        fileResult,
+        accumulator: acc,
+        lineContent,
+        matchStart: m.index,
+        matchLength: m[0].length,
+        lineNumber: lineNum,
+        maxResults
+      }) === 'stop'
+    ) {
       return 'stop'
     }
     // Prevent infinite loop on zero-length regex matches.
@@ -484,13 +324,20 @@ export function ingestGitGrepLine(
       submatchRegex.lastIndex++
     }
   }
-  // Why: git grep reported this line as a match, but JS regex semantics can
-  // still find no exact occurrence. Keep the result navigable instead of
-  // silently dropping a git-confirmed hit.
+  // Why: git grep confirmed the line but JS regex found no occurrence; keep it navigable, don't drop a git-confirmed hit.
   if (!acceptedLineMatch) {
-    const clamped = clampLineContext(lineContent, 0, lineContent.length)
     const fileResult = getFileResult()
-    if (pushMatch(fileResult, acc, clamped, lineNum, maxResults) === 'stop') {
+    if (
+      pushSearchMatch({
+        fileResult,
+        accumulator: acc,
+        lineContent,
+        matchStart: 0,
+        matchLength: lineContent.length,
+        lineNumber: lineNum,
+        maxResults
+      }) === 'stop'
+    ) {
       return 'stop'
     }
   }

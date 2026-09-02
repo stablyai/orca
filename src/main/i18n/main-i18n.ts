@@ -9,10 +9,13 @@ import i18next, {
 import { isPseudoLocalizationLocale, pseudoLocalizeString } from '../../shared/pseudo-localization'
 import { DEFAULT_UI_LOCALE, resolveUiLocale, type SupportedUiLocale } from '../../shared/ui-locale'
 import { UI_LANGUAGE_SYSTEM, type UiLanguage } from '../../shared/ui-language'
+import type { PluginLanguagePackRegistration } from '../../shared/plugins/plugin-language-pack-artifact'
 
 export const mainI18n: I18nInstance = i18next.createInstance()
 
 let initialized = false
+let pluginLanguagePacks: readonly PluginLanguagePackRegistration[] = []
+const registeredPluginLanguages = new Set<string>()
 
 // Why: main-process callers pass English fallbacks to translateMain(), so the
 // main bundle does not need to parse any locale catalog at cold start. Only
@@ -72,16 +75,20 @@ export async function ensureMainI18n(): Promise<I18nInstance> {
       }
     })
     initialized = true
+    applyMainPluginLanguagePacks()
   }
   return mainI18n
 }
 
-export async function setMainUiLanguage(language: UiLanguage): Promise<SupportedUiLocale> {
+export async function setMainUiLanguage(language: UiLanguage): Promise<string> {
   await ensureMainI18n()
-  const locale = resolveUiLocale(
+  const selectedLocale = resolveUiLocale(
     language,
     language === UI_LANGUAGE_SYSTEM ? getMainSystemLocale() : DEFAULT_UI_LOCALE
   )
+  const locale =
+    pluginLanguagePacks.find((pack) => pack.id === selectedLocale)?.resourceLanguage ??
+    (selectedLocale.startsWith('plugin:') ? DEFAULT_UI_LOCALE : selectedLocale)
   if (mainI18n.language !== locale) {
     // changeLanguage triggers the lazy backend load for non-English locales and
     // resolves once the catalog is in memory, so callers that await this have
@@ -89,6 +96,30 @@ export async function setMainUiLanguage(language: UiLanguage): Promise<Supported
     await mainI18n.changeLanguage(locale)
   }
   return locale
+}
+
+function applyMainPluginLanguagePacks(): void {
+  for (const language of registeredPluginLanguages) {
+    mainI18n.removeResourceBundle(language, 'translation')
+  }
+  registeredPluginLanguages.clear()
+  for (const pack of pluginLanguagePacks) {
+    mainI18n.addResourceBundle(pack.resourceLanguage, 'translation', pack.catalog, true, true)
+    registeredPluginLanguages.add(pack.resourceLanguage)
+  }
+}
+
+export function setMainPluginLanguagePacks(
+  packs: readonly PluginLanguagePackRegistration[]
+): boolean {
+  if (pluginLanguagePacks === packs) {
+    return false
+  }
+  pluginLanguagePacks = packs
+  if (initialized) {
+    applyMainPluginLanguagePacks()
+  }
+  return true
 }
 
 export function translateMain(key: string, fallback: string, options?: TOptions): string {

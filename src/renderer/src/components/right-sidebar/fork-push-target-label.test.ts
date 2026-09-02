@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import type { GitPushTarget } from '../../../../shared/types'
-import { describeForkPushTarget } from './fork-push-target-label'
+import type { GitPushTarget } from '../../../../shared/worktree/types'
+import { describeForkPushTarget } from './source-control/panel/fork-push-target-label'
 
 function target(overrides: Partial<GitPushTarget>): GitPushTarget {
   return {

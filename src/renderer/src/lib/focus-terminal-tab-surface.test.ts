@@ -1,8 +1,17 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { focusTerminalTabSurface } from './focus-terminal-tab-surface'
 
+const mocks = vi.hoisted(() => ({
+  refreshTerminalImeInputContext: vi.fn()
+}))
+
+vi.mock('@/components/terminal-pane/terminal-ime-input-context-refresh', () => ({
+  refreshTerminalImeInputContext: mocks.refreshTerminalImeInputContext
+}))
+
 describe('focusTerminalTabSurface', () => {
   afterEach(() => {
+    mocks.refreshTerminalImeInputContext.mockClear()
     vi.unstubAllGlobals()
   })
 
@@ -26,6 +35,50 @@ describe('focusTerminalTabSurface', () => {
     focusTerminalTabSurface('tab-1')
 
     expect(textarea.focus).toHaveBeenCalled()
+  })
+
+  it('optionally refreshes the focused helper native input context', () => {
+    flushAnimationFrames()
+    const textarea = { focus: vi.fn() }
+    vi.stubGlobal('document', {
+      querySelector: vi.fn((selector: string) =>
+        selector === '[data-terminal-tab-id="tab-1"] .xterm-helper-textarea' ? textarea : null
+      )
+    })
+
+    focusTerminalTabSurface('tab-1', null, { refreshImeContext: true })
+
+    expect(textarea.focus).toHaveBeenCalledOnce()
+    expect(mocks.refreshTerminalImeInputContext).toHaveBeenCalledWith(textarea, {
+      onRefocusSkipped: undefined
+    })
+  })
+
+  it('does not steal focus from a newer owner during guarded remount recovery', () => {
+    const frames: FrameRequestCallback[] = []
+    vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) => {
+      frames.push(callback)
+      return frames.length
+    })
+    vi.stubGlobal('cancelAnimationFrame', vi.fn())
+    const textarea = { focus: vi.fn() }
+    const body = {}
+    const outside = {}
+    const documentState = {
+      activeElement: body as unknown,
+      body,
+      querySelector: vi.fn((selector: string) =>
+        selector === '[data-terminal-tab-id="tab-1"] .xterm-helper-textarea' ? textarea : null
+      )
+    }
+    vi.stubGlobal('document', documentState)
+
+    focusTerminalTabSurface('tab-1', null, { onlyIfFocusUnclaimed: true })
+    frames.shift()?.(0)
+    documentState.activeElement = outside
+    frames.shift()?.(0)
+
+    expect(textarea.focus).not.toHaveBeenCalled()
   })
 
   it('does not steal focus while inline tab rename is open', () => {

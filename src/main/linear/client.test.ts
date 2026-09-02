@@ -90,21 +90,25 @@ async function loadClientModule(options: SafeStorageMockOptions = {}) {
       })
     })
   })
-  vi.doMock('electron', () => ({
-    safeStorage: {
-      isEncryptionAvailable: () => options.encryptionAvailable ?? false,
-      encryptString: (value: string) => Buffer.from(value),
-      decryptString: options.decryptString ?? ((value: Buffer) => value.toString('utf-8'))
-    }
-  }))
+  const { setSecretStore } = await import('../../shared/secret-store')
+  setSecretStore({
+    isEncryptionAvailable: () => options.encryptionAvailable ?? false,
+    encryptString: (value) => Buffer.from(value),
+    decryptString: options.decryptString ?? ((value) => value.toString('utf-8')),
+    describeProtectionGap: () => null
+  })
   vi.doMock('os', async () => {
     const actual = await vi.importActual<typeof Os>('os')
     return { ...actual, homedir: () => tempHome }
   })
   class AuthenticationLinearError extends Error {}
-  vi.doMock('@linear/sdk', () => ({
-    AuthenticationLinearError,
-    LinearClient: linearClientMock
+  // Why: client.ts loads @linear/sdk lazily via ./linear-sdk (createRequire) to
+  // keep it off the startup parse path; mock the loader, not the raw module.
+  vi.doMock('./linear-sdk', () => ({
+    loadLinearSdk: () => ({
+      AuthenticationLinearError,
+      LinearClient: linearClientMock
+    })
   }))
 
   return import('./client')

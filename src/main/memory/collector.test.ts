@@ -1,5 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import os from 'node:os'
 import type { MemorySnapshotStore } from './collector'
+import { setAppEnvironment } from '../../shared/app-environment'
 
 type AppMetricFixture = {
   pid: number
@@ -8,16 +10,11 @@ type AppMetricFixture = {
   memory: { workingSetSize: number }
 }
 
-const { appMetricsMock, execMock, listRegisteredPtysMock } = vi.hoisted(() => ({
+const { appMetricsMock, runProcessMock, execMock, listRegisteredPtysMock } = vi.hoisted(() => ({
   appMetricsMock: vi.fn<() => AppMetricFixture[]>(() => []),
+  runProcessMock: vi.fn(),
   execMock: vi.fn(),
   listRegisteredPtysMock: vi.fn()
-}))
-
-vi.mock('electron', () => ({
-  app: {
-    getAppMetrics: appMetricsMock
-  }
 }))
 
 vi.mock('child_process', () => ({
@@ -25,12 +22,33 @@ vi.mock('child_process', () => ({
     execMock(cmd, opts, cb)
 }))
 
+// Why mock the chokepoint for the Windows sweep: maxBuffer, timeout and the
+// hidden console are its contract now, so the assertions below are about which
+// query runs, not how a process is started.
+vi.mock('../../shared/child-process/run-process', () => ({
+  runProcess: (spec: { program: string; args?: string[] }) => runProcessMock(spec)
+}))
+
 vi.mock('./pty-registry', () => ({
   listRegisteredPtys: listRegisteredPtysMock
 }))
 
+function appEnvironment() {
+  return {
+    getPath: () => process.cwd(),
+    getAppPath: () => process.cwd(),
+    getVersion: () => '0.0.0-test',
+    isPackaged: () => false,
+    onWillQuit: () => {},
+    exit: () => {},
+    getAppMetrics: appMetricsMock
+  }
+}
+
 async function loadCollector() {
   vi.resetModules()
+  const { setAppEnvironment: setResetAppEnvironment } = await import('../../shared/app-environment')
+  setResetAppEnvironment(appEnvironment())
   return await import('./collector')
 }
 
@@ -102,51 +120,6 @@ describe('parsePsOutput', () => {
   })
 })
 
-describe('parseWmicOutput', () => {
-  it('emits one row per blank-line-delimited stanza', async () => {
-    const { parseWmicOutput } = await loadCollector()
-    const stdout = [
-      'ParentProcessId=1',
-      'ProcessId=100',
-      'WorkingSetSize=2048',
-      '',
-      'ParentProcessId=100',
-      'ProcessId=200',
-      'WorkingSetSize=1024',
-      ''
-    ].join('\r\n')
-
-    const rows = parseWmicOutput(stdout)
-
-    expect(rows).toEqual([
-      { pid: 100, ppid: 1, cpu: 0, memory: 2048 },
-      { pid: 200, ppid: 100, cpu: 0, memory: 1024 }
-    ])
-  })
-
-  it('flushes the final stanza even without a trailing blank line', async () => {
-    const { parseWmicOutput } = await loadCollector()
-    const rows = parseWmicOutput('ProcessId=100\nParentProcessId=1\nWorkingSetSize=512')
-    expect(rows).toEqual([{ pid: 100, ppid: 1, cpu: 0, memory: 512 }])
-  })
-
-  it('skips stanzas missing pid or ppid', async () => {
-    const { parseWmicOutput } = await loadCollector()
-    // Why: wmic occasionally emits a stanza with only WorkingSetSize set
-    // (e.g. a process that exited mid-query). Dropping such rows avoids
-    // injecting ghost zero-pid entries into the index.
-    const stdout = ['WorkingSetSize=999', '', 'ProcessId=100', 'ParentProcessId=1'].join('\n')
-    const rows = parseWmicOutput(stdout)
-    expect(rows).toEqual([{ pid: 100, ppid: 1, cpu: 0, memory: 0 }])
-  })
-
-  it('ignores lines without an equals separator', async () => {
-    const { parseWmicOutput } = await loadCollector()
-    const rows = parseWmicOutput(['garbage line', 'ProcessId=5', 'ParentProcessId=1'].join('\n'))
-    expect(rows).toEqual([{ pid: 5, ppid: 1, cpu: 0, memory: 0 }])
-  })
-})
-
 describe('collectSubtree', () => {
   function makeIndex(rows: { pid: number; ppid: number }[]) {
     const byPid = new Map<number, { pid: number; ppid: number; cpu: number; memory: number }>()
@@ -160,7 +133,7 @@ describe('collectSubtree', () => {
         childrenOf.set(r.ppid, [r.pid])
       }
     }
-    return { byPid, childrenOf }
+    return { byPid, childrenOf, hasPrivateMemory: false }
   }
 
   it('walks every descendant of the root inclusive', async () => {
@@ -200,30 +173,69 @@ describe('collectSubtree', () => {
     // those as "walked" but do not fabricate a row for them.
     const index = {
       byPid: new Map([[1, { pid: 1, ppid: 0, cpu: 0, memory: 0 }]]),
-      childrenOf: new Map([[1, [2]]])
+      childrenOf: new Map([[1, [2]]]),
+      hasPrivateMemory: false
     }
 
     expect(collectSubtree(index, 1)).toEqual([1])
+  })
+
+  it('does not descend into a subtree already attributed to another PTY', async () => {
+    const { collectSubtree } = await loadCollector()
+    class CountingChildrenMap extends Map<number, number[]> {
+      lookups = 0
+
+      override get(key: number): number[] | undefined {
+        this.lookups += 1
+        return super.get(key)
+      }
+    }
+    const childrenOf = new CountingChildrenMap([
+      [1, [2, 4]],
+      [2, [3]],
+      [3, [5]]
+    ])
+    const byPid = new Map([1, 2, 3, 4, 5].map((pid) => [pid, { pid, ppid: 0, cpu: 0, memory: 0 }]))
+    const index = { byPid, childrenOf, hasPrivateMemory: false }
+
+    // A prior PTY rooted at 2 already claimed 2 and all of its descendants;
+    // the overlapping walk must still include the independent sibling 4.
+    expect(collectSubtree(index, 1, new Set([2]))).toEqual([1, 4])
+    // The excluded branch is not even expanded (2 lookups: roots 1 and 4,
+    // versus 5 without the claimed-subtree fast path).
+    expect(childrenOf.lookups).toBe(2)
   })
 })
 
 describe('collectMemorySnapshot', () => {
   beforeEach(() => {
+    setAppEnvironment(appEnvironment())
+    vi.restoreAllMocks()
     appMetricsMock.mockReset()
     appMetricsMock.mockReturnValue([])
+    runProcessMock.mockReset()
     execMock.mockReset()
     listRegisteredPtysMock.mockReset()
     listRegisteredPtysMock.mockReturnValue([])
   })
 
   function mockPsResponse(stdout: string) {
-    const processStdout = process.platform === 'win32' ? psFixtureToWmic(stdout) : stdout
-    execMock.mockImplementation((_cmd, _opts, cb) =>
-      cb(null, { stdout: processStdout, stderr: '' })
+    execMock.mockImplementation((_cmd, _opts, cb) => cb(null, { stdout, stderr: '' }))
+    runProcessMock.mockImplementation((spec: { program: string }) =>
+      Promise.resolve({
+        code: 0,
+        signal: null,
+        stdout:
+          spec.program === 'typeperf.exe'
+            ? psFixtureToTypeperfOutput(stdout)
+            : psFixtureToWindowsProcessOutput(stdout),
+        stderr: '',
+        timedOut: false
+      })
     )
   }
 
-  function psFixtureToWmic(stdout: string): string {
+  function psFixtureToWindowsProcessOutput(stdout: string): string {
     return stdout
       .split('\n')
       .map((line) => line.trim())
@@ -232,12 +244,56 @@ describe('collectMemorySnapshot', () => {
         const [pid, ppid, _cpu, rssKb] = line.split(/\s+/, 4)
         const memory = Number.parseInt(rssKb ?? '', 10)
         return [
-          `ParentProcessId=${ppid ?? ''}`,
-          `ProcessId=${pid ?? ''}`,
-          `WorkingSetSize=${Number.isFinite(memory) && memory > 0 ? memory * 1024 : 0}`
-        ].join('\r\n')
+          pid ?? '',
+          ppid ?? '',
+          Number.isFinite(memory) && memory > 0 ? memory * 1024 : 0,
+          '0',
+          '0',
+          '1'
+        ].join('\t')
       })
-      .join('\r\n\r\n')
+      .join('\r\n')
+  }
+
+  function psFixtureToTypeperfOutput(stdout: string): string {
+    const rows = stdout
+      .split('\n')
+      .map((line) => line.trim())
+      .filter(Boolean)
+      .map((line, index) => {
+        const [pid, ppid, _cpu, rssKb] = line.split(/\s+/, 4)
+        const memoryKb = Number.parseInt(rssKb ?? '', 10)
+        return {
+          instance: `fixture${index}`,
+          pid: pid ?? '',
+          ppid: ppid ?? '',
+          memory: Number.isFinite(memoryKb) && memoryKb > 0 ? memoryKb * 1024 : 0
+        }
+      })
+    const counterColumns = (counter: string): string[] =>
+      rows.map((row) => `"\\\\HOST\\Process(${row.instance})\\${counter}"`)
+    const valueColumns = (field: 'pid' | 'ppid' | 'memory'): string[] =>
+      rows.map((row) => `"${row[field]}"`)
+
+    return [
+      [
+        '"(PDH-CSV 4.0)"',
+        ...counterColumns('ID Process'),
+        ...counterColumns('Creating Process ID'),
+        ...counterColumns('Working Set')
+      ].join(','),
+      ['"time"', ...valueColumns('pid'), ...valueColumns('ppid'), ...valueColumns('memory')].join(
+        ','
+      )
+    ].join('\r\n')
+  }
+
+  function expectProcessSweepCount(count: number): void {
+    if (os.platform() === 'win32') {
+      expect(runProcessMock).toHaveBeenCalledTimes(count)
+      return
+    }
+    expect(execMock).toHaveBeenCalledTimes(count)
   }
 
   it('coalesces concurrent callers onto a single in-flight sweep', async () => {
@@ -254,7 +310,7 @@ describe('collectMemorySnapshot', () => {
       collectMemorySnapshot(emptyStore)
     ])
 
-    expect(execMock).toHaveBeenCalledTimes(1)
+    expectProcessSweepCount(1)
     // All three callers see the same snapshot object (same promise).
     expect(a).toBe(b)
     expect(b).toBe(c)
@@ -267,7 +323,7 @@ describe('collectMemorySnapshot', () => {
     await collectMemorySnapshot(emptyStore)
     await collectMemorySnapshot(emptyStore)
 
-    expect(execMock).toHaveBeenCalledTimes(2)
+    expectProcessSweepCount(2)
   })
 
   it('uses host process RSS for Electron app metrics when available', async () => {
@@ -348,7 +404,7 @@ describe('collectMemorySnapshot', () => {
         worktreeId: 'repo-1::/wt/b',
         sessionId: 's-b',
         paneKey: 'p-b',
-        pid: 100 // also rooted at 100, but every pid is already claimed
+        pid: 101 // a descendant of the first root, already claimed with its subtree
       }
     ])
 
@@ -388,14 +444,25 @@ describe('collectMemorySnapshot', () => {
     expect(snap.worktrees[0].memory).toBe(2048 * 1024)
   })
 
-  it('returns an empty snapshot when ps fails', async () => {
-    execMock.mockImplementation((_cmd, _opts, cb) => cb(new Error('ps blew up'), { stdout: '' }))
+  it('returns an empty snapshot when process enumeration fails', async () => {
+    execMock.mockImplementation((_cmd, _opts, cb) =>
+      cb(new Error('process enumeration failed'), { stdout: '' })
+    )
+    runProcessMock.mockImplementation(() =>
+      Promise.resolve({
+        code: 1,
+        signal: null,
+        stdout: '',
+        stderr: 'process enumeration failed',
+        timedOut: false
+      })
+    )
     listRegisteredPtysMock.mockReturnValue([])
 
     const { collectMemorySnapshot } = await loadCollector()
     const snap = await collectMemorySnapshot(emptyStore)
 
-    // ps failure should not surface as a rejected promise or crash the
+    // Enumeration failure should not surface as a rejected promise or crash the
     // renderer; the collector swallows and returns zeros so the UI can
     // render an empty state.
     expect(snap.worktrees).toEqual([])

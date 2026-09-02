@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import {
+  computerUseClickModifiersValidationMessage,
   computerUseHotkeyValidationMessage,
   computerUsePressKeyValidationMessage
 } from './computer-use-key-spec'
@@ -33,5 +34,23 @@ describe('computer-use key specs', () => {
     expect(computerUsePressKeyValidationMessage('CmdOrCtrl+V')).toEqual(expected)
     expect(computerUsePressKeyValidationMessage('Ctrl+Shift+P')).toEqual(expected)
     expect(computerUsePressKeyValidationMessage('')).toEqual(expected)
+  })
+
+  it('accepts modifier-only click chords', () => {
+    expect(computerUseClickModifiersValidationMessage('CmdOrCtrl')).toBeNull()
+    expect(computerUseClickModifiersValidationMessage('CmdOrCtrl+Shift')).toBeNull()
+    expect(computerUseClickModifiersValidationMessage('Control + Alt')).toBeNull()
+  })
+
+  it('rejects empty, key-bearing, and malformed click modifier chords', () => {
+    const expected = expect.stringContaining('Click modifiers accept modifier keys only')
+
+    expect(computerUseClickModifiersValidationMessage('')).toEqual(expected)
+    expect(computerUseClickModifiersValidationMessage('CmdOrCtrl+A')).toEqual(expected)
+    expect(computerUseClickModifiersValidationMessage('Cmd-Or-Ctrl')).toEqual(expected)
+    expect(computerUseClickModifiersValidationMessage('Ctrl++Shift')).toEqual(expected)
+    expect(computerUseClickModifiersValidationMessage('Ctrl+Shift+Alt+Meta+Super')).toEqual(
+      expected
+    )
   })
 })

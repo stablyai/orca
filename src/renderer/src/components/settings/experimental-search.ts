@@ -5,6 +5,7 @@ import { translateSearchKeyword } from './settings-search-keywords'
 import { getNewWorktreeCardStyleSearchEntry } from './new-worktree-card-style-search-entry'
 import { getNativeChatExperimentalSearchEntry } from './native-chat-experimental-search-entry'
 import { getEphemeralVmsSearchEntry } from './ephemeral-vms-search'
+import { getAgentsSidebarEntry } from './appearance-sidebar-search'
 
 export const getExperimentalPaneSearchEntries = createLocalizedCatalog(
   (): SettingsSearchEntry[] => [
@@ -46,11 +47,16 @@ export const getExperimentalPaneSearchEntries = createLocalizedCatalog(
         )
       ]
     },
+    getNativeChatExperimentalSearchEntry(),
+    getAgentsSidebarEntry(),
     {
-      title: translate('auto.components.settings.experimental.search.ccc5548ac5', 'Agents View'),
+      title: translate(
+        'auto.components.settings.experimental.search.agentDashboard.title',
+        'Agent Dashboard'
+      ),
       description: translate(
-        'auto.components.settings.experimental.search.4d63251595',
-        'Threaded left-sidebar feed for agent completions and blocking states.'
+        'auto.components.settings.experimental.search.agentDashboard.description',
+        'Kanban board for monitoring agents across worktrees, in-window or as a pop-out.'
       ),
       keywords: [
         ...translateSearchKeyword(
@@ -58,44 +64,35 @@ export const getExperimentalPaneSearchEntries = createLocalizedCatalog(
           'experimental'
         ),
         ...translateSearchKeyword(
-          'auto.components.settings.experimental.search.fa72e71f05',
-          'agents'
+          'auto.components.settings.experimental.search.agentDashboard.agent',
+          'agent'
         ),
         ...translateSearchKeyword(
-          'auto.components.settings.experimental.search.92a9357d1f',
-          'agents view'
+          'auto.components.settings.experimental.search.agentDashboard.dashboard',
+          'dashboard'
         ),
         ...translateSearchKeyword(
-          'auto.components.settings.experimental.search.244a0ecd3d',
-          'activity'
+          'auto.components.settings.experimental.search.agentDashboard.kanban',
+          'kanban'
         ),
         ...translateSearchKeyword(
-          'auto.components.settings.experimental.search.d01b3882ba',
-          'notifications'
+          'auto.components.settings.experimental.search.agentDashboard.popout',
+          'pop-out'
         ),
         ...translateSearchKeyword(
-          'auto.components.settings.experimental.search.10b52f79c1',
+          'auto.components.settings.experimental.search.agentDashboard.board',
+          'board'
+        ),
+        ...translateSearchKeyword(
+          'auto.components.settings.experimental.search.agentDashboard.inWindow',
+          'in-window'
+        ),
+        ...translateSearchKeyword(
+          'auto.components.settings.experimental.search.agentDashboard.worktrees',
           'worktrees'
-        ),
-        ...translateSearchKeyword(
-          'auto.components.settings.experimental.search.ca5d1f3f46',
-          'timeline'
-        ),
-        ...translateSearchKeyword(
-          'auto.components.settings.experimental.search.7b79081695',
-          'unread'
-        ),
-        ...translateSearchKeyword(
-          'auto.components.settings.experimental.search.8facf10138',
-          'bell'
-        ),
-        ...translateSearchKeyword(
-          'auto.components.settings.experimental.search.fe5688b761',
-          'sidebar'
         )
       ]
     },
-    getNativeChatExperimentalSearchEntry(),
     {
       title: translate(
         'auto.components.settings.experimental.search.9e4ddf776d',
@@ -185,55 +182,6 @@ export const getExperimentalPaneSearchEntries = createLocalizedCatalog(
       ]
     },
     getNewWorktreeCardStyleSearchEntry(),
-    {
-      title: translate(
-        'auto.components.settings.experimental.search.78c2a8dc74',
-        'Shared paths on worktrees'
-      ),
-      description: translate(
-        'auto.components.settings.experimental.search.603d29ed74',
-        'Automatically materialize configured files or folders into newly created worktrees using APFS clone-copy on macOS when possible, otherwise symlinks.'
-      ),
-      keywords: [
-        ...translateSearchKeyword(
-          'auto.components.settings.experimental.search.0d24759f14',
-          'experimental'
-        ),
-        ...translateSearchKeyword(
-          'auto.components.settings.experimental.search.d23ae13990',
-          'worktree'
-        ),
-        ...translateSearchKeyword(
-          'auto.components.settings.experimental.search.10b52f79c1',
-          'worktrees'
-        ),
-        ...translateSearchKeyword(
-          'auto.components.settings.experimental.search.c387565812',
-          'symlink'
-        ),
-        ...translateSearchKeyword(
-          'auto.components.settings.experimental.search.bff1ff7768',
-          'symlinks'
-        ),
-        ...translateSearchKeyword(
-          'auto.components.settings.experimental.search.3028f0bd3a',
-          'link'
-        ),
-        ...translateSearchKeyword(
-          'auto.components.settings.experimental.search.f082788cfe',
-          'links'
-        ),
-        ...translateSearchKeyword(
-          'auto.components.settings.experimental.search.3021571c30',
-          'shared'
-        ),
-        ...translateSearchKeyword('auto.components.settings.experimental.search.4ad605f222', 'env'),
-        ...translateSearchKeyword(
-          'auto.components.settings.experimental.search.44c7f209d5',
-          'node_modules'
-        )
-      ]
-    },
     getEphemeralVmsSearchEntry()
   ]
 )
@@ -252,11 +200,15 @@ function findEntry(title: string): SettingsSearchEntry {
 export function getExperimentalSearchEntry() {
   return {
     pet: findEntry(translate('auto.components.settings.experimental.search.87d99e634b', 'Pet')),
-    agentsView: findEntry(
-      translate('auto.components.settings.experimental.search.ccc5548ac5', 'Agents View')
-    ),
     nativeChat: findEntry(
-      translate('auto.components.settings.experimental.search.nativeChat.title', 'Native chat')
+      translate('auto.components.settings.experimental.search.nativeChat.title', 'Chat UI')
+    ),
+    agentsSidebar: getAgentsSidebarEntry(),
+    agentDashboard: findEntry(
+      translate(
+        'auto.components.settings.experimental.search.agentDashboard.title',
+        'Agent Dashboard'
+      )
     ),
     terminalAttention: findEntry(
       translate('auto.components.settings.experimental.search.9e4ddf776d', 'Terminal attention')
@@ -273,14 +225,8 @@ export function getExperimentalSearchEntry() {
         'New card style'
       )
     ),
-    symlinksOnWorktrees: findEntry(
-      translate(
-        'auto.components.settings.experimental.search.78c2a8dc74',
-        'Shared paths on worktrees'
-      )
-    ),
     ephemeralVms: findEntry(
-      translate('auto.components.settings.ephemeralVms.search.title', 'Per-Workspace Environments')
+      translate('auto.components.settings.ephemeralVms.search.cloudVmTitle', 'Cloud VM')
     )
   } as const
 }

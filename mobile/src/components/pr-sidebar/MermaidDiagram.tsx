@@ -1,7 +1,8 @@
-import { useMemo, useState } from 'react'
+import { memo, useMemo, useState } from 'react'
 import { ScrollView, StyleSheet, Text, View } from 'react-native'
 import { WebView } from 'react-native-webview'
 import { colors, radii, spacing, typography } from '../../theme/mobile-theme'
+import { MERMAID_ENGINE_JS } from './mermaid-webview-engine.generated'
 
 type Props = {
   source: string
@@ -9,11 +10,15 @@ type Props = {
 }
 
 // Renders a ```mermaid fence as a diagram via a sandboxed WebView (mermaid has no
-// native RN renderer). Mermaid is loaded from a CDN inside the WebView HTML, the
-// SVG is themed dark to match the sidebar, and the WebView posts back its rendered
-// height so we can size to content. On any failure (no network, parse error,
-// render error) we fall back to the raw source in a labeled mono code box.
-export function MermaidDiagram({ source, base }: Props) {
+// native RN renderer). Mermaid ships inside the app as a generated bundle embedded
+// in the WebView HTML — no network — the SVG is themed dark to match the sidebar,
+// and the WebView posts back its rendered height so we can size to content. On any
+// failure (parse error, render error) we fall back to the raw source in a labeled
+// mono code box.
+// memo: both props are primitives; without it every mounted diagram re-renders
+// per frame during pinch-to-zoom (textScale updates), marshalling the full HTML
+// string across the Fabric boundary each time.
+export const MermaidDiagram = memo(function MermaidDiagram({ source, base }: Props) {
   const [height, setHeight] = useState(0)
   const [failed, setFailed] = useState(false)
   const html = useMemo(() => buildHtml(source), [source])
@@ -58,7 +63,7 @@ export function MermaidDiagram({ source, base }: Props) {
       />
     </View>
   )
-}
+})
 
 function MermaidFallback({ source, base }: Props) {
   return (
@@ -73,21 +78,33 @@ function MermaidFallback({ source, base }: Props) {
   )
 }
 
-// Self-contained HTML: load mermaid from CDN, render the graph, post the body
+// JSON.stringify escapes quotes and control chars but leaves `<`, `>`, `&`, and
+// the U+2028/U+2029 line separators raw — so a source containing `</script>`
+// would close this inline <script> and let the rest execute as markup. Diagram
+// source is untrusted (agent output, PR/chat content), so escape those to \uXXXX;
+// the literal still parses back to the exact original string inside the WebView.
+function encodeSourceForScript(source: string): string {
+  return JSON.stringify(source).replace(
+    /[<>&\u2028\u2029]/g,
+    (char) => `\\u${char.charCodeAt(0).toString(16).padStart(4, '0')}`
+  )
+}
+
+// Self-contained HTML: embedded mermaid bundle, render the graph, post the body
 // height (or "error") back to RN. Theme variables match the dark sidebar palette.
-function buildHtml(source: string): string {
-  // JSON.stringify safely escapes the user's diagram source for embedding.
-  const encoded = JSON.stringify(source)
+export function buildHtml(source: string): string {
+  const encoded = encodeSourceForScript(source)
   return `<!DOCTYPE html>
 <html>
 <head>
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data: blob:; font-src data:; base-uri 'none'; form-action 'none'" />
 <style>
   html, body { margin: 0; padding: 0; background: ${colors.bgRaised}; }
   #c { padding: 8px; }
   #c svg { max-width: 100%; height: auto; }
 </style>
-<script src="https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js"></script>
+<script>${MERMAID_ENGINE_JS}</script>
 </head>
 <body>
 <div id="c"><pre class="mermaid"></pre></div>
@@ -114,7 +131,7 @@ function buildHtml(source: string): string {
       }
     });
     mermaid.run({ querySelector: '.mermaid' })
-      .then(reportHeight)
+      .then(function () { reportHeight(); })
       .catch(function () { post('error'); });
   } catch (e) {
     post('error');

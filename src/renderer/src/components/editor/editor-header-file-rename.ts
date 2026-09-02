@@ -23,8 +23,14 @@ export function useEditorHeaderFileRename(activeFile: OpenFile): EditorHeaderFil
   const renameCancelledRef = useRef(false)
   const renameFocusFrameRef = useRef<number | null>(null)
   const currentFileName = basename(activeFile.filePath)
+  // Why: read-only tabs (AI Vault View Log) are never renameable — rename would
+  // rewrite the agent-owned artifact's backing path.
   const canRename =
-    activeFile.mode === 'edit' && !activeFile.diffSource && !activeFile.conflict && !isRenaming
+    activeFile.mode === 'edit' &&
+    !activeFile.diffSource &&
+    !activeFile.conflict &&
+    !activeFile.readOnly &&
+    !isRenaming
 
   const openRenameInput = (): void => {
     if (!canRename) {
@@ -36,7 +42,6 @@ export function useEditorHeaderFileRename(activeFile: OpenFile): EditorHeaderFil
 
   const commitRename = (): void => {
     if (renameCancelledRef.current) {
-      renameCancelledRef.current = false
       setIsRenaming(false)
       return
     }
@@ -46,6 +51,9 @@ export function useEditorHeaderFileRename(activeFile: OpenFile): EditorHeaderFil
       return
     }
     const newName = input.value.trim()
+    // onBlur follows Enter when the input unmounts; consume that trailing event
+    // so one user action cannot start a second rename against the old path.
+    renameCancelledRef.current = true
     setIsRenaming(false)
     if (!newName || newName === currentFileName) {
       return

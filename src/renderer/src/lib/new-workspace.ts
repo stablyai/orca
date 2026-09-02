@@ -4,6 +4,7 @@ import {
   pasteDraftToAgentPtyWhenReady
 } from '@/lib/agent-paste-draft'
 import { sendFollowupPromptWhenAgentReady } from '@/lib/agent-followup-delivery'
+import { showAutomationPromptNotSentToast } from '@/lib/agent-background-session-timeout-toast'
 import type { AgentStartupPlan } from '@/lib/tui-agent-startup'
 import type { LinkedWorkItemContext } from '@/lib/linked-work-item-context'
 import {
@@ -12,7 +13,8 @@ import {
   queuePendingAgentStartupDelivery,
   resolveAgentStartupTabId
 } from '@/lib/agent-startup-delayed-delivery'
-import type { FolderWorkspaceLinkedTask, OrcaHooks, TaskViewPresetId } from '../../../shared/types'
+import type { FolderWorkspaceLinkedTask } from '../../../shared/folder-workspace-types'
+import type { OrcaHooks } from '../../../shared/orca-yaml-hook-types'
 import { resolveHookCommandSourcePolicy } from '../../../shared/hook-command-source-policy'
 import { slugifyForWorkspaceName } from '../../../shared/workspace-name'
 import { createBrowserUuid } from '@/lib/browser-uuid'
@@ -20,31 +22,7 @@ export { getLinkedWorkItemSuggestedName } from '../../../shared/workspace-name'
 export { getLinkedWorkItemWorkspaceName } from '../../../shared/workspace-name'
 export { getWorkspaceIntentName } from '../../../shared/workspace-name'
 
-/**
- * Why: the TaskPage's preset buttons and the openTaskPage prefetcher both need
- * to compute the same GitHub query string for a given preset id. Keep the
- * mapping here so the prefetch warms exactly the cache key the page will look
- * up on mount.
- */
 export { PER_REPO_FETCH_LIMIT, CROSS_REPO_DISPLAY_LIMIT } from '../../../shared/work-items'
-
-export function getTaskPresetQuery(presetId: TaskViewPresetId | null): string {
-  switch (presetId) {
-    case 'all':
-    case 'issues':
-      return 'is:issue is:open'
-    case 'my-issues':
-      return 'assignee:@me is:issue is:open'
-    case 'prs':
-      return 'is:pr is:open'
-    case 'my-prs':
-      return 'author:@me is:pr is:open'
-    case 'review':
-      return 'review-requested:@me is:pr is:open'
-    case null:
-      return 'is:issue is:open'
-  }
-}
 
 export const CLIENT_PLATFORM: NodeJS.Platform = navigator.userAgent.includes('Windows')
   ? 'win32'
@@ -58,7 +36,14 @@ export type LinkedWorkItemSummary = Omit<FolderWorkspaceLinkedTask, 'provider'> 
   provider?: FolderWorkspaceLinkedTask['provider']
   linearWorkspaceId?: string
   linearOrganizationUrlKey?: string
+  linearBranchName?: string
   linkedContext?: LinkedWorkItemContext
+}
+
+export function canUseIssueCommandForLinkedItemProvider(
+  provider: FolderWorkspaceLinkedTask['provider'] | null
+): boolean {
+  return provider === 'github' || provider === 'gitlab'
 }
 
 // Why: when a repo has no `orca.yaml` issueCommand and no per-user override,
@@ -302,12 +287,17 @@ async function deliverAgentStartupToTerminal(
   // (aider, goose, etc.) that need their initial prompt typed into the live
   // session and submitted. Wait until the agent owns the PTY before writing.
   if (startup.followupPrompt) {
-    await sendFollowupPromptWhenAgentReady({
+    const delivered = await sendFollowupPromptWhenAgentReady({
       ptyId,
       expectedProcess: startup.expectedProcess,
       prompt: startup.followupPrompt,
       settings: runtimeSettings
     })
+    // Why: a dropped follow-up is otherwise silent — surface the same toast the
+    // draft path uses so the user knows to open the workspace and paste it.
+    if (!delivered) {
+      showAutomationPromptNotSentToast(startup.agent)
+    }
   }
 
   // Why: draftPrompt uses bracketed-paste so the URL lands atomically in the
@@ -321,7 +311,9 @@ async function deliverAgentStartupToTerminal(
       agent: startup.agent,
       // Why: startup.draftPrompt is only attached after native draft launch
       // planning is unavailable, so this paste is the first delivery attempt.
-      forcePaste: true
+      forcePaste: true,
+      // Why: surface a dropped draft instead of silently losing it.
+      onTimeout: () => showAutomationPromptNotSentToast(startup.agent)
     })
   }
 }

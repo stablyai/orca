@@ -86,6 +86,68 @@ describe('automation run output snapshot buffer', () => {
     expect(snapshot?.truncated).toBe(true)
   })
 
+  it('preserves FIFO content through compaction and later partial trimming', () => {
+    const buffer = createAutomationRunOutputSnapshotBuffer()
+    const chunkCount = (256 * 1024) / 16
+    const replacementChunks = Array.from({ length: chunkCount }, (_, index) =>
+      index.toString(36).padStart(4, '0').repeat(4)
+    )
+
+    for (let index = 0; index < chunkCount; index += 1) {
+      buffer.append('A'.repeat(16))
+    }
+    for (const chunk of replacementChunks) {
+      buffer.append(chunk)
+    }
+
+    const replacedContent = replacementChunks.join('')
+    expect(buffer.snapshot()).toMatchObject({ content: replacedContent, truncated: true })
+
+    buffer.append('TAIL')
+    expect(buffer.snapshot()).toMatchObject({
+      content: `${replacedContent.slice(4)}TAIL`,
+      truncated: true
+    })
+  })
+
+  it('strips escape sequences joined across chunk boundaries', () => {
+    const buffer = createAutomationRunOutputSnapshotBuffer()
+
+    buffer.append('Before\u001b]0;hidden')
+    buffer.append('\u001b\\After')
+
+    expect(buffer.snapshot()).toMatchObject({ content: 'BeforeAfter', truncated: false })
+  })
+
+  it('retains the same UTF-16 tail when overflow splits a surrogate pair', () => {
+    const buffer = createAutomationRunOutputSnapshotBuffer()
+    const initial = '\ud83d\ude00'.repeat((256 * 1024) / 2)
+
+    buffer.append(initial)
+    buffer.append('x')
+
+    expect(buffer.snapshot()).toMatchObject({
+      content: `${initial.slice(1)}x`,
+      truncated: true
+    })
+  })
+
+  it('owns the exact UTF-16 tail of one oversized chunk', () => {
+    const buffer = createAutomationRunOutputSnapshotBuffer()
+    const retained = `\ude00${'A'.repeat(256 * 1024 - 2)}\ud83d`
+
+    buffer.append('older output')
+    buffer.append(`discarded prefix${retained}`)
+
+    expect(buffer.snapshot()).toMatchObject({ content: retained, truncated: true })
+
+    buffer.append('TAIL')
+    expect(buffer.snapshot()).toMatchObject({
+      content: `${retained.slice(4)}TAIL`,
+      truncated: true
+    })
+  })
+
   it('creates a saved snapshot from agent transcript text', () => {
     expect(createAutomationRunOutputSnapshotFromText('\nFinal summary.\n')).toEqual({
       format: 'plain_text',

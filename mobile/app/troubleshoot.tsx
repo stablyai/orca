@@ -1,36 +1,30 @@
 import { useState, useCallback, useRef } from 'react'
-import {
-  View,
-  Text,
-  StyleSheet,
-  Pressable,
-  ScrollView,
-  ActivityIndicator,
-  Platform
-} from 'react-native'
+import { View, Text, Pressable, ScrollView, ActivityIndicator, Platform } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useRouter } from 'expo-router'
 import {
   ChevronLeft,
   ChevronDown,
   ChevronUp,
-  WifiOff,
-  Shield,
-  Monitor,
-  Clock,
-  Globe,
   Activity,
   CheckCircle2,
+  ScrollText,
   XCircle,
   AlertTriangle
 } from 'lucide-react-native'
-import { colors, spacing, typography } from '../src/theme/mobile-theme'
+import { colors, spacing } from '../src/theme/mobile-theme'
 import { loadHosts } from '../src/transport/host-store'
 import {
   startDiagnosticFetchTimeout,
   type DiagnosticFetchTimeout
 } from '../src/diagnostics/diagnostic-fetch-timeout'
-import { formatEndpoint, testHostReachability } from '../src/diagnostics/host-reachability'
+import {
+  formatEndpoint,
+  testHostReachability,
+  unreachableHostDetail
+} from '../src/diagnostics/host-reachability'
+import { troubleshootCommonIssues } from '../src/diagnostics/troubleshoot-common-issues'
+import { troubleshootScreenStyles as styles } from '../src/diagnostics/troubleshoot-screen-styles'
 
 type DiagnosticStatus = 'idle' | 'running' | 'done'
 
@@ -39,66 +33,6 @@ type CheckResult = {
   status: 'pass' | 'fail' | 'warn'
   detail: string
 }
-
-type TroubleshootSection = {
-  id: string
-  icon: React.ReactNode
-  title: string
-  steps: string[]
-}
-
-const sections: TroubleshootSection[] = [
-  {
-    id: 'wifi',
-    icon: <WifiOff size={16} color={colors.textSecondary} />,
-    title: 'Different WiFi Networks',
-    steps: [
-      'Both devices must be on the same local network.',
-      'Ethernet and WiFi must share the same subnet.',
-      'Try reconnecting WiFi on both devices.'
-    ]
-  },
-  {
-    id: 'firewall',
-    icon: <Shield size={16} color={colors.textSecondary} />,
-    title: 'Firewall Blocking Port 6768',
-    steps: [
-      'macOS: System Settings → Network → Firewall — allow Orca.',
-      'Windows: Defender Firewall → Allow app — enable Orca for Private networks.',
-      'Linux: sudo ufw allow 6768',
-      'Corporate/school networks may block P2P — try a personal hotspot.'
-    ]
-  },
-  {
-    id: 'desktop',
-    icon: <Monitor size={16} color={colors.textSecondary} />,
-    title: 'Desktop App Not Running',
-    steps: [
-      'Orca must be open on your desktop to accept connections.',
-      'Try restarting Orca — the companion server starts on launch.',
-      'After an update, you may need to re-pair via QR code.'
-    ]
-  },
-  {
-    id: 'timeout',
-    icon: <Clock size={16} color={colors.textSecondary} />,
-    title: 'Connection Timeout',
-    steps: [
-      'Check WiFi signal strength on your phone.',
-      'Go back to the host list and tap your host to retry.',
-      'Restart both apps if timeouts persist.'
-    ]
-  },
-  {
-    id: 'vpn',
-    icon: <Globe size={16} color={colors.textSecondary} />,
-    title: 'VPN Interference',
-    steps: [
-      'VPNs can route local traffic through a remote server.',
-      'Disable the VPN or enable split tunneling / "Allow LAN".'
-    ]
-  }
-]
 
 function StatusIcon({ status }: { status: CheckResult['status'] }) {
   switch (status) {
@@ -211,7 +145,7 @@ export default function TroubleshootScreen() {
           status: reachable ? 'pass' : 'fail',
           detail: reachable
             ? `Reachable at ${formatEndpoint(host.endpoint)}`
-            : `Cannot reach ${formatEndpoint(host.endpoint)}`
+            : unreachableHostDetail(host.endpoint)
         })
         setChecks([...results])
       }
@@ -273,6 +207,17 @@ export default function TroubleshootScreen() {
           </Text>
         </Pressable>
 
+        <Pressable
+          style={({ pressed }) => [
+            styles.diagnosticButton,
+            pressed && styles.diagnosticButtonPressed
+          ]}
+          onPress={() => router.push('/connection-log')}
+        >
+          <ScrollText size={16} color={colors.textPrimary} />
+          <Text style={styles.diagnosticButtonLabel}>View network diagnostics</Text>
+        </Pressable>
+
         {checks.length > 0 && (
           <View style={styles.section}>
             {checks.map((check, i) => (
@@ -295,7 +240,7 @@ export default function TroubleshootScreen() {
         <Text style={styles.sectionHeading}>Common issues</Text>
 
         <View style={styles.section}>
-          {sections.map((section, i) => (
+          {troubleshootCommonIssues.map((section, i) => (
             <View key={section.id}>
               {i > 0 && <View style={styles.separator} />}
               <Pressable
@@ -329,135 +274,3 @@ export default function TroubleshootScreen() {
     </View>
   )
 }
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: colors.bgBase,
-    padding: spacing.lg
-  },
-  topRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: spacing.lg
-  },
-  backButton: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: spacing.sm
-  },
-  heading: {
-    fontSize: 20,
-    fontWeight: '700',
-    color: colors.textPrimary
-  },
-  scroll: {
-    flex: 1
-  },
-  scrollContent: {
-    paddingBottom: spacing.xl
-  },
-  diagnosticButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: spacing.sm,
-    backgroundColor: colors.bgRaised,
-    borderRadius: 10,
-    paddingVertical: spacing.md,
-    paddingHorizontal: spacing.lg,
-    marginBottom: spacing.lg
-  },
-  diagnosticButtonPressed: {
-    opacity: 0.7
-  },
-  diagnosticButtonDisabled: {
-    opacity: 0.5
-  },
-  diagnosticButtonLabel: {
-    fontSize: typography.bodySize,
-    fontWeight: '600',
-    color: colors.textPrimary
-  },
-  checkRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-    paddingVertical: spacing.sm + 2,
-    paddingHorizontal: spacing.md + 2
-  },
-  checkLabel: {
-    fontSize: typography.bodySize,
-    fontWeight: '500',
-    color: colors.textPrimary
-  },
-  checkDetail: {
-    flex: 1,
-    textAlign: 'right',
-    fontSize: typography.metaSize,
-    color: colors.textMuted
-  },
-  checkDetailFail: {
-    color: colors.statusRed
-  },
-  sectionHeading: {
-    fontSize: typography.metaSize,
-    fontWeight: '600',
-    color: colors.textMuted,
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-    marginBottom: spacing.sm,
-    marginTop: spacing.sm,
-    paddingHorizontal: spacing.xs
-  },
-  section: {
-    backgroundColor: colors.bgPanel,
-    borderRadius: 12,
-    overflow: 'hidden',
-    marginBottom: spacing.lg
-  },
-  separator: {
-    height: StyleSheet.hairlineWidth,
-    backgroundColor: colors.borderSubtle,
-    marginHorizontal: spacing.md
-  },
-  rowPressed: {
-    backgroundColor: colors.bgRaised
-  },
-  accordionHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm + 2,
-    paddingVertical: spacing.md,
-    paddingHorizontal: spacing.md + 2
-  },
-  accordionTitle: {
-    flex: 1,
-    fontSize: typography.bodySize,
-    fontWeight: '500',
-    color: colors.textPrimary
-  },
-  accordionBody: {
-    paddingHorizontal: spacing.md + 2,
-    paddingBottom: spacing.md,
-    gap: spacing.xs + 2
-  },
-  stepRow: {
-    flexDirection: 'row',
-    gap: spacing.sm
-  },
-  bullet: {
-    fontSize: typography.metaSize,
-    color: colors.textMuted,
-    lineHeight: 18
-  },
-  stepText: {
-    flex: 1,
-    fontSize: typography.metaSize,
-    color: colors.textMuted,
-    lineHeight: 18
-  }
-})

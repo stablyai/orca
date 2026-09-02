@@ -1,20 +1,34 @@
 import { translate } from '@/i18n/i18n'
 import type { MobileNetworkInterface } from '../settings/mobile-network-interface-selection'
-import { HeroFlow, HeroIntro, HeroPaired, type PairedDevice, type Platform } from './MobileHero'
-import type { StepIndex } from './MobileHero'
+import {
+  HeroFlow,
+  HeroIntro,
+  HeroPaired,
+  type PairedDevice,
+  type Platform,
+  type StepIndex
+} from './MobileHero'
 import { getInstallCopy, type IosChannel } from './mobile-platform-copy'
 import type { MobilePageStage } from './mobile-page-stage'
 import { MobilePageToolbar } from './MobilePageToolbar'
 import { PhoneCarousel } from './PhoneCarousel'
+import type { MobilePairingConnectionMode } from '../../../../shared/mobile-pairing-connection-mode'
+import type { MobileRelayMintFailure } from '../../../../shared/mobile-relay-mint-failure'
 
 type MobilePageContentProps = {
   closeMobilePage: () => void
   copyInstallUrl: () => void
   copyPairingCode: () => void
-  devices: PairedDevice[]
+  devices: readonly PairedDevice[]
   enterFlow: () => void
   generatePairing: (rotate: boolean) => void
+  canGeneratePairing: boolean
   handleAddressChange: (address: string) => void
+  customAddresses: readonly string[]
+  selectedAddressIsCustom: boolean
+  onCustomAddressSelect: (address: string) => void
+  onCustomAddressRemove: (address: string) => void
+  beforeCustomAddressChange: (address: string) => Promise<boolean>
   handleBack: () => void
   handleContinue: () => void
   installQrUrl: string | null
@@ -22,15 +36,24 @@ type MobilePageContentProps = {
   setIosChannel: (channel: IosChannel) => void
   loadNetworkInterfaces: () => void
   networkInterfaces: MobileNetworkInterface[]
+  openAndroidInstallGuide: () => void
   openInstallUrl: () => void
   pairAnotherDevice: () => void
   pairLoading: boolean
+  connectionMode: MobilePairingConnectionMode
+  handleConnectionModeChange: (mode: MobilePairingConnectionMode) => void
   pairQrDataUrl: string | null
+  pairQrSize: number | null
   pairingUrl: string | null
+  pairingQrError: boolean
+  relayMintFailure: MobileRelayMintFailure | null
+  onUseLan: () => void
+  onRetryRelay: () => void
+  onCopyRelayDiagnostics: () => void
   platform: Platform
   refreshingNetworkInterfaces: boolean
   revokeDevice: (id: string) => void
-  revokingDeviceIds: string[]
+  revokingDeviceIds: readonly string[]
   selectedAddress: string | undefined
   setPlatform: (platform: Platform) => void
   showMobileButton: boolean
@@ -47,7 +70,13 @@ export function MobilePageContent({
   devices,
   enterFlow,
   generatePairing,
+  canGeneratePairing,
   handleAddressChange,
+  customAddresses,
+  selectedAddressIsCustom,
+  onCustomAddressSelect,
+  onCustomAddressRemove,
+  beforeCustomAddressChange,
   handleBack,
   handleContinue,
   installQrUrl,
@@ -55,11 +84,20 @@ export function MobilePageContent({
   setIosChannel,
   loadNetworkInterfaces,
   networkInterfaces,
+  openAndroidInstallGuide,
   openInstallUrl,
   pairAnotherDevice,
   pairLoading,
+  connectionMode,
+  handleConnectionModeChange,
   pairQrDataUrl,
+  pairQrSize,
   pairingUrl,
+  pairingQrError,
+  relayMintFailure,
+  onUseLan,
+  onRetryRelay,
+  onCopyRelayDiagnostics,
   platform,
   refreshingNetworkInterfaces,
   revokeDevice,
@@ -73,7 +111,7 @@ export function MobilePageContent({
   toggleMobileSidebarButton
 }: MobilePageContentProps): React.JSX.Element {
   return (
-    <div className="mobile-page-root">
+    <div className="mobile-page-root scrollbar-sleek">
       <MobilePageToolbar
         showMobileButton={showMobileButton}
         onClose={closeMobilePage}
@@ -99,16 +137,31 @@ export function MobilePageContent({
               installCopy={getInstallCopy(platform, iosChannel)}
               iosChannel={iosChannel}
               onIosChannelChange={setIosChannel}
+              onOpenAndroidInstallGuide={openAndroidInstallGuide}
               onOpenInstallUrl={openInstallUrl}
               onCopyInstallUrl={copyInstallUrl}
               pairQrDataUrl={pairQrDataUrl}
+              pairQrSize={pairQrSize}
               pairingUrl={pairingUrl}
+              pairingQrError={pairingQrError}
+              relayMintFailure={relayMintFailure}
+              onUseLan={onUseLan}
+              onRetryRelay={onRetryRelay}
+              onCopyRelayDiagnostics={onCopyRelayDiagnostics}
               pairLoading={pairLoading}
+              connectionMode={connectionMode}
+              onConnectionModeChange={handleConnectionModeChange}
               onRegeneratePairing={() => generatePairing(true)}
+              canGeneratePairing={canGeneratePairing}
               onCopyPairingCode={copyPairingCode}
               networkInterfaces={networkInterfaces}
+              customAddresses={customAddresses}
               selectedAddress={selectedAddress}
+              selectedAddressIsCustom={selectedAddressIsCustom}
               onSelectedAddressChange={handleAddressChange}
+              onCustomAddressSelect={onCustomAddressSelect}
+              onCustomAddressRemove={onCustomAddressRemove}
+              beforeCustomAddressChange={beforeCustomAddressChange}
               onRefreshNetworkInterfaces={loadNetworkInterfaces}
               refreshingNetworkInterfaces={refreshingNetworkInterfaces}
               onBack={handleBack}

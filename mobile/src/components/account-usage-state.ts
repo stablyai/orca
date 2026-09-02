@@ -5,53 +5,26 @@
 // Pure state/selectors live here (no React Native imports) so they can be
 // unit-tested directly; AccountUsage.tsx re-exports them alongside the
 // UsageBar component.
-export type RateLimitWindow = {
-  usedPercent: number
-  windowMinutes: number
-  resetsAt: number | null
-  resetDescription: string | null
-}
+import { formatResetCountdown } from '../../../src/shared/rate-limit-reset-format'
+import type {
+  AccountsSnapshot,
+  InactiveAccountUsage,
+  ProviderRateLimits
+} from './accounts-snapshot'
 
-export type ProviderRateLimits = {
-  provider: 'claude' | 'codex' | 'gemini' | 'opencode-go' | 'kimi'
-  session: RateLimitWindow | null
-  weekly: RateLimitWindow | null
-  monthly?: RateLimitWindow | null
-  buckets?: Array<RateLimitWindow & { name: string }>
-  updatedAt: number
-  error: string | null
-  status: 'idle' | 'fetching' | 'ok' | 'error' | 'unavailable'
-}
-
-export type InactiveAccountUsage = {
-  accountId: string
-  rateLimits: ProviderRateLimits | null
-  updatedAt: number
-  isFetching: boolean
-}
-
-export type ClaudeAccountSummary = {
-  id: string
-  email: string
-  organizationName?: string | null
-}
-
-export type CodexAccountSummary = {
-  id: string
-  email: string
-  workspaceLabel?: string | null
-}
-
-export type AccountsSnapshot = {
-  claude: { accounts: ClaudeAccountSummary[]; activeAccountId: string | null }
-  codex: { accounts: CodexAccountSummary[]; activeAccountId: string | null }
-  rateLimits: {
-    claude: ProviderRateLimits | null
-    codex: ProviderRateLimits | null
-    inactiveClaudeAccounts: InactiveAccountUsage[]
-    inactiveCodexAccounts: InactiveAccountUsage[]
-  }
-}
+export {
+  AccountsSnapshotSchema,
+  decodeAccountsSnapshot,
+  ProviderRateLimitsSchema,
+  RateLimitRuntimeTargetSchema,
+  type AccountsSnapshot,
+  type ClaudeAccountSummary,
+  type CodexAccountSummary,
+  type InactiveAccountUsage,
+  type ProviderRateLimits,
+  type RateLimitRuntimeTarget,
+  type RateLimitWindow
+} from './accounts-snapshot'
 
 export type ProviderKey = 'claude' | 'codex'
 
@@ -115,6 +88,27 @@ export function getUsageBarState(
     unavailable: window == null && !fetching,
     loading: fetching && window == null
   }
+}
+
+/**
+ * Reset countdown for one window, e.g. "Resets in 3h 54m" / "Resets now",
+ * or null when the window has no reset timestamp (so the UI degrades to
+ * today's bars-only layout).
+ *
+ * Why: shares formatResetCountdown with the desktop status-bar tooltip so the
+ * copy stays identical across surfaces. `now` is a parameter so the function
+ * stays pure and unit-testable.
+ */
+export function getWindowResetLabel(
+  limits: ProviderRateLimits | null,
+  windowKey: 'session' | 'weekly',
+  now: number
+): string | null {
+  const resetsAt = limits?.[windowKey]?.resetsAt
+  if (resetsAt == null) {
+    return null
+  }
+  return formatResetCountdown(resetsAt - now)
 }
 
 // Why: the usage UI must render for the system-default login, not only for

@@ -91,6 +91,10 @@ describe('canAutoSaveOpenFile', () => {
       )
     ).toBe(false)
   })
+
+  it('rejects read-only edit tabs (AI Vault View Log)', () => {
+    expect(canAutoSaveOpenFile(makeOpenFile({ readOnly: true }))).toBe(false)
+  })
 })
 
 describe('normalizeAutoSaveDelayMs', () => {
@@ -253,5 +257,55 @@ describe('getOpenFilesForExternalFileChange', () => {
         runtimeEnvironmentId: 'env-1'
       }).map((file) => file.id)
     ).toEqual(['runtime-edit', 'runtime-diff'])
+  })
+  it('matches restored WSL aliases only for a proven local Windows watcher', () => {
+    vi.stubGlobal('navigator', { userAgent: 'Windows' })
+    const terminalLinkTab = makeOpenFile({
+      id: '//wsl.localhost/Ubuntu/workspace/repo/file.ts',
+      filePath: '//wsl.localhost/Ubuntu/workspace/repo/file.ts',
+      worktreeId: 'wt-wsl'
+    })
+
+    expect(
+      getOpenFilesForExternalFileChange([terminalLinkTab], {
+        worktreeId: 'wt-wsl',
+        worktreePath: '\\\\wsl.localhost\\Ubuntu\\workspace\\repo',
+        relativePath: 'file.ts',
+        runtimeEnvironmentId: null,
+        allowLocalWindowsWslAliases: true
+      }).map((file) => file.id)
+    ).toEqual(['//wsl.localhost/Ubuntu/workspace/repo/file.ts'])
+
+    expect(
+      getOpenFilesForExternalFileChange([terminalLinkTab], {
+        worktreeId: 'wt-wsl',
+        worktreePath: '\\\\wsl.localhost\\Ubuntu\\workspace\\repo',
+        relativePath: 'file.ts',
+        runtimeEnvironmentId: null
+      })
+    ).toEqual([])
+
+    vi.stubGlobal('navigator', { userAgent: 'Linux' })
+    expect(
+      getOpenFilesForExternalFileChange([terminalLinkTab], {
+        worktreeId: 'wt-wsl',
+        worktreePath: '\\\\wsl.localhost\\Ubuntu\\workspace\\repo',
+        relativePath: 'file.ts',
+        runtimeEnvironmentId: null,
+        allowLocalWindowsWslAliases: true
+      })
+    ).toEqual([])
+
+    vi.stubGlobal('navigator', { userAgent: 'Windows' })
+    vi.stubGlobal('__ORCA_WEB_CLIENT__', true)
+    expect(
+      getOpenFilesForExternalFileChange([terminalLinkTab], {
+        worktreeId: 'wt-wsl',
+        worktreePath: '\\\\wsl.localhost\\Ubuntu\\workspace\\repo',
+        relativePath: 'file.ts',
+        runtimeEnvironmentId: null,
+        allowLocalWindowsWslAliases: true
+      })
+    ).toEqual([])
   })
 })

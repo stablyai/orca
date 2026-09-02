@@ -1,26 +1,46 @@
-import { exec, spawn } from 'node:child_process'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { execFile, spawn } from 'node:child_process'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as ChildProcess from 'node:child_process'
 import { createFakeChild, createHandlers, requestContext } from './agent-exec-handler-test-harness'
+import { TERMINAL_GIT_CREDENTIAL_GUARD_POLICY_ENV } from '../shared/terminal-git-credential-guard'
 
 vi.mock('child_process', async (importOriginal) => {
   const actual = await importOriginal<typeof ChildProcess>()
   return {
     ...actual,
-    exec: vi.fn(),
+    execFile: vi.fn(),
     spawn: vi.fn()
   }
 })
 
 const spawnMock = vi.mocked(spawn)
-const execMock = vi.mocked(exec)
+const execFileMock = vi.mocked(execFile)
 
 type AgentExecResult = { exitCode: number | null; timedOut: boolean }
 
+const GUARD_OWNED_ENV_RE = /^(?:GIT_CONFIG_(?:COUNT|KEY_\d+|VALUE_\d+)|WSLENV)$/
+
 describe('AgentExecHandler', () => {
+  let ambientGuardEnv: Record<string, string | undefined> = {}
+
   beforeEach(() => {
     spawnMock.mockReset()
-    execMock.mockReset()
+    execFileMock.mockReset()
+    // Why: the guard rewrites these, so an already-guarded runner (Orca guards
+    // its own agent terminals) would not see its ambient values passed through.
+    ambientGuardEnv = {}
+    for (const key of Object.keys(process.env).filter((name) => GUARD_OWNED_ENV_RE.test(name))) {
+      ambientGuardEnv[key] = process.env[key]
+      delete process.env[key]
+    }
+  })
+
+  afterEach(() => {
+    for (const [key, value] of Object.entries(ambientGuardEnv)) {
+      if (value !== undefined) {
+        process.env[key] = value
+      }
+    }
   })
 
   it('executes a non-interactive command with captured output and stdin', async () => {
@@ -52,7 +72,11 @@ describe('AgentExecHandler', () => {
     })
     expect(spawnMock).toHaveBeenCalledWith('agent', ['--flag', '42'], {
       cwd: '/repo',
-      env: process.env,
+      env: expect.objectContaining({
+        ...process.env,
+        GIT_TERMINAL_PROMPT: '0',
+        GCM_INTERACTIVE: 'never'
+      }),
       stdio: ['pipe', 'pipe', 'pipe'],
       windowsHide: true
     })
@@ -97,6 +121,87 @@ describe('AgentExecHandler', () => {
     })
   })
 
+  it('consumes an unattended marker and applies the full Git guard on the relay host', async () => {
+    const child = createFakeChild()
+    spawnMock.mockReturnValue(child as never)
+    const handlers = createHandlers()
+
+    const pending = handlers.get('agent.execNonInteractive')!(
+      {
+        binary: '/bin/bash',
+        args: ['-lc', 'git fetch'],
+        cwd: '/repo',
+        timeoutMs: 5_000,
+        env: { [TERMINAL_GIT_CREDENTIAL_GUARD_POLICY_ENV]: 'guard' }
+      },
+      requestContext()
+    )
+
+    child.emit('close', 0)
+    await expect(pending).resolves.toMatchObject({ exitCode: 0 })
+
+    const env = spawnMock.mock.calls[0]?.[2]?.env as Record<string, string>
+    expect(env[TERMINAL_GIT_CREDENTIAL_GUARD_POLICY_ENV]).toBeUndefined()
+    expect(env.GIT_TERMINAL_PROMPT).toBe('0')
+    expect(env.GCM_INTERACTIVE).toBe('never')
+    expect(Object.values(env)).toContain('credential.interactive')
+    expect(Object.values(env)).toContain('credential.guiPrompt')
+  })
+
+  it('guards wrapped agents after atomically replacing inherited indexed config', async () => {
+    const keys = [
+      'GIT_CONFIG_COUNT',
+      'GIT_CONFIG_KEY_0',
+      'GIT_CONFIG_VALUE_0',
+      'GIT_CONFIG_KEY_1',
+      'GIT_CONFIG_VALUE_1'
+    ] as const
+    const saved = Object.fromEntries(keys.map((key) => [key, process.env[key]]))
+    process.env.GIT_CONFIG_COUNT = '2'
+    process.env.GIT_CONFIG_KEY_0 = 'base.one'
+    process.env.GIT_CONFIG_VALUE_0 = 'one'
+    process.env.GIT_CONFIG_KEY_1 = 'base.two'
+    process.env.GIT_CONFIG_VALUE_1 = 'two'
+
+    try {
+      const child = createFakeChild()
+      spawnMock.mockReturnValue(child as never)
+      const handlers = createHandlers()
+      const pending = handlers.get('agent.execNonInteractive')!(
+        {
+          binary: 'npx',
+          args: ['codex', 'exec'],
+          cwd: '/repo',
+          timeoutMs: 5_000,
+          env: {
+            GIT_CONFIG_COUNT: '1',
+            GIT_CONFIG_KEY_0: 'http.proxy',
+            GIT_CONFIG_VALUE_0: 'http://proxy.invalid'
+          }
+        },
+        requestContext()
+      )
+
+      child.emit('close', 0)
+      await expect(pending).resolves.toMatchObject({ exitCode: 0 })
+      const env = spawnMock.mock.calls[0]?.[2]?.env as Record<string, string>
+      expect(env.GIT_TERMINAL_PROMPT).toBe('0')
+      expect(env.GIT_CONFIG_COUNT).toBe('3')
+      expect(env.GIT_CONFIG_KEY_0).toBe('http.proxy')
+      expect(env.GIT_CONFIG_KEY_1).toBe('credential.interactive')
+      expect(env.GIT_CONFIG_KEY_2).toBe('credential.guiPrompt')
+      expect(Object.values(env)).not.toContain('base.two')
+    } finally {
+      for (const key of keys) {
+        if (saved[key] === undefined) {
+          delete process.env[key]
+        } else {
+          process.env[key] = saved[key]
+        }
+      }
+    }
+  })
+
   it('cancels the in-flight command for the requested cwd', async () => {
     const child = createFakeChild()
     spawnMock.mockReturnValue(child as never)
@@ -118,7 +223,11 @@ describe('AgentExecHandler', () => {
     ).resolves.toEqual({ canceled: true })
 
     if (process.platform === 'win32') {
-      expect(execMock).toHaveBeenCalledWith('taskkill /pid 12345 /T /F', expect.any(Function))
+      expect(execFileMock).toHaveBeenCalledWith(
+        'taskkill',
+        ['/pid', '12345', '/T', '/F'],
+        expect.any(Function)
+      )
     } else {
       expect(child.kill).toHaveBeenCalledWith('SIGKILL')
     }
@@ -171,8 +280,16 @@ describe('AgentExecHandler', () => {
     ).resolves.toEqual({ canceled: true })
 
     if (process.platform === 'win32') {
-      expect(execMock).toHaveBeenCalledWith('taskkill /pid 12345 /T /F', expect.any(Function))
-      expect(execMock).not.toHaveBeenCalledWith('taskkill /pid 12346 /T /F', expect.any(Function))
+      expect(execFileMock).toHaveBeenCalledWith(
+        'taskkill',
+        ['/pid', '12345', '/T', '/F'],
+        expect.any(Function)
+      )
+      expect(execFileMock).not.toHaveBeenCalledWith(
+        'taskkill',
+        ['/pid', '12346', '/T', '/F'],
+        expect.any(Function)
+      )
     } else {
       expect(commitChild.kill).toHaveBeenCalledWith('SIGKILL')
       expect(pullRequestChild.kill).not.toHaveBeenCalled()
@@ -217,7 +334,11 @@ describe('AgentExecHandler', () => {
     controller.abort()
 
     if (process.platform === 'win32') {
-      expect(execMock).toHaveBeenCalledWith('taskkill /pid 12345 /T /F', expect.any(Function))
+      expect(execFileMock).toHaveBeenCalledWith(
+        'taskkill',
+        ['/pid', '12345', '/T', '/F'],
+        expect.any(Function)
+      )
     } else {
       expect(child.kill).toHaveBeenCalledWith('SIGKILL')
     }
@@ -265,8 +386,16 @@ describe('AgentExecHandler', () => {
     )
 
     if (process.platform === 'win32') {
-      expect(execMock).toHaveBeenCalledWith('taskkill /pid 12345 /T /F', expect.any(Function))
-      expect(execMock).not.toHaveBeenCalledWith('taskkill /pid 12346 /T /F', expect.any(Function))
+      expect(execFileMock).toHaveBeenCalledWith(
+        'taskkill',
+        ['/pid', '12345', '/T', '/F'],
+        expect.any(Function)
+      )
+      expect(execFileMock).not.toHaveBeenCalledWith(
+        'taskkill',
+        ['/pid', '12346', '/T', '/F'],
+        expect.any(Function)
+      )
     } else {
       expect(firstChild.kill).toHaveBeenCalledWith('SIGKILL')
       expect(secondChild.kill).not.toHaveBeenCalled()
@@ -280,7 +409,11 @@ describe('AgentExecHandler', () => {
     ).resolves.toEqual({ canceled: true })
 
     if (process.platform === 'win32') {
-      expect(execMock).toHaveBeenCalledWith('taskkill /pid 12346 /T /F', expect.any(Function))
+      expect(execFileMock).toHaveBeenCalledWith(
+        'taskkill',
+        ['/pid', '12346', '/T', '/F'],
+        expect.any(Function)
+      )
     } else {
       expect(secondChild.kill).toHaveBeenCalledWith('SIGKILL')
     }
@@ -325,7 +458,11 @@ describe('AgentExecHandler', () => {
 
       expect(outcome).toBe('timed-out:null')
       if (process.platform === 'win32') {
-        expect(execMock).toHaveBeenCalledWith('taskkill /pid 12345 /T /F', expect.any(Function))
+        expect(execFileMock).toHaveBeenCalledWith(
+          'taskkill',
+          ['/pid', '12345', '/T', '/F'],
+          expect.any(Function)
+        )
       } else {
         expect(child.kill).toHaveBeenCalledWith('SIGKILL')
       }

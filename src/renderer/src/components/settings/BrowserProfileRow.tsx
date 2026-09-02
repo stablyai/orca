@@ -1,6 +1,10 @@
 import { Import, Loader2, Trash2 } from 'lucide-react'
 import { toast } from 'sonner'
-import type { BrowserCookieImportSummary, BrowserSessionProfile } from '../../../../shared/types'
+import { emitBrowserCookieImportToast } from '@/lib/browser-cookie-import-toast'
+import type {
+  BrowserCookieImportSummary,
+  BrowserSessionProfile
+} from '../../../../shared/browser-workspace-types'
 import { Button } from '../ui/button'
 import {
   DropdownMenu,
@@ -13,6 +17,8 @@ import {
   DropdownMenuSubTrigger,
   DropdownMenuTrigger
 } from '../ui/dropdown-menu'
+import { BrowserCookieImportDisclosure } from '../BrowserCookieImportDisclosure'
+import { BrowserCookieImportMachineNotice } from '../BrowserCookieImportMachineNotice'
 import { useAppStore } from '../../store'
 import { BROWSER_FAMILY_LABELS } from '../../../../shared/constants'
 import { translate } from '@/i18n/i18n'
@@ -58,7 +64,8 @@ export function BrowserProfileRow({
       .importCookiesFromBrowser(profile.id, browserFamily, browserProfile)
     if (result.ok) {
       const browser = detectedBrowsers.find((b) => b.family === browserFamily)
-      toast.success(
+      emitBrowserCookieImportToast(
+        result.summary,
         browserProfile
           ? translate(
               'auto.components.settings.BrowserProfileRow.a3f8c2d1e0b4',
@@ -78,7 +85,8 @@ export function BrowserProfileRow({
                 value1: browser?.label ?? browserFamily,
                 value2: profile.label
               }
-            )
+            ),
+        result
       )
     } else {
       toast.error(result.reason)
@@ -88,12 +96,14 @@ export function BrowserProfileRow({
   const handleImportFromFile = async (): Promise<void> => {
     const result = await useAppStore.getState().importCookiesToProfile(profile.id)
     if (result.ok) {
-      toast.success(
+      emitBrowserCookieImportToast(
+        result.summary,
         translate(
           'auto.components.settings.BrowserProfileRow.b4c167764d',
           'Imported {{value0}} cookies from file into {{value1}}.',
           { value0: result.summary.importedCookies, value1: profile.label }
-        )
+        ),
+        result
       )
     } else if (result.reason !== 'canceled') {
       toast.error(result.reason)
@@ -102,7 +112,11 @@ export function BrowserProfileRow({
 
   const sourceLabel = profile.source
     ? `${BROWSER_FAMILY_LABELS[profile.source.browserFamily] ?? profile.source.browserFamily}${profile.source.profileName ? ` (${profile.source.profileName})` : ''}`
-    : null
+    : translate('auto.components.settings.BrowserProfileRow.796d846483', 'No cookies imported')
+  const userAgentLabel =
+    profile.userAgentMode === 'native'
+      ? translate('auto.components.settings.BrowserProfileRow.b5c0479e21', 'Unmodified user agent')
+      : null
 
   // Why: uses div[role=button] instead of <button> to avoid nested <button>
   // elements — the dropdown trigger and trash actions inside also render as
@@ -133,16 +147,10 @@ export function BrowserProfileRow({
             </span>
           ) : null}
         </div>
-        {sourceLabel ? (
-          <p className="truncate text-[11px] text-muted-foreground">{sourceLabel}</p>
-        ) : (
-          <p className="text-[11px] text-muted-foreground">
-            {translate(
-              'auto.components.settings.BrowserProfileRow.796d846483',
-              'No cookies imported'
-            )}
-          </p>
-        )}
+        <p className="truncate text-[11px] text-muted-foreground">
+          {sourceLabel}
+          {userAgentLabel ? ` · ${userAgentLabel}` : ''}
+        </p>
       </div>
       <div className="flex shrink-0 items-center gap-1" onClick={(e) => e.stopPropagation()}>
         <DropdownMenu
@@ -170,12 +178,16 @@ export function BrowserProfileRow({
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
+            <BrowserCookieImportMachineNotice />
             {detectedBrowsers.map((browser) =>
               browser.profiles.length > 1 ? (
                 <DropdownMenuSub key={browser.family}>
                   <DropdownMenuSubTrigger>
-                    {translate('auto.components.settings.BrowserProfileRow.7df818977e', 'From')}
-                    {browser.label}
+                    {translate(
+                      'auto.components.settings.BrowserProfileRow.c5a273a809',
+                      'From {{value0}}',
+                      { value0: browser.label }
+                    )}
                   </DropdownMenuSubTrigger>
                   <DropdownMenuPortal>
                     <DropdownMenuSubContent>
@@ -197,8 +209,11 @@ export function BrowserProfileRow({
                   key={browser.family}
                   onSelect={() => void handleImportFromBrowser(browser.family)}
                 >
-                  {translate('auto.components.settings.BrowserProfileRow.7df818977e', 'From')}
-                  {browser.label}
+                  {translate(
+                    'auto.components.settings.BrowserProfileRow.c5a273a809',
+                    'From {{value0}}',
+                    { value0: browser.label }
+                  )}
                 </DropdownMenuItem>
               )
             )}
@@ -206,6 +221,7 @@ export function BrowserProfileRow({
             <DropdownMenuItem onSelect={() => void handleImportFromFile()}>
               {translate('auto.components.settings.BrowserProfileRow.ebb78dfd6f', 'From File…')}
             </DropdownMenuItem>
+            <BrowserCookieImportDisclosure />
           </DropdownMenuContent>
         </DropdownMenu>
         {isDefault ? (

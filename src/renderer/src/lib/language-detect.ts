@@ -14,12 +14,18 @@ const EXT_TO_LANGUAGE: Record<string, string> = {
   // is what gives .tsx/.jsx files syntax highlighting in the editor.
   '.ts': 'typescript',
   '.tsx': 'typescript',
+  '.cts': 'typescript',
+  '.mts': 'typescript',
   '.js': 'javascript',
   '.jsx': 'javascript',
   '.mjs': 'javascript',
   '.cjs': 'javascript',
   '.json': 'json',
   '.jsonc': 'json',
+  // Why: JSONL is one JSON value per line; a dedicated 'jsonl' language gives
+  // JSON-style color without attaching JSON whole-document diagnostics that
+  // would flag every record after line one as trailing content.
+  '.jsonl': 'jsonl',
   '.ipynb': 'notebook',
   '.md': 'markdown',
   '.mdx': 'markdown',
@@ -30,6 +36,12 @@ const EXT_TO_LANGUAGE: Record<string, string> = {
   '.less': 'less',
   '.html': 'html',
   '.htm': 'html',
+  // Why: stopgap until a real JSP grammar — 'html' colors the markup; <% %> and ${} stay plain.
+  '.jsp': 'html',
+  '.jspf': 'html',
+  // Why: Monaco declares Liquid as both '.liquid' and '.html.liquid'; the final-extension
+  // lookup below covers the compound form, so the single entry is enough.
+  '.liquid': 'liquid',
   '.xml': 'xml',
   '.svg': 'xml',
   '.py': 'python',
@@ -65,10 +77,9 @@ const EXT_TO_LANGUAGE: Record<string, string> = {
   '.graphql': 'graphql',
   '.gql': 'graphql',
   '.dockerfile': 'dockerfile',
-  '.proto': 'protobuf',
+  '.proto': 'proto',
   '.lua': 'lua',
   '.r': 'r',
-  '.R': 'r',
   '.scala': 'scala',
   '.dart': 'dart',
   '.ex': 'elixir',

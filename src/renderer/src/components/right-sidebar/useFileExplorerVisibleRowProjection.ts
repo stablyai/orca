@@ -1,8 +1,5 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useMemo } from 'react'
 import { useAppStore } from '@/store'
-import { getConnectionId } from '@/lib/connection-context'
-import { getRuntimeGitIgnoredPaths } from '@/runtime/runtime-git-client'
-import { getRightSidebarWorktreeRuntimeSettings } from './file-explorer-runtime-owner'
 import { isDotfileRelativePath } from './file-explorer-entries'
 import type { DirCache, TreeNode } from './file-explorer-types'
 import {
@@ -16,16 +13,9 @@ import {
   getFileExplorerNameFilterIgnoredQueryRelativePaths,
   type FileExplorerNameFilterProjectionSource
 } from './file-explorer-name-filter-projection'
+import { useFileExplorerIgnoredPaths } from './use-file-explorer-ignored-paths'
 
-const EMPTY_IGNORED_PATHS: readonly string[] = []
 const EMPTY_RELATIVE_PATHS: string[] = []
-
-export type IgnoredPathResult = {
-  activeWorktreeId: string
-  paths: string[]
-  relativePaths: readonly string[]
-  worktreePath: string
-}
 
 type VisibleFileExplorerRowProjectionOptions = {
   ignoredSet: Set<string>
@@ -119,29 +109,26 @@ export function createVisibleFileExplorerRowProjection(
   return createFileExplorerRowProjectionFromParts(visibleFlatRows, rowsByPath)
 }
 
-export function getEffectiveFileExplorerIgnoredPaths({
-  activeWorktreeId,
-  canLoadIgnoredPaths,
-  ignoredPathResult,
-  worktreePath
-}: {
-  activeWorktreeId: string | null
-  canLoadIgnoredPaths: boolean
-  ignoredPathResult: IgnoredPathResult | null
-  worktreePath: string | null
-}): readonly string[] {
-  const ignoredPathResultMatchesCurrentWorktree =
-    ignoredPathResult !== null &&
-    ignoredPathResult.activeWorktreeId === activeWorktreeId &&
-    ignoredPathResult.worktreePath === worktreePath
-
-  if (!canLoadIgnoredPaths || !ignoredPathResultMatchesCurrentWorktree) {
-    return EMPTY_IGNORED_PATHS
-  }
-
-  // Why: expanding folders changes the query before the async ignored refresh returns.
-  // Keep same-worktree answers so known ignored rows do not flash as normal text.
-  return ignoredPathResult.paths
+/**
+ * Holds the array identity while its contents are unchanged.
+ *
+ * Why: a tree refresh commits dirCache once per read wave, and every commit
+ * rebuilds this list. Each new identity would re-issue the uncancellable git
+ * check-ignore over the whole visible tree — the remote round trips the wave cap
+ * exists to bound.
+ */
+function useContentStableRelativePaths(relativePaths: string[], enabled: boolean): string[] {
+  // Why: filters need fresh identities per keystroke and must not evict the tree signature.
+  // Why: NUL cannot occur in paths, so the signature can reconstruct the list losslessly.
+  const signature = useMemo(
+    () => (enabled ? relativePaths.join('\u0000') : null),
+    [enabled, relativePaths]
+  )
+  const stableTreePaths = useMemo(
+    () => (signature ? signature.split('\u0000') : EMPTY_RELATIVE_PATHS),
+    [signature]
+  )
+  return enabled ? stableTreePaths : relativePaths
 }
 
 export function useFileExplorerVisibleRowProjection(
@@ -163,8 +150,7 @@ export function useFileExplorerVisibleRowProjection(
   const settings = useAppStore((s) => s.settings)
   const updateSettings = useAppStore((s) => s.updateSettings)
   const showGitIgnoredFiles = settings?.showGitIgnoredFiles ?? true
-  const [ignoredPathResult, setIgnoredPathResult] = useState<IgnoredPathResult | null>(null)
-  const relativePaths = useMemo(
+  const rebuiltRelativePaths = useMemo(
     () =>
       activeRepoSupportsGit
         ? nameFilter
@@ -176,58 +162,20 @@ export function useFileExplorerVisibleRowProjection(
         : EMPTY_RELATIVE_PATHS,
     [activeRepoSupportsGit, dirCache, expanded, nameFilter, showDotfiles, worktreePath]
   )
+  // Why: the name-filter list is debounced per keystroke, so it must keep a fresh
+  // identity; only the dirCache-derived list needs stability across wave commits.
+  const relativePaths = useContentStableRelativePaths(rebuiltRelativePaths, !nameFilter)
   const canLoadIgnoredPaths =
     activeRepoSupportsGit &&
     Boolean(activeWorktreeId) &&
     Boolean(worktreePath) &&
     relativePaths.length > 0
-
-  useEffect(() => {
-    if (!canLoadIgnoredPaths || !activeWorktreeId || !worktreePath) {
-      return
-    }
-
-    let canceled = false
-    const connectionId = getConnectionId(activeWorktreeId) ?? undefined
-    void getRuntimeGitIgnoredPaths(
-      {
-        settings: getRightSidebarWorktreeRuntimeSettings(activeWorktreeId),
-        worktreeId: activeWorktreeId,
-        worktreePath,
-        connectionId
-      },
-      [...relativePaths]
-    )
-      .then((nextIgnoredPaths) => {
-        if (!canceled) {
-          setIgnoredPathResult({
-            activeWorktreeId,
-            paths: nextIgnoredPaths,
-            relativePaths,
-            worktreePath
-          })
-        }
-      })
-      .catch(() => {
-        if (!canceled) {
-          setIgnoredPathResult({
-            activeWorktreeId,
-            paths: [],
-            relativePaths,
-            worktreePath
-          })
-        }
-      })
-
-    return () => {
-      canceled = true
-    }
-  }, [activeWorktreeId, canLoadIgnoredPaths, relativePaths, worktreePath])
-
-  const effectiveIgnoredPaths = getEffectiveFileExplorerIgnoredPaths({
+  const shouldDebounceIgnoredQuery = nameFilter !== null
+  const effectiveIgnoredPaths = useFileExplorerIgnoredPaths({
     activeWorktreeId,
     canLoadIgnoredPaths,
-    ignoredPathResult,
+    relativePaths,
+    shouldDebounceIgnoredQuery,
     worktreePath
   })
   const ignoredSet = useMemo(() => buildIgnoredSet(effectiveIgnoredPaths), [effectiveIgnoredPaths])

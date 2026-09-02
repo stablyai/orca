@@ -55,6 +55,32 @@ describe('planSourceControlAgentActionLaunch', () => {
     expect(result.ok && result.commandLabel).toBe("codex '--model' 'gpt-5.5'")
   })
 
+  it.each([
+    {
+      terminalWindowsShell: 'cmd.exe',
+      expectedCommand: 'powershell.exe -NoProfile -EncodedCommand'
+    },
+    {
+      terminalWindowsShell: 'git-bash',
+      expectedCommand: 'ORCA_HERMES_STARTUP_QUERY'
+    }
+  ])(
+    'uses $terminalWindowsShell quoting for Hermes source-control prompts',
+    ({ terminalWindowsShell, expectedCommand }) => {
+      const result = planSourceControlAgentActionLaunch({
+        agent: 'hermes',
+        commandInput: 'Review the change',
+        promptDelivery: 'auto-submit',
+        detectedAgents: ['hermes'],
+        platform: 'win32',
+        terminalWindowsShell
+      })
+
+      expect(result.ok && result.plan.launchCommand).toContain(expectedCommand)
+      expect(result.ok && result.plan.env?.ORCA_HERMES_STARTUP_QUERY).toBe('Review the change')
+    }
+  )
+
   it('rejects invalid per-action CLI arguments', () => {
     expect(
       planSourceControlAgentActionLaunch({

@@ -2,20 +2,24 @@ import { ipcMain } from 'electron'
 import { posix, resolve } from 'node:path'
 import type {
   CreateHostedReviewArgs,
+  CreateStackedHostedReviewArgs,
   HostedReviewCreationEligibilityArgs,
   HostedReviewForBranchArgs
 } from '../../shared/hosted-review'
-import type { Repo } from '../../shared/types'
+import type { Repo } from '../../shared/repo-types'
 import type { Store } from '../persistence'
 import type { StatsCollector } from '../stats/collector'
 import {
   createHostedReview,
   getHostedReviewCreationEligibility
 } from '../source-control/hosted-review-creation'
+import { createStackedHostedReview } from '../source-control/stacked-hosted-review-creation'
 import { getHostedReviewForBranch } from '../source-control/hosted-review'
-import { resolveRegisteredWorktreePath } from './filesystem-auth'
-import { listRepoWorktrees } from '../repo-worktrees'
+import { resolveRegisteredWorktreePath } from './registered-worktree-roots-cache'
+import { listRepoWorktreeGraph } from '../repo-worktrees'
 import { getLocalProjectWorktreeGitOptions } from '../project-runtime-git-options'
+import { getWorktreeSharedLinkPaths } from '../git/worktree-shared-directories'
+import { getRepoExecutionHostId } from '../../shared/execution-host'
 
 function assertRegisteredRepo(repoPath: string, store: Store, repoId?: string): Repo {
   if (repoId) {
@@ -33,6 +37,27 @@ function assertRegisteredRepo(repoPath: string, store: Store, repoId?: string): 
   return repo
 }
 
+function assertRegisteredRepoForBranch(args: HostedReviewForBranchArgs, store: Store): Repo {
+  if (!args.repoOwnerExecutionHostId) {
+    return assertRegisteredRepo(args.repoPath, store, args.repoId)
+  }
+  const matches = store.getRepos().filter((candidate) => {
+    const samePath = candidate.connectionId
+      ? normalizeRemoteHostedReviewPath(candidate.path) ===
+        normalizeRemoteHostedReviewPath(args.repoPath)
+      : resolve(candidate.path) === resolve(args.repoPath)
+    return (
+      candidate.id === args.repoId &&
+      samePath &&
+      getRepoExecutionHostId(candidate) === args.repoOwnerExecutionHostId
+    )
+  })
+  if (matches.length !== 1) {
+    throw new Error('Access denied: unknown or ambiguous repository owner')
+  }
+  return matches[0]
+}
+
 async function resolveHostedReviewWorktreePath(
   repo: Repo,
   store: Store,
@@ -43,7 +68,7 @@ async function resolveHostedReviewWorktreePath(
   }
   if (repo.connectionId) {
     const remoteWorktreePath = normalizeRemoteHostedReviewPath(worktreePath)
-    const repoWorktrees = await listRepoWorktrees(repo)
+    const repoWorktrees = await listRepoWorktreeGraph(repo)
     if (
       !repoWorktrees.some(
         (worktree) => normalizeRemoteHostedReviewPath(worktree.path) === remoteWorktreePath
@@ -57,8 +82,8 @@ async function resolveHostedReviewWorktreePath(
   const localGitOptions = getLocalProjectWorktreeGitOptions(store, repo)
   const repoWorktrees =
     Object.keys(localGitOptions).length > 0
-      ? await listRepoWorktrees(repo, localGitOptions)
-      : await listRepoWorktrees(repo)
+      ? await listRepoWorktreeGraph(repo, localGitOptions)
+      : await listRepoWorktreeGraph(repo)
   if (!repoWorktrees.some((worktree) => resolve(worktree.path) === resolvedWorktreePath)) {
     throw new Error('Access denied: worktree does not belong to repository')
   }
@@ -77,8 +102,11 @@ function normalizeRemoteHostedReviewPath(remotePath: string): string {
 
 export function registerHostedReviewHandlers(store: Store, stats: StatsCollector): void {
   ipcMain.handle('hostedReview:forBranch', async (_event, args: HostedReviewForBranchArgs) => {
-    const repo = assertRegisteredRepo(args.repoPath, store, args.repoId)
-    const localGitOptions = getLocalProjectWorktreeGitOptions(store, repo)
+    const repo = assertRegisteredRepoForBranch(args, store)
+    const localGitOptions = {
+      ...getLocalProjectWorktreeGitOptions(store, repo),
+      admissionTier: args.admissionTier ?? ('background' as const)
+    }
     const review = await getHostedReviewForBranch({
       repoPath: repo.path,
       connectionId: repo.connectionId,
@@ -90,7 +118,8 @@ export function registerHostedReviewHandlers(store: Store, stats: StatsCollector
       linkedAzureDevOpsPR: args.linkedAzureDevOpsPR ?? null,
       linkedGiteaPR: args.linkedGiteaPR ?? null,
       currentHeadOid: args.currentHeadOid ?? null,
-      ...(Object.keys(localGitOptions).length > 0 ? { localGitExecOptions: localGitOptions } : {})
+      ...(args.active === true ? { active: true } : {}),
+      localGitExecOptions: localGitOptions
     })
     if (review?.provider === 'github' && !stats.hasCountedPR(review.url)) {
       stats.record({
@@ -113,7 +142,7 @@ export function registerHostedReviewHandlers(store: Store, stats: StatsCollector
         ...args,
         repoPath: worktreePath,
         connectionId: repo.connectionId ?? null,
-        ...(Object.keys(localGitOptions).length > 0 ? { localGitExecOptions: localGitOptions } : {})
+        localGitExecOptions: { ...localGitOptions, admissionTier: 'interactive' as const }
       })
     }
   )
@@ -121,9 +150,24 @@ export function registerHostedReviewHandlers(store: Store, stats: StatsCollector
   ipcMain.handle('hostedReview:create', async (_event, args: CreateHostedReviewArgs) => {
     const repo = assertRegisteredRepo(args.repoPath, store, args.repoId)
     const worktreePath = await resolveHostedReviewWorktreePath(repo, store, args.worktreePath)
-    const localGitOptions = getLocalProjectWorktreeGitOptions(store, repo)
+    const localGitOptions = {
+      ...getLocalProjectWorktreeGitOptions(store, repo),
+      admissionTier: 'interactive' as const
+    }
+    // Why: the dirty preflight must not count Orca's own shared symlinks as user work (issue #10451).
+    // Remote creation never materializes them, and `repo.path` is a path on the
+    // remote host — reading it locally would resolve an unrelated `orca.yaml`.
+    // Not dead code: SSH ignores these, so this only prevents that read and a poisoned cache entry.
+    const sharedLinkPaths = repo.connectionId ? [] : getWorktreeSharedLinkPaths(repo)
     const executionOptions =
-      Object.keys(localGitOptions).length > 0 ? { localGitExecOptions: localGitOptions } : undefined
+      Object.keys(localGitOptions).length > 0 || sharedLinkPaths.length > 0
+        ? {
+            ...(Object.keys(localGitOptions).length > 0
+              ? { localGitExecOptions: localGitOptions }
+              : {}),
+            ...(sharedLinkPaths.length > 0 ? { sharedLinkPaths } : {})
+          }
+        : undefined
     const input = {
       provider: args.provider,
       base: args.base,
@@ -146,4 +190,47 @@ export function registerHostedReviewHandlers(store: Store, stats: StatsCollector
     }
     return result
   })
+
+  ipcMain.handle(
+    'hostedReview:createStacked',
+    async (_event, args: CreateStackedHostedReviewArgs) => {
+      const repo = assertRegisteredRepo(args.repoPath, store, args.repoId)
+      const worktreePath = await resolveHostedReviewWorktreePath(repo, store, args.worktreePath)
+      const localGitOptions = {
+        ...getLocalProjectWorktreeGitOptions(store, repo),
+        admissionTier: 'interactive' as const
+      }
+      const sharedLinkPaths = repo.connectionId ? [] : getWorktreeSharedLinkPaths(repo)
+      const executionOptions = {
+        ...(Object.keys(localGitOptions).length > 0
+          ? { localGitExecOptions: localGitOptions }
+          : {}),
+        ...(sharedLinkPaths.length > 0 ? { sharedLinkPaths } : {})
+      }
+      const input = {
+        provider: args.provider,
+        base: args.base,
+        head: args.head,
+        title: args.title,
+        body: args.body,
+        draft: args.draft,
+        ...(args.useTemplate !== undefined ? { useTemplate: args.useTemplate } : {})
+      }
+      const result = await createStackedHostedReview(
+        worktreePath,
+        input,
+        repo.connectionId ?? null,
+        executionOptions
+      )
+      if (result.ok && !stats.hasCountedPR(result.url)) {
+        stats.record({
+          type: 'pr_created',
+          at: Date.now(),
+          repoId: repo.id,
+          meta: { prNumber: result.number, prUrl: result.url }
+        })
+      }
+      return result
+    }
+  )
 }

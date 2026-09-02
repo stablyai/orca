@@ -132,7 +132,7 @@ describe('worktree removal evicts generation records (leak regression)', () => {
         commitRecord(OTHER, OTHER_PATH)
       )
 
-    const result = await store.getState().removeWorktree(WT)
+    const result = await store.getState().removeWorktree({ id: WT, executionHostId: null })
     expect(result).toEqual({ ok: true })
 
     const s = store.getState()

@@ -1,6 +1,6 @@
 import { Play } from 'lucide-react'
 import type React from 'react'
-import type { OrcaHooks } from '../../../../shared/types'
+import type { OrcaHooks } from '../../../../shared/orca-yaml-hook-types'
 import { Button } from '../ui/button'
 import { translate } from '@/i18n/i18n'
 

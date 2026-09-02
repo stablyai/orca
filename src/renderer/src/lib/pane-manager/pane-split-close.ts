@@ -2,6 +2,7 @@ import type {
   ManagedPane,
   ManagedPaneInternal,
   PaneManagerOptions,
+  PaneSplitOptions,
   PaneStyleOptions
 } from './pane-manager-types'
 import type { DragReorderCallbacks } from './pane-drag-reorder'
@@ -30,7 +31,7 @@ type MovedPaneSplitState = {
 type SplitManagedPaneArgs = {
   paneId: number
   direction: 'vertical' | 'horizontal'
-  opts?: { ratio?: number; cwd?: string; leafId?: string; ptyId?: string }
+  opts?: PaneSplitOptions
   sourceContainer?: HTMLElement
   panes: Map<number, ManagedPaneInternal>
   root: HTMLElement
@@ -148,6 +149,7 @@ function openSplitPane(
   // source cwd for local splits or attaches a runtime-spawned PTY for web splits.
   const spawnHints = {
     ...(cwd ? { cwd } : {}),
+    ...(args.opts?.cwdPromise ? { cwdPromise: args.opts.cwdPromise } : {}),
     ...(args.opts?.ptyId ? { ptyId: args.opts.ptyId } : {})
   }
   args.publishPaneCreated(newPane, Object.keys(spawnHints).length > 0 ? spawnHints : undefined)
@@ -166,7 +168,10 @@ type CloseManagedPaneArgs = {
   setActivePaneId: (paneId: number | null) => void
 }
 
-export function closeManagedPane(args: CloseManagedPaneArgs): void {
+function teardownManagedPane(
+  args: CloseManagedPaneArgs,
+  reason: 'close' | 'detach' | 'retire'
+): void {
   const pane = args.panes.get(args.paneId)
   if (!pane) {
     return
@@ -180,8 +185,36 @@ export function closeManagedPane(args: CloseManagedPaneArgs): void {
     safeFit(p)
   }
   updateMultiPaneState(args.getDragCallbacks())
-  args.managerOptions.onPaneClosed?.(args.paneId, { paneId: args.paneId, leafId: closedLeafId })
+  args.managerOptions.onPaneClosed?.(args.paneId, {
+    paneId: args.paneId,
+    leafId: closedLeafId,
+    reason
+  })
   args.managerOptions.onLayoutChanged?.()
+}
+
+export function closeManagedPane(args: CloseManagedPaneArgs): void {
+  teardownManagedPane(args, 'close')
+}
+
+export function detachManagedPaneForExternalMove(args: CloseManagedPaneArgs): boolean {
+  // Why: refuse to detach the last pane — there is no other pane to fall back to.
+  if (!args.panes.has(args.paneId) || args.panes.size <= 1) {
+    return false
+  }
+  // Why: pane-to-tab detach tears down only this renderer pane; the PTY is
+  // adopted by the new tab, so the 'detach' reason tells TerminalPane to skip
+  // process-close cleanup.
+  teardownManagedPane(args, 'detach')
+  return true
+}
+
+export function retireManagedPanePreservingPty(args: CloseManagedPaneArgs): boolean {
+  if (!args.panes.has(args.paneId) || args.panes.size <= 1) {
+    return false
+  }
+  teardownManagedPane(args, 'retire')
+  return true
 }
 
 function removePaneContainer(args: CloseManagedPaneArgs, pane: ManagedPaneInternal): void {

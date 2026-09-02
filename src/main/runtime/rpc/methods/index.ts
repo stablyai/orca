@@ -1,12 +1,17 @@
 import type { RpcAnyMethod } from '../core'
 import { STATUS_METHODS } from './status'
+import { AI_VAULT_METHODS } from './ai-vault'
 import { AUTOMATION_METHODS } from './automations'
 import { REPO_METHODS } from './repo'
 import { WORKTREE_METHODS } from './worktree'
 import { TERMINAL_METHODS } from './terminal'
+import { TERMINAL_ORPHAN_METHODS } from './terminal-orphan'
 import { BROWSER_CORE_METHODS } from './browser-core'
 import { BROWSER_EXTRA_METHODS } from './browser-extras'
 import { BROWSER_SCREENCAST_METHODS } from './browser-screencast'
+import { BROWSER_CLIENT_HOST_METHODS } from './browser-client-host'
+import { BROWSER_CLIENT_FILE_CHANNEL_METHODS } from './browser-client-file-channel'
+import { BROWSER_NETWORK_TUNNEL_METHODS } from './browser-network-tunnel'
 import { ORCHESTRATION_METHODS } from './orchestration'
 import { NOTIFICATION_METHODS } from './notifications'
 import { STATS_METHODS } from './stats'
@@ -29,23 +34,39 @@ import { SPEECH_METHODS } from './speech'
 import { CLIENT_UI_METHODS } from './client-ui'
 import { CLIENT_EVENT_METHODS } from './client-events'
 import { WORKSPACE_PORT_METHODS } from './workspace-ports'
+import { PLUGIN_METHODS } from './plugins'
 import { SKILL_METHODS } from './skills'
 import { CLIPBOARD_METHODS } from './clipboard'
 import { HOST_CAPABILITY_METHODS } from './host-capabilities'
 import { EMULATOR_METHODS } from './emulator'
+import { PAIRING_METHODS } from './pairing'
+import { UPDATER_METHODS } from './updater'
+import { AGENT_SESSION_METHODS } from './agent-session'
+import { STRUCTURED_AGENT_SESSION_METHODS } from './structured-agent-session'
+import { ARTIFACT_METHODS } from './artifacts'
+import { AGENT_HOOK_METHODS } from './agent-hooks'
 
 // Why: a flat manifest keeps registration order explicit and provides one
 // grep-point for "what methods does the RPC server expose?" — useful when
 // auditing the security boundary or wiring new CLI commands.
 export const ALL_RPC_METHODS: readonly RpcAnyMethod[] = [
   ...STATUS_METHODS,
+  ...AGENT_HOOK_METHODS,
+  ...AI_VAULT_METHODS,
+  ...ARTIFACT_METHODS,
   ...AUTOMATION_METHODS,
   ...REPO_METHODS,
   ...WORKTREE_METHODS,
+  ...AGENT_SESSION_METHODS,
+  ...STRUCTURED_AGENT_SESSION_METHODS,
   ...TERMINAL_METHODS,
+  ...TERMINAL_ORPHAN_METHODS,
   ...BROWSER_CORE_METHODS,
   ...BROWSER_SCREENCAST_METHODS,
   ...BROWSER_EXTRA_METHODS,
+  ...BROWSER_CLIENT_HOST_METHODS,
+  ...BROWSER_CLIENT_FILE_CHANNEL_METHODS,
+  ...BROWSER_NETWORK_TUNNEL_METHODS,
   ...ORCHESTRATION_METHODS,
   ...NOTIFICATION_METHODS,
   ...STATS_METHODS,
@@ -66,10 +87,13 @@ export const ALL_RPC_METHODS: readonly RpcAnyMethod[] = [
   ...SSH_METHODS,
   ...SPEECH_METHODS,
   ...WORKSPACE_PORT_METHODS,
+  ...PLUGIN_METHODS,
   ...SKILL_METHODS,
   ...CLIPBOARD_METHODS,
   ...HOST_CAPABILITY_METHODS,
   ...CLIENT_EVENT_METHODS,
   ...CLIENT_UI_METHODS,
-  ...EMULATOR_METHODS
+  ...EMULATOR_METHODS,
+  ...PAIRING_METHODS,
+  ...UPDATER_METHODS
 ]

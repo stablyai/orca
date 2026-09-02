@@ -1,47 +1,80 @@
 import type { Worktree } from './workspace-list-types'
+import { getWorktreeRowIdentity } from './worktree-host-row-identity'
 
-export function getMobileWorkspaceLineageGroupKey(worktreeId: string): string {
-  return `workspace-lineage:${encodeURIComponent(worktreeId)}`
+type WorktreeLineageIdentitySource = Pick<Worktree, 'worktreeId' | 'hostId'>
+
+export function getMobileWorkspaceLineageGroupKey(worktree: WorktreeLineageIdentitySource): string {
+  return `workspace-lineage:${encodeURIComponent(getWorktreeRowIdentity(worktree))}`
+}
+
+function hasValidLineageParent(worktree: Worktree, parent: Worktree): boolean {
+  if (
+    worktree.lineageWorktreeInstanceId === undefined &&
+    worktree.parentWorktreeInstanceId === undefined
+  ) {
+    return true
+  }
+  // Why: desktop rejects stale lineage when a path is reused by a new workspace
+  // instance; mobile needs the same guard before nesting parent/child rows.
+  return (
+    worktree.worktreeInstanceId === worktree.lineageWorktreeInstanceId &&
+    parent.worktreeInstanceId === worktree.parentWorktreeInstanceId
+  )
 }
 
 export function applyMobileWorkspaceLineage(
   worktrees: readonly Worktree[],
   collapsedGroups: ReadonlySet<string> = new Set()
 ): Worktree[] {
-  const visibleIds = new Set(worktrees.map((worktree) => worktree.worktreeId))
+  const visibleIds = new Set(worktrees.map((worktree) => getWorktreeRowIdentity(worktree)))
+  const worktreeById = new Map(
+    worktrees.map((worktree) => [getWorktreeRowIdentity(worktree), worktree])
+  )
   const childrenByParentId = new Map<string, Worktree[]>()
   const childIds = new Set<string>()
 
   for (const worktree of worktrees) {
+    const worktreeId = getWorktreeRowIdentity(worktree)
     const parentId = worktree.parentWorktreeId
-    if (!parentId || parentId === worktree.worktreeId || !visibleIds.has(parentId)) {
+    const parentIdentity = parentId
+      ? getWorktreeRowIdentity({ worktreeId: parentId, hostId: worktree.hostId })
+      : null
+    const parent = parentIdentity ? worktreeById.get(parentIdentity) : undefined
+    if (
+      !parentIdentity ||
+      parentIdentity === worktreeId ||
+      !visibleIds.has(parentIdentity) ||
+      !parent ||
+      !hasValidLineageParent(worktree, parent)
+    ) {
       continue
     }
-    childIds.add(worktree.worktreeId)
-    const children = childrenByParentId.get(parentId) ?? []
+    childIds.add(worktreeId)
+    const children = childrenByParentId.get(parentIdentity) ?? []
     children.push(worktree)
-    childrenByParentId.set(parentId, children)
+    childrenByParentId.set(parentIdentity, children)
   }
 
   const result: Worktree[] = []
   const emitted = new Set<string>()
   const markDescendantsEmitted = (worktree: Worktree): void => {
-    for (const child of childrenByParentId.get(worktree.worktreeId) ?? []) {
-      if (!emitted.has(child.worktreeId)) {
-        emitted.add(child.worktreeId)
+    for (const child of childrenByParentId.get(getWorktreeRowIdentity(worktree)) ?? []) {
+      const childId = getWorktreeRowIdentity(child)
+      if (!emitted.has(childId)) {
+        emitted.add(childId)
         markDescendantsEmitted(child)
       }
     }
   }
   const emit = (worktree: Worktree, depth: number, isLastChild: boolean): void => {
-    if (emitted.has(worktree.worktreeId)) {
+    const worktreeId = getWorktreeRowIdentity(worktree)
+    if (emitted.has(worktreeId)) {
       return
     }
-    const children = childrenByParentId.get(worktree.worktreeId) ?? []
+    const children = childrenByParentId.get(worktreeId) ?? []
     const lineageCollapsed =
-      children.length > 0 &&
-      collapsedGroups.has(getMobileWorkspaceLineageGroupKey(worktree.worktreeId))
-    emitted.add(worktree.worktreeId)
+      children.length > 0 && collapsedGroups.has(getMobileWorkspaceLineageGroupKey(worktree))
+    emitted.add(worktreeId)
     result.push({
       ...worktree,
       lineageDepth: depth,
@@ -58,13 +91,13 @@ export function applyMobileWorkspaceLineage(
     })
   }
 
-  const roots = worktrees.filter((worktree) => !childIds.has(worktree.worktreeId))
+  const roots = worktrees.filter((worktree) => !childIds.has(getWorktreeRowIdentity(worktree)))
   roots.forEach((worktree, index) => {
     emit(worktree, 0, index === roots.length - 1)
   })
 
   for (const worktree of worktrees) {
-    if (!emitted.has(worktree.worktreeId)) {
+    if (!emitted.has(getWorktreeRowIdentity(worktree))) {
       // Why: malformed cyclic lineage should not hide every participant.
       emit(worktree, 0, true)
     }

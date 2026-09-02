@@ -7,7 +7,7 @@ import {
   SelectValue
 } from '@/components/ui/select'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
-import { Field } from './automation-page-parts'
+import { AUTOMATION_EDITOR_SECTION_LABEL_CLASS, Field } from './automation-page-parts'
 import type { AutomationDraft } from './AutomationEditorDialog'
 import { translate } from '@/i18n/i18n'
 
@@ -26,6 +26,7 @@ export function AutomationMissedRunGraceField({
 }: AutomationMissedRunGraceFieldProps): React.JSX.Element {
   return (
     <Field
+      labelClassName={AUTOMATION_EDITOR_SECTION_LABEL_CLASS}
       label={
         <span className="inline-flex items-center gap-1">
           {translate(

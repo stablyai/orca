@@ -1,4 +1,4 @@
-import type { PRCheckJob, PRCheckStep } from '../../../../shared/types'
+import type { PRCheckJob, PRCheckStep } from '../../../../shared/github/check-types'
 
 export type StepOutcome = 'success' | 'failure' | 'skipped' | 'pending'
 

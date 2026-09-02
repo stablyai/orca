@@ -1,4 +1,19 @@
-import { keybindingMatchesAction, type KeybindingOverrides } from '../../../../shared/keybindings'
+import {
+  keybindingMatchesAction,
+  type KeybindingInput,
+  type KeybindingMatchOptions,
+  type KeybindingOverrides,
+  type TerminalShortcutPolicy
+} from '../../../../shared/keybindings'
+import type { WindowsShiftEnterEncoding } from './terminal-windows-shift-enter'
+import {
+  resolveTerminalOptionShortcutAction,
+  type MacOptionAsAlt
+} from './terminal-option-shortcut-policy'
+import type { OptionKeyLocationState } from '../../lib/keyboard-layout/option-key-location-state'
+import type { TerminalOptionKittyRelease } from './terminal-option-kitty-release'
+
+export type { MacOptionAsAlt } from './terminal-option-shortcut-policy'
 
 export type TerminalShortcutEvent = {
   key: string
@@ -8,28 +23,31 @@ export type TerminalShortcutEvent = {
   altKey: boolean
   shiftKey: boolean
   repeat?: boolean
+  isComposing?: boolean
+  keyCode?: number
+  getModifierState?: (key: string) => boolean
 }
 
-export type MacOptionAsAlt = 'true' | 'false' | 'left' | 'right'
-
-// Why: macOS composition replaces event.key for punctuation, so we map
-// event.code to the unmodified character for Esc+ sequences.
-const PUNCTUATION_CODE_MAP: Record<string, string> = {
-  Period: '.',
-  Comma: ',',
-  Slash: '/',
-  Backslash: '\\',
-  Semicolon: ';',
-  Quote: "'",
-  BracketLeft: '[',
-  BracketRight: ']',
-  Minus: '-',
-  Equal: '=',
-  Backquote: '`'
+// Shared close-chord predicate: the terminal pane (L3) and the floating panel's focused-terminal
+// branch (L2) both treat terminal.closePane OR a terminal-scope tab.close as "close the active
+// pane," so the two layers can't diverge. Callers pass the options each binding needs —
+// terminal.closePane is context-free; tab.close is scoped to the terminal surface.
+export function isTerminalPaneCloseChord(
+  event: KeybindingInput,
+  platform: NodeJS.Platform,
+  keybindings: KeybindingOverrides | undefined,
+  closePaneOptions?: KeybindingMatchOptions,
+  tabCloseOptions?: KeybindingMatchOptions
+): boolean {
+  return (
+    keybindingMatchesAction('terminal.closePane', event, platform, keybindings, closePaneOptions) ||
+    keybindingMatchesAction('tab.close', event, platform, keybindings, tabCloseOptions)
+  )
 }
 
 export type TerminalShortcutAction =
   | { type: 'copySelection' }
+  | { type: 'selectAll' }
   | { type: 'toggleSearch' }
   | { type: 'clearActivePane' }
   | { type: 'focusPane'; direction: 'next' | 'previous' }
@@ -40,22 +58,54 @@ export type TerminalShortcutAction =
   | { type: 'closeActivePane' }
   | { type: 'splitActivePane'; direction: 'vertical' | 'horizontal' }
   | { type: 'scrollViewport'; position: 'top' | 'bottom' }
-  | { type: 'sendInput'; data: string }
+  | {
+      type: 'sendInput'
+      data: string
+      optionKittyRelease?: TerminalOptionKittyRelease
+      consumeOptionKeyUp?: boolean
+    }
+  | { type: 'trackNativeOptionDeadKey' }
+  | { type: 'switchInputSource' }
 
 /**
- * Resolves terminal keyboard events before xterm receives them.
- * Keeps configurable Orca shortcuts and terminal byte fallbacks in one
- * platform-aware policy so renderer handlers do not duplicate key checks.
+ * Resolves terminal keyboard events before xterm receives them, centralizing
+ * Orca shortcuts and terminal byte fallbacks in one platform-aware policy.
  */
 export function resolveTerminalShortcutAction(
   event: TerminalShortcutEvent,
   isMac: boolean,
   macOptionAsAlt: MacOptionAsAlt = 'false',
-  optionKeyLocation: number = 0,
+  optionKeyLocations: OptionKeyLocationState = 0,
   isWindows: boolean = false,
-  keybindings?: KeybindingOverrides
+  keybindings?: KeybindingOverrides,
+  // Why: lazy so local ConPTY lookup runs only for Ctrl+Arrow and Ctrl+Enter.
+  isLocalWindowsConptyPane?: () => boolean,
+  // Why: exact flags distinguish ordinary kitty negotiation from report-all mode.
+  getKittyKeyboardFlagsActivePane?: () => number,
+  // Why: composition is the difference between event.key and the current layout with Option absent.
+  layoutCharacterForCode?: (code: string, shifted: boolean) => string | undefined,
+  // Why: lazy so agent-state lookup for the pane's Windows encoding runs only on Shift+Enter, not every keystroke.
+  getWindowsShiftEnterEncoding?: () => WindowsShiftEnterEncoding,
+  // Why: keybindings follow the client OS, but byte protocols follow the PTY host — they differ for macOS clients on Windows runtimes.
+  isWindowsTerminalHost: () => boolean = () => isWindows,
+  // Why: gates the tab.close pane-close alias — under terminal-first a remapped tab.close yields to the shell (terminal.closePane, scope terminal, still closes).
+  terminalShortcutPolicy: TerminalShortcutPolicy = 'orca-first',
+  // Why: query-only Droid/Grok consumers need CSI-u even when the live kitty flags remain inactive.
+  hasCtrlEnterCsiUAuthority?: () => boolean
 ): TerminalShortcutAction | null {
   const platform: NodeJS.Platform = isMac ? 'darwin' : isWindows ? 'win32' : 'linux'
+
+  // Why: capture this chord even on repeat without blocking the OS default input-source switch.
+  if (keybindingMatchesAction('terminal.switchInputSource', event, platform, keybindings)) {
+    return { type: 'switchInputSource' }
+  }
+
+  // Why: held select-all keydowns must remain claimed until keyup so Kitty
+  // event reporting cannot encode their repeat or release into the PTY.
+  if (keybindingMatchesAction('terminal.selectAll', event, platform, keybindings)) {
+    return { type: 'selectAll' }
+  }
+
   if (!event.repeat) {
     if (keybindingMatchesAction('terminal.copySelection', event, platform, keybindings)) {
       return { type: 'copySelection' }
@@ -93,7 +143,14 @@ export function resolveTerminalShortcutAction(
       return { type: 'clearPaneTitle' }
     }
 
-    if (keybindingMatchesAction('terminal.closePane', event, platform, keybindings)) {
+    // Why: recognize the active tab.close binding as a pane-close alias too, so a user who remaps
+    // tab.close alone still closes the focused split pane (never the whole tab); L2 always defers to us.
+    if (
+      isTerminalPaneCloseChord(event, platform, keybindings, undefined, {
+        context: 'terminal',
+        terminalShortcutPolicy
+      })
+    ) {
       return { type: 'closeActivePane' }
     }
 
@@ -113,9 +170,12 @@ export function resolveTerminalShortcutAction(
     event.shiftKey &&
     event.key === 'Enter'
   ) {
-    // Why: Codex on Windows PowerShell treats CSI-u Shift+Enter as inert,
-    // while the Alt+Enter byte path inserts a composer newline.
-    return { type: 'sendInput', data: isWindows ? '\x1b\r' : '\x1b[13;2u' }
+    // Why: negotiated KKP is authoritative everywhere; trusted pane evidence also preserves Droid's Windows encoding without KKP.
+    const windowsHost = isWindowsTerminalHost()
+    const hasTrustedWindowsCsiU = windowsHost && getWindowsShiftEnterEncoding?.() === 'csi-u'
+    // Why: CSI-u is application input, not universal; without trusted Windows evidence, require active KKP negotiation.
+    const canSendCsiU = hasTrustedWindowsCsiU || (getKittyKeyboardFlagsActivePane?.() ?? 0) > 0
+    return { type: 'sendInput', data: canSendCsiU ? '\x1b[13;2u' : '\x1b\r' }
   }
 
   if (
@@ -125,14 +185,16 @@ export function resolveTerminalShortcutAction(
     !event.shiftKey &&
     event.key === 'Enter'
   ) {
-    // Why: xterm.js collapses Ctrl+Enter to a bare CR, so TUIs that expect
-    // modified Enter chords never receive the distinct input and treat it as
-    // plain Enter. Forward the kitty CSI-u sequence directly (modifier code
-    // 5 = Ctrl; cf. 2 = Shift above) so cue/queue behavior reaches the TUI.
-    // Sibling of the Shift+Enter case; a Windows fallback is not added yet
-    // because, unlike #2418's Codex-on-PowerShell inertness, no Windows TUI is
-    // known to drop the CSI-u form for Ctrl+Enter.
-    return { type: 'sendInput', data: '\x1b[13;5u' }
+    const localWindowsConpty = isLocalWindowsConptyPane?.() === true
+    // Why: preserve query-only TUI chords elsewhere; local ConPTY shells require negotiation or trusted consumer evidence (#12329).
+    const canSendCsiU =
+      !localWindowsConpty ||
+      (getKittyKeyboardFlagsActivePane?.() ?? 0) > 0 ||
+      hasCtrlEnterCsiUAuthority?.() === true
+    return {
+      type: 'sendInput',
+      data: canSendCsiU ? '\x1b[13;5u' : '\r'
+    }
   }
 
   if (
@@ -152,18 +214,14 @@ export function resolveTerminalShortcutAction(
     if (event.key === 'Delete') {
       return { type: 'sendInput', data: '\x0b' }
     }
-    // Why: Cmd+←/→ on macOS conventionally moves to start/end of line in
-    // terminals (iTerm2, Ghostty). xterm.js has no default mapping for
-    // Cmd+Arrow, so we translate to readline's Ctrl+A (\x01) / Ctrl+E (\x05),
-    // which work universally across bash/zsh/fish and most TUI editors.
+    // Why: xterm.js has no Cmd+Arrow mapping; translate Cmd+←/→ to readline Ctrl+A/Ctrl+E for line start/end (iTerm2/Ghostty).
     if (event.key === 'ArrowLeft') {
       return { type: 'sendInput', data: '\x01' }
     }
     if (event.key === 'ArrowRight') {
       return { type: 'sendInput', data: '\x05' }
     }
-    // Why: macOS terminal users expect Cmd+↑/↓ to jump through scrollback
-    // without writing escape bytes into the shell.
+    // Why: macOS users expect Cmd+↑/↓ to scroll scrollback, not write escape bytes to the shell.
     if (event.key === 'ArrowUp') {
       return { type: 'scrollViewport', position: 'top' }
     }
@@ -179,6 +237,10 @@ export function resolveTerminalShortcutAction(
     !event.shiftKey &&
     event.key === 'Backspace'
   ) {
+    // Why: a kitty-protocol TUI binds the CSI 127;3u xterm emits natively; the legacy \x1b\x7f fallback would bypass it.
+    if ((getKittyKeyboardFlagsActivePane?.() ?? 0) > 0) {
+      return null
+    }
     return { type: 'sendInput', data: '\x1b\x7f' }
   }
 
@@ -187,14 +249,14 @@ export function resolveTerminalShortcutAction(
     !event.ctrlKey &&
     event.altKey &&
     !event.shiftKey &&
+    event.code?.startsWith('Numpad') !== true &&
     (event.key === 'ArrowLeft' || event.key === 'ArrowRight')
   ) {
-    // Why: xterm.js would otherwise emit \e[1;3D / \e[1;3C for option/alt+arrow,
-    // which default readline (bash, zsh) does not bind to backward-word /
-    // forward-word — so word navigation silently doesn't work without a custom
-    // inputrc. Translate to \eb / \ef (readline's default word-nav bindings) so
-    // option+←/→ on macOS and alt+←/→ on Linux/Windows behave like they do in
-    // iTerm2's "Esc+" option-key mode. Platform-agnostic: both produce altKey.
+    // Why: a kitty-protocol TUI binds alt+arrow via xterm's native CSI 1;3D/C; \eb/\ef would reach it as alt+b/f.
+    if ((getKittyKeyboardFlagsActivePane?.() ?? 0) > 0) {
+      return null
+    }
+    // Why: readline doesn't bind xterm's \e[1;3D/C for alt+←/→, so translate to \eb/\ef for word-nav (iTerm2 "Esc+" behavior).
     return { type: 'sendInput', data: event.key === 'ArrowLeft' ? '\x1bb' : '\x1bf' }
   }
 
@@ -206,68 +268,23 @@ export function resolveTerminalShortcutAction(
     !event.shiftKey &&
     (event.key === 'ArrowLeft' || event.key === 'ArrowRight')
   ) {
-    // Why: Windows Terminal, GNOME Terminal, and Konsole all bind Ctrl+←/→ for
-    // word navigation on Linux/Windows — but xterm.js emits \e[1;5D / \e[1;5C,
-    // which default readline (bash, zsh) does not bind to backward-word /
-    // forward-word. Translate to \eb / \ef (same bytes as our Alt+Arrow rule)
-    // so Ctrl+←/→ works for word-nav matching user expectations on those
-    // platforms without requiring a custom inputrc.
-    //
-    // Mac-gated: Ctrl+Arrow on macOS is reserved for Mission Control / Spaces
-    // navigation at the OS level and should never reach the app.
+    // Why: local Windows ConPTY (PSReadLine) binds Ctrl+←/→ itself; sending \eb/\ef prints stray b/f. Remote/WSL run readline.
+    if (isLocalWindowsConptyPane?.()) {
+      return null
+    }
+    // Why: readline ignores xterm's \e[1;5D/C, so translate Ctrl+←/→ to \eb/\ef for word-nav; !isMac since Mac reserves Ctrl+Arrow.
     return { type: 'sendInput', data: event.key === 'ArrowLeft' ? '\x1bb' : '\x1bf' }
   }
 
-  // Why: with macOptionIsMeta disabled (to let non-US keyboard layouts compose
-  // characters like @ and €), xterm.js no longer translates Option+letter into
-  // Esc+letter automatically. We match on event.code (physical key) rather than
-  // event.key because macOS composition replaces event.key with the composed
-  // character (e.g. Option+B reports key='∫', not key='b').
-  //
-  // The handling depends on the macOptionAsAlt setting (mirrors Ghostty):
-  // - 'true':  xterm handles all Option as Meta natively; nothing to do here.
-  // - 'false': compensate the three most critical readline shortcuts (B/F/D).
-  // - 'left'/'right': the designated Option key acts as full Meta (emit Esc+
-  //   for any single letter); the other key composes, with B/F/D compensated.
-  if (isMac && !event.metaKey && !event.ctrlKey && event.altKey && !event.shiftKey) {
-    // Why: event.location on a character key reports that key's position (always
-    // 0 for standard keys), NOT which modifier is held. The caller must track
-    // the Option key's own keydown location and pass it as optionKeyLocation.
-    const isLeftOption = optionKeyLocation === 1
-    const isRightOption = optionKeyLocation === 2
-
-    const shouldActAsMeta =
-      (macOptionAsAlt === 'left' && isLeftOption) || (macOptionAsAlt === 'right' && isRightOption)
-
-    if (shouldActAsMeta) {
-      // Emit Esc+key for letter keys (e.g. Option+B → \x1bb)
-      if (event.code?.startsWith('Key') && event.code.length === 4) {
-        const letter = event.code.charAt(3).toLowerCase()
-        return { type: 'sendInput', data: `\x1b${letter}` }
-      }
-      // Emit Esc+digit for number keys (e.g. Option+1 → \x1b1)
-      if (event.code?.startsWith('Digit') && event.code.length === 6) {
-        return { type: 'sendInput', data: `\x1b${event.code.charAt(5)}` }
-      }
-      const punct = event.code ? PUNCTUATION_CODE_MAP[event.code] : undefined
-      if (punct) {
-        return { type: 'sendInput', data: `\x1b${punct}` }
-      }
-    }
-
-    // In 'false', 'left', or 'right' mode, the compose-side Option key still
-    // needs the three most critical readline shortcuts patched.
-    if (macOptionAsAlt !== 'true' && !shouldActAsMeta) {
-      if (event.code === 'KeyB') {
-        return { type: 'sendInput', data: '\x1bb' }
-      }
-      if (event.code === 'KeyF') {
-        return { type: 'sendInput', data: '\x1bf' }
-      }
-      if (event.code === 'KeyD') {
-        return { type: 'sendInput', data: '\x1bd' }
-      }
-    }
+  const optionAction = resolveTerminalOptionShortcutAction(event, {
+    isMac,
+    macOptionAsAlt,
+    optionKeyLocations,
+    getKittyKeyboardFlags: () => getKittyKeyboardFlagsActivePane?.() ?? 0,
+    layoutCharacterForCode
+  })
+  if (optionAction) {
+    return optionAction
   }
 
   return null

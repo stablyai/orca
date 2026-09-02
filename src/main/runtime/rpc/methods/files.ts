@@ -1,29 +1,23 @@
-/* oxlint-disable max-lines -- Why: file RPC routing coverage stays together so the dispatcher contract for read, write, mutation, and watch methods is easy to audit. */
 import { z } from 'zod'
 import { defineMethod, defineStreamingMethod, type RpcAnyMethod } from '../core'
-import { createFileWatchEventBatcher } from './file-watch-event-batcher'
+import { runFileWatchStream } from './file-watch-stream-lifecycle'
+import { FILE_MUTATION_METHODS } from './files-mutation-methods'
+import { remoteFileContentBudget } from './files-remote-content-budget'
+import {
+  QUICK_OPEN_REMOTE_QUERY_MAX_CODE_UNITS,
+  QUICK_OPEN_SEARCH_VERSION
+} from '../../../../shared/quick-open-path-search'
+import { limitQuickOpenSearchReplyBySerializedBytes } from '../../../../shared/quick-open-transport-budget'
+import { FileOpen, WorktreeSelector } from './files-target-schemas'
+import { FILE_TERMINAL_ARTIFACT_METHODS } from './files-terminal-artifact-methods'
 
 let filesWatchSubscriptionSeq = 0
-const RUNTIME_FILE_BASE64_PATTERN = /^[A-Za-z0-9+/]*={0,2}$/
 
-function isValidRuntimeFileBase64(value: unknown): value is string {
-  return (
-    typeof value === 'string' && value.length % 4 !== 1 && RUNTIME_FILE_BASE64_PATTERN.test(value)
-  )
-}
-
-const WorktreeSelector = z.object({
-  worktree: z
-    .unknown()
-    .transform((v) => (typeof v === 'string' ? v : ''))
-    .pipe(z.string().min(1, 'Missing worktree selector'))
-})
-
-const FileOpen = WorktreeSelector.extend({
-  relativePath: z
-    .unknown()
-    .transform((v) => (typeof v === 'string' ? v : ''))
-    .pipe(z.string().min(1, 'Missing relative path'))
+const FilePathSearch = WorktreeSelector.extend({
+  query: z.string().max(QUICK_OPEN_REMOTE_QUERY_MAX_CODE_UNITS).default(''),
+  limit: z.number().int().positive().max(32).default(16),
+  excludePaths: z.array(z.string()).optional(),
+  mode: z.literal('quick-open').optional()
 })
 
 const ResolveTerminalPath = WorktreeSelector.extend({
@@ -31,15 +25,36 @@ const ResolveTerminalPath = WorktreeSelector.extend({
     .unknown()
     .transform((v) => (typeof v === 'string' ? v : ''))
     .pipe(z.string().min(1, 'Missing path text')),
+  terminal: z
+    .unknown()
+    .transform((v) => (typeof v === 'string' && v.length > 0 ? v : null))
+    .nullable()
+    .optional(),
   cwd: z
     .unknown()
     .transform((v) => (typeof v === 'string' && v.length > 0 ? v : null))
     .nullable()
+    .optional(),
+  crossWorkspace: z
+    .unknown()
+    .transform((v) => v === true)
+    .optional(),
+  nativeChatContext: z
+    .object({
+      tabId: z.string().min(1),
+      sessionId: z.string().min(1)
+    })
     .optional()
 })
 
 const FileOpenDiff = FileOpen.extend({
   staged: z.boolean().optional()
+})
+
+const DocPreviewFileRead = FileOpen.extend({
+  entryRelativePath: z.string().min(1),
+  implicitRootRelativePath: z.string().nullable(),
+  authorizedRootRelativePaths: z.array(z.string())
 })
 
 const FileTreePath = WorktreeSelector.extend({
@@ -56,28 +71,6 @@ const ServerDirectoryBrowse = z.object({
     .pipe(z.string())
 })
 
-// Why: write content must be a real string. Coercing a missing/non-string value
-// to '' silently truncated the target file to empty instead of erroring. An
-// explicit '' is still accepted (writing an empty file is legitimate).
-const FileWrite = FileOpen.extend({
-  content: z
-    .unknown()
-    .refine((v): v is string => typeof v === 'string', { message: 'Missing file content' })
-})
-
-const FileWriteBase64 = FileOpen.extend({
-  contentBase64: z
-    .unknown()
-    .refine((v): v is string => typeof v === 'string', { message: 'Missing file content' })
-    // Why: Buffer.from(..., 'base64') accepts malformed input by dropping
-    // invalid bytes, which can silently create empty or corrupt uploaded files.
-    .refine(isValidRuntimeFileBase64, 'File content must be base64')
-})
-
-const FileWriteBase64Chunk = FileWriteBase64.extend({
-  append: z.boolean().optional()
-})
-
 const FileReadChunk = FileOpen.extend({
   offset: z.number().int().nonnegative(),
   length: z
@@ -85,43 +78,6 @@ const FileReadChunk = FileOpen.extend({
     .int()
     .positive()
     .max(512 * 1024)
-})
-
-const FileRename = WorktreeSelector.extend({
-  oldRelativePath: z
-    .unknown()
-    .transform((v) => (typeof v === 'string' ? v : ''))
-    .pipe(z.string().min(1, 'Missing source path')),
-  newRelativePath: z
-    .unknown()
-    .transform((v) => (typeof v === 'string' ? v : ''))
-    .pipe(z.string().min(1, 'Missing destination path'))
-})
-
-const FileCopy = WorktreeSelector.extend({
-  sourceRelativePath: z
-    .unknown()
-    .transform((v) => (typeof v === 'string' ? v : ''))
-    .pipe(z.string().min(1, 'Missing source path')),
-  destinationRelativePath: z
-    .unknown()
-    .transform((v) => (typeof v === 'string' ? v : ''))
-    .pipe(z.string().min(1, 'Missing destination path'))
-})
-
-const FileCommitUpload = WorktreeSelector.extend({
-  tempRelativePath: z
-    .unknown()
-    .transform((v) => (typeof v === 'string' ? v : ''))
-    .pipe(z.string().min(1, 'Missing temporary path')),
-  finalRelativePath: z
-    .unknown()
-    .transform((v) => (typeof v === 'string' ? v : ''))
-    .pipe(z.string().min(1, 'Missing final path'))
-})
-
-const FileDelete = FileOpen.extend({
-  recursive: z.boolean().optional()
 })
 
 const FileSearch = WorktreeSelector.extend({
@@ -137,8 +93,13 @@ const FileSearch = WorktreeSelector.extend({
   maxResults: z.number().int().positive().optional()
 })
 
+// Why: `maxResults` is a new optional field (wire rule 1) — an older host strips it and keeps its
+// own default. It existed only on the Electron IPC hop, so "the client names its cap and a full page
+// means there is more" was true for desktop and merely incidental for web and mobile, which were
+// saved by `remoteFileContentBudget` defaulting the cap inside `listRuntimeFiles`.
 const FileListAll = WorktreeSelector.extend({
-  excludePaths: z.array(z.string()).optional()
+  excludePaths: z.array(z.string()).optional(),
+  maxResults: z.number().int().positive().optional()
 })
 
 const FileUnwatch = z.object({
@@ -152,7 +113,33 @@ export const FILE_METHODS: RpcAnyMethod[] = [
   defineMethod({
     name: 'files.list',
     params: WorktreeSelector,
-    handler: async (params, { runtime }) => runtime.listMobileFiles(params.worktree)
+    handler: async (params, { runtime, signal }) =>
+      signal === undefined
+        ? runtime.listMobileFiles(params.worktree)
+        : runtime.listMobileFiles(params.worktree, { signal })
+  }),
+  defineMethod({
+    name: 'files.searchPaths',
+    params: FilePathSearch,
+    handler: async (params, { runtime, signal, clientKind, requestId }) => {
+      if (params.mode !== 'quick-open') {
+        return runtime.searchMobileFilePaths(params.worktree, params.query, params.limit)
+      }
+      const result = {
+        ...(await runtime.searchQuickOpenFilePaths(
+          params.worktree,
+          params.query,
+          params.limit,
+          params.excludePaths,
+          signal
+        )),
+        quickOpenSearchVersion: QUICK_OPEN_SEARCH_VERSION
+      }
+      const maxContentBytes = remoteFileContentBudget(clientKind, requestId)
+      return maxContentBytes === undefined
+        ? result
+        : limitQuickOpenSearchReplyBySerializedBytes(result, maxContentBytes)
+    }
   }),
   defineMethod({
     name: 'files.open',
@@ -173,16 +160,42 @@ export const FILE_METHODS: RpcAnyMethod[] = [
       runtime.readMobileFile(params.worktree, params.relativePath)
   }),
   defineMethod({
+    name: 'files.readDocPreview',
+    params: DocPreviewFileRead,
+    handler: async (params, { runtime, clientKind, requestId }) =>
+      runtime.readDocPreviewFile(
+        params.worktree,
+        params.relativePath,
+        params.entryRelativePath,
+        params.implicitRootRelativePath,
+        params.authorizedRootRelativePaths,
+        remoteFileContentBudget(clientKind, requestId)
+      )
+  }),
+  defineMethod({
     name: 'files.resolveTerminalPath',
     params: ResolveTerminalPath,
-    handler: async (params, { runtime }) =>
-      runtime.resolveTerminalPath(params.worktree, params.pathText, params.cwd ?? null)
+    handler: async (params, { runtime, clientId }) =>
+      runtime.resolveTerminalPath(
+        params.worktree,
+        params.pathText,
+        params.cwd ?? null,
+        clientId,
+        params.terminal ?? null,
+        params.crossWorkspace === true,
+        params.nativeChatContext ?? null
+      )
   }),
+  ...FILE_TERMINAL_ARTIFACT_METHODS,
   defineMethod({
     name: 'files.readPreview',
     params: FileOpen,
-    handler: async (params, { runtime }) =>
-      runtime.readFileExplorerPreview(params.worktree, params.relativePath)
+    handler: async (params, { runtime, clientKind, requestId }) => {
+      const budget = remoteFileContentBudget(clientKind, requestId)
+      return budget === undefined
+        ? runtime.readFileExplorerPreview(params.worktree, params.relativePath)
+        : runtime.readFileExplorerPreview(params.worktree, params.relativePath, budget)
+    }
   }),
   defineMethod({
     name: 'files.readChunk',
@@ -206,87 +219,7 @@ export const FILE_METHODS: RpcAnyMethod[] = [
     params: ServerDirectoryBrowse,
     handler: async (params, { runtime }) => runtime.browseServerDir(params.path)
   }),
-  defineMethod({
-    name: 'files.write',
-    params: FileWrite,
-    handler: async (params, { runtime }) =>
-      runtime.writeFileExplorerFile(params.worktree, params.relativePath, params.content)
-  }),
-  defineMethod({
-    name: 'files.writeBase64',
-    params: FileWriteBase64,
-    handler: async (params, { runtime }) =>
-      runtime.writeFileExplorerFileBase64(
-        params.worktree,
-        params.relativePath,
-        params.contentBase64
-      )
-  }),
-  defineMethod({
-    name: 'files.writeBase64Chunk',
-    params: FileWriteBase64Chunk,
-    handler: async (params, { runtime }) =>
-      runtime.writeFileExplorerFileBase64Chunk(
-        params.worktree,
-        params.relativePath,
-        params.contentBase64,
-        params.append === true
-      )
-  }),
-  defineMethod({
-    name: 'files.createFile',
-    params: FileOpen,
-    handler: async (params, { runtime }) =>
-      runtime.createFileExplorerFile(params.worktree, params.relativePath)
-  }),
-  defineMethod({
-    name: 'files.createDir',
-    params: FileOpen,
-    handler: async (params, { runtime }) =>
-      runtime.createFileExplorerDir(params.worktree, params.relativePath)
-  }),
-  defineMethod({
-    name: 'files.createDirNoClobber',
-    params: FileOpen,
-    handler: async (params, { runtime }) =>
-      runtime.createFileExplorerDirNoClobber(params.worktree, params.relativePath)
-  }),
-  defineMethod({
-    name: 'files.commitUpload',
-    params: FileCommitUpload,
-    handler: async (params, { runtime }) =>
-      runtime.commitFileExplorerUpload(
-        params.worktree,
-        params.tempRelativePath,
-        params.finalRelativePath
-      )
-  }),
-  defineMethod({
-    name: 'files.rename',
-    params: FileRename,
-    handler: async (params, { runtime }) =>
-      runtime.renameFileExplorerPath(
-        params.worktree,
-        params.oldRelativePath,
-        params.newRelativePath
-      )
-  }),
-  defineMethod({
-    name: 'files.copy',
-    params: FileCopy,
-    handler: async (params, { runtime }) =>
-      runtime.copyFileExplorerPath(
-        params.worktree,
-        params.sourceRelativePath,
-        params.destinationRelativePath
-      )
-  }),
-  defineMethod({
-    name: 'files.delete',
-    params: FileDelete,
-    handler: async (params, { runtime }) =>
-      runtime.deleteFileExplorerPath(params.worktree, params.relativePath, params.recursive)
-  }),
+  ...FILE_MUTATION_METHODS,
   defineMethod({
     name: 'files.search',
     params: FileSearch,
@@ -304,8 +237,15 @@ export const FILE_METHODS: RpcAnyMethod[] = [
   defineMethod({
     name: 'files.listAll',
     params: FileListAll,
-    handler: async (params, { runtime }) =>
-      runtime.listRuntimeFiles(params.worktree, { excludePaths: params.excludePaths })
+    handler: async (params, { runtime, clientKind, requestId, signal }) => {
+      const maxContentBytes = remoteFileContentBudget(clientKind, requestId)
+      return runtime.listRuntimeFiles(params.worktree, {
+        excludePaths: params.excludePaths,
+        ...(params.maxResults === undefined ? {} : { maxResults: params.maxResults }),
+        ...(signal === undefined ? {} : { signal }),
+        ...(maxContentBytes === undefined ? {} : { maxContentBytes })
+      })
+    }
   }),
   defineMethod({
     name: 'files.listMarkdownDocuments',
@@ -324,62 +264,13 @@ export const FILE_METHODS: RpcAnyMethod[] = [
     handler: async (params, { runtime, connectionId, signal }, emit) => {
       const seq = ++filesWatchSubscriptionSeq
       const subscriptionId = `files-watch-${connectionId ?? 'inproc'}-${seq}`
-      if (signal?.aborted) {
-        return
-      }
-      await new Promise<void>((resolve, reject) => {
-        let settled = false
-        let unwatch: (() => void) | null = null
-        const eventBatcher = createFileWatchEventBatcher(params.worktree, emit)
-        const finish = (): void => {
-          if (settled) {
-            return
-          }
-          settled = true
-          signal?.removeEventListener('abort', handleAbort)
-          resolve()
-        }
-        const cleanup = (): void => {
-          eventBatcher.flush()
-          eventBatcher.dispose()
-          unwatch?.()
-          emit({ type: 'end' })
-          finish()
-        }
-        const handleAbort = (): void => {
-          if (unwatch) {
-            cleanup()
-          } else {
-            // Why: watch setup may have queued events before resolving its
-            // unwatch callback. Dispose that transient batcher on early abort.
-            eventBatcher.dispose()
-            finish()
-          }
-        }
-        signal?.addEventListener('abort', handleAbort, { once: true })
-        void runtime
-          .watchFileExplorer(params.worktree, (events) => {
-            eventBatcher.push(events)
-          })
-          .then((nextUnwatch) => {
-            if (signal?.aborted || settled) {
-              // Why: the connection can close while watch setup is still
-              // resolving. Tear down the late watcher immediately instead of
-              // registering cleanup on a connection that was already reaped.
-              eventBatcher.dispose()
-              nextUnwatch()
-              return
-            }
-            unwatch = nextUnwatch
-            runtime.registerSubscriptionCleanup(subscriptionId, cleanup, connectionId)
-            emit({ type: 'ready', subscriptionId })
-          })
-          .catch((error) => {
-            if (!settled) {
-              signal?.removeEventListener('abort', handleAbort)
-              reject(error)
-            }
-          })
+      await runFileWatchStream({
+        runtime,
+        worktree: params.worktree,
+        connectionId,
+        signal,
+        subscriptionId,
+        emit
       })
     }
   }),
@@ -387,7 +278,7 @@ export const FILE_METHODS: RpcAnyMethod[] = [
     name: 'files.unwatch',
     params: FileUnwatch,
     handler: async (params, { runtime }) => {
-      runtime.cleanupSubscription(params.subscriptionId)
+      await runtime.cleanupSubscriptionAndWait(params.subscriptionId)
       return { unsubscribed: true }
     }
   })

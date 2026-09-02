@@ -28,5 +28,6 @@ export const TERMINAL_REFLOW_JS = `
     }
     applyFitScale('reflow-msg');
     updateScrollIndicator(false);
+    emitKeyboardAvoidanceMetrics();
   }
 `

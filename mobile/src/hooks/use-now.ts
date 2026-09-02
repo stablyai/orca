@@ -1,14 +1,52 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState, useSyncExternalStore } from 'react'
+import { AppState, type AppStateStatus } from 'react-native'
 
-// One shared interval per caller, mirroring desktop's useNow: relative
-// timestamps ("Xm") need a periodic re-render to stay honest. The worktree list
-// owns a single tick that drives every visible agent row, rather than each row
-// running its own interval.
-export function useNow(intervalMs = 30_000): number {
+const appStateListeners = new Set<() => void>()
+let currentAppState: AppStateStatus | null = AppState.currentState
+let appStateSubscription: ReturnType<typeof AppState.addEventListener> | null = null
+
+function subscribeToAppState(listener: () => void): () => void {
+  appStateListeners.add(listener)
+  if (!appStateSubscription) {
+    currentAppState = AppState.currentState
+    appStateSubscription = AppState.addEventListener('change', (nextState) => {
+      currentAppState = nextState
+      appStateListeners.forEach((notify) => notify())
+    })
+  }
+
+  return () => {
+    appStateListeners.delete(listener)
+    if (appStateListeners.size === 0) {
+      appStateSubscription?.remove()
+      appStateSubscription = null
+    }
+  }
+}
+
+function isAppActive(): boolean {
+  return (appStateSubscription ? currentAppState : AppState.currentState) === 'active'
+}
+
+// A list-level caller's single tick drives every visible relative-time label.
+export function useNow(intervalMs = 30_000, enabled = true): number {
+  const appActive = useSyncExternalStore(subscribeToAppState, isAppActive, isAppActive)
+  const running = appActive && enabled
   const [now, setNow] = useState(() => Date.now())
+  const wasRunningRef = useRef(running)
+
   useEffect(() => {
+    const resumed = running && !wasRunningRef.current
+    wasRunningRef.current = running
+    if (!running) {
+      return
+    }
+    if (resumed) {
+      setNow(Date.now())
+    }
     const id = setInterval(() => setNow(Date.now()), intervalMs)
     return () => clearInterval(id)
-  }, [intervalMs])
+  }, [intervalMs, running])
+
   return now
 }

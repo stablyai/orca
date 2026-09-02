@@ -19,11 +19,69 @@ import { readBlobAtOid, type GitBufferExec, type GitExec } from './git-handler-o
  * doesn't re-read `.gitmodules` over the (possibly high-latency) SSH link.
  */
 export const SUBMODULE_PATHS_CACHE_TTL_MS = 5_000
+export const MAX_SUBMODULE_PATHS_CACHE_ENTRIES = 512
 type SubmodulePathsCacheEntry = { paths: string[]; expiresAt: number }
-export type SubmodulePathsCache = Map<string, SubmodulePathsCacheEntry>
+export type SubmodulePathsCache = {
+  entries: Map<string, SubmodulePathsCacheEntry>
+  generation: number
+}
 
 export function createSubmodulePathsCache(): SubmodulePathsCache {
-  return new Map()
+  return { entries: new Map(), generation: 0 }
+}
+
+export function clearSubmodulePathsCache(cache: SubmodulePathsCache): void {
+  cache.entries.clear()
+  // Why: a pre-mutation SSH read must not restore stale .gitmodules paths
+  // after the mutation invalidated them.
+  cache.generation += 1
+}
+
+export function getSubmodulePathsCacheCount(cache: SubmodulePathsCache): number {
+  return cache.entries.size
+}
+
+function getCachedSubmodulePaths(
+  cache: SubmodulePathsCache,
+  worktreePath: string,
+  now: number
+): string[] | null {
+  const cached = cache.entries.get(worktreePath)
+  if (!cached) {
+    return null
+  }
+  if (cached.expiresAt <= now) {
+    cache.entries.delete(worktreePath)
+    return null
+  }
+  cache.entries.delete(worktreePath)
+  cache.entries.set(worktreePath, cached)
+  return cached.paths
+}
+
+function pruneExpiredSubmodulePaths(cache: SubmodulePathsCache, now: number): void {
+  for (const [worktreePath, entry] of cache.entries) {
+    if (entry.expiresAt <= now) {
+      cache.entries.delete(worktreePath)
+    }
+  }
+}
+
+function rememberSubmodulePaths(
+  cache: SubmodulePathsCache,
+  worktreePath: string,
+  paths: string[],
+  now: number
+): void {
+  cache.entries.delete(worktreePath)
+  cache.entries.set(worktreePath, { paths, expiresAt: now + SUBMODULE_PATHS_CACHE_TTL_MS })
+  while (cache.entries.size > MAX_SUBMODULE_PATHS_CACHE_ENTRIES) {
+    const oldestPath = cache.entries.keys().next().value
+    if (oldestPath === undefined) {
+      break
+    }
+    cache.entries.delete(oldestPath)
+  }
 }
 
 /**
@@ -38,12 +96,18 @@ export async function listSubmodulePathsCached(
   cache: SubmodulePathsCache,
   now: number = Date.now()
 ): Promise<string[]> {
-  const cached = cache.get(worktreePath)
-  if (cached && cached.expiresAt > now) {
-    return cached.paths
+  const cached = getCachedSubmodulePaths(cache, worktreePath, now)
+  if (cached) {
+    return cached
   }
+  // Why: prune on misses so disconnected worktrees cannot accumulate while
+  // repeated SSH diff clicks keep their O(1) cache-hit path.
+  pruneExpiredSubmodulePaths(cache, now)
+  const cacheGeneration = cache.generation
   const paths = await listSubmodulePaths(git, worktreePath)
-  cache.set(worktreePath, { paths, expiresAt: now + SUBMODULE_PATHS_CACHE_TTL_MS })
+  if (cacheGeneration === cache.generation) {
+    rememberSubmodulePaths(cache, worktreePath, paths, now)
+  }
   return paths
 }
 

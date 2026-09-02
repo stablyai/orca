@@ -1,10 +1,12 @@
 import { describe, expect, it } from 'vitest'
 import {
-  buildSourceControlBranchContextStats,
+  buildSourceControlCompareBaseStats,
+  formatSourceControlRefLabel,
   resolveSourceControlDisplayedBaseRef,
+  shouldShowSourceControlBranchContextChrome,
   shouldShowSourceControlBranchContextRow
-} from './source-control-branch-context-stats'
-import type { GitBranchCompareSummary } from '../../../../shared/types'
+} from './source-control/panel/branch-context-stats'
+import type { GitBranchCompareSummary } from '../../../../shared/git-diff-compare-types'
 
 const readySummary: GitBranchCompareSummary = {
   baseRef: 'origin/main',
@@ -26,63 +28,111 @@ describe('source-control branch context stats', () => {
     expect(resolveSourceControlDisplayedBaseRef(null, null)).toBeNull()
   })
 
-  it('shows the row when compare summary or configured base ref exists', () => {
+  it('formats refs for scannable labels without dropping remote qualification', () => {
+    expect(formatSourceControlRefLabel('refs/remotes/origin/main')).toBe('origin/main')
+    expect(formatSourceControlRefLabel('refs/heads/feature/foo')).toBe('feature/foo')
+    expect(formatSourceControlRefLabel('origin/main')).toBe('origin/main')
+    expect(formatSourceControlRefLabel('refs/tags/v1.2.3')).toBe('v1.2.3')
+  })
+
+  it('shows the row only when a displayable base ref exists', () => {
     expect(shouldShowSourceControlBranchContextRow(null, null)).toBe(false)
     expect(shouldShowSourceControlBranchContextRow(null, 'origin/main')).toBe(true)
     expect(
       shouldShowSourceControlBranchContextRow({ ...readySummary, status: 'loading' }, null)
     ).toBe(true)
     expect(shouldShowSourceControlBranchContextRow(readySummary, null)).toBe(true)
+    // Summary without a usable base must not claim the row is visible.
+    expect(shouldShowSourceControlBranchContextRow({ ...readySummary, baseRef: '   ' }, null)).toBe(
+      false
+    )
+    expect(shouldShowSourceControlBranchContextRow({ ...readySummary, baseRef: '' }, null)).toBe(
+      false
+    )
   })
 
-  it('renders upstream ahead and behind counts', () => {
-    const stats = buildSourceControlBranchContextStats({
-      summary: { ...readySummary, commitsAhead: 0 },
-      baseRef: 'origin/main',
-      upstreamStatus: { hasUpstream: true, ahead: 2, behind: 1 }
-    })
-    expect(stats.map((stat) => stat.label)).toEqual(['↑2', '↓1'])
-    expect(stats[0]?.title).toBe('2 commits ahead of origin/main')
-    expect(stats[1]?.title).toBe('1 commit behind origin/main')
+  it('shows toolbar chrome when head identity exists even without a base', () => {
+    expect(shouldShowSourceControlBranchContextChrome(null, null, null)).toBe(false)
+    expect(
+      shouldShowSourceControlBranchContextChrome(null, null, {
+        kind: 'branch',
+        branchName: 'local-only'
+      })
+    ).toBe(true)
+    expect(shouldShowSourceControlBranchContextChrome(readySummary, null, null)).toBe(true)
   })
 
-  it('shows branch-compare ahead when it differs from upstream ahead', () => {
-    const stats = buildSourceControlBranchContextStats({
-      summary: readySummary,
-      baseRef: 'origin/main',
-      upstreamStatus: { hasUpstream: true, ahead: 1, behind: 0 }
-    })
-    expect(stats.map((stat) => stat.label)).toEqual(['↑1', '↑3'])
-    expect(stats[0]?.title).toBe('1 commit ahead of origin/main')
-    expect(stats[1]?.title).toBe('3 commits ahead of origin/main')
-  })
-
-  it('dedupes branch-compare ahead when it matches upstream ahead', () => {
-    const stats = buildSourceControlBranchContextStats({
-      summary: { ...readySummary, commitsAhead: 2 },
-      baseRef: 'origin/main',
-      upstreamStatus: { hasUpstream: true, ahead: 2, behind: 0 }
-    })
-    expect(stats.map((stat) => stat.label)).toEqual(['↑2'])
-    expect(stats[0]?.title).toBe('2 commits ahead of origin/main')
-  })
-
-  it('falls back to branch-compare ahead without upstream', () => {
-    const stats = buildSourceControlBranchContextStats({
-      summary: readySummary,
-      baseRef: 'origin/main'
-    })
-    expect(stats.map((stat) => stat.label)).toEqual(['↑3'])
+  it('counts commits ahead of the compare base', () => {
+    const stats = buildSourceControlCompareBaseStats(readySummary, 'refs/remotes/origin/main')
+    expect(stats.map((stat) => stat.label)).toEqual(['\u21913'])
     expect(stats[0]?.title).toBe('3 commits ahead of origin/main')
   })
 
-  it('returns no stats when branch is even with base', () => {
+  it('names the base ref, never the tracked branch', () => {
+    // The rebase case: upstream still points at the pre-rebase branch. This count
+    // is against the compare base and says so, so the two cannot be conflated.
+    const stats = buildSourceControlCompareBaseStats(
+      { ...readySummary, commitsAhead: 36 },
+      'origin/main'
+    )
+    expect(stats[0]?.label).toBe('\u219136')
+    expect(stats[0]?.title).toBe('36 commits ahead of origin/main')
+  })
+
+  it('singularizes a single commit', () => {
+    const stats = buildSourceControlCompareBaseStats(
+      { ...readySummary, commitsAhead: 1, commitsBehind: 1 },
+      'origin/main'
+    )
+    expect(stats.map((stat) => stat.title)).toEqual([
+      '1 commit ahead of origin/main',
+      '1 commit behind origin/main'
+    ])
+  })
+
+  // The case the row exists for: a rebased branch is ahead of its base and behind it.
+  it('counts both directions against the compare base', () => {
+    const stats = buildSourceControlCompareBaseStats(
+      { ...readySummary, commitsAhead: 33, commitsBehind: 12 },
+      'refs/remotes/origin/main'
+    )
+    expect(stats.map((stat) => stat.label)).toEqual(['\u219133', '\u219312'])
+    expect(stats[1]?.title).toBe('12 commits behind origin/main')
+  })
+
+  it('drops each direction independently when it is zero or unreported', () => {
     expect(
-      buildSourceControlBranchContextStats({
-        summary: { ...readySummary, commitsAhead: 0 },
-        baseRef: 'origin/main',
-        upstreamStatus: { hasUpstream: true, ahead: 0, behind: 0 }
-      })
+      buildSourceControlCompareBaseStats(
+        { ...readySummary, commitsAhead: 0, commitsBehind: 4 },
+        'origin/main'
+      ).map((stat) => stat.label)
+    ).toEqual(['\u21934'])
+    // An older remote host omits commitsBehind entirely; ahead must still render.
+    expect(
+      buildSourceControlCompareBaseStats(
+        { ...readySummary, commitsBehind: undefined },
+        'origin/main'
+      ).map((stat) => stat.label)
+    ).toEqual(['\u21913'])
+  })
+
+  it('shows nothing without a ready summary or a positive count', () => {
+    expect(buildSourceControlCompareBaseStats(null, 'origin/main')).toEqual([])
+    expect(buildSourceControlCompareBaseStats(undefined, 'origin/main')).toEqual([])
+    expect(
+      buildSourceControlCompareBaseStats({ ...readySummary, status: 'loading' }, 'origin/main')
+    ).toEqual([])
+    expect(
+      buildSourceControlCompareBaseStats(
+        { ...readySummary, commitsAhead: 0, commitsBehind: 0 },
+        'origin/main'
+      )
+    ).toEqual([])
+    expect(
+      buildSourceControlCompareBaseStats(
+        { ...readySummary, commitsAhead: undefined, commitsBehind: undefined },
+        'origin/main'
+      )
     ).toEqual([])
   })
 })

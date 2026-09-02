@@ -1,34 +1,64 @@
-import { branchName } from '@/lib/git-utils'
-import { issueCacheKey as getIssueCacheKey } from '@/store/slices/github'
-import type { Repo, Worktree } from '../../../shared/types'
-import { extractWorktreePaletteCommentSnippet } from './worktree-palette-comment-snippet'
-import { isWorktreePaletteQueryTooLarge } from './worktree-palette-query-bounds'
+import { getWorktreeHostIdentity } from '../../../shared/worktree/host-qualified-identity'
+import { matchPaletteDocument } from './palette-match/match-document'
+import { preparePaletteQuery } from './palette-match/palette-query'
+import type { MatchRange } from './palette-match/normalized-text'
+import type { PaletteResultQualityClass } from './palette-match/match-quality'
+import type {
+  PaletteDocument,
+  PaletteDocumentMatch,
+  PaletteDocumentRank
+} from './palette-match/palette-document'
+import {
+  buildWorktreePaletteDocuments,
+  WORKTREE_PALETTE_BRANCH_FIELD_ID,
+  WORKTREE_PALETTE_HOST_FIELD_ID,
+  WORKTREE_PALETTE_NAME_FIELD_ID,
+  WORKTREE_PALETTE_REPO_FIELD_ID,
+  type IssueCacheEntry,
+  type PRCacheEntry,
+  type WorktreePaletteDocumentSources
+} from './worktree-palette-document'
+import {
+  applyWorktreeCommentSnippet,
+  type PaletteSupportingKind
+} from './worktree-palette-evidence'
+import type { HostedReviewInfo } from '../../../shared/hosted-review'
+import type { Repo } from '../../../shared/repo-types'
+import type { Worktree } from '../../../shared/worktree/types'
+import { resolvePaletteRepoForWorktree } from './palette-repo-resolution'
+import {
+  matchWorktreePaletteTaskUrl,
+  parseCmdJTaskSourceUrl
+} from './worktree-palette-task-url-match'
 
-export type MatchRange = { start: number; end: number }
+export type { MatchRange }
 
-export type PaletteMatchedField =
-  | 'displayName'
-  | 'branch'
-  | 'repo'
-  | 'comment'
-  | 'pr'
-  | 'issue'
-  | 'port'
+export type PaletteMatchedField = 'displayName' | 'branch' | 'repo' | 'host' | PaletteSupportingKind
 
 export type PaletteSupportingText = {
-  labelKind: 'comment' | 'pr' | 'issue' | 'port'
+  labelKind: PaletteSupportingKind
   text: string
-  matchRange: MatchRange | null
+  matchRanges: readonly MatchRange[]
+  accessibilityLabel: string
 }
 
 export type PaletteSearchResult = {
   worktreeId: string
-  matchedField: PaletteMatchedField | null
-  displayNameRange: MatchRange | null
-  branchRange: MatchRange | null
-  repoRange: MatchRange | null
+  /** Why (STA-4343): `repoId::path` repeats across hosts, so consumers that key on a
+   *  result — board filters, item ids — need the host to tell two rows apart. */
+  worktreeHostId?: Worktree['hostId']
+  matchedFields: readonly PaletteMatchedField[]
+  displayNameRanges: readonly MatchRange[]
+  branchRanges: readonly MatchRange[]
+  repoRanges: readonly MatchRange[]
+  hostRanges: readonly MatchRange[]
   supportingText: PaletteSupportingText | null
+  /** null for the empty query, where every worktree is listed without a match. */
+  qualityClass: PaletteResultQualityClass | null
+  rank: PaletteDocumentRank | null
 }
+
+const NO_RANGES: readonly MatchRange[] = []
 
 export function getWorktreePaletteSearchScope(args: {
   hasQuery: boolean
@@ -44,266 +74,154 @@ export function getWorktreePaletteSearchScope(args: {
   return args.allWorktrees.filter((worktree) => !worktree.isArchived)
 }
 
-type PRCacheEntry = { data?: { number: number; title: string } | null } | undefined
-type IssueCacheEntry = { data?: { number: number; title: string } | null } | undefined
-
-function makeResult(
+export function makeEmptyPaletteSearchResult(
   worktreeId: string,
-  matchedField: PaletteMatchedField | null,
-  overrides: Partial<Omit<PaletteSearchResult, 'worktreeId' | 'matchedField'>> = {}
+  worktreeHostId?: Worktree['hostId']
 ): PaletteSearchResult {
   return {
     worktreeId,
-    matchedField,
-    displayNameRange: null,
-    branchRange: null,
-    repoRange: null,
+    ...(worktreeHostId ? { worktreeHostId } : {}),
+    matchedFields: [],
+    displayNameRanges: NO_RANGES,
+    branchRanges: NO_RANGES,
+    repoRanges: NO_RANGES,
+    hostRanges: NO_RANGES,
     supportingText: null,
-    ...overrides
+    qualityClass: null,
+    rank: null
   }
 }
 
-export function searchWorktrees(
-  worktrees: Worktree[],
-  query: string,
-  repoMap: Map<string, Repo>,
-  prCache: Record<string, PRCacheEntry> | null,
-  issueCache: Record<string, IssueCacheEntry> | null,
-  workspacePortsByWorktreeId?: Map<string, { port: number; processName?: string }[]>
-): PaletteSearchResult[] {
-  if (isWorktreePaletteQueryTooLarge(query)) {
+const VISIBLE_FIELD_LABELS: ReadonlyMap<string, PaletteMatchedField> = new Map([
+  [WORKTREE_PALETTE_NAME_FIELD_ID, 'displayName'],
+  [WORKTREE_PALETTE_BRANCH_FIELD_ID, 'branch'],
+  [WORKTREE_PALETTE_REPO_FIELD_ID, 'repo'],
+  [WORKTREE_PALETTE_HOST_FIELD_ID, 'host']
+])
+
+function toSupportingText(match: PaletteDocumentMatch): PaletteSupportingText | null {
+  const evidence = match.supportingEvidence[0]
+  if (!evidence) {
+    return null
+  }
+  const kind = evidence.kind as PaletteSupportingKind
+  if (kind === 'comment') {
+    const snippet = applyWorktreeCommentSnippet(evidence.text, evidence.ranges)
+    return {
+      labelKind: kind,
+      text: snippet.text,
+      matchRanges: snippet.ranges,
+      accessibilityLabel: evidence.accessibilityLabel
+    }
+  }
+  return {
+    labelKind: kind,
+    text: evidence.text,
+    matchRanges: evidence.ranges,
+    accessibilityLabel: evidence.accessibilityLabel
+  }
+}
+
+export function toWorktreePaletteSearchResult(
+  worktreeId: string,
+  match: PaletteDocumentMatch,
+  worktreeHostId?: Worktree['hostId']
+): PaletteSearchResult {
+  const supportingText = toSupportingText(match)
+  const matchedFields: PaletteMatchedField[] = []
+  for (const fieldId of match.rangesByField.keys()) {
+    const label = VISIBLE_FIELD_LABELS.get(fieldId)
+    if (label && !matchedFields.includes(label)) {
+      matchedFields.push(label)
+    }
+  }
+  if (supportingText) {
+    matchedFields.push(supportingText.labelKind)
+  }
+
+  return {
+    worktreeId,
+    ...(worktreeHostId ? { worktreeHostId } : {}),
+    matchedFields,
+    displayNameRanges: match.rangesByField.get(WORKTREE_PALETTE_NAME_FIELD_ID) ?? NO_RANGES,
+    branchRanges: match.rangesByField.get(WORKTREE_PALETTE_BRANCH_FIELD_ID) ?? NO_RANGES,
+    repoRanges: match.rangesByField.get(WORKTREE_PALETTE_REPO_FIELD_ID) ?? NO_RANGES,
+    hostRanges: match.rangesByField.get(WORKTREE_PALETTE_HOST_FIELD_ID) ?? NO_RANGES,
+    supportingText,
+    qualityClass: match.qualityClass,
+    rank: match.rank
+  }
+}
+
+export type WorktreePaletteSearchArgs = {
+  worktrees: readonly Worktree[]
+  query: string
+  documents: ReadonlyMap<string, PaletteDocument>
+  repoMap: ReadonlyMap<string, Repo>
+  repoMapByHostIdentity?: ReadonlyMap<string, Repo>
+  checksReviewByWorktree?: ReadonlyMap<Worktree, HostedReviewInfo | null>
+}
+
+/** Matches prepared documents; callers memoize `documents` across keystrokes. */
+export function searchWorktreeDocuments(args: WorktreePaletteSearchArgs): PaletteSearchResult[] {
+  const prepared = preparePaletteQuery(args.query)
+  if (prepared.state === 'invalid') {
     return []
   }
-  const trimmedQuery = query.trim()
-  if (!trimmedQuery) {
-    return worktrees.map((worktree) => makeResult(worktree.id, null))
+  if (prepared.state === 'empty') {
+    return args.worktrees.map((worktree) =>
+      makeEmptyPaletteSearchResult(worktree.id, worktree.hostId)
+    )
   }
 
-  const q = trimmedQuery.toLowerCase()
-  const numericQuery = q.startsWith('#') ? q.slice(1) : q
+  const taskSourceUrl = parseCmdJTaskSourceUrl(args.query.trim())
   const results: PaletteSearchResult[] = []
-
-  // Support "repo/worktree" composite queries (e.g. "orca/main") so users can
-  // narrow by repo and worktree in a single token. Worktrees are identified by
-  // their branch name here, so the right-hand side is matched against the
-  // branch. We split on the FIRST slash only — branch names themselves contain
-  // slashes (e.g. "feature/foo"), and we still want the right-hand side to
-  // match those in full.
-  const slashIndex = q.indexOf('/')
-  const composite =
-    slashIndex > 0 && slashIndex < q.length - 1
-      ? { repoPart: q.slice(0, slashIndex), branchPart: q.slice(slashIndex + 1) }
-      : null
-
-  for (const worktree of worktrees) {
-    if (composite) {
-      const repoName = repoMap.get(worktree.repoId)?.displayName ?? ''
-      const branch = branchName(worktree.branch)
-      const repoIdx = repoName.toLowerCase().indexOf(composite.repoPart)
-      const branchIdx = branch.toLowerCase().indexOf(composite.branchPart)
-      if (repoIdx !== -1 && branchIdx !== -1) {
-        results.push(
-          makeResult(worktree.id, 'branch', {
-            repoRange: { start: repoIdx, end: repoIdx + composite.repoPart.length },
-            branchRange: { start: branchIdx, end: branchIdx + composite.branchPart.length }
-          })
-        )
-        continue
+  for (const worktree of args.worktrees) {
+    if (taskSourceUrl) {
+      const match = matchWorktreePaletteTaskUrl({
+        worktree,
+        intent: taskSourceUrl,
+        repo: resolvePaletteRepoForWorktree(worktree, args.repoMap, args.repoMapByHostIdentity),
+        review: args.checksReviewByWorktree?.get(worktree)
+      })
+      if (match) {
+        results.push(match)
       }
-      // Fall through to single-token matching so users who type a branch name
-      // that happens to contain a slash (e.g. "feature/foo") still get hits.
-    }
-
-    const nameIndex = worktree.displayName.toLowerCase().indexOf(q)
-    if (nameIndex !== -1) {
-      results.push(
-        makeResult(worktree.id, 'displayName', {
-          displayNameRange: { start: nameIndex, end: nameIndex + q.length }
-        })
-      )
       continue
     }
 
-    const branch = branchName(worktree.branch)
-    const branchIndex = branch.toLowerCase().indexOf(q)
-    if (branchIndex !== -1) {
-      results.push(
-        makeResult(worktree.id, 'branch', {
-          branchRange: { start: branchIndex, end: branchIndex + q.length }
-        })
-      )
+    const document = args.documents.get(getWorktreeHostIdentity(worktree))
+    if (!document) {
       continue
     }
-
-    const repoName = repoMap.get(worktree.repoId)?.displayName ?? ''
-    const repoIndex = repoName.toLowerCase().indexOf(q)
-    if (repoIndex !== -1) {
-      results.push(
-        makeResult(worktree.id, 'repo', {
-          repoRange: { start: repoIndex, end: repoIndex + q.length }
-        })
-      )
-      continue
-    }
-
-    if (worktree.comment) {
-      const commentIndex = worktree.comment.toLowerCase().indexOf(q)
-      if (commentIndex !== -1) {
-        const snippet = extractWorktreePaletteCommentSnippet(
-          worktree.comment,
-          commentIndex,
-          commentIndex + q.length
-        )
-        results.push(
-          makeResult(worktree.id, 'comment', {
-            supportingText: {
-              labelKind: 'comment',
-              text: snippet.text,
-              matchRange: snippet.matchRange
-            }
-          })
-        )
-        continue
-      }
-    }
-
-    if (!numericQuery) {
-      continue
-    }
-
-    const workspacePorts = workspacePortsByWorktreeId?.get(worktree.id) ?? []
-    let matchedPort = false
-    for (const port of workspacePorts) {
-      const portText = String(port.port)
-      const portIndex = portText.indexOf(numericQuery)
-      if (portIndex !== -1) {
-        const label = port.processName ? `${portText} · ${port.processName}` : portText
-        results.push(
-          makeResult(worktree.id, 'port', {
-            supportingText: {
-              labelKind: 'port',
-              text: label,
-              matchRange: {
-                start: portIndex,
-                end: portIndex + numericQuery.length
-              }
-            }
-          })
-        )
-        matchedPort = true
-        break
-      }
-    }
-    if (matchedPort) {
-      continue
-    }
-
-    const repo = repoMap.get(worktree.repoId)
-    const prKey = repo ? `${repo.path}::${branch}` : ''
-    const pr = prKey && prCache ? prCache[prKey]?.data : undefined
-
-    if (pr) {
-      const prText = `PR #${pr.number}`
-      const prNumberIndex = String(pr.number).indexOf(numericQuery)
-      if (prNumberIndex !== -1) {
-        results.push(
-          makeResult(worktree.id, 'pr', {
-            supportingText: {
-              labelKind: 'pr',
-              text: prText,
-              matchRange: {
-                start: 'PR #'.length + prNumberIndex,
-                end: 'PR #'.length + prNumberIndex + numericQuery.length
-              }
-            }
-          })
-        )
-        continue
-      }
-
-      const prTitleIndex = pr.title.toLowerCase().indexOf(q)
-      if (prTitleIndex !== -1) {
-        results.push(
-          makeResult(worktree.id, 'pr', {
-            supportingText: {
-              labelKind: 'pr',
-              text: pr.title,
-              matchRange: { start: prTitleIndex, end: prTitleIndex + q.length }
-            }
-          })
-        )
-        continue
-      }
-    } else if (worktree.linkedPR != null) {
-      const prText = `PR #${worktree.linkedPR}`
-      const prNumberIndex = String(worktree.linkedPR).indexOf(numericQuery)
-      if (prNumberIndex !== -1) {
-        results.push(
-          makeResult(worktree.id, 'pr', {
-            supportingText: {
-              labelKind: 'pr',
-              text: prText,
-              matchRange: {
-                start: 'PR #'.length + prNumberIndex,
-                end: 'PR #'.length + prNumberIndex + numericQuery.length
-              }
-            }
-          })
-        )
-        continue
-      }
-    }
-
-    if (worktree.linkedIssue == null) {
-      continue
-    }
-
-    const issueText = `Issue #${worktree.linkedIssue}`
-    const issueNumberIndex = String(worktree.linkedIssue).indexOf(numericQuery)
-    if (issueNumberIndex !== -1) {
-      results.push(
-        makeResult(worktree.id, 'issue', {
-          supportingText: {
-            labelKind: 'issue',
-            text: issueText,
-            matchRange: {
-              start: 'Issue #'.length + issueNumberIndex,
-              end: 'Issue #'.length + issueNumberIndex + numericQuery.length
-            }
-          }
-        })
-      )
-      continue
-    }
-
-    const issueKey = repo
-      ? getIssueCacheKey(
-          repo.path,
-          repo.id,
-          worktree.linkedIssue,
-          undefined,
-          repo.connectionId,
-          repo.executionHostId
-        )
-      : ''
-    const issue = issueKey && issueCache ? issueCache[issueKey]?.data : undefined
-    if (!issue?.title) {
-      continue
-    }
-
-    const issueTitleIndex = issue.title.toLowerCase().indexOf(q)
-    if (issueTitleIndex !== -1) {
-      results.push(
-        makeResult(worktree.id, 'issue', {
-          supportingText: {
-            labelKind: 'issue',
-            text: issue.title,
-            matchRange: { start: issueTitleIndex, end: issueTitleIndex + q.length }
-          }
-        })
-      )
+    const match = matchPaletteDocument({
+      document,
+      tokens: prepared.tokens,
+      normalizedQuery: prepared.normalized
+    })
+    if (match) {
+      results.push(toWorktreePaletteSearchResult(worktree.id, match, worktree.hostId))
     }
   }
-
   return results
 }
+
+/** Convenience entry point that prepares documents inline. */
+export function searchWorktrees(
+  worktrees: readonly Worktree[],
+  query: string,
+  repoMap: ReadonlyMap<string, Repo>,
+  sources: Omit<WorktreePaletteDocumentSources, 'repoMap'> = {}
+): PaletteSearchResult[] {
+  const documentSources: WorktreePaletteDocumentSources = { ...sources, repoMap }
+  return searchWorktreeDocuments({
+    worktrees,
+    query,
+    documents: buildWorktreePaletteDocuments(worktrees, documentSources),
+    repoMap,
+    repoMapByHostIdentity: sources.repoMapByHostIdentity,
+    checksReviewByWorktree: sources.checksReviewByWorktree
+  })
+}
+
+export type { IssueCacheEntry, PRCacheEntry }

@@ -5,7 +5,9 @@ import { cn } from '@/lib/utils'
 import { translate } from '@/i18n/i18n'
 import { getVisibleAutomationSetupDecision } from './automation-setup-decision'
 import type { AutomationCreateTarget, AutomationDraft } from './AutomationEditorDialog'
-import type { OrcaHooks, ProjectHostSetup, Repo } from '../../../../shared/types'
+import type { OrcaHooks } from '../../../../shared/orca-yaml-hook-types'
+import type { ProjectHostSetup } from '../../../../shared/project-types'
+import type { Repo } from '../../../../shared/repo-types'
 
 type AutomationSetupDecisionFieldProps = {
   createTarget: AutomationCreateTarget

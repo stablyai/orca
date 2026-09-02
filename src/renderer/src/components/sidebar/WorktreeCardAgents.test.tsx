@@ -1,5 +1,3 @@
-/* eslint-disable max-lines -- Why: this suite shares a broad mocked sidebar
-   harness across compact/full mode, lineage, and image-note cases. */
 import { renderToStaticMarkup } from 'react-dom/server'
 import type { ReactNode } from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
@@ -116,7 +114,7 @@ vi.mock('./useWorktreeAgentRows', () => ({
   useWorktreeAgentRows: vi.fn(() => mockAgents)
 }))
 
-vi.mock('@/components/dashboard/useNow', () => ({
+vi.mock('@/hooks/use-now', () => ({
   useNow: vi.fn(() => 2000)
 }))
 
@@ -357,6 +355,28 @@ describe('WorktreeCardAgents', () => {
 
     expect(markup).toContain('Collapsed child')
     expect(markup).not.toContain('Prompt cache expires')
+  })
+
+  it('does not repeat a subagent role used as its compact primary label', async () => {
+    const { CompactAgentRow } = await import('./worktree-card-compact-agents')
+
+    const markup = renderToStaticMarkup(
+      <CompactAgentRow
+        agent={
+          mockAgent({
+            agentType: 'reviewer',
+            rowSource: 'subagent',
+            startedAt: 1000,
+            prompt: 'reviewer'
+          }) as DashboardAgentRowData
+        }
+        now={2000}
+        onActivate={vi.fn()}
+      />
+    )
+
+    expect(markup).toContain('reviewer')
+    expect(markup).not.toContain(' - Reviewer')
   })
 
   it('marks only the focused agent row', async () => {
@@ -751,7 +771,9 @@ describe('WorktreeCardAgents', () => {
     const markup = renderToStaticMarkup(<WorktreeCardAgents worktreeId="wt-1" />)
     const iconTitles = [...markup.matchAll(/title="([^"]+)"/g)].map((match) => match[1])
 
+    // Variety icons stay identity-free; the state label belongs to the shared tooltip.
     expect(iconTitles).toEqual([])
+    expect(markup).toContain('>Working<')
     expect(markup).not.toContain('>5 working<')
     expect(markup).toContain('>+2<')
   })

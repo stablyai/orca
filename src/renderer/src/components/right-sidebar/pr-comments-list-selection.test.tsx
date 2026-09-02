@@ -1,58 +1,86 @@
 // @vitest-environment happy-dom
 
-import { act, type ReactNode } from 'react'
+globalThis.IS_REACT_ACT_ENVIRONMENT = true
+
+import { act, StrictMode, Suspense, type ReactNode } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { TooltipProvider } from '@/components/ui/tooltip'
 
-vi.mock('@/components/ui/dropdown-menu', () => ({
-  DropdownMenu: ({ children }: { children: ReactNode }) => <>{children}</>,
-  DropdownMenuContent: ({ children }: { children: ReactNode }) => <div>{children}</div>,
-  DropdownMenuLabel: ({ children }: { children: ReactNode }) => <div>{children}</div>,
-  DropdownMenuItem: ({
-    children,
-    onSelect
-  }: {
-    children: ReactNode
-    onSelect?: (event: Event) => void
-  }) => (
-    <button
-      type="button"
-      role="menuitem"
-      onClick={() => onSelect?.({ preventDefault: () => {} } as unknown as Event)}
-    >
-      {children}
-    </button>
-  ),
-  DropdownMenuRadioGroup: ({ children }: { children: ReactNode }) => <>{children}</>,
-  DropdownMenuRadioItem: ({
-    children,
-    onSelect
-  }: {
-    children: ReactNode
-    onSelect?: (event: Event) => void
-  }) => (
-    <button
-      type="button"
-      role="menuitemradio"
-      onClick={() => onSelect?.({ preventDefault: () => {} } as unknown as Event)}
-    >
-      {children}
-    </button>
-  ),
-  DropdownMenuSeparator: () => <hr />,
-  DropdownMenuTrigger: ({ children }: { children: ReactNode }) => <>{children}</>
-}))
-import type { PRComment } from '../../../../shared/types'
-import type { PRCommentGroup } from '@/lib/pr-comment-groups'
-import { clearPRCommentsListSelection } from './pr-comments-list-selection'
-import { PRCommentsList } from './checks-panel-content'
+vi.mock('@/components/ui/dropdown-menu', () => {
+  // Radix keeps the selection callback on the group, so the mocked items need it too.
+  let onRadioValueChange: ((value: string) => void) | undefined
+  return {
+    DropdownMenu: ({ children }: { children: ReactNode }) => <>{children}</>,
+    DropdownMenuContent: ({ children }: { children: ReactNode }) => <div>{children}</div>,
+    DropdownMenuLabel: ({ children }: { children: ReactNode }) => <div>{children}</div>,
+    DropdownMenuItem: ({
+      children,
+      onSelect
+    }: {
+      children: ReactNode
+      onSelect?: (event: Event) => void
+    }) => (
+      <button
+        type="button"
+        role="menuitem"
+        onClick={() => onSelect?.({ preventDefault: () => {} } as unknown as Event)}
+      >
+        {children}
+      </button>
+    ),
+    DropdownMenuRadioGroup: ({
+      children,
+      onValueChange
+    }: {
+      children: ReactNode
+      onValueChange?: (value: string) => void
+    }) => {
+      onRadioValueChange = onValueChange
+      return <>{children}</>
+    },
+    DropdownMenuRadioItem: ({
+      children,
+      value,
+      onSelect
+    }: {
+      children: ReactNode
+      value?: string
+      onSelect?: (event: Event) => void
+    }) => (
+      <button
+        type="button"
+        role="menuitemradio"
+        onClick={() => {
+          onSelect?.({ preventDefault: () => {} } as unknown as Event)
+          if (value !== undefined) {
+            onRadioValueChange?.(value)
+          }
+        }}
+      >
+        {children}
+      </button>
+    ),
+    DropdownMenuSeparator: () => <hr />,
+    DropdownMenuTrigger: ({ children }: { children: ReactNode }) => <>{children}</>
+  }
+})
+import type { PRComment } from '../../../../shared/github/comment-types'
+import type { PRCommentGroup } from '../../../../shared/pr-comment-groups'
+import {
+  MAX_PERSISTED_PR_COMMENTS_LIST_SELECTIONS,
+  clearPRCommentsListSelectionsForTests,
+  getPRCommentsListSelectionCountForTests,
+  seedPRCommentsListSelectionForTests,
+  type PRCommentsListSelectionClearRequest
+} from './pr-comments-list-selection'
+import { PRCommentsList } from './checks-panel/comments-list'
 
 let container: HTMLDivElement
 let root: Root
 
 beforeEach(() => {
-  clearPRCommentsListSelection('review:42')
+  clearPRCommentsListSelectionsForTests()
   container = document.createElement('div')
   document.body.appendChild(container)
   root = createRoot(container)
@@ -63,6 +91,7 @@ afterEach(() => {
     root.unmount()
   })
   container.remove()
+  clearPRCommentsListSelectionsForTests()
 })
 
 function comment(overrides: Partial<PRComment>): PRComment {
@@ -79,18 +108,48 @@ function comment(overrides: Partial<PRComment>): PRComment {
 
 function renderList(props: {
   comments: PRComment[]
+  contextKey?: string
+  strictMode?: boolean
   onResolveSelectedCommentsWithAI?: (groups: PRCommentGroup[]) => void
+  clearRequest?: PRCommentsListSelectionClearRequest | null
 }): void {
+  const list = (
+    <TooltipProvider>
+      <PRCommentsList
+        comments={props.comments}
+        commentsLoading={false}
+        selectionContextKey={props.contextKey ?? 'review:42'}
+        selectionClearRequest={props.clearRequest}
+        onResolveSelectedCommentsWithAI={props.onResolveSelectedCommentsWithAI ?? vi.fn()}
+      />
+    </TooltipProvider>
+  )
+  act(() => {
+    root.render(props.strictMode ? <StrictMode>{list}</StrictMode> : list)
+  })
+}
+
+const neverSettles = new Promise<void>(() => {})
+
+function SuspendForever(): ReactNode {
+  throw neverSettles
+}
+
+function renderAbandonedList(comments: PRComment[], contextKey: string): void {
   act(() => {
     root.render(
-      <TooltipProvider>
-        <PRCommentsList
-          comments={props.comments}
-          commentsLoading={false}
-          selectionContextKey="review:42"
-          onResolveSelectedCommentsWithAI={props.onResolveSelectedCommentsWithAI ?? vi.fn()}
-        />
-      </TooltipProvider>
+      <Suspense fallback={<div>Loading review</div>}>
+        <TooltipProvider>
+          <PRCommentsList
+            key={`abandoned:${contextKey}`}
+            comments={comments}
+            commentsLoading={false}
+            selectionContextKey={contextKey}
+            onResolveSelectedCommentsWithAI={vi.fn()}
+          />
+          <SuspendForever />
+        </TooltipProvider>
+      </Suspense>
     )
   })
 }
@@ -125,6 +184,24 @@ function hasButton(label: string): boolean {
     (candidate) =>
       candidate.textContent?.includes(label) ||
       candidate.getAttribute('aria-label')?.includes(label)
+  )
+}
+
+function selectDisplayMode(label: string): void {
+  const item = [...container.querySelectorAll('[role="menuitemradio"]')].find(
+    (candidate) => candidate.textContent === label
+  )
+  if (!item) {
+    throw new Error(`Display mode not found: ${label}`)
+  }
+  act(() => {
+    item.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+  })
+}
+
+function renderedGroupOrder(labels: readonly string[]): string[] {
+  return [...container.querySelectorAll('[data-testid="pr-comment-group"]')].map(
+    (row) => labels.find((label) => row.textContent?.includes(label)) ?? '<unmatched>'
   )
 }
 
@@ -217,12 +294,20 @@ describe('PRCommentsList comment resolution selection', () => {
   it('lets a user queue one eligible comment thread for the agent from the visible row action', () => {
     const onResolveSelectedCommentsWithAI = vi.fn()
     renderList({
+      // Why: distinct timestamps pin thread-1 to the first row under the newest-first grouped order.
       comments: [
-        comment({ id: 1, threadId: 'thread-1', path: 'src/a.ts', isResolved: false }),
+        comment({
+          id: 1,
+          createdAt: '2026-05-15T00:00:00Z',
+          threadId: 'thread-1',
+          path: 'src/a.ts',
+          isResolved: false
+        }),
         comment({
           id: 2,
           author: 'bob',
           body: 'Second thread.',
+          createdAt: '2026-05-14T00:00:00Z',
           threadId: 'thread-2',
           path: 'src/b.ts',
           isResolved: false
@@ -297,6 +382,87 @@ describe('PRCommentsList comment resolution selection', () => {
     expect(container.querySelector('button[role="checkbox"]')).toBeNull()
   })
 
+  it('drops an empty selection from the persisted context cache', () => {
+    renderList({
+      comments: [comment({ id: 1, threadId: 'thread-1', path: 'src/a.ts', isResolved: false })]
+    })
+    clickButton('Queue for agent')
+
+    const selectedCheckbox = container.querySelector<HTMLButtonElement>(
+      'button[role="checkbox"][aria-checked="true"]'
+    )
+    expect(selectedCheckbox).not.toBeNull()
+    act(() => {
+      selectedCheckbox?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    })
+
+    expect(getPRCommentsListSelectionCountForTests()).toBe(0)
+  })
+
+  it('clears sent standalone bot comments from the queue when the parent confirms launch', () => {
+    const comments = [
+      comment({
+        id: 1,
+        author: 'coderabbitai',
+        body: 'Review Change Stack. No actionable comments were generated.',
+        isBot: true
+      })
+    ]
+    renderList({ comments })
+    clickButton('Queue for agent')
+
+    expect(hasButton('Send 1 queued comments to AI')).toBe(true)
+
+    renderList({
+      comments,
+      clearRequest: { contextKey: 'review:42', token: 1 }
+    })
+
+    expect(hasButton('Send 1 queued comments to AI')).toBe(false)
+    expect(container.querySelector('button[role="checkbox"]')).toBeNull()
+  })
+
+  it('keeps queued comments selected when clearRequest is null', () => {
+    const comments = [comment({ id: 1, threadId: 'thread-1', path: 'src/a.ts', isResolved: false })]
+    renderList({ comments })
+    clickButton('Queue for agent')
+
+    expect(hasButton('Send 1 queued comments to AI')).toBe(true)
+
+    renderList({ comments, clearRequest: null })
+
+    expect(hasButton('Send 1 queued comments to AI')).toBe(true)
+  })
+
+  it('keeps a clear request pending until its review context is mounted', () => {
+    const queuedComments = [
+      comment({
+        id: 1,
+        author: 'coderabbitai',
+        body: 'Review Change Stack. No actionable comments were generated.',
+        isBot: true
+      })
+    ]
+    renderList({ comments: queuedComments, contextKey: 'review:42' })
+    clickButton('Queue for agent')
+
+    expect(hasButton('Send 1 queued comments to AI')).toBe(true)
+
+    renderList({
+      comments: [comment({ id: 2, body: 'Other review comment.' })],
+      contextKey: 'review:99',
+      clearRequest: { contextKey: 'review:42', token: 1 }
+    })
+    renderList({
+      comments: queuedComments,
+      contextKey: 'review:42',
+      clearRequest: { contextKey: 'review:42', token: 1 }
+    })
+
+    expect(hasButton('Send 1 queued comments to AI')).toBe(false)
+    expect(container.querySelector('button[role="checkbox"]')).toBeNull()
+  })
+
   it('exits selection mode when refresh leaves no eligible loaded threads', () => {
     renderList({
       comments: [comment({ id: 1, threadId: 'thread-1', path: 'src/a.ts', isResolved: false })]
@@ -308,5 +474,133 @@ describe('PRCommentsList comment resolution selection', () => {
     })
 
     expect(hasButton('Send 1 queued comments to AI')).toBe(false)
+    expect(getPRCommentsListSelectionCountForTests()).toBe(0)
+  })
+
+  it('keeps GitHub and GitLab review selections isolated under Strict Mode replay', () => {
+    const comments = [comment({ id: 1, threadId: 'thread-1', path: 'src/a.ts' })]
+    const githubContext = 'local::repo::branch::github::42::github-head'
+    const gitlabContext = 'local::repo::branch::gitlab::42::gitlab-head'
+
+    renderList({ comments, contextKey: githubContext, strictMode: true })
+    clickButton('Queue for agent')
+    renderList({ comments, contextKey: gitlabContext, strictMode: true })
+    clickButton('Queue for agent')
+
+    expect(getPRCommentsListSelectionCountForTests()).toBe(2)
+    renderList({ comments, contextKey: githubContext, strictMode: true })
+    expect(hasButton('Send 1 queued comments to AI')).toBe(true)
+    renderList({ comments, contextKey: gitlabContext, strictMode: true })
+    expect(hasButton('Send 1 queued comments to AI')).toBe(true)
+  })
+
+  it('does not refresh LRU recency for an abandoned Suspense render', () => {
+    const comments = [comment({ id: 1, threadId: 'thread-1', path: 'src/a.ts' })]
+    const queuedGroupIds = ['thread:thread-1'] as const
+    const seedContext = (contextKey: string): void => {
+      seedPRCommentsListSelectionForTests(contextKey, queuedGroupIds)
+    }
+
+    seedContext('review:oldest')
+    for (let i = 0; i < MAX_PERSISTED_PR_COMMENTS_LIST_SELECTIONS - 1; i += 1) {
+      seedContext(`review:recent-${i}`)
+    }
+
+    renderAbandonedList(comments, 'review:oldest')
+    expect(container.textContent).toContain('Loading review')
+    seedContext('review:new')
+
+    renderList({ comments, contextKey: 'review:oldest' })
+    expect(hasButton('Send 1 queued comments to AI')).toBe(false)
+    renderList({ comments, contextKey: 'review:recent-0' })
+    expect(hasButton('Send 1 queued comments to AI')).toBe(true)
+  })
+
+  it('bounds persisted review contexts while retaining recently restored selections', () => {
+    const comments = [comment({ id: 1, threadId: 'thread-1', path: 'src/a.ts', isResolved: false })]
+    const queuedGroupIds = ['thread:thread-1'] as const
+    const seedContext = (contextKey: string): void => {
+      seedPRCommentsListSelectionForTests(contextKey, queuedGroupIds)
+    }
+
+    seedContext('review:keep')
+    for (let i = 0; i < MAX_PERSISTED_PR_COMMENTS_LIST_SELECTIONS - 1; i += 1) {
+      seedContext(`review:stale-${i}`)
+    }
+
+    // Why: committed remount must refresh LRU recency for the restored context.
+    renderList({ comments, contextKey: 'review:keep' })
+    expect(hasButton('Send 1 queued comments to AI')).toBe(true)
+
+    seedContext('review:new')
+
+    expect(getPRCommentsListSelectionCountForTests()).toBe(
+      MAX_PERSISTED_PR_COMMENTS_LIST_SELECTIONS
+    )
+
+    renderList({ comments, contextKey: 'review:stale-0' })
+    expect(hasButton('Send 1 queued comments to AI')).toBe(false)
+
+    renderList({ comments, contextKey: 'review:keep' })
+    expect(hasButton('Send 1 queued comments to AI')).toBe(true)
+  })
+})
+
+describe('PRCommentsList comment ordering', () => {
+  const labels = ['Oldest note.', 'Middle note.', 'Newest note.']
+
+  it('reads newest-first in grouped mode and oldest-first in timeline mode', () => {
+    renderList({
+      comments: [
+        comment({ id: 1, body: 'Middle note.', createdAt: '2026-05-14T00:00:00Z' }),
+        comment({ id: 2, body: 'Newest note.', createdAt: '2026-05-15T00:00:00Z' }),
+        comment({ id: 3, body: 'Oldest note.', createdAt: '2026-05-13T00:00:00Z' })
+      ]
+    })
+
+    expect(renderedGroupOrder(labels)).toEqual(['Newest note.', 'Middle note.', 'Oldest note.'])
+
+    selectDisplayMode('Timeline')
+
+    expect(renderedGroupOrder(labels)).toEqual(['Oldest note.', 'Middle note.', 'Newest note.'])
+  })
+
+  it('ranks a replied-to thread by its fresh reply in grouped mode only', () => {
+    const threadLabels = ['Replied thread.', 'Quiet thread.']
+    renderList({
+      comments: [
+        comment({
+          id: 1,
+          body: 'Replied thread.',
+          createdAt: '2026-05-14T00:00:00Z',
+          threadId: 'thread-1',
+          path: 'src/a.ts',
+          isResolved: false
+        }),
+        comment({
+          id: 2,
+          body: 'Quiet thread.',
+          createdAt: '2026-05-13T00:00:00Z',
+          threadId: 'thread-2',
+          path: 'src/b.ts',
+          isResolved: false
+        }),
+        comment({
+          id: 3,
+          body: 'Fresh reply.',
+          createdAt: '2026-05-16T00:00:00Z',
+          threadId: 'thread-1',
+          path: 'src/a.ts',
+          isResolved: false
+        })
+      ]
+    })
+
+    expect(renderedGroupOrder(threadLabels)).toEqual(['Replied thread.', 'Quiet thread.'])
+
+    // Why: timeline ranks by when a thread started, so the quiet older root leads again.
+    selectDisplayMode('Timeline')
+
+    expect(renderedGroupOrder(threadLabels)).toEqual(['Quiet thread.', 'Replied thread.'])
   })
 })

@@ -506,6 +506,11 @@ async function openPairingUrlInSimulator(pairingUrl, deviceUdid, runtime, worktr
   await execFileAsync('xcrun', ['simctl', 'openurl', deviceUdid, pairingUrl])
   await new Promise((resolve) => setTimeout(resolve, 2000))
 
+  // Why: the first deep link can arrive while the freshly opened Expo app is
+  // still mounting, so resend it once the JS router is ready to receive URLs.
+  await execFileAsync('xcrun', ['simctl', 'openurl', deviceUdid, pairingUrl])
+  await new Promise((resolve) => setTimeout(resolve, 2000))
+
   // Why: the mobile app intentionally asks for a trust confirmation before
   // saving a host. This lands on the Pair button on current iPhone simulators.
   await orca(['emulator', 'tap', '0.5', '0.56', '--worktree', worktree, '--json'], {

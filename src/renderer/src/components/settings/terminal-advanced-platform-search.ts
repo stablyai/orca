@@ -62,7 +62,9 @@ export const getTerminalMacOptionSearchEntries = createLocalizedCatalog(() => [
         'international'
       ),
       ...translateSearchKeyword('auto.components.settings.terminal.search.fae142a354', 'readline'),
-      ...translateSearchKeyword('auto.components.settings.terminal.search.82b63d07fe', 'ghostty')
+      // Why: product name stays untranslated so search matches "Ghostty".
+      'Ghostty',
+      'ghostty'
     ]
   }
 ])
@@ -99,7 +101,9 @@ export const getTerminalGhosttyImportSearchEntries = createLocalizedCatalog(() =
       'One-time import of supported Ghostty terminal settings.'
     ),
     keywords: [
-      ...translateSearchKeyword('auto.components.settings.terminal.search.82b63d07fe', 'ghostty'),
+      // Why: product name stays untranslated so search matches "Ghostty".
+      'Ghostty',
+      'ghostty',
       ...translateSearchKeyword('auto.components.settings.terminal.search.fd752b3cac', 'import'),
       ...translateSearchKeyword('auto.components.settings.terminal.search.f66a7cf715', 'terminal'),
       ...translateSearchKeyword('auto.components.settings.terminal.search.2ade3ea490', 'config'),

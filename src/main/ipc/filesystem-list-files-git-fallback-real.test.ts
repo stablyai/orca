@@ -1,17 +1,19 @@
-import { execFile as execFileCallback } from 'node:child_process'
+import { execFile as execFileCallback, spawn, type SpawnOptions } from 'node:child_process'
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { promisify } from 'node:util'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Store } from '../persistence'
+import type * as GitRunner from '../git/runner'
 
-const { checkRgAvailableMock } = vi.hoisted(() => ({
-  checkRgAvailableMock: vi.fn()
+const { wslAwareSpawnMock } = vi.hoisted(() => ({
+  wslAwareSpawnMock: vi.fn()
 }))
 
-vi.mock('./rg-availability', () => ({
-  checkRgAvailable: checkRgAvailableMock
+vi.mock('../git/runner', async (importOriginal) => ({
+  ...(await importOriginal<typeof GitRunner>()),
+  wslAwareSpawn: wslAwareSpawnMock
 }))
 
 import { listQuickOpenFiles } from './filesystem-list-files'
@@ -50,6 +52,16 @@ async function initRepo(repoPath: string): Promise<void> {
 describe('filesystem-list-files real git fallback', () => {
   let tempDir: string | null = null
 
+  beforeEach(() => {
+    wslAwareSpawnMock.mockImplementation(
+      (_command: string, _args: string[], options: SpawnOptions & { cwd?: string }) =>
+        spawn('orca-definitely-missing-rg', [], {
+          cwd: options.cwd,
+          stdio: options.stdio
+        })
+    )
+  })
+
   afterEach(async () => {
     if (tempDir) {
       await rm(tempDir, { recursive: true, force: true })
@@ -59,7 +71,6 @@ describe('filesystem-list-files real git fallback', () => {
   })
 
   it('returns real paths for UTF-8 filenames from the git fallback', async () => {
-    checkRgAvailableMock.mockResolvedValue(false)
     tempDir = await mkdtemp(join(tmpdir(), 'orca-quick-open-git-fallback-'))
     const repoPath = join(tempDir, 'repo')
     await execFile('git', ['init', '-q', repoPath])
@@ -71,7 +82,6 @@ describe('filesystem-list-files real git fallback', () => {
   })
 
   it('fills nested git repos from gitlink and untracked embedded-repo entries', async () => {
-    checkRgAvailableMock.mockResolvedValue(false)
     tempDir = await mkdtemp(join(tmpdir(), 'orca-quick-open-monorepo-'))
     const repoPath = join(tempDir, 'parent')
     const appPath = join(repoPath, 'packages', 'app')
@@ -117,7 +127,6 @@ describe('filesystem-list-files real git fallback', () => {
   })
 
   it('walks a non-git root instead of returning an empty git fallback result', async () => {
-    checkRgAvailableMock.mockResolvedValue(false)
     tempDir = await mkdtemp(join(tmpdir(), 'orca-quick-open-non-git-'))
     await writeRel(tempDir, 'folder/file.ts')
 
@@ -126,8 +135,18 @@ describe('filesystem-list-files real git fallback', () => {
     ])
   })
 
+  it('bounds a non-git readdir fallback without treating the limit as an error', async () => {
+    tempDir = await mkdtemp(join(tmpdir(), 'orca-quick-open-bounded-non-git-'))
+    await writeRel(tempDir, 'a.ts')
+    await writeRel(tempDir, 'b.ts')
+
+    const files = await listQuickOpenFiles(tempDir, makeStore(tempDir), undefined, undefined, 1)
+
+    expect(files).toHaveLength(1)
+    expect(['a.ts', 'b.ts']).toContain(files[0])
+  })
+
   it('rejects abnormal git ls-files failures instead of resolving an empty list', async () => {
-    checkRgAvailableMock.mockResolvedValue(false)
     tempDir = await mkdtemp(join(tmpdir(), 'orca-quick-open-bad-index-'))
     const repoPath = join(tempDir, 'repo')
     await initRepo(repoPath)
@@ -139,7 +158,6 @@ describe('filesystem-list-files real git fallback', () => {
   })
 
   it('resolves an empty repo as an empty list', async () => {
-    checkRgAvailableMock.mockResolvedValue(false)
     tempDir = await mkdtemp(join(tmpdir(), 'orca-quick-open-empty-repo-'))
     const repoPath = join(tempDir, 'repo')
     await initRepo(repoPath)

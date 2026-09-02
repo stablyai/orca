@@ -6,7 +6,7 @@ import {
   getCheckDetailsPromptKey,
   truncateLogTailForPrompt
 } from './pr-checks-fix-prompt'
-import type { PRCheckDetail, PRCheckRunDetails } from '../../../shared/types'
+import type { PRCheckDetail, PRCheckRunDetails } from '../../../shared/github/check-types'
 
 const failingCheck: PRCheckDetail = {
   name: 'unit',
@@ -32,6 +32,27 @@ function buildPrompt(overrides: {
 
 afterEach(() => {
   vi.restoreAllMocks()
+})
+
+describe('getCheckDetailsPromptKey', () => {
+  // Regression for #7732: a GitLab job with no web_url would otherwise key on its
+  // list index, so its freshly loaded log would never reach the fix prompt.
+  it('keys GitLab jobs by job id ahead of the index fallback', () => {
+    const manualJob: PRCheckDetail = {
+      name: 'deploy: production',
+      status: 'completed',
+      conclusion: 'failure',
+      url: null,
+      gitlabJobId: 987654
+    }
+
+    expect(getCheckDetailsPromptKey(manualJob, 0)).toBe('gitlab-job:987654:deploy: production')
+    expect(getCheckDetailsPromptKey(manualJob, 3)).toBe(getCheckDetailsPromptKey(manualJob, 0))
+  })
+
+  it('leaves GitHub check identities untouched', () => {
+    expect(getCheckDetailsPromptKey(failingCheck, 0)).toBe('check-run:11')
+  })
 })
 
 describe('buildFixBrokenChecksPrompt', () => {

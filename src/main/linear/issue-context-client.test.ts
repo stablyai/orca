@@ -6,13 +6,22 @@ const getStatus = vi.fn()
 const isAuthError = vi.fn()
 const clearToken = vi.fn()
 
-vi.mock('./client', () => ({
+vi.mock('./linear-request-concurrency', () => ({
   acquire: vi.fn().mockResolvedValue(undefined),
-  release: vi.fn(),
+  release: vi.fn()
+}))
+
+vi.mock('./linear-token-store', () => ({
+  clearToken: (...args: unknown[]) => clearToken(...args)
+}))
+
+vi.mock('./client', () => ({
   getClients: (...args: unknown[]) => getClients(...args),
   getStatus: (...args: unknown[]) => getStatus(...args),
   isAuthError: (...args: unknown[]) => isAuthError(...args),
-  clearToken: (...args: unknown[]) => clearToken(...args)
+  // The signed public-file-url client reuses the same underlying raw client, so
+  // body reads route through the entry's rawRequest spy in these tests.
+  getPublicFileUrlClient: (entry: LinearClientForWorkspace) => entry.client
 }))
 
 function makeEntry(options: {

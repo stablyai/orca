@@ -3,7 +3,7 @@ import type {
   PRCheckJob,
   PRCheckRunDetails,
   PRCheckStep
-} from '../../../../src/shared/types'
+} from '../../../../src/shared/github/check-types'
 
 // Pure mapping from the github.prCheckDetails payload to the rows the mobile
 // expanded check detail renders. No React/native imports so it stays unit-testable

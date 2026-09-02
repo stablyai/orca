@@ -85,7 +85,9 @@ export const getTerminalPaneInteractionSearchEntries = createLocalizedCatalog(()
       ...translateSearchKeyword('auto.components.settings.terminal.search.ea364ce6e4', 'mouse'),
       ...translateSearchKeyword('auto.components.settings.terminal.search.d1fa00a9cb', 'hover'),
       ...translateSearchKeyword('auto.components.settings.terminal.search.846a7a1204', 'pane'),
-      ...translateSearchKeyword('auto.components.settings.terminal.search.82b63d07fe', 'ghostty'),
+      // Why: product name stays untranslated so search matches "Ghostty".
+      'Ghostty',
+      'ghostty',
       ...translateSearchKeyword('auto.components.settings.terminal.search.f036794286', 'active')
     ]
   },

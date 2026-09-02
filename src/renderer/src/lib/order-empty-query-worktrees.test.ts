@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { Worktree } from '../../../shared/types'
+import type { Worktree } from '../../../shared/worktree/types'
 import { orderEmptyQueryWorktrees } from './order-empty-query-worktrees'
 
 function wt(overrides: Partial<Worktree> & { id: string; displayName: string }): Worktree {
@@ -70,6 +70,24 @@ describe('orderEmptyQueryWorktrees', () => {
     expect(result.switchableWorktreesForRows.map((w) => w.id)).toEqual(['a', 'b'])
   })
 
+  it('does not crash the switcher when a visible worktree has no displayName (crash 99657ab1)', () => {
+    // displayName is typed `string` but arrives undefined for persisted/discovered
+    // worktrees; the bare localeCompare tie-break used to throw and take down Cmd+J.
+    const named = wt({ id: 'a', displayName: 'apple', lastActivityAt: 100 })
+    const unnamed = wt({
+      id: 'b',
+      displayName: undefined as unknown as string,
+      lastActivityAt: 100
+    })
+    expect(() =>
+      orderEmptyQueryWorktrees({
+        visibleWorktrees: [named, unnamed],
+        activeWorktreeId: null,
+        lastVisitedAtByWorktreeId: {}
+      })
+    ).not.toThrow()
+  })
+
   it('excludes current worktree from rows but includes it in state list', () => {
     const cur = wt({ id: 'cur', displayName: 'cur' })
     const other = wt({ id: 'other', displayName: 'other' })
@@ -80,6 +98,20 @@ describe('orderEmptyQueryWorktrees', () => {
     })
     expect(result.switchableWorktreesForRows.map((w) => w.id)).toEqual(['other'])
     expect(result.visibleWorktreesForState.map((w) => w.id)).toEqual(['cur', 'other'])
+  })
+
+  // Why: `repoId::path` repeats across hosts, so a bare-id filter treated the SSH twin as
+  // current too and dropped it from the rows — the host it lived on became unreachable.
+  it('keeps the same-id worktree on the other host switchable', () => {
+    const local = wt({ id: 'shared', displayName: 'local', hostId: 'local' })
+    const ssh = wt({ id: 'shared', displayName: 'ssh', hostId: 'ssh:box' })
+    const result = orderEmptyQueryWorktrees({
+      visibleWorktrees: [local, ssh],
+      activeWorktreeId: 'shared',
+      activeWorkspaceExecutionHostId: 'local',
+      lastVisitedAtByWorktreeId: {}
+    })
+    expect(result.switchableWorktreesForRows.map((w) => w.displayName)).toEqual(['ssh'])
   })
 
   it('returns empty rows but non-empty state when only the current worktree is visible', () => {

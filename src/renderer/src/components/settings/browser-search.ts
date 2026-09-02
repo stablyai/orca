@@ -1,8 +1,22 @@
 import type { SettingsSearchEntry } from './settings-search'
 import { translate } from '@/i18n/i18n'
 import { translateSearchKeyword } from './settings-search-keywords'
+import {
+  getBrowserLinkRoutingDescription,
+  getTerminalLinkActionsDescription,
+  getLinkRoutingModifierDescription,
+  getLinkRoutingModifierTitle
+} from './browser-link-routing-copy'
+import {
+  getBrowserClientHostedRemoteDescription,
+  getBrowserClientHostedRemoteTitle
+} from './browser-client-hosted-remote-copy'
+import {
+  getBrowserSshWorkspaceRoutingDescription,
+  getBrowserSshWorkspaceRoutingTitle
+} from './browser-ssh-workspace-routing-copy'
 
-type BrowserShortcutPlatform = {
+export type BrowserShortcutPlatform = {
   isMac: boolean
 }
 
@@ -12,12 +26,36 @@ function getDefaultBrowserShortcutPlatform(): BrowserShortcutPlatform {
   }
 }
 
-export function getBrowserLinkRoutingShortcutLabel(platform: BrowserShortcutPlatform): string {
-  return platform.isMac ? '⇧⌘-click' : 'Shift+Ctrl+click'
-}
-
-export function getBrowserLinkRoutingDescription(platform: BrowserShortcutPlatform): string {
-  return `Open http(s) links in Orca's built-in browser — from the terminal, markdown, and the editor. ${getBrowserLinkRoutingShortcutLabel(platform)} always uses your system browser.`
+export function getTerminalLinkActionSearchKeywords(platform: BrowserShortcutPlatform): string[] {
+  return [
+    ...translateSearchKeyword('auto.components.settings.browser.search.2d2d995c58', 'browser'),
+    ...translateSearchKeyword('auto.components.settings.browser.search.bea27bac4b', 'links'),
+    ...translateSearchKeyword(
+      'auto.components.settings.browser.search.terminalLinkActions.terminal',
+      'terminal'
+    ),
+    ...translateSearchKeyword(
+      'auto.components.settings.browser.search.terminalLinkActions.click',
+      'click'
+    ),
+    ...translateSearchKeyword(
+      'auto.components.settings.browser.search.terminalLinkActions.actions',
+      'actions'
+    ),
+    ...translateSearchKeyword(
+      'auto.components.settings.browser.search.terminalLinkActions.popover',
+      'popover'
+    ),
+    ...translateSearchKeyword(
+      'auto.components.settings.browser.search.terminalLinkActions.menu',
+      'menu'
+    ),
+    ...translateSearchKeyword(
+      'auto.components.settings.browser.search.terminalLinkActions.disable',
+      'disable'
+    ),
+    platform.isMac ? 'cmd' : 'ctrl'
+  ]
 }
 
 export function getBrowserPaneSearchEntries(
@@ -110,6 +148,46 @@ export function getBrowserPaneSearchEntries(
       ]
     },
     {
+      title: getLinkRoutingModifierTitle(false),
+      description: getLinkRoutingModifierDescription({
+        openLinksInApp: false,
+        isMac: platform.isMac
+      }),
+      keywords: [
+        ...translateSearchKeyword('auto.components.settings.browser.search.2d2d995c58', 'browser'),
+        ...translateSearchKeyword('auto.components.settings.browser.search.bea27bac4b', 'links'),
+        ...translateSearchKeyword('auto.components.settings.browser.search.90425d313c', 'shift'),
+        ...translateSearchKeyword(
+          'auto.components.settings.browser.search.linkRoutingModifier.routing',
+          'routing'
+        ),
+        ...translateSearchKeyword(
+          'auto.components.settings.browser.search.linkRoutingModifier.modifier',
+          'modifier'
+        ),
+        ...translateSearchKeyword(
+          'auto.components.settings.browser.search.linkRoutingModifier.invert',
+          'invert'
+        ),
+        ...translateSearchKeyword(
+          'auto.components.settings.browser.search.linkRoutingModifier.opposite',
+          'opposite'
+        ),
+        // Why: the row renders live copy but this entry is built with openLinksInApp
+        // false, so index the other title too or the row is unfindable by its own text.
+        getLinkRoutingModifierTitle(true),
+        platform.isMac ? 'cmd' : 'ctrl'
+      ]
+    },
+    {
+      title: translate(
+        'auto.components.settings.BrowserTerminalLinkActionsSetting.title',
+        'Show terminal link actions'
+      ),
+      description: getTerminalLinkActionsDescription(platform),
+      keywords: getTerminalLinkActionSearchKeywords(platform)
+    },
+    {
       title: translate(
         'auto.components.settings.browser.search.19ea5607cf',
         'Localhost Worktree Labels'
@@ -148,6 +226,62 @@ export function getBrowserPaneSearchEntries(
         ...translateSearchKeyword('auto.components.settings.browser.search.533a253deb', 'edge'),
         ...translateSearchKeyword('auto.components.settings.browser.search.1c1e097985', 'arc'),
         ...translateSearchKeyword('auto.components.settings.browser.search.7539f6336c', 'profile')
+      ]
+    },
+    // Appended, not inserted: BrowserPane selects these entries by index.
+    {
+      title: getBrowserClientHostedRemoteTitle(),
+      description: getBrowserClientHostedRemoteDescription(),
+      keywords: [
+        ...translateSearchKeyword('auto.components.settings.browser.search.2d2d995c58', 'browser'),
+        ...translateSearchKeyword(
+          'auto.components.settings.browser.search.clientHostedRemote.remote',
+          'remote'
+        ),
+        ...translateSearchKeyword(
+          'auto.components.settings.browser.search.clientHostedRemote.client',
+          'client'
+        ),
+        ...translateSearchKeyword(
+          'auto.components.settings.browser.search.clientHostedRemote.host',
+          'host'
+        ),
+        ...translateSearchKeyword(
+          'auto.components.settings.browser.search.clientHostedRemote.desktop',
+          'desktop'
+        ),
+        ...translateSearchKeyword('auto.components.settings.browser.search.72c58f7792', 'webview'),
+        ...translateSearchKeyword(
+          'auto.components.settings.browser.search.clientHostedRemote.placement',
+          'placement'
+        )
+      ]
+    },
+    {
+      title: getBrowserSshWorkspaceRoutingTitle(),
+      description: getBrowserSshWorkspaceRoutingDescription(),
+      keywords: [
+        ...translateSearchKeyword('auto.components.settings.browser.search.2d2d995c58', 'browser'),
+        ...translateSearchKeyword(
+          'auto.components.settings.browser.search.sshWorkspaceRouting.ssh',
+          'ssh'
+        ),
+        ...translateSearchKeyword(
+          'auto.components.settings.browser.search.sshWorkspaceRouting.proxy',
+          'proxy'
+        ),
+        ...translateSearchKeyword(
+          'auto.components.settings.browser.search.sshWorkspaceRouting.tunnel',
+          'tunnel'
+        ),
+        ...translateSearchKeyword(
+          'auto.components.settings.browser.search.sshWorkspaceRouting.routing',
+          'routing'
+        ),
+        ...translateSearchKeyword(
+          'auto.components.settings.browser.search.sshWorkspaceRouting.network',
+          'network'
+        )
       ]
     }
   ]

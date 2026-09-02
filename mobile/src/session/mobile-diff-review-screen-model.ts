@@ -1,4 +1,4 @@
-import type { DiffComment, MobileDiffReviewState } from '../../../src/shared/types'
+import type { DiffComment, MobileDiffReviewState } from '../../../src/shared/diff-comment-types'
 import type { MobileGitBranchCompareResult } from '../source-control/mobile-branch-compare'
 import type { MobileGitStatusResult } from '../source-control/mobile-git-status'
 import type { MobileDiffLine } from './mobile-diff-lines'
@@ -100,7 +100,7 @@ export function nextReviewIndexAfterMarkReviewed({
   const wrappedIndex = filteredQueue.findIndex(
     (item) => item.key !== currentItemKey && !item.isReviewed
   )
-  const targetIndex = nextIndex >= 0 ? nextIndex : wrappedIndex >= 0 ? wrappedIndex : null
+  const targetIndex = nextIndex !== -1 ? nextIndex : wrappedIndex !== -1 ? wrappedIndex : null
   if (targetIndex === null) {
     return null
   }

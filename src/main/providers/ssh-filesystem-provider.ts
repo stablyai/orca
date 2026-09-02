@@ -1,97 +1,80 @@
 import type { SshChannelMultiplexer } from '../ssh/ssh-channel-multiplexer'
 import { isMethodNotFoundError, readFileViaStream } from '../ssh/ssh-filesystem-stream-reader'
 import { uploadBuffer } from '../ssh/sftp-upload'
-import type { IFilesystemProvider, FileStat, FileReadResult } from './types'
-import type { DirEntry, FsChangeEvent, SearchOptions, SearchResult } from '../../shared/types'
-import { isPathInsideOrEqual } from '../../shared/cross-platform-path'
+import { requestGitStreamable } from '../ssh/ssh-git-response-stream-reader'
+import { lstatViaSftp } from './ssh-filesystem-provider-sftp'
+import {
+  downloadFileViaSftp,
+  downloadFolderViaSftp,
+  type SftpFactory
+} from './ssh-filesystem-download'
+import { openSshFileUploadSession, type SshRawTransferOptions } from './ssh-filesystem-file-upload'
+import {
+  closeSshFilesystemWatch,
+  registerSshFilesystemWatch,
+  stopSshFilesystemWatchRegistration,
+  type WatchRegistration
+} from './ssh-filesystem-provider-watch'
+import type {
+  IFilesystemProvider,
+  FileRangeReadResult,
+  FileReadLimits,
+  FileStat,
+  FileReadResult,
+  FileUploadSession,
+  TerminalArtifactAccessOptions
+} from './types'
+import type { SearchOptions, SearchResult } from '../../shared/code-search-types'
+import type { DirEntry, FsChangeEvent } from '../../shared/filesystem-entry-types'
+import { routeSshFilesystemWatchNotification } from './ssh-filesystem-watch-notifications'
 import type { WorkspaceSpaceDirectoryScanResult } from '../../shared/workspace-space-types'
-import type { SFTPWrapper, Stats } from 'ssh2'
-
-type SftpFactory = () => Promise<SFTPWrapper>
-type WatchRegistration = {
-  callbacks: Set<(events: FsChangeEvent[]) => void>
-  setupPromise: Promise<void>
-}
-
+import { isWindowsRemoteHost, type RemoteHostPlatform } from '../ssh/ssh-remote-platform'
+import {
+  probeSshQuickOpenSearchCapability,
+  probeSshRangedReadCapability
+} from './ssh-filesystem-provider-capabilities'
+import { readSshFileRange } from './ssh-filesystem-range-read'
+import {
+  readSshTerminalArtifact,
+  writeSshTerminalArtifact
+} from './ssh-filesystem-terminal-artifact'
+import { readSshDocPreviewFile } from './ssh-filesystem-doc-preview'
 const WORKSPACE_SPACE_SCAN_TIMEOUT_MS = 130_000
-
-function fileStatFromSftpStats(stats: Stats): FileStat {
-  let type: FileStat['type'] = 'file'
-  if (stats.isDirectory()) {
-    type = 'directory'
-  } else if (stats.isSymbolicLink()) {
-    type = 'symlink'
-  }
-  return { size: stats.size, type, mtime: stats.mtime * 1000 }
-}
-
-function lstatViaSftp(sftp: SFTPWrapper, filePath: string): Promise<FileStat> {
-  return new Promise((resolve, reject) => {
-    sftp.lstat(filePath, (err, stats) => {
-      if (err) {
-        reject(err)
-        return
-      }
-      resolve(fileStatFromSftpStats(stats))
-    })
-  })
-}
-
-function fastGetViaSftp(
-  sftp: SFTPWrapper,
-  sourcePath: string,
-  destinationPath: string
-): Promise<void> {
-  return new Promise((resolve, reject) => {
-    sftp.fastGet(sourcePath, destinationPath, (err) => {
-      if (err) {
-        reject(err)
-        return
-      }
-      resolve()
-    })
-  })
-}
-
 export class SshFilesystemProvider implements IFilesystemProvider {
   private connectionId: string
   private mux: SshChannelMultiplexer
-  // Why: each watch() call registers for a specific rootPath, but the relay
-  // sends all fs.changed events on one notification channel. Keying by rootPath
-  // prevents cross-pollination between different worktree watchers.
   private watchListeners = new Map<string, WatchRegistration>()
-  // Why: store the unsubscribe handle so dispose() can detach from the
-  // multiplexer. Without this, notification callbacks keep firing after
-  // the provider is torn down on disconnect, routing events to stale state.
   private unsubscribeNotifications: (() => void) | null = null
   private tempDirPromise: Promise<string> | null = null
   private disposed = false
-  // Why: relays from a previous build may not implement fs.readFileStream.
-  // We log the fallback once per session at warn level so users on stale
-  // relays get diagnosed quickly without per-read log spam.
   private loggedStreamFallback = false
+  readonly downloadFolder?: IFilesystemProvider['downloadFolder']
 
   constructor(
     connectionId: string,
     mux: SshChannelMultiplexer,
-    private readonly createSftp?: SftpFactory
+    private readonly createSftp?: SftpFactory,
+    private readonly rawTransfer?: SshRawTransferOptions,
+    hostPlatform?: RemoteHostPlatform
   ) {
     this.connectionId = connectionId
     this.mux = mux
 
-    this.unsubscribeNotifications = mux.onNotification((method, params) => {
-      if (method === 'fs.changed') {
-        const events = params.events as FsChangeEvent[]
-        for (const [rootPath, registration] of this.watchListeners) {
-          const matching = events.filter((e) => isPathInsideOrEqual(rootPath, e.absolutePath))
-          if (matching.length > 0) {
-            for (const cb of registration.callbacks) {
-              cb(matching)
-            }
-          }
-        }
-      }
-    })
+    if (createSftp) {
+      // Why: system SSH has raw single-file transfer but no ssh2 SFTP channel;
+      // omitting this method makes folder capability truthful at the provider boundary.
+      // windowsRemotePaths is provider-owned (from host platform), not a caller option.
+      const windowsRemotePaths = hostPlatform ? isWindowsRemoteHost(hostPlatform) : undefined
+      this.downloadFolder = (sourcePath, destinationPath, options) =>
+        downloadFolderViaSftp(createSftp, sourcePath, destinationPath, {
+          ...options,
+          windowsRemotePaths
+        })
+    }
+
+    this.unsubscribeNotifications = mux.onNotification((method, params) =>
+      routeSshFilesystemWatchNotification(this.watchListeners, method, params)
+    )
   }
 
   dispose(): void {
@@ -103,8 +86,8 @@ export class SshFilesystemProvider implements IFilesystemProvider {
       this.unsubscribeNotifications()
       this.unsubscribeNotifications = null
     }
-    for (const rootPath of this.watchListeners.keys()) {
-      this.notifyUnwatch(rootPath)
+    for (const registration of this.watchListeners.values()) {
+      stopSshFilesystemWatchRegistration(this.mux, registration)
     }
     this.watchListeners.clear()
   }
@@ -117,14 +100,14 @@ export class SshFilesystemProvider implements IFilesystemProvider {
     return (await this.mux.request('fs.readDir', { dirPath })) as DirEntry[]
   }
 
-  async readFile(filePath: string): Promise<FileReadResult> {
+  async readFile(filePath: string, limits?: FileReadLimits): Promise<FileReadResult> {
     // Why: streaming is the default path so previews above the legacy single-
     // frame budget (~12 MB after base64) don't hit MAX_MESSAGE_SIZE. Old relays
     // that don't implement fs.readFileStream surface as MethodNotFound; we fall
     // back to the legacy single-shot fs.readFile (which retains the old 10 MB
     // cap on those hosts).
     try {
-      return await readFileViaStream(this.mux, filePath)
+      return await readFileViaStream(this.mux, filePath, limits)
     } catch (err) {
       if (isMethodNotFoundError(err)) {
         if (!this.loggedStreamFallback) {
@@ -139,16 +122,51 @@ export class SshFilesystemProvider implements IFilesystemProvider {
     }
   }
 
+  readDocPreviewFile(
+    request: Parameters<NonNullable<IFilesystemProvider['readDocPreviewFile']>>[0]
+  ): ReturnType<NonNullable<IFilesystemProvider['readDocPreviewFile']>> {
+    return readSshDocPreviewFile(this.mux, request)
+  }
+
+  readFileRange(
+    filePath: string,
+    position: number,
+    length: number,
+    options?: { signal?: AbortSignal }
+  ): Promise<FileRangeReadResult> {
+    return readSshFileRange(this.mux, filePath, position, length, options?.signal)
+  }
+
+  supportsFileRangeRead(options?: { signal?: AbortSignal }): Promise<boolean> {
+    return probeSshRangedReadCapability(this.mux, options?.signal)
+  }
+
+  readTerminalArtifact(
+    filePath: string,
+    options: TerminalArtifactAccessOptions
+  ): Promise<FileReadResult> {
+    return readSshTerminalArtifact(this.mux, filePath, options)
+  }
+
+  writeTerminalArtifact(
+    filePath: string,
+    content: string,
+    options: TerminalArtifactAccessOptions
+  ): Promise<FileStat> {
+    return writeSshTerminalArtifact(this.mux, filePath, content, options)
+  }
+
   async downloadFile(sourcePath: string, destinationPath: string): Promise<void> {
-    if (!this.createSftp) {
-      throw new Error('Remote file download is unavailable. Reconnect the SSH target and retry.')
+    // Why: system SSH targets cannot open an ssh2-owned SFTP channel.
+    if (this.rawTransfer?.downloadFile) {
+      await this.rawTransfer.downloadFile(sourcePath, destinationPath)
+      return
     }
-    const sftp = await this.createSftp()
-    try {
-      await fastGetViaSftp(sftp, sourcePath, destinationPath)
-    } finally {
-      sftp.end()
-    }
+    await downloadFileViaSftp(this.createSftp, sourcePath, destinationPath)
+  }
+
+  async openFileUploadSession(): Promise<FileUploadSession> {
+    return openSshFileUploadSession(this.createSftp, this.rawTransfer)
   }
 
   async getTempDir(): Promise<string> {
@@ -178,6 +196,11 @@ export class SshFilesystemProvider implements IFilesystemProvider {
     contentBase64: string,
     append: boolean
   ): Promise<void> {
+    const contents = Buffer.from(contentBase64, 'base64')
+    if (this.rawTransfer?.writeBuffer) {
+      await this.rawTransfer.writeBuffer(filePath, contents, { append, exclusive: !append })
+      return
+    }
     if (!this.createSftp) {
       throw new Error('remote_binary_upload_unavailable')
     }
@@ -185,7 +208,7 @@ export class SshFilesystemProvider implements IFilesystemProvider {
     try {
       // Why: relay fs.writeFile is text-only. SFTP writes the decoded bytes
       // directly so runtime uploads do not corrupt images, PDFs, or archives.
-      await uploadBuffer(sftp, Buffer.from(contentBase64, 'base64'), filePath, {
+      await uploadBuffer(sftp, contents, filePath, {
         append,
         exclusive: !append
       })
@@ -275,71 +298,51 @@ export class SshFilesystemProvider implements IFilesystemProvider {
     return (await this.mux.request('fs.search', opts)) as SearchResult
   }
 
-  async listFiles(rootPath: string, options?: { excludePaths?: string[] }): Promise<string[]> {
-    // Why: older relays ignore unknown fields, so sending excludePaths to a
-    // pre-refactor relay is a non-regression. The relay validates the shape
-    // and treats malformed input as "no exclusions" rather than failing.
+  async listFiles(
+    rootPath: string,
+    options?: Parameters<IFilesystemProvider['listFiles']>[1]
+  ): Promise<string[]> {
     const params: Record<string, unknown> = { rootPath }
     if (options?.excludePaths && options.excludePaths.length > 0) {
       params.excludePaths = options.excludePaths
     }
-    return (await this.mux.request('fs.listFiles', params)) as string[]
+    if (options?.maxResults !== undefined) {
+      params.maxResults = options.maxResults
+    }
+    if (options?.searchQuery !== undefined) {
+      params.searchQuery = options.searchQuery
+    }
+    // Why #7721: the signal lets a workspace switch send rpc.cancel so the
+    // relay aborts the full-tree scan instead of stacking abandoned scans
+    // that starve interactive fs.readDir/fs.stat on the shared SSH channel.
+    // Why streamable: a monorepo listing serializes past the relay's 1 MiB control lane, and the
+    // lane it demotes to is refused under unrelated producer load. Opting in moves it to the bulk
+    // lane in chunks; an old relay ignores the flag and answers plainly, which the reader detects
+    // by the sentinel marker being absent.
+    return (await requestGitStreamable(this.mux, 'fs.listFiles', params, {
+      signal: options?.signal
+    })) as string[]
   }
 
-  async watch(rootPath: string, callback: (events: FsChangeEvent[]) => void): Promise<() => void> {
-    if (this.disposed) {
-      throw new Error('SSH filesystem provider disposed')
-    }
-    let registration = this.watchListeners.get(rootPath)
-    if (registration) {
-      registration.callbacks.add(callback)
-      await registration.setupPromise
-      if (this.disposed || this.watchListeners.get(rootPath) !== registration) {
-        throw new Error('SSH filesystem provider disposed')
-      }
-      return this.createWatchUnsubscribe(rootPath, registration, callback)
-    }
-
-    const callbacks = new Set<(events: FsChangeEvent[]) => void>([callback])
-    const setupPromise = this.mux.request('fs.watch', { rootPath }).then(
-      () => undefined,
-      (error) => {
-        if (this.watchListeners.get(rootPath) === registration) {
-          this.watchListeners.delete(rootPath)
-        }
-        throw error
-      }
-    )
-    registration = { callbacks, setupPromise }
-    this.watchListeners.set(rootPath, registration)
-    await setupPromise
-    if (this.disposed || this.watchListeners.get(rootPath) !== registration) {
-      this.notifyUnwatch(rootPath)
-      throw new Error('SSH filesystem provider disposed')
-    }
-
-    return this.createWatchUnsubscribe(rootPath, registration, callback)
-  }
-
-  private notifyUnwatch(rootPath: string): void {
-    try {
-      this.mux.notify('fs.unwatch', { rootPath })
-    } catch {
-      // Connection teardown may already have closed the mux; disposal must continue.
-    }
-  }
-
-  private createWatchUnsubscribe(
+  supportsQuickOpenSearch = (options: { signal?: AbortSignal } = {}): Promise<boolean> =>
+    probeSshQuickOpenSearchCapability(this.mux, options.signal)
+  async watch(
     rootPath: string,
-    registration: WatchRegistration,
-    callback: (events: FsChangeEvent[]) => void
-  ): () => void {
-    return () => {
-      registration.callbacks.delete(callback)
-      if (registration.callbacks.size === 0 && this.watchListeners.get(rootPath) === registration) {
-        this.watchListeners.delete(rootPath)
-        this.notifyUnwatch(rootPath)
-      }
-    }
+    callback: (events: FsChangeEvent[]) => void,
+    options?: { signal?: AbortSignal; onTerminalError?: (error: Error) => void }
+  ): Promise<() => void> {
+    return registerSshFilesystemWatch({
+      mux: this.mux,
+      disposed: () => this.disposed,
+      registrations: this.watchListeners,
+      rootPath,
+      callback,
+      onTerminalError: options?.onTerminalError,
+      signal: options?.signal
+    })
+  }
+
+  async closeWatch(rootPath: string): Promise<void> {
+    await closeSshFilesystemWatch(this.mux, this.watchListeners, rootPath)
   }
 }

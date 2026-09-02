@@ -11,8 +11,8 @@ import type {
   GitHubProjectField,
   GitHubProjectFieldMutationValue,
   GitHubProjectRow as GitHubProjectRowType
-} from '../../../../shared/github-project-types'
-import type { GlobalSettings } from '../../../../shared/types'
+} from '../../../../shared/github/project-types'
+import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import { translate } from '@/i18n/i18n'
 
 const PROJECT_FROZEN_COLUMN_SURFACE_CLASS =
@@ -34,6 +34,7 @@ type Props = {
   onEditIssueType?: (issueType: GitHubIssueType | null) => void
   onStartWork?: () => void
   onOpenInBrowser?: () => void
+  sourceHost?: string
   sourceSettings: Pick<GlobalSettings, 'activeRuntimeEnvironmentId'> | null | undefined
 }
 
@@ -51,6 +52,7 @@ export default function ProjectRow({
   onEditIssueType,
   onStartWork,
   onOpenInBrowser,
+  sourceHost,
   sourceSettings
 }: Props): React.JSX.Element {
   const disabled = row.itemType === 'REDACTED'
@@ -100,6 +102,7 @@ export default function ProjectRow({
                 onEditLabels={onEditLabels}
                 onEditIssueType={onEditIssueType}
                 onOpenDialog={f.dataType === 'TITLE' ? onOpenDialog : undefined}
+                sourceHost={sourceHost}
                 sourceSettings={sourceSettings}
               />
             </div>
