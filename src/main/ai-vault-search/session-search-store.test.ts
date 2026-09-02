@@ -1,20 +1,19 @@
-import { appendFile, mkdtemp, rename, rm, stat, writeFile } from 'node:fs/promises'
+import { appendFile, mkdtemp, rename, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import {
-  createSessionParseStats,
-  parseAgentSessionFileCached,
-  resetSessionParseCacheForTests
-} from '../ai-vault/session-scanner-parse-cache'
+import { resetSessionParseCacheForTests } from '../ai-vault/session-scanner-parse-cache'
 import {
   registerSessionSearchIndexSink,
   withSessionSearchIndexRequired
 } from '../ai-vault/session-search-capture'
-import type { SessionFileCandidate } from '../ai-vault/session-scanner-types'
 import { SessionSearchStore } from './session-search-store'
-
-const SESSION_ID = 'aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee'
+import {
+  assistantRecord,
+  CLAUDE_SESSION_ID as SESSION_ID,
+  parseTranscript as parse,
+  userRecord
+} from './session-search-transcript-fixtures'
 let tempRoots: string[] = []
 let store: SessionSearchStore
 
@@ -38,52 +37,6 @@ async function makeTempDir(): Promise<string> {
   const root = await mkdtemp(join(tmpdir(), 'orca-session-search-'))
   tempRoots.push(root)
   return root
-}
-
-async function claudeCandidate(path: string): Promise<SessionFileCandidate> {
-  const fileStat = await stat(path)
-  return {
-    agent: 'claude',
-    codexHome: null,
-    file: {
-      path,
-      mtimeMs: fileStat.mtimeMs,
-      modifiedAt: fileStat.mtime.toISOString(),
-      sizeBytes: fileStat.size,
-      dev: fileStat.dev,
-      ino: fileStat.ino
-    }
-  }
-}
-
-function userRecord(index: number, content: unknown, sessionId = SESSION_ID): string {
-  return JSON.stringify({
-    type: 'user',
-    sessionId,
-    timestamp: new Date(1740000000000 + index * 60_000).toISOString(),
-    cwd: '/repo/app',
-    gitBranch: 'main',
-    message: { role: 'user', content }
-  })
-}
-
-function assistantRecord(index: number, content: unknown, sessionId = SESSION_ID): string {
-  return JSON.stringify({
-    type: 'assistant',
-    sessionId,
-    timestamp: new Date(1740000000000 + index * 60_000).toISOString(),
-    message: { role: 'assistant', model: 'claude-fable-5', content }
-  })
-}
-
-async function parse(path: string) {
-  const stats = createSessionParseStats()
-  const session = await parseAgentSessionFileCached(
-    await claudeCandidate(path),
-    process.platform,
-    stats
-  )
-  return { session, stats }
 }
 
 describe('SessionSearchStore', () => {

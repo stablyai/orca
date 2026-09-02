@@ -40,6 +40,8 @@ export type AiVaultSearchHit = {
   messageCount: number
   resumeCommand: string
   score: number
+  /** Sessions folded into this hit (forks sharing an opening prefix); absent when unique. */
+  duplicateCount?: number
   evidence: AiVaultSearchEvidence
 }
 

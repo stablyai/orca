@@ -16,6 +16,7 @@ import {
   planSessionSearchQuery,
   type SessionSearchQueryPlan
 } from './session-search-query-planner'
+import { isCollapsibleContentHash } from './session-search-content-hash'
 import { SessionSearchTypoRepair } from './session-search-typo-repair'
 
 // Measured: user 3 / assistant 2 / tool 1 / identifiers 1 (MRR 0.503 vs 0.475 flat).
@@ -47,6 +48,15 @@ type SessionRow = {
   updated_at: string | null
   message_count: number
   resume_command: string
+  content_hash: string | null
+  content_hash_count: number
+}
+
+type ScoredSession = {
+  session: SessionRow
+  message: MessageRow
+  score: number
+  duplicateCount: number
 }
 
 export type SessionSearchExecution = {
@@ -159,21 +169,24 @@ export class SessionSearchQuery {
     }
     const sessions = this.loadSessions([...best.keys()], args)
     const limit = Math.min(args.limit ?? AI_VAULT_SEARCH_LIMIT_DEFAULT, AI_VAULT_SEARCH_LIMIT_MAX)
-    const scored = sessions.map((session) => {
-      const message = best.get(session.id)!
-      return {
-        session,
-        message,
-        score: message.score - LENGTH_PRIOR * Math.log(1 + session.message_count)
-      }
-    })
+    const scored = collapseForks(
+      sessions.map((session) => {
+        const message = best.get(session.id)!
+        return {
+          session,
+          message,
+          score: message.score - LENGTH_PRIOR * Math.log(1 + session.message_count),
+          duplicateCount: 1
+        }
+      })
+    )
     scored.sort((left, right) =>
       args.sort === 'newest'
         ? (right.session.updated_at ?? '').localeCompare(left.session.updated_at ?? '')
         : right.score - left.score
     )
     const table = tier === 'full' ? 'messages_fts' : 'conversation_fts'
-    return scored.slice(0, limit).map(({ session, message, score }) => ({
+    return scored.slice(0, limit).map(({ session, message, score, duplicateCount }) => ({
       agent: session.agent,
       sessionId: session.session_id,
       filePath: session.file_path,
@@ -185,6 +198,7 @@ export class SessionSearchQuery {
       messageCount: session.message_count,
       resumeCommand: session.resume_command,
       score,
+      ...(duplicateCount > 1 ? { duplicateCount } : {}),
       evidence: {
         role: message.role as AiVaultSearchHit['evidence']['role'],
         timestamp: message.ts,
@@ -233,4 +247,38 @@ export class SessionSearchQuery {
       .prepare(`SELECT * FROM sessions WHERE ${conditions.join(' AND ')}`)
       .all(...values) as SessionRow[]
   }
+}
+
+/**
+ * Folds forked copies of one conversation into a single hit: same opening
+ * prefix, newest `updated_at` wins, the rest become `duplicateCount`. Done here
+ * and not at write time so index rows stay per file (cursors and deletes).
+ */
+function collapseForks(scored: ScoredSession[]): ScoredSession[] {
+  const groups = new Map<string, ScoredSession[]>()
+  for (const entry of scored) {
+    const { content_hash: hash, content_hash_count: count, id } = entry.session
+    const key = isCollapsibleContentHash(hash, count) ? `hash:${hash}` : `session:${id}`
+    const group = groups.get(key)
+    if (group) {
+      group.push(entry)
+    } else {
+      groups.set(key, [entry])
+    }
+  }
+  const collapsed: ScoredSession[] = []
+  for (const group of groups.values()) {
+    if (group.length === 1) {
+      collapsed.push(group[0]!)
+      continue
+    }
+    const winner = group.reduce((best, entry) => (isNewer(entry, best) ? entry : best))
+    collapsed.push({ ...winner, duplicateCount: group.length })
+  }
+  return collapsed
+}
+
+function isNewer(entry: ScoredSession, best: ScoredSession): boolean {
+  const order = (entry.session.updated_at ?? '').localeCompare(best.session.updated_at ?? '')
+  return order === 0 ? entry.score > best.score : order > 0
 }

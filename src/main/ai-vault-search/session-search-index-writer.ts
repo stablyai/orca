@@ -4,6 +4,11 @@ import type {
   SessionSearchIndexedFile,
   SessionSearchIndexUpdate
 } from '../ai-vault/session-search-capture'
+import {
+  EMPTY_CONTENT_HASH,
+  foldContentHash,
+  type SessionContentHash
+} from './session-search-content-hash'
 import { identifierShadowText } from './session-search-identifier-split'
 
 // Why: FTS5's length normalization buries a 100 KB tool log even when it holds
@@ -86,7 +91,15 @@ export class SessionSearchIndexWriter {
         this.db.exec('COMMIT')
         return
       }
-      const sessionRowId = this.upsertSession(update, appendable ? existing.session_row_id : null)
+      const rowId = appendable ? existing.session_row_id : null
+      const sessionRowId = this.upsertSession(
+        update,
+        rowId,
+        foldContentHash(
+          rowId === null ? EMPTY_CONTENT_HASH : this.contentHash(rowId),
+          update.messages
+        )
+      )
       this.insertMessages(sessionRowId, update)
       this.upsertFile(update, sessionRowId)
       this.db.exec('COMMIT')
@@ -130,7 +143,18 @@ export class SessionSearchIndexWriter {
     this.db.prepare('DELETE FROM files WHERE path = ?').run(path)
   }
 
-  private upsertSession(update: SessionSearchIndexUpdate, rowId: number | null): number {
+  private contentHash(rowId: number): SessionContentHash {
+    const row = this.db
+      .prepare('SELECT content_hash, content_hash_count FROM sessions WHERE id = ?')
+      .get(rowId) as { content_hash: string | null; content_hash_count: number } | undefined
+    return row ? { hash: row.content_hash, count: row.content_hash_count } : EMPTY_CONTENT_HASH
+  }
+
+  private upsertSession(
+    update: SessionSearchIndexUpdate,
+    rowId: number | null,
+    contentHash: SessionContentHash
+  ): number {
     const session = update.session!
     const values = [
       session.agent,
@@ -143,13 +167,16 @@ export class SessionSearchIndexWriter {
       session.createdAt,
       session.updatedAt,
       session.messageCount,
-      session.resumeCommand
+      session.resumeCommand,
+      contentHash.hash,
+      contentHash.count
     ]
     if (rowId !== null) {
       this.db
         .prepare(
           `UPDATE sessions SET agent = ?, session_id = ?, file_path = ?, codex_home = ?, title = ?,
-             cwd = ?, branch = ?, created_at = ?, updated_at = ?, message_count = ?, resume_command = ?
+             cwd = ?, branch = ?, created_at = ?, updated_at = ?, message_count = ?, resume_command = ?,
+             content_hash = ?, content_hash_count = ?
            WHERE id = ?`
         )
         .run(...values, rowId)
@@ -158,8 +185,8 @@ export class SessionSearchIndexWriter {
     const result = this.db
       .prepare(
         `INSERT INTO sessions(agent, session_id, file_path, codex_home, title, cwd, branch,
-           created_at, updated_at, message_count, resume_command)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+           created_at, updated_at, message_count, resume_command, content_hash, content_hash_count)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
       )
       .run(...values)
     return Number(result.lastInsertRowid)

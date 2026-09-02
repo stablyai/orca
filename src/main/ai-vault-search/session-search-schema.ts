@@ -1,7 +1,7 @@
 import SyncDatabase from '../sqlite/sync-database'
 
 // Bump to drop and rebuild: the index is a cache over the transcripts, never a source.
-export const SESSION_SEARCH_SCHEMA_VERSION = 2
+export const SESSION_SEARCH_SCHEMA_VERSION = 3
 
 // unicode61 keeps `_ . - /` inside tokens so paths and identifiers match exactly;
 // the `identifiers` column carries the split form (see session-search-identifier-split).
@@ -22,9 +22,13 @@ CREATE TABLE IF NOT EXISTS sessions(
   created_at TEXT,
   updated_at TEXT,
   message_count INTEGER NOT NULL DEFAULT 0,
-  resume_command TEXT NOT NULL
+  resume_command TEXT NOT NULL,
+  -- Chained digest of the first N messages; forks of one conversation share it.
+  content_hash TEXT,
+  content_hash_count INTEGER NOT NULL DEFAULT 0
 );
 CREATE INDEX IF NOT EXISTS sessions_agent ON sessions(agent);
+CREATE INDEX IF NOT EXISTS sessions_content_hash ON sessions(content_hash);
 CREATE INDEX IF NOT EXISTS sessions_updated_at ON sessions(updated_at);
 CREATE TABLE IF NOT EXISTS files(
   path TEXT PRIMARY KEY,
