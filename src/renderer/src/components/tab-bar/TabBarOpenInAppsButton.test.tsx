@@ -24,7 +24,14 @@ const {
 } = vi.hoisted(() => ({
   mockState: {
     worktreesByRepo: {} as Record<string, { id: string; repoId: string; path: string }[]>,
-    repos: [] as { id: string; connectionId?: string | null }[],
+    repos: [] as { id: string; path: string; connectionId?: string | null }[],
+    folderWorkspaces: [] as {
+      id: string
+      projectGroupId: string
+      folderPath: string
+      connectionId?: string | null
+    }[],
+    projectGroups: [] as { id: string; connectionId?: string | null }[],
     settings: {
       activeRuntimeEnvironmentId: null as string | null,
       openInApplications: [] as { id: string; label: string; command: string }[]
@@ -76,7 +83,9 @@ beforeEach(() => {
   mockState.worktreesByRepo = {
     'repo-1': [{ id: 'repo-1::/tmp/ws', repoId: 'repo-1', path: '/tmp/ws' }]
   }
-  mockState.repos = [{ id: 'repo-1', connectionId: null }]
+  mockState.repos = [{ id: 'repo-1', path: '/tmp/repo-1', connectionId: null }]
+  mockState.folderWorkspaces = []
+  mockState.projectGroups = []
   mockState.settings = { activeRuntimeEnvironmentId: null, openInApplications: [vscode, cursor] }
   mockState.recentOpenInApplicationId = null
   openInExternalEditorMock.mockReset().mockResolvedValue({ ok: true })
@@ -133,6 +142,41 @@ describe('TabBarOpenInAppsButton', () => {
     expect(container.querySelector('button')).toBeNull()
   })
 
+  it('renders for folder workspaces, which live outside worktreesByRepo', async () => {
+    mockState.folderWorkspaces = [
+      { id: 'folder-1', projectGroupId: 'group-1', folderPath: '/tmp/plain-folder' }
+    ]
+    render('folder:folder-1')
+    const button = primaryButton()
+    expect(button.textContent).toBe('VS Code')
+
+    await act(async () => {
+      button.click()
+      await Promise.resolve()
+    })
+
+    expect(openInExternalEditorMock).toHaveBeenCalledWith({
+      path: '/tmp/plain-folder',
+      command: 'code',
+      connectionId: null
+    })
+  })
+
+  it('resolves the SSH connection of a remote folder workspace', () => {
+    mockState.folderWorkspaces = [
+      {
+        id: 'folder-1',
+        projectGroupId: 'group-1',
+        folderPath: '/srv/remote-folder',
+        connectionId: 'ssh-1'
+      }
+    ]
+    mockState.recentOpenInApplicationId = 'cursor'
+    render('folder:folder-1')
+    // Why: Cursor is local only, so an SSH folder must fall back to VS Code like an SSH worktree does.
+    expect(primaryButton().textContent).toBe('VS Code')
+  })
+
   it('opens the workspace in the first configured app and remembers it', async () => {
     render()
     const button = primaryButton()
@@ -160,7 +204,7 @@ describe('TabBarOpenInAppsButton', () => {
   })
 
   it('prefers an app that can open an SSH workspace over a local-only recent one', () => {
-    mockState.repos = [{ id: 'repo-1', connectionId: 'ssh-1' }]
+    mockState.repos = [{ id: 'repo-1', path: '/tmp/repo-1', connectionId: 'ssh-1' }]
     mockState.recentOpenInApplicationId = 'cursor'
     render()
     // Why: only VS Code supports SSH workspaces, so Cursor is "Local only" on a remote repo.
@@ -169,7 +213,7 @@ describe('TabBarOpenInAppsButton', () => {
   })
 
   it('disables the primary action and keeps its tooltip reachable when no app can open the workspace here', async () => {
-    mockState.repos = [{ id: 'repo-1', connectionId: 'ssh-1' }]
+    mockState.repos = [{ id: 'repo-1', path: '/tmp/repo-1', connectionId: 'ssh-1' }]
     mockState.settings = { activeRuntimeEnvironmentId: null, openInApplications: [cursor] }
     render()
     expect(primaryButton().textContent).toBe('Cursor')

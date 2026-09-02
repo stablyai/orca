@@ -18,9 +18,11 @@ import {
 import { OpenInApplicationIcon } from '@/lib/open-in-app-catalog'
 import { NO_OPEN_IN_APPLICATIONS } from '@/lib/open-in-application-selection'
 import { useAppStore } from '@/store'
-import { findWorktreeById } from '@/store/slices/worktree-helpers'
+import { getIndexedWorktreeById } from '@/store/worktree-repo-index'
+import { getConnectionIdFromState } from '@/lib/connection-owner-resolution'
 import { translate } from '@/i18n/i18n'
 import type { OpenInApplication } from '../../../../shared/ui-chrome-types'
+import { parseWorkspaceKey } from '../../../../shared/workspace-scope'
 import {
   TAB_BAR_ACTION_BUTTON_CLASS,
   TAB_BAR_SPLIT_BUTTON_CHEVRON_CLASS,
@@ -63,8 +65,18 @@ export function resolvePrimaryOpenInApplication(
 export function TabBarOpenInAppsButton({
   worktreeId
 }: TabBarOpenInAppsButtonProps): React.JSX.Element | null {
-  const worktreesByRepo = useAppStore((s) => s.worktreesByRepo)
-  const repos = useAppStore((s) => s.repos)
+  // Why: folder workspaces live in `folderWorkspaces`, not `worktreesByRepo`, and the selectors return primitives so store writes elsewhere don't re-render the strip.
+  const worktreePath = useAppStore((s) => {
+    const scope = parseWorkspaceKey(worktreeId)
+    if (scope?.type === 'folder') {
+      return (
+        s.folderWorkspaces.find((workspace) => workspace.id === scope.folderWorkspaceId)
+          ?.folderPath ?? null
+      )
+    }
+    return getIndexedWorktreeById(s.worktreesByRepo, worktreeId)?.path ?? null
+  })
+  const connectionId = useAppStore((s) => getConnectionIdFromState(s, worktreeId) ?? null)
   const settings = useAppStore((s) => s.settings)
   const openInApplications = useAppStore(
     (s) => s.settings?.openInApplications ?? NO_OPEN_IN_APPLICATIONS
@@ -75,16 +87,6 @@ export function TabBarOpenInAppsButton({
   // Why: closing the menu restores focus to the chevron, which must not immediately reopen its tooltip.
   const suppressMoreAppsTooltipRef = useRef(false)
 
-  // Why: floating terminals use a synthetic worktree id with no workspace behind it, so there is nothing to open.
-  const worktree = useMemo(
-    () => findWorktreeById(worktreesByRepo, worktreeId) ?? null,
-    [worktreesByRepo, worktreeId]
-  )
-  const connectionId = useMemo(
-    () =>
-      worktree ? (repos.find((repo) => repo.id === worktree.repoId)?.connectionId ?? null) : null,
-    [repos, worktree]
-  )
   const availabilityOf = useCallback(
     (application: OpenInApplication) =>
       getOpenInEntryAvailability(toOpenInEntry(application), settings, connectionId),
@@ -119,19 +121,20 @@ export function TabBarOpenInAppsButton({
     suppressMoreAppsTooltipRef.current = false
   }, [])
   const openPrimary = useCallback((): void => {
-    if (!primary || !worktree) {
+    if (!primary || !worktreePath) {
       return
     }
     useAppStore.getState().setRecentOpenInApplicationId(primary.id)
     void openWorktreePath({
       target: 'external-editor',
-      worktreePath: worktree.path,
+      worktreePath,
       connectionId,
       command: primary.command
     })
-  }, [connectionId, primary, worktree])
+  }, [connectionId, primary, worktreePath])
 
-  if (!worktree) {
+  // Why: floating terminals use a synthetic worktree id with no workspace behind it, so there is nothing to open.
+  if (!worktreePath) {
     return null
   }
 
@@ -221,7 +224,7 @@ export function TabBarOpenInAppsButton({
         </Tooltip>
         <DropdownMenuContent align="end" side="bottom" sideOffset={6} className="w-52">
           <WorktreeOpenInMenuItems
-            worktreePath={worktree.path}
+            worktreePath={worktreePath}
             connectionId={connectionId}
             includeFileManager={false}
             onOpenEntry={(entry) => useAppStore.getState().setRecentOpenInApplicationId(entry.id)}
