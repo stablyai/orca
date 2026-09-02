@@ -63,6 +63,7 @@ const unifiedLabelIndexCache = new WeakMap<object, Map<string, Map<string, strin
 const routingIndexCache = new WeakMap<AppState['tabsByWorktree'], AgentStatusPaneRoutingIndex>()
 const NO_UNIFIED_TABS = {}
 
+/** First visible terminal label per tab id for identity fallback when the pane title is empty. */
 function createUnifiedTerminalLabelIndex(
   entries: AppState['unifiedTabsByWorktree'][string] | undefined
 ): Map<string, string | undefined> {
@@ -164,6 +165,7 @@ export function createAgentStatusPaneRoutingIndex(store: AppState): AgentStatusP
   return index
 }
 
+/** Indexed equivalent of `resolveWorktreeConnection` for batch status application. */
 export function resolveWorktreeConnectionFromRoutingIndex(
   index: AgentStatusPaneRoutingIndex,
   worktreeId: string
@@ -180,6 +182,7 @@ export function resolveWorktreeConnectionFromRoutingIndex(
   }
 }
 
+/** Indexed equivalent of `resolvePaneKey`, including the tab's `launchAgent`. */
 export function resolvePaneKeyFromRoutingIndex(
   index: AgentStatusPaneRoutingIndex,
   paneKey: string

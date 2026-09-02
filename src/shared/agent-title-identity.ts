@@ -48,6 +48,7 @@ function computeIsClaudeAgent(title: string): boolean {
 export const isClaudeAgent: (title: string) => boolean =
   memoizeTitleClassification(computeIsClaudeAgent)
 
+/** Catalog display name encoded in a terminal title, or null when the title is not an agent. */
 function computeAgentLabel(title: string): string | null {
   if (isClaudeManagementTitle(title)) {
     return null

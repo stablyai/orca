@@ -130,6 +130,7 @@ export function isClaudeManagementTitle(title: string): boolean {
   return CLAUDE_MANAGEMENT_TITLE_RE.test(title)
 }
 
+/** Catalog display name encoded in a terminal title, or null when the title is not an agent. */
 function computeAgentLabel(title: string): string | null {
   if (isClaudeManagementTitle(title)) {
     return null

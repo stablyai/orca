@@ -189,6 +189,7 @@ export function resolvePaneKey(
   }
 }
 
+/** Repo connection for `worktreeId`, or unresolved when the worktree/repo is not hydrated. */
 export function resolveWorktreeConnection(
   store: ReturnType<typeof useAppStore.getState>,
   worktreeId: string
@@ -209,6 +210,7 @@ export function resolveWorktreeConnection(
   }
 }
 
+/** Re-attribute Claude-typed hooks to the wrapper that launched the pane (`openzoo` / OpenClaude). */
 export function resolveHookPayloadAgentType(
   payload: ParsedAgentStatusPayload,
   terminalTitle: string | undefined,

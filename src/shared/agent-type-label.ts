@@ -28,6 +28,7 @@ const WELL_KNOWN_LABELS: Record<string, string> = {
   kimi: 'Kimi'
 }
 
+/** User-facing label for an agent id (`openzoo` → `OpenZoo`); unknown ids pass through. */
 export function formatAgentTypeLabel(agentType: AgentType | null | undefined): string {
   if (!agentType || agentType === 'unknown') {
     return 'Agent'
