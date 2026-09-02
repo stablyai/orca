@@ -14,7 +14,7 @@ import {
   recentRankForEntry,
   withRepoSectionDisplayLabels
 } from './section-order'
-import { buildFolderWorkspaceRow } from './row-builders'
+import { appendFolderWorkspaceRows } from './row-builders'
 
 export function appendProjectGroupSections(
   ctx: SectionAppendContext,
@@ -108,9 +108,21 @@ export function appendProjectGroupSections(
       projectGroupDepth: depth
     })
     if (!collapsedGroups.has(key)) {
-      for (const pair of folderWorkspacesByProjectGroupId.get(projectGroup.id) ?? []) {
-        result.push(buildFolderWorkspaceRow(pair, depth + 1))
-      }
+      appendFolderWorkspaceRows(
+        result,
+        folderWorkspacesByProjectGroupId.get(projectGroup.id) ?? [],
+        depth + 1,
+        {
+          attachedByFolderId: ctx.attachedByFolderId,
+          repoMap: ctx.repoMap,
+          lineageById: ctx.lineageById,
+          worktreeMap: ctx.worktreeMap,
+          nestLineage: ctx.nestLineage,
+          collapsedGroups,
+          cyclicLineageIds: ctx.cyclicLineageIds,
+          hostContextLabelByWorktreeIdentity: ctx.mixedWorktreeHostContextLabels
+        }
+      )
       appendOrderedGroups(ctx, withRepoSectionDisplayLabels(repoEntries), depth + 1)
       for (const childGroup of childGroups) {
         appendProjectGroup(childGroup, depth + 1)

@@ -7,7 +7,10 @@ import type { ProjectGroup } from '../../../../../../shared/project-group-types'
 import type { ProjectOrderBy } from '../../../../../../shared/ui-chrome-types'
 import type { Repo } from '../../../../../../shared/repo-types'
 import type { WorkspaceStatusDefinition, Worktree } from '../../../../../../shared/worktree/types'
-import type { WorktreeLineage } from '../../../../../../shared/worktree/lineage-types'
+import type {
+  WorkspaceLineage,
+  WorktreeLineage
+} from '../../../../../../shared/worktree/lineage-types'
 import type { ExecutionHostId } from '../../../../../../shared/execution-host'
 import { folderWorkspaceKey } from '../../../../../../shared/workspace-scope'
 import { getHostDisplayLabelOverrides } from '../../../../../../shared/host-setting-overrides'
@@ -30,6 +33,7 @@ type SectionRowsArgs = {
   repoMap: Map<string, Repo>
   worktreeMap: Map<string, Worktree>
   worktreeLineageById: Record<string, WorktreeLineage>
+  workspaceLineageByChildKey: Record<string, WorkspaceLineage>
   prCache: AppState['prCache'] | null
   settings: AppState['settings']
   workspaceStatuses: readonly WorkspaceStatusDefinition[]
@@ -166,7 +170,8 @@ export function useSidebarSectionRows(args: SectionRowsArgs) {
         args.visibleFolderWorkspacesForRows,
         hostLabelById,
         defaultHostId,
-        args.pinnedDisplayPolicy
+        args.pinnedDisplayPolicy,
+        args.workspaceLineageByChildKey
       ),
     [
       args.groupBy,
@@ -189,7 +194,8 @@ export function useSidebarSectionRows(args: SectionRowsArgs) {
       args.newExternalWorktreesInboxByRepo,
       pendingCreations,
       hostLabelById,
-      args.pinnedDisplayPolicy
+      args.pinnedDisplayPolicy,
+      args.workspaceLineageByChildKey
     ]
   )
   const orderedHostOptions = useMemo(

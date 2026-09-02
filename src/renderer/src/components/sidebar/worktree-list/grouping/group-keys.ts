@@ -101,6 +101,11 @@ export function getLineageGroupKey(worktreeId: string): string {
   return `${LINEAGE_GROUP_PREFIX}${worktreeId}`
 }
 
+/** Collapse key for the worktrees attached to a folder workspace. */
+export function getFolderWorkspaceAttachedGroupKey(folderWorkspaceId: string): string {
+  return `folder-attached:${folderWorkspaceId}`
+}
+
 export function getWorktreeLineageGroupKey(worktree: Pick<Worktree, 'id' | 'hostId'>): string {
   return getLineageGroupKey(worktree.hostId ? getWorktreeHostIdentity(worktree) : worktree.id)
 }
