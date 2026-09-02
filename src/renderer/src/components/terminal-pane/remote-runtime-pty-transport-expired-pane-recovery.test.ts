@@ -224,7 +224,7 @@ describe('createRemoteRuntimePtyTransport', () => {
 
     subscriptionCallbacks?.onResponse({
       ok: true,
-      result: { type: 'end', streamId: newStreamId }
+      result: { type: 'end', streamId: newStreamId, verdict: 'exited' }
     })
 
     expect(onPtyExit).toHaveBeenCalledWith('remote:env-1@@terminal-new')

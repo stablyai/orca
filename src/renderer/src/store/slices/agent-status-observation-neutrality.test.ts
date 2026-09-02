@@ -120,8 +120,8 @@ describe('agent status observation is behavior-neutral', () => {
       )
       expect(stampedRows.map(getAgentDotState)).toEqual(unstampedRows.map(getAgentDotState))
 
-      expect(resolveAttention([{ kind: 'hook', entry: stamped }], at)).toEqual(
-        resolveAttention([{ kind: 'hook', entry: unstamped }], at)
+      expect(resolveAttention([{ kind: 'hook', entry: stamped, hasLivePty: false }], at)).toEqual(
+        resolveAttention([{ kind: 'hook', entry: unstamped, hasLivePty: false }], at)
       )
     }
   })
@@ -141,7 +141,9 @@ describe('agent status observation is behavior-neutral', () => {
     }
 
     expect(isExplicitAgentStatusFresh(entry, now, AGENT_STATUS_STALE_AFTER_MS)).toBe(true)
-    expect(resolveAttention([{ kind: 'hook', entry }], now)).toMatchObject({ cls: 1 })
+    expect(resolveAttention([{ kind: 'hook', entry, hasLivePty: false }], now)).toMatchObject({
+      cls: 1
+    })
     const rows = buildWorktreeAgentRows({
       tabs: [makeTab({ id: 'tab-1', worktreeId: 'wt-1' })],
       entries: [entry],

@@ -3,7 +3,6 @@ import { createReadStream } from 'node:fs'
 import fsp from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
-import { shell } from 'electron'
 import type {
   LinuxPackageInstallRecovery,
   LinuxRootPackageType
@@ -36,7 +35,7 @@ export type LinuxPackageInstructionsResult =
   | { ok: false; reason: LinuxPackageRecoveryUnavailableReason }
 
 export type LinuxPackageRevealResult =
-  | { ok: true }
+  | { ok: true; path: string }
   | { ok: false; reason: LinuxPackageRecoveryUnavailableReason }
 
 type ValidationResult =
@@ -45,7 +44,7 @@ type ValidationResult =
 
 let trackedArtifact: LinuxPackageArtifact | null = null
 // Why: the renderer debounces clicks, but the IPC boundary must not allow parallel hashing of a 160 MB package.
-let inFlightValidation: { key: string; promise: Promise<ValidationResult> } | null = null
+const inFlightValidations = new WeakMap<LinuxPackageArtifact, Promise<ValidationResult>>()
 
 export function getTrackedLinuxPackageArtifact(): LinuxPackageArtifact | null {
   return trackedArtifact
@@ -117,24 +116,24 @@ function resolveExpectedSha512(
 }
 
 /**
- * Retains the verified download so a failed root-package install stays recoverable without paying
- * for the 160 MB transfer again. Only the in-memory event metadata is trusted for the digest.
+ * Retains the downloaded package and its release digest so manual actions do not repeat the 160 MB
+ * transfer. Only the in-memory event metadata is trusted for the digest.
  */
-export function captureLinuxPackageArtifact(event: unknown): void {
+export function captureLinuxPackageArtifact(event: unknown): LinuxPackageArtifact | null {
   const packageType = getLinuxRootPackageType()
   if (!packageType) {
-    return
+    return null
   }
   const downloadedFile = (event as { downloadedFile?: unknown })?.downloadedFile
   const version = (event as { version?: unknown })?.version
   if (typeof downloadedFile !== 'string' || !path.isAbsolute(downloadedFile)) {
-    return
+    return null
   }
   if (!downloadedFile.toLowerCase().endsWith(`.${packageType}`)) {
-    return
+    return null
   }
   if (typeof version !== 'string' || version.length === 0) {
-    return
+    return null
   }
   const sha512 = resolveExpectedSha512(
     (event as { files?: unknown })?.files,
@@ -147,9 +146,11 @@ export function captureLinuxPackageArtifact(event: unknown): void {
     // Why: an unresolvable digest only means THIS event cannot arm recovery. A previously retained
     // artifact carries its own digest and is revalidated on every use, so dropping it would force a
     // needless 160 MB redownload of a file that is still on disk and still verifiable.
-    return
+    return null
   }
-  trackedArtifact = { packageType, version, path: downloadedFile, sha512 }
+  const artifact = { packageType, version, path: downloadedFile, sha512 }
+  trackedArtifact = artifact
+  return artifact
 }
 
 function isInsideDirectory(root: string, target: string): boolean {
@@ -244,26 +245,18 @@ async function validateArtifact(artifact: LinuxPackageArtifact): Promise<Validat
   }
 }
 
-/**
- * Hashes the artifact, joining an identical pass already in flight. `fresh` opts out of that reuse:
- * a verdict that reaches a root installer must cover the bytes as of this call, not as of whenever
- * some earlier Copy/Show click started streaming.
- */
-function runValidation(
-  artifact: LinuxPackageArtifact,
-  options?: { fresh?: boolean }
-): Promise<ValidationResult> {
-  const key = `${artifact.packageType}:${artifact.version}:${artifact.path}:${artifact.sha512}`
-  if (!options?.fresh && inFlightValidation?.key === key) {
-    return inFlightValidation.promise
+/** Hashes the exact captured artifact, joining only that capture's in-flight proof. */
+function runValidation(artifact: LinuxPackageArtifact): Promise<ValidationResult> {
+  const inFlight = inFlightValidations.get(artifact)
+  if (inFlight) {
+    return inFlight
   }
   const promise: Promise<ValidationResult> = validateArtifact(artifact).finally(() => {
-    // Why: identity, not key — a fresh install pass may already have replaced this entry.
-    if (inFlightValidation?.promise === promise) {
-      inFlightValidation = null
+    if (inFlightValidations.get(artifact) === promise) {
+      inFlightValidations.delete(artifact)
     }
   })
-  inFlightValidation = { key, promise }
+  inFlightValidations.set(artifact, promise)
   return promise
 }
 
@@ -305,38 +298,12 @@ export async function resolveLinuxPackageInstallInstructions(
   }
 }
 
-/**
- * Re-proves the retained package immediately before the privileged installer consumes it.
- *
- * The cache path is user-writable, so a digest checked when the download finished says nothing
- * about the bytes `dpkg -i` will read minutes later. Re-hashing here does not close the race —
- * only an immutable handoff would — but it shrinks the window from "since the download" to
- * "since this call", and it catches the artifact being swapped or deleted outright. Takes the
- * artifact rather than a recovery so both the retry and the plain "Restart to Update" install
- * are covered.
- */
-export async function revalidateLinuxPackageForInstall(
-  artifact: LinuxPackageArtifact
-): Promise<{ ok: true } | { ok: false; reason: LinuxPackageRecoveryUnavailableReason }> {
-  const validation = await runValidation(artifact, { fresh: true })
-  return validation.ok ? { ok: true } : { ok: false, reason: validation.reason }
-}
-
-export async function revealLinuxPackage(
+export async function resolveLinuxPackageRevealTarget(
   recovery: LinuxPackageInstallRecovery
 ): Promise<LinuxPackageRevealResult> {
   const validation = await validateTrackedArtifact(recovery)
   if (!validation.ok) {
     return validation
   }
-  // Why: this cache path must not travel through the workspace shell:openPath API, whose execution
-  // host can be an SSH or WSL machine rather than the one that owns the installed package.
-  try {
-    shell.showItemInFolder(validation.artifact.path)
-  } catch {
-    // Why: every other failure in this module reports through {ok:false}; a raw throw here would
-    // reject the IPC with an unredacted message and skip the lifecycle record.
-    return { ok: false, reason: 'read-failed' }
-  }
-  return { ok: true }
+  return { ok: true, path: validation.artifact.path }
 }

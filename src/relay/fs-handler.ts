@@ -25,6 +25,7 @@ import {
   writeRelayFile
 } from './fs-path-mutation-requests'
 import { buildExcludePathPrefixes } from '../shared/quick-open-filter'
+import { maybeStreamRpcResponse, type GitResponseStreamRegistry } from './git-response-stream'
 import { readRelayFileContent, readRelayFileStreamMetadata } from './fs-handler-file-read'
 import { readRelayFileRange } from './fs-handler-file-range'
 import { FileRangeReadRequestError } from '../shared/file-range-read'
@@ -47,12 +48,19 @@ export class FsHandler {
   private watchRegistry: RelayFilesystemWatchRegistry
   private streamRegistry = new RelayStreamRegistry()
   private listFilesScans = new ListFilesScanCoordinator()
+  private readonly responseStreams: GitResponseStreamRegistry | undefined
 
   constructor(
     dispatcher: RelayDispatcher,
     _context: RelayContext,
-    watcherPool?: RelayWatcherProcessPool
+    watcherPool?: RelayWatcherProcessPool,
+    // Why passed in rather than owned: GitHandler registers the `git.responseAck` route every pump
+    // is credited through, and a client keys reassembly on `streamId` alone — see the header of
+    // git-response-stream.ts. Without one this handler answers plainly, which is the pre-streaming
+    // behavior rather than a stream nothing can credit.
+    responseStreams?: GitResponseStreamRegistry
   ) {
+    this.responseStreams = responseStreams
     this.dispatcher = dispatcher
     this.watchRegistry = new RelayFilesystemWatchRegistry(dispatcher, watcherPool)
     this.registerHandlers()
@@ -204,7 +212,10 @@ export class FsHandler {
     }
   }
 
-  private listFiles(params: Record<string, unknown>, context?: RequestContext): Promise<string[]> {
+  private async listFiles(
+    params: Record<string, unknown>,
+    context?: RequestContext
+  ): Promise<unknown> {
     const rootPath = expandTilde(params.rootPath as string)
     const maxResults =
       typeof params.maxResults === 'number' &&
@@ -224,13 +235,21 @@ export class FsHandler {
     // Why #7721: full-tree scans are the relay's most expensive request; the
     // coordinator caps them at one per client, coalescing duplicates and
     // aborting a stale scan when the workspace changes or the host cancels.
-    return this.listFilesScans.run({
+    const files = await this.listFilesScans.run({
       clientId: context?.clientId ?? 0,
       key: JSON.stringify([rootPath, excludePathPrefixes, maxResults, searchQuery]),
       signal: context?.signal,
       start: (signal) =>
         runListFilesScan(rootPath, excludePathPrefixes, signal, maxResults, searchQuery)
     })
+    // Why: a full listing of a real monorepo serializes past the 1 MiB control lane — Orca's own
+    // checkout is 22.6k paths averaging 58 characters, so a 20,001-row page is ~1.2MB — and the
+    // legacy-response lane it demotes to is refused under unrelated producer load. Streaming makes
+    // size stop being a correctness question instead of picking a row or byte ceiling to refuse at.
+    // A client that did not opt in still gets the plain array, exactly as before.
+    return this.responseStreams
+      ? maybeStreamRpcResponse(files, params, context, this.responseStreams, this.dispatcher)
+      : files
   }
 
   private async workspaceSpaceScan(params: Record<string, unknown>, context: RequestContext) {

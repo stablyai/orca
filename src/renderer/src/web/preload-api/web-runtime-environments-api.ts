@@ -182,6 +182,7 @@ export function createRuntimeEnvironmentsApi(): NonNullable<
     },
     getStatus: ({ selector, timeoutMs }) =>
       callEnvironmentEnvelope<RuntimeStatus>(selector, 'status.get', undefined, timeoutMs),
+    retryControlConnection: () => Promise.resolve(),
     prepareBrowserClientHostPlacement: async () => ({ kind: 'server' }),
     call: ({ selector, method, params, timeoutMs }) =>
       callEnvironmentEnvelope(selector, method, params, timeoutMs),

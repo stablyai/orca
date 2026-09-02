@@ -14,7 +14,7 @@ export type PtySpawnResult = {
   incarnationId?: PtyIncarnationId
   /** Relay source identity installed before adjacent source frames are decoded. */
   sourceActivation?: PtySourceReceivingActivation
-  /** The provider observed this exact spawn exit before its control reply settled. */
+  /** The provider observed this exact spawn exit before returning its spawn result. */
   exitedBeforeSpawnReply?: true
   /** OS-level pid of the shell process, when available at spawn time.
    *  Why: the memory collector needs this to walk each PTY's process

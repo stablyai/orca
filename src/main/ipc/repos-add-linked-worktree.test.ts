@@ -113,7 +113,7 @@ describe('repos:add with git worktrees', () => {
     invalidateAuthorizedRootsCacheMock.mockReset()
     prepareLocalWorktreeRootForRepoMock.mockReset().mockResolvedValue(undefined)
 
-    registerRepoHandlers(mockWindow as never, mockStore as never)
+    registerRepoHandlers(mockWindow as never, mockStore as never, {} as never)
   })
 
   it('returns the tracked main checkout instead of adding its linked worktree', async () => {

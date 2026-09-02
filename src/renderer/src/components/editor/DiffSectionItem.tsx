@@ -34,6 +34,7 @@ export function DiffSectionItem({
   sectionHeight,
   worktreeId,
   loadSection,
+  loadDeferredSection,
   retrySection,
   toggleSection,
   openSection,
@@ -372,10 +373,12 @@ export function DiffSectionItem({
           isEditable={isEditable}
           diffEditorFontSize={diffEditorFontSize}
           diffWordWrap={settings?.diffWordWrap}
+          diffShowWhitespace={settings?.diffShowWhitespace}
           editorFontFamily={resolveEditorFontFamily(settings)}
           onCancelComment={() => setPopover(null)}
           onSubmitComment={handleSubmitComment}
           onRetrySection={retrySection}
+          onLoadDeferredSection={loadDeferredSection ?? loadSection}
           onSaveLimitedDiff={() => void handleSectionSaveRef.current(index)}
           onMount={handleMount}
         />

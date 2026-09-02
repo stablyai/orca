@@ -1,6 +1,6 @@
 import type { GlobalSettings } from '../../shared/global-settings-types'
 import type { Repo } from '../../shared/repo-types'
-import type { GitWorktreeInfo, Worktree } from '../../shared/worktree/types'
+import type { GitPushTarget, GitWorktreeInfo, Worktree } from '../../shared/worktree/types'
 import type { GitRuntimeOptions } from '../git/git-runtime-options'
 import type { CommitMessageAgentEnvironmentResolvers } from '../text-generation/commit-message-agent-environment'
 import type { PullRequestLinkedIssueMeta } from '../source-control/pull-request-linked-issue'
@@ -22,6 +22,11 @@ export type RuntimeGitCommandHost = {
   /** `undefined` keeps cached metadata; `null` is the authoritative unlinked answer. */
   getWorktreeLinkedIssue?(worktreeId: string): number | null | undefined
   getWorktreeLinkedIssueMeta?(worktreeId: string): PullRequestLinkedIssueMeta | null | undefined
+  /** Why (#17828 review follow-up): RuntimeGitSyncCommands deliberately materializes with
+   *  no store (avoids unrelated ownership-inheritance/refspec-migration side effects), so a
+   *  lazily-minted remote still needs a way back into the store's `pushTarget.remoteCreated`
+   *  for #17842's orphan sweep. Called only when materialize reports `remoteCreated: true`. */
+  persistMaterializedPushTarget?(worktreeId: string, pushTarget: GitPushTarget): void
 }
 
 export function localGitOptionsForTarget(target: RuntimeGitTarget): GitRuntimeOptions {

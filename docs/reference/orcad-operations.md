@@ -4,8 +4,6 @@
 whatever supervises it: what it binds, what it owns on disk, who restarts what, and what its
 readiness payload actually proves.
 
-Design background: `docs/design/shipping-orcad.html` §00c and §04.
-
 ## Two long-lived processes, not one
 
 A deployment is **orcad** plus **the terminal daemon**.
@@ -14,18 +12,22 @@ A deployment is **orcad** plus **the terminal daemon**.
 | ---------- | -------------------------------- | ------------------------------------- |
 | Started by | the supervisor                   | orcad, detached                       |
 | Owns       | RPC, git, worktrees, persistence | every local PTY                       |
-| Lifetime   | one supervised run               | **outlives orcad**                    |
+| Lifetime   | one supervised run               | detached from orcad, not its service  |
 | Endpoint   | `ws://<bind>:<port>`             | `<data-root>/daemon/daemon-v<N>.sock` |
 
-The daemon outliving orcad is the property the whole peer model is recommended for
-(`docs/reference/ssh-execution-boundary.md`): daemon-backed PTYs stay `live` across a runtime
-restart, so a restart, an update or a rollback does not destroy running work. Everything
-below exists to keep that true.
+orcad detaches the daemon and calls `disconnectDaemon()`, never `shutdownDaemon()`. The
+built-in remote deployment path stops only the recorded orcad PID, so the daemon and its PTYs
+survive. The successor adopts the current endpoint and routes supported previous protocol
+versions through legacy adapters. This makes a PID-scoped update, rollback or restart
+non-destructive to live work.
 
-**Consequence for supervision:** orcad's shutdown path calls `disconnectDaemon()`, never
-`shutdownDaemon()`. A supervisor that reaps orcad's whole process group — systemd's
-`KillMode=control-group` — kills the daemon too and turns every restart back into data loss.
-Use `KillMode=mixed` (the default) or `process`, and never `--send-sigkill` on the group.
+Process detachment is not service isolation. A daemon forked by orcad, and every PTY it owns,
+remain in the same systemd service cgroup. `KillMode=mixed` does **not** preserve them: it
+sends the graceful stop signal only to the main process, then sends `SIGKILL` to every process
+remaining in the cgroup when the stop timeout expires. `KillMode=control-group` is destructive
+too. `KillMode=process` leaves service-owned processes unmanaged and is not a supported
+preservation mechanism. Service-restart survival requires separately supervised cgroups; the
+current deployment does not provide them.
 
 ## Bind policy
 
@@ -75,6 +77,25 @@ record. A lock that asked "is any process using this root" would refuse exactly 
 a live daemon makes worthwhile.
 
 ## Supervision
+
+### Process-scoped and cgroup-wide stops
+
+The built-in remote updater performs a PID-scoped stop and keeps the daemon's install version
+pinned while it owns sessions. A combined-unit systemd stop or restart is different: it reaps
+the daemon and every live terminal after the graceful window.
+
+Before a cgroup-wide stop, obtain a fresh `orca-ide terminal list --json` result using the same OS
+account and home as the daemon. Invoke the installer's absolute launcher path so `sudo`'s
+`secure_path` cannot hide a per-user registration (for example,
+`sudo -Hu orca /home/orca/.local/bin/orca-ide terminal list --json`). Replace both `orca` and
+`/home/orca` with the service account and home used by the unit; an extracted deployment may use
+its absolute `resources/bin/orca-ide` launcher instead. A safe empty census is untruncated, has an explicit `hostScope`, covers every
+execution host affected by the stop, and lists no terminals on those hosts. Every
+`omittedHostIds` entry must be explicitly accounted for outside the target service's execution
+boundary. A separately paired runtime is outside that boundary; local execution and SSH hosts
+reached through this runtime are not. An affected or unknown omission, missing scope,
+truncation, a failed request or lost contact makes the result `unverifiable`: defer the stop. Do
+not admit new work after the census. Orca does not yet provide an atomic census-and-stop fence.
 
 ### Who supervises orcad
 
@@ -127,11 +148,11 @@ An external supervisor (systemd, launchd, a process manager). orcad conforms to 
 
 ### Decommissioning
 
-The daemon outliving orcad is deliberate, so stopping orcad does **not** leave the host with
-zero Orca processes. A daemon that has been adopted stays resident after its runtime
-disconnects — that is what makes the next start a reattach rather than a cold restore. To
-retire a host completely, stop orcad and then stop the daemon named by
-`health.terminalDaemon.pid`, or delete the data root and let the endpoint go stale.
+After a PID-scoped stop, an adopted daemon stays resident so the next orcad can reattach.
+A combined-unit systemd stop kills it instead. To retire a process-scoped deployment, apply
+the census rule above, stop orcad, then stop the daemon named by `health.terminalDaemon.pid`.
+Only report it `exited` after verification on the execution host; loss of contact is
+`unverifiable`.
 
 ## Health
 
@@ -145,7 +166,8 @@ nodeVersion  / nodeAbi   process.versions.node / .modules — the ABI native add
 platform / arch / pid
 terminalDaemon:
   state              live | degraded | absent
-  ownsFreshSessions  whether NEW terminals are daemon-owned, i.e. survive an orcad restart
+  ownsFreshSessions  whether NEW terminals are daemon-owned; this supports PID-scoped
+                     restart recovery, not supervisor or service-cgroup isolation
   pid                the live daemon's pid, from its own PID record
   buildVersion       the build the LIVE daemon was forked from (may legitimately predate
                      this orcad after an update — reporting orcad's version for both would
@@ -179,11 +201,13 @@ Named here so nothing reads as implemented that is not:
 - **A continuous health endpoint.** `health` is published once, in the readiness payload. A
   supervisor's periodic liveness/readiness probe needs an HTTP or RPC surface over the same
   `collectOrcadHealth()`; that surface does not exist yet.
-- **libc slot.** §04 asks for it in the health payload. It belongs to the native strategy
-  (plan item 5), which owns libc detection; there is no honest value to publish until then.
-- **`degradations[]`.** Plan item 2's contract, not this one.
+- **Systemd-isolated daemon supervision.** orcad and its daemon currently share one service
+  cgroup, so a combined-unit stop cannot preserve live terminals.
+- **libc slot.** There is no honest health value to publish until native libc detection owns
+  it.
+- **`degradations[]`.** The readiness contract does not publish this collection yet.
 - **Credential administration** (list / revoke / rotate devices, expiring pending offers,
-  structured security logging) — §04, not delivered here.
+  structured security logging).
 - **Pinned-port fail-closed.** A pinned `--port` still falls back to an OS-assigned port on
   conflict.
 - **Reconciling `webClientUrl` with reachability** under the loopback default.

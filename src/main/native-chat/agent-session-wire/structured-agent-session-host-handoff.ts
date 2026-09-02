@@ -169,7 +169,7 @@ export function structuredTuiTranscriptImportOptions(
     : { codexSessionsDirs: [join(record.accountHome.path, 'sessions')] }
 }
 
-async function acquireNativeHandoffOwner(
+export async function acquireNativeHandoffOwner(
   deps: StructuredAgentSessionHostDeps,
   host: HostHandoffAccess,
   input: { sessionId: string; fence: number; spawnToken: string }
@@ -180,8 +180,11 @@ async function acquireNativeHandoffOwner(
     throw new Error('agent_session_identity_required')
   }
   const eventSink = host.eventSink(input.sessionId)
+  const priorBarrier = await eventSink.drained()
+  if (!priorBarrier.ok) {
+    throw priorBarrier.error
+  }
   eventSink.unbind()
-  await eventSink.drained()
   const acquired = await deps.adapter.acquire({
     identity: journalIdentityFor(record, session.params),
     fence: input.fence,
@@ -215,11 +218,16 @@ async function acquireNativeHandoffOwner(
   }
   session.hasProviderChild = true
   session.fence = proved.lease.runtimeFence
+  session.acquisitionGeneration = acquired.acquisitionGeneration ?? null
   eventSink.bind({
     journal: session.journal,
     fence: proved.lease.runtimeFence,
     publish: () => host.subscribers.publish(input.sessionId, session.journal)
   })
+  const acquiredBarrier = await eventSink.drained()
+  if (!acquiredBarrier.ok) {
+    throw acquiredBarrier.error
+  }
   host.subscribers.snapshot(input.sessionId, session.journal, proved.lease.runtimeFence)
   return proved
 }

@@ -81,4 +81,19 @@ describe('structured agent session status projection', () => {
       })
     ])
   })
+
+  it('preserves structured tool lifecycle state for the live renderer', () => {
+    const projected = projectStructuredItemToNativeChat(
+      item('running-tool', 1, {
+        kind: 'tool-call',
+        name: 'shell',
+        input: { command: 'cat package.json' },
+        state: 'running'
+      })
+    )
+
+    expect(projected?.blocks).toEqual([
+      { type: 'tool-call', name: 'shell', input: { command: 'cat package.json' }, state: 'running' }
+    ])
+  })
 })

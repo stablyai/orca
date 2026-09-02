@@ -135,6 +135,7 @@ export async function createWorkerWorktree(args: {
     name: params.name as string,
     baseBranch: params.baseBranch,
     displayName: params.displayName,
+    ...(params.displayName !== undefined ? { displayNameKind: 'user' as const } : {}),
     comment: params.comment,
     // setupDecision runs setup without the legacy runHooks activation side effect.
     runHooks: false,

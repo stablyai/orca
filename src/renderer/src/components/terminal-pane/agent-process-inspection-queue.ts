@@ -63,12 +63,18 @@ function pumpInspectionQueue(): void {
 
   activeInspections += 1
   inspectionStarts.push(now)
-  void next.run().finally(() => {
-    activeInspections = Math.max(0, activeInspections - 1)
-    if (inspectionQueue.length > 0) {
-      scheduleInspectionPump()
-    }
-  })
+  // Why the catch before finally: an unreachable runtime rejects the inspection on a cadence, and a
+  // bare `.finally()` chain re-raises it as a renderer-global unhandledrejection. Coordinators own
+  // their own failure/backoff state, so the queue only has to keep its accounting running.
+  void next
+    .run()
+    .catch(() => {})
+    .finally(() => {
+      activeInspections = Math.max(0, activeInspections - 1)
+      if (inspectionQueue.length > 0) {
+        scheduleInspectionPump()
+      }
+    })
 
   if (inspectionQueue.length > 0) {
     scheduleInspectionPump()

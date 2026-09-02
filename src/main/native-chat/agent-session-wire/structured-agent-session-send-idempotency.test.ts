@@ -4,10 +4,8 @@ import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AgentJournalMessageItem } from '../../../shared/agent-session-journal-types'
 import { structuredAgentSessionPayloadFingerprint } from '../../../shared/structured-agent-session-mutation'
-import {
-  openAgentSessionJournal,
-  type AgentSessionJournal
-} from '../agent-session-journal/journal-store'
+import { openAgentSessionJournal } from '../agent-session-journal/journal-store-factory'
+import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import type { StructuredAgentSessionAdapter } from './structured-agent-session-adapter'
 import { performSend, type AgentSessionTurnContext } from './structured-agent-session-turns'
 

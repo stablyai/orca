@@ -231,9 +231,9 @@ export function installTerminalKeydownFit(session: ConnectPanePtySession): void 
       isAgentTaskCompleteTrackingEnabled() && session.deps.isVisibleRef.current,
     isProcessInspectionCostly: () => {
       // Why: local Windows inspection forks a powershell.exe whole-process-table
-      // CIM scan per poll (~10-40x heavier than POSIX `ps`); SSH/remote PTYs run
-      // their scans on the remote host, so only local Windows panes relax the
-      // no-evidence cadence.
+      // CIM scan per poll (~10-40x heavier than POSIX `ps`). Keep the no-evidence
+      // cadence enabled until inventory evidence is consumed by this renderer;
+      // mixed-version relays may omit the optional field.
       if (!navigator.userAgent.includes('Windows')) {
         return false
       }

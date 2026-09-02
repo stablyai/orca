@@ -13,6 +13,7 @@ import {
 const TAB_MENU_SOURCES = [
   'EditorFileTabContextMenu.tsx',
   'SortableTabContextMenu.tsx',
+  'TabAgentSessionIdMenuItem.tsx',
   'BrowserTab.tsx',
   'TabWorkspaceLayoutMenuSection.tsx',
   'TerminalTabSplitMenuSection.tsx'

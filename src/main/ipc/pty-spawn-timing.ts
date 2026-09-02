@@ -1,7 +1,10 @@
-// Why: pty:spawn latency has four very different suspects (startup barrier,
-// Claude auth prep, buildPtyHostEnv filesystem work, provider/daemon spawn).
-// A single opt-in log line per spawn lets benchmarks attribute the cost
-// without a tracing dependency. Enabled via ORCA_PTY_SPAWN_TIMING=1.
+// Why: pty:spawn latency has several very different suspects (startup barrier,
+// Claude auth prep, Codex resume/hook prep, account resolution, buildPtyHostEnv
+// filesystem work, provider/daemon spawn). A single opt-in log line per spawn
+// lets benchmarks attribute the cost without a tracing dependency. Each phase
+// must name what it actually spans — `host_env` once covered the whole Codex
+// preamble and pinned 2s of hook-install cost on the env builder that ran last.
+// Enabled via ORCA_PTY_SPAWN_TIMING=1.
 
 export type PtySpawnTiming = {
   mark(phase: string): void

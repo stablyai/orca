@@ -4,6 +4,7 @@ import {
 } from '../../shared/git-branch-cleanup'
 import type { RemoveWorktreeResult } from '../../shared/worktree/create-types'
 import { withLocalGitCapabilityCacheForExecution } from './git-capability-state'
+import { withRepoRefMaintenancePaused } from './local-repo-ref-maintenance'
 import { gitExecFileAsync } from './runner'
 import { parseWorktreeList } from './worktree-list-parser'
 import type { GitWorktreeExecOptions, RemoveWorktreeOptions } from './worktree-operation-options'
@@ -152,7 +153,11 @@ export async function forceDeleteLocalBranch(
   }
   // Why: stale toast actions must not delete a branch that moved; `update-ref -d` deletes only if the ref still == expectedHead.
   try {
-    await runGit(['update-ref', '-d', `refs/heads/${branchName}`, expectedHead], repoPath)
+    // `update-ref -d` needs the packed-refs lock a running idle pack holds while
+    // it rewrites; waits it out rather than cancelling the pack.
+    await withRepoRefMaintenancePaused('branch-delete', () =>
+      runGit(['update-ref', '-d', `refs/heads/${branchName}`, expectedHead], repoPath)
+    )
   } catch {
     throw new Error(
       `Local branch "${branchName}" changed after the workspace was deleted. Review it before deleting it.`

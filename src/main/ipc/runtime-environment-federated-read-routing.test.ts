@@ -23,7 +23,10 @@ vi.mock('../../shared/remote-runtime-client', () => ({
 vi.mock('./runtime-environment-request-connections', () => ({
   sendRemoteRuntimeConnectionRequest: vi.fn(),
   sendRemoteRuntimeSharedControlRequest: sendRemoteRuntimeSharedControlRequestMock,
-  reconnectRemoteRuntimeSharedControlConnection: vi.fn()
+  reconnectRemoteRuntimeSharedControlConnection: vi.fn(),
+  retryRemoteRuntimeSharedControlConnectionNow: vi.fn(),
+  ensureRemoteRuntimeSharedControlConnection: vi.fn(),
+  pauseRemoteRuntimeSharedControlRetry: vi.fn()
 }))
 
 import {

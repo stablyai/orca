@@ -9,6 +9,7 @@ import { getAgentDotState } from './worktree-card-agent-summary'
 import { translate } from '@/i18n/i18n'
 import { getAgentRowPrimaryText } from '@/lib/agent-row-primary-text'
 import { formatAgentToolPreview } from '@/lib/agent-row-tool-preview'
+import { agentNoUpdateLabel } from '@/lib/agent-row-decay-state'
 import { useAgentRowConversationName } from '@/components/dashboard/use-agent-row-conversation-name'
 import { lastEnteredDoneAt } from '@/components/dashboard/agent-finished-timestamp'
 import CacheTimer, { usePromptCacheCountdownForPane } from './CacheTimer'
@@ -37,9 +38,14 @@ function getCompactAgentPrimary(
   return prompt || agentStateLabel(getAgentDotState(agent))
 }
 
-export function getCompactAgentSecondary(agent: DashboardAgentRowData): string {
+export function getCompactAgentSecondary(agent: DashboardAgentRowData, now: number): string {
   if (agent.entry.interrupted === true) {
     return 'Interrupted by user'
+  }
+  // Why: the only honest thing to say about a pane Orca still holds but no longer hears
+  // from is how long the silence has run; the user supplies the meaning.
+  if (agent.state === 'unverifiable') {
+    return agentNoUpdateLabel(agent.entry, now)
   }
   // Why: the lead turn is over in monitoring, so its last tool line is stale; name the state instead.
   if (agent.state === 'working' && agent.entry.workingMode === 'monitoring') {
@@ -122,7 +128,7 @@ export const CompactAgentRow = React.memo(function CompactAgentRow({
   const conversationName = useAgentRowConversationName(agent)
   const primary = getCompactAgentPrimary(agent, conversationName)
   const isLineageChild = agent.lineage?.depth === 1
-  const secondary = getCompactAgentSecondary(agent)
+  const secondary = getCompactAgentSecondary(agent, now)
   // Why: sidebar truncation must preserve the passive-vs-active distinction.
   const leadingText = dotState === 'monitoring' ? secondary : primary
   const trailingText =

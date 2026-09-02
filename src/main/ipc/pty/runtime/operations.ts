@@ -34,8 +34,7 @@ export function writePtyFromRuntimeController(
     return false
   }
   try {
-    getProviderForPty(ptyId).write(ptyId, data)
-    return true
+    return getProviderForPty(ptyId).write(ptyId, data) !== false
   } catch {
     return false
   }

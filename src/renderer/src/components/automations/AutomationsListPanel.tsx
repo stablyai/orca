@@ -1,7 +1,4 @@
 import React, { useRef } from 'react'
-import { Plus, RefreshCw } from 'lucide-react'
-import { Button } from '@/components/ui/button'
-import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { cn } from '@/lib/utils'
 import type {
   AutomationRun,
@@ -18,15 +15,14 @@ import type { RuntimeStatus } from '../../../../shared/runtime-types'
 import type { TaskSourceHostAvailability } from '../task-source-context-summary'
 import type { AutomationRowAction } from './automation-captured-owner'
 import type { AutomationHostTarget } from './automation-host-client'
-import { clampAutomationListSearchQueryInput } from './automation-list-search'
 import {
+  createAutomationListEnterHandler,
   getAutomationListArrowNavigationTarget,
   type AutomationListArrowKey
 } from './automation-list-keyboard-navigation'
 import type { AutomationListRow } from './automation-list-row-identity'
 import type { AutomationPaneTab } from './automation-page-state'
-import { AutomationListSearchField } from './AutomationListSearchField'
-import { AutomationListFilterMenu, AutomationListFilterPills } from './AutomationListFilterMenu'
+import { AutomationListFilterPills } from './AutomationListFilterMenu'
 import { isAutomationListFilterActive, type AutomationListFilter } from './automation-list-view'
 import { automationHostFilterStableKey } from '../../../../shared/automation-host-filter'
 import type { AutomationTemplate } from './automation-templates'
@@ -46,6 +42,7 @@ import { LIST_TABLE_CONTAINER_CLASS } from '@/lib/list-table-layout'
 import { translate } from '@/i18n/i18n'
 import { AutomationTemplateEmptyState } from './AutomationTemplateEmptyState'
 import { AutomationListTableHeader } from './AutomationListTableHeader'
+import { AutomationListToolbar } from './AutomationListToolbar'
 
 const TEMPLATE_EMPTY_STATES: ReadonlySet<string> = new Set(['host-empty', 'all-hosts-empty'])
 const EMPTY_AUTOMATION_RUNS: ReadonlyMap<string, AutomationRun> = new Map()
@@ -214,6 +211,15 @@ export function AutomationsListPanel(props: AutomationsListPanelProps): React.JS
       visibleItems
     ]
   )
+  const handleSearchEnter = createAutomationListEnterHandler({
+    items: visibleItems,
+    selectedId: selectedRowKey,
+    selectedExternalKey,
+    selectAutomationRow,
+    selectExternalKey,
+    setActivePaneTab,
+    onOpenDetail
+  })
   React.useEffect(() => {
     if (!pendingKeyboardScrollRef.current) {
       return
@@ -275,60 +281,21 @@ export function AutomationsListPanel(props: AutomationsListPanelProps): React.JS
       className="flex min-h-0 flex-1 flex-col overflow-hidden px-3 pb-4 md:px-5"
       data-contextual-tour-target="automations-list"
     >
-      <div className="flex shrink-0 items-end justify-between gap-3 pb-4">
-        <div ref={toolbarRef} className="flex min-w-0 flex-1 items-end gap-2">
-          <AutomationListSearchField
-            className="w-full max-w-xs"
-            query={listSearchQuery}
-            isTooLarge={isListSearchQueryTooLarge}
-            onQueryChange={(query) =>
-              onListSearchQueryChange(clampAutomationListSearchQueryInput(query))
-            }
-            onClear={() => onListSearchQueryChange('')}
-            onArrowNavigate={handleSearchArrowNavigate}
-          />
-          <AutomationListFilterMenu
-            filter={listFilter}
-            onChange={onListFilterChange}
-            hostEntries={hostCatalog.entries}
-          />
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon-sm"
-                aria-label={translate(
-                  'auto.components.automations.AutomationsPage.19a6e30eae',
-                  'Refresh automations'
-                )}
-                onClick={onRefresh}
-                disabled={isRefreshing}
-                className="shrink-0 border border-border bg-background shadow-none hover:bg-muted/50"
-              >
-                <RefreshCw className={cn('size-4', isRefreshing && 'animate-spin')} />
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent side="bottom" sideOffset={6}>
-              {translate(
-                'auto.components.automations.AutomationsPage.19a6e30eae',
-                'Refresh automations'
-              )}
-            </TooltipContent>
-          </Tooltip>
-        </div>
-        <Button
-          type="button"
-          size="sm"
-          className="shrink-0"
-          onClick={() => openCreateDialog()}
-          disabled={!canCreateAutomation}
-          data-contextual-tour-target="automations-create"
-        >
-          <Plus className="size-4" />
-          {translate('auto.components.automations.AutomationsPage.newAutomation', 'New Automation')}
-        </Button>
-      </div>
+      <AutomationListToolbar
+        toolbarRef={toolbarRef}
+        listSearchQuery={listSearchQuery}
+        isListSearchQueryTooLarge={isListSearchQueryTooLarge}
+        onListSearchQueryChange={onListSearchQueryChange}
+        onSearchArrowNavigate={handleSearchArrowNavigate}
+        onSearchEnter={handleSearchEnter}
+        listFilter={listFilter}
+        onListFilterChange={onListFilterChange}
+        hostEntries={hostCatalog.entries}
+        onRefresh={onRefresh}
+        isRefreshing={isRefreshing}
+        openCreateDialog={openCreateDialog}
+        canCreateAutomation={canCreateAutomation}
+      />
 
       {listFilterActive || legacyScopeStableKey !== null ? (
         <div className="flex flex-wrap items-center gap-1.5 pb-3">

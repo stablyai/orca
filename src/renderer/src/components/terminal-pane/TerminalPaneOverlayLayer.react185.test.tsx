@@ -6,8 +6,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 ;(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
 
 let terminalPaneRenderCount = 0
+let terminalPaneProps: { onPtyExit?: (ptyId: string, exitCode?: number) => void } | null = null
+const markUnverifiedPtyLoss = vi.fn()
 vi.mock('./TerminalPane', () => ({
-  default: () => {
+  default: (props: { onPtyExit?: (ptyId: string, exitCode?: number) => void }) => {
+    terminalPaneProps = props
     terminalPaneRenderCount += 1
     return null
   }
@@ -15,7 +18,7 @@ vi.mock('./TerminalPane', () => ({
 
 vi.mock('../../store', () => ({
   useAppStore: Object.assign(() => undefined, {
-    getState: () => ({ pendingStartupByTabId: {} })
+    getState: () => ({ pendingStartupByTabId: {}, markUnverifiedPtyLoss })
   })
 }))
 
@@ -85,6 +88,8 @@ function renderSlot(): void {
 
 beforeEach(() => {
   terminalPaneRenderCount = 0
+  terminalPaneProps = null
+  markUnverifiedPtyLoss.mockReset()
   capturedResizeCallback = null
   ;(globalThis as { __ORCA_WEB_CLIENT__?: boolean }).__ORCA_WEB_CLIENT__ = true
   vi.stubGlobal('ResizeObserver', CapturingResizeObserver)
@@ -111,6 +116,16 @@ afterEach(() => {
 })
 
 describe('TerminalPaneOverlayLayer fallback measure<->fit loop (React #185)', () => {
+  it('keeps the tab when the host reports an unverified PTY loss', () => {
+    renderSlot()
+
+    act(() => {
+      terminalPaneProps?.onPtyExit?.('pty-host-lost', -1)
+    })
+
+    expect(markUnverifiedPtyLoss).toHaveBeenCalledWith(TAB_ID)
+  })
+
   it('does not re-render on ResizeObserver ticks with an unchanged rect', () => {
     renderSlot()
     expect(capturedResizeCallback).toBeTypeOf('function')

@@ -18,6 +18,7 @@ export type QuickCreationRequestInput = {
   workspaceName: string
   nameWasGenerated: boolean
   displayName: string | undefined
+  displayNameKind?: 'generated' | 'user'
   selectedRepoIsGit: boolean
   baseBranch: string | undefined
   compareBaseRef: string | undefined
@@ -63,6 +64,7 @@ export function buildQuickCreationRequest(
     name: input.workspaceName,
     ...(input.nameWasGenerated ? { nameWasGenerated: true } : {}),
     ...(input.displayName ? { displayName: input.displayName } : {}),
+    ...(input.displayNameKind ? { displayNameKind: input.displayNameKind } : {}),
     ...(input.selectedRepoIsGit && input.baseBranch ? { baseBranch: input.baseBranch } : {}),
     ...(input.selectedRepoIsGit && input.compareBaseRef
       ? { compareBaseRef: input.compareBaseRef }

@@ -1,7 +1,12 @@
 import { posix as pathPosix } from 'node:path'
-import { quotePosixShell as quoteBashString } from '../../shared/wsl-login-shell-command'
 import { parseWslUncPath } from '../../shared/wsl-paths'
 import { runWslProcess } from '../wsl/wsl-runner'
+import {
+  buildWslCodexSessionBridgeShellCommand,
+  WSL_SESSION_BRIDGE_TIMEOUT_MS
+} from './wsl-codex-session-bridge-script'
+
+export { buildWslCodexSessionBridgeShellCommand } from './wsl-codex-session-bridge-script'
 
 export type WslCodexSessionBridgeTarget = {
   distro: string
@@ -21,8 +26,6 @@ export type WslCodexSessionBridgeSummary = {
 
 const emptySummary: WslCodexSessionBridgeSummary = { scannedFiles: 0, linkedFiles: 0 }
 const backgroundWslSessionBridgeTasks = new Map<string, Promise<void>>()
-const WSL_SESSION_BRIDGE_TIMEOUT_MS = 30_000
-
 export function startWslCodexSessionBridgeInBackground(
   target: WslCodexSessionBridgeTarget
 ): Promise<void> {
@@ -84,39 +87,6 @@ export function resolveWslCodexSessionBridgeLinuxPaths(
     systemSessionsRoot: joinLinuxPath(systemHomePath, 'sessions'),
     managedSessionsRoot: joinLinuxPath(managedHomePath, 'sessions')
   }
-}
-
-export function buildWslCodexSessionBridgeShellCommand(
-  paths: WslCodexSessionBridgeLinuxPaths
-): string {
-  const shellCommand = [
-    'set -u',
-    `source_sessions_root=${quoteBashString(paths.systemSessionsRoot)}`,
-    `managed_sessions_root=${quoteBashString(paths.managedSessionsRoot)}`,
-    'scanned_files=0',
-    'linked_files=0',
-    'if [ ! -d "$source_sessions_root" ]; then',
-    `  printf '{"scannedFiles":0,"linkedFiles":0}\\n'`,
-    '  exit 0',
-    'fi',
-    "while IFS= read -r -d '' source_file; do",
-    '  scanned_files=$((scanned_files + 1))',
-    '  relative_path=${source_file#"$source_sessions_root"/}',
-    '  target_file="$managed_sessions_root/$relative_path"',
-    '  if [ -e "$target_file" ] || [ -L "$target_file" ]; then',
-    '    continue',
-    '  fi',
-    '  target_dir=${target_file%/*}',
-    '  mkdir -p -- "$target_dir" || continue',
-    // Why: Codex resume ignores symlinked JSONL, so WSL links must be
-    // Linux hardlinks created inside the distro filesystem.
-    '  if ln -- "$source_file" "$target_file"; then',
-    '    linked_files=$((linked_files + 1))',
-    '  fi',
-    `done < <(find "$source_sessions_root" -type f -name '*.jsonl' -print0 2>/dev/null)`,
-    `printf '{"scannedFiles":%s,"linkedFiles":%s}\\n' "$scanned_files" "$linked_files"`
-  ].join('\n')
-  return shellCommand
 }
 
 function getWslSessionBridgeTaskKey(target: WslCodexSessionBridgeTarget): string {

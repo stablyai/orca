@@ -21,6 +21,7 @@ export function CombinedDiffSectionList({
   isCommitMode,
   isDark,
   loadSection,
+  loadDeferredSection,
   markDirectScrollInput,
   modifiedEditorsRef,
   onScrollbarPointerDown,
@@ -49,6 +50,7 @@ export function CombinedDiffSectionList({
   isCommitMode: boolean
   isDark: boolean
   loadSection: (index: number) => void
+  loadDeferredSection: (index: number) => void
   markDirectScrollInput: () => void
   modifiedEditorsRef: DiffSectionItemProps['modifiedEditorsRef']
   onScrollbarPointerDown: (event: React.PointerEvent<HTMLDivElement>) => void
@@ -104,6 +106,7 @@ export function CombinedDiffSectionList({
                   sectionHeight={sectionHeights[virtualItem.index]}
                   worktreeId={file.worktreeId}
                   loadSection={loadSection}
+                  loadDeferredSection={loadDeferredSection}
                   retrySection={retrySection}
                   toggleSection={toggleSection}
                   openSection={openSection}
