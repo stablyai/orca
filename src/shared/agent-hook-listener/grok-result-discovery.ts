@@ -204,7 +204,7 @@ export function preparePendingGrokResultDiscovery(
     envelope?.hookEventName ??
     record.hook_event_name ??
     record.hookEventName
-  if (!isGrokEvent(eventName, 'stop', 'session_end')) {
+  if (!isGrokEvent(eventName, 'stop', 'session_end', 'stop_cancelled')) {
     return null
   }
   const metadata = readGrokSessionMetadata(

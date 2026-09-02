@@ -13,6 +13,8 @@ export const GROK_EVENTS = [
   { eventName: 'UserPromptSubmit', definition: { hooks: [{ type: 'command', command: '' }] } },
   { eventName: 'Stop', definition: { hooks: [{ type: 'command', command: '' }] } },
   { eventName: 'StopFailure', definition: { hooks: [{ type: 'command', command: '' }] } },
+  // Why (#15225): Grok 1.0+ fires StopCancelled instead of Stop on Ctrl+C / Esc / max-turns.
+  { eventName: 'StopCancelled', definition: { hooks: [{ type: 'command', command: '' }] } },
   { eventName: 'SessionEnd', definition: { hooks: [{ type: 'command', command: '' }] } },
   {
     // Why: Orca needs the pre-event to show in-flight tools and detect ask_user_question waits;

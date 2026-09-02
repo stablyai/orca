@@ -251,6 +251,7 @@ describe('GrokHookService', () => {
         'SessionEnd',
         'SessionStart',
         'Stop',
+        'StopCancelled',
         'StopFailure',
         'UserPromptSubmit'
       ].sort()
@@ -262,8 +263,9 @@ describe('GrokHookService', () => {
     // Why: Grok matchers are real regexes; bare `*` does not match-all.
     expect(config.hooks.PostToolUseFailure[0].matcher).toBe('.*')
     expect(config.hooks.PostToolUse[0].matcher).toBe('.*')
-    // Why: StopFailure must not carry a tool matcher — lifecycle-only event.
+    // Why: StopFailure / StopCancelled must not carry a tool matcher — lifecycle-only events.
     expect(config.hooks.StopFailure[0].matcher).toBeUndefined()
+    expect(config.hooks.StopCancelled[0].matcher).toBeUndefined()
     expect(config.hooks.Notification[0].matcher).toBeUndefined()
     // Why: assert the shipped helper still matches what install wrote (regression
     // guard if GROK_TOOL_EVENT_MATCHER drifts from install).
@@ -287,6 +289,8 @@ describe('GrokHookService', () => {
       'utf8'
     )
     expect(script).toContain('/hook/grok')
+    expect(script).toContain('--max-time 8')
+    expect(script).not.toContain('--max-time 1.5')
     if (process.platform === 'win32') {
       expect(script).toContain('%SystemRoot%\\System32\\curl.exe')
       // Why: windows-grok-hook-script.test.ts pins the GROK_HOME guard shape itself,

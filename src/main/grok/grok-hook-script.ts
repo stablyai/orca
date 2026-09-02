@@ -9,7 +9,8 @@ import {
 } from '../agent-hooks/hook-stdin-contract'
 import {
   buildWindowsGrokHookScript,
-  GROK_HOME_ENVELOPE_MAX_LENGTH
+  GROK_HOME_ENVELOPE_MAX_LENGTH,
+  GROK_HOOK_POST_MAX_TIME_SECONDS
 } from './windows-grok-hook-script'
 
 export function getGrokManagedScriptFileName(): string {
@@ -49,7 +50,9 @@ export function getGrokManagedScript(target: 'local' | 'posix' = 'local'): strin
     '  grok_home=$GROK_HOME',
     'fi',
     'printf \'%s\' "$payload" | curl -sS -X POST "http://127.0.0.1:${ORCA_AGENT_HOOK_PORT}/hook/grok" \\',
-    '  --connect-timeout 0.5 --max-time 1.5 \\',
+    // Why: Grok Stop stdin includes lastAssistantMessage (up to 32 KiB). The
+    // shared 1.5s bound drops those posts; TUI still shows `stop [hooks: 1]`.
+    `  --connect-timeout 0.5 --max-time ${GROK_HOOK_POST_MAX_TIME_SECONDS} \\`,
     '  -H "Content-Type: application/x-www-form-urlencoded" \\',
     '  -H "X-Orca-Agent-Hook-Token: ${ORCA_AGENT_HOOK_TOKEN}" \\',
     '  --data-urlencode "paneKey=${ORCA_PANE_KEY}" \\',
