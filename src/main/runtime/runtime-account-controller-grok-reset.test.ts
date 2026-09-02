@@ -79,25 +79,36 @@ describe('RuntimeAccountController Grok reset replay', () => {
     expect(ledger.read().attempts).toMatchObject([{ idempotencyKey: key, state: 'settled' }])
   })
 
-  it('coalesces concurrent desktop and RPC attempts with different UUIDs', async () => {
+  it("serializes different UUIDs and replays only each UUID's own result", async () => {
     const ledger = createLedgerStore()
     let resolveProvider!: (value: { outcome: 'reset' }) => void
-    const consumeGrokRateLimitResetCredit = vi.fn(
-      () => new Promise<{ outcome: 'reset' }>((resolve) => (resolveProvider = resolve))
-    )
+    const consumeGrokRateLimitResetCredit = vi
+      .fn()
+      .mockImplementationOnce(
+        () => new Promise<{ outcome: 'reset' }>((resolve) => (resolveProvider = resolve))
+      )
+      .mockResolvedValueOnce({ outcome: 'nothingToReset' })
     const rateLimits = { grok: { provider: 'grok' as const, weekly: { usedPercent: 80 } } }
     const controller = new RuntimeAccountController(() => ledger.store as never)
     controller.setServices(accountServices(consumeGrokRateLimitResetCredit, rateLimits) as never)
+    const firstKey = '44444444-4444-4444-8444-444444444444'
+    const secondKey = '55555555-5555-4555-8555-555555555555'
 
-    const desktop = controller.consumeGrokResetCredit('44444444-4444-4444-8444-444444444444')
-    const rpc = controller.consumeGrokResetCredit('55555555-5555-4555-8555-555555555555')
+    const desktop = controller.consumeGrokResetCredit(firstKey)
+    const rpc = controller.consumeGrokResetCredit(secondKey)
+    await vi.waitFor(() => expect(consumeGrokRateLimitResetCredit).toHaveBeenCalledOnce())
     resolveProvider({ outcome: 'reset' })
 
-    await expect(Promise.all([desktop, rpc])).resolves.toMatchObject([
-      { outcome: 'reset' },
-      { outcome: 'reset' }
+    await expect(desktop).resolves.toMatchObject({ outcome: 'reset' })
+    await expect(rpc).resolves.toMatchObject({ outcome: 'nothingToReset' })
+    await expect(controller.consumeGrokResetCredit(secondKey)).resolves.toMatchObject({
+      outcome: 'nothingToReset'
+    })
+    expect(consumeGrokRateLimitResetCredit).toHaveBeenCalledTimes(2)
+    expect(ledger.read().attempts).toMatchObject([
+      { idempotencyKey: firstKey, outcome: 'reset' },
+      { idempotencyKey: secondKey, outcome: 'nothingToReset' }
     ])
-    expect(consumeGrokRateLimitResetCredit).toHaveBeenCalledOnce()
   })
 
   it('settles a recovered pending attempt when weekly usage was reset', async () => {
