@@ -14,6 +14,8 @@ type MockState = {
   ptyIdsByTabId: Record<string, string[]>
   suppressedPtyExitIds: Record<string, boolean>
   terminalLayoutsByTabId: Record<string, TerminalLayoutSnapshot>
+  runtimePaneTitlesByTabId: Record<string, Record<number, string>>
+  runtimeAgentOrchestrationByPaneKey: Record<string, NonNullable<AgentStatusEntry['orchestration']>>
   browserTabsByWorktree: Record<string, unknown[]>
   retainedAgentsByPaneKey: Record<string, { worktreeId: string }>
   agentStatusByPaneKey: Record<string, AgentStatusEntry>
@@ -117,6 +119,8 @@ describe('dispatchTerminalNotification', () => {
           ptyIdsByLeafId: { [liveLeafId]: 'pty-1' }
         }
       },
+      runtimePaneTitlesByTabId: {},
+      runtimeAgentOrchestrationByPaneKey: {},
       browserTabsByWorktree: {},
       retainedAgentsByPaneKey: {},
       agentStatusByPaneKey: {
@@ -353,6 +357,420 @@ describe('dispatchTerminalNotification', () => {
     expect(mockState.markTerminalTabUnread).toHaveBeenCalledWith('tab-1')
     expect(mockState.markTerminalPaneUnread).toHaveBeenCalledWith(paneKey)
     expect(window.api.notifications.dispatch).not.toHaveBeenCalled()
+  })
+
+  it('suppresses parent OS completion while an orchestration child is active', () => {
+    const childPaneKey = 'tab-child:33333333-3333-4333-8333-333333333333'
+    mockState.agentStatusByPaneKey[childPaneKey] = makeAgentStatus(childPaneKey, {
+      state: 'working',
+      prompt: 'child still running',
+      worktreeId: 'wt-primary',
+      orchestration: {
+        taskId: 'task-1',
+        dispatchId: 'ctx-1',
+        parentPaneKey: paneKey
+      }
+    })
+
+    dispatchTerminalNotification('wt-primary', {
+      source: 'agent-task-complete',
+      terminalTitle: 'codex',
+      paneKey
+    })
+
+    expect(mockState.markWorktreeUnread).toHaveBeenCalledWith('wt-primary')
+    expect(mockState.markTerminalTabUnread).toHaveBeenCalledWith('tab-1')
+    expect(mockState.markTerminalPaneUnread).toHaveBeenCalledWith(paneKey)
+    expect(window.api.notifications.dispatch).not.toHaveBeenCalled()
+  })
+
+  it.each(['waiting', 'blocked'] as const)(
+    'suppresses parent OS completion while an orchestration child is %s',
+    (childState) => {
+      const childPaneKey = 'tab-child:33333333-3333-4333-8333-333333333333'
+      mockState.agentStatusByPaneKey[childPaneKey] = makeAgentStatus(childPaneKey, {
+        state: childState,
+        prompt: 'child needs attention',
+        worktreeId: 'wt-primary',
+        orchestration: {
+          taskId: 'task-1',
+          dispatchId: 'ctx-1',
+          parentPaneKey: paneKey
+        }
+      })
+
+      dispatchTerminalNotification('wt-primary', {
+        source: 'agent-task-complete',
+        terminalTitle: 'codex',
+        paneKey
+      })
+
+      expect(mockState.markWorktreeUnread).toHaveBeenCalledWith('wt-primary')
+      expect(mockState.markTerminalTabUnread).toHaveBeenCalledWith('tab-1')
+      expect(mockState.markTerminalPaneUnread).toHaveBeenCalledWith(paneKey)
+      expect(window.api.notifications.dispatch).not.toHaveBeenCalled()
+    }
+  )
+
+  it('suppresses parent OS completion for child related by parent terminal handle', () => {
+    const childPaneKey = 'tab-child:33333333-3333-4333-8333-333333333333'
+    mockState.agentStatusByPaneKey[paneKey] = makeAgentStatus(paneKey, {
+      terminalHandle: 'term-parent'
+    })
+    mockState.agentStatusByPaneKey[childPaneKey] = makeAgentStatus(childPaneKey, {
+      state: 'working',
+      prompt: 'child still running',
+      worktreeId: 'wt-primary',
+      orchestration: {
+        taskId: 'task-1',
+        dispatchId: 'ctx-1',
+        parentTerminalHandle: 'term-parent'
+      }
+    })
+
+    dispatchTerminalNotification('wt-primary', {
+      source: 'agent-task-complete',
+      terminalTitle: 'codex',
+      paneKey
+    })
+
+    expect(mockState.markWorktreeUnread).toHaveBeenCalledWith('wt-primary')
+    expect(window.api.notifications.dispatch).not.toHaveBeenCalled()
+  })
+
+  it('suppresses parent OS completion for child related by coordinator handle', () => {
+    const childPaneKey = 'tab-child:33333333-3333-4333-8333-333333333333'
+    mockState.agentStatusByPaneKey[paneKey] = makeAgentStatus(paneKey, {
+      terminalHandle: 'term-coordinator'
+    })
+    mockState.agentStatusByPaneKey[childPaneKey] = makeAgentStatus(childPaneKey, {
+      state: 'working',
+      prompt: 'child still running',
+      worktreeId: 'wt-primary',
+      orchestration: {
+        taskId: 'task-1',
+        dispatchId: 'ctx-1',
+        coordinatorHandle: 'term-coordinator'
+      }
+    })
+
+    dispatchTerminalNotification('wt-primary', {
+      source: 'agent-task-complete',
+      terminalTitle: 'codex',
+      paneKey
+    })
+
+    expect(mockState.markWorktreeUnread).toHaveBeenCalledWith('wt-primary')
+    expect(window.api.notifications.dispatch).not.toHaveBeenCalled()
+  })
+
+  it('still dispatches parent waiting attention while an orchestration child is active', () => {
+    const childPaneKey = 'tab-child:33333333-3333-4333-8333-333333333333'
+    const waitingStartedAt = Date.now()
+    mockState.agentStatusByPaneKey[paneKey] = makeAgentStatus(paneKey, {
+      state: 'waiting',
+      prompt: 'approval needed',
+      updatedAt: waitingStartedAt,
+      stateStartedAt: waitingStartedAt
+    })
+    mockState.agentStatusByPaneKey[childPaneKey] = makeAgentStatus(childPaneKey, {
+      state: 'working',
+      prompt: 'child still running',
+      worktreeId: 'wt-primary',
+      orchestration: {
+        taskId: 'task-1',
+        dispatchId: 'ctx-1',
+        parentPaneKey: paneKey
+      }
+    })
+
+    dispatchTerminalNotification('wt-primary', {
+      source: 'agent-task-complete',
+      terminalTitle: 'codex',
+      paneKey,
+      agentStatusSnapshot: {
+        state: 'waiting',
+        prompt: 'approval needed',
+        agentType: 'codex',
+        stateStartedAt: waitingStartedAt
+      }
+    })
+
+    expect(window.api.notifications.dispatch).toHaveBeenCalledWith(
+      expect.objectContaining({
+        source: 'agent-task-complete',
+        worktreeId: 'wt-primary',
+        paneKey,
+        agentState: 'waiting',
+        agentPrompt: 'approval needed'
+      })
+    )
+  })
+
+  it('does not suppress from a handle-matched child in another worktree', () => {
+    const childPaneKey = 'tab-secondary-child:33333333-3333-4333-8333-333333333333'
+    mockState.tabsByWorktree['wt-secondary'] = [
+      { id: 'tab-secondary-child', ptyId: 'pty-secondary-child' }
+    ]
+    mockState.agentStatusByPaneKey[paneKey] = makeAgentStatus(paneKey, {
+      terminalHandle: 'term-shared'
+    })
+    mockState.agentStatusByPaneKey[childPaneKey] = makeAgentStatus(childPaneKey, {
+      state: 'working',
+      prompt: 'other worktree child',
+      worktreeId: 'wt-secondary',
+      orchestration: {
+        taskId: 'task-1',
+        dispatchId: 'ctx-1',
+        parentTerminalHandle: 'term-shared'
+      }
+    })
+
+    dispatchTerminalNotification('wt-primary', {
+      source: 'agent-task-complete',
+      terminalTitle: 'codex',
+      paneKey
+    })
+
+    expect(window.api.notifications.dispatch).toHaveBeenCalledWith(
+      expect.objectContaining({
+        source: 'agent-task-complete',
+        worktreeId: 'wt-primary',
+        paneKey
+      })
+    )
+  })
+
+  it('does not suppress when an explicit child worktree id conflicts with tab membership', () => {
+    const childPaneKey = 'tab-1:33333333-3333-4333-8333-333333333333'
+    mockState.agentStatusByPaneKey[paneKey] = makeAgentStatus(paneKey, {
+      terminalHandle: 'term-shared'
+    })
+    mockState.agentStatusByPaneKey[childPaneKey] = makeAgentStatus(childPaneKey, {
+      state: 'working',
+      prompt: 'misattributed child',
+      worktreeId: 'wt-secondary',
+      orchestration: {
+        taskId: 'task-1',
+        dispatchId: 'ctx-1',
+        parentTerminalHandle: 'term-shared'
+      }
+    })
+
+    dispatchTerminalNotification('wt-primary', {
+      source: 'agent-task-complete',
+      terminalTitle: 'codex',
+      paneKey
+    })
+
+    expect(window.api.notifications.dispatch).toHaveBeenCalledWith(
+      expect.objectContaining({
+        source: 'agent-task-complete',
+        worktreeId: 'wt-primary',
+        paneKey
+      })
+    )
+  })
+
+  it('suppresses parent OS completion for active title-derived orchestration children', () => {
+    const childLeafId = '33333333-3333-4333-8333-333333333333'
+    const childPaneKey = `tab-title-child:${childLeafId}`
+    mockState.tabsByWorktree['wt-primary'].push({
+      id: 'tab-title-child',
+      ptyId: 'pty-title-child'
+    })
+    mockState.ptyIdsByTabId['tab-title-child'] = ['pty-title-child']
+    mockState.terminalLayoutsByTabId['tab-title-child'] = {
+      root: { type: 'leaf', leafId: childLeafId },
+      activeLeafId: childLeafId,
+      expandedLeafId: null,
+      ptyIdsByLeafId: { [childLeafId]: 'pty-title-child' }
+    }
+    mockState.runtimePaneTitlesByTabId['tab-title-child'] = {
+      1: '⠋ Claude Code'
+    }
+    mockState.runtimeAgentOrchestrationByPaneKey[childPaneKey] = {
+      taskId: 'task-1',
+      dispatchId: 'ctx-1',
+      parentPaneKey: paneKey
+    }
+
+    dispatchTerminalNotification('wt-primary', {
+      source: 'agent-task-complete',
+      terminalTitle: 'codex',
+      paneKey
+    })
+
+    expect(mockState.markWorktreeUnread).toHaveBeenCalledWith('wt-primary')
+    expect(window.api.notifications.dispatch).not.toHaveBeenCalled()
+  })
+
+  it('uses active title-derived suppression when a child hook row is stale', () => {
+    const childLeafId = '33333333-3333-4333-8333-333333333333'
+    const childPaneKey = `tab-title-child:${childLeafId}`
+    const staleTime = Date.now() - 31 * 60 * 1_000
+    mockState.tabsByWorktree['wt-primary'].push({
+      id: 'tab-title-child',
+      ptyId: 'pty-title-child'
+    })
+    mockState.ptyIdsByTabId['tab-title-child'] = ['pty-title-child']
+    mockState.terminalLayoutsByTabId['tab-title-child'] = {
+      root: { type: 'leaf', leafId: childLeafId },
+      activeLeafId: childLeafId,
+      expandedLeafId: null,
+      ptyIdsByLeafId: { [childLeafId]: 'pty-title-child' }
+    }
+    mockState.runtimePaneTitlesByTabId['tab-title-child'] = {
+      1: '⠋ Claude Code'
+    }
+    mockState.runtimeAgentOrchestrationByPaneKey[childPaneKey] = {
+      taskId: 'task-1',
+      dispatchId: 'ctx-1',
+      parentPaneKey: paneKey
+    }
+    mockState.agentStatusByPaneKey[childPaneKey] = makeAgentStatus(childPaneKey, {
+      state: 'working',
+      prompt: 'stale hook row',
+      updatedAt: staleTime,
+      stateStartedAt: staleTime,
+      worktreeId: 'wt-primary',
+      orchestration: {
+        taskId: 'task-1',
+        dispatchId: 'ctx-1',
+        parentPaneKey: paneKey
+      }
+    })
+
+    dispatchTerminalNotification('wt-primary', {
+      source: 'agent-task-complete',
+      terminalTitle: 'codex',
+      paneKey
+    })
+
+    expect(mockState.markWorktreeUnread).toHaveBeenCalledWith('wt-primary')
+    expect(window.api.notifications.dispatch).not.toHaveBeenCalled()
+  })
+
+  it('does not suppress child completion for a sibling linked to the same parent', () => {
+    const completedChildLeafId = '33333333-3333-4333-8333-333333333333'
+    const activeSiblingLeafId = '44444444-4444-4444-8444-444444444444'
+    const completedChildPaneKey = `tab-child-done:${completedChildLeafId}`
+    const activeSiblingPaneKey = `tab-child-working:${activeSiblingLeafId}`
+    mockState.tabsByWorktree['wt-primary'].push(
+      { id: 'tab-child-done', ptyId: 'pty-child-done' },
+      { id: 'tab-child-working', ptyId: 'pty-child-working' }
+    )
+    mockState.ptyIdsByTabId['tab-child-done'] = ['pty-child-done']
+    mockState.ptyIdsByTabId['tab-child-working'] = ['pty-child-working']
+    mockState.terminalLayoutsByTabId['tab-child-done'] = {
+      root: { type: 'leaf', leafId: completedChildLeafId },
+      activeLeafId: completedChildLeafId,
+      expandedLeafId: null,
+      ptyIdsByLeafId: { [completedChildLeafId]: 'pty-child-done' }
+    }
+    mockState.terminalLayoutsByTabId['tab-child-working'] = {
+      root: { type: 'leaf', leafId: activeSiblingLeafId },
+      activeLeafId: activeSiblingLeafId,
+      expandedLeafId: null,
+      ptyIdsByLeafId: { [activeSiblingLeafId]: 'pty-child-working' }
+    }
+    mockState.agentStatusByPaneKey[completedChildPaneKey] = makeAgentStatus(completedChildPaneKey, {
+      state: 'done',
+      prompt: 'child done',
+      orchestration: {
+        taskId: 'task-1',
+        dispatchId: 'ctx-1',
+        parentPaneKey: paneKey
+      }
+    })
+    mockState.agentStatusByPaneKey[activeSiblingPaneKey] = makeAgentStatus(activeSiblingPaneKey, {
+      state: 'working',
+      prompt: 'sibling still running',
+      orchestration: {
+        taskId: 'task-2',
+        dispatchId: 'ctx-2',
+        parentPaneKey: paneKey
+      }
+    })
+
+    dispatchTerminalNotification('wt-primary', {
+      source: 'agent-task-complete',
+      terminalTitle: 'codex',
+      paneKey: completedChildPaneKey,
+      agentStatusSnapshot: {
+        state: 'done',
+        prompt: 'child done',
+        agentType: 'codex',
+        stateStartedAt: Date.now()
+      }
+    })
+
+    expect(window.api.notifications.dispatch).toHaveBeenCalledWith(
+      expect.objectContaining({
+        source: 'agent-task-complete',
+        worktreeId: 'wt-primary',
+        paneKey: completedChildPaneKey
+      })
+    )
+  })
+
+  it('allows parent OS completion when orchestration children are done', () => {
+    const childPaneKey = 'tab-child:33333333-3333-4333-8333-333333333333'
+    mockState.agentStatusByPaneKey[childPaneKey] = makeAgentStatus(childPaneKey, {
+      state: 'done',
+      prompt: 'child finished',
+      worktreeId: 'wt-primary',
+      orchestration: {
+        taskId: 'task-1',
+        dispatchId: 'ctx-1',
+        parentPaneKey: paneKey
+      }
+    })
+
+    dispatchTerminalNotification('wt-primary', {
+      source: 'agent-task-complete',
+      terminalTitle: 'codex',
+      paneKey
+    })
+
+    expect(window.api.notifications.dispatch).toHaveBeenCalledWith(
+      expect.objectContaining({
+        source: 'agent-task-complete',
+        worktreeId: 'wt-primary',
+        paneKey
+      })
+    )
+  })
+
+  it('allows parent OS completion when orchestration child status is stale', () => {
+    const childPaneKey = 'tab-child:33333333-3333-4333-8333-333333333333'
+    const staleTime = Date.now() - 31 * 60 * 1_000
+    mockState.agentStatusByPaneKey[childPaneKey] = makeAgentStatus(childPaneKey, {
+      state: 'working',
+      prompt: 'stale child',
+      worktreeId: 'wt-primary',
+      updatedAt: staleTime,
+      stateStartedAt: staleTime,
+      orchestration: {
+        taskId: 'task-1',
+        dispatchId: 'ctx-1',
+        parentPaneKey: paneKey
+      }
+    })
+
+    dispatchTerminalNotification('wt-primary', {
+      source: 'agent-task-complete',
+      terminalTitle: 'codex',
+      paneKey
+    })
+
+    expect(window.api.notifications.dispatch).toHaveBeenCalledWith(
+      expect.objectContaining({
+        source: 'agent-task-complete',
+        worktreeId: 'wt-primary',
+        paneKey
+      })
+    )
   })
 
   it('does not mark the visible focused pane unread', () => {

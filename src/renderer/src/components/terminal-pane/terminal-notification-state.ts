@@ -1,4 +1,5 @@
-import { isExplicitAgentStatusFresh } from '@/lib/agent-status'
+import { detectAgentStatusFromTitle, isExplicitAgentStatusFresh } from '@/lib/agent-status'
+import { resolveRuntimePaneTitleForLeaf } from '@/lib/runtime-pane-title-leaf-id'
 import type { useAppStore } from '@/store'
 import { getWorktreeMapFromState } from '@/store/selectors'
 import { AGENT_STATUS_STALE_AFTER_MS } from '../../../../shared/agent-status-types'
@@ -51,6 +52,124 @@ export function hasLivePtyForNotification(
   // list is between renderer hydration states; the pane-key PTY binding is the
   // live terminal source in that path.
   return hasLivePtyForWorktree(state, worktreeId) || hasLivePtyForPaneKey(state, paneKey)
+}
+
+export function hasActiveOrchestrationChildForPaneKey(
+  state: StoreSnapshot,
+  worktreeId: string,
+  parentPaneKey: string
+): boolean {
+  const now = Date.now()
+  const parentTerminalHandle = state.agentStatusByPaneKey?.[parentPaneKey]?.terminalHandle
+  const liveStatusChildIsActive = Object.entries(state.agentStatusByPaneKey ?? {}).some(
+    ([paneKey, entry]) => {
+      if (
+        paneKey === parentPaneKey ||
+        entry.state === 'done' ||
+        !agentStatusEntryBelongsToWorktree(state, worktreeId, entry) ||
+        !isExplicitAgentStatusFresh(entry, now, AGENT_STATUS_STALE_AFTER_MS)
+      ) {
+        return false
+      }
+      return orchestrationContextMatchesParent(
+        entry.orchestration,
+        parentPaneKey,
+        parentTerminalHandle
+      )
+    }
+  )
+  if (liveStatusChildIsActive) {
+    return true
+  }
+
+  return Object.entries(state.runtimeAgentOrchestrationByPaneKey ?? {}).some(
+    ([paneKey, orchestration]) => {
+      if (
+        paneKey === parentPaneKey ||
+        isFreshDoneOrActiveAgentStatus(state, paneKey, now) ||
+        !paneKeyBelongsToWorktree(state, worktreeId, paneKey) ||
+        !orchestrationContextMatchesParent(orchestration, parentPaneKey, parentTerminalHandle)
+      ) {
+        return false
+      }
+      const title = getRuntimeTitleForPaneKey(state, worktreeId, paneKey)
+      const status = title ? detectAgentStatusFromTitle(title) : null
+      return status === 'working' || status === 'permission'
+    }
+  )
+}
+
+function orchestrationContextMatchesParent(
+  orchestration: StoreSnapshot['runtimeAgentOrchestrationByPaneKey'][string] | undefined,
+  parentPaneKey: string,
+  parentTerminalHandle: string | undefined
+): boolean {
+  if (orchestration?.parentPaneKey === parentPaneKey) {
+    return true
+  }
+  return Boolean(
+    parentTerminalHandle &&
+    (orchestration?.parentTerminalHandle === parentTerminalHandle ||
+      orchestration?.coordinatorHandle === parentTerminalHandle)
+  )
+}
+
+function paneKeyBelongsToWorktree(
+  state: StoreSnapshot,
+  worktreeId: string,
+  paneKey: string
+): boolean {
+  const tabId = getPaneKeyTabId(paneKey)
+  return tabId !== null && (state.tabsByWorktree[worktreeId] ?? []).some((tab) => tab.id === tabId)
+}
+
+function getRuntimeTitleForPaneKey(
+  state: StoreSnapshot,
+  worktreeId: string,
+  paneKey: string
+): string | null {
+  const parsed = parsePaneKey(paneKey)
+  if (!parsed || !hasLivePtyForPaneKey(state, paneKey)) {
+    return null
+  }
+  const layout = state.terminalLayoutsByTabId?.[parsed.tabId]
+  const runtimeTitle = resolveRuntimePaneTitleForLeaf(
+    layout,
+    state.runtimePaneTitlesByTabId?.[parsed.tabId],
+    parsed.leafId
+  )
+  if (runtimeTitle) {
+    return runtimeTitle
+  }
+  if (layout?.activeLeafId && layout.activeLeafId !== parsed.leafId) {
+    return null
+  }
+  return (
+    (state.tabsByWorktree[worktreeId] ?? []).find((tab) => tab.id === parsed.tabId)?.title ?? null
+  )
+}
+
+function agentStatusEntryBelongsToWorktree(
+  state: StoreSnapshot,
+  worktreeId: string,
+  entry: { paneKey: string; worktreeId?: string }
+): boolean {
+  if (entry.worktreeId) {
+    return entry.worktreeId === worktreeId
+  }
+  return paneKeyBelongsToWorktree(state, worktreeId, entry.paneKey)
+}
+
+function isFreshDoneOrActiveAgentStatus(
+  state: StoreSnapshot,
+  paneKey: string,
+  now: number
+): boolean {
+  const entry = state.agentStatusByPaneKey?.[paneKey]
+  return Boolean(
+    entry &&
+    (entry.state === 'done' || isExplicitAgentStatusFresh(entry, now, AGENT_STATUS_STALE_AFTER_MS))
+  )
 }
 
 function layoutContainsLeaf(
