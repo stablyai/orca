@@ -1,11 +1,15 @@
 import AsyncStorage from '@react-native-async-storage/async-storage'
+import { compareAppVersions } from '../../../src/shared/app-version'
 
 // Why: Android APKs are published as GitHub pre-releases, which /releases/latest hides.
 export const ANDROID_RELEASES_API_URL =
-  'https://api.github.com/repos/stablyai/orca/releases?per_page=30'
+  'https://api.github.com/repos/stablyai/orca/releases?per_page=100'
 export const ANDROID_RELEASES_PAGE_URL =
   'https://github.com/stablyai/orca/releases?q=mobile-android-v'
 export const CHECK_INTERVAL_MS = 24 * 60 * 60 * 1000
+// Why: desktop releases dominate the feed (roughly daily), so the newest Android release can
+// sit past page one. ponytail: 500 releases ≈ a year of desktop cadence; raise if Android gaps grow.
+export const MAX_RELEASE_PAGES = 5
 
 const STATE_KEY = 'orca:androidUpdate'
 const TAG_PREFIX = 'mobile-android-v'
@@ -23,18 +27,6 @@ type StoredState = {
   readonly skippedVersion: string | null
 }
 
-export function compareVersions(a: string, b: string): number {
-  const left = a.split('.').map(Number)
-  const right = b.split('.').map(Number)
-  for (let i = 0; i < Math.max(left.length, right.length); i++) {
-    const diff = (left[i] || 0) - (right[i] || 0)
-    if (diff !== 0) {
-      return diff
-    }
-  }
-  return 0
-}
-
 export function findLatestAndroidRelease(releases: unknown): AndroidUpdate | null {
   if (!Array.isArray(releases)) {
     return null
@@ -46,30 +38,45 @@ export function findLatestAndroidRelease(releases: unknown): AndroidUpdate | nul
       continue
     }
     const assets = Array.isArray(entry?.assets)
-      ? (entry.assets as Array<Record<string, unknown>>)
+      ? (entry.assets as Array<Record<string, unknown> | null>)
       : []
-    const apkUrl = assets.find((asset) => asset?.name === APK_ASSET_NAME)?.browser_download_url
-    if (typeof apkUrl !== 'string') {
+    if (!assets.some((asset) => asset?.name === APK_ASSET_NAME)) {
       continue
     }
     const version = tag.slice(TAG_PREFIX.length)
-    if (!latest || compareVersions(version, latest.version) > 0) {
-      latest = { version, apkUrl }
+    if (!latest || compareAppVersions(version, latest.version) > 0) {
+      // Why: build the URL from the tag so release metadata cannot redirect the download.
+      latest = {
+        version,
+        apkUrl: `https://github.com/stablyai/orca/releases/download/${tag}/${APK_ASSET_NAME}`
+      }
     }
   }
   return latest
 }
 
+function nextPageUrl(response: Response): string | null {
+  const link = response.headers?.get('link') ?? ''
+  return link.match(/<([^>]+)>;\s*rel="next"/)?.[1] ?? null
+}
+
 export async function fetchLatestAndroidRelease(
   fetchFn: typeof fetch = fetch
 ): Promise<AndroidUpdate | null> {
-  const response = await fetchFn(ANDROID_RELEASES_API_URL, {
-    headers: { Accept: 'application/vnd.github+json' }
-  })
-  if (!response.ok) {
-    throw new Error(`GitHub releases request failed: ${response.status}`)
+  let url: string | null = ANDROID_RELEASES_API_URL
+  for (let page = 0; page < MAX_RELEASE_PAGES && url; page++) {
+    const response = await fetchFn(url, { headers: { Accept: 'application/vnd.github+json' } })
+    if (!response.ok) {
+      throw new Error(`GitHub releases request failed: ${response.status}`)
+    }
+    // Why: releases are newest-first, so the first page holding any Android release holds the newest.
+    const latest = findLatestAndroidRelease(await response.json())
+    if (latest) {
+      return latest
+    }
+    url = nextPageUrl(response)
   }
-  return findLatestAndroidRelease(await response.json())
+  return null
 }
 
 async function loadState(): Promise<StoredState | null> {
@@ -89,6 +96,14 @@ async function saveState(state: StoredState): Promise<void> {
   }
 }
 
+// Why: a skip landing while a check is mid-fetch must not be overwritten by the check's write.
+let stateQueue: Promise<unknown> = Promise.resolve()
+function withStateLock<T>(task: () => Promise<T>): Promise<T> {
+  const run = stateQueue.then(task)
+  stateQueue = run.catch(() => {})
+  return run
+}
+
 function isCheckDue(state: StoredState | null, now: number): boolean {
   if (state?.checkedAt == null) {
     return true
@@ -97,35 +112,39 @@ function isCheckDue(state: StoredState | null, now: number): boolean {
   return now < state.checkedAt || now - state.checkedAt >= CHECK_INTERVAL_MS
 }
 
-export async function checkForAndroidUpdate(opts: {
+export function checkForAndroidUpdate(opts: {
   currentVersion: string
   now?: number
   fetchFn?: typeof fetch
 }): Promise<AndroidUpdate | null> {
-  const now = opts.now ?? Date.now()
-  const stored = await loadState()
-  let state = stored
-  if (isCheckDue(stored, now)) {
-    try {
-      const latest = await fetchLatestAndroidRelease(opts.fetchFn)
-      state = { checkedAt: now, latest, skippedVersion: stored?.skippedVersion ?? null }
-      await saveState(state)
-    } catch {
-      // Why: keep the stale checkedAt so the next foreground retries instead of waiting a day.
+  return withStateLock(async () => {
+    const now = opts.now ?? Date.now()
+    const stored = await loadState()
+    let state = stored
+    if (isCheckDue(stored, now)) {
+      try {
+        const latest = await fetchLatestAndroidRelease(opts.fetchFn)
+        state = { checkedAt: now, latest, skippedVersion: stored?.skippedVersion ?? null }
+        await saveState(state)
+      } catch {
+        // Why: keep the stale checkedAt so the next foreground retries instead of waiting a day.
+      }
     }
-  }
-  const latest = state?.latest
-  if (!latest || compareVersions(latest.version, opts.currentVersion) <= 0) {
-    return null
-  }
-  return latest.version === state?.skippedVersion ? null : latest
+    const latest = state?.latest
+    if (!latest || compareAppVersions(latest.version, opts.currentVersion) <= 0) {
+      return null
+    }
+    return latest.version === state?.skippedVersion ? null : latest
+  })
 }
 
-export async function skipAndroidUpdate(version: string): Promise<void> {
-  const stored = await loadState()
-  await saveState({
-    checkedAt: stored?.checkedAt ?? null,
-    latest: stored?.latest ?? null,
-    skippedVersion: version
+export function skipAndroidUpdate(version: string): Promise<void> {
+  return withStateLock(async () => {
+    const stored = await loadState()
+    await saveState({
+      checkedAt: stored?.checkedAt ?? null,
+      latest: stored?.latest ?? null,
+      skippedVersion: version
+    })
   })
 }

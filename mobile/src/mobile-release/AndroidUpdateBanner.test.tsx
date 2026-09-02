@@ -97,6 +97,27 @@ describe('AndroidUpdateBanner', () => {
     expect(JSON.stringify(renderer.toJSON())).toContain('0.0.48')
   })
 
+  it('ignores a check that was already in flight when the banner is dismissed', async () => {
+    renderer = await render()
+    let resolvePending!: (value: typeof update | null) => void
+    vi.mocked(checkForAndroidUpdate).mockReturnValueOnce(
+      new Promise((resolve) => {
+        resolvePending = resolve
+      })
+    )
+    await act(async () => {
+      native.appStateListeners.forEach((listener) => listener('active'))
+    })
+    await act(async () => {
+      pressables(renderer!)[1].props.onPress()
+    })
+    await act(async () => {
+      resolvePending(update)
+      await Promise.resolve()
+    })
+    expect(renderer.toJSON()).toBeNull()
+  })
+
   it('skips the version and hides on dismiss', async () => {
     renderer = await render()
     await act(async () => {

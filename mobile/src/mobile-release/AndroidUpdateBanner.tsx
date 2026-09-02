@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { AppState, Linking, Platform, Pressable, StyleSheet, Text, View } from 'react-native'
 import Constants from 'expo-constants'
 import { X } from 'lucide-react-native'
@@ -12,6 +12,8 @@ import {
 // Why: sideloaded APKs have no store to announce updates, so the app checks GitHub Releases itself.
 export function AndroidUpdateBanner() {
   const [update, setUpdate] = useState<AndroidUpdate | null>(null)
+  // Why: a dismiss bumps this so a check already in flight cannot re-show the banner.
+  const dismissGeneration = useRef(0)
 
   useEffect(() => {
     const currentVersion = Constants.expoConfig?.version
@@ -20,8 +22,9 @@ export function AndroidUpdateBanner() {
     }
     let active = true
     const check = () => {
+      const startedAt = dismissGeneration.current
       void checkForAndroidUpdate({ currentVersion }).then((next) => {
-        if (active) {
+        if (active && startedAt === dismissGeneration.current) {
           setUpdate(next)
         }
       })
@@ -40,6 +43,7 @@ export function AndroidUpdateBanner() {
 
   const dismiss = useCallback(() => {
     if (update) {
+      dismissGeneration.current += 1
       void skipAndroidUpdate(update.version)
       setUpdate(null)
     }

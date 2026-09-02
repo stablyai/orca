@@ -2,8 +2,9 @@ import AsyncStorage from '@react-native-async-storage/async-storage'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   CHECK_INTERVAL_MS,
+  MAX_RELEASE_PAGES,
   checkForAndroidUpdate,
-  compareVersions,
+  fetchLatestAndroidRelease,
   findLatestAndroidRelease,
   skipAndroidUpdate
 } from './android-update-check'
@@ -33,8 +34,38 @@ function release(tag: string, opts: { draft?: boolean; apk?: boolean } = {}) {
   }
 }
 
+type Page = { body: unknown; ok?: boolean; next?: string }
+
+function pageResponse(page: Page) {
+  return {
+    ok: page.ok ?? true,
+    status: page.ok === false ? 403 : 200,
+    headers: {
+      get: (name: string) =>
+        name.toLowerCase() === 'link' && page.next ? `<${page.next}>; rel="next"` : null
+    },
+    json: async () => page.body
+  }
+}
+
+// Why: a request past the last page keeps returning the last page, so cap tests can loop.
+function fetchPages(pages: Page[]): typeof fetch {
+  let index = 0
+  return vi.fn(async () =>
+    pageResponse(pages[Math.min(index++, pages.length - 1)])
+  ) as unknown as typeof fetch
+}
+
 function fetchReturning(body: unknown, ok = true): typeof fetch {
-  return vi.fn(async () => ({ ok, json: async () => body })) as unknown as typeof fetch
+  return fetchPages([{ body, ok }])
+}
+
+function deferred<T>(): { promise: Promise<T>; resolve: (value: T) => void } {
+  let resolve!: (value: T) => void
+  const promise = new Promise<T>((r) => {
+    resolve = r
+  })
+  return { promise, resolve }
 }
 
 beforeEach(() => {
@@ -45,19 +76,13 @@ beforeEach(() => {
   })
 })
 
-describe('compareVersions', () => {
-  it('compares dotted versions numerically, not lexically', () => {
-    expect(compareVersions('0.0.10', '0.0.9')).toBeGreaterThan(0)
-    expect(compareVersions('0.0.47', '0.0.47')).toBe(0)
-    expect(compareVersions('0.1.0', '0.0.99')).toBeGreaterThan(0)
-  })
-})
-
 describe('findLatestAndroidRelease', () => {
   it('picks the highest published mobile-android release that ships an APK', () => {
     const releases = [
       { tag_name: 'v1.4.195', draft: false, assets: [{ name: 'orca-macos-arm64.dmg' }] },
       release('mobile-android-v0.0.46'),
+      release('mobile-android-v0.0.10'),
+      release('mobile-android-v0.0.9'),
       release('mobile-android-v0.0.49', { draft: true }),
       release('mobile-android-v0.0.48', { apk: false }),
       release('mobile-android-v0.0.47')
@@ -73,6 +98,43 @@ describe('findLatestAndroidRelease', () => {
     expect(findLatestAndroidRelease(null)).toBeNull()
     expect(findLatestAndroidRelease({ message: 'rate limited' })).toBeNull()
     expect(findLatestAndroidRelease([{ tag_name: 42 }])).toBeNull()
+  })
+
+  it('derives the APK URL from the tag rather than trusting asset metadata', () => {
+    const tampered = {
+      ...release('mobile-android-v0.0.47'),
+      assets: [{ name: 'app-release.apk', browser_download_url: 'https://evil.example/x.apk' }]
+    }
+    expect(findLatestAndroidRelease([tampered])?.apkUrl).toBe(
+      'https://github.com/stablyai/orca/releases/download/mobile-android-v0.0.47/app-release.apk'
+    )
+  })
+})
+
+describe('fetchLatestAndroidRelease', () => {
+  const desktopPage = [{ tag_name: 'v1.4.195', draft: false, assets: [] }]
+  const next = 'https://api.github.com/repositories/1/releases?per_page=100&page=2'
+
+  it('follows Link pagination until a page contains an Android release', async () => {
+    const fetchFn = fetchPages([
+      { body: desktopPage, next },
+      { body: [release('mobile-android-v0.0.47')] }
+    ])
+    expect((await fetchLatestAndroidRelease(fetchFn))?.version).toBe('0.0.47')
+    expect(fetchFn).toHaveBeenCalledTimes(2)
+    expect(vi.mocked(fetchFn).mock.calls[1][0]).toBe(next)
+  })
+
+  it('stops at the last page when nothing matches', async () => {
+    const fetchFn = fetchPages([{ body: desktopPage }])
+    expect(await fetchLatestAndroidRelease(fetchFn)).toBeNull()
+    expect(fetchFn).toHaveBeenCalledTimes(1)
+  })
+
+  it('gives up after the page cap', async () => {
+    const fetchFn = fetchPages([{ body: desktopPage, next }])
+    expect(await fetchLatestAndroidRelease(fetchFn)).toBeNull()
+    expect(fetchFn).toHaveBeenCalledTimes(MAX_RELEASE_PAGES)
   })
 })
 
@@ -152,6 +214,21 @@ describe('checkForAndroidUpdate', () => {
     expect(
       (await checkForAndroidUpdate({ currentVersion: '0.0.47', now: 2, fetchFn: ok }))?.version
     ).toBe('0.0.48')
+  })
+
+  it('keeps a skip issued while a check is still in flight', async () => {
+    const gate = deferred<void>()
+    const slow = vi.fn(async () => {
+      await gate.promise
+      return pageResponse({ body: [release('mobile-android-v0.0.48')] })
+    }) as unknown as typeof fetch
+    const checking = checkForAndroidUpdate({ currentVersion: '0.0.47', now: 1, fetchFn: slow })
+    const skipping = skipAndroidUpdate('0.0.48')
+    gate.resolve()
+    await Promise.all([checking, skipping])
+    expect(
+      await checkForAndroidUpdate({ currentVersion: '0.0.47', now: 2, fetchFn: fetchReturning([]) })
+    ).toBeNull()
   })
 
   it('treats a non-2xx response as a failed check', async () => {

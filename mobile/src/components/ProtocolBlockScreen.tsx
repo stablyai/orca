@@ -19,6 +19,8 @@ export function ProtocolBlockScreen({ verdict }: Props) {
   const isMobileTooOld = verdict.reason === 'mobile-too-old'
   const [androidApkUrl, setAndroidApkUrl] = useState<string | null>(null)
   useEffect(() => {
+    // Why: a verdict change must not keep a previous lookup's URL if this one fails.
+    setAndroidApkUrl(null)
     if (Platform.OS === 'ios' || !isMobileTooOld) {
       return
     }
