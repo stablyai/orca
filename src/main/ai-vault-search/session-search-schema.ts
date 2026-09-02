@@ -1,3 +1,4 @@
+import { rmSync } from 'node:fs'
 import SyncDatabase from '../sqlite/sync-database'
 
 // Bump to drop and rebuild: the index is a cache over the transcripts, never a source.
@@ -63,25 +64,15 @@ CREATE TABLE IF NOT EXISTS search_log(
 );
 `
 
-const DROP_SQL = `
-DROP TABLE IF EXISTS messages_vocab;
-DROP TABLE IF EXISTS conversation_fts;
-DROP TABLE IF EXISTS messages_fts;
-DROP TABLE IF EXISTS messages;
-DROP TABLE IF EXISTS files;
-DROP TABLE IF EXISTS sessions;
-DROP TABLE IF EXISTS search_log;
-DROP TABLE IF EXISTS meta;
-`
-
 export function openSessionSearchDatabase(path: string): SyncDatabase {
-  const db = new SyncDatabase(path)
-  db.pragma('journal_mode = WAL')
-  db.pragma('synchronous = NORMAL')
-  db.pragma('busy_timeout = 5000')
+  let db = openWithPragmas(path)
   const version = readSchemaVersion(db)
   if (version !== null && version !== SESSION_SEARCH_SCHEMA_VERSION) {
-    db.exec(DROP_SQL)
+    // Why: DROP TABLE on a multi-GB FTS index takes minutes and runs inside the
+    // scanner service's init, past its ready timeout; unlinking is instant.
+    db.close()
+    removeSessionSearchDatabase(path)
+    db = openWithPragmas(path)
   }
   db.exec(SCHEMA_SQL)
   db.prepare('INSERT OR REPLACE INTO meta(key, value) VALUES (?, ?)').run(
@@ -89,6 +80,23 @@ export function openSessionSearchDatabase(path: string): SyncDatabase {
     String(SESSION_SEARCH_SCHEMA_VERSION)
   )
   return db
+}
+
+function openWithPragmas(path: string): SyncDatabase {
+  const db = new SyncDatabase(path)
+  db.pragma('journal_mode = WAL')
+  db.pragma('synchronous = NORMAL')
+  db.pragma('busy_timeout = 5000')
+  return db
+}
+
+export function removeSessionSearchDatabase(path: string): void {
+  if (path === ':memory:') {
+    return
+  }
+  for (const suffix of ['', '-wal', '-shm', '-journal']) {
+    rmSync(`${path}${suffix}`, { force: true })
+  }
 }
 
 export function openSessionSearchDatabaseReadOnly(path: string): SyncDatabase {
