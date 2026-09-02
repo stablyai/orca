@@ -298,4 +298,24 @@ describe('ControlRoomTerminalCanvas', () => {
       terminalTabId: 'shell-b'
     })
   })
+
+  it('restores pinned agents after the Control Room remounts', async () => {
+    const renderControlRoom = (): void => {
+      root.render(<ControlRoomTerminalCanvas onTerminalVisibilityChange={() => undefined} />)
+    }
+
+    await act(async () => renderControlRoom())
+    const pinLast = container.querySelector('[aria-label="Pin last terminal"]') as HTMLButtonElement
+    await act(async () => pinLast.click())
+
+    await act(async () => root.render(null))
+    await act(async () => renderControlRoom())
+    const pinned = container.querySelector('[aria-label="Pinned"]') as HTMLButtonElement
+    await act(async () => pinned.click())
+
+    expect(container.querySelector('[data-testid="terminal-labels"]')?.textContent).toBe('Agent A')
+    expect(mocks.canvasProps?.terminalItems).toEqual([
+      expect.objectContaining({ terminalTabId: 'agent-a', pinned: true })
+    ])
+  })
 })

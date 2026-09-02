@@ -118,17 +118,19 @@ export default function ControlRoomTerminalCanvas({
 
   const setPreferences = useCallback(
     (updater: (current: ControlRoomPreferences) => ControlRoomPreferences) => {
-      setPreferencesState((current) => {
-        const next = updater(current)
-        const storage = browserStorage()
-        if (storage) {
-          writeControlRoomPreferences(storage, next)
-        }
-        return next
-      })
+      setPreferencesState(updater)
     },
     []
   )
+
+  useEffect(() => {
+    const storage = browserStorage()
+    if (storage) {
+      // Persist after React commits the preference change. Keeping this write
+      // outside the state updater also survives remounts and concurrent renders.
+      writeControlRoomPreferences(storage, preferences)
+    }
+  }, [preferences])
 
   const setScope = useCallback(
     (scope: ControlRoomScope) => setPreferences((current) => ({ ...current, scope })),

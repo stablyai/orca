@@ -175,8 +175,7 @@ function boundsOverlap(
   )
 }
 
-/** Finds the nearest clear position at or below/right of the requested drop.
- *  Why: distant panes must never pull a dropped pane up or inward. */
+/** Finds the nearest clear position around the requested drop. */
 export function resolvePaneCanvasDrop(
   requested: PaneCanvasBounds,
   otherBounds: readonly PaneCanvasBounds[]
@@ -205,15 +204,17 @@ export function resolvePaneCanvasDrop(
       return candidate
     }
     for (const collision of collisions) {
+      const left = collision.x - candidate.width - PANE_CANVAS_GAP
+      const above = collision.y - candidate.height - PANE_CANVAS_GAP
+      if (left >= 0) {
+        queue.push({ ...candidate, x: left })
+      }
+      if (above >= 0) {
+        queue.push({ ...candidate, y: above })
+      }
       queue.push(
-        {
-          ...candidate,
-          x: Math.max(candidate.x, collision.x + collision.width + PANE_CANVAS_GAP)
-        },
-        {
-          ...candidate,
-          y: Math.max(candidate.y, collision.y + collision.height + PANE_CANVAS_GAP)
-        }
+        { ...candidate, x: collision.x + collision.width + PANE_CANVAS_GAP },
+        { ...candidate, y: collision.y + collision.height + PANE_CANVAS_GAP }
       )
     }
   }

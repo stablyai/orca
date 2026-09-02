@@ -140,6 +140,12 @@ describe('control room terminal items', () => {
         ptyIdsByTabId: {}
       })
     ).toEqual([])
+    expect(
+      build([done], 'pinned', {
+        terminalTabsByWorktree: { 'worktree-1': [stopped] },
+        ptyIdsByTabId: {}
+      })
+    ).toHaveLength(1)
   })
 
   it('adds live ordinary terminals only in the All view', () => {

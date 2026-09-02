@@ -88,4 +88,26 @@ describe('TabGroupCanvasLayout titlebar', () => {
     const toolbar = container.querySelector('[data-pane-canvas-toolbar]') as HTMLElement
     expect(toolbar.classList.contains('pane-canvas-toolbar-window-controls-inset')).toBe(false)
   })
+
+  it('contains browser zoom gestures without blocking ordinary canvas scrolling', () => {
+    const viewport = container.querySelector('[data-pane-canvas-viewport]') as HTMLElement
+    const zoomWheel = new WheelEvent('wheel', {
+      bubbles: true,
+      cancelable: true,
+      deltaY: 120
+    })
+    // happy-dom does not currently copy ctrlKey from WheelEventInit.
+    Object.defineProperty(zoomWheel, 'ctrlKey', { value: true })
+    const scrollWheel = new WheelEvent('wheel', {
+      bubbles: true,
+      cancelable: true,
+      deltaY: 120
+    })
+
+    viewport.dispatchEvent(zoomWheel)
+    viewport.dispatchEvent(scrollWheel)
+
+    expect(zoomWheel.defaultPrevented).toBe(true)
+    expect(scrollWheel.defaultPrevented).toBe(false)
+  })
 })

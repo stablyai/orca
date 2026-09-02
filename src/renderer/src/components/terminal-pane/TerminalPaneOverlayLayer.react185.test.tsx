@@ -247,17 +247,35 @@ describe('TerminalPaneOverlayLayer fallback measure<->fit loop (React #185)', ()
     expect(overlay?.style.left).toBe('360px')
   })
 
-  it('contains wheel input that xterm releases with a non-passive native listener', () => {
+  it('hands wheel input released by xterm back to the Canvas viewport', () => {
     const addEventListener = vi.spyOn(HTMLElement.prototype, 'addEventListener')
     renderCanvasSlot()
     const overlay = container.querySelector<HTMLElement>('[data-terminal-overlay-tab-id]')
-    const wheel = new WheelEvent('wheel', { bubbles: true, cancelable: true, deltaY: 120 })
+    if (!canvasViewport) {
+      throw new Error('Canvas viewport unavailable')
+    }
+    Object.defineProperties(canvasViewport, {
+      clientHeight: { value: 400 },
+      clientWidth: { value: 800 },
+      scrollHeight: { value: 1600 },
+      scrollWidth: { value: 1800 }
+    })
+    canvasViewport.scrollTop = 600
+    canvasViewport.scrollLeft = 500
+    const wheel = new WheelEvent('wheel', {
+      bubbles: true,
+      cancelable: true,
+      deltaX: -80,
+      deltaY: -120
+    })
 
     act(() => {
       overlay?.dispatchEvent(wheel)
     })
 
     expect(wheel.defaultPrevented).toBe(true)
+    expect(canvasViewport.scrollTop).toBe(480)
+    expect(canvasViewport.scrollLeft).toBe(420)
     expect(
       addEventListener.mock.calls.some(
         ([type, , options]) =>

@@ -1,5 +1,8 @@
 import { PANE_CANVAS_GAP, type PaneCanvasBounds } from './pane-canvas-layout-state'
 
+const PANE_CANVAS_MIN_TRAILING_WORKSPACE = 256
+const PANE_CANVAS_TRAILING_VIEWPORT_RATIO = 0.5
+
 export type PaneCanvasViewport = {
   scrollLeft: number
   scrollTop: number
@@ -39,13 +42,30 @@ export function paneCanvasExtent(
   minimumWidth: number,
   minimumHeight: number
 ): { width: number; height: number } {
+  const trailingWidth = Math.max(
+    PANE_CANVAS_MIN_TRAILING_WORKSPACE,
+    minimumWidth * PANE_CANVAS_TRAILING_VIEWPORT_RATIO
+  )
+  const trailingHeight = Math.max(
+    PANE_CANVAS_MIN_TRAILING_WORKSPACE,
+    minimumHeight * PANE_CANVAS_TRAILING_VIEWPORT_RATIO
+  )
   return terminalTabIds.reduce(
     (extent, terminalTabId) => {
       const bounds = boundsByTerminalTabId[terminalTabId]
       return bounds
         ? {
-            width: Math.max(extent.width, bounds.x + bounds.width + PANE_CANVAS_GAP),
-            height: Math.max(extent.height, bounds.y + bounds.height + PANE_CANVAS_GAP)
+            // Keep useful blank workspace beyond the last card. Without it a
+            // viewport-height terminal puts its resize edge at the scroll
+            // boundary, so there is nowhere to pan before extending it.
+            width: Math.max(
+              extent.width,
+              bounds.x + bounds.width + PANE_CANVAS_GAP + trailingWidth
+            ),
+            height: Math.max(
+              extent.height,
+              bounds.y + bounds.height + PANE_CANVAS_GAP + trailingHeight
+            )
           }
         : extent
     },

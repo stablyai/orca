@@ -192,6 +192,25 @@ export default function TabGroupCanvasLayout({
     []
   )
 
+  useEffect(() => {
+    const viewport = viewportRef.current
+    if (!viewport) {
+      return
+    }
+    const containBrowserZoom = (event: WheelEvent): void => {
+      if (!event.ctrlKey) {
+        return
+      }
+      // Ctrl+wheel belongs to the Canvas while the pointer is over it. Until
+      // Canvas zoom is exposed deliberately, do not let Chromium shrink the
+      // entire Orca UI as an accidental workaround for reaching blank space.
+      event.preventDefault()
+      event.stopPropagation()
+    }
+    viewport.addEventListener('wheel', containBrowserZoom, { passive: false })
+    return () => viewport.removeEventListener('wheel', containBrowserZoom)
+  }, [viewportRef])
+
   const beginCanvasPan = useCallback(
     (event: React.PointerEvent<HTMLDivElement>) => {
       if (event.button !== 0 || canvasPanCleanupRef.current) {

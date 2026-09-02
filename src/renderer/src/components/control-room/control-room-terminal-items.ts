@@ -64,11 +64,14 @@ function includeForScope(
   hasAgent: boolean,
   pinned: boolean
 ): boolean {
+  if (scope === 'pinned') {
+    // A pin is a durable user choice. Keep its restored terminal card visible
+    // while the PTY is offline so an app restart does not look like it forgot
+    // every pinned agent.
+    return pinned
+  }
   if (!live) {
     return false
-  }
-  if (scope === 'pinned') {
-    return pinned
   }
   if (scope === 'all') {
     return true

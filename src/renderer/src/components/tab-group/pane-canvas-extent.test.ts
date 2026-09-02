@@ -5,7 +5,13 @@ describe('pane canvas extent', () => {
   it('grows beyond the viewport to retain off-screen cards', () => {
     expect(
       paneCanvasExtent(['far'], { far: { x: 1400, y: 900, width: 480, height: 320 } }, 1280, 800)
-    ).toEqual({ width: 1888, height: 1228 })
+    ).toEqual({ width: 2528, height: 1628 })
+  })
+
+  it('keeps trailing workspace below a viewport-height card for panning and resizing', () => {
+    expect(
+      paneCanvasExtent(['tall'], { tall: { x: 8, y: 8, width: 560, height: 760 } }, 1280, 800)
+    ).toEqual({ width: 1280, height: 1176 })
   })
 
   it('ignores retained bounds for sessions outside the current scope', () => {

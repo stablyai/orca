@@ -21,6 +21,29 @@ const MIN_OVERLAY_FIT_WIDTH_PX = 48
 const MIN_OVERLAY_FIT_HEIGHT_PX = 24
 const FALLBACK_RECT_MIN_CHANGE_PX = 1
 
+function findCanvasViewport(terminalTabId: string): HTMLElement | null {
+  for (const body of document.querySelectorAll<HTMLElement>('[data-terminal-canvas-body-id]')) {
+    if (body.dataset.terminalCanvasBodyId === terminalTabId) {
+      return body.closest<HTMLElement>('[data-pane-canvas-viewport]')
+    }
+  }
+  return null
+}
+
+function wheelDeltaPixels(delta: number, deltaMode: number, pageSize: number): number {
+  if (deltaMode === 1) {
+    return delta * 16
+  }
+  if (deltaMode === 2) {
+    return delta * pageSize
+  }
+  return delta
+}
+
+function clampScroll(value: number, maximum: number): number {
+  return Math.max(0, Math.min(Math.max(0, maximum), value))
+}
+
 function shouldUseCssAnchorPositioning(): boolean {
   return (
     HAS_CSS_ANCHOR_POSITIONING &&
@@ -187,9 +210,23 @@ export const TerminalOverlaySlot = memo(function TerminalOverlaySlot({
       // xterm consumes wheel events while its own scroll position changes, but
       // deliberately releases them at either boundary. A Canvas terminal is
       // positioned in a sibling overlay, so that released event can otherwise
-      // scroll the Canvas viewport underneath it. React delegates wheel events
-      // through a passive listener in Chromium, so this boundary guard must be
-      // a native non-passive listener for preventDefault() to take effect.
+      // never reach the Canvas viewport. Hand those released deltas back to the
+      // viewport so users can pan in either direction without first finding a
+      // sliver of empty background. React delegates wheel events through a
+      // passive listener in Chromium, so this bridge must be native/non-passive.
+      if (!event.defaultPrevented) {
+        const viewport = findCanvasViewport(canvasTerminalTabId)
+        if (viewport) {
+          const nextLeft =
+            viewport.scrollLeft +
+            wheelDeltaPixels(event.deltaX, event.deltaMode, viewport.clientWidth)
+          const nextTop =
+            viewport.scrollTop +
+            wheelDeltaPixels(event.deltaY, event.deltaMode, viewport.clientHeight)
+          viewport.scrollLeft = clampScroll(nextLeft, viewport.scrollWidth - viewport.clientWidth)
+          viewport.scrollTop = clampScroll(nextTop, viewport.scrollHeight - viewport.clientHeight)
+        }
+      }
       event.preventDefault()
       event.stopPropagation()
     }

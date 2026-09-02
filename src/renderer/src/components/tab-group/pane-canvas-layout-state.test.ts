@@ -184,11 +184,16 @@ describe('pane canvas layout state', () => {
     expect(reconciled.boundsByTerminalTabId['new-terminal'].y).toBeGreaterThan(500)
   })
 
-  it('allows travel across panes but resolves an overlapping drop down or right', () => {
+  it('allows travel across panes and resolves an overlapping drop to nearby open space', () => {
     const requested = { x: 100, y: 100, width: 320, height: 220 }
     const resolved = resolvePaneCanvasDrop(requested, [{ x: 80, y: 80, width: 400, height: 300 }])
-    expect(resolved.x).toBeGreaterThanOrEqual(requested.x)
-    expect(resolved.y).toBeGreaterThanOrEqual(requested.y)
-    expect(resolved.x > requested.x || resolved.y > requested.y).toBe(true)
+    expect(resolved).not.toEqual(requested)
+  })
+
+  it('moves a right-side overlap left when that is the nearest open space', () => {
+    const requested = { x: 900, y: 100, width: 560, height: 360 }
+    const resolved = resolvePaneCanvasDrop(requested, [{ x: 1000, y: 0, width: 560, height: 900 }])
+
+    expect(resolved).toEqual({ x: 432, y: 100, width: 560, height: 360 })
   })
 })
