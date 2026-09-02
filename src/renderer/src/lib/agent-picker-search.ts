@@ -1,6 +1,6 @@
 import { isClipboardTextByteLengthOverLimit } from '../../../shared/clipboard-text'
 
-export type AgentPickerSearchEntry = { id: string; label: string; cmd: string }
+type AgentPickerSearchEntry = { id: string; label: string; cmd: string }
 
 type RankedAgent<T extends AgentPickerSearchEntry> = {
   agent: T

@@ -94,8 +94,7 @@ function renderPane(
       React.createElement(AgentsPane, {
         settings,
         updateSettings: vi.fn(),
-        ...props,
-        updateSettingsOrThrow: props.updateSettingsOrThrow ?? vi.fn().mockResolvedValue(undefined)
+        ...props
       })
     )
   )

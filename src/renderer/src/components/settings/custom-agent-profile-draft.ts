@@ -1,12 +1,14 @@
 import type { AgentCatalogEntry } from '@/lib/agent-catalog'
-import {
-  createCustomAgentProfileId,
-  type CustomAgentProfile
-} from '../../../../shared/custom-agent-profile'
+import type { CustomAgentProfile } from '../../../../shared/custom-agent-profile'
 import { tokenizeStartupCommand } from '../../../../shared/tui-agent-startup-shell'
 import type { AgentStartupShell } from '../../../../shared/tui-agent-startup-shell'
 
-export type CustomAgentProfileDraft = CustomAgentProfile
+function createCustomAgentProfileId(): string {
+  return (
+    globalThis.crypto?.randomUUID?.() ??
+    `custom-agent-${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`
+  )
+}
 
 function uniqueCopyName(name: string, reservedNames: readonly string[]): string {
   const names = new Set(reservedNames.map((value) => value.trim().toLowerCase()))
@@ -26,7 +28,7 @@ function literalTokens(value: string, shell: AgentStartupShell): string[] | null
   return parsed.ok && parsed.spans.every((span) => !span.divergesFromShell) ? parsed.tokens : null
 }
 
-export function createCustomAgentProfileDraft(): CustomAgentProfileDraft {
+export function createCustomAgentProfileDraft(): CustomAgentProfile {
   return {
     id: createCustomAgentProfileId(),
     name: '',
@@ -41,7 +43,7 @@ export function duplicateBuiltInAgentAsCustom(args: {
   launchArgs: string
   shell: AgentStartupShell
   reservedNames: readonly string[]
-}): CustomAgentProfileDraft | null {
+}): CustomAgentProfile | null {
   const commandTokens = literalTokens(args.command, args.shell)
   const launchArgTokens = literalTokens(args.launchArgs, args.shell)
   if (!commandTokens?.length || !launchArgTokens) {

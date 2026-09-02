@@ -24,7 +24,6 @@ export function renderAgentsSettingsSection(context: SettingsRenderContext): Rea
         <AgentsPane
           settings={model.settings}
           updateSettings={model.updateSettings}
-          updateSettingsOrThrow={model.updateSettingsOrThrow}
           wslSupportedPlatform={terminal.localWslSupportedPlatform}
           wslAvailable={terminal.localWindowsRuntimeCapabilities.wslAvailable}
           wslDistros={terminal.localWindowsRuntimeCapabilities.wslDistros}

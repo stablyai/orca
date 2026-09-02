@@ -1,4 +1,5 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
+import type { launchCustomAgentInNewTab as LaunchCustomAgentInNewTab } from './launch-custom-agent-in-new-tab'
 
 const mocks = vi.hoisted(() => ({
   createTab: vi.fn(),
@@ -76,7 +77,14 @@ vi.mock('@/components/tab-bar/reconcile-order', () => ({
 }))
 vi.mock('sonner', () => ({ toast: { error: mocks.toastError } }))
 
+let launchCustomAgentInNewTab: typeof LaunchCustomAgentInNewTab
+
 describe('launchCustomAgentInNewTab', () => {
+  beforeAll(async () => {
+    const module = await import('./launch-custom-agent-in-new-tab')
+    launchCustomAgentInNewTab = module.launchCustomAgentInNewTab
+  })
+
   beforeEach(() => {
     vi.clearAllMocks()
     mocks.createTab.mockReturnValue({ id: 'tab-1' })
@@ -89,9 +97,7 @@ describe('launchCustomAgentInNewTab', () => {
     store.folderWorkspaces = []
   })
 
-  it('launches a Codex variant with exact profile argv', async () => {
-    const { launchCustomAgentInNewTab } = await import('./launch-custom-agent-in-new-tab')
-
+  it('launches a Codex variant with exact profile argv', () => {
     launchCustomAgentInNewTab({ profileId: 'codex-luna', worktreeId: 'wt-1' })
 
     expect(mocks.createTab).toHaveBeenCalledWith('wt-1', undefined, undefined, {
@@ -105,9 +111,7 @@ describe('launchCustomAgentInNewTab', () => {
     })
   })
 
-  it('launches a generic profile without claiming built-in identity', async () => {
-    const { launchCustomAgentInNewTab } = await import('./launch-custom-agent-in-new-tab')
-
+  it('launches a generic profile without claiming built-in identity', () => {
     expect(launchCustomAgentInNewTab({ profileId: 'dhimanex', worktreeId: 'wt-1' })).toEqual({
       tabId: 'tab-1'
     })
@@ -120,9 +124,7 @@ describe('launchCustomAgentInNewTab', () => {
     })
   })
 
-  it('does not claim stale identity after the executable changes', async () => {
-    const { launchCustomAgentInNewTab } = await import('./launch-custom-agent-in-new-tab')
-
+  it('does not claim stale identity after the executable changes', () => {
     launchCustomAgentInNewTab({ profileId: 'repointed', worktreeId: 'wt-1' })
 
     expect(mocks.createTab).toHaveBeenCalledWith('wt-1', undefined, undefined, {
@@ -134,11 +136,9 @@ describe('launchCustomAgentInNewTab', () => {
     })
   })
 
-  it('queues the one-shot argv environment for native Windows', async () => {
+  it('queues the one-shot argv environment for native Windows', () => {
     mocks.getAgentLaunchPlatformForRepo.mockReturnValue('win32')
     store.settings.terminalWindowsShell = 'cmd.exe'
-    const { launchCustomAgentInNewTab } = await import('./launch-custom-agent-in-new-tab')
-
     launchCustomAgentInNewTab({ profileId: 'dhimanex', worktreeId: 'wt-1' })
 
     expect(mocks.queueTabStartupCommand).toHaveBeenCalledWith('tab-1', {
@@ -147,14 +147,12 @@ describe('launchCustomAgentInNewTab', () => {
     })
   })
 
-  it('uses the known platform for Linux SSH and folder workspaces', async () => {
+  it('uses the known platform for Linux SSH and folder workspaces', () => {
     mocks.getExecutionHostIdForWorktree.mockReturnValue('ssh:folder-host')
     store.sshConnectionStates.set('folder-host', {
       targetId: 'folder-host',
       remotePlatform: 'linux'
     })
-    const { launchCustomAgentInNewTab } = await import('./launch-custom-agent-in-new-tab')
-
     launchCustomAgentInNewTab({ profileId: 'codex-luna', worktreeId: 'folder:docs' })
 
     expect(mocks.queueTabStartupCommand).toHaveBeenCalledWith('tab-1', {
@@ -163,15 +161,13 @@ describe('launchCustomAgentInNewTab', () => {
     })
   })
 
-  it('uses POSIX argv for a local WSL folder workspace', async () => {
+  it('uses POSIX argv for a local WSL folder workspace', () => {
     store.folderWorkspaces = [
       {
         id: 'wsl-folder',
         folderPath: '\\\\wsl.localhost\\Ubuntu\\home\\dhiman\\project'
       }
     ]
-    const { launchCustomAgentInNewTab } = await import('./launch-custom-agent-in-new-tab')
-
     launchCustomAgentInNewTab({ profileId: 'codex-luna', worktreeId: 'folder:wsl-folder' })
 
     expect(mocks.queueTabStartupCommand).toHaveBeenCalledWith('tab-1', {
@@ -180,8 +176,7 @@ describe('launchCustomAgentInNewTab', () => {
     })
   })
 
-  it('fails closed on paired hosts and Windows SSH', async () => {
-    const { launchCustomAgentInNewTab } = await import('./launch-custom-agent-in-new-tab')
+  it('fails closed on paired hosts and Windows SSH', () => {
     mocks.getExecutionHostIdForWorktree.mockReturnValue('runtime:server')
     expect(launchCustomAgentInNewTab({ profileId: 'codex-luna', worktreeId: 'wt-1' })).toBeNull()
 
@@ -194,18 +189,14 @@ describe('launchCustomAgentInNewTab', () => {
     expect(mocks.createTab).not.toHaveBeenCalled()
   })
 
-  it('fails closed when the selected profile was removed', async () => {
-    const { launchCustomAgentInNewTab } = await import('./launch-custom-agent-in-new-tab')
-
+  it('fails closed when the selected profile was removed', () => {
     expect(
       launchCustomAgentInNewTab({ profileId: 'removed-profile', worktreeId: 'wt-1' })
     ).toBeNull()
     expect(mocks.createTab).not.toHaveBeenCalled()
   })
 
-  it('does not launch a disabled profile', async () => {
-    const { launchCustomAgentInNewTab } = await import('./launch-custom-agent-in-new-tab')
-
+  it('does not launch a disabled profile', () => {
     expect(launchCustomAgentInNewTab({ profileId: 'disabled', worktreeId: 'wt-1' })).toBeNull()
     expect(mocks.createTab).not.toHaveBeenCalled()
   })

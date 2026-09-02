@@ -71,7 +71,6 @@ export {
 type AgentsPaneProps = {
   settings: GlobalSettings
   updateSettings: (updates: Partial<GlobalSettings>) => void | Promise<void>
-  updateSettingsOrThrow: (updates: Partial<GlobalSettings>) => Promise<void>
   wslSupportedPlatform?: boolean
   wslAvailable?: boolean
   wslDistros?: string[]
@@ -156,13 +155,13 @@ export function AgentPermissionsSetting({
 export function AgentsPane({
   settings,
   updateSettings,
-  updateSettingsOrThrow,
   wslSupportedPlatform,
   wslAvailable,
   wslDistros,
   wslCapabilitiesLoading
 }: AgentsPaneProps): React.JSX.Element {
   const customProfilesRef = useRef<CustomAgentProfilesSectionHandle | null>(null)
+  const updateSettingsOrThrow = useAppStore((state) => state.updateSettingsOrThrow)
   const activeServerEnvironmentId = settings.activeRuntimeEnvironmentId?.trim() || null
   const agentDetectionTarget = useMemo<AgentDetectionTarget>(
     () =>

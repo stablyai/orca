@@ -6,8 +6,8 @@ import { isTuiAgent } from './tui-agent-config'
 import { TUI_AGENT_DISPLAY_NAMES } from './tui-agent-display-names'
 
 export const CUSTOM_AGENT_PROFILES_MAX = 32
-export const CUSTOM_AGENT_ARGUMENTS_MAX = 256
-export const CUSTOM_AGENT_ARGUMENTS_BYTES_MAX = 16 * 1024
+const CUSTOM_AGENT_ARGUMENTS_MAX = 256
+const CUSTOM_AGENT_ARGUMENTS_BYTES_MAX = 16 * 1024
 
 const PROFILE_ID_MAX = 128
 const PROFILE_NAME_MAX = 80
@@ -251,11 +251,4 @@ function buildCustomAgentWindowsLaunch(
     command,
     env: { [WINDOWS_ARGV_ENV]: encodeUtf8Base64(JSON.stringify(argv)) }
   }
-}
-
-export function createCustomAgentProfileId(): string {
-  return (
-    globalThis.crypto?.randomUUID?.() ??
-    `custom-agent-${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`
-  )
 }

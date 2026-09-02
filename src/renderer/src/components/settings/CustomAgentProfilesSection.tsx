@@ -15,10 +15,7 @@ import { Button } from '../ui/button'
 import { useConfirmationDialog } from '@/components/confirmation-dialog-context'
 import { SettingsBadge, SettingsSubsectionHeader } from './SettingsFormControls'
 import { AgentRowAction, AgentSettingsRow } from './AgentSettingsRow'
-import {
-  createCustomAgentProfileDraft,
-  type CustomAgentProfileDraft
-} from './custom-agent-profile-draft'
+import { createCustomAgentProfileDraft } from './custom-agent-profile-draft'
 import {
   CustomAgentProfileEditor,
   validateCustomAgentDraft,
@@ -26,7 +23,7 @@ import {
 } from './CustomAgentProfileEditor'
 
 export type CustomAgentProfilesSectionHandle = {
-  openProfile: (profile: CustomAgentProfileDraft) => void
+  openProfile: (profile: CustomAgentProfile) => void
 }
 
 function profileSummary(profile: CustomAgentProfile): string {

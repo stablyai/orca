@@ -11,17 +11,16 @@ import { Button } from '../ui/button'
 import { Input } from '../ui/input'
 import { Label } from '../ui/label'
 import { AgentRowAction } from './AgentSettingsRow'
-import type { CustomAgentProfileDraft } from './custom-agent-profile-draft'
 
 export type CustomAgentEditorState = {
   originalId: string | null
-  profile: CustomAgentProfileDraft
+  profile: CustomAgentProfile
 }
 
 type DraftErrors = Partial<Record<'name' | 'executable' | 'profile', string>>
 
 export function validateCustomAgentDraft(
-  draft: CustomAgentProfileDraft,
+  draft: CustomAgentProfile,
   profiles: readonly CustomAgentProfile[],
   catalog: readonly AgentCatalogEntry[],
   originalId: string | null
@@ -81,7 +80,7 @@ export function CustomAgentProfileEditor({
   saving: boolean
   persistenceError: string | null
   nameInputRef: React.RefObject<HTMLInputElement | null>
-  onChange: (profile: CustomAgentProfileDraft) => void
+  onChange: (profile: CustomAgentProfile) => void
   onSave: () => void
   onCancel: () => void
 }): React.JSX.Element {
@@ -90,8 +89,6 @@ export function CustomAgentProfileEditor({
   const argumentsId = useId()
   const nameErrorId = `${profile.id}-name-error`
   const executableErrorId = `${profile.id}-executable-error`
-  const profileErrorId = `${profile.id}-profile-error`
-  const persistenceErrorId = `${profile.id}-persistence-error`
   const argumentInputRefs = useRef<(HTMLInputElement | null)[]>([])
   const addArgumentRef = useRef<HTMLButtonElement | null>(null)
   const argumentIdsRef = useRef(profile.args.map((_, index) => `${profile.id}-argument-${index}`))
@@ -217,12 +214,12 @@ export function CustomAgentProfileEditor({
       </div>
 
       {errors.profile && !errors.executable ? (
-        <p id={profileErrorId} className="text-xs text-destructive" role="alert">
+        <p className="text-xs text-destructive" role="alert">
           {errors.profile}
         </p>
       ) : null}
       {persistenceError ? (
-        <p id={persistenceErrorId} className="text-xs text-destructive" role="alert">
+        <p className="text-xs text-destructive" role="alert">
           {persistenceError}
         </p>
       ) : null}

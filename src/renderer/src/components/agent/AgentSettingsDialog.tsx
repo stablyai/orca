@@ -27,7 +27,6 @@ export default function AgentSettingsDialog({
 }: AgentSettingsDialogProps): React.JSX.Element | null {
   const settings = useAppStore((s) => s.settings)
   const updateSettings = useAppStore((s) => s.updateSettings)
-  const updateSettingsOrThrow = useAppStore((s) => s.updateSettingsOrThrow)
   const isWindowsRenderer =
     typeof navigator !== 'undefined' && navigator.userAgent.includes('Windows')
   const isWebClient = isWebClientLocation()
@@ -73,7 +72,6 @@ export default function AgentSettingsDialog({
           <AgentsPane
             settings={settings}
             updateSettings={updateSettings}
-            updateSettingsOrThrow={updateSettingsOrThrow}
             wslSupportedPlatform={wslSupportedPlatform}
             wslAvailable={localWindowsTerminalCapabilities.wslAvailable}
             wslDistros={localWindowsTerminalCapabilities.wslDistros}

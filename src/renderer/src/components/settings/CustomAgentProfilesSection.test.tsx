@@ -7,7 +7,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { getAgentCatalog } from '@/lib/agent-catalog'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { CustomAgentProfilesSection } from './CustomAgentProfilesSection'
-import type { ReactNode } from 'react'
+import type { ComponentProps, ReactNode } from 'react'
 
 vi.mock('@/components/confirmation-dialog-context', () => ({
   useConfirmationDialog: () => vi.fn().mockResolvedValue(true)
@@ -21,23 +21,34 @@ function renderWithTooltips(children: ReactNode): ReturnType<typeof render> {
   return render(<TooltipProvider>{children}</TooltipProvider>)
 }
 
+type SectionProps = Pick<
+  ComponentProps<typeof CustomAgentProfilesSection>,
+  'profiles' | 'onProfilesChange'
+>
+
+function renderSection(props: Partial<SectionProps> = {}): ReturnType<typeof render> {
+  return renderWithTooltips(
+    <CustomAgentProfilesSection
+      profiles={props.profiles ?? []}
+      catalog={getAgentCatalog()}
+      onProfilesChange={props.onProfilesChange ?? vi.fn()}
+    />
+  )
+}
+
 describe('CustomAgentProfilesSection', () => {
   it('uses the installed-agent row controls and expands editing in place', async () => {
     const user = userEvent.setup()
-    renderWithTooltips(
-      <CustomAgentProfilesSection
-        profiles={[
-          {
-            id: 'codex-luna',
-            name: 'Codex Luna',
-            executable: 'codex',
-            args: ['--model', 'luna']
-          }
-        ]}
-        catalog={getAgentCatalog()}
-        onProfilesChange={vi.fn()}
-      />
-    )
+    renderSection({
+      profiles: [
+        {
+          id: 'codex-luna',
+          name: 'Codex Luna',
+          executable: 'codex',
+          args: ['--model', 'luna']
+        }
+      ]
+    })
 
     expect(screen.getByRole('radiogroup', { name: 'Codex Luna availability' })).toBeVisible()
     expect(screen.getByRole('button', { name: 'Set default' })).toBeVisible()
@@ -58,13 +69,7 @@ describe('CustomAgentProfilesSection', () => {
       executable: 'codex',
       args: ['--model', 'luna']
     } as const
-    const view = renderWithTooltips(
-      <CustomAgentProfilesSection
-        profiles={[profile]}
-        catalog={getAgentCatalog()}
-        onProfilesChange={onProfilesChange}
-      />
-    )
+    const view = renderSection({ profiles: [profile], onProfilesChange })
 
     await user.click(screen.getByRole('button', { name: 'Set default' }))
     await waitFor(() =>
@@ -89,13 +94,7 @@ describe('CustomAgentProfilesSection', () => {
   it('creates a generic profile with ordered literal arguments', async () => {
     const user = userEvent.setup()
     const onProfilesChange = vi.fn().mockResolvedValue(undefined)
-    renderWithTooltips(
-      <CustomAgentProfilesSection
-        profiles={[]}
-        catalog={getAgentCatalog()}
-        onProfilesChange={onProfilesChange}
-      />
-    )
+    renderSection({ onProfilesChange })
 
     await user.click(screen.getByRole('button', { name: 'Create custom agent' }))
     await user.type(screen.getByLabelText('Name'), 'Dhimanex')
@@ -117,13 +116,7 @@ describe('CustomAgentProfilesSection', () => {
 
   it('rejects a built-in display name', async () => {
     const user = userEvent.setup()
-    renderWithTooltips(
-      <CustomAgentProfilesSection
-        profiles={[]}
-        catalog={getAgentCatalog()}
-        onProfilesChange={vi.fn()}
-      />
-    )
+    renderSection()
 
     await user.click(screen.getByRole('button', { name: 'Create custom agent' }))
     await user.type(screen.getByLabelText('Name'), 'Codex')
@@ -138,22 +131,19 @@ describe('CustomAgentProfilesSection', () => {
   it('drops duplicated identity when the executable changes', async () => {
     const user = userEvent.setup()
     const onProfilesChange = vi.fn().mockResolvedValue(undefined)
-    renderWithTooltips(
-      <CustomAgentProfilesSection
-        profiles={[
-          {
-            id: 'codex-luna',
-            name: 'Codex Luna',
-            baseAgent: 'codex',
-            baseAgentExecutable: 'codex',
-            executable: 'codex',
-            args: ['--model', 'luna']
-          }
-        ]}
-        catalog={getAgentCatalog()}
-        onProfilesChange={onProfilesChange}
-      />
-    )
+    renderSection({
+      profiles: [
+        {
+          id: 'codex-luna',
+          name: 'Codex Luna',
+          baseAgent: 'codex',
+          baseAgentExecutable: 'codex',
+          executable: 'codex',
+          args: ['--model', 'luna']
+        }
+      ],
+      onProfilesChange
+    })
 
     await user.click(screen.getByRole('button', { name: 'Edit Codex Luna' }))
     await user.clear(screen.getByLabelText('Executable'))
@@ -168,13 +158,9 @@ describe('CustomAgentProfilesSection', () => {
 
   it('keeps a failed write visible until the editor is cancelled', async () => {
     const user = userEvent.setup()
-    renderWithTooltips(
-      <CustomAgentProfilesSection
-        profiles={[]}
-        catalog={getAgentCatalog()}
-        onProfilesChange={vi.fn().mockRejectedValue(new Error('Settings write failed'))}
-      />
-    )
+    renderSection({
+      onProfilesChange: vi.fn().mockRejectedValue(new Error('Settings write failed'))
+    })
 
     await user.click(screen.getByRole('button', { name: 'Create custom agent' }))
     await user.type(screen.getByLabelText('Name'), 'Dhimanex')
@@ -194,13 +180,10 @@ describe('CustomAgentProfilesSection', () => {
       .fn()
       .mockRejectedValueOnce(new Error('Settings write failed'))
       .mockResolvedValueOnce(undefined)
-    renderWithTooltips(
-      <CustomAgentProfilesSection
-        profiles={[{ id: 'a', name: 'Agent A', executable: 'a', args: [] }]}
-        catalog={getAgentCatalog()}
-        onProfilesChange={onProfilesChange}
-      />
-    )
+    renderSection({
+      profiles: [{ id: 'a', name: 'Agent A', executable: 'a', args: [] }],
+      onProfilesChange
+    })
 
     const deleteAgent = screen.getByRole('button', { name: 'Delete Agent A' })
     await user.click(deleteAgent)
@@ -220,16 +203,13 @@ describe('CustomAgentProfilesSection', () => {
           finishWrite = resolve
         })
     )
-    renderWithTooltips(
-      <CustomAgentProfilesSection
-        profiles={[
-          { id: 'a', name: 'Agent A', executable: 'a', args: [] },
-          { id: 'b', name: 'Agent B', executable: 'b', args: [] }
-        ]}
-        catalog={getAgentCatalog()}
-        onProfilesChange={onProfilesChange}
-      />
-    )
+    renderSection({
+      profiles: [
+        { id: 'a', name: 'Agent A', executable: 'a', args: [] },
+        { id: 'b', name: 'Agent B', executable: 'b', args: [] }
+      ],
+      onProfilesChange
+    })
 
     const deleteA = screen.getByRole('button', { name: 'Delete Agent A' })
     const deleteB = screen.getByRole('button', { name: 'Delete Agent B' })
