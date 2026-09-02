@@ -74,7 +74,14 @@ export async function listRepoWorktreeGraph(
   }
   if (repo.connectionId) {
     const provider = getSshGitProvider(repo.connectionId)
-    return provider ? await provider.listWorktrees(repo.path) : []
+    // Why: path-only callers treat [] as "not a member". An unreachable host is not
+    // an empty catalog (#14004) — never fall back to local git against a server path.
+    if (!provider) {
+      throw new WorktreeCatalogUnavailableError(
+        `Worktree catalog unavailable for ${repo.path}: SSH connection "${repo.connectionId}" is not connected.`
+      )
+    }
+    return await provider.listWorktrees(repo.path)
   }
   return hasLocalRepoWorktreeListOptions(options)
     ? await listWorktreeGraph(repo.path, options)

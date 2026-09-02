@@ -1,5 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { resolve } from 'node:path'
+import {
+  isWorktreeCatalogUnavailableError,
+  WorktreeCatalogUnavailableError
+} from '../../shared/worktree/worktree-catalog-availability'
 
 const ORIGINAL_PLATFORM = process.platform
 
@@ -474,6 +478,30 @@ describe('registerHostedReviewHandlers', () => {
       'ssh-1',
       { localGitExecOptions: { admissionTier: 'interactive' } }
     )
+    expect(createHostedReviewMock).not.toHaveBeenCalled()
+  })
+
+  it('does not treat an unavailable SSH worktree catalog as a missing worktree', async () => {
+    listRepoWorktreeGraphMock.mockRejectedValue(
+      new WorktreeCatalogUnavailableError(
+        `Worktree catalog unavailable for ${repoPath}: SSH connection "ssh-1" is not connected.`
+      )
+    )
+
+    registerHostedReviewHandlers(store as never, stats as never)
+
+    await expect(
+      handlers['hostedReview:create'](null, {
+        repoPath,
+        repoId: repo.id,
+        worktreePath,
+        provider: 'github',
+        base: 'main',
+        head: 'feature/pr',
+        title: 'Feature PR'
+      })
+    ).rejects.toSatisfy(isWorktreeCatalogUnavailableError)
+
     expect(createHostedReviewMock).not.toHaveBeenCalled()
   })
 

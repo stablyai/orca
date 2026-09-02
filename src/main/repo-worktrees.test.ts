@@ -1,15 +1,22 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { isWorktreeCatalogUnavailableError } from '../shared/worktree/worktree-catalog-availability'
 
-const { listWorktreeGraphMock, listWorktreesMock, listWorktreesStrictMock } = vi.hoisted(() => ({
-  listWorktreeGraphMock: vi.fn(),
-  listWorktreesMock: vi.fn(),
-  listWorktreesStrictMock: vi.fn()
-}))
+const { getSshGitProviderMock, listWorktreeGraphMock, listWorktreesMock, listWorktreesStrictMock } =
+  vi.hoisted(() => ({
+    getSshGitProviderMock: vi.fn(),
+    listWorktreeGraphMock: vi.fn(),
+    listWorktreesMock: vi.fn(),
+    listWorktreesStrictMock: vi.fn()
+  }))
 
 vi.mock('./git/worktree', () => ({
   listWorktreeGraph: listWorktreeGraphMock,
   listWorktrees: listWorktreesMock,
   listWorktreesStrict: listWorktreesStrictMock
+}))
+
+vi.mock('./providers/ssh-git-dispatch', () => ({
+  getSshGitProvider: getSshGitProviderMock
 }))
 
 import {
@@ -22,6 +29,7 @@ import {
 
 describe('repo-worktrees', () => {
   beforeEach(() => {
+    getSshGitProviderMock.mockReset()
     listWorktreeGraphMock.mockReset()
     listWorktreesMock.mockReset()
     listWorktreesStrictMock.mockReset()
@@ -154,6 +162,57 @@ describe('repo-worktrees', () => {
         kind: 'folder'
       })
     ])
+  })
+
+  it('throws when the SSH git provider is missing from the graph listing', async () => {
+    getSshGitProviderMock.mockReturnValue(undefined)
+    const repo = {
+      id: 'repo-1',
+      path: '/remote/workspace/repo',
+      displayName: 'repo',
+      badgeColor: '#000',
+      addedAt: 0,
+      connectionId: 'ssh-1',
+      kind: 'git' as const
+    }
+
+    await expect(listRepoWorktreeGraph(repo)).rejects.toSatisfy((error: unknown) => {
+      return (
+        isWorktreeCatalogUnavailableError(error) &&
+        error instanceof Error &&
+        error.message ===
+          'Worktree catalog unavailable for /remote/workspace/repo: SSH connection "ssh-1" is not connected.'
+      )
+    })
+    expect(listWorktreeGraphMock).not.toHaveBeenCalled()
+  })
+
+  it('delegates the SSH graph listing to the connected git provider', async () => {
+    const worktrees = [
+      {
+        path: '/remote/workspace/feature',
+        head: 'abc',
+        branch: 'feature',
+        isBare: false,
+        isMainWorktree: false
+      }
+    ]
+    const listWorktrees = vi.fn().mockResolvedValue(worktrees)
+    getSshGitProviderMock.mockReturnValue({ listWorktrees })
+
+    const result = await listRepoWorktreeGraph({
+      id: 'repo-1',
+      path: '/remote/workspace/repo',
+      displayName: 'repo',
+      badgeColor: '#000',
+      addedAt: 0,
+      connectionId: 'ssh-1',
+      kind: 'git'
+    })
+
+    expect(listWorktrees).toHaveBeenCalledWith('/remote/workspace/repo')
+    expect(listWorktreeGraphMock).not.toHaveBeenCalled()
+    expect(result).toEqual(worktrees)
   })
 
   it('delegates strict local listing with the signal and WSL options', async () => {
