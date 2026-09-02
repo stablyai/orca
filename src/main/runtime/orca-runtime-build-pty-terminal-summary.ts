@@ -25,6 +25,10 @@ export class OrcaRuntimeWithBuildPtyTerminalSummary extends OrcaRuntimeWithGetPt
       incarnationId: pty.incarnationId,
       orphaned,
       worktreeId: pty.worktreeId,
+      // Why: this summary is already built straight from the live pty record, so
+      // there's no staleness to bridge here — kept for a uniform contract with
+      // buildTerminalSummary's leaf-derived case, where the two values can diverge.
+      freshWorktreeId: pty.worktreeId,
       worktreePath: worktree?.path ?? '',
       branch: worktree?.branch ?? '',
       tabId: orphaned ? `pty:${pty.ptyId}` : pty.tabId!,

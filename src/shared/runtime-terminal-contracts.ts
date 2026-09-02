@@ -18,6 +18,10 @@ export type RuntimeTerminalSummary = {
   incarnationId?: string | null
   orphaned?: boolean
   worktreeId: string
+  /** pty.worktreeId when the pty has re-incarnated since the leaf's worktreeId was assigned
+   *  (recordPtyWorktree updates the pty record but never the leaf); falls back to worktreeId.
+   *  Absent when the host predates the field. */
+  freshWorktreeId?: string
   worktreePath: string
   branch: string
   tabId: string

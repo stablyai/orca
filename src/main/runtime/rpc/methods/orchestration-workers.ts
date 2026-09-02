@@ -99,7 +99,12 @@ export const ORCHESTRATION_WORKER_START_METHODS: RpcMethod[] = [
       let explicitTerminal
       if (params.terminal) {
         explicitTerminal = await runtime.showTerminal(params.terminal)
-        if (explicitTerminal.worktreeId !== resolvedWorktree?.id) {
+        // Why freshWorktreeId: a reused terminal's pty can reincarnate into a
+        // different worktree without ever updating the leaf's static worktreeId
+        // (#17307) — validating against the live value keeps a worker from being
+        // dispatched into whatever directory the pane physically ended up in.
+        const liveWorktreeId = explicitTerminal.freshWorktreeId ?? explicitTerminal.worktreeId
+        if (liveWorktreeId !== resolvedWorktree?.id) {
           throw new OrchestrationError(
             'terminal_worktree_mismatch',
             `Terminal ${params.terminal} does not belong to worktree ${resolvedWorktree?.id}.`
