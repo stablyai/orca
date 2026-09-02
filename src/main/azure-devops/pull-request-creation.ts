@@ -1,4 +1,3 @@
-import { Buffer } from 'node:buffer'
 import type { CreateHostedReviewInput, CreateHostedReviewResult } from '../../shared/hosted-review'
 import {
   normalizeHostedReviewBaseRef,
@@ -8,11 +7,23 @@ import {
   HostedReviewApiRequestError,
   requestHostedReviewJson
 } from '../source-control/hosted-review-api-request'
+import {
+  getHostedReviewLocalGitOptions,
+  type HostedReviewExecutionOptions
+} from '../source-control/hosted-review-git-options'
 import { readHostedPullRequestTemplate } from '../source-control/pull-request-template'
 import {
+  getAzCliAzureDevOpsAccessToken,
+  isEntraEligibleAzureDevOpsBaseUrl
+} from './az-cli-access-token'
+import {
   azureDevOpsApiVersionForOrigin,
+  azureDevOpsTokenConfigured,
+  getAzureDevOpsAuthConfig,
   isAzureDevOpsPreviewVersionRejection,
   markAzureDevOpsPreviewApiVersionOrigin,
+  normalizeAzureDevOpsApiBaseUrl,
+  resolveAzureDevOpsAuthHeaders,
   resolveAzureDevOpsGitApiBaseUrl
 } from './azure-devops-api-request'
 import { getAzureDevOpsPullRequestForBranch } from './client'
@@ -21,39 +32,32 @@ import { getAzureDevOpsRepoRef, type AzureDevOpsRepoRef } from './repository-ref
 
 const CREATE_REQUEST_TIMEOUT_MS = 60_000
 
-type AzureDevOpsCreateAuthConfig = {
-  pat: string | null
-  accessToken: string | null
-  username: string | null
-}
-
-function envValue(name: string): string | null {
-  const value = process.env[name]?.trim() ?? ''
-  return value.length > 0 ? value : null
-}
-
-function getAuthConfig(): AzureDevOpsCreateAuthConfig {
-  return {
-    pat: envValue('ORCA_AZURE_DEVOPS_TOKEN') ?? envValue('ORCA_AZURE_DEVOPS_PAT'),
-    accessToken: envValue('ORCA_AZURE_DEVOPS_ACCESS_TOKEN'),
-    username: envValue('ORCA_AZURE_DEVOPS_USERNAME')
+/**
+ * A configured env token always authenticates. Otherwise hosted Azure DevOps
+ * accepts the az CLI's Entra login; on-prem servers require the token.
+ */
+export async function isAzureDevOpsReviewCreationAuthenticated(
+  repoPath: string,
+  connectionId?: string | null,
+  options: HostedReviewExecutionOptions = {}
+): Promise<boolean> {
+  const config = getAzureDevOpsAuthConfig()
+  if (azureDevOpsTokenConfigured(config)) {
+    return true
   }
-}
-
-export function isAzureDevOpsReviewCreationAuthenticated(): boolean {
-  const config = getAuthConfig()
-  return Boolean(config.pat || config.accessToken)
-}
-
-function authHeaders(config: AzureDevOpsCreateAuthConfig): Record<string, string> {
-  if (config.accessToken) {
-    return { Authorization: `Bearer ${config.accessToken}` }
+  const baseUrl = config.apiBaseUrl
+    ? normalizeAzureDevOpsApiBaseUrl(config.apiBaseUrl)
+    : (
+        await getAzureDevOpsRepoRef(
+          repoPath,
+          connectionId,
+          getHostedReviewLocalGitOptions(options)
+        )
+      )?.apiBaseUrl
+  if (!baseUrl || !isEntraEligibleAzureDevOpsBaseUrl(baseUrl)) {
+    return false
   }
-  if (config.pat) {
-    const encoded = Buffer.from(`${config.username ?? ''}:${config.pat}`).toString('base64')
-    return { Authorization: `Basic ${encoded}` }
-  }
-  return {}
+  return (await getAzCliAzureDevOpsAccessToken()) !== null
 }
 
 function apiUrl(repo: AzureDevOpsRepoRef, path: string): URL {
@@ -124,7 +128,7 @@ function classifyCreateError(error: unknown): CreateHostedReviewResult {
       ok: false,
       code: 'auth_required',
       error:
-        'Create PR failed: Azure DevOps is not authenticated. Next step: set ORCA_AZURE_DEVOPS_TOKEN in this environment.'
+        'Create PR failed: Azure DevOps is not authenticated. Next step: run az login or set ORCA_AZURE_DEVOPS_TOKEN in this environment.'
     }
   }
   if (status === 409 || lower.includes('already exists') || lower.includes('active pull request')) {
@@ -218,6 +222,7 @@ export async function createAzureDevOpsPullRequest(
     ...(input.draft ? { isDraft: true } : {})
   }
 
+  const baseUrl = resolveAzureDevOpsGitApiBaseUrl(repo)
   try {
     const raw = await requestCreatePullRequest(
       repo,
@@ -227,7 +232,7 @@ export async function createAzureDevOpsPullRequest(
         headers: {
           Accept: 'application/json',
           'Content-Type': 'application/json',
-          ...authHeaders(getAuthConfig())
+          ...(await resolveAzureDevOpsAuthHeaders(baseUrl))
         },
         body: JSON.stringify(requestBody)
       }

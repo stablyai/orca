@@ -9430,7 +9430,6 @@
                   "48842720d2": "ORCA_AZURE_DEVOPS_TOKEN",
                   "7bbc9c64f0": "設定:",
                   "f3f47dc7de": "このランタイムでは、Azure DevOps の状態をまだ取得できません。",
-                  "0eb50d5593": "Azure DevOps REST API トークン経由の PR とビルドステータス。",
                   "54636c65d4": "検出された Azure リポジトリの PR とビルドステータス",
                   "ea204f5e03": "{{value0}} · PR とビルドステータス",
                   "6154b02093": "Bitbucket の認証情報は設定されていますが、認証できませんでした。トークンとリポジトリの権限を確認し、環境変数を変更した場合は Orca を再起動してください。",
@@ -9440,7 +9439,14 @@
                   "63a7f47392": "ORCA_BITBUCKET_EMAIL",
                   "24ac1c69dc": "このランタイムでは、Bitbucket の状態をまだ取得できません。",
                   "a924e8dcd1": "Bitbucket Cloud API トークン経由の PR とビルドステータス。",
-                  "0fa5629dad": "PR とビルドステータス"
+                  "0fa5629dad": "PR とビルドステータス",
+                  "az": {
+                    "run": "Run",
+                    "login": "az login",
+                    "or": {
+                      "set": " (Azure CLI), set"
+                    }
+                  }
                 }
               }
             }

@@ -9435,7 +9435,6 @@
                   "48842720d2": "ORCA_AZURE_DEVOPS_TOKEN",
                   "7bbc9c64f0": "설정",
                   "f3f47dc7de": "이 런타임에서는 아직 Azure DevOps 상태를 사용할 수 없습니다.",
-                  "0eb50d5593": "Azure DevOps REST API 토큰을 통한 PR 및 빌드 상태입니다.",
                   "54636c65d4": "감지된 Azure Repos의 PR 및 빌드 상태",
                   "ea204f5e03": "{{value0}} · PR 및 빌드 상태",
                   "6154b02093": "Bitbucket 자격 증명이 구성되어 있지만 인증할 수 없습니다. 토큰과 repos 권한을 확인하고, 환경 변수가 변경되었다면 Orca를 다시 시작하세요.",
@@ -9445,7 +9444,14 @@
                   "63a7f47392": "ORCA_BITBUCKET_EMAIL",
                   "24ac1c69dc": "이 런타임에서는 아직 Bitbucket 상태를 사용할 수 없습니다.",
                   "a924e8dcd1": "Bitbucket Cloud API 토큰을 통한 PR 및 빌드 상태입니다.",
-                  "0fa5629dad": "PR 및 빌드 상태"
+                  "0fa5629dad": "PR 및 빌드 상태",
+                  "az": {
+                    "run": "Run",
+                    "login": "az login",
+                    "or": {
+                      "set": " (Azure CLI), set"
+                    }
+                  }
                 }
               }
             }

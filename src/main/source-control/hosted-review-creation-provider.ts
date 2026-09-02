@@ -86,7 +86,7 @@ export function reviewCopy(provider: HostedReviewProvider): {
       shortLabel: 'PR',
       reviewLabel: 'pull request',
       providerName: 'Azure DevOps',
-      authInstruction: 'Set ORCA_AZURE_DEVOPS_TOKEN'
+      authInstruction: 'Run az login or set ORCA_AZURE_DEVOPS_TOKEN'
     }
   }
   if (provider === 'gitea') {
@@ -123,7 +123,7 @@ export async function isProviderAuthenticated(
     return isGitLabAuthenticated(repoPath, connectionId, options)
   }
   if (provider === 'azure-devops') {
-    return isAzureDevOpsReviewCreationAuthenticated()
+    return isAzureDevOpsReviewCreationAuthenticated(repoPath, connectionId, options)
   }
   if (provider === 'gitea') {
     return isGiteaReviewCreationAuthenticated()

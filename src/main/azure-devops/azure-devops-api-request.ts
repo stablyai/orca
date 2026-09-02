@@ -1,6 +1,10 @@
 import { Buffer } from 'node:buffer'
 import type { AzureDevOpsRepoRef } from './repository-ref'
 import { cancelUnreadResponseBody } from '../lib/unread-response-body'
+import {
+  getAzCliAzureDevOpsAccessToken,
+  isEntraEligibleAzureDevOpsBaseUrl
+} from './az-cli-access-token'
 
 const REQUEST_TIMEOUT_MS = 5000
 const DEFAULT_API_VERSION = '7.1'
@@ -77,7 +81,7 @@ export function azureDevOpsTokenConfigured(config: AzureDevOpsAuthConfig): boole
   return Boolean(config.pat || config.accessToken)
 }
 
-function authHeaders(config: AzureDevOpsAuthConfig): Record<string, string> {
+function envAuthHeaders(config: AzureDevOpsAuthConfig): Record<string, string> {
   if (config.accessToken) {
     return { Authorization: `Bearer ${config.accessToken}` }
   }
@@ -86,6 +90,26 @@ function authHeaders(config: AzureDevOpsAuthConfig): Record<string, string> {
     return { Authorization: `Basic ${encoded}` }
   }
   return {}
+}
+
+/**
+ * Env tokens win; otherwise hosted Azure DevOps falls back to the az CLI's
+ * Entra login. On-prem Azure DevOps Server never tries az — it only accepts
+ * PAT/Windows auth.
+ */
+export async function resolveAzureDevOpsAuthHeaders(
+  baseUrl: string
+): Promise<Record<string, string>> {
+  const config = getAzureDevOpsAuthConfig()
+  const fromEnv = envAuthHeaders(config)
+  if (Object.keys(fromEnv).length > 0) {
+    return fromEnv
+  }
+  if (!isEntraEligibleAzureDevOpsBaseUrl(baseUrl)) {
+    return {}
+  }
+  const token = await getAzCliAzureDevOpsAccessToken()
+  return token ? { Authorization: `Bearer ${token}` } : {}
 }
 
 function isUrlPathAncestor(ancestor: string, descendant: string): boolean {
@@ -155,12 +179,11 @@ export async function requestAzureDevOpsJsonAtBase<T>(
   // throws instead of collapsing to null so callers never report false not_found.
   throwOnFailure = false
 ): Promise<T | null> {
-  const config = getAzureDevOpsAuthConfig()
-  const doFetch = (url: URL): Promise<Response> =>
+  const doFetch = async (url: URL): Promise<Response> =>
     fetch(url, {
       headers: {
         Accept: 'application/json',
-        ...authHeaders(config)
+        ...(await resolveAzureDevOpsAuthHeaders(baseUrl))
       },
       signal: AbortSignal.timeout(options.timeoutMs ?? REQUEST_TIMEOUT_MS)
     })
