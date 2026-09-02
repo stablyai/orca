@@ -22,7 +22,7 @@ import {
   isMobilePublishableBrowserWorkspace,
   isMobilePublishableOpenFile,
   isWebOnlyMirroredTerminalTab
-} from './mobile-session-tab-helpers'
+} from './mobile-session-surfaces'
 import {
   appendFallbackEditorTabsToGroups,
   buildMobileSessionGroupProjection,

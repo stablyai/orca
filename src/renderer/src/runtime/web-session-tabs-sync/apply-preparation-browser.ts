@@ -1,10 +1,10 @@
 import { buildWebSessionExistingTabIndex } from '../web-session-existing-tab-index'
-import { chooseTargetGroupId, buildHostGroupIdByTabId } from './layout-helpers'
+import { chooseTargetGroupId, buildHostGroupIdByTabId } from './tab-group-layout-tree'
 import {
   buildMirroredBrowserTabs,
   browserWorkspaceHasRemoteEnvironmentPage,
   browserWorkspaceHasClientHostedEnvironmentPage
-} from './browser-helpers'
+} from './mirrored-browser-tabs'
 import { buildMirroredEditorTabs } from './tab-builders'
 import { buildMirroredAgentTabs, isReadyBrowserTab, isReadyEditorTab } from './terminal-surfaces'
 import { hostSnapshotAffirmsClientHostedPages } from '../host-session-snapshot-authority'

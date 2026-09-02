@@ -41,10 +41,12 @@ export function mergeReviewerSuggestions(
       byLogin.set(key, user)
       continue
     }
-    if (!existing.avatarUrl && user.avatarUrl) {
+    // Why: seeds carry login only; backfill display fields from the metadata query.
+    if ((!existing.avatarUrl && user.avatarUrl) || (!existing.name && user.name)) {
       byLogin.set(key, {
         ...existing,
-        avatarUrl: user.avatarUrl
+        avatarUrl: existing.avatarUrl || user.avatarUrl,
+        name: existing.name ?? user.name
       })
     }
   }

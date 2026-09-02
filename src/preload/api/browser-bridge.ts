@@ -1,4 +1,7 @@
-import { browserApiPart1 } from './browser-bridge-part-1'
-import { browserApiPart2 } from './browser-bridge-part-2'
+import { browserGuestRegistrationAndDownloadsApi } from './browser-bridge-guest-registration-and-downloads'
+import { browserPageInteractionAndSessionsApi } from './browser-bridge-page-interaction-and-sessions'
 
-export const browserApi = { ...browserApiPart1, ...browserApiPart2 }
+export const browserApi = {
+  ...browserGuestRegistrationAndDownloadsApi,
+  ...browserPageInteractionAndSessionsApi
+}

@@ -2,12 +2,10 @@ import type { AppState } from '@/store/types'
 import { resolveTerminalTabTitle } from '../../../../shared/tab-title-resolution'
 import type { TerminalTab } from '../../../../shared/terminal-tab-types'
 import {
-  EMPTY_AGENT_STATUS_BY_PANE_KEY,
   EMPTY_BROWSER_PAGES_BY_WORKSPACE,
   EMPTY_BROWSER_TABS_BY_WORKTREE,
   graphState
 } from './graph-state'
-import { buildRuntimeMobileAgentStatusProjection } from './agent-status-projection'
 
 export function getBrowserTabsByWorktree(state: AppState): AppState['browserTabsByWorktree'] {
   // Some callers/tests build partial pre-browser states; treat missing slices as empty.
@@ -146,12 +144,4 @@ export function stableHashString(value: string): string {
     hash = Math.imul(hash, 16777619)
   }
   return `draft:${value.length}:${(hash >>> 0).toString(16)}`
-}
-
-export function buildRuntimeMobileAgentStatusProjectionForState(
-  agentStatusByPaneKey: AppState['agentStatusByPaneKey'] | undefined
-): string {
-  return buildRuntimeMobileAgentStatusProjection(
-    agentStatusByPaneKey ?? EMPTY_AGENT_STATUS_BY_PANE_KEY
-  )
 }

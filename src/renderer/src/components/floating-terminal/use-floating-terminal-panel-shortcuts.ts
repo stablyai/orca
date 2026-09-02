@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, type KeyboardEvent as ReactKeyboardEvent } from 'react'
 import { isTerminalPaneCloseChord } from '@/components/terminal-pane/terminal-shortcut-policy'
+import { ensureClientCreationActionAllowed } from '@/lib/client-creation-action-error'
 import {
   matchFloatingWorkspacePanelOwnedAction,
   matchFloatingWorkspacePanelShortcut
@@ -7,6 +8,7 @@ import {
 import { isFloatingWorkspaceTerminalInputTarget } from '@/lib/floating-workspace-terminal-actions'
 import { getShortcutPlatform } from '@/lib/shortcut-platform'
 import { useAppStore } from '@/store'
+import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
 import type { KeybindingContext, KeybindingMatchOptions } from '../../../../shared/keybindings'
 import type {
   FloatingPanelShortcutInput,
@@ -123,6 +125,11 @@ export function useFloatingTerminalPanelShortcuts({
         if (resolution.action === 'tab.newTerminal') {
           createFloatingTerminalTab()
         } else if (resolution.action === 'tab.newBrowser') {
+          if (
+            !ensureClientCreationActionAllowed(FLOATING_TERMINAL_WORKTREE_ID, 'managed-browser')
+          ) {
+            return 'handled'
+          }
           createFloatingBrowserTab()
         } else if (resolution.action === 'tab.newMarkdown') {
           createFloatingMarkdownTab()

@@ -363,6 +363,10 @@ describe('Electron runtime package contract', () => {
     expect(afterInstallScript).toContain('chrome-sandbox')
     expect(afterInstallScript).toContain('chmod 4755 "$sandbox"')
     expect(afterInstallScript).not.toContain('chmod 0755 "$sandbox"')
+    expect(afterInstallScript).toContain('is_owned_link()')
+    expect(afterInstallScript).toContain('readlink -f -- "$link"')
+    expect(afterInstallScript).toContain('[ ! -e "$link" ] && [ ! -L "$link" ]')
+    expect(afterInstallScript).not.toContain('[ ! -e "$link" ] || [ -L "$link" ]')
   })
 
   it('advances only the skill release ledger in a taggable release-cut commit', () => {

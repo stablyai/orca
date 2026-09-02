@@ -12,10 +12,16 @@ import {
   DOWNLOAD_SESSION_TTL_MS,
   inspectDownloadDestination,
   promoteDownloadedFile,
-  validateRequiredString,
   createSiblingTransferPath,
   type DownloadFileResult
-} from './filesystem-file-helpers'
+} from './filesystem-download-promotion'
+
+function validateRequiredString(value: unknown, label: string): string {
+  if (typeof value !== 'string' || value.trim() === '') {
+    throw new Error(`${label} is required`)
+  }
+  return value
+}
 
 export function registerFilesystemDownloadHandlers(context: FilesystemHandlerContext): void {
   const { downloadSessions, closeDownloadSession, cleanupDownloadSessionsForSender } = context

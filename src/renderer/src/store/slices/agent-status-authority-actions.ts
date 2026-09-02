@@ -10,12 +10,12 @@ import {
   boundRecentlyRetiredAgentStatusPaneKeys,
   movePaneKeyedRecord,
   removePaneKeys
-} from './agent-status-map-helpers'
+} from './agent-status-pane-keyed-records'
 import {
   getLeafIdFromPaneKey,
   getTabIdFromPaneKey,
   isRecentlyClosedAgentStatusTab
-} from './agent-status-pane-helpers'
+} from './agent-status-pane-key-tab-binding'
 
 export function createAgentStatusAuthorityActions(
   runtime: AgentStatusRuntime

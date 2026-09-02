@@ -1,11 +1,11 @@
 import type { AppState } from '../types'
 import type { DropAgentStatusByTabPrefixOptions } from './agent-status-contract'
+import { pruneMigrationUnsupportedEntries } from './agent-status-migration-unsupported-entries'
 import {
   boundRecentlyClosedAgentStatusTabIds,
-  boundRecentlyRetiredAgentStatusPaneKeys,
-  pruneMigrationUnsupportedEntries
-} from './agent-status-map-helpers'
-import { findCompletedOrphanPaneKeysForTabClose } from './agent-status-pane-helpers'
+  boundRecentlyRetiredAgentStatusPaneKeys
+} from './agent-status-pane-keyed-records'
+import { findCompletedOrphanPaneKeysForTabClose } from './agent-status-pane-key-tab-binding'
 
 /** Slices that only the fold touched, so the batch commits as a MERGE. */
 export function buildAgentStatusBatchPatch(

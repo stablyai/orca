@@ -105,6 +105,10 @@ import {
   type WorktreePushTargetStore
 } from './worktree-push-target-cleanup'
 import {
+  reconcileOrphanedPrRemotes,
+  reconcileOrphanedPrRemotesSsh
+} from './worktree-push-target-reconciliation'
+import {
   configureCreatedWorktreePushTargetWithExec,
   ensureUniqueRemoteName,
   findRemoteForUrl,
@@ -1030,6 +1034,18 @@ export async function cleanupUnusedWorktreePushTargetRemote(
   } catch (error) {
     console.warn(`[worktrees] Failed to clean up fork PR remote for ${removedWorktreeId}`, error)
   }
+  // Why: also catches remotes this specific removal couldn't reclaim (legacy metadata,
+  // a preserved branch since deleted, a worktree removed outside Orca) -- see
+  // worktree-push-target-reconciliation.ts. Rate-limited internally; safe to call every removal.
+  // Not awaited: a repo with a large backlog (the scenario this exists for) can have dozens of
+  // candidate remotes, each probed with a couple of git subprocesses -- that must never add
+  // latency to the worktree-removal call the user is waiting on. It catches its own errors.
+  void reconcileOrphanedPrRemotes(
+    repoPath,
+    getRepoIdFromWorktreeId(removedWorktreeId),
+    store,
+    gitOptions
+  )
 }
 
 export async function configureCreatedWorktreePushTarget(
@@ -1134,6 +1150,14 @@ export async function cleanupUnusedWorktreePushTargetRemoteSsh(
       error
     )
   }
+  // Why: SSH counterpart of the sweep above -- the execution host owns these remotes.
+  // Not awaited for the same reason as the local path: never add sweep latency to removal.
+  void reconcileOrphanedPrRemotesSsh(
+    provider,
+    repoPath,
+    getRepoIdFromWorktreeId(removedWorktreeId),
+    store
+  )
 }
 
 async function readRemoteEffectiveHooks(

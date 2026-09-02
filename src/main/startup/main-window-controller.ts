@@ -145,6 +145,9 @@ export function openMainWindow(options: { revealOnDidFinishLoad?: boolean } = {}
     clearExpectedRendererReload(rendererWebContentsId)
     recordCrashBreadcrumb('main_window_loaded')
     logStartupMilestone('did-finish-load')
+    // Why cleared here: a reload drops the old ui:openMarkdownFiles listener, and the fresh
+    // renderer re-attaches by pulling. Pushing into the gap between would be silently lost.
+    state.markdownFileOpenListenerReady = false
     const currentStore = state.store
     if (currentStore && resolveConsent(currentStore.getSettings()).effective === 'enabled') {
       trackAppOpenedOnce()

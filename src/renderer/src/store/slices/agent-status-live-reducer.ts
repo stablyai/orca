@@ -1,6 +1,9 @@
 import type { AppState } from '../types'
-import { capLiveAgentStatusesInPlace, classifyPaneKeyLiveness } from './agent-status-pane-helpers'
-import { removePaneKeys } from './agent-status-map-helpers'
+import {
+  capLiveAgentStatusesInPlace,
+  classifyPaneKeyLiveness
+} from './agent-status-capacity-eviction'
+import { removePaneKeys } from './agent-status-pane-keyed-records'
 import { recoveryRecordMatches } from './agent-status-recovery-equivalence'
 import type { AgentStatusLiveEntryBuild } from './agent-status-live-entry-builder'
 import { agentProviderSessionsEqual } from '../../../../shared/agent-session-resume'

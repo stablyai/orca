@@ -21,23 +21,6 @@ const COPY_SOURCE = readSource('smart-workspace-name-field-copy.ts')
 const INPUT_SOURCE = readSource('smart-workspace-name-input-surface.tsx')
 const SURFACE_SOURCE = readSource('smart-workspace-name-field-surface.tsx')
 const DIALOG_SOURCE = readSource('smart-workspace-cross-repo-dialog.tsx')
-const FIELD_SOURCES = [
-  MODEL_SOURCE,
-  CONTROLLER_SOURCE,
-  FOUNDATION_SOURCE,
-  AVAILABILITY_SOURCE,
-  FOCUS_SOURCE,
-  STATE_SOURCE,
-  GITHUB_SOURCE,
-  GITLAB_SOURCE,
-  SECONDARY_SEARCH_SOURCE,
-  ACTIONS_SOURCE,
-  PRESENTATION_SOURCE,
-  COPY_SOURCE,
-  INPUT_SOURCE,
-  SURFACE_SOURCE,
-  DIALOG_SOURCE
-].join('\n')
 
 function sourceBetween(source: string, startPattern: string, endPattern: string): string {
   const start = source.indexOf(startPattern)
@@ -72,7 +55,7 @@ describe('SmartWorkspaceNameField repo-backed source boundaries', () => {
     expect(availableModesSection).toContain("item.id === 'jira'")
     expect(availableModesSection).toContain('return jiraSourceConnected')
     expect(availableModesSection).toContain('branchesEnabled && !repoBackedSourcesDisabled')
-    expect(FIELD_SOURCES).toContain('repoBackedSourcesDisabled')
+    expect(CONTROLLER_SOURCE).toContain('repoBackedSourcesDisabled')
     expect(CONTROLLER_SOURCE).toContain('foundation.gitlabSourceAvailable')
 
     const jiraLookupSection = sourceBetween(
@@ -107,8 +90,13 @@ describe('SmartWorkspaceNameField repo-backed source boundaries', () => {
   })
 
   it('searches repo-backed task sources through implicit repo targets instead of a menu', () => {
-    expect(FIELD_SOURCES).not.toContain('RepoBackedSourceMenu')
-    expect(FIELD_SOURCES).not.toContain('repoBackedSourceOptions')
+    // The menu declared a prop, derived a visibility flag, and rendered a control; implicit repo
+    // targets replaced all three, so each former host is pinned separately.
+    expect(MODEL_SOURCE).not.toContain('repoBackedSourceOptions')
+    expect(CONTROLLER_SOURCE).not.toContain('repoBackedSourceOptions')
+    expect(FOUNDATION_SOURCE).not.toContain('repoBackedSourceOptions')
+    expect(SURFACE_SOURCE).not.toContain('RepoBackedSourceMenu')
+    expect(INPUT_SOURCE).not.toContain('RepoBackedSourceMenu')
     expect(MODEL_SOURCE).toContain('repoBackedSearchRepos?: readonly RepoOption[]')
 
     const targetSection = sourceBetween(
@@ -125,26 +113,27 @@ describe('SmartWorkspaceNameField repo-backed source boundaries', () => {
     expect(CONTROLLER_SOURCE).toContain('foundation.repoBackedSearchTargets.length > 0')
     expect(GITHUB_SOURCE).toContain('fetchWorkItemsAcrossRepos')
     expect(GITHUB_SOURCE).toContain('repoBackedSearchTargets.map')
+    expect(GITLAB_SOURCE).toContain('repoBackedSearchTargets.map')
   })
 
   it('does not fan decisive Linear URLs out to unrelated providers', () => {
     const githubGate = sourceBetween(
-      FIELD_SOURCES,
+      CONTROLLER_SOURCE,
       'const shouldQueryGithub =',
       'const shouldQueryLinear ='
     )
     const branchGate = sourceBetween(
-      FIELD_SOURCES,
+      SECONDARY_SEARCH_SOURCE,
       'const branchSearchRequest = useMemo',
       'useEffect(() => {\n    if (!branchSearchRequest)'
     )
     const gitlabGate = sourceBetween(
-      FIELD_SOURCES,
+      CONTROLLER_SOURCE,
       'const shouldQueryGitlab =',
       'useSmartWorkspaceGitlabSearch({'
     )
 
-    expect(FIELD_SOURCES).toContain(
+    expect(PRESENTATION_SOURCE).toContain(
       "linearUrlIntent !== null && (mode === 'smart' || mode === 'linear')"
     )
     expect(githubGate).toContain('!linearUrlIntentOwnsInput')

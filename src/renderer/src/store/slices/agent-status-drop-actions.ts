@@ -6,11 +6,11 @@ import type {
 import type { AgentStatusSlice } from './agent-status-slice-contract'
 import type { AgentStatusRuntime } from './agent-status-runtime'
 import { buildAgentStatusTabPrefixDropPatch } from './agent-status-drop-reducer'
-import { pruneMigrationUnsupportedEntries } from './agent-status-map-helpers'
+import { pruneMigrationUnsupportedEntries } from './agent-status-migration-unsupported-entries'
 import {
   retainedAgentEntryFromLive,
   shouldReplaceRetainedWithLive
-} from './agent-status-pane-helpers'
+} from './agent-status-pane-key-tab-binding'
 import { retireAgentPaneAuthorityAliasesByOwnerTab } from './agent-pane-authority'
 
 function removeAcknowledgement(

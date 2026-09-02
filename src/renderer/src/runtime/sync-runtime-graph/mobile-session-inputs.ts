@@ -21,7 +21,7 @@ import { captureMountedTerminalSurfaces, narrowRecordByKeys } from './mobile-ses
 import {
   getRuntimeLeafIdsForTerminal,
   resolveMobileTabWideAgentHintLeafId
-} from './mobile-session-tab-helpers'
+} from './mobile-session-surfaces'
 
 export function getOpenFileIndexes(openFiles: AppState['openFiles']): OpenFileIndexes {
   if (graphState.cachedOpenFileIndexesSource === openFiles && graphState.cachedOpenFileIndexes) {

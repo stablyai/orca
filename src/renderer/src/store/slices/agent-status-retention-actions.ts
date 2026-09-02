@@ -1,8 +1,8 @@
 import type { RetainedAgentEntry } from './agent-status-contract'
 import type { AgentStatusSlice } from './agent-status-slice-contract'
 import type { AgentStatusRuntime } from './agent-status-runtime'
-import { mergeCurrentOrchestrationContext } from './agent-status-map-helpers'
-import { capRetainedAgents } from './agent-status-pane-helpers'
+import { mergeCurrentOrchestrationContext } from './agent-status-orchestration-context'
+import { capRetainedAgents } from './agent-status-capacity-eviction'
 
 export function createAgentStatusRetentionActions(
   runtime: AgentStatusRuntime
