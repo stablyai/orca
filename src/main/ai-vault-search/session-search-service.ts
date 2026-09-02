@@ -14,8 +14,12 @@ import {
   parseAgentSessionFileCached
 } from '../ai-vault/session-scanner-parse-cache'
 import { discoverAiVaultSessionSources } from '../ai-vault/session-scanner-source-discovery'
-import type { AiVaultScanIssue } from '../../shared/ai-vault-types'
-import type { AiVaultScanOptions, SessionFileCandidate } from '../ai-vault/session-scanner-types'
+import type { AiVaultAgent, AiVaultScanIssue } from '../../shared/ai-vault-types'
+import type {
+  AiVaultScanOptions,
+  SessionFileCandidate,
+  SessionFileDiscovery
+} from '../ai-vault/session-scanner-types'
 import {
   registerSessionSearchIndexSink,
   withSessionSearchIndexRequired
@@ -140,11 +144,32 @@ export class SessionSearchService {
         issues
       })
       const candidates = await sessionCandidatesFromDiscoveries(discoveries, options)
+      this.recordDiscovered(discoveries, issues)
       await this.parseAll(candidates, signal)
       this.store.setBackfillState('complete')
     } catch (error) {
       this.store.setBackfillState('idle')
       throw error
+    }
+  }
+
+  /** Discovered-vs-indexed is the only way a provider that indexes nothing stays visible. */
+  private recordDiscovered(
+    discoveries: readonly SessionFileDiscovery[],
+    issues: readonly AiVaultScanIssue[]
+  ): void {
+    const files = new Map<AiVaultAgent, number>()
+    for (const discovery of discoveries) {
+      files.set(discovery.agent, (files.get(discovery.agent) ?? 0) + discovery.files.length)
+    }
+    const failures = new Map<AiVaultAgent, number>()
+    for (const issue of issues) {
+      if (issue.kind !== 'notice') {
+        failures.set(issue.agent, (failures.get(issue.agent) ?? 0) + 1)
+      }
+    }
+    for (const agent of new Set([...files.keys(), ...failures.keys()])) {
+      this.store.setDiscovered(agent, files.get(agent) ?? 0, failures.get(agent) ?? 0)
     }
   }
 
@@ -157,6 +182,7 @@ export class SessionSearchService {
         try {
           await parseAgentSessionFileCached(candidate, process.platform, stats)
         } catch (error) {
+          this.store.recordParseFailure(candidate.agent)
           console.warn('[ai-vault-search] backfill skipped', candidate.file.path, error)
         }
         sinceYield += 1

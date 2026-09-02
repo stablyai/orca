@@ -61,6 +61,12 @@ export type AiVaultSearchProviderCoverage = {
   agent: AiVaultAgent
   sessionsIndexed: number
   messagesIndexed: number
+  /** Transcript files the last full discovery saw for this provider. */
+  filesDiscovered?: number
+  /** Files whose parse threw; they are discovered but unsearchable. */
+  parseFailures?: number
+  /** Non-notice scan issues (unreachable host, denied scope) attributed to this provider. */
+  scanIssues?: number
 }
 
 export type AiVaultSearchCoverage = {

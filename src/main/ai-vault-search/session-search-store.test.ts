@@ -189,6 +189,34 @@ describe('SessionSearchStore', () => {
     expect(store.search({ query: 'shared phrase', scopePaths: ['/other'] }).hits).toHaveLength(0)
   })
 
+  it('keeps a provider with discovered files and no indexed sessions in coverage', async () => {
+    const root = await makeTempDir()
+    const path = join(root, `${SESSION_ID}.jsonl`)
+    await writeFile(path, `${userRecord(0, 'indexed claude question')}\n`)
+    await parse(path)
+
+    store.setDiscovered('claude', 1, 0)
+    store.setDiscovered('codex', 7, 2)
+    store.recordParseFailure('codex')
+    store.recordParseFailure('codex')
+    store.setBackfillState('complete')
+
+    const coverage = store.coverage()
+    expect(coverage.providers).toEqual([
+      { agent: 'claude', sessionsIndexed: 1, messagesIndexed: 1, filesDiscovered: 1 },
+      {
+        agent: 'codex',
+        sessionsIndexed: 0,
+        messagesIndexed: 0,
+        filesDiscovered: 7,
+        parseFailures: 2,
+        scanIssues: 2
+      }
+    ])
+    // The SQL GROUP BY has no codex row at all; silence would hide the failure.
+    expect(coverage.sessionsIndexed).toBe(1)
+  })
+
   it('does not choke on FTS5 syntax in user text', async () => {
     const root = await makeTempDir()
     const path = join(root, `${SESSION_ID}.jsonl`)

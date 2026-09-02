@@ -158,6 +158,40 @@ describe('formatAgentSessionSearch', () => {
     expect(footer).toBe('128 sessions indexed, still indexing older sessions · 13 ms')
   })
 
+  it('names a provider whose discovered files never reached the index', () => {
+    const footer = format(
+      makeResult({
+        coverage: {
+          ...COVERAGE,
+          providers: [
+            { agent: 'claude', sessionsIndexed: 128, messagesIndexed: 4096, filesDiscovered: 130 },
+            { agent: 'codex', sessionsIndexed: 0, messagesIndexed: 0, filesDiscovered: 42 }
+          ]
+        }
+      })
+    )
+      .split('\n')
+      .at(-1)
+    expect(footer).toBe('128 sessions indexed · 13 ms; Codex not indexed (42 files)')
+  })
+
+  it('stays quiet about an unindexed provider while the backfill is still running', () => {
+    const footer = format(
+      makeResult({
+        coverage: {
+          ...COVERAGE,
+          backfill: 'running',
+          providers: [
+            { agent: 'codex', sessionsIndexed: 0, messagesIndexed: 0, filesDiscovered: 42 }
+          ]
+        }
+      })
+    )
+      .split('\n')
+      .at(-1)
+    expect(footer).toBe('128 sessions indexed, still indexing older sessions · 13 ms')
+  })
+
   it('names pending changed files once backfill is done', () => {
     const footer = format(makeResult({ coverage: { ...COVERAGE, filesPending: 4 } }))
       .split('\n')

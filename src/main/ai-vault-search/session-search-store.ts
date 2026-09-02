@@ -23,6 +23,8 @@ const SEARCH_LOG_LIMIT = 5000
 
 export type SessionSearchBackfillState = 'idle' | 'running' | 'complete'
 
+type ProviderDiscovery = { files: number; parseFailures: number; scanIssues: number }
+
 /** Owns the index database: the scanner writes through it, search reads from it. */
 export class SessionSearchStore implements SessionSearchIndexSink {
   private readonly db: SyncDatabase
@@ -32,6 +34,7 @@ export class SessionSearchStore implements SessionSearchIndexSink {
   private lastIndexedAt: string | null = null
   private applyFailures = 0
   private readonly stale = new Map<string, SessionFileCandidate>()
+  private readonly discovery = new Map<AiVaultAgent, ProviderDiscovery>()
 
   constructor(
     path: string,
@@ -89,6 +92,17 @@ export class SessionSearchStore implements SessionSearchIndexSink {
     this.backfill = state
   }
 
+  /** What a full discovery pass saw, so a provider that indexed nothing is still visible. */
+  setDiscovered(agent: AiVaultAgent, files: number, scanIssues: number): void {
+    const entry = this.providerDiscovery(agent)
+    entry.files = files
+    entry.scanIssues = scanIssues
+  }
+
+  recordParseFailure(agent: AiVaultAgent): void {
+    this.providerDiscovery(agent).parseFailures += 1
+  }
+
   search(args: AiVaultSearchArgs): AiVaultSearchResult {
     const startedAt = performance.now()
     const execution = this.query.execute(args)
@@ -111,11 +125,20 @@ export class SessionSearchStore implements SessionSearchIndexSink {
          GROUP BY s.agent ORDER BY s.agent`
       )
       .all() as { agent: AiVaultAgent; sessions: number; messages: number }[]
-    const byProvider: AiVaultSearchProviderCoverage[] = providers.map((row) => ({
-      agent: row.agent,
-      sessionsIndexed: row.sessions,
-      messagesIndexed: row.messages
-    }))
+    const indexed = new Map(providers.map((row) => [row.agent, row]))
+    const agents = [...new Set([...indexed.keys(), ...this.discovery.keys()])].sort()
+    const byProvider: AiVaultSearchProviderCoverage[] = agents.map((agent) => {
+      const row = indexed.get(agent)
+      const seen = this.discovery.get(agent)
+      return {
+        agent,
+        sessionsIndexed: row?.sessions ?? 0,
+        messagesIndexed: row?.messages ?? 0,
+        ...(seen && seen.files > 0 ? { filesDiscovered: seen.files } : {}),
+        ...(seen && seen.parseFailures > 0 ? { parseFailures: seen.parseFailures } : {}),
+        ...(seen && seen.scanIssues > 0 ? { scanIssues: seen.scanIssues } : {})
+      }
+    })
     return {
       sessionsIndexed: byProvider.reduce((sum, row) => sum + row.sessionsIndexed, 0),
       messagesIndexed: byProvider.reduce((sum, row) => sum + row.messagesIndexed, 0),
@@ -132,6 +155,16 @@ export class SessionSearchStore implements SessionSearchIndexSink {
 
   close(): void {
     this.db.close()
+  }
+
+  private providerDiscovery(agent: AiVaultAgent): ProviderDiscovery {
+    const existing = this.discovery.get(agent)
+    if (existing) {
+      return existing
+    }
+    const created: ProviderDiscovery = { files: 0, parseFailures: 0, scanIssues: 0 }
+    this.discovery.set(agent, created)
+    return created
   }
 
   private logQuery(query: string, route: string, hits: number, durationMs: number): void {

@@ -1,5 +1,6 @@
 import { basename } from 'node:path'
 import { aiVaultAgentLabel } from '../shared/ai-vault-types'
+import { aiVaultSearchUnindexedProviders } from '../shared/ai-vault-search-coverage'
 import type { AiVaultSearchHit, AiVaultSearchResult } from '../shared/ai-vault-search-types'
 
 const ROLE_LABEL: Record<AiVaultSearchHit['evidence']['role'], string> = {
@@ -70,6 +71,12 @@ export function formatAgentSessionSearch(
       : coverage.filesPending > 0
         ? `, ${coverage.filesPending} changed files pending`
         : ''
-  lines.push(`${scope}${pending} · ${result.durationMs.toFixed(0)} ms`)
+  const unindexed = aiVaultSearchUnindexedProviders(coverage)
+    .map(
+      (provider) =>
+        `; ${aiVaultAgentLabel(provider.agent)} not indexed (${(provider.filesDiscovered ?? 0).toLocaleString()} files)`
+    )
+    .join('')
+  lines.push(`${scope}${pending} · ${result.durationMs.toFixed(0)} ms${unindexed}`)
   return lines.join('\n')
 }

@@ -13283,7 +13283,8 @@
             "newestFirst": "Newest first",
             "searchingSessions": "Searching {{value0}} sessions",
             "indexingOlder": "indexing older sessions…",
-            "filesPending": "{{value0}} changed files pending"
+            "filesPending": "{{value0}} changed files pending",
+            "providerNotIndexed": "{{value0}} not indexed"
           }
         }
       },
