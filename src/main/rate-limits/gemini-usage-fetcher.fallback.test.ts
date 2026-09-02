@@ -175,6 +175,57 @@ describe('fetchGeminiRateLimits fallback oauth creds', () => {
     expect(result.error).toContain('Gemini project ID not found')
   })
 
+  it('loads credentials from Antigravity CLI structure and fetches quota', async () => {
+    readFileMock.mockImplementation(async (filePath: string) => {
+      if (filePath.includes('antigravity-cli') && filePath.includes('oauth_creds.json')) {
+        return JSON.stringify({
+          accessToken: 'antigravity-access-token',
+          refreshToken: 'antigravity-refresh-token',
+          expiresAt: Date.now() + 3600 * 1000
+        })
+      }
+      throw { code: 'ENOENT' }
+    })
+    netFetchMock
+      .mockResolvedValueOnce(makeResponse({ cloudaicompanionProject: 'antigravity-proj-789' }))
+      .mockResolvedValueOnce(makeResponse(quotaResponse))
+
+    const result = await fetchGeminiRateLimits(true)
+
+    expect(result.status).toBe('ok')
+    expect(result.error).toBeNull()
+    expect(result.session).not.toBeNull()
+  })
+
+  it('resolves project ID from local Antigravity project cache when remote call fails', async () => {
+    readFileMock.mockImplementation(async (filePath: string) => {
+      if (filePath.includes('oauth_creds.json')) {
+        return JSON.stringify(validCreds)
+      }
+      if (filePath.includes('default_project_id.txt')) {
+        return 'cached-antigravity-project'
+      }
+      throw { code: 'ENOENT' }
+    })
+    // First two loadCodeAssist calls fail, then quota call succeeds with cached project
+    netFetchMock
+      .mockResolvedValueOnce(makeResponse('Not Found', 404))
+      .mockResolvedValueOnce(makeResponse('Not Found', 404))
+      .mockResolvedValueOnce(makeResponse(quotaResponse))
+
+    const result = await fetchGeminiRateLimits(true)
+
+    expect(result.status).toBe('ok')
+    expect(result.error).toBeNull()
+
+    const quotaCall = netFetchMock.mock.calls.find(
+      (call) => typeof call[0] === 'string' && call[0].includes('retrieveUserQuota')
+    )
+    expect(quotaCall).toBeDefined()
+    const quotaBody = JSON.parse((quotaCall![1] as RequestInit).body as string)
+    expect(quotaBody.project).toBe('cached-antigravity-project')
+  })
+
   it('returns unavailable without reading OAuth files when geminiCliOAuthEnabled=false', async () => {
     const result = await fetchGeminiRateLimits(false)
 

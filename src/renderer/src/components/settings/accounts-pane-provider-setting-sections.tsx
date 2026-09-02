@@ -49,13 +49,13 @@ export function renderGeminiAccountsSection(model: AccountsPaneSectionModel): Re
           <Label>
             {translate(
               'auto.components.settings.AccountsPane.96f3649526',
-              'Use Gemini CLI credentials (experimental)'
+              'Use Antigravity / Gemini CLI credentials (experimental)'
             )}
           </Label>
           <p className="text-xs text-muted-foreground">
             {translate(
               'auto.components.settings.AccountsPane.c2aee76420',
-              'Extracts OAuth credentials from your local Gemini CLI installation to authenticate with Google for {{value0}}. This uses credentials issued to the Gemini CLI app, not Orca. May break if Google updates the CLI. Use at your own risk.',
+              'Extracts OAuth credentials from your local Antigravity or Gemini CLI installation to authenticate with Google for {{value0}}. This uses credentials issued to the CLI app, not Orca. May break if Google updates the CLI. Use at your own risk.',
               { value0: localAccountRuntimeSentenceLabel }
             )}
           </p>
@@ -63,7 +63,7 @@ export function renderGeminiAccountsSection(model: AccountsPaneSectionModel): Re
         <Switch
           aria-label={translate(
             'auto.components.settings.AccountsPane.96f3649526',
-            'Use Gemini CLI credentials (experimental)'
+            'Use Antigravity / Gemini CLI credentials (experimental)'
           )}
           checked={settings.geminiCliOAuthEnabled}
           onCheckedChange={(checked) => {
