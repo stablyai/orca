@@ -147,7 +147,21 @@ export function parseRoadmapDate(value: string): number | null {
   }
   const [, year, month, day] = match
   const ms = Date.UTC(Number(year), Number(month) - 1, Number(day))
-  return Number.isNaN(ms) ? null : ms
+  if (Number.isNaN(ms)) {
+    return null
+  }
+  // Why: Date.UTC normalizes overflow (2026-02-30 → Mar 2) instead of failing;
+  // round-trip the components so an invalid calendar date is rejected, not
+  // silently moved to a different day.
+  const roundTrip = new Date(ms)
+  if (
+    roundTrip.getUTCFullYear() !== Number(year) ||
+    roundTrip.getUTCMonth() !== Number(month) - 1 ||
+    roundTrip.getUTCDate() !== Number(day)
+  ) {
+    return null
+  }
+  return ms
 }
 
 function readDateValue(row: GitHubProjectRow, field: GitHubProjectField): number | null {

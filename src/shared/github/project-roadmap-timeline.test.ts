@@ -224,6 +224,13 @@ describe('parseRoadmapDate', () => {
   it('rejects malformed input', () => {
     expect(parseRoadmapDate('March 2')).toBeNull()
   })
+
+  it('rejects invalid calendar dates instead of letting Date.UTC normalize them', () => {
+    expect(parseRoadmapDate('2026-02-30')).toBeNull()
+    expect(parseRoadmapDate('2026-13-01')).toBeNull()
+    expect(parseRoadmapDate('2026-04-31')).toBeNull()
+    expect(parseRoadmapDate('2024-02-29')).toBe(Date.parse('2024-02-29T00:00:00Z'))
+  })
 })
 
 describe('buildRoadmapTicks', () => {

@@ -26,6 +26,11 @@ const LANE_HEIGHT_PX = 36
 const TICK_WIDTH_PX: Record<RoadmapZoom, number> = { month: 148, quarter: 128, year: 160 }
 const ZOOMS: RoadmapZoom[] = ['month', 'quarter', 'year']
 
+function localTodayAsUtcMidnightMs(): number {
+  const now = new Date()
+  return Date.UTC(now.getFullYear(), now.getMonth(), now.getDate())
+}
+
 type Props = {
   table: GitHubProjectTable
   onOpenDialog?: (row: GitHubProjectRow) => void
@@ -43,12 +48,25 @@ export default function ProjectRoadmap({
   const locale = i18n.resolvedLanguage ?? i18n.language
   // Why: the grid lives on UTC calendar days (parseRoadmapDate), so "today"
   // must be the viewer's LOCAL calendar date mapped to UTC midnight — the raw
-  // instant would shift the marker into the wrong day off UTC. Frozen for the
-  // component's life to keep render pure.
-  const [todayMs] = useState(() => {
+  // instant would shift the marker into the wrong day off UTC.
+  const [todayMs, setTodayMs] = useState(localTodayAsUtcMidnightMs)
+  // Why: a pane left open across midnight would otherwise keep yesterday's
+  // marker; re-arm after each fire so multi-day sessions stay honest.
+  useEffect(() => {
     const now = new Date()
-    return Date.UTC(now.getFullYear(), now.getMonth(), now.getDate())
-  })
+    const nextLocalMidnight = new Date(
+      now.getFullYear(),
+      now.getMonth(),
+      now.getDate() + 1
+    ).getTime()
+    // Why: the +1s pad absorbs timer drift so the callback lands after the
+    // date change, not just before it.
+    const timer = setTimeout(
+      () => setTodayMs(localTodayAsUtcMidnightMs()),
+      nextLocalMidnight - now.getTime() + 1000
+    )
+    return () => clearTimeout(timer)
+  }, [todayMs])
   const [zoom, setZoom] = useState<RoadmapZoom>(loadRoadmapZoom)
   const [collapsed, setCollapsed] = useState<ReadonlySet<string>>(() => new Set())
   const scrollRef = useRef<HTMLDivElement | null>(null)
