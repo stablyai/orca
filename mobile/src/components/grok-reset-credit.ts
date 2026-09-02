@@ -11,7 +11,12 @@ import {
   type ProviderRateLimits
 } from './accounts-snapshot'
 
-export type GrokResetCreditOutcome = 'reset' | 'nothingToReset' | 'noCredit' | 'alreadyRedeemed'
+export type GrokResetCreditOutcome =
+  | 'reset'
+  | 'nothingToReset'
+  | 'noCredit'
+  | 'alreadyRedeemed'
+  | 'usageUnavailable'
 
 export type GrokResetCreditRequestResult = {
   outcome: GrokResetCreditOutcome
@@ -67,6 +72,8 @@ export function getGrokResetCreditOutcomeCopy(outcome: GrokResetCreditOutcome): 
         title: 'No reset available',
         message: 'This account has no SuperGrok usage-limit reset tokens available.'
       }
+    case 'usageUnavailable':
+      return { title: 'Could not verify Grok usage', message: 'Try again.' }
   }
 }
 
@@ -82,7 +89,8 @@ function decodeGrokResetResult(
     outcome !== 'reset' &&
     outcome !== 'nothingToReset' &&
     outcome !== 'noCredit' &&
-    outcome !== 'alreadyRedeemed'
+    outcome !== 'alreadyRedeemed' &&
+    outcome !== 'usageUnavailable'
   ) {
     throw new Error('Invalid reset response from host')
   }
@@ -103,11 +111,13 @@ async function performGrokResetCreditRequest(
     throw new Error(response.error.message)
   }
   const result = decodeGrokResetResult(response.result)
-  let attemptJournalRetained = false
-  try {
-    await clearGrokResetAttemptAfterAuthoritativeResponse(attempt)
-  } catch {
-    attemptJournalRetained = true
+  let attemptJournalRetained = result.outcome === 'usageUnavailable'
+  if (!attemptJournalRetained) {
+    try {
+      await clearGrokResetAttemptAfterAuthoritativeResponse(attempt)
+    } catch {
+      attemptJournalRetained = true
+    }
   }
   return { ...result, attemptJournalRetained }
 }

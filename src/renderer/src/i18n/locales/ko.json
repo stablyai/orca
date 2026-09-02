@@ -14713,6 +14713,7 @@
     "grokUsage": { "resetCredits": { "label": "사용 한도 재설정" } },
     "grokResetMenu": {
       "failure": "SuperGrok 재설정을 사용할 수 없습니다. 다시 시도하세요.",
+      "usageUnavailable": "Grok 사용량을 확인할 수 없습니다. 다시 시도해 주세요.",
       "openDetails": "Grok 세부 정보 및 사용 한도 재설정 열기",
       "confirmTitle": "Grok 한도를 재설정할까요?",
       "confirmDescription": "로그인한 계정의 SuperGrok 사용 한도 재설정 토큰 1개를 사용해 현재 주간 한도를 즉시 초기화합니다.",

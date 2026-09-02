@@ -14600,6 +14600,7 @@
     "grokUsage": { "resetCredits": { "label": "Restablecimientos del límite de uso" } },
     "grokResetMenu": {
       "failure": "No se pudo usar el restablecimiento de SuperGrok. Inténtalo de nuevo.",
+      "usageUnavailable": "No se pudo verificar el uso de Grok. Inténtalo de nuevo.",
       "openDetails": "Abrir detalles de Grok y el restablecimiento del límite de uso",
       "confirmTitle": "¿Restablecer los límites de Grok?",
       "confirmDescription": "Esto usa un token de restablecimiento del límite de uso de SuperGrok para la cuenta con sesión iniciada y restablece inmediatamente el límite semanal actual.",

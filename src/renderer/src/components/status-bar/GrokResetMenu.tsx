@@ -73,7 +73,15 @@ export function GrokResetMenu({
     }
     setIsRedeemingReset(true)
     try {
-      await consumeReset()
+      const outcome = await consumeReset()
+      if (outcome === 'usageUnavailable') {
+        toast.error(
+          translate(
+            'components.grokResetMenu.usageUnavailable',
+            'Could not verify Grok usage. Try again.'
+          )
+        )
+      }
     } catch (error) {
       console.error('Failed to redeem Grok usage-limit reset from status bar:', error)
       toast.error(

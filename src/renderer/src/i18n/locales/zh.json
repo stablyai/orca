@@ -14678,6 +14678,7 @@
     "grokUsage": { "resetCredits": { "label": "使用限额重置" } },
     "grokResetMenu": {
       "failure": "无法使用 SuperGrok 重置。请重试。",
+      "usageUnavailable": "无法验证 Grok 使用情况。请重试。",
       "openDetails": "打开 Grok 详情和使用限额重置",
       "confirmTitle": "重置 Grok 限额？",
       "confirmDescription": "这会为已登录的账户使用一个 SuperGrok 使用限额重置令牌，并立即清除当前的每周限额。",

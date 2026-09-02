@@ -90,7 +90,7 @@ describe('RateLimitService Grok reset redemption', () => {
     expect(consumeGrokRateLimitResetCredit).not.toHaveBeenCalled()
   })
 
-  it('refuses redemption when a failed fetch retains stale nonzero usage', async () => {
+  it('keeps redemption retryable when a failed fetch retains stale nonzero usage', async () => {
     vi.mocked(fetchGrokRateLimits)
       .mockResolvedValueOnce(grokLimits(80))
       .mockResolvedValueOnce({
@@ -103,7 +103,7 @@ describe('RateLimitService Grok reset redemption', () => {
     await service.refreshGrok()
 
     await expect(service.consumeGrokRateLimitResetCredit()).resolves.toMatchObject({
-      outcome: 'nothingToReset',
+      outcome: 'usageUnavailable',
       state: { grok: { status: 'error', weekly: { usedPercent: 80 } } }
     })
     expect(consumeGrokRateLimitResetCredit).not.toHaveBeenCalled()

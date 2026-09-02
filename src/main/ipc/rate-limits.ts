@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto'
 import { ipcMain } from 'electron'
 import type { RateLimitService } from '../rate-limits/service'
 import type {
-  CodexRateLimitResetOutcome,
+  GrokRateLimitResetOutcome,
   RateLimitRuntimeTarget,
   RateLimitState
 } from '../../shared/rate-limit-types'
@@ -12,7 +12,7 @@ export function registerRateLimitHandlers(
   rateLimits: RateLimitService,
   codexAccounts: CodexAccountService,
   consumeGrokResetCredit: (idempotencyKey: string) => Promise<{
-    outcome: CodexRateLimitResetOutcome
+    outcome: GrokRateLimitResetOutcome
     snapshot: { rateLimits: RateLimitState }
   }>
 ): void {

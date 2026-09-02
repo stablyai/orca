@@ -35,6 +35,22 @@ export class GrokResetCreditLedger {
     this.attemptsByKey.set(idempotencyKey, attempt)
   }
 
+  discardProviderPending(idempotencyKey: string): void {
+    if (this.attemptsByKey.get(idempotencyKey)?.state !== 'providerPending') {
+      return
+    }
+    if (!this.durableLedger) {
+      throw this.loadError ?? new Error('Grok reset-credit attempt ledger is unavailable')
+    }
+    const attempts = this.durableLedger.attempts.filter(
+      (attempt) => attempt.idempotencyKey !== idempotencyKey
+    )
+    const nextLedger: GrokResetCreditAttemptLedger = { version: 1, attempts }
+    this.store.replaceGrokResetCreditAttemptLedgerAndFlush(nextLedger)
+    this.durableLedger = structuredClone(nextLedger)
+    this.attemptsByKey.delete(idempotencyKey)
+  }
+
   private hydrate(): void {
     try {
       this.durableLedger = this.store.getGrokResetCreditAttemptLedger()

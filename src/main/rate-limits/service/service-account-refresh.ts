@@ -8,7 +8,8 @@ import {
   type ClaudeAccountSelectionTarget,
   type RateLimitRuntimeTarget,
   type RateLimitState,
-  type CodexRateLimitResetResult
+  type CodexRateLimitResetResult,
+  type GrokRateLimitResetResult
 } from './service-types'
 
 export abstract class RateLimitServiceAccountRefresh extends RateLimitServiceInactiveAccounts {
@@ -122,12 +123,15 @@ export abstract class RateLimitServiceAccountRefresh extends RateLimitServiceIna
     }
   }
 
-  async consumeGrokRateLimitResetCredit(): Promise<CodexRateLimitResetResult> {
+  async consumeGrokRateLimitResetCredit(): Promise<GrokRateLimitResetResult> {
     await this.fetchGrokOnly({ force: true })
     const grok = this.state.grok
     const weekly = grok?.weekly
+    if (grok?.status !== 'ok') {
+      return { outcome: 'usageUnavailable', state: this.getState() }
+    }
     // Why: a one-time token at 0% would be spent without changing the weekly window.
-    if (grok?.status !== 'ok' || !weekly || weekly.usedPercent <= 0) {
+    if (!weekly || weekly.usedPercent <= 0) {
       return { outcome: 'nothingToReset', state: this.getState() }
     }
     try {

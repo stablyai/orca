@@ -9,7 +9,11 @@ import type {
   ClaudeRateLimitAccountsState,
   CodexRateLimitAccountsState
 } from '../../shared/managed-account-types'
-import type { CodexRateLimitResetOutcome, RateLimitState } from '../../shared/rate-limit-types'
+import type {
+  CodexRateLimitResetOutcome,
+  GrokRateLimitResetOutcome,
+  RateLimitState
+} from '../../shared/rate-limit-types'
 import type { CodexResetCreditExpectedScope } from '../../shared/codex-reset-credit-scope'
 import type { CommitMessageAgentEnvironmentResolvers } from '../text-generation/commit-message-agent-environment'
 import type { ClaudeAccountSelectionTarget } from '../claude-accounts/runtime-selection'
@@ -41,7 +45,7 @@ export type CodexRateLimitResetRpcResult = {
 )
 
 export type GrokRateLimitResetRpcResult = {
-  outcome: CodexRateLimitResetOutcome
+  outcome: GrokRateLimitResetOutcome
   snapshot: AccountsSnapshot
 }
 
@@ -158,7 +162,12 @@ export class RuntimeAccountController {
       )
       const operation = this.grokResetInFlight ?? this.startGrokResetOperation()
       promise = operation.then((result) => {
-        ledger.markSettled(idempotencyKey, result.outcome)
+        if (result.outcome === 'usageUnavailable') {
+          // Why: no provider call started, so a later natural window reset must not look like recovered redemption.
+          ledger.discardProviderPending(idempotencyKey)
+        } else {
+          ledger.markSettled(idempotencyKey, result.outcome)
+        }
         return result
       })
     }
@@ -212,6 +221,9 @@ export class RuntimeAccountController {
     }
     const operation = this.grokResetInFlight ?? this.startGrokResetOperation()
     const result = await operation
+    if (result.outcome === 'usageUnavailable') {
+      return result
+    }
     if (result.outcome === 'nothingToReset' && result.snapshot.rateLimits.grok?.status !== 'ok') {
       throw new Error('The Grok reset outcome is unknown; retry the same request.')
     }
@@ -219,7 +231,7 @@ export class RuntimeAccountController {
     return result
   }
 
-  private grokResetResult(outcome: CodexRateLimitResetOutcome): GrokRateLimitResetRpcResult {
+  private grokResetResult(outcome: GrokRateLimitResetOutcome): GrokRateLimitResetRpcResult {
     const { claudeAccounts, codexAccounts, rateLimits } = this.requireServices()
     return {
       outcome,

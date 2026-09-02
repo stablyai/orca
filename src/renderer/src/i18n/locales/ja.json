@@ -14635,6 +14635,7 @@
     "grokUsage": { "resetCredits": { "label": "使用上限のリセット" } },
     "grokResetMenu": {
       "failure": "SuperGrok のリセットを使用できませんでした。もう一度お試しください。",
+      "usageUnavailable": "Grok の使用状況を確認できませんでした。もう一度お試しください。",
       "openDetails": "Grok の詳細と使用上限リセットを開く",
       "confirmTitle": "Grok の制限をリセットしますか？",
       "confirmDescription": "サインイン中のアカウントの SuperGrok 使用上限リセットトークンを 1 つ使用し、現在の週間上限を直ちにリセットします。",

@@ -97,6 +97,13 @@ export type CodexRateLimitResetResult = {
   state: RateLimitState
 }
 
+export type GrokRateLimitResetOutcome = CodexRateLimitResetOutcome | 'usageUnavailable'
+
+export type GrokRateLimitResetResult = {
+  outcome: GrokRateLimitResetOutcome
+  state: RateLimitState
+}
+
 export type RateLimitRuntimeTarget = {
   runtime: 'host' | 'wsl'
   wslDistro: string | null

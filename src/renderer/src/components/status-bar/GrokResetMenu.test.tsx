@@ -5,9 +5,12 @@ import '@testing-library/jest-dom/vitest'
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import React from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { ProviderRateLimits } from '../../../../shared/rate-limit-types'
+import type {
+  GrokRateLimitResetOutcome,
+  ProviderRateLimits
+} from '../../../../shared/rate-limit-types'
 
-const consumeReset = vi.fn(async () => {})
+const consumeReset = vi.fn<() => Promise<GrokRateLimitResetOutcome>>(async () => 'reset')
 const updateSettings = vi.fn(async () => {})
 const { toastError } = vi.hoisted(() => ({ toastError: vi.fn() }))
 const translateMock = vi.hoisted(() =>
@@ -200,6 +203,22 @@ describe('GrokResetMenu', () => {
 
     await waitFor(() =>
       expect(toastError).toHaveBeenCalledWith('Could not use the SuperGrok reset. Try again.')
+    )
+  })
+
+  it('shows a retryable toast when Grok usage cannot be verified', async () => {
+    consumeReset.mockResolvedValueOnce('usageUnavailable')
+    renderMenu()
+
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Reset now' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Reset now' }))
+
+    await waitFor(() =>
+      expect(toastError).toHaveBeenCalledWith('Could not verify Grok usage. Try again.')
+    )
+    expect(translateMock).toHaveBeenCalledWith(
+      'components.grokResetMenu.usageUnavailable',
+      'Could not verify Grok usage. Try again.'
     )
   })
 })

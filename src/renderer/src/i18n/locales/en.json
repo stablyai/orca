@@ -16973,6 +16973,7 @@
     "grokUsage": { "resetCredits": { "label": "Usage-limit resets" } },
     "grokResetMenu": {
       "failure": "Could not use the SuperGrok reset. Try again.",
+      "usageUnavailable": "Could not verify Grok usage. Try again.",
       "openDetails": "Open Grok details and usage-limit reset",
       "confirmTitle": "Reset Grok limits?",
       "confirmDescription": "This uses one SuperGrok usage-limit reset token for the signed-in account and clears the current weekly pool immediately.",
