@@ -76,7 +76,8 @@ describe('ensureHooksConfirmed', () => {
   it('short-circuits to run when the persisted content hash matches the current script', async () => {
     const { state, pending } = createTestState()
     const script = 'pnpm install'
-    const hash = await hashOrcaHookScript(script)
+    // Why: trust hashes the serialized content ('# setup' + indented free text), not the raw script.
+    const hash = await hashOrcaHookScript(`# setup\n    ${script}`)
     state.trustedOrcaHooks['repo-1'] = {
       setup: { contentHash: hash, approvedAt: 1 }
     }
@@ -107,7 +108,7 @@ describe('ensureHooksConfirmed', () => {
     const promise = ensureHooksConfirmed(state, 'repo-1', 'setup')
 
     await vi.waitFor(() => expect(pending).toHaveLength(1))
-    expect(pending[0].data.scriptContent).toBe('new script')
+    expect(pending[0].data.scriptContent).toBe('# setup\n    new script')
     // The dialog uses this flag to tell the user we're re-prompting *because*
     // orca.yaml changed, not because they've never approved this hook.
     expect(pending[0].data.previouslyApproved).toBe(true)
@@ -135,7 +136,7 @@ describe('ensureHooksConfirmed', () => {
 
     await vi.waitFor(() => expect(pending).toHaveLength(1))
     const expectedContent =
-      'pnpm install\n\n# defaultTabs[1] Server\npnpm dev\n\n# defaultTabs[3]\ncodex'
+      '# setup\n    pnpm install\n\n# defaultTabs[1] "Server"\n    pnpm dev\n\n# defaultTabs[3]\n    codex'
     expect(pending[0].data.scriptContent).toBe(expectedContent)
     expect(pending[0].data.contentHash).toBe(await hashOrcaHookScript(expectedContent))
 
@@ -522,8 +523,8 @@ describe('ensureHooksConfirmed', () => {
       repoId: 'repo-1',
       repoName: 'Repo One',
       scriptKind: 'setup',
-      scriptContent: 'pnpm install',
-      contentHash: await hashOrcaHookScript('pnpm install'),
+      scriptContent: '# setup\n    pnpm install',
+      contentHash: await hashOrcaHookScript('# setup\n    pnpm install'),
       previouslyApproved: false
     })
 

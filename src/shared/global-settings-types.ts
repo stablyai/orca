@@ -73,6 +73,8 @@ export type GlobalSettings = {
   autoRenameBranchFromWorkDefaultedOn?: boolean
   branchPrefix: BranchPrefixStrategy
   branchPrefixCustom: string
+  /** Opt-in: wrap local tab startup commands in `op run` when their env carries 1Password op:// secret references. */
+  onePasswordSecretsEnabled?: boolean
   theme: 'system' | 'dark' | 'light'
   /** Controls the left sidebar surface without changing terminal brightness. */
   leftSidebarAppearanceMode: LeftSidebarAppearanceMode

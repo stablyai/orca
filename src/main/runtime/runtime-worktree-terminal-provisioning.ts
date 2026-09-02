@@ -10,6 +10,7 @@ export type WorktreeProvisionTerminalOptions = {
   title?: string
   command?: string
   env?: Record<string, string>
+  defaultTabEnv?: Record<string, string>
   direction?: 'horizontal' | 'vertical'
   activate?: boolean
   surfaceOwner?: false
@@ -63,6 +64,7 @@ export async function createWorktreeDefaultTabTerminals(
       const terminal = await host.createTerminal(selector, {
         ...(template.title ? { title: template.title } : {}),
         ...(command && defaultTabs.runCommands ? { command } : {}),
+        ...(template.env && defaultTabs.runCommands ? { defaultTabEnv: template.env } : {}),
         ...surfacing
       })
       handles.push(terminal.handle)

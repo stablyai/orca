@@ -77,19 +77,7 @@ export function shouldRunSetupForCreate(repo: Repo, decision: SetupDecision = 'i
   return policy === 'run-by-default'
 }
 
-export function getDefaultTabCommandTrustContent(hooks: OrcaHooks | null): string {
-  const commands = (hooks?.defaultTabs ?? [])
-    .map((tab, index) => {
-      const command = tab.command?.trim()
-      if (!command) {
-        return null
-      }
-      const label = tab.title ? ` ${tab.title}` : ''
-      return `# defaultTabs[${index + 1}]${label}\n${command}`
-    })
-    .filter((entry): entry is string => entry !== null)
-  return [hooks?.scripts.setup?.trim(), ...commands].filter(Boolean).join('\n\n')
-}
+export { getDefaultTabCommandTrustContent } from '../shared/default-tab-trust-content'
 
 export function getDefaultTabsLaunch(
   hooks: OrcaHooks | null,
@@ -100,7 +88,10 @@ export function getDefaultTabsLaunch(
   if (tabs.length === 0) {
     return undefined
   }
-  const hasCommands = tabs.some((tab) => Boolean(tab.command?.trim()))
+  // Why: env-only tabs carry trust-relevant shared content too — without this they could never inject env.
+  const hasCommands = tabs.some(
+    (tab) => Boolean(tab.command?.trim()) || Object.keys(tab.env ?? {}).length > 0
+  )
   const sharedCommandPolicy = resolveHookCommandSourcePolicy(
     repo.hookSettings?.commandSourcePolicy,
     {

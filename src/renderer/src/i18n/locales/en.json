@@ -11559,6 +11559,18 @@
         },
         "NativeChatSupportedAgents": {
           "label": "Supported agents:"
+        },
+        "one": {
+          "password": {
+            "integration": {
+              "card": {
+                "description": "Resolve op:// secret references in tab environment variables through the 1Password CLI (op) at launch. Requires the op CLI and its desktop-app integration.",
+                "statusOn": "Enabled",
+                "statusOff": "Disabled",
+                "toggleLabel": "Enable 1Password secret resolution"
+              }
+            }
+          }
         }
       },
       "right": {

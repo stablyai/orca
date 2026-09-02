@@ -14,6 +14,116 @@ import {
 } from '../orca-runtime-test-mocks.spec'
 import type { WorktreeMeta } from '../orca-runtime-test-mocks.spec'
 import { TEST_REPO_ID, makeWorktreeMeta, store } from '../orca-runtime-test-fixtures.spec'
+import { createWorktreeDefaultTabTerminals } from '../runtime-worktree-terminal-provisioning'
+
+describe('runtime-owned default tab env', () => {
+  const createDefaultTabs = async (defaultTabs: {
+    runCommands: boolean
+    tabs: { title: string; command?: string; env?: Record<string, string> }[]
+  }) => {
+    const createTerminal = vi.fn().mockResolvedValue({ handle: 'term-1', tabId: 'tab-1' })
+    await createWorktreeDefaultTabTerminals(
+      {
+        canSpawn: () => true,
+        createTerminal,
+        splitTerminal: vi.fn(),
+        setTabColor: vi.fn(),
+        getSettings: () => store.getSettings(),
+        getPtyId: () => undefined,
+        recordSetupCompletionToken: vi.fn()
+      },
+      'id:worktree-1',
+      'worktree-1',
+      defaultTabs
+    )
+    return createTerminal
+  }
+
+  it('forwards committed env when shared commands are trusted', async () => {
+    const createTerminal = await createDefaultTabs({
+      runCommands: true,
+      tabs: [{ title: 'Claude', command: 'claude', env: { TOKEN: 'op://V/I/F' } }]
+    })
+
+    expect(createTerminal).toHaveBeenCalledWith(
+      'id:worktree-1',
+      expect.objectContaining({ command: 'claude', defaultTabEnv: { TOKEN: 'op://V/I/F' } })
+    )
+  })
+
+  it('withholds committed env when shared commands are skipped', async () => {
+    const createTerminal = await createDefaultTabs({
+      runCommands: false,
+      tabs: [{ title: 'Claude', command: 'claude', env: { TOKEN: 'op://V/I/F' } }]
+    })
+
+    expect(createTerminal).toHaveBeenCalledWith('id:worktree-1', { title: 'Claude' })
+  })
+
+  it('forwards committed env for an env-only tab', async () => {
+    const createTerminal = await createDefaultTabs({
+      runCommands: true,
+      tabs: [{ title: 'Shell', env: { TOKEN: 'op://V/I/F' } }]
+    })
+
+    expect(createTerminal).toHaveBeenCalledWith(
+      'id:worktree-1',
+      expect.objectContaining({ defaultTabEnv: { TOKEN: 'op://V/I/F' } })
+    )
+  })
+})
+
+describe('committed tab env and agent resolution', () => {
+  const scope = {
+    id: 'repo-1::/tmp/wt',
+    path: '/tmp/wt',
+    connectionId: null,
+    repo: { id: 'repo-1', path: '/tmp/repo', displayName: 'Repo One' },
+    folderWorkspace: null
+  }
+
+  const resolve = async (runtime: InstanceType<typeof OrcaRuntimeService>, opts: object) =>
+    (
+      runtime as unknown as {
+        resolveAgentTerminalCreateOptions: (
+          workspace: unknown,
+          options: unknown
+        ) => Promise<Record<string, unknown>>
+      }
+    ).resolveAgentTerminalCreateOptions(scope, opts)
+
+  it('does not suppress bare-agent resolution', async () => {
+    const runtime = new OrcaRuntimeService({
+      ...store,
+      getSettings: () => ({
+        ...store.getSettings(),
+        agentCmdOverrides: { codex: 'codex --sandbox' }
+      })
+    } as never)
+
+    const withEnv = await resolve(runtime, {
+      command: 'codex',
+      defaultTabEnv: { TOKEN: 'op://V/I/F' }
+    })
+    const withoutEnv = await resolve(runtime, { command: 'codex' })
+
+    expect(withoutEnv.command).not.toBe('codex')
+    expect(withEnv.command).toBe(withoutEnv.command)
+    expect(withEnv.launchAgent).toBe('codex')
+  })
+
+  it('folds the private channel after resolution with launch env precedence', async () => {
+    const runtime = new OrcaRuntimeService(store)
+    const resolved = await resolve(runtime, {
+      command: 'sh -c true',
+      env: { SHARED: 'from-launch' },
+      defaultTabEnv: { SHARED: 'from-tab', ONLY_TAB: 'kept' }
+    })
+
+    expect(resolved.env).toEqual({ SHARED: 'from-launch', ONLY_TAB: 'kept' })
+    expect(resolved.defaultTabEnv).toBeUndefined()
+  })
+})
 
 describe('OrcaRuntimeService', () => {
   it('does not surface the new workspace when a background create splits its setup pane', async () => {
