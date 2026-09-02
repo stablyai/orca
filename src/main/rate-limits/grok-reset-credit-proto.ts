@@ -47,6 +47,7 @@ export function encodeStringField(field: number, value: string): Uint8Array<Arra
   return encodeLengthDelimited(field, textEncoder.encode(value))
 }
 
+// Why: grok.com's public consumer_ui descriptor defines ConsumerRedeemResetReq.token_id as field 10.
 export function encodeRedeemResetRequest(tokenId: string): Uint8Array<ArrayBuffer> {
   return encodeStringField(10, tokenId)
 }

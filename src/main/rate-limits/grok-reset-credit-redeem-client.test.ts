@@ -7,7 +7,6 @@ import {
   encodeGetRemainingResetsResponse,
   encodeGrpcWebMessage,
   encodeRedeemResetRequest,
-  encodeStringField,
   GROK_REDEEM_RESET_URL,
   GROK_REMAINING_RESETS_URL,
   mapGrokRedeemGrpcStatus
@@ -34,9 +33,9 @@ function grpcResponse(payload: Uint8Array<ArrayBufferLike>, grpcStatus = '0'): R
 }
 
 describe('Grok reset redemption protocol', () => {
-  it('encodes RedeemReset token_id as protobuf field 10', () => {
+  it('matches the public RedeemReset token_id field 10 wire encoding', () => {
     expect(Buffer.from(encodeRedeemResetRequest('restok_INVALID')).toString('hex')).toBe(
-      Buffer.from(encodeStringField(10, 'restok_INVALID')).toString('hex')
+      '520e726573746f6b5f494e56414c4944'
     )
   })
 
