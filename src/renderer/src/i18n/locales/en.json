@@ -132,7 +132,8 @@
         "resourceUsageToggleDescription": "Show the Resource Manager. Click it for CPU, memory, sessions, daemon controls, and workspace disk scans.",
         "portsToggleDescription": "Show live workspace ports. Click it for workspace-scoped ports and external listeners.",
         "antigravityToggleDescription": "Show Antigravity subscription usage for the active workspace.",
-        "grokToggleDescription": "Show Grok subscription credit usage when signed in via Grok CLI."
+        "grokToggleDescription": "Show Grok subscription credit usage when signed in via Grok CLI.",
+        "kiroToggleDescription": "Show Kiro subscription credit usage reported by Kiro CLI."
       },
       "menuBarIcon": {
         "title": "Show Menu Bar Icon",
@@ -3669,7 +3670,8 @@
             "grokUsageMenu": "Grok Usage",
             "floatingTerminalNewActivity": "{{label}}, new activity",
             "codexSignInSuccess": "Signed in to Codex",
-            "codexSignInError": "Codex sign-in failed. Please try again."
+            "codexSignInError": "Codex sign-in failed. Please try again.",
+            "kiroUsageMenu": "Kiro Usage"
           },
           "StatusBarUsageEmptyCta": {
             "828c764a79": "Connect an account",
@@ -3848,7 +3850,8 @@
             "e2c6a4f917": "Run Grok to refresh",
             "d1b7f509ac": "Run grok in a terminal on the computer running Orca and wait for it to start. If prompted, complete sign-in, then retry usage. You do not need to send a chat message.",
             "f90b3d7a16": "Run Kimi to refresh",
-            "a37e8c15d4": "Run kimi in a terminal on the computer running Orca and wait for it to start, then retry usage."
+            "a37e8c15d4": "Run kimi in a terminal on the computer running Orca and wait for it to start, then retry usage.",
+            "resetOnDate": "Resets on {{value0}}"
           },
           "SshTargetStatusRow": {
             "sshHost": "SSH Host"
@@ -8993,7 +8996,11 @@
             "d6c0a9e2f4": "grok",
             "c5b9f8d1e3": "xai",
             "usagePercentageDisplayTitle": "Usage percentages",
-            "usagePercentageDisplayDescription": "Choose whether provider limits show the percentage used or remaining."
+            "usagePercentageDisplayDescription": "Choose whether provider limits show the percentage used or remaining.",
+            "kiroUsageTitle": "Kiro Usage",
+            "kiroUsageDescription": "Show Kiro subscription credit usage in the status bar.",
+            "kiro": "kiro",
+            "kiroAws": "aws"
           }
         },
         "auto": {
