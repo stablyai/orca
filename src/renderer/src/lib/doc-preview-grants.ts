@@ -31,14 +31,20 @@ export function buildDocPreviewGrantRequest(
     return null
   }
   const connectionId = getConnectionIdForFileFromState(state, worktreeId, filePath)
-  if (connectionId) {
+  if (connectionId === undefined) {
+    return null
+  }
+  if (connectionId !== null) {
     // Outside a workspace there is no broader request base: the document directory bounds
     // resolution, and main starts such a grant at the entry file alone — an out-of-workspace
     // directory is often a home directory, which is where secrets live.
     return { owner: { kind: 'ssh', connectionId }, requestBase, root, entryRelativePath }
   }
   const environmentId = getRuntimeEnvironmentIdForWorktree(state, worktreeId)
-  if (!environmentId || !worktreeRoot || !worktreeRelativePath) {
+  if (!environmentId) {
+    return { owner: { kind: 'local' }, requestBase, root, entryRelativePath }
+  }
+  if (!worktreeRoot || !worktreeRelativePath) {
     return null
   }
   return {

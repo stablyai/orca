@@ -92,7 +92,7 @@ beforeEach(() => {
 
 /**
  * What a preview open looks like now: a browser tab located by the document, never a URL.
- * `activate` is the caller's call — opening a file moves the reader to it, a side preview does not.
+ * `activate` preserves the focus behavior of the entry point that opened it.
  */
 function docPreviewCall(filePath: string, extra: Record<string, unknown> = {}): unknown[] {
   return [
@@ -110,16 +110,17 @@ function docPreviewCall(filePath: string, extra: Record<string, unknown> = {}): 
 }
 
 describe('openFileInBrowserTab', () => {
-  it('opens a local file URL in the Orca browser with the filename as title', () => {
-    openFileInBrowserTab({
+  it('isolates a local HTML file behind a scoped document grant instead of a file URL', () => {
+    const plan = openFileInBrowserTab({
       filePath: '/tmp/example file.html',
       worktreeId: 'wt-1'
     })
 
-    expect(mocks.createBrowserTab).toHaveBeenCalledWith('wt-1', 'file:///tmp/example%20file.html', {
-      title: 'example file.html',
-      activate: true
-    })
+    expect(plan).toEqual({ status: 'doc-preview' })
+    expect(mocks.createBrowserTab).toHaveBeenCalledWith(
+      ...docPreviewCall('/tmp/example file.html', { activate: true })
+    )
+    expect(mocks.createBrowserTab.mock.calls[0]?.[1]).not.toMatch(/^file:/)
   })
 
   it('renders a paired-runtime file as a local doc preview instead of a runtime browser tab', () => {
@@ -301,11 +302,9 @@ describe('openFileInBrowserTab', () => {
     })
 
     expect(mocks.createEmptySplitGroup).toHaveBeenCalledWith('wt-1', 'group-1', 'right')
-    expect(mocks.createBrowserTab).toHaveBeenCalledWith('wt-1', 'file:///tmp/example.html', {
-      title: 'example.html',
-      targetGroupId: 'group-2',
-      activate: true
-    })
+    expect(mocks.createBrowserTab).toHaveBeenCalledWith(
+      ...docPreviewCall('/tmp/example.html', { targetGroupId: 'group-2', activate: true })
+    )
   })
 
   it('rejects a local workspace whose managed browser is unavailable before creating a split', () => {

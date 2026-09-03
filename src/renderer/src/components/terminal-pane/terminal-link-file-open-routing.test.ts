@@ -11,13 +11,16 @@ import {
 } from './terminal-link-handlers-test-harness'
 
 const findWorkspaceFileRouteMock = vi.hoisted(() => vi.fn())
+const filePreviewMocks = vi.hoisted(() => ({
+  getWorkspaceFilePreviewPlan: vi.fn(() => ({ status: 'doc-preview' as const })),
+  openFileInBrowserTab: vi.fn()
+}))
 const doubles = createTerminalLinkTestDoubles()
 const {
   storeState,
   deps,
   openFileMock,
   openFilePathMock,
-  createBrowserTabMock,
   setPendingEditorRevealMock,
   setMarkdownViewModeMock,
   statMock
@@ -46,10 +49,12 @@ vi.mock('@/lib/runtime-workspace-file-route', () => ({
   findWorkspaceFileRoute: findWorkspaceFileRouteMock
 }))
 
+vi.mock('@/lib/file-preview', () => filePreviewMocks)
+
 installTerminalLinkTestEnvironment(doubles)
 
 describe('handleOscLink', () => {
-  it('opens local .html file paths in Orca browser tabs with the platform modifier', async () => {
+  it('opens local .html file paths in the isolated document preview', async () => {
     setPlatform('Macintosh')
 
     openDetectedFilePath('/tmp/report.html', null, null, deps)
@@ -59,11 +64,10 @@ describe('handleOscLink', () => {
 
     expect(openFileMock).not.toHaveBeenCalled()
     expect(setPendingEditorRevealMock).not.toHaveBeenCalled()
-    expect(createBrowserTabMock).toHaveBeenCalledWith(
-      'wt-1',
-      'file:///tmp/report.html',
-      expect.objectContaining({ title: 'report.html', activate: true })
-    )
+    expect(filePreviewMocks.openFileInBrowserTab).toHaveBeenCalledWith({
+      filePath: '/tmp/report.html',
+      worktreeId: 'wt-1'
+    })
     expect(openFilePathMock).not.toHaveBeenCalled()
     // Why: the browser tab is the surface — activation must not re-seed a shell into a
     // workspace whose last terminal the user closed.
@@ -72,7 +76,7 @@ describe('handleOscLink', () => {
     })
   })
 
-  it('also opens local .htm paths in Orca browser tabs with the platform modifier', async () => {
+  it('also opens local .htm paths in the isolated document preview', async () => {
     setPlatform('Macintosh')
 
     openDetectedFilePath('/tmp/legacy.HTM', null, null, deps)
@@ -80,11 +84,10 @@ describe('handleOscLink', () => {
 
     expect(openFileMock).not.toHaveBeenCalled()
     expect(setPendingEditorRevealMock).not.toHaveBeenCalled()
-    expect(createBrowserTabMock).toHaveBeenCalledWith(
-      'wt-1',
-      'file:///tmp/legacy.HTM',
-      expect.objectContaining({ title: 'legacy.HTM' })
-    )
+    expect(filePreviewMocks.openFileInBrowserTab).toHaveBeenCalledWith({
+      filePath: '/tmp/legacy.HTM',
+      worktreeId: 'wt-1'
+    })
     expect(openFilePathMock).not.toHaveBeenCalled()
   })
 

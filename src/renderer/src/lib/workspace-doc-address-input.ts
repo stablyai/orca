@@ -43,17 +43,13 @@ function planToTarget(
   filePath: string
 ): WorkspaceDocAddressTarget {
   const plan = getWorkspaceFilePreviewPlan(state, worktreeId, filePath)
-  if (plan.status === 'doc-preview') {
-    return {
-      status: 'workspace-doc',
-      docLocation: { kind: 'workspace-doc', worktreeId, filePath }
-    }
-  }
   if (plan.status === 'unsupported') {
     return { status: 'unsupported', message: plan.message }
   }
-  // A local file keeps today's file:// tab; the URL pipeline handles it.
-  return { status: 'not-a-workspace-doc' }
+  return {
+    status: 'workspace-doc',
+    docLocation: { kind: 'workspace-doc', worktreeId, filePath }
+  }
 }
 
 /**

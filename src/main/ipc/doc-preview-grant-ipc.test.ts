@@ -108,6 +108,12 @@ describe('document preview grant handlers', () => {
     expect(mocks.isTrustedBrowserRenderer).toHaveBeenCalledWith(sender)
   })
 
+  it('mints a local grant for the bounded main-process reader', () => {
+    const result = mint({ ...REQUEST, owner: { kind: 'local' } })
+
+    expect(getDocPreviewGrant(result.grantId)?.owner).toEqual({ kind: 'local' })
+  })
+
   it('revokes a grant it minted', () => {
     const result = mint()
 
