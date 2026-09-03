@@ -1,11 +1,7 @@
 import { access } from 'node:fs/promises'
 import * as path from 'node:path'
-import type {
-  GitConflictKind,
-  GitFileStatus,
-  GitStatusEntry
-} from '../../../shared/git-status-types'
-import { decodeGitCQuotedPath } from '../../../shared/git-cquoted-path'
+import type { GitConflictKind, GitFileStatus, GitStatusEntry } from './git-status-types'
+import { decodeGitCQuotedPath } from './git-cquoted-path'
 
 export async function parseUnmergedEntry(
   worktreePath: string,

@@ -1,0 +1,10 @@
+export const RELAY_CLOSE_CODE = {
+  BAD_OUTER_CREDENTIAL: 4401,
+  HOST_OFFLINE: 4404,
+  PEER_DROPPED: 4408,
+  WRONG_CELL: 4409,
+  LIMIT_EXCEEDED: 4429,
+  DRAINING: 4503
+} as const
+
+export type RelayCloseCode = (typeof RELAY_CLOSE_CODE)[keyof typeof RELAY_CLOSE_CODE]

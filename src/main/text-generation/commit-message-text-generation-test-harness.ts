@@ -36,7 +36,9 @@ export function createChildTerminationExpectation(
 ): (child: { pid: number; kill: ReturnType<typeof vi.fn> }) => void {
   return (child) => {
     if (process.platform === 'win32') {
-      expect(terminateWindowsProcessTreeMock).toHaveBeenCalledWith(child.pid)
+      expect(terminateWindowsProcessTreeMock).toHaveBeenCalledWith(child.pid, {
+        site: 'source-control-text-generation'
+      })
       expect(child.kill).not.toHaveBeenCalled()
       return
     }

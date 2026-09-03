@@ -227,27 +227,26 @@ export function buildExplicitEntriesByTabId(
   migrationUnsupportedByPtyId?: Record<string, MigrationUnsupportedPtyEntry>
 ): Map<string, AgentStatusEntry[]> {
   const byTab = new Map<string, AgentStatusEntry[]>()
-  const entries = [
-    ...Object.values(agentStatusByPaneKey ?? {}),
-    ...Object.values(migrationUnsupportedByPtyId ?? {}).flatMap((entry) => {
-      const agentEntry = migrationUnsupportedToAgentStatusEntry(entry)
-      return agentEntry ? [agentEntry] : []
-    })
-  ]
-  if (entries.length === 0) {
-    return byTab
-  }
-  for (const entry of entries) {
+  const pushEntry = (entry: AgentStatusEntry): void => {
     const parsed = parsePaneKey(entry.paneKey)
     // Why: skip malformed/legacy-numeric paneKeys rather than bucketing unroutable rows under a tab.
     if (!parsed) {
-      continue
+      return
     }
     const bucket = byTab.get(parsed.tabId)
     if (bucket) {
       bucket.push(entry)
     } else {
       byTab.set(parsed.tabId, [entry])
+    }
+  }
+  for (const entry of Object.values(agentStatusByPaneKey ?? {})) {
+    pushEntry(entry)
+  }
+  for (const entry of Object.values(migrationUnsupportedByPtyId ?? {})) {
+    const agentEntry = migrationUnsupportedToAgentStatusEntry(entry)
+    if (agentEntry) {
+      pushEntry(agentEntry)
     }
   }
   return byTab
@@ -366,9 +365,12 @@ export function buildAttentionByWorktree(
 ): Map<string, WorktreeAttention> {
   const byTab = buildExplicitEntriesByTabId(agentStatusByPaneKey, migrationUnsupportedByPtyId)
   const byAttributedWorktree = buildExplicitEntriesByWorktreeId(agentStatusByPaneKey)
-  const mirroredTabIds = new Set(
-    Object.values(tabsByWorktree ?? {}).flatMap((tabs) => tabs.map((tab) => tab.id))
-  )
+  const mirroredTabIds = new Set<string>()
+  for (const tabs of Object.values(tabsByWorktree ?? {})) {
+    for (const tab of tabs) {
+      mirroredTabIds.add(tab.id)
+    }
+  }
   const paneSources: TabPaneInputSources = {
     entriesByTabId: byTab,
     ptyIdsByTabId,

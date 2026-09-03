@@ -293,12 +293,12 @@
     "windows-native-registry": "3.2.2"
   },
   "lint-staged": {
-    "*.{ts,tsx,js,jsx,mjs,mts,cts}": [
+    "{*.{ts,tsx,js,jsx,mjs,mts,cts},!(cloud)/**/*.{ts,tsx,js,jsx,mjs,mts,cts}}": [
       "oxlint",
       "oxlint --config config/oxlint-react-doctor.json",
       "oxfmt --write"
     ],
-    "*.{json,css}": [
+    "{*.{json,css},!(cloud)/**/*.{json,css}}": [
       "oxfmt --write"
     ]
   },

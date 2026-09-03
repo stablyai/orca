@@ -86,6 +86,17 @@ describe('docs-only path classification', () => {
   it('does not start desktop PR Checks for mobile-only diffs', () => {
     expect(shouldRunPrChecks(['mobile/src/App.tsx', 'mobile/package.json'])).toBe(false)
   })
+
+  it('does not start desktop PR Checks for cloud-only diffs', () => {
+    expect(
+      shouldRunPrChecks([
+        'cloud/apps/relay/src/index.ts',
+        'cloud/package.json',
+        'cloud/.gitleaks.toml',
+        '.github/workflows/cloud-verify.yml'
+      ])
+    ).toBe(false)
+  })
 })
 
 describe('per-job path classification', () => {

@@ -10,9 +10,29 @@ export function projectHostSetupCompatibilityStateEqual(
   nextState: Pick<PersistedState, 'projects' | 'projectHostSetups'>
 ): boolean {
   return (
-    JSON.stringify(state.projects ?? []) === JSON.stringify(nextState.projects) &&
-    JSON.stringify(state.projectHostSetups ?? []) === JSON.stringify(nextState.projectHostSetups)
+    arraysEqualByJson(state.projects ?? [], nextState.projects ?? []) &&
+    arraysEqualByJson(state.projectHostSetups ?? [], nextState.projectHostSetups ?? [])
   )
+}
+
+// Why element-wise: a whole-array JSON.stringify re-serialises every row to answer a
+// question that a shared identity already settles for most of them.
+function arraysEqualByJson<T>(a: readonly T[], b: readonly T[]): boolean {
+  if (a === b) {
+    return true
+  }
+  if (a.length !== b.length) {
+    return false
+  }
+  for (let i = 0; i < a.length; i++) {
+    if (a[i] === b[i]) {
+      continue
+    }
+    if (JSON.stringify(a[i]) !== JSON.stringify(b[i])) {
+      return false
+    }
+  }
+  return true
 }
 
 export function isRepoBackedProjectHostSetup(

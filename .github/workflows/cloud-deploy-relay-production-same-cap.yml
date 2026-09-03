@@ -1,0 +1,310 @@
+name: Deploy Relay Production Same-Cap
+
+on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: Verify, roll one canary, roll a bounded batch, or roll back
+        required: true
+        default: verify
+        type: choice
+        options: [verify, canary-apply, batch-apply, rollback]
+      cell-ids:
+        description: Ordered comma-separated serving cells; one canary or two to four batch cells
+        required: true
+        type: string
+      target-image-digest:
+        description: Exact immutable compatibility image digest
+        required: true
+        type: string
+      rollback-image-digest:
+        description: Exact immutable currently serving rollback digest
+        required: true
+        type: string
+      target-rehome-protocol:
+        description: Exact target regional-rehome protocol
+        required: true
+        default: '1'
+        type: choice
+        options: ['0', '1']
+      rollback-rehome-protocol:
+        description: Exact rollback regional-rehome protocol
+        required: true
+        default: '0'
+        type: choice
+        options: ['0', '1']
+      expected-selector-generation:
+        description: Exact selector generation before the first cell
+        required: true
+        type: string
+      expected-existing-only-cells:
+        description: Exact existing-only membership, or none
+        required: true
+        type: string
+      expected-migration-only-cells:
+        description: Exact migration-only membership, or none
+        required: true
+        type: string
+      expected-general-cells:
+        description: Exact general membership, or none
+        required: true
+        type: string
+      expected-rehome-generation:
+        description: Exact durable regional-rehome control generation; it must be disabled
+        required: true
+        type: string
+      monitor-run-id:
+        description: Fresh successful aggregate dry-run monitor workflow run
+        required: false
+        type: string
+      monitor-run-attempt:
+        description: Exact monitor attempt
+        required: false
+        type: string
+      canary-run-id:
+        description: Successful same-commit canary run required for batch-apply
+        required: false
+        type: string
+      confirmation:
+        description: Exact digest-and-cell-bound mutation confirmation
+        required: false
+        type: string
+
+permissions:
+  actions: read
+  contents: read
+  id-token: write
+
+concurrency:
+  group: production-cloud-sql-rollout
+  cancel-in-progress: false
+
+defaults:
+  run:
+    working-directory: cloud
+
+jobs:
+  gate:
+    if: ${{ vars.ORCA_CLOUD_OPERATIONS_ENABLED == 'true' && (github.ref == 'refs/heads/main') }}
+    runs-on: blacksmith-2vcpu-ubuntu-2204
+    timeout-minutes: 10
+    environment: production
+    outputs:
+      cells: ${{ steps.wave.outputs.cells }}
+      job-mode: ${{ steps.wave.outputs.job-mode }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with: { node-version: 24 }
+
+      - id: wave
+        env:
+          MODE: ${{ inputs.mode }}
+          CELL_IDS: ${{ inputs.cell-ids }}
+          TARGET_DIGEST: ${{ inputs.target-image-digest }}
+          ROLLBACK_DIGEST: ${{ inputs.rollback-image-digest }}
+          CONFIRMATION: ${{ inputs.confirmation }}
+          CANARY_RUN_ID: ${{ inputs.canary-run-id }}
+        run: |
+          CELLS="$(node dev/scripts/relay-production-same-cap-wave.mjs validate \
+            --mode "${MODE}" --cell-ids "${CELL_IDS}" \
+            --target-digest "${TARGET_DIGEST}" --rollback-digest "${ROLLBACK_DIGEST}" \
+            --confirmation "${CONFIRMATION}" --canary-run-id "${CANARY_RUN_ID}")"
+          echo "cells=${CELLS}" >> "${GITHUB_OUTPUT}"
+          if [[ "${MODE}" =~ ^(canary-apply|batch-apply)$ ]]; then
+            echo 'job-mode=apply' >> "${GITHUB_OUTPUT}"
+          else
+            echo "job-mode=${MODE}" >> "${GITHUB_OUTPUT}"
+          fi
+
+      - name: Download exact prior canary authority
+        if: ${{ inputs.mode == 'batch-apply' }}
+        uses: actions/download-artifact@v4
+        with:
+          name: relay-same-cap-canary-${{ inputs.canary-run-id }}
+          path: ${{ runner.temp }}/relay-same-cap-canary
+          github-token: ${{ github.token }}
+          run-id: ${{ inputs.canary-run-id }}
+
+      - name: Verify canary authority against this batch
+        if: ${{ inputs.mode == 'batch-apply' }}
+        env:
+          CANARY_RUN_ID: ${{ inputs.canary-run-id }}
+        run: |
+          node dev/scripts/relay-production-same-cap-wave.mjs verify-canary \
+            --file "${RUNNER_TEMP}/relay-same-cap-canary/authority.json" \
+            --commit-sha "${GITHUB_SHA}" --run-id "${CANARY_RUN_ID}" \
+            --target-digest "${{ inputs.target-image-digest }}" \
+            --rollback-digest "${{ inputs.rollback-image-digest }}" \
+            --selector-generation "${{ inputs.expected-selector-generation }}" \
+            --rehome-generation "${{ inputs.expected-rehome-generation }}"
+
+      - name: Reject previously consumed aggregate safety evidence
+        if: ${{ inputs.mode != 'verify' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          MONITOR_RUN_ID: ${{ inputs.monitor-run-id }}
+          MONITOR_RUN_ATTEMPT: ${{ inputs.monitor-run-attempt }}
+        run: |
+          [[ "${MONITOR_RUN_ID}" =~ ^[1-9][0-9]*$ ]]
+          [[ "${MONITOR_RUN_ATTEMPT}" =~ ^[1-9][0-9]*$ ]]
+          MARKER_NAME="relay-same-cap-monitor-consumed-${MONITOR_RUN_ID}-${MONITOR_RUN_ATTEMPT}"
+          COUNT="$(gh api "/repos/${GITHUB_REPOSITORY}/actions/artifacts?name=${MARKER_NAME}&per_page=1" \
+            --jq '.total_count')"
+          test "${COUNT}" = 0
+          mkdir -p "${RUNNER_TEMP}/relay-same-cap-monitor-authority"
+          printf '%s\n' "${GITHUB_RUN_ID}" \
+            > "${RUNNER_TEMP}/relay-same-cap-monitor-authority/${MARKER_NAME}"
+
+      - name: Consume aggregate safety evidence for this exact wave
+        if: ${{ inputs.mode != 'verify' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: relay-same-cap-monitor-consumed-${{ inputs.monitor-run-id }}-${{ inputs.monitor-run-attempt }}
+          path: ${{ runner.temp }}/relay-same-cap-monitor-authority/relay-same-cap-monitor-consumed-${{ inputs.monitor-run-id }}-${{ inputs.monitor-run-attempt }}
+          retention-days: 90
+          if-no-files-found: error
+
+  cell_1:
+    needs: gate
+    uses: ./.github/workflows/cloud-deploy-relay-production-same-cap-job.yml
+    with:
+      mode: ${{ needs.gate.outputs.job-mode }}
+      target-cell-id: ${{ fromJSON(needs.gate.outputs.cells)[0] }}
+      target-image-digest: ${{ inputs.target-image-digest }}
+      rollback-image-digest: ${{ inputs.rollback-image-digest }}
+      target-rehome-protocol: ${{ inputs.target-rehome-protocol }}
+      rollback-rehome-protocol: ${{ inputs.rollback-rehome-protocol }}
+      expected-selector-generation: ${{ inputs.expected-selector-generation }}
+      expected-existing-only-cells: ${{ inputs.expected-existing-only-cells }}
+      expected-migration-only-cells: ${{ inputs.expected-migration-only-cells }}
+      expected-general-cells: ${{ inputs.expected-general-cells }}
+      expected-rehome-generation: ${{ inputs.expected-rehome-generation }}
+      monitor-run-id: ${{ inputs.monitor-run-id }}
+      monitor-run-attempt: ${{ inputs.monitor-run-attempt }}
+      wave-index: '0'
+    secrets: inherit
+
+  cell_2:
+    if: ${{ needs.cell_1.result == 'success' && fromJSON(needs.gate.outputs.cells)[1] != null }}
+    needs: [gate, cell_1]
+    uses: ./.github/workflows/cloud-deploy-relay-production-same-cap-job.yml
+    with:
+      mode: ${{ needs.gate.outputs.job-mode }}
+      target-cell-id: ${{ fromJSON(needs.gate.outputs.cells)[1] }}
+      target-image-digest: ${{ inputs.target-image-digest }}
+      rollback-image-digest: ${{ inputs.rollback-image-digest }}
+      target-rehome-protocol: ${{ inputs.target-rehome-protocol }}
+      rollback-rehome-protocol: ${{ inputs.rollback-rehome-protocol }}
+      expected-selector-generation: ${{ inputs.expected-selector-generation }}
+      expected-existing-only-cells: ${{ inputs.expected-existing-only-cells }}
+      expected-migration-only-cells: ${{ inputs.expected-migration-only-cells }}
+      expected-general-cells: ${{ inputs.expected-general-cells }}
+      expected-rehome-generation: ${{ inputs.expected-rehome-generation }}
+      monitor-run-id: ${{ inputs.monitor-run-id }}
+      monitor-run-attempt: ${{ inputs.monitor-run-attempt }}
+      wave-index: '1'
+    secrets: inherit
+
+  cell_3:
+    if: ${{ needs.cell_2.result == 'success' && fromJSON(needs.gate.outputs.cells)[2] != null }}
+    needs: [gate, cell_2]
+    uses: ./.github/workflows/cloud-deploy-relay-production-same-cap-job.yml
+    with:
+      mode: ${{ needs.gate.outputs.job-mode }}
+      target-cell-id: ${{ fromJSON(needs.gate.outputs.cells)[2] }}
+      target-image-digest: ${{ inputs.target-image-digest }}
+      rollback-image-digest: ${{ inputs.rollback-image-digest }}
+      target-rehome-protocol: ${{ inputs.target-rehome-protocol }}
+      rollback-rehome-protocol: ${{ inputs.rollback-rehome-protocol }}
+      expected-selector-generation: ${{ inputs.expected-selector-generation }}
+      expected-existing-only-cells: ${{ inputs.expected-existing-only-cells }}
+      expected-migration-only-cells: ${{ inputs.expected-migration-only-cells }}
+      expected-general-cells: ${{ inputs.expected-general-cells }}
+      expected-rehome-generation: ${{ inputs.expected-rehome-generation }}
+      monitor-run-id: ${{ inputs.monitor-run-id }}
+      monitor-run-attempt: ${{ inputs.monitor-run-attempt }}
+      wave-index: '2'
+    secrets: inherit
+
+  cell_4:
+    if: ${{ needs.cell_3.result == 'success' && fromJSON(needs.gate.outputs.cells)[3] != null }}
+    needs: [gate, cell_3]
+    uses: ./.github/workflows/cloud-deploy-relay-production-same-cap-job.yml
+    with:
+      mode: ${{ needs.gate.outputs.job-mode }}
+      target-cell-id: ${{ fromJSON(needs.gate.outputs.cells)[3] }}
+      target-image-digest: ${{ inputs.target-image-digest }}
+      rollback-image-digest: ${{ inputs.rollback-image-digest }}
+      target-rehome-protocol: ${{ inputs.target-rehome-protocol }}
+      rollback-rehome-protocol: ${{ inputs.rollback-rehome-protocol }}
+      expected-selector-generation: ${{ inputs.expected-selector-generation }}
+      expected-existing-only-cells: ${{ inputs.expected-existing-only-cells }}
+      expected-migration-only-cells: ${{ inputs.expected-migration-only-cells }}
+      expected-general-cells: ${{ inputs.expected-general-cells }}
+      expected-rehome-generation: ${{ inputs.expected-rehome-generation }}
+      monitor-run-id: ${{ inputs.monitor-run-id }}
+      monitor-run-attempt: ${{ inputs.monitor-run-attempt }}
+      wave-index: '3'
+    secrets: inherit
+
+  seal_canary:
+    if: ${{ inputs.mode == 'canary-apply' }}
+    needs: [gate, cell_1]
+    runs-on: blacksmith-2vcpu-ubuntu-2204
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with: { node-version: 24 }
+
+      - name: Seal exact successful canary authority
+        run: |
+          mkdir -p "${RUNNER_TEMP}/relay-same-cap-canary"
+          node dev/scripts/relay-production-same-cap-wave.mjs create-canary \
+            --cell-id "${{ inputs.cell-ids }}" \
+            --target-digest "${{ inputs.target-image-digest }}" \
+            --rollback-digest "${{ inputs.rollback-image-digest }}" \
+            --confirmation "${{ inputs.confirmation }}" \
+            --commit-sha "${GITHUB_SHA}" --run-id "${GITHUB_RUN_ID}" \
+            --selector-generation "${{ inputs.expected-selector-generation }}" \
+            --rehome-generation "${{ inputs.expected-rehome-generation }}" \
+            > "${RUNNER_TEMP}/relay-same-cap-canary/authority.json"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: relay-same-cap-canary-${{ github.run_id }}
+          path: ${{ runner.temp }}/relay-same-cap-canary/authority.json
+          retention-days: 30
+          if-no-files-found: error
+
+  # Every cell job re-enters the run's lease with release: 'false'; only this job frees it.
+  release_lease:
+    if: always()
+    needs:
+      - gate
+      - cell_1
+      - cell_2
+      - cell_3
+      - cell_4
+      - seal_canary
+    runs-on: blacksmith-2vcpu-ubuntu-2204
+    timeout-minutes: 10
+    environment: production
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ vars.PRODUCTION_GCP_RELAY_DEPLOY_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ vars.PRODUCTION_GCP_RELAY_DEPLOY_SERVICE_ACCOUNT }}
+
+      - uses: google-github-actions/setup-gcloud@v2
+
+      - uses: ./.github/actions/cloud-sql-rollout-lease
+        with:
+          bucket: onorca-cloud-terraform-state
+          object: terraform/state/cloud-sql-rollout/production.lock
+          release: 'true'

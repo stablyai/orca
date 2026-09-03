@@ -25,7 +25,12 @@ function descendants(rows: ProcessRow[], rootPid: number): (ProcessRow & { depth
   const children = new Map<number, ProcessRow[]>()
   const rowByPid = new Map<number, ProcessRow>()
   for (const row of rows) {
-    children.set(row.ppid, [...(children.get(row.ppid) ?? []), row])
+    const bucket = children.get(row.ppid)
+    if (bucket) {
+      bucket.push(row)
+    } else {
+      children.set(row.ppid, [row])
+    }
     // Array#find below was first-match-wins for duplicate PIDs; retain that contract in the index.
     if (!rowByPid.has(row.pid)) {
       rowByPid.set(row.pid, row)
@@ -61,7 +66,12 @@ function excludedProcessTreePids(
   const excluded = new Set(rootPids)
   const children = new Map<number, number[]>()
   for (const row of rows) {
-    children.set(row.ppid, [...(children.get(row.ppid) ?? []), row.pid])
+    const bucket = children.get(row.ppid)
+    if (bucket) {
+      bucket.push(row.pid)
+    } else {
+      children.set(row.ppid, [row.pid])
+    }
   }
   const pending = [...rootPids]
   while (pending.length > 0) {
@@ -85,8 +95,12 @@ async function resolveExcludedProcessTreePids(
     return new Set()
   }
   const roots = new Set<number>()
+  const pids = new Set<number>()
+  for (const row of rows) {
+    pids.add(row.pid)
+  }
   for (const identity of identities) {
-    if (!rows.some((row) => row.pid === identity.pid)) {
+    if (!pids.has(identity.pid)) {
       continue
     }
     // Unavailable start time cannot prove PID reuse, so retain the conservative exclusion.
@@ -172,7 +186,14 @@ export async function readStructuredTuiProcessIdentity(input: {
             foreground: false
           }))
         : posixRows(await (input.readPosixRows ?? getFreshProcessTableSnapshot)())
-    if (!rows.some((row) => row.pid === input.rootPid)) {
+    let rootPresent = false
+    for (const row of rows) {
+      if (row.pid === input.rootPid) {
+        rootPresent = true
+        break
+      }
+    }
+    if (!rootPresent) {
       throw new Error('The terminal root process was not present in the process snapshot.')
     }
     const excludedPids = await resolveExcludedProcessTreePids(

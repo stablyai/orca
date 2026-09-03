@@ -1,5 +1,5 @@
-import { decodeGitCQuotedPath } from '../../shared/git-cquoted-path'
-import type { GitWorktreeInfo } from '../../shared/worktree/types'
+import { decodeGitCQuotedPath } from './git-cquoted-path'
+import type { GitWorktreeInfo } from './worktree/types'
 
 /**
  * Parse the porcelain output of `git worktree list --porcelain`.

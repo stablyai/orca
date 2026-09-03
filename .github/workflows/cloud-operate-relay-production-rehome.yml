@@ -1,0 +1,106 @@
+name: Operate Relay Production Rehome
+
+on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: Inspect or apply the durable regional-rehome switch
+        required: true
+        default: inspect
+        type: choice
+        options: [inspect, enable, pause, disable]
+      director-image-digest:
+        description: Exact immutable serving director digest
+        required: true
+        type: string
+      rollback-image-digest:
+        description: Exact immutable selector-rollback director digest
+        required: true
+        type: string
+      expected-selector-generation:
+        description: Exact admission selector generation
+        required: true
+        type: string
+      expected-existing-only-cells:
+        description: Exact existing-only membership, or none
+        required: true
+        type: string
+      expected-migration-only-cells:
+        description: Exact migration-only membership, or none
+        required: true
+        type: string
+      expected-general-cells:
+        description: Exact general membership, or none
+        required: true
+        type: string
+      expected-control-generation:
+        description: Exact durable rehome generation
+        required: true
+        type: string
+      not-before:
+        description: Exact epoch milliseconds; ignored only by inspect
+        required: true
+        default: '0'
+        type: string
+      rate-per-minute:
+        description: Exact global host rate; initial enable is fixed at 10
+        required: true
+        default: '10'
+        type: string
+      preference-max-age-ms:
+        description: Maximum fresh preference age
+        required: true
+        default: '86400000'
+        type: string
+      drain-grace-ms:
+        description: Per-host source drain grace
+        required: true
+        default: '3600000'
+        type: string
+      monitor-run-id:
+        description: Fresh successful aggregate dry-run required only by enable
+        required: false
+        type: string
+      monitor-run-attempt:
+        description: Exact monitor attempt required only by enable
+        required: false
+        type: string
+      confirmation:
+        description: ENABLE_REGIONAL_REHOMING, PAUSE_REGIONAL_REHOMING, or DISABLE_REGIONAL_REHOMING
+        required: false
+        type: string
+
+permissions:
+  actions: read
+  contents: read
+  id-token: write
+
+concurrency:
+  group: production-cloud-sql-rollout
+  cancel-in-progress: false
+
+defaults:
+  run:
+    working-directory: cloud
+
+jobs:
+  operate:
+    if: ${{ vars.ORCA_CLOUD_OPERATIONS_ENABLED == 'true' }}
+    uses: ./.github/workflows/cloud-operate-relay-production-rehome-job.yml
+    with:
+      mode: ${{ inputs.mode }}
+      director-image-digest: ${{ inputs.director-image-digest }}
+      rollback-image-digest: ${{ inputs.rollback-image-digest }}
+      expected-selector-generation: ${{ inputs.expected-selector-generation }}
+      expected-existing-only-cells: ${{ inputs.expected-existing-only-cells }}
+      expected-migration-only-cells: ${{ inputs.expected-migration-only-cells }}
+      expected-general-cells: ${{ inputs.expected-general-cells }}
+      expected-control-generation: ${{ inputs.expected-control-generation }}
+      not-before: ${{ inputs.not-before }}
+      rate-per-minute: ${{ inputs.rate-per-minute }}
+      preference-max-age-ms: ${{ inputs.preference-max-age-ms }}
+      drain-grace-ms: ${{ inputs.drain-grace-ms }}
+      confirmation: ${{ inputs.confirmation }}
+      monitor-run-id: ${{ inputs.monitor-run-id }}
+      monitor-run-attempt: ${{ inputs.monitor-run-attempt }}
+    secrets: inherit

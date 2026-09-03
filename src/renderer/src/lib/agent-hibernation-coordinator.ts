@@ -29,6 +29,7 @@ import type {
   RuntimeTerminalListResult,
   RuntimeTerminalSummary
 } from '../../../shared/runtime-types'
+import { getWindowParkVisible, subscribeWindowParkVisibility } from './window-park-visibility'
 
 export const AGENT_HIBERNATION_TICK_MS = 60 * 1000
 
@@ -41,6 +42,7 @@ type AgentHibernationCoordinatorOptions = {
 
 type AgentHibernationCoordinatorState = {
   interval: IntervalHandle | null
+  unsubscribeVisibility: (() => void) | null
   confirmationState: AgentHibernationConfirmationState
   tickInFlight: boolean
   shuttingDownCandidateIds: Set<string>
@@ -49,6 +51,7 @@ type AgentHibernationCoordinatorState = {
 
 const coordinator: AgentHibernationCoordinatorState = {
   interval: null,
+  unsubscribeVisibility: null,
   confirmationState: {},
   tickInFlight: false,
   shuttingDownCandidateIds: new Set(),
@@ -266,7 +269,23 @@ export function startAgentHibernationCoordinator(
   }
   coordinator.now = options.now ?? (() => Date.now())
   const intervalMs = options.intervalMs ?? AGENT_HIBERNATION_TICK_MS
-  coordinator.interval = setInterval(() => void runAgentHibernationTick(), intervalMs)
+  coordinator.interval = setInterval(() => {
+    // Why: hibernation only reclaims memory for a visible session — a hidden window postpones
+    // reclaim to the becoming-visible run below. getWindowParkVisible, not raw
+    // visibilityState: macOS can wedge the latter at 'hidden' with no further
+    // visibilitychange, which would stop reclaiming for the rest of the session.
+    if (!getWindowParkVisible()) {
+      return
+    }
+    void runAgentHibernationTick()
+  }, intervalMs)
+  // Why: confirmationState survives the hidden gap, so without a resume run the "two
+  // consecutive ticks" rule would span the whole time the window was away.
+  coordinator.unsubscribeVisibility = subscribeWindowParkVisibility(() => {
+    if (getWindowParkVisible()) {
+      void runAgentHibernationTick()
+    }
+  })
   return stopAgentHibernationCoordinator
 }
 
@@ -275,6 +294,8 @@ export function stopAgentHibernationCoordinator(): void {
     clearInterval(coordinator.interval)
     coordinator.interval = null
   }
+  coordinator.unsubscribeVisibility?.()
+  coordinator.unsubscribeVisibility = null
   coordinator.confirmationState = {}
 }
 

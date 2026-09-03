@@ -1,6 +1,6 @@
 import React from 'react'
 import type { Virtualizer } from '@tanstack/react-virtual'
-import { dirname, normalizeRelativePath } from '@/lib/path'
+import { dirname } from '@/lib/path'
 import { cn } from '@/lib/utils'
 import type { GitFileStatus } from '../../../../shared/git-status-types'
 import { FileExplorerRow } from './FileExplorerRow'
@@ -143,7 +143,8 @@ export function FileExplorerVirtualRows(props: FileExplorerVirtualRowsProps): Re
         }
 
         const n = node!
-        const normalizedRelativePath = normalizeRelativePath(n.relativePath)
+        // Why: relativePath is normalized at construction (fileExplorerEntriesToTreeNodes), so re-normalizing per row per render only paid 2 regexes for a byte-identical string.
+        const normalizedRelativePath = n.relativePath
         const nodeStatus = n.isDirectory
           ? (folderStatusByRelativePath.get(normalizedRelativePath) ?? null)
           : (statusByRelativePath.get(normalizedRelativePath) ?? null)

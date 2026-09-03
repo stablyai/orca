@@ -6,7 +6,7 @@ import type { RemoveWorktreeResult } from '../../shared/worktree/create-types'
 import { withLocalGitCapabilityCacheForExecution } from './git-capability-state'
 import { withRepoRefMaintenancePaused } from './local-repo-ref-maintenance'
 import { gitExecFileAsync } from './runner'
-import { parseWorktreeList } from './worktree-list-parser'
+import { parseWorktreeList } from '../../shared/git-worktree-porcelain-parser'
 import type { GitWorktreeExecOptions, RemoveWorktreeOptions } from './worktree-operation-options'
 import {
   gitExecOptions,

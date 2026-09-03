@@ -1,0 +1,331 @@
+name: Prove Relay Asia Staging
+
+on:
+  workflow_dispatch:
+    inputs:
+      image-digest:
+        description: Exact immutable Relay digest deployed on staging C4
+        required: true
+        type: string
+      selector-generation:
+        description: Exact selector generation with C4 migration-only
+        required: true
+        type: string
+      promote-attempt-id:
+        description: Durable unique C4 promotion attempt ID
+        required: true
+        type: string
+      rollback-attempt-id:
+        description: Durable unique C4 rollback attempt ID
+        required: true
+        type: string
+      confirmation:
+        description: Enter PROVE_ASIA_STAGING
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: relay-staging-mutation
+  cancel-in-progress: false
+
+defaults:
+  run:
+    working-directory: cloud
+
+jobs:
+  prove:
+    if: ${{ vars.ORCA_CLOUD_OPERATIONS_ENABLED == 'true' && (github.ref == 'refs/heads/main') }}
+    runs-on: [self-hosted, linux, x64, relay-asia-east2-load]
+    timeout-minutes: 75
+    environment: staging
+    env:
+      GCP_PROJECT_ID: onorca-cloud-staging
+      DIRECTOR_ORIGIN: https://relay-staging.onorca.dev
+      AUTH_ORIGIN: https://auth-staging.onorca.dev
+      IMAGE_DIGEST: ${{ inputs.image-digest }}
+      INITIAL_SELECTOR_GENERATION: ${{ inputs.selector-generation }}
+      PROMOTE_ATTEMPT_ID: ${{ inputs.promote-attempt-id }}
+      ROLLBACK_ATTEMPT_ID: ${{ inputs.rollback-attempt-id }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Validate the exact staging proof request
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "${{ inputs.confirmation }}" = PROVE_ASIA_STAGING
+          [[ "${IMAGE_DIGEST}" =~ ^sha256:[0-9a-f]{64}$ ]]
+          [[ "${INITIAL_SELECTOR_GENERATION}" =~ ^[1-9][0-9]*$ ]]
+          [[ "${PROMOTE_ATTEMPT_ID}" =~ ^[A-Za-z0-9_-]{8,128}$ ]]
+          [[ "${ROLLBACK_ATTEMPT_ID}" =~ ^[A-Za-z0-9_-]{8,128}$ ]]
+          test "${PROMOTE_ATTEMPT_ID}" != "${ROLLBACK_ATTEMPT_ID}"
+
+      - id: auth
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ vars.STAGING_GCP_RELAY_ASIA_PROOF_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ vars.STAGING_GCP_RELAY_ASIA_PROOF_SERVICE_ACCOUNT }}
+          token_format: id_token
+          id_token_audience: https://relay-staging.onorca.dev/v1/admin/drain
+          id_token_include_email: true
+
+      - uses: google-github-actions/setup-gcloud@v2
+
+      - uses: ./.github/actions/cloud-sql-rollout-lease
+        with:
+          bucket: onorca-cloud-staging-terraform-state
+          object: terraform/state/cloud-sql-rollout/staging.lock
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - uses: pnpm/action-setup@v4
+        with:
+          package_json_file: cloud/package.json
+
+      - name: Require the exact staging director image before promotion
+        env:
+          ORCA_RELAY_ADMIN_ID_TOKEN: ${{ steps.auth.outputs.id_token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          runtime="$(curl --fail-with-body --max-time 30 --request POST \
+            "${DIRECTOR_ORIGIN}/v1/admin/runtime-status" \
+            --header "Authorization: Bearer ${ORCA_RELAY_ADMIN_ID_TOKEN}" \
+            --header 'Content-Type: application/json' --data '{"v":1}')"
+          test "$(jq -r '.role' <<< "${runtime}")" = director
+          test "$(jq -r '.imageDigest' <<< "${runtime}")" = "${IMAGE_DIGEST}"
+
+      - name: Install exact load-harness dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build the Relay load-harness contract
+        run: pnpm --filter @orca-cloud/relay-contract build
+
+      - name: Promote only staging C4
+        id: promote
+        env:
+          ORCA_RELAY_ADMIN_ID_TOKEN: ${{ steps.auth.outputs.id_token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          result="$(node dev/scripts/operate-relay-asia-admission.mjs \
+            --environment staging \
+            --mode promote \
+            --cell-ids staging-gce-c4 \
+            --expected-generation "${INITIAL_SELECTOR_GENERATION}" \
+            --attempt-id "${PROMOTE_ATTEMPT_ID}" \
+            --image-digest "${IMAGE_DIGEST}")"
+          generation="$(jq -er '.generation' <<< "${result}")"
+          test "$(jq -r '.states["staging-gce-c4"]' <<< "${result}")" = general
+          echo "generation=${generation}" >> "${GITHUB_OUTPUT}"
+          echo "started_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "${GITHUB_OUTPUT}"
+
+      - name: Run sharded two-horizon and mixed splice proofs
+        env:
+          ORCA_RELAY_ADMIN_ID_TOKEN: ${{ steps.auth.outputs.id_token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          proof_dir="${RUNNER_TEMP}/relay-asia-staging-proof"
+          mkdir -p "${proof_dir}"
+          fd_limit="$(ulimit -n)"
+          if test "${fd_limit}" != unlimited; then
+            [[ "${fd_limit}" =~ ^[0-9]+$ ]]
+            test "${fd_limit}" -ge 4096
+          fi
+          run_phase() {
+            phase="$1"
+            controls="$2"
+            splices="$3"
+            pids=()
+            stop_shards() {
+              for pid in "${pids[@]}"; do kill "${pid}" 2>/dev/null || true; done
+              for pid in "${pids[@]}"; do wait "${pid}" 2>/dev/null || true; done
+            }
+            trap stop_shards EXIT
+            for shard in 0 1 2 3; do
+              slow=0
+              wedged=0
+              boundary_args=()
+              request_unit_args=()
+              if test "${phase}" = launch && test "${shard}" = 0; then
+                slow=4
+                wedged=1
+              fi
+              if test "${phase}" = launch && test "${shard}" = 0; then
+                boundary_args=(
+                  --region-behavior-probes 1
+                  --capacity-cell-id staging-gce-c4
+                  --capacity-cell-origin https://c4.relay-staging.onorca.dev
+                  --capacity-unobserved-bound 60
+                  --rebind-probes 2
+                  --skip-rebind-overflow-check
+                )
+              fi
+              node dev/scripts/load-relay-controls.mjs \
+                --director-origin "${DIRECTOR_ORIGIN}" \
+                --auth-origin "${AUTH_ORIGIN}" \
+                --preferred-region asia-east2 \
+                --relay-asia-load-principals 32 \
+                --controls "${controls}" \
+                --splices "${splices}" \
+                --slow-reader-splices "${slow}" \
+                --wedged-reader-splices "${wedged}" \
+                --capacity-hard-cap 3000 \
+                "${boundary_args[@]}" \
+                "${request_unit_args[@]}" \
+                --phase-barrier-dir "${proof_dir}/${phase}-barrier" \
+                --aggregate-controls "$((controls * 4))" \
+                --aggregate-splices "$((splices * 4))" \
+                --aggregate-reader-splices "$([[ "${phase}" = launch ]] && echo 5 || echo 0)" \
+                --aggregate-reader-bytes "$([[ "${phase}" = launch ]] && echo 12582912 || echo 0)" \
+                --required-lease-horizons 2 \
+                --splice-ramp-seconds 120 \
+                --max-generator-rss-growth-mib 512 \
+                --ramp-seconds 180 \
+                --duration-seconds 210 \
+                --shard-count 4 \
+                --shard-index "${shard}" \
+                > "${proof_dir}/${phase}-${shard}.jsonl" &
+              pids+=("$!")
+            done
+            failed=0
+            for pid in "${pids[@]}"; do
+              if ! wait "${pid}"; then failed=1; break; fi
+            done
+            if test "${failed}" = 1; then
+              stop_shards
+              for shard in 0 1 2 3; do
+                jq -cer 'select(.event == "relay_load_progress" or .event == "relay_load_complete") |
+                  {event, shardIndex, active, peakActive, connected, connectionFailures,
+                   rampConnectionFailures, connectionFailuresByReason, unexpectedCloses,
+                   protocolErrors, refreshErrors, socketErrors, elapsedSeconds}' \
+                  "${proof_dir}/${phase}-${shard}.jsonl" | tail -n 1 || true
+              done
+              trap - EXIT
+              return 1
+            fi
+            trap - EXIT
+            for shard in 0 1 2 3; do
+              jq -cer 'select(.event == "relay_load_complete")' \
+                "${proof_dir}/${phase}-${shard}.jsonl" | tail -n 1
+            done | jq -s . > "${proof_dir}/${phase}.json"
+          }
+          run_phase launch 5 5
+
+      - name: Collect and validate aggregate staging proof evidence
+        env:
+          PROOF_STARTED_AT: ${{ steps.promote.outputs.started_at }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          proof_dir="${RUNNER_TEMP}/relay-asia-staging-proof"
+          ended_at="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          sleep 60
+          gcloud logging read \
+            "timestamp>=\"${PROOF_STARTED_AT}\" AND timestamp<=\"${ended_at}\" AND jsonPayload.event=\"orca_relay_runtime_metrics\"" \
+            --project "${GCP_PROJECT_ID}" --limit 20000 --format json \
+            > "${proof_dir}/runtime-metrics.json"
+          node dev/scripts/relay-asia-rollout-evidence.mjs create-staging \
+            --repository "${GITHUB_REPOSITORY}" \
+            --run-id "${GITHUB_RUN_ID}" \
+            --run-attempt "${GITHUB_RUN_ATTEMPT}" \
+            --commit-sha "${GITHUB_SHA}" \
+            --image-digest "${IMAGE_DIGEST}" \
+            --selector-generation "${{ steps.promote.outputs.generation }}" \
+            --started-at "${PROOF_STARTED_AT}" \
+            --ended-at "${ended_at}" \
+            --launch-report "${proof_dir}/launch.json" \
+            --logs-json "${proof_dir}/runtime-metrics.json" \
+            --output "${proof_dir}/evidence.json"
+
+      - name: Return staging C4 to migration-only
+        if: ${{ always() && steps.promote.outcome != 'skipped' }}
+        env:
+          ORCA_RELAY_ADMIN_ID_TOKEN: ${{ steps.auth.outputs.id_token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          promoted="$(node dev/scripts/operate-relay-asia-admission.mjs \
+            --environment staging \
+            --mode recover-promotion \
+            --cell-ids staging-gce-c4 \
+            --expected-generation "${INITIAL_SELECTOR_GENERATION}" \
+            --attempt-id "${PROMOTE_ATTEMPT_ID}" \
+            --image-digest "${IMAGE_DIGEST}")"
+          if test "$(jq -r '.promoted' <<< "${promoted}")" = false; then exit 0; fi
+          promoted_generation="$(jq -er '.generation' <<< "${promoted}")"
+          result="$(node dev/scripts/operate-relay-asia-admission.mjs \
+            --environment staging \
+            --mode rollback \
+            --cell-ids staging-gce-c4 \
+            --expected-generation "${promoted_generation}" \
+            --attempt-id "${ROLLBACK_ATTEMPT_ID}" \
+            --image-digest "${IMAGE_DIGEST}")"
+          test "$(jq -r '.states["staging-gce-c4"]' <<< "${result}")" = migration-only
+
+      - name: Upload immutable staging readiness evidence
+        if: ${{ success() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: relay-asia-staging-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/relay-asia-staging-proof/evidence.json
+          if-no-files-found: error
+          retention-days: 7
+
+  recover:
+    if: ${{ always() && github.ref == 'refs/heads/main' }}
+    needs: prove
+    runs-on: blacksmith-2vcpu-ubuntu-2204
+    timeout-minutes: 15
+    environment: staging
+    env:
+      IMAGE_DIGEST: ${{ inputs.image-digest }}
+      INITIAL_SELECTOR_GENERATION: ${{ inputs.selector-generation }}
+      PROMOTE_ATTEMPT_ID: ${{ inputs.promote-attempt-id }}
+      ROLLBACK_ATTEMPT_ID: ${{ inputs.rollback-attempt-id }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - id: auth
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ vars.STAGING_GCP_RELAY_ASIA_PROOF_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ vars.STAGING_GCP_RELAY_ASIA_PROOF_SERVICE_ACCOUNT }}
+          token_format: id_token
+          id_token_audience: https://relay-staging.onorca.dev/v1/admin/drain
+          id_token_include_email: true
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - name: Recover staging C4 with a fresh identity
+        env:
+          ORCA_RELAY_ADMIN_ID_TOKEN: ${{ steps.auth.outputs.id_token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          promoted="$(node dev/scripts/operate-relay-asia-admission.mjs \
+            --environment staging \
+            --mode recover-promotion \
+            --cell-ids staging-gce-c4 \
+            --expected-generation "${INITIAL_SELECTOR_GENERATION}" \
+            --attempt-id "${PROMOTE_ATTEMPT_ID}" \
+            --image-digest "${IMAGE_DIGEST}")"
+          if test "$(jq -r '.promoted' <<< "${promoted}")" = false; then exit 0; fi
+          promoted_generation="$(jq -er '.generation' <<< "${promoted}")"
+          result="$(node dev/scripts/operate-relay-asia-admission.mjs \
+            --environment staging \
+            --mode rollback \
+            --cell-ids staging-gce-c4 \
+            --expected-generation "${promoted_generation}" \
+            --attempt-id "${ROLLBACK_ATTEMPT_ID}" \
+            --image-digest "${IMAGE_DIGEST}")"
+          test "$(jq -r '.states["staging-gce-c4"]' <<< "${result}")" = migration-only
