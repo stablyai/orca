@@ -38,6 +38,20 @@ export const INCIDENT_MONITOR_THRESHOLDS = {
   // margin; relayPostgresRetryExhausted below stays at zero tolerance, so any
   // transaction that terminally fails still freezes the gate.
   relayPostgresRetries: 300,
+  // Why: this bar stays at zero. Cell-inventory contention reaches the retry
+  // wrapper from exactly two kinds of caller, and neither is a sweep tick that
+  // can shrug the failure off:
+  //   - request paths, which take a wait bounded at CELL_INVENTORY_LOCK_TIMEOUT_MS
+  //     (assignment, control activation, activity, admin drain/evacuate/supersede);
+  //   - sweep-reachable code that a request also enters, which keeps the pool
+  //     lock_timeout so it cannot fail faster than before this change: the
+  //     completeEvacuation site that waits, reconcileReservationAccounting, and
+  //     placement re-entered from evacuateDeadCells.
+  // Sweep-only sites take the inventory NOWAIT, so their contention becomes
+  // database_lock_unavailable, which is not a retryable abort and never reaches
+  // this counter. The relay's cell-inventory-lock census test holds that split.
+  // Splitting the metric by the phase label PR #423 put on the log payload would
+  // need a labelled log-based metric, which this signal's counter does not carry.
   relayPostgresRetryExhausted: 0,
   // Why: public admission is a per-instance semaphore, so fleet assignment capacity is
   // concurrency x instances. A floor of 1 let the 2026-08-04 collapse from five instances

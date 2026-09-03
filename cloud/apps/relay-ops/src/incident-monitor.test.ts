@@ -123,6 +123,19 @@ describe('incident monitor evaluator', () => {
     })
   })
 
+  // Why: sweeps no longer reach the retry wrapper, so any exhaustion left in this
+  // counter is a request path that terminally failed. It must still freeze.
+  it('freezes on a single exhausted request-path transaction', () => {
+    const sample = healthySample()
+    sample.sources['relay-logs']!.signals['relay.postgres_retry_exhausted'] = signal(1)
+    expect(evaluateIncidentSample(sample, startedAt)).toMatchObject({
+      status: 'freeze',
+      failures: [
+        expect.objectContaining({ signal: 'relay.postgres_retry_exhausted', threshold: 0 })
+      ]
+    })
+  })
+
   it('allows missing auth readiness and legacy existing-only connections', () => {
     const sample = healthySample()
     const legacySelector = {

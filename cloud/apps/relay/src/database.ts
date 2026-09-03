@@ -1,4 +1,5 @@
 import { mkdirSync } from 'node:fs'
+import { performance } from 'node:perf_hooks'
 import { join } from 'node:path'
 import { DatabaseSync } from 'node:sqlite'
 import pg from 'pg'
@@ -8,9 +9,37 @@ import {
   type PostgresPoolPressureCounts
 } from './postgres-pool-pressure.js'
 import { applyPostgresSchema } from './postgres-schema-startup.js'
+import {
+  CellInventoryHoldSamples,
+  emptyCellInventoryHoldCounts,
+  type CellInventoryHoldCounts
+} from './cell-inventory-hold-samples.js'
+
+export const POSTGRES_LOCK_TIMEOUT_MS = 1_000
+
+function setLocalLockTimeout(milliseconds: number): string {
+  if (!Number.isInteger(milliseconds) || milliseconds < 1) {
+    throw new Error('invalid_lock_timeout')
+  }
+  return `SET LOCAL lock_timeout = '${milliseconds}ms'`
+}
 
 export type SqlRow = Record<string, unknown>
-export type RelayLockOptions = { failIfUnavailable?: boolean }
+export type RelayLockOptions = {
+  failIfUnavailable?: boolean
+  // Only honoured inside a transaction: SET LOCAL is a no-op in autocommit.
+  lockTimeoutMs?: number
+  // Report how long this lock is held to COMMIT. The hold, not the wait, is what
+  // forms the queue, and nothing measured it before.
+  measureHoldMs?: boolean
+}
+
+// A transaction that can report how long it held a measured lock before COMMIT.
+type HoldMeasuringTransaction = { consumeHoldMs(): number | undefined }
+
+function measuredHoldMs(transaction: unknown): number | undefined {
+  return (transaction as HoldMeasuringTransaction).consumeHoldMs?.()
+}
 export type RelayTransactionOptions = { reportRetries?: boolean }
 
 export interface RelayDatabase {
@@ -612,8 +641,22 @@ function postgresTransactionErrorPhase(error: unknown): string {
 
 class SqliteTransaction implements RelayDatabase {
   readonly dialect = 'sqlite' as const
+  private heldFromMs: number | undefined
 
   constructor(protected readonly database: DatabaseSync) {}
+
+  consumeHoldMs(): number | undefined {
+    if (this.heldFromMs === undefined) return undefined
+    const holdMs = performance.now() - this.heldFromMs
+    this.heldFromMs = undefined
+    return holdMs
+  }
+
+  protected noteHeld(options: RelayLockOptions): void {
+    if (options.measureHoldMs && this.heldFromMs === undefined) {
+      this.heldFromMs = performance.now()
+    }
+  }
 
   async query(sql: string, params: unknown[] = []): Promise<SqlRow[]> {
     const statement = this.database.prepare(sql)
@@ -626,9 +669,11 @@ class SqliteTransaction implements RelayDatabase {
   async queryLocked(
     sql: string,
     params: unknown[] = [],
-    _options: RelayLockOptions = {}
+    options: RelayLockOptions = {}
   ): Promise<SqlRow[]> {
-    return await this.query(sql, params)
+    const rows = await this.query(sql, params)
+    this.noteHeld(options)
+    return rows
   }
 
   async transaction<T>(
@@ -643,6 +688,11 @@ class SqliteTransaction implements RelayDatabase {
 
 class SqliteDatabase extends SqliteTransaction {
   private tail: Promise<void> = Promise.resolve()
+  private readonly holds = new CellInventoryHoldSamples()
+
+  consumeHoldCounts(): CellInventoryHoldCounts {
+    return this.holds.consumeCounts()
+  }
 
   override async query(sql: string, params: unknown[] = []): Promise<SqlRow[]> {
     await this.tail
@@ -655,9 +705,11 @@ class SqliteDatabase extends SqliteTransaction {
     this.tail = new Promise((resolve) => (release = resolve))
     await previous
     this.database.exec('BEGIN IMMEDIATE')
+    const transaction = new SqliteTransaction(this.database)
     try {
-      const result = await operation(new SqliteTransaction(this.database))
+      const result = await operation(transaction)
       this.database.exec('COMMIT')
+      this.holds.record(measuredHoldMs(transaction) ?? Number.NaN)
       return result
     } catch (error) {
       this.database.exec('ROLLBACK')
@@ -675,8 +727,16 @@ class SqliteDatabase extends SqliteTransaction {
 
 class PostgresTransaction implements RelayDatabase {
   readonly dialect = 'postgres' as const
+  private heldFromMs: number | undefined
 
   constructor(protected readonly client: pg.PoolClient) {}
+
+  consumeHoldMs(): number | undefined {
+    if (this.heldFromMs === undefined) return undefined
+    const holdMs = performance.now() - this.heldFromMs
+    this.heldFromMs = undefined
+    return holdMs
+  }
 
   async query(sql: string, params: unknown[] = []): Promise<SqlRow[]> {
     try {
@@ -693,11 +753,21 @@ class PostgresTransaction implements RelayDatabase {
     params: unknown[] = [],
     options: RelayLockOptions = {}
   ): Promise<SqlRow[]> {
+    // SET LOCAL lasts to COMMIT, so a bound left in place would silently govern
+    // every later locked statement in the transaction and misattribute its 55P03s.
+    const bounded = options.lockTimeoutMs !== undefined && !options.failIfUnavailable
     try {
-      return await this.query(
+      // A blocked waiter holds its pooled client for the whole lock_timeout, so
+      // hot tiny-table locks bound their own wait well under the pool default.
+      if (bounded) await this.query(setLocalLockTimeout(options.lockTimeoutMs!))
+      const rows = await this.query(
         `${sql} FOR UPDATE${options.failIfUnavailable ? ' NOWAIT' : ''}`,
         params
       )
+      if (options.measureHoldMs && this.heldFromMs === undefined) {
+        this.heldFromMs = performance.now()
+      }
+      return rows
     } catch (error) {
       if (
         options.failIfUnavailable &&
@@ -706,6 +776,10 @@ class PostgresTransaction implements RelayDatabase {
         throw new Error('database_lock_unavailable')
       }
       throw error
+    } finally {
+      // Restore on the error path too: the transaction may still be retried or
+      // continue with unrelated locks after a caught lock failure.
+      if (bounded) await this.query(setLocalLockTimeout(POSTGRES_LOCK_TIMEOUT_MS)).catch(() => undefined)
     }
   }
 
@@ -723,7 +797,6 @@ const POSTGRES_TRANSACTION_ATTEMPTS = 3
 const POSTGRES_RETRY_MAX_DELAY_MS = 25
 const POSTGRES_CONNECTION_TIMEOUT_MS = 2_000
 const POSTGRES_STATEMENT_TIMEOUT_MS = 5_000
-const POSTGRES_LOCK_TIMEOUT_MS = 1_000
 const POSTGRES_IDLE_TRANSACTION_TIMEOUT_MS = 5_000
 
 function retryablePostgresTransactionError(error: unknown): boolean {
@@ -749,6 +822,11 @@ async function waitForPostgresRetry(random: () => number = Math.random): Promise
 class PostgresDatabase implements RelayDatabase {
   readonly dialect = 'postgres' as const
   private readonly pressure: PostgresPoolPressure
+  private readonly holds = new CellInventoryHoldSamples()
+
+  consumeHoldCounts(): CellInventoryHoldCounts {
+    return this.holds.consumeCounts()
+  }
 
   constructor(private readonly pool: pg.Pool) {
     this.pressure = new PostgresPoolPressure(pool)
@@ -770,6 +848,8 @@ class PostgresDatabase implements RelayDatabase {
     options: RelayLockOptions = {}
   ): Promise<SqlRow[]> {
     try {
+      // No transaction here, so options.lockTimeoutMs cannot apply: SET LOCAL
+      // would be discarded at the autocommit boundary before the lock is taken.
       return await this.query(
         `${sql} FOR UPDATE${options.failIfUnavailable ? ' NOWAIT' : ''}`,
         params
@@ -791,10 +871,12 @@ class PostgresDatabase implements RelayDatabase {
   ): Promise<T> {
     for (let attempt = 1; attempt <= POSTGRES_TRANSACTION_ATTEMPTS; attempt++) {
       const client = await this.pressure.connect()
+      const transaction = new PostgresTransaction(client)
       try {
         await client.query('BEGIN')
-        const result = await operation(new PostgresTransaction(client))
+        const result = await operation(transaction)
         await client.query('COMMIT')
+        this.holds.record(measuredHoldMs(transaction) ?? Number.NaN)
         return result
       } catch (error) {
         await client.query('ROLLBACK').catch(() => undefined)
@@ -850,6 +932,13 @@ export function consumeRelayDatabasePoolPressure(
   return database instanceof PostgresDatabase
     ? database.consumePoolPressure()
     : emptyPostgresPoolPressureCounts()
+}
+
+export function consumeRelayCellInventoryHold(
+  database: RelayDatabase
+): CellInventoryHoldCounts {
+  const holder = database as { consumeHoldCounts?: () => CellInventoryHoldCounts }
+  return holder.consumeHoldCounts?.() ?? emptyCellInventoryHoldCounts()
 }
 
 export function readRelayDatabasePoolPressure(

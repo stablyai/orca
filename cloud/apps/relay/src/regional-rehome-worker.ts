@@ -3,6 +3,7 @@ import type { RelayAssignmentStore } from './assignment-store.js'
 import type { RelayConfig } from './config.js'
 import { googleMetadataIdentityToken } from './google-metadata-identity-token.js'
 import type { RegionalRehomeSafetySnapshot } from './relay-observability.js'
+import { jitteredSweepIntervalMs } from './relay-sweep-schedule.js'
 
 type RegionalRehomeWorkerOptions = {
   fetch?: typeof fetch
@@ -10,6 +11,7 @@ type RegionalRehomeWorkerOptions = {
   now?: () => number
   intervalMs?: number
   requestTimeoutMs?: number
+  random?: () => number
   safetySnapshot?: () => RegionalRehomeSafetySnapshot
 }
 
@@ -109,7 +111,10 @@ export function startRegionalRehomeWorker(
       inFlight = false
     }
   }
-  const timer = setInterval(() => void run(), options.intervalMs ?? 1_000)
+  const timer = setInterval(
+    () => void run(),
+    options.intervalMs ?? jitteredSweepIntervalMs(1_000, options.random)
+  )
   timer.unref()
   void run()
   return {
