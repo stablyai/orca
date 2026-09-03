@@ -12,6 +12,14 @@ const SSH_WORKTREE_ID = `${SSH_REPO_ID}::/remote/worktree`
 const SSH_PTY_LEFT = `ssh:${CONNECTION_ID}@@pty-left`
 const SSH_PTY_RIGHT = `ssh:${CONNECTION_ID}@@pty-right`
 
+function makeDeferred(): { promise: Promise<void>; resolve: () => void } {
+  let resolve!: () => void
+  const promise = new Promise<void>((next) => {
+    resolve = next
+  })
+  return { promise, resolve }
+}
+
 const SSH_REPO = {
   id: SSH_REPO_ID,
   path: '/remote/worktree',
@@ -166,6 +174,137 @@ function syncSshSplit(runtime: OrcaRuntimeService, snapshot: RuntimeMobileSessio
 }
 
 describe('OrcaRuntimeService terminal retirement host partitioning (STA-3463)', () => {
+  it('routes a stale catalog owner to the unique persisted session owner', async () => {
+    const staleHostId: ExecutionHostId = 'runtime:stale-host'
+    const persistedTab = {
+      id: 'tab',
+      ptyId: 'persisted-pty',
+      worktreeId: SSH_WORKTREE_ID,
+      title: 'Terminal',
+      customTitle: null,
+      color: null,
+      sortOrder: 0,
+      createdAt: 1
+    }
+    const localSession: WorkspaceSessionState = {
+      ...getDefaultWorkspaceSession(),
+      tabsByWorktree: { [SSH_WORKTREE_ID]: [persistedTab] },
+      terminalLayoutsByTabId: {
+        tab: {
+          root: { type: 'leaf', leafId: 'leaf' },
+          activeLeafId: 'leaf',
+          expandedLeafId: null,
+          ptyIdsByLeafId: { leaf: 'persisted-pty' }
+        }
+      }
+    }
+    const sessions = new Map<ExecutionHostId, WorkspaceSessionState>([
+      [LOCAL_EXECUTION_HOST_ID, localSession],
+      [staleHostId, getDefaultWorkspaceSession()]
+    ])
+    const store = {
+      getRepos: () => [{ ...SSH_REPO, executionHostId: staleHostId }],
+      getRepo: () => ({ ...SSH_REPO, executionHostId: staleHostId }),
+      getWorktreeMeta: () => undefined,
+      getAllWorktreeMeta: () => ({}),
+      getWorkspaceSessionHostIds: () => [...sessions.keys()],
+      getWorkspaceSession: (hostId?: ExecutionHostId) =>
+        sessions.get(hostId ?? LOCAL_EXECUTION_HOST_ID) ?? getDefaultWorkspaceSession(),
+      setWorkspaceSession: (session: WorkspaceSessionState, hostId?: ExecutionHostId) =>
+        sessions.set(hostId ?? LOCAL_EXECUTION_HOST_ID, session),
+      flushOrThrow: vi.fn()
+    } as never
+    const runtime = new OrcaRuntimeService(store)
+    runtime.setPtyController({
+      write: () => true,
+      kill: vi.fn(() => true),
+      getForegroundProcess: async () => null
+    })
+    runtime.registerPty('persisted-pty', SSH_WORKTREE_ID, null, {
+      tabId: 'tab',
+      leafId: 'leaf'
+    })
+
+    await expect(
+      runtime.closeMobileSessionTab(`id:${SSH_WORKTREE_ID}`, 'tab')
+    ).resolves.toMatchObject({
+      closed: true
+    })
+    expect(sessions.get(LOCAL_EXECUTION_HOST_ID)?.tabsByWorktree[SSH_WORKTREE_ID]).toEqual([])
+    expect(sessions.get(staleHostId)?.tabsByWorktree[SSH_WORKTREE_ID]).toBeUndefined()
+  })
+
+  it('waits for provider retirement on a direct worktree stop', async () => {
+    const harness = partitionedStore()
+    const runtime = new OrcaRuntimeService(harness.store)
+    const physicalStop = makeDeferred()
+    const kill = vi.fn(() => true)
+    const stopAndWait = vi.fn(async () => {
+      await physicalStop.promise
+      return true
+    })
+    runtime.setPtyController({
+      write: () => true,
+      kill,
+      stopAndWait,
+      getForegroundProcess: async () => null
+    })
+    syncSshSplit(runtime, makeSshSnapshot())
+    runtime.registerPty(SSH_PTY_LEFT, SSH_WORKTREE_ID, CONNECTION_ID, {
+      tabId: 'tab',
+      leafId: 'left'
+    })
+
+    const stopping = runtime.stopTerminalsForWorktree(`id:${SSH_WORKTREE_ID}`, {
+      resolvedWorktreeId: SSH_WORKTREE_ID
+    })
+    await vi.waitFor(() => expect(stopAndWait).toHaveBeenCalledWith(SSH_PTY_LEFT))
+    let settled = false
+    void stopping.then(() => {
+      settled = true
+    })
+    await Promise.resolve()
+    expect(settled).toBe(false)
+    expect(kill).not.toHaveBeenCalled()
+
+    physicalStop.resolve()
+    await expect(stopping).resolves.toEqual({ stopped: 2 })
+  })
+
+  it('continues stopping later PTYs when one provider retirement rejects', async () => {
+    const harness = partitionedStore()
+    const runtime = new OrcaRuntimeService(harness.store)
+    const stopAndWait = vi.fn(async (ptyId: string) => {
+      if (ptyId === SSH_PTY_LEFT) {
+        throw new Error('relay_unavailable')
+      }
+      return true
+    })
+    runtime.setPtyController({
+      write: () => true,
+      kill: vi.fn(() => true),
+      stopAndWait,
+      getForegroundProcess: async () => null
+    })
+    syncSshSplit(runtime, makeSshSnapshot())
+    runtime.registerPty(SSH_PTY_LEFT, SSH_WORKTREE_ID, CONNECTION_ID, {
+      tabId: 'tab',
+      leafId: 'left'
+    })
+    runtime.registerPty(SSH_PTY_RIGHT, SSH_WORKTREE_ID, CONNECTION_ID, {
+      tabId: 'tab',
+      leafId: 'right'
+    })
+
+    await expect(
+      runtime.stopTerminalsForWorktree(`id:${SSH_WORKTREE_ID}`, {
+        resolvedWorktreeId: SSH_WORKTREE_ID
+      })
+    ).resolves.toEqual({ stopped: 1 })
+    expect(stopAndWait).toHaveBeenNthCalledWith(1, SSH_PTY_LEFT)
+    expect(stopAndWait).toHaveBeenNthCalledWith(2, SSH_PTY_RIGHT)
+  })
+
   it('retires an exited SSH pane from the SSH partition and leaves the local partition untouched', async () => {
     const harness = partitionedStore()
     const localBefore = harness.sessions.get(LOCAL_EXECUTION_HOST_ID)!

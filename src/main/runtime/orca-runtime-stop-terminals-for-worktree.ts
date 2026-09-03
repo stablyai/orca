@@ -15,7 +15,7 @@ export class OrcaRuntimeWithStopTerminalsForWorktree extends OrcaRuntimeWithReso
       deadline?: number
       stopPty?: (
         ptyId: string,
-        stop: () => boolean | Promise<boolean>
+        stop: () => Promise<boolean>
       ) => Promise<{ stopped: boolean; owner: boolean }>
       /** Authoritative id for an orphan whose selector no longer resolves. */
       resolvedWorktreeId?: string
@@ -68,30 +68,32 @@ export class OrcaRuntimeWithStopTerminalsForWorktree extends OrcaRuntimeWithReso
       if (options.deadline !== undefined && Date.now() >= options.deadline) {
         break
       }
-      const stop = (): boolean | Promise<boolean> => {
+      const stop = async (): Promise<boolean> => {
         if (options.deadline !== undefined && Date.now() >= options.deadline) {
           return false
         }
-        if (options.stopPty) {
-          // Why: destructive worktree cleanup must not let its cross-surface
-          // dedupe treat fire-and-forget controller.kill as physical exit.
-          // Why: the RPC deadline makes shutdown/list RPCs settle before the sweep
-          // deadline so a wedged daemon yields the accurate stop failure; no deadline
-          // (non-destructive) keeps the provider default RPC timeout.
-          if (options.deadline !== undefined) {
-            return (
-              this.ptyController?.stopAndWait?.(ptyId, {
+        try {
+          // Why: terminal.stop is a durable receipt; wait for provider exit so
+          // onPtyExit de-persists the tab before returning.
+          if (this.ptyController?.stopAndWait) {
+            // Why: the RPC deadline makes shutdown/list RPCs settle before the sweep deadline.
+            if (options.deadline !== undefined) {
+              return await this.ptyController.stopAndWait(ptyId, {
                 deadlineMs: teardownRpcDeadline(options.deadline)
-              }) ?? false
-            )
+              })
+            }
+            return await this.ptyController.stopAndWait(ptyId)
           }
-          return this.ptyController?.stopAndWait?.(ptyId) ?? false
+          return Boolean(this.ptyController?.kill(ptyId))
+        } catch (error) {
+          // A worktree sweep is best-effort per PTY; continue after provider errors.
+          console.warn(`[runtime] failed to stop terminal ${ptyId}`, error)
+          return false
         }
-        return Boolean(this.ptyController?.kill(ptyId))
       }
       const stopResult = options.stopPty
         ? await options.stopPty(ptyId, stop)
-        : { stopped: stop(), owner: true }
+        : { stopped: await stop(), owner: true }
       if (stopResult.owner && stopResult.stopped) {
         stopped += 1
       }

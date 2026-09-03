@@ -76,10 +76,11 @@ describe('OrcaRuntimeService', () => {
   it('stops by exact id when the selector no longer resolves', async () => {
     const runtime = new OrcaRuntimeService(store)
     const kill = vi.fn(() => true)
+    const stopAndWait = vi.fn(async () => true)
     runtime.setPtyController({
       write: () => true,
       kill,
-      stopAndWait: vi.fn(async () => true),
+      stopAndWait,
       getForegroundProcess: async () => null
     })
     syncSinglePty(runtime)
@@ -90,7 +91,7 @@ describe('OrcaRuntimeService', () => {
         resolvedWorktreeId: TEST_WORKTREE_ID
       })
     ).resolves.toEqual({ stopped: 1 })
-    expect(kill).toHaveBeenCalledWith('pty-1')
+    expect(stopAndWait).toHaveBeenCalledWith('pty-1')
   })
 
   it('does not sweep a sibling workspace sharing the checkout dir of an exact id', async () => {
@@ -138,10 +139,11 @@ describe('OrcaRuntimeService', () => {
   it('stops only the owning connection when one worktree id lives on two hosts', async () => {
     const runtime = new OrcaRuntimeService(store)
     const kill = vi.fn(() => true)
+    const stopAndWait = vi.fn(async () => true)
     runtime.setPtyController({
       write: () => true,
       kill,
-      stopAndWait: vi.fn(async () => true),
+      stopAndWait,
       getForegroundProcess: async () => null
     })
     syncSinglePty(runtime, null)
@@ -156,8 +158,8 @@ describe('OrcaRuntimeService', () => {
         resolvedConnectionId: 'ssh-1'
       })
     ).resolves.toEqual({ stopped: 1 })
-    expect(kill).toHaveBeenCalledWith('pty-ssh')
-    expect(kill).not.toHaveBeenCalledWith('pty-local')
+    expect(stopAndWait).toHaveBeenCalledWith('pty-ssh')
+    expect(stopAndWait).not.toHaveBeenCalledWith('pty-local')
   })
 
   it('awaits physical PTY stop when destructive teardown supplies shared dedupe', async () => {
@@ -175,7 +177,7 @@ describe('OrcaRuntimeService', () => {
       getForegroundProcess: async () => null
     })
     syncSinglePty(runtime)
-    const stopPty = vi.fn(async (_ptyId: string, stop: () => boolean | Promise<boolean>) => ({
+    const stopPty = vi.fn(async (_ptyId: string, stop: () => Promise<boolean>) => ({
       stopped: await stop(),
       owner: true
     }))
@@ -204,7 +206,7 @@ describe('OrcaRuntimeService', () => {
       getForegroundProcess: async () => null
     })
     syncSinglePty(runtime)
-    const stopPty = vi.fn(async (_ptyId: string, stop: () => boolean | Promise<boolean>) => ({
+    const stopPty = vi.fn(async (_ptyId: string, stop: () => Promise<boolean>) => ({
       stopped: await stop(),
       owner: true
     }))
