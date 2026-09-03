@@ -197,6 +197,48 @@ describe('gitlab client — MR operations', () => {
       expect(mr?.pipelineStatus).toBe('failure')
     })
 
+    // Why (#18484): GitLab's list endpoint omits `head_pipeline`/`pipeline` entirely, so a failed
+    // pipeline read as neutral and the card painted the MR open-green. Re-fetch the single MR.
+    it('re-fetches the MR by iid when the list row carries no pipeline field', async () => {
+      getProjectRefMock.mockResolvedValueOnce({ host: 'gitlab.com', path: 'g/p' })
+      glabExecFileAsyncMock
+        .mockResolvedValueOnce({
+          stdout: JSON.stringify([
+            { iid: 5049, title: 'odin-log-api', state: 'opened', sha: 'abc' }
+          ])
+        })
+        .mockResolvedValueOnce({
+          stdout: JSON.stringify({
+            iid: 5049,
+            title: 'odin-log-api',
+            state: 'opened',
+            sha: 'abc',
+            head_pipeline: { status: 'failed' }
+          })
+        })
+
+      const mr = await getMergeRequestForBranch('/repo', 'odin-log-api')
+      expect(mr?.number).toBe(5049)
+      expect(mr?.pipelineStatus).toBe('failure')
+      expect(glabExecFileAsyncMock).toHaveBeenCalledTimes(2)
+      expect(glabExecFileAsyncMock).toHaveBeenLastCalledWith(
+        ['api', 'projects/g%2Fp/merge_requests/5049?with_merge_status_recheck=true'],
+        { cwd: '/repo' }
+      )
+    })
+
+    it('keeps the list row when the pipeline re-fetch fails', async () => {
+      getProjectRefMock.mockResolvedValueOnce({ host: 'gitlab.com', path: 'g/p' })
+      glabExecFileAsyncMock
+        .mockResolvedValueOnce({
+          stdout: JSON.stringify([{ iid: 6, title: 'Flaky', state: 'opened', sha: 'abc' }])
+        })
+        .mockRejectedValueOnce(new Error('glab: 502'))
+
+      const mr = await getMergeRequestForBranchOrThrow('/repo', 'flaky')
+      expect(mr).toMatchObject({ number: 6, pipelineStatus: 'neutral' })
+    })
+
     it('strips refs/heads/ prefix from the branch arg', async () => {
       getProjectRefMock.mockResolvedValueOnce({ host: 'gitlab.com', path: 'g/p' })
       glabExecFileAsyncMock.mockResolvedValueOnce({ stdout: '[]' })

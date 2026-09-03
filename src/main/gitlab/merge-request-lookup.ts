@@ -20,6 +20,11 @@ import { shouldHideNonOpenReviewOnDefaultBranch } from '../source-control/repo-d
 
 type HostedReviewLocalGitOptions = ReturnType<typeof getHostedReviewLocalGitOptions>
 
+type RawMergeRequest = Parameters<typeof mapMRInfo>[0] & {
+  head_pipeline?: { status?: string } | null
+  pipeline?: { status?: string } | null
+}
+
 function hostedReviewLocalGitOptionArgs(
   options: HostedReviewExecutionOptions = {}
 ): [] | [HostedReviewLocalGitOptions] {
@@ -63,10 +68,7 @@ export async function getMergeRequest(
       args,
       glabRepoExecOptions(repoPath, connectionId, localGitOptions)
     )
-    const data = JSON.parse(stdout) as Parameters<typeof mapMRInfo>[0] & {
-      head_pipeline?: { status?: string } | null
-      pipeline?: { status?: string } | null
-    }
+    const data = JSON.parse(stdout) as RawMergeRequest
     // Why: older GitLab instances expose `pipeline` instead of `head_pipeline`; try both.
     const pipelineStatus = derivePipelineStatus(data.head_pipeline ?? data.pipeline ?? null)
     return mapMRInfo(data, pipelineStatus)
@@ -103,21 +105,20 @@ export async function getMergeRequestForBranch(
   }
   await acquire()
   try {
-    if (typeof linkedMRIid === 'number') {
+    const fetchByIid = async (iid: number): Promise<MRInfo> => {
       const { stdout } = await glabExecFileAsync(
         [
           'api',
           ...glabHostnameArgs(projectRef, connectionId),
-          `projects/${encodedProject(projectRef.path)}/merge_requests/${linkedMRIid}?with_merge_status_recheck=true`
+          `projects/${encodedProject(projectRef.path)}/merge_requests/${iid}?with_merge_status_recheck=true`
         ],
         glabRepoExecOptions(repoPath, connectionId, localGitOptions)
       )
-      const raw = JSON.parse(stdout) as Parameters<typeof mapMRInfo>[0] & {
-        head_pipeline?: { status?: string } | null
-        pipeline?: { status?: string } | null
-      }
-      const pipelineStatus = derivePipelineStatus(raw.head_pipeline ?? raw.pipeline ?? null)
-      return mapMRInfo(raw, pipelineStatus)
+      const raw = JSON.parse(stdout) as RawMergeRequest
+      return mapMRInfo(raw, derivePipelineStatus(raw.head_pipeline ?? raw.pipeline ?? null))
+    }
+    if (typeof linkedMRIid === 'number') {
+      return fetchByIid(linkedMRIid)
     }
     if (branchName) {
       const { stdout } = await glabExecFileAsync(
@@ -132,15 +133,12 @@ export async function getMergeRequestForBranch(
         ],
         glabRepoExecOptions(repoPath, connectionId, localGitOptions)
       )
-      const data = JSON.parse(stdout) as (Parameters<typeof mapMRInfo>[0] & {
-        head_pipeline?: { status?: string } | null
-        pipeline?: { status?: string } | null
-      })[]
+      const data = JSON.parse(stdout) as RawMergeRequest[]
       if (Array.isArray(data) && data.length > 0) {
         const raw = data[0]
         // Why: older GitLab list payloads expose `pipeline` instead of `head_pipeline`.
         const pipelineStatus = derivePipelineStatus(raw.head_pipeline ?? raw.pipeline ?? null)
-        const info = mapMRInfo(raw, pipelineStatus)
+        let info = mapMRInfo(raw, pipelineStatus)
         // Why (#9171): discard a non-open implicit branch match on the repo default branch.
         const hideOnDefaultBranch = await shouldHideNonOpenReviewOnDefaultBranch({
           state: info.state,
@@ -151,6 +149,16 @@ export async function getMergeRequestForBranch(
           localGitOptions
         })
         if (!hideOnDefaultBranch) {
+          // Why (#18484): the list endpoint omits `head_pipeline`/`pipeline` entirely, so a failed
+          // pipeline read as neutral and the card painted the MR open-green. Re-fetch the single
+          // MR for its pipeline; keep the list row if that call fails, since the MR does exist.
+          if (!('head_pipeline' in raw) && !('pipeline' in raw)) {
+            try {
+              info = await fetchByIid(info.number)
+            } catch {
+              // ponytail: list row stays authoritative; pipeline just reads neutral this poll
+            }
+          }
           return info
         }
       }
