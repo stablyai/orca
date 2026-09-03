@@ -24,6 +24,7 @@ import {
 import { readGithubCacheSnapshot } from './user-data-path'
 import {
   gcStaleWorktreeMeta,
+  gcOrphanedRepoState,
   normalizeWorktreeLinkedItemMetadata
 } from '../tracking-repos/worktree-metadata-normalization'
 import { backfillLegacyAutomationContexts } from '../scheduling-automations/automation-context-migration'
@@ -262,6 +263,11 @@ export class LoadedStateParsingOperations {
     }
 
     if (gcStaleWorktreeMeta(result) > 0) {
+      this.runtime.loadNeedsSave = true
+    }
+
+    // Why: a crashed/partial repo removal can leave session state that recreates a duplicate workspace on restart.
+    if (gcOrphanedRepoState(result) > 0) {
       this.runtime.loadNeedsSave = true
     }
 

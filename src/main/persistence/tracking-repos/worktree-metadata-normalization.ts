@@ -1,10 +1,11 @@
 import { existsSync } from 'node:fs'
 import { isAbsolute } from 'node:path'
-import { getRepoExecutionHostId, LOCAL_EXECUTION_HOST_ID } from '../../../shared/execution-host'
+import { getRepoExecutionHostId, LOCAL_EXECUTION_HOST_ID, type ExecutionHostId } from '../../../shared/execution-host'
 import { FOLDER_WORKSPACE_INSTANCE_SEPARATOR } from '../../../shared/worktree/id'
 import { isWindowsAbsolutePathLike } from '../../../shared/cross-platform-path'
 import { isWslUncPath } from '../../../shared/wsl-paths'
-import { worktreeWorkspaceKey } from '../../../shared/workspace-scope'
+import { parseWorkspaceKey, worktreeWorkspaceKey } from '../../../shared/workspace-scope'
+import type { WorkspaceKey } from '../../../shared/folder-workspace-types'
 import {
   areTaskSourceContextsEqual,
   normalizeStoredTaskSourceContext
@@ -15,6 +16,7 @@ import {
 } from '../../../shared/workspace-linked-item'
 import { isWorkspaceLinkedItemSourceContextMatch } from '../../../shared/workspace-linked-item-source-context'
 import type { PersistedState } from '../../../shared/persisted-state-types'
+import { gcOrphanedWorkspaceSessionOwners } from '../restoring-sessions/session-owner-removal'
 import {
   pruneUnreferencedWorktreeIdentityMeta,
   removeWorktreeMetadataForHost
@@ -84,6 +86,106 @@ export function gcStaleWorktreeMeta(state: PersistedState): number {
     // worktree later created at the same repoId::path, and nothing else ever reclaims them.
     removeWorktreeMetadataForHost(state, key, LOCAL_EXECUTION_HOST_ID)
     removed++
+  }
+  return removed
+}
+
+// Owner identity is (repoId, executionHostId): the same repo id can exist on
+// local and a remote host, so orphan detection must not collapse them.
+function repoHostOwnerKey(repoId: string, hostId: ExecutionHostId): string {
+  return `${repoId}\0${hostId}`
+}
+
+export function gcOrphanedRepoState(state: PersistedState): number {
+  const liveOwnerIds = new Set([
+    ...state.repos.map((repo) => repo.id),
+    ...(state.projects ?? []).map((project) => project.id)
+  ])
+  // Why: an unexpectedly empty owner list must not turn one anomalous load into a full state wipe.
+  if (liveOwnerIds.size === 0) {
+    return 0
+  }
+  const liveProjectIds = new Set((state.projects ?? []).map((project) => project.id))
+  // Why: repo ids are host-scoped here, so a live local repo1 must not keep a
+  // removed SSH repo1's meta/session partition alive (and vice-versa).
+  const liveRepoHostKeys = new Set(
+    state.repos.map((repo) => repoHostOwnerKey(repo.id, getRepoExecutionHostId(repo)))
+  )
+  const ownerIdOf = (key: string): string | null => {
+    const scope = parseWorkspaceKey(key)
+    if (scope?.type === 'folder') {
+      return null
+    }
+    const worktreeId = scope?.type === 'worktree' ? scope.worktreeId : key
+    const separator = worktreeId.indexOf('::')
+    return separator === -1 ? null : worktreeId.slice(0, separator)
+  }
+  // Host-agnostic: owner absent from every host. Used for lineage, which carries
+  // no host of its own, so its sweep stays as conservative as before.
+  const isOrphanKeyAnyHost = (key: string): boolean => {
+    const ownerId = ownerIdOf(key)
+    return ownerId !== null && !liveOwnerIds.has(ownerId)
+  }
+  // Host-scoped: owner repo not live on `hostId`. Projects own workspaces across
+  // hosts, so a live project id is never an orphan.
+  const isOrphanKeyForHost = (key: string, hostId: ExecutionHostId): boolean => {
+    const ownerId = ownerIdOf(key)
+    if (ownerId === null || liveProjectIds.has(ownerId)) {
+      return false
+    }
+    return !liveRepoHostKeys.has(repoHostOwnerKey(ownerId, hostId))
+  }
+
+  let removed = 0
+  for (const [key, meta] of Object.entries(state.worktreeMeta)) {
+    // Host-tagged metas (the SSH duplicate the bug is about) are scoped to their
+    // host; host-less legacy metas stay on the conservative any-host check since
+    // they can belong to a remote repo whose host isn't recorded here.
+    const orphaned = meta?.hostId
+      ? isOrphanKeyForHost(key, meta.hostId)
+      : isOrphanKeyAnyHost(key)
+    if (orphaned) {
+      delete state.worktreeMeta[key]
+      removed++
+    }
+  }
+  for (const [childId, lineage] of Object.entries(state.worktreeLineageById)) {
+    if (isOrphanKeyAnyHost(childId) || isOrphanKeyAnyHost(lineage.parentWorktreeId)) {
+      delete state.worktreeLineageById[childId]
+      removed++
+    }
+  }
+  for (const [childKey, lineage] of Object.entries(state.workspaceLineageByChildKey)) {
+    const childScope = parseWorkspaceKey(childKey)
+    const parentScope = parseWorkspaceKey(lineage.parentWorkspaceKey)
+    if (
+      (childScope?.type === 'worktree' && isOrphanKeyAnyHost(childScope.worktreeId)) ||
+      (parentScope?.type === 'worktree' && isOrphanKeyAnyHost(parentScope.worktreeId))
+    ) {
+      delete state.workspaceLineageByChildKey[childKey as WorkspaceKey]
+      removed++
+    }
+  }
+  // Why any-host for the legacy blob: it predates host partitions and can hold a
+  // remote repo's session, so scoping it to LOCAL would wrongly sweep it.
+  const localSession = gcOrphanedWorkspaceSessionOwners(
+    state.workspaceSession,
+    liveOwnerIds,
+    isOrphanKeyAnyHost
+  )
+  state.workspaceSession = localSession.session
+  removed += localSession.removed
+  for (const [partitionHostId, session] of Object.entries(state.workspaceSessionsByHostId ?? {})) {
+    if (!session) {
+      continue
+    }
+    // A partition's owners all belong to its host, so scope orphan detection to it.
+    const host = partitionHostId as ExecutionHostId
+    const partition = gcOrphanedWorkspaceSessionOwners(session, liveOwnerIds, (key) =>
+      isOrphanKeyForHost(key, host)
+    )
+    state.workspaceSessionsByHostId![host] = partition.session
+    removed += partition.removed
   }
   return removed
 }
