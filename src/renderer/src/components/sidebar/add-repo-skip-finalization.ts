@@ -1,6 +1,6 @@
 import type { Worktree } from '../../../../shared/worktree/types'
 import { isDefaultBranchWorkspace } from './default-branch-workspace'
-import { widenFilterRepoIds } from '@/store/slices/repo-filter-selection'
+import { includeReposInFilter } from '@/store/slices/repo-filter-selection'
 
 export type AddRepoSkipFinalizationState = {
   activeRepoId: string | null
@@ -29,10 +29,7 @@ export function finalizeImportedRepoAfterSkip(
     state.setActiveRepo(importedRepoId)
   }
   // Why: widen the filter rather than clear it, so an active project selection survives adding a project.
-  const widenedFilterRepoIds = widenFilterRepoIds(state.filterRepoIds, [importedRepoId])
-  if (widenedFilterRepoIds) {
-    state.setFilterRepoIds(widenedFilterRepoIds)
-  }
+  includeReposInFilter(state, [importedRepoId])
   if (state.showActiveOnly) {
     state.setShowActiveOnly(false)
   }

@@ -15,7 +15,7 @@ import {
   gateWorktreeAgentActivation,
   workspaceHasSleepingAgentSessions
 } from '@/lib/worktree-agent-activation-gate'
-import { widenFilterRepoIds } from '@/store/slices/repo-filter-selection'
+import { includeReposInFilter } from '@/store/slices/repo-filter-selection'
 import { resumeSleepingAgentSessionsForWorktree } from '@/lib/resume-sleeping-agent-session'
 import { shouldAutoCreateInitialTerminal } from '@/components/terminal/initial-terminal'
 import { getRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
@@ -300,11 +300,7 @@ export function activateAndRevealWorktree(
 
   // 5. Widen (not clear) filters hiding the target so reveal renders the card without dropping the user's project selection.
   if (opts?.clearSidebarFilters !== false) {
-    const currentState = useAppStore.getState()
-    const widenedFilterRepoIds = widenFilterRepoIds(currentState.filterRepoIds, [wt.repoId])
-    if (widenedFilterRepoIds) {
-      currentState.setFilterRepoIds(widenedFilterRepoIds)
-    }
+    includeReposInFilter(useAppStore.getState(), [wt.repoId])
     if (
       state.hideAutomationGeneratedWorkspaces &&
       wt.automationProvenance?.kind === 'created-by-automation'

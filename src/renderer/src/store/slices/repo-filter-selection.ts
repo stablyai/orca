@@ -28,3 +28,14 @@ export function widenFilterRepoIds(
   }
   return missing.length > 0 ? [...filterRepoIds, ...missing] : null
 }
+
+// Why: reveal and import paths share one no-op-safe entry point instead of repeating the widen-then-set dance.
+export function includeReposInFilter(
+  state: { filterRepoIds: readonly string[]; setFilterRepoIds: (ids: string[]) => void },
+  repoIds: readonly string[]
+): void {
+  const widened = widenFilterRepoIds(state.filterRepoIds, repoIds)
+  if (widened) {
+    state.setFilterRepoIds(widened)
+  }
+}
