@@ -926,15 +926,26 @@ function isMatchingSelectedGitHubPr(
   )
 }
 
+/** Remote conflict is checkable against the selected review: an absent push target still qualifies. */
 function isAllowedPushTargetRemoteConflict(
   conflictKind: 'local' | 'remote' | null,
   branchName: string,
   args: SelectedReviewBranchInput
 ): boolean {
+  // Why absent is allowed: a fork PR whose push target cannot be resolved — the
+  // fork was deleted, or its metadata is inaccessible — still knows the review
+  // number and the head ref. Requiring a push target here made that PR take a
+  // `-N` suffix, which is the behaviour #536 set out to remove ("forked PRs where
+  // users would otherwise expect `gh pr checkout`-style behavior"). A push target
+  // naming a *different* branch is still rejected. This only decides whether the
+  // caller looks the review up; the conflict is cleared solely by that lookup
+  // confirming the branch owns the selected review.
+  const pushTargetMatches =
+    args.pushTarget === undefined || args.pushTarget.branchName === branchName
   return (
     conflictKind === 'remote' &&
     isSelectedReviewBranchOverride(args, branchName) &&
-    args.pushTarget?.branchName === branchName
+    pushTargetMatches
   )
 }
 
