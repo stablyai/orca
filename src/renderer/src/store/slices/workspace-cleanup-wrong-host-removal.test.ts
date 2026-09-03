@@ -117,6 +117,7 @@ function makeHostCandidate(
       clean: true,
       upstreamAhead: 0,
       upstreamBehind: 0,
+      merged: null,
       checkedAt: NOW
     },
     fingerprint: `fingerprint-${executionHostId ?? 'unqualified'}`

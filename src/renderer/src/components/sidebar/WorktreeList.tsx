@@ -210,6 +210,17 @@ const WorktreeList = React.memo(function WorktreeList({
     },
     [openModal]
   )
+  const handleOpenProjectCleanup = useCallback(
+    (repo: Repo) => {
+      // Why: repo ids repeat across execution hosts, so the host has to travel
+      // with the id or the scan could reach into a different host's project.
+      openModal('workspace-cleanup', {
+        repoId: repo.id,
+        executionHostId: getRepoExecutionHostId(repo)
+      })
+    },
+    [openModal]
+  )
   const handleRemoveProject = useCallback(
     (repo: Repo) => {
       openModal('confirm-remove-folder', {
@@ -296,6 +307,7 @@ const WorktreeList = React.memo(function WorktreeList({
         handleCreateForRepo={handleCreateForRepo}
         handleOpenRepoSettings={handleOpenRepoSettings}
         handleOpenWorktreeVisibility={handleOpenWorktreeVisibility}
+        handleOpenProjectCleanup={handleOpenProjectCleanup}
         handleShowImportedWorktrees={externalWorktreeCards.handleShowImportedWorktrees}
         handleKeepImportedWorktreesHidden={externalWorktreeCards.handleKeepImportedWorktreesHidden}
         importedWorktreeCardActionState={externalWorktreeCards.importedWorktreeCardActionState}

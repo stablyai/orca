@@ -190,7 +190,7 @@ describe('workspace cleanup presentation', () => {
       makeCandidate({
         worktreeId: 'repo-1::/repo/dirty-review',
         displayName: 'dirty-review',
-        git: { clean: false, upstreamAhead: 0, upstreamBehind: 0, checkedAt: NOW },
+        git: { clean: false, upstreamAhead: 0, upstreamBehind: 0, merged: null, checkedAt: NOW },
         lastActivityAt: NOW - 100 * 24 * 60 * 60 * 1000,
         localContext: {
           terminalTabCount: 1,
@@ -204,7 +204,13 @@ describe('workspace cleanup presentation', () => {
       makeCandidate({
         worktreeId: 'repo-1::/repo/unknown',
         displayName: 'unknown',
-        git: { clean: null, upstreamAhead: null, upstreamBehind: null, checkedAt: null },
+        git: {
+          clean: null,
+          upstreamAhead: null,
+          upstreamBehind: null,
+          merged: null,
+          checkedAt: null
+        },
         blockers: ['git-status-error']
       })
     ]
@@ -239,7 +245,7 @@ describe('workspace cleanup presentation', () => {
 
   it('treats unknown-base clean rows as unknown git risk', () => {
     const candidate = makeCandidate({
-      git: { clean: true, upstreamAhead: null, upstreamBehind: null, checkedAt: NOW },
+      git: { clean: true, upstreamAhead: null, upstreamBehind: null, merged: null, checkedAt: NOW },
       blockers: ['unknown-base']
     })
 
@@ -267,7 +273,13 @@ describe('workspace cleanup presentation', () => {
       repoName: 'Search Repo',
       branch: 'feature/search',
       path: '/repo/search-target',
-      git: { clean: null, upstreamAhead: null, upstreamBehind: null, checkedAt: null },
+      git: {
+        clean: null,
+        upstreamAhead: null,
+        upstreamBehind: null,
+        merged: null,
+        checkedAt: null
+      },
       localContext: {
         terminalTabCount: 0,
         cleanEditorTabCount: 0,
@@ -301,21 +313,21 @@ describe('workspace cleanup presentation', () => {
         displayName: 'bravo',
         repoName: 'Repo B',
         lastActivityAt: NOW - 5,
-        git: { clean: false, upstreamAhead: 0, upstreamBehind: 0, checkedAt: NOW }
+        git: { clean: false, upstreamAhead: 0, upstreamBehind: 0, merged: null, checkedAt: NOW }
       }),
       makeCandidate({
         worktreeId: 'repo-1::/repo/alpha',
         displayName: 'alpha',
         repoName: 'Repo A',
         lastActivityAt: NOW - 10,
-        git: { clean: true, upstreamAhead: 0, upstreamBehind: 0, checkedAt: NOW }
+        git: { clean: true, upstreamAhead: 0, upstreamBehind: 0, merged: null, checkedAt: NOW }
       }),
       makeCandidate({
         worktreeId: 'repo-1::/repo/charlie',
         displayName: 'charlie',
         repoName: 'Repo C',
         lastActivityAt: NOW - 1,
-        git: { clean: true, upstreamAhead: 2, upstreamBehind: 0, checkedAt: NOW },
+        git: { clean: true, upstreamAhead: 2, upstreamBehind: 0, merged: null, checkedAt: NOW },
         blockers: ['unpushed-commits']
       })
     ]

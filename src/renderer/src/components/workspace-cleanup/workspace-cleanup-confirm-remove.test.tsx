@@ -167,6 +167,7 @@ describe('WorkspaceCleanupConfirmRemove', () => {
         clean: null,
         upstreamAhead: null,
         upstreamBehind: null,
+        merged: null,
         checkedAt: null
       }
     })

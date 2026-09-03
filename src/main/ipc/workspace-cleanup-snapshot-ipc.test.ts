@@ -39,6 +39,7 @@ vi.mock('../workspace-cleanup-removal-snapshot-prune', () => ({
 }))
 
 import { registerWorkspaceCleanupHandlers } from './workspace-cleanup'
+import { WORKSPACE_CLEANUP_CLASSIFIER_VERSION } from '../../shared/workspace-cleanup'
 
 const NOW = 1_700_000_000_000
 
@@ -277,7 +278,7 @@ describe('workspace cleanup snapshot IPC', () => {
       worktreeId: 'repo-1::/same',
       dismissedAt: NOW,
       fingerprint: 'fp',
-      classifierVersion: 2
+      classifierVersion: WORKSPACE_CLEANUP_CLASSIFIER_VERSION
     }
 
     await handler?.({} as never, {

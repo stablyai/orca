@@ -14,28 +14,37 @@ import {
   toSafeWorkspaceCleanupRepoScanError,
   withWorkspaceCleanupTimeout
 } from './workspace-cleanup-scan-primitives'
-import { getLocalProjectWorktreeGitOptions } from '../project-runtime-git-options'
+import {
+  getLocalProjectWorktreeGitOptions,
+  type LocalProjectWorktreeGitOptions
+} from '../project-runtime-git-options'
 
 export async function listCleanupGitWorktrees(
   store: Store,
   repo: Repo,
   repoIsFolder: boolean,
   signal?: AbortSignal
-): Promise<{ provider: IGitProvider | null; gitWorktrees: GitWorktreeInfo[] }> {
+): Promise<{
+  provider: IGitProvider | null
+  gitWorktrees: GitWorktreeInfo[]
+  localGitOptions: LocalProjectWorktreeGitOptions
+}> {
   if (repoIsFolder) {
     return {
       provider: repo.connectionId ? (getSshGitProvider(repo.connectionId) ?? null) : null,
-      gitWorktrees: [createFolderWorktree(repo)]
+      gitWorktrees: [createFolderWorktree(repo)],
+      localGitOptions: {}
     }
   }
   if (repo.connectionId) {
     const provider = getSshGitProvider(repo.connectionId) ?? null
     if (!provider) {
       // Why: cleanup should reflect only workspaces Orca can currently inspect.
-      return { provider: null, gitWorktrees: [] }
+      return { provider: null, gitWorktrees: [], localGitOptions: {} }
     }
     return {
       provider,
+      localGitOptions: {},
       gitWorktrees: await withWorkspaceCleanupTimeout(
         (signal) => provider.listWorktrees(repo.path, { signal }),
         WORKSPACE_CLEANUP_GIT_READ_TIMEOUT_MS,
@@ -47,6 +56,7 @@ export async function listCleanupGitWorktrees(
   const localGitOptions = getLocalProjectWorktreeGitOptions(store, repo)
   return {
     provider: null,
+    localGitOptions,
     gitWorktrees: await withWorkspaceCleanupTimeout(
       (signal) => listRepoWorktrees(repo, { ...localGitOptions, signal }),
       WORKSPACE_CLEANUP_GIT_READ_TIMEOUT_MS,

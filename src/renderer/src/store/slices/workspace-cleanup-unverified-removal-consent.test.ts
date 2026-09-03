@@ -21,6 +21,7 @@ describe('workspace cleanup removal verification and consent', () => {
           clean: null,
           upstreamAhead: null,
           upstreamBehind: null,
+          merged: null,
           checkedAt
         }
       })
@@ -131,6 +132,7 @@ describe('workspace cleanup removal verification and consent', () => {
         clean: null,
         upstreamAhead: null,
         upstreamBehind: null,
+        merged: null,
         checkedAt: null
       }
     })
@@ -171,6 +173,7 @@ describe('workspace cleanup removal verification and consent', () => {
         clean: null,
         upstreamAhead: null,
         upstreamBehind: null,
+        merged: null,
         checkedAt: null
       }
     })
@@ -184,6 +187,7 @@ describe('workspace cleanup removal verification and consent', () => {
         clean: null,
         upstreamAhead: null,
         upstreamBehind: null,
+        merged: null,
         checkedAt: null
       }
     })
@@ -218,6 +222,7 @@ describe('workspace cleanup removal verification and consent', () => {
         clean: null,
         upstreamAhead: null,
         upstreamBehind: null,
+        merged: null,
         checkedAt: null
       }
     })
@@ -249,6 +254,7 @@ describe('workspace cleanup removal verification and consent', () => {
         clean: null,
         upstreamAhead: null,
         upstreamBehind: null,
+        merged: null,
         checkedAt: null
       }
     })
@@ -280,6 +286,7 @@ describe('workspace cleanup removal verification and consent', () => {
         clean: null,
         upstreamAhead: null,
         upstreamBehind: null,
+        merged: null,
         checkedAt: null
       }
     })
@@ -312,6 +319,7 @@ describe('workspace cleanup removal verification and consent', () => {
           clean: null,
           upstreamAhead: null,
           upstreamBehind: null,
+          merged: null,
           checkedAt: null
         }
       }),
@@ -325,6 +333,7 @@ describe('workspace cleanup removal verification and consent', () => {
           clean: null,
           upstreamAhead: null,
           upstreamBehind: null,
+          merged: null,
           checkedAt: null
         }
       })
@@ -366,7 +375,7 @@ describe('workspace cleanup removal verification and consent', () => {
   it('requires recorded approval before an id-only force removal', async () => {
     const candidate = makeCandidate({
       blockers: ['unknown-base'],
-      git: { clean: true, upstreamAhead: 0, upstreamBehind: 0, checkedAt: NOW }
+      git: { clean: true, upstreamAhead: 0, upstreamBehind: 0, merged: null, checkedAt: NOW }
     })
     installWorkspaceCleanupApi(
       vi.fn().mockResolvedValue({

@@ -3,13 +3,15 @@ import type { WorkspaceCleanupBrowseState } from './workspace-cleanup-browse-sta
 import type { ExecutionHostId } from './execution-host'
 import { getWorkspaceCleanupCandidateHostId } from './workspace-cleanup-host-identity'
 
-export const WORKSPACE_CLEANUP_CLASSIFIER_VERSION = 2
+// Why: v3 recommends merged branches, so dismissals recorded against the
+// inactivity-only classifier no longer describe the same judgement.
+export const WORKSPACE_CLEANUP_CLASSIFIER_VERSION = 3
 export const WORKSPACE_CLEANUP_ARCHIVED_IDLE_MS = 7 * 24 * 60 * 60 * 1000
 export const WORKSPACE_CLEANUP_IDLE_MS = 30 * 24 * 60 * 60 * 1000
 
 export type WorkspaceCleanupTier = 'ready' | 'review' | 'protected'
 
-export type WorkspaceCleanupReason = 'archived' | 'idle-clean'
+export type WorkspaceCleanupReason = 'archived' | 'idle-clean' | 'merged'
 
 export type WorkspaceCleanupInactivityInput = {
   isArchived: boolean
@@ -80,12 +82,23 @@ export type WorkspaceCleanupCandidate = {
     clean: boolean | null
     upstreamAhead: number | null
     upstreamBehind: number | null
+    /** True when Git proved the branch contributes no unmerged changes to its base,
+     *  including squash and rebase merges. null when unprobed or the probe failed. */
+    merged: boolean | null
     checkedAt: number | null
   }
   fingerprint: string
 }
 
-export type WorkspaceCleanupScanArgs = {
+/** One project on one execution host. `repoId` alone is ambiguous — the same id
+ *  can name a different project per host, so a scan carrying only the id would
+ *  reach into a host the user was not looking at. */
+export type WorkspaceCleanupScanScope = {
+  repoId: string
+  executionHostId?: string
+}
+
+export type WorkspaceCleanupScanArgs = Partial<WorkspaceCleanupScanScope> & {
   worktreeId?: string
   /** Non-destructive evidence refresh; bounded so one renderer cannot enqueue an unbounded scan. */
   worktreeIds?: string[]
@@ -235,6 +248,7 @@ export function createWorkspaceCleanupFingerprint(args: {
   branch: string
   head: string
   gitClean: boolean | null
+  gitMerged?: boolean | null
   lastActivityAt: number
   classifierVersion?: number
 }): string {
@@ -245,6 +259,13 @@ export function createWorkspaceCleanupFingerprint(args: {
     args.branch,
     args.head,
     args.gitClean === null ? 'unknown' : args.gitClean ? 'clean' : 'dirty',
+    // Why: a dismissal must not keep hiding a workspace that has since merged —
+    // that transition is exactly when it becomes worth recommending again.
+    args.gitMerged === null || args.gitMerged === undefined
+      ? 'merge-unknown'
+      : args.gitMerged
+        ? 'merged'
+        : 'unmerged',
     lastActivityBucket
   ].join('|')
 }

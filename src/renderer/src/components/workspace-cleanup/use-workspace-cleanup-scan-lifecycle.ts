@@ -5,6 +5,7 @@ import { useMountedRef } from '@/hooks/useMountedRef'
 import { translate } from '@/i18n/i18n'
 import { formatWorkspaceCleanupReadyToast } from './workspace-cleanup-scan-notice'
 import { isWorkspaceCleanupScanSupersededError } from '@/store/slices/workspace-cleanup-broad-scan-registry'
+import type { WorkspaceCleanupScanScope } from '../../../../shared/workspace-cleanup'
 
 export type WorkspaceCleanupScanLifecycle = {
   startWorkspaceCleanupScan: (options?: { notifyWhenReady?: boolean }) => void
@@ -21,7 +22,8 @@ export function useWorkspaceCleanupScanLifecycle({
   removalInFlight,
   removalInFlightRef,
   resetRowFailures,
-  onFreshOpen
+  onFreshOpen,
+  scope
 }: {
   open: boolean
   loading: boolean
@@ -29,6 +31,8 @@ export function useWorkspaceCleanupScanLifecycle({
   removalInFlightRef: { current: boolean }
   resetRowFailures: () => void
   onFreshOpen: () => void
+  /** Project the dialog was opened for, or null when it covers every project. */
+  scope?: WorkspaceCleanupScanScope | null
 }): WorkspaceCleanupScanLifecycle {
   const scanWorkspaceCleanup = useAppStore((s) => s.scanWorkspaceCleanup)
   const hydrateCleanupFromCache = useAppStore((s) => s.hydrateWorkspaceCleanupFromCache)
@@ -47,7 +51,10 @@ export function useWorkspaceCleanupScanLifecycle({
   const startWorkspaceCleanupScan = useCallback(
     (options: { notifyWhenReady?: boolean } = {}) => {
       resetRowFailures()
-      void scanWorkspaceCleanup()
+      // Why: the scope belongs to the open dialog, not to one call. Reading it
+      // here keeps Refresh — and any future rescan — inside the project the user
+      // asked about, instead of silently widening to every project.
+      void scanWorkspaceCleanup(scope ? { ...scope } : undefined)
         .then((result) => {
           if (!mountedRef.current || !options.notifyWhenReady || openRef.current) {
             return
@@ -68,7 +75,9 @@ export function useWorkspaceCleanupScanLifecycle({
                   'auto.components.workspace.cleanup.WorkspaceCleanupDialog.4a35c08764',
                   'Review'
                 ),
-                onClick: () => openModal('workspace-cleanup')
+                // Why: reopening from the toast must land on the same project
+                // the finished scan described.
+                onClick: () => openModal('workspace-cleanup', scope ? { ...scope } : {})
               }
             }
           )
@@ -85,7 +94,7 @@ export function useWorkspaceCleanupScanLifecycle({
           }
         })
     },
-    [mountedRef, openModal, resetRowFailures, scanWorkspaceCleanup]
+    [mountedRef, openModal, resetRowFailures, scanWorkspaceCleanup, scope]
   )
 
   const hydrateThenScan = useCallback(() => {

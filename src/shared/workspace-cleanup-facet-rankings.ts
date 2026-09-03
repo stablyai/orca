@@ -39,6 +39,9 @@ const AGENT_RANK: Record<WorkspaceCleanupAgentState, number> = {
 }
 
 const GIT_RANK: Record<WorkspaceCleanupGitState, number> = {
+  // Why: risk ascending. A merged branch is safer than merely clean — the base
+  // provably carries every change already.
+  merged: 0,
   clean: 1,
   unknown: 2,
   dirty: 3,

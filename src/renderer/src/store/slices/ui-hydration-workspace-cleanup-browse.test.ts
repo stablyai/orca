@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { createDefaultWorkspaceCleanupBrowseState } from '../../../../shared/workspace-cleanup-browse-state'
 import { createUIStore, makePersistedUI } from './ui-slice-test-harness'
+import { WORKSPACE_CLEANUP_CLASSIFIER_VERSION } from '../../../../shared/workspace-cleanup'
 
 function persistedWithIdleDays(idleMinDays: number | null) {
   const browse = createDefaultWorkspaceCleanupBrowseState()
@@ -59,7 +60,7 @@ describe('workspace cleanup browse hydration', () => {
       worktreeId: 'repo-1::/repo/one',
       dismissedAt: Date.now(),
       fingerprint: 'fp-1',
-      classifierVersion: 2
+      classifierVersion: WORKSPACE_CLEANUP_CLASSIFIER_VERSION
     }
 
     store.getState().hydratePersistedUI(

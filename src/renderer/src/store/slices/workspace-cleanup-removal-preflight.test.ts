@@ -407,6 +407,7 @@ describe('workspace cleanup removal and protection', () => {
         clean: false,
         upstreamAhead: 0,
         upstreamBehind: 0,
+        merged: null,
         checkedAt: NOW
       }
     })
@@ -447,6 +448,7 @@ describe('workspace cleanup removal and protection', () => {
         clean: false,
         upstreamAhead: 0,
         upstreamBehind: 0,
+        merged: null,
         checkedAt: NOW
       }
     })
@@ -486,6 +488,7 @@ describe('workspace cleanup removal and protection', () => {
         clean: null,
         upstreamAhead: null,
         upstreamBehind: null,
+        merged: null,
         checkedAt: null
       }
     })
@@ -493,7 +496,7 @@ describe('workspace cleanup removal and protection', () => {
       executionHostId: 'local',
       tier: 'review',
       blockers: ['unpushed-commits'],
-      git: { clean: true, upstreamAhead: 3, upstreamBehind: 0, checkedAt: NOW }
+      git: { clean: true, upstreamAhead: 3, upstreamBehind: 0, merged: null, checkedAt: NOW }
     })
     const scan = vi.fn().mockResolvedValue({
       scannedAt: NOW,

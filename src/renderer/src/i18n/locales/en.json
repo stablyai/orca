@@ -2876,7 +2876,8 @@
             "archivedStatus": "Archived",
             "readyStatus": "Ready",
             "f637f63882": "Resource Manager counts {{value0}}; this list found {{value1}}. That counter reads Orca's activity record alone, while this scan also checks each workspace's git history and skips disconnected remotes.",
-            "74f6c16279": "Back"
+            "74f6c16279": "Back",
+            "mergedStatus": "Merged"
           },
           "backgroundRemoval": {
             "removed": "Removed workspaces: {{value0}}",
@@ -2922,7 +2923,8 @@
             "gitStatusErrorBlocker": "Git status unavailable",
             "dirtyFilesBlocker": "Changed files",
             "unknownBaseBlocker": "Could not verify unpushed commits",
-            "dismissedBlocker": "Ignored"
+            "dismissedBlocker": "Ignored",
+            "mergedGit": "Merged into base"
           },
           "workspace": {
             "cleanup": {
@@ -5593,7 +5595,8 @@
           "groupRenameFailedDesc": "Orca could not confirm the new name with the group's host. Recheck the group after reconnecting.",
           "failedNestWorkspace": "Failed to nest workspace",
           "sidebarRowMissing": "Target no longer exists",
-          "failedUnnestWorkspace": "Failed to unnest workspace"
+          "failedUnnestWorkspace": "Failed to unnest workspace",
+          "projectCleanup": "Clean Up Workspaces…"
         },
         "WorktreeMetaDialog": {
           "3db0a2a593": "Cancel",
@@ -16927,7 +16930,8 @@
             "clean": "Clean",
             "dirty": "Uncommitted changes",
             "unpushed": "Unpushed commits",
-            "unknown": "Not checked"
+            "unknown": "Not checked",
+            "merged": "Merged into base"
           },
           "agent": {
             "working": "Working",

@@ -1,6 +1,7 @@
 import React from 'react'
 import {
   CircleX,
+  BrushCleaning,
   Ellipsis,
   Eye,
   FolderInput,
@@ -60,6 +61,7 @@ export type RepoHeaderProjectActions = {
   getWorktreeVisibilityDefaults: (repo: Repo) => WorktreeVisibilityDefaults | undefined
   onOpenRepoSettings: (projectId: string, sectionId?: string) => void
   onOpenWorktreeVisibility: (repo: Repo) => void
+  onOpenProjectCleanup: (repo: Repo) => void
   onCreateGroupFromRepo: (repo: Repo) => void
   onMoveProjectToGroup: (repo: Repo, groupId: string) => void
   onRemoveProjectFromGroup: (repo: Repo) => void
@@ -132,6 +134,15 @@ export function RepoHeaderProjectActionsMenu({
           <DropdownMenuItem onSelect={() => actions.onOpenWorktreeVisibility(repo)}>
             <Eye className="size-3.5" />
             {getWorktreeVisibilityMenuLabel(repo, actions.getWorktreeVisibilityDefaults(repo))}
+          </DropdownMenuItem>
+        ) : null}
+        {isGitRepoKind(repo) ? (
+          <DropdownMenuItem onSelect={() => actions.onOpenProjectCleanup(repo)}>
+            <BrushCleaning className="size-3.5" />
+            {translate(
+              'auto.components.sidebar.WorktreeList.projectCleanup',
+              'Clean Up Workspaces…'
+            )}
           </DropdownMenuItem>
         ) : null}
         <DropdownMenuItem onSelect={() => actions.onCreateGroupFromRepo(repo)}>

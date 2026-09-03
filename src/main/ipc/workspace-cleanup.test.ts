@@ -62,6 +62,13 @@ vi.mock('../project-runtime-git-options', () => ({
   getLocalProjectWorktreeGitOptions: getLocalProjectWorktreeGitOptionsMock
 }))
 
+// Why: these cases pin the inactivity classifier, and the blanket git mock above
+// would otherwise feed the merge proof stdout that reads as "merged". Merge
+// behavior has its own tests in workspace-cleanup-merged-evidence.test.ts.
+vi.mock('./workspace-cleanup-merge-probe', () => ({
+  readWorkspaceCleanupMergeVerdict: vi.fn().mockResolvedValue(null)
+}))
+
 vi.mock('../memory/pty-registry', () => ({
   listRegisteredPtys: listRegisteredPtysMock
 }))

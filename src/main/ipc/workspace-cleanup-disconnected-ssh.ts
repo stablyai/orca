@@ -99,12 +99,14 @@ function createDisconnectedSshCandidate(
       clean: null,
       upstreamAhead: null,
       upstreamBehind: null,
+      merged: null,
       checkedAt: null
     },
     fingerprint: createWorkspaceCleanupFingerprint({
       branch: basename(path),
       head: '',
       gitClean: null,
+      gitMerged: null,
       lastActivityAt: meta.lastActivityAt
     })
   })
