@@ -11,6 +11,10 @@ import {
 const TRANSCRIPT_READ_MAX_BYTES = 1024 * 1024
 const TRANSCRIPT_LINE_MAX_BYTES = 256 * 1024
 const TRANSCRIPT_DIRECTORY_MAX_ENTRIES = 4096
+// Why: locating one child scans a whole rollout directory, so a parent with thousands of
+// unlocated children would scan millions of names on a single hook event. Cap the searches;
+// reading an already-located child is one stat and stays uncapped.
+const CHILD_LOCATE_MAX_PER_TICK = 64
 // Why: retire a child whose rollout stays unreadable this long, else a deleted/never-written file pins a phantom row forever.
 const CHILD_UNREADABLE_GRACE_MS = 60_000
 const SAFE_THREAD_ID = /^[A-Za-z0-9-]{1,64}$/
@@ -293,8 +297,17 @@ export function reconcileCodexSubagentTranscript(
   }
   const entriesByDirectory = new Map<string, string[]>()
   const now = Date.now()
+  let locateBudget = CHILD_LOCATE_MAX_PER_TICK
+  const located: string[] = []
   for (const [id, tracked] of state.subagents) {
     if (!tracked.filePath) {
+      if (locateBudget === 0) {
+        // Why: leave unresolvedSince alone — a child we declined to look for must not burn
+        // its grace, or a big backlog would retire rows it never actually searched for.
+        continue
+      }
+      locateBudget -= 1
+      located.push(id)
       tracked.filePath = resolveChildTranscript(
         normalizedPath,
         id,
@@ -323,5 +336,14 @@ export function reconcileCodexSubagentTranscript(
     }
     finishCodexSubagent(roster, id)
     state.subagents.delete(id)
+  }
+  // Why: send the children we searched for and still could not find to the back, so a backlog
+  // larger than the budget takes turns instead of the same head being retried every tick.
+  for (const id of located) {
+    const tracked = state.subagents.get(id)
+    if (tracked && !tracked.filePath) {
+      state.subagents.delete(id)
+      state.subagents.set(id, tracked)
+    }
   }
 }
