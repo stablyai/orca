@@ -66,7 +66,16 @@ export function useNativeChatComposerKeyDown({
         if ((event.key === 'Enter' || event.key === 'Tab') && items.length > 0) {
           event.preventDefault()
           const item = items[activeSuggestion] ?? items[0]
-          if (event.key === 'Enter' && item.kind === 'command') {
+          // Why: dispatching sends `/command` and clears the draft, which only
+          // makes sense for a draft-leading slash (`/:0`) — agent TUIs dispatch
+          // only line-leading commands. A mid-text slash inserts as prose, like
+          // the $ skill picker, so surrounding text is preserved.
+          const dispatchable =
+            event.key === 'Enter' &&
+            item.kind === 'command' &&
+            autocomplete.mode === 'slash' &&
+            autocomplete.triggerKey === '/:0'
+          if (dispatchable) {
             dispatchPickerCommand(item)
           } else {
             completePickerItem(item)

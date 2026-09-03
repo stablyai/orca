@@ -215,13 +215,20 @@ export function applyPickerSuggestion(
 ): { draft: string; caret: number; insertedToken: string } {
   const before = draft.slice(0, caret)
   const after = draft.slice(caret)
-  const match = prefix === '/' ? before.match(/^\/(\S*)$/) : before.match(/(^|\s)\$(\S*)$/)
+  const match = prefix === '/' ? before.match(/(^|\s)\/(\S*)$/) : before.match(/(^|\s)\$(\S*)$/)
   if (!match) {
     return { draft, caret, insertedToken: '' }
   }
   const query = match.at(-1) ?? ''
   const tokenStart = before.length - query.length - 1
   const insertedToken = `${prefix}${item.name}`
-  const nextBefore = `${before.slice(0, tokenStart)}${insertedToken} `
-  return { draft: nextBefore + after, caret: nextBefore.length, insertedToken }
+  // Why: reuse an existing separator instead of inserting a duplicate space when
+  // the caret sits mid-text before whitespace.
+  const needsSpace = !/^\s/.test(after)
+  const nextBefore = `${before.slice(0, tokenStart)}${insertedToken}${needsSpace ? ' ' : ''}`
+  return {
+    draft: nextBefore + after,
+    caret: nextBefore.length + (needsSpace ? 0 : 1),
+    insertedToken
+  }
 }

@@ -69,7 +69,7 @@ export function useNativeChatPickerState(args: {
     profile?.skillPrefix === '$'
       ? /(?:^|\s)\$\S*$/.test(beforeCaret)
       : profile?.skillPrefix === '/'
-        ? beforeCaret.startsWith('/') && !/\s/.test(beforeCaret)
+        ? /(?:^|\s)\/\S*$/.test(beforeCaret)
         : false
   const discovery = useNativeChatSkills(agent, terminalTabId, skillPickerTriggered)
   const listboxId = `native-chat-picker-${useId().replaceAll(':', '')}`

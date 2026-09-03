@@ -54,8 +54,18 @@ export function deriveComposerAutocomplete(
   dismissedTriggerKey: string | null = null
 ): ComposerAutocomplete {
   const before = draft.slice(0, caret)
-  if (before.startsWith('/') && !/\s/.test(before)) {
-    return deriveSlashAutocomplete(before, agentCommands, profile, discovery, dismissedTriggerKey)
+  // Why: fire at any word boundary, mirroring the $ and @ pickers below; a
+  // start-only slash could not be triggered once any prose preceded it.
+  const slashMatch = before.match(/(?:^|\s)\/(\S*)$/)
+  if (slashMatch) {
+    return deriveSlashAutocomplete(
+      before,
+      slashMatch[1],
+      agentCommands,
+      profile,
+      discovery,
+      dismissedTriggerKey
+    )
   }
   const mentionMatch = before.match(/(?:^|\s)@(\S*)$/)
   if (mentionMatch) {
@@ -89,16 +99,16 @@ export function deriveComposerAutocomplete(
 
 function deriveSlashAutocomplete(
   before: string,
+  query: string,
   agentCommands: readonly SlashCommandSuggestion[],
   profile: NativeChatAgentProfile | null,
   discovery: NativeChatSkillDiscoverySnapshot,
   dismissedTriggerKey: string | null
 ): ComposerAutocomplete {
-  const triggerKey = '/:0'
+  const triggerKey = `/:${before.length - query.length - 1}`
   if (dismissedTriggerKey === triggerKey) {
     return { mode: 'none' }
   }
-  const query = before.slice(1)
   const hasSlashSkills = profile?.skillPrefix === '/'
   // Why: the caller owns catalog policy (e.g. Grok ships skills-only until a
   // verified catalog lands); this derivation must not re-gate per agent.
@@ -176,8 +186,11 @@ export function applyMentionSuggestion(
     return { draft, caret }
   }
   const tokenStart = before.length - match[2].length - 1
-  const nextBefore = `${before.slice(0, tokenStart)}@${path} `
-  return { draft: nextBefore + after, caret: nextBefore.length }
+  // Why: reuse an existing separator instead of inserting a duplicate space when
+  // the caret sits mid-text before whitespace.
+  const needsSpace = !/^\s/.test(after)
+  const nextBefore = `${before.slice(0, tokenStart)}@${path}${needsSpace ? ' ' : ''}`
+  return { draft: nextBefore + after, caret: nextBefore.length + (needsSpace ? 0 : 1) }
 }
 
 export type HistoryState = { entries: readonly string[]; index: number | null }

@@ -75,6 +75,13 @@ describe('useNativeChatComposerKeyDown', () => {
     expect(tab.callbacks.dispatchPickerCommand).not.toHaveBeenCalled()
   })
 
+  it('inserts (not dispatches) a mid-text command on Enter — TUIs dispatch only line-leading commands', () => {
+    const { handler, callbacks } = setup({ ...picker(), triggerKey: '/:4' })
+    handler(keyEvent('Enter') as never)
+    expect(callbacks.completePickerItem).toHaveBeenCalledWith(COMMAND)
+    expect(callbacks.dispatchPickerCommand).not.toHaveBeenCalled()
+  })
+
   it('falls through to composer send when the open picker has no options', () => {
     const { handler, callbacks } = setup(picker([]))
     handler(keyEvent('Enter') as never)
