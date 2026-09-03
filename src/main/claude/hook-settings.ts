@@ -99,6 +99,36 @@ export const CLAUDE_EVENTS = [
   }
 ] as const
 
+// Why #15548: current Claude Code validates hook event names against its
+// settings schema and skips the ENTIRE settings.json when it hits an unknown
+// key — so env vars, statusLine and every other user setting in that file go
+// silently dead. These events are OpenClaude-only (OpenClaude emits them and
+// tolerates the extras), so they must never be written to .claude/settings.json.
+const OPENCLAUDE_ONLY_EVENT_NAMES: readonly string[] = [
+  'StopFailure',
+  'PostToolUseFailure',
+  'TeammateIdle',
+  'PermissionRequest'
+]
+
+export function getEventsForSettings(settings = CLAUDE_HOOK_SETTINGS): readonly (typeof CLAUDE_EVENTS)[number][] {
+  if (settings.configDirName === '.openclaude') {
+    return CLAUDE_EVENTS
+  }
+  return CLAUDE_EVENTS.filter(
+    (event) => !OPENCLAUDE_ONLY_EVENT_NAMES.includes(event.eventName)
+  )
+}
+
+// Managed entries under these keys must be swept from this variant's config on
+// the next install: a config written before #15548 carries them, and as long as
+// they sit there Claude Code keeps rejecting the whole file.
+export function getUnsupportedEventNames(
+  settings = CLAUDE_HOOK_SETTINGS
+): readonly string[] {
+  return settings.configDirName === '.openclaude' ? [] : OPENCLAUDE_ONLY_EVENT_NAMES
+}
+
 export function getConfigPath(settings = CLAUDE_HOOK_SETTINGS): string {
   return join(homedir(), settings.configDirName, 'settings.json')
 }
@@ -195,12 +225,13 @@ export function getRemoteManagedCommand(scriptPath: string): string {
 export function applyManagedHooks(
   config: HooksConfig,
   hook: HookCommandConfig,
-  scriptFileName = getManagedScriptFileName()
+  scriptFileName = getManagedScriptFileName(),
+  settings = CLAUDE_HOOK_SETTINGS
 ): HooksConfig {
   const nextHooks = { ...config.hooks }
   const isManagedCommand = createManagedCommandMatcher(scriptFileName)
 
-  for (const event of CLAUDE_EVENTS) {
+  for (const event of getEventsForSettings(settings)) {
     const current = Array.isArray(nextHooks[event.eventName]) ? nextHooks[event.eventName] : []
     const cleaned = removeManagedCommands(current, isManagedCommand)
     const definition: HookDefinition = {
@@ -208,6 +239,15 @@ export function applyManagedHooks(
       hooks: [hook]
     }
     nextHooks[event.eventName] = [...cleaned, definition]
+  }
+
+  // Heal a config written before #15548: keys this agent's schema rejects make
+  // it skip the whole settings file, so the key has to go entirely — a
+  // user-authored entry under one is equally poisonous, and in a schema-
+  // validating Claude Code it can never fire anyway. (OpenClaude lists no
+  // unsupported keys, so user config there is untouched.)
+  for (const eventName of getUnsupportedEventNames(settings)) {
+    delete nextHooks[eventName]
   }
 
   return { ...config, hooks: nextHooks }
