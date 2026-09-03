@@ -2,7 +2,12 @@
 import { parentPort, workerData } from 'node:worker_threads'
 import { resampleToRate } from './stt-audio-resample'
 import { OfflineAudioChunker } from './stt-offline-audio-chunker'
-import { buildHotwordsConfig, resolveFile, resolveTokens } from './stt-worker-model-config'
+import {
+  buildHotwordsConfig,
+  buildOfflineTransducerRecognizerConfig,
+  resolveFile,
+  resolveTokens
+} from './stt-worker-model-config'
 
 type WorkerMessage =
   | {
@@ -148,23 +153,15 @@ function handleInit(msg: Extract<WorkerMessage, { type: 'init' }>): void {
       recognizer = sherpa.createOfflineRecognizer(config)
       stream = sherpa.createOfflineStream(recognizer)
     } else {
-      // Offline transducer (e.g. Parakeet, GigaAM). featureDim varies per model (GigaAM: 64).
-      const featureDim = msg.featureDim ?? 80
-      const config = {
-        featConfig: { sampleRate, featureDim },
-        modelConfig: {
-          transducer: {
-            encoder: resolveFile(files, 'encoder', modelDir),
-            decoder: resolveFile(files, 'decoder', modelDir),
-            joiner: resolveFile(files, 'joiner', modelDir)
-          },
-          tokens,
-          numThreads: 2,
-          provider: 'cpu',
-          debug: 0
-        },
-        ...hotwords
-      }
+      const config = buildOfflineTransducerRecognizerConfig({
+        sampleRate,
+        featureDim: msg.featureDim,
+        modelDir,
+        modelType,
+        files,
+        hotwordsFilePath: msg.hotwordsFilePath,
+        modelingUnit: msg.modelingUnit
+      })
       recognizer = sherpa.createOfflineRecognizer(config)
       stream = sherpa.createOfflineStream(recognizer)
     }

@@ -77,3 +77,39 @@ export function buildHotwordsConfig(opts: {
     modelingUnit: unit
   }
 }
+
+// Offline transducer (Parakeet, GigaAM) recognizer config; featureDim varies per model.
+export function buildOfflineTransducerRecognizerConfig(opts: {
+  sampleRate: number
+  featureDim?: number
+  modelDir: string
+  modelType: string
+  files: string[]
+  hotwordsFilePath?: string
+  modelingUnit?: string
+}): {
+  featConfig: { sampleRate: number; featureDim: number }
+  modelConfig: {
+    transducer: { encoder: string; decoder: string; joiner: string }
+    tokens: string
+    numThreads: number
+    provider: string
+    debug: number
+  }
+} & HotwordsConfig {
+  return {
+    featConfig: { sampleRate: opts.sampleRate, featureDim: opts.featureDim ?? 80 },
+    modelConfig: {
+      transducer: {
+        encoder: resolveFile(opts.files, 'encoder', opts.modelDir),
+        decoder: resolveFile(opts.files, 'decoder', opts.modelDir),
+        joiner: resolveFile(opts.files, 'joiner', opts.modelDir)
+      },
+      tokens: resolveTokens(opts.files, opts.modelDir),
+      numThreads: 2,
+      provider: 'cpu',
+      debug: 0
+    },
+    ...buildHotwordsConfig(opts)
+  }
+}
