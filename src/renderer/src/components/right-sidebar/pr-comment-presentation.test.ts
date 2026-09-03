@@ -15,7 +15,7 @@ describe('pr-comment-presentation', () => {
   it('returns card layout tokens for cards and focus variants', () => {
     const cards = getPRCommentPresentationClasses('cards')
     expect(cards.useCardLayout).toBe(true)
-    expect(cards.commentBody).toContain('text-[13px]')
+    expect(cards.commentBody).toContain('text-xs')
     expect(cards.commentBody).toContain('leading-relaxed')
     expect(cards.commentBody).toContain('text-foreground')
     expect(cards.group).toContain('bg-secondary')
@@ -29,9 +29,9 @@ describe('pr-comment-presentation', () => {
 
     const focus = getPRCommentPresentationClasses('focus')
     expect(focus.useCardLayout).toBe(true)
-    expect(focus.commentBody).toContain('text-[13px]')
+    expect(focus.commentBody).toContain('text-xs')
     expect(focus.commentBody).toContain('leading-relaxed')
-    expect(focus.commentBodyReply).toContain('text-[13px]')
+    expect(focus.commentBodyReply).toContain('text-xs')
     expect(focus.commentBodyReply).toContain('leading-relaxed')
     expect(focus.author).toContain('text-[13px]')
     expect(focus.list).toContain('gap-2')
@@ -67,7 +67,7 @@ describe('pr-comment-presentation', () => {
     expect(markdown).toContain('[&_pre]:text-xs')
     // Code inside a fence must track the fence, not shrink again.
     expect(markdown).toContain('[&_pre_code]:text-[1em]')
-    expect(markdown).toContain('[&_table]:text-[12px]')
+    expect(markdown).toContain('[&_table]:text-[11px]')
   })
 
   it('stops sub/sup small-print from compounding below the caption tier', () => {
@@ -85,20 +85,20 @@ describe('pr-comment-presentation', () => {
     expect(markdown).not.toContain('[&_sub]:bottom-0')
   })
 
-  it('gives headings a perceptible step over the 13px body', () => {
+  it('gives headings a perceptible step over the 12px body', () => {
     const markdown = getPRCommentPresentationClasses('cards').commentBodyMarkdown
-    // 13px headings over a 12px body was a 1.08x ratio — invisible. Match the
-    // document variant's scale instead.
-    expect(markdown).toContain('[&_.comment-md-h1]:text-[18px]')
-    expect(markdown).toContain('[&_.comment-md-h2]:text-[16px]')
-    expect(markdown).toContain('[&_.comment-md-h3]:text-[15px]')
-    expect(markdown).not.toContain('[&_.comment-md-h1]:text-[13px]')
+    // 13px headings over a 12px body was a 1.08x ratio — invisible. Step the
+    // headings up so the hierarchy reads.
+    expect(markdown).toContain('[&_.comment-md-h1]:text-[16px]')
+    expect(markdown).toContain('[&_.comment-md-h2]:text-[15px]')
+    expect(markdown).toContain('[&_.comment-md-h3]:text-[14px]')
+    expect(markdown).not.toContain('[&_.comment-md-h1]:text-[12px]')
   })
 
   it('promotes bold-then-linebreak labels but not mid-sentence emphasis', () => {
     const markdown = getPRCommentPresentationClasses('cards').commentBodyMarkdown
     const label = '[&_.comment-md-p>strong:first-child:has(+br)'
-    expect(markdown).toContain(`${label}]:text-[15px]`)
+    expect(markdown).toContain(`${label}]:text-[14px]`)
     expect(markdown).toContain(`${label}]:block`)
     expect(markdown).toContain('[&_.comment-md-p:first-child>strong:first-child:has(+br)]:mt-0')
     // Blocking the label makes its own <br> a duplicate break.

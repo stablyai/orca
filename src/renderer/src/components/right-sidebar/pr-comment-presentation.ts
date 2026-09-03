@@ -80,18 +80,18 @@ const MARKDOWN_BASE = cn(
   // raw <div> between them otherwise breaks the chain and collapses the tail to zero gap.
   '[&_.comment-md-p]:block [&_.comment-md-p+.comment-md-p]:mt-2 [&>*+*]:mt-2 [&_details]:my-2',
   '[&_.comment-md-h]:mt-4 [&_.comment-md-h]:mb-1 [&_.comment-md-h]:block [&_.comment-md-h]:leading-tight [&_.comment-md-h:first-child]:mt-0',
-  // Why: the document variant's proven scale (18/16/15 over 13px body) — the sidebar was
+  // Why: 16/15/14 over a 12px body — the sidebar was
   // the only surface rendering this markdown with no perceptible heading step.
-  '[&_.comment-md-h1]:text-[18px] [&_.comment-md-h2]:text-[16px] [&_.comment-md-h3]:text-[15px]',
+  '[&_.comment-md-h1]:text-[16px] [&_.comment-md-h2]:text-[15px] [&_.comment-md-h3]:text-[14px]',
   // Why: bots write section titles as bold-then-linebreak, not headings, so those carry
   // the real hierarchy. :has(+br) promotes only those, never mid-sentence emphasis.
-  '[&_.comment-md-p>strong:first-child:has(+br)]:mt-3 [&_.comment-md-p>strong:first-child:has(+br)]:mb-0.5 [&_.comment-md-p>strong:first-child:has(+br)]:block [&_.comment-md-p>strong:first-child:has(+br)]:text-[15px] [&_.comment-md-p>strong:first-child:has(+br)]:leading-tight',
+  '[&_.comment-md-p>strong:first-child:has(+br)]:mt-3 [&_.comment-md-p>strong:first-child:has(+br)]:mb-0.5 [&_.comment-md-p>strong:first-child:has(+br)]:block [&_.comment-md-p>strong:first-child:has(+br)]:text-[14px] [&_.comment-md-p>strong:first-child:has(+br)]:leading-tight',
   '[&_.comment-md-p:first-child>strong:first-child:has(+br)]:mt-0',
   // The label's own <br> would double the break once it is block-level.
   '[&_.comment-md-p>strong:first-child:has(+br)+br]:hidden',
   // Why: compact sizes code/pre/tables at 10px inside the prose, shrinking the densest
   // content. 0.92em mirrors the document variant's inline-code ratio.
-  '[&_code]:text-[0.92em] [&_pre]:text-xs [&_pre_code]:text-[1em] [&_table]:text-[12px]',
+  '[&_code]:text-[0.92em] [&_pre]:text-xs [&_pre_code]:text-[1em] [&_table]:text-[11px]',
   // Why: bots use sub/sup as small-print, and the browser's 75% compounds when nested
   // (13px -> 7.3px). An absolute size stops the compounding at the caption tier.
   '[&_sub]:text-[11px] [&_sup]:text-[11px]',
@@ -117,9 +117,8 @@ const COMMENT_AVATAR =
 const RESOLVED_SECTION_LABEL =
   'text-[11px] font-semibold uppercase tracking-wider text-muted-foreground'
 
-// Why: matches the document-variant body (PullRequestPage/GitHubItemDialog) so the same
-// bot markdown reads the same everywhere; 12px left no room for a heading step above it.
-const CARD_COMMENT_BODY_SIZE = 'text-[13px] leading-relaxed'
+// Why: 12px keeps the narrow sidebar dense; the headings carry the hierarchy.
+const CARD_COMMENT_BODY_SIZE = 'text-xs leading-relaxed'
 const CARD_COMMENT_AUTHOR_SIZE = 'text-[13px]'
 const CARD_COMMENT_LIST_GAP = 'gap-2'
 const CARD_COMMENT_BODY_PADDING = 'px-4 py-2.5'
