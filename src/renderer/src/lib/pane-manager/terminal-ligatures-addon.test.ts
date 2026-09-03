@@ -142,6 +142,27 @@ describe('TerminalLigaturesAddon', () => {
     expect(addonMock.joiner).toHaveBeenCalledTimes(2)
   })
 
+  it('drops pure-underscore joiner ranges so underscores stay visible (#13473)', () => {
+    const harness = createTerminalHarness()
+    // Simulate a font whose `calt` connects underscores into one glyph:
+    // the upstream joiner reports `___` as a single ligature cluster.
+    addonMock.joiner.mockImplementation((text: string) => {
+      const ranges: [number, number][] = []
+      if (text === '___') {
+        ranges.push([0, 2])
+      }
+      if (text.includes('=>')) {
+        ranges.push([text.indexOf('='), text.indexOf('>')])
+      }
+      return ranges
+    })
+    new TerminalLigaturesAddon().activate(harness.terminal)
+    const joiner = harness.getRegisteredJoiner()
+
+    expect(joiner('___')).toEqual([])
+    expect(joiner('a => b')).toEqual([[2, 3]])
+  })
+
   it('deregisters the wrapped joiner through the real terminal', () => {
     const harness = createTerminalHarness()
     const addon = new TerminalLigaturesAddon()
