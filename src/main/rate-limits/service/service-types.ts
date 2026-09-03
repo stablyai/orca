@@ -68,8 +68,7 @@ export type ActiveWindowRefreshPlan =
   | { kind: 'full' }
   | { kind: 'providers'; providers: ActiveRateLimitProvider[] }
 
-// Why: Claude's usage endpoint has a tight budget and quota is only informational; prefer a recent snapshot over polling into 429s.
-export const DEFAULT_POLL_MS = 15 * 60 * 1000 // 15 minutes
+export const DEFAULT_POLL_MS = 15 * 60 * 1000 // 15 minutes — safe cadence to avoid tight cloud 429 rate limits
 export const MIN_POLL_MS = 30 * 1000 // 30 seconds — renderer input should never create a tight loop.
 export const MAX_POLL_MS = 2_147_483_647 // Max safe setInterval delay before Node clamps back to 1ms.
 export const MIN_REFETCH_MS = 5 * 60 * 1000 // 5 minutes — debounce resume/manual refresh bursts
