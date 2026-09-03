@@ -281,4 +281,40 @@ describe('getBranchCompare real refs', () => {
     expect(missingOrigin.summary.commitsAhead).toBe(7)
     expect(missingOrigin.entries).toHaveLength(7)
   })
+
+  it('compares a slash-local release/24 base against origin/release/24', async () => {
+    const root = await mkdtemp(path.join(tmpdir(), 'orca-branch-compare-slash-local-'))
+    tempRoots.push(root)
+    const repo = path.join(root, 'repo')
+    execFileSync('git', ['init', '-q', repo])
+    git(repo, ['symbolic-ref', 'HEAD', 'refs/heads/master'])
+    git(repo, ['config', 'user.email', 'test@example.com'])
+    git(repo, ['config', 'user.name', 'Test User'])
+    git(repo, ['config', 'commit.gpgSign', 'false'])
+
+    async function commitFile(relativePath: string, message: string): Promise<void> {
+      const target = path.join(repo, relativePath)
+      await mkdir(path.dirname(target), { recursive: true })
+      await writeFile(target, `${message}\n`)
+      git(repo, ['add', relativePath])
+      git(repo, ['commit', '-q', '-m', message])
+    }
+
+    await commitFile('base.txt', 'base')
+    git(repo, ['branch', 'release/24'])
+    git(repo, ['update-ref', 'refs/remotes/origin/release/24', 'HEAD'])
+    git(repo, ['checkout', '-q', 'release/24'])
+    await commitFile('stale.txt', 'stale local')
+    git(repo, ['checkout', '-q', '-b', 'feature', 'refs/remotes/origin/release/24'])
+    await commitFile('feature-1.txt', 'feature 1')
+
+    const compared = await getBranchCompare(repo, 'release/24')
+    const originOid = git(repo, ['rev-parse', 'refs/remotes/origin/release/24']).trim()
+    expect(compared.summary).toMatchObject({
+      baseOid: originOid,
+      commitsAhead: 1,
+      status: 'ready'
+    })
+    expect(compared.entries.map((entry) => entry.path)).toEqual(['feature-1.txt'])
+  })
 })

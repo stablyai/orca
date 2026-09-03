@@ -23,8 +23,9 @@ export async function resolveWorktreeAddBaseRef(
 }
 
 /**
- * Bare `master` / `refs/heads/master` names used as a compare base. Slash names
- * such as `origin/master` are already remote-qualified and stay untouched.
+ * Bare local compare bases, including slash-containing names such as
+ * `release/24`. Explicit remote pins (`origin/master`, `refs/remotes/...`)
+ * stay untouched.
  */
 export function localBranchNameForCompareBase(baseRef: string): string | null {
   const trimmed = baseRef.trim()
@@ -34,7 +35,9 @@ export function localBranchNameForCompareBase(baseRef: string): string | null {
   if (trimmed.startsWith('refs/heads/')) {
     return trimmed.slice('refs/heads/'.length) || null
   }
-  if (trimmed.startsWith('refs/') || trimmed.includes('/')) {
+  // Why: `origin/master` is already a remote-tracking pin. Other slash names
+  // such as `release/24` are local branch paths and still need origin/.
+  if (trimmed.startsWith('refs/') || trimmed.startsWith('origin/')) {
     return null
   }
   return trimmed

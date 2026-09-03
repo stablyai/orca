@@ -10,6 +10,9 @@ describe('preferRemoteTrackingCompareBase', () => {
     expect(preferRemoteTrackingCompareBase('refs/heads/master', 'refs/remotes/origin/master')).toBe(
       'refs/remotes/origin/master'
     )
+    expect(preferRemoteTrackingCompareBase('release/24', 'origin/release/24')).toBe(
+      'origin/release/24'
+    )
   })
 
   it('keeps a remote-qualified worktree pin even when the repo default differs', () => {
@@ -62,5 +65,30 @@ describe('resolveBranchCompareBaseRef', () => {
     )
     expect(refExists).toHaveBeenCalledWith('refs/remotes/origin/master')
     expect(refExists).not.toHaveBeenCalledWith('refs/heads/master')
+  })
+
+  it('prefers origin/release/24 when a slash-containing local branch also exists', async () => {
+    const existing = new Set(['refs/remotes/origin/release/24', 'refs/heads/release/24'])
+    const refExists = vi.fn(async (ref: string) => existing.has(ref))
+
+    await expect(resolveBranchCompareBaseRef('release/24', refExists)).resolves.toBe(
+      'refs/remotes/origin/release/24'
+    )
+    await expect(resolveBranchCompareBaseRef('refs/heads/release/24', refExists)).resolves.toBe(
+      'refs/remotes/origin/release/24'
+    )
+    expect(refExists).toHaveBeenCalledWith('refs/remotes/origin/release/24')
+    expect(refExists).not.toHaveBeenCalledWith('refs/remotes/release/24')
+  })
+
+  it('leaves origin/release/24 as a remote pin without probing origin/origin/release/24', async () => {
+    const refExists = vi.fn(async (ref: string) => ref === 'refs/remotes/origin/release/24')
+
+    await expect(resolveBranchCompareBaseRef('origin/release/24', refExists)).resolves.toBe(
+      'refs/remotes/origin/release/24'
+    )
+    expect(refExists).toHaveBeenCalledWith('refs/remotes/origin/release/24')
+    expect(refExists).not.toHaveBeenCalledWith('refs/remotes/origin/origin/release/24')
+    expect(refExists).not.toHaveBeenCalledWith('refs/heads/release/24')
   })
 })
