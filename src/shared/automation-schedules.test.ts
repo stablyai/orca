@@ -253,6 +253,32 @@ describe('automation schedules', () => {
     expect(isValidAutomationSchedule('0 9 * * 1-7')).toBe(true)
   })
 
+  it('runs a bare start value with a step through the end of its field', () => {
+    // Why: `5/15` means 5,20,35,50; dropping the step made the automation hourly.
+    const anchor = new Date('2026-05-01T00:00:00').getTime()
+    const runs: number[] = []
+    let cursor = anchor
+    for (let index = 0; index < 4; index += 1) {
+      const next = nextAutomationOccurrenceAfter('5/15 * * * *', anchor, cursor)
+      if (next === null) {
+        break
+      }
+      runs.push(new Date(next).getMinutes())
+      cursor = next
+    }
+
+    expect(runs).toEqual([5, 20, 35, 50])
+    // A bare value with no step still means exactly that value.
+    expect(new Date(nextAutomationOccurrenceAfter('5 * * * *', anchor, anchor)!).getMinutes()).toBe(
+      5
+    )
+    // `1/2` in day-of-week is Mon/Wed/Fri/Sun, matching `1-7/2`.
+    expect(isValidAutomationSchedule('0 9 * * 1/2')).toBe(true)
+    expect(nextAutomationOccurrenceAfter('0 9 * * 1/2', anchor, anchor)).toBe(
+      nextAutomationOccurrenceAfter('0 9 * * 1-7/2', anchor, anchor)
+    )
+  })
+
   it('rejects cron fields with malformed separators', () => {
     expect(isValidAutomationSchedule('*/15/2 9 * * *')).toBe(false)
     expect(isValidAutomationSchedule('0 9 1--5 * *')).toBe(false)
