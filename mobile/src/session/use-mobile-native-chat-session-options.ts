@@ -5,6 +5,13 @@ import {
   type CatalogCommandDelivery,
   type CatalogModel
 } from '../../../src/shared/agent-session-option-catalog'
+import type { RpcClient } from '../transport/rpc-client'
+import { useDiscoveredAgentCatalogModels } from './mobile-agent-model-discovery'
+import {
+  getAppliedReportModelId,
+  getScopedRecord,
+  setAppliedReportModelId
+} from './mobile-native-chat-session-option-records'
 import type {
   SessionOptionDescriptor,
   SessionOptionValue
@@ -21,7 +28,6 @@ import {
 import {
   applyNativeChatReportedSessionOptions,
   clearNativeChatSessionModel,
-  createNativeChatSessionOptionRecord,
   getTrackedSessionOption,
   isFlipOnlyMidSession,
   matchNativeChatCatalogModelId,
@@ -43,51 +49,19 @@ export type MobileNativeChatSessionOptionsController = {
 
 type PendingOperation = { id: string; token: number }
 
-// Why: per-tab records survive chat↔terminal flips and remounts, like desktop's
-// scope cache. Bounded so long sessions across many tabs can't grow unbounded.
-const MOBILE_SESSION_OPTION_RECORD_CAP = 32
-const recordsByScope = new Map<string, NativeChatSessionOptionRecord>()
-// The catalog model id last taken from a hook report, per scope. Mobile cannot
-// read the agent's screen, so a repeat of the same report is not new evidence.
-const appliedReportByScope = new Map<string, string>()
-
-function getScopedRecord(scopeKey: string, agent: string): NativeChatSessionOptionRecord {
-  const existing = recordsByScope.get(scopeKey)
-  const record =
-    existing && existing.agent === agent ? existing : createNativeChatSessionOptionRecord(agent)
-  if (record !== existing) {
-    appliedReportByScope.delete(scopeKey)
-  }
-  // Why: delete-then-set on every read makes the touched scope most-recent, so
-  // eviction only sheds the oldest UNTOUCHED tab. Insertion order alone would let
-  // a long-lived active tab be the oldest key and lose its tracked model.
-  recordsByScope.delete(scopeKey)
-  recordsByScope.set(scopeKey, record)
-  while (recordsByScope.size > MOBILE_SESSION_OPTION_RECORD_CAP) {
-    const oldest = recordsByScope.keys().next().value
-    if (oldest === undefined) {
-      break
-    }
-    recordsByScope.delete(oldest)
-    appliedReportByScope.delete(oldest)
-  }
-  return record
-}
-
-export function clearMobileSessionOptionRecordsForTests(): void {
-  recordsByScope.clear()
-  appliedReportByScope.clear()
-}
+export { clearMobileSessionOptionRecordsForTests } from './mobile-native-chat-session-option-records'
 
 const EMPTY_SNAPSHOT: SessionOptionDescriptor[] = []
 
-/** The model list every consumer must see: the catalog's, plus the tracked model
- *  when the catalog no longer lists it. Desktop reconciles identically. */
+/** The model list every consumer must see: the host's live list when a probe
+ *  returned one (desktop replaces the seed identically), plus the tracked model
+ *  when that list no longer names it. */
 function activeModels(
   catalog: AgentSessionOptionCatalog,
-  record: NativeChatSessionOptionRecord
+  record: NativeChatSessionOptionRecord,
+  discovered: CatalogModel[] | null
 ): CatalogModel[] {
-  return withTrackedNativeChatModel(catalog, catalog.models, record)
+  return withTrackedNativeChatModel(catalog, discovered ?? catalog.models, record)
 }
 
 export function useMobileNativeChatSessionOptions(args: {
@@ -96,6 +70,10 @@ export function useMobileNativeChatSessionOptions(args: {
   scopeKey: string | null
   /** Provider model from live agent status, when the hook reported one. */
   reportedModel: string | null
+  /** Null until the host connection is up; model discovery waits for it. */
+  client: RpcClient | null
+  hostId: string
+  worktreeId: string
   dispatchCommand: (
     command: string,
     options?: { delivery?: CatalogCommandDelivery }
@@ -104,7 +82,8 @@ export function useMobileNativeChatSessionOptions(args: {
    *  dispatched — bring the terminal view forward. */
   onAgentPicker?: () => void
 }): MobileNativeChatSessionOptionsController {
-  const { agent, scopeKey, reportedModel, dispatchCommand, onAgentPicker } = args
+  const { agent, scopeKey, reportedModel, client, hostId, worktreeId, dispatchCommand } = args
+  const { onAgentPicker } = args
   const catalog = useMemo(
     // Widening this to a `defaultModelIsCliDefault` catalog (grok) also needs the
     // effective-model resolution desktop does — `previousModelId` below is tracked-only,
@@ -130,13 +109,28 @@ export function useMobileNativeChatSessionOptions(args: {
     }
   }, [identity])
 
+  // Why: the seed catalog carries version-neutral family aliases only, so without
+  // this probe the picker cannot offer host-specific variants such as `opus[1m]`.
+  const discoveredModels = useDiscoveredAgentCatalogModels({
+    agent,
+    client,
+    hostId,
+    worktreeId,
+    enabled: Boolean(catalog?.listModels)
+  })
+
   // Seed the current model from live agent status; hook reports are authority
   // over locally dispatched guesses (desktop 'reported' source parity).
   useEffect(() => {
     if (!catalog || !scopeKey || !agent || !reportedModel) {
       return
     }
-    const matched = matchNativeChatCatalogModelId(catalog, reportedModel)
+    // The host's live list first: `claude-opus-5[1m]` would otherwise fall through
+    // to the seed's substring rule and match the plain `opus` family row.
+    const matched =
+      (discoveredModels
+        ? matchNativeChatCatalogModelId({ ...catalog, models: discoveredModels }, reportedModel)
+        : null) ?? matchNativeChatCatalogModelId(catalog, reportedModel)
     if (!matched) {
       return
     }
@@ -144,15 +138,15 @@ export function useMobileNativeChatSessionOptions(args: {
     // status stream reconnects, and a session-start report cannot have observed a
     // `/model` sent after it. Re-applying it would revert the user's pick. Only a
     // report that CHANGES is evidence; the value itself still wins when it does.
-    if (appliedReportByScope.get(scopeKey) === matched) {
+    if (getAppliedReportModelId(scopeKey) === matched) {
       return
     }
-    appliedReportByScope.set(scopeKey, matched)
+    setAppliedReportModelId(scopeKey, matched)
     const record = getScopedRecord(scopeKey, agent)
     if (applyNativeChatReportedSessionOptions(record, { model: matched })) {
       bump()
     }
-  }, [agent, bump, catalog, reportedModel, scopeKey])
+  }, [agent, bump, catalog, discoveredModels, reportedModel, scopeKey])
 
   const snapshot = useMemo(() => {
     if (!catalog || !scopeKey || !agent) {
@@ -165,12 +159,12 @@ export function useMobileNativeChatSessionOptions(args: {
       catalog,
       // The snapshot no longer self-heals an unlisted tracked model; every caller
       // reconciles it in, so a value the seed dropped keeps its row and options.
-      models: activeModels(catalog, record),
+      models: activeModels(catalog, record, discoveredModels),
       record,
       mode: 'live',
       modelLabel: 'Model'
     })
-  }, [agent, catalog, scopeKey, version])
+  }, [agent, catalog, discoveredModels, scopeKey, version])
 
   const runSerialized = useCallback(
     (operationIdentity: string, id: string, run: () => Promise<boolean>): Promise<boolean> => {
@@ -218,7 +212,7 @@ export function useMobileNativeChatSessionOptions(args: {
         const apply =
           id === 'model'
             ? catalog.modelApply
-            : activeModels(catalog, record)
+            : activeModels(catalog, record, discoveredModels)
                 .find((model) => model.id === previousModelId)
                 ?.options.find((option) => option.id === id)?.apply
         if (!apply || apply.midSession?.kind === 'agent-picker') {
@@ -242,7 +236,7 @@ export function useMobileNativeChatSessionOptions(args: {
           apply,
           modelId: previousModelId,
           catalog,
-          models: activeModels(catalog, record),
+          models: activeModels(catalog, record, discoveredModels),
           record
         })
         if (!command) {
@@ -282,7 +276,7 @@ export function useMobileNativeChatSessionOptions(args: {
         return true
       })
     },
-    [agent, bump, catalog, dispatchCommand, identity, runSerialized, scopeKey]
+    [agent, bump, catalog, discoveredModels, dispatchCommand, identity, runSerialized, scopeKey]
   )
 
   const invokeAction = useCallback(
@@ -296,7 +290,7 @@ export function useMobileNativeChatSessionOptions(args: {
         const apply =
           id === 'model'
             ? catalog.modelApply
-            : activeModels(catalog, record)
+            : activeModels(catalog, record, discoveredModels)
                 .find((model) => model.id === modelId)
                 ?.options.find((option) => option.id === id)?.apply
         const midSession = apply?.midSession
@@ -319,7 +313,17 @@ export function useMobileNativeChatSessionOptions(args: {
         return false
       })
     },
-    [agent, bump, catalog, dispatchCommand, identity, onAgentPicker, runSerialized, scopeKey]
+    [
+      agent,
+      bump,
+      catalog,
+      discoveredModels,
+      dispatchCommand,
+      identity,
+      onAgentPicker,
+      runSerialized,
+      scopeKey
+    ]
   )
 
   const recordCommand = useCallback(
@@ -330,7 +334,7 @@ export function useMobileNativeChatSessionOptions(args: {
       const record = getScopedRecord(scopeKey, agent)
       const result = recordNativeChatSessionOptionCommand({
         catalog,
-        models: activeModels(catalog, record),
+        models: activeModels(catalog, record, discoveredModels),
         record,
         command
       })

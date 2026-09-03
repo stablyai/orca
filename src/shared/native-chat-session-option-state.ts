@@ -146,6 +146,13 @@ export function applyNativeChatReportedSessionOptions(
   return changed
 }
 
+/** Splits `opus[1m]` into the family alias and its bracketed variant. A variant
+ *  is a distinct model choice, so it must match exactly on both sides. */
+function splitModelVariant(value: string): { base: string; variant: string } {
+  const match = /^(.*?)(\[[^\]]+\])$/.exec(value)
+  return match ? { base: match[1]!, variant: match[2]! } : { base: value, variant: '' }
+}
+
 export function matchNativeChatCatalogModelId(
   catalog: AgentSessionOptionCatalog,
   reported: string
@@ -162,8 +169,16 @@ export function matchNativeChatCatalogModelId(
   if (byLabel) {
     return byLabel.id
   }
+  // Why: the resolved provider model carries a version the alias omits
+  // (`claude-opus-5[1m]` vs `opus[1m]`), so the family is matched by substring —
+  // but the variant is not optional. Without this, `claude-opus-5[1m]` lands on
+  // the plain `opus` row and the picker claims a 200k window.
+  const reportedParts = splitModelVariant(normalized)
   const containing = [...catalog.models]
     .sort((left, right) => right.id.length - left.id.length)
-    .find((model) => normalized.includes(model.id.toLowerCase()))
+    .find((model) => {
+      const parts = splitModelVariant(model.id.toLowerCase())
+      return parts.variant === reportedParts.variant && reportedParts.base.includes(parts.base)
+    })
   return containing?.id ?? null
 }

@@ -1,6 +1,8 @@
 import { createElement } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import type { RpcClient } from '../transport/rpc-client'
+import { clearMobileAgentModelDiscoveryForTests } from './mobile-agent-model-discovery'
 import type { MobileNativeChatSendOutcome } from './mobile-native-chat-send'
 import {
   clearMobileSessionOptionRecordsForTests,
@@ -27,6 +29,9 @@ describe('useMobileNativeChatSessionOptions', () => {
       agent: 'claude',
       scopeKey: 'host\0worktree\0tab',
       reportedModel: null,
+      client: null,
+      hostId: 'host',
+      worktreeId: 'worktree',
       dispatchCommand,
       onAgentPicker,
       ...overrides
@@ -45,6 +50,7 @@ describe('useMobileNativeChatSessionOptions', () => {
 
   beforeEach(() => {
     clearMobileSessionOptionRecordsForTests()
+    clearMobileAgentModelDiscoveryForTests()
     dispatchCommand.mockReset()
     dispatchCommand.mockResolvedValue('accepted')
     onAgentPicker.mockReset()
@@ -283,5 +289,67 @@ describe('useMobileNativeChatSessionOptions', () => {
     await expect(first).resolves.toBe(true)
     await expect(queued).resolves.toBe(false)
     expect(dispatchCommand).toHaveBeenCalledTimes(1)
+  })
+
+  it('offers the host list, including a 1M-context variant the seed cannot name', async () => {
+    const client = { sendRequest: vi.fn() }
+    client.sendRequest.mockResolvedValue({
+      ok: true,
+      result: {
+        success: true,
+        catalogOrigin: 'probe',
+        models: [
+          { id: 'sonnet', label: 'Sonnet' },
+          { id: 'opus', label: 'Opus' },
+          { id: 'opus[1m]', label: 'Opus (1M context)' }
+        ]
+      }
+    })
+    mount({ client: client as unknown as RpcClient })
+    await act(async () => {
+      await Promise.resolve()
+    })
+    const model = api!.snapshot[0]!.kind as { choices: { value: string }[] }
+    expect(model.choices.map((choice) => choice.value)).toEqual(['sonnet', 'opus', 'opus[1m]'])
+  })
+
+  it('reports a 1M-context model against its own row, not the plain family row', async () => {
+    const client = { sendRequest: vi.fn() }
+    client.sendRequest.mockResolvedValue({
+      ok: true,
+      result: {
+        success: true,
+        catalogOrigin: 'probe',
+        models: [
+          { id: 'opus', label: 'Opus' },
+          { id: 'opus[1m]', label: 'Opus (1M context)' }
+        ]
+      }
+    })
+    mount({ client: client as unknown as RpcClient })
+    await act(async () => {
+      await Promise.resolve()
+    })
+    update({ reportedModel: 'claude-opus-5[1m]' })
+    expect(api!.snapshot[0]!.kind).toMatchObject({ currentValue: 'opus[1m]' })
+  })
+
+  it('keeps the seed catalog when the host cannot answer the probe', async () => {
+    const client = { sendRequest: vi.fn() }
+    client.sendRequest.mockResolvedValue({
+      ok: false,
+      error: { code: 'method_not_found', message: 'unknown method' }
+    })
+    mount({ client: client as unknown as RpcClient })
+    await act(async () => {
+      await Promise.resolve()
+    })
+    const model = api!.snapshot[0]!.kind as { choices: { value: string }[] }
+    expect(model.choices.map((choice) => choice.value)).toEqual([
+      'fable',
+      'opus',
+      'sonnet',
+      'haiku'
+    ])
   })
 })

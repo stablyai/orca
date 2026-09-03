@@ -61,4 +61,20 @@ describe('matchNativeChatCatalogModelId', () => {
     expect(matchNativeChatCatalogModelId(CLAUDE_SESSION_OPTION_CATALOG, 'mystery-model')).toBeNull()
     expect(matchNativeChatCatalogModelId(CLAUDE_SESSION_OPTION_CATALOG, '')).toBeNull()
   })
+
+  it('keeps a bracketed context variant distinct from its family alias', () => {
+    const withLongContext = {
+      ...CLAUDE_SESSION_OPTION_CATALOG,
+      models: [
+        ...CLAUDE_SESSION_OPTION_CATALOG.models,
+        { id: 'opus[1m]', label: 'Opus (1M context)', options: [] }
+      ]
+    }
+    expect(matchNativeChatCatalogModelId(withLongContext, 'claude-opus-5[1m]')).toBe('opus[1m]')
+    expect(matchNativeChatCatalogModelId(withLongContext, 'claude-opus-5')).toBe('opus')
+    // A 1M report with no 1M row listed must not silently claim the 200k row.
+    expect(
+      matchNativeChatCatalogModelId(CLAUDE_SESSION_OPTION_CATALOG, 'claude-opus-5[1m]')
+    ).toBeNull()
+  })
 })
