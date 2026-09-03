@@ -3,7 +3,16 @@
 // or the script body that lands on the remote box. Local install behavior
 // is exercised through `installer-utils.test.ts` and the per-CLI status
 // audit; this file covers ONLY the SFTP-backed path added in commit #8.
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import {
+  chmodSync,
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync
+} from 'node:fs'
+import { spawnSync } from 'node:child_process'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { vi, describe, expect, it } from 'vitest'
@@ -32,6 +41,28 @@ type TestHook = { command: string; args?: string[] }
 
 function hasManagedCommand(hook: TestHook, matcher: (command: string | undefined) => boolean) {
   return matcher(hook.command) || hook.args?.some(matcher) === true
+}
+
+function createFakeOciProviderEventWriter(dir: string): {
+  writerPath: string
+  argsPath: string
+  payloadPath: string
+} {
+  const writerPath = join(dir, 'fake-oci-provider-event-writer.sh')
+  const argsPath = join(dir, 'writer-args.txt')
+  const payloadPath = join(dir, 'writer-payload.json')
+  writeFileSync(
+    writerPath,
+    `#!/bin/sh
+printf '%s\\n' "$@" > "$ORCA_TEST_WRITER_ARGS"
+payload=$(cat)
+case "$payload" in
+  *'"hook_event_name":"SessionStart"'*) printf '%s' "$payload" > "$ORCA_TEST_WRITER_PAYLOAD" ;;
+esac
+`
+  )
+  chmodSync(writerPath, 0o755)
+  return { writerPath, argsPath, payloadPath }
 }
 
 describe('getWindowsManagedLifecycleHook', () => {
@@ -363,6 +394,88 @@ describe('ClaudeHookService.install', () => {
       rmSync(tmpHome, { recursive: true, force: true })
     }
   })
+
+  it.skipIf(process.platform === 'win32')(
+    'records OCI Claude SessionStart payloads before endpoint handling',
+    () => {
+      const tmpHome = mkdtempSync(join(tmpdir(), 'orca-claude-oci-session-'))
+      vi.stubEnv('HOME', tmpHome)
+      vi.stubEnv('USERPROFILE', tmpHome)
+      try {
+        expect(new ClaudeHookService().install().state).toBe('installed')
+
+        const scriptPath = join(tmpHome, '.orca', 'agent-hooks', 'claude-hook.sh')
+        const script = readFileSync(scriptPath, 'utf-8')
+        const recorder = 'if [ -n "${ORCA_OCI_SESSION_MANIFEST:-}" ]'
+        expect(script.indexOf('if [ -n "$DEVIN_PROJECT_DIR" ]')).toBeLessThan(
+          script.indexOf(recorder)
+        )
+        expect(script.indexOf('if [ -n "$CLAUDE_JOB_DIR" ]')).toBeLessThan(script.indexOf(recorder))
+        expect(script.indexOf(recorder)).toBeLessThan(
+          script.indexOf('if [ -n "$ORCA_AGENT_HOOK_ENDPOINT" ]')
+        )
+        expect(script).toContain('printf \'%s\' "$payload" | curl')
+        expect(script).toContain('/hook/claude')
+
+        const writer = createFakeOciProviderEventWriter(tmpHome)
+        const cleanEnv: NodeJS.ProcessEnv = {}
+        for (const [key, value] of Object.entries(process.env)) {
+          if (!key.startsWith('ORCA_')) {
+            cleanEnv[key] = value
+          }
+        }
+        const env = {
+          ...cleanEnv,
+          ORCA_OCI_SESSION_MANIFEST: join(tmpHome, 'manifest.json'),
+          ORCA_OCI_WORKTREE_PATH: tmpHome,
+          ORCA_OCI_REPO_ROOT: tmpHome,
+          ORCA_OCI_PROVIDER_EVENT_WRITER: writer.writerPath,
+          ORCA_TEST_WRITER_ARGS: writer.argsPath,
+          ORCA_TEST_WRITER_PAYLOAD: writer.payloadPath
+        }
+        const runHook = (payload: string) =>
+          spawnSync('/bin/sh', [scriptPath], {
+            input: payload,
+            env,
+            encoding: 'utf-8',
+            timeout: 5000
+          })
+
+        const sessionPayload = JSON.stringify({
+          hook_event_name: 'SessionStart',
+          session_id: 'claude-session-id'
+        })
+        const sessionResult = runHook(sessionPayload)
+        expect(sessionResult.error).toBeUndefined()
+        expect(sessionResult.status).toBe(0)
+        expect(sessionResult.stdout).toBe('{}\n')
+        expect(readFileSync(writer.payloadPath, 'utf-8')).toBe(sessionPayload)
+        expect(readFileSync(writer.argsPath, 'utf-8').trim().split('\n')).toEqual([
+          'record',
+          '--manifest',
+          join(tmpHome, 'manifest.json'),
+          '--provider',
+          'claude',
+          '--worktree',
+          tmpHome,
+          '--repo-root',
+          tmpHome,
+          '--payload-stdin'
+        ])
+
+        const ordinaryResult = runHook(
+          JSON.stringify({ hook_event_name: 'UserPromptSubmit', prompt: 'ordinary' })
+        )
+        expect(ordinaryResult.error).toBeUndefined()
+        expect(ordinaryResult.status).toBe(0)
+        expect(readFileSync(writer.payloadPath, 'utf-8')).toBe(sessionPayload)
+        expect(ordinaryResult.stdout).toBe('{}\n')
+      } finally {
+        vi.unstubAllEnvs()
+        rmSync(tmpHome, { recursive: true, force: true })
+      }
+    }
+  )
 
   it.skipIf(process.platform !== 'win32')(
     'runs portable managed hooks through a single headless command string',

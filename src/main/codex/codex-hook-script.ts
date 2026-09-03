@@ -1,4 +1,5 @@
 import { buildPosixAgentHookPostCommand } from '../agent-hooks/hook-post-command'
+import { buildPosixOciWorktreeSessionRecordLines } from '../agent-hooks/oci-worktree-session-event'
 import {
   buildPosixHookPayloadCapture,
   buildPosixHookSpoolLines,
@@ -26,6 +27,7 @@ export function getManagedScript(target: 'local' | 'posix' = 'local'): string {
     '#!/bin/sh',
     ...buildPosixHookPayloadCapture(),
     ...buildPosixHookSpoolLines('codex'),
+    ...buildPosixOciWorktreeSessionRecordLines('codex'),
     // Why: sourcing refreshes PORT/TOKEN/ENV/VERSION from the current Orca so a surviving PTY keeps reporting after a restart (see claude/hook-service.ts).
     'load_hook_endpoint() {',
     '  endpoint_path="$1"',

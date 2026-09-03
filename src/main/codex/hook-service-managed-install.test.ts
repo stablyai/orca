@@ -1,9 +1,17 @@
 import { describe, expect, it, vi } from 'vitest'
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import {
+  chmodSync,
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync
+} from 'node:fs'
 import { homedir, tmpdir } from 'node:os'
 import type * as Os from 'node:os'
 import { join } from 'node:path'
-import { spawn } from 'node:child_process'
+import { spawn, spawnSync } from 'node:child_process'
 import { createServer } from 'node:http'
 import type { AddressInfo } from 'node:net'
 import { isCodexManagedCommand, setupCodexHookHomes } from './hook-service-test-harness'
@@ -46,6 +54,28 @@ function localManagedCodexEvents(): string[] {
     'SubagentStop',
     'UserPromptSubmit'
   ]
+}
+
+function createFakeOciProviderEventWriter(dir: string): {
+  writerPath: string
+  argsPath: string
+  payloadPath: string
+} {
+  const writerPath = join(dir, 'fake-oci-provider-event-writer.sh')
+  const argsPath = join(dir, 'writer-args.txt')
+  const payloadPath = join(dir, 'writer-payload.json')
+  writeFileSync(
+    writerPath,
+    `#!/bin/sh
+printf '%s\\n' "$@" > "$ORCA_TEST_WRITER_ARGS"
+payload=$(cat)
+case "$payload" in
+  *'"hook_event_name":"SessionStart"'*) printf '%s' "$payload" > "$ORCA_TEST_WRITER_PAYLOAD" ;;
+esac
+`
+  )
+  chmodSync(writerPath, 0o755)
+  return { writerPath, argsPath, payloadPath }
 }
 
 describe('CodexHookService', () => {
@@ -128,6 +158,83 @@ describe('CodexHookService', () => {
     expect(trustConfig).toContain('approval_policy = "on-request"')
     expect(trustConfig).toContain(':permission_request:0:0')
   })
+
+  it.skipIf(process.platform === 'win32')(
+    'registers and executes the shared Codex OCI SessionStart recorder',
+    async () => {
+      expect((await new CodexHookService().install()).state).toBe('installed')
+
+      const managedCodexHome = join(homes.userDataDir, 'codex-runtime-home', 'home')
+      const hooksConfig = JSON.parse(
+        readFileSync(join(managedCodexHome, 'hooks.json'), 'utf-8')
+      ) as {
+        hooks: Record<string, { hooks?: { command?: string }[] }[]>
+      }
+      const sessionStartCommand = hooksConfig.hooks.SessionStart?.[0]?.hooks?.[0]?.command ?? ''
+      const scriptPath = join(homes.tmpHome, '.orca', 'agent-hooks', 'codex-hook.sh')
+      expect(sessionStartCommand).toContain(scriptPath)
+
+      const script = readFileSync(scriptPath, 'utf-8')
+      const recorder = 'if [ -n "${ORCA_OCI_SESSION_MANIFEST:-}" ]'
+      expect(script.indexOf(recorder)).toBeGreaterThanOrEqual(0)
+      expect(script.indexOf(recorder)).toBeLessThan(script.indexOf('load_hook_endpoint() {'))
+      expect(script).toContain('printf \'%s\' "$payload" | curl')
+      expect(script).toContain('/hook/codex')
+
+      const writer = createFakeOciProviderEventWriter(homes.tmpHome)
+      const cleanEnv: NodeJS.ProcessEnv = {}
+      for (const [key, value] of Object.entries(process.env)) {
+        if (!key.startsWith('ORCA_')) {
+          cleanEnv[key] = value
+        }
+      }
+      const env = {
+        ...cleanEnv,
+        HOME: homes.tmpHome,
+        ORCA_OCI_SESSION_MANIFEST: join(homes.tmpHome, 'manifest.json'),
+        ORCA_OCI_WORKTREE_PATH: homes.tmpHome,
+        ORCA_OCI_REPO_ROOT: homes.tmpHome,
+        ORCA_OCI_PROVIDER_EVENT_WRITER: writer.writerPath,
+        ORCA_TEST_WRITER_ARGS: writer.argsPath,
+        ORCA_TEST_WRITER_PAYLOAD: writer.payloadPath
+      }
+      const runHook = (payload: string) =>
+        spawnSync('/bin/sh', [scriptPath], {
+          input: payload,
+          env,
+          encoding: 'utf-8',
+          timeout: 5000
+        })
+
+      const sessionPayload = JSON.stringify({
+        hook_event_name: 'SessionStart',
+        session_id: 'codex-session-id'
+      })
+      const sessionResult = runHook(sessionPayload)
+      expect(sessionResult.error).toBeUndefined()
+      expect(sessionResult.status).toBe(0)
+      expect(readFileSync(writer.payloadPath, 'utf-8')).toBe(sessionPayload)
+      expect(readFileSync(writer.argsPath, 'utf-8').trim().split('\n')).toEqual([
+        'record',
+        '--manifest',
+        join(homes.tmpHome, 'manifest.json'),
+        '--provider',
+        'codex',
+        '--worktree',
+        homes.tmpHome,
+        '--repo-root',
+        homes.tmpHome,
+        '--payload-stdin'
+      ])
+
+      const ordinaryResult = runHook(
+        JSON.stringify({ hook_event_name: 'UserPromptSubmit', prompt: 'ordinary' })
+      )
+      expect(ordinaryResult.error).toBeUndefined()
+      expect(ordinaryResult.status).toBe(0)
+      expect(readFileSync(writer.payloadPath, 'utf-8')).toBe(sessionPayload)
+    }
+  )
 
   it('installs managed hooks + trust into a per-account self-contained home, not the shared mirror', async () => {
     const systemCodexHome = join(homes.tmpHome, '.codex')

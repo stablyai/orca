@@ -16,6 +16,7 @@ import {
   writeManagedScriptRemote
 } from '../agent-hooks/installer-utils-remote'
 import { refreshManagedScriptIfPresent } from '../agent-hooks/managed-hook-script-refresh'
+import { buildPosixOciWorktreeSessionRecordLines } from '../agent-hooks/oci-worktree-session-event'
 import {
   buildPosixHookPayloadCapture,
   buildPosixHookSpoolLines,
@@ -112,6 +113,7 @@ function getManagedScript(
     'if [ -n "$CLAUDE_JOB_DIR" ]; then',
     '  exit 0',
     'fi',
+    ...buildPosixOciWorktreeSessionRecordLines('claude'),
     // Why: refresh endpoint coordinates for PTYs surviving an Orca restart.
     // Why: suppress parse errors so they neither leak nor trip outer set -e.
     'if [ -n "$ORCA_AGENT_HOOK_ENDPOINT" ] && [ -r "$ORCA_AGENT_HOOK_ENDPOINT" ]; then',
