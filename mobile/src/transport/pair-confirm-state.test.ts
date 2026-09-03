@@ -48,7 +48,18 @@ describe('resolvePairConfirmRouteState', () => {
     expect(resolvePairConfirmRouteState('not a pairing code')).toEqual({
       kind: 'error',
       offer: null,
-      errorMessage: 'Not a valid pairing code'
+      errorMessage: 'That pairing link is damaged — generate a new code on your computer'
+    })
+  })
+
+  it('blames the app version, not the link, for an unsupported offer version', () => {
+    const futureOffer = encodeOffer({ ...offer, v: 99 } as unknown as PairingOffer)
+
+    expect(resolvePairConfirmRouteState(futureOffer)).toEqual({
+      kind: 'error',
+      offer: null,
+      errorMessage:
+        'This pairing code is version 99, but this app only supports version 2. Update Orca on your phone.'
     })
   })
 })

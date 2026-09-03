@@ -1,5 +1,6 @@
 import { z } from 'zod'
 import {
+  PAIRING_OFFER_VERSION,
   PairingOfferSchema,
   type PairingOffer
 } from '../../../src/shared/mobile-relay-pairing-offer'
@@ -10,7 +11,7 @@ import {
 } from './mobile-relay-host-overlay'
 import { MobileRelayEndpointSchema } from '../../../src/shared/mobile-relay-credential-contract'
 
-export { PairingOfferSchema }
+export { PAIRING_OFFER_VERSION, PairingOfferSchema }
 export type { PairingOffer }
 
 export type RpcRequest = {

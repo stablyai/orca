@@ -210,6 +210,30 @@ export async function saveTerminalLinkOpenMode(mode: MobileTerminalLinkOpenMode)
   await AsyncStorage.setItem(TERMINAL_LINK_OPEN_MODE_KEY, mode)
 }
 
+const UPDATE_CHECK_KEY = 'orca:automaticUpdateCheckEnabled'
+
+// Why: default-on, because a sideloaded Android APK has no store to announce a
+// new build — an out-of-date app otherwise fails silently (a pairing offer it
+// can't read looks like a bad code). Opting out stops the app contacting GitHub
+// at startup at all.
+export async function loadAutomaticUpdateCheckEnabled(): Promise<boolean> {
+  try {
+    const raw = await AsyncStorage.getItem(UPDATE_CHECK_KEY)
+    return raw === null ? true : raw === 'true'
+  } catch {
+    return true
+  }
+}
+
+export async function saveAutomaticUpdateCheckEnabled(enabled: boolean): Promise<void> {
+  try {
+    await AsyncStorage.setItem(UPDATE_CHECK_KEY, String(enabled))
+  } catch {
+    // Why: the About toggle fires this without awaiting, so a storage failure
+    // must not surface as an unhandled rejection; the value re-reads next launch.
+  }
+}
+
 function stringArray(value: unknown): string[] {
   return Array.isArray(value)
     ? value.filter((item): item is string => typeof item === 'string')
