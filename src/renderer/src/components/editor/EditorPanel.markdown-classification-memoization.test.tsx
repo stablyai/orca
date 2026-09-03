@@ -226,11 +226,15 @@ describe('EditorPanel markdown classification memoization', () => {
 
     expect(probe.lastShellProps?.onContentChangeForFile).toBe(initialCallback)
 
-    // …and the stable callback still compares against the freshly loaded content.
+    // …and the stable callback compares against the newly committed baseline,
+    // not the one captured when it was created.
     const file = useAppStore.getState().openFiles[0]
     await act(async () =>
       probe.lastShellProps?.onContentChangeForFile(file, `${MARKDOWN_WITH_HTML}\nReloaded.\n`)
     )
     expect(useAppStore.getState().openFiles[0]?.isDirty).toBe(false)
+
+    await act(async () => probe.lastShellProps?.onContentChangeForFile(file, MARKDOWN_WITH_HTML))
+    expect(useAppStore.getState().openFiles[0]?.isDirty).toBe(true)
   })
 })
