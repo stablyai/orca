@@ -183,6 +183,43 @@ describe('Subprocess: Relay entry point', () => {
     await relay.sentinelReceived
   }, 10_000)
 
+  it('keeps relay parsing before the remote CLI argument boundary', async () => {
+    tmpDir = mkdtempSync(path.join(tmpdir(), 'relay-cli-boundary-'))
+    const relaySockPath = relayTestSocketPath(tmpDir, 'relay.sock')
+    const cliSockPath = relayTestSocketPath(tmpDir, 'cli-argument.sock')
+    let stderr = ''
+    const cli = spawnChild(
+      'node',
+      [
+        relayEntry,
+        '--grace-time',
+        '0',
+        '--sock-path',
+        relaySockPath,
+        '--orca-cli',
+        'vm',
+        'recipe',
+        'doctor',
+        'my-vm',
+        '--json',
+        '--connect',
+        '--sock-path',
+        cliSockPath
+      ],
+      { stdio: ['ignore', 'ignore', 'pipe'] }
+    )
+    cli.stderr!.on('data', (chunk: Buffer) => {
+      stderr += chunk.toString('utf8')
+    })
+
+    const result = await waitForChildExit(cli)
+
+    expect(result.code).toBe(1)
+    expect(stderr).toContain('[orca-cli] Relay socket error:')
+    expect(stderr).toContain(relaySockPath)
+    expect(stderr).not.toContain(cliSockPath)
+  }, 10_000)
+
   it('keeps the Node-18 relay bundle free of unsupported array copy methods', () => {
     expect(readFileSync(relayEntry, 'utf8')).not.toContain('.toReversed(')
   })
