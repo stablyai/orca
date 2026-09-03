@@ -1,5 +1,6 @@
 import { getConnectionIdFromState } from '@/lib/connection-context'
 import { useAppStore } from '@/store'
+import { isWebClientLocation } from '@/lib/web-client-location'
 import type { AppState } from '@/store/types'
 import { parseExecutionHostId, type ExecutionHostId } from '../../../../shared/execution-host'
 import { parseWorkspaceKey } from '../../../../shared/workspace-scope'
@@ -42,7 +43,12 @@ export type FileExplorerOwnerState = Pick<
 
 export function getFileExplorerOperationOwnerFromState(
   state: FileExplorerOwnerState,
-  worktreeId: string | null | undefined
+  worktreeId: string | null | undefined,
+  // Why: a browser web client has no local host, so a `local`-owned worktree on
+  // a headless `orca serve` must be operated through the connected server runtime
+  // instead of the (nonexistent) browser-local host. Injected for testability;
+  // the store-backed getFileExplorerOperationOwner passes isWebClientLocation().
+  isWebClient: boolean = false
 ): FileExplorerOperationOwner {
   if (worktreeId === FLOATING_TERMINAL_WORKTREE_ID) {
     return { kind: 'local' }
@@ -62,7 +68,7 @@ export function getFileExplorerOperationOwnerFromState(
       }
     }
     if (route.executionHostId) {
-      return operationOwnerFromHostId(route.executionHostId)
+      return operationOwnerFromHostId(route.executionHostId, state, isWebClient)
     }
   }
 
@@ -90,13 +96,19 @@ export function getFileExplorerOperationOwnerFromState(
   if (connectionId === undefined) {
     return { kind: 'unresolved' }
   }
-  return connectionId ? { kind: 'ssh', connectionId } : { kind: 'local' }
+  return connectionId
+    ? { kind: 'ssh', connectionId }
+    : localOrConnectedRuntimeOwner(state, isWebClient)
 }
 
 export function getFileExplorerOperationOwner(
   worktreeId: string | null | undefined
 ): FileExplorerOperationOwner {
-  return getFileExplorerOperationOwnerFromState(useAppStore.getState(), worktreeId)
+  return getFileExplorerOperationOwnerFromState(
+    useAppStore.getState(),
+    worktreeId,
+    isWebClientLocation()
+  )
 }
 
 export function getFileExplorerOperationRoute(
@@ -241,11 +253,15 @@ export function getFileExplorerOwnerUnresolvedMessage(): string {
   )
 }
 
-function operationOwnerFromHostId(hostId: ExecutionHostId): FileExplorerOperationOwner {
+function operationOwnerFromHostId(
+  hostId: ExecutionHostId,
+  state: FileExplorerOwnerState,
+  isWebClient: boolean
+): FileExplorerOperationOwner {
   const parsed = parseExecutionHostId(hostId)
   switch (parsed?.kind) {
     case 'local':
-      return { kind: 'local' }
+      return localOrConnectedRuntimeOwner(state, isWebClient)
     case 'ssh':
       return { kind: 'ssh', connectionId: parsed.targetId }
     case 'runtime':
@@ -253,4 +269,28 @@ function operationOwnerFromHostId(hostId: ExecutionHostId): FileExplorerOperatio
     case undefined:
       return { kind: 'unresolved' }
   }
+}
+
+// Why: on a browser web client there is no local host, so a `local`-owned
+// worktree can only be operated through the server the client is connected to.
+// The connected server's runtime env is the client's activeRuntimeEnvironmentId
+// (set to the connected environment id on web startup). Resolving to it lets
+// file listing, deletion, and terminals work for local worktrees on a headless
+// `orca serve`, and it is per-connection so different browsers/devices each use
+// their own server. On desktop (isWebClient=false) behavior is unchanged.
+function localOrConnectedRuntimeOwner(
+  state: FileExplorerOwnerState,
+  isWebClient: boolean
+): FileExplorerOperationOwner {
+  if (isWebClient) {
+    const connectedEnvironmentId = state.settings?.activeRuntimeEnvironmentId?.trim()
+    if (connectedEnvironmentId) {
+      return {
+        kind: 'runtime',
+        environmentId: connectedEnvironmentId,
+        executionHostId: `runtime:${encodeURIComponent(connectedEnvironmentId)}`
+      }
+    }
+  }
+  return { kind: 'local' }
 }
