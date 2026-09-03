@@ -70,6 +70,32 @@ describe('detectLanguage', () => {
     expect(detectLanguage('C:\\app\\WebContent\\WEB-INF\\jsp\\LIST.JSP')).toBe('html')
   })
 
+  it('maps systemd and Podman Quadlet unit files to the ini language id', () => {
+    const extensions = [
+      'container',
+      'kube',
+      'network',
+      'volume',
+      'pod',
+      'build',
+      'image',
+      'service',
+      'socket',
+      'timer',
+      'mount',
+      'automount',
+      'swap',
+      'target',
+      'path',
+      'slice',
+      'scope'
+    ]
+
+    for (const extension of extensions) {
+      expect(detectLanguage(`/etc/systemd/system/example.${extension}`)).toBe('ini')
+    }
+  })
+
   it('maps .liquid files to the Monaco built-in liquid language id, including the compound .html.liquid form', () => {
     expect(detectLanguage('theme.liquid')).toBe('liquid')
     expect(detectLanguage('sections/header.liquid')).toBe('liquid')
