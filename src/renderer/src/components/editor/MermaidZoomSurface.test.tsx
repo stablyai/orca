@@ -10,6 +10,11 @@ const DIAGRAM_HEIGHT = 600
 const SURFACE_WIDTH = 400
 const SURFACE_HEIGHT = 400
 
+// Why: the error path reports a null size, which must leave the box unmeasured.
+const renderedSize: { current: { width: number; height: number } | null } = {
+  current: { width: DIAGRAM_WIDTH, height: DIAGRAM_HEIGHT }
+}
+
 vi.mock('@/i18n/i18n', () => ({
   translate: (_key: string, fallback: string) => fallback
 }))
@@ -24,7 +29,7 @@ vi.mock('./MermaidBlock', async () => {
     onRendered?: (size: { width: number; height: number } | null) => void
   }) {
     useEffect(() => {
-      onRendered?.({ width: DIAGRAM_WIDTH, height: DIAGRAM_HEIGHT })
+      onRendered?.(renderedSize.current)
     }, [onRendered])
     return createElement('div', { className: 'mermaid-block', 'data-testid': 'mermaid-block' })
   }
@@ -37,6 +42,7 @@ const originalClientWidth = Object.getOwnPropertyDescriptor(HTMLElement.prototyp
 const originalClientHeight = Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'clientHeight')
 
 beforeEach(() => {
+  renderedSize.current = { width: DIAGRAM_WIDTH, height: DIAGRAM_HEIGHT }
   Object.defineProperty(HTMLElement.prototype, 'clientWidth', {
     configurable: true,
     get: () => SURFACE_WIDTH
@@ -283,6 +289,16 @@ describe('MermaidZoomSurface', () => {
 
     const zoomedSurface = document.querySelector('.mermaid-viewer')
     expect(zoomedSurface?.className).toContain('cursor-grab')
+  })
+
+  it('leaves the box unmeasured and hides the controls when the diagram fails to render', () => {
+    renderedSize.current = null
+    renderSurface()
+
+    const box = getDiagramBox()
+    expect(box.dataset.zoomLayout).toBe('false')
+    expect(box.style.width).toBe('')
+    expect(screen.queryByRole('button', { name: 'Zoom in' })).toBeNull()
   })
 
   it('detaches the wheel listener when the surface unmounts', () => {

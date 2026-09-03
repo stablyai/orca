@@ -729,10 +729,18 @@
   width: 100%;
   height: auto;
 }
-/* Why: auto margins center the diagram without clipping its leading edge once
-   zoom makes it overflow, which justify-content: center would do, and flex: none
-   keeps the flex parent from shrinking a zoomed box back to the pane width. */
+/* Until the surface has measured the diagram, including a render that failed,
+   the box spans the canvas so the error banner and source keep the width they
+   had before this wrapper existed. */
 .mermaid-diagram-box {
+  align-self: flex-start;
+  width: 100%;
+}
+/* Why: once the box carries a pixel size, auto margins center it without
+   clipping its leading edge the way justify-content: center would, and
+   flex: none keeps the flex parent from shrinking it back to the pane width. */
+.mermaid-diagram-box[data-zoom-layout='true'] {
+  align-self: auto;
   flex: none;
   margin: auto;
 }
