@@ -315,6 +315,7 @@ export class SshRelaySession {
   private muxDisposeCleanup: (() => void) | null = null
   // Why: hold the notification-handler disposer so teardownProviders can release it on reconnect/shutdown (symmetric with muxDisposeCleanup).
   private muxNotificationCleanup: (() => void) | null = null
+  private remoteWorkspaceNotificationCleanup: (() => void) | null = null
   // Why: onStateChange never fires when the relay channel closes but SSH stays up; this callback lets ssh.ts drive relay-level reconnect.
   private _onRelayLost: ((targetId: string) => void) | null = null
   // Why: a version mismatch or a blocked owner admission is terminal, so it needs a separate callback
@@ -1529,8 +1530,11 @@ export class SshRelaySession {
     return isAgentStatusHooksEnabled(store.getSettings?.())
   }
 
+  // Why: capture the disposer for the same reason the agent-hook handler below does -- teardown
+  // has to release it, and re-wiring must not stack a second handler on a live mux.
   private wireUpRemoteWorkspaceEvents(mux: SshChannelMultiplexer): void {
-    mux.onNotification((method, params) => {
+    this.remoteWorkspaceNotificationCleanup?.()
+    this.remoteWorkspaceNotificationCleanup = mux.onNotification((method, params) => {
       notifyRemoteWorkspaceHandlers(this.targetId, method, params)
     })
   }
@@ -1641,6 +1645,8 @@ export class SshRelaySession {
     this.releaseRelayLossWatcher()
     this.muxNotificationCleanup?.()
     this.muxNotificationCleanup = null
+    this.remoteWorkspaceNotificationCleanup?.()
+    this.remoteWorkspaceNotificationCleanup = null
     for (const cleanup of this.ptyRecoveryNotificationCleanups) {
       cleanup()
     }
