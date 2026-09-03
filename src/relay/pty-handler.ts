@@ -30,6 +30,7 @@ import {
 import { splitWorktreeIdForFilesystem } from '../shared/worktree/id'
 import {
   formatUnresolvedRelaySpawnCwdMessage,
+  relayHostDirectoryExists,
   resolveRelaySpawnCwd,
   type RelaySpawnCwdResolution
 } from './pty-spawn-cwd'
@@ -2770,6 +2771,18 @@ export class PtyHandler {
     const shellOverride = typeof entry.shellOverride === 'string' ? entry.shellOverride.trim() : ''
     const resolvedShellOverride = resolveRevivedShellOverride(shellOverride)
     const shell = resolvedShellOverride || resolveDefaultShell()
+    // Mirrors spawn: the entry's override is what gets re-launched, so a WSL
+    // pane needs the same guest-visible HISTFILE and the same WSLENV carrier.
+    const wslShell = isRelayWslShell(shell)
+    // Why cwd is re-checked: it is the one serialized field revive still took on trust, and it only
+    // proves the directory existed when the client wrote it down. A worktree removed since leaves
+    // node-pty to _exit(1) the child on POSIX (a pane revived already dead) and to throw on Windows,
+    // which escapes the loop and costs every later entry its state. Same call as the shell override
+    // below: drop this one pane rather than substitute a directory it was never pointed at. Skipped
+    // for a WSL shell, whose cwd lives in a guest that never stats on this host.
+    if (!wslShell && !relayHostDirectoryExists(entry.cwd)) {
+      return
+    }
     const terminalWindowsWslDistro =
       typeof entry.terminalWindowsWslDistro === 'string' &&
       entry.terminalWindowsWslDistro.length <= MAX_REVIVED_WSL_DISTRO_LENGTH
@@ -2788,9 +2801,6 @@ export class PtyHandler {
     ) {
       injectRelayFishHistoryEnv(spawnEnv, entry.worktreeId)
     }
-    // Mirrors spawn: the entry's override is what gets re-launched, so a WSL
-    // pane needs the same guest-visible HISTFILE and the same WSLENV carrier.
-    const wslShell = isRelayWslShell(shell)
     if (historyIsolationEnabled && entry.worktreeId) {
       const historyRoot = injectRelayHistoryEnv(spawnEnv, entry.worktreeId, shell, {
         wsl: wslShell
