@@ -62,13 +62,75 @@ function createTokensProvider(
         endState: new TextMateTokenizerState(result.ruleStack),
         tokens: result.tokens.map((token) => ({
           startIndex: token.startIndex,
-          // Why: Monaco themes match a single token scope; TextMate returns a
-          // scope stack, and the final entry is the most specific reusable one.
-          scopes: token.scopes.at(-1) ?? fallbackScopeName
+          scopes: toMonacoThemeTokenScope(token.scopes.at(-1) ?? fallbackScopeName)
         }))
       }
     }
   }
+}
+
+export function toMonacoThemeTokenScope(textMateScope: string): string {
+  if (textMateScope.endsWith('.gdscript')) {
+    return toGDScriptThemeTokenScope(textMateScope)
+  }
+
+  // Why: Monaco's stock themes omit TextMate's entity/storage namespaces.
+  if (textMateScope.startsWith('entity.name.function.decorator')) {
+    return 'annotation'
+  }
+  if (
+    textMateScope.startsWith('entity.name.function') ||
+    textMateScope.startsWith('entity.name.type') ||
+    textMateScope.startsWith('entity.other.inherited-class') ||
+    textMateScope.startsWith('support.class')
+  ) {
+    return 'type'
+  }
+  if (textMateScope.startsWith('storage.')) {
+    return 'keyword'
+  }
+  if (textMateScope.startsWith('variable.other.constant')) {
+    return 'constant'
+  }
+  if (textMateScope.startsWith('constant.numeric')) {
+    return 'number'
+  }
+  return textMateScope
+}
+
+function toGDScriptThemeTokenScope(textMateScope: string): string {
+  if (
+    textMateScope.startsWith('entity.name.function') ||
+    textMateScope.startsWith('keyword.control')
+  ) {
+    return 'keyword.flow'
+  }
+  if (
+    textMateScope.startsWith('entity.name.type') ||
+    textMateScope.startsWith('entity.other.inherited-class') ||
+    textMateScope.startsWith('support.class')
+  ) {
+    return 'type'
+  }
+  if (textMateScope.startsWith('storage.') || textMateScope.startsWith('keyword.language')) {
+    return 'annotation'
+  }
+  if (textMateScope.startsWith('keyword.operator')) {
+    return 'delimiter'
+  }
+  if (textMateScope.startsWith('variable.other.constant')) {
+    return 'variable'
+  }
+  if (
+    textMateScope.startsWith('variable.other') ||
+    textMateScope.startsWith('constant.character.escape')
+  ) {
+    return 'identifier'
+  }
+  if (textMateScope.startsWith('constant.numeric')) {
+    return 'number'
+  }
+  return textMateScope
 }
 
 export async function createTextMateTokensProvider(
