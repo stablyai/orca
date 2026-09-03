@@ -22,6 +22,12 @@ describe('dev CLI terminal wrappers', () => {
     expect(readFileSync(path.join(userDataPath, 'cli', 'bin', 'orca.cmd'), 'utf8')).toBe(wrapper)
     expect(readFileSync(path.join(root, 'out', 'bin', 'orca-dev.cmd'), 'utf8')).toBe(wrapper)
     expect(readFileSync(path.join(root, 'out', 'bin', 'orca.cmd'), 'utf8')).toBe(wrapper)
+    const subWrapper = readFileSync(path.join(userDataPath, 'cli', 'bin', 'orca-sub.cmd'), 'utf8')
+    expect(subWrapper).toContain(`set "ORCA_USER_DATA_PATH=${userDataPath}"`)
+    expect(subWrapper).toContain(
+      `node "${path.join(root, 'config', 'scripts', 'orca-sub.mjs')}" %*`
+    )
+    expect(readFileSync(path.join(root, 'out', 'bin', 'orca-sub.cmd'), 'utf8')).toBe(subWrapper)
   })
 
   it('escapes literal percent signs in every Windows batch path', () => {
@@ -45,6 +51,10 @@ describe('dev CLI terminal wrappers', () => {
     )
     expect(readFileSync(path.join(root, 'out', 'bin', 'orca-dev.cmd'), 'utf8')).toBe(wrapper)
     expect(readFileSync(path.join(root, 'out', 'bin', 'orca.cmd'), 'utf8')).toBe(wrapper)
+    const subWrapper = readFileSync(path.join(root, 'out', 'bin', 'orca-sub.cmd'), 'utf8')
+    expect(subWrapper).toContain(
+      `node "${path.join(root, 'config', 'scripts', 'orca-sub.mjs').replaceAll('%', '%%')}" %*`
+    )
   })
 
   it('writes executable-style POSIX wrappers with the same profile identity', () => {
@@ -66,5 +76,11 @@ describe('dev CLI terminal wrappers', () => {
     expect(readFileSync(path.join(userDataPath, 'cli', 'bin', 'orca'), 'utf8')).toBe(wrapper)
     expect(readFileSync(path.join(root, 'out', 'bin', 'orca-dev'), 'utf8')).toBe(wrapper)
     expect(readFileSync(path.join(root, 'out', 'bin', 'orca'), 'utf8')).toBe(wrapper)
+    const subWrapper = readFileSync(path.join(userDataPath, 'cli', 'bin', 'orca-sub'), 'utf8')
+    expect(subWrapper).toContain(`export ORCA_USER_DATA_PATH=${JSON.stringify(userDataPath)}`)
+    expect(subWrapper).toContain(
+      `exec node ${JSON.stringify(path.join(root, 'config', 'scripts', 'orca-sub.mjs'))} "$@"`
+    )
+    expect(readFileSync(path.join(root, 'out', 'bin', 'orca-sub'), 'utf8')).toBe(subWrapper)
   })
 })
