@@ -1,0 +1,351 @@
+{
+  "$schema": "https://raw.githubusercontent.com/martinring/tmlanguage/master/tmlanguage.json",
+  "name": "Varnish Configuration Language",
+  "patterns": [
+    {
+      "include": "#macros"
+    },
+    {
+      "include": "#comments"
+    },
+    {
+      "include": "#constants"
+    },
+    {
+      "include": "#functions"
+    },
+    {
+      "include": "#keywords"
+    },
+    {
+      "include": "#strings"
+    },
+    {
+      "include": "#types"
+    },
+    {
+      "include": "#variables"
+    }
+  ],
+  "repository": {
+    "macros": {
+      "patterns": [
+        {
+          "name": "keyword.control.vcl",
+          "match": "^\\s*#FASTLY\\s+(deliver|error|fetch|hash|hit|log|miss|pass|recv)\\s*$"
+        }
+      ]
+    },
+    "comments": {
+      "patterns": [
+        {
+          "name": "comment.line.number-sign.vcl",
+          "match": "#.*"
+        },
+        {
+          "name": "comment.line.double-slash.vcl",
+          "match": "//.*"
+        },
+        {
+          "name": "comment.line.block.vcl",
+          "begin": "/\\*",
+          "end": "\\*/"
+        }
+      ]
+    },
+    "constants": {
+      "patterns": [
+        {
+          "name": "constant.numeric.vcl",
+          "match": "\\b-?[0-9]+(\\.[0-9])?\\s*(ms|s|m|h|d|w|y)\\b"
+        },
+        {
+          "name": "constant.numeric.vcl",
+          "match": "\\b-?[0-9]+(\\.[0-9])?\\s*%"
+        },
+        {
+          "name": "constant.numeric.vcl",
+          "match": "\\b-?[0-9]+(\\.[0-9])?(e[+-]?[0-9]+)?\\b"
+        },
+        {
+          "name": "constant.numeric.vcl",
+          "match": "\\b-?0x[0-9A-Fa-f]+(\\.[0-9A-Fa-f]+)?(p[+-]?[0-9]+)?\\b\\b"
+        },
+        {
+          "name": "constant.language.vcl",
+          "match": "\\b(always|false|true)\\b"
+        }
+      ]
+    },
+    "functions": {
+      "patterns": [
+        {
+          "name": "entity.name.function.vcl",
+          "match": "\\b(accept\\.charset_lookup|accept\\.encoding_lookup|accept\\.language_filter_basic|accept\\.language_lookup|accept\\.media_lookup)\\b"
+        },
+        {
+          "name": "entity.name.function.vcl",
+          "match": "\\b(bin\\.base64_to_hex|bin\\.hex_to_base64|crypto\\.decrypt_base64|crypto\\.decrypt_hex|crypto\\.encrypt_base64|crypto\\.encrypt_hex|digest\\.awsv4_hmac|digest\\.base64_decode|digest\\.base64|digest\\.base64url_decode|digest\\.base64url_nopad|digest\\.base64url_nopad_decode|digest\\.base64url|digest\\.ecdsa_verify|digest\\.hash_crc32|digest\\.hash_crc32b|digest\\.hash_md5|digest\\.hash_sha1_from_base64|digest\\.hash_sha1|digest\\.hash_sha224|digest\\.hash_sha256_from_base64|digest\\.hash_sha256|digest\\.hash_sha384|digest\\.hash_sha512_from_base64|digest\\.hash_sha512|digest\\.hmac_md5_base64|digest\\.hmac_md5|digest\\.hmac_sha1_base64|digest\\.hmac_sha1|digest\\.hmac_sha256_base64|digest\\.hmac_sha256|digest\\.hmac_sha512_base64|digest\\.hmac_sha512|digest\\.rsa_verify|digest\\.secure_is_equal|digest\\.time_hmac_md5|digest\\.time_hmac_sha1|digest\\.time_hmac_sha256|digest\\.time_hmac_sha512)\\b"
+        },
+        {
+          "name": "entity.name.function.vcl",
+          "match": "\\b(parse_time_delta|std\\.integer2time|std\\.time|strftime|time\\.add|time\\.hex_to_time|time\\.is_after|time\\.runits|time\\.sub|time\\.units)\\b"
+        },
+        {
+          "name": "entity.name.function.vcl",
+          "match": "\\b(math\\.is_finite|math\\.is_infinite|math\\.is_nan|math\\.is_normal|math\\.is_subnormal)\\b"
+        },
+        {
+          "name": "entity.name.function.vcl",
+          "match": "\\b(math\\.exp|math\\.exp2|math\\.log10|math\\.log2|math\\.log)\\b"
+        },
+        {
+          "name": "entity.name.function.vcl",
+          "match": "\\b(math\\.ceil|math\\.floor|math\\.roundeven|math\\.roundhalfdown|math\\.roundhalfup|math\\.round|math\\.trunc)\\b"
+        },
+        {
+          "name": "entity.name.function.vcl",
+          "match": "\\b(math\\.acosh|math\\.acos|math\\.asinh|math\\.asin|math\\.atan2|math\\.atanh|math\\.atan|math\\.cosh|math\\.cos|math\\.sinh|math\\.sin|math\\.sqrt|math\\.tanh|math\\.tan)\\b"
+        },
+        {
+          "name": "entity.name.function.vcl",
+          "match": "\\b(addr\\.extract_bits|addr\\.is_ipv4|addr\\.is_ipv6|fastly\\.hash|fastly\\.try_select_shield|http_status_matches|resp\\.tarpit|setcookie\\.delete_by_name|setcookie\\.get_value_by_name|std\\.collect|std\\.count|std\\.strcasecmp|subfield)\\b"
+        },
+        {
+          "name": "entity.name.function.vcl",
+          "match": "\\b(boltsort\\.sort|querystring\\.add|querystring\\.clean|querystring\\.filter_except|querystring\\.filter|querystring\\.filtersep|querystring\\.get|querystring\\.globfilter_except|querystring\\.globfilter|querystring\\.regfilter_except|querystring\\.regfilter|querystring\\.remove|querystring\\.set|querystring\\.sort)\\b"
+        },
+        {
+          "name": "entity.name.function.vcl",
+          "match": "\\b(randombool_seeded|randombool|randomint_seeded|randomint|randomstr)\\b"
+        },
+        {
+          "name": "entity.name.function.vcl",
+          "match": "\\b(ratelimit\\.check_rates|ratelimit\\.check_rate|ratelimit\\.penaltybox_add|ratelimit\\.penaltybox_has|ratelimit\\.ratecounter_increment)\\b"
+        },
+        {
+          "name": "entity.name.function.vcl",
+          "match": "\\b(cstr_escape|json\\.escape|regsub|regsuball|std\\.anystr2ip|std\\.atof|std\\.atoi|std\\.basename|std\\.dirname|std\\.ip2str|std\\.ip|std\\.itoa|std\\.itoa_charset|std\\.prefixof|std\\.replace|std\\.replace_prefix|std\\.replace_suffix|std\\.replaceall|std\\.str2ip|std\\.strlen|std\\.strpad|std\\.strrep|std\\.strrev|std\\.strstr|std\\.strtof|std\\.strtol|std\\.suffixof|std\\.tolower|std\\.toupper|substr|urldecode|urlencode|utf8\\.codepoint_count|utf8\\.is_valid|utf8\\.strpad|utf8\\.substr|xml_escape)\\b"
+        },
+        {
+          "name": "entity.name.function.vcl",
+          "match": "\\b(early_hints|h2\\.disable_header_compression|h2\\.push|h3\\.alt_svc)\\b"
+        },
+        {
+          "name": "entity.name.function.vcl",
+          "match": "\\b(table\\.contains|table\\.lookup_acl|table\\.lookup_backend|table\\.lookup_bool|table\\.lookup_float|table\\.lookup_integer|table\\.lookup_ip|table\\.lookup_rtime|table\\.lookup)\\b"
+        },
+        {
+          "name": "entity.name.function.vcl",
+          "match": "\\b(uuid\\.dns|uuid\\.is_valid|uuid\\.is_version3|uuid\\.is_version4|uuid\\.is_version5|uuid\\.is_version7|uuid\\.oid|uuid\\.url|uuid\\.version3|uuid\\.version4|uuid\\.version5|uuid\\.version7|uuid\\.x500)\\b"
+        },
+        {
+          "name": "support.variable.vcl",
+          "match": "\\b(re\\.group\\.[0-9])\\b"
+        },
+        {
+          "name": "support.variable.vcl",
+          "match": "\\b(backend\\.conn\\.is_tls|backend\\.conn\\.tls_protocol|backend\\.socket\\.congestion_algorithm|backend\\.socket\\.cwnd|backend\\.socket\\.tcpi_advmss|backend\\.socket\\.tcpi_bytes_acked|backend\\.socket\\.tcpi_bytes_received|backend\\.socket\\.tcpi_data_segs_in|backend\\.socket\\.tcpi_data_segs_out|backend\\.socket\\.tcpi_delivery_rate|backend\\.socket\\.tcpi_delta_retrans|backend\\.socket\\.tcpi_last_data_sent|backend\\.socket\\.tcpi_max_pacing_rate|backend\\.socket\\.tcpi_min_rtt|backend\\.socket\\.tcpi_notsent_bytes|backend\\.socket\\.tcpi_pacing_rate|backend\\.socket\\.tcpi_pmtu|backend\\.socket\\.tcpi_rcv_mss|backend\\.socket\\.tcpi_rcv_rtt|backend\\.socket\\.tcpi_rcv_space|backend\\.socket\\.tcpi_rcv_ssthresh|backend\\.socket\\.tcpi_reordering|backend\\.socket\\.tcpi_rtt|backend\\.socket\\.tcpi_rttvar|backend\\.socket\\.tcpi_segs_in|backend\\.socket\\.tcpi_segs_out|backend\\.socket\\.tcpi_snd_cwnd|backend\\.socket\\.tcpi_snd_mss|backend\\.socket\\.tcpi_snd_ssthresh|backend\\.socket\\.tcpi_total_retrans|backend\\.{NAME}\\.connections_open|backend\\.{NAME}\\.connections_used|backend\\.{NAME}\\.healthy|bereq\\.between_bytes_timeout|bereq\\.connect_timeout|bereq\\.first_byte_timeout|beresp\\.backend\\.alternate_ips|beresp\\.backend\\.ip|beresp\\.backend\\.port|beresp\\.backend\\.requests|beresp\\.backend\\.src_ip|beresp\\.handshake_time_to_origin_ms|beresp\\.used_alternate_path_to_origin|req\\.backend\\.healthy|req\\.backend.ip|req\\.backend\\.is_origin|req\\.backend\\.is_shield|req\\.backend)\\b"
+        },
+        {
+          "name": "support.variable.vcl",
+          "match": "\\b(bereq\\.body_bytes_written|bereq\\.bytes_written|bereq\\.header_bytes_written|bereq\\.is_clustering|bereq\\.method|bereq\\.proto|bereq\\.request|bereq\\.url\\.basename|bereq\\.url\\.dirname|bereq\\.url\\.ext|bereq\\.url\\.path|bereq\\.url\\.qs|bereq\\.url)\\b"
+        },
+        {
+          "name": "support.variable.vcl",
+          "match": "\\b(beresp\\.backend\\.name|beresp\\.brotli|beresp\\.cacheable|beresp\\.do_stream|beresp\\.grace|beresp\\.gzip|beresp\\.hipaa|beresp\\.pci|beresp\\.proto|beresp\\.response|beresp\\.saintmode|beresp\\.stale_if_error|beresp\\.stale_while_revalidate|beresp\\.status|beresp\\.ttl)\\b"
+        },
+        {
+          "name": "support.variable.vcl",
+          "match": "\\b(obj\\.age|obj\\.cacheable|obj\\.entered|obj\\.grace|obj\\.hits|obj\\.is_pci|obj\\.lastuse|obj\\.proto|obj\\.response|obj\\.stale_if_error|obj\\.stale_while_revalidate|obj\\.status|obj\\.ttl|req\\.digest\\.ratio|req\\.digest|req\\.hash|stale\\.exists)\\b"
+        },
+        {
+          "name": "support.variable.vcl",
+          "match": "\\b(client\\.as\\.name|client\\.as\\.number|client\\.identity|client\\.ip|client\\.port|client\\.requests|client\\.socket\\.congestion_algorithm|client\\.socket\\.cwnd|client\\.socket\\.nexthop|client\\.socket\\.pace|client\\.socket\\.ploss|client\\.socket\\.tcp_info|client\\.socket\\.tcpi_advmss|client\\.socket\\.tcpi_bytes_acked|client\\.socket\\.tcpi_bytes_received|client\\.socket\\.tcpi_data_segs_in|client\\.socket\\.tcpi_data_segs_out|client\\.socket\\.tcpi_delivery_rate|client\\.socket\\.tcpi_delta_retrans|client\\.socket\\.tcpi_last_data_sent|client\\.socket\\.tcpi_max_pacing_rate|client\\.socket\\.tcpi_min_rtt|client\\.socket\\.tcpi_notsent_bytes|client\\.socket\\.tcpi_pacing_rate|client\\.socket\\.tcpi_pmtu|client\\.socket\\.tcpi_rcv_mss|client\\.socket\\.tcpi_rcv_rtt|client\\.socket\\.tcpi_rcv_space|client\\.socket\\.tcpi_rcv_ssthresh|client\\.socket\\.tcpi_reordering|client\\.socket\\.tcpi_rtt|client\\.socket\\.tcpi_rttvar|client\\.socket\\.tcpi_segs_in|client\\.socket\\.tcpi_segs_out|client\\.socket\\.tcpi_snd_cwnd|client\\.socket\\.tcpi_snd_mss|client\\.socket\\.tcpi_snd_ssthresh|client\\.socket\\.tcpi_total_retrans|fastly_info\\.edge\\.is_tls|fastly_info\\.h2\\.stream_id|fastly_info\\.is_h2|fastly_info\\.is_h3|quic\\.cc\\.cwnd|quic\\.cc\\.ssthresh|quic\\.num_bytes\\.received|quic\\.num_bytes\\.sent|quic\\.num_packets\\.ack_received|quic\\.num_packets\\.decryption_failed|quic\\.num_packets\\.late_acked|quic\\.num_packets\\.lost|quic\\.num_packets\\.received|quic\\.num_packets\\.sent|quic\\.rtt\\.latest|quic\\.rtt\\.minimum|quic\\.rtt\\.smoothed|quic\\.rtt\\.variance|req\\.is_ipv6|req\\.is_ssl|req\\.protocol|tls\\.client\\.cipher|tls\\.client\\.ciphers_list|tls\\.client\\.ciphers_list_sha|tls\\.client\\.ciphers_list_txt|tls\\.client\\.ciphers_sha|tls\\.client\\.handshake_sent_bytes|tls\\.client\\.iana_chosen_cipher_id|tls\\.client\\.ja3_md5|tls\\.client\\.protocol|tls\\.client\\.servername|tls\\.client\\.tlsexts_list|tls\\.client\\.tlsexts_list_sha|tls\\.client\\.tlsexts_list_txt|tls\\.client\\.tlsexts_sha|transport\\.bw_estimate|transport\\.type)\\b"
+        },
+        {
+          "name": "support.variable.vcl",
+          "match": "\\b(client\\.bot\\.name|client\\.browser\\.name|client\\.browser\\.version|client\\.class\\.bot|client\\.class\\.browser|client\\.class\\.checker|client\\.class\\.downloader|client\\.class\\.feedreader|client\\.class\\.filter|client\\.class\\.masquerading|client\\.class\\.spam|client\\.display\\.height|client\\.display\\.ppi|client\\.display\\.touchscreen|client\\.display\\.width|client\\.identified|client\\.os\\.name|client\\.os\\.version|client\\.platform\\.ereader|client\\.platform\\.gameconsole|client\\.platform\\.hwtype|client\\.platform\\.mediaplayer|client\\.platform\\.mobile|client\\.platform\\.smarttv|client\\.platform\\.tablet|client\\.platform\\.tvplayer|fastly_info\\.h2\\.is_push|fastly_info\\.host_header|req\\.body\\.base64|req\\.body_bytes_read|req\\.body|req\\.bytes_read|req\\.enable_range_on_pass|req\\.enable_segmented_caching|req\\.hash_always_miss|req\\.hash_ignore_busy|req\\.header_bytes_read|req\\.is_background_fetch|req\\.is_purge|req\\.method|req\\.postbody|req\\.proto|req\\.request|req\\.url\\.basename|req\\.url\\.dirname|req\\.url\\.ext|req\\.url\\.path|req\\.url\\.qs|req\\.url|req\\.xid|time\\.elapsed\\.msec|time\\.elapsed\\.msec_frac|time\\.elapsed\\.sec|time\\.elapsed\\.usec|time\\.elapsed\\.usec_frac|time\\.elapsed|time\\.end\\.msec|time\\.end\\.msec_frac|time\\.end\\.sec|time\\.end\\.usec|time\\.end\\.usec_frac|time\\.end|time\\.interval_elapsed_ratio|time\\.start\\.msec|time\\.start\\.msec_frac|time\\.start\\.sec|time\\.start\\.usec|time\\.start\\.usec_frac|time\\.start)\\b"
+        },
+        {
+          "name": "support.variable.vcl",
+          "match": "\\b(resp\\.body_bytes_written|resp\\.bytes_written|resp\\.completed|resp\\.header_bytes_written|resp\\.is_locally_generated|resp\\.proto|resp\\.response|resp\\.status|time\\.to_first_byte)\\b"
+        },
+        {
+          "name": "support.variable.vcl",
+          "match": "\\b(beresp\\.do_esi|esi\\.allow_inside_cdata|req\\.esi_level|req\\.esi|req\\.is_esi_subreq|req\\.topurl)\\b"
+        },
+        {
+          "name": "support.variable.vcl",
+          "match": "\\b(client\\.geo\\.area_code|client\\.geo\\.city\\.ascii|client\\.geo\\.city\\.latin1|client\\.geo\\.city\\.utf8|client\\.geo\\.city|client\\.geo\\.conn_speed|client\\.geo\\.conn_type|client\\.geo\\.continent_code|client\\.geo\\.country_code3|client\\.geo\\.country_code|client\\.geo\\.country_name\\.ascii|client\\.geo\\.country_name\\.latin1|client\\.geo\\.country_name\\.utf8|client\\.geo\\.country_name|client\\.geo\\.gmt_offset|client\\.geo\\.ip_override|client\\.geo\\.latitude|client\\.geo\\.longitude|client\\.geo\\.metro_code|client\\.geo\\.postal_code|client\\.geo\\.proxy_description|client\\.geo\\.proxy_type|client\\.geo\\.region\\.ascii|client\\.geo\\.region\\.latin1|client\\.geo\\.region\\.utf8|client\\.geo\\.region|client\\.geo\\.utc_offset)\\b"
+        },
+        {
+          "name": "support.variable.vcl",
+          "match": "\\b(math\\.1_PI|math\\.2PI|math\\.2_PI|math\\.2_SQRTPI|math\\.E|math\\.FLOAT_DIG|math\\.FLOAT_EPSILON|math\\.FLOAT_MANT_DIG|math\\.FLOAT_MAX_10_EXP|math\\.FLOAT_MAX_EXP|math\\.FLOAT_MAX|math\\.FLOAT_MIN_10_EXP|math\\.FLOAT_MIN_EXP|math\\.FLOAT_MIN|math\\.FLOAT_RADIX|math\\.INTEGER_BIT|math\\.INTEGER_MAX|math\\.INTEGER_MIN|math\\.LN10|math\\.LN2|math\\.LOG10E|math\\.LOG2E|math\\.NAN|math\\.NEG_HUGE_VAL|math\\.NEG_INFINITY|math\\.PHI|math\\.PI_2|math\\.PI_4|math\\.PI|math\\.POS_HUGE_VAL|math\\.POS_INFINITY|math\\.SQRT1_2|math\\.SQRT2|math\\.TAU)\\b"
+        },
+        {
+          "name": "support.variable.vcl",
+          "match": "\\b(fastly\\.error|fastly\\.ff\\.visits_this_pop_this_service|fastly\\.ff\\.visits_this_service|fastly_info\\.state|req\\.backend\\.ip|req\\.backend\\.name|req\\.backend\\.port|req\\.service_id|req\\.vcl\\.generation|req\\.vcl\\.md5|req\\.vcl\\.version|req\\.vcl|resp\\.stale\\.is_error|resp\\.stale\\.is_revalidating|resp\\.stale|workspace\\.bytes_free|workspace\\.bytes_total|workspace\\.overflowed)\\b"
+        },
+        {
+          "name": "support.variable.vcl",
+          "match": "\\b(backend|director)\\.[^.]+\\.healthy\\b"
+        },
+        {
+          "name": "support.variable.vcl",
+          "match": "\\b(ratecounter)\\.[^.]+\\.(bucket\\.10s|bucket\\.20s|bucket\\.30s|bucket\\.40s|bucket\\.50s|bucket\\.60s|rate\\.10s|rate\\.1s|rate\\.60s)\\b"
+        },
+        {
+          "name": "support.variable.vcl",
+          "match": "\\b(segmented_caching\\.autopurged|segmented_caching\\.block_number|segmented_caching\\.block_size|segmented_caching\\.cancelled|segmented_caching\\.client_req\\.is_open_ended|segmented_caching\\.client_req\\.is_range|segmented_caching\\.client_req\\.range_high|segmented_caching\\.client_req\\.range_low|segmented_caching\\.completed|segmented_caching\\.error|segmented_caching\\.failed|segmented_caching\\.is_inner_req|segmented_caching\\.is_outer_req|segmented_caching\\.obj\\.complete_length|segmented_caching\\.rounded_req\\.range_high|segmented_caching\\.rounded_req\\.range_low|segmented_caching\\.total_blocks)\\b"
+        },
+        {
+          "name": "support.variable.vcl",
+          "match": "\\b(req\\.grace|req\\.is_clustering|req\\.max_stale_if_error|req\\.max_stale_while_revalidate|req\\.restarts|server\\.datacenter|server\\.hostname|server\\.identity|server\\.ip|server\\.port|server\\.region)\\b"
+        },
+        {
+          "name": "support.variable.vcl",
+          "match": "\\b(waf\\.anomaly_score|waf\\.blocked|waf\\.counter|waf\\.executed|waf\\.failures|waf\\.http_violation_score|waf\\.inbound_anomaly_score|waf\\.lfi_score|waf\\.logdata|waf\\.logged|waf\\.message|waf\\.passed|waf\\.php_injection_score|waf\\.rce_score|waf\\.rfi_score|waf\\.rule_id|waf\\.session_fixation_score|waf\\.severity|waf\\.sql_injection_score|waf\\.xss_score)\\b"
+        },
+        {
+          "name": "support.variable.vcl",
+          "match": "\\b(header\\.filter_except|header\\.filter|header\\.get|header\\.set|header\\.unset)\\b"
+        }
+      ]
+    },
+    "keywords": {
+      "patterns": [
+        {
+          "name": "keyword.control.vcl",
+          "match": "\\b(else|elseif|elsif|error|if)\\b"
+        },
+        {
+          "name": "meta.function.vcl",
+          "begin": "^\\s*(sub)\\s+([a-zA-Z_0-9]+)",
+          "beginCaptures": {
+            "1": {
+              "name": "keyword.control.vcl"
+            },
+            "2": {
+              "name": "entity.name.function.vcl"
+            }
+          },
+          "end": "{"
+        },
+        {
+          "name": "meta.function.vcl",
+          "begin": "^\\s*(return)\\s*\\((deliver_stale|deliver|fetch|hash|hit_for_pass|lookup|pass)\\s*\\)",
+          "beginCaptures": {
+            "1": {
+              "name": "keyword.control.vcl"
+            },
+            "2": {
+              "name": "entity.name.function.vcl"
+            }
+          },
+          "end": ";"
+        },
+        {
+          "name": "keyword.other.vcl",
+          "match": "\\b(acl|backend|director|penaltybox|ratecounter|table)\\b"
+        },
+        {
+          "name": "keyword.other.vcl",
+          "match": "\\b(add|declare local|error|esi|include|log|remove|restart|return|set|synthetic\\.base64|synthetic|unset)\\b"
+        },
+        {
+          "name": "meta.function.vcl",
+          "begin": "^\\s*(call)\\s+([a-zA-Z_0-9]+)",
+          "beginCaptures": {
+            "1": {
+              "name": "keyword.control.vcl"
+            },
+            "2": {
+              "name": "entity.name.function.vcl"
+            }
+          },
+          "end": ";"
+        },
+        {
+          "name": "keyword.operator.vcl",
+          "match": "(!|=|==|!=|>=|<=|>|<|~|!~|\\|\\||&&|[+*/%&^|-]=|rol=|ror=|\\|\\|=|\\+)"
+        }
+      ]
+    },
+    "strings": {
+      "patterns": [
+        {
+          "name": "string.quoted.double.vcl",
+          "begin": "{([a-z]+)?\"",
+          "end": "\"\\1}",
+          "patterns": [
+            {
+              "name": "constant.character.escape.vcl",
+              "match": "\\\\."
+            }
+          ]
+        },
+        {
+          "name": "string.quoted.double.vcl",
+          "begin": "\"",
+          "end": "\"",
+          "patterns": [
+            {
+              "name": "constant.character.escape.vcl",
+              "match": "\\\\."
+            }
+          ]
+        },
+        {
+          "name": "string.quoted.double.vcl",
+          "match": "\\bLF\\b"
+        }
+      ]
+    },
+    "types": {
+      "patterns": [
+        {
+          "name": "entity.name.type.vcl",
+          "match": "\\b(ACL|BACKEND|BOOL|FLOAT|ID|INTEGER|IP|RTIME|STRING|TIME)\\b"
+        },
+        {
+          "name": "storage.type.vcl",
+          "match": "\\b(chash|client|fallback|hash|random)\\b"
+        }
+      ]
+    },
+    "variables": {
+      "patterns": [
+        {
+          "name": "variable.other.vcl",
+          "match": "\\b(bereq|beresp|obj|req|resp)\\.http\\.[a-zA-Z0-9_.-]+(:[a-zA-Z0-9_.-]+)?"
+        },
+        {
+          "name": "variable.other.vcl",
+          "match": "\\b(var)\\.[a-zA-Z0-9_-]+"
+        },
+        {
+          "name": "variable.other.vcl",
+          "match": "\\bF_[a-zA-Z0-9_-]+"
+        },
+        {
+          "name": "support.other.vcl",
+          "match": "\\.(address|always_use_host_header|auto_loadbalance|backend|between_bytes_timeout|bypass_local_route_table|client_cert|comment|connect_timeout|dynamic|first_byte_timeout|healthcheck|hostname|host_header|host|ipv4|ipv6|is_shield|max_connections|max_tls_version|min_tls_version|name|override_host|port|probe|share_key|ssl_ca_cert|ssl_cert_hostname|ssl_check_cert|ssl_cipehers|ssl_client_cert|ssl_client_key|ssl_sni_hostname|ssl|use_ssl|weight)"
+        },
+        {
+          "name": "support.other.vcl",
+          "match": "\\.(dummy|expected_response|initial|interval|request|timeout|threshold|window)"
+        },
+        {
+          "name": "support.other.vcl",
+          "match": "\\.(id|key|quorum|seed|retries|vnodes_per_node)"
+        },
+        {
+          "name": "support.variable.vcl",
+          "match": "\\b(now\\.sec|now)\\b"
+        }
+      ]
+    }
+  },
+  "scopeName": "source.vcl"
+}
