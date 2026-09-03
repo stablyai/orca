@@ -23,6 +23,7 @@ export type WorktreeStatus =
 type WorktreeStatusHeuristicOptions = {
   liveAgentStatus?: LiveAgentWorktreeStatus
   agentStatusPaneIdsByTabId?: Record<string, ReadonlySet<string>>
+  foregroundAgentPaneIdsByTabId?: Record<string, ReadonlySet<string>>
   terminalLayoutsByTabId?: Record<string, TerminalLayoutSnapshot | undefined>
   terminalLayoutRootsByTabId?: Record<string, TerminalPaneLayoutNode | null | undefined>
 }
@@ -74,6 +75,7 @@ function tabHasStatus(
   options: WorktreeStatusHeuristicOptions
 ): boolean {
   const agentStatusPaneIds = options.agentStatusPaneIdsByTabId?.[tab.id]
+  const foregroundAgentPaneIds = options.foregroundAgentPaneIdsByTabId?.[tab.id]
   const paneTitles = runtimePaneTitlesByTabId[tab.id]
   if (paneTitles && Object.keys(paneTitles).length > 0) {
     const tabLayoutRoot =
@@ -91,9 +93,16 @@ function tabHasStatus(
       ) {
         continue
       }
+      // Why: same pre-hydration gap as the agent-row branch above; one title and one agent pane pair unambiguously.
+      const hasSingleUnmappedForegroundAgentPane =
+        leafId === null && foregroundAgentPaneIds?.size === 1 && paneTitleEntries.length === 1
+      const paneRunsAgentProcess =
+        foregroundAgentPaneIds?.has(runtimePaneId) === true ||
+        (leafId !== null && foregroundAgentPaneIds?.has(leafId) === true) ||
+        hasSingleUnmappedForegroundAgentPane
       if (
         classifyTitleActivity(title) === status &&
-        titleStatusIsAgentAttributable(title, tab.launchAgent)
+        titleStatusIsAgentAttributable(title, tab.launchAgent, paneRunsAgentProcess)
       ) {
         return true
       }
@@ -104,15 +113,28 @@ function tabHasStatus(
   if (agentStatusPaneIds && agentStatusPaneIds.size > 0) {
     return false
   }
+  // Why: no pane titles to map process evidence onto, so any agent pane attributes the tab title — the same reach `launchAgent` has here.
   return (
     classifyTitleActivity(tab.title) === status &&
-    titleStatusIsAgentAttributable(tab.title, tab.launchAgent)
+    titleStatusIsAgentAttributable(
+      tab.title,
+      tab.launchAgent,
+      (foregroundAgentPaneIds?.size ?? 0) > 0
+    )
   )
 }
 
 // Why: require agent attribution so a bare never-cleared spinner title can't spin the dot "0 agents" forever with no matching sidebar row.
-function titleStatusIsAgentAttributable(title: string, launchAgent?: TuiAgent | null): boolean {
+function titleStatusIsAgentAttributable(
+  title: string,
+  launchAgent?: TuiAgent | null,
+  paneRunsAgentProcess = false
+): boolean {
   if (resolveAgentTypeFromTerminalTitle(title) !== null) {
+    return true
+  }
+  // Why: the process table is the only durable identity for a hand-started agent — launchAgent persists as null and the generated title names Claude only by accident.
+  if (paneRunsAgentProcess) {
     return true
   }
   // Why: a spinner proves activity but not identity (Claude's thinking title has no provider
@@ -139,6 +161,7 @@ export function resolveWorktreeStatus(args: {
   ptyIdsByTabId: Record<string, string[]>
   runtimePaneTitlesByTabId?: Record<string, Record<number, string>>
   agentStatusPaneIdsByTabId?: Record<string, ReadonlySet<string>>
+  foregroundAgentPaneIdsByTabId?: Record<string, ReadonlySet<string>>
   terminalLayoutsByTabId?: Record<string, TerminalLayoutSnapshot | undefined>
   terminalLayoutRootsByTabId?: Record<string, TerminalPaneLayoutNode | null | undefined>
   hasPermission: boolean
@@ -155,6 +178,7 @@ export function resolveWorktreeStatus(args: {
     args.runtimePaneTitlesByTabId ?? {},
     {
       agentStatusPaneIdsByTabId: args.agentStatusPaneIdsByTabId,
+      foregroundAgentPaneIdsByTabId: args.foregroundAgentPaneIdsByTabId,
       terminalLayoutsByTabId: args.terminalLayoutsByTabId,
       terminalLayoutRootsByTabId: args.terminalLayoutRootsByTabId
     }

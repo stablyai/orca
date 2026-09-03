@@ -380,3 +380,28 @@ describe('terminalTabActivityToAgentDotState', () => {
     expect(terminalTabActivityToAgentDotState('inactive')).toBeNull()
   })
 })
+
+describe('resolveTerminalTabActivityStatus foreground agent attribution', () => {
+  const CLAUDE_BUSY_TITLE = '◐ Orca automatic session title renaming'
+
+  it('spins for an agent status title when the pane foreground process is an agent', () => {
+    const status = resolveTerminalTabActivityStatus({
+      tab: { id: TAB_ID, title: CLAUDE_BUSY_TITLE },
+      ptyIdsByTabId: LIVE_PTY,
+      paneForegroundAgentByPaneKey: {
+        [`${TAB_ID}:${FIRST_LEAF_ID}`]: { agent: 'claude', shellForeground: false }
+      }
+    })
+
+    expect(status).toBe('working')
+  })
+
+  it('stays active for the same title with no agent process in the tab', () => {
+    const status = resolveTerminalTabActivityStatus({
+      tab: { id: TAB_ID, title: CLAUDE_BUSY_TITLE },
+      ptyIdsByTabId: LIVE_PTY
+    })
+
+    expect(status).toBe('active')
+  })
+})

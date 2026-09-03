@@ -22,6 +22,7 @@ type WorktreeActivityStatusState = Pick<
   | 'migrationUnsupportedByPtyId'
   | 'retainedAgentsByPaneKey'
   | 'runtimeAgentOrchestrationByPaneKey'
+  | 'paneForegroundAgentByPaneKey'
 >
 
 export function selectWorktreeActivityStatuses(
@@ -37,7 +38,8 @@ export function selectWorktreeActivityStatuses(
       hasInterrupted,
       hasLiveDone,
       hasRetainedDone,
-      agentStatusPaneIdsByTabId
+      agentStatusPaneIdsByTabId,
+      foregroundAgentPaneIdsByTabId
     } = selectWorktreeAgentActivitySummary(statusInputs, worktreeId)
     statuses.set(
       worktreeId,
@@ -47,6 +49,7 @@ export function selectWorktreeActivityStatuses(
         ptyIdsByTabId: selectLivePtyIdsForWorktree(statusInputs, worktreeId),
         runtimePaneTitlesByTabId: selectRuntimePaneTitlesForWorktree(statusInputs, worktreeId),
         agentStatusPaneIdsByTabId,
+        foregroundAgentPaneIdsByTabId,
         terminalLayoutRootsByTabId: selectTerminalLayoutRootsForWorktree(statusInputs, worktreeId),
         hasPermission,
         hasLiveWorking,

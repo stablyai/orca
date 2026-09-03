@@ -15,7 +15,8 @@ function makeStatusState(): StatusState {
     agentStatusByPaneKey: {},
     migrationUnsupportedByPtyId: {},
     retainedAgentsByPaneKey: {},
-    runtimeAgentOrchestrationByPaneKey: {}
+    runtimeAgentOrchestrationByPaneKey: {},
+    paneForegroundAgentByPaneKey: {}
   }
 }
 

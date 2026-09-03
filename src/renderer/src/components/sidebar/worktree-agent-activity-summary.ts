@@ -21,9 +21,12 @@ export type WorktreeAgentActivitySummary = {
   hasLiveDone: boolean
   hasRetainedDone: boolean
   agentStatusPaneIdsByTabId: Record<string, ReadonlySet<string>>
+  /** Panes whose foreground process is a recognized agent, from the process table. */
+  foregroundAgentPaneIdsByTabId: Record<string, ReadonlySet<string>>
 }
 
 const EMPTY_AGENT_STATUS_PANE_IDS_BY_TAB_ID: Record<string, ReadonlySet<string>> = {}
+const EMPTY_FOREGROUND_AGENT_PANE_IDS_BY_TAB_ID: Record<string, ReadonlySet<string>> = {}
 
 const EMPTY_SUMMARY: WorktreeAgentActivitySummary = {
   hasPermission: false,
@@ -32,7 +35,8 @@ const EMPTY_SUMMARY: WorktreeAgentActivitySummary = {
   hasInterrupted: false,
   hasLiveDone: false,
   hasRetainedDone: false,
-  agentStatusPaneIdsByTabId: EMPTY_AGENT_STATUS_PANE_IDS_BY_TAB_ID
+  agentStatusPaneIdsByTabId: EMPTY_AGENT_STATUS_PANE_IDS_BY_TAB_ID,
+  foregroundAgentPaneIdsByTabId: EMPTY_FOREGROUND_AGENT_PANE_IDS_BY_TAB_ID
 }
 
 type AgentActivityTabsByWorktree = Record<string, readonly { id: string }[]>
@@ -46,6 +50,7 @@ export type AgentActivityInput = Pick<
 > & {
   tabsByWorktree: AgentActivityTabsByWorktree
   runtimeAgentOrchestrationByPaneKey?: AppState['runtimeAgentOrchestrationByPaneKey']
+  paneForegroundAgentByPaneKey?: AppState['paneForegroundAgentByPaneKey']
 }
 
 type AgentActivityCache = {
@@ -54,6 +59,7 @@ type AgentActivityCache = {
   migrationUnsupportedByPtyId: AppState['migrationUnsupportedByPtyId']
   retainedAgentsByPaneKey: AppState['retainedAgentsByPaneKey']
   runtimeAgentOrchestrationByPaneKey: AppState['runtimeAgentOrchestrationByPaneKey'] | undefined
+  paneForegroundAgentByPaneKey: AppState['paneForegroundAgentByPaneKey'] | undefined
   summaries: Map<string, WorktreeAgentActivitySummary>
 }
 
@@ -70,13 +76,15 @@ function getWorktreeAgentActivitySummaries(
   state: AgentActivityInput
 ): Map<string, WorktreeAgentActivitySummary> {
   const runtimeAgentOrchestrationByPaneKey = state.runtimeAgentOrchestrationByPaneKey
+  const paneForegroundAgentByPaneKey = state.paneForegroundAgentByPaneKey
   if (
     agentActivityCache &&
     agentActivityCache.tabsByWorktree === state.tabsByWorktree &&
     agentActivityCache.agentStatusEpoch === state.agentStatusEpoch &&
     agentActivityCache.migrationUnsupportedByPtyId === state.migrationUnsupportedByPtyId &&
     agentActivityCache.retainedAgentsByPaneKey === state.retainedAgentsByPaneKey &&
-    agentActivityCache.runtimeAgentOrchestrationByPaneKey === runtimeAgentOrchestrationByPaneKey
+    agentActivityCache.runtimeAgentOrchestrationByPaneKey === runtimeAgentOrchestrationByPaneKey &&
+    agentActivityCache.paneForegroundAgentByPaneKey === paneForegroundAgentByPaneKey
   ) {
     return agentActivityCache.summaries
   }
@@ -99,6 +107,26 @@ function getWorktreeAgentActivitySummaries(
       summaries.set(worktreeId, summary)
     }
     return summary
+  }
+
+  // Why: the process table is the only durable proof of an agent the user started by hand.
+  for (const [paneKey, entry] of Object.entries(paneForegroundAgentByPaneKey ?? {})) {
+    if (!entry.agent) {
+      continue
+    }
+    const paneIdentity = parseAgentStatusPaneIdentity(paneKey)
+    if (!paneIdentity) {
+      continue
+    }
+    const worktreeId = tabIdToWorktreeId.get(paneIdentity.tabId)
+    if (!worktreeId) {
+      continue
+    }
+    addForegroundAgentPaneId(
+      summaryForWorktree(worktreeId),
+      paneIdentity.tabId,
+      paneIdentity.paneId
+    )
   }
 
   const now = Date.now()
@@ -170,6 +198,7 @@ function getWorktreeAgentActivitySummaries(
     migrationUnsupportedByPtyId: state.migrationUnsupportedByPtyId,
     retainedAgentsByPaneKey: state.retainedAgentsByPaneKey,
     runtimeAgentOrchestrationByPaneKey,
+    paneForegroundAgentByPaneKey,
     summaries
   }
   return summaries
@@ -189,6 +218,10 @@ function summariesEqual(
     agentStatusPaneIdsByTabIdEqual(
       previous.agentStatusPaneIdsByTabId,
       next.agentStatusPaneIdsByTabId
+    ) &&
+    agentStatusPaneIdsByTabIdEqual(
+      previous.foregroundAgentPaneIdsByTabId,
+      next.foregroundAgentPaneIdsByTabId
     )
   )
 }
@@ -251,6 +284,23 @@ function addAgentStatusPaneId(
   if (!paneIds) {
     paneIds = new Set<string>()
     summary.agentStatusPaneIdsByTabId[tabId] = paneIds
+  }
+  paneIds.add(paneId)
+}
+
+/** Records a pane whose foreground process is a recognized agent. */
+function addForegroundAgentPaneId(
+  summary: WorktreeAgentActivitySummary,
+  tabId: string,
+  paneId: string
+): void {
+  if (summary.foregroundAgentPaneIdsByTabId === EMPTY_FOREGROUND_AGENT_PANE_IDS_BY_TAB_ID) {
+    summary.foregroundAgentPaneIdsByTabId = {}
+  }
+  let paneIds = summary.foregroundAgentPaneIdsByTabId[tabId] as Set<string> | undefined
+  if (!paneIds) {
+    paneIds = new Set<string>()
+    summary.foregroundAgentPaneIdsByTabId[tabId] = paneIds
   }
   paneIds.add(paneId)
 }

@@ -6,6 +6,7 @@ import {
 } from '../../../../shared/agent-status-types'
 import { parseLegacyNumericPaneKey, parsePaneKey } from '../../../../shared/stable-pane-id'
 import type { TerminalLayoutSnapshot, TerminalTab } from '../../../../shared/terminal-tab-types'
+import type { PaneForegroundAgentEntry } from '@/store/slices/pane-foreground-agent'
 
 // Why: a terminal tab is a container of panes, exactly like a worktree card is
 // a container of tabs. Reuse the WorktreeCard status vocabulary and resolver so
@@ -127,6 +128,44 @@ function parseAgentStatusPaneKey(paneKey: string): { tabId: string; paneId: stri
 
 const EMPTY_PANE_IDS: ReadonlySet<string> = new Set()
 
+type ForegroundAgentPaneIdsCache = {
+  paneForegroundAgentByPaneKey: Record<string, PaneForegroundAgentEntry> | undefined
+  paneIdsByTabId: Map<string, Set<string>>
+}
+
+// Why: same per-snapshot bucketing as the flags cache above — every tab's selector reads it on every store write.
+let foregroundAgentPaneIdsCache: ForegroundAgentPaneIdsCache | null = null
+
+/** Buckets process-table pane identity by tab, so the tab dot and the worktree dot attribute alike. */
+function getForegroundAgentPaneIdsByTabId(
+  paneForegroundAgentByPaneKey: Record<string, PaneForegroundAgentEntry> | undefined
+): Map<string, Set<string>> {
+  if (
+    foregroundAgentPaneIdsCache &&
+    foregroundAgentPaneIdsCache.paneForegroundAgentByPaneKey === paneForegroundAgentByPaneKey
+  ) {
+    return foregroundAgentPaneIdsCache.paneIdsByTabId
+  }
+  const paneIdsByTabId = new Map<string, Set<string>>()
+  for (const [paneKey, entry] of Object.entries(paneForegroundAgentByPaneKey ?? {})) {
+    if (!entry.agent) {
+      continue
+    }
+    const identity = parseAgentStatusPaneKey(paneKey)
+    if (!identity) {
+      continue
+    }
+    const paneIds = paneIdsByTabId.get(identity.tabId)
+    if (paneIds) {
+      paneIds.add(identity.paneId)
+    } else {
+      paneIdsByTabId.set(identity.tabId, new Set([identity.paneId]))
+    }
+  }
+  foregroundAgentPaneIdsCache = { paneForegroundAgentByPaneKey, paneIdsByTabId }
+  return paneIdsByTabId
+}
+
 type TerminalTabActivityInput = {
   // Why: launchAgent is read, not just carried — the status gate needs it to attribute a
   // bare spinner title to an agent (#9040). Narrowing it away here compiles (it is optional)
@@ -139,6 +178,8 @@ type TerminalTabActivityInput = {
   runtimePaneTitlesByTabId?: Record<string, Record<number, string>>
   ptyIdsByTabId?: Record<string, string[]>
   terminalLayout?: TerminalLayoutSnapshot
+  // Why: the only durable signal for an agent the user started by hand — see titleStatusIsAgentAttributable.
+  paneForegroundAgentByPaneKey?: Record<string, PaneForegroundAgentEntry>
 }
 
 /**
@@ -153,15 +194,19 @@ export function resolveTerminalTabActivityStatus({
   agentStatusEpoch,
   runtimePaneTitlesByTabId,
   ptyIdsByTabId,
-  terminalLayout
+  terminalLayout,
+  paneForegroundAgentByPaneKey
 }: TerminalTabActivityInput): TerminalTabActivityStatus {
   const flags = getTerminalTabActivityFlags(agentStatusByPaneKey, agentStatusEpoch).get(tab.id)
+  const foregroundAgentPaneIds =
+    getForegroundAgentPaneIdsByTabId(paneForegroundAgentByPaneKey).get(tab.id) ?? EMPTY_PANE_IDS
   return resolveWorktreeStatus({
     tabs: [tab],
     browserTabs: [],
     ptyIdsByTabId: ptyIdsByTabId ?? {},
     runtimePaneTitlesByTabId: runtimePaneTitlesByTabId ?? {},
     agentStatusPaneIdsByTabId: { [tab.id]: flags?.paneIds ?? EMPTY_PANE_IDS },
+    foregroundAgentPaneIdsByTabId: { [tab.id]: foregroundAgentPaneIds },
     terminalLayoutsByTabId: terminalLayout ? { [tab.id]: terminalLayout } : undefined,
     hasPermission: flags?.hasPermission ?? false,
     hasLiveWorking: flags?.hasLiveWorking ?? false,
@@ -296,6 +341,7 @@ export function hasUnreadAgentCompletionForTerminalTab(
 /** Test-only: clear the memoized per-tab flag cache between cases. */
 export function resetTerminalTabActivityFlagsCacheForTest(): void {
   flagsCache = null
+  foregroundAgentPaneIdsCache = null
 }
 
 /** Test-only: clear the unread marker snapshot index between cases. */
