@@ -39,6 +39,17 @@ Never use vague names like `helpers`, `utils`, `common`, `misc`, or `shared-stuf
 
 Always use the primary working directory (the worktree) for all file reads and edits. Never follow absolute paths from subagent results that point to the main repo.
 
+## Red After Merging Main
+
+Before diagnosing a branch — or a whole stack — that went red after merging `main`, check whether `main` was already broken. No workflow runs the test suite on a push to `main`, so its commits carry no checks and the question has to be answered from the PRs whose CI ran against `main` at that moment:
+
+```sh
+pnpm run diagnose:upstream-breakage at <commit> --window-hours 1
+pnpm run diagnose:upstream-breakage compare <pr> <pr> ...
+```
+
+An identical failure set across independent branches is upstream by construction, and the repair is to merge a newer `main` — not to fix the branches. The probe answers `broken` / `clean` / `unknown` and never reports `clean` without positive evidence. See [`docs/reference/upstream-breakage-diagnosis.md`](./docs/reference/upstream-breakage-diagnosis.md).
+
 ## Cross-Platform Support
 
 Orca targets macOS, Linux, and Windows. Keep all platform-dependent behavior behind runtime checks:
