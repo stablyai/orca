@@ -1,9 +1,10 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react'
 import { RefreshCw } from 'lucide-react'
 import type { GhAccountBinding } from '../../../../shared/github/account-binding'
 import type { Repo } from '../../../../shared/repo-types'
 import type { GhAccountBindingInventory } from '../../../../shared/github/auth-types'
 import { Button } from '../ui/button'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select'
 import { SearchableSetting } from './SearchableSetting'
 import { useAppStore } from '../../store'
 import { getRepoOwnerRoutedSettings } from '@/lib/repo-runtime-owner'
@@ -26,6 +27,9 @@ function accountKey(host: string, user: string): string {
   return `${host.toLowerCase()}\0${user.toLowerCase()}`
 }
 
+// Why: Radix Select rejects an empty item value, so "inherit the ambient login" needs a sentinel.
+const AMBIENT_VALUE = '__ambient_gh_login__'
+
 export function RepositoryGitHubAccountSection({
   repo,
   updateRepo,
@@ -38,6 +42,7 @@ export function RepositoryGitHubAccountSection({
   const [error, setError] = useState<string | null>(null)
   const [notEnforced, setNotEnforced] = useState(false)
   const loadGenerationRef = useRef(0)
+  const selectLabelId = useId()
 
   // Why: getRepoOwnerRoutedSettings returns a fresh object each render, and the target
   // depends on nothing else — key the memo on the id so it stays stable.
@@ -90,7 +95,7 @@ export function RepositoryGitHubAccountSection({
     inventoryAccounts.some((entry) => accountKey(entry.host, entry.user) === selectedKey)
   )
 
-  const applyBinding = async (next: GhAccountBinding | null) => {
+  const applyBinding = async (requested: GhAccountBinding | null) => {
     if (saving) {
       return
     }
@@ -98,8 +103,9 @@ export function RepositoryGitHubAccountSection({
     setError(null)
     setNotEnforced(false)
     try {
-      if (next) {
-        const validation = await validateRepositoryGhAccountBinding(runtimeTarget, repo, next)
+      let resolved = requested
+      if (requested) {
+        const validation = await validateRepositoryGhAccountBinding(runtimeTarget, repo, requested)
         if (!validation.ok) {
           setError(
             validation.error === 'gh_multi_account_unsupported'
@@ -129,9 +135,9 @@ export function RepositoryGitHubAccountSection({
           )
           return
         }
-        next = validation.binding
+        resolved = validation.binding
       }
-      const result = await Promise.resolve(updateRepo(repo.id, { ghAccount: next }))
+      const result = await Promise.resolve(updateRepo(repo.id, { ghAccount: resolved }))
       if (result === false) {
         setError(
           translate(
@@ -142,7 +148,7 @@ export function RepositoryGitHubAccountSection({
         return
       }
       const echoed = useAppStore.getState().repos.find((entry) => entry.id === repo.id)?.ghAccount
-      if (!isGhAccountBindingEnforced(next, echoed)) {
+      if (!isGhAccountBindingEnforced(resolved, echoed)) {
         setNotEnforced(true)
       }
     } catch (err) {
@@ -205,24 +211,24 @@ export function RepositoryGitHubAccountSection({
         </Button>
       </div>
 
-      <label className="block space-y-1.5">
-        <span className="text-xs text-muted-foreground">
+      <div className="space-y-1.5">
+        <span id={selectLabelId} className="block text-xs text-muted-foreground">
           {translate(
             'auto.components.settings.RepositoryGitHubAccountSection.selectLabel',
             'Account'
           )}
         </span>
-        <select
-          className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-xs outline-none focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px] disabled:cursor-not-allowed disabled:opacity-50"
-          value={selectedKey}
+        <Select
+          value={repo.ghAccount ? selectedKey : AMBIENT_VALUE}
           disabled={loading || saving}
-          onChange={(event) => {
-            const value = event.target.value
-            if (!value) {
-              void applyBinding(null)
+          onValueChange={(value) => {
+            if (value === AMBIENT_VALUE) {
+              if (repo.ghAccount) {
+                void applyBinding(null)
+              }
               return
             }
-            if (repo.ghAccount && accountKey(repo.ghAccount.host, repo.ghAccount.user) === value) {
+            if (repo.ghAccount && selectedKey === value) {
               return
             }
             const account = inventoryAccounts.find(
@@ -234,36 +240,42 @@ export function RepositoryGitHubAccountSection({
             void applyBinding({ host: account.host, user: account.user })
           }}
         >
-          <option value="">
-            {translate(
-              'auto.components.settings.RepositoryGitHubAccountSection.ambient',
-              'Default (ambient gh login)'
-            )}
-          </option>
-          {repo.ghAccount && !selectedInInventory ? (
-            <option value={selectedKey}>
+          <SelectTrigger size="sm" className="w-full" aria-labelledby={selectLabelId}>
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value={AMBIENT_VALUE}>
               {translate(
-                'auto.components.settings.RepositoryGitHubAccountSection.unavailableOption',
-                '{{user}} @ {{host}} (unavailable)',
-                { user: repo.ghAccount.user, host: repo.ghAccount.host }
+                'auto.components.settings.RepositoryGitHubAccountSection.ambient',
+                'Default (ambient gh login)'
               )}
-            </option>
-          ) : null}
-          {inventoryAccounts.map((account) => {
-            const key = accountKey(account.host, account.user)
-            const disabled = account.source !== 'keyring' || capabilityBlocksBinding
-            const label =
-              account.source === 'keyring'
-                ? `${account.user} @ ${account.host}`
-                : `${account.user} @ ${account.host} (${account.envToken ?? 'env'})`
-            return (
-              <option key={key} value={key} disabled={disabled}>
-                {label}
-              </option>
-            )
-          })}
-        </select>
-      </label>
+            </SelectItem>
+            {repo.ghAccount && !selectedInInventory ? (
+              // Why: keep the bound account's key as the item value so the trigger shows it; disabled so it cannot be re-picked.
+              <SelectItem value={selectedKey} disabled>
+                {translate(
+                  'auto.components.settings.RepositoryGitHubAccountSection.unavailableOption',
+                  '{{user}} @ {{host}} (unavailable)',
+                  { user: repo.ghAccount.user, host: repo.ghAccount.host }
+                )}
+              </SelectItem>
+            ) : null}
+            {inventoryAccounts.map((account) => {
+              const key = accountKey(account.host, account.user)
+              const disabled = account.source !== 'keyring' || capabilityBlocksBinding
+              const label =
+                account.source === 'keyring'
+                  ? `${account.user} @ ${account.host}`
+                  : `${account.user} @ ${account.host} (${account.envToken ?? 'env'})`
+              return (
+                <SelectItem key={key} value={key} disabled={disabled}>
+                  {label}
+                </SelectItem>
+              )
+            })}
+          </SelectContent>
+        </Select>
+      </div>
 
       {capabilityUnsupported ? (
         <p className="text-xs text-muted-foreground">

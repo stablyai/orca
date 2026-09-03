@@ -90,7 +90,7 @@ export function getRepositoryPaneSearchEntries(
             keywords: [
               repo.displayName,
               ...translateSearchKeyword(
-                'auto.components.settings.repository.search.github',
+                'auto.components.settings.repository.search.9dc60d7f6d',
                 'github'
               ),
               ...translateSearchKeyword(

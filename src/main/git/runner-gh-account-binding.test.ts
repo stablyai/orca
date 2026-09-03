@@ -55,7 +55,9 @@ function mockChild(pid = 4321): ChildProcess {
 }
 
 /** Spawns a child that settles with `stdout`, capturing the env the runner handed it. */
-function spawnSettledChild(stdout: string): { env: () => NodeJS.ProcessEnv | undefined } {
+function spawnSettledChild(stdout: string): {
+  env: () => NodeJS.ProcessEnv | undefined
+} {
   let capturedEnv: NodeJS.ProcessEnv | undefined
   spawnMock.mockImplementation(
     (_cmd: string, _args: string[], opts: { env?: NodeJS.ProcessEnv }) => {
@@ -151,5 +153,29 @@ describe('ghExecFileAsync account binding', () => {
       })
     ).rejects.toMatchObject({ code: 'gh_bound_account_host_mismatch' })
     expect(spawnMock).not.toHaveBeenCalled()
+  })
+
+  it.each(['-Rgithub.acme.com/a/b', '-R=github.acme.com/a/b'])(
+    'fails closed for the attached %s host form',
+    async (attached) => {
+      await expect(
+        ghExecFileAsync(['pr', 'list', attached], {
+          host: 'github.com',
+          ghAccount: { host: 'github.com', user: 'Alice' }
+        })
+      ).rejects.toMatchObject({ code: 'gh_bound_account_host_mismatch' })
+      expect(spawnMock).not.toHaveBeenCalled()
+    }
+  )
+
+  it('accepts an attached -R form that names the bound host', async () => {
+    const spawned = spawnSettledChild('[]')
+
+    await ghExecFileAsync(['pr', 'list', '-Rgithub.com/a/b'], {
+      host: 'github.com',
+      ghAccount: { host: 'github.com', user: 'Alice' }
+    })
+
+    expect(spawned.env()?.GH_TOKEN).toBe('bound-token')
   })
 })

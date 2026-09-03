@@ -9979,6 +9979,10 @@
             "projectRuntimeDescription": "Choose whether this project runs on Windows or WSL.",
             "githubAccount": "GitHub Account",
             "githubAccountDescription": "Bind a keyring gh login for this project’s GitHub API calls.",
+            "githubAccountKeyword": "github account",
+            "ghAccount": "gh account",
+            "login": "login",
+            "token": "token",
             "externalWorktrees": "External worktrees",
             "externalWorktreesDescription": "Override whether worktrees created outside Orca appear for this project."
           }

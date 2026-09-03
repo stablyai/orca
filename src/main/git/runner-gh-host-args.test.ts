@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import { applyGhHostToArgs } from './runner'
+import { collectGhArgvHostSignals } from './command-runner/gh-host-args'
 
 describe('applyGhHostToArgs', () => {
   it('returns args unchanged when no host is given', () => {
@@ -138,5 +139,41 @@ describe('applyGhHostToArgs', () => {
       '--repo',
       'github.acme-corp.com/a/b'
     ])
+  })
+})
+
+describe('collectGhArgvHostSignals', () => {
+  it('collects --hostname and host-qualified --repo / -R values, lowercased', () => {
+    expect(collectGhArgvHostSignals(['api', '--hostname', 'GitHub.Acme.com', 'user'])).toEqual([
+      'github.acme.com'
+    ])
+    expect(collectGhArgvHostSignals(['api', '--hostname=ghe.example.com', 'user'])).toEqual([
+      'ghe.example.com'
+    ])
+    expect(collectGhArgvHostSignals(['pr', 'list', '--repo', 'ghe.example.com/a/b'])).toEqual([
+      'ghe.example.com'
+    ])
+    expect(collectGhArgvHostSignals(['pr', 'list', '-R', 'ghe.example.com/a/b'])).toEqual([
+      'ghe.example.com'
+    ])
+    expect(collectGhArgvHostSignals(['pr', 'list', '--repo=ghe.example.com/a/b'])).toEqual([
+      'ghe.example.com'
+    ])
+  })
+
+  it('reads the attached -R forms gh accepts, so a bound call cannot drift hosts through them', () => {
+    expect(collectGhArgvHostSignals(['pr', 'list', '-Rghe.example.com/a/b'])).toEqual([
+      'ghe.example.com'
+    ])
+    expect(collectGhArgvHostSignals(['pr', 'list', '-R=ghe.example.com/a/b'])).toEqual([
+      'ghe.example.com'
+    ])
+  })
+
+  it('ignores bare owner/repo shorthand and free text that merely starts with -R', () => {
+    expect(collectGhArgvHostSignals(['pr', 'list', '-R', 'a/b'])).toEqual([])
+    expect(collectGhArgvHostSignals(['pr', 'list', '-Ra/b'])).toEqual([])
+    expect(collectGhArgvHostSignals(['pr', 'create', '--title', '-R-flavoured title'])).toEqual([])
+    expect(collectGhArgvHostSignals(['pr', 'list', '-R-'])).toEqual([])
   })
 })
