@@ -523,6 +523,71 @@ describe('orchestration new-worktree workers', () => {
     expect(db.getTask(task.id)?.status).toBe('blocked')
   })
 
+  it('keeps new-child authority recoverable when prompt acceptance is unobserved', async () => {
+    mockCreatedWorktree({ hookFound: false })
+    vi.mocked(runtime.sendTerminalAgentPrompt).mockRejectedValueOnce(
+      new Error('agent_prompt_stalled')
+    )
+
+    const { result, task } = await startWorker({ name: 'recoverable-input-worker' })
+    const dispatchId = (result as { dispatchId: string }).dispatchId
+
+    expect(result).toMatchObject({
+      state: 'failed',
+      failedStage: 'dispatch_input',
+      lastError: 'agent_prompt_stalled',
+      residualResources: expect.arrayContaining([
+        expect.objectContaining({ kind: 'worktree', id: 'repo::created' }),
+        expect.objectContaining({ kind: 'terminal', id: 'term_worker' })
+      ])
+    })
+    expect(db.getDispatchContextById(dispatchId)).toMatchObject({
+      assignee_handle: 'term_worker',
+      status: 'failed',
+      capability_hash: expect.any(String),
+      capability_revoked_at: null
+    })
+    expect(db.getWorkerTerminalResourceByOwner(dispatchId)).toMatchObject({
+      terminal_handle: 'term_worker',
+      ownership_state: 'owned'
+    })
+    const prompt = vi.mocked(runtime.sendTerminalAgentPrompt).mock.calls[0]?.[1] ?? ''
+    const capability = prompt.match(/--dispatch-capability (dcap_[A-Za-z0-9_-]+)/)?.[1]
+    if (!capability) {
+      throw new Error('Worker preamble did not carry its Dispatch capability.')
+    }
+    const send = ORCHESTRATION_METHODS.find((candidate) => candidate.name === 'orchestration.send')
+    if (!send?.params) {
+      throw new Error('orchestration.send method is not registered')
+    }
+    const report = await send.handler(
+      send.params.parse({
+        from: 'term_worker',
+        subject: 'Worker recovered the start receipt',
+        body: 'worker received the prompt',
+        type: 'worker_done',
+        payload: JSON.stringify({
+          taskId: task.id,
+          dispatchId,
+          outcome: 'succeeded'
+        })
+      }),
+      { runtime, orchestrationCapability: capability }
+    )
+    expect(report).toMatchObject({ lifecycle: { action: 'completed' } })
+    const settledTask = db.getTask(task.id)
+    expect(settledTask?.status).toBe('completed')
+    expect(JSON.parse(settledTask?.result ?? 'null')).toMatchObject({
+      provenance: 'worker_report',
+      outcome: 'succeeded',
+      body: 'worker received the prompt'
+    })
+    expect(db.getDispatchContextById(dispatchId)?.status).toBe('completed')
+    expect(db.getWorkerDispatch(dispatchId)).toMatchObject({ state: 'succeeded', stage: 'settled' })
+    expect(runtime.createManagedWorktree).toHaveBeenCalledOnce()
+    expect(runtime.sendTerminalAgentPrompt).toHaveBeenCalledOnce()
+  })
+
   it('persists the retry request with the starting Dispatch before worktree effects', async () => {
     const task = db.createTask({ spec: 'atomic worker acceptance', runId })
     let finishCreate: ((value: CreateWorktreeResult) => void) | undefined

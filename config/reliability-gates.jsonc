@@ -12696,6 +12696,7 @@
         "https://linear.app/stably/issue/STA-3800",
         "https://linear.app/stably/issue/STA-3904",
         "https://linear.app/stably/issue/STA-4328",
+        "https://linear.app/stably/issue/STA-4674",
         "https://github.com/stablyai/orca/issues/7226",
         "https://github.com/stablyai/orca/issues/13821",
         "https://github.com/stablyai/orca/issues/14347"
@@ -12705,6 +12706,7 @@
       "commands": [
         "pnpm exec vitest run --config config/vitest.config.ts src/shared/agent-prompt-injection.test.ts src/main/runtime/orca-runtime.test.ts src/main/runtime/rpc/methods/orchestration-tasks-dispatch.test.ts src/main/runtime/orchestration/coordinator.test.ts",
         "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/rpc/methods/orchestration-worker-start-prompt-contract.test.ts --reporter=dot",
+        "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/rpc/methods/orchestration-workers-new-worktree.test.ts --reporter=dot",
         "node tests/tools/repro-orchestration-long-prompt.mjs --cli out/bin/orca-dev --mode codex-like --size-kb 32 --timeout-ms 20000"
       ],
       "testFiles": [
@@ -12712,6 +12714,7 @@
         "src/main/runtime/orca-runtime.test.ts",
         "src/main/runtime/rpc/methods/orchestration-tasks-dispatch.test.ts",
         "src/main/runtime/rpc/methods/orchestration-worker-start-prompt-contract.test.ts",
+        "src/main/runtime/rpc/methods/orchestration-workers-new-worktree.test.ts",
         "src/main/runtime/orchestration/coordinator.test.ts",
         "tests/tools/repro-orchestration-long-prompt.mjs"
       ],
@@ -12754,6 +12757,12 @@
           ]
         },
         {
+          "file": "src/main/runtime/rpc/methods/orchestration-workers-new-worktree.test.ts",
+          "assertions": [
+            "an unobserved new-child prompt acceptance retains its exact assignee, capability, owned terminal resource, and one-send effects until authenticated worker_done settles the Dispatch"
+          ]
+        },
+        {
           "file": "src/main/runtime/orchestration/coordinator.test.ts",
           "assertions": [
             "coordinator dispatch failures from prompt injection circuit-break through the DB",
@@ -12770,6 +12779,15 @@
         }
       ],
       "evidenceRuns": [
+        {
+          "date": "2026-08-27",
+          "runner": "local",
+          "platform": "macos",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/rpc/methods/orchestration-workers-new-worktree.test.ts --reporter=dot",
+          "result": "passed",
+          "durationSeconds": 32.1,
+          "summary": "Twenty-one new-worktree worker-start contracts passed, including a new-child prompt whose unobserved acceptance retained the exact assignee, capability, owned terminal resource, and one-send effects until authenticated worker_done settled the Dispatch."
+        },
         {
           "date": "2026-08-23",
           "runner": "local",
