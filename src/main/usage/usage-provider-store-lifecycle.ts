@@ -4,6 +4,11 @@ import { UsageCacheSnapshotWriter } from '../usage-cache-snapshot-writer'
 import { loadKnownUsageWorktreesByRepo } from '../usage-worktree-metadata'
 import type { UsageScanWorktreeRef } from './usage-provider-contract'
 import { createWorktreeRefs, getUsageWorktreeFingerprint } from './usage-worktree-refs'
+import {
+  loadUsageSourceCache,
+  resolveUsageSourceCacheFile,
+  serializeUsageSourceCache
+} from './usage-provider-source-cache'
 
 const STALE_MS = 5 * 60_000
 
@@ -15,6 +20,7 @@ type UsageProviderScanState = {
 }
 
 type UsageProviderStoreState<SourceKey extends string> = {
+  schemaVersion: number
   worktreeFingerprint: string | null
   sessions: unknown[]
   dailyAggregates: unknown[]
@@ -56,13 +62,33 @@ export abstract class UsageProviderStoreLifecycle<
   protected state: State
   private scanPromise: Promise<void> | null = null
   private readonly writer: UsageCacheSnapshotWriter
+  private readonly sourceWriter: UsageCacheSnapshotWriter
+  private legacySource: State[SourceKey] | null = null
+  private migrationPromise: Promise<void> | null = null
 
   constructor(
     private readonly store: Pick<Store, 'getRepos' | 'getAllWorktreeMeta'>,
     private readonly config: UsageProviderStoreLifecycleConfig<SourceKey, State, DataPresenceKey>
   ) {
     this.writer = new UsageCacheSnapshotWriter(config.logTag, config.resolveCacheFile)
+    this.sourceWriter = new UsageCacheSnapshotWriter(config.logTag, () =>
+      resolveUsageSourceCacheFile(config.resolveCacheFile())
+    )
     this.state = this.load()
+    const loadedSource = Array.isArray(this.state[this.config.sourceKey])
+      ? this.state[this.config.sourceKey]
+      : this.emptySourceState()
+    this.state[this.config.sourceKey] = this.emptySourceState()
+    if (loadedSource.length > 0) {
+      this.legacySource = loadedSource
+      this.migrationPromise = this.writePartitionedState(loadedSource)
+        .catch(() => {})
+        .finally(() => {
+          if (this.legacySource === loadedSource) {
+            this.legacySource = null
+          }
+        })
+    }
   }
 
   getScanState(): PublicUsageProviderScanState<DataPresenceKey> {
@@ -76,12 +102,16 @@ export abstract class UsageProviderStoreLifecycle<
 
   /** Await queued cache writes so quit does not drop the final snapshot. */
   flush(): Promise<void> {
-    return this.writer.flush()
+    return Promise.all([
+      this.migrationPromise,
+      this.writer.flush(),
+      this.sourceWriter.flush()
+    ]).then(() => undefined)
   }
 
   async setEnabled(enabled: boolean): Promise<PublicUsageProviderScanState<DataPresenceKey>> {
     this.state.scanState.enabled = enabled
-    await this.writeToDisk()
+    await this.writeHotState()
     return this.getScanState()
   }
 
@@ -100,8 +130,14 @@ export abstract class UsageProviderStoreLifecycle<
     return this.getScanState()
   }
 
-  protected writeToDisk(): Promise<void> {
-    return this.writer.write(() => JSON.stringify(this.state, null, this.config.jsonIndent))
+  protected writeHotState(): Promise<void> {
+    return this.writer.write(() =>
+      JSON.stringify(
+        { ...this.state, [this.config.sourceKey]: this.emptySourceState() },
+        null,
+        this.config.jsonIndent
+      )
+    )
   }
 
   private load(): State {
@@ -141,20 +177,24 @@ export abstract class UsageProviderStoreLifecycle<
         const result = await this.config.scan(
           createWorktreeRefs(repos, worktreesByRepo),
           this.state.worktreeFingerprint === worktreeFingerprint
-            ? this.state[this.config.sourceKey]
-            : this.config.createDefaultState()[this.config.sourceKey]
+            ? this.loadPreviousSource()
+            : this.emptySourceState()
         )
-        this.state[this.config.sourceKey] = result[this.config.sourceKey]
+        const nextSource = result[this.config.sourceKey]
+        this.state[this.config.sourceKey] = nextSource
         this.state.sessions = result.sessions
         this.state.dailyAggregates = result.dailyAggregates
         this.state.worktreeFingerprint = worktreeFingerprint
         this.state.scanState.lastScanCompletedAt = Date.now()
         this.state.scanState.lastScanError = null
         // Persistence failures do not turn a successful source scan into a scan failure.
-        await this.writeToDisk().catch(() => {})
+        await this.writePartitionedState(nextSource).catch(() => {})
+        if (this.state[this.config.sourceKey] === nextSource) {
+          this.state[this.config.sourceKey] = this.emptySourceState()
+        }
       } catch (error) {
         this.state.scanState.lastScanError = error instanceof Error ? error.message : String(error)
-        await this.writeToDisk().catch(() => {})
+        await this.writeHotState().catch(() => {})
       } finally {
         this.scanPromise = null
       }
@@ -166,5 +206,42 @@ export abstract class UsageProviderStoreLifecycle<
   private async getCurrentWorktreeFingerprint(): Promise<string> {
     const repos = this.store.getRepos()
     return getUsageWorktreeFingerprint(loadKnownUsageWorktreesByRepo(this.store, repos))
+  }
+
+  private emptySourceState(): State[SourceKey] {
+    return this.config.createDefaultState()[this.config.sourceKey]
+  }
+
+  private loadPreviousSource(): State[SourceKey] {
+    const resident = this.state[this.config.sourceKey]
+    if (resident.length > 0) {
+      return resident
+    }
+    if (this.legacySource) {
+      return this.legacySource
+    }
+    return (loadUsageSourceCache({
+      cacheFile: this.config.resolveCacheFile(),
+      sourceKey: this.config.sourceKey,
+      schemaVersion: this.state.schemaVersion,
+      worktreeFingerprint: this.state.worktreeFingerprint,
+      logTag: this.config.logTag
+    }) ?? this.emptySourceState()) as State[SourceKey]
+  }
+
+  private async writePartitionedState(sources: State[SourceKey]): Promise<void> {
+    const snapshot = {
+      schemaVersion: this.state.schemaVersion,
+      worktreeFingerprint: this.state.worktreeFingerprint,
+      sources
+    }
+    await this.sourceWriter.write(() =>
+      serializeUsageSourceCache({
+        sourceKey: this.config.sourceKey,
+        ...snapshot,
+        jsonIndent: this.config.jsonIndent
+      })
+    )
+    await this.writeHotState()
   }
 }
