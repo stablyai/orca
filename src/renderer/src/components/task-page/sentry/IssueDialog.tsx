@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import type {
   SentryAssignee,
   SentryEvent,
@@ -132,18 +132,27 @@ export function SentryIssueDialog({
   const [loadingMore, setLoadingMore] = useState(false)
   const [mutating, setMutating] = useState(false)
   const issueId = issue?.id
+  const openIssueId = useRef(issueId)
+  const eventRequestGeneration = useRef(0)
+  const loadMorePending = useRef(false)
+  openIssueId.current = issueId
 
   useEffect(() => {
+    const generation = ++eventRequestGeneration.current
+    loadMorePending.current = false
+    setLoadingMore(false)
     if (!issueId) {
       setEvents([])
       setNextCursor(null)
       return
     }
     let active = true
+    setEvents([])
+    setNextCursor(null)
     setLoading(true)
     void Promise.all([sentryListEvents(settings, issueId), sentryListAssignees(settings)])
       .then(([page, nextAssignees]) => {
-        if (!active) {
+        if (!active || generation !== eventRequestGeneration.current) {
           return
         }
         setEvents(page.items)
@@ -153,9 +162,13 @@ export function SentryIssueDialog({
       .catch(
         (error) =>
           active &&
+          generation === eventRequestGeneration.current &&
           toast.error(error instanceof Error ? error.message : translate("auto.components.task.page.sentry.IssueDialog.84784c841c", "Could not load Sentry events."))
       )
-      .finally(() => active && setLoading(false))
+      .finally(
+        () =>
+          active && generation === eventRequestGeneration.current && setLoading(false)
+      )
     return () => {
       active = false
     }
@@ -181,18 +194,32 @@ export function SentryIssueDialog({
   }
 
   const loadMoreEvents = async (): Promise<void> => {
-    if (!issue || !nextCursor || loadingMore) {
+    if (!issue || !nextCursor || loadMorePending.current) {
       return
     }
+    const generation = eventRequestGeneration.current
+    const requestedIssueId = issue.id
+    loadMorePending.current = true
     setLoadingMore(true)
     try {
-      const page = await sentryListEvents(settings, issue.id, nextCursor)
+      const page = await sentryListEvents(settings, requestedIssueId, nextCursor)
+      if (
+        generation !== eventRequestGeneration.current ||
+        openIssueId.current !== requestedIssueId
+      ) {
+        return
+      }
       setEvents((current) => [...current, ...page.items])
       setNextCursor(page.nextCursor)
     } catch (cause) {
-      toast.error(cause instanceof Error ? cause.message : translate("auto.components.task.page.sentry.IssueDialog.c8a29ced35", "Could not load more Sentry events."))
+      if (generation === eventRequestGeneration.current) {
+        toast.error(cause instanceof Error ? cause.message : translate("auto.components.task.page.sentry.IssueDialog.c8a29ced35", "Could not load more Sentry events."))
+      }
     } finally {
-      setLoadingMore(false)
+      if (generation === eventRequestGeneration.current) {
+        loadMorePending.current = false
+        setLoadingMore(false)
+      }
     }
   }
 
