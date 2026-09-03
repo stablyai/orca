@@ -83,7 +83,7 @@ export class RuntimeTerminalWait {
           resolve,
           reject,
           timeout: null,
-          pollInterval: null,
+          cancelIdlePoll: null,
           abortCleanup: null
         }
         if (!this.waiters.bindAbort(waiter, options?.signal)) {
@@ -177,7 +177,7 @@ export class RuntimeTerminalWait {
         resolve,
         reject,
         timeout: null,
-        pollInterval: null,
+        cancelIdlePoll: null,
         abortCleanup: null
       }
 
