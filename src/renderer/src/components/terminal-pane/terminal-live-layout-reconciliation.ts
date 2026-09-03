@@ -3,6 +3,7 @@ import type {
   TerminalPaneSplitDirection
 } from '../../../../shared/terminal-tab-types'
 import { isRemoteRuntimePtyId } from '@/runtime/runtime-terminal-inspection'
+import { collectLeafIds } from './terminal-pane-layout-tree'
 
 /**
  * Whether a tab's split layout is owned by a host (web/mobile clients, or a
@@ -85,15 +86,6 @@ function mountedLeafIdsIn(
   ]
 }
 
-function collectLeafIds(node: TerminalPaneLayoutNode, leafIds: Set<string>): void {
-  if (node.type === 'leaf') {
-    leafIds.add(node.leafId)
-    return
-  }
-  collectLeafIds(node.first, leafIds)
-  collectLeafIds(node.second, leafIds)
-}
-
 /**
  * Mounted leaves the host layout no longer names. The host retires a leaf when
  * its PTY ends, so a pane still mounted for it is a ghost: it renders nothing
@@ -107,8 +99,7 @@ export function planTerminalLiveLayoutRemovals(
   if (!root) {
     return []
   }
-  const layoutLeafIds = new Set<string>()
-  collectLeafIds(root, layoutLeafIds)
+  const layoutLeafIds = new Set(collectLeafIds(root))
   return [...currentLeafIds].filter((leafId) => !layoutLeafIds.has(leafId))
 }
 
