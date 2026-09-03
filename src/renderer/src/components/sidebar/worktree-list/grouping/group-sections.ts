@@ -50,6 +50,8 @@ export type SectionAppendContext = {
   worktreeMap: Map<string, Worktree>
   nestLineage: boolean
   cyclicLineageIds: ReadonlySet<string>
+  /** False lets dynamic sorts rank the main workspace anywhere in its group (#15770). */
+  pinMainWorktreeFirst?: boolean
 }
 
 export function appendOrderedGroups(
@@ -190,7 +192,10 @@ export function appendOrderedGroups(
           }
         }
       }
-      const items = groupBy === 'repo' ? orderMainWorktreeFirst(group.items) : group.items
+      const items =
+        groupBy === 'repo' && ctx.pinMainWorktreeFirst !== false
+          ? orderMainWorktreeFirst(group.items)
+          : group.items
       const hostContextLabelByRepoId =
         groupBy === 'repo'
           ? getMixedHostContextLabels(group, repoMap, projectIndex, hostLabelById)
