@@ -1,4 +1,8 @@
 import type { LiveAgentWorktreeStatus } from '@/lib/worktree-activity-state'
+import {
+  prepareRuntimePathPrefixKey,
+  type RuntimePathPrefixKey
+} from '../../../../shared/runtime-path-prefix-match'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
 import type { WorkspaceStatusDefinition } from '../../../../shared/worktree/types'
 import { getWorkspaceCleanupCandidateIdentity } from '../../../../shared/workspace-cleanup-host-identity'
@@ -78,6 +82,8 @@ export type WorkspaceCleanupFacets = {
   hasLocalContext: boolean
   isCompletelyEmpty: boolean
   searchText: string
+  /** Comparison key for the path-prefix facet; never render or splice this. */
+  pathPrefixKey: RuntimePathPrefixKey
 }
 
 const EMPTY_REVIEW_INFO: WorkspaceCleanupReviewInfo = {
@@ -108,7 +114,7 @@ export function buildWorkspaceCleanupFacets(
   const localContextCount = getLocalContextCount(candidate)
   const hasComment = (worktree?.comment ?? '').trim().length > 0
   const branch = getBranchDisplayName(worktree?.branch ?? candidate.branch)
-  const facets: Omit<WorkspaceCleanupFacets, 'searchText'> = {
+  const facets: Omit<WorkspaceCleanupFacets, 'searchText' | 'pathPrefixKey'> = {
     candidate,
     worktreeId: candidate.worktreeId,
     identity: hostIdentity,
@@ -162,7 +168,13 @@ export function buildWorkspaceCleanupFacets(
     isCompletelyEmpty:
       localContextCount === 0 && !review.hasReview && ticketSources.length === 0 && !hasComment
   }
-  return { ...facets, searchText: buildSearchText(facets) }
+  // Why: normalize once per candidate here, not once per row per filter pass —
+  // the location facet re-runs over every candidate on each keystroke.
+  return {
+    ...facets,
+    searchText: buildSearchText(facets),
+    pathPrefixKey: prepareRuntimePathPrefixKey(facets.path)
+  }
 }
 
 export function buildWorkspaceCleanupFacetList(
@@ -217,7 +229,9 @@ function getTicketSources(
   return sources
 }
 
-function buildSearchText(facets: Omit<WorkspaceCleanupFacets, 'searchText'>): string {
+function buildSearchText(
+  facets: Omit<WorkspaceCleanupFacets, 'searchText' | 'pathPrefixKey'>
+): string {
   return [
     facets.displayName,
     facets.repoName,
