@@ -46,6 +46,17 @@ export function resetTerminalWebglSuggestion(): void {
   resetTerminalWebglAutoDecision()
 }
 
+export function clearTerminalWebglRendererSuggestion(): void {
+  // Why: the suggestion cannot tell a host that can never do WebGL from a GPU
+  // process that was restarting for one attach. Latched for the app's lifetime
+  // it outranks every per-pane latch, so each pane that re-attaches afterwards
+  // silently falls to the DOM renderer — with no latch of its own to show why,
+  // and no resize or worktree switch able to undo it. Expire it at the same
+  // recovery boundaries the per-pane failure latch uses. The cached auto
+  // decision survives: re-probing it would burn a context.
+  suggestedRendererType = undefined
+}
+
 export function clearTerminalWebglAttachBackoff(pane: ManagedPaneInternal): void {
   pane.webglAttachFailedSinceRecovery = false
 }
