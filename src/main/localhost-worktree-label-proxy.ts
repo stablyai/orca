@@ -242,7 +242,13 @@ function targetUrlForRequest(target: URL, request: IncomingMessage): URL {
 }
 
 function requestHeadersForTarget(request: IncomingMessage, target: URL): http.OutgoingHttpHeaders {
+  const originalHost = request.headers.host
   const headers: http.OutgoingHttpHeaders = { ...request.headers }
   headers.host = target.host
+  if (originalHost) {
+    headers['x-forwarded-host'] = originalHost
+  } else {
+    delete headers['x-forwarded-host']
+  }
   return headers
 }
