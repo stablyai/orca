@@ -15,6 +15,28 @@ const CONTEXT: PackageJsonDependencyHoverContext = {
 }
 
 describe('resolvePackageJsonDependencyHover', () => {
+  // Why the renderer supplies it at all: main authorizes this root against its
+  // own worktree registration before anything runs in it, so the value is a
+  // claim to be checked, never a path to be trusted.
+  it('supplies the worktree root its own hover context resolved', async () => {
+    const lookupPackageInfo = vi.fn(async () => ({ status: 'not-found' as const }))
+
+    await resolvePackageJsonDependencyHover({
+      modelText: TEXT,
+      offset: REACT_KEY_OFFSET,
+      isCancelled: () => false,
+      resolveContext: () => CONTEXT,
+      resolveInstalledVersion: async () => ({ status: 'installed', version: '19.0.0' }),
+      lookupPackageInfo
+    })
+
+    expect(lookupPackageInfo).toHaveBeenCalledWith({
+      packageName: 'react',
+      worktreeRoot: '/repo',
+      executionHostId: 'local'
+    })
+  })
+
   it('returns null and never resolves context when no dependency key is hovered', async () => {
     const resolveContext = vi.fn()
     const result = await resolvePackageJsonDependencyHover({
@@ -172,6 +194,7 @@ describe('resolvePackageJsonDependencyHover', () => {
       expect(resolveInstalledVersion).toHaveBeenCalledWith(CONTEXT, 'react')
       expect(lookupPackageInfo).toHaveBeenCalledWith({
         packageName: 'react',
+        worktreeRoot: CONTEXT.worktreeRoot,
         executionHostId: CONTEXT.executionHostId
       })
       expect(result?.markdown).not.toContain('catalog:')

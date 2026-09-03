@@ -53,6 +53,7 @@ describe('registerNpmPackageInfoHandlers', () => {
 
     const result = await invoke({
       packageName: '-evil-flag',
+      worktreeRoot: '/repo',
       executionHostId: 'local'
     })
 
@@ -75,9 +76,35 @@ describe('registerNpmPackageInfoHandlers', () => {
 
     const result = await invoke({
       packageName: 'react',
+      worktreeRoot: '/repo',
       executionHostId: 'local'
     })
 
     expect(result).toEqual({ status: 'unavailable', reason: 'error' })
+  })
+
+  // Why validated here too: `worktreeRoot` is the only renderer-supplied value
+  // that becomes a subprocess cwd. A missing one must be refused at the
+  // boundary rather than arriving at the gate as `undefined`.
+  it('rejects a request whose worktreeRoot is absent, without calling the service', async () => {
+    registerNpmPackageInfoHandlers(fakeStore)
+
+    const result = await invoke({ packageName: 'react', executionHostId: 'local' })
+
+    expect(result).toEqual({ status: 'unavailable', reason: 'error' })
+    expect(mocks.lookup).not.toHaveBeenCalled()
+  })
+
+  it('rejects a request whose worktreeRoot is not a string, without calling the service', async () => {
+    registerNpmPackageInfoHandlers(fakeStore)
+
+    const result = await invoke({
+      packageName: 'react',
+      worktreeRoot: ['/repo'],
+      executionHostId: 'local'
+    })
+
+    expect(result).toEqual({ status: 'unavailable', reason: 'error' })
+    expect(mocks.lookup).not.toHaveBeenCalled()
   })
 })

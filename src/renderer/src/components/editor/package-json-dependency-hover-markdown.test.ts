@@ -194,3 +194,43 @@ describe('never explains what it could not fetch', () => {
     }
   )
 })
+
+describe('buildPackageJsonDependencyHoverMarkdown source attribution', () => {
+  // Why nothing is rendered: this hover never explains what it could not
+  // reach. `sourceReason` exists for diagnostics and tests; surfacing "read
+  // from the public registry because this workspace is untrusted" would put
+  // back exactly the failure copy this hover deliberately does without.
+  it('never mentions the reason a result fell back to the public registry', () => {
+    const markdown = buildMarkdown({
+      packageName: 'react',
+      installedVersion: { status: 'installed', version: '19.0.0' },
+      result: okResult({
+        latestVersion: '19.1.0',
+        source: 'registry-http',
+        sourceReason: 'workspace-untrusted'
+      })
+    })
+
+    expect(markdown).not.toContain('workspace-untrusted')
+    expect(markdown).not.toMatch(/trust/i)
+    expect(markdown).not.toMatch(/registry/i)
+  })
+
+  it('renders a trusted npm-cli result identically to an untrusted registry one', () => {
+    const params = {
+      packageName: 'react',
+      installedVersion: { status: 'installed' as const, version: '19.0.0' }
+    }
+
+    expect(buildMarkdown({ ...params, result: okResult({ latestVersion: '19.1.0' }) })).toBe(
+      buildMarkdown({
+        ...params,
+        result: okResult({
+          latestVersion: '19.1.0',
+          source: 'registry-http',
+          sourceReason: 'npm-unavailable'
+        })
+      })
+    )
+  })
+})

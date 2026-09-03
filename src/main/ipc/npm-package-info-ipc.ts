@@ -17,6 +17,9 @@ function isWellFormedRequest(value: unknown): value is NpmPackageInfoRequest {
   const request = value as Record<string, unknown>
   return (
     typeof request.packageName === 'string' &&
+    // The only renderer-supplied value that becomes a subprocess cwd; the
+    // service still authorizes it against main-owned registration.
+    typeof request.worktreeRoot === 'string' &&
     typeof request.executionHostId === 'string' &&
     isValidNpmPackageName(request.packageName)
   )

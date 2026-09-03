@@ -64,6 +64,9 @@ export async function resolvePackageJsonDependencyHover(
   const rawResult = params.lookupPackageInfo
     ? await params.lookupPackageInfo({
         packageName: location.packageName,
+        // A claim, not a permission: main authorizes this root against its own
+        // worktree registration, and asks trust about the authorized path.
+        worktreeRoot: context.worktreeRoot,
         executionHostId: context.executionHostId
       })
     : undefined

@@ -10,6 +10,7 @@ export const NPM_PACKAGE_INFO_LOOKUP_CHANNEL = 'npm-package-info:lookup'
 export type NpmPackageInfoRequest = {
   packageName: string
   /** Must be a registered worktree root; the local npm CLI runs with this cwd. */
+  worktreeRoot: string
   executionHostId: ExecutionHostId
 }
 
@@ -24,6 +25,13 @@ export type NpmPackageInfo = {
   /** `https:` only; any other scheme is normalized to `null` before it reaches this type. */
   repositoryUrl: string | null
   source: 'npm-cli' | 'registry-http'
+  /**
+   * Why the fallback happened, when `source` is `registry-http` on a host that
+   * could otherwise have used the CLI. Diagnostic and test-facing only: the
+   * hover deliberately never explains what it could not reach, so nothing
+   * renders this.
+   */
+  sourceReason?: 'workspace-untrusted' | 'npm-unavailable'
 }
 
 /**
