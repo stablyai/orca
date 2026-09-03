@@ -468,8 +468,86 @@ describe('orchestration RPC methods', () => {
         subject: 'Done again',
         type: 'worker_done',
         payload
-      })) as { lifecycle: { code: string } }
+      })) as { lifecycle: { code: string; reason: string } }
       expect(revoked.lifecycle.code).toBe('dispatch_capability_invalid')
+      // Why: the proven dispatch owner is told what settled it and what still works.
+      expect(revoked.lifecycle.reason).toContain('was settled as completed')
+      expect(revoked.lifecycle.reason).toContain('--type escalation')
+      expect(revoked.lifecycle.reason).toContain('Do not exit with uncommitted work')
+    })
+
+    it('does not disclose settlement state to a caller that fails identity', async () => {
+      setup()
+      const task = db.createTask({ spec: 'capability work' })
+      const dispatch = db.createDispatchContext(task.id, 'term_worker', 'tab_worker:leaf_worker')
+      const capability = db.mintDispatchCapability({
+        dispatchId: dispatch.id,
+        paneKey: 'tab_worker:leaf_worker',
+        processIncarnation: 'runtime_test:term_worker:1'
+      })
+      vi.spyOn(runtime, 'getTerminalPaneKey').mockImplementation((handle) =>
+        handle === 'term_worker' ? 'tab_worker:leaf_worker' : coordinatorPaneKey
+      )
+      const payload = JSON.stringify({
+        taskId: task.id,
+        dispatchId: dispatch.id,
+        outcome: 'succeeded'
+      })
+
+      ctx = { runtime, orchestrationCapability: capability }
+      await call('orchestration.send', {
+        from: 'term_worker',
+        subject: 'Done',
+        type: 'worker_done',
+        payload
+      })
+      expect(db.getDispatchContextById(dispatch.id)?.capability_revoked_at).toBeTruthy()
+
+      // Why: an invalid token must not disclose whether or how the dispatch settled.
+      ctx = { runtime, orchestrationCapability: 'dcap_wrong' }
+      const foreign = (await call('orchestration.send', {
+        from: 'term_worker',
+        subject: 'Done',
+        type: 'worker_done',
+        payload
+      })) as { lifecycle: { code: string; reason: string } }
+      expect(foreign.lifecycle.code).toBe('dispatch_capability_invalid')
+      expect(foreign.lifecycle.reason).toBe('The Dispatch capability is invalid.')
+      expect(foreign.lifecycle.reason).not.toContain('settled')
+      expect(foreign.lifecycle.reason).not.toContain('escalation')
+
+      // Why: pane and process identity failures must equally disclose nothing about settlement.
+      ctx = { runtime, orchestrationCapability: capability }
+      vi.mocked(runtime.getTerminalPaneKey).mockImplementation((handle) =>
+        handle === 'term_worker' ? 'tab_other:leaf_other' : coordinatorPaneKey
+      )
+      const wrongPane = (await call('orchestration.send', {
+        from: 'term_worker',
+        subject: 'Done',
+        type: 'worker_done',
+        payload
+      })) as { lifecycle: { code: string; reason: string } }
+      expect(wrongPane.lifecycle.code).toBe('dispatch_capability_invalid')
+      expect(wrongPane.lifecycle.reason).toBe('The caller is not the Dispatch pane.')
+      expect(wrongPane.lifecycle.reason).not.toContain('settled')
+      expect(wrongPane.lifecycle.reason).not.toContain('escalation')
+
+      vi.mocked(runtime.getTerminalPaneKey).mockImplementation((handle) =>
+        handle === 'term_worker' ? 'tab_worker:leaf_worker' : coordinatorPaneKey
+      )
+      vi.mocked(runtime.getTerminalProcessIncarnation).mockReturnValue(
+        'runtime_test:term_worker:2'
+      )
+      const wrongProcess = (await call('orchestration.send', {
+        from: 'term_worker',
+        subject: 'Done',
+        type: 'worker_done',
+        payload
+      })) as { lifecycle: { code: string; reason: string } }
+      expect(wrongProcess.lifecycle.code).toBe('dispatch_capability_invalid')
+      expect(wrongProcess.lifecycle.reason).toBe('The Dispatch process incarnation changed.')
+      expect(wrongProcess.lifecycle.reason).not.toContain('settled')
+      expect(wrongProcess.lifecycle.reason).not.toContain('escalation')
     })
 
     it('does not wake waiters for a heartbeat suppressed at send time', async () => {

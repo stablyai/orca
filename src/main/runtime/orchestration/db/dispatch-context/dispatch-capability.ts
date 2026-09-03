@@ -1,8 +1,38 @@
 import { randomBytes, timingSafeEqual } from 'node:crypto'
 import { OrchestrationError } from '../../orchestration-error'
+import type { DispatchContextRow } from '../../types'
 import { hashDispatchCapability } from '../dispatch-capability-hash'
 import { isEquivalentPaneKey } from '../pane-key-match'
+import { exposeUtcTimestamp } from '../utc-timestamp'
 import type { OrchestrationDb } from '../orchestration-db'
+
+// Why: state only what the row proves — what settled the dispatch and when —
+// and name escalation as the one channel this capability does not gate.
+function describeRevokedDispatch(dispatch: DispatchContextRow): string {
+  return [
+    describeRevocationCause(dispatch),
+    'This is final for worker_done and heartbeat: resending them cannot change it.',
+    // Why not "escalation will reach the coordinator": that depends on topology
+    // this function cannot see. The gate's scope is a fact; delivery is not.
+    'This capability gates only worker_done and heartbeat, so if the task is not actually finished, report that with --type escalation.',
+    'Do not exit with uncommitted work.'
+  ].join('\n')
+}
+
+// Why: a revoked row does not record who revoked it, so every branch states
+// only stored columns and never infers the actor.
+function describeRevocationCause(dispatch: DispatchContextRow): string {
+  const at = exposeUtcTimestamp(dispatch.completed_at ?? dispatch.capability_revoked_at)
+  const when = at ? ` at ${at}` : ''
+  if (dispatch.status === 'circuit_broken') {
+    return `Dispatch ${dispatch.id} circuit-broke after ${dispatch.failure_count} failures${when}, which revoked its lifecycle capability.`
+  }
+  if (dispatch.status === 'completed' || dispatch.status === 'failed') {
+    const cause = dispatch.last_failure ? ` (${dispatch.last_failure})` : ''
+    return `Dispatch ${dispatch.id} was settled as ${dispatch.status}${cause}${when}, which revoked its lifecycle capability.`
+  }
+  return `Dispatch ${dispatch.id} had its lifecycle capability revoked${when} while still ${dispatch.status}.`
+}
 
 export function mintDispatchCapability(
   this: OrchestrationDb,
@@ -52,9 +82,6 @@ export function verifyDispatchCapability(
   if (!dispatch.capability_hash) {
     return { valid: false, reason: `Dispatch ${params.dispatchId} has no lifecycle capability.` }
   }
-  if (dispatch.capability_revoked_at) {
-    return { valid: false, reason: `Dispatch ${params.dispatchId} capability is revoked.` }
-  }
   if (!params.capability) {
     // Why: a worker that omits the flag needs the flag name, not just the diagnosis.
     return {
@@ -81,6 +108,10 @@ export function verifyDispatchCapability(
     dispatch.process_incarnation !== params.processIncarnation
   ) {
     return { valid: false, reason: 'The Dispatch process incarnation changed.' }
+  }
+  // Why last: a caller must pass identity before it learns any dispatch state.
+  if (dispatch.capability_revoked_at) {
+    return { valid: false, reason: describeRevokedDispatch(dispatch) }
   }
   return { valid: true }
 }
