@@ -2,6 +2,7 @@ import type { WorktreeShareSkipWarning } from '../../shared/worktree/create-type
 
 export type WorktreeConfiguredPathSkipReason =
   | 'missing'
+  | 'stat-failed'
   | 'not-directory'
   | 'not-gitignored'
   | 'unsafe'
@@ -28,12 +29,24 @@ export type WorktreeCopyBudgetSkipInput = {
 
 const SKIP_REASON_LABEL: Record<WorktreeConfiguredPathSkipReason, string> = {
   missing: 'missing',
+  'stat-failed': 'unreadable',
   'not-directory': 'not a directory',
   'not-gitignored': 'not gitignored',
   unsafe: 'unsafe path',
   'unsupported-pattern': 'unsupported pattern',
   'too-many-entries': 'exceeds include entry limit',
   'copy-budget': 'exceeds copy budget'
+}
+
+// Same named-entry cap as copy-budget prose; keep RPC/JSON from listing every skip.
+const MAX_NAMED_SKIPPED_ENTRIES = 5
+
+function skippedEntryOverflowText(count: number): string | undefined {
+  const rest = count - MAX_NAMED_SKIPPED_ENTRIES
+  if (rest <= 0) {
+    return undefined
+  }
+  return `and ${rest.toLocaleString('en-US')} more`
 }
 
 export function formatWorktreeConfiguredPathSkip(skip: WorktreeConfiguredPathSkip): string {
@@ -54,7 +67,8 @@ export function copyBudgetSkipsToConfigured(
 export function worktreeShareSkipWarningsFromSkips(
   skips: readonly WorktreeConfiguredPathSkip[]
 ): WorktreeShareSkipWarning[] {
-  return skips.map((skip) => ({
+  const named = skips.slice(0, MAX_NAMED_SKIPPED_ENTRIES)
+  const warnings: WorktreeShareSkipWarning[] = named.map((skip) => ({
     code: skip.mechanism === 'share' ? 'WORKTREE_SHARE_SKIPPED' : 'WORKTREE_INCLUDE_SKIPPED',
     message: formatWorktreeConfiguredPathSkip(skip),
     details: {
@@ -63,6 +77,16 @@ export function worktreeShareSkipWarningsFromSkips(
       ...(skip.budgetReason ? { budgetReason: skip.budgetReason } : {})
     }
   }))
+  const overflow = skippedEntryOverflowText(skips.length)
+  const overflowSkip = skips[MAX_NAMED_SKIPPED_ENTRIES]
+  if (overflow && overflowSkip) {
+    warnings.push({
+      code:
+        overflowSkip.mechanism === 'share' ? 'WORKTREE_SHARE_SKIPPED' : 'WORKTREE_INCLUDE_SKIPPED',
+      message: overflow
+    })
+  }
+  return warnings
 }
 
 export function joinWorktreeShareSkipWarningText(
@@ -71,7 +95,12 @@ export function joinWorktreeShareSkipWarningText(
   if (skips.length === 0) {
     return undefined
   }
-  return skips.map(formatWorktreeConfiguredPathSkip).join('\n')
+  const lines = skips.slice(0, MAX_NAMED_SKIPPED_ENTRIES).map(formatWorktreeConfiguredPathSkip)
+  const overflow = skippedEntryOverflowText(skips.length)
+  if (overflow) {
+    lines.push(overflow)
+  }
+  return lines.join('\n')
 }
 
 /** Combine resolve-time share/include skips with copy-budget refusals into the

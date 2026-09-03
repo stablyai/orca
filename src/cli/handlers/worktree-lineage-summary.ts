@@ -29,7 +29,7 @@ export function printLineageSummary(
   }
   for (const warning of result.warnings ?? []) {
     // Share/include skips also live on `warning` and would otherwise print twice.
-    if (!warning.code.startsWith('LINEAGE_')) {
+    if (warning.code === 'WORKTREE_SHARE_SKIPPED' || warning.code === 'WORKTREE_INCLUDE_SKIPPED') {
       continue
     }
     console.error(`warning: ${warning.message}`)

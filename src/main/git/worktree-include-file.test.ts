@@ -106,8 +106,8 @@ describe('resolveWorktreeIncludePaths', () => {
   })
 
   it('stops after 1000 entries so one repo file cannot request unbounded work', async () => {
-    const names = Array.from({ length: 1001 }, (_, index) => `ignored-${index}.env`)
-    for (const name of names) {
+    const names = Array.from({ length: 1002 }, (_, index) => `ignored-${index}.env`)
+    for (const name of names.slice(0, 1000)) {
       writeFileSync(join(repo, name), 'A=1')
     }
     writeInclude(`${names.join('\n')}\n`)
@@ -117,8 +117,10 @@ describe('resolveWorktreeIncludePaths', () => {
 
     expect(resolved.paths).toHaveLength(1000)
     expect(resolved.skipped).toEqual([
-      { mechanism: 'include', path: 'ignored-1000.env', reason: 'too-many-entries' }
+      { mechanism: 'include', path: 'ignored-1000.env', reason: 'too-many-entries' },
+      { mechanism: 'include', path: 'ignored-1001.env', reason: 'too-many-entries' }
     ])
+    expect(warn).toHaveBeenCalledTimes(1)
     expect(warn).toHaveBeenCalledWith(expect.stringContaining('more than 1000 entries'))
   })
 })
