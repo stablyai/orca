@@ -57,6 +57,58 @@ describe('SSH config host picker search', () => {
     expect(last.hasMore).toBe(false)
   })
 
+  it('flags a config host whose machine is already registered under another label', () => {
+    // Why: the same box gets added twice — once manually by IP, once from the config
+    // picker — and alias comparison cannot see that because the names differ.
+    const result = searchSshConfigHosts(
+      [{ host: 'aimp', hostname: '172.16.203.131', user: 'chanmuzi' }],
+      [
+        {
+          configHost: '172.16.203.131',
+          label: 'AI Box',
+          host: '172.16.203.131',
+          port: 22,
+          username: 'chanmuzi'
+        }
+      ]
+    )
+
+    expect(result.hosts[0]).toMatchObject({ alias: 'aimp', alreadyInOrca: true })
+    expect(result.newHostCount).toBe(0)
+  })
+
+  it('leaves a different machine unflagged', () => {
+    const result = searchSshConfigHosts(
+      [{ host: 'aimp', hostname: '172.16.203.131', user: 'chanmuzi' }],
+      [
+        {
+          configHost: '10.0.0.9',
+          label: 'Other Box',
+          host: '10.0.0.9',
+          port: 22,
+          username: 'chanmuzi'
+        }
+      ]
+    )
+
+    expect(result.hosts[0]).toMatchObject({ alias: 'aimp', alreadyInOrca: false })
+    expect(result.newHostCount).toBe(1)
+  })
+
+  it('does not collide config hosts that carry no HostName', () => {
+    // Why: without HostName the candidate host degrades to the alias itself, so the
+    // endpoint check must not start matching unrelated aliases against each other.
+    const result = searchSshConfigHosts(
+      [{ host: 'alpha' }, { host: 'beta' }],
+      [{ configHost: 'gamma', label: 'Gamma', host: 'gamma', port: 22, username: '' }]
+    )
+
+    expect(result.hosts.map((host) => [host.alias, host.alreadyInOrca])).toEqual([
+      ['alpha', false],
+      ['beta', false]
+    ])
+  })
+
   it('counts de-duplicated and existing aliases while matching effective display fields', () => {
     const result = searchSshConfigHosts(
       [
