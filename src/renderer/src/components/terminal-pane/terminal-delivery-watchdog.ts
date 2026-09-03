@@ -182,10 +182,6 @@ function scheduleWatchdogTimer(): void {
     if (tickInFlight) {
       return
     }
-    // Why: a wedge while hidden is unobservable — heal on the next visible tick instead of shipping full pty→chars maps every 15s.
-    if (typeof document !== 'undefined' && document.visibilityState === 'hidden') {
-      return
-    }
     tickInFlight = true
     void runWatchdogTick().finally(() => {
       tickInFlight = false

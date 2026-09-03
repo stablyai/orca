@@ -181,10 +181,6 @@ export function useContextualTour(
     let requestPending = false
     let cancelled = false
     const request = (): void => {
-      // Why: a tour that fires while hidden is invisible by construction — request on the becoming-visible pass instead.
-      if (typeof document !== 'undefined' && document.visibilityState === 'hidden') {
-        return
-      }
       if (frame !== null || requestPending) {
         return
       }
