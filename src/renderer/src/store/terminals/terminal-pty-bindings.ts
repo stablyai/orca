@@ -1,4 +1,5 @@
 import { parseAppSshPtyId } from '../../../../shared/ssh-pty-id'
+import { getRepoIdFromWorktreeId } from '../../../../shared/worktree/id'
 import { parseRemoteRuntimePtyId, toRemoteRuntimePtyId } from '@/runtime/runtime-terminal-stream'
 import { isTerminalTabPresent } from '../slices/terminal-tab-retirement'
 import type { TerminalSlice, TerminalStoreGet, TerminalStoreSet } from './terminal-state'
@@ -23,6 +24,7 @@ export function createTerminalPtyBindingActions(
       }
       let worktreeId: string | null = null
       let wasActivationSpawn = false
+      let becameSpotlightLogPty = false
       const isRemoteRuntimeMirror = isRemoteRuntimePtyId(ptyId)
       set((s) => {
         if (directSshRetryAttemptId) {
@@ -104,6 +106,11 @@ export function createTerminalPtyBindingActions(
           // Why: tab.ptyId is the single-pane fallback for legacy attach; later split-pane spawns must not steal it or remount/close reattaches the tab to the wrong PTY.
           const currentTabPtyId = tab.ptyId === replacementPtyId ? ptyId : tab.ptyId
           const nextTabPtyId = currentTabPtyId ?? nextPtyIds[0] ?? null
+          // Only the tab's primary PTY feeds the Spotlight log mirror — split
+          // panes in the Spotlight tab shouldn't interleave into the server log.
+          if (tab.spotlightRepoRoot && nextTabPtyId === ptyId) {
+            becameSpotlightLogPty = true
+          }
           const nextPendingActivationSpawn = consumePendingActivationSpawn(
             tab.pendingActivationSpawn
           )
@@ -278,6 +285,20 @@ export function createTerminalPtyBindingActions(
       // Why: activation spawns come from clicking a worktree, not work in it — skip the lastActivityAt stamp and sortEpoch bump; other spawn reasons still bump.
       if (worktreeId && !wasActivationSpawn && !isRemoteRuntimeMirror) {
         get().bumpWorktreeActivity(worktreeId)
+      }
+
+      if (becameSpotlightLogPty && worktreeId) {
+        const repoId = getRepoIdFromWorktreeId(worktreeId)
+        // Only the repo's single Spotlight terminal (in the main worktree) feeds
+        // the log mirror; stale spotlight-flagged tabs elsewhere stay inert.
+        const isMainWorktreeTab = get().worktreesByRepo[repoId]?.some(
+          (entry) => entry.id === worktreeId && entry.isMainWorktree
+        )
+        // Optional-chained: PTY spawns must never fail on a renderer/preload
+        // version skew (dev reload before app restart).
+        if (isMainWorktreeTab) {
+          void window.api.spotlight?.setLogPty?.({ repoId, ptyId })
+        }
       }
     }
   }

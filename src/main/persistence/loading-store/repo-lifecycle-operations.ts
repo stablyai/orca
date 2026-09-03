@@ -1,5 +1,6 @@
 import type { ProjectHostSetup, ProjectHostSetupUpdateArgs } from '../../../shared/project-types'
 import type { Repo } from '../../../shared/repo-types'
+import type { SpotlightRepoState } from '../../../shared/spotlight'
 import {
   removeRepoFromHostWorkspaceSessions,
   removeRepoFromWorkspaceSession
@@ -73,6 +74,9 @@ export class RepoLifecycleOperations {
     syncProjectHostSetupCompatibilityState(this)
     // Why: presets are repo-scoped and unreachable once the repo is gone, so drop them with it.
     delete this[repoLifecycleOperationsContext].runtime.state.sparsePresetsByRepo[id]
+    if (this[repoLifecycleOperationsContext].runtime.state.spotlightByRepoId) {
+      delete this[repoLifecycleOperationsContext].runtime.state.spotlightByRepoId[id]
+    }
     delete this[repoLifecycleOperationsContext].runtime.state.retiredWorktreeNamesByRepo?.[id]
     pruneWorktreeStateForRepo(this, id, null)
     this[repoLifecycleOperationsContext].runtime.state.workspaceSession =
@@ -86,6 +90,33 @@ export class RepoLifecycleOperations {
         id
       )
     scheduleSave(this[repoLifecycleOperationsContext].scheduling)
+  }
+
+  // ── Spotlight testing ──────────────────────────────────────────────
+
+  getSpotlightState(repoId: string): SpotlightRepoState | null {
+    return this[repoLifecycleOperationsContext].runtime.state.spotlightByRepoId?.[repoId] ?? null
+  }
+
+  getAllSpotlightStates(): Record<string, SpotlightRepoState> {
+    return { ...this[repoLifecycleOperationsContext].runtime.state.spotlightByRepoId }
+  }
+
+  setSpotlightState(repoId: string, spotlightState: SpotlightRepoState): void {
+    const state = this[repoLifecycleOperationsContext].runtime.state
+    if (!state.spotlightByRepoId) {
+      state.spotlightByRepoId = {}
+    }
+    state.spotlightByRepoId[repoId] = spotlightState
+    scheduleSave(this[repoLifecycleOperationsContext].scheduling)
+  }
+
+  clearSpotlightState(repoId: string): void {
+    const state = this[repoLifecycleOperationsContext].runtime.state
+    if (state.spotlightByRepoId && repoId in state.spotlightByRepoId) {
+      delete state.spotlightByRepoId[repoId]
+      scheduleSave(this[repoLifecycleOperationsContext].scheduling)
+    }
   }
 
   removeProjectForHost(id: string, hostId: ExecutionHostId): void {
@@ -185,6 +216,7 @@ export class RepoLifecycleOperations {
         | 'worktreeVisibilitySourcePreferences'
         | 'projectGroupId'
         | 'projectGroupOrder'
+        | 'spotlightTestingEnabled'
         | 'projectHostSetupMethod'
       >
     > & {

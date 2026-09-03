@@ -12,6 +12,7 @@ import { resolveTerminalWorktreeRoute } from '@/lib/terminal-worktree-route'
 import { translate } from '@/i18n/i18n'
 import {
   guardPinnedTabClose,
+  isSpotlightProtectedTab,
   isUnifiedTabPinned,
   resolvePinnedTabLabel,
   shouldConfirmPinnedTabClose
@@ -97,12 +98,14 @@ export function closeTerminalTab(
     return
   }
 
-  // Why: a pinned tab routes through the confirmation guard instead of closing
-  // outright. `force` is the post-confirmation re-entry, which skips the guard.
+  // Why: pinned and Spotlight-server tabs route through the confirmation guard
+  // instead of closing outright. `force` is the post-confirmation re-entry,
+  // which skips the guard.
+  const isSpotlightTab = isSpotlightProtectedTab(state, owningWorktreeId, terminalTabId)
   if (
     options?.reason !== 'pty-exit' &&
     !options?.force &&
-    isUnifiedTabPinned(state, owningWorktreeId, terminalTabId)
+    (isUnifiedTabPinned(state, owningWorktreeId, terminalTabId) || isSpotlightTab)
   ) {
     // Why: background lifecycle callers cannot safely wait on a modal whose
     // owner may be unattended; reject pinned tabs without bypassing the guard.
@@ -113,11 +116,15 @@ export function closeTerminalTab(
     // Why: the pin prompt supersedes the running-process one only when it actually
     // appears. With `confirmClosePinnedTab` off it says nothing, so fall through and let
     // a busy pinned tab still get asked — Cmd+W did exactly that before #10142.
-    if (shouldConfirmPinnedTabClose(state)) {
+    // Spotlight-protected tabs always prompt (confirming turns Spotlight off and
+    // restores the root before the tab closes).
+    if (isSpotlightTab || shouldConfirmPinnedTabClose(state)) {
       guardPinnedTabClose({
-        isPinned: true,
+        isPinned: isUnifiedTabPinned(state, owningWorktreeId, terminalTabId),
         tabLabel: resolvePinnedTabLabel(state, owningWorktreeId, terminalTabId),
         onClose: () => closeTerminalTab(tabId, { ...options, force: true }),
+        worktreeId: owningWorktreeId,
+        terminalTabId,
         ...(options?.onCancel ? { onCancel: options.onCancel } : {})
       })
       return

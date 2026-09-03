@@ -5,6 +5,9 @@ import type { AppState } from '../types'
  *  original close once the user accepts; the label is shown in the dialog. */
 export type PinnedTabCloseConfirmRequest = {
   tabLabel: string
+  /** 'spotlight' = the tab is the repo's live Spotlight server terminal; the
+   *  dialog explains that confirming turns Spotlight off first. */
+  kind?: 'pinned' | 'spotlight'
   onConfirm: () => void
   onCancel?: () => void
 }

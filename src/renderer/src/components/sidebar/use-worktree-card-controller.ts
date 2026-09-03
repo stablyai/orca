@@ -8,9 +8,13 @@ import { useWorktreeCardLinkedDetails } from './use-worktree-card-linked-details
 import { useWorktreeCardReviewDetails } from './use-worktree-card-review-details'
 import { useWorktreeCardSecondaryDetails } from './use-worktree-card-secondary-details'
 import { useWorktreeCardWorkspaceActions } from './use-worktree-card-workspace-actions'
+import { useAppStore } from '@/store'
 
 export function useWorktreeCardController(props: ResolvedWorktreeCardProps) {
   const { worktree, repo } = props
+  // Spotlight holder state for this repo; drives the amber active-root bar,
+  // the detached-HEAD badge suppression, and the header badges/quick action.
+  const spotlight = useAppStore((s) => (repo ? (s.spotlightByRepo?.[repo.id] ?? null) : null))
   const foundation = useWorktreeCardFoundation({ worktree, repo })
   const review = useWorktreeCardReviewDetails({
     worktree,
@@ -157,6 +161,7 @@ export function useWorktreeCardController(props: ResolvedWorktreeCardProps) {
     shouldRefreshHostedReview,
     ...activation,
     showDeleteQuickAction,
+    spotlight,
     ...workspaceActions,
     ...secondary
   }

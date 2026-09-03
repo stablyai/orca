@@ -6,6 +6,7 @@ import { parseWorktreeId } from '../../worktree-logic'
 import type { RemoveWorktreeArgs } from '../ipc-context-schemas'
 import type { WorktreeIpcContext } from '../worktree-ipc-context'
 import { executeWorktreeRemoval } from './execute-worktree-removal'
+import { deactivateSpotlightIfHolder } from '../../spotlight'
 import {
   getWorktreeRemovalInFlightKey,
   getWorktreeRemovalOptionsKey
@@ -34,6 +35,11 @@ export function registerWorktreeRemovalHandlers(context: WorktreeIpcContext): vo
         }
         throw new Error(`Worktree deletion already in progress: ${args.worktreeId}`)
       }
+
+      // Restore the root before deleting the holder: otherwise the root stays
+      // frozen on a snapshot pointing at a worktree that is about to vanish,
+      // auto-sync dies silently, and the sidebar badge keeps claiming active.
+      await deactivateSpotlightIfHolder(repoId, args.worktreeId)
 
       // Why: concurrent stale-toast/double-click/sidebar races can hit the same worktree; share the op so only one path touches Git and disk.
       const removal = withWorktreeSpan({ stage: 'remove', path: worktreePath }, () =>

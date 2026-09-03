@@ -45,6 +45,8 @@ export function createHarnessStoreState(
     updateBrowserPageState: vi.fn(),
     setEditorFontZoomLevel: vi.fn(),
     setRateLimitsFromPush: vi.fn(),
+    applySpotlightChanged: vi.fn(),
+    hydrateSpotlightState: vi.fn(() => Promise.resolve()),
     setSshConnectionState: vi.fn(),
     setSshTargetLabels: vi.fn(),
     setPortForwards: vi.fn(),

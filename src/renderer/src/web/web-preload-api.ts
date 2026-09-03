@@ -1,5 +1,6 @@
 import type { PreloadApi } from '../../../preload/api-types'
 import type { StatsSummary } from '../../../shared/process-stats-types'
+import type { SpotlightOpResult } from '../../../shared/spotlight'
 import { createWebE2EApi } from './preload-api/web-e2e-api'
 import {
   createAccountsApi,
@@ -60,6 +61,14 @@ export function installWebPreloadApi(): void {
   window.api = withFallback(createWebPreloadApi(), []) as PreloadApi
 }
 
+function webSpotlightUnavailable(): SpotlightOpResult {
+  return {
+    ok: false,
+    error: { code: 'unsupported-host', message: 'Spotlight testing is unavailable on web.' },
+    state: null
+  }
+}
+
 function createWebPreloadApi(): Partial<PreloadApi> {
   return {
     ...createWebAppApi(),
@@ -79,6 +88,15 @@ function createWebPreloadApi(): Partial<PreloadApi> {
     nativeChat: createWebNativeChatApi(),
     runtimeEnvironments: createRuntimeEnvironmentsApi(),
     repos: createReposApi(),
+    spotlight: {
+      getState: async () => ({ byRepo: {} }),
+      activate: async () => webSpotlightUnavailable(),
+      sync: async () => webSpotlightUnavailable(),
+      deactivate: async () => webSpotlightUnavailable(),
+      setLogPty: async () => {},
+      clearLogPty: async () => {},
+      onChanged: () => () => {}
+    },
     worktrees: createWorktreesApi(),
     fs: createFileApi(),
     git: createGitApi(),

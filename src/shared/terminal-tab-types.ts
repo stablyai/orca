@@ -53,6 +53,10 @@ export type TerminalTab = {
    *  `sortEpoch` increments. Split layouts use a numeric count because one tab
    *  can remount several panes. Never persisted — it is a transient handoff. */
   pendingActivationSpawn?: boolean | number
+  /** Why: marks the per-workspace "Spotlight" terminal (cwd = repo root) so
+   *  re-activation reuses it instead of stacking duplicates. Persisted so the
+   *  marker survives session restore. */
+  spotlightRepoRoot?: boolean
 }
 
 export type TerminalPaneSplitDirection = 'vertical' | 'horizontal'

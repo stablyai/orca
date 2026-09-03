@@ -121,7 +121,7 @@ export function WorktreeCardParentContent({
   return (
     <div
       className={cn(
-        'flex w-full min-w-0 gap-0.5 pl-0',
+        'relative flex w-full min-w-0 gap-0.5 pl-0',
         titleOnlyCard ? 'items-center' : 'items-start'
       )}
       style={
@@ -129,6 +129,12 @@ export function WorktreeCardParentContent({
       }
       data-worktree-card-parent-content=""
     >
+      {worktree.isMainWorktree && presentation.spotlightActive && (
+        <span
+          aria-hidden
+          className="pointer-events-none absolute inset-y-1 left-0 w-[3px] rounded-full bg-amber-500"
+        />
+      )}
       {showCombinedStatusSlot ? (
         <div
           className={cn(

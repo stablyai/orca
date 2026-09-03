@@ -29,6 +29,15 @@ export function registerProjectCatalogIpcBridge(
   )
 
   unsubs.push(
+    window.api.spotlight.onChanged((event) => {
+      useAppStore.getState().applySpotlightChanged(event)
+    })
+  )
+  // Why: main owns spotlight state (it survives app restarts); hydrate once
+  // so buttons/badges render the right holder before any push event arrives.
+  void useAppStore.getState().hydrateSpotlightState()
+
+  unsubs.push(
     window.api.worktrees.onChanged(
       async (data: {
         repoId: string

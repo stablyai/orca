@@ -1,5 +1,6 @@
 import type { RepoSlice } from './repos/repo-state'
 import type { SparsePresetsSlice } from './slices/sparse-presets'
+import type { SpotlightSlice } from './slices/spotlight'
 import type { WorktreeSlice } from './slices/worktrees'
 import type { TerminalSlice } from './terminals/terminal-state'
 import type { TabsSlice } from './slices/tabs'
@@ -46,6 +47,7 @@ import type { TerminalQuickCommandHostsSlice } from './slices/terminal-quick-com
 
 export type AppState = RepoSlice &
   SparsePresetsSlice &
+  SpotlightSlice &
   WorktreeSlice &
   TerminalSlice &
   TabsSlice &

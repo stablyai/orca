@@ -85,6 +85,8 @@ export async function useIpcEventsForCloseRouting({
         editorFontZoomLevel: 0,
         setEditorFontZoomLevel: vi.fn(),
         setRateLimitsFromPush: vi.fn(),
+        applySpotlightChanged: vi.fn(),
+        hydrateSpotlightState: vi.fn(() => Promise.resolve()),
         setSshConnectionState: vi.fn(),
         setSshTargetLabels: vi.fn(),
         setPortForwards: vi.fn(),
@@ -143,6 +145,10 @@ export async function useIpcEventsForCloseRouting({
     dispatchEvent: vi.fn(),
     api: {
       repos: { onChanged: () => () => {} },
+      spotlight: {
+        onChanged: () => () => {},
+        getState: () => Promise.resolve({ byRepo: {} })
+      },
       automations: { onChanged: () => () => {} },
       worktrees: {
         onChanged: () => () => {},

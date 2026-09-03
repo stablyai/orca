@@ -34,6 +34,7 @@ type RepositoryUpdates = Partial<
     | 'agentWorktreeVisibility'
     | 'projectGroupId'
     | 'projectGroupOrder'
+    | 'spotlightTestingEnabled'
   >
 > & {
   sourceControlAi?: Repo['sourceControlAi'] | null

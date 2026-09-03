@@ -50,6 +50,13 @@ export function sanitizeRepoUpdate(updates: RepoUpdate): RepoUpdate {
   ) {
     delete sanitized.forkSyncMode
   }
+  if (
+    'spotlightTestingEnabled' in sanitized &&
+    sanitized.spotlightTestingEnabled !== undefined &&
+    typeof sanitized.spotlightTestingEnabled !== 'boolean'
+  ) {
+    delete sanitized.spotlightTestingEnabled
+  }
   if ('customWorktreeVisibilitySources' in sanitized) {
     const sources = normalizeCustomWorktreeVisibilitySources(
       sanitized.customWorktreeVisibilitySources

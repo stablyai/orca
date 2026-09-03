@@ -18,6 +18,7 @@ import type { PersistedUIState } from './persisted-ui-state-types'
 import type { ProjectGroup } from './project-group-types'
 import type { Project, ProjectHostSetup } from './project-types'
 import type { Repo } from './repo-types'
+import type { SpotlightRepoState } from './spotlight'
 import type { SparsePreset } from './worktree/create-types'
 import type { RetiredNameRegistry } from './worktree/retired-name-registry'
 import type { WorkspaceLineage, WorktreeLineage } from './worktree/lineage-types'
@@ -114,4 +115,8 @@ export type PersistedState = {
   featureInteractionTelemetryBuckets?: FeatureInteractionTelemetryBucketState
   /** Main-owned reset mutation journal. Never expose this through renderer settings APIs. */
   codexResetCreditAttemptLedger?: CodexResetCreditAttemptLedger
+  /** Spotlight testing holder per repo. Cache only — the git refs
+   *  (refs/orca/spotlight/*) in each repo are the source of truth; this record
+   *  is reconciled against them on repo load. Optional on legacy files. */
+  spotlightByRepoId?: Record<string, SpotlightRepoState>
 }

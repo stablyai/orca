@@ -4,6 +4,10 @@ import { parseWorkspaceKey } from '../../../../../shared/workspace-scope'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../../shared/constants'
 import { isEphemeralSetupTerminalWorktreeId } from '../../../../../shared/ephemeral-setup-terminal-worktree-id'
 import { parseExecutionHostId } from '../../../../../shared/execution-host'
+import { getRepoIdFromWorktreeId } from '../../../../../shared/worktree/id'
+import { isFolderRepo } from '../../../../../shared/repo-kind'
+import { resolveRuntimePath } from '../../../../../shared/cross-platform-path'
+import { SPOTLIGHT_LOG_RELATIVE_PATH } from '../../../../../shared/spotlight'
 import { resolveTerminalWorktreeRoute } from '@/lib/terminal-worktree-route'
 import { getConnectionId } from '@/lib/connection-context'
 import { getRemoteRuntimePtyEnvironmentId } from '@/runtime/runtime-terminal-stream'
@@ -69,8 +73,30 @@ export function installAgentIdleWorkingHandlers(session: ConnectPanePtySession):
     ORCA_WORKTREE_ID: session.deps.worktreeId,
     ...(session.launchToken ? { ORCA_AGENT_LAUNCH_TOKEN: session.launchToken } : {})
   }
+  // Why: agents must find the dev-server log by path. ORCA_SPOTLIGHT_ROOT is set
+  // UNGATED — even before Spotlight is enabled — because env vars freeze at spawn,
+  // so a terminal started before the toggle was on would otherwise never get a
+  // handle to the root. The log path itself stays gated on the enabled flag.
+  const spotlightLogRepo = session.state.repos.find(
+    (repo) => repo.id === getRepoIdFromWorktreeId(session.deps.worktreeId)
+  )
+  const spotlightLogEnv: Record<string, string> =
+    spotlightLogRepo && !spotlightLogRepo.connectionId?.trim() && !isFolderRepo(spotlightLogRepo)
+      ? {
+          ORCA_SPOTLIGHT_ROOT: spotlightLogRepo.path,
+          ...(spotlightLogRepo.spotlightTestingEnabled === true
+            ? {
+                ORCA_SPOTLIGHT_LOG: resolveRuntimePath(
+                  spotlightLogRepo.path,
+                  SPOTLIGHT_LOG_RELATIVE_PATH
+                )
+              }
+            : {})
+        }
+      : {}
   session.paneEnv = {
     ...session.paneStartup?.env,
+    ...spotlightLogEnv,
     ...session.paneIdentityEnv
   }
 

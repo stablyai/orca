@@ -10,6 +10,7 @@ import { cn } from '@/lib/utils'
 import type { Repo } from '../../../../shared/repo-types'
 import { resolveRepoHeaderColor } from './project-header-color'
 import { formatSparseDirectoryPreview, shouldBeginWorktreeRename } from './worktree-card-model'
+import { SpotlightPrimaryBadge, SpotlightQuickAction } from './WorktreeCardSpotlightControls'
 import type { WorktreeCardPresentation } from './worktree-card-presentation'
 import { WorktreeCardSshHostControl } from './WorktreeCardSshHostControl'
 import { WorktreeTitleInlineRename } from './WorktreeTitleInlineRename'
@@ -84,6 +85,7 @@ export function WorktreeCardHeader({
     showHeaderActions,
     showTitleRowPrimary,
     showDeleteQuickAction,
+    spotlightEligible,
     showTitleRowIndicators,
     titleRowIndicators,
     titleWrapper
@@ -287,6 +289,12 @@ export function WorktreeCardHeader({
               </TooltipContent>
             </Tooltip>
           )}
+
+          {showTitleRowPrimary && repo ? <SpotlightPrimaryBadge repo={repo} /> : null}
+
+          {spotlightEligible && repo ? (
+            <SpotlightQuickAction worktree={worktree} repo={repo} />
+          ) : null}
 
           {showDeleteQuickAction && (
             <Tooltip>

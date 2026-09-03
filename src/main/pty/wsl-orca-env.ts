@@ -98,6 +98,9 @@ export function addOrcaWslInteropEnv(env: Record<string, string>): void {
     'ORCA_WSL_HOOK_INSTANCE/u',
     'ORCA_OMP_SOURCE_AGENT_DIR/p',
     'ORCA_OMP_STATUS_EXTENSION/p',
+    // /p so wsl.exe translates the Windows repo-root log path to /mnt/... —
+    // without it an agent inside the distro gets an unreadable C:\ path.
+    'ORCA_SPOTLIGHT_LOG/p',
     ...worktreeSetupWslenvEntries(env)
   ]
   applyWslenvPassthrough(env, passthroughEntries)

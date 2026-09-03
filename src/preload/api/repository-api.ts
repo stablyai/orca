@@ -63,6 +63,7 @@ export type RepositoryApi = {
         | 'worktreeVisibilitySourcePreferences'
         | 'projectGroupId'
         | 'projectGroupOrder'
+        | 'spotlightTestingEnabled'
         | 'forkSyncMode'
       >
     > & {

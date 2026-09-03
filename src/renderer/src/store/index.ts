@@ -2,6 +2,7 @@ import { create } from 'zustand'
 import type { AppState } from './types'
 import { createRepoSlice } from './slices/repos'
 import { createSparsePresetsSlice } from './slices/sparse-presets'
+import { createSpotlightSlice } from './slices/spotlight'
 import { createWorktreeSlice } from './slices/worktrees'
 import { createTerminalSlice } from './slices/terminals'
 import { createTabsSlice } from './slices/tabs'
@@ -66,6 +67,7 @@ export const useAppStore = create<AppState>()(
     return {
       ...createRepoSlice(...a),
       ...createSparsePresetsSlice(...a),
+      ...createSpotlightSlice(...a),
       ...createWorktreeSlice(...a),
       ...createTerminalSlice(...a),
       ...createTabsSlice(...a),

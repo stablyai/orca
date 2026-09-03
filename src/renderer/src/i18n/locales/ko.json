@@ -316,6 +316,26 @@
             "f518e89aa5": "프로젝트가 해당 프로필에 이미 있습니다",
             "f03ae7f27b": "프로젝트를 전송하지 못했습니다"
           }
+        },
+        "spotlight": {
+          "operationInProgress": "Finish or abort the merge/rebase in progress first.",
+          "rootDiverged": "The project root has changes made outside the Spotlight workspace. Commit or discard them there first.",
+          "restoreConflict": "Restoring the original root changes conflicted. Resolve it in the project root, then retry.",
+          "unsupportedHost": "Spotlight testing is not available for this project host yet.",
+          "activated": "Spotlight on — the project root now mirrors this workspace",
+          "activateFailed": "Failed to start Spotlight",
+          "syncFailed": "Spotlight sync failed",
+          "released": "Spotlight off — project root restored",
+          "releasedDetached": "Spotlight off — project root left detached",
+          "releasedDetachedInUse": "Its branch \"{{branch}}\" is checked out in another workspace, so the root could not switch back to it. Free that branch (or check out any branch in the root) to re-attach.",
+          "releasedDetachedGone": "The root's original branch no longer exists, so it was left detached at its original commit.",
+          "deactivateFailed": "Failed to turn off Spotlight",
+          "activatedLogs": "Server logs are mirrored for agents at .orca/spotlight.log",
+          "forceSync": "Force sync",
+          "forceSynced": "Spotlight re-synced — the root mirrors the workspace again",
+          "untrackedCollision": "Untracked files in the project root would be overwritten. Move or delete them, or force the sync.",
+          "notEnabled": "Spotlight testing is not enabled for this project.",
+          "activatedNoTerminal": "Spotlight on — open the primary workspace and start your server there"
         }
       }
     },
@@ -478,6 +498,13 @@
           "emulator": {
             "tab": {
               "bf4f2a8a72": "에뮬레이터를 시작할 수 없습니다. iOS 또는 Android 에뮬레이터 설정을 확인하고 다른 기기를 사용해 보세요."
+            }
+          }
+        },
+        "spotlight": {
+          "terminal": {
+            "tab": {
+              "title": "Spotlight"
             }
           }
         }
@@ -2867,7 +2894,10 @@
             "0d1963f4a6": "이 탭은 고정되어 있습니다. 정말 닫으시겠어요?",
             "dont_ask_again": "고정된 탭에 대해 다시 묻지 않기",
             "0b38ee2f86": "취소",
-            "c337c9d75c": "닫기"
+            "c337c9d75c": "닫기",
+            "spotlightTitle": "Spotlight is using this terminal",
+            "spotlightDescription": "This terminal runs your server at the project root and feeds agent logs. Closing it turns Spotlight off and restores the project root.",
+            "spotlightConfirm": "Turn Off Spotlight & Close"
           },
           "TerminalSshReconnectOverlay": {
             "authFailed": "{{value0}} 인증에 실패했습니다. 이 터미널 세션을 계속하려면 다시 연결하세요.",
@@ -4685,7 +4715,10 @@
           "setParentWorkspace": "상위 워크트리 설정...",
           "workspaceSection": "워크스페이스",
           "primaryDeleteDisabled": "기본 작업 트리는 삭제할 수 없습니다. 대신 프로젝트를 제거하세요.",
-          "deleteWorktree": "작업 트리 삭제"
+          "deleteWorktree": "작업 트리 삭제",
+          "spotlightOff": "Turn Off Spotlight",
+          "spotlightOn": "Spotlight This Workspace",
+          "spotlightForceSync": "Force Sync Spotlight (overwrite root changes)"
         },
         "WorktreeList": {
           "d880ea0744": "그룹을 만들고 이 프로젝트를 그룹으로 이동하세요.",
@@ -5278,6 +5311,19 @@
           "3b7ea51793": "검색 지우기",
           "7f1c2e94a5": "검색어가 너무 깁니다 — 보드가 필터링되지 않았습니다",
           "9a4d0f6b21": "너무 김"
+        },
+        "WorktreeCardSpotlightControls": {
+          "syncing": "Syncing…",
+          "activeHere": "Spotlight on — this workspace mirrors to the project root. Click to turn off.",
+          "takeover": "Take the Spotlight from \"{{holder}}\" — the project root will mirror this workspace instead.",
+          "activate": "Spotlight this workspace — mirror its changes onto the project root for testing.",
+          "primaryBadgeAria": "Spotlight is mirroring a workspace onto this project root. Click to turn off.",
+          "badgeLabel": "spotlight",
+          "primaryBadgeTooltip": "The project root mirrors \"{{holder}}\". Click to turn Spotlight off and restore the root.",
+          "turnOff": "Turn off Spotlight and restore the project root",
+          "agentLogs": "Agents in every workspace can read the server logs: .orca/spotlight.log (env var ORCA_SPOTLIGHT_LOG).",
+          "syncBroken": "Spotlight sync is failing:",
+          "lastSynced": "Last synced {{when}}."
         }
       },
       "shared": {
@@ -8885,7 +8931,9 @@
             "externalWorktreesDescription": "이 프로젝트에서 Orca 외부 작업 트리를 표시할지 재정의합니다.",
             "copy": "copy",
             "clone": "clone",
-            "apfs": "apfs"
+            "apfs": "apfs",
+            "spotlightTesting": "Spotlight Testing",
+            "spotlightTestingDescription": "Mirror workspace changes onto the project root for testing."
           }
         },
         "runtime": {
@@ -10304,6 +10352,13 @@
           "reviewStepDescription": "최근 실행을 검토하고 필요할 때 언제든지 작업을 계속할 수 있습니다.",
           "openAutomations": "자동화 열기",
           "openAutomationsDescription": "일정을 생성하고 최근 실행을 확인합니다."
+        },
+        "RepositorySpotlightSection": {
+          "title": "Spotlight Testing",
+          "sectionDescription": "Test workspace changes against the project root without duplicating installed dependencies or build output.",
+          "toggleDescription": "Show a Spotlight button on workspaces of this project that mirrors their tracked changes onto the project root.",
+          "toggleLabel": "Use Spotlight testing",
+          "logsDescription": "While Spotlight is on, the server terminal's output is mirrored to .orca/spotlight.log so agents in any workspace can read it (env var ORCA_SPOTLIGHT_LOG)."
         }
       },
       "right": {

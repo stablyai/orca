@@ -29,6 +29,8 @@ export function registerSessionTabIpcBridge(unsubs: (() => void)[]): void {
       guardPinnedTabClose({
         isPinned: isUnifiedTabPinned(store, worktreeId, tabId),
         tabLabel: resolvePinnedTabLabel(store, worktreeId, tabId),
+        worktreeId,
+        terminalTabId: tabId,
         onClose: () => {
           const currentStore = useAppStore.getState()
           closeMobileSessionTabInStore(currentStore, worktreeId, tabId)

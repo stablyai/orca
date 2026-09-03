@@ -26,6 +26,10 @@ export function buildTerminalCreateWindow(args: {
     dispatchEvent,
     api: {
       repos: { onChanged: () => () => {} },
+      spotlight: {
+        onChanged: () => () => {},
+        getState: () => Promise.resolve({ byRepo: {} })
+      },
       automations: { onChanged: () => () => {} },
       worktrees: {
         onChanged: () => () => {},

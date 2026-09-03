@@ -6,6 +6,7 @@ import { isLegacyRepoForExternalWorktreeVisibility } from '../../../shared/exter
 import { normalizeRepoSourceControlAiOverrides } from '../../../shared/source-control-ai'
 import { normalizeWorktreeVisibilitySourcePreferences } from '../../../shared/worktree/visibility-sources'
 import { sanitizeRepoUpdatesForPersistence } from './repo-sanitization'
+import { isFolderRepo } from '../../../shared/repo-kind'
 
 export type RepoUpdateMutationOperations = {
   state: PersistedState
@@ -63,6 +64,7 @@ export class RepoUpdatePersistenceOperations {
         | 'worktreeVisibilitySourcePreferences'
         | 'projectGroupId'
         | 'projectGroupOrder'
+        | 'spotlightTestingEnabled'
         | 'projectHostSetupMethod'
       >
     > & {
@@ -81,6 +83,16 @@ export class RepoUpdatePersistenceOperations {
       return null
     }
     const sanitizedUpdates = sanitizeRepoUpdatesForPersistence(updates)
+    if (
+      sanitizedUpdates.spotlightTestingEnabled === true &&
+      (isFolderRepo(repo) || Boolean(repo.connectionId?.trim()))
+    ) {
+      // Spotlight testing is local-git only; the service refuses folder/SSH
+      // repos and the settings UI hides the toggle for them. Drop a stray enable
+      // (e.g. from a runtime RPC client) so it can't persist a flag that only
+      // injects a dead ORCA_SPOTLIGHT_LOG with no UI to turn it back off.
+      delete sanitizedUpdates.spotlightTestingEnabled
+    }
     if (
       'agentWorktreeVisibility' in sanitizedUpdates &&
       !('worktreeVisibilitySourcePreferences' in sanitizedUpdates) &&

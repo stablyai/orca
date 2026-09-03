@@ -32,6 +32,7 @@ export type EditorExternalWatchTargetState = Pick<
   | 'sshConnectionStates'
   | 'folderWorkspaces'
   | 'projectGroups'
+  | 'spotlightByRepo'
 >
 
 type WatchedTargetsSnapshot = {
@@ -51,6 +52,7 @@ let cachedGitStatusHugeByWorktree: AppState['gitStatusHugeByWorktree'] | null = 
 let cachedSshConnectionStates: AppState['sshConnectionStates'] | null = null
 let cachedFolderWorkspaces: AppState['folderWorkspaces'] | null = null
 let cachedProjectGroups: AppState['projectGroups'] | null = null
+let cachedSpotlightByRepo: AppState['spotlightByRepo'] | null = null
 let cachedWatchedTargetsSnapshot: WatchedTargetsSnapshot = { targets: [], targetsKey: '' }
 
 export function getEditorExternalWatchTargetKey(target: EditorExternalWatchTarget): string {
@@ -123,7 +125,8 @@ export function selectEditorExternalWatchTargets(
     cachedGitStatusHugeByWorktree === state.gitStatusHugeByWorktree &&
     cachedSshConnectionStates === state.sshConnectionStates &&
     cachedFolderWorkspaces === state.folderWorkspaces &&
-    cachedProjectGroups === state.projectGroups
+    cachedProjectGroups === state.projectGroups &&
+    cachedSpotlightByRepo === state.spotlightByRepo
   ) {
     return cachedWatchedTargetsSnapshot
   }
@@ -172,6 +175,21 @@ export function selectEditorExternalWatchTargets(
     }
     // Why: sidebar watcher must follow the selected worktree's host owner, not the host currently focused in the UI.
     owners.add(getRuntimeEnvironmentIdForWorktree(state, activeWorktreeId))
+  }
+
+  // Why: Spotlight's auto-sync needs the holder worktree watched even when it
+  // has no open editor and isn't the active worktree. Route that need through
+  // this single owner (local-only MVP → local owner) instead of a second
+  // watch/unwatch owner in the same renderer — two owners share one
+  // sender-keyed listener entry in main, so either's unwatch starves the other.
+  for (const spotlight of Object.values(state.spotlightByRepo)) {
+    const holderId = spotlight.holderWorktreeId
+    let owners = targetOwnersByWorktreeId.get(holderId)
+    if (!owners) {
+      owners = new Set()
+      targetOwnersByWorktreeId.set(holderId, owners)
+    }
+    owners.add(null)
   }
 
   const nextTargets: EditorExternalWatchTarget[] = []
@@ -250,6 +268,7 @@ export function selectEditorExternalWatchTargets(
   cachedSshConnectionStates = state.sshConnectionStates
   cachedFolderWorkspaces = state.folderWorkspaces
   cachedProjectGroups = state.projectGroups
+  cachedSpotlightByRepo = state.spotlightByRepo
 
   if (targetsKey === cachedWatchedTargetsSnapshot.targetsKey) {
     return cachedWatchedTargetsSnapshot

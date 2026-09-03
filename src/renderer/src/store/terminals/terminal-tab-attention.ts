@@ -14,6 +14,7 @@ export function createTerminalTabAttentionActions(
   | 'clearTerminalPaneUnread'
   | 'setTabCustomTitle'
   | 'setTabColor'
+  | 'markTabSpotlightRepoRoot'
 > {
   return {
     markTerminalTabUnread: (tabId) => {
@@ -94,6 +95,18 @@ export function createTerminalTabAttentionActions(
         get().setTabCustomLabel(item.id, title, opts)
       }
     },
+    markTabSpotlightRepoRoot: (tabId) => {
+      set((s) => {
+        const next = { ...s.tabsByWorktree }
+        for (const wId of Object.keys(next)) {
+          next[wId] = next[wId].map((t) =>
+            t.id === tabId ? { ...t, spotlightRepoRoot: true } : t
+          )
+        }
+        return { tabsByWorktree: next }
+      })
+    },
+
     setTabColor: (tabId, color) => {
       set((s) => {
         const next = { ...s.tabsByWorktree }

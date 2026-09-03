@@ -50,6 +50,7 @@ import type { PreflightApi } from './api/preflight-api'
 import type { PtyApi } from './api/pty-api'
 import type { ProjectGroupsApi, ProjectsApi, RepositoryApi } from './api/repository-api'
 import type { RuntimeApi } from './api/runtime-api'
+import type { SpotlightApi } from './api/spotlight-api'
 import type { KeybindingsApi, SettingsApi } from './api/settings-api'
 import type { ShellApi } from './api/shell-api'
 import type { SpeechApi } from './api/speech-api'
@@ -72,6 +73,7 @@ export type PreloadApi = {
   platform: PlatformApi
   e2e: E2EApi
   repos: RepositoryApi
+  spotlight: SpotlightApi
   projects: ProjectsApi
   projectGroups: ProjectGroupsApi
   folderWorkspaces: FolderWorkspacesApi
