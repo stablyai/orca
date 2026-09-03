@@ -195,7 +195,8 @@ export function reconcileFederatedWorkerStop(
         to: 'failed',
         projection: {
           completed_at: dispatch.completed_at ?? new Date().toISOString(),
-          last_failure: 'stopped'
+          last_failure: 'stopped',
+          termination_reason: 'operator_close'
         }
       })
     }
