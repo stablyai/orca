@@ -8,10 +8,13 @@ description: >-
   requests phrased as "hand off", "handoff", "handover", "give this to another
   agent", or "another worktree" when the user did not explicitly ask to
   supervise, monitor, wait for results, or coordinate a DAG. Use `orca-cli` for
-  ordinary terminal control, lightweight terminal prompts, shell commands, Orca
+  terminal control, lightweight terminal prompts, shell commands, Orca
   worktree management, reading or waiting on terminals, and automation of the
-  browser embedded inside Orca. Use Computer Use for browser windows, webviews,
-  Orca app UI, or desktop UI outside Orca's embedded browser.
+  browser embedded inside Orca. Use Computer Use for external browser windows,
+  webviews, Orca app UI, or desktop UI outside Orca's embedded browser only when
+  the task requires OS/window-level control such as focus, menus, dialogs,
+  coordinates, or screenshots. Use `orca-cli` for Orca's embedded pages and a
+  page-automation tool such as Playwright or CDP for external pages.
 ---
 
 # Orca Inter-Agent Orchestration
@@ -143,6 +146,7 @@ Rules:
 - `terminal list --json` omits `visualLayouts` because handle recovery does not need topology. Add `--include-visual-layouts` only for explicit tab and pane inspection.
 - `orca orchestration check --peek --format --json` returns locally formatted unread mail without consuming it; it never writes to terminal input or remotely wakes another terminal. Use `orchestration dispatch --inject` to deliver a tracked task, or `terminal send` when an existing agent needs a free-form prompt.
 - While supervising workers manually, use `check --wait --types worker_done,escalation,question --timeout-ms <n>` instead of sleep/poll loops. Process the whole Delivery, reply to `question` messages with `orca orchestration reply --id <msg_id> --body <answer> --json`, then acknowledge and keep waiting.
+- `check --json` prints exactly one JSON document on stdout. While `--wait` blocks it also prints keepalive lines (`{"_keepalive":true,...}`) to stderr so you can tell the process is alive; those are never on stdout. Do not merge the streams before a parser — `check --wait --json 2>&1 | <parser>` fails with "Extra data: line 2". Pipe stdout only.
 - Treat a `check --wait` timeout or `{count:0}` as a checkpoint, not a worker failure. Long coding tasks routinely run 15-60 minutes; keep using rolling waits unless you receive `worker_done`/`escalation`, the terminal exits or disappears, or the user explicitly asks you to stop.
 - Heartbeats and visible terminal activity mean the worker is alive, not done. Do not stop, close, kill, or restart a worker just because it has not produced a completion message yet.
 - Use `ask` when a worker needs a blocking answer from the coordinator; it defaults to the active Dispatch's Run. Timeout or disconnect leaves the question pending, so resume by its original message ID instead of asking again.
@@ -290,6 +294,7 @@ orca orchestration reply --id <message_id> --body "<answer>" --json
 
 Recovery is conditional, never a fixed destructive sequence:
 
+- The response was lost and named no Dispatch: run `orca orchestration request-show --request <request_id> --json` first. It is read-only. `completed` means the mutation already took effect. `pending` means the original mutation is still running or Orca restarted before recording its outcome. For either state, replaying the original command with `--retry-request <request_id>` reuses the same operation identity so Orca can replay, join, or safely recover it without starting a separate duplicate. `absent` means this runtime holds no receipt under your caller identity and is not proof that nothing happened; inspect the affected state before deciding whether to retry.
 - `worker-show --dispatch <id>` says `ready`: keep waiting or read bounded output.
 - It proves `failed` or `stopped`: start a replacement with `worker-start --task <task> --retry-of <id>` plus an explicit `--on`/`--worktree` and `--agent`/`--terminal` choice. Retry does not silently inherit placement.
 - It remains `outcome_unknown`: either `worker-stop --dispatch <id>` and inspect again, or explicitly `worker-abandon --dispatch <id>` while accepting that resources may still be live. Abandon performs no remote, process, or filesystem action.

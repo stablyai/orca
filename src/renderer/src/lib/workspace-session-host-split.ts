@@ -8,7 +8,7 @@ import { isWorktreeHostIdentity } from '../../../shared/worktree/host-qualified-
 import {
   GLOBAL_WORKSPACE_SESSION_FIELDS,
   WORKSPACE_SESSION_FIELD_OWNERSHIP
-} from './workspace-session-host-field-ownership'
+} from '../../../shared/workspace-session-host-field-ownership'
 import {
   buildWorktreeIdByFileId,
   buildWorktreeIdByTabId,
@@ -289,6 +289,15 @@ export function splitWorkspaceSessionByHost(
   }
 
   return slices
+}
+
+/** Every defined non-'local' partition; 'local' is handled by its own dedicated write. */
+export function nonLocalHostSessionEntries(
+  slices: HostSessionSlices
+): [ExecutionHostId, WorkspaceSessionState][] {
+  return (Object.entries(slices) as [ExecutionHostId, WorkspaceSessionState][]).filter(
+    ([hostId, slice]) => hostId !== LOCAL_EXECUTION_HOST_ID && slice !== undefined
+  )
 }
 
 /** Inverse of split: combine per-host slices into one unified session. Global

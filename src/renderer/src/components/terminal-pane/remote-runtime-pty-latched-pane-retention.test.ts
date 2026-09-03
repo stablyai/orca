@@ -5,6 +5,7 @@ import {
   decodeTerminalStreamJson
 } from '../../../../shared/terminal-stream-protocol'
 import type { RuntimeMobileSessionTabsResult } from '../../../../shared/runtime-types'
+import { REMOTE_RUNTIME_AUTO_RECOVERY_TIMEOUT_MS } from './remote-runtime-pty-recovery-state'
 
 // Why: the recovery cutoff no longer tears down the retry registry entry or the accepted-snapshot
 // listener, so those two module-global collections are the only places a latched pane can accumulate.
@@ -184,7 +185,7 @@ describe('remote runtime pty latched-pane retention', () => {
 
       for (let cycle = 0; cycle < 20; cycle += 1) {
         const transport = await attachStalePane(cycle)
-        await vi.advanceTimersByTimeAsync(66_000)
+        await vi.advanceTimersByTimeAsync(REMOTE_RUNTIME_AUTO_RECOVERY_TIMEOUT_MS + 6_000)
         expect(transport.getRecoveryState?.().phase).toBe('disconnected')
         latched.push(await registries())
         transport.destroy?.()
@@ -208,7 +209,7 @@ describe('remote runtime pty latched-pane retention', () => {
       const settled: { subscribers: number; scheduled: number }[] = []
       for (let cycle = 0; cycle < 20; cycle += 1) {
         const transport = await attachStalePane(cycle)
-        await vi.advanceTimersByTimeAsync(66_000)
+        await vi.advanceTimersByTimeAsync(REMOTE_RUNTIME_AUTO_RECOVERY_TIMEOUT_MS + 6_000)
         expect(transport.getRecoveryState?.().phase).toBe('disconnected')
         transport.detach?.()
         await vi.advanceTimersByTimeAsync(1_000)
@@ -227,7 +228,7 @@ describe('remote runtime pty latched-pane retention', () => {
       const transports: Awaited<ReturnType<typeof attachStalePane>>[] = []
       for (let pane = 0; pane < 8; pane += 1) {
         transports.push(await attachStalePane(pane))
-        await vi.advanceTimersByTimeAsync(66_000)
+        await vi.advanceTimersByTimeAsync(REMOTE_RUNTIME_AUTO_RECOVERY_TIMEOUT_MS + 6_000)
       }
       // Retention is per live pane, not per timeout: eight latched panes hold eight of each.
       expect(await registries()).toEqual({ subscribers: 8, scheduled: 8 })
@@ -247,7 +248,7 @@ describe('remote runtime pty latched-pane retention', () => {
     vi.useFakeTimers()
     try {
       const transport = await attachStalePane(0)
-      await vi.advanceTimersByTimeAsync(66_000)
+      await vi.advanceTimersByTimeAsync(REMOTE_RUNTIME_AUTO_RECOVERY_TIMEOUT_MS + 6_000)
       expect(transport.getRecoveryState?.().phase).toBe('disconnected')
 
       const baseline = await registries()
@@ -277,7 +278,7 @@ describe('remote runtime pty latched-pane retention', () => {
       const { retryAllRemoteRuntimePtyRecoveriesNow } =
         await import('./remote-runtime-pty-recovery-state')
       const transport = await attachStalePane(0)
-      await vi.advanceTimersByTimeAsync(66_000)
+      await vi.advanceTimersByTimeAsync(REMOTE_RUNTIME_AUTO_RECOVERY_TIMEOUT_MS + 6_000)
       expect(transport.getRecoveryState?.().phase).toBe('disconnected')
 
       const baseline = await registries()
@@ -295,7 +296,7 @@ describe('remote runtime pty latched-pane retention', () => {
         // A second trigger in the same window must find nothing to advance, so an online/resume
         // storm cannot stack fresh recovery epochs on one pane.
         expect(retryAllRemoteRuntimePtyRecoveriesNow()).toBe(0)
-        await vi.advanceTimersByTimeAsync(66_000)
+        await vi.advanceTimersByTimeAsync(REMOTE_RUNTIME_AUTO_RECOVERY_TIMEOUT_MS + 6_000)
         expect(transport.getRecoveryState?.().phase).toBe('disconnected')
         observed.push({ ...(await registries()), timers: vi.getTimerCount(), revived })
       }
@@ -325,7 +326,7 @@ describe('remote runtime pty latched-pane retention', () => {
     try {
       const handleEvents = await import('../../runtime/web-session-terminal-handle-events')
       const transport = await attachStalePane(0)
-      await vi.advanceTimersByTimeAsync(66_000)
+      await vi.advanceTimersByTimeAsync(REMOTE_RUNTIME_AUTO_RECOVERY_TIMEOUT_MS + 6_000)
       expect(transport.getRecoveryState?.().phase).toBe('disconnected')
       const baseline = await registries()
 

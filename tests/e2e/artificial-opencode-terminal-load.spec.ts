@@ -447,7 +447,7 @@ async function measureCrossWorkspaceTypingDuringHiddenLoad({
       scheduler,
       mainPressure
     )
-    expect(scheduler?.rendererDroppedBacklogs ?? 0).toBe(0)
+    expect(scheduler?.droppedBacklogCount ?? Number.POSITIVE_INFINITY).toBe(0)
     expect(measurement.medianLatencyMs).toBeLessThan(MAX_MEDIAN_KEY_LATENCY_MS)
     expect(measurement.worstLatencyMs).toBeLessThan(MAX_WORST_KEY_LATENCY_UNDER_LOAD_MS)
     expect(measurement.maxTimerDriftMs).toBeLessThan(MAX_TIMER_DRIFT_UNDER_LOAD_MS)

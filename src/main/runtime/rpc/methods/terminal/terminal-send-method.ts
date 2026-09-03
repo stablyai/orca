@@ -1,3 +1,5 @@
+import { isAgentSessionPtyWriteRefusedError } from '../../../../../shared/agent-session-pty-write-admission'
+import { assertLegacyAiVaultResumeCommandAllowed } from '../../../../ai-vault/structured-session-ownership'
 import { InvalidArgumentError, defineMethod, type RpcAnyMethod } from '../../core'
 import { isTerminalQueryReply } from '../../../../../shared/terminal-query-reply'
 import { assertTerminalAgentSendable } from '../../terminal-agent-send-guard'
@@ -21,6 +23,16 @@ export const TERMINAL_SEND_METHODS: RpcAnyMethod[] = [
     handler: async (params, { runtime, clientId, signal }) => {
       await assertTerminalSendTextWithinLimit(params.text)
       await assertTerminalSendTextWithinLimit(params.resolvedLaunchDraft?.text)
+      if (params.text) {
+        await assertLegacyAiVaultResumeCommandAllowed(params.text, () =>
+          runtime.ensureStructuredAgentSessionHost()
+        )
+      }
+      if (params.resolvedLaunchDraft?.text) {
+        await assertLegacyAiVaultResumeCommandAllowed(params.resolvedLaunchDraft.text, () =>
+          runtime.ensureStructuredAgentSessionHost()
+        )
+      }
       const queryReplyClientId = clientId ?? params.client?.id
       if (
         params.inputKind === 'query-reply' &&
@@ -188,6 +200,18 @@ export const TERMINAL_SEND_METHODS: RpcAnyMethod[] = [
             )
       } catch (error) {
         mobileFloorClaim.current?.rollback()
+        if (isAgentSessionPtyWriteRefusedError(error)) {
+          // Why: name the owner and the stage instead of a bare not-writable, so a client can say
+          // who holds the session rather than retrying into a lease it will never win.
+          return {
+            send: {
+              handle: params.terminal,
+              accepted: false,
+              bytesWritten: 0,
+              agentSessionRefusal: error.refusal
+            }
+          }
+        }
         const refusedReason = getTerminalSendGuardRefusedReason(error)
         if (refusedReason) {
           return {

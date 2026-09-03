@@ -36,14 +36,11 @@ export function ExperimentalPane({
 }: ExperimentalPaneProps): React.JSX.Element {
   const searchQuery = useAppStore((s) => s.settingsSearchQuery)
   const showPet = matchesSettingsSearch(searchQuery, [getExperimentalSearchEntry().pet])
-  const showAgentsView = matchesSettingsSearch(searchQuery, [
-    getExperimentalSearchEntry().agentsView
+  const showNativeChat = matchesSettingsSearch(searchQuery, [
+    getExperimentalSearchEntry().nativeChat
   ])
   const showAgentDashboard = matchesSettingsSearch(searchQuery, [
     getExperimentalSearchEntry().agentDashboard
-  ])
-  const showNativeChat = matchesSettingsSearch(searchQuery, [
-    getExperimentalSearchEntry().nativeChat
   ])
   const showTerminalAttention = matchesSettingsSearch(searchQuery, [
     getExperimentalSearchEntry().terminalAttention
@@ -64,6 +61,10 @@ export function ExperimentalPane({
 
   return (
     <div className="space-y-4">
+      {showAgentDashboard ? (
+        <AgentDashboardExperimentalSetting settings={settings} updateSettings={updateSettings} />
+      ) : null}
+
       {showPet ? (
         <SearchableSetting
           title={translate('auto.components.settings.ExperimentalPane.dd6f0a1d45', 'Pet')}
@@ -96,48 +97,6 @@ export function ExperimentalPane({
             />
           </div>
         </SearchableSetting>
-      ) : null}
-
-      {showAgentsView ? (
-        <SearchableSetting
-          title={translate('auto.components.settings.ExperimentalPane.a05bcdaf57', 'Agents View')}
-          description={translate(
-            'auto.components.settings.ExperimentalPane.f63ea281e3',
-            'Threaded left-sidebar feed for agent completions and blocking states.'
-          )}
-          keywords={getExperimentalSearchEntry().agentsView.keywords}
-          className="space-y-3 py-2"
-        >
-          <div className="flex items-start justify-between gap-4">
-            <div className="min-w-0 shrink space-y-0.5">
-              <Label>
-                {translate('auto.components.settings.ExperimentalPane.a05bcdaf57', 'Agents View')}
-              </Label>
-              <p className="text-xs text-muted-foreground">
-                {translate(
-                  'auto.components.settings.ExperimentalPane.0277901cf7',
-                  'Adds an Agents entry to the left sidebar with a threaded worktree feed for completed agents, blocking questions, unread state, and worktree creation events. Experimental — the event model and UI may change.'
-                )}
-              </p>
-            </div>
-            <Switch
-              aria-label={translate(
-                'auto.components.settings.ExperimentalPane.a05bcdaf57',
-                'Agents View'
-              )}
-              checked={settings.experimentalActivity}
-              onCheckedChange={(checked) =>
-                updateSettings({
-                  experimentalActivity: checked
-                })
-              }
-            />
-          </div>
-        </SearchableSetting>
-      ) : null}
-
-      {showAgentDashboard ? (
-        <AgentDashboardExperimentalSetting settings={settings} updateSettings={updateSettings} />
       ) : null}
 
       {showNativeChat ? (

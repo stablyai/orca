@@ -286,7 +286,7 @@ describe('registerPtyHandlers', () => {
           getProfiles: vi.fn()
         } as never)
         const shutdown = vi.fn(async () => undefined)
-        const store = { markSshRemotePtyLease: vi.fn() }
+        const store = { markSshRemotePtyLease: vi.fn(), clearSshRemotePtyKillIntent: vi.fn() }
         const runtime = {
           setPtyController: vi.fn(),
           onPtyExit: vi.fn()
@@ -357,7 +357,7 @@ describe('registerPtyHandlers', () => {
           getDefaultShell: vi.fn(),
           getProfiles: vi.fn()
         } as never)
-        const store = { markSshRemotePtyLease: vi.fn() }
+        const store = { markSshRemotePtyLease: vi.fn(), clearSshRemotePtyKillIntent: vi.fn() }
         const runtime = {
           setPtyController: vi.fn(),
           onPtyExit: vi.fn()
@@ -385,7 +385,8 @@ describe('registerPtyHandlers', () => {
       })
       it('marks a detached SSH lease terminated when runtime controller kill has no provider', async () => {
         const store = {
-          markSshRemotePtyLease: vi.fn()
+          markSshRemotePtyLease: vi.fn(),
+          clearSshRemotePtyKillIntent: vi.fn()
         }
         const runtime = {
           setPtyController: vi.fn(),
@@ -417,7 +418,8 @@ describe('registerPtyHandlers', () => {
       it('keeps a rejected SSH PTY unverifiable after kill shutdown fails transiently', async () => {
         const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
         const store = {
-          markSshRemotePtyLease: vi.fn()
+          markSshRemotePtyLease: vi.fn(),
+          clearSshRemotePtyKillIntent: vi.fn()
         }
         const runtime = {
           setPtyController: vi.fn(),
@@ -527,6 +529,8 @@ describe('registerPtyHandlers', () => {
               ORCA_TAB_ID: 'tab-1',
               ORCA_WORKTREE_ID: 'wt-1'
             },
+            tabId: 'tab-1',
+            leafId: '11111111-1111-4111-8111-111111111111',
             connectionId: 'ssh-1'
           })
           const env = sshSpawn.mock.calls.at(-1)![0].env

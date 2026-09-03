@@ -192,16 +192,21 @@ describe('killCodexAppServerProcessTree', () => {
     expect(child.kill).toHaveBeenCalledWith('SIGKILL')
   })
 
-  it('kills the direct app-server process on non-Windows hosts', () => {
+  it('kills the launcher descendants before the direct process on non-Windows hosts', () => {
     const child = {
       pid: 1234,
       kill: vi.fn(() => true) as ChildProcess['kill']
     }
-    const spawnImpl = vi.fn() as unknown as typeof spawn
+    const descendants = { unref: vi.fn(), on: vi.fn() }
+    const spawnImpl = vi.fn(() => descendants) as unknown as typeof spawn
 
     killCodexAppServerProcessTree(child, { platform: 'linux', spawnImpl })
 
-    expect(spawnImpl).not.toHaveBeenCalled()
+    expect(spawnImpl).toHaveBeenCalledWith('pkill', ['-KILL', '-P', '1234'], { stdio: 'ignore' })
+    // A missing pkill arrives as an async 'error' event; unhandled, it would
+    // take down the main process.
+    expect(descendants.on).toHaveBeenCalledWith('error', expect.any(Function))
+    expect(descendants.unref).toHaveBeenCalledOnce()
     expect(child.kill).toHaveBeenCalledWith('SIGKILL')
   })
 })

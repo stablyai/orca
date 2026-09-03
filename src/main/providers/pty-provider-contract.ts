@@ -199,7 +199,18 @@ export type IPtyProvider = {
   // deadline; each RPC leaf converts to a relative timeout when it actually issues.
   shutdown(
     id: string,
-    opts: { immediate?: boolean; keepHistory?: boolean; deadlineMs?: number }
+    opts: {
+      immediate?: boolean
+      keepHistory?: boolean
+      deadlineMs?: number
+      expectedIncarnationId?: PtyIncarnationId
+      /** Ask the execution host to refuse this stop unless it recorded this exact client identity
+       *  as the PTY's creator AND this connection still authenticates as it. Optional because a
+       *  host that predates it ignores the field, and because most stops are ordinary teardown of a
+       *  pane whose owner the host may never have attested (a revived PTY carries none). Set it
+       *  wherever the caller's authority to destroy comes from that attestation. */
+      expectedOwnerClientInstanceId?: string
+    }
   ): Promise<void>
   sendSignal(id: string, signal: string): Promise<void>
   getCwd(id: string): Promise<string>

@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as NodeFsPromisesModule from 'node:fs/promises'
+import type * as WslRunningPathFilterModule from '../wsl-running-path-filter'
 
 const UBUNTU_HOME = '\\\\wsl.localhost\\Ubuntu\\home\\ada'
 const WSL_MANAGED_SESSIONS_DIR = `${UBUNTU_HOME}\\.local\\share\\orca\\codex-runtime-home\\home\\sessions`
@@ -9,8 +10,13 @@ const ROLLOUT_UNC =
   '\\\\wsl.localhost\\Ubuntu\\home\\ada\\.local\\share\\orca\\codex-runtime-home\\home\\sessions\\2026\\07\\24\\rollout-wsl-sess.jsonl'
 
 vi.mock('../wsl', () => ({
-  listWslDistrosAsync: vi.fn(async () => ['Ubuntu']),
-  getWslHomeAsync: vi.fn(async () => UBUNTU_HOME)
+  getWslHomeAsync: vi.fn(async () => UBUNTU_HOME),
+  listRunningWslDistrosAsync: vi.fn(async () => ['Ubuntu']),
+  listRunningWslHomeDirsAsync: vi.fn(async () => [UBUNTU_HOME])
+}))
+vi.mock('../wsl-running-path-filter', async (importOriginal) => ({
+  ...(await importOriginal<typeof WslRunningPathFilterModule>()),
+  filterPathsToRunningWslDistrosAsync: vi.fn(async (paths: readonly string[]) => [...paths])
 }))
 
 // Only these UNC fixtures are readable. Every other `\\wsl.localhost\` path —
@@ -49,7 +55,7 @@ vi.mock('../ai-vault/session-scanner-discovery', () => ({
 
 import { resetHostReadableTranscriptPathCacheForTests } from './host-readable-transcript-path'
 import { resolveSessionFilePath } from './session-file-resolver'
-import { getWslHomeAsync, listWslDistrosAsync } from '../wsl'
+import { listRunningWslHomeDirsAsync } from '../wsl'
 
 const realPlatform = process.platform
 
@@ -59,8 +65,7 @@ function setPlatform(platform: NodeJS.Platform): void {
 
 beforeEach(() => {
   resetHostReadableTranscriptPathCacheForTests()
-  vi.mocked(getWslHomeAsync).mockClear()
-  vi.mocked(listWslDistrosAsync).mockClear()
+  vi.mocked(listRunningWslHomeDirsAsync).mockClear()
   scanned.dirs = []
   scanned.hostRootHasRollout = false
   setPlatform('win32')
@@ -101,8 +106,7 @@ describe('resolveSessionFilePath on a Windows host with WSL', () => {
     await expect(resolveSessionFilePath('codex', 'wsl-sess')).resolves.toBe(HOST_ROLLOUT)
 
     expect(scanned.dirs.some((dir) => dir.startsWith('\\\\wsl.localhost\\'))).toBe(false)
-    expect(vi.mocked(listWslDistrosAsync)).not.toHaveBeenCalled()
-    expect(vi.mocked(getWslHomeAsync)).not.toHaveBeenCalled()
+    expect(vi.mocked(listRunningWslHomeDirsAsync)).not.toHaveBeenCalled()
   })
 
   it('leaves the guest path alone on non-Windows hosts', async () => {

@@ -30,7 +30,9 @@ export type BrowserPageWebviewNavigationHandlersArgs = {
   addressBarInputRef: RefObject<HTMLInputElement | null>
   onSetUrlRef: MutableRefObject<BrowserPageUrlSetter>
   onUpdatePageStateRef: MutableRefObject<(tabId: string, updates: BrowserTabPageState) => void>
-  addBrowserHistoryEntryRef: MutableRefObject<(url: string, title: string) => void>
+  addBrowserHistoryEntryRef: MutableRefObject<
+    (url: string, title: string, faviconUrl?: string | null) => void
+  >
   faviconUrlRef: MutableRefObject<string | null>
   setAddressBarValue: Dispatch<SetStateAction<string>>
   annotationViewportBridgeTokenRef: MutableRefObject<string>
@@ -127,7 +129,7 @@ export function createBrowserPageWebviewNavigationHandlers({
       const browserModelUrl = redactKagiSessionToken(currentUrl)
       const title = getBrowserDisplayTitle(event.title, browserModelUrl)
       onUpdatePageStateRef.current(browserTabId, { title })
-      addBrowserHistoryEntryRef.current(browserModelUrl, title)
+      addBrowserHistoryEntryRef.current(browserModelUrl, title, faviconUrlRef.current)
     } catch {
       // Why: title-updated can fire before dom-ready, making getURL() throw.
     }

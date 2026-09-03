@@ -125,7 +125,7 @@ async function mountActivityPage(): Promise<void> {
 }
 
 async function selectSeededThread(): Promise<void> {
-  const row = Array.from(seededContainer.querySelectorAll<HTMLElement>('[role="button"]')).find(
+  const row = Array.from(seededContainer.querySelectorAll<HTMLElement>('[role="listitem"]')).find(
     (element) => element.textContent?.includes(PROMPT)
   )
   expect(row).toBeDefined()

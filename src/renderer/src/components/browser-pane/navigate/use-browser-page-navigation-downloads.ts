@@ -11,6 +11,7 @@ import {
 } from 'react'
 import { translate } from '@/i18n/i18n'
 import { getWorkspaceFileBrowserOpenTarget } from '@/lib/file-preview'
+import { routeWorkspaceDocAddressSubmission } from './workspace-doc-address-submission'
 import {
   getWorkspaceFileDragRejectionMessage,
   readWorkspaceFileDragPaths,
@@ -127,6 +128,15 @@ export function useBrowserPageNavigationDownloads({
 
   const submitAddressBar = (): void => {
     keepAddressBarFocusRef.current = false
+    const consumedAsWorkspaceDoc = routeWorkspaceDocAddressSubmission({
+      worktreeId,
+      pageId: browserTabId,
+      value: addressBarValue,
+      onLoadError: (loadError) => onUpdatePageStateRef.current(browserTabId, { loadError })
+    })
+    if (consumedAsWorkspaceDoc) {
+      return
+    }
     const submission = resolveBrowserAddressBarSubmission(addressBarValue)
     if (submission.status === 'invalid') {
       onUpdatePageStateRef.current(browserTabId, { loadError: submission.loadError })

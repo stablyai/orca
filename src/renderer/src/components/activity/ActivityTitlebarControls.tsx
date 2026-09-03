@@ -8,7 +8,7 @@ import { useActivityUnreadCount } from './useActivityUnreadCount'
 import { translate } from '@/i18n/i18n'
 
 export function ActivityTitlebarControls(): React.JSX.Element {
-  const unreadCount = useActivityUnreadCount(true, 'agent-events')
+  const unreadCount = useActivityUnreadCount()
   const closeActivityPage = useAppStore((s) => s.closeActivityPage)
 
   return (

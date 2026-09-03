@@ -80,7 +80,7 @@ describe('resolveAgentForegroundProcess', () => {
     // Why: the Windows rows reader caches across calls (500ms TTL), so each
     // case's rows must not be answered by the previous case's snapshot.
     __setWindowsProcessTreeLoaderForTests(() => ({
-      ProcessDataFlag: { None: 0, Memory: 1, CommandLine: 2 },
+      ProcessDataFlag: { None: 0, Memory: 1, CommandLine: 2, CreationTime: 4 },
       getAllProcesses: getAllProcessesMock
     }))
     platform = Object.getOwnPropertyDescriptor(process, 'platform')

@@ -14,6 +14,7 @@ function createPane(options: { loadAddon?: () => void } = {}): ManagedPaneIntern
     leafId,
     stablePaneId: leafId,
     terminal: {
+      options: { cursorBlink: true },
       cols: 80,
       rows: 24,
       refresh: vi.fn(),

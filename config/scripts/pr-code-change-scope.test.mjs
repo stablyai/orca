@@ -17,6 +17,7 @@ const expensiveJobs = [
   'static_analysis',
   'typecheck',
   'git_compatibility',
+  'codex_index_heal_contract',
   'xterm_patch_sync',
   'shell_contracts',
   'test',
@@ -118,6 +119,49 @@ describe('per-job path classification', () => {
     })
   })
 
+  it('runs the Codex index-heal contract only when the heal or its transport changes', () => {
+    expectClassification(['src/main/codex/codex-session-index-heal.ts'], {
+      codex_index_heal_contract: true,
+      package: true,
+      package_windows: true
+    })
+    expectClassification(['src/main/sqlite/sync-database.ts'], {
+      codex_index_heal_contract: true,
+      package: true,
+      package_windows: true
+    })
+    expectClassification(['src/main/codex/codex-app-server-session.ts'], {
+      codex_index_heal_contract: true,
+      package: true,
+      package_windows: true
+    })
+    expectClassification(['src/main/codex/codex-index-heal-binary-contract.test.ts'], {
+      codex_index_heal_contract: true
+    })
+    // Keep the real-binary gate live when a transport or launch dependency changes.
+    for (const file of [
+      'src/main/codex/codex-app-server-capability-signal.ts',
+      'src/main/codex/codex-process-exit-deadline.ts',
+      'src/main/codex/codex-session-backfill.ts',
+      'src/main/codex/codex-session-index-heal-state.ts',
+      'src/main/codex-cli/command.ts',
+      'src/main/win32-utils.ts',
+      'src/shared/node-cli-command-resolution.ts',
+      'src/shared/windows-batch-spawn.ts'
+    ]) {
+      expectClassification([file], {
+        codex_index_heal_contract: true,
+        package: true,
+        package_windows: true
+      })
+    }
+    // A neighbouring Codex module must not drag the real-binary job in.
+    expectClassification(['src/main/codex/codex-home-paths.ts'], {
+      package: true,
+      package_windows: true
+    })
+  })
+
   it('runs xterm patch sync only when xterm inputs change', () => {
     expectClassification(['config/patches/xterm-upstream.json'], {
       xterm_patch_sync: true
@@ -135,6 +179,28 @@ describe('per-job path classification', () => {
       package: true
     })
     expectClassification(['native/computer-use-macos/Package.swift'], {})
+  })
+
+  it('runs Linux packaging when an artifact contract changes', () => {
+    for (const file of [
+      'config/docker/cli-launch-contract/Dockerfile',
+      'config/docker/cli-launch-contract/run-cli-case.sh',
+      'config/docker/headless-pairing/Dockerfile',
+      'config/docker/headless-pairing/run-appimage-case.sh',
+      'config/docker/headless-serve-shutdown/Dockerfile',
+      'config/scripts/run-linux-cli-launch-contract-docker.mjs',
+      'config/scripts/run-headless-linux-pairing-docker.mjs',
+      'config/scripts/static-appimage-package-contract.cjs'
+    ]) {
+      expectClassification([file], { package: true })
+    }
+  })
+
+  it('runs both package jobs when the shared skills runtime verifier changes', () => {
+    expectClassification(['config/scripts/verify-skills-cli-runtime.cjs'], {
+      package: true,
+      package_windows: true
+    })
   })
 
   it('runs shell contracts when live-shell inputs change', () => {
@@ -181,8 +247,24 @@ describe('per-job path classification', () => {
     for (const file of [
       'src/shared/protocol-version.ts',
       'src/shared/terminal-stream-protocol.ts',
+      'src/shared/agent-session-wire.ts',
+      'src/shared/agent-session-mutation-envelope.ts',
+      'src/shared/agent-session-journal-item-key.ts',
+      'src/shared/agent-session-journal-types.ts',
+      'src/main/ai-vault/structured-session-ownership.ts',
+      'src/main/native-chat/agent-session-journal/journal-cursor.ts',
+      'src/main/native-chat/agent-session-journal/journal-reducer.ts',
+      'src/main/native-chat/agent-session-journal/journal-row-schema.ts',
+      'src/main/native-chat/agent-session-wire/structured-agent-session-host.ts',
+      'src/main/runtime/agent-session-record-store.ts',
       'src/main/runtime/rpc/dispatcher.ts',
+      'src/main/runtime/rpc/methods/ai-vault.ts',
       'src/main/runtime/rpc/methods/browser-tab-create-schema.ts',
+      'src/main/runtime/rpc/methods/session-tabs.ts',
+      'src/main/runtime/rpc/methods/structured-agent-session.ts',
+      'src/main/runtime/rpc/methods/structured-agent-session-gate.ts',
+      'src/main/runtime/rpc/methods/structured-agent-session-hold.ts',
+      'src/main/runtime/rpc/methods/structured-agent-session-schemas.ts',
       'src/main/runtime/rpc/methods/terminal.ts',
       'src/renderer/src/runtime/remote-runtime-terminal-multiplexer.ts'
     ]) {

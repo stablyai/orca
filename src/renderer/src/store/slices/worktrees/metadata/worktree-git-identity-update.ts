@@ -85,7 +85,11 @@ export function createUpdateWorktreeGitIdentity(
         }
         // Why: terminal branch switches only patch branch/head here; re-derive auto titles like full listing does.
         const currentBranchName = branchName(worktree.branch)
-        const wasAutoDerived = worktree.displayName === currentBranchName
+        const wasAutoDerived =
+          worktree.displayNameMode === 'automatic' ||
+          (worktree.displayNameMode === undefined &&
+            worktree.cliProvenance?.kind !== 'created-by-cli' &&
+            worktree.displayName === currentBranchName)
         const wasDetachedAutoDerived =
           worktree.branch === '' &&
           nextBranch !== '' &&

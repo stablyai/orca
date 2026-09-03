@@ -34,11 +34,16 @@ export type ScannedFile = { path: string; relativePath: string; source: string }
  *
  * Dot-directories are skipped: they hold generated and vendored trees (the
  * cross-version e2e checkouts among them), which are not ours to fix.
+ *
+ * `extensions` widens or narrows which filenames are read -- a guard over CI
+ * config also has to see `.mjs`, and one that only wants test files pays for
+ * reading nothing else.
  */
 export function scanSourceTree(
   root: string,
-  options: { includeTests?: boolean } = {}
+  options: { includeTests?: boolean; extensions?: RegExp } = {}
 ): ScannedFile[] {
+  const extensions = options.extensions ?? /\.tsx?$/
   const found: ScannedFile[] = []
   const visit = (directory: string): void => {
     for (const entry of readdirSync(directory)) {
@@ -50,7 +55,7 @@ export function scanSourceTree(
         visit(path)
         continue
       }
-      if (!/\.tsx?$/.test(entry)) {
+      if (!extensions.test(entry)) {
         continue
       }
       const relativePath = relative(root, path).replace(/\\/g, '/')

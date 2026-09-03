@@ -36,7 +36,7 @@
 
 휴대폰에서 에이전트를 모니터링하고 조종하세요 — 에이전트가 완료되면 알림을 받고 어디서든 후속 지시를 보낼 수 있습니다.
 
-[iOS App Store](https://apps.apple.com/us/app/orca-ide/id6766130217) · [TestFlight](https://testflight.apple.com/join/YjeGMQBA) · [Android APK 0.0.46](https://github.com/stablyai/orca/releases/download/mobile-android-v0.0.46/app-release.apk) · [문서 →](https://www.onorca.dev/docs/mobile)
+[iOS App Store](https://apps.apple.com/us/app/orca-ide/id6766130217) · [TestFlight](https://testflight.apple.com/join/YjeGMQBA) · [Android APK 0.0.47](https://github.com/stablyai/orca/releases/download/mobile-android-v0.0.47/app-release.apk) · [문서 →](https://www.onorca.dev/docs/mobile)
 
 </td>
 <td width="50%">
@@ -230,7 +230,7 @@ yay -S stably-orca-bin
 데스크톱 앱과 페어링해 휴대폰에서 에이전트를 모니터링하고 조종하세요.
 
 - **iOS:** [App Store에서 다운로드](https://apps.apple.com/us/app/orca-ide/id6766130217) 또는 [TestFlight 참여](https://testflight.apple.com/join/YjeGMQBA)
-- **Android:** [APK 0.0.46 다운로드](https://github.com/stablyai/orca/releases/download/mobile-android-v0.0.46/app-release.apk) · [설치 가이드](https://www.onorca.dev/docs/android-apk)
+- **Android:** [APK 0.0.47 다운로드](https://github.com/stablyai/orca/releases/download/mobile-android-v0.0.47/app-release.apk) · [설치 가이드](https://www.onorca.dev/docs/android-apk)
 
 ---
 
@@ -238,9 +238,9 @@ yay -S stably-orca-bin
 
 - **Discord:** **[Discord](https://discord.gg/fzjDKHxv8Q)** 커뮤니티에 참여하세요.
 - **Twitter / X:** 업데이트와 공지는 **[@orca_build](https://x.com/orca_build)** 를 팔로우하세요.
-- **WeChat:** QR 코드를 스캔해 Orca 커뮤니티 WeChat 그룹 7에 참여하세요.
+- **WeChat:** QR 코드를 스캔해 Orca 커뮤니티 WeChat 그룹 8에 참여하세요.
 
-  <img src="../assets/wechat-qr-group7.jpg" alt="Orca 커뮤니티 WeChat 그룹 7 QR 코드" width="160" />
+  <img src="../assets/wechat-qr-group8.jpg" alt="Orca 커뮤니티 WeChat 그룹 8 QR 코드" width="160" />
 
 - **피드백과 아이디어:** 우리는 빠르게 출시합니다. 필요한 기능이 있나요? [새 기능을 요청](https://github.com/stablyai/orca/issues)하세요.
 - **개인정보 보호:** Orca가 수집하는 익명 사용 데이터와 수집 거부 방법은 [개인정보 및 텔레메트리 문서](https://www.onorca.dev/docs/telemetry)를 참고하세요.

@@ -1,103 +1,70 @@
+import { useMemo } from 'react'
 import { useAppStore } from '@/store'
 
 /**
- * Binds every store action the Source Control panel dispatches. Each entry keeps its own selector so
- * the returned references stay stable and can be used directly in downstream dependency arrays.
+ * Binds every store action the Source Control panel dispatches.
+ *
+ * Why `getState()` and not one selector each: zustand action identities are fixed when the store is
+ * built and no slice ever puts one in a `set()` payload, so subscribing to them can never fire. The
+ * 40 action subscriptions only added 40 live listeners and 40 selector runs to every store write
+ * while the panel was mounted. The two generation-record maps are real state, so they stay
+ * subscribed.
+ *
+ * Reference stability is preserved and slightly stronger than before: each action keeps the single
+ * identity it was created with, and the returned object itself is now stable until one of the two
+ * subscribed maps changes, so downstream dependency arrays keep working.
  */
 export function useSourceControlStoreActions() {
-  const updateSettings = useAppStore((s) => s.updateSettings)
-  const openSettingsTarget = useAppStore((s) => s.openSettingsTarget)
-  const openSettingsPage = useAppStore((s) => s.openSettingsPage)
-  const fetchHostedReviewForBranch = useAppStore((s) => s.fetchHostedReviewForBranch)
-  const getHostedReviewCreationEligibility = useAppStore(
-    (s) => s.getHostedReviewCreationEligibility
-  )
-  const createHostedReview = useAppStore((s) => s.createHostedReview)
-  const createStackedHostedReview = useAppStore((s) => s.createStackedHostedReview)
-  const updateWorktreeMeta = useAppStore((s) => s.updateWorktreeMeta)
-  const fetchPRForBranch = useAppStore((s) => s.fetchPRForBranch)
-  const enqueueGitHubPRRefresh = useAppStore((s) => s.enqueueGitHubPRRefresh)
-  const updateRepo = useAppStore((s) => s.updateRepo)
-  const setGitStatus = useAppStore((s) => s.setGitStatus)
-  const updateWorktreeGitIdentity = useAppStore((s) => s.updateWorktreeGitIdentity)
-  const beginGitBranchCompareRequest = useAppStore((s) => s.beginGitBranchCompareRequest)
-  const setGitBranchCompareResult = useAppStore((s) => s.setGitBranchCompareResult)
-  const fetchUpstreamStatus = useAppStore((s) => s.fetchUpstreamStatus)
-  const ensureHostedReviewPushTarget = useAppStore((s) => s.ensureHostedReviewPushTarget)
-  const setUpstreamStatus = useAppStore((s) => s.setUpstreamStatus)
-  const pushBranch = useAppStore((s) => s.pushBranch)
-  const pullBranch = useAppStore((s) => s.pullBranch)
-  const fastForwardBranch = useAppStore((s) => s.fastForwardBranch)
-  const syncBranch = useAppStore((s) => s.syncBranch)
-  const rebaseFromBase = useAppStore((s) => s.rebaseFromBase)
-  const fetchBranch = useAppStore((s) => s.fetchBranch)
-  const revealInExplorer = useAppStore((s) => s.revealInExplorer)
-  const openConflictReview = useAppStore((s) => s.openConflictReview)
-  const openAllDiffs = useAppStore((s) => s.openAllDiffs)
-  const openBranchAllDiffs = useAppStore((s) => s.openBranchAllDiffs)
-  const deleteDiffComment = useAppStore((s) => s.deleteDiffComment)
-  const clearDiffComments = useAppStore((s) => s.clearDiffComments)
-  const clearDiffCommentsForFile = useAppStore((s) => s.clearDiffCommentsForFile)
-  const setRightSidebarOpen = useAppStore((s) => s.setRightSidebarOpen)
-  const setRightSidebarTab = useAppStore((s) => s.setRightSidebarTab)
   const prGenerationRecords = useAppStore((s) => s.pullRequestGenerationRecords)
-  const allocatePullRequestGenerationRequestId = useAppStore(
-    (s) => s.allocatePullRequestGenerationRequestId
-  )
-  const setPullRequestGenerationRecord = useAppStore((s) => s.setPullRequestGenerationRecord)
-  const updatePullRequestGenerationRecord = useAppStore((s) => s.updatePullRequestGenerationRecord)
   const commitMessageGenerationRecords = useAppStore((s) => s.commitMessageGenerationRecords)
-  const allocateCommitMessageGenerationRequestId = useAppStore(
-    (s) => s.allocateCommitMessageGenerationRequestId
-  )
-  const setCommitMessageGenerationRecord = useAppStore((s) => s.setCommitMessageGenerationRecord)
-  const updateCommitMessageGenerationRecord = useAppStore(
-    (s) => s.updateCommitMessageGenerationRecord
-  )
 
-  return {
-    allocateCommitMessageGenerationRequestId,
-    allocatePullRequestGenerationRequestId,
-    beginGitBranchCompareRequest,
-    clearDiffComments,
-    clearDiffCommentsForFile,
-    commitMessageGenerationRecords,
-    createHostedReview,
-    createStackedHostedReview,
-    deleteDiffComment,
-    enqueueGitHubPRRefresh,
-    ensureHostedReviewPushTarget,
-    fastForwardBranch,
-    fetchBranch,
-    fetchHostedReviewForBranch,
-    fetchPRForBranch,
-    fetchUpstreamStatus,
-    getHostedReviewCreationEligibility,
-    openAllDiffs,
-    openBranchAllDiffs,
-    openConflictReview,
-    openSettingsPage,
-    openSettingsTarget,
-    prGenerationRecords,
-    pullBranch,
-    pushBranch,
-    rebaseFromBase,
-    revealInExplorer,
-    setCommitMessageGenerationRecord,
-    setGitBranchCompareResult,
-    setGitStatus,
-    setPullRequestGenerationRecord,
-    setRightSidebarOpen,
-    setRightSidebarTab,
-    setUpstreamStatus,
-    syncBranch,
-    updateCommitMessageGenerationRecord,
-    updatePullRequestGenerationRecord,
-    updateRepo,
-    updateSettings,
-    updateWorktreeGitIdentity,
-    updateWorktreeMeta
-  }
+  return useMemo(() => {
+    const state = useAppStore.getState()
+    return {
+      allocateCommitMessageGenerationRequestId: state.allocateCommitMessageGenerationRequestId,
+      allocatePullRequestGenerationRequestId: state.allocatePullRequestGenerationRequestId,
+      beginGitBranchCompareRequest: state.beginGitBranchCompareRequest,
+      clearDiffComments: state.clearDiffComments,
+      clearDiffCommentsForFile: state.clearDiffCommentsForFile,
+      commitMessageGenerationRecords,
+      createHostedReview: state.createHostedReview,
+      createStackedHostedReview: state.createStackedHostedReview,
+      deleteDiffComment: state.deleteDiffComment,
+      enqueueGitHubPRRefresh: state.enqueueGitHubPRRefresh,
+      ensureHostedReviewPushTarget: state.ensureHostedReviewPushTarget,
+      fastForwardBranch: state.fastForwardBranch,
+      fetchBranch: state.fetchBranch,
+      fetchHostedReviewForBranch: state.fetchHostedReviewForBranch,
+      fetchPRForBranch: state.fetchPRForBranch,
+      fetchUpstreamStatus: state.fetchUpstreamStatus,
+      getHostedReviewCreationEligibility: state.getHostedReviewCreationEligibility,
+      openAllDiffs: state.openAllDiffs,
+      openBranchAllDiffs: state.openBranchAllDiffs,
+      openConflictReview: state.openConflictReview,
+      openModal: state.openModal,
+      openSettingsPage: state.openSettingsPage,
+      openSettingsTarget: state.openSettingsTarget,
+      prGenerationRecords,
+      pullBranch: state.pullBranch,
+      pushBranch: state.pushBranch,
+      rebaseFromBase: state.rebaseFromBase,
+      revealInExplorer: state.revealInExplorer,
+      setCommitMessageGenerationRecord: state.setCommitMessageGenerationRecord,
+      setGitBranchCompareResult: state.setGitBranchCompareResult,
+      setGitStatus: state.setGitStatus,
+      setPullRequestGenerationRecord: state.setPullRequestGenerationRecord,
+      setRightSidebarOpen: state.setRightSidebarOpen,
+      setRightSidebarTab: state.setRightSidebarTab,
+      setUpstreamStatus: state.setUpstreamStatus,
+      syncBranch: state.syncBranch,
+      updateCommitMessageGenerationRecord: state.updateCommitMessageGenerationRecord,
+      updatePullRequestGenerationRecord: state.updatePullRequestGenerationRecord,
+      updateRepo: state.updateRepo,
+      updateSettings: state.updateSettings,
+      updateWorktreeGitIdentity: state.updateWorktreeGitIdentity,
+      updateWorktreeMeta: state.updateWorktreeMeta
+    }
+  }, [commitMessageGenerationRecords, prGenerationRecords])
 }
 
 export type SourceControlStoreActions = ReturnType<typeof useSourceControlStoreActions>

@@ -14,7 +14,9 @@ import { cn } from '@/lib/utils'
 import { FilePathCursorTooltip, splitTrailingSegment } from '@/components/file-path-cursor-tooltip'
 import { translate } from '@/i18n/i18n'
 import { SEARCH_ENGINE_LABELS } from '../../../../shared/browser-url'
+import { formatBrowserHistoryUrl } from '@/lib/browser-history-match'
 import type { ActiveOption } from './tab-create-entry-active-option'
+import { BrowserFavicon } from '@/components/browser-favicon'
 
 export const RESULT_LISTBOX_ID = 'tab-create-entry-results'
 
@@ -137,7 +139,7 @@ function getOpenTabIcon(option: Extract<ActiveOption, { kind: 'tab' }>['option']
     return <TerminalSquare className="size-3.5 shrink-0" aria-hidden="true" />
   }
   if (contentType === 'browser') {
-    return <Globe className="size-3.5 shrink-0" aria-hidden="true" />
+    return <BrowserFavicon faviconUrl={option.faviconUrl} className="size-3.5" />
   }
   if (contentType === 'simulator') {
     return <Smartphone className="size-3.5 shrink-0" aria-hidden="true" />
@@ -180,6 +182,18 @@ function getActionPresentation(option: ActiveOption): {
       detail: option.option.matchedText ?? option.option.title,
       icon: getOpenTabIcon(option.option),
       label: translate('auto.components.tab.bar.TabBarCreateEntry.8f0a1c4d92', 'Switch to tab'),
+      showDetail: true
+    }
+  }
+  if (option.kind === 'history') {
+    const { entry } = option.option
+    const url = formatBrowserHistoryUrl(entry.url)
+    return {
+      // Why the title is detail, not label: the label span is shrink-0 whenever a
+      // detail shows, so a variable-length title there would refuse to truncate.
+      detail: entry.title ? `${entry.title} · ${url}` : url,
+      icon: <BrowserFavicon faviconUrl={entry.faviconUrl} className="size-3.5" />,
+      label: translate('auto.components.tab.bar.TabBarCreateEntry.openPage', 'Open page'),
       showDetail: true
     }
   }

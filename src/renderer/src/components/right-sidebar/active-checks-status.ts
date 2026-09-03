@@ -3,6 +3,7 @@ import { getRepoMapFromState, getWorktreeMapFromState } from '../../store/select
 import type { CheckStatus } from '../../../../shared/github/pull-request-types'
 import { getGitHubPRCacheKey } from '../../store/slices/github-cache-key'
 import { getHostedReviewCacheKey } from '../../store/slices/hosted-review-cache-identity'
+import { isGitHubPRSuppressed } from '../../../../shared/worktree/github-pr-suppression'
 
 type ActiveChecksStatusState = Pick<
   AppState,
@@ -64,5 +65,12 @@ export function getActiveChecksStatus(state: ActiveChecksStatusState): CheckStat
   ) {
     return null
   }
-  return state.prCache[prCacheKey]?.data?.checksStatus ?? hostedReview?.status ?? null
+  const branchPR = state.prCache[prCacheKey]?.data ?? null
+  if (branchPR && !isGitHubPRSuppressed(activeWorktree, branchPR.number)) {
+    return branchPR.checksStatus
+  }
+  return hostedReview?.provider === 'github' &&
+    !isGitHubPRSuppressed(activeWorktree, hostedReview.number)
+    ? hostedReview.status
+    : null
 }

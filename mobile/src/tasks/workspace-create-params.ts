@@ -121,8 +121,7 @@ export function buildTaskWorkspaceCreateParams(args: {
   const comment = note?.trim()
   const selectedBaseBranch = baseBranch || hostedStartPoint?.baseBranch
   const selectedPushTarget = pushTarget ?? hostedStartPoint?.pushTarget
-  // Why: desktop only sends displayName while the name is still auto-derived; a
-  // user-edited name suppresses it so the runtime keeps the user's chosen name.
+  // Preserve provenance so the host can distinguish an intentional label from a generated title.
   const sourceName =
     item.provider === 'linear'
       ? getWorkspaceSourceName({
@@ -136,7 +135,11 @@ export function buildTaskWorkspaceCreateParams(args: {
       : item.provider === 'jira'
         ? getWorkspaceSourceName(buildJiraWorkspaceSource(item.source))
         : getWorkspaceSourceName({ provider: item.provider, ...item.source })
-  const displayName = nameIsAutoManaged ? { displayName: sourceName.displayName } : {}
+  const displayName = nameIsAutoManaged
+    ? { displayName: sourceName.displayName, displayNameKind: 'generated' as const }
+    : workspaceName?.trim()
+      ? { displayName: workspaceName, displayNameKind: 'user' as const }
+      : {}
   const common = {
     setupDecision,
     activate: true,

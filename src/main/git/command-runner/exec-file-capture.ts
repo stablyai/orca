@@ -6,11 +6,15 @@ import type { WslProcessGroupTermination } from '../wsl-process-group-terminatio
 import { createAbortError } from './abort-error'
 import { killSpawnedCommandTree } from './spawned-command-tree-kill'
 import { DEFAULT_GIT_MAX_BUFFER } from './git-exec-options'
+import type { GitAdmissionTier } from './git-exec-options'
 
 type ExecFileCaptureOptions = Omit<ExecFileOptions, 'timeout'> & {
   timeout?: number
   stdin?: string
   terminationBarrier?: boolean
+  onChildTerminated?: () => void
+  admissionTier?: GitAdmissionTier
+  createTimeoutError?: () => Error
 }
 
 const GIT_TERMINATION_BARRIER_FALLBACK_TIMEOUT_MS = 2_147_000_000
@@ -21,7 +25,11 @@ export async function execFileCaptureToTermination(
   options: ExecFileCaptureOptions,
   termination?: WslProcessGroupTermination
 ): Promise<{ stdout: string | Buffer; stderr: string | Buffer }> {
-  const result = await runProcess({
+  // Why measured here: runProcess spawns inside its promise executor, which runs
+  // synchronously, so this brackets exactly the main-thread block execFileCapture
+  // reports for its own spawns.
+  const spawnStartedAt = performance.now()
+  const pending = runProcess({
     program: command,
     args,
     cwd: typeof options.cwd === 'string' ? options.cwd : undefined,
@@ -30,21 +38,34 @@ export async function execFileCaptureToTermination(
     maxOutputBytes: options.maxBuffer ?? DEFAULT_GIT_MAX_BUFFER,
     signal: options.signal,
     terminationBarrier: termination ?? true,
+    onChildTerminated: options.onChildTerminated,
     ...(options.stdin === undefined ? {} : { input: options.stdin })
   })
+  recordSubprocessSpawn(command, args, performance.now() - spawnStartedAt)
+  const result = await pending
   const stdout = options.encoding === 'buffer' ? Buffer.from(result.stdout) : result.stdout
   const cleanStderr = termination?.stripControlOutput(result.stderr) ?? result.stderr
   const stderr = options.encoding === 'buffer' ? Buffer.from(cleanStderr) : cleanStderr
-  if (result.code === 0 && !result.timedOut && !options.signal?.aborted) {
+  if (
+    result.code === 0 &&
+    !result.timedOut &&
+    !result.outputTruncated &&
+    !options.signal?.aborted
+  ) {
     return { stdout, stderr }
   }
-  const error = new Error(
-    result.timedOut
-      ? `${command} timed out.`
-      : options.signal?.aborted
-        ? 'The operation was aborted.'
-        : cleanStderr.trim() || `${command} exited with ${result.code}.`
-  )
+  const error = result.timedOut
+    ? (options.createTimeoutError?.() ?? new Error(`${command} timed out.`))
+    : new Error(
+        options.signal?.aborted
+          ? 'The operation was aborted.'
+          : result.outputTruncated
+            ? // Why fail instead of returning the clipped text: callers parse this
+              // as JSON or JSONL, where a clipped answer reads as a shorter valid
+              // one. execFile's own maxBuffer overrun errored for the same reason.
+              `${command} produced more than ${options.maxBuffer ?? DEFAULT_GIT_MAX_BUFFER} bytes of output.`
+            : cleanStderr.trim() || `${command} exited with ${result.code}.`
+      )
   if (options.signal?.aborted) {
     error.name = 'AbortError'
   }
@@ -80,6 +101,7 @@ export function execFileCapture(
 ): Promise<{ stdout: string | Buffer; stderr: string | Buffer }> {
   return new Promise((resolve, reject) => {
     if (options.signal?.aborted) {
+      options.onChildTerminated?.()
       reject(createAbortError())
       return
     }
@@ -88,6 +110,14 @@ export function execFileCapture(
     let terminating = false
     let child: ChildProcess | null = null
     let timer: NodeJS.Timeout | null = null
+    let terminationReported = false
+    const reportChildTerminated = (): void => {
+      if (terminationReported) {
+        return
+      }
+      terminationReported = true
+      options.onChildTerminated?.()
+    }
     const cleanup = (): void => {
       if (timer) {
         clearTimeout(timer)
@@ -160,15 +190,20 @@ export function execFileCapture(
       )
       recordSubprocessSpawn(command, args, performance.now() - spawnStartedAt)
     } catch (error) {
+      reportChildTerminated()
       finish(error instanceof Error ? error : new Error(String(error)))
       return
     }
 
     child.once('error', (error) => {
+      if (!child?.pid) {
+        reportChildTerminated()
+      }
       if (!terminating) {
         finish(error)
       }
     })
+    child.once('close', reportChildTerminated)
 
     if (options.stdin !== undefined) {
       endSubprocessStdin(child.stdin, options.stdin)
@@ -181,7 +216,7 @@ export function execFileCapture(
           return
         }
         terminating = true
-        const timeoutError = new Error(`${command} timed out.`)
+        const timeoutError = options.createTimeoutError?.() ?? new Error(`${command} timed out.`)
         if (!child) {
           terminating = false
           finish(timeoutError)

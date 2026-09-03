@@ -1,5 +1,5 @@
 import { ipcMain } from 'electron'
-import type { SshTarget } from '../../shared/ssh-types'
+import type { SshTarget, SshTerminateSessionsResult } from '../../shared/ssh-types'
 import { SSH_TERMINATE_RECONNECT_REQUIRED } from '../../shared/constants'
 import { isSshPtyNotFoundError } from '../providers/ssh-pty-errors'
 import { toAppSshPtyId, toRelaySshPtyId } from '../providers/ssh-pty-id'
@@ -60,14 +60,21 @@ async function doResetRelay(targetId: string, target: SshTarget): Promise<void> 
     assertSshConnectsNotFenced()
     conn = await connectionManager!.connect(target)
   }
+  let relayStopAcknowledged = false
   try {
     await forceStopRelayForTarget(conn, targetId)
+    relayStopAcknowledged = true
   } finally {
     const ptyIds = new Set(getPtyIdsForConnection(targetId))
     for (const lease of persistedStore!.getSshRemotePtyLeases(targetId)) {
       if (lease.state !== 'terminated' && lease.state !== 'expired') {
         ptyIds.add(lease.ptyId)
-        persistedStore!.markSshRemotePtyLease(targetId, lease.ptyId, 'expired')
+        // Why: only a host-acknowledged force-stop may retire a lease. When it threw we never
+        // observed those shells, so expiring them would record a verdict we do not hold; mirrors
+        // ssh:terminateSessions, and the next connect re-attaches (or expires) them on evidence.
+        if (relayStopAcknowledged) {
+          persistedStore!.markSshRemotePtyLease(targetId, lease.ptyId, 'expired')
+        }
       }
     }
     // Why: reset force-kills the remote relay, so every local PTY handle it owned is stale even if the reset command failed after SIGTERM.
@@ -98,6 +105,9 @@ export function registerSshConnectionHandlers(): void {
 
   ipcMain.handle('ssh:terminateSessions', async (_event, args: { targetId: string }) => {
     invalidateConnectAttempt(args.targetId)
+    // Why (#12661): an offline sweep tears down local transport only. The caller must be able to tell
+    // "the host stopped these" from "nobody asked the host", so carry the verdict out of the lifecycle queue.
+    let outcome: SshTerminateSessionsResult = { terminated: 0, unverifiable: 0 }
     await runTargetLifecycle(args.targetId, async () => {
       const provider = getSshPtyProvider(args.targetId)
       const leases = persistedStore!.getSshRemotePtyLeases(args.targetId)
@@ -142,6 +152,10 @@ export function registerSshConnectionHandlers(): void {
             )
           )
         : []
+      if (!provider) {
+        // Nothing observed these remote shells, so their state is unknown — not "nothing to do".
+        outcome = { terminated: 0, unverifiable: ptyIds.length }
+      }
       const shutdownFailures: string[] = []
       for (const [index, result] of shutdownResults.entries()) {
         const { appPtyId, relayPtyId } = ptyIds[index]
@@ -154,6 +168,7 @@ export function registerSshConnectionHandlers(): void {
         clearProviderPtyState(appPtyId)
         deletePtyOwnership(appPtyId)
         persistedStore!.markSshRemotePtyLease(args.targetId, relayPtyId, 'terminated')
+        outcome = { ...outcome, terminated: outcome.terminated + 1 }
       }
       if (shutdownFailures.length > 0) {
         // Why: a failed relay shutdown can leave the remote process alive in the grace window; keep the lease/session so the user can retry.
@@ -161,6 +176,7 @@ export function registerSshConnectionHandlers(): void {
       }
       await teardownSshTargetTransport(args.targetId, (session) => session.disposeAndPersist())
     })
+    return outcome
   })
 
   ipcMain.handle('ssh:resetRelay', (_event, args: { targetId: string }) => {

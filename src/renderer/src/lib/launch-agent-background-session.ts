@@ -40,6 +40,7 @@ import {
 } from '@/lib/adopt-agent-background-session-tab'
 import { createBackgroundAgentStatusConsumer } from '@/lib/background-agent-status-consumer'
 import { isWslUncPath } from '../../../shared/wsl-paths'
+import { runtimeWaitExitCode, settleTabPtyBinding } from '@/lib/agent-background-session-exit'
 
 export async function launchAgentBackgroundSession(
   args: LaunchAgentBackgroundSessionArgs
@@ -127,7 +128,9 @@ export async function launchAgentBackgroundSession(
   )
   let ptyId = '',
     runtimeTerminalHandle: string | null = null
-  let returnedLaunchConfig: typeof startupPlan.launchConfig | undefined
+  // What the local spawn answered and later steps still need: which lifetime of `ptyId` this launch
+  // owns, and the config the host actually launched. Both absent for a runtime terminal.
+  let spawned: { incarnationId?: string; launchConfig?: typeof startupPlan.launchConfig } = {}
   let tab: ReturnType<typeof store.createTab> | null = null
   let exitHandled = false,
     eagerPtyBuffer: EagerPtyHandle | null = null
@@ -143,7 +146,7 @@ export async function launchAgentBackgroundSession(
     unsubscribeData()
     sshStartupDelivery.clear()
     if (tab) {
-      useAppStore.getState().clearTabPtyId(tab.id, exitPtyId)
+      settleTabPtyBinding(tab.id, exitPtyId, code)
     }
     useAppStore.getState().clearAgentLaunchConfig(paneKey)
     onExit?.(exitPtyId, code)
@@ -219,7 +222,7 @@ export async function launchAgentBackgroundSession(
         }
       })
       ptyId = result.id
-      returnedLaunchConfig = result.launchConfig
+      spawned = result
     }
     const adopted = await adoptAgentBackgroundSessionTab({
       store,
@@ -227,7 +230,7 @@ export async function launchAgentBackgroundSession(
       reservedTabId,
       ptyId,
       paneKey,
-      launchConfig: returnedLaunchConfig ?? startupPlan.launchConfig,
+      launchConfig: spawned.launchConfig ?? startupPlan.launchConfig,
       launchRegistration,
       runtimeTarget,
       runtimeTerminalHandle,
@@ -277,10 +280,12 @@ export async function launchAgentBackgroundSession(
         { terminal: runtimeTerminalHandle, for: 'exit' },
         { timeoutMs: 24 * 60 * 60 * 1000 }
       )
-        .then((result) => handleExit(ptyId, result.wait.exitCode ?? 0))
+        .then((result) => handleExit(ptyId, runtimeWaitExitCode(result.wait)))
         .catch(() => {})
     } else {
-      eagerPtyBuffer = registerEagerPtyBuffer(ptyId, handleExit)
+      // Why the incarnation: a relay-recycled id can hold the previous owner's exit, and draining
+      // that into this handler tears the agent session down seconds after it launched.
+      eagerPtyBuffer = registerEagerPtyBuffer(ptyId, handleExit, spawned.incarnationId)
       unsubscribeData = subscribeToPtyData(ptyId, handleData)
       // Why: opening the workspace attaches a real terminal transport and disposes
       // the eager exit handler. This sidecar keeps automation completion tracking

@@ -23,6 +23,7 @@ function trackSmartClassDistribution(attention: ReadonlyMap<string, WorktreeAtte
   let class2 = 0
   let class3 = 0
   let class4 = 0
+  let class5 = 0
   for (const info of attention.values()) {
     if (info.cls === 1) {
       class1++
@@ -30,8 +31,10 @@ function trackSmartClassDistribution(attention: ReadonlyMap<string, WorktreeAtte
       class2++
     } else if (info.cls === 3) {
       class3++
-    } else {
+    } else if (info.cls === 4) {
       class4++
+    } else {
+      class5++
     }
   }
   track('smart_sort_class_distribution', {
@@ -39,6 +42,7 @@ function trackSmartClassDistribution(attention: ReadonlyMap<string, WorktreeAtte
     class_2: class2,
     class_3: class3,
     class_4: class4,
+    class_5: class5,
     total_worktrees: attention.size
   })
 }

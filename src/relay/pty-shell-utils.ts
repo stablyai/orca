@@ -6,16 +6,21 @@ import { promisify } from 'node:util'
 import {
   isAgentForegroundWrapperProcess,
   isExpectedAgentProcess,
-  recognizeAgentProcess,
-  recognizeAgentProcessFromCommandLine
+  recognizeAgentProcess
 } from '../shared/agent-process-recognition'
 import { getFirstCommandToken } from '../shared/command-token-scanner'
-import { getProcessTableSnapshot, type ProcessTableRow } from '../shared/process-table-snapshot'
+import {
+  getFreshProcessTableSnapshot,
+  getProcessTableSnapshot,
+  type ProcessTableIndex,
+  type ProcessTableRow
+} from '../shared/process-table-snapshot'
+import { getProcessTableIndex } from '../shared/process-table-index'
+import { selectForegroundProcessCandidate } from '../shared/foreground-process-selection'
 import {
   resolveOuterWrapperForegroundProcess,
   shouldInspectOuterWrapperForegroundProcess
 } from '../shared/foreground-wrapper-agent'
-import { isShellProcess } from '../shared/shell-process-detection'
 import {
   resolveWindowsAgentForegroundProcess,
   shouldInspectWindowsAgentForeground
@@ -166,15 +171,37 @@ export async function resolveProcessCwd(pid: number, fallbackCwd: string): Promi
 }
 
 /**
- * Check whether a process has child processes (via pgrep).
+ * Check whether a process has child processes.
+ *
+ * Why the shared snapshot and not `pgrep -P`: this answers one field of
+ * `pty.inspectProcess`, which every tracked pane polls on a 750ms/2000ms
+ * cadence, and the fork was neither cached nor coalesced. procps-ng opens six
+ * procfs files per process to resolve a ppid — including a `/proc/<pid>/ctty`
+ * that never exists on Linux — so one call cost O(host process count) syscalls,
+ * ~4k opens per pgrep on a 690-process host, at up to 8 forks/sec (#13537).
+ * `getForegroundProcessName` in the same RPC already captured the TTL-cached
+ * `ps` table, whose index carries the parent/child map, so the answer is free.
+ *
+ * `fresh` opts out of that TTL. A poll can read a 500ms-old table because its
+ * next tick corrects it, but a close or cleanup decision acts on the answer
+ * once and destructively — a child that started inside the TTL would be killed
+ * with no confirmation. `pgrep` scanned per call, so anything that decides
+ * has to keep scanning per call.
  */
-export async function processHasChildren(pid: number): Promise<boolean> {
+export async function processHasChildren(
+  pid: number,
+  options?: { fresh?: boolean }
+): Promise<boolean> {
+  // Windows has no `ps`; the previous `pgrep` fork always failed here too, so
+  // this keeps the same answer without spawning anything to reach it.
+  if (process.platform === 'win32') {
+    return false
+  }
   try {
-    const { stdout } = await execFile('pgrep', ['-P', String(pid)], {
-      encoding: 'utf-8',
-      timeout: 3000
-    })
-    return stdout.trim().length > 0
+    const rows = options?.fresh
+      ? await getFreshProcessTableSnapshot()
+      : await getProcessTableSnapshot()
+    return (getProcessTableIndex(rows).childrenByPpid.get(pid)?.length ?? 0) > 0
   } catch {
     return false
   }
@@ -194,41 +221,19 @@ export function isProcessAlive(pid: number): boolean {
 }
 
 function collectDescendants(
-  rows: ProcessTableRow[],
+  index: ProcessTableIndex,
   rootPid: number
 ): (ProcessTableRow & { depth: number })[] {
-  const childrenByParent = new Map<number, ProcessTableRow[]>()
-  for (const row of rows) {
-    const children = childrenByParent.get(row.ppid) ?? []
-    children.push(row)
-    childrenByParent.set(row.ppid, children)
-  }
-
   const descendants: (ProcessTableRow & { depth: number })[] = []
-  const stack = (childrenByParent.get(rootPid) ?? []).map((row) => ({ row, depth: 1 }))
+  const stack = (index.childrenByPpid.get(rootPid) ?? []).map((row) => ({ row, depth: 1 }))
   while (stack.length > 0) {
     const { row, depth } = stack.pop()!
     descendants.push({ ...row, depth })
-    for (const child of childrenByParent.get(row.pid) ?? []) {
+    for (const child of index.childrenByPpid.get(row.pid) ?? []) {
       stack.push({ row: child, depth: depth + 1 })
     }
   }
   return descendants
-}
-
-function candidateScore(row: ProcessTableRow & { depth: number }): number {
-  return (row.stat.includes('+') ? 10_000 : 0) + row.depth
-}
-
-function processCommandToken(command: string): string {
-  return getFirstCommandToken(command)
-}
-
-function candidateMatchesFallbackWrapper(
-  candidate: ProcessTableRow,
-  fallbackProcess: string
-): boolean {
-  return isExpectedAgentProcess(processCommandToken(candidate.command), fallbackProcess)
 }
 
 async function getRecognizedForegroundDescendant(
@@ -237,41 +242,53 @@ async function getRecognizedForegroundDescendant(
 ): Promise<string | null> {
   try {
     const rows = await getProcessTableSnapshot()
-    const root = rows.find((row) => row.pid === pid)
-    const candidates = collectDescendants(rows, pid).sort(
-      (a, b) => candidateScore(b) - candidateScore(a)
-    )
-    // Why: SSH relays do not have the daemon's async wrapper cache. Inspect the
-    // remote process tree so node/python agent entrypoints become real agents.
-    const foregroundIsKnown =
-      root?.stat.includes('+') === true ||
-      candidates.some((candidate) => candidate.stat.includes('+'))
-    const foregroundCandidates = foregroundIsKnown
-      ? candidates.filter((candidate) => candidate.stat.includes('+'))
-      : candidates
-    const inspectionCandidates =
-      fallbackProcess && isAgentForegroundWrapperProcess(fallbackProcess)
-        ? foregroundCandidates.filter((candidate) =>
-            candidateMatchesFallbackWrapper(candidate, fallbackProcess)
-          )
-        : foregroundCandidates
-    if (
-      fallbackProcess &&
-      isAgentForegroundWrapperProcess(fallbackProcess) &&
-      inspectionCandidates.length !== 1
-    ) {
-      return null
-    }
-    for (const candidate of inspectionCandidates) {
-      const recognized = recognizeAgentProcessFromCommandLine(candidate.command)
-      if (recognized) {
-        // Why: return the outer wrapper (omp) rather than the deeper wrapped child
-        // (pi) of a shell→omp→pi tree — see resolveOuterWrapperForegroundProcess.
-        return resolveOuterWrapperForegroundProcess(recognized, candidate, candidates)
-      }
-    }
+    return getForegroundProcessNameFromProcessTable(rows, pid, fallbackProcess)
   } catch {
     // Fall through to node-pty's process name or the root command name.
+  }
+  return null
+}
+
+// Why: returns null (never the fallback) so `getForegroundProcessName` keeps
+// owning the fallback ladder — its wrapper branch answers with the RECOGNIZED
+// process name, which is normalized where node-pty's raw name is not.
+function getForegroundProcessNameFromProcessTable(
+  rows: ProcessTableRow[],
+  pid: number,
+  fallbackProcess?: string | null
+): string | null {
+  // Why: one memoized index per capture, so N panes sharing the TTL-cached
+  // snapshot no longer each rebuild the parent/child map over every row.
+  const index = getProcessTableIndex(rows)
+  const root = index.byPid.get(pid)
+  const candidates = collectDescendants(index, pid)
+  // Why: SSH relays do not have the daemon's async wrapper cache. Inspect the
+  // remote process tree so node/python agent entrypoints become real agents.
+  const foregroundIsKnown =
+    root?.stat.includes('+') === true ||
+    candidates.some((candidate) => candidate.stat.includes('+'))
+  const foregroundCandidates = foregroundIsKnown
+    ? candidates.filter((candidate) => candidate.stat.includes('+'))
+    : candidates
+  const inspectionCandidates =
+    fallbackProcess && isAgentForegroundWrapperProcess(fallbackProcess)
+      ? foregroundCandidates.filter((candidate) =>
+          isExpectedAgentProcess(getFirstCommandToken(candidate.command), fallbackProcess)
+        )
+      : foregroundCandidates
+  if (
+    fallbackProcess &&
+    isAgentForegroundWrapperProcess(fallbackProcess) &&
+    inspectionCandidates.length !== 1
+  ) {
+    return null
+  }
+  const ancestryCandidates = root ? [{ ...root, depth: 0 }, ...candidates] : candidates
+  const selected = selectForegroundProcessCandidate(inspectionCandidates, ancestryCandidates)
+  if (selected) {
+    // Why: return the outer wrapper (omp) rather than a deeper recognized helper
+    // in the same process lineage.
+    return resolveOuterWrapperForegroundProcess(selected.recognized, selected.candidate, candidates)
   }
   return null
 }
@@ -310,10 +327,11 @@ export async function getForegroundProcessName(
         (await resolveWindowsAgentForegroundProcess(pid, fallbackProcess, {})) ?? fallbackProcess
       )
     }
-    if (!isShellProcess(fallbackProcess) && !isAgentForegroundWrapperProcess(fallbackProcess)) {
-      return fallbackProcess
-    }
   }
+  // Why: an unrecognized name is not proof of a non-agent foreground -- macOS p_comm truncates
+  // to the executable basename, which for the native Claude install is its version directory
+  // (`2.1.258`). The TTL-cached table read resolves the real command line; a foreground that
+  // is genuinely not an agent still answers with its own name below.
   const recognized = await getRecognizedForegroundDescendant(pid, fallbackProcess)
   if (recognized) {
     return recognized
@@ -332,9 +350,6 @@ export async function getForegroundProcessName(
   }
 }
 
-/**
- * List available shell profiles from /etc/shells (or known fallbacks).
- */
 export function listShellProfiles(): { name: string; path: string }[] {
   const profiles: { name: string; path: string }[] = []
   const seen = new Set<string>()

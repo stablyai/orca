@@ -9,8 +9,11 @@ import { resolveGitDir } from './resolve-git-dir'
 
 // Why: the git-status → existsSync race can miss a transient HEAD; fall back to 'unknown' for one poll cycle.
 // Why: detect rebase from rebase-merge/ or rebase-apply/ dirs (persist all steps), not REBASE_HEAD (partial, lingers → stale badge).
-export async function detectConflictOperation(worktreePath: string): Promise<GitConflictOperation> {
-  const gitDir = await resolveGitDir(worktreePath)
+export async function detectConflictOperation(
+  worktreePath: string,
+  options: Pick<GitRuntimeOptions, 'wslDistro'> = {}
+): Promise<GitConflictOperation> {
+  const gitDir = await resolveGitDir(worktreePath, options)
   const mergeHead = path.join(gitDir, 'MERGE_HEAD')
   const cherryPickHead = path.join(gitDir, 'CHERRY_PICK_HEAD')
   const rebaseMergeDir = path.join(gitDir, 'rebase-merge')

@@ -1,7 +1,10 @@
 import { spawn } from 'node:child_process'
 import type * as ChildProcess from 'node:child_process'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { SSH_MUX_REQUEST_TIMEOUT_CODE } from '../ssh/ssh-channel-multiplexer'
+import {
+  createSshDisposalError,
+  SSH_MUX_REQUEST_TIMEOUT_CODE
+} from '../ssh/ssh-channel-multiplexer'
 import {
   discoverCommitMessageModelsLocal,
   discoverCommitMessageModelsRemote
@@ -235,7 +238,11 @@ describe('discoverCommitMessageModelsLocal', () => {
         'wsl.exe',
         ['-d', 'Ubuntu', '--exec', 'sh', '-lc', expect.any(String)],
         expect.objectContaining({
-          cwd: undefined,
+          // Why a concrete directory (#16463): `undefined` makes CreateProcessW inherit
+          // Orca's own cwd, a deletable WSL UNC path when it was launched from a
+          // worktree. The Linux directory still rides inside the command (/mnt/c/repo,
+          // asserted below), so the Windows-side cwd never decides where discovery runs.
+          cwd: expect.any(String),
           windowsHide: true
         })
       )
@@ -460,6 +467,26 @@ describe('generateCommitMessageFromContext', () => {
       '/remote/repo',
       async () => {
         throw transportTimeout
+      },
+      'npx cursor-agent'
+    )
+
+    expect(result).toEqual({
+      success: false,
+      error:
+        'Cursor model discovery took longer than 60s and may still be running on the remote host.'
+    })
+  })
+
+  it('keeps the unverifiable wording when the link is declared lost instead of timing out', async () => {
+    // Same regression as the exec leg: a wedged link now disposes the mux before the response
+    // deadline, so this branch sees CONNECTION_LOST. Reporting "could not be reached" for it
+    // asserts absence the client never observed (docs/reference/ssh-execution-boundary.md).
+    const result = await discoverCommitMessageModelsRemote(
+      'cursor',
+      '/remote/repo',
+      async () => {
+        throw createSshDisposalError('connection_lost')
       },
       'npx cursor-agent'
     )

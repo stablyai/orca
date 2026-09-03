@@ -57,6 +57,8 @@ export type OpenTabSearchResult =
       contentType: 'browser'
       pageId: string
       workspaceId: string
+      url: string
+      faviconUrl: string | null
     })
   | (OpenTabSearchResultBase & {
       source: 'simulator'
@@ -204,7 +206,9 @@ export function searchOpenTabs({
       source: 'browser',
       contentType: 'browser',
       pageId: result.pageId,
-      workspaceId: result.workspaceId
+      workspaceId: result.workspaceId,
+      url: result.url,
+      faviconUrl: result.faviconUrl
     })),
     ...rank('simulator', searchSimulatorTabs([...simulatorTabs], trimmed), (result) => ({
       ...baseResult('simulator', result.tabId, result, executionHostId),

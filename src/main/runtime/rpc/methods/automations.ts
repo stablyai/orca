@@ -83,8 +83,16 @@ export const AUTOMATION_METHODS: RpcMethod[] = [
   defineMethod({
     name: 'automation.runs',
     params: AutomationRuns,
-    handler: (params, { runtime }) => ({
-      runs: runtime.listAutomationRuns(params.automationId, params.expectedOwner)
-    })
+    handler: (params, { runtime }) => {
+      if (params.limit !== undefined || params.cursor !== undefined) {
+        return runtime.listAutomationRunsPage(
+          params.automationId,
+          params.expectedOwner,
+          params.limit,
+          params.cursor
+        )
+      }
+      return { runs: runtime.listAutomationRuns(params.automationId, params.expectedOwner) }
+    }
   })
 ]

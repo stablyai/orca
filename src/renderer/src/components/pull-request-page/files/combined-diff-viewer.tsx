@@ -3,20 +3,13 @@ import { useVirtualizer } from '@tanstack/react-virtual'
 import type { editor as monacoEditor } from 'monaco-editor'
 import { useAppStore } from '@/store'
 import { DiffSectionItem } from '@/components/editor/DiffSectionItem'
-import {
-  CombinedDiffFileTree,
-  createCombinedDiffSectionIndexMap,
-  handleCombinedDiffFileTreeNavigation
-} from '@/components/editor/CombinedDiffFileTree'
-import {
-  getDiffSectionEstimatedHeight,
-  isIntrinsicHeightImageDiff
-} from '@/components/editor/diff-section-layout'
+import { CombinedDiffFileTree } from '../../editor/combined-diff/browse-files/combined-diff-file-tree'
+import { useCombinedDiffSectionIndexMap } from '../../editor/combined-diff/resolve-changes/use-combined-diff-section-index-map'
+import { handleCombinedDiffFileTreeNavigation } from '../../editor/combined-diff/browse-files/combined-diff-file-tree-navigation'
+import { getDiffSectionRowEstimatedHeight } from '@/components/editor/diff-section-layout'
 import type { DiffSection } from '@/components/editor/diff-section-types'
-import {
-  getCombinedDiffBranchEntriesInTreeOrder,
-  type CombinedDiffFileTreeEntry
-} from '@/components/editor/combined-diff-file-tree-model'
+import { getCombinedDiffBranchEntriesInTreeOrder } from '../../editor/combined-diff/browse-files/combined-diff-file-tree-filter'
+import type { CombinedDiffFileTreeEntry } from '../../editor/combined-diff/resolve-changes/combined-diff-section-identity'
 import { PRViewedCheckbox } from '@/components/github/PRViewedCheckbox'
 import { isPRFileViewed } from '@/components/github/pr-file-content-size'
 import {
@@ -187,7 +180,7 @@ export function PRFilesCombinedDiffViewer({
     })
 
   const allSectionsCollapsed = sections.length > 0 && sections.every((section) => section.collapsed)
-  const sectionIndexByKey = useMemo(() => createCombinedDiffSectionIndexMap(sections), [sections])
+  const sectionIndexByKey = useCombinedDiffSectionIndexMap({ entrySignature, sections })
   const visibleActiveTreeSectionKey =
     activeTreeSectionKey && sectionIndexByKey.has(activeTreeSectionKey)
       ? activeTreeSectionKey
@@ -205,19 +198,7 @@ export function PRFilesCombinedDiffViewer({
       if (!section) {
         return 88
       }
-      return getDiffSectionEstimatedHeight({
-        collapsed: section.collapsed,
-        measuredContentHeight: sectionHeights[index],
-        originalContent: section.originalContent,
-        modifiedContent: section.modifiedContent,
-        changedLineCount:
-          section.added === undefined && section.removed === undefined
-            ? undefined
-            : (section.added ?? 0) + (section.removed ?? 0),
-        useIntrinsicImageHeight: isIntrinsicHeightImageDiff(section.diffResult),
-        isLargeDiffLimited: section.largeDiffRenderLimit?.limited === true,
-        lineCounts: section.largeDiffRenderLimit?.lineCounts ?? undefined
-      })
+      return getDiffSectionRowEstimatedHeight(section, sectionHeights[index])
     },
     overscan: PR_DIFF_OVERSCAN,
     getItemKey: (index) => {

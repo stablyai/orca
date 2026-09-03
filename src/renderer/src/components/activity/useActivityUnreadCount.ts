@@ -12,85 +12,60 @@ type ActivityUnreadCountSource = Pick<
   | 'agentStatusByPaneKey'
   | 'migrationUnsupportedByPtyId'
   | 'retainedAgentsByPaneKey'
-  | 'worktreesByRepo'
->
-
-type ActivityUnreadCountMode = 'agent-events' | 'sidebar-badge'
-
-const EMPTY_WORKTREES_BY_REPO: AppState['worktreesByRepo'] = {}
-const EMPTY_MIGRATION_UNSUPPORTED: AppState['migrationUnsupportedByPtyId'] = {}
-const EMPTY_RETAINED_AGENTS: AppState['retainedAgentsByPaneKey'] = {}
-const EMPTY_ACKNOWLEDGED_AGENTS: AppState['acknowledgedAgentsByPaneKey'] = {}
-
-const DISABLED_ACTIVITY_UNREAD_INPUTS = {
-  sortEpoch: 0,
-  worktreesByRepo: EMPTY_WORKTREES_BY_REPO,
-  migrationUnsupportedByPtyId: EMPTY_MIGRATION_UNSUPPORTED,
-  retainedAgentsByPaneKey: EMPTY_RETAINED_AGENTS,
-  acknowledgedAgentsByPaneKey: EMPTY_ACKNOWLEDGED_AGENTS
+> & {
+  /** Per-pane "Clear completed" cutoffs; hidden events must not count as unread. */
+  activityClearedAtByPaneKey?: Record<string, number>
 }
 
 function isUnreadAgentState(state: AgentStatusState): boolean {
   return state === 'done' || state === 'blocked' || state === 'waiting'
 }
 
-export function countActivityUnread(
-  source: ActivityUnreadCountSource,
-  mode: ActivityUnreadCountMode
-): number {
+/** Counts unread done/blocked/waiting events for the Activity page titlebar badge. */
+export function countActivityUnread(source: ActivityUnreadCountSource): number {
   let count = 0
+  const seenPaneKeys = new Set<string>()
 
-  if (mode === 'sidebar-badge') {
-    for (const worktrees of Object.values(source.worktreesByRepo)) {
-      for (const worktree of worktrees) {
-        if (worktree.createdAt && worktree.isUnread) {
-          count += 1
-        }
-      }
-    }
-  }
-
+  // Why no worktree.isUnread here: Activity lists only agent threads, so a worktree
+  // unread would light a badge with no row to read and no way to clear it.
   const countEntry = (entry: AgentStatusEntry, ackAt: number): void => {
-    if (mode === 'agent-events') {
-      // Why: Activity feed surfaces historical done/blocked/waiting events
-      // from stateHistory, so the titlebar badge must mirror that event count.
-      for (const history of entry.stateHistory) {
-        if (isUnreadAgentState(history.state) && ackAt < history.startedAt) {
-          count += 1
-        }
+    // Why: "Clear completed" hides events at or before the pane's cutoff from the feed,
+    // so a hidden event must not keep the badge lit; treat the cutoff like an ack floor.
+    const clearedAt = source.activityClearedAtByPaneKey?.[entry.paneKey] ?? 0
+    const mutedAt = Math.max(ackAt, clearedAt)
+    // Why: Activity feed surfaces historical done/blocked/waiting events
+    // from stateHistory, so the titlebar badge must mirror that event count.
+    for (const history of entry.stateHistory) {
+      if (isUnreadAgentState(history.state) && mutedAt < history.startedAt) {
+        count += 1
       }
     }
     // Why: a session-boundary done is an idle connect (STA-3386), not an event to read.
-    // History never contains a boundary, but it DOES keep the real completion a boundary
-    // displaced (the slice pushes it on done→done), so sidebar-badge mode — which skips the
-    // history loop above — must still count that displaced completion or the badge silently
-    // drops an unacknowledged finish the moment its session is resumed.
     if (
       isUnreadAgentState(entry.state) &&
       entry.sessionBoundary !== true &&
-      ackAt < entry.stateStartedAt
+      mutedAt < entry.stateStartedAt
     ) {
       count += 1
-    } else if (mode === 'sidebar-badge' && entry.state === 'done' && entry.sessionBoundary) {
-      const displaced = entry.stateHistory.at(-1)
-      if (displaced && isUnreadAgentState(displaced.state) && ackAt < displaced.startedAt) {
-        count += 1
-      }
     }
   }
 
   for (const [paneKey, entry] of Object.entries(source.agentStatusByPaneKey)) {
+    seenPaneKeys.add(paneKey)
     countEntry(entry, source.acknowledgedAgentsByPaneKey[paneKey] ?? 0)
   }
   for (const [paneKey, retained] of Object.entries(source.retainedAgentsByPaneKey)) {
-    if (mode === 'sidebar-badge' && retained.entry.state !== 'done') {
+    // Live status is the primary source; retained is a handoff cache and may briefly overlap it.
+    if (seenPaneKeys.has(paneKey)) {
       continue
     }
+    seenPaneKeys.add(paneKey)
     countEntry(retained.entry, source.acknowledgedAgentsByPaneKey[paneKey] ?? 0)
   }
   for (const unsupported of Object.values(source.migrationUnsupportedByPtyId)) {
     const entry = migrationUnsupportedToAgentStatusEntry(unsupported)
-    if (entry) {
+    if (entry && !seenPaneKeys.has(entry.paneKey)) {
+      seenPaneKeys.add(entry.paneKey)
       countEntry(entry, source.acknowledgedAgentsByPaneKey[entry.paneKey] ?? 0)
     }
   }
@@ -98,53 +73,40 @@ export function countActivityUnread(
   return count
 }
 
-export function useActivityUnreadCount(enabled: boolean, mode: ActivityUnreadCountMode): number {
+export function useActivityUnreadCount(): number {
   const {
     sortEpoch,
-    worktreesByRepo,
     migrationUnsupportedByPtyId,
     retainedAgentsByPaneKey,
-    acknowledgedAgentsByPaneKey
+    acknowledgedAgentsByPaneKey,
+    activityClearedAtByPaneKey
   } = useAppStore(
-    useShallow((state) => {
-      if (!enabled) {
-        return DISABLED_ACTIVITY_UNREAD_INPUTS
-      }
-      return {
-        // Why: live status prompt/tool updates churn agentStatusByPaneKey but
-        // cannot change unread count unless a sort-relevant state transition
-        // or removal occurred. sortEpoch is the cheap invalidation signal.
-        sortEpoch: state.sortEpoch,
-        worktreesByRepo: state.worktreesByRepo,
-        migrationUnsupportedByPtyId: state.migrationUnsupportedByPtyId,
-        retainedAgentsByPaneKey: state.retainedAgentsByPaneKey,
-        acknowledgedAgentsByPaneKey: state.acknowledgedAgentsByPaneKey
-      }
-    })
+    useShallow((state) => ({
+      // Why: live status prompt/tool updates churn agentStatusByPaneKey but
+      // cannot change unread count unless a sort-relevant state transition
+      // or removal occurred. sortEpoch is the cheap invalidation signal.
+      sortEpoch: state.sortEpoch,
+      migrationUnsupportedByPtyId: state.migrationUnsupportedByPtyId,
+      retainedAgentsByPaneKey: state.retainedAgentsByPaneKey,
+      acknowledgedAgentsByPaneKey: state.acknowledgedAgentsByPaneKey,
+      activityClearedAtByPaneKey: state.activityClearedAtByPaneKey
+    }))
   )
 
   return useMemo(() => {
-    if (!enabled) {
-      return 0
-    }
     void sortEpoch
-    return countActivityUnread(
-      {
-        agentStatusByPaneKey: useAppStore.getState().agentStatusByPaneKey,
-        migrationUnsupportedByPtyId,
-        retainedAgentsByPaneKey,
-        worktreesByRepo,
-        acknowledgedAgentsByPaneKey
-      },
-      mode
-    )
+    return countActivityUnread({
+      agentStatusByPaneKey: useAppStore.getState().agentStatusByPaneKey,
+      migrationUnsupportedByPtyId,
+      retainedAgentsByPaneKey,
+      acknowledgedAgentsByPaneKey,
+      activityClearedAtByPaneKey
+    })
   }, [
     acknowledgedAgentsByPaneKey,
-    enabled,
+    activityClearedAtByPaneKey,
     migrationUnsupportedByPtyId,
-    mode,
     retainedAgentsByPaneKey,
-    sortEpoch,
-    worktreesByRepo
+    sortEpoch
   ])
 }

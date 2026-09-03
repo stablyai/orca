@@ -86,7 +86,7 @@ function DropdownMenuCheckboxItem({
     >
       <span className="pointer-events-none absolute left-2 flex size-3.5 items-center justify-center">
         <DropdownMenuPrimitive.ItemIndicator>
-          <CheckIcon className="size-4" />
+          <CheckIcon className="size-3.5" />
         </DropdownMenuPrimitive.ItemIndicator>
       </span>
       {children}
@@ -178,9 +178,12 @@ function DropdownMenuSubTrigger({
   className,
   inset,
   children,
+  hideChevron,
   ...props
 }: React.ComponentProps<typeof DropdownMenuPrimitive.SubTrigger> & {
   inset?: boolean
+  // Why: collision-flipped submenus open leftward, where a right-pointing chevron misleads.
+  hideChevron?: boolean
 }) {
   return (
     <DropdownMenuPrimitive.SubTrigger
@@ -193,7 +196,7 @@ function DropdownMenuSubTrigger({
       {...props}
     >
       {children}
-      <ChevronRightIcon className="ml-auto size-4" />
+      {hideChevron ? null : <ChevronRightIcon className="ml-auto size-4" />}
     </DropdownMenuPrimitive.SubTrigger>
   )
 }

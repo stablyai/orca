@@ -43,6 +43,18 @@ export function worktreeIdComparisonKey(worktreeId: string): string | null {
   )}`
 }
 
+/**
+ * Why: workspace identity is per *workspace*, not per checkout dir. Folder projects back several
+ * independent workspaces with one directory, separated only by the `::workspace:<uuid>` suffix that
+ * filesystem callers must strip; stripping it here instead lets one session steal a sibling's PTYs.
+ * Normalize only path spelling, so Windows/WSL/SSH ids still match themselves across hosts, and
+ * fall back to exact equality for a malformed id.
+ */
+export function worktreeIdsEqual(left: string, right: string): boolean {
+  const leftKey = worktreeIdComparisonKey(left)
+  return leftKey === null ? left === right : leftKey === worktreeIdComparisonKey(right)
+}
+
 export function splitWorktreeId(worktreeId: string): ParsedWorktreeId | null {
   const separatorIdx = worktreeId.indexOf(WORKTREE_ID_SEPARATOR)
   if (separatorIdx === -1) {

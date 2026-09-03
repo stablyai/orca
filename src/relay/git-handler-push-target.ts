@@ -1,5 +1,6 @@
 import { assertGitPushTargetShape } from '../shared/git-push-target-validation'
 import { gitRefTargetsBranchOnRemote } from '../shared/git-remote-branch-name'
+import { findGitRemoteNameByFetchUrl } from '../shared/git-remote-url-index'
 import type { GitPushTarget } from '../shared/worktree/types'
 
 type RelayGit = (args: string[], cwd: string) => Promise<{ stdout: string; stderr: string }>
@@ -67,31 +68,19 @@ type ConfiguredPushRemote = {
   branchRemote: string | null
 }
 
+// Host-side twin of `src/main/git/remote.ts`: one `git remote -v` instead of
+// `git remote` plus a serial `git remote get-url` per remote.
 async function findRemoteNameForUrl(
   git: RelayGit,
   worktreePath: string,
   remoteUrl: string
 ): Promise<string | null> {
   try {
-    const { stdout } = await git(['remote'], worktreePath)
-    const remotes = stdout
-      .split(/\r?\n/)
-      .map((line) => line.trim())
-      .filter(Boolean)
-    for (const remoteName of remotes) {
-      try {
-        const { stdout: urlStdout } = await git(['remote', 'get-url', remoteName], worktreePath)
-        if (urlStdout.trim() === remoteUrl) {
-          return remoteName
-        }
-      } catch {
-        // Ignore a remote that disappeared or has no fetch URL.
-      }
-    }
+    const { stdout } = await git(['remote', '-v'], worktreePath)
+    return findGitRemoteNameByFetchUrl(stdout, (candidateUrl) => candidateUrl === remoteUrl)
   } catch {
     return null
   }
-  return null
 }
 
 async function normalizePushRemote(
@@ -120,9 +109,17 @@ async function getConfiguredPushRemote(
   if (!remote) {
     return null
   }
+  const normalizedRemote = await normalizePushRemote(git, worktreePath, remote)
+  // The two usually name the same URL; resolving it twice reads the remote table twice.
+  if (!branchRemote) {
+    return { remote: normalizedRemote, branchRemote: null }
+  }
   return {
-    remote: await normalizePushRemote(git, worktreePath, remote),
-    branchRemote: branchRemote ? await normalizePushRemote(git, worktreePath, branchRemote) : null
+    remote: normalizedRemote,
+    branchRemote:
+      branchRemote === remote
+        ? normalizedRemote
+        : await normalizePushRemote(git, worktreePath, branchRemote)
   }
 }
 

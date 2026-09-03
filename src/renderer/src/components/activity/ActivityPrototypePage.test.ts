@@ -399,7 +399,7 @@ describe('buildActivityEvents', () => {
     expect(threads[0].events[0].entry.prompt).toBe('Retained prior run')
   })
 
-  it('groups visible threads by current status order', () => {
+  it('groups visible threads with attention states before working and done', () => {
     const repo = makeRepo()
     const worktree = makeWorktree()
     const workingTab = makeTab()
@@ -442,11 +442,49 @@ describe('buildActivityEvents', () => {
       })
     )
 
-    expect(groups.map((group) => group.id)).toEqual(['working', 'blocked', 'done'])
+    expect(groups.map((group) => group.id)).toEqual(['blocked', 'working', 'done'])
     expect(groups.map((group) => group.threads.map((thread) => thread.paneKey))).toEqual([
-      [PANE_KEY],
       [PANE_KEY_2],
+      [PANE_KEY],
       [PANE_KEY_3]
     ])
+  })
+
+  it('merges runtime orchestration context into activity events and entries', () => {
+    const repo = makeRepo()
+    const worktree = makeWorktree()
+    const tab1 = makeTabWithIds('tab-1', worktree.id)
+    const tab2 = makeTabWithIds('tab-2', worktree.id)
+    const result = buildActivityEvents({
+      agentStatusByPaneKey: {
+        [PANE_KEY]: makeWorkingEntryWithoutHistory(),
+        [PANE_KEY_2]: {
+          ...makeWorkingEntryWithoutHistory(),
+          paneKey: PANE_KEY_2,
+          terminalHandle: 'terminal-child'
+        }
+      },
+      runtimeAgentOrchestrationByPaneKey: {
+        [PANE_KEY_2]: {
+          parentPaneKey: PANE_KEY,
+          parentTerminalHandle: 'terminal-parent',
+          taskId: 'task-counsel',
+          dispatchId: 'ctx-counsel'
+        }
+      },
+      retainedAgentsByPaneKey: {},
+      tabsByWorktree: {
+        [worktree.id]: [tab1, tab2]
+      },
+      worktreeMap: new Map([[worktree.id, worktree]]),
+      repoMap: new Map([[repo.id, repo]]),
+      acknowledgedAgentsByPaneKey: {},
+      now: 5_000
+    })
+
+    expect(result.liveAgentByPaneKey[PANE_KEY_2].entry.orchestration?.parentPaneKey).toBe(PANE_KEY)
+    expect(result.liveAgentByPaneKey[PANE_KEY_2].entry.orchestration?.parentTerminalHandle).toBe(
+      'terminal-parent'
+    )
   })
 })

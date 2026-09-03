@@ -265,6 +265,41 @@ export function setVisibleWorktreeShortcutTargets(
  * recomputes the order the sidebar *would* render from the same row pipeline,
  * so a closed sidebar numbers workspaces the same way an open one does (#9497).
  */
+export function buildVisibleWorktreeOptionsFromState(
+  state: ReturnType<typeof useAppStore.getState>,
+  repoMap: Map<string, Repo>
+): VisibleWorktreeOptions {
+  return {
+    filterRepoIds: state.filterRepoIds,
+    showSleepingWorkspaces: state.showSleepingWorkspaces,
+    tabsByWorktree: state.tabsByWorktree,
+    ptyIdsByTabId: state.ptyIdsByTabId,
+    browserTabsByWorktree: state.browserTabsByWorktree,
+    worktreeIdsWithLiveAgent: getWorktreeIdsWithLiveAgent(
+      state.agentStatusByPaneKey,
+      state.tabsByWorktree,
+      Date.now()
+    ),
+    hideDefaultBranchWorkspace: state.hideDefaultBranchWorkspace,
+    hideAutomationGeneratedWorkspaces: state.hideAutomationGeneratedWorkspaces,
+    hideCliCreatedWorkspaces: state.hideCliCreatedWorkspaces,
+    hideDetachedHeadWorkspaces: state.hideDetachedHeadWorkspaces,
+    hideWorkspacesFromOtherDevices: state.hideWorkspacesFromOtherDevices,
+    pairedDeviceIdsByEnvironment: state.hideWorkspacesFromOtherDevices
+      ? getPairedDeviceIdsByEnvironment(
+          state.runtimeEnvironments,
+          state.runtimeStatusByEnvironmentId
+        )
+      : EMPTY_PAIRED_DEVICE_IDS_BY_ENVIRONMENT,
+    alwaysShowDefaultBranchWorkspace: state.alwaysShowDefaultBranchWorkspace,
+    repoMap,
+    workspaceHostScope: state.workspaceHostScope,
+    visibleWorkspaceHostIds: state.visibleWorkspaceHostIds,
+    defaultHostId: getSettingsFocusedExecutionHostId(state.settings),
+    worktreeLineageById: state.worktreeLineageById
+  }
+}
+
 export function getVisibleWorktreeIds(): string[] {
   // Prefer the published IDs that mirror the rendered sidebar order.
   if (_publishedVisibleIds) {
@@ -299,35 +334,11 @@ export function getVisibleWorktreeIds(): string[] {
     sortedIds = sorted.map((w) => w.id)
   }
 
-  const visibleIds = computeVisibleWorktreeIds(state.worktreesByRepo, sortedIds, {
-    filterRepoIds: state.filterRepoIds,
-    showSleepingWorkspaces: state.showSleepingWorkspaces,
-    tabsByWorktree: state.tabsByWorktree,
-    ptyIdsByTabId: state.ptyIdsByTabId,
-    browserTabsByWorktree: state.browserTabsByWorktree,
-    worktreeIdsWithLiveAgent: getWorktreeIdsWithLiveAgent(
-      state.agentStatusByPaneKey,
-      state.tabsByWorktree,
-      Date.now()
-    ),
-    hideDefaultBranchWorkspace: state.hideDefaultBranchWorkspace,
-    hideAutomationGeneratedWorkspaces: state.hideAutomationGeneratedWorkspaces,
-    hideCliCreatedWorkspaces: state.hideCliCreatedWorkspaces,
-    hideDetachedHeadWorkspaces: state.hideDetachedHeadWorkspaces,
-    hideWorkspacesFromOtherDevices: state.hideWorkspacesFromOtherDevices,
-    pairedDeviceIdsByEnvironment: state.hideWorkspacesFromOtherDevices
-      ? getPairedDeviceIdsByEnvironment(
-          state.runtimeEnvironments,
-          state.runtimeStatusByEnvironmentId
-        )
-      : EMPTY_PAIRED_DEVICE_IDS_BY_ENVIRONMENT,
-    alwaysShowDefaultBranchWorkspace: state.alwaysShowDefaultBranchWorkspace,
-    repoMap,
-    workspaceHostScope: state.workspaceHostScope,
-    visibleWorkspaceHostIds: state.visibleWorkspaceHostIds,
-    defaultHostId: getSettingsFocusedExecutionHostId(state.settings),
-    worktreeLineageById: state.worktreeLineageById
-  })
+  const visibleIds = computeVisibleWorktreeIds(
+    state.worktreesByRepo,
+    sortedIds,
+    buildVisibleWorktreeOptionsFromState(state, repoMap)
+  )
 
   const visibleIdRank = new Map(visibleIds.map((id, index) => [id, index]))
   const visibleHostIds = getVisibleWorkspaceHostIdSet(state)

@@ -6,13 +6,11 @@ import {
   Eraser,
   GitFork,
   Maximize2,
-  MessageSquare,
   Minimize2,
   PanelBottomClose,
   PanelsTopLeft,
   PanelRightClose,
   Pencil,
-  SquareTerminal,
   TextSelect,
   X
 } from 'lucide-react'
@@ -30,7 +28,6 @@ import type { ExecutionHostId } from '../../../../shared/execution-host'
 import { formatPrimaryShortcutLabel } from '@/hooks/useShortcutLabel'
 import type { KeybindingOverrides } from '../../../../shared/keybindings'
 import { translate } from '@/i18n/i18n'
-import { isMacPlatform, nativeChatToggleShortcutLabel } from '../native-chat/native-chat-shortcut'
 import { AgentSessionContinuationMenuItem } from './AgentSessionContinuationMenuItem'
 import type { TerminalQuickCommandMenuHost } from '@/hooks/use-terminal-quick-command-hosts'
 import { TerminalQuickCommandsSubmenu } from './TerminalQuickCommandsSubmenu'
@@ -56,9 +53,6 @@ type TerminalContextMenuProps = {
   canContinueAgentSessionInNewSession: boolean
   onContinueAgentSessionInNewSession: () => void
   onForkAgentSession: () => void
-  canToggleNativeChat: boolean
-  isNativeChatView: boolean
-  onToggleNativeChat: () => void
   onCopyAgentSessionContext: () => void
   quickCommandHosts: TerminalQuickCommandMenuHost[]
   quickCommandHostLoadFailed: boolean
@@ -72,6 +66,8 @@ type TerminalContextMenuProps = {
   canClearPaneTitle: boolean
   onCopyTerminalId: () => void
   onCopyPaneId: () => void
+  canCopyAgentSessionId: boolean
+  onCopyAgentSessionId: () => void
 }
 
 export default function TerminalContextMenu({
@@ -95,9 +91,6 @@ export default function TerminalContextMenu({
   canContinueAgentSessionInNewSession,
   onContinueAgentSessionInNewSession,
   onForkAgentSession,
-  canToggleNativeChat,
-  isNativeChatView,
-  onToggleNativeChat,
   onCopyAgentSessionContext,
   quickCommandHosts,
   quickCommandHostLoadFailed,
@@ -110,7 +103,9 @@ export default function TerminalContextMenu({
   onClearPaneTitle,
   canClearPaneTitle,
   onCopyTerminalId,
-  onCopyPaneId
+  onCopyPaneId,
+  canCopyAgentSessionId,
+  onCopyAgentSessionId
 }: TerminalContextMenuProps): React.JSX.Element {
   // Why: one primary binding prevents Windows/Linux shortcut labels from forcing row wraps.
   const shortcuts = useMemo(
@@ -124,8 +119,7 @@ export default function TerminalContextMenu({
       expand: formatPrimaryShortcutLabel('terminal.expandPane', keybindings),
       setTitle: formatPrimaryShortcutLabel('terminal.setTitle', keybindings),
       clearPaneTitle: formatPrimaryShortcutLabel('terminal.clearPaneTitle', keybindings),
-      close: formatPrimaryShortcutLabel('terminal.closePane', keybindings),
-      nativeChat: nativeChatToggleShortcutLabel(isMacPlatform())
+      close: formatPrimaryShortcutLabel('terminal.closePane', keybindings)
     }),
     [keybindings]
   )
@@ -215,21 +209,6 @@ export default function TerminalContextMenu({
             'Copy Context'
           )}
         </DropdownMenuItem>
-        {canToggleNativeChat ? (
-          <DropdownMenuItem onSelect={onToggleNativeChat}>
-            {isNativeChatView ? <SquareTerminal /> : <MessageSquare />}
-            {isNativeChatView
-              ? translate(
-                  'components.tab.bar.SortableTabContextMenu.switchToTerminalView',
-                  'Switch to terminal view'
-                )
-              : translate(
-                  'components.tab.bar.SortableTabContextMenu.switchToChatView',
-                  'Switch to chat view'
-                )}
-            <DropdownMenuShortcut>{shortcuts.nativeChat}</DropdownMenuShortcut>
-          </DropdownMenuItem>
-        ) : null}
         <DropdownMenuSeparator />
         <DropdownMenuItem className="whitespace-nowrap" onSelect={onSplitRight}>
           <PanelRightClose />
@@ -299,6 +278,15 @@ export default function TerminalContextMenu({
             {showClearPaneTitleShortcut ? (
               <DropdownMenuShortcut>{shortcuts.clearPaneTitle}</DropdownMenuShortcut>
             ) : null}
+          </DropdownMenuItem>
+        ) : null}
+        {canCopyAgentSessionId ? (
+          <DropdownMenuItem onSelect={onCopyAgentSessionId}>
+            <Copy />
+            {translate(
+              'components.terminalPane.TerminalContextMenu.copySessionId',
+              'Copy Session ID'
+            )}
           </DropdownMenuItem>
         ) : null}
         <DropdownMenuItem onSelect={onCopyTerminalId}>

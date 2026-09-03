@@ -1,3 +1,5 @@
+import type { SshPendingPtyKill } from './ssh-pending-pty-kill'
+
 // ─── SSH Connection Types ───────────────────────────────────────────
 
 export const MIN_SSH_RELAY_GRACE_PERIOD_SECONDS = 60
@@ -211,6 +213,9 @@ export type SshRemotePtyLease = {
   updatedAt: number
   lastAttachedAt?: number
   lastDetachedAt?: number
+  /** A stop this client asked for and could not confirm, replayed on the next handshake to this
+   *  same target. See `shared/ssh-pending-pty-kill.ts`. Never on the wire — client-local. */
+  pendingKill?: SshPendingPtyKill
 }
 
 /** Main-owned relay lease needed to reclaim PTY delivery after a desktop restart. */
@@ -260,4 +265,14 @@ export type DetectedPort = {
 export type EnrichedDetectedPort = DetectedPort & {
   advertisedUrl?: string
   advertisedProtocol?: 'http' | 'https'
+}
+
+/** Outcome of `ssh:terminateSessions`. Uses the fixed verdict vocabulary from
+ *  docs/reference/ssh-execution-boundary.md: a host we could not reach yields `unverifiable`,
+ *  never `exited`, so an offline sweep can never be read as a successful remote kill (issue #12661). */
+export type SshTerminateSessionsResult = {
+  /** Remote PTYs the host acknowledged stopping. */
+  terminated: number
+  /** Leases whose remote shells were never reached because the relay was offline. */
+  unverifiable: number
 }

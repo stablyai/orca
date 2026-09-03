@@ -481,6 +481,37 @@ describe('orca cli worktree awareness', () => {
     process.exitCode = priorExitCode
   })
 
+  it('rejects SSH project setup relative paths, which name the client filesystem', async () => {
+    // A local CLI reaching an `ssh:*` host is still off-client: resolving `./orca` against the
+    // CLI cwd would register a path that exists on the wrong machine.
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+    const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const priorExitCode = process.exitCode
+
+    await main(
+      [
+        'project',
+        'setup-existing-folder',
+        '--project',
+        'github:stablyai/orca',
+        '--host',
+        'ssh:openclaw',
+        '--path',
+        './orca',
+        '--json'
+      ],
+      '/tmp/repo'
+    )
+
+    expect(callMock).not.toHaveBeenCalled()
+    expect([...logSpy.mock.calls, ...errSpy.mock.calls].flat().join('\n')).toContain(
+      'Remote project setup requires --path to be an absolute path on the remote server.'
+    )
+    expect(process.exitCode).toBe(1)
+
+    process.exitCode = priorExitCode
+  })
+
   it('rejects remote repo.add relative paths instead of resolving against client cwd', async () => {
     const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
     const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {})

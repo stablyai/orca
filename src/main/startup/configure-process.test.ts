@@ -1,4 +1,4 @@
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { homedir, tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -135,6 +135,66 @@ describe('patchPackagedProcessPath', () => {
     expect(segments).not.toContain('/home/linuxbrew/.linuxbrew/bin')
     expect(segments).toContain('/nix/var/nix/profiles/default/bin')
     expect(segments).toContain('/usr/local/bin')
+  })
+
+  // Why this ordering is load-bearing (#18234): a seed exists so a GUI-launched
+  // Electron can *find* a tool, not to re-rank tools the user already has.
+  // `~/.local/bin` is user-writable and can hold a wrapper for any system tool.
+  // The reporter's `~/.local/bin/gh` wrapped `mise x gh -- gh`; seeded ahead of
+  // /usr/bin it ran instead of the real gh, and the wrapper's inner bare `gh`
+  // resolved back to itself. Measured in a container: with the login shell's
+  // ordering that chain exits in 22ms, with the seeded ordering it never
+  // terminates and creates ~1,300 processes/second.
+  it('never lets a seeded user dir overtake a system dir already on PATH', async () => {
+    const { app } = await import('electron')
+    const { patchPackagedProcessPath } = await import('./configure-process')
+
+    setPlatform('linux')
+    Object.defineProperty(app, 'isPackaged', { configurable: true, value: true })
+    process.env.HOME = '/home/tester'
+    process.env.PATH = '/usr/local/bin:/usr/bin:/bin'
+
+    patchPackagedProcessPath()
+
+    const segments = (process.env.PATH ?? '').split(':')
+    const localBin = segments.indexOf(join('/home/tester', '.local/bin'))
+    // Still reachable — that is what the seeding is for (#829).
+    expect(localBin).toBeGreaterThan(-1)
+    for (const systemDir of ['/usr/bin', '/bin', '/usr/local/bin']) {
+      expect(segments.indexOf(systemDir)).toBeLessThan(localBin)
+    }
+    expect(segments.indexOf(join('/home/tester', 'bin'))).toBeGreaterThan(
+      segments.indexOf('/usr/bin')
+    )
+  })
+
+  it('keeps version-manager shims ahead of the inherited PATH', async () => {
+    const { app } = await import('electron')
+    const { patchPackagedProcessPath } = await import('./configure-process')
+    const { getVersionManagerBinPaths } = await import('../../shared/node-cli-command-resolution')
+
+    setPlatform('linux')
+    Object.defineProperty(app, 'isPackaged', { configurable: true, value: true })
+    process.env.HOME = '/home/tester'
+    process.env.PATH = '/usr/bin:/bin'
+
+    patchPackagedProcessPath()
+
+    const segments = (process.env.PATH ?? '').split(':')
+    const genericUserBinDirs = [join('/home/tester', 'bin'), join('/home/tester', '.local/bin')]
+    const seeded = getVersionManagerBinPaths({ platform: 'linux', homePath: '/home/tester' })
+    const shimDirs = seeded.filter((dir) => !genericUserBinDirs.includes(dir))
+    expect(shimDirs).not.toHaveLength(0)
+    // Why these keep leading: an nvm/mise/asdf user's runtime must beat a
+    // system install, which is the reason this seeding is ordered at all.
+    for (const dir of shimDirs) {
+      expect(segments.indexOf(dir)).toBeLessThan(segments.indexOf('/usr/bin'))
+    }
+    // Why these do not: the same list carries the generic user bin dirs, which
+    // hold whatever was last installed there rather than a managed toolchain.
+    for (const dir of genericUserBinDirs) {
+      expect(segments.indexOf(dir)).toBeGreaterThan(segments.indexOf('/usr/bin'))
+    }
   })
 
   it('leaves PATH untouched when the app is not packaged', async () => {
@@ -508,20 +568,6 @@ describe('enableMainProcessGpuFeatures', () => {
     expect(app.commandLine.appendSwitch).not.toHaveBeenCalledWith('enable-unsafe-webgpu')
   })
 
-  it('opts hidden pages out of intensive wake-up throttling', async () => {
-    const { app } = await import('electron')
-    const { enableMainProcessGpuFeatures } = await import('./configure-process')
-
-    delete process.env.ORCA_E2E_USER_DATA_DIR
-    vi.mocked(app.commandLine.appendSwitch).mockClear()
-    enableMainProcessGpuFeatures()
-
-    expect(app.commandLine.appendSwitch).toHaveBeenCalledWith(
-      'disable-features',
-      'IntensiveWakeUpThrottling'
-    )
-  })
-
   it('raises the WebGL context budget above the 16-context Blink default', async () => {
     const { app } = await import('electron')
     const { enableMainProcessGpuFeatures } = await import('./configure-process')
@@ -752,5 +798,85 @@ describe('enableMainProcessGpuFeatures', () => {
 
     expect(app.commandLine.appendSwitch).toHaveBeenCalledWith('disable-gpu-sandbox')
     expect(app.commandLine.appendSwitch).toHaveBeenCalledWith('enable-features', 'ExistingFeature')
+  })
+})
+
+describe('safe graphics mode startup switches', () => {
+  const originalE2EUserDataDir = process.env.ORCA_E2E_USER_DATA_DIR
+
+  afterEach(() => {
+    if (originalE2EUserDataDir === undefined) {
+      delete process.env.ORCA_E2E_USER_DATA_DIR
+    } else {
+      process.env.ORCA_E2E_USER_DATA_DIR = originalE2EUserDataDir
+    }
+  })
+
+  function disabledFeaturesFrom(appendSwitch: ReturnType<typeof vi.fn>): string[] {
+    return appendSwitch.mock.calls
+      .filter(([name]) => name === 'disable-features')
+      .flatMap(([, value]) => String(value ?? '').split(','))
+      .filter(Boolean)
+  }
+
+  it('opts hidden pages out of intensive wake-up throttling', async () => {
+    const { app } = await import('electron')
+    const { optOutOfHiddenPageWakeUpThrottling } = await import('./configure-process')
+
+    vi.mocked(app.commandLine.appendSwitch).mockClear()
+    optOutOfHiddenPageWakeUpThrottling()
+
+    expect(app.commandLine.appendSwitch).toHaveBeenCalledWith(
+      'disable-features',
+      'IntensiveWakeUpThrottling'
+    )
+  })
+
+  // Why: the defect was the call site, not the switch — a win32 safe-graphics launch runs
+  // `if (!gpuFallbackActiveThisLaunch) enableMainProcessGpuFeatures()` and skips everything
+  // parked inside it, so only an unconditional call site reaches the users a GPU crash already hit.
+  it('calls the throttling opt-out outside the GPU-fallback gate in preflight', () => {
+    const mainSource = readFileSync(join(__dirname, 'main-process-preflight.ts'), 'utf8')
+    const gateStart = mainSource.indexOf('if (!state.gpuFallbackActiveThisLaunch) {')
+    expect(gateStart).toBeGreaterThanOrEqual(0)
+    const gateEnd = mainSource.indexOf('\n  }', gateStart)
+    expect(gateEnd).toBeGreaterThan(gateStart)
+
+    expect(mainSource.match(/\boptOutOfHiddenPageWakeUpThrottling\(\)/g)).toHaveLength(1)
+    expect(mainSource.slice(gateStart, gateEnd)).not.toContain('optOutOfHiddenPageWakeUpThrottling')
+  })
+
+  // Why: Chromium consumes the command line at ready, so this must stay in the pre-ready
+  // top-level block and never move into the whenReady callback, where appendSwitch is a silent
+  // no-op — the same invisible failure as parking it behind the GPU gate.
+  it('appends the throttling opt-out before app ready in preflight', () => {
+    const mainSource = readFileSync(join(__dirname, 'main-process-preflight.ts'), 'utf8')
+    const entrySource = readFileSync(join(__dirname, '..', 'index.ts'), 'utf8')
+    const preflightEnd = mainSource.indexOf('\n  return true')
+    const readyStart = entrySource.indexOf('void app.whenReady()')
+    const preflightCall = entrySource.indexOf('runMainProcessPreflight({')
+    expect(preflightEnd).toBeGreaterThan(0)
+    expect(readyStart).toBeGreaterThan(0)
+    expect(preflightCall).toBeGreaterThanOrEqual(0)
+    expect(preflightCall).toBeLessThan(readyStart)
+
+    const callIndex = mainSource.indexOf('optOutOfHiddenPageWakeUpThrottling()')
+    expect(callIndex).toBeGreaterThan(0)
+    expect(callIndex).toBeLessThan(preflightEnd)
+  })
+
+  // Why: Chromium enables IntensiveWakeUpThrottling on every desktop platform, so the opt-out
+  // must never become reachable only through the GPU-feature path again.
+  it('does not couple the throttling opt-out to GPU feature setup', async () => {
+    const { app } = await import('electron')
+    const { enableMainProcessGpuFeatures } = await import('./configure-process')
+
+    delete process.env.ORCA_E2E_USER_DATA_DIR
+    vi.mocked(app.commandLine.appendSwitch).mockClear()
+    enableMainProcessGpuFeatures()
+
+    expect(disabledFeaturesFrom(vi.mocked(app.commandLine.appendSwitch))).not.toContain(
+      'IntensiveWakeUpThrottling'
+    )
   })
 })

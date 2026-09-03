@@ -135,6 +135,15 @@ shape is §7a; key points:
 - Use the VM image's package manager (`apt`/`dnf`/`apk`, per the base distro — not the provider brand).
 - Clone with the git token via `GIT_ASKPASS` (§5).
 - **Trap errors and remove the half-built sandbox** so a crash doesn't leave a paid resource running.
+- **Never snapshot a machine on which the Orca runtime has already run.** The first `orca serve` creates
+  the runtime's user-data dir, and everything in it gets baked into the image and shared by every VM
+  booted from it: the pairing keypair and device-token registry (`orca-devices.json`,
+  `orca-e2ee-keypair.json`), `agent-session-authority.key`, and the build box's logs, terminal history
+  and orchestration db. Confirmed: two VMs from one such snapshot emitted **identical `deviceToken` and
+  `pairedDeviceId`**. Snapshot **before** the runtime has ever run, or delete the resolved user-data
+  directory first: `orca_user_data_path="${ORCA_USER_DATA_PATH:-${XDG_CONFIG_HOME:-$HOME/.config}/orca}"; rm -rf -- "$orca_user_data_path"`.
+  This matches Orca's Linux precedence for custom and default paths; deleting a named file list will
+  drift as Orca adds state.
 - Snapshot the stopped sandbox, parse the snapshot id, and write it + scope/project/port/repo to state.
 
 ---
@@ -162,6 +171,10 @@ ephemeral — so authenticate once and bake it into a second snapshot layer. Scr
 their own terminal, or via the Claude Code harness bang-prefix (`! <cmd>`, with the required space after
 `!`). You scaffold/boot the sandbox and run steps 3–4, but **you cannot observe the interactive login
 finishing** — so **ask the user to tell you when it's done** before you verify and re-snapshot.
+
+This layer inherits §3's rule: if you started `orca serve` on the base or auth sandbox to smoke-test it,
+delete the runtime's user-data dir (`~/.config/orca` on Linux) before re-snapshotting, or every workspace
+booted from this image shares one pairing identity and one `agent-session-authority.key`.
 
 If the agent's credentials are short-lived, warn that the snapshot may need periodic re-auth (§10).
 

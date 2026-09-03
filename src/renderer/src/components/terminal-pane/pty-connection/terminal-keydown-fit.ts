@@ -11,7 +11,7 @@ import { resolveCompatibleAgentTypeForOwner } from '../../../../../shared/agent-
 import { registerTerminalSideEffectFactConsumer } from '../terminal-side-effect-facts-handler'
 
 import { isAgentTaskCompleteTrackingEnabled } from './agent-task-complete-settings'
-import { isRemoteExecutionHostPtyId } from '../remote-execution-host-pty'
+import { isAgentProcessInspectionCostly } from '../agent-process-inspection-cost'
 import { isRemoteRuntimePtyId } from './paired-parked-terminal-restore'
 
 import type { ConnectPanePtySession } from './connect-pane-pty-session'
@@ -229,17 +229,8 @@ export function installTerminalKeydownFit(session: ConnectPanePtySession): void 
       }),
     shouldPollProcessCadence: () =>
       isAgentTaskCompleteTrackingEnabled() && session.deps.isVisibleRef.current,
-    isProcessInspectionCostly: () => {
-      // Why: local Windows inspection forks a powershell.exe whole-process-table
-      // CIM scan per poll (~10-40x heavier than POSIX `ps`); SSH/remote PTYs run
-      // their scans on the remote host, so only local Windows panes relax the
-      // no-evidence cadence.
-      if (!navigator.userAgent.includes('Windows')) {
-        return false
-      }
-      const ptyId = session.transport.getPtyId()
-      return ptyId !== null && !isRemoteExecutionHostPtyId(ptyId)
-    },
+    isProcessInspectionCostly: () =>
+      isAgentProcessInspectionCostly(navigator.userAgent, session.transport.getPtyId()),
     isLive: () => {
       if (session.disposed) {
         return false

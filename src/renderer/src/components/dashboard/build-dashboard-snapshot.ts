@@ -1,9 +1,7 @@
 import type { AppState } from '@/store/types'
 import {
   DASHBOARD_MAX_MAP_WORKSPACES,
-  dashboardCardDisplayState,
   type DashboardCard,
-  type DashboardCardDotState,
   type DashboardSnapshot,
   type DashboardWorkspace
 } from '../../../../shared/dashboard-snapshot'
@@ -14,26 +12,17 @@ import {
   type DashboardCardTerminalInputState
 } from './dashboard-card-terminal-input'
 import { readDashboardClientHost } from './dashboard-client-host'
-import { migrationUnsupportedToAgentStatusEntry } from '@/lib/migration-unsupported-agent-entry'
-import { applyAgentRowLineage, dashboardCardParentPaneKey } from './agent-row-lineage'
+import { dashboardCardParentPaneKey } from './agent-row-lineage'
 import { lastEnteredDoneAt } from './agent-finished-timestamp'
-import { buildWorktreeAgentRows } from '../sidebar/worktree-agent-rows'
+import { selectTerminalLayoutsForWorktree } from '../sidebar/worktree-agent-row-selectors'
+import { EMPTY_WORKTREE_AGENT_ORCHESTRATION } from '../sidebar/worktree-agent-orchestration-batch'
 import {
-  selectLiveAgentStatusEntriesForWorktree,
-  selectMigrationUnsupportedEntriesForWorktree,
-  selectRetainedAgentEntriesForWorktree,
-  selectRuntimeAgentOrchestrationForWorktree,
-  selectTerminalLayoutsForWorktree
-} from '../sidebar/worktree-agent-row-selectors'
-import {
-  EMPTY_WORKTREE_AGENT_ORCHESTRATION,
-  releaseRuntimeAgentOrchestrationBatchCache,
-  selectRuntimeAgentOrchestrationBatch
-} from '../sidebar/worktree-agent-orchestration-batch'
-import {
-  selectLivePtyIdsForWorktree,
-  selectRuntimePaneTitlesForWorktree
-} from '../sidebar/worktree-card-status-inputs'
+  finishWorktreeAgentRowsCachePass,
+  selectWorktreeAgentRowsCached,
+  startWorktreeAgentRowsCachePass,
+  type WorktreeAgentRowsCache
+} from './worktree-agent-rows-cache'
+import { selectRuntimePaneTitlesForWorktree } from '../sidebar/worktree-card-status-inputs'
 import {
   resolveDashboardCardContext,
   type DashboardCardContextState
@@ -54,8 +43,9 @@ import {
   type DashboardLaunchDetectionState
 } from './dashboard-worktree-launch-options'
 import { buildDashboardSnapshotFilterOptions } from './dashboard-snapshot-filter-options'
-import { dashboardBucketForDotState } from './dashboard-card-bucket'
 import { groupSubagentsByParentPaneKey } from './dashboard-subagent-cards'
+import { selectDashboardOrchestration } from './dashboard-orchestration-selection'
+import { dashboardRowBucketProjection } from './dashboard-row-bucket'
 
 /** The store slices the snapshot builder reads. Kept as a Pick so unit tests
  *  can pass a partial store without constructing the whole AppState. */
@@ -78,7 +68,7 @@ export type DashboardSnapshotState = Pick<
   Partial<
     DashboardCardTerminalInputState &
       DashboardLaunchDetectionState &
-      Pick<AppState, 'runtimeEnvironments' | 'sshTargetLabels'>
+      Pick<AppState, 'runtimeEnvironments' | 'sshTargetLabels' | 'unifiedTabsByWorktree'>
   >
 
 /**
@@ -91,7 +81,15 @@ export type DashboardSnapshotState = Pick<
 export function buildDashboardSnapshot(
   state: DashboardSnapshotState,
   now: number,
-  options: { includeCardDetails?: boolean; includeFilterOptions?: boolean } = {}
+  options: {
+    includeCardDetails?: boolean
+    includeFilterOptions?: boolean
+    /** Optional per-worktree row-pipeline reuse; card assembly always runs fresh
+     *  because cards also read review/host/status slices the cache does not key. */
+    rowsCache?: WorktreeAgentRowsCache
+    /** Freshness token for rowsCache (agentStatusEpoch); required for the cache to be safe. */
+    rowsGeneration?: unknown
+  } = {}
 ): DashboardSnapshot {
   const cards: DashboardCard[] = []
   const workspaces: DashboardWorkspace[] | undefined =
@@ -106,58 +104,32 @@ export function buildDashboardSnapshot(
     options.includeFilterOptions === false
       ? undefined
       : buildDashboardSnapshotFilterOptions(state, activeWorktrees)
-  let singletonOrchestration: ReturnType<typeof selectRuntimeAgentOrchestrationForWorktree> | null =
-    null
-  let orchestrationByWorktree: ReturnType<typeof selectRuntimeAgentOrchestrationBatch> | null = null
-  if (activeWorktrees.length >= 2) {
-    orchestrationByWorktree = selectRuntimeAgentOrchestrationBatch(
-      state,
-      activeWorktrees.map(({ worktree }) => worktree.id)
-    )
-  } else {
-    releaseRuntimeAgentOrchestrationBatchCache()
-    if (activeWorktrees.length === 1) {
-      singletonOrchestration = selectRuntimeAgentOrchestrationForWorktree(
-        state,
-        activeWorktrees[0].worktree.id
-      )
-    }
+  const { singletonOrchestration, orchestrationByWorktree } = selectDashboardOrchestration(
+    state,
+    activeWorktrees
+  )
+  if (options.rowsCache) {
+    startWorktreeAgentRowsCachePass(options.rowsCache)
   }
 
   for (const workspace of activeWorktrees) {
     const { repo, worktree } = workspace
     const worktreeId = worktree.id
     const parentWorktreeId = worktree.parentWorktreeId
-    const liveEntries = selectLiveAgentStatusEntriesForWorktree(state, worktreeId)
-    const migrationUnsupported = selectMigrationUnsupportedEntriesForWorktree(state, worktreeId)
-    const entries =
-      migrationUnsupported.length > 0
-        ? [
-            ...liveEntries,
-            ...migrationUnsupported.flatMap((unsupported) => {
-              const entry = migrationUnsupportedToAgentStatusEntry(unsupported)
-              return entry ? [entry] : []
-            })
-          ]
-        : liveEntries
     const terminalLayoutsByTabId = selectTerminalLayoutsForWorktree(state, worktreeId)
     const paneTitlesByTabId = selectRuntimePaneTitlesForWorktree(state, worktreeId)
 
-    const rows = applyAgentRowLineage(
-      buildWorktreeAgentRows({
-        tabs: state.tabsByWorktree[worktreeId] ?? [],
-        entries,
-        retained: selectRetainedAgentEntriesForWorktree(state, worktreeId),
-        runtimePaneTitlesByTabId: paneTitlesByTabId,
-        ptyIdsByTabId: selectLivePtyIdsForWorktree(state, worktreeId),
-        terminalLayoutsByTabId,
-        runtimeAgentOrchestrationByPaneKey:
-          singletonOrchestration ??
-          orchestrationByWorktree?.get(worktreeId) ??
-          EMPTY_WORKTREE_AGENT_ORCHESTRATION,
-        now
-      })
-    )
+    const rows = selectWorktreeAgentRowsCached({
+      state,
+      worktreeId,
+      orchestration:
+        singletonOrchestration ??
+        orchestrationByWorktree?.get(worktreeId) ??
+        EMPTY_WORKTREE_AGENT_ORCHESTRATION,
+      now,
+      generation: options.rowsGeneration,
+      cache: options.rowsCache
+    })
     const subagentsByParentPaneKey = includeCardDetails
       ? groupSubagentsByParentPaneKey(rows)
       : undefined
@@ -195,7 +167,8 @@ export function buildDashboardSnapshot(
       // agent-hook status) carry synthetic prompt/lastAssistantMessage — the
       // agent LABEL and a status word like "Idle". They're marked by
       // startedAt === 0, and must NOT be shown as real conversation.
-      const isTitleDerived = row.startedAt === 0
+      const { isTitleDerived, dotState, workingMode, unseen, bucket } =
+        dashboardRowBucketProjection(row, state.acknowledgedAgentsByPaneKey)
       const routingPaneKey = row.activationPaneKey ?? row.paneKey
       const parsed = parsePaneKey(routingPaneKey)
       const tabId = parsed?.tabId ?? row.tab.id
@@ -209,17 +182,6 @@ export function buildDashboardSnapshot(
         layoutPtyId && (state.ptyIdsByTabId?.[tabId] ?? []).includes(layoutPtyId)
           ? layoutPtyId
           : null
-      const dotState = row.state as DashboardCardDotState
-      const workingMode =
-        row.state === 'working' && row.entry.workingMode === 'monitoring'
-          ? row.entry.workingMode
-          : undefined
-      const unseen =
-        !isTitleDerived &&
-        (state.acknowledgedAgentsByPaneKey?.[row.paneKey] ?? 0) < row.entry.stateStartedAt
-      const bucket = dashboardBucketForDotState(
-        dashboardCardDisplayState({ dotState, workingMode, unseen })
-      )
       // Why: only a live pty can open a preview terminal, and only a
       // card-rendering caller can open one — the sidebar's bucket counts must
       // not pay host resolution on every agent-status tick.
@@ -297,6 +259,10 @@ export function buildDashboardSnapshot(
         ...(terminalInput ? { terminalInput } : {})
       })
     }
+  }
+
+  if (options.rowsCache) {
+    finishWorktreeAgentRowsCachePass(options.rowsCache)
   }
 
   return {

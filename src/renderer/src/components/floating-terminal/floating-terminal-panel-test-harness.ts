@@ -59,7 +59,6 @@ export type FloatingTerminalPanelMocks = {
   pinFile: Mock<FloatingPanelStoreState['pinFile']>
   setFloatingFocus: Mock<(state: { panelFocused: boolean; terminalFocused: boolean }) => void>
   setActiveTab: Mock<FloatingPanelStoreState['setActiveTab']>
-  setRenamingTabId: Mock<FloatingPanelStoreState['setRenamingTabId']>
   setTabColor: Mock<FloatingPanelStoreState['setTabColor']>
   setTabCustomTitle: Mock<FloatingPanelStoreState['setTabCustomTitle']>
   setTabPaneExpanded: Mock<FloatingPanelStoreState['setTabPaneExpanded']>
@@ -106,7 +105,6 @@ export const mocks: FloatingTerminalPanelMocks = {
   pinFile: vi.fn(),
   setFloatingFocus: vi.fn(),
   setActiveTab: vi.fn(),
-  setRenamingTabId: vi.fn(),
   setTabColor: vi.fn(),
   setTabCustomTitle: vi.fn(),
   setTabPaneExpanded: vi.fn(),
@@ -133,7 +131,6 @@ function resetStore(tabs: TerminalTab[] = []): void {
     activeGroupIdByWorktree: {},
     activeTabIdByWorktree: { [FLOATING_TERMINAL_WORKTREE_ID]: tabs[0]?.id ?? null },
     expandedPaneByTabId: {},
-    renamingTabId: null,
     activateTab: mocks.activateTab,
     closeBrowserTab: mocks.closeBrowserTab,
     closeFile: mocks.closeFile,
@@ -147,7 +144,6 @@ function resetStore(tabs: TerminalTab[] = []): void {
     pinFile: mocks.pinFile,
     setActiveTab: mocks.setActiveTab,
     setTabCustomTitle: mocks.setTabCustomTitle,
-    setRenamingTabId: mocks.setRenamingTabId,
     setTabColor: mocks.setTabColor,
     setTabPaneExpanded: mocks.setTabPaneExpanded,
     browserDefaultUrl: 'about:blank',
@@ -196,6 +192,7 @@ export async function setupFloatingTerminalPanelTest(): Promise<void> {
   }
   vi.stubGlobal('window', {
     addEventListener: vi.fn(),
+    dispatchEvent: vi.fn(),
     api: {
       app: {
         getFloatingMarkdownDirectory: mocks.getFloatingMarkdownDirectory,

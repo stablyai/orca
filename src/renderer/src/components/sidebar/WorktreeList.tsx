@@ -116,7 +116,7 @@ const WorktreeList = React.memo(function WorktreeList({
     sortedIds,
     repoMap,
     worktreeLineageById,
-    settings,
+    defaultHostId,
     agentSendTargetWorktreeId
   })
   const effectiveCollapsedGroups = useEffectiveCollapsedGroups({
