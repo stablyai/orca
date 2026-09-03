@@ -126,6 +126,13 @@ export function settingsForWorktreeOwner(
 // One line per workspace is enough to diagnose it (#10634).
 export const ambiguousOwnerWarnedWorktreeIds = new Set<string>()
 
+/** Re-arms the once-per-workspace warning; called from every worktree teardown path. */
+export function forgetAmbiguousOwnerWarnings(worktreeIds: Iterable<string>): void {
+  for (const worktreeId of worktreeIds) {
+    ambiguousOwnerWarnedWorktreeIds.delete(worktreeId)
+  }
+}
+
 export function warnAmbiguousOwnerOnce(worktreeId: string, errorLabel: string): void {
   if (ambiguousOwnerWarnedWorktreeIds.has(worktreeId)) {
     return

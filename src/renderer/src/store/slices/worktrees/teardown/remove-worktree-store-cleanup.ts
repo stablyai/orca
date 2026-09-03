@@ -3,6 +3,7 @@ import type { ExecutionHostId } from '../../../../../../shared/execution-host'
 import type { WorktreeSliceSet } from '../listing/worktree-slice-types'
 import { removeDeleteStatesForWorktreeIds } from './worktree-delete-state'
 import { removeWorktreeVisitEntries } from '@/lib/worktree-visit-recency'
+import { forgetAmbiguousOwnerWarnings } from '../listing/worktree-owner-settings'
 
 export function applyRemoveWorktreeSuccessState(
   set: WorktreeSliceSet,
@@ -10,6 +11,9 @@ export function applyRemoveWorktreeSuccessState(
   tabIds: Set<string>,
   executionHostId?: ExecutionHostId
 ): void {
+  // Why outside `set`: it is module-scope, not store state. Dropping it also
+  // re-arms the once-per-workspace warning if this id is ever added back.
+  forgetAmbiguousOwnerWarnings([worktreeId])
   set((s) => {
     const next = { ...s.worktreesByRepo }
     for (const repoId of Object.keys(next)) {
