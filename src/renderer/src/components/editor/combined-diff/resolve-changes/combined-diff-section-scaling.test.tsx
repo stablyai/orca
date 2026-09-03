@@ -49,35 +49,46 @@ function makeCountingSection(
   return section
 }
 
-function createFakeVirtualizer(): Virtualizer<HTMLDivElement, Element> {
-  return {
-    getTotalSize: () => 0,
-    getVirtualItems: () => [],
-    isScrolling: false,
-    measure: vi.fn(),
-    scrollToIndex: vi.fn()
-  } as unknown as Virtualizer<HTMLDivElement, Element>
-}
+const FAKE_VIRTUALIZER = {
+  getTotalSize: () => 0,
+  getVirtualItems: () => [],
+  isScrolling: false,
+  measure: vi.fn(),
+  scrollToIndex: vi.fn()
+} as unknown as Virtualizer<HTMLDivElement, Element>
 
-function useCombinedDiffSectionPasses(sections: DiffSection[]): {
+// Stable across renders so the hooks under test see the same dependency identities the viewer gives them.
+const NO_DIRECT_SCROLL_INPUT = (): boolean => false
+const NOOP = vi.fn()
+const PROGRAMMATIC_SCROLL_MARKS = createProgrammaticScrollMarks()
+const SCROLL_CONTAINER_REF = { current: null } as React.RefObject<HTMLDivElement | null>
+const SCROLL_ANCHOR_REF = { current: null } as React.RefObject<VirtualizedScrollAnchor>
+const LATEST_DOM_SCROLL_ANCHOR_REF = { current: null } as React.RefObject<VirtualizedScrollAnchor>
+const SCROLL_OFFSET_REF = { current: 0 } as React.RefObject<number>
+
+function useCombinedDiffSectionPasses({
+  sections,
+  sectionsRef
+}: {
+  sections: DiffSection[]
+  sectionsRef: React.RefObject<DiffSection[]>
+}): {
   allSectionsCollapsed: boolean
   rowKeys: readonly string[]
   sectionIndexByKey: ReadonlyMap<string, number>
   viewedSectionKeys: ReadonlySet<string>
 } {
-  const sectionsRef = { current: sections } as React.RefObject<DiffSection[]>
-  const scrollContainerRef = { current: null } as React.RefObject<HTMLDivElement | null>
   const sectionRowKeys = useCombinedDiffSectionRowKeys({ generation: 1, sections })
   const sectionIndexByKey = useCombinedDiffSectionIndexMap({ entrySignature: 'sig', sections })
   const anchors = useCombinedDiffScrollAnchors({
     clampRestoreCount: 0,
     generation: 1,
-    hasDirectScrollInput: () => false,
-    latestDomScrollAnchorRef: { current: null } as React.RefObject<VirtualizedScrollAnchor>,
-    programmaticScrollMarks: createProgrammaticScrollMarks(),
-    scrollAnchorRef: { current: null } as React.RefObject<VirtualizedScrollAnchor>,
-    scrollContainerRef,
-    scrollOffsetRef: { current: 0 } as React.RefObject<number>,
+    hasDirectScrollInput: NO_DIRECT_SCROLL_INPUT,
+    latestDomScrollAnchorRef: LATEST_DOM_SCROLL_ANCHOR_REF,
+    programmaticScrollMarks: PROGRAMMATIC_SCROLL_MARKS,
+    scrollAnchorRef: SCROLL_ANCHOR_REF,
+    scrollContainerRef: SCROLL_CONTAINER_REF,
+    scrollOffsetRef: SCROLL_OFFSET_REF,
     sectionIndexByKey,
     sections,
     sectionsRef,
@@ -85,17 +96,17 @@ function useCombinedDiffSectionPasses(sections: DiffSection[]): {
     structureRevision: sectionRowKeys.structureRevision,
     totalSize: 0,
     viewStateKey: 'scaling-test',
-    virtualizer: createFakeVirtualizer()
+    virtualizer: FAKE_VIRTUALIZER
   })
   const treeNavigation = useCombinedDiffTreeNavigation({
-    ensureSectionLoaded: vi.fn(),
+    ensureSectionLoaded: NOOP,
     entrySignature: 'sig',
-    markDirectScrollInput: vi.fn(),
+    markDirectScrollInput: NOOP,
     scrollToIndex: anchors.scrollToSectionIndex,
     sectionIndexByKey,
     sections,
     sectionsRef,
-    toggleSection: vi.fn(),
+    toggleSection: NOOP,
     treeMode: 'all'
   })
   return {
@@ -112,8 +123,12 @@ describe('combined diff section passes at scale', () => {
     const initial = Array.from({ length: SECTION_COUNT }, (_, index) =>
       makeCountingSection(counter, `combined-branch:file-${index}.ts`)
     )
+    const sectionsRef = { current: initial } as React.RefObject<DiffSection[]>
     const view = renderHook(
-      ({ sections }: { sections: DiffSection[] }) => useCombinedDiffSectionPasses(sections),
+      ({ sections }: { sections: DiffSection[] }) => {
+        sectionsRef.current = sections
+        return useCombinedDiffSectionPasses({ sections, sectionsRef })
+      },
       { initialProps: { sections: initial } }
     )
     const firstRowKeys = view.result.current.rowKeys
@@ -155,8 +170,12 @@ describe('combined diff section passes at scale', () => {
     const sections = Array.from({ length: 4 }, (_, index) =>
       makeCountingSection(counter, `combined-branch:file-${index}.ts`)
     )
+    const sectionsRef = { current: sections } as React.RefObject<DiffSection[]>
     const view = renderHook(
-      ({ rows }: { rows: DiffSection[] }) => useCombinedDiffSectionPasses(rows),
+      ({ rows }: { rows: DiffSection[] }) => {
+        sectionsRef.current = rows
+        return useCombinedDiffSectionPasses({ sections: rows, sectionsRef })
+      },
       { initialProps: { rows: sections } }
     )
     const firstRowKeys = view.result.current.rowKeys
