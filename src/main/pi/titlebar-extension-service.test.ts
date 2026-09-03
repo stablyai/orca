@@ -2,7 +2,6 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { execFileSync } from 'node:child_process'
 import { createHash } from 'node:crypto'
 import {
-  chmodSync,
   existsSync,
   lstatSync,
   mkdirSync,
@@ -285,37 +284,53 @@ describe('PiTitlebarExtensionService', () => {
     )
   })
 
-  it.skipIf(process.platform === 'win32')(
-    'retries a legacy SQLite migration as a whole set after sidecar copy failure',
-    () => {
-      const overlayDir = legacySourceOverlayPath('omp', piHome)
-      mkdirSync(overlayDir, { recursive: true })
-      const walPath = join(overlayDir, 'agent.db-wal')
-      writeFileSync(join(overlayDir, 'agent.db'), 'legacy sqlite credentials')
-      writeFileSync(walPath, 'legacy sqlite wal')
-      chmodSync(walPath, 0o000)
+  it('retries a legacy SQLite migration as a whole set after sidecar copy failure', async () => {
+    const overlayDir = legacySourceOverlayPath('omp', piHome)
+    mkdirSync(overlayDir, { recursive: true })
+    const walPath = join(overlayDir, 'agent.db-wal')
+    writeFileSync(join(overlayDir, 'agent.db'), 'legacy sqlite credentials')
+    writeFileSync(walPath, 'legacy sqlite wal')
 
-      try {
-        const svc = new PiTitlebarExtensionService()
-        svc.buildPtyEnv('pty-omp-sidecar-fail-1', piHome, 'omp')
-
-        expect(existsSync(join(piHome, 'agent.db'))).toBe(false)
-        expect(existsSync(join(piHome, 'agent.db-wal'))).toBe(false)
-        expect(existsSync(join(overlayDir, '.orca-omp-overlay-migration-complete'))).toBe(false)
-
-        chmodSync(walPath, 0o600)
-        svc.buildPtyEnv('pty-omp-sidecar-fail-2', piHome, 'omp')
-
-        expect(readFileSync(join(piHome, 'agent.db'), 'utf-8')).toBe('legacy sqlite credentials')
-        expect(readFileSync(join(piHome, 'agent.db-wal'), 'utf-8')).toBe('legacy sqlite wal')
-        expect(
-          readFileSync(join(overlayDir, '.orca-omp-overlay-migration-complete'), 'utf-8')
-        ).toBe('complete\n')
-      } finally {
-        chmodSync(walPath, 0o600)
+    let failNextWalCopy = true
+    vi.resetModules()
+    vi.doMock('node:fs', async (importOriginal) => {
+      const actual = await importOriginal<typeof fsModule>()
+      return {
+        ...actual,
+        cpSync: (
+          source: Parameters<typeof actual.cpSync>[0],
+          destination: Parameters<typeof actual.cpSync>[1],
+          options?: Parameters<typeof actual.cpSync>[2]
+        ) => {
+          if (String(source) === walPath && failNextWalCopy) {
+            failNextWalCopy = false
+            throw new Error('transient copy failure')
+          }
+          return actual.cpSync(source, destination, options)
+        }
       }
+    })
+
+    try {
+      const { migrateLegacyOmpOverlayState } = await import('./legacy-omp-overlay-migration')
+      migrateLegacyOmpOverlayState(piHome, overlayDir)
+
+      expect(existsSync(join(piHome, 'agent.db'))).toBe(false)
+      expect(existsSync(join(piHome, 'agent.db-wal'))).toBe(false)
+      expect(existsSync(join(overlayDir, '.orca-omp-overlay-migration-complete'))).toBe(false)
+
+      migrateLegacyOmpOverlayState(piHome, overlayDir)
+
+      expect(readFileSync(join(piHome, 'agent.db'), 'utf-8')).toBe('legacy sqlite credentials')
+      expect(readFileSync(join(piHome, 'agent.db-wal'), 'utf-8')).toBe('legacy sqlite wal')
+      expect(readFileSync(join(overlayDir, '.orca-omp-overlay-migration-complete'), 'utf-8')).toBe(
+        'complete\n'
+      )
+    } finally {
+      vi.doUnmock('node:fs')
+      vi.resetModules()
     }
-  )
+  })
 
   it('retries a legacy SQLite migration as a whole set after sidecar stat failure', async () => {
     const overlayDir = legacySourceOverlayPath('omp', piHome)
