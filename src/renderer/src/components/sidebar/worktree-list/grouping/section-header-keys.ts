@@ -3,8 +3,14 @@ import type { Row } from './row-types'
 
 type CollapseAllState = 'collapse' | 'expand' | 'none'
 
-export function collectSectionHeaderKeys(rows: readonly Row[]): string[] {
+export function collectSectionHeaderKeys(
+  rows: readonly Row[],
+  options: { filtersHideAllRows?: boolean } = {}
+): string[] {
   const headerKeys: string[] = []
+  if (options.filtersHideAllRows) {
+    return headerKeys
+  }
   for (const row of rows) {
     if (row.type === 'header') {
       headerKeys.push(row.key)

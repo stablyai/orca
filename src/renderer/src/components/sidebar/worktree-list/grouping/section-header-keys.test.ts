@@ -22,6 +22,20 @@ describe('collectSectionHeaderKeys', () => {
 
     expect(collectSectionHeaderKeys(rows)).toEqual(['pinned', 'repo:orca'])
   })
+
+  it('returns no keys when filters hide every row, even if group headers remain', () => {
+    const rows: Row[] = [
+      {
+        type: 'header',
+        key: 'project-group:ungrouped',
+        label: 'Ungrouped',
+        count: 0,
+        tone: 'neutral'
+      }
+    ]
+
+    expect(collectSectionHeaderKeys(rows, { filtersHideAllRows: true })).toEqual([])
+  })
 })
 
 describe('resolveCollapseAllState', () => {

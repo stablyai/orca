@@ -62,7 +62,6 @@ export function SidebarCollapseAllButton({
           size="icon-xs"
           className="text-muted-foreground hover:text-foreground"
           aria-label={label}
-          data-workspace-board-preserve-open=""
           onClick={handleAction}
         >
           {icon}

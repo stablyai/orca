@@ -185,7 +185,19 @@ const WorktreeList = React.memo(function WorktreeList({
     visibleWorkspaceHostIds: filterState.visibleWorkspaceHostIds,
     workspaceHostScope: filterState.workspaceHostScope
   })
-  const sectionHeaderKeys = useMemo(() => collectSectionHeaderKeys(rowModel.rows), [rowModel.rows])
+  const filtersHideAllRows = shouldFiltersHideAllRows({
+    hasFilters,
+    visibleWorktreeCount: visibleWorktrees.length,
+    visibleFolderWorkspaceCount: visibleScope.visibleFolderWorkspacesForRows.length,
+    placeholderRepoCount: rowModel.placeholderRepoIds.size,
+    importedWorktreeCardCount: externalWorktreeCards.importedWorktreesByRepo.size
+  })
+  // Why: the empty state replaces every header when filters hide all rows, so the
+  // collapse-all control must not advertise sections the user cannot see.
+  const sectionHeaderKeys = useMemo(
+    () => collectSectionHeaderKeys(rowModel.rows, { filtersHideAllRows }),
+    [rowModel.rows, filtersHideAllRows]
+  )
   useEffect(() => {
     setSidebarSectionHeaderKeys(sectionHeaderKeys)
   }, [sectionHeaderKeys, setSidebarSectionHeaderKeys])
@@ -270,13 +282,6 @@ const WorktreeList = React.memo(function WorktreeList({
     clearFilters
   })
 
-  const filtersHideAllRows = shouldFiltersHideAllRows({
-    hasFilters,
-    visibleWorktreeCount: visibleWorktrees.length,
-    visibleFolderWorkspaceCount: visibleScope.visibleFolderWorkspacesForRows.length,
-    placeholderRepoCount: rowModel.placeholderRepoIds.size,
-    importedWorktreeCardCount: externalWorktreeCards.importedWorktreesByRepo.size
-  })
   // Why: the header button must exist in both branches so wide and compact modes agree.
   const collapseAllPortal = projectsOptionsTarget
     ? createPortal(
