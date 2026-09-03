@@ -37,7 +37,7 @@ export class OrcaRuntimeWithCreateManagedWorktree extends OrcaRuntimeWithGetWork
       throw new Error('Selected agent is disabled. Choose an enabled agent before creating.')
     }
     const agentStartup =
-      !args.startup && args.startupAgent
+      !args.startup && args.startupAgent && !args.startupPromptFactory
         ? this.buildStartupForAgent(
             repo,
             args.startupAgent,
@@ -49,14 +49,31 @@ export class OrcaRuntimeWithCreateManagedWorktree extends OrcaRuntimeWithGetWork
       !args.startup && !agentStartup && args.startupDraft
         ? await this.buildStartupForDraft(repo, args.startupDraft, requestedAgent)
         : null
-    const effectiveStartup = args.startup ?? agentStartup?.startup ?? draftStartup?.startup
-    const effectiveStartupFollowup = agentStartup?.followup
+    let effectiveStartup = args.startup ?? agentStartup?.startup ?? draftStartup?.startup
+    let effectiveStartupFollowup = agentStartup?.followup
     const effectiveCreatedWithAgent = args.startup
       ? args.createdWithAgent
       : (agentStartup?.agent ??
         draftStartup?.agent ??
         (requestedAgentEnabled ? requestedAgent : undefined))
     const effectiveDraftPaste = args.startupDraftPaste ?? draftStartup?.draftPaste
+    // Why: an argv worker prompt names the worktree it runs in, so it can only be
+    // built once the record exists. Resolve it after create and before the startup
+    // terminal is planned, so the launch command carries the prompt.
+    const resolveDeferredStartup = async (worktreeId: string): Promise<void> => {
+      if (!args.startupPromptFactory || !args.startupAgent || effectiveStartup) {
+        return
+      }
+      const startupPrompt = await args.startupPromptFactory(worktreeId)
+      const startup = this.buildStartupForAgent(
+        repo,
+        args.startupAgent,
+        startupPrompt,
+        args.startupLaunchPreferences
+      )
+      effectiveStartup = startup.startup
+      effectiveStartupFollowup = startup.followup
+    }
     // Resolve the execution host once: SSH ownership has two spellings, and reading the raw
     // `connectionId` field routes an `executionHostId: 'ssh:*'`-only repo down the local path,
     // which runs `git worktree add` on the client against a remote path.
@@ -108,6 +125,13 @@ export class OrcaRuntimeWithCreateManagedWorktree extends OrcaRuntimeWithGetWork
           ...(effectiveStartup ? { startup: effectiveStartup } : {}),
           ...(effectiveStartupFollowup ? { startupFollowup: effectiveStartupFollowup } : {}),
           ...(effectiveCreatedWithAgent ? { createdWithAgent: effectiveCreatedWithAgent } : {}),
+          ...(args.startupPromptFactory
+            ? {
+                startupAgent: args.startupAgent,
+                startupLaunchPreferences: args.startupLaunchPreferences,
+                startupPromptFactory: args.startupPromptFactory
+              }
+            : {}),
           ...(effectiveDraftPaste ? { startupDraftPaste: effectiveDraftPaste } : {})
         }
       )
@@ -154,6 +178,10 @@ export class OrcaRuntimeWithCreateManagedWorktree extends OrcaRuntimeWithGetWork
         onWorktreeMetadataPersisted: (persistedWorktree) =>
           this.recordCreatedWorktreeLineage(persistedWorktree, lineageResolution)
       })
+    this.invalidateResolvedWorktreeCache()
+    this.invalidateWorktreeScanCacheForRepo(repo.id)
+    await resolveDeferredStartup(worktree.id)
+
     const settings = createSettings
     const { lineage, workspaceLineage, warnings: lineageWarnings } = metadataResult
 

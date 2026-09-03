@@ -47,7 +47,7 @@ export function failWorkerStart(
   try {
     const dispatch = this.getDispatchContextById(dispatchId)
     const worker = this.getWorkerDispatch(dispatchId)
-    if (!dispatch || !worker || worker.state !== 'starting') {
+    if (!dispatch || !worker || !['starting', 'ready'].includes(worker.state)) {
       throw new OrchestrationError('dispatch_inactive', `Dispatch ${dispatchId} is not starting.`)
     }
     this.db

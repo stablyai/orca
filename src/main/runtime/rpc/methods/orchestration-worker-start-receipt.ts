@@ -8,6 +8,19 @@ import type { OrchestrationWorkerLaunchReceipt } from './orchestration-worker-la
 import { isAgentSessionPtyWriteRefusedError } from '../../../../shared/agent-session-pty-write-admission'
 import { structuredChatPtyWriteRefusalCopy } from '../../../../shared/agent-session-pty-write-refusal-copy'
 
+export function createWorkerStartupCleanupError(
+  worktreeId: string,
+  startupError: unknown,
+  cleanupError: unknown
+): AggregateError {
+  const startupMessage = startupError instanceof Error ? startupError.message : String(startupError)
+  const cleanupMessage = cleanupError instanceof Error ? cleanupError.message : String(cleanupError)
+  return new AggregateError(
+    [startupError, cleanupError],
+    `Failed to prepare startup prompt for worktree ${worktreeId}: ${startupMessage}; cleanup failed: ${cleanupMessage}`
+  )
+}
+
 export function failWorkerStartWithReceipt(args: {
   db: OrchestrationDb
   runId: string

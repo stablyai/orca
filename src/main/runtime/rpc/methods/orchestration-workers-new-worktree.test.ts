@@ -1,4 +1,4 @@
-import { mkdtempSync, rmSync } from 'node:fs'
+import { mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -8,97 +8,36 @@ import { OrchestrationDb } from '../../orchestration/db'
 import { RpcDispatcher } from '../dispatcher'
 import type { RpcRequest } from '../core'
 import { ORCHESTRATION_METHODS } from './orchestration'
+import {
+  coordinatorPaneKey,
+  createNewWorktreeTestSupport,
+  type CreateWorktreeResult
+} from './orchestration-workers-new-worktree.test-support'
 
 describe('orchestration new-worktree workers', () => {
-  type CreateWorktreeResult = Awaited<ReturnType<OrcaRuntimeService['createManagedWorktree']>>
-  const coordinatorPaneKey = 'tab_coord:aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'
   let db: OrchestrationDb
   let runtime: OrcaRuntimeService
   let runId: string
+  let workerLaunchTokenHash: string | null
   const paths: string[] = []
+  const support = createNewWorktreeTestSupport({
+    getWorkerLaunchTokenHash: () => workerLaunchTokenHash,
+    setWorkerLaunchTokenHash: (hash) => {
+      workerLaunchTokenHash = hash
+    }
+  })
 
   beforeEach(() => {
-    db = new OrchestrationDb(':memory:')
-    runtime = new OrcaRuntimeService()
-    runtime.setOrchestrationDb(db)
-    runId = db.createRun({
-      objective: 'Test new-worktree workers',
-      coordinatorHandle: 'term_coord',
-      coordinatorPaneKey
-    }).id
-    vi.spyOn(runtime, 'getTerminalPaneKey').mockImplementation((handle) =>
-      handle === 'term_coord'
-        ? coordinatorPaneKey
-        : handle === 'term_worker'
-          ? 'tab_worker:bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb'
-          : null
-    )
-    vi.spyOn(runtime, 'getTerminalProcessIncarnation').mockImplementation((handle) =>
-      handle === 'term_worker' ? 'runtime_test:term_worker:1' : null
-    )
-    vi.spyOn(runtime, 'validateOrchestrationAgentLauncher').mockImplementation(() => {})
-    vi.spyOn(runtime, 'showTerminal').mockResolvedValue({
-      handle: 'term_coord',
-      worktreeId: 'repo::parent',
-      status: 'running'
-    } as never)
-    vi.spyOn(runtime, 'showManagedWorktree').mockResolvedValue({
-      id: 'repo::parent',
-      repoId: 'repo'
-    } as never)
-    vi.spyOn(runtime, 'showRepo').mockResolvedValue({
-      id: 'repo',
-      kind: 'git'
-    } as never)
-    vi.spyOn(runtime, 'createTerminal')
-    vi.spyOn(runtime, 'listTerminals').mockResolvedValue({
-      terminals: [{ handle: 'term_worker', title: 'Codex' }],
-      totalCount: 1,
-      truncated: false
-    } as never)
-    vi.spyOn(runtime, 'waitForTerminal').mockResolvedValue({
-      handle: 'term_worker',
-      condition: 'tui-idle',
-      satisfied: true,
-      status: 'running',
-      exitCode: null
-    })
-    vi.spyOn(runtime, 'waitForSetupTerminalCompletion').mockReturnValue(
-      new Promise(() => undefined)
-    )
-    vi.spyOn(runtime, 'getTerminalOrchestrationCliCommand').mockReturnValue('orca')
-    vi.spyOn(runtime, 'sendTerminalAgentPrompt').mockResolvedValue({
-      handle: 'term_worker',
-      accepted: true,
-      bytesWritten: 1
-    })
+    const state = support.setup()
+    db = state.db
+    runtime = state.runtime
+    runId = state.runId
   })
 
-  afterEach(() => {
-    db.close()
-    for (const path of paths.splice(0)) {
-      rmSync(path, { recursive: true, force: true })
-    }
-  })
+  afterEach(() => support.cleanup(db, paths))
 
   async function startWorker(overrides: Record<string, unknown> = {}) {
-    const task = db.createTask({ spec: 'new-worktree task', runId })
-    const method = ORCHESTRATION_METHODS.find(
-      (candidate) => candidate.name === 'orchestration.workerStart'
-    )
-    if (!method) {
-      throw new Error('workerStart method is not registered')
-    }
-    const params = method.params!.parse({
-      task: task.id,
-      from: 'term_coord',
-      worktree: 'new-child',
-      name: 'new-worker',
-      agent: 'codex',
-      ...overrides
-    })
-    const result = await method.handler(params, { runtime })
-    return { result, task }
+    return support.startWorker({ db, runtime, runId }, overrides)
   }
 
   function mockCreatedWorktree(options?: {
@@ -108,61 +47,20 @@ describe('orchestration new-worktree workers', () => {
     terminals?: { handle: string; title: string }[]
     setupTerminalHandle?: string
   }) {
-    const hookFound = options?.hookFound ?? true
-    const state = options?.state ?? (hookFound ? 'running' : 'not_configured')
-    vi.spyOn(runtime, 'createManagedWorktree').mockResolvedValue({
-      worktree: { id: 'repo::created', repoId: 'repo' },
-      startupTerminal: { spawned: true, handle: 'term_worker' },
-      setupReceipt: {
-        requested: state === 'skipped' ? 'skip' : 'run',
-        hookFound,
-        startupPolicy: options?.startupPolicy ?? 'start-immediately',
-        state,
-        terminalHandle:
-          options?.setupTerminalHandle ??
-          options?.terminals?.find((terminal) => terminal.title === 'Setup')?.handle
-      }
-    } as never)
-    if (options?.terminals) {
-      vi.mocked(runtime.listTerminals).mockResolvedValue({
-        terminals: options.terminals,
-        totalCount: options.terminals.length,
-        truncated: false
-      } as never)
-    }
+    support.mockCreatedWorktree({ db, runtime, runId }, options)
   }
 
-  it('creates an independent top-level worktree and reuses its agent terminal', async () => {
+  it('keeps prompt submission for a non-argv new-worktree agent', async () => {
     mockCreatedWorktree()
 
-    const { result } = await startWorker({ worktree: 'new-top-level' })
+    const { result } = await startWorker({ worktree: 'new-top-level', agent: 'goose' })
 
-    expect(runtime.createManagedWorktree).toHaveBeenCalledWith(
-      expect.objectContaining({
-        startupAgent: 'codex',
-        awaitTerminalProvisioning: true,
-        observeSetupCompletion: true,
-        lineage: expect.objectContaining({ noParent: true, parentWorktree: undefined })
-      })
-    )
     expect(result).toMatchObject({ state: 'ready' })
-    expect(result).toHaveProperty(
-      'effects',
-      expect.arrayContaining([
-        expect.objectContaining({
-          kind: 'worktree',
-          action: 'created_top_level',
-          id: 'repo::created'
-        }),
-        expect.objectContaining({
-          kind: 'terminal',
-          role: 'agent',
-          action: 'reused_agent_terminal',
-          id: 'term_worker'
-        })
-      ])
-    )
-    expect(runtime.createTerminal).not.toHaveBeenCalled()
+    expect(runtime.sendTerminalAgentPrompt).toHaveBeenCalledOnce()
+    const createOptions = vi.mocked(runtime.createManagedWorktree).mock.calls[0]?.[0]
+    expect(createOptions).not.toHaveProperty('startupPrompt')
+    expect(createOptions).not.toHaveProperty('startupLaunchToken')
+    expect(createOptions).not.toHaveProperty('startupPreAllocatedHandle')
   })
 
   it('passes launch preferences into agent-first worktree creation', async () => {
@@ -225,14 +123,70 @@ describe('orchestration new-worktree workers', () => {
 
   it('injects the execution host CLI command and Dispatch capability together', async () => {
     mockCreatedWorktree()
-    vi.mocked(runtime.getTerminalOrchestrationCliCommand).mockReturnValue('orca-ide')
+    vi.mocked(runtime.getTerminalOrchestrationCliCommand).mockReturnValue('orca')
+    vi.mocked(runtime.getWorktreeOrchestrationCliCommand).mockResolvedValue('orca-ide')
 
     await startWorker({ worktree: 'new-top-level' })
 
-    const prompt = vi.mocked(runtime.sendTerminalAgentPrompt).mock.calls[0]?.[1] ?? ''
+    const createOptions = vi.mocked(runtime.createManagedWorktree).mock.calls[0]?.[0]
+    const prompt = (await createOptions?.startupPromptFactory?.('repo::created')) ?? ''
     expect(prompt).toContain('orca-ide orchestration send')
     expect(prompt).toMatch(/--dispatch-capability dcap_[A-Za-z0-9_-]+/)
     expect(prompt).not.toMatch(/(^|\s)orca orchestration send/)
+    expect(runtime.getWorktreeOrchestrationCliCommand).toHaveBeenCalledWith('repo::created')
+    expect(runtime.getWorktreeOrchestrationCliCommand).not.toHaveBeenCalledWith('repo::parent')
+    expect(runtime.getTerminalOrchestrationCliCommand).not.toHaveBeenCalled()
+  })
+
+  it('cleans the created worktree when target CLI resolution fails', async () => {
+    mockCreatedWorktree()
+    vi.mocked(runtime.getWorktreeOrchestrationCliCommand).mockRejectedValueOnce(
+      new Error('target runtime unavailable')
+    )
+    const removeWorktree = vi.spyOn(runtime, 'removeManagedWorktree').mockResolvedValue({
+      deleted: true
+    } as never)
+
+    const { result, task } = await startWorker({ worktree: 'new-child' })
+    const dispatchId = (result as { dispatchId: string }).dispatchId
+
+    expect(result).toMatchObject({ state: 'failed', failedStage: 'worktree_create' })
+    expect(removeWorktree).toHaveBeenCalledWith('id:repo::created', true, false, true)
+    expect(db.getTask(task.id)?.status).toBe('failed')
+    expect(db.getDispatchContextById(dispatchId)).toMatchObject({
+      status: 'failed',
+      capability_revoked_at: expect.any(String)
+    })
+    expect(db.getWorkerDispatch(dispatchId)).toMatchObject({
+      state: 'failed',
+      stage: 'worktree_create'
+    })
+    expect(runtime.createTerminal).not.toHaveBeenCalled()
+  })
+
+  it('surfaces startup and cleanup failures while closing the Dispatch', async () => {
+    mockCreatedWorktree()
+    const startupError = new Error('target runtime unavailable')
+    const cleanupError = new Error('worktree cleanup permission denied')
+    vi.mocked(runtime.getWorktreeOrchestrationCliCommand).mockRejectedValueOnce(startupError)
+    const removeWorktree = vi
+      .spyOn(runtime, 'removeManagedWorktree')
+      .mockRejectedValueOnce(cleanupError)
+
+    const { result, task } = await startWorker({ worktree: 'new-child' })
+    const dispatchId = (result as { dispatchId: string }).dispatchId
+    const lastError = (result as { lastError: string }).lastError
+
+    expect(removeWorktree).toHaveBeenCalledWith('id:repo::created', true, false, true)
+    expect(lastError).toContain('repo::created')
+    expect(lastError).toContain(startupError.message)
+    expect(lastError).toContain(cleanupError.message)
+    expect(db.getTask(task.id)?.status).toBe('failed')
+    expect(db.getDispatchContextById(dispatchId)).toMatchObject({ status: 'failed' })
+    expect(db.getWorkerDispatch(dispatchId)).toMatchObject({
+      state: 'failed',
+      stage: 'worktree_create'
+    })
   })
 
   it('passes exact repo, base, metadata, lineage, and setup choices to worktree creation', async () => {
@@ -335,7 +289,7 @@ describe('orchestration new-worktree workers', () => {
         expect.objectContaining({ kind: 'dispatch_input', state: 'accepted' })
       ])
     )
-    expect(runtime.sendTerminalAgentPrompt).toHaveBeenCalledOnce()
+    expect(runtime.sendTerminalAgentPrompt).not.toHaveBeenCalled()
     expect(db.getInbox(10).filter((message) => message.run_id === runId)).toEqual(
       expect.arrayContaining([expect.objectContaining({ type: 'status', priority: 'high' })])
     )
@@ -380,9 +334,7 @@ describe('orchestration new-worktree workers', () => {
         expect.objectContaining({ kind: 'dispatch_input', state: 'accepted' })
       ])
     })
-    expect(vi.mocked(runtime.waitForTerminal).mock.invocationCallOrder[0]).toBeLessThan(
-      vi.mocked(runtime.sendTerminalAgentPrompt).mock.invocationCallOrder[0]!
-    )
+    expect(runtime.sendTerminalAgentPrompt).not.toHaveBeenCalled()
     expect(JSON.parse(db.getWorkerDispatch(dispatchId)?.effects ?? '[]')).toEqual(
       expect.arrayContaining([
         expect.objectContaining({ kind: 'dispatch_input', state: 'accepted' })
@@ -488,7 +440,7 @@ describe('orchestration new-worktree workers', () => {
       status: 'exited',
       exitCode: 1
     })
-    const durableEffect = await startWorker({ name: 'durable-effect' })
+    const durableEffect = await startWorker({ name: 'durable-effect', agent: 'goose' })
     expect(durableEffect.result).toMatchObject({
       state: 'failed',
       failedStage: 'agent_readiness',
@@ -544,7 +496,7 @@ describe('orchestration new-worktree workers', () => {
         from: 'term_coord',
         worktree: 'new-child',
         name: 'atomic-worker',
-        agent: 'codex'
+        agent: 'goose'
       }
     }
 
@@ -611,7 +563,7 @@ describe('orchestration new-worktree workers', () => {
         from: 'term_coord',
         worktree: 'new-child',
         name: 'recover-input-worker',
-        agent: 'codex'
+        agent: 'goose'
       }
     }
 
@@ -699,7 +651,7 @@ describe('orchestration new-worktree workers', () => {
         })
     )
 
-    const pending = startWorker({ name: 'staged-worker' })
+    const pending = startWorker({ name: 'staged-worker', agent: 'goose' })
     await vi.waitFor(() => {
       const task = db.listTasks()[0]
       const dispatch = task ? db.getDispatchContext(task.id) : undefined

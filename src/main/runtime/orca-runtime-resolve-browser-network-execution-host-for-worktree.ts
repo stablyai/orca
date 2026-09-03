@@ -9,6 +9,7 @@ import {
 } from '../../shared/execution-host'
 import { resolveRuntimeBrowserNetworkExecutionHost } from './runtime-browser-network-execution-host'
 import { resolveLocalProjectRuntimeForWorktreeId } from '../local-project-runtime-resolution'
+import { resolveTerminalOrchestrationCliCommand } from './orchestration/cli-command'
 import { getRegisteredSshState } from '../ssh/ssh-target-registry'
 import { resolveWorktreeLaunchHost } from './worktree-launch-host-repo'
 import { folderWorkspaceKey, parseWorkspaceKey } from '../../shared/workspace-scope'
@@ -91,6 +92,20 @@ export class OrcaRuntimeWithResolveBrowserNetworkExecutionHostForWorktree extend
     selector: string
   ): Promise<TerminalWorkspaceLaunchScope> {
     return (await this.resolveTerminalWorkspaceLaunchTarget(selector)).scope
+  }
+
+  // Why: argv-injected prompts are built BEFORE a terminal exists, so the CLI
+  // name must come from the target workspace rather than a pane handle. This
+  // preserves `orca-ide` for WSL worktrees and bare `orca` for SSH/native.
+  async getWorktreeOrchestrationCliCommand(worktreeId: string): Promise<'orca' | 'orca-ide'> {
+    const workspace = await this.resolveTerminalWorkspaceLaunchScope(`id:${worktreeId}`)
+    return resolveTerminalOrchestrationCliCommand({
+      connectionId: workspace.connectionId,
+      isWsl: null,
+      worktreeId: workspace.id,
+      worktreePath: workspace.path,
+      projectRuntime: this.resolveProjectRuntimeForWorktree(workspace.id)
+    })
   }
 
   protected async resolveTerminalWorkspaceLaunchTarget(

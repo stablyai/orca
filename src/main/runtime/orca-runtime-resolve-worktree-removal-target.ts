@@ -200,7 +200,7 @@ export class OrcaRuntimeWithResolveWorktreeRemovalTarget extends OrcaRuntimeWith
     const sessionOptions = this.toAgentSessionOptions(opts.launchPreferences)
     const startupPlan = buildAgentStartupPlan({
       agent,
-      prompt: '',
+      prompt: opts.agentPrompt ?? '',
       cmdOverrides: settings.agentCmdOverrides ?? {},
       agentArgs: resolveTuiAgentLaunchArgs(agent, settings.agentDefaultArgs),
       agentEnv: resolveTuiAgentLaunchEnv(agent, settings.agentDefaultEnv),
@@ -218,6 +218,14 @@ export class OrcaRuntimeWithResolveWorktreeRemovalTarget extends OrcaRuntimeWith
         throw new Error(`Could not build launch command for ${opts.startupAgent}.`)
       }
       return opts
+    }
+
+    // Why: a deferred followupPrompt means the plan could NOT embed the prompt
+    // in the launch and expects a post-start paste — exactly the submission
+    // race agentPrompt exists to avoid. Refuse loudly instead of silently
+    // degrading to the paste path.
+    if (opts.agentPrompt && startupPlan.followupPrompt) {
+      throw new Error(`Agent ${agent} cannot embed a startup prompt in its launch command.`)
     }
 
     await this.markWorkspaceTrustedForAgent(agent, workspace.connectionId, workspace.path)

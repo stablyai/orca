@@ -51,6 +51,9 @@ export type RuntimeManagedWorktreeCreateArgs = {
   startupAgent?: TuiAgent
   startupLaunchPreferences?: AgentLaunchPreferences
   startupPrompt?: string
+  startupPromptFactory?: (worktreeId: string) => Promise<string>
+  startupLaunchToken?: string
+  startupPreAllocatedHandle?: string
   pendingFirstAgentMessageRename?: boolean
   automationProvenance?: AutomationWorkspaceProvenance
   cliProvenance?: CliWorkspaceProvenance

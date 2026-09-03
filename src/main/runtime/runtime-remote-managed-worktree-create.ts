@@ -44,6 +44,15 @@ type Dependencies = {
     startup?: RuntimeRemoteWorktreeCreateArgs['startup'],
     defaultTabs?: CreateWorktreeResult['defaultTabs']
   ): void
+  // Why: an argv worker prompt names the worktree it runs in, so the remote path
+  // can only build the launch after the create returns an id.
+  resolveDeferredStartup?(worktreeId: string): Promise<
+    | {
+        startup: RuntimeRemoteWorktreeCreateArgs['startup']
+        followup?: WorktreeStartupFollowup
+      }
+    | undefined
+  >
   invalidateResolvedWorktrees(): void
   invalidateWorktreeScan(repoId: string): void
   notifyWorktreesChanged(repoId: string): void
@@ -84,20 +93,30 @@ export async function createRuntimeRemoteManagedWorktree(
   let startupTerminalPaneKey: string | null = null
   let startupTerminalPtyId: string | null = null
 
-  let sequencedStartup = args.startup
+  let effectiveStartup = args.startup
+  let effectiveStartupFollowup = args.startupFollowup
+  if (!effectiveStartup && args.startupPromptFactory && args.startupAgent) {
+    const deferred = await deps.resolveDeferredStartup?.(result.worktree.id)
+    effectiveStartup = deferred?.startup
+    effectiveStartupFollowup = deferred?.followup
+  }
+
+  let sequencedStartup = effectiveStartup
   let wrappedSetupCommandStr: string | undefined
-  if (args.startup && result.setup?.waitForAgentStartup === true) {
+  if (effectiveStartup && result.setup?.waitForAgentStartup === true) {
     const platform = setupPlatform(result.setup)
     const sequenced = createSequencedSetupAgentCommands({
       runnerScriptPath: result.setup.runnerScriptPath,
-      startupCommand: args.startup.command,
+      startupCommand: effectiveStartup.command,
       platform,
       shell: result.setup.shell
     })
     sequencedStartup = {
-      ...args.startup,
+      ...effectiveStartup,
       command: sequenced.startupCommand,
-      ...(sequenced.startupEnv ? { env: { ...args.startup.env, ...sequenced.startupEnv } } : {})
+      ...(sequenced.startupEnv
+        ? { env: { ...effectiveStartup.env, ...sequenced.startupEnv } }
+        : {})
     }
     wrappedSetupCommandStr = sequenced.setupCommand
   }
@@ -110,12 +129,16 @@ export async function createRuntimeRemoteManagedWorktree(
       }
       const terminal = await deps.createTerminal(`path:${result.worktree.path}`, {
         command: sequencedStartup.command,
-        ...(result.setup && args.startup
-          ? { claudeAgentTeamsSourceCommand: args.startup.command }
+        ...(result.setup && effectiveStartup
+          ? { claudeAgentTeamsSourceCommand: effectiveStartup.command }
           : {}),
         env: sequencedStartup.env,
         ...(sequencedStartup.launchConfig ? { launchConfig: sequencedStartup.launchConfig } : {}),
         ...(args.createdWithAgent ? { launchAgent: args.createdWithAgent } : {}),
+        ...(args.startupLaunchToken ? { launchToken: args.startupLaunchToken } : {}),
+        ...(args.startupPreAllocatedHandle
+          ? { preAllocatedHandle: args.startupPreAllocatedHandle }
+          : {}),
         ...(sequencedStartup.viewMode ? { viewMode: sequencedStartup.viewMode } : {}),
         startupCommandDelivery: sequencedStartup.startupCommandDelivery,
         telemetry: sequencedStartup.telemetry,
@@ -124,8 +147,8 @@ export async function createRuntimeRemoteManagedWorktree(
       if (args.startupDraftPaste) {
         deps.pasteDraft(terminal.handle, args.startupDraftPaste)
       }
-      if (args.startupFollowup) {
-        deps.sendFollowup(terminal.handle, args.startupFollowup)
+      if (effectiveStartupFollowup) {
+        deps.sendFollowup(terminal.handle, effectiveStartupFollowup)
       }
       didSpawnStartup = true
       startupTerminalHandle = terminal.handle
@@ -177,12 +200,12 @@ export async function createRuntimeRemoteManagedWorktree(
           }
         : undefined
     const activationDefaultTabs = runtimeWillProvisionTerminals ? undefined : result.defaultTabs
-    if (args.startup && !didSpawnStartup) {
+    if (effectiveStartup && !didSpawnStartup) {
       deps.activate(
         repo.id,
         result.worktree.id,
         activationSetup,
-        args.startup,
+        effectiveStartup,
         activationDefaultTabs
       )
     } else {

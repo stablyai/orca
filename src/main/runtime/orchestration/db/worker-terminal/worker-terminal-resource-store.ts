@@ -106,6 +106,44 @@ export function getWorkerTerminalResourceByOwner(
     .get(dispatchId) as WorkerTerminalResourceRow | undefined
 }
 
+// No transaction: composes inside worker authority binding's transaction.
+export function bindWorkerTerminalResourceStatement(
+  this: OrchestrationDb,
+  params: {
+    dispatchId: string
+    worktreeId: string | null
+    terminalHandle: string
+    paneKey: string | null
+    processIncarnation: string | null
+    hostScope: string | null
+  }
+): WorkerTerminalResourceRow {
+  const resource = this.getWorkerTerminalResourceByOwner(params.dispatchId)
+  if (!resource) {
+    throw new OrchestrationError(
+      'dispatch_not_found',
+      `Worker terminal resource for Dispatch ${params.dispatchId} was not found.`
+    )
+  }
+  this.db
+    .prepare(
+      `UPDATE worker_terminal_resources
+       SET worktree_id = ?, terminal_handle = ?, pane_key = ?, process_incarnation = ?,
+           host_scope = ?, updated_at = datetime('now')
+       WHERE id = ? AND owner_dispatch_id = ? AND ownership_state = 'owned'`
+    )
+    .run(
+      params.worktreeId,
+      params.terminalHandle,
+      params.paneKey,
+      params.processIncarnation,
+      params.hostScope,
+      resource.id,
+      params.dispatchId
+    )
+  return this.getWorkerTerminalResource(resource.id) as WorkerTerminalResourceRow
+}
+
 export function getWorkerTerminalResourceFormerlyOwnedBy(
   this: OrchestrationDb,
   dispatchId: string
@@ -169,6 +207,7 @@ export type WorkerTerminalResourceStoreMethods = {
   createWorkerTerminalResourceStatement: typeof createWorkerTerminalResourceStatement
   getWorkerTerminalResource: typeof getWorkerTerminalResource
   getWorkerTerminalResourceByOwner: typeof getWorkerTerminalResourceByOwner
+  bindWorkerTerminalResourceStatement: typeof bindWorkerTerminalResourceStatement
   getWorkerTerminalResourceFormerlyOwnedBy: typeof getWorkerTerminalResourceFormerlyOwnedBy
   transferWorkerTerminalResourceStatement: typeof transferWorkerTerminalResourceStatement
 }
@@ -179,6 +218,7 @@ export function attachWorkerTerminalResourceStore(ctor: { prototype: object }): 
     createWorkerTerminalResourceStatement,
     getWorkerTerminalResource,
     getWorkerTerminalResourceByOwner,
+    bindWorkerTerminalResourceStatement,
     getWorkerTerminalResourceFormerlyOwnedBy,
     transferWorkerTerminalResourceStatement
   })

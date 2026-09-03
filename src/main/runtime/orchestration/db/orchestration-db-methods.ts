@@ -48,6 +48,7 @@ import type { TaskStoreMethods } from './tasks/task-store'
 import type { TaskStatusTransitionMethods } from './tasks/task-status-transition'
 import type { FederatedWorkerStartReconcileMethods } from './worker-dispatch/federated-worker-start-reconcile'
 import type { WorkerDispatchAbandonMethods } from './worker-dispatch/worker-dispatch-abandon'
+import type { WorkerDispatchArgvAuthorityMethods } from './worker-dispatch/worker-dispatch-argv-authority'
 import type { WorkerDispatchAuthorityMethods } from './worker-dispatch/worker-dispatch-authority'
 import type { WorkerDispatchOutcomeMethods } from './worker-dispatch/worker-dispatch-outcome'
 import type { WorkerDispatchStageMethods } from './worker-dispatch/worker-dispatch-stage'
@@ -93,6 +94,7 @@ export type OrchestrationDbMethods = CreateTablesMethods &
   WorkerDispatchStartMethods &
   WorkerDispatchStageMethods &
   WorkerDispatchAuthorityMethods &
+  WorkerDispatchArgvAuthorityMethods &
   WorkerDispatchOutcomeMethods &
   FederatedWorkerStartReconcileMethods &
   WorkerTerminalRecoveryMethods &

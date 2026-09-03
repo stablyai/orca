@@ -42,6 +42,18 @@ export class OrcaRuntimeWithCreateManagedRemoteWorktree extends OrcaRuntimeWithC
           defaultTabs,
           args.navigation
         ),
+      resolveDeferredStartup: async (worktreeId) => {
+        if (!args.startupPromptFactory || !args.startupAgent) {
+          return undefined
+        }
+        const startupPrompt = await args.startupPromptFactory(worktreeId)
+        return this.buildStartupForAgent(
+          repo,
+          args.startupAgent,
+          startupPrompt,
+          args.startupLaunchPreferences
+        )
+      },
       invalidateResolvedWorktrees: () => this.invalidateResolvedWorktreeCache(),
       invalidateWorktreeScan: (repoId) => this.invalidateWorktreeScanCacheForRepo(repoId),
       notifyWorktreesChanged: (repoId) => this.notifyWorktreesChanged(repoId)

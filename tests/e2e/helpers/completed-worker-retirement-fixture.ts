@@ -33,9 +33,19 @@ if (args.includes('app-server')) {
   process.stderr.write("error: unrecognized subcommand 'app-server'\\n")
   process.exit(2)
 }
+let acknowledged = false
+const argvPreamble = args.find((argument) =>
+  argument.includes('You are working inside Orca, a multi-agent IDE. You are a dispatched worker.')
+)
 append({ event: 'spawn', args })
 process.stdout.write('\\u001b]0;Codex Ready\\u0007OpenAI Codex\\nmodel: e2e\\ndirectory: e2e\\n')
 ${FAKE_AGENT_PASTE_END_SCANNER_SOURCE}
+if (argvPreamble) {
+  acknowledged = true
+  append({ event: 'ack', mode: 'bracketed' })
+  process.stdout.write('\\u001b]0;Codex Working\\u0007ACK\\n')
+  setTimeout(() => process.stdout.write('\\u001b]0;Codex Ready\\u0007'), 10)
+}
 process.stdin.on('data', (chunk) => {
   const input = chunk.toString()
   const pasteEndScan = scanFakeAgentPasteEnd(fakeAgentPasteEndTail, input)
@@ -48,12 +58,15 @@ process.stdin.on('data', (chunk) => {
     append({ event: 'normal-exit' })
     process.exit(0)
   }
-  fakeAgentMaybeAck(pasteEndScan, input, (mode) => {
-    append({ event: 'ack', mode })
-    const message = mode === 'bracketed' ? 'ACK' : 'PASTE_PROTOCOL_ERROR'
-    process.stdout.write('\\u001b]0;Codex Working\\u0007' + message + '\\n')
-    setTimeout(() => process.stdout.write('\\u001b]0;Codex Ready\\u0007'), 10)
-  })
+  if (!acknowledged) {
+    fakeAgentMaybeAck(pasteEndScan, input, (mode) => {
+      acknowledged = true
+      append({ event: 'ack', mode })
+      const message = mode === 'bracketed' ? 'ACK' : 'PASTE_PROTOCOL_ERROR'
+      process.stdout.write('\\u001b]0;Codex Working\\u0007' + message + '\\n')
+      setTimeout(() => process.stdout.write('\\u001b]0;Codex Ready\\u0007'), 10)
+    })
+  }
 })
 process.stdin.setRawMode?.(true)
 process.stdin.resume()
@@ -115,6 +128,14 @@ export function readCompletedWorkerLedger(): LifecycleEvent[] {
 }
 
 export function readCompletedWorkerDispatchCapability(): string | null {
+  const argv = readCompletedWorkerLedger()
+    .filter((event) => event.event === 'spawn')
+    .flatMap((event) => event.args ?? [])
+    .join(' ')
+  const argvCapability = argv.match(/--dispatch-capability\s+(\S+)/)?.[1]
+  if (argvCapability) {
+    return argvCapability
+  }
   const input = readCompletedWorkerLedger()
     .filter((event) => event.event === 'input')
     .map((event) => event.input ?? '')

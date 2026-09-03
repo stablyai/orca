@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -12,6 +13,7 @@ import { OrchestrationDb } from '../../orchestration/db'
 import type { RpcRequest } from '../core'
 import { RpcDispatcher } from '../dispatcher'
 import { ORCHESTRATION_METHODS } from './orchestration'
+import type { TuiAgent } from '../../../../shared/tui-agent'
 
 vi.mock('../../../git/worktree', () => ({
   listWorktrees: vi.fn().mockResolvedValue([
@@ -51,10 +53,13 @@ type PromptContractHarness = {
   startedTurns: () => number
   prematureSubmits: () => number
   writes: string[]
+  runtime: Awaited<ReturnType<typeof createAgentPromptSubmissionRuntime>>['runtime']
+  handle: string
 }
 
 async function createPromptContractHarness(
-  outcome: 'accepted' | 'swallowed'
+  outcome: 'accepted' | 'swallowed',
+  launchAgent: TuiAgent = 'aider'
 ): Promise<PromptContractHarness> {
   let composerReady = false
   let submittedTurns = 0
@@ -62,10 +67,10 @@ async function createPromptContractHarness(
   let prematureSubmits = 0
   const fixture = await createAgentPromptSubmissionRuntime((runtime, data) => {
     if (data.includes(AGENT_PROMPT_BRACKETED_PASTE_END)) {
+      composerReady = true
       setTimeout(() => runtime.onPtyData('pty-prompt', 'partial composer frame', Date.now()), 650)
       setTimeout(() => runtime.onPtyData('pty-prompt', '\x1b[?25h', Date.now()), 750)
       setTimeout(() => {
-        composerReady = true
         runtime.onPtyData('pty-prompt', 'final composer frame', Date.now())
       }, 1_000)
       return
@@ -81,7 +86,7 @@ async function createPromptContractHarness(
       startedTurns += 1
       runtime.onPtyData('pty-prompt', '\x1b]0;Codex working\x07', Date.now())
     }
-  }, 'codex')
+  }, launchAgent)
   const { runtime, handle } = fixture
   runtime.onPtyData('pty-prompt', '\x1b]0;Codex idle\x07', Date.now())
 
@@ -118,17 +123,46 @@ async function createPromptContractHarness(
     repoId: 'repo-1'
   } as never)
   vi.spyOn(runtime, 'showRepo').mockResolvedValue({ id: 'repo-1', kind: 'git' } as never)
-  vi.spyOn(runtime, 'createManagedWorktree').mockResolvedValue({
-    worktree: { id: AGENT_PROMPT_TEST_WORKTREE_ID, repoId: 'repo-1' },
-    startupTerminal: { spawned: true, handle },
-    setupReceipt: {
-      requested: 'run',
-      hookFound: false,
-      startupPolicy: 'start-immediately',
-      state: 'not_configured'
-    }
-  } as never)
+  let launchTokenHash: string | null = null
+  if (launchAgent === 'codex') {
+    vi.spyOn(runtime, 'createPreAllocatedTerminalHandle').mockReturnValue(handle)
+    vi.spyOn(runtime, 'getOrchestrationDispatchAuthority').mockImplementation((candidate) =>
+      candidate === handle && launchTokenHash
+        ? ({
+            runtimeId: runtime.getRuntimeId(),
+            terminalHandle: handle,
+            ptyId: 'pty-prompt',
+            worktreeId: AGENT_PROMPT_TEST_WORKTREE_ID,
+            paneKey: WORKER_PANE_KEY,
+            processIncarnation: `runtime_test:${handle}:1`,
+            launchTokenHash,
+            hostScope: { kind: 'local', hostId: 'local' }
+          } as never)
+        : null
+    )
+    vi.spyOn(runtime, 'sendTerminalAgentPrompt').mockResolvedValue({
+      handle,
+      accepted: true,
+      bytesWritten: 1
+    } as never)
+  }
+  vi.spyOn(runtime, 'createManagedWorktree').mockImplementation(async (args) => {
+    launchTokenHash = args.startupLaunchToken
+      ? createHash('sha256').update(args.startupLaunchToken).digest('hex')
+      : null
+    return {
+      worktree: { id: AGENT_PROMPT_TEST_WORKTREE_ID, repoId: 'repo-1' },
+      startupTerminal: { spawned: true, handle },
+      setupReceipt: {
+        requested: 'run',
+        hookFound: false,
+        startupPolicy: 'start-immediately',
+        state: 'not_configured'
+      }
+    } as never
+  })
   vi.spyOn(runtime, 'getTerminalOrchestrationCliCommand').mockReturnValue('orca')
+  vi.spyOn(runtime, 'getWorktreeOrchestrationCliCommand').mockResolvedValue('orca')
 
   return {
     db,
@@ -145,7 +179,7 @@ async function createPromptContractHarness(
         from: 'term_coord',
         worktree: 'new-child',
         name: `prompt-contract-${outcome}`,
-        agent: 'codex'
+        agent: launchAgent
       }
     },
     requestId: `${REQUEST_ID}_${outcome}`,
@@ -153,7 +187,9 @@ async function createPromptContractHarness(
     submittedTurns: () => submittedTurns,
     startedTurns: () => startedTurns,
     prematureSubmits: () => prematureSubmits,
-    writes: fixture.writes
+    writes: fixture.writes,
+    runtime,
+    handle
   }
 }
 
@@ -274,6 +310,64 @@ describe('orchestration worker-start prompt contract', () => {
       state: 'failed',
       failedStage: 'dispatch_input',
       lastError: 'agent_prompt_stalled'
+    })
+  })
+
+  it('launches a Codex new-child worker with argv authority and no prompt submission', async () => {
+    const harness = await createPromptContractHarness('accepted', 'codex')
+    const waitForTerminal = vi.spyOn(harness.runtime, 'waitForTerminal').mockResolvedValue({
+      handle: harness.handle,
+      condition: 'tui-idle',
+      satisfied: true,
+      status: 'running',
+      exitCode: null
+    })
+
+    const response = await harness.dispatcher.dispatch(harness.request)
+
+    expect(response).toMatchObject({
+      ok: true,
+      result: {
+        state: 'ready',
+        stage: 'input_accepted',
+        effects: expect.arrayContaining([
+          expect.objectContaining({ kind: 'terminal', role: 'agent', action: 'created' }),
+          expect.objectContaining({ kind: 'dispatch_input', state: 'accepted' })
+        ])
+      }
+    })
+    if (!response.ok) {
+      throw new Error(response.error.message)
+    }
+    const dispatchId = (response.result as { dispatchId: string }).dispatchId
+    const startup = vi.mocked(harness.runtime.createManagedWorktree).mock.calls[0]?.[0]
+    const startupPrompt = await startup?.startupPromptFactory?.('repo::created')
+    expect(startup).toMatchObject({
+      startupAgent: 'codex',
+      startupLaunchToken: expect.any(String),
+      startupPreAllocatedHandle: harness.handle,
+      lineage: { parentWorktree: 'repo::parent', noParent: false }
+    })
+    expect(startupPrompt).toMatch(/--dispatch-capability dcap_[A-Za-z0-9_-]+/)
+    expect(harness.runtime.sendTerminalAgentPrompt).not.toHaveBeenCalled()
+    expect(waitForTerminal).toHaveBeenCalledTimes(1)
+    expect(waitForTerminal).toHaveBeenCalledWith(harness.handle, {
+      condition: 'tui-idle',
+      timeoutMs: 60_000
+    })
+    expect(harness.writes.filter((data) => data === '\r')).toHaveLength(0)
+    expect(harness.db.getDispatchContextById(dispatchId)).toMatchObject({
+      launch_token_hash: createHash('sha256')
+        .update(startup?.startupLaunchToken as string)
+        .digest('hex'),
+      assignee_pane_key: WORKER_PANE_KEY,
+      process_incarnation: `runtime_test:${harness.handle}:1`
+    })
+    expect(harness.db.getWorkerTerminalResourceByOwner(dispatchId)).toMatchObject({
+      ownership_state: 'owned',
+      terminal_handle: harness.handle,
+      pane_key: WORKER_PANE_KEY,
+      process_incarnation: `runtime_test:${harness.handle}:1`
     })
   })
 })
