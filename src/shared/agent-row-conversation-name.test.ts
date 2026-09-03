@@ -4,6 +4,7 @@ import {
   type ConversationNameTab
 } from './agent-row-conversation-name'
 
+/** A conversation-name tab with every source empty unless a test overrides it. */
 function makeTab(overrides: Partial<ConversationNameTab> = {}): ConversationNameTab {
   return { customTitle: null, title: '', ...overrides }
 }
@@ -29,6 +30,44 @@ describe('getAgentRowConversationName', () => {
     expect(getAgentRowConversationName(tab, 'opencode', false)).toBe(
       'OC | build the release pipeline'
     )
+  })
+
+  it('uses the AI Vault session title like the tab bar does', () => {
+    // Why: Codex `/rename` names the session in session_index.jsonl; the tab
+    // bar already surfaces that name via aiVaultTitle, so the sidebar row must
+    // agree instead of falling back to the generated title.
+    const tab = makeTab({
+      aiVaultTitle: { agent: 'codex', sessionId: 'sess-1', title: 'orca sidebar rename' },
+      generatedTitle: 'Fix intake flow',
+      title: 'Codex ready'
+    })
+    expect(getAgentRowConversationName(tab, 'codex', true, undefined, 'sess-1')).toBe(
+      'orca sidebar rename'
+    )
+  })
+
+  it('keeps tab-owned renames above the AI Vault session title', () => {
+    const tab = makeTab({
+      customTitle: 'Patient sync spike',
+      aiVaultTitle: { agent: 'codex', sessionId: 'sess-1', title: 'orca sidebar rename' }
+    })
+    expect(getAgentRowConversationName(tab, 'codex', true, undefined, 'sess-1')).toBe(
+      'Patient sync spike'
+    )
+  })
+
+  it('lends an AI Vault title only to the row that owns the session', () => {
+    const tab = makeTab({
+      aiVaultTitle: { agent: 'codex', sessionId: 'sess-1', title: 'orca sidebar rename' },
+      generatedTitle: 'Fix intake flow'
+    })
+    // A split sibling with a different session keeps its own labels.
+    expect(getAgentRowConversationName(tab, 'codex', true, null, 'sess-2')).toBe('Fix intake flow')
+    // A row without a session may only borrow the title on a single-pane tab.
+    expect(getAgentRowConversationName(tab, 'codex', true, undefined)).toBe('orca sidebar rename')
+    expect(getAgentRowConversationName(tab, 'codex', true, null)).toBe('Fix intake flow')
+    // And only when the agent identity agrees.
+    expect(getAgentRowConversationName(tab, 'claude', true, undefined)).toBe('Fix intake flow')
   })
 
   it('uses the generated title only when generated titles are enabled', () => {

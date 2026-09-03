@@ -49,7 +49,12 @@ export function rowConversationName(
     parsePaneKey(row.paneKey)?.leafId
   )
   return (
-    getAgentRowConversationName(row.tab, row.agentType, generatedTitlesEnabled, paneLiveTitle) ??
-    undefined
+    getAgentRowConversationName(
+      row.tab,
+      row.agentType,
+      generatedTitlesEnabled,
+      paneLiveTitle,
+      row.entry.providerSession?.id ?? null
+    ) ?? undefined
   )
 }
