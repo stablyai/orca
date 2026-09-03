@@ -1,11 +1,15 @@
 import * as path from 'node:path'
 import type { RemoveWorktreeResult } from '../shared/worktree/create-types'
-import { assertWorktreeUnlockedForRemoval } from '../shared/worktree/removal'
+import {
+  assertWorktreeRowPresentForRemoval,
+  assertWorktreeUnlockedForRemoval
+} from '../shared/worktree/removal'
 import { isSubmoduleWorktreeRemovalRefusal } from '../shared/worktree/submodule-removal'
+import { assertAuthoritativeWorktreeCatalog } from '../shared/worktree/worktree-catalog-availability'
 import { deleteAlreadyMergedRelayBranchAfterSafeDeleteFailure } from './git-handler-branch-cleanup'
 import type { GitExec } from './git-handler-ops'
 import type { GitCapabilityCache } from '../shared/git-capability-cache'
-import { readRelayWorktreeList } from './git-handler-worktree-list'
+import { readRelayWorktreeList, type RelayWorktreeInfo } from './git-handler-worktree-list'
 
 function getErrorText(error: unknown): string {
   if (typeof error === 'object' && error !== null) {
@@ -75,12 +79,9 @@ async function listRelayWorktreesForRemoval(
   git: GitExec,
   repoPath: string,
   capabilities: GitCapabilityCache
-) {
-  try {
-    return await readRelayWorktreeList(git, repoPath, capabilities)
-  } catch {
-    return []
-  }
+): Promise<RelayWorktreeInfo[]> {
+  const worktrees = await readRelayWorktreeList(git, repoPath, capabilities)
+  return assertAuthoritativeWorktreeCatalog<RelayWorktreeInfo>(worktrees, repoPath)
 }
 
 async function deleteRelayBranchAfterWorktreeRemoval(
@@ -147,8 +148,9 @@ export async function removeWorktreeOp(
   const removedWorktree = worktreesBeforeRemoval.find((worktree) =>
     areRelayWorktreePathsEqual(worktree.path, worktreePath)
   )
-  const branchName = normalizeLocalBranchRef(removedWorktree?.branch ?? '')
-  const branchHead = removedWorktree?.head ?? ''
+  assertWorktreeRowPresentForRemoval(removedWorktree)
+  const branchName = normalizeLocalBranchRef(removedWorktree.branch ?? '')
+  const branchHead = removedWorktree.head ?? ''
 
   assertWorktreeUnlockedForRemoval(removedWorktree)
 

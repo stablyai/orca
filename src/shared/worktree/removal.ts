@@ -55,6 +55,14 @@ export function createLockedWorktreeRemovalError(lockReason?: string): Error {
   )
 }
 
+export function assertWorktreeRowPresentForRemoval<T>(
+  worktree: T | undefined
+): asserts worktree is T {
+  if (worktree == null) {
+    throw new Error('Worktree is not registered in the Git catalog.')
+  }
+}
+
 export function assertWorktreeUnlockedForRemoval(
   worktree: Pick<GitWorktreeInfo, 'locked' | 'lockReason'> | undefined
 ): void {
