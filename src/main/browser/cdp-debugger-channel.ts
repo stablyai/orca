@@ -34,9 +34,9 @@ export class CdpDebuggerChannel {
     }
     this.attached = true
 
-    // Why: attaching the CDP debugger sets navigator.webdriver = true and
-    // exposes other automation signals that Cloudflare Turnstile checks.
-    // Inject before any page loads so challenges succeed.
+    // Why: Electron's guest diverges from Chrome on a few APIs Cloudflare Turnstile reads.
+    // Inject before any page loads so challenges succeed. Attaching the debugger is not itself
+    // one of those divergences — it leaves navigator.webdriver false, which is what Chrome reports.
     try {
       await this.webContents.debugger.sendCommand('Page.enable', {})
       await this.webContents.debugger.sendCommand('Page.addScriptToEvaluateOnNewDocument', {

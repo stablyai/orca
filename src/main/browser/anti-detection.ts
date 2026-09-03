@@ -1,21 +1,10 @@
-// Why: Cloudflare Turnstile and similar bot detectors probe multiple browser
-// APIs beyond navigator.webdriver. This script runs via
-// Page.addScriptToEvaluateOnNewDocument before any page JS to mask automation
-// signals that CDP debugger attachment and Electron's webview expose.
+// Why: Electron's browser guest diverges from Chrome on a few APIs that bot detectors read,
+// and this script closes those specific gaps. It runs via Page.addScriptToEvaluateOnNewDocument
+// before any page JS. Every override here has to earn its place against a measurement in
+// anti-detection-automation-surface.electron.test.ts: what Electron already reports matches Chrome
+// for navigator.webdriver, plugins and languages, so nothing masks those. Defining a property the
+// engine keeps on a prototype moves it onto the instance, which is itself what detectors look for.
 export const ANTI_DETECTION_SCRIPT = `(function() {
-  Object.defineProperty(navigator, 'webdriver', { get: () => false });
-  // Why: Electron webviews expose an empty plugins array. Real Chrome always
-  // has at least a few default plugins (PDF Viewer, etc.). An empty array is
-  // a strong automation signal.
-  if (navigator.plugins.length === 0) {
-    Object.defineProperty(navigator, 'plugins', {
-      get: () => [
-        { name: 'Chrome PDF Plugin', filename: 'internal-pdf-viewer' },
-        { name: 'Chrome PDF Viewer', filename: 'mhjfbmdgcfjbbpaeojofohoefgiehjai' },
-        { name: 'Native Client', filename: 'internal-nacl-plugin' }
-      ]
-    });
-  }
   // Why: auth hosts present Firefox, where Electron's native window.chrome is an identity mismatch.
   if (navigator.userAgent.includes('Firefox/')) {
     try {
@@ -151,11 +140,4 @@ export const ANTI_DETECTION_SCRIPT = `(function() {
       };
     }
   } catch {}
-  // Why: Electron webviews may have an empty languages array. Real Chrome
-  // always has at least one entry. An empty array is an automation signal.
-  if (!navigator.languages || navigator.languages.length === 0) {
-    Object.defineProperty(navigator, 'languages', {
-      get: () => ['en-US', 'en']
-    });
-  }
 })()`
