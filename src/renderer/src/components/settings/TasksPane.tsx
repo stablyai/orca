@@ -9,11 +9,12 @@ import {
 } from '../../../../shared/task-providers'
 import { JiraIcon } from '@/components/icons/JiraIcon'
 import { LinearIcon } from '@/components/icons/LinearIcon'
+import { SentryIcon } from '@/components/icons/SentryIcon'
 import { Button } from '@/components/ui/button'
 import { useAppStore } from '@/store'
 import { SearchableSetting } from './SearchableSetting'
 import { SettingsSubsectionHeader } from './SettingsFormControls'
-import { CodeHostSetupSteps, JiraSetupSteps } from './TaskSourceSimpleSetup'
+import { CodeHostSetupSteps, JiraSetupSteps, SentrySetupSteps } from './TaskSourceSimpleSetup'
 import { TaskSourceLinearSetup } from './TaskSourceLinearSetup'
 import { TaskSourceProviderCard } from './TaskSourceProviderCard'
 import {
@@ -89,6 +90,11 @@ const PROVIDER_META: Record<
       )
     },
     Icon: ({ className }) => <JiraIcon className={className} />
+  },
+  sentry: {
+    label: 'Sentry',
+    description: 'Connect Sentry Cloud or self-hosted Sentry and show issues in Tasks.',
+    Icon: ({ className }) => <SentryIcon className={className} />
   }
 }
 
@@ -226,6 +232,15 @@ export function TasksPane({ settings, updateSettings }: TasksPaneProps): React.J
                     onToggleVisible={() => toggleProvider('jira')}
                     onConnected={() => void checkJiraConnection()}
                     onOpenIntegrations={() => openIntegrations(JIRA_INTEGRATION_SECTION_ID)}
+                  />
+                ) : provider === 'sentry' ? (
+                  <SentrySetupSteps
+                    connected={readiness.connected}
+                    checking={readiness.checking}
+                    visible={visible}
+                    canHide={canHide}
+                    settings={settings}
+                    onToggleVisible={() => toggleProvider('sentry')}
                   />
                 ) : (
                   <CodeHostSetupSteps

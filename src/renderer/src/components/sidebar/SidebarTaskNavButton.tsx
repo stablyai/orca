@@ -2,6 +2,7 @@ import React from 'react'
 import { EyeOff, Github, Gitlab, List } from 'lucide-react'
 import { JiraIcon } from '@/components/icons/JiraIcon'
 import { LinearIcon } from '@/components/icons/LinearIcon'
+import { SentryIcon } from '@/components/icons/SentryIcon'
 import {
   ContextMenu,
   ContextMenuContent,
@@ -226,6 +227,14 @@ export function SidebarTaskNavButton(): React.JSX.Element | null {
                 onOpen={() => openTaskPage({ taskSource: 'jira' })}
               >
                 <JiraIcon className="size-3.5" />
+              </TaskProviderShortcut>
+            ) : null}
+            {visibleTaskProviders.includes('sentry') ? (
+              <TaskProviderShortcut
+                label="Open Sentry issues"
+                onOpen={() => openTaskPage({ taskSource: 'sentry' })}
+              >
+                <SentryIcon className="size-3.5" />
               </TaskProviderShortcut>
             ) : null}
           </span>

@@ -170,6 +170,10 @@ export function getLinkedWorkItemPromptContext(
       ? { linkedUrls: [], linkedContextBlocks: [linearBlock] }
       : { linkedUrls: [], linkedContextBlocks: [] }
   }
+  const contained = buildContainedLinkedContextBlock(linkedWorkItem?.linkedContext)
+  if (contained) {
+    return { linkedUrls: [], linkedContextBlocks: [contained] }
+  }
   const linkedUrl = linkedWorkItem?.url?.trim()
   return linkedUrl
     ? { linkedUrls: [linkedUrl], linkedContextBlocks: [] }
@@ -195,6 +199,10 @@ export function getLaunchableWorkItemDraftContent(args: {
       url: args.url
     })
     return linearBlock ? formatDraftContextBlock(linearBlock) : ''
+  }
+  const contained = buildContainedLinkedContextBlock(args.linkedContext)
+  if (contained) {
+    return formatDraftContextBlock(contained)
   }
   return args.url
 }
