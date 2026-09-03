@@ -28,6 +28,18 @@ export function getRepoIdFromMobileWorktreeId(id: string): string {
   return separatorIdx === -1 ? id : id.slice(0, separatorIdx)
 }
 
+export const MOBILE_FOLDER_WORKSPACE_ROUTE_PREFIX = 'folder:'
+
+/** The folder workspace id behind a `folder:<id>` route, or null for any other route.
+ *  Folder workspace routes name no repo, so callers must branch on this before
+ *  resolving a worktree id through `repo.list`. */
+export function getFolderWorkspaceIdFromMobileWorktreeId(id: string): string | null {
+  if (!id.startsWith(MOBILE_FOLDER_WORKSPACE_ROUTE_PREFIX)) {
+    return null
+  }
+  return id.slice(MOBILE_FOLDER_WORKSPACE_ROUTE_PREFIX.length) || null
+}
+
 export function isGestureMouseTrackingMode(
   mode: TerminalModes['mouseTrackingMode'] | undefined
 ): boolean {
