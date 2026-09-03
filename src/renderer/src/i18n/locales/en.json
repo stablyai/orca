@@ -117,6 +117,7 @@
         "system": "System",
         "english": "English",
         "chinese": "中文（简体）",
+        "chineseTraditional": "中文（繁體）",
         "korean": "한국어",
         "japanese": "日本語",
         "spanish": "Español"

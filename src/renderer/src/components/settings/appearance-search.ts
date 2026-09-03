@@ -47,6 +47,7 @@ export const getLanguageEntries = createLocalizedCatalog((): SettingsSearchEntry
       ...translateSearchKeyword('settings.appearance.language.system', 'System'),
       ...translateSearchKeyword('settings.appearance.language.english', 'English'),
       ...translateSearchKeyword('settings.appearance.language.chinese', '中文（简体）'),
+      ...translateSearchKeyword('settings.appearance.language.chineseTraditional', '中文（繁體）'),
       ...translateSearchKeyword('settings.appearance.language.korean', '한국어'),
       ...translateSearchKeyword('settings.appearance.language.japanese', '日本語'),
       ...translateSearchKeyword('settings.appearance.language.spanish', 'Español'),
@@ -55,6 +56,8 @@ export const getLanguageEntries = createLocalizedCatalog((): SettingsSearchEntry
       // switch to) their language whatever the current interface locale is.
       '语言', // Chinese (Simplified)
       '語言', // Chinese (Traditional)
+      '繁體', // Traditional Chinese script name
+      '简体', // Simplified Chinese script name
       '언어', // Korean
       '言語', // Japanese
       'Idioma', // Spanish
