@@ -5,6 +5,7 @@ import {
   SYNTHETIC_AGENT_TITLE_PROFILES,
   type SyntheticAgentTitleProfile
 } from './synthetic-agent-title'
+import { STRONG_PERMISSION_KEYWORDS_RE } from './agent-title-core'
 import { isLegacyPiCompatibleTitle } from './pi-compatible-synthetic-title'
 import { getWrapperTitleSegments } from './terminal-title-wrapper-segments'
 
@@ -96,9 +97,7 @@ function hasPermissionSuffix(title: string, sourceProfile: SyntheticAgentTitlePr
   const normalizedTitle = title.trim().toLowerCase()
   return (
     normalizedTitle === sourceProfile.permissionLabel.toLowerCase() ||
-    normalizedTitle.includes('action required') ||
-    normalizedTitle.includes('permission') ||
-    normalizedTitle.includes('waiting')
+    STRONG_PERMISSION_KEYWORDS_RE.test(title)
   )
 }
 
