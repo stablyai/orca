@@ -237,6 +237,7 @@ describe('gitlab client — MR operations', () => {
 
       const mr = await getMergeRequestForBranchOrThrow('/repo', 'flaky')
       expect(mr).toMatchObject({ number: 6, pipelineStatus: 'neutral' })
+      expect(glabExecFileAsyncMock).toHaveBeenCalledTimes(2)
     })
 
     it('strips refs/heads/ prefix from the branch arg', async () => {

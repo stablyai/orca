@@ -105,6 +105,7 @@ export async function getMergeRequestForBranch(
   }
   await acquire()
   try {
+    /** Fetch one MR by iid with merge-status recheck and pipeline status rolled up. */
     const fetchByIid = async (iid: number): Promise<MRInfo> => {
       const { stdout } = await glabExecFileAsync(
         [
@@ -156,7 +157,8 @@ export async function getMergeRequestForBranch(
             try {
               info = await fetchByIid(info.number)
             } catch {
-              // ponytail: list row stays authoritative; pipeline just reads neutral this poll
+              // Why: the list row already proves the MR exists; a transient re-fetch failure
+              // must not turn it into "unavailable", so the pipeline just reads neutral this poll.
             }
           }
           return info
