@@ -85,19 +85,31 @@ do
     [ -x "$candidate" ] && printf '%s\\n' "$candidate"
   done
 done
+fnm_dir=\${FNM_DIR:-"$HOME/.fnm"}
+mise_data_dir=\${MISE_DATA_DIR:-}
+if [ -z "$mise_data_dir" ]; then
+  mise_data_dir=\${XDG_DATA_HOME:-"$HOME/.local/share"}/mise
+fi
+mise_installs_dir=\${MISE_INSTALLS_DIR:-"$mise_data_dir/installs"}
+mise_shims_dir=\${MISE_SHIMS_DIR:-"$mise_data_dir/shims"}
+asdf_data_dir=\${ASDF_DATA_DIR:-"$HOME/.asdf"}
+volta_home=\${VOLTA_HOME:-"$HOME/.volta"}
+n_prefix=\${N_PREFIX:-/usr/local}
+n_cache_prefix=\${N_CACHE_PREFIX:-"$n_prefix"}
 for candidate in \\
   /usr/local/bin/node \\
   /opt/homebrew/bin/node \\
   "$HOME/.local/bin/node" \\
-  "$HOME/.fnm/aliases/default/bin/node" \\
-  "$HOME/.fnm/node-versions"/*/installation/bin/node \\
+  "$fnm_dir/aliases/default/bin/node" \\
+  "$fnm_dir/node-versions"/*/installation/bin/node \\
   "$HOME/.local/share/fnm/node-versions"/*/installation/bin/node \\
-  "$HOME/.local/share/mise/shims/node" \\
-  "$HOME/.local/share/mise/installs/node"/*/bin/node \\
-  "$HOME/.asdf/shims/node" \\
-  "$HOME/.asdf/installs/nodejs"/*/bin/node \\
-  "$HOME/.volta/bin/node" \\
-  /usr/local/n/versions/node/*/bin/node
+  "$mise_shims_dir/node" \\
+  "$mise_installs_dir/node"/*/bin/node \\
+  "$asdf_data_dir/shims/node" \\
+  "$asdf_data_dir/installs/nodejs"/*/bin/node \\
+  "$volta_home/bin/node" \\
+  "$n_prefix/bin/node" \\
+  "$n_cache_prefix/n/versions/node"/*/bin/node
 do
   [ -x "$candidate" ] && printf '%s\\n' "$candidate"
 done
