@@ -21,6 +21,8 @@ import {
   focusSplitWebRuntimeTerminalPane,
   type WebRuntimeSplitSource
 } from './web-runtime-split-focus'
+import { beginWebSessionCustomTitleIntent } from './web-session-custom-title-intent'
+import type { WebRuntimeTabPropsMutation } from './web-runtime-tab-props-mutation'
 
 const pendingWebRuntimeSplitMirrorTelemetry = new Map<string, Set<string>>()
 const WEB_RUNTIME_SPLIT_MIRROR_SUPPRESSION_TTL_MS = 30_000
@@ -191,7 +193,6 @@ export function closeWebRuntimeTerminal(ptyId: string | null | undefined): boole
   return true
 }
 
-// Why: pane geometry is host-authoritative for remote tabs; local-only changes revert on next snapshot, so push to host.
 export async function updateWebRuntimePaneLayout(args: {
   worktreeId: string
   tabId: string
@@ -231,21 +232,22 @@ export async function updateWebRuntimePaneLayout(args: {
   }
 }
 
-// Why: tab color/pin are host-authoritative; mirror the change so it persists (undefined field = leave as-is on host).
-export function setWebRuntimeTabProps(args: {
-  worktreeId: string
-  tabId: string
-  color?: string | null
-  isPinned?: boolean
-  viewMode?: 'terminal' | 'chat'
-}): boolean {
+export function setWebRuntimeTabProps(args: WebRuntimeTabPropsMutation): boolean {
   const environmentId =
     getRuntimeEnvironmentIdForWorktree(useAppStore.getState(), args.worktreeId) ?? null
   if (!environmentId || !isWebRuntimeSessionActive(environmentId)) {
     return false
   }
   const callEnvironment = captureRuntimeEnvironmentCall(environmentId)
+  const intentOwner = captureWebSessionIntentOwner(environmentId)
   const state = useAppStore.getState()
+  const customTitleIntent = beginWebSessionCustomTitleIntent({
+    owner: intentOwner,
+    worktreeId: args.worktreeId,
+    tabId: args.tabId,
+    previousTitle: args.previousCustomTitle ?? null,
+    intendedTitle: args.customTitle
+  })
   void import('./web-session-tabs-sync')
     .then(({ resolveHostSessionTabIdForWebSessionTab }) => {
       const hostTabId =
@@ -254,12 +256,14 @@ export function setWebRuntimeTabProps(args: {
           worktreeId: args.worktreeId,
           tabId: args.tabId
         }) ?? (isWebTerminalSurfaceTabId(args.tabId) ? toHostSessionTabId(args.tabId) : args.tabId)
+      customTitleIntent?.retarget(hostTabId)
       return callEnvironment({
         method: 'session.tabs.setTabProps',
         params: {
           worktree: toRuntimeWorktreeSelector(args.worktreeId),
           tabId: hostTabId,
           ...(args.color !== undefined ? { color: args.color } : {}),
+          ...(args.customTitle !== undefined ? { customTitle: args.customTitle } : {}),
           ...(args.isPinned !== undefined ? { isPinned: args.isPinned } : {}),
           ...(args.viewMode !== undefined ? { viewMode: args.viewMode } : {})
         },
@@ -270,6 +274,7 @@ export function setWebRuntimeTabProps(args: {
       unwrapRuntimeRpcResult(response as RuntimeRpcResponse<{ updated: true }>)
     })
     .catch((error) => {
+      customTitleIntent?.cancel()
       console.warn(
         '[web-runtime-session] failed to set tab props:',
         error instanceof Error ? error.message : String(error)

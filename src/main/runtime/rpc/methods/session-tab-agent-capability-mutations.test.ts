@@ -75,6 +75,22 @@ describe('session tab structured capability mutations', () => {
       expect(fixture.calls[method.runtimeMethod]).not.toHaveBeenCalled()
     })
   }
+
+  it('forwards customTitle through the existing setTabProps mutation', async () => {
+    const fixture = createFixture([STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY])
+
+    const response = await fixture.dispatch('session.tabs.setTabProps', {
+      worktree: 'id:wt-1',
+      tabId: 'codex-session',
+      customTitle: 'Shared build'
+    })
+
+    expect(response.ok).toBe(true)
+    expect(fixture.calls.setMobileSessionTabProps).toHaveBeenCalledWith('id:wt-1', {
+      tabId: 'codex-session',
+      customTitle: 'Shared build'
+    })
+  })
 })
 
 function createFixture(capabilities: RuntimeCapability[]) {

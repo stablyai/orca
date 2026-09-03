@@ -15,7 +15,12 @@ export class OrcaRuntimeWithPersistHeadlessSessionTabProps extends OrcaRuntimeWi
   protected persistHeadlessSessionTabProps(
     worktreeId: string,
     tabId: string,
-    props: { color?: string | null; isPinned?: boolean; viewMode?: 'terminal' | 'chat' }
+    props: {
+      color?: string | null
+      customTitle?: string | null
+      isPinned?: boolean
+      viewMode?: 'terminal' | 'chat'
+    }
   ): void {
     const session = this.getWorkspaceSessionForWorktree(worktreeId)
     if (!session || !this.store?.setWorkspaceSession) {
@@ -33,6 +38,7 @@ export class OrcaRuntimeWithPersistHeadlessSessionTabProps extends OrcaRuntimeWi
             ? {
                 ...tab,
                 ...(props.color !== undefined ? { color: props.color } : {}),
+                ...(props.customTitle !== undefined ? { customTitle: props.customTitle } : {}),
                 ...(props.isPinned !== undefined ? { isPinned: props.isPinned } : {}),
                 ...(props.viewMode !== undefined ? { viewMode: props.viewMode } : {})
               }
@@ -51,6 +57,9 @@ export class OrcaRuntimeWithPersistHeadlessSessionTabProps extends OrcaRuntimeWi
             ? {
                 ...tab,
                 ...(props.color !== undefined ? { color: props.color } : {}),
+                ...(props.customTitle !== undefined && tab.contentType === 'terminal'
+                  ? { customLabel: props.customTitle }
+                  : {}),
                 ...(props.isPinned !== undefined ? { isPinned: props.isPinned } : {})
               }
             : tab
@@ -67,12 +76,21 @@ export class OrcaRuntimeWithPersistHeadlessSessionTabProps extends OrcaRuntimeWi
   protected applyHeadlessSessionTabPropsToSnapshot(
     worktreeId: string,
     tabId: string,
-    props: { color?: string | null; isPinned?: boolean; viewMode?: 'terminal' | 'chat' }
+    props: {
+      color?: string | null
+      customTitle?: string | null
+      isPinned?: boolean
+      viewMode?: 'terminal' | 'chat'
+    }
   ): void {
     const snapshot = this.mobileSessionTabsByWorktree.get(worktreeId)
     if (!snapshot) {
       return
     }
+    const persistedTitle =
+      props.customTitle !== undefined
+        ? this.resolvePersistedHeadlessTerminalTitle(worktreeId, tabId)
+        : null
     let changed = false
     const tabs = snapshot.tabs.map((tab) => {
       if (this.getMobileSessionTopLevelTabId(tab) !== tabId) {
@@ -82,6 +100,12 @@ export class OrcaRuntimeWithPersistHeadlessSessionTabProps extends OrcaRuntimeWi
       return {
         ...tab,
         ...(props.color !== undefined ? { color: props.color } : {}),
+        ...(props.customTitle !== undefined && tab.type === 'terminal'
+          ? {
+              customTitle: props.customTitle,
+              ...(persistedTitle ? { title: persistedTitle } : {})
+            }
+          : {}),
         ...(props.isPinned !== undefined ? { isPinned: props.isPinned } : {}),
         ...(props.viewMode !== undefined ? { viewMode: props.viewMode } : {})
       }
@@ -97,6 +121,25 @@ export class OrcaRuntimeWithPersistHeadlessSessionTabProps extends OrcaRuntimeWi
     }
     this.mobileSessionTabsByWorktree.set(worktreeId, nextSnapshot)
     this.emitMobileSessionTabsSnapshot(nextSnapshot)
+  }
+
+  private resolvePersistedHeadlessTerminalTitle(worktreeId: string, tabId: string): string | null {
+    const tabs = this.getWorkspaceSessionForWorktree(worktreeId)?.tabsByWorktree[worktreeId]
+    const sortedTabs = tabs
+      ? [...tabs].sort((a, b) => a.sortOrder - b.sortOrder || a.createdAt - b.createdAt)
+      : undefined
+    const index = sortedTabs?.findIndex((tab) => tab.id === tabId) ?? -1
+    const tab = index >= 0 ? sortedTabs?.[index] : undefined
+    if (!tab) {
+      return null
+    }
+    return (
+      tab.customTitle?.trim() ||
+      tab.generatedTitle?.trim() ||
+      tab.title?.trim() ||
+      tab.defaultTitle?.trim() ||
+      `Terminal ${index + 1}`
+    )
   }
 
   protected getMobileSessionTopLevelTabId(tab: RuntimeMobileSessionSnapshotTab): string {

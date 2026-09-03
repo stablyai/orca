@@ -199,14 +199,14 @@ export class OrcaRuntimeWithCloseHeadlessMobileTerminalTab extends OrcaRuntimeWi
     return { updated: true }
   }
 
-  // Why: tab color/pin are host-authoritative for remote-server tabs but had no
-  // push path, so pinning or coloring a tab reverted on the next snapshot and
-  // was never persisted. Persist to the workspace session + live snapshot.
+  // Why: remote-server tab props are host-authoritative; persist client writes
+  // to the workspace session and live snapshot so reconnects cannot revert them.
   async setMobileSessionTabProps(
     worktreeSelector: string,
     args: {
       tabId: string
       color?: string | null
+      customTitle?: string | null
       isPinned?: boolean
       viewMode?: 'terminal' | 'chat'
     }

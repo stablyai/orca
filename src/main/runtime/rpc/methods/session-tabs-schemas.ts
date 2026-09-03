@@ -5,6 +5,7 @@ import type { TuiAgent } from '../../../../shared/tui-agent'
 import { sleepingAgentLaunchConfigSchema } from '../../../../shared/workspace-session-sleeping-agents'
 import { RUNTIME_NAVIGATION_TARGETS } from '../../../../shared/runtime-navigation'
 import { TAB_ACTIVATION_INTENTS } from '../../../../shared/tab-activation-intent'
+import { CUSTOM_TAB_TITLE_MAX_LENGTH } from '../../../../shared/custom-tab-title'
 import { OptionalBoolean } from '../schemas'
 
 export const WorktreeTabSelector = z.object({
@@ -126,6 +127,8 @@ export const SetTabProps = WorktreeTabSelector.extend({
     .pipe(z.string().min(1, 'Missing tab id')),
   // undefined = leave unchanged; null = clear color / unset.
   color: z.string().max(64).nullable().optional(),
+  // undefined = leave unchanged; null = clear the user-authored title.
+  customTitle: z.string().max(CUSTOM_TAB_TITLE_MAX_LENGTH).nullable().optional(),
   isPinned: z.boolean().optional(),
   // undefined = leave unchanged; no "clear" semantic (absence means default 'terminal').
   viewMode: z.enum(['terminal', 'chat']).optional()

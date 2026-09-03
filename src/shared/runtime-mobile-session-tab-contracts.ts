@@ -9,6 +9,7 @@ export type RuntimeMobileSessionTerminalTab = {
   type: 'terminal'
   id: string
   title: string
+  customTitle?: string | null
   quickCommandLabel?: string | null
   parentTabId: string
   leafId: string

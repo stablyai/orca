@@ -106,6 +106,7 @@ export const SESSION_TAB_MUTATION_METHODS: RpcAnyMethod[] = [
       return runtime.setMobileSessionTabProps(params.worktree, {
         tabId: params.tabId,
         ...(params.color !== undefined ? { color: params.color } : {}),
+        ...(params.customTitle !== undefined ? { customTitle: params.customTitle } : {}),
         ...(params.isPinned !== undefined ? { isPinned: params.isPinned } : {}),
         ...(params.viewMode !== undefined ? { viewMode: params.viewMode } : {})
       })

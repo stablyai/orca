@@ -5,6 +5,7 @@ import { resolvePaneAgentOwnerRecord } from '../../../../shared/pane-agent-owner
 import { normalizeCompatibleAgentTitleForOwner } from '../../../../shared/agent-title-owner'
 import { getRemoteRuntimePtyEnvironmentId, toRemoteRuntimePtyId } from '../runtime-terminal-stream'
 import { toWebTerminalSurfaceTabId } from '../web-runtime-session'
+import { reconcileWebSessionCustomTitleIntent } from '../web-session-custom-title-intent'
 import type { MirroredTerminalTab, TerminalSurface, ReadyTerminalSurface } from './state'
 import { chooseRemoteTerminalLayout, isTerminalSurfaceTab } from './terminal-surfaces'
 
@@ -160,6 +161,17 @@ export function buildMirroredTerminalTabs(
     // Why: viewMode echoes back through host snapshots, so prefer the client's record during the echo window and adopt the host value only without a prior tab.
     const hostViewModeSurface = surfaces.find((surface) => surface.viewMode)
     const viewMode = existing ? existing.viewMode : hostViewModeSurface?.viewMode
+    // Missing means an older host; present null/string is the new host's authoritative value.
+    const hostCustomTitleSurface = surfaces.find((surface) => surface.customTitle !== undefined)
+    const customTitle = hostCustomTitleSurface
+      ? reconcileWebSessionCustomTitleIntent({
+          owner: { environmentId },
+          worktreeId: snapshot.worktree,
+          hostTabId: parentTabId,
+          hostTitle: hostCustomTitleSurface.customTitle ?? null,
+          now
+        })
+      : (existing?.customTitle ?? null)
     return {
       tab: {
         id: localTabId,
@@ -173,7 +185,7 @@ export function buildMirroredTerminalTabs(
         ...(existing?.aiVaultTitle ? { aiVaultTitle: existing.aiVaultTitle } : {}),
         ...(quickCommandLabel ? { quickCommandLabel } : {}),
         ...(startupCwd ? { startupCwd } : {}),
-        customTitle: existing?.customTitle ?? null,
+        customTitle,
         color,
         isPinned,
         ...(viewMode ? { viewMode } : {}),

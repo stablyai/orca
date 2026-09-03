@@ -1,0 +1,1 @@
+export const CUSTOM_TAB_TITLE_MAX_LENGTH = 256
