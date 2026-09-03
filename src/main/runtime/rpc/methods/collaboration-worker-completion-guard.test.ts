@@ -1,3 +1,6 @@
+import { mkdtempSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { RpcContext } from '../core'
 import { OrcaRuntimeService } from '../../orca-runtime'
@@ -161,5 +164,67 @@ describe('collaboration worker completion guard', () => {
     expect(result.lifecycle).toMatchObject({ action: 'failed' })
     expect(fixture.db.getTask(fixture.producerTaskId)?.status).toBe('failed')
     expect(fixture.db.getDispatchContextById(fixture.dispatchId)?.status).toBe('failed')
+  })
+
+  it('keeps required publication enforcement after reopening the orchestration database in a new runtime', async () => {
+    const dbPath = join(
+      mkdtempSync(join(tmpdir(), 'orca-collaboration-restart-')),
+      'orchestration.db'
+    )
+    db = new OrchestrationDb(dbPath)
+    runtime = new OrcaRuntimeService()
+    runtime.setOrchestrationDb(db)
+    vi.spyOn(runtime, 'getTerminalPaneKey').mockImplementation((handle) =>
+      handle === 'term_producer' ? PRODUCER_PANE : null
+    )
+
+    const run = db.createRun({
+      objective: 'restart-safe collaboration completion guard',
+      coordinatorHandle: 'term_coord',
+      coordinatorPaneKey: COORDINATOR_PANE
+    })
+    const producer = db.createTask({ spec: 'producer', runId: run.id })
+    const subscriber = db.createTask({ spec: 'subscriber', runId: run.id })
+    const dispatch = createRootDispatch(db, producer.id, 'term_producer', PRODUCER_PANE)
+    registerCollaborationRuntimeTopology(
+      runtime,
+      run.id,
+      createCollaborationTopology([
+        { taskId: producer.id, publishesTo: ['/required'], requiredPublishesTo: ['/required'] },
+        {
+          taskId: subscriber.id,
+          subscribesTo: ['/required'],
+          admission: { acceptedTypes: ['result'], minPriority: 'normal' }
+        }
+      ])
+    )
+
+    db.close()
+    vi.restoreAllMocks()
+    db = new OrchestrationDb(dbPath)
+    runtime = new OrcaRuntimeService()
+    runtime.setOrchestrationDb(db)
+    vi.spyOn(runtime, 'getTerminalPaneKey').mockImplementation((handle) =>
+      handle === 'term_producer' ? PRODUCER_PANE : null
+    )
+
+    const result = await sendWorkerDone(
+      {
+        db,
+        runtime,
+        runId: run.id,
+        producerTaskId: producer.id,
+        subscriberTaskId: subscriber.id,
+        dispatchId: dispatch.id
+      },
+      'succeeded'
+    )
+
+    expect(result.lifecycle).toMatchObject({
+      action: 'rejected',
+      code: 'collaboration_publish_incomplete'
+    })
+    expect(db.getTask(producer.id)?.status).toBe('dispatched')
+    expect(db.getDispatchContextById(dispatch.id)?.status).toBe('dispatched')
   })
 })
