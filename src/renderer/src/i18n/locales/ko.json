@@ -9297,7 +9297,7 @@
           "off": "꺼짐"
         },
         "RepositoryGitHubAccountSection": {
-          "unsupported": "이 런타임의 GitHub CLI는 계정 바인딩에 비해 너무 오래되었습니다(gh ≥ 2.40 필요).",
+          "unsupported": "이 런타임의 GitHub CLI는 계정 바인딩을 지원하기에는 너무 오래되었습니다(gh ≥ 2.40 필요).",
           "capabilityUnknown": "이 런타임의 GitHub CLI가 계정 바인딩을 지원하는지 확인할 수 없습니다. 다시 시도하세요.",
           "envToken": "환경 토큰 계정은 바인딩할 수 없습니다. 키링 로그인을 사용하세요.",
           "invalidBinding": "해당 GitHub 계정 바인딩이 유효하지 않습니다.",
