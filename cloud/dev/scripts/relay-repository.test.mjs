@@ -5,6 +5,7 @@ import { fileURLToPath } from 'node:url'
 import {
   RELAY_GITHUB_REPOSITORY,
   RELAY_WORKFLOW_FILE_PREFIX,
+  prefixedRelayWorkflowPath,
   readRelayWorkflow,
   relayWorkflowFile,
   relayWorkflowPath,
@@ -21,6 +22,8 @@ test('workflow identity is derived, never restated', () => {
   assert.equal(relayWorkflowFile('deploy-relay-staging.yml'), `${RELAY_WORKFLOW_FILE_PREFIX}deploy-relay-staging.yml`)
   assert.equal(relayWorkflowPath('deploy-relay-staging.yml'), `.github/workflows/${relayWorkflowFile('deploy-relay-staging.yml')}`)
   assert.ok(relayWorkflowUrl('deploy-relay-staging.yml').pathname.endsWith(relayWorkflowPath('deploy-relay-staging.yml')))
+  // A caller rendering Terraform's trusted ref supplies that prefix instead of this checkout's.
+  assert.equal(prefixedRelayWorkflowPath('cloud-', 'deploy-relay-staging.yml'), '.github/workflows/cloud-deploy-relay-staging.yml')
   assert.match(readRelayWorkflow('deploy-relay-staging.yml'), /^name:/m)
   assert.match(RELAY_GITHUB_REPOSITORY, /^[\w.-]+\/[\w.-]+$/)
 })
