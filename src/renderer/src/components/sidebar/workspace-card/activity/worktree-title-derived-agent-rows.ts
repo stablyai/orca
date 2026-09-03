@@ -263,6 +263,12 @@ function isTitleDerivedLaunchOwnerLeaf(
   if (layout?.root?.type === 'leaf' && layout.root.leafId === leafId) {
     return true
   }
+  const boundLeafIds = Object.keys(layout?.ptyIdsByLeafId ?? {}).filter(isTerminalLeafId)
+  // Why: a rootless snapshot can bind split panes before the tree serializes;
+  // launchAgent is tab-scoped and must not stamp a spinner-only sibling.
+  if (!layout?.root && boundLeafIds.length > 1) {
+    return false
+  }
   // Why: tab-bar + creates the newest agent with a rootless snapshot until the
   // pane tree serializes; the unique bound/active leaf is still that tab's owner.
   return !layout?.root && resolveRootlessTerminalLayoutLeafId(layout ?? EMPTY_LAYOUT) === leafId
