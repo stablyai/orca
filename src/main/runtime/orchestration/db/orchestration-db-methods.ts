@@ -33,6 +33,7 @@ import type { MutationReceiptStoreMethods } from './mutation-receipts/mutation-r
 import type { QuestionThreadsMethods } from './questions/question-threads'
 import type { OrchestrationResetMethods } from './reset/orchestration-reset'
 import type { RunBindingMethods } from './runs/run-binding'
+import type { RunCollaborationTopologyMethods } from './runs/run-collaboration-topology'
 import type { RunCoordinatorMailRoutingMethods } from './runs/run-coordinator-mail-routing'
 import type { RunCreateMethods } from './runs/run-create'
 import type { RunDeliveryMethods } from './runs/run-delivery'
@@ -79,6 +80,7 @@ export type OrchestrationDbMethods = CreateTablesMethods &
   LegacyReplyOperationMethods &
   RunCreateMethods &
   RunBindingMethods &
+  RunCollaborationTopologyMethods &
   RunLookupMethods &
   RunCoordinatorMailRoutingMethods &
   LegacyCoordinatorMailTakeoverMethods &

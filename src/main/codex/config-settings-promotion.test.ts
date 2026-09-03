@@ -468,12 +468,13 @@ describe('codex settings write-back promotion', () => {
     syncSystemConfigIntoManagedCodexHome()
     const baselineBeforeFailure = readFileSync(baselinePath(), 'utf-8')
     simulateCodexSettingWrite('model', '"o4"')
+    const runtimeBeforeFailure = readRuntimeConfig()
 
     promotionTestState.failAtomicWrite = true
     syncSystemConfigIntoManagedCodexHome()
 
     expect(readSystemConfig()).toBe('model = "gpt-5"\n')
-    expect(readRuntimeConfig()).toBe('model = "o4"\n')
+    expect(readRuntimeConfig()).toBe(runtimeBeforeFailure)
     expect(readFileSync(baselinePath(), 'utf-8')).toBe(baselineBeforeFailure)
 
     promotionTestState.failAtomicWrite = false

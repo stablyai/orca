@@ -464,7 +464,7 @@ describe('OrcaRuntimeService', () => {
     }
   })
 
-  it('resolves tui-idle from a Codex ready prompt preview', async () => {
+  it('does not resolve tui-idle from an early Codex idle title during MCP startup', async () => {
     const runtime = new OrcaRuntimeService(store)
     runtime.setPtyController({
       spawn: vi.fn().mockResolvedValue({ id: 'pty-bg' }),
@@ -472,24 +472,248 @@ describe('OrcaRuntimeService', () => {
       kill: () => true,
       getForegroundProcess: async () => null
     })
-    const { handle } = await runtime.createTerminal(`path:${TEST_WORKTREE_PATH}`)
-    runtime.onPtyData(
-      'pty-bg',
-      [
-        ' >_ OpenAI Codex (v0.131.0)\n',
-        ' model:       gpt-5.5 high   /model to change\n',
-        ' directory:   ~/orca/workspaces/orca/cli-debug\n'
-      ].join(''),
-      Date.now()
-    )
-
-    await expect(
-      runtime.waitForTerminal(handle, { condition: 'tui-idle', timeoutMs: 1_000 })
-    ).resolves.toMatchObject({
-      handle,
-      condition: 'tui-idle',
-      status: 'running'
+    const { handle } = await runtime.createTerminal(`path:${TEST_WORKTREE_PATH}`, {
+      launchAgent: 'codex'
     })
+    runtime.attachWindow(1)
+    runtime.syncWindowGraph(1, {
+      tabs: [
+        {
+          tabId: 'tab-bg',
+          worktreeId: TEST_WORKTREE_ID,
+          title: 'Codex done',
+          activeLeafId: 'pane-bg',
+          layout: null
+        }
+      ],
+      leaves: [
+        {
+          tabId: 'tab-bg',
+          worktreeId: TEST_WORKTREE_ID,
+          leafId: 'pane-bg',
+          paneRuntimeId: 1,
+          ptyId: 'pty-bg',
+          paneTitle: 'Codex done'
+        }
+      ]
+    })
+    runtime.onPtyData('pty-bg', 'Booting MCP server: computer-use\n', Date.now())
+    const internals = runtime as unknown as {
+      ptyLifecycleGenerationById: Map<string, number>
+      ptysById: Map<
+        string,
+        {
+          launchAgent: string | null
+          lastAgentStatus: string | null
+          lastOutputAt: number | null
+          preview: string
+          tailBuffer: string[]
+          tailPartialLine: string
+        }
+      >
+    }
+    internals.ptyLifecycleGenerationById.set('pty-bg', 1)
+    const ptyRecord = internals.ptysById.get('pty-bg')
+    expect(ptyRecord).toBeDefined()
+    ptyRecord!.launchAgent = 'codex'
+    ptyRecord!.lastAgentStatus = 'idle'
+    ptyRecord!.tailBuffer = []
+    ptyRecord!.tailPartialLine = 'Booting MCP server: computer-use'
+    ptyRecord!.preview = 'Booting MCP server: computer-use'
+    ptyRecord!.lastOutputAt = Date.now()
+
+    const abort = new AbortController()
+    const wait = runtime.waitForTerminal(handle, { condition: 'tui-idle', signal: abort.signal })
+    let settled = false
+    void wait
+      .then(() => {
+        settled = true
+      })
+      .catch(() => {})
+    await Promise.resolve()
+    expect(settled).toBe(false)
+    abort.abort()
+    await expect(wait).rejects.toThrow('request_aborted')
+  })
+
+  it('does not resolve a pre-accepted Codex generation from foreground quiescence', async () => {
+    vi.useFakeTimers()
+    try {
+      const runtime = new OrcaRuntimeService(store)
+      runtime.setPtyController({
+        spawn: vi.fn().mockResolvedValue({ id: 'pty-bg' }),
+        write: () => true,
+        kill: () => true,
+        getForegroundProcess: async () => 'codex'
+      })
+      const { handle } = await runtime.createTerminal(`path:${TEST_WORKTREE_PATH}`, {
+        launchAgent: 'codex'
+      })
+      runtime.onPtyData('pty-bg', 'OpenAI Codex\n', Date.now())
+      syncSinglePty(runtime, 'pty-bg', { paneTitle: 'Codex' })
+
+      const abort = new AbortController()
+      const wait = runtime.waitForTerminal(handle, { condition: 'tui-idle', signal: abort.signal })
+      let settled = false
+      void wait
+        .then(() => {
+          settled = true
+        })
+        .catch(() => {})
+      await vi.advanceTimersByTimeAsync(4_000)
+      expect(settled).toBe(false)
+      abort.abort()
+      await expect(wait).rejects.toThrow('request_aborted')
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('does not resolve a pre-accepted Codex generation from a visible ready screen', async () => {
+    vi.useFakeTimers()
+    try {
+      const runtime = new OrcaRuntimeService(store)
+      const serializeProviderBuffer = vi.fn().mockResolvedValue({
+        data: ' >_ OpenAI Codex (v0.131.0)\r\nmodel: gpt-5.5\r\ndirectory: /repo\r\n',
+        cols: 80,
+        rows: 24,
+        seq: 1,
+        source: 'headless' as const,
+        alternateScreen: true
+      })
+      runtime.setPtyController({
+        spawn: vi.fn().mockResolvedValue({ id: 'pty-bg' }),
+        write: () => true,
+        kill: () => true,
+        getForegroundProcess: async () => null,
+        serializeProviderBuffer
+      })
+      const { handle } = await runtime.createTerminal(`path:${TEST_WORKTREE_PATH}`, {
+        launchAgent: 'codex'
+      })
+      syncSinglePty(runtime, 'pty-bg', { paneTitle: 'Codex' })
+      const internals = runtime as unknown as {
+        leaves: Map<
+          string,
+          {
+            lastAgentStatus: string | null
+            lastOutputAt: number | null
+            preview: string
+            tailBuffer: string[]
+            tailPartialLine: string
+          }
+        >
+        providerSnapshotPreferredPtys: Set<string>
+        terminalWaiters: { get(handle: string): ReadonlySet<unknown> | undefined }
+        startTuiIdleVisibleReadProbe(waiter: unknown, timeoutMs: number): void
+      }
+      const leaf = internals.leaves.get('tab-1::pane:1')
+      expect(leaf).toBeDefined()
+      leaf!.lastAgentStatus = null
+      leaf!.lastOutputAt = null
+      leaf!.preview = ''
+      leaf!.tailBuffer = []
+      leaf!.tailPartialLine = ''
+      internals.providerSnapshotPreferredPtys.add('pty-bg')
+
+      const abort = new AbortController()
+      const wait = runtime.waitForTerminal(handle, { condition: 'tui-idle', signal: abort.signal })
+      let settled = false
+      void wait
+        .then(() => {
+          settled = true
+        })
+        .catch(() => {})
+      const waiter = [...(internals.terminalWaiters.get(handle) ?? [])][0]
+      expect(waiter).toBeDefined()
+      internals.startTuiIdleVisibleReadProbe(waiter, 10_000)
+      await vi.advanceTimersByTimeAsync(2_000)
+      await Promise.resolve()
+
+      expect(serializeProviderBuffer).toHaveBeenCalled()
+      expect(settled).toBe(false)
+      abort.abort()
+      await expect(wait).rejects.toThrow('request_aborted')
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('resolves tui-idle from a Codex ready prompt preview after it settles', async () => {
+    vi.useFakeTimers()
+    try {
+      const runtime = new OrcaRuntimeService(store)
+      runtime.setPtyController({
+        spawn: vi.fn().mockResolvedValue({ id: 'pty-bg' }),
+        write: () => true,
+        kill: () => true,
+        getForegroundProcess: async () => null
+      })
+      const { handle } = await runtime.createTerminal(`path:${TEST_WORKTREE_PATH}`, {
+        launchAgent: 'codex'
+      })
+      runtime.onPtyData(
+        'pty-bg',
+        [
+          ' >_ OpenAI Codex (v0.131.0)\n',
+          ' model:       gpt-5.5 high   /model to change\n',
+          ' directory:   ~/orca/workspaces/orca/cli-debug\n'
+        ].join(''),
+        Date.now()
+      )
+
+      const wait = runtime.waitForTerminal(handle, { condition: 'tui-idle', timeoutMs: 10_000 })
+      let settled = false
+      void wait.then(() => {
+        settled = true
+      })
+      await vi.advanceTimersByTimeAsync(2_999)
+      expect(settled).toBe(false)
+      await vi.advanceTimersByTimeAsync(1_001)
+      await expect(wait).resolves.toMatchObject({
+        handle,
+        condition: 'tui-idle',
+        status: 'running'
+      })
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('resolves a Codex ready prompt immediately after a verified accepted prompt', async () => {
+    vi.useFakeTimers()
+    try {
+      const runtime = new OrcaRuntimeService(store)
+      runtime.setPtyController({
+        spawn: vi.fn().mockResolvedValue({ id: 'pty-bg' }),
+        write: (_ptyId, data) => {
+          if (data === '\r') {
+            runtime.onPtyData(
+              'pty-bg',
+              '\x1b[2K\u2022 Working (0s \u2022 esc to interrupt)\x1b[0m',
+              Date.now()
+            )
+          }
+          return true
+        },
+        kill: () => true,
+        getForegroundProcess: async () => null
+      })
+      const { handle } = await runtime.createTerminal(`path:${TEST_WORKTREE_PATH}`, {
+        launchAgent: 'codex'
+      })
+      const accepted = runtime.sendTerminalAgentPrompt(handle, 'review this')
+      await Promise.resolve()
+      await vi.runAllTimersAsync()
+      await accepted
+
+      runtime.onPtyData('pty-bg', ' >_ OpenAI Codex (v0.131.0)\nmodel: gpt-5.5\n', Date.now())
+      await expect(
+        runtime.waitForTerminal(handle, { condition: 'tui-idle', timeoutMs: 1_000 })
+      ).resolves.toMatchObject({ handle, condition: 'tui-idle' })
+    } finally {
+      vi.useRealTimers()
+    }
   })
 
   it('resolves tui-idle from an Antigravity ready prompt preview', async () => {

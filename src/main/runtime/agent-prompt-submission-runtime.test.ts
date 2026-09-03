@@ -54,6 +54,25 @@ describe('agent prompt submission runtime', () => {
     expect(writes.filter((data) => data === '\r')).toHaveLength(1)
   })
 
+  it('accepts a fresh Codex terminal Working indicator', async () => {
+    vi.useFakeTimers()
+    const { runtime, handle, writes } = await createPromptRuntime((runtime, data) => {
+      if (data === '\r') {
+        runtime.onPtyData(
+          'pty-prompt',
+          '\x1b[2K\u2022 Working (0s \u2022 esc to interrupt)\x1b[0m',
+          Date.now()
+        )
+      }
+    }, 'codex')
+
+    const submission = runtime.sendTerminalAgentPrompt(handle, 'review this')
+    await vi.runAllTimersAsync()
+
+    await expect(submission).resolves.toMatchObject({ accepted: true })
+    expect(writes.filter((data) => data === '\r')).toHaveLength(1)
+  })
+
   it('accepts a working-to-idle cycle completed before the first poll', async () => {
     vi.useFakeTimers()
     const { runtime, handle, writes } = await createPromptRuntime((runtime, data) => {

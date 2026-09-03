@@ -3,7 +3,12 @@ import { OrcaRuntimeWithSerializeAgentPromptSubmission } from './orca-runtime-se
 import type { RuntimeTerminalAgentStatusSnapshot } from './runtime-terminal-agent-status-query'
 import type { AgentStatus } from '../../shared/agent-detection'
 import type { RuntimeTerminalWaitBlockedReason } from '../../shared/runtime-types'
-import { detectTerminalWaitBlockedReason } from './terminal-wait-detection'
+import {
+  detectTerminalWaitBlockedReason,
+  findCodexReadyPromptIndex,
+  isKnownReadyPromptPreview
+} from './terminal-wait-detection'
+import { TUI_IDLE_QUIESCENCE_MS } from './orca-runtime-postlude'
 import { isOpenCodeNativeTitle } from '../../shared/agent-detection'
 import type { AgentStatusEntry } from '../../shared/agent-status-types'
 import type { RuntimePtyWorktreeRecord } from './runtime-terminal-state-records'
@@ -100,6 +105,59 @@ export class OrcaRuntimeWithResolveAuthoritativeTerminalWaitPermission extends O
   protected getPtyAgent(ptyId: string): TuiAgent | null {
     const pty = this.ptysById.get(ptyId)
     return pty?.launchAgent ?? pty?.foregroundAgent ?? null
+  }
+
+  protected canResolveTuiIdlePromptPreview(
+    ptyId: string | null,
+    waitText: string,
+    lastOutputAt: number | null
+  ): boolean {
+    if (!ptyId || this.getPtyAgent(ptyId) !== 'codex') {
+      return isKnownReadyPromptPreview(waitText)
+    }
+    if (
+      this.agentPromptAcceptedGenerationByPtyId.get(ptyId) === this.getPtyLifecycleGeneration(ptyId)
+    ) {
+      return true
+    }
+    return this.isSettledReadyPromptPreview(waitText, lastOutputAt)
+  }
+
+  protected canResolveTuiIdleEvidence(
+    ptyId: string | null,
+    waitText: string,
+    lastOutputAt: number | null
+  ): boolean {
+    if (ptyId && this.getPtyAgent(ptyId) === 'omp') {
+      return this.ompPromptReadinessByPtyId.get(ptyId)?.ready === true
+    }
+    const hasCodexPrompt = findCodexReadyPromptIndex(waitText.toLowerCase()) !== null
+    if (!ptyId) {
+      return !hasCodexPrompt || this.isSettledReadyPromptPreview(waitText, lastOutputAt)
+    }
+    const pty = this.ptysById.get(ptyId)
+    // Prompt text alone stays under the generic ready-tail contract. The stricter
+    // generation fence applies only when runtime-owned identity says this PTY is Codex.
+    const isCodex =
+      this.getPtyAgent(ptyId) === 'codex' ||
+      pty?.lastOscTitle?.toLowerCase().includes('codex') === true
+    if (!isCodex) {
+      return true
+    }
+    const acceptedGeneration = this.agentPromptAcceptedGenerationByPtyId.get(ptyId)
+    return (
+      (acceptedGeneration !== undefined &&
+        acceptedGeneration === this.getPtyLifecycleGeneration(ptyId)) ||
+      this.isSettledReadyPromptPreview(waitText, lastOutputAt)
+    )
+  }
+
+  private isSettledReadyPromptPreview(preview: string, lastOutputAt: number | null): boolean {
+    return (
+      isKnownReadyPromptPreview(preview) &&
+      lastOutputAt !== null &&
+      Date.now() - lastOutputAt >= TUI_IDLE_QUIESCENCE_MS
+    )
   }
 
   protected assertAgentPromptPermissionSafe(

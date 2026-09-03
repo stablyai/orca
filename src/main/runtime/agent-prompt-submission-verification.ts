@@ -11,12 +11,17 @@ const HOOK_OBSERVED_TURN_START_AGENTS = new Set<TuiAgent>(['codex', 'kimi'])
 export const AGENT_PROMPT_STALLED_ERROR = 'agent_prompt_stalled'
 
 export type AgentPromptActivity = Readonly<{
+  agent?: TuiAgent | null
   generation: number
   permissionSequence: number
   workingSequence: number
+  /** OMP receipts bind a real interactive input to the same agent-start prompt. */
+  ompInputSequence?: number
+  ompInputFingerprint?: string | null
   /** When the hook's current `working` turn began; reaches the runtime with no window and no
    *  title coverage. Pinned across same-state pings, so a refresh alone cannot move it. */
   explicitWorkingStartedAt: number | null
+  terminalWorkingSequence: number
   /** PTY bytes seen on this pane; delivery evidence when a turn-start edge cannot be observed. */
   outputSequence: number
   status: 'working' | 'permission' | 'idle' | null
@@ -32,6 +37,7 @@ type AgentPromptVerificationOptions = {
   readActivity: () => AgentPromptActivity
   timeoutMs?: number
   signal?: AbortSignal
+  expectedOmpPromptFingerprint?: string
 }
 
 export function resolveAgentPromptEffectTimeoutMs(agent: TuiAgent | null | undefined): number {
@@ -77,7 +83,9 @@ export async function verifyAgentPromptSubmission(
     const current = options.readActivity()
     assertSamePromptGeneration(options.baseline, current)
     assertPromptNotBlocked(options.baseline, current)
-    if (agentPromptEffectObserved(options.baseline, current)) {
+    if (
+      agentPromptEffectObserved(options.baseline, current, options.expectedOmpPromptFingerprint)
+    ) {
       return
     }
     await waitForAgentPromptPoll(options.signal)
@@ -86,7 +94,7 @@ export async function verifyAgentPromptSubmission(
   const current = options.readActivity()
   assertSamePromptGeneration(options.baseline, current)
   assertPromptNotBlocked(options.baseline, current)
-  if (agentPromptEffectObserved(options.baseline, current)) {
+  if (agentPromptEffectObserved(options.baseline, current, options.expectedOmpPromptFingerprint)) {
     return
   }
   throw new Error(AGENT_PROMPT_STALLED_ERROR)
@@ -94,8 +102,21 @@ export async function verifyAgentPromptSubmission(
 
 function agentPromptEffectObserved(
   baseline: AgentPromptActivity,
-  current: AgentPromptActivity
+  current: AgentPromptActivity,
+  expectedOmpPromptFingerprint?: string
 ): boolean {
+  // Why: autonomous OMP turns also emit working titles/status/before_agent_start.
+  // Only a fresh receipt for this exact interactive prompt proves our input landed.
+  if (baseline.agent === 'omp' || current.agent === 'omp') {
+    return (
+      expectedOmpPromptFingerprint !== undefined &&
+      current.ompInputFingerprint === expectedOmpPromptFingerprint &&
+      (current.ompInputSequence ?? 0) > (baseline.ompInputSequence ?? 0)
+    )
+  }
+  if (baseline.agent === 'codex' || current.agent === 'codex') {
+    return current.terminalWorkingSequence > baseline.terminalWorkingSequence
+  }
   return (
     current.workingSequence > baseline.workingSequence ||
     observedHookWorkingAfterBaseline(baseline, current) ||

@@ -13,8 +13,8 @@ export type PreambleParams = {
   coordinatorHandle: string
   workerHandle: string
   devMode?: boolean
-  // Why: packaged WSL panes install the scoped launcher as `orca-ide`;
-  // other execution hosts keep their existing bare `orca` bridge.
+  // Why: when the target runtime resolved a worker CLI, that execution-host
+  // choice is authoritative over the caller-side dev fallback.
   cliCommand?: OrchestrationCliCommand
   // Why: populated by the coordinator's dispatch pre-flight (§3.1) only
   // when the target worktree is behind its tracking remote. When absent
@@ -33,6 +33,11 @@ export type PreambleParams = {
   workerKind?: 'prompt-returning-agent' | 'bare-shell'
   // Why gated: advertising a verb the depth cap will reject just burns a turn.
   canDispatchSubWorkers?: boolean
+  // Why: the coordinator may inject task-required protocol actions (extra
+  // reports, custom steps) that must complete before worker_done. Inserted
+  // verbatim (trimmed) as its own block inside CLI COMMANDS ahead of the
+  // worker_done report so agents read the full protocol in execution order.
+  preCompletionProtocol?: string
 }
 
 // Why: 5 minutes is frequent enough that the coordinator's stale-heartbeat
@@ -47,16 +52,18 @@ const HEARTBEAT_INTERVAL_MIN = 5
 // not as a separate prose block — LLM readers anchor on examples and skim
 // trailing prose, so rules must land at the point of use.
 export function buildDispatchPreamble(params: PreambleParams): string {
-  // Why: in dev mode, agents must use orca-dev to connect to the dev runtime's
-  // socket. Without this, agents inside the dev Electron app would call the
-  // production CLI and talk to the wrong Orca instance (Section 6.4).
-  const cli = params.devMode ? 'orca-dev' : (params.cliCommand ?? 'orca')
+  // Why: target-aware runtime selection wins; devMode is only a fallback for
+  // previews/callers that have no concrete worker terminal to resolve.
+  const cli = params.cliCommand ?? (params.devMode ? 'orca-dev' : 'orca')
   const postDoneInstructions = buildPostWorkerDoneInstructions({
     cli,
     workerKind: params.workerKind ?? 'prompt-returning-agent'
   })
   const capabilityFlag = params.dispatchCapability
     ? ` --dispatch-capability ${params.dispatchCapability}`
+    : ''
+  const preCompletionBlock = params.preCompletionProtocol?.trim()
+    ? `\n${params.preCompletionProtocol.trim()}\n`
     : ''
 
   const header = `You are working inside Orca, a multi-agent IDE. You are a dispatched worker.
@@ -67,7 +74,7 @@ You talk to the coordinator only through the CLI commands below. Do not use
 Slack, GitHub comments, or any other channel to reach a human during the run.
 
 === CLI COMMANDS ===
-
+${preCompletionBlock}
   # Report the terminal task outcome (REQUIRED exactly once).
   #
   # RULE: --body must be a 3-sentence executive summary (what you did,
@@ -81,6 +88,11 @@ Slack, GitHub comments, or any other channel to reach a human during the run.
   # Never encode failure only in prose and never silently exit.
   # Include BOTH taskId and dispatchId in the payload so a late completion
   # from a failed retry cannot complete the current dispatch.
+  #
+  # RULE: worker_done is the FINAL Dispatch-scoped protocol action. Complete
+  # every other task-required protocol action (ask, escalation, heartbeat)
+  # before sending it; once worker_done is accepted, later Dispatch-scoped
+  # actions may be rejected.
   ${cli} orchestration send --from ${params.workerHandle}${capabilityFlag} \\
     --type worker_done --subject "<short status>" \\
     --body "<3-sentence summary: what you did, what you found, what's left>" \\

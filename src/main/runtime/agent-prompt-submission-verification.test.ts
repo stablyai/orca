@@ -11,10 +11,12 @@ import {
 
 function activity(overrides: Partial<AgentPromptActivity> = {}): AgentPromptActivity {
   return {
+    agent: null,
     generation: 1,
     permissionSequence: 2,
     workingSequence: 4,
     explicitWorkingStartedAt: null,
+    terminalWorkingSequence: 0,
     outputSequence: 7,
     status: 'idle',
     ...overrides
@@ -44,6 +46,35 @@ describe('agent prompt submission verification', () => {
     })
 
     current = activity({ workingSequence: 5, status: 'working' })
+    await vi.advanceTimersByTimeAsync(50)
+
+    await expect(verification).resolves.toBeUndefined()
+  })
+
+  it('does not accept Codex startup lifecycle activity as submitted-prompt evidence', async () => {
+    vi.useFakeTimers()
+    let current = activity({ agent: 'codex', status: 'working' })
+    const verification = verifyAgentPromptSubmission({
+      baseline: current,
+      readActivity: () => current
+    })
+    const rejected = expect(verification).rejects.toThrow('agent_prompt_stalled')
+
+    current = activity({ agent: 'codex', status: 'working', workingSequence: 5 })
+    await vi.advanceTimersByTimeAsync(AGENT_PROMPT_EFFECT_TIMEOUT_MS)
+
+    await rejected
+  })
+
+  it('accepts a fresh Codex terminal Working indicator', async () => {
+    vi.useFakeTimers()
+    let current = activity({ agent: 'codex' })
+    const verification = verifyAgentPromptSubmission({
+      baseline: current,
+      readActivity: () => current
+    })
+
+    current = activity({ agent: 'codex', terminalWorkingSequence: 1 })
     await vi.advanceTimersByTimeAsync(50)
 
     await expect(verification).resolves.toBeUndefined()

@@ -443,6 +443,69 @@ describe('OrcaRuntimeService', () => {
     await expect(runtime.isTerminalRunningAgent(handle)).resolves.toBe(true)
   })
 
+  it('identifies a reused terminal from its current foreground agent process', async () => {
+    const runtime = new OrcaRuntimeService(store)
+    runtime.setPtyController({
+      write: () => true,
+      kill: () => true,
+      getForegroundProcess: async () => 'codex'
+    })
+    syncSinglePty(runtime, 'pty-1', { paneTitle: 'bash' })
+    const [terminal] = (await runtime.listTerminals()).terminals
+
+    await expect(runtime.getTerminalRunningTuiAgent(terminal.handle)).resolves.toBe('codex')
+  })
+
+  it('confirms a cold Windows shell foreground before identifying a reused agent', async () => {
+    const runtime = new OrcaRuntimeService(store)
+    const confirmForegroundProcess = vi.fn().mockResolvedValue('codex')
+    runtime.setPtyController({
+      write: () => true,
+      kill: () => true,
+      getForegroundProcess: async () => 'powershell.exe',
+      confirmForegroundProcess
+    })
+    syncSinglePty(runtime, 'pty-1', { paneTitle: 'bash' })
+    const [terminal] = (await runtime.listTerminals()).terminals
+
+    await expect(runtime.getTerminalRunningTuiAgent(terminal.handle)).resolves.toBe('codex')
+    expect(confirmForegroundProcess).toHaveBeenCalledWith('pty-1')
+  })
+
+  it('fails closed when a reused terminal foreground process is unrecognized', async () => {
+    const runtime = new OrcaRuntimeService(store)
+    runtime.setPtyController({
+      write: () => true,
+      kill: () => true,
+      getForegroundProcess: async () => 'vim'
+    })
+    syncSinglePty(runtime, 'pty-1', { paneTitle: 'Codex' })
+    const [terminal] = (await runtime.listTerminals()).terminals
+
+    await expect(runtime.getTerminalRunningTuiAgent(terminal.handle)).resolves.toBeNull()
+  })
+
+  it('fails closed when a reused terminal changes PTY while foreground identity is read', async () => {
+    let resolveForeground!: (process: string) => void
+    const foreground = new Promise<string>((resolve) => {
+      resolveForeground = resolve
+    })
+    const runtime = new OrcaRuntimeService(store)
+    runtime.setPtyController({
+      write: () => true,
+      kill: () => true,
+      getForegroundProcess: async () => await foreground
+    })
+    syncSinglePty(runtime, 'pty-1', { paneTitle: 'bash' })
+    const [terminal] = (await runtime.listTerminals()).terminals
+
+    const identified = runtime.getTerminalRunningTuiAgent(terminal.handle)
+    syncSinglePty(runtime, 'pty-2', { paneTitle: 'bash' })
+    resolveForeground('codex')
+
+    await expect(identified).resolves.toBeNull()
+  })
+
   it('does not treat a bare Cursor Agent native title as a running agent session', async () => {
     const runtime = new OrcaRuntimeService(store)
     runtime.setPtyController({
@@ -457,6 +520,7 @@ describe('OrcaRuntimeService', () => {
     const [terminal] = (await runtime.listTerminals()).terminals
 
     await expect(runtime.isTerminalRunningAgent(terminal.handle)).resolves.toBe(false)
+    await expect(runtime.getTerminalRunningTuiAgent(terminal.handle)).resolves.toBeNull()
     await expect(runtime.getTerminalAgentStatus(terminal.handle)).resolves.toEqual({
       handle: terminal.handle,
       isRunningAgent: false,

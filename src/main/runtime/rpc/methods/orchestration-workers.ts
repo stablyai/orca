@@ -1,4 +1,6 @@
 import type { TuiAgent } from '../../../../shared/tui-agent'
+import { buildCollaborationWorkerProtocolForTask } from '../../collaboration/collaboration-worker-protocol'
+import { getCollaborationRuntimeTopology } from '../../collaboration/collaboration-runtime-registry'
 import { buildDispatchPreamble } from '../../orchestration/preamble'
 import { OrchestrationError } from '../../orchestration/orchestration-error'
 import { defineMethod, type RpcMethod } from '../core'
@@ -78,7 +80,7 @@ export const ORCHESTRATION_WORKER_START_METHODS: RpcMethod[] = [
       const requestedWorktree = params.worktree ?? 'current'
       const createsWorktree =
         requestedWorktree === 'new-child' || requestedWorktree === 'new-top-level'
-      const { agent, launch } = prepareLocalWorkerStart({ params, createsWorktree, runtime })
+      let { agent, launch } = prepareLocalWorkerStart({ params, createsWorktree, runtime })
 
       const coordinatorTerminal = await runtime.showTerminal(params.from)
       const creationWorktree = createsWorktree
@@ -96,16 +98,16 @@ export const ORCHESTRATION_WORKER_START_METHODS: RpcMethod[] = [
         : requestedWorktree === 'current'
           ? await runtime.showManagedTerminalWorkspace(`id:${coordinatorTerminal.worktreeId}`)
           : await runtime.showManagedTerminalWorkspace(requestedWorktree)
-      let explicitTerminal
       if (params.terminal) {
-        explicitTerminal = await runtime.showTerminal(params.terminal)
+        const explicitTerminal = await runtime.showTerminal(params.terminal)
         if (explicitTerminal.worktreeId !== resolvedWorktree?.id) {
           throw new OrchestrationError(
             'terminal_worktree_mismatch',
             `Terminal ${params.terminal} does not belong to worktree ${resolvedWorktree?.id}.`
           )
         }
-        if (!(await runtime.isTerminalRunningAgent(params.terminal))) {
+        agent = (await runtime.getTerminalRunningTuiAgent(params.terminal)) ?? undefined
+        if (!agent) {
           throw new OrchestrationError(
             'agent_unconfigured',
             `Terminal ${params.terminal} is not running a recognized agent.`
@@ -244,6 +246,17 @@ export const ORCHESTRATION_WORKER_START_METHODS: RpcMethod[] = [
         })
 
         failedStage = 'dispatch_input'
+        const cliCommand = runtime.getTerminalOrchestrationCliCommand(terminalHandle)
+        // Why: every local Dispatch path derives collaboration instructions from the
+        // same Task topology, so completion gates never outrun the worker preamble.
+        const preCompletionProtocol = buildCollaborationWorkerProtocolForTask({
+          topology: getCollaborationRuntimeTopology(runtime, run.id),
+          taskId: task.id,
+          workerHandle: terminalHandle,
+          dispatchCapability: capability,
+          devMode: params.devMode,
+          cliCommand
+        })
         const preamble = buildDispatchPreamble({
           canDispatchSubWorkers: started.dispatch.depth < runtime.getNestedWorkerMaxDepth(),
           taskId: task.id,
@@ -253,7 +266,8 @@ export const ORCHESTRATION_WORKER_START_METHODS: RpcMethod[] = [
           workerHandle: terminalHandle,
           dispatchCapability: capability,
           devMode: params.devMode,
-          cliCommand: runtime.getTerminalOrchestrationCliCommand(terminalHandle)
+          cliCommand,
+          preCompletionProtocol
         })
         await runtime.sendTerminalAgentPrompt(terminalHandle, preamble)
         effects.push({

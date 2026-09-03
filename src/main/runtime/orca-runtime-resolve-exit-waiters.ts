@@ -5,6 +5,7 @@ import type { RuntimeLeafRecord, RuntimePtyWorktreeRecord } from './runtime-term
 import { buildPtyTerminalWaitResult, buildTerminalWaitResult } from './terminal-wait-results'
 import type { AgentStatus } from '../../shared/agent-detection'
 import { detectExplicitIdleStatusFromTitle } from './terminal-wait-detection'
+import { buildTerminalWaitText } from './terminal-wait-tail-state'
 
 export class OrcaRuntimeWithResolveExitWaiters extends OrcaRuntimeWithBindPtyIncarnationHandle {
   protected resolveExitWaiters(leaf: RuntimeLeafRecord): void {
@@ -44,7 +45,11 @@ export class OrcaRuntimeWithResolveExitWaiters extends OrcaRuntimeWithBindPtyInc
       return
     }
     for (const waiter of [...waiters]) {
-      if (waiter.condition === 'tui-idle') {
+      const waitText = buildTerminalWaitText(leaf.tailBuffer, leaf.tailPartialLine, leaf.preview)
+      if (
+        waiter.condition === 'tui-idle' &&
+        this.canResolveTuiIdleEvidence(leaf.ptyId, waitText, leaf.lastOutputAt)
+      ) {
         this.resolveWaiter(waiter, buildTerminalWaitResult(handle, 'tui-idle', leaf))
       }
     }
@@ -79,7 +84,11 @@ export class OrcaRuntimeWithResolveExitWaiters extends OrcaRuntimeWithBindPtyInc
       return
     }
     for (const waiter of [...waiters]) {
-      if (waiter.condition === 'tui-idle') {
+      const waitText = buildTerminalWaitText(pty.tailBuffer, pty.tailPartialLine, pty.preview)
+      if (
+        waiter.condition === 'tui-idle' &&
+        this.canResolveTuiIdleEvidence(pty.ptyId, waitText, pty.lastOutputAt)
+      ) {
         this.resolveWaiter(waiter, buildPtyTerminalWaitResult(handle, 'tui-idle', pty))
       }
     }

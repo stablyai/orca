@@ -707,6 +707,7 @@ describe('orchestration federation', () => {
     expect(workerRuntime.closeTerminal).toHaveBeenCalledTimes(1)
     expect(workerRuntime.closeTerminal).toHaveBeenCalledWith('term_windows_worker')
     expect(homeDb.getTask(task.id)?.status).toBe('blocked')
+    expect(homeDb.getDispatchContextById(dispatch.id)?.termination_reason).toBe('operator_close')
 
     vi.mocked(workerRuntime.showTerminal).mockResolvedValue({
       handle: 'term_windows_worker',

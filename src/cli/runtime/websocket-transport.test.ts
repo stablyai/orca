@@ -1,5 +1,5 @@
 import { createServer, type Server } from 'node:http'
-import { mkdtempSync } from 'node:fs'
+import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -152,6 +152,29 @@ describe('CLI remote WebSocket transport', () => {
 
     expect(status.result.app.desktopWindowStatus).toBe('initializing')
     expect(launchOrcaApp).not.toHaveBeenCalled()
+  })
+
+  it('launches the local app with the client profile rather than an ambient profile', async () => {
+    const originalUserDataPath = process.env.ORCA_USER_DATA_PATH
+    const ambientProfile = mkdtempSync(join(tmpdir(), 'orca-ambient-profile-'))
+    const explicitProfile = mkdtempSync(join(tmpdir(), 'orca-explicit-profile-'))
+    process.env.ORCA_USER_DATA_PATH = ambientProfile
+    const client = new RuntimeClient(explicitProfile, 5_000)
+
+    try {
+      await expect(client.openOrca(0)).rejects.toMatchObject({
+        code: 'runtime_open_timeout'
+      })
+      expect(launchOrcaApp).toHaveBeenCalledWith(explicitProfile)
+    } finally {
+      if (originalUserDataPath === undefined) {
+        delete process.env.ORCA_USER_DATA_PATH
+      } else {
+        process.env.ORCA_USER_DATA_PATH = originalUserDataPath
+      }
+      rmSync(ambientProfile, { recursive: true, force: true })
+      rmSync(explicitProfile, { recursive: true, force: true })
+    }
   })
 
   it('connects through a saved environment selector', async () => {

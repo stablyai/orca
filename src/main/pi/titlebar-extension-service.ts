@@ -11,6 +11,7 @@ import {
   ORCA_PI_PREFILL_EXTENSION_FILE,
   getPiPrefillExtensionSource
 } from './prefill-extension-source'
+import { getOmpPromptReadinessExtensionSource } from './omp-prompt-readiness-source'
 import { ORCA_PI_EXTENSION_FILE, getPiTitlebarExtensionSource } from './titlebar-extension-source'
 import {
   isSafeDescendCandidate as sharedIsSafeDescendCandidate,
@@ -28,6 +29,8 @@ export const isSafeDescendCandidate = sharedIsSafeDescendCandidate
 const PI_AGENT_SUBDIR = 'agent'
 const ORCA_MANAGED_EXTENSION_MARKER = '@orca-managed-pi-extension'
 const OMP_MANAGED_STATUS_EXTENSION_DIR = 'omp-managed-status-extension'
+const OMP_PROMPT_READINESS_EXTENSION_DIR = 'omp-prompt-readiness-extension'
+const ORCA_OMP_PROMPT_READINESS_EXTENSION_FILE = 'orca-omp-prompt-readiness.ts'
 
 type ManagedExtensionWriteResult = 'written' | 'skipped-user-owned' | 'failed'
 
@@ -134,6 +137,30 @@ export class PiTitlebarExtensionService {
 
     const fallbackPath = join(fallbackDir, ORCA_PI_AGENT_STATUS_EXTENSION_FILE)
     return this.writeManagedExtension(fallbackPath, source) === 'written' ? fallbackPath : undefined
+  }
+
+  /**
+   * Supplies the OMP prompt-readiness sentinel when status hooks are disabled.
+   * Keep it outside ~/.omp and the full-status fallback directory: this
+   * extension is profile-owned, contains no status callbacks, and must never
+   * replace a user's extension or a full-hook installation.
+   */
+  buildOmpPromptReadinessEnv(): Record<string, string> {
+    const extensionDir = join(
+      getAppEnvironment().getPath('userData'),
+      OMP_PROMPT_READINESS_EXTENSION_DIR
+    )
+    try {
+      mkdirSync(extensionDir, { recursive: true })
+    } catch {
+      return {}
+    }
+
+    const extensionPath = join(extensionDir, ORCA_OMP_PROMPT_READINESS_EXTENSION_FILE)
+    const source = withOrcaManagedExtensionMarker(getOmpPromptReadinessExtensionSource())
+    return this.writeManagedExtension(extensionPath, source) === 'written'
+      ? { ORCA_OMP_STATUS_EXTENSION: extensionPath }
+      : {}
   }
 
   private installManagedExtensions(

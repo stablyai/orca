@@ -95,6 +95,7 @@ describe('PiTitlebarExtensionService', () => {
     rmSync(join(userDataDir, 'pi-agent-overlays'), { recursive: true, force: true })
     rmSync(join(userDataDir, 'omp-agent-overlays'), { recursive: true, force: true })
     rmSync(join(userDataDir, 'omp-managed-status-extension'), { recursive: true, force: true })
+    rmSync(join(userDataDir, 'omp-prompt-readiness-extension'), { recursive: true, force: true })
   })
 
   function expectPiHomeIntact(): void {
@@ -163,6 +164,26 @@ describe('PiTitlebarExtensionService', () => {
 
     expect(existsSync(join(piHome, 'extensions', 'orca-agent-status.ts'))).toBe(true)
     expectPiHomeIntact()
+  })
+
+  it('writes the hooks-disabled OMP readiness extension in a dedicated managed location', () => {
+    const userStatusPath = join(piHome, 'extensions', 'orca-agent-status.ts')
+    writeFileSync(userStatusPath, 'user-owned full OMP status extension')
+
+    const svc = new PiTitlebarExtensionService()
+    const env = svc.buildOmpPromptReadinessEnv()
+    const readinessPath = join(
+      userDataDir,
+      'omp-prompt-readiness-extension',
+      'orca-omp-prompt-readiness.ts'
+    )
+
+    expect(env).toEqual({ ORCA_OMP_STATUS_EXTENSION: readinessPath })
+    expect(readFileSync(userStatusPath, 'utf-8')).toBe('user-owned full OMP status extension')
+    const readinessSource = readFileSync(readinessPath, 'utf-8')
+    expect(readinessSource).toContain('@orca-managed-pi-extension')
+    expect(readinessSource).toContain('installOmpPromptReadiness')
+    expect(readinessSource).not.toContain("return '/hook/omp'")
   })
 
   it('installs only Prime status into the selected Prime agent dir', () => {

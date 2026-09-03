@@ -101,6 +101,11 @@ export const HANDLER_GROUPS: readonly HandlerGroup[] = [
   },
   ...BROWSER_HANDLER_GROUPS,
   {
+    name: 'mission',
+    keys: ['mission start'],
+    load: async () => (await import('./handlers/mission.js')).MISSION_HANDLERS
+  },
+  {
     name: 'orchestration',
     keys: [
       'orchestration run-create',
@@ -132,7 +137,11 @@ export const HANDLER_GROUPS: readonly HandlerGroup[] = [
       'orchestration gate-create',
       'orchestration gate-resolve',
       'orchestration gate-list',
-      'orchestration reset'
+      'orchestration reset',
+      'orchestration collaboration-publish',
+      'orchestration collaboration-checkpoint',
+      'orchestration collaboration-ack',
+      'orchestration collaboration-configure'
     ],
     load: async () => (await import('./handlers/orchestration.js')).ORCHESTRATION_HANDLERS
   },

@@ -361,6 +361,35 @@ describe('orchestration dispatch coordinator handle', () => {
       json: true
     } as never)
 
+  it('refreshes a live coordinator env handle through the stable pane key', async () => {
+    process.env.ORCA_TERMINAL_HANDLE = 'term_live_coord'
+    process.env.ORCA_PANE_KEY = 'tab_coord:leaf_coord'
+    callMock
+      .mockResolvedValueOnce({ result: { terminal: { handle: 'term_live_coord' } } })
+      .mockResolvedValueOnce({ result: { terminal: { handle: 'term_live_coord' } } })
+      .mockResolvedValueOnce({
+        result: { dispatch: { id: 'ctx_1', task_id: 'task_1', status: 'dispatched' } }
+      })
+
+    await invokeDispatch(
+      new Map<string, string | boolean>([
+        ['task', 'task_1'],
+        ['to', 'term_worker'],
+        ['inject', true]
+      ])
+    )
+
+    expect(callMock).toHaveBeenNthCalledWith(1, 'terminal.show', {
+      terminal: 'term_live_coord'
+    })
+    expect(callMock).toHaveBeenNthCalledWith(2, 'terminal.resolvePane', {
+      paneKey: 'tab_coord:leaf_coord'
+    })
+    expect(callMock).toHaveBeenNthCalledWith(3, 'orchestration.dispatch',
+      expect.objectContaining({ from: 'term_live_coord' })
+    )
+  })
+
   it('remints a stale coordinator env handle from the caller pane key', async () => {
     process.env.ORCA_TERMINAL_HANDLE = 'term_stale_coord'
     process.env.ORCA_PANE_KEY = 'tab_coord:leaf_coord'
