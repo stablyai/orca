@@ -76,7 +76,7 @@ read-only bootstrap to orient. Do not dead-end and do not invent commands:
 
 ```text
 ORCA status --json
-ORCA orchestration task-list --json
+ORCA orchestration run-list --json
 ORCA terminal list --json
 ```
 
