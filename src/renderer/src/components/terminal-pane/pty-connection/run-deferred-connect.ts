@@ -1,6 +1,7 @@
 import { createTerminalZeroDimensionsMessage } from '../../../../../shared/terminal-zero-dimensions-diagnostic'
 import { isWorktreeRemovalFenceError } from '../../../../../shared/worktree/removal-fence-error'
 import { safeFit } from '@/lib/pane-manager/pane-tree-ops'
+import { useAppStore } from '@/store'
 import { createCodexBackfillErrorDetector } from '../codex-backfill-error-detector'
 import { hasWorktreeSleepIntent, onWorktreeSleepIntentCleared } from '@/lib/worktree-sleep-intent'
 
@@ -52,7 +53,12 @@ export function installRunDeferredConnect(session: ConnectPanePtySession): void 
           if (index !== -1) {
             session.waitTeardowns.splice(index, 1)
           }
-          if (!session.disposed) {
+          // Why: an activation wake bumps the tab generation in the same tick and the
+          // remounted pane connects on its own; a stale generation must not connect too.
+          const currentTab = Object.values(useAppStore.getState().tabsByWorktree)
+            .flat()
+            .find((candidate) => candidate.id === session.deps.tabId)
+          if (!session.disposed && (currentTab?.generation ?? 0) === session.tabGeneration) {
             session.runDeferredConnect()
           }
         })
