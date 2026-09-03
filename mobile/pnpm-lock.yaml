@@ -8,12 +8,8 @@ overrides:
   xcode>uuid: 11.1.1
 
 patchedDependencies:
-  react-native-webview@13.16.2:
-    hash: de6761dfa76a5491a23e49f1262566a8831cab26736a336fdffc5d4e7d05ff27
-    path: patches/react-native-webview@13.16.2.patch
-  react-native@0.83.10:
-    hash: 44876634a8efbb0f2c3f66cd4332be170ec821d1cbfc0264ac80680983e8513d
-    path: patches/react-native@0.83.10.patch
+  react-native-webview@13.16.2: de6761dfa76a5491a23e49f1262566a8831cab26736a336fdffc5d4e7d05ff27
+  react-native@0.83.10: 44876634a8efbb0f2c3f66cd4332be170ec821d1cbfc0264ac80680983e8513d
 
 importers:
 
@@ -119,7 +115,7 @@ importers:
         specifier: 19.2.8
         version: 19.2.8(react@19.2.8)
       react-native:
-        specifier: ^0.83.10
+        specifier: 0.83.10
         version: 0.83.10(patch_hash=44876634a8efbb0f2c3f66cd4332be170ec821d1cbfc0264ac80680983e8513d)(@babel/core@7.29.7)(@react-native/metro-config@0.85.2(@babel/core@7.29.7))(@types/react@19.2.14)(react@19.2.8)
       react-native-gesture-handler:
         specifier: ^2.31.2

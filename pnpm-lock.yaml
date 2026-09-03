@@ -155,7 +155,7 @@ importers:
         specifier: ^3.3.1
         version: 3.3.1
       node-pty:
-        specifier: ^1.1.0
+        specifier: 1.1.0
         version: 1.1.0(patch_hash=e262847f57a1d4d3f2287a843822f7dcf3c9d8655892b07a69eba464e1317eaa)
       posthog-node:
         specifier: ^5.33.3

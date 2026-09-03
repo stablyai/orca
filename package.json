@@ -164,7 +164,7 @@
     "electron-updater": "^6.8.9",
     "i18next": "^26.3.1",
     "jsonc-parser": "^3.3.1",
-    "node-pty": "^1.1.0",
+    "node-pty": "1.1.0",
     "posthog-node": "^5.33.3",
     "proper-lockfile": "4.1.2",
     "psl": "1.15.0",
