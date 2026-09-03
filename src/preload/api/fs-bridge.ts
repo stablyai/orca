@@ -109,8 +109,10 @@ export const fsApi = {
       recursive?: boolean
     } & SshMutationExpectation
   ): Promise<void> => ipcRenderer.invoke('fs:deletePath', args),
-  authorizeExternalPath: (args: { targetPath: string }): Promise<void> =>
-    ipcRenderer.invoke('fs:authorizeExternalPath', args),
+  grantExternalFile: (args: { targetPath: string }): Promise<void> =>
+    ipcRenderer.invoke('fs:grantExternalFile', args),
+  grantExternalDirectory: (args: { targetPath: string }): Promise<void> =>
+    ipcRenderer.invoke('fs:grantExternalDirectory', args),
   stat: (args: {
     filePath: string
     connectionId?: string

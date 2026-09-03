@@ -24,7 +24,8 @@ export type TerminalLinkTestDoubles = {
   openFileUriMock: Mock
   openFilePathMock: Mock
   openFileMock: Mock
-  authorizeExternalPathMock: Mock
+  grantExternalFileMock: Mock
+  grantExternalDirectoryMock: Mock
   statMock: Mock
   fsPathExistsMock: Mock
   runtimeEnvironmentCallMock: Mock
@@ -43,7 +44,8 @@ export function createTerminalLinkTestDoubles(): TerminalLinkTestDoubles {
   const openFileUriMock = vi.fn()
   const openFilePathMock = vi.fn()
   const openFileMock = vi.fn()
-  const authorizeExternalPathMock = vi.fn()
+  const grantExternalFileMock = vi.fn()
+  const grantExternalDirectoryMock = vi.fn()
   const statMock = vi.fn().mockResolvedValue({ isDirectory: false })
   const fsPathExistsMock = vi.fn().mockResolvedValue(true)
   const runtimeEnvironmentCallMock = vi.fn()
@@ -72,7 +74,8 @@ export function createTerminalLinkTestDoubles(): TerminalLinkTestDoubles {
     openFileUriMock,
     openFilePathMock,
     openFileMock,
-    authorizeExternalPathMock,
+    grantExternalFileMock,
+    grantExternalDirectoryMock,
     statMock,
     fsPathExistsMock,
     runtimeEnvironmentCallMock,

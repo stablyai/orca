@@ -11,13 +11,8 @@ import {
 } from './terminal-link-handlers-test-harness'
 
 const doubles = createTerminalLinkTestDoubles()
-const {
-  storeState,
-  authorizeExternalPathMock,
-  statMock,
-  openFileMock,
-  setPendingEditorRevealMock
-} = doubles
+const { storeState, grantExternalFileMock, statMock, openFileMock, setPendingEditorRevealMock } =
+  doubles
 
 vi.mock('@/store', () => ({
   useAppStore: {
@@ -189,7 +184,7 @@ describe('createFilePathLinkProvider range bounds', () => {
     })
     await flushAsyncWork()
 
-    expect(authorizeExternalPathMock).toHaveBeenCalledWith({
+    expect(grantExternalFileMock).toHaveBeenCalledWith({
       targetPath: '/home/alice/notes.md'
     })
   })

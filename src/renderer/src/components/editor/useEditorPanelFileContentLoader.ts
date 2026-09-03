@@ -118,7 +118,7 @@ export function useEditorPanelFileContentLoader({
             ? undefined
             : readSettings?.activeRuntimeEnvironmentId?.trim()
           if (isLiveTailLogTab) {
-            await window.api.fs.authorizeExternalPath({ targetPath: filePath })
+            await window.api.fs.grantExternalFile({ targetPath: filePath })
             readConnectionId = undefined
           } else {
             const currentState = useAppStore.getState()
@@ -155,7 +155,7 @@ export function useEditorPanelFileContentLoader({
             if (!externalSshOwnerId) {
               // Why: client-local external tabs need their main-process path grant
               // refreshed because that authorization is only held in memory.
-              await window.api.fs.authorizeExternalPath({ targetPath: filePath })
+              await window.api.fs.grantExternalFile({ targetPath: filePath })
               // Why: that grant covers the client path, so this read must stay off the
               // worktree's SSH host.
               readConnectionId = undefined

@@ -91,10 +91,10 @@ type ProbeProps = {
   gitStatusByWorktree?: Record<string, GitStatusEntry[]>
 }
 
-const authorizeExternalPath = vi.fn()
+const grantExternalFile = vi.fn()
 // Why: opening any liveTail tab arms useLocalLogTail's change subscription.
 const onLocalLogTailChanged = vi.fn(() => () => {})
-const fsApi = { authorizeExternalPath, onLocalLogTailChanged }
+const fsApi = { grantExternalFile, onLocalLogTailChanged }
 let latestFileContents: Record<string, FileContent> = {}
 let latestDiffContents: Record<string, DiffContent> = {}
 let latestReloadContent: (file: OpenFile) => void = () => {}
@@ -138,8 +138,8 @@ describe('useEditorPanelContentState', () => {
   beforeEach(() => {
     latestFileContents = {}
     latestDiffContents = {}
-    authorizeExternalPath.mockReset()
-    authorizeExternalPath.mockResolvedValue(undefined)
+    grantExternalFile.mockReset()
+    grantExternalFile.mockResolvedValue(undefined)
     onLocalLogTailChanged.mockClear()
     ;(window as unknown as { api: unknown }).api = { fs: fsApi }
     mocks.readRuntimeFileContent.mockReset()
@@ -258,7 +258,7 @@ describe('useEditorPanelContentState', () => {
 
     await vi.waitFor(() => expect(latestFileContents[activeFile.id]?.content).toBe('# remote'))
     // Why: the client-local grant must not be requested for a remote-owned path.
-    expect(authorizeExternalPath).not.toHaveBeenCalled()
+    expect(grantExternalFile).not.toHaveBeenCalled()
     expect(mocks.readRuntimeFileContent).toHaveBeenCalledWith(
       expect.objectContaining({
         filePath: '/work/reports/audit.md',
@@ -286,7 +286,7 @@ describe('useEditorPanelContentState', () => {
     await vi.waitFor(() => expect(latestFileContents[activeFile.id]?.content).toBe('log line'))
     // Why: AI Vault only surfaces client-local logs, so the worktree's SSH target must
     // not capture this read — it stays a granted client-local path.
-    expect(authorizeExternalPath).toHaveBeenCalledWith({ targetPath: logPath })
+    expect(grantExternalFile).toHaveBeenCalledWith({ targetPath: logPath })
     expect(mocks.readRuntimeFileContent).toHaveBeenCalledWith(
       expect.objectContaining({ connectionId: undefined, includeLocalLogMetadata: true })
     )
@@ -311,7 +311,7 @@ describe('useEditorPanelContentState', () => {
     })
 
     await vi.waitFor(() => expect(latestFileContents[activeFile.id]?.content).toBe('# local'))
-    expect(authorizeExternalPath).toHaveBeenCalledWith({ targetPath: '/Users/me/notes/audit.md' })
+    expect(grantExternalFile).toHaveBeenCalledWith({ targetPath: '/Users/me/notes/audit.md' })
   })
 
   it('rejects an unstamped external tab in a remote runtime workspace', async () => {

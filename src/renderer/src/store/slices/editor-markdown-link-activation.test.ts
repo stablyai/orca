@@ -33,7 +33,7 @@ describe('createEditorSlice activateMarkdownLink', () => {
   const openUrlMock = vi.fn()
   const openFileUriMock = vi.fn()
   const pathExistsMock = vi.fn()
-  const authorizeExternalPathMock = vi.fn()
+  const grantExternalFileMock = vi.fn()
   const fsStatMock = vi.fn()
   const runtimeEnvironmentCallMock = vi.fn()
   const runtimeEnvironmentTransportCallMock = vi.fn()
@@ -45,7 +45,7 @@ describe('createEditorSlice activateMarkdownLink', () => {
     openFileUriMock.mockReset()
     pathExistsMock.mockReset()
     pathExistsMock.mockResolvedValue(true)
-    authorizeExternalPathMock.mockReset()
+    grantExternalFileMock.mockReset()
     fsStatMock.mockReset()
     fsStatMock.mockImplementation(async ({ filePath }: { filePath: string }) => {
       const exists = await pathExistsMock(filePath)
@@ -78,7 +78,7 @@ describe('createEditorSlice activateMarkdownLink', () => {
         pathExists: pathExistsMock
       },
       fs: {
-        authorizeExternalPath: authorizeExternalPathMock,
+        grantExternalFile: grantExternalFileMock,
         stat: fsStatMock
       },
       runtimeEnvironments: {
@@ -565,7 +565,7 @@ describe('createEditorSlice activateMarkdownLink', () => {
       worktreeId: 'wt-1',
       worktreeRoot: '/repo'
     })
-    expect(authorizeExternalPathMock).toHaveBeenCalledWith({ targetPath: '/tmp/image.png' })
+    expect(grantExternalFileMock).toHaveBeenCalledWith({ targetPath: '/tmp/image.png' })
     expect(store.getState().openFiles).toEqual([
       expect.objectContaining({
         filePath: '/tmp/image.png',
@@ -621,7 +621,7 @@ describe('createEditorSlice activateMarkdownLink', () => {
       worktreeRoot: '/repo'
     })
 
-    expect(authorizeExternalPathMock).not.toHaveBeenCalled()
+    expect(grantExternalFileMock).not.toHaveBeenCalled()
     expect(store.getState().openFiles).toEqual([])
     expect(toastErrorMock).toHaveBeenCalledWith(
       'Opening remote paths in the local OS is not available.'

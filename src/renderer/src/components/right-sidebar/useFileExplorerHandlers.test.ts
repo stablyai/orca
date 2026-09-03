@@ -37,7 +37,7 @@ describe('activateFileExplorerNode', () => {
       canToggleDirectories: false,
       loadDir: vi.fn(),
       statPath: vi.fn(),
-      authorizeExternalPath: vi.fn(),
+      grantExternalPath: vi.fn(),
       markPathAsDirectory: vi.fn(),
       setSelectedPath
     })
@@ -59,7 +59,7 @@ describe('activateFileExplorerNode', () => {
       toggleDir,
       loadDir,
       statPath: vi.fn().mockResolvedValue({ isDirectory: true }),
-      authorizeExternalPath: vi.fn(),
+      grantExternalPath: vi.fn(),
       markPathAsDirectory,
       setSelectedPath: vi.fn()
     })
@@ -97,7 +97,7 @@ describe('activateFileExplorerNode', () => {
       toggleDir: vi.fn(),
       loadDir: vi.fn(),
       statPath: vi.fn().mockResolvedValue({ isDirectory: false }),
-      authorizeExternalPath: vi.fn(),
+      grantExternalPath: vi.fn(),
       markPathAsDirectory: vi.fn(),
       setSelectedPath: vi.fn()
     })
@@ -138,7 +138,7 @@ describe('activateFileExplorerNode', () => {
       toggleDir: vi.fn(),
       loadDir: vi.fn(),
       statPath: vi.fn().mockRejectedValue(new Error('stat failed')),
-      authorizeExternalPath: vi.fn(),
+      grantExternalPath: vi.fn(),
       markPathAsDirectory: vi.fn(),
       setSelectedPath: vi.fn()
     })
@@ -158,7 +158,7 @@ describe('activateFileExplorerNode', () => {
 
   it('grants the symlink target local path access before resolving it', async () => {
     const order: string[] = []
-    const authorizeExternalPath = vi.fn(async () => {
+    const grantExternalPath = vi.fn(async () => {
       order.push('authorize')
     })
     const statPath = vi.fn(async () => {
@@ -180,7 +180,7 @@ describe('activateFileExplorerNode', () => {
       toggleDir: vi.fn(),
       loadDir: vi.fn(),
       statPath,
-      authorizeExternalPath,
+      grantExternalPath,
       markPathAsDirectory: vi.fn(),
       setSelectedPath: vi.fn()
     })
@@ -188,7 +188,7 @@ describe('activateFileExplorerNode', () => {
     // Why: the grant has to land before the stat, or the allow-list denies the
     // target and the row can never open.
     expect(order).toEqual(['authorize', 'stat'])
-    expect(authorizeExternalPath).toHaveBeenCalledWith({ targetPath: '/repo/linked-docs' })
+    expect(grantExternalPath).toHaveBeenCalledWith({ targetPath: '/repo/linked-docs' })
     expect(openFile).toHaveBeenCalledTimes(1)
   })
 
@@ -208,7 +208,7 @@ describe('activateFileExplorerNode', () => {
       toggleDir: vi.fn(),
       loadDir: vi.fn(),
       statPath: vi.fn().mockResolvedValue({ isDirectory: false }),
-      authorizeExternalPath: vi.fn().mockRejectedValue(new Error('ipc unavailable')),
+      grantExternalPath: vi.fn().mockRejectedValue(new Error('ipc unavailable')),
       markPathAsDirectory: vi.fn(),
       setSelectedPath: vi.fn()
     })
@@ -218,7 +218,7 @@ describe('activateFileExplorerNode', () => {
   })
 
   it('leaves symlink authorization to the host for a remote-owned workspace', async () => {
-    const authorizeExternalPath = vi.fn()
+    const grantExternalPath = vi.fn()
     useAppStore.setState({
       worktreesByRepo: {
         'repo-1': [
@@ -240,12 +240,12 @@ describe('activateFileExplorerNode', () => {
       toggleDir: vi.fn(),
       loadDir: vi.fn(),
       statPath: vi.fn().mockResolvedValue({ isDirectory: false }),
-      authorizeExternalPath,
+      grantExternalPath,
       markPathAsDirectory: vi.fn(),
       setSelectedPath: vi.fn()
     })
 
-    expect(authorizeExternalPath).not.toHaveBeenCalled()
+    expect(grantExternalPath).not.toHaveBeenCalled()
   })
 
   it('opens local files without runtime fallback when no runtime owner is set', async () => {
@@ -272,7 +272,7 @@ describe('activateFileExplorerNode', () => {
       toggleDir: vi.fn(),
       loadDir: vi.fn(),
       statPath: vi.fn(),
-      authorizeExternalPath: vi.fn(),
+      grantExternalPath: vi.fn(),
       markPathAsDirectory: vi.fn(),
       setSelectedPath: vi.fn()
     })

@@ -108,7 +108,7 @@ export function navigateBrowserPageToUrl({
           connectionId: undefined
         }
         if (!isRemoteRuntimeFileOperation(fileContext, notebookPath)) {
-          await window.api.fs.authorizeExternalPath({ targetPath: notebookPath })
+          await window.api.fs.grantExternalFile({ targetPath: notebookPath })
         }
         const stat = await statRuntimePath(fileContext, notebookPath)
         if (stat.isDirectory) {

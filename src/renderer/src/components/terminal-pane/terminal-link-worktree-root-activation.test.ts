@@ -16,7 +16,7 @@ import {
 } from './terminal-link-handlers-test-harness'
 
 const doubles = createTerminalLinkTestDoubles()
-const { storeState, deps, authorizeExternalPathMock, statMock, openFileMock, openFilePathMock } =
+const { storeState, deps, grantExternalFileMock, statMock, openFileMock, openFilePathMock } =
   doubles
 
 vi.mock('@/store', () => ({
@@ -55,7 +55,7 @@ describe('handleOscLink', () => {
     await flushAsyncWork()
 
     expect(activateAndRevealWorktree).toHaveBeenCalledWith('wt-2')
-    expect(authorizeExternalPathMock).not.toHaveBeenCalled()
+    expect(grantExternalFileMock).not.toHaveBeenCalled()
     expect(statMock).not.toHaveBeenCalled()
     expect(openFilePathMock).not.toHaveBeenCalled()
     expect(openFileMock).not.toHaveBeenCalled()
@@ -73,7 +73,7 @@ describe('handleOscLink', () => {
 
     expect(activateAndRevealWorktree).toHaveBeenCalledTimes(1)
     expect(activateAndRevealWorktree).toHaveBeenCalledWith('wt-2')
-    expect(authorizeExternalPathMock).not.toHaveBeenCalled()
+    expect(grantExternalFileMock).not.toHaveBeenCalled()
     expect(statMock).not.toHaveBeenCalled()
   })
 
@@ -90,9 +90,7 @@ describe('handleOscLink', () => {
     })
     await flushAsyncWork()
 
-    expect(authorizeExternalPathMock).toHaveBeenCalledWith({
-      targetPath: '/tmp/other-worktree'
-    })
+    expect(grantExternalFileMock).not.toHaveBeenCalled()
     expect(statMock).toHaveBeenCalled()
     expect(openFilePathMock).toHaveBeenCalledWith('/tmp/other-worktree')
     expect(activateAndRevealWorktree).not.toHaveBeenCalled()
@@ -113,7 +111,7 @@ describe('handleOscLink', () => {
     await flushAsyncWork()
 
     expect(activateAndRevealWorktree).toHaveBeenCalledWith('wt-2')
-    expect(authorizeExternalPathMock).not.toHaveBeenCalled()
+    expect(grantExternalFileMock).not.toHaveBeenCalled()
     expect(statMock).not.toHaveBeenCalled()
     expect(openFilePathMock).not.toHaveBeenCalled()
   })
@@ -131,7 +129,7 @@ describe('handleOscLink', () => {
     await flushAsyncWork()
 
     expect(activateAndRevealWorktree).toHaveBeenCalledWith('wt-win')
-    expect(authorizeExternalPathMock).not.toHaveBeenCalled()
+    expect(grantExternalFileMock).not.toHaveBeenCalled()
     expect(statMock).not.toHaveBeenCalled()
     expect(openFilePathMock).not.toHaveBeenCalled()
   })
@@ -147,7 +145,7 @@ describe('handleOscLink', () => {
     await flushAsyncWork()
 
     expect(activateAndRevealWorktree).toHaveBeenCalledWith('wt-2')
-    expect(authorizeExternalPathMock).not.toHaveBeenCalled()
+    expect(grantExternalFileMock).not.toHaveBeenCalled()
     expect(statMock).not.toHaveBeenCalled()
     expect(openFilePathMock).not.toHaveBeenCalled()
     expect(openFileMock).not.toHaveBeenCalled()
@@ -254,7 +252,7 @@ describe('createFilePathLinkProvider range bounds', () => {
 
     expect(opened).toBe(true)
     expect(activateAndRevealWorktree).toHaveBeenCalledWith('wt-2')
-    expect(authorizeExternalPathMock).not.toHaveBeenCalled()
+    expect(grantExternalFileMock).not.toHaveBeenCalled()
     expect(statMock).not.toHaveBeenCalled()
     expect(openFilePathMock).not.toHaveBeenCalled()
     expect(openFileMock).not.toHaveBeenCalled()

@@ -74,7 +74,8 @@ export function createFileApi(): NonNullable<Partial<PreloadApi>['fs']> {
     ...createWebFileMutationMethods({
       captureSession: captureWebFileMutationSession
     }),
-    authorizeExternalPath: () => Promise.resolve(),
+    grantExternalFile: () => Promise.resolve(),
+    grantExternalDirectory: () => Promise.resolve(),
     stat: async ({ filePath }) => {
       const file = await resolveRuntimeFilePath(filePath)
       return callRuntimeResult('files.stat', {

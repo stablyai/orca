@@ -106,7 +106,8 @@ export type FilesystemApi = {
         recursive?: boolean
       } & SshMutationExpectation
     ) => Promise<void>
-    authorizeExternalPath: (args: { targetPath: string }) => Promise<void>
+    grantExternalFile: (args: { targetPath: string }) => Promise<void>
+    grantExternalDirectory: (args: { targetPath: string }) => Promise<void>
     stat: (args: {
       filePath: string
       connectionId?: string
