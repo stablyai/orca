@@ -14,13 +14,14 @@ describe('#9040 terminal tab dot attributes spinner titles to the launched agent
     resetTerminalTabActivityFlagsCacheForTest()
   })
 
-  it('reports working for a Claude spinner title on a live tab', () => {
+  it('reports working for a Claude spinner pane title on a live tab', () => {
     const status = resolveTerminalTabActivityStatus({
       tab: {
         id: 'tab-1',
-        title: '⠋ implementing the feature',
+        title: 'bash',
         launchAgent: 'claude'
       } satisfies Partial<TerminalTab> as TerminalTab,
+      runtimePaneTitlesByTabId: { 'tab-1': { 0: '⠋ implementing the feature' } },
       ptyIdsByTabId: { 'tab-1': ['pty-0'] }
     })
 
@@ -28,21 +29,40 @@ describe('#9040 terminal tab dot attributes spinner titles to the launched agent
   })
 
   // Control: the named-provider path this must stay at parity with.
-  it('reports working for a named-provider title', () => {
+  it('reports working for a named-provider pane title', () => {
     const status = resolveTerminalTabActivityStatus({
-      tab: { id: 'tab-1', title: 'claude [working]' } as TerminalTab,
+      tab: { id: 'tab-1', title: 'bash' } as TerminalTab,
+      runtimePaneTitlesByTabId: { 'tab-1': { 0: 'claude [working]' } },
       ptyIdsByTabId: { 'tab-1': ['pty-0'] }
     })
 
     expect(status).toBe('working')
   })
 
-  it('stays out of working for a spinner title with no launch identity', () => {
+  it('stays out of working for a spinner pane title with no launch identity', () => {
     const status = resolveTerminalTabActivityStatus({
-      tab: { id: 'tab-1', title: '⠐ Review branch for regressions' } as TerminalTab,
+      tab: { id: 'tab-1', title: 'bash' } as TerminalTab,
+      runtimePaneTitlesByTabId: { 'tab-1': { 0: '⠐ Review branch for regressions' } },
       ptyIdsByTabId: { 'tab-1': ['pty-0'] }
     })
 
     expect(status).not.toBe('working')
+  })
+
+  // Why (STA-2926): the tab-bar dot resolves through the same heuristic as the sidebar, so it
+  // inherits the same rule — a title left on the tab after its pane stopped publishing is a
+  // stale leftover with no pane to attribute it to, and must not light the dot.
+  it('does not report working for an agent title no pane is publishing', () => {
+    for (const tab of [
+      { id: 'tab-1', title: '⠋ implementing the feature', launchAgent: 'claude' },
+      { id: 'tab-1', title: 'claude [working]' }
+    ] satisfies Partial<TerminalTab>[]) {
+      const status = resolveTerminalTabActivityStatus({
+        tab: tab as TerminalTab,
+        ptyIdsByTabId: { 'tab-1': ['pty-0'] }
+      })
+
+      expect(status).toBe('active')
+    }
   })
 })

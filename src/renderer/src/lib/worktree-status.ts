@@ -75,39 +75,38 @@ function tabHasStatus(
 ): boolean {
   const agentStatusPaneIds = options.agentStatusPaneIdsByTabId?.[tab.id]
   const paneTitles = runtimePaneTitlesByTabId[tab.id]
-  if (paneTitles && Object.keys(paneTitles).length > 0) {
-    const tabLayoutRoot =
-      options.terminalLayoutRootsByTabId?.[tab.id] ?? options.terminalLayoutsByTabId?.[tab.id]?.root
-    const paneTitleEntries = Object.entries(paneTitles)
-    for (const [runtimePaneId, title] of paneTitleEntries) {
-      const leafId = resolveRuntimePaneTitleLeafIdFromRoot(tabLayoutRoot, runtimePaneId)
-      // Why: runtime titles can precede layout hydration (SSH/replay); with one title and one agent row, prefer that row over a stale spinner.
-      const hasSingleUnmappedAgentStatusPane =
-        leafId === null && agentStatusPaneIds?.size === 1 && paneTitleEntries.length === 1
-      if (
-        agentStatusPaneIds?.has(runtimePaneId) ||
-        (leafId !== null && agentStatusPaneIds?.has(leafId)) ||
-        hasSingleUnmappedAgentStatusPane
-      ) {
-        continue
-      }
-      if (
-        classifyTitleActivity(title) === status &&
-        titleStatusIsAgentAttributable(title, tab.launchAgent)
-      ) {
-        return true
-      }
+  // Why (STA-2926, #11372): runtime pane titles are the only pane-scoped title channel, and
+  // clearRuntimePaneTitle drops a pane's slot the moment its PTY exits. A tab with no slots left
+  // has nothing publishing a title, so `tab.title` — a provenance-free mirror of the last focused
+  // pane — is a stale leftover rather than evidence of live work. The row builder refuses to mint
+  // a row from that same title, and the dot must agree with the row (#9040) instead of spinning
+  // "working" over zero agents.
+  if (!paneTitles || Object.keys(paneTitles).length === 0) {
+    return false
+  }
+  const tabLayoutRoot =
+    options.terminalLayoutRootsByTabId?.[tab.id] ?? options.terminalLayoutsByTabId?.[tab.id]?.root
+  const paneTitleEntries = Object.entries(paneTitles)
+  for (const [runtimePaneId, title] of paneTitleEntries) {
+    const leafId = resolveRuntimePaneTitleLeafIdFromRoot(tabLayoutRoot, runtimePaneId)
+    // Why: runtime titles can precede layout hydration (SSH/replay); with one title and one agent row, prefer that row over a stale spinner.
+    const hasSingleUnmappedAgentStatusPane =
+      leafId === null && agentStatusPaneIds?.size === 1 && paneTitleEntries.length === 1
+    if (
+      agentStatusPaneIds?.has(runtimePaneId) ||
+      (leafId !== null && agentStatusPaneIds?.has(leafId)) ||
+      hasSingleUnmappedAgentStatusPane
+    ) {
+      continue
     }
-    return false
+    if (
+      classifyTitleActivity(title) === status &&
+      titleStatusIsAgentAttributable(title, tab.launchAgent)
+    ) {
+      return true
+    }
   }
-  // Why: a tab title can't identify its pane; once an agent row owns one, prefer the row over a completed pane's stale "working" title.
-  if (agentStatusPaneIds && agentStatusPaneIds.size > 0) {
-    return false
-  }
-  return (
-    classifyTitleActivity(tab.title) === status &&
-    titleStatusIsAgentAttributable(tab.title, tab.launchAgent)
-  )
+  return false
 }
 
 // Why: require agent attribution so a bare never-cleared spinner title can't spin the dot "0 agents" forever with no matching sidebar row.
@@ -116,8 +115,8 @@ function titleStatusIsAgentAttributable(title: string, launchAgent?: TuiAgent | 
     return true
   }
   // Why: a spinner proves activity but not identity (Claude's thinking title has no provider
-  // token, #9040); the tab's launch identity supplies it, mirroring the row builder's spinner
-  // fallback (#9647) so the dot and the sidebar row agree.
+  // token, #9040); the tab's launch identity supplies it, mirroring the row builder's own
+  // pane-title owner fallback (#9647) so the dot and the sidebar row agree.
   return containsAgentSpinnerGlyph(title) && Boolean(launchAgent)
 }
 

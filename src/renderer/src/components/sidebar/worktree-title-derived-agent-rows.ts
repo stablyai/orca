@@ -77,58 +77,45 @@ export function buildTitleDerivedAgentRows(args: {
         ? Object.entries(paneTitles).sort(([a], [b]) => Number(a) - Number(b))
         : []
 
-    if (paneTitleEntries.length > 0) {
-      for (const [paneId, title] of paneTitleEntries) {
-        const leafId = resolveLeafIdForTitleFallback({
-          layout,
-          paneTitleEntries,
-          paneId: Number(paneId),
-          title
-        })
-        if (!leafId) {
-          continue
-        }
-        const row = buildTitleDerivedAgentRow({
-          tab,
-          leafId,
-          title,
-          ownerAgentType: resolveTitleDerivedPaneOwner(tab, layout, leafId),
-          now: args.now,
-          runtimeAgentOrchestrationByPaneKey: args.runtimeAgentOrchestrationByPaneKey
-        })
-        if (!row || args.seenPaneKeys.has(row.paneKey)) {
-          continue
-        }
-        rows.push(row)
-        args.seenPaneKeys.add(row.paneKey)
+    // Why (STA-2926, #11372): runtimePaneTitles is the only pane-scoped title channel — it is
+    // written per OSC frame and cleared the moment a pane's PTY exits or its pane closes. A tab
+    // with none of them has no pane publishing a title, so there is nothing here to row. The
+    // former `tab.title` fallback recycled a dead pane's row onto whichever leaf survived: the
+    // tab title is a tab-scoped mirror of the *focused* pane and carries no pane provenance, so
+    // once its pane closed it could not be attributed to any leaf — it was evidence of nothing.
+    // Symmetrical with #14650's `isShellProcess` guard, which refuses to resurrect a row from a
+    // title that is positive evidence the agent exited.
+    for (const [paneId, title] of paneTitleEntries) {
+      const leafId = resolveLeafIdForTitleFallback({
+        layout,
+        paneTitleEntries,
+        paneId: Number(paneId),
+        title
+      })
+      if (!leafId) {
+        continue
       }
-      continue
+      const row = buildTitleDerivedAgentRow({
+        tab,
+        leafId,
+        title,
+        ownerAgentType: resolveTitleDerivedPaneOwner(tab, layout, leafId),
+        now: args.now,
+        runtimeAgentOrchestrationByPaneKey: args.runtimeAgentOrchestrationByPaneKey
+      })
+      if (!row || args.seenPaneKeys.has(row.paneKey)) {
+        continue
+      }
+      rows.push(row)
+      args.seenPaneKeys.add(row.paneKey)
     }
-
-    const leafId = layout?.activeLeafId ?? collectLeafIds(layout?.root ?? null)[0]
-    if (!leafId) {
-      continue
-    }
-    const row = buildTitleDerivedAgentRow({
-      tab,
-      leafId,
-      title: tab.title,
-      ownerAgentType: resolveTitleDerivedPaneOwner(tab, layout, leafId),
-      now: args.now,
-      runtimeAgentOrchestrationByPaneKey: args.runtimeAgentOrchestrationByPaneKey
-    })
-    if (!row || args.seenPaneKeys.has(row.paneKey)) {
-      continue
-    }
-    rows.push(row)
-    args.seenPaneKeys.add(row.paneKey)
   }
 
   return rows
 }
 
 /**
- * Constructs a dashboard agent row from a terminal tab's title fallback,
+ * Constructs a dashboard agent row from one pane's live runtime title,
  * normalising Pi-compatible agent names to their owner.
  */
 function buildTitleDerivedAgentRow(args: {

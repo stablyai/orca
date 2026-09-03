@@ -34,7 +34,10 @@ describe('getWorktreeStatus', () => {
         { id: 'tab-2', title: 'claude [permission]' }
       ],
       [{ id: 'browser-1' }],
-      livePtyMap('tab-1', 'tab-2')
+      livePtyMap('tab-1', 'tab-2'),
+      // Why: the status must come from panes that are actually publishing — a tab title alone no
+      // longer feeds the dot (STA-2926).
+      { 'tab-1': { 0: 'claude [working]' }, 'tab-2': { 0: 'claude [permission]' } }
     )
 
     expect(status).toBe('permission')
@@ -129,14 +132,28 @@ describe('getWorktreeStatus', () => {
     expect(status).toBe('active')
   })
 
-  it('still spins on an agent-attributable braille-spinner title', () => {
+  it('still spins on an agent-attributable braille-spinner pane title', () => {
     const status = getWorktreeStatus(
       [{ id: 'tab-1', title: '⠹ codex fix flaky test' }],
+      [],
+      livePtyMap('tab-1'),
+      { 'tab-1': { 0: '⠹ codex fix flaky test' } }
+    )
+
+    expect(status).toBe('working')
+  })
+
+  // Why (STA-2926): once every pane's title slot is cleared, `tab.title` is a provenance-free
+  // leftover of a pane that is gone. It used to keep the dot spinning over zero sidebar rows;
+  // the row builder refuses to mint a row from it, so the dot must refuse to spin on it too.
+  it('does not spin on an agent title no pane is publishing', () => {
+    const status = getWorktreeStatus(
+      [{ id: 'tab-1', title: 'claude [working]' }],
       [],
       livePtyMap('tab-1')
     )
 
-    expect(status).toBe('working')
+    expect(status).toBe('active')
   })
 })
 
@@ -294,6 +311,7 @@ describe('resolveWorktreeStatus', () => {
       tabs: [{ id: 'tab-1', title: 'claude [working]' }],
       browserTabs: [],
       ptyIdsByTabId: livePtyMap('tab-1'),
+      runtimePaneTitlesByTabId: { 'tab-1': { 0: 'claude [working]' } },
       hasPermission: false,
       hasLiveWorking: false,
       hasLiveDone: true,
@@ -387,6 +405,7 @@ describe('resolveWorktreeStatus', () => {
       tabs: [{ id: 'tab-1', title: 'claude [permission]' }],
       browserTabs: [],
       ptyIdsByTabId: livePtyMap('tab-1'),
+      runtimePaneTitlesByTabId: { 'tab-1': { 0: 'claude [permission]' } },
       hasPermission: false,
       hasLiveWorking: false,
       hasLiveDone: true,

@@ -7,6 +7,7 @@ import { buildWorktreeAgentRows } from './worktree-agent-rows'
 
 const LEAF_ID_1 = '77777777-7777-4777-8777-777777777777'
 const LEAF_ID_2 = '88888888-8888-4888-8888-888888888888'
+const LEAF_ID_3 = '99999999-9999-4999-8999-999999999999'
 
 function makeTab(id: string, overrides: Partial<TerminalTab> = {}): TerminalTab {
   return {
@@ -380,5 +381,82 @@ describe('buildTitleDerivedAgentRows', () => {
     })
 
     expect(rows).toHaveLength(0)
+  })
+})
+
+// STA-2926 / #11372. Closing a split pane clears that pane's runtime title slot, but nothing
+// clears `tab.title` — `resolveTabTitleAfterPaneClose` asks for a reset and
+// `getFallbackTabTitle` hands the current (stale) title straight back whenever the tab has no
+// customTitle/quickCommandLabel/defaultTitle. The tab title is a tab-scoped mirror of the
+// focused pane, so it carries no pane provenance and must never mint a pane row.
+describe('buildTitleDerivedAgentRows — closed split pane', () => {
+  it('does not recycle a closed pane row onto the sibling or a replacement session', () => {
+    // The agent pane closed; `survivingLeafId` is the leaf the sidebar would attribute the
+    // orphaned tab title to — the promoted sibling, or a pane opened after the close.
+    for (const survivingLeafId of [LEAF_ID_1, LEAF_ID_3]) {
+      const rows = buildWorktreeAgentRows({
+        tabs: [makeTab('tab-1', { title: '✳ Claude Code' })],
+        entries: [],
+        retained: [],
+        // Emptied by clearRuntimePaneTitle on the closed pane's PTY exit.
+        runtimePaneTitlesByTabId: {},
+        ptyIdsByTabId: { 'tab-1': ['pty-survivor'] },
+        terminalLayoutsByTabId: { 'tab-1': makeSingleLayout(survivingLeafId) },
+        now: 2000
+      })
+
+      expect(rows).toHaveLength(0)
+    }
+  })
+
+  // Pre-fix these minted codex/working, codex/idle and gemini/idle respectively — the last one
+  // an agent the tab never launched, taken purely from the dead pane's leftover title.
+  it('does not synthesize a row from a stale spinner or identity tab title', () => {
+    for (const title of ['⠋ Codex', '✳ refactor the resolver', '⏸ Gemini CLI']) {
+      const rows = buildWorktreeAgentRows({
+        tabs: [makeTab('tab-1', { title, launchAgent: 'codex' })],
+        entries: [],
+        retained: [],
+        runtimePaneTitlesByTabId: {},
+        ptyIdsByTabId: { 'tab-1': ['pty-survivor'] },
+        terminalLayoutsByTabId: { 'tab-1': makeSingleLayout(LEAF_ID_1) },
+        now: 2000
+      })
+
+      expect(rows).toHaveLength(0)
+    }
+  })
+
+  it('keeps the surviving pane on its own identity rather than the closed pane title', () => {
+    const rows = buildWorktreeAgentRows({
+      tabs: [makeTab('tab-1', { title: '✳ Claude Code' })],
+      entries: [],
+      retained: [],
+      // The survivor publishes; the closed pane's slot is gone.
+      runtimePaneTitlesByTabId: { 'tab-1': { 2: '⠋ Codex' } },
+      ptyIdsByTabId: { 'tab-1': ['pty-survivor'] },
+      terminalLayoutsByTabId: { 'tab-1': makeSingleLayout(LEAF_ID_2) },
+      now: 2000
+    })
+
+    expect(rows.map((row) => [row.paneKey, row.agentType, row.state])).toEqual([
+      [makePaneKey('tab-1', LEAF_ID_2), 'codex', 'working']
+    ])
+  })
+
+  it('still rows a live pane that publishes its own runtime title', () => {
+    const rows = buildWorktreeAgentRows({
+      tabs: [makeTab('tab-1', { title: '⠋ Codex', launchAgent: 'codex' })],
+      entries: [],
+      retained: [],
+      runtimePaneTitlesByTabId: { 'tab-1': { 1: '⠋ Codex' } },
+      ptyIdsByTabId: { 'tab-1': ['pty-codex'] },
+      terminalLayoutsByTabId: { 'tab-1': makeSingleLayout(LEAF_ID_1) },
+      now: 2000
+    })
+
+    expect(rows.map((row) => [row.paneKey, row.agentType, row.state])).toEqual([
+      [makePaneKey('tab-1', LEAF_ID_1), 'codex', 'working']
+    ])
   })
 })

@@ -44,16 +44,21 @@ describe('getWorktreeStatus', () => {
     // populated live-pty map so this assertion exercises the live-tab branch.
     // Titles are real classifiable shapes: getWorktreeStatus reads the shared
     // classifier through pane-agent-evidence, which this file does not mock.
+    // Why (STA-2926): the dot reads runtime pane titles, so publish each title on a pane rather
+    // than relying on the tab title, which no longer feeds the heuristic on its own.
     const livePtyIds = { 'tab-1': ['pty-1'] }
     expect(
       getWorktreeStatus(
         [makeTerminalTab('Claude - action required')],
         [{ id: 'browser-1' }],
-        livePtyIds
+        livePtyIds,
+        { 'tab-1': { 0: 'Claude - action required' } }
       )
     ).toBe('permission')
     expect(
-      getWorktreeStatus([makeTerminalTab('mimo working')], [{ id: 'browser-1' }], livePtyIds)
+      getWorktreeStatus([makeTerminalTab('mimo working')], [{ id: 'browser-1' }], livePtyIds, {
+        'tab-1': { 0: 'mimo working' }
+      })
     ).toBe('working')
   })
 })

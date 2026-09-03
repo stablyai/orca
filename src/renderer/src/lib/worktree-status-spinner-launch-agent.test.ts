@@ -30,20 +30,10 @@ function rowCount(tab: Partial<TerminalTab>, paneTitles?: Record<number, string>
 
 // Why: #9040 — Claude's thinking title is a braille spinner plus task text with no
 // provider token, so the dot's attribution gate rejected it and the worktree resolved
-// to 'active', which renders the same emerald dot as 'done'. The sidebar row builder
-// already falls back to the tab's launch identity for spinner titles (#9647); the dot
-// must agree.
+// to 'active', which renders the same emerald dot as 'done'. The sidebar row builder falls
+// back to the pane's launch identity for spinner titles (#9647); the dot must agree. Both
+// halves now read the same pane-scoped channel — see the STA-2926 cases below.
 describe('#9040 worktree dot attributes spinner titles to the launched agent', () => {
-  it('spins for a Claude spinner title when the tab was launched as claude', () => {
-    const status = getWorktreeStatus(
-      [{ id: 'tab-1', title: '⠋ implementing the feature', launchAgent: 'claude' }],
-      [],
-      livePtyMap('tab-1')
-    )
-
-    expect(status).toBe('working')
-  })
-
   it('spins for a spinner-only pane title when the tab was launched as claude', () => {
     const status = getWorktreeStatus(
       [{ id: 'tab-1', title: 'bash', launchAgent: 'claude' }],
@@ -55,11 +45,12 @@ describe('#9040 worktree dot attributes spinner titles to the launched agent', (
     expect(status).toBe('working')
   })
 
-  // Why: pins the #9647 gate — spinner attribution needs a launch identity, so a
-  // spinner in a tab no agent was launched in cannot spin the dot.
-  it('stays active for a spinner title with no launch identity', () => {
+  // Why (STA-2926): a spinner surviving only on `tab.title` is the leftover of a pane that
+  // already closed — no pane is publishing it. It must not spin the dot, because the row
+  // builder will not mint a row from it and the dot may never spin over zero rows.
+  it('does not spin for a Claude spinner tab title no pane is publishing', () => {
     const status = getWorktreeStatus(
-      [{ id: 'tab-1', title: '⠐ Review branch for regressions' }],
+      [{ id: 'tab-1', title: '⠋ implementing the feature', launchAgent: 'claude' }],
       [],
       livePtyMap('tab-1')
     )
@@ -67,11 +58,23 @@ describe('#9040 worktree dot attributes spinner titles to the launched agent', (
     expect(status).toBe('active')
   })
 
-  it('does not manufacture activity from a non-spinner title with a launch identity', () => {
+  // Why: pins the #9647 gate — spinner attribution needs a launch identity, so a
+  // spinner in a tab no agent was launched in cannot spin the dot. Published on a pane so the
+  // assertion exercises that gate rather than stopping at the no-pane-titles guard above.
+  it('stays active for a spinner pane title with no launch identity', () => {
+    const status = getWorktreeStatus([{ id: 'tab-1', title: 'bash' }], [], livePtyMap('tab-1'), {
+      'tab-1': { 0: '⠐ Review branch for regressions' }
+    })
+
+    expect(status).toBe('active')
+  })
+
+  it('does not manufacture activity from a non-spinner pane title with a launch identity', () => {
     const status = getWorktreeStatus(
       [{ id: 'tab-1', title: 'bash', launchAgent: 'claude' }],
       [],
-      livePtyMap('tab-1')
+      livePtyMap('tab-1'),
+      { 'tab-1': { 0: 'bash' } }
     )
 
     expect(status).toBe('active')
@@ -86,19 +89,18 @@ describe('#9040 worktree dot attributes spinner titles to the launched agent', (
 // deliberate choice rather than drifting silently.
 describe('#9040 spinner attribution trade-off is bounded', () => {
   it('over-reports a non-agent spinner in a tab an agent was launched in', () => {
-    const tab = {
-      id: 'tab-1',
-      title: '⠋ Progress: resolved 42',
-      launchAgent: 'claude'
-    } satisfies Partial<TerminalTab>
+    const tab = { id: 'tab-1', title: 'bash', launchAgent: 'claude' } satisfies Partial<TerminalTab>
+    // The spinner is published by a live pane; a tab-title-only spinner no longer reaches the
+    // heuristic at all (STA-2926), so the trade-off is pinned where it is still real.
+    const paneTitles = { 'tab-1': { 0: '⠋ Progress: resolved 42' } }
 
-    expect(getWorktreeStatus([tab], [], livePtyMap('tab-1'))).toBe('working')
-    // Bound 1: the same title cannot spin a tab with no launch identity.
-    expect(getWorktreeStatus([{ id: 'tab-1', title: tab.title }], [], livePtyMap('tab-1'))).toBe(
-      'active'
-    )
+    expect(getWorktreeStatus([tab], [], livePtyMap('tab-1'), paneTitles)).toBe('working')
+    // Bound 1: the same pane title cannot spin a tab with no launch identity.
+    expect(
+      getWorktreeStatus([{ id: 'tab-1', title: 'bash' }], [], livePtyMap('tab-1'), paneTitles)
+    ).toBe('active')
     // Bound 2: a dead PTY drops out regardless of launch identity.
-    expect(getWorktreeStatus([tab], [], {})).toBe('inactive')
+    expect(getWorktreeStatus([tab], [], {}, paneTitles)).toBe('inactive')
   })
 })
 
@@ -109,28 +111,54 @@ describe('#9040 spinner attribution matches named-provider dot/row agreement', (
   it('produces a sidebar row alongside the dot, like a named provider does', () => {
     const spinnerTab = {
       id: 'tab-1',
-      title: '⠋ implementing the feature',
+      title: 'bash',
       launchAgent: 'claude'
     } satisfies Partial<TerminalTab>
-    const namedTab = { id: 'tab-1', title: 'claude [working]' }
-
-    expect(getWorktreeStatus([spinnerTab], [], livePtyMap('tab-1'))).toBe('working')
-    expect(rowCount(spinnerTab)).toBe(1)
-    // Control: the pre-existing named-provider path resolves to the same pair.
-    expect(getWorktreeStatus([namedTab], [], livePtyMap('tab-1'))).toBe('working')
-    expect(rowCount(namedTab)).toBe(1)
-  })
-
-  it('agrees for a spinner pane title too', () => {
-    const tab = { id: 'tab-1', title: 'bash', launchAgent: 'claude' } satisfies Partial<TerminalTab>
-    const paneTitles = { 'tab-1': { 0: '⠙ refactoring the parser' } }
+    const spinnerPaneTitles = { 0: '⠋ implementing the feature' }
+    const namedTab = { id: 'tab-1', title: 'bash' }
+    const namedPaneTitles = { 0: 'claude [working]' }
     const layouts = { 'tab-1': singleLeafLayout() }
 
     expect(
-      getWorktreeStatus([tab], [], livePtyMap('tab-1'), paneTitles, {
-        terminalLayoutsByTabId: layouts
-      })
+      getWorktreeStatus(
+        [spinnerTab],
+        [],
+        livePtyMap('tab-1'),
+        { 'tab-1': spinnerPaneTitles },
+        {
+          terminalLayoutsByTabId: layouts
+        }
+      )
     ).toBe('working')
-    expect(rowCount(tab, paneTitles['tab-1'])).toBe(1)
+    expect(rowCount(spinnerTab, spinnerPaneTitles)).toBe(1)
+    // Control: the pre-existing named-provider path resolves to the same pair.
+    expect(
+      getWorktreeStatus(
+        [namedTab],
+        [],
+        livePtyMap('tab-1'),
+        { 'tab-1': namedPaneTitles },
+        {
+          terminalLayoutsByTabId: layouts
+        }
+      )
+    ).toBe('working')
+    expect(rowCount(namedTab, namedPaneTitles)).toBe(1)
+  })
+
+  // Why (STA-2926): the agreement is load-bearing in the negative direction too. Once no pane
+  // publishes a title, the closed pane's leftover tab title must move neither half. Previously
+  // it moved both — minting a recycled row on the surviving leaf — and a half-applied fix that
+  // removed only the row would have stranded a dot spinning "working" over zero agents.
+  it('moves neither the dot nor a row when no pane publishes a title', () => {
+    const tabs = [
+      { id: 'tab-1', title: '⠋ implementing the feature', launchAgent: 'claude' },
+      { id: 'tab-1', title: 'claude [working]' }
+    ] satisfies Partial<TerminalTab>[]
+
+    for (const tab of tabs) {
+      expect(getWorktreeStatus([tab], [], livePtyMap('tab-1'))).toBe('active')
+      expect(rowCount(tab)).toBe(0)
+    }
   })
 })

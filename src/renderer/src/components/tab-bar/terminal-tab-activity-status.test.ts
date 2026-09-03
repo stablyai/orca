@@ -146,6 +146,9 @@ describe('resolveTerminalTabActivityStatus', () => {
       resolveTerminalTabActivityStatus({
         tab: { id: TAB_ID, title: 'Codex working' },
         agentStatusByPaneKey: { [stale.paneKey]: stale },
+        // Why (STA-2926): the title has to be live on a pane — a tab title alone no longer
+        // reaches the heuristic, so publishing it is what makes this a "live" title.
+        runtimePaneTitlesByTabId: { [TAB_ID]: { 1: 'Codex working' } },
         ptyIdsByTabId: LIVE_PTY
       })
     ).toBe('working')
@@ -157,6 +160,7 @@ describe('resolveTerminalTabActivityStatus', () => {
       resolveTerminalTabActivityStatus({
         tab: { id: TAB_ID, title: 'Codex working' },
         agentStatusByPaneKey: { [restored.paneKey]: restored },
+        runtimePaneTitlesByTabId: { [TAB_ID]: { 1: 'Codex working' } },
         ptyIdsByTabId: LIVE_PTY
       })
     ).toBe('active')
@@ -247,6 +251,9 @@ describe('resolveTerminalTabActivityStatus', () => {
     expect(
       resolveTerminalTabActivityStatus({
         tab: { id: TAB_ID, title: 'zsh' },
+        // Published so the shell title actually reaches the classifier rather than stopping at
+        // the no-pane-titles guard (STA-2926).
+        runtimePaneTitlesByTabId: { [TAB_ID]: { 1: 'zsh' } },
         ptyIdsByTabId: LIVE_PTY
       })
     ).toBe('active')
