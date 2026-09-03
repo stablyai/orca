@@ -423,6 +423,17 @@ describe('shouldRecoverRendererAfterProcessGone', () => {
     ).toBe(true)
   })
 
+  // Why: an external SIGTERM/SIGKILL of the Chromium children leaves the main process
+  // alive, so this reload is the only path back to a live window (macOS + Linux).
+  it('recovers renderers killed outside a known teardown window', () => {
+    expect(
+      shouldRecoverRendererAfterProcessGone({
+        reason: 'killed',
+        expectedTeardown: 'none'
+      })
+    ).toBe(true)
+  })
+
   it('does not recover renderer integrity failures', () => {
     expect(
       shouldRecoverRendererAfterProcessGone({
