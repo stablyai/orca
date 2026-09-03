@@ -8,11 +8,13 @@ import type { WorkspaceCleanupCandidate } from '../shared/workspace-cleanup'
 import type { WorkspaceSpaceWorktree } from '../shared/workspace-space-types'
 import {
   persistWorkspaceCleanupScanResult,
-  pruneWorkspaceCleanupScanSnapshots
+  pruneWorkspaceCleanupScanSnapshots,
+  withWorkspaceCleanupScanSnapshotProducer
 } from './workspace-cleanup-scan-snapshot'
 import {
   persistWorkspaceSpaceAnalysisSnapshot,
-  pruneWorkspaceSpaceAnalysisSnapshots
+  pruneWorkspaceSpaceAnalysisSnapshots,
+  withWorkspaceSpaceAnalysisSnapshotProducer
 } from './workspace-space-analysis-snapshot'
 
 const describeBench = process.env.ORCA_WORKSPACE_SNAPSHOT_PRUNE_BENCH ? describe : describe.skip
@@ -37,21 +39,30 @@ describeBench('workspace snapshot bulk pruning', () => {
       worktreeId: candidate.worktreeId,
       executionHostId: candidate.executionHostId
     }))
-    await persistWorkspaceCleanupScanResult(
-      snapshotDirectory,
-      { includeAllWorkspaces: true },
-      { scannedAt: 1, candidates, errors: [] }
+    await withWorkspaceCleanupScanSnapshotProducer(snapshotDirectory, (producer) =>
+      persistWorkspaceCleanupScanResult(
+        snapshotDirectory,
+        { includeAllWorkspaces: true },
+        { scannedAt: 1, candidates, errors: [] },
+        producer
+      )
     )
-    await persistWorkspaceSpaceAnalysisSnapshot(snapshotDirectory, {
-      scannedAt: 1,
-      totalSizeBytes: ROW_COUNT * 1_000,
-      reclaimableBytes: ROW_COUNT * 1_000,
-      worktreeCount: ROW_COUNT,
-      scannedWorktreeCount: ROW_COUNT,
-      unavailableWorktreeCount: 0,
-      repos: makeRepoSummaries(worktrees),
-      worktrees
-    })
+    await withWorkspaceSpaceAnalysisSnapshotProducer(snapshotDirectory, (producer) =>
+      persistWorkspaceSpaceAnalysisSnapshot(
+        snapshotDirectory,
+        {
+          scannedAt: 1,
+          totalSizeBytes: ROW_COUNT * 1_000,
+          reclaimableBytes: ROW_COUNT * 1_000,
+          worktreeCount: ROW_COUNT,
+          scannedWorktreeCount: ROW_COUNT,
+          unavailableWorktreeCount: 0,
+          repos: makeRepoSummaries(worktrees),
+          worktrees
+        },
+        producer
+      )
+    )
 
     const startedAt = performance.now()
     await Promise.all([

@@ -20,8 +20,10 @@ import { scanWorkspaceCleanup } from './workspace-cleanup-scan'
 import { hasTargetedWorkspaceCleanupScan } from './workspace-cleanup-scan-targets'
 import {
   persistWorkspaceCleanupScanResult,
-  readWorkspaceCleanupScanSnapshot
+  readWorkspaceCleanupScanSnapshot,
+  withWorkspaceCleanupScanSnapshotProducer
 } from '../workspace-cleanup-scan-snapshot'
+import type { WorkspaceSnapshotPruneProducerToken } from '../workspace-snapshot-prune-tombstone-holders'
 import {
   beginWorkspaceCleanupRemovalSnapshotPruneBatch,
   finishWorkspaceCleanupRemovalSnapshotPruneBatch,
@@ -85,7 +87,9 @@ export function registerWorkspaceCleanupHandlers(
       // work, not merely mute its progress events.
       const onSenderDestroyed = (): void => controller.abort()
       sender.once('destroyed', onSenderDestroyed)
-      try {
+      const runScan = async (
+        producer?: WorkspaceSnapshotPruneProducerToken
+      ): Promise<WorkspaceCleanupScanResult> => {
         const result = await scanWorkspaceCleanup(store, scanArgs, {
           signal: controller.signal,
           onProgress: scanArgs.scanId
@@ -96,13 +100,20 @@ export function registerWorkspaceCleanupHandlers(
               }
             : undefined
         })
-        // Focused scans are live-only; persisting each rewrites and fsyncs the
-        // fleet snapshot. worktreeIds: [] is still targeted — persisting its
-        // empty result would wipe the fleet cache.
-        if (!targeted) {
-          void persistWorkspaceCleanupScanResult(snapshotDirectory, scanArgs, result)
+        // Fire-and-forget: the fence stays open until the write settles, but the reply must not
+        // wait on it.
+        if (producer) {
+          void persistWorkspaceCleanupScanResult(snapshotDirectory, scanArgs, result, producer)
         }
         return result
+      }
+      try {
+        // Focused scans are live-only, so they never take the fence: persisting each would rewrite
+        // and fsync the fleet snapshot. worktreeIds: [] is still targeted — persisting its empty
+        // result would wipe the fleet cache.
+        return targeted
+          ? await runScan()
+          : await withWorkspaceCleanupScanSnapshotProducer(snapshotDirectory, runScan)
       } finally {
         if (!sender.isDestroyed()) {
           sender.removeListener('destroyed', onSenderDestroyed)

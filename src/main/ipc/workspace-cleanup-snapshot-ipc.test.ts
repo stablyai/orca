@@ -10,6 +10,25 @@ const { persistScanResultMock, readScanSnapshotMock, scanWorkspaceCleanupMock } 
   })
 )
 
+const { withProducerMock, producerToken, fenceLog } = vi.hoisted(() => {
+  const fenceLog: string[] = []
+  const producerToken = { seq: 7, beginWrite: vi.fn(() => vi.fn()) }
+  return {
+    fenceLog,
+    producerToken,
+    withProducerMock: vi.fn(
+      async (_directory: string, produce: (producer: unknown) => Promise<unknown>) => {
+        fenceLog.push('open')
+        try {
+          return await produce(producerToken)
+        } finally {
+          fenceLog.push('close')
+        }
+      }
+    )
+  }
+})
+
 const { beginPruneBatchMock, finishPruneBatchMock, recordPruneMock } = vi.hoisted(() => ({
   beginPruneBatchMock: vi.fn(),
   finishPruneBatchMock: vi.fn().mockResolvedValue(undefined),
@@ -25,7 +44,8 @@ vi.mock('electron', () => ({
 
 vi.mock('../workspace-cleanup-scan-snapshot', () => ({
   persistWorkspaceCleanupScanResult: persistScanResultMock,
-  readWorkspaceCleanupScanSnapshot: readScanSnapshotMock
+  readWorkspaceCleanupScanSnapshot: readScanSnapshotMock,
+  withWorkspaceCleanupScanSnapshotProducer: withProducerMock
 }))
 
 vi.mock('./workspace-cleanup-scan', () => ({
@@ -68,7 +88,11 @@ function makeEmptyStore(): Store {
 describe('workspace cleanup snapshot IPC', () => {
   beforeEach(() => {
     vi.mocked(ipcMain.handle).mockClear()
-    persistScanResultMock.mockReset().mockResolvedValue(undefined)
+    withProducerMock.mockClear()
+    fenceLog.length = 0
+    persistScanResultMock.mockReset().mockImplementation(async () => {
+      fenceLog.push('persist')
+    })
     readScanSnapshotMock.mockReset()
     scanWorkspaceCleanupMock.mockReset().mockImplementation(async (_store, args, options) => {
       const result = { scannedAt: NOW, candidates: [], errors: [] }
@@ -96,7 +120,46 @@ describe('workspace cleanup snapshot IPC', () => {
     const args = { includeAllWorkspaces: true }
     const result = await handler?.(makeScanEvent(), args)
 
-    expect(persistScanResultMock).toHaveBeenCalledWith('/profile-a', args, result)
+    // The token is the write capability; persisting with anything else would escape the fence.
+    expect(persistScanResultMock).toHaveBeenCalledWith('/profile-a', args, result, producerToken)
+  })
+
+  it('runs a broad scan and its persist inside one snapshot producer bracket', async () => {
+    registerWorkspaceCleanupHandlers(makeEmptyStore())
+    const handler = vi
+      .mocked(ipcMain.handle)
+      .mock.calls.find(([channel]) => channel === 'workspaceCleanup:scan')?.[1]
+
+    await handler?.(makeScanEvent(), { includeAllWorkspaces: true })
+
+    expect(withProducerMock).toHaveBeenCalledWith('/profile-a', expect.any(Function))
+    expect(fenceLog).toEqual(['open', 'persist', 'close'])
+  })
+
+  it('closes the snapshot producer bracket when a broad scan fails without persisting', async () => {
+    registerWorkspaceCleanupHandlers(makeEmptyStore())
+    const handler = vi
+      .mocked(ipcMain.handle)
+      .mock.calls.find(([channel]) => channel === 'workspaceCleanup:scan')?.[1]
+    scanWorkspaceCleanupMock.mockRejectedValueOnce(new Error('scan exploded'))
+
+    await expect(handler?.(makeScanEvent(), { includeAllWorkspaces: true })).rejects.toThrow(
+      'scan exploded'
+    )
+
+    expect(persistScanResultMock).not.toHaveBeenCalled()
+    expect(fenceLog).toEqual(['open', 'close'])
+  })
+
+  it('does not fence a targeted scan, which never persists', async () => {
+    registerWorkspaceCleanupHandlers(makeEmptyStore())
+    const handler = vi
+      .mocked(ipcMain.handle)
+      .mock.calls.find(([channel]) => channel === 'workspaceCleanup:scan')?.[1]
+
+    await handler?.(makeScanEvent(), { worktreeId: 'repo-1::/repo-feature' })
+
+    expect(withProducerMock).not.toHaveBeenCalled()
   })
 
   it('does not rewrite the fleet snapshot for a focused scan', async () => {

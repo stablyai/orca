@@ -11,19 +11,32 @@ import {
 import type { ExecutionHostId } from '../shared/execution-host'
 import {
   activeWorkspaceSnapshotPruneKeys,
-  registerWorkspaceSnapshotPrunesForFile,
   workspaceSnapshotPruneKey,
   workspaceSnapshotPruneTargetKeys,
-  type WorkspaceSnapshotPruneTarget,
-  type WorkspaceSnapshotPruneTombstone
+  type WorkspaceSnapshotPruneTarget
 } from './workspace-snapshot-prune-index'
+import {
+  createWorkspaceSnapshotPruneTombstoneRegistry,
+  type WorkspaceSnapshotPruneProducerToken
+} from './workspace-snapshot-prune-tombstone-holders'
+import { withoutWorktreeRows } from './workspace-space-analysis-row-pruning'
 
 const SNAPSHOT_FILE_NAME = 'orca-workspace-space-analysis.json'
 const SNAPSHOT_VERSION = 2
 
 export type WorkspaceSpaceAnalysisSnapshotPruneTarget = WorkspaceSnapshotPruneTarget
 
-const prunedWorkspacesByFile = new Map<string, Map<string, WorkspaceSnapshotPruneTombstone>>()
+const tombstoneRegistry = createWorkspaceSnapshotPruneTombstoneRegistry((directory) =>
+  sidecarSnapshotFile(directory, SNAPSHOT_FILE_NAME)
+)
+
+/** Run every analysis that may persist to this sidecar inside the fence — the only source of a token. */
+export const withWorkspaceSpaceAnalysisSnapshotProducer = tombstoneRegistry.withProducer
+
+/** Retention probe: STA-4451 is about how many tombstones survive, not just which rows they hide. */
+export const workspaceSpaceAnalysisSnapshotTombstoneCountForTests = (
+  snapshotDirectory: string
+): number => tombstoneRegistry.count(sidecarSnapshotFile(snapshotDirectory, SNAPSHOT_FILE_NAME))
 
 type PersistedWorkspaceSpaceAnalysisSnapshot = {
   version: number
@@ -108,102 +121,28 @@ async function writeSnapshot(file: string, analysis: WorkspaceSpaceAnalysis): Pr
 /** Persist a completed analysis. Never throws — the snapshot is a refetchable cache. */
 export async function persistWorkspaceSpaceAnalysisSnapshot(
   snapshotDirectory: string,
-  analysis: WorkspaceSpaceAnalysis
+  analysis: WorkspaceSpaceAnalysis,
+  producer: WorkspaceSnapshotPruneProducerToken
 ): Promise<void> {
   const file = sidecarSnapshotFile(snapshotDirectory, SNAPSHOT_FILE_NAME)
+  const endWrite = producer.beginWrite(file)
+  if (!endWrite) {
+    // The producer was bounded out, so its tombstones have already retired. Writing now is exactly
+    // the resurrection they existed to prevent — drop this result instead.
+    return
+  }
   try {
     await withSidecarSnapshotQueue(file, async () => {
-      await writeSnapshot(file, stripTopLevelItems(excludeRowsPrunedDuringScan(file, analysis)))
-      clearSupersededPrunes(file, analysis)
+      await writeSnapshot(
+        file,
+        stripTopLevelItems(excludeRowsPrunedDuringScan(file, analysis, producer.seq))
+      )
     })
   } catch (error) {
     console.warn('[workspace-space] failed to persist analysis snapshot:', error)
+  } finally {
+    endWrite()
   }
-}
-
-function withoutWorktreeRows(
-  analysis: WorkspaceSpaceAnalysis,
-  shouldRemove: (row: WorkspaceSpaceWorktree) => boolean
-): WorkspaceSpaceAnalysis {
-  const worktrees: WorkspaceSpaceWorktree[] = []
-  const removedByRepo = new Map<
-    string,
-    {
-      worktreeCount: number
-      scannedWorktreeCount: number
-      unavailableWorktreeCount: number
-      totalSizeBytes: number
-      reclaimableBytes: number
-    }
-  >()
-  let removedCount = 0
-  let scannedDelta = 0
-  let unavailableDelta = 0
-  let totalSizeDelta = 0
-  let reclaimableDelta = 0
-
-  for (const row of analysis.worktrees) {
-    if (!shouldRemove(row)) {
-      worktrees.push(row)
-      continue
-    }
-    const scanned = row.status === 'ok' ? 1 : 0
-    const unavailable = row.status === 'ok' ? 0 : 1
-    removedCount += 1
-    scannedDelta += scanned
-    unavailableDelta += unavailable
-    totalSizeDelta += row.sizeBytes
-    reclaimableDelta += row.reclaimableBytes
-    const key = analysisRepoKey(row)
-    const delta = removedByRepo.get(key) ?? {
-      worktreeCount: 0,
-      scannedWorktreeCount: 0,
-      unavailableWorktreeCount: 0,
-      totalSizeBytes: 0,
-      reclaimableBytes: 0
-    }
-    delta.worktreeCount += 1
-    delta.scannedWorktreeCount += scanned
-    delta.unavailableWorktreeCount += unavailable
-    delta.totalSizeBytes += row.sizeBytes
-    delta.reclaimableBytes += row.reclaimableBytes
-    removedByRepo.set(key, delta)
-  }
-  if (removedCount === 0) {
-    return analysis
-  }
-  return {
-    ...analysis,
-    worktrees,
-    worktreeCount: Math.max(0, analysis.worktreeCount - removedCount),
-    scannedWorktreeCount: Math.max(0, analysis.scannedWorktreeCount - scannedDelta),
-    unavailableWorktreeCount: Math.max(0, analysis.unavailableWorktreeCount - unavailableDelta),
-    totalSizeBytes: Math.max(0, analysis.totalSizeBytes - totalSizeDelta),
-    reclaimableBytes: Math.max(0, analysis.reclaimableBytes - reclaimableDelta),
-    repos: analysis.repos.map((repo) => {
-      const delta = removedByRepo.get(analysisRepoKey(repo))
-      return delta
-        ? {
-            ...repo,
-            worktreeCount: Math.max(0, repo.worktreeCount - delta.worktreeCount),
-            scannedWorktreeCount: Math.max(
-              0,
-              repo.scannedWorktreeCount - delta.scannedWorktreeCount
-            ),
-            unavailableWorktreeCount: Math.max(
-              0,
-              repo.unavailableWorktreeCount - delta.unavailableWorktreeCount
-            ),
-            totalSizeBytes: Math.max(0, repo.totalSizeBytes - delta.totalSizeBytes),
-            reclaimableBytes: Math.max(0, repo.reclaimableBytes - delta.reclaimableBytes)
-          }
-        : repo
-    })
-  }
-}
-
-function analysisRepoKey(entry: { repoId: string; executionHostId?: ExecutionHostId }): string {
-  return JSON.stringify([entry.executionHostId, entry.repoId])
 }
 
 /** Register anti-resurrection tombstones without scheduling a sidecar rewrite. */
@@ -214,20 +153,23 @@ export function registerWorkspaceSpaceAnalysisSnapshotPruneTombstones(
   if (targets.length === 0) {
     return
   }
-  registerWorkspaceSnapshotPrunesForFile(
-    prunedWorkspacesByFile,
+  // Deferred: the flush is a holder too, or a settling producer would retire the tombstone before
+  // finalize runs and finalize would skip the sidecar rewrite it was tombstoned for.
+  tombstoneRegistry.register(
     sidecarSnapshotFile(snapshotDirectory, SNAPSHOT_FILE_NAME),
-    targets
+    targets,
+    true
   )
 }
 
 function excludeRowsPrunedDuringScan(
   file: string,
-  analysis: WorkspaceSpaceAnalysis
+  analysis: WorkspaceSpaceAnalysis,
+  producerSeq: number
 ): WorkspaceSpaceAnalysis {
   const prunedKeys = activeWorkspaceSnapshotPruneKeys(
-    prunedWorkspacesByFile.get(file),
-    analysis.scannedAt
+    tombstoneRegistry.tombstones(file),
+    producerSeq
   )
   return withoutWorktreeRows(
     analysis,
@@ -235,21 +177,6 @@ function excludeRowsPrunedDuringScan(
       prunedKeys.has(workspaceSnapshotPruneKey(row.worktreeId, row.executionHostId)) ||
       prunedKeys.has(workspaceSnapshotPruneKey(row.worktreeId))
   )
-}
-
-function clearSupersededPrunes(file: string, analysis: WorkspaceSpaceAnalysis): void {
-  const pruned = prunedWorkspacesByFile.get(file)
-  if (!pruned) {
-    return
-  }
-  for (const [key, entry] of pruned) {
-    if (entry.prunedAt < analysis.scannedAt) {
-      pruned.delete(key)
-    }
-  }
-  if (pruned.size === 0) {
-    prunedWorkspacesByFile.delete(file)
-  }
 }
 
 async function pruneWorkspaceSpaceAnalysisSnapshotsWithRegisteredTombstones(
@@ -263,11 +190,12 @@ async function pruneWorkspaceSpaceAnalysisSnapshotsWithRegisteredTombstones(
   const file = sidecarSnapshotFile(snapshotDirectory, SNAPSHOT_FILE_NAME)
   const targetKeys = workspaceSnapshotPruneTargetKeys(targets)
   if (registerTombstones) {
-    registerWorkspaceSnapshotPrunesForFile(prunedWorkspacesByFile, file, targets)
+    // Immediate: no flush holder, this call performs the sidecar rewrite itself.
+    tombstoneRegistry.register(file, targets, false)
   }
   try {
     await withSidecarSnapshotQueue(file, async () => {
-      const registered = prunedWorkspacesByFile.get(file)
+      const registered = tombstoneRegistry.tombstones(file)
       const coalescedTargetKeys = registerTombstones
         ? targetKeys
         : new Set([...targetKeys].filter((key) => registered?.has(key)))
@@ -291,6 +219,10 @@ async function pruneWorkspaceSpaceAnalysisSnapshotsWithRegisteredTombstones(
     })
   } catch (error) {
     console.warn('[workspace-space] failed to prune analysis snapshot:', error)
+  } finally {
+    if (!registerTombstones) {
+      tombstoneRegistry.releaseFlush(file, targetKeys)
+    }
   }
 }
 

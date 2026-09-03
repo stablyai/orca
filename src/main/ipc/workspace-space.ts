@@ -12,7 +12,8 @@ import {
 } from '../workspace-space-analysis'
 import {
   persistWorkspaceSpaceAnalysisSnapshot,
-  readWorkspaceSpaceAnalysisSnapshot
+  readWorkspaceSpaceAnalysisSnapshot,
+  withWorkspaceSpaceAnalysisSnapshotProducer
 } from '../workspace-space-analysis-snapshot'
 
 const PROGRESS_EMIT_INTERVAL_MS = 100
@@ -86,30 +87,33 @@ export function registerWorkspaceSpaceHandlers(store: Store): void {
         promise: Promise.resolve(null as never)
       }
       inFlightScan = scan
-      scan.promise = analyzeWorkspaceSpace(store, {
-        scanId,
-        signal: controller.signal,
-        onProgress: (progress) => {
-          latestProgress = progress
-          scan.progress = progress
-          sendProgress(progress)
-        }
-      })
-        .then((analysis): WorkspaceSpaceAnalyzeResult => {
-          // Fire-and-forget: a ~6-minute cold analysis must survive reload/restart, but
-          // persistence must never delay or fail the reply.
-          void persistWorkspaceSpaceAnalysisSnapshot(snapshotDirectory, analysis)
-          return { ok: true, analysis }
-        })
-        .catch((error: unknown): WorkspaceSpaceAnalyzeResult => {
-          if (error instanceof WorkspaceSpaceScanCancelledError) {
-            return { ok: false, cancelled: true }
+      // The fence opens before the analysis starts and stays open until its write settles, so a
+      // workspace removed mid-analysis cannot be restored by this result.
+      scan.promise = withWorkspaceSpaceAnalysisSnapshotProducer(snapshotDirectory, (producer) =>
+        analyzeWorkspaceSpace(store, {
+          scanId,
+          signal: controller.signal,
+          onProgress: (progress) => {
+            latestProgress = progress
+            scan.progress = progress
+            sendProgress(progress)
           }
-          throw error
         })
-        .finally(() => {
-          inFlightScan = null
-        })
+          .then((analysis): WorkspaceSpaceAnalyzeResult => {
+            // Fire-and-forget: a ~6-minute cold analysis must survive reload/restart, but
+            // persistence must never delay or fail the reply.
+            void persistWorkspaceSpaceAnalysisSnapshot(snapshotDirectory, analysis, producer)
+            return { ok: true, analysis }
+          })
+          .catch((error: unknown): WorkspaceSpaceAnalyzeResult => {
+            if (error instanceof WorkspaceSpaceScanCancelledError) {
+              return { ok: false, cancelled: true }
+            }
+            throw error
+          })
+      ).finally(() => {
+        inFlightScan = null
+      })
     }
     return inFlightScan.promise
   })

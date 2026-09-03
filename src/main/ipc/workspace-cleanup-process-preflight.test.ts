@@ -23,7 +23,11 @@ vi.mock('../memory/pty-registry', () => ({
 
 vi.mock('../workspace-cleanup-scan-snapshot', () => ({
   persistWorkspaceCleanupScanResult: vi.fn(async () => undefined),
-  readWorkspaceCleanupScanSnapshot: vi.fn(async () => null)
+  readWorkspaceCleanupScanSnapshot: vi.fn(async () => null),
+  withWorkspaceCleanupScanSnapshotProducer: vi.fn(
+    async (_directory: string, produce: (producer: unknown) => Promise<unknown>) =>
+      produce({ seq: 1, beginWrite: () => () => {} })
+  )
 }))
 
 vi.mock('../workspace-cleanup-removal-snapshot-prune', () => ({

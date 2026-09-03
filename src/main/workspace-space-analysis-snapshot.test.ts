@@ -33,8 +33,12 @@ import {
   pruneWorkspaceSpaceAnalysisSnapshot,
   pruneWorkspaceSpaceAnalysisSnapshots,
   readWorkspaceSpaceAnalysisSnapshot,
-  registerWorkspaceSpaceAnalysisSnapshotPruneTombstones
+  registerWorkspaceSpaceAnalysisSnapshotPruneTombstones,
+  withWorkspaceSpaceAnalysisSnapshotProducer,
+  workspaceSpaceAnalysisSnapshotTombstoneCountForTests
 } from './workspace-space-analysis-snapshot'
+import { WORKSPACE_SNAPSHOT_PRUNE_PRODUCER_TIMEOUT_MS } from './workspace-snapshot-prune-index'
+import { openWorkspaceSnapshotPruneProducer } from './workspace-snapshot-prune-producer-fixtures'
 
 const SNAPSHOT_FILE = 'orca-workspace-space-analysis.json'
 const NOW = 1_700_000_000_000
@@ -97,6 +101,21 @@ function makeAnalysis(worktrees: WorkspaceSpaceWorktree[]): WorkspaceSpaceAnalys
   }
 }
 
+/** An analysis whose fence opens at persist time — one that raced no removal. */
+function persistAnalysis(
+  snapshotDirectory: string,
+  analysis: WorkspaceSpaceAnalysis
+): Promise<void> {
+  return withWorkspaceSpaceAnalysisSnapshotProducer(snapshotDirectory, (producer) =>
+    persistWorkspaceSpaceAnalysisSnapshot(snapshotDirectory, analysis, producer)
+  )
+}
+
+const openAnalysis = (
+  snapshotDirectory: string
+): ReturnType<typeof openWorkspaceSnapshotPruneProducer> =>
+  openWorkspaceSnapshotPruneProducer(withWorkspaceSpaceAnalysisSnapshotProducer, snapshotDirectory)
+
 describe('workspace space analysis snapshot', () => {
   beforeEach(async () => {
     snapshotWriteSpy.mockClear()
@@ -110,7 +129,7 @@ describe('workspace space analysis snapshot', () => {
   it('round-trips a completed analysis', async () => {
     const analysis = makeAnalysis([makeWorktreeRow()])
 
-    await persistWorkspaceSpaceAnalysisSnapshot(userDataDirHolder.dir, analysis)
+    await persistAnalysis(userDataDirHolder.dir, analysis)
 
     await expect(readWorkspaceSpaceAnalysisSnapshot(userDataDirHolder.dir)).resolves.toEqual(
       analysis
@@ -133,7 +152,7 @@ describe('workspace space analysis snapshot', () => {
       omittedTopLevelSizeBytes: 500
     })
 
-    await persistWorkspaceSpaceAnalysisSnapshot(userDataDirHolder.dir, makeAnalysis([row]))
+    await persistAnalysis(userDataDirHolder.dir, makeAnalysis([row]))
 
     const cached = await readWorkspaceSpaceAnalysisSnapshot(userDataDirHolder.dir)
     expect(cached?.worktrees[0]).toMatchObject({
@@ -195,10 +214,7 @@ describe('workspace space analysis snapshot', () => {
       sizeBytes: 1000,
       reclaimableBytes: 0
     })
-    await persistWorkspaceSpaceAnalysisSnapshot(
-      userDataDirHolder.dir,
-      makeAnalysis([removed, kept])
-    )
+    await persistAnalysis(userDataDirHolder.dir, makeAnalysis([removed, kept]))
 
     snapshotWriteSpy.mockClear()
     await pruneWorkspaceSpaceAnalysisSnapshot(userDataDirHolder.dir, removed.worktreeId, 'local')
@@ -257,7 +273,7 @@ describe('workspace space analysis snapshot', () => {
       sizeBytes: 500,
       reclaimableBytes: 500
     })
-    await persistWorkspaceSpaceAnalysisSnapshot(
+    await persistAnalysis(
       userDataDirHolder.dir,
       makeAnalysis([localCollision, remoteCollision, localRemoved, remoteRemoved, kept])
     )
@@ -304,10 +320,7 @@ describe('workspace space analysis snapshot', () => {
   it('keeps profile snapshots isolated', async () => {
     const otherProfile = await mkdtemp(join(tmpdir(), 'orca-space-snapshot-other-'))
     try {
-      await persistWorkspaceSpaceAnalysisSnapshot(
-        userDataDirHolder.dir,
-        makeAnalysis([makeWorktreeRow()])
-      )
+      await persistAnalysis(userDataDirHolder.dir, makeAnalysis([makeWorktreeRow()]))
 
       await expect(readWorkspaceSpaceAnalysisSnapshot(otherProfile)).resolves.toBeNull()
     } finally {
@@ -323,20 +336,24 @@ describe('workspace space analysis snapshot', () => {
       isRemote: true,
       path: '/remote-feature'
     })
-    const staleAnalysis = {
-      ...makeAnalysis([local, remote]),
-      scannedAt: Date.now() - 1
-    }
+    const staleAnalysis = makeAnalysis([local, remote])
+    // The analysis is in flight before the removal, so it is a fenced producer of this sidecar.
+    const analysis = await openAnalysis(userDataDirHolder.dir)
     await pruneWorkspaceSpaceAnalysisSnapshots(userDataDirHolder.dir, [
       { worktreeId: local.worktreeId, executionHostId: 'local' },
       { worktreeId: remote.worktreeId, executionHostId: 'ssh:ssh-1' }
     ])
 
-    await persistWorkspaceSpaceAnalysisSnapshot(userDataDirHolder.dir, staleAnalysis)
+    await persistWorkspaceSpaceAnalysisSnapshot(
+      userDataDirHolder.dir,
+      staleAnalysis,
+      analysis.producer
+    )
     expect((await readWorkspaceSpaceAnalysisSnapshot(userDataDirHolder.dir))?.worktrees).toEqual([])
 
-    const recreated = { ...staleAnalysis, scannedAt: Date.now() + 1 }
-    await persistWorkspaceSpaceAnalysisSnapshot(userDataDirHolder.dir, recreated)
+    await analysis.finish()
+    // An analysis started after the removal is not fenced, so a re-created workspace comes back.
+    await persistAnalysis(userDataDirHolder.dir, staleAnalysis)
     expect((await readWorkspaceSpaceAnalysisSnapshot(userDataDirHolder.dir))?.worktrees).toEqual([
       local,
       remote
@@ -344,34 +361,160 @@ describe('workspace space analysis snapshot', () => {
   })
 
   it('registers a tombstone immediately without rewriting the sidecar', async () => {
-    const staleAnalysis = { ...makeAnalysis([makeWorktreeRow()]), scannedAt: Date.now() - 1 }
+    const staleAnalysis = makeAnalysis([makeWorktreeRow()])
+    const analysis = await openAnalysis(userDataDirHolder.dir)
 
     registerWorkspaceSpaceAnalysisSnapshotPruneTombstones(userDataDirHolder.dir, [
       { worktreeId: 'repo-1::/repo-feature', executionHostId: 'local' }
     ])
 
     expect(snapshotWriteSpy).not.toHaveBeenCalled()
-    await persistWorkspaceSpaceAnalysisSnapshot(userDataDirHolder.dir, staleAnalysis)
+    await persistWorkspaceSpaceAnalysisSnapshot(
+      userDataDirHolder.dir,
+      staleAnalysis,
+      analysis.producer
+    )
     expect((await readWorkspaceSpaceAnalysisSnapshot(userDataDirHolder.dir))?.worktrees).toEqual([])
+    await analysis.finish()
   })
 
-  it('keeps the original tombstone time when a removal batch flushes', async () => {
+  it('does not fence an analysis that started after a removal batch registered', async () => {
     const row = makeWorktreeRow()
     const target = { worktreeId: row.worktreeId, executionHostId: 'local' as const }
-    const now = vi.spyOn(Date, 'now').mockReturnValue(100)
     registerWorkspaceSpaceAnalysisSnapshotPruneTombstones(userDataDirHolder.dir, [target])
-    now.mockReturnValue(200)
 
     await finalizeWorkspaceSpaceAnalysisSnapshotPrunes(userDataDirHolder.dir, [target])
-    await persistWorkspaceSpaceAnalysisSnapshot(userDataDirHolder.dir, {
-      ...makeAnalysis([row]),
-      scannedAt: 150
-    })
+    await persistAnalysis(userDataDirHolder.dir, makeAnalysis([row]))
 
     expect((await readWorkspaceSpaceAnalysisSnapshot(userDataDirHolder.dir))?.worktrees).toEqual([
       { ...row, topLevelItems: [] }
     ])
+  })
+
+  it('retains no tombstone when a removal races no analysis at all', async () => {
+    const row = makeWorktreeRow()
+    await pruneWorkspaceSpaceAnalysisSnapshot(
+      userDataDirHolder.dir,
+      row.worktreeId,
+      row.executionHostId
+    )
+
+    expect(workspaceSpaceAnalysisSnapshotTombstoneCountForTests(userDataDirHolder.dir)).toBe(0)
+    await persistAnalysis(userDataDirHolder.dir, makeAnalysis([row]))
+    expect((await readWorkspaceSpaceAnalysisSnapshot(userDataDirHolder.dir))?.worktrees).toEqual([
+      row
+    ])
+  })
+
+  it('does not accumulate tombstones as workspaces are removed', async () => {
+    for (let index = 0; index < 25; index += 1) {
+      await pruneWorkspaceSpaceAnalysisSnapshot(
+        userDataDirHolder.dir,
+        `repo-1::/repo-removed-${index}`,
+        'local'
+      )
+    }
+
+    expect(workspaceSpaceAnalysisSnapshotTombstoneCountForTests(userDataDirHolder.dir)).toBe(0)
+  })
+
+  it('holds a tombstone until the analysis in flight when it was pruned settles', async () => {
+    const row = makeWorktreeRow()
+    const analysis = await openAnalysis(userDataDirHolder.dir)
+    await pruneWorkspaceSpaceAnalysisSnapshot(
+      userDataDirHolder.dir,
+      row.worktreeId,
+      row.executionHostId
+    )
+
+    expect(workspaceSpaceAnalysisSnapshotTombstoneCountForTests(userDataDirHolder.dir)).toBe(1)
+    await persistWorkspaceSpaceAnalysisSnapshot(
+      userDataDirHolder.dir,
+      makeAnalysis([row]),
+      analysis.producer
+    )
+    expect((await readWorkspaceSpaceAnalysisSnapshot(userDataDirHolder.dir))?.worktrees).toEqual([])
+
+    await analysis.finish()
+
+    expect(workspaceSpaceAnalysisSnapshotTombstoneCountForTests(userDataDirHolder.dir)).toBe(0)
+    await persistAnalysis(userDataDirHolder.dir, makeAnalysis([row]))
+    expect((await readWorkspaceSpaceAnalysisSnapshot(userDataDirHolder.dir))?.worktrees).toEqual([
+      row
+    ])
+  })
+
+  it('keeps holding a tombstone when the wall clock jumps past the producer timeout', async () => {
+    // A laptop sleep/resume moves Date.now() while the analysis's promise does not; expiring the
+    // holder on that reading retires a tombstone whose producer is still about to write.
+    const row = makeWorktreeRow()
+    const analysis = await openAnalysis(userDataDirHolder.dir)
+    await pruneWorkspaceSpaceAnalysisSnapshot(
+      userDataDirHolder.dir,
+      row.worktreeId,
+      row.executionHostId
+    )
+    // Anchor on the real clock: NOW is a fixture constant in the past, so offsetting it would
+    // step the clock backwards instead of forwards.
+    const now = vi
+      .spyOn(Date, 'now')
+      .mockReturnValue(Date.now() + WORKSPACE_SNAPSHOT_PRUNE_PRODUCER_TIMEOUT_MS * 48)
+
+    expect(workspaceSpaceAnalysisSnapshotTombstoneCountForTests(userDataDirHolder.dir)).toBe(1)
+    await persistWorkspaceSpaceAnalysisSnapshot(
+      userDataDirHolder.dir,
+      makeAnalysis([row]),
+      analysis.producer
+    )
+
+    expect((await readWorkspaceSpaceAnalysisSnapshot(userDataDirHolder.dir))?.worktrees).toEqual([])
+    expect(workspaceSpaceAnalysisSnapshotTombstoneCountForTests(userDataDirHolder.dir)).toBe(1)
     now.mockRestore()
+    await analysis.finish()
+  })
+
+  it('retires a tombstone whose analysis never settles once the producer timeout elapses', async () => {
+    vi.useFakeTimers()
+    try {
+      const row = makeWorktreeRow()
+      const analysis = await openAnalysis(userDataDirHolder.dir)
+      await pruneWorkspaceSpaceAnalysisSnapshot(
+        userDataDirHolder.dir,
+        row.worktreeId,
+        row.executionHostId
+      )
+      expect(workspaceSpaceAnalysisSnapshotTombstoneCountForTests(userDataDirHolder.dir)).toBe(1)
+
+      await vi.advanceTimersByTimeAsync(WORKSPACE_SNAPSHOT_PRUNE_PRODUCER_TIMEOUT_MS + 1)
+      expect(workspaceSpaceAnalysisSnapshotTombstoneCountForTests(userDataDirHolder.dir)).toBe(0)
+
+      // Losing the bound disarms the producer, so the row it still holds cannot come back.
+      snapshotWriteSpy.mockClear()
+      await persistWorkspaceSpaceAnalysisSnapshot(
+        userDataDirHolder.dir,
+        makeAnalysis([row]),
+        analysis.producer
+      )
+      expect(snapshotWriteSpy).not.toHaveBeenCalled()
+      await analysis.finish()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('flushes a batched tombstone even when an analysis settles before the batch closes', async () => {
+    const row = makeWorktreeRow()
+    const target = { worktreeId: row.worktreeId, executionHostId: 'local' as const }
+    await persistAnalysis(userDataDirHolder.dir, makeAnalysis([row]))
+    const analysis = await openAnalysis(userDataDirHolder.dir)
+    registerWorkspaceSpaceAnalysisSnapshotPruneTombstones(userDataDirHolder.dir, [target])
+    await analysis.finish()
+
+    expect(workspaceSpaceAnalysisSnapshotTombstoneCountForTests(userDataDirHolder.dir)).toBe(1)
+    await finalizeWorkspaceSpaceAnalysisSnapshotPrunes(userDataDirHolder.dir, [target])
+
+    expect((await readWorkspaceSpaceAnalysisSnapshot(userDataDirHolder.dir))?.worktrees).toEqual([])
+    expect(workspaceSpaceAnalysisSnapshotTombstoneCountForTests(userDataDirHolder.dir)).toBe(0)
   })
 
   it('prunes host-colliding workspace ids without corrupting surviving totals', async () => {
@@ -382,10 +525,7 @@ describe('workspace space analysis snapshot', () => {
       sizeBytes: 3000,
       reclaimableBytes: 3000
     })
-    await persistWorkspaceSpaceAnalysisSnapshot(
-      userDataDirHolder.dir,
-      makeAnalysis([local, remote])
-    )
+    await persistAnalysis(userDataDirHolder.dir, makeAnalysis([local, remote]))
 
     await pruneWorkspaceSpaceAnalysisSnapshot(userDataDirHolder.dir, remote.worktreeId, 'ssh:ssh-1')
 
@@ -419,10 +559,7 @@ describe('workspace space analysis snapshot', () => {
       sizeBytes: 3000,
       reclaimableBytes: 3000
     })
-    await persistWorkspaceSpaceAnalysisSnapshot(
-      userDataDirHolder.dir,
-      makeAnalysis([local, remote])
-    )
+    await persistAnalysis(userDataDirHolder.dir, makeAnalysis([local, remote]))
 
     await pruneWorkspaceSpaceAnalysisSnapshot(userDataDirHolder.dir, local.worktreeId)
 
