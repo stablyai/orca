@@ -314,6 +314,69 @@ export class SshConnection {
     )
   }
 
+  private async withGuardedSftp<T>(
+    signal: AbortSignal | undefined,
+    run: (
+      sftp: SFTPWrapper,
+      endSftp: () => void,
+      guardOperation: <R>(operation: () => Promise<R>) => Promise<R>
+    ) => Promise<T>,
+    options?: { retainAfterSuccess?: boolean }
+  ): Promise<T> {
+    const sftp = await this.sftp(signal)
+    const swallowLateSftpError = (): void => {}
+    let sftpEndRequested = false
+    const endSftp = (): void => {
+      if (!sftpEndRequested) {
+        sftpEndRequested = true
+        sftp.end()
+      }
+    }
+    const guardOperation = async <R>(operation: () => Promise<R>): Promise<R> => {
+      let onSftpError!: (error: Error) => void
+      let sftpErrorWonRace = false
+      const sftpError = new Promise<never>((_resolve, reject) => {
+        onSftpError = (error: Error): void => {
+          sftpErrorWonRace = true
+          reject(error)
+        }
+        sftp.prependOnceListener('error', onSftpError)
+      })
+      try {
+        // Why: if sftpError wins the race, this keeps running unobserved and may reject
+        // later (e.g. once endSftp() closes the channel) — swallow that so it doesn't
+        // surface as an unhandled rejection; the race's winner is what callers see.
+        // Called inside try so a synchronous throw from operation() still runs finally's
+        // listener removal below.
+        const operationResult = operation()
+        operationResult.catch(() => {})
+        return await Promise.race([operationResult, sftpError])
+      } catch (error) {
+        // Why: a channel-level error leaves the session unusable for later calls (e.g. a
+        // retained upload session) — close it so callers don't keep writing to a dead channel.
+        if (sftpErrorWonRace) {
+          endSftp()
+        }
+        throw error
+      } finally {
+        sftp.removeListener('error', onSftpError)
+      }
+    }
+    sftp.on('error', swallowLateSftpError)
+    sftp.once('close', () => sftp.removeListener('error', swallowLateSftpError))
+
+    let succeeded = false
+    try {
+      const result = await guardOperation(() => run(sftp, endSftp, guardOperation))
+      succeeded = true
+      return result
+    } finally {
+      if (!succeeded || !options?.retainAfterSuccess) {
+        endSftp()
+      }
+    }
+  }
+
   private async openSessionChannelWithRetry<T>(
     open: () => Promise<T>,
     signal?: AbortSignal
@@ -504,18 +567,7 @@ export class SshConnection {
     )
     try {
       if (!this.useSystemSshTransport) {
-        const sftp = await this.sftp(linkedSignal.signal)
-        const swallowLateSftpError = (): void => {}
-        let sftpEndRequested = false
-        const endSftp = (): void => {
-          if (!sftpEndRequested) {
-            sftpEndRequested = true
-            sftp.end()
-          }
-        }
-        sftp.on('error', swallowLateSftpError)
-        sftp.once('close', () => sftp.removeListener('error', swallowLateSftpError))
-        try {
+        await this.withGuardedSftp(linkedSignal.signal, async (sftp, endSftp) => {
           // Why: resolve on the same session that transfers — a later session is not authoritative for this one's namespace.
           const transfer = (async (): Promise<void> => {
             const targetDir = await resolveSftpTransferPathIfMapped(sftp, remoteDir, options)
@@ -530,9 +582,7 @@ export class SshConnection {
             endSftp()
             return () => sftp.removeListener('close', onClose)
           })
-        } finally {
-          endSftp()
-        }
+        })
         return
       }
       await uploadDirectoryViaSystemSsh(this.target, localDir, remoteDir, {
@@ -551,13 +601,10 @@ export class SshConnection {
     options?: SshRemoteFileOptions
   ): Promise<void> {
     if (!this.useSystemSshTransport) {
-      const sftp = await this.sftp()
-      try {
+      await this.withGuardedSftp(undefined, async (sftp) => {
         const { fastGetViaSftp } = await import('../providers/ssh-filesystem-provider-sftp')
         await fastGetViaSftp(sftp, remotePath, localPath)
-      } finally {
-        sftp.end()
-      }
+      })
       return
     }
     await downloadFileViaSystemSsh(this.target, remotePath, localPath, {
@@ -569,13 +616,18 @@ export class SshConnection {
 
   async openFileUploadSession(options?: SshRemoteFileOptions): Promise<FileUploadSession> {
     if (!this.useSystemSshTransport) {
-      const sftp = await this.sftp()
-      const { uploadFile } = await import('./sftp-upload')
-      return {
-        uploadFile: (localPath, remotePath, uploadOptions) =>
-          uploadFile(sftp, localPath, remotePath, uploadOptions),
-        close: () => sftp.end()
-      }
+      return this.withGuardedSftp(
+        undefined,
+        async (sftp, endSftp, guardOperation) => {
+          const { uploadFile } = await import('./sftp-upload')
+          return {
+            uploadFile: (localPath, remotePath, uploadOptions) =>
+              guardOperation(() => uploadFile(sftp, localPath, remotePath, uploadOptions)),
+            close: endSftp
+          }
+        },
+        { retainAfterSuccess: true }
+      )
     }
     // Why: disconnect replaces the connection controller, so an existing import session must stay bound to the signal and SSH config it opened with.
     const signal = this.systemOperationAbortController.signal
@@ -605,18 +657,7 @@ export class SshConnection {
     )
     try {
       if (!this.useSystemSshTransport) {
-        const sftp = await this.sftp(linkedSignal.signal)
-        const swallowLateSftpError = (): void => {}
-        let sftpEndRequested = false
-        const endSftp = (): void => {
-          if (!sftpEndRequested) {
-            sftpEndRequested = true
-            sftp.end()
-          }
-        }
-        sftp.on('error', swallowLateSftpError)
-        sftp.once('close', () => sftp.removeListener('error', swallowLateSftpError))
-        try {
+        await this.withGuardedSftp(linkedSignal.signal, async (sftp, endSftp) => {
           // Why: resolve on the same session that writes — a later session is not authoritative for this one's namespace.
           const write = (async (): Promise<void> => {
             const targetPath = await resolveSftpTransferPathIfMapped(sftp, remotePath, options)
@@ -629,9 +670,7 @@ export class SshConnection {
             endSftp()
             return () => sftp.removeListener('close', onClose)
           })
-        } finally {
-          endSftp()
-        }
+        })
         return
       }
       await writeFileViaSystemSsh(this.target, remotePath, contents, {
@@ -650,13 +689,10 @@ export class SshConnection {
     options?: SshRemoteFileOptions & { append?: boolean; exclusive?: boolean }
   ): Promise<void> {
     if (!this.useSystemSshTransport) {
-      const sftp = await this.sftp()
-      try {
+      await this.withGuardedSftp(undefined, async (sftp) => {
         const { uploadBuffer } = await import('./sftp-upload')
         await uploadBuffer(sftp, contents, remotePath, options)
-      } finally {
-        sftp.end()
-      }
+      })
       return
     }
     await writeBufferViaSystemSsh(this.target, remotePath, contents, {

@@ -54,6 +54,7 @@ async function uploadFileAndJoinTeardown(
     handleClose ??= handle.close()
     return handleClose
   }
+  const swallowLateStreamError = (): void => {}
   try {
     options?.signal?.throwIfAborted()
     const statResult = await lstat(localPath)
@@ -77,6 +78,22 @@ async function uploadFileAndJoinTeardown(
     // outlives it, ssh2 throws it synchronously into the socket handler (#15479).
     writeStreamErrors = latchLateSftpStreamErrors(writeStream, remotePath)
     readStream = handle.createReadStream({ autoClose: false })
+    // Why: finished(stream, {cleanup:true}) removes its own 'error' listener once it
+    // settles. If the peer stream (or abortTransfer) later calls destroy(err) on a
+    // stream that already settled — e.g. a small file finishes reading before the
+    // remote write fails — the destroy-triggered error emission would have zero
+    // listeners and crash the process. Node's fs.ReadStream closes its fd via async
+    // I/O, so the deferred error emission can land well after this function's own
+    // finally runs; 'close' always follows 'error' in the same destroy cycle for this
+    // stream, so anchoring the read-side removal there (rather than guessing a tick)
+    // is safe. ssh2's own WriteStream, unlike Node's streams, never emits 'close' on an
+    // errored destroy (see ssh2/lib/protocol/SFTP.js closeStream()), so the write-side
+    // no-op listener is deliberately left attached instead of relying on 'close' —
+    // harmless, since the stream is discarded either way.
+    writeStream.on('error', swallowLateStreamError)
+    readStream.on('error', swallowLateStreamError)
+    writeStream.once('close', () => writeStream?.removeListener('error', swallowLateStreamError))
+    readStream.once('close', () => readStream?.removeListener('error', swallowLateStreamError))
     const abortTransfer = (): void => {
       const reason =
         options?.signal?.reason instanceof Error
