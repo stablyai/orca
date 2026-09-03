@@ -6,6 +6,11 @@ import {
   type FileExplorerDirectoryListing
 } from './file-explorer-directory-listing'
 import { forEachWithConcurrency } from '../../../../shared/map-with-concurrency'
+import {
+  clearFileExplorerDirsLoading,
+  markFileExplorerDirsLoading,
+  withPendingFileExplorerDirCacheEntries
+} from './file-explorer-dir-load-state'
 
 export type RefreshFileExplorerTreeDir = {
   dirPath: string
@@ -17,6 +22,7 @@ export type RefreshFileExplorerExpandedDirsParams = {
   worktreePath: string
   dirLoadTracker: FileExplorerDirLoadTracker
   setDirCache: Dispatch<SetStateAction<Record<string, DirCache>>>
+  setLoadingDirPaths: Dispatch<SetStateAction<ReadonlySet<string>>>
   readDirectory: (dirPath: string) => Promise<FileExplorerDirectoryListing>
   maxConcurrentReads: number
   /** Called per dir whose fresh listing was committed, so callers can clear a staleness mark. */
@@ -28,6 +34,7 @@ export async function refreshFileExplorerExpandedDirs({
   worktreePath,
   dirLoadTracker,
   setDirCache,
+  setLoadingDirPaths,
   readDirectory,
   maxConcurrentReads,
   onDirCommitted
@@ -55,19 +62,22 @@ export async function refreshFileExplorerExpandedDirs({
   // workers itself — otherwise a later batch commits after the caller already saw this reject.
   let stopped = false
 
+  const uniqueDirPaths = uniqueDirs.map((dir) => dir.dirPath)
   // Why: mark every dir loading up front — FileExplorer's auto-load
   // effect re-runs on any `expanded` change and fans out an unbounded loadDir per
   // dir that is neither cached nor loading, which would defeat the concurrency cap.
-  setDirCache((prev) => {
-    const next = { ...prev }
-    for (const { dirPath } of uniqueDirs) {
-      next[dirPath] = {
-        children: prev[dirPath]?.children ?? [],
-        loading: true
-      }
+  // Why this no longer touches dirCache for known dirs: the pre-mark used to rebuild the whole
+  // visible tree once per refresh before a single fresh listing existed.
+  setDirCache((prev) => withPendingFileExplorerDirCacheEntries(prev, uniqueDirPaths))
+  setLoadingDirPaths((prev) => markFileExplorerDirsLoading(prev, uniqueDirPaths))
+
+  // Why: only dirs this refresh still owns — a superseding load owns the flag for the rest.
+  const clearOwnedLoadingMarks = (dirPaths: readonly string[]): void => {
+    const owned = dirPaths.filter((dirPath) => dirLoadTracker.isCurrent(loadTokens.get(dirPath)!))
+    if (owned.length > 0) {
+      setLoadingDirPaths((prev) => clearFileExplorerDirsLoading(prev, owned))
     }
-    return next
-  })
+  }
 
   const commitPendingResults = (): void => {
     if (stopped) {
@@ -88,6 +98,7 @@ export async function refreshFileExplorerExpandedDirs({
       }
       return next
     })
+    clearOwnedLoadingMarks(currentResults.map((result) => result.dirPath))
     committedDirs += currentResults.length
     // Why: the cache write above already landed for every result, so a throwing callback must not
     // strand the rest of the batch with a staleness mark no later commit will clear.
@@ -119,41 +130,46 @@ export async function refreshFileExplorerExpandedDirs({
     }
   }
 
-  await forEachWithConcurrency(uniqueDirs, maxConcurrentReads, async ({ dirPath, depth }) => {
-    if (stopped) {
-      return
-    }
-    const loadToken = loadTokens.get(dirPath)!
-    // A superseding load owns this dir now; do not spend a round trip on a result we must drop.
-    if (!dirLoadTracker.isCurrent(loadToken)) {
-      settleRead()
-      return
-    }
-    let cache: DirCache | undefined
-    try {
-      const listing = await readDirectory(dirPath)
-      if (dirLoadTracker.isCurrent(loadToken)) {
-        cache = {
-          children: fileExplorerEntriesToTreeNodes(
-            listing.entries,
-            dirPath,
-            depth,
-            worktreePath,
-            listing.operationOwner
-          ),
-          loading: false,
-          operationOwner: listing.operationOwner
+  try {
+    await forEachWithConcurrency(uniqueDirs, maxConcurrentReads, async ({ dirPath, depth }) => {
+      if (stopped) {
+        return
+      }
+      const loadToken = loadTokens.get(dirPath)!
+      // A superseding load owns this dir now; do not spend a round trip on a result we must drop.
+      if (!dirLoadTracker.isCurrent(loadToken)) {
+        settleRead()
+        return
+      }
+      let cache: DirCache | undefined
+      try {
+        const listing = await readDirectory(dirPath)
+        if (dirLoadTracker.isCurrent(loadToken)) {
+          cache = {
+            children: fileExplorerEntriesToTreeNodes(
+              listing.entries,
+              dirPath,
+              depth,
+              worktreePath,
+              listing.operationOwner
+            ),
+            operationOwner: listing.operationOwner
+          }
+        }
+      } catch {
+        if (dirLoadTracker.isCurrent(loadToken)) {
+          cache = { children: [] }
         }
       }
-    } catch {
-      if (dirLoadTracker.isCurrent(loadToken)) {
-        cache = { children: [], loading: false }
-      }
+      settleRead(cache ? { dirPath, cache } : undefined)
+    })
+    if (settledSinceCommit > 0) {
+      commitPendingResults()
     }
-    settleRead(cache ? { dirPath, cache } : undefined)
-  })
-  if (settledSinceCommit > 0) {
-    commitPendingResults()
+  } finally {
+    // Why: no dir this refresh still owns may keep a spinner once the wave ends, including the
+    // ones a failed commit or a superseded read left uncommitted.
+    clearOwnedLoadingMarks(uniqueDirPaths)
   }
 
   return committedDirs === uniqueDirs.length

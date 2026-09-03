@@ -11,6 +11,7 @@ type UseFileExplorerTreeLoadEffectsParams = {
   visibleFilesWorktreePath: string | null
   expanded: Set<string>
   dirCache: Record<string, DirCache>
+  loadingDirPaths: ReadonlySet<string>
   rootError: string | null
   isDirStale: (dirPath: string) => boolean
   loadDir: (dirPath: string, depth: number, options?: { force?: boolean }) => Promise<boolean>
@@ -24,6 +25,7 @@ export function useFileExplorerTreeLoadEffects({
   visibleFilesWorktreePath,
   expanded,
   dirCache,
+  loadingDirPaths,
   rootError,
   isDirStale,
   loadDir,
@@ -77,7 +79,11 @@ export function useFileExplorerTreeLoadEffects({
     for (const dirPath of expanded) {
       // Why: a full refresh (watcher overflow) re-reads only root and the dirs expanded at the time,
       // so a listing cached while collapsed is unverified — re-read it here instead of trusting it.
-      const decision = decideExpandedDirLoad(dirCache[dirPath], isDirStale(dirPath))
+      const decision = decideExpandedDirLoad(
+        dirCache[dirPath],
+        loadingDirPaths.has(dirPath),
+        isDirStale(dirPath)
+      )
       if (decision === 'skip') {
         continue
       }

@@ -164,6 +164,11 @@ export function buildEditorExternalWatchEventHandler(
 
     for (const change of batchPaths.changes) {
       const matching = batchPaths.matchingOpenFiles(change)
+      // Why: most watched paths match no open file, and the notification below is only ever read
+      // past this point — building it first allocates (and dictionary-modes) it for nothing.
+      if (matching.length === 0 && !batchPaths.hasCombinedDiffConsumer) {
+        continue
+      }
       const notification: EditorExternalWatchNotification = {
         worktreeId: target.worktreeId,
         worktreePath: target.worktreePath,
@@ -177,9 +182,7 @@ export function buildEditorExternalWatchEventHandler(
         }
       })
       if (matching.length === 0) {
-        if (batchPaths.hasCombinedDiffConsumer) {
-          scheduleDebouncedEditorExternalReload(notification)
-        }
+        scheduleDebouncedEditorExternalReload(notification)
         continue
       }
       const dirtyMatches = matching.filter((file) => file.isDirty)

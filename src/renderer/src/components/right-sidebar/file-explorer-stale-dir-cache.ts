@@ -22,9 +22,10 @@ export type ExpandedDirLoadDecision = 'skip' | 'load' | 'reload'
 /** What the expansion effect owes a newly expanded dir: nothing, a first read, or a forced re-read. */
 export function decideExpandedDirLoad(
   cached: DirCache | undefined,
+  loading: boolean,
   stale: boolean
 ): ExpandedDirLoadDecision {
-  if (cached?.loading) {
+  if (loading) {
     return 'skip'
   }
   if (!cached?.children.length) {

@@ -17,6 +17,10 @@ import {
   trackDetachedLocalUnsubscribe
 } from './filesystem-watcher-listener-lifecycle'
 import { createDebouncedBatch } from './filesystem-watcher-batch-control'
+import { mapWithConcurrency } from '../../shared/map-with-concurrency'
+
+// Why: matches the watcher subprocess budget in parcel-watcher-event-delivery.ts.
+const DIRECTORY_STAT_CONCURRENCY = 8
 
 // ── Event coalescing ─────────────────────────────────────────────────
 // Why: keep the last event per path in a flush window; delete→create emits both (delete cleans the subtree, create refreshes the parent), create→delete is dropped (§4.4).
@@ -128,8 +132,12 @@ async function flushBatch(root: WatchedRoot): Promise<void> {
 
     const coalesced = coalesceEvents(rawEvents)
 
-    const events: FsChangeEvent[] = await Promise.all(
-      coalesced.map(async (evt) => {
+    // Why: a full batch is up to MAX_BATCHED_WATCHER_EVENTS paths; unbounded stat() would swamp
+    // libuv's 4-thread pool, which also serves git reads and persistence writes.
+    const events: FsChangeEvent[] = await mapWithConcurrency(
+      coalesced,
+      DIRECTORY_STAT_CONCURRENCY,
+      async (evt) => {
         // Why: a deleted path can't be stat'd; leave isDirectory undefined and let the renderer infer from dirCache.
         const isDirectory = evt.type === 'delete' ? undefined : await tryStatIsDirectory(evt.path)
 
@@ -138,7 +146,7 @@ async function flushBatch(root: WatchedRoot): Promise<void> {
           absolutePath: evt.path,
           isDirectory
         }
-      })
+      }
     )
 
     if (root.batch.cancelled || root.listeners.size === 0) {
