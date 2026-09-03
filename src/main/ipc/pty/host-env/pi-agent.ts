@@ -62,6 +62,7 @@ export function clearPiAgentShadowEnv(baseEnv: Record<string, string>, kind: PiA
     delete baseEnv.ORCA_OMP_CODING_AGENT_DIR
     delete baseEnv.ORCA_OMP_SOURCE_AGENT_DIR
     delete baseEnv.ORCA_OMP_STATUS_EXTENSION
+    delete baseEnv.ORCA_OMP_PREFILL_EXTENSION
     return
   }
   if (kind === 'prime-agent') {
@@ -89,6 +90,11 @@ export function exposePiManagedExtensionEnv(
       baseEnv.ORCA_OMP_STATUS_EXTENSION = managedEnv.ORCA_OMP_STATUS_EXTENSION
     } else {
       delete baseEnv.ORCA_OMP_STATUS_EXTENSION
+    }
+    if (managedEnv.ORCA_OMP_PREFILL_EXTENSION) {
+      baseEnv.ORCA_OMP_PREFILL_EXTENSION = managedEnv.ORCA_OMP_PREFILL_EXTENSION
+    } else {
+      delete baseEnv.ORCA_OMP_PREFILL_EXTENSION
     }
     return
   }

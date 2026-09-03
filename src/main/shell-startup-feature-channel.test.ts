@@ -86,6 +86,16 @@ describe('shell startup feature selection', () => {
     ).toContain('markers')
   })
 
+  it('wraps an OMP prefill pane so the managed extension can load', () => {
+    expect(
+      selectShellStartupFeatures({
+        shellPath: '/bin/zsh',
+        env: { ORCA_OMP_PREFILL_EXTENSION: '/tmp/orca-prefill.ts' },
+        ...PLAIN_PANE
+      })
+    ).toEqual(['overlay', 'history', 'markers'])
+  })
+
   it('does not wrap bash for history alone', () => {
     // Why: bash has no system rc that clobbers HISTFILE, and `--rcfile` would
     // replace its login startup-file chain with Orca's approximation.

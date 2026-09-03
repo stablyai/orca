@@ -653,6 +653,31 @@ describe('tui agent startup plans', () => {
     )
   })
 
+  it('keeps Linear link-only drafts on ORCA_OMP_PREFILL (not argv submit) (#11245)', () => {
+    // Why: linked Linear identity must land as an editable draft. Argv would
+    // auto-submit; paste races OMP startup. Env prefill is the only reliable path.
+    const linearDraft = [
+      'Review before starting',
+      '',
+      'Linked Linear issue: ENG-11245',
+      'https://linear.app/acme/issue/ENG-11245/omp-linear-preload',
+      ''
+    ].join('\n')
+    const plan = buildAgentDraftLaunchPlan({
+      agent: 'omp',
+      draft: linearDraft,
+      cmdOverrides: {},
+      platform: 'darwin'
+    })
+
+    expect(plan).not.toBeNull()
+    expect(plan?.env?.ORCA_OMP_PREFILL).toBe(linearDraft.trim())
+    expect(plan?.launchCommand).toContain('omp;')
+    expect(plan?.launchCommand).toContain('ORCA_OMP_PREFILL')
+    expect(plan?.launchCommand).not.toContain('ENG-11245')
+    expect(plan?.launchCommand).not.toContain('linear.app')
+  })
+
   it('returns null for oversized Windows flag drafts so callers paste after ready', () => {
     expect(
       buildAgentDraftLaunchPlan({

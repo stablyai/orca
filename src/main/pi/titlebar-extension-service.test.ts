@@ -206,6 +206,7 @@ describe('PiTitlebarExtensionService', () => {
     expect(env.PI_CODING_AGENT_DIR).toBeUndefined()
     expect(env.ORCA_OMP_SOURCE_AGENT_DIR).toBe(piHome)
     expect(env.ORCA_OMP_STATUS_EXTENSION).toBe(join(piHome, 'extensions', 'orca-agent-status.ts'))
+    expect(env.ORCA_OMP_PREFILL_EXTENSION).toBe(join(piHome, 'extensions', 'orca-prefill.ts'))
     expect(existsSync(sourcePath)).toBe(false)
     expect(existsSync(join(userDataDir, 'omp-agent-overlays'))).toBe(false)
     expect(existsSync(join(piHome, 'history.db'))).toBe(false)
