@@ -247,6 +247,11 @@ export function MobileNativeChatView({
     [hasMore, loadingEarlier, onLoadEarlier]
   )
 
+  const jumpToLatest = useCallback(() => {
+    setAtBottom(true)
+    listRef.current?.scrollToEnd({ animated: false })
+  }, [])
+
   // Align a single message's top to the top of the viewport.
   const onScrollToMessage = useCallback((index: number) => {
     listRef.current?.scrollToIndex({ index, viewPosition: 0, animated: true })
@@ -353,7 +358,7 @@ export function MobileNativeChatView({
             <Pressable
               accessibilityLabel="Scroll to latest"
               style={[styles.fab, styles.fabBottom]}
-              onPress={() => listRef.current?.scrollToEnd({ animated: true })}
+              onPress={jumpToLatest}
             >
               <ArrowDown size={18} color={colors.textPrimary} strokeWidth={2.2} />
             </Pressable>
