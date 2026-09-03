@@ -2,6 +2,8 @@ import React from 'react'
 import Markdown, { defaultUrlTransform } from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import remarkBreaks from 'remark-breaks'
+import remarkMath from 'remark-math'
+import rehypeKatex from 'rehype-katex'
 import rehypeRaw from 'rehype-raw'
 import rehypeSanitize, { defaultSchema } from 'rehype-sanitize'
 import { cn } from '@/lib/utils'
@@ -60,7 +62,7 @@ const commentMarkdownFileUriUrlTransform: UrlTransform = (value, key, node) => {
 // plain-text renderer used whitespace-pre-wrap which preserved them. Adding
 // remark-breaks converts single newlines to <br>, keeping backward compat
 // with existing plain-text comments that rely on newline formatting.
-const remarkPlugins = [remarkGfm, remarkBreaks]
+const remarkPlugins = [remarkGfm, remarkBreaks, remarkMath]
 
 const GITHUB_REFERENCE_PATTERN = /(?:\b([A-Za-z0-9_.-]+)\/([A-Za-z0-9_.-]+))?#([1-9][0-9]*)\b/g
 
@@ -160,6 +162,7 @@ const commentMarkdownSanitizeSchema = {
   attributes: {
     ...defaultSchema.attributes,
     a: [...(defaultSchema.attributes?.a ?? []), 'href', 'title'],
+    code: [['className', /^language-./, 'math-inline', 'math-display']],
     details: [...(defaultSchema.attributes?.details ?? []), 'open'],
     img: [...(defaultSchema.attributes?.img ?? []), 'src', 'alt', 'title', 'width', 'height'],
     input: [...(defaultSchema.attributes?.input ?? []), 'type', 'checked', 'disabled'],
@@ -176,8 +179,13 @@ const commentMarkdownSanitizeSchema = {
 }
 
 // Why: GitHub comments often include safe raw HTML (`<sub>`, `<details>`,
-// `<br />`). Parse it, then sanitize immediately before React renders it.
-const rehypePlugins: MarkdownPlugins = [rehypeRaw, [rehypeSanitize, commentMarkdownSanitizeSchema]]
+// `<br />`). Parse it, then sanitize before KaTeX expands it so generated math
+// elements don't need to be in the allowlist schema.
+const rehypePlugins: MarkdownPlugins = [
+  rehypeRaw,
+  [rehypeSanitize, commentMarkdownSanitizeSchema],
+  rehypeKatex
+]
 
 type CommentMarkdownProps = React.ComponentPropsWithoutRef<'div'> & {
   content: string
