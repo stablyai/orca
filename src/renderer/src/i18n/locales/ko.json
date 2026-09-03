@@ -1573,7 +1573,7 @@
         "b227d88520": "{{value0}} 파일을 찾았습니다.",
         "995be8ea22": "복사",
         "cf144856dc": "복사됨",
-        "344f8a48dd": "on the host running the Quick Open scan to enable fast, gitignore-aware listing:"
+        "47c3a72d38": "빠른 gitignore 인식 목록을 활성화하려면 이 컴퓨터에서 다음을 수행하세요."
       },
       "SelectedTextCopyMenu": {
         "9b40d7b018": "복사"
