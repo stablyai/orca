@@ -124,7 +124,12 @@ export const readProcessTable = createProcessTableSnapshotReader(readFreshProces
 
 export function readProcessTableBeforeDeadline(
   readTable: ProcessTableReader,
-  timeoutMs: number
+  timeoutMs: number,
+  /** Keep this deadline timer ref'd instead of the default unref'd. Only a
+   *  caller that awaits the full escalation (daemon shutdown) should set
+   *  this — otherwise Node's event loop can see no ref'd work left and let
+   *  the process exit before the deadline this promise depends on fires. */
+  keepAlive = false
 ): Promise<ProcessTableCapture | null> {
   return new Promise((resolve) => {
     let settled = false
@@ -137,7 +142,9 @@ export function readProcessTableBeforeDeadline(
       resolve(capture)
     }
     const timer = setTimeout(() => finish(null), timeoutMs)
-    timer.unref?.()
+    if (!keepAlive) {
+      timer.unref?.()
+    }
     try {
       void readTable(timeoutMs).then(
         (rows) => finish(rows),
@@ -250,7 +257,13 @@ type KillSweepDeps = SnapshotDeps &
  *   leaves the tree running (#9045, #10475).
  * Callers must not signal the root before this runs on POSIX — a dead root's
  * descendants reparent to pid 1 and become unfindable. Snapshot failure
- * degrades to killRoot alone on POSIX.
+ * degrades to killRoot alone on POSIX. killRoot always runs right after the
+ * SIGTERM sweep (POSIX) or the identity probe (Windows/WSL fallback),
+ * regardless of `awaitEscalation` — only the promise this function returns,
+ * not killRoot's own timing, is delayed by it. On Windows this also means
+ * killRoot never waits on `taskkill /T /F` itself, which carries its own
+ * multi-second timeout that stacked behind the identity probe could exceed
+ * a caller's shutdown budget and skip the native force-kill entirely.
  */
 export async function killWithDescendantSweep(
   rootPid: number,
@@ -259,6 +272,7 @@ export async function killWithDescendantSweep(
 ): Promise<void> {
   const platform = deps.platform ?? process.platform
   if (platform === 'win32') {
+    let treeKillEscalation: Promise<void> = Promise.resolve()
     try {
       if ((deps.ownsRoot?.() ?? true) && Number.isInteger(rootPid) && rootPid > 0) {
         // Why first: the job names the tree Orca created, so it is immune to the
@@ -271,30 +285,44 @@ export async function killWithDescendantSweep(
         // the last shell handle before it queues the JS exit callback — Windows may
         // already have recycled this PID while the map still looks live. taskkill /T /F
         // on a recycled PID force-kills an unrelated tree, so demand OS identity first.
+        // This also covers the WSL fallback (a wsl.exe root's job never reaches guest
+        // processes, so terminateOwnedTree reports `unavailable` and lands here too).
         const verify = deps.verifyTreeKillTarget ?? verifyWindowsTreeKillTarget
         const target = await verify(rootPid).catch((): WindowsTreeKillTarget => 'unknown')
         // Re-check ownership: the identity query awaits, so exit can land meanwhile.
         if (target === 'own' && (deps.ownsRoot?.() ?? true)) {
           const killTree = deps.killWindowsTree ?? terminateWindowsProcessTree
-          // Why: taskkill may race an already-exited tree; never block killRoot on that.
-          await killTree(rootPid).catch(() => {})
+          // Why not awaited here: taskkill's own WINDOWS_PROCESS_TREE_KILL_TIMEOUT_MS
+          // stacked behind WINDOWS_ROOT_IDENTITY_TIMEOUT_MS above can exceed the
+          // daemon's SHUTDOWN_TIMEOUT_MS, which let killRoot get skipped entirely
+          // when the outer shutdown race gave up first. Run it as a bounded
+          // escalation instead, exactly like the POSIX SIGKILL sweep below, so
+          // killRoot always fires on schedule and this only delays an opt-in await.
+          treeKillEscalation = killTree(rootPid).catch(() => {})
         }
       }
     } finally {
       killRoot()
     }
+    if (deps.awaitEscalation) {
+      await treeKillEscalation
+    }
     return
   }
 
   const snapshot = await captureDescendantSnapshot(rootPid, deps)
+  let escalation: Promise<void> = Promise.resolve()
   try {
     // Signal the captured descendants while their parent links still exist;
     // killing the root first creates a reparent/PID-reuse window.
     if (snapshot && (deps.ownsRoot?.() ?? true)) {
-      terminateDescendantSnapshot(snapshot, deps)
+      escalation = terminateDescendantSnapshot(snapshot, deps)
     }
   } finally {
     killRoot()
+  }
+  if (deps.awaitEscalation) {
+    await escalation
   }
 }
 
@@ -311,6 +339,27 @@ export type TerminateDeps = {
   sendSignal?: SignalSender
   graceMs?: number
   timeoutMs?: number
+  /**
+   * On POSIX (consumed directly by terminateDescendantSnapshot): await the
+   * grace-window SIGKILL escalation before resolving, instead of leaving it
+   * on its own unref'd timer. A caller that force-exits the process right
+   * after this resolves (daemon shutdown) would otherwise drop that timer
+   * mid-flight and leave SIGTERM-ignoring descendants alive. Off by default
+   * because it adds up to ~DESCENDANT_KILL_GRACE_MS + DESCENDANT_SNAPSHOT_TIMEOUT_MS
+   * of latency, which a long-lived process's fire-and-forget close
+   * (interactive tab close) does not need to pay.
+   *
+   * Also keeps the grace-window timer and its escalation deadline read
+   * ref'd instead of unref'd: an awaiting caller needs Node's event loop to
+   * actually stay alive for these to fire, not just a promise nobody's loop
+   * is obligated to keep pending. Fire-and-forget callers must leave this
+   * unset so an otherwise-idle long-lived process isn't held open by it.
+   *
+   * On Windows (consumed by killWithDescendantSweep via this same field):
+   * await the `taskkill /T /F` escalation kicked off after the identity
+   * probe, for the same reason — killRoot itself never waits on it either way.
+   */
+  awaitEscalation?: boolean
 }
 
 export function hasUnambiguousStartIdentity(row: ProcessTableRow, capturedAtMs: number): boolean {
@@ -328,48 +377,59 @@ export function hasUnambiguousStartIdentity(row: ProcessTableRow, capturedAtMs: 
  * reaching detached-pgid children the PTY's SIGHUP cannot, then after a grace
  * window SIGKILL identity-safe survivors. Processes born in the capture second
  * are not escalated because ps cannot distinguish same-second PID reuse.
+ * The returned promise settles once that escalation check finishes (or is
+ * skipped for an empty tree); its timer stays unref'd — unless `awaitEscalation`
+ * is set, for a caller (daemon shutdown) that awaits this promise and needs
+ * Node's event loop kept alive long enough for it to actually settle — so a
+ * caller that never awaits it does not keep an otherwise-idle process alive.
  */
 export function terminateDescendantSnapshot(
   snapshot: DescendantSnapshot,
   deps: TerminateDeps = {}
-): void {
+): Promise<void> {
   const sendSignal = deps.sendSignal ?? sendDescendantSignal
   const readTable = deps.readTable ?? readProcessTable
+  const keepAlive = deps.awaitEscalation ?? false
   for (const row of snapshot.descendants) {
     sendSignal(row.pid, 'SIGTERM')
   }
   if (snapshot.descendants.length === 0) {
-    return
+    return Promise.resolve()
   }
-  const timer = setTimeout(() => {
-    void readProcessTableBeforeDeadline(
-      readTable,
-      deps.timeoutMs ?? DESCENDANT_SNAPSHOT_TIMEOUT_MS
-    ).then((capture) => {
-      if (!capture) {
-        return
-      }
-      const expectedPids = new Set(snapshot.descendants.map((row) => row.pid))
-      const liveTargets = new Map<number, ProcessTableRow | null>()
-      // Why: a process table may be large, while one agent's descendants are
-      // normally few. Index only signal targets instead of duplicating every row.
-      for (const live of capture.rows) {
-        if (expectedPids.has(live.pid)) {
-          // Duplicate PID rows make identity ambiguous, so never escalate them.
-          liveTargets.set(live.pid, liveTargets.has(live.pid) ? null : live)
+  return new Promise((resolve) => {
+    const timer = setTimeout(() => {
+      void readProcessTableBeforeDeadline(
+        readTable,
+        deps.timeoutMs ?? DESCENDANT_SNAPSHOT_TIMEOUT_MS,
+        keepAlive
+      ).then((capture) => {
+        if (capture) {
+          const expectedPids = new Set(snapshot.descendants.map((row) => row.pid))
+          const liveTargets = new Map<number, ProcessTableRow | null>()
+          // Why: a process table may be large, while one agent's descendants are
+          // normally few. Index only signal targets instead of duplicating every row.
+          for (const live of capture.rows) {
+            if (expectedPids.has(live.pid)) {
+              // Duplicate PID rows make identity ambiguous, so never escalate them.
+              liveTargets.set(live.pid, liveTargets.has(live.pid) ? null : live)
+            }
+          }
+          for (const row of snapshot.descendants) {
+            const live = liveTargets.get(row.pid)
+            if (
+              hasUnambiguousStartIdentity(row, snapshot.capturedAtMs) &&
+              live?.startedAt === row.startedAt &&
+              live.pgid === row.pgid
+            ) {
+              sendSignal(row.pid, 'SIGKILL')
+            }
+          }
         }
-      }
-      for (const row of snapshot.descendants) {
-        const live = liveTargets.get(row.pid)
-        if (
-          hasUnambiguousStartIdentity(row, snapshot.capturedAtMs) &&
-          live?.startedAt === row.startedAt &&
-          live.pgid === row.pgid
-        ) {
-          sendSignal(row.pid, 'SIGKILL')
-        }
-      }
-    })
-  }, deps.graceMs ?? DESCENDANT_KILL_GRACE_MS)
-  timer.unref?.()
+        resolve()
+      })
+    }, deps.graceMs ?? DESCENDANT_KILL_GRACE_MS)
+    if (!keepAlive) {
+      timer.unref?.()
+    }
+  })
 }
