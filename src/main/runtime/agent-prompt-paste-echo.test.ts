@@ -6,7 +6,8 @@ import {
   deriveAgentPromptPasteEchoProbe,
   getAgentPromptPasteEchoTimeoutMs,
   isAgentPromptPasteEchoObserved,
-  isAgentPromptPasteEchoPlaceholderObserved
+  isAgentPromptPasteEchoPlaceholderObserved,
+  pastePayloadContainsPlaceholderFragment
 } from './agent-prompt-paste-echo'
 
 describe('deriveAgentPromptPasteEchoProbe', () => {
@@ -64,6 +65,20 @@ describe('isAgentPromptPasteEchoObserved', () => {
   it('matches other collapsed-paste placeholder variants in post-write output', () => {
     expect(isAgentPromptPasteEchoPlaceholderObserved('[Pasted Content 40 lines]')).toBe(true)
     expect(isAgentPromptPasteEchoPlaceholderObserved('Pasted content added')).toBe(true)
+  })
+
+  it('identifies a placeholder fragment supplied by the paste payload', () => {
+    expect(
+      pastePayloadContainsPlaceholderFragment(
+        buildAgentPromptPasteBytes('leading text [Pasted text #1 +40 lines] before the tail')
+      )
+    ).toBe(true)
+  })
+
+  it('does not identify a placeholder fragment in an ordinary paste payload', () => {
+    expect(pastePayloadContainsPlaceholderFragment(buildAgentPromptPasteBytes('ordinary prompt'))).toBe(
+      false
+    )
   })
 })
 

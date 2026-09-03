@@ -23,7 +23,8 @@ import {
   deriveAgentPromptPasteEchoProbe,
   getAgentPromptPasteEchoTimeoutMs,
   isAgentPromptPasteEchoObserved,
-  isAgentPromptPasteEchoPlaceholderObserved
+  isAgentPromptPasteEchoPlaceholderObserved,
+  pastePayloadContainsPlaceholderFragment
 } from './agent-prompt-paste-echo'
 
 export class OrcaRuntimeWithWriteTerminalAgentPrompt extends OrcaRuntimeWithResolveAuthoritativeTerminalWaitPermission {
@@ -143,7 +144,7 @@ export class OrcaRuntimeWithWriteTerminalAgentPrompt extends OrcaRuntimeWithReso
     return 1
   }
 
-  /** Polls the pane for the paste tail (or a collapse placeholder) so Enter never overtakes a
+  /** Polls the pane for the paste tail (or a collapse placeholder the payload cannot supply) so Enter never overtakes a
    *  redraw burst the render gate's hard cap already gave up waiting on. Best-effort: on
    *  timeout it falls back to today's behavior rather than blocking submission indefinitely. */
   private async waitForAgentPromptPasteEcho(
@@ -157,6 +158,7 @@ export class OrcaRuntimeWithWriteTerminalAgentPrompt extends OrcaRuntimeWithReso
     options: RuntimeTerminalWriteOptions
   ): Promise<void> {
     const probe = deriveAgentPromptPasteEchoProbe(pastePayload)
+    const canUsePlaceholderEvidence = !pastePayloadContainsPlaceholderFragment(pastePayload)
     if (probe === null || pasteOutputSequenceBaseline === null) {
       return
     }
@@ -169,7 +171,8 @@ export class OrcaRuntimeWithWriteTerminalAgentPrompt extends OrcaRuntimeWithReso
       if (
         activity.outputSequence > pasteOutputSequenceBaseline &&
         (isAgentPromptPasteEchoObserved(postPasteOutput, probe) ||
-          isAgentPromptPasteEchoPlaceholderObserved(postPasteOutput))
+          (canUsePlaceholderEvidence &&
+            isAgentPromptPasteEchoPlaceholderObserved(postPasteOutput)))
       ) {
         await waitForAgentPromptDelay(AGENT_PROMPT_ECHO_SETTLE_MS, options.signal)
         return

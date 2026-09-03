@@ -97,11 +97,13 @@ async function createSettlementRuntimeWithImmediateRenderGate(): Promise<{
 const PROMPT = 'y'.repeat(12_000)
 // Why: matches the 24-char echo probe derived from PROMPT's tail (all 'y's).
 const PROMPT_TAIL_ECHO = 'y'.repeat(24)
+const PROMPT_LEADING_TEXT = '[Pasted text #1 +40 lines]\n'
+const PROMPT_WITH_LITERAL_PLACEHOLDER = `${PROMPT_LEADING_TEXT}${PROMPT}`
 
-function floorMsFor(platform: NodeJS.Platform): number {
+function floorMsFor(platform: NodeJS.Platform, prompt = PROMPT): number {
   return getAgentPromptSubmitDelayMs(
     platform,
-    Buffer.byteLength(buildAgentPromptPasteBytes(PROMPT), 'utf8')
+    Buffer.byteLength(buildAgentPromptPasteBytes(prompt), 'utf8')
   )
 }
 
@@ -263,6 +265,30 @@ describe('agent prompt render gate ingest floor', () => {
     await vi.advanceTimersByTimeAsync(1)
     expect(countSubmits(writes)).toBe(1)
     expect(submitTimes[0]).toBe(floorMs + AGENT_PROMPT_ECHO_SETTLE_MS)
+
+    await vi.runAllTimersAsync()
+    await stalled
+  })
+
+  it('does not treat a placeholder supplied by the prompt as a collapsed-paste echo', async () => {
+    useHostPlatform('win32')
+    vi.useFakeTimers()
+    const { runtime, handle, writes } = await createSettlementRuntimeWithImmediateRenderGate()
+    const floorMs = floorMsFor('win32', PROMPT_WITH_LITERAL_PLACEHOLDER)
+    const submission = runtime.sendTerminalAgentPrompt(handle, PROMPT_WITH_LITERAL_PLACEHOLDER)
+    const stalled = expect(submission).rejects.toThrow('agent_prompt_stalled')
+
+    await vi.advanceTimersByTimeAsync(0)
+    runtime.onPtyData(PTY_ID, PROMPT_LEADING_TEXT, Date.now())
+
+    await vi.advanceTimersByTimeAsync(
+      floorMs + AGENT_PROMPT_ECHO_SETTLE_MS + AGENT_PROMPT_ECHO_POLL_INTERVAL_MS
+    )
+    expect(countSubmits(writes)).toBe(0)
+
+    runtime.onPtyData(PTY_ID, PROMPT_TAIL_ECHO, Date.now())
+    await vi.advanceTimersByTimeAsync(AGENT_PROMPT_ECHO_POLL_INTERVAL_MS + AGENT_PROMPT_ECHO_SETTLE_MS)
+    expect(countSubmits(writes)).toBe(1)
 
     await vi.runAllTimersAsync()
     await stalled

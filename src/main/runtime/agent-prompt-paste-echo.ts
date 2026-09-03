@@ -60,3 +60,9 @@ export function isAgentPromptPasteEchoPlaceholderObserved(postPasteOutput: strin
   const normalized = stripAllWhitespace(postPasteOutput)
   return AGENT_PROMPT_PASTE_PLACEHOLDER_FRAGMENTS.some((fragment) => normalized.includes(fragment))
 }
+
+/** A payload that contains a placeholder can echo it before its tail is fully ingested. */
+export function pastePayloadContainsPlaceholderFragment(pastePayload: string): boolean {
+  const normalized = stripAllWhitespace(pastePayload)
+  return AGENT_PROMPT_PASTE_PLACEHOLDER_FRAGMENTS.some((fragment) => normalized.includes(fragment))
+}
