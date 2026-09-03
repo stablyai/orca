@@ -85,6 +85,7 @@ describe('ClaudeAccountService credential capture', () => {
     }
     const runtimeAuth = {
       clearLastWrittenCredentialsJson: vi.fn(),
+      setIdentityStatusListener: vi.fn(),
       syncForCurrentSelection: vi.fn(async () => {}),
       forceMaterializeCurrentSelectionForRollback: vi.fn(async () => {})
     }
@@ -173,6 +174,7 @@ describe('ClaudeAccountService credential capture', () => {
     }
     const runtimeAuth = {
       clearLastWrittenCredentialsJson: vi.fn(),
+      setIdentityStatusListener: vi.fn(),
       syncForCurrentSelection: vi.fn(async () => {}),
       forceMaterializeCurrentSelectionForRollback: vi.fn(async () => {
         throw new Error('rematerialize failed')
@@ -255,6 +257,7 @@ describe('ClaudeAccountService credential capture', () => {
     }
     const runtimeAuth = {
       clearLastWrittenCredentialsJson: vi.fn(),
+      setIdentityStatusListener: vi.fn(),
       syncForCurrentSelection: vi.fn(async () => {}),
       forceMaterializeCurrentSelectionForRollback: vi.fn(async () => {})
     }
@@ -337,6 +340,7 @@ describe('ClaudeAccountService credential capture', () => {
     }
     const runtimeAuth = {
       clearLastWrittenCredentialsJson: vi.fn(),
+      setIdentityStatusListener: vi.fn(),
       syncForCurrentSelection: vi.fn(async () => {}),
       forceMaterializeCurrentSelectionForRollback: vi.fn(async () => {})
     }

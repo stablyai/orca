@@ -88,6 +88,7 @@ describe('ClaudeAccountService credential capture', () => {
     }
     const runtimeAuth = {
       clearLastWrittenCredentialsJson: vi.fn(),
+      setIdentityStatusListener: vi.fn(),
       forceMaterializeCurrentSelectionForRollback: vi.fn(async () => {}),
       syncForCurrentSelection: vi.fn(async () => {
         throw new Error('materialize failed')
@@ -161,6 +162,7 @@ describe('ClaudeAccountService credential capture', () => {
     }
     const runtimeAuth = {
       clearLastWrittenCredentialsJson: vi.fn(),
+      setIdentityStatusListener: vi.fn(),
       forceMaterializeCurrentSelectionForRollback: vi.fn(async () => {}),
       syncForCurrentSelection: vi.fn(async () => {
         throw new Error('materialize failed')
@@ -235,6 +237,7 @@ describe('ClaudeAccountService credential capture', () => {
     }
     const runtimeAuth = {
       clearLastWrittenCredentialsJson: vi.fn(),
+      setIdentityStatusListener: vi.fn(),
       forceMaterializeCurrentSelectionForRollback: vi.fn(async () => {}),
       syncForCurrentSelection: vi.fn()
     }
@@ -311,6 +314,7 @@ describe('ClaudeAccountService credential capture', () => {
     }
     const runtimeAuth = {
       clearLastWrittenCredentialsJson: vi.fn(),
+      setIdentityStatusListener: vi.fn(),
       forceMaterializeCurrentSelectionForRollback: vi.fn(async () => {}),
       syncForCurrentSelection: vi.fn(async () => {
         rmSync(oauthPath, { force: true })
@@ -382,6 +386,7 @@ describe('ClaudeAccountService credential capture', () => {
     }
     const runtimeAuth = {
       clearLastWrittenCredentialsJson: vi.fn(),
+      setIdentityStatusListener: vi.fn(),
       syncForCurrentSelection: vi.fn(async () => {}),
       forceMaterializeCurrentSelectionForRollback: vi.fn(async () => {})
     }

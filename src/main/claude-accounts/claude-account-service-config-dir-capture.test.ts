@@ -72,6 +72,7 @@ describe('ClaudeAccountService.addAccountFromConfigDir', () => {
     const rateLimits = { evictInactiveClaudeCache: vi.fn() }
     const runtimeAuth = {
       clearLastWrittenCredentialsJson: vi.fn(),
+      setIdentityStatusListener: vi.fn(),
       forceMaterializeCurrentSelectionForRollback: vi.fn(async () => {})
     }
     return { store, rateLimits, runtimeAuth, getSettings: () => settings }

@@ -3844,6 +3844,8 @@
             "1804cd8c3f": "Refreshing sign-in",
             "f8f0f9d8cc": "Network issue",
             "bf2e739f18": "Sign-in unavailable",
+            "c47a1e90b3": "Signed in as another account",
+            "8b2f4c6d19": "This Claude account’s home is signed in as a different account. Run /login in its terminal to sign back in.",
             "3ac91d7e42": "Account files missing",
             "f8b8dbed85": "Usage unavailable",
             "3d3c9c0c1f": "Claude usage will refresh after the live Claude terminal rotates its credentials.",

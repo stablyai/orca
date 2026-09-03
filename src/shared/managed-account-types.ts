@@ -73,6 +73,14 @@ export type ClaudeManagedAccount = {
 export type ClaudeManagedAccountSummary = {
   id: string
   email: string
+  /**
+   * Whether this account's own home is signed in as the identity Orca recorded for it.
+   *
+   * Optional on the wire on purpose: a client and a remote host update independently, so a newer
+   * client talking to a host that predates this field receives nothing and must read that as
+   * `unknown`. Never branch on it being present — see docs/reference/remote-wire-compatibility.md.
+   */
+  identityStatus?: 'match' | 'foreign' | 'unknown'
   managedAuthRuntime?: 'host' | 'wsl'
   wslDistro?: string | null
   authMethod: 'subscription-oauth' | 'unknown'

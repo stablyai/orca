@@ -6,6 +6,8 @@ import type {
 import type { Store } from '../persistence'
 import type { RateLimitService } from '../rate-limits/service'
 import { beginClaudeAuthSwitch, endClaudeAuthSwitch } from './live-pty-gate'
+import type { ClaudeAccountIdentityStatus } from './claude-account-identity-status'
+import { ClaudeAccountIdentityTracker } from './claude-account-identity-tracker'
 import type { ClaudeRuntimeAuthService } from './runtime-auth-service'
 import {
   getClaudeSelectionTargetForAccount,
@@ -23,7 +25,8 @@ export class ClaudeAccountSelection {
     private readonly store: Store,
     private readonly rateLimits: RateLimitService,
     private readonly runtimeAuth: ClaudeRuntimeAuthService,
-    private readonly removeManagedAuth: (accountId: string, path: string) => Promise<void>
+    private readonly removeManagedAuth: (accountId: string, path: string) => Promise<void>,
+    private readonly identityStatuses: ClaudeAccountIdentityTracker = new ClaudeAccountIdentityTracker()
   ) {}
 
   list(): ClaudeRateLimitAccountsState {
@@ -119,7 +122,7 @@ export class ClaudeAccountSelection {
     const settings = this.store.getSettings()
     return {
       accounts: settings.claudeManagedAccounts
-        .map(toClaudeAccountSummary)
+        .map((account) => toClaudeAccountSummary(account, this.identityStatuses.get(account.id)))
         .sort((a, b) => b.updatedAt - a.updatedAt),
       activeAccountId: normalizeClaudeRuntimeSelection(settings).host,
       activeAccountIdsByRuntime: normalizeClaudeRuntimeSelection(settings)
@@ -175,10 +178,16 @@ export class ClaudeAccountSelection {
   }
 }
 
-function toClaudeAccountSummary(account: ClaudeManagedAccount): ClaudeManagedAccountSummary {
+function toClaudeAccountSummary(
+  account: ClaudeManagedAccount,
+  identityStatus?: ClaudeAccountIdentityStatus
+): ClaudeManagedAccountSummary {
   return {
     id: account.id,
     email: account.email,
+    // Absent when no lane has looked at this account's home yet. Left undefined rather than
+    // defaulted to 'match', so "not looked at" never renders as a positive assurance.
+    ...(identityStatus === undefined ? {} : { identityStatus }),
     managedAuthRuntime: account.managedAuthRuntime ?? 'host',
     wslDistro: account.wslDistro ?? null,
     authMethod: account.authMethod ?? 'unknown',

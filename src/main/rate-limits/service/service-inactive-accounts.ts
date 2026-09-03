@@ -186,6 +186,17 @@ export abstract class RateLimitServiceInactiveAccounts extends RateLimitServiceP
     }
   }
 
+  /**
+   * Republishes account state that changed outside a usage fetch.
+   *
+   * Why this exists: `onChanged` on the account controller is wired only to this service's state
+   * listeners, so a change with no rate-limit component — an account's identity turning out to be
+   * someone else's, say — would sit in main and never reach the status bar.
+   */
+  publishClaudeAccountsChanged(): void {
+    this.pushToRenderer()
+  }
+
   evictInactiveClaudeCache(accountId: string): void {
     this.inactiveClaudeAccountsGeneration += 1
     this.inactiveClaudeCache.delete(accountId)

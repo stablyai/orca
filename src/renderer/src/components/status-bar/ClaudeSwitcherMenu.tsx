@@ -278,6 +278,20 @@ export function ClaudeSwitcherMenu({
                   <div className="flex w-full flex-col gap-0.5">
                     <div className="flex min-w-0 items-center gap-2">
                       <span className="min-w-0 flex-1 truncate">{target.label}</span>
+                      {target.signedInAsAnotherAccount ? (
+                        <span
+                          className="shrink-0 text-[10px] font-medium text-destructive"
+                          title={translate(
+                            'auto.components.status.bar.tooltip.8b2f4c6d19',
+                            'This Claude account\u2019s home is signed in as a different account. Run /login in its terminal to sign back in.'
+                          )}
+                        >
+                          {translate(
+                            'auto.components.status.bar.tooltip.c47a1e90b3',
+                            'Signed in as another account'
+                          )}
+                        </span>
+                      ) : null}
                       {target.active ? (
                         <span className="shrink-0 text-[10px] font-medium text-muted-foreground">
                           {translate('auto.components.status.bar.StatusBar.ff0fbe9311', 'Active')}

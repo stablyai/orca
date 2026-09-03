@@ -27,6 +27,8 @@ export type ClaudeStatusSwitchTarget = {
   label: string
   active: boolean
   runtimeTarget: CodexStatusRuntimeTarget
+  /** True only for a proven identity mismatch; absent covers both "matches" and "not checked". */
+  signedInAsAnotherAccount?: boolean
 }
 
 export type ClaudeStatusSwitchGroup = {

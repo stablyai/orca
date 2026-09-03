@@ -83,6 +83,7 @@ describe('ClaudeAccountService credential capture', () => {
       })
     }
     const runtimeAuth = {
+      setIdentityStatusListener: vi.fn(),
       syncForCurrentSelection: vi.fn(async () => {}),
       forceMaterializeCurrentSelectionForRollback: vi.fn(async () => {})
     }
@@ -145,6 +146,7 @@ describe('ClaudeAccountService credential capture', () => {
       })
     }
     const runtimeAuth = {
+      setIdentityStatusListener: vi.fn(),
       syncForCurrentSelection: vi.fn(async () => {}),
       forceMaterializeCurrentSelectionForRollback: vi.fn(async () => {})
     }
@@ -215,6 +217,7 @@ describe('ClaudeAccountService credential capture', () => {
       })
     }
     const runtimeAuth = {
+      setIdentityStatusListener: vi.fn(),
       syncForCurrentSelection: vi.fn(async () => {}),
       forceMaterializeCurrentSelectionForRollback: vi.fn(async () => {})
     }
@@ -373,6 +376,7 @@ describe('ClaudeAccountService credential capture', () => {
       })
     }
     const runtimeAuth = {
+      setIdentityStatusListener: vi.fn(),
       syncForCurrentSelection: vi.fn(async () => {}),
       forceMaterializeCurrentSelectionForRollback: vi.fn(async () => {})
     }
@@ -441,6 +445,7 @@ describe('ClaudeAccountService credential capture', () => {
       updateSettings: vi.fn()
     }
     const runtimeAuth = {
+      setIdentityStatusListener: vi.fn(),
       syncForCurrentSelection: vi.fn(async () => {}),
       forceMaterializeCurrentSelectionForRollback: vi.fn(async () => {})
     }
@@ -515,6 +520,7 @@ describe('ClaudeAccountService credential capture', () => {
       })
     }
     const runtimeAuth = {
+      setIdentityStatusListener: vi.fn(),
       syncForCurrentSelection: vi.fn(async () => {}),
       forceMaterializeCurrentSelectionForRollback: vi.fn(async () => {})
     }

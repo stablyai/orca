@@ -94,7 +94,10 @@ export function buildClaudeStatusSwitchGroups(
           id: account.id,
           label: account.email,
           active: account.id === activeId,
-          runtimeTarget: target
+          runtimeTarget: target,
+          // Only a proven mismatch is carried through. `unknown` and "not looked at yet" both mean
+          // we have no business telling the user their account is someone else's.
+          signedInAsAnotherAccount: account.identityStatus === 'foreign'
         }))
       ]
     }
@@ -180,5 +183,34 @@ export function resolveClaudeStatusAccountState(
   if (settings?.activeRuntimeEnvironmentId?.trim()) {
     return runtimeState
   }
-  return getClaudeStatusAccountsFromSettings(settings) ?? runtimeState
+  const fromSettings = getClaudeStatusAccountsFromSettings(settings)
+  if (!fromSettings) {
+    return runtimeState
+  }
+  return {
+    ...fromSettings,
+    accounts: withIdentityStatusFromRuntime(fromSettings.accounts, runtimeState)
+  }
+}
+
+/**
+ * Carries `identityStatus` over from the runtime snapshot onto the settings-derived summaries.
+ *
+ * Whether an account's home is signed in as the right identity is decided by reading that home,
+ * which only the host can do — persisted settings have no such field and never will. Without this
+ * merge the settings-derived summary silently wins locally and erases a `foreign` verdict computed
+ * in main, which is the one case the badge exists for.
+ *
+ * The value is left absent when the runtime has none, so "not looked at yet" stays distinguishable
+ * from "looked and matched" rather than being flattened into a false assurance.
+ */
+function withIdentityStatusFromRuntime(
+  accounts: ClaudeRateLimitAccountsState['accounts'],
+  runtimeState: ClaudeRateLimitAccountsState
+): ClaudeRateLimitAccountsState['accounts'] {
+  const byId = new Map(runtimeState.accounts.map((account) => [account.id, account.identityStatus]))
+  return accounts.map((account) => {
+    const identityStatus = byId.get(account.id)
+    return identityStatus === undefined ? account : { ...account, identityStatus }
+  })
 }

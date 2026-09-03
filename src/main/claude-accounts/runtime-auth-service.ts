@@ -17,11 +17,20 @@ import {
   readComposedClaudeCredentials
 } from './claude-credential-read-result'
 import { readClaudeManagedAuthFile } from './managed-auth-path'
+import {
+  compareClaudeAccountIdentity,
+  type ClaudeAccountIdentityStatus
+} from './claude-account-identity-status'
+import { RUNTIME_OAUTH_ACCOUNT_PARSE_ERROR } from './runtime-auth/runtime-auth-types'
+import type { ClaudeManagedAccount } from '../../shared/managed-account-types'
 
 export type { ClaudeRuntimeAuthPreparation } from './runtime-auth/runtime-auth-types'
 
 export class ClaudeRuntimeAuthService extends ClaudeRuntimeAuthSync {
   private readonly startupMigrations: Promise<void>
+  private identityStatusListener:
+    | ((accountId: string, status: ClaudeAccountIdentityStatus) => void)
+    | null = null
 
   constructor(store: Store) {
     super(store)
@@ -49,6 +58,30 @@ export class ClaudeRuntimeAuthService extends ClaudeRuntimeAuthSync {
    */
   async whenStartupMigrationsComplete(): Promise<void> {
     await this.startupMigrations
+  }
+
+  setIdentityStatusListener(
+    listener: ((accountId: string, status: ClaudeAccountIdentityStatus) => void) | null
+  ): void {
+    this.identityStatusListener = listener
+  }
+
+  /**
+   * Reads the account's own `.claude.json` and reports whether it is signed in as the identity
+   * Orca recorded. Read-only by design: a home signed in as someone else is reported, never
+   * rewritten. Reverting it is what generated the defects this work removed.
+   */
+  private reportIdentityStatus(account: ClaudeManagedAccount, configDir: string): void {
+    if (!this.identityStatusListener) {
+      return
+    }
+    const oauthAccount = this.readRuntimeOauthAccount(configDir)
+    this.identityStatusListener(
+      account.id,
+      oauthAccount === RUNTIME_OAUTH_ACCOUNT_PARSE_ERROR
+        ? 'unknown'
+        : compareClaudeAccountIdentity(oauthAccount, account)
+    )
   }
 
   private async migrateToScopedStore(): Promise<void> {
@@ -116,6 +149,11 @@ export class ClaudeRuntimeAuthService extends ClaudeRuntimeAuthSync {
       await this.syncForCurrentSelection(effectiveTarget)
     }
     const preparation = this.getPreparation(effectiveTarget)
+    // The pane is about to run against this home, so this is the moment its identity is worth
+    // checking. Reporting only; nothing here writes.
+    if (selected && preparation.envPatch.CLAUDE_CONFIG_DIR === preparation.configDir) {
+      this.reportIdentityStatus(selected, preparation.configDir)
+    }
     return preparation
   }
 

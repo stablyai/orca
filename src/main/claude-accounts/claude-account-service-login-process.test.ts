@@ -284,6 +284,7 @@ describe('ClaudeAccountService credential capture', () => {
       }
       const runtimeAuth = {
         clearLastWrittenCredentialsJson: vi.fn(),
+        setIdentityStatusListener: vi.fn(),
         forceMaterializeCurrentSelectionForRollback: vi.fn(async () => {})
       }
       const rateLimits = {
@@ -408,6 +409,7 @@ describe('ClaudeAccountService credential capture', () => {
       }
       const runtimeAuth = {
         clearLastWrittenCredentialsJson: vi.fn(),
+        setIdentityStatusListener: vi.fn(),
         forceMaterializeCurrentSelectionForRollback: vi.fn(async () => {})
       }
       const rateLimits = {
@@ -468,6 +470,7 @@ describe('ClaudeAccountService credential capture', () => {
       }
       const runtimeAuth = {
         clearLastWrittenCredentialsJson: vi.fn(),
+        setIdentityStatusListener: vi.fn(),
         forceMaterializeCurrentSelectionForRollback: vi.fn(async () => {})
       }
       const rateLimits = {
@@ -552,6 +555,7 @@ describe('ClaudeAccountService credential capture', () => {
       }
       const runtimeAuth = {
         clearLastWrittenCredentialsJson: vi.fn(),
+        setIdentityStatusListener: vi.fn(),
         forceMaterializeCurrentSelectionForRollback: vi.fn(async () => {})
       }
       const rateLimits = {

@@ -1,4 +1,5 @@
 import type { ClaudeRateLimitAccountsState } from '../../shared/managed-account-types'
+import { ClaudeAccountIdentityTracker } from './claude-account-identity-tracker'
 import type { Store } from '../persistence'
 import type { RateLimitService } from '../rate-limits/service'
 import { ClaudeAccountRegistration } from './claude-account-registration'
@@ -35,6 +36,7 @@ export class ClaudeAccountService {
   private mutationQueue: Promise<unknown> = Promise.resolve()
   private cancelPendingClaudeLogin: (() => boolean) | null = null
   private readonly storage = new ClaudeManagedAuthStorage()
+  private readonly identityStatuses = new ClaudeAccountIdentityTracker()
   private readonly selection: ClaudeAccountSelection
   private readonly registration: ClaudeAccountRegistration
 
@@ -43,9 +45,23 @@ export class ClaudeAccountService {
     rateLimits: RateLimitService,
     private readonly runtimeAuth: ClaudeRuntimeAuthService
   ) {
-    this.selection = new ClaudeAccountSelection(store, rateLimits, runtimeAuth, (accountId, path) =>
-      this.safeRemoveManagedAuth(accountId, path)
+    this.selection = new ClaudeAccountSelection(
+      store,
+      rateLimits,
+      runtimeAuth,
+      (accountId, path) => this.safeRemoveManagedAuth(accountId, path),
+      this.identityStatuses
     )
+    // Only a change is published: recomputing the same verdict on every launch must not push a
+    // fresh snapshot to the renderer each time a pane opens.
+    // Optional call on purpose: the badge is an enhancement over the account list, so a runtime
+    // auth service that cannot take a listener degrades to never updating it rather than failing
+    // account construction outright.
+    runtimeAuth.setIdentityStatusListener?.((accountId, status) => {
+      if (this.identityStatuses.record(accountId, status)) {
+        rateLimits.publishClaudeAccountsChanged()
+      }
+    })
     this.registration = new ClaudeAccountRegistration({
       store,
       rateLimits,
