@@ -1,4 +1,10 @@
 import * as path from 'node:path'
+import {
+  GIT_PUSH_SET_UPSTREAM_GUIDANCE,
+  isPushAutoSetupRemoteApplicable,
+  supportsPushAutoSetupRemote,
+  type GitCapabilityCache
+} from '../shared/git-capability-cache'
 import { resolveWorktreeAddBaseRef } from '../shared/worktree/base-ref'
 import { windowsLongPathGitArgs } from '../shared/windows-long-path-git-args'
 import type { GitExec } from './git-handler-ops'
@@ -32,6 +38,7 @@ async function persistRelayWorktreeCreationBase(
 export async function addWorktreeOp(
   git: GitExec,
   params: Record<string, unknown>,
+  capabilities: GitCapabilityCache,
   // Why: only the execution host's OS matters here — the client may be macOS while the SSH host is Windows.
   platform: NodeJS.Platform = process.platform
 ): Promise<void> {
@@ -84,6 +91,10 @@ export async function addWorktreeOp(
   await git(args, repoPath)
 
   if (checkoutExistingBranch) {
+    // Why: a claimed branch skips branch.<name>.base (it is not a new
+    // branch) but still needs autoSetupRemote, or its first push fails
+    // with no upstream — mirrors local addWorktree's claim path.
+    await ensureRelayPushAutoSetupRemote(git, targetDir, capabilities)
     return
   }
 
@@ -91,12 +102,15 @@ export async function addWorktreeOp(
     await persistRelayWorktreeCreationBase(git, targetDir, branchName, effectiveBase)
   }
 
-  // Why: best-effort write so a deliberate user value (any scope) is
-  // preserved and a real read failure is not silently overwritten. Final
-  // catch is warn-only — if the remote host's git is <2.37 the value is
-  // ignored at push time and the user falls back to `git push -u` once.
-  // (Note: it is the SSH host's git that matters here, not the client's.)
-  // Mirrors local addWorktree exactly.
+  await ensureRelayPushAutoSetupRemote(git, targetDir, capabilities)
+}
+
+// Why: preserve any user value; unsupported remote Git gets explicit first-push guidance.
+async function ensureRelayPushAutoSetupRemote(
+  git: GitExec,
+  targetDir: string,
+  capabilities: GitCapabilityCache
+): Promise<void> {
   try {
     let alreadySet = false
     try {
@@ -113,6 +127,32 @@ export async function addWorktreeOp(
       }
     }
     if (!alreadySet) {
+      let pushDefault: string | undefined
+      try {
+        const { stdout } = await git(['config', '--get', 'push.default'], targetDir)
+        pushDefault = stdout
+      } catch (readError) {
+        const code = (readError as { code?: unknown })?.code
+        if (code !== 1) {
+          throw readError
+        }
+      }
+      if (!isPushAutoSetupRemoteApplicable(pushDefault)) {
+        console.warn(
+          `relay addWorktree: push.default does not support automatic upstream setup; first push requires: ${GIT_PUSH_SET_UPSTREAM_GUIDANCE}`
+        )
+        return
+      }
+      const supported = await supportsPushAutoSetupRemote(capabilities, async () => {
+        const { stdout } = await git(['help', '--config'], targetDir)
+        return stdout
+      })
+      if (!supported) {
+        console.warn(
+          `relay addWorktree: Git does not support push.autoSetupRemote; first push requires: ${GIT_PUSH_SET_UPSTREAM_GUIDANCE}`
+        )
+        return
+      }
       await git(['config', '--local', 'push.autoSetupRemote', 'true'], targetDir)
     }
   } catch (error) {

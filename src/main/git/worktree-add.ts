@@ -1,4 +1,9 @@
 import { resolveWorktreeAddBaseRef } from '../../shared/worktree/base-ref'
+import {
+  GIT_PUSH_SET_UPSTREAM_GUIDANCE,
+  isPushAutoSetupRemoteApplicable,
+  supportsPushAutoSetupRemote
+} from '../../shared/git-capability-cache'
 import type {
   LocalBaseRefRefreshResult,
   LocalBaseRefUpdateSuggestion
@@ -6,6 +11,7 @@ import type {
 import { windowsLongPathGitArgs } from '../../shared/windows-long-path-git-args'
 import { withRepoRefMaintenancePaused } from './local-repo-ref-maintenance'
 import { gitExecFileAsync } from './runner'
+import { withLocalGitCapabilityCacheForExecution } from './git-capability-state'
 import { runWithGitReadCacheInvalidation } from './status'
 import { invalidateWslLinkedWorktreeGitRouting } from './wsl-linked-worktree-git-routing'
 import {
@@ -107,6 +113,41 @@ export async function configurePushAutoSetupRemote(
       }
     }
     if (!alreadySet) {
+      let pushDefault: string | undefined
+      try {
+        const { stdout } = await gitExecFileAsync(['config', '--get', 'push.default'], {
+          ...gitExecOptions(worktreePath, options)
+        })
+        pushDefault = stdout
+      } catch (readError) {
+        const code = (readError as { code?: unknown })?.code
+        if (code !== 1) {
+          throw readError
+        }
+      }
+      if (!isPushAutoSetupRemoteApplicable(pushDefault)) {
+        console.warn(
+          `addWorktree: push.default does not support automatic upstream setup; first push requires: ${GIT_PUSH_SET_UPSTREAM_GUIDANCE}`
+        )
+        return
+      }
+      const supported = await withLocalGitCapabilityCacheForExecution(
+        { cwd: worktreePath, wslDistro: options.wslDistro, signal: options.signal },
+        (capabilities) =>
+          supportsPushAutoSetupRemote(capabilities, async () => {
+            const { stdout } = await gitExecFileAsync(
+              ['help', '--config'],
+              gitExecOptions(worktreePath, options)
+            )
+            return stdout
+          })
+      )
+      if (!supported) {
+        console.warn(
+          `addWorktree: Git does not support push.autoSetupRemote; first push requires: ${GIT_PUSH_SET_UPSTREAM_GUIDANCE}`
+        )
+        return
+      }
       await gitExecFileAsync(['config', '--local', 'push.autoSetupRemote', 'true'], {
         ...gitExecOptions(worktreePath, options)
       })
@@ -217,6 +258,8 @@ async function performAddWorktree(
   }
 
   if (options.checkoutExistingBranch) {
+    // Why: claiming an existing branch skips branch metadata but still needs a push upstream.
+    await configurePushAutoSetupRemote(worktreePath, options)
     return localBaseRefRefresh ? { localBaseRefRefresh } : {}
   }
 
