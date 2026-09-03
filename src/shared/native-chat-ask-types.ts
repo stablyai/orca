@@ -1,7 +1,7 @@
 // Canonical AskUserQuestion prompt types consumed by the shared parser and both
 // native-chat platform UIs.
 
-export type AskOption = { label: string; description?: string }
+export type AskOption = { label: string; description?: string; hasPreview?: boolean }
 export type AskQuestion = {
   question: string
   header?: string

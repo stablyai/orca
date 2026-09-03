@@ -33,7 +33,14 @@ export type NativeChatInteractiveSend = {
     prompt: AskPrompt,
     selections: AskAnswerSelection[],
     onDeliverySettled?: (delivered: boolean) => void
-  ) => { settleAfterMs: number; waitsForVerifiedDelivery: boolean }
+  ) => {
+    settleAfterMs: number
+    waitsForVerifiedDelivery: boolean
+    /** Clears the pane's question wait. Written bytes do not prove the agent
+     *  accepted the answer, so the caller invokes this only once a confirmation
+     *  signal lands (#16865). */
+    confirmAnswered: () => void
+  }
   /** Send a raw control string (e.g. an approval option number or ESC) as-is. */
   sendRaw: (raw: string) => void
   /** Stop delayed writes without interrupting the agent. */
@@ -86,9 +93,13 @@ export function useNativeChatInteractiveSend(
       prompt: AskPrompt,
       selections: AskAnswerSelection[],
       onDeliverySettled?: (delivered: boolean) => void
-    ): { settleAfterMs: number; waitsForVerifiedDelivery: boolean } => {
+    ): {
+      settleAfterMs: number
+      waitsForVerifiedDelivery: boolean
+      confirmAnswered: () => void
+    } => {
       if (!targetPtyId || !hasAskAnswer(prompt, selections)) {
-        return { settleAfterMs: 0, waitsForVerifiedDelivery: false }
+        return { settleAfterMs: 0, waitsForVerifiedDelivery: false, confirmAnswered: () => {} }
       }
       // Cancel any prior in-flight answer before starting a new one.
       cancelInFlight()
@@ -106,6 +117,24 @@ export function useNativeChatInteractiveSend(
       const questionStatusBaseline = stepsAnswer
         ? useAppStore.getState().agentStatusByPaneKey[paneKey]
         : undefined
+      let confirmed = false
+      const confirmAnswered = stepsAnswer
+        ? (): void => {
+            if (confirmed) {
+              return
+            }
+            confirmed = true
+            inferQuestionAnsweredFromCurrentStatus({
+              paneKey,
+              getStatusEntry: () => questionStatusBaseline,
+              inferQuestionAnswered: (request) =>
+                window.api.agentStatus.inferQuestionAnswered(request).catch((err) => {
+                  console.warn('[agent-question] native-chat inference failed:', err)
+                  return false
+                })
+            })
+          }
+        : (): void => {}
       let settledHandle: NativeChatSendHandle | null = null
       const onSettled = stepsAnswer
         ? (delivered: boolean): void => {
@@ -113,17 +142,6 @@ export function useNativeChatInteractiveSend(
               // Why: a completed verified send otherwise retains its timers,
               // promises, and prompt callback until the next send or unmount.
               inFlightRef.current = null
-            }
-            if (delivered) {
-              inferQuestionAnsweredFromCurrentStatus({
-                paneKey,
-                getStatusEntry: () => questionStatusBaseline,
-                inferQuestionAnswered: (request) =>
-                  window.api.agentStatus.inferQuestionAnswered(request).catch((err) => {
-                    console.warn('[agent-question] native-chat inference failed:', err)
-                    return false
-                  })
-              })
             }
             onDeliverySettled?.(delivered)
           }
@@ -138,14 +156,15 @@ export function useNativeChatInteractiveSend(
             onSettled
           )
         : sendNativeChatMessage(settings, targetPtyId, formatAskAnswer(prompt, selections))
-      // Why: native-chat answer writes bypass xterm.onData. Infer only after
-      // every paced selector write has fired, so an early digit in a multi-step
-      // answer cannot dismiss the wait or cancel the remaining writes.
+      // Why: native-chat answer writes bypass xterm.onData, so settlement is
+      // reported only after every paced selector write has fired — an early
+      // digit in a multi-step answer must not cancel the remaining writes.
       settledHandle = handle
       inFlightRef.current = handle
       return {
         settleAfterMs: handle.settleAfterMs,
-        waitsForVerifiedDelivery: onSettled !== undefined
+        waitsForVerifiedDelivery: onSettled !== undefined,
+        confirmAnswered
       }
     },
     [terminalTabId, paneKey, targetPtyId, agent, cancelInFlight]

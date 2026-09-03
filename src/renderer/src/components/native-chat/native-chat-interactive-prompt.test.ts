@@ -78,6 +78,28 @@ describe('parseAskFromStatus', () => {
     expect(prompt?.questions).toHaveLength(1)
     expect(prompt?.questions[0]?.question).toBe('ok')
   })
+
+  it('surfaces preview presence per option, without carrying the preview text', () => {
+    const prompt = parseAskFromStatus(
+      JSON.stringify({
+        questions: [
+          {
+            question: 'q',
+            options: [
+              { label: 'A', preview: 'const x = 1' },
+              { label: 'B' },
+              { label: 'C', preview: '' }
+            ]
+          }
+        ]
+      })
+    )
+    expect(prompt?.questions[0]?.options).toEqual([
+      { label: 'A', hasPreview: true },
+      { label: 'B' },
+      { label: 'C' }
+    ])
+  })
 })
 
 describe('parseApprovalFromStatus', () => {
@@ -179,6 +201,18 @@ const single = (options: string[], multiSelect = false): AskPrompt => ({
   questions: [{ question: 'q', multiSelect, options: options.map((label) => ({ label })) }]
 })
 
+/** A question where one option carries a preview snippet, switching Claude's
+ *  selector to the list+preview layout that needs an explicit Enter to commit. */
+const singleWithPreview = (options: string[]): AskPrompt => ({
+  questions: [
+    {
+      question: 'q',
+      multiSelect: false,
+      options: options.map((label, i) => (i === 0 ? { label, hasPreview: true } : { label }))
+    }
+  ]
+})
+
 describe('buildAskAnswerKeys', () => {
   it('single-select: sends the picked option NUMBER (not the label), no trailing Enter', () => {
     // STA-1860 regression: picking the 2nd option must deliver the 2nd option.
@@ -238,6 +272,107 @@ describe('buildAskAnswerKeys', () => {
 
   it('is empty when nothing is answered', () => {
     expect(buildAskAnswerKeys(single(['Tabs', 'Spaces']), [{ indices: [] }])).toEqual([])
+  })
+
+  it('single-question preview selector: appends Enter after the option number to commit it', () => {
+    // #16865: a digit alone only moves the highlight in the list+preview layout;
+    // without this Enter the answer is silently dropped.
+    expect(buildAskAnswerKeys(singleWithPreview(['Tabs', 'Spaces']), [{ indices: [1] }])).toEqual([
+      { raw: '2' },
+      { raw: '\r' }
+    ])
+  })
+
+  it('single-question preview selector: appends Enter regardless of which option is picked', () => {
+    // The preview layout is a property of the whole selector, not the chosen row.
+    expect(buildAskAnswerKeys(singleWithPreview(['Tabs', 'Spaces']), [{ indices: [0] }])).toEqual([
+      { raw: '1' },
+      { raw: '\r' }
+    ])
+  })
+
+  it('preview selector option plus free text: selects the row, then annotates it', () => {
+    // The preview layout has no "Type something" row (upstream
+    // anthropics/claude-code#27348, closed "not planned"); `n` opens a note on
+    // the selected row, so the digit comes first and the answer delivers as that
+    // option carrying its annotation.
+    expect(
+      buildAskAnswerKeys(singleWithPreview(['Tabs', 'Spaces']), [
+        { indices: [1], other: 'but only in JS' }
+      ])
+    ).toEqual([{ raw: '2' }, { raw: 'n' }, { text: 'but only in JS' }, { raw: '\r' }])
+  })
+
+  it('preview selector free text with no pick: emits nothing', () => {
+    // Notes attach to a selected option, so there is no keystroke sequence for
+    // this input. The card prevents it; the builder refuses to invent a pick.
+    expect(
+      buildAskAnswerKeys(singleWithPreview(['Tabs', 'Spaces']), [{ indices: [], other: 'Zebra' }])
+    ).toEqual([])
+  })
+
+  it('preview selector: an unanswered lone question emits nothing', () => {
+    expect(buildAskAnswerKeys(singleWithPreview(['Tabs', 'Spaces']), [{ indices: [] }])).toEqual([])
+  })
+
+  it('plain selector free text: no extra Enter before the text', () => {
+    expect(
+      buildAskAnswerKeys(single(['Tabs', 'Spaces']), [{ indices: [], other: 'Zebra' }])
+    ).toEqual([{ raw: '3' }, { text: 'Zebra' }, { raw: '\r' }])
+  })
+
+  it('single-question plain selector: unchanged, no Enter appended', () => {
+    expect(buildAskAnswerKeys(single(['Tabs', 'Spaces']), [{ indices: [1] }])).toEqual([
+      { raw: '2' }
+    ])
+  })
+
+  it('multi-question with a preview single-select answer: Enter follows that question’s digit, plus the existing final submit Enter', () => {
+    const prompt: AskPrompt = {
+      questions: [
+        {
+          question: 'q1',
+          multiSelect: false,
+          options: [
+            { label: 'Tabs', hasPreview: true },
+            { label: 'Spaces', hasPreview: true }
+          ]
+        },
+        { question: 'q2', multiSelect: false, options: [{ label: 'Apple' }, { label: 'Banana' }] }
+      ]
+    }
+    expect(buildAskAnswerKeys(prompt, [{ indices: [1] }, { indices: [0] }])).toEqual([
+      { raw: '2' },
+      { raw: '\r' },
+      { raw: '1' },
+      { raw: '\r' }
+    ])
+  })
+
+  it('multi-select with previews: keeps the plain checkbox sequence', () => {
+    // How the preview layout renders a multi-select — whether it keeps checkbox
+    // toggles and a "Type something" row at all — is unmeasured, so this pins
+    // current behavior rather than asserting a verified contract.
+    const prompt: AskPrompt = {
+      questions: [
+        {
+          question: 'q',
+          multiSelect: true,
+          options: [
+            { label: 'A', hasPreview: true },
+            { label: 'B', hasPreview: true }
+          ]
+        }
+      ]
+    }
+    expect(buildAskAnswerKeys(prompt, [{ indices: [0], other: 'Zebra' }])).toEqual([
+      { raw: '1' },
+      { raw: '3' },
+      { text: 'Zebra' },
+      { raw: '\r' },
+      { raw: '\x1b[C' },
+      { raw: '\r' }
+    ])
   })
 })
 

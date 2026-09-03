@@ -6,6 +6,7 @@ import {
 } from './native-chat-types'
 import {
   extractPendingAsk,
+  isAskResolvedInTranscript,
   nativeChatAskDismissKey,
   parseAskFromStatus,
   resolveNativeChatAsk
@@ -165,6 +166,25 @@ describe('extractPendingAsk', () => {
       ])
     ).toBeNull()
   })
+
+  it('surfaces preview presence from a transcript tool-call, same as the live status path', () => {
+    // Transcript replay decodes tool-call input as an object (not a JSON string,
+    // unlike the hook-status path), but both route through the same option
+    // parser, so preview presence must survive here too.
+    const pending = extractPendingAsk([
+      message('m1', [
+        call('AskUserQuestion', {
+          questions: [
+            { question: 'Pick', options: [{ label: 'A', preview: 'snippet' }, { label: 'B' }] }
+          ]
+        })
+      ])
+    ])
+    expect(pending?.questions[0]?.options).toEqual([
+      { label: 'A', hasPreview: true },
+      { label: 'B' }
+    ])
+  })
 })
 
 describe('parseAskFromStatus', () => {
@@ -201,5 +221,187 @@ describe('resolveNativeChatAsk', () => {
     expect(resolveNativeChatAsk({ liveAsk, messages: transcript, transcriptSettled: false })).toBe(
       liveAsk
     )
+  })
+
+  it('retires a live ask the settled transcript shows resolved', () => {
+    // A question killed inside the TUI emits no hook, so live status holds it
+    // forever; its tool-result is the only evidence it is over (#16865).
+    const liveAsk = parseAskFromStatus(JSON.stringify(QUESTIONS_INPUT))!
+    expect(
+      resolveNativeChatAsk({
+        liveAsk,
+        messages: [message('m1', [call('AskUserQuestion', QUESTIONS_INPUT)]), toolTurn('m2')],
+        transcriptSettled: true
+      })
+    ).toBeNull()
+  })
+
+  it('keeps a live ask asserted while the transcript is still unsettled', () => {
+    const liveAsk = parseAskFromStatus(JSON.stringify(QUESTIONS_INPUT))!
+    expect(
+      resolveNativeChatAsk({
+        liveAsk,
+        messages: [message('m1', [call('AskUserQuestion', QUESTIONS_INPUT)]), toolTurn('m2')],
+        transcriptSettled: false
+      })
+    ).toBe(liveAsk)
+  })
+
+  it('surfaces the transcript ask still pending when the live one is resolved', () => {
+    const liveAsk = parseAskFromStatus(JSON.stringify(QUESTIONS_INPUT))!
+    const later = { questions: [{ question: 'Ship it?', options: [{ label: 'Go' }] }] }
+    const resolved = resolveNativeChatAsk({
+      liveAsk,
+      messages: [
+        message('m1', [call('AskUserQuestion', QUESTIONS_INPUT)]),
+        toolTurn('m2'),
+        message('m3', [call('AskUserQuestion', later)])
+      ],
+      transcriptSettled: true
+    })
+    expect(resolved?.questions[0]?.question).toBe('Ship it?')
+  })
+
+  it('keeps a cancelled ask retired after its interrupt row lands', () => {
+    // The live repro: X cancels the selector, Claude writes the is_error result
+    // then the interrupt row, and re-mounting the pane (view switch) must not
+    // bring the dead question back.
+    const liveAsk = parseAskFromStatus(JSON.stringify(QUESTIONS_INPUT))!
+    expect(
+      resolveNativeChatAsk({
+        liveAsk,
+        messages: [
+          message('m1', [call('AskUserQuestion', QUESTIONS_INPUT)]),
+          toolTurn('m2'),
+          interrupted('m3'),
+          userTurn('m4', 'ask me another question')
+        ],
+        transcriptSettled: true
+      })
+    ).toBeNull()
+  })
+
+  it('does not let a different pending ask suppress the live one', () => {
+    const liveAsk = parseAskFromStatus(JSON.stringify(QUESTIONS_INPUT))!
+    const other = { questions: [{ question: 'Other?', options: [{ label: 'A' }] }] }
+    expect(
+      resolveNativeChatAsk({
+        liveAsk,
+        messages: [message('m1', [call('AskUserQuestion', other)])],
+        transcriptSettled: true
+      })
+    ).toBe(liveAsk)
+  })
+})
+
+describe('isAskResolvedInTranscript', () => {
+  const ask = parseAskFromStatus(JSON.stringify(QUESTIONS_INPUT))!
+
+  it('reports resolved only once this ask receives its own FIFO result', () => {
+    const calls = [message('m1', [call('AskUserQuestion', QUESTIONS_INPUT)])]
+    expect(isAskResolvedInTranscript(ask, calls)).toBe(false)
+    expect(isAskResolvedInTranscript(ask, [...calls, toolTurn('m2')])).toBe(true)
+  })
+
+  it('is false when the transcript never mentions the ask', () => {
+    expect(isAskResolvedInTranscript(ask, [])).toBe(false)
+    expect(
+      isAskResolvedInTranscript(ask, [
+        message('m1', [call('Bash', { command: 'ls' })]),
+        toolTurn('m2')
+      ])
+    ).toBe(false)
+  })
+
+  it('does not credit a sibling call result to the ask', () => {
+    // FIFO: the result settles the older Bash call, leaving the ask outstanding.
+    expect(
+      isAskResolvedInTranscript(ask, [
+        message('m1', [call('Bash', { command: 'ls' }), call('AskUserQuestion', QUESTIONS_INPUT)]),
+        toolTurn('m2')
+      ])
+    ).toBe(false)
+  })
+
+  it('never reports resolved for an ask orphaned by an interrupt', () => {
+    // The orphan's result never arrives, so a later result belongs to a call
+    // from the next turn — crediting it would hide a live question (#11761).
+    expect(
+      isAskResolvedInTranscript(ask, [
+        message('m1', [call('AskUserQuestion', QUESTIONS_INPUT)]),
+        interrupted('m2'),
+        message('m3', [call('Bash', { command: 'ls' })]),
+        toolTurn('m4')
+      ])
+    ).toBe(false)
+  })
+
+  it('never reports resolved for an ask orphaned by a new user turn', () => {
+    expect(
+      isAskResolvedInTranscript(ask, [
+        message('m1', [call('AskUserQuestion', QUESTIONS_INPUT)]),
+        userTurn('m2', 'never mind'),
+        message('m3', [call('Bash', { command: 'ls' })]),
+        toolTurn('m4')
+      ])
+    ).toBe(false)
+  })
+
+  // Measured shape of a TUI-cancelled ask (Claude Code session transcripts): the
+  // is_error tool-result lands first, then `[Request interrupted by user for tool
+  // use]`. A verdict wiped by that trailing row let stale live status win again,
+  // and remounting the pane (view switch) re-rendered the dead question.
+  it('keeps the verdict when the cancel path writes its interrupt row after the result', () => {
+    expect(
+      isAskResolvedInTranscript(ask, [
+        message('m1', [call('AskUserQuestion', QUESTIONS_INPUT)]),
+        toolTurn('m2'),
+        interrupted('m3'),
+        userTurn('m4', 'ask me another question')
+      ])
+    ).toBe(true)
+  })
+
+  it('keeps the verdict when the interrupt arrives as a plain user row', () => {
+    expect(
+      isAskResolvedInTranscript(ask, [
+        message('m1', [call('AskUserQuestion', QUESTIONS_INPUT)]),
+        toolTurn('m2'),
+        userTurn('m3', '[Request interrupted by user for tool use]')
+      ])
+    ).toBe(true)
+  })
+
+  it('un-resolves once the agent asks the same question again', () => {
+    expect(
+      isAskResolvedInTranscript(ask, [
+        message('m1', [call('AskUserQuestion', QUESTIONS_INPUT)]),
+        toolTurn('m2'),
+        userTurn('m3', 'ask me that again'),
+        message('m4', [call('AskUserQuestion', QUESTIONS_INPUT)])
+      ])
+    ).toBe(false)
+  })
+
+  it('re-arms after a reset so a re-asked question resolves on its own result', () => {
+    expect(
+      isAskResolvedInTranscript(ask, [
+        message('m1', [call('AskUserQuestion', QUESTIONS_INPUT)]),
+        userTurn('m2', 'never mind'),
+        message('m3', [call('AskUserQuestion', QUESTIONS_INPUT)]),
+        toolTurn('m4')
+      ])
+    ).toBe(true)
+  })
+
+  it('matches by canonical content, not object identity', () => {
+    const equivalent = parseAskFromStatus(JSON.stringify(QUESTIONS_INPUT))!
+    expect(equivalent).not.toBe(ask)
+    expect(
+      isAskResolvedInTranscript(equivalent, [
+        message('m1', [call('AskUserQuestion', QUESTIONS_INPUT)]),
+        toolTurn('m2')
+      ])
+    ).toBe(true)
   })
 })

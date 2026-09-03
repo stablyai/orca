@@ -47,6 +47,9 @@ function parseQuestionsShape(input: unknown): AskPrompt | null {
   return questions.length > 0 ? { questions } : null
 }
 
+/** Tolerant parse of raw tool-input options: bare strings become label-only
+ *  options, malformed entries are dropped, and an empty-string preview counts
+ *  as no preview. */
 function parseOptions(raw: unknown): AskOption[] {
   if (!Array.isArray(raw)) {
     return []
@@ -61,10 +64,12 @@ function parseOptions(raw: unknown): AskOption[] {
         typeof option === 'object' &&
         typeof (option as { label?: unknown }).label === 'string'
       ) {
-        const value = option as { label: string; description?: unknown }
+        const value = option as { label: string; description?: unknown; preview?: unknown }
         return {
           label: value.label,
-          description: typeof value.description === 'string' ? value.description : undefined
+          description: typeof value.description === 'string' ? value.description : undefined,
+          hasPreview:
+            typeof value.preview === 'string' && value.preview.length > 0 ? true : undefined
         }
       }
       return null
@@ -131,13 +136,71 @@ export function extractPendingAsk(messages: readonly NativeChatMessage[]): AskPr
   return pending
 }
 
-/** Prefers live status and consults transcript history only after its read settles. */
+/** Does the transcript positively show THIS ask already resolved?
+ *
+ *  Answers only from evidence: a tool-call matching `ask` whose FIFO slot then
+ *  received its tool-result. Absence of the call, an unsettled read, and a call
+ *  orphaned by a user turn or interrupt all answer false — an orphan's result
+ *  never arrives, so it can never witness resolution (#11761). Callers use this
+ *  to retire an ask that live status still asserts; a false negative leaves a
+ *  stale card up, while a false positive would hide a live question.
+ *
+ *  Claude Code writes a tool-result row for an AskUserQuestion cancelled in the
+ *  TUI (`is_error`), so a selector the user escaped reads as resolved here. That
+ *  result is immediately followed by the interrupt row, so a formed verdict
+ *  outlives turn boundaries; only a fresh matching call un-resolves the ask. */
+export function isAskResolvedInTranscript(
+  ask: AskPrompt,
+  messages: readonly NativeChatMessage[]
+): boolean {
+  // Same identity the cards dismiss under: canonical content, not object identity.
+  const askKey = nativeChatAskDismissKey(ask)
+  // Mirrors extractPendingAsk's FIFO walk: `outstanding` holds each unresolved
+  // call's key (or null for a non-question call), oldest first.
+  let outstanding: (string | null)[] = []
+  let resolved = false
+  for (const message of messages) {
+    if (message.role === 'user' || isInterruptedStatusMessage(message)) {
+      // The turn owning these calls ended; their results never arrive, so the
+      // pending FIFO is void. A verdict already witnessed by a result stands —
+      // the cancel path writes the interrupt row right after the tool-result.
+      outstanding = []
+    }
+    for (const block of message.blocks) {
+      if (block.type === 'tool-call') {
+        const key = nativeChatAskDismissKey(parseToolInput(block.name, block.input))
+        if (key === askKey) {
+          // The agent is asking this same question again: a live instance is
+          // outstanding, so the earlier resolution no longer describes it.
+          resolved = false
+        }
+        outstanding.push(key)
+      } else if (block.type === 'tool-result' && outstanding.length > 0) {
+        if (outstanding.shift() === askKey) {
+          resolved = true
+        }
+      }
+    }
+  }
+  return resolved
+}
+
+/** Prefers live status, except where the settled transcript positively shows the
+ *  live ask already resolved — a question killed inside the TUI emits no hook, so
+ *  live status would otherwise assert it forever (#16865). Falls through to the
+ *  transcript's own pending ask so a genuinely newer question still renders. */
 export function resolveNativeChatAsk(args: {
   liveAsk: AskPrompt | null
   messages: readonly NativeChatMessage[]
   transcriptSettled: boolean
 }): AskPrompt | null {
-  return args.liveAsk ?? (args.transcriptSettled ? extractPendingAsk(args.messages) : null)
+  if (args.liveAsk) {
+    if (!args.transcriptSettled || !isAskResolvedInTranscript(args.liveAsk, args.messages)) {
+      return args.liveAsk
+    }
+    return extractPendingAsk(args.messages)
+  }
+  return args.transcriptSettled ? extractPendingAsk(args.messages) : null
 }
 
 /** One question's chosen answer, normalized for delivery: the selected option
@@ -187,6 +250,38 @@ const ASK_NEXT_TAB = '\x1b[C'
 const ASK_PREVIOUS_ROW = '\x1b[A'
 const ASK_NEXT_ROW = '\x1b[B'
 const ASK_NOTES = '\t'
+// The preview layout has no "Type something" row (upstream
+// anthropics/claude-code#27348, closed "not planned"). Free text goes through a
+// per-option note instead: `n` opens the notes field on the highlighted row.
+const ASK_PREVIEW_NOTE = 'n'
+
+/** True once any option in the question carries a preview snippet — the
+ *  selector then switches to a list+preview layout where a digit only moves
+ *  the highlight, and a separate Enter commits it. */
+function questionHasPreview(q: AskQuestion): boolean {
+  return q.options.some((o) => o.hasPreview === true)
+}
+
+/** Answer a preview-layout question, whose row set and commit semantics differ
+ *  from the plain selector: no "Type something" row, and a digit only highlights.
+ *
+ *  Notes attach to a selected option — the layout offers no selection-less note —
+ *  so an answer without a pick delivers nothing rather than fabricating a
+ *  selection or sending a sequence the selector does not accept. */
+function buildPreviewAnswerKeys(
+  sel: AskAnswerSelection | undefined,
+  other: string
+): AskAnswerKeyGroup[] {
+  const picked = sel?.indices[0]
+  if (picked === undefined) {
+    return []
+  }
+  const selectRow: AskAnswerKeyGroup = { raw: String(picked + 1) }
+  if (other) {
+    return [selectRow, { raw: ASK_PREVIEW_NOTE }, { text: other }, { raw: ASK_ENTER }]
+  }
+  return [selectRow, { raw: ASK_ENTER }]
+}
 
 /** Build the ordered keystroke groups that answer a Claude Code AskUserQuestion.
  *  Each group is written a step apart so the selector applies it before the next.
@@ -194,6 +289,8 @@ const ASK_NOTES = '\t'
  *  - single-select pick  → the option number (selects AND commits; in a
  *    multi-question prompt it auto-advances to the next question)
  *  - free-text answer    → the "Type something" row number, the text, then Enter
+ *  - preview layout      → see `buildPreviewAnswerKeys`; the row set and commit
+ *    semantics both differ from the plain selector
  *  - multi-select        → each option number TOGGLES its checkbox, then a step
  *    to the Submit tab
  *  - a multi-question prompt (and a lone multi-select) finishes on a Submit
@@ -224,6 +321,13 @@ export function buildAskAnswerKeys(
       // A multi-select never auto-advances; step to the next tab (the Submit tab
       // when this is the last question).
       groups.push({ raw: ASK_NEXT_TAB })
+    } else if (questionHasPreview(q)) {
+      const previewGroups = buildPreviewAnswerKeys(sel, other)
+      if (previewGroups.length > 0) {
+        groups.push(...previewGroups)
+      } else if (multiQuestion) {
+        groups.push({ raw: ASK_NEXT_TAB })
+      }
     } else if (other) {
       // Single-select can only carry one value, so route any answer that
       // includes free text through the "Type something" row as one string.
