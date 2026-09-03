@@ -135,6 +135,28 @@ describe('worktree RPC schemas', () => {
     expect(parsed.displayName).toBeUndefined()
   })
 
+  it('sets a needsAttention reason on worktree.set', () => {
+    const parsed = WorktreeSet.parse({
+      worktree: 'id:r1::/repos/wt',
+      needsAttention: 'PR #996: 1 unresolved thread'
+    })
+
+    expect(parsed.needsAttention).toBe('PR #996: 1 unresolved thread')
+  })
+
+  it('clears needsAttention via null on worktree.set', () => {
+    const parsed = WorktreeSet.parse({ worktree: 'id:r1::/repos/wt', needsAttention: null })
+
+    expect(parsed.needsAttention).toBeNull()
+  })
+
+  it('omits needsAttention that was never sent', () => {
+    const parsed = WorktreeSet.parse({ worktree: 'id:r1::/repos/wt', comment: 'note' })
+
+    expect(parsed.needsAttention).toBeUndefined()
+    expect(Object.hasOwn(parsed, 'needsAttention')).toBe(false)
+  })
+
   it('parses optional GitHub PR suppression writes and clears', () => {
     expect(
       WorktreeSet.parse({ worktree: 'id:r1::/repos/wt', suppressedGitHubPR: 42 }).suppressedGitHubPR

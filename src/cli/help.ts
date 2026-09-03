@@ -201,6 +201,8 @@ export function formatFlagHelp(flag: string): string {
     issue: '--issue <number|null>  Linked GitHub issue number',
     'linear-issue':
       '--linear-issue <id|url|null> Linked Linear issue identifier or URL; null clears on set',
+    'needs-attention':
+      '--needs-attention <text|null> Provider-agnostic "needs attention" reason for the sidebar; null clears on set',
     json: '--json                 Emit machine-readable JSON',
     key: '--key <key>            Key argument for this command',
     limit: '--limit <n>            Maximum number of rows to return',

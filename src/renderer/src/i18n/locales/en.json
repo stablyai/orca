@@ -144,6 +144,12 @@
         }
       }
     },
+    "notifications": {
+      "needsAttention": {
+        "label": "Needs Attention",
+        "description": "An external tool flags a worktree as needing your attention."
+      }
+    },
     "browser": {
       "clientHostedRemote": {
         "title": "Host remote browser pages on this device",

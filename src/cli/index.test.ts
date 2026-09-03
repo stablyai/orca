@@ -459,6 +459,18 @@ describe('orca root help', () => {
     expect(callMock).not.toHaveBeenCalled()
   })
 
+  it('advertises the needs-attention hook on worktree set help', async () => {
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+    logSpy.mockClear()
+
+    await main(['worktree', 'set', '--help'], '/tmp/repo')
+
+    const setHelp = String(logSpy.mock.calls[0][0])
+    expect(setHelp).toContain('--needs-attention <text|null>')
+    expect(setHelp).toContain('--needs-attention <text|null> Provider-agnostic "needs attention"')
+    expect(callMock).not.toHaveBeenCalled()
+  })
+
   it('advertises explicit orchestration task display labels', async () => {
     const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
     logSpy.mockClear()

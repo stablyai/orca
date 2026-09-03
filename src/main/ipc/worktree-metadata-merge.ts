@@ -64,6 +64,7 @@ export function mergeWorktree(
             ? 'fixed'
             : 'automatic',
     comment: meta?.comment || '',
+    needsAttention: meta?.needsAttention ?? null,
     linkedIssue: meta?.linkedIssue ?? null,
     linkedPR: meta?.linkedPR ?? null,
     ...(meta?.suppressedGitHubPR !== undefined

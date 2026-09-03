@@ -26,7 +26,7 @@ import { registerRuntimeEnvironmentHandlers } from '../runtime-environments'
 import { registerEphemeralVmHandlers } from '../ephemeral-vm'
 import { registerAiVaultHandlers } from '../ai-vault'
 import { registerNativeChatHandlers } from '../native-chat'
-import { registerNotificationHandlers } from '../notifications'
+import { dispatchNotification, registerNotificationHandlers } from '../notifications'
 import { registerNotebookHandlers } from '../notebook'
 import { registerOnboardingHandlers } from '../onboarding'
 import { registerDashboardPopoutHandlers } from '../dashboard-popout'
@@ -163,6 +163,17 @@ export function registerCoreHandlers(
   registerStatsHandlers(stats)
   registerMemoryHandlers(store)
   registerNotificationHandlers(store, runtime)
+  // Why: a `needsAttention` metadata change can come from a headless CLI call with
+  // no renderer to relay through (unlike RuntimeNotifier's other events), so the
+  // runtime calls straight into the native-notification dispatch here. Unlike the
+  // ipcMain.handle path, nothing absorbs a rejected promise here, so catch explicitly.
+  // Must run after registerNotificationHandlers, which clears its cooldown maps on
+  // every call — reversing the order would let a direct dispatch see stale state.
+  runtime.setNotificationDispatch((args) => {
+    Promise.resolve(dispatchNotification(store, runtime, args)).catch((error: unknown) => {
+      console.error('[notifications] Failed to dispatch a needs-attention notification:', error)
+    })
+  })
   registerNotebookHandlers(store)
   registerOnboardingHandlers(store)
   registerDashboardPopoutHandlers(store, keybindings)

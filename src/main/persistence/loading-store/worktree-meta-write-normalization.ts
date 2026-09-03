@@ -21,6 +21,7 @@ function createDefaultWorktreeMeta(): WorktreeMeta {
     instanceId: randomUUID(),
     displayName: '',
     comment: '',
+    needsAttention: null,
     isUnread: false,
     sortOrder: Date.now(),
     lastActivityAt: 0,

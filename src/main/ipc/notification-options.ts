@@ -40,6 +40,17 @@ export function buildNotificationOptions(args: NotificationDispatchRequest): {
     }
   }
 
+  if (args.source === 'needs-attention') {
+    const reason = normalizeNotificationText(
+      args.needsAttentionReason,
+      NOTIFICATION_BODY_PREVIEW_MAX_LENGTH
+    )
+    return {
+      title: `Needs attention: ${args.worktreeLabel ?? 'workspace'}`,
+      body: reason || 'A worktree needs your attention.'
+    }
+  }
+
   const richOptions = buildAgentTaskCompleteNotificationOptions(args)
   if (richOptions) {
     return richOptions

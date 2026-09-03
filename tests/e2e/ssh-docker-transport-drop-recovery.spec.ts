@@ -117,7 +117,9 @@ test.describe('SSH transport drop recovery', () => {
   // run after the flood produces no output within the poll budget. Same shape as #18018 (deaf pane
   // after a stalled host resumes), and not caused by this spec. Tracked there; the three verdict
   // assertions around it stay enforced.
-  test.fixme('stays bounded when a disconnected shell floods its pty', async ({ orcaPage }, testInfo) => {
+  test.fixme('stays bounded when a disconnected shell floods its pty', async ({
+    orcaPage
+  }, testInfo) => {
     test.slow()
     // Timeouts here are deliberately generous: this guards memory, not latency. A 48MB flood plus a
     // reconnect lands near 60s wall-clock end to end, so a 60s bind timeout was marginal and made
