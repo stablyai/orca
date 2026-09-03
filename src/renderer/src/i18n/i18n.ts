@@ -7,6 +7,8 @@ import i18next, {
 import { initReactI18next } from 'react-i18next'
 
 import en from './locales/en.json'
+import { canonicalizePackLocale } from './pack-locale'
+import { applyPluginPluralLocales } from './plugin-plural-locale'
 import { isPseudoLocalizationLocale, pseudoLocalizeString } from './pseudo-localization'
 import { DEFAULT_LOCALE, resolveUiLocale } from './supported-languages'
 import type { SupportedUiLocale } from '../../../shared/ui-locale'
@@ -103,7 +105,12 @@ let pluginLanguagePacks: readonly PluginLanguagePackRegistration[] = []
 export function getIntlLocale(): string {
   const active = i18n.language
   const pack = pluginLanguagePacks.find((entry) => entry.resourceLanguage === active)
-  const candidate = pack?.locale ?? active
+  // Why: the declared tag is author-supplied, so canonicalize before Intl sees
+  // it. `ru_RU` would otherwise throw and degrade a Russian pack to English.
+  const candidate = pack ? canonicalizePackLocale(pack.locale) : active
+  if (!candidate) {
+    return DEFAULT_LOCALE
+  }
   try {
     // Why: an empty result means Intl has no data for the tag, so fall through
     // to the default locale instead of letting Intl pick the runtime one.
@@ -129,4 +136,7 @@ export function setRendererPluginLanguagePacks(
     i18n.addResourceBundle(pack.resourceLanguage, 'translation', pack.catalog, true, true)
     registeredPluginLanguages.add(pack.resourceLanguage)
   }
+  // Why: the synthetic resource language carries no locale, so plural selection
+  // has to be told which one the pack was written for.
+  applyPluginPluralLocales(i18n, packs)
 }

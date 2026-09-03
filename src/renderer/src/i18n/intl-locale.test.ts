@@ -57,6 +57,20 @@ describe('getIntlLocale', () => {
     expect(getIntlLocale()).toBe('ru-RU')
   })
 
+  it('canonicalizes a POSIX-style tag the pack declared', async () => {
+    withSupportedLocales(['ru-RU'])
+    // `ru_RU` is an ordinary manifest slip. Uncanonicalized it makes Intl throw,
+    // which used to degrade a Russian pack to English dates without a word.
+    await activate(PACK_RESOURCE, [{ ...PACK, locale: 'ru_RU' }])
+    expect(getIntlLocale()).toBe('ru-RU')
+  })
+
+  it('falls back to the default locale when the declared tag cannot be canonicalized', async () => {
+    withSupportedLocales(['ru-RU'])
+    await activate(PACK_RESOURCE, [{ ...PACK, locale: 'not_a_locale' }])
+    expect(getIntlLocale()).toBe(DEFAULT_LOCALE)
+  })
+
   it('falls back to the default locale when ICU has no data for the tag', async () => {
     withSupportedLocales([])
     await activate('es')
