@@ -345,27 +345,27 @@ test('routes same-id browser and simulator Cmd-J rows to their owning paired hos
     })
     // Why: a live catalog refresh that reaps one same-id row re-hosts the surviving palette
     // entry, so assert the collision still exists at click time instead of blaming the palette.
-    const expectSameIdCollisionIntact = async (step: string): Promise<void> => {
-      expect(
-        await page.evaluate(
-          (worktreeId) =>
-            window
-              .__store!.getState()
-              .allWorktrees()
-              .filter((worktree) => worktree.id === worktreeId)
-              .map((worktree) => worktree.hostId)
-              .sort(),
-          seeded.sharedWorktreeId
-        ),
-        `same-id host rows before ${step}`
-      ).toEqual(['local', remoteHostId].sort())
+    const assertSameIdCollisionIntact = async (step: string): Promise<void> => {
+      const hosts = await page.evaluate(
+        (worktreeId) =>
+          window
+            .__store!.getState()
+            .allWorktrees()
+            .filter((worktree) => worktree.id === worktreeId)
+            .map((worktree) => worktree.hostId)
+            .sort(),
+        seeded.sharedWorktreeId
+      )
+      if (JSON.stringify(hosts) !== JSON.stringify(['local', remoteHostId].sort())) {
+        throw new Error(`same-id host rows changed before ${step}: ${JSON.stringify(hosts)}`)
+      }
     }
     await page.evaluate(() => window.__store!.getState().openModal('worktree-palette'))
     let palette = page.getByRole('dialog', { name: 'Jump to...' })
     let input = palette.getByPlaceholder(
       'Search chats, terminals, worktrees, settings, and actions...'
     )
-    await expectSameIdCollisionIntact('remote browser page palette open')
+    await assertSameIdCollisionIntact('remote browser page palette open')
     const remoteBrowserAfterOpen = await page.evaluate(
       ({ tabId, worktreeId }) => {
         const state = window.__store!.getState()
@@ -393,7 +393,7 @@ test('routes same-id browser and simulator Cmd-J rows to their owning paired hos
       body: await page.screenshot(),
       contentType: 'image/png'
     })
-    await expectSameIdCollisionIntact('remote browser page click')
+    await assertSameIdCollisionIntact('remote browser page click')
     await palette.locator(`[cmdk-item][data-value="browser-page:${seeded.remotePageId}"]`).click()
     await expect
       .poll(() =>
@@ -436,7 +436,7 @@ test('routes same-id browser and simulator Cmd-J rows to their owning paired hos
     await expect(palette.locator('[cmdk-item][data-value="browser-page:page-local"]')).toHaveCount(
       1
     )
-    await expectSameIdCollisionIntact('local browser page click')
+    await assertSameIdCollisionIntact('local browser page click')
     await palette.locator('[cmdk-item][data-value="browser-page:page-local"]').click()
     await expect
       .poll(() =>
@@ -468,7 +468,7 @@ test('routes same-id browser and simulator Cmd-J rows to their owning paired hos
       body: await page.screenshot(),
       contentType: 'image/png'
     })
-    await expectSameIdCollisionIntact('remote simulator click')
+    await assertSameIdCollisionIntact('remote simulator click')
     await palette.locator('[cmdk-item][data-value="simulator-tab:simulator-remote"]').click()
     await expect
       .poll(() =>
@@ -500,7 +500,7 @@ test('routes same-id browser and simulator Cmd-J rows to their owning paired hos
       '[cmdk-item][data-value="simulator-tab:simulator-local"]'
     )
     await expect(localSimulatorRow).toHaveCount(1)
-    await expectSameIdCollisionIntact('local simulator click')
+    await assertSameIdCollisionIntact('local simulator click')
     await localSimulatorRow.click()
     await expect
       .poll(() =>

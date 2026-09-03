@@ -20,7 +20,8 @@ import {
 import { orchestrationMigrationFence } from './orchestration-contract-fence'
 import { recordRuntimeFeatureInteraction } from './runtime-feature-interaction'
 import { OrchestrationLegacyCompatibility } from './orchestration-legacy-compatibility'
-import type { RpcDispatchStreamingOptions } from './dispatcher-stream-options'
+// oxfmt-ignore
+import type { RpcDispatchCallOptions, RpcDispatchStreamingOptions } from './dispatcher-stream-options'
 import { mapDispatcherError } from './dispatcher-error-response'
 import { parseRpcRequestParams } from './dispatcher-request-parsing'
 import { routeDispatcherClientHostedBrowserRpc } from './dispatcher-client-browser-routing'
@@ -28,9 +29,6 @@ import { needsLocalCallerFingerprint } from './dispatcher-caller-fingerprint'
 import { RpcStreamingDispatcher } from './rpc-streaming-dispatcher'
 
 export type DispatcherOptions = { runtime: OrcaRuntimeService; methods?: readonly RpcAnyMethod[] }
-
-// oxfmt-ignore
-type DispatchCallOptions = Pick<RpcDispatchStreamingOptions, 'signal' | 'connectionId' | 'clientId' | 'clientKind' | 'clientCapabilities' | 'authenticatedCallerFingerprint'>
 
 export class RpcDispatcher {
   private readonly runtime: OrcaRuntimeService
@@ -53,7 +51,7 @@ export class RpcDispatcher {
     })
   }
 
-  async dispatch(request: RpcRequest, options?: DispatchCallOptions): Promise<RpcResponse> {
+  async dispatch(request: RpcRequest, options?: RpcDispatchCallOptions): Promise<RpcResponse> {
     const meta = this.meta()
     const method = this.registry.get(request.method)
     if (!method) {
@@ -176,7 +174,5 @@ export class RpcDispatcher {
     return this.streamingDispatcher.dispatch(request, reply, options)
   }
 
-  private meta(): RpcEnvelopeMeta {
-    return { runtimeId: this.runtime.getRuntimeId() }
-  }
+  private meta = (): RpcEnvelopeMeta => ({ runtimeId: this.runtime.getRuntimeId() })
 }

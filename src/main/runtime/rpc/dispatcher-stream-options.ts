@@ -20,3 +20,13 @@ export type RpcDispatchStreamingOptions = {
     handler: (bytes: Uint8Array<ArrayBufferLike>) => void
   ) => () => void
 }
+
+export type RpcDispatchCallOptions = Pick<
+  RpcDispatchStreamingOptions,
+  | 'signal'
+  | 'connectionId'
+  | 'clientId'
+  | 'clientKind'
+  | 'clientCapabilities'
+  | 'authenticatedCallerFingerprint'
+>
