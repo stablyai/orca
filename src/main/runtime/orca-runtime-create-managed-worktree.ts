@@ -4,12 +4,13 @@ import type { RuntimeManagedWorktreeCreateArgs } from './runtime-managed-worktre
 import type { CreateWorktreeResult } from '../../shared/worktree/create-types'
 import { isTuiAgentEnabled } from '../../shared/tui-agent-selection'
 import { isFolderRepo } from '../../shared/repo-kind'
-import { getRepoSshConnectionId } from '../../shared/execution-host'
+import { getRepoExecutionHostId, getRepoSshConnectionId } from '../../shared/execution-host'
 import { createRuntimeFolderWorktree } from './runtime-folder-worktree-create'
 import { createRuntimeLocalManagedWorktree } from './runtime-local-worktree-create'
 import { prepareRuntimeLocalWorktreeSetup } from './runtime-local-worktree-setup'
 import { invalidateAuthorizedRootsCache } from '../ipc/filesystem-auth'
 import { startRuntimeLocalWorktreeTerminals } from './runtime-local-worktree-terminal-startup'
+import { getFolderWorkspaceExecutionHostId } from '../../shared/folder-workspace-worktree'
 
 export class OrcaRuntimeWithCreateManagedWorktree extends OrcaRuntimeWithGetWorktreeTerminalProvisioningHost {
   async createManagedWorktree(
@@ -97,6 +98,17 @@ export class OrcaRuntimeWithCreateManagedWorktree extends OrcaRuntimeWithGetWork
     const lineageInput =
       args.lineage || args.comment ? { ...args.lineage, comment: args.comment } : undefined
     const lineageResolution = await this.resolveLineageForWorktreeCreate(lineageInput)
+    // Why: rejecting after either create path returns would strand a child on disk without valid lineage.
+    if (lineageResolution.kind === 'lineage') {
+      const parentHostId =
+        lineageResolution.parent.type === 'worktree'
+          ? lineageResolution.parent.worktree.hostId
+          : getFolderWorkspaceExecutionHostId(lineageResolution.parent.folderWorkspace)
+      this.worktreeLineage.validateParentHost(
+        { hostId: getRepoExecutionHostId(repo) },
+        { hostId: parentHostId }
+      )
+    }
     if (sshConnectionId) {
       // Why normalize the row: the remote-create pipeline reads `repo.connectionId!` at every
       // depth, so hand it the connection the resolved host actually names.

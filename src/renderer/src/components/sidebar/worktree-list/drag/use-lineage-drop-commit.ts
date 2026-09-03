@@ -16,12 +16,12 @@ export type WorktreeLineageDropCommit = ReturnType<typeof useWorktreeLineageDrop
 
 // Nesting and un-nesting are the two lineage mutations a sidebar drag can commit.
 export function useWorktreeLineageDropCommit(args: {
-  repoMap: Map<string, Repo>
+  repoOwners: ReadonlyMap<string, readonly Repo[]>
   worktreeMap: Map<string, Worktree>
   worktreeLineageById: Record<string, WorktreeLineage>
   worktreeDragGroups: readonly WorktreeDragGroup[]
 }) {
-  const { repoMap, worktreeMap, worktreeLineageById, worktreeDragGroups } = args
+  const { repoOwners, worktreeMap, worktreeLineageById, worktreeDragGroups } = args
   const assignWorktreeParent = useAppStore((s) => s.assignWorktreeParent)
   const updateWorktreeLineage = useAppStore((s) => s.updateWorktreeLineage)
   const cyclicLineageIds = useMemo(
@@ -51,14 +51,14 @@ export function useWorktreeLineageDropCommit(args: {
             candidateParent,
             lineageById: worktreeLineageById,
             worktreeMap,
-            repoMap,
+            repoOwners,
             cyclicLineageIds
           })
         )
       })
       return canAssignAll ? target : { ...target, lineageParentId: null }
     },
-    [cyclicLineageIds, repoMap, worktreeLineageById, worktreeMap]
+    [cyclicLineageIds, repoOwners, worktreeLineageById, worktreeMap]
   )
 
   const commitWorktreeLineageParentDrop = useCallback(

@@ -6,6 +6,7 @@ function createInput(
 ): QuickCreationRequestInput {
   return {
     repoId: 'repo-1',
+    executionHostId: null,
     ephemeralVmRecipe: undefined,
     indeterminateProgress: false,
     taskSourceContext: null,
@@ -73,6 +74,7 @@ describe('quick composer creation request', () => {
   it('keeps provider, branch, sparse, runtime, and startup fields in the quick wire payload', () => {
     const request = buildQuickCreationRequest(
       createInput({
+        executionHostId: 'runtime:env-1',
         indeterminateProgress: true,
         nameWasGenerated: true,
         displayName: 'Characterize request',
@@ -98,6 +100,7 @@ describe('quick composer creation request', () => {
     )
 
     expect(request).toMatchObject({
+      executionHostId: 'runtime:env-1',
       worktreeCreateProgressMode: 'indeterminate',
       nameWasGenerated: true,
       displayName: 'Characterize request',

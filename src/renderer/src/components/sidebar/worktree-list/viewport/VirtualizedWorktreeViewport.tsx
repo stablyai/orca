@@ -1,5 +1,6 @@
 import React, { useCallback, useMemo, useRef, useState } from 'react'
 import { useAppStore } from '@/store'
+import { useRepoOwners } from '@/store/selectors'
 import { translate } from '@/i18n/i18n'
 import { WorktreeListScrollToTopButton } from '../../WorktreeListScrollToTopButton'
 import { renderWorktreeSidebarDropIndicators } from './drop-indicators'
@@ -56,6 +57,7 @@ export const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktr
   // Why: callback-ref only mutates scrollRef; state re-runs the scroll-to-top listener attach.
   const [scrollElement, setScrollElement] = useState<HTMLDivElement | null>(null)
   const settings = useAppStore((s) => s.settings)
+  const repoOwners = useRepoOwners()
   const worktreeVisibilityDefaultsByHost = useAppStore((s) => s.worktreeVisibilityDefaultsByHost)
   const sshConnectionStates = useAppStore((s) => s.sshConnectionStates)
   const newCardStyle = settings?.experimentalNewWorktreeCardStyle === true
@@ -97,7 +99,7 @@ export const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktr
 
   const session = useWorktreeDragSession({ rows, scrollRef })
   const lineageDrop = useWorktreeLineageDropCommit({
-    repoMap,
+    repoOwners,
     worktreeMap,
     worktreeLineageById,
     worktreeDragGroups: session.worktreeDragGroups

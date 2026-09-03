@@ -16,6 +16,7 @@ type WorktreeSnapshot = {
 // cross-render caching without pinning replaced store snapshots in memory.
 const worktreeSnapshotCache = new WeakMap<AppState['worktreesByRepo'], WorktreeSnapshot>()
 const repoMapCache = new WeakMap<AppState['repos'], Map<string, Repo>>()
+const repoOwnersCache = new WeakMap<AppState['repos'], Map<string, Repo[]>>()
 
 function getWorktreeSnapshot(worktreesByRepo: AppState['worktreesByRepo']): WorktreeSnapshot {
   const cachedSnapshot = worktreeSnapshotCache.get(worktreesByRepo)
@@ -105,4 +106,18 @@ export function getIndexedRepoMap(repos: AppState['repos']): Map<string, Repo> {
   const repoMap = new Map(repos.map((repo) => [repo.id, repo]))
   repoMapCache.set(repos, repoMap)
   return repoMap
+}
+
+/** Every execution-host owner for one repo id, preserving store order. */
+export function getIndexedRepoOwners(repos: AppState['repos']): Map<string, Repo[]> {
+  const cachedOwners = repoOwnersCache.get(repos)
+  if (cachedOwners) {
+    return cachedOwners
+  }
+  const owners = new Map<string, Repo[]>()
+  for (const repo of repos) {
+    owners.set(repo.id, [...(owners.get(repo.id) ?? []), repo])
+  }
+  repoOwnersCache.set(repos, owners)
+  return owners
 }

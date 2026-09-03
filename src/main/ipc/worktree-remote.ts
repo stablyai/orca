@@ -286,20 +286,17 @@ const NO_CREATED_WORKTREE_LINEAGE: CreatedWorktreeLineageRecords = {
   workspaceLineage: null
 }
 
-/** Mirrors the projection's edge rule so we never persist a row the sidebar would silently drop.
- *  WorktreeMeta has no repoId, so the parent's comes from its `<repoId>::<path>` id. */
+/** Mirrors the projection's edge rule so we never persist a row the sidebar would silently drop. */
 function createdWorktreeSharesParentLineageBoundary(
   worktree: Worktree,
-  parentWorktreeId: string,
   parentMeta: WorktreeMeta
 ): boolean {
   return sharesWorktreeLineageBoundary(worktree, {
-    repoId: getRepoIdFromWorktreeId(parentWorktreeId),
-    hostId: parentMeta.hostId,
-    projectId: parentMeta.projectId
+    hostId: parentMeta.hostId
   })
 }
 
+/** Persists the workspace and worktree lineage captured during creation when the parent is valid. */
 export function recordWorkspaceLineageForCreatedWorktree(
   store: Store,
   args: CreateWorktreeArgs,
@@ -338,16 +335,10 @@ export function recordWorkspaceLineageForCreatedWorktree(
       console.warn(
         `[worktree-create] parent ${parentScope.worktreeId} has no instance identity; skipping lineage`
       )
-    } else if (
-      !createdWorktreeSharesParentLineageBoundary(
-        worktree,
-        parentScope.worktreeId,
-        parentWorktreeMeta
-      )
-    ) {
+    } else if (!createdWorktreeSharesParentLineageBoundary(worktree, parentWorktreeMeta)) {
       parentOutsideLineageBoundary = true
       console.warn(
-        `[worktree-create] parent ${parentScope.worktreeId} is outside ${worktree.id}'s repo/host/project boundary; skipping lineage`
+        `[worktree-create] parent ${parentScope.worktreeId} is outside ${worktree.id}'s host boundary; skipping lineage`
       )
     } else {
       lineage = store.setWorktreeLineage(worktree.id, {

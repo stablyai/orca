@@ -305,7 +305,7 @@ describe('ComposerParentWorktreePicker', () => {
     expect(rows()).toHaveLength(0)
   })
 
-  it('excludes archived worktrees and worktrees from another repo', () => {
+  it('excludes archived worktrees and includes worktrees from another repo on the same host', () => {
     seed(
       [
         makeWorktree({ id: 'alpha', displayName: 'Alpha' }),
@@ -320,10 +320,11 @@ describe('ComposerParentWorktreePicker', () => {
 
     expect(candidateLabels().join(' ')).toContain('Alpha')
     expect(candidateLabels().join(' ')).not.toContain('Archived')
-    expect(candidateLabels().join(' ')).not.toContain('Other repo')
+    expect(candidateLabels().join(' ')).toContain('Other repo')
+    expect(candidateLabels().join(' ')).toContain('repo2')
   })
 
-  it('excludes candidates on another execution host or project', () => {
+  it('excludes candidates on another execution host and includes another project', () => {
     seed([
       makeWorktree({ id: 'same', displayName: 'Same host', hostId: 'local', projectId: 'proj1' }),
       makeWorktree({
@@ -344,7 +345,6 @@ describe('ComposerParentWorktreePicker', () => {
       <ComposerParentWorktreePicker
         repoId={REPO_ID}
         executionHostId="local"
-        projectId="proj1"
         value={null}
         onChange={vi.fn()}
       />
@@ -353,18 +353,16 @@ describe('ComposerParentWorktreePicker', () => {
 
     expect(candidateLabels().join(' ')).toContain('Same host')
     expect(candidateLabels().join(' ')).not.toContain('Other host')
-    expect(candidateLabels().join(' ')).not.toContain('Other project')
+    expect(candidateLabels().join(' ')).toContain('Other project')
   })
 
-  // A worktree with no recorded hostId inherits its repo's host, which is the child's host too.
-  it('keeps candidates whose host or project is unrecorded', () => {
+  it('keeps candidates whose host is inherited from the repo', () => {
     seed([makeWorktree({ id: 'unscoped', displayName: 'Unscoped' })])
 
     render(
       <ComposerParentWorktreePicker
         repoId={REPO_ID}
         executionHostId="local"
-        projectId="proj1"
         value={null}
         onChange={vi.fn()}
       />
@@ -372,6 +370,60 @@ describe('ComposerParentWorktreePicker', () => {
     fireEvent.click(trigger())
 
     expect(candidateLabels().join(' ')).toContain('Unscoped')
+  })
+
+  it('excludes a cross-repo candidate owned by another host', () => {
+    seed(
+      [
+        makeWorktree({ id: 'same', displayName: 'Same host' }),
+        makeWorktree({ id: 'other', displayName: 'Other host', repoId: 'repo2' })
+      ],
+      [REPO_ID, 'repo2']
+    )
+    storeState.repos = [makeRepo(REPO_ID), { ...makeRepo('repo2'), executionHostId: 'ssh:remote' }]
+
+    render(
+      <ComposerParentWorktreePicker
+        repoId={REPO_ID}
+        executionHostId="local"
+        value={null}
+        onChange={vi.fn()}
+      />
+    )
+    fireEvent.click(trigger())
+
+    expect(candidateLabels().join(' ')).toContain('Same host')
+    expect(candidateLabels().join(' ')).not.toContain('Other host')
+  })
+
+  it('excludes an unstamped candidate with multiple repo owners', () => {
+    seed([
+      makeWorktree({ id: 'ambiguous', displayName: 'Ambiguous owner', repoId: 'repo2' }),
+      makeWorktree({
+        id: 'stamped',
+        displayName: 'Stamped owner',
+        repoId: 'repo2',
+        hostId: 'ssh:remote'
+      })
+    ])
+    storeState.repos = [
+      makeRepo(REPO_ID),
+      makeRepo('repo2'),
+      { ...makeRepo('repo2'), executionHostId: 'ssh:remote' }
+    ]
+
+    render(
+      <ComposerParentWorktreePicker
+        repoId={REPO_ID}
+        executionHostId="ssh:remote"
+        value={null}
+        onChange={vi.fn()}
+      />
+    )
+    fireEvent.click(trigger())
+
+    expect(candidateLabels().join(' ')).not.toContain('Ambiguous owner')
+    expect(candidateLabels().join(' ')).toContain('Stamped owner')
   })
 
   it('restricts candidates to the active folder workspace subtree', () => {

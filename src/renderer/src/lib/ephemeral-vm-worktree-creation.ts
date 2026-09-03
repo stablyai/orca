@@ -74,6 +74,7 @@ export async function prepareRequestForCreate(
   const preparedRequest: WorktreeCreationRequest = {
     ...request,
     repoId: preparedTarget.setup.repo.id,
+    executionHostId: preparedTarget.setup.setup.hostId,
     ...(preparedTarget.checkoutMode === 'provisioned-root'
       ? { baseBranch: request.baseBranch, compareBaseRef: request.compareBaseRef }
       : getEphemeralVmPortableBaseSelection(request)),

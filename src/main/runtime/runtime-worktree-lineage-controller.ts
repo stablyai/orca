@@ -5,7 +5,8 @@ import {
   parseWorkspaceKey,
   worktreeWorkspaceKey
 } from '../../shared/workspace-scope'
-import { sharesResolvedWorktreeLineageBoundary } from '../../shared/resolved-worktree-lineage'
+import { sharesWorktreeLineageBoundary } from '../../shared/resolved-worktree-lineage'
+import type { Worktree } from '../../shared/worktree/types'
 import type { OrchestrationDb } from './orchestration/db'
 import type { RuntimeStore } from './runtime-store-contract'
 import type { ResolvedWorktree } from './runtime-worktree-path-identity'
@@ -87,12 +88,7 @@ export class RuntimeWorktreeLineageController {
     if (child.id === parent.id) {
       throw new RuntimeLineageError('LINEAGE_PARENT_CYCLE', 'A worktree cannot parent itself.')
     }
-    if (!sharesResolvedWorktreeLineageBoundary(child, parent)) {
-      throw new RuntimeLineageError(
-        'LINEAGE_PARENT_CONTEXT_CONFLICT',
-        'Parent worktree must belong to the same repository, execution host, and project.'
-      )
-    }
+    this.validateParentHost(child, parent)
     const instanceById = new Map(
       this.deps.getCachedWorktrees()?.map((worktree) => [worktree.id, worktree.instanceId]) ?? [
         [child.id, child.instanceId],
@@ -121,6 +117,16 @@ export class RuntimeWorktreeLineageController {
       }
       cursor = lineage.parentWorktreeId
     }
+  }
+
+  validateParentHost(child: Pick<Worktree, 'hostId'>, parent: Pick<Worktree, 'hostId'>): void {
+    if (sharesWorktreeLineageBoundary(child, parent)) {
+      return
+    }
+    throw new RuntimeLineageError(
+      'LINEAGE_PARENT_CONTEXT_CONFLICT',
+      'Parent worktree must belong to the same execution host.'
+    )
   }
 
   async resolveTaskCandidate(taskId: string): Promise<WorktreeLineageCandidate | null> {

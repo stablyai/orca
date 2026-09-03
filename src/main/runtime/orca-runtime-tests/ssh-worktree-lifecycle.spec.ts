@@ -6,6 +6,7 @@ import {
   ensurePathWithinWorkspaceMock,
   getActiveMultiplexerMock,
   getBranchConflictKind,
+  getSshGitProviderMock,
   gitRunner,
   listWorktrees,
   muxRequestMock,
@@ -23,6 +24,8 @@ import {
   TEST_REPO_PATH,
   createFolderWorkspaceRuntimeStore,
   isOriginMainBaseRefProbe,
+  makeFolderWorkspace,
+  makeWorktreeInfo,
   makeWorktreeMeta,
   store
 } from '../orca-runtime-test-fixtures.spec'
@@ -142,7 +145,108 @@ describe('OrcaRuntimeService', () => {
     expect(listWorktrees).not.toHaveBeenCalled()
   })
 
-  it('records lineage for SSH-backed CLI-created worktrees', async () => {
+  it.each([
+    { direction: 'local to SSH', childConnectionId: null, parentHostId: 'ssh:parent' },
+    { direction: 'SSH to local', childConnectionId: 'child', parentHostId: 'local' },
+    {
+      direction: 'SSH host A to SSH host B',
+      childConnectionId: 'child',
+      parentHostId: 'ssh:parent'
+    }
+  ] as const)('rejects $direction lineage before creating a worktree', async (scenario) => {
+    const repo = {
+      ...store.getRepo(TEST_REPO_ID)!,
+      ...(scenario.childConnectionId ? { connectionId: scenario.childConnectionId } : {})
+    }
+    const runtime = new OrcaRuntimeService({
+      ...store,
+      getRepos: () => [repo],
+      getRepo: (id: string) => (id === repo.id ? repo : undefined)
+    } as never)
+    const parentId = 'parent-repo::/parent'
+    const parent = {
+      id: parentId,
+      repoId: 'parent-repo',
+      path: '/parent',
+      hostId: scenario.parentHostId,
+      instanceId: 'parent-instance',
+      head: 'abc',
+      branch: 'parent',
+      isBare: false,
+      isMainWorktree: false,
+      parentWorktreeId: null,
+      childWorktreeIds: [],
+      lineage: null,
+      git: makeWorktreeInfo('/parent')
+    }
+    vi.spyOn(
+      runtime as unknown as {
+        resolveLineageForWorktreeCreate: () => Promise<unknown>
+      },
+      'resolveLineageForWorktreeCreate'
+    ).mockResolvedValue({
+      kind: 'lineage',
+      parent: {
+        type: 'worktree',
+        workspaceKey: `worktree:${parentId}`,
+        worktree: parent,
+        instanceId: parent.instanceId
+      },
+      origin: 'cli',
+      capture: { source: 'explicit-cli-flag', confidence: 'explicit' }
+    })
+
+    await expect(
+      runtime.createManagedWorktree({
+        repoSelector: TEST_REPO_ID,
+        name: 'child',
+        lineage: { parentWorktree: `id:${parentId}` }
+      })
+    ).rejects.toMatchObject({
+      code: 'LINEAGE_PARENT_CONTEXT_CONFLICT',
+      message: 'Parent worktree must belong to the same execution host.'
+    })
+
+    expect(addWorktree).not.toHaveBeenCalled()
+    expect(getSshGitProviderMock).not.toHaveBeenCalled()
+  })
+
+  it.each([
+    { direction: 'local to SSH', childConnectionId: null, parentConnectionId: 'parent' },
+    { direction: 'SSH to local', childConnectionId: 'child', parentConnectionId: null },
+    {
+      direction: 'SSH host A to SSH host B',
+      childConnectionId: 'child',
+      parentConnectionId: 'parent'
+    }
+  ] as const)('rejects $direction folder lineage before creating a worktree', async (scenario) => {
+    const repo = {
+      ...store.getRepo(TEST_REPO_ID)!,
+      ...(scenario.childConnectionId ? { connectionId: scenario.childConnectionId } : {})
+    }
+    const folderWorkspace = makeFolderWorkspace({ connectionId: scenario.parentConnectionId })
+    const runtime = new OrcaRuntimeService({
+      ...createFolderWorkspaceRuntimeStore(folderWorkspace),
+      getRepos: () => [repo],
+      getRepo: (id: string) => (id === repo.id ? repo : undefined)
+    } as never)
+
+    await expect(
+      runtime.createManagedWorktree({
+        repoSelector: TEST_REPO_ID,
+        name: 'child',
+        lineage: { parentWorkspace: TEST_FOLDER_WORKSPACE_KEY }
+      })
+    ).rejects.toMatchObject({
+      code: 'LINEAGE_PARENT_CONTEXT_CONFLICT',
+      message: 'Parent worktree must belong to the same execution host.'
+    })
+
+    expect(addWorktree).not.toHaveBeenCalled()
+    expect(getSshGitProviderMock).not.toHaveBeenCalled()
+  })
+
+  it('records cross-repository lineage for SSH-backed CLI-created worktrees', async () => {
     vi.mocked(listWorktrees).mockClear()
     vi.mocked(addWorktree).mockClear()
     const remoteRepo = {
@@ -159,8 +263,14 @@ describe('OrcaRuntimeService', () => {
         scripts: { setup: '', archive: '' }
       }
     }
+    const parentRepo = {
+      ...remoteRepo,
+      id: 'parent-repo',
+      path: '/remote/parent-repo',
+      displayName: 'parent repo'
+    }
     const parent = {
-      path: '/remote/repo-parent',
+      path: '/remote/parent-repo-parent',
       head: 'abc',
       branch: 'refs/heads/repo-parent',
       isBare: false,
@@ -173,7 +283,7 @@ describe('OrcaRuntimeService', () => {
       isBare: false,
       isMainWorktree: false
     }
-    const parentId = `${TEST_REPO_ID}::${parent.path}`
+    const parentId = `${parentRepo.id}::${parent.path}`
     const childId = `${TEST_REPO_ID}::${created.path}`
     const metaById: Record<string, WorktreeMeta> = {
       [parentId]: makeWorktreeMeta({ instanceId: 'parent-instance' })
@@ -181,8 +291,8 @@ describe('OrcaRuntimeService', () => {
     const lineageById: Record<string, WorktreeLineage> = {}
     const remoteStore = {
       ...store,
-      getRepos: () => [remoteRepo],
-      getRepo: (id: string) => (id === TEST_REPO_ID ? remoteRepo : undefined),
+      getRepos: () => [remoteRepo, parentRepo],
+      getRepo: (id: string) => [remoteRepo, parentRepo].find((repo) => repo.id === id),
       getAllWorktreeMeta: () => metaById,
       getWorktreeMeta: (worktreeId: string) => metaById[worktreeId],
       setWorktreeMeta: (worktreeId: string, meta: Partial<WorktreeMeta>) => {
@@ -215,7 +325,9 @@ describe('OrcaRuntimeService', () => {
         throw new Error(`unexpected git call: ${args.join(' ')}`)
       }),
       addWorktree: vi.fn().mockResolvedValue(undefined),
-      listWorktrees: vi.fn().mockResolvedValueOnce([parent]).mockResolvedValue([parent, created])
+      listWorktrees: vi.fn(async (repoPath: string) =>
+        repoPath === parentRepo.path ? [parent] : [created]
+      )
     }
     registerSshGitProvider('ssh-1', provider as never)
     getActiveMultiplexerMock.mockReturnValue({ request: muxRequestMock, notify: vi.fn() })

@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { ExecutionHostId } from '../../shared/execution-host'
 import type { Repo } from '../../shared/repo-types'
+import type { WorktreeLineage } from '../../shared/worktree/lineage-types'
 import type { WorktreeMeta } from '../../shared/worktree/meta-types'
 import type { GitWorktreeInfo, Worktree } from '../../shared/worktree/types'
 import type { Store } from '../persistence'
@@ -38,14 +39,16 @@ function gitWorktree(path: string): GitWorktreeInfo {
 
 function createDeps(repos: Repo[]): RepoWorktreeRowDeps & {
   metaById: Record<string, WorktreeMeta>
+  lineageById: Record<string, WorktreeLineage>
   scanRepo: ReturnType<typeof vi.fn<RepoWorktreeRowDeps['scanRepo']>>
   listFolderWorkspaces: ReturnType<typeof vi.fn<RepoWorktreeRowDeps['listFolderWorkspaces']>>
 } {
   const metaById: Record<string, WorktreeMeta> = {}
+  const lineageById: Record<string, WorktreeLineage> = {}
   const store = {
     getRepos: () => repos,
     getAllWorktreeMeta: () => metaById,
-    getAllWorktreeLineage: () => ({}),
+    getAllWorktreeLineage: () => lineageById,
     getProjects: () => [],
     getSettings: () => ({}),
     setWorktreeMeta: (worktreeId: string, updates: Partial<WorktreeMeta>) => {
@@ -59,7 +62,7 @@ function createDeps(repos: Repo[]): RepoWorktreeRowDeps & {
     worktrees: [gitWorktree(owner.id === 'unrelated' ? '/unrelated/worktree' : '/same/worktree')]
   }))
   const listFolderWorkspaces = vi.fn<RepoWorktreeRowDeps['listFolderWorkspaces']>(() => [])
-  return { store, metaById, scanRepo, listFolderWorkspaces }
+  return { store, metaById, lineageById, scanRepo, listFolderWorkspaces }
 }
 
 describe('host-qualified scoped worktree resolution', () => {
@@ -248,6 +251,105 @@ describe('host-qualified scoped worktree resolution', () => {
     await expect(
       resolveScopedWorktreeIdRow(deps, 'shared::/same/worktree', 'ssh:builder')
     ).resolves.toBeNull()
+    expect(deps.scanRepo).not.toHaveBeenCalled()
+  })
+
+  it.each([
+    [
+      'exact child ID',
+      'repo-child::/same/worktree',
+      'repo-parent::/parent/worktree',
+      'repo-child::/same/worktree'
+    ],
+    [
+      'a trailing slash on the child ID',
+      'repo-child::/same/worktree',
+      'repo-parent::/parent/worktree',
+      'repo-child::/same/worktree/'
+    ],
+    [
+      'a doubled separator on the child ID',
+      'repo-child::/same/worktree',
+      'repo-parent::/parent/worktree',
+      'repo-child::/same//worktree'
+    ],
+    [
+      'an NFD child ID',
+      'repo-child::/same/café',
+      'repo-parent::/parent/worktree',
+      `repo-child::${'/same/café'.normalize('NFD')}`
+    ],
+    [
+      'a trailing slash on the parent ID',
+      'repo-child::/same/worktree',
+      'repo-parent::/parent/worktree',
+      'repo-parent::/parent/worktree/'
+    ]
+  ])(
+    'falls back to fleet resolution for cross-repo lineage requested with %s',
+    async (_label, childId, parentId, requestedId) => {
+      const deps = createDeps([
+        repo('repo-child', '/local/child-repo', { executionHostId: 'local' }),
+        repo('repo-parent', '/local/parent-repo', { executionHostId: 'local' })
+      ])
+      deps.lineageById[childId] = {
+        worktreeId: childId,
+        worktreeInstanceId: 'child-instance',
+        parentWorktreeId: parentId,
+        parentWorktreeInstanceId: 'parent-instance',
+        origin: 'manual',
+        capture: { source: 'manual-action', confidence: 'explicit' },
+        createdAt: 1
+      }
+
+      await expect(resolveScopedWorktreeIdRow(deps, requestedId, 'local')).resolves.toBeNull()
+      expect(deps.scanRepo).not.toHaveBeenCalled()
+    }
+  )
+
+  it('ignores colliding cross-repo lineage owned by another host', async () => {
+    const childId = 'repo-child::/same/worktree'
+    const parentId = 'repo-parent::/parent/worktree'
+    const deps = createDeps([
+      repo('repo-child', '/local/child-repo', { executionHostId: 'local' }),
+      repo('repo-child', '/remote/child-repo', { executionHostId: 'ssh:builder' }),
+      repo('repo-parent', '/remote/parent-repo', { executionHostId: 'ssh:builder' })
+    ])
+    deps.lineageById[childId] = {
+      worktreeId: childId,
+      worktreeInstanceId: 'remote-child-instance',
+      parentWorktreeId: parentId,
+      parentWorktreeInstanceId: 'remote-parent-instance',
+      origin: 'manual',
+      capture: { source: 'manual-action', confidence: 'explicit' },
+      createdAt: 1
+    }
+    ;(
+      deps.store as Store & {
+        getWorktreeMetaForHost: (
+          worktreeId: string,
+          hostId: ExecutionHostId
+        ) => WorktreeMeta | undefined
+      }
+    ).getWorktreeMetaForHost = (worktreeId, hostId) => {
+      if (hostId !== 'ssh:builder') {
+        return undefined
+      }
+      return worktreeId === childId
+        ? ({ instanceId: 'remote-child-instance', hostId } as unknown as WorktreeMeta)
+        : ({ instanceId: 'remote-parent-instance', hostId } as unknown as WorktreeMeta)
+    }
+
+    await expect(resolveScopedWorktreeIdRow(deps, childId, 'local')).resolves.toMatchObject({
+      id: childId,
+      hostId: 'local'
+    })
+    expect(deps.scanRepo.mock.calls.map(([owner]) => owner)).toEqual([
+      expect.objectContaining({ path: '/local/child-repo' })
+    ])
+
+    deps.scanRepo.mockClear()
+    await expect(resolveScopedWorktreeIdRow(deps, childId, 'ssh:builder')).resolves.toBeNull()
     expect(deps.scanRepo).not.toHaveBeenCalled()
   })
 

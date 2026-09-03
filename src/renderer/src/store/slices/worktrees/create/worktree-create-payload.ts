@@ -7,6 +7,8 @@ import type { WorkspaceLinkedItem } from '../../../../../../shared/worktree/type
 /** Trailing bag for `createWorktree` args that outgrew its positional list. */
 export type CreateWorktreeCallOptions = {
   automationProvenanceRequest?: CreateWorktreeArgs['automationProvenanceRequest']
+  /** Host selected with the repo. Keeps duplicate repo IDs routed to the same owner. */
+  executionHostId?: ExecutionHostId
   linkedWorkItem?: WorkspaceLinkedItem | null
   linkedTaskSourceContext?: TaskSourceContext | null
   /** Lets the owning runtime launch and prefill a task agent without first creating an idle shell. */

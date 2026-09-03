@@ -46,12 +46,16 @@ function makeMap(worktrees: readonly Worktree[]): Map<string, Worktree> {
   return new Map(worktrees.map((worktree) => [worktree.id, worktree]))
 }
 
-function makeRepoMap(
+function makeRepoOwners(
   repos: readonly Pick<Repo, 'id' | 'connectionId' | 'executionHostId'>[] = [
     { id: 'repo', connectionId: null, executionHostId: 'local' }
   ]
-): Map<string, Pick<Repo, 'connectionId' | 'executionHostId'>> {
-  return new Map(repos.map((repo) => [repo.id, repo]))
+): Map<string, Pick<Repo, 'connectionId' | 'executionHostId'>[]> {
+  const owners = new Map<string, Pick<Repo, 'connectionId' | 'executionHostId'>[]>()
+  for (const repo of repos) {
+    owners.set(repo.id, [...(owners.get(repo.id) ?? []), repo])
+  }
+  return owners
 }
 
 describe('canAssignWorktreeParent', () => {
@@ -161,7 +165,7 @@ describe('canAssignWorktreeParent', () => {
     ).toBe(false)
   })
 
-  it('stays repo-agnostic while the picker candidate filter is repo and host scoped', () => {
+  it('offers a cross-repo candidate on the same host to the picker', () => {
     const child = makeWorktree('child', 'repo-a')
     const sameRepo = makeWorktree('same-repo', 'repo-a')
     const otherRepo = makeWorktree('other-repo', 'repo-b')
@@ -181,12 +185,31 @@ describe('canAssignWorktreeParent', () => {
         worktrees,
         lineageById: {},
         worktreeMap: makeMap(worktrees),
-        repoMap: makeRepoMap([
+        repoOwners: makeRepoOwners([
           { id: 'repo-a', connectionId: null, executionHostId: 'local' },
           { id: 'repo-b', connectionId: null, executionHostId: 'local' }
         ])
       }).map((worktree) => worktree.id)
-    ).toEqual([sameRepo.id])
+    ).toEqual([sameRepo.id, otherRepo.id])
+  })
+
+  it('excludes a cross-repo candidate whose repo runs on another host', () => {
+    const child = makeWorktree('child', 'repo-a')
+    const otherRepo = makeWorktree('other-repo', 'repo-b')
+    const worktrees = [child, otherRepo]
+
+    expect(
+      getEligibleWorktreeParents({
+        child,
+        worktrees,
+        lineageById: {},
+        worktreeMap: makeMap(worktrees),
+        repoOwners: makeRepoOwners([
+          { id: 'repo-a', connectionId: null, executionHostId: 'local' },
+          { id: 'repo-b', connectionId: null, executionHostId: 'ssh:remote' }
+        ])
+      })
+    ).toEqual([])
   })
 
   it('excludes same-repo candidates owned by a different runtime host', () => {
@@ -204,20 +227,66 @@ describe('canAssignWorktreeParent', () => {
         worktrees,
         lineageById: {},
         worktreeMap: makeMap(worktrees),
-        repoMap: makeRepoMap([
+        repoOwners: makeRepoOwners([
           { id: 'repo-a', connectionId: null, executionHostId: 'runtime:env-a' }
         ])
       }).map((worktree) => worktree.id)
     ).toEqual([sameHost.id])
   })
 
-  it('excludes a candidate across a known project boundary for picker and direct drop checks', () => {
+  it('fails closed for unstamped worktrees with duplicate repo owners', () => {
+    const child = makeWorktree('child', 'repo-a')
+    const candidate = makeWorktree('candidate', 'repo-b')
+    const worktrees = [child, candidate]
+    const repoOwners = makeRepoOwners([
+      { id: 'repo-a', connectionId: null, executionHostId: 'local' },
+      { id: 'repo-a', connectionId: null, executionHostId: 'runtime:env-a' },
+      { id: 'repo-b', connectionId: null, executionHostId: 'local' },
+      { id: 'repo-b', connectionId: null, executionHostId: 'runtime:env-b' }
+    ])
+
+    candidate.hostId = 'local'
+    expect(
+      getEligibleWorktreeParents({
+        child,
+        worktrees,
+        lineageById: {},
+        worktreeMap: makeMap(worktrees),
+        repoOwners
+      })
+    ).toEqual([])
+
+    child.hostId = 'local'
+    candidate.hostId = undefined
+    expect(
+      getEligibleWorktreeParents({
+        child,
+        worktrees,
+        lineageById: {},
+        worktreeMap: makeMap(worktrees),
+        repoOwners
+      })
+    ).toEqual([])
+
+    candidate.hostId = 'local'
+    expect(
+      getEligibleWorktreeParents({
+        child,
+        worktrees,
+        lineageById: {},
+        worktreeMap: makeMap(worktrees),
+        repoOwners
+      })
+    ).toEqual([candidate])
+  })
+
+  it('offers a candidate across a known project boundary for picker and direct drop checks', () => {
     const child = { ...makeWorktree('child'), projectId: 'project-a' }
     const sameProject = { ...makeWorktree('same-project'), projectId: 'project-a' }
     const otherProject = { ...makeWorktree('other-project'), projectId: 'project-b' }
     const worktrees = [child, sameProject, otherProject]
     const worktreeMap = makeMap(worktrees)
-    const repoMap = makeRepoMap()
+    const repoOwners = makeRepoOwners()
 
     expect(
       getEligibleWorktreeParents({
@@ -225,16 +294,43 @@ describe('canAssignWorktreeParent', () => {
         worktrees,
         lineageById: {},
         worktreeMap,
-        repoMap
+        repoOwners
       }).map((worktree) => worktree.id)
-    ).toEqual([sameProject.id])
+    ).toEqual([sameProject.id, otherProject.id])
     expect(
       isEligibleWorktreeParent({
         child,
         candidateParent: otherProject,
         lineageById: {},
         worktreeMap,
-        repoMap
+        repoOwners
+      })
+    ).toBe(true)
+  })
+
+  it('excludes a candidate across a known host boundary for picker and direct drop checks', () => {
+    const child = { ...makeWorktree('child'), hostId: 'local' as const }
+    const otherHost = { ...makeWorktree('other-host'), hostId: 'ssh:remote' as const }
+    const worktrees = [child, otherHost]
+    const worktreeMap = makeMap(worktrees)
+    const repoOwners = makeRepoOwners()
+
+    expect(
+      getEligibleWorktreeParents({
+        child,
+        worktrees,
+        lineageById: {},
+        worktreeMap,
+        repoOwners
+      })
+    ).toEqual([])
+    expect(
+      isEligibleWorktreeParent({
+        child,
+        candidateParent: otherHost,
+        lineageById: {},
+        worktreeMap,
+        repoOwners
       })
     ).toBe(false)
   })
@@ -251,7 +347,7 @@ describe('canAssignWorktreeParent', () => {
         worktrees: [child, archived, visible],
         lineageById: {},
         worktreeMap: makeMap([child, archived, visible]),
-        repoMap: makeRepoMap()
+        repoOwners: makeRepoOwners()
       }).map((worktree) => worktree.id)
     ).toEqual([visible.id])
   })

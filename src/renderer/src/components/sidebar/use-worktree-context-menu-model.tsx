@@ -7,7 +7,7 @@ import {
   getLineageRenderInfo
 } from './worktree-lineage-projection'
 import { getWorkspaceStatus } from './workspace-status'
-import { getEligibleWorktreeParents } from './worktree-parent-candidates'
+import { useEligibleWorktreeParentCount } from './use-eligible-worktree-parent-count'
 import {
   hasSleepableWorkspaceActivity,
   useWorkspaceLineageMenuActions
@@ -210,20 +210,14 @@ export function useWorktreeContextMenuModel({
   const hasAnyContextLineage = activeContextWorktrees.some((item) =>
     hasWorktreeParentLink(item, worktreeLineageById, workspaceLineageByChildKey)
   )
-  const eligibleParentCount = useMemo(
-    () =>
-      menuOpen
-        ? getEligibleWorktreeParents({
-            child: worktree,
-            worktrees: allWorktrees,
-            lineageById: worktreeLineageById,
-            worktreeMap,
-            repoMap,
-            cyclicLineageIds
-          }).length
-        : 0,
-    [allWorktrees, cyclicLineageIds, menuOpen, repoMap, worktree, worktreeLineageById, worktreeMap]
-  )
+  const eligibleParentCount = useEligibleWorktreeParentCount({
+    child: worktree,
+    enabled: menuOpen,
+    worktrees: allWorktrees,
+    lineageById: worktreeLineageById,
+    worktreeMap,
+    cyclicLineageIds
+  })
 
   const setMenuOpenState = useCallback(
     (open: boolean) => {

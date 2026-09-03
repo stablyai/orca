@@ -184,6 +184,7 @@ export function useFullCreationExecution(input: FullCreationExecutionInput) {
         undefined,
         submitCompareBaseRef,
         {
+          ...(selectedRepoExecutionHostId ? { executionHostId: selectedRepoExecutionHostId } : {}),
           linkedWorkItem: toFolderWorkspaceLinkedTask(submitLinkedWorkItem),
           linkedTaskSourceContext: taskSourceContext,
           nameWasGenerated,

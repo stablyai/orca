@@ -14,6 +14,7 @@ import { getProjectHostSetupProjectionFromState } from './project-host-setup-sel
 import {
   getIndexedAllWorktrees as getCachedAllWorktrees,
   getIndexedRepoMap as getCachedRepoMap,
+  getIndexedRepoOwners as getCachedRepoOwners,
   getIndexedWorktreeMap as getCachedWorktreeMap,
   getIndexedWorktreesById as getCachedWorktreesById
 } from './worktree-repo-index'
@@ -227,6 +228,7 @@ export const useRepos = () => useAppStore((s) => s.repos)
 export const useActiveRepo = () =>
   useAppStore(useShallow((s) => selectRepoByIdForActiveWorkspace(s, s.activeRepoId)))
 export const useRepoMap = () => useAppStore((s) => getCachedRepoMap(s.repos))
+export const useRepoOwners = () => useAppStore((s) => getCachedRepoOwners(s.repos))
 
 type ActiveWorkspaceRepoState = Pick<
   AppState,

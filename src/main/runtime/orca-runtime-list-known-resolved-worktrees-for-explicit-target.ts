@@ -11,16 +11,24 @@ import {
   resolveLocalProjectRuntimesForRepos
 } from '../project-runtime-git-options'
 import { getAgentLaunchPlatformForRepo } from './runtime-agent-launch-resolution'
-import { resolveRepoWorktreeRows, resolveScopedWorktreeIdRow } from './repo-worktree-row-resolution'
+import {
+  resolveRepoWorktreeRows,
+  resolveScopedWorktreeIdRow,
+  type RepoWorktreeRow
+} from './repo-worktree-row-resolution'
 import { projectResolvedWorktreeLineage } from '../../shared/resolved-worktree-lineage'
 import type { RepoWorktreeRowDeps } from './repo-worktree-row-resolution'
 import { listRuntimeFolderWorkspaces } from './runtime-worktree-filesystem'
-import type { ExecutionHostId } from '../../shared/execution-host'
+import {
+  getRepoExecutionHostId,
+  getRepoSshConnectionId,
+  LOCAL_EXECUTION_HOST_ID,
+  type ExecutionHostId
+} from '../../shared/execution-host'
 import type { Repo } from '../../shared/repo-types'
 import type { ProjectExecutionRuntimeResolution } from '../../shared/project-execution-runtime'
 import type { RuntimeWorktreeScanResult } from './repo-worktree-resolution-scan'
 import { getSshGitProviderGeneration } from '../providers/ssh-git-dispatch'
-import { getRepoExecutionHostId, getRepoSshConnectionId } from '../../shared/execution-host'
 import type { RuntimeWorktreeScanCache } from './orca-runtime-core'
 import { resolveWorktreeScanCacheTtlMs } from './runtime-worktree-scan-cache'
 
@@ -104,7 +112,14 @@ export class OrcaRuntimeWithListKnownResolvedWorktreesForExplicitTarget extends 
       )
     )
     const lineageById = this.store?.getAllWorktreeLineage?.() ?? {}
-    const worktrees = perRepoWorktrees.flatMap((rows) =>
+    const rowsByHostId = new Map<ExecutionHostId, RepoWorktreeRow[]>()
+    for (const worktree of perRepoWorktrees.flat()) {
+      const hostId = worktree.hostId ?? LOCAL_EXECUTION_HOST_ID
+      const rows = rowsByHostId.get(hostId) ?? []
+      rows.push(worktree)
+      rowsByHostId.set(hostId, rows)
+    }
+    const worktrees = [...rowsByHostId.values()].flatMap((rows) =>
       projectResolvedWorktreeLineage(rows, lineageById)
     )
     return { worktrees, platformByRepoId }

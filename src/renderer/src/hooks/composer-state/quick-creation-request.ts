@@ -6,10 +6,12 @@ import type { TaskSourceContext } from '../../../../shared/task-source-context'
 import type { TuiAgent } from '../../../../shared/tui-agent'
 import type { GitPushTarget } from '../../../../shared/worktree/types'
 import type { SetupDecision } from '../../../../shared/worktree/create-types'
+import type { ExecutionHostId } from '../../../../shared/execution-host'
 import { toFolderWorkspaceLinkedTask } from '@/components/sidebar/folder-workspace-composer-helpers'
 
 export type QuickCreationRequestInput = {
   repoId: string
+  executionHostId: ExecutionHostId | null
   ephemeralVmRecipe: WorktreeCreationRequest['ephemeralVmRecipe']
   indeterminateProgress: boolean
   taskSourceContext: TaskSourceContext | null
@@ -56,6 +58,7 @@ export function buildQuickCreationRequest(
 ): WorktreeCreationRequest {
   return {
     repoId: input.repoId,
+    ...(input.executionHostId ? { executionHostId: input.executionHostId } : {}),
     ...(input.ephemeralVmRecipe ? { ephemeralVmRecipe: input.ephemeralVmRecipe } : {}),
     worktreeCreateProgressMode: input.indeterminateProgress ? 'indeterminate' : 'stepped',
     ...(input.taskSourceContext ? { taskSourceContext: input.taskSourceContext } : {}),

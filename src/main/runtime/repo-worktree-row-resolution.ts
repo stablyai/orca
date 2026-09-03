@@ -175,9 +175,8 @@ export async function resolveRepoWorktreeRows(
 /**
  * Resolve one `<repoId>::<path>` worktree id by scanning only its owning repo.
  *
- * Lineage edges are intra-repo by construction (`sharesResolvedWorktreeLineageBoundary` requires a
- * matching repoId), so projecting over one repo's rows yields the same parent and child ids the
- * fleet scan would. Returns `null` whenever that does not hold, and the caller falls back.
+ * Cross-repo lineage needs every repo on the host, so affected rows return `null` and let the caller
+ * fall back to its fleet scan. Other rows retain the cheap scoped path.
  */
 export async function resolveScopedWorktreeIdRow(
   deps: RepoWorktreeRowDeps,
@@ -187,6 +186,38 @@ export async function resolveScopedWorktreeIdRow(
   const { store } = deps
   const parsed = splitWorktreeIdForFilesystem(worktreeId)
   if (!parsed?.repoId || !parsed.worktreePath) {
+    return null
+  }
+  const comparisonKey = worktreeIdComparisonKey(worktreeId)
+  const lineageById = store.getAllWorktreeLineage?.() ?? {}
+  const touchesCrossRepoLineage = Object.values(lineageById).some((lineage) => {
+    const touchesRequestedWorktree =
+      lineage.worktreeId === worktreeId ||
+      lineage.parentWorktreeId === worktreeId ||
+      (comparisonKey !== null &&
+        (worktreeIdComparisonKey(lineage.worktreeId) === comparisonKey ||
+          worktreeIdComparisonKey(lineage.parentWorktreeId) === comparisonKey))
+    if (!touchesRequestedWorktree) {
+      return false
+    }
+    const child = splitWorktreeId(lineage.worktreeId)
+    const parent = splitWorktreeId(lineage.parentWorktreeId)
+    if (child?.repoId === parent?.repoId) {
+      return false
+    }
+    // Why: lineage IDs are host-unqualified. A colliding edge on another host must not force this
+    // host's otherwise-scoped lookup into a fleet fallback that cannot resolve the target row.
+    if (requiredHostId !== undefined && typeof store.getWorktreeMetaForHost === 'function') {
+      const childMeta = readWorktreeMetaForHost(store, lineage.worktreeId, requiredHostId)
+      const parentMeta = readWorktreeMetaForHost(store, lineage.parentWorktreeId, requiredHostId)
+      return (
+        childMeta?.instanceId === lineage.worktreeInstanceId &&
+        parentMeta?.instanceId === lineage.parentWorktreeInstanceId
+      )
+    }
+    return true
+  })
+  if (touchesCrossRepoLineage) {
     return null
   }
   const owners = store
@@ -208,14 +239,13 @@ export async function resolveScopedWorktreeIdRow(
     store.getAllWorktreeMeta() ?? {},
     resolveLocalProjectRuntimesForRepos(store, [repo])
   )
-  const projected = projectResolvedWorktreeLineage(rows, store.getAllWorktreeLineage?.() ?? {})
+  const projected = projectResolvedWorktreeLineage(rows, lineageById)
   const exact = projected.find((worktree) => worktree.id === worktreeId)
   if (exact) {
     return exact
   }
   // Why (#16243): the scan can spell this id's path differently — the divergence `path:` absorbs.
   // One equivalent row may stand in; two is an ambiguity a scoped lookup must refuse, not guess.
-  const comparisonKey = worktreeIdComparisonKey(worktreeId)
   if (comparisonKey === null) {
     return null
   }

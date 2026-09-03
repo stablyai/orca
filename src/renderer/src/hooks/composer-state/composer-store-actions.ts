@@ -51,6 +51,7 @@ export type ComposerStoreActions = {
     compareBaseRef?: string,
     options?: {
       automationProvenanceRequest?: CreateWorktreeArgs['automationProvenanceRequest']
+      executionHostId?: ExecutionHostId
       linkedWorkItem?: WorkspaceLinkedItem | null
       linkedTaskSourceContext?: TaskSourceContext | null
       startupDraft?: string
