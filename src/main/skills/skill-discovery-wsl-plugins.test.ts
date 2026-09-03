@@ -7,6 +7,7 @@ const runWslProcessMock = vi.hoisted(() => vi.fn())
 vi.mock('../wsl/wsl-runner', () => ({ runWslProcess: runWslProcessMock }))
 
 import { buildSkillDiscoverySources } from './skill-discovery-sources'
+import { rootMayContainSourceKind } from './skill-discovery-source-filter'
 import { discoverSkillsInWsl } from './skill-discovery-wsl'
 
 function record(...fields: string[]): string {
@@ -20,6 +21,50 @@ function wslResult(stdout: string): WslResult {
 describe('WSL Claude plugin skill discovery', () => {
   beforeEach(() => runWslProcessMock.mockReset())
   afterEach(() => vi.unstubAllEnvs())
+
+  it('skips workspace roots and plugin metadata when discovery has no cwd', async () => {
+    runWslProcessMock.mockResolvedValueOnce(wslResult(''))
+
+    const result = await discoverSkillsInWsl({ distro: 'Ubuntu', homeDir: '/home/alice' })
+
+    expect(runWslProcessMock).toHaveBeenCalledTimes(1)
+    const scanScript = runWslProcessMock.mock.calls[0]?.[0].script as string
+    expect(scanScript.match(/'\/home\/alice\/\.agents\/skills'/g)).toHaveLength(1)
+    expect(scanScript.match(/'\/home\/alice\/\.claude\/skills'/g)).toHaveLength(1)
+    const expectedRoots = buildSkillDiscoverySources({
+      homeDir: '/home/alice',
+      cwd: undefined,
+      repos: [],
+      includeCwd: false,
+      pathApi: pathPosix
+    })
+    expect(result.sources).toHaveLength(expectedRoots.length)
+  })
+
+  it('skips plugin metadata and unrelated roots for filtered home discovery', async () => {
+    runWslProcessMock.mockResolvedValueOnce(wslResult(''))
+
+    const result = await discoverSkillsInWsl({
+      distro: 'Ubuntu',
+      homeDir: '/home/alice',
+      cwd: '/work/orca',
+      names: ['orchestration'],
+      sourceKinds: ['home']
+    })
+
+    expect(runWslProcessMock).toHaveBeenCalledTimes(1)
+    const scanScript = runWslProcessMock.mock.calls[0]?.[0].script as string
+    expect(scanScript).not.toContain('/work/orca')
+    expect(scanScript).not.toContain("'/home/alice/.codex/plugins/cache'")
+    const expectedRoots = buildSkillDiscoverySources({
+      homeDir: '/home/alice',
+      cwd: '/work/orca',
+      repos: [],
+      includeCwd: true,
+      pathApi: pathPosix
+    }).filter((root) => rootMayContainSourceKind(root, ['home']))
+    expect(result.sources).toHaveLength(expectedRoots.length)
+  })
 
   it('reads enabled plugin metadata and scans the selected install inside the distro', async () => {
     const homeDir = '/home/alice'

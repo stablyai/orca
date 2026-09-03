@@ -1,4 +1,8 @@
-import type { SkillDiscoveryResult, SkillDiscoveryTarget } from '../../../shared/skills'
+import type {
+  SkillDiscoveryResult,
+  SkillDiscoveryTarget,
+  SkillSourceKind
+} from '../../../shared/skills'
 import type { RuntimeClientTarget } from '@/runtime/runtime-rpc-client'
 import { discoverSkillsForRuntimeTarget } from '@/runtime/runtime-skills-client'
 import { INSTALLED_AGENT_SKILLS_CHANGED_EVENT } from './installed-agent-skills-change-event'
@@ -46,40 +50,78 @@ export function resetSkillDiscoveryCacheForTests(): void {
 }
 
 function normalizeSkillDiscoveryTarget(
-  target: SkillDiscoveryTarget | undefined
+  target: SkillDiscoveryTarget | undefined,
+  names?: readonly string[],
+  sourceKinds?: readonly SkillSourceKind[]
 ): SkillDiscoveryTarget | undefined {
+  const requestedNames = names?.map((name) => name.trim().toLowerCase()).filter(Boolean) ?? []
+  const targetNames = target?.names?.map((name) => name.trim().toLowerCase()).filter(Boolean) ?? []
+  const effectiveNames = [...new Set(requestedNames.length > 0 ? requestedNames : targetNames)]
+  const effectiveSourceKinds = [
+    ...new Set(sourceKinds?.length ? sourceKinds : (target?.sourceKinds ?? []))
+  ]
+  const filters = {
+    ...(effectiveNames?.length ? { names: [...effectiveNames] } : {}),
+    ...(effectiveSourceKinds?.length ? { sourceKinds: [...effectiveSourceKinds] } : {})
+  }
   const projectRuntime = target?.projectRuntime
   if (projectRuntime) {
     if (projectRuntime.status === 'repair-required') {
-      return { projectRuntime }
+      return { projectRuntime, ...filters }
     }
     if (projectRuntime.runtime.kind === 'wsl') {
       return {
         runtime: 'wsl',
         wslDistro: projectRuntime.runtime.distro,
-        projectRuntime
+        projectRuntime,
+        ...filters
       }
     }
     return {
       runtime: 'host',
-      projectRuntime
+      projectRuntime,
+      ...filters
     }
   }
 
   if (target?.runtime !== 'wsl') {
-    return undefined
+    return Object.keys(filters).length > 0 ? filters : undefined
   }
-  return { runtime: 'wsl', wslDistro: target.wslDistro?.trim() || null }
+  return { runtime: 'wsl', wslDistro: target.wslDistro?.trim() || null, ...filters }
 }
 
-export function getSkillDiscoveryTargetKey(target: SkillDiscoveryTarget | undefined): string {
+function appendSkillDiscoveryFiltersToKey(
+  runtimeKey: string,
+  target: SkillDiscoveryTarget | undefined
+): string {
+  return target?.names?.length || target?.sourceKinds?.length
+    ? JSON.stringify([
+        runtimeKey,
+        target.names ? [...target.names].sort() : null,
+        target.sourceKinds ? [...target.sourceKinds].sort() : null
+      ])
+    : runtimeKey
+}
+
+function getNormalizedSkillDiscoveryRuntimeKey(target: SkillDiscoveryTarget | undefined): string {
   if (target?.projectRuntime) {
     return target.projectRuntime.status === 'resolved'
       ? target.projectRuntime.runtime.cacheKey
       : target.projectRuntime.repair.cacheKey
   }
-  const normalizedTarget = normalizeSkillDiscoveryTarget(target)
-  return normalizedTarget?.runtime === 'wsl' ? `wsl:${normalizedTarget.wslDistro ?? ''}` : 'host'
+  return target?.runtime === 'wsl' ? `wsl:${target.wslDistro ?? ''}` : 'host'
+}
+
+export function getSkillDiscoveryTargetKey(
+  target: SkillDiscoveryTarget | undefined,
+  names?: readonly string[],
+  sourceKinds?: readonly SkillSourceKind[]
+): string {
+  const normalizedTarget = normalizeSkillDiscoveryTarget(target, names, sourceKinds)
+  return appendSkillDiscoveryFiltersToKey(
+    getNormalizedSkillDiscoveryRuntimeKey(normalizedTarget),
+    normalizedTarget
+  )
 }
 
 // Why: a connected remote runtime scans its own disk. Sharing the local key
@@ -89,21 +131,28 @@ export function getSkillDiscoveryTargetKey(target: SkillDiscoveryTarget | undefi
 // remote gets rescanned once per client-side target shape.
 export function getRuntimeScopedSkillDiscoveryKey(
   runtimeTarget: RuntimeClientTarget,
-  target: SkillDiscoveryTarget | undefined
+  target: SkillDiscoveryTarget | undefined,
+  names?: readonly string[],
+  sourceKinds?: readonly SkillSourceKind[]
 ): string {
-  return runtimeTarget.kind === 'environment'
-    ? `runtime:${runtimeTarget.environmentId}`
-    : getSkillDiscoveryTargetKey(target)
+  const normalizedTarget = normalizeSkillDiscoveryTarget(target, names, sourceKinds)
+  const runtimeKey =
+    runtimeTarget.kind === 'environment'
+      ? `runtime:${runtimeTarget.environmentId}`
+      : getNormalizedSkillDiscoveryRuntimeKey(normalizedTarget)
+  return appendSkillDiscoveryFiltersToKey(runtimeKey, normalizedTarget)
 }
 
 function startInstalledAgentSkillDiscovery(
   force: boolean,
   target: SkillDiscoveryTarget | undefined,
   runtimeTarget: RuntimeClientTarget,
-  key: string
+  key: string,
+  names?: readonly string[],
+  sourceKinds?: readonly SkillSourceKind[]
 ): Promise<SkillDiscoveryResult> {
   const generation = discoveryGeneration
-  const normalizedTarget = normalizeSkillDiscoveryTarget(target)
+  const normalizedTarget = normalizeSkillDiscoveryTarget(target, names, sourceKinds)
   // Why: a forced caller knows disk changed (install finished, explicit recheck),
   // so it must also bypass the host's shared scans — not just this window's cache.
   const requestTarget = force ? { ...normalizedTarget, refresh: true } : normalizedTarget
@@ -132,9 +181,11 @@ function startInstalledAgentSkillDiscovery(
 export async function discoverInstalledAgentSkills(
   force: boolean,
   target?: SkillDiscoveryTarget,
-  runtimeTarget: RuntimeClientTarget = LOCAL_RUNTIME_TARGET
+  runtimeTarget: RuntimeClientTarget = LOCAL_RUNTIME_TARGET,
+  names?: readonly string[],
+  sourceKinds?: readonly SkillSourceKind[]
 ): Promise<SkillDiscoveryResult> {
-  const key = getRuntimeScopedSkillDiscoveryKey(runtimeTarget, target)
+  const key = getRuntimeScopedSkillDiscoveryKey(runtimeTarget, target, names, sourceKinds)
   if (!force) {
     // Why: only a cache-serving read should refresh recency — a forced refresh
     // discards the entry it would otherwise promote.
@@ -161,5 +212,5 @@ export async function discoverInstalledAgentSkills(
     }
   }
 
-  return startInstalledAgentSkillDiscovery(force, target, runtimeTarget, key)
+  return startInstalledAgentSkillDiscovery(force, target, runtimeTarget, key, names, sourceKinds)
 }

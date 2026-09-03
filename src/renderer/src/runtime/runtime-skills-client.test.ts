@@ -80,6 +80,28 @@ describe('discoverSkillsForRuntimeTarget', () => {
     )
   })
 
+  it('forwards portable inventory filters without client runtime identity', async () => {
+    const result = discoveryResult('orchestration')
+    runtimeEnvironmentCall.mockResolvedValueOnce({ id: 'skills', ok: true, result })
+
+    await discoverSkillsForRuntimeTarget(
+      { kind: 'environment', environmentId: 'env-1' },
+      {
+        runtime: 'wsl',
+        wslDistro: 'Ubuntu',
+        names: ['orchestration'],
+        sourceKinds: ['home']
+      }
+    )
+
+    expect(runtimeEnvironmentCall).toHaveBeenCalledWith(
+      expect.objectContaining({
+        method: 'skills.discover',
+        params: { names: ['orchestration'], sourceKinds: ['home'] }
+      })
+    )
+  })
+
   // Why: no caller can produce these yet, so the remote params must stay empty
   // rather than shipping a client-host target the server would misread.
   it('sends no target at all to a remote runtime', async () => {
