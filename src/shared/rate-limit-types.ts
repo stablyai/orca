@@ -39,6 +39,8 @@ export type UsageRateLimitMetadata = {
   failureKind?: UsageRateLimitFailureKind
   credentialSource?: string
   authProvenance?: string
+  /** Stable provider account identity used to scope cached auth-bound state. */
+  authAccountId?: string
   deferredByLiveClaudeSession?: boolean
   lastSuccessfulSource?: UsageRateLimitSource
   /** Unix ms timestamp before which usage refetches should not be attempted (from HTTP Retry-After). */
@@ -65,7 +67,7 @@ export type ProviderRateLimits = {
   monthly?: RateLimitWindow | null
   /** Named per-model buckets (Gemini only). */
   buckets?: RateLimitBucket[]
-  /** Available earned Codex rate-limit reset credits, if reported. */
+  /** Available reset credits or tokens reported by the provider. */
   rateLimitResetCredits?: {
     availableCount: number
     /** Total earned reset credits, including spent or expired credits, if reported. */
@@ -92,6 +94,13 @@ export type CodexRateLimitResetOutcome = 'reset' | 'nothingToReset' | 'noCredit'
 
 export type CodexRateLimitResetResult = {
   outcome: CodexRateLimitResetOutcome
+  state: RateLimitState
+}
+
+export type GrokRateLimitResetOutcome = CodexRateLimitResetOutcome | 'usageUnavailable'
+
+export type GrokRateLimitResetResult = {
+  outcome: GrokRateLimitResetOutcome
   state: RateLimitState
 }
 

@@ -148,7 +148,9 @@ export function registerCoreHandlers(
   registerClaudeAccountHandlers(claudeAccounts)
   registerMiniMaxCredentialsHandlers(rateLimits)
   registerGrokAccountHandlers()
-  registerRateLimitHandlers(rateLimits, codexAccounts)
+  registerRateLimitHandlers(rateLimits, codexAccounts, (idempotencyKey) =>
+    runtime.consumeGrokRateLimitResetCredit(idempotencyKey)
+  )
   registerGitHubHandlers(store, stats)
   registerGitLabHandlers(store)
   registerHostedReviewHandlers(store, stats)

@@ -56,6 +56,13 @@ const ConsumeCodexResetCreditParams = z
   })
   .strict()
 
+const ConsumeGrokResetCreditParams = z
+  .object({
+    // Why: Grok has one host CLI login, so the phone's attempt key is the replay scope.
+    idempotencyKey: z.uuid('Invalid idempotencyKey')
+  })
+  .strict()
+
 const AddClaudeFromConfigDirParams = z.object({
   configDir: z.string().min(1, 'Missing configDir'),
   runtime: z.enum(['host', 'wsl']).optional(),
@@ -133,6 +140,12 @@ export const ACCOUNT_METHODS: readonly RpcAnyMethod[] = [
     params: ConsumeCodexResetCreditParams,
     handler: async (params, { runtime }) =>
       runtime.consumeCodexRateLimitResetCredit(params.idempotencyKey, params.expectedScope)
+  }),
+  defineMethod({
+    name: 'accounts.consumeGrokResetCredit',
+    params: ConsumeGrokResetCreditParams,
+    handler: async (params, { runtime }) =>
+      runtime.consumeGrokRateLimitResetCredit(params.idempotencyKey)
   }),
   defineMethod({
     name: 'accounts.removeClaude',

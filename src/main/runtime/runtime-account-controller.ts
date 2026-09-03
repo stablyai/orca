@@ -9,10 +9,16 @@ import type {
   ClaudeRateLimitAccountsState,
   CodexRateLimitAccountsState
 } from '../../shared/managed-account-types'
-import type { CodexRateLimitResetOutcome, RateLimitState } from '../../shared/rate-limit-types'
+import type {
+  CodexRateLimitResetOutcome,
+  GrokRateLimitResetOutcome,
+  RateLimitState
+} from '../../shared/rate-limit-types'
 import type { CodexResetCreditExpectedScope } from '../../shared/codex-reset-credit-scope'
 import type { CommitMessageAgentEnvironmentResolvers } from '../text-generation/commit-message-agent-environment'
 import type { ClaudeAccountSelectionTarget } from '../claude-accounts/runtime-selection'
+import type { Store } from '../persistence'
+import { GrokResetCreditCoordinator } from './grok-reset-credit-coordinator'
 
 export type RuntimeAccountServices = {
   claudeAccounts: ClaudeAccountService
@@ -38,9 +44,19 @@ export type CodexRateLimitResetRpcResult = {
     }
 )
 
+export type GrokRateLimitResetRpcResult = {
+  outcome: GrokRateLimitResetOutcome
+  snapshot: AccountsSnapshot
+}
+
 export class RuntimeAccountController {
   private services: RuntimeAccountServices | null = null
   private commitMessageAgentEnvironment: CommitMessageAgentEnvironmentResolvers | null = null
+  private readonly grokResetCredits: GrokResetCreditCoordinator
+
+  constructor(getStore: () => Store | null = () => null) {
+    this.grokResetCredits = new GrokResetCreditCoordinator(() => this.requireServices(), getStore)
+  }
 
   setServices(services: RuntimeAccountServices): void {
     this.services = services
@@ -121,6 +137,10 @@ export class RuntimeAccountController {
       }
     }
     return { outcome: result.outcome, scope: result.scope, snapshot }
+  }
+
+  consumeGrokResetCredit(idempotencyKey: string): Promise<GrokRateLimitResetRpcResult> {
+    return this.grokResetCredits.consume(idempotencyKey)
   }
 
   removeClaude(accountId: string): Promise<ClaudeRateLimitAccountsState> {

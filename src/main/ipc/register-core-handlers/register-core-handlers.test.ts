@@ -458,7 +458,14 @@ describe('registerCoreHandlers', () => {
 
   it('passes the store through to handler registrars that need it', async () => {
     const store = { marker: 'store' }
-    const runtime = { marker: 'runtime', getAgentBrowserBridge: () => null }
+    const consumeGrokRateLimitResetCredit = vi.fn(async (idempotencyKey: string) => ({
+      idempotencyKey
+    }))
+    const runtime = {
+      marker: 'runtime',
+      getAgentBrowserBridge: () => null,
+      consumeGrokRateLimitResetCredit
+    }
     const stats = { marker: 'stats' }
     const claudeUsage = { marker: 'claudeUsage' }
     const codexUsage = { marker: 'codexUsage' }
@@ -517,7 +524,16 @@ describe('registerCoreHandlers', () => {
     expect(registerClaudeAccountHandlersMock).toHaveBeenCalledWith(claudeAccounts)
     expect(registerMiniMaxCredentialsHandlersMock).toHaveBeenCalledWith(rateLimits)
     expect(registerGrokAccountHandlersMock).toHaveBeenCalled()
-    expect(registerRateLimitHandlersMock).toHaveBeenCalledWith(rateLimits, codexAccounts)
+    expect(registerRateLimitHandlersMock).toHaveBeenCalledWith(
+      rateLimits,
+      codexAccounts,
+      expect.any(Function)
+    )
+    const consumeGrokThroughRuntime = registerRateLimitHandlersMock.mock.calls[0]?.[2]
+    await expect(consumeGrokThroughRuntime('attempt-id')).resolves.toEqual({
+      idempotencyKey: 'attempt-id'
+    })
+    expect(consumeGrokRateLimitResetCredit).toHaveBeenCalledWith('attempt-id')
     expect(registerGitHubHandlersMock).toHaveBeenCalledWith(store, stats)
     expect(registerLinearHandlersMock).toHaveBeenCalled()
     expect(registerJiraHandlersMock).toHaveBeenCalled()

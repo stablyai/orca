@@ -14560,6 +14560,37 @@
     }
   },
   "components": {
+    "grokAccounts": {
+      "resetCredits": {
+        "title": "Restablecimientos del límite de uso",
+        "description": "Los mismos tokens de restablecimiento de SuperGrok que en Configuración → Uso en grok.com. Canjéalos desde el menú de uso de Grok en la barra de estado.",
+        "availableOne": "1 restablecimiento disponible",
+        "availableMany": "{{count}} restablecimientos disponibles",
+        "openUsage": "Abrir Uso en grok.com"
+      }
+    },
+    "grokUsage": { "resetCredits": { "label": "Restablecimientos del límite de uso" } },
+    "grokResetMenu": {
+      "failure": "No se pudo usar el restablecimiento de SuperGrok. Inténtalo de nuevo.",
+      "usageUnavailable": "No se pudo verificar el uso de Grok. Inténtalo de nuevo.",
+      "openDetails": "Abrir detalles de Grok y el restablecimiento del límite de uso",
+      "confirmTitle": "¿Restablecer los límites de Grok?",
+      "confirmDescription": "Esto usa un token de restablecimiento del límite de uso de SuperGrok para la cuenta con sesión iniciada y restablece inmediatamente el límite semanal actual.",
+      "skipFutureConfirmation": "No volver a preguntar",
+      "cancel": "Cancelar",
+      "redeeming": "Aplicando restablecimiento…",
+      "redeemNow": "Restablecer ahora",
+      "availableOne": "1 restablecimiento del límite disponible",
+      "availableMany": "{{count}} restablecimientos del límite disponibles",
+      "manageAccounts": "Administrar cuentas…"
+    },
+    "resetCreditExpiry": {
+      "nextNow": "El siguiente vence ahora",
+      "singleNow": "Vence ahora",
+      "nextIn": "El siguiente vence en {{duration}}",
+      "singleIn": "Vence en {{duration}}"
+    },
+    "usageRoster": { "openDetails": "Abrir detalles de uso" },
     "native-chat": {
       "composer": {
         "imageUnsupported": "Este agente no admite pegar imágenes.",

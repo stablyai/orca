@@ -124,6 +124,7 @@ export function createSettings(overrides: Partial<GlobalSettings> = {}): GlobalS
     skipDeleteAutomationConfirm: false,
     skipDeleteArtifactConfirm: false,
     skipCodexRateLimitResetConfirm: false,
+    skipGrokRateLimitResetConfirm: false,
     defaultTaskViewPreset: 'all',
     defaultTaskSource: 'github',
     visibleTaskProviders: ['github', 'gitlab', 'linear', 'jira'],

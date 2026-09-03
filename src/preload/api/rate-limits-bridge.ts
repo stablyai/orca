@@ -1,6 +1,7 @@
 import { ipcRenderer } from 'electron'
 import type {
   CodexRateLimitResetResult,
+  GrokRateLimitResetResult,
   RateLimitRuntimeTarget,
   RateLimitState
 } from '../../shared/rate-limit-types'
@@ -13,6 +14,8 @@ export const rateLimitsApi = {
     ipcRenderer.invoke('rateLimits:refreshCodexForTarget', target),
   consumeCodexResetCredit: (): Promise<CodexRateLimitResetResult> =>
     ipcRenderer.invoke('rateLimits:consumeCodexResetCredit'),
+  consumeGrokResetCredit: (): Promise<GrokRateLimitResetResult> =>
+    ipcRenderer.invoke('rateLimits:consumeGrokResetCredit'),
   refreshClaudeForTarget: (target: RateLimitRuntimeTarget): Promise<RateLimitState> =>
     ipcRenderer.invoke('rateLimits:refreshClaudeForTarget', target),
   setPollingInterval: (ms: number): Promise<void> =>

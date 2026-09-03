@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 
 import {
   getInactiveProviderUsage,
+  getHostProviderRateLimits,
   getUsageBarState,
   getWindowResetLabel,
   hasActiveProviderUsage,
@@ -125,6 +126,18 @@ describe('getInactiveProviderUsage', () => {
     })
 
     expect(getInactiveProviderUsage(snapshot, 'claude', 'account-1')?.rateLimits).toBe(limits)
+  })
+})
+
+describe('getHostProviderRateLimits', () => {
+  it('reads the optional Grok slot and tolerates an old-host omission', () => {
+    const oldHost = makeSnapshot()
+    expect(getHostProviderRateLimits(oldHost, 'grok')).toBeNull()
+
+    const grok = makeLimits({ provider: 'grok', status: 'ok' })
+    const newHost = makeSnapshot()
+    newHost.rateLimits.grok = grok
+    expect(getHostProviderRateLimits(newHost, 'grok')).toBe(grok)
   })
 })
 

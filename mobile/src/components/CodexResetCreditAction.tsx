@@ -8,13 +8,15 @@ export function CodexResetCreditAction({
   scopeLabel,
   busy,
   disabled,
-  onPress
+  onPress,
+  productLabel = 'Codex'
 }: {
   summary: CodexResetCreditSummary
   scopeLabel?: string | null
   busy: boolean
   disabled: boolean
   onPress: () => void
+  productLabel?: string
 }) {
   return (
     <>
@@ -24,7 +26,7 @@ export function CodexResetCreditAction({
           <Text style={styles.title}>{summary.availabilityLabel}</Text>
           <Text style={styles.subtitle}>
             {[summary.expiryLabel, scopeLabel].filter(Boolean).join(' · ') ||
-              'Earned Codex rate-limit reset'}
+              `Earned ${productLabel} rate-limit reset`}
           </Text>
         </View>
         <Pressable
@@ -36,11 +38,13 @@ export function CodexResetCreditAction({
           onPress={onPress}
           disabled={disabled}
           accessibilityRole="button"
-          accessibilityLabel={busy ? 'Resetting Codex rate limits' : 'Use Codex rate-limit reset'}
+          accessibilityLabel={
+            busy ? `Resetting ${productLabel} rate limits` : `Use ${productLabel} rate-limit reset`
+          }
           accessibilityHint={
             scopeLabel
               ? `Uses one earned reset for ${scopeLabel}`
-              : 'Uses one earned reset for the active Codex account'
+              : `Uses one earned reset for the active ${productLabel} account`
           }
           accessibilityState={{ busy, disabled }}
           hitSlop={8}

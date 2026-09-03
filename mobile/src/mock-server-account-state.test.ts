@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it } from 'vitest'
 import {
   consumeMockCodexResetCredit,
+  consumeMockGrokResetCredit,
   createMockAccountsSnapshot,
   getMockCodexResetScope,
   resetMockAccountState,
@@ -56,5 +57,18 @@ describe('mock account reset state', () => {
       reason: 'offerChanged',
       scope
     })
+  })
+
+  it('exposes and idempotently redeems the Grok reset inventory', () => {
+    expect(createMockAccountsSnapshot().rateLimits.grok.rateLimitResetCredits.availableCount).toBe(
+      1
+    )
+
+    const first = consumeMockGrokResetCredit(FIRST_OPERATION_ID)
+    expect(first).toEqual({ outcome: 'reset' })
+    expect(consumeMockGrokResetCredit(FIRST_OPERATION_ID)).toEqual(first)
+    const after = createMockAccountsSnapshot().rateLimits.grok
+    expect(after.rateLimitResetCredits.availableCount).toBe(0)
+    expect(after.weekly.usedPercent).toBe(0)
   })
 })

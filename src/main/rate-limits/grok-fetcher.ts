@@ -10,6 +10,15 @@ import {
   type GrokAuthReadResult,
   type GrokAuthSession
 } from './grok-auth'
+import { supplementGrokRateLimitResetCredits } from './grok-reset-credit-client'
+import type { RateLimitResetCredits } from './codex-reset-credit-client'
+import {
+  billingUsageResult,
+  mapMonthlyUsage,
+  mapWeeklyCredits,
+  resolveBillingConfig,
+  type GrokBillingResponse
+} from './grok-billing-mappers'
 
 // Why: billing URL and headers must match Grok CLI or xAI rejects the request.
 const GROK_CLI_PROXY_BASE =
@@ -20,36 +29,8 @@ const BILLING_CREDITS_URL = `${GROK_CLI_PROXY_BASE}/billing?format=credits`
 // which is present in the default (format-less) billing view.
 const BILLING_DEFAULT_URL = `${GROK_CLI_PROXY_BASE}/billing`
 const API_TIMEOUT_MS = 10_000
-const WEEKLY_WINDOW_MINUTES = 10_080
-const MONTHLY_WINDOW_MINUTES = 43_200
 
 const GROK_CLI_AUTH_HEADER = 'xai-grok-cli'
-
-type GrokMoneyVal = { val?: string | number }
-
-type GrokUsagePeriod = {
-  type?: string
-  start?: string
-  end?: string
-}
-
-type GrokBillingConfig = {
-  creditUsagePercent?: number
-  currentPeriod?: GrokUsagePeriod
-  billingPeriodStart?: string
-  billingPeriodEnd?: string
-  subscriptionTier?: string
-  monthlyLimit?: GrokMoneyVal
-  used?: GrokMoneyVal
-  onDemandCap?: GrokMoneyVal
-  onDemandUsed?: GrokMoneyVal
-  prepaidBalance?: GrokMoneyVal
-  isUnifiedBillingUser?: boolean
-}
-
-type GrokBillingResponse = GrokBillingConfig & {
-  config?: GrokBillingConfig
-}
 
 function result(
   status: ProviderRateLimits['status'],
@@ -67,77 +48,6 @@ function result(
   }
 }
 
-function parseResetDescription(isoString: string | undefined): string | null {
-  if (!isoString) {
-    return null
-  }
-  const date = new Date(isoString)
-  if (Number.isNaN(date.getTime())) {
-    return null
-  }
-  const isToday = date.toDateString() === new Date().toDateString()
-  return isToday
-    ? date.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })
-    : date.toLocaleDateString(undefined, { weekday: 'short', hour: 'numeric', minute: '2-digit' })
-}
-
-function timestampsMatch(left: string | undefined, right: string | undefined): boolean {
-  const leftTimestamp = left ? Date.parse(left) : Number.NaN
-  const rightTimestamp = right ? Date.parse(right) : Number.NaN
-  return Number.isFinite(leftTimestamp) && leftTimestamp === rightTimestamp
-}
-
-function hasConfirmedWeeklyPeriod(config: GrokBillingConfig): boolean {
-  const period = config.currentPeriod
-  // Why: monthly unified-billing responses can also carry a weekly currentPeriod;
-  // matching billing bounds identify Grok's omitted protobuf zero unambiguously.
-  return (
-    period?.type === 'USAGE_PERIOD_TYPE_WEEKLY' &&
-    timestampsMatch(period.start, config.billingPeriodStart) &&
-    timestampsMatch(period.end, config.billingPeriodEnd)
-  )
-}
-
-function mapWeeklyCredits(config: GrokBillingConfig): RateLimitWindow | null {
-  const usedPercent =
-    config.creditUsagePercent === undefined && hasConfirmedWeeklyPeriod(config)
-      ? 0
-      : config.creditUsagePercent
-  if (typeof usedPercent !== 'number' || !Number.isFinite(usedPercent)) {
-    return null
-  }
-  const periodEnd = config.currentPeriod?.end ?? config.billingPeriodEnd
-  const resetsAt = periodEnd ? Date.parse(periodEnd) : null
-  return {
-    usedPercent: Math.min(100, Math.max(0, usedPercent)),
-    windowMinutes: WEEKLY_WINDOW_MINUTES,
-    resetsAt: resetsAt !== null && Number.isFinite(resetsAt) ? resetsAt : null,
-    resetDescription: parseResetDescription(periodEnd)
-  }
-}
-
-function parseMoneyVal(value: GrokMoneyVal | undefined): number | null {
-  const raw = value?.val
-  const num = typeof raw === 'string' ? Number.parseFloat(raw) : raw
-  return typeof num === 'number' && Number.isFinite(num) ? num : null
-}
-
-function mapMonthlyUsage(config: GrokBillingConfig): RateLimitWindow | null {
-  const limit = parseMoneyVal(config.monthlyLimit)
-  const used = parseMoneyVal(config.used)
-  if (limit === null || used === null || limit <= 0) {
-    return null
-  }
-  const periodEnd = config.currentPeriod?.end ?? config.billingPeriodEnd
-  const resetsAt = periodEnd ? Date.parse(periodEnd) : null
-  return {
-    usedPercent: Math.min(100, Math.max(0, (used / limit) * 100)),
-    windowMinutes: MONTHLY_WINDOW_MINUTES,
-    resetsAt: resetsAt !== null && Number.isFinite(resetsAt) ? resetsAt : null,
-    resetDescription: parseResetDescription(periodEnd)
-  }
-}
-
 function grokRequestHeaders(session: GrokAuthSession): Record<string, string> {
   const headers: Record<string, string> = {
     Authorization: `Bearer ${session.accessToken}`,
@@ -148,39 +58,6 @@ function grokRequestHeaders(session: GrokAuthSession): Record<string, string> {
     headers['x-userid'] = session.userId
   }
   return headers
-}
-
-function resolveBillingConfig(data: GrokBillingResponse): GrokBillingConfig | null {
-  if (data.config) {
-    return data.config
-  }
-  if (typeof data.creditUsagePercent === 'number') {
-    return data
-  }
-  return null
-}
-
-function billingUsageResult(
-  windows: { weekly?: RateLimitWindow | null; monthly?: RateLimitWindow | null },
-  config: GrokBillingConfig,
-  session: GrokAuthSession
-): ProviderRateLimits {
-  const tier = config.subscriptionTier?.trim()
-  const authLabel = session.email?.trim() || session.userId || 'Grok account'
-  const provenance = tier ? `${authLabel} (${tier})` : authLabel
-  return {
-    provider: 'grok',
-    session: null,
-    weekly: windows.weekly ?? null,
-    ...(windows.monthly ? { monthly: windows.monthly } : {}),
-    updatedAt: Date.now(),
-    error: null,
-    status: 'ok',
-    usageMetadata: {
-      source: 'oauth',
-      authProvenance: provenance
-    }
-  }
 }
 
 type GrokBillingFetchOutcome =
@@ -240,7 +117,12 @@ async function fetchMonthlyUsageFallback(
 
 // Why: Orca never runs grok login; it only reads the session file the CLI updates.
 export async function fetchGrokRateLimits(
-  options: { signal?: AbortSignal; authReadResult?: GrokAuthReadResult } = {}
+  options: {
+    signal?: AbortSignal
+    authReadResult?: GrokAuthReadResult
+    previousRateLimitResetCredits?: RateLimitResetCredits
+    previousAuthAccountId?: string
+  } = {}
 ): Promise<ProviderRateLimits> {
   const readResult = options.authReadResult ?? readGrokAuthSession()
   if (readResult.status === 'missing') {
@@ -275,7 +157,15 @@ export async function fetchGrokRateLimits(
     }
     const weekly = mapWeeklyCredits(config)
     if (weekly) {
-      return billingUsageResult({ weekly }, config, session)
+      return await supplementGrokRateLimitResetCredits(
+        billingUsageResult({ weekly }, config, session),
+        session,
+        {
+          signal: options.signal,
+          previousRateLimitResetCredits: options.previousRateLimitResetCredits,
+          previousAuthAccountId: options.previousAuthAccountId
+        }
+      )
     }
     // Why: some unified-billing accounts expose only a monthly included budget;
     // their credits view omits creditUsagePercent, so read the default view.
@@ -284,7 +174,15 @@ export async function fetchGrokRateLimits(
       return fallback.result
     }
     if (fallback.window) {
-      return billingUsageResult({ monthly: fallback.window }, config, session)
+      return await supplementGrokRateLimitResetCredits(
+        billingUsageResult({ monthly: fallback.window }, config, session),
+        session,
+        {
+          signal: options.signal,
+          previousRateLimitResetCredits: options.previousRateLimitResetCredits,
+          previousAuthAccountId: options.previousAuthAccountId
+        }
+      )
     }
     return result('unavailable', 'Grok billing response did not include credit usage')
   } catch (err) {

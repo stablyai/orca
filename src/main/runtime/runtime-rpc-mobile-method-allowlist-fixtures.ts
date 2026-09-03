@@ -22,6 +22,10 @@ export function createMobileRpcSurfaceRuntime() {
     scope: expectedCodexResetScope,
     snapshot: { claude: null, codex: null }
   })
+  const consumeGrokRateLimitResetCredit: MobileRpcMock = vi.fn().mockResolvedValue({
+    outcome: 'noCredit',
+    snapshot: { claude: null, codex: null, rateLimits: { grok: null } }
+  })
   const removeClaudeAccount: MobileRpcMock = vi.fn().mockResolvedValue({ ok: true })
   const readTerminal: MobileRpcMock = vi.fn().mockResolvedValue({ tail: ['ok'] })
   const getRuntimeGitStatus: MobileRpcMock = vi
@@ -123,6 +127,7 @@ export function createMobileRpcSurfaceRuntime() {
     selectClaudeAccount,
     selectCodexAccount,
     consumeCodexRateLimitResetCredit,
+    consumeGrokRateLimitResetCredit,
     removeClaudeAccount,
     readTerminal,
     getRuntimeGitStatus,

@@ -16649,6 +16649,37 @@
     }
   },
   "components": {
+    "grokAccounts": {
+      "resetCredits": {
+        "title": "Usage-limit resets",
+        "description": "Same SuperGrok reset tokens as Settings → Usage on grok.com. Redeem from the Grok usage menu in the status bar.",
+        "availableOne": "1 reset available",
+        "availableMany": "{{count}} resets available",
+        "openUsage": "Open grok.com Usage"
+      }
+    },
+    "grokUsage": { "resetCredits": { "label": "Usage-limit resets" } },
+    "grokResetMenu": {
+      "failure": "Could not use the SuperGrok reset. Try again.",
+      "usageUnavailable": "Could not verify Grok usage. Try again.",
+      "openDetails": "Open Grok details and usage-limit reset",
+      "confirmTitle": "Reset Grok limits?",
+      "confirmDescription": "This uses one SuperGrok usage-limit reset token for the signed-in account and clears the current weekly pool immediately.",
+      "skipFutureConfirmation": "Don't ask again",
+      "cancel": "Cancel",
+      "redeeming": "Using reset…",
+      "redeemNow": "Reset now",
+      "availableOne": "1 rate-limit reset available",
+      "availableMany": "{{count}} rate-limit resets available",
+      "manageAccounts": "Manage Accounts…"
+    },
+    "resetCreditExpiry": {
+      "nextNow": "Next expires now",
+      "singleNow": "Expires now",
+      "nextIn": "Next expires in {{duration}}",
+      "singleIn": "Expires in {{duration}}"
+    },
+    "usageRoster": { "openDetails": "Open usage details" },
     "jiraUserPicker": {
       "select": "Select {{value0}}",
       "search": "Search users",

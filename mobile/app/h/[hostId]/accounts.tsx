@@ -34,6 +34,7 @@ import {
 } from '../../../src/components/codex-reset-credit'
 import { CodexResetCreditAction } from '../../../src/components/CodexResetCreditAction'
 import { useCodexResetCreditAction } from '../../../src/components/use-codex-reset-credit-action'
+import { HostUsageSections } from '../../../src/accounts/host-usage-sections'
 
 export default function AccountsScreen() {
   const router = useRouter()
@@ -381,6 +382,15 @@ export default function AccountsScreen() {
           <>
             {renderProviderSection('claude', 'Claude')}
             {renderProviderSection('codex', 'Codex')}
+            <HostUsageSections
+              snapshot={snapshot}
+              now={now}
+              connected={connState === 'connected'}
+              busy={busyAccountId !== null || resettingCodex}
+              client={client}
+              hostId={hostId}
+              onSnapshot={acceptSnapshot}
+            />
             <View style={styles.footerHint}>
               <User size={14} color={colors.textMuted} />
               <Text style={styles.footerHintText}>

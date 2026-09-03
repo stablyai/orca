@@ -14560,6 +14560,37 @@
     }
   },
   "components": {
+    "grokAccounts": {
+      "resetCredits": {
+        "title": "使用上限のリセット",
+        "description": "grok.com の「設定 → 使用状況」と同じ SuperGrok リセットトークンです。ステータスバーの Grok 使用状況メニューから使用できます。",
+        "availableOne": "利用可能なリセット: 1",
+        "availableMany": "利用可能なリセット: {{count}}",
+        "openUsage": "grok.com の使用状況を開く"
+      }
+    },
+    "grokUsage": { "resetCredits": { "label": "使用上限のリセット" } },
+    "grokResetMenu": {
+      "failure": "SuperGrok のリセットを使用できませんでした。もう一度お試しください。",
+      "usageUnavailable": "Grok の使用状況を確認できませんでした。もう一度お試しください。",
+      "openDetails": "Grok の詳細と使用上限リセットを開く",
+      "confirmTitle": "Grok の制限をリセットしますか？",
+      "confirmDescription": "サインイン中のアカウントの SuperGrok 使用上限リセットトークンを 1 つ使用し、現在の週間上限を直ちにリセットします。",
+      "skipFutureConfirmation": "今後表示しない",
+      "cancel": "キャンセル",
+      "redeeming": "リセットを使用中…",
+      "redeemNow": "今すぐリセット",
+      "availableOne": "レート制限リセットが 1 回利用可能",
+      "availableMany": "レート制限リセットが {{count}} 回利用可能",
+      "manageAccounts": "アカウントを管理…"
+    },
+    "resetCreditExpiry": {
+      "nextNow": "次のリセットはまもなく失効します",
+      "singleNow": "まもなく失効します",
+      "nextIn": "次は {{duration}} 後に期限切れ",
+      "singleIn": "{{duration}} 後に期限切れ"
+    },
+    "usageRoster": { "openDetails": "使用量の詳細を開く" },
     "native-chat": {
       "composer": {
         "imageUnsupported": "この Agent では画像の貼り付けはサポートされていません。",

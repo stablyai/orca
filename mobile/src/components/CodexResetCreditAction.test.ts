@@ -19,7 +19,7 @@ const summary = {
   expiryLabel: 'Expires in 5d'
 }
 
-function renderAction(busy: boolean, disabled: boolean): ReactTestRenderer {
+function renderAction(busy: boolean, disabled: boolean, productLabel?: string): ReactTestRenderer {
   let renderer: ReactTestRenderer | null = null
   act(() => {
     renderer = create(
@@ -28,7 +28,8 @@ function renderAction(busy: boolean, disabled: boolean): ReactTestRenderer {
         scopeLabel: 'dev@example.com on the host',
         busy,
         disabled,
-        onPress: vi.fn()
+        onPress: vi.fn(),
+        productLabel
       })
     )
   })
@@ -62,6 +63,15 @@ describe('CodexResetCreditAction', () => {
     expect(button.props.accessibilityState).toEqual({ busy: true, disabled: true })
     expect(button.props.style({ pressed: false })[1]).toMatchObject({ opacity: 0.5 })
     expect(text).toContain('Resetting…')
+    act(() => renderer.unmount())
+  })
+
+  it('uses the supplied product label for a shared Grok action', () => {
+    const renderer = renderAction(false, false, 'Grok')
+    const button = renderer.root.findByType('Pressable')
+
+    expect(button.props.accessibilityLabel).toBe('Use Grok rate-limit reset')
+    expect(button.props.accessibilityHint).toContain('dev@example.com on the host')
     act(() => renderer.unmount())
   })
 })

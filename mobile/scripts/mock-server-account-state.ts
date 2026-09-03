@@ -2,6 +2,9 @@ import {
   buildCodexResetCreditExpectedScope,
   type CodexResetCreditExpectedScope
 } from '../../src/shared/codex-reset-credit-scope'
+import { createMockGrokRateLimits, resetMockGrokState } from './mock-server-grok-reset-state'
+
+export { consumeMockGrokResetCredit } from './mock-server-grok-reset-state'
 
 type MockCodexUsage = {
   availableResetCredits: number
@@ -60,6 +63,7 @@ export function resetMockAccountState(now = Date.now()): void {
   ])
   resetOperations = new Map()
   resetOfferOwners = new Map()
+  resetMockGrokState(now)
 }
 
 resetMockAccountState(fixtureStartedAt)
@@ -227,6 +231,7 @@ export function createMockAccountsSnapshot() {
         status: 'ok' as const
       },
       codex: codexLimits,
+      grok: createMockGrokRateLimits(),
       claudeTarget: { runtime: 'host' as const, wslDistro: null },
       codexTarget: { runtime: 'host' as const, wslDistro: null },
       inactiveClaudeAccounts: [],

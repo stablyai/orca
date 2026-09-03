@@ -101,6 +101,32 @@ describe('decodeAccountsSnapshot', () => {
 
     expect(snapshot.rateLimits.claudeTarget).toEqual({ runtime: 'host', wslDistro: null })
     expect(snapshot.rateLimits.codexTarget).toEqual({ runtime: 'host', wslDistro: null })
+    expect(snapshot.rateLimits.grok).toBeUndefined()
+  })
+
+  it('decodes optional Grok limits and reset inventory from a newer host', () => {
+    const raw = makeSnapshot() as { rateLimits: Record<string, unknown> }
+    raw.rateLimits.grok = {
+      provider: 'grok',
+      session: null,
+      weekly: {
+        usedPercent: 13,
+        windowMinutes: 10_080,
+        resetsAt: 300,
+        resetDescription: null
+      },
+      rateLimitResetCredits: { availableCount: 1, nextExpiresAt: 500 },
+      usageMetadata: { authProvenance: 'dev@example.com (SuperGrok)' },
+      updatedAt: 100,
+      error: null,
+      status: 'ok'
+    }
+
+    const snapshot = decodeAccountsSnapshot(raw)
+
+    expect(snapshot.rateLimits.grok?.weekly?.usedPercent).toBe(13)
+    expect(snapshot.rateLimits.grok?.rateLimitResetCredits?.availableCount).toBe(1)
+    expect(snapshot.rateLimits.grok?.usageMetadata?.authProvenance).toContain('SuperGrok')
   })
 
   it.each([
@@ -121,6 +147,20 @@ describe('decodeAccountsSnapshot', () => {
   ] satisfies Array<[string, string[], unknown]>)('rejects malformed %s', (_name, path, value) => {
     const snapshot = makeSnapshot()
     setPath(snapshot, path, value)
+
+    expect(() => decodeAccountsSnapshot(snapshot)).toThrow('Invalid accounts snapshot from host')
+  })
+
+  it('rejects a Grok slot with the wrong provider identity', () => {
+    const snapshot = makeSnapshot() as { rateLimits: Record<string, unknown> }
+    snapshot.rateLimits.grok = {
+      provider: 'codex',
+      session: null,
+      weekly: null,
+      updatedAt: 100,
+      error: null,
+      status: 'ok'
+    }
 
     expect(() => decodeAccountsSnapshot(snapshot)).toThrow('Invalid accounts snapshot from host')
   })

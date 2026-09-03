@@ -7,6 +7,7 @@ import type { CodexRateLimitHomeResolution } from '../../codex-accounts/runtime-
 
 export type {
   CodexRateLimitResetResult,
+  GrokRateLimitResetResult,
   RateLimitState,
   ProviderRateLimits,
   InactiveAccountUsage,

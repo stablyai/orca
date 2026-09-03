@@ -14616,6 +14616,37 @@
     }
   },
   "components": {
+    "grokAccounts": {
+      "resetCredits": {
+        "title": "使用限额重置",
+        "description": "与 grok.com 的“设置 → 使用情况”中相同的 SuperGrok 重置令牌。可从状态栏的 Grok 使用情况菜单中兑换。",
+        "availableOne": "1 个重置可用",
+        "availableMany": "{{count}} 个重置可用",
+        "openUsage": "打开 grok.com 使用情况"
+      }
+    },
+    "grokUsage": { "resetCredits": { "label": "使用限额重置" } },
+    "grokResetMenu": {
+      "failure": "无法使用 SuperGrok 重置。请重试。",
+      "usageUnavailable": "无法验证 Grok 使用情况。请重试。",
+      "openDetails": "打开 Grok 详情和使用限额重置",
+      "confirmTitle": "重置 Grok 限额？",
+      "confirmDescription": "这会为已登录的账户使用一个 SuperGrok 使用限额重置令牌，并立即清除当前的每周限额。",
+      "skipFutureConfirmation": "不再询问",
+      "cancel": "取消",
+      "redeeming": "正在使用重置…",
+      "redeemNow": "立即重置",
+      "availableOne": "1 次速率限制重置可用",
+      "availableMany": "{{count}} 次速率限制重置可用",
+      "manageAccounts": "管理账户…"
+    },
+    "resetCreditExpiry": {
+      "nextNow": "下一个现在过期",
+      "singleNow": "现在过期",
+      "nextIn": "下一个将在 {{duration}} 后过期",
+      "singleIn": "将在 {{duration}} 后过期"
+    },
+    "usageRoster": { "openDetails": "查看使用详情" },
     "native-chat": {
       "composer": {
         "imageUnsupported": "此智能体不支持粘贴图片。",

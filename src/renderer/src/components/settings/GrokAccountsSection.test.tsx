@@ -8,28 +8,29 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const mocks = vi.hoisted(() => ({
   getStatus: vi.fn(),
-  refreshGrokRateLimits: vi.fn()
+  refreshGrokRateLimits: vi.fn(),
+  grokUsage: null as Record<string, unknown> | null,
+  translate: vi.fn((_key: string, fallback: string, values?: Record<string, string | number>) => {
+    let result = fallback
+    for (const [key, value] of Object.entries(values ?? {})) {
+      result = result.replace(`{{${key}}}`, String(value))
+    }
+    return result
+  })
 }))
 
 vi.mock('@/lib/agent-catalog', () => ({
   AgentIcon: () => React.createElement('span', { 'data-testid': 'grok-icon' })
 }))
 
-vi.mock('@/i18n/i18n', () => ({
-  translate: (_key: string, fallback: string, values?: Record<string, string>) => {
-    let result = fallback
-    for (const [key, value] of Object.entries(values ?? {})) {
-      result = result.replace(`{{${key}}}`, value)
-    }
-    return result
-  }
-}))
+vi.mock('@/i18n/i18n', () => ({ translate: mocks.translate }))
 
 vi.mock('../../store', () => ({
   useAppStore: (selector: (state: Record<string, unknown>) => unknown) =>
     selector({
       refreshGrokRateLimits: mocks.refreshGrokRateLimits,
-      rateLimits: { grok: null }
+      rateLimits: { grok: mocks.grokUsage },
+      settingsSearchQuery: ''
     })
 }))
 
@@ -37,6 +38,7 @@ import { GrokAccountsSection } from './GrokAccountsSection'
 
 describe('GrokAccountsSection', () => {
   beforeEach(() => {
+    mocks.grokUsage = null
     mocks.getStatus.mockResolvedValue({
       signedIn: true,
       email: 'dev@example.com',
@@ -65,5 +67,26 @@ describe('GrokAccountsSection', () => {
       )
     ).toBeInTheDocument()
     expect(screen.queryByText(/grok login/i)).not.toBeInTheDocument()
+  })
+
+  it('uses a semantic count placeholder for available resets', async () => {
+    mocks.grokUsage = {
+      provider: 'grok',
+      session: null,
+      weekly: null,
+      rateLimitResetCredits: { availableCount: 2, nextExpiresAt: null },
+      updatedAt: 1,
+      error: null,
+      status: 'ok'
+    }
+
+    render(<GrokAccountsSection />)
+
+    expect(await screen.findByText('2 resets available')).toBeInTheDocument()
+    expect(mocks.translate).toHaveBeenCalledWith(
+      'components.grokAccounts.resetCredits.availableMany',
+      '{{count}} resets available',
+      { count: 2 }
+    )
   })
 })

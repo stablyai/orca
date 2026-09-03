@@ -103,6 +103,7 @@ export function createSettings(overrides: TestSettingsOverrides = {}): GlobalSet
     skipDeleteAutomationConfirm: false,
     skipDeleteArtifactConfirm: false,
     skipCodexRateLimitResetConfirm: false,
+    skipGrokRateLimitResetConfirm: false,
     defaultTaskViewPreset: 'all',
     defaultTaskSource: 'github',
     visibleTaskProviders: ['github', 'gitlab', 'linear', 'jira'],

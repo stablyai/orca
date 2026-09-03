@@ -338,6 +338,8 @@ export type GlobalSettings = {
   skipDeleteArtifactConfirm: boolean
   /** Why: a Codex rate-limit reset spends a scarce credit on the live account; keep this skip separate from local confirmations. */
   skipCodexRateLimitResetConfirm: boolean
+  /** Why: a Grok usage-limit reset spends a scarce SuperGrok token; keep this skip separate from Codex. */
+  skipGrokRateLimitResetConfirm: boolean
   /** Default preset in the new-workspace GitHub task view. */
   defaultTaskViewPreset: TaskViewPresetId
   /** Persisted last-used task source so Tasks reopens to the same provider instead of defaulting to GitHub. */
