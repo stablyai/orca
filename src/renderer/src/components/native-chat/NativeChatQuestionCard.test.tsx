@@ -134,6 +134,56 @@ describe('NativeChatQuestionCard', () => {
     expect(onAnswer).toHaveBeenCalledWith([{ indices: [1], other: '' }])
   })
 
+  it('resets state when a reused card receives a different prompt', () => {
+    const onAnswer = vi.fn()
+    const firstPrompt: AskPrompt = {
+      questions: [
+        {
+          question: 'First question',
+          header: 'First',
+          multiSelect: false,
+          options: [{ label: 'First option' }]
+        },
+        {
+          question: 'Second question',
+          header: 'Second',
+          multiSelect: false,
+          options: [{ label: 'Old option' }]
+        }
+      ]
+    }
+    render(firstPrompt, onAnswer)
+    clickAction('Skip')
+    clickOption('Old option')
+
+    const replacementPrompt: AskPrompt = {
+      questions: [
+        {
+          question: 'Replacement question',
+          multiSelect: false,
+          options: [{ label: 'New option' }]
+        }
+      ]
+    }
+    render(replacementPrompt, onAnswer)
+
+    expect(container.textContent).toContain('Replacement question')
+    expect(container.textContent).not.toContain('Old option')
+    clickAction('Skip')
+    expect(onAnswer).not.toHaveBeenCalled()
+  })
+
+  it('keeps state when an equivalent prompt receives a new questions array', () => {
+    const onAnswer = vi.fn()
+    render(tabsOrSpaces, onAnswer)
+    clickOption('Spaces')
+
+    render({ questions: [...tabsOrSpaces.questions] }, onAnswer)
+    clickAction('Submit')
+
+    expect(onAnswer).toHaveBeenCalledWith([{ indices: [1], other: '' }])
+  })
+
   it('carries free text through as the other answer', () => {
     const onAnswer = vi.fn()
     render(tabsOrSpaces, onAnswer)
