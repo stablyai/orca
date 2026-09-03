@@ -1,11 +1,11 @@
 import type { AgentStatusState, AgentType, AgentWorkingMode } from './agent-status-types'
 import type { BaseRefSearchResult, Repo } from './repo-types'
-import type { CreateWorktreeResult, RemoveWorktreeResult } from './worktree/create-types'
 import type {
-  WorkspaceLineage,
-  WorktreeLineage,
-  WorktreeLineageWarning
-} from './worktree/lineage-types'
+  CreateWorktreeResult,
+  RemoveWorktreeResult,
+  WorktreeCreateWarning
+} from './worktree/create-types'
+import type { WorkspaceLineage, WorktreeLineage } from './worktree/lineage-types'
 import type { GitWorktreeInfo, Worktree } from './worktree/types'
 
 export type RuntimeWorktreeAgentRow = {
@@ -110,7 +110,7 @@ export type RuntimeWorktreeCreateResult = {
   worktree: RuntimeWorktreeRecord
   lineage: WorktreeLineage | null
   workspaceLineage?: WorkspaceLineage | null
-  warnings: WorktreeLineageWarning[]
+  warnings: WorktreeCreateWarning[]
   warning?: string
   startupTerminal?: CreateWorktreeResult['startupTerminal']
   agentTerminalHandle?: string
