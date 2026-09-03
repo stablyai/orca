@@ -4,7 +4,7 @@
 
 **Goal:** Make every local OCI Git worktree recoverable after an OCI/tmux restart by having the setup hook create one deterministic four-window tmux session (`codex`, `claude`, `omp`, `bash`) and having the coordinator resume each provider exactly once from provider-native session locators persisted in a path-bound manifest.
 
-**Architecture:** Keep raw tmux as a host recovery surface, not an Orca-managed worker. The setup hook remains the sole owner of session naming, session path, window layout, session environment, and OMP hook installation. Provider hooks record native `SessionStart` identifiers through a host-local atomic manifest writer. The coordinator observes sessions created by the current setup invocation, validates the exact provider command and approval flags, and sends at most one provider resume command to each newly created pane; existing sessions, missing locators, failed preflights, and failed resumes remain shell-only with `RECOVERY_REQUIRED` and never fall back to a fresh or recent-session launch.
+**Architecture:** Keep raw tmux as a host recovery surface, not an Orca-managed worker. The setup hook remains the sole owner of session naming, session path, window layout, session environment, and OMP hook installation. Claude/Codex raw recorders run only after their provider-specific exclusion guards, may pass captured provider payloads to a host-local writer, and the writer mutates the manifest only for `SessionStart`. The coordinator observes sessions created by the current setup invocation, validates the exact provider command and approval flags, and sends at most one provider resume command to each newly created pane; existing sessions, missing locators, failed preflights, and failed resumes remain shell-only with `RECOVERY_REQUIRED` and never fall back to a fresh or recent-session launch.
 
 **Tech Stack:** Bash, tmux, jq, `realpath`, `sha256sum`, `flock`, TypeScript-generated POSIX hook scripts, Bun OMP hooks, the existing `/srv/script/orca-coordinator.sh` JSON CLI integration, Vitest, ShellCheck.
 
@@ -52,12 +52,12 @@
 
 ### Create
 
-- `/srv/script/orca-worktree-session-manifest.sh` — host-local `record` command. Validates canonical worktree/root identity and exact manifest path, extracts native Claude/Codex JSON identifiers or accepts OMP's native identifier arguments, serializes concurrent updates with `flock`, and publishes mode-0600 JSON through temp-file plus atomic rename.
-- `/srv/script/orca-worktree-session-manifest.test.sh` — isolated manifest writer, path-binding, permissions, concurrency, malformed-input, and moved-worktree tests.
+- `/srv/script/orca-worktree-session-manifest.sh` — host-local `record` command. Validates canonical worktree/root identity, including linked-worktree `--git-common-dir` ownership and exact manifest path, extracts native Claude/Codex JSON identifiers or accepts OMP's native identifier arguments, serializes concurrent updates with `flock`, and publishes mode-0600 JSON through temp-file plus atomic rename.
+- `/srv/script/orca-worktree-session-manifest.test.sh` — isolated manifest writer, path-binding, linked-worktree identity, permissions, concurrency, malformed-input, and moved-worktree tests.
 - `/srv/script/orca-omp-worktree-session-hook.ts` — OMP auto-discovered `session_start` hook. Reads `ctx.sessionManager.getSessionId()` and optional `ctx.sessionManager.getSessionFile()`, then invokes the manifest writer with the tmux session's exact environment context.
 - `/srv/script/orca-omp-worktree-session-hook.test.sh` — Bun harness that registers the hook with a fake HookAPI and verifies the native OMP callback arguments sent to a fake writer.
-- `src/main/agent-hooks/oci-worktree-session-event.ts` — shared POSIX shell-line generator for guarded raw-tmux native `SessionStart` recording; no endpoint, pane key, or UI relay dependency.
-- `src/main/agent-hooks/oci-worktree-session-event.test.ts` — exact generated-line contract and platform guard tests.
+- `src/main/agent-hooks/oci-worktree-session-event.ts` — shared POSIX shell-line generator for guarded raw-tmux provider-payload recording; no endpoint, pane key, or UI relay dependency.
+- `src/main/agent-hooks/oci-worktree-session-event.test.ts` — exact generated-line contract, provider-exclusion ordering, ordinary-event no-op, and platform guard tests.
 
 ### Modify
 
@@ -66,10 +66,10 @@
 - `/srv/script/orca-coordinator.sh` — preserve current coordinator/hpv2 behavior while replacing worktree's old single Codex `--last` bootstrap with observed-new-session provider recovery and exact preflighted commands.
 - `/srv/script/orca-coordinator.test.sh` — add fake provider binaries, manifests, flag preflight, one-shot, failure, and `RESUME_AGENTS=0` cases without weakening current liveness checks.
 - `/srv/script/projects/orca.md` — document the OCI recovery contract, operational backup/hashes, manifest location, provider flags, `RECOVERY_REQUIRED`, and archive/recreate procedure.
-- `src/main/claude/hook-service.ts` — add the shared raw-tmux recorder to the generated POSIX script while preserving the neutral JSON output, Devin guard, endpoint refresh, and normal Orca spool/post path.
-- `src/main/claude/hook-service.test.ts` — verify the installed POSIX managed script contains and executes the raw native SessionStart branch without changing existing user settings behavior.
-- `src/main/codex/codex-hook-script.ts` — add the same shared raw-tmux recorder to the generated POSIX script while preserving endpoint refresh, WSL curl fallback, and normal spool/post behavior.
-- `src/main/codex/hook-service-managed-install.test.ts` — verify the managed script installed under the redirected runtime `CODEX_HOME` records raw native SessionStart payloads and still posts ordinary events.
+- `src/main/claude/hook-service.ts` — add the shared raw-tmux recorder after the existing Devin/`CLAUDE_JOB_DIR` exclusions and before endpoint-dependent logic, while preserving the neutral JSON output, endpoint refresh, and normal Orca spool/post path.
+- `src/main/claude/hook-service.test.ts` — verify the shared POSIX managed script at `~/.orca/agent-hooks/claude-hook.sh` contains the recorder after exclusions and executes the raw native SessionStart branch without changing existing user settings behavior.
+- `src/main/codex/codex-hook-script.ts` — add the same shared raw-tmux recorder after payload/spool setup and before endpoint loading, while preserving the endpoint loader and WSL curl fallback.
+- `src/main/codex/hook-service-managed-install.test.ts` — verify redirected runtime `CODEX_HOME/hooks.json` registers SessionStart through the shared `~/.orca/agent-hooks/codex-hook.sh` launcher, that launcher records raw native SessionStart payloads, and ordinary events leave the manifest unchanged.
 
 ### Do not modify
 
@@ -145,7 +145,7 @@ ORCA_OCI_REPO_ROOT=canonical repository root
 ORCA_OCI_PROVIDER_EVENT_WRITER=/srv/script/orca-worktree-session-manifest.sh
 ```
 
-The setup hook also sets `CODEX_HOME` and `ORCA_CODEX_HOME` to the Orca-managed runtime home `${XDG_CONFIG_HOME:-$HOME/.config}/orca/codex-runtime-home/home` unless the coordinator's test-only `ORCA_COORDINATOR_CODEX_HOME` override is present. This closes the existing Codex split where Orca installs hooks in its redirected runtime home while a raw shell would otherwise invoke the user's `~/.codex`.
+The setup hook also sets `CODEX_HOME` and `ORCA_CODEX_HOME` to the Orca-managed runtime home `${XDG_CONFIG_HOME:-$HOME/.config}/orca/codex-runtime-home/home` unless the coordinator's test-only `ORCA_COORDINATOR_CODEX_HOME` override is present. This closes the existing Codex split where Orca installs `hooks.json` in its redirected runtime home while a raw shell would otherwise invoke the user's `~/.codex`. The executable managed POSIX launcher remains the shared `~/.orca/agent-hooks/codex-hook.sh`; the runtime `hooks.json` registration and shared launcher are separate installation artifacts and must be preflighted separately.
 
 The persisted schema is exactly:
 
@@ -196,12 +196,12 @@ export function buildPosixOciWorktreeSessionRecordLines(
 ```
 
 The returned shell lines must:
-
 1. Require all four `ORCA_OCI_*` variables before doing anything.
 2. Pipe the already captured native `payload` variable to the configured writer's `record` command.
 3. Pass `--manifest`, `--provider`, `--worktree`, `--repo-root`, and `--payload-stdin` as separate shell arguments.
 4. Redirect writer output and errors away from the provider hook protocol and fail open for the provider process (`|| :`).
 5. Never inspect terminal output, `PWD`, mtimes, endpoint variables, pane keys, or UI relay state.
+6. The generator does not need to parse the event type. The writer reads `hook_event_name` and mutates the manifest only for `SessionStart`; ordinary events may invoke the writer but must be a no-op.
 
 Generated line shape:
 
@@ -221,11 +221,9 @@ fi
 
 The Claude generator emits `--provider claude`; the Codex generator emits the same line with the compile-time literal `--provider codex`. No generated script accepts a provider value from payload text.
 
-- [ ] **Step 2: Add the adapter before normal spool/post code**
+In Claude's POSIX `getManagedScript()` return array, keep `buildPosixHookPayloadCapture()` and `buildPosixHookSpoolLines('claude')` in their existing order, then keep the existing Devin exclusion and `CLAUDE_JOB_DIR` guard before inserting the generated raw-recorder lines. The recorder must therefore run after both provider-specific exclusions and before the `ORCA_AGENT_HOOK_ENDPOINT` refresh/validation path. Preserve the existing initial `printf "{}\\n"` and neutral exit paths. Do not add this branch to the Windows `.cmd` output; this recovery surface is Linux POSIX tmux.
 
-In Claude's POSIX `getManagedScript()` return array, place the generated lines immediately after `buildPosixHookPayloadCapture()` and before `buildPosixHookSpoolLines('claude')`. Preserve the existing initial `printf "{}\\n"`, Devin skip, `CLAUDE_JOB_DIR` exit, endpoint refresh, and neutral exit paths. Do not add this branch to the Windows `.cmd` output; this recovery surface is Linux POSIX tmux.
-
-In Codex's POSIX `getManagedScript()` return array, place the generated lines immediately after `buildPosixHookPayloadCapture()` and before `buildPosixHookSpoolLines('codex')`. Preserve the existing endpoint loader and WSL curl fallback. Do not make the raw branch depend on a successfully loaded `ORCA_AGENT_HOOK_ENDPOINT`.
+In Codex's POSIX `getManagedScript()` return array, keep `buildPosixHookPayloadCapture()` and `buildPosixHookSpoolLines('codex')` in their existing order, then insert the generated raw-recorder lines before `load_hook_endpoint()` and all endpoint-dependent logic. Preserve the existing endpoint loader and WSL curl fallback. Do not make the raw branch depend on a successfully loaded `ORCA_AGENT_HOOK_ENDPOINT`.
 
 - [ ] **Step 3: Test generated contract and normal-path isolation**
 
@@ -243,7 +241,9 @@ expect(lines.join('\n')).not.toContain('ORCA_AGENT_HOOK_ENDPOINT')
 expect(lines.join('\n')).not.toContain('ORCA_PANE_KEY')
 ```
 
-Use the existing provider install tests to read the actual installed scripts and run each script on a temporary POSIX host with a fake executable writer. Send a native `SessionStart` JSON payload containing a provider `session_id`; assert the writer receives the exact payload on stdin and the provider script exits zero. Send an ordinary event and assert the raw writer is not invoked. Leave the existing ordinary Orca endpoint/post assertions intact.
+Use the existing provider install tests to read the actual installed POSIX scripts and run each script on a temporary host with a fake executable writer. For Claude, assert that the raw recorder appears after the Devin/`CLAUDE_JOB_DIR` exclusions. Send a native `SessionStart` JSON payload containing a provider `session_id`; assert the writer receives the exact payload on stdin and the provider script exits zero. Send an ordinary event; the fake writer may be invoked, but the actual manifest writer must leave the manifest unchanged. Keep the existing ordinary Orca endpoint/post assertions intact.
+
+The Claude test must inspect the shared `~/.orca/agent-hooks/claude-hook.sh` path produced by `getManagedScriptPath()`. The Codex test must inspect both the redirected runtime `CODEX_HOME/hooks.json` SessionStart entry and the shared `~/.orca/agent-hooks/codex-hook.sh` content it invokes; do not assert that the executable launcher lives under `CODEX_HOME`.
 
 - [ ] **Step 4: Run the focused source tests through hpv2**
 
@@ -283,13 +283,32 @@ Require exactly one locator source:
 
 Reject unknown flags, missing values, duplicate flags, empty IDs, control characters, and provider/locator combinations that do not match the table above. Do not echo the native payload or locator into diagnostics.
 
-Resolve `worktree` and `repo-root` with `realpath -e`. Verify:
+Resolve `worktree` and `repo-root` with `realpath -e`. Verify both are
+non-bare worktree paths and that they belong to the same Git repository:
 
 ```bash
-git -C "$worktree" rev-parse --show-toplevel
+canonical_git_common_dir() {
+  local path="$1" common
+  common="$(git -C "$path" rev-parse --git-common-dir)"
+  case "$common" in
+    /*) realpath -e "$common" ;;
+    *) realpath -e "$path/$common" ;;
+  esac
+}
+
+worktree_top="$(realpath -e "$(git -C "$worktree" rev-parse --show-toplevel)")"
+repo_top="$(realpath -e "$(git -C "$repo_root" rev-parse --show-toplevel)")"
+[ "$worktree_top" = "$worktree" ]
+[ "$repo_top" = "$repo_root" ]
+worktree_common="$(canonical_git_common_dir "$worktree")"
+repo_common="$(canonical_git_common_dir "$repo_root")"
+[ "$worktree_common" = "$repo_common" ]
 ```
 
-resolves to exactly `repo-root`. Compute the expected manifest path from the canonical worktree:
+The `show-toplevel` checks are intentionally against each canonical path, not
+against each other: a linked worktree has its own top-level path while sharing
+the repository's canonical common Git directory with the main worktree. Compute
+the expected manifest path from the canonical worktree:
 
 ```bash
 state_home="${XDG_STATE_HOME:-$HOME/.local/state}"
@@ -299,6 +318,7 @@ expected="$(realpath -m "$state_home/orca/oci-worktree-sessions")/$(
 ```
 
 Reject if the supplied `--manifest` is not exactly `expected`. This prevents a stale pane or a caller with another worktree's path from writing that worktree's file.
+
 
 - [ ] **Step 2: Extract only native provider locators**
 
@@ -466,16 +486,43 @@ Repeat with `getSessionFile() -> null` and assert no `--resume-file` argument. R
 
 Keep the existing `setup|archive` interface, `ORCA_TMUX_SOCKET`, `ORCA_TMUX_UNIT`, and `ORCA_TMUX_KEEPER` test overrides, realpath-based root/worktree validation, slugification, root-to-`main` naming, exact session path check, keeper/server check, and exact archive target. Do not replace `session_path` validation with `pane_current_path`; a pane may `cd` away while session ownership remains correct.
 
-Keep these invariants:
+Keep these identity invariants:
+
+The shared setup/archive prelude must keep missing-path tolerance:
 
 ```bash
-root="$(realpath -e "${ORCA_ROOT_PATH:?ORCA_ROOT_PATH missing}")"
-worktree="$(realpath -e "${ORCA_WORKTREE_PATH:?ORCA_WORKTREE_PATH missing}")"
-toplevel="$(git -C "$worktree" rev-parse --show-toplevel)"
-[ "$(realpath -e "$toplevel")" = "$root" ]
+root="$(realpath -m "${ORCA_ROOT_PATH:?ORCA_ROOT_PATH missing}")"
+worktree="$(realpath -m "${ORCA_WORKTREE_PATH:?ORCA_WORKTREE_PATH missing}")"
 ```
 
-A missing worktree is an error for setup and remains archive-tolerated when the directory has already been removed.
+For `setup`, after checking that both paths are directories, canonicalize them
+with `realpath -e` and enforce these identity invariants:
+
+```bash
+root="$(realpath -e "$root")"
+worktree="$(realpath -e "$worktree")"
+worktree_top="$(realpath -e "$(git -C "$worktree" rev-parse --show-toplevel)")"
+[ "$worktree_top" = "$worktree" ]
+
+canonical_git_common_dir() {
+  local path="$1" common
+  common="$(git -C "$path" rev-parse --git-common-dir)"
+  case "$common" in
+    /*) realpath -e "$common" ;;
+    *) realpath -e "$path/$common" ;;
+  esac
+}
+
+root_top="$(realpath -e "$(git -C "$root" rev-parse --show-toplevel)")"
+[ "$root_top" = "$root" ]
+[ "$(canonical_git_common_dir "$worktree")" = "$(canonical_git_common_dir "$root")" ]
+```
+
+The root/worktree comparison uses the shared Git common directory because
+`root` is the main repository worktree for a linked worktree, while
+`worktree_top` must still equal the selected worktree itself. `archive` must not
+run these setup-only `realpath -e` or Git checks; a missing worktree remains
+archive-tolerated.
 
 - [ ] **Step 2: Compute exact session metadata and dependencies**
 
@@ -603,26 +650,38 @@ Read provider fields only through `jq -er` selectors equivalent to:
 
 For OMP, use `.resumeFilePath` when it is a non-empty string; otherwise use the exact `.id`. Missing/malformed fields are provider-local `RECOVERY_REQUIRED`, not a fresh start and not a reason to touch another provider.
 
-- [ ] **Step 4: Add provider command/flag preflight**
-
-Before sending a provider command, verify the binary exists and its help output contains the exact selector and approval options:
+Before sending a provider command, verify the binary exists and the exact
+resume selector and approval options are accepted without starting a provider:
 
 ```text
 codex: CODEX_HOME=$codex_home codex --help contains --dangerously-bypass-approvals-and-sandbox;
        CODEX_HOME=$codex_home codex resume --help is callable
-claude: claude --help contains --resume and --dangerously-skip-permissions
+claude: claude --resume "__orca_capability_probe__" --dangerously-skip-permissions --help exits zero
 omp:    omp --help contains --resume, --auto-approve, --approval-mode, and yolo
 ```
 
+The Claude line is a parser-acceptance probe: it must pass the exact
+`--resume` and `--dangerously-skip-permissions` arguments with `--help` so no
+conversation is resumed or provider session is launched. Do not require those
+flags to appear in `claude --help` output. A failed probe is
+`RECOVERY_REQUIRED`.
+
+The installation artifacts must be checked independently:
 
 ```text
-codex: $codex_home/hooks.json exists and contains the managed SessionStart adapter
-claude: the installed managed Claude hook script exists and contains the raw adapter
-omp: $HOME/.omp/agent/hooks/orca-oci-worktree-session-hook.ts exists and is readable
+codex: $codex_home/hooks.json exists; its SessionStart managed command points to
+       $HOME/.orca/agent-hooks/codex-hook.sh; that shared script contains the
+       raw adapter
+claude: $HOME/.orca/agent-hooks/claude-hook.sh exists and contains the raw adapter
+omp:    $HOME/.omp/agent/hooks/orca-oci-worktree-session-hook.ts exists and is readable
 writer: provider_event_writer is executable
 ```
 
-If any check fails, print `RECOVERY_REQUIRED` in that provider's pane and log the precise preflight reason. Never silently remove a flag, substitute a different resume selector, or use a provider's recent-session option.
+Do not treat the Codex runtime `hooks.json` and shared executable launcher as
+the same file. If any check fails, print `RECOVERY_REQUIRED` in that provider's
+pane and log the precise preflight reason. Never silently remove a flag,
+substitute a different resume selector, or use a provider's recent-session
+option.
 
 - [ ] **Step 5: Send one exact command per provider window**
 
@@ -648,13 +707,16 @@ Extend the coordinator shell test with temporary fake `codex`, `claude`, and `om
 
 ```text
 new session + complete manifest + valid help -> exactly three exact invocations
+new linked-worktree session + matching common dir -> provider recovery allowed
+different repo common dir -> shells + RECOVERY_REQUIRED; zero provider invocations
 new session + ORCA_COORDINATOR_RESUME_AGENTS=0 -> zero provider invocations
 second ensure with existing four-window sessions -> zero duplicate invocations
 missing manifest -> shells + RECOVERY_REQUIRED; zero provider invocations
 wrong manifest binding -> shells + RECOVERY_REQUIRED; zero provider invocations
 missing provider field -> only that provider RECOVERY_REQUIRED
-missing help flag -> provider RECOVERY_REQUIRED; no downgraded invocation
+missing help flag or failed Claude parser probe -> provider RECOVERY_REQUIRED; no downgraded invocation
 provider exits non-zero -> shell remains and RECOVERY_REQUIRED is visible
+ordinary provider event -> writer may run; manifest remains unchanged
 second ensure after provider failure -> no retry/invocation
 pre-existing legacy one-window session -> untouched, no auto-migration
 Windows inventory path -> no local session
@@ -687,17 +749,26 @@ Document this exact flow:
 
 Include the manifest path/schema, exact provider commands, Codex managed-home requirement, OMP hook path, `ORCA_OCI_*` variables, `ORCA_COORDINATOR_RESUME_AGENTS=0` meaning, and the warning that `RECOVERY_REQUIRED` is not evidence that a provider has no upstream session; it means this recovery path is intentionally fail-closed.
 
-- [ ] **Step 2: Record live-hook deployment evidence**
+After the `/srv/script` copy and focused test pass, load the amended Orca source in the supported OCI runtime and invoke the existing managed-agent hook install/reconciliation operation for Claude and Codex. This is the path backed by `installManagedAgentHooks` and its existing `ClaudeHookService.refreshManagedScripts()` / `CodexHookService.refreshManagedScripts()` refreshers; do not manually copy generated managed scripts. If the live OCI runtime cannot run the amended source, stop and do not claim managed-hook deployment.
 
-After the `/srv/script` copy and focused test pass, update the live hook setting and probe a disposable worktree. Record:
+Verify the resulting artifacts before updating the live setup hook:
+
+```text
+Claude: ~/.orca/agent-hooks/claude-hook.sh contains the recorder after the Devin/CLAUDE_JOB_DIR guards
+Codex: redirected CODEX_HOME/hooks.json SessionStart entry points to ~/.orca/agent-hooks/codex-hook.sh
+       ~/.orca/agent-hooks/codex-hook.sh contains the recorder
+```
+
+Then update the live OCI setup hook setting and probe a disposable worktree. Record:
 
 ```text
 observed new session name
 session_path
 0:codex, 1:claude, 2:omp, 3:bash
 all pane_current_path values
-ORCA_OCI_* values and CODEX_HOME
+ORCA_OCI_* values, CODEX_HOME, and ORCA_CODEX_HOME
 OMP hook installation path
+Claude/Codex installed-script probe result
 archive result for the disposable session
 ```
 
@@ -767,9 +838,7 @@ After the tests pass, write `SHA256SUMS.after` in the backup directory from the 
 
 **Files:** repository TypeScript files and tests from Task 1; operational files remain outside Git.
 
-- [ ] **Step 1: Synchronize the OCI commit to hpv2**
-
-Commit only tracked Orca repository changes after the source-focused review. Do not stage the unrelated untracked files. Push the OCI commit, then use `/srv/script/orca-coordinator.sh` to fetch/fast-forward hpv2 and verify the exact commit SHA before running any project command. If hpv2 is unavailable, stop project validation rather than running pnpm on OCI.
+Commit only tracked Orca repository changes after the source-focused review. Do not stage the unrelated untracked files. Push the OCI commit, then use `/srv/script/orca-coordinator.sh` to fetch/fast-forward hpv2 and verify the exact commit SHA before running any project command. If hpv2 is unavailable, stop project validation rather than running pnpm on OCI. This source synchronization and hpv2 validation do not deploy live OCI managed scripts; Task 6 Step 2's supported managed-hook install/reconciliation and installed-script probe remain mandatory before claiming the raw provider path is live.
 
 - [ ] **Step 2: Run focused source tests through hpv2**
 
@@ -810,13 +879,16 @@ Re-run the four OCI shell suites and `git diff --check` after any final source c
 - [ ] A new local OCI worktree setup creates exactly four ordered windows named `codex`, `claude`, `omp`, `bash`, all with the canonical worktree pane CWD and exact session path.
 - [ ] The setup hook is idempotent for an existing exact-path session and fail-closed for a name/path mismatch; it does not auto-migrate old layouts.
 - [ ] A partial new layout is removed without touching any pre-existing session or the coordinator keeper.
-- [ ] Session environment contains the four exact `ORCA_OCI_*` variables and routes raw Codex to the same redirected `CODEX_HOME` where Orca installs its managed hook.
-- [ ] Claude and Codex record native `SessionStart.session_id` through the shared generated POSIX adapter; OMP records `getSessionId()` and optional `getSessionFile()` through the auto-discovered hook.
-- [ ] The manifest is keyed by canonical worktree path, validates canonical root/worktree identity, is mode 0600 under mode-0700 directories, serializes concurrent writers, and publishes atomically.
+- [ ] A linked worktree passes when its canonical `show-toplevel` equals the worktree and its canonical `--git-common-dir` matches the repository root; a different repository is rejected.
+- [ ] Session environment contains the four exact `ORCA_OCI_*` variables and routes raw Codex to the same redirected `CODEX_HOME` where Orca registers its hook.
+- [ ] Claude and Codex raw recorders run after required provider exclusions, pass native payloads to the writer, and the manifest changes only for native `SessionStart.session_id`; ordinary events leave it unchanged.
+- [ ] Claude's shared `~/.orca/agent-hooks/claude-hook.sh` and Codex's shared `~/.orca/agent-hooks/codex-hook.sh` contain the recorder; Codex's redirected `CODEX_HOME/hooks.json` independently registers the shared launcher.
+- [ ] OMP records `getSessionId()` and optional `getSessionFile()` through the auto-discovered hook.
+- [ ] The manifest is keyed by canonical worktree path, validates canonical root/worktree identity and shared Git common directory, is mode 0600 under mode-0700 directories, serializes concurrent writers, and publishes atomically.
 - [ ] The coordinator sends fixed provider resume commands with exact dangerous approval flags only to sessions observed as newly created in the current invocation.
-- [ ] Missing/malformed/mismatched locators, missing hook dependencies, unsupported help flags, and failed provider launches leave shells plus `RECOVERY_REQUIRED`; no fallback starts.
+- [ ] Claude capability preflight uses a non-launching parser-acceptance probe; unsupported flags, missing artifacts, and failed launches leave shells plus `RECOVERY_REQUIRED` with no fallback.
 - [ ] A second coordinator invocation sends no duplicate provider command to an existing session, including after a provider failure.
 - [ ] `ORCA_COORDINATOR_RESUME_AGENTS=0` suppresses provider sends without suppressing the four-window layout.
 - [ ] Windows/hpv2 inventory entries remain excluded and hpv2/runtime failures do not destroy OCI sessions.
 - [ ] Raw tmux remains outside Orca's managed worker/UI contract.
-- [ ] Focused shell tests, ShellCheck, hpv2 provider-hook tests, node typecheck, changed-file quality, exact SHA sync, and operational before/after hashes are recorded.
+- [ ] The supported OCI managed-hook deployment and live installed-script probe are recorded separately from hpv2 source validation; focused shell tests, ShellCheck, hpv2 provider-hook tests, node typecheck, changed-file quality, exact SHA sync, and operational before/after hashes are recorded.

@@ -71,13 +71,14 @@ ORCA_OCI_PROVIDER_EVENT_WRITER=/srv/script/orca-worktree-session-manifest.sh
 The writer path is host-local and may be overridden only by focused tests.
 
 
-The provider-native SessionStart adapters then have one explicit path:
+The provider-native raw event adapters then have one explicit path:
 
 - Claude and Codex use the generated managed hook scripts in
   `src/main/claude/hook-service.ts#getManagedScript` and
   `src/main/codex/codex-hook-script.ts#getManagedScript`. When
-  `ORCA_OCI_SESSION_MANIFEST` and `ORCA_OCI_PROVIDER_EVENT_WRITER` are set,
-  their guarded `SessionStart` branch sends the native JSON hook payload to:
+  `ORCA_OCI_SESSION_MANIFEST`, `ORCA_OCI_WORKTREE_PATH`,
+  `ORCA_OCI_REPO_ROOT`, and `ORCA_OCI_PROVIDER_EVENT_WRITER` are set,
+  their raw recorder passes the captured native JSON payload to:
 
   ```text
   "$ORCA_OCI_PROVIDER_EVENT_WRITER" record \
@@ -88,6 +89,14 @@ The provider-native SessionStart adapters then have one explicit path:
     --payload-stdin
   ```
 
+  The Claude recorder is emitted after the existing Devin and
+  `CLAUDE_JOB_DIR` exclusion guards and before endpoint-dependent logic.
+  The Codex recorder is emitted after payload capture and the spool helper
+  definition but before endpoint loading. Neither recorder depends on an
+  `ORCA_AGENT_HOOK_*` endpoint or adds a Windows `.cmd` branch.
+  The generated recorder may invoke the writer for ordinary provider events;
+  the writer alone parses `hook_event_name` and mutates the manifest only for
+  `SessionStart`. Ordinary events must leave the manifest unchanged.
   The adapter extracts only the provider's native `session_id`; it never
   parses terminal output. The normal Orca status-hook path remains separate.
 - OMP loads `/srv/script/orca-omp-worktree-session-hook.ts`, installed as the
@@ -97,12 +106,19 @@ The provider-native SessionStart adapters then have one explicit path:
   exact ID and optional resume file path. It is a provider hook event, never
   terminal-output parsing.
 
-The writer realpaths and validates `ORCA_OCI_WORKTREE_PATH`, verifies that
-`git -C` reports the same `ORCA_OCI_REPO_ROOT`, rejects a mismatched manifest
-argument, and atomically updates only that provider's field. Missing provider
-hook configuration means no locator is published; recovery remains
-`RECOVERY_REQUIRED`. Managed Orca panes do not set `ORCA_OCI_*` and therefore
-do not write this manifest.
+The writer realpaths both `ORCA_OCI_WORKTREE_PATH` and
+`ORCA_OCI_REPO_ROOT`. It requires
+`git -C "$worktree" rev-parse --show-toplevel` to resolve to the canonical
+worktree itself and the corresponding command for `repo-root` to resolve to
+that canonical root. It then canonicalizes `git -C "$worktree" rev-parse
+--git-common-dir` and the corresponding value from `repo-root` (resolving
+relative output against the command's path). Those common directories must
+match. This supports a linked worktree whose path differs from the main
+repository worktree while rejecting a different repository. The writer
+rejects a mismatched manifest argument and atomically updates only that
+provider's field. Missing provider hook configuration means no locator is
+published; recovery remains `RECOVERY_REQUIRED`. Managed Orca panes do not set
+`ORCA_OCI_*` and therefore do not write this manifest.
 
 The setup implementation must treat provider-hook adapter installation and the
 writer's executable path as a preflight dependency. It may not silently rely
@@ -111,6 +127,7 @@ relay association.
 
 The setup hook must remove a partially created session if four-window creation
 fails. Existing sessions remain untouched.
+
 
 Initial rollout does not mutate legacy sessions that predate the four-window
 layout. The operator must archive and recreate each such session once; only
@@ -217,15 +234,19 @@ and never committed to the worktree. Its minimum schema is:
 }
 ```
 
-Entries are updated only by the explicit provider-native SessionStart adapter
-path defined in the chosen approach. The implementation must not infer an ID
-from terminal text, file mtime, a global recent-session picker, or a relay
-event that lacks the raw session's `ORCA_OCI_*` context. The writer receives a
-normalized provider locator from the adapter, realpaths and validates the
-worktree/root pair, then atomically updates the matching manifest. For OMP,
-`resumeFilePath` is stored only when
+Entries are updated only by the explicit provider-native raw-event adapter
+path defined in the chosen approach. The generated Claude/Codex recorder may
+pass each captured payload to the writer, but the writer accepts only a
+`SessionStart` payload for a manifest mutation. An ordinary provider event
+therefore may invoke the writer but must produce no manifest change. The
+implementation must not infer an ID from terminal text, file mtime, a global
+recent-session picker, or a relay event that lacks the raw session's
+`ORCA_OCI_*` context. The writer receives a normalized provider locator from
+the adapter, realpaths and validates the worktree/root pair, then atomically
+updates the matching manifest. For OMP, `resumeFilePath` is stored only when
 `ctx.sessionManager.getSessionFile()` supplies the authoritative path;
 otherwise the exact OMP session ID remains the locator.
+
 
 A manifest is consumed only when its recorded `worktreePath` and `repoRoot`
 match the canonical realpaths of the target session. A moved or renamed
@@ -322,8 +343,12 @@ The setup-hook test must assert:
 
 The manifest tests must assert:
 
-- one manifest is selected only for the exact canonical worktree path and repo
-  root;
+- one manifest is selected only for the exact canonical worktree path and
+  repository root;
+- the worktree's canonical `git rev-parse --show-toplevel` equals the
+  worktree path itself;
+- the worktree and repository root resolve to the same canonical
+  `--git-common-dir`, including a real linked-worktree fixture;
 - Codex, Claude, and OMP locators are persisted with their provider-specific
   fields;
 - manifest writes are private and atomic;
@@ -333,20 +358,29 @@ The manifest tests must assert:
 
 The event-path tests must assert:
 
-- Claude/Codex SessionStart payloads reach the writer with the native
+- the Claude recorder appears after the Devin/`CLAUDE_JOB_DIR` exclusions and
+  before endpoint-dependent code;
+- Claude/Codex `SessionStart` payloads reach the writer with the native
   `session_id`;
+- an ordinary Claude/Codex payload may reach the writer but leaves the
+  manifest unchanged;
+- the installed Claude POSIX script is the shared
+  `~/.orca/agent-hooks/claude-hook.sh` path and contains the recorder;
+- Codex's redirected runtime `CODEX_HOME/hooks.json` `SessionStart`
+  registration points to the shared `~/.orca/agent-hooks/codex-hook.sh`
+  launcher, and that launcher contains the recorder;
 - OMP `session_start` reaches the writer with
   `ctx.sessionManager.getSessionId()` and its optional session file;
 - absent or mismatched `ORCA_OCI_*` context cannot write another worktree's
   manifest;
 - no manifest update depends on terminal text, mtime, or recent-session order.
 
-
 The coordinator test must assert:
 
 - `ensure-session` restores missing local worktree sessions;
 - Windows/hp_v2 paths are skipped;
-- only sessions created during the current invocation receive provider commands;
+- only sessions created during the current invocation receive provider
+  commands;
 - the exact provider-specific locator commands are sent to the matching
   windows;
 - `ORCA_COORDINATOR_RESUME_AGENTS=0` restores sessions without provider starts;
@@ -357,7 +391,10 @@ The coordinator test must assert:
 
 Run CLI help probes for the installed Codex, Claude, and OMP versions and keep
 the exact-resume assertions aligned with
-`getAgentResumeArgv()`/`buildAgentResumeStartupPlan()`. Do not infer a
+`getAgentResumeArgv()`/`buildAgentResumeStartupPlan()`. Claude capability
+preflight must use a non-launching parser-acceptance invocation that includes
+the exact `--resume` and `--dangerously-skip-permissions` arguments; it must
+not require those strings to appear in `claude --help` output. Do not infer a
 provider's resume syntax from another provider.
 
 Provider preflight tests must cover the installed Codex, Claude, and OMP
