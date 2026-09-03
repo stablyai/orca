@@ -1,6 +1,7 @@
 import { resampleToRate } from './stt-audio-resample'
 
 export const OPENAI_TRANSCRIPTION_MODEL_BY_ID: Record<string, string> = {
+  'openai-gpt-transcribe': 'gpt-transcribe',
   'openai-gpt-4o-mini-transcribe': 'gpt-4o-mini-transcribe',
   'openai-gpt-4o-transcribe': 'gpt-4o-transcribe'
 }
