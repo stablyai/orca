@@ -160,7 +160,7 @@ export function reconcileFederatedWorkerStop(
       .prepare(
         `UPDATE dispatch_contexts
          SET status = 'failed', completed_at = COALESCE(completed_at, datetime('now')),
-             last_failure = 'stopped'
+             last_failure = 'stopped', termination_reason = 'operator_close'
          WHERE id = ? AND status IN ('pending', 'dispatched')`
       )
       .run(dispatchId)
