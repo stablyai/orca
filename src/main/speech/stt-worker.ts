@@ -11,6 +11,7 @@ type WorkerMessage =
       modelType: string
       streaming: boolean
       sampleRate: number
+      featureDim?: number
       files: string[]
       hotwordsFilePath?: string
       modelingUnit?: string
@@ -147,8 +148,10 @@ function handleInit(msg: Extract<WorkerMessage, { type: 'init' }>): void {
       recognizer = sherpa.createOfflineRecognizer(config)
       stream = sherpa.createOfflineStream(recognizer)
     } else {
+      // Offline transducer (e.g. Parakeet, GigaAM). featureDim varies per model (GigaAM: 64).
+      const featureDim = msg.featureDim ?? 80
       const config = {
-        featConfig: { sampleRate, featureDim: 80 },
+        featConfig: { sampleRate, featureDim },
         modelConfig: {
           transducer: {
             encoder: resolveFile(files, 'encoder', modelDir),
