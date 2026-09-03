@@ -1,10 +1,13 @@
-import type { WorktreeLineage } from './worktree/lineage-types'
+import type { WorkspaceKey } from './folder-workspace-types'
+import type { WorkspaceLineage, WorktreeLineage } from './worktree/lineage-types'
+import { worktreeWorkspaceKey } from './workspace-scope'
 import type { Worktree } from './worktree/types'
 
 export type WorktreeWithResolvedLineage<T extends Worktree = Worktree> = T & {
   parentWorktreeId: string | null
   childWorktreeIds: string[]
   lineage: WorktreeLineage | null
+  workspaceLineage?: WorkspaceLineage | null
 }
 
 /** The fields a lineage edge is scoped by. Split out so create-time callers — which have a
@@ -78,9 +81,29 @@ export function getCyclicWorktreeLineageChildIds(
 
 export function projectResolvedWorktreeLineage<T extends Worktree>(
   worktrees: readonly T[],
-  lineageById: Readonly<Record<string, WorktreeLineage>>
+  lineageById: Readonly<Record<string, WorktreeLineage>>,
+  workspaceLineageByChildKey: Readonly<Record<WorkspaceKey, WorkspaceLineage>> = {},
+  externalWorkspaceInstances: Readonly<
+    Record<WorkspaceKey, string | readonly (string | undefined)[] | undefined>
+  > = {}
 ): WorktreeWithResolvedLineage<T>[] {
   const worktreeById = new Map(worktrees.map((worktree) => [worktree.id, worktree]))
+  const workspaceInstances = new Map<WorkspaceKey, Set<string>>()
+  for (const [workspaceKey, values] of Object.entries(externalWorkspaceInstances)) {
+    const instances = Array.isArray(values) ? values : [values]
+    workspaceInstances.set(
+      workspaceKey as WorkspaceKey,
+      new Set(instances.filter((instance): instance is string => Boolean(instance)))
+    )
+  }
+  for (const worktree of worktrees) {
+    if (worktree.instanceId) {
+      const key = worktreeWorkspaceKey(worktree.id)
+      const instances = workspaceInstances.get(key) ?? new Set<string>()
+      instances.add(worktree.instanceId)
+      workspaceInstances.set(key, instances)
+    }
+  }
   const validLineageByChildId = new Map<string, WorktreeLineage>()
   const childIdsByParentId = new Map<string, string[]>()
 
@@ -110,11 +133,23 @@ export function projectResolvedWorktreeLineage<T extends Worktree>(
 
   return worktrees.map((worktree) => {
     const lineage = validLineageByChildId.get(worktree.id) ?? null
+    const workspaceLineage = workspaceLineageByChildKey[worktreeWorkspaceKey(worktree.id)]
+    const validWorkspaceLineage =
+      workspaceLineage &&
+      (workspaceLineage.childInstanceId == null ||
+        workspaceLineage.childInstanceId === worktree.instanceId) &&
+      (workspaceLineage.parentInstanceId == null ||
+        workspaceInstances
+          .get(workspaceLineage.parentWorkspaceKey)
+          ?.has(workspaceLineage.parentInstanceId) === true)
+        ? workspaceLineage
+        : null
     return {
       ...worktree,
       parentWorktreeId: lineage?.parentWorktreeId ?? null,
       childWorktreeIds: childIdsByParentId.get(worktree.id) ?? [],
-      lineage
+      lineage,
+      workspaceLineage: validWorkspaceLineage
     }
   })
 }

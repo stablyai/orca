@@ -7,6 +7,7 @@ import {
 import type { OrchestrationWorkerLaunchReceipt } from './orchestration-worker-launch-preferences'
 import { isAgentSessionPtyWriteRefusedError } from '../../../../shared/agent-session-pty-write-admission'
 import { structuredChatPtyWriteRefusalCopy } from '../../../../shared/agent-session-pty-write-refusal-copy'
+import { OrchestrationError } from '../../orchestration/orchestration-error'
 
 export function failWorkerStartWithReceipt(args: {
   db: OrchestrationDb
@@ -41,6 +42,7 @@ export function failWorkerStartWithReceipt(args: {
     stage: worker.stage,
     failedStage: args.failedStage,
     lastError: reason,
+    ...(args.error instanceof OrchestrationError ? { errorCode: args.error.code } : {}),
     setup: args.setup,
     launch: args.launch,
     effects: JSON.parse(worker.effects) as unknown[],

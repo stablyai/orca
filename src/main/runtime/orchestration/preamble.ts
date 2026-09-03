@@ -1,4 +1,5 @@
 import type { OrchestrationCliCommand } from './cli-command'
+import { buildOrchestrationPromptMarker } from '../../../shared/orchestration-prompt-marker'
 
 export type PreambleParams = {
   taskId: string
@@ -59,7 +60,8 @@ export function buildDispatchPreamble(params: PreambleParams): string {
     ? ` --dispatch-capability ${params.dispatchCapability}`
     : ''
 
-  const header = `You are working inside Orca, a multi-agent IDE. You are a dispatched worker.
+  const header = `${buildOrchestrationPromptMarker(params.taskId, params.dispatchId)}
+You are working inside Orca, a multi-agent IDE. You are a dispatched worker.
 Your coordinator's terminal handle is: ${params.coordinatorHandle}
 Your task ID is: ${params.taskId}
 

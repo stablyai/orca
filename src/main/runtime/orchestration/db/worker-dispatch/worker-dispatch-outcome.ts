@@ -5,7 +5,8 @@ import type { OrchestrationDb } from '../orchestration-db'
 export function markWorkerDispatchReady(
   this: OrchestrationDb,
   dispatchId: string,
-  effects?: unknown[]
+  effects?: unknown[],
+  stage = 'input_accepted'
 ): WorkerDispatchRow {
   this.db.exec('BEGIN IMMEDIATE')
   try {
@@ -20,11 +21,11 @@ export function markWorkerDispatchReady(
     this.db
       .prepare(
         `UPDATE worker_dispatches
-         SET state = 'ready', stage = 'input_accepted',
+         SET state = 'ready', stage = ?,
              effects = COALESCE(?, effects), updated_at = datetime('now')
          WHERE dispatch_id = ?`
       )
-      .run(effects ? JSON.stringify(effects) : null, dispatchId)
+      .run(stage, effects ? JSON.stringify(effects) : null, dispatchId)
     this.db.exec('COMMIT')
     return this.getWorkerDispatch(dispatchId) as WorkerDispatchRow
   } catch (error) {

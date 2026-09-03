@@ -6,6 +6,7 @@ import type {
   WorkspaceLineage
 } from '../../shared/worktree/lineage-types'
 import { worktreeWorkspaceKey } from '../../shared/workspace-scope'
+import { splitWorktreeId } from '../../shared/worktree/id'
 import type { RuntimeStore } from './runtime-store-contract'
 
 type LineageParent =
@@ -54,8 +55,14 @@ export function recordCreatedWorktreeLineage(
   const childInstanceId = worktree.instanceId
   const parentInstanceId = resolution.parent.instanceId
   const createdAt = Date.now()
+  const sharesRepository =
+    resolution.parent.type === 'worktree'
+      ? splitWorktreeId(worktree.id)?.repoId ===
+        splitWorktreeId(resolution.parent.worktree.id)?.repoId
+      : false
   if (
     resolution.parent.type === 'worktree' &&
+    sharesRepository &&
     childInstanceId &&
     parentInstanceId &&
     store?.setWorktreeLineage
@@ -77,7 +84,7 @@ export function recordCreatedWorktreeLineage(
         : {}),
       createdAt
     })
-  } else if (resolution.parent.type === 'worktree') {
+  } else if (sharesRepository) {
     warnings.push({
       code: 'LINEAGE_PARENT_CONTEXT_MISSING',
       message:

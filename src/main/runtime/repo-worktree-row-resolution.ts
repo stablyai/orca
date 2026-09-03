@@ -10,7 +10,7 @@ import {
   writeWorktreeMetaForHost
 } from '../persistence/host-qualified-worktree-meta'
 import { isFolderRepo } from '../../shared/repo-kind'
-import { projectResolvedWorktreeLineage } from '../../shared/resolved-worktree-lineage'
+import { projectCurrentHostWorktreeLineage } from './runtime-worktree-lineage-projection'
 import { withTimeout } from '../../shared/promise-timeout-fallback'
 import type { GitWorktreeInfo, Worktree } from '../../shared/worktree/types'
 import type { WorktreeLineage } from '../../shared/worktree/lineage-types'
@@ -23,6 +23,7 @@ import { pruneLineageForMissingRepoWorktrees } from '../worktree-lineage-pruning
 import { getRepoOwnedWorktreeMeta } from '../worktree-metadata-ownership'
 import { resolveLocalProjectRuntimesForRepos } from '../project-runtime-git-options'
 import type { RuntimeWorktreeScanResult } from './repo-worktree-resolution-scan'
+import { parseWorkspaceKey, worktreeWorkspaceKey } from '../../shared/workspace-scope'
 
 /**
  * Per-repo budget for one resolution pass. Why: mobile startup shares this path, so one slow repo
@@ -208,7 +209,42 @@ export async function resolveScopedWorktreeIdRow(
     store.getAllWorktreeMeta() ?? {},
     resolveLocalProjectRuntimesForRepos(store, [repo])
   )
-  const projected = projectResolvedWorktreeLineage(rows, store.getAllWorktreeLineage?.() ?? {})
+  const allMeta = store.getAllWorktreeMeta() ?? {}
+  const parentRepoIds = new Set<string>()
+  for (const row of rows) {
+    const ancestry = store.getAllWorkspaceLineage?.()[worktreeWorkspaceKey(row.id)]
+    const parent = ancestry ? parseWorkspaceKey(ancestry.parentWorkspaceKey) : null
+    if (parent?.type === 'worktree') {
+      const parsedParent = splitWorktreeIdForFilesystem(parent.worktreeId)
+      if (parsedParent?.repoId && parsedParent.repoId !== repo.id) {
+        parentRepoIds.add(parsedParent.repoId)
+      }
+    }
+  }
+  const parentRepos = store
+    .getRepos()
+    .filter(
+      (candidate) =>
+        parentRepoIds.has(candidate.id) &&
+        getRepoExecutionHostId(candidate) === getRepoExecutionHostId(repo)
+    )
+  const projectRuntimes = resolveLocalProjectRuntimesForRepos(store, parentRepos)
+  const currentFleet = [
+    ...rows,
+    ...(
+      await Promise.all(
+        parentRepos.map((candidate) =>
+          resolveRepoWorktreeRows(deps, candidate, allMeta, projectRuntimes)
+        )
+      )
+    ).flat()
+  ]
+  const projected = projectCurrentHostWorktreeLineage({
+    worktrees: rows,
+    currentFleet,
+    store,
+    executionHostId: getRepoExecutionHostId(repo)
+  })
   const exact = projected.find((worktree) => worktree.id === worktreeId)
   if (exact) {
     return exact

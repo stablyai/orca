@@ -113,10 +113,23 @@ async function createPromptContractHarness(
     worktreeId: 'repo::parent',
     status: 'running'
   } as never)
-  vi.spyOn(runtime, 'showManagedWorktree').mockResolvedValue({
-    id: 'repo::parent',
-    repoId: 'repo-1'
-  } as never)
+  vi.spyOn(runtime, 'showManagedWorktree').mockImplementation(async (selector) => {
+    if (selector === `id:${AGENT_PROMPT_TEST_WORKTREE_ID}`) {
+      return {
+        id: AGENT_PROMPT_TEST_WORKTREE_ID,
+        repoId: 'repo-1',
+        workspaceLineage: {
+          childWorkspaceKey: `worktree:${AGENT_PROMPT_TEST_WORKTREE_ID}`,
+          parentWorkspaceKey: 'worktree:repo::parent',
+          origin: 'orchestration',
+          taskId: task.id,
+          orchestrationRunId: run.id,
+          coordinatorHandle: 'term_coord'
+        }
+      } as never
+    }
+    return { id: 'repo::parent', repoId: 'repo-1' } as never
+  })
   vi.spyOn(runtime, 'showRepo').mockResolvedValue({ id: 'repo-1', kind: 'git' } as never)
   vi.spyOn(runtime, 'createManagedWorktree').mockResolvedValue({
     worktree: { id: AGENT_PROMPT_TEST_WORKTREE_ID, repoId: 'repo-1' },

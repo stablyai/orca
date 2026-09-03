@@ -10,8 +10,40 @@ import type { ProjectExecutionRuntimeResolution } from '../../shared/project-exe
 import { resolveLocalProjectRuntimeForWorktreeId } from '../local-project-runtime-resolution'
 import type { RuntimePtyWorktreeRecord } from './runtime-terminal-state-records'
 import { resolveTerminalOrchestrationCliCommand } from './orchestration/cli-command'
+import { resolveOrchestrationPromptDeliveryEvidence } from './orchestration-prompt-delivery-evidence'
 
 export class OrcaRuntimeWithGetOrchestrationDispatchAuthority extends OrcaRuntimeWithVerifyOrchestrationCompatibilityCaller {
+  getOrchestrationPromptDeliveryEvidence(args: {
+    terminalHandle: string
+    taskId: string
+    dispatchId: string
+    processIncarnation: string
+    submittedAt: number
+  }): 'input_delivered' | 'worker_running' | null {
+    let ptyId: string | null = null
+    try {
+      ptyId = this.resolveLiveLeafForHandle(args.terminalHandle)?.ptyId ?? null
+    } catch {
+      return null
+    }
+    if (!ptyId) {
+      return null
+    }
+    const snapshot = this.getTerminalAgentStatusSnapshot(args.terminalHandle, ptyId)
+    const paneKey = this.getPaneKeyForTerminalHandle(args.terminalHandle)
+    return resolveOrchestrationPromptDeliveryEvidence({
+      taskId: args.taskId,
+      dispatchId: args.dispatchId,
+      expectedProcessIncarnation: args.processIncarnation,
+      currentProcessIncarnation: this.getTerminalProcessIncarnation(args.terminalHandle),
+      submittedAt: args.submittedAt,
+      terminalOutputAt: this.ptysById.get(ptyId)?.lastOutputAt ?? null,
+      terminalStatus: snapshot.titleStatus,
+      waitText: snapshot.waitText,
+      hooks: (this.getAgentStatusSnapshotFn?.() ?? []).filter((entry) => entry.paneKey === paneKey)
+    })
+  }
+
   /** Every pane key this PTY could be addressed by, including restored receipts. */
   protected collectPaneKeysForPty(ptyId: string): Set<string> {
     const paneKeys = new Set<string>()

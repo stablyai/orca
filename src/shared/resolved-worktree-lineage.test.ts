@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { join } from 'node:path'
 import type { WorktreeLineage } from './worktree/lineage-types'
+import { worktreeWorkspaceKey } from './workspace-scope'
 import type { Worktree } from './worktree/types'
 import type { WorktreeLineageBoundary } from './resolved-worktree-lineage'
 import {
@@ -91,6 +92,83 @@ describe('projectResolvedWorktreeLineage', () => {
       { id: 'child', parentWorktreeId: 'parent', childWorktreeIds: [], lineage: lineage() },
       { id: 'parent', parentWorktreeId: null, childWorktreeIds: ['child'], lineage: null }
     ])
+  })
+
+  it('projects cross-repo orchestration ancestry without creating ordinary nesting', () => {
+    const crossRepoChild = worktree('target::child', 'child-instance', { repoId: 'target' })
+    const spawnLineage = {
+      childWorkspaceKey: worktreeWorkspaceKey(crossRepoChild.id),
+      childInstanceId: crossRepoChild.instanceId,
+      parentWorkspaceKey: worktreeWorkspaceKey('source::parent'),
+      parentInstanceId: 'parent-instance',
+      origin: 'orchestration' as const,
+      capture: { source: 'orchestration-context' as const, confidence: 'inferred' as const },
+      taskId: 'task_1',
+      createdAt: 1
+    }
+
+    const [projected] = projectResolvedWorktreeLineage(
+      [crossRepoChild],
+      {},
+      { [spawnLineage.childWorkspaceKey]: spawnLineage },
+      { [spawnLineage.parentWorkspaceKey]: 'parent-instance' }
+    )
+
+    expect(projected).toMatchObject({
+      parentWorktreeId: null,
+      lineage: null,
+      workspaceLineage: spawnLineage
+    })
+  })
+
+  it('rejects cross-repo ancestry after the parent instance is recreated', () => {
+    const crossRepoChild = worktree('target::child', 'child-instance', { repoId: 'target' })
+    const childKey = worktreeWorkspaceKey(crossRepoChild.id)
+    const parentKey = worktreeWorkspaceKey('source::parent')
+    const [projected] = projectResolvedWorktreeLineage(
+      [crossRepoChild],
+      {},
+      {
+        [childKey]: {
+          childWorkspaceKey: childKey,
+          childInstanceId: 'child-instance',
+          parentWorkspaceKey: parentKey,
+          parentInstanceId: 'deleted-parent-instance',
+          origin: 'orchestration' as const,
+          capture: {
+            source: 'orchestration-context' as const,
+            confidence: 'inferred' as const
+          },
+          createdAt: 1
+        }
+      },
+      { [parentKey]: 'recreated-parent-instance' }
+    )
+
+    expect(projected.workspaceLineage).toBeNull()
+  })
+
+  it('accepts the matching parent instance when the workspace key exists on multiple hosts', () => {
+    const crossRepoChild = worktree('target::child', 'child-instance', { repoId: 'target' })
+    const childKey = worktreeWorkspaceKey(crossRepoChild.id)
+    const parentKey = worktreeWorkspaceKey('source::parent')
+    const spawnLineage = {
+      childWorkspaceKey: childKey,
+      childInstanceId: 'child-instance',
+      parentWorkspaceKey: parentKey,
+      parentInstanceId: 'parent-on-first-host',
+      origin: 'orchestration' as const,
+      capture: { source: 'orchestration-context' as const, confidence: 'inferred' as const },
+      createdAt: 1
+    }
+    const [projected] = projectResolvedWorktreeLineage(
+      [crossRepoChild],
+      {},
+      { [childKey]: spawnLineage },
+      { [parentKey]: ['parent-on-first-host', 'parent-on-second-host'] }
+    )
+
+    expect(projected.workspaceLineage).toEqual(spawnLineage)
   })
 
   it.each([

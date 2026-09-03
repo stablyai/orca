@@ -2,6 +2,8 @@ import type { AgentLaunchPreferences } from '../../../../shared/agent-session-ho
 import type { TuiAgent } from '../../../../shared/tui-agent'
 import type { OrcaRuntimeService } from '../../orca-runtime'
 import type { OrchestrationDb } from '../../orchestration/db'
+import { assertCreatedWorkerAncestry } from './orchestration-worker-ancestry'
+export { isUnknownWorkerStartOutcome } from './orchestration-worker-start-outcome'
 
 export type WorkerEffect = {
   kind: 'worktree' | 'terminal' | 'setup' | 'dispatch_input'
@@ -108,6 +110,8 @@ export async function createWorkerWorktree(args: {
   runtime: OrcaRuntimeService
   db: OrchestrationDb
   dispatchId: string
+  runId: string
+  taskId: string
   requestedWorktree: string
   coordinatorWorktree: Awaited<ReturnType<OrcaRuntimeService['showManagedWorktree']>>
   params: {
@@ -147,12 +151,38 @@ export async function createWorkerWorktree(args: {
     ...(args.launchPreferences ? { startupLaunchPreferences: args.launchPreferences } : {}),
     activate: false,
     lineage: {
-      parentWorktree: requestedWorktree === 'new-child' ? coordinatorWorktree.id : undefined,
+      parentWorktree: undefined,
+      orchestrationContext:
+        requestedWorktree === 'new-child'
+          ? {
+              parentWorktreeId: coordinatorWorktree.id,
+              orchestrationRunId: args.runId,
+              taskId: args.taskId,
+              coordinatorHandle: params.from
+            }
+          : undefined,
       noParent: requestedWorktree === 'new-top-level',
       callerTerminalHandle: params.from
     }
   })
   const terminalHandle = created.startupTerminal?.handle
+  const authoritative =
+    requestedWorktree === 'new-child'
+      ? await runtime.showManagedWorktree(`id:${created.worktree.id}`)
+      : (created.worktree as Awaited<ReturnType<OrcaRuntimeService['showManagedWorktree']>>)
+  if (requestedWorktree === 'new-child') {
+    assertCreatedWorkerAncestry({
+      db,
+      dispatchId,
+      runId: args.runId,
+      taskId: args.taskId,
+      coordinatorHandle: params.from,
+      childWorktreeId: created.worktree.id,
+      parentWorktreeId: coordinatorWorktree.id,
+      workspaceLineage: authoritative.workspaceLineage,
+      effects
+    })
+  }
   effects.push({
     kind: 'worktree',
     action: requestedWorktree === 'new-child' ? 'created_child' : 'created_top_level',
@@ -210,7 +240,7 @@ export async function createWorkerWorktree(args: {
     terminalId: setupTerminalHandle ?? setupTerminal?.id
   })
   return {
-    worktree: created.worktree as Awaited<ReturnType<OrcaRuntimeService['showManagedWorktree']>>,
+    worktree: authoritative,
     terminalHandle,
     setupReceipt
   }
@@ -265,19 +295,4 @@ export function monitorWorkerSetup(args: {
       args.runtime.notifyMessageArrived(message.to_handle, message.type)
     })
     .catch(() => undefined)
-}
-
-export function isUnknownWorkerStartOutcome(error: unknown, stage: string): boolean {
-  const code =
-    error && typeof error === 'object' && typeof (error as { code?: unknown }).code === 'string'
-      ? (error as { code: string }).code
-      : ''
-  if (code === 'operation_unknown') {
-    return true
-  }
-  if (stage !== 'worktree_create') {
-    return false
-  }
-  const message = error instanceof Error ? error.message : String(error)
-  return /connection|disconnect|timed?\s*out|runtime changed|outcome unknown/i.test(message)
 }
