@@ -18,9 +18,10 @@ import en from './locales/en.json'
 import es from './locales/es.json'
 import ja from './locales/ja.json'
 import ko from './locales/ko.json'
+import tr from './locales/tr.json'
 import zh from './locales/zh.json'
 
-const catalogs = { es, ja, ko, zh }
+const catalogs = { es, ja, ko, tr, zh }
 
 const WORKSPACE_CLEANUP_BROWSE_TRANSLATIONS = {
   zh: {

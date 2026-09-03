@@ -3,6 +3,7 @@ import en from '@/i18n/locales/en.json'
 import es from '@/i18n/locales/es.json'
 import ja from '@/i18n/locales/ja.json'
 import ko from '@/i18n/locales/ko.json'
+import tr from '@/i18n/locales/tr.json'
 import zh from '@/i18n/locales/zh.json'
 import { OSC52_CLIPBOARD_SETTING_ID } from './osc52-clipboard-setting-anchor'
 import type * as Osc52ClipboardToastModule from './osc52-clipboard-toast'
@@ -95,7 +96,7 @@ describe('showOsc52ClipboardBlockedToast', () => {
   it('mentions Grok and Zellij in every supported locale', () => {
     // Why assert the catalog, not the code fallback: en.json is bundled as the
     // `en` resource, so a catalog value silently wins over translate()'s fallback.
-    const locales = [en, es, ja, ko, zh]
+    const locales = [en, es, ja, ko, tr, zh]
 
     for (const locale of locales) {
       const description =

@@ -4,12 +4,13 @@ import {
   UI_LANGUAGE_JAPANESE,
   UI_LANGUAGE_KOREAN,
   UI_LANGUAGE_SPANISH,
+  UI_LANGUAGE_TURKISH,
   UI_LANGUAGE_SYSTEM,
   isPluginUiLanguage,
   type UiLanguage
 } from './ui-language'
 
-export const SUPPORTED_UI_LOCALES = ['en', 'zh', 'ko', 'ja', 'es'] as const
+export const SUPPORTED_UI_LOCALES = ['en', 'zh', 'ko', 'ja', 'es', 'tr'] as const
 export type SupportedUiLocale = (typeof SUPPORTED_UI_LOCALES)[number]
 
 export const DEFAULT_UI_LOCALE: SupportedUiLocale = 'en'
@@ -53,6 +54,9 @@ export function resolveUiLocale(
   }
   if (language === UI_LANGUAGE_SPANISH) {
     return 'es'
+  }
+  if (language === UI_LANGUAGE_TURKISH) {
+    return 'tr'
   }
   return normalizeSupportedUiLocale(systemLocale)
 }

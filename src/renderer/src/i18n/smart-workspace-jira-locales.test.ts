@@ -3,9 +3,10 @@ import en from './locales/en.json'
 import es from './locales/es.json'
 import ja from './locales/ja.json'
 import ko from './locales/ko.json'
+import tr from './locales/tr.json'
 import zh from './locales/zh.json'
 
-const localizedCatalogs = { es, ja, ko, zh }
+const localizedCatalogs = { es, ja, ko, tr, zh }
 const english = en.auto.components.new.workspace.SmartWorkspaceNameField
 const recoveryKeys = [
   'loadingJira',

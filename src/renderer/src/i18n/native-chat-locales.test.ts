@@ -3,10 +3,11 @@ import en from './locales/en.json'
 import es from './locales/es.json'
 import ja from './locales/ja.json'
 import ko from './locales/ko.json'
+import tr from './locales/tr.json'
 import zh from './locales/zh.json'
 import { CODEX_SESSION_OPTION_CATALOG } from '../../../shared/agent-session-option-catalog-claude-codex'
 
-const localizedCatalogs = { es, ja, ko, zh }
+const localizedCatalogs = { es, ja, ko, tr, zh }
 const englishSetting = en.auto.components.settings.ExperimentalPane.nativeChat
 const englishSearch = en.auto.components.settings.experimental.search.nativeChat
 const englishComposer = en.components['native-chat'].composer
@@ -45,7 +46,6 @@ describe('native chat locale copy', () => {
       expect(search.grok).toBe('grok')
       const composer = catalog.components['native-chat'].composer
       for (const key of [
-        'model',
         'effort',
         'fastMode',
         'thinking',
@@ -67,6 +67,8 @@ describe('native chat locale copy', () => {
       for (const key of ['on', 'off'] as const) {
         expect(composer.optionValue[key].trim()).not.toBe('')
       }
+      // Why: "model" is spelled identically in some locales (tr); non-empty is the contract.
+      expect(composer.model.trim()).not.toBe('')
     }
   )
 })
