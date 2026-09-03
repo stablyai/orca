@@ -71,7 +71,8 @@ export function readForBranch(value: unknown): HostedReviewInfo | null {
     autoMergeAllowed:
       value.autoMergeAllowed === null ? null : (readBoolean(value.autoMergeAllowed) ?? undefined),
     mergeStateStatus: value.mergeStateStatus === null ? null : readString(value.mergeStateStatus),
-    headSha: readString(value.headSha)
+    headSha: readString(value.headSha),
+    unresolvedReviewCommentCount: readNumber(value.unresolvedReviewCommentCount)
   }
 }
 
@@ -105,7 +106,8 @@ export function readPRForBranch(value: unknown): PRInfo | null {
     // prRepo identifies a fork PR's head repo; checks/merge are keyed on it.
     prRepo: readRepoIdentity(value.prRepo),
     // mergeMethodSettings drives which merge methods the picker may offer.
-    mergeMethodSettings: readMergeMethodSettings(value.mergeMethodSettings)
+    mergeMethodSettings: readMergeMethodSettings(value.mergeMethodSettings),
+    unresolvedReviewCommentCount: readNumber(value.unresolvedReviewCommentCount)
   }
 }
 

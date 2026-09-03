@@ -392,7 +392,8 @@ describe('forge provider interface', () => {
     })
     expect(getPRForBranchOutcomeMock).toHaveBeenCalledWith('/repo', '', null, 'ssh-1', 7, {
       acceptMergedFallbackPR: true,
-      currentHeadOid: null
+      currentHeadOid: null,
+      includeUnresolvedReviewCommentCount: true
     })
   })
 
@@ -407,7 +408,8 @@ describe('forge provider interface', () => {
     })
 
     expect(getPRForBranchOutcomeMock).toHaveBeenCalledWith('/repo', 'feature/x', null, null, null, {
-      currentHeadOid: 'abc1234'
+      currentHeadOid: 'abc1234',
+      includeUnresolvedReviewCommentCount: true
     })
   })
 

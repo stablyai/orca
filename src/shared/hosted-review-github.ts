@@ -21,6 +21,9 @@ export function hostedReviewInfoFromGitHubPRInfo(pr: PRInfo): HostedReviewInfo {
     ...(pr.confirmedContainedHeadOid
       ? { confirmedContainedHeadOid: pr.confirmedContainedHeadOid }
       : {}),
-    ...(pr.conflictSummary ? { conflictSummary: pr.conflictSummary } : {})
+    ...(pr.conflictSummary ? { conflictSummary: pr.conflictSummary } : {}),
+    ...(pr.unresolvedReviewCommentCount !== undefined
+      ? { unresolvedReviewCommentCount: pr.unresolvedReviewCommentCount }
+      : {})
   }
 }

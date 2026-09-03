@@ -1,4 +1,5 @@
 import type { MRComment } from '../../shared/gitlab-types'
+import { isBotPRCommentAuthor } from '../../shared/pr-comment-audience'
 import { encodedProject } from './project-path-encoding'
 import {
   glabHostnameArgs,
@@ -58,6 +59,22 @@ export function flattenDiscussions(discussions: GitLabRawDiscussion[]): MRCommen
   // Why: oldest-first matches gitlab.com's conversation rendering and
   // makes "what's new" intuitive when polling for updates later.
   return out.sort((a, b) => (a.createdAt ?? '').localeCompare(b.createdAt ?? ''))
+}
+
+/** Discussions whose root note is resolvable, unresolved, and not bot-authored. */
+export function countUnresolvedDiscussions(discussions: readonly GitLabRawDiscussion[]): number {
+  let count = 0
+  for (const discussion of discussions) {
+    const root = discussion.notes?.find((note) => note.system !== true)
+    if (!root || root.resolvable !== true || root.resolved === true) {
+      continue
+    }
+    if (isBotPRCommentAuthor(root.author?.username ?? '', root.author?.state === 'bot')) {
+      continue
+    }
+    count += 1
+  }
+  return count
 }
 
 export async function fetchDiscussions(

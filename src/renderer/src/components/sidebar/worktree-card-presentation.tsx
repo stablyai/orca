@@ -10,6 +10,7 @@ import {
   WorktreeCardMetaBadges
 } from './WorktreeCardMeta'
 import { WorktreeCardPortsDetails, WorktreeCardPortsTrigger } from './WorktreeCardPorts'
+import { getUnresolvedReviewCommentCount } from './worktree-review-helpers'
 import type { WorktreeCardController } from './use-worktree-card-controller'
 
 export function buildWorktreeCardPresentation(card: WorktreeCardController) {
@@ -212,6 +213,7 @@ export function buildWorktreeCardPresentation(card: WorktreeCardController) {
             linearIssue={metaLinearIssue}
             jiraIssue={metaJiraIssue}
             review={newCardStyle ? null : metaReview}
+            unresolvedReviewCommentCount={getUnresolvedReviewCommentCount(metaReview)}
             comment={metaComment}
             automationProvenance={metaAutomationProvenance}
             cliProvenance={metaCliProvenance}
