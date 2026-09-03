@@ -55,18 +55,21 @@ function acquirePhysicalKeyTracker(
       pressedCodes.delete(code)
     }
   }
-  const reset = (): void => pressedCodes.clear()
   // Why: bubble-phase keyup cleanup runs after xterm's target handler, so the
   // pane can still classify that release against the shared pressed-key set.
+  // Why no 'blur' reset: clearing held keys on focus loss makes a letter held
+  // across a focus change look like an orphaned legacy-IME keyup on release,
+  // which would wrongly arm the candidate-digit guard and drop the user's next
+  // bare digit. Keeping the keydown record lets that release match instead. A
+  // key released while the window is unfocused lingers until its next press,
+  // which only softens the orphan heuristic — it never suppresses real input.
   eventTarget.addEventListener('keydown', observeKeyboardEvent)
   eventTarget.addEventListener('keyup', observeKeyboardEvent)
-  eventTarget.addEventListener('blur', reset)
   const tracker = {
     pressedCodes,
     users: 1,
     dispose: () => releasePhysicalKeyTracker(eventTarget, tracker),
-    observeKeyboardEvent,
-    reset
+    observeKeyboardEvent
   }
   physicalKeyTrackers.set(eventTarget, tracker)
   return tracker
@@ -77,17 +80,15 @@ function releasePhysicalKeyTracker(
   tracker: TerminalImeLinuxPhysicalKeyTracker & {
     users: number
     observeKeyboardEvent?: EventListener
-    reset?: EventListener
   }
 ): void {
   tracker.users -= 1
   if (tracker.users > 0) {
     return
   }
-  if (tracker.observeKeyboardEvent && tracker.reset) {
+  if (tracker.observeKeyboardEvent) {
     eventTarget.removeEventListener('keydown', tracker.observeKeyboardEvent)
     eventTarget.removeEventListener('keyup', tracker.observeKeyboardEvent)
-    eventTarget.removeEventListener('blur', tracker.reset)
   }
   tracker.pressedCodes.clear()
   physicalKeyTrackers.delete(eventTarget)
