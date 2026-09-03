@@ -30,6 +30,7 @@ export function BrowserPageToolbar({
   sessionProfileId,
   viewportPresetId,
   isActive,
+  inputLocked,
   canGoBack,
   canGoForward,
   convertedFrom,
@@ -68,6 +69,7 @@ export function BrowserPageToolbar({
   sessionProfileId: string | null
   viewportPresetId: BrowserViewportPresetId | null
   isActive: boolean
+  inputLocked: boolean
   canGoBack: boolean
   canGoForward: boolean
   /** Set on a page the address bar converted; Back returns across it once guest history runs out. */
@@ -135,6 +137,7 @@ export function BrowserPageToolbar({
       }}
       addressSlot={
         <BrowserAddressBar
+          disabled={inputLocked}
           value={addressBarValue}
           onChange={setAddressBarValue}
           onSubmit={submitAddressBar}
