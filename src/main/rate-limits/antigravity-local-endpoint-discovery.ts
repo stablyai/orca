@@ -95,8 +95,11 @@ export function parseLsofListeningPorts(stdout: string, targetPids: Set<number>)
 }
 
 export async function discoverAntigravityEndpoints(): Promise<AntigravityEndpoint[]> {
-  const endpoints: AntigravityEndpoint[] = []
+  const httpsEndpoints: AntigravityEndpoint[] = []
+  const httpFallbackEndpoints: AntigravityEndpoint[] = []
   const targetPids = new Set<number>()
+  const csrfByPid = new Map<number, string>()
+  let latestCsrf: string | undefined
 
   if (process.platform === 'win32') {
     try {
@@ -115,7 +118,12 @@ export async function discoverAntigravityEndpoints(): Promise<AntigravityEndpoin
           targetPids.add(row.pid)
           const csrf =
             parseCmdLineFlag(row.command, 'csrf_token') ||
-            parseCmdLineFlag(row.command, 'csrf-token')
+            parseCmdLineFlag(row.command, 'csrf-token') ||
+            undefined
+          if (csrf) {
+            csrfByPid.set(row.pid, csrf)
+            latestCsrf = csrf
+          }
           const serverPortStr =
             parseCmdLineFlag(row.command, 'server_port') ||
             parseCmdLineFlag(row.command, 'server-port') ||
@@ -123,8 +131,9 @@ export async function discoverAntigravityEndpoints(): Promise<AntigravityEndpoin
             parseCmdLineFlag(row.command, 'https-server-port')
           const serverPort = Number.parseInt(serverPortStr, 10)
           if (serverPort > 0 && serverPort <= 65535) {
-            endpoints.push({ port: serverPort, isHttps: true, csrfToken: csrf })
-            endpoints.push({ port: serverPort, isHttps: false, csrfToken: csrf })
+            // Antigravity language server is HTTPS by default.
+            httpsEndpoints.push({ port: serverPort, isHttps: true, csrfToken: csrf })
+            httpFallbackEndpoints.push({ port: serverPort, isHttps: false, csrfToken: csrf })
           }
         }
       }
@@ -136,8 +145,8 @@ export async function discoverAntigravityEndpoints(): Promise<AntigravityEndpoin
         if (netstatRes.code === 0) {
           const ports = parseNetstatListeningPorts(netstatRes.stdout, targetPids)
           for (const port of ports) {
-            endpoints.push({ port, isHttps: false })
-            endpoints.push({ port, isHttps: true })
+            httpsEndpoints.push({ port, isHttps: true, csrfToken: latestCsrf })
+            httpFallbackEndpoints.push({ port, isHttps: false, csrfToken: latestCsrf })
           }
         }
       } catch {}
@@ -161,7 +170,13 @@ export async function discoverAntigravityEndpoints(): Promise<AntigravityEndpoin
             ) {
               targetPids.add(pid)
               const csrf =
-                parseCmdLineFlag(cmd, 'csrf_token') || parseCmdLineFlag(cmd, 'csrf-token')
+                parseCmdLineFlag(cmd, 'csrf_token') ||
+                parseCmdLineFlag(cmd, 'csrf-token') ||
+                undefined
+              if (csrf) {
+                csrfByPid.set(pid, csrf)
+                latestCsrf = csrf
+              }
               const serverPortStr =
                 parseCmdLineFlag(cmd, 'server_port') ||
                 parseCmdLineFlag(cmd, 'server-port') ||
@@ -169,8 +184,8 @@ export async function discoverAntigravityEndpoints(): Promise<AntigravityEndpoin
                 parseCmdLineFlag(cmd, 'https-server-port')
               const serverPort = Number.parseInt(serverPortStr, 10)
               if (serverPort > 0 && serverPort <= 65535) {
-                endpoints.push({ port: serverPort, isHttps: true, csrfToken: csrf })
-                endpoints.push({ port: serverPort, isHttps: false, csrfToken: csrf })
+                httpsEndpoints.push({ port: serverPort, isHttps: true, csrfToken: csrf })
+                httpFallbackEndpoints.push({ port: serverPort, isHttps: false, csrfToken: csrf })
               }
             }
           }
@@ -187,8 +202,8 @@ export async function discoverAntigravityEndpoints(): Promise<AntigravityEndpoin
         if (lsofRes.code === 0) {
           const ports = parseLsofListeningPorts(lsofRes.stdout, targetPids)
           for (const port of ports) {
-            endpoints.push({ port, isHttps: false })
-            endpoints.push({ port, isHttps: true })
+            httpsEndpoints.push({ port, isHttps: true, csrfToken: latestCsrf })
+            httpFallbackEndpoints.push({ port, isHttps: false, csrfToken: latestCsrf })
           }
         }
       } catch {}
@@ -197,7 +212,7 @@ export async function discoverAntigravityEndpoints(): Promise<AntigravityEndpoin
 
   const unique: AntigravityEndpoint[] = []
   const seen = new Set<string>()
-  for (const ep of endpoints) {
+  for (const ep of [...httpsEndpoints, ...httpFallbackEndpoints]) {
     const key = `${ep.port}:${ep.isHttps}:${ep.csrfToken ?? ''}`
     if (!seen.has(key)) {
       seen.add(key)
