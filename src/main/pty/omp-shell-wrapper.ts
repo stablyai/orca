@@ -45,9 +45,14 @@ export function getPosixOmpShellWrapper(): string {
 # interactive launch invocations so subcommands such as \`omp config\` keep
 # their normal argv shape.
 __orca_omp_should_skip_extension() {
+  # Why: zsh global aliases rewrite tokens such as double-dash help during
+  # interactive parse (HyDE bat.zsh). Strip a leading -- before matching so
+  # the pattern list never contains those alias names.
   case "\${1:-}" in
-    help|--help|-h|--version|-v) return 0 ;;
-    ${subcommands}) return 0 ;;
+    help|-h|-v) return 0 ;;
+  esac
+  case "\${1#--}" in
+    help|version|${subcommands}) return 0 ;;
   esac
   return 1
 }
