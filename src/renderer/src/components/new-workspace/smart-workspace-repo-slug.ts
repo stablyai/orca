@@ -129,19 +129,44 @@ export async function findMatchingRepoForSlug(
   slug: RepoSlug,
   cache: Map<string, RepoSlug>
 ): Promise<RepoSlugTarget | null> {
-  let upstreamMatch: RepoSlugTarget | null = null
-  for (const target of targets) {
-    const origin = await getRepoSlugCached(target.repo, target.sourceContext, cache)
+  // Why: serial origin+upstream probes stacked 30s timeouts; start origins together
+  // and only then live-probe unresolved upstreams, still preferring origin hits.
+  const originPromises = targets.map((target) =>
+    getRepoSlugCached(target.repo, target.sourceContext, cache)
+  )
+  const origins: (RepoSlug | null)[] = []
+  for (const [index, originPromise] of originPromises.entries()) {
+    const origin = await originPromise
+    origins.push(origin)
     if (origin && sameSlug(origin, slug)) {
-      return target
-    }
-    if (
-      !upstreamMatch &&
-      origin &&
-      (await repoUpstreamMatchesPastedSlug(target.repo, origin, slug, target.sourceContext, cache))
-    ) {
-      upstreamMatch = target
+      return targets[index]
     }
   }
-  return upstreamMatch
+
+  const unresolved: { target: RepoSlugTarget; origin: RepoSlug }[] = []
+  let persistedMatch: RepoSlugTarget | null = null
+  for (const [index, target] of targets.entries()) {
+    const origin = origins[index]
+    if (!origin) {
+      continue
+    }
+    if (persistedUpstreamMatchesPasted(target.repo, origin, slug)) {
+      persistedMatch = target
+      break
+    }
+    if (target.repo.upstream === undefined) {
+      unresolved.push({ target, origin })
+    }
+  }
+  if (unresolved.length === 0) {
+    return persistedMatch
+  }
+
+  const hits = await Promise.all(
+    unresolved.map(({ target, origin }) =>
+      repoUpstreamMatchesPastedSlug(target.repo, origin, slug, target.sourceContext, cache)
+    )
+  )
+  const hit = hits.findIndex(Boolean)
+  return hit === -1 ? persistedMatch : unresolved[hit].target
 }
