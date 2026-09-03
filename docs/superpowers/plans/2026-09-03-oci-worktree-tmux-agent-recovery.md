@@ -4,11 +4,11 @@
 
 **Goal:** Make every local OCI Git worktree recoverable after an OCI/tmux restart by having the setup hook create one deterministic four-window tmux session (`codex`, `claude`, `omp`, `bash`) and having the coordinator resume each provider exactly once from provider-native session locators persisted in a path-bound manifest.
 
-**Architecture:** Keep raw tmux as a host recovery surface, not an Orca-managed worker. The setup hook remains the sole owner of session naming, session path, window layout, session environment, and OMP hook installation. Claude/Codex raw recorders run only after their provider-specific exclusion guards, may pass captured provider payloads to a host-local writer, and the writer mutates the manifest only for `SessionStart`. The coordinator observes sessions created by the current setup invocation, validates the exact provider command and approval flags, and sends at most one provider resume command to each newly created pane; existing sessions, missing locators, failed preflights, and failed resumes remain shell-only with `RECOVERY_REQUIRED` and never fall back to a fresh or recent-session launch.
+**Architecture:** Keep raw tmux as a host recovery surface, not an Orca-managed worker. The setup hook remains the sole owner of session naming, session path, window layout, session environment, and explicit OMP extension selection. Claude/Codex raw recorders run only after their provider-specific exclusion guards, may pass captured provider payloads to a host-local writer, and the writer mutates the manifest only for `SessionStart`. The OMP recovery extension rereads its native session identity on each context-bearing lifecycle callback and records only a durable session ID. The coordinator observes sessions created by the current setup invocation, validates the exact provider command and approval flags, and sends at most one provider resume command to each newly created pane; existing sessions, missing locators, failed preflights, and failed resumes remain shell-only with `RECOVERY_REQUIRED` and never fall back to a fresh or recent-session launch.
 
 **Tech Stack:** Bash, tmux, jq, `realpath`, `sha256sum`, `flock`, TypeScript-generated POSIX hook scripts, Bun OMP hooks, the existing `/srv/script/orca-coordinator.sh` JSON CLI integration, Vitest, ShellCheck.
 
-**Review basis:** The approved design is recorded in `docs/superpowers/specs/2026-09-03-oci-worktree-tmux-agent-recovery-design.md`. The final standalone web GPT contract review returned `APPROVE` / `NONE` from the revised summary; it was a contract review, not independent repository inspection. The implementation must therefore retain the local source facts below, especially Codex's redirected `CODEX_HOME`, OMP's native `sessionManager` APIs, and the existing setup-hook source-of-truth boundary.
+**Review basis:** The design is recorded in `docs/superpowers/specs/2026-09-03-oci-worktree-tmux-agent-recovery-design.md`. Follow-up source review confirmed the linked-worktree identity rules, provider hook order, Codex artifact split, Claude parser probe, OMP extension installation path, OMP lifecycle behavior, provider ID trust boundary, OMP ID-based resume contract, and the supported managed-hook reconciliation entrypoints recorded below. The implementation must retain the local source facts for Codex's redirected `CODEX_HOME`, OMP's `sessionManager` APIs, the existing OMP extension wrapper, and the setup-hook source-of-truth boundary.
 
 ---
 
@@ -31,7 +31,7 @@
   - `src/main/claude/hook-service.test.ts`
   - `src/main/codex/codex-hook-script.ts`
   - `src/main/codex/hook-service-managed-install.test.ts`
-- Keep the approved design specification unchanged unless implementation evidence exposes a real contract error; update the plan or spec before coding if that happens.
+- Keep the design specification and this plan synchronized; source evidence from the follow-up review is incorporated below before coding.
 - Do not change Dashboard, AgentMap, managed-worker registration, terminal ownership, IPC, RPC, stream frames, or remote wire contracts. A raw tmux pane is never an Orca-managed worker.
 - Do not auto-migrate an existing one-window or otherwise legacy session. Existing sessions are left untouched; the documented operator action is archive and recreate once.
 - Do not infer provider locators from terminal text, pane order, mtimes, recent-session pickers, `--last`, `--continue`, or a fresh provider launch.
@@ -54,17 +54,17 @@
 
 - `/srv/script/orca-worktree-session-manifest.sh` — host-local `record` command. Validates canonical worktree/root identity, including linked-worktree `--git-common-dir` ownership and exact manifest path, extracts native Claude/Codex JSON identifiers or accepts OMP's native identifier arguments, serializes concurrent updates with `flock`, and publishes mode-0600 JSON through temp-file plus atomic rename.
 - `/srv/script/orca-worktree-session-manifest.test.sh` — isolated manifest writer, path-binding, linked-worktree identity, permissions, concurrency, malformed-input, and moved-worktree tests.
-- `/srv/script/orca-omp-worktree-session-hook.ts` — OMP auto-discovered `session_start` hook. Reads `ctx.sessionManager.getSessionId()` and optional `ctx.sessionManager.getSessionFile()`, then invokes the manifest writer with the tmux session's exact environment context.
-- `/srv/script/orca-omp-worktree-session-hook.test.sh` — Bun harness that registers the hook with a fake HookAPI and verifies the native OMP callback arguments sent to a fake writer.
+- `/srv/script/orca-omp-worktree-session-hook.ts` — OMP recovery extension loaded through the existing explicit `ORCA_OMP_STATUS_EXTENSION`/`omp --extension` path. It rereads `ctx.sessionManager.getSessionId()` and uses `getSessionFile()` only to distinguish durable sessions; it records the current native ID on each supported lifecycle callback.
+- `/srv/script/orca-omp-worktree-session-hook.test.sh` — Bun harness that registers the extension's lifecycle callbacks with a fake HookAPI and verifies repeated native OMP IDs sent to a fake writer.
 - `src/main/agent-hooks/oci-worktree-session-event.ts` — shared POSIX shell-line generator for guarded raw-tmux provider-payload recording; no endpoint, pane key, or UI relay dependency.
 - `src/main/agent-hooks/oci-worktree-session-event.test.ts` — exact generated-line contract, provider-exclusion ordering, ordinary-event no-op, and platform guard tests.
 
 ### Modify
 
-- `/srv/script/orca-tmux-hook.sh` — create and validate the four-window layout, install the OMP hook, set session-scoped raw recovery environment, and remove partially created sessions on layout failure.
-- `/srv/script/orca-tmux-hook.test.sh` — assert exact ordered windows, session/pane paths, env values, idempotency, mismatch fail-closed behavior, and partial-layout cleanup.
+- `/srv/script/orca-tmux-hook.sh` — create and validate the four-window layout, install/select the OMP recovery extension, set session-scoped raw recovery environment, and remove partially created sessions on layout failure.
+- `/srv/script/orca-tmux-hook.test.sh` — assert exact ordered windows, session/pane paths, env values including `ORCA_OMP_STATUS_EXTENSION`, idempotency, mismatch fail-closed behavior, and partial-layout cleanup.
 - `/srv/script/orca-coordinator.sh` — preserve current coordinator/hpv2 behavior while replacing worktree's old single Codex `--last` bootstrap with observed-new-session provider recovery and exact preflighted commands.
-- `/srv/script/orca-coordinator.test.sh` — add fake provider binaries, manifests, flag preflight, one-shot, failure, and `RESUME_AGENTS=0` cases without weakening current liveness checks.
+- `/srv/script/orca-coordinator.test.sh` — add fake provider binaries, manifests, flag preflight, one-shot, failure, invalid-ID, and `RESUME_AGENTS=0` cases without weakening current liveness checks.
 - `/srv/script/projects/orca.md` — document the OCI recovery contract, operational backup/hashes, manifest location, provider flags, `RECOVERY_REQUIRED`, and archive/recreate procedure.
 - `src/main/claude/hook-service.ts` — add the shared raw-tmux recorder after the existing Devin/`CLAUDE_JOB_DIR` exclusions and before endpoint-dependent logic, while preserving the neutral JSON output, endpoint refresh, and normal Orca spool/post path.
 - `src/main/claude/hook-service.test.ts` — verify the shared POSIX managed script at `~/.orca/agent-hooks/claude-hook.sh` contains the recorder after exclusions and executes the raw native SessionStart branch without changing existing user settings behavior.
@@ -73,8 +73,7 @@
 
 ### Do not modify
 
-- `src/shared/agent-session-resume.ts` and `src/shared/tui-agent-resume-startup.ts`; their already verified provider argv mapping is the command contract this feature consumes.
-- `src/main/agent-hooks/managed-agent-hook-registry.ts`; raw OMP installation is host-local auto-discovery, not a managed Orca worker hook.
+- `src/main/agent-hooks/managed-agent-hook-registry.ts`; the raw OMP extension is a host-local explicit `ORCA_OMP_STATUS_EXTENSION` selection, not a managed Orca worker hook.
 - `src/renderer/src/**`; there is no UI change.
 - `/srv/script/AGENTS.md` and `/home/ai/.codex/AGENTS.md`; they remain host/project policy.
 
@@ -143,6 +142,7 @@ ORCA_OCI_SESSION_MANIFEST=canonical manifest path
 ORCA_OCI_WORKTREE_PATH=canonical worktree path
 ORCA_OCI_REPO_ROOT=canonical repository root
 ORCA_OCI_PROVIDER_EVENT_WRITER=/srv/script/orca-worktree-session-manifest.sh
+ORCA_OMP_STATUS_EXTENSION=canonical OMP extension path
 ```
 
 The setup hook also sets `CODEX_HOME` and `ORCA_CODEX_HOME` to the Orca-managed runtime home `${XDG_CONFIG_HOME:-$HOME/.config}/orca/codex-runtime-home/home` unless the coordinator's test-only `ORCA_COORDINATOR_CODEX_HOME` override is present. This closes the existing Codex split where Orca installs `hooks.json` in its redirected runtime home while a raw shell would otherwise invoke the user's `~/.codex`. The executable managed POSIX launcher remains the shared `~/.orca/agent-hooks/codex-hook.sh`; the runtime `hooks.json` registration and shared launcher are separate installation artifacts and must be preflighted separately.
@@ -157,7 +157,7 @@ The persisted schema is exactly:
   "providers": {
     "codex": { "key": "session_id", "id": "codex-session-id" },
     "claude": { "key": "session_id", "id": "claude-session-id" },
-    "omp": { "key": "session_id", "id": "omp-session-id", "resumeFilePath": "/canonical/omp-session.jsonl" }
+    "omp": { "key": "session_id", "id": "omp-session-id" }
   }
 }
 ```
@@ -167,10 +167,12 @@ Provider resume commands are fixed and must not be generalized through an enviro
 ```bash
 codex resume "$CODEX_SESSION_ID" --dangerously-bypass-approvals-and-sandbox
 claude --resume "$CLAUDE_SESSION_ID" --dangerously-skip-permissions
-omp --resume "$OMP_RESUME_TARGET" --auto-approve --approval-mode=yolo
+omp --extension "$ORCA_OMP_STATUS_EXTENSION" --resume "$OMP_SESSION_ID" --auto-approve --approval-mode=yolo
 ```
 
-The coordinator may override provider binary paths, writer, OMP source, and Codex home only for isolated tests. Tests set `XDG_STATE_HOME` to a temporary directory instead of overriding the manifest-root formula. The coordinator must not override provider argv or approval flags in production.
+OMP's recorded `session_id` is the authoritative resume locator. `getSessionFile()` is read by the recovery extension only as the same persistence gate used by Orca's OMP status integration; it is not stored as `resumeFilePath` and is not passed to `omp --resume` in this OCI path. The explicit `--extension "$ORCA_OMP_STATUS_EXTENSION"` argument is the recovery command's confirmed OMP integration path; the coordinator must validate that it is the exact readable session extension selected by setup.
+
+The coordinator may override provider binary paths, writer, OMP source, OMP agent directory, and Codex home only for isolated tests. Tests set `XDG_STATE_HOME` to a temporary directory instead of overriding the manifest-root formula. The coordinator must not override provider argv or approval flags in production.
 
 ## Implementation tasks
 
@@ -278,10 +280,9 @@ Require exactly one locator source:
 ```text
 --payload-stdin                  # only codex/claude
 --session-id ID                  # only omp
---resume-file PATH               # optional omp field, only with --session-id
 ```
 
-Reject unknown flags, missing values, duplicate flags, empty IDs, control characters, and provider/locator combinations that do not match the table above. Do not echo the native payload or locator into diagnostics.
+Reject unknown flags, missing values, duplicate flags, empty IDs, and provider/locator combinations that do not match the table above. Implement one `normalize_provider_session_id` helper and use it for both JSON-extracted IDs and `--session-id`: trim surrounding whitespace, reject empty values, values over the shared 512 string-length limit, values beginning with `-`, and values containing a character with code `<= 0x1f` or `0x7f`. Do not echo the native payload or locator into diagnostics.
 
 Resolve `worktree` and `repo-root` with `realpath -e`. Verify both are
 non-bare worktree paths and that they belong to the same Git repository:
@@ -327,12 +328,13 @@ For Claude and Codex, read all stdin once and use `jq -er` to require the native
 ```bash
 event_name="$(printf '%s' "$payload" | jq -er '.hook_event_name // empty')"
 [ "$event_name" = SessionStart ] || exit 0
-session_id="$(printf '%s' "$payload" | jq -er '.session_id | strings | select(length > 0)')"
+raw_session_id="$(printf '%s' "$payload" | jq -er '.session_id | strings')"
+session_id="$(normalize_provider_session_id "$raw_session_id")" || exit 1
 ```
 
-Do not accept an event with a missing/empty `session_id`; return non-zero without changing the manifest. Do not parse a transcript filename, terminal output, or current directory from the payload.
+`normalize_provider_session_id` must apply the exact shared boundary described in Step 1 before any manifest write: trim surrounding whitespace, require a non-empty value of at most 512 characters, reject a leading `-`, and reject every control character. A missing, malformed, overlong, leading-dash, or unsafe ID returns non-zero without changing the manifest. Do not parse a transcript filename, terminal output, or current directory from the payload.
 
-For OMP, accept the exact `--session-id` from `ctx.sessionManager.getSessionId()` and preserve a non-empty `--resume-file` from `ctx.sessionManager.getSessionFile()` as `resumeFilePath`. Do not derive either value from a path basename, mtime, or recent picker.
+For OMP, accept `--session-id` only from `ctx.sessionManager.getSessionId()` after the same normalization. The extension reads `ctx.sessionManager.getSessionFile()` only to suppress records for non-persistent/ephemeral sessions; it never turns that path into a manifest locator. Do not derive either value from a path basename, mtime, or recent picker.
 
 - [ ] **Step 3: Publish one provider field atomically and serialize writers**
 
@@ -347,7 +349,7 @@ and .repoRoot == $repo_root
 and (.providers | type == "object")
 ```
 
-For a missing manifest, start with the exact version/path/root/provider object. Replace only the selected provider field. Preserve the other provider fields and preserve all existing `omp.resumeFilePath` data when the incoming OMP event has no resume file.
+For a missing manifest, start with the exact version/path/root/provider object. Replace only the selected provider field. The OMP field contains only the normalized native `session_id`; never create or preserve an OMP `resumeFilePath` field.
 
 Write JSON to `mktemp "$manifest.tmp.XXXXXX"`, `chmod 600` the temp file, then `mv -f` it over the manifest. Remove the temp file on every failure. Never write directly to the final path and never leave a mode-0644 intermediate file.
 
@@ -356,9 +358,9 @@ Write JSON to `mktemp "$manifest.tmp.XXXXXX"`, `chmod 600` the temp file, then `
 The shell test must create a temporary Git root and worktree and verify:
 
 ```text
-Claude SessionStart JSON -> providers.claude.key=session_id and exact id
-Codex SessionStart JSON  -> providers.codex.key=session_id and exact id
-OMP session-id + file    -> providers.omp.id and resumeFilePath
+Claude SessionStart JSON -> providers.claude.key=session_id and exact normalized id
+Codex SessionStart JSON  -> providers.codex.key=session_id and exact normalized id
+OMP persistent session-id -> providers.omp.key=session_id and exact normalized id
 second provider record   -> previous provider fields preserved
 concurrent codex/claude records -> both fields survive
 manifest mode            -> 600; parent directory -> 700
@@ -368,11 +370,14 @@ moved/missing worktree   -> non-zero and no write
 malformed existing JSON  -> non-zero and file unchanged
 ordinary provider event  -> zero and no provider field
 missing native id        -> non-zero and no provider field
+overlong/leading-dash/control-character/whitespace-only id -> non-zero and no write
 ```
+
+The same invalid-ID cases must run for Claude, Codex, and OMP. Whitespace surrounding an otherwise valid ID is trimmed before persistence and resume; no rejected input may alter an existing provider field.
 
 Also assert the writer has no code path reading `tmux capture-pane`, `pane_current_path`, file mtimes, or recent session listings. Run the actual script; do not make a source-text-only test the sole proof.
 
-### Task 3: Add the native OMP `session_start` adapter and installation
+### Task 3: Add the native OMP recovery extension and installation
 
 **Files:**
 
@@ -380,99 +385,87 @@ Also assert the writer has no code path reading `tmux capture-pane`, `pane_curre
 - Create `/srv/script/orca-omp-worktree-session-hook.test.sh`.
 - Modify `/srv/script/orca-tmux-hook.sh` and its test.
 
-- [ ] **Step 1: Implement the OMP hook against the installed API**
+- [ ] **Step 1: Implement the OMP extension against the installed API**
 
-Export a default function that subscribes only to `session_start`:
+Export a default function that registers the raw recorder on every context-bearing lifecycle event already used by Orca's OMP status extension:
 
-```ts
-import { spawnSync } from 'node:child_process'
-
-type OmpHookContext = {
-  cwd: string
-  sessionManager: {
-    getSessionId(): string
-    getSessionFile(): string | null
-  }
-}
-
-export default function registerOciWorktreeHook(pi: {
-  on(
-    event: 'session_start',
-    handler: (event: unknown, ctx: OmpHookContext) => unknown
-  ): void
-}): void {
-  pi.on('session_start', async (_event, ctx) => {
-    const manifest = process.env.ORCA_OCI_SESSION_MANIFEST?.trim()
-    const worktree = process.env.ORCA_OCI_WORKTREE_PATH?.trim()
-    const repoRoot = process.env.ORCA_OCI_REPO_ROOT?.trim()
-    const writer = process.env.ORCA_OCI_PROVIDER_EVENT_WRITER?.trim()
-    const sessionId = ctx.sessionManager.getSessionId().trim()
-    const resumeFilePath = ctx.sessionManager.getSessionFile()?.trim() ?? ''
-    if (!manifest || !worktree || !repoRoot || !writer || !sessionId) return
-
-    const args = [
-      'record',
-      '--manifest',
-      manifest,
-      '--provider',
-      'omp',
-      '--worktree',
-      worktree,
-      '--repo-root',
-      repoRoot,
-      '--session-id',
-      sessionId
-    ]
-    if (resumeFilePath) args.push('--resume-file', resumeFilePath)
-    try {
-      spawnSync(writer, args, { stdio: 'ignore' })
-    } catch {
-      // A missing writer must not make the OMP session unusable.
-    }
-  })
-}
+```text
+before_agent_start
+agent_start
+tool_call
+tool_execution_start
+tool_execution_end
+tool_approval_requested
+tool_approval_resolved
+message_end
+agent_settled
+agent_end
 ```
 
-Use the actual `HookContext` shape verified in the installed OMP package: `cwd`, readonly `sessionManager`, `getSessionId()`, and `getSessionFile()`. Catch spawn errors so the OMP session itself remains usable; the coordinator's missing manifest/provider field is the recovery signal. Do not subscribe to session switch/branch events.
+Do not make `session_start` the recording contract: the current OMP status
+source intentionally leaves its `session_start` handler unregistered. Use the
+installed OMP `HookContext` shape (`cwd`, readonly `sessionManager`,
+`getSessionId()`, and `getSessionFile()`). Each registered callback must reread
+both session-manager values. Treat a non-empty `getSessionFile()` as the
+persistence gate, but store and send only the normalized `getSessionId()`:
+
+
+```ts
+const sessionId = normalizeProviderSessionId(ctx.sessionManager.getSessionId())
+const sessionFile = ctx.sessionManager.getSessionFile()?.trim() ?? ''
+if (!sessionId || !sessionFile) return
+spawnSync(writer, [
+  'record',
+  '--manifest', manifest,
+  '--provider', 'omp',
+  '--worktree', worktree,
+  '--repo-root', repoRoot,
+  '--session-id', sessionId
+], { stdio: 'ignore' })
+```
+
+The shell writer remains the final validation boundary; the extension-side normalization only prevents needless invalid invocations. Catch spawn errors so the OMP session itself remains usable. Do not use `getSessionFile()` as a resume target, do not pass `--resume-file`, and do not subscribe to unverified event names outside the installed event set above. The callback set is required because Orca's existing OMP status source documents in-process session switching and refreshes identity on each lifecycle event.
 
 The runtime script must not hardcode a different writer path; the setup hook's environment is authoritative. The test may set `ORCA_OCI_PROVIDER_EVENT_WRITER` to a temporary fake executable.
 
-- [ ] **Step 2: Install the hook idempotently from the setup hook**
+- [ ] **Step 2: Install and select the extension through OMP's existing mechanism**
+
+OMP's confirmed integration writes managed extensions under the selected agent directory's `extensions` child (`src/main/pi/titlebar-extension-service.ts#installManagedExtensions`). The existing wrapper's source-backed native invocation is `omp --extension <path>` (`src/main/pty/omp-shell-wrapper.ts#__orca_omp_invoke`). Raw recovery must pass that argument directly; it must not depend on an arbitrary tmux pane having Orca's shell-startup wrapper installed. Do not use or describe `~/.omp/agent/hooks` as an auto-discovery directory.
 
 Before creating a new tmux session, the setup hook must:
 
 ```bash
-omp_hook_dir="$HOME/.omp/agent/hooks"
-mkdir -p "$omp_hook_dir"
-tmp_hook="$(mktemp "$omp_hook_dir/orca-oci-worktree-session-hook.ts.XXXXXX")"
+omp_agent_dir="${ORCA_OCI_OMP_AGENT_DIR:-$HOME/.omp/agent}"
+omp_extension_dir="$omp_agent_dir/extensions"
+omp_extension_path="$omp_extension_dir/orca-oci-worktree-session-hook.ts"
+mkdir -p "$omp_extension_dir"
+if [ -e "$omp_extension_path" ] && ! grep -Fq '@orca-managed-oci-worktree-extension' "$omp_extension_path"; then
+  printf '%s\n' 'OMP extension path is user-owned' >&2
+  exit 1
+fi
+tmp_hook="$(mktemp "$omp_extension_dir/orca-oci-worktree-session-hook.ts.XXXXXX")"
 cp "$omp_hook_source" "$tmp_hook"
 chmod 600 "$tmp_hook"
-mv -f "$tmp_hook" "$omp_hook_dir/orca-oci-worktree-session-hook.ts"
+mv -f "$tmp_hook" "$omp_extension_path"
 ```
 
-Use `/srv/script/orca-omp-worktree-session-hook.ts` by default and `ORCA_OCI_OMP_HOOK_SOURCE` only as an isolated test override. If the source is absent or cannot be copied, fail before creating a session. Do not overwrite any other user hook.
+The source file must carry the `@orca-managed-oci-worktree-extension` marker. Use `/srv/script/orca-omp-worktree-session-hook.ts` by default and `ORCA_OCI_OMP_HOOK_SOURCE` only as an isolated test override. Set the new session's `ORCA_OMP_STATUS_EXTENSION` to the exact `omp_extension_path`; the coordinator reads that value and passes it directly with `omp --extension`, while interactive shells may use the existing wrapper when present. If the source is absent, the extension cannot be installed, or the existing path is user-owned, fail before creating a session. Do not overwrite any other user extension.
 
-The live hook body must carry this same installation logic. Re-running setup for an existing session must return after session path validation without changing the OMP hook or any session environment.
+The live hook body must carry this same installation and selection logic. Re-running setup for an existing session must return after session path validation without changing the OMP extension or any session environment.
 
-- [ ] **Step 3: Test the OMP adapter through a real callback**
+- [ ] **Step 3: Test the OMP extension through repeated real callbacks**
 
-The shell test must generate a Bun harness that imports the new `.ts` file, captures the `session_start` handler, supplies:
+The shell test must generate a Bun harness that imports the new `.ts` file, captures handlers for the event set above, and supplies a mutable context:
 
 ```text
-getSessionId()  -> omp-native-id
+getSessionId() -> omp-native-id-1, then omp-native-id-2
 getSessionFile() -> /tmp/omp-native-session.jsonl
 cwd -> /srv/worktree
 ```
 
-Set the four `ORCA_OCI_*` environment variables and invoke the handler. The fake writer must log argv and assert:
+Set the four `ORCA_OCI_*` environment variables and invoke `agent_start`, then mutate the native ID and invoke `before_agent_start` or another listed lifecycle callback. The fake writer must receive two records with the two IDs, proving a session switch is reflected in the manifest. Assert that neither record contains `--resume-file` and that the OMP recovery command selects the extension with `--extension`.
 
-```text
-record --manifest /tmp/oci-manifest.json --provider omp --worktree /srv/worktree
-      --repo-root /srv/repository --session-id omp-native-id
-      --resume-file /tmp/omp-native-session.jsonl
-```
-
-Repeat with `getSessionFile() -> null` and assert no `--resume-file` argument. Repeat with missing context and assert no writer invocation.
+Repeat with `getSessionFile() -> null` and assert no writer invocation for the ephemeral session. Repeat with missing context and assert no writer invocation. Verify the setup test installs the file under `$HOME/.omp/agent/extensions`, sets `ORCA_OMP_STATUS_EXTENSION` to that file, and the coordinator's OMP argv passes that exact path with `--extension`.
 
 ### Task 4: Make the setup hook own the deterministic four-window layout
 
@@ -533,10 +526,12 @@ manifest_dir="$(realpath -m "${XDG_STATE_HOME:-$HOME/.local/state}/orca/oci-work
 manifest="${manifest_dir}/$(printf '%s' "$worktree" | sha256sum | cut -d' ' -f1).json"
 writer="${ORCA_OCI_PROVIDER_EVENT_WRITER:-/srv/script/orca-worktree-session-manifest.sh}"
 omp_hook_source="${ORCA_OCI_OMP_HOOK_SOURCE:-/srv/script/orca-omp-worktree-session-hook.ts}"
+omp_agent_dir="${ORCA_OCI_OMP_AGENT_DIR:-$HOME/.omp/agent}"
+omp_extension_path="$omp_agent_dir/extensions/orca-oci-worktree-session-hook.ts"
 codex_home="${ORCA_COORDINATOR_CODEX_HOME:-${XDG_CONFIG_HOME:-$HOME/.config}/orca/codex-runtime-home/home}"
 ```
 
-Require `tmux`, `git`, `realpath`, `sha256sum`, `jq`, and the writer. Require the OMP source for a new session. These checks are setup dependencies, not a reason to modify an existing session.
+Require `tmux`, `git`, `realpath`, `sha256sum`, `jq`, and the writer. Require the OMP source for a new session. The extension directory may be created by the installation step. These checks are setup dependencies, not a reason to modify an existing session.
 
 - [ ] **Step 3: Leave existing sessions untouched**
 
@@ -552,6 +547,7 @@ tmux -L "$socket" new-session -d -s "$session" -n codex -c "$worktree" \
   -e "ORCA_OCI_WORKTREE_PATH=$worktree" \
   -e "ORCA_OCI_REPO_ROOT=$root" \
   -e "ORCA_OCI_PROVIDER_EVENT_WRITER=$writer" \
+  -e "ORCA_OMP_STATUS_EXTENSION=$omp_extension_path" \
   -e "CODEX_HOME=$codex_home" \
   -e "ORCA_CODEX_HOME=$codex_home"
 tmux -L "$socket" new-window -d -t "$session:1" -n claude -c "$worktree"
@@ -569,7 +565,8 @@ Use the test socket and shell's arguments exactly as existing code does; do not 
 2:omp
 3:bash
 all four #{pane_current_path} == canonical worktree
-show-environment contains all four ORCA_OCI_* values and CODEX_HOME/ORCA_CODEX_HOME
+all four ORCA_OCI_* values, CODEX_HOME/ORCA_CODEX_HOME, and ORCA_OMP_STATUS_EXTENSION
+OMP recovery argv selects the exact extension path with --extension
 ```
 
 - [ ] **Step 5: Remove partial new sessions on any layout failure**
@@ -588,6 +585,8 @@ all four pane cwds == worktree
 session_path == worktree even after a pane cd /tmp
 all four ORCA_OCI_* env values exact
 CODEX_HOME and ORCA_CODEX_HOME exact
+ORCA_OMP_STATUS_EXTENSION == $omp_extension_path
+OMP recovery argv receives --extension "$omp_extension_path"
 second setup -> no extra window/no env rewrite/no hook rewrite
 same-name wrong path -> non-zero
 missing worktree -> non-zero
@@ -596,7 +595,8 @@ partial new layout -> session removed
 archive -> exact session only; missing/deleted path archive is zero
 ```
 
-Run the live UI setup hook manually against a disposable local worktree only after this test passes. Observe the newly created session, four windows, session path, pane paths, and env; archive that disposable session through the existing archive hook. Do not use a real project worktree for the probe.
+Run the live UI setup hook manually against a disposable local worktree only after this test passes. Observe the newly created session, four windows, session path, pane paths, env, and OMP extension selection; archive that disposable session through the existing archive hook. Do not use a real project worktree for the probe.
+
 
 ### Task 5: Replace worktree `--last` bootstrap with one-shot provider recovery
 
@@ -612,7 +612,8 @@ Do not change `ensure_session()`'s coordinator keeper logic. Add these configura
 ```bash
 manifest_root="${XDG_STATE_HOME:-$HOME/.local/state}/orca/oci-worktree-sessions"
 provider_event_writer="${ORCA_COORDINATOR_PROVIDER_EVENT_WRITER:-/srv/script/orca-worktree-session-manifest.sh}"
-omp_hook_source="${ORCA_COORDINATOR_OMP_HOOK_SOURCE:-/srv/script/orca-omp-worktree-session-hook.ts}"
+omp_agent_dir="${ORCA_COORDINATOR_OMP_AGENT_DIR:-$HOME/.omp/agent}"
+omp_extension_path="$omp_agent_dir/extensions/orca-oci-worktree-session-hook.ts"
 codex_home="${ORCA_COORDINATOR_CODEX_HOME:-${XDG_CONFIG_HOME:-$HOME/.config}/orca/codex-runtime-home/home}"
 ```
 
@@ -639,7 +640,7 @@ Use the observed `created` name as the only target. Do not calculate a session n
 
 - [ ] **Step 3: Add exact manifest and layout reads**
 
-For a newly created session, read `ORCA_OCI_SESSION_MANIFEST`, `ORCA_OCI_WORKTREE_PATH`, and `ORCA_OCI_REPO_ROOT` from the session environment and compare the latter two values to the canonical `$path` and `$root` arguments from the inventory loop. Reject the session for provider recovery if any is missing, if the manifest path is not the exact sha256 path under `manifest_root`, or if manifest `worktreePath`/`repoRoot` do not exactly match the setup context. Log `RECOVERY_REQUIRED` and leave all panes as shells when the binding fails.
+For a newly created session, read `ORCA_OCI_SESSION_MANIFEST`, `ORCA_OCI_WORKTREE_PATH`, `ORCA_OCI_REPO_ROOT`, and `ORCA_OMP_STATUS_EXTENSION` from the session environment. Compare `ORCA_OCI_WORKTREE_PATH` and `ORCA_OCI_REPO_ROOT` to the canonical `$path` and `$root` arguments from the inventory loop, and require the OMP extension value to equal the expected readable file under the selected agent directory's `extensions` child. Reject the session for provider recovery if any is missing, if the manifest path is not the exact sha256 path under `manifest_root`, or if manifest `worktreePath`/`repoRoot` do not exactly match the setup context. Log `RECOVERY_REQUIRED` and leave all panes as shells when the binding fails.
 Read provider fields only through `jq -er` selectors equivalent to:
 
 ```jq
@@ -648,16 +649,19 @@ Read provider fields only through `jq -er` selectors equivalent to:
 .providers.omp.key == "session_id" and (.providers.omp.id | strings | length > 0)
 ```
 
-For OMP, use `.resumeFilePath` when it is a non-empty string; otherwise use the exact `.id`. Missing/malformed fields are provider-local `RECOVERY_REQUIRED`, not a fresh start and not a reason to touch another provider.
+After each selector, pass the extracted value through the same provider-ID normalizer as the manifest writer. Trim surrounding whitespace, reject empty or over-512-character values, reject leading `-`, and reject control characters (`<= 0x1f` or `0x7f`) before constructing any command. A rejected ID is provider-local `RECOVERY_REQUIRED`; it must not alter the manifest or reach `send-keys`.
 
+For OMP, use `.providers.omp.id` only. Do not inspect or synthesize `resumeFilePath`; the recorded native session ID is the OCI locator. Read `ORCA_OMP_STATUS_EXTENSION` from the new session environment and require it to equal the expected extension path under the selected agent directory's `extensions` child. Missing/malformed fields are provider-local `RECOVERY_REQUIRED`, not a fresh start and not a reason to touch another provider.
 Before sending a provider command, verify the binary exists and the exact
-resume selector and approval options are accepted without starting a provider:
+resume selector, extension, and approval options are accepted without starting
+a provider:
 
 ```text
 codex: CODEX_HOME=$codex_home codex --help contains --dangerously-bypass-approvals-and-sandbox;
        CODEX_HOME=$codex_home codex resume --help is callable
 claude: claude --resume "__orca_capability_probe__" --dangerously-skip-permissions --help exits zero
-omp:    omp --help contains --resume, --auto-approve, --approval-mode, and yolo
+omp:    omp --extension "$omp_extension_path" --help is callable and
+       omp --help contains --resume, --auto-approve, --approval-mode, and yolo
 ```
 
 The Claude line is a parser-acceptance probe: it must pass the exact
@@ -666,31 +670,30 @@ conversation is resumed or provider session is launched. Do not require those
 flags to appear in `claude --help` output. A failed probe is
 `RECOVERY_REQUIRED`.
 
-The installation artifacts must be checked independently:
+The installation artifacts and OMP extension route must be checked independently:
 
 ```text
 codex: $codex_home/hooks.json exists; its SessionStart managed command points to
-       $HOME/.orca/agent-hooks/codex-hook.sh; that shared script contains the
-       raw adapter
+       $HOME/.orca/agent-hooks/codex-hook.sh; that shared script contains
+       the raw adapter
 claude: $HOME/.orca/agent-hooks/claude-hook.sh exists and contains the raw adapter
-omp:    $HOME/.omp/agent/hooks/orca-oci-worktree-session-hook.ts exists and is readable
+omp:    $omp_extension_path exists under the agent directory's extensions child,
+       is readable, and session environment ORCA_OMP_STATUS_EXTENSION points to it;
+       recovery argv passes --extension "$omp_extension_path"
 writer: provider_event_writer is executable
 ```
 
-Do not treat the Codex runtime `hooks.json` and shared executable launcher as
-the same file. If any check fails, print `RECOVERY_REQUIRED` in that provider's
-pane and log the precise preflight reason. Never silently remove a flag,
-substitute a different resume selector, or use a provider's recent-session
-option.
+Do not treat the Codex runtime `hooks.json` and shared executable launcher as the same file. If any check fails, print `RECOVERY_REQUIRED` in that provider's pane and log the precise preflight reason. Never silently remove a flag, substitute a different resume selector, or use a provider's recent-session option.
+
 
 - [ ] **Step 5: Send one exact command per provider window**
 
-Use fixed window names/indexes from the hook's new-session contract and shell-quote every manifest-derived locator with Bash `printf '%q'`. Send only these commands:
+Use fixed window names/indexes from the hook's new-session contract and shell-quote every manifest-derived locator plus the session's OMP extension path with Bash `printf '%q'`. Send only these commands:
 
 ```bash
 codex resume "$codex_id" --dangerously-bypass-approvals-and-sandbox
 claude --resume "$claude_id" --dangerously-skip-permissions
-omp --resume "$omp_resume_target" --auto-approve --approval-mode=yolo
+omp --extension "$omp_extension_path" --resume "$omp_id" --auto-approve --approval-mode=yolo
 ```
 
 Wrap each command so a non-zero provider exit leaves the shell alive and prints a literal sentinel:
@@ -715,8 +718,9 @@ missing manifest -> shells + RECOVERY_REQUIRED; zero provider invocations
 wrong manifest binding -> shells + RECOVERY_REQUIRED; zero provider invocations
 missing provider field -> only that provider RECOVERY_REQUIRED
 missing help flag or failed Claude parser probe -> provider RECOVERY_REQUIRED; no downgraded invocation
-provider exits non-zero -> shell remains and RECOVERY_REQUIRED is visible
-ordinary provider event -> writer may run; manifest remains unchanged
+overlong/leading-dash/control-character provider ID -> provider RECOVERY_REQUIRED; zero invocation
+provider ID with surrounding whitespace -> trimmed ID is the only argv value
+OMP manifest ID -> omp --extension receives the selected extension path and --resume receives only that ID, never a file path
 second ensure after provider failure -> no retry/invocation
 pre-existing legacy one-window session -> untouched, no auto-migration
 Windows inventory path -> no local session
@@ -734,45 +738,48 @@ Keep all current coordinator tests for coordinator reuse, bare coordinator start
 
 - [ ] **Step 1: Add the operational contract**
 
-Document this exact flow:
-
 ```text
 1. Coordinator enumerates local OCI Git worktrees only.
 2. Setup hook creates/reuses the deterministic session and, for a new session, four windows.
 3. Coordinator observes before/after session names.
 4. Only newly created sessions are eligible for provider resume.
-5. Provider-native SessionStart hooks populate the path-bound manifest.
+5. Provider-native SessionStart/lifecycle adapters populate the path-bound manifest.
 6. Missing/malformed/mismatched locator or unsupported flags produce RECOVERY_REQUIRED.
 7. Existing sessions are never restarted or migrated.
 8. Archive the exact old session and rerun setup once to migrate a legacy layout.
 ```
 
-Include the manifest path/schema, exact provider commands, Codex managed-home requirement, OMP hook path, `ORCA_OCI_*` variables, `ORCA_COORDINATOR_RESUME_AGENTS=0` meaning, and the warning that `RECOVERY_REQUIRED` is not evidence that a provider has no upstream session; it means this recovery path is intentionally fail-closed.
+Include the manifest path/schema, exact provider commands, Codex managed-home requirement, OMP extension path and `ORCA_OMP_STATUS_EXTENSION` wrapper selection, `ORCA_OCI_*` variables, `ORCA_COORDINATOR_RESUME_AGENTS=0` meaning, and the warning that `RECOVERY_REQUIRED` is not evidence that a provider has no upstream session; it means this recovery path is intentionally fail-closed.
 
-After the `/srv/script` copy and focused test pass, load the amended Orca source in the supported OCI runtime and invoke the existing managed-agent hook install/reconciliation operation for Claude and Codex. This is the path backed by `installManagedAgentHooks` and its existing `ClaudeHookService.refreshManagedScripts()` / `CodexHookService.refreshManagedScripts()` refreshers; do not manually copy generated managed scripts. If the live OCI runtime cannot run the amended source, stop and do not claim managed-hook deployment.
+After the `/srv/script` copy and focused tests pass, use the supported `agent hooks on` path for the live OCI runtime. When the runtime is reachable, the settings update path (`src/main/ipc/settings.ts`) calls `applyAgentStatusHooksEnabled()`, which calls `installManagedAgentHooks()` and refreshes the existing Claude/Codex managed scripts. When the runtime is unavailable, the CLI's offline `setAgentHooksEnabled()` path calls the same `applyAgentStatusHooksEnabled()` operation directly. The raw OMP recovery extension is not installed by this managed-hook refresh; the live setup hook installs it under the OMP agent directory's `extensions` child and selects it through `ORCA_OMP_STATUS_EXTENSION`. Do not treat `agent hooks status` alone as deployment or refresh. Do not manually copy generated managed scripts.
 
-Verify the resulting artifacts before updating the live setup hook:
+Verify the resulting artifacts and returned statuses before updating the live setup hook:
 
 ```text
 Claude: ~/.orca/agent-hooks/claude-hook.sh contains the recorder after the Devin/CLAUDE_JOB_DIR guards
 Codex: redirected CODEX_HOME/hooks.json SessionStart entry points to ~/.orca/agent-hooks/codex-hook.sh
        ~/.orca/agent-hooks/codex-hook.sh contains the recorder
+OMP:   ~/.omp/agent/extensions/orca-oci-worktree-session-hook.ts is the
+       explicit extension source selected by ORCA_OMP_STATUS_EXTENSION
 ```
 
-Then update the live OCI setup hook setting and probe a disposable worktree. Record:
+If neither supported `agent hooks on` route can run the amended source and refresh the artifacts, stop and do not claim managed-hook deployment. Then update the live OCI setup hook setting and probe a disposable worktree. Record:
 
 ```text
+agent hooks on route (runtime settings or offline CLI fallback)
+returned managed-hook statuses
 observed new session name
 session_path
 0:codex, 1:claude, 2:omp, 3:bash
 all pane_current_path values
-ORCA_OCI_* values, CODEX_HOME, and ORCA_CODEX_HOME
-OMP hook installation path
+ORCA_OCI_* values, CODEX_HOME, ORCA_CODEX_HOME, and ORCA_OMP_STATUS_EXTENSION
+OMP extension installation path and wrapper --extension argument
 Claude/Codex installed-script probe result
 archive result for the disposable session
 ```
 
 Do not restart `orca-tmux.service`, kill the tmux server, or touch a real project session for this probe.
+
 
 ### Task 7: Run focused OCI verification and preserve operational evidence
 
@@ -880,15 +887,15 @@ Re-run the four OCI shell suites and `git diff --check` after any final source c
 - [ ] The setup hook is idempotent for an existing exact-path session and fail-closed for a name/path mismatch; it does not auto-migrate old layouts.
 - [ ] A partial new layout is removed without touching any pre-existing session or the coordinator keeper.
 - [ ] A linked worktree passes when its canonical `show-toplevel` equals the worktree and its canonical `--git-common-dir` matches the repository root; a different repository is rejected.
-- [ ] Session environment contains the four exact `ORCA_OCI_*` variables and routes raw Codex to the same redirected `CODEX_HOME` where Orca registers its hook.
+- [ ] Session environment contains the four exact `ORCA_OCI_*` variables, the exact `ORCA_OMP_STATUS_EXTENSION` extension path, and routes raw Codex to the same redirected `CODEX_HOME` where Orca registers its hook.
 - [ ] Claude and Codex raw recorders run after required provider exclusions, pass native payloads to the writer, and the manifest changes only for native `SessionStart.session_id`; ordinary events leave it unchanged.
 - [ ] Claude's shared `~/.orca/agent-hooks/claude-hook.sh` and Codex's shared `~/.orca/agent-hooks/codex-hook.sh` contain the recorder; Codex's redirected `CODEX_HOME/hooks.json` independently registers the shared launcher.
-- [ ] OMP records `getSessionId()` and optional `getSessionFile()` through the auto-discovered hook.
-- [ ] The manifest is keyed by canonical worktree path, validates canonical root/worktree identity and shared Git common directory, is mode 0600 under mode-0700 directories, serializes concurrent writers, and publishes atomically.
-- [ ] The coordinator sends fixed provider resume commands with exact dangerous approval flags only to sessions observed as newly created in the current invocation.
+- [ ] OMP records the current durable `getSessionId()` on every supported context-bearing lifecycle callback (not `session_start`, which the current OMP status source intentionally does not register), using `getSessionFile()` only as a persistence gate; the extension is installed under the agent directory's `extensions` child, selected through `ORCA_OMP_STATUS_EXTENSION`, and passed explicitly with `omp --extension` during recovery.
+- [ ] Every Claude, Codex, and OMP provider ID is normalized with the shared trim/empty/512-character/leading-dash/control-character boundary; rejected IDs cannot mutate the manifest or reach resume argv.
+- [ ] The coordinator sends fixed provider resume commands with exact dangerous approval flags only to sessions observed as newly created in the current invocation; OMP receives only its recorded `session_id`.
 - [ ] Claude capability preflight uses a non-launching parser-acceptance probe; unsupported flags, missing artifacts, and failed launches leave shells plus `RECOVERY_REQUIRED` with no fallback.
 - [ ] A second coordinator invocation sends no duplicate provider command to an existing session, including after a provider failure.
 - [ ] `ORCA_COORDINATOR_RESUME_AGENTS=0` suppresses provider sends without suppressing the four-window layout.
 - [ ] Windows/hpv2 inventory entries remain excluded and hpv2/runtime failures do not destroy OCI sessions.
 - [ ] Raw tmux remains outside Orca's managed worker/UI contract.
-- [ ] The supported OCI managed-hook deployment and live installed-script probe are recorded separately from hpv2 source validation; focused shell tests, ShellCheck, hpv2 provider-hook tests, node typecheck, changed-file quality, exact SHA sync, and operational before/after hashes are recorded.
+- [ ] The supported OCI managed-hook deployment and live installed-script probe are recorded separately from hpv2 source validation; the exact `agent hooks on` runtime/offline route, returned statuses, focused shell tests, ShellCheck, hpv2 provider-hook tests, node typecheck, changed-file quality, exact SHA sync, and operational before/after hashes are recorded.

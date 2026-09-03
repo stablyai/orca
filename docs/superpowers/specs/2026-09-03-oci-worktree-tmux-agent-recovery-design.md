@@ -66,6 +66,7 @@ ORCA_OCI_SESSION_MANIFEST=<manifest path>
 ORCA_OCI_WORKTREE_PATH=<canonical worktree path>
 ORCA_OCI_REPO_ROOT=<canonical repository root>
 ORCA_OCI_PROVIDER_EVENT_WRITER=/srv/script/orca-worktree-session-manifest.sh
+ORCA_OMP_STATUS_EXTENSION=<installed OMP extension path>
 ```
 
 The writer path is host-local and may be overridden only by focused tests.
@@ -99,12 +100,26 @@ The provider-native raw event adapters then have one explicit path:
   `SessionStart`. Ordinary events must leave the manifest unchanged.
   The adapter extracts only the provider's native `session_id`; it never
   parses terminal output. The normal Orca status-hook path remains separate.
-- OMP loads `/srv/script/orca-omp-worktree-session-hook.ts`, installed as the
-  host-local auto-discovered hook extension under `~/.omp/agent/hooks/`. Its
-  `session_start` handler reads `ctx.sessionManager.getSessionId()` and
-  `ctx.sessionManager.getSessionFile()`, then invokes the same writer with the
-  exact ID and optional resume file path. It is a provider hook event, never
-  terminal-output parsing.
+- OMP uses `/srv/script/orca-omp-worktree-session-hook.ts`, installed under the
+  selected OMP agent directory's `extensions` child (normally
+  `~/.omp/agent/extensions/`). The setup hook sets
+  `ORCA_OMP_STATUS_EXTENSION` to that exact file. The existing
+  `src/main/pty/omp-shell-wrapper.ts` is the source-backed proof that OMP's
+  supported explicit invocation is `omp --extension <path>`; raw recovery
+  passes that argument directly and does not depend on an arbitrary tmux pane
+  having Orca's shell-startup wrapper. `~/.omp/agent/hooks/` is not an
+  auto-discovery contract.
+  The extension registers the context-bearing lifecycle callbacks
+  `before_agent_start`, `agent_start`, `tool_call`, `tool_execution_start`,
+  `tool_execution_end`, `tool_approval_requested`,
+  `tool_approval_resolved`, `message_end`, `agent_settled`, and `agent_end`.
+  The current OMP status source intentionally has no `session_start` handler.
+  Each callback rereads `ctx.sessionManager.getSessionId()` and
+  `getSessionFile()`, uses a non-empty session file only as the persistence
+  gate, and invokes the same writer with only the normalized native session ID.
+  OMP can switch sessions in-process, so the callback set must refresh the ID
+  rather than rely on a single initial callback. It is a provider hook event,
+  never terminal-output parsing.
 
 The writer realpaths both `ORCA_OCI_WORKTREE_PATH` and
 `ORCA_OCI_REPO_ROOT`. It requires
@@ -184,15 +199,18 @@ provider manifest entry matches that same worktree.
 | --- | --- |
 | `codex` | `codex resume <session-id> --dangerously-bypass-approvals-and-sandbox` |
 | `claude` | `claude --resume <session-id> --dangerously-skip-permissions` |
-| `omp` | `omp --resume <resume-file-or-session-id> --auto-approve --approval-mode=yolo` |
+| `omp` | `omp --extension <extension-path> --resume <session-id> --auto-approve --approval-mode=yolo` |
 
 The provider locator is not selected by tmux session name or a global recent
 session picker. The Codex locator is the recorded `session_id`; the Claude
 locator is its recorded `session_id`; the OMP locator is its recorded
-`resumeFilePath` when present, otherwise its recorded `session_id`. This
-matches the provider-specific mapping in
-`src/shared/agent-session-resume.ts:getAgentResumeArgv()` and the startup plan
-in `src/shared/tui-agent-resume-startup.ts:buildAgentResumeStartupPlan()`.
+`session_id` only. The OMP command also receives the exact extension path from
+`ORCA_OMP_STATUS_EXTENSION`; this is extension selection, not a session
+locator. The locator mapping matches
+`src/shared/agent-session-resume.ts:getAgentResumeArgv()` for the default OMP
+case. That function supports an explicit caller-supplied `ompResumeFilePath`
+override, but this OCI manifest does not populate that separate override from
+native `getSessionFile()`.
 
 The permission-bypass flags are an explicit OCI-only policy. They are not sent
 to hp_v2. OMP has no `dangerously-skip-permissions` flag; `--auto-approve` plus
@@ -229,7 +247,7 @@ and never committed to the worktree. Its minimum schema is:
   "providers": {
     "codex": { "key": "session_id", "id": "..." },
     "claude": { "key": "session_id", "id": "..." },
-    "omp": { "key": "session_id", "id": "...", "resumeFilePath": "..." }
+    "omp": { "key": "session_id", "id": "..." }
   }
 }
 ```
@@ -243,9 +261,16 @@ implementation must not infer an ID from terminal text, file mtime, a global
 recent-session picker, or a relay event that lacks the raw session's
 `ORCA_OCI_*` context. The writer receives a normalized provider locator from
 the adapter, realpaths and validates the worktree/root pair, then atomically
-updates the matching manifest. For OMP, `resumeFilePath` is stored only when
-`ctx.sessionManager.getSessionFile()` supplies the authoritative path;
-otherwise the exact OMP session ID remains the locator.
+updates the matching manifest. OMP's `getSessionFile()` is a persistence gate
+only; it is never serialized as `resumeFilePath` or used as the OCI resume
+target.
+
+All Claude, Codex, and OMP IDs use the same trust boundary as
+`normalizeAgentProviderSession` in `src/shared/agent-session-resume.ts`: trim
+surrounding whitespace, reject empty values, reject values over the shared
+512 string-length limit, reject a leading `-`, and reject control characters
+with code `<= 0x1f` or `0x7f`. Rejected values cannot mutate a manifest or reach
+resume argv.
 
 
 A manifest is consumed only when its recorded `worktreePath` and `repoRoot`
@@ -338,7 +363,10 @@ The setup-hook test must assert:
 - branch worktree name derivation;
 - exactly four windows in the documented order;
 - every window's session path and initial pane CWD match the worktree;
-- an existing session is reused without window mutation;
+- `ORCA_OMP_STATUS_EXTENSION` points to the installed extension under the
+  agent directory's `extensions` child and the coordinator's recovery argv
+  passes that exact path with `omp --extension`;
+- an existing session is reused without window or extension mutation;
 - path mismatch fails closed.
 
 The manifest tests must assert:
@@ -351,6 +379,10 @@ The manifest tests must assert:
   `--git-common-dir`, including a real linked-worktree fixture;
 - Codex, Claude, and OMP locators are persisted with their provider-specific
   fields;
+- surrounding whitespace is trimmed before persistence;
+- empty, overlong, leading-dash, or control-character IDs from all three
+  providers return non-zero, leave the prior manifest field unchanged, and
+  never reach a resume command;
 - manifest writes are private and atomic;
 - a moved worktree, missing provider entry, malformed locator, or provider
   mismatch yields `RECOVERY_REQUIRED`;
@@ -369,8 +401,10 @@ The event-path tests must assert:
 - Codex's redirected runtime `CODEX_HOME/hooks.json` `SessionStart`
   registration points to the shared `~/.orca/agent-hooks/codex-hook.sh`
   launcher, and that launcher contains the recorder;
-- OMP `session_start` reaches the writer with
-  `ctx.sessionManager.getSessionId()` and its optional session file;
+- OMP registers the confirmed lifecycle event set, rereads a mutable
+  `ctx.sessionManager` ID after a session switch, and records both native IDs;
+- OMP with a missing `getSessionFile()` does not invoke the writer, and no OMP
+  event passes `--resume-file`;
 - absent or mismatched `ORCA_OCI_*` context cannot write another worktree's
   manifest;
 - no manifest update depends on terminal text, mtime, or recent-session order.
@@ -382,12 +416,14 @@ The coordinator test must assert:
 - only sessions created during the current invocation receive provider
   commands;
 - the exact provider-specific locator commands are sent to the matching
-  windows;
+  windows, with OMP receiving only its recorded `session_id`;
+- invalid provider IDs are rejected before `send-keys`;
 - `ORCA_COORDINATOR_RESUME_AGENTS=0` restores sessions without provider starts;
 - provider resume failure produces `RECOVERY_REQUIRED` and no fresh command;
 - an existing session is not resumed again;
 - an unreachable hp_v2 runtime does not destroy the OCI keeper or local session
   inventory.
+
 
 Run CLI help probes for the installed Codex, Claude, and OMP versions and keep
 the exact-resume assertions aligned with
@@ -399,7 +435,9 @@ provider's resume syntax from another provider.
 
 Provider preflight tests must cover the installed Codex, Claude, and OMP
 selector/permission flags, with unsupported flags producing
-`RECOVERY_REQUIRED` and no downgrade.
+`RECOVERY_REQUIRED` and no downgrade. The OMP preflight and recovery command
+must use the manifest's ID, never a native session-file path.
+
 
 Recovery idempotency tests must cover a second coordinator invocation after
 each provider preflight/start failure: it must leave the existing session
@@ -410,15 +448,23 @@ The UI-visible managed-worker acceptance remains a separate Orca UI/AgentMap
 smoke check. It must verify a managed worker has its own terminal and managed
 lineage; it must not expect a raw tmux window to become a card.
 
-## Verification and delivery
-
 Read-only source inspection, ShellCheck, and focused shell tests run on OCI.
 Project pnpm gates, builds, packaging, and Electron validation remain hp_v2-only
 through the coordinator. No hp_v2 reboot is required for normal OCI session
 recovery verification; a controlled OCI tmux-service restart or host reboot
 scenario must be performed only by the coordinator/host owner.
 
-Before claiming recovery support, record the focused test output and verify that
-provider resume is attempted only for newly created sessions. Keep the provider
-resume policy independent from hp_v2 terminal handles, SHA gates, and remote
-wire fields.
+Before claiming recovery support, record the focused test output and verify
+that provider resume is attempted only for newly created sessions. For live
+managed-hook deployment, use the supported `agent hooks on` entrypoint: a
+reachable runtime routes the settings update through
+`src/main/ipc/settings.ts` to `applyAgentStatusHooksEnabled()` and
+`installManagedAgentHooks()`, while the CLI's offline path calls the same
+installation operation directly. This refreshes the managed Claude/Codex
+artifacts; it does not install the raw OMP recovery extension. The live setup
+hook installs that extension under `~/.omp/agent/extensions/`, sets
+`ORCA_OMP_STATUS_EXTENSION`, and the disposable-session probe verifies the
+explicit `omp --extension` route. `agent hooks status` alone is not a refresh
+operation. Record the returned statuses and verify all artifacts before
+updating the live setup hook. Keep the provider resume policy independent from
+hp_v2 terminal handles, SHA gates, and remote wire fields.
