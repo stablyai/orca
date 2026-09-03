@@ -11739,6 +11739,14 @@
         },
         "NativeChatSupportedAgents": {
           "label": "Supported agents:"
+        },
+        "RemoveIntegrationButton": {
+          "title": "Remove {{value0}} integration?",
+          "description": "Orca will delete its saved credentials for this integration from {{value0}}. Credentials issued by {{value1}} will not be revoked.",
+          "confirm": "Remove",
+          "success": "{{value0}} integration removed.",
+          "failure": "Could not remove the {{value0}} integration.",
+          "action": "Remove"
         }
       },
       "right": {

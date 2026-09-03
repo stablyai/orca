@@ -7,6 +7,7 @@ import { useMountedRef } from '@/hooks/useMountedRef'
 import { getProviderRuntimeContextKey } from '@/lib/provider-runtime-context'
 import { useAppStore } from '@/store'
 import { IntegrationCardDetails, IntegrationCardShell } from './integration-card-shell'
+import { RemoveIntegrationButton } from './RemoveIntegrationButton'
 import { useIntegrationSubordinateRowClass } from './integration-card-presentation'
 import { LinearAgentSkillInstallCta } from './linear-agent-skill-install-cta'
 import { getProviderAccountScope } from './provider-account-scope'
@@ -104,21 +105,30 @@ export function LinearIntegrationCard(): React.JSX.Element {
       }
       actions={
         !checking ? (
-          <Button
-            variant={connected ? 'outline' : 'default'}
-            size="sm"
-            onClick={() => setDialogOpen(true)}
-          >
-            {connected
-              ? translate(
-                  'auto.components.settings.task.tracker.integration.cards.622c224082',
-                  'Add workspace access'
-                )
-              : translate(
-                  'auto.components.settings.task.tracker.integration.cards.1a12e33fe5',
-                  'Add Linear access'
-                )}
-          </Button>
+          <>
+            <Button
+              variant={connected ? 'outline' : 'default'}
+              size="sm"
+              onClick={() => setDialogOpen(true)}
+            >
+              {connected
+                ? translate(
+                    'auto.components.settings.task.tracker.integration.cards.622c224082',
+                    'Add workspace access'
+                  )
+                : translate(
+                    'auto.components.settings.task.tracker.integration.cards.1a12e33fe5',
+                    'Add Linear access'
+                  )}
+            </Button>
+            {connected ? (
+              <RemoveIntegrationButton
+                integrationName="Linear"
+                scopeLabel={accountScope.label}
+                onRemove={() => handleDisconnect()}
+              />
+            ) : null}
+          </>
         ) : null
       }
     >
