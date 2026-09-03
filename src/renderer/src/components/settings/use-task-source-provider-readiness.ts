@@ -1,4 +1,4 @@
-import { useMemo } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import type { TaskProvider } from '../../../../shared/task-providers'
 import {
   GLOBAL_AGENT_SKILL_SOURCE_KINDS,
@@ -11,6 +11,7 @@ import { getLocalPreflightContext, localPreflightContextKey } from '@/lib/local-
 import { getProviderRuntimeContextKey } from '@/lib/provider-runtime-context'
 import { useAppStore } from '@/store'
 import type { TaskProviderReadiness } from './task-source-setup-state'
+import { sentryStatus } from '@/runtime/runtime-sentry-client'
 
 export function useTaskSourceProviderReadiness(
   visibleProviders: readonly TaskProvider[]
@@ -32,6 +33,25 @@ export function useTaskSourceProviderReadiness(
   const linearStatusContextKey = useAppStore((s) => s.linearStatusContextKey)
   const providerRuntimeContextKey = getProviderRuntimeContextKey(settings)
   const activeSkillRuntime = useActiveProjectSkillRuntime()
+  const [sentryState, setSentryState] = useState({ connected: false, checking: true })
+
+  useEffect(() => {
+    let active = true
+    const refresh = (): void => {
+      setSentryState((current) => ({ ...current, checking: true }))
+      void sentryStatus(settings)
+        .then(
+          (status) => active && setSentryState({ connected: status.connected, checking: false })
+        )
+        .catch(() => active && setSentryState({ connected: false, checking: false }))
+    }
+    refresh()
+    window.addEventListener('sentry-connection-changed', refresh)
+    return () => {
+      active = false
+      window.removeEventListener('sentry-connection-changed', refresh)
+    }
+  }, [providerRuntimeContextKey, settings])
 
   const {
     installed: linearSkillInstalled,
@@ -89,6 +109,11 @@ export function useTaskSourceProviderReadiness(
         connected: jiraConnected,
         checking: jiraChecking,
         visible: visible.has('jira')
+      },
+      sentry: {
+        connected: sentryState.connected,
+        checking: sentryState.checking,
+        visible: visible.has('sentry')
       }
     }
   }, [
@@ -103,6 +128,7 @@ export function useTaskSourceProviderReadiness(
     linearSkillSettled,
     reviewChecking,
     reviewUnavailable,
+    sentryState,
     visibleProvidersKey
   ])
 }

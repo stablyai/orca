@@ -6,6 +6,7 @@ import { TaskPageGitHubList } from './github/List'
 import { TaskPageGitLabTodoList } from './gitlab/TodoList'
 import { TaskPageGitLabItemList } from './gitlab/ItemList'
 import { TaskPageJiraContent } from './jira/Content'
+import { TaskPageSentryContent } from './sentry/Content'
 export function TaskPageContent({
   model
 }: {
@@ -69,6 +70,8 @@ export function TaskPageContent({
     <TaskPageGitLabTodoList model={model} />
   ) : taskSource === 'gitlab' ? (
     <TaskPageGitLabItemList model={model} />
+  ) : taskSource === 'sentry' ? (
+    <TaskPageSentryContent model={model} />
   ) : (
     <TaskPageJiraContent model={model} />
   )

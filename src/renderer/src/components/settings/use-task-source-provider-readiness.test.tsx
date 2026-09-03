@@ -45,7 +45,11 @@ vi.mock('@/hooks/useInstalledAgentSkills', () => ({
   useInstalledAgentSkillNames: () => mocks.skill
 }))
 
-const ALL_PROVIDERS: readonly TaskProvider[] = ['github', 'gitlab', 'linear', 'jira']
+vi.mock('@/runtime/runtime-sentry-client', () => ({
+  sentryStatus: () => Promise.resolve({ connected: true })
+}))
+
+const ALL_PROVIDERS: readonly TaskProvider[] = ['github', 'gitlab', 'linear', 'jira', 'sentry']
 
 let root: Root | null = null
 let container: HTMLDivElement | null = null

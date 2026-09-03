@@ -18,6 +18,8 @@ export function areWorkspaceLinkedItemsEqual(
     a.url === b.url &&
     (a.linearIdentifier ?? null) === (b.linearIdentifier ?? null) &&
     (a.jiraIdentifier ?? null) === (b.jiraIdentifier ?? null) &&
+    (a.sentryIssueId ?? null) === (b.sentryIssueId ?? null) &&
+    (a.sentryShortId ?? null) === (b.sentryShortId ?? null) &&
     (a.repoId ?? null) === (b.repoId ?? null)
   )
 }
@@ -31,7 +33,8 @@ export function normalizeWorkspaceLinkedItem(value: unknown): WorkspaceLinkedIte
     raw.provider !== 'github' &&
     raw.provider !== 'gitlab' &&
     raw.provider !== 'linear' &&
-    raw.provider !== 'jira'
+    raw.provider !== 'jira' &&
+    raw.provider !== 'sentry'
   ) {
     return null
   }
@@ -59,6 +62,12 @@ export function normalizeWorkspaceLinkedItem(value: unknown): WorkspaceLinkedIte
       : {}),
     ...(typeof raw.jiraIdentifier === 'string' && raw.jiraIdentifier.trim().length > 0
       ? { jiraIdentifier: raw.jiraIdentifier.trim() }
+      : {}),
+    ...(typeof raw.sentryIssueId === 'string' && raw.sentryIssueId.trim().length > 0
+      ? { sentryIssueId: raw.sentryIssueId.trim() }
+      : {}),
+    ...(typeof raw.sentryShortId === 'string' && raw.sentryShortId.trim().length > 0
+      ? { sentryShortId: raw.sentryShortId.trim() }
       : {}),
     ...(typeof raw.repoId === 'string' && raw.repoId.trim().length > 0
       ? { repoId: raw.repoId.trim() }
