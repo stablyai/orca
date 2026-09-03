@@ -10,7 +10,16 @@ import {
   selectOrcaCloudOrg
 } from './profile-cloud-client'
 
-const fetchMock = vi.fn()
+const { fetchMock } = vi.hoisted(() => ({ fetchMock: vi.fn() }))
+
+vi.mock('electron', () => ({
+  net: { fetch: fetchMock },
+  session: { defaultSession: {} }
+}))
+
+vi.mock('../network/proxy-settings', () => ({
+  ensureElectronProxyFromEnvironment: vi.fn().mockResolvedValue({ source: 'none' })
+}))
 
 const config: OrcaCloudAuthConfig = {
   apiBaseUrl: 'https://orca-cloud.example',
@@ -44,7 +53,6 @@ function mockFetchJson(value: unknown): void {
 describe('Orca cloud client', () => {
   beforeEach(() => {
     fetchMock.mockReset()
-    vi.stubGlobal('fetch', fetchMock)
   })
 
   it('normalizes session exchange organizations', async () => {

@@ -10,7 +10,16 @@ import {
   revokeOrcaCloudOrgInvite
 } from './profile-cloud-org-members-client'
 
-const fetchMock = vi.fn()
+const { fetchMock } = vi.hoisted(() => ({ fetchMock: vi.fn() }))
+
+vi.mock('electron', () => ({
+  net: { fetch: fetchMock },
+  session: { defaultSession: {} }
+}))
+
+vi.mock('../network/proxy-settings', () => ({
+  ensureElectronProxyFromEnvironment: vi.fn().mockResolvedValue({ source: 'none' })
+}))
 
 const config: OrcaCloudAuthConfig = {
   apiBaseUrl: 'https://orca-cloud.example',
@@ -45,7 +54,6 @@ function mockJsonResponse(value: unknown, init: { ok?: boolean; status?: number 
 describe('Orca cloud org members client', () => {
   beforeEach(() => {
     fetchMock.mockReset()
-    vi.stubGlobal('fetch', fetchMock)
   })
 
   it('normalizes the roster, dropping malformed rows and defaulting the viewer role', async () => {
