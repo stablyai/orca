@@ -55,6 +55,12 @@ function moveContainer(container: HTMLElement, left: number, top: number): void 
     ({ left, top, width: 400, height: 300 }) as unknown as DOMRect
 }
 
+function breakContainer(container: HTMLElement): void {
+  container.getBoundingClientRect = () => {
+    throw new Error('rect read failed')
+  }
+}
+
 async function attachHost(
   browserPageId: string,
   left: number
@@ -165,6 +171,31 @@ describe('client-hosted page position driver', () => {
 
     expect(frames.pending()).toBe(0)
     expect(frames.cancelled()).toHaveLength(1)
+  })
+
+  // Why this is pinned: one loop now serves every overlay, so a host that throws must not take
+  // the others down with it — nothing would restart the loop, and a pane that merely moves fires
+  // no resize/scroll event to recover from.
+  it('keeps syncing the other hosts and reschedules when one host throws', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const broken = await attachHost('page-one', 10)
+    const healthy = await attachHost('page-two', 20)
+
+    breakContainer(broken.container)
+    moveContainer(healthy.container, 222, 12)
+    frames.runFrame()
+
+    expect(healthy.host().style.left).toBe('222px')
+    expect(healthy.host().style.top).toBe('12px')
+    expect(frames.pending()).toBe(1)
+
+    // Still running a frame later, and the repeat failure is not re-logged every frame.
+    moveContainer(healthy.container, 333, 24)
+    frames.runFrame()
+
+    expect(healthy.host().style.left).toBe('333px')
+    expect(frames.pending()).toBe(1)
+    expect(warn).toHaveBeenCalledTimes(1)
   })
 
   it('releases a disposed registry host from the shared loop without its pane detaching', async () => {

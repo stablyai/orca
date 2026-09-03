@@ -13,21 +13,37 @@
  * fires another `visibilitychange` (see `terminal-pane/stale-document-visibility.ts`) — and
  * there a gate would freeze every overlay on a window the user is looking at, with no
  * recovery. Zero upside, unrecoverable downside: let Chromium's own throttling do it.
+ *
+ * Sharing one loop would otherwise make a throwing host everyone's problem, so each sync is
+ * isolated and the reschedule is unconditional: one bad host is skipped, never one that
+ * wedges every other overlay at a stale rect with no event left to recover it.
  */
 
 /** Re-reads one host's container rect and repositions its overlay. */
 export type BrowserClientPagePositionSync = () => void
 
 const syncs = new Set<BrowserClientPagePositionSync>()
+/** Already-reported syncs, so a host failing every frame is one log line, not sixty a second. */
+const reportedFailures = new WeakSet<BrowserClientPagePositionSync>()
 let frame: number | null = null
 
 function runFrame(): void {
   frame = null
-  // Copied: a host may register or drop out while being synced.
-  for (const sync of Array.from(syncs)) {
-    sync()
+  try {
+    // Copied: a host may register or drop out while being synced.
+    for (const sync of Array.from(syncs)) {
+      try {
+        sync()
+      } catch (error) {
+        if (!reportedFailures.has(sync)) {
+          reportedFailures.add(sync)
+          console.warn('[browser-pane] client-hosted page position sync failed:', error)
+        }
+      }
+    }
+  } finally {
+    startFrame()
   }
-  startFrame()
 }
 
 function startFrame(): void {
