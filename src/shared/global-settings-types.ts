@@ -140,6 +140,8 @@ export type GlobalSettings = {
   terminalActivePaneOpacity: number
   terminalPaneOpacityTransitionMs: number
   terminalDividerThicknessPx: number
+  terminalActivePaneBorderEnabled?: boolean
+  terminalActivePaneBorderColor?: string
   terminalBackgroundOpacity?: number
   terminalColorOverrides?: TerminalColorOverrides
   terminalPaddingX?: number

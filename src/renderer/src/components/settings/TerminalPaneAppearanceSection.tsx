@@ -1,6 +1,11 @@
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import { DEFAULT_TERMINAL_INACTIVE_PANE_OPACITY } from '../../../../shared/constants'
-import { NumberField, SettingsSubsectionHeader } from './SettingsFormControls'
+import {
+  ColorField,
+  NumberField,
+  SettingsSubsectionHeader,
+  SettingsSwitchRow
+} from './SettingsFormControls'
 import { SearchableSetting } from './SearchableSetting'
 import { clampNumber, resolvePaneStyleOptions } from '@/lib/terminal-theme'
 import { translate } from '@/i18n/i18n'
@@ -15,7 +20,6 @@ export function TerminalPaneAppearanceSection({
   updateSettings
 }: TerminalPaneAppearanceSectionProps): React.JSX.Element {
   const paneStyleOptions = resolvePaneStyleOptions(settings)
-
   return (
     <section className="space-y-3">
       <SettingsSubsectionHeader
@@ -88,6 +92,56 @@ export function TerminalPaneAppearanceSection({
                 terminalDividerThicknessPx: clampNumber(value, 1, 32)
               })
             }
+          />
+        </SearchableSetting>
+        <SearchableSetting
+          title={translate(
+            'auto.components.settings.TerminalAppearanceSection.activePaneBorder',
+            'Active Pane Border'
+          )}
+          description={translate(
+            'auto.components.settings.TerminalAppearanceSection.activePaneBorderDesc',
+            'Outline the focused pane. Matches the divider thickness above.'
+          )}
+          keywords={['pane', 'border', 'outline', 'active', 'focus', 'highlight']}
+        >
+          <SettingsSwitchRow
+            label={translate(
+              'auto.components.settings.TerminalAppearanceSection.activePaneBorder',
+              'Active Pane Border'
+            )}
+            description={translate(
+              'auto.components.settings.TerminalAppearanceSection.activePaneBorderDesc',
+              'Outline the focused pane. Matches the divider thickness above.'
+            )}
+            checked={paneStyleOptions.activePaneBorderEnabled}
+            onChange={() =>
+              updateSettings({
+                terminalActivePaneBorderEnabled: !paneStyleOptions.activePaneBorderEnabled
+              })
+            }
+          />
+        </SearchableSetting>
+        <SearchableSetting
+          title={translate(
+            'auto.components.settings.TerminalAppearanceSection.activePaneBorderColor',
+            'Active Pane Border Color'
+          )}
+          description={translate(
+            'auto.components.settings.TerminalAppearanceSection.activePaneBorderColorDesc',
+            'Color of the focused pane outline.'
+          )}
+          keywords={['pane', 'border', 'outline', 'color', 'active', 'focus', 'highlight']}
+        >
+          <ColorField
+            label={translate(
+              'auto.components.settings.TerminalAppearanceSection.activePaneBorderColor',
+              'Active Pane Border Color'
+            )}
+            description=""
+            value={settings.terminalActivePaneBorderColor ?? ''}
+            fallback={document.documentElement.classList.contains('dark') ? '#60a5fa' : '#2563eb'}
+            onChange={(value) => updateSettings({ terminalActivePaneBorderColor: value })}
           />
         </SearchableSetting>
       </div>

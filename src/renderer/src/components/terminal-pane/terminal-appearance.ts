@@ -238,6 +238,8 @@ export function applyTerminalAppearance(
     activePaneOpacity: paneStyles.activePaneOpacity,
     opacityTransitionMs: paneStyles.opacityTransitionMs,
     dividerThicknessPx: paneStyles.dividerThicknessPx,
+    activePaneBorderEnabled: paneStyles.activePaneBorderEnabled,
+    activePaneBorderColor: paneStyles.activePaneBorderColor,
     focusFollowsMouse: paneStyles.focusFollowsMouse,
     paddingX: settings.terminalPaddingX,
     paddingY: settings.terminalPaddingY

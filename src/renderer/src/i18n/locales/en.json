@@ -8440,7 +8440,11 @@
           "e90afcc44f": "off",
           "16c471ee03": "on",
           "typographyAdvanced": "Typography",
-          "dimUnfocusedPanes": "Dim unfocused panes."
+          "dimUnfocusedPanes": "Dim unfocused panes.",
+          "activePaneBorder": "Active Pane Border",
+          "activePaneBorderDesc": "Outline the focused pane. Matches the divider thickness above.",
+          "activePaneBorderColor": "Active Pane Border Color",
+          "activePaneBorderColorDesc": "Color of the focused pane outline."
         },
         "TerminalAdvancedTypographyControls": {
           "f5fa1a08f1": "Bold Font Weight",
@@ -10227,6 +10231,11 @@
             "e58d4040d0": "Thickness of the pane divider line.",
             "2d5ab88b7c": "Divider Thickness",
             "6c4c85ba43": "dimming",
+            "activePaneBorder": "Active Pane Border",
+            "activePaneBorderDescription": "Outline the focused pane in a color you pick.",
+            "border": "border",
+            "outline": "outline",
+            "highlight": "highlight",
             "18dd5026c6": "Opacity applied to panes that are not currently active.",
             "72bbcbd1dd": "Inactive Pane Opacity",
             "d4f7d1ce5c": "Opacity of the terminal cursor.",

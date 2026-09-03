@@ -7,7 +7,12 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { buildDefaultTerminalOptions } from '@/lib/pane-manager/pane-terminal-options'
 import { buildFontFamily } from '@/components/terminal-pane/layout-serialization'
 import { composeActiveTerminalTheme } from '@/components/terminal-pane/terminal-appearance'
-import { clampNumber, resolveEffectiveTerminalAppearance } from '@/lib/terminal-theme'
+import {
+  clampNumber,
+  DEFAULT_TERMINAL_ACTIVE_PANE_BORDER_COLOR,
+  normalizeColor,
+  resolveEffectiveTerminalAppearance
+} from '@/lib/terminal-theme'
 import { resolveTerminalMinimumContrastRatio } from '@/lib/terminal-contrast-correction'
 import { resolveTerminalFontWeights } from '../../../../shared/terminal-fonts'
 import { resolveTerminalLigaturesEnabled } from '../../../../shared/terminal-ligatures'
@@ -110,6 +115,18 @@ export function TerminalSettingsPreview({
 
   const dividerThicknessPx = clampNumber(settings.terminalDividerThicknessPx, 1, 32)
   const inactivePaneOpacity = clampNumber(settings.terminalInactivePaneOpacity, 0, 1)
+  const activePaneBorderStyle: React.CSSProperties | undefined =
+    settings.terminalActivePaneBorderEnabled
+      ? {
+          outlineStyle: 'solid',
+          outlineWidth: dividerThicknessPx,
+          outlineOffset: -dividerThicknessPx,
+          outlineColor: normalizeColor(
+            settings.terminalActivePaneBorderColor,
+            DEFAULT_TERMINAL_ACTIVE_PANE_BORDER_COLOR
+          )
+        }
+      : undefined
   const paneBackground = composedTheme?.background ?? '#000'
 
   useEffect(() => {
@@ -318,7 +335,7 @@ export function TerminalSettingsPreview({
             <div
               ref={containerRef}
               className="min-w-0 flex-1 overflow-hidden p-2"
-              style={{ backgroundColor: paneBackground }}
+              style={{ backgroundColor: paneBackground, ...activePaneBorderStyle }}
               tabIndex={-1}
             />
             {previewPaneDividerVisible ? (

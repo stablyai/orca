@@ -11,12 +11,8 @@ import type {
 } from './pane-manager-types'
 import type { SplitPaneAroundLeafIdsOptions } from './pane-subtree-split'
 import type { PaneManagerHost } from './pane-manager-host'
-import {
-  applyDividerStyles,
-  applyPaneOpacity,
-  applyRootBackground,
-  disposeDividersIn
-} from './pane-divider'
+import { applyDividerStyles, applyRootBackground, disposeDividersIn } from './pane-divider'
+import { applyActivePaneStyles, disposeActivePaneBorder } from './pane-active-border'
 import { cancelActivePaneDrag, createDragReorderState, handlePaneDrop } from './pane-drag-reorder'
 import { beginPaneDragFromPointerDown } from './pane-drag-pointer'
 import { setLigaturesEnabled, disposePane } from './pane-lifecycle'
@@ -232,7 +228,7 @@ export class PaneManager {
     }
     const changed = this.activePaneId !== paneId
     this.activePaneId = paneId
-    applyPaneOpacity(this.panes.values(), this.activePaneId, this.styleOptions)
+    applyActivePaneStyles(this.root, this.panes.values(), this.activePaneId, this.styleOptions)
 
     if (opts?.focus !== false) {
       pane.terminal.focus()
@@ -245,7 +241,7 @@ export class PaneManager {
 
   setPaneStyleOptions(opts: PaneStyleOptions): void {
     this.styleOptions = { ...opts }
-    applyPaneOpacity(this.panes.values(), this.activePaneId, this.styleOptions)
+    applyActivePaneStyles(this.root, this.panes.values(), this.activePaneId, this.styleOptions)
     applyDividerStyles(this.root, this.styleOptions)
     applyRootBackground(this.root, this.styleOptions)
   }
@@ -349,6 +345,7 @@ export class PaneManager {
     }
     this.identities.clear()
     disposeDividersIn(this.root)
+    disposeActivePaneBorder(this.root)
     this.root.innerHTML = ''
     this.activePaneId = null
   }

@@ -7406,7 +7406,11 @@
           "e90afcc44f": "关",
           "16c471ee03": "开",
           "typographyAdvanced": "排版",
-          "dimUnfocusedPanes": "调暗未聚焦的窗格。"
+          "dimUnfocusedPanes": "调暗未聚焦的窗格。",
+          "activePaneBorder": "活动窗格边框",
+          "activePaneBorderDesc": "为聚焦的窗格描边。粗细与上方分割线一致。",
+          "activePaneBorderColor": "活动窗格边框颜色",
+          "activePaneBorderColorDesc": "聚焦窗格边框的颜色。"
         },
         "TerminalFontSizeSetting": {
           "9b5252c85a": "像素",
@@ -9165,6 +9169,11 @@
             "e58d4040d0": "窗格分隔线的厚度。",
             "2d5ab88b7c": "分隔板厚度",
             "6c4c85ba43": "调光",
+            "activePaneBorder": "活动窗格边框",
+            "activePaneBorderDescription": "用指定的颜色为聚焦的窗格描边。",
+            "border": "边框",
+            "outline": "描边",
+            "highlight": "高亮",
             "18dd5026c6": "不透明度应用于当前不活动的窗格。",
             "72bbcbd1dd": "非活动窗格不透明度",
             "d4f7d1ce5c": "终端光标的不透明度。",

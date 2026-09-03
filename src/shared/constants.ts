@@ -171,6 +171,12 @@ export function getDefaultSettings(homedir: string): GlobalSettings {
       typeof process !== 'undefined' && process.platform === 'linux',
     terminalFontFamily: defaultTerminalFontFamily(),
     terminalInactivePaneOpacity: DEFAULT_TERMINAL_INACTIVE_PANE_OPACITY,
+    terminalActivePaneOpacity: 1,
+    terminalPaneOpacityTransitionMs: 140,
+    terminalDividerThicknessPx: 3,
+    terminalActivePaneBorderEnabled: false,
+    terminalActivePaneBorderColor: '',
+    // Why: Windows paste-on-right-click matches native convention; macOS/Linux keep right-click for the context menu.
     terminalRightClickToPaste: getDefaultTerminalRightClickToPaste(),
     notifications: getDefaultNotificationSettings(),
     voice: getDefaultVoiceSettings()

@@ -24,5 +24,7 @@ export const SETTING_LABELS: Partial<Record<keyof GlobalSettings, string>> = {
   terminalDividerColorDark: 'Divider Color (Dark)',
   terminalDividerColorLight: 'Divider Color (Light)',
   terminalInactivePaneOpacity: 'Inactive Pane Opacity',
+  terminalActivePaneBorderEnabled: 'Active Pane Border',
+  terminalActivePaneBorderColor: 'Active Pane Border Color',
   windowBackgroundBlur: 'Window Background Blur'
 }

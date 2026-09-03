@@ -9,7 +9,7 @@ const disposeWebgl = vi.hoisted(() => vi.fn())
 const clearPendingSplitScrollRestore = vi.hoisted(() => vi.fn())
 const scheduleSplitScrollRestore = vi.hoisted(() => vi.fn())
 const updateMultiPaneState = vi.hoisted(() => vi.fn())
-const applyPaneOpacity = vi.hoisted(() => vi.fn())
+const applyActivePaneStyles = vi.hoisted(() => vi.fn())
 const applyDividerStyles = vi.hoisted(() => vi.fn())
 
 vi.mock('./pane-tree-ops', () => ({
@@ -40,8 +40,11 @@ vi.mock('./pane-drag-reorder', () => ({
 }))
 
 vi.mock('./pane-divider', () => ({
-  applyDividerStyles,
-  applyPaneOpacity
+  applyDividerStyles
+}))
+
+vi.mock('./pane-active-border', () => ({
+  applyActivePaneStyles
 }))
 
 import { splitManagedPane } from './pane-split-close'

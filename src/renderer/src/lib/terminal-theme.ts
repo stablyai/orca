@@ -15,6 +15,8 @@ export const DEFAULT_TERMINAL_THEME_DARK = 'Ghostty Default Style Dark'
 export const DEFAULT_TERMINAL_THEME_LIGHT = 'Builtin Tango Light'
 export const DEFAULT_TERMINAL_DIVIDER_DARK = '#3f3f46'
 const DEFAULT_TERMINAL_DIVIDER_LIGHT = '#d4d4d8'
+/** Empty color setting = follow the theme's pane-locate accent (main.css). */
+export const DEFAULT_TERMINAL_ACTIVE_PANE_BORDER_COLOR = 'var(--terminal-pane-locate)'
 
 export type EffectiveTerminalAppearance = {
   mode: 'dark' | 'light'
@@ -160,6 +162,8 @@ export function resolvePaneStyleOptions(
     | 'terminalActivePaneOpacity'
     | 'terminalPaneOpacityTransitionMs'
     | 'terminalDividerThicknessPx'
+    | 'terminalActivePaneBorderEnabled'
+    | 'terminalActivePaneBorderColor'
     | 'terminalFocusFollowsMouse'
   >
 ) {
@@ -168,6 +172,11 @@ export function resolvePaneStyleOptions(
     activePaneOpacity: clampNumber(settings.terminalActivePaneOpacity, 0, 1),
     opacityTransitionMs: clampNumber(settings.terminalPaneOpacityTransitionMs, 0, 5000),
     dividerThicknessPx: clampNumber(settings.terminalDividerThicknessPx, 1, 32),
+    activePaneBorderEnabled: settings.terminalActivePaneBorderEnabled ?? false,
+    activePaneBorderColor: normalizeColor(
+      settings.terminalActivePaneBorderColor,
+      DEFAULT_TERMINAL_ACTIVE_PANE_BORDER_COLOR
+    ),
     // Why no clamping: boolean pass-through. Both true and false are valid.
     focusFollowsMouse: settings.terminalFocusFollowsMouse
   }

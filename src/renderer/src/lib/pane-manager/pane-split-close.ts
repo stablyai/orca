@@ -15,7 +15,8 @@ import {
   safeFit,
   wrapInSplit
 } from './pane-tree-ops'
-import { applyDividerStyles, applyPaneOpacity } from './pane-divider'
+import { applyDividerStyles } from './pane-divider'
+import { applyActivePaneStyles } from './pane-active-border'
 import { disposePane, openTerminal } from './pane-lifecycle'
 import { disposeWebgl } from './pane-webgl-renderer'
 import { clearPendingSplitScrollRestore, scheduleSplitScrollRestore } from './pane-split-scroll'
@@ -142,7 +143,7 @@ function openSplitPane(
   cwd?: string
 ): void {
   openTerminal(newPane)
-  applyPaneOpacity(args.panes.values(), newPane.id, args.styleOptions)
+  applyActivePaneStyles(args.root, args.panes.values(), newPane.id, args.styleOptions)
   applyDividerStyles(args.root, args.styleOptions)
   newPane.terminal.focus()
   updateMultiPaneState(args.getDragCallbacks())
@@ -187,7 +188,7 @@ function teardownManagedPane(
     releaseTerminalScrollIntentKey(closedLeafId)
   }
   const nextActivePaneId = activateReplacementPane(args)
-  applyPaneOpacity(args.panes.values(), nextActivePaneId, args.styleOptions)
+  applyActivePaneStyles(args.root, args.panes.values(), nextActivePaneId, args.styleOptions)
   for (const p of args.panes.values()) {
     safeFit(p)
   }
