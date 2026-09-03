@@ -65,6 +65,10 @@ All changes must consider folder workspaces as well as git worktrees. Don't assu
 
 Clients and remote Orca servers update independently, so mixed versions are the normal state. Before changing anything a paired client and host exchange — RPC params, stream frames, or the content either side publishes over them — follow [`docs/reference/remote-wire-compatibility.md`](./docs/reference/remote-wire-compatibility.md). A new optional field is safe; a new stream opcode must be capability-negotiated because decoders drop unknown opcodes silently; and changing what the host publishes reaches old clients even with no wire change.
 
+## Testing Across Execution Hosts
+
+Bugs that only appear on a remote/SSH host are invisible when you only test locally. To reproduce Orca's host topologies (local, remote `runtime:` server, `ssh:` host, and combinations) on one machine, use `pnpm dev:mode <mode>` — see [`docs/local-multi-host-test-modes.md`](./docs/local-multi-host-test-modes.md).
+
 ## Git Binary Compatibility
 
 Orca runs the user's Git binary on native, WSL, and SSH hosts, which may all have different versions. Treat Git 2.25 as the core-workflow baseline and follow [`docs/reference/git-compatibility.md`](./docs/reference/git-compatibility.md).
