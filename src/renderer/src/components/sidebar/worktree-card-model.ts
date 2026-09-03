@@ -23,6 +23,8 @@ export type WorktreeCardProps = {
   revealHighlightTone?: 'default' | 'ai'
   selectedWorktrees?: readonly Worktree[]
   hideRepoBadge?: boolean
+  // Why: views that interleave projects in one group name the project inline, since branch-only titles (main/master) collide.
+  showProjectName?: boolean
   hostContextLabel?: string
   inPinnedSection?: boolean
   activationRowKey?: string
