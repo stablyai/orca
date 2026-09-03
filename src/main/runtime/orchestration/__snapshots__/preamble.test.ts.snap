@@ -12,6 +12,14 @@ Slack, GitHub comments, or any other channel to reach a human during the run.
 
   # Report the terminal task outcome (REQUIRED exactly once).
   #
+  # RULE: only this owning top-level turn may send worker_done, heartbeat,
+  # escalation, or decision_gate. If you delegate to an internal subagent or
+  # reviewer (cold review, code review, any spawned helper), it must hand its
+  # conclusion back to you as review findings and must never run these
+  # lifecycle commands itself. Orca authenticates the pane, not the caller
+  # inside it, so a subagent's worker_done settles YOUR dispatch, revokes the
+  # capability, and locks you out of reporting your real result.
+  #
   # RULE: --body must be a 3-sentence executive summary (what you did,
   # what you found, what's left). Never send an empty body; the coordinator
   # reads the body first and only opens artifacts if it needs more detail.

@@ -152,4 +152,63 @@ describe('orchestration.send Dispatch authority', () => {
       expect(db.listGates({ taskId: task.id })).toHaveLength(0)
     }
   )
+
+  // #15634: the capability/pane/incarnation triple identifies a PTY, not the turn
+  // running inside it, so anything forked in the worker's pane can settle the
+  // Dispatch. Pinned as-is; the same gap applies to heartbeat/escalation/decision_gate,
+  // which share this authority path. Closing it needs a single-use turn-scoped
+  // credential — an architectural change to capability minting, tracked separately.
+  it('documents known trust-granularity limitation: an internal subagent sharing the pane can settle the Dispatch and lock out the owning worker', async () => {
+    setup()
+    const task = db.createTask({ spec: 'owning worker assignment' })
+    const dispatch = db.createDispatchContext(task.id, 'term_worker', 'tab_worker:leaf_worker')
+    const identity = {
+      paneKey: 'tab_worker:leaf_worker',
+      processIncarnation: 'runtime_test:term_worker:1'
+    }
+    const capability = db.mintDispatchCapability({ dispatchId: dispatch.id, ...identity })
+    vi.mocked(runtime.getTerminalPaneKey).mockImplementation((handle) =>
+      handle === 'term_worker' ? identity.paneKey : harness.coordinatorPaneKey
+    )
+    ctx = { runtime, orchestrationCapability: capability }
+    const payload = JSON.stringify({
+      taskId: task.id,
+      dispatchId: dispatch.id,
+      outcome: 'succeeded'
+    })
+
+    // Verification is a replayable predicate: the identical triple stays valid across
+    // calls, so possession — not turn ownership — is what authorizes a settlement.
+    const verifyArgs = { dispatchId: dispatch.id, capability, ...identity }
+    expect(db.verifyDispatchCapability(verifyArgs)).toEqual({ valid: true })
+    expect(db.verifyDispatchCapability(verifyArgs)).toEqual({ valid: true })
+
+    // The delegated reviewer reports first and is accepted — nothing distinguishes it
+    // from the owning turn.
+    const subagentReport = (await send({
+      from: 'term_worker',
+      subject: 'Cold review complete',
+      type: 'worker_done',
+      payload
+    })) as { lifecycle: { action: string } }
+
+    expect(subagentReport.lifecycle).toMatchObject({ action: 'completed' })
+    expect(db.getTask(task.id)?.status).toBe('completed')
+    expect(db.getDispatchContextById(dispatch.id)?.status).toBe('completed')
+
+    // The owning worker — still mid-task — is now locked out of reporting its own result.
+    expect(db.verifyDispatchCapability(verifyArgs)).toMatchObject({ valid: false })
+    const owningWorkerReport = (await send({
+      from: 'term_worker',
+      subject: 'Owning worker done',
+      type: 'worker_done',
+      payload
+    })) as { lifecycle: { action: string; code: string }; message: { subject: string } }
+
+    expect(owningWorkerReport.lifecycle).toMatchObject({
+      action: 'rejected',
+      code: 'dispatch_capability_invalid'
+    })
+    expect(owningWorkerReport.message.subject).toBe('Rejected worker_done: Owning worker done')
+  })
 })
