@@ -5,9 +5,9 @@
 //
 // Fill sheets dock chrome to the *true keyboard top* via marginBottom + height
 // shrink. They always use the raw frame height (subtracting safe-bottom on iOS
-// parks the TextInput under the keys). Content-sized sheets keep the legacy
-// translate path: iOS subtracts safe-bottom (padding already covers it),
-// Android uses the full IME height.
+// parks the TextInput under the keys). Content-sized sheets lift in layout:
+// iOS subtracts safe-bottom (padding already covers it), while Android uses the
+// full IME height.
 
 export function resolveBottomDrawerKeyboardInset(input: {
   keyboardHeight: number
