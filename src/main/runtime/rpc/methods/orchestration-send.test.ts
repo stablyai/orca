@@ -607,6 +607,7 @@ describe('orchestration RPC methods', () => {
         writable: opts.writable ?? true,
         lastOutputAt: opts.lastOutputAt ?? null,
         preview: opts.preview ?? '',
+        surface: opts.surface ?? 'visible',
         // Why spread: absent `agentIdentity` means unknown, so the helper must be able to
         // produce a summary that genuinely lacks the field.
         ...(opts.agentIdentity ? { agentIdentity: opts.agentIdentity } : {})

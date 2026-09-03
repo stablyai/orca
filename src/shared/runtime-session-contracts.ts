@@ -139,6 +139,8 @@ export type RuntimeSyncedLeaf = {
   leafId: string
   paneRuntimeId: number
   ptyId: string | null
+  /** Current renderer presentation; absent renderers predate surface reporting. */
+  surface?: 'background' | 'visible'
   paneTitle?: string | null
   title?: string | null
 }

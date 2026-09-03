@@ -27,6 +27,8 @@ export type RuntimeTerminalSummary = {
   writable: boolean
   lastOutputAt: number | null
   preview: string
+  /** Current visibility; absent when the host predates surface reporting. */
+  surface?: 'background' | 'visible'
   /** Host-resolved agent identity for action consumers; absent when unknown or unsupported. */
   agentIdentity?: TuiAgent
   /** Absent while running or when the host predates the field; never infer a clean finish. */

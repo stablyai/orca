@@ -18,6 +18,7 @@ import type {
   RuntimeTerminalWait
 } from '../shared/runtime-types'
 
+/** Formats `terminal list`, including each terminal's current visible/background surface. */
 export function formatTerminalList(result: RuntimeTerminalListResult): string {
   const scope = formatTerminalListHostScope(result.hostScope)
   if (result.terminals.length === 0) {
@@ -26,7 +27,7 @@ export function formatTerminalList(result: RuntimeTerminalListResult): string {
   const body = result.terminals
     .map(
       (terminal) =>
-        `${terminal.handle}  ${terminal.title ?? '(untitled)'}  ${terminal.connected ? 'connected' : 'disconnected'}  host=${terminal.executionHostId ?? 'unverifiable'}  ${terminal.worktreePath}\n${terminal.preview ? `preview: ${terminal.preview}` : 'preview: <empty>'}`
+        `${terminal.handle}  ${terminal.title ?? '(untitled)'}  ${terminal.connected ? 'connected' : 'disconnected'}  [${terminal.surface ?? 'unverifiable'}]  host=${terminal.executionHostId ?? 'unverifiable'}  ${terminal.worktreePath}\n${terminal.preview ? `preview: ${terminal.preview}` : 'preview: <empty>'}`
     )
     .join('\n\n')
   const visualLayout = formatTerminalVisualLayouts(result.visualLayouts)
@@ -103,6 +104,7 @@ function formatVisualPaneNode(node: RuntimeTerminalVisualPaneNode, depth: number
   ]
 }
 
+/** Formats `terminal show` with full metadata for one runtime terminal handle. */
 export function formatTerminalShow(result: { terminal: RuntimeTerminalShow }): string {
   const terminal = result.terminal
   return [
@@ -117,6 +119,7 @@ export function formatTerminalShow(result: { terminal: RuntimeTerminalShow }): s
     // Why listed above the preview: the preview is where a reader would otherwise have to
     // spot the prompt by eye, which is the work this line exists to remove.
     `agentWait: ${formatAgentWait(terminal.agentWait)}`,
+    `surface: ${terminal.surface ?? 'unverifiable'}`,
     `preview: ${terminal.preview || '<empty>'}`
   ].join('\n')
 }
