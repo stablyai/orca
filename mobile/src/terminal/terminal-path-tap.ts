@@ -7,6 +7,7 @@ import {
   parseFileLinkLocation,
   type ParsedFileLinkLocation
 } from '../../../src/shared/file-link-location'
+import { trimFileLinkRangeNonAsciiProse } from '../../../src/shared/non-ascii-terminal-text-boundary'
 
 export type TappedFilePath = ParsedFileLinkLocation
 
@@ -15,10 +16,13 @@ export type TappedFilePath = ParsedFileLinkLocation
 // with :line or :line:col. Like desktop, we propose candidates and let the host
 // existence-check reject non-files — agents often print a bare filename, so
 // requiring a slash would miss the common case.
+// Why \p{L}\p{M}\p{N}: ASCII-only classes truncated CJK path segments (#13396).
+// Pair with trimFileLinkRangeNonAsciiProse so glued particles after
+// an extension are not part of the tap target.
 const LOCAL_PATH_REGEX =
-  /(?:~[\\/]|[\\/]|\.{1,2}[\\/]|[A-Za-z]:[\\/]|[A-Za-z0-9._-]+[\\/]|(?=[A-Za-z0-9._-]*\.[A-Za-z0-9]))[A-Za-z0-9._~\-/%+@\\()[\]]*(?::\d+)?(?::\d+)?/g
+  /(?:~[\\/]|[\\/]|\.{1,2}[\\/]|[A-Za-z]:[\\/]|[\p{L}\p{M}\p{N}._-]+[\\/]|(?=[\p{L}\p{M}\p{N}._-]*\.[A-Za-z0-9]))[\p{L}\p{M}\p{N}._~\-/%+@\\()[\]]*(?::\d+)?(?::\d+)?/gu
 const SPACED_PATH_REGEX =
-  /(?:~[\\/]|[\\/]|\.{1,2}[\\/]|[A-Za-z]:[\\/]|[A-Za-z0-9._-]+[\\/])[^()[\]{}'",;<>|`\r\n]+(?::\d+)?(?::\d+)?/g
+  /(?:~[\\/]|[\\/]|\.{1,2}[\\/]|[A-Za-z]:[\\/]|[\p{L}\p{M}\p{N}._-]+[\\/])[^()[\]{}'",;<>|`\r\n]+(?::\d+)?(?::\d+)?/gu
 
 const LEADING_TRIM_CHARS = new Set(['(', '[', '{', '"', "'"])
 const TRAILING_TRIM_CHARS = new Set([')', ']', '}', '"', "'", ',', ';', '.'])
@@ -82,13 +86,17 @@ function trimSpacedPathTrailingProse(
   // segment is path-like (contains a separator) — "v1.2 reports/result.json"
   // extends, prose like "failed to start app.py" must not be swallowed.
   let selected: string | null = null
-  const extensionPrefixPattern = /\.[A-Za-z0-9_+-]+(?::\d+)?(?::\d+)?(?=\s+|$)/g
+  // Also stop at non-ASCII: a CJK bracket closes a citation as often as a particle.
+  const extensionPrefixPattern = /\.[A-Za-z0-9_+-]+(?::\d+)?(?::\d+)?(?=\s+|$|\P{ASCII})/gu
   let match: RegExpExecArray | null
   while ((match = extensionPrefixPattern.exec(range.text)) !== null) {
     const end = match.index + match[0].length
     const text = range.text.slice(0, end)
     if (countPathStarts(text) > 1) {
       continue
+    }
+    if (selected !== null && COMPLETE_PATH.test(selected)) {
+      break
     }
     if (
       end < range.text.length ||
@@ -115,6 +123,10 @@ function trimSpacedPathTrailingProse(
     endIndex: range.startIndex + selected.length
   }
 }
+
+// Mirror of the renderer rule: a separator plus an alphabetic extension means the
+// span is already a finished path, so a further hop across whitespace is a second one.
+const COMPLETE_PATH = /[\\/].*\.[A-Za-z][A-Za-z0-9_+-]*$/
 
 function countPathStarts(text: string): number {
   let count = 0
@@ -148,10 +160,11 @@ function matchSpacedFilePathAtColumn(lineText: string, col: number): TappedFileP
     ) {
       continue
     }
-    const candidate = trimSpacedPathTrailingProse(trimmed, col)
-    if (!candidate) {
+    const proseTrimmed = trimSpacedPathTrailingProse(trimmed, col)
+    if (!proseTrimmed) {
       continue
     }
+    const candidate = trimFileLinkRangeNonAsciiProse(proseTrimmed)
     if (col < candidate.startIndex || col >= candidate.endIndex) {
       continue
     }
@@ -181,10 +194,11 @@ export function matchFilePathAtColumn(lineText: string, col: number): TappedFile
     if (!trimmed) {
       continue
     }
-    if (col < trimmed.startIndex || col >= trimmed.endIndex) {
+    const candidate = trimFileLinkRangeNonAsciiProse(trimmed)
+    if (col < candidate.startIndex || col >= candidate.endIndex) {
       continue
     }
-    const parsed = parsePathWithOptionalLineColumn(trimmed.text)
+    const parsed = parsePathWithOptionalLineColumn(candidate.text)
     if (parsed) {
       return parsed
     }

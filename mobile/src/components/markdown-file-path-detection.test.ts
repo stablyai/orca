@@ -210,6 +210,28 @@ describe('detectFilePathSegments', () => {
       { type: 'file', value: 'src/app/Main.tsx', path: 'src/app/Main.tsx' }
     ])
   })
+
+  it('detects CJK directory segments and trims trailing particles', () => {
+    expect(detectFilePathSegments('開く /Users/me/docs/日本語フォルダ/ファイル.mdへ 完了')).toEqual(
+      [
+        { type: 'text', value: '開く ' },
+        {
+          type: 'file',
+          value: '/Users/me/docs/日本語フォルダ/ファイル.md',
+          path: '/Users/me/docs/日本語フォルダ/ファイル.md'
+        },
+        { type: 'text', value: 'へ 完了' }
+      ]
+    )
+  })
+
+  it('detects ASCII separator paths with glued CJK particles in prose', () => {
+    expect(detectFilePathSegments('保存先は plans/foo.mdへ 確定')).toEqual([
+      { type: 'text', value: '保存先は ' },
+      { type: 'file', value: 'plans/foo.md', path: 'plans/foo.md' },
+      { type: 'text', value: 'へ 確定' }
+    ])
+  })
 })
 
 describe('isFilePathCodeSpan', () => {
@@ -255,6 +277,12 @@ describe('isFilePathCodeSpan', () => {
   it('rejects emails and git URLs with a mid-token @', () => {
     expect(isFilePathCodeSpan('git@github.com:user/repo.git')).toBe(false)
     expect(isFilePathCodeSpan('user@host.com/path/file.txt')).toBe(false)
+  })
+
+  it('accepts code spans with CJK particles glued after the extension', () => {
+    expect(isFilePathCodeSpan('src/foo.tsへ')).toBe(true)
+    expect(isFilePathCodeSpan('plans/foo.mdに')).toBe(true)
+    expect(isFilePathCodeSpan('package.jsonです')).toBe(true)
   })
 })
 

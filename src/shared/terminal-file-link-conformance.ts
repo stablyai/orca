@@ -137,5 +137,59 @@ export const TERMINAL_FILE_LINK_TAP_CONFORMANCE_CASES: TerminalFileLinkTapConfor
     lineText: 'just some prose with no path here',
     tapText: 'prose',
     expected: null
+  },
+  // A glued particle is not always followed by a space: punctuation, ASCII, and CJK
+  // brackets all close the citation, and a letters-only trim never fires there.
+  {
+    name: 'particle then full-width parenthesis',
+    lineText: 'plans/foo.mdを(参照) 確認',
+    tapText: 'foo',
+    expected: { pathText: 'plans/foo.md', line: null, column: null }
+  },
+  {
+    name: 'particle then ascii tail',
+    lineText: 'plans/foo.mdへabc',
+    tapText: 'foo',
+    expected: { pathText: 'plans/foo.md', line: null, column: null }
+  },
+  {
+    name: 'cjk closing bracket after extension',
+    lineText: 'docs/日本語.md」を 参照',
+    tapText: '日本語',
+    expected: { pathText: 'docs/日本語.md', line: null, column: null }
+  },
+  // Prose glues onto the left as readily as the right.
+  {
+    name: 'prose glued before a bare filename',
+    lineText: '文書はREADME.mdだ',
+    tapText: 'README',
+    expected: { pathText: 'README.md', line: null, column: null }
+  },
+  {
+    name: 'prose glued before a separator path',
+    lineText: '参照docs/文書.md を見て',
+    tapText: 'docs/',
+    expected: { pathText: 'docs/文書.md', line: null, column: null }
+  },
+  // Two relative paths on one line must stay separate; they used to merge into a
+  // span that resolved to nothing and killed both.
+  {
+    name: 'two relative paths, first',
+    lineText: 'docs/a.md see docs/b.md',
+    tapText: 'a.md',
+    expected: { pathText: 'docs/a.md', line: null, column: null }
+  },
+  {
+    name: 'two relative paths, second',
+    lineText: 'docs/a.md see docs/b.md',
+    tapText: 'b.md',
+    expected: { pathText: 'docs/b.md', line: null, column: null }
+  },
+  // Only at a non-ASCII -> ASCII boundary: a wholly non-Latin name is a real name.
+  {
+    name: 'wholly non-latin name stays whole',
+    lineText: '参照文書.md を見て',
+    tapText: '参照',
+    expected: { pathText: '参照文書.md', line: null, column: null }
   }
 ]

@@ -7,6 +7,7 @@ import {
   isFilePathCodeSpan,
   normalizeFilePath
 } from './markdown-file-path-detection'
+import { trimFileLinkNonAsciiProse } from '../../../src/shared/non-ascii-terminal-text-boundary'
 import { routeMarkdownHref } from './markdown-href-routing'
 import {
   isIntrawordUnderscoreToken,
@@ -132,7 +133,7 @@ function renderInline(text: string, onOpenFile?: (pathText: string) => void): Re
           <Text
             key={key}
             style={[styles.inlineCode, styles.inlineCodeLink]}
-            onPress={() => onOpenFile(normalizeFilePath(code.trim()))}
+            onPress={() => onOpenFile(normalizeFilePath(trimFileLinkNonAsciiProse(code.trim())))}
           >
             {code}
           </Text>
