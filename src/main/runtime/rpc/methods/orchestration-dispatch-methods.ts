@@ -180,6 +180,16 @@ export const ORCHESTRATION_DISPATCH_METHODS: RpcMethod[] = [
           throw new Error(`Task not found: ${params.task}`)
         }
         const workerHandle = ctx?.assignee_handle ?? 'worker'
+        const cliCommand = ctx
+          ? runtime.getTerminalOrchestrationCliCommand(workerHandle)
+          : undefined
+        const preCompletionProtocol = buildCollaborationWorkerProtocolForTask({
+          topology: getCollaborationRuntimeTopology(runtime, task.run_id),
+          taskId: task.id,
+          workerHandle,
+          devMode: params.devMode,
+          cliCommand
+        })
         const preamble = buildDispatchPreamble({
           taskId: task.id,
           // Why: use the real ctx.id when present so the preview matches what was injected; placeholder when no dispatch has occurred yet.
@@ -189,7 +199,8 @@ export const ORCHESTRATION_DISPATCH_METHODS: RpcMethod[] = [
           coordinatorHandle: params.from ?? 'coordinator',
           workerHandle,
           devMode: params.devMode,
-          ...(ctx ? { cliCommand: runtime.getTerminalOrchestrationCliCommand(workerHandle) } : {})
+          cliCommand,
+          preCompletionProtocol
         })
         return { dispatch: ctx ?? null, preamble }
       }

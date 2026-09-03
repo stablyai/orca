@@ -577,6 +577,35 @@ describe('orchestration RPC methods', () => {
       expect(result.dispatch?.task_id).toBe(task.id)
     })
 
+    it('--preamble regenerates the collaboration protocol of the real dispatch', async () => {
+      setup()
+      const task = db.createTask({ spec: 'publish a reviewed result' })
+      const subscriber = db.createTask({ spec: 'consume the reviewed result', runId: task.run_id })
+      registerCollaborationRuntimeTopology(
+        runtime,
+        task.run_id,
+        createCollaborationTopology([
+          { taskId: task.id, publishesTo: ['/required'], requiredPublishesTo: ['/required'] },
+          {
+            taskId: subscriber.id,
+            subscribesTo: ['/required'],
+            admission: { acceptedTypes: ['finding'], minPriority: 'normal' }
+          }
+        ])
+      )
+      createRootDispatch(db, task.id, 'term_a')
+
+      const result = (await call('orchestration.dispatchShow', {
+        task: task.id,
+        preamble: true,
+        from: 'term_coord'
+      })) as { preamble: string }
+
+      expect(result.preamble).toContain('=== COLLABORATION: PUBLISHER ===')
+      expect(result.preamble).toContain('collaboration-publish')
+      expect(result.preamble).toContain('/required')
+    })
+
     it('--preamble works when no dispatch exists yet', async () => {
       setup()
       const task = db.createTask({ spec: 'build feature' })

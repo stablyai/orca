@@ -4,6 +4,8 @@ import { ORCHESTRATION_METHODS } from './orchestration'
 import { createOrchestrationRpcHarness } from './orchestration-rpc-test-harness'
 import type { OrchestrationDb } from '../../orchestration/db'
 import type { OrcaRuntimeService } from '../../orca-runtime'
+import { createCollaborationTopology } from '../../collaboration/collaboration-topology'
+import { registerCollaborationRuntimeTopology } from '../../collaboration/collaboration-runtime-registry'
 
 describe('orchestration RPC methods', () => {
   const h = createOrchestrationRpcHarness()
@@ -85,6 +87,26 @@ describe('orchestration RPC methods', () => {
 
       expect(created.run.consumer_generation).toBe(1)
       expect(current.run?.id).toBe(created.run.id)
+    })
+
+    it('keeps persisted collaboration topology out of the public Run shape', async () => {
+      setup(false)
+      vi.spyOn(runtime, 'getTerminalPaneKey').mockReturnValue(coordinatorPaneKey)
+      const created = (await call('orchestration.runCreate', {
+        objective: 'Internal topology storage',
+        from: 'term_coord'
+      })) as { run: { id: string } }
+      registerCollaborationRuntimeTopology(
+        runtime,
+        created.run.id,
+        createCollaborationTopology([{ taskId: 'task_internal' }])
+      )
+
+      const shown = (await call('orchestration.runShow', { id: created.run.id })) as {
+        run: Record<string, unknown>
+      }
+
+      expect(shown.run).not.toHaveProperty('collaboration_topology')
     })
 
     it('requires runtime-observed stable pane identity for binding', async () => {

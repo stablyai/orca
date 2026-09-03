@@ -14,6 +14,17 @@ CREATE TABLE IF NOT EXISTS runs (
   updated_at            TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
+CREATE TABLE IF NOT EXISTS run_collaboration_topologies (
+  run_id        TEXT PRIMARY KEY,
+  topology      TEXT NOT NULL
+);
+
+CREATE TRIGGER IF NOT EXISTS trg_runs_forget_collaboration_topology
+AFTER DELETE ON runs
+BEGIN
+  DELETE FROM run_collaboration_topologies WHERE run_id = OLD.id;
+END;
+
 CREATE TABLE IF NOT EXISTS messages (
   id            TEXT NOT NULL,
   run_id        TEXT NOT NULL DEFAULT '${LEGACY_RUN_ID}',
