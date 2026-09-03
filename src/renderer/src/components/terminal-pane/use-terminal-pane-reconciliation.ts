@@ -10,7 +10,8 @@ import {
   isHostAuthoritativeLayout,
   planTerminalLiveLayoutInsertions,
   planTerminalLiveLayoutRemovals,
-  selectRetiredPaneIds
+  selectRetiredPaneIds,
+  trackRetiredLeafIds
 } from './terminal-live-layout-reconciliation'
 import { collectLeafIds } from './terminal-pane-layout-tree'
 import { useTerminalPaneProcessExitActions } from './use-terminal-pane-process-exit-actions'
@@ -34,9 +35,11 @@ export function useTerminalPaneReconciliation(controller: TerminalPaneCloseContr
     restoredLayout,
     tabId
   } = controller
-  // Leaves the last host-authoritative layout named; a removal needs the host to
-  // have named the leaf before it dropped it.
+  // Leaves the last host-authoritative layout named, and the ones it has since
+  // dropped whose panes are still mounted; a removal needs the host to have
+  // named the leaf before it dropped it, and may have to wait for the PTY exit.
   const hostLayoutLeafIdsRef = useRef<ReadonlySet<string>>(new Set())
+  const retiredLeafIdsRef = useRef<ReadonlySet<string>>(new Set())
 
   useEffect(() => {
     closeTerminalLinkActions()
@@ -55,14 +58,21 @@ export function useTerminalPaneReconciliation(controller: TerminalPaneCloseContr
     ) {
       return
     }
-    const previousHostLayoutLeafIds = hostLayoutLeafIdsRef.current
-    hostLayoutLeafIdsRef.current = new Set(collectLeafIds(restoredLayout.root))
+    const layoutLeafIds = new Set(collectLeafIds(restoredLayout.root))
     const mountedLeafIds = manager.getPanes().map((pane) => pane.leafId)
+    const retiredLeafIds = trackRetiredLeafIds({
+      retiredLeafIds: retiredLeafIdsRef.current,
+      previousLayoutLeafIds: hostLayoutLeafIdsRef.current,
+      layoutLeafIds,
+      mountedLeafIds
+    })
+    hostLayoutLeafIdsRef.current = layoutLeafIds
+    retiredLeafIdsRef.current = retiredLeafIds
     const insertions = planTerminalLiveLayoutInsertions(restoredLayout.root, mountedLeafIds)
     const removals = planTerminalLiveLayoutRemovals(
       restoredLayout.root,
       mountedLeafIds,
-      previousHostLayoutLeafIds
+      retiredLeafIds
     )
     if (insertions.length === 0 && removals.length === 0) {
       return

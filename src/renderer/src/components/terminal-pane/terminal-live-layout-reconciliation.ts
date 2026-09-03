@@ -95,17 +95,17 @@ function mountedLeafIdsIn(
 export function planTerminalLiveLayoutRemovals(
   root: TerminalPaneLayoutNode | null | undefined,
   currentLeafIds: Iterable<string>,
-  previousLayoutLeafIds: ReadonlySet<string>
+  retiredLeafIds: ReadonlySet<string>
 ): string[] {
   if (!root) {
     return []
   }
   const layoutLeafIds = new Set(collectLeafIds(root))
-  // Why: only a leaf the host named before can be one it retired. A leaf it has
-  // never named is a pane the client is still starting; its transport has no PTY
-  // yet either, so a snapshot that lands mid-spawn must not read as a retirement.
+  // Why: a mounted leaf the layout stopped naming is a removal only once the
+  // host is known to have retired it (trackRetiredLeafIds). A snapshot landing
+  // while the client is still starting a pane must not read as a retirement.
   return [...currentLeafIds].filter(
-    (leafId) => !layoutLeafIds.has(leafId) && previousLayoutLeafIds.has(leafId)
+    (leafId) => !layoutLeafIds.has(leafId) && retiredLeafIds.has(leafId)
   )
 }
 
@@ -205,4 +205,27 @@ export function selectRetiredPaneIds(
     paneIds.push(paneId)
   }
   return paneIds
+}
+
+/**
+ * Leaves the host dropped from its layout whose panes are still mounted. Only a
+ * leaf the host named before can be retired: a leaf it has never named belongs
+ * to a pane the client is still starting. A retired leaf stays retired until
+ * its pane is gone or the host names it again, so a removal skipped while the
+ * transport still held its PTY is planned again once that PTY clears.
+ */
+export function trackRetiredLeafIds(args: {
+  retiredLeafIds: ReadonlySet<string>
+  previousLayoutLeafIds: ReadonlySet<string>
+  layoutLeafIds: ReadonlySet<string>
+  mountedLeafIds: Iterable<string>
+}): ReadonlySet<string> {
+  const mounted = new Set(args.mountedLeafIds)
+  const next = new Set<string>()
+  for (const leafId of [...args.retiredLeafIds, ...args.previousLayoutLeafIds]) {
+    if (mounted.has(leafId) && !args.layoutLeafIds.has(leafId)) {
+      next.add(leafId)
+    }
+  }
+  return next
 }
