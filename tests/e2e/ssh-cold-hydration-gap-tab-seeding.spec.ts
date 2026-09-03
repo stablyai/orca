@@ -70,17 +70,57 @@ function findRemoteSnapshotPath(target: DockerSshRelayTarget): string | null {
   return listing.split('\n').find((line) => line.endsWith('.json')) ?? null
 }
 
-async function waitForUploadedRemoteSnapshot(target: DockerSshRelayTarget): Promise<string> {
+/** Tab ids the relay has actually committed, or null while no readable snapshot exists yet. */
+function readPersistedRemoteSnapshotTabIds(
+  target: DockerSshRelayTarget,
+  snapshotPath: string
+): string[] | null {
+  try {
+    const parsed = JSON.parse(
+      execDockerSshRelayTargetControlCommand(target, `cat ${snapshotPath}`)
+    ) as {
+      session?: { tabsByWorktreePath?: Record<string, { id?: unknown }[]> }
+    }
+    return Object.values(parsed.session?.tabsByWorktreePath ?? {})
+      .flat()
+      .map((tab) => tab?.id)
+      .filter((id): id is string => typeof id === 'string')
+  } catch {
+    return null
+  }
+}
+
+/**
+ * Wait until the host snapshot actually holds every seeded tab, not merely until a file exists.
+ *
+ * Why content and not existence: the upload is a detached chain hung off the local session write
+ * (`use-app-session-persistence.ts`), so no barrier the test can await proves it landed, and the
+ * relay rewrites the file atomically — a short capture is a stale revision, never a torn one.
+ * Capturing on existence replays a revision that predates the baseline, and the client then
+ * applies that empty session as an authoritative replace, which is indistinguishable from the
+ * tab loss this spec exists to catch.
+ */
+async function waitForRemoteSnapshotHoldingTabs(
+  target: DockerSshRelayTarget,
+  tabIds: readonly string[]
+): Promise<string> {
   let snapshotPath: string | null = null
+  let persistedTabIds: string[] | null = null
   await expect
     .poll(
       () => {
         snapshotPath = findRemoteSnapshotPath(target)
-        return snapshotPath
+        persistedTabIds = snapshotPath
+          ? readPersistedRemoteSnapshotTabIds(target, snapshotPath)
+          : null
+        return tabIds.every((id) => persistedTabIds?.includes(id) === true)
       },
-      { timeout: 60_000, message: 'the relay never persisted a workspace snapshot' }
+      {
+        timeout: 60_000,
+        message: `the relay never persisted a snapshot holding the ${tabIds.length}-tab baseline`
+      }
     )
-    .not.toBeNull()
+    .toBe(true)
   return snapshotPath!
 }
 
@@ -190,7 +230,7 @@ test.describe('SSH cold hydration gap tab seeding', () => {
       await waitForSessionReady(firstLaunch.page)
       const remote = await connectAndSeedTabs(firstLaunch.page, target)
       expect(remote.tabIds).toHaveLength(BASELINE_TAB_COUNT)
-      const snapshotPath = await waitForUploadedRemoteSnapshot(target)
+      const snapshotPath = await waitForRemoteSnapshotHoldingTabs(target, remote.tabIds)
       await flushSessionBeforeQuit(firstLaunch.page, remote.targetId)
       await restart.close(app)
       app = null
@@ -275,7 +315,7 @@ test.describe('SSH cold hydration gap tab seeding', () => {
       await waitForSessionReady(firstLaunch.page)
       const remote = await connectAndSeedTabs(firstLaunch.page, target)
       expect(remote.tabIds).toHaveLength(BASELINE_TAB_COUNT)
-      await waitForUploadedRemoteSnapshot(target)
+      await waitForRemoteSnapshotHoldingTabs(target, remote.tabIds)
       await flushSessionBeforeQuit(firstLaunch.page, remote.targetId)
       await seeding.close(seedingApp)
       seedingApp = null
