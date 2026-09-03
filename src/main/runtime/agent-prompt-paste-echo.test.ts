@@ -5,7 +5,8 @@ import {
   AGENT_PROMPT_ECHO_TIMEOUT_MS_WIN32,
   deriveAgentPromptPasteEchoProbe,
   getAgentPromptPasteEchoTimeoutMs,
-  isAgentPromptPasteEchoObserved
+  isAgentPromptPasteEchoObserved,
+  isAgentPromptPasteEchoPlaceholderObserved
 } from './agent-prompt-paste-echo'
 
 describe('deriveAgentPromptPasteEchoProbe', () => {
@@ -49,16 +50,20 @@ describe('isAgentPromptPasteEchoObserved', () => {
     expect(isAgentPromptPasteEchoObserved('composer is empty', probe)).toBe(false)
   })
 
-  it('treats "[Pasted text #1 +N lines]" as observed', () => {
-    expect(isAgentPromptPasteEchoObserved('[Pasted text #1 +40 lines]', probe)).toBe(true)
+  it('does not treat a prompt-supplied placeholder as a tail echo', () => {
+    const prompt = `[Pasted text #1 +40 lines]\n${'z'.repeat(40)}`
+    const promptProbe = deriveAgentPromptPasteEchoProbe(buildAgentPromptPasteBytes(prompt))!
+
+    expect(isAgentPromptPasteEchoObserved('[Pasted text #1 +40 lines]', promptProbe)).toBe(false)
   })
 
-  it('treats "[Pasted Content]" style placeholders as observed', () => {
-    expect(isAgentPromptPasteEchoObserved('[Pasted Content 40 lines]', probe)).toBe(true)
+  it('matches a collapsed-paste placeholder in output known to follow the write', () => {
+    expect(isAgentPromptPasteEchoPlaceholderObserved('[Pasted text #1 +40 lines]')).toBe(true)
   })
 
-  it('treats a lowercase "Pasted content" fragment as observed', () => {
-    expect(isAgentPromptPasteEchoObserved('Pasted content added', probe)).toBe(true)
+  it('matches other collapsed-paste placeholder variants in post-write output', () => {
+    expect(isAgentPromptPasteEchoPlaceholderObserved('[Pasted Content 40 lines]')).toBe(true)
+    expect(isAgentPromptPasteEchoPlaceholderObserved('Pasted content added')).toBe(true)
   })
 })
 

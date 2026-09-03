@@ -22,7 +22,8 @@ import {
   AGENT_PROMPT_ECHO_SETTLE_MS,
   deriveAgentPromptPasteEchoProbe,
   getAgentPromptPasteEchoTimeoutMs,
-  isAgentPromptPasteEchoObserved
+  isAgentPromptPasteEchoObserved,
+  isAgentPromptPasteEchoPlaceholderObserved
 } from './agent-prompt-paste-echo'
 
 export class OrcaRuntimeWithWriteTerminalAgentPrompt extends OrcaRuntimeWithResolveAuthoritativeTerminalWaitPermission {
@@ -42,6 +43,19 @@ export class OrcaRuntimeWithWriteTerminalAgentPrompt extends OrcaRuntimeWithReso
     const pasteByteLength = Buffer.byteLength(pastePayload, 'utf8')
     const pasteIngestMs = getTerminalPasteIngestMs(writeHostPlatform, pasteByteLength)
     const renderGate = this.createAgentPromptRenderGate(ptyId, pasteIngestMs)
+    let pasteOutputSequenceBaseline: number | null = null
+    let postPasteOutput = ''
+    const unsubscribePasteEcho = renderGate
+      ? this.subscribeToTerminalData(ptyId, (data, meta) => {
+          if (
+            pasteOutputSequenceBaseline !== null &&
+            typeof meta?.seq === 'number' &&
+            meta.seq > pasteOutputSequenceBaseline
+          ) {
+            postPasteOutput += data
+          }
+        })
+      : null
     try {
       assertAgentPromptRequestActive(options.signal)
       this.assertAgentPromptGeneration(ptyId, generation)
@@ -59,8 +73,10 @@ export class OrcaRuntimeWithWriteTerminalAgentPrompt extends OrcaRuntimeWithReso
       if (!this.ptyController?.write(ptyId, pastePayload)) {
         throw new Error('terminal_not_writable')
       }
+      pasteOutputSequenceBaseline = this.getAgentPromptActivity(handle, ptyId).outputSequence
     } catch (error) {
       renderGate?.dispose()
+      unsubscribePasteEcho?.()
       throw error
     }
 
@@ -76,22 +92,22 @@ export class OrcaRuntimeWithWriteTerminalAgentPrompt extends OrcaRuntimeWithReso
             options.signal
           )
         ])
+        // Why: full scrollback can contain an earlier prompt; only bytes emitted after this
+        // write's output boundary can prove this paste reached the composer.
+        await this.waitForAgentPromptPasteEcho(
+          handle,
+          ptyId,
+          generation,
+          pastePayload,
+          writeHostPlatform,
+          pasteOutputSequenceBaseline,
+          () => postPasteOutput,
+          options
+        )
       } finally {
         renderGate.dispose()
+        unsubscribePasteEcho?.()
       }
-      // Why: the gate is a readiness signal for redraw activity, not proof the composer
-      // consumed the paste -- on Windows a Codex pane can still be streaming per-keystroke
-      // redraws past the gate's hard cap, and Enter written mid-burst becomes a stray
-      // newline (agent_prompt_stalled). Poll the pane for the paste tail (or a placeholder
-      // like "[Pasted text #1 +N lines]") before proceeding.
-      await this.waitForAgentPromptPasteEcho(
-        handle,
-        ptyId,
-        generation,
-        pastePayload,
-        writeHostPlatform,
-        options
-      )
     } else {
       await waitForAgentPromptDelay(
         getAgentPromptSubmitDelayMs(writeHostPlatform, pasteByteLength),
@@ -136,18 +152,25 @@ export class OrcaRuntimeWithWriteTerminalAgentPrompt extends OrcaRuntimeWithReso
     generation: number,
     pastePayload: string,
     writeHostPlatform: NodeJS.Platform,
+    pasteOutputSequenceBaseline: number | null,
+    readPostPasteOutput: () => string,
     options: RuntimeTerminalWriteOptions
   ): Promise<void> {
     const probe = deriveAgentPromptPasteEchoProbe(pastePayload)
-    if (probe === null) {
+    if (probe === null || pasteOutputSequenceBaseline === null) {
       return
     }
     const deadlineAt = Date.now() + getAgentPromptPasteEchoTimeoutMs(writeHostPlatform)
     while (Date.now() < deadlineAt) {
       assertAgentPromptRequestActive(options.signal)
       this.assertAgentPromptGeneration(ptyId, generation)
-      const waitText = this.getTerminalAgentStatusSnapshot(handle, ptyId).waitText
-      if (isAgentPromptPasteEchoObserved(waitText, probe)) {
+      const activity = this.getAgentPromptActivity(handle, ptyId)
+      const postPasteOutput = readPostPasteOutput()
+      if (
+        activity.outputSequence > pasteOutputSequenceBaseline &&
+        (isAgentPromptPasteEchoObserved(postPasteOutput, probe) ||
+          isAgentPromptPasteEchoPlaceholderObserved(postPasteOutput))
+      ) {
         await waitForAgentPromptDelay(AGENT_PROMPT_ECHO_SETTLE_MS, options.signal)
         return
       }

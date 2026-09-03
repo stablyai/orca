@@ -49,12 +49,14 @@ export function deriveAgentPromptPasteEchoProbe(pastePayload: string): string | 
   return normalized.slice(-AGENT_PROMPT_ECHO_PROBE_LENGTH)
 }
 
-/** True once the pane text demonstrably reflects the paste: either the literal tail (normal
- *  echo) or a composer placeholder like "[Pasted text #1 +N lines]" (collapsed echo). */
+/** True once post-paste terminal output contains the literal tail of the pasted text. */
 export function isAgentPromptPasteEchoObserved(paneText: string, probe: string): boolean {
   const normalized = stripAllWhitespace(paneText)
-  if (normalized.includes(probe)) {
-    return true
-  }
+  return normalized.includes(probe)
+}
+
+/** Collapsed-paste markers are only evidence when their input is scoped to post-paste output. */
+export function isAgentPromptPasteEchoPlaceholderObserved(postPasteOutput: string): boolean {
+  const normalized = stripAllWhitespace(postPasteOutput)
   return AGENT_PROMPT_PASTE_PLACEHOLDER_FRAGMENTS.some((fragment) => normalized.includes(fragment))
 }

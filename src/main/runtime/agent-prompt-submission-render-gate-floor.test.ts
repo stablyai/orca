@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { buildAgentPromptPasteBytes, getAgentPromptSubmitDelayMs } from '../../shared/agent-prompt-injection'
 import {
+  AGENT_PROMPT_ECHO_POLL_INTERVAL_MS,
   AGENT_PROMPT_ECHO_SETTLE_MS,
   AGENT_PROMPT_ECHO_TIMEOUT_MS_DEFAULT,
   AGENT_PROMPT_ECHO_TIMEOUT_MS_WIN32
@@ -123,6 +124,7 @@ describe('agent prompt render gate ingest floor', () => {
     // Why: the pane already echoed the paste tail well before the floor -- the echo wait only
     // starts once the floor's Promise.all resolves, so it cannot shorten this window, but it
     // does add its settle on top once that point is reached.
+    await vi.advanceTimersByTimeAsync(0)
     runtime.onPtyData(PTY_ID, PROMPT_TAIL_ECHO, Date.now())
 
     // Flush the render gate's already-resolved promise without advancing real time.
@@ -175,6 +177,54 @@ describe('agent prompt render gate ingest floor', () => {
     await stalled
   })
 
+  it('does not accept a probe already present in scrollback before the paste write', async () => {
+    useHostPlatform('win32')
+    vi.useFakeTimers()
+    const { runtime, handle, writes } = await createSettlementRuntimeWithImmediateRenderGate()
+    const floorMs = floorMsFor('win32')
+    runtime.onPtyData(PTY_ID, PROMPT_TAIL_ECHO, Date.now())
+    const submission = runtime.sendTerminalAgentPrompt(handle, PROMPT)
+    const stalled = expect(submission).rejects.toThrow('agent_prompt_stalled')
+
+    await vi.advanceTimersByTimeAsync(floorMs + AGENT_PROMPT_ECHO_SETTLE_MS)
+    expect(countSubmits(writes)).toBe(0)
+
+    runtime.onPtyData(PTY_ID, PROMPT_TAIL_ECHO, Date.now())
+    await vi.advanceTimersByTimeAsync(AGENT_PROMPT_ECHO_POLL_INTERVAL_MS + AGENT_PROMPT_ECHO_SETTLE_MS)
+    expect(countSubmits(writes)).toBe(1)
+
+    await vi.runAllTimersAsync()
+    await stalled
+  })
+
+  it('does not accept the first attempt\'s echo on the first poll after a retry paste', async () => {
+    useHostPlatform('win32')
+    vi.useFakeTimers()
+    const { runtime, handle, writes } = await createSettlementRuntimeWithImmediateRenderGate()
+    const floorMs = floorMsFor('win32')
+    const firstSubmission = runtime.sendTerminalAgentPrompt(handle, PROMPT)
+    const firstStalled = expect(firstSubmission).rejects.toThrow('agent_prompt_stalled')
+
+    await vi.advanceTimersByTimeAsync(0)
+    runtime.onPtyData(PTY_ID, PROMPT_TAIL_ECHO, Date.now())
+    await vi.advanceTimersByTimeAsync(floorMs + AGENT_PROMPT_ECHO_SETTLE_MS)
+    expect(countSubmits(writes)).toBe(1)
+    await vi.runAllTimersAsync()
+    await firstStalled
+
+    const retrySubmission = runtime.sendTerminalAgentPrompt(handle, PROMPT)
+    const retryStalled = expect(retrySubmission).rejects.toThrow('agent_prompt_stalled')
+    await vi.advanceTimersByTimeAsync(floorMs + AGENT_PROMPT_ECHO_POLL_INTERVAL_MS)
+    expect(countSubmits(writes)).toBe(1)
+
+    runtime.onPtyData(PTY_ID, PROMPT_TAIL_ECHO, Date.now())
+    await vi.advanceTimersByTimeAsync(AGENT_PROMPT_ECHO_POLL_INTERVAL_MS + AGENT_PROMPT_ECHO_SETTLE_MS)
+    expect(countSubmits(writes)).toBe(2)
+
+    await vi.runAllTimersAsync()
+    await retryStalled
+  })
+
   it('falls back to writing Enter at the echo deadline when the pane never echoes the paste', async () => {
     useHostPlatform('win32')
     vi.useFakeTimers()
@@ -205,6 +255,7 @@ describe('agent prompt render gate ingest floor', () => {
     const submission = runtime.sendTerminalAgentPrompt(handle, PROMPT)
     const stalled = expect(submission).rejects.toThrow('agent_prompt_stalled')
 
+    await vi.advanceTimersByTimeAsync(0)
     runtime.onPtyData(PTY_ID, '[Pasted text #1 +40 lines]', Date.now())
 
     await vi.advanceTimersByTimeAsync(floorMs + AGENT_PROMPT_ECHO_SETTLE_MS - 1)
