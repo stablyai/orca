@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { WorktreeMeta } from '../../../shared/worktree/meta-types'
+import { WORKTREE_META_PERSISTED_DEFAULTS } from '../../../shared/worktree/meta-persisted-defaults'
 import type { PersistedState } from '../../../shared/persisted-state-types'
 import {
   gcStaleWorktreeMeta,
@@ -7,9 +8,10 @@ import {
   WORKTREE_META_GC_GRACE_MS
 } from './worktree-metadata-normalization'
 
-// Only the presence of an entry matters here; the normalizer never reads its linked-item fields.
+// Only the presence of an entry matters to the alias/lineage passes, but the normalizer is also
+// the load-side inverse of the serializer's default omission, so a surviving row carries them back.
 function makeMeta(): WorktreeMeta {
-  return { createdAt: 1 } as WorktreeMeta
+  return { createdAt: 1, ...WORKTREE_META_PERSISTED_DEFAULTS } as WorktreeMeta
 }
 
 function makeState(overrides: Partial<PersistedState>): PersistedState {

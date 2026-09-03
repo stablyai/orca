@@ -7,6 +7,8 @@ import {
   type ProtectedSecretRetentionUpdate
 } from '../../protected-secret-persistence'
 import { stripRetiredGlobalSettings } from '../applying-settings/terminal-settings-migrations'
+import { omitDefaultWorktreeMetaFieldsInMap } from '../../../shared/worktree/meta-persisted-defaults'
+import { withoutRedundantPartitionGlobals } from '../../../shared/workspace-session-host-field-ownership'
 
 import {
   applySecretSentinelSubstitutions,
@@ -69,6 +71,26 @@ export class StateSerializationSecretHandlingOperations {
     // Why: clone before encrypting secrets so in-memory this.state stays plaintext.
     const stateToSave = {
       ...this.getDurableState(),
+      // Default-valued metadata slots are re-filled at load (normalizeWorktreeLinkedItemMetadata),
+      // so omitting them here is lossless and drops ~12% of the file on a heavy install.
+      worktreeMeta: omitDefaultWorktreeMetaFieldsInMap(this.runtime.state.worktreeMeta),
+      ...(this.runtime.state.worktreeMetaByIdentity !== undefined
+        ? {
+            worktreeMetaByIdentity: omitDefaultWorktreeMetaFieldsInMap(
+              this.runtime.state.worktreeMetaByIdentity
+            )
+          }
+        : {}),
+      // 'local' owns these globals and is the only slice any read takes them from; the load path
+      // re-seeds each partition's default, so writing them per host is pure file weight.
+      ...(this.runtime.state.workspaceSessionsByHostId !== undefined
+        ? {
+            workspaceSessionsByHostId: withoutRedundantPartitionGlobals(
+              this.runtime.state.workspaceSessionsByHostId,
+              this.runtime.state.workspaceSession
+            )
+          }
+        : {}),
       // Why both keys unconditionally: the explicit keys always win over the spread, and
       // JSON.stringify drops the `undefined` value so a note-free profile gains no key on disk.
       // The strip builds a new array here only; this.state records keep their notes in memory.
