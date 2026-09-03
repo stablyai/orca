@@ -133,6 +133,7 @@ describe('Codex transcript history modes', () => {
         },
         '2026-08-09T10:00:01.000Z'
       ),
+      completedItem({ type: 'ContextCompaction', id: 'compaction-1' }, '2026-08-09T10:00:01.500Z'),
       {
         type: 'response_item',
         payload: {
@@ -172,13 +173,19 @@ describe('Codex transcript history modes', () => {
           ]
         },
         {
+          id: 'compaction-1',
+          role: 'system',
+          timestamp: Date.parse('2026-08-09T10:00:01.500Z'),
+          blocks: [{ type: 'text', text: 'Context compacted' }]
+        },
+        {
           id: 'assistant-1',
           role: 'assistant',
           blocks: [{ type: 'text', text: 'Visible response' }]
         }
       ]
     })
-    expect('messages' in result && result.messages).toHaveLength(2)
+    expect('messages' in result && result.messages).toHaveLength(3)
     expect(tail).toMatchObject({ messages: 'messages' in result ? result.messages : [] })
   })
 
