@@ -22,7 +22,10 @@ describe('shouldEmitTitleFactForFrame', () => {
 
   it('suppresses a decorative repeat inside the heartbeat window', () => {
     expect(
-      shouldEmitTitleFactForFrame({ ...base, nowMs: 1_000 + DECORATIVE_TITLE_FACT_HEARTBEAT_MS - 1 })
+      shouldEmitTitleFactForFrame({
+        ...base,
+        nowMs: 1_000 + DECORATIVE_TITLE_FACT_HEARTBEAT_MS - 1
+      })
     ).toBe(false)
   })
 

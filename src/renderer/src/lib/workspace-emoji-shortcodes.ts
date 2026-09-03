@@ -1,5 +1,7 @@
-import type { StandardEmojiShortcodeEntry } from '../../../shared/emoji-shortcode-catalog'
-import { getPrimedEmojiShortcodeEntries } from './emoji-shortcode-catalog-loader'
+import {
+  getStandardEmojiShortcodeEntries,
+  type StandardEmojiShortcodeEntry
+} from '../../../shared/emoji-shortcode-catalog'
 
 export type WorkspaceEmojiSuggestion = StandardEmojiShortcodeEntry
 
@@ -19,16 +21,13 @@ export type WorkspaceEmojiReplacement = {
 let exactShortcode: ReadonlyMap<string, WorkspaceEmojiSuggestion> | null = null
 
 function exactShortcodeIndex(): ReadonlyMap<string, WorkspaceEmojiSuggestion> {
-  if (exactShortcode) {
-    return exactShortcode
-  }
-  const entries = getPrimedEmojiShortcodeEntries()
-  const index = new Map(entries.map(({ emoji, shortcode }) => [shortcode, { emoji, shortcode }]))
-  // Never memoize the empty index the primed catalog returns before it resolves.
-  if (entries.length > 0) {
-    exactShortcode = index
-  }
-  return index
+  exactShortcode ??= new Map(
+    getStandardEmojiShortcodeEntries().map(({ emoji, shortcode }) => [
+      shortcode,
+      { emoji, shortcode }
+    ])
+  )
+  return exactShortcode
 }
 
 // Lower tiers rank first, so `korea` surfaces `south_korea` above `dishwasher`-style incidental hits.
@@ -54,7 +53,7 @@ export function searchWorkspaceEmojiShortcodes(
     return []
   }
 
-  const matches = getPrimedEmojiShortcodeEntries()
+  const matches = getStandardEmojiShortcodeEntries()
     .flatMap((entry) => {
       const tier = matchTier(entry.shortcode, normalizedQuery)
       return tier === null ? [] : [{ ...entry, tier }]

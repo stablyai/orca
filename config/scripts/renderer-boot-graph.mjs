@@ -37,11 +37,15 @@ export function readRendererBootGraph(rendererDir) {
 export function bootGraphForbiddenPayloads(root = process.cwd()) {
   return [
     { label: '@xterm/addon-webgl', signature: 'WebGL2 not supported' },
-    { label: 'emojibase-data', signature: 'zany_face' },
     { label: 'i18n/locales/en.json', signature: prunedAwayEnglishSignature(root) }
     // Not zod: six other shared modules on the boot path (runtime environments,
     // closed-tab tombstones, the browser page protocol, shared/constants…)
     // still import it, so there is nothing to ratchet yet.
+    //
+    // Not emojibase-data either: deferring it made the shortcode transform
+    // return an empty catalog until the load settled, so a `:wink:` submitted
+    // in that window persisted literally. Nothing that resolves a shortcode can
+    // be async without that race, so the data stays statically imported.
   ]
 }
 

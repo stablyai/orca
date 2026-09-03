@@ -1,18 +1,12 @@
-import { beforeAll, describe, expect, it } from 'vitest'
+import { describe, expect, it } from 'vitest'
 import {
   applyWorkspaceEmojiSuggestion,
   getActiveWorkspaceEmojiShortcode,
   replaceCompletedWorkspaceEmojiShortcode,
   searchWorkspaceEmojiShortcodes
 } from './workspace-emoji-shortcodes'
-import { primeEmojiShortcodeCatalog } from './emoji-shortcode-catalog-loader'
 
 describe('workspace emoji shortcodes', () => {
-  // Production primes this right after first paint; a unit test has to ask.
-  beforeAll(async () => {
-    await primeEmojiShortcodeCatalog()
-  })
-
   it('finds standard emoji by shortcode', () => {
     expect(searchWorkspaceEmojiShortcodes('wink', 1)).toEqual([{ emoji: '😉', shortcode: 'wink' }])
   })

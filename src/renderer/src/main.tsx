@@ -22,7 +22,6 @@ import { I18nProvider } from './i18n/I18nProvider'
 import { translate } from './i18n/i18n'
 import { getOrCreateRendererRoot } from './lib/react-renderer-root'
 import { primeTerminalWebglAddon } from './lib/pane-manager/pane-webgl-renderer'
-import { primeEmojiShortcodeCatalog } from './lib/emoji-shortcode-catalog-loader'
 import { SkillWarningPreviewLauncher } from './components/skills/SkillWarningPreviewLauncher'
 import { installBrowserClientPageRenderer } from './components/browser-pane/browser-client-page-renderer-installation'
 
@@ -79,10 +78,8 @@ getOrCreateRendererRoot(rootElement, import.meta.hot?.data).render(
 )
 recordRendererCrashBreadcrumb('renderer_bootstrap_rendered')
 
-// Why here: both payloads are large, eagerly needed later, and needed by
-// nothing during boot — the xterm WebGL addon only once a terminal attaches
-// (many frames away), the emoji shortcode data only once a `:` is typed or a
-// workspace name is submitted. Loading them after the first render keeps them
-// out of the boot graph without deferring anything the user can perceive.
+// Why here: the xterm WebGL addon is 243 KB, is only ever constructed once a
+// terminal attaches (many frames away), and is needed by nothing during boot.
+// Starting the load after the first render keeps it off the boot graph while
+// leaving it resolved long before any pane can attach.
 void primeTerminalWebglAddon()
-void primeEmojiShortcodeCatalog()
