@@ -109,6 +109,18 @@ export function createVisibleFileExplorerRowProjection(
   return createFileExplorerRowProjectionFromParts(visibleFlatRows, rowsByPath)
 }
 
+function relativePathListsEqual(a: readonly string[], b: readonly string[]): boolean {
+  if (a.length !== b.length) {
+    return false
+  }
+  for (let i = 0; i < a.length; i++) {
+    if (a[i] !== b[i]) {
+      return false
+    }
+  }
+  return true
+}
+
 /**
  * Holds the array identity while its contents are unchanged.
  *
@@ -119,29 +131,19 @@ export function createVisibleFileExplorerRowProjection(
  */
 function useContentStableRelativePaths(relativePaths: string[], enabled: boolean): string[] {
   // Why: filters need fresh identities per keystroke and must not evict the tree signature.
-  // Why ref-read-in-render + write-in-effect: render must stay pure (react-doctor), so the
-  // previous array is published after commit — worst case one render loses stability, never stale.
   const prevRef = useRef<string[] | null>(null)
-  useEffect(() => {
-    prevRef.current = relativePaths
-  }, [relativePaths])
-  if (!enabled) {
-    return relativePaths
-  }
   const prev = prevRef.current
-  if (prev && prev.length === relativePaths.length) {
-    let equal = true
-    for (let i = 0; i < prev.length; i++) {
-      if (prev[i] !== relativePaths[i]) {
-        equal = false
-        break
-      }
-    }
-    if (equal) {
-      return prev
-    }
-  }
-  return relativePaths
+  // Why publish `stable`, not `relativePaths`: the ref must hold what this hook actually
+  // returned. Publishing the input instead leaves the ref one commit behind, so a wave of
+  // content-equal arrays flips identity on every render — the churn this hook exists to stop.
+  const stable =
+    enabled && prev && relativePathListsEqual(prev, relativePaths) ? prev : relativePaths
+  // Why write-in-effect: render must stay pure (react-doctor); the first commit of a new
+  // list loses stability, never staleness.
+  useEffect(() => {
+    prevRef.current = stable
+  }, [stable])
+  return stable
 }
 
 export function useFileExplorerVisibleRowProjection(

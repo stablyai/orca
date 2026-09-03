@@ -143,16 +143,6 @@ export function hydrateOverrides(
   // readers so held phone-fit overlays appear even without a fresh IPC event.
   for (const [ptyId, override] of overridesByPtyId) {
     const prior = previous.get(ptyId) ?? null
-    // Why: identical re-delivery must not wake every pane — skip no-op notifications.
-    if (
-      prior &&
-      prior.mode === override.mode &&
-      prior.cols === override.cols &&
-      prior.rows === override.rows
-    ) {
-      previous.delete(ptyId)
-      continue
-    }
     notifyChange({
       ptyId,
       mode: override.mode,
