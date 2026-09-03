@@ -93,7 +93,12 @@ export abstract class RemoteRuntimeTerminalBinarySnapshots extends RemoteRuntime
             seq: info?.seq,
             kittyKeyboardFlags: info?.kittyKeyboardFlags,
             alternateScreen: info?.alternateScreen,
-            terminalOwner: info?.terminalOwner
+            terminalOwner: info?.terminalOwner,
+            // Why: the image encodes wraps and cursor moves against the host's
+            // grid, so the restorer must replay it there — the request path has
+            // always carried these; the pushes silently dropped them.
+            cols: info?.cols,
+            rows: info?.rows
           })
         } else if (target === 'recovery') {
           // Why: a server-pushed recovery snapshot replaces terminal state
@@ -105,7 +110,9 @@ export abstract class RemoteRuntimeTerminalBinarySnapshots extends RemoteRuntime
             seq: info?.seq,
             kittyKeyboardFlags: info?.kittyKeyboardFlags,
             alternateScreen: info?.alternateScreen,
-            terminalOwner: info?.terminalOwner
+            terminalOwner: info?.terminalOwner,
+            cols: info?.cols,
+            rows: info?.rows
           })
         }
       } else if (matchesPendingRequest) {

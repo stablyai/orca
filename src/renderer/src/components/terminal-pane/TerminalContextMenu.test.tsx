@@ -92,6 +92,8 @@ function renderMenu(overrides: Record<string, unknown> = {}): string {
     canClearPaneTitle: false,
     onCopyTerminalId: vi.fn(),
     onCopyPaneId: vi.fn(),
+    canCopyAgentSessionId: false,
+    onCopyAgentSessionId: vi.fn(),
     ...overrides
   }
   return renderToStaticMarkup(React.createElement(TerminalContextMenu, props))
@@ -144,6 +146,29 @@ describe('TerminalContextMenu', () => {
     renderMenu()
 
     expect(items.list.some((item) => childrenText(item.children).includes('Switch to'))).toBe(false)
+  })
+
+  it('shows Copy Session ID only for panes with provider identity', () => {
+    const onCopyAgentSessionId = vi.fn()
+    renderMenu({ canCopyAgentSessionId: true, onCopyAgentSessionId })
+
+    const item = items.list.find(
+      (candidate) => childrenText(candidate.children) === 'Copy Session ID'
+    )
+    expect(item).toBeDefined()
+    expect(
+      items.list
+        .map((candidate) => childrenText(candidate.children))
+        .filter((label) => ['Copy Session ID', 'Copy Terminal ID', 'Copy Pane ID'].includes(label))
+    ).toEqual(['Copy Session ID', 'Copy Terminal ID', 'Copy Pane ID'])
+    item?.onSelect?.()
+    expect(onCopyAgentSessionId).toHaveBeenCalledTimes(1)
+
+    items.list = []
+    renderMenu({ canCopyAgentSessionId: false })
+    expect(
+      items.list.some((candidate) => childrenText(candidate.children) === 'Copy Session ID')
+    ).toBe(false)
   })
 
   it('shows one shortcut per terminal menu action on Windows', () => {

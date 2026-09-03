@@ -46,7 +46,8 @@ function queries(store: RuntimeStore): RuntimeManagedWorktreeQueries {
     listResolved: async () => [],
     resolveRepo: async () => store.getRepos()[0]!,
     selectRepos: () => store.getRepos(),
-    scanRepo: async () => ({ ok: true, worktrees: [] })
+    scanRepo: async () => ({ ok: true, worktrees: [] }),
+    listKnownHostIds: () => []
   })
 }
 

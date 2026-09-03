@@ -10,7 +10,7 @@ import {
   SSH_FILESYSTEM_PROVIDER_UNAVAILABLE_MESSAGE
 } from '../providers/ssh-filesystem-dispatch'
 import { getActiveSshAiVaultHostInfo, requestActiveSshAiVaultSessionList } from '../ipc/ssh'
-import { isSshMuxRequestTimeoutError } from '../ssh/ssh-channel-multiplexer'
+import { isSshRequestOutcomeUnverifiable } from '../ssh/ssh-channel-multiplexer'
 import { createAiVaultScanCancelledError } from './ai-vault-scan-cancellation'
 import { scanRemoteAiVaultSessions } from './remote-session-scanner'
 import { parseAiVaultListResult } from './session-list-result-validation'
@@ -84,7 +84,7 @@ async function scanOneSshHost(
       throw error
     }
     if (
-      isSshMuxRequestTimeoutError(error) &&
+      isSshRequestOutcomeUnverifiable(error) &&
       (relayTimeoutMs === undefined || relayTimeoutMs >= MEANINGFUL_RELAY_SCAN_ATTEMPT_MS)
     ) {
       return sshScanIssueResult(executionHostId, targetId, errorMessage(error))

@@ -17,6 +17,7 @@ type UseFileExplorerRowScrollingParams = {
   worktreePath: string | null
   expanded: Set<string>
   dirCache: Record<string, DirCache>
+  loadingDirPaths: ReadonlySet<string>
   rootCache: DirCache | undefined
   loadDir: (dirPath: string, depth: number, options?: { force?: boolean }) => Promise<boolean>
   setSelectedPath: (path: string | null) => void
@@ -42,6 +43,7 @@ export function useFileExplorerRowScrolling({
   worktreePath,
   expanded,
   dirCache,
+  loadingDirPaths,
   rootCache,
   loadDir,
   setSelectedPath,
@@ -81,6 +83,7 @@ export function useFileExplorerRowScrolling({
     clearPendingExplorerReveal,
     expanded,
     dirCache,
+    loadingDirPaths,
     rootCache,
     rowProjection,
     loadDir,

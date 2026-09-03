@@ -1,6 +1,7 @@
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { ChevronRight } from 'lucide-react'
 import { translate } from '@/i18n/i18n'
+import { useNow } from '@/hooks/use-now'
 
 export function NativeChatWorkingStatus({
   startedAt,
@@ -15,18 +16,17 @@ export function NativeChatWorkingStatus({
   expanded?: boolean
   onToggleExpanded?: () => void
 }): React.JSX.Element {
-  const [elapsedSeconds, setElapsedSeconds] = useState(0)
-
-  useEffect(() => {
-    if (thinking || workedSeconds != null) {
-      return
-    }
-    const epoch = startedAt ?? Date.now()
-    setElapsedSeconds(Math.max(0, Math.floor((Date.now() - epoch) / 1000)))
-    const update = () => setElapsedSeconds(Math.max(0, Math.floor((Date.now() - epoch) / 1000)))
-    const timer = window.setInterval(update, 1000)
-    return () => window.clearInterval(timer)
-  }, [startedAt, thinking, workedSeconds])
+  // Why: elapsed seconds is ordinary render dataflow, not an external system.
+  // The shared 1s clock is visibility-gated and collapses every in-flight turn
+  // onto one tick, instead of one interval plus one commit per turn.
+  const counting = !thinking && workedSeconds == null
+  const now = useNow(1_000, counting)
+  // Why: preserves the old effect's `startedAt ?? Date.now()` epoch for the
+  // single frame before the turn's startedAt lands.
+  const [mountedAt] = useState(() => Date.now())
+  const elapsedSeconds = counting
+    ? Math.max(0, Math.floor((now - (startedAt ?? mountedAt)) / 1000))
+    : 0
 
   const label =
     workedSeconds != null

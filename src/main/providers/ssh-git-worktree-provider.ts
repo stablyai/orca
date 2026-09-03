@@ -2,6 +2,7 @@ import type { GitStatusResult } from '../../shared/git-status-types'
 import type { RemoveWorktreeResult } from '../../shared/worktree/create-types'
 import type { GitWorktreeInfo } from '../../shared/worktree/types'
 import { CapabilityProbeCache } from '../../shared/capability-probe-cache'
+import { assertAuthoritativeWorktreeCatalog } from '../../shared/worktree/worktree-catalog-availability'
 import { isJsonRpcMethodNotFoundError } from './ssh-git-relay-errors'
 import { SshGitReviewHeadProvider } from './ssh-git-review-head-provider'
 
@@ -23,6 +24,7 @@ function filterUntrackedPorcelainStatus(stdout: string | undefined): string | un
 
 export class SshGitWorktreeProvider extends SshGitReviewHeadProvider {
   private loggedWorktreeIsCleanFallback = false
+  private loggedMarkRemoteOrcaCreatedFallback = false
   // Why: reconnect replaces this provider, so an upgraded relay is naturally re-probed.
   private readonly worktreeIsCleanCapabilityCache = new CapabilityProbeCache<
     typeof WORKTREE_IS_CLEAN_CAPABILITY
@@ -32,11 +34,14 @@ export class SshGitWorktreeProvider extends SshGitReviewHeadProvider {
     repoPath: string,
     options?: { signal?: AbortSignal }
   ): Promise<GitWorktreeInfo[]> {
-    return (await this.mux.request(
+    const response = await this.mux.request(
       'git.listWorktrees',
       { repoPath },
       { signal: options?.signal }
-    )) as GitWorktreeInfo[]
+    )
+    // Why (#14004): relays before this fix answered a failed worktree scan with `[]`. Mixed versions are
+    // normal, so refuse the shape here too — a Git repo always lists its own checkout.
+    return assertAuthoritativeWorktreeCatalog<GitWorktreeInfo>(response, repoPath)
   }
 
   async addWorktree(
@@ -125,6 +130,25 @@ export class SshGitWorktreeProvider extends SshGitReviewHeadProvider {
     await this.runWithGitReadInvalidation(async () => {
       await this.mux.request('git.renameCurrentBranch', { worktreePath, newBranch })
     })
+  }
+
+  // Why: git.exec blocks config writes outright, so the deferred fork-remote provenance
+  // marker (#17828) needs its own RPC. Non-essential to push/pull, so an older relay
+  // that hasn't shipped it yet degrades to no marker rather than failing materialization.
+  async markRemoteOrcaCreated(repoPath: string, remoteName: string): Promise<void> {
+    try {
+      await this.mux.request('git.markRemoteOrcaCreated', { repoPath, remoteName })
+    } catch (error) {
+      if (!isJsonRpcMethodNotFoundError(error)) {
+        throw error
+      }
+      if (!this.loggedMarkRemoteOrcaCreatedFallback) {
+        this.loggedMarkRemoteOrcaCreatedFallback = true
+        console.warn(
+          "[ssh-git] Relay does not implement git.markRemoteOrcaCreated; this remote will lack a git-config provenance marker permanently (reconnecting does not retroactively add it -- only a newer relay deployment does, for remotes added after that). The store's remoteCreated flag remains the fallback ownership signal for cleanup."
+        )
+      }
+    }
   }
 
   async forceDeletePreservedBranch(

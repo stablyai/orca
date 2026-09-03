@@ -97,7 +97,9 @@ describe('terminateCodexProbeChild', () => {
     expect(child.kill).not.toHaveBeenCalled()
 
     await vi.advanceTimersByTimeAsync(CODEX_PROBE_SHUTDOWN_DRAIN_MS)
-    expect(killWindowsProcessTree).toHaveBeenCalledWith(child.pid)
+    expect(killWindowsProcessTree).toHaveBeenCalledWith(child.pid, {
+      site: 'codex-rate-limit-probe'
+    })
     expect(child.kill).toHaveBeenCalledTimes(1)
     expect(child.kill).toHaveBeenCalledWith()
 
@@ -122,7 +124,9 @@ describe('terminateCodexProbeChild', () => {
     })
 
     await vi.advanceTimersByTimeAsync(0)
-    expect(killWindowsProcessTree).toHaveBeenCalledWith(child.pid)
+    expect(killWindowsProcessTree).toHaveBeenCalledWith(child.pid, {
+      site: 'codex-rate-limit-probe'
+    })
     child.exit()
     await Promise.resolve()
     expect(settled).toBe(false)

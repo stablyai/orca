@@ -96,6 +96,22 @@ describe('projectSessionTabAgentStatus', () => {
         STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY
       ])
     ).toEqual(oldClient)
+    expect(
+      projectSessionTabAgentStatus(
+        snapshot,
+        'mobile',
+        [STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY],
+        false
+      )
+    ).toEqual(oldClient)
+
+    const capableMobile = projectSessionTabAgentStatus(
+      snapshot,
+      'mobile',
+      [STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY],
+      true
+    )
+    expect(capableMobile).toBe(snapshot)
 
     const capable = projectSessionTabAgentStatus(snapshot, 'runtime', [
       STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY
@@ -132,6 +148,14 @@ describe('projectSessionTabAgentStatus', () => {
       projectSessionTabAgentStatus(snapshot, 'runtime', [
         STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY
       ]).tabs.map((tab) => tab.id)
+    ).toEqual(['agent-session:codex'])
+    expect(
+      projectSessionTabAgentStatus(
+        snapshot,
+        'mobile',
+        [STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY],
+        true
+      ).tabs.map((tab) => tab.id)
     ).toEqual(['agent-session:codex'])
   })
 

@@ -5,6 +5,7 @@ import type {
   DashboardSnapshot,
   DashboardSpawnAgentArgs
 } from '../../shared/dashboard-snapshot'
+import type { PreloadApi } from '../api-types'
 
 export const dashboardApi = {
   // Open the pop-out dashboard window, or focus it if already open.
@@ -71,4 +72,4 @@ export const dashboardApi = {
     ipcRenderer.invoke('dashboardPopout:spawnAgent', args),
   sleepWorkspace: (args: DashboardSleepWorkspaceArgs): Promise<void> =>
     ipcRenderer.invoke('dashboardPopout:sleepWorkspace', args)
-}
+} satisfies PreloadApi['dashboard']

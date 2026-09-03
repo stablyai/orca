@@ -9,6 +9,7 @@ import {
   normalizeBrowserTitle,
   normalizeUrl
 } from '../browser-page-records'
+import { normalizeBrowserHistoryUrl } from '../../../../../shared/workspace-session-browser-history'
 
 export function createBrowserPageStateActions(
   set: BrowserSliceSet,
@@ -98,6 +99,17 @@ export function createBrowserPageStateActions(
           browserPagesByWorkspace: {
             ...s.browserPagesByWorkspace,
             [workspace.id]: nextPages
+          }
+        }
+        if (updates.faviconUrl !== undefined && updates.faviconUrl !== page.faviconUrl) {
+          const historyIndex = s.browserUrlHistory.findIndex(
+            (entry) => entry.normalizedUrl === normalizeBrowserHistoryUrl(page.url)
+          )
+          const historyEntry = s.browserUrlHistory[historyIndex]
+          if (historyEntry && historyEntry.faviconUrl !== updates.faviconUrl) {
+            nextState.browserUrlHistory = s.browserUrlHistory.map((entry, index) =>
+              index === historyIndex ? { ...entry, faviconUrl: updates.faviconUrl } : entry
+            )
           }
         }
         if (!browserWorkspaceMirrorFieldsEqual(workspace, nextWorkspace)) {

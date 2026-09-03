@@ -33,23 +33,21 @@ export function bindRegisterPaneSerializer(session: ConnectPanePtySession): void
           if (isTerminalWritePipelineCertifiedDead(session.pane.terminal)) {
             return null
           }
-          // Why: alt-screen TUIs (vim, claude-code) hold transient state in
-          // the alternate screen. The hydration path requests
-          // altScreenForcesZeroRows so normal-buffer scrollback isn't bled
-          // into the seed when the user is mid-TUI; the read-fallback path
-          // omits it because it wants the user's currently-visible content.
-          const alt = session.pane.terminal.buffer.active.type === 'alternate'
           // Why serializeWithAbsoluteCursor: SerializeAddon's relative
           // cursor restore lands one column short when replay of a
           // margin-filling final row leaves the target wrap-pending.
-          const data =
-            opts?.altScreenForcesZeroRows && alt
-              ? serializeWithAbsoluteCursor(session.pane.serializeAddon, session.pane.terminal, {
-                  scrollback: 0
-                })
-              : serializeWithAbsoluteCursor(session.pane.serializeAddon, session.pane.terminal, {
-                  scrollback: opts?.scrollbackRows
-                })
+          //
+          // Why scrollback is never zeroed mid-TUI: the addon emits the normal
+          // buffer first and only then the `?1049h` alt frame, and readers split
+          // the two back apart (splitTerminalSnapshotAnsi). Forcing `scrollback: 0`
+          // while an alt-screen TUI was up therefore dropped the pre-TUI shell
+          // output from the seed instead of the transient TUI bytes, and every
+          // later restore painted only the TUI screen (#6106).
+          const data = serializeWithAbsoluteCursor(
+            session.pane.serializeAddon,
+            session.pane.terminal,
+            { scrollback: opts?.scrollbackRows }
+          )
           const orderedSeq =
             session.rendererOrderedPtyId === ptyId ? session.rendererOrderedSeq : null
           // Why snapshotFlags and not `flags`: this pane may itself have

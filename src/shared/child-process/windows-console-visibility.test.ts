@@ -34,7 +34,7 @@ const ALLOWLIST: readonly string[] = readAllowlist(
  * the allowlist does not bound this: a swap (one file fixed and delisted, one
  * new file added with its entry) satisfies both membership assertions.
  */
-const UNHIDDEN_SPAWNER_PIN = 68
+const UNHIDDEN_SPAWNER_PIN = 66
 
 const CHILD_PROCESS_IMPORT =
   /from\s+['"](?:node:)?child_process['"]|require\(\s*['"](?:node:)?child_process['"]/

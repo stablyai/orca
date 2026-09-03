@@ -7,7 +7,6 @@ import { getStructuredAgentSessionHost } from '../native-chat/agent-session-wire
 import { LOCAL_EXECUTION_HOST_ID } from '../../shared/execution-host'
 import type { AgentStatusIpcPayload } from '../../shared/agent-status-types'
 import { getLocalProjectWorktreeGitOptions } from '../project-runtime-git-options'
-import { getRuntimeFileTargetExecutionHostId } from './orca-runtime-files'
 import type { AgentSessionAttachParams } from '../native-chat/agent-session-wire/structured-agent-session-attach'
 import { getSystemCodexHomePath } from '../codex/codex-home-paths'
 import { resolveTuiAgentLaunchEnv } from '../../shared/tui-agent-launch-defaults'
@@ -90,18 +89,16 @@ export class OrcaRuntimeWithResolveRecoveredStructuredTuiTranscript extends Orca
   protected async resolveStructuredAgentSessionLocation(worktreeSelector: string) {
     const target = await this.resolveRuntimeFileTarget(worktreeSelector)
     const repo = this.store?.getRepo(target.worktree.repoId)
+    // WSL routing describes *this* machine; no remote or runtime host may inherit it.
     const wslDistro =
-      repo && !target.connectionId
+      repo && target.executionHostId === LOCAL_EXECUTION_HOST_ID
         ? (getLocalProjectWorktreeGitOptions(this.requireStore(), repo).wslDistro ?? null)
         : null
     const folderWorkspace = this.store
       ?.getFolderWorkspaces?.()
       .some((workspace) => workspace.id === target.worktree.id)
     return {
-      executionHostId: getRuntimeFileTargetExecutionHostId({
-        worktree: target.worktree,
-        connectionId: target.connectionId
-      }),
+      executionHostId: target.executionHostId,
       wslDistro,
       workspaceId: target.worktree.id,
       workspaceKind: folderWorkspace ? ('folder' as const) : ('git-worktree' as const)

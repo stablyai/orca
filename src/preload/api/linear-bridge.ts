@@ -1,37 +1,30 @@
 import { ipcRenderer } from 'electron'
 import type { LinearProjectDetail } from '../../shared/linear/project-types'
+import type { PreloadApi } from '../api-types'
 
 export const linearApi = {
-  connect: (args: {
-    apiKey: string
-  }): Promise<{ ok: true; viewer: unknown } | { ok: false; error: string }> =>
-    ipcRenderer.invoke('linear:connect', args),
+  connect: (args: { apiKey: string }) => ipcRenderer.invoke('linear:connect', args),
 
   disconnect: (args?: { workspaceId?: string }): Promise<void> =>
     ipcRenderer.invoke('linear:disconnect', args),
 
-  selectWorkspace: (args: { workspaceId: string }): Promise<unknown> =>
+  selectWorkspace: (args: { workspaceId: string }) =>
     ipcRenderer.invoke('linear:selectWorkspace', args),
 
-  status: (): Promise<unknown> => ipcRenderer.invoke('linear:status'),
+  status: () => ipcRenderer.invoke('linear:status'),
 
-  testConnection: (args?: {
-    workspaceId?: string
-  }): Promise<{ ok: true; viewer: unknown } | { ok: false; error: string }> =>
+  testConnection: (args?: { workspaceId?: string }) =>
     ipcRenderer.invoke('linear:testConnection', args),
 
-  searchIssues: (args: {
-    query: string
-    limit?: number
-    workspaceId?: string
-  }): Promise<unknown[]> => ipcRenderer.invoke('linear:searchIssues', args),
+  searchIssues: (args: { query: string; limit?: number; workspaceId?: string }) =>
+    ipcRenderer.invoke('linear:searchIssues', args),
 
   listIssues: (args?: {
     filter?: 'assigned' | 'created' | 'all' | 'completed'
     limit?: number
     workspaceId?: string
     attributeFilter?: unknown
-  }): Promise<unknown> => ipcRenderer.invoke('linear:listIssues', args),
+  }) => ipcRenderer.invoke('linear:listIssues', args),
 
   createIssue: (args: {
     teamId: string
@@ -49,7 +42,7 @@ export const linearApi = {
     | { ok: false; error: string }
   > => ipcRenderer.invoke('linear:createIssue', args),
 
-  getIssue: (args: { id: string; workspaceId?: string }): Promise<unknown> =>
+  getIssue: (args: { id: string; workspaceId?: string }) =>
     ipcRenderer.invoke('linear:getIssue', args),
 
   updateIssue: (args: {
@@ -66,18 +59,17 @@ export const linearApi = {
   }): Promise<{ ok: true; id: string } | { ok: false; error: string }> =>
     ipcRenderer.invoke('linear:addIssueComment', args),
 
-  issueComments: (args: { issueId: string; workspaceId?: string }): Promise<unknown[]> =>
+  issueComments: (args: { issueId: string; workspaceId?: string }) =>
     ipcRenderer.invoke('linear:issueComments', args),
 
-  listTeams: (args?: { workspaceId?: string }): Promise<unknown[]> =>
-    ipcRenderer.invoke('linear:listTeams', args),
+  listTeams: (args?: { workspaceId?: string }) => ipcRenderer.invoke('linear:listTeams', args),
 
   listProjects: (args?: {
     query?: string
     limit?: number
     workspaceId?: string
     force?: boolean
-  }): Promise<unknown> => ipcRenderer.invoke('linear:listProjects', args),
+  }) => ipcRenderer.invoke('linear:listProjects', args),
 
   createProject: (args: {
     name: string
@@ -94,7 +86,7 @@ export const linearApi = {
   }): Promise<{ ok: true; project: LinearProjectDetail } | { ok: false; error: string }> =>
     ipcRenderer.invoke('linear:createProject', args),
 
-  getProject: (args: { id: string; workspaceId: string; force?: boolean }): Promise<unknown> =>
+  getProject: (args: { id: string; workspaceId: string; force?: boolean }) =>
     ipcRenderer.invoke('linear:getProject', args),
 
   listProjectIssues: (args: {
@@ -102,42 +94,38 @@ export const linearApi = {
     limit?: number
     workspaceId: string
     force?: boolean
-  }): Promise<unknown> => ipcRenderer.invoke('linear:listProjectIssues', args),
+  }) => ipcRenderer.invoke('linear:listProjectIssues', args),
 
   listCustomViews: (args: {
     model: string
     limit?: number
     workspaceId?: string
     force?: boolean
-  }): Promise<unknown> => ipcRenderer.invoke('linear:listCustomViews', args),
+  }) => ipcRenderer.invoke('linear:listCustomViews', args),
 
-  getCustomView: (args: {
-    viewId: string
-    model: string
-    workspaceId: string
-    force?: boolean
-  }): Promise<unknown> => ipcRenderer.invoke('linear:getCustomView', args),
+  getCustomView: (args: { viewId: string; model: string; workspaceId: string; force?: boolean }) =>
+    ipcRenderer.invoke('linear:getCustomView', args),
 
   listCustomViewIssues: (args: {
     viewId: string
     limit?: number
     workspaceId: string
     force?: boolean
-  }): Promise<unknown> => ipcRenderer.invoke('linear:listCustomViewIssues', args),
+  }) => ipcRenderer.invoke('linear:listCustomViewIssues', args),
 
   listCustomViewProjects: (args: {
     viewId: string
     limit?: number
     workspaceId: string
     force?: boolean
-  }): Promise<unknown> => ipcRenderer.invoke('linear:listCustomViewProjects', args),
+  }) => ipcRenderer.invoke('linear:listCustomViewProjects', args),
 
-  teamStates: (args: { teamId: string; workspaceId?: string }): Promise<unknown[]> =>
+  teamStates: (args: { teamId: string; workspaceId?: string }) =>
     ipcRenderer.invoke('linear:teamStates', args),
 
-  teamLabels: (args: { teamId: string; workspaceId?: string }): Promise<unknown[]> =>
+  teamLabels: (args: { teamId: string; workspaceId?: string }) =>
     ipcRenderer.invoke('linear:teamLabels', args),
 
-  teamMembers: (args: { teamId: string; workspaceId?: string }): Promise<unknown[]> =>
+  teamMembers: (args: { teamId: string; workspaceId?: string }) =>
     ipcRenderer.invoke('linear:teamMembers', args)
-}
+} satisfies PreloadApi['linear']

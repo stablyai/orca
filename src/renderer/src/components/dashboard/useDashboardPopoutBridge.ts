@@ -1,9 +1,10 @@
 import { useEffect } from 'react'
 import { useAppStore, type AppState } from '@/store'
-import { activateTabAndFocusPane } from '@/lib/activate-tab-and-focus-pane'
+import { revealDashboardAgent } from './reveal-dashboard-agent'
 import { runSleepWorktree } from '../sidebar/sleep-worktree-flow'
 import type { RepoIcon } from '../../../../shared/repo-icon'
 import { buildDashboardSnapshot, type DashboardSnapshotState } from './build-dashboard-snapshot'
+import { createWorktreeAgentRowsCache } from './worktree-agent-rows-cache'
 import { launchDashboardAgent } from './launch-dashboard-agent'
 
 // Why: cap snapshot rebuilds during bursts of agent-status pings. The board is a
@@ -132,8 +133,7 @@ export function useDashboardPopoutBridge(enabled: boolean): void {
       return
     }
     return window.api.dashboard.onRevealAgent((args) => {
-      useAppStore.getState().setActiveWorktree(args.worktreeId, args.executionHostId)
-      activateTabAndFocusPane(args.tabId, args.leafId, { flashFocusedPane: true })
+      revealDashboardAgent(args)
     })
   }, [enabled])
 
@@ -164,9 +164,16 @@ export function useDashboardPopoutBridge(enabled: boolean): void {
     // `withIcons` is forced whenever the pop-out could be starting from nothing —
     // it opened, or it mounted and asked. Throttled republishes omit an unchanged
     // icon map and the pop-out keeps the one it already has.
+    // Why effect-scoped: one cache per popout-bridge lifecycle; unchanged worktrees
+    // reuse their row pipeline across the up-to-4Hz republish stream.
+    const rowsCache = createWorktreeAgentRowsCache()
     const publishNow = (withIcons: boolean): void => {
       lastPublishAt = Date.now()
-      const snapshot = buildDashboardSnapshot(useAppStore.getState(), lastPublishAt)
+      const state = useAppStore.getState()
+      const snapshot = buildDashboardSnapshot(state, lastPublishAt, {
+        rowsCache,
+        rowsGeneration: state.agentStatusEpoch
+      })
       const icons = snapshot.repoIconsByRepoId ?? {}
       if (!withIcons && repoIconsUnchanged(icons, lastPublishedRepoIcons)) {
         const { repoIconsByRepoId: _omitted, ...withoutIcons } = snapshot

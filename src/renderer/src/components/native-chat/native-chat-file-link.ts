@@ -6,6 +6,7 @@ import {
 } from '@/lib/explicit-file-link-target'
 import { getRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
 import type { AppState } from '@/store/types'
+import { parseWorkspaceKey } from '../../../../shared/workspace-scope'
 
 export type NativeChatFileLinkContext = {
   worktreeId: string
@@ -86,13 +87,21 @@ export function resolveNativeChatFileLinkContext(
   const worktree = knownWorktree?.path
     ? knownWorktree
     : findWorktreeFallback(state.worktreesByRepo, worktreeId)
-  if (!worktree?.path) {
+  const workspaceScope = parseWorkspaceKey(worktreeId)
+  const worktreePath =
+    worktree?.path ??
+    (workspaceScope?.type === 'folder'
+      ? (state.folderWorkspaces.find(
+          (workspace) => workspace.id === workspaceScope.folderWorkspaceId
+        )?.folderPath ?? null)
+      : null)
+  if (!worktreePath) {
     return null
   }
 
   return {
     worktreeId,
-    worktreePath: worktree.path,
+    worktreePath,
     runtimeEnvironmentId: getRuntimeEnvironmentIdForWorktree(state, worktreeId)
   }
 }

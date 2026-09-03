@@ -75,6 +75,48 @@ describe('session tab structured capability mutations', () => {
       expect(fixture.calls[method.runtimeMethod]).not.toHaveBeenCalled()
     })
   }
+
+  it.each(['session.tabs.close', 'session.tabs.closeLifecycle'] as const)(
+    'allows capable mobile clients to close structured tabs when the experiment is enabled (%s)',
+    async (method) => {
+      const snapshot = agentSnapshot()
+      const closeMobileSessionTab = vi.fn().mockResolvedValue({ closed: true })
+      const runtime = {
+        getRuntimeId: () => 'test-runtime',
+        getClientSettings: vi.fn(() => ({ experimentalStructuredNativeChat: true })),
+        listMobileSessionTabs: vi.fn().mockResolvedValue(snapshot),
+        closeMobileSessionTab
+      } as unknown as OrcaRuntimeService
+      const dispatcher = new RpcDispatcher({ runtime, methods: SESSION_TAB_METHODS })
+      const replies: string[] = []
+      await dispatcher.dispatchStreaming(
+        {
+          id: 'request-1',
+          authToken: 'token',
+          method,
+          params:
+            method === 'session.tabs.close'
+              ? { worktree: 'id:wt-1', tabId: 'codex-session', reason: 'user' }
+              : {
+                  worktree: 'id:wt-1',
+                  tabId: 'codex-session',
+                  reason: 'cleanup',
+                  publicationEpoch: 'epoch-1',
+                  terminal: 'pty-1'
+                }
+        },
+        (response) => replies.push(response),
+        {
+          clientKind: 'mobile',
+          pairedDeviceId: 'paired-mobile',
+          clientCapabilities: [STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY]
+        }
+      )
+
+      expect(JSON.parse(replies[0]!).ok).toBe(true)
+      expect(closeMobileSessionTab).toHaveBeenCalledOnce()
+    }
+  )
 })
 
 function createFixture(capabilities: RuntimeCapability[]) {

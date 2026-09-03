@@ -6,6 +6,7 @@ import type {
 import type { StartupCommandDelivery } from './codex-startup-delivery'
 import type { ExecutionHostId } from './execution-host'
 import type { PtyIncarnationId } from './pty-incarnation'
+import type { RuntimeListingHostScope } from './runtime-listing-host-scope'
 import type { RuntimeMobileSessionTabsResult } from './runtime-session-contracts'
 import type { TabGroupLayoutNode } from './tab-types'
 import type { TerminalExitCause } from './terminal-exit-cause'
@@ -83,10 +84,8 @@ export type RuntimeTerminalVisualLayout = {
   root: RuntimeTerminalVisualLayoutNode
 }
 
-export type RuntimeTerminalListHostScope = {
-  hostIds: ExecutionHostId[]
-  omittedHostIds: ExecutionHostId[]
-}
+/** The shared listing-scope shape, kept under its incumbent name for existing consumers. */
+export type RuntimeTerminalListHostScope = RuntimeListingHostScope
 
 export type RuntimeTerminalListResult = {
   terminals: RuntimeTerminalSummary[]
@@ -158,6 +157,14 @@ export type RuntimeWorktreeTerminalSleepResult = {
       remainingLivePtyIds: string[]
     }
 )
+
+export type RuntimeWorktreeTerminalCloseResult = {
+  closed: number
+  stopped: number
+  retiredSurfaces: true
+  ptyStopVerdict?: 'live' | 'unverifiable'
+  ptyStopReason?: string
+}
 
 export type RuntimeTerminalInteractiveWaitSource = 'hook' | 'prompt-text' | 'title'
 
@@ -250,6 +257,8 @@ export type RuntimeTerminalCreateRequestPayload =
 
 export type RuntimeTerminalCreate = {
   handle: string
+  /** Host-owned PTY incarnation used to fence remote identity observations. */
+  incarnationId?: string | null
   tabId?: string
   paneKey?: string | null
   ptyId?: string | null
@@ -275,6 +284,8 @@ export type RuntimeTerminalSplit = {
 
 export type RuntimeTerminalResolvePane = {
   handle: string
+  /** Host-owned PTY incarnation used to fence remote identity observations. */
+  incarnationId?: string | null
   tabId: string
   leafId: string
   ptyId: string | null

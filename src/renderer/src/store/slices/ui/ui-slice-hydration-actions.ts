@@ -1,4 +1,6 @@
 import type { UISlice, UISliceGet, UISliceSet } from './ui-slice-contract'
+import type { AppState } from '../../types'
+import type { PersistedUIState } from '../../../../../shared/persisted-ui-state-types'
 import { normalizeRightSidebarRoute } from '../../right-sidebar-route'
 import {
   applyManualRepoOrder,
@@ -7,7 +9,8 @@ import {
 import { normalizeWorkspaceCleanupBrowseState } from '../../../../../shared/workspace-cleanup-browse-state'
 import {
   normalizeExecutionHostScope,
-  normalizeExecutionHostOrder
+  normalizeExecutionHostOrder,
+  normalizeVisibleExecutionHostIds
 } from '../../../../../shared/execution-host'
 import { normalizeFeatureInteractions } from '../../../../../shared/feature-interactions'
 import { normalizeContextualTourIds } from '../../../../../shared/contextual-tours'
@@ -17,6 +20,10 @@ import {
   normalizeWorktreeCardProperties,
   normalizeAgentActivityDisplayMode
 } from '../../../../../shared/constants'
+import {
+  normalizeActivityGroupBy,
+  normalizeThreadReadFilter
+} from '../../../../../shared/agents-view-thread-filters'
 import {
   clampWorkspaceBoardColumnWidth,
   clampWorkspaceBoardOpacity,
@@ -46,7 +53,7 @@ import {
 import {
   hydrateTrustedOrcaHooks,
   normalizeHydratedVisibleWorkspaceHostIds,
-  sanitizeAcknowledgedAgentsByPaneKey,
+  preserveStringArrayIdentity,
   sanitizeHydratedActiveView,
   sanitizePersistedRepoIds,
   sanitizeShowDotfilesByWorktree,
@@ -56,7 +63,7 @@ import {
   migrateStatusBarItems,
   clampPetSize
 } from './ui-slice-hydration-sanitizers'
-import { sanitizeTaskResumeState } from './ui-slice-hydration-values'
+import { hydrateAgentReadState, sanitizeTaskResumeState } from './ui-slice-hydration-values'
 
 const MAX_LEFT_SIDEBAR_WIDTH = 500
 const MAX_RIGHT_SIDEBAR_WIDTH = 4000
@@ -65,6 +72,28 @@ const DEFAULT_ON_KIMI_STATUS_BAR_ITEM: StatusBarItem = 'kimi'
 const DEFAULT_ON_MINIMAX_STATUS_BAR_ITEM: StatusBarItem = 'minimax'
 const DEFAULT_ON_ANTIGRAVITY_STATUS_BAR_ITEM: StatusBarItem = 'antigravity'
 const DEFAULT_ON_GROK_STATUS_BAR_ITEM: StatusBarItem = 'grok'
+
+function hydrateStatusBarItems(ui: PersistedUIState): StatusBarItem[] {
+  let items = migrateStatusBarItems(ui.statusBarItems)
+  const defaults = [
+    ['_portsStatusBarDefaultAdded', DEFAULT_ON_PORTS_STATUS_BAR_ITEM],
+    ['_kimiStatusBarDefaultAdded', DEFAULT_ON_KIMI_STATUS_BAR_ITEM],
+    ['_minimaxStatusBarDefaultAdded', DEFAULT_ON_MINIMAX_STATUS_BAR_ITEM],
+    ['_antigravityStatusBarDefaultAdded', DEFAULT_ON_ANTIGRAVITY_STATUS_BAR_ITEM],
+    ['_grokStatusBarDefaultAdded', DEFAULT_ON_GROK_STATUS_BAR_ITEM]
+  ] as const
+  for (const [flag, item] of defaults) {
+    if (!ui[flag] && !items.includes(item)) {
+      items = [...items, item]
+    }
+  }
+  if (typeof window !== 'undefined' && defaults.some(([flag]) => !ui[flag])) {
+    window.api.ui
+      .set({ statusBarItems: items, ...Object.fromEntries(defaults.map(([flag]) => [flag, true])) })
+      .catch(console.error)
+  }
+  return items
+}
 
 export function createUiHydrationActions(set: UISliceSet, _get: UISliceGet): Partial<UISlice> {
   return {
@@ -75,6 +104,7 @@ export function createUiHydrationActions(set: UISliceSet, _get: UISliceGet): Par
         const validRepoIds = new Set(s.repos.map((repo) => repo.id))
         const validRepoHostIdentities = new Set(s.repos.map(getRepoHostIdentity))
         const persistedFilterRepoIds = sanitizePersistedRepoIds(ui.filterRepoIds)
+        const persistedAgentsFilterRepoIds = sanitizePersistedRepoIds(ui.agentsFilterRepoIds)
         // Why: pre-rename builds used sidekick* keys; read as fallback only so new pet* writes win after upgrade.
         const customPets = Array.isArray(ui.customPets)
           ? ui.customPets
@@ -84,46 +114,7 @@ export function createUiHydrationActions(set: UISliceSet, _get: UISliceGet): Par
         const petId = ui.petId ?? ui.sidekickId
         // Migration: one-shot old-'recent'→'smart' runs in main (_sortBySmartMigrated), not here, so a deliberate 'recent' choice survives restart.
         const sortBy = ui.sortBy
-        const migratedStatusBarItems = migrateStatusBarItems(ui.statusBarItems)
-        const statusBarItemsWithPorts: StatusBarItem[] =
-          ui._portsStatusBarDefaultAdded || migratedStatusBarItems.includes('ports')
-            ? migratedStatusBarItems
-            : [...migratedStatusBarItems, DEFAULT_ON_PORTS_STATUS_BAR_ITEM]
-        const statusBarItems: StatusBarItem[] =
-          ui._kimiStatusBarDefaultAdded || statusBarItemsWithPorts.includes('kimi')
-            ? statusBarItemsWithPorts
-            : [...statusBarItemsWithPorts, DEFAULT_ON_KIMI_STATUS_BAR_ITEM]
-        const statusBarItemsWithMiniMax: StatusBarItem[] =
-          ui._minimaxStatusBarDefaultAdded || statusBarItems.includes('minimax')
-            ? statusBarItems
-            : [...statusBarItems, DEFAULT_ON_MINIMAX_STATUS_BAR_ITEM]
-        const statusBarItemsWithAntigravity: StatusBarItem[] =
-          ui._antigravityStatusBarDefaultAdded || statusBarItemsWithMiniMax.includes('antigravity')
-            ? statusBarItemsWithMiniMax
-            : [...statusBarItemsWithMiniMax, DEFAULT_ON_ANTIGRAVITY_STATUS_BAR_ITEM]
-        const statusBarItemsWithGrok: StatusBarItem[] =
-          ui._grokStatusBarDefaultAdded || statusBarItemsWithAntigravity.includes('grok')
-            ? statusBarItemsWithAntigravity
-            : [...statusBarItemsWithAntigravity, DEFAULT_ON_GROK_STATUS_BAR_ITEM]
-        if (
-          (!ui._portsStatusBarDefaultAdded ||
-            !ui._kimiStatusBarDefaultAdded ||
-            !ui._minimaxStatusBarDefaultAdded ||
-            !ui._antigravityStatusBarDefaultAdded ||
-            !ui._grokStatusBarDefaultAdded) &&
-          typeof window !== 'undefined'
-        ) {
-          window.api.ui
-            .set({
-              statusBarItems: statusBarItemsWithGrok,
-              _portsStatusBarDefaultAdded: true,
-              _kimiStatusBarDefaultAdded: true,
-              _minimaxStatusBarDefaultAdded: true,
-              _antigravityStatusBarDefaultAdded: true,
-              _grokStatusBarDefaultAdded: true
-            })
-            .catch(console.error)
-        }
+        const statusBarItemsWithGrok = hydrateStatusBarItems(ui)
         const rightSidebarRoute = normalizeRightSidebarRoute(
           ui.rightSidebarTab,
           ui.rightSidebarExplorerView
@@ -183,6 +174,20 @@ export function createUiHydrationActions(set: UISliceSet, _get: UISliceGet): Par
             validRepoIds.size === 0
               ? persistedFilterRepoIds
               : persistedFilterRepoIds.filter((repoId) => validRepoIds.has(repoId)),
+          agentsVisibleHostIds: preserveStringArrayIdentity(
+            s.agentsVisibleHostIds,
+            normalizeVisibleExecutionHostIds(ui.agentsVisibleHostIds)
+          ),
+          agentsFilterRepoIds: preserveStringArrayIdentity(
+            s.agentsFilterRepoIds,
+            validRepoIds.size === 0
+              ? persistedAgentsFilterRepoIds
+              : persistedAgentsFilterRepoIds.filter((repoId) => validRepoIds.has(repoId))
+          ),
+          agentsShowChildAgents: ui.agentsShowChildAgents === true,
+          agentsCompactMode: ui.agentsCompactMode !== false,
+          agentsReadFilter: normalizeThreadReadFilter(ui.agentsReadFilter),
+          agentsGroupBy: normalizeActivityGroupBy(ui.agentsGroupBy),
           collapsedGroups: new Set(ui.collapsedGroups ?? []),
           uiZoomLevel: ui.uiZoomLevel ?? 0,
           editorFontZoomLevel: ui.editorFontZoomLevel ?? 0,
@@ -262,10 +267,7 @@ export function createUiHydrationActions(set: UISliceSet, _get: UISliceGet): Par
             ui.usagePercentageDisplayChangeNoticeDismissed === true,
           // Why: default false so existing users still see the CTA; only explicit dismissal persists true.
           usageEmptyStateDismissed: ui.usageEmptyStateDismissed === true,
-          // Why: stale acks are inert (paneKey reuse beats them via stateStartedAt); sanitizer bounds growth past HYDRATE_MAX_AGE_MS.
-          acknowledgedAgentsByPaneKey: sanitizeAcknowledgedAgentsByPaneKey(
-            ui.acknowledgedAgentsByPaneKey
-          ),
+          ...hydrateAgentReadState(ui),
           workspaceCleanupDismissals: sanitizeWorkspaceCleanupDismissals(
             ui.workspaceCleanup?.dismissals
           ),
@@ -279,9 +281,7 @@ export function createUiHydrationActions(set: UISliceSet, _get: UISliceGet): Par
               : s.workspaceCleanupBrowse,
           // Why: restore only on startup; on 'sync' broadcasts it would clobber the window's current per-window view.
           activeView:
-            source === 'startup'
-              ? sanitizeHydratedActiveView(ui.activeView, s.settings?.experimentalActivity === true)
-              : s.activeView,
+            source === 'startup' ? sanitizeHydratedActiveView(ui.activeView) : s.activeView,
           persistedUIReady: true
         }
         // The incoming payload is authoritative for the writer-owned fields, so it becomes the
@@ -337,7 +337,7 @@ export function createUiHydrationActions(set: UISliceSet, _get: UISliceGet): Par
           ...hydrated,
           persistedUIWriteBaseline: nextWriteBaseline,
           persistedUIWriteBaselineGeneration: nextWriteBaselineGeneration
-        }
+        } as Partial<AppState>
       })
   }
 }

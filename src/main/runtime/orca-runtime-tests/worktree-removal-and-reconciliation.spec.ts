@@ -404,27 +404,36 @@ describe('OrcaRuntimeService', () => {
           wslDistro: 'Ubuntu'
         }
       )
-      expect(gitSpy).toHaveBeenCalledWith(
+      // Why: a fork remote is deferred to first push/pull/fetch/fast-forward
+      // (#17828) instead of being added/fetched at create time, so the create
+      // path must not run check-ref-format, the fork fetch, or set-upstream-to
+      // -- the metadata is persisted untouched for on-demand materialization.
+      expect(gitSpy).not.toHaveBeenCalledWith(
         ['check-ref-format', '--branch', 'contributor/runtime-wsl'],
-        { cwd: TEST_REPO_PATH, wslDistro: 'Ubuntu' }
+        expect.anything()
       )
-      expect(gitSpy).toHaveBeenCalledWith(
+      expect(gitSpy).not.toHaveBeenCalledWith(
         [
           'fetch',
           'pr-contributor-orca',
           '+refs/heads/contributor/runtime-wsl*:refs/remotes/pr-contributor-orca/contributor/runtime-wsl*'
         ],
-        { cwd: TEST_REPO_PATH, wslDistro: 'Ubuntu' }
+        expect.anything()
       )
-      expect(gitSpy).toHaveBeenCalledWith(
+      expect(gitSpy).not.toHaveBeenCalledWith(
         [
           'branch',
           '--set-upstream-to',
           'pr-contributor-orca/contributor/runtime-wsl',
           'runtime-wsl'
         ],
-        { cwd: createdWorktree.path, wslDistro: 'Ubuntu' }
+        expect.anything()
       )
+      expect(result.worktree.pushTarget).toEqual({
+        remoteName: 'pr-contributor-orca',
+        branchName: 'contributor/runtime-wsl',
+        remoteUrl: 'git@github.com:contributor/orca.git'
+      })
       expect(listWorktrees).toHaveBeenCalledWith(TEST_REPO_PATH, { wslDistro: 'Ubuntu' })
     } finally {
       gitSpy.mockRestore()

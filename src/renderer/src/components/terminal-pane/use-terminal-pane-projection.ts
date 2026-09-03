@@ -16,6 +16,9 @@ import {
 } from '../native-chat/native-chat-leaf-routing'
 import { canContinueAgentSessionInNewSession } from './terminal-agent-session-continuation'
 import type { TerminalPaneMobileController } from './use-terminal-pane-mobile-actions'
+import { useAppStore } from '@/store'
+import { makePaneKey } from '../../../../shared/stable-pane-id'
+import { resolvePaneAgentSessionId } from './pane-agent-session-id'
 
 export function useTerminalPaneProjection(controller: TerminalPaneMobileController) {
   const {
@@ -40,6 +43,7 @@ export function useTerminalPaneProjection(controller: TerminalPaneMobileControll
     shouldMeasureHiddenStartup,
     structuredSessionAgent,
     structuredSessionId,
+    tabId,
     sshReconnectOwnsTerminalErrors,
     systemPrefersDark,
     tabAgentTypeByLeaf,
@@ -100,6 +104,11 @@ export function useTerminalPaneProjection(controller: TerminalPaneMobileControll
   )
   const menuPaneHasCustomTitle =
     contextMenu.menuPaneId !== null && Boolean(paneTitles[contextMenu.menuPaneId])
+  const menuAgentSessionId = useAppStore((state) =>
+    contextMenu.open && contextMenuLeafId
+      ? resolvePaneAgentSessionId(state, makePaneKey(tabId, contextMenuLeafId))
+      : null
+  )
   const chatLeafStillMounted = chatLeafId
     ? managedPanes.some((pane) => pane.leafId === chatLeafId)
     : false
@@ -181,6 +190,7 @@ export function useTerminalPaneProjection(controller: TerminalPaneMobileControll
     showSshReconnectOverlay,
     visibleTerminalError,
     menuPaneHasCustomTitle,
+    menuAgentSessionId,
     chatLeafStillMounted,
     chatPane,
     chatPanePtyId,

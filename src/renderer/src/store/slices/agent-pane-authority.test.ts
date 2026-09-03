@@ -74,6 +74,20 @@ describe('agent pane authority', () => {
     expect(retirePaneAuthority).toHaveBeenCalledWith(TARGET)
   })
 
+  it('retires the pane activity cutoff with the rest of its pane-owned state', () => {
+    const store = createTestStore()
+    store.setState({
+      activityClearedAtByPaneKey: {
+        [TARGET]: 1_000,
+        [SIBLING]: 2_000
+      }
+    })
+
+    store.getState().retireAgentPaneAuthority(TARGET)
+
+    expect(store.getState().activityClearedAtByPaneKey).toEqual({ [SIBLING]: 2_000 })
+  })
+
   // STA-4114: the renderer tombstone outlived the detach/reattach cycle, so a pane
   // that was still running never showed status again for the rest of its life.
   it('lifts the retirement fence on re-attach so an in-flight turn can still report done', () => {

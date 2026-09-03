@@ -29,6 +29,7 @@ export type RpcReply = {
 export type RpcClientIdentity = {
   clientKind?: 'mobile' | 'runtime'
   clientCapabilities?: readonly string[]
+  updateClientCapabilities?: (capabilities: readonly string[]) => void
   connectionId?: string
   clientId?: string
 }

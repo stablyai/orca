@@ -42,6 +42,7 @@ export type BrowserPaletteSearchResult = {
   workspaceId: string
   worktreeId: string
   title: string
+  faviconUrl: string | null
   /** Raw page URL, so callers can dedupe a row against another list of destinations. */
   url: string
   secondaryText: string
@@ -153,6 +154,7 @@ function baseResult(entry: SearchableBrowserPage): BrowserPaletteSearchResult {
     workspaceId: entry.workspace.id,
     worktreeId: entry.worktree.id,
     title: entry.page.title || formattedUrl,
+    faviconUrl: entry.page.faviconUrl,
     url: entry.page.url,
     secondaryText: formattedUrl,
     workspaceLabel: entry.workspace.label ?? null,

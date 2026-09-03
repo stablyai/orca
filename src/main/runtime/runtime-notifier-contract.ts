@@ -119,7 +119,7 @@ export type RuntimeNotifier = {
   closeTerminal(tabId: string, paneRuntimeId?: number): void
   closeTerminalTab?(
     tabId: string,
-    options?: { localPtyTeardownOwnedExternally?: boolean }
+    options?: { localPtyTeardownOwnedExternally?: boolean; force?: boolean }
   ): Promise<void>
   sleepWorktree(worktreeId: string): void
   // Why: a phone opening a worktree wakes its slept agents by asking the host

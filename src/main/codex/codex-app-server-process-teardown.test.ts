@@ -23,7 +23,7 @@ describe('terminateCodexAppServerProcessTree', () => {
     release.resolve()
     await teardown
 
-    expect(terminateWindowsTree).toHaveBeenCalledWith(1234)
+    expect(terminateWindowsTree).toHaveBeenCalledWith(1234, { site: 'codex-app-server-teardown' })
     expect(target.kill).toHaveBeenCalledWith('SIGKILL')
   })
 

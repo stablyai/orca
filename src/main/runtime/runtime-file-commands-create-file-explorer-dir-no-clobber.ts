@@ -1,10 +1,7 @@
 // @ts-nocheck -- mechanically split class members.
 import { RuntimeFileCommandsWithWriteFileExplorerFile } from './runtime-file-commands-write-file-explorer-file'
 import { assertRuntimeFileMutationExpectation } from './runtime-file-commands-mobile-file-list-limit'
-import {
-  SSH_FILESYSTEM_PROVIDER_UNAVAILABLE_MESSAGE,
-  getSshFilesystemProvider
-} from '../providers/ssh-filesystem-dispatch'
+import { requireRuntimeFileProvider } from './runtime-file-command-target'
 import { resolveAuthorizedPath } from '../ipc/filesystem-auth'
 import { constants, copyFile, mkdir, rm } from 'node:fs/promises'
 import { dirname } from 'node:path'
@@ -20,16 +17,13 @@ export class RuntimeFileCommandsWithCreateFileExplorerDirNoClobber extends Runti
   ): Promise<{ ok: true }> {
     const target = await this.resolveFileExplorerPath(worktreeSelector, relativePath)
     assertRuntimeFileMutationExpectation(
-      target.connectionId,
+      target.executionHostId,
       expectedExecutionHostId,
       expectedSshTargetId,
       expectedSshConnectionGeneration
     )
-    const provider = target.connectionId ? getSshFilesystemProvider(target.connectionId) : null
-    if (target.connectionId) {
-      if (!provider) {
-        throw new Error(SSH_FILESYSTEM_PROVIDER_UNAVAILABLE_MESSAGE)
-      }
+    const provider = requireRuntimeFileProvider(target)
+    if (provider) {
       await provider.createDirNoClobber(target.path)
       return { ok: true }
     }
@@ -52,18 +46,13 @@ export class RuntimeFileCommandsWithCreateFileExplorerDirNoClobber extends Runti
       finalRelativePath
     ])
     assertRuntimeFileMutationExpectation(
-      tempTarget.connectionId,
+      tempTarget.executionHostId,
       expectedExecutionHostId,
       expectedSshTargetId,
       expectedSshConnectionGeneration
     )
-    const provider = tempTarget.connectionId
-      ? getSshFilesystemProvider(tempTarget.connectionId)
-      : null
-    if (tempTarget.connectionId) {
-      if (!provider) {
-        throw new Error(SSH_FILESYSTEM_PROVIDER_UNAVAILABLE_MESSAGE)
-      }
+    const provider = requireRuntimeFileProvider(tempTarget)
+    if (provider) {
       await provider.copy(tempTarget.path, finalTarget.path)
       await provider.deletePath(tempTarget.path, false).catch(() => {})
       return { ok: true }
@@ -91,18 +80,13 @@ export class RuntimeFileCommandsWithCreateFileExplorerDirNoClobber extends Runti
       newRelativePath
     ])
     assertRuntimeFileMutationExpectation(
-      oldTarget.connectionId,
+      oldTarget.executionHostId,
       expectedExecutionHostId,
       expectedSshTargetId,
       expectedSshConnectionGeneration
     )
-    const provider = oldTarget.connectionId
-      ? getSshFilesystemProvider(oldTarget.connectionId)
-      : null
-    if (oldTarget.connectionId) {
-      if (!provider) {
-        throw new Error(SSH_FILESYSTEM_PROVIDER_UNAVAILABLE_MESSAGE)
-      }
+    const provider = requireRuntimeFileProvider(oldTarget)
+    if (provider) {
       await provider.renameNoClobber(oldTarget.path, newTarget.path)
       return { ok: true }
     }
@@ -127,18 +111,13 @@ export class RuntimeFileCommandsWithCreateFileExplorerDirNoClobber extends Runti
       [sourceRelativePath, destinationRelativePath]
     )
     assertRuntimeFileMutationExpectation(
-      sourceTarget.connectionId,
+      sourceTarget.executionHostId,
       expectedExecutionHostId,
       expectedSshTargetId,
       expectedSshConnectionGeneration
     )
-    const provider = sourceTarget.connectionId
-      ? getSshFilesystemProvider(sourceTarget.connectionId)
-      : null
-    if (sourceTarget.connectionId) {
-      if (!provider) {
-        throw new Error(SSH_FILESYSTEM_PROVIDER_UNAVAILABLE_MESSAGE)
-      }
+    const provider = requireRuntimeFileProvider(sourceTarget)
+    if (provider) {
       await provider.copy(sourceTarget.path, destinationTarget.path)
       return { ok: true }
     }
@@ -166,16 +145,13 @@ export class RuntimeFileCommandsWithCreateFileExplorerDirNoClobber extends Runti
   ): Promise<{ ok: true }> {
     const target = await this.resolveFileExplorerPath(worktreeSelector, relativePath)
     assertRuntimeFileMutationExpectation(
-      target.connectionId,
+      target.executionHostId,
       expectedExecutionHostId,
       expectedSshTargetId,
       expectedSshConnectionGeneration
     )
-    const provider = target.connectionId ? getSshFilesystemProvider(target.connectionId) : null
-    if (target.connectionId) {
-      if (!provider) {
-        throw new Error(SSH_FILESYSTEM_PROVIDER_UNAVAILABLE_MESSAGE)
-      }
+    const provider = requireRuntimeFileProvider(target)
+    if (provider) {
       await provider.deletePath(target.path, recursive)
       return { ok: true }
     }

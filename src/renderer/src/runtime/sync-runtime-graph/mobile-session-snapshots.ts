@@ -14,9 +14,9 @@ import {
 import {
   buildMobileSessionAgentStatusByWorktree,
   buildMobileSessionWorktreeInputs,
-  getEditorDraftVersionByFileId,
   getOpenFileIndexes
 } from './mobile-session-inputs'
+import { getEditorDraftVersionByFileId } from './sync-projections'
 import { getMobileTerminalTheme } from './mobile-terminal-theme'
 import {
   isMobilePublishableBrowserWorkspace,
@@ -208,16 +208,29 @@ export function buildMobileSessionTabSnapshots(
     }
     const candidateVersion = ++graphState.mobileSessionSnapshotVersion
     if (cached && jsonContentEquals(cached.content, content)) {
+      const snapshot =
+        cached.snapshot.worktreeInstanceId === inputs.worktreeInstanceId
+          ? cached.snapshot
+          : {
+              worktree: worktreeId,
+              ...(inputs.worktreeInstanceId
+                ? { worktreeInstanceId: inputs.worktreeInstanceId }
+                : {}),
+              publicationEpoch: mobilePublicationEpoch,
+              snapshotVersion: candidateVersion,
+              ...content
+            }
       graphState.mobileSessionSnapshotCacheByWorktree.set(worktreeId, {
         inputs,
         content,
-        snapshot: cached.snapshot
+        snapshot
       })
-      snapshots.push(cached.snapshot)
+      snapshots.push(snapshot)
       continue
     }
     const snapshot: RuntimeMobileSessionTabsSnapshot = {
       worktree: worktreeId,
+      ...(inputs.worktreeInstanceId ? { worktreeInstanceId: inputs.worktreeInstanceId } : {}),
       publicationEpoch: mobilePublicationEpoch,
       snapshotVersion: candidateVersion,
       ...content

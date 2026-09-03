@@ -1,7 +1,7 @@
 // @ts-nocheck -- mechanically split from OrcaRuntimeService; behavior is covered by AST equivalence and characterization tests.
 import { OrcaRuntimeWithStructuredAgentSessionRecoverTuiOwner } from './orca-runtime-structured-agent-session-recover-tui-owner'
 import { DEFAULT_WORKTREE_PS_LIMIT } from './orca-runtime-postlude'
-import type { RuntimeWorktreePsSummary } from '../../shared/runtime-types'
+import type { RuntimeWorktreePsResult } from '../../shared/runtime-types'
 import { buildRuntimeWorktreePsSummaries } from './runtime-worktree-ps-summaries'
 import { buildRuntimeWorktreeSummaryPathIndex } from './runtime-worktree-summary-paths'
 import {
@@ -15,6 +15,7 @@ import { enrichMissingRepoGitRemoteIdentities } from '../repo-git-remote-identit
 import { ensureStructuredAgentSessionHost as installStructuredAgentSessionHost } from './structured-agent-session-runtime'
 import { getProfileUserDataPath } from '../orca-profiles/profile-storage-paths'
 import { LOCAL_EXECUTION_HOST_ID } from '../../shared/execution-host'
+import { buildWorktreeListingPage } from './worktree-listing-host-scope'
 import {
   resolveTuiAgentLaunchArgs,
   resolveTuiAgentLaunchEnv
@@ -30,11 +31,7 @@ export class OrcaRuntimeWithGetWorktreePs extends OrcaRuntimeWithStructuredAgent
   async getWorktreePs(
     limit = DEFAULT_WORKTREE_PS_LIMIT,
     sourceDefaultsSupported = true
-  ): Promise<{
-    worktrees: RuntimeWorktreePsSummary[]
-    totalCount: number
-    truncated: boolean
-  }> {
+  ): Promise<RuntimeWorktreePsResult> {
     if (!Number.isInteger(limit) || limit <= 0) {
       throw new Error('invalid_limit')
     }
@@ -111,11 +108,9 @@ export class OrcaRuntimeWithGetWorktreePs extends OrcaRuntimeWithStructuredAgent
     })
 
     const sorted = [...summaries.values()].sort(compareWorktreePs)
-    return {
-      worktrees: sorted.slice(0, limit),
-      totalCount: sorted.length,
-      truncated: sorted.length > limit
-    }
+    // Why: the same cap starvation as worktree.list — a host whose rows all sort last gets no
+    // page at all, which is indistinguishable from it having no workspaces (#18104).
+    return buildWorktreeListingPage(sorted, limit, this.listKnownExecutionHostIds())
   }
 
   listRepos(): Repo[] {

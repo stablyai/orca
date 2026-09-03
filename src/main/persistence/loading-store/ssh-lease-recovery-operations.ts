@@ -13,6 +13,7 @@ import {
 import {
   getSshRemotePtyLeases as getSshRemotePtyLeasesOperation,
   markSshRemotePtyLease as markSshRemotePtyLeaseOperation,
+  type MarkSshRemotePtyLeaseOptions,
   markSshRemotePtyLeases as markSshRemotePtyLeasesOperation,
   markSshRemotePtyLeasesAsync as markSshRemotePtyLeasesAsyncOperation,
   markSshRemotePtyLeasesAttachedAsync as markSshRemotePtyLeasesAttachedAsyncOperation,
@@ -120,8 +121,13 @@ export class SshLeaseRecoveryOperations {
     )
   }
 
-  markSshRemotePtyLease(targetId: string, ptyId: string, state: SshRemotePtyLease['state']): void {
-    markSshRemotePtyLeaseOperation(getSshPtyLeaseOperations(this), targetId, ptyId, state)
+  markSshRemotePtyLease(
+    targetId: string,
+    ptyId: string,
+    state: SshRemotePtyLease['state'],
+    options?: MarkSshRemotePtyLeaseOptions
+  ): void {
+    markSshRemotePtyLeaseOperation(getSshPtyLeaseOperations(this), targetId, ptyId, state, options)
   }
 
   removeSshRemotePtyLease(targetId: string, ptyId: string): void {

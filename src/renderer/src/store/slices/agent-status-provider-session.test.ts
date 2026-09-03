@@ -222,6 +222,46 @@ describe('recordAgentProviderSession', () => {
     })
   })
 
+  it('keeps the activity cutoff and manual-unread stamp across a heartbeat for the same pane', () => {
+    const store = createTestStore()
+    store.setState({
+      tabsByWorktree: { 'wt-1': [makeTab({ id: 'tab-1', worktreeId: 'wt-1' })] }
+    } as Partial<AppState>)
+    const providerSession = {
+      key: 'session_id' as const,
+      id: 'pi-session-1',
+      transcriptPath: '/tmp/pi-session-1.jsonl'
+    }
+    store
+      .getState()
+      .setAgentStatus(
+        'tab-1:leaf-1',
+        { state: 'done', prompt: 'finish', agentType: 'pi' },
+        'Pi',
+        { updatedAt: 10, stateStartedAt: 10 },
+        { tabId: 'tab-1', worktreeId: 'wt-1' }
+      )
+    store.getState().applyActivityClearedAt({ 'tab-1:leaf-1': 5_000 })
+    store.getState().unacknowledgeAgents(['tab-1:leaf-1'])
+
+    store.getState().recordAgentProviderSession(
+      'tab-1:leaf-1',
+      'pi',
+      providerSession,
+      { updatedAt: 20 },
+      {
+        tabId: 'tab-1',
+        worktreeId: 'wt-1',
+        connectionId: null
+      }
+    )
+
+    // The pane is not retired here — only its live status becomes a sleeping record. Dropping
+    // these maps would replay history the user already cleared on the next heartbeat.
+    expect(store.getState().activityClearedAtByPaneKey['tab-1:leaf-1']).toBe(5_000)
+    expect(store.getState().manuallyUnreadTurnsByPaneKey['tab-1:leaf-1']).toBeGreaterThan(0)
+  })
+
   it('does not reuse Pi launch config when the session file identity changes', () => {
     const store = createTestStore()
     store.setState({

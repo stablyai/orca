@@ -9,9 +9,6 @@ import {
 } from './runtime-file-commands-mobile-file-list-limit'
 import { isWatcherProcessFailure } from '../ipc/parcel-watcher-process-failure'
 import { stopSshFileExplorerWatchRearms } from './runtime-file-commands-ssh-file-watcher-rearm'
-import type { GitWorktreeInfo, Worktree } from '../../shared/worktree/types'
-import type { ExecutionHostId } from '../../shared/execution-host'
-import { toSshExecutionHostId } from '../../shared/execution-host'
 
 export function registerRuntimeFileWatcherRelease(
   runtimeId: string,
@@ -177,20 +174,4 @@ export function _resetRuntimeFileWatcherLeasesForTests(): void {
     stopSshFileExplorerWatchRearms(key)
   }
   runtimeFileWatcherLeasesByOwnerAndRoot.clear()
-}
-
-export type ResolvedRuntimeFileWorktree = Worktree & { git: GitWorktreeInfo }
-
-export type ResolvedRuntimeFileTarget = {
-  worktree: ResolvedRuntimeFileWorktree
-  connectionId?: string
-}
-
-export function getRuntimeFileTargetExecutionHostId(
-  target: ResolvedRuntimeFileTarget
-): ExecutionHostId {
-  return (
-    target.worktree.hostId ??
-    (target.connectionId ? toSshExecutionHostId(target.connectionId) : 'local')
-  )
 }

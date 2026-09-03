@@ -43,8 +43,11 @@ export function buildRuntimeMobileAgentStatusProjection(
   // A status ping replaces one entry and re-spreads the map; reuse every other entry.
   const entries = new Map<string, AgentStatusProjectionCacheEntry>()
   const parts: string[] = []
+  // Code-unit order, not `localeCompare`: this projection is only ever compared with `===`, so it
+  // must be deterministic, not locale-correct — and an ICU collator per comparison is ~4.5k calls
+  // per ping at the 500-entry cap.
   for (const [paneKey, entry] of Object.entries(agentStatusByPaneKey).sort(([a], [b]) =>
-    a.localeCompare(b)
+    a < b ? -1 : a > b ? 1 : 0
   )) {
     const previous = cached?.entries.get(paneKey)
     const entryCache =

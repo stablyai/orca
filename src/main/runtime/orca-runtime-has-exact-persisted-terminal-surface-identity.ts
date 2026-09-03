@@ -65,7 +65,7 @@ export class OrcaRuntimeWithHasExactPersistedTerminalSurfaceIdentity extends Orc
         exactOnly: true
       })
       if (retired) {
-        this.mobileSessionTabsByWorktree.set(candidate.worktreeId, retired.snapshot)
+        this.storeMobileSessionSnapshot(candidate.worktreeId, retired.snapshot)
         this.notifyMobileSessionTabsChanged(candidate.worktreeId)
       }
     }

@@ -13,6 +13,7 @@ import {
 import type { StoreRuntimeState } from './store-runtime-state'
 import type { WriteSchedulingOperations } from './write-scheduling'
 import type { SessionHostPartitionOperations } from './session-host-partitions'
+import { invalidateLocalWorktreeMetadataPruneInputs } from '../../local-worktree-metadata-prune-gate'
 import { scheduleSave } from './write-scheduling'
 import {
   hasPersistedWorkspaceSession,
@@ -32,6 +33,7 @@ import { mergeWorktreeMetaForWrite } from './worktree-meta-write-normalization'
 import {
   captureNativeLocalWorktreeMetadataScanExpectation as captureNativeLocalWorktreeMetadataScanExpectationOperation,
   pruneSessionlessMissingLocalWorktreeMetadataForRepo as pruneSessionlessMissingLocalWorktreeMetadataForRepoOperation,
+  selectProbeableLocalWorktreeMetadataCandidates as selectProbeableLocalWorktreeMetadataCandidatesOperation,
   type LocalWorktreeMetadataPruneExpectation,
   type NativeLocalWorktreeMetadataScanExpectation
 } from '../tracking-repos/missing-local-worktree-metadata-pruning'
@@ -197,7 +199,19 @@ export class MetadataLineageOperations {
         }
       )
     }
+    // Why: dropping a row can free the identity key that was vetoing an unrelated row's removal, so
+    // the metadata prune needs to look again — it is otherwise waiting on evidence (#17775).
+    invalidateLocalWorktreeMetadataPruneInputs()
     scheduleSave(this[metadataLineageOperationsContext].scheduling)
+  }
+
+  selectProbeableLocalWorktreeMetadataCandidates(
+    scan: NativeLocalWorktreeMetadataScanExpectation
+  ): readonly LocalWorktreeMetadataPruneExpectation[] {
+    return selectProbeableLocalWorktreeMetadataCandidatesOperation(
+      this[metadataLineageOperationsContext].runtime.state,
+      scan
+    )
   }
 
   pruneSessionlessMissingLocalWorktreeMetadataForRepo(

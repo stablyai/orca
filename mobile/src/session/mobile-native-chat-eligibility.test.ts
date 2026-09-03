@@ -123,6 +123,30 @@ describe('resolveMobileNativeChat', () => {
     expect(resolveMobileNativeChat({ type: 'browser', launchAgent: 'claude' })).toBeNull()
   })
 
+  it('resolves Codex structured agent-session tabs directly', () => {
+    expect(
+      resolveMobileNativeChat({
+        type: 'agent-session',
+        sessionId: 'structured-1',
+        agent: 'codex'
+      })
+    ).toEqual({
+      agent: 'codex',
+      sessionId: 'structured-1',
+      transcriptPath: null
+    })
+  })
+
+  it('rejects non-Codex structured agent-session tabs', () => {
+    expect(
+      resolveMobileNativeChat({
+        type: 'agent-session',
+        sessionId: 'structured-1',
+        agent: 'claude'
+      } as never)
+    ).toBeNull()
+  })
+
   it('canShowMobileNativeChat mirrors resolution', () => {
     expect(canShowMobileNativeChat({ type: 'terminal', launchAgent: 'claude' })).toBe(true)
     expect(canShowMobileNativeChat(null)).toBe(false)

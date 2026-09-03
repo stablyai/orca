@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { SSH_SESSION_EXPIRED_ERROR } from './ssh-pty-errors'
+import { SSH_PTY_SOURCE_RESTORE_REQUIRED_ERROR } from './ssh-pty-errors'
 import { SshPtyProvider } from './ssh-pty-provider'
 
 describe('SSH PTY provider session reattach incarnation', () => {
@@ -30,7 +30,7 @@ describe('SSH PTY provider session reattach incarnation', () => {
     )
   })
 
-  it('fails closed when generic reattach requires source restoration', async () => {
+  it('fails closed without claiming expiry when reattach requires source restoration', async () => {
     const mux = {
       request: vi.fn().mockResolvedValue({
         incarnationId: 'incarnation-reattached',
@@ -44,8 +44,10 @@ describe('SSH PTY provider session reattach incarnation', () => {
     }
     const provider = new SshPtyProvider('conn-1', mux as never)
 
+    // The relay proved the PTY alive before answering restoreRequired, so the rejection must not
+    // carry the token that makes callers retire the binding and cold-restore the agent.
     await expect(provider.spawn({ cols: 80, rows: 24, sessionId: 'pty-old' })).rejects.toThrow(
-      `${SSH_SESSION_EXPIRED_ERROR}: pty-old`
+      new RegExp(`^${SSH_PTY_SOURCE_RESTORE_REQUIRED_ERROR}: pty-old`)
     )
   })
 })

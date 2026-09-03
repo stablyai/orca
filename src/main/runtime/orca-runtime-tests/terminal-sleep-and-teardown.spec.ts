@@ -20,6 +20,241 @@ import {
 } from '../orca-runtime-test-fixtures.spec'
 
 describe('OrcaRuntimeService', () => {
+  it('durably closes every terminal in one workspace without touching a sibling', async () => {
+    const otherWorktreeId = `${TEST_REPO_ID}::/tmp/worktree-b`
+    const session = makeWorkspaceSessionWithHeadlessTerminal({
+      tabsByWorktree: {
+        [TEST_WORKTREE_ID]: [
+          {
+            id: 'host-tab',
+            ptyId: 'pty-1',
+            worktreeId: TEST_WORKTREE_ID,
+            title: 'Agent',
+            customTitle: null,
+            color: null,
+            sortOrder: 0,
+            createdAt: 1
+          },
+          {
+            id: 'pinned-tab',
+            ptyId: 'pty-2',
+            worktreeId: TEST_WORKTREE_ID,
+            title: 'Pinned',
+            customTitle: null,
+            color: null,
+            sortOrder: 1,
+            createdAt: 2,
+            isPinned: true
+          }
+        ],
+        [otherWorktreeId]: [
+          {
+            id: 'other-tab',
+            ptyId: 'pty-other',
+            worktreeId: otherWorktreeId,
+            title: 'Unrelated',
+            customTitle: null,
+            color: null,
+            sortOrder: 0,
+            createdAt: 1
+          }
+        ]
+      },
+      terminalLayoutsByTabId: {
+        'host-tab': makeHeadlessTerminalLayout({ [HEADLESS_LEAF_ID]: 'pty-1' }),
+        'pinned-tab': makeHeadlessTerminalLayout({ pinned: 'pty-2' }),
+        'other-tab': makeHeadlessTerminalLayout({ other: 'pty-other' })
+      },
+      sleepingAgentSessionsByPaneKey: {
+        'host-tab:headless': {
+          paneKey: 'host-tab:headless',
+          tabId: 'host-tab',
+          worktreeId: TEST_WORKTREE_ID,
+          agent: 'codex',
+          providerSession: { key: 'session_id', id: 'resume-target' },
+          prompt: '',
+          state: 'working',
+          capturedAt: 1,
+          updatedAt: 1
+        },
+        'other-tab:other': {
+          paneKey: 'other-tab:other',
+          tabId: 'other-tab',
+          worktreeId: otherWorktreeId,
+          agent: 'codex',
+          providerSession: { key: 'session_id', id: 'unrelated' },
+          prompt: '',
+          state: 'working',
+          capturedAt: 1,
+          updatedAt: 1
+        }
+      },
+      terminalPtyIncarnationsByPaneKey: {
+        'host-tab:headless': 'incarnation-1',
+        'pinned-tab:pinned': 'incarnation-2',
+        'other-tab:other': 'incarnation-other'
+      }
+    })
+    const { runtimeStore, getSession } = makeRuntimeStoreWithWorkspaceSession(session)
+    const runtime = new OrcaRuntimeService(runtimeStore as never)
+    runtime.attachWindow(1)
+    runtime.syncWindowGraph(1, { tabs: [], leaves: [] })
+    const stopAndWait = vi.fn(async (ptyId: string) => {
+      runtime.onPtyExit(ptyId, 0)
+      return true
+    })
+    runtime.setPtyController({
+      write: () => true,
+      kill: () => false,
+      stopAndWait,
+      getForegroundProcess: async () => null
+    })
+    runtime.registerPty('pty-1', TEST_WORKTREE_ID, null, {
+      tabId: 'host-tab',
+      leafId: HEADLESS_LEAF_ID
+    })
+    runtime.registerPty('pty-2', TEST_WORKTREE_ID, null, {
+      tabId: 'pinned-tab',
+      leafId: 'pinned'
+    })
+    runtime.registerPty('pty-other', otherWorktreeId, null, {
+      tabId: 'other-tab',
+      leafId: 'other'
+    })
+    runtime.registerPty('pty-shadow', TEST_WORKTREE_ID, 'ssh-shadow')
+
+    await expect(runtime.closeTerminalsForWorktree(`id:${TEST_WORKTREE_ID}`)).resolves.toEqual({
+      closed: 2,
+      stopped: 2,
+      retiredSurfaces: true
+    })
+
+    expect(stopAndWait).toHaveBeenCalledTimes(2)
+    expect(stopAndWait).not.toHaveBeenCalledWith('pty-other')
+    expect(stopAndWait).not.toHaveBeenCalledWith('pty-shadow')
+    expect(getSession().tabsByWorktree[TEST_WORKTREE_ID]).toEqual([])
+    expect(getSession().tabsByWorktree[otherWorktreeId]).toHaveLength(1)
+    expect(getSession().sleepingAgentSessionsByPaneKey).toEqual({
+      'other-tab:other': expect.objectContaining({ worktreeId: otherWorktreeId })
+    })
+    expect(getSession().terminalPtyIncarnationsByPaneKey).toEqual({
+      'other-tab:other': 'incarnation-other'
+    })
+  })
+
+  it('reports an unverified PTY instead of claiming workspace close stopped it', async () => {
+    const session = makeWorkspaceSessionWithHeadlessTerminal()
+    const { runtimeStore } = makeRuntimeStoreWithWorkspaceSession(session)
+    const runtime = new OrcaRuntimeService(runtimeStore as never)
+    runtime.attachWindow(1)
+    runtime.syncWindowGraph(1, { tabs: [], leaves: [] })
+    runtime.setPtyController({
+      write: () => true,
+      kill: () => false,
+      stopAndWait: async () => false,
+      getForegroundProcess: async () => null
+    })
+    runtime.registerPty('persisted-pty', TEST_WORKTREE_ID, null, {
+      tabId: 'host-tab',
+      leafId: HEADLESS_LEAF_ID
+    })
+
+    await expect(runtime.closeTerminalsForWorktree(`id:${TEST_WORKTREE_ID}`)).resolves.toEqual({
+      closed: 1,
+      stopped: 0,
+      retiredSurfaces: true,
+      ptyStopVerdict: 'unverifiable',
+      ptyStopReason: 'the owning host did not confirm the PTY exit'
+    })
+  })
+
+  it('uses the worktree host when repository connection metadata is stale', async () => {
+    const targetConnectionId = 'conn-target'
+    const targetHostId = `ssh:${targetConnectionId}`
+    const targetPtyId = `${targetHostId}@@pty-target`
+    const session = makeWorkspaceSessionWithHeadlessTerminal({
+      tabsByWorktree: {
+        [TEST_WORKTREE_ID]: [
+          {
+            id: 'host-tab',
+            ptyId: targetPtyId,
+            worktreeId: TEST_WORKTREE_ID,
+            title: 'Persisted Terminal',
+            customTitle: null,
+            color: null,
+            sortOrder: 0,
+            createdAt: 1
+          }
+        ]
+      },
+      terminalLayoutsByTabId: {
+        'host-tab': makeHeadlessTerminalLayout({ [HEADLESS_LEAF_ID]: targetPtyId })
+      }
+    })
+    const { runtimeStore } = makeRuntimeStoreWithWorkspaceSession(session)
+    const repo = { ...store.getRepo(TEST_REPO_ID)!, connectionId: 'conn-stale' }
+    runtimeStore.getRepos = () => [repo]
+    runtimeStore.getRepo = (id: string) => (id === TEST_REPO_ID ? repo : undefined)
+    runtimeStore.getWorktreeMeta = () => ({ hostId: targetHostId }) as never
+    runtimeStore.getAllWorktreeMeta = () =>
+      ({ [TEST_WORKTREE_ID]: { hostId: targetHostId } }) as never
+    const runtime = new OrcaRuntimeService(runtimeStore as never)
+    runtime.attachWindow(1)
+    runtime.syncWindowGraph(1, { tabs: [], leaves: [] })
+    const stopAndWait = vi.fn(async () => true)
+    runtime.setPtyController({
+      write: () => true,
+      kill: vi.fn(() => false),
+      stopAndWait,
+      getForegroundProcess: async () => null
+    })
+    runtime.registerPty(targetPtyId, TEST_WORKTREE_ID, targetConnectionId, {
+      tabId: 'host-tab',
+      leafId: HEADLESS_LEAF_ID
+    })
+
+    await expect(runtime.stopTerminalsForWorktree(`id:${TEST_WORKTREE_ID}`)).resolves.toEqual({
+      stopped: 1
+    })
+    expect(stopAndWait).toHaveBeenCalledWith(targetPtyId)
+  })
+
+  it('reports disconnected SSH PTYs as unverifiable during workspace close', async () => {
+    const ptyId = 'ssh:conn-1@@disconnected'
+    const session = makeWorkspaceSessionWithHeadlessTerminal({
+      tabsByWorktree: { [TEST_WORKTREE_ID]: [] },
+      terminalLayoutsByTabId: {}
+    })
+    const { runtimeStore } = makeRuntimeStoreWithWorkspaceSession(session)
+    const repo = { ...store.getRepo(TEST_REPO_ID)!, connectionId: 'conn-1' }
+    runtimeStore.getRepos = () => [repo]
+    runtimeStore.getRepo = (id: string) => (id === TEST_REPO_ID ? repo : undefined)
+    const runtime = new OrcaRuntimeService(runtimeStore as never)
+    runtime.attachWindow(1)
+    runtime.syncWindowGraph(1, { tabs: [], leaves: [] })
+    runtime.setPtyController({
+      write: () => true,
+      kill: vi.fn(() => false),
+      stopAndWait: vi.fn(async () => false),
+      getForegroundProcess: async () => null
+    })
+    runtime['recordPtyWorktree'](ptyId, TEST_WORKTREE_ID, {
+      connected: false,
+      connectionId: 'conn-1',
+      tabId: 'host-tab'
+    })
+    runtime.markPtyLivenessUnverifiable(ptyId, 'relay disconnected')
+
+    await expect(
+      runtime.closeTerminalsForWorktree(`id:${TEST_WORKTREE_ID}`)
+    ).resolves.toMatchObject({
+      closed: 0,
+      stopped: 0,
+      ptyStopVerdict: 'unverifiable',
+      ptyStopReason: 'relay disconnected'
+    })
+  })
+
   it('shows worktree.ps working when the current pane supersedes a Claude agents OSC title', async () => {
     const runtime = new OrcaRuntimeService(store)
 
@@ -76,10 +311,11 @@ describe('OrcaRuntimeService', () => {
   it('stops by exact id when the selector no longer resolves', async () => {
     const runtime = new OrcaRuntimeService(store)
     const kill = vi.fn(() => true)
+    const stopAndWait = vi.fn(async () => true)
     runtime.setPtyController({
       write: () => true,
       kill,
-      stopAndWait: vi.fn(async () => true),
+      stopAndWait,
       getForegroundProcess: async () => null
     })
     syncSinglePty(runtime)
@@ -90,7 +326,7 @@ describe('OrcaRuntimeService', () => {
         resolvedWorktreeId: TEST_WORKTREE_ID
       })
     ).resolves.toEqual({ stopped: 1 })
-    expect(kill).toHaveBeenCalledWith('pty-1')
+    expect(stopAndWait).toHaveBeenCalledWith('pty-1')
   })
 
   it('does not sweep a sibling workspace sharing the checkout dir of an exact id', async () => {
@@ -138,10 +374,11 @@ describe('OrcaRuntimeService', () => {
   it('stops only the owning connection when one worktree id lives on two hosts', async () => {
     const runtime = new OrcaRuntimeService(store)
     const kill = vi.fn(() => true)
+    const stopAndWait = vi.fn(async () => true)
     runtime.setPtyController({
       write: () => true,
       kill,
-      stopAndWait: vi.fn(async () => true),
+      stopAndWait,
       getForegroundProcess: async () => null
     })
     syncSinglePty(runtime, null)
@@ -156,8 +393,8 @@ describe('OrcaRuntimeService', () => {
         resolvedConnectionId: 'ssh-1'
       })
     ).resolves.toEqual({ stopped: 1 })
-    expect(kill).toHaveBeenCalledWith('pty-ssh')
-    expect(kill).not.toHaveBeenCalledWith('pty-local')
+    expect(stopAndWait).toHaveBeenCalledWith('pty-ssh')
+    expect(stopAndWait).not.toHaveBeenCalledWith('pty-local')
   })
 
   it('awaits physical PTY stop when destructive teardown supplies shared dedupe', async () => {
@@ -175,7 +412,7 @@ describe('OrcaRuntimeService', () => {
       getForegroundProcess: async () => null
     })
     syncSinglePty(runtime)
-    const stopPty = vi.fn(async (_ptyId: string, stop: () => boolean | Promise<boolean>) => ({
+    const stopPty = vi.fn(async (_ptyId: string, stop: () => Promise<boolean>) => ({
       stopped: await stop(),
       owner: true
     }))
@@ -204,7 +441,7 @@ describe('OrcaRuntimeService', () => {
       getForegroundProcess: async () => null
     })
     syncSinglePty(runtime)
-    const stopPty = vi.fn(async (_ptyId: string, stop: () => boolean | Promise<boolean>) => ({
+    const stopPty = vi.fn(async (_ptyId: string, stop: () => Promise<boolean>) => ({
       stopped: await stop(),
       owner: true
     }))

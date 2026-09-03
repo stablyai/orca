@@ -95,7 +95,8 @@ export function reduceStructuredAgentSession(
   action: StructuredAgentSessionAction
 ): StructuredAgentSessionState {
   if (action.type === 'loading') {
-    return { ...EMPTY_STRUCTURED_AGENT_SESSION, status: 'loading' }
+    // Keep the last transcript visible while a reconnect rehydrates the stream.
+    return { ...state, status: 'loading', error: undefined }
   }
   if (action.type === 'error') {
     return { ...state, status: 'error', error: action.message }

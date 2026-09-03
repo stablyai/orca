@@ -4,6 +4,10 @@ import {
   SkillInstallFailureSchema
 } from '../shared/skill-install-failure'
 import {
+  TERMINAL_UNAVAILABLE_RPC_ERROR_CODE,
+  TerminalUnavailableCauseSchema
+} from '../shared/terminal-unavailable-cause'
+import {
   RelayErrorCode,
   type JsonRpcNotification,
   type JsonRpcRequest,
@@ -135,11 +139,16 @@ export abstract class RelayDispatcherRpcRouting extends RelayDispatcherFrameCode
       const message = err instanceof Error ? err.message : String(err)
       const errorCode = (err as { code?: unknown }).code
       const code = typeof errorCode === 'number' ? errorCode : -32000
-      const skillFailure =
+      // Why an allowlist keyed on the error code: error `data` is otherwise dropped, so a
+      // handler cannot leak internals by attaching them. Each published shape is validated
+      // against its own schema before it crosses.
+      const structured =
         errorCode === SKILL_INSTALL_RPC_ERROR_CODE
           ? SkillInstallFailureSchema.safeParse((err as { data?: unknown }).data)
-          : null
-      const data = skillFailure?.success === true ? skillFailure.data : undefined
+          : errorCode === TERMINAL_UNAVAILABLE_RPC_ERROR_CODE
+            ? TerminalUnavailableCauseSchema.safeParse((err as { data?: unknown }).data)
+            : null
+      const data = structured?.success === true ? structured.data : undefined
       const accepted = this.sendResponse(
         client,
         req.id,
@@ -194,12 +203,17 @@ export abstract class RelayDispatcherRpcRouting extends RelayDispatcherFrameCode
     const frame = this.prepareFrame(msg)
     const lane =
       frame.frameBytes > DISPATCHER_CONTROL_QUEUE_MAX_BYTES ? 'legacy-response' : 'control'
-    const accepted = this.enqueuePreparedFrame(client, frame, lane, onSettled)
+    // Why 'reject': the control lane is a shared budget, so a reply that fits the 1 MiB ceiling alone
+    // still overflows it under concurrent traffic. Fatal admission would close the connection — every
+    // pane on the host — over one listing. A response is the droppable class of control frame: it
+    // carries an id, so the substitute below tells that one caller, and pty.replay/notifyControl keep
+    // the fatal default because a silent drop there desyncs the client with nothing to retry.
+    const accepted = this.enqueuePreparedFrame(client, frame, lane, onSettled, 'reject')
     if (accepted) {
       return true
     }
     // Why: an oversized response must fail its own request; closing would kill every pane on the host.
-    // A rejected first enqueue either left onSettled untouched or closed the client, so exactly one settlement happens.
+    // A rejected first enqueue leaves onSettled untouched, so exactly one settlement happens.
     return this.enqueuePreparedFrame(
       client,
       this.prepareFrame({
@@ -218,7 +232,10 @@ export abstract class RelayDispatcherRpcRouting extends RelayDispatcherFrameCode
           settlement.ok
             ? { ok: false, error: new Error(RESPONSE_OVER_CAPACITY_MESSAGE) }
             : settlement
-        )
+        ),
+      // Why 'reject': if even ~150 bytes will not fit, the caller's own request timeout settles it.
+      // Closing to report that one request failed is the outcome this whole path exists to avoid.
+      'reject'
     )
   }
 

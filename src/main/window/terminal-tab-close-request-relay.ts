@@ -12,7 +12,7 @@ const TERMINAL_TAB_CLOSE_TIMEOUT_MS = 20_000
 export async function requestTerminalTabCloseFromRenderer(
   mainWindow: BrowserWindow,
   tabId: string,
-  options: { localPtyTeardownOwnedExternally?: boolean } = {}
+  options: { localPtyTeardownOwnedExternally?: boolean; force?: boolean } = {}
 ): Promise<void> {
   if (mainWindow.isDestroyed() || mainWindow.webContents.isDestroyed()) {
     throw new Error('renderer_unavailable')

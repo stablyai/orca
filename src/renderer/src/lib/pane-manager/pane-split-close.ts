@@ -21,6 +21,7 @@ import { disposeWebgl } from './pane-webgl-renderer'
 import { clearPendingSplitScrollRestore, scheduleSplitScrollRestore } from './pane-split-scroll'
 import { reattachWebglIfNeeded } from './pane-webgl-reattach'
 import { toPublicPane } from './pane-public-view'
+import { releaseTerminalScrollIntentKey } from './terminal-scroll-intent-key-store'
 
 type MovedPaneSplitState = {
   pane: ManagedPaneInternal
@@ -179,6 +180,12 @@ function teardownManagedPane(
   const closedLeafId = pane.leafId
   args.releasePaneIdentity(args.paneId)
   removePaneContainer(args, pane)
+  if (reason === 'close') {
+    // Leaf ids are minted UUIDs and never reused, so a closed leaf's scroll
+    // intent is unreachable. Detach/retire hand the leaf to a new host, which
+    // must still be able to restore it.
+    releaseTerminalScrollIntentKey(closedLeafId)
+  }
   const nextActivePaneId = activateReplacementPane(args)
   applyPaneOpacity(args.panes.values(), nextActivePaneId, args.styleOptions)
   for (const p of args.panes.values()) {

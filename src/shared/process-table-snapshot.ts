@@ -1,27 +1,3 @@
-import { execFile as execFileCb } from 'node:child_process'
-import { promisify } from 'node:util'
-
-const execFile = promisify(execFileCb)
-
-// Why: agent foreground-process inspection runs this full process-table scan on
-// a 750ms/2000ms per-pane cadence. On a shared SSH relay every tracked agent
-// terminal drives it, so concurrent panes used to each fork their own `ps`,
-// pinning idle CPU (issue #6288). Memoizing collapses overlapping scans to one.
-/** Columns used by the evidence reader. Keep command last so its spaces survive parsing. */
-export const PS_ARGS = ['-axo', 'pid=,ppid=,pgid=,tpgid=,stat=,command='] as const
-const PS_TIMEOUT_MS = 3000
-
-// Why: 500ms is below the active cadence poll's minimum inter-poll gap (~675ms
-// = 750ms less jitter), so a cadence-driven pane never reuses a snapshot older
-// than it would have scanned itself; a burst of panes polling in the same
-// window collapses from up to 8 scans/sec down to ~2/sec. The faster
-// event-driven follow-up inspections (e.g. the pending-title confirmation,
-// which can re-fire <500ms apart) intentionally accept a <=500ms-stale table:
-// they only confirm the same agent still owns the pane, and process-exit is
-// debounced across repeated samples, so a near-instant cached scan answers
-// identically to a fresh fork.
-const DEFAULT_SNAPSHOT_TTL_MS = 500
-
 export type ProcessTableRow = {
   pid: number
   ppid: number
@@ -29,9 +5,26 @@ export type ProcessTableRow = {
   pgid?: number
   /** Terminal foreground process group id (`0`/`-1` means no controlling tty). */
   tpgid?: number
+  /** Controlling terminal name, when the host process table provides it. */
+  tty?: string
+  /** Opaque host process start marker (Linux /proc ticks or host ps marker). */
+  startTime?: string
   stat: string
   command: string
 }
+
+/** Columns used by the evidence reader. Keep command last so its spaces survive parsing. */
+export const PS_ARGS = (
+  process.platform === 'darwin'
+    ? ['-axo', 'pid=,ppid=,pgid=,tpgid=,stat=,tty=,lstart=,command=']
+    : ['-axo', 'pid=,ppid=,pgid=,tpgid=,stat=,tty=,etimes=,command=']
+) as readonly string[]
+
+// Why: execFile's 1MB default leaves ~3x headroom (326KB / 1,460 processes, and
+// a single 5KB argv row is ordinary), so a busy host overflows it and then EVERY
+// capture fails — a readable process table degrading into permanent
+// "unverifiable". Matches the sibling reader in pty-descendant-termination.ts.
+export const PS_MAX_BUFFER_BYTES = 32 * 1024 * 1024
 
 /**
  * Parse legacy or evidence-shaped `ps` output into rows. Tolerates CRLF so a
@@ -42,17 +35,54 @@ export function parseProcessTableRows(stdout: string): ProcessTableRow[] {
   const rows: ProcessTableRow[] = []
   for (const line of stdout.split(/\r?\n/)) {
     const trimmed = line.trim()
-    const match = trimmed.match(/^(\d+)\s+(\d+)\s+(?:(-?\d+)\s+(-?\d+)\s+)?(\S+)\s+(.+)$/)
-    if (!match) {
+    const macStartMatch = trimmed.match(
+      /^(\d+)\s+(\d+)\s+(-?\d+)\s+(-?\d+)\s+(\S+)\s+(\S+)\s+(\S+\s+\S+\s+\d{1,2}\s+\S+\s+\d{4})\s+(.+)$/
+    )
+    if (macStartMatch) {
+      rows.push({
+        pid: Number(macStartMatch[1]),
+        ppid: Number(macStartMatch[2]),
+        pgid: Number(macStartMatch[3]),
+        tpgid: Number(macStartMatch[4]),
+        stat: macStartMatch[5],
+        tty: macStartMatch[6],
+        startTime: macStartMatch[7],
+        command: macStartMatch[8]
+      })
       continue
     }
-    rows.push({
-      pid: Number(match[1]),
-      ppid: Number(match[2]),
-      ...(match[3] !== undefined ? { pgid: Number(match[3]), tpgid: Number(match[4]) } : {}),
-      stat: match[5] ?? match[3],
-      command: match[6] ?? match[4]
-    } as ProcessTableRow)
+    const evidenceMatch = trimmed.match(
+      /^(\d+)\s+(\d+)\s+(?:(-?\d+)\s+(-?\d+)\s+)?(\S+)(?:\s+(\S+)\s+(\d+))?\s+(.+)$/
+    )
+    if (evidenceMatch) {
+      rows.push({
+        pid: Number(evidenceMatch[1]),
+        ppid: Number(evidenceMatch[2]),
+        ...(evidenceMatch[3] !== undefined
+          ? { pgid: Number(evidenceMatch[3]), tpgid: Number(evidenceMatch[4]) }
+          : {}),
+        stat: evidenceMatch[5] ?? evidenceMatch[3],
+        ...(evidenceMatch[7] !== undefined
+          ? { tty: evidenceMatch[6], startTime: evidenceMatch[7] }
+          : {}),
+        command: evidenceMatch[8] ?? evidenceMatch[6] ?? evidenceMatch[4]
+      } as ProcessTableRow)
+      continue
+    }
+    const legacyMatch = trimmed.match(
+      /^((?:\d+)\s+(?:\d+)\s+)(?:(-?\d+)\s+(-?\d+)\s+)?(\S+)\s+(.+)$/
+    )
+    if (legacyMatch) {
+      rows.push({
+        pid: Number(legacyMatch[1].trim().split(/\s+/)[0]),
+        ppid: Number(legacyMatch[1].trim().split(/\s+/)[1]),
+        ...(legacyMatch[2] !== undefined
+          ? { pgid: Number(legacyMatch[2]), tpgid: Number(legacyMatch[3]) }
+          : {}),
+        stat: legacyMatch[4],
+        command: legacyMatch[5]
+      } as ProcessTableRow)
+    }
   }
   return rows
 }
@@ -88,10 +118,16 @@ export function parseStrictProcessTableRows(stdout: string): ProcessTableRow[] {
     if (/^PID\s+PPID\s+PGID\s+TPGID\s+STAT\s+COMMAND$/i.test(line)) {
       continue
     }
-    const match = line.match(/^(\d+)\s+(\d+)\s+(-?\d+)\s+(-?\d+)\s+(\S+)\s+(.+)$/)
-    if (!match) {
+    const macStartMatch = line.match(
+      /^(\d+)\s+(\d+)\s+(-?\d+)\s+(-?\d+)\s+(\S+)\s+(\S+)\s+(\S+\s+\S+\s+\d{1,2}\s+\S+\s+\d{4})\s+(.+)$/
+    )
+    const numericMatch = macStartMatch
+      ? null
+      : line.match(/^(\d+)\s+(\d+)\s+(-?\d+)\s+(-?\d+)\s+(\S+)(?:\s+(\S+)\s+(\d+))?\s+(.+)$/)
+    if (!numericMatch && !macStartMatch) {
       throw new ProcessTableCaptureError('malformed_row')
     }
+    const match = numericMatch ?? macStartMatch!
     const pid = Number(match[1])
     const ppid = Number(match[2])
     const pgid = Number(match[3])
@@ -105,60 +141,28 @@ export function parseStrictProcessTableRows(stdout: string): ProcessTableRow[] {
       pgid < 0 ||
       !Number.isSafeInteger(tpgid) ||
       (tpgid < 0 && tpgid !== -1) ||
-      match[6].length === 0
+      (match[8] ?? match[6]).length === 0
     ) {
       throw new ProcessTableCaptureError('invalid_numeric_field')
     }
-    rows.push({ pid, ppid, pgid, tpgid, stat: match[5], command: match[6] })
+    rows.push({
+      pid,
+      ppid,
+      pgid,
+      tpgid,
+      stat: match[5],
+      ...(numericMatch && match[7] !== undefined
+        ? { tty: match[6], startTime: match[7] }
+        : macStartMatch
+          ? { tty: match[6], startTime: match[7] }
+          : {}),
+      command: numericMatch ? (match[8] ?? match[6]) : match[8]
+    })
   }
   if (rows.length === 0) {
     throw new ProcessTableCaptureError('empty_capture')
   }
   return rows
-}
-
-export type ProcessTableIndexStats = {
-  captures?: number
-  indexBuilds: number
-  rowVisits: number
-  indexLookups: number
-}
-
-export type ProcessTableIndex = {
-  rows: readonly ProcessTableRow[]
-  byPid: ReadonlyMap<number, ProcessTableRow>
-  childrenByPpid: ReadonlyMap<number, readonly ProcessTableRow[]>
-  stats?: ProcessTableIndexStats
-}
-
-/**
- * Build the correlation indexes in one linear pass over a capture. Only the
- * indexes a resolver actually reads are materialized: group indexes would cost
- * two more maps plus a per-row array allocation on every capture, and foreground
- * membership is derived from each row's own `pgid` against the root's `tpgid`.
- */
-export function buildProcessTableIndex(
-  rows: readonly ProcessTableRow[],
-  stats?: ProcessTableIndexStats
-): ProcessTableIndex {
-  if (stats) {
-    stats.indexBuilds += 1
-  }
-  const byPid = new Map<number, ProcessTableRow>()
-  const childrenByPpid = new Map<number, ProcessTableRow[]>()
-  for (const row of rows) {
-    if (stats) {
-      stats.rowVisits += 1
-    }
-    // Preserve rows.find() semantics if a malformed table repeats a pid
-    if (!byPid.has(row.pid)) {
-      byPid.set(row.pid, row)
-    }
-    const children = childrenByPpid.get(row.ppid) ?? []
-    children.push(row)
-    childrenByPpid.set(row.ppid, children)
-  }
-  return { rows, byPid, childrenByPpid, stats }
 }
 
 /**
@@ -167,226 +171,4 @@ export function buildProcessTableIndex(
  */
 export function scoreForegroundCandidateRow(row: ProcessTableRow & { depth: number }): number {
   return (row.stat.includes('+') ? 10_000 : 0) + row.depth
-}
-
-export function lookupProcessTableIndex<T>(
-  index: ProcessTableIndex,
-  lookup: (index: ProcessTableIndex) => T,
-  stats = index.stats
-): T {
-  if (stats) {
-    stats.indexLookups += 1
-  }
-  return lookup(index)
-}
-
-const processTableIndexes = new WeakMap<readonly ProcessTableRow[], ProcessTableIndex>()
-
-/**
- * Memoize one index per snapshot identity, so the panes that share a TTL-cached
- * capture walk its rows once instead of once each. Keyed weakly by the rows
- * array, so an index dies with the snapshot that produced it. The shared build
- * materializes only `byPid` and `childrenByPpid`, so a one-pane relay pays for
- * two maps per capture rather than four indexes no resolver queries.
- *
- * Deliberately stats-free: `buildProcessTableIndex` mutates the caller's counter
- * bag and stores it on the index, so a shared index would hand one caller's bag
- * to an unrelated later caller and let a cache hit satisfy an `indexBuilds`
- * measurement without building anything. Measured callers keep calling
- * `buildProcessTableIndex(rows, stats)` directly.
- */
-export function getProcessTableIndex(rows: readonly ProcessTableRow[]): ProcessTableIndex {
-  const cached = processTableIndexes.get(rows)
-  if (cached) {
-    return cached
-  }
-  const index = buildProcessTableIndex(rows)
-  processTableIndexes.set(rows, index)
-  return index
-}
-
-type Snapshot<T> = { value: T; capturedAtMs: number }
-
-type ProcessTableSnapshotReaderDeps<T> = {
-  runPs: () => Promise<T>
-  now: () => number
-  ttlMs?: number
-}
-
-/**
- * Build a process-table snapshot reader that deduplicates concurrent and
- * near-simultaneous scans behind a single in-flight promise + short TTL.
- * Exposed as a factory so tests can inject the scan and clock; production code
- * uses the shared `getProcessTableSnapshot` instance below. Generic over the
- * scan result so both the POSIX and Windows readers cache already-parsed rows,
- * letting a burst of panes share one parse per TTL window.
- */
-export function createProcessTableSnapshotReader<T = string>(
-  deps: ProcessTableSnapshotReaderDeps<T>
-): {
-  getSnapshot: () => Promise<T>
-  getFreshSnapshot: () => Promise<T>
-  reset: () => void
-} {
-  const ttlMs = deps.ttlMs ?? DEFAULT_SNAPSHOT_TTL_MS
-  let cached: Snapshot<T> | null = null
-  let inFlight: Promise<T> | null = null
-  let sequence = 0
-  let freshQueued: { promise: Promise<T>; startSequence: number | null } | null = null
-
-  async function runSnapshot(): Promise<T> {
-    const promise = deps.runPs()
-    inFlight = promise
-    try {
-      const value = await promise
-      // Why: stamp capture time AFTER the scan returns so a slow scan can't
-      // hand back a snapshot that is already older than its TTL.
-      cached = { value, capturedAtMs: deps.now() }
-      return value
-    } finally {
-      if (inFlight === promise) {
-        inFlight = null
-      }
-    }
-  }
-
-  async function getSnapshot(): Promise<T> {
-    if (cached && deps.now() - cached.capturedAtMs < ttlMs) {
-      return cached.value
-    }
-    if (inFlight) {
-      return inFlight
-    }
-    if (freshQueued) {
-      // Why: a fresh request schedules its scan in a microtask so same-turn
-      // callers can share it; an ordinary miss must not start a competing scan.
-      return freshQueued.promise
-    }
-    return runSnapshot()
-  }
-
-  function getFreshSnapshot(): Promise<T> {
-    const requestSequence = ++sequence
-    if (freshQueued?.startSequence === null) {
-      return freshQueued.promise
-    }
-    const priorFresh = freshQueued?.promise ?? null
-    const priorScan = inFlight
-    const entry: { promise: Promise<T>; startSequence: number | null } = {
-      promise: Promise.resolve(undefined as never),
-      startSequence: null
-    }
-    entry.promise = Promise.resolve().then(async () => {
-      for (const prior of [priorFresh, priorScan]) {
-        if (!prior) {
-          continue
-        }
-        try {
-          await prior
-        } catch {
-          // The post-boundary scan below owns the confirmation result.
-        }
-      }
-      // Why: same-turn callers join while startSequence is null; later callers
-      // queue behind this scan. The sequence proves every shared scan began
-      // strictly after each request without relying on wall-clock precision.
-      entry.startSequence = ++sequence
-      if (entry.startSequence <= requestSequence) {
-        throw new Error('fresh process snapshot did not start after request')
-      }
-      return runSnapshot()
-    })
-    freshQueued = entry
-    const clearQueued = (): void => {
-      if (freshQueued === entry) {
-        freshQueued = null
-      }
-    }
-    void entry.promise.then(clearQueued, clearQueued)
-    return entry.promise
-  }
-
-  return {
-    getSnapshot,
-    getFreshSnapshot,
-    // Why: lets tests that mock `ps` per case clear the cross-call cache so one
-    // case's snapshot can't satisfy the next within the TTL window.
-    reset: () => {
-      cached = null
-      inFlight = null
-      sequence = 0
-      freshQueued = null
-    }
-  }
-}
-
-/**
- * One capture, two views. The lenient and strict readers issue byte-identical
- * `ps` argv, so giving them separate memoizers would fork `ps` twice per TTL
- * window on a relay that serves both — the exact doubling issue #6288 removed.
- * Each parse is memoized per capture (including a strict failure) so a burst of
- * panes sharing the window re-tokenizes nothing.
- */
-type ProcessTableCapture = {
-  lenient: () => ProcessTableRow[]
-  strict: () => ProcessTableRow[]
-}
-
-function createProcessTableCapture(stdout: string): ProcessTableCapture {
-  let lenientRows: ProcessTableRow[] | null = null
-  let strictResult: { rows: ProcessTableRow[] } | { error: unknown } | null = null
-  return {
-    lenient: () => (lenientRows ??= parseProcessTableRows(stdout)),
-    strict: () => {
-      if (strictResult === null) {
-        try {
-          strictResult = { rows: parseStrictProcessTableRows(stdout) }
-        } catch (error) {
-          strictResult = { error }
-        }
-      }
-      if ('error' in strictResult) {
-        throw strictResult.error
-      }
-      return strictResult.rows
-    }
-  }
-}
-
-const processTableReader = createProcessTableSnapshotReader<ProcessTableCapture>({
-  runPs: async () => {
-    const { stdout } = await execFile('ps', [...PS_ARGS], {
-      encoding: 'utf-8',
-      timeout: PS_TIMEOUT_MS
-    })
-    return createProcessTableCapture(stdout)
-  },
-  now: () => Date.now()
-})
-
-/**
- * Run (or reuse a recent) `ps -axo` process-table scan and return
- * its parsed rows. Per-process singleton: the relay and local main processes
- * each dedupe their own scans and share a single parse per TTL window.
- */
-export async function getProcessTableSnapshot(): Promise<ProcessTableRow[]> {
-  return (await processTableReader.getSnapshot()).lenient()
-}
-
-/** Capture process rows from a scan that starts after this request. */
-export async function getFreshProcessTableSnapshot(): Promise<ProcessTableRow[]> {
-  return (await processTableReader.getFreshSnapshot()).lenient()
-}
-
-/** Strict evidence view of the same deduplicated capture. */
-export async function getStrictProcessTableSnapshot(): Promise<ProcessTableRow[]> {
-  return (await processTableReader.getSnapshot()).strict()
-}
-
-/**
- * Test-only: clear the shared snapshot cache so suites that mock `ps` between
- * cases don't have one case's snapshot served to the next within the TTL.
- */
-export function resetProcessTableSnapshotForTests(): void {
-  processTableReader.reset()
 }

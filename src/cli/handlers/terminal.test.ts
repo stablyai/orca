@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { RuntimeClient } from '../runtime-client'
+import { RuntimeClientError, type RuntimeClient } from '../runtime-client'
 import { parseArgs } from '../args'
 import { printHelp } from '../help'
 import { COMMAND_SPECS } from '../specs'
@@ -122,14 +122,130 @@ describe('terminal close CLI', () => {
     expect(process.exitCode).toBeUndefined()
   })
 
+  it('routes --worktree --all to authoritative durable bulk close', async () => {
+    const parsed = parseArgs(['terminal', 'close', '--worktree', 'id:repo::/worktree', '--all'])
+    const call = vi.fn().mockResolvedValue({
+      result: { closed: 2, stopped: 3, retiredSurfaces: true }
+    })
+    vi.spyOn(console, 'log').mockImplementation(() => {})
+
+    await TERMINAL_HANDLERS['terminal close']({
+      flags: parsed.flags,
+      client: { call } as unknown as RuntimeClient,
+      cwd: '/tmp/worktree',
+      json: true
+    })
+
+    expect(call).toHaveBeenCalledWith('terminal.closeAll', {
+      worktree: 'id:repo::/worktree'
+    })
+  })
+
+  it('fails JSON when bulk close cannot verify every PTY stopped', async () => {
+    process.exitCode = undefined
+    const call = vi.fn().mockResolvedValue({
+      result: {
+        closed: 2,
+        stopped: 1,
+        retiredSurfaces: true,
+        ptyStopVerdict: 'unverifiable',
+        ptyStopReason: 'the SSH host disconnected'
+      }
+    })
+    const log = vi.spyOn(console, 'log').mockImplementation(() => {})
+
+    await TERMINAL_HANDLERS['terminal close']({
+      flags: new Map<string, string | true>([
+        ['worktree', 'id:repo::/worktree'],
+        ['all', true]
+      ]),
+      client: { call } as unknown as RuntimeClient,
+      cwd: '/tmp/worktree',
+      json: true
+    })
+
+    expect(JSON.parse(String(log.mock.calls[0]?.[0]))).toMatchObject({
+      ok: false,
+      error: {
+        code: 'terminal_stop_unverifiable',
+        data: { close: { closed: 2, stopped: 1, ptyStopVerdict: 'unverifiable' } }
+      }
+    })
+    expect(process.exitCode).toBe(1)
+  })
+
+  it.each([
+    [new Map<string, string | true>([['worktree', 'active']]), 'requires --all'],
+    [
+      new Map<string, string | true>([
+        ['worktree', 'active'],
+        ['all', true],
+        ['terminal', 'term-1']
+      ]),
+      'cannot be combined'
+    ],
+    [new Map<string, string | true>([['all', true]]), 'Missing required --worktree']
+  ])('rejects ambiguous bulk-close flags', async (flags, message) => {
+    await expect(
+      TERMINAL_HANDLERS['terminal close']({
+        flags,
+        client: { call: vi.fn() } as unknown as RuntimeClient,
+        cwd: '/tmp/worktree',
+        json: true
+      })
+    ).rejects.toThrow(message)
+  })
+
+  it('fails safely before mutation when the host predates bulk close', async () => {
+    const call = vi
+      .fn()
+      .mockRejectedValue(
+        new RuntimeClientError('method_not_found', 'Unknown method: terminal.closeAll')
+      )
+
+    await expect(
+      TERMINAL_HANDLERS['terminal close']({
+        flags: new Map<string, string | true>([
+          ['worktree', 'active'],
+          ['all', true]
+        ]),
+        client: { call } as unknown as RuntimeClient,
+        cwd: '/tmp/worktree',
+        json: true
+      })
+    ).rejects.toMatchObject({ code: 'incompatible_runtime' })
+  })
+
   it('documents that --tab waits for durable persistence', () => {
     const log = vi.spyOn(console, 'log').mockImplementation(() => {})
 
     printHelp(COMMAND_SPECS, ['terminal', 'close'])
 
     const help = String(log.mock.calls[0]?.[0])
-    expect(help).toContain('orca terminal close [--terminal <handle>] [--tab] [--json]')
+    expect(help).toContain('--worktree <selector> --all')
     expect(help).toContain('durable persistence')
+  })
+
+  it('hides legacy stop from terminal command discovery', () => {
+    const log = vi.spyOn(console, 'log').mockImplementation(() => {})
+
+    printHelp(COMMAND_SPECS, ['terminal'])
+
+    const help = String(log.mock.calls[0]?.[0])
+    expect(help).toContain('close')
+    expect(help).not.toContain('stop')
+  })
+
+  it('keeps root help aligned with the canonical close command', () => {
+    const log = vi.spyOn(console, 'log').mockImplementation(() => {})
+
+    printHelp(COMMAND_SPECS)
+
+    const help = String(log.mock.calls[0]?.[0])
+    expect(help).toContain(
+      'terminal close            Close one terminal, its whole tab with --tab, or all in a worktree'
+    )
+    expect(help).not.toContain('terminal stop')
   })
 })
 

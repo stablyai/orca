@@ -100,12 +100,6 @@ export type WorkspaceCleanupScanArgs = {
 
 export const WORKSPACE_CLEANUP_TARGET_BATCH_LIMIT = 500
 
-export type WorkspaceCleanupLocalProcessArgs = {
-  worktreeId: string
-  connectionId?: string | null
-  worktreePath?: string
-}
-
 export type WorkspaceCleanupSnapshotPruneBatchArgs = {
   batchId: string
 }
@@ -142,10 +136,6 @@ export type WorkspaceCleanupUnverifiedRemovalConsent = {
   identity: string
   /** Minted for one removal call and released when that call settles. */
   attemptId: string
-}
-
-export type WorkspaceCleanupLocalProcessResult = {
-  hasKillableProcesses: boolean | null
 }
 
 export type WorkspaceCleanupDismissArgs = {

@@ -3,14 +3,12 @@ import {
   type InspectionPriority
 } from './agent-process-inspection-queue'
 import type { RecognizedAgentProcess } from '../../../../shared/agent-process-recognition'
-import { recognizeAgentProcess } from '../../../../shared/agent-process-recognition'
-import type { RuntimeTerminalProcessInspection } from '@/runtime/runtime-terminal-inspection'
-import {
-  NO_EVIDENCE_ACTIVITY_HOT_WINDOW_MS,
-  POLL_TIER_INTERVAL_MS,
-  type PollCadenceTier
-} from './agent-completion-poll-cadence'
 import type { ProcessMonitorOptions } from './agent-completion-process-types'
+import { createAgentCompletionPollScheduler } from './agent-completion-poll-scheduler'
+import {
+  handleAgentCompletionInspectionResult,
+  type RemoteInspectionState
+} from './agent-completion-inspection-result'
 
 export function createAgentCompletionProcessMonitor({
   options,
@@ -23,14 +21,30 @@ export function createAgentCompletionProcessMonitor({
   hasPendingCodexAttention,
   dispatchCompletion
 }: ProcessMonitorOptions) {
-  function clearPollTimer(): void {
-    if (state.pollTimer === null) {
+  const remoteInspection: RemoteInspectionState = {
+    authorityGeneration: null,
+    observationEpoch: -1,
+    bindingKey: null,
+    knownAuthorityGenerations: new Set<string>()
+  }
+
+  function bindRemoteInspectionGeneration(ptyId: string, incarnationId: string | null): void {
+    if (options.isRemotePtyId?.(ptyId) !== true) {
       return
     }
-    clearTimeout(state.pollTimer)
-    state.pollTimer = null
-    state.pollTimerTier = null
+    const bindingKey = `${ptyId}\0${incarnationId ?? ''}`
+    if (remoteInspection.bindingKey === bindingKey) {
+      return
+    }
+    remoteInspection.bindingKey = bindingKey
+    remoteInspection.authorityGeneration = null
+    remoteInspection.observationEpoch = -1
+    remoteInspection.knownAuthorityGenerations.clear()
+    // Invalidate reads queued for a prior same-id incarnation.
+    state.inspectionGeneration += 1
   }
+  const { clearPollTimer, scheduleNextPoll, shouldRunCadenceInspection } =
+    createAgentCompletionPollScheduler({ options, state, pendingTitle, requestInspection })
 
   function handleRecognizedProcess(process: RecognizedAgentProcess): void {
     state.pendingProcessExitAgent = null
@@ -67,69 +81,6 @@ export function createAgentCompletionProcessMonitor({
     establishAgentEvidence()
   }
 
-  function handleInspectionResult(result: RuntimeTerminalProcessInspection): boolean {
-    if (result.unavailable === true) {
-      state.pendingProcessExitAgent = null
-      state.consecutiveInspectionErrors += 1
-      scheduleNextPoll()
-      return false
-    }
-    state.consecutiveInspectionErrors = 0
-    const recognized = recognizeAgentProcess(result.foregroundProcess)
-    if (recognized) {
-      handleRecognizedProcess(recognized)
-      return true
-    }
-    if (hasPendingHookDone() || hasPendingCodexAttention()) {
-      scheduleNextPoll()
-      return false
-    }
-    if (state.lastForegroundAgent && state.hasAgentRunEvidence) {
-      if (result.hasChildProcesses) {
-        state.pendingProcessExitAgent = null
-        scheduleNextPoll()
-        return false
-      }
-      const pending = state.pendingProcessExitAgent
-      if (
-        !pending ||
-        pending.agent !== state.lastForegroundAgent.agent ||
-        pending.processName !== state.lastForegroundAgent.processName
-      ) {
-        state.pendingProcessExitAgent = state.lastForegroundAgent
-        scheduleNextPoll()
-        return false
-      }
-      const exited = state.lastForegroundAgent
-      state.pendingProcessExitAgent = null
-      if (options.shouldSuppressConfirmedProcessExitCompletion?.(exited) !== true) {
-        const replayIdentityBeforeExit = identityScope.getLast()
-        const committed = dispatchCompletion('process-exit', exited.processName, {
-          terminalIdleConfirmed: true,
-          completionIdentity: {
-            source: 'process-exit',
-            identity: `${exited.agent}:${exited.processName}`,
-            agentIdentity: exited.agent
-          }
-        })
-        if (
-          !committed &&
-          !identityScope.hasUnconsumedStampedTail() &&
-          replayIdentityBeforeExit?.source === 'hook' &&
-          replayIdentityBeforeExit.agentIdentity === exited.agent
-        ) {
-          identityScope.deleteLast()
-        }
-      }
-      state.lastForegroundAgent = null
-      clearAgentRunEvidence()
-    } else {
-      state.lastForegroundAgent = null
-      clearAgentRunEvidence()
-    }
-    return false
-  }
-
   function requestInspection(priority: InspectionPriority): void {
     if (state.disposed || state.inspectionInFlight || !options.isLive()) {
       return
@@ -141,8 +92,11 @@ export function createAgentCompletionProcessMonitor({
     if (!ptyId) {
       return
     }
+    const expectedIncarnationIdAtRequest = options.getExpectedIncarnationId?.() ?? null
+    bindRemoteInspectionGeneration(ptyId, expectedIncarnationIdAtRequest)
     state.inspectionInFlight = true
     const generationAtRequest = state.inspectionGeneration
+    const requestStartedAtMonotonic = performance.now()
     const pendingTitleIdAtRequest = priority === 'pending-title' ? pendingTitle.get()?.id : null
     enqueueAgentProcessInspection({
       priority,
@@ -151,14 +105,35 @@ export function createAgentCompletionProcessMonitor({
         let inspectedRecognizedAgent = false
         let inspectionSucceeded = false
         try {
-          const result = await options.inspectProcess(options.getSettings(), ptyId)
-          if (!state.disposed && generationAtRequest === state.inspectionGeneration) {
+          const result = await (expectedIncarnationIdAtRequest
+            ? options.inspectProcess(options.getSettings(), ptyId, {
+                expectedIncarnationId: expectedIncarnationIdAtRequest
+              })
+            : options.inspectProcess(options.getSettings(), ptyId))
+          if (
+            !state.disposed &&
+            generationAtRequest === state.inspectionGeneration &&
+            (options.getExpectedIncarnationId?.() ?? null) === expectedIncarnationIdAtRequest
+          ) {
             const currentPendingTitle = pendingTitle.get()
             const appliesToCurrentPendingTitle =
               !currentPendingTitle ||
               (priority === 'pending-title' && currentPendingTitle.id === pendingTitleIdAtRequest)
             if (appliesToCurrentPendingTitle) {
-              inspectedRecognizedAgent = handleInspectionResult(result)
+              inspectedRecognizedAgent = handleAgentCompletionInspectionResult({
+                result,
+                requestStartedAtMonotonic,
+                options,
+                state,
+                identityScope,
+                clearAgentRunEvidence,
+                hasPendingHookDone,
+                hasPendingCodexAttention,
+                scheduleNextPoll,
+                handleRecognizedProcess,
+                dispatchCompletion,
+                remoteInspection
+              })
             }
             inspectionSucceeded = true
           }
@@ -194,70 +169,6 @@ export function createAgentCompletionProcessMonitor({
         }
       }
     })
-  }
-
-  function shouldRunCadenceInspection(): boolean {
-    return (
-      state.hasAgentRunEvidence ||
-      state.lastForegroundAgent !== null ||
-      (options.shouldPollProcessCadence?.() !== false &&
-        options.shouldPollNoEvidenceProcessCadence?.() !== false) ||
-      (options.shouldPollProcessCadence?.() !== false &&
-        state.lastPaneActivityAt !== null &&
-        Date.now() - state.lastPaneActivityAt < NO_EVIDENCE_ACTIVITY_HOT_WINDOW_MS)
-    )
-  }
-
-  function currentPollTier(): PollCadenceTier {
-    if (options.shouldPollProcessCadence?.() === false) {
-      return 'hidden'
-    }
-    if (state.lastForegroundAgent) {
-      return 'active'
-    }
-    if (state.hasAgentRunEvidence) {
-      return 'idle'
-    }
-    if (
-      options.isProcessInspectionCostly?.() === true &&
-      (state.lastPaneActivityAt === null ||
-        Date.now() - state.lastPaneActivityAt >= NO_EVIDENCE_ACTIVITY_HOT_WINDOW_MS)
-    ) {
-      return 'no-evidence'
-    }
-    return 'idle'
-  }
-
-  function scheduleNextPoll(): void {
-    if (state.disposed || !state.pollTrackingStarted || !options.isLive() || pendingTitle.get()) {
-      return
-    }
-    const tier = currentPollTier()
-    if (state.pollTimer !== null) {
-      if (
-        state.pollTimerTier !== null &&
-        POLL_TIER_INTERVAL_MS[tier] < POLL_TIER_INTERVAL_MS[state.pollTimerTier]
-      ) {
-        clearPollTimer()
-      } else {
-        return
-      }
-    }
-    if (!shouldRunCadenceInspection() || !options.getPtyId()) {
-      return
-    }
-    const base = POLL_TIER_INTERVAL_MS[tier]
-    const backoff =
-      state.consecutiveInspectionErrors > 0
-        ? Math.min(Math.max(10_000, base), base * 2 ** state.consecutiveInspectionErrors)
-        : base
-    const interval = Math.round(backoff * (1 + (Math.random() * 0.2 - 0.1)))
-    state.pollTimerTier = tier
-    state.pollTimer = setTimeout(() => {
-      state.pollTimer = null
-      state.pollTimerTier = null
-      requestInspection('cadence')
-    }, interval)
   }
 
   return {

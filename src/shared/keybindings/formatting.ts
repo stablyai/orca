@@ -90,38 +90,41 @@ export function findKeybindingActionsForBinding(
   ).map((definition) => definition.id)
 }
 
+const KEY_TOKEN_LABELS: Record<string, string> = {
+  BracketLeft: '[',
+  BracketRight: ']',
+  Minus: '-',
+  Underscore: '_',
+  Equal: '=',
+  Plus: '+',
+  ArrowLeft: '←',
+  ArrowRight: '→',
+  ArrowUp: '↑',
+  ArrowDown: '↓',
+  PageUp: 'PageUp',
+  PageDown: 'PageDown',
+  NumpadAdd: 'Numpad +',
+  NumpadSubtract: 'Numpad -',
+  Comma: ',',
+  Period: '.',
+  Slash: '/',
+  Backslash: '\\',
+  Semicolon: ';',
+  Quote: "'",
+  Backquote: '`',
+  Enter: 'Enter',
+  Backspace: 'Backspace',
+  Delete: 'Delete',
+  Insert: 'Insert',
+  Tab: 'Tab',
+  Escape: 'Esc',
+  Space: 'Space'
+}
+
+const MAC_KEY_TOKEN_LABELS: Record<string, string> = { ...KEY_TOKEN_LABELS, Backspace: '⌫' }
+
 function formatKeyToken(token: string, isMac: boolean): string {
-  const labels: Record<string, string> = {
-    BracketLeft: '[',
-    BracketRight: ']',
-    Minus: '-',
-    Underscore: '_',
-    Equal: '=',
-    Plus: '+',
-    ArrowLeft: '←',
-    ArrowRight: '→',
-    ArrowUp: '↑',
-    ArrowDown: '↓',
-    PageUp: 'PageUp',
-    PageDown: 'PageDown',
-    NumpadAdd: 'Numpad +',
-    NumpadSubtract: 'Numpad -',
-    Comma: ',',
-    Period: '.',
-    Slash: '/',
-    Backslash: '\\',
-    Semicolon: ';',
-    Quote: "'",
-    Backquote: '`',
-    Enter: 'Enter',
-    Backspace: isMac ? '⌫' : 'Backspace',
-    Delete: 'Delete',
-    Insert: 'Insert',
-    Tab: 'Tab',
-    Escape: 'Esc',
-    Space: 'Space'
-  }
-  return labels[token] ?? token
+  return (isMac ? MAC_KEY_TOKEN_LABELS : KEY_TOKEN_LABELS)[token] ?? token
 }
 
 export function findKeybindingConflicts(

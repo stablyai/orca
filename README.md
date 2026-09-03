@@ -238,9 +238,8 @@ Pair with your desktop app to monitor and steer your agents from your phone.
 
 - **Discord:** Join the community on **[Discord](https://discord.gg/fzjDKHxv8Q)**.
 - **Twitter / X:** Follow **[@orca_build](https://x.com/orca_build)** for updates and announcements.
-- **WeChat:** Scan to join the Orca community WeChat group 7. If it is full, use group 8.
+- **WeChat:** Scan to join the Orca community WeChat group 8.
 
-  <img src="docs/assets/wechat-qr-group7.jpg" alt="WeChat group 7 QR code for the Orca community" width="160" />&nbsp;&nbsp;
   <img src="docs/assets/wechat-qr-group8.jpg" alt="WeChat group 8 QR code for the Orca community" width="160" />
 
 - **Feedback &amp; Ideas:** We ship fast. Missing something? [Request a new feature](https://github.com/stablyai/orca/issues).
@@ -253,6 +252,9 @@ Pair with your desktop app to monitor and steer your agents from your phone.
 
 Want to contribute or run locally? See our [CONTRIBUTING.md](.github/CONTRIBUTING.md) guide.
 
+The relay that pairs the mobile app with a desktop host is also in this repository under
+[`cloud/`](cloud/README.md), with a separate pnpm workspace and setup guide.
+
 <a href="https://github.com/stablyai/orca/graphs/contributors">
   <img src="https://contrib.rocks/image?repo=stablyai/orca" alt="Orca contributors" />
 </a>
@@ -262,6 +264,7 @@ Want to contribute or run locally? See our [CONTRIBUTING.md](.github/CONTRIBUTIN
 </p>
 
 ## Signed Builds
+
 Windows code signing sponored/provided by [SignPath.io](https://signpath.io), certificate by [SignPath Foundation](https://signpath.org).
 
 ## License

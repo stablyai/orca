@@ -192,11 +192,12 @@ describe('guardRunningTerminalClose', () => {
     expect(visibleRequest()).toBeNull()
   })
 
-  it('fails open when a remote handle reports the inspection as unavailable', async () => {
+  it('fails open when a remote handle reports client-only unverifiable inspection', async () => {
     inspectRuntimeTerminalProcessMock.mockResolvedValue({
       foregroundProcess: null,
-      hasChildProcesses: true,
-      unavailable: true
+      hasChildProcesses: false,
+      verdict: 'unverifiable',
+      reason: 'transport_loss'
     })
     const onClose = vi.fn()
 

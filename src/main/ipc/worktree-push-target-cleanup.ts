@@ -16,7 +16,11 @@ export type GitRemoteExec = (
   args: string[],
   cwd: string
 ) => Promise<{ stdout: string; stderr?: string }>
-export type WorktreePushTargetStore = Pick<Store, 'getAllWorktreeMeta'>
+// Why: `setWorktreeMeta` is optional so existing narrow test stubs (only
+// `getAllWorktreeMeta`) keep compiling; callers that want materialize-time
+// provenance persistence (worktree-remote.ts) pass a store that has it.
+export type WorktreePushTargetStore = Pick<Store, 'getAllWorktreeMeta'> &
+  Partial<Pick<Store, 'setWorktreeMeta'>>
 
 export function sameGitHubRemoteUrl(left: string, right: string): boolean {
   if (left === right) {
@@ -181,6 +185,26 @@ function isBranchConfigSeparator(code: number): boolean {
   return code === 32 || (code >= 9 && code <= 13)
 }
 
+// Why: on-demand materialization (push/pull/fetch/fast-forward, #17828) never
+// updates the store's `pushTarget.remoteCreated` flag, so ownership must also be
+// readable from the repo-local `remote.<name>.orca-created` config Orca writes
+// when it creates the remote (see `worktree-push-target-setup.ts`).
+async function remoteHasOrcaProvenance(
+  execGit: GitRemoteExec,
+  repoPath: string,
+  remoteName: string
+): Promise<boolean> {
+  try {
+    const { stdout } = await execGit(
+      ['config', '--get', `remote.${remoteName}.orca-created`],
+      repoPath
+    )
+    return stdout.trim() === 'true'
+  } catch {
+    return false
+  }
+}
+
 // Exported for unit tests: the `execGit` seam lets tests drive the multi-fork
 // cleanup matrix without touching a real repo.
 export async function cleanupUnusedWorktreePushTargetRemoteWithExec(
@@ -190,11 +214,12 @@ export async function cleanupUnusedWorktreePushTargetRemoteWithExec(
   store: WorktreePushTargetStore,
   execGit: GitRemoteExec
 ): Promise<void> {
+  if (!target?.remoteUrl || target.remoteName === 'origin' || target.remoteName === 'upstream') {
+    return
+  }
   if (
-    !target?.remoteCreated ||
-    !target.remoteUrl ||
-    target.remoteName === 'origin' ||
-    target.remoteName === 'upstream'
+    !target.remoteCreated &&
+    !(await remoteHasOrcaProvenance(execGit, repoPath, target.remoteName))
   ) {
     return
   }

@@ -1,4 +1,5 @@
 import { ipcRenderer } from 'electron'
+import type { PreloadApi } from '../api-types'
 
 export const browserPageInteractionAndSessionsApi = {
   onContextMenuRequested: (
@@ -81,23 +82,17 @@ export const browserPageInteractionAndSessionsApi = {
   },
   cancelDownload: (args: { downloadId: string }): Promise<boolean> =>
     ipcRenderer.invoke('browser:cancelDownload', args),
-  setGrabMode: (args: {
-    browserPageId: string
-    enabled: boolean
-  }): Promise<{ ok: true } | { ok: false; reason: string }> =>
+  setGrabMode: (args: { browserPageId: string; enabled: boolean }) =>
     ipcRenderer.invoke('browser:setGrabMode', args),
-  awaitGrabSelection: (args: { browserPageId: string; opId: string }): Promise<unknown> =>
+  awaitGrabSelection: (args: { browserPageId: string; opId: string }) =>
     ipcRenderer.invoke('browser:awaitGrabSelection', args),
   cancelGrab: (args: { browserPageId: string }): Promise<boolean> =>
     ipcRenderer.invoke('browser:cancelGrab', args),
   captureSelectionScreenshot: (args: {
     browserPageId: string
     rect: { x: number; y: number; width: number; height: number }
-  }): Promise<{ ok: true; screenshot: unknown } | { ok: false; reason: string }> =>
-    ipcRenderer.invoke('browser:captureSelectionScreenshot', args),
-  extractHoverPayload: (args: {
-    browserPageId: string
-  }): Promise<{ ok: true; payload: unknown } | { ok: false; reason: string }> =>
+  }) => ipcRenderer.invoke('browser:captureSelectionScreenshot', args),
+  extractHoverPayload: (args: { browserPageId: string }) =>
     ipcRenderer.invoke('browser:extractHoverPayload', args),
   onGrabModeToggle: (callback: (browserPageId: string) => void): (() => void) => {
     const listener = (_event: Electron.IpcRendererEvent, browserPageId: string) =>
@@ -115,7 +110,7 @@ export const browserPageInteractionAndSessionsApi = {
     ipcRenderer.on('browser:grabActionShortcut', listener)
     return () => ipcRenderer.removeListener('browser:grabActionShortcut', listener)
   },
-  sessionListProfiles: (): Promise<unknown[]> => ipcRenderer.invoke('browser:session:listProfiles'),
+  sessionListProfiles: () => ipcRenderer.invoke('browser:session:listProfiles'),
   prepareSshWorkspacePartition: (args: {
     targetId: string
     browserProfileId?: string
@@ -126,40 +121,28 @@ export const browserPageInteractionAndSessionsApi = {
     scope: 'default' | 'isolated' | 'imported'
     label: string
     userAgentMode?: 'clean' | 'native'
-  }): Promise<unknown> => ipcRenderer.invoke('browser:session:createProfile', args),
+  }) => ipcRenderer.invoke('browser:session:createProfile', args),
   sessionDeleteProfile: (args: { profileId: string }): Promise<boolean> =>
     ipcRenderer.invoke('browser:session:deleteProfile', args),
-  sessionImportCookies: (args: {
-    profileId: string
-  }): Promise<{ ok: true; profileId: string; summary: unknown } | { ok: false; reason: string }> =>
+  sessionImportCookies: (args: { profileId: string }) =>
     ipcRenderer.invoke('browser:session:importCookies', args),
   sessionResolvePartition: (args: { profileId: string | null }): Promise<string | null> =>
     ipcRenderer.invoke('browser:session:resolvePartition', args),
-  sessionDetectBrowsers: (): Promise<unknown[]> =>
-    ipcRenderer.invoke('browser:session:detectBrowsers'),
-  sessionDetectBrowsersForClientHost: (args: {
-    environmentId: string
-  }): Promise<unknown[] | null> =>
+  sessionDetectBrowsers: () => ipcRenderer.invoke('browser:session:detectBrowsers'),
+  sessionDetectBrowsersForClientHost: (args: { environmentId: string }) =>
     ipcRenderer.invoke('browser:session:detectBrowsersForClientHost', args),
-  sessionImportFromBrowser: (args: {
-    profileId: string
-    browserFamily: string
-  }): Promise<{ ok: true; profileId: string; summary: unknown } | { ok: false; reason: string }> =>
+  sessionImportFromBrowser: (args: { profileId: string; browserFamily: string }) =>
     ipcRenderer.invoke('browser:session:importFromBrowser', args),
   sessionImportFromBrowserForClientHost: (args: {
     environmentId: string
     profileId: string
     browserFamily: string
     browserProfile?: string
-  }): Promise<
-    { ok: true; profileId: string; summary: unknown } | { ok: false; reason: string } | null
-  > => ipcRenderer.invoke('browser:session:importFromBrowserForClientHost', args),
-  sessionClientRouteImportSources: (args: {
-    environmentId: string
-  }): Promise<Record<string, unknown>> =>
+  }) => ipcRenderer.invoke('browser:session:importFromBrowserForClientHost', args),
+  sessionClientRouteImportSources: (args: { environmentId: string }) =>
     ipcRenderer.invoke('browser:session:clientRouteImportSources', args),
   sessionClearDefaultCookies: (): Promise<boolean> =>
     ipcRenderer.invoke('browser:session:clearDefaultCookies'),
   notifyActiveTabChanged: (args: { browserPageId: string }): Promise<boolean> =>
     ipcRenderer.invoke('browser:activeTabChanged', args)
-}
+} satisfies Partial<PreloadApi['browser']>

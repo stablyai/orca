@@ -106,7 +106,11 @@ export class DaemonRequestRouter {
           foregroundProcess: this.options.host.getForegroundProcess(request.payload.sessionId)
         }
       case 'inspectProcess':
-        return this.options.host.inspectProcess(request.payload.sessionId)
+        return request.payload.expectedIncarnationId
+          ? this.options.host.inspectProcess(request.payload.sessionId, {
+              expectedIncarnationId: request.payload.expectedIncarnationId
+            })
+          : this.options.host.inspectProcess(request.payload.sessionId)
       case 'confirmForegroundProcess':
         return {
           foregroundProcess: await this.options.host.confirmForegroundProcess(

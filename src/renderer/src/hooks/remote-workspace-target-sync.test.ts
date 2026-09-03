@@ -457,6 +457,63 @@ describe('createRemoteWorkspaceTargetSync', () => {
     expect(clearRemoteWorkspaceHydrated).toHaveBeenCalledWith('target-a')
   })
 
+  it('re-pulls a conflicted target once the catalog can place the host tabs it dropped', async () => {
+    vi.useFakeTimers()
+    const hydrateTabsSession = vi.fn()
+    const markRemoteWorkspaceHydrated = vi.fn()
+    const state = appState({
+      worktreesByRepo: {},
+      hydrateTabsSession,
+      markRemoteWorkspaceHydrated
+    })
+    const incoming = snapshot(12, {
+      '/remote/work': [
+        {
+          id: 'host-tab',
+          worktreePath: '/remote/work',
+          ptyId: 'ssh:target-a@@pty-1'
+        } as RemoteWorkspaceSnapshot['session']['tabsByWorktreePath'][string][number]
+      ]
+    })
+    const get = vi.fn(async () => incoming)
+    const harness = createHarness(state, get)
+    try {
+      const pending = harness.sync.applyUnsolicitedSnapshot('target-a', incoming)
+      await flush()
+      // The bounded in-apply wait expires with the host's path still unplaceable.
+      await vi.advanceTimersByTimeAsync(10_000)
+      await pending
+      expect(
+        markRemoteWorkspaceHydrated,
+        'adopting none of the host tabs is not the host picture'
+      ).not.toHaveBeenCalled()
+      expect(
+        get,
+        'nothing should re-pull while the path is still unplaceable'
+      ).not.toHaveBeenCalled()
+
+      // Minutes later the user opens the worktree and its catalog row finally lands.
+      state.worktreesByRepo = appState().worktreesByRepo
+      harness.publishState()
+      await vi.advanceTimersByTimeAsync(0)
+      await flush()
+      await vi.advanceTimersByTimeAsync(0)
+
+      expect(get).toHaveBeenCalledWith({ targetId: 'target-a' })
+      expect(
+        hydrateTabsSession.mock.calls
+          .at(-1)?.[0]
+          .tabsByWorktree['repo-a::/remote/work'].map((tab: { id: string }) => tab.id),
+        'the host tab dropped by the cold-catalog pull was never hydrated'
+      ).toEqual(['host-tab'])
+      // Hydration is what lifts the upload suppression, so the host ledger stops going stale too.
+      expect(markRemoteWorkspaceHydrated).toHaveBeenCalledWith('target-a')
+    } finally {
+      harness.sync.stop()
+      vi.useRealTimers()
+    }
+  })
+
   it('keeps only the latest placement waiter and fences a burst to the newest snapshot', async () => {
     vi.useFakeTimers()
     const hydrateTabsSession = vi.fn()

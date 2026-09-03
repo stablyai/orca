@@ -74,3 +74,15 @@ export function removePaneKeys<T>(
   }
   return next
 }
+
+export function removePaneKeysByTabPrefix<T>(
+  record: Record<string, T>,
+  tabPrefix: string,
+  extraPaneKeys: ReadonlySet<string> = new Set()
+): Record<string, T> {
+  const prefix = `${tabPrefix}:`
+  const matchingKeys = Object.keys(record).filter(
+    (key) => key.startsWith(prefix) || extraPaneKeys.has(key)
+  )
+  return removePaneKeys(record, new Set(matchingKeys))
+}

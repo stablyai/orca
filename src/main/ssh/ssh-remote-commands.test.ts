@@ -13,6 +13,7 @@ import {
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
+import { decodeRemotePowerShellScript } from './ssh-remote-powershell'
 import {
   lockAgeSecondsCommand,
   tryCreateInstallLockCommand,
@@ -63,8 +64,7 @@ const powerShell51Executable =
     : undefined
 
 function decodePowerShellCommand(command: string): string {
-  const match = command.match(/-EncodedCommand\s+([A-Za-z0-9+/=]+)/)
-  return match ? Buffer.from(match[1], 'base64').toString('utf16le') : ''
+  return command.includes('-EncodedCommand ') ? decodeRemotePowerShellScript(command) : ''
 }
 
 function runShellCommand(command: string): Promise<string> {

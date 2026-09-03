@@ -40,6 +40,7 @@ export function retryDirectSshTerminalPanes(
   state: DirectSshTerminalBindingState & {
     deferredSshSessionIdsByTabId: Record<string, string>
     terminalLayoutsByTabId?: Record<string, TerminalLayoutSnapshot>
+    disownedPtyIds?: Record<string, true>
   },
   terminalWorkspaceKeys: ReadonlySet<string>,
   authority: DirectSshAuthority,
@@ -76,9 +77,15 @@ export function retryDirectSshTerminalPanes(
       }
       if (
         liveBindingMatches(tab, working.directSshLivePtyBindingByTabId[tab.id], authority) ||
+        // Why `working` and not `state`: invalidateStaleDirectSshTerminalBindings has already
+        // dropped the bindings it judged stale for this authority, so a retry is not blocked by a
+        // record that step just retired.
         !shouldRetryPaneSpawnOnSshReconnect({
           targetId: authority.targetId,
           tabPtyId: tab.ptyId,
+          tabPtyIds: working.ptyIdsByTabId?.[tab.id],
+          leafPtyIds: Object.values(working.terminalLayoutsByTabId?.[tab.id]?.ptyIdsByLeafId ?? {}),
+          disownedPtyIds: working.disownedPtyIds,
           deferredSessionId: state.deferredSshSessionIdsByTabId[tab.id]
         })
       ) {
@@ -152,6 +159,7 @@ export function retryDirectSshTerminalPanes(
 export function retrySettledDirectSshTerminalPane(
   state: DirectSshTerminalBindingState & {
     deferredSshSessionIdsByTabId: Record<string, string>
+    disownedPtyIds?: Record<string, true>
   },
   terminalWorkspaceKeys: ReadonlySet<string>,
   authority: DirectSshAuthority,

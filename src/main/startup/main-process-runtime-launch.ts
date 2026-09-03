@@ -280,7 +280,7 @@ export async function initializeMainProcessRuntimeLaunch(
   }
   let serveOptions: ReturnType<typeof getServeOptions> | null = null
   try {
-    serveOptions = state.isServeMode ? getServeOptions() : null
+    serveOptions = state.isServeMode ? getServeOptions(process.argv) : null
   } catch (error) {
     console.error(error instanceof Error ? error.message : String(error))
     app.exit(1)
@@ -289,6 +289,9 @@ export async function initializeMainProcessRuntimeLaunch(
   state.serveOptions = serveOptions
   const runtimeRpc = installRuntimeRpc(runtime, serveOptions)
   const shellPathReady = shellPathHydration.whenReady()
+  // Why published: the renderer's git-environment barrier must fence on the same
+  // generation the terminal startup services wait for, not a later re-read.
+  state.shellPathReady = shellPathReady
   let desktopWindow: BrowserWindow | null = null
   if (process.platform === 'win32' && app.isPackaged && !serveOptions) {
     const desktopStartup = startWindowsDesktopBeforeShellPathReady({

@@ -24,6 +24,7 @@ import { stat } from 'node:fs/promises'
 import { joinWorktreeRelativePath } from './runtime-relative-paths'
 import { resolveAuthorizedPath } from '../ipc/filesystem-auth'
 import { isENOENT } from '../ipc/filesystem-path-containment'
+import { runtimeFileRouteForTarget, type RuntimeFileRoute } from './runtime-file-command-target'
 
 export class RuntimeFileCommandsWithConstructor extends RuntimeFileCommandsWithActiveRuntimeTextSearches {
   constructor(private readonly host: RuntimeFileCommandHost) {
@@ -36,10 +37,12 @@ export class RuntimeFileCommandsWithConstructor extends RuntimeFileCommandsWithA
   ): Promise<RuntimeFileListResult> {
     const store = this.host.requireStore()
     const target = await this.host.resolveRuntimeFileTarget(worktreeSelector)
-    const { worktree, connectionId } = target
-    const files = connectionId
-      ? await this.listRemoteMobileFiles(worktree.path, connectionId, undefined, options.signal)
-      : await listQuickOpenFiles(worktree.path, store, undefined, options.signal)
+    const { worktree } = target
+    const route = runtimeFileRouteForTarget(target)
+    const files =
+      route.kind === 'ssh'
+        ? await this.listRemoteMobileFiles(worktree.path, route.provider, undefined, options.signal)
+        : await listQuickOpenFiles(worktree.path, store, undefined, options.signal)
     const entries = files
       .filter((relativePath) => isSafeMobileRelativePath(relativePath))
       .sort((a, b) => a.localeCompare(b))
@@ -66,22 +69,26 @@ export class RuntimeFileCommandsWithConstructor extends RuntimeFileCommandsWithA
   ): Promise<RuntimeFileListResult> {
     const store = this.host.requireStore()
     const target = await this.host.resolveRuntimeFileTarget(worktreeSelector)
-    const { worktree, connectionId } = target
-    const cacheKey = `${connectionId ?? 'local'}:${worktree.id}:${worktree.path}`
+    const { worktree } = target
+    const route = runtimeFileRouteForTarget(target)
+    // Why: identical paths exist on local and on several SSH hosts; the cache key must name the
+    // resolved host, which `connectionId` could not tell apart from "unresolved".
+    const cacheKey = `${target.executionHostId}:${worktree.id}:${worktree.path}`
     const inventory = await this.mobileFilePathSearchCache.get(cacheKey, async () => {
-      const listed = connectionId
-        ? await this.listRemoteMobileFiles(
-            worktree.path,
-            connectionId,
-            MOBILE_FILE_PATH_SEARCH_CACHE_LIMIT + 1
-          )
-        : await listQuickOpenFiles(
-            worktree.path,
-            store,
-            undefined,
-            undefined,
-            MOBILE_FILE_PATH_SEARCH_CACHE_LIMIT + 1
-          )
+      const listed =
+        route.kind === 'ssh'
+          ? await this.listRemoteMobileFiles(
+              worktree.path,
+              route.provider,
+              MOBILE_FILE_PATH_SEARCH_CACHE_LIMIT + 1
+            )
+          : await listQuickOpenFiles(
+              worktree.path,
+              store,
+              undefined,
+              undefined,
+              MOBILE_FILE_PATH_SEARCH_CACHE_LIMIT + 1
+            )
       const safePaths = listed
         .filter((relativePath) => isSafeMobileRelativePath(relativePath))
         .sort((a, b) => a.localeCompare(b))
@@ -113,14 +120,15 @@ export class RuntimeFileCommandsWithConstructor extends RuntimeFileCommandsWithA
     signal?: AbortSignal
   ): Promise<RuntimeFileListResult> {
     const target = await this.host.resolveRuntimeFileTarget(worktreeSelector)
-    const { worktree, connectionId } = target
+    const { worktree } = target
+    const route = runtimeFileRouteForTarget(target)
     const result =
       !query.trim() || isQuickOpenQueryTooLarge(query)
         ? { paths: [], totalCount: 0, truncated: false }
-        : connectionId
+        : route.kind === 'ssh'
           ? await this.searchRemoteQuickOpenFilePaths(
               worktree.path,
-              connectionId,
+              route.provider,
               query,
               limit,
               excludePaths,
@@ -149,7 +157,8 @@ export class RuntimeFileCommandsWithConstructor extends RuntimeFileCommandsWithA
     worktreeSelector: string,
     relativePath: string
   ): Promise<RuntimeFileOpenResult> {
-    const { worktree, connectionId } = await this.host.resolveRuntimeFileTarget(worktreeSelector)
+    const target = await this.host.resolveRuntimeFileTarget(worktreeSelector)
+    const { worktree } = target
     if (!isSafeMobileRelativePath(relativePath)) {
       throw new Error('invalid_relative_path')
     }
@@ -166,7 +175,7 @@ export class RuntimeFileCommandsWithConstructor extends RuntimeFileCommandsWithA
     }
     const filePath = joinWorktreeRelativePath(worktree.path, relativePath)
     // Why: CLI/agents treat opened:true as success; stat first so missing paths fail the RPC instead of opening a ghost tab.
-    await this.assertMobileOpenTargetExists(filePath, connectionId)
+    await this.assertMobileOpenTargetExists(filePath, runtimeFileRouteForTarget(target))
     // Why: the internal runtimeId isn't a valid env selector; pass undefined so openFile falls back to activeRuntimeEnvironmentId.
     this.host.openFile(worktree.id, filePath, relativePath, undefined)
     return { worktree: worktree.id, relativePath, kind, opened: true }
@@ -174,16 +183,16 @@ export class RuntimeFileCommandsWithConstructor extends RuntimeFileCommandsWithA
 
   protected async assertMobileOpenTargetExists(
     filePath: string,
-    connectionId?: string
+    route: RuntimeFileRoute
   ): Promise<void> {
     try {
-      await (connectionId
-        ? this.statRemoteTerminalPath(filePath, connectionId)
+      await (route.kind === 'ssh'
+        ? this.statRemoteTerminalPath(filePath, route.connectionId)
         : stat(await resolveAuthorizedPath(filePath, this.host.requireStore())))
     } catch (error) {
       if (
         isENOENT(error) ||
-        (connectionId && RuntimeFileCommands.isRemoteNotFoundErrorMessage(error))
+        (route.kind === 'ssh' && RuntimeFileCommands.isRemoteNotFoundErrorMessage(error))
       ) {
         throw new Error(`ENOENT: no such file or directory, open '${filePath}'`)
       }

@@ -4,6 +4,12 @@ import type { FeatureInteractionState } from '../../../../../shared/feature-inte
 import type { ContextualTourId } from '../../../../../shared/contextual-tours'
 import { normalizeFeatureInteractions } from '../../../../../shared/feature-interactions'
 import { normalizeContextualTourIds } from '../../../../../shared/contextual-tours'
+import type { UISlice } from './ui-slice-contract'
+import {
+  sanitizeAcknowledgedAgentsByPaneKey,
+  sanitizeActivityClearedAtByPaneKey,
+  sanitizePaneKeyTimestampRecord
+} from './ui-slice-hydration-sanitizers'
 
 const VALID_TASK_PRESETS = new Set<TaskViewPresetId>([
   'all',
@@ -131,4 +137,20 @@ export function mergeContextualTourSeenIds(
     merged.add(id)
   }
   return [...merged]
+}
+
+/** Stale acks/marks are inert (paneKey reuse beats them via stateStartedAt); the sanitizers only bound growth past HYDRATE_MAX_AGE_MS. */
+export function hydrateAgentReadState(
+  ui: PersistedUIState
+): Pick<
+  UISlice,
+  'acknowledgedAgentsByPaneKey' | 'activityClearedAtByPaneKey' | 'manuallyUnreadTurnsByPaneKey'
+> {
+  return {
+    acknowledgedAgentsByPaneKey: sanitizeAcknowledgedAgentsByPaneKey(
+      ui.acknowledgedAgentsByPaneKey
+    ),
+    activityClearedAtByPaneKey: sanitizeActivityClearedAtByPaneKey(ui.activityClearedAtByPaneKey),
+    manuallyUnreadTurnsByPaneKey: sanitizePaneKeyTimestampRecord(ui.manuallyUnreadTurnsByPaneKey)
+  }
 }

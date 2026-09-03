@@ -23,7 +23,10 @@ import { TERMINAL_FILE_GRANT_TTL_MS } from './runtime-file-commands-mobile-file-
 import type { RuntimeTerminalPathResolution } from '../../shared/runtime-types'
 import { isPathInsideOrEqual } from '../../shared/cross-platform-path'
 import { randomUUID } from 'node:crypto'
-import type { ResolvedRuntimeFileTarget } from './runtime-file-watcher-leases'
+import {
+  runtimeFileSshTargetId,
+  type ResolvedRuntimeFileTarget
+} from './runtime-file-command-target'
 
 export class RuntimeFileCommandsWithResolveAllowedTerminalArtifactPath extends RuntimeFileCommandsWithResolveTerminalPath {
   protected async resolveAllowedTerminalArtifactPath(args: {
@@ -188,7 +191,7 @@ export class RuntimeFileCommandsWithResolveAllowedTerminalArtifactPath extends R
     if (
       grant.worktreeId !== target.worktree.id ||
       grant.absolutePath !== absolutePath ||
-      grant.connectionId !== target.connectionId ||
+      grant.connectionId !== runtimeFileSshTargetId(target) ||
       grant.clientId !== clientId
     ) {
       throw new Error('terminal_file_grant_mismatch')

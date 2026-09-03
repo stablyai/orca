@@ -59,6 +59,19 @@ export type RemoteWorkspaceObservedPatchResult =
       message?: string
     }
 
+export const REMOTE_WORKSPACE_CHANGED_NOTIFICATION = 'workspace.changed'
+
+/**
+ * Sent instead of `workspace.changed` when the snapshot frame did not fit the client's producer
+ * frame capacity. Carries no session: the client re-reads through `workspace.get`, whose response
+ * lane is budgeted in megabytes rather than in one ~12KB producer frame.
+ *
+ * Wire contract: a relay that predates this never sends it, and a client that predates it drops it
+ * the same way it drops any unknown notification method — which is exactly the silent drop this
+ * replaces, so an un-negotiated pairing is never worse than before.
+ */
+export const REMOTE_WORKSPACE_STALE_NOTIFICATION = 'workspace.stale'
+
 export type RemoteWorkspaceChangedEvent = {
   targetId: string
   snapshot: RemoteWorkspaceObservedSnapshot

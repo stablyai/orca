@@ -1,0 +1,267 @@
+name: Deploy Relay Production Director
+
+on:
+  workflow_dispatch:
+    inputs:
+      image-digest:
+        description: "Immutable relay image digest (sha256: plus 64 lowercase hex characters)"
+        required: true
+        type: string
+      regional-placement-mode:
+        description: Preserve the live switch, explicitly enable Asia preference, or force US-first
+        required: true
+        default: preserve
+        type: choice
+        options: [preserve, enable, disable]
+      prune-incompatible-revisions:
+        description: Retain only the newly verified serving and rollback revisions
+        required: true
+        default: false
+        type: boolean
+      confirmation:
+        description: Enter the exact confirmation required by a destructive option
+        required: false
+        type: string
+      expected-rehome-generation:
+        description: Exact durable regional-rehome generation; it must remain disabled
+        required: true
+        type: string
+      bootstrap-runtime-identity:
+        description: One-time move from the stamped-cell identity to the director identity
+        required: true
+        default: false
+        type: boolean
+      predecessor-image-digest:
+        description: Exact immutable serving predecessor digest for the one-time identity bootstrap
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  id-token: write
+
+# Director updates and candidate operations both mutate production relay control state.
+concurrency:
+  group: production-cloud-sql-rollout
+  cancel-in-progress: false
+
+defaults:
+  run:
+    working-directory: cloud
+
+jobs:
+  deploy:
+    if: ${{ vars.ORCA_CLOUD_OPERATIONS_ENABLED == 'true' }}
+    runs-on: blacksmith-2vcpu-ubuntu-2204
+    environment: production
+    env:
+      GCP_PROJECT_ID: onorca-cloud
+      GCP_REGION: ${{ vars.PRODUCTION_GCP_REGION }}
+      DIRECTOR_SERVICE_NAME: orca-cloud-relay
+      IMAGE_REPOSITORY: us-central1-docker.pkg.dev/onorca-cloud/orca-cloud/relay
+      REGIONAL_PLACEMENT_SECRET: orca-cloud-relay-regional-placement-enabled
+      IMAGE_DIGEST: ${{ inputs.image-digest }}
+      REGIONAL_PLACEMENT_MODE: ${{ inputs.regional-placement-mode }}
+      PRUNE_INCOMPATIBLE_REVISIONS: ${{ inputs.prune-incompatible-revisions }}
+      # Floor the served revision must keep, matching relay_min_instances in
+      # environments/production.tfvars. This gate only fails a bad deploy; Terraform
+      # still owns the value, and the candidate inherits it from the serving revision.
+      DIRECTOR_MIN_INSTANCES: 5
+      DIRECTOR_MAX_INSTANCES: 5
+      DIRECTOR_RUNTIME_SERVICE_ACCOUNT: ${{ vars.PRODUCTION_GCP_RELAY_DIRECTOR_RUNTIME_SERVICE_ACCOUNT }}
+      PREDECESSOR_RUNTIME_SERVICE_ACCOUNT: ${{ vars.PRODUCTION_GCP_RELAY_RUNTIME_SERVICE_ACCOUNT }}
+      REHOME_AUDIENCE: https://relay.onorca.dev/v1/admin/host-drain
+      EXPECTED_REHOME_GENERATION: ${{ inputs.expected-rehome-generation }}
+      BOOTSTRAP_RUNTIME_IDENTITY: ${{ inputs.bootstrap-runtime-identity }}
+      PREDECESSOR_IMAGE_DIGEST: ${{ inputs.predecessor-image-digest }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - id: google-auth
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ vars.PRODUCTION_GCP_RELAY_DEPLOY_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ vars.PRODUCTION_GCP_RELAY_DEPLOY_SERVICE_ACCOUNT }}
+          token_format: id_token
+          id_token_audience: https://relay.onorca.dev/v1/admin/drain
+          id_token_include_email: true
+
+      - uses: google-github-actions/setup-gcloud@v2
+
+      - uses: ./.github/actions/cloud-sql-rollout-lease
+        with:
+          bucket: onorca-cloud-terraform-state
+          object: terraform/state/cloud-sql-rollout/production.lock
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - name: Resolve immutable production image
+        shell: bash
+        env:
+          CONFIRMATION: ${{ inputs.confirmation }}
+        run: |
+          if [[ ! "${IMAGE_DIGEST}" =~ ^sha256:[0-9a-f]{64}$ ]]; then
+            echo "image-digest must be an immutable lowercase sha256 digest" >&2
+            exit 1
+          fi
+          IMAGE="${IMAGE_REPOSITORY}@${IMAGE_DIGEST}"
+          SERVED_DIGEST="$(gcloud artifacts docker images describe "${IMAGE}" --format='value(image_summary.digest)')"
+          test "${SERVED_DIGEST}" = "${IMAGE_DIGEST}"
+          [[ "${PRUNE_INCOMPATIBLE_REVISIONS}" =~ ^(true|false)$ ]]
+          [[ "${EXPECTED_REHOME_GENERATION}" =~ ^(0|[1-9][0-9]*)$ ]]
+          [[ "${DIRECTOR_RUNTIME_SERVICE_ACCOUNT}" =~ ^[a-z][a-z0-9-]+@${GCP_PROJECT_ID}[.]iam[.]gserviceaccount[.]com$ ]]
+          [[ "${PREDECESSOR_RUNTIME_SERVICE_ACCOUNT}" =~ ^[a-z][a-z0-9-]+@${GCP_PROJECT_ID}[.]iam[.]gserviceaccount[.]com$ ]]
+          [[ "${BOOTSTRAP_RUNTIME_IDENTITY}" =~ ^(true|false)$ ]]
+          if test "${BOOTSTRAP_RUNTIME_IDENTITY}" = true; then
+            [[ "${PREDECESSOR_IMAGE_DIGEST}" =~ ^sha256:[a-f0-9]{64}$ ]]
+            test "${PRUNE_INCOMPATIBLE_REVISIONS}" = false
+            test "${REGIONAL_PLACEMENT_MODE}" = preserve
+            test "${CONFIRMATION}" = BOOTSTRAP_RELAY_DIRECTOR_REHOME_IDENTITY
+          elif test "${PRUNE_INCOMPATIBLE_REVISIONS}" = true; then
+            test "${REGIONAL_PLACEMENT_MODE}" = preserve
+            test "${CONFIRMATION}" = PRUNE_INCOMPATIBLE_RELAY_DIRECTOR_REVISIONS
+          elif test "${REGIONAL_PLACEMENT_MODE}" = disable; then
+            test "${CONFIRMATION}" = FORCE_RELAY_US_FIRST
+          else
+            test -z "${CONFIRMATION}"
+          fi
+          echo "IMAGE=${IMAGE}" >> "${GITHUB_ENV}"
+
+      # Why: the deploy INHERITS the serving revision's floor, so when that revision has
+      # already lost it the candidate inherits zero, the in-script gate compares zero against
+      # zero and passes, and the post-deploy check below only notices after traffic moved.
+      # The documented rollback target is created at minimum instances zero, so promoting it
+      # arms exactly that. Refuse to inherit a degraded floor rather than latch it.
+      - name: Require a healthy serving floor before deploying
+        shell: bash
+        run: |
+          SERVING="$(gcloud run services describe "${DIRECTOR_SERVICE_NAME}" \
+            --project "${GCP_PROJECT_ID}" --region "${GCP_REGION}" --format=json \
+            | jq -r '[.status.traffic[] | select((.percent // 0) > 0)]
+                     | if length == 1 and .[0].percent == 100 then .[0].revisionName else empty end')"
+          test -n "${SERVING}"
+          FLOOR="$(gcloud run revisions describe "${SERVING}" \
+            --project "${GCP_PROJECT_ID}" --region "${GCP_REGION}" \
+            --format="value(metadata.annotations['autoscaling.knative.dev/minScale'])")"
+          if [[ "${FLOOR:-0}" -lt "${DIRECTOR_MIN_INSTANCES}" ]]; then
+            echo "serving revision ${SERVING} holds ${FLOOR:-0} minimum instances," \
+              "below ${DIRECTOR_MIN_INSTANCES}; deploying would inherit and latch it." >&2
+            echo "Restore the floor first: gcloud run services update ${DIRECTOR_SERVICE_NAME}" \
+              "--min-instances=${DIRECTOR_MIN_INSTANCES}" >&2
+            exit 1
+          fi
+          CEILING="$(gcloud run revisions describe "${SERVING}" \
+            --project "${GCP_PROJECT_ID}" --region "${GCP_REGION}" \
+            --format="value(metadata.annotations['autoscaling.knative.dev/maxScale'])")"
+          test "${CEILING}" = "${DIRECTOR_MAX_INSTANCES}"
+          echo "serving revision ${SERVING} holds ${FLOOR} minimum instances"
+          echo "SERVING_REVISION=${SERVING}" >> "${GITHUB_ENV}"
+
+      # Why: no --min-instances here. The candidate inherits the Terraform-owned
+      # scaling, and this step ends with 100% traffic on it. Pinning 1 rebuilt the
+      # per-instance admission shortage that took placement failures to ~70%.
+      - name: Deploy director blue/green
+        env:
+          ORCA_RELAY_ADMIN_ID_TOKEN: ${{ steps.google-auth.outputs.id_token }}
+        run: |
+          served_version="$(gcloud run revisions describe "${SERVING_REVISION}" \
+            --project "${GCP_PROJECT_ID}" --region "${GCP_REGION}" --format=json \
+            | jq -r '[.spec.containers[0].env[]? |
+                select(.name == "ORCA_RELAY_REGIONAL_PLACEMENT_ENABLED") |
+                (.valueSource.secretKeyRef // .valueFrom.secretKeyRef // {}) |
+                (.version // .key // empty)] |
+                if length == 1 then .[0] else empty end')"
+          if [[ "${served_version}" =~ ^[1-9][0-9]*$ ]]; then
+            current_version="${served_version}"
+          else
+            test "${REGIONAL_PLACEMENT_MODE}" = preserve
+            current_version="$(gcloud secrets versions describe latest \
+              --project "${GCP_PROJECT_ID}" --secret "${REGIONAL_PLACEMENT_SECRET}" \
+              --format='value(name)' | awk -F/ '{print $NF}')"
+            [[ "${current_version}" =~ ^[1-9][0-9]*$ ]]
+          fi
+          current="$(gcloud secrets versions access "${current_version}" \
+            --project "${GCP_PROJECT_ID}" --secret "${REGIONAL_PLACEMENT_SECRET}")"
+          [[ "${current}" =~ ^(true|false)$ ]]
+          case "${REGIONAL_PLACEMENT_MODE}" in
+            preserve) desired="${current}" ;;
+            enable) desired=true ;;
+            disable) desired=false ;;
+            *) echo "regional-placement-mode is invalid" >&2; exit 1 ;;
+          esac
+          if test "${current}" != "${desired}"; then
+            target_version="$(printf '%s' "${desired}" | gcloud secrets versions add \
+              "${REGIONAL_PLACEMENT_SECRET}" --project "${GCP_PROJECT_ID}" --data-file=- \
+              --format='value(name)' --quiet | awk -F/ '{print $NF}')"
+          else
+            target_version="${current_version}"
+          fi
+          [[ "${target_version}" =~ ^[1-9][0-9]*$ ]]
+          RELEASE_ID="${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}-${GITHUB_SHA:0:8}"
+          node dev/scripts/deploy-relay-blue-green.mjs \
+            --project "${GCP_PROJECT_ID}" \
+            --region "${GCP_REGION}" \
+            --service "${DIRECTOR_SERVICE_NAME}" \
+            --image "${IMAGE}" \
+            --role director \
+            --runtime-service-account "${DIRECTOR_RUNTIME_SERVICE_ACCOUNT}" \
+            --predecessor-runtime-service-account "${PREDECESSOR_RUNTIME_SERVICE_ACCOUNT}" \
+            --bootstrap-runtime-identity "${BOOTSTRAP_RUNTIME_IDENTITY}" \
+            --predecessor-image-digest "${PREDECESSOR_IMAGE_DIGEST}" \
+            --rehome-director-service-account "${DIRECTOR_RUNTIME_SERVICE_ACCOUNT}" \
+            --rehome-audience "${REHOME_AUDIENCE}" \
+            --rehome-control-origin https://relay.onorca.dev \
+            --admin-audience https://relay.onorca.dev/v1/admin/drain \
+            --expected-rehome-generation "${EXPECTED_REHOME_GENERATION}" \
+            --max-instances "${DIRECTOR_MAX_INSTANCES}" \
+            --prune-revisions "${PRUNE_INCOMPATIBLE_REVISIONS}" \
+            --release-id "${RELEASE_ID}" \
+            --regional-placement-secret-version "${target_version}"
+          echo "REGIONAL_PLACEMENT_ENABLED=${desired}" >> "${GITHUB_ENV}"
+          echo "REGIONAL_PLACEMENT_VERSION=${target_version}" >> "${GITHUB_ENV}"
+
+      - name: Verify served revision and native health
+        shell: bash
+        run: |
+          SERVICE_JSON="$(gcloud run services describe "${DIRECTOR_SERVICE_NAME}" \
+            --project "${GCP_PROJECT_ID}" \
+            --region "${GCP_REGION}" \
+            --format=json)"
+          REVISION="$(jq -r '[.status.traffic[] | select((.percent // 0) > 0)] | if length == 1 and .[0].percent == 100 then .[0].revisionName else empty end' <<< "${SERVICE_JSON}")"
+          test -n "${REVISION}"
+          SERVED_IMAGE="$(gcloud run revisions describe "${REVISION}" \
+            --project "${GCP_PROJECT_ID}" \
+            --region "${GCP_REGION}" \
+            --format='value(spec.containers[0].image)')"
+          test "${SERVED_IMAGE}" = "${IMAGE}"
+          SERVED_REGIONAL_PLACEMENT_SECRET="$(gcloud run revisions describe "${REVISION}" \
+            --project "${GCP_PROJECT_ID}" --region "${GCP_REGION}" --format=json \
+            | jq -cer '[.spec.containers[0].env[] |
+              select(.name == "ORCA_RELAY_REGIONAL_PLACEMENT_ENABLED") |
+              (.valueSource.secretKeyRef // .valueFrom.secretKeyRef // {}) |
+              {secret: (.secret // .name), version: (.version // .key)}] |
+              if length == 1 then .[0] else error("regional placement secret missing") end')"
+          test "$(jq -r '.secret' <<< "${SERVED_REGIONAL_PLACEMENT_SECRET}")" = \
+            "${REGIONAL_PLACEMENT_SECRET}"
+          test "$(jq -r '.version' <<< "${SERVED_REGIONAL_PLACEMENT_SECRET}")" = \
+            "${REGIONAL_PLACEMENT_VERSION}"
+          test "$(gcloud secrets versions access "${REGIONAL_PLACEMENT_VERSION}" --project "${GCP_PROJECT_ID}" \
+            --secret "${REGIONAL_PLACEMENT_SECRET}")" = "${REGIONAL_PLACEMENT_ENABLED}"
+          # Why: a served revision with no warm-instance floor still passes health and digest
+          # checks while quietly shrinking per-instance admission capacity.
+          SERVED_MIN_INSTANCES="$(gcloud run revisions describe "${REVISION}" \
+            --project "${GCP_PROJECT_ID}" \
+            --region "${GCP_REGION}" \
+            --format="value(metadata.annotations['autoscaling.knative.dev/minScale'])")"
+          if [[ "${SERVED_MIN_INSTANCES:-0}" -lt "${DIRECTOR_MIN_INSTANCES}" ]]; then
+            echo "served revision ${REVISION} holds ${SERVED_MIN_INSTANCES:-0} minimum instances, expected at least ${DIRECTOR_MIN_INSTANCES}" >&2
+            exit 1
+          fi
+          SERVED_MAX_INSTANCES="$(gcloud run revisions describe "${REVISION}" \
+            --project "${GCP_PROJECT_ID}" --region "${GCP_REGION}" \
+            --format="value(metadata.annotations['autoscaling.knative.dev/maxScale'])")"
+          test "${SERVED_MAX_INSTANCES}" = "${DIRECTOR_MAX_INSTANCES}"
+          SERVICE_URL="$(jq -r '.status.url' <<< "${SERVICE_JSON}")"
+          node dev/scripts/smoke-relay.mjs "${SERVICE_URL}"

@@ -2,9 +2,9 @@
 import { RuntimeFileCommandsWithCreateFileExplorerDirNoClobber } from './runtime-file-commands-create-file-explorer-dir-no-clobber'
 import type { SearchOptions, SearchResult } from '../../shared/code-search-types'
 import {
-  SSH_FILESYSTEM_PROVIDER_UNAVAILABLE_MESSAGE,
-  getSshFilesystemProvider
-} from '../providers/ssh-filesystem-dispatch'
+  requireRuntimeFileProvider,
+  runtimeFileRouteForTarget
+} from './runtime-file-command-target'
 import { QUICK_OPEN_LISTING_MAX_RESULTS } from '../../shared/quick-open-listing-limits'
 import { limitQuickOpenFilesBySerializedBytes } from '../../shared/quick-open-transport-budget'
 import { listQuickOpenFiles } from '../ipc/filesystem-list-files'
@@ -22,13 +22,10 @@ export class RuntimeFileCommandsWithSearchRuntimeFiles extends RuntimeFileComman
     options: Omit<SearchOptions, 'rootPath'>
   ): Promise<SearchResult> {
     const target = await this.host.resolveRuntimeFileTarget(worktreeSelector)
-    const provider = target.connectionId ? getSshFilesystemProvider(target.connectionId) : null
+    const provider = requireRuntimeFileProvider(target)
     const rootPath = target.worktree.path
     const searchOptions = { ...options, rootPath }
-    if (target.connectionId) {
-      if (!provider) {
-        throw new Error(SSH_FILESYSTEM_PROVIDER_UNAVAILABLE_MESSAGE)
-      }
+    if (provider) {
       return provider.search(searchOptions)
     }
     return this.searchLocalRuntimeFiles(rootPath, searchOptions)
@@ -44,8 +41,10 @@ export class RuntimeFileCommandsWithSearchRuntimeFiles extends RuntimeFileComman
     } = {}
   ): Promise<string[]> {
     const target = await this.host.resolveRuntimeFileTarget(worktreeSelector)
-    const provider = target.connectionId ? getSshFilesystemProvider(target.connectionId) : null
-    if (target.connectionId) {
+    const route = runtimeFileRouteForTarget(target)
+    if (route.kind === 'ssh') {
+      // Why: quick-open listings degrade to empty for an unreachable host rather than throwing.
+      const provider = route.provider
       if (!provider) {
         return []
       }
@@ -73,11 +72,8 @@ export class RuntimeFileCommandsWithSearchRuntimeFiles extends RuntimeFileComman
 
   async listRuntimeMarkdownDocuments(worktreeSelector: string): Promise<MarkdownDocument[]> {
     const target = await this.host.resolveRuntimeFileTarget(worktreeSelector)
-    const provider = target.connectionId ? getSshFilesystemProvider(target.connectionId) : null
-    if (target.connectionId) {
-      if (!provider) {
-        throw new Error(SSH_FILESYSTEM_PROVIDER_UNAVAILABLE_MESSAGE)
-      }
+    const provider = requireRuntimeFileProvider(target)
+    if (provider) {
       const relativePaths = await provider.listFiles(target.worktree.path)
       return markdownDocumentsFromRelativePaths(target.worktree.path, relativePaths)
     }
@@ -89,11 +85,8 @@ export class RuntimeFileCommandsWithSearchRuntimeFiles extends RuntimeFileComman
     relativePath: string
   ): Promise<{ size: number; isDirectory: boolean; mtime: number }> {
     const target = await this.resolveFileExplorerPath(worktreeSelector, relativePath)
-    const provider = target.connectionId ? getSshFilesystemProvider(target.connectionId) : null
-    if (target.connectionId) {
-      if (!provider) {
-        throw new Error(SSH_FILESYSTEM_PROVIDER_UNAVAILABLE_MESSAGE)
-      }
+    const provider = requireRuntimeFileProvider(target)
+    if (provider) {
       const fileStat = await provider.stat(target.path)
       return {
         size: fileStat.size,

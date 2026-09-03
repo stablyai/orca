@@ -1,9 +1,6 @@
 import type { RuntimeMobileSessionTabsResult } from '../../../../shared/runtime-types'
-import {
-  buildMissingWebSessionTabsRemovals,
-  recordReceivedWebSessionTabsRemoval,
-  sessionTabsFreshnessKey
-} from './tracking'
+import { recordReceivedWebSessionTabsRemoval, sessionTabsFreshnessKey } from './tracking'
+import { buildMissingWebSessionTabsRemovals } from './session-tabs-inventory-absence'
 import { isCurrentSessionTabsRuntimeFrame } from './publisher-identity-fences'
 import type { VisibilityResumeOmission } from './state'
 import type { VisibilityResumeBatch, VisibilityResumeMissing } from './visibility-resume-types'
@@ -15,6 +12,7 @@ export function recordVisibilityResumeInventoryReceipt(args: {
   visibilityGeneration: number
   inventoryReceivedFrame: number
   snapshots: readonly RuntimeMobileSessionTabsResult[]
+  hostAuthoritative: boolean
   runtimeId?: string
 }): VisibilityResumeMissing[] {
   const {
@@ -24,6 +22,7 @@ export function recordVisibilityResumeInventoryReceipt(args: {
     visibilityGeneration,
     inventoryReceivedFrame,
     snapshots,
+    hostAuthoritative,
     runtimeId
   } = args
   if (!isCurrentSessionTabsRuntimeFrame(environmentId, runtimeId)) {
@@ -50,7 +49,8 @@ export function recordVisibilityResumeInventoryReceipt(args: {
   return buildMissingWebSessionTabsRemovals(
     environmentId,
     environment.trackedWorktrees,
-    publishedWorktrees
+    publishedWorktrees,
+    hostAuthoritative
   ).map((missing) => {
     const key = sessionTabsFreshnessKey(environmentId, missing.snapshot.worktree)
     omissions.set(key, {

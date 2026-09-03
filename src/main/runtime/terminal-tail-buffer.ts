@@ -110,14 +110,19 @@ export function appendNormalizedToTailBuffer(
 // Why a window: the unwindowed impl below is O(tail) per chunk (~93% of the event loop under TUI flood, findings log 2026-07-03); a redraw only touches rows the cursor reaches, so window the suffix and share the prefix by reference. Equivalence fuzz-verified in retained-tail-redraw-window.equivalence.test.ts.
 const REDRAW_WINDOW_SAFETY_ROWS = 8
 
+// Why module-level: this ran `new RegExp` per redraw chunk — i.e. per TUI frame per PTY.
+// Safe to share because `maxUpwardCursorReach` is synchronous and non-reentrant; it resets
+// `lastIndex` before every scan.
+const CURSOR_UP_PATTERN = new RegExp(`${String.fromCharCode(27)}\\[(\\d*)(?:;[\\d;]*)?A`, 'g')
+
 function maxUpwardCursorReach(
   normalizedChunk: string,
   previousRedrawCursor: RetainedTailRedrawCursor | null
 ): number {
   let reach = previousRedrawCursor ? previousRedrawCursor.rowFromEnd : 0
-  const cursorUpPattern = new RegExp(`${String.fromCharCode(27)}\\[(\\d*)(?:;[\\d;]*)?A`, 'g')
+  CURSOR_UP_PATTERN.lastIndex = 0
   let match: RegExpExecArray | null
-  while ((match = cursorUpPattern.exec(normalizedChunk)) !== null) {
+  while ((match = CURSOR_UP_PATTERN.exec(normalizedChunk)) !== null) {
     reach += match[1] ? Number.parseInt(match[1], 10) : 1
   }
   return reach

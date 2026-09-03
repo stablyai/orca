@@ -2756,7 +2756,8 @@
             "e4aa243f8c": "重新启动守护进程",
             "a7e2fd2699": "提交议题",
             "5c8ce20be6": "如果这种情况持续存在，请",
-            "cc6d997c65": "从此处重新启动终端守护进程以清除失效的守护进程状态。"
+            "cc6d997c65": "从此处重新启动终端守护进程以清除失效的守护进程状态。",
+            "remoteTerminalClosed": "远程终端已关闭。"
           },
           "TerminalProcessExitOverlay": {
             "capacityTitle": "已达到 Git Bash 控制台上限",
@@ -2895,7 +2896,7 @@
           "TerminalRemoteRuntimeReconnectBanner": {
             "retryingTitle": "正在重新连接到远程运行时",
             "disconnectedTitle": "远程运行时已断开连接",
-            "retryingBody": "Orca 将重试最多一分钟。如果连接恢复，此终端将恢复。",
+            "retryingBody": "Orca 正在自动重试。如果连接恢复，此终端将恢复。",
             "disconnectedBody": "自动重试已停止。重新连接以恢复此终端会话。",
             "reconnectButton": "重新连接"
           }
@@ -2936,7 +2937,7 @@
             "6e0bc8f3a8": "在浏览器中打开",
             "9dd880bd56": "关闭右侧的选项卡",
             "1611a1324b": "关闭",
-            "5d6e89891f": "重复选项卡",
+            "5d6e89891f": "复制选项卡",
             "966feb9ad5": "向右拆分",
             "7e8106899f": "向左拆分",
             "2186a8407c": "向下拆分",
@@ -3921,7 +3922,9 @@
           "searchLinks": "搜索链接",
           "deleteSkills": "删除技能…"
         },
-        "SkillShareSelectionControls": { "01c5a15e02": "共享技能" },
+        "SkillShareSelectionControls": {
+          "01c5a15e02": "共享技能"
+        },
         "SkillRow": {
           "updatedUnknown": "无日期",
           "pathCopied": "路径已复制",
@@ -3931,13 +3934,17 @@
           "viewDetails": "查看详情",
           "deleteSkill": "删除…"
         },
-        "SkillsList": { "listLabel": "技能" },
+        "SkillsList": {
+          "listLabel": "技能"
+        },
         "sourceStatus": {
           "missing": "未找到文件夹",
           "remoteRepo": "远程仓库 — 未扫描",
           "unavailable": "未扫描"
         },
-        "sources": { "heading": "技能文件夹" },
+        "sources": {
+          "heading": "技能文件夹"
+        },
         "sourceKind": {
           "home": "主目录",
           "workspace": "工作区",
@@ -3967,7 +3974,10 @@
           "deleteLinkOne": "{{count}} 个链接",
           "deleteLinkOther": "{{count}} 个链接"
         },
-        "filter": { "allAgents": "所有 Agent", "sharedAgent": "共享 (.agents)" },
+        "filter": {
+          "allAgents": "所有 Agent",
+          "sharedAgent": "共享 (.agents)"
+        },
         "SkillsSelectionHeader": {
           "exit": "退出选择",
           "exitTooltip": "退出选择 · Esc",
@@ -3976,7 +3986,11 @@
           "clear": "清除",
           "deleteTitle": "选择要删除的技能"
         },
-        "SkillDetailDialog": { "agents": "Agent", "updated": "已更新", "copy": "复制" },
+        "SkillDetailDialog": {
+          "agents": "Agent",
+          "updated": "已更新",
+          "copy": "复制"
+        },
         "SkillFreshnessNudge": {
           "titleOne": "已安装的 Orca 技能已过期",
           "titleMany": "{{value0}} 个已安装的 Orca 技能已过期",
@@ -4419,12 +4433,15 @@
           "keepDefaultBranchAria": "隐藏休眠工作区时仍显示默认分支"
         },
         "SidebarHeader": {
+          "projects": "项目",
           "92154beb7e": "新工作区",
           "49f62c5665": "工作区板",
           "5c9c7c16aa": "添加项目以创建工作区",
           "ca6f729da2": "新工作区 ({{value0}})",
           "a30e34eb5c": "关闭工作区板",
-          "25a95899c9": "添加项目"
+          "25a95899c9": "添加项目",
+          "spaces": "空间",
+          "views": "侧边栏视图"
         },
         "SidebarNav": {
           "80611a8b10": "搜索",
@@ -8250,7 +8267,8 @@
             },
             "agentDashboard": {
               "title": "智能体仪表盘",
-              "description": "用于监控跨工作树的智能体的看板，支持窗口内或弹出窗口显示。"
+              "description": "用于监控跨工作树的智能体的看板，支持窗口内或弹出窗口显示。",
+              "dashboard": "仪表盘"
             }
           }
         },
@@ -10435,7 +10453,7 @@
             "7ac885bd2f": "下载文件夹",
             "dd112c81d2": "在 Orca 浏览器中打开",
             "1bb9be455c": "添加为项目...",
-            "0fec99bfd7": "复制",
+            "0fec99bfd7": "创建副本",
             "f61af83316": "新建文件夹",
             "37c875d827": "新文件",
             "b3e288bf41": "无法下载“{{value0}}”。",
@@ -13757,6 +13775,35 @@
         }
       },
       "automations": {
+        "AutomationListToolbar": {
+          "runs": "运行"
+        },
+        "AutomationRunsDashboard": {
+          "search": "搜索运行…",
+          "filters": "筛选条件",
+          "host": "主机",
+          "status": "状态",
+          "refresh": "刷新运行",
+          "successful24h": "成功 · 24 小时",
+          "failed24h": "失败 · 24 小时",
+          "successful7d": "成功 · 7 天",
+          "failed7d": "失败 · 7 天",
+          "historyUnavailableOne": "1 个自动化的运行历史不可用。计数仅包含可用的历史记录。",
+          "historyUnavailableMany": "{{count}} 个自动化的运行历史不可用。计数仅包含可用的历史记录。",
+          "automation": "自动化",
+          "triggered": "已触发",
+          "trigger": "触发",
+          "loading": "正在加载运行…",
+          "noRuns": "尚无运行",
+          "emptyDescription": "触发自动化后，运行记录会显示在这里。",
+          "runs": "运行",
+          "local": "本地",
+          "remote": "远程"
+        },
+        "AutomationsPageBreadcrumb": {
+          "ariaLabel": "自动化面包屑导航",
+          "runDetails": "运行详情"
+        },
         "AutomationCustomCronPanel": {
           "3e3b2c369f": "cron",
           "e81a02d61b": "保存前输入有效的五字段 cron。",
@@ -14185,9 +14232,10 @@
           "b29191b3e0": "工作树",
           "8c3b621ddf": "项目",
           "4a3986b200": "状态",
-          "770d458144": "对智能体活动进行分组",
+          "770d458144": "分组方式",
           "795cbf26e2": "筛选...",
           "4616ea39fd": "跳转到工作区",
+          "markThreadRead": "将话题标记为已读",
           "59b131fbd9": "将话题标记为未读",
           "beb2c19173": "未读",
           "5651b216c6": "未知项目",
@@ -14798,6 +14846,13 @@
       "sent": "已将会话上下文发送到新的 {{agent}} 会话。",
       "deliveryFailed": "新的 {{agent}} 会话已启动，但无法发送上下文。",
       "launchFailed": "无法启动新的 {{agent}} 会话。"
+    },
+    "terminalPane": {
+      "TerminalContextMenu": {
+        "copySessionId": "复制会话 ID",
+        "copySessionIdSuccess": "已复制会话 ID",
+        "copySessionIdError": "复制会话 ID 失败"
+      }
     }
   },
   "dashboardPopout": {
@@ -14895,7 +14950,8 @@
   },
   "dashboard": {
     "sidebar": {
-      "label": "智能体仪表盘"
+      "label": "智能体",
+      "dashboardLabel": "智能体仪表盘"
     }
   },
   "browser": {
@@ -14935,6 +14991,21 @@
         "addressInUse": "另一个进程可能占用了端口。请重启 Orca 以重试。",
         "unknown": "请重启 Orca 以重试。"
       }
+    }
+  },
+  "agentsSidebarIntro": {
+    "migrated": {
+      "title": "智能体更容易找到了",
+      "description": "智能体视图现在是侧边栏的专用标签页。你的活动和筛选条件都会保留。",
+      "dismiss": "知道了",
+      "action": "打开智能体"
+    },
+    "new": {
+      "title": "认识你的智能体标签页",
+      "description": "查看智能体正在做什么、哪些已完成，以及哪些需要你介入。",
+      "hide": "隐藏智能体",
+      "action": "试用智能体",
+      "hiddenToast": "智能体标签页已隐藏。可在设置 → 实验性功能中重新启用。"
     }
   }
 }

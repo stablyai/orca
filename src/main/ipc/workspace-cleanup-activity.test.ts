@@ -2,17 +2,11 @@ import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
 import { describe, expect, it, vi } from 'vitest'
-import type { Repo } from '../../shared/repo-types'
 import type { Worktree } from '../../shared/worktree/types'
 import { resolveWorkspaceCleanupActivityWorktree } from './workspace-cleanup-activity'
+import type { WorkspaceCleanupGitRoute } from './workspace-cleanup-git-route'
 
-const REPO: Repo = {
-  id: 'repo-1',
-  path: '/repo',
-  displayName: 'Repo',
-  badgeColor: '#000',
-  addedAt: 1
-}
+const LOCAL_ROUTE: WorkspaceCleanupGitRoute = { kind: 'local', hostId: 'local' }
 
 function makeWorktree(overrides: Partial<Worktree> = {}): Worktree {
   return {
@@ -51,7 +45,11 @@ describe('resolveWorkspaceCleanupActivityWorktree', () => {
       mtimeMs: targetPath.endsWith('.git') ? 20_000 : 10_000
     }))
 
-    const worktree = await resolveWorkspaceCleanupActivityWorktree(REPO, makeWorktree(), statPath)
+    const worktree = await resolveWorkspaceCleanupActivityWorktree(
+      LOCAL_ROUTE,
+      makeWorktree(),
+      statPath
+    )
 
     expect(statPath).toHaveBeenCalledWith('/repo-feature')
     expect(statPath).toHaveBeenCalledWith(path.join('/repo-feature', '.git'))
@@ -76,7 +74,7 @@ describe('resolveWorkspaceCleanupActivityWorktree', () => {
     const readTextFile = vi.fn(async () => `gitdir: ${gitDirPath}\n`)
 
     const worktree = await resolveWorkspaceCleanupActivityWorktree(
-      REPO,
+      LOCAL_ROUTE,
       makeWorktree(),
       statPath,
       readTextFile
@@ -104,7 +102,7 @@ describe('resolveWorkspaceCleanupActivityWorktree', () => {
     const readTextFile = vi.fn(async () => `gitdir: ${gitDirPath}\n`)
 
     const worktree = await resolveWorkspaceCleanupActivityWorktree(
-      REPO,
+      LOCAL_ROUTE,
       makeWorktree(),
       statPath,
       readTextFile
@@ -131,7 +129,7 @@ describe('resolveWorkspaceCleanupActivityWorktree', () => {
     )
 
     const worktree = await resolveWorkspaceCleanupActivityWorktree(
-      REPO,
+      LOCAL_ROUTE,
       makeWorktree(),
       statPath,
       readTextFile
@@ -160,7 +158,7 @@ describe('resolveWorkspaceCleanupActivityWorktree', () => {
       const statPath = vi.fn(async () => ({ mtimeMs: 10_000 }))
 
       const worktree = await resolveWorkspaceCleanupActivityWorktree(
-        REPO,
+        LOCAL_ROUTE,
         makeWorktree({ path: worktreePath }),
         statPath
       )
@@ -179,7 +177,7 @@ describe('resolveWorkspaceCleanupActivityWorktree', () => {
     )
 
     const worktree = await resolveWorkspaceCleanupActivityWorktree(
-      REPO,
+      LOCAL_ROUTE,
       makeWorktree(),
       statPath,
       readTextFile
@@ -197,7 +195,7 @@ describe('resolveWorkspaceCleanupActivityWorktree', () => {
     const readTextFile = vi.fn(async () => 'gitdir: .repo/gitdir\n')
 
     const worktree = await resolveWorkspaceCleanupActivityWorktree(
-      REPO,
+      LOCAL_ROUTE,
       makeWorktree(),
       statPath,
       readTextFile
@@ -224,7 +222,7 @@ describe('resolveWorkspaceCleanupActivityWorktree', () => {
     const readTextFile = vi.fn(async () => 'gitdir: /home/me/repo/.git/worktrees/repo-feature\n')
 
     const worktree = await resolveWorkspaceCleanupActivityWorktree(
-      REPO,
+      LOCAL_ROUTE,
       makeWorktree({ path: worktreePath }),
       statPath,
       readTextFile
@@ -252,7 +250,7 @@ describe('resolveWorkspaceCleanupActivityWorktree', () => {
       )
 
       const worktree = await resolveWorkspaceCleanupActivityWorktree(
-        REPO,
+        LOCAL_ROUTE,
         makeWorktree({ path: String.raw`C:\Users\me\repo-feature` }),
         statPath,
         readTextFile
@@ -283,7 +281,7 @@ describe('resolveWorkspaceCleanupActivityWorktree', () => {
     const statPath = vi.fn(async () => ({ mtimeMs: 10_000 }))
 
     const worktree = await resolveWorkspaceCleanupActivityWorktree(
-      REPO,
+      LOCAL_ROUTE,
       makeWorktree({ lastActivityAt: 30_000 }),
       statPath
     )
@@ -295,7 +293,7 @@ describe('resolveWorkspaceCleanupActivityWorktree', () => {
     const statPath = vi.fn(async () => ({ mtimeMs: 20_000 }))
 
     const worktree = await resolveWorkspaceCleanupActivityWorktree(
-      { ...REPO, connectionId: 'ssh-1' },
+      { kind: 'ssh', hostId: 'ssh:ssh-1', connectionId: 'ssh-1', provider: null },
       makeWorktree({ createdAt: 10_000 }),
       statPath
     )

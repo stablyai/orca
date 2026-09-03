@@ -1,11 +1,13 @@
-import { STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY } from '../../../../shared/protocol-version'
 import type { RpcContext } from '../core'
+import { supportsStructuredAgentSessions } from './structured-agent-session-policy'
 
 export async function restoreStructuredTabsIfSupported(
-  runtime: RpcContext['runtime'],
-  capabilities: readonly string[] | undefined
+  context: Pick<RpcContext, 'runtime' | 'clientKind' | 'clientCapabilities'>
 ): Promise<void> {
-  if (capabilities?.includes(STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY)) {
-    await runtime.restoreStructuredAgentSessionTabs()
+  if (
+    supportsStructuredAgentSessions(context) &&
+    typeof context.runtime.restoreStructuredAgentSessionTabs === 'function'
+  ) {
+    await context.runtime.restoreStructuredAgentSessionTabs()
   }
 }

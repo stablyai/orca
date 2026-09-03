@@ -8,7 +8,6 @@ import type {
 import { getMobileSessionSnapshotTabIdentityKeys } from './mobile-session-tab-merge'
 import { getRuntimeBrowserPageRegistry } from './runtime-browser-page-registry'
 import { sameRuntimeBrowserPlacement } from '../../shared/runtime-browser-placement'
-import { createHash } from 'node:crypto'
 import type { ClientHostedBrowserRowsEvent } from '../../shared/client-hosted-browser-rows'
 
 export class OrcaRuntimeWithStoredMobileSnapshotHasStalePreservedTab extends OrcaRuntimeWithMergePreservedHeadlessMobileSessionTabs {
@@ -115,23 +114,14 @@ export class OrcaRuntimeWithStoredMobileSnapshotHasStalePreservedTab extends Orc
 
   protected getMergedMobileSessionPublicationEpoch(
     snapshot: RuntimeMobileSessionTabsSnapshot,
-    preservedTabs: readonly RuntimeMobileSessionSnapshotTab[]
+    _preservedTabs: readonly RuntimeMobileSessionSnapshotTab[]
   ): string {
     // Why: preserved snapshots can merge repeatedly; strip the prior merge suffix first so the publication epoch stays idempotent.
     const normalizedPublicationEpoch = snapshot.publicationEpoch.split(':headless-merge:')[0]
-    const signature = createHash('sha1')
-      .update(
-        preservedTabs
-          .map((tab) =>
-            tab.type === 'terminal'
-              ? `${tab.id}:${tab.parentTabId}:${tab.ptyId ?? ''}:${tab.leafId}`
-              : tab.id
-          )
-          .join('|')
-      )
-      .digest('hex')
-      .slice(0, 12)
-    return `${normalizedPublicationEpoch}:headless-merge:${signature}`
+    // The epoch identifies the publisher generation, not the merged content.
+    // Content changes are ordered by snapshotVersion, so encoding a merge hash
+    // here would make the identity oscillate and permanently fence later rows.
+    return normalizedPublicationEpoch
   }
 
   /** Serves a hydrating host renderer; the publisher counts this as a delivery, not a read. */

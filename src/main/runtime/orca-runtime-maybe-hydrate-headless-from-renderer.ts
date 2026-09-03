@@ -52,9 +52,11 @@ export class OrcaRuntimeWithMaybeHydrateHeadlessFromRenderer extends OrcaRuntime
     // state and the seed-resolve would overwrite it, dropping live bytes.
     state.writeChain = state.writeChain.then(async () => {
       try {
+        // Why the scrollback is not suppressed mid-TUI: the seed IS the model's
+        // normal buffer, so zeroing it while an alt-screen agent was up left the
+        // model with no pre-TUI history to restore from (#6106).
         const rendered = await controller.serializeBuffer!(ptyId, {
-          scrollbackRows: MOBILE_SUBSCRIBE_SCROLLBACK_ROWS,
-          altScreenForcesZeroRows: true
+          scrollbackRows: MOBILE_SUBSCRIBE_SCROLLBACK_ROWS
         })
         if (!rendered || rendered.data.length === 0) {
           return

@@ -137,6 +137,66 @@ describe('patchPackagedProcessPath', () => {
     expect(segments).toContain('/usr/local/bin')
   })
 
+  // Why this ordering is load-bearing (#18234): a seed exists so a GUI-launched
+  // Electron can *find* a tool, not to re-rank tools the user already has.
+  // `~/.local/bin` is user-writable and can hold a wrapper for any system tool.
+  // The reporter's `~/.local/bin/gh` wrapped `mise x gh -- gh`; seeded ahead of
+  // /usr/bin it ran instead of the real gh, and the wrapper's inner bare `gh`
+  // resolved back to itself. Measured in a container: with the login shell's
+  // ordering that chain exits in 22ms, with the seeded ordering it never
+  // terminates and creates ~1,300 processes/second.
+  it('never lets a seeded user dir overtake a system dir already on PATH', async () => {
+    const { app } = await import('electron')
+    const { patchPackagedProcessPath } = await import('./configure-process')
+
+    setPlatform('linux')
+    Object.defineProperty(app, 'isPackaged', { configurable: true, value: true })
+    process.env.HOME = '/home/tester'
+    process.env.PATH = '/usr/local/bin:/usr/bin:/bin'
+
+    patchPackagedProcessPath()
+
+    const segments = (process.env.PATH ?? '').split(':')
+    const localBin = segments.indexOf(join('/home/tester', '.local/bin'))
+    // Still reachable — that is what the seeding is for (#829).
+    expect(localBin).toBeGreaterThan(-1)
+    for (const systemDir of ['/usr/bin', '/bin', '/usr/local/bin']) {
+      expect(segments.indexOf(systemDir)).toBeLessThan(localBin)
+    }
+    expect(segments.indexOf(join('/home/tester', 'bin'))).toBeGreaterThan(
+      segments.indexOf('/usr/bin')
+    )
+  })
+
+  it('keeps version-manager shims ahead of the inherited PATH', async () => {
+    const { app } = await import('electron')
+    const { patchPackagedProcessPath } = await import('./configure-process')
+    const { getVersionManagerBinPaths } = await import('../../shared/node-cli-command-resolution')
+
+    setPlatform('linux')
+    Object.defineProperty(app, 'isPackaged', { configurable: true, value: true })
+    process.env.HOME = '/home/tester'
+    process.env.PATH = '/usr/bin:/bin'
+
+    patchPackagedProcessPath()
+
+    const segments = (process.env.PATH ?? '').split(':')
+    const genericUserBinDirs = [join('/home/tester', 'bin'), join('/home/tester', '.local/bin')]
+    const seeded = getVersionManagerBinPaths({ platform: 'linux', homePath: '/home/tester' })
+    const shimDirs = seeded.filter((dir) => !genericUserBinDirs.includes(dir))
+    expect(shimDirs).not.toHaveLength(0)
+    // Why these keep leading: an nvm/mise/asdf user's runtime must beat a
+    // system install, which is the reason this seeding is ordered at all.
+    for (const dir of shimDirs) {
+      expect(segments.indexOf(dir)).toBeLessThan(segments.indexOf('/usr/bin'))
+    }
+    // Why these do not: the same list carries the generic user bin dirs, which
+    // hold whatever was last installed there rather than a managed toolchain.
+    for (const dir of genericUserBinDirs) {
+      expect(segments.indexOf(dir)).toBeGreaterThan(segments.indexOf('/usr/bin'))
+    }
+  })
+
   it('leaves PATH untouched when the app is not packaged', async () => {
     const { app } = await import('electron')
     const { patchPackagedProcessPath } = await import('./configure-process')

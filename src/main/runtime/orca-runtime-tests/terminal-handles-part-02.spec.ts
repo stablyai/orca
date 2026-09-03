@@ -1,6 +1,12 @@
-import { describe, expect, it } from 'vitest'
-import { TEST_WINDOW_ID, TEST_WORKTREE_ID, createRuntime } from '../orca-runtime-test-fixtures.spec'
-import '../orca-runtime-test-mocks.spec'
+import { describe, expect, it, vi } from 'vitest'
+import {
+  HEADLESS_LEAF_ID,
+  TEST_WINDOW_ID,
+  TEST_WORKTREE_ID,
+  createRuntime,
+  createRuntimeWithSshLease
+} from '../orca-runtime-test-fixtures.spec'
+import { makePaneKey } from '../orca-runtime-test-mocks.spec'
 
 describe('OrcaRuntimeService', () => {
   it('invalidates a re-keyed leaf-unique handle so in-flight waiters fail fast', async () => {
@@ -142,5 +148,77 @@ describe('OrcaRuntimeService', () => {
     abort.abort()
     await waiting
     expect(settled).toBe('rejected')
+  })
+  it('recovers a moved SSH pane through the tab it now sits in, not the one its lease froze', async () => {
+    // `detachTerminalPaneToTab` moves a live pane and the lease keeps naming the tab it LEFT.
+    // Matching on that frozen tabId refused the pane's real coordinates outright, so a moved pane
+    // could only ever be "recovered" through coordinates it had already abandoned.
+    const leaseTabId = 'tab-before-move'
+    const currentTabId = 'tab-after-move'
+    const appPtyId = 'ssh:ssh-target@@pty-8'
+    const runtime = createRuntimeWithSshLease(appPtyId, leaseTabId)
+    const paneKey = makePaneKey(currentTabId, HEADLESS_LEAF_ID)
+    runtime.registerPty(appPtyId, TEST_WORKTREE_ID, 'ssh-target', {
+      tabId: currentTabId,
+      leafId: HEADLESS_LEAF_ID
+    })
+    const handle = runtime.resolveTerminalPane(paneKey, TEST_WORKTREE_ID).handle
+    runtime.onPtyExit(appPtyId, -1, undefined, { hostExitConfirmed: true })
+    const createTerminal = vi.spyOn(runtime, 'createTerminal').mockResolvedValue({
+      handle: 'term-replacement',
+      tabId: currentTabId,
+      paneKey,
+      ptyId: 'pty-replacement',
+      worktreeId: TEST_WORKTREE_ID,
+      title: null,
+      surface: 'background'
+    })
+
+    await expect(
+      runtime.recoverTerminalPane(paneKey, TEST_WORKTREE_ID, handle)
+    ).resolves.toMatchObject({ handle: 'term-replacement' })
+    expect(createTerminal).toHaveBeenCalledWith(`id:${TEST_WORKTREE_ID}`, {
+      tabId: currentTabId,
+      leafId: HEADLESS_LEAF_ID,
+      focus: false
+    })
+  })
+
+  it('refuses a moved SSH pane addressed through the tab it left', async () => {
+    // The other half: a viewer on a stale mirror asks under the OLD tab, whose layout no longer
+    // holds this leaf. Accepting it binds one leaf in two tabs and leaves the PTY under the current
+    // tab orphaned with its agent still running. The handle CAS happens to refuse first here, so
+    // the lease resolver is asserted directly - it is the independent second refusal.
+    const leaseTabId = 'tab-stale-mirror'
+    const currentTabId = 'tab-moved-to'
+    const appPtyId = 'ssh:ssh-target@@pty-9'
+    const runtime = createRuntimeWithSshLease(appPtyId, leaseTabId)
+    const stalePaneKey = makePaneKey(leaseTabId, HEADLESS_LEAF_ID)
+    runtime.registerPty(appPtyId, TEST_WORKTREE_ID, 'ssh-target', {
+      tabId: leaseTabId,
+      leafId: HEADLESS_LEAF_ID
+    })
+    const staleHandle = runtime.resolveTerminalPane(stalePaneKey, TEST_WORKTREE_ID).handle
+    // The move: same leaf, same PTY, new tab.
+    runtime.registerPty(appPtyId, TEST_WORKTREE_ID, 'ssh-target', {
+      tabId: currentTabId,
+      leafId: HEADLESS_LEAF_ID
+    })
+    runtime.onPtyExit(appPtyId, -1, undefined, { hostExitConfirmed: true })
+    const createTerminal = vi.spyOn(runtime, 'createTerminal')
+
+    await expect(
+      runtime.recoverTerminalPane(stalePaneKey, TEST_WORKTREE_ID, staleHandle)
+    ).rejects.toThrow(/terminal_not_recoverable|terminal_not_found/)
+    const leases = runtime as unknown as {
+      getRecentExpiredSshLease: (worktreeId: string, tabId: string, leafId?: string) => unknown
+    }
+    expect(
+      leases.getRecentExpiredSshLease(TEST_WORKTREE_ID, leaseTabId, HEADLESS_LEAF_ID)
+    ).toBeNull()
+    expect(
+      leases.getRecentExpiredSshLease(TEST_WORKTREE_ID, currentTabId, HEADLESS_LEAF_ID)
+    ).not.toBeNull()
+    expect(createTerminal).not.toHaveBeenCalled()
   })
 })

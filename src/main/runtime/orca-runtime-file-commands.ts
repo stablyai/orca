@@ -29,8 +29,8 @@ export class OrcaRuntimeWithFileCommands extends OrcaRuntimeWithPreservedBranchC
     requireStore: () => this.requireStore(),
     resolveWorktreeSelector: (selector) => this.resolveWorktreeSelector(selector),
     resolveRuntimeFileTarget: (selector) => this.resolveRuntimeFileTarget(selector),
-    resolveKnownWorkspaceFileTarget: (absolutePath, connectionId) =>
-      this.resolveKnownWorkspaceFileTarget(absolutePath, connectionId),
+    resolveKnownWorkspaceFileTarget: (absolutePath, executionHostId) =>
+      this.resolveKnownWorkspaceFileTarget(absolutePath, executionHostId),
     resolveTerminalCwd: (terminalHandle) => this.resolveTerminalCwd(terminalHandle),
     resolveTerminalContext: (terminalHandle) => this.resolveTerminalContext(terminalHandle),
     resolveTerminalFileUriHostname: (terminalHandle) =>
@@ -97,6 +97,16 @@ export class OrcaRuntimeWithFileCommands extends OrcaRuntimeWithPreservedBranchC
             linkedWorkItem: meta.linkedWorkItem
           }
         : null
+    },
+    // Why (#17828 review follow-up): RuntimeGitSyncCommands materializes with no store to
+    // avoid unrelated side effects; this is its only way back into the persisted
+    // `pushTarget.remoteCreated` flag that #17842's orphan sweep relies on.
+    persistMaterializedPushTarget: (worktreeId, pushTarget) => {
+      const store = this.store
+      if (!store?.setWorktreeMeta) {
+        return
+      }
+      store.setWorktreeMeta(worktreeId, { pushTarget })
     }
   })
 

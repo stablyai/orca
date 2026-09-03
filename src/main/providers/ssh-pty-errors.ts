@@ -1,5 +1,13 @@
 export const SSH_SESSION_EXPIRED_ERROR = 'SSH_SESSION_EXPIRED'
 export const SSH_PTY_IDENTITY_MISMATCH_ERROR = 'SSH_PTY_IDENTITY_MISMATCH'
+/**
+ * The relay accepted the attach for a PTY it had just proven alive and only retired the stale
+ * output delivery. Deliberately not `SSH_SESSION_EXPIRED`: every consumer of that token retires the
+ * pane binding and cold-restores the agent, which duplicates a running agent onto one transcript
+ * (docs/reference/ssh-execution-boundary.md — respawning needs host evidence of absence, and this
+ * reply is host evidence of the opposite).
+ */
+export const SSH_PTY_SOURCE_RESTORE_REQUIRED_ERROR = 'SSH_PTY_SOURCE_RESTORE_REQUIRED'
 
 export function isSshPtyNotFoundError(error: unknown): boolean {
   const message = error instanceof Error ? error.message : String(error)

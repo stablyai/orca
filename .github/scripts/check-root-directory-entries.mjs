@@ -13,6 +13,10 @@ function readRootEntries(sha) {
   return stdout.split('\0').filter(Boolean)
 }
 
+// Why: the Cloud workspace import is the one reviewed root addition; it stays
+// listed until it lands on main, after which the base tree carries it.
+const REVIEWED_ROOT_ENTRIES = new Set(['cloud'])
+
 function checkRootDirectoryEntries(argv) {
   if (argv.length !== 2) {
     console.error(`Usage: ${process.argv[1]} <base-sha> <head-sha>`)
@@ -21,7 +25,9 @@ function checkRootDirectoryEntries(argv) {
 
   const [baseSha, headSha] = argv
   const baseEntries = new Set(readRootEntries(baseSha))
-  const blockedEntries = readRootEntries(headSha).filter((entry) => !baseEntries.has(entry))
+  const blockedEntries = readRootEntries(headSha).filter(
+    (entry) => !baseEntries.has(entry) && !REVIEWED_ROOT_ENTRIES.has(entry)
+  )
 
   if (blockedEntries.length === 0) {
     console.log('Root directory guard passed: no new root-level files or folders.')

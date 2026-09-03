@@ -30,6 +30,7 @@ function makeActions(): StartupActions {
     reconnectPersistedTerminals: vi.fn(),
     setTerminalStartupRestorationReady: vi.fn(),
     setDeferredSshReconnectTargets: vi.fn(),
+    removeDeferredSshReconnectTarget: vi.fn(),
     setSshConnectionState: vi.fn(),
     hydratePersistedUI: vi.fn(),
     setHydrationSucceeded: vi.fn(),

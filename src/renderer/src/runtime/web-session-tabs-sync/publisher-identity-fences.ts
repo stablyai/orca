@@ -125,6 +125,22 @@ export function isRetiredSessionTabsPublicationEpoch(
   return hasRetiredValue(sessionTabsPublicationEpochHistoryByWorktree.get(key), publicationEpoch)
 }
 
+/**
+ * A headless merge keeps the renderer publication as its base epoch while
+ * adding runtime-owned surfaces. Treat both forms as one ordering lineage.
+ */
+export function sameSessionTabsPublicationLineage(left: string, right: string): boolean {
+  return (
+    left === right ||
+    ((left.includes(':headless-merge:') || right.includes(':headless-merge:')) &&
+      left.split(':headless-merge:')[0] === right.split(':headless-merge:')[0])
+  )
+}
+
+export function isHeadlessMergeSessionTabsPublication(publicationEpoch: string): boolean {
+  return publicationEpoch.includes(':headless-merge:')
+}
+
 export function noteSessionTabsPublicationEpoch(
   key: string,
   publicationEpoch: string

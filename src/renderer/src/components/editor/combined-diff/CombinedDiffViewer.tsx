@@ -11,6 +11,8 @@ import {
   EMPTY_GIT_STATUS_ENTRIES,
   useCombinedDiffEntrySet
 } from './resolve-changes/use-combined-diff-entry-set'
+import { useCombinedDiffSectionIndexMap } from './resolve-changes/use-combined-diff-section-index-map'
+import { useCombinedDiffSectionRowKeys } from './resolve-changes/use-combined-diff-section-row-keys'
 import { useCombinedDiffSectionLoadRegistry } from './load-sections/combined-diff-section-load-registry'
 import { useCombinedDiffSectionLoader } from './load-sections/use-combined-diff-section-loader'
 import { useCombinedDiffSectionRetry } from './load-sections/use-combined-diff-section-retry'
@@ -89,6 +91,7 @@ export default function CombinedDiffViewer({
   const preferences = useCombinedDiffViewPreferences({
     combinedDiffFileTreeVisibleByDefault: settings?.combinedDiffFileTreeVisibleByDefault,
     diffDefaultView: settings?.diffDefaultView,
+    diffShowWhitespace: settings?.diffShowWhitespace,
     diffWordWrap: settings?.diffWordWrap,
     registry,
     setSections,
@@ -119,6 +122,13 @@ export default function CombinedDiffViewer({
     setSections
   })
 
+  // Why: one incremental scan of `sections` feeds the virtualizer keys, the restore signal and the
+  // toolbar collapse state, instead of three independent full passes per loaded section.
+  const sectionRowKeys = useCombinedDiffSectionRowKeys({ generation, sections })
+  const sectionIndexByKey = useCombinedDiffSectionIndexMap({
+    entrySignature: entrySet.entrySignature,
+    sections
+  })
   const { hasDirectScrollInput, markDirectScrollInput } = useCombinedDiffDirectScrollInput()
   const { cleanupActiveScrollbarDrag, handleScrollbarPointerDown, scrollThumb, updateScrollbar } =
     useCombinedDiffScrollbar({ markDirectScrollInput, scrollContainerRef })
@@ -126,6 +136,7 @@ export default function CombinedDiffViewer({
     generation,
     programmaticScrollMarks,
     renderedIndicesRef: registry.renderedIndicesRef,
+    rowKeys: sectionRowKeys.rowKeys,
     scrollContainerRef,
     scrollOffsetRef: restore.scrollOffsetRef,
     sectionHeights,
@@ -141,9 +152,11 @@ export default function CombinedDiffViewer({
     scrollAnchorRef: restore.scrollAnchorRef,
     scrollContainerRef,
     scrollOffsetRef: restore.scrollOffsetRef,
+    sectionIndexByKey,
     sections,
     sectionsRef: registry.sectionsRef,
     sideBySide: preferences.sideBySide,
+    structureRevision: sectionRowKeys.structureRevision,
     totalSize: virtualizer.getTotalSize(),
     viewStateKey,
     virtualizer
@@ -167,6 +180,7 @@ export default function CombinedDiffViewer({
     entrySignature: entrySet.entrySignature,
     markDirectScrollInput,
     scrollToIndex: anchors.scrollToSectionIndex,
+    sectionIndexByKey,
     sections,
     sectionsRef: registry.sectionsRef,
     toggleSection,
@@ -296,7 +310,7 @@ export default function CombinedDiffViewer({
         skippedConflicts={skippedConflicts!}
       />
     ) : null
-  const allSectionsCollapsed = sections.every((section) => section.collapsed)
+  const allSectionsCollapsed = sectionRowKeys.allSectionsCollapsed
 
   return (
     <>
@@ -308,6 +322,7 @@ export default function CombinedDiffViewer({
           commitCompare={entrySet.commitCompare}
           diffCommentCount={notes.diffCommentCount}
           diffCommentsForWorktree={diffCommentsForWorktree}
+          diffShowWhitespace={settings?.diffShowWhitespace}
           diffWordWrap={settings?.diffWordWrap}
           file={file}
           fileTreeCollapsed={preferences.fileTreeCollapsed}
@@ -323,6 +338,7 @@ export default function CombinedDiffViewer({
           sectionCount={sections.length}
           setAllSectionsCollapsed={preferences.setAllSectionsCollapsed}
           sideBySide={preferences.sideBySide}
+          toggleDiffShowWhitespace={preferences.toggleDiffShowWhitespace}
           toggleDiffWordWrap={preferences.toggleDiffWordWrap}
           toggleSideBySide={preferences.toggleSideBySide}
         />

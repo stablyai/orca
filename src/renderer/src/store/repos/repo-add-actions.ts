@@ -5,7 +5,7 @@ import type { Repo } from '../../../../shared/repo-types'
 import { isGitRepoKind } from '../../../../shared/repo-kind'
 import { getRepoHostIdentity } from '../slices/repo-host-identity'
 import { callRuntimeRpc, getActiveRuntimeTarget } from '../../runtime/runtime-rpc-client'
-import { buildDismissedOnboardingFolderAgentStartup } from '@/lib/onboarding-folder-agent-startup'
+import { resolveDismissedOnboardingFolderAgentLaunch } from '@/lib/onboarding-folder-agent-startup'
 import { isNativeChatTranscriptLocalReadable } from '@/lib/native-chat-transcript-readability'
 import { markOnboardingProjectAdded } from '@/lib/onboarding-project-checklist'
 import { translate } from '@/i18n/i18n'
@@ -187,17 +187,43 @@ export function createRepoAddActions(
           const { activateAndRevealWorktree } = await import('../../lib/worktree-activation')
           const onboarding = await window.api.onboarding.get().catch(() => null)
           // Why: adding the first folder from Landing skips onboarding's completeRepo hook; carry the default agent into the first terminal here.
-          const startup = buildDismissedOnboardingFolderAgentStartup(
-            get().settings,
+          const launch = resolveDismissedOnboardingFolderAgentLaunch({
+            settings: get().settings,
             onboarding,
-            hadProjectBeforeAdd,
-            isNativeChatTranscriptLocalReadable(repo.connectionId)
-          )
+            hasExistingProject: hadProjectBeforeAdd,
+            executionHostId: executionHostId ?? LOCAL_EXECUTION_HOST_ID,
+            nativeChatTranscriptIsLocalReadable: isNativeChatTranscriptLocalReadable(
+              repo.connectionId
+            )
+          })
           activateAndRevealWorktree(folderWorktree.id, {
             sidebarRevealBehavior: 'auto',
             ...(executionHostId ? { executionHostId } : {}),
-            ...(startup ? { startup } : {})
+            ...(launch.startup ? { startup: launch.startup } : {}),
+            ...(launch.route === 'structured-native-chat' ? { providesInitialSurface: true } : {})
           })
+          if (launch.route === 'structured-native-chat' && launch.agent === 'codex') {
+            const [{ startStructuredCodexLaunch }, { StructuredAgentSessionCreateRefusalError }] =
+              await Promise.all([
+                import('@/lib/structured-agent-session-launch'),
+                import('@/lib/launch-structured-codex-session')
+              ])
+            const structured = startStructuredCodexLaunch(folderWorktree.id)
+            const fallback = structured.claimDefinitiveRefusalFallback(() => {
+              activateAndRevealWorktree(folderWorktree.id, {
+                sidebarRevealBehavior: 'auto',
+                ...(executionHostId ? { executionHostId } : {}),
+                ...(launch.fallbackStartup ? { startup: launch.fallbackStartup } : {})
+              })
+            })
+            try {
+              await structured.launchResult
+            } catch (error) {
+              if (error instanceof StructuredAgentSessionCreateRefusalError) {
+                await fallback
+              }
+            }
+          }
         }
         return repo
       } catch (err) {

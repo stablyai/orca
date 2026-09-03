@@ -32,6 +32,8 @@ export type MobileNativeChatTab = {
   /** Host-provided launch context still parked as an unsent TUI-input draft. */
   launchDraft?: string
   launchDraftCreatedAt?: number
+  sessionId?: string | null
+  agent?: string | null
 }
 
 /** Resolve a session tab to the transcript identity native chat needs, or
@@ -42,7 +44,15 @@ export function resolveMobileNativeChat(
   tab: MobileNativeChatTab | null,
   nativeChatTranscriptIsLocalReadable = false
 ): MobileNativeChatResolution | null {
-  if (!tab || tab.type !== 'terminal') {
+  if (!tab) {
+    return null
+  }
+  if (tab.type === 'agent-session') {
+    return tab.sessionId && tab.agent === 'codex'
+      ? { agent: tab.agent, sessionId: tab.sessionId, transcriptPath: null }
+      : null
+  }
+  if (tab.type !== 'terminal') {
     return null
   }
   const liveAgent = tab.agentStatus?.agentType ?? null
@@ -70,4 +80,16 @@ export function canShowMobileNativeChat(
   nativeChatTranscriptIsLocalReadable = false
 ): boolean {
   return resolveMobileNativeChat(tab, nativeChatTranscriptIsLocalReadable) !== null
+}
+
+export function resolveMobileNativeChatFileSessionId(
+  tab: MobileNativeChatTab | null
+): string | null {
+  if (tab?.type === 'agent-session') {
+    return tab.sessionId ?? null
+  }
+  if (tab?.type === 'terminal') {
+    return tab.agentStatus?.providerSession?.id ?? null
+  }
+  return null
 }

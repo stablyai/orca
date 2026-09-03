@@ -202,7 +202,15 @@ export async function resolveTerminalOrphanInventory(args: {
     ) {
       disposition = 'retain'
     } else if (surface.pending && terminal.ptyId !== surface.expectedPtyId) {
-      disposition = 'remove'
+      // Rebind, never retire. `expectedPtyId` is the ptyId of the *snapshot frame's* pending row;
+      // `terminal.ptyId` is the answer to a `terminal.list` with `requireFreshPtyLiveness: true`, so
+      // the host has just attested this handle is live under a different PTY. A PTY id changing
+      // across a host relaunch is the normal case, not evidence of death (#11495). Retaining emits a
+      // ready row bound to the host's handle, which is the rebind — the handle is the identity, the
+      // ptyId behind it is the host's business. Removal here needs what the two branches around it
+      // already require: an explicit `retiredTerminalSurfaces` entry, or two authoritative
+      // inventories omitting the identity. See docs/reference/ssh-execution-boundary.md.
+      disposition = 'retain'
     } else if (!hasStrongOrphanIdentity(terminal, surface, snapshot.worktree)) {
       disposition = 'retain'
     } else {

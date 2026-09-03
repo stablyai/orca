@@ -114,6 +114,7 @@ describe('PR E2E gate contract', () => {
     expect(prWorkflow.jobs['e2e-paths'].outputs.test_files).toBe(
       '${{ steps.filter.outputs.test_files }}'
     )
+    expect(prWorkflow.jobs.e2e.with.ref).toBe('${{ github.event.pull_request.head.sha }}')
     expect(prWorkflow.jobs.e2e.with.test_files).toBe('${{ needs.e2e-paths.outputs.test_files }}')
   })
 
@@ -266,6 +267,7 @@ describe('PR E2E gate contract', () => {
       'tests/e2e/pty-input-write-queue-ssh.spec.ts',
       'tests/e2e/ssh-cold-activation-restore.spec.ts',
       'tests/e2e/ssh-docker-reconnect-pane-restore.spec.ts',
+      'tests/e2e/ssh-docker-transport-drop-recovery.spec.ts',
       'tests/e2e/ssh-port-forward-lifecycle.spec.ts',
       'tests/e2e/ssh-reconnect-tab-destruction.spec.ts',
       'tests/e2e/ssh-startup-exec-readiness.spec.ts',

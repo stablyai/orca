@@ -45,7 +45,7 @@ describe('RuntimeGitCommands branch diff', () => {
     const commands = new RuntimeGitCommands({
       resolveRuntimeGitTarget: async () => ({
         worktree: makeWorktree('/remote/repo'),
-        connectionId: 'conn-1'
+        executionHostId: 'ssh:conn-1'
       }),
       getRuntimeSettings: () => ({}) as GlobalSettings
     })

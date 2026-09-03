@@ -1,6 +1,7 @@
 import { vi } from 'vitest'
 import type { MobileRelayCredentialBundle } from './mobile-relay-credential-bundle'
 import type { MobileRelayRpcSession } from './mobile-relay-rpc-session'
+import { RelayDialStageTracker, type RelayDialStage } from './relay-dial-stage'
 import type { MobileEndpointSupervisorDependencies } from './mobile-endpoint-supervisor'
 import type { RpcClient } from './rpc-client'
 import type { MobileConnectionPath, StableLogicalRpcClient } from './stable-logical-rpc-client'
@@ -51,6 +52,10 @@ export class FakeRelaySession extends FakeSession implements MobileRelayRpcSessi
   // Why: production-realistic defaults — fictional fake values hid three
   // live defects in this subsystem (latch, churn, int32 timer overflow).
   getAttachDeadlineAt = () => Date.now() + 10_000
+  readonly dialStage = new RelayDialStageTracker()
+  getDialStage = () => this.dialStage.getDialStage()
+  onDialStageChange = (listener: (stage: RelayDialStage) => void) =>
+    this.dialStage.onDialStageChange(listener)
   getResumeExpiresAt = () => this.resumeExpiry
   getResumeConfirmation = () => ({
     v: 1 as const,

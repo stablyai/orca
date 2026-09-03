@@ -5,6 +5,7 @@ import type { RuntimeWorktreeRemovalTarget } from './runtime-worktree-selection'
 import { resolveRuntimeWorktreeRemovalTarget } from './runtime-worktree-removal-target'
 import type { RuntimeStore } from './runtime-store-contract'
 import { splitWorktreeId } from '../../shared/worktree/id'
+import { runtimeWorktreeIdsEqual } from './runtime-worktree-path-identity'
 import { hasWorktreeRemovalRepoOwnerOnOtherHost } from '../worktree-removal-repo-owner'
 import { advertisedUrlWatcher } from '../ports/advertised-url-watcher'
 import { deleteWorktreeHistoryDir } from '../terminal-history-deletion'
@@ -13,7 +14,6 @@ import type { ForceDeleteWorktreeBranchResult } from '../../shared/worktree/crea
 import type { RuntimeTerminalRename } from '../../shared/runtime-types'
 import type { TerminalWorkspaceLaunchScope } from './runtime-legacy-worker-terminal-recovery-types'
 import type { TerminalCreateOptions } from './runtime-terminal-contracts'
-import { repoIsRemote } from '../../shared/agent-launch-remote'
 import { resolveLocalWindowsAgentStartupShell } from '../../shared/windows-terminal-shell'
 import { isTuiAgentEnabled } from '../../shared/tui-agent-selection'
 import { resolveBareAgentLaunchCommand } from './runtime-agent-launch-resolution'
@@ -52,15 +52,36 @@ export class OrcaRuntimeWithResolveWorktreeRemovalTarget extends OrcaRuntimeWith
       ((persistedHostId && persistedHostId !== hostId) ||
         (repoId && hasWorktreeRemovalRepoOwnerOnOtherHost(store, repoId, hostId)))
     )
+    const acceptedRendererSnapshot = this.acceptedRendererMobileSnapshotByWorktree.get(worktreeId)
+    const storedSnapshot = this.mobileSessionTabsByWorktree.get(worktreeId)
     if (hostId) {
       store.removeWorktreeMeta(worktreeId, hostId)
     } else {
       store.removeWorktreeMeta(worktreeId)
     }
     if (!preservesSameIdOwner) {
+      // A paired PTY can outlive the delete acknowledgement; it must not be
+      // rescued into a newly-created occupant of the same path-derived ID.
+      for (const ptyId of this.pairedRendererSessionOwnedPtyIds) {
+        const ptyWorktreeId = this.ptysById.get(ptyId)?.worktreeId
+        if (ptyWorktreeId && runtimeWorktreeIdsEqual(ptyWorktreeId, worktreeId)) {
+          this.pairedRendererSessionOwnedPtyIds.delete(ptyId)
+        }
+      }
+      const removedPublicationEpoch =
+        acceptedRendererSnapshot?.publicationEpoch ??
+        storedSnapshot?.publicationEpoch ??
+        this.rendererGeneration ??
+        undefined
+      this.removedMobileSessionWorktreeIds.set(
+        worktreeId,
+        removedPublicationEpoch ? { removedPublicationEpoch } : {}
+      )
       this.mobileSessionTabsByWorktree.delete(worktreeId)
       this.mobileSessionTabsAgentStatusHeartbeat.removeWorktree(worktreeId)
       this.acceptedRendererMobileSnapshotByWorktree.delete(worktreeId)
+      this.cancelScheduledMobileSessionTabsChanged(worktreeId)
+      this.notifyMobileSessionTabsRemoved(worktreeId)
       advertisedUrlWatcher.forgetWorktree(worktreeId)
       deleteWorktreeHistoryDir(worktreeId)
       this.closeHeadlessBrowserPagesForWorktree(worktreeId)
@@ -153,7 +174,9 @@ export class OrcaRuntimeWithResolveWorktreeRemovalTarget extends OrcaRuntimeWith
 
     const settings = store.getSettings()
     const platform = this.getAgentLaunchPlatformForWorkspace(workspace)
-    const isRemote = workspace.repo ? repoIsRemote(workspace.repo) : Boolean(workspace.connectionId)
+    // Why: `workspace.repo` is display metadata and may be a row from another host; the launch
+    // shape must match the PTY route this scope already resolved.
+    const isRemote = Boolean(workspace.connectionId)
     const queuedShell = resolveLocalWindowsAgentStartupShell({
       platform,
       isRemote,

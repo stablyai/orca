@@ -40,8 +40,11 @@ export const appApi = {
       throw new Error('Failed to stage renderer state before unload.')
     }
   },
+  awaitBeforeUnloadCheckpoint: () => awaitBeforeUnloadCheckpoint(),
   awaitFirstWindowStartupServices: (): Promise<void> =>
     ipcRenderer.invoke('app:awaitFirstWindowStartupServices'),
+  awaitGitEnvironmentStartupBarrier: (): Promise<void> =>
+    ipcRenderer.invoke('app:awaitGitEnvironmentStartupBarrier'),
   prepareTerminalStartupRestoration: (): Promise<void> =>
     ipcRenderer.invoke('app:prepareTerminalStartupRestoration'),
   recoverLegacyWorkerTerminalsForRendererStartup: (): Promise<void> =>
@@ -73,4 +76,4 @@ export const appApi = {
     ipcRenderer.invoke('app:pickFloatingWorkspaceDirectory'),
   writeTerminalRenderDesyncEvidence: (args: WriteTerminalRenderDesyncEvidenceArgs) =>
     ipcRenderer.invoke('terminal:writeRenderDesyncEvidence', args)
-}
+} satisfies PreloadApi['app']

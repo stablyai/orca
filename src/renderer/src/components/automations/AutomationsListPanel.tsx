@@ -107,6 +107,7 @@ type AutomationsListPanelProps = {
   onOpenDetail: () => void
   onRefresh: () => void
   isRefreshing: boolean
+  onOpenRuns: () => void
 }
 
 export function AutomationsListPanel(props: AutomationsListPanelProps): React.JSX.Element {
@@ -153,7 +154,8 @@ export function AutomationsListPanel(props: AutomationsListPanelProps): React.JS
     canCreateAutomation,
     onOpenDetail,
     onRefresh,
-    isRefreshing
+    isRefreshing,
+    onOpenRuns
   } = props
   const listRef = useRef<HTMLDivElement>(null)
   // Hosts moved into the Filters menu, so its toolbar row is the focus fallback now.
@@ -293,6 +295,7 @@ export function AutomationsListPanel(props: AutomationsListPanelProps): React.JS
         hostEntries={hostCatalog.entries}
         onRefresh={onRefresh}
         isRefreshing={isRefreshing}
+        onOpenRuns={onOpenRuns}
         openCreateDialog={openCreateDialog}
         canCreateAutomation={canCreateAutomation}
       />

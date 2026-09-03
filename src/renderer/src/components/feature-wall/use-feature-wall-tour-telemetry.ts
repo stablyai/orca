@@ -77,7 +77,8 @@ export function useFeatureWallTourTelemetry(args: {
   getDepthSummary: () => FeatureWallTourDepthSummary
 }): { markExitAction: (exitAction: FeatureWallExitAction) => void } {
   const { isOpen, source, getDepthSummary } = args
-  const telemetryRef = useRef<FeatureWallTourTelemetryState>(createFeatureWallTourTelemetryState())
+  const telemetryRef = useRef<FeatureWallTourTelemetryState>(undefined!)
+  telemetryRef.current ??= createFeatureWallTourTelemetryState()
   const sourceRef = useRef(source)
   const getDepthSummaryRef = useRef(getDepthSummary)
   // Why: close telemetry may emit from stable callbacks; keep the payload

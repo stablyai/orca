@@ -599,9 +599,12 @@ describe('reconnectPersistedTerminals', () => {
     }
     const sshConnectionStates = new Map([[targetId, currentAuthorityState]])
     const originalGet = sshConnectionStates.get.bind(sshConnectionStates)
+    // Rotate from the first read after the entry authority check, so the
+    // pre-publication check sees the new generation whatever number of
+    // intermediate reads the reconnect pass happens to make.
     sshConnectionStates.get = ((key: string) => {
       authorityReads += 1
-      return authorityReads >= 4 ? rotatedAuthorityState : originalGet(key)
+      return authorityReads >= 2 ? rotatedAuthorityState : originalGet(key)
     }) as typeof sshConnectionStates.get
     store.setState({
       repos: [
@@ -636,7 +639,7 @@ describe('reconnectPersistedTerminals', () => {
     })
 
     const after = store.getState()
-    expect(authorityReads).toBeGreaterThanOrEqual(4)
+    expect(authorityReads).toBeGreaterThanOrEqual(2)
     expect(after.tabsByWorktree).toBe(before.tabsByWorktree)
     expect(after.ptyIdsByTabId).toBe(before.ptyIdsByTabId)
     expect(after.pendingReconnectWorktreeIds).toBe(before.pendingReconnectWorktreeIds)

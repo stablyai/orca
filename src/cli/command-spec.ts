@@ -5,6 +5,7 @@ export type CommandSpec = {
   argumentMode?: 'parsed' | 'passthrough'
   // Why: typo recovery must never steer a benign mistake into destructive state changes.
   destructive?: boolean
+  hidden?: boolean
   summary: string
   usage: string
   allowedFlags: string[]

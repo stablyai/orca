@@ -95,6 +95,7 @@ export class OrcaRuntimeWithCreateRuntimeOwnedMobileSessionTerminal extends Orca
       parentTabId,
       leafId,
       ptyId: livePty.pty.ptyId,
+      incarnationId: livePty.pty.incarnationId,
       title: terminal.title ?? livePty.pty.title ?? 'Terminal',
       ...(cwd ? { startupCwd: cwd } : {}),
       ...(opts.launchAgent ? { launchAgent: opts.launchAgent } : {}),
@@ -139,7 +140,7 @@ export class OrcaRuntimeWithCreateRuntimeOwnedMobileSessionTerminal extends Orca
       ...(existing?.tabGroupLayout ? { tabGroupLayout: existing.tabGroupLayout } : {}),
       tabs
     }
-    this.mobileSessionTabsByWorktree.set(worktreeId, next)
+    this.storeMobileSessionSnapshot(worktreeId, next)
     const result = this.toMobileSessionTabsResult(next)
     const changeSequence = ++this.mobileSessionTabsChangeSequence
     for (const subscription of this.mobileSessionTabListeners) {

@@ -37,7 +37,7 @@ export function canReserveAdmission(args: {
   charge: AdmissionCharge
   limits: SshPtyModelAdmissionLimits
   usageByPty: ReadonlyMap<string, PtyUsage>
-  closingGenerations: ReadonlySet<number>
+  closingGenerations: { has: (generation: number) => boolean }
   globalSourceUnits: number
   globalBytes: number
 }): boolean {

@@ -1,0 +1,15 @@
+[extend]
+useDefault = true
+
+[[allowlists]]
+description = "Explicit Relay test signing key"
+regexTarget = "secret"
+regexes = ['''^test-assignment-key-with-at-least-32-bytes$''']
+
+# The Cloud SQL rollout lease records `owner/repo/run_id` as the holder of a lease. The action's
+# unit tests build fixture holders from that shape, which the generic key rule reads as a secret.
+[[allowlists]]
+description = "Cloud SQL rollout lease holder keys in the action's unit tests"
+regexTarget = "secret"
+paths = ['''\.github/actions/cloud-sql-rollout-lease/[a-z-]+\.test\.mjs$''']
+regexes = ['''^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+/[0-9]+$''']

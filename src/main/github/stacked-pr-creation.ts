@@ -1,3 +1,5 @@
+import type { ExecutionHostId } from '../../shared/execution-host'
+import { hostedReviewSshConnectionId } from '../source-control/hosted-review-execution-host'
 import type {
   CreateStackedHostedReviewInput,
   CreateStackedHostedReviewResult
@@ -116,12 +118,14 @@ function validateParentStack(
 export async function prepareGitHubStackedPullRequest(
   repoPath: string,
   input: CreateStackedHostedReviewInput,
-  connectionId?: string | null,
+  executionHostId: ExecutionHostId,
   options: HostedReviewExecutionOptions = {}
 ): Promise<StackedPullRequestPlan> {
   if (input.provider !== 'github') {
     return creationError('Stacked pull request creation is available only for GitHub repositories.')
   }
+  // `gh` runs on this client whatever the host; only the git reads under it are routed.
+  const connectionId = hostedReviewSshConnectionId(executionHostId)
   const repository = await getOriginGitHubApiRepository(
     repoPath,
     connectionId,
@@ -222,10 +226,11 @@ export async function registerGitHubStackedPullRequest(args: {
   repository: GitHubApiRepository
   parentReview: NumberedHostedReviewSummary
   currentReview: NumberedHostedReviewSummary
-  connectionId?: string | null
+  executionHostId: ExecutionHostId
   options?: HostedReviewExecutionOptions
 }): Promise<CreateStackedHostedReviewResult> {
   const options = args.options ?? {}
+  const connectionId = hostedReviewSshConnectionId(args.executionHostId)
   await acquire()
   try {
     const [parentStacks, currentStacks] = await Promise.all([
@@ -233,14 +238,14 @@ export async function registerGitHubStackedPullRequest(args: {
         args.repoPath,
         args.repository,
         args.parentReview.number,
-        args.connectionId,
+        connectionId,
         options
       ),
       getStacksForPullRequest(
         args.repoPath,
         args.repository,
         args.currentReview.number,
-        args.connectionId,
+        connectionId,
         options
       )
     ])
@@ -281,7 +286,7 @@ export async function registerGitHubStackedPullRequest(args: {
       command.push('-F', `pull_requests[]=${pullRequest}`)
     }
     const { stdout } = await ghExecFileAsync(command, {
-      ...ghOptions(args.repoPath, args.repository, args.connectionId, options),
+      ...ghOptions(args.repoPath, args.repository, connectionId, options),
       idempotent: false
     })
     const stackNumber = Number((JSON.parse(stdout) as { number?: unknown }).number)

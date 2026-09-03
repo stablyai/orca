@@ -26,6 +26,8 @@ type MobileRelayE2eeLinkOptions = {
   onText: (plaintext: string) => void
   onBinary: (plaintext: Uint8Array) => void
   onHello?: (hello: Extract<RelayPhoneHello, { ok: true }>) => void
+  // Fired once relay-auth is on the wire: from here the cell owns the wait.
+  onOpen?: () => void
   onError: (error: Error) => void
   createSocket?: (url: string) => WebSocket
 }
@@ -96,7 +98,9 @@ export class MobileRelayE2eeLink {
         )
       } catch (error) {
         this.fail(asError(error))
+        return
       }
+      this.options.onOpen?.()
     }
     this.socket.onmessage = (event) => {
       this.inboundChain = this.inboundChain

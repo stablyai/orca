@@ -11,6 +11,7 @@ import type { DiffSection } from './diff-section-types'
 import { translate } from '@/i18n/i18n'
 import { LargeDiffFallback } from './LargeDiffFallback'
 import { LargeDiffLoadPrompt } from './LargeDiffLoadPrompt'
+import { buildDiffEditorWhitespaceOptions } from './diff-editor-whitespace-options'
 import { buildDiffEditorWordWrapOptions } from './diff-editor-word-wrap-options'
 import { monacoFindOptions } from './monaco-find-options'
 
@@ -39,6 +40,7 @@ type DiffSectionBodyProps = {
   isEditable: boolean
   diffEditorFontSize: number
   diffWordWrap?: boolean
+  diffShowWhitespace?: boolean
   editorFontFamily?: string
   onCancelComment: () => void
   onSubmitComment: (body: string) => Promise<void>
@@ -65,6 +67,7 @@ export function DiffSectionBody({
   isEditable,
   diffEditorFontSize,
   diffWordWrap,
+  diffShowWhitespace,
   editorFontFamily,
   onCancelComment,
   onSubmitComment,
@@ -204,6 +207,7 @@ export function DiffSectionBody({
             fontFamily: editorFontFamily || 'monospace',
             lineNumbers: 'on',
             ...buildDiffEditorWordWrapOptions(diffWordWrap),
+            ...buildDiffEditorWhitespaceOptions(diffShowWhitespace),
             automaticLayout: true,
             renderOverviewRuler: false,
             scrollbar: combinedDiffSectionScrollbarOptions,

@@ -59,6 +59,7 @@ describe('RuntimeGitSyncCommands admission', () => {
   it('prioritizes local runtime git actions and preserves host routing', async () => {
     const commands = new RuntimeGitSyncCommands({
       resolveRuntimeGitTarget: async () => ({
+        executionHostId: 'local',
         worktree,
         localGitOptions: { wslDistro: 'Ubuntu' }
       }),
@@ -107,7 +108,7 @@ describe('RuntimeGitSyncCommands admission', () => {
     const commands = new RuntimeGitSyncCommands({
       resolveRuntimeGitTarget: async () => ({
         worktree,
-        connectionId: 'conn-1'
+        executionHostId: 'ssh:conn-1'
       }),
       getRuntimeSettings: () => ({}) as GlobalSettings
     })

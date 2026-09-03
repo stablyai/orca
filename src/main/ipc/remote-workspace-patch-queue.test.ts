@@ -77,8 +77,11 @@ describe('remoteWorkspace:setForConnectedTargets patch queue', () => {
   const handlers = new Map<string, (event: unknown, args: unknown) => unknown>()
   const muxByTargetId = new Map<string, { request: ReturnType<typeof vi.fn> }>()
   const getRepoMock = vi.fn<Store['getRepo']>()
+  // Ownership resolution reads the catalog, not one id-keyed row, so the fake has to project one.
+  const KNOWN_REPO_IDS = ['repo-target-1', 'repo-target-2', 'repo-reset', 'repo-newer']
   const store = {
-    getRepo: getRepoMock
+    getRepo: getRepoMock,
+    getRepos: () => KNOWN_REPO_IDS.map((repoId) => getRepoMock(repoId)).filter(Boolean)
   } as unknown as Store
 
   const target: SshTarget = {

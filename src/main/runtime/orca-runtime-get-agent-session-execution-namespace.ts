@@ -11,7 +11,6 @@ import type {
 } from '../../shared/agent-session-host-authority'
 import { canonicalizeAgentSessionIdentity } from './agent-session-claim-identity'
 import { isTuiAgentEnabled } from '../../shared/tui-agent-selection'
-import { repoIsRemote } from '../../shared/agent-launch-remote'
 import { resolveLocalWindowsAgentStartupShell } from '../../shared/windows-terminal-shell'
 import { buildAgentResumeStartupPlan } from '../../shared/tui-agent-startup'
 import {
@@ -123,7 +122,9 @@ export class OrcaRuntimeWithGetAgentSessionExecutionNamespace extends OrcaRuntim
       throw new Error('Selected agent is disabled. Choose an enabled agent before resuming.')
     }
     const platform = this.getAgentLaunchPlatformForWorkspace(workspace)
-    const isRemote = workspace.repo ? repoIsRemote(workspace.repo) : Boolean(workspace.connectionId)
+    // Why: `workspace.repo` is display metadata and may be a row from another host; the launch
+    // shape must match the PTY route this scope already resolved.
+    const isRemote = Boolean(workspace.connectionId)
     const shell = resolveLocalWindowsAgentStartupShell({
       platform,
       isRemote,

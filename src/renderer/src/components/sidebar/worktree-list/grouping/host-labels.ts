@@ -1,11 +1,14 @@
 import type { Repo } from '../../../../../../shared/repo-types'
 import type { Worktree } from '../../../../../../shared/worktree/types'
 import {
-  getExecutionHostLabel,
   getRepoExecutionHostId,
   getWorktreeExecutionHostId
 } from '../../../../../../shared/execution-host'
 import type { ExecutionHostId } from '../../../../../../shared/execution-host'
+import {
+  getHostContextLabel,
+  getMixedHostContextLabels as getSharedMixedHostContextLabels
+} from '../../../../../../shared/worktree/host-context-labels'
 import { getWorktreeHostIdentity } from '../../../../../../shared/worktree/host-qualified-identity'
 import {
   getProjectGroupingForRepo,
@@ -15,7 +18,7 @@ import {
 import { getFolderWorkspaceHostId } from '../../folder-workspace-host-id'
 import type { RenderableFolderWorkspace } from './folder-workspace-lanes'
 
-function getRepoHostId(repoId: string, repoMap: Map<string, Repo>): string | null {
+function getRepoHostId(repoId: string, repoMap: Map<string, Repo>): ExecutionHostId | null {
   const repo = repoMap.get(repoId)
   return repo ? getRepoExecutionHostId(repo) : null
 }
@@ -28,14 +31,14 @@ function getRepoHostLabel(
 ): string | null {
   const setup = projectIndex?.setupByRepoId.get(repoId)
   if (setup) {
-    return hostLabelById?.get(setup.hostId) ?? getExecutionHostLabel(setup.hostId)
+    return getHostContextLabel(setup.hostId, { hostLabelById })
   }
   const repo = repoMap.get(repoId)
   if (!repo) {
     return null
   }
   const hostId = getRepoExecutionHostId(repo)
-  return hostLabelById?.get(hostId) ?? getExecutionHostLabel(hostId)
+  return getHostContextLabel(hostId, { hostLabelById })
 }
 
 export function getMixedHostContextLabels(
@@ -45,16 +48,22 @@ export function getMixedHostContextLabels(
   hostLabelById: ReadonlyMap<string, string> | undefined
 ): Map<string, string> | undefined {
   const labelsByRepoId = new Map<string, string>()
-  const uniqueLabels = new Set<string>()
+  // Host identity, not the rendered label, determines whether rows are ambiguous:
+  // two hosts can intentionally share a user-facing label.
+  const uniqueHostIds = new Set<ExecutionHostId>()
   for (const repoId of group.repoIds) {
     const label = getRepoHostLabel(repoId, repoMap, projectIndex, hostLabelById)
     if (!label) {
       continue
     }
     labelsByRepoId.set(repoId, label)
-    uniqueLabels.add(label)
+    const setup = projectIndex?.setupByRepoId.get(repoId)
+    const hostId = setup?.hostId ?? getRepoHostId(repoId, repoMap)
+    if (hostId) {
+      uniqueHostIds.add(hostId)
+    }
   }
-  return uniqueLabels.size > 1 ? labelsByRepoId : undefined
+  return uniqueHostIds.size > 1 ? labelsByRepoId : undefined
 }
 
 /**
@@ -128,17 +137,12 @@ export function getMixedWorktreeHostContextLabels(
   hostLabelById: ReadonlyMap<string, string> | undefined,
   defaultHostId: ExecutionHostId
 ): Map<string, string> | undefined {
-  const labelsByIdentity = new Map<string, string>()
-  const uniqueHostIds = new Set<ExecutionHostId>()
-  for (const worktree of worktrees) {
-    const hostId = getWorktreeExecutionHostId(worktree, repoMap.get(worktree.repoId), defaultHostId)
-    uniqueHostIds.add(hostId)
-    labelsByIdentity.set(
-      getWorktreeHostIdentity(worktree),
-      hostLabelById?.get(hostId) ?? getExecutionHostLabel(hostId)
-    )
-  }
-  return uniqueHostIds.size > 1 ? labelsByIdentity : undefined
+  return getSharedMixedHostContextLabels(worktrees, {
+    getHostId: (worktree) =>
+      getWorktreeExecutionHostId(worktree, repoMap.get(worktree.repoId), defaultHostId),
+    getIdentity: getWorktreeHostIdentity,
+    sources: { hostLabelById }
+  })
 }
 
 export function getHostWorktreeCounts(

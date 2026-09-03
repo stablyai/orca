@@ -1,0 +1,109 @@
+name: Deploy Relay Staging GCE Candidate
+
+on:
+  workflow_dispatch:
+    inputs:
+      source-cell-id:
+        description: Existing Terraform cell ID to evacuate
+        required: true
+        type: string
+      target-cell-id:
+        description: Distinct Terraform candidate cell ID
+        required: true
+        type: string
+      mode:
+        description: Preflight is read-only; reset repairs an empty candidate; execute evacuates
+        required: true
+        default: preflight
+        type: choice
+        options:
+          - preflight
+          - reset-empty-candidate
+          - execute
+      confirmation:
+        description: Enter RESET_CANDIDATE for reset or EVACUATE for execute
+        required: false
+        type: string
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: relay-staging-mutation
+  cancel-in-progress: false
+
+defaults:
+  run:
+    working-directory: cloud
+
+jobs:
+  candidate:
+    if: ${{ vars.ORCA_CLOUD_OPERATIONS_ENABLED == 'true' }}
+    runs-on: blacksmith-2vcpu-ubuntu-2204
+    environment: staging
+    env:
+      GCP_PROJECT_ID: onorca-cloud-staging
+      DIRECTOR_ORIGIN: https://relay-staging.onorca.dev
+      ADMIN_AUDIENCE: https://relay-staging.onorca.dev/v1/admin/drain
+      SOURCE_CELL_ID: ${{ inputs.source-cell-id }}
+      TARGET_CELL_ID: ${{ inputs.target-cell-id }}
+      DEPLOY_MODE: ${{ inputs.mode }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - id: google-auth
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ vars.STAGING_GCP_RELAY_DEPLOY_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ vars.STAGING_GCP_RELAY_DEPLOY_SERVICE_ACCOUNT }}
+          token_format: id_token
+          id_token_audience: https://relay-staging.onorca.dev/v1/admin/drain
+          id_token_include_email: true
+
+      - uses: google-github-actions/setup-gcloud@v2
+
+      - uses: ./.github/actions/cloud-sql-rollout-lease
+        with:
+          bucket: onorca-cloud-staging-terraform-state
+          object: terraform/state/cloud-sql-rollout/staging.lock
+
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_wrapper: false
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - name: Require explicit mutation confirmation
+        if: ${{ inputs.mode != 'preflight' }}
+        env:
+          CONFIRMATION: ${{ inputs.confirmation }}
+        run: |
+          if [[ "${DEPLOY_MODE}" = "execute" ]]; then
+            test "${CONFIRMATION}" = "EVACUATE"
+          else
+            test "${CONFIRMATION}" = "RESET_CANDIDATE"
+          fi
+
+      - name: Read reviewed Terraform topology
+        run: |
+          node dev/scripts/infra.mjs init --env staging
+          terraform -chdir=infra/terraform output -json relay_gce_cell_deployments > "${RUNNER_TEMP}/relay-gce-topology.json"
+          RUNTIME_SERVICE_ACCOUNT="$(terraform -chdir=infra/terraform output -raw relay_runtime_service_account)"
+          echo "RUNTIME_SERVICE_ACCOUNT=${RUNTIME_SERVICE_ACCOUNT}" >> "${GITHUB_ENV}"
+
+      - name: Preflight or evacuate exact GCE candidate
+        env:
+          ORCA_RELAY_ADMIN_ID_TOKEN: ${{ steps.google-auth.outputs.id_token }}
+        run: |
+          node dev/scripts/deploy-relay-gce-candidate.mjs \
+            --project "${GCP_PROJECT_ID}" \
+            --director-origin "${DIRECTOR_ORIGIN}" \
+            --admin-audience "${ADMIN_AUDIENCE}" \
+            --topology-file "${RUNNER_TEMP}/relay-gce-topology.json" \
+            --source-cell-id "${SOURCE_CELL_ID}" \
+            --target-cell-id "${TARGET_CELL_ID}" \
+            --runtime-service-account "${RUNTIME_SERVICE_ACCOUNT}" \
+            --mode "${DEPLOY_MODE}"

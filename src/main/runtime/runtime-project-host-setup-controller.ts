@@ -13,7 +13,11 @@ import type {
   ProjectUpdateArgs
 } from '../../shared/project-types'
 import type { Repo } from '../../shared/repo-types'
-import { parseExecutionHostId, type ExecutionHostId } from '../../shared/execution-host'
+import {
+  getSshTargetIdForExecutionHost,
+  parseExecutionHostId,
+  type ExecutionHostId
+} from '../../shared/execution-host'
 import { getProjectIdForProviderIdentity } from '../../shared/project-host-setup-projection'
 import { getProjectHostSetupForRepo } from '../../shared/project-host-setup-lookup'
 import { invalidateAuthorizedRootsCache } from '../ipc/filesystem-auth'
@@ -24,18 +28,29 @@ type RuntimeProjectHostSetupDependencies = {
   getStore: () => RuntimeStore | null
   listRepos: () => Repo[]
   addRepo: (path: string, kind: 'folder' | 'git', hostId: ExecutionHostId) => Promise<Repo>
+  /** Register an existing path that lives on an SSH host; `addRepo` only reaches local/runtime hosts. */
+  addRemoteRepo: (args: {
+    connectionId: string
+    remotePath: string
+    displayName?: string
+    kind: 'folder' | 'git'
+  }) => Promise<Repo>
   cloneRepo: (url: string, destination: string, hostId: ExecutionHostId) => Promise<Repo>
   invalidateResolvedWorktrees: () => void
   invalidateWorktreeScan: (repoId: string) => void
   notifyReposChanged: () => void
 }
 
-function assertHostIsSupported(hostId: ExecutionHostId | null | undefined): void {
+// Why clone alone still refuses: nothing in this process clones onto an SSH host. `cloneRepo` runs
+// `git clone` on the client, so accepting `ssh:*` here would register the client's copy as the
+// host's repo — a local answer to a remote question. Registering an existing remote path, by
+// contrast, has a correct implementation this process already uses over IPC.
+function assertCloneHostIsSupported(hostId: ExecutionHostId | null | undefined): void {
   if (parseExecutionHostId(hostId)?.kind !== 'ssh') {
     return
   }
   throw new Error(
-    'SSH hosts are not supported by this operation. Set the project up from the Orca desktop app, which owns the SSH connection.'
+    'Cloning onto an SSH host is not supported. Clone the repository on the host, then set the project up from that existing folder.'
   )
 }
 
@@ -82,18 +97,25 @@ export class RuntimeProjectHostSetupController {
     if (!this.deps.getStore()) {
       throw new Error('runtime_unavailable')
     }
-    assertHostIsSupported(args.hostId)
+    const kind = args.kind === 'folder' ? 'folder' : 'git'
     const knownRepoIds = new Set(this.deps.listRepos().map((repo) => repo.id))
-    const repo = await this.deps.addRepo(
-      args.path,
-      args.kind === 'folder' ? 'folder' : 'git',
-      args.hostId
-    )
+    // Why route rather than refuse: this process owns the SSH connection, and its own IPC handler
+    // already registers `ssh:*` hosts correctly. Refusing here only made the CLI and runtime RPC
+    // disagree with the desktop app about what the same process can do.
+    const sshTargetId = getSshTargetIdForExecutionHost(args.hostId)
+    const repo = sshTargetId
+      ? await this.deps.addRemoteRepo({
+          connectionId: sshTargetId,
+          remotePath: args.path,
+          ...(args.displayName ? { displayName: args.displayName } : {}),
+          kind
+        })
+      : await this.deps.addRepo(args.path, kind, args.hostId)
     return this.completeSetup(args, repo, !knownRepoIds.has(repo.id))
   }
 
   async setupClone(args: ProjectHostSetupCloneArgs): Promise<ProjectHostSetupResult> {
-    assertHostIsSupported(args.hostId)
+    assertCloneHostIsSupported(args.hostId)
     const knownRepoIds = new Set(this.deps.listRepos().map((repo) => repo.id))
     const repo = await this.deps.cloneRepo(args.url, args.destination, args.hostId)
     return this.completeSetup(

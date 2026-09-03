@@ -1,19 +1,26 @@
 // Regression guard: bound the volume of cadence process inspections a visible,
 // idle terminal with NO agent evidence drives on hosts where each inspection is
-// a whole-process-table scan (local Windows forks powershell.exe/CIM — the
-// scan-cost analogue of #6288). Pre-fix a single visible idle shell inspected
-// every 2s forever (~30 scans/min); with the no-evidence tier it inspects every
-// 15s, and pane activity (output/title/hook) or agent evidence re-arms the hot
-// cadence so agent-start detection stays event-driven and agent-finish
-// detection is unchanged.
+// expensive — local Windows forks a powershell.exe/CIM whole-process-table scan
+// (the scan-cost analogue of #6288), and a remote/SSH pane pays a host round
+// trip plus a host-side foreground scan. Pre-fix a single visible idle shell
+// inspected every 2s forever (~30 scans/min); with the no-evidence tier it
+// inspects every 15s, and pane activity (output/title/hook) or agent evidence
+// re-arms the hot cadence so agent-start detection stays event-driven and
+// agent-finish detection is unchanged.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   createAgentCompletionCoordinator,
   resetAgentCompletionCoordinatorIdentitiesForTest
 } from './agent-completion-coordinator'
 import { resetAgentProcessInspectionQueueForTests } from './agent-process-inspection-queue'
+import { isAgentProcessInspectionCostly } from './agent-process-inspection-cost'
+import { toRemoteRuntimePtyId } from '../../../../shared/remote-runtime-pty-id'
+import { toAppSshPtyId } from '../../../../shared/ssh-pty-id'
 import type { RuntimeTerminalProcessInspection } from '@/runtime/runtime-terminal-inspection'
 import type { AgentCompletionCoordinatorOptions } from './agent-completion-coordinator-types'
+
+const MAC_UA = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)'
+const WINDOWS_UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'
 
 function processResult(
   foregroundProcess: string | null,
@@ -67,6 +74,43 @@ describe('agent completion no-evidence inspection cadence', () => {
     expect(inspectProcess).toHaveBeenCalledTimes(4)
   })
 
+  it('bounds a visible idle remote pane through the shipped cost predicate', async () => {
+    // Why: a remote inspection is an RPC round trip to the execution host plus a
+    // host-side foreground scan — the costliest inspection shape here — yet it
+    // was excluded from the no-evidence tier on every client platform.
+    const sshPtyId = toAppSshPtyId('target-1', 'pty-1')
+    const inspectProcess = vi.fn(async () => processResult(null, false))
+    const { coordinator } = createCoordinator(inspectProcess, {
+      getPtyId: () => sshPtyId,
+      isProcessInspectionCostly: () => isAgentProcessInspectionCostly(MAC_UA, sshPtyId)
+    })
+
+    coordinator.startProcessTracking()
+    await vi.advanceTimersByTimeAsync(60_000)
+
+    // 60s / 15s = 4 host round trips. Pre-fix (2s idle cadence) this was 30.
+    expect(inspectProcess).toHaveBeenCalledTimes(4)
+  })
+
+  it('re-arms the remote pane to the 2s cadence on the first byte of PTY output', async () => {
+    // Why: agent-start detection on a remote pane must stay event-driven, not
+    // wait out the relaxed interval.
+    const runtimePtyId = toRemoteRuntimePtyId('term_1', 'env-a')
+    const inspectProcess = vi.fn(async () => processResult(null, false))
+    const { coordinator } = createCoordinator(inspectProcess, {
+      getPtyId: () => runtimePtyId,
+      isProcessInspectionCostly: () => isAgentProcessInspectionCostly(MAC_UA, runtimePtyId)
+    })
+
+    coordinator.startProcessTracking()
+    await vi.advanceTimersByTimeAsync(14_000)
+    expect(inspectProcess).not.toHaveBeenCalled()
+
+    coordinator.observeOutputActivity()
+    await vi.advanceTimersByTimeAsync(2_000)
+    expect(inspectProcess).toHaveBeenCalledTimes(1)
+  })
+
   it('keeps the full 2s idle cadence on hosts where inspection is cheap', async () => {
     const inspectProcess = vi.fn(async () => processResult(null, false))
     const { coordinator } = createCoordinator(inspectProcess, {
@@ -76,7 +120,7 @@ describe('agent completion no-evidence inspection cadence', () => {
     coordinator.startProcessTracking()
     await vi.advanceTimersByTimeAsync(60_000)
 
-    // 60s / 2s = 30: POSIX/SSH/remote panes must not be relaxed.
+    // 60s / 2s = 30: local POSIX panes (cheap `ps`) must not be relaxed.
     expect(inspectProcess).toHaveBeenCalledTimes(30)
   })
 
@@ -273,5 +317,32 @@ describe('agent completion no-evidence inspection cadence', () => {
       quietedHookDone: false,
       terminalIdleConfirmed: true
     })
+  })
+})
+
+describe('isAgentProcessInspectionCostly', () => {
+  it('treats remote-execution-host ptys as costly on every client platform', () => {
+    for (const userAgent of [MAC_UA, WINDOWS_UA]) {
+      expect(isAgentProcessInspectionCostly(userAgent, toAppSshPtyId('target-1', 'pty-1'))).toBe(
+        true
+      )
+      expect(
+        isAgentProcessInspectionCostly(userAgent, toRemoteRuntimePtyId('term_1', 'env-a'))
+      ).toBe(true)
+      expect(isAgentProcessInspectionCostly(userAgent, toRemoteRuntimePtyId('term_1'))).toBe(true)
+    }
+  })
+
+  it('leaves the local branch unchanged: Windows costly, POSIX cheap', () => {
+    expect(isAgentProcessInspectionCostly(WINDOWS_UA, 'worktree-1|pane-1')).toBe(true)
+    expect(isAgentProcessInspectionCostly(WINDOWS_UA, null)).toBe(false)
+    expect(isAgentProcessInspectionCostly(MAC_UA, 'worktree-1|pane-1')).toBe(false)
+    expect(isAgentProcessInspectionCostly(MAC_UA, null)).toBe(false)
+  })
+
+  // Why: a bare "ssh:" id names no connection, so it is not evidence the
+  // inspection crosses a link (see remote-execution-host-pty.test.ts).
+  it('does not relax a POSIX pane for an ssh-prefixed id carrying no relay pty id', () => {
+    expect(isAgentProcessInspectionCostly(MAC_UA, 'ssh:target-1')).toBe(false)
   })
 })

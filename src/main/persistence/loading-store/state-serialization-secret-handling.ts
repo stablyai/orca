@@ -1,4 +1,4 @@
-import { createHash, randomUUID } from 'node:crypto'
+import { randomUUID } from 'node:crypto'
 import type { PersistedState } from '../../../shared/persisted-state-types'
 import { collectFolderWorkspaceDiffComments } from '../../folder-workspace-diff-comments'
 import {
@@ -7,7 +7,13 @@ import {
   type ProtectedSecretRetentionUpdate
 } from '../../protected-secret-persistence'
 import { stripRetiredGlobalSettings } from '../applying-settings/terminal-settings-migrations'
+import { omitDefaultWorktreeMetaFieldsInMap } from '../../../shared/worktree/meta-persisted-defaults'
+import { withoutRedundantPartitionGlobals } from '../../../shared/workspace-session-host-field-ownership'
 
+import {
+  applySecretSentinelSubstitutions,
+  type SecretSentinelSubstitution
+} from './secret-sentinel-substitution'
 import type { StoreRuntimeState } from './store-runtime-state'
 
 type StateSerializationSecretHandlingOperationsRuntime = Pick<
@@ -24,7 +30,7 @@ export class StateSerializationSecretHandlingOperations {
   }
 
   buildStateToSave(): {
-    payload: string
+    payload: Buffer
     stateHash: string
     protectedSecretUpdates: ProtectedSecretRetentionUpdate[]
   } {
@@ -37,7 +43,7 @@ export class StateSerializationSecretHandlingOperations {
     // on deterministic-IV platforms (macOS/legacy-Linux OSCrypt). A per-slot
     // random UUID can't occur anywhere else in the serialized state (the user
     // sets their data before it is minted), so it appears exactly once.
-    const secretSubs: { sentinel: string; blob: string; hashValue: string }[] = []
+    const secretSubs: SecretSentinelSubstitution[] = []
     const protectedSecretUpdates: ProtectedSecretRetentionUpdate[] = []
     let protectedStorageDegraded = false
     const encryptToSentinel = (slot: string, plaintext: string): string => {
@@ -65,6 +71,26 @@ export class StateSerializationSecretHandlingOperations {
     // Why: clone before encrypting secrets so in-memory this.state stays plaintext.
     const stateToSave = {
       ...this.getDurableState(),
+      // Default-valued metadata slots are re-filled at load (normalizeWorktreeLinkedItemMetadata),
+      // so omitting them here is lossless and drops ~12% of the file on a heavy install.
+      worktreeMeta: omitDefaultWorktreeMetaFieldsInMap(this.runtime.state.worktreeMeta),
+      ...(this.runtime.state.worktreeMetaByIdentity !== undefined
+        ? {
+            worktreeMetaByIdentity: omitDefaultWorktreeMetaFieldsInMap(
+              this.runtime.state.worktreeMetaByIdentity
+            )
+          }
+        : {}),
+      // 'local' owns these globals and is the only slice any read takes them from; the load path
+      // re-seeds each partition's default, so writing them per host is pure file weight.
+      ...(this.runtime.state.workspaceSessionsByHostId !== undefined
+        ? {
+            workspaceSessionsByHostId: withoutRedundantPartitionGlobals(
+              this.runtime.state.workspaceSessionsByHostId,
+              this.runtime.state.workspaceSession
+            )
+          }
+        : {}),
       // Why both keys unconditionally: the explicit keys always win over the spread, and
       // JSON.stringify drops the `undefined` value so a note-free profile gains no key on disk.
       // The strip builds a new array here only; this.state records keep their notes in memory.
@@ -105,21 +131,14 @@ export class StateSerializationSecretHandlingOperations {
     // Why compact: ~20% fewer bytes and less serialize time; all readers JSON.parse so formatting is irrelevant.
     // One full-state stringify; secret slots currently hold sentinels.
     const serialized = JSON.stringify(stateToSave)
-    // Substitute each unique sentinel exactly once: ciphertext for the on-disk
-    // payload, a stable normalized value for the guard hash. Function-form
-    // replacement keeps `$` inert; both sides read the sentinel as JSON-escaped
-    // in `serialized`, so each replace is byte-for-byte position-exact.
-    let payload = serialized
-    let hashInput = serialized
-    for (const { sentinel, blob, hashValue } of secretSubs) {
-      const escapedSentinel = JSON.stringify(sentinel).slice(1, -1)
-      payload = payload.replace(escapedSentinel, () => JSON.stringify(blob).slice(1, -1))
-      hashInput = hashInput.replace(escapedSentinel, () => JSON.stringify(hashValue).slice(1, -1))
-    }
-    const stateHash = createHash('sha1')
-      .update(protectedStorageDegraded ? 'safeStorage-degraded\0' : '')
-      .update(hashInput)
-      .digest('hex')
+    // Substitute each unique sentinel: ciphertext for the on-disk payload, a stable normalized
+    // value for the guard hash. One pass builds both, so the multi-MB state is never copied per
+    // sentinel and never encoded twice.
+    const { payload, stateHash } = applySecretSentinelSubstitutions(
+      serialized,
+      secretSubs,
+      protectedStorageDegraded ? 'safeStorage-degraded\0' : ''
+    )
     return { payload, stateHash, protectedSecretUpdates }
   }
 }

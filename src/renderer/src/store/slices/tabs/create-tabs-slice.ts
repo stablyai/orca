@@ -14,7 +14,6 @@ import { createTabsSessionActions } from './tabs-session-actions'
 
 export const createTabsSlice: StateCreator<AppState, [], [], TabsSlice> = (set, get) => ({
   unifiedTabsByWorktree: {},
-  renamingTabId: null,
   groupsByWorktree: {},
   activeGroupIdByWorktree: {},
   layoutByWorktree: {},

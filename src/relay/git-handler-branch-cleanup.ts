@@ -4,7 +4,7 @@ import {
 } from '../shared/git-branch-cleanup'
 import type { GitCapabilityCache } from '../shared/git-capability-cache'
 import type { GitExec } from './git-handler-ops'
-import { parseWorktreeList } from './git-handler-utils'
+import { parseWorktreeList } from '../shared/git-worktree-porcelain-parser'
 
 export async function deleteAlreadyMergedRelayBranchAfterSafeDeleteFailure(
   git: GitExec,

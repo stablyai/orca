@@ -103,22 +103,19 @@ vi.mock('../gitlab/gl-utils', () => ({
     connectionId ? {} : { cwd: repoPath }
 }))
 
-vi.mock('../git/upstream', () => ({
-  getUpstreamStatus: getUpstreamStatusMock
-}))
+vi.mock('../git/upstream', () => ({ getUpstreamStatus: getUpstreamStatusMock }))
 
-vi.mock('../providers/ssh-git-dispatch', () => ({
-  getSshGitProvider: getSshGitProviderMock
-}))
+vi.mock('../providers/ssh-git-dispatch', () => ({ getSshGitProvider: getSshGitProviderMock }))
 
-vi.mock('./hosted-review', () => ({
-  getHostedReviewForBranch: getHostedReviewForBranchMock
-}))
+vi.mock('./hosted-review', () => ({ getHostedReviewForBranch: getHostedReviewForBranchMock }))
 
 import { createHostedReview, getHostedReviewCreationEligibility } from './hosted-review-creation'
 import { baseRefExistsOnRemote } from './hosted-review-creation-git-state'
 
 import { _resetOriginGitHubApiRepositoryCache } from '../github/github-api-repository'
+
+// Every eligibility case below is one local repo at the same path.
+const LOCAL_REPO_ARGS = { executionHostId: 'local' as const, repoPath: '/repo' }
 
 // The origin-repository cache is module-level state; reset it so slugs
 // resolved by one test cannot leak into the next.
@@ -243,7 +240,7 @@ describe('getHostedReviewCreationEligibility', () => {
 
     await expect(
       getHostedReviewCreationEligibility({
-        repoPath: '/repo',
+        ...LOCAL_REPO_ARGS,
         branch: 'main',
         base: 'origin/main',
         hasUncommittedChanges: false,
@@ -271,7 +268,7 @@ describe('getHostedReviewCreationEligibility', () => {
       throw Object.assign(new Error('missing ref'), { code: 1 })
     })
 
-    await expect(baseRefExistsOnRemote('main', '/repo')).resolves.toBe(true)
+    await expect(baseRefExistsOnRemote('main', '/repo', 'local')).resolves.toBe(true)
     expect(gitExecFileAsyncMock.mock.calls.map(([args]) => args)).toContainEqual([
       'show-ref',
       '--verify',
@@ -299,7 +296,7 @@ describe('getHostedReviewCreationEligibility', () => {
         throw Object.assign(new Error('missing ref'), { code: 1 })
       })
 
-      await expect(baseRefExistsOnRemote('main', '/repo')).resolves.toBe(false)
+      await expect(baseRefExistsOnRemote('main', '/repo', 'local')).resolves.toBe(false)
       expect(gitExecFileAsyncMock.mock.calls.map(([args]) => args)).toContainEqual([
         'show-ref',
         '--',
@@ -321,7 +318,7 @@ describe('getHostedReviewCreationEligibility', () => {
       throw Object.assign(new Error('missing ref'), { code: 1 })
     })
 
-    await expect(baseRefExistsOnRemote('orphan/main', '/repo')).resolves.toBe(true)
+    await expect(baseRefExistsOnRemote('orphan/main', '/repo', 'local')).resolves.toBe(true)
     expect(gitExecFileAsyncMock.mock.calls.map(([args]) => args)).toContainEqual([
       'show-ref',
       '--verify',
@@ -343,7 +340,7 @@ describe('getHostedReviewCreationEligibility', () => {
       throw Object.assign(new Error('missing ref'), { code: 1 })
     })
 
-    await expect(baseRefExistsOnRemote('orphan/main', '/repo')).resolves.toBe(false)
+    await expect(baseRefExistsOnRemote('orphan/main', '/repo', 'local')).resolves.toBe(false)
     expect(gitExecFileAsyncMock.mock.calls.map(([args]) => args)).toContainEqual([
       'show-ref',
       '--',
@@ -366,7 +363,7 @@ describe('getHostedReviewCreationEligibility', () => {
       throw new Error(`unexpected git command: ${args.join(' ')}`)
     })
 
-    await expect(baseRefExistsOnRemote('feature/fix', '/repo')).resolves.toBe(true)
+    await expect(baseRefExistsOnRemote('feature/fix', '/repo', 'local')).resolves.toBe(true)
   })
 
   it('finds a unique bare suffix on an unconfigured stale remote', async () => {
@@ -384,7 +381,7 @@ describe('getHostedReviewCreationEligibility', () => {
       throw new Error(`unexpected git command: ${args.join(' ')}`)
     })
 
-    await expect(baseRefExistsOnRemote('main', '/repo')).resolves.toBe(true)
+    await expect(baseRefExistsOnRemote('main', '/repo', 'local')).resolves.toBe(true)
     expect(gitExecFileAsyncMock).toHaveBeenCalledWith(
       ['show-ref', '--', 'main'],
       expect.objectContaining({ maxBuffer: 10 * 1024 * 1024 })
@@ -406,7 +403,7 @@ describe('getHostedReviewCreationEligibility', () => {
       throw new Error(`unexpected git command: ${args.join(' ')}`)
     })
 
-    await expect(baseRefExistsOnRemote('HEAD', '/repo')).resolves.toBe(false)
+    await expect(baseRefExistsOnRemote('HEAD', '/repo', 'local')).resolves.toBe(false)
   })
 
   it('keeps a bare suffix present when stale refs are ambiguous across remotes', async () => {
@@ -425,7 +422,7 @@ describe('getHostedReviewCreationEligibility', () => {
       throw new Error(`unexpected git command: ${args.join(' ')}`)
     })
 
-    await expect(baseRefExistsOnRemote('main', '/repo')).resolves.toBe(true)
+    await expect(baseRefExistsOnRemote('main', '/repo', 'local')).resolves.toBe(true)
     expect(gitExecFileAsyncMock).toHaveBeenCalledWith(
       ['show-ref', '--', 'main'],
       expect.objectContaining({ maxBuffer: 10 * 1024 * 1024 })
@@ -443,7 +440,7 @@ describe('getHostedReviewCreationEligibility', () => {
       throw new Error(`unexpected git command: ${args.join(' ')}`)
     })
 
-    await expect(baseRefExistsOnRemote('main', '/repo')).resolves.toBe(false)
+    await expect(baseRefExistsOnRemote('main', '/repo', 'local')).resolves.toBe(false)
     expect(gitExecFileAsyncMock).toHaveBeenCalledWith(
       ['show-ref', '--', 'main'],
       expect.objectContaining({ maxBuffer: 10 * 1024 * 1024 })
@@ -466,12 +463,12 @@ describe('getHostedReviewCreationEligibility', () => {
         throw new Error(`unexpected git command: ${args.join(' ')}`)
       })
 
-      await expect(baseRefExistsOnRemote('main', '/repo')).resolves.toBe(true)
+      await expect(baseRefExistsOnRemote('main', '/repo', 'local')).resolves.toBe(true)
     }
   )
 
   it('fails closed for malformed base input without invoking Git', async () => {
-    await expect(baseRefExistsOnRemote('main*', '/repo')).resolves.toBe(false)
+    await expect(baseRefExistsOnRemote('main*', '/repo', 'local')).resolves.toBe(false)
     expect(gitExecFileAsyncMock).not.toHaveBeenCalled()
   })
 
@@ -479,7 +476,7 @@ describe('getHostedReviewCreationEligibility', () => {
     getHostedReviewForBranchMock.mockResolvedValue({ number: 7, url: 'https://x/pull/7' })
     await expect(
       getHostedReviewCreationEligibility({
-        repoPath: '/repo',
+        ...LOCAL_REPO_ARGS,
         branch: 'feature/x',
         hasUncommittedChanges: false,
         hasUpstream: true,
@@ -493,7 +490,7 @@ describe('getHostedReviewCreationEligibility', () => {
     getHostedReviewForBranchMock.mockResolvedValue(null)
     await expect(
       getHostedReviewCreationEligibility({
-        repoPath: '/repo',
+        ...LOCAL_REPO_ARGS,
         branch: 'feature/x',
         hasUncommittedChanges: false,
         hasUpstream: true,
@@ -507,7 +504,7 @@ describe('getHostedReviewCreationEligibility', () => {
     getHostedReviewForBranchMock.mockRejectedValue(new Error('ssh: connection refused'))
     await expect(
       getHostedReviewCreationEligibility({
-        repoPath: '/repo',
+        ...LOCAL_REPO_ARGS,
         branch: 'feature/x',
         hasUncommittedChanges: false,
         hasUpstream: false,
@@ -524,7 +521,7 @@ describe('getHostedReviewCreationEligibility', () => {
     getHostedReviewForBranchMock.mockRejectedValue(new Error('gh: could not connect to github.com'))
     await expect(
       getHostedReviewCreationEligibility({
-        repoPath: '/repo',
+        ...LOCAL_REPO_ARGS,
         branch: 'feature/x',
         base: 'origin/main',
         hasUncommittedChanges: false,
@@ -553,12 +550,16 @@ describe('getHostedReviewCreationEligibility', () => {
       return { stdout: 'refs/remotes/origin/main\n', stderr: '' }
     })
 
-    const result = await createHostedReview('/repo', {
-      provider: 'github',
-      base: 'main',
-      head: 'feature/x',
-      title: 'Add feature'
-    })
+    const result = await createHostedReview(
+      '/repo',
+      {
+        provider: 'github',
+        base: 'main',
+        head: 'feature/x',
+        title: 'Add feature'
+      },
+      'local'
+    )
 
     expect(result).toMatchObject({ ok: false, code: 'validation' })
     // The provider create API must never run on an inconclusive lookup.
@@ -570,7 +571,7 @@ describe('getHostedReviewCreationEligibility', () => {
   const stackedArgs = (
     overrides: Partial<Parameters<typeof getHostedReviewCreationEligibility>[0]> = {}
   ): Parameters<typeof getHostedReviewCreationEligibility>[0] => ({
-    repoPath: '/repo',
+    ...LOCAL_REPO_ARGS,
     branch: 'feature/stacked',
     base: 'stacked-parent',
     hasUncommittedChanges: false,
@@ -658,7 +659,7 @@ describe('getHostedReviewCreationEligibility', () => {
   it('blocks dirty tracked GitHub branches before PR creation', async () => {
     await expect(
       getHostedReviewCreationEligibility({
-        repoPath: '/repo',
+        ...LOCAL_REPO_ARGS,
         branch: 'feature/create-pr',
         base: 'main',
         hasUncommittedChanges: true,
@@ -680,7 +681,7 @@ describe('getHostedReviewCreationEligibility', () => {
 
     await expect(
       getHostedReviewCreationEligibility({
-        repoPath: '/repo',
+        ...LOCAL_REPO_ARGS,
         branch: 'feature/create-pr',
         base: 'main',
         hasUncommittedChanges: true,
@@ -710,7 +711,7 @@ describe('getHostedReviewCreationEligibility', () => {
 
     await expect(
       getHostedReviewCreationEligibility({
-        repoPath: '/repo',
+        ...LOCAL_REPO_ARGS,
         branch: 'refs/heads/feature/create-pr',
         base: 'origin/main',
         hasUncommittedChanges: false,
@@ -733,7 +734,7 @@ describe('getHostedReviewCreationEligibility', () => {
     mockGitHubEnterpriseProvider()
 
     const result = await getHostedReviewCreationEligibility({
-      repoPath: '/repo',
+      ...LOCAL_REPO_ARGS,
       branch: 'feature/create-pr',
       base: 'origin/main',
       hasUncommittedChanges: false,
@@ -772,7 +773,7 @@ describe('getHostedReviewCreationEligibility', () => {
     await expect(
       getHostedReviewCreationEligibility({
         repoPath: '/remote/repo',
-        connectionId: 'ssh-1',
+        executionHostId: 'ssh:ssh-1',
         branch: 'feature/create-pr',
         base: 'origin/main',
         hasUncommittedChanges: false,
@@ -789,7 +790,7 @@ describe('getHostedReviewCreationEligibility', () => {
     expect(getProjectSlugMock).toHaveBeenCalledWith('/remote/repo', 'ssh-1')
     expect(getRepoSlugMock).toHaveBeenCalledWith('/remote/repo', 'ssh-1')
     expect(getHostedReviewForBranchMock).toHaveBeenCalledWith(
-      expect.objectContaining({ repoPath: '/remote/repo', connectionId: 'ssh-1' })
+      expect.objectContaining({ repoPath: '/remote/repo', executionHostId: 'ssh:ssh-1' })
     )
     // Why: the base-on-remote probe must run on the SSH host that will execute
     // the provider create, so it flows through the relay exec, not local git.
@@ -803,7 +804,7 @@ describe('getHostedReviewCreationEligibility', () => {
   it('offers push as the next action for authenticated branches with local-only commits', async () => {
     await expect(
       getHostedReviewCreationEligibility({
-        repoPath: '/repo',
+        ...LOCAL_REPO_ARGS,
         branch: 'feature/create-pr',
         base: 'main',
         hasUncommittedChanges: false,
@@ -823,7 +824,7 @@ describe('getHostedReviewCreationEligibility', () => {
 
     await expect(
       getHostedReviewCreationEligibility({
-        repoPath: '/repo',
+        ...LOCAL_REPO_ARGS,
         branch: 'feature/gitlab',
         base: 'main',
         hasUncommittedChanges: false,
@@ -850,7 +851,7 @@ describe('getHostedReviewCreationEligibility', () => {
 
     await expect(
       getHostedReviewCreationEligibility({
-        repoPath: '/repo',
+        ...LOCAL_REPO_ARGS,
         branch: 'feature/azure',
         base: 'main',
         hasUncommittedChanges: false,
@@ -875,7 +876,7 @@ describe('getHostedReviewCreationEligibility', () => {
 
     await expect(
       getHostedReviewCreationEligibility({
-        repoPath: '/repo',
+        ...LOCAL_REPO_ARGS,
         branch: 'feature/gitea',
         base: 'main',
         hasUncommittedChanges: false,

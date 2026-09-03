@@ -75,7 +75,7 @@ describe('RuntimeFileCommands', () => {
     const { commands } = createRuntimeFileCommands({
       resolveRuntimeFileTarget: vi.fn(async () => ({
         worktree: { id: 'wt-1', repoId: 'repo-1', path: '/repo' },
-        connectionId: 'ssh-1'
+        executionHostId: 'ssh:ssh-1'
       }))
     })
 
@@ -96,7 +96,7 @@ describe('RuntimeFileCommands', () => {
         repoId: 'repo-1',
         path: '/repo'
       },
-      connectionId: null
+      executionHostId: 'local'
     }))
     const { commands } = createRuntimeFileCommands({ resolveRuntimeFileTarget })
     const child = createRuntimeSearchChild()
@@ -128,7 +128,7 @@ describe('RuntimeFileCommands', () => {
     async (order) => {
       const resolveRuntimeFileTarget = vi.fn(async () => ({
         worktree: { id: 'wt-1', repoId: 'repo-1', path: '/repo' },
-        connectionId: null
+        executionHostId: 'local'
       }))
       const { commands } = createRuntimeFileCommands({ resolveRuntimeFileTarget })
       const child = createRuntimeSearchChild()
@@ -163,7 +163,7 @@ describe('RuntimeFileCommands', () => {
   it("falls back when a runtime native launcher exits outside ripgrep's contract", async () => {
     const resolveRuntimeFileTarget = vi.fn(async () => ({
       worktree: { id: 'wt-1', repoId: 'repo-1', path: '/repo' },
-      connectionId: null
+      executionHostId: 'local'
     }))
     const { commands } = createRuntimeFileCommands({ resolveRuntimeFileTarget })
     const child = createRuntimeSearchChild()
@@ -191,7 +191,7 @@ describe('RuntimeFileCommands', () => {
         repoId: 'repo-1',
         path: 'C:\\repo'
       },
-      connectionId: null
+      executionHostId: 'local'
     }))
     const { commands, store } = createRuntimeFileCommands({ resolveRuntimeFileTarget })
     const child = createRuntimeSearchChild()
@@ -231,7 +231,7 @@ describe('RuntimeFileCommands', () => {
   it('keeps the runtime WSL preflight and falls back before starting real rg', async () => {
     const resolveRuntimeFileTarget = vi.fn(async () => ({
       worktree: { id: 'wt-1', repoId: 'repo-1', path: 'C:\\repo' },
-      connectionId: null
+      executionHostId: 'local'
     }))
     const { commands } = createRuntimeFileCommands({ resolveRuntimeFileTarget })
     const fallback = { files: [], totalMatches: 0, truncated: false }
@@ -250,7 +250,7 @@ describe('RuntimeFileCommands', () => {
   it('keeps legacy SSH Quick Open replies within the frame-sized result bound', async () => {
     const resolveRuntimeFileTarget = vi.fn(async () => ({
       worktree: { id: 'wt-1', repoId: 'repo-1', path: '/repo' },
-      connectionId: 'ssh-1'
+      executionHostId: 'ssh:ssh-1'
     }))
     const { commands } = createRuntimeFileCommands({ resolveRuntimeFileTarget })
     const listFiles = vi.fn(async () => ['src/target.ts'])

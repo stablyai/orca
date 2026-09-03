@@ -3,6 +3,7 @@ import { captureDescendantSnapshot, type DescendantSnapshot } from '../pty-desce
 import { terminateDescendantSnapshotAndWait } from '../pty-descendant-exit-verification'
 import { terminateWindowsProcessTree } from '../windows-process-tree-kill'
 import { findAgentSessionSpawnTokenProcesses } from '../runtime/agent-session-spawn-token-process-scan'
+import { recordSelfInitiatedTreeKill } from '../crash-reporting/self-initiated-tree-kill-log'
 
 const TOKEN_PROCESS_EXIT_TIMEOUT_MS = 3_500
 const TOKEN_PROCESS_POLL_MS = 25
@@ -17,7 +18,7 @@ export type CodexAppServerProcessTeardownDeps = {
   findSpawnTokenProcesses?: (spawnToken: string) => Promise<number[] | null>
   captureDescendants?: (rootPid: number) => Promise<DescendantSnapshot | null>
   terminateDescendants?: (snapshot: DescendantSnapshot) => Promise<boolean>
-  terminateWindowsTree?: (rootPid: number) => Promise<void>
+  terminateWindowsTree?: (rootPid: number, deps?: { site?: string }) => Promise<void>
   signalPid?: (pid: number, signal: NodeJS.Signals) => void
   signalProcessGroup?: (pgid: number, signal: NodeJS.Signals) => void
   isPidPresent?: (pid: number) => boolean
@@ -34,10 +35,16 @@ function terminateDedicatedPosixGroup(
     ((pgid: number, signal: NodeJS.Signals) => process.kill(-pgid, signal))
   try {
     signalGroup(rootPid, 'SIGKILL')
-    return true
   } catch (error) {
     return (error as NodeJS.ErrnoException).code === 'ESRCH'
   }
+  // Outside the try: that catch is the ESRCH contract, not a breadcrumb handler.
+  recordSelfInitiatedTreeKill({
+    pid: rootPid,
+    site: 'codex-app-server-teardown',
+    scope: 'posix-process-group'
+  })
+  return true
 }
 
 function sendSignal(pid: number, signal: NodeJS.Signals): void {
@@ -129,6 +136,11 @@ async function terminatePosixTree(
         }
       })
     signalGroup(snapshot.rootPgid, 'SIGKILL')
+    recordSelfInitiatedTreeKill({
+      pid: snapshot.rootPgid,
+      site: 'codex-app-server-teardown',
+      scope: 'posix-process-group'
+    })
   }
   if (!descendantsExited) {
     child.kill('SIGCONT')
@@ -151,7 +163,7 @@ async function terminateOnce(
   }
   if ((deps.platform ?? process.platform) === 'win32') {
     const terminate = deps.terminateWindowsTree ?? terminateWindowsProcessTree
-    await terminate(rootPid)
+    await terminate(rootPid, { site: 'codex-app-server-teardown' })
     // taskkill owns the tree; this preserves the prior direct-child fallback when it fails.
     child.kill('SIGKILL')
     return true

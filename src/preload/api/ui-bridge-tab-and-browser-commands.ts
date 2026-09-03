@@ -6,6 +6,7 @@ import type {
   WorktreeSetupLaunch
 } from '../../shared/worktree/launch-types'
 import { browserFindSubscriptions } from '../preload-runtime-support'
+import type { PreloadApi } from '../api-types'
 
 export const uiTabAndBrowserCommandsApi = {
   onRequestTabSetProfile: (
@@ -200,4 +201,4 @@ export const uiTabAndBrowserCommandsApi = {
     ipcRenderer.on('ui:activateWorktree', listener)
     return () => ipcRenderer.removeListener('ui:activateWorktree', listener)
   }
-}
+} satisfies Partial<PreloadApi['ui']>

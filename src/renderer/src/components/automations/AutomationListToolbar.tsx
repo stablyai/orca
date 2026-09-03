@@ -1,5 +1,5 @@
 import React from 'react'
-import { Plus, RefreshCw } from 'lucide-react'
+import { History, Plus, RefreshCw } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { translate } from '@/i18n/i18n'
@@ -25,6 +25,7 @@ type AutomationListToolbarProps = {
   hostEntries: readonly AutomationHostCatalogEntry[]
   onRefresh: () => void
   isRefreshing: boolean
+  onOpenRuns: () => void
   openCreateDialog: (template?: AutomationTemplate) => void
   canCreateAutomation: boolean
 }
@@ -41,6 +42,7 @@ export function AutomationListToolbar({
   hostEntries,
   onRefresh,
   isRefreshing,
+  onOpenRuns,
   openCreateDialog,
   canCreateAutomation
 }: AutomationListToolbarProps): React.JSX.Element {
@@ -88,17 +90,29 @@ export function AutomationListToolbar({
           </TooltipContent>
         </Tooltip>
       </div>
-      <Button
-        type="button"
-        size="sm"
-        className="shrink-0"
-        onClick={() => openCreateDialog()}
-        disabled={!canCreateAutomation}
-        data-contextual-tour-target="automations-create"
-      >
-        <Plus className="size-4" />
-        {translate('auto.components.automations.AutomationsPage.newAutomation', 'New Automation')}
-      </Button>
+      <div className="flex shrink-0 items-center gap-2">
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          onClick={onOpenRuns}
+          data-contextual-tour-target="automations-runs"
+        >
+          <History className="size-4" />
+          {translate('auto.components.automations.AutomationListToolbar.runs', 'Runs')}
+        </Button>
+        <Button
+          type="button"
+          size="sm"
+          className="shrink-0"
+          onClick={() => openCreateDialog()}
+          disabled={!canCreateAutomation}
+          data-contextual-tour-target="automations-create"
+        >
+          <Plus className="size-4" />
+          {translate('auto.components.automations.AutomationsPage.newAutomation', 'New Automation')}
+        </Button>
+      </div>
     </div>
   )
 }

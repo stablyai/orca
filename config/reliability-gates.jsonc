@@ -6141,10 +6141,11 @@
         "https://github.com/stablyai/orca/pull/8706",
         "https://github.com/stablyai/orca/issues/14524"
       ],
-      "invariant": "Close permanently removes the owned provider session, agent descendants, persisted tab/layout authority, and resume authority even when no TerminalPane is mounted; final-pane CLI close commits durable tab retirement before PTY stop can publish graph loss, does not acknowledge before that retirement, and treats the later exit retirement as idempotent. A persisted explicit-empty state prevents initial-tab fallback from repopulating the workspace after reload or restart. A handle remains valid while the same provider-attested PTY incarnation survives renderer reload or re-key, and becomes stale without adopting a replacement incarnation. A terminating id remains reserved through natural exit, duplicate callers await the same completion, and immediate teardown upgrades any graceful request without signalling a recycled PID or a descendant tree after root ownership is lost; process-table work is locale-stable, bounded, fresh for each post-start request, same-turn coalesced, and begins within the requesting caller's deadline, including bulk worktree cleanup; detach and park preserve ownership; aliases prevent a detached agent's immutable physical pane key from being retired with its former tab.",
-      "oracle": "Capture exact tab, pane, PTY, handle, incarnation, and persisted layout identities. Final-pane terminal.close must invoke one durability-acknowledged tab retirement before exact PTY teardown; controlled PTY exit and graph removal afterward must remain idempotent, omit the target from persistence and provider inventory, and leave an unrelated canary handle live. The ordinary path stays pending until the persisted row is removed and never falls back to the fire-and-forget pane event; reload/restart must keep the explicitly emptied worktree at zero terminal tabs and provider sessions. Reloading the renderer with the same tab/pane/PTY/incarnation must keep the handle readable; changing only the incarnation behind the same PTY id, losing the authoritative graph, or superseding the renderer handle with a preallocated handle must reject the old handle with terminal_handle_stale. Parked-close tests prove the exact PTY disappears; descendant/process tests keep natural exits reserved, upgrade teardown safely, bound/coalesce process-table work, and protect recycled identities.",
+      "invariant": "Close permanently removes the owned provider session, agent descendants, persisted tab/layout authority, and resume authority even when no TerminalPane is mounted; final-pane CLI close commits durable tab retirement before PTY stop can publish graph loss, does not acknowledge before that retirement, and treats the later exit retirement as idempotent. Workspace-wide CLI close applies that same durable contract to every terminal in exactly one worktree, including pinned and persisted-only surfaces, without touching sibling-worktree PTYs or resume records. A persisted explicit-empty state prevents initial-tab fallback from repopulating the workspace after reload or restart. A handle remains valid while the same provider-attested PTY incarnation survives renderer reload or re-key, and becomes stale without adopting a replacement incarnation. A terminating id remains reserved through natural exit, duplicate callers await the same completion, and immediate teardown upgrades any graceful request without signalling a recycled PID or a descendant tree after root ownership is lost; process-table work is locale-stable, bounded, fresh for each post-start request, same-turn coalesced, and begins within the requesting caller's deadline, including bulk worktree cleanup; detach and park preserve ownership; aliases prevent a detached agent's immutable physical pane key from being retired with its former tab.",
+      "oracle": "Capture exact tab, pane, PTY, handle, incarnation, and persisted layout identities. Final-pane terminal.close must invoke one durability-acknowledged tab retirement before exact PTY teardown; controlled PTY exit and graph removal afterward must remain idempotent, omit the target from persistence and provider inventory, and leave an unrelated canary handle live. terminal.closeAll must force-retire every pinned and unpinned target surface, clear its persisted agent-resume and incarnation records, await authoritative PTY exit, preserve a sibling worktree's tab, PTY, and resume authority, and return an unverifiable failure instead of claiming exit when the owning host does not confirm a stop. The ordinary path stays pending until the persisted row is removed and never falls back to the fire-and-forget pane event; reload/restart must keep the explicitly emptied worktree at zero terminal tabs and provider sessions. Reloading the renderer with the same tab/pane/PTY/incarnation must keep the handle readable; changing only the incarnation behind the same PTY id, losing the authoritative graph, or superseding the renderer handle with a preallocated handle must reject the old handle with terminal_handle_stale. Parked-close tests prove the exact PTY disappears; descendant/process tests keep natural exits reserved, upgrade teardown safely, bound/coalesce process-table work, and protect recycled identities.",
       "commands": [
         "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/orca-runtime-terminal-close-continuity.test.ts",
+        "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/orca-runtime.test.ts",
         "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/terminal/initial-terminal.test.ts src/renderer/src/lib/worktree-activation-default-tabs.test.ts src/renderer/src/store/slices/terminals-explicit-empty-hydration.test.ts",
         "pnpm dlx node@24 ./node_modules/vitest/vitest.mjs run --config config/vitest.config.ts src/main/agent-hooks/server-pane-authority.test.ts src/main/ipc/agent-hooks.test.ts src/main/ipc/agent-pane-authority-ownership.test.ts src/main/ipc/pty-management.test.ts src/main/persistence-initial-load.test.ts src/main/persistence-pane-identity-migration.test.ts src/main/persistence-pty-binding-reconciliation.test.ts src/renderer/src/store/slices/agent-pane-authority.test.ts src/renderer/src/store/slices/terminal-pane-detach-agent-identity.test.ts src/renderer/src/store/slices/terminal-tab-retirement.test.ts src/renderer/src/store/slices/terminal-tab-retirement-store.test.ts tests/e2e/completed-worker-retirement-resume.unit.test.ts src/renderer/src/components/shared/kill-all-terminal-surfaces.test.ts",
         "pnpm exec vitest run --config config/vitest.config.ts src/main/pty-descendant-termination.test.ts src/main/daemon/session.test.ts src/main/daemon/terminal-host.test.ts src/main/providers/local-pty-provider-shutdown.test.ts src/main/runtime/worktree-teardown.test.ts",
@@ -6156,6 +6157,7 @@
       ],
       "testFiles": [
         "src/main/runtime/orca-runtime-terminal-close-continuity.test.ts",
+        "src/main/runtime/orca-runtime.test.ts",
         "src/renderer/src/components/terminal/initial-terminal.test.ts",
         "src/renderer/src/lib/worktree-activation-default-tabs.test.ts",
         "src/renderer/src/store/slices/terminals-explicit-empty-hydration.test.ts",
@@ -6184,6 +6186,12 @@
         "tests/e2e/headless-serve-cli-terminal-retention-parity.spec.ts"
       ],
       "assertionRefs": [
+        {
+          "file": "src/main/runtime/orca-runtime.test.ts",
+          "assertions": [
+            "workspace-wide close force-retires pinned and unpinned tabs, clears resume/incarnation state, awaits both target PTYs, preserves the sibling worktree, and reports an unconfirmed stop as unverifiable"
+          ]
+        },
         {
           "file": "src/main/runtime/orca-runtime-terminal-close-continuity.test.ts",
           "assertions": [
@@ -13864,6 +13872,90 @@
       "demotionRule": "Cannot promote if the oracle is screenshot-only or environment-skipped."
     },
     {
+      "id": "terminal-render.foreground-repair-span",
+      "title": "A forced foreground repaint covers every row the write changed",
+      "maturity": "experimental",
+      "protection": "partial",
+      "owner": "terminal-rendering",
+      "layer": "renderer-unit",
+      "surfaces": [
+        "foreground PTY output",
+        "in-place agent redraws",
+        "erase-in-line/display",
+        "alternate screen",
+        "scroll",
+        "wide glyphs"
+      ],
+      "platforms": ["macos", "linux", "windows"],
+      "providers": ["local", "daemon", "ssh", "remote-runtime"],
+      "coveredPlatforms": ["macos"],
+      "coveredProviders": [],
+      "coverageNotes": "Renderer-unit convergence corpus over a real xterm parser, plus manual CDP pixel evidence on the macOS WebGL renderer. The repaint span is provider-independent because it is computed from xterm's parse, not from the transport; SSH/WSL/remote were not exercised live.",
+      "motivatingLinks": [
+        "https://github.com/stablyai/orca/pull/2669",
+        "https://github.com/stablyai/orca/pull/4669",
+        "https://github.com/stablyai/orca/pull/8178"
+      ],
+      "invariant": "The row span Orca asks xterm to repaint after a forced foreground refresh must cover every viewport row whose rendered content changed during that write, plus the cursor row before and after it; when the span cannot be established — unobservable parse, viewport scroll, or a normal/alternate buffer flip — the whole viewport must be repainted.",
+      "oracle": "A real @xterm/headless parser replays an adversarial corpus (in-place bottom-row redraws, standalone CR overwrite, backspace, erase-in-line, erase-in-display above and below the cursor, full clear, wide CJK, emoji, combining marks, ZWJ sequences, scroll-region insert/delete, reverse index, DEC 2026 frames, alternate-screen enter and exit, viewport scroll, narrow panes). Each viewport row is serialized cell-by-cell with its attributes before and after the write, and every row that differs must fall inside the span the settle path requested. A vacuity guard asserts each case actually moves the screen.",
+      "commands": [
+        "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/lib/pane-manager/terminal-foreground-repair-convergence.test.ts"
+      ],
+      "testFiles": [
+        "src/renderer/src/lib/pane-manager/terminal-foreground-repair-convergence.test.ts"
+      ],
+      "assertionRefs": [
+        {
+          "file": "src/renderer/src/lib/pane-manager/terminal-foreground-repair-convergence.test.ts",
+          "assertions": [
+            "every viewport row whose serialized cells changed lies inside the requested repaint span",
+            "the cursor row before and after the write is inside the requested repaint span",
+            "viewport scroll and alternate-screen transitions still request the whole grid",
+            "an unobservable parse span falls back to the whole grid",
+            "an in-place bottom-row redraw narrows well below the full grid"
+          ]
+        }
+      ],
+      "evidenceRuns": [
+        {
+          "date": "2026-09-02",
+          "runner": "local",
+          "platform": "macos",
+          "result": "passed",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/lib/pane-manager/terminal-foreground-repair-convergence.test.ts",
+          "durationSeconds": 1,
+          "summary": "25 cases passed against a real xterm parser; paired CDP run on a 4-pane macOS WebGL dev build produced screenshots byte-identical to a forced full model rebuild."
+        }
+      ],
+      "runtimeBudget": {
+        "p95Seconds": 15,
+        "scope": "Renderer-unit convergence corpus"
+      },
+      "flakeHistory": {
+        "status": "not-started",
+        "evidence": "New deterministic gate; no soak history yet."
+      },
+      "redGreenEvidence": {
+        "status": "complete",
+        "evidence": "Narrowing the span to the cursor rows alone (dropping xterm's parse span) fails the claude-style in-place redraw and erase-in-display-above cases; reading buffer indices instead of viewport rows made the corpus vacuous and is now blocked by the changed-row guard."
+      },
+      "performanceBudget": {
+        "required": true,
+        "evidence": "Measured on a focused, visible 4-pane macOS dev build under an agent-style in-place redraw load: rendered cells/s 157,708 -> 30,139 and forEachDecorationAtCell 320,868/s -> 60,652/s with render frames/s unchanged (59.8 -> 60.5)."
+      },
+      "promotionCriteria": [
+        "Add Windows DOM-renderer coverage for the synchronous repair branch.",
+        "Wire pixel or cell evidence for the alternate-screen and reflow paths into CI rather than manual CDP runs.",
+        "Keep a full-grid fallback assertion for every new span-narrowing condition."
+      ],
+      "knownGaps": [
+        "No CI-wired pixel oracle; WebGL convergence evidence was collected manually over CDP.",
+        "Windows ConPTY synchronous repair path is covered only by the shared corpus, not on a Windows runner.",
+        "SSH/WSL/remote providers were not exercised live; the span is transport-independent by construction."
+      ],
+      "demotionRule": "Demote or block if a narrowing condition is added without a matching convergence case, if the corpus stops asserting that each case changes at least one row, or if a repaint regression is reported for in-place agent redraws."
+    },
+    {
       "id": "terminal-shell.windows-resolution-parity",
       "title": "Windows local and daemon providers resolve shells and startup commands consistently",
       "maturity": "experimental",
@@ -16701,16 +16793,17 @@
       "providers": ["local-daemon"],
       "coveredPlatforms": ["linux"],
       "coveredProviders": ["local-daemon"],
-      "coverageNotes": "An Ubuntu 26.04 amd64 container extracts the packaged AppImage into disposable HOME and XDG directories, leaves APPDIR unset to preserve extracted-AppRun direct serve mode, waits for structured serve readiness, then exercises terminal-style foreground-process-group SIGINT and the documented systemd KillMode=mixed main-PID SIGTERM in separate containers. Local evidence runs under Rosetta on an arm64 Docker host; native amd64 PR CI repeats the same foreground AppRun identity contract.",
+      "coverageNotes": "An Ubuntu 26.04 amd64 container first launches the original AppImage through dbus-run-session and xvfb-run with startup diagnostics, then extracts the packaged AppImage into disposable HOME and XDG directories, leaves APPDIR unset to preserve extracted-AppRun direct serve mode, waits for structured serve readiness, and exercises terminal-style foreground-process-group SIGINT plus the documented systemd KillMode=mixed main-PID SIGTERM in separate containers. Local evidence runs under Rosetta on an arm64 Docker host; native amd64 PR CI repeats the same startup and foreground-AppRun identity contracts.",
       "motivatingLinks": [
         "https://github.com/stablyai/orca/issues/14109",
         "https://linear.app/stably/issue/STA-4051"
       ],
       "invariant": "After packaged foreground headless serve publishes structured readiness, one SIGINT or SIGTERM exits successfully without an Electron fatal trap or core evidence, releases the exact listener and owned Xvfb/process tree, and leaves an unrelated process identity untouched.",
-      "oracle": "For each signal, start a fresh unprivileged Ubuntu 26.04 container with disposable profile and runtime directories, a random loopback port, DISPLAY unset, software GL, and the extracted AppImage in a fresh session. Wait for orca_server_ready schema version 1, record the listener owner, process tree, owned Xvfb, and unrelated canary identities, deliver SIGINT to the foreground process group or the documented KillMode=mixed graceful SIGTERM to the AppRun PID, then require wait status zero, no Failed to shutdown, SIGTRAP, core, listener, recorded descendant, profile/AppImage/Xvfb residue, or changed canary identity. The 30-second bounds are failure deadlines, never success conditions.",
+      "oracle": "First start the original, readable-and-executable AppImage once in a fresh restricted Ubuntu 26.04 container through dbus-run-session -- xvfb-run -a --appimage-extract-and-run with ORCA_STARTUP_DIAGNOSTICS=1, and require the exact updater-setup-done marker within 90 seconds while fencing the launcher and owned Xvfb by PID start ticks. For each signal, start a separate unprivileged container with disposable profile and runtime directories, a random loopback port, DISPLAY unset, software GL, and the extracted AppImage in a fresh session. Wait for orca_server_ready schema version 1, record the listener owner, process tree, owned Xvfb, and unrelated canary identities, deliver SIGINT to the foreground process group or the documented KillMode=mixed graceful SIGTERM to the AppRun PID, then require wait status zero, no Failed to shutdown, SIGTRAP, core, listener, recorded descendant, profile/AppImage/Xvfb residue, or changed canary identity. The 30-second bounds are failure deadlines, never success conditions.",
       "commands": [
         "pnpm exec vitest run --config config/vitest.config.ts src/main/startup/ensure-virtual-display.test.ts config/scripts/headless-serve-shutdown-workflow.test.mjs --reporter=dot",
         "shellcheck config/docker/headless-serve-shutdown/run-signal-case.sh",
+        "shellcheck config/docker/headless-serve-shutdown/run-appimage-desktop-startup-case.sh",
         "node config/scripts/run-headless-serve-shutdown-docker.mjs --appimage dist/orca-linux.AppImage",
         "node config/scripts/run-headless-serve-shutdown-docker.mjs --appimage dist/orca-linux.AppImage --platform linux/amd64"
       ],
@@ -16718,7 +16811,8 @@
         "src/main/startup/ensure-virtual-display.test.ts",
         "config/scripts/headless-serve-shutdown-workflow.test.mjs",
         "config/scripts/run-headless-serve-shutdown-docker.mjs",
-        "config/docker/headless-serve-shutdown/run-signal-case.sh"
+        "config/docker/headless-serve-shutdown/run-signal-case.sh",
+        "config/docker/headless-serve-shutdown/run-appimage-desktop-startup-case.sh"
       ],
       "assertionRefs": [
         {
@@ -16735,15 +16829,19 @@
           "file": "config/scripts/headless-serve-shutdown-workflow.test.mjs",
           "assertions": [
             "PR CI builds an x64 AppImage before invoking the packaged shutdown oracle",
+            "the original AppImage desktop startup oracle is wired before extraction and signal cases",
+            "the bound AppImage is readable and executable before desktop launch and extraction",
             "the documented systemd unit uses KillMode=mixed so graceful TERM targets Orca before its owned Xvfb"
           ]
         },
         {
           "file": "config/scripts/run-headless-serve-shutdown-docker.mjs",
           "assertions": [
+            "the original AppImage startup runs through dbus-run-session and xvfb-run with a bounded diagnostics marker",
             "SIGINT and SIGTERM run in separate disposable containers",
             "both signal failures are reported before the oracle exits",
             "the exact AppImage SHA-256, entrypoint, and signal target are published",
+            "the read-only AppImage bind is checked for read and execute permissions before extraction",
             "the launcher exec overlay isolates the related STA-4017 signal boundary"
           ]
         },
@@ -16753,6 +16851,14 @@
             "SIGINT reaches the isolated foreground process group while owned Xvfb stays in its own group",
             "SIGTERM reaches the exact AppRun PID under the documented systemd KillMode=mixed policy",
             "target and descendant identities are fenced by PID start ticks before signaling and residue checks"
+          ]
+        },
+        {
+          "file": "config/docker/headless-serve-shutdown/run-appimage-desktop-startup-case.sh",
+          "assertions": [
+            "the original AppImage emits the exact updater-setup-done startup marker within 90 seconds",
+            "launcher and owned Xvfb identities are fenced by PID start ticks",
+            "cleanup sends bounded TERM then KILL signals and preserves failure logs"
           ]
         }
       ],
@@ -16774,11 +16880,20 @@
           "result": "passed",
           "durationSeconds": 48,
           "summary": "The extracted candidate AppRun passed process-group SIGINT and systemd-mixed main-PID SIGTERM under Ubuntu 26.04 amd64 emulation with status zero, no fatal evidence, full listener/Xvfb/tree cleanup, and an unchanged canary identity."
+        },
+        {
+          "date": "2026-08-31",
+          "runner": "ci",
+          "platform": "linux",
+          "command": "node config/scripts/run-headless-serve-shutdown-docker.mjs --appimage dist/orca-linux.AppImage --platform linux/amd64",
+          "result": "passed",
+          "durationSeconds": 1336,
+          "summary": "Native-amd64 PR package job https://github.com/stablyai/orca/actions/runs/33360129768/job/99389831915 built AppImage SHA-256 999d43bfe123e87a77fe917a5f46be1efd5c45a5205f99f02998a75136d8a793 and ran the restricted original-AppImage startup oracle before each of the three signal matrices. Each startup reached the exact updater-setup-done marker with stable launcher/Xvfb PID-start-tick identities and bounded TERM/KILL cleanup; SIGINT and SIGTERM then returned wait status 0 with no fatal evidence, listener, descendant, Xvfb, or canary residue. This is CI evidence only; no fresh local Docker oracle is claimed."
         }
       ],
       "runtimeBudget": {
-        "p95Seconds": 240,
-        "scope": "two fresh Ubuntu 26.04 containers, one per foreground signal"
+        "p95Seconds": 1800,
+        "scope": "three AppImage startup/extraction matrices, each with fresh Ubuntu 26.04 INT and TERM containers"
       },
       "flakeHistory": {
         "status": "not-started",
@@ -16804,6 +16919,105 @@
         "The harness exercises foreground headless Linux shutdown and does not replace desktop, updater, SSH, or detached PTY lifecycle coverage."
       ],
       "demotionRule": "Keep experimental or demote if either signal traps, returns nonzero, retains its listener/Xvfb/run-owned process identity, touches the unrelated canary, or the focused gate flakes without an identified product or harness defect."
+    },
+    {
+      "id": "runtime.linux-cli-launch-contract",
+      "title": "Packaged Linux CLI commands run without FUSE, user namespaces, or a display",
+      "maturity": "experimental",
+      "protection": "partial",
+      "owner": "runtime-platform",
+      "layer": "appimage-cli-entrypoint",
+      "surfaces": [
+        "packaged Linux AppImage",
+        "bundled CLI launcher",
+        "extracted direct binary",
+        "desktop launch diagnosis"
+      ],
+      "platforms": ["linux"],
+      "providers": ["local-daemon"],
+      "coveredPlatforms": ["linux"],
+      "coveredProviders": ["local-daemon"],
+      "coverageNotes": "A restricted Ubuntu container stages the extracted AppImage payload with no /dev/fuse and with unprivileged user namespaces denied, then runs eight CLI cases across the bundled launcher and the extracted direct binary. x64 only, because PR CI builds only --x64.",
+      "motivatingLinks": [
+        "https://github.com/stablyai/orca/issues/13719",
+        "https://github.com/stablyai/orca/issues/14229"
+      ],
+      "invariant": "On a host without FUSE and without unprivileged user namespaces, every packaged CLI entrypoint either completes its command or reports a diagnosis, and never terminates on a signal.",
+      "oracle": "Build the image, stage the AppImage payload, and run each case in the restricted container. Assert the preconditions first: unshare -Ur must fail and /dev/fuse must be absent, so a relaxed runner fails the job rather than silently skipping. For each case require the exact expected exit status and an expected substring of the command's own output, with the harness RESULT/CRASHED/PRECONDITION_FAILED control lines excluded so a case name can never satisfy its own assertion. Any status of 128 or above is a crash and fails immediately. The per-case timeout is a failure deadline, never a success condition.",
+      "commands": [
+        "node config/scripts/run-linux-cli-launch-contract-docker.mjs --appimage dist/orca-linux.AppImage",
+        "shellcheck config/docker/cli-launch-contract/run-cli-case.sh"
+      ],
+      "testFiles": [
+        "config/scripts/run-linux-cli-launch-contract-docker.mjs",
+        "config/docker/cli-launch-contract/run-cli-case.sh"
+      ],
+      "assertionRefs": [
+        {
+          "file": "config/scripts/run-linux-cli-launch-contract-docker.mjs",
+          "assertions": [
+            "the bundled launcher serves --help, --version, status, skills --help, and worktree list without Chromium",
+            "a direct binary launch reaching JavaScript runs the command instead of booting a GUI",
+            "a desktop launch with no display reports the missing-display diagnosis instead of trapping",
+            "a stale DISPLAY is diagnosed rather than trusted",
+            "expected output is matched against the command's own output, not the harness control lines"
+          ]
+        },
+        {
+          "file": "config/docker/cli-launch-contract/run-cli-case.sh",
+          "assertions": [
+            "the container refuses to run unless unprivileged user namespaces are denied and /dev/fuse is absent",
+            "an exit status of 128 or above is reported as a crash rather than compared to the expected status"
+          ]
+        }
+      ],
+      "evidenceRuns": [
+        {
+          "date": "2026-08-31",
+          "runner": "ci",
+          "platform": "linux",
+          "command": "node config/scripts/run-linux-cli-launch-contract-docker.mjs --appimage dist/orca-linux.AppImage",
+          "result": "passed",
+          "durationSeconds": 40,
+          "summary": "PR package job https://github.com/stablyai/orca/actions/runs/33360129768/job/99389831915 ran all eight cases to ok on ubuntu-latest. The unshare and /dev/fuse preconditions held under moby's default seccomp profile rather than tripping."
+        },
+        {
+          "date": "2026-09-01",
+          "runner": "local",
+          "platform": "linux",
+          "command": "node config/scripts/run-linux-cli-launch-contract-docker.mjs --appimage dist/orca-linux.AppImage",
+          "result": "passed",
+          "durationSeconds": 60,
+          "summary": "All eight cases passed on Ubuntu 24.04 amd64 hardware against an AppImage built from the stack tip, invoked against a copy of that artifact outside dist/."
+        }
+      ],
+      "runtimeBudget": {
+        "p95Seconds": 300,
+        "scope": "eight CLI launch cases in one restricted Ubuntu container"
+      },
+      "flakeHistory": {
+        "status": "not-started",
+        "evidence": "The harness is new; soak history is not yet available."
+      },
+      "redGreenEvidence": {
+        "status": "complete",
+        "evidence": "The same harness run against a stock release AppImage failed four of eight cases: nofuse-userns-bundled-version at status 93, and all three direct-binary cases crashed at status 133 (SIGTRAP, the uv_close abort of #13719 and #14229). The stack-tip AppImage passed all eight. Corroborated at artifact level: the stack-tip runtime is a static-pie ELF with no PT_INTERP, the stock runtime is dynamically linked. Caveat: the two skills cases previously asserted a substring that the harness's own RESULT line contained, so they passed independently of command output; both now assert the rendered help header, and the green runs above predate that change."
+      },
+      "performanceBudget": {
+        "required": false,
+        "evidence": "The gate is CI-only and adds no product code path."
+      },
+      "promotionCriteria": [
+        "Collect 30 consecutive CI passes or 14 days without an unexplained flake.",
+        "Extend the matrix to arm64 once PR CI builds that architecture.",
+        "Re-run red/green against a stock AppImage after any change to the launcher entrypoint."
+      ],
+      "knownGaps": [
+        "The preconditions depend on moby's default seccomp profile denying unshare(CLONE_NEWUSER) and on /dev/fuse being absent. A runner with a relaxed profile or a mounted /dev/fuse trips PRECONDITION_FAILED and fails the job rather than skipping.",
+        "x64 only: PR CI builds only --x64, so the arm64 launcher path is unexercised.",
+        "The harness covers CLI entrypoints only; it does not exercise a full desktop session."
+      ],
+      "demotionRule": "Keep experimental or demote if any case terminates on a signal, the preconditions stop holding on the CI runner, or an assertion can be satisfied by anything other than the command's own output."
     },
     {
       "id": "ssh-managed-hooks.node18-runtime-compatibility",

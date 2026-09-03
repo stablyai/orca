@@ -31,6 +31,7 @@
     "../src/main/wsl-distro-retry.ts",
     "../src/main/wsl-running-distro-cache.ts",
     "../src/main/wsl.ts",
+    "../src/main/wsl-interop-spawn-directory.ts",
     "../src/main/persistence/applying-settings/ui-state-read.ts",
     "../src/main/persistence/applying-settings/ui-state-update.ts",
     "../src/main/persistence/applying-settings/ui-selection-normalization.ts",

@@ -1,0 +1,331 @@
+name: Operate Relay Production Rehome Job
+
+on:
+  workflow_call:
+    inputs:
+      mode: { required: true, type: string }
+      director-image-digest: { required: true, type: string }
+      rollback-image-digest: { required: true, type: string }
+      expected-selector-generation: { required: true, type: string }
+      expected-existing-only-cells: { required: true, type: string }
+      expected-migration-only-cells: { required: true, type: string }
+      expected-general-cells: { required: true, type: string }
+      expected-control-generation: { required: true, type: string }
+      not-before: { required: true, type: string }
+      rate-per-minute: { required: true, type: string }
+      preference-max-age-ms: { required: true, type: string }
+      drain-grace-ms: { required: true, type: string }
+      confirmation: { required: true, type: string }
+      monitor-run-id: { required: true, type: string }
+      monitor-run-attempt: { required: true, type: string }
+
+permissions:
+  actions: read
+  contents: read
+  id-token: write
+
+defaults:
+  run:
+    # `shell: bash` adds pipefail; without it `node ... | tee` reports tee's exit code and a
+    # thrown inspect/apply passed green (Aug 28-29 and Sep 3 2026 runs).
+    shell: bash
+    working-directory: cloud
+
+jobs:
+  control:
+    if: ${{ github.ref == 'refs/heads/main' }}
+    runs-on: blacksmith-2vcpu-ubuntu-2204
+    timeout-minutes: 30
+    environment: production
+    env:
+      GCP_PROJECT_ID: onorca-cloud
+      GCP_REGION: ${{ vars.PRODUCTION_GCP_REGION }}
+      DIRECTOR_SERVICE: orca-cloud-relay
+      DIRECTOR_ORIGIN: https://relay.onorca.dev
+      REHOME_AUDIENCE: https://relay.onorca.dev/v1/admin/host-drain
+      MODE: ${{ inputs.mode }}
+      DIRECTOR_IMAGE_DIGEST: ${{ inputs.director-image-digest }}
+      ROLLBACK_IMAGE_DIGEST: ${{ inputs.rollback-image-digest }}
+      EXPECTED_SELECTOR_GENERATION: ${{ inputs.expected-selector-generation }}
+      EXPECTED_EXISTING_ONLY_CELLS: ${{ inputs.expected-existing-only-cells }}
+      EXPECTED_MIGRATION_ONLY_CELLS: ${{ inputs.expected-migration-only-cells }}
+      EXPECTED_GENERAL_CELLS: ${{ inputs.expected-general-cells }}
+      EXPECTED_CONTROL_GENERATION: ${{ inputs.expected-control-generation }}
+      NOT_BEFORE: ${{ inputs.not-before }}
+      RATE_PER_MINUTE: ${{ inputs.rate-per-minute }}
+      PREFERENCE_MAX_AGE_MS: ${{ inputs.preference-max-age-ms }}
+      DRAIN_GRACE_MS: ${{ inputs.drain-grace-ms }}
+      CONFIRMATION: ${{ inputs.confirmation }}
+      MONITOR_RUN_ID: ${{ inputs.monitor-run-id }}
+      MONITOR_RUN_ATTEMPT: ${{ inputs.monitor-run-attempt }}
+      OUTPUT_DIRECTORY: ${{ github.workspace }}/relay-monitor-evidence
+    steps:
+      - name: Require exact reusable-workflow configuration
+        working-directory: .
+        env:
+          DEPLOY_WIF: ${{ vars.PRODUCTION_GCP_RELAY_DEPLOY_WORKLOAD_IDENTITY_PROVIDER }}
+          DEPLOY_SERVICE_ACCOUNT: ${{ vars.PRODUCTION_GCP_RELAY_DEPLOY_SERVICE_ACCOUNT }}
+          DIRECTOR_RUNTIME_SERVICE_ACCOUNT: ${{ vars.PRODUCTION_GCP_RELAY_DIRECTOR_RUNTIME_SERVICE_ACCOUNT }}
+        run: |
+          [[ "${MODE}" =~ ^(inspect|enable|pause|disable)$ ]]
+          [[ "${EXPECTED_SELECTOR_GENERATION}" =~ ^(0|[1-9][0-9]*)$ ]]
+          [[ "${EXPECTED_CONTROL_GENERATION}" =~ ^(0|[1-9][0-9]*)$ ]]
+          test -n "${DEPLOY_WIF}"
+          test -n "${DEPLOY_SERVICE_ACCOUNT}"
+          if [[ "${MODE}" =~ ^(inspect|enable)$ ]]; then
+            [[ "${DIRECTOR_IMAGE_DIGEST}" =~ ^sha256:[a-f0-9]{64}$ ]]
+            [[ "${ROLLBACK_IMAGE_DIGEST}" =~ ^sha256:[a-f0-9]{64}$ ]]
+            test -n "${GCP_REGION}"
+            test -n "${DIRECTOR_RUNTIME_SERVICE_ACCOUNT}"
+          fi
+          case "${MODE}" in
+            inspect)
+              test -z "${CONFIRMATION}"
+              ;;
+            enable)
+              test "${CONFIRMATION}" = ENABLE_REGIONAL_REHOMING
+              test "${RATE_PER_MINUTE}" = 10
+              [[ "${NOT_BEFORE}" =~ ^[1-9][0-9]*$ ]]
+              ;;
+            pause)
+              test "${CONFIRMATION}" = PAUSE_REGIONAL_REHOMING
+              ;;
+            disable)
+              test "${CONFIRMATION}" = DISABLE_REGIONAL_REHOMING
+              ;;
+          esac
+
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - id: google-auth
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ vars.PRODUCTION_GCP_RELAY_DEPLOY_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ vars.PRODUCTION_GCP_RELAY_DEPLOY_SERVICE_ACCOUNT }}
+          token_format: id_token
+          id_token_audience: https://relay.onorca.dev/v1/admin/drain
+          id_token_include_email: true
+
+      - name: Apply emergency durable pause or disable before diagnostics
+        if: ${{ inputs.mode == 'pause' || inputs.mode == 'disable' }}
+        env:
+          ORCA_RELAY_ADMIN_ID_TOKEN: ${{ steps.google-auth.outputs.id_token }}
+        run: |
+          node dev/scripts/operate-relay-regional-rehome.mjs \
+            --mode "${MODE}" --director-origin "${DIRECTOR_ORIGIN}" \
+            --expected-selector-generation "${EXPECTED_SELECTOR_GENERATION}" \
+            --expected-existing-only-cells "${EXPECTED_EXISTING_ONLY_CELLS}" \
+            --expected-migration-only-cells "${EXPECTED_MIGRATION_ONLY_CELLS}" \
+            --expected-general-cells "${EXPECTED_GENERAL_CELLS}" \
+            --expected-control-generation "${EXPECTED_CONTROL_GENERATION}" \
+            --not-before "${NOT_BEFORE}" --rate-per-minute "${RATE_PER_MINUTE}" \
+            --preference-max-age-ms "${PREFERENCE_MAX_AGE_MS}" \
+            --drain-grace-ms "${DRAIN_GRACE_MS}" --confirmation "${CONFIRMATION}" \
+            | tee "${RUNNER_TEMP}/relay-rehome-control.json"
+
+      - uses: pnpm/action-setup@v4
+        if: ${{ inputs.mode == 'enable' }}
+        with: { package_json_file: cloud/package.json }
+
+      - run: pnpm install --frozen-lockfile
+        if: ${{ inputs.mode == 'enable' }}
+
+      - name: Download fresh aggregate safety evidence
+        if: ${{ inputs.mode == 'enable' }}
+        uses: actions/download-artifact@v4
+        with:
+          name: relay-monitor-dry-run-${{ inputs.monitor-run-id }}-${{ inputs.monitor-run-attempt }}
+          path: ${{ github.workspace }}/relay-monitor-evidence
+          github-token: ${{ github.token }}
+          run-id: ${{ inputs.monitor-run-id }}
+
+      - name: Verify enable evidence provenance
+        if: ${{ inputs.mode == 'enable' }}
+        run: |
+          [[ "${MONITOR_RUN_ID}" =~ ^[1-9][0-9]*$ ]]
+          [[ "${MONITOR_RUN_ATTEMPT}" =~ ^[1-9][0-9]*$ ]]
+          node dev/scripts/relay-monitor-evidence.mjs verify-authority \
+            --directory "${OUTPUT_DIRECTORY}" \
+            --incident-id "relay-${MONITOR_RUN_ID}-dry-run" \
+            --run-id "${MONITOR_RUN_ID}" --run-attempt "${MONITOR_RUN_ATTEMPT}" \
+            --commit-sha "${GITHUB_SHA}" --mode dry-run \
+            --required-migration-policy strict
+
+      - name: Reject previously consumed enable safety evidence
+        if: ${{ inputs.mode == 'enable' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          MARKER_NAME="relay-rehome-enable-monitor-consumed-${MONITOR_RUN_ID}-${MONITOR_RUN_ATTEMPT}"
+          COUNT="$(gh api "/repos/${GITHUB_REPOSITORY}/actions/artifacts?name=${MARKER_NAME}&per_page=1" \
+            --jq '.total_count')"
+          test "${COUNT}" = 0
+
+      - uses: google-github-actions/setup-gcloud@v2
+
+      - uses: ./.github/actions/cloud-sql-rollout-lease
+        with:
+          bucket: onorca-cloud-terraform-state
+          object: terraform/state/cloud-sql-rollout/production.lock
+
+      - name: Verify exact serving and rollback director identities
+        if: ${{ inputs.mode == 'inspect' || inputs.mode == 'enable' }}
+        env:
+          DIRECTOR_RUNTIME_SERVICE_ACCOUNT: ${{ vars.PRODUCTION_GCP_RELAY_DIRECTOR_RUNTIME_SERVICE_ACCOUNT }}
+        run: |
+          SERVICE_JSON="$(gcloud run services describe "${DIRECTOR_SERVICE}" \
+            --project "${GCP_PROJECT_ID}" --region "${GCP_REGION}" --format=json)"
+          SERVING_REVISION="$(jq -er \
+            '[.status.traffic[] | select((.percent // 0) > 0)] |
+             if length == 1 and .[0].percent == 100 then .[0].revisionName
+             else error("director does not have one serving revision") end' \
+            <<< "${SERVICE_JSON}")"
+          ROLLBACK_REVISION="$(jq -er \
+            '[.status.traffic[] | select(.tag == "selector-rollback")] |
+             if length == 1 then .[0].revisionName else error("rollback tag missing") end' \
+            <<< "${SERVICE_JSON}")"
+          verify_revision() {
+            local revision="$1" expected_digest="$2"
+            local json
+            json="$(gcloud run revisions describe "${revision}" \
+              --project "${GCP_PROJECT_ID}" --region "${GCP_REGION}" --format=json)"
+            test "$(jq -r '.spec.serviceAccountName' <<< "${json}")" = \
+              "${DIRECTOR_RUNTIME_SERVICE_ACCOUNT}"
+            test "$(jq -r '.spec.containers[0].image | split("@") | last' <<< "${json}")" = \
+              "${expected_digest}"
+            test "$(jq -r '[.spec.containers[0].env[] | select(.name ==
+              "ORCA_RELAY_REHOME_DIRECTOR_SERVICE_ACCOUNT") | .value] | if length == 1
+              then .[0] else empty end' <<< "${json}")" = "${DIRECTOR_RUNTIME_SERVICE_ACCOUNT}"
+            test "$(jq -r '[.spec.containers[0].env[] | select(.name ==
+              "ORCA_RELAY_REHOME_AUDIENCE") | .value] | if length == 1 then .[0]
+              else empty end' <<< "${json}")" = "${REHOME_AUDIENCE}"
+          }
+          verify_revision "${SERVING_REVISION}" "${DIRECTOR_IMAGE_DIGEST}"
+          verify_revision "${ROLLBACK_REVISION}" "${ROLLBACK_IMAGE_DIGEST}"
+
+      - name: Seal 24-hour aggregate region observation evidence
+        if: ${{ inputs.mode == 'enable' }}
+        run: |
+          mkdir -p "${RUNNER_TEMP}/relay-region-observation"
+          # 6 director instances x 120 samples/hour x 25h = 18000; a clipped
+          # read empties the oldest hourly buckets and fails the seal.
+          gcloud logging read \
+            'resource.type="cloud_run_revision" AND resource.labels.service_name="orca-cloud-relay" AND jsonPayload.event="orca_relay_runtime_metrics" AND jsonPayload.role="director"' \
+            --project "${GCP_PROJECT_ID}" --freshness=25h --limit=30000 --format=json \
+            | node dev/scripts/relay-region-observation-evidence.mjs create \
+                --commit-sha "${GITHUB_SHA}" \
+                --director-image-digest "${DIRECTOR_IMAGE_DIGEST}" \
+                --selector-generation "${EXPECTED_SELECTOR_GENERATION}" \
+                --control-generation "${EXPECTED_CONTROL_GENERATION}" \
+            > "${RUNNER_TEMP}/relay-region-observation/evidence.json"
+
+      - name: Upload sealed 24-hour aggregate region evidence
+        if: ${{ inputs.mode == 'enable' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: relay-region-observation-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/relay-region-observation/evidence.json
+          retention-days: 90
+          if-no-files-found: error
+
+      - name: Verify sealed 24-hour enable authority
+        if: ${{ inputs.mode == 'enable' }}
+        run: |
+          node dev/scripts/relay-region-observation-evidence.mjs verify \
+            --file "${RUNNER_TEMP}/relay-region-observation/evidence.json" \
+            --commit-sha "${GITHUB_SHA}" \
+            --director-image-digest "${DIRECTOR_IMAGE_DIGEST}" \
+            --selector-generation "${EXPECTED_SELECTOR_GENERATION}" \
+            --control-generation "${EXPECTED_CONTROL_GENERATION}"
+
+      - name: Recheck every aggregate safety signal before enable
+        if: ${{ inputs.mode == 'enable' }}
+        env:
+          ORCA_RELAY_ADMIN_ID_TOKEN: ${{ steps.google-auth.outputs.id_token }}
+        run: |
+          pnpm incident:relay-preflight -- \
+            --state-file "${OUTPUT_DIRECTORY}/relay-${MONITOR_RUN_ID}-dry-run.state.json"
+
+      - name: Seal single-use enable safety authority
+        if: ${{ inputs.mode == 'enable' }}
+        run: |
+          MARKER_NAME="relay-rehome-enable-monitor-consumed-${MONITOR_RUN_ID}-${MONITOR_RUN_ATTEMPT}"
+          mkdir -p "${RUNNER_TEMP}/relay-rehome-enable-authority"
+          printf '%s\n' "${GITHUB_RUN_ID}" \
+            > "${RUNNER_TEMP}/relay-rehome-enable-authority/${MARKER_NAME}"
+
+      - name: Consume enable safety evidence before durable mutation
+        if: ${{ inputs.mode == 'enable' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: relay-rehome-enable-monitor-consumed-${{ inputs.monitor-run-id }}-${{ inputs.monitor-run-attempt }}
+          path: ${{ runner.temp }}/relay-rehome-enable-authority/relay-rehome-enable-monitor-consumed-${{ inputs.monitor-run-id }}-${{ inputs.monitor-run-attempt }}
+          retention-days: 90
+          if-no-files-found: error
+
+      - name: Inspect regional rehome control
+        if: ${{ inputs.mode == 'inspect' }}
+        env:
+          ORCA_RELAY_ADMIN_ID_TOKEN: ${{ steps.google-auth.outputs.id_token }}
+        run: |
+          node dev/scripts/operate-relay-regional-rehome.mjs \
+            --mode inspect --director-origin "${DIRECTOR_ORIGIN}" \
+            --expected-selector-generation "${EXPECTED_SELECTOR_GENERATION}" \
+            --expected-existing-only-cells "${EXPECTED_EXISTING_ONLY_CELLS}" \
+            --expected-migration-only-cells "${EXPECTED_MIGRATION_ONLY_CELLS}" \
+            --expected-general-cells "${EXPECTED_GENERAL_CELLS}" \
+            --expected-control-generation "${EXPECTED_CONTROL_GENERATION}" \
+            | tee "${RUNNER_TEMP}/relay-rehome-control.json"
+
+      - name: Apply exact durable regional rehome enable
+        if: ${{ inputs.mode == 'enable' }}
+        env:
+          ORCA_RELAY_ADMIN_ID_TOKEN: ${{ steps.google-auth.outputs.id_token }}
+        run: |
+          node dev/scripts/operate-relay-regional-rehome.mjs \
+            --mode "${MODE}" --director-origin "${DIRECTOR_ORIGIN}" \
+            --expected-selector-generation "${EXPECTED_SELECTOR_GENERATION}" \
+            --expected-existing-only-cells "${EXPECTED_EXISTING_ONLY_CELLS}" \
+            --expected-migration-only-cells "${EXPECTED_MIGRATION_ONLY_CELLS}" \
+            --expected-general-cells "${EXPECTED_GENERAL_CELLS}" \
+            --expected-control-generation "${EXPECTED_CONTROL_GENERATION}" \
+            --not-before "${NOT_BEFORE}" --rate-per-minute "${RATE_PER_MINUTE}" \
+            --preference-max-age-ms "${PREFERENCE_MAX_AGE_MS}" \
+            --drain-grace-ms "${DRAIN_GRACE_MS}" --confirmation "${CONFIRMATION}" \
+            | tee "${RUNNER_TEMP}/relay-rehome-control.json"
+
+      - name: Read fresh aggregate completion and abort evidence
+        run: |
+          gcloud logging read \
+            'resource.type="cloud_run_revision" AND resource.labels.service_name="orca-cloud-relay" AND textPayload:"[orca-relay] regional rehome inventory"' \
+            --project "${GCP_PROJECT_ID}" --freshness=15m --limit=20 --format=json \
+            | node dev/scripts/relay-rehome-aggregate-evidence.mjs --max-age-ms 900000 \
+            | tee "${RUNNER_TEMP}/relay-rehome-inventory.json"
+
+      - name: Publish aggregate control evidence
+        run: |
+          {
+            echo '### Regional rehome control'
+            jq -r '"- mode: `\(.mode)`\n- generation: `\(.control.generation)`\n- enabled: `\(.control.enabled)`"' \
+              "${RUNNER_TEMP}/relay-rehome-control.json"
+            jq -r '"- active: `\(.active)`\n- awaiting receipt: `\(.awaitingReceipt)`\n- target registered: `\(.targetRegistered)`\n- completed (24h): `\(.completedLast24Hours)`\n- aborted (24h): `\(.abortedLast24Hours)`"' \
+              "${RUNNER_TEMP}/relay-rehome-inventory.json"
+          } >> "${GITHUB_STEP_SUMMARY}"
+
+      - name: Fail closed after an unsuccessful enable run
+        if: ${{ failure() && inputs.mode == 'enable' && steps.google-auth.outcome == 'success' }}
+        env:
+          ORCA_RELAY_ADMIN_ID_TOKEN: ${{ steps.google-auth.outputs.id_token }}
+        run: |
+          node dev/scripts/operate-relay-regional-rehome.mjs \
+            --mode recover-enable --director-origin "${DIRECTOR_ORIGIN}" \
+            --expected-control-generation "${EXPECTED_CONTROL_GENERATION}" \
+            --confirmation RECOVER_FAILED_REGIONAL_REHOME_ENABLE \
+            | tee "${RUNNER_TEMP}/relay-rehome-enable-recovery.json"
+          jq -e \
+            '.mode == "recover-enable" and .control.enabled == false' \
+            "${RUNNER_TEMP}/relay-rehome-enable-recovery.json" >/dev/null

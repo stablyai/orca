@@ -21,8 +21,10 @@ export class OrcaRuntimeWithCloseStructuredAgentSessionTab extends OrcaRuntimeWi
     tab: RuntimeMobileSessionAgentTab
   ): Promise<void> {
     const host = getStructuredAgentSessionHost()
-    if (typeof host?.setSessionTabVisibility === 'function') {
-      await host.setSessionTabVisibility(tab.sessionId, false)
+    if (host) {
+      if (typeof host.setSessionTabVisibility === 'function') {
+        await host.setSessionTabVisibility(tab.sessionId, false)
+      }
     }
     const nextTabs = snapshot.tabs.filter((candidate) => candidate.id !== tab.id)
     const active = nextTabs.find((candidate) => candidate.isActive) ?? nextTabs[0] ?? null
@@ -39,8 +41,12 @@ export class OrcaRuntimeWithCloseStructuredAgentSessionTab extends OrcaRuntimeWi
       })),
       tabs: nextTabs
     }
-    this.mobileSessionTabsByWorktree.set(worktreeId, nextSnapshot)
+    this.storeMobileSessionSnapshot(worktreeId, nextSnapshot)
     this.emitMobileSessionTabsSnapshot(nextSnapshot)
+    // Retire durable visibility and the runtime snapshot before stopping the provider.
+    if (typeof host?.close === 'function') {
+      await host.close(tab.sessionId)
+    }
   }
 
   // Why: a refused echoed close means the echoing client already pruned its
@@ -49,7 +55,7 @@ export class OrcaRuntimeWithCloseStructuredAgentSessionTab extends OrcaRuntimeWi
   protected republishMobileSessionTabsSnapshot(worktreeId: string): void {
     const snapshot = this.mobileSessionTabsByWorktree.get(worktreeId)
     if (snapshot) {
-      this.mobileSessionTabsByWorktree.set(worktreeId, {
+      this.storeMobileSessionSnapshot(worktreeId, {
         ...snapshot,
         snapshotVersion: snapshot.snapshotVersion + 1
       })
@@ -161,7 +167,7 @@ export class OrcaRuntimeWithCloseStructuredAgentSessionTab extends OrcaRuntimeWi
       })),
       tabs: nextTabs
     }
-    this.mobileSessionTabsByWorktree.set(worktreeId, nextSnapshot)
+    this.storeMobileSessionSnapshot(worktreeId, nextSnapshot)
     this.emitMobileSessionTabsSnapshot(nextSnapshot)
     return true
   }
@@ -203,7 +209,7 @@ export class OrcaRuntimeWithCloseStructuredAgentSessionTab extends OrcaRuntimeWi
       focusesHost,
       publicationEpoch: `headless:${Date.now().toString(36)}`
     })
-    this.mobileSessionTabsByWorktree.set(worktreeId, nextSnapshot)
+    this.storeMobileSessionSnapshot(worktreeId, nextSnapshot)
     // Why: browser group membership is otherwise live-only; persist it so a
     // later rebuild keeps the browser in its group instead of coalescing left.
     if (placedInTargetGroup && nextSnapshot.tabGroupLayout) {

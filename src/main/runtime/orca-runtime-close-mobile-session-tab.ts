@@ -32,6 +32,7 @@ export class OrcaRuntimeWithCloseMobileSessionTab extends OrcaRuntimeWithRefuseU
       clientNavigationId?: string
       localPtyTeardownOwnedExternally?: boolean
       expectedPtyCloseAuthority?: RuntimePtyTabCloseAuthority
+      force?: boolean
     } = {}
   ): Promise<MobileSessionTabCloseOutcome> {
     const graphEpoch = options.clientNavigationId ? this.captureReadyGraphEpoch() : null
@@ -166,6 +167,7 @@ export class OrcaRuntimeWithCloseMobileSessionTab extends OrcaRuntimeWithRefuseU
       if (closingWholeParent && !this.tabs.has(tab.parentTabId)) {
         this.closeHeadlessMobileTerminalTab(worktreeId, snapshot, tab, {
           allowMissingPersistedTab: Boolean(ptyCloseAuthority),
+          force: options.force,
           killPtys:
             options.localPtyTeardownOwnedExternally !== true &&
             (options.reason === undefined || options.reason === 'user'),
@@ -188,9 +190,12 @@ export class OrcaRuntimeWithCloseMobileSessionTab extends OrcaRuntimeWithRefuseU
         try {
           await (options.localPtyTeardownOwnedExternally
             ? this.notifier.closeTerminalTab(tab.parentTabId, {
-                localPtyTeardownOwnedExternally: true
+                localPtyTeardownOwnedExternally: true,
+                ...(options.force ? { force: true } : {})
               })
-            : this.notifier.closeTerminalTab(tab.parentTabId))
+            : options.force
+              ? this.notifier.closeTerminalTab(tab.parentTabId, { force: true })
+              : this.notifier.closeTerminalTab(tab.parentTabId))
         } finally {
           releasePublicationThrottle()
         }
@@ -211,6 +216,7 @@ export class OrcaRuntimeWithCloseMobileSessionTab extends OrcaRuntimeWithRefuseU
           this.closeHeadlessMobileTerminalTab(worktreeId, remainingSnapshot, remainingTab, {
             // Why: the renderer may already have durably removed the tab before acknowledging.
             allowMissingPersistedTab: true,
+            force: options.force,
             ...(remainingPtyCloseAuthority ? { authorizedPty: remainingPtyCloseAuthority.pty } : {})
           })
           this.notifyRendererOfHeadlessTerminalClose(tab.parentTabId)
@@ -221,22 +227,18 @@ export class OrcaRuntimeWithCloseMobileSessionTab extends OrcaRuntimeWithRefuseU
       // Why: notifier implementations without the acknowledged relay may expose
       // only raw pane close. Runtime-owned parents still need de-persist + kill.
       if (closingWholeParent && this.isRuntimeOwnedHeadlessMobileTab(worktreeId, tab)) {
-        this.closeHeadlessMobileTerminalTab(
-          worktreeId,
-          snapshot,
-          tab,
-          ptyCloseAuthority ? { authorizedPty: ptyCloseAuthority.pty } : {}
-        )
+        this.closeHeadlessMobileTerminalTab(worktreeId, snapshot, tab, {
+          force: options.force,
+          ...(ptyCloseAuthority ? { authorizedPty: ptyCloseAuthority.pty } : {})
+        })
         this.notifyRendererOfHeadlessTerminalClose(tab.parentTabId)
         return finishCommittedClose()
       }
       if (!this.notifier?.closeTerminal) {
-        this.closeHeadlessMobileTerminalTab(
-          worktreeId,
-          snapshot,
-          tab,
-          ptyCloseAuthority ? { authorizedPty: ptyCloseAuthority.pty } : {}
-        )
+        this.closeHeadlessMobileTerminalTab(worktreeId, snapshot, tab, {
+          force: options.force,
+          ...(ptyCloseAuthority ? { authorizedPty: ptyCloseAuthority.pty } : {})
+        })
         return finishCommittedClose()
       }
       if (tab.id === tabId) {

@@ -1,10 +1,10 @@
 import { PTY_LIVE_NOTE, describeUnconfirmedStop } from '../shared/pty-liveness-verdict'
 import { structuredChatPtyWriteRefusalCopy } from '../shared/agent-session-pty-write-refusal-copy'
+import { formatListingHostScope, type WithAnnotatedHostScope } from './omitted-host-scope-selectors'
 import type {
   RuntimeTerminalClose,
   RuntimeTerminalCreate,
   RuntimeTerminalFocus,
-  RuntimeTerminalListHostScope,
   RuntimeTerminalListResult,
   RuntimeTerminalVisualLayout,
   RuntimeTerminalVisualLayoutNode,
@@ -18,8 +18,10 @@ import type {
   RuntimeTerminalWait
 } from '../shared/runtime-types'
 
-export function formatTerminalList(result: RuntimeTerminalListResult): string {
-  const scope = formatTerminalListHostScope(result.hostScope)
+export function formatTerminalList(
+  result: WithAnnotatedHostScope<RuntimeTerminalListResult>
+): string {
+  const scope = formatListingHostScope(result.hostScope)
   if (result.terminals.length === 0) {
     return `No terminals listed.\n${scope}`
   }
@@ -35,18 +37,6 @@ export function formatTerminalList(result: RuntimeTerminalListResult): string {
   return result.truncated
     ? `${bodyWithScope}\ntruncated: showing ${result.terminals.length} of ${result.totalCount}`
     : bodyWithScope
-}
-
-// Why: a listing that does not say what it covers reads as absolute, and an
-// absent scope means the host is too old to know — not that it covered everything.
-function formatTerminalListHostScope(scope: RuntimeTerminalListHostScope | undefined): string {
-  if (!scope) {
-    return 'scope: unverifiable — this host does not report which hosts it lists'
-  }
-  const covered = scope.hostIds.length > 0 ? scope.hostIds.join(', ') : 'none'
-  const omitted =
-    scope.omittedHostIds.length > 0 ? ` — not covered: ${scope.omittedHostIds.join(', ')}` : ''
-  return `scope: ${covered}${omitted}`
 }
 
 function formatTerminalVisualLayouts(

@@ -186,7 +186,14 @@ export function runProcess(spec: ProcessSpec): Promise<ProcessResult> {
 
     const resolveFromClose = (code: number | null, signal: NodeJS.Signals | null): void =>
       settle(() =>
-        resolve({ code, signal, stdout: stdout.text(), stderr: stderr.text(), timedOut })
+        resolve({
+          code,
+          signal,
+          stdout: stdout.text(),
+          stderr: stderr.text(),
+          timedOut,
+          outputTruncated: stdout.truncated() || stderr.truncated()
+        })
       )
 
     const settleBarrierOutcome = (): void => {
@@ -381,6 +388,9 @@ export function runProcessSync(spec: ProcessSpec): ProcessResult {
     signal: result.signal,
     stdout: result.stdout?.toString('utf8') ?? '',
     stderr: result.stderr?.toString('utf8') ?? '',
+    // Why always false: spawnSync reports an overrun as an ENOBUFS error, and
+    // the guard above rethrows it, so no truncated result reaches this point.
+    outputTruncated: false,
     // Why ETIMEDOUT and not the signal: a timeout kills with SIGTERM, but so
     // does anything else that terminates the child, and only a timeout also
     // sets this error. Reading the signal alone reports a deliberately

@@ -3,29 +3,35 @@ import { useAppStore } from '../../store'
 import { useLinkRoutingPreferenceDialog } from '@/components/link-routing-preference-dialog'
 import { isWindowsUserAgent } from './pane-helpers'
 import type { SessionRestoredBannerReason } from './session-restored-banner-pane-state'
+import { useTerminalPaneStoreActions } from './use-terminal-pane-store-actions'
 import type { TerminalPaneChatController } from './use-terminal-pane-chat-state'
 
 export function useTerminalPaneStoreBindings(controller: TerminalPaneChatController) {
   const { expectedLayoutLeafIds, isVisible, restoredLayout, tabId } = controller
-  const setTabLayout = useAppStore((store) => store.setTabLayout)
+  const {
+    clearRuntimePaneTitle,
+    clearTabPtyId,
+    clearTerminalPaneUnread,
+    clearTerminalTabUnread,
+    clearWorktreeUnread,
+    consumeTabIssueCommandSplit,
+    consumeTabSetupSplit,
+    consumeTabStartupCommand,
+    markTerminalPaneUnread,
+    markTerminalTabUnread,
+    markWorktreeUnread,
+    openSpacePage,
+    refreshWorkspaceSpace,
+    setRuntimePaneTitle,
+    setTabLayout,
+    updateSettings,
+    updateTabPtyId,
+    updateTabTitle
+  } = useTerminalPaneStoreActions()
   const expectedLayoutLeafIdsAttr =
     expectedLayoutLeafIds.length > 0 ? expectedLayoutLeafIds.join(' ') : undefined
   const initialLayoutRef = useRef(restoredLayout)
-  const updateTabTitle = useAppStore((store) => store.updateTabTitle)
-  const setRuntimePaneTitle = useAppStore((store) => store.setRuntimePaneTitle)
-  const clearRuntimePaneTitle = useAppStore((store) => store.clearRuntimePaneTitle)
-  const updateTabPtyId = useAppStore((store) => store.updateTabPtyId)
-  const clearTabPtyId = useAppStore((store) => store.clearTabPtyId)
-  const markWorktreeUnread = useAppStore((store) => store.markWorktreeUnread)
-  const markTerminalTabUnread = useAppStore((store) => store.markTerminalTabUnread)
-  const markTerminalPaneUnread = useAppStore((store) => store.markTerminalPaneUnread)
-  const clearWorktreeUnread = useAppStore((store) => store.clearWorktreeUnread)
-  const clearTerminalTabUnread = useAppStore((store) => store.clearTerminalTabUnread)
-  const clearTerminalPaneUnread = useAppStore((store) => store.clearTerminalPaneUnread)
-  const openSpacePage = useAppStore((store) => store.openSpacePage)
-  const refreshWorkspaceSpace = useAppStore((store) => store.refreshWorkspaceSpace)
   const settings = useAppStore((store) => store.settings)
-  const updateSettings = useAppStore((store) => store.updateSettings)
   const requestLinkRoutingPreference = useLinkRoutingPreferenceDialog()
   const keybindings = useAppStore((store) => store.keybindings)
   const rightClickToPaste = settings?.terminalRightClickToPaste ?? isWindowsUserAgent()
@@ -37,13 +43,10 @@ export function useTerminalPaneStoreBindings(controller: TerminalPaneChatControl
   const [sessionRestoredBannerPaneIds, setSessionRestoredBannerPaneIds] = useState<
     Map<number, SessionRestoredBannerReason>
   >(() => new Map())
-  const consumeTabStartupCommand = useAppStore((store) => store.consumeTabStartupCommand)
   const [setupSplit] = useState(() => useAppStore.getState().pendingSetupSplitByTabId[tabId])
-  const consumeTabSetupSplit = useAppStore((store) => store.consumeTabSetupSplit)
   const [issueCommandSplit] = useState(
     () => useAppStore.getState().pendingIssueCommandSplitByTabId[tabId]
   )
-  const consumeTabIssueCommandSplit = useAppStore((store) => store.consumeTabIssueCommandSplit)
 
   return {
     setTabLayout,

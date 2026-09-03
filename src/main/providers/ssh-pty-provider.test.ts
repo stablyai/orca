@@ -255,16 +255,41 @@ describe('SshPtyProvider', () => {
     expectRequest(mux.request, 'pty.getForegroundProcess', { id: 'pty-1' })
   })
 
-  it('preserves unavailable process inspection', async () => {
+  it('preserves client-only unverifiable process inspection', async () => {
     const inspection = {
       foregroundProcess: null,
-      hasChildProcesses: true,
-      unavailable: true as const
+      hasChildProcesses: false,
+      verdict: 'unverifiable' as const,
+      reason: 'transport_loss' as const
     }
     mux.request.mockResolvedValue(inspection)
 
     await expect(provider.inspectProcess(scopedPty1)).resolves.toEqual(inspection)
     expectRequest(mux.request, 'pty.inspectProcess', { id: 'pty-1' })
+  })
+
+  it('forwards the expected incarnation for fenced remote inspection', async () => {
+    const inspection = {
+      foregroundProcess: 'codex',
+      hasChildProcesses: true,
+      foregroundProcessEvidence: { verdict: 'live' }
+    }
+    mux.request.mockResolvedValue(inspection)
+
+    await expect(
+      provider.inspectProcess(scopedPty1, { expectedIncarnationId: 'incarnation-1' })
+    ).resolves.toEqual(inspection)
+    expectRequest(mux.request, 'pty.inspectProcess', {
+      id: 'pty-1',
+      expectedIncarnationId: 'incarnation-1'
+    })
+  })
+
+  it('probes the additive foreground-evidence capability', async () => {
+    mux.request.mockResolvedValue({ foregroundProcessEvidenceVersion: 1 })
+
+    await expect(provider.supportsForegroundProcessEvidence()).resolves.toBe(true)
+    expectRequest(mux.request, 'pty.getCapabilities', undefined, { timeoutMs: 5_000 })
   })
 
   it('serializes scoped app ids using raw relay ids', async () => {

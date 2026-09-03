@@ -1,3 +1,5 @@
+// @vitest-environment happy-dom
+
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const mockCreateTab = vi.fn()
@@ -6,9 +8,11 @@ const mockWaitForAgentReady = vi.fn()
 const mockPasteDraftWhenAgentReady = vi.fn()
 const mockMarkNativeChatLaunchPromptFailed = vi.fn()
 const mockCreateStructuredCodexSessionLaunchIntent = vi.fn()
+const mockAbandonStructuredAgentSessionLaunchIntent = vi.fn()
 const mockLaunchStructuredCodexSession = vi.fn()
 const mockRefreshLocalStructuredSessionTabs = vi.fn()
 const mockToastError = vi.fn()
+const mockCallStructuredAgentSession = vi.fn()
 
 function structuredLaunchIntent(worktreeId: string, sessionId = 'codex-session-1') {
   return {
@@ -49,6 +53,10 @@ const store = {
   detectedWorktreesByRepo: {},
   allWorktrees: vi.fn(() => store.worktreesByRepo['repo-1']),
   tabsByWorktree: { 'wt-1': [{ id: 'tab-1' }] },
+  unifiedTabsByWorktree: {} as Record<
+    string,
+    { contentType: string; entityId: string; worktreeId: string }[]
+  >,
   openFiles: [] as { id: string; worktreeId: string }[],
   browserTabsByWorktree: {} as Record<string, { id: string }[]>,
   tabBarOrderByWorktree: {} as Record<string, string[]>,
@@ -87,6 +95,7 @@ vi.mock('@/lib/launch-structured-codex-session', () => {
   class StructuredAgentSessionCreateRefusalError extends Error {}
   return {
     createStructuredCodexSessionLaunchIntent: mockCreateStructuredCodexSessionLaunchIntent,
+    abandonStructuredAgentSessionLaunchIntent: mockAbandonStructuredAgentSessionLaunchIntent,
     launchStructuredCodexSession: mockLaunchStructuredCodexSession,
     StructuredAgentSessionCreateRefusalError
   }
@@ -95,6 +104,17 @@ vi.mock('@/runtime/local-structured-session-tabs-sync', () => ({
   refreshLocalStructuredSessionTabs: mockRefreshLocalStructuredSessionTabs,
   LOCAL_STRUCTURED_SESSION_OWNER: 'local-structured-session'
 }))
+vi.mock('@/runtime/local-runtime-capabilities', () => ({
+  readLocalRuntimeCapabilities: () => ['agent-session.structured.v1']
+}))
+vi.mock('@/lib/worktree-runtime-owner', () => ({
+  getExecutionHostIdForWorktree: () =>
+    store.repos[0]?.connectionId ? `ssh:${store.repos[0].connectionId}` : 'local',
+  getRuntimeEnvironmentIdForWorktree: () => null
+}))
+vi.mock('@/runtime/structured-agent-session-client', () => ({
+  callStructuredAgentSession: mockCallStructuredAgentSession
+}))
 
 /** Structured adoption creates the tab in terminal mode and flips it to chat once
  *  Codex is ready; the bridge stamps `viewMode: 'chat'` on the tab up front. That
@@ -102,6 +122,9 @@ vi.mock('@/runtime/local-structured-session-tabs-sync', () => ({
 describe('structured chat adoption guard on the launch path', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    store.unifiedTabsByWorktree = {
+      'wt-1': [{ contentType: 'agent-session', entityId: 'codex-session-1', worktreeId: 'wt-1' }]
+    }
     store.repos = [{ id: 'repo-1', connectionId: null, path: '/repo' }]
     store.projects = [{ id: 'repo-1', localWindowsRuntimePreference: { kind: 'inherit-global' } }]
     mockCreateTab.mockReturnValue({ id: 'tab-1' })
@@ -110,7 +133,15 @@ describe('structured chat adoption guard on the launch path', () => {
     mockCreateStructuredCodexSessionLaunchIntent.mockImplementation((worktreeId: string) =>
       structuredLaunchIntent(worktreeId)
     )
-    mockLaunchStructuredCodexSession.mockResolvedValue('codex-session-1')
+    mockLaunchStructuredCodexSession.mockResolvedValue({
+      sessionId: 'codex-session-1',
+      fence: 1
+    })
+    mockCallStructuredAgentSession.mockResolvedValue({
+      ok: true,
+      page: { fence: 1 },
+      value: { submission: { dispatchState: 'accepted' } }
+    })
     mockRefreshLocalStructuredSessionTabs.mockResolvedValue([
       {
         worktree: 'wt-1',
@@ -159,7 +190,7 @@ describe('structured chat adoption guard on the launch path', () => {
     )
   })
 
-  it('surfaces a direct structured launch failure instead of silently doing nothing', async () => {
+  it('falls back to the preserved terminal launch on a definitive refusal', async () => {
     const { StructuredAgentSessionCreateRefusalError } =
       await import('./launch-structured-codex-session')
     mockLaunchStructuredCodexSession.mockRejectedValueOnce(
@@ -170,19 +201,38 @@ describe('structured chat adoption guard on the launch path', () => {
     const result = launchAgentInNewTab({ agent: 'codex', worktreeId: 'wt-1' })
 
     expect(result).toMatchObject({ tabId: null, pasteDraftAfterLaunch: false })
-    await vi.waitFor(() =>
-      expect(mockToastError).toHaveBeenCalledWith(
-        'Could not open Codex chat',
-        expect.objectContaining({ description: 'provider unavailable' })
-      )
+    await vi.waitFor(() => expect(mockCreateTab).toHaveBeenCalledOnce())
+    expect(mockToastError).not.toHaveBeenCalled()
+  })
+
+  it('reports prompt delivery from the definitive-refusal terminal fallback', async () => {
+    const { StructuredAgentSessionCreateRefusalError } =
+      await import('./launch-structured-codex-session')
+    mockLaunchStructuredCodexSession.mockRejectedValueOnce(
+      new StructuredAgentSessionCreateRefusalError('provider unavailable')
     )
-    expect(mockCreateTab).not.toHaveBeenCalled()
+    const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
+
+    const result = launchAgentInNewTab({
+      agent: 'codex',
+      worktreeId: 'wt-1',
+      prompt: 'start this task',
+      promptDelivery: 'submit-after-ready'
+    })
+
+    await expect(result?.promptDeliveryResult).resolves.toEqual({
+      delivered: true,
+      failureNotified: false
+    })
+    expect(mockCreateTab).toHaveBeenCalledOnce()
+    expect(mockPasteDraftWhenAgentReady).toHaveBeenCalledOnce()
   })
 
   it('coalesces repeated structured launches for one worktree while the host is starting', async () => {
-    let resolveLaunch!: (sessionId: string) => void
+    let resolveLaunch!: (receipt: { sessionId: string; fence: number }) => void
     mockLaunchStructuredCodexSession.mockImplementationOnce(
-      () => new Promise<string>((resolve) => (resolveLaunch = resolve))
+      () =>
+        new Promise<{ sessionId: string; fence: number }>((resolve) => (resolveLaunch = resolve))
     )
     const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
 
@@ -192,15 +242,19 @@ describe('structured chat adoption guard on the launch path', () => {
     expect(first).toMatchObject({ focusAfterMenuClose: 'structured-session' })
     expect(second).toMatchObject({ focusAfterMenuClose: 'structured-session' })
     expect(mockLaunchStructuredCodexSession).toHaveBeenCalledTimes(1)
-    resolveLaunch('codex-session-1')
+    resolveLaunch({ sessionId: 'codex-session-1', fence: 1 })
   })
 
   it('keeps the single-flight reservation until the published tab inventory is refreshed', async () => {
+    store.unifiedTabsByWorktree = {}
     let resolveRefresh!: (snapshots: unknown[]) => void
     mockRefreshLocalStructuredSessionTabs.mockImplementationOnce(
       () => new Promise<unknown[]>((resolve) => (resolveRefresh = resolve))
     )
-    mockLaunchStructuredCodexSession.mockResolvedValue('codex-session-1')
+    mockLaunchStructuredCodexSession.mockResolvedValue({
+      sessionId: 'codex-session-1',
+      fence: 1
+    })
     const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
 
     launchAgentInNewTab({ agent: 'codex', worktreeId: 'wt-1' })
@@ -209,6 +263,9 @@ describe('structured chat adoption guard on the launch path', () => {
     launchAgentInNewTab({ agent: 'codex', worktreeId: 'wt-1' })
 
     expect(mockLaunchStructuredCodexSession).toHaveBeenCalledTimes(1)
+    store.unifiedTabsByWorktree['wt-1'] = [
+      { contentType: 'agent-session', entityId: 'codex-session-1', worktreeId: 'wt-1' }
+    ]
     resolveRefresh([
       { worktree: 'wt-1', tabs: [{ type: 'agent-session', sessionId: 'codex-session-1' }] }
     ])
@@ -216,21 +273,28 @@ describe('structured chat adoption guard on the launch path', () => {
   })
 
   it('does not create a sibling when post-create visibility proof is unknown', async () => {
+    store.unifiedTabsByWorktree = {}
     const firstIntent = structuredLaunchIntent('wt-1', 'codex-session-1')
     const secondIntent = structuredLaunchIntent('wt-1', 'codex-session-2')
     mockCreateStructuredCodexSessionLaunchIntent
       .mockReturnValueOnce(firstIntent)
       .mockReturnValueOnce(secondIntent)
     mockLaunchStructuredCodexSession
-      .mockResolvedValueOnce(firstIntent.sessionId)
+      .mockResolvedValueOnce({ sessionId: firstIntent.sessionId, fence: 1 })
       .mockRejectedValueOnce(new Error('response lost'))
-      .mockResolvedValueOnce(secondIntent.sessionId)
+      .mockResolvedValueOnce({ sessionId: secondIntent.sessionId, fence: 1 })
     mockRefreshLocalStructuredSessionTabs
       .mockRejectedValueOnce(new Error('inventory unavailable'))
       .mockResolvedValueOnce([])
-      .mockResolvedValueOnce([
-        { worktree: 'wt-1', tabs: [{ type: 'agent-session', sessionId: 'codex-session-1' }] }
-      ])
+      .mockImplementationOnce(() => {
+        // The inventory refresh also publishes the host snapshot into the renderer projection.
+        store.unifiedTabsByWorktree['wt-1'] = [
+          { contentType: 'agent-session', entityId: firstIntent.sessionId, worktreeId: 'wt-1' }
+        ]
+        return Promise.resolve([
+          { worktree: 'wt-1', tabs: [{ type: 'agent-session', sessionId: firstIntent.sessionId }] }
+        ])
+      })
       .mockResolvedValueOnce([
         { worktree: 'wt-1', tabs: [{ type: 'agent-session', sessionId: 'codex-session-2' }] }
       ])
@@ -249,14 +313,17 @@ describe('structured chat adoption guard on the launch path', () => {
     await new Promise((resolve) => setTimeout(resolve, 0))
 
     // A successful retry must release the reservation so a later launch can start normally.
+    store.unifiedTabsByWorktree['wt-1'] = [
+      { contentType: 'agent-session', entityId: secondIntent.sessionId, worktreeId: 'wt-1' }
+    ]
     launchAgentInNewTab({ agent: 'codex', worktreeId: 'wt-1' })
-    await vi.waitFor(() => expect(mockRefreshLocalStructuredSessionTabs).toHaveBeenCalledTimes(4))
+    await vi.waitFor(() => expect(mockLaunchStructuredCodexSession).toHaveBeenCalledTimes(3))
     expect(mockCreateStructuredCodexSessionLaunchIntent).toHaveBeenCalledTimes(2)
     expect(mockLaunchStructuredCodexSession).toHaveBeenCalledTimes(3)
     expect(mockLaunchStructuredCodexSession.mock.calls[2]?.[0]).toBe(secondIntent)
   })
 
-  it('keeps prompted Codex on the ordinary terminal launch path', async () => {
+  it('routes an auto-submitted Codex prompt through the structured outbox', async () => {
     const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
 
     const result = launchAgentInNewTab({
@@ -265,20 +332,19 @@ describe('structured chat adoption guard on the launch path', () => {
       prompt: 'start this task'
     })
 
-    expect(result?.tabId).toBe('tab-1')
-    expect(mockCreateTab).toHaveBeenCalledWith(
-      'wt-1',
-      undefined,
-      undefined,
-      expect.objectContaining({ launchAgent: 'codex' })
-    )
-    expect(mockWaitForAgentReady).not.toHaveBeenCalled()
-    expect(mockSetTabViewMode).not.toHaveBeenCalled()
+    expect(result).toMatchObject({ tabId: null, focusAfterMenuClose: 'structured-session' })
+    await expect(result?.promptDeliveryResult).resolves.toEqual({
+      delivered: true,
+      failureNotified: false
+    })
+    expect(mockCreateTab).not.toHaveBeenCalled()
   })
 
-  it('shows rejected prompt delivery in chat after Codex becomes ready', async () => {
-    const error = new Error('prompt transport rejected')
-    mockPasteDraftWhenAgentReady.mockRejectedValue(error)
+  it('leaves a refused structured prompt queued for an explicit retry', async () => {
+    mockCallStructuredAgentSession.mockResolvedValueOnce({
+      ok: false,
+      refusal: { code: 'agent_session_busy', message: 'busy' }
+    })
     const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
 
     const result = launchAgentInNewTab({
@@ -288,9 +354,11 @@ describe('structured chat adoption guard on the launch path', () => {
       promptDelivery: 'submit-after-ready'
     })
 
-    await expect(result?.promptDeliveryResult).rejects.toBe(error)
-    expect(mockMarkNativeChatLaunchPromptFailed).toHaveBeenCalledWith('tab-1')
-    expect(mockSetTabViewMode).not.toHaveBeenCalled()
+    await expect(result?.promptDeliveryResult).resolves.toEqual({
+      delivered: false,
+      failureNotified: false
+    })
+    expect(mockCreateTab).not.toHaveBeenCalled()
   })
 
   it('keeps an SSH Codex tab on the bridge', async () => {

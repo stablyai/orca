@@ -48,11 +48,22 @@ export class OrcaRuntimeWithPerformMobileSessionPtyRecordsRefresh extends OrcaRu
         : targetWorktreeId
           ? null
           : undefined
+    if (
+      targetConnectionId !== null &&
+      this.ptyController.supportsForegroundProcessEvidence &&
+      !(await this.ptyController.supportsForegroundProcessEvidence(targetConnectionId))
+    ) {
+      // A legacy relay ignores the optional projection and would still run its
+      // expensive process-table inventory on every mobile cadence tick.
+      return null
+    }
     return await this.refreshPtyWorktreeRecordsWithControllerInventory(
       resolvedWorktrees,
       targetWorktreeId,
       undefined,
-      targetConnectionId
+      targetConnectionId,
+      false,
+      { includeForegroundProcessEvidence: false }
     )
   }
 

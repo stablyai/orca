@@ -6,7 +6,12 @@ import { tabHasLivePty } from '@/lib/tab-has-live-pty'
 import { persistWorktreeSortOrderByHost } from '@/lib/worktree-sort-order-persistence'
 import type { Repo } from '../../../../../../shared/repo-types'
 import type { Worktree } from '../../../../../../shared/worktree/types'
-import { buildWorktreeComparator, compareWorktreeSortLabel, type SortBy } from '../../smart-sort'
+import {
+  buildWorktreeComparator,
+  buildWorktreeSortLabels,
+  compareWorktreeSortLabel,
+  type SortBy
+} from '../../smart-sort'
 import {
   buildAttentionByWorktree,
   hasFreshAttributedAgentStatus,
@@ -23,6 +28,7 @@ function trackSmartClassDistribution(attention: ReadonlyMap<string, WorktreeAtte
   let class2 = 0
   let class3 = 0
   let class4 = 0
+  let class5 = 0
   for (const info of attention.values()) {
     if (info.cls === 1) {
       class1++
@@ -30,8 +36,10 @@ function trackSmartClassDistribution(attention: ReadonlyMap<string, WorktreeAtte
       class2++
     } else if (info.cls === 3) {
       class3++
-    } else {
+    } else if (info.cls === 4) {
       class4++
+    } else {
+      class5++
     }
   }
   track('smart_sort_class_distribution', {
@@ -39,6 +47,7 @@ function trackSmartClassDistribution(attention: ReadonlyMap<string, WorktreeAtte
     class_2: class2,
     class_3: class3,
     class_4: class4,
+    class_5: class5,
     total_worktrees: attention.size
   })
 }
@@ -99,14 +108,16 @@ export function useSidebarWorktreeSortOrder(args: {
       (worktree) => !worktree.isArchived
     )
     const now = Date.now()
+    // Why precompute: the label tiebreaker runs on every comparison in every mode.
+    const labels = buildWorktreeSortLabels(nonArchivedWorktrees)
     let detectedLiveSmartSignal = false
 
     // Why cold-start detection: agent-status hydrates async, so the warm comparator would collapse all to Class 4; keep the persisted order until a live signal appears.
     if (sortBy === 'smart' && !sessionHasHadLiveSmartSignal.current) {
       // Why tabHasLivePty over tab.ptyId: slept terminals keep tab.ptyId as a wake hint, so it'd falsely keep cold-start ordering off.
-      const hasAnyLivePty = Object.values(state.tabsByWorktree)
-        .flat()
-        .some((tab) => tabHasLivePty(state.ptyIdsByTabId, tab.id))
+      const hasAnyLivePty = Object.values(state.tabsByWorktree).some((tabs) =>
+        tabs.some((tab) => tabHasLivePty(state.ptyIdsByTabId, tab.id))
+      )
       if (
         hasAnyLivePty ||
         hasFreshAttributedAgentStatus(state.agentStatusByPaneKey, now, state.tabsByWorktree)
@@ -114,7 +125,7 @@ export function useSidebarWorktreeSortOrder(args: {
         detectedLiveSmartSignal = true
       } else {
         nonArchivedWorktrees.sort(
-          (a, b) => b.sortOrder - a.sortOrder || compareWorktreeSortLabel(a, b)
+          (a, b) => b.sortOrder - a.sortOrder || compareWorktreeSortLabel(a, b, labels)
         )
         return {
           sortedIds: nonArchivedWorktrees.map((w) => w.id),
@@ -138,7 +149,9 @@ export function useSidebarWorktreeSortOrder(args: {
             state.terminalLayoutsByTabId
           )
         : new Map<string, WorktreeAttention>()
-    nonArchivedWorktrees.sort(buildWorktreeComparator(sortBy, repoMap, now, attentionByWorktree))
+    nonArchivedWorktrees.sort(
+      buildWorktreeComparator(sortBy, repoMap, now, attentionByWorktree, labels)
+    )
     return {
       sortedIds: nonArchivedWorktrees.map((w) => w.id),
       attentionByWorktree: sortBy === 'smart' ? attentionByWorktree : null,

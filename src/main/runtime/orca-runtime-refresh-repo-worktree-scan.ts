@@ -17,7 +17,7 @@ import { getSshGitProvider } from '../providers/ssh-git-dispatch'
 import type { GitWorktreeInfo } from '../../shared/worktree/types'
 import { listStoredWorktreeRowsForRepo } from './repo-worktree-row-resolution'
 import type { ResolvedWorktree } from './runtime-worktree-path-identity'
-import { getRepoExecutionHostId } from '../../shared/execution-host'
+import { getRepoExecutionHostId, getRepoSshConnectionId } from '../../shared/execution-host'
 
 export class OrcaRuntimeWithRefreshRepoWorktreeScan extends OrcaRuntimeWithListKnownResolvedWorktreesForExplicitTarget {
   /**
@@ -31,8 +31,10 @@ export class OrcaRuntimeWithRefreshRepoWorktreeScan extends OrcaRuntimeWithListK
   ): Promise<RuntimeWorktreeScanRefresh> {
     const scannedAt = Date.now()
     // SSH and WSL-routed repos run Git off-host, so a local admin-dir read cannot describe them.
+    // Resolve the execution host rather than reading `connectionId`: a row stamped only
+    // `executionHostId: 'ssh:*'` is just as off-host, and fingerprinting it stats client paths.
     const fingerprintCapable =
-      !repo.connectionId &&
+      !getRepoSshConnectionId(repo) &&
       // Why: a repo whose scan TTL already reaches the reconciliation interval can never reuse a
       // fingerprint, so reading one would be pure work. Agent-scratch roots are that case today.
       resolveWorktreeScanCacheTtlMs(repo) < WORKTREE_SCAN_ADMIN_RECONCILE_INTERVAL_MS &&
@@ -92,13 +94,17 @@ export class OrcaRuntimeWithRefreshRepoWorktreeScan extends OrcaRuntimeWithListK
     repo: Repo,
     projectRuntime: ProjectExecutionRuntimeResolution | undefined
   ): Promise<RuntimeWorktreeScanResult> {
-    if (!repo.connectionId) {
+    // Why not `repo.connectionId`: SSH ownership has two spellings, and a repo carrying only
+    // `executionHostId: 'ssh:*'` would otherwise be scanned on the client against a remote path —
+    // `git worktree list` then reports nothing, so the remote worktrees never resolve at all.
+    const sshConnectionId = getRepoSshConnectionId(repo)
+    if (!sshConnectionId) {
       return await scanLocalRepoWorktreesForResolution(
         repo.path,
         getLocalProjectWorktreeGitOptionsForRuntime(repo, projectRuntime)
       )
     }
-    const provider = getSshGitProvider(repo.connectionId)
+    const provider = getSshGitProvider(sshConnectionId)
     if (!provider) {
       return { ok: false, worktrees: this.listStoredWorktreesForResolution(repo) }
     }
@@ -149,7 +155,7 @@ export class OrcaRuntimeWithRefreshRepoWorktreeScan extends OrcaRuntimeWithListK
 
   protected invalidateSshWorktreeScanCacheInternal(targetId: string): void {
     const repos = this.store?.getRepos() ?? []
-    const affectedRepos = repos.filter((repo) => repo.connectionId === targetId)
+    const affectedRepos = repos.filter((repo) => getRepoSshConnectionId(repo) === targetId)
     const affectedScopeKeys = new Set(
       affectedRepos.map((repo) => `${repo.id}\0${getRepoExecutionHostId(repo)}`)
     )

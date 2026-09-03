@@ -20,6 +20,19 @@ import type { UISlice } from './ui-slice-contract'
 
 const MIN_SIDEBAR_WIDTH = 220
 const HYDRATE_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000
+
+export function preserveStringArrayIdentity<T extends string>(
+  current: readonly T[] | null,
+  next: T[] | null
+): T[] | null {
+  if (!current || !next) {
+    return next
+  }
+  return current.length === next.length && current.every((value, index) => value === next[index])
+    ? (current as T[])
+    : next
+}
+
 export function isPlainPersistedRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === 'object' && !Array.isArray(value)
 }
@@ -91,11 +104,14 @@ export function sanitizePersistedSidebarWidth(
   return Math.min(maxWidth, Math.max(MIN_SIDEBAR_WIDTH, width))
 }
 
-export function sanitizeAcknowledgedAgentsByPaneKey(value: unknown): Record<string, number> {
+export function sanitizePaneKeyTimestampRecord(
+  value: unknown,
+  maxAgeMs: number = HYDRATE_MAX_AGE_MS
+): Record<string, number> {
   if (value === null || typeof value !== 'object' || Array.isArray(value)) {
     return {}
   }
-  const cutoff = Date.now() - HYDRATE_MAX_AGE_MS
+  const cutoff = Date.now() - maxAgeMs
   const out: Record<string, number> = {}
   for (const [key, ackAt] of Object.entries(value as Record<string, unknown>)) {
     if (!isSafePersistedRecordKey(key)) {
@@ -107,6 +123,16 @@ export function sanitizeAcknowledgedAgentsByPaneKey(value: unknown): Record<stri
     out[key] = ackAt
   }
   return out
+}
+
+export const sanitizeAcknowledgedAgentsByPaneKey = sanitizePaneKeyTimestampRecord
+
+/** Cleared-at cutoffs must outlive any persisted status entry they guard: main prunes entries
+ *  at HYDRATE_MAX_AGE_MS from receivedAt, and cutoff values trail receipt time, so pruning them
+ *  on the same clock can resurrect a cleared entry. Double the TTL keeps the guard alive past
+ *  every entry it can still shadow. */
+export function sanitizeActivityClearedAtByPaneKey(value: unknown): Record<string, number> {
+  return sanitizePaneKeyTimestampRecord(value, 2 * HYDRATE_MAX_AGE_MS)
 }
 
 export function sanitizeWorkspaceCleanupDismissals(
@@ -145,16 +171,9 @@ export function sanitizeWorkspaceCleanupDismissals(
   return out
 }
 
-export function sanitizeHydratedActiveView(
-  value: PersistedUIState['activeView'],
-  experimentalActivityEnabled: boolean
-): TopLevelView {
+export function sanitizeHydratedActiveView(value: PersistedUIState['activeView']): TopLevelView {
   // Why: older data (pre-activeView) or a view a different build doesn't have falls back to terminal rather than rendering nothing.
   if (!isTopLevelView(value)) {
-    return 'terminal'
-  }
-  // Why: activity is hidden when its setting is off, so gate only it (mobile/automations stay functional when hidden).
-  if (value === 'activity' && !experimentalActivityEnabled) {
     return 'terminal'
   }
   return value

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   formatQuestionAnswer,
+  formatQuestionFreeTextAnswer,
   mobileChatQuestionKey,
   parseAgentQuestion,
   type MobileChatQuestion
@@ -141,6 +142,12 @@ describe('formatQuestionAnswer', () => {
     expect(formatQuestionAnswer(numbered, [])).toBe('')
     expect(formatQuestionAnswer(numbered, ['   '])).toBe('')
   })
+
+  it('prefixes free-text answers with an opaque prompt token when provided', () => {
+    expect(
+      formatQuestionFreeTextAnswer({ ...numbered, freeTextToken: 'target' }, '  hi there  ')
+    ).toBe(`target:${encodeURIComponent('hi there')}`)
+  })
 })
 
 describe('mobileChatQuestionKey', () => {
@@ -152,6 +159,9 @@ describe('mobileChatQuestionKey', () => {
       optionTokens: ['1', '2']
     }
     expect(mobileChatQuestionKey({ ...first, options: ['A', 'C'] })).not.toBe(
+      mobileChatQuestionKey(first)
+    )
+    expect(mobileChatQuestionKey({ ...first, freeTextToken: 'target-2' })).not.toBe(
       mobileChatQuestionKey(first)
     )
   })

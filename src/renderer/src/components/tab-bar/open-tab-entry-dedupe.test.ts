@@ -90,7 +90,8 @@ describe('dropFileEntriesCoveredByTabResults', () => {
         contentType: 'browser',
         pageId: 'page-1',
         url: 'https://example.com/zebra',
-        workspaceId: 'ws-1'
+        workspaceId: 'ws-1',
+        faviconUrl: null
       },
       {
         executionHostId: 'local',

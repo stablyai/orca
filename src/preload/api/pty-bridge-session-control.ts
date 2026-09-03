@@ -15,6 +15,7 @@ import type {
 import type { TerminalViewAttributes } from '../../shared/terminal-view-attributes'
 import type { PtyMainDeliveryDiagnostics } from '../../shared/pty-delivery-diagnostics'
 import type { AgentKind, LaunchSource, RequestKind } from '../../shared/telemetry-events'
+import type { PreloadApi } from '../api-types'
 
 export const ptySessionControlApi = {
   spawn: (opts: {
@@ -204,4 +205,4 @@ export const ptySessionControlApi = {
     ipcRenderer.invoke('pty:hasChildProcesses', { id }),
   getForegroundProcess: (id: string): Promise<string | null> =>
     ipcRenderer.invoke('pty:getForegroundProcess', { id })
-}
+} satisfies Partial<PreloadApi['pty']>

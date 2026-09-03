@@ -52,7 +52,7 @@ type ReattachResultSession = ReattachPayloadSession &
     | 'clearExitedPanePtyLayoutBinding'
     | 'syncHiddenRendererPtyDelivery'
     | 'transportStreamGeneration'
-  >
+  > & { remotePtyIncarnationId?: string | null }
 
 export function bindHandleReattachResult(sessionBag: ConnectPanePtySession): void {
   const session = sessionBag as unknown as ReattachResultSession
@@ -82,6 +82,13 @@ export function bindHandleReattachResult(sessionBag: ConnectPanePtySession): voi
     session.authoritativeReattachGeneration += 1
     const connectResult =
       result && typeof result === 'object' && 'id' in result ? (result as PtyConnectResult) : null
+    if (connectResult?.incarnationId) {
+      session.remotePtyIncarnationId = connectResult.incarnationId
+    } else if (connectResult?.isReattach || typeof result === 'string') {
+      // Legacy hosts do not publish an incarnation; force client-only
+      // unverifiable evidence until a fresh attach returns one.
+      session.remotePtyIncarnationId = null
+    }
 
     if (connectResult?.exitedBeforeAttach) {
       // Why: the transport already delivered the dead session's final frame + exit; treat as terminal state, not a failed reattach.

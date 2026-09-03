@@ -87,6 +87,11 @@ export class OrcaRuntimeWithStateFields extends OrcaRuntimeWithLinearCommands {
   ) {
     super()
     this.store = store
+    store?.onSettingsChanged?.((updates) => {
+      if ('experimentalStructuredNativeChat' in updates) {
+        this.notifyMobileSessionTabsChanged()
+      }
+    })
     const runtime = this as RuntimeCommandSurfaceHost<this>
     installRuntimeFileCommandSurface(runtime, this.fileCommands)
     installRuntimeGitCommandSurface(runtime, this.gitCommands)

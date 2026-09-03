@@ -7,6 +7,10 @@ import type {
 } from '../../shared/runtime-types'
 import type { CommandHandler } from '../dispatch'
 import { formatWorktreeList, formatWorktreePs, formatWorktreeShow, printResult } from '../format'
+import {
+  annotateOmittedHostScope,
+  type WithAnnotatedHostScope
+} from '../omitted-host-scope-selectors'
 import { RuntimeClientError } from '../runtime-client'
 import {
   getOptionalNullableNumberFlag,
@@ -21,19 +25,23 @@ import {
   getRequiredWorktreeSelector,
   resolveCurrentWorktreeSelector
 } from '../selectors'
-import { isTuiAgent } from '../../shared/tui-agent-config'
 import { isWorkspaceKey, worktreeWorkspaceKey } from '../../shared/workspace-scope'
 import { printLineageSummary } from './worktree-lineage-summary'
 import {
   assertWorkspaceTargetFlagsCompatible,
-  hasWorkspaceProjectTarget,
-  resolveProjectCreateRepoSelector
+  hasWorkspaceProjectTarget
 } from '../worktree-project-target'
 import {
   assertCreateParentFlagsCompatible,
   resolveCreateParentSelector
 } from './worktree-create-parent-selector'
 import { getOptionalLinearIssueLinkFlag } from './worktree-linear-issue-link'
+import {
+  getCreateRepoSelector,
+  getOptionalSetupDecision,
+  getOptionalStartupAgent,
+  getPresentStringFlag
+} from './worktree-create-flags'
 
 type HookWarningResult = {
   warning?: string
@@ -87,101 +95,24 @@ function getEnvParentWorkspace(): string | undefined {
   return undefined
 }
 
-function getPresentStringFlag(
-  flags: Map<string, string | boolean>,
-  name: string,
-  options: { allowEmpty?: boolean } = {}
-): string | undefined {
-  if (!flags.has(name)) {
-    return undefined
-  }
-  const value = flags.get(name)
-  if (typeof value === 'string' && (options.allowEmpty || value.length > 0)) {
-    return value
-  }
-  throw new RuntimeClientError('invalid_argument', `Missing value for --${name}`)
-}
-
-function getOptionalStartupAgent(flags: Map<string, string | boolean>): string | undefined {
-  const agent = getPresentStringFlag(flags, 'agent')
-  if (agent === undefined) {
-    if (flags.has('prompt')) {
-      throw new RuntimeClientError('invalid_argument', '--prompt requires --agent')
-    }
-    return undefined
-  }
-  if (!isTuiAgent(agent)) {
-    throw new RuntimeClientError('invalid_argument', `Unknown TUI agent "${agent}"`)
-  }
-  return agent
-}
-
-function getOptionalSetupDecision(
-  flags: Map<string, string | boolean>
-): 'run' | 'skip' | 'inherit' | undefined {
-  const setup = getPresentStringFlag(flags, 'setup')
-  if (setup !== undefined && setup !== 'run' && setup !== 'skip' && setup !== 'inherit') {
-    throw new RuntimeClientError('invalid_argument', '--setup must be one of: run, skip, inherit')
-  }
-  if (flags.get('run-hooks') === true) {
-    if (setup !== undefined && setup !== 'run') {
-      throw new RuntimeClientError(
-        'invalid_argument',
-        'Choose either --run-hooks or --setup run, not contradictory setup flags.'
-      )
-    }
-    return setup
-  }
-  return setup
-}
-
-function getRepoSelectorFromWorktreeSelector(selector: string | undefined): string | undefined {
-  if (!selector?.startsWith('id:')) {
-    return undefined
-  }
-  const worktreeId = selector.slice('id:'.length)
-  const separatorIndex = worktreeId.indexOf('::')
-  if (separatorIndex <= 0) {
-    return undefined
-  }
-  return `id:${worktreeId.slice(0, separatorIndex)}`
-}
-
-async function getCreateRepoSelector(
-  flags: Map<string, string | boolean>,
-  cwdParentWorktree: string | undefined,
-  client: Parameters<CommandHandler>[0]['client']
-): Promise<string> {
-  const projectRepoSelector = await resolveProjectCreateRepoSelector(flags, client)
-  if (projectRepoSelector) {
-    return projectRepoSelector
-  }
-  const explicitRepo = getPresentStringFlag(flags, 'repo')
-  if (explicitRepo) {
-    return explicitRepo
-  }
-  const inferredRepo = getRepoSelectorFromWorktreeSelector(cwdParentWorktree)
-  if (inferredRepo) {
-    return inferredRepo
-  }
-  throw new RuntimeClientError(
-    'invalid_argument',
-    'Missing repo selector. Pass --repo or run from inside an Orca-managed worktree.'
-  )
-}
-
 export const WORKTREE_HANDLERS: Record<string, CommandHandler> = {
   'worktree ps': async ({ flags, client, json }) => {
-    const result = await client.call<RuntimeWorktreePsResult>('worktree.ps', {
-      limit: getOptionalPositiveIntegerFlag(flags, 'limit')
-    })
+    const result = await client.call<WithAnnotatedHostScope<RuntimeWorktreePsResult>>(
+      'worktree.ps',
+      { limit: getOptionalPositiveIntegerFlag(flags, 'limit') }
+    )
+    await annotateOmittedHostScope(client, result.result)
     printResult(result, json, formatWorktreePs)
   },
   'worktree list': async ({ flags, client, json }) => {
-    const result = await client.call<RuntimeWorktreeListResult>('worktree.list', {
-      repo: getOptionalStringFlag(flags, 'repo'),
-      limit: getOptionalPositiveIntegerFlag(flags, 'limit')
-    })
+    const result = await client.call<WithAnnotatedHostScope<RuntimeWorktreeListResult>>(
+      'worktree.list',
+      {
+        repo: getOptionalStringFlag(flags, 'repo'),
+        limit: getOptionalPositiveIntegerFlag(flags, 'limit')
+      }
+    )
+    await annotateOmittedHostScope(client, result.result)
     printResult(result, json, formatWorktreeList)
   },
   'worktree show': async ({ flags, client, cwd, json }) => {

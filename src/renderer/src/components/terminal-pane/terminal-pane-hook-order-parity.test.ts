@@ -6,11 +6,13 @@ import ts from 'typescript-api'
 import { describe, expect, it } from 'vitest'
 
 const TERMINAL_PANE_HOOK_SOURCE_PATTERN =
-  /^(?:TerminalPane\.tsx|use-terminal-pane-(?:chat-state|close-actions|context-actions|controller|foundation|global-listeners|layout-bindings|layout-persistence|lifecycle-stage|mobile-actions|paste-listeners|process-exit-actions|projection|reconciliation|startup-actions|store-bindings|title-effects|title-state)\.ts)$/
+  /^(?:TerminalPane\.tsx|use-terminal-pane-(?:chat-state|close-actions|context-actions|controller|foundation|global-listeners|layout-bindings|layout-persistence|lifecycle-stage|mobile-actions|paste-listeners|process-exit-actions|projection|reconciliation|startup-actions|store-actions|store-bindings|title-effects|title-state)\.ts)$/
 // Rebased onto main after the workbench surface-per-workspace and deferred
-// split-cwd changes; this hash is from that main's pre-split TerminalPane (229 hooks).
+// split-cwd changes; the pane session-ID projection added one render hook (230 hooks).
+// Then 27 stable-action `useAppStore` subscriptions folded into four
+// `useTerminalPaneStoreActions()` calls, each one `useMemo` (204 hooks, 8 useMemo).
 const PRE_REFACTOR_HOOK_ORDER_SHA256 =
-  'be2366fffb992e082fd9e4641b7543a0db75cb7bc4ef6e0eb0deda41beaac358'
+  'b541d26ff66a1db0b7150ced2a4340c5cf025aba79a651a2ad8d2fa68d403ae3'
 
 const sourceFiles = readdirSync(__dirname)
   .filter((name) => TERMINAL_PANE_HOOK_SOURCE_PATTERN.test(name))
@@ -75,15 +77,15 @@ function readFlattenedHookOrder(): string[] {
 describe('TerminalPane refactor hook parity', () => {
   it('preserves the recursively flattened render hook order', () => {
     const hooks = readFlattenedHookOrder()
-    expect(hooks).toHaveLength(229)
-    expect(hooks.filter((hook) => hook === 'useMemo')).toHaveLength(4)
+    expect(hooks).toHaveLength(204)
+    expect(hooks.filter((hook) => hook === 'useMemo')).toHaveLength(8)
     expect(createHash('sha256').update(hooks.join('\n')).digest('hex')).toBe(
       PRE_REFACTOR_HOOK_ORDER_SHA256
     )
   })
 
   it('aggregates every extracted hook stage', () => {
-    expect(sourceFiles).toHaveLength(19)
+    expect(sourceFiles).toHaveLength(20)
     expect(sourceFiles).toContain('TerminalPane.tsx')
     expect(sourceFiles).toContain('use-terminal-pane-controller.ts')
   })

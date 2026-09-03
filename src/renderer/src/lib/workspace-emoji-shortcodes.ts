@@ -1,5 +1,5 @@
 import {
-  STANDARD_EMOJI_SHORTCODE_ENTRIES,
+  getStandardEmojiShortcodeEntries,
   type StandardEmojiShortcodeEntry
 } from '../../../shared/emoji-shortcode-catalog'
 
@@ -16,9 +16,19 @@ export type WorkspaceEmojiReplacement = {
   value: string
 }
 
-const EXACT_SHORTCODE = new Map(
-  STANDARD_EMOJI_SHORTCODE_ENTRIES.map(({ emoji, shortcode }) => [shortcode, { emoji, shortcode }])
-)
+// Lazy for the same reason as the shared catalog it indexes: nothing needs it
+// until a `:` shortcode is completed.
+let exactShortcode: ReadonlyMap<string, WorkspaceEmojiSuggestion> | null = null
+
+function exactShortcodeIndex(): ReadonlyMap<string, WorkspaceEmojiSuggestion> {
+  exactShortcode ??= new Map(
+    getStandardEmojiShortcodeEntries().map(({ emoji, shortcode }) => [
+      shortcode,
+      { emoji, shortcode }
+    ])
+  )
+  return exactShortcode
+}
 
 // Lower tiers rank first, so `korea` surfaces `south_korea` above `dishwasher`-style incidental hits.
 const MATCH_TIER = { exact: 0, prefix: 1, wordStart: 2, substring: 3 } as const
@@ -43,15 +53,17 @@ export function searchWorkspaceEmojiShortcodes(
     return []
   }
 
-  const matches = STANDARD_EMOJI_SHORTCODE_ENTRIES.flatMap((entry) => {
-    const tier = matchTier(entry.shortcode, normalizedQuery)
-    return tier === null ? [] : [{ ...entry, tier }]
-  }).sort(
-    (left, right) =>
-      left.tier - right.tier ||
-      left.shortcode.length - right.shortcode.length ||
-      left.shortcode.localeCompare(right.shortcode)
-  )
+  const matches = getStandardEmojiShortcodeEntries()
+    .flatMap((entry) => {
+      const tier = matchTier(entry.shortcode, normalizedQuery)
+      return tier === null ? [] : [{ ...entry, tier }]
+    })
+    .sort(
+      (left, right) =>
+        left.tier - right.tier ||
+        left.shortcode.length - right.shortcode.length ||
+        left.shortcode.localeCompare(right.shortcode)
+    )
   const seenEmoji = new Set<string>()
   const suggestions: WorkspaceEmojiSuggestion[] = []
   for (const { emoji, shortcode } of matches) {
@@ -96,7 +108,7 @@ export function replaceCompletedWorkspaceEmojiShortcode(
   if (!match) {
     return null
   }
-  const suggestion = EXACT_SHORTCODE.get(match[2].toLowerCase())
+  const suggestion = exactShortcodeIndex().get(match[2].toLowerCase())
   if (!suggestion) {
     return null
   }

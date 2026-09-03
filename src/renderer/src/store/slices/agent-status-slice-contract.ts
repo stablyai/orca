@@ -14,6 +14,7 @@ import type {
   AgentProviderSessionMetadata,
   DropAgentStatusByTabPrefixOptions,
   DropAgentStatusByWorktreeOptions,
+  DropAgentStatusOptions,
   DropHibernatedAgentPaneOptions,
   RetainedAgentEntry,
   AllAgentSessionCaptureMode
@@ -133,7 +134,7 @@ export type AgentStatusSlice = {
   clearTransientAgentStatuses: (connectionId: string, clearedAt: number) => void
 
   /** Remove a single entry AND suppress re-retention on its next disappearance (user-initiated teardown: X button, pane close). */
-  dropAgentStatus: (paneKey: string) => void
+  dropAgentStatus: (paneKey: string, opts?: DropAgentStatusOptions) => void
 
   /** Remove all entries under a tab AND suppress re-retention for each (tab close — no rows may reappear). */
   dropAgentStatusByTabPrefix: (
@@ -166,6 +167,9 @@ export type AgentStatusSlice = {
 
   /** Dismiss a retained entry by its paneKey. */
   dismissRetainedAgent: (paneKey: string) => void
+
+  /** Dismiss several retained entries in one set (Activity "Clear completed"). */
+  dismissRetainedAgents: (paneKeys: readonly string[]) => void
 
   /** Dismiss all retained entries belonging to a worktree. */
   dismissRetainedAgentsByWorktree: (worktreeId: string) => void

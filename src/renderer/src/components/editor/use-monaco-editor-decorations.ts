@@ -6,7 +6,7 @@ import {
   setMarkdownDocCompletionDocuments
 } from './monaco-markdown-doc-completions'
 import type { MarkdownDocLinkDecorationController } from './monaco-markdown-doc-link-decorations'
-import { buildGitConflictDecorations, hasGitConflictMarkers } from './monaco-conflict-decorations'
+import { buildGitConflictDecorations } from './monaco-conflict-decorations'
 
 export type MonacoEditorDecorations = {
   markdownDocLinkDecorationsRef: MutableRefObject<MarkdownDocLinkDecorationController | null>
@@ -52,9 +52,14 @@ export function useMonacoEditorDecorations(params: {
     }
   }, [editorRef, language, markdownDocuments])
 
+  // Why: content changes are already covered by the controller's own
+  // `onDidChangeModelContent` subscription (which also catches programmatic
+  // edits this effect never saw), so mirroring `content` here only doubled the
+  // debounce timer churn per keystroke. A language swap on a retained model has
+  // no content event, so that trigger stays.
   useEffect(() => {
     markdownDocLinkDecorationsRef.current?.refresh()
-  }, [content, language])
+  }, [language])
 
   useEffect(() => {
     const ed = mountedEditor
@@ -62,13 +67,17 @@ export function useMonacoEditorDecorations(params: {
       return
     }
 
-    if (!conflictDecorationsEnabled || !hasGitConflictMarkers(content)) {
+    if (!conflictDecorationsEnabled) {
       conflictDecorationsRef.current?.clear()
       return
     }
 
     // Why: conflict markers are ordinary file text, so Monaco needs explicit decorations to keep unresolved blocks visible.
     const decorations = buildGitConflictDecorations(content)
+    if (decorations.length === 0) {
+      conflictDecorationsRef.current?.clear()
+      return
+    }
     if (!conflictDecorationsRef.current) {
       conflictDecorationsRef.current = ed.createDecorationsCollection(decorations)
       return

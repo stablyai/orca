@@ -12,7 +12,11 @@ import { TableRow } from '@tiptap/extension-table-row'
 import { BlockMath, InlineMath } from '@tiptap/extension-mathematics'
 import { Markdown } from '@tiptap/markdown'
 import { createLowlight, common } from 'lowlight'
-import { loadLocalImageSrc, onImageCacheInvalidated } from './useLocalImageSrc'
+import {
+  acquireLocalImageSrcLease,
+  loadLocalImageSrc,
+  onImageCacheInvalidated
+} from './useLocalImageSrc'
 import type { RuntimeFileOperationArgs } from '@/runtime/runtime-file-client'
 import {
   createRawMarkdownHtmlBlock,
@@ -126,14 +130,18 @@ export function createRichMarkdownExtensions({
 
           let currentSrc = node.attrs.src as string | undefined
           let currentContextVersion = getImageContextVersion(this.storage)
+          let releaseImageLease: (() => void) | undefined
 
           const loadImage = (src: string | undefined): void => {
+            releaseImageLease?.()
+            releaseImageLease = undefined
             const fp = this.storage.filePath as string
             const runtimeContext = this.storage.runtimeContext as
               | RuntimeFileOperationArgs
               | undefined
             const contextVersionAtLoad = getImageContextVersion(this.storage)
             if (src && fp) {
+              releaseImageLease = acquireLocalImageSrcLease(src, fp, undefined, runtimeContext)
               void loadLocalImageSrc(src, fp, undefined, runtimeContext).then((resolved) => {
                 if (currentSrc !== src || currentContextVersion !== contextVersionAtLoad) {
                   return
@@ -187,6 +195,7 @@ export function createRichMarkdownExtensions({
               return true
             },
             destroy: () => {
+              releaseImageLease?.()
               if (reloadListeners instanceof Set) {
                 reloadListeners.delete(reloadForContextChange)
               }

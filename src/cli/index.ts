@@ -8,6 +8,7 @@ import {
   specPaths,
   validateCommandAndFlags
 } from './args'
+import { readOrcaCliVersion } from './cli-version'
 import { dispatch } from './dispatch'
 import {
   assertEnvironmentSelectorResolvable,
@@ -30,6 +31,10 @@ function shouldIgnoreRemoteSelection(commandPath: string[]): boolean {
     commandPath[0] === 'account' ||
     commandPath[0] === 'artifacts' ||
     commandPath[0] === 'environment' ||
+    // Why: `host list` answers "what can this machine target, and with what flag". Half of that
+    // answer (paired servers) is read from this machine's own pairing store and cannot be routed,
+    // so routing the other half produced one listing describing two machines at once.
+    commandPath[0] === 'host' ||
     commandPath[0] === 'serve' ||
     commandPath[0] === 'agent' ||
     commandPath[0] === 'vm' ||
@@ -59,6 +64,17 @@ export async function main(
   argv = process.argv.slice(2),
   cwd = resolveInvocationCwd()
 ): Promise<void> {
+  // Why: version audits use the bundled launcher; Electron intercepts direct binary version flags.
+  if (argv.length === 1 && (argv[0] === '--version' || argv[0] === '-v')) {
+    const version = readOrcaCliVersion()
+    if (!version) {
+      process.stderr.write('Could not determine the Orca version for this build.\n')
+      process.exitCode = 1
+      return
+    }
+    process.stdout.write(`${version}\n`)
+    return
+  }
   if (argv[0] === 'agent-teams-tmux') {
     await runAgentTeamsTmuxShim(argv.slice(1))
     return

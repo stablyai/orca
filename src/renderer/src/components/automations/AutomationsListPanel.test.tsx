@@ -91,6 +91,7 @@ function renderPanel(
           }}
           hostCatalog={HOST_CATALOG}
           canCreateAutomation={true}
+          onOpenRuns={() => undefined}
           externalManagersUncheckedNotice={uncheckedNotice}
           onSelectHost={() => undefined}
           onRecoverHost={() => undefined}

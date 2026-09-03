@@ -79,7 +79,8 @@ export class OrcaRuntimeWithSyncWindowGraph extends OrcaRuntimeWithAttachWindow 
     const changedMobileWorktrees = this.syncMobileSessionTabs(
       graph.mobileSessionTabs,
       graph.unchangedMobileSessionWorktrees,
-      mobileSessionResyncWorktrees
+      mobileSessionResyncWorktrees,
+      rendererGeneration
     )
     const nextLeaves = new Map<string, RuntimeLeafRecord>()
     const graphSyncedAt = this.nextTitleObservationSequence()
@@ -237,7 +238,7 @@ export class OrcaRuntimeWithSyncWindowGraph extends OrcaRuntimeWithAttachWindow 
       // the PTY touch path does) or the re-emitted payload — e.g. the
       // pending-handle → ready flip — is discarded and the client stays stale.
       // The accepted-renderer tracking is untouched: this is a main-local bump.
-      this.mobileSessionTabsByWorktree.set(worktreeId, {
+      this.storeMobileSessionSnapshot(worktreeId, {
         ...stored,
         snapshotVersion: stored.snapshotVersion + 1
       })
