@@ -135,9 +135,14 @@ export function acknowledgeRunDelivery(
     this.requireCurrentConsumer(params.runId, params.consumerGeneration)
     const delivery = this.getDeliveryRaw(params.deliveryId)
     if (!delivery || delivery.run_id !== params.runId) {
+      // Why: a delivery is the batch; the only id a caller sees while reading the
+      // message list is the message id, so a Run-scope verdict sends them hunting
+      // the wrong axis. Name the id-kind mismatch and the field that carries one.
       throw new OrchestrationError(
         'stale_delivery',
-        `Delivery ${params.deliveryId} does not belong to this Run.`
+        !delivery && this.getMessageById(params.deliveryId)
+          ? `${params.deliveryId} is a message id, not a delivery id. Acknowledge the batch with the deliveryId field from the check response.`
+          : `Delivery ${params.deliveryId} does not belong to this Run.`
       )
     }
     if (
