@@ -20,7 +20,7 @@ function createTerminal(bracketedPasteMode = true) {
 }
 
 describe('terminal bracketed paste policy', () => {
-  it('temporarily ignores bracketed paste wrappers for single-line paste after Ctrl+C', () => {
+  it('keeps bracketed paste wrappers for single-line paste after Ctrl+C', () => {
     const terminal = createTerminal(true)
     const observedIgnoreValues: (boolean | undefined)[] = []
     terminal.paste.mockImplementation(() => {
@@ -31,7 +31,7 @@ describe('terminal bracketed paste policy', () => {
     pasteTerminalText(terminal, 'a69ce28e1d092e0c8825cd1a109ac36409962bc1')
 
     expect(terminal.paste).toHaveBeenCalledWith('a69ce28e1d092e0c8825cd1a109ac36409962bc1')
-    expect(observedIgnoreValues).toEqual([true])
+    expect(observedIgnoreValues).toEqual([false])
     expect(terminal.options.ignoreBracketedPasteMode).toBe(false)
   })
 
@@ -144,7 +144,7 @@ describe('terminal bracketed paste policy', () => {
     observeTerminalBracketedPasteModeOutput(terminal, '04h')
     pasteTerminalText(terminal, 'commit')
 
-    expect(observedIgnoreValues).toEqual([true])
+    expect(observedIgnoreValues).toEqual([false])
   })
 
   it('detects split compound bracketed paste mode output', () => {
@@ -178,12 +178,17 @@ describe('terminal bracketed paste policy', () => {
     expect(observedIgnoreValues).toEqual([false, false])
   })
 
-  it('renders embedded escape bytes inert when forcing plain single-line paste', () => {
+  it('keeps bracketed paste for single-line payloads that contain escape bytes after Ctrl+C', () => {
     const terminal = createTerminal(true)
+    const observedIgnoreValues: (boolean | undefined)[] = []
+    terminal.paste.mockImplementation(() => {
+      observedIgnoreValues.push(terminal.options.ignoreBracketedPasteMode)
+    })
 
     markTerminalBracketedPasteInterrupted(terminal)
     pasteTerminalText(terminal, 'before\x1b[201~after')
 
-    expect(terminal.paste).toHaveBeenCalledWith('before\u241b[201~after')
+    expect(terminal.paste).toHaveBeenCalledWith('before\x1b[201~after')
+    expect(observedIgnoreValues).toEqual([false])
   })
 })
