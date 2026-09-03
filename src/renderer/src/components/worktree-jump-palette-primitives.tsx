@@ -7,6 +7,7 @@ import type { MatchRange, PaletteSearchResult } from '@/lib/worktree-palette-sea
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import type { Worktree } from '../../../shared/worktree/types'
 import { resolveWorktreeBranchLabel } from '@/lib/worktree-default-display-name'
+import { windowPaletteSecondaryText } from '@/lib/palette-secondary-text-window'
 
 export function PaletteRowShortcutBadge({
   index,
@@ -85,6 +86,7 @@ export function PaletteOpenTabPrimaryLine({
 }): React.JSX.Element {
   const showSecondary = secondaryText.trim().length > 0
   const showWorktree = worktreeName.trim().length > 0
+  const secondary = windowPaletteSecondaryText(secondaryText, secondaryRanges)
 
   return (
     <div className="flex min-w-0 items-center gap-2 overflow-hidden">
@@ -110,8 +112,12 @@ export function PaletteOpenTabPrimaryLine({
       {showSecondary ? (
         <>
           <span className="shrink-0 text-muted-foreground/45">·</span>
-          <span className="min-w-0 truncate text-[12px] font-medium text-muted-foreground/92">
-            <HighlightedText text={secondaryText} matchRanges={secondaryRanges} />
+          <span
+            data-slot="palette-open-tab-secondary"
+            title={secondary.elided ? secondaryText : undefined}
+            className="min-w-0 max-w-[min(38%,20rem)] truncate text-[12px] font-medium text-muted-foreground/92"
+          >
+            <HighlightedText text={secondary.text} matchRanges={secondary.ranges} />
           </span>
         </>
       ) : null}
@@ -120,7 +126,7 @@ export function PaletteOpenTabPrimaryLine({
           <span className="shrink-0 text-muted-foreground/45">·</span>
           <span
             data-slot="palette-open-tab-worktree"
-            className="min-w-0 truncate text-[12px] font-medium text-muted-foreground/92"
+            className="min-w-0 max-w-[min(24%,11rem)] truncate text-[12px] font-medium text-muted-foreground/92"
           >
             <HighlightedText text={worktreeName} matchRanges={worktreeRanges} />
           </span>
