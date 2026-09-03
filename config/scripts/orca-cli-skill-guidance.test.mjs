@@ -123,6 +123,47 @@ describe('orca CLI skill guidance', () => {
     expect(skill).not.toContain('live_sk_')
   })
 
+  // A wrong viewport is silent: the command reports the width it was given, Chromium renders 980,
+  // and the agent then reports a breakpoint it never rendered. The trap has to be in the guide.
+  it('teaches responsive viewport control and the mobile-flag trap', () => {
+    const skill = readSkill().replace(/\s+/gu, ' ')
+
+    expect(skill).toContain('orca viewport --width <w> --height <h> --scale <n>')
+    expect(skill).toContain('never pass `--mobile`')
+    expect(skill).toContain('980 px default layout viewport')
+    expect(skill).toContain('survives `goto` but is dropped by `reload`')
+    expect(skill).toContain('before trusting a measurement')
+    // The typed command is missing from `orca --help`, so the guide is where agents find it.
+    expect(skill).toContain('ORCA viewport --width <w> --height <h> [--scale <n>] --json')
+  })
+
+  it('documents the passthrough surface and its dead ends', () => {
+    const skill = readSkill().replace(/\s+/gu, ' ')
+
+    expect(skill).toContain('Passthrough-only commands:')
+    expect(skill).toContain('tokenizes the passthrough string on spaces')
+    expect(skill).toContain('Target.createBrowserContext: Not allowed')
+    expect(skill).toContain('--enable react-devtools')
+    // `help` is not an agent-browser command, so the example it replaced always errored.
+    expect(skill).not.toContain('exec --command "help"')
+    expect(skill).toContain('ORCA exec --command "vitals" --json')
+  })
+
+  // The runtime serves the generated bundle, not the markdown, so guide-only assertions can pass
+  // while what agents actually read is stale.
+  it('keeps the generated bundle in sync with the guide source', () => {
+    const bundle = readFileSync(join(projectDir, 'src', 'cli', 'bundled-skill-guides.ts'), 'utf8')
+
+    for (const phrase of [
+      'never pass `--mobile`',
+      'Passthrough-only commands:',
+      'ORCA viewport --width <w> --height <h> [--scale <n>] --json'
+    ]) {
+      expect(bundle).toContain(phrase)
+    }
+    expect(bundle).not.toContain('exec --command \\"help\\"')
+  })
+
   // Publishing defaults to off, so an agent that follows the unconditional share workflow
   // just loops on denials. The guide has to teach the opt-in and the recovery.
   it('teaches the artifact publish opt-in and its recovery path', () => {

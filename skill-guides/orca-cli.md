@@ -355,8 +355,34 @@ ORCA cookie get --json
 ORCA capture start --json
 ORCA console --limit 50 --json
 ORCA network --limit 50 --json
-ORCA exec --command "help" --json
+ORCA viewport --width <w> --height <h> [--scale <n>] --json
+ORCA geolocation --latitude <lat> --longitude <lon> --json
+ORCA exec --command "vitals" --json
 ```
+
+Passthrough-only commands:
+
+The embedded browser is Chromium, driven by `agent-browser`, so `orca exec` reaches capabilities with
+no typed equivalent. Run `agent-browser --help` for the full surface; the ones worth knowing here:
+
+```text
+ORCA exec --command "set viewport 0 0" --json              # reset; typed `orca viewport` rejects 0
+ORCA exec --command "pushstate <path>" --json              # SPA soft nav that refetches server data
+ORCA exec --command "get styles <sel>" --json              # typed `get` covers text/html/value/url/title/count/box
+ORCA exec --command "diff snapshot" --json                 # also: diff screenshot --baseline, diff url
+ORCA exec --command "network route <url> --abort" --json   # also: network har; typed `network` only reads the log
+ORCA exec --command "vitals" --json                        # Core Web Vitals
+ORCA exec --command "set media reduced-motion" --json      # typed --reduced-motion is accepted but never applied
+ORCA exec --command "trace start" --json                   # also: profiler start, inspect
+```
+
+`agent-browser` tokenizes the passthrough string on spaces, so an argument that contains a space
+needs the typed command instead: `orca set device --name "iPhone 17" --json` works,
+`orca exec --command "set device iPhone 17"` reads `iPhone` as the whole device name.
+
+Two `agent-browser` capabilities are unavailable inside the embedded browser: `record start` fails
+with a CDP `Target.createBrowserContext: Not allowed`, and the `react *` commands need the binary
+relaunched with `--enable react-devtools`.
 
 Browser rules:
 
@@ -367,6 +393,11 @@ Browser rules:
 - For concurrent browser work, run `orca tab list --json`, read `tabs[].browserPageId`, and pass `--page <browserPageId>` on later commands.
 - Use typed tab commands (`orca tab list/create/close/switch`), not `orca exec --command "tab ..."`, so Orca keeps UI state synchronized.
 - Prefer `wait --text`, `--url`, `--selector`, or `--load` after async page changes instead of bare timeouts.
+- Set a responsive viewport with `orca viewport --width <w> --height <h> --scale <n>`, and **never pass `--mobile`**. The mobile flag makes Chromium fall back to its 980 px default layout viewport, so the requested width is discarded while the command still reports it: `--width 390 --scale 3` gives `innerWidth` 390 and `matchMedia('(min-width: 768px)')` false, the same call with `--mobile` gives 980 and true. `orca set device --name "iPhone 17"` implies the mobile flag and hits the same wall, so it changes the user agent and device scale factor but not the breakpoint.
+- `orca set media --reduced-motion reduce` is accepted and reports `{"set": true}`, but `prefers-reduced-motion: reduce` stays false; `orca exec --command "set media reduced-motion"` does apply it. `--color-scheme` on the same command works normally.
+- A viewport override survives `goto` but is dropped by `reload`. Re-assert it after navigating and confirm with `orca eval --expression "innerWidth"` before trusting a measurement — nothing in the failing case reports an error.
+- `screenshot` honors an emulated viewport at exact CSS pixels, but a scale above 1 can duplicate the page inside the capture (seen at scale 3). Take mobile screenshots at scale 1 and read layout facts from `eval`, not from the image.
+- For an SPA route change, prefer `orca exec --command "pushstate <path>"` over a hand-written `history.pushState` in `eval`: the passthrough detects the framework router, so server data refetches, while a raw `pushState` only rewrites the URL. Its JSON result echoes the pre-navigation URL; read the new one with `orca eval --expression "location.pathname"`.
 - Less common workflows can use typed commands above or `orca exec --command "<agent-browser command>"` passthrough.
 - If `fill` or `type` fails on a custom input, try `orca focus --element @e1 --json` then `orca inserttext --text "text" --json`.
 - Client-hosted pages have interactive-session affinity: the page renders in the paired desktop's own browser engine, so every command against it needs that desktop online and returns `browser_host_unavailable` when it is closed, asleep, or disconnected. Server-hosted pages keep running with no desktop attached, so prefer server placement for long-running or unattended browser automation.
