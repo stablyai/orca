@@ -119,6 +119,59 @@ describe('useNativeChatSessionOptions model reporting', () => {
     expect(selectedValue(result.current.snapshot, 'model')).toBe('sonnet')
   })
 
+  it('does not let a retry already in flight overwrite a pick made meanwhile', async () => {
+    // The retry checks for a pick before it starts, but the snapshot read is
+    // async; a pick that lands while that read is in flight must still win.
+    vi.useFakeTimers()
+    discoverModels.mockResolvedValue(null)
+    let resolveLateSnapshot: (snapshot: { data: string; alternateScreen: false }) => void = () => {}
+    const getMainBufferSnapshot = vi
+      .fn()
+      .mockResolvedValueOnce({ data: '', alternateScreen: false })
+      .mockReturnValueOnce(
+        new Promise<{ data: string; alternateScreen: false }>((resolve) => {
+          resolveLateSnapshot = resolve
+        })
+      )
+      .mockReturnValue(new Promise(() => {}))
+    Object.defineProperty(window, 'api', {
+      configurable: true,
+      value: { pty: { getMainBufferSnapshot } }
+    })
+    const dispatchCommand = vi.fn().mockResolvedValue(undefined)
+    // Stable, as the pane's real reader is: an inline arrow would restart the
+    // read effect on every render and cancel the very retry under test.
+    const readTerminalScreen = (): string | null => null
+
+    const { result } = renderHook(() =>
+      useNativeChatSessionOptions({
+        agent: 'claude',
+        terminalTabId: 'tab-inflight-pick',
+        targetPtyId: 'pty-inflight-pick',
+        dispatchCommand,
+        readTerminalScreen
+      })
+    )
+
+    // The blank first read schedules a retry, whose read is now in flight.
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(5_000)
+    })
+    expect(getMainBufferSnapshot).toHaveBeenCalledTimes(2)
+
+    await act(async () => {
+      await result.current.surface?.setOption('model', 'sonnet')
+    })
+    expect(selectedValue(result.current.snapshot, 'model')).toBe('sonnet')
+
+    await act(async () => {
+      resolveLateSnapshot({ data: CLAUDE_SCREEN_HAIKU, alternateScreen: false })
+      await vi.advanceTimersByTimeAsync(0)
+    })
+
+    expect(selectedValue(result.current.snapshot, 'model')).toBe('sonnet')
+  })
+
   it('re-resolves the reported model against models discovered after the read', async () => {
     // Why: discovery is async, so the first scrape can only reach the seed. If
     // the reported id were left at the family the picker would show a row it

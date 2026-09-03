@@ -202,6 +202,11 @@ export function useNativeChatSessionOptions(args: {
         if (cancelled) {
           return
         }
+        // Why: the snapshot read is async. A pick that landed while a retry's
+        // read was in flight already names the model; the frame is stale by then.
+        if (attempt > 0 && modelIsKnown()) {
+          return
+        }
         reportedScreenRef.current = screen
         surface.reportSessionOptions(reportedValues)
         return
