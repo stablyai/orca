@@ -1,13 +1,9 @@
-import { execFileSync } from 'node:child_process'
 import { mkdirSync, rmSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
 import type { Locator, Page } from '@stablyai/playwright-test'
+import { runGit } from './helpers/git-fixture-command'
 import { test, expect } from './helpers/orca-app'
 import { waitForActiveWorktree, waitForSessionReady } from './helpers/store'
-
-function runGit(repoPath: string, args: string[]): void {
-  execFileSync('git', args, { cwd: repoPath, stdio: 'pipe' })
-}
 
 function createGitRepo(repoPath: string): void {
   rmSync(repoPath, { recursive: true, force: true })

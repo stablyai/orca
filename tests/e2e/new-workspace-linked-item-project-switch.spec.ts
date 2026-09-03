@@ -12,21 +12,17 @@
  * field pill re-render path.
  */
 
-import { execFileSync } from 'node:child_process'
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import type { Page } from '@stablyai/playwright-test'
+import { runGit } from './helpers/git-fixture-command'
 import { test, expect } from './helpers/orca-app'
 import { waitForActiveWorktree, waitForSessionReady } from './helpers/store'
 import type { LinkedWorkItemSummary } from '../../src/renderer/src/lib/new-workspace'
 import type { TaskSourceContext } from '../../src/shared/task-source-context'
 
 const SECOND_PROJECT_NAME = 'linked-item-second-project'
-
-function runGit(repoPath: string, args: string[]): void {
-  execFileSync('git', args, { cwd: repoPath, stdio: 'pipe' })
-}
 
 function createGitRepo(repoPath: string): void {
   mkdirSync(repoPath, { recursive: true })

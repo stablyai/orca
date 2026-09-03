@@ -1,7 +1,7 @@
-import { execFileSync } from 'node:child_process'
 import { mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
+import { runGit } from './helpers/git-fixture-command'
 
 export type LargeFileCountRepoOptions = {
   /** Files committed on the initial commit. */
@@ -25,10 +25,6 @@ export type LargeFileCountRepo = {
   trackedFiles: number
   untrackedFiles: number
   modifiedFiles: number
-}
-
-function runGit(repoPath: string, args: string[]): void {
-  execFileSync('git', args, { cwd: repoPath, stdio: 'pipe' })
 }
 
 /**

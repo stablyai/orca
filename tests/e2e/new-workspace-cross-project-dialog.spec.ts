@@ -1,17 +1,13 @@
-import { execFileSync } from 'node:child_process'
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
+import { runGit } from './helpers/git-fixture-command'
 import { test, expect } from './helpers/orca-app'
 import { waitForActiveWorktree, waitForSessionReady } from './helpers/store'
 
 const LONG_REPOSITORY_NAME = 'cross-project-dialog-long-repository-name'.repeat(3)
 const LONG_REPOSITORY_SLUG = LONG_REPOSITORY_NAME
 const CURRENT_REPOSITORY_NAME = 'current-project-name'.repeat(3)
-
-function runGit(repositoryPath: string, args: string[]): void {
-  execFileSync('git', args, { cwd: repositoryPath, stdio: 'pipe' })
-}
 
 function createGitRepository(repositoryPath: string): void {
   mkdirSync(repositoryPath, { recursive: true })

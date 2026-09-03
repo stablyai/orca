@@ -1,8 +1,8 @@
-import { execFileSync } from 'node:child_process'
 import { mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import type { Page } from '@stablyai/playwright-test'
+import { runGit } from './helpers/git-fixture-command'
 import { test, expect } from './helpers/orca-app'
 import { waitForSessionReady } from './helpers/store'
 
@@ -27,10 +27,6 @@ type ScrollProbeSample = {
 
 const FILE_COUNT = 18
 const ADDED_LINES_PER_FILE = 180
-
-function runGit(repoPath: string, args: string[]): void {
-  execFileSync('git', args, { cwd: repoPath, stdio: 'pipe' })
-}
 
 function buildBaseFile(fileIndex: number): string {
   return `${Array.from(

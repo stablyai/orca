@@ -1,7 +1,7 @@
-import { execFileSync } from 'node:child_process'
 import { mkdirSync, rmSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
 import type { ElectronApplication, Page } from '@stablyai/playwright-test'
+import { runGit } from './helpers/git-fixture-command'
 import { test, expect } from './helpers/orca-app'
 import { waitForActiveWorktree, waitForSessionReady } from './helpers/store'
 import { worktreeRow, worktreeRowSurface } from './worktree-row-locators'
@@ -14,10 +14,6 @@ type WorktreeIds = {
   repoId: string
   mainWorktreeId: string
   featureWorktreeId: string
-}
-
-function runGit(cwd: string, args: string[]): void {
-  execFileSync('git', args, { cwd, stdio: 'pipe' })
 }
 
 /** Repo whose shared orca.yaml carries a real setup script, plus a second worktree. */

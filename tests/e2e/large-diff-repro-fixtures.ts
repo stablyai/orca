@@ -1,8 +1,8 @@
-import { execFileSync } from 'node:child_process'
+import { randomUUID } from 'node:crypto'
 import { mkdirSync, mkdtempSync, realpathSync, writeFileSync } from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
-import { randomUUID } from 'node:crypto'
+import { runGit } from './helpers/git-fixture-command'
 
 export type IsolatedLargeDiffRepo = {
   repoPath: string
@@ -13,10 +13,6 @@ export type IsolatedLargeDiffRepo = {
 export type IsolatedStagedLocaleDiffRepo = {
   repoPath: string
   relativePaths: string[]
-}
-
-function runGit(repoPath: string, args: string[]): void {
-  execFileSync('git', args, { cwd: repoPath, stdio: 'pipe' })
 }
 
 export function createIsolatedLargeDiffRepo(): IsolatedLargeDiffRepo {
