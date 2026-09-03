@@ -85,6 +85,33 @@ function mountedLeafIdsIn(
   ]
 }
 
+function collectLeafIds(node: TerminalPaneLayoutNode, leafIds: Set<string>): void {
+  if (node.type === 'leaf') {
+    leafIds.add(node.leafId)
+    return
+  }
+  collectLeafIds(node.first, leafIds)
+  collectLeafIds(node.second, leafIds)
+}
+
+/**
+ * Mounted leaves the host layout no longer names. The host retires a leaf when
+ * its PTY ends, so a pane still mounted for it is a ghost: it renders nothing
+ * and, once it is the only pane left, absorbs the tab's next close. An empty
+ * layout plans nothing — absence of a tree is not evidence about any pane.
+ */
+export function planTerminalLiveLayoutRemovals(
+  root: TerminalPaneLayoutNode | null | undefined,
+  currentLeafIds: Iterable<string>
+): string[] {
+  if (!root) {
+    return []
+  }
+  const layoutLeafIds = new Set<string>()
+  collectLeafIds(root, layoutLeafIds)
+  return [...currentLeafIds].filter((leafId) => !layoutLeafIds.has(leafId))
+}
+
 export function planTerminalLiveLayoutInsertions(
   root: TerminalPaneLayoutNode | null | undefined,
   currentLeafIds: Iterable<string>

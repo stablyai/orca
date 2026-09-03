@@ -8,7 +8,8 @@ import { safeFit } from '@/lib/pane-manager/pane-tree-ops'
 import { resolvePaneKeyForManager } from '@/lib/pane-manager/pane-key-resolution'
 import {
   isHostAuthoritativeLayout,
-  planTerminalLiveLayoutInsertions
+  planTerminalLiveLayoutInsertions,
+  planTerminalLiveLayoutRemovals
 } from './terminal-live-layout-reconciliation'
 import { useTerminalPaneProcessExitActions } from './use-terminal-pane-process-exit-actions'
 import type { TerminalPaneCloseController } from './use-terminal-pane-close-actions'
@@ -24,6 +25,7 @@ export function useTerminalPaneReconciliation(controller: TerminalPaneCloseContr
     managerRef,
     paneCount,
     paneLayoutRevision,
+    paneTransportsRef,
     pendingPaneSizeRefreshFrameIdsRef,
     persistLayoutSnapshot,
     restoredLayout,
@@ -47,11 +49,10 @@ export function useTerminalPaneReconciliation(controller: TerminalPaneCloseContr
     ) {
       return
     }
-    const insertions = planTerminalLiveLayoutInsertions(
-      restoredLayout.root,
-      manager.getPanes().map((pane) => pane.leafId)
-    )
-    if (insertions.length === 0) {
+    const mountedLeafIds = manager.getPanes().map((pane) => pane.leafId)
+    const insertions = planTerminalLiveLayoutInsertions(restoredLayout.root, mountedLeafIds)
+    const removals = planTerminalLiveLayoutRemovals(restoredLayout.root, mountedLeafIds)
+    if (insertions.length === 0 && removals.length === 0) {
       return
     }
     let appliedInsertion = false
@@ -81,6 +82,21 @@ export function useTerminalPaneReconciliation(controller: TerminalPaneCloseContr
       if (createdPane) {
         appliedInsertion = true
       }
+    }
+    // Why: the host retired these leaves (its PTY for them ended), so their panes
+    // would otherwise outlive the layout as blank ghosts and take the tab's next
+    // close for themselves. A pane still bound to a PTY is not a ghost — a stale
+    // snapshot may simply not name it yet — and the last pane is never removed.
+    for (const leafId of removals) {
+      const paneId = manager.getNumericIdForLeaf(leafId)
+      if (paneId === null || manager.getPanes().length <= 1) {
+        continue
+      }
+      const transport = paneTransportsRef.current.get(paneId)
+      if (!transport || transport.getPtyId() !== null) {
+        continue
+      }
+      manager.closePane(paneId)
     }
     if (appliedInsertion) {
       persistLayoutSnapshot()

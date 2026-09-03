@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import {
   isHostAuthoritativeLayout,
-  planTerminalLiveLayoutInsertions
+  planTerminalLiveLayoutInsertions,
+  planTerminalLiveLayoutRemovals
 } from './terminal-live-layout-reconciliation'
 import type { TerminalPaneLayoutNode } from '../../../../shared/terminal-tab-types'
 
@@ -230,5 +231,33 @@ describe('planTerminalLiveLayoutInsertions', () => {
     }
 
     expect(planTerminalLiveLayoutInsertions(layout, [])).toEqual([])
+  })
+})
+
+describe('planTerminalLiveLayoutRemovals', () => {
+  it('plans the mounted leaf a host-retired layout no longer names', () => {
+    // Why: closing one pane of a remote-server split kills its PTY on the host,
+    // which retires the leaf and republishes a one-leaf layout; the pane mounted
+    // for the retired leaf must go too, or it lingers as a blank ghost.
+    const layout: TerminalPaneLayoutNode = { type: 'leaf', leafId: 'leaf-a' }
+
+    expect(planTerminalLiveLayoutRemovals(layout, ['leaf-a', 'leaf-b'])).toEqual(['leaf-b'])
+  })
+
+  it('plans nothing when every mounted leaf is still in the layout', () => {
+    const layout: TerminalPaneLayoutNode = {
+      type: 'split',
+      direction: 'vertical',
+      first: { type: 'leaf', leafId: 'leaf-a' },
+      second: { type: 'leaf', leafId: 'leaf-b' }
+    }
+
+    expect(planTerminalLiveLayoutRemovals(layout, ['leaf-a', 'leaf-b'])).toEqual([])
+    expect(planTerminalLiveLayoutRemovals(layout, ['leaf-a'])).toEqual([])
+  })
+
+  it('plans nothing for an empty layout', () => {
+    expect(planTerminalLiveLayoutRemovals(null, ['leaf-a'])).toEqual([])
+    expect(planTerminalLiveLayoutRemovals(undefined, ['leaf-a'])).toEqual([])
   })
 })
