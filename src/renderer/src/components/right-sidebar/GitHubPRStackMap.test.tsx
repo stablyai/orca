@@ -110,4 +110,29 @@ describe('GitHubPRStackMap', () => {
       shiftKey: false
     })
   })
+
+  it('distinguishes cancelled checks while preserving legacy failure wording', () => {
+    const statusStack: GitHubPRStack = {
+      ...stack,
+      entries: [
+        {
+          ...stack.entries![1]!,
+          number: 204,
+          checksPresentationStatus: 'cancelled'
+        },
+        stack.entries![1]!
+      ]
+    }
+    act(() => {
+      root.render(
+        <GitHubPRStackMap stack={statusStack} currentPRNumber={204} onOpenPullRequest={vi.fn()} />
+      )
+    })
+    act(() =>
+      container.querySelector<HTMLButtonElement>('button[aria-label="Expand stack #51"]')?.click()
+    )
+
+    expect(container.textContent).toContain('checks cancelled')
+    expect(container.textContent).toContain('checks failed')
+  })
 })

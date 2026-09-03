@@ -29,4 +29,14 @@ describe('hostedReviewInfoFromGitHubPRInfo', () => {
       githubRepository
     })
   })
+
+  it('copies the optional cancellation presentation state', () => {
+    const review = hostedReviewInfoFromGitHubPRInfo({
+      ...pr,
+      checksStatus: 'failure',
+      checksPresentationStatus: 'cancelled'
+    })
+
+    expect(review).toMatchObject({ status: 'failure', checkPresentationStatus: 'cancelled' })
+  })
 })

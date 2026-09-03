@@ -74,12 +74,14 @@ vi.mock('./checks-panel/check-presentation', () => ({
   CHECK_COLOR: {
     success: 'success',
     failure: 'failure',
+    cancelled: 'cancelled',
     pending: 'pending',
     neutral: 'neutral'
   },
   CHECK_ICON: {
     success: (props: { className?: string }) => <span data-icon="success" {...props} />,
     failure: (props: { className?: string }) => <span data-icon="failure" {...props} />,
+    cancelled: (props: { className?: string }) => <span data-icon="cancelled" {...props} />,
     pending: (props: { className?: string }) => <span data-icon="pending" {...props} />,
     neutral: (props: { className?: string }) => <span data-icon="neutral" {...props} />
   },
@@ -272,6 +274,21 @@ describe('FolderWorkspacePrChecksPanel', () => {
     expect(container.textContent).not.toContain('1 attached')
     expect(container.textContent).not.toContain('with PR/MR')
     expect(container.textContent).not.toContain('unknown')
+  })
+
+  it('summarizes cancelled reviews separately from failures', () => {
+    const reviewEntry = Object.values(mockState.store.hostedReviewCache)[0]
+    reviewEntry.data = makeReview({
+      status: 'failure',
+      checkPresentationStatus: 'cancelled'
+    })
+
+    renderPanel()
+
+    expect(container.textContent).toContain('1 cancelled · 1 worktree')
+    expect(container.textContent).toContain('Checks cancelled')
+    expect(container.querySelector('[data-icon="cancelled"]')).not.toBeNull()
+    expect(container.textContent).not.toContain('failing')
   })
 
   it('summarizes failing and pending rows before the worktree count', () => {

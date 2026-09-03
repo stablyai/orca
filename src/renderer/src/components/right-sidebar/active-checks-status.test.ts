@@ -38,6 +38,24 @@ describe('getActiveChecksStatus', () => {
     expect(getActiveChecksStatus(state)).toBe('success')
   })
 
+  it('returns the optional cancellation presentation state', () => {
+    const state = {
+      activeWorktreeId: 'wt-1',
+      repos: [{ id: 'repo-1', path: '/repo' }],
+      worktreesByRepo: {
+        'repo-1': [{ id: 'wt-1', repoId: 'repo-1', branch: 'refs/heads/feature/test' }]
+      },
+      prCache: {
+        'repo-1::feature/test': {
+          data: { ...makePR('failure'), checksPresentationStatus: 'cancelled' },
+          fetchedAt: 2
+        }
+      }
+    } as unknown as Pick<AppState, 'activeWorktreeId' | 'repos' | 'worktreesByRepo' | 'prCache'>
+
+    expect(getActiveChecksStatus(state)).toBe('cancelled')
+  })
+
   it('uses GitLab MR pipeline status when the active branch has no GitHub PR cache entry', () => {
     const state = {
       activeWorktreeId: 'wt-1',

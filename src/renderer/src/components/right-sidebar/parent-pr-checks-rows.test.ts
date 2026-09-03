@@ -152,6 +152,26 @@ describe('buildParentPrChecksProjection', () => {
       }).rows[0]
     ).toMatchObject({ status: 'pending', group: 'pending' })
 
+    const cancelled = makeProjection({
+      worktree,
+      repo,
+      hostedReviewCache: {
+        [cacheKey]: {
+          data: makeReview({ status: 'failure', checkPresentationStatus: 'cancelled' }),
+          fetchedAt: 1,
+          linkedReviewHintKey: ''
+        }
+      }
+    })
+    expect(cancelled.rows[0]).toMatchObject({
+      status: 'cancelled',
+      group: 'needsAttention',
+      checkTone: 'cancelled',
+      reviewStatus: 'cancelled',
+      summary: 'Checks cancelled'
+    })
+    expect(cancelled.summary).toMatchObject({ failing: 0, cancelled: 1 })
+
     expect(
       makeProjection({
         worktree,
@@ -719,6 +739,12 @@ describe('buildParentPrChecksProjection', () => {
               status: 'completed',
               conclusion: 'failure',
               url: null
+            },
+            {
+              name: 'cancelled build',
+              status: 'completed',
+              conclusion: 'cancelled',
+              url: null
             }
           ],
           fetchedAt: 1,
@@ -729,6 +755,7 @@ describe('buildParentPrChecksProjection', () => {
 
     expect(projection.rows[0]?.detailNames).toEqual(['build'])
     expect(projection.rows[0]?.status).toBe('failing')
+    expect(projection.rows[0]?.summary).toBe('1 failing')
     expect(projection.rows[0]?.githubRepository).toEqual(githubRepository)
   })
 
@@ -752,6 +779,7 @@ describe('buildParentPrChecksProjection', () => {
         [checksKey]: {
           data: [
             { name: 'build', status: 'completed', conclusion: 'failure', url: null },
+            { name: 'cancelled build', status: 'completed', conclusion: 'cancelled', url: null },
             { name: 'lint', status: 'in_progress', conclusion: null, url: null },
             {
               name: 'GitHub Actions #1001',
@@ -767,5 +795,41 @@ describe('buildParentPrChecksProjection', () => {
     })
 
     expect(projection.rows[0]?.detailNames).toEqual(['GitHub Actions #1001', 'build'])
+    expect(projection.rows[0]?.summary).toBe('2 failing')
+  })
+
+  it('counts only cancelled checks in a cancelled row preview', () => {
+    const repo = makeRepo()
+    const worktree = makeWorktree({ id: 'repo-1::/feature' })
+    const review = makeReview({
+      status: 'failure',
+      checkPresentationStatus: 'cancelled',
+      headSha: 'abc123'
+    })
+    const hostedKey = getHostedReviewCacheKey(repo.path, 'feature', settings, repo.id)
+    const checksKey = getGitHubRepoCacheKey(
+      repo.path,
+      repo.id,
+      prChecksCacheSuffix(12, null, 'abc123'),
+      settings
+    )
+    const projection = makeProjection({
+      worktree,
+      repo,
+      hostedReviewCache: { [hostedKey]: { data: review, fetchedAt: 1, linkedReviewHintKey: '' } },
+      checksCache: {
+        [checksKey]: {
+          data: [
+            { name: 'cancelled build', status: 'completed', conclusion: 'cancelled', url: null },
+            { name: 'pending lint', status: 'in_progress', conclusion: null, url: null }
+          ],
+          fetchedAt: 1,
+          headSha: 'abc123'
+        }
+      }
+    })
+
+    expect(projection.rows[0]?.detailNames).toEqual(['cancelled build'])
+    expect(projection.rows[0]?.summary).toBe('1 cancelled')
   })
 })

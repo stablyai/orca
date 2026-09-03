@@ -51,7 +51,7 @@ export async function getFallbackPRListForBranch(
     { ...ghOptions, ...githubHostExecOptions(prRepo) }
   )
   const list = JSON.parse(stdout) as PullRequestLookupData[]
-  return list[0] ?? null
+  return list[0] ? { ...list[0], statusCheckRollupComplete: false } : null
 }
 
 export async function hydrateBranchLookupWithExactPR(
@@ -151,7 +151,10 @@ export async function lookupPRByBranchName(args: {
       args.ghOptions
     )
     return {
-      data: normalizePullRequestLookupData(JSON.parse(stdout) as PullRequestLookupData),
+      data: normalizePullRequestLookupData({
+        ...(JSON.parse(stdout) as PullRequestLookupData),
+        statusCheckRollupComplete: true
+      }),
       dataRepo: null
     }
   } catch (err) {

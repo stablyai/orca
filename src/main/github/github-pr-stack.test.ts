@@ -28,6 +28,39 @@ const summary: GitHubPRStack = {
   baseSha: 'base-sha'
 }
 
+function stackResponse(statusCheckRollup: unknown) {
+  return {
+    stdout: JSON.stringify({
+      data: {
+        repository: {
+          pullRequest: {
+            stack: {
+              number: 51,
+              size: 1,
+              baseRefName: 'main',
+              entries: {
+                nodes: [
+                  {
+                    position: 1,
+                    pullRequest: {
+                      number: 202,
+                      title: 'API',
+                      url: 'https://github.com/stablyai/orca/pull/202',
+                      state: 'OPEN',
+                      mergeable: 'MERGEABLE',
+                      statusCheckRollup
+                    }
+                  }
+                ]
+              }
+            }
+          }
+        }
+      }
+    })
+  }
+}
+
 beforeEach(() => {
   vi.useRealTimers()
   ghExecFileAsyncMock.mockReset()
@@ -38,6 +71,71 @@ beforeEach(() => {
 })
 
 describe('hydrateGitHubPRStack', () => {
+  it('presents a provably complete cancellation-only rollup as cancelled', async () => {
+    ghExecFileAsyncMock.mockResolvedValue(
+      stackResponse({
+        state: 'FAILURE',
+        contexts: {
+          totalCount: 1,
+          pageInfo: { hasNextPage: false },
+          nodes: [{ __typename: 'CheckRun', status: 'COMPLETED', conclusion: 'CANCELLED' }]
+        }
+      })
+    )
+
+    const result = await hydrateGitHubPRStack(repository, 202, summary, { cwd: '/repo' })
+
+    expect(result.entries?.[0]).toMatchObject({
+      checksStatus: 'failure',
+      checksPresentationStatus: 'cancelled'
+    })
+    const queryArgs = ghExecFileAsyncMock.mock.calls[0]?.[0].join(' ')
+    expect(queryArgs).toContain('contexts(first: 100)')
+    expect(queryArgs).toContain('totalCount')
+    expect(queryArgs).toContain('pageInfo { hasNextPage }')
+    expect(queryArgs).toContain('... on CheckRun { status conclusion }')
+    expect(queryArgs).toContain('... on StatusContext { state }')
+  })
+
+  it('keeps genuine failure precedence over a cancelled context', async () => {
+    ghExecFileAsyncMock.mockResolvedValue(
+      stackResponse({
+        state: 'FAILURE',
+        contexts: {
+          totalCount: 2,
+          pageInfo: { hasNextPage: false },
+          nodes: [
+            { __typename: 'CheckRun', status: 'COMPLETED', conclusion: 'CANCELLED' },
+            { __typename: 'CheckRun', status: 'COMPLETED', conclusion: 'FAILURE' }
+          ]
+        }
+      })
+    )
+
+    const result = await hydrateGitHubPRStack(repository, 202, summary, { cwd: '/repo' })
+
+    expect(result.entries?.[0]?.checksStatus).toBe('failure')
+    expect(result.entries?.[0]?.checksPresentationStatus).toBeUndefined()
+  })
+
+  it('does not infer cancellation from a truncated context page', async () => {
+    ghExecFileAsyncMock.mockResolvedValue(
+      stackResponse({
+        state: 'FAILURE',
+        contexts: {
+          totalCount: 2,
+          pageInfo: { hasNextPage: true },
+          nodes: [{ __typename: 'CheckRun', status: 'COMPLETED', conclusion: 'CANCELLED' }]
+        }
+      })
+    )
+
+    const result = await hydrateGitHubPRStack(repository, 202, summary, { cwd: '/repo' })
+
+    expect(result.entries?.[0]?.checksStatus).toBe('failure')
+    expect(result.entries?.[0]?.checksPresentationStatus).toBeUndefined()
+  })
+
   it('maps and caches every entry in one GraphQL request', async () => {
     ghExecFileAsyncMock.mockResolvedValue({
       stdout: JSON.stringify({

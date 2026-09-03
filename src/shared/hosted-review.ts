@@ -1,4 +1,5 @@
 import type {
+  CheckPresentationStatus,
   CheckStatus,
   GitHubRepositoryIdentity,
   PRConflictSummary,
@@ -34,6 +35,8 @@ export type HostedReviewInfo = {
   state: HostedReviewState
   url: string
   status: CheckStatus
+  /** Optional mixed-version presentation detail; status remains the merge-gating verdict. */
+  checkPresentationStatus?: CheckPresentationStatus
   updatedAt: string
   mergeable: PRMergeableState
   reviewDecision?: PRReviewDecision | null

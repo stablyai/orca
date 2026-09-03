@@ -87,6 +87,26 @@ describe('ReviewIcon', () => {
     expect(failing).toContain('text-rose-500/85')
   })
 
+  it('uses the muted check tone for cancellation', () => {
+    const cancelled = renderToStaticMarkup(
+      <ReviewIcon
+        review={{
+          provider: 'github',
+          number: 1,
+          title: 'Open',
+          state: 'open',
+          status: 'failure',
+          checkPresentationStatus: 'cancelled'
+        }}
+        className="size-3"
+        variant="generic"
+      />
+    )
+
+    expect(cancelled).toContain('text-muted-foreground/60')
+    expect(cancelled).not.toContain('text-rose-500/85')
+  })
+
   it('renders merged reviews with the merge glyph', () => {
     const merged = renderToStaticMarkup(
       <ReviewIcon

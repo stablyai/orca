@@ -119,6 +119,35 @@ describe('getFolderWorkspaceCardPrDisplay', () => {
     expect(display).toMatchObject({ number: 3, status: 'failure' })
   })
 
+  it('keeps genuine failures ahead of cancelled attached PRs', () => {
+    const cancelled = makeWorktree({ id: 'cancelled', linkedPR: 1 })
+    const failing = makeWorktree({ id: 'failing', linkedPR: 2 })
+
+    const display = getFolderWorkspaceCardPrDisplay({
+      folderWorkspaceId: 'folder-1',
+      workspaceLineageByChildKey: {
+        [cancelled.id]: makeWorkspaceLineage(cancelled),
+        [failing.id]: makeWorkspaceLineage(failing)
+      },
+      worktreeLineageById: {},
+      worktreeMap: new Map([
+        [cancelled.id, cancelled],
+        [failing.id, failing]
+      ]),
+      repoMap: new Map([[repo.id, repo]]),
+      hostedReviewCache: null,
+      prCache: {
+        'repo-1::cancelled': {
+          data: { ...makePr(1, 'failure'), checksPresentationStatus: 'cancelled' },
+          fetchedAt: 2
+        },
+        'repo-1::failing': makePrEntry(2, 'failure')
+      }
+    })
+
+    expect(display).toMatchObject({ number: 2, status: 'failure' })
+  })
+
   it('uses pending attached PR status ahead of passing PRs', () => {
     const passing = makeWorktree({ id: 'passing', linkedPR: 1 })
     const pending = makeWorktree({ id: 'pending', linkedPR: 2 })

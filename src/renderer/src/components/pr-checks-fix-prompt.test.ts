@@ -4,6 +4,7 @@ import {
   PROMPT_LOG_TAIL_SCAN_CODE_UNITS,
   buildFixBrokenChecksPrompt,
   getCheckDetailsPromptKey,
+  getBrokenChecks,
   truncateLogTailForPrompt
 } from './pr-checks-fix-prompt'
 import type { PRCheckDetail, PRCheckRunDetails } from '../../../shared/github/check-types'
@@ -56,6 +57,16 @@ describe('getCheckDetailsPromptKey', () => {
 })
 
 describe('buildFixBrokenChecksPrompt', () => {
+  it('excludes cancelled checks from the broken-check fix target', () => {
+    const cancelledCheck: PRCheckDetail = {
+      ...failingCheck,
+      name: 'cancelled',
+      conclusion: 'cancelled'
+    }
+
+    expect(getBrokenChecks([failingCheck, cancelledCheck])).toEqual([failingCheck])
+  })
+
   it('keeps names-only broken check data when no details are provided', () => {
     const prompt = buildPrompt({})
 

@@ -1,7 +1,7 @@
 import React from 'react'
 import { MoreHorizontal } from 'lucide-react'
 import type { ActiveRightSidebarTab } from '@/store/slices/editor'
-import type { CheckStatus } from '../../../../shared/github/pull-request-types'
+import type { CheckPresentationStatus } from '../../../../shared/github/pull-request-types'
 import { cn } from '@/lib/utils'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { RIGHT_SIDEBAR_HEADER_NO_DRAG_CLASS_NAME } from './right-sidebar-titlebar-drag-regions'
@@ -26,21 +26,29 @@ export type ActivityBarItem = {
   /** When true, shown only for worktrees that belong to an SSH repo. */
   sshOnly?: boolean
   /** Host-owned health indicator; plugin content cannot style this chrome. */
-  statusIndicator?: CheckStatus
+  statusIndicator?: CheckPresentationStatus
 }
 
-const STATUS_DOT_COLOR: Record<CheckStatus, string> = {
+const STATUS_DOT_COLOR: Record<CheckPresentationStatus, string> = {
   success: 'bg-emerald-500',
   failure: 'bg-rose-500',
+  cancelled: 'bg-muted-foreground',
   pending: 'bg-amber-500',
   neutral: 'bg-muted-foreground'
 }
 
-function activityItemAriaLabel(item: ActivityBarItem, status?: CheckStatus | null): string {
+function activityItemAriaLabel(
+  item: ActivityBarItem,
+  status?: CheckPresentationStatus | null
+): string {
   const base = item.shortcut ? `${item.title} (${item.shortcut})` : item.title
-  return status === 'failure'
-    ? `${base} — ${translate('auto.components.right.sidebar.activityBar.error', 'Error')}`
-    : base
+  if (status === 'failure') {
+    return `${base} — ${translate('auto.components.right.sidebar.activityBar.error', 'Error')}`
+  }
+  if (status === 'cancelled') {
+    return `${base} — ${translate('auto.components.right.sidebar.activityBar.cancelled', 'Cancelled')}`
+  }
+  return base
 }
 
 export function TopActivityOverflowMenu({
@@ -52,7 +60,7 @@ export function TopActivityOverflowMenu({
   items: ActivityBarItem[]
   activeTab: ActiveRightSidebarTab
   onSelect: (tab: ActiveRightSidebarTab) => void
-  checksStatus?: CheckStatus | null
+  checksStatus?: CheckPresentationStatus | null
 }): React.JSX.Element {
   const hiddenChecksStatus =
     checksStatus && checksStatus !== 'neutral' && items.some((item) => item.id === 'checks')
@@ -78,7 +86,9 @@ export function TopActivityOverflowMenu({
           aria-label={
             hiddenItemStatus === 'failure'
               ? `${moreTabsLabel} — ${translate('auto.components.right.sidebar.activityBar.error', 'Error')}`
-              : moreTabsLabel
+              : hiddenItemStatus === 'cancelled'
+                ? `${moreTabsLabel} — ${translate('auto.components.right.sidebar.activityBar.checksCancelled', 'Checks cancelled')}`
+                : moreTabsLabel
           }
         >
           <MoreHorizontal size={16} />
@@ -96,13 +106,15 @@ export function TopActivityOverflowMenu({
         {items.map((item) => {
           const Icon = item.icon
           const active = item.id === activeTab
+          const itemStatus =
+            item.statusIndicator ?? (item.id === 'checks' ? hiddenChecksStatus : null)
           return (
             <DropdownMenuItem
               key={item.id}
               onSelect={() => onSelect(item.id)}
               className={cn(active && 'bg-accent text-accent-foreground')}
               aria-current={active ? 'page' : undefined}
-              aria-label={activityItemAriaLabel(item, item.statusIndicator)}
+              aria-label={activityItemAriaLabel(item, itemStatus)}
             >
               <Icon size={14} />
               <span>{item.title}</span>
@@ -132,7 +144,7 @@ export function ActivityBarButton({
   active: boolean
   onClick: () => void
   layout: 'top' | 'side'
-  statusIndicator?: CheckStatus | null
+  statusIndicator?: CheckPresentationStatus | null
 }): React.JSX.Element {
   const Icon = item.icon
   const isTop = layout === 'top'

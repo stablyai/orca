@@ -5,7 +5,10 @@ import type { GitLabProjectRef } from '../../../../../shared/gitlab-types'
 import type { PRCheckDetail, PRCheckRunDetails } from '../../../../../shared/github/check-types'
 import type { GitHubRepositoryIdentity } from '../../../../../shared/github/pull-request-types'
 import { sortChecksBySeverity } from '../../../../../shared/pr-check-severity-order'
-import { summarizeProviderChecks } from '../../../../../shared/provider-check-summary'
+import {
+  getProviderCheckFailureCount,
+  summarizeProviderChecks
+} from '../../../../../shared/provider-check-summary'
 import { createCheckRunDetailsRequestId } from '@/components/editor/check-run-details-tab'
 import { translate } from '@/i18n/i18n'
 import { useCheckDetailsResize } from '../check-details-resize'
@@ -64,12 +67,10 @@ export function useChecksListState({
   // Why: every header count comes from the same classifier the checks pill uses — counting only
   // `success` made a 2-success/3-skipped PR say "2 passing" next to "5/5 passed", and treating a
   // null conclusion as pending kept a completed-but-unresolved check spinning forever.
-  const {
-    passed: passingCount,
-    failed: failingCount,
-    pending: pendingCount,
-    neutral: neutralCount
-  } = summarizeProviderChecks(checks)
+  const summary = summarizeProviderChecks(checks)
+  const { passed: passingCount, pending: pendingCount, neutral: neutralCount } = summary
+  const failingCount = getProviderCheckFailureCount(summary)
+  const cancelledCount = summary.cancelled ?? 0
 
   useEffect(() => {
     const validKeys = new Set(rows.map((row) => row.key))
@@ -341,6 +342,7 @@ export function useChecksListState({
     rows,
     passingCount,
     failingCount,
+    cancelledCount,
     pendingCount,
     neutralCount,
     toggleCheckExpanded,

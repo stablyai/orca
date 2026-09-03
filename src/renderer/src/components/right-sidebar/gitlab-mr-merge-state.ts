@@ -1,9 +1,10 @@
 import type { HostedReviewInfo } from '../../../../shared/hosted-review'
+import type { CheckPresentationStatus } from '../../../../shared/github/pull-request-types'
 import { translate } from '@/i18n/i18n'
 
 type GitLabMRMergeStateReview = Pick<
   HostedReviewInfo,
-  'state' | 'status' | 'mergeable' | 'mergeStateStatus'
+  'state' | 'status' | 'checkPresentationStatus' | 'mergeable' | 'mergeStateStatus'
 >
 
 type MergePresentation = {
@@ -19,7 +20,7 @@ function blockedPresentation(label: string, tooltip: string): MergePresentation 
 /** Map GitLab detailed_merge_status (stored on mergeStateStatus) to a blocked/checking label. */
 function presentUnknownMergeState(
   mergeStateStatus: string | null | undefined,
-  checksStatus: GitLabMRMergeStateReview['status']
+  checksStatus: CheckPresentationStatus
 ): MergePresentation {
   const status = (mergeStateStatus ?? '').toLowerCase()
   switch (status) {
@@ -121,6 +122,18 @@ function presentUnknownMergeState(
         )
       )
     default:
+      if (checksStatus === 'cancelled') {
+        return blockedPresentation(
+          translate(
+            'auto.components.right.sidebar.gitlab.mr.merge.state.checksCancelled',
+            'Checks cancelled'
+          ),
+          translate(
+            'auto.components.right.sidebar.gitlab.mr.merge.state.checksCancelledUnknownTooltip',
+            'The pipeline was cancelled and GitLab has not reported a final merge status'
+          )
+        )
+      }
       // Why: with no usable reason from GitLab, a red pipeline is the most actionable thing we
       // know — reporting a bare "Checking" hid the failure the user actually has to fix.
       if (checksStatus === 'failure') {
@@ -146,6 +159,7 @@ function presentUnknownMergeState(
 }
 
 export function presentGitLabMRMergeState(review: GitLabMRMergeStateReview): MergePresentation {
+  const checkStatus = review.checkPresentationStatus ?? review.status
   if (review.state === 'merged') {
     return {
       label: translate('auto.components.right.sidebar.gitlab.mr.merge.state.fae95ae20d', 'Merged'),
@@ -192,7 +206,20 @@ export function presentGitLabMRMergeState(review: GitLabMRMergeStateReview): Mer
   // Why: only GitLab's explicit `mergeable` projects to MERGEABLE. UNKNOWN used to fall through
   // to "Able to merge", so not_approved / discussions_not_resolved / ci_must_pass looked ready.
   if (review.mergeable !== 'MERGEABLE') {
-    return presentUnknownMergeState(review.mergeStateStatus, review.status)
+    return presentUnknownMergeState(review.mergeStateStatus, checkStatus)
+  }
+  if (checkStatus === 'cancelled') {
+    return {
+      label: translate(
+        'auto.components.right.sidebar.gitlab.mr.merge.state.checksCancelled',
+        'Checks cancelled'
+      ),
+      tooltip: translate(
+        'auto.components.right.sidebar.gitlab.mr.merge.state.checksCancelledTooltip',
+        'GitLab says this MR can merge, but the pipeline was cancelled'
+      ),
+      directMergeAvailable: true
+    }
   }
   if (review.status === 'failure') {
     return {

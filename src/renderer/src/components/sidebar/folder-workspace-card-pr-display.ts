@@ -21,9 +21,10 @@ type FolderWorkspaceCardPrDisplayArgs = {
 
 const REVIEW_STATUS_PRIORITY: Record<NonNullable<WorktreeCardPrDisplay['status']>, number> = {
   failure: 0,
-  pending: 1,
-  success: 2,
-  neutral: 3
+  cancelled: 1,
+  pending: 2,
+  success: 3,
+  neutral: 4
 }
 
 export function getFolderWorkspaceCardPrDisplay({
@@ -133,5 +134,5 @@ function compareReviewDisplays(left: WorktreeCardPrDisplay, right: WorktreeCardP
 }
 
 function getReviewDisplayPriority(review: WorktreeCardPrDisplay): number {
-  return review.status ? REVIEW_STATUS_PRIORITY[review.status] : 4
+  return review.status ? REVIEW_STATUS_PRIORITY[review.status] : 5
 }

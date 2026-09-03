@@ -5,6 +5,7 @@ import type { PRCheckDetail } from '../../../shared/github/check-types'
 export type PRCheckCounts = {
   passing: number
   failing: number
+  cancelled: number
   needsAction: number
   pending: number
   neutral: number
@@ -29,9 +30,11 @@ export function getCheckCounts(checks: readonly PRCheckDetail[]): PRCheckCounts 
   const needsAction = checks.filter(
     (check) => getCheckConclusion(check) === 'action_required'
   ).length
+  const cancelled = summary.cancelled ?? 0
   return {
     passing: summary.passed,
-    failing: summary.failed - needsAction,
+    failing: summary.failed - needsAction - cancelled,
+    cancelled,
     needsAction,
     pending: summary.pending,
     neutral: summary.neutral
@@ -40,7 +43,7 @@ export function getCheckCounts(checks: readonly PRCheckDetail[]): PRCheckCounts 
 
 /** `tone` keys the caller's `CHECK_COLOR`/`CHECK_ICON` maps so styling stays with the surface. */
 export type PRCheckCountChip = {
-  tone: 'success' | 'failure' | 'action_required' | 'pending' | 'neutral'
+  tone: 'success' | 'failure' | 'cancelled' | 'action_required' | 'pending' | 'neutral'
   label: string
 }
 
@@ -77,6 +80,14 @@ export function getCheckCountChips(counts: PRCheckCounts): PRCheckCountChip[] {
       )
     })
   }
+  if (counts.cancelled > 0) {
+    chips.push({
+      tone: 'cancelled',
+      label: translate('auto.components.pr-check-counts.cancelledChip', '{{value0}} cancelled', {
+        value0: counts.cancelled
+      })
+    })
+  }
   if (counts.pending > 0) {
     chips.push({
       tone: 'pending',
@@ -107,6 +118,9 @@ export function getChecksSummaryLabel(checks: readonly PRCheckDetail[]): string 
   // Why: action_required (e.g. workflow awaiting approval) blocks merge but isn't a failure, so surface it distinctly.
   if (counts.needsAction > 0) {
     return `${counts.needsAction} ${counts.needsAction === 1 ? 'check needs' : 'checks need'} action`
+  }
+  if (counts.cancelled > 0) {
+    return `${counts.cancelled} ${counts.cancelled === 1 ? 'check' : 'checks'} cancelled`
   }
   if (counts.pending > 0) {
     return `${counts.pending} ${counts.pending === 1 ? 'check' : 'checks'} pending`

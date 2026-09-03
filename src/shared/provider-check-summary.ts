@@ -1,8 +1,17 @@
-import type { ProviderCheckSummary } from './github/pull-request-types'
+import type {
+  CheckPresentationStatus,
+  CheckStatus,
+  ProviderCheckSummary
+} from './github/pull-request-types'
 
-export type CheckOutcome = 'passed' | 'failed' | 'pending' | 'neutral'
+export type CheckOutcome = 'passed' | 'failed' | 'cancelled' | 'pending' | 'neutral'
 
 export type CheckOutcomeInput = { status?: string | null; conclusion?: string | null }
+
+export type ProviderCheckStatuses = {
+  status: CheckStatus
+  presentationStatus?: CheckPresentationStatus
+}
 
 // Why: a skipped job is a deliberate "not applicable", not an unresolved signal — every surface
 // must count it as passing or the same PR reads green on desktop and grey on mobile.
@@ -14,7 +23,6 @@ const FAILED_CONCLUSIONS = new Set([
   'error',
   'startup_failure',
   'timed_out',
-  'cancelled',
   'action_required'
 ])
 
@@ -22,6 +30,9 @@ const FAILED_CONCLUSIONS = new Set([
 export function classifyCheckOutcome(check: CheckOutcomeInput): CheckOutcome {
   const conclusion = (check.conclusion ?? '').toLowerCase()
   const status = (check.status ?? '').toLowerCase()
+  if (conclusion === 'cancelled' || conclusion === 'canceled') {
+    return 'cancelled'
+  }
   if (FAILED_CONCLUSIONS.has(conclusion)) {
     return 'failed'
   }
@@ -56,6 +67,7 @@ export function summarizeProviderChecks(
 ): ProviderCheckSummary {
   let passed = 0
   let failed = 0
+  let cancelled = 0
   let pending = 0
   let neutral = 0
   for (const check of checks) {
@@ -64,6 +76,10 @@ export function summarizeProviderChecks(
       passed += 1
     } else if (outcome === 'failed') {
       failed += 1
+    } else if (outcome === 'cancelled') {
+      // Why: keep the legacy failed count non-passing while newer clients render cancellation separately.
+      failed += 1
+      cancelled += 1
     } else if (outcome === 'pending') {
       pending += 1
     } else {
@@ -76,8 +92,35 @@ export function summarizeProviderChecks(
     total,
     passed,
     failed,
+    ...(cancelled > 0 ? { cancelled } : {}),
     pending,
     neutral
+  }
+}
+
+export function getProviderCheckFailureCount(summary: ProviderCheckSummary): number {
+  return Math.max(0, summary.failed - (summary.cancelled ?? 0))
+}
+
+export function getProviderCheckPresentationState(
+  summary: ProviderCheckSummary
+): CheckPresentationStatus | 'none' {
+  if (summary.state !== 'failure') {
+    return summary.state
+  }
+  if (getProviderCheckFailureCount(summary) > 0) {
+    return 'failure'
+  }
+  return (summary.cancelled ?? 0) > 0 ? 'cancelled' : 'failure'
+}
+
+export function getProviderCheckStatuses(summary: ProviderCheckSummary): ProviderCheckStatuses {
+  const status = summary.state === 'none' ? 'neutral' : summary.state
+  const presentationState = getProviderCheckPresentationState(summary)
+  const presentationStatus = presentationState === 'none' ? 'neutral' : presentationState
+  return {
+    status,
+    ...(presentationStatus !== status ? { presentationStatus } : {})
   }
 }
 
@@ -89,8 +132,12 @@ export function getProviderChecksLabel(summary: ProviderCheckSummary | undefined
   if (summary.total === 0) {
     return 'No checks'
   }
-  if (summary.failed > 0) {
-    return `${summary.failed} failing`
+  const failing = getProviderCheckFailureCount(summary)
+  if (failing > 0) {
+    return `${failing} failing`
+  }
+  if ((summary.cancelled ?? 0) > 0) {
+    return `${summary.cancelled} cancelled`
   }
   if (summary.pending > 0) {
     return `${summary.pending} pending`

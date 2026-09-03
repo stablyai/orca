@@ -4,7 +4,7 @@ import type {
   PRMergeableState,
   GitHubPRStack
 } from '../../../../shared/github/pull-request-types'
-import { deriveCheckStatus, mapPRState } from '../../mappers'
+import { deriveCheckStatuses, mapPRState } from '../../mappers'
 import type { OwnerRepo } from '../../gh-utils'
 import type { PullRequestLookupData } from './pull-request-lookup-data'
 
@@ -30,6 +30,7 @@ export function assemblePRRefreshFoundOutcome(args: {
     headDivergedFromMergedPRAtOid,
     conflictSummary
   } = args
+  const checkStatuses = deriveCheckStatuses(data.statusCheckRollup)
   return {
     kind: 'found',
     fetchedAt: Date.now(),
@@ -38,7 +39,10 @@ export function assemblePRRefreshFoundOutcome(args: {
       title: data.title,
       state: mapPRState(data.state, data.isDraft),
       url: data.url,
-      checksStatus: deriveCheckStatus(data.statusCheckRollup),
+      checksStatus: checkStatuses.status,
+      ...(data.statusCheckRollupComplete === true && checkStatuses.presentationStatus
+        ? { checksPresentationStatus: checkStatuses.presentationStatus }
+        : {}),
       updatedAt: data.updatedAt,
       mergeable,
       ...(data.reviewDecision !== undefined ? { reviewDecision: data.reviewDecision } : {}),

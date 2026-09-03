@@ -2392,7 +2392,9 @@
               "a5b66afb58": "Checks passed",
               "fbd4f57f0a": "Checks passed. Merge eligibility will be checked again before merging.",
               "4ab19a62ef": "Enable auto-merge",
-              "8f6cb3772f": "Merge this pull request automatically once requirements are met"
+              "8f6cb3772f": "Merge this pull request automatically once requirements are met",
+              "checksCancelled": "Checks cancelled",
+              "checksCancelledTooltip": "GitHub says this PR can merge, but some checks were cancelled"
             }
           }
         },
@@ -12247,7 +12249,10 @@
                 "actionRequiredHint": "This check needs a manual action on GitHub (for example, approving the workflow run) before merging is unblocked.",
                 "b3195cba33": "Unmark author as bot",
                 "f588b46a6c": "Mark author as bot",
-                "e45324fbed": "Failed to load check details."
+                "e45324fbed": "Failed to load check details.",
+                "cancelledCheck": "cancelled check",
+                "cancelledCheckHint": "Cancelled checks remain non-passing until they are rerun.",
+                "checksCancelledChip": "cancelled"
               },
               "empty": {
                 "state": {
@@ -12435,7 +12440,10 @@
                   "4ecc0d90ee": "Blocked",
                   "a0f3de7023": "GitLab reports this merge request is blocked",
                   "804ecf93e8": "GitLab has not reported a final merge status",
-                  "a5c049afe4": "GitLab says this MR can merge"
+                  "a5c049afe4": "GitLab says this MR can merge",
+                  "checksCancelled": "Checks cancelled",
+                  "checksCancelledUnknownTooltip": "The pipeline was cancelled and GitLab has not reported a final merge status",
+                  "checksCancelledTooltip": "GitLab says this MR can merge, but the pipeline was cancelled"
                 }
               }
             }
@@ -13028,7 +13036,9 @@
             "loadFailed": "The plugin panel could not be loaded."
           },
           "activityBar": {
-            "error": "Error"
+            "error": "Error",
+            "cancelled": "Cancelled",
+            "checksCancelled": "Checks cancelled"
           },
           "AiVaultSessionLimitMenu": {
             "historyDepth": "History depth: {{value0}}",
@@ -13044,6 +13054,7 @@
             "568c647ccd": "draft",
             "bea9ade223": "conflicts",
             "838aadf512": "checks failed",
+            "checksCancelled": "checks cancelled",
             "316039b5db": "checks pending",
             "4b1e5ee9d3": "changes requested",
             "9a17b5255c": "review needed",
@@ -16070,7 +16081,9 @@
           "oneFailing": "1 failing",
           "failingCount": "{{value0}} failing",
           "onePending": "1 pending",
-          "pendingCount": "{{value0}} pending"
+          "pendingCount": "{{value0}} pending",
+          "oneCancelled": "1 cancelled",
+          "cancelledCount": "{{value0}} cancelled"
         },
         "parentPrChecks": {
           "rowSummary": {
@@ -16090,7 +16103,9 @@
             "refreshFailed": "Refresh failed",
             "checking": "Checking review status…",
             "notFetched": "Status not fetched yet",
-            "unavailableWorktree": "Unavailable for this worktree"
+            "unavailableWorktree": "Unavailable for this worktree",
+            "cancelledCount": "{{value0}} cancelled",
+            "checksCancelled": "Checks cancelled"
           },
           "groups": {
             "needsAttention": "Needs attention",
@@ -16426,7 +16441,8 @@
         "failingChip": "{{value0}} failing",
         "pendingChip": "{{value0}} pending",
         "needsActionChip": "{{value0}} action required",
-        "unresolvedChip": "{{value0}} unresolved"
+        "unresolvedChip": "{{value0}} unresolved",
+        "cancelledChip": "{{value0}} cancelled"
       },
       "BrowserPane": {
         "streamConnectionLost": "Lost connection to the remote server.",

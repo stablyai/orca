@@ -26,10 +26,17 @@ function stackEntryStatus(entry: GitHubPRStackEntry): string {
   if (entry.mergeable === 'CONFLICTING') {
     return translate('auto.components.right.sidebar.GitHubPRStackMap.bea9ade223', 'conflicts')
   }
-  if (entry.checksStatus === 'failure') {
+  const checksStatus = entry.checksPresentationStatus ?? entry.checksStatus
+  if (checksStatus === 'cancelled') {
+    return translate(
+      'auto.components.right.sidebar.GitHubPRStackMap.checksCancelled',
+      'checks cancelled'
+    )
+  }
+  if (checksStatus === 'failure') {
     return translate('auto.components.right.sidebar.GitHubPRStackMap.838aadf512', 'checks failed')
   }
-  if (entry.checksStatus === 'pending') {
+  if (checksStatus === 'pending') {
     return translate('auto.components.right.sidebar.GitHubPRStackMap.316039b5db', 'checks pending')
   }
   if (entry.reviewDecision === 'CHANGES_REQUESTED') {
