@@ -573,7 +573,13 @@ describe('PortsPanel runtime routing', () => {
         runtimeTarget: { kind: 'environment', environmentId: 'env-1' },
         setWorkspacePortScan: setWorkspacePortScan as never,
         setWorkspacePortScanForKey: setWorkspacePortScanForKey as never,
-        getWorkspacePortScansByKey: () => ({ 'local:all': localHostScan }),
+        // Why: the real store already reflects setWorkspacePortScanForKey's
+        // write for the target host by the time this is read — a mock that
+        // omits it understates how many hosts are actually tracked.
+        getWorkspacePortScansByKey: () => ({
+          'local:all': localHostScan,
+          'environment:env-1:all': remoteHostScan
+        }),
         setWorkspacePortScanRefreshing: setWorkspacePortScanRefreshing as never
       })
     ).resolves.toEqual({ ok: true })

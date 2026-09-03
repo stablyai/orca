@@ -178,8 +178,9 @@ export async function refreshWorkspacePortScanAfterStop(args: {
     args.setWorkspacePortScanForKey?.(scanKey, scan)
     const currentScans = args.getWorkspacePortScansByKey?.() ?? {}
     const merged = mergeWorkspacePortScans({ ...currentScans, [scanKey]: scan })
+    // Why: currentScans already contains the entry just written above, so ">1" (not ">0") is the real multi-host check.
     args.setWorkspacePortScan({
-      key: merged && Object.keys(currentScans).length > 0 ? 'all-hosts:all' : scanKey,
+      key: merged && Object.keys(currentScans).length > 1 ? 'all-hosts:all' : scanKey,
       result: merged ?? scan
     })
   }
