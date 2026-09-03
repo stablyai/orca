@@ -66,18 +66,34 @@ describe('useNativeChatInteractiveSend', () => {
 
   it('routes a non-selector answer through the pasted-text send path', () => {
     const { result } = renderHook(() =>
-      useNativeChatInteractiveSend('tab-1', PANE_KEY, 'pty-1', 'grok')
+      useNativeChatInteractiveSend('tab-1', PANE_KEY, 'pty-1', 'omp')
     )
 
     act(() => result.current.sendAnswer(PROMPT, [{ indices: [1] }]))
 
-    // Grok commits a pasted answer: label text 'B', not option-number keystrokes.
+    // OMP commits a pasted answer: label text 'B', not option-number keystrokes.
     expect(mocks.sendNativeChatMessage).toHaveBeenCalledWith(
       { terminalTabId: 'tab-1' },
       'pty-1',
       'B'
     )
     expect(mocks.sendNativeChatAskAnswer).not.toHaveBeenCalled()
+  })
+
+  it('routes a Grok answer through its question-card keystrokes', () => {
+    const { result } = renderHook(() =>
+      useNativeChatInteractiveSend('tab-1', PANE_KEY, 'pty-1', 'grok')
+    )
+
+    act(() => result.current.sendAnswer(PROMPT, [{ indices: [1] }]))
+
+    expect(mocks.sendNativeChatAskAnswer).toHaveBeenCalledWith(
+      { terminalTabId: 'tab-1' },
+      'pty-1',
+      [{ raw: '2' }],
+      expect.any(Function)
+    )
+    expect(mocks.sendNativeChatMessage).not.toHaveBeenCalled()
   })
 
   it('routes a Codex answer through the option-number keystroke path', () => {

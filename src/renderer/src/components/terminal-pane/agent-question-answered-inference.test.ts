@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { AgentStatusEntry } from '../../../../shared/agent-status-types'
+import { isQuestionAnsweredSubmitInput } from '../../../../shared/agent-question-answered-intent'
 import { createAgentQuestionAnsweredInference } from './agent-question-answered-inference'
 
 const PANE_KEY = 'tab-1:11111111-1111-4111-8111-111111111111'
@@ -97,6 +98,19 @@ describe('agent question-answered inference', () => {
       inference.observeSentTerminalInput('\r')
       expect(inferQuestionAnswered).not.toHaveBeenCalled()
     }
+  })
+
+  it('keeps waiting when a Grok multi_select digit only picks a partial answer', () => {
+    const interactivePrompt = JSON.stringify({
+      questions: [
+        {
+          question: 'pick several',
+          multi_select: true,
+          options: [{ label: 'A' }, { label: 'B' }]
+        }
+      ]
+    })
+    expect(isQuestionAnsweredSubmitInput('1', interactivePrompt)).toBe(false)
   })
 
   it('keeps waiting when the synthetic free-text row is selected', () => {

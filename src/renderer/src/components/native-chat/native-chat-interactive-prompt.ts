@@ -13,10 +13,12 @@ import {
   type AskQuestion,
   type InteractiveQuestionParser
 } from '../../../../shared/native-chat-ask'
+import { buildGrokAskAnswerKeys } from '../../../../shared/native-chat-grok-ask-answer'
 
 export {
   buildAskAnswerKeys,
   buildCodexAskAnswerKeys,
+  buildGrokAskAnswerKeys,
   formatAskAnswer,
   hasAskAnswer,
   parseAskFromStatus,
