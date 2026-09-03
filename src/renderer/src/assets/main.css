@@ -803,8 +803,7 @@ html.native-shell .app-layout {
 /* Why: workspace view still needs a full titlebar-height strip above the
    sidebar so the native macOS traffic lights and sidebar chrome sit in the
    same vertical band they use in settings/landing. The center and right
-   workspace columns are offset separately to align with this 36px baseline
-   (4px drag strip + 32px tab row). */
+   workspace columns use the same 36px tab-row baseline. */
 .titlebar-left {
   height: 36px;
   min-height: 36px;
