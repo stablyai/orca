@@ -5,7 +5,9 @@ import {
   type DeviceCredentialInstalled,
   type MobileRelayEndpoint
 } from '../../../src/shared/mobile-relay-credential-contract'
+import { MOBILE_RELAY_CLOSE_CODE } from '../../../src/shared/mobile-relay-close-codes'
 import type { PairingRelay } from '../../../src/shared/mobile-relay-pairing-offer'
+import { RelayOuterError } from './mobile-relay-e2ee-link'
 import { loadHosts, saveHost } from './host-store'
 import {
   promotePairingJournalCredential,
@@ -104,6 +106,8 @@ async function runRecovery(
   // of an authoritatively committed install must not look like "nothing to
   // reconcile" — that journal is the only record left to retry the write from.
   let observedCommitted = false
+  // Why: BAD_OUTER_CREDENTIAL is permanent — count per-credential so all-rejected abandons without waiting on the TTL.
+  let permanentFailures = 0
   for (const credential of credentials) {
     let client: PairingCandidateClient | null = null
     try {
@@ -141,12 +145,23 @@ async function runRecovery(
         await publishCommitted(journal, reconciled, dependencies)
         return 'recovered'
       }
-    } catch {
+    } catch (error) {
       // Why: ambiguous pairing state advances only by credential priority and
       // authoritative status; a transport failure never rewrites the journal.
+      if (
+        error instanceof RelayOuterError &&
+        error.code === MOBILE_RELAY_CLOSE_CODE.BAD_OUTER_CREDENTIAL
+      ) {
+        permanentFailures += 1
+      }
     } finally {
       client?.close()
     }
+  }
+  // Why: all-permanent means no future launch can reconcile; abandon now and let the TTL branch below handle transient-only outages.
+  if (!observedCommitted && permanentFailures === credentials.length) {
+    await dependencies.clearJournal(journal.metadata.journalId).catch(() => {})
+    return 'abandoned'
   }
   // Why: past invite expiry no credential can still establish what happened, so
   // retaining the journal cannot reconcile anything — it only fails every later

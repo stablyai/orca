@@ -1,5 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { MOBILE_RELAY_CLOSE_CODE } from '../../../src/shared/mobile-relay-close-codes'
 import type { MobileRelayCredentialBundle } from './mobile-relay-credential-bundle'
+import { RelayOuterError } from './mobile-relay-e2ee-link'
 import { createMobileRelayPairingJournal } from './mobile-relay-pairing-journal'
 import {
   recoverMobileRelayPairing,
@@ -234,6 +236,53 @@ describe('mobile relay pairing recovery', () => {
 
     await expect(recoverMobileRelayPairing(deps)).resolves.toBe('abandoned')
     expect(deps.clearJournal).toHaveBeenCalledWith(saved.metadata.journalId)
+  })
+
+  // Why: desktop-revoked journal → every credential returns 4401; abandon must not wait on the TTL.
+  it('abandons a journal immediately when every credential is permanently rejected', async () => {
+    const saved = journal()
+    const seenCredentials: (string | undefined)[] = []
+    const connectRelay = vi.fn((args: { credential?: string }) => {
+      seenCredentials.push(args.credential)
+      return client(async () => {
+        throw new RelayOuterError(MOBILE_RELAY_CLOSE_CODE.BAD_OUTER_CREDENTIAL)
+      })
+    })
+    const deps = {
+      ...dependencies({ journal: saved, connectRelay }),
+      // Why: pin now inside invite lifetime so the TTL-based abandon branch cannot be the cause.
+      now: () => now
+    }
+
+    await expect(recoverMobileRelayPairing(deps)).resolves.toBe('abandoned')
+    // Why: lock in recoveryCredentials' order/contents, not just the final result.
+    expect(seenCredentials).toEqual([saved.secrets.pendingResumeToken, undefined])
+    expect(deps.clearJournal).toHaveBeenCalledWith(saved.metadata.journalId)
+  })
+
+  // Why: any transient credential keeps the journal retryable on a later launch.
+  it('keeps the journal when at least one credential had a transient failure', async () => {
+    const saved = journal()
+    const seenCredentials: (string | undefined)[] = []
+    const connectRelay = vi.fn((args: { credential?: string }) => {
+      seenCredentials.push(args.credential)
+      return args.credential
+        ? client(async () => {
+            throw new RelayOuterError(MOBILE_RELAY_CLOSE_CODE.BAD_OUTER_CREDENTIAL)
+          })
+        : client(async () => {
+            throw new Error('relay unreachable')
+          })
+    })
+    const deps = {
+      ...dependencies({ journal: saved, connectRelay }),
+      now: () => now
+    }
+
+    await expect(recoverMobileRelayPairing(deps)).resolves.toBe('deferred')
+    // Why: lock in resume-permanent + invite-transient, not just the final result.
+    expect(seenCredentials).toEqual([saved.secrets.pendingResumeToken, undefined])
+    expect(deps.clearJournal).not.toHaveBeenCalled()
   })
 
   it('keeps a just-expired journal so a brief outage cannot discard it', async () => {
