@@ -26,6 +26,10 @@ function acquireReuseDispatchTab(tabId: string): (() => void) | null {
   return () => activeReuseDispatchTabIds.delete(tabId)
 }
 
+/**
+ * Dispatches one automation run into a background agent session and persists
+ * completion only after the submitted prompt reaches its own working state.
+ */
 export async function handleAutomationDispatchRequest({
   automation,
   run,
@@ -181,11 +185,7 @@ export async function handleAutomationDispatchRequest({
         // Why: fresh launches can replay a stale non-boundary done before the
         // submitted automation prompt reaches working. Completion requires the
         // prompt's own working edge, just like reuse-session dispatches.
-        if (
-          payload.state !== 'done' ||
-          payload.sessionBoundary === true ||
-          !backgroundSawWorking
-        ) {
+        if (payload.state !== 'done' || payload.sessionBoundary === true || !backgroundSawWorking) {
           return
         }
         completion.handleAgentDone()
