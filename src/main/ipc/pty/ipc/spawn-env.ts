@@ -94,6 +94,7 @@ export async function assemblePtyIpcSpawnEnv(ctx: PtyIpcSpawnState): Promise<voi
     // Why: Agent Teams ids/tokens are process-local, so the team env must be regenerated for the new leader PTY.
     const prepared = await runtime.prepareClaudeAgentTeamsLeaderForHandle({
       handle: ctx.preAllocatedHandle,
+      paneKey: ctx.stablePaneKey ?? undefined,
       baseEnv: ctx.baseEnv ?? {}
     })
     ctx.agentTeamsLeaderHandle = ctx.preAllocatedHandle
