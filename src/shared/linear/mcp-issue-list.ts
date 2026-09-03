@@ -28,7 +28,7 @@ export type LinearMcpIssueListResult = {
   // must fall back to meta rather than read absence as "complete".
   truncated?: boolean
   meta: {
-    // null when the caller set no --limit, i.e. every matching issue was read.
+    // null means no caller cap; hasMore still reports safety-backstop truncation.
     limit: number | null
     returned: number
     hasMore: boolean

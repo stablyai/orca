@@ -120,6 +120,24 @@ describe('linear-format', () => {
     expect(output).not.toContain('truncated:')
   })
 
+  it('marks an empty list-issues result when it was truncated', () => {
+    const output = formatLinearMcpIssueList({
+      issues: [],
+      truncated: true,
+      meta: {
+        limit: null,
+        returned: 0,
+        hasMore: true,
+        orderBy: 'updatedAt',
+        workspaceId: 'workspace-1',
+        partial: false,
+        workspaceErrors: []
+      }
+    })
+
+    expect(output).toBe('No Linear issues found.\ntruncated: showing 0')
+  })
+
   it('includes task fields in issue readback text', () => {
     const result = {
       issue: {

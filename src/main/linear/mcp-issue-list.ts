@@ -2,7 +2,12 @@ import type {
   LinearMcpIssueListRequest,
   LinearMcpIssueListResult
 } from '../../shared/linear/agent-access'
-import { getClients, getStatus, type LinearClientForWorkspace } from './client'
+import {
+  createSignalBoundLinearClient,
+  getClients,
+  getStatus,
+  type LinearClientForWorkspace
+} from './client'
 import { withLinearRead } from './issue-context-client'
 import { linearError } from './issue-context-errors'
 import {
@@ -29,6 +34,8 @@ type RawListIssuesResponse = {
     pageInfo?: { hasNextPage?: boolean; endCursor?: string | null }
   } | null
 }
+
+type IssueListPageRead = { connection: RawListIssuesResponse['issues'] } | { budgetExhausted: true }
 
 type WorkspaceIssuePage = {
   issues: LinearMcpIssueListResult['issues']
@@ -174,6 +181,7 @@ async function readIssueListWorkspace(
 ): Promise<WorkspaceIssuePage> {
   const filter = buildIssueFilter(request)
   const issues: WorkspaceIssuePage['issues'] = []
+  const issueIds = new Set<string>()
   let after = request.cursor
   let hasMore = false
   let nextCursor: string | undefined
@@ -183,20 +191,25 @@ async function readIssueListWorkspace(
         ? LIST_ISSUES_PAGE_SIZE
         : Math.min(limit - issues.length, LIST_ISSUES_PAGE_SIZE)
     // Each page takes its own concurrency slot so a long walk cannot starve other reads.
-    const connection = await withLinearRead(entry, async () => {
-      const raw = await entry.client.client.rawRequest<
-        RawListIssuesResponse,
-        Record<string, unknown>
-      >(LIST_ISSUES_QUERY, {
-        first,
-        after,
-        filter,
-        orderBy,
-        includeArchived: request.includeArchived ?? false
-      })
-      return raw.data?.issues
+    const read = await readIssueListPage(entry, deadline, {
+      first,
+      after,
+      filter,
+      orderBy,
+      includeArchived: request.includeArchived ?? false
     })
-    for (const issue of connection?.nodes ?? []) {
+    if ('budgetExhausted' in read) {
+      hasMore = true
+      nextCursor = after
+      break
+    }
+    const connection = read.connection
+    const pageNodes = connection?.nodes ?? []
+    for (const issue of pageNodes) {
+      if (issueIds.has(issue.id)) {
+        continue
+      }
+      issueIds.add(issue.id)
       issues.push({
         ...mapIssue(issue),
         workspace: { id: entry.workspace.id, name: entry.workspace.organizationName }
@@ -204,7 +217,7 @@ async function readIssueListWorkspace(
     }
     hasMore = connection?.pageInfo?.hasNextPage === true
     nextCursor = connection?.pageInfo?.endCursor ?? undefined
-    if (!hasMore || !nextCursor) {
+    if (!hasMore || !nextCursor || nextCursor === after || pageNodes.length === 0) {
       break
     }
     if (limit !== null && issues.length >= limit) {
@@ -216,6 +229,39 @@ async function readIssueListWorkspace(
     after = nextCursor
   }
   return { issues, hasMore, nextCursor }
+}
+
+async function readIssueListPage(
+  entry: LinearClientForWorkspace,
+  deadline: number,
+  variables: Record<string, unknown>
+): Promise<IssueListPageRead> {
+  return withLinearRead(entry, async () => {
+    const remaining = deadline - Date.now()
+    if (remaining <= 0) {
+      return { budgetExhausted: true }
+    }
+    const controller = new AbortController()
+    const timeout = setTimeout(() => controller.abort(), remaining)
+    timeout.unref?.()
+    try {
+      const client = createSignalBoundLinearClient(entry, controller.signal)
+      const raw = await client.client.rawRequest<RawListIssuesResponse, Record<string, unknown>>(
+        LIST_ISSUES_QUERY,
+        variables
+      )
+      return controller.signal.aborted
+        ? { budgetExhausted: true }
+        : { connection: raw.data?.issues }
+    } catch (error) {
+      if (controller.signal.aborted) {
+        return { budgetExhausted: true }
+      }
+      throw error
+    } finally {
+      clearTimeout(timeout)
+    }
+  })
 }
 
 // null means unbounded: read until Linear stops handing out pages.

@@ -6,6 +6,7 @@ const getStatus = vi.fn()
 const acquire = vi.fn()
 const release = vi.fn()
 const clearToken = vi.fn()
+let requestSignal: AbortSignal | undefined
 
 const workspace = (id: string, organizationName: string) => ({
   id,
@@ -17,8 +18,16 @@ const workspace = (id: string, organizationName: string) => ({
 
 const clientEntry = (id: string, organizationName: string) => ({
   workspace: workspace(id, organizationName),
-  client: { client: { rawRequest } }
+  client: { client: { rawRequest } },
+  apiKey: 'token'
 })
+
+const createSignalBoundLinearClient = vi.fn(
+  (entry: ReturnType<typeof clientEntry>, signal: AbortSignal) => {
+    requestSignal = signal
+    return entry.client
+  }
+)
 
 vi.mock('./linear-request-concurrency', () => ({
   acquire,
@@ -30,6 +39,7 @@ vi.mock('./linear-token-store', () => ({
 }))
 
 vi.mock('./client', () => ({
+  createSignalBoundLinearClient,
   getClients,
   getStatus,
   isAuthError: () => false
@@ -66,6 +76,7 @@ function pageResponse(
 describe('list-issues pagination contract', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    requestSignal = undefined
     const entry = clientEntry('workspace-1', 'Acme')
     getClients.mockReturnValue([entry])
     getStatus.mockReturnValue({ workspaces: [entry.workspace] })
@@ -211,7 +222,7 @@ describe('list-issues pagination contract', () => {
     expect(rawRequest.mock.calls.map((call) => call[1]?.first)).toEqual([250, 50])
   })
 
-  it('stops and reports truncation when a provider never stops offering pages', async () => {
+  it('stops, deduplicates, and reports truncation when a provider repeats a cursor', async () => {
     rawRequest.mockResolvedValue(
       pageResponse([issueNode('issue-1', 'ENG-1', '2026-07-01T00:00:00.000Z')], true, 'same-cursor')
     )
@@ -221,7 +232,20 @@ describe('list-issues pagination contract', () => {
 
     expect(result.truncated).toBe(true)
     expect(result.meta.hasMore).toBe(true)
-    expect(rawRequest.mock.calls.length).toBeLessThanOrEqual(200)
+    expect(rawRequest).toHaveBeenCalledTimes(2)
+    expect(result.issues.map((issue) => issue.identifier)).toEqual(['ENG-1'])
+    expect(result.meta.nextCursor).toMatch(/^orca\.linear\.v1\./)
+  })
+
+  it('stops on an empty page even when the provider offers another cursor', async () => {
+    rawRequest.mockResolvedValue(pageResponse([], true, 'next-page'))
+    const { listMcpIssues } = await import('./mcp-issue-list')
+
+    const result = await listMcpIssues({})
+
+    expect(rawRequest).toHaveBeenCalledTimes(1)
+    expect(result.issues).toEqual([])
+    expect(result.truncated).toBe(true)
     expect(result.meta.nextCursor).toMatch(/^orca\.linear\.v1\./)
   })
 
@@ -260,6 +284,50 @@ describe('list-issues pagination contract', () => {
       expect(issued).toBe(2)
       expect(result.truncated).toBe(true)
       expect(result.meta.nextCursor).toMatch(/^orca\.linear\.v1\./)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('aborts an in-flight provider request at the shared read deadline', async () => {
+    vi.useFakeTimers()
+    try {
+      rawRequest.mockImplementation(
+        () =>
+          new Promise((_resolve, reject) => {
+            requestSignal?.addEventListener(
+              'abort',
+              () => {
+                reject(Object.assign(new Error('aborted'), { name: 'AbortError' }))
+              },
+              { once: true }
+            )
+          })
+      )
+      const { listMcpIssues } = await import('./mcp-issue-list')
+
+      const pending = listMcpIssues({})
+      let settled = false
+      void pending.then(
+        () => {
+          settled = true
+        },
+        () => {
+          settled = true
+        }
+      )
+      await vi.advanceTimersByTimeAsync(20_000)
+      expect(settled).toBe(true)
+      const result = await pending
+
+      expect(requestSignal?.aborted).toBe(true)
+      expect(rawRequest).toHaveBeenCalledTimes(1)
+      expect(result).toMatchObject({
+        issues: [],
+        truncated: true,
+        meta: { hasMore: true }
+      })
+      expect(result.meta.nextCursor).toBeUndefined()
     } finally {
       vi.useRealTimers()
     }

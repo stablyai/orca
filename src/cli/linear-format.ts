@@ -128,11 +128,12 @@ export function formatLinearIssueList(result: LinearIssueListResult): string {
 }
 
 export function formatLinearMcpIssueList(result: LinearMcpIssueListResult): string {
-  if (result.issues.length === 0) {
-    return 'No Linear issues found.'
-  }
+  const body =
+    result.issues.length === 0
+      ? 'No Linear issues found.'
+      : result.issues.map(formatSearchRow).join('\n')
   return appendLinearListTruncation(
-    result.issues.map(formatSearchRow).join('\n'),
+    body,
     result.issues.length,
     result.truncated ?? result.meta.hasMore
   )

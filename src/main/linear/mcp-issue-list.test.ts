@@ -21,7 +21,8 @@ const clientEntry = (
   request: ReturnType<typeof vi.fn> = rawRequest
 ) => ({
   workspace: workspace(id, organizationName),
-  client: { client: { rawRequest: request } }
+  client: { client: { rawRequest: request } },
+  apiKey: 'token'
 })
 
 vi.mock('./linear-request-concurrency', () => ({
@@ -34,6 +35,7 @@ vi.mock('./linear-token-store', () => ({
 }))
 
 vi.mock('./client', () => ({
+  createSignalBoundLinearClient: (entry: ReturnType<typeof clientEntry>) => entry.client,
   getClients,
   getStatus,
   isAuthError: () => false

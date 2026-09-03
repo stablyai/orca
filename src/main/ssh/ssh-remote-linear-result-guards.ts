@@ -39,6 +39,62 @@ export function isLinearSearchResult(result: unknown): result is LinearSearchRes
   )
 }
 
+function isLinearMcpIssue(issue: unknown): boolean {
+  return (
+    isRecord(issue) &&
+    typeof issue.id === 'string' &&
+    typeof issue.identifier === 'string' &&
+    typeof issue.title === 'string' &&
+    typeof issue.url === 'string' &&
+    Array.isArray(issue.labels) &&
+    issue.labels.every(isLinearNamedEntity) &&
+    isOptionalLinearNamedEntity(issue.state) &&
+    isOptionalLinearNamedEntity(issue.team) &&
+    isOptionalLinearNamedEntity(issue.project) &&
+    isOptionalLinearNamedEntity(issue.cycle) &&
+    isOptionalLinearUser(issue.assignee) &&
+    (issue.priority === undefined ||
+      issue.priority === null ||
+      typeof issue.priority === 'number') &&
+    isLinearWorkspaceCandidate(issue.workspace)
+  )
+}
+
+function isOptionalLinearNamedEntity(value: unknown): boolean {
+  return value === undefined || value === null || isLinearNamedEntity(value)
+}
+
+function isLinearNamedEntity(value: unknown): boolean {
+  return (
+    isRecord(value) &&
+    (value.id === undefined || value.id === null || typeof value.id === 'string') &&
+    (value.name === undefined || value.name === null || typeof value.name === 'string') &&
+    (value.color === undefined || value.color === null || typeof value.color === 'string') &&
+    (value.type === undefined || value.type === null || typeof value.type === 'string')
+  )
+}
+
+function isOptionalLinearUser(value: unknown): boolean {
+  return (
+    value === undefined ||
+    value === null ||
+    (isRecord(value) &&
+      (value.id === undefined || value.id === null || typeof value.id === 'string') &&
+      (value.displayName === undefined ||
+        value.displayName === null ||
+        typeof value.displayName === 'string') &&
+      (value.avatarUrl === undefined ||
+        value.avatarUrl === null ||
+        typeof value.avatarUrl === 'string'))
+  )
+}
+
+function isLinearWorkspaceCandidate(workspace: unknown): boolean {
+  return (
+    isRecord(workspace) && typeof workspace.id === 'string' && typeof workspace.name === 'string'
+  )
+}
+
 export function isLinearIssueListResult(result: unknown): result is LinearIssueListResult {
   return (
     isRecord(result) &&
@@ -53,9 +109,14 @@ export function isLinearMcpIssueListResult(result: unknown): result is LinearMcp
   return (
     isRecord(result) &&
     Array.isArray(result.issues) &&
+    result.issues.every(isLinearMcpIssue) &&
     isRecord(result.meta) &&
-    typeof result.meta.orderBy === 'string' &&
-    Array.isArray(result.meta.workspaceErrors)
+    (typeof result.meta.limit === 'number' || result.meta.limit === null) &&
+    typeof result.meta.hasMore === 'boolean' &&
+    (result.meta.orderBy === 'createdAt' || result.meta.orderBy === 'updatedAt') &&
+    typeof result.meta.partial === 'boolean' &&
+    Array.isArray(result.meta.workspaceErrors) &&
+    result.meta.workspaceErrors.every(isLinearWorkspaceError)
   )
 }
 

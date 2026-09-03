@@ -146,6 +146,31 @@ function mkdtempLike(prefix: string): string {
 }
 
 describe('Linear client workspace storage', () => {
+  it('binds an abort signal to a request-scoped client', async () => {
+    const linear = await loadClientModule()
+    const controller = new AbortController()
+
+    linear.createSignalBoundLinearClient(
+      {
+        workspace: {
+          id: 'org-alpha',
+          organizationId: 'org-alpha',
+          organizationName: 'Alpha',
+          displayName: 'Ada',
+          email: 'ada@example.com'
+        },
+        client: {} as never,
+        apiKey: 'token-alpha'
+      },
+      controller.signal
+    )
+
+    expect(linearClientMock).toHaveBeenCalledWith({
+      apiKey: 'token-alpha',
+      signal: controller.signal
+    })
+  })
+
   it('stores multiple workspaces and remembers the selected workspace', async () => {
     const linear = await loadClientModule()
 
