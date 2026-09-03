@@ -242,11 +242,18 @@ session picker. The Codex locator is the recorded `session_id`; the Claude
 locator is its recorded `session_id`; the OMP locator is its recorded
 `session_id` only. The OMP command also receives the exact extension path from
 `ORCA_OMP_STATUS_EXTENSION`; this is extension selection, not a session
-locator. The locator mapping matches
-`src/shared/agent-session-resume.ts:getAgentResumeArgv()` for the default OMP
-case. That function supports an explicit caller-supplied `ompResumeFilePath`
-override, but this OCI manifest does not populate that separate override from
-native `getSessionFile()`.
+locator. The OCI recovery command in the table above is a literal bash
+argument list built directly by `orca-coordinator.sh`; it never calls
+`src/shared/agent-session-resume.ts:getAgentResumeArgv()`. That shared
+function's OMP case is `['omp', '--resume', ompResumeFilePath?.trim() || id]`
+(confirmed at `agent-session-resume.ts:282-285`) and is reachable only through
+Orca's own managed-worker resume flow, which supplies its own
+`ompResumeFilePath` argument from a different code path than this OCI
+manifest. Because this raw path never constructs or passes an
+`ompResumeFilePath` value, the file-priority branch of that function is
+structurally unreachable here, not merely untested; this OCI path's own
+`--resume "$OMP_SESSION_ID"` argument is always the manifest's normalized
+`session_id`.
 
 The permission-bypass flags are an explicit OCI-only policy. They are not sent
 to hp_v2. OMP has no `dangerously-skip-permissions` flag; `--auto-approve` plus
@@ -515,15 +522,23 @@ only by the coordinator/host owner.
 
 Before claiming recovery support, record the focused test output and verify
 that provider resume is attempted only for newly created sessions. For live
-managed-hook deployment, use the supported `agent hooks on` entrypoint: a
-reachable runtime routes the settings update through
-`src/main/ipc/settings.ts` to `applyAgentStatusHooksEnabled()` and
-`installManagedAgentHooks()`, while the CLI's offline path calls the same
-installation operation directly. This refreshes the managed Claude/Codex
-artifacts; it does not install the raw OMP recovery extension. The live setup
-hook installs that extension under `~/.omp/agent/extensions/`, sets
-`ORCA_OMP_STATUS_EXTENSION`, and the disposable-session probe verifies the
-explicit `omp --extension` route. `agent hooks status` alone is not a refresh
-operation. Record the returned statuses and verify all artifacts before
-updating the live setup hook. Keep the provider resume policy independent from
-hp_v2 terminal handles, SHA gates, and remote wire fields.
+managed-hook deployment, `src/main/ipc/settings.ts`'s `hookSettingChanged`
+guard skips `applyAgentStatusHooksEnabled()`/`installManagedAgentHooks()`
+whenever a reachable runtime already has the requested
+`agentStatusHooksEnabled` value, so a single `agent hooks on` against an
+already-enabled runtime falls through
+`src/cli/handlers/agent-hooks.ts:setAgentHooksEnabled()` to the read-only
+`getManagedAgentHookStatuses()` path and refreshes nothing. Use `agent hooks
+off` immediately followed by `agent hooks on` to force the state transition
+that runs `installManagedAgentHooks()`'s unconditional
+`refreshExistingManagedScripts()`; the CLI's offline path calls
+`applyAgentStatusHooksEnabled()` directly on every invocation and needs no
+toggle. This refreshes the managed Claude/Codex artifacts; it does not
+install the raw OMP recovery extension. The live setup hook installs that
+extension under `~/.omp/agent/extensions/`, sets `ORCA_OMP_STATUS_EXTENSION`,
+and the disposable-session probe verifies the explicit `omp --extension`
+route. `agent hooks status` alone is not a refresh operation, and neither is
+`agent hooks on` alone against an already-enabled reachable runtime. Record
+the returned statuses and verify all artifacts before updating the live setup
+hook. Keep the provider resume policy independent from hp_v2 terminal
+handles, SHA gates, and remote wire fields.

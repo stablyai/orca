@@ -228,7 +228,7 @@ claude --resume "$CLAUDE_SESSION_ID" --dangerously-skip-permissions
 omp --extension "$ORCA_OMP_STATUS_EXTENSION" --resume "$OMP_SESSION_ID" --auto-approve --approval-mode=yolo
 ```
 
-OMP's recorded `session_id` is the authoritative resume locator. `getSessionFile()` is read by the recovery extension only as the same persistence gate used by Orca's OMP status integration; it is not stored as `resumeFilePath` and is not passed to `omp --resume` in this OCI path. The explicit `--extension "$ORCA_OMP_STATUS_EXTENSION"` argument is the recovery command's confirmed OMP integration path; the coordinator must validate that it is the exact readable session extension selected by setup.
+OMP's recorded `session_id` is the authoritative resume locator. `getSessionFile()` is read by the recovery extension only as the same persistence gate used by Orca's OMP status integration; it is not stored as `resumeFilePath` and is not passed to `omp --resume` in this OCI path. The explicit `--extension "$ORCA_OMP_STATUS_EXTENSION"` argument is the recovery command's confirmed OMP integration path; the coordinator must validate that it is the exact readable session extension selected by setup. This `omp --extension … --resume "$OMP_SESSION_ID" …` line is a literal bash argument list built directly in `orca-coordinator.sh`; it never calls `src/shared/agent-session-resume.ts:getAgentResumeArgv()`, whose separate OMP case (`['omp', '--resume', ompResumeFilePath?.trim() || id]`) belongs to Orca's own managed-worker resume flow and its own `ompResumeFilePath` argument. This OCI path never constructs that argument, so that function's file-priority branch is structurally unreachable here, not merely untested.
 
 The coordinator may override provider binary paths, writer, OMP source, OMP agent directory, and Codex home only for isolated tests. Tests set `XDG_STATE_HOME` to a temporary directory instead of overriding the manifest-root formula. The coordinator must not override provider argv or approval flags in production.
 
@@ -845,7 +845,30 @@ provider locator for the path-bound manifest.
 
 Include the manifest path/schema, exact provider commands, Codex managed-home requirement, OMP extension path and `ORCA_OMP_STATUS_EXTENSION` wrapper selection, `ORCA_OCI_*` variables, `ORCA_COORDINATOR_RESUME_AGENTS=0` meaning, and the warning that `RECOVERY_REQUIRED` is not evidence that a provider has no upstream session; it means this recovery path is intentionally fail-closed.
 
-After the `/srv/script` copy and focused tests pass, use the supported `agent hooks on` path for the live OCI runtime. When the runtime is reachable, the settings update path (`src/main/ipc/settings.ts`) calls `applyAgentStatusHooksEnabled()`, which calls `installManagedAgentHooks()` and refreshes the existing Claude/Codex managed scripts. When the runtime is unavailable, the CLI's offline `setAgentHooksEnabled()` path calls the same `applyAgentStatusHooksEnabled()` operation directly. The raw OMP recovery extension is not installed by this managed-hook refresh; the live setup hook installs it under the OMP agent directory's `extensions` child and selects it through `ORCA_OMP_STATUS_EXTENSION`. Do not treat `agent hooks status` alone as deployment or refresh. Do not manually copy generated managed scripts.
+After the `/srv/script` copy and focused tests pass, refresh the live managed
+scripts through the supported CLI. `agent hooks on` alone does not guarantee a
+refresh: `src/cli/handlers/agent-hooks.ts:setAgentHooksEnabled()` calls
+`updateRunningRuntime()`, which sends `settings.update` with
+`agentStatusHooksEnabled: true`; when a reachable runtime already has that
+setting `true`, `src/main/ipc/settings.ts`'s `hookSettingChanged` guard is
+false, `applyAgentStatusHooksEnabled()`/`installManagedAgentHooks()` is never
+called, and the CLI falls through to `getManagedAgentHookStatuses()`, a
+read-only status probe. Since hooks are already enabled in the normal
+operator flow, this is the common case, not an edge case. Force the actual
+state transition instead: run `agent hooks off` immediately followed by
+`agent hooks on`. Both calls change `agentStatusHooksEnabled`, so
+`hookSettingChanged` is true both times, `applyAgentStatusHooksEnabled(true, …)`
+runs, and `installManagedAgentHooks()`'s unconditional
+`refreshExistingManagedScripts()` regenerates the Claude/Codex managed
+scripts from the amended source before the presence-gated install step. When
+the runtime is unreachable, the CLI's offline `setAgentHooksEnabled()` path
+calls `applyAgentStatusHooksEnabled()` directly on every invocation and does
+not need the off/on toggle. The raw OMP recovery extension is not installed
+by this managed-hook refresh; the live setup hook installs it under the OMP
+agent directory's `extensions` child and selects it through
+`ORCA_OMP_STATUS_EXTENSION`. Do not treat `agent hooks status` or a single
+`agent hooks on` against an already-enabled reachable runtime as deployment
+or refresh.
 
 Verify the resulting artifacts and returned statuses before updating the live setup hook:
 
@@ -857,10 +880,13 @@ OMP:   ~/.omp/agent/extensions/orca-oci-worktree-session-hook.ts is the
        explicit extension source selected by ORCA_OMP_STATUS_EXTENSION
 ```
 
-If neither supported `agent hooks on` route can run the amended source and refresh the artifacts, stop and do not claim managed-hook deployment. Then update the live OCI setup hook setting and probe a disposable worktree. Record:
+If neither the reachable-runtime off/on toggle nor the offline CLI fallback
+can run the amended source and refresh the artifacts, stop and do not claim
+managed-hook deployment. Then update the live OCI setup hook setting and
+probe a disposable worktree. Record:
 
 ```text
-agent hooks on route (runtime settings or offline CLI fallback)
+agent hooks route (reachable-runtime off/on toggle or offline CLI fallback)
 returned managed-hook statuses
 observed new session name
 session_path
@@ -1004,4 +1030,4 @@ Re-run the five OCI shell suites and `git diff --check` after any final source c
 - [ ] Windows/hpv2 inventory entries remain excluded and hpv2/runtime failures do not destroy OCI sessions.
 - [ ] Raw tmux remains outside Orca's managed worker/UI contract.
 - [ ] The coordinator-only `oci-omp-run` fallback uses direct persistent non-PTY OMP execution with stable origin/profile/session storage, resumes follow-up requests from its saved `sessionId`, relays stdout, and remains inaccessible to worker panes.
-- [ ] The supported OCI managed-hook deployment and live installed-script probe are recorded separately from hpv2 source validation; the exact `agent hooks on` runtime/offline route, returned statuses, focused shell tests, ShellCheck, hpv2 provider-hook tests, node typecheck, changed-file quality, exact SHA sync, and operational before/after hashes are recorded.
+- [ ] The supported OCI managed-hook deployment and live installed-script probe are recorded separately from hpv2 source validation; the exact `agent hooks off`/`agent hooks on` reachable-runtime toggle (or offline CLI fallback), returned statuses, focused shell tests, ShellCheck, hpv2 provider-hook tests, node typecheck, changed-file quality, exact SHA sync, and operational before/after hashes are recorded. A single `agent hooks on` against an already-enabled reachable runtime is not accepted as deployment evidence.
