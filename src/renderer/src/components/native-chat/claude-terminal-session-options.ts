@@ -24,12 +24,24 @@ const CLAUDE_MODEL_EFFORT =
 const FRAME_TOP = '╭'
 const FRAME_BOTTOM = '╰'
 const FRAME_COLUMN = '│'
+const ESC = String.fromCharCode(27)
+// Cursor-forward (`ESC[nC`); the count defaults to 1 when omitted.
+const CURSOR_FORWARD_PATTERN = new RegExp(`${ESC}\\[(\\d*)C`, 'g')
 
 /** Rows of the visible screen, ANSI-stripped and whitespace-collapsed. */
 function normalizedScreenLines(screen: string): string[] {
-  return stripScrollbackAnsi(screen)
+  return stripScrollbackAnsi(widenCursorForwardGaps(screen))
     .split('\n')
     .map((line) => line.replace(/\s+/g, ' ').trim())
+}
+
+// Claude Code 2.1.258 draws the header with cursor-forward moves instead of
+// spaces (`Claude\x1b[1CCode`, `Opus\x1b[1C5\x1b[1Cwith`). Stripping them with
+// the rest of the ANSI fuses the words, so turn each move into the gap it spans.
+function widenCursorForwardGaps(screen: string): string {
+  return screen.replace(CURSOR_FORWARD_PATTERN, (_match, count: string) =>
+    ' '.repeat(Math.max(1, Number(count || '1')))
+  )
 }
 
 function isClaudeHeaderRow(line: string): boolean {
