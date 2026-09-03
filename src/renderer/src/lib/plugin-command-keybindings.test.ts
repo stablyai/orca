@@ -77,6 +77,53 @@ describe('plugin command keybindings', () => {
     ).toBeNull()
   })
 
+
+  it('terminal focus matches only bindings that opted in via allowInTerminal (#15642)', () => {
+    const optedIn: ActivePluginCommand = {
+      ...command,
+      id: 'speak',
+      keybindings: [
+        { key: 'Mod+Alt+T', when: 'global' },
+        { key: 'Mod+Shift+S', when: 'global', allowInTerminal: true }
+      ]
+    }
+    const plainInput = { key: 't', code: 'KeyT', control: true, meta: false, alt: true, shift: false }
+    const optedInput = {
+      key: 's',
+      code: 'KeyS',
+      control: true,
+      meta: false,
+      alt: false,
+      shift: true
+    }
+
+    // Default (app focus): every binding matches.
+    expect(findPluginCommandForKeybinding([optedIn], plainInput, 'linux', undefined, true)).toBe(
+      optedIn
+    )
+    // Terminal focus: only the opted-in chord matches…
+    expect(
+      findPluginCommandForKeybinding([optedIn], optedInput, 'linux', undefined, true, {
+        requireAllowInTerminal: true
+      })
+    ).toBe(optedIn)
+    // …and a non-opted chord no longer claims the terminal's key.
+    expect(
+      findPluginCommandForKeybinding([optedIn], plainInput, 'linux', undefined, true, {
+        requireAllowInTerminal: true
+      })
+    ).toBeNull()
+  })
+
+  it('terminal focus ignores commands whose bindings never opted in', () => {
+    const input = { key: 't', code: 'KeyT', control: true, meta: false, alt: true, shift: false }
+    expect(
+      findPluginCommandForKeybinding([command], input, 'linux', undefined, true, {
+        requireAllowInTerminal: true
+      })
+    ).toBeNull()
+  })
+
   it('reports conflicts between plugin and built-in definitions', () => {
     const actionId = pluginCommandKeybindingActionId(command)
     const definitions = [...KEYBINDING_DEFINITIONS, pluginCommandKeybindingDefinition(command)]

@@ -37,7 +37,13 @@ export const pluginKeybindingContributionSchema = z
         }
         return normalized.value
       }),
-    when: z.enum(['global', 'worktree']).optional()
+    when: z.enum(['global', 'worktree']).optional(),
+    // Why (#15642): plugin chords are consulted only in app focus by default so a
+    // plugin cannot steal Ctrl+C from a terminal. Without an opt-in there is no
+    // reachable trigger for users who live in terminals (no palette contribution
+    // point, panels cannot invoke commands, no OS-level global shortcut), so a
+    // binding may explicitly opt into terminal focus.
+    allowInTerminal: z.boolean().optional()
   })
   .strict()
 

@@ -28,7 +28,10 @@ describe('content-pack manifest contributions', () => {
             action: 'view.tasks'
           }
         ],
-        keybindings: [{ command: 'workspace.openTasks', key: 'Mod+Alt+T' }],
+        keybindings: [
+          { command: 'workspace.openTasks', key: 'Mod+Alt+T' },
+          { command: 'workspace.openTasks', key: 'Mod+Shift+T', allowInTerminal: true }
+        ],
         vmRecipes: [{ path: 'recipes/fly.json' }],
         agents: [{ path: 'agents/custom.json' }]
       })
@@ -153,3 +156,23 @@ describe('content-pack manifest contributions', () => {
     }
   })
 })
+
+  it('parses allowInTerminal on contributed keybindings (#15642)', () => {
+    const parsed = pluginManifestSchema.safeParse(
+      manifest({
+        commands: [
+          {
+            id: 'workspace.openTasks',
+            title: 'Open tasks',
+            context: 'worktree',
+            action: 'view.tasks'
+          }
+        ],
+        keybindings: [{ command: 'workspace.openTasks', key: 'Mod+Shift+T', allowInTerminal: true }]
+      })
+    )
+    expect(parsed.success).toBe(true)
+    if (parsed.success) {
+      expect(parsed.data.contributes.keybindings[0]?.allowInTerminal).toBe(true)
+    }
+  })
