@@ -119,7 +119,8 @@
         "chinese": "中文（简体）",
         "korean": "한국어",
         "japanese": "日本語",
-        "spanish": "Español"
+        "spanish": "Español",
+        "russian": "Русский"
       },
       "statusBar": {
         "claudeToggleDescription": "Show Claude token and cost usage for the active workspace.",

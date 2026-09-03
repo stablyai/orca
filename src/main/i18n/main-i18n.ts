@@ -27,7 +27,8 @@ const LAZY_LOCALE_LOADERS: Record<
   es: () => import('../../renderer/src/i18n/locales/es.json'),
   ja: () => import('../../renderer/src/i18n/locales/ja.json'),
   ko: () => import('../../renderer/src/i18n/locales/ko.json'),
-  zh: () => import('../../renderer/src/i18n/locales/zh.json')
+  zh: () => import('../../renderer/src/i18n/locales/zh.json'),
+  ru: () => import('../../renderer/src/i18n/locales/ru.json')
 }
 
 const lazyLocaleBackend: BackendModule = {
