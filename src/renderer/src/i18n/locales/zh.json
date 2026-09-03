@@ -12875,6 +12875,9 @@
           "8528a5eaf5": "已解决",
           "69d4e210bb": "未解决"
         },
+        "CsvColumnResizeHandle": {
+          "resizeColumn": "调整“{{value0}}”列的大小"
+        },
         "CsvViewer": {
           "eedd0d37a7": "列",
           "ac31d2cd60": "行",
