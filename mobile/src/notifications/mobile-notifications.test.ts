@@ -7,8 +7,8 @@ import {
   subscribeToDesktopNotifications
 } from './mobile-notifications'
 import AsyncStorage from '@react-native-async-storage/async-storage'
-import type { RpcClient } from '../transport/rpc-client'
 import { loadPushNotificationsEnabled } from '../storage/preferences'
+import { createRpcClientTestDouble } from '../test/rpc-client-test-double'
 import { resetHostNotificationSessionsForTests } from './notification-reconnect-catchup'
 
 vi.mock('expo-notifications', () => ({
@@ -93,11 +93,11 @@ describe('subscribeToDesktopNotifications', () => {
 
   it('drops the local stream when disposed before the desktop returns ready', () => {
     const unsubscribeStream = vi.fn()
-    const client = {
+    const client = createRpcClientTestDouble({
       subscribe: vi.fn(() => unsubscribeStream),
       getState: vi.fn(() => 'connected'),
       sendRequest: vi.fn()
-    } as unknown as RpcClient
+    })
 
     const unsubscribe = subscribeToDesktopNotifications(client, 'host-1')
     unsubscribe()
@@ -117,14 +117,14 @@ describe('subscribeToDesktopNotifications', () => {
       .mockResolvedValueOnce('scheduled-2')
     vi.mocked(Notifications.dismissNotificationAsync).mockResolvedValue(undefined)
     let onEvent: ((data: unknown) => void) | null = null
-    const client = {
+    const client = createRpcClientTestDouble({
       subscribe: vi.fn((_method, _params, callback: (data: unknown) => void) => {
         onEvent = callback
         return vi.fn()
       }),
       getState: vi.fn(() => 'connected'),
       sendRequest: vi.fn()
-    } as unknown as RpcClient
+    })
 
     subscribeToDesktopNotifications(client, 'host-1')
     onEvent?.({
@@ -173,14 +173,14 @@ describe('subscribeToDesktopNotifications', () => {
     } as never)
     vi.mocked(Notifications.scheduleNotificationAsync).mockResolvedValue('scheduled-1')
     let onEvent: ((data: unknown) => void) | null = null
-    const client = {
+    const client = createRpcClientTestDouble({
       subscribe: vi.fn((_method, _params, callback: (data: unknown) => void) => {
         onEvent = callback
         return vi.fn()
       }),
       getState: vi.fn(() => 'connected'),
       sendRequest: vi.fn()
-    } as unknown as RpcClient
+    })
 
     subscribeToDesktopNotifications(client, 'host-concurrent')
     onEvent?.({
@@ -217,14 +217,14 @@ describe('subscribeToDesktopNotifications', () => {
     )
     vi.mocked(Notifications.dismissNotificationAsync).mockResolvedValue(undefined)
     let onEvent: ((data: unknown) => void) | null = null
-    const client = {
+    const client = createRpcClientTestDouble({
       subscribe: vi.fn((_method, _params, callback: (data: unknown) => void) => {
         onEvent = callback
         return vi.fn()
       }),
       getState: vi.fn(() => 'connected'),
       sendRequest: vi.fn()
-    } as unknown as RpcClient
+    })
 
     subscribeToDesktopNotifications(client, 'host-dismiss-race')
     onEvent?.({
@@ -257,14 +257,14 @@ describe('subscribeToDesktopNotifications', () => {
       .mockResolvedValueOnce('scheduled-2')
     vi.mocked(Notifications.dismissNotificationAsync).mockResolvedValue(undefined)
     let onEvent: ((data: unknown) => void) | null = null
-    const client = {
+    const client = createRpcClientTestDouble({
       subscribe: vi.fn((_method, _params, callback: (data: unknown) => void) => {
         onEvent = callback
         return vi.fn()
       }),
       getState: vi.fn(() => 'connected'),
       sendRequest: vi.fn()
-    } as unknown as RpcClient
+    })
 
     subscribeToDesktopNotifications(client, 'host-dismiss-failed-replacement')
     onEvent?.({
@@ -304,14 +304,14 @@ describe('subscribeToDesktopNotifications', () => {
   it('treats unknown dismiss events as no-ops', async () => {
     vi.mocked(Notifications.dismissNotificationAsync).mockResolvedValue(undefined)
     let onEvent: ((data: unknown) => void) | null = null
-    const client = {
+    const client = createRpcClientTestDouble({
       subscribe: vi.fn((_method, _params, callback: (data: unknown) => void) => {
         onEvent = callback
         return vi.fn()
       }),
       getState: vi.fn(() => 'connected'),
       sendRequest: vi.fn()
-    } as unknown as RpcClient
+    })
 
     subscribeToDesktopNotifications(client, 'host-unknown')
     onEvent?.({ type: 'dismiss', notificationId: 'agent:missing' })
@@ -335,14 +335,14 @@ describe('subscribeToDesktopNotifications', () => {
         .mockResolvedValueOnce('scheduled-new')
       vi.mocked(Notifications.dismissNotificationAsync).mockResolvedValue(undefined)
       let onEvent: ((data: unknown) => void) | null = null
-      const client = {
+      const client = createRpcClientTestDouble({
         subscribe: vi.fn((_method, _params, callback: (data: unknown) => void) => {
           onEvent = callback
           return vi.fn()
         }),
         getState: vi.fn(() => 'connected'),
         sendRequest: vi.fn()
-      } as unknown as RpcClient
+      })
 
       subscribeToDesktopNotifications(client, 'host-1')
       onEvent?.({ type: 'notification', title: 't', body: 'b', notificationId: 'agent:old' })
@@ -386,7 +386,7 @@ describe('subscribeToDesktopNotifications — reconnect catch-up', () => {
   function makeClient() {
     let onData: ((data: unknown) => void) | null = null
     const sentRequests: { method: string; params: unknown }[] = []
-    const client = {
+    const client = createRpcClientTestDouble({
       subscribe: vi.fn((_method: string, _params: unknown, cb: (data: unknown) => void) => {
         onData = cb
         return vi.fn()
@@ -399,12 +399,12 @@ describe('subscribeToDesktopNotifications — reconnect catch-up', () => {
             result: method === 'notifications.getMissedSince' ? { notifications: [] } : undefined
           }) as never
       )
-    }
+    })
     // Why: onData is captured live via a getter (not destructured) because the
     // subscribe mock assigns it asynchronously as a side effect of
     // subscribeToDesktopNotifications calling client.subscribe.
     return {
-      client: client as unknown as RpcClient,
+      client,
       get onData() {
         return onData
       },

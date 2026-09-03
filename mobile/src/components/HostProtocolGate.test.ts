@@ -1,6 +1,7 @@
 import { createElement, useEffect } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { createRpcClientTestDouble } from '../test/rpc-client-test-double'
 import type { RpcClient } from '../transport/rpc-client'
 import { HostProtocolGate, useHostProtocolGates } from './HostProtocolGate'
 
@@ -36,7 +37,9 @@ vi.mock('../transport/client-context', () => ({
 }))
 
 function clientWithStatus(result: Record<string, unknown>): RpcClient {
-  return { sendRequest: vi.fn().mockResolvedValue({ ok: true, result }) } as unknown as RpcClient
+  return createRpcClientTestDouble({
+    sendRequest: vi.fn().mockResolvedValue({ ok: true, result })
+  })
 }
 
 function GateConsumer() {
@@ -161,9 +164,9 @@ describe('HostProtocolGate', () => {
   })
 
   it('does not mount host routes before a connected host passes the compatibility probe', async () => {
-    const client = {
+    const client = createRpcClientTestDouble({
       sendRequest: vi.fn().mockReturnValue(new Promise(() => {}))
-    } as unknown as RpcClient
+    })
     hostClient.current = { client, state: 'connected' }
     renderer = await renderGate()
     const output = renderedText(renderer)
@@ -179,9 +182,9 @@ describe('HostProtocolGate', () => {
     expect(renderedText(renderer)).toContain('HostContent')
     expect(probeMounts.count).toBe(1)
 
-    const client = {
+    const client = createRpcClientTestDouble({
       sendRequest: vi.fn().mockReturnValue(new Promise(() => {}))
-    } as unknown as RpcClient
+    })
     await act(async () => {
       hostClient.current = { client, state: 'connected' }
       renderer?.update(gateElement())
@@ -220,7 +223,7 @@ describe('HostProtocolGate', () => {
   })
 
   it('keeps an already-validated host route mounted while reconnect status is pending', async () => {
-    const client = {
+    const client = createRpcClientTestDouble({
       sendRequest: vi
         .fn()
         .mockResolvedValueOnce({
@@ -228,7 +231,7 @@ describe('HostProtocolGate', () => {
           result: { protocolVersion: 5, minCompatibleMobileVersion: 0 }
         })
         .mockReturnValueOnce(new Promise(() => {}))
-    } as unknown as RpcClient
+    })
     hostClient.current = { client, state: 'connected' }
     renderer = await renderGate()
 
@@ -251,9 +254,9 @@ describe('HostProtocolGate', () => {
 
   it('fails open when a connected host cannot answer the status probe', async () => {
     hostClient.current = {
-      client: {
+      client: createRpcClientTestDouble({
         sendRequest: vi.fn().mockResolvedValue({ ok: false, error: { message: 'unavailable' } })
-      } as unknown as RpcClient,
+      }),
       state: 'connected'
     }
     renderer = await renderGate()

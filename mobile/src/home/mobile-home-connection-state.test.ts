@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { RpcClient } from '../transport/rpc-client'
+import { createRpcClientTestDouble } from '../test/rpc-client-test-double'
 import type { HostCatalogEntry } from '../transport/types'
 import {
   reconcileMobileHomeHostStates,
@@ -22,7 +22,7 @@ function catalogHost(
 }
 
 function liveClient(hostId: string, state: MobileHomeClientEntry['state']): MobileHomeClientEntry {
-  return { hostId, state, client: {} as RpcClient }
+  return { hostId, state, client: createRpcClientTestDouble() }
 }
 
 describe('mobile home connection state', () => {

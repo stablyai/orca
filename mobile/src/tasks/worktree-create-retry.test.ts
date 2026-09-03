@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
+import { createRpcClientTestDouble } from '../test/rpc-client-test-double'
 import type { RpcClient } from '../transport/rpc-client'
 import { markRpcDeliveryUnknown } from '../transport/rpc-delivery-ambiguity'
 import { LogicalClientCutoverError } from '../transport/stable-logical-rpc-client'
@@ -70,7 +71,7 @@ function scriptedClient(
   lastInboundAt?: number | (() => number)
 ): RpcClient {
   let call = 0
-  return {
+  return createRpcClientTestDouble({
     getState: () => connection?.getState() ?? 'connected',
     getLastInboundAt: () =>
       (typeof lastInboundAt === 'function' ? lastInboundAt() : lastInboundAt) ?? null,
@@ -112,7 +113,7 @@ function scriptedClient(
         _meta: { runtimeId: 'r' }
       }
     }
-  } as unknown as RpcClient
+  })
 }
 
 describe('createWorktreeWithNameRetry', () => {

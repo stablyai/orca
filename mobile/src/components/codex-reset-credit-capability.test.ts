@@ -1,6 +1,7 @@
 import { createElement } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import { createRpcClientTestDouble } from '../test/rpc-client-test-double'
 import type { RpcClient } from '../transport/rpc-client'
 
 const probe = vi.hoisted(() => ({
@@ -58,7 +59,7 @@ describe('useCodexResetCreditCapability', () => {
         return cancel
       }
     )
-    const client = { sendRequest: vi.fn() } as unknown as RpcClient
+    const client = createRpcClientTestDouble({ sendRequest: vi.fn() })
     let renderer: ReactTestRenderer | null = null
 
     function Harness() {

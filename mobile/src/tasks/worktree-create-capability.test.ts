@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { createRpcClientTestDouble } from '../test/rpc-client-test-double'
 import type { RpcClient } from '../transport/rpc-client'
 import { LogicalClientCutoverError } from '../transport/stable-logical-rpc-client'
 import { readNewWorktreeRuntimeCapabilities } from './worktree-create-capability'
@@ -18,7 +19,7 @@ type StatusOutcome =
 
 function statusClient(outcomes: StatusOutcome[]): RpcClient {
   let call = 0
-  return {
+  return createRpcClientTestDouble({
     sendRequest: async () => {
       const outcome = outcomes[Math.min(call, outcomes.length - 1)]!
       call += 1
@@ -38,7 +39,7 @@ function statusClient(outcomes: StatusOutcome[]): RpcClient {
         _meta: { runtimeId: 'r' }
       }
     }
-  } as unknown as RpcClient
+  })
 }
 
 describe('readNewWorktreeRuntimeCapabilities', () => {
