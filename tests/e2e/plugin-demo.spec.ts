@@ -78,7 +78,10 @@ test('runs hello-orca panel, command, and event behind visible consent', async (
 
   try {
     const installed = await orcaPage.evaluate(async (sourcePath) => {
-      const settings = await window.api.settings.set({ pluginSystemEnabled: true })
+      const settings = await window.api.settings.set({
+        pluginSystemEnabled: true,
+        uiLanguage: 'en'
+      })
       window.__store?.setState({ settings })
       const result = await window.api.plugins.install({ kind: 'local-path', path: sourcePath })
       if (!result.ok) {
@@ -143,6 +146,10 @@ test('runs hello-orca panel, command, and event behind visible consent', async (
     }, pluginRoot)
 
     await openDemoPanel(orcaPage)
+
+    const panel = orcaPage.frameLocator('iframe[title="Hello Orca"]')
+    await panel.getByRole('button', { name: "Ping this plugin's worker" }).click()
+    await expect(panel.locator('#status')).toHaveText('worker pong count=3')
 
     const panelPath = join(pluginRoot, 'panel.html')
     const panelHtml = await readFile(panelPath, 'utf8')

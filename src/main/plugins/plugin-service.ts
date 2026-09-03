@@ -76,6 +76,7 @@ export class PluginService {
       contentVerifier: this.contentVerifier,
       executeHostCall: (pluginKey, method, params) =>
         this.executeHostCall(pluginKey, method, params, { viaPanel: true }),
+      invokePluginCommand: this.invokeCommand.bind(this),
       log: (pluginKey, line) => this.logBuffer.append(pluginKey, 'error', line)
     })
     this.workerController = new PluginWorkerController({

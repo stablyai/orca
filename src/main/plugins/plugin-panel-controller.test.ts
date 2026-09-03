@@ -5,7 +5,11 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { pluginManifestSchema } from '../../shared/plugins/plugin-manifest'
 import { createPluginPanelCallAdmission } from '../../shared/plugins/plugin-panel-call-admission'
 import type { ValidDiscoveredPlugin } from './plugin-discovery'
-import { PluginPanelController } from './plugin-panel-controller'
+import {
+  PLUGIN_PANEL_COMMAND_ERROR_MAX_CODE_UNITS,
+  PLUGIN_PANEL_COMMAND_RESULT_MAX_BYTES,
+  PluginPanelController
+} from './plugin-panel-controller'
 
 const roots: string[] = []
 
@@ -42,6 +46,164 @@ async function createPlugin(): Promise<ValidDiscoveredPlugin> {
 }
 
 describe('PluginPanelController identity binding', () => {
+  it('invokes only the command worker bound to the open panel session', async () => {
+    const plugin = await createPlugin()
+    const invokePluginCommand = vi.fn().mockResolvedValue({
+      sessions: [{ id: 'session-one', title: 'First session' }]
+    })
+    const controller = new PluginPanelController({
+      resolveApprovedPlugin: (pluginKey) => (pluginKey === plugin.pluginKey ? plugin : null),
+      contentVerifier: { verify: vi.fn().mockResolvedValue(undefined) },
+      executeHostCall: vi.fn(),
+      invokePluginCommand,
+      log: vi.fn()
+    })
+    const entry = await controller.open('runtime:one', plugin.pluginKey, 'dashboard')
+
+    await expect(
+      controller.execute('runtime:one', {
+        sessionToken: entry!.sessionToken,
+        action: 'plugin.command.invoke',
+        params: {
+          commandId: 'history-query',
+          args: { query: 'release' }
+        }
+      })
+    ).resolves.toEqual({
+      ok: true,
+      value: { sessions: [{ id: 'session-one', title: 'First session' }] }
+    })
+    expect(invokePluginCommand).toHaveBeenCalledWith(plugin.pluginKey, 'history-query', {
+      query: 'release'
+    })
+
+    await expect(
+      controller.execute('runtime:one', {
+        sessionToken: entry!.sessionToken,
+        action: 'plugin.command.invoke',
+        params: {
+          commandId: 'history-query',
+          pluginKey: 'orca-samples.other'
+        }
+      })
+    ).resolves.toMatchObject({ ok: false, code: 'invalid_params' })
+    expect(invokePluginCommand).toHaveBeenCalledTimes(1)
+
+    await expect(
+      controller.execute('runtime:other', {
+        sessionToken: entry!.sessionToken,
+        action: 'plugin.command.invoke',
+        params: { commandId: 'history-query' }
+      })
+    ).resolves.toMatchObject({ ok: false, code: 'invalid_request' })
+    expect(invokePluginCommand).toHaveBeenCalledTimes(1)
+  })
+
+  it('returns a bounded action error when the bound plugin command fails', async () => {
+    const plugin = await createPlugin()
+    const controller = new PluginPanelController({
+      resolveApprovedPlugin: () => plugin,
+      contentVerifier: { verify: vi.fn().mockResolvedValue(undefined) },
+      executeHostCall: vi.fn(),
+      invokePluginCommand: vi.fn().mockRejectedValue(new Error('history index unavailable')),
+      log: vi.fn()
+    })
+    const entry = await controller.open('runtime:one', plugin.pluginKey, 'dashboard')
+
+    await expect(
+      controller.execute('runtime:one', {
+        sessionToken: entry!.sessionToken,
+        action: 'plugin.command.invoke',
+        params: { commandId: 'history-query' }
+      })
+    ).resolves.toEqual({
+      ok: false,
+      code: 'action_failed',
+      error: 'history index unavailable'
+    })
+  })
+
+  it('truncates oversized worker errors before they reach the renderer', async () => {
+    const plugin = await createPlugin()
+    const controller = new PluginPanelController({
+      resolveApprovedPlugin: () => plugin,
+      contentVerifier: { verify: vi.fn().mockResolvedValue(undefined) },
+      executeHostCall: vi.fn(),
+      invokePluginCommand: vi
+        .fn()
+        .mockRejectedValue(new Error('x'.repeat(PLUGIN_PANEL_COMMAND_ERROR_MAX_CODE_UNITS + 1))),
+      log: vi.fn()
+    })
+    const entry = await controller.open('runtime:one', plugin.pluginKey, 'dashboard')
+
+    await expect(
+      controller.execute('runtime:one', {
+        sessionToken: entry!.sessionToken,
+        action: 'plugin.command.invoke',
+        params: { commandId: 'history-query' }
+      })
+    ).resolves.toEqual({
+      ok: false,
+      code: 'action_failed',
+      error: 'x'.repeat(PLUGIN_PANEL_COMMAND_ERROR_MAX_CODE_UNITS)
+    })
+  })
+
+  it('falls back safely when a worker rejection cannot be stringified', async () => {
+    const plugin = await createPlugin()
+    const hostileError = {
+      toString(): string {
+        throw new Error('string coercion failed')
+      }
+    }
+    const controller = new PluginPanelController({
+      resolveApprovedPlugin: () => plugin,
+      contentVerifier: { verify: vi.fn().mockResolvedValue(undefined) },
+      executeHostCall: vi.fn(),
+      invokePluginCommand: vi.fn().mockRejectedValue(hostileError),
+      log: vi.fn()
+    })
+    const entry = await controller.open('runtime:one', plugin.pluginKey, 'dashboard')
+
+    await expect(
+      controller.execute('runtime:one', {
+        sessionToken: entry!.sessionToken,
+        action: 'plugin.command.invoke',
+        params: { commandId: 'history-query' }
+      })
+    ).resolves.toEqual({
+      ok: false,
+      code: 'action_failed',
+      error: 'plugin command failed'
+    })
+  })
+
+  it('refuses an oversized worker result before it reaches the renderer', async () => {
+    const plugin = await createPlugin()
+    const controller = new PluginPanelController({
+      resolveApprovedPlugin: () => plugin,
+      contentVerifier: { verify: vi.fn().mockResolvedValue(undefined) },
+      executeHostCall: vi.fn(),
+      invokePluginCommand: vi
+        .fn()
+        .mockResolvedValue('x'.repeat(PLUGIN_PANEL_COMMAND_RESULT_MAX_BYTES + 1)),
+      log: vi.fn()
+    })
+    const entry = await controller.open('runtime:one', plugin.pluginKey, 'dashboard')
+
+    await expect(
+      controller.execute('runtime:one', {
+        sessionToken: entry!.sessionToken,
+        action: 'plugin.command.invoke',
+        params: { commandId: 'history-query' }
+      })
+    ).resolves.toEqual({
+      ok: false,
+      code: 'action_failed',
+      error: 'plugin command result exceeds the size limit'
+    })
+  })
+
   it('uses the session identity and rejects caller-supplied plugin claims', async () => {
     const plugin = await createPlugin()
     const executeHostCall = vi.fn().mockResolvedValue({ ok: true, value: { delivered: true } })
