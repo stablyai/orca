@@ -152,6 +152,12 @@ jobs:
       - name: Verify localization catalog
         run: pnpm run verify:localization-catalog
 
+      # Why: the renderer ships only the English entries i18next cannot rebuild
+      # from each call site's inline default, so the generated subset has to
+      # track en.json and those defaults.
+      - name: Verify runtime-required localization catalog
+        run: pnpm run verify:localization-runtime-catalog
+
       # Why: extraction writes sorted evidence to an isolated temporary path,
       # so feature PRs need one normalized AST pass rather than a three-OS matrix.
       - name: Verify localization extraction

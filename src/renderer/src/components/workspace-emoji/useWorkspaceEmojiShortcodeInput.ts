@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type RefObject } from 'react'
 import { isImeCompositionKeyDown } from '@/lib/ime-composition-keyboard-event'
+import { primeEmojiShortcodeCatalog } from '@/lib/emoji-shortcode-catalog-loader'
 import {
   applyWorkspaceEmojiSuggestion,
   getActiveWorkspaceEmojiShortcode,
@@ -22,6 +23,12 @@ export function useWorkspaceEmojiShortcodeInput({
   onValueChange,
   value
 }: WorkspaceEmojiShortcodeInputOptions) {
+  // Why on mount and not only in main.tsx: pop-out and web windows have their
+  // own entry points, and a field that can accept `:` must never be the thing
+  // that starts the catalog load.
+  useEffect(() => {
+    void primeEmojiShortcodeCatalog()
+  }, [])
   const [cursor, setCursor] = useState<number | null>(null)
   const [commandValue, setCommandValue] = useState('')
   const focusFrameRef = useRef<number | null>(null)

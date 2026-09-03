@@ -1,4 +1,4 @@
-import { WebglAddon } from '@xterm/addon-webgl'
+import type { WebglAddon } from '@xterm/addon-webgl'
 import type { ManagedPane, ManagedPaneInternal } from './pane-manager-types'
 import { recordTerminalWebglDiagnostic } from '../../../../shared/terminal-webgl-diagnostics'
 import { getLivePaneCensus } from './pane-manager-registry'
@@ -36,6 +36,36 @@ type XtermWebglAddonInternals = {
     _gl?: ReleasableWebglContext
     _canvas?: HTMLCanvasElement
   }
+}
+
+// Why the primed handle instead of a static import: nine boot-path modules
+// import this file for ENABLE_WEBGL_RENDERER / disposeWebgl / present…, which
+// dragged the 243 KB addon into the chunk every renderer launch fetches and
+// evaluates before first paint — even though the addon is only ever
+// constructed once a terminal attaches. The load stays eager, just off the
+// critical path: main.tsx primes it right after the React root renders, and
+// attachWebgl reads the resolved constructor synchronously.
+let webglAddonConstructor: (new () => WebglAddon) | null = null
+let webglAddonLoad: Promise<void> | null = null
+const panesAwaitingWebglAddon = new Set<ManagedPaneInternal>()
+
+export function primeTerminalWebglAddon(): Promise<void> {
+  webglAddonLoad ??= import('@xterm/addon-webgl').then(
+    (module) => {
+      webglAddonConstructor = module.WebglAddon
+      // A pane that opened in the window between priming and resolution is
+      // still on the DOM renderer; attach now rather than waiting for a fit.
+      // attachWebgl deletes the pane it is handling, which is the entry the
+      // iterator is on — safe to drop mid-iteration.
+      for (const pane of panesAwaitingWebglAddon) {
+        attachWebgl(pane)
+      }
+    },
+    (error) => {
+      console.warn('[terminal] WebGL addon failed to load — using DOM renderer:', error)
+    }
+  )
+  return webglAddonLoad
 }
 
 export function resetTerminalWebglSuggestion(): void {
@@ -94,6 +124,7 @@ export function disposeWebgl(
   options?: { refreshDimensions?: boolean }
 ): void {
   cancelPendingWebglRefresh(pane)
+  panesAwaitingWebglAddon.delete(pane)
   if (!pane.webglAddon) {
     return
   }
@@ -324,9 +355,18 @@ export function attachWebgl(pane: ManagedPaneInternal): void {
   }
   // Single-addon invariant: never stack a second addon on a live one.
   disposeWebgl(pane)
+  const WebglAddonConstructor = webglAddonConstructor
+  if (!WebglAddonConstructor) {
+    // Only reachable if a pane opens before the primed load resolves; the
+    // continuation in primeTerminalWebglAddon attaches this pane the moment it
+    // does, and the fit hook is the later backstop.
+    panesAwaitingWebglAddon.add(pane)
+    void primeTerminalWebglAddon()
+    return
+  }
   let webglAddon: WebglAddon | null = null
   try {
-    webglAddon = new WebglAddon()
+    webglAddon = new WebglAddonConstructor()
     const addon = webglAddon
     addon.onContextLoss(() => {
       console.warn(

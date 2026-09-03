@@ -2,7 +2,8 @@
 
 import { useRef, useState } from 'react'
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
+import { primeEmojiShortcodeCatalog } from '@/lib/emoji-shortcode-catalog-loader'
 import { useWorkspaceEmojiShortcodeInput } from './useWorkspaceEmojiShortcodeInput'
 
 function EmojiInputHarness({
@@ -53,6 +54,10 @@ function EmojiInputHarness({
 }
 
 describe('useWorkspaceEmojiShortcodeInput', () => {
+  // The hook primes this on mount; await it so suggestions are ready to assert on.
+  beforeAll(async () => {
+    await primeEmojiShortcodeCatalog()
+  })
   afterEach(cleanup)
 
   it('replaces a completed shortcode without discarding trailing text', () => {

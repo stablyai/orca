@@ -6,6 +6,7 @@ import {
   clearTerminalWebglAttachBackoff,
   presentPaneViewport,
   presentPaneViewportPreservingSynchronizedOutput,
+  primeTerminalWebglAddon,
   resetTerminalWebglSuggestion,
   resetWebglTextureAtlas
 } from './pane-webgl-renderer'
@@ -110,7 +111,8 @@ function createPausedPane(display: 'block' | 'none'): {
 }
 
 describe('terminal WebGL addon lifecycle', () => {
-  beforeEach(() => {
+  beforeEach(async () => {
+    await primeTerminalWebglAddon()
     resetTerminalWebglSuggestion()
     vi.spyOn(console, 'warn').mockImplementation(() => {})
     vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) => {
