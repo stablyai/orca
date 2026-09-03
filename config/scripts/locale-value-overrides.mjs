@@ -3,6 +3,13 @@ import { KO_VALUE_OVERRIDES } from './locale-ko-value-overrides.mjs'
 import { ZH_VALUE_OVERRIDES } from './locale-zh-value-overrides.mjs'
 
 export const LOCALE_VALUE_OVERRIDES = {
+  pt: {
+    // Why: the agent-translation pipeline over-applied the "keep 'terminal' as a loanword"
+    // glossary rule to the whole string instead of just that word, leaving these two literally
+    // untranslated (caught by the pt.json integrity audit — es/ja/ko/zh translate the same key).
+    '{{count}} terminal session': '{{count}} sessão de terminal',
+    '{{count}} terminal sessions': '{{count}} sessões de terminal'
+  },
   es: {
     'Explore Orca': 'Explorar Orca',
     'OpenCode Go': 'OpenCode Go',
