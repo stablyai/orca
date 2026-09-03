@@ -26,6 +26,19 @@ function configureHeadlessServeChromiumFlags(): void {
   // Why: externally managed displays are commonly Xvfb too; a GPU-process fork can trap before serve readiness.
   app.disableHardwareAcceleration()
   app.commandLine.appendSwitch('disable-gpu')
+  pinOzonePlatformToX11()
+}
+
+// Why: Electron has already resolved its platform hint into --ozone-platform by now, so on a
+// desktop session (a `systemctl --user` serve unit inherits one) it reads Wayland, where a hidden
+// BrowserWindow with the GPU disabled above never paints and browser panes stay blank. Overriding
+// the resolved value is the only way to reach X11; an explicit command-line choice still wins.
+function pinOzonePlatformToX11(): void {
+  if (process.argv.some((arg) => arg.startsWith('--ozone-platform'))) {
+    return
+  }
+  app.commandLine.removeSwitch('ozone-platform')
+  app.commandLine.appendSwitch('ozone-platform', 'x11')
 }
 
 function xvfbSocketPath(displayNumber: number): string {

@@ -9,7 +9,7 @@ const { spawnMock, existsSyncMock, readFileSyncMock, rmSyncMock, statSyncMock, a
     statSyncMock: vi.fn(),
     appMock: {
       disableHardwareAcceleration: vi.fn(),
-      commandLine: { appendSwitch: vi.fn(), getSwitchValue: vi.fn() },
+      commandLine: { appendSwitch: vi.fn(), getSwitchValue: vi.fn(), removeSwitch: vi.fn() },
       once: vi.fn()
     }
   }))
@@ -62,6 +62,7 @@ describe('ensureVirtualDisplayForHeadlessServe', () => {
     statSyncMock.mockReset()
     appMock.disableHardwareAcceleration.mockReset()
     appMock.commandLine.appendSwitch.mockReset()
+    appMock.commandLine.removeSwitch.mockReset()
     appMock.commandLine.getSwitchValue.mockReset().mockReturnValue('')
     appMock.once.mockReset()
     delete process.env.DISPLAY
@@ -110,6 +111,36 @@ describe('ensureVirtualDisplayForHeadlessServe', () => {
     expect(appMock.disableHardwareAcceleration).toHaveBeenCalled()
     expect(appMock.commandLine.appendSwitch).toHaveBeenCalledWith('disable-dev-shm-usage')
     expect(appMock.commandLine.appendSwitch).toHaveBeenCalledWith('disable-gpu')
+  })
+
+  it('pins Ozone to X11 so offscreen serve windows keep compositing', async () => {
+    setPlatform('linux')
+    process.env.DISPLAY = ':0'
+    mockLiveXDisplay()
+    const { ensureVirtualDisplayForHeadlessServe } = await import('./ensure-virtual-display')
+
+    expect(ensureVirtualDisplayForHeadlessServe({ isServeMode: true })).toBe(true)
+    // Electron has already resolved its hint into --ozone-platform, so appending alone is a
+    // no-op: the value must be dropped first or Ozone stays on Wayland and never paints.
+    expect(appMock.commandLine.removeSwitch).toHaveBeenCalledWith('ozone-platform')
+    expect(appMock.commandLine.appendSwitch).toHaveBeenCalledWith('ozone-platform', 'x11')
+  })
+
+  it('leaves an explicitly selected ozone platform alone', async () => {
+    setPlatform('linux')
+    process.env.DISPLAY = ':0'
+    const originalArgv = process.argv
+    process.argv = [...originalArgv, '--ozone-platform=wayland']
+    mockLiveXDisplay()
+    const { ensureVirtualDisplayForHeadlessServe } = await import('./ensure-virtual-display')
+
+    try {
+      ensureVirtualDisplayForHeadlessServe({ isServeMode: true })
+    } finally {
+      process.argv = originalArgv
+    }
+    expect(appMock.commandLine.removeSwitch).not.toHaveBeenCalled()
+    expect(appMock.commandLine.appendSwitch).not.toHaveBeenCalledWith('ozone-platform', 'x11')
   })
 
   it('reports unsupported when Xvfb cannot be launched', async () => {
