@@ -2,6 +2,7 @@ import {
   isWebviewDragPassthroughActive,
   registerWebviewDragPassthroughSurface
 } from './host-guest/webview-drag-passthrough'
+import { registerBrowserClientPagePositionSync } from './browser-client-page-position-driver'
 import type { BrowserClientRetainedRendererPage as RetainedPage } from './browser-client-page-retained-state'
 
 export type BrowserClientPageVisibleAttachment = {
@@ -108,19 +109,11 @@ function showRetainedHost(host: HTMLDivElement, container: HTMLElement): () => v
   window.addEventListener('scroll', syncViewport, true)
   // Why: a pane can MOVE without resizing (tab dragged across an even split, sidebar toggles),
   // which fires no resize/scroll event — the overlay would keep painting at the old pane's rect.
-  let positionFrame: number | null = null
-  const trackPosition = (): void => {
-    syncViewport()
-    positionFrame = requestAnimationFrame(trackPosition)
-  }
-  if (typeof requestAnimationFrame === 'function') {
-    positionFrame = requestAnimationFrame(trackPosition)
-  }
+  // The per-frame re-read is shared with every other shown host by the position driver.
+  const releasePositionSync = registerBrowserClientPagePositionSync(syncViewport)
   syncViewport()
   return () => {
-    if (positionFrame !== null) {
-      cancelAnimationFrame(positionFrame)
-    }
+    releasePositionSync()
     observer?.disconnect()
     window.removeEventListener('resize', syncViewport)
     window.removeEventListener('scroll', syncViewport, true)
