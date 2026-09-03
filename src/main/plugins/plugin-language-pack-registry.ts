@@ -72,6 +72,7 @@ export class PluginLanguagePackRegistry {
                 resourceLanguage: pluginLanguageResourceId(id),
                 pluginKey: plugin.pluginKey,
                 locale: contribution.locale,
+                ...(contribution.displayName ? { displayName: contribution.displayName } : {}),
                 catalog: parsed.catalog
               }
             })

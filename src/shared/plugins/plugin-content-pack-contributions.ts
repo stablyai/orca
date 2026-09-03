@@ -18,7 +18,11 @@ export const pluginLocaleIdSchema = z
 export const pluginLanguagePackContributionSchema = z
   .object({
     locale: pluginLocaleIdSchema,
-    path: pluginRelativePathSchema
+    path: pluginRelativePathSchema,
+    // Why (#13031): optional native name for the Settings language picker so
+    // community packs can match built-in labels (中文（繁體）) instead of
+    // `{locale} — {pluginKey}`.
+    displayName: z.string().trim().min(1).max(80).optional()
   })
   .strict()
 

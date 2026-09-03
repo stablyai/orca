@@ -20,6 +20,8 @@ export type PluginLanguagePackRegistration = {
   resourceLanguage: `plugin${string}`
   pluginKey: string
   locale: string
+  /** Optional native picker label from the language-pack contribution (#13031). */
+  displayName?: string
   catalog: Record<string, unknown>
 }
 
