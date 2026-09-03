@@ -15,9 +15,16 @@ export function relayWorkflowFile(name) {
   return `${RELAY_WORKFLOW_FILE_PREFIX}${name}`
 }
 
+// Repository-relative path for a repository that renames its copies with `prefix`. Terraform's
+// trusted prefix is a variable and need not be this checkout's, so callers rendering a
+// workflow_ref from Terraform pass it in rather than assuming the local one.
+export function prefixedRelayWorkflowPath(prefix, name) {
+  return `.github/workflows/${prefix}${name}`
+}
+
 // Repository-relative path, the shape GitHub reports in workflow_ref and evidence payloads.
 export function relayWorkflowPath(name) {
-  return `.github/workflows/${relayWorkflowFile(name)}`
+  return prefixedRelayWorkflowPath(RELAY_WORKFLOW_FILE_PREFIX, name)
 }
 
 export function relayWorkflowUrl(name) {

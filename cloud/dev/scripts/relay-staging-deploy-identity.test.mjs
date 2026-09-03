@@ -2,11 +2,7 @@ import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import test from 'node:test'
 import { readWorkflow, workflowFiles } from './cloud-sql-rollout-lock-census.mjs'
-import {
-  RELAY_WORKFLOW_FILE_PREFIX,
-  relayWorkflowFile,
-  relayWorkflowPath
-} from './relay-repository.mjs'
+import { prefixedRelayWorkflowPath, relayWorkflowFile } from './relay-repository.mjs'
 
 const identity = readFileSync(
   new URL('../../infra/terraform/relay-staging-deploy-iam.tf', import.meta.url),
@@ -128,8 +124,11 @@ test('the rendered attribute condition stays inside the provider limit', () => {
     `assertion.repository_id == '${variableDefault('github_repo_id')}'`,
     `assertion.repository_owner_id == '${variableDefault('github_owner_id')}'`
   ]
+  // The prefix is the Terraform variable, not this checkout's own workflow filenames: the
+  // condition names the files as the trusted repository carries them.
+  const prefix = variableDefault('github_workflow_file_prefix')
   const workflowRefs = providerWorkflowFiles().map(
-    (file) => `${repository}/${relayWorkflowPath(file)}@refs/heads/main`
+    (file) => `${repository}/${prefixedRelayWorkflowPath(prefix, file)}@refs/heads/main`
   )
   const rendered = [
     ...claims,
@@ -138,9 +137,7 @@ test('the rendered attribute condition stays inside the provider limit', () => {
     `(${workflowRefs.map((ref) => `assertion.workflow_ref == '${ref}'`).join(' || ')})`
   ].join(' && ')
   assert.ok(rendered.length < 4096, `rendered condition is ${rendered.length} characters`)
-  // 797 is the private repository's rendered length. This copy prefixes every workflow filename,
-  // which is the only difference, so the pin still moves the moment a workflow is added or dropped.
-  assert.equal(rendered.length, 797 + workflowRefs.length * RELAY_WORKFLOW_FILE_PREFIX.length)
+  assert.equal(rendered.length, 791)
 })
 
 // Why: the census is the point. A binding added here without a workflow step behind it, or one

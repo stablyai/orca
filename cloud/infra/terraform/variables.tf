@@ -22,14 +22,14 @@ variable "github_owner" {
 variable "github_repo" {
   type        = string
   description = "GitHub repo allowed to deploy through Workload Identity Federation."
-  default     = "orca-cloud"
+  default     = "orca"
 }
 
 # Numeric IDs survive a rename or transfer of the repository; every provider pins them next to the name.
 variable "github_repo_id" {
   type        = string
   description = "Numeric GitHub repository ID of github_owner/github_repo."
-  default     = "1273841466"
+  default     = "1183888342"
 
   validation {
     condition     = can(regex("^[0-9]+$", var.github_repo_id))
@@ -48,12 +48,24 @@ variable "github_owner_id" {
   }
 }
 
-# Additional repositories whose identical workflows the same identities must accept while the
-# public extraction runs. Each entry renders its own OR arm in every provider condition, so the
-# private repo keeps working while the public one takes over. `workflow_file_prefix` is the rename
-# the importing repository applies to the workflow files it copies. Empty is the steady state:
-# the final step of the cutover is to empty this list again and point github_owner/github_repo,
-# github_repo_id, and github_owner_id at the surviving repository.
+# The rename the relay repository applies to the workflow files it carries. The public repo keeps
+# the workflows under `cloud-` names, so every relay workflow_ref is built from this head.
+variable "github_workflow_file_prefix" {
+  type        = string
+  description = "Filename prefix on github_owner/github_repo's copies of the relay workflows."
+  default     = "cloud-"
+
+  validation {
+    condition     = can(regex("^[a-z0-9-]*$", var.github_workflow_file_prefix))
+    error_message = "github_workflow_file_prefix must be lowercase letters, digits, or hyphens."
+  }
+}
+
+# Additional repositories whose identical workflows the same identities must accept during a
+# repository move. Each entry renders its own OR arm in every provider condition, so both repos
+# can run the same workflows through the same identities. `workflow_file_prefix` is the rename the
+# importing repository applies to the workflow files it copies. Empty is the steady state, and is
+# where the public extraction left it: stablyai/orca is now the primary and only repository.
 variable "github_accepted_repositories" {
   type = list(object({
     owner                = string
