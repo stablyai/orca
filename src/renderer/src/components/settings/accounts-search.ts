@@ -212,6 +212,29 @@ export const getAccountsGrokSearchEntries = createLocalizedCatalog(() => [
   }
 ])
 
+export const getAccountsZaiSearchEntries = createLocalizedCatalog(() => [
+  {
+    title: translate('auto.components.settings.accounts.search.zaiUsageTitle', 'Z.ai Usage'),
+    description: translate(
+      'auto.components.settings.accounts.search.zaiUsageDescription',
+      'Paste your Z.ai API key to show GLM Coding Plan quota in the status bar.'
+    ),
+    keywords: [
+      ...translateSearchKeyword('auto.components.settings.accounts.search.zaiKeyword', 'z.ai'),
+      ...translateSearchKeyword('auto.components.settings.accounts.search.glmKeyword', 'glm'),
+      ...translateSearchKeyword(
+        'auto.components.settings.accounts.search.apiKeyKeyword',
+        'api key'
+      ),
+      ...translateSearchKeyword(
+        'auto.components.settings.accounts.search.e949b08ffb',
+        'rate limit'
+      ),
+      ...translateSearchKeyword('auto.components.settings.accounts.search.86edc96bc9', 'status bar')
+    ]
+  }
+])
+
 export const getAccountsPaneSearchEntries = createLocalizedCatalog((): SettingsSearchEntry[] => [
   ...getAccountsLocationSearchEntries(),
   ...getAccountsClaudeSearchEntries(),
@@ -219,5 +242,6 @@ export const getAccountsPaneSearchEntries = createLocalizedCatalog((): SettingsS
   ...getAccountsGeminiSearchEntries(),
   ...getAccountsOpencodeSearchEntries(),
   ...getAccountsMiniMaxSearchEntries(),
-  ...getAccountsGrokSearchEntries()
+  ...getAccountsGrokSearchEntries(),
+  ...getAccountsZaiSearchEntries()
 ])

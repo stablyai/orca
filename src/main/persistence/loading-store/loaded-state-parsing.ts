@@ -105,6 +105,12 @@ export class LoadedStateParsingOperations {
             isLegacyOpenCodeSessionCookie
           )
         }
+        if (parsed.settings?.zaiApiKey) {
+          parsed.settings.zaiApiKey = this.runtime.protectedSecrets.decrypt(
+            PROTECTED_SECRET_SLOT.zaiApiKey,
+            parsed.settings.zaiApiKey
+          )
+        }
         if (parsed.settings?.httpProxyUrl) {
           const decryptedProxy = this.runtime.protectedSecrets.decryptWithStatus(
             PROTECTED_SECRET_SLOT.httpProxyUrl,

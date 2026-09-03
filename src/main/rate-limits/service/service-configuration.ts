@@ -9,6 +9,7 @@ import {
   type ClaudeAuthPreparationResolver,
   type OpenCodeGoRateLimitConfig,
   type MiniMaxRateLimitConfig,
+  type ZaiRateLimitConfig,
   type GeminiCliOAuthEnabledResolver,
   type InactiveCodexAccountInfo,
   type InactiveClaudeAccountInfo,
@@ -45,6 +46,10 @@ export abstract class RateLimitServiceConfiguration extends RateLimitServiceAcco
 
   setMiniMaxConfigResolver(resolver: () => MiniMaxRateLimitConfig): void {
     this.miniMaxConfigResolver = resolver
+  }
+
+  setZaiConfigResolver(resolver: () => ZaiRateLimitConfig): void {
+    this.zaiConfigResolver = resolver
   }
 
   setGeminiCliOAuthEnabledResolver(resolver: GeminiCliOAuthEnabledResolver): void {

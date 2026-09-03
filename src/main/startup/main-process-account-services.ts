@@ -108,6 +108,7 @@ export function initializeMainProcessAccountServices(): void {
       models: settings.minimaxUsageModels
     }
   })
+  state.rateLimits.setZaiConfigResolver(() => ({ apiKey: store.getSettings().zaiApiKey }))
   state.rateLimits.setGeminiCliOAuthEnabledResolver(() => store.getSettings().geminiCliOAuthEnabled)
   state.rateLimits.setNetworkProxySettingsResolver(() => store.getSettings())
   state.keybindings = new KeybindingService({

@@ -62,6 +62,7 @@ export type StatusBarItem =
   | 'kimi'
   | 'minimax'
   | 'grok'
+  | 'zai'
   | 'ssh'
   | 'resource-usage'
   | 'ports'

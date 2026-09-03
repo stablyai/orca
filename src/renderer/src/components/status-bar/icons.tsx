@@ -34,6 +34,23 @@ export function MiniMaxIcon({ size = 14 }: { size?: number }): React.JSX.Element
   )
 }
 
+export function ZaiIcon({ size = 14 }: { size?: number }): React.JSX.Element {
+  // Why: a plain Z glyph, drawn in currentColor so it reads in both themes and
+  // carries no vendor artwork we would have to vendor and license.
+  return (
+    <svg
+      viewBox="0 0 16 16"
+      width={size}
+      height={size}
+      aria-hidden="true"
+      className="text-current block shrink-0"
+      fill="currentColor"
+    >
+      <path d="M3.6 2h8.8v1.9L6.7 12h5.9v2H3.4v-1.9L9.1 4H3.6V2z" />
+    </svg>
+  )
+}
+
 // Why: each instance needs unique filter/mask IDs — reusing the same ID across
 // multiple SVGs on the same page causes the browser to resolve to the first one,
 // breaking all subsequent instances.

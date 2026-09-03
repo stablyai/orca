@@ -360,6 +360,8 @@ export type GlobalSettings = {
   minimaxGroupId: string
   /** Comma-separated MiniMax model names to show in the status bar usage window. */
   minimaxUsageModels: string
+  /** Z.ai API key used for GLM Coding Plan quota fetching. Stored encrypted. */
+  zaiApiKey: string
   /** Extract OAuth credentials from the local Gemini CLI for rate-limit fetching. Off by default (explicit opt-in). */
   geminiCliOAuthEnabled: boolean
   /** Per-agent CLI command overrides. A missing key means use the catalog default binary name. */

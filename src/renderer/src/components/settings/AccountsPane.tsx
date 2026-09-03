@@ -22,7 +22,8 @@ import {
   getAccountsLocationSearchEntries,
   getAccountsMiniMaxSearchEntries,
   getAccountsOpencodeSearchEntries,
-  getAccountsPaneSearchEntries
+  getAccountsPaneSearchEntries,
+  getAccountsZaiSearchEntries
 } from './accounts-search'
 import { getRemoteAccountsPaneScope } from './provider-account-scope'
 import { ProviderHostScopeControl } from './ProviderHostScopeControl'
@@ -58,6 +59,7 @@ import {
   renderOpenCodeAccountsSection
 } from './accounts-pane-provider-setting-sections'
 import { renderMiniMaxAccountsSection } from './accounts-pane-minimax-section'
+import { renderZaiAccountsSection } from './accounts-pane-zai-section'
 import { renderAccountsRemovalDialogs } from './accounts-pane-removal-dialogs'
 
 export { getAccountsPaneSearchEntries }
@@ -365,7 +367,10 @@ export function AccountsPane({
       : null,
     matchesSettingsSearch(searchQuery, getAccountsGrokSearchEntries()) ? (
       <GrokAccountsSection key="grok" />
-    ) : null
+    ) : null,
+    matchesSettingsSearch(searchQuery, getAccountsZaiSearchEntries())
+      ? renderZaiAccountsSection(model)
+      : null
   ].filter(Boolean)
 
   return (

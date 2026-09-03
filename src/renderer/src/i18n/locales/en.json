@@ -132,7 +132,8 @@
         "resourceUsageToggleDescription": "Show the Resource Manager. Click it for CPU, memory, sessions, daemon controls, and workspace disk scans.",
         "portsToggleDescription": "Show live workspace ports. Click it for workspace-scoped ports and external listeners.",
         "antigravityToggleDescription": "Show Antigravity subscription usage for the active workspace.",
-        "grokToggleDescription": "Show Grok subscription credit usage when signed in via Grok CLI."
+        "grokToggleDescription": "Show Grok subscription credit usage when signed in via Grok CLI.",
+        "zaiToggleDescription": "Show Z.ai GLM Coding Plan quota when an API key is configured."
       },
       "menuBarIcon": {
         "title": "Show Menu Bar Icon",
@@ -1071,7 +1072,7 @@
         "cd50cec5d7": "Coordinate multiple coding agents through Orca.",
         "58a868e8e4": "Orchestration",
         "7c79d3b7bf": "Optional",
-        "b1c2f8b0ac": "Optional account switching and usage setup for Claude, Codex, Gemini, OpenCode Go, MiniMax, and Grok.",
+        "b1c2f8b0ac": "Optional account switching and usage setup for Claude, Codex, Gemini, OpenCode Go, MiniMax, Grok, and Z.ai.",
         "f70ac54d38": "AI Provider Accounts",
         "4121f7a0a2": "Manage AI agents, set a default, and customize commands.",
         "b49abbd2f7": "Agents",
@@ -3683,7 +3684,8 @@
             "grokUsageMenu": "Grok Usage",
             "floatingTerminalNewActivity": "{{label}}, new activity",
             "codexSignInSuccess": "Signed in to Codex",
-            "codexSignInError": "Codex sign-in failed. Please try again."
+            "codexSignInError": "Codex sign-in failed. Please try again.",
+            "zaiUsageMenu": "Z.ai Usage"
           },
           "StatusBarUsageEmptyCta": {
             "828c764a79": "Connect an account",
@@ -6417,7 +6419,14 @@
           "codexConfigSyncMissingSource": "Codex is still using the settings it last synced because {{value0}} is missing. Restore that file to resume syncing.",
           "codexConfigSyncBlankSource": "Codex is still using the settings it last synced because {{value0}} is empty. That is expected while a synced folder finishes downloading.",
           "codexConfigSyncManagedHomeUnavailable": "Orca could not read this account’s Codex files just now, so settings may not be syncing. This usually clears on its own — antivirus or a backup tool briefly locks them.",
-          "codexConfigSyncUnreadableSource": "Codex is still using the settings it last synced because {{value0}} could not be read. Check that file's permissions."
+          "codexConfigSyncUnreadableSource": "Codex is still using the settings it last synced because {{value0}} could not be read. Check that file's permissions.",
+          "zaiTitle": "Z.ai",
+          "zaiSubtitle": "Configure Z.ai GLM Coding Plan usage.",
+          "zaiApiKeyTitle": "Z.ai API Key",
+          "zaiApiKeyDescription": "Paste your Z.ai API key to show GLM Coding Plan quota in the status bar.",
+          "zaiApiKeyLabel": "Z.ai API key",
+          "zaiApiKeyPlaceholder": "API key from z.ai → API Keys",
+          "zaiApiKeyHint": "The key is stored encrypted and used only for the GLM Coding Plan quota endpoint. A Coding Plan subscription is required — pay-as-you-go keys report no quota windows."
         },
         "AdvancedPane": {
           "40b29e0bf3": "Restart",
@@ -8790,7 +8799,9 @@
             "d2c6a0e8f1": "grok",
             "c1b5f9d7e0": "xai",
             "b0a4e8c6d9": "oauth",
-            "a9f3d7b5c8": "login"
+            "a9f3d7b5c8": "login",
+            "zaiUsageTitle": "Z.ai Usage",
+            "zaiUsageDescription": "Paste your Z.ai API key to show GLM Coding Plan quota in the status bar."
           }
         },
         "advanced": {
@@ -9017,7 +9028,9 @@
             "d6c0a9e2f4": "grok",
             "c5b9f8d1e3": "xai",
             "usagePercentageDisplayTitle": "Usage percentages",
-            "usagePercentageDisplayDescription": "Choose whether provider limits show the percentage used or remaining."
+            "usagePercentageDisplayDescription": "Choose whether provider limits show the percentage used or remaining.",
+            "zaiUsageTitle": "Z.ai Usage",
+            "zaiUsageDescription": "Show GLM Coding Plan quota from your Z.ai API key."
           }
         },
         "auto": {

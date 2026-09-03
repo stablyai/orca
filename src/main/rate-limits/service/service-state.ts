@@ -13,6 +13,7 @@ import {
   type ClaudeAuthPreparationResolver,
   type OpenCodeGoRateLimitConfig,
   type MiniMaxRateLimitConfig,
+  type ZaiRateLimitConfig,
   type GeminiCliOAuthEnabledResolver,
   type NormalizedCodexAccountSelectionTarget,
   type NormalizedClaudeAccountSelectionTarget,
@@ -31,7 +32,8 @@ export abstract class RateLimitServiceState {
     kimi: null,
     antigravity: null,
     minimax: null,
-    grok: null
+    grok: null,
+    zai: null
   }
   protected grokAuthConfigured = readGrokAuthSession().status === 'ok'
   protected pollInterval: number = DEFAULT_POLL_MS
@@ -46,7 +48,8 @@ export abstract class RateLimitServiceState {
     kimi: 0,
     minimax: 0,
     grok: 0,
-    antigravity: 0
+    antigravity: 0,
+    zai: 0
   }
   // Why: consecutive failures drive exponential backoff of the fast activation-retry lane; reset on any success/unavailable result.
   protected activeFailureStreakByProvider: Record<ActiveRateLimitProvider, number> = {
@@ -57,7 +60,8 @@ export abstract class RateLimitServiceState {
     kimi: 0,
     minimax: 0,
     grok: 0,
-    antigravity: 0
+    antigravity: 0,
+    zai: 0
   }
   protected mainWindow: BrowserWindow | null = null
   protected detachWindowListeners: (() => void) | null = null
@@ -74,8 +78,10 @@ export abstract class RateLimitServiceState {
   protected lastClaudeAuthSnapshot: { configDir: string | null; provenance: string } | null = null
   protected opencodeFetchGeneration = 0
   protected minimaxFetchGeneration = 0
+  protected zaiFetchGeneration = 0
   protected lastOpencodeConfigHash = ''
   protected lastMiniMaxConfigHash = ''
+  protected lastZaiConfigHash = ''
   protected codexHomePathResolver: CodexHomePathResolver | null = null
   protected codexFetchTarget: NormalizedCodexAccountSelectionTarget = {
     runtime: 'host',
@@ -90,6 +96,7 @@ export abstract class RateLimitServiceState {
   }
   protected openCodeGoConfigResolver: (() => OpenCodeGoRateLimitConfig) | null = null
   protected miniMaxConfigResolver: (() => MiniMaxRateLimitConfig) | null = null
+  protected zaiConfigResolver: (() => ZaiRateLimitConfig) | null = null
   protected geminiCliOAuthEnabledResolver: GeminiCliOAuthEnabledResolver | null = null
   protected inactiveClaudeAccountsResolver: (() => InactiveClaudeAccountInfo[]) | null = null
   protected inactiveCodexAccountsResolver: (() => InactiveCodexAccountInfo[]) | null = null

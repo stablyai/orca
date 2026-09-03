@@ -118,6 +118,10 @@ export class StateSerializationSecretHandlingOperations {
         httpProxyUrl: encryptToSentinel(
           PROTECTED_SECRET_SLOT.httpProxyUrl,
           this.runtime.state.settings.httpProxyUrl ?? ''
+        ),
+        zaiApiKey: encryptToSentinel(
+          PROTECTED_SECRET_SLOT.zaiApiKey,
+          this.runtime.state.settings.zaiApiKey ?? ''
         )
       },
       ui: {

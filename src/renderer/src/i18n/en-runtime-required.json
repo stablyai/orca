@@ -3570,7 +3570,8 @@
         "f6300deb8b": "New Browser Tab"
       },
       "useSettingsNavigationMetadata": {
-        "5235c215ca": "Choose which task providers appear in the Tasks page and sidebar."
+        "5235c215ca": "Choose which task providers appear in the Tasks page and sidebar.",
+        "b1c2f8b0ac": "Optional account switching and usage setup for Claude, Codex, Gemini, OpenCode Go, MiniMax, Grok, and Z.ai."
       }
     },
     "lib": {

@@ -25,6 +25,8 @@ export abstract class RateLimitServiceFullCycleApplication extends RateLimitServ
       opencodeGeneration,
       miniMaxConfigChanged,
       miniMaxGeneration,
+      zaiConfigChanged,
+      zaiGeneration,
       claudeFetchGated,
       results: [
         claudeResult,
@@ -32,7 +34,8 @@ export abstract class RateLimitServiceFullCycleApplication extends RateLimitServ
         geminiResult,
         opencodeGoResult,
         kimiResult,
-        miniMaxResult
+        miniMaxResult,
+        zaiResult
       ],
       grokResultPromise
     } = prepared
@@ -125,6 +128,18 @@ export abstract class RateLimitServiceFullCycleApplication extends RateLimitServ
             status: 'error'
           } satisfies ProviderRateLimits)
 
+    const zai =
+      zaiResult.status === 'fulfilled'
+        ? zaiResult.value
+        : ({
+            provider: 'zai',
+            session: null,
+            weekly: null,
+            updatedAt: Date.now(),
+            error: zaiResult.reason instanceof Error ? zaiResult.reason.message : 'Unknown error',
+            status: 'error'
+          } satisfies ProviderRateLimits)
+
     const latestCodexHome = this.resolveCodexHome(codexTarget)
     const latestClaudeAuthPreparation = await this.claudeAuthPreparationResolver?.(claudeTarget)
     if (signal.aborted) {
@@ -148,6 +163,7 @@ export abstract class RateLimitServiceFullCycleApplication extends RateLimitServ
       this.isSameClaudeTarget(claudeTarget, this.claudeFetchTarget)
     const shouldApplyOpencode = opencodeGeneration === this.opencodeFetchGeneration
     const shouldApplyMiniMax = miniMaxGeneration === this.minimaxFetchGeneration
+    const shouldApplyZai = zaiGeneration === this.zaiFetchGeneration
 
     if (shouldApplyClaude) {
       this.trackActiveFailureStreak('claude', claude)
@@ -163,6 +179,9 @@ export abstract class RateLimitServiceFullCycleApplication extends RateLimitServ
     this.trackActiveFailureStreak('kimi', kimi)
     if (shouldApplyMiniMax) {
       this.trackActiveFailureStreak('minimax', miniMax)
+    }
+    if (shouldApplyZai) {
+      this.trackActiveFailureStreak('zai', zai)
     }
 
     // Why: apply a Codex result only when provenance and generation still match, else a raced in-flight fetch overwrites the new account.
@@ -188,7 +207,12 @@ export abstract class RateLimitServiceFullCycleApplication extends RateLimitServ
         ? miniMaxConfigChanged
           ? miniMax
           : this.applyStalePolicy(miniMax, previousState.minimax)
-        : this.state.minimax
+        : this.state.minimax,
+      zai: shouldApplyZai
+        ? zaiConfigChanged
+          ? zai
+          : this.applyStalePolicy(zai, previousState.zai)
+        : this.state.zai
     })
 
     const grokResult = await grokResultPromise

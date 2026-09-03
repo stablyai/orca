@@ -110,6 +110,7 @@ export function createSettings(overrides: TestSettingsOverrides = {}): GlobalSet
     defaultRepoSelection: null,
     defaultLinearTeamSelection: null,
     opencodeSessionCookie: '',
+    zaiApiKey: '',
     opencodeWorkspaceId: '',
     minimaxGroupId: '',
     minimaxUsageModels: 'general',

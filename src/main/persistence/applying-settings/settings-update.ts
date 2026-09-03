@@ -61,6 +61,9 @@ export function updateSettings(
   if ('httpProxyUrl' in updates && !updates.httpProxyUrl) {
     operations.removeRetainedBlob(PROTECTED_SECRET_SLOT.httpProxyUrl)
   }
+  if ('zaiApiKey' in updates && !updates.zaiApiKey) {
+    operations.removeRetainedBlob(PROTECTED_SECRET_SLOT.zaiApiKey)
+  }
   // Why: coerce to boolean here (not the IPC edge) so every write path is covered and a truthy non-bool can't persist as "tray-minimize on".
   if ('minimizeToTrayOnClose' in updates) {
     sanitizedUpdates.minimizeToTrayOnClose = updates.minimizeToTrayOnClose === true

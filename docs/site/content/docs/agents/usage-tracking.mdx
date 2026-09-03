@@ -2,7 +2,7 @@
 title: Usage & rate-limit tracking
 ---
 
-Orca reads local usage state for Claude Code, Codex, Gemini, OpenCode, Kimi Code, and MiniMax and surfaces it in the status bar, so you know how close you are to a rate limit before an agent stalls.
+Orca reads local usage state for Claude Code, Codex, Gemini, OpenCode, Kimi Code, MiniMax, and Z.ai and surfaces it in the status bar, so you know how close you are to a rate limit before an agent stalls.
 
 ## What's shown
 
@@ -12,7 +12,9 @@ Orca reads local usage state for Claude Code, Codex, Gemini, OpenCode, Kimi Code
 
 ## How it works
 
-Orca reads the local usage state each agent maintains on disk (under `~/.claude`, `~/.codex`, and the Gemini/OpenCode equivalents). No API calls, no extra auth. This means the readout is only as fresh as the agent's own bookkeeping — numbers update when the agent writes, not in real time.
+Orca reads the local usage state each agent maintains on disk (under `~/.claude`, `~/.codex`, and the Gemini/OpenCode equivalents) — no API calls, no extra auth for those. The readout is then only as fresh as the agent's own bookkeeping: numbers update when the agent writes, not in real time.
+
+Z.ai is the exception: there is no local state to read, so Orca calls the GLM Coding Plan quota API with the key you store under [Settings → Accounts](/docs/settings). Without a key the Z.ai row reads **Usage unavailable**.
 
 ## Multi-account accounting
 

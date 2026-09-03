@@ -91,6 +91,7 @@ Settings are grouped into panes. Everything here is searchable with `Cmd-,` then
 - Jira — Cloud (email + API token) or self-hosted Server/Data Center (PAT or username/password). See [Jira items drawer](/docs/review/jira).
 - Bitbucket Cloud — **Connect** with **Email & API token** (default) or an **Access token**. Orca verifies the credential before saving. `ORCA_BITBUCKET_*` environment variables take precedence and hide Connect / Disconnect. Saved credentials stay on this machine — on a [Remote Orca Server](/docs/remote-servers), set the env vars on the server instead. See [Hosted reviews](/docs/review/github).
 - MiniMax — paste a MiniMax session cookie (from `platform.minimax.io/console/usage`) to enable local usage and rate-limit tracking for the MiniMax CLI. Optional group ID and usage models fields override the defaults picked from the cookie.
+- Z.ai — paste a Z.ai API key to track GLM Coding Plan quota (5-hour and weekly windows) in the status bar. The key is stored encrypted and used only for Z.ai's quota endpoint; a Coding Plan subscription is required.
 - MCP servers.
 
 ## Notifications

@@ -52,6 +52,10 @@ export type MiniMaxRateLimitConfig = {
   models: string
 }
 
+export type ZaiRateLimitConfig = {
+  apiKey: string
+}
+
 export type MiniMaxResolvedConfig = {
   config: MiniMaxRateLimitConfig
   error: string | null
@@ -105,6 +109,7 @@ export type InternalRateLimitState = {
   antigravity: ProviderRateLimits | null
   minimax: ProviderRateLimits | null
   grok: ProviderRateLimits | null
+  zai: ProviderRateLimits | null
 }
 
 export function normalizePollingInterval(ms: number): number {

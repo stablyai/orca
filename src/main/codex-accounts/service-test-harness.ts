@@ -131,6 +131,7 @@ export function createSettings(overrides: Partial<GlobalSettings> = {}): GlobalS
     defaultRepoSelection: null,
     defaultLinearTeamSelection: null,
     opencodeSessionCookie: '',
+    zaiApiKey: '',
     opencodeWorkspaceId: '',
     minimaxGroupId: '',
     minimaxUsageModels: 'general',

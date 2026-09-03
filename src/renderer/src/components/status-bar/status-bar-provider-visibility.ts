@@ -7,6 +7,7 @@ export type UsageProviderSettings = Pick<
   | 'claudeManagedAccounts'
   | 'opencodeSessionCookie'
   | 'geminiCliOAuthEnabled'
+  | 'zaiApiKey'
 > & {
   // Why: Antigravity has no separate persisted usage credential in Orca. The
   // checked status-bar item is the durable user signal; StatusBar only sets
@@ -28,6 +29,7 @@ type UsageProviderSnapshots = {
   antigravity: ProviderRateLimits | null | undefined
   minimax: ProviderRateLimits | null | undefined
   grok: ProviderRateLimits | null | undefined
+  zai: ProviderRateLimits | null | undefined
 }
 
 type UsageProviderId = ProviderRateLimits['provider']
@@ -77,7 +79,8 @@ export function hasUsageProviderSettings(
     // Antigravity's durable signal requires geminiCliOAuthEnabled, so it is
     // already covered by the gemini term above.
     settings?.minimaxCookieConfigured === true ||
-    settings?.grokAuthConfigured === true
+    settings?.grokAuthConfigured === true ||
+    Boolean(settings?.zaiApiKey?.trim())
   )
 }
 
@@ -111,6 +114,9 @@ export function hasUsageProviderSettingsForProvider(
   }
   if (providerId === 'grok') {
     return settings.grokAuthConfigured === true
+  }
+  if (providerId === 'zai') {
+    return Boolean(settings.zaiApiKey?.trim())
   }
   return false
 }
@@ -165,7 +171,8 @@ export function isUsageEmptyState(
     isProviderSnapshotPending(providers.kimi) ||
     antigravitySnapshotPending ||
     isProviderSnapshotPending(providers.minimax) ||
-    isProviderSnapshotPending(providers.grok)
+    isProviderSnapshotPending(providers.grok) ||
+    isProviderSnapshotPending(providers.zai)
   ) {
     return false
   }
@@ -178,6 +185,7 @@ export function isUsageEmptyState(
     !isProviderConfigured(providers.kimi) &&
     !isProviderConfigured(providers.antigravity) &&
     !isProviderConfigured(providers.minimax) &&
-    !isProviderConfigured(providers.grok)
+    !isProviderConfigured(providers.grok) &&
+    !isProviderConfigured(providers.zai)
   )
 }
