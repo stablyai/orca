@@ -38,7 +38,11 @@ describe('antigravity-local-usage-fetcher', () => {
   TCP    [::1]:50821            [::]:0                 LISTENING       13052
 `
       const ports = parseNetstatListeningPorts(netstatOutput, new Set([13052]))
-      expect(ports).toEqual([60232, 60233, 50821])
+      expect(ports).toEqual([
+        { port: 60232, pid: 13052 },
+        { port: 60233, pid: 13052 },
+        { port: 50821, pid: 13052 }
+      ])
     })
 
     it('parses lsof listening output matching target PIDs', () => {
@@ -52,7 +56,10 @@ cother
 n127.0.0.1:8080
 `
       const ports = parseLsofListeningPorts(lsofOutput, new Set([13052]))
-      expect(ports).toEqual([60232, 60233])
+      expect(ports).toEqual([
+        { port: 60232, pid: 13052 },
+        { port: 60233, pid: 13052 }
+      ])
     })
   })
 

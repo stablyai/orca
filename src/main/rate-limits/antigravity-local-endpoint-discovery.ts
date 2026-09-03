@@ -53,8 +53,17 @@ export function parseCmdLineFlag(cmdLine: string, flag: string): string {
   }
 }
 
-export function parseNetstatListeningPorts(stdout: string, targetPids: Set<number>): number[] {
-  const ports: number[] = []
+export type DiscoveredProcessPort = {
+  port: number
+  pid: number
+}
+
+export function parseNetstatListeningPorts(
+  stdout: string,
+  targetPids: Set<number>
+): DiscoveredProcessPort[] {
+  const result: DiscoveredProcessPort[] = []
+  const seen = new Set<string>()
   for (const line of stdout.split('\n')) {
     const parts = line.trim().split(/\s+/)
     if (parts[0]?.toUpperCase() === 'TCP' && parts[3]?.toUpperCase() === 'LISTENING') {
@@ -63,17 +72,23 @@ export function parseNetstatListeningPorts(stdout: string, targetPids: Set<numbe
       if (targetPids.has(pid)) {
         const portStr = addr.split(':').pop() ?? ''
         const port = Number.parseInt(portStr, 10)
-        if (port > 0 && !ports.includes(port)) {
-          ports.push(port)
+        const key = `${port}:${pid}`
+        if (port > 0 && !seen.has(key)) {
+          seen.add(key)
+          result.push({ port, pid })
         }
       }
     }
   }
-  return ports
+  return result
 }
 
-export function parseLsofListeningPorts(stdout: string, targetPids: Set<number>): number[] {
-  const ports: number[] = []
+export function parseLsofListeningPorts(
+  stdout: string,
+  targetPids: Set<number>
+): DiscoveredProcessPort[] {
+  const result: DiscoveredProcessPort[] = []
+  const seen = new Set<string>()
   let currentPid: number | null = null
   for (const line of stdout.split('\n')) {
     if (!line) {
@@ -86,12 +101,14 @@ export function parseLsofListeningPorts(stdout: string, targetPids: Set<number>)
       const addr = line.slice(1)
       const portStr = addr.split(':').pop() ?? ''
       const port = Number.parseInt(portStr, 10)
-      if (port > 0 && !ports.includes(port)) {
-        ports.push(port)
+      const key = `${port}:${currentPid}`
+      if (port > 0 && !seen.has(key)) {
+        seen.add(key)
+        result.push({ port, pid: currentPid })
       }
     }
   }
-  return ports
+  return result
 }
 
 export async function discoverAntigravityEndpoints(): Promise<AntigravityEndpoint[]> {
@@ -99,7 +116,6 @@ export async function discoverAntigravityEndpoints(): Promise<AntigravityEndpoin
   const httpFallbackEndpoints: AntigravityEndpoint[] = []
   const targetPids = new Set<number>()
   const csrfByPid = new Map<number, string>()
-  let latestCsrf: string | undefined
 
   if (process.platform === 'win32') {
     try {
@@ -122,7 +138,6 @@ export async function discoverAntigravityEndpoints(): Promise<AntigravityEndpoin
             undefined
           if (csrf) {
             csrfByPid.set(row.pid, csrf)
-            latestCsrf = csrf
           }
           const serverPortStr =
             parseCmdLineFlag(row.command, 'server_port') ||
@@ -144,9 +159,10 @@ export async function discoverAntigravityEndpoints(): Promise<AntigravityEndpoin
         const netstatRes = await runProcess({ program: 'netstat', args: ['-ano', '-p', 'tcp'] })
         if (netstatRes.code === 0) {
           const ports = parseNetstatListeningPorts(netstatRes.stdout, targetPids)
-          for (const port of ports) {
-            httpsEndpoints.push({ port, isHttps: true, csrfToken: latestCsrf })
-            httpFallbackEndpoints.push({ port, isHttps: false, csrfToken: latestCsrf })
+          for (const { port, pid } of ports) {
+            const csrf = csrfByPid.get(pid)
+            httpsEndpoints.push({ port, isHttps: true, csrfToken: csrf })
+            httpFallbackEndpoints.push({ port, isHttps: false, csrfToken: csrf })
           }
         }
       } catch {}
@@ -175,7 +191,6 @@ export async function discoverAntigravityEndpoints(): Promise<AntigravityEndpoin
                 undefined
               if (csrf) {
                 csrfByPid.set(pid, csrf)
-                latestCsrf = csrf
               }
               const serverPortStr =
                 parseCmdLineFlag(cmd, 'server_port') ||
@@ -201,9 +216,10 @@ export async function discoverAntigravityEndpoints(): Promise<AntigravityEndpoin
         })
         if (lsofRes.code === 0) {
           const ports = parseLsofListeningPorts(lsofRes.stdout, targetPids)
-          for (const port of ports) {
-            httpsEndpoints.push({ port, isHttps: true, csrfToken: latestCsrf })
-            httpFallbackEndpoints.push({ port, isHttps: false, csrfToken: latestCsrf })
+          for (const { port, pid } of ports) {
+            const csrf = csrfByPid.get(pid)
+            httpsEndpoints.push({ port, isHttps: true, csrfToken: csrf })
+            httpFallbackEndpoints.push({ port, isHttps: false, csrfToken: csrf })
           }
         }
       } catch {}
