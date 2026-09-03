@@ -2,6 +2,7 @@ import type { WorktreePurgeTarget, WorktreeSlice } from '../../worktree-helpers'
 import type { WorktreeSliceGet, WorktreeSliceSet } from '../listing/worktree-slice-types'
 import type { ProjectHostSetup } from '../../../../../../shared/project-types'
 import type { Repo } from '../../../../../../shared/repo-types'
+import { getProjectGroupSubtreeIds } from '../../../../../../shared/project-groups'
 import type { DetectedWorktreeListResult } from '../../../../../../shared/worktree/types'
 import type { ExecutionHostId } from '../../../../../../shared/execution-host'
 import {
@@ -40,7 +41,44 @@ export function createPurgeStaleRuntimeHostState(
           repoIdsWithSurvivingOwners.add(repo.id)
         }
       }
-      const reposChanged = survivingRepos.length !== s.repos.length
+      // Why: project groups mirrored from a runtime host are renderer-only rows
+      // stamped with `executionHostId: runtime:<envId>`. When that host is
+      // removed, retiring its repos/sessions but not its group row leaves an
+      // empty orphan group in the sidebar that can never be deleted (its owner
+      // runtime no longer exists). Drop those rows too — only `runtime:` owners;
+      // local/SSH-owned groups are never touched.
+      const projectGroups = s.projectGroups ?? []
+      const removedRuntimeGroups = projectGroups.filter((group) =>
+        isRemovedRuntimeHostId(group.executionHostId, removed)
+      )
+      const droppedGroupIds = new Set<string>()
+      for (const group of removedRuntimeGroups) {
+        for (const groupId of getProjectGroupSubtreeIds(removedRuntimeGroups, group.id)) {
+          droppedGroupIds.add(groupId)
+        }
+      }
+      const groupsChanged = droppedGroupIds.size > 0
+      const survivingGroups = groupsChanged
+        ? projectGroups.filter((group) => !droppedGroupIds.has(group.id))
+        : projectGroups
+      const folderWorkspaces = s.folderWorkspaces ?? []
+      const survivingFolderWorkspaces = groupsChanged
+        ? folderWorkspaces.filter(
+            (workspace) =>
+              !workspace.projectGroupId || !droppedGroupIds.has(workspace.projectGroupId)
+          )
+        : folderWorkspaces
+      const folderWorkspacesChanged = survivingFolderWorkspaces !== folderWorkspaces
+      // Why: a surviving repo must never keep pointing at a dropped runtime group.
+      const reposAfterGroupCascade = groupsChanged
+        ? survivingRepos.map((repo) =>
+            repo.projectGroupId && droppedGroupIds.has(repo.projectGroupId)
+              ? { ...repo, projectGroupId: null }
+              : repo
+          )
+        : survivingRepos
+      const reposUngroupedChanged = reposAfterGroupCascade !== survivingRepos
+      const reposChanged = survivingRepos.length !== s.repos.length || reposUngroupedChanged
 
       // Why: a repoId-less setup on the removed host can still split a surviving project group, so drop every setup it owns.
       const survivingSetups: ProjectHostSetup[] = []
@@ -269,6 +307,8 @@ export function createPurgeStaleRuntimeHostState(
         !visibilityDefaultsChanged &&
         !visibilitySupportChanged &&
         !visibilitySourceSupportChanged &&
+        !groupsChanged &&
+        !folderWorkspacesChanged &&
         removedWorktreeIds.size === 0
       ) {
         return s
@@ -283,11 +323,16 @@ export function createPurgeStaleRuntimeHostState(
           )
         : s.detectedWorktreesByRepo
 
-      const rowsChanged = worktreesChanged || detectedChanged
+      const rowsOrGroupsChanged =
+        worktreesChanged || detectedChanged || groupsChanged || folderWorkspacesChanged
       return {
         ...purgeState,
-        ...(reposChanged ? { repos: survivingRepos } : {}),
+        ...(reposChanged ? { repos: reposAfterGroupCascade } : {}),
         ...(setupsChanged ? { projectHostSetups: survivingSetups } : {}),
+        ...(groupsChanged ? { projectGroups: survivingGroups } : {}),
+        ...(folderWorkspacesChanged
+          ? { folderWorkspaces: survivingFolderWorkspaces, folderWorkspacePathStatuses: {} }
+          : {}),
         ...(worktreesChanged ? { worktreesByRepo: worktreeDrop.rowsByRepo } : {}),
         ...(detectedChanged ? { detectedWorktreesByRepo } : {}),
         ...(restoredSessionOwnersChanged
@@ -302,7 +347,7 @@ export function createPurgeStaleRuntimeHostState(
         ...(visibilitySourceSupportChanged
           ? { worktreeVisibilitySourceDefaultsSupportedRuntimeEnvironmentId: null }
           : {}),
-        ...(rowsChanged ? { sortEpoch: s.sortEpoch + 1 } : {}),
+        ...(rowsOrGroupsChanged ? { sortEpoch: s.sortEpoch + 1 } : {}),
         // Why: mirror validateRepoScopedUi so a filtered/active sidebar can't reference a purged repo id.
         ...(reposChanged
           ? {
