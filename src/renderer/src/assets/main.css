@@ -1220,6 +1220,33 @@ html.native-shell .app-layout {
   background: color-mix(in srgb, var(--sidebar-accent) 40%, transparent);
 }
 
+/* Why: an opaque --accent chip is mixed against the sidebar base, so on a selected
+   card it lands on that card's translucent wash instead — and both resolve to
+   ~foreground 10%, which makes the chip vanish. An alpha fill composites over
+   whatever surface the chip actually sits on, holding the same step on the
+   sidebar, a hovered card and a selected card, in every appearance mode. */
+.worktree-sidebar-chip {
+  /* Transparent, not a tinted ring: the fill alone carried the chip before, and
+     the border slot only stays to keep the box model identical. */
+  border-color: transparent;
+  background: color-mix(in srgb, var(--worktree-sidebar-foreground) 8%, transparent);
+}
+
+.dark .worktree-sidebar-chip {
+  background: color-mix(in srgb, var(--worktree-sidebar-foreground) 12%, transparent);
+}
+
+/* Tracks --muted-foreground's own ratio so the chip label stays level with the
+   branch text beside it, instead of being mixed against the sidebar base and
+   sinking into the lifted fill. */
+.worktree-sidebar-chip-label {
+  color: color-mix(in srgb, var(--worktree-sidebar-foreground) 55%, transparent);
+}
+
+.dark .worktree-sidebar-chip-label {
+  color: color-mix(in srgb, var(--worktree-sidebar-foreground) 62%, transparent);
+}
+
 /* Why: the brighter border carries the selected state; a translucent wash keeps
    card text legible instead of lifting the surface toward the foreground color. */
 [data-worktree-card-surface][data-worktree-card-active='primary'] {
