@@ -14,6 +14,7 @@ export type StructuredCodexLaunchOptions = {
   prompt?: string
   promptDelivery?: 'auto-submit' | 'submit-after-ready'
   onPromptDelivered?: () => void
+  agent?: 'codex' | 'claude' | 'openclaude' | 'grok' | 'cursor'
 }
 
 export type StructuredLaunchCaller = {

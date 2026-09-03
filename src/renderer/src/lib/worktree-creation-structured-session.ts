@@ -10,6 +10,7 @@ import { activateStructuredAgentSessionById } from '@/lib/structured-agent-sessi
 import { preflightAgentTrust } from '@/lib/agent-trust-preflight'
 import type { WorktreeCreationRequest } from '@/lib/pending-worktree-creation'
 import type { WorktreeStartupPayload } from '@/lib/worktree-startup-payload'
+import { isAcpStructuredAgent } from '../../../shared/acp-agent-recipes'
 import { closeStructuredAgentSession } from '@/runtime/structured-agent-session-close'
 import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
 import { toRuntimeWorktreeSelector } from '@/runtime/runtime-worktree-selector'
@@ -48,7 +49,7 @@ export async function launchStructuredWorktreeSession(args: {
   let { activation, primaryTabId } = args
   let accepted = true
   let visibilityUnknown = false
-  if (args.request.agent !== 'codex') {
+  if (!isAcpStructuredAgent(args.request.agent)) {
     return { accepted, cancelled: false, visibilityUnknown, activation, primaryTabId }
   }
   if (!useAppStore.getState().pendingWorktreeCreations[args.creationId]) {
@@ -58,8 +59,11 @@ export async function launchStructuredWorktreeSession(args: {
   const launch = startStructuredCodexLaunch(
     args.worktreeId,
     args.recoverUnknownLaunch
-      ? {}
-      : { prompt: args.request.launchDraftPrompt ?? args.request.quickPrompt }
+      ? { agent: args.request.agent }
+      : {
+          prompt: args.request.launchDraftPrompt ?? args.request.quickPrompt,
+          agent: args.request.agent
+        }
   )
   let cancelled = false
   const cancelLaunch = (): void => {

@@ -47,6 +47,16 @@ describe('decideInitialAgentTabViewMode', () => {
     ).toBeUndefined()
   })
 
+  it('opens Cursor in chat when Native Chat is on, without a PTY transcript', () => {
+    expect(
+      decideInitialAgentTabViewMode({
+        experimentalNativeChat: true,
+        openAgentTabsInChatByDefault: true,
+        agent: 'cursor'
+      })
+    ).toBe('chat')
+  })
+
   it.each(['gemini', 'opencode'] as const)(
     'keeps unsupported agent %s in terminal view',
     (agent) => {

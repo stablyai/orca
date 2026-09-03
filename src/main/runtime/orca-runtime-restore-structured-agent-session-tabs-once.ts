@@ -23,6 +23,19 @@ import { isWslUncPath } from '../../shared/wsl-paths'
 import { parseAppSshPtyId } from '../../shared/ssh-pty-id'
 import type { PtyProcessInspection } from '../providers/pty-process-inspection'
 
+function structuredAgentSessionTabTitle(agent: RuntimeMobileSessionAgentTab['agent']): string {
+  if (agent === 'claude' || agent === 'openclaude') {
+    return 'Claude Chat'
+  }
+  if (agent === 'grok') {
+    return 'Grok Chat'
+  }
+  if (agent === 'cursor') {
+    return 'Cursor Chat'
+  }
+  return 'Codex Chat'
+}
+
 export class OrcaRuntimeWithRestoreStructuredAgentSessionTabsOnce extends OrcaRuntimeWithResolveRecoveredStructuredTuiTranscript {
   protected async restoreStructuredAgentSessionTabsOnce(): Promise<void> {
     await this.prepareStructuredAgentSessionStartupRestoration()
@@ -45,16 +58,13 @@ export class OrcaRuntimeWithRestoreStructuredAgentSessionTabsOnce extends OrcaRu
     }
     this.hydrateHeadlessMobileSessionTabsFromWorkspaceSession()
     for (const session of host?.listSessionTabs() ?? []) {
-      if (session.agent !== 'codex') {
-        continue
-      }
       let sessionId = session.sessionId
       while (sessionId.startsWith('agent-session:')) {
         sessionId = sessionId.slice('agent-session:'.length)
       }
       await this.publishStructuredAgentSessionTab({
         ...session,
-        agent: 'codex',
+        agent: session.agent,
         sessionId,
         activate: false,
         notify: false
@@ -65,7 +75,7 @@ export class OrcaRuntimeWithRestoreStructuredAgentSessionTabsOnce extends OrcaRu
   async publishStructuredAgentSessionTab(input: {
     workspaceId: string
     sessionId: string
-    agent: 'codex'
+    agent: 'codex' | 'claude' | 'openclaude' | 'grok' | 'cursor'
     activate: boolean
     notify?: boolean
   }): Promise<void> {
@@ -105,7 +115,7 @@ export class OrcaRuntimeWithRestoreStructuredAgentSessionTabsOnce extends OrcaRu
     const tab: RuntimeMobileSessionAgentTab = {
       type: 'agent-session',
       id,
-      title: 'Codex Chat',
+      title: structuredAgentSessionTabTitle(input.agent),
       sessionId: input.sessionId,
       agent: input.agent,
       isActive: input.activate

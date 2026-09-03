@@ -17,10 +17,12 @@ import {
 } from '@/runtime/web-session-focus-intent'
 import { LOCAL_STRUCTURED_SESSION_OWNER } from '@/runtime/local-structured-session-tabs-sync'
 
+type StructuredAgentSessionCreateAgent = 'codex' | 'claude' | 'openclaude' | 'grok' | 'cursor'
+
 type StructuredAgentSessionCreateParams = {
   envelope: AgentSessionMutationEnvelope
   worktree: string
-  agent: 'codex'
+  agent: StructuredAgentSessionCreateAgent
 }
 
 export type StructuredAgentSessionLaunchIntent = {
@@ -32,10 +34,11 @@ export type StructuredAgentSessionLaunchIntent = {
 export class StructuredAgentSessionCreateRefusalError extends Error {}
 
 export function createStructuredCodexSessionLaunchIntent(
-  worktreeId: string
+  worktreeId: string,
+  agent: StructuredAgentSessionCreateAgent = 'codex'
 ): StructuredAgentSessionLaunchIntent {
-  const sessionId = `codex_${crypto.randomUUID().replaceAll('-', '_')}`
-  const fields = { worktree: toRuntimeWorktreeSelector(worktreeId), agent: 'codex' as const }
+  const sessionId = `${agent}_${crypto.randomUUID().replaceAll('-', '_')}`
+  const fields = { worktree: toRuntimeWorktreeSelector(worktreeId), agent }
   const state = useAppStore.getState()
   recordWebSessionFocusIntent(
     { environmentId: LOCAL_STRUCTURED_SESSION_OWNER },

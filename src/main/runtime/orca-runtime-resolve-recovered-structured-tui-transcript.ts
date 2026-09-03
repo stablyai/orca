@@ -12,6 +12,7 @@ import { getSystemCodexHomePath } from '../codex/codex-home-paths'
 import { resolveTuiAgentLaunchEnv } from '../../shared/tui-agent-launch-defaults'
 import { hasPersistedStructuredAgentSessionStore as hasPersistedStructuredAgentSessionStoreOnDisk } from './structured-agent-session-runtime'
 import { getProfileUserDataPath } from '../orca-profiles/profile-storage-paths'
+import { acpAccountHomeVariable, acpHandleProvider } from '../../shared/acp-agent-recipes'
 
 export class OrcaRuntimeWithResolveRecoveredStructuredTuiTranscript extends OrcaRuntimeWithStopStructuredSessionProcess {
   protected async resolveRecoveredStructuredTuiTranscript(input: {
@@ -45,7 +46,7 @@ export class OrcaRuntimeWithResolveRecoveredStructuredTuiTranscript extends Orca
 
   async getStructuredAgentSessionCreateSupport(
     worktreeSelector: string,
-    agent: 'codex'
+    agent: 'codex' | 'claude' | 'openclaude' | 'grok' | 'cursor'
   ): Promise<{ supported: boolean; reason?: 'agent' | 'remote' | 'wsl' }> {
     const location = await this.resolveStructuredAgentSessionLocation(worktreeSelector)
     await this.ensureStructuredAgentSessionHost()
@@ -108,8 +109,21 @@ export class OrcaRuntimeWithResolveRecoveredStructuredTuiTranscript extends Orca
   async resolveStructuredAgentSessionCreateIntent(input: {
     envelope: { sessionId: string; clientOperationId: string }
     worktree: string
-    agent: 'codex'
+    agent: 'codex' | 'claude' | 'openclaude' | 'grok' | 'cursor'
   }): Promise<AgentSessionAttachParams> {
+    if (input.agent !== 'codex') {
+      return this.resolveStructuredAgentSessionIntent(
+        input,
+        async ({ workspacePath, launchEnv }) => {
+          const variable = acpAccountHomeVariable(input.agent)
+          return (
+            (variable ? launchEnv[variable]?.trim() : undefined) ||
+            launchEnv.HOME?.trim() ||
+            workspacePath
+          )
+        }
+      )
+    }
     return this.resolveStructuredAgentSessionIntent(input, async ({ workspacePath, launchEnv }) => {
       // A create has no process yet, so the current selection is what it must follow.
       const preparedHome = await this.prepareCodexStructuredLaunchFn?.({ workspacePath, launchEnv })
@@ -126,7 +140,7 @@ export class OrcaRuntimeWithResolveRecoveredStructuredTuiTranscript extends Orca
     input: {
       envelope: { sessionId: string; clientOperationId: string }
       worktree: string
-      agent: 'codex'
+      agent: 'codex' | 'claude' | 'openclaude' | 'grok' | 'cursor'
     },
     resolveAccountHomePath: (context: {
       workspacePath: string
@@ -149,10 +163,10 @@ export class OrcaRuntimeWithResolveRecoveredStructuredTuiTranscript extends Orca
         payloadFingerprint: ''
       },
       location,
-      provider: input.agent,
+      provider: acpHandleProvider(input.agent) ?? 'codex',
       agent: input.agent,
       accountHome: {
-        variable: 'CODEX_HOME',
+        variable: acpAccountHomeVariable(input.agent) ?? 'CODEX_HOME',
         path: await resolveAccountHomePath({ workspacePath, launchEnv })
       },
       runtimeKind: 'native'

@@ -55,7 +55,10 @@ export type AgentSessionAttachParams = {
   accountHome: AgentSessionAccountHome
   runtimeKind: AgentSessionOwnerRuntimeKind
   /** Omitted only for create-by-intent; the adapter proves the durable handle. */
-  providerHandle?: Exclude<AgentSessionProviderHandle, { kind: 'opaque' }>
+  providerHandle?:
+    | Exclude<AgentSessionProviderHandle, { kind: 'opaque' }>
+    | { kind: 'grok'; sessionId: string }
+    | { kind: 'cursor'; sessionId: string }
 }
 
 /** Host-supplied half of the reservation. */
@@ -120,7 +123,13 @@ export function journalIdentityFor(
             sessionId: head.handle.sessionId,
             leafUuid: head.handle.leafUuid
           }
-        : (params.providerHandle ?? { kind: 'opaque', agent: params.agent, value: 'pending' })
+        : head?.handle.provider === 'grok' || head?.handle.provider === 'cursor'
+          ? { kind: 'opaque', agent: params.agent, value: head.handle.sessionId }
+          : params.providerHandle?.kind === 'grok' || params.providerHandle?.kind === 'cursor'
+            ? { kind: 'opaque', agent: params.agent, value: params.providerHandle.sessionId }
+            : params.providerHandle?.kind === 'codex' || params.providerHandle?.kind === 'claude'
+              ? params.providerHandle
+              : { kind: 'opaque', agent: params.agent, value: 'pending' }
   return {
     sessionId: record.sessionId,
     workspaceId: params.location.workspaceId,

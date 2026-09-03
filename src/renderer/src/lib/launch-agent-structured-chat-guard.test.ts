@@ -164,7 +164,7 @@ describe('structured chat adoption guard on the launch path', () => {
       focusAfterMenuClose: 'structured-session'
     })
     expect(shouldQueueTerminalFocusAfterMenuClose(result!)).toBe(false)
-    expect(mockCreateStructuredCodexSessionLaunchIntent).toHaveBeenCalledWith('wt-1')
+    expect(mockCreateStructuredCodexSessionLaunchIntent).toHaveBeenCalledWith('wt-1', 'codex')
     expect(mockLaunchStructuredCodexSession).toHaveBeenCalledWith(
       expect.objectContaining({ worktreeId: 'wt-1' })
     )

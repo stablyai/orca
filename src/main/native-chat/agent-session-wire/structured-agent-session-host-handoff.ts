@@ -143,7 +143,7 @@ async function importTuiHistory(
   }
   const options = structuredTuiTranscriptImportOptions(record, input.transcriptPath)
   const providerSessionId =
-    head.handle.provider === 'claude' ? head.handle.sessionId : head.handle.threadId
+    head.handle.provider === 'codex' ? head.handle.threadId : head.handle.sessionId
   const imported = await importLegacyTranscriptIntoJournal({
     journal: session.journal,
     agent: head.handle.provider,

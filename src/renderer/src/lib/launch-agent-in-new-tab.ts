@@ -31,6 +31,7 @@ import type { LaunchSource } from '../../../shared/telemetry-events'
 import { getConnectionIdFromState } from '@/lib/connection-context'
 import { resolveInitialNativeChatSessionOptions } from '@/components/native-chat/native-chat-launch-session-options'
 import { seedNativeChatAppliedSessionOptions } from '@/components/native-chat/native-chat-session-option-cache'
+import { isAcpStructuredAgent } from '../../../shared/acp-agent-recipes'
 import { startStructuredCodexLaunch } from '@/lib/structured-agent-session-launch'
 import {
   hasExplicitTuiLaunchCustomization,
@@ -226,11 +227,12 @@ function launchAgentInNewTabInternal(
           hasExplicitTuiLaunchCustomization(store.settings, agent),
         initialSessionOptions: startupPlan.sessionOptions
       })
-  if (launchRoute === 'structured-native-chat' && agent === 'codex') {
+  if (launchRoute === 'structured-native-chat' && isAcpStructuredAgent(agent)) {
     const structuredLaunch = startStructuredCodexLaunch(worktreeId, {
       prompt: trimmedPrompt,
       ...(promptDelivery === 'submit-after-ready' ? { promptDelivery } : {}),
-      onPromptDelivered
+      onPromptDelivered,
+      agent
     })
     void structuredLaunch
       .claimDefinitiveRefusalFallback(() => {

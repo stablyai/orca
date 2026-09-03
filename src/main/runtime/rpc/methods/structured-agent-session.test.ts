@@ -122,8 +122,8 @@ function dispatcher(): RpcDispatcher {
         workspaceId: 'workspace-1',
         workspaceKind: 'git-worktree'
       },
-      provider: 'codex',
-      agent: 'codex',
+      provider: params.agent === 'openclaude' ? 'claude' : params.agent,
+      agent: params.agent,
       accountHome: { variable: 'CODEX_HOME', path: '/host/.codex' },
       runtimeKind: 'native'
     })),
@@ -366,22 +366,30 @@ describe('parameter validation', () => {
     )
   })
 
-  it('rejects Claude structured create shapes', async () => {
+  it('accepts ACP create intents and still rejects unknown agents', async () => {
+    const fields = { worktree: 'id:workspace-1', agent: 'grok' as const }
+    const created = await call(
+      'agentSession.create',
+      {
+        envelope: envelope({
+          expectedRuntimeFence: null,
+          payloadFingerprint: computeAgentSessionPayloadFingerprint({
+            method: 'agentSession.create',
+            sessionId: SESSION,
+            fields
+          })
+        }),
+        ...fields
+      },
+      STRUCTURED_CLIENT
+    )
+    expect(created).toMatchObject({ ok: true })
+    expect(runtimeCalls.publishStructuredAgentSessionTab).toHaveBeenCalledWith(
+      expect.objectContaining({ agent: 'grok', activate: true })
+    )
     await rejects('agentSession.createSupport', {
       worktree: 'id:workspace-1',
-      agent: 'claude'
-    })
-    const fields = { worktree: 'id:workspace-1', agent: 'claude' }
-    await rejects('agentSession.create', {
-      envelope: envelope({
-        expectedRuntimeFence: null,
-        payloadFingerprint: computeAgentSessionPayloadFingerprint({
-          method: 'agentSession.create',
-          sessionId: SESSION,
-          fields
-        })
-      }),
-      ...fields
+      agent: 'gemini'
     })
   })
 

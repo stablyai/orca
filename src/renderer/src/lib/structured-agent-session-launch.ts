@@ -192,7 +192,7 @@ function structuredCodexLaunchState(
     }
   }
 
-  const intent = createStructuredCodexSessionLaunchIntent(worktreeId)
+  const intent = createStructuredCodexSessionLaunchIntent(worktreeId, options.agent)
   const text = options.prompt?.trim() ?? ''
   const stagedPrompt = text
     ? enqueueStructuredAgentSessionLaunchPrompt(intent.sessionId, text)

@@ -55,6 +55,18 @@ const ProviderHandle = z.discriminatedUnion('kind', [
       sessionId: Identifier('Invalid provider session id'),
       leafUuid: Identifier('Invalid leaf uuid').nullable()
     })
+    .strict(),
+  z
+    .object({
+      kind: z.literal('grok'),
+      sessionId: Identifier('Invalid provider session id')
+    })
+    .strict(),
+  z
+    .object({
+      kind: z.literal('cursor'),
+      sessionId: Identifier('Invalid provider session id')
+    })
     .strict()
 ])
 
@@ -77,7 +89,7 @@ const ExecutionLocation = z
 
 const AccountHome = z
   .object({
-    variable: z.enum(['CLAUDE_CONFIG_DIR', 'CODEX_HOME']),
+    variable: z.enum(['CLAUDE_CONFIG_DIR', 'CODEX_HOME', 'GROK_HOME', 'CURSOR_CONFIG_DIR']),
     path: z.string().min(1).max(4096)
   })
   .strict()
@@ -86,7 +98,7 @@ export const AttachParams = z
   .object({
     envelope: MutationEnvelope,
     location: ExecutionLocation,
-    provider: z.enum(['codex', 'claude']),
+    provider: z.enum(['codex', 'claude', 'grok', 'cursor']),
     agent: Identifier('Invalid agent'),
     accountHome: AccountHome,
     runtimeKind: z.enum(['native', 'tui']),
@@ -98,7 +110,7 @@ export const CreateIntentParams = z
   .object({
     envelope: MutationEnvelope,
     worktree: Identifier('Invalid worktree selector'),
-    agent: z.literal('codex')
+    agent: z.enum(['codex', 'claude', 'openclaude', 'grok', 'cursor'])
   })
   .strict()
 
@@ -107,7 +119,7 @@ export const CreateParams = z.union([AttachParams, CreateIntentParams])
 export const CreateSupportParams = z
   .object({
     worktree: Identifier('Invalid worktree selector'),
-    agent: z.literal('codex')
+    agent: z.enum(['codex', 'claude', 'openclaude', 'grok', 'cursor'])
   })
   .strict()
 

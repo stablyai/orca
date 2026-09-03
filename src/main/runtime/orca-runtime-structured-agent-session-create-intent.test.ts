@@ -52,4 +52,55 @@ describe('structured agent-session create intent', () => {
       path: '/accounts/selected/home'
     })
   })
+
+  it('pins Grok home from GROK_HOME and Cursor from CURSOR_CONFIG_DIR', async () => {
+    const runtime = new OrcaRuntimeService({
+      getSettings: () => ({
+        agentDefaultEnv: {
+          grok: { GROK_HOME: '/accounts/grok' },
+          cursor: { CURSOR_CONFIG_DIR: '/accounts/cursor' }
+        }
+      })
+    } as never)
+    vi.spyOn(runtime, 'getStructuredAgentSessionCreateSupport').mockResolvedValue({
+      supported: true
+    })
+    const internal = runtime as unknown as {
+      resolveStructuredAgentSessionLocation: () => Promise<{
+        executionHostId: string
+        wslDistro: null
+        workspaceId: string
+        workspaceKind: 'git-worktree'
+      }>
+      resolveRuntimeFileTarget: () => Promise<{ worktree: { path: string } }>
+    }
+    internal.resolveStructuredAgentSessionLocation = vi.fn(async () => ({
+      executionHostId: 'local',
+      wslDistro: null,
+      workspaceId: 'workspace-1',
+      workspaceKind: 'git-worktree' as const
+    }))
+    internal.resolveRuntimeFileTarget = vi.fn(async () => ({
+      worktree: { path: '/repos/workspace-1' }
+    }))
+
+    const grok = await runtime.resolveStructuredAgentSessionCreateIntent({
+      envelope: { sessionId: 'session-g', clientOperationId: 'operation-g' },
+      worktree: 'id:workspace-1',
+      agent: 'grok'
+    })
+    expect(grok.provider).toBe('grok')
+    expect(grok.accountHome).toEqual({ variable: 'GROK_HOME', path: '/accounts/grok' })
+
+    const cursor = await runtime.resolveStructuredAgentSessionCreateIntent({
+      envelope: { sessionId: 'session-c', clientOperationId: 'operation-c' },
+      worktree: 'id:workspace-1',
+      agent: 'cursor'
+    })
+    expect(cursor.provider).toBe('cursor')
+    expect(cursor.accountHome).toEqual({
+      variable: 'CURSOR_CONFIG_DIR',
+      path: '/accounts/cursor'
+    })
+  })
 })

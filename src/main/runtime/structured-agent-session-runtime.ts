@@ -11,11 +11,14 @@ import { existsSync } from 'node:fs'
 import { join } from 'node:path'
 import type { AgentSessionOwnerProbe } from '../../shared/agent-session-lease-adjudication'
 import type { AgentSessionRecord } from '../../shared/agent-session-record'
+import { createAcpStructuredSessionAdapter } from '../acp/acp-structured-launch'
+import type { openAcpJsonRpcConnection } from '../acp/acp-jsonrpc-connection'
 import { createCodexStructuredLaunchResolver } from '../codex/codex-structured-launch-resolution'
 import {
   CodexStructuredSessionAdapter,
   type CodexStructuredSessionAdapterDeps
 } from '../codex/codex-structured-session-adapter'
+import { CompositeStructuredSessionAdapter } from '../native-chat/agent-session-wire/composite-structured-session-adapter'
 import { StructuredAgentSessionHost } from '../native-chat/agent-session-wire/structured-agent-session-host'
 import type { StructuredAgentSessionHandoffTransport } from '../native-chat/agent-session-wire/structured-agent-session-handoff-types'
 import { setStructuredAgentSessionHost } from '../native-chat/agent-session-wire/structured-agent-session-registry'
@@ -25,7 +28,8 @@ import { stopOrphanAgentSessionChildren } from './agent-session-orphan-child-rea
 import {
   probeAgentSessionProcessIdentities,
   probeAgentSessionProcessIdentity,
-  probeAgentSessionReservation
+  probeAgentSessionReservation,
+  readProcessStartTimeMs
 } from './agent-session-process-identity-probe'
 import { findAgentSessionSpawnTokenProcesses } from './agent-session-spawn-token-process-scan'
 import { readEchoedAgentSessionSpawnToken } from './agent-session-spawn-token-readback'
@@ -57,6 +61,7 @@ export type StructuredAgentSessionRuntimeDeps = {
   resolveCodexCommand?: (options?: { pathEnv?: string | null; homePath?: string }) => string
   /** Provider transports are overridden only to drive the runtime against scripted children. */
   openCodexConnection?: CodexStructuredSessionAdapterDeps['openConnection']
+  openAcpConnection?: typeof openAcpJsonRpcConnection
   /** Scripted app-servers carry fake pids the real start-time read cannot answer for. */
   readProcessStartTime?: CodexStructuredSessionAdapterDeps['readProcessStartTime']
   resolveLaunchArgs?: (provider: AgentSessionRecord['provider']) => Promise<string[]> | string[]
@@ -71,7 +76,7 @@ export type StructuredAgentSessionRuntimeDeps = {
 
 type InstalledRuntime = {
   host: StructuredAgentSessionHost
-  adapter: CodexStructuredSessionAdapter
+  adapter: CompositeStructuredSessionAdapter
   /** Resolves after every adapter-exit recovery callback has settled. */
   waitForRecovery: () => Promise<void>
 }
@@ -89,8 +94,7 @@ export function ensureStructuredAgentSessionHost(
   return installing.then((installed) => installed.host)
 }
 
-/** Drops the host and reaps every Codex child under it. Runtime teardown and
- *  test isolation take the same path, so neither can leave a live app-server. */
+/** Drops the host and reaps every structured provider child under it. */
 export async function stopStructuredAgentSessionRuntime(): Promise<void> {
   const pending = installing
   installing = null
@@ -172,7 +176,26 @@ async function install(deps: StructuredAgentSessionRuntimeDeps): Promise<Install
         })
       }
     })
-    const adapter = codex
+    const acp = createAcpStructuredSessionAdapter({
+      store,
+      resolveWorkspacePath: deps.resolveWorkspacePath,
+      resolveEnvironment,
+      readProcessStartTime: deps.readProcessStartTime ?? readProcessStartTimeMs,
+      ...(deps.openAcpConnection ? { openConnection: deps.openAcpConnection } : {}),
+      onEvent: (event) => {
+        if (event.type !== 'ended' || event.cause !== 'unexpected-exit') {
+          return
+        }
+        recoveryChain = recoveryChain.then(async () => {
+          try {
+            await host?.handleAdapterEvent(event)
+          } catch (error) {
+            deps.onError?.({ scope: `structured-agent-session-exit:${event.sessionId}`, error })
+          }
+        })
+      }
+    })
+    const adapter = new CompositeStructuredSessionAdapter({ codex, acp })
     host = new StructuredAgentSessionHost({
       store,
       adapter,

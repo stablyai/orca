@@ -6,6 +6,8 @@ import {
   getTuiAgentDefaultArgs,
   getTuiAgentDefaultEnv
 } from '../../../shared/tui-agent-launch-defaults'
+import { isAcpStructuredAgent } from '../../../shared/acp-agent-recipes'
+import { isNativeChatSupportedAgent } from '../../../shared/native-chat-agent-support'
 import {
   decideInitialAgentTabViewMode,
   type NativeChatLaunchPromptDelivery
@@ -82,7 +84,7 @@ export function resolveAgentLaunchRoute(input: AgentLaunchRoutingInput): AgentLa
     return 'terminal-tui'
   }
   if (input.settings?.experimentalStructuredNativeChat !== true) {
-    return 'legacy-native-chat'
+    return isNativeChatSupportedAgent(input.agent) ? 'legacy-native-chat' : 'terminal-tui'
   }
 
   const projectRuntime = input.projectRuntime
@@ -92,7 +94,7 @@ export function resolveAgentLaunchRoute(input: AgentLaunchRoutingInput): AgentLa
     input.initialSessionOptions && Object.keys(input.initialSessionOptions).length > 0
   )
   const structuredSupported =
-    input.agent === 'codex' &&
+    isAcpStructuredAgent(input.agent) &&
     input.promptDelivery !== 'draft' &&
     input.workspaceKind !== 'floating' &&
     input.requiresTuiLaunchCustomization !== true &&
@@ -102,5 +104,8 @@ export function resolveAgentLaunchRoute(input: AgentLaunchRoutingInput): AgentLa
     !runtimeRefused &&
     input.hostCapabilities.includes(STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY)
 
-  return structuredSupported ? 'structured-native-chat' : 'legacy-native-chat'
+  if (structuredSupported) {
+    return 'structured-native-chat'
+  }
+  return isNativeChatSupportedAgent(input.agent) ? 'legacy-native-chat' : 'terminal-tui'
 }
