@@ -3,7 +3,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   createRetainedHostFixture,
   disposeRetainedHostFixtures,
-  RETAINED_FIXTURE_PAGE
+  RETAINED_FIXTURE_PAGE,
+  type RetainedHostFixture
 } from './browser-client-page-retained-host-fixture'
 import type { BrowserClientPageVisibleAttachment } from './browser-client-page-retained-registry'
 
@@ -57,7 +58,11 @@ function moveContainer(container: HTMLElement, left: number, top: number): void 
 async function attachHost(
   browserPageId: string,
   left: number
-): Promise<{ container: HTMLElement; host: () => HTMLDivElement }> {
+): Promise<{
+  container: HTMLElement
+  host: () => HTMLDivElement
+  registry: RetainedHostFixture['registry']
+}> {
   const identity = { ...RETAINED_FIXTURE_PAGE, browserPageId }
   const rig = createRetainedHostFixture()
   moveContainer(rig.container, left, 0)
@@ -65,6 +70,7 @@ async function attachHost(
   openAttachments.push(rig.attach(identity))
   return {
     container: rig.container,
+    registry: rig.registry,
     host: () =>
       document.querySelector<HTMLDivElement>(
         `[data-browser-client-page-id="${browserPageId}"]`
@@ -122,39 +128,57 @@ describe('client-hosted page position driver', () => {
     expect(pane.host().style.top).toBe('48px')
   })
 
-  it('stops the loop while hidden and resyncs every host before resuming', async () => {
+  // Why this is pinned: a `hidden` document is not proof the overlay is unobservable. Chromium's
+  // macOS occlusion tracker can wedge `visibilityState` at 'hidden' with no further
+  // visibilitychange while the window still paints, and Chromium already stops rAF itself in the
+  // states where the window really is unobservable. A visibility gate here would freeze every
+  // overlay on a window the user is looking at and save nothing.
+  it('keeps tracking pane moves while the document reports hidden', async () => {
     const first = await attachHost('page-one', 10)
     const second = await attachHost('page-two', 20)
 
     setVisibility('hidden')
 
-    expect(frames.pending()).toBe(0)
-    expect(frames.cancelled()).toHaveLength(1)
+    expect(frames.pending()).toBe(1)
+    expect(frames.cancelled()).toHaveLength(0)
 
-    // A pane moved while hidden must be corrected the instant the document is observable.
-    moveContainer(first.container, 300, 0)
-    moveContainer(second.container, 400, 0)
-    setVisibility('visible')
+    moveContainer(first.container, 300, 24)
+    moveContainer(second.container, 400, 36)
+    frames.runFrame()
 
     expect(first.host().style.left).toBe('300px')
+    expect(first.host().style.top).toBe('24px')
     expect(second.host().style.left).toBe('400px')
+    expect(second.host().style.top).toBe('36px')
     expect(frames.pending()).toBe(1)
   })
 
-  it('cancels the frame and drops the visibilitychange listener with the last host', async () => {
-    const removeListener = vi.spyOn(document, 'removeEventListener')
+  it('cancels the shared frame only when the last host detaches', async () => {
     await attachHost('page-one', 10)
     await attachHost('page-two', 20)
 
     openAttachments.shift()!.detach()
 
     expect(frames.pending()).toBe(1)
-    expect(removeListener.mock.calls.some(([type]) => type === 'visibilitychange')).toBe(false)
 
     openAttachments.shift()!.detach()
 
     expect(frames.pending()).toBe(0)
     expect(frames.cancelled()).toHaveLength(1)
-    expect(removeListener.mock.calls.some(([type]) => type === 'visibilitychange')).toBe(true)
+  })
+
+  it('releases a disposed registry host from the shared loop without its pane detaching', async () => {
+    const pane = await attachHost('page-one', 10)
+
+    pane.registry.dispose()
+
+    expect(frames.pending()).toBe(0)
+    expect(frames.cancelled()).toHaveLength(1)
+
+    // The stranded sync would otherwise keep re-reading a container whose host left the document.
+    moveContainer(pane.container, 999, 0)
+    frames.runFrame()
+
+    expect(pane.host()).toBeNull()
   })
 })

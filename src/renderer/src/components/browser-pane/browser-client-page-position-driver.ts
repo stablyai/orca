@@ -5,9 +5,14 @@
  * that cost linear in shown hosts (N loops × N forced layouts per frame); one driver
  * syncing N registered hosts keeps the loop count at one.
  *
- * The loop is gated on document visibility: a hidden document paints nothing, so no
- * overlay can be observed at a stale rect, and every host is resynced the instant the
- * document becomes visible again — before the loop resumes.
+ * Deliberately NOT gated on document visibility. Measured on Electron 43 / macOS: when the
+ * window is hidden, minimized or fully occluded, `visibilityState` is 'hidden' AND Chromium
+ * already runs 0 rAF callbacks/s, so a gate saves nothing it does not already save. Its only
+ * effect would be in the state where `visibilityState` is wedged at 'hidden' while frames
+ * still flow — Chromium's macOS occlusion tracker does that after display sleep and never
+ * fires another `visibilitychange` (see `terminal-pane/stale-document-visibility.ts`) — and
+ * there a gate would freeze every overlay on a window the user is looking at, with no
+ * recovery. Zero upside, unrecoverable downside: let Chromium's own throttling do it.
  */
 
 /** Re-reads one host's container rect and repositions its overlay. */
@@ -15,32 +20,18 @@ export type BrowserClientPagePositionSync = () => void
 
 const syncs = new Set<BrowserClientPagePositionSync>()
 let frame: number | null = null
-let listeningToVisibility = false
 
-function isDocumentVisible(): boolean {
-  return typeof document === 'undefined' || document.visibilityState === 'visible'
-}
-
-function syncRegisteredHosts(): void {
+function runFrame(): void {
+  frame = null
   // Copied: a host may register or drop out while being synced.
   for (const sync of Array.from(syncs)) {
     sync()
   }
-}
-
-function runFrame(): void {
-  frame = null
-  syncRegisteredHosts()
   startFrame()
 }
 
 function startFrame(): void {
-  if (
-    frame !== null ||
-    syncs.size === 0 ||
-    !isDocumentVisible() ||
-    typeof requestAnimationFrame !== 'function'
-  ) {
+  if (frame !== null || syncs.size === 0 || typeof requestAnimationFrame !== 'function') {
     return
   }
   frame = requestAnimationFrame(runFrame)
@@ -56,25 +47,11 @@ function stopFrame(): void {
   frame = null
 }
 
-function handleVisibilityChange(): void {
-  if (!isDocumentVisible()) {
-    stopFrame()
-    return
-  }
-  // Resync before resuming so the first observable frame already has the current rects.
-  syncRegisteredHosts()
-  startFrame()
-}
-
 /** Registers a host with the shared loop; the returned release unregisters it. */
 export function registerBrowserClientPagePositionSync(
   sync: BrowserClientPagePositionSync
 ): () => void {
   syncs.add(sync)
-  if (!listeningToVisibility && typeof document !== 'undefined') {
-    document.addEventListener('visibilitychange', handleVisibilityChange)
-    listeningToVisibility = true
-  }
   startFrame()
   let released = false
   return () => {
@@ -83,13 +60,8 @@ export function registerBrowserClientPagePositionSync(
     }
     released = true
     syncs.delete(sync)
-    if (syncs.size > 0) {
-      return
-    }
-    stopFrame()
-    if (listeningToVisibility && typeof document !== 'undefined') {
-      document.removeEventListener('visibilitychange', handleVisibilityChange)
-      listeningToVisibility = false
+    if (syncs.size === 0) {
+      stopFrame()
     }
   }
 }

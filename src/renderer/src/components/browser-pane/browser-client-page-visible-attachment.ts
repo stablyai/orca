@@ -25,9 +25,9 @@ export function attachBrowserClientRetainedPage(
   if (!page.host.parentElement) {
     throw new Error('browser_client_page_renderer_retained_host_unavailable')
   }
-  const attachment = { container }
-  page.visibleAttachment = attachment
   const stopTrackingViewport = showRetainedHost(page.host, container)
+  const attachment = { container, stopTrackingViewport }
+  page.visibleAttachment = attachment
   let detached = false
   return {
     webview: page.webview,
@@ -112,7 +112,13 @@ function showRetainedHost(host: HTMLDivElement, container: HTMLElement): () => v
   // The per-frame re-read is shared with every other shown host by the position driver.
   const releasePositionSync = registerBrowserClientPagePositionSync(syncViewport)
   syncViewport()
+  // Idempotent: the registry releases a page it tears down, and the pane's own detach follows.
+  let stopped = false
   return () => {
+    if (stopped) {
+      return
+    }
+    stopped = true
     releasePositionSync()
     observer?.disconnect()
     window.removeEventListener('resize', syncViewport)
