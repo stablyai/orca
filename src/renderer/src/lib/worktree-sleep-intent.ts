@@ -2,14 +2,35 @@
 // Any pane connect that runs while the marker is set waits here, and the clear
 // that marks the workspace awake resumes every waiting connect.
 const sleepingWorktreeIds = new Set<string>()
+const tearingDownWorktreeIds = new Set<string>()
 const wakeListenersByWorktreeId = new Map<string, Set<() => void>>()
 
 export function markWorktreeSleepIntent(worktreeId: string): void {
   sleepingWorktreeIds.add(worktreeId)
 }
 
+/**
+ * Why: a spawn that resolves while the sleep teardown is still awaiting its host
+ * would bind a PTY and clear the marker, waking every waiting pane mid-sleep.
+ * Binds during the teardown window are not wakes.
+ */
+export async function withWorktreeSleepTeardown<T>(
+  worktreeId: string,
+  teardown: () => Promise<T>
+): Promise<T> {
+  tearingDownWorktreeIds.add(worktreeId)
+  try {
+    return await teardown()
+  } finally {
+    tearingDownWorktreeIds.delete(worktreeId)
+  }
+}
+
 export function clearWorktreeSleepIntent(worktreeId: string | null): void {
-  if (!worktreeId || !sleepingWorktreeIds.delete(worktreeId)) {
+  if (!worktreeId || tearingDownWorktreeIds.has(worktreeId)) {
+    return
+  }
+  if (!sleepingWorktreeIds.delete(worktreeId)) {
     return
   }
   const listeners = wakeListenersByWorktreeId.get(worktreeId)
@@ -27,6 +48,7 @@ export function clearWorktreeSleepIntent(worktreeId: string | null): void {
 // Why: a purged worktree must not wake its panes; they are being unmounted.
 export function forgetWorktreeSleepIntent(worktreeId: string): void {
   sleepingWorktreeIds.delete(worktreeId)
+  tearingDownWorktreeIds.delete(worktreeId)
   wakeListenersByWorktreeId.delete(worktreeId)
 }
 

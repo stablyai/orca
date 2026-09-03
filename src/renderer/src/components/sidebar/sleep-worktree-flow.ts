@@ -1,6 +1,10 @@
 import { toast } from 'sonner'
 import { useAppStore } from '@/store'
-import { clearWorktreeSleepIntent, markWorktreeSleepIntent } from '@/lib/worktree-sleep-intent'
+import {
+  clearWorktreeSleepIntent,
+  markWorktreeSleepIntent,
+  withWorktreeSleepTeardown
+} from '@/lib/worktree-sleep-intent'
 import { VIRTUALIZED_SCROLL_ANCHOR_RECORD_EVENT } from '@/hooks/useVirtualizedScrollAnchor'
 import { translate } from '@/i18n/i18n'
 
@@ -167,7 +171,7 @@ export async function runSleepWorktrees(worktreeIds: readonly string[]): Promise
         // other teardown runs, terminals second so the PTY kill uses the same
         // ordering on both paths. Without the browser thunk here, sleep leaks
         // browserPagesByWorkspace entries and live webviews for the slept worktree.
-        await shutdownWorktreeBrowsers(worktreeId)
+        await withWorktreeSleepTeardown(worktreeId, () => shutdownWorktreeBrowsers(worktreeId))
       } catch (err) {
         console.error('[sleep-worktree] browser shutdown failed', { worktreeId, error: err })
         failedWorktreeIds.add(worktreeId)
@@ -182,17 +186,15 @@ export async function runSleepWorktrees(worktreeIds: readonly string[]): Promise
         // history dir (local) or relay session id (SSH); it also captures
         // serializer buffers into buffersByLeafId for SSH wake to reseed
         // scrollback. See DESIGN_DOC_TERMINAL_HISTORY_FIX_V2.md §3.3.c.
-        await shutdownWorktreeTerminals(worktreeId, { keepIdentifiers: true })
-        if (typeof window !== 'undefined' && window.api?.ephemeralVm?.suspendWorkspace) {
-          await window.api.ephemeralVm.suspendWorkspace({ workspaceId: worktreeId })
-        }
-        // Why: a spawn that resolved during teardown binds a PTY and clears the marker;
-        // the workspace is asleep now, so re-assert it. A workspace the user activated
-        // meanwhile is awake by their choice and must not be left marked.
+        await withWorktreeSleepTeardown(worktreeId, async () => {
+          await shutdownWorktreeTerminals(worktreeId, { keepIdentifiers: true })
+          if (typeof window !== 'undefined' && window.api?.ephemeralVm?.suspendWorkspace) {
+            await window.api.ephemeralVm.suspendWorkspace({ workspaceId: worktreeId })
+          }
+        })
+        // Why: a workspace the user activated during the batch is awake by their choice.
         if (useAppStore.getState().activeWorktreeId === worktreeId) {
           clearWorktreeSleepIntent(worktreeId)
-        } else {
-          markWorktreeSleepIntent(worktreeId)
         }
       } catch (err) {
         console.error('[sleep-worktree] terminal or host suspension failed', {

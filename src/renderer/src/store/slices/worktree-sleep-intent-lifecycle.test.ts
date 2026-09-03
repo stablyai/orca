@@ -120,6 +120,24 @@ describe('worktree sleep intent lifecycle', () => {
     unsubscribe()
   })
 
+  it('ignores a PTY bind that lands while the sleep teardown is in flight', async () => {
+    const store = createTestStore()
+    seedWorktree(store)
+    const tab = store.getState().createTab(WORKTREE_ID, undefined, undefined, { activate: false })
+    markWorktreeSleepIntent(WORKTREE_ID)
+    const woke = vi.fn()
+    intent.onWorktreeSleepIntentCleared(WORKTREE_ID, woke)
+
+    await intent.withWorktreeSleepTeardown(WORKTREE_ID, async () => {
+      store.getState().updateTabPtyId(tab.id, 'pty-late-spawn')
+    })
+
+    expect(hasWorktreeSleepIntent(WORKTREE_ID)).toBe(true)
+    expect(woke).not.toHaveBeenCalled()
+    store.getState().updateTabPtyId(tab.id, 'pty-after-teardown')
+    expect(hasWorktreeSleepIntent(WORKTREE_ID)).toBe(false)
+  })
+
   it('keeps notifying siblings when one wake listener throws', () => {
     const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
     const woke = vi.fn()

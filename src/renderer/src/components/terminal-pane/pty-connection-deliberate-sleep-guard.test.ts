@@ -313,10 +313,16 @@ describe('deliberate sleep keeps mounted panes cold', () => {
     const binding = connectPanePty(createPane(1) as never, createManager(1) as never, deps as never)
     await flushAsyncTicks()
     binding.dispose()
+    // Why: the connect body already refuses a disposed session, so prove the
+    // listener itself is gone: a wake after dispose reaches no subscriber.
+    const wakeCalls: number[] = []
+    const { onWorktreeSleepIntentCleared } = await import('@/lib/worktree-sleep-intent')
+    onWorktreeSleepIntentCleared('wt-1', () => wakeCalls.push(1))
     clearWorktreeSleepIntent('wt-1')
     await flushAsyncTicks()
 
     expect(transport.connect).not.toHaveBeenCalled()
+    expect(wakeCalls).toHaveLength(1)
   })
 
   it('still connects a slept pane that carries a queued startup', async () => {

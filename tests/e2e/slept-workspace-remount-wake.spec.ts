@@ -72,7 +72,8 @@ test('remounting a slept hidden pane does not respawn its PTY', async ({ orcaPag
   expect(remounted, 'remountTerminalTabForRecovery did not find the slept tab').toBe(true)
   await assertStaysCold(orcaPage, slept)
 
-  // Non-vacuity: a deliberate click must still wake it.
+  // Non-vacuity: a deliberate click must still wake it, and exactly once — the
+  // waiting pane and its remounted successor must not both reattach.
   await activateWorkspaceByClick(orcaPage, slept)
   await expect
     .poll(async () => (await readWorkspaceSample(orcaPage, slept)).livePtyCount, {
@@ -80,4 +81,7 @@ test('remounting a slept hidden pane does not respawn its PTY', async ({ orcaPag
       message: 'the slept workspace never wakes even on deliberate activation'
     })
     .toBeGreaterThan(0)
+  await orcaPage.waitForTimeout(3_000)
+  expect((await readWorkspaceSample(orcaPage, slept)).livePtyCount).toBe(1)
+  expect(await readHostLiveTerminalCount(orcaPage, slept)).toBe(1)
 })

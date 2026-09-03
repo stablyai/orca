@@ -44,7 +44,8 @@ vi.mock('@/store', () => ({
 vi.mock('sonner', () => ({ toast: { error: mocks.toastError } }))
 vi.mock('@/lib/worktree-sleep-intent', () => ({
   clearWorktreeSleepIntent: mocks.clearWorktreeSleepIntent,
-  markWorktreeSleepIntent: mocks.markWorktreeSleepIntent
+  markWorktreeSleepIntent: mocks.markWorktreeSleepIntent,
+  withWorktreeSleepTeardown: (_worktreeId: string, teardown: () => Promise<unknown>) => teardown()
 }))
 
 import { runSleepWorktree, runSleepWorktrees } from './sleep-worktree-flow'
@@ -219,14 +220,6 @@ describe('runSleepWorktree', () => {
     await run
 
     expect(mocks.clearWorktreeSleepIntent).toHaveBeenLastCalledWith('wt-2')
-  })
-
-  it('re-asserts the marker after teardown so a late PTY bind cannot un-sleep it', async () => {
-    await runSleepWorktree('wt-1')
-
-    const marks = mocks.markWorktreeSleepIntent.mock.invocationCallOrder
-    const terminalShutdown = mocks.state.shutdownWorktreeTerminals.mock.invocationCallOrder[0]
-    expect(marks.some((order) => order > terminalShutdown)).toBe(true)
   })
 
   it('marks each worktree only when its own teardown starts', async () => {
