@@ -1,4 +1,5 @@
 import { holdPtyResizesForPaneSubtrees } from './pane-pty-resize-hold'
+import { equalizeAdjacentDividerPanes } from './pane-divider-adjacent-equalize'
 
 export type DividerCallbacks = {
   refitPanesUnder: (el: HTMLElement) => void
@@ -260,14 +261,14 @@ export function attachDividerDrag(
   }
 
   const onDoubleClick = (): void => {
+    // Why: the second click of a double-click also starts a drag; abandon it so
+    // equalize is not fighting an in-progress pointer capture session.
+    finishActiveDrag(false)
     const prev = divider.previousElementSibling as HTMLElement | null
     const next = divider.nextElementSibling as HTMLElement | null
-    if (!prev || !next) {
+    if (!equalizeAdjacentDividerPanes(prev, next) || !prev || !next) {
       return
     }
-
-    prev.style.flex = '1 1 0%'
-    next.style.flex = '1 1 0%'
 
     callbacks.refitPanesUnder(prev)
     callbacks.refitPanesUnder(next)
