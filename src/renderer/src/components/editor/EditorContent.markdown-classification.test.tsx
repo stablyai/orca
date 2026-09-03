@@ -9,8 +9,11 @@ const classifiers = vi.hoisted(() => ({
   exceedsSizeLimit: vi.fn<(content: string) => boolean>()
 }))
 
+// Why: the decision is what gets cached; the message is resolved from it per
+// read so it can follow the active UI language. The stub uses the message text
+// itself as the reason token so both seams stay observable.
 vi.mock('./markdown-rich-mode', () => ({
-  getMarkdownRichModeEligibility: ({
+  getMarkdownRichModeEligibilityDecision: ({
     content,
     sizeOverridden
   }: {
@@ -18,8 +21,9 @@ vi.mock('./markdown-rich-mode', () => ({
     sizeOverridden: boolean
   }) => ({
     exceedsSizeLimit: !sizeOverridden && classifiers.exceedsSizeLimit(content),
-    unsupportedMessage: classifiers.getUnsupportedMessage(content)
-  })
+    unsupportedReason: classifiers.getUnsupportedMessage(content)
+  }),
+  resolveMarkdownRichModeUnsupportedMessage: (reason: string | null) => reason
 }))
 
 vi.mock('./editor-lazy-views', () => {

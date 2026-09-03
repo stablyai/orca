@@ -10,6 +10,7 @@ import type * as MarkdownRoundTripModule from './markdown-round-trip'
 
 type ShellProps = {
   onContentChangeForFile: (file: OpenFile | null, content: string) => void
+  model: { inlineMarkdownRenderState: { richModeUnsupportedMessage: string | null } | null }
 }
 
 const probe = vi.hoisted(() => ({
@@ -27,9 +28,12 @@ vi.mock('./markdown-rich-mode', async (importActual) => {
   const actual = await importActual<typeof MarkdownRichModeModule>()
   return {
     ...actual,
-    getMarkdownRichModeEligibility: (params: { content: string; sizeOverridden: boolean }) => {
+    getMarkdownRichModeEligibilityDecision: (params: {
+      content: string
+      sizeOverridden: boolean
+    }) => {
       probe.eligibility(params.content)
-      return actual.getMarkdownRichModeEligibility(params)
+      return actual.getMarkdownRichModeEligibilityDecision(params)
     }
   }
 })
@@ -49,7 +53,16 @@ vi.mock('./EditorPanelShell', () => ({
   EditorPanelShell: (props: ShellProps) => {
     probe.shellRender()
     probe.lastShellProps = props
-    return <div data-editor-panel-shell="true" />
+    // Why: `richModeUnsupportedMessage` is exactly what EditorMarkdownFileSurface
+    // renders as the rich-mode fallback banner, so rendering it here asserts on
+    // the banner text without mounting the whole editor surface.
+    return (
+      <div data-editor-panel-shell="true">
+        <span data-rich-fallback-banner="true">
+          {props.model.inlineMarkdownRenderState?.richModeUnsupportedMessage ?? ''}
+        </span>
+      </div>
+    )
   }
 }))
 
@@ -61,6 +74,7 @@ vi.mock('./useEditorPanelContentState', () => ({
   })
 }))
 
+import { i18n } from '@/i18n/i18n'
 import EditorPanel from './EditorPanel'
 import { resetMarkdownRichModeEligibilityCache } from './markdown-rich-mode-eligibility-cache'
 
@@ -81,6 +95,17 @@ const MARKDOWN_WITH_HTML = [
   '<!-- a comment -->',
   '',
   'Body text.',
+  ''
+].join('\n')
+
+// Why: reference-style links are the cheapest branch that produces a fallback
+// banner without paying for a TipTap round trip.
+const MARKDOWN_WITH_REFERENCE_LINKS = [
+  '# Notes',
+  '',
+  'See [the docs][ref].',
+  '',
+  '[ref]: https://example.com',
   ''
 ].join('\n')
 
@@ -207,6 +232,50 @@ describe('EditorPanel markdown classification memoization', () => {
 
     await change(MARKDOWN_WITH_HTML)
     expect(isDirty()).toBe(false)
+  })
+
+  it('re-localizes the rich-mode fallback banner after a UI language switch', async () => {
+    contentState.fileContents = {
+      [FILE_PATH]: { content: MARKDOWN_WITH_REFERENCE_LINKS, isBinary: false }
+    }
+    await act(async () => root.render(<EditorPanel />))
+    await flushEffects()
+
+    const banner = (): string | null =>
+      container.querySelector('[data-rich-fallback-banner="true"]')?.textContent ?? null
+
+    expect(banner()).toBe(
+      'Editable only in code mode because this file contains reference-style links.'
+    )
+    expect(probe.eligibility).toHaveBeenCalledTimes(1)
+
+    await act(async () => {
+      await i18n.changeLanguage('ja')
+    })
+    try {
+      // An ordinary idle re-render, the same shape as a git-status poll tick.
+      await act(async () => {
+        useAppStore.setState({ gitStatusByWorktree: { [WORKTREE_ID]: [] } })
+      })
+
+      expect(banner()).toBe(
+        'このファイルには参照形式のリンクが含まれているため、コードモードでのみ編集できます。'
+      )
+      // The decision is still cached — only the string was re-resolved.
+      expect(probe.eligibility).toHaveBeenCalledTimes(1)
+    } finally {
+      await act(async () => {
+        await i18n.changeLanguage('en')
+      })
+    }
+
+    await act(async () => {
+      useAppStore.setState({ gitStatusByWorktree: { [WORKTREE_ID]: [] } })
+    })
+    expect(banner()).toBe(
+      'Editable only in code mode because this file contains reference-style links.'
+    )
+    expect(probe.eligibility).toHaveBeenCalledTimes(1)
   })
 
   it('keeps the content-change callback identity stable across content loads', async () => {

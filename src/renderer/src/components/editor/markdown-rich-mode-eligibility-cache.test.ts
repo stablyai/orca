@@ -1,5 +1,6 @@
 // @vitest-environment happy-dom
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { i18n } from '@/i18n/i18n'
 import { getMarkdownRichModeEligibility } from './markdown-rich-mode'
 import {
   getCachedMarkdownRichModeEligibility,
@@ -86,9 +87,27 @@ describe('getCachedMarkdownRichModeEligibility', () => {
     }
   })
 
-  it('returns the retained result for a repeated content string', () => {
-    const content = '# Title\n\n<div>Hi</div>\n'
-    const first = getCachedMarkdownRichModeEligibility({ content, sizeOverridden: false })
-    expect(getCachedMarkdownRichModeEligibility({ content, sizeOverridden: false })).toBe(first)
+  it('re-resolves the unsupported message per read instead of caching the string', async () => {
+    const content = '# Title\n\n[ref]: https://example.com\n\nSee [ref].\n'
+    const english = getCachedMarkdownRichModeEligibility({ content, sizeOverridden: false })
+    expect(english.unsupportedMessage).toBe(
+      'Editable only in code mode because this file contains reference-style links.'
+    )
+
+    await i18n.changeLanguage('ja')
+    try {
+      const japanese = getCachedMarkdownRichModeEligibility({ content, sizeOverridden: false })
+      expect(japanese.unsupportedMessage).not.toBeNull()
+      // Why: the decision is cached but the localized string is not, so a cache
+      // hit still follows the language active at read time.
+      expect(japanese.unsupportedMessage).not.toBe(english.unsupportedMessage)
+      expect(japanese.exceedsSizeLimit).toBe(english.exceedsSizeLimit)
+    } finally {
+      await i18n.changeLanguage('en')
+    }
+
+    expect(
+      getCachedMarkdownRichModeEligibility({ content, sizeOverridden: false }).unsupportedMessage
+    ).toBe(english.unsupportedMessage)
   })
 })

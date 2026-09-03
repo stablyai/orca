@@ -1,12 +1,14 @@
 import {
-  getMarkdownRichModeEligibility,
-  type MarkdownRichModeEligibility
+  getMarkdownRichModeEligibilityDecision,
+  resolveMarkdownRichModeUnsupportedMessage,
+  type MarkdownRichModeEligibility,
+  type MarkdownRichModeEligibilityDecision
 } from './markdown-rich-mode'
 
 type EligibilityCacheEntry = {
   content: string
   sizeOverridden: boolean
-  result: MarkdownRichModeEligibility
+  decision: MarkdownRichModeEligibilityDecision
 }
 
 // Why: one entry per visible markdown surface (active tab plus split panes),
@@ -16,18 +18,36 @@ const MAX_ENTRIES = 4
 const entries: EligibilityCacheEntry[] = []
 
 /**
- * Memoized `getMarkdownRichModeEligibility`.
+ * Memoized rich-mode eligibility.
  *
- * Why: the classifier is pure but scans the whole document (and can build a
+ * Why: classifying is pure but scans the whole document (and can build a
  * throwaway TipTap editor to round-trip it), while `EditorPanel` re-renders
- * from ~18 store subscriptions — including idle git-status polls. Keying on
- * the content string keeps classification at once per content change instead
- * of once per render, with byte-identical output.
+ * from ~18 store subscriptions — including idle git-status polls. Keying on the
+ * content string keeps classification at once per content change instead of
+ * once per render.
+ *
+ * Only the *decision* is cached. `unsupportedMessage` is resolved per read
+ * because the matcher messages are late-bound `translate()` getters: caching
+ * the string would freeze the fallback banner in whatever UI language happened
+ * to be active when the document was first classified, which is wrong both on
+ * a language switch and at startup (the persisted language is applied from an
+ * effect, after the first render).
  */
 export function getCachedMarkdownRichModeEligibility(params: {
   content: string
   sizeOverridden: boolean
 }): MarkdownRichModeEligibility {
+  const decision = getCachedMarkdownRichModeEligibilityDecision(params)
+  return {
+    exceedsSizeLimit: decision.exceedsSizeLimit,
+    unsupportedMessage: resolveMarkdownRichModeUnsupportedMessage(decision.unsupportedReason)
+  }
+}
+
+function getCachedMarkdownRichModeEligibilityDecision(params: {
+  content: string
+  sizeOverridden: boolean
+}): MarkdownRichModeEligibilityDecision {
   const { content, sizeOverridden } = params
   for (let index = 0; index < entries.length; index += 1) {
     const entry = entries[index]
@@ -38,15 +58,15 @@ export function getCachedMarkdownRichModeEligibility(params: {
       entries.splice(index, 1)
       entries.unshift(entry)
     }
-    return entry.result
+    return entry.decision
   }
 
-  const result = getMarkdownRichModeEligibility({ content, sizeOverridden })
-  entries.unshift({ content, sizeOverridden, result })
+  const decision = getMarkdownRichModeEligibilityDecision({ content, sizeOverridden })
+  entries.unshift({ content, sizeOverridden, decision })
   if (entries.length > MAX_ENTRIES) {
     entries.length = MAX_ENTRIES
   }
-  return result
+  return decision
 }
 
 export function resetMarkdownRichModeEligibilityCache(): void {
