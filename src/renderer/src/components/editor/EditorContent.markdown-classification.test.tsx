@@ -71,6 +71,7 @@ vi.mock('@/store', () => {
 
 import { EditorContent } from './EditorContent'
 import { getEditorPanelRenderModel } from './editor-panel-render-model'
+import { resetMarkdownRichModeEligibilityCache } from './markdown-rich-mode-eligibility-cache'
 
 function openFile(
   language: 'markdown' | 'typescript' = 'markdown',
@@ -172,6 +173,7 @@ function getGuardedRenderModel({
 }
 
 beforeEach(() => {
+  resetMarkdownRichModeEligibilityCache()
   classifiers.getUnsupportedMessage.mockImplementation((content) =>
     content.includes('[reference]:') ? 'Reference links require source mode.' : null
   )
@@ -181,6 +183,7 @@ beforeEach(() => {
 afterEach(() => {
   cleanup()
   vi.clearAllMocks()
+  resetMarkdownRichModeEligibilityCache()
 })
 
 describe('inline Markdown render classification', () => {

@@ -18,6 +18,7 @@ import { useEditorPanelContentState } from './useEditorPanelContentState'
 import { useMarkdownPreviewShortcut } from './useMarkdownPreviewShortcut'
 import { useUntitledFileRename } from './useUntitledFileRename'
 import { extractFrontMatter } from './markdown-frontmatter'
+import { isEditorContentUnchanged } from './editor-content-dirty-state'
 import {
   selectEditorPanelGitBranchEntries,
   selectEditorPanelGitStatusEntries
@@ -145,28 +146,33 @@ function EditorPanelInner({
   useClosedEditorTabCleanup(openFiles)
   useMarkdownPreviewShortcut({ activeFile, panelRef, openMarkdownPreview })
 
+  // Why: reading loaded content through refs keeps this callback identity stable
+  // across content loads, so a background file read stops pushing fresh props
+  // through the whole memoized editor subtree.
+  const fileContentsRef = useRef(fileContents)
+  fileContentsRef.current = fileContents
+  const diffContentsRef = useRef(diffContents)
+  diffContentsRef.current = diffContents
   const handleContentChangeForFile = useCallback(
     (file: typeof activeFile, content: string) => {
       if (!file) {
         return
       }
       setEditorDraft(file.id, content)
-      const normalize =
-        file.language === 'markdown'
-          ? (value: string): string => value.trimEnd()
-          : (value: string): string => value
+      const ignoreTrailingWhitespace = file.language === 'markdown'
       if (file.mode === 'edit') {
+        const original = fileContentsRef.current[file.id]?.content ?? ''
         markFileDirty(
           file.id,
-          normalize(content) !== normalize(fileContents[file.id]?.content ?? '')
+          !isEditorContentUnchanged(content, original, ignoreTrailingWhitespace)
         )
         return
       }
-      const diffContent = diffContents[file.id]
+      const diffContent = diffContentsRef.current[file.id]
       const original = diffContent?.kind === 'text' ? diffContent.modifiedContent : ''
-      markFileDirty(file.id, normalize(content) !== normalize(original))
+      markFileDirty(file.id, !isEditorContentUnchanged(content, original, ignoreTrailingWhitespace))
     },
-    [diffContents, fileContents, markFileDirty, setEditorDraft]
+    [markFileDirty, setEditorDraft]
   )
 
   const handleContentChange = useCallback(
