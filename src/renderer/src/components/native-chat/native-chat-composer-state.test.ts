@@ -277,6 +277,80 @@ describe('native skill and command picker', () => {
     ])
   })
 
+  it('keeps lower-priority scopes visible when one scope fills the unfiltered list', () => {
+    const skills = [
+      ...Array.from({ length: 61 }, (_, index) =>
+        skill({
+          name: `repo-skill-${String(index).padStart(3, '0')}`,
+          sourceKind: 'repo',
+          skillFilePath: `/repo/.agents/skills/repo-${index}/SKILL.md`
+        })
+      ),
+      ...Array.from({ length: 11 }, (_, index) =>
+        skill({
+          name: `home-skill-${String(index).padStart(3, '0')}`,
+          sourceKind: 'home',
+          skillFilePath: `/home/.claude/skills/home-${index}/SKILL.md`
+        })
+      )
+    ]
+    const items = buildNativeChatPickerItems([], skills, '', '/')
+    const names = items.map((item) => item.name)
+    expect(names).toHaveLength(72)
+    expect(names).toContain('home-skill-000')
+    expect(names).toContain('home-skill-010')
+    expect(names).toContain('repo-skill-060')
+  })
+
+  it('budgets truncation across scopes so a huge scope cannot erase a smaller one', () => {
+    const skills = [
+      ...Array.from({ length: 800 }, (_, index) =>
+        skill({
+          name: `repo-skill-${String(index).padStart(4, '0')}`,
+          sourceKind: 'repo',
+          skillFilePath: `/repo/.agents/skills/repo-${index}/SKILL.md`
+        })
+      ),
+      ...Array.from({ length: 3 }, (_, index) =>
+        skill({
+          name: `home-skill-${index}`,
+          sourceKind: 'home',
+          skillFilePath: `/home/.claude/skills/home-${index}/SKILL.md`
+        })
+      )
+    ]
+    const names = buildNativeChatPickerItems([], skills, '', '/').map((item) => item.name)
+    expect(names).toHaveLength(500)
+    // Budgeted rows still land in scope order, so the home rows sort last.
+    expect(names.slice(-3)).toEqual(['home-skill-0', 'home-skill-1', 'home-skill-2'])
+    expect(names.slice(0, -3).every((name) => name.startsWith('repo-skill-'))).toBe(true)
+  })
+
+  it('keeps a queried catalog in rank order rather than spreading it across scopes', () => {
+    // 600 prefix matches (rank 1) in repo vs 10 substring matches (rank 2) in home:
+    // rank order fills the cap with repo rows, a scope budget would interleave home rows.
+    const skills = [
+      ...Array.from({ length: 600 }, (_, index) =>
+        skill({
+          name: `deploy-${String(index).padStart(4, '0')}`,
+          sourceKind: 'repo',
+          skillFilePath: `/repo/.agents/skills/deploy-${index}/SKILL.md`
+        })
+      ),
+      ...Array.from({ length: 10 }, (_, index) =>
+        skill({
+          name: `alpha-deploy-${index}`,
+          sourceKind: 'home',
+          skillFilePath: `/home/.claude/skills/alpha-deploy-${index}/SKILL.md`
+        })
+      )
+    ]
+    const names = buildNativeChatPickerItems([], skills, 'deploy', '/').map((item) => item.name)
+    expect(names).toHaveLength(500)
+    expect(names.every((name) => name.startsWith('deploy-'))).toBe(true)
+    expect(names).not.toContain('alpha-deploy-0')
+  })
+
   it('keeps a long token-safe name intact for insertion instead of truncating it', () => {
     const longName = `skill-${'x'.repeat(100)}`
     const items = buildNativeChatPickerItems(
