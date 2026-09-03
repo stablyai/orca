@@ -519,3 +519,45 @@ describe('isUsageEmptyState', () => {
     ).toBe(true)
   })
 })
+
+// STA-3445: the reporter's Codex account was connected (Settings resolved its
+// ~/.codex identity) while the status bar still offered "Configure usage
+// tracking". A system-default account persists no managed-account row, so the
+// usage snapshot is its only durable signal here.
+describe('a system-default Codex account whose usage probe failed', () => {
+  function withCodex(codex: ProviderRateLimits): Parameters<typeof isUsageEmptyState>[0] {
+    return {
+      claude: provider('unavailable', { provider: 'claude' }),
+      codex,
+      gemini: provider('unavailable'),
+      opencodeGo: provider('unavailable', { provider: 'opencode-go' }),
+      kimi: provider('unavailable', { provider: 'kimi' }),
+      antigravity: provider('unavailable', { provider: 'antigravity' }),
+      minimax: provider('unavailable', { provider: 'minimax' }),
+      grok: provider('unavailable', { provider: 'grok' })
+    }
+  }
+
+  const failedReading = provider('error', {
+    provider: 'codex',
+    error: 'Codex CLI not found'
+  })
+
+  it('keeps the Codex chip visible instead of hiding a connected account', () => {
+    expect(isProviderConfigured(failedReading)).toBe(true)
+    expect(getVisibleUsageProvider('codex', failedReading, usageSettings())).toBe(failedReading)
+  })
+
+  it('does not offer the connect-an-account CTA to a signed-in user', () => {
+    expect(isUsageEmptyState(withCodex(failedReading), usageSettings())).toBe(false)
+  })
+
+  it('still offers the CTA when Codex really is signed out', () => {
+    expect(
+      isUsageEmptyState(
+        withCodex(provider('unavailable', { provider: 'codex', error: 'Codex not signed in' })),
+        usageSettings()
+      )
+    ).toBe(true)
+  })
+})

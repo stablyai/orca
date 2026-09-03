@@ -176,7 +176,10 @@ async function fetchWslBackend(
     if (options.signal?.aborted) {
       return abortedCodexRateLimitResult()
     }
-    return result
+    // Why (STA-3445): this is the one path that publishes the backend reading as-is, so the
+    // no-window rule the RPC and PTY probes apply has to hold here too. Falling through to
+    // those probes beats overwriting the account's last real usage with two nulls.
+    return result && (result.session || result.weekly)
       ? supplementCodexRateLimitResetCredits(result, fetchCodexResetCredits, options)
       : null
   } catch {
@@ -207,7 +210,20 @@ export async function fetchCodexRateLimits(
       'error'
     )
   }
+  return withSignedInCodexStatus(await readSignedInCodexRateLimits(options))
+}
 
+// Why: `unavailable` is the UI's "provider is not set up" signal — it hides the
+// chip and feeds the status bar's "Connect an account" empty state. Everything
+// below the auth gate ran against a Codex sign-in Orca already found on disk, so
+// a probe that could not run is a failed reading, never an absent account.
+function withSignedInCodexStatus(limits: ProviderRateLimits): ProviderRateLimits {
+  return limits.status === 'unavailable' ? { ...limits, status: 'error' } : limits
+}
+
+async function readSignedInCodexRateLimits(
+  options?: FetchCodexRateLimitsOptions
+): Promise<ProviderRateLimits> {
   if (options?.codexHomePath && parseWslUncPath(options.codexHomePath)) {
     const backendResult = await fetchWslBackend(options)
     if (backendResult) {

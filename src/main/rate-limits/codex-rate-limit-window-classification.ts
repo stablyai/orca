@@ -15,6 +15,37 @@ export type CodexRateLimitWindowsSnapshot = {
   secondary?: CodexRateWindowSnapshot | null
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === 'object' && !Array.isArray(value)
+}
+
+function isReadableRateLimitWindow(value: unknown): boolean {
+  return (
+    isRecord(value) && typeof value.usedPercent === 'number' && Number.isFinite(value.usedPercent)
+  )
+}
+
+/**
+ * False only for a wrapper that carries windows but none this build can read — the shape it
+ * must not classify, because classifying it yields the same two nulls a real empty answer does.
+ *
+ * Why not "every window must read": one window Orca does not recognise beside one it does is a
+ * readable answer. Rejecting it would discard live usage the day the app-server grows a window
+ * shape, which is the harm this gate exists to prevent, pointed the other way.
+ */
+export function isReadableCodexRateLimitWindowsSnapshot(
+  value: unknown
+): value is CodexRateLimitWindowsSnapshot | null | undefined {
+  if (value == null) {
+    return true
+  }
+  if (!isRecord(value)) {
+    return false
+  }
+  const windows = [value.primary, value.secondary]
+  return windows.some(isReadableRateLimitWindow) || windows.every((window) => window == null)
+}
+
 type MappableCodexRateWindowSnapshot = CodexRateWindowSnapshot & { usedPercent: number }
 type CodexRateLimitWindowKind = 'session' | 'weekly' | null
 
