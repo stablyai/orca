@@ -626,7 +626,7 @@ describe('regional rehome assignment state', () => {
       await context.store.releaseActivity(identity, sourceControl)
     }
     probe.reset()
-    probe.failNoWaitOnce = true
+    probe.failNoWaitTimes = 1
     const busy = collectEventWarnings('orca_relay_sweep_cell_inventory_busy')
 
     let completed: number
@@ -642,6 +642,57 @@ describe('regional rehome assignment state', () => {
         event: 'orca_relay_sweep_cell_inventory_busy',
         sweep: 'complete-ready-regional-rehomes',
         skipped: 1
+      }
+    ])
+    await context.database.close()
+  })
+
+  // Why: with `continue` replaced by `break` a single contended candidate drops
+  // the rest of the page. Two in a row prove the sweep resumes, not just that it
+  // survived one, and that the summary counts both.
+  it('completes a candidate behind two contended ones', async () => {
+    const probe = new CellInventoryLockProbe()
+    const context = await setup({ wrap: (database) => probe.wrap(database) })
+    const identities = [
+      { userId: 'user-1', relayHostId: 'abcdefghijklmnop' },
+      { userId: 'user-2', relayHostId: 'ponmlkjihgfedcba' },
+      { userId: 'user-3', relayHostId: 'aaaabbbbccccdddd' }
+    ]
+    for (const identity of identities) {
+      // Dispatch is rate limited, so each claim needs its own interval.
+      context.advance(60_000)
+      await freshHeartbeats(context)
+      const sourceControl = await activatePreferredSource(context, identity)
+      const attempt = await context.store.claimRegionalRehome()
+      await context.store.recordRegionalRehomeDrainReceipt(attempt!.attemptId, 'accepted')
+      await context.store.activateControl(identity, {
+        cellId: target.id,
+        assignmentEpoch: 2,
+        generation: 1
+      })
+      await context.store.markMigrationTargetRegistered(identity, {
+        cellId: target.id,
+        assignmentEpoch: 2
+      })
+      await context.store.releaseActivity(identity, sourceControl)
+    }
+    probe.reset()
+    probe.failNoWaitTimes = 2
+    const busy = collectEventWarnings('orca_relay_sweep_cell_inventory_busy')
+
+    let completed: number
+    try {
+      completed = await context.store.completeReadyRegionalRehomes()
+    } finally {
+      busy.restore()
+    }
+
+    expect(completed).toBe(1)
+    expect(busy.entries).toEqual([
+      {
+        event: 'orca_relay_sweep_cell_inventory_busy',
+        sweep: 'complete-ready-regional-rehomes',
+        skipped: 2
       }
     ])
     await context.database.close()
@@ -1692,8 +1743,8 @@ async function heartbeat(
 class CellInventoryLockProbe {
   readonly locks: (RelayLockOptions | undefined)[] = []
   failNoWait = false
-  // Contends one candidate only, so the sweep must carry on to the next.
-  failNoWaitOnce = false
+  // Contends the first N candidates only, so the sweep must carry on past them.
+  failNoWaitTimes = 0
   failWith: Error | null = null
 
   reset(): void {
@@ -1708,8 +1759,8 @@ class CellInventoryLockProbe {
         if (sql.trim() === 'SELECT * FROM relay_cells ORDER BY cell_id ASC') {
           probe.locks.push(options)
           if (probe.failWith) throw probe.failWith
-          if (options?.failIfUnavailable && probe.failNoWaitOnce) {
-            probe.failNoWaitOnce = false
+          if (options?.failIfUnavailable && probe.failNoWaitTimes > 0) {
+            probe.failNoWaitTimes--
             throw new Error('database_lock_unavailable')
           }
           if (probe.failNoWait && options?.failIfUnavailable) {

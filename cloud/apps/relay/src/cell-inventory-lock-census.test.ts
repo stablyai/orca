@@ -1,11 +1,11 @@
 import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
-import type { CellInventoryLockMode } from './assignment-store.js'
+import { cellInventoryLockOptions, type CellInventoryLockMode } from './assignment-store.js'
 
 // Which entry points can reach a call site. A site a sweep can enter must never
 // take the bounded wait: its 55P03 becomes a terminal transaction failure, and
 // the incident monitor freezes on a single one.
-type Reachability = 'request' | 'sweep' | 'both'
+type Reachability = 'request' | 'sweep' | 'both' | 'orphan'
 
 // 'caller' is not a CellInventoryLockMode: those sites take the mode threaded
 // from `assign`, which is 'request' for a client and 'pool-default' for the
@@ -25,7 +25,8 @@ const CENSUS: CensusEntry[] = [
   { method: 'assignOnce', mode: 'nowait', reach: 'both' },
   { method: 'assignOnce', mode: 'nowait', reach: 'both' },
   { method: 'refreshDrainMigrationLeasesOnce', mode: 'request', reach: 'request' },
-  { method: 'changeActivity', mode: 'request', reach: 'request' },
+  // Reachable from neither: changeActivity has no production callers, only tests.
+  { method: 'changeActivity', mode: 'request', reach: 'orphan' },
   { method: 'acquireActivity', mode: 'request', reach: 'request' },
   { method: 'activateControl', mode: 'request', reach: 'request' },
   { method: 'startEvacuation', mode: 'request', reach: 'request' },
@@ -52,20 +53,15 @@ const CENSUS: CensusEntry[] = [
 ]
 
 // The background sweeps, and nothing else. A method reachable from one of these
-// can be entered by a sweep tick, whatever else can also enter it.
-const SWEEP_ROOTS = [
-  'refreshRegionalRehomeLeases',
-  'completeReadyEvacuations',
-  'completeReadyRegionalRehomes',
-  'abortExpiredEvacuations',
-  'abortExpiredRegionalRehomes',
-  'reapRegionalRehomeAttempts',
-  'releaseExpiredActivityLeases',
-  'releaseExpiredActivity',
-  'releaseExpiredRegionPreferences',
-  'evacuateDeadCells',
-  'claimRegionalRehome',
-  'recordRegionalRehomeDispatchFailure'
+// can be entered by a sweep tick, whatever else can also enter it. Both lists are
+// read from source, so a new sweep step or a new route widens the derivation here
+// instead of silently widening what a bounded wait can be entered from.
+const SWEEP_ENTRY_FILES = ['./assignment-cleanup-steps.ts', './regional-rehome-worker.ts']
+const REQUEST_ENTRY_FILES = [
+  './app.ts',
+  './relay-server.ts',
+  './host-session-registry.ts',
+  './cell-admission-startup.ts'
 ]
 
 const DECLARATION = /^ {2}(?:private |public )?(?:static )?(?:async )?([A-Za-z_][\w]*)[(<]/
@@ -74,9 +70,18 @@ function storeSource(): string[] {
   return readFileSync(new URL('./assignment-store.ts', import.meta.url), 'utf8').split('\n')
 }
 
-// Why: a hand-written reachability column is a claim, not a check. Derive it, so
-// a new sweep edge into a bounded site fails here instead of in production.
-function sweepReachableMethods(lines: string[]): Set<string> {
+function entryPoints(files: string[]): string[] {
+  return files.flatMap((file) =>
+    [
+      ...readFileSync(new URL(file, import.meta.url), 'utf8').matchAll(
+        /assignments\.([A-Za-z_][\w]*)\(/g
+      )
+    ].map((call) => call[1]!)
+  )
+}
+
+// Same-class call graph: store methods only ever reach each other through `this.`.
+function storeCallGraph(lines: string[]): Map<string, Set<string>> {
   const bounds: { name: string; start: number }[] = []
   lines.forEach((line, index) => {
     const declaration = DECLARATION.exec(line)
@@ -93,8 +98,12 @@ function sweepReachableMethods(lines: string[]): Set<string> {
     }
     callees.set(method.name, names)
   })
+  return callees
+}
+
+function closure(callees: Map<string, Set<string>>, roots: string[]): Set<string> {
   const reached = new Set<string>()
-  const pending = [...SWEEP_ROOTS]
+  const pending = [...roots]
   while (pending.length > 0) {
     const name = pending.pop()!
     if (reached.has(name)) continue
@@ -102,6 +111,23 @@ function sweepReachableMethods(lines: string[]): Set<string> {
     for (const callee of callees.get(name) ?? []) if (!reached.has(callee)) pending.push(callee)
   }
   return reached
+}
+
+// Why: a hand-written reachability column is a claim, not a check. Derive both
+// directions, so a new sweep edge into a bounded site fails here instead of in
+// production, and so 'sweep' and 'both' stop being asserted by hand.
+function derivedReachability(lines: string[]): (method: string) => Reachability {
+  const callees = storeCallGraph(lines)
+  const sweep = closure(callees, entryPoints(SWEEP_ENTRY_FILES))
+  const request = closure(callees, entryPoints(REQUEST_ENTRY_FILES))
+  return (method) =>
+    sweep.has(method)
+      ? request.has(method)
+        ? 'both'
+        : 'sweep'
+      : request.has(method)
+        ? 'request'
+        : 'orphan'
 }
 
 function readCallSites(): { method: string; mode: CensusMode }[] {
@@ -136,27 +162,42 @@ describe('cell inventory lock call-site census', () => {
   })
 
   it('derives the same reachability the census claims', () => {
-    const reached = sweepReachableMethods(storeSource())
-    const derived = readCallSites().map(({ method }) => reached.has(method))
+    const reachOf = derivedReachability(storeSource())
 
-    expect(derived).toEqual(CENSUS.map((entry) => entry.reach !== 'request'))
+    expect(readCallSites().map(({ method }) => reachOf(method))).toEqual(
+      CENSUS.map((entry) => entry.reach)
+    )
   })
 
   // Why: this is the whole point of the classification. A shorter wait on a
   // sweep-reachable site turns contention into a terminal transaction failure,
   // and relayPostgresRetryExhausted freezes the incident gate at zero.
+  // Why: the hold distribution is what the 500ms bound will be tuned against, so
+  // a mode that stops asking for it goes unmeasured in exactly the lane that
+  // matters. Nothing else in the suite reads the pool-default branch.
+  it('measures the hold in every lock mode', () => {
+    const modes: CellInventoryLockMode[] = ['request', 'nowait', 'pool-default']
+
+    expect(modes.map((mode) => cellInventoryLockOptions(mode).measureHoldMs)).toEqual([
+      true,
+      true,
+      true
+    ])
+  })
+
   it('never puts a sweep-reachable site on the bounded wait', () => {
-    const reached = sweepReachableMethods(storeSource())
+    const reachOf = derivedReachability(storeSource())
     const bounded = readCallSites().filter(
-      (site) => site.mode === 'request' && reached.has(site.method)
+      (site) => site.mode === 'request' && ['sweep', 'both'].includes(reachOf(site.method))
     )
 
     expect(bounded).toEqual([])
   })
 
   it('routes every sweep-only site to NOWAIT so it can skip the tick', () => {
-    const queueing = CENSUS.filter(
-      (entry) => entry.reach === 'sweep' && entry.mode !== 'nowait'
+    const reachOf = derivedReachability(storeSource())
+    const queueing = readCallSites().filter(
+      (site) => reachOf(site.method) === 'sweep' && site.mode !== 'nowait'
     )
 
     expect(queueing).toEqual([])
