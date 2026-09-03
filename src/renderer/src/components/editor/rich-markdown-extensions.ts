@@ -205,7 +205,9 @@ export function createRichMarkdownExtensions({
     }),
     ...createOrcaDetailsExtensions(),
     Table.configure({
-      resizable: false
+      resizable: true,
+      renderWrapper: true,
+      cellMinWidth: 96
     }),
     TableRow,
     TableHeader,

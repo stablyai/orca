@@ -615,22 +615,30 @@
 /* ── Editor-style scrollbar (matches Monaco) ────────── */
 
 .scrollbar-editor,
+.rich-markdown-editor .tableWrapper,
 .xterm .xterm-viewport {
   scrollbar-width: thin;
   scrollbar-color: rgba(121, 121, 121, 0.4) transparent;
 }
 
 .scrollbar-editor::-webkit-scrollbar,
+.rich-markdown-editor .tableWrapper::-webkit-scrollbar,
 .xterm .xterm-viewport::-webkit-scrollbar {
   width: 14px;
 }
 
+.rich-markdown-editor .tableWrapper::-webkit-scrollbar {
+  height: 14px;
+}
+
 .scrollbar-editor::-webkit-scrollbar-track,
+.rich-markdown-editor .tableWrapper::-webkit-scrollbar-track,
 .xterm .xterm-viewport::-webkit-scrollbar-track {
   background: transparent;
 }
 
 .scrollbar-editor::-webkit-scrollbar-thumb,
+.rich-markdown-editor .tableWrapper::-webkit-scrollbar-thumb,
 .xterm .xterm-viewport::-webkit-scrollbar-thumb {
   background: rgba(121, 121, 121, 0.4);
   border: 3px solid transparent;
@@ -639,6 +647,7 @@
 }
 
 .scrollbar-editor::-webkit-scrollbar-thumb:hover,
+.rich-markdown-editor .tableWrapper::-webkit-scrollbar-thumb:hover,
 .xterm .xterm-viewport::-webkit-scrollbar-thumb:hover {
   background: rgba(121, 121, 121, 0.7);
   border: 3px solid transparent;
