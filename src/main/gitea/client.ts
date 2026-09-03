@@ -39,6 +39,8 @@ export type GiteaAuthStatus = {
 type RequestOptions = {
   searchParams?: Record<string, string | number>
   timeoutMs?: number
+  // Why: only a single-resource fetch may read 404 as "absent". See requestJsonAtBase.
+  allowNotFound?: boolean
 }
 
 function envValue(name: string): string | null {
@@ -97,7 +99,12 @@ async function requestJsonAtBase<T>(
     })
     if (!response.ok) {
       await cancelUnreadResponseBody(response)
-      if (throwOnFailure) {
+      // Why: 404 only means "this resource is absent" for a single-resource
+      // fetch the caller opted in with allowNotFound (PR #N deleted, or Gitea
+      // masking it). On any other path a 404 is indistinguishable from a wrong
+      // base URL, a repo that isn't on this forge, or a token without scope —
+      // collapsing that to "no PR" would hide a misconfigured host forever.
+      if (throwOnFailure && !(options.allowNotFound && response.status === 404)) {
         throw new Error(`Gitea request failed: HTTP ${response.status}`)
       }
       return null
@@ -306,7 +313,9 @@ export async function getGiteaPullRequestForBranch(
   const raw = await requestJson<RawGiteaPullRequest>(
     repo,
     `/repos/${encodedRepoPath(repo)}/pulls/${encodeURIComponent(String(linkedPRNumber))}`,
-    {},
+    // Why: a linked PR number can legitimately be gone (deleted, or on a repo
+    // the token can't see). That is a real "no PR", not a lookup failure.
+    { allowNotFound: true },
     throwOnFailure
   )
   return raw ? normalizePullRequest(repo, raw) : null

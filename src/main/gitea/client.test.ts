@@ -267,6 +267,47 @@ describe('Gitea client', () => {
     )
   })
 
+  it('treats a 404 on the linked PR as "no PR" rather than a lookup failure', async () => {
+    const requested: string[] = []
+    const fetchMock = vi.fn(async (url: string | URL) => {
+      requested.push(new URL(String(url)).pathname)
+      // The branch scan succeeds and is simply empty; only PR #42 is gone.
+      return String(url).includes('/pulls/42')
+        ? Response.json({ message: 'not found' }, { status: 404 })
+        : Response.json([])
+    })
+    vi.stubGlobal('fetch', fetchMock)
+
+    await expect(
+      getGiteaPullRequestForBranchOrThrow('/repo', 'feature/gitea', 42)
+    ).resolves.toBeNull()
+    expect(requested).toEqual([
+      '/api/v1/repos/team/repo/pulls',
+      '/api/v1/repos/team/repo/pulls/42'
+    ])
+  })
+
+  it('resolves null without throwing when the scan returns an empty list', async () => {
+    // Gitea has no head-branch filter, so "branch has no PR" arrives as a 200
+    // with [] from the repo listing — never a 404. The throwing variant must
+    // still report that as a plain "no PR".
+    const fetchMock = vi.fn(async () => Response.json([]))
+    vi.stubGlobal('fetch', fetchMock)
+
+    await expect(getGiteaPullRequestForBranchOrThrow('/repo', 'feature/gitea')).resolves.toBeNull()
+  })
+
+  it('still throws on a 404 from the /pulls scan so a misconfigured host is not read as "no PR"', async () => {
+    const fetchMock = vi.fn(async () => Response.json({ message: 'not found' }, { status: 404 }))
+    vi.stubGlobal('fetch', fetchMock)
+
+    // A repo-level 404 means wrong base URL / repo absent / token lacks scope —
+    // collapsing it to "no PR" would hide the misconfiguration indefinitely.
+    await expect(getGiteaPullRequestForBranchOrThrow('/repo', 'feature/gitea')).rejects.toThrow(
+      /Gitea request failed: HTTP 404/
+    )
+  })
+
   it('expires successful scans and bounds retained repository listings', async () => {
     vi.useFakeTimers()
     try {
