@@ -1,6 +1,5 @@
 import { useCallback, useRef } from 'react'
 import type React from 'react'
-import type { editor as monacoEditor } from 'monaco-editor'
 import { useAppStore } from '@/store'
 import { detectLanguage } from '@/lib/language-detect'
 import { joinPath } from '@/lib/path'
@@ -19,7 +18,6 @@ import type { DiffSectionItemProps } from '../../diff-section-item-props'
 
 export type CombinedDiffSectionActions = {
   handleSectionSaveRef: DiffSectionItemProps['handleSectionSaveRef']
-  modifiedEditorsRef: DiffSectionItemProps['modifiedEditorsRef']
   openSection: (index: number) => void
   openSectionPreview: (section: DiffSection) => void
 }
@@ -54,7 +52,6 @@ export function useCombinedDiffSectionActions({
   const openFile = useAppStore((s) => s.openFile)
   const openBranchDiff = useAppStore((s) => s.openBranchDiff)
   const openCommitDiff = useAppStore((s) => s.openCommitDiff)
-  const modifiedEditorsRef = useRef<Map<number, monacoEditor.IStandaloneCodeEditor>>(new Map())
 
   const openSection = useCallback(
     (index: number) => {
@@ -158,13 +155,13 @@ export function useCombinedDiffSectionActions({
       if (!section) {
         return
       }
-      const modifiedEditor = modifiedEditorsRef.current.get(index)
-      if (!modifiedEditor && !section.dirty) {
+      if (!section.dirty) {
         return
       }
 
       const sectionKey = section.key
-      const content = modifiedEditor?.getValue() ?? section.modifiedContent
+      // Why: the renderer mirrors every keystroke into section state, so it is the only draft source.
+      const content = section.modifiedContent
       const absolutePath = joinPath(file.filePath, section.path)
       try {
         const state = useAppStore.getState()
@@ -242,5 +239,5 @@ export function useCombinedDiffSectionActions({
   const handleSectionSaveRef = useRef(handleSectionSave)
   handleSectionSaveRef.current = handleSectionSave
 
-  return { handleSectionSaveRef, modifiedEditorsRef, openSection, openSectionPreview }
+  return { handleSectionSaveRef, openSection, openSectionPreview }
 }

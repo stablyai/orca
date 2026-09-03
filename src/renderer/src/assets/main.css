@@ -3037,3 +3037,11 @@ html.native-shell .app-layout {
     inset 0 1px 0 0 color-mix(in srgb, var(--foreground) 5%, transparent),
     0 10px 24px rgba(0, 0, 0, 0.18);
 }
+
+/* Why: inside a Pierre annotation row the diff already owns placement, so the
+   note draft drops the overlay's absolute positioning and fills the row. */
+.orca-diff-comment-popover-inline {
+  position: static;
+  width: 100%;
+  max-width: none;
+}

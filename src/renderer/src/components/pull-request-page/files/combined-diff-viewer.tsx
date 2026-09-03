@@ -1,6 +1,5 @@
 import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { useVirtualizer } from '@tanstack/react-virtual'
-import type { editor as monacoEditor } from 'monaco-editor'
 import { useAppStore } from '@/store'
 import { DiffSectionItem } from '@/components/editor/DiffSectionItem'
 import { CombinedDiffFileTree } from '../../editor/combined-diff/browse-files/combined-diff-file-tree'
@@ -28,6 +27,7 @@ import { usePRFilesDiffViewPersistence } from './view-restore'
 import { buildInlineReviewComments } from './inline-comments'
 import { usePRFileSectionHeights } from './section-heights'
 import { usePRFileActiveSection } from './active-section'
+import { PierreDiffProviders } from '@/components/editor/pierre-diff/PierreDiffProviders'
 
 export function PRFilesCombinedDiffViewer({
   files,
@@ -45,9 +45,6 @@ export function PRFilesCombinedDiffViewer({
   onViewedChange
 }: PRFilesCombinedDiffViewerProps): React.JSX.Element {
   const settings = useAppStore((s) => s.settings)
-  const isDark =
-    settings?.theme === 'dark' ||
-    (settings?.theme === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches)
   const diffEntrySignature = useMemo(
     () =>
       JSON.stringify(
@@ -116,7 +113,6 @@ export function PRFilesCombinedDiffViewer({
   const loadingIndicesRef = useRef<Set<number>>(new Set())
   const sectionsRef = useRef<DiffSection[]>([])
   const generationRef = useRef(0)
-  const modifiedEditorsRef = useRef<Map<number, monacoEditor.IStandaloneCodeEditor>>(new Map())
   const handleSectionSaveRef = useRef<(index: number) => Promise<void>>(async () => {})
   useLayoutEffect(() => {
     // Why: keep the loader/navigation callbacks reading the latest sections without a render-phase ref write.
@@ -308,6 +304,7 @@ export function PRFilesCombinedDiffViewer({
   )
 
   return (
+    <PierreDiffProviders>
     <div className="flex h-full min-h-0 flex-1 flex-col overflow-hidden">
       <PRFilesDiffToolbar
         files={files}
@@ -350,7 +347,6 @@ export function PRFilesCombinedDiffViewer({
                     index={virtualItem.index}
                     isBranchMode={false}
                     sideBySide={sideBySide}
-                    isDark={isDark}
                     settings={settings}
                     sectionHeight={sectionHeights[virtualItem.index]}
                     worktreeId={`github-pr:${repoId}:${prNumber}`}
@@ -367,7 +363,6 @@ export function PRFilesCombinedDiffViewer({
                     getCommentableLineNumbers={getCommentableLineNumbers}
                     setSectionHeights={setSectionHeights}
                     setSections={setSections}
-                    modifiedEditorsRef={modifiedEditorsRef}
                     handleSectionSaveRef={handleSectionSaveRef}
                   />
                 </div>
@@ -377,5 +372,6 @@ export function PRFilesCombinedDiffViewer({
         </div>
       </div>
     </div>
+    </PierreDiffProviders>
   )
 }

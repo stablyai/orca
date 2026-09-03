@@ -1,4 +1,3 @@
-import type { editor as monacoEditor } from 'monaco-editor'
 import type { DiffSection } from './diff-section-types'
 import {
   getLargeDiffRenderLimitFromCounts,
@@ -7,19 +6,13 @@ import {
 
 export function getLiveDiffSectionRenderLimit({
   section,
-  modifiedEditor,
   modifiedContent
 }: {
   section: DiffSection
-  modifiedEditor: monacoEditor.ICodeEditor
   modifiedContent: string
 }): LargeDiffRenderLimit {
-  const modifiedLineCount =
-    modifiedContent.length === 0
-      ? 0
-      : (modifiedEditor.getModel()?.getLineCount() ??
-        section.largeDiffRenderLimit?.lineCounts?.modified ??
-        0)
+  // Why: the renderer no longer owns a text model, so count lines from the draft itself.
+  const modifiedLineCount = modifiedContent.length === 0 ? 0 : modifiedContent.split('\n').length
 
   return getLargeDiffRenderLimitFromCounts({
     originalLineCount: section.largeDiffRenderLimit?.lineCounts?.original ?? 0,
