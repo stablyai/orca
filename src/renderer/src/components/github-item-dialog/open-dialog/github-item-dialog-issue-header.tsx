@@ -30,6 +30,7 @@ import { WorkItemIssueSourceIndicator } from './work-item-issue-source-indicator
 export function GitHubItemDialogIssueHeader({
   workItem,
   backLabel,
+  embedded,
   onClose,
   linkCopied,
   setLinkCopyButtonRef,
@@ -44,6 +45,8 @@ export function GitHubItemDialogIssueHeader({
 }: {
   workItem: GitHubWorkItem
   backLabel: string
+  /** Rendered inside a sidebar panel: no back affordance, no workspace CTA. */
+  embedded: boolean
   onClose: () => void
   linkCopied: boolean
   setLinkCopyButtonRef: (node: HTMLButtonElement | null) => void
@@ -64,18 +67,22 @@ export function GitHubItemDialogIssueHeader({
     <>
       <div className="flex-none border-b border-border/60 bg-muted/30 px-6 py-2.5">
         <div className="flex items-center gap-2 text-[13px] text-muted-foreground">
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
-            onClick={onClose}
-            className="-ml-2 h-7 gap-1 px-2 text-muted-foreground hover:text-foreground"
-            aria-label={backLabel}
-          >
-            <ChevronLeft className="size-4" />
-            {backLabel}
-          </Button>
-          <span className="text-border">·</span>
+          {embedded ? null : (
+            <>
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                onClick={onClose}
+                className="-ml-2 h-7 gap-1 px-2 text-muted-foreground hover:text-foreground"
+                aria-label={backLabel}
+              >
+                <ChevronLeft className="size-4" />
+                {backLabel}
+              </Button>
+              <span className="text-border">·</span>
+            </>
+          )}
           {ownerRepo ? (
             <>
               <span className="truncate">
@@ -142,70 +149,72 @@ export function GitHubItemDialogIssueHeader({
             <span className="break-words">{workItem.title}</span>
             <span className="ml-2 font-light text-muted-foreground">#{workItem.number}</span>
           </h1>
-          <div className="flex shrink-0 items-center gap-2">
-            {/* Why: Orca's signature affordance — keep primary so it stands out against GitHub's familiar surface. */}
-            {issueAttachedWorkspace ? (
-              <DropdownMenu modal={false}>
-                <ButtonGroup>
-                  <Button
-                    type="button"
-                    size="sm"
-                    onClick={() => handleOpenOrUseIssueWorkspace(workItem)}
-                    className="gap-1.5 whitespace-nowrap"
-                    aria-label={translate(
-                      'auto.components.GitHubItemDialog.84855fedd0',
-                      'Open workspace attached to issue'
-                    )}
-                  >
-                    {translate('auto.components.GitHubItemDialog.726db41722', 'Open workspace')}
-                    <ArrowRight className="size-3.5" />
-                  </Button>
-                  <DropdownMenuTrigger asChild>
+          {embedded ? null : (
+            <div className="flex shrink-0 items-center gap-2">
+              {/* Why: Orca's signature affordance — keep primary so it stands out against GitHub's familiar surface. */}
+              {issueAttachedWorkspace ? (
+                <DropdownMenu modal={false}>
+                  <ButtonGroup>
                     <Button
                       type="button"
-                      size="icon-sm"
+                      size="sm"
+                      onClick={() => handleOpenOrUseIssueWorkspace(workItem)}
+                      className="gap-1.5 whitespace-nowrap"
                       aria-label={translate(
-                        'auto.components.GitHubItemDialog.fe6ff12dc2',
-                        'More issue workspace actions'
+                        'auto.components.GitHubItemDialog.84855fedd0',
+                        'Open workspace attached to issue'
                       )}
                     >
-                      <ChevronDown className="size-3.5" />
+                      {translate('auto.components.GitHubItemDialog.726db41722', 'Open workspace')}
+                      <ArrowRight className="size-3.5" />
                     </Button>
-                  </DropdownMenuTrigger>
-                </ButtonGroup>
-                <DropdownMenuContent align="end">
-                  <DropdownMenuItem onSelect={() => onUse(workItem)}>
-                    <Plus className="size-4" />
-                    {translate(
-                      'auto.components.GitHubItemDialog.36182aa57f',
-                      'Start new workspace'
-                    )}
-                  </DropdownMenuItem>
-                  <DropdownMenuItem onSelect={() => window.api.shell.openUrl(workItem.url)}>
-                    <ExternalLink className="size-4" />
-                    {translate('auto.components.GitHubItemDialog.3fdf777817', 'Open on GitHub')}
-                  </DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
-            ) : (
-              <Button
-                type="button"
-                size="sm"
-                onClick={() => onUse(workItem)}
-                className="gap-1.5 whitespace-nowrap"
-                aria-label={translate(
-                  'auto.components.GitHubItemDialog.0ab4664a8b',
-                  'Start workspace from issue'
-                )}
-              >
-                {translate(
-                  'auto.components.GitHubItemDialog.0ab4664a8b',
-                  'Start workspace from issue'
-                )}
-                <ArrowRight className="size-3.5" />
-              </Button>
-            )}
-          </div>
+                    <DropdownMenuTrigger asChild>
+                      <Button
+                        type="button"
+                        size="icon-sm"
+                        aria-label={translate(
+                          'auto.components.GitHubItemDialog.fe6ff12dc2',
+                          'More issue workspace actions'
+                        )}
+                      >
+                        <ChevronDown className="size-3.5" />
+                      </Button>
+                    </DropdownMenuTrigger>
+                  </ButtonGroup>
+                  <DropdownMenuContent align="end">
+                    <DropdownMenuItem onSelect={() => onUse(workItem)}>
+                      <Plus className="size-4" />
+                      {translate(
+                        'auto.components.GitHubItemDialog.36182aa57f',
+                        'Start new workspace'
+                      )}
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onSelect={() => window.api.shell.openUrl(workItem.url)}>
+                      <ExternalLink className="size-4" />
+                      {translate('auto.components.GitHubItemDialog.3fdf777817', 'Open on GitHub')}
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              ) : (
+                <Button
+                  type="button"
+                  size="sm"
+                  onClick={() => onUse(workItem)}
+                  className="gap-1.5 whitespace-nowrap"
+                  aria-label={translate(
+                    'auto.components.GitHubItemDialog.0ab4664a8b',
+                    'Start workspace from issue'
+                  )}
+                >
+                  {translate(
+                    'auto.components.GitHubItemDialog.0ab4664a8b',
+                    'Start workspace from issue'
+                  )}
+                  <ArrowRight className="size-3.5" />
+                </Button>
+              )}
+            </div>
+          )}
         </div>
         <div className="mt-3 flex flex-wrap items-center gap-2 text-[13px] text-muted-foreground">
           <span

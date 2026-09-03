@@ -34,6 +34,9 @@ export type PullRequestPageProps = {
     reviewRequests: GitHubAssignableUser[]
   ) => void
   onClose: () => void
+  /** 'panel' drops the page chrome that has no meaning inside a sidebar panel:
+   *  the back affordance and the start-workspace CTA. */
+  variant?: 'page' | 'panel'
   /** Optional Project-origin context; when set, slug-addressed IPCs route writes to the row's repo instead of `repoPath` (both may be set — slug wins for writes). */
   projectOrigin?: PullRequestPageProjectOrigin
 }

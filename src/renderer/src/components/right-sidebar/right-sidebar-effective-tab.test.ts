@@ -104,4 +104,29 @@ describe('resolveRightSidebarEffectiveTab', () => {
       })
     ).toThrow('at least one visible tab')
   })
+
+  it('falls back to a visible tab when a persisted Task route loses its linked item', () => {
+    // Why: the Task tab hides itself for a workspace with no linked work item.
+    // Switching to such a workspace must render a visible tab rather than an
+    // empty panel, and must not overwrite the stored route.
+    expect(
+      resolveRightSidebarEffectiveTab({
+        normalizedActiveTab: 'task',
+        visibleItems: gitVisibleItems,
+        activeFolderWorkspaceKey: null,
+        rememberedFolderTab: null
+      })
+    ).toBe('explorer')
+  })
+
+  it('keeps the Task route while the active workspace still has a linked item', () => {
+    expect(
+      resolveRightSidebarEffectiveTab({
+        normalizedActiveTab: 'task',
+        visibleItems: [...gitVisibleItems, { id: 'task' }],
+        activeFolderWorkspaceKey: null,
+        rememberedFolderTab: null
+      })
+    ).toBe('task')
+  })
 })
