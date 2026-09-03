@@ -6,6 +6,7 @@ import { OrchestrationError } from '../../orchestration/orchestration-error'
 import type { RemoteDispatchAttachmentRow } from '../../orchestration/types'
 import { defineMethod, type RpcMethod } from '../core'
 import { OptionalFiniteNumber, requiredString } from '../schemas'
+import type { WorkerTerminalObservationStatus } from './orchestration-worker-observation'
 import { readExactWorkerOutput } from './orchestration-worker-output'
 import { describeUnconfirmedAgentStop } from '../../../../shared/pty-liveness-verdict'
 
@@ -215,7 +216,7 @@ async function inspectRemoteAttachment(
 ): Promise<{
   terminal: Awaited<ReturnType<OrcaRuntimeService['showTerminal']>> | null
   exact: boolean
-  status: 'unattached' | 'missing' | 'identity_changed' | 'live' | 'exited' | 'unverifiable'
+  status: WorkerTerminalObservationStatus
   /** Set with `unverifiable`; names what we lost contact with. */
   reason?: string
   /** Set only on a proven-exact attachment parked on a prompt that needs a human. */

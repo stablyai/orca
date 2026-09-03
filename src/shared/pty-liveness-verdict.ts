@@ -1,10 +1,19 @@
 /**
- * The one vocabulary Orca uses to talk about whether a PTY is live.
+ * `live` / `unverifiable` / `exited` for a PTY — the fixed verdict vocabulary of
+ * docs/reference/ssh-execution-boundary.md.
  *
  * `exited` requires positive evidence of absence from the owning host. Losing
  * contact with that host — an unregistered SSH provider, a dropped relay, an
  * inventory that only enumerates registered providers — is `unverifiable`, never
  * a death certificate and never a successful stop.
+ *
+ * What that doc fixes is the three spellings, "whatever the field is named" — not
+ * one type and not one discriminant. `PtyProcessInspectionEvidence` spells the
+ * same three under `verdict`, answering a different question (does this shell
+ * have children) with different payloads, and ships them across the relay wire
+ * inside `processEvidence`. Keep the shapes separate: renaming that discriminant
+ * reads as malformed evidence on the far side of a version skew, which is worse
+ * than the field being absent, and the arms are not interchangeable anyway.
  */
 export type PtyLivenessVerdict =
   | { status: 'exited' }
