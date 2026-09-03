@@ -83,6 +83,16 @@ afterEach(() => {
 })
 
 describe('root directory guard', () => {
+  it('allows the repository-local OpenCode config', () => {
+    const fixture = makeFixture()
+    const head = commitFiles(fixture.root, [['opencode.json', '{}\n']])
+
+    const result = runGuard({ ...fixture, head })
+
+    expect(result.status).toBe(0)
+    expect(result.stdout).toContain('no new root-level files or folders')
+  })
+
   it('allows additions inside an existing top-level directory', () => {
     const fixture = makeFixture()
     const head = commitFiles(fixture.root, [['config/new.txt', 'nested\n']])
