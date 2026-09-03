@@ -6,6 +6,7 @@ import {
   discoverCommitMessageModelsRemote,
   type DiscoverCommitMessageModelsResult
 } from '../../text-generation/commit-message-text-generation'
+import { normalizeSourceControlAiSettings } from '../../../shared/source-control-ai'
 import { prepareLocalCommitMessageAgentEnv } from '../../text-generation/commit-message-agent-environment'
 import { parseWslPath } from '../../wsl'
 import { getSshGitProvider } from '../../providers/ssh-git-dispatch'
@@ -28,6 +29,13 @@ export function registerFilesystemGitModelDiscoveryHandlers(
     ): Promise<DiscoverCommitMessageModelsResult> => {
       const agentId = args.agentId
       const agentCommandOverride = store.getSettings().agentCmdOverrides?.[agentId as TuiAgent]
+      // Resolve the user-configured timeout for model discovery, matching the
+      // value used by the generation flow.
+      const normalizedSettings = normalizeSourceControlAiSettings(
+        store.getSettings().sourceControlAi,
+        store.getSettings().commitMessageAi
+      )
+      const generationTimeoutMs = normalizedSettings.generationTimeoutMs
       if (args.connectionId) {
         if (!args.worktreePath) {
           return { success: false, error: 'Missing worktree path for remote model discovery.' }
@@ -43,7 +51,8 @@ export function registerFilesystemGitModelDiscoveryHandlers(
           agentId as TuiAgent,
           args.worktreePath,
           (plan, cwd, timeoutMs) => provider.executeCommitMessagePlan(plan, cwd, timeoutMs),
-          agentCommandOverride
+          agentCommandOverride,
+          generationTimeoutMs
         )
       }
       let localRuntimeTarget: CommitMessageAgentRuntimeTarget = { runtime: 'host' }
@@ -74,9 +83,16 @@ export function registerFilesystemGitModelDiscoveryHandlers(
             agentId as TuiAgent,
             localEnv.env,
             agentCommandOverride,
-            localDiscoveryOptions
+            localDiscoveryOptions,
+            generationTimeoutMs
           )
-        : discoverCommitMessageModelsLocal(agentId as TuiAgent, localEnv.env, agentCommandOverride)
+        : discoverCommitMessageModelsLocal(
+            agentId as TuiAgent,
+            localEnv.env,
+            agentCommandOverride,
+            undefined,
+            generationTimeoutMs
+          )
     }
   )
 }
