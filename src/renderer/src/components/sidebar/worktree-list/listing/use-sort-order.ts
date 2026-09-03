@@ -6,7 +6,12 @@ import { tabHasLivePty } from '@/lib/tab-has-live-pty'
 import { persistWorktreeSortOrderByHost } from '@/lib/worktree-sort-order-persistence'
 import type { Repo } from '../../../../../../shared/repo-types'
 import type { Worktree } from '../../../../../../shared/worktree/types'
-import { buildWorktreeComparator, compareWorktreeSortLabel, type SortBy } from '../../smart-sort'
+import {
+  buildWorktreeComparator,
+  buildWorktreeSortLabels,
+  compareWorktreeSortLabel,
+  type SortBy
+} from '../../smart-sort'
 import {
   buildAttentionByWorktree,
   hasFreshAttributedAgentStatus,
@@ -103,6 +108,8 @@ export function useSidebarWorktreeSortOrder(args: {
       (worktree) => !worktree.isArchived
     )
     const now = Date.now()
+    // Why precompute: the label tiebreaker runs on every comparison in every mode.
+    const labels = buildWorktreeSortLabels(nonArchivedWorktrees)
     let detectedLiveSmartSignal = false
 
     // Why cold-start detection: agent-status hydrates async, so the warm comparator would collapse all to Class 4; keep the persisted order until a live signal appears.
@@ -118,7 +125,7 @@ export function useSidebarWorktreeSortOrder(args: {
         detectedLiveSmartSignal = true
       } else {
         nonArchivedWorktrees.sort(
-          (a, b) => b.sortOrder - a.sortOrder || compareWorktreeSortLabel(a, b)
+          (a, b) => b.sortOrder - a.sortOrder || compareWorktreeSortLabel(a, b, labels)
         )
         return {
           sortedIds: nonArchivedWorktrees.map((w) => w.id),
@@ -142,7 +149,9 @@ export function useSidebarWorktreeSortOrder(args: {
             state.terminalLayoutsByTabId
           )
         : new Map<string, WorktreeAttention>()
-    nonArchivedWorktrees.sort(buildWorktreeComparator(sortBy, repoMap, now, attentionByWorktree))
+    nonArchivedWorktrees.sort(
+      buildWorktreeComparator(sortBy, repoMap, now, attentionByWorktree, labels)
+    )
     return {
       sortedIds: nonArchivedWorktrees.map((w) => w.id),
       attentionByWorktree: sortBy === 'smart' ? attentionByWorktree : null,

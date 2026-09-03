@@ -47,6 +47,7 @@ import {
   isWorkspaceFromOtherDevice
 } from './workspace-creator-visibility'
 import { isDefaultBranchWorkspace } from './default-branch-workspace'
+import { getLineageAncestorIndex, getSortedWorktreeRankIndex } from './visible-worktree-indexes'
 import { getWorktreeHostIdentity } from '../../../../shared/worktree/host-qualified-identity'
 
 /**
@@ -96,7 +97,7 @@ export function computeVisibleWorktrees(
 
   // Why: sidebar lineage is structural. Archived workspaces stay hidden, but
   // every other valid ancestor can bypass filters so children never orphan.
-  const lineageAncestorById = new Map(all.map((w) => [w.id, w]))
+  const lineageAncestorById = getLineageAncestorIndex(worktreesByRepo)
 
   if (opts.hideWorkspacesFromOtherDevices) {
     all = all.filter(
@@ -170,7 +171,7 @@ export function computeVisibleWorktrees(
 
   // Apply cached sort order. Items not yet in the cache (e.g. brand-new
   // worktrees before the next sortEpoch bump) are appended at the end.
-  const orderIndex = new Map(sortedIds.map((id, i) => [id, i]))
+  const orderIndex = getSortedWorktreeRankIndex(sortedIds)
   all.sort((a, b) => {
     const ai = orderIndex.get(a.id) ?? Infinity
     const bi = orderIndex.get(b.id) ?? Infinity
