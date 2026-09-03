@@ -314,6 +314,11 @@ export function mergeSnapshotAndSessions(
     if (!worktree || browsers.length === 0) {
       continue
     }
+    // Why: runtime-hosted repos are excluded from Steps 1 and 2; a mirrored
+    // browser must not re-expose one as a local repo/worktree row here.
+    if (isRuntimeScopedRepo(worktree.repoId)) {
+      continue
+    }
     const repoName = ctx.repoDisplayNameById.get(worktree.repoId) || worktree.repoId
     const repo = ensureRepo(worktree.repoId, repoName)
     let row = findWorktreeRow(repo, worktreeId)

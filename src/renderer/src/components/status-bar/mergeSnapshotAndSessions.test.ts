@@ -108,6 +108,38 @@ describe('mergeSnapshotAndSessions', () => {
     })
   })
 
+  it('excludes runtime-scoped browser-only workspaces', () => {
+    const worktree = {
+      id: 'runtime-repo::/runtime/browser-only',
+      repoId: 'runtime-repo',
+      displayName: 'browser-only'
+    } as Worktree
+    const browser = {
+      id: 'browser-1',
+      worktreeId: worktree.id,
+      title: 'Orca docs',
+      url: 'https://docs.orca.dev',
+      loading: false,
+      faviconUrl: null,
+      canGoBack: false,
+      canGoForward: false,
+      loadError: null,
+      createdAt: 1
+    } as BrowserWorkspace
+    const out = mergeSnapshotAndSessions(
+      null,
+      [],
+      baseCtx({
+        repoDisplayNameById: new Map([['runtime-repo', 'RUNTIME']]),
+        repoRuntimeScopedById: new Map([['runtime-repo', true]]),
+        worktreeById: new Map([[worktree.id, worktree]]),
+        browserTabsByWorktree: { [worktree.id]: [browser] }
+      })
+    )
+
+    expect(out).toEqual([])
+  })
+
   it('passes through snapshot worktrees with numeric metrics and hasLocalSamples', () => {
     const wt: WorktreeMemory = {
       worktreeId: 'orca::/Users/me/Triton',
