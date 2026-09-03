@@ -1,13 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import {
-  clearWorktreeSleepIntent,
-  hasWorktreeSleepIntent,
-  markWorktreeSleepIntent
-} from '@/lib/worktree-sleep-intent'
+import * as intent from '@/lib/worktree-sleep-intent'
 import { buildWorktreePurgeState } from './worktrees/teardown/worktree-purge-state'
 import { createTestStore, makeWorktree, seedStore } from './store-test-helpers'
 import { createStoreCascadesMockApi } from './store-cascades-test-harness'
 
+const { clearWorktreeSleepIntent, hasWorktreeSleepIntent, markWorktreeSleepIntent } = intent
 const WORKTREE_ID = 'repo1::/path/wt1'
 const FOLDER_KEY = 'folder:folder-1'
 
@@ -92,13 +89,47 @@ describe('worktree sleep intent lifecycle', () => {
     expect(hasWorktreeSleepIntent(WORKTREE_ID)).toBe(false)
   })
 
-  it('is pruned when the worktree is purged', () => {
+  it('is released when a tab is created with a live PTY', () => {
     const store = createTestStore()
     seedWorktree(store)
     markWorktreeSleepIntent(WORKTREE_ID)
 
+    store.getState().createTab(WORKTREE_ID, undefined, undefined, {
+      activate: false,
+      initialPtyId: 'pty-cli-created'
+    })
+
+    expect(hasWorktreeSleepIntent(WORKTREE_ID)).toBe(false)
+  })
+
+  it('notifies wake listeners once and only on a real clear', () => {
+    const { onWorktreeSleepIntentCleared } = intent
+    const woke = vi.fn()
+    markWorktreeSleepIntent(WORKTREE_ID)
+    const unsubscribe = onWorktreeSleepIntentCleared(WORKTREE_ID, woke)
+
+    clearWorktreeSleepIntent('repo1::/path/other')
+    expect(woke).not.toHaveBeenCalled()
+    clearWorktreeSleepIntent(WORKTREE_ID)
+    clearWorktreeSleepIntent(WORKTREE_ID)
+    expect(woke).toHaveBeenCalledTimes(1)
+
+    markWorktreeSleepIntent(WORKTREE_ID)
+    clearWorktreeSleepIntent(WORKTREE_ID)
+    expect(woke).toHaveBeenCalledTimes(1)
+    unsubscribe()
+  })
+
+  it('is forgotten without waking panes when the worktree is purged', () => {
+    const store = createTestStore()
+    seedWorktree(store)
+    markWorktreeSleepIntent(WORKTREE_ID)
+    const woke = vi.fn()
+    intent.onWorktreeSleepIntentCleared(WORKTREE_ID, woke)
+
     store.setState(buildWorktreePurgeState(store.getState(), [WORKTREE_ID]))
 
     expect(hasWorktreeSleepIntent(WORKTREE_ID)).toBe(false)
+    expect(woke).not.toHaveBeenCalled()
   })
 })

@@ -185,6 +185,53 @@ describe('deliberate sleep keeps mounted panes cold', () => {
     expect(transport.connect).not.toHaveBeenCalled()
   })
 
+  it('connects a waiting pane once the workspace is woken', async () => {
+    const { connectPanePty } = await import('./pty-connection')
+    const { clearWorktreeSleepIntent, markWorktreeSleepIntent } =
+      await import('@/lib/worktree-sleep-intent')
+    const transport = createMockTransport()
+    transportFactoryQueue.push(transport)
+    mockStoreState = {
+      ...mockStoreState,
+      activeWorktreeId: 'wt-other',
+      tabsByWorktree: { 'wt-1': [{ id: 'tab-woken', ptyId: 'wt-1@@dead' }] }
+    }
+    markWorktreeSleepIntent('wt-1')
+    const deps = createDeps({
+      tabId: 'tab-woken',
+      restoredLeafId: LEAF_1,
+      restoredPtyIdByLeafId: { [LEAF_1]: 'wt-1@@dead' },
+      isVisibleRef: { current: false }
+    })
+
+    connectPanePty(createPane(1) as never, createManager(1) as never, deps as never)
+    await flushAsyncTicks()
+    expect(transport.connect).not.toHaveBeenCalled()
+
+    clearWorktreeSleepIntent('wt-1')
+    await flushAsyncTicks()
+
+    expect(transport.connect).toHaveBeenCalledTimes(1)
+  })
+
+  it('drops the wake listener when a waiting pane is disposed', async () => {
+    const { connectPanePty } = await import('./pty-connection')
+    const { clearWorktreeSleepIntent, markWorktreeSleepIntent } =
+      await import('@/lib/worktree-sleep-intent')
+    const transport = createMockTransport()
+    transportFactoryQueue.push(transport)
+    markWorktreeSleepIntent('wt-1')
+    const deps = createDeps({ tabId: 'tab-disposed', isVisibleRef: { current: false } })
+
+    const binding = connectPanePty(createPane(1) as never, createManager(1) as never, deps as never)
+    await flushAsyncTicks()
+    binding.dispose()
+    clearWorktreeSleepIntent('wt-1')
+    await flushAsyncTicks()
+
+    expect(transport.connect).not.toHaveBeenCalled()
+  })
+
   it('still connects a slept pane that carries a queued startup', async () => {
     const { connectPanePty } = await import('./pty-connection')
     const { markWorktreeSleepIntent } = await import('@/lib/worktree-sleep-intent')

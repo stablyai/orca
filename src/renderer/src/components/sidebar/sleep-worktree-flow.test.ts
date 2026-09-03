@@ -190,6 +190,27 @@ describe('runSleepWorktree', () => {
     expect(mocks.clearWorktreeSleepIntent).not.toHaveBeenCalled()
   })
 
+  it('marks each worktree only when its own teardown starts', async () => {
+    let releaseFirst: () => void = () => {}
+    mocks.state.shutdownWorktreeBrowsers.mockImplementationOnce(
+      () =>
+        new Promise<void>((resolve) => {
+          releaseFirst = resolve
+        })
+    )
+
+    const run = runSleepWorktrees(['wt-1', 'wt-2'])
+    await Promise.resolve()
+
+    // Why: wt-2 is still awake while wt-1 tears down; marking it early would
+    // hold its panes cold and swallow its activity.
+    expect(mocks.markWorktreeSleepIntent).toHaveBeenCalledWith('wt-1')
+    expect(mocks.markWorktreeSleepIntent).not.toHaveBeenCalledWith('wt-2')
+    releaseFirst()
+    await run
+    expect(mocks.markWorktreeSleepIntent).toHaveBeenCalledWith('wt-2')
+  })
+
   it('surfaces a toast and skips terminals when browsers throws', async () => {
     mocks.state.activeWorktreeId = 'wt-1'
     mocks.state.shutdownWorktreeBrowsers.mockRejectedValueOnce(new Error('boom'))

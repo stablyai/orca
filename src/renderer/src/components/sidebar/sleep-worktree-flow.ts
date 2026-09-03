@@ -141,16 +141,15 @@ export async function runSleepWorktrees(worktreeIds: readonly string[]): Promise
     shutdownWorktreeBrowsers,
     shutdownWorktreeTerminals
   } = useAppStore.getState()
-  // Why: mark before any teardown so exits do not stamp activity and the panes
-  // left mounted stay cold until an explicit wake (#10205). Kept off the store
-  // so it cannot disturb the sidebar's scroll restoration.
-  for (const worktreeId of worktreeIds) {
-    markWorktreeSleepIntent(worktreeId)
-  }
   const sleptActiveWorktreeId =
     activeWorktreeId && worktreeIds.includes(activeWorktreeId) ? activeWorktreeId : null
   if (sleptActiveWorktreeId) {
     const restoreSidebarPosition = preserveSidebarWorktreePosition(sleptActiveWorktreeId)
+    // Why: clearing the active workspace can unmount TerminalPanes before
+    // shutdownWorktreeTerminals writes PTY suppressions; mark first so those
+    // exits do not stamp activity. Kept off the store so it cannot disturb the
+    // sidebar's scroll restoration.
+    markWorktreeSleepIntent(sleptActiveWorktreeId)
     setActiveWorktree(null)
     restoreSidebarPosition()
   }
@@ -158,6 +157,10 @@ export async function runSleepWorktrees(worktreeIds: readonly string[]): Promise
   const failedWorktreeIds = new Set<string>()
   try {
     for (const worktreeId of worktreeIds) {
+      // Why: the marker outlives teardown so the panes left mounted stay cold
+      // until an explicit wake (#10205); mark per workspace so an earlier
+      // slow teardown never leaves a later, still-awake one marked.
+      markWorktreeSleepIntent(worktreeId)
       try {
         // Why: sleep mirrors removeWorktree's shutdown sequence — browsers first
         // so destroyPersistentWebview unregisters the Chromium guests before any

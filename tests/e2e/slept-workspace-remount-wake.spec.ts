@@ -35,6 +35,8 @@ async function assertStaysCold(page: Page, worktreeId: string): Promise<void> {
   expect(peakLivePty, 'slept workspace grew a live PTY').toBe(0)
   expect(peakTabs, 'slept workspace grew a tab').toBe(1)
   expect(hostLive, 'host created a session for the slept workspace').toBe(0)
+  // Why: proves the gate held rather than the pane having quietly unmounted.
+  expect(diag.at(-1), 'remounted pane did not wait for the wake').toContain('WAIT FOR WAKE')
 }
 
 test('remounting a slept hidden pane does not respawn its PTY', async ({ orcaPage }) => {

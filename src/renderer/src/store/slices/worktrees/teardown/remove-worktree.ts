@@ -6,7 +6,7 @@ import { parseExecutionHostId } from '../../../../../../shared/execution-host'
 import { ensureHooksConfirmed } from '@/lib/ensure-hooks-confirmed'
 import { getActiveRuntimeTarget } from '../../../../runtime/runtime-rpc-client'
 import { forgetHugeRepoWarningDismissalsForWorktrees } from '@/lib/source-control-huge-repo-warning-dismissals'
-import { clearWorktreeSleepIntent } from '@/lib/worktree-sleep-intent'
+import { forgetWorktreeSleepIntent } from '@/lib/worktree-sleep-intent'
 import { showPreservedBranchToast } from '@/components/sidebar/preserved-branch-toast'
 import {
   resolveWorktreeOperationRouteResult,
@@ -223,7 +223,7 @@ export function createRemoveWorktree(
 
       // Why: invalidate stale probes once deletion is authoritative, so an old toast can't mutate a same-path replacement.
       forgetHugeRepoWarningDismissalsForWorktrees([worktreeId])
-      clearWorktreeSleepIntent(worktreeId)
+      forgetWorktreeSleepIntent(worktreeId)
       // Why: forget-local is legal while the host is unreachable, so record the removal here too — otherwise an
       // in-flight metadata read that snapshotted this row re-appends it, and disconnected polls never drop it.
       if (hostId && parseExecutionHostId(hostId)?.kind === 'ssh') {

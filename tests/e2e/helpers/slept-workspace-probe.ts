@@ -77,7 +77,7 @@ export async function readConnectDiagnostics(page: Page, worktreeId: string): Pr
     const tabByPaneId = new Map<string, string>()
     const owned: string[] = []
     for (const line of diag) {
-      const connect = /^pane=(\d+) tab=(\S+)/.exec(line)
+      const connect = /^pane=(\d+) tab=(\S+) /.exec(line)
       if (connect) {
         tabByPaneId.set(connect[1], connect[2])
         if (tabIds.has(connect[2])) {
