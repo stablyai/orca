@@ -71,6 +71,13 @@ export function buildWorktreeCardPresentation(card: WorktreeCardController) {
 
   // Why: pinned trees mix repos, so the repo icon shows regardless of groupBy's hideRepoBadge.
   const showPinnedRepoIcon = inPinnedSection && !!repo
+  // Why: pinned section drops the project group header; show a visible project name when the
+  // card title is a worktree/branch label rather than the project itself (#13353).
+  const pinnedProjectName = repo?.displayName?.trim() ?? ''
+  const showPinnedProjectName =
+    showPinnedRepoIcon &&
+    pinnedProjectName.length > 0 &&
+    pinnedProjectName !== visibleCardTitle.trim()
   // Why: new card style retired the Compact/Detailed switch; repo identity uses the compact chip, not a lower pill.
   const showRepoIdentityInTitle = newCardStyle || compactCards
   const showInlineRepoBadge =
@@ -263,6 +270,8 @@ export function buildWorktreeCardPresentation(card: WorktreeCardController) {
 
   return {
     showPinnedRepoIcon,
+    showPinnedProjectName,
+    pinnedProjectName,
     showInlineRepoBadge,
     showRepoBadgeInMetaRow,
     showHostContextBadge,
