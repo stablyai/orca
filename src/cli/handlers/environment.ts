@@ -1,4 +1,4 @@
-import type { CommandHandler } from '../dispatch'
+import type { CommandHandler, HandlerContext } from '../dispatch'
 import { formatEnvironment, formatEnvironmentList, formatHostList, printResult } from '../format'
 import { listSshTargets } from '../host-selector-alternatives'
 import { getDefaultUserDataPath, RuntimeClientError } from '../runtime-client'
@@ -33,7 +33,9 @@ export const ENVIRONMENT_HANDLERS: Record<string, CommandHandler> = {
   // Why: an agent told "run it on <name>" had nowhere to look. `orca environment list` showed
   // paired servers only, and nothing in the CLI listed SSH targets at all, so the wrong-axis
   // guess was the only move available. This is the one place that answers both.
-  'host list': async ({ client, json }) => {
+  'host list': async (ctx) => {
+    rejectRemoteSelectionFlags(ctx, 'orca host list')
+    const { client, json } = ctx
     const environments = listEnvironments(getDefaultUserDataPath()).map((environment) => ({
       kind: 'environment' as const,
       name: environment.name,
@@ -53,7 +55,9 @@ export const ENVIRONMENT_HANDLERS: Record<string, CommandHandler> = {
     ]
     printResult(localSuccess({ hosts }), json, formatHostList)
   },
-  'environment list': async ({ json }) => {
+  'environment list': async (ctx) => {
+    rejectRemoteSelectionFlags(ctx, 'orca environment list')
+    const { json } = ctx
     const environments = listEnvironments(getDefaultUserDataPath()).map(redactRuntimeEnvironment)
     printResult(localSuccess({ environments }), json, formatEnvironmentList)
   },
@@ -75,6 +79,17 @@ export const ENVIRONMENT_HANDLERS: Record<string, CommandHandler> = {
       (result: EnvironmentRemoveResult) =>
         `Removed environment ${result.removed.name} (${result.removed.id}).`
     )
+  }
+}
+
+function rejectRemoteSelectionFlags(ctx: HandlerContext, command: string): void {
+  for (const flag of ['environment', 'pairing-code']) {
+    if (ctx.flags.has(flag)) {
+      throw new RuntimeClientError(
+        'invalid_argument',
+        `\`--${flag}\` does not retarget \`${command}\`. Run it on the host whose environments and hosts you want to inspect.`
+      )
+    }
   }
 }
 

@@ -31,6 +31,7 @@ function shouldIgnoreRemoteSelection(commandPath: string[]): boolean {
     commandPath[0] === 'account' ||
     commandPath[0] === 'artifacts' ||
     commandPath[0] === 'environment' ||
+    commandPath[0] === 'host' ||
     commandPath[0] === 'serve' ||
     commandPath[0] === 'agent' ||
     commandPath[0] === 'vm' ||
