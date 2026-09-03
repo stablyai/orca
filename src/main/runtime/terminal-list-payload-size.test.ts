@@ -200,11 +200,18 @@ describe('terminal.list payload size', () => {
     const withoutLayouts = await runtime.listTerminals(`id:${WORKTREE_ID}`, 10_000, {
       includeVisualLayouts: false
     })
-    const { visualLayouts, ...expectedWithoutLayouts } = withLayouts
+    const { visualLayouts, ...withLayoutPayload } = withLayouts
+    const expectedWithoutLayouts = {
+      ...withLayoutPayload,
+      terminals: withLayoutPayload.terminals.map(
+        ({ visualTopologyState: _state, ...terminal }) => terminal
+      )
+    }
 
     expect(withLayouts.terminals).toHaveLength(TERMINAL_COUNT)
     expect(visualLayouts).toHaveLength(1)
     expect(withoutLayouts).toEqual(expectedWithoutLayouts)
+    expect(withoutLayouts.terminals.every((terminal) => !terminal.visualTopologyState)).toBe(true)
     expect(layoutBuilder).not.toHaveBeenCalled()
 
     const beforeBytes = Buffer.byteLength(JSON.stringify(withLayouts), 'utf8')

@@ -16,15 +16,10 @@ import {
   expandWindowsEnvironmentVariables,
   expandWindowsPathEnvironmentVariables
 } from '../../../shared/windows-environment-expansion'
+import { removeUnspecifiedPaneIdentityEnv } from '../../../shared/pane-identity-env'
 import type { TuiAgent } from '../../../shared/tui-agent'
 import type { PtySubprocessOptions } from '../pty-subprocess'
 
-const PANE_IDENTITY_ENV_KEYS = [
-  'ORCA_PANE_KEY',
-  'ORCA_TAB_ID',
-  'ORCA_WORKTREE_ID',
-  'ORCA_AGENT_LAUNCH_TOKEN'
-] as const
 const WINDOWS_PATH_ENV_KEY_RE = /^path$/i
 
 function composeGuardedDaemonGitConfigEnv(
@@ -55,17 +50,6 @@ function deleteRequestedDaemonEnvKeys(
   }
   if (deleteOrcaOwnedCodexHome) {
     delete env.CODEX_HOME
-  }
-}
-
-function removeUnspecifiedPaneIdentityEnv(
-  env: Record<string, string>,
-  explicitEnv: Record<string, string> | undefined
-): void {
-  for (const key of PANE_IDENTITY_ENV_KEYS) {
-    if (!explicitEnv || !Object.hasOwn(explicitEnv, key)) {
-      delete env[key]
-    }
   }
 }
 

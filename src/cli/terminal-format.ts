@@ -26,7 +26,7 @@ export function formatTerminalList(result: RuntimeTerminalListResult): string {
   const body = result.terminals
     .map(
       (terminal) =>
-        `${terminal.handle}  ${terminal.title ?? '(untitled)'}  ${terminal.connected ? 'connected' : 'disconnected'}  host=${terminal.executionHostId ?? 'unverifiable'}  ${terminal.worktreePath}\n${terminal.preview ? `preview: ${terminal.preview}` : 'preview: <empty>'}`
+        `${terminal.handle}  ${terminal.title ?? '(untitled)'}  ${terminal.connected ? 'connected' : 'disconnected'}  visual=${terminal.visualTopologyState ?? 'unverifiable'}  host=${terminal.executionHostId ?? 'unverifiable'}  ${terminal.worktreePath}\n${terminal.preview ? `preview: ${terminal.preview}` : 'preview: <empty>'}`
     )
     .join('\n\n')
   const visualLayout = formatTerminalVisualLayouts(result.visualLayouts)
@@ -114,6 +114,7 @@ export function formatTerminalShow(result: { terminal: RuntimeTerminalShow }): s
     `ptyId: ${terminal.ptyId ?? 'none'}`,
     `connected: ${terminal.connected}`,
     `writable: ${terminal.writable}`,
+    `visualTopologyState: ${terminal.visualTopologyState ?? 'unverifiable'}`,
     // Why listed above the preview: the preview is where a reader would otherwise have to
     // spot the prompt by eye, which is the work this line exists to remove.
     `agentWait: ${formatAgentWait(terminal.agentWait)}`,

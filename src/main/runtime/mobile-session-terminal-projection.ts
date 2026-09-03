@@ -23,6 +23,7 @@ export function buildHeadlessMobileSessionTerminalTabs(
       }
       return leafIds.flatMap((leafId) => {
         const ptyId = layout?.ptyIdsByLeafId?.[leafId] ?? (leafIds.length === 1 ? tab.ptyId : null)
+        const incarnationId = session.terminalPtyIncarnationsByPaneKey?.[`${tab.id}:${leafId}`]
         const title =
           tab.customTitle?.trim() ||
           tab.generatedTitle?.trim() ||
@@ -37,6 +38,7 @@ export function buildHeadlessMobileSessionTerminalTabs(
             leafId,
             title,
             ...(ptyId ? { ptyId } : {}),
+            ...(incarnationId ? { incarnationId } : {}),
             ...(tab.startupCwd ? { startupCwd: tab.startupCwd } : {}),
             ...(tab.launchAgent ? { launchAgent: tab.launchAgent } : {}),
             ...(layout ? { parentLayout: cloneTerminalLayoutSnapshot(layout) } : {}),

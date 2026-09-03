@@ -8,6 +8,7 @@ import type { PtyControllerInventory } from './runtime-pty-controller-contract'
 import type { ResolvedWorktreeSnapshot } from './runtime-resolved-worktree-cache'
 import type { RuntimeLeafRecord, RuntimePtyWorktreeRecord } from './runtime-terminal-state-records'
 import { buildRuntimeTerminalVisualLayouts } from './runtime-terminal-visual-layout'
+import { annotateRuntimeTerminalVisualTopology } from './runtime-terminal-visual-topology-state'
 import {
   includeTargetResolvedWorktree,
   type ResolvedWorktree
@@ -163,8 +164,12 @@ export class RuntimeTerminalList {
               : snapshots.values(),
             getTabTitle: (tabId) => this.deps.getTabTitle(tabId)
           })
+    const listedWithVisualState =
+      opts.includeVisualLayouts === false
+        ? listed
+        : annotateRuntimeTerminalVisualTopology(listed, visualLayouts, snapshots.values())
     return {
-      terminals: listed,
+      terminals: listedWithVisualState,
       hostScope: this.deps.buildHostScope(
         targetId,
         matching,

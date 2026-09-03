@@ -13,6 +13,8 @@ export type RuntimeMobileSessionTerminalTab = {
   parentTabId: string
   leafId: string
   ptyId?: string | null
+  /** Persisted PTY generation when the snapshot can prove it; absent on older publishers. */
+  incarnationId?: string
   terminalTheme?: RuntimeMobileTerminalTheme
   agentStatus?: AgentStatusEntry | null
   /** Event-only lead-turn end time for paired clients; never persisted in AgentStatusEntry. */

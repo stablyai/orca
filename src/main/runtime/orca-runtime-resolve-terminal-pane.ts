@@ -13,6 +13,8 @@ import {
   readTerminalTail
 } from './terminal-tail-read'
 import { getTerminalState } from './terminal-wait-results'
+import { buildRuntimeTerminalVisualLayouts } from './runtime-terminal-visual-layout'
+import { annotateRuntimeTerminalVisualTopology } from './runtime-terminal-visual-topology-state'
 
 export class OrcaRuntimeWithResolveTerminalPane extends OrcaRuntimeWithGetTerminalInteractiveWait {
   resolveTerminalPane(paneKey: string, expectedWorktreeId?: string): RuntimeTerminalResolvePane {
@@ -113,16 +115,19 @@ export class OrcaRuntimeWithResolveTerminalPane extends OrcaRuntimeWithGetTermin
       const preview = await this.visibleSnapshotPreview(pty.pty.ptyId, summary.preview)
       this.assertLiveTerminalHandleTargetsPty(handle, pty.pty.ptyId)
       const agentWait = await this.getTerminalInteractiveWait(handle)
-      return {
-        ...summary,
-        preview,
-        tabId: pty.pty.tabId ?? pty.record.tabId,
-        leafId: parsePaneKey(pty.pty.paneKey ?? '')?.leafId ?? pty.record.leafId,
-        paneRuntimeId: -1,
-        ptyId: pty.pty.ptyId,
-        rendererGraphEpoch: this.rendererGraphEpoch,
-        ...(agentWait !== undefined ? { agentWait } : {})
-      }
+      return this.withVisualTopologyState(
+        {
+          ...summary,
+          preview,
+          tabId: pty.pty.tabId ?? pty.record.tabId,
+          leafId: parsePaneKey(pty.pty.paneKey ?? '')?.leafId ?? pty.record.leafId,
+          paneRuntimeId: -1,
+          ptyId: pty.pty.ptyId,
+          rendererGraphEpoch: this.rendererGraphEpoch,
+          ...(agentWait !== undefined ? { agentWait } : {})
+        },
+        worktreesById
+      )
     }
     const graphEpoch = this.captureReadyGraphEpoch()
     const worktreesById = await this.getResolvedWorktreeMap()
@@ -137,14 +142,32 @@ export class OrcaRuntimeWithResolveTerminalPane extends OrcaRuntimeWithGetTermin
       this.assertLiveTerminalHandleTargetsPty(handle, leaf.ptyId)
     }
     const agentWait = await this.getTerminalInteractiveWait(handle)
-    return {
-      ...summary,
-      preview,
-      paneRuntimeId: leaf.paneRuntimeId,
-      ptyId: leaf.ptyId,
-      rendererGraphEpoch: this.rendererGraphEpoch,
-      ...(agentWait !== undefined ? { agentWait } : {})
-    }
+    return this.withVisualTopologyState(
+      {
+        ...summary,
+        preview,
+        paneRuntimeId: leaf.paneRuntimeId,
+        ptyId: leaf.ptyId,
+        rendererGraphEpoch: this.rendererGraphEpoch,
+        ...(agentWait !== undefined ? { agentWait } : {})
+      },
+      worktreesById
+    )
+  }
+
+  protected withVisualTopologyState(
+    terminal: RuntimeTerminalShow,
+    worktreesById: Map<string, { path: string }>
+  ): RuntimeTerminalShow {
+    const snapshot = this.mobileSessionTabsByWorktree.get(terminal.worktreeId)
+    const snapshots = snapshot ? [snapshot] : []
+    const layouts = buildRuntimeTerminalVisualLayouts({
+      terminals: [terminal],
+      worktreesById,
+      snapshots,
+      getTabTitle: (tabId) => this.tabs.get(tabId)?.title ?? null
+    })
+    return annotateRuntimeTerminalVisualTopology([terminal], layouts, snapshots)[0]
   }
 
   async readTerminal(

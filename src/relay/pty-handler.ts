@@ -4,6 +4,7 @@ import type * as NodePty from 'node-pty'
 import { existsSync } from 'node:fs'
 import { basename, join } from 'node:path'
 import { randomUUID } from 'node:crypto'
+import { removeUnspecifiedPaneIdentityEnv } from '../shared/pane-identity-env'
 import { resolveWindowsGitBashShellPath } from '../main/git-bash'
 import { WINDOWS_GIT_BASH_SHELL } from '../shared/windows-terminal-shell'
 import type { RelayDispatcher, RequestContext } from './dispatcher'
@@ -777,6 +778,9 @@ export class PtyHandler {
     // on, yet an inherited Orca HISTFILE must not scope a pane to someone else's
     // worktree on the disabled and revive paths either.
     dropInheritedOrcaHistFile(result)
+    // Why: relay processes are often launched from an Orca pane; inherited identity names the
+    // relay's parent pane, never this spawn. Explicit child identity remains authoritative.
+    removeUnspecifiedPaneIdentityEnv(result, rendererEnv)
     // Why unconditionally: ORCA_HISTFILE is Orca-owned and minted below by
     // injectRelayHistoryEnv, which also runs only with isolation on. An
     // inherited one (the relay can be launched from an Orca pane) would
