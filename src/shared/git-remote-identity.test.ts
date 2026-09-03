@@ -4,6 +4,7 @@ import {
   deriveGitRemoteIdentity,
   matchGitRemoteKeyParts,
   normalizeGitRemoteUrl,
+  parseGitRemoteVerboseOutput,
   splitGitRemoteKey
 } from './git-remote-identity'
 
@@ -51,6 +52,22 @@ describe('normalizeGitRemoteUrl', () => {
 })
 
 describe('deriveGitRemoteIdentity', () => {
+  it('recognizes fetch remotes with partial clone filters', () => {
+    const stdout = [
+      'origin\thttps://github.com/stablyai/orca.git (fetch) [blob:none]',
+      'origin\thttps://github.com/stablyai/orca.git (push)'
+    ].join('\n')
+
+    expect(parseGitRemoteVerboseOutput(stdout)).toEqual([
+      { name: 'origin', url: 'https://github.com/stablyai/orca.git' }
+    ])
+    expect(deriveGitRemoteIdentity(stdout)).toEqual({
+      canonicalKey: 'github.com/stablyai/orca',
+      remoteName: 'origin',
+      remoteUrl: 'https://github.com/stablyai/orca.git'
+    })
+  })
+
   it('prefers upstream, then origin, then the first named remote', () => {
     expect(
       deriveGitRemoteIdentity(
