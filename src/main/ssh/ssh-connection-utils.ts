@@ -117,9 +117,7 @@ export function isGssapiSystemSshFallbackCandidate(
   return (isAuthError(err) || isPassphraseError(err)) && resolved?.gssapiAuthentication === true
 }
 
-export function sleep(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms))
-}
+export { sleep } from '../../shared/sleep'
 
 export function shellEscape(s: string): string {
   return `'${s.replace(/'/g, "'\\''")}'`

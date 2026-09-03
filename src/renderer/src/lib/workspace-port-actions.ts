@@ -7,6 +7,7 @@ import {
   type RuntimeClientTarget
 } from '@/runtime/runtime-rpc-client'
 import { toRuntimeWorktreeSelector } from '@/runtime/runtime-worktree-selector'
+import { sleep } from '../../../shared/sleep'
 import { parseExecutionHostId, type ExecutionHostId } from '../../../shared/execution-host'
 import type {
   WorkspacePort,
@@ -40,10 +41,6 @@ type WorkspacePortScanByKeySetter = ReturnType<
 type WorkspacePortScanRefreshingSetter = ReturnType<
   typeof useAppStore.getState
 >['setWorkspacePortScanRefreshing']
-
-function delay(ms: number): Promise<void> {
-  return new Promise((resolve) => window.setTimeout(resolve, ms))
-}
 
 export function shouldOpenWorkspacePortInOrcaBrowser(
   settings: { openLinksInApp?: boolean } | null | undefined
@@ -199,7 +196,7 @@ export async function refreshWorkspacePortScanAfterStop(args: {
     // port row after the process actually exits. Failures here are swallowed
     // because the UI is already correct from the first scan; surfacing a
     // 'Failed to refresh ports' toast on top of the stop success would lie.
-    await delay(WORKSPACE_PORT_STOP_SETTLE_MS)
+    await sleep(WORKSPACE_PORT_STOP_SETTLE_MS)
     try {
       const settledScan = await scanWorkspacePortsForTarget(args.runtimeTarget)
       publishScan(settledScan)

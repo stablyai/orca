@@ -1,4 +1,5 @@
 import { ipcMain } from 'electron'
+import { sleep } from '../../shared/sleep'
 import { DaemonPtyRouter } from '../daemon/daemon-pty-router'
 import { DegradedDaemonPtyProvider } from '../daemon/degraded-daemon-pty-provider'
 import type { DaemonPtyAdapter } from '../daemon/daemon-pty-adapter'
@@ -13,10 +14,6 @@ import type { DaemonSessionInfo } from '../daemon/types'
 // Why: poll past the daemon's 5s SIGTERM→SIGKILL ladder (KILL_TIMEOUT_MS in session.ts), else slow-exiting shells falsely look "refused".
 const MAX_POLL_ATTEMPTS = 65
 const POLL_INTERVAL_MS = 100
-
-function sleep(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms))
-}
 
 function getDaemonAdapters(): DaemonPtyAdapter[] {
   const provider = getDaemonProvider()

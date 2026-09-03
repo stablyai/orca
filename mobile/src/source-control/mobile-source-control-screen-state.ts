@@ -123,9 +123,7 @@ export function firstParam(value: string | string[] | undefined): string {
   return Array.isArray(value) ? (value[0] ?? '') : (value ?? '')
 }
 
-export function wait(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms))
-}
+export { sleep as wait } from '../../../src/shared/sleep'
 
 export function formatBranchLabel(branch: string | undefined, head: string | undefined): string {
   if (branch?.startsWith('refs/heads/')) {
