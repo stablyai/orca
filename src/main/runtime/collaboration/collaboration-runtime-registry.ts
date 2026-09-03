@@ -1,41 +1,62 @@
+import { OrchestrationError } from '../orchestration/orchestration-error'
 import type { OrcaRuntimeService } from '../orca-runtime'
-import type { CollaborationTopology } from './collaboration-topology'
+import {
+  createCollaborationTopology,
+  type CollaborationTopology,
+  type CollaborationTopologyStep
+} from './collaboration-topology'
 
-const registrationsByRuntime = new WeakMap<OrcaRuntimeService, Map<string, CollaborationTopology>>()
+type PersistedCollaborationTopology = {
+  version: 1
+  steps: readonly CollaborationTopologyStep[]
+}
 
 export function registerCollaborationRuntimeTopology(
   runtime: OrcaRuntimeService,
   runId: string,
   topology: CollaborationTopology
 ): void {
-  let runs = registrationsByRuntime.get(runtime)
-  if (!runs) {
-    runs = new Map()
-    registrationsByRuntime.set(runtime, runs)
-  }
-  if (runs.has(runId)) {
-    throw new Error(`collaboration run ${runId} is already registered`)
-  }
-  runs.set(runId, topology)
+  runtime
+    .getOrchestrationDb()
+    .setRunCollaborationTopology(runId, serializeCollaborationTopology(topology))
 }
 
 export function getCollaborationRuntimeTopology(
   runtime: OrcaRuntimeService,
   runId: string
 ): CollaborationTopology | undefined {
-  return registrationsByRuntime.get(runtime)?.get(runId)
+  const serialized = runtime.getOrchestrationDb().getRunCollaborationTopology(runId)
+  if (serialized === undefined || serialized === null) {
+    return undefined
+  }
+  return parseCollaborationTopology(runId, serialized)
 }
 
 export function unregisterCollaborationRuntimeTopology(
   runtime: OrcaRuntimeService,
   runId: string
 ): void {
-  const runs = registrationsByRuntime.get(runtime)
-  if (!runs) {
-    return
-  }
-  runs.delete(runId)
-  if (runs.size === 0) {
-    registrationsByRuntime.delete(runtime)
+  runtime.getOrchestrationDb().clearRunCollaborationTopology(runId)
+}
+
+function serializeCollaborationTopology(topology: CollaborationTopology): string {
+  return JSON.stringify({
+    version: 1,
+    steps: topology.steps
+  } satisfies PersistedCollaborationTopology)
+}
+
+function parseCollaborationTopology(runId: string, serialized: string): CollaborationTopology {
+  try {
+    const parsed = JSON.parse(serialized) as Partial<PersistedCollaborationTopology> | null
+    if (!parsed || parsed.version !== 1 || !Array.isArray(parsed.steps)) {
+      throw new Error('unsupported collaboration topology payload')
+    }
+    return createCollaborationTopology(parsed.steps)
+  } catch (error) {
+    throw new OrchestrationError(
+      'collaboration_topology_unavailable',
+      `Persisted collaboration topology for run ${runId} is invalid: ${error instanceof Error ? error.message : String(error)}`
+    )
   }
 }
