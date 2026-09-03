@@ -9,7 +9,8 @@ import { forEachWithConcurrency } from '../../../../shared/map-with-concurrency'
 import {
   clearFileExplorerDirsLoading,
   markFileExplorerDirsLoading,
-  withPendingFileExplorerDirCacheEntries
+  withPendingFileExplorerDirCacheEntries,
+  type FileExplorerLoadingDirsUpdater
 } from './file-explorer-dir-load-state'
 
 export type RefreshFileExplorerTreeDir = {
@@ -22,7 +23,7 @@ export type RefreshFileExplorerExpandedDirsParams = {
   worktreePath: string
   dirLoadTracker: FileExplorerDirLoadTracker
   setDirCache: Dispatch<SetStateAction<Record<string, DirCache>>>
-  setLoadingDirPaths: Dispatch<SetStateAction<ReadonlySet<string>>>
+  updateLoadingDirPaths: FileExplorerLoadingDirsUpdater
   readDirectory: (dirPath: string) => Promise<FileExplorerDirectoryListing>
   maxConcurrentReads: number
   /** Called per dir whose fresh listing was committed, so callers can clear a staleness mark. */
@@ -34,7 +35,7 @@ export async function refreshFileExplorerExpandedDirs({
   worktreePath,
   dirLoadTracker,
   setDirCache,
-  setLoadingDirPaths,
+  updateLoadingDirPaths,
   readDirectory,
   maxConcurrentReads,
   onDirCommitted
@@ -69,13 +70,13 @@ export async function refreshFileExplorerExpandedDirs({
   // Why this no longer touches dirCache for known dirs: the pre-mark used to rebuild the whole
   // visible tree once per refresh before a single fresh listing existed.
   setDirCache((prev) => withPendingFileExplorerDirCacheEntries(prev, uniqueDirPaths))
-  setLoadingDirPaths((prev) => markFileExplorerDirsLoading(prev, uniqueDirPaths))
+  updateLoadingDirPaths((prev) => markFileExplorerDirsLoading(prev, uniqueDirPaths))
 
   // Why: only dirs this refresh still owns — a superseding load owns the flag for the rest.
   const clearOwnedLoadingMarks = (dirPaths: readonly string[]): void => {
     const owned = dirPaths.filter((dirPath) => dirLoadTracker.isCurrent(loadTokens.get(dirPath)!))
     if (owned.length > 0) {
-      setLoadingDirPaths((prev) => clearFileExplorerDirsLoading(prev, owned))
+      updateLoadingDirPaths((prev) => clearFileExplorerDirsLoading(prev, owned))
     }
   }
 

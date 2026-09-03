@@ -77,13 +77,14 @@ export function useFileExplorerTreeLoadEffects({
       return
     }
     for (const dirPath of expanded) {
+      // Why first: a refresh wave marks every dir it owns before its first read lands, and without
+      // this the effect would fan out an unbounded loadDir per dir on the next `expanded` change.
+      if (loadingDirPaths.has(dirPath)) {
+        continue
+      }
       // Why: a full refresh (watcher overflow) re-reads only root and the dirs expanded at the time,
       // so a listing cached while collapsed is unverified — re-read it here instead of trusting it.
-      const decision = decideExpandedDirLoad(
-        dirCache[dirPath],
-        loadingDirPaths.has(dirPath),
-        isDirStale(dirPath)
-      )
+      const decision = decideExpandedDirLoad(dirCache[dirPath], isDirStale(dirPath))
       if (decision === 'skip') {
         continue
       }

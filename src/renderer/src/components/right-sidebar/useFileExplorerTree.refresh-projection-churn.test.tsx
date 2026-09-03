@@ -10,6 +10,7 @@ import { FileExplorerVirtualRows } from './FileExplorerVirtualRows'
 import { createFileExplorerRowProjection } from './file-explorer-row-projection'
 import { directoryNode } from './file-explorer-tree-node-test-fixtures'
 import { visit, type ReactElementLike } from './file-explorer-element-tree-test-harness'
+import { useFileExplorerTreeLoadEffects } from './use-file-explorer-tree-load-effects'
 import { useFileExplorerTree } from './useFileExplorerTree'
 import { useFileExplorerVisibleRowProjection } from './useFileExplorerVisibleRowProjection'
 
@@ -157,6 +158,37 @@ describe('file explorer directory refresh churn', () => {
     expect(result.current.tree.dirCache[SRC_DIR].children).toHaveLength(1)
     // The spinner rendered without the projection being rebuilt for it.
     expect(rebuilds()).toBe(rebuildsWhileLoading + 1)
+  })
+
+  it('does not stack a second read on an expanded dir the loading set already owns', () => {
+    const loadDir = vi.fn().mockResolvedValue(true)
+    const params = {
+      visibleFilesWorktreePath: WORKTREE_PATH,
+      expanded: new Set([SRC_DIR]),
+      dirCache: {},
+      loadingDirPaths: new Set([SRC_DIR]),
+      rootError: null,
+      isDirStale: () => false,
+      loadDir,
+      resetAndLoad: vi.fn(),
+      resetSelection: vi.fn(),
+      setNameFilterQuery: vi.fn()
+    }
+    const hook = renderHook((props: typeof params) => useFileExplorerTreeLoadEffects(props), {
+      initialProps: params
+    })
+    // Why this matters: a refresh wave marks every dir it owns before its first read lands, and the
+    // effect re-runs on any `expanded` change — without the guard it fans out an unbounded loadDir.
+    expect(loadDir).not.toHaveBeenCalled()
+
+    // The effect re-runs on `expanded` identity; by then the wave's read has landed and cleared.
+    hook.rerender({
+      ...params,
+      expanded: new Set([SRC_DIR]),
+      loadingDirPaths: new Set<string>()
+    })
+    expect(loadDir).toHaveBeenCalledTimes(1)
+    expect(loadDir).toHaveBeenCalledWith(SRC_DIR, 0, undefined)
   })
 
   it('renders the folder spinner from the loading dir set', () => {

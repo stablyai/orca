@@ -34,20 +34,15 @@ describe('decideExpandedDirLoad', () => {
   const children = [{ name: 'gone.ts', path: '/repo/src/gone.ts' } as TreeNode]
 
   it('re-reads a cached dir whose listing the last full refresh skipped', () => {
-    expect(decideExpandedDirLoad({ children }, false, true)).toBe('reload')
+    expect(decideExpandedDirLoad({ children }, true)).toBe('reload')
   })
 
   it('trusts a cached listing that is not stale', () => {
-    expect(decideExpandedDirLoad({ children }, false, false)).toBe('skip')
+    expect(decideExpandedDirLoad({ children }, false)).toBe('skip')
   })
 
   it('reads a dir that has never been listed', () => {
-    expect(decideExpandedDirLoad(undefined, false, false)).toBe('load')
-    expect(decideExpandedDirLoad({ children: [] }, false, false)).toBe('load')
-  })
-
-  it('never stacks a read on one already in flight, stale or not', () => {
-    expect(decideExpandedDirLoad({ children }, true, true)).toBe('skip')
-    expect(decideExpandedDirLoad({ children: [] }, true, false)).toBe('skip')
+    expect(decideExpandedDirLoad(undefined, false)).toBe('load')
+    expect(decideExpandedDirLoad({ children: [] }, false)).toBe('load')
   })
 })

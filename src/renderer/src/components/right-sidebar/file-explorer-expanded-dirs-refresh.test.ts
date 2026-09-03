@@ -4,18 +4,18 @@ import type { DirEntry } from '../../../../shared/filesystem-entry-types'
 import type { DirCache } from './file-explorer-types'
 import { createFileExplorerDirLoadTracker } from './file-explorer-dir-load-tracker'
 import { refreshFileExplorerExpandedDirs } from './file-explorer-expanded-dirs-refresh'
+import type { FileExplorerLoadingDirsUpdater } from './file-explorer-dir-load-state'
 
 type CacheUpdate = SetStateAction<Record<string, DirCache>>
-type LoadingUpdate = SetStateAction<ReadonlySet<string>>
 
 function createLoadingDirPathsRecorder(): {
-  setLoadingDirPaths: (update: LoadingUpdate) => void
+  updateLoadingDirPaths: FileExplorerLoadingDirsUpdater
   isLoading: (dirPath: string) => boolean
 } {
   let loadingDirPaths: ReadonlySet<string> = new Set<string>()
   return {
-    setLoadingDirPaths: (update: LoadingUpdate) => {
-      loadingDirPaths = typeof update === 'function' ? update(loadingDirPaths) : update
+    updateLoadingDirPaths: (update) => {
+      loadingDirPaths = update(loadingDirPaths)
     },
     isLoading: (dirPath: string) => loadingDirPaths.has(dirPath)
   }
@@ -46,7 +46,7 @@ describe('refreshFileExplorerExpandedDirs', () => {
       }
       cache = next
     })
-    const { setLoadingDirPaths, isLoading } = createLoadingDirPathsRecorder()
+    const { updateLoadingDirPaths, isLoading } = createLoadingDirPathsRecorder()
     const readDirectory = vi.fn(async (dirPath: string) => {
       const entriesByPath: Record<string, DirEntry[]> = {
         '/repo/src': [entry('index.ts')],
@@ -63,7 +63,7 @@ describe('refreshFileExplorerExpandedDirs', () => {
       worktreePath: '/repo',
       dirLoadTracker: createFileExplorerDirLoadTracker(),
       setDirCache,
-      setLoadingDirPaths,
+      updateLoadingDirPaths,
       readDirectory,
       // A limit at or above the dir count keeps one result batch.
       maxConcurrentReads: 16
@@ -110,7 +110,7 @@ describe('refreshFileExplorerExpandedDirs', () => {
     const setDirCache = vi.fn((update: CacheUpdate) => {
       cache = typeof update === 'function' ? update(cache) : update
     })
-    const { setLoadingDirPaths } = createLoadingDirPathsRecorder()
+    const { updateLoadingDirPaths } = createLoadingDirPathsRecorder()
     const newerSrcCache: DirCache = {
       children: [
         {
@@ -145,7 +145,7 @@ describe('refreshFileExplorerExpandedDirs', () => {
       worktreePath: '/repo',
       dirLoadTracker: tracker,
       setDirCache,
-      setLoadingDirPaths,
+      updateLoadingDirPaths,
       readDirectory,
       maxConcurrentReads: 16
     })
@@ -168,7 +168,7 @@ describe('refreshFileExplorerExpandedDirs', () => {
     const setDirCache = vi.fn((update: CacheUpdate) => {
       cache = typeof update === 'function' ? update(cache) : update
     })
-    const { setLoadingDirPaths } = createLoadingDirPathsRecorder()
+    const { updateLoadingDirPaths } = createLoadingDirPathsRecorder()
     let releaseDocs!: () => void
     const docsGate = new Promise<void>((resolve) => {
       releaseDocs = resolve
@@ -189,7 +189,7 @@ describe('refreshFileExplorerExpandedDirs', () => {
       worktreePath: '/repo',
       dirLoadTracker: tracker,
       setDirCache,
-      setLoadingDirPaths,
+      updateLoadingDirPaths,
       readDirectory,
       maxConcurrentReads: 16
     })
@@ -232,7 +232,7 @@ describe('refreshFileExplorerExpandedDirs', () => {
     const setDirCache = vi.fn((update: CacheUpdate) => {
       cache = typeof update === 'function' ? update(cache) : update
     })
-    const { setLoadingDirPaths, isLoading } = createLoadingDirPathsRecorder()
+    const { updateLoadingDirPaths, isLoading } = createLoadingDirPathsRecorder()
     let inFlight = 0
     let peakInFlight = 0
     const readDirectory = vi.fn(async (dirPath: string) => {
@@ -251,7 +251,7 @@ describe('refreshFileExplorerExpandedDirs', () => {
       worktreePath: '/repo',
       dirLoadTracker: createFileExplorerDirLoadTracker(),
       setDirCache,
-      setLoadingDirPaths,
+      updateLoadingDirPaths,
       readDirectory,
       maxConcurrentReads: 4
     })
@@ -276,7 +276,7 @@ describe('refreshFileExplorerExpandedDirs', () => {
     const setDirCache = vi.fn((update: CacheUpdate) => {
       cache = typeof update === 'function' ? update(cache) : update
     })
-    const { setLoadingDirPaths, isLoading } = createLoadingDirPathsRecorder()
+    const { updateLoadingDirPaths, isLoading } = createLoadingDirPathsRecorder()
     let releaseInitialReads!: () => void
     const initialReadsGate = new Promise<void>((resolve) => {
       releaseInitialReads = resolve
@@ -293,7 +293,7 @@ describe('refreshFileExplorerExpandedDirs', () => {
       worktreePath: '/repo',
       dirLoadTracker: createFileExplorerDirLoadTracker(),
       setDirCache,
-      setLoadingDirPaths,
+      updateLoadingDirPaths,
       readDirectory,
       maxConcurrentReads: 3
     })
@@ -321,7 +321,7 @@ describe('refreshFileExplorerExpandedDirs', () => {
     const setDirCache = vi.fn((update: CacheUpdate) => {
       cache = typeof update === 'function' ? update(cache) : update
     })
-    const { setLoadingDirPaths, isLoading } = createLoadingDirPathsRecorder()
+    const { updateLoadingDirPaths, isLoading } = createLoadingDirPathsRecorder()
     let releaseSlowRead!: () => void
     const slowRead = new Promise<void>((resolve) => {
       releaseSlowRead = resolve
@@ -338,7 +338,7 @@ describe('refreshFileExplorerExpandedDirs', () => {
       worktreePath: '/repo',
       dirLoadTracker: createFileExplorerDirLoadTracker(),
       setDirCache,
-      setLoadingDirPaths,
+      updateLoadingDirPaths,
       readDirectory,
       maxConcurrentReads: 2
     })
@@ -364,7 +364,7 @@ describe('refreshFileExplorerExpandedDirs', () => {
     const setDirCache = vi.fn((update: CacheUpdate) => {
       cache = typeof update === 'function' ? update(cache) : update
     })
-    const { setLoadingDirPaths } = createLoadingDirPathsRecorder()
+    const { updateLoadingDirPaths } = createLoadingDirPathsRecorder()
     const commitError = new Error('commit failed')
 
     await expect(
@@ -373,7 +373,7 @@ describe('refreshFileExplorerExpandedDirs', () => {
         worktreePath: '/repo',
         dirLoadTracker: createFileExplorerDirLoadTracker(),
         setDirCache,
-        setLoadingDirPaths,
+        updateLoadingDirPaths,
         readDirectory: async () => ({
           entries: [entry('index.ts')],
           operationOwner: { kind: 'local' as const }
@@ -394,7 +394,7 @@ describe('refreshFileExplorerExpandedDirs', () => {
     const setDirCache = vi.fn((update: CacheUpdate) => {
       cache = typeof update === 'function' ? update(cache) : update
     })
-    const { setLoadingDirPaths } = createLoadingDirPathsRecorder()
+    const { updateLoadingDirPaths } = createLoadingDirPathsRecorder()
     const commitError = new Error('commit failed')
     const onDirCommitted = vi.fn((dirPath: string) => {
       if (dirPath === '/repo/a') {
@@ -411,7 +411,7 @@ describe('refreshFileExplorerExpandedDirs', () => {
         worktreePath: '/repo',
         dirLoadTracker: createFileExplorerDirLoadTracker(),
         setDirCache,
-        setLoadingDirPaths,
+        updateLoadingDirPaths,
         readDirectory: async () => ({
           entries: [entry('index.ts')],
           operationOwner: { kind: 'local' as const }
@@ -434,7 +434,7 @@ describe('refreshFileExplorerExpandedDirs', () => {
     const setDirCache = vi.fn((update: CacheUpdate) => {
       cache = typeof update === 'function' ? update(cache) : update
     })
-    const { setLoadingDirPaths, isLoading } = createLoadingDirPathsRecorder()
+    const { updateLoadingDirPaths, isLoading } = createLoadingDirPathsRecorder()
     const commitError = new Error('commit failed')
     const onDirCommitted = vi.fn((dirPath: string) => {
       if (dirPath === '/repo/a') {
@@ -448,7 +448,7 @@ describe('refreshFileExplorerExpandedDirs', () => {
         worktreePath: '/repo',
         dirLoadTracker: createFileExplorerDirLoadTracker(),
         setDirCache,
-        setLoadingDirPaths,
+        updateLoadingDirPaths,
         readDirectory: async () => ({
           entries: [entry('index.ts')],
           operationOwner: { kind: 'local' as const }
@@ -478,7 +478,7 @@ describe('refreshFileExplorerExpandedDirs', () => {
     const setDirCache = vi.fn((update: CacheUpdate) => {
       cache = typeof update === 'function' ? update(cache) : update
     })
-    const { setLoadingDirPaths } = createLoadingDirPathsRecorder()
+    const { updateLoadingDirPaths } = createLoadingDirPathsRecorder()
     let releaseFirst!: () => void
     const firstGate = new Promise<void>((resolve) => {
       releaseFirst = resolve
@@ -498,7 +498,7 @@ describe('refreshFileExplorerExpandedDirs', () => {
       worktreePath: '/repo',
       dirLoadTracker: tracker,
       setDirCache,
-      setLoadingDirPaths,
+      updateLoadingDirPaths,
       readDirectory,
       maxConcurrentReads: 1
     })
