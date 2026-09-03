@@ -39,22 +39,27 @@ function providerMaxUsed(sections: UsageSection[]): number {
 function shortLabel(
   p: ProviderRateLimits,
   section: UsageSection,
-  useRemainingDuration = false
+  useRemainingDuration = false,
+  now: number = Date.now()
 ): string {
   if (p.buckets?.some((b) => b.name === section.label)) {
     return section.label
   }
-  // fableWeekly shares the 7d window with weekly; label it distinctly so the two
-  // don't both render as "wk".
+  // Compact mode shows remaining time for every window (Codex/Grok/Kimi).
+  // Only verbose needs a distinct fixed "Fable" so it does not share "wk" with weekly.
+  if (useRemainingDuration) {
+    return formatRateLimitWindowChipLabel(section.window, now)
+  }
   if (section.window === p.fableWeekly) {
     return 'Fable'
   }
-  return useRemainingDuration
-    ? formatRateLimitWindowChipLabel(section.window)
-    : formatWindowLabel(section.window.windowMinutes)
+  return formatWindowLabel(section.window.windowMinutes)
 }
 
-export function getTightestUsageSection(p: ProviderRateLimits): UsageSection | null {
+export function getTightestUsageSection(
+  p: ProviderRateLimits,
+  now: number = Date.now()
+): UsageSection | null {
   const sections = usedSections(p)
   if (sections.length === 0) {
     return null
@@ -66,7 +71,7 @@ export function getTightestUsageSection(p: ProviderRateLimits): UsageSection | n
       ? candidate
       : current
   )
-  return { ...tightest, label: shortLabel(p, tightest, true) }
+  return { ...tightest, label: shortLabel(p, tightest, true, now) }
 }
 
 // The soonest-resetting window summarizes the agent's next reset in one line.
@@ -130,7 +135,8 @@ export function UsageRow({
   const name = getProviderDisplayName(p.provider)
   const plan = formatPlanLabel(p.planType)
   const reset = hasUsage ? soonestResetLabel(sections, now) : null
-  const tightest = mode === 'compact' ? getTightestUsageSection(p) : null
+  // Why: pass `now` so Fable/session remaining chips tick with the shared clock (#13041).
+  const tightest = mode === 'compact' ? getTightestUsageSection(p, now) : null
 
   return (
     <div data-usage-mode={mode} className="flex min-w-0 flex-1 flex-col gap-1">
