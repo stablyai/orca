@@ -7,6 +7,7 @@ import {
 } from './mobile-endpoint-supervisor-support'
 import { persistResumeConfirmation } from './mobile-relay-credential-rotation'
 import type { MobileRelayCredentialBundle } from './mobile-relay-credential-bundle'
+import type { RelayDialAttemptContext } from './mobile-relay-diagnostic-log'
 import type { RelayReconnectController } from './mobile-relay-reconnect-controller'
 import type { StableLogicalRpcClient } from './stable-logical-rpc-client'
 import type { MobileRelayEndpoint } from '../../../src/shared/mobile-relay-credential-contract'
@@ -43,19 +44,27 @@ export class MobileRelaySessionEstablisher {
       scheduleLease: (expiry: number | null) => void
       scheduleDirectProbe: () => void
       onBookkeepingError: (error: Error) => void
-      onDialFailure: (error: Error) => void
+      onDialFailure: (error: Error, context: RelayDialAttemptContext) => void
     }
   ) {}
 
-  // Tries each eligible credential until one establishes. Only a grace-repairable
-  // failure (BAD_OUTER_CREDENTIAL) moves on to the next credential.
+  /**
+   * Tries each eligible credential until one establishes, resolving with the outcome of
+   * the run: 'established', 'aborted', or 'failed' with the last error.
+   *
+   * Only a grace-repairable failure (BAD_OUTER_CREDENTIAL) moves on to the next
+   * credential; each failure reports which credential was in play so a log can show
+   * whether failures cluster on one of them.
+   */
   async dialEligible(
     credentials: { token: string; version: number }[]
   ): Promise<
     { outcome: 'established' } | { outcome: 'aborted' } | { outcome: 'failed'; error: Error | null }
   > {
     let lastError: Error | null = null
+    let attempt = 0
     for (const credential of credentials) {
+      attempt += 1
       const result = await this.dial(credential)
       if (result.ok) {
         return { outcome: 'established' }
@@ -64,7 +73,11 @@ export class MobileRelaySessionEstablisher {
         return { outcome: 'aborted' }
       }
       lastError = result.error
-      this.args.onDialFailure(result.error)
+      this.args.onDialFailure(result.error, {
+        credentialVersion: credential.version,
+        attempt,
+        totalCredentials: credentials.length
+      })
       if (!this.args.controller.shouldTryGraceAfterRelayFailure(result.error)) {
         break
       }

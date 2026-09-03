@@ -1,8 +1,15 @@
 import type { RpcClient } from './rpc-client'
 
-// Why: a migration must not cut over to a session that has only opened a socket — the
-// replacement has to reach 'connected' (E2EE authenticated) first, and a relay dial can
-// sit in handshaking for seconds, so the wait is bounded by the caller's timeout.
+/**
+ * Resolves once `session` reaches 'connected' (E2EE authenticated), rejecting if it
+ * lands on a terminal state or the timeout elapses first.
+ *
+ * Why: a migration must not cut over to a session that has only opened a socket — the
+ * replacement has to reach 'connected' first, and a relay dial can sit in handshaking
+ * for seconds, so the wait is bounded by the caller's timeout. The rejection names the
+ * phase it timed out in, because 'connecting' (socket never opened) and 'handshaking'
+ * (E2EE stalled after it did) need different investigation.
+ */
 export function waitForAuthenticated(session: RpcClient, timeoutMs: number): Promise<void> {
   if (session.getState() === 'connected') {
     return Promise.resolve()
@@ -13,8 +20,13 @@ export function waitForAuthenticated(session: RpcClient, timeoutMs: number): Pro
     // Why: armed before subscribing — a synchronous notification during registration
     // must find a timer to clear, or a settled wait leaves it running for 12s.
     const timer = setTimeout(() => {
+      // Why: the bare message cannot distinguish a cell socket that never opened
+      // ('connecting') from an E2EE handshake that stalled after it did
+      // ('handshaking'), and the inner HANDSHAKE_TIMEOUT_MS never surfaces when the
+      // socket is replaced before it fires — so name the phase we timed out in.
+      const phase = session.getState()
       finish()
-      reject(new Error('replacement session authentication timed out'))
+      reject(new Error(`replacement session authentication timed out (phase: ${phase})`))
     }, timeoutMs)
     unsubscribe = session.onStateChange((state) => {
       if (state === 'connected') {

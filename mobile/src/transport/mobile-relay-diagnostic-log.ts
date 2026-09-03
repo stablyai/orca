@@ -8,19 +8,36 @@ export function logRelayConnected(log: RelayRecoveryLog): void {
   })
 }
 
+// Which credential the dial used, so a log can show whether failures cluster on one
+// credential while a later attempt with another succeeds. The version is an integer
+// counter, never the token itself.
+export type RelayDialAttemptContext = {
+  credentialVersion: number
+  attempt: number
+  totalCredentials: number
+}
+
+/**
+ * Records a relay dial or active-session failure on the recovery log, appending the
+ * director's retry-after when present and the dialed credential when `context` is given.
+ */
 export function logRelayDialFailure(
   log: RelayRecoveryLog,
   error: Error | null,
-  source: 'dial' | 'active-session' = 'dial'
+  source: 'dial' | 'active-session' = 'dial',
+  context?: RelayDialAttemptContext
 ): void {
   if (!error) {
     return
   }
   const base = `${error.name}: ${String(error.message).slice(0, 80)}`
-  const detail =
+  const withRetryAfter =
     error instanceof RelayDirectorHttpError && error.retryAfterMs != null
       ? `${base}; retry-after=${error.retryAfterMs}ms`
       : base
+  const detail = context
+    ? `${withRetryAfter}; credential=v${context.credentialVersion} (${context.attempt}/${context.totalCredentials})`
+    : withRetryAfter
   log(source === 'dial' ? 'relay dial failed' : 'active relay session failed', detail, {
     level: 'error',
     code: source === 'dial' ? 'relay-dial-failed' : 'relay-session-failed'
