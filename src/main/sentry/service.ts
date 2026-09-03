@@ -15,8 +15,7 @@ import { CredentialDecryptionError } from '../integration-credential-file'
 import { normalizeSentryBaseUrl, parseSentryPagination, sentryRequest } from './api-client'
 import {
   clearSentryCredential,
-  readSentryConnectionFile,
-  readSentryToken,
+  readSentryCredential,
   saveSentryCredential
 } from './credential-store'
 import { mapEvent, mapIssue, mapOrganization, mapProject } from './mappers'
@@ -33,31 +32,29 @@ function currentClient(): {
   organization: SentryOrganization
   organizations: SentryOrganization[]
 } {
-  const file = readSentryConnectionFile()
-  const token = readSentryToken()
-  if (!file || !token) {
+  const credential = readSentryCredential()
+  if (!credential) {
     throw new Error('Sentry is not connected.')
   }
-  return { ...file, token }
+  return credential
 }
 
 export function getSentryStatus(): SentryConnectionStatus {
-  const file = readSentryConnectionFile()
-  if (!file) {
-    return { connected: false, connection: null, organizations: [] }
-  }
   try {
-    const token = readSentryToken()
+    const credential = readSentryCredential()
+    if (!credential) {
+      return { connected: false, connection: null, organizations: [] }
+    }
     return {
-      connected: Boolean(token),
-      connection: token ? { baseUrl: file.baseUrl, organization: file.organization } : null,
-      organizations: token ? file.organizations : []
+      connected: true,
+      connection: { baseUrl: credential.baseUrl, organization: credential.organization },
+      organizations: credential.organizations
     }
   } catch (error) {
     return {
       connected: false,
       connection: null,
-      organizations: file.organizations,
+      organizations: [],
       ...(error instanceof CredentialDecryptionError ? { credentialError: error.message } : {})
     }
   }
@@ -173,11 +170,13 @@ function mapAssignable(value: unknown, type: 'user' | 'team'): SentryAssignee | 
   }
   const profile =
     data.user && typeof data.user === 'object' ? (data.user as Record<string, unknown>) : data
+  const assigneeId =
+    type === 'user' && typeof profile.id === 'string' ? profile.id : id
   const name =
     typeof profile.name === 'string' ? profile.name : typeof data.slug === 'string' ? data.slug : id
   return {
     type,
-    id,
+    id: assigneeId,
     name,
     email: typeof profile.email === 'string' ? profile.email : null
   }

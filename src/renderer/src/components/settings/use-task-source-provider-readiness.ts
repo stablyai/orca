@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import type { TaskProvider } from '../../../../shared/task-providers'
 import {
   GLOBAL_AGENT_SKILL_SOURCE_KINDS,
@@ -34,16 +34,26 @@ export function useTaskSourceProviderReadiness(
   const providerRuntimeContextKey = getProviderRuntimeContextKey(settings)
   const activeSkillRuntime = useActiveProjectSkillRuntime()
   const [sentryState, setSentryState] = useState({ connected: false, checking: true })
+  const sentryRefreshGeneration = useRef(0)
 
   useEffect(() => {
     let active = true
     const refresh = (): void => {
+      const generation = ++sentryRefreshGeneration.current
       setSentryState((current) => ({ ...current, checking: true }))
       void sentryStatus(settings)
         .then(
-          (status) => active && setSentryState({ connected: status.connected, checking: false })
+          (status) =>
+            active &&
+            generation === sentryRefreshGeneration.current &&
+            setSentryState({ connected: status.connected, checking: false })
         )
-        .catch(() => active && setSentryState({ connected: false, checking: false }))
+        .catch(
+          () =>
+            active &&
+            generation === sentryRefreshGeneration.current &&
+            setSentryState({ connected: false, checking: false })
+        )
     }
     refresh()
     window.addEventListener('sentry-connection-changed', refresh)

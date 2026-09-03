@@ -12,6 +12,7 @@ import {
 import { IntegrationCardDetails, IntegrationCardShell } from './integration-card-shell'
 import { Loader2 } from 'lucide-react'
 import { toast } from 'sonner'
+import { translate } from '@/i18n/i18n'
 
 export function SentryIntegrationCard(): React.JSX.Element {
   const settings = useAppStore((state) => state.settings)
@@ -32,10 +33,14 @@ export function SentryIntegrationCard(): React.JSX.Element {
     try {
       const result = await sentryTestConnection(settings)
       if (result.ok) {
-        toast.success('Sentry connection works.')
+        toast.success(translate("auto.components.settings.sentry.integration.card.85e231fa1b", "Sentry connection works."))
       } else {
         toast.error(result.error)
       }
+    } catch (cause) {
+      toast.error(
+        cause instanceof Error ? cause.message : translate("auto.components.settings.sentry.integration.card.f77fd46260", "Could not test the Sentry connection.")
+      )
     } finally {
       setTesting(false)
     }
@@ -45,22 +50,40 @@ export function SentryIntegrationCard(): React.JSX.Element {
   return (
     <IntegrationCardShell
       icon={<SentryIcon className="size-5" />}
-      name="Sentry"
+      name={translate('auto.components.settings.sentry.integration.card.name', 'Sentry')}
       description={
         connected
-          ? `${status.connection?.organization.name ?? 'Organization'} connected`
-          : 'Browse and triage Sentry issues.'
+          ? translate(
+              'auto.components.settings.sentry.integration.card.organizationConnected',
+              '{{organizationName}} connected',
+              {
+                organizationName:
+                  status.connection?.organization.name ??
+                  translate(
+                    'auto.components.settings.sentry.integration.card.organization',
+                    'Organization'
+                  )
+              }
+            )
+          : translate("auto.components.settings.sentry.integration.card.44597e225a", "Browse and triage Sentry issues.")
       }
       checking={status === null}
       statusTone={connected ? 'connected' : 'attention'}
-      statusLabel={connected ? 'Connected' : 'Not connected'}
+      statusLabel={
+        connected
+          ? translate('auto.components.settings.sentry.integration.card.connected', 'Connected')
+          : translate(
+              'auto.components.settings.sentry.integration.card.notConnected',
+              'Not connected'
+            )
+      }
       actions={
         <Button
           size="sm"
           variant={connected ? 'outline' : 'default'}
           onClick={() => setDialogOpen(true)}
         >
-          {connected ? 'Change access' : 'Connect Sentry'}
+          {connected ? translate("auto.components.settings.sentry.integration.card.1255726ada", "Change access") : translate("auto.components.settings.sentry.integration.card.7d879829aa", "Connect Sentry")}
         </Button>
       }
     >
@@ -74,26 +97,28 @@ export function SentryIntegrationCard(): React.JSX.Element {
               <div className="truncate">{status.connection?.baseUrl}</div>
             </div>
             <Button variant="outline" size="sm" disabled={testing} onClick={() => void test()}>
-              {testing ? <Loader2 className="size-3.5 animate-spin" /> : null}Test
-            </Button>
+              {testing ? <Loader2 className="size-3.5 animate-spin" /> : null}{translate("auto.components.settings.sentry.integration.card.b68ec41a71", "Test")}</Button>
             <Button
               variant="ghost"
               size="sm"
-              onClick={() =>
-                void sentryDisconnect(settings).then(() => {
-                  refresh()
-                  window.dispatchEvent(new Event('sentry-connection-changed'))
-                })
-              }
+              onClick={() => {
+                void sentryDisconnect(settings)
+                  .then(() => {
+                    refresh()
+                    window.dispatchEvent(new Event('sentry-connection-changed'))
+                  })
+                  .catch((cause) =>
+                    toast.error(
+                      cause instanceof Error ? cause.message : translate("auto.components.settings.sentry.integration.card.975e204557", "Could not disconnect from Sentry.")
+                    )
+                  )
+              }}
             >
-              Disconnect
-            </Button>
+              {translate("auto.components.settings.sentry.integration.card.c6df63df00", "Disconnect")}</Button>
           </div>
         ) : (
           <p className="text-xs text-muted-foreground">
-            The selected execution host stores the token. Tokens need event:read; triage needs
-            event:write or event:admin.
-          </p>
+            {translate("auto.components.settings.sentry.integration.card.02a0fbad1b", "The selected execution host stores the token. Tokens need event:read; triage needs event:write or event:admin.")}</p>
         )}
       </IntegrationCardDetails>
       <SentryConnectDialog

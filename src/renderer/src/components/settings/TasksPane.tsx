@@ -92,8 +92,8 @@ const PROVIDER_META: Record<
     Icon: ({ className }) => <JiraIcon className={className} />
   },
   sentry: {
-    label: 'Sentry',
-    description: 'Connect Sentry Cloud or self-hosted Sentry and show issues in Tasks.',
+    label: translate("auto.components.settings.TasksPane.1cba89d28a", "Sentry"),
+    description: translate("auto.components.settings.TasksPane.2b17a67319", "Connect Sentry Cloud or self-hosted Sentry and show issues in Tasks."),
     Icon: ({ className }) => <SentryIcon className={className} />
   }
 }

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { TaskPageComposerActionsModel } from '../../use-task-page-composer-actions'
 import type {
   SentryConnectionStatus,
@@ -38,6 +38,7 @@ import {
 import { ChevronDown, ExternalLink, Loader2, RefreshCw } from 'lucide-react'
 import { SentryIssueDialog } from './IssueDialog'
 import { toast } from 'sonner'
+import { translate } from '@/i18n/i18n'
 
 const EMPTY_PAGE: SentryPage<SentryIssue> = { items: [], nextCursor: null, previousCursor: null }
 
@@ -48,14 +49,24 @@ function relativeTime(value: string): string {
   }
   const minutes = Math.max(0, Math.floor((Date.now() - timestamp) / 60_000))
   if (minutes < 60) {
-    return `${minutes}m ago`
+    return translate('auto.components.task.page.sentry.Content.minutesAgo', '{{minutes}}m ago', {
+      minutes
+    })
   }
   const hours = Math.floor(minutes / 60)
-  return hours < 24 ? `${hours}h ago` : `${Math.floor(hours / 24)}d ago`
+  return hours < 24
+    ? translate('auto.components.task.page.sentry.Content.hoursAgo', '{{hours}}h ago', { hours })
+    : translate('auto.components.task.page.sentry.Content.daysAgo', '{{days}}d ago', {
+        days: Math.floor(hours / 24)
+      })
 }
 
 function selectedLabel(selected: Set<string>, allLabel: string): string {
-  return selected.size ? `${selected.size} selected` : allLabel
+  return selected.size
+    ? translate('auto.components.task.page.sentry.Content.selectedCount', '{{total}} selected', {
+        total: selected.size
+      })
+    : allLabel
 }
 
 export function TaskPageSentryContent({
@@ -77,6 +88,8 @@ export function TaskPageSentryContent({
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [connectOpen, setConnectOpen] = useState(false)
+  const issueRequestGeneration = useRef(0)
+  const catalogRequestGeneration = useRef(0)
 
   const loadStatus = useCallback(async (): Promise<SentryConnectionStatus> => {
     const next = await sentryStatus(settings)
@@ -85,29 +98,76 @@ export function TaskPageSentryContent({
   }, [settings])
 
   const loadIssues = useCallback(
-    async (cursor?: string): Promise<void> => {
+    async (
+      cursor?: string,
+      filters?: { projects: string[]; environments: string[] }
+    ): Promise<void> => {
+      const generation = ++issueRequestGeneration.current
       setLoading(true)
       setError(null)
       try {
         const next = await sentryListIssues(settings, {
           query,
-          projects: [...selectedProjects],
-          environments: [...selectedEnvironments],
+          projects: filters?.projects ?? [...selectedProjects],
+          environments: filters?.environments ?? [...selectedEnvironments],
           statsPeriod,
           sort,
           cursor,
           limit: 50
         })
+        if (generation !== issueRequestGeneration.current) {
+          return
+        }
         setPage((current) =>
           cursor ? { ...next, items: [...current.items, ...next.items] } : next
         )
       } catch (cause) {
-        setError(cause instanceof Error ? cause.message : 'Could not load Sentry issues.')
+        if (generation === issueRequestGeneration.current) {
+          setError(
+            cause instanceof Error
+              ? cause.message
+              : translate(
+                  'auto.components.task.page.sentry.Content.loadFailed',
+                  'Could not load Sentry issues.'
+                )
+          )
+        }
       } finally {
-        setLoading(false)
+        if (generation === issueRequestGeneration.current) {
+          setLoading(false)
+        }
       }
     },
     [query, selectedEnvironments, selectedProjects, settings, sort, statsPeriod]
+  )
+  const loadIssuesRef = useRef(loadIssues)
+
+  useEffect(() => {
+    loadIssuesRef.current = loadIssues
+  }, [loadIssues])
+
+  const loadProviderData = useCallback(
+    async (resetFilters = false): Promise<void> => {
+      const generation = ++catalogRequestGeneration.current
+      const [nextProjects, nextEnvironments] = await Promise.all([
+        sentryListProjects(settings),
+        sentryListEnvironments(settings)
+      ])
+      if (generation !== catalogRequestGeneration.current) {
+        return
+      }
+      setProjects(nextProjects)
+      setEnvironments(nextEnvironments)
+      if (resetFilters) {
+        setSelectedProjects(new Set())
+        setSelectedEnvironments(new Set())
+      }
+      await loadIssuesRef.current(
+        undefined,
+        resetFilters ? { projects: [], environments: [] } : undefined
+      )
+    },
+    [settings]
   )
 
   useEffect(() => {
@@ -118,27 +178,25 @@ export function TaskPageSentryContent({
         if (!active || !next.connected) {
           return
         }
-        const [nextProjects, nextEnvironments] = await Promise.all([
-          sentryListProjects(settings),
-          sentryListEnvironments(settings)
-        ])
-        if (!active) {
-          return
-        }
-        setProjects(nextProjects)
-        setEnvironments(nextEnvironments)
-        await loadIssues()
+        await loadProviderData()
       })
       .catch(
         (cause) =>
           active &&
-          setError(cause instanceof Error ? cause.message : 'Could not read Sentry connection.')
+          setError(
+            cause instanceof Error
+              ? cause.message
+              : translate(
+                  'auto.components.task.page.sentry.Content.statusFailed',
+                  'Could not read Sentry connection.'
+                )
+          )
       )
       .finally(() => active && setLoading(false))
     return () => {
       active = false
     }
-  }, [loadIssues, loadStatus, settings])
+  }, [loadProviderData, loadStatus])
 
   const updateIssue = (updated: SentryIssue): void => {
     setSelectedIssue(updated)
@@ -210,23 +268,30 @@ export function TaskPageSentryContent({
     return (
       <div className="mt-3 flex min-h-72 flex-1 flex-col items-center justify-center rounded-md border border-border/50 bg-muted/20 text-center">
         <SentryIcon className="mb-4 size-8 text-muted-foreground/60" />
-        <h2 className="font-medium">Connect Sentry</h2>
+        <h2 className="font-medium">{translate("auto.components.task.page.sentry.Content.78d5b2169a", "Connect Sentry")}</h2>
         <p className="mt-1 max-w-md text-sm text-muted-foreground">
-          Connect an organization to browse errors, inspect events, and start workspaces.
-        </p>
+          {translate("auto.components.task.page.sentry.Content.c6ed210867", "Connect an organization to browse errors, inspect events, and start workspaces.")}</p>
         {status?.credentialError ? (
           <p className="mt-2 text-sm text-destructive">{status.credentialError}</p>
         ) : null}
         <Button className="mt-4" onClick={() => setConnectOpen(true)}>
-          Connect Sentry
-        </Button>
+          {translate("auto.components.task.page.sentry.Content.78d5b2169a", "Connect Sentry")}</Button>
         <SentryConnectDialog
           open={connectOpen}
           onOpenChange={setConnectOpen}
           settings={settings}
           onConnected={(next) => {
             setStatus(next)
-            void loadIssues()
+            void loadProviderData(true).catch((cause) =>
+              setError(
+                cause instanceof Error
+                  ? cause.message
+                  : translate(
+                      'auto.components.task.page.sentry.Content.catalogFailed',
+                      'Could not load Sentry projects and environments.'
+                    )
+              )
+            )
           }}
         />
       </div>
@@ -240,11 +305,22 @@ export function TaskPageSentryContent({
           <Select
             value={connection?.organization.slug}
             onValueChange={(slug) =>
-              void sentrySelectOrganization(settings, slug).then((next) => {
-                setStatus(next)
-                setPage(EMPTY_PAGE)
-                void loadIssues()
-              })
+              void sentrySelectOrganization(settings, slug)
+                .then((next) => {
+                  setStatus(next)
+                  setPage(EMPTY_PAGE)
+                  return loadProviderData(true)
+                })
+                .catch((cause) =>
+                  setError(
+                    cause instanceof Error
+                      ? cause.message
+                      : translate(
+                          'auto.components.task.page.sentry.Content.organizationFailed',
+                          'Could not change the Sentry organization.'
+                        )
+                  )
+                )
             }
           >
             <SelectTrigger className="h-8 w-48">
@@ -279,10 +355,10 @@ export function TaskPageSentryContent({
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="24h">24 hours</SelectItem>
-            <SelectItem value="7d">7 days</SelectItem>
-            <SelectItem value="14d">14 days</SelectItem>
-            <SelectItem value="30d">30 days</SelectItem>
+            <SelectItem value="24h">{translate("auto.components.task.page.sentry.Content.5be30b3ff0", "24 hours")}</SelectItem>
+            <SelectItem value="7d">{translate("auto.components.task.page.sentry.Content.f9f4523be0", "7 days")}</SelectItem>
+            <SelectItem value="14d">{translate("auto.components.task.page.sentry.Content.2f69b48145", "14 days")}</SelectItem>
+            <SelectItem value="30d">{translate("auto.components.task.page.sentry.Content.a502b35389", "30 days")}</SelectItem>
           </SelectContent>
         </Select>
         <Select value={sort} onValueChange={(value) => setSort(value as typeof sort)}>
@@ -290,10 +366,10 @@ export function TaskPageSentryContent({
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="date">Last seen</SelectItem>
-            <SelectItem value="new">First seen</SelectItem>
-            <SelectItem value="freq">Events</SelectItem>
-            <SelectItem value="user">Users</SelectItem>
+            <SelectItem value="date">{translate("auto.components.task.page.sentry.Content.eb7d38e761", "Last seen")}</SelectItem>
+            <SelectItem value="new">{translate("auto.components.task.page.sentry.Content.25b700d4a8", "First seen")}</SelectItem>
+            <SelectItem value="freq">{translate("auto.components.task.page.sentry.Content.4f38f202dc", "Events")}</SelectItem>
+            <SelectItem value="user">{translate("auto.components.task.page.sentry.Content.7299517360", "Users")}</SelectItem>
           </SelectContent>
         </Select>
         <form
@@ -307,16 +383,15 @@ export function TaskPageSentryContent({
             className="h-8"
             value={query}
             onChange={(event) => setQuery(event.target.value)}
-            placeholder="Sentry search query"
+            placeholder={translate("auto.components.task.page.sentry.Content.b05286cc83", "Sentry search query")}
           />
           <Button type="submit" size="sm">
-            Search
-          </Button>
+            {translate("auto.components.task.page.sentry.Content.25172c3f31", "Search")}</Button>
         </form>
         <Button
           variant="ghost"
           size="icon-sm"
-          aria-label="Refresh Sentry issues"
+          aria-label={translate("auto.components.task.page.sentry.Content.f50a8e43b5", "Refresh Sentry issues")}
           onClick={() => void loadIssues()}
         >
           <RefreshCw className="size-4" />
@@ -361,8 +436,7 @@ export function TaskPageSentryContent({
           </div>
         ) : (
           <div className="flex h-full min-h-52 items-center justify-center text-sm text-muted-foreground">
-            No Sentry issues match these filters.
-          </div>
+            {translate("auto.components.task.page.sentry.Content.ffe7c243dc", "No Sentry issues match these filters.")}</div>
         )}
       </div>
       <div className="flex items-center justify-between border-t border-border/50 p-2">
@@ -379,30 +453,39 @@ export function TaskPageSentryContent({
             }
           >
             <ExternalLink className="size-4" />
-            Open Sentry
-          </Button>
+            {translate("auto.components.task.page.sentry.Content.7e214329ca", "Open Sentry")}</Button>
           <Button
             variant="ghost"
             size="sm"
             onClick={() =>
-              void sentryTestConnection(settings).then((result) =>
-                result.ok ? toast.success('Sentry connection works.') : toast.error(result.error)
-              )
+              void sentryTestConnection(settings)
+                .then((result) =>
+                  result.ok ? toast.success(translate("auto.components.task.page.sentry.Content.e51fc0fbd7", "Sentry connection works.")) : toast.error(result.error)
+                )
+                .catch((cause) =>
+                  toast.error(
+                    cause instanceof Error ? cause.message : translate("auto.components.task.page.sentry.Content.29e70b2996", "Could not test the Sentry connection.")
+                  )
+                )
             }
           >
-            Test connection
-          </Button>
+            {translate("auto.components.task.page.sentry.Content.9063f9b03b", "Test connection")}</Button>
           <Button
             variant="ghost"
             size="sm"
             onClick={() =>
-              void sentryDisconnect(settings).then(() =>
-                setStatus({ connected: false, connection: null, organizations: [] })
-              )
+              void sentryDisconnect(settings)
+                .then(() =>
+                  setStatus({ connected: false, connection: null, organizations: [] })
+                )
+                .catch((cause) =>
+                  toast.error(
+                    cause instanceof Error ? cause.message : translate("auto.components.task.page.sentry.Content.b381f3e7a1", "Could not disconnect from Sentry.")
+                  )
+                )
             }
           >
-            Disconnect
-          </Button>
+            {translate("auto.components.task.page.sentry.Content.b0ac878654", "Disconnect")}</Button>
         </div>
         {page.nextCursor ? (
           <Button
@@ -411,8 +494,7 @@ export function TaskPageSentryContent({
             disabled={loading}
             onClick={() => void loadIssues(page.nextCursor ?? undefined)}
           >
-            {loading ? <Loader2 className="size-4 animate-spin" /> : null}Load more
-          </Button>
+            {loading ? <Loader2 className="size-4 animate-spin" /> : null}{translate("auto.components.task.page.sentry.Content.e67bacb7cf", "Load more")}</Button>
         ) : null}
       </div>
       <SentryIssueDialog
@@ -428,7 +510,16 @@ export function TaskPageSentryContent({
         settings={settings}
         onConnected={(next) => {
           setStatus(next)
-          void loadIssues()
+          void loadProviderData(true).catch((cause) =>
+            setError(
+              cause instanceof Error
+                ? cause.message
+                : translate(
+                    'auto.components.task.page.sentry.Content.catalogFailed',
+                    'Could not load Sentry projects and environments.'
+                  )
+            )
+          )
         }}
       />
     </div>

@@ -27,8 +27,8 @@ export function SentrySetupSteps(
         <TaskSourceStepRow
           index={1}
           state={getConnectStepState(props)}
-          title="Connect Sentry"
-          description="Add Sentry Cloud or a self-hosted instance with an auth token."
+          title={translate("auto.components.settings.TaskSourceSimpleSetup.baaebad650", "Connect Sentry")}
+          description={translate("auto.components.settings.TaskSourceSimpleSetup.709d36f8c7", "Add Sentry Cloud or a self-hosted instance with an auth token.")}
           action={
             <Button
               type="button"
@@ -36,7 +36,7 @@ export function SentrySetupSteps(
               variant={props.connected ? 'outline' : 'default'}
               onClick={() => setDialogOpen(true)}
             >
-              {props.connected ? 'Manage access' : 'Add Sentry access'}
+              {props.connected ? translate("auto.components.settings.TaskSourceSimpleSetup.d64c6c6162", "Manage access") : translate("auto.components.settings.TaskSourceSimpleSetup.37f0453bd2", "Add Sentry access")}
             </Button>
           }
         />

@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, readFileSync, unlinkSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, readFileSync, unlinkSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
 import type { SentryConnection, SentryOrganization } from '../../shared/sentry-types'
@@ -15,7 +15,10 @@ type SentryConnectionFile = {
   organizations: SentryOrganization[]
 }
 
+export type SentryCredentialRecord = SentryConnectionFile & { token: string }
+
 const orcaDir = (): string => join(homedir(), '.orca')
+const credentialPath = (): string => join(orcaDir(), 'sentry-credential.enc')
 const tokenPath = (): string => join(orcaDir(), 'sentry-token.enc')
 const connectionPath = (): string => join(orcaDir(), 'sentry-connection.json')
 
@@ -29,40 +32,69 @@ export function saveSentryCredential(
   organizations: SentryOrganization[]
 ): void {
   ensureOrcaDir()
-  writeEncryptedCredential('Sentry', tokenPath(), token)
-  writeFileSync(
-    connectionPath(),
-    JSON.stringify({ version: 1, ...connection, organizations } satisfies SentryConnectionFile),
-    { encoding: 'utf8', mode: 0o600 }
+  writeEncryptedCredential(
+    'Sentry',
+    credentialPath(),
+    JSON.stringify({
+      version: 1,
+      token,
+      ...connection,
+      organizations
+    } satisfies SentryCredentialRecord)
   )
 }
 
-export function readSentryToken(): string | null {
-  if (!credentialFileHasContent(tokenPath())) {
-    return null
-  }
-  return readStoredCredentialToken('Sentry', readFileSync(tokenPath()))
-}
-
-export function readSentryConnectionFile(): SentryConnectionFile | null {
+function parseCredentialRecord(value: string): SentryCredentialRecord | null {
   try {
-    const value = JSON.parse(readFileSync(connectionPath(), 'utf8')) as SentryConnectionFile
+    const record = JSON.parse(value) as SentryCredentialRecord
     if (
-      value.version !== 1 ||
-      typeof value.baseUrl !== 'string' ||
-      !value.organization ||
-      !Array.isArray(value.organizations)
+      record.version !== 1 ||
+      typeof record.token !== 'string' ||
+      !record.token ||
+      typeof record.baseUrl !== 'string' ||
+      !record.organization ||
+      !Array.isArray(record.organizations)
     ) {
       return null
     }
-    return value
+    return record
   } catch {
     return null
   }
 }
 
+function readLegacyCredential(): SentryCredentialRecord | null {
+  let value: SentryConnectionFile
+  try {
+    value = JSON.parse(readFileSync(connectionPath(), 'utf8')) as SentryConnectionFile
+  } catch {
+    return null
+  }
+  const token = credentialFileHasContent(tokenPath())
+    ? readStoredCredentialToken('Sentry', readFileSync(tokenPath()))
+    : null
+  if (
+    value.version !== 1 ||
+    !token ||
+    typeof value.baseUrl !== 'string' ||
+    !value.organization ||
+    !Array.isArray(value.organizations)
+  ) {
+    return null
+  }
+  return { ...value, token }
+}
+
+export function readSentryCredential(): SentryCredentialRecord | null {
+  if (!credentialFileHasContent(credentialPath())) {
+    return readLegacyCredential()
+  }
+  const value = readStoredCredentialToken('Sentry', readFileSync(credentialPath()))
+  return value ? parseCredentialRecord(value) : null
+}
+
 export function clearSentryCredential(): void {
-  for (const path of [tokenPath(), connectionPath()]) {
+  for (const path of [credentialPath(), tokenPath(), connectionPath()]) {
     try {
       if (existsSync(path)) {
         unlinkSync(path)

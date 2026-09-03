@@ -231,7 +231,7 @@ export function SidebarTaskNavButton(): React.JSX.Element | null {
             ) : null}
             {visibleTaskProviders.includes('sentry') ? (
               <TaskProviderShortcut
-                label="Open Sentry issues"
+                label={translate("auto.components.sidebar.SidebarTaskNavButton.8dcf47f2f2", "Open Sentry issues")}
                 onOpen={() => openTaskPage({ taskSource: 'sentry' })}
               >
                 <SentryIcon className="size-3.5" />

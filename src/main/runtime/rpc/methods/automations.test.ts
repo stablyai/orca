@@ -44,12 +44,16 @@ describe('automation RPC methods', () => {
         },
         sourceContext: {
           kind: 'task-source',
-          provider: 'github',
+          provider: 'sentry',
           projectId: 'github:stablyai/orca',
           hostId: 'local',
           projectHostSetupId: 'setup-local',
           repoId: 'repo-local',
-          providerIdentity: { provider: 'github', owner: 'stablyai', repo: 'orca' }
+          providerIdentity: {
+            provider: 'sentry',
+            baseUrl: 'https://sentry.example',
+            organizationSlug: 'stably'
+          }
         },
         repo: 'repo-1',
         setupDecision: 'skip',
@@ -84,7 +88,7 @@ describe('automation RPC methods', () => {
         precheck: { command: 'test -f ready', timeoutSeconds: 30 },
         agentId: 'codex',
         runContext: expect.objectContaining({ hostId: 'runtime:gpu' }),
-        sourceContext: expect.objectContaining({ hostId: 'local' }),
+        sourceContext: expect.objectContaining({ provider: 'sentry', hostId: 'local' }),
         repo: 'repo-1',
         setupDecision: 'skip',
         reuseSession: true

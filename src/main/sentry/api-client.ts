@@ -15,8 +15,8 @@ export class SentryApiError extends Error {
 
 export function normalizeSentryBaseUrl(value: string): string {
   const url = new URL(value.trim())
-  if (url.protocol !== 'https:' && url.protocol !== 'http:') {
-    throw new Error('Sentry URL must use HTTP or HTTPS.')
+  if (url.protocol !== 'https:') {
+    throw new Error('Sentry URL must use HTTPS.')
   }
   if (url.username || url.password || url.search || url.hash) {
     throw new Error('Enter the base URL without credentials, a query, or a fragment.')
@@ -62,7 +62,10 @@ export async function sentryRequest<T>(args: {
     ...(proxySession ? { proxySession } : {}),
     probeUrl: url.toString()
   }).catch(() => undefined)
-  const signal = args.init?.signal ?? AbortSignal.timeout(REQUEST_TIMEOUT_MS)
+  const timeoutSignal = AbortSignal.timeout(REQUEST_TIMEOUT_MS)
+  const signal = args.init?.signal
+    ? AbortSignal.any([args.init.signal, timeoutSignal])
+    : timeoutSignal
   const response = await httpClient.fetch(url.toString(), { ...args.init, headers, signal })
   if (!response.ok) {
     throw new SentryApiError(
