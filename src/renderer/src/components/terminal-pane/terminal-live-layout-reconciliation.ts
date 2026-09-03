@@ -94,13 +94,19 @@ function mountedLeafIdsIn(
  */
 export function planTerminalLiveLayoutRemovals(
   root: TerminalPaneLayoutNode | null | undefined,
-  currentLeafIds: Iterable<string>
+  currentLeafIds: Iterable<string>,
+  previousLayoutLeafIds: ReadonlySet<string>
 ): string[] {
   if (!root) {
     return []
   }
   const layoutLeafIds = new Set(collectLeafIds(root))
-  return [...currentLeafIds].filter((leafId) => !layoutLeafIds.has(leafId))
+  // Why: only a leaf the host named before can be one it retired. A leaf it has
+  // never named is a pane the client is still starting; its transport has no PTY
+  // yet either, so a snapshot that lands mid-spawn must not read as a retirement.
+  return [...currentLeafIds].filter(
+    (leafId) => !layoutLeafIds.has(leafId) && previousLayoutLeafIds.has(leafId)
+  )
 }
 
 export function planTerminalLiveLayoutInsertions(

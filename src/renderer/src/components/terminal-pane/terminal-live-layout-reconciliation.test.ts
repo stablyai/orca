@@ -236,13 +236,15 @@ describe('planTerminalLiveLayoutInsertions', () => {
 })
 
 describe('planTerminalLiveLayoutRemovals', () => {
+  const BOTH = new Set(['leaf-a', 'leaf-b'])
+
   it('plans the mounted leaf a host-retired layout no longer names', () => {
     // Why: closing one pane of a remote-server split kills its PTY on the host,
     // which retires the leaf and republishes a one-leaf layout; the pane mounted
     // for the retired leaf must go too, or it lingers as a blank ghost.
     const layout: TerminalPaneLayoutNode = { type: 'leaf', leafId: 'leaf-a' }
 
-    expect(planTerminalLiveLayoutRemovals(layout, ['leaf-a', 'leaf-b'])).toEqual(['leaf-b'])
+    expect(planTerminalLiveLayoutRemovals(layout, ['leaf-a', 'leaf-b'], BOTH)).toEqual(['leaf-b'])
   })
 
   it('plans nothing when every mounted leaf is still in the layout', () => {
@@ -253,13 +255,25 @@ describe('planTerminalLiveLayoutRemovals', () => {
       second: { type: 'leaf', leafId: 'leaf-b' }
     }
 
-    expect(planTerminalLiveLayoutRemovals(layout, ['leaf-a', 'leaf-b'])).toEqual([])
-    expect(planTerminalLiveLayoutRemovals(layout, ['leaf-a'])).toEqual([])
+    expect(planTerminalLiveLayoutRemovals(layout, ['leaf-a', 'leaf-b'], BOTH)).toEqual([])
+    expect(planTerminalLiveLayoutRemovals(layout, ['leaf-a'], BOTH)).toEqual([])
   })
 
   it('plans nothing for an empty layout', () => {
-    expect(planTerminalLiveLayoutRemovals(null, ['leaf-a'])).toEqual([])
-    expect(planTerminalLiveLayoutRemovals(undefined, ['leaf-a'])).toEqual([])
+    expect(planTerminalLiveLayoutRemovals(null, ['leaf-a'], BOTH)).toEqual([])
+    expect(planTerminalLiveLayoutRemovals(undefined, ['leaf-a'], BOTH)).toEqual([])
+  })
+
+  it('leaves a mounted leaf the host has never named alone', () => {
+    // Why: a pane the client just split is still spawning, so its transport has
+    // no PTY yet, and a host snapshot that lands mid-spawn does not name it.
+    // Only a leaf the host named before can be one the host retired.
+    const layout: TerminalPaneLayoutNode = { type: 'leaf', leafId: 'leaf-a' }
+
+    expect(
+      planTerminalLiveLayoutRemovals(layout, ['leaf-a', 'leaf-new'], new Set(['leaf-a']))
+    ).toEqual([])
+    expect(planTerminalLiveLayoutRemovals(layout, ['leaf-a', 'leaf-new'], new Set())).toEqual([])
   })
 })
 

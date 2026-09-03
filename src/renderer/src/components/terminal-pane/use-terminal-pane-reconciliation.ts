@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect } from 'react'
+import { useEffect, useLayoutEffect, useRef } from 'react'
 import {
   applyExpandedLayoutTo,
   cancelPendingPaneSizeRefreshFrames,
@@ -12,6 +12,7 @@ import {
   planTerminalLiveLayoutRemovals,
   selectRetiredPaneIds
 } from './terminal-live-layout-reconciliation'
+import { collectLeafIds } from './terminal-pane-layout-tree'
 import { useTerminalPaneProcessExitActions } from './use-terminal-pane-process-exit-actions'
 import type { TerminalPaneCloseController } from './use-terminal-pane-close-actions'
 
@@ -33,6 +34,9 @@ export function useTerminalPaneReconciliation(controller: TerminalPaneCloseContr
     restoredLayout,
     tabId
   } = controller
+  // Leaves the last host-authoritative layout named; a removal needs the host to
+  // have named the leaf before it dropped it.
+  const hostLayoutLeafIdsRef = useRef<ReadonlySet<string>>(new Set())
 
   useEffect(() => {
     closeTerminalLinkActions()
@@ -51,9 +55,15 @@ export function useTerminalPaneReconciliation(controller: TerminalPaneCloseContr
     ) {
       return
     }
+    const previousHostLayoutLeafIds = hostLayoutLeafIdsRef.current
+    hostLayoutLeafIdsRef.current = new Set(collectLeafIds(restoredLayout.root))
     const mountedLeafIds = manager.getPanes().map((pane) => pane.leafId)
     const insertions = planTerminalLiveLayoutInsertions(restoredLayout.root, mountedLeafIds)
-    const removals = planTerminalLiveLayoutRemovals(restoredLayout.root, mountedLeafIds)
+    const removals = planTerminalLiveLayoutRemovals(
+      restoredLayout.root,
+      mountedLeafIds,
+      previousHostLayoutLeafIds
+    )
     if (insertions.length === 0 && removals.length === 0) {
       return
     }
