@@ -82,13 +82,18 @@ export async function resolveWorktreeIncludePaths(
     }
 
     const candidates: string[] = []
+    let loggedEntryLimit = false
     for (const entry of parseWorktreeIncludeFile(content)) {
       if (candidates.length >= WORKTREE_INCLUDE_MAX_ENTRIES) {
-        console.warn(
-          `[worktree-include] ${WORKTREE_INCLUDE_FILE} lists more than ${WORKTREE_INCLUDE_MAX_ENTRIES} entries; ignoring the rest`
-        )
+        // Why: every excess parsed entry is refused, not just the first over the cap.
+        if (!loggedEntryLimit) {
+          console.warn(
+            `[worktree-include] ${WORKTREE_INCLUDE_FILE} lists more than ${WORKTREE_INCLUDE_MAX_ENTRIES} entries; ignoring the rest`
+          )
+          loggedEntryLimit = true
+        }
         skipped.push({ mechanism: 'include', path: entry, reason: 'too-many-entries' })
-        break
+        continue
       }
       if (isUnsupportedPattern(entry)) {
         console.warn(

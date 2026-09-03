@@ -25,6 +25,16 @@ describe('formatWorktreeConfiguredPathSkip', () => {
       })
     ).toBe('include: node_modules skipped (exceeds copy budget)')
   })
+
+  it('names an unreadable share path separately from missing', () => {
+    expect(
+      formatWorktreeConfiguredPathSkip({
+        mechanism: 'share',
+        path: 'node_modules',
+        reason: 'stat-failed'
+      })
+    ).toBe('share: node_modules skipped (unreadable)')
+  })
 })
 
 describe('buildWorktreeShareSkipReport', () => {
@@ -80,6 +90,41 @@ describe('buildWorktreeShareSkipReport', () => {
         message: 'include: node_modules skipped (exceeds copy budget)',
         details: { path: 'node_modules', reason: 'copy-budget', budgetReason: 'entries' }
       })
+    ])
+  })
+
+  it('names the first five skips and summarizes the rest', () => {
+    const includeSkips = Array.from({ length: 7 }, (_, index) => ({
+      mechanism: 'include' as const,
+      path: `skip-${index}`,
+      reason: 'missing' as const
+    }))
+
+    const report = buildWorktreeShareSkipReport({
+      shareSkips: [],
+      includeSkips
+    })
+
+    expect(report.warning).toBe(
+      [
+        'include: skip-0 skipped (missing)',
+        'include: skip-1 skipped (missing)',
+        'include: skip-2 skipped (missing)',
+        'include: skip-3 skipped (missing)',
+        'include: skip-4 skipped (missing)',
+        'and 2 more'
+      ].join('\n')
+    )
+    expect(report.warnings).toEqual([
+      expect.objectContaining({ details: { path: 'skip-0', reason: 'missing' } }),
+      expect.objectContaining({ details: { path: 'skip-1', reason: 'missing' } }),
+      expect.objectContaining({ details: { path: 'skip-2', reason: 'missing' } }),
+      expect.objectContaining({ details: { path: 'skip-3', reason: 'missing' } }),
+      expect.objectContaining({ details: { path: 'skip-4', reason: 'missing' } }),
+      {
+        code: 'WORKTREE_INCLUDE_SKIPPED',
+        message: 'and 2 more'
+      }
     ])
   })
 })

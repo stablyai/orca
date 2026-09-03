@@ -92,18 +92,30 @@ export async function resolveWorktreeSharedDirectories(
         try {
           return {
             relativePath,
-            exists: true,
+            exists: true as const,
             isDirectory: (await stat(join(repoPath, relativePath))).isDirectory()
           }
-        } catch {
-          return { relativePath, exists: false, isDirectory: false }
+        } catch (error) {
+          // Why: ENOENT is "not installed yet"; EACCES/EIO are not the same skip.
+          const reason: 'missing' | 'stat-failed' =
+            (error as NodeJS.ErrnoException).code === 'ENOENT' ? 'missing' : 'stat-failed'
+          return {
+            relativePath,
+            exists: false as const,
+            isDirectory: false,
+            reason
+          }
         }
       }
     )
     const existing: string[] = []
     for (const probe of probes) {
       if (!probe.exists) {
-        skipped.push({ mechanism: 'share', path: probe.relativePath, reason: 'missing' })
+        skipped.push({
+          mechanism: 'share',
+          path: probe.relativePath,
+          reason: probe.reason
+        })
         continue
       }
       if (probe.isDirectory) {
