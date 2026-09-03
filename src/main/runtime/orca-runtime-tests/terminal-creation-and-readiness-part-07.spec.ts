@@ -509,6 +509,117 @@ describe('OrcaRuntimeService', () => {
     }
   })
 
+  it('injects pending Web context once across concurrent prompts for one PTY generation', async () => {
+    vi.useFakeTimers()
+    try {
+      const writes: string[] = []
+      const runtime = new OrcaRuntimeService(store, undefined, { agentHostMode: 'serve' })
+      runtime.setPtyController({
+        spawn: vi.fn().mockResolvedValue({ id: 'pty-web-context' }),
+        write: (_ptyId, data) => {
+          writes.push(data)
+          acknowledgeAgentPromptSubmit(runtime, 'pty-web-context', data)
+          return true
+        },
+        kill: () => true,
+        getForegroundProcess: async () => null
+      })
+      const { handle, ptyId } = await runtime.createTerminal(`path:${TEST_WORKTREE_PATH}`)
+      runtime.armAgentClientContextForPty(ptyId, 'web')
+
+      const first = runtime.sendTerminalAgentPrompt(handle, 'first prompt', {
+        clientSurface: 'web'
+      })
+      const second = runtime.sendTerminalAgentPrompt(handle, 'second prompt', {
+        clientSurface: 'web'
+      })
+      await vi.runAllTimersAsync()
+      await Promise.all([first, second])
+
+      const pastes = writes.filter((data) => data !== '\r')
+      expect(pastes[0]).toContain('clientSurface=web hostMode=serve')
+      expect(pastes[0]).toContain('first prompt')
+      expect(pastes[1]).not.toContain('<orca-client-context>')
+      expect(pastes[1]).toContain('second prompt')
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('keeps pending Web context after a refused prompt and ignores non-Web sends', async () => {
+    vi.useFakeTimers()
+    try {
+      const writes: string[] = []
+      let acceptWrites = true
+      const runtime = new OrcaRuntimeService(store, undefined, { agentHostMode: 'serve' })
+      runtime.setPtyController({
+        spawn: vi.fn().mockResolvedValue({ id: 'pty-web-context-retry' }),
+        write: (_ptyId, data) => {
+          writes.push(data)
+          if (acceptWrites) {
+            acknowledgeAgentPromptSubmit(runtime, 'pty-web-context-retry', data)
+          }
+          return acceptWrites
+        },
+        kill: () => true,
+        getForegroundProcess: async () => null
+      })
+      const { handle, ptyId } = await runtime.createTerminal(`path:${TEST_WORKTREE_PATH}`)
+      runtime.armAgentClientContextForPty(ptyId, 'web')
+
+      const desktop = runtime.sendTerminalAgentPrompt(handle, 'desktop prompt')
+      await vi.runAllTimersAsync()
+      await desktop
+      expect(writes[0]).not.toContain('<orca-client-context>')
+
+      acceptWrites = false
+      await expect(
+        runtime.sendTerminalAgentPrompt(handle, 'refused Web prompt', { clientSurface: 'web' })
+      ).rejects.toThrow('terminal_not_writable')
+
+      acceptWrites = true
+      const retry = runtime.sendTerminalAgentPrompt(handle, 'accepted Web prompt', {
+        clientSurface: 'web'
+      })
+      await vi.runAllTimersAsync()
+      await retry
+      expect(writes.at(-2)).toContain('clientSurface=web hostMode=serve')
+      expect(writes.at(-2)).toContain('accepted Web prompt')
+
+      runtime.armAgentClientContextForPty(ptyId, 'web')
+      const replay = runtime.sendTerminalAgentPrompt(handle, 'after replay', {
+        clientSurface: 'web'
+      })
+      await vi.runAllTimersAsync()
+      await replay
+      expect(writes.at(-2)).not.toContain('<orca-client-context>')
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('clears pending Web client context when its PTY generation exits', async () => {
+    const runtime = new OrcaRuntimeService(store)
+    runtime.setPtyController({
+      spawn: vi.fn().mockResolvedValue({ id: 'pty-web-context-exit' }),
+      write: () => true,
+      kill: () => true,
+      getForegroundProcess: async () => null
+    })
+    const { ptyId } = await runtime.createTerminal(`path:${TEST_WORKTREE_PATH}`)
+    runtime.armAgentClientContextForPty(ptyId, 'web')
+
+    runtime.onPtyExit(ptyId!, 0)
+
+    expect(
+      (
+        runtime as unknown as {
+          agentClientContextByPtyId: Map<string, unknown>
+        }
+      ).agentClientContextByPtyId.has(ptyId!)
+    ).toBe(false)
+  })
+
   it.each(['claude', 'codex'] as const)(
     'waits for %s composer output frames to settle before one submit',
     async (agent) => {

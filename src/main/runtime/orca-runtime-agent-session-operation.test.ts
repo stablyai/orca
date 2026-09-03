@@ -38,7 +38,7 @@ function terminal() {
 function createRuntime(provider?: {
   supportsAgentSessionClaims?: () => boolean
   supportsAgentSessionCreateOperations?: () => boolean
-}) {
+}, agentHostMode?: 'desktop' | 'serve' | 'orcad') {
   const runtime = new OrcaRuntimeService(
     {
       getSettings: () => ({
@@ -49,7 +49,12 @@ function createRuntime(provider?: {
       })
     } as never,
     undefined,
-    provider ? { getLocalProvider: () => provider as never } : undefined
+    provider || agentHostMode
+      ? {
+          ...(provider ? { getLocalProvider: () => provider as never } : {}),
+          ...(agentHostMode ? { agentHostMode } : {})
+        }
+      : undefined
   )
   const internal = runtime as unknown as {
     resolveTerminalWorkspaceLaunchScope: ReturnType<typeof vi.fn>
@@ -65,6 +70,77 @@ function createRuntime(provider?: {
   internal.markRemoteWorkspaceTrustedForAgent = vi.fn()
   return runtime
 }
+
+describe('paired Web agent launch context', () => {
+  it('binds Web guidance and serve diagnostics to a fresh agent session', async () => {
+    const runtime = createRuntime(undefined, 'serve')
+    const createTerminal = vi.spyOn(runtime, 'createTerminal').mockResolvedValue(terminal())
+
+    await runtime.createAgentSession(request(operationId(), { prompt: 'inspect the runtime' }), {
+      clientId: 'paired-web-1',
+      clientKind: 'runtime',
+      clientSurface: 'web'
+    })
+
+    expect(createTerminal).toHaveBeenCalledWith(
+      'id:worktree-1',
+      expect.objectContaining({
+        command: expect.stringContaining('clientSurface=web hostMode=serve'),
+        env: expect.objectContaining({
+          ORCA_CLIENT_SURFACE: 'web',
+          ORCA_HOST_MODE: 'serve'
+        })
+      })
+    )
+    expect(createTerminal.mock.calls[0]?.[1]?.command).toContain('inspect the runtime')
+    expect(
+      (
+        runtime as unknown as {
+          agentClientContextByPtyId: Map<string, unknown>
+        }
+      ).agentClientContextByPtyId.has('pty-operation')
+    ).toBe(false)
+  })
+
+  it('does not label a local desktop launch as Web', async () => {
+    const runtime = createRuntime(undefined, 'desktop')
+    const createTerminal = vi.spyOn(runtime, 'createTerminal').mockResolvedValue(terminal())
+
+    await runtime.createAgentSession(request(operationId(), { prompt: 'inspect the runtime' }))
+
+    const options = createTerminal.mock.calls[0]?.[1]
+    expect(options?.command).not.toContain('clientSurface=web')
+    expect(options?.env?.ORCA_CLIENT_SURFACE).toBeUndefined()
+    expect(options?.env?.ORCA_HOST_MODE).toBeUndefined()
+  })
+
+  it('stamps a resumed paired Web session with the runtime host mode', async () => {
+    const runtime = createRuntime(undefined, 'serve')
+    const createTerminal = vi.spyOn(runtime, 'createTerminal').mockResolvedValue(terminal())
+
+    await runtime.ensureAgentSession(
+      {
+        kind: 'explicit',
+        worktree: 'id:worktree-1',
+        agent: 'codex',
+        providerSession: { key: 'session_id', id: 'provider-session-web' }
+      },
+      { clientId: 'paired-web-1', clientKind: 'runtime', clientSurface: 'web' }
+    )
+
+    expect(createTerminal.mock.calls[0]?.[1]?.env).toMatchObject({
+      ORCA_CLIENT_SURFACE: 'web',
+      ORCA_HOST_MODE: 'serve'
+    })
+    expect(
+      (
+        runtime as unknown as {
+          agentClientContextByPtyId: Map<string, { pending: boolean }>
+        }
+      ).agentClientContextByPtyId.get('pty-operation')?.pending
+    ).toBe(true)
+  })
+})
 
 // Why: an SSH-backed workspace whose spawn response was lost — the leak in #17929.
 function installRemoteReclaimHarness(

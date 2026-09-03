@@ -542,6 +542,46 @@ describe('session tab RPC methods', () => {
     })
   })
 
+  it('decorates legacy agent creation only for a negotiated Web surface', async () => {
+    const runtime = {
+      getRuntimeId: () => 'test-runtime',
+      decorateAgentPromptForClient: vi.fn((prompt: string) => `[web/serve]\n${prompt}`),
+      decorateAgentEnvForClient: vi.fn((env: Record<string, string> | undefined) => ({
+        ...env,
+        ORCA_CLIENT_SURFACE: 'web',
+        ORCA_HOST_MODE: 'serve'
+      })),
+      createMobileSessionTerminal: vi.fn().mockResolvedValue({
+        tab: { type: 'terminal', id: 'tab-1::leaf-1' },
+        publicationEpoch: 'epoch-1',
+        snapshotVersion: 1
+      })
+    } as unknown as OrcaRuntimeService
+    const dispatcher = new RpcDispatcher({ runtime, methods: SESSION_TAB_METHODS })
+
+    await dispatcher.dispatchStreaming(
+      makeRequest('session.tabs.createTerminal', {
+        worktree: 'id:wt-1',
+        agent: 'codex',
+        agentPrompt: 'Review this diff'
+      }),
+      () => {},
+      {
+        clientKind: 'runtime',
+        pairedDeviceId: 'web-device',
+        clientCapabilities: ['client-surface.web.v1']
+      }
+    )
+
+    expect(runtime.createMobileSessionTerminal).toHaveBeenCalledWith(
+      'id:wt-1',
+      expect.objectContaining({
+        agentPrompt: '[web/serve]\nReview this diff',
+        env: { ORCA_CLIENT_SURFACE: 'web', ORCA_HOST_MODE: 'serve' }
+      })
+    )
+  })
+
   it('rejects agent prompts without an agent preset', async () => {
     const runtime = {
       getRuntimeId: () => 'test-runtime',

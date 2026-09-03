@@ -13,10 +13,53 @@ import type { RuntimeTerminalSummary } from '../../shared/runtime-types'
 import type { ResolvedWorktree } from './runtime-worktree-path-identity'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../shared/constants'
 import type { WorkspaceSessionState } from '../../shared/workspace-session-state-types'
+import type { RuntimeAgentSessionRpcCaller } from '../../shared/agent-session-host-authority'
+import {
+  prependOrcaAgentClientContext,
+  withOrcaAgentClientContextEnv
+} from '../../shared/agent-client-context'
 
 export class OrcaRuntimeWithGetRuntimeId extends OrcaRuntimeWithHasExactPersistedTerminalSurfaceIdentity {
   getRuntimeId(): string {
     return this.runtimeId
+  }
+
+  decorateAgentPromptForClient(
+    prompt: string,
+    clientSurface: RuntimeAgentSessionRpcCaller['clientSurface']
+  ): string {
+    return clientSurface === 'web'
+      ? prependOrcaAgentClientContext(prompt, {
+          clientSurface: 'web',
+          hostMode: this.agentHostMode
+        })
+      : prompt
+  }
+
+  decorateAgentEnvForClient(
+    env: Record<string, string> | undefined,
+    clientSurface: RuntimeAgentSessionRpcCaller['clientSurface']
+  ): Record<string, string> | undefined {
+    return clientSurface === 'web'
+      ? withOrcaAgentClientContextEnv(env, {
+          clientSurface: 'web',
+          hostMode: this.agentHostMode
+        })
+      : env
+  }
+
+  armAgentClientContextForPty(
+    ptyId: string | null | undefined,
+    clientSurface: RuntimeAgentSessionRpcCaller['clientSurface']
+  ): void {
+    if (!ptyId || clientSurface !== 'web') {
+      return
+    }
+    const generation = this.getPtyLifecycleGeneration(ptyId)
+    if (this.agentClientContextByPtyId.get(ptyId)?.generation === generation) {
+      return
+    }
+    this.agentClientContextByPtyId.set(ptyId, { generation, pending: true })
   }
 
   resolveOrchestrationWorkerServer(selector: string): OrchestrationWorkerServer {

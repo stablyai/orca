@@ -3,11 +3,12 @@
 // byte builders in native-chat-send.ts so those stay IO-free and unit-testable.
 
 import {
+  sendRuntimeAgentPrompt,
   sendRuntimePtyInput,
   sendRuntimePtyInputVerified
 } from '@/runtime/runtime-terminal-inspection'
 import type { getSettingsForAgentTabRuntimeOwner } from '@/lib/agent-paste-draft'
-import type { AskAnswerKeyGroup } from './native-chat-interactive-prompt'
+import { isWebClientLocation } from '@/lib/web-client-location'
 import { AGENT_TUI_CLEAR_INPUT_MAX } from '../../../../shared/agent-tui-input-clear'
 import {
   NATIVE_CHAT_ADVANCE_BUFFER_MS,
@@ -28,6 +29,7 @@ import {
 
 export { NATIVE_CHAT_ADVANCE_BUFFER_MS, NATIVE_CHAT_QUESTION_STEP_MS, NATIVE_CHAT_SUBMIT_DELAY_MS }
 export { resetNativeChatPtySendQueuesForTests }
+export { sendNativeChatAskAnswer } from './native-chat-runtime-answer-send'
 
 // Why: agent TUI composers treat Ctrl+U as kill-to-start-of-line. Chat sends
 // start from an empty line so a prior cancelled paste cannot glue onto the next
@@ -53,6 +55,8 @@ export type NativeChatSendOptions = {
    * pasting on top of residue.
    */
   confirmCleared?: () => boolean
+  /** Submit the complete text through Runtime's semantic Agent-prompt boundary. */
+  agentPrompt?: true
 }
 
 /** Cancels an in-flight send's pending pty writes (the delayed Enter, and any
@@ -63,9 +67,11 @@ export type NativeChatSendHandle = {
   settleAfterMs: number
   /** Actual completion, which can outlive the nominal schedule if the renderer stalls. */
   settled?: Promise<void>
+  /** Present for semantic remote sends; false leaves the editable draft intact. */
+  accepted?: Promise<boolean>
 }
 
-type RuntimeSettings = ReturnType<typeof getSettingsForAgentTabRuntimeOwner>
+export type RuntimeSettings = ReturnType<typeof getSettingsForAgentTabRuntimeOwner>
 
 export function clearUnsubmittedAgentInput(
   settings: RuntimeSettings,
@@ -129,6 +135,12 @@ export function sendNativeChatMessage(
   text: string,
   options?: NativeChatSendOptions
 ): NativeChatSendHandle {
+  if (options?.agentPrompt === true) {
+    const semantic = sendRemoteNativeChatAgentPrompt(settings, ptyId, text, options)
+    if (semantic) {
+      return semantic
+    }
+  }
   return enqueueNativeChatPtySend(
     ptyId,
     NATIVE_CHAT_SUBMIT_DELAY_MS + clearConfirmDurationMs(options),
@@ -153,6 +165,102 @@ export function sendNativeChatMessage(
       onCancelUnsubmitted: () => clearUnsubmittedAgentInput(settings, ptyId, options)
     }
   )
+}
+
+function sendRemoteNativeChatAgentPrompt(
+  settings: RuntimeSettings,
+  ptyId: string,
+  text: string,
+  options: NativeChatSendOptions
+): NativeChatSendHandle | null {
+  if (!isWebClientLocation() || !ptyId.startsWith('remote:')) {
+    return null
+  }
+  let resolveAccepted!: (accepted: boolean) => void
+  let acceptanceSettled = false
+  const accepted = new Promise<boolean>((resolve) => {
+    resolveAccepted = resolve
+  })
+  const settleAcceptance = (value: boolean): void => {
+    if (acceptanceSettled) {
+      return
+    }
+    acceptanceSettled = true
+    resolveAccepted(value)
+  }
+  const queued = enqueueNativeChatPtySend(
+    ptyId,
+    NATIVE_CHAT_SUBMIT_DELAY_MS + clearConfirmDurationMs(options),
+    ({ isCancelled, delay, signal, markSubmitted }) => {
+      const finish = (value: boolean): void => {
+        settleAcceptance(value)
+        markSubmitted()
+      }
+      const submit = async (): Promise<void> => {
+        if (isCancelled()) {
+          finish(false)
+          return
+        }
+        try {
+          const semanticPrompt = sendRuntimeAgentPrompt(settings, ptyId, text, signal)
+          if (!semanticPrompt) {
+            sendRuntimePtyInput(settings, ptyId, buildNativeChatPasteBytes(text))
+            delay(NATIVE_CHAT_SUBMIT_DELAY_MS, () => {
+              sendRuntimePtyInput(settings, ptyId, NATIVE_CHAT_SUBMIT)
+              finish(true)
+            })
+            return
+          }
+          finish((await semanticPrompt) === true)
+        } catch {
+          finish(false)
+        }
+      }
+      const afterClear = (): void => {
+        const confirmCleared = options.confirmCleared
+        if (!confirmCleared) {
+          void submit()
+          return
+        }
+        delay(NATIVE_CHAT_CLEAR_CONFIRM_MS, () => {
+          let cleared = false
+          try {
+            cleared = confirmCleared()
+          } catch {
+            // An unreadable terminal is unconfirmed; the maximal clear remains safe.
+          }
+          if (cleared) {
+            void submit()
+            return
+          }
+          void sendRuntimePtyInputVerified(settings, ptyId, AGENT_TUI_CLEAR_INPUT_MAX).then(
+            (acceptedClear) => (acceptedClear ? submit() : finish(false)),
+            () => finish(false)
+          )
+        })
+      }
+      void sendRuntimePtyInputVerified(
+        settings,
+        ptyId,
+        options.clearInput ?? NATIVE_CHAT_CLEAR_UNSUBMITTED_INPUT
+      ).then(
+        (acceptedClear) => (acceptedClear ? afterClear() : finish(false)),
+        () => finish(false)
+      )
+    },
+    {
+      onCancelUnsubmitted: () => clearUnsubmittedAgentInput(settings, ptyId, options)
+    }
+  )
+  void queued.settled.then(() => settleAcceptance(false))
+  return {
+    ...queued,
+    accepted,
+    cancel: () => {
+      queued.cancel()
+      settleAcceptance(false)
+    }
+  }
 }
 
 function waitForNativeChatSubmit(signal?: AbortSignal): Promise<boolean> {
@@ -270,64 +378,4 @@ export function sendNativeChatTypedCommand(
  *  composer is empty. */
 export function submitNativeChatPrompt(settings: RuntimeSettings, ptyId: string): void {
   sendRuntimePtyInput(settings, ptyId, NATIVE_CHAT_SUBMIT)
-}
-
-/**
- * Answer Claude's AskUserQuestion by writing its keystroke groups (built by
- * `buildAskAnswerKeys`) to the PTY, one group per `NATIVE_CHAT_QUESTION_STEP_MS`
- * step so the arrow-navigate selector applies each before the next.
- */
-export function sendNativeChatAskAnswer(
-  settings: RuntimeSettings,
-  ptyId: string,
-  groups: AskAnswerKeyGroup[],
-  onSettled?: (delivered: boolean) => void
-): NativeChatSendHandle {
-  if (groups.length === 0) {
-    return { cancel: () => {}, settleAfterMs: 0 }
-  }
-  const timers: ReturnType<typeof setTimeout>[] = []
-  const verifiedWrites: Promise<boolean>[] = []
-  let cancelled = false
-  groups.forEach((group, index) => {
-    timers.push(
-      setTimeout(() => {
-        const bytes = 'raw' in group ? group.raw : buildNativeChatPasteBytes(group.text)
-        if (onSettled) {
-          // Why: inference must use the remote host's acceptance result, not
-          // the fire-and-forget renderer dispatch result.
-          verifiedWrites.push(
-            sendRuntimePtyInputVerified(settings, ptyId, bytes).catch(() => false)
-          )
-        } else {
-          sendRuntimePtyInput(settings, ptyId, bytes)
-        }
-      }, index * NATIVE_CHAT_QUESTION_STEP_MS)
-    )
-  })
-  const settleAfterMs =
-    (groups.length - 1) * NATIVE_CHAT_QUESTION_STEP_MS + NATIVE_CHAT_SUBMIT_DELAY_MS
-  if (onSettled) {
-    // Why: status inference must wait for every paced write and must not run
-    // after cancellation or a rejected runtime write.
-    timers.push(
-      setTimeout(() => {
-        void Promise.all(verifiedWrites).then((results) => {
-          if (!cancelled) {
-            onSettled(results.every(Boolean))
-          }
-        })
-      }, settleAfterMs)
-    )
-  }
-  return {
-    cancel: () => {
-      cancelled = true
-      for (const timer of timers) {
-        clearTimeout(timer)
-      }
-    },
-    // Hold the card until the last keystroke has fired and its submit gap passed.
-    settleAfterMs
-  }
 }

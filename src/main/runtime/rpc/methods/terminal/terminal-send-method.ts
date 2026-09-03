@@ -15,12 +15,16 @@ import {
   type MobileInputFloorClaimHolder
 } from './terminal-input-delivery'
 import { updateViewportForClient } from './terminal-viewport-update'
+import { CLIENT_SURFACE_WEB_RUNTIME_CAPABILITY } from '../../../../../shared/protocol-version'
 
 export const TERMINAL_SEND_METHODS: RpcAnyMethod[] = [
   defineMethod({
     name: 'terminal.send',
     params: TerminalSend,
-    handler: async (params, { runtime, clientId, signal }) => {
+    handler: async (params, { runtime, clientId, clientCapabilities, signal }) => {
+      const clientSurface = clientCapabilities?.includes(CLIENT_SURFACE_WEB_RUNTIME_CAPABILITY)
+        ? ('web' as const)
+        : undefined
       await assertTerminalSendTextWithinLimit(params.text)
       await assertTerminalSendTextWithinLimit(params.resolvedLaunchDraft?.text)
       if (params.text) {
@@ -158,13 +162,14 @@ export const TERMINAL_SEND_METHODS: RpcAnyMethod[] = [
       const mobileFloorClientId = resolveMobileFloorClientId(driver, params.client)
       const mobileFloorClaim: MobileInputFloorClaimHolder = { current: null }
       const beforeWrite = assertSendPreconditions
-      const useSettledAgentPrompt =
+      const useAgentPromptPath =
         params.agentPrompt === true &&
         hasText &&
         params.enter === true &&
         params.interrupt !== true &&
         params.client?.type === 'desktop' &&
-        (await runtime.isTerminalRunningSettledPromptAgent(params.terminal))
+        (clientSurface === 'web' ||
+          (await runtime.isTerminalRunningSettledPromptAgent(params.terminal)))
       const reserveWrite =
         params.inputKind !== 'query-reply' && leaf?.ptyId && mobileFloorClientId
           ? (ptyId: string): void => {
@@ -177,10 +182,11 @@ export const TERMINAL_SEND_METHODS: RpcAnyMethod[] = [
           : undefined
       let result
       try {
-        result = useSettledAgentPrompt
+        result = useAgentPromptPath
           ? await runtime.sendTerminalAgentPrompt(params.terminal, params.text!, {
               beforeWrite,
-              signal
+              signal,
+              ...(clientSurface ? { clientSurface } : {})
             })
           : await runtime.sendTerminal(
               params.terminal,

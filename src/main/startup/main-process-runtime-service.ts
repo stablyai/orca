@@ -59,6 +59,7 @@ export function initializeMainProcessRuntime(): OrcaRuntimeService {
       )
   }
   const runtime = new OrcaRuntimeService(store, stats, {
+    agentHostMode: state.isServeMode ? 'serve' : 'desktop',
     agentSessionClaimSigner: loadAgentSessionClaimSigner(
       getProfileUserDataPath(),
       getProfileUserDataPath()

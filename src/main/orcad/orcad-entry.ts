@@ -166,6 +166,7 @@ async function startOrcadRuntime(
   await startOrcadDaemon()
 
   const runtime = new OrcaRuntimeService(store, undefined, {
+    agentHostMode: 'orcad',
     // Why lazy: a daemon swap replaces the provider after construction, so an eager
     // reference would freeze the pre-daemon one.
     getLocalProvider: () => getLocalPtyProvider(),

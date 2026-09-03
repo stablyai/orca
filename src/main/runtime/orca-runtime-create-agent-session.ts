@@ -166,7 +166,10 @@ export class OrcaRuntimeWithCreateAgentSession extends OrcaRuntimeWithGetAgentSe
           request.agentArgs !== undefined
             ? request.agentArgs
             : resolveTuiAgentLaunchArgs(request.agent, settings.agentDefaultArgs),
-        agentEnv: resolveTuiAgentLaunchEnv(request.agent, settings.agentDefaultEnv),
+        agentEnv: this.decorateAgentEnvForClient(
+          resolveTuiAgentLaunchEnv(request.agent, settings.agentDefaultEnv),
+          caller.clientSurface
+        ),
         sessionOptions: this.toAgentSessionOptions(request.launchPreferences),
         platform,
         shell,
@@ -177,7 +180,9 @@ export class OrcaRuntimeWithCreateAgentSession extends OrcaRuntimeWithGetAgentSe
           ? buildAgentDraftLaunchPlan({ ...startupArgs, draft: request.prompt ?? '' })
           : buildAgentStartupPlan({
               ...startupArgs,
-              prompt: request.prompt ?? '',
+              prompt: request.prompt
+                ? this.decorateAgentPromptForClient(request.prompt, caller.clientSurface)
+                : '',
               allowEmptyPromptLaunch: true
             })
       if (!startup) {
@@ -231,6 +236,9 @@ export class OrcaRuntimeWithCreateAgentSession extends OrcaRuntimeWithGetAgentSe
           retainReplayFence = true
         }
         throw error
+      }
+      if (request.promptDelivery === 'draft' || !request.prompt) {
+        this.armAgentClientContextForPty(terminal.ptyId, caller.clientSurface)
       }
       return { terminal, disposition: 'created' }
     })()

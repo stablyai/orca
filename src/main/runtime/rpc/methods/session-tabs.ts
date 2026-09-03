@@ -16,6 +16,7 @@ import { SESSION_TAB_MARKDOWN_METHODS } from './session-tab-markdown-methods'
 import { SESSION_TAB_MUTATION_METHODS } from './session-tab-mutation-methods'
 import { restoreStructuredTabsIfSupported } from './structured-session-tab-restore'
 import { assertLegacyAiVaultResumeCommandAllowed } from '../../../ai-vault/structured-session-ownership'
+import { CLIENT_SURFACE_WEB_RUNTIME_CAPABILITY } from '../../../../shared/protocol-version'
 
 export const SESSION_TAB_METHODS: RpcAnyMethod[] = [
   defineMethod({
@@ -43,22 +44,42 @@ export const SESSION_TAB_METHODS: RpcAnyMethod[] = [
   defineMethod({
     name: 'session.tabs.createTerminal',
     params: CreateTerminalTab,
-    handler: async (params, { runtime, signal, clientKind, pairedDeviceId }) => {
+    handler: async (
+      params,
+      { runtime, signal, clientKind, clientCapabilities, pairedDeviceId }
+    ) => {
       if (params.command) {
         await assertLegacyAiVaultResumeCommandAllowed(params.command, () =>
           runtime.ensureStructuredAgentSessionHost()
         )
       }
-      return runtime.createMobileSessionTerminal(params.worktree, {
+      const clientSurface = clientCapabilities?.includes(CLIENT_SURFACE_WEB_RUNTIME_CAPABILITY)
+        ? ('web' as const)
+        : undefined
+      const created = await runtime.createMobileSessionTerminal(params.worktree, {
         afterTabId: params.afterTabId,
         targetGroupId: params.targetGroupId,
         command: params.command,
         cwd: params.cwd,
-        ...(params.env ? { env: params.env } : {}),
+        ...(params.env || (clientSurface === 'web' && (params.agent || params.launchAgent))
+          ? {
+              env:
+                clientSurface === 'web'
+                  ? runtime.decorateAgentEnvForClient(params.env, clientSurface)
+                  : params.env
+            }
+          : {}),
         ...(params.envToDelete ? { envToDelete: params.envToDelete } : {}),
         startupCommandDelivery: params.startupCommandDelivery,
         agent: params.agent,
-        ...(params.agentPrompt !== undefined ? { agentPrompt: params.agentPrompt } : {}),
+        ...(params.agentPrompt !== undefined
+          ? {
+              agentPrompt:
+                clientSurface === 'web'
+                  ? runtime.decorateAgentPromptForClient(params.agentPrompt, clientSurface)
+                  : params.agentPrompt
+            }
+          : {}),
         ...(params.launchConfig ? { launchConfig: params.launchConfig } : {}),
         ...(params.launchToken ? { launchToken: params.launchToken } : {}),
         ...(params.launchAgent ? { launchAgent: params.launchAgent } : {}),
@@ -75,6 +96,14 @@ export const SESSION_TAB_METHODS: RpcAnyMethod[] = [
         // of running down the timeout and rolling back a live tab (#7718).
         signal
       })
+      if (
+        clientSurface === 'web' &&
+        params.agentPrompt === undefined &&
+        (params.agent || params.launchAgent)
+      ) {
+        runtime.armAgentClientContextForPty(created.tab.ptyId, clientSurface)
+      }
+      return created
     }
   }),
   defineStreamingMethod({

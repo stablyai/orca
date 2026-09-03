@@ -289,7 +289,11 @@ describe('agent session RPC methods', () => {
         viewMode: 'chat'
       }),
       (response) => replies.push(JSON.parse(response) as RpcResponse),
-      { clientId: 'authenticated-device', clientKind: 'runtime' }
+      {
+        clientId: 'authenticated-device',
+        clientKind: 'runtime',
+        clientCapabilities: ['client-surface.web.v1']
+      }
     )
 
     expect(replies).toHaveLength(1)
@@ -305,7 +309,7 @@ describe('agent session RPC methods', () => {
         launchPreferences: { model: 'gpt-5', effort: 'high' },
         viewMode: 'chat'
       },
-      { clientId: 'authenticated-device', clientKind: 'runtime' }
+      { clientId: 'authenticated-device', clientKind: 'runtime', clientSurface: 'web' }
     )
   })
 

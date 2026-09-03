@@ -7,6 +7,7 @@ import {
   buildTerminalSendPayload
 } from './terminal-send-payload'
 import { buildAgentPromptPasteBytes } from '../../shared/agent-prompt-injection'
+import type { RuntimeAgentSessionRpcCaller } from '../../shared/agent-session-host-authority'
 
 export class OrcaRuntimeWithControllerKnowsPtyIsLive extends OrcaRuntimeWithResolveTerminalPane {
   protected controllerKnowsPtyIsLive(ptyId: string): boolean {
@@ -128,32 +129,31 @@ export class OrcaRuntimeWithControllerKnowsPtyIsLive extends OrcaRuntimeWithReso
       beforeWrite?: (ptyId: string) => void | Promise<void>
       suffixFailureError?: string
       signal?: AbortSignal
+      clientSurface?: RuntimeAgentSessionRpcCaller['clientSurface']
     } = {}
   ): Promise<RuntimeTerminalSend> {
-    const payload = buildAgentPromptPasteBytes(prompt)
     const pty = this.getLivePtyForHandle(handle)
     if (pty) {
       if (!pty.pty.connected) {
         throw new Error('terminal_not_writable')
       }
-      await assertTerminalInputWithinLimitWithYield(payload)
       const generation = this.getPtyLifecycleGeneration(pty.pty.ptyId)
-      const submits = await this.serializeAgentPromptSubmission(
+      const submitted = await this.serializeAgentPromptSubmission(
         pty.pty.ptyId,
         generation,
         async () => {
           this.assertLiveTerminalHandleTargetsPty(handle, pty.pty.ptyId)
           this.assertAgentPromptGeneration(pty.pty.ptyId, generation)
-          return await this.writeTerminalAgentPrompt(
+          return await this.writeTerminalAgentPromptWithClientContext(
             handle,
             pty.pty.ptyId,
             generation,
-            payload,
+            prompt,
             options
           )
         }
       )
-      const bytesWritten = Buffer.byteLength(payload, 'utf8') + submits
+      const bytesWritten = submitted.payloadBytes + submitted.suffixBytes
       return { handle, accepted: true, bytesWritten }
     }
 
@@ -161,19 +161,63 @@ export class OrcaRuntimeWithControllerKnowsPtyIsLive extends OrcaRuntimeWithReso
     if (!leaf.writable || !leaf.ptyId) {
       throw new Error('terminal_not_writable')
     }
-    await assertTerminalInputWithinLimitWithYield(payload)
     // Why: same absence gate as sendTerminal — a stale graph mirror must not
     // accept a prompt into a void; unknown liveness still proceeds.
     if (await this.isLeafPtyProvenAbsent(leaf.ptyId)) {
       throw new Error('terminal_not_writable')
     }
     const generation = this.getPtyLifecycleGeneration(leaf.ptyId)
-    const submits = await this.serializeAgentPromptSubmission(leaf.ptyId, generation, async () => {
-      this.assertLiveTerminalHandleTargetsPty(handle, leaf.ptyId!)
-      this.assertAgentPromptGeneration(leaf.ptyId!, generation)
-      return await this.writeTerminalAgentPrompt(handle, leaf.ptyId!, generation, payload, options)
-    })
-    const bytesWritten = Buffer.byteLength(payload, 'utf8') + submits
+    const submitted = await this.serializeAgentPromptSubmission(
+      leaf.ptyId,
+      generation,
+      async () => {
+        this.assertLiveTerminalHandleTargetsPty(handle, leaf.ptyId!)
+        this.assertAgentPromptGeneration(leaf.ptyId!, generation)
+        return await this.writeTerminalAgentPromptWithClientContext(
+          handle,
+          leaf.ptyId!,
+          generation,
+          prompt,
+          options
+        )
+      }
+    )
+    const bytesWritten = submitted.payloadBytes + submitted.suffixBytes
     return { handle, accepted: true, bytesWritten }
+  }
+
+  private async writeTerminalAgentPromptWithClientContext(
+    handle: string,
+    ptyId: string,
+    generation: number,
+    prompt: string,
+    options: {
+      beforeWrite?: (ptyId: string) => void | Promise<void>
+      suffixFailureError?: string
+      signal?: AbortSignal
+      clientSurface?: RuntimeAgentSessionRpcCaller['clientSurface']
+    }
+  ): Promise<{ payloadBytes: number; suffixBytes: number }> {
+    const pendingContext = this.agentClientContextByPtyId.get(ptyId)
+    const shouldDecorate =
+      options.clientSurface === 'web' &&
+      pendingContext?.generation === generation &&
+      pendingContext.pending
+    const submittedPrompt = shouldDecorate
+      ? this.decorateAgentPromptForClient(prompt, 'web')
+      : prompt
+    const payload = buildAgentPromptPasteBytes(submittedPrompt)
+    await assertTerminalInputWithinLimitWithYield(payload)
+    const suffixBytes = await this.writeTerminalAgentPrompt(
+      handle,
+      ptyId,
+      generation,
+      payload,
+      options
+    )
+    if (shouldDecorate && this.agentClientContextByPtyId.get(ptyId) === pendingContext) {
+      pendingContext.pending = false
+    }
+    return { payloadBytes: Buffer.byteLength(payload, 'utf8'), suffixBytes }
   }
 }
