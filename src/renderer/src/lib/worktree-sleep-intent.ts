@@ -15,7 +15,12 @@ export function clearWorktreeSleepIntent(worktreeId: string | null): void {
   const listeners = wakeListenersByWorktreeId.get(worktreeId)
   wakeListenersByWorktreeId.delete(worktreeId)
   for (const listener of listeners ?? []) {
-    listener()
+    try {
+      listener()
+    } catch (error) {
+      // Why: one pane's connect failure must not strand its siblings or throw out of a store action.
+      console.error('[sleep-intent] wake listener failed', { worktreeId, error })
+    }
   }
 }
 

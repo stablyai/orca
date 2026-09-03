@@ -21,7 +21,6 @@ export function createSetActiveFolderWorkspace(
     if (!workspace) {
       return
     }
-    clearWorktreeSleepIntent(workspaceKey)
     if (shouldDeferActivationTerminalPrep()) {
       markInputQuietSchedulerInput()
     }
@@ -64,6 +63,8 @@ export function createSetActiveFolderWorkspace(
           : s.folderWorkspaces
       }
     })
+    // Why: cleared after the set() so a waiting pane connects against the activated state.
+    clearWorktreeSleepIntent(workspaceKey)
     if (workspace.isUnread) {
       void get().updateFolderWorkspace(
         folderWorkspaceId,

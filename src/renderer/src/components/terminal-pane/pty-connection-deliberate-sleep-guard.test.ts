@@ -246,6 +246,61 @@ describe('deliberate sleep keeps mounted panes cold', () => {
     expect(transport.connect).not.toHaveBeenCalled()
   })
 
+  it('resumes a waiting pane mounted under a unified tab id', async () => {
+    const { connectPanePty } = await import('./pty-connection')
+    const { clearWorktreeSleepIntent, markWorktreeSleepIntent } =
+      await import('@/lib/worktree-sleep-intent')
+    const transport = createMockTransport()
+    transportFactoryQueue.push(transport)
+    mockStoreState = {
+      ...mockStoreState,
+      activeWorktreeId: 'wt-other',
+      tabsByWorktree: { 'wt-1': [{ id: 'tab-entity', ptyId: null, generation: 3 }] },
+      getTab: (id: string) =>
+        id === 'unified-1' ? { id, contentType: 'terminal', entityId: 'tab-entity' } : null
+    } as never
+    markWorktreeSleepIntent('wt-1')
+    const deps = createDeps({ tabId: 'unified-1', isVisibleRef: { current: false } })
+
+    connectPanePty(createPane(1) as never, createManager(1) as never, deps as never)
+    await flushAsyncTicks()
+    expect(transport.connect).not.toHaveBeenCalled()
+
+    clearWorktreeSleepIntent('wt-1')
+    await flushAsyncTicks()
+
+    expect(transport.connect).toHaveBeenCalledTimes(1)
+  })
+
+  it('re-arms after a wake so a second sleep can hold the pane again', async () => {
+    const { connectPanePty } = await import('./pty-connection')
+    const { clearWorktreeSleepIntent, markWorktreeSleepIntent } =
+      await import('@/lib/worktree-sleep-intent')
+    const transport = createMockTransport()
+    transportFactoryQueue.push(transport)
+    let releaseCwd: (cwd: string) => void = () => {}
+    const cwdPromise = new Promise<string>((resolve) => {
+      releaseCwd = resolve
+    })
+    markWorktreeSleepIntent('wt-1')
+    const deps = createDeps({ tabId: 'tab-resleep', isVisibleRef: { current: false }, cwdPromise })
+
+    connectPanePty(createPane(1) as never, createManager(1) as never, deps as never)
+    await flushAsyncTicks()
+    // Wake: the pane leaves the sleep gate and parks on the cwd gate.
+    clearWorktreeSleepIntent('wt-1')
+    await flushAsyncTicks()
+    // Sleep again before the cwd settles, then wake again.
+    markWorktreeSleepIntent('wt-1')
+    releaseCwd('/cwd')
+    await flushAsyncTicks()
+    expect(transport.connect).not.toHaveBeenCalled()
+    clearWorktreeSleepIntent('wt-1')
+    await flushAsyncTicks()
+
+    expect(transport.connect).toHaveBeenCalledTimes(1)
+  })
+
   it('drops the wake listener when a waiting pane is disposed', async () => {
     const { connectPanePty } = await import('./pty-connection')
     const { clearWorktreeSleepIntent, markWorktreeSleepIntent } =

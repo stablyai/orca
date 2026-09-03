@@ -186,6 +186,14 @@ export async function runSleepWorktrees(worktreeIds: readonly string[]): Promise
         if (typeof window !== 'undefined' && window.api?.ephemeralVm?.suspendWorkspace) {
           await window.api.ephemeralVm.suspendWorkspace({ workspaceId: worktreeId })
         }
+        // Why: a spawn that resolved during teardown binds a PTY and clears the marker;
+        // the workspace is asleep now, so re-assert it. A workspace the user activated
+        // meanwhile is awake by their choice and must not be left marked.
+        if (useAppStore.getState().activeWorktreeId === worktreeId) {
+          clearWorktreeSleepIntent(worktreeId)
+        } else {
+          markWorktreeSleepIntent(worktreeId)
+        }
       } catch (err) {
         console.error('[sleep-worktree] terminal or host suspension failed', {
           worktreeId,

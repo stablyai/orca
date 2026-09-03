@@ -7,6 +7,7 @@ import { hasWorktreeSleepIntent, onWorktreeSleepIntentCleared } from '@/lib/work
 
 import { isRemoteRuntimePtyId } from './paired-parked-terminal-restore'
 import { recordPtyConnectDiagnostic } from './pty-connect-limits'
+import { findTerminalTabForPane } from './terminal-tab-id'
 
 import type { ConnectPanePtySession } from './connect-pane-pty-session'
 import { bindBuildColdRestoreAgentResumeStartup } from './cold-restore-resume-startup'
@@ -49,15 +50,18 @@ export function installRunDeferredConnect(session: ConnectPanePtySession): void 
           `pane=${session.pane.id} tab=${session.deps.tabId} -> WAIT FOR WAKE (deliberate sleep)`
         )
         const unsubscribe = onWorktreeSleepIntentCleared(session.deps.worktreeId, () => {
+          wakeWaitStarted = false
           const index = session.waitTeardowns.indexOf(unsubscribe)
           if (index !== -1) {
             session.waitTeardowns.splice(index, 1)
           }
           // Why: an activation wake bumps the tab generation in the same tick and the
           // remounted pane connects on its own; a stale generation must not connect too.
-          const currentTab = Object.values(useAppStore.getState().tabsByWorktree)
-            .flat()
-            .find((candidate) => candidate.id === session.deps.tabId)
+          const currentTab = findTerminalTabForPane(
+            useAppStore.getState(),
+            session.deps.worktreeId,
+            session.deps.tabId
+          )
           if (!session.disposed && (currentTab?.generation ?? 0) === session.tabGeneration) {
             session.runDeferredConnect()
           }

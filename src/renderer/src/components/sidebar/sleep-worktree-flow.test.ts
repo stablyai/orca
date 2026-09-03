@@ -1,9 +1,20 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const mocks = vi.hoisted(() => {
-  const state = {
-    activeWorktreeId: null as string | null,
-    setActiveWorktree: vi.fn(),
+  const state: {
+    activeWorktreeId: string | null
+    setActiveWorktree: ReturnType<typeof vi.fn>
+    shutdownWorktreeBrowsers: ReturnType<typeof vi.fn>
+    shutdownWorktreeTerminals: ReturnType<typeof vi.fn>
+    suppressPtyExit: ReturnType<typeof vi.fn>
+    consumeSuppressedPtyExit: ReturnType<typeof vi.fn>
+    tabsByWorktree: Record<string, { id: string }[]>
+    ptyIdsByTabId: Record<string, string[]>
+  } = {
+    activeWorktreeId: null,
+    setActiveWorktree: vi.fn((worktreeId: string | null) => {
+      state.activeWorktreeId = worktreeId
+    }),
     shutdownWorktreeBrowsers: vi.fn().mockResolvedValue(undefined),
     shutdownWorktreeTerminals: vi.fn().mockResolvedValue(undefined),
     suppressPtyExit: vi.fn(),
@@ -188,6 +199,34 @@ describe('runSleepWorktree', () => {
     expect(mocks.state.suppressPtyExit).not.toHaveBeenCalled()
     expect(mocks.markWorktreeSleepIntent).toHaveBeenCalledWith('wt-1')
     expect(mocks.clearWorktreeSleepIntent).not.toHaveBeenCalled()
+  })
+
+  it('leaves a worktree the user activated mid-batch awake', async () => {
+    let releaseFirst: () => void = () => {}
+    mocks.state.shutdownWorktreeBrowsers.mockImplementationOnce(
+      () =>
+        new Promise<void>((resolve) => {
+          releaseFirst = resolve
+        })
+    )
+
+    const run = runSleepWorktrees(['wt-1', 'wt-2'])
+    await Promise.resolve()
+    // Why: the user clicked wt-2 while wt-1 was tearing down; sleeping it anyway
+    // must not leave the active workspace marked with no clear pending.
+    mocks.state.activeWorktreeId = 'wt-2'
+    releaseFirst()
+    await run
+
+    expect(mocks.clearWorktreeSleepIntent).toHaveBeenLastCalledWith('wt-2')
+  })
+
+  it('re-asserts the marker after teardown so a late PTY bind cannot un-sleep it', async () => {
+    await runSleepWorktree('wt-1')
+
+    const marks = mocks.markWorktreeSleepIntent.mock.invocationCallOrder
+    const terminalShutdown = mocks.state.shutdownWorktreeTerminals.mock.invocationCallOrder[0]
+    expect(marks.some((order) => order > terminalShutdown)).toBe(true)
   })
 
   it('marks each worktree only when its own teardown starts', async () => {

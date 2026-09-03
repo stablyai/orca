@@ -120,6 +120,20 @@ describe('worktree sleep intent lifecycle', () => {
     unsubscribe()
   })
 
+  it('keeps notifying siblings when one wake listener throws', () => {
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const woke = vi.fn()
+    markWorktreeSleepIntent(WORKTREE_ID)
+    intent.onWorktreeSleepIntentCleared(WORKTREE_ID, () => {
+      throw new Error('boom')
+    })
+    intent.onWorktreeSleepIntentCleared(WORKTREE_ID, woke)
+
+    expect(() => clearWorktreeSleepIntent(WORKTREE_ID)).not.toThrow()
+    expect(woke).toHaveBeenCalledTimes(1)
+    errorSpy.mockRestore()
+  })
+
   it('is forgotten without waking panes when the worktree is purged', () => {
     const store = createTestStore()
     seedWorktree(store)
