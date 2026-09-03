@@ -42,6 +42,13 @@ import { translate } from '@/i18n/i18n'
 
 const EMPTY_PAGE: SentryPage<SentryIssue> = { items: [], nextCursor: null, previousCursor: null }
 
+type SentryIssueListOverrides = {
+  projects?: string[]
+  environments?: string[]
+  statsPeriod?: string
+  sort?: 'date' | 'new' | 'freq' | 'user'
+}
+
 function relativeTime(value: string): string {
   const timestamp = Date.parse(value)
   if (!Number.isFinite(timestamp)) {
@@ -100,7 +107,7 @@ export function TaskPageSentryContent({
   const loadIssues = useCallback(
     async (
       cursor?: string,
-      filters?: { projects: string[]; environments: string[] }
+      overrides?: SentryIssueListOverrides
     ): Promise<void> => {
       const generation = ++issueRequestGeneration.current
       setLoading(true)
@@ -108,10 +115,10 @@ export function TaskPageSentryContent({
       try {
         const next = await sentryListIssues(settings, {
           query,
-          projects: filters?.projects ?? [...selectedProjects],
-          environments: filters?.environments ?? [...selectedEnvironments],
-          statsPeriod,
-          sort,
+          projects: overrides?.projects ?? [...selectedProjects],
+          environments: overrides?.environments ?? [...selectedEnvironments],
+          statsPeriod: overrides?.statsPeriod ?? statsPeriod,
+          sort: overrides?.sort ?? sort,
           cursor,
           limit: 50
         })
@@ -149,23 +156,37 @@ export function TaskPageSentryContent({
   const loadProviderData = useCallback(
     async (resetFilters = false): Promise<void> => {
       const generation = ++catalogRequestGeneration.current
-      const [nextProjects, nextEnvironments] = await Promise.all([
-        sentryListProjects(settings),
-        sentryListEnvironments(settings)
-      ])
-      if (generation !== catalogRequestGeneration.current) {
-        return
-      }
-      setProjects(nextProjects)
-      setEnvironments(nextEnvironments)
+      const invalidatedIssueGeneration = ++issueRequestGeneration.current
+      setLoading(true)
       if (resetFilters) {
-        setSelectedProjects(new Set())
-        setSelectedEnvironments(new Set())
+        setPage(EMPTY_PAGE)
       }
-      await loadIssuesRef.current(
-        undefined,
-        resetFilters ? { projects: [], environments: [] } : undefined
-      )
+      try {
+        const [nextProjects, nextEnvironments] = await Promise.all([
+          sentryListProjects(settings),
+          sentryListEnvironments(settings)
+        ])
+        if (generation !== catalogRequestGeneration.current) {
+          return
+        }
+        setProjects(nextProjects)
+        setEnvironments(nextEnvironments)
+        if (resetFilters) {
+          setSelectedProjects(new Set())
+          setSelectedEnvironments(new Set())
+        }
+        await loadIssuesRef.current(
+          undefined,
+          resetFilters ? { projects: [], environments: [] } : undefined
+        )
+      } finally {
+        if (
+          generation === catalogRequestGeneration.current &&
+          invalidatedIssueGeneration === issueRequestGeneration.current
+        ) {
+          setLoading(false)
+        }
+      }
     },
     [settings]
   )
@@ -339,7 +360,10 @@ export function TaskPageSentryContent({
           label={selectedLabel(selectedProjects, 'All projects')}
           items={projects.map((project) => ({ id: project.id, label: project.name }))}
           selected={selectedProjects}
-          onChange={setSelectedProjects}
+          onChange={(next) => {
+            setSelectedProjects(next)
+            void loadIssues(undefined, { projects: [...next] })
+          }}
         />
         <FilterMenu
           label={selectedLabel(selectedEnvironments, 'All environments')}
@@ -348,9 +372,18 @@ export function TaskPageSentryContent({
             label: environment.name
           }))}
           selected={selectedEnvironments}
-          onChange={setSelectedEnvironments}
+          onChange={(next) => {
+            setSelectedEnvironments(next)
+            void loadIssues(undefined, { environments: [...next] })
+          }}
         />
-        <Select value={statsPeriod} onValueChange={setStatsPeriod}>
+        <Select
+          value={statsPeriod}
+          onValueChange={(next) => {
+            setStatsPeriod(next)
+            void loadIssues(undefined, { statsPeriod: next })
+          }}
+        >
           <SelectTrigger className="h-8 w-28">
             <SelectValue />
           </SelectTrigger>
@@ -361,7 +394,14 @@ export function TaskPageSentryContent({
             <SelectItem value="30d">{translate("auto.components.task.page.sentry.Content.a502b35389", "30 days")}</SelectItem>
           </SelectContent>
         </Select>
-        <Select value={sort} onValueChange={(value) => setSort(value as typeof sort)}>
+        <Select
+          value={sort}
+          onValueChange={(value) => {
+            const next = value as typeof sort
+            setSort(next)
+            void loadIssues(undefined, { sort: next })
+          }}
+        >
           <SelectTrigger className="h-8 w-32">
             <SelectValue />
           </SelectTrigger>
