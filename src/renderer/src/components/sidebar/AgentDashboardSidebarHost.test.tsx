@@ -59,6 +59,40 @@ describe('AgentDashboardSidebarHost', () => {
     await waitFor(() => expect(closeWorkspaceBoard).toHaveBeenCalledOnce())
   })
 
+  it('yields to the page the user just asked for', async () => {
+    const props = {
+      sidebarOpen: true,
+      workspaceBoardOpen: false,
+      closeWorkspaceBoard: vi.fn(),
+      statusBarVisible: true
+    }
+    useAppStore.setState({ activeView: 'terminal', agentDashboardDrawerOpen: true })
+    const view = render(<AgentDashboardSidebarHost {...props} />)
+
+    act(() => useAppStore.getState().openAutomationsPage())
+    view.rerender(<AgentDashboardSidebarHost {...props} />)
+
+    await waitFor(() => expect(useAppStore.getState().agentDashboardDrawerOpen).toBe(false))
+  })
+
+  // Why: opening the drawer never touches activeView, so a rule keyed on the current view rather
+  // than on a change to it would close a drawer opened while standing on one of those pages.
+  it('stays open when opened while a page is already showing', async () => {
+    const props = {
+      sidebarOpen: true,
+      workspaceBoardOpen: false,
+      closeWorkspaceBoard: vi.fn(),
+      statusBarVisible: true
+    }
+    useAppStore.setState({ activeView: 'automations', agentDashboardDrawerOpen: false })
+    const view = render(<AgentDashboardSidebarHost {...props} />)
+
+    act(() => useAppStore.setState({ agentDashboardDrawerOpen: true }))
+    view.rerender(<AgentDashboardSidebarHost {...props} />)
+
+    await waitFor(() => expect(useAppStore.getState().agentDashboardDrawerOpen).toBe(true))
+  })
+
   it('clears an open dashboard when the sidebar closes', async () => {
     useAppStore.setState({ agentDashboardDrawerOpen: true })
     render(
