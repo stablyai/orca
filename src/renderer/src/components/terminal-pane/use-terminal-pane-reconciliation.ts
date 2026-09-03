@@ -9,7 +9,8 @@ import { resolvePaneKeyForManager } from '@/lib/pane-manager/pane-key-resolution
 import {
   isHostAuthoritativeLayout,
   planTerminalLiveLayoutInsertions,
-  planTerminalLiveLayoutRemovals
+  planTerminalLiveLayoutRemovals,
+  selectRetiredPaneIds
 } from './terminal-live-layout-reconciliation'
 import { useTerminalPaneProcessExitActions } from './use-terminal-pane-process-exit-actions'
 import type { TerminalPaneCloseController } from './use-terminal-pane-close-actions'
@@ -19,6 +20,7 @@ export function useTerminalPaneReconciliation(controller: TerminalPaneCloseContr
     activityIsolationSnapshotRef,
     closeTerminalLinkActions,
     containerRef,
+    executeClosePane,
     isActive,
     isRendererVisible,
     isolatedPaneKey,
@@ -85,18 +87,16 @@ export function useTerminalPaneReconciliation(controller: TerminalPaneCloseContr
     }
     // Why: the host retired these leaves (its PTY for them ended), so their panes
     // would otherwise outlive the layout as blank ghosts and take the tab's next
-    // close for themselves. A pane still bound to a PTY is not a ghost — a stale
-    // snapshot may simply not name it yet — and the last pane is never removed.
-    for (const leafId of removals) {
-      const paneId = manager.getNumericIdForLeaf(leafId)
-      if (paneId === null || manager.getPanes().length <= 1) {
-        continue
-      }
-      const transport = paneTransportsRef.current.get(paneId)
-      if (!transport || transport.getPtyId() !== null) {
-        continue
-      }
-      manager.closePane(paneId)
+    // close for themselves. Closing through executeClosePane runs the same
+    // cleanup a user close does: cache timer, agent status, terminal error,
+    // restored-session banner and the leaf's pty binding.
+    const retiredPaneIds = selectRetiredPaneIds(removals, {
+      paneCount: manager.getPanes().length,
+      paneIdForLeaf: (leafId) => manager.getNumericIdForLeaf(leafId),
+      ptyIdForPane: (paneId) => paneTransportsRef.current.get(paneId)?.getPtyId()
+    })
+    for (const paneId of retiredPaneIds) {
+      executeClosePane(paneId)
     }
     if (appliedInsertion) {
       persistLayoutSnapshot()
@@ -110,7 +110,7 @@ export function useTerminalPaneReconciliation(controller: TerminalPaneCloseContr
       manager.setActivePane(nextActivePaneId, { focus: isActive })
     }
     // oxlint-disable-next-line react-hooks/exhaustive-deps -- Preserve the pre-split dependency contract.
-  }, [isActive, paneCount, persistLayoutSnapshot, restoredLayout])
+  }, [executeClosePane, isActive, paneCount, persistLayoutSnapshot, restoredLayout])
 
   useLayoutEffect(() => {
     const snapshots = activityIsolationSnapshotRef.current

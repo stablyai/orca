@@ -183,3 +183,29 @@ export function planTerminalLiveLayoutInsertions(
   ensureSubtree(root)
   return insertions
 }
+
+/** Panes to close for leaves the host retired. Only a pane whose transport has
+ *  no PTY any more is a ghost; a pane with no transport yet, or still bound to
+ *  a PTY, may simply not be named by a stale snapshot. The last pane on the tab
+ *  is never removed. */
+export function selectRetiredPaneIds(
+  retiredLeafIds: readonly string[],
+  view: {
+    paneCount: number
+    paneIdForLeaf: (leafId: string) => number | null
+    ptyIdForPane: (paneId: number) => string | null | undefined
+  }
+): number[] {
+  const paneIds: number[] = []
+  for (const leafId of retiredLeafIds) {
+    if (view.paneCount - paneIds.length <= 1) {
+      break
+    }
+    const paneId = view.paneIdForLeaf(leafId)
+    if (paneId === null || view.ptyIdForPane(paneId) !== null) {
+      continue
+    }
+    paneIds.push(paneId)
+  }
+  return paneIds
+}

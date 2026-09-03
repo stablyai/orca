@@ -2,7 +2,8 @@ import { describe, expect, it } from 'vitest'
 import {
   isHostAuthoritativeLayout,
   planTerminalLiveLayoutInsertions,
-  planTerminalLiveLayoutRemovals
+  planTerminalLiveLayoutRemovals,
+  selectRetiredPaneIds
 } from './terminal-live-layout-reconciliation'
 import type { TerminalPaneLayoutNode } from '../../../../shared/terminal-tab-types'
 
@@ -259,5 +260,35 @@ describe('planTerminalLiveLayoutRemovals', () => {
   it('plans nothing for an empty layout', () => {
     expect(planTerminalLiveLayoutRemovals(null, ['leaf-a'])).toEqual([])
     expect(planTerminalLiveLayoutRemovals(undefined, ['leaf-a'])).toEqual([])
+  })
+})
+
+describe('selectRetiredPaneIds', () => {
+  const view = (ptyIdsByPane: Record<number, string | null | undefined>) => ({
+    paneCount: Object.keys(ptyIdsByPane).length,
+    paneIdForLeaf: (leafId: string) => (leafId === 'leaf-b' ? 2 : leafId === 'leaf-c' ? 3 : null),
+    ptyIdForPane: (paneId: number) => ptyIdsByPane[paneId]
+  })
+
+  it('closes the pane whose transport lost its PTY', () => {
+    // Why: the host retired the leaf because its PTY ended, so a pane that no
+    // longer has one is exactly the blank ghost the layout stopped naming.
+    expect(selectRetiredPaneIds(['leaf-b'], view({ 1: 'pty-a', 2: null }))).toEqual([2])
+  })
+
+  it('keeps a pane still bound to a PTY or not yet attached to a transport', () => {
+    // A stale snapshot may simply not name a live pane yet; a pane with no
+    // transport is still mounting. Neither is evidence of a retired leaf.
+    expect(selectRetiredPaneIds(['leaf-b'], view({ 1: 'pty-a', 2: 'pty-b' }))).toEqual([])
+    expect(selectRetiredPaneIds(['leaf-b'], view({ 1: 'pty-a', 2: undefined }))).toEqual([])
+  })
+
+  it('never removes the last pane on the tab', () => {
+    expect(selectRetiredPaneIds(['leaf-b'], view({ 2: null }))).toEqual([])
+    expect(selectRetiredPaneIds(['leaf-b', 'leaf-c'], view({ 2: null, 3: null }))).toEqual([2])
+  })
+
+  it('skips a leaf that has no mounted pane', () => {
+    expect(selectRetiredPaneIds(['leaf-x'], view({ 1: 'pty-a', 2: null }))).toEqual([])
   })
 })
