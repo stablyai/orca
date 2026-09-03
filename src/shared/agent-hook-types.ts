@@ -17,7 +17,11 @@ export const AGENT_HOOK_TARGETS = [
   'copilot',
   'hermes',
   'devin',
-  'kimi'
+  'kimi',
+  // Why: Kiro CLI hooks live in per-agent config files and cannot be attached
+  // to its built-in default agent, so Orca manages Kiro's native notification
+  // settings instead (see src/main/kiro/hook-service.ts).
+  'kiro'
 ] as const
 export type AgentHookTarget = (typeof AGENT_HOOK_TARGETS)[number]
 

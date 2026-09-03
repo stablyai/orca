@@ -22,6 +22,7 @@ import { CopilotHookService, copilotHookService } from '../copilot/hook-service'
 import { HermesHookService, hermesHookService } from '../hermes/hook-service'
 import { DevinHookService, devinHookService } from '../devin/hook-service'
 import { KimiHookService, kimiHookService } from '../kimi/hook-service'
+import { kiroHookService } from '../kiro/hook-service'
 import { openClaudeHookService } from '../openclaude/hook-service'
 import { MANAGED_AGENT_HOOK_INSTALLERS } from './managed-agent-hook-controls'
 import {
@@ -708,7 +709,12 @@ describe('remote hook service installers', () => {
       ['copilot', copilotHookService],
       ['hermes', hermesHookService],
       ['devin', devinHookService],
-      ['kimi', kimiHookService]
+      ['kimi', kimiHookService],
+      // Why: Kiro has no installRemote - it manages kiro-cli's local
+      // notification settings only (see src/main/kiro/hook-service.ts). The
+      // cast is needed because weak-type checking rejects a service that
+      // shares no optional member with the map's value type.
+      ['kiro', kiroHookService as { installRemote?: unknown }]
     ])
 
     // Guard against a service silently missing from the map above as new agents land.
