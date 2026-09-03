@@ -11,14 +11,20 @@ import type {
   SessionAccumulator
 } from './session-scanner-types'
 import {
-  accumulatorFoldResumeState,
   addPreviewContent,
   addPreviewMessage,
+  cloneSessionAccumulator,
   createAccumulator,
   finalizeSession,
   sessionIdFromFileName,
   updateTimeline
 } from './session-scanner-accumulator'
+import {
+  applyGraphSessionTitle,
+  cloneGraphSessionTitleState,
+  type GraphSessionAgent,
+  type GraphSessionTitleState
+} from './session-scanner-graph-session-title'
 import {
   arrayValue,
   asRecord,
@@ -169,7 +175,7 @@ export function rovoPartsText(parts: unknown[], role: 'user' | 'assistant'): str
 // Agents whose transcripts are append-only message-graph JSONL (session +
 // model_change + message records). OMP and Prime Agent are Pi forks and
 // share the format.
-export type MessageGraphAgent = 'openclaw' | 'pi' | 'omp' | 'prime-agent'
+export type MessageGraphAgent = GraphSessionAgent
 
 export async function parseMessageGraphSessionFile(
   agent: MessageGraphAgent,
@@ -205,12 +211,14 @@ export async function parseMessageGraphSessionContent(
   })
 }
 
-function consumeMessageGraphRecordLine(accumulator: SessionAccumulator, line: string): void {
+function consumeMessageGraphRecordLine(state: GraphSessionTitleState, line: string): void {
   const record = parseJsonObject(line)
   if (!record) {
     return
   }
+  const { accumulator } = state
   updateTimeline(accumulator, extractString(record.timestamp))
+  applyGraphSessionTitle(state, record)
   if (record.type === 'session') {
     const sessionId = extractString(record.id)
     if (sessionId) {
@@ -234,7 +242,7 @@ function consumeMessageGraphRecordLine(accumulator: SessionAccumulator, line: st
   if (role === 'user' || role === 'assistant') {
     accumulator.messageCount++
     if (role === 'user') {
-      accumulator.title ??= extractMessageText(message)
+      accumulator.fallbackTitle ??= extractMessageText(message)
     } else {
       accumulator.model = extractString(message?.model) ?? accumulator.model
       accumulator.totalTokens += tokenTotal(message?.usage)
@@ -247,14 +255,27 @@ export function createMessageGraphSessionResumeState(
   agent: MessageGraphAgent,
   file: FileWithMtime
 ): ResumableSessionParseState {
-  const state = accumulatorFoldResumeState(
-    createAccumulator({ agent, file, sessionId: sessionIdFromFileName(file.path) }),
-    consumeMessageGraphRecordLine
-  )
+  const resume = createMessageGraphResumeFrom({
+    agent,
+    accumulator: createAccumulator({ agent, file, sessionId: sessionIdFromFileName(file.path) }),
+    source: null
+  })
   // Why: only OMP materializes task-subagent transcripts beside its sessions
   // (in the same-named artifact dir); the row UI shows the count without
   // expanding details. Pi/OpenClaw/Prime Agent have no such layout — skip the readdir.
-  return agent === 'omp' ? withOmpSubagentTranscriptCount(state, file.path) : state
+  return agent === 'omp' ? withOmpSubagentTranscriptCount(resume, file.path) : resume
+}
+
+function createMessageGraphResumeFrom(state: GraphSessionTitleState): ResumableSessionParseState {
+  return {
+    consumeLine: (line) => consumeMessageGraphRecordLine(state, line),
+    clone: () => createMessageGraphResumeFrom(cloneGraphSessionTitleState(state)),
+    touchFile: (nextFile) => {
+      state.accumulator.modifiedAt = nextFile.modifiedAt
+    },
+    finalize: (platform, options) =>
+      finalizeSession(cloneSessionAccumulator(state.accumulator), platform, options)
+  }
 }
 
 async function parseMessageGraphSessionLines(args: {

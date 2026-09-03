@@ -768,6 +768,7 @@ describe('scanAiVaultSessions', () => {
     const ompSession = result.sessions.find((session) => session.agent === 'omp')
     expect(ompSession?.model).toBe('gpt-5.4-mini')
     expect(ompSession?.totalTokens).toBe(160)
+    expect(ompSession?.title).toBe('OMP session title')
 
     // Prime Agent keeps Pi's `model_change.modelId` key, so the pre-reply model
     // must come through even though no assistant message was written yet.

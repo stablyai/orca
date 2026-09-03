@@ -8,7 +8,11 @@ import {
   codexFixture,
   codexWorkerFixtureLines
 } from './session-scanner-codex-fixtures'
-import { allIncrementalAgentFixtures } from './session-scanner-incremental-fixtures'
+import {
+  allIncrementalAgentFixtures,
+  ompFixture,
+  piFixture
+} from './session-scanner-incremental-fixtures'
 import {
   createSessionParseStats,
   parseAgentSessionFileCached,
@@ -17,6 +21,11 @@ import {
 import type { SessionFileCandidate } from './session-scanner-types'
 
 let tempRoots: string[] = []
+
+const titleMetadataFixtures = [
+  { name: 'pi', fixture: piFixture(), expectedTitle: 'Pi renamed session' },
+  { name: 'omp', fixture: ompFixture(), expectedTitle: 'OMP renamed session' }
+]
 
 beforeEach(() => {
   resetSessionParseCacheForTests()
@@ -133,6 +142,78 @@ describe.each(allIncrementalAgentFixtures())('incremental parse parity: $agent',
     expect(completed).toEqual(
       await parseAgentSessionFile(await candidateFor(fixture.agent, path), process.platform)
     )
+  })
+})
+
+describe.each(titleMetadataFixtures)('incremental title metadata: $name', (entry) => {
+  it('adopts a harness rename appended after the cached scan', async () => {
+    const root = await makeTempDir()
+    const path = join(root, entry.fixture.fileName)
+    await mkdir(dirname(path), { recursive: true })
+    await writeFile(path, `${entry.fixture.seedLines.join('\n')}\n`)
+    await parseAgentSessionFileCached(
+      await candidateFor(entry.fixture.agent, path),
+      process.platform
+    )
+
+    await appendFile(path, `${entry.fixture.appendLines.join('\n')}\n`)
+    const grownCandidate = await candidateFor(entry.fixture.agent, path)
+    const stats = createSessionParseStats()
+    const incremental = await parseAgentSessionFileCached(grownCandidate, process.platform, stats)
+    expect(stats.incremental).toBe(1)
+    expect(incremental?.title).toBe(entry.expectedTitle)
+    expect(incremental).toEqual(await parseAgentSessionFile(grownCandidate, process.platform))
+  })
+})
+
+describe('incremental OMP title precedence', () => {
+  it('keeps a user title ahead of an appended automatic title', async () => {
+    const root = await makeTempDir()
+    const path = join(root, ompFixture().fileName)
+    await writeFile(
+      path,
+      `${[
+        JSON.stringify({
+          type: 'title',
+          v: 1,
+          title: 'Persisted user title',
+          source: 'user',
+          updatedAt: '2026-05-01T10:00:00.000Z',
+          pad: ''
+        }),
+        JSON.stringify({
+          type: 'session',
+          id: 'omp-session',
+          cwd: '/repo/app',
+          title: 'Stale source-less title',
+          timestamp: '2026-05-01T10:00:00.000Z'
+        }),
+        JSON.stringify({
+          type: 'message',
+          message: { role: 'user', content: 'first prompt' },
+          timestamp: '2026-05-01T10:00:05.000Z'
+        })
+      ].join('\n')}\n`
+    )
+    await parseAgentSessionFileCached(await candidateFor('omp', path), process.platform)
+
+    await appendFile(
+      path,
+      `${JSON.stringify({
+        type: 'title_change',
+        title: 'Later automatic title',
+        source: 'auto',
+        timestamp: '2026-05-01T10:00:30.000Z'
+      })}\n`
+    )
+    const stats = createSessionParseStats()
+    const incremental = await parseAgentSessionFileCached(
+      await candidateFor('omp', path),
+      process.platform,
+      stats
+    )
+    expect(stats.incremental).toBe(1)
+    expect(incremental?.title).toBe('Persisted user title')
   })
 })
 

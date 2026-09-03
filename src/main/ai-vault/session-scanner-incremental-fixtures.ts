@@ -170,6 +170,13 @@ export function piFixture(): IncrementalAgentFixture {
     ],
     appendLines: [
       JSON.stringify({
+        type: 'session_info',
+        id: 'pi-name-1',
+        parentId: null,
+        name: 'Pi renamed session',
+        timestamp: '2026-05-01T10:00:20.000Z'
+      }),
+      JSON.stringify({
         type: 'model_change',
         modelId: 'pi-2',
         timestamp: '2026-05-01T10:00:30.000Z'
@@ -192,8 +199,8 @@ export function piFixture(): IncrementalAgentFixture {
 
 // OMP is a Pi fork sharing the message-graph format, but keys the model on
 // `model` (not Pi's `modelId`); its own fixture exercises the registry's 'omp'
-// branch and that model-key difference. (The session `title` is included for
-// realism only — the parser derives the title from the first user message.)
+// branch and that model-key difference. The appended title change mirrors a
+// persisted `/rename` after the initial scan.
 export function ompFixture(): IncrementalAgentFixture {
   return {
     agent: 'omp',
@@ -204,7 +211,8 @@ export function ompFixture(): IncrementalAgentFixture {
         version: 3,
         id: 'cccccccc-dddd-4eee-8fff-000000000000',
         cwd: '/repo/app',
-        title: 'OMP session title',
+        title: 'OMP automatic title',
+        titleSource: 'auto',
         timestamp: '2026-05-01T10:00:00.000Z'
       }),
       JSON.stringify({
@@ -219,6 +227,15 @@ export function ompFixture(): IncrementalAgentFixture {
       })
     ],
     appendLines: [
+      JSON.stringify({
+        type: 'title_change',
+        id: 'omp-title-1',
+        parentId: null,
+        title: 'OMP renamed session',
+        previousTitle: 'OMP automatic title',
+        source: 'user',
+        timestamp: '2026-05-01T10:00:30.000Z'
+      }),
       JSON.stringify({
         type: 'message',
         message: {
