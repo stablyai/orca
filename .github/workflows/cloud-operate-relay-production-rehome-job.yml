@@ -26,6 +26,9 @@ permissions:
 
 defaults:
   run:
+    # `shell: bash` adds pipefail; without it `node ... | tee` reports tee's exit code and a
+    # thrown inspect/apply passed green (Aug 28-29 and Sep 3 2026 runs).
+    shell: bash
     working-directory: cloud
 
 jobs:
