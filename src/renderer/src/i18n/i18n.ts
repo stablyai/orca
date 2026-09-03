@@ -15,7 +15,7 @@ import type { PluginLanguagePackRegistration } from '../../../shared/plugins/plu
 
 export const i18n: I18nInstance = i18next.createInstance()
 
-// Why: only the English catalog is bundled eagerly. The other four locales add
+// Why: only the English catalog is bundled eagerly. The other five locales add
 // ~2MB to the renderer's startup chunk (parsed on every launch) even though the
 // app always boots in English and only switches after the persisted UI language
 // loads. A lazy backend fetches each non-English catalog on demand, so any
@@ -28,6 +28,7 @@ const NON_DEFAULT_LOCALE_LOADERS: Record<
   es: () => import('./locales/es.json'),
   ja: () => import('./locales/ja.json'),
   ko: () => import('./locales/ko.json'),
+  pt: () => import('./locales/pt.json'),
   zh: () => import('./locales/zh.json')
 }
 
