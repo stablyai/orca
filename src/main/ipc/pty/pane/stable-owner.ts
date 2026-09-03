@@ -12,6 +12,8 @@ import {
 } from '../../../daemon/daemon-errors'
 import { ptyIncarnationById, ptyOwnership } from '../provider/ownership-state'
 import { isPtyAlreadyGoneError } from '../provider/liveness'
+import { isSshPtyAbsentFromRelayError } from '../../../providers/ssh-pty-errors'
+import { spawnWithoutReplayedIntent } from './relay-replacement-resume-suppression'
 import { clearProviderPtyState } from '../provider/state-cleanup'
 
 export type StablePaneOwner = {
@@ -166,6 +168,8 @@ export type StablePaneSpawnContext = {
   connectionId?: string | null
   resolveOwner?: () => StablePaneOwner | null
   onFreshSpawn?: (result: PtySpawnResult) => void
+  /** Fired when a reachable relay positively answered this exact PTY id absent. */
+  onRelayPositiveAbsence?: () => void
 }
 
 export function stablePanePersistenceFence(
@@ -242,6 +246,9 @@ export async function attachStablePaneOwner(
     if (!isPtyAlreadyGoneError(error)) {
       throw error
     }
+    if (isSshPtyAbsentFromRelayError(error)) {
+      args.onRelayPositiveAbsence?.()
+    }
     const ownerBeforeRetire = args.resolveOwner?.()
     if (
       ownerBeforeRetire &&
@@ -282,9 +289,24 @@ export async function spawnForStablePane(
   args: StablePaneSpawnContext
 ): Promise<{ result: PtySpawnResult; owner: StablePaneOwner | null }> {
   if (args.owner) {
-    const attached = await attachStablePaneOwner({ ...args, owner: args.owner })
+    let relayAnsweredAbsent = false
+    const attached = await attachStablePaneOwner({
+      ...args,
+      owner: args.owner,
+      onRelayPositiveAbsence: () => {
+        relayAnsweredAbsent = true
+      }
+    })
     if (attached) {
       return attached
+    }
+    // Why: the user still needs a terminal, so the spawn itself is never gated — only the startup
+    // intent is, and only when the answering relay proves it never held the binding it answered for.
+    const plain = relayAnsweredAbsent
+      ? await spawnWithoutReplayedIntent({ ...args, ptyId: args.owner.ptyId })
+      : null
+    if (plain) {
+      return { result: plain, owner: null }
     }
   }
   const result = await args.provider.spawn(args.spawnOptions)

@@ -57,6 +57,9 @@ export type PtySpawnResult = {
   snapshotTerminalOwner?: TerminalOwner
   /** True when the spawn reattached to an existing daemon session. */
   isReattach?: boolean
+  /** Main dropped this spawn's resume/launch intent, so the pane is a NEW session. Set by main,
+   *  not the provider; the renderer swaps the restored banner for "resume unavailable". */
+  agentResumeUnavailable?: true
   /** Last OSC title tracked by the daemon session the snapshot came from.
    *  Seeds main's terminal title records after a relaunch; never replayed
    *  into a terminal. */

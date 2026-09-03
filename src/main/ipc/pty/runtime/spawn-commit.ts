@@ -226,10 +226,11 @@ export async function commitRuntimePtySpawn(ctx: RuntimePtySpawnState) {
   if (!ctx.stablePaneOwner) {
     ctx.deps.runtime?.noteTerminalSpawnCommand?.(ctx.result.id, ctx.launchCommand ?? null)
   }
-  if (ctx.isClaudeLaunch && !ctx.stablePaneOwner) {
+  if (ctx.isClaudeLaunch && !ctx.stablePaneOwner && !ctx.result.agentResumeUnavailable) {
     markClaudePtySpawned(ctx.result.id)
   }
-  if (args.telemetry && !ctx.stablePaneOwner) {
+  // Why: a suppressed resume produced a plain shell, so there is no agent launch to report.
+  if (args.telemetry && !ctx.stablePaneOwner && !ctx.result.agentResumeUnavailable) {
     const agentKindParse = agentKindSchema.safeParse(args.telemetry.agent_kind)
     const launchSourceParse = launchSourceSchema.safeParse(args.telemetry.launch_source)
     const requestKindParse = requestKindSchema.safeParse(args.telemetry.request_kind)

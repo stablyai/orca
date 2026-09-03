@@ -131,7 +131,7 @@ export async function commitPtyIpcSpawn(ctx: PtyIpcSpawnState): Promise<PtySpawn
       typeof ctx.launchCommand === 'string' ? ctx.launchCommand : null
     )
   }
-  if (ctx.isClaudeLaunch && !ctx.stablePaneOwner) {
+  if (ctx.isClaudeLaunch && !ctx.stablePaneOwner && !ctx.result.agentResumeUnavailable) {
     markClaudePtySpawned(ctx.result.id)
   }
   // Why: record the paneKey mapping so clearProviderPtyState can clear the agent-hooks server's per-paneKey caches on exit.
@@ -189,7 +189,8 @@ export async function commitPtyIpcSpawn(ctx: PtyIpcSpawnState): Promise<PtySpawn
     })
   }
   // Why: telemetry-plan.md§Agent launch semantics — fire agent_started only after spawn resolved; safeParse each field so a spoofed IPC payload can't poison the event (missing required field skips it).
-  if (args.telemetry && !ctx.stablePaneOwner) {
+  // Why: a suppressed resume produced a plain shell, so there is no agent launch to report.
+  if (args.telemetry && !ctx.stablePaneOwner && !ctx.result.agentResumeUnavailable) {
     const agentKindParse = agentKindSchema.safeParse(args.telemetry.agent_kind)
     const launchSourceParse = launchSourceSchema.safeParse(args.telemetry.launch_source)
     const requestKindParse = requestKindSchema.safeParse(args.telemetry.request_kind)
