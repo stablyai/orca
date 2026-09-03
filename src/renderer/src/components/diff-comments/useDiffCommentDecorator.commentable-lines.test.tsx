@@ -178,7 +178,55 @@ afterEach(() => {
   vi.clearAllMocks()
 })
 
+function countingCommentableLines(length: number): {
+  lines: readonly number[]
+  joins: () => number
+} {
+  const lines = Array.from({ length }, (_, index) => index + 1)
+  let joins = 0
+  Object.defineProperty(lines, 'join', {
+    configurable: true,
+    value: (separator?: string) => {
+      joins += 1
+      return Array.prototype.join.call(lines, separator)
+    }
+  })
+  return { lines, joins: () => joins }
+}
+
 describe('useDiffCommentDecorator commentable-line churn', () => {
+  it('joins the commentable-line array once, not once per render, for a stable array', () => {
+    const fake = createFakeEditor()
+    const comments = [reviewNote(1)]
+    // reviewCommentLineNumbers carries every added and context line of the patch.
+    const { lines, joins } = countingCommentableLines(4_000)
+    const hook = renderDecorator(fake, { commentableLineNumbers: lines, comments })
+
+    for (let render = 1; render < 100; render += 1) {
+      hook.rerender({ commentableLineNumbers: lines, comments })
+    }
+
+    expect(joins()).toBe(1)
+  })
+
+  it('still re-keys on a fresh-but-equal array so the comment set survives a review refresh', () => {
+    const fake = createFakeEditor()
+    const comments = [reviewNote(1)]
+    const hook = renderDecorator(fake, {
+      commentableLineNumbers: freshCommentableLines(),
+      comments
+    })
+
+    fake.emitMouseMove(12)
+    expect(isAddButtonVisible(fake.domNode)).toBe(true)
+
+    hook.rerender({ commentableLineNumbers: freshCommentableLines(), comments })
+
+    fake.emitMouseMove(12)
+    expect(isAddButtonVisible(fake.domNode)).toBe(true)
+    expect(rootCounts.created).toBe(1)
+  })
+
   it('keeps every comment root and view zone alive across value-equal review refreshes', async () => {
     const fake = createFakeEditor()
     const comments = [reviewNote(1), reviewNote(2), reviewNote(3)]

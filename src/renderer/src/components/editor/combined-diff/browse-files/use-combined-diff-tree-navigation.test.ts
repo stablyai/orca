@@ -32,6 +32,7 @@ function renderNavigation(sections: DiffSection[], entrySignature: string) {
         entrySignature: props.entrySignature,
         markDirectScrollInput: vi.fn(),
         scrollToIndex: vi.fn(),
+        sectionIndexByKey: new Map(props.sections.map((section, index) => [section.key, index])),
         sections: props.sections,
         sectionsRef,
         toggleSection: vi.fn(),

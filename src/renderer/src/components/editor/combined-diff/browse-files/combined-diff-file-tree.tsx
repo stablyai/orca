@@ -20,8 +20,18 @@ import {
   buildCombinedDiffUncommittedTreeGroups,
   flattenCombinedDiffTreeRoots,
   getViewedCombinedDiffTreeVisibility,
+  type CombinedDiffTreeGroup,
   type CombinedDiffTreeNode
 } from './combined-diff-file-tree-model'
+
+// Why: a collapsed tree renders nothing, so every memo below short-circuits to one of these instead
+// of building and flattening the whole tree behind a hidden panel. Expanding rebuilds them, which
+// an expand already costs today.
+const EMPTY_TREE_ENTRIES: readonly CombinedDiffFileTreeEntry[] = Object.freeze([])
+const EMPTY_TREE_EXTENSIONS: readonly string[] = Object.freeze([])
+const EMPTY_UNCOMMITTED_TREE_GROUPS: CombinedDiffTreeGroup[] = []
+const EMPTY_TREE_ROOTS: CombinedDiffTreeNode[] = []
+const EMPTY_TREE_ROWS: CombinedDiffTreeNode[] = []
 
 export function CombinedDiffFileTree({
   mode,
@@ -67,19 +77,24 @@ export function CombinedDiffFileTree({
   }, [])
 
   const availableExtensions = React.useMemo(
-    () => Array.from(new Set(entries.map(getEntryExtension))).sort(),
-    [entries]
+    () =>
+      collapsed
+        ? EMPTY_TREE_EXTENSIONS
+        : Array.from(new Set(entries.map(getEntryExtension))).sort(),
+    [collapsed, entries]
   )
   // Why: viewed/loading state changes for one section must not invalidate the path filter or tree
   // construction. It is applied below as a visibility overlay.
   const structurallyFilteredEntries = React.useMemo(
     () =>
-      getCombinedDiffFileTreeEntriesMatchingStaticFilters({
-        entries,
-        query,
-        excludedExtensions
-      }),
-    [entries, excludedExtensions, query]
+      collapsed
+        ? EMPTY_TREE_ENTRIES
+        : getCombinedDiffFileTreeEntriesMatchingStaticFilters({
+            entries,
+            query,
+            excludedExtensions
+          }),
+    [collapsed, entries, excludedExtensions, query]
   )
   const toggleExtension = React.useCallback((extension: string) => {
     setExcludedExtensions((prev) => {
@@ -102,37 +117,39 @@ export function CombinedDiffFileTree({
 
   const uncommittedTreeGroups = React.useMemo(
     () =>
-      mode === 'all' || mode === 'uncommitted'
+      !collapsed && (mode === 'all' || mode === 'uncommitted')
         ? buildCombinedDiffUncommittedTreeGroups(structurallyFilteredEntries)
-        : [],
-    [mode, structurallyFilteredEntries]
+        : EMPTY_UNCOMMITTED_TREE_GROUPS,
+    [collapsed, mode, structurallyFilteredEntries]
   )
   const branchTreeRoots = React.useMemo(
     () =>
-      mode === 'all' || mode === 'branch' || mode === 'commit'
+      !collapsed && (mode === 'all' || mode === 'branch' || mode === 'commit')
         ? buildCombinedDiffBranchTreeRoots(mode, structurallyFilteredEntries)
-        : [],
-    [mode, structurallyFilteredEntries]
+        : EMPTY_TREE_ROOTS,
+    [collapsed, mode, structurallyFilteredEntries]
   )
   // Why: the viewed overlay below replaces these rows entirely when viewed files are hidden, so
   // flattening the unfiltered tree there is pure dead work.
   const uncommittedRowsByArea = React.useMemo(() => {
     const rowsByArea = new Map<string, CombinedDiffTreeNode[]>()
-    if (!includeViewed) {
+    if (collapsed || !includeViewed) {
       return rowsByArea
     }
     for (const group of uncommittedTreeGroups) {
       rowsByArea.set(group.area, flattenCombinedDiffTreeRoots(group.roots, collapsedDirectoryKeys))
     }
     return rowsByArea
-  }, [collapsedDirectoryKeys, includeViewed, uncommittedTreeGroups])
+  }, [collapsed, collapsedDirectoryKeys, includeViewed, uncommittedTreeGroups])
   const branchRows = React.useMemo(
     () =>
-      includeViewed ? flattenCombinedDiffTreeRoots(branchTreeRoots, collapsedDirectoryKeys) : [],
-    [branchTreeRoots, collapsedDirectoryKeys, includeViewed]
+      !collapsed && includeViewed
+        ? flattenCombinedDiffTreeRoots(branchTreeRoots, collapsedDirectoryKeys)
+        : EMPTY_TREE_ROWS,
+    [branchTreeRoots, collapsed, collapsedDirectoryKeys, includeViewed]
   )
   const uncommittedVisibleRowsByArea = React.useMemo(() => {
-    if (includeViewed) {
+    if (collapsed || includeViewed) {
       return null
     }
     const rowsByArea = new Map<string, ReturnType<typeof getViewedCombinedDiffTreeVisibility>>()
@@ -148,10 +165,17 @@ export function CombinedDiffFileTree({
       )
     }
     return rowsByArea
-  }, [collapsedDirectoryKeys, includeViewed, mode, uncommittedTreeGroups, viewedSectionKeys])
+  }, [
+    collapsed,
+    collapsedDirectoryKeys,
+    includeViewed,
+    mode,
+    uncommittedTreeGroups,
+    viewedSectionKeys
+  ])
   const branchVisibleRows = React.useMemo(
     () =>
-      includeViewed
+      collapsed || includeViewed
         ? null
         : getViewedCombinedDiffTreeVisibility({
             roots: branchTreeRoots,
@@ -159,7 +183,7 @@ export function CombinedDiffFileTree({
             mode,
             viewedSectionKeys
           }),
-    [branchTreeRoots, collapsedDirectoryKeys, includeViewed, mode, viewedSectionKeys]
+    [branchTreeRoots, collapsed, collapsedDirectoryKeys, includeViewed, mode, viewedSectionKeys]
   )
   const visibleEntryCount = includeViewed
     ? structurallyFilteredEntries.length

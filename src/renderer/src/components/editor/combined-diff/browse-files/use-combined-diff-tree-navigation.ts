@@ -3,14 +3,13 @@ import type { GitBranchChangeEntry } from '../../../../../../shared/git-diff-com
 import type { GitStatusEntry } from '../../../../../../shared/git-status-types'
 import type { DiffSection } from '../../diff-section-types'
 import type { CombinedDiffFileTreeMode } from '../resolve-changes/combined-diff-section-identity'
-import { useCombinedDiffSectionIndexMap } from '../resolve-changes/use-combined-diff-section-index-map'
 import { handleCombinedDiffFileTreeNavigation } from './combined-diff-file-tree-navigation'
 import { isCombinedDiffSectionViewed } from './combined-diff-file-tree-filter'
 
 export type CombinedDiffTreeNavigation = {
   activeTreeSectionKey: string | null
   handleTreeNavigate: (entry: GitStatusEntry | GitBranchChangeEntry) => void
-  sectionIndexByKey: Map<string, number>
+  sectionIndexByKey: ReadonlyMap<string, number>
   sectionIndexByKeyRef: React.RefObject<ReadonlyMap<string, number>>
   viewedSectionKeys: Set<string>
 }
@@ -21,6 +20,7 @@ export function useCombinedDiffTreeNavigation({
   entrySignature,
   markDirectScrollInput,
   scrollToIndex,
+  sectionIndexByKey,
   sections,
   sectionsRef,
   toggleSection,
@@ -30,12 +30,13 @@ export function useCombinedDiffTreeNavigation({
   entrySignature: string
   markDirectScrollInput: () => void
   scrollToIndex: (index: number) => void
+  // Why: hoisted to the viewer so the scroll anchor and the tree share one identity-stable map.
+  sectionIndexByKey: ReadonlyMap<string, number>
   sections: DiffSection[]
   sectionsRef: React.RefObject<DiffSection[]>
   toggleSection: (index: number) => void
   treeMode: CombinedDiffFileTreeMode
 }): CombinedDiffTreeNavigation {
-  const sectionIndexByKey = useCombinedDiffSectionIndexMap({ entrySignature, sections })
   const sectionIndexByKeyRef = useRef<ReadonlyMap<string, number>>(sectionIndexByKey)
   sectionIndexByKeyRef.current = sectionIndexByKey
 
@@ -79,6 +80,11 @@ export function useCombinedDiffTreeNavigation({
       const previousSection = previous.sections[index]
       const section = sections[index]
       if (!previousSection || !section) {
+        continue
+      }
+      // Why: a section load rewrites one element of a `prev.map(...)` copy, so identity settles
+      // every untouched row without re-deriving its viewed state.
+      if (previousSection === section) {
         continue
       }
       // Why: reordered keys can't be patched index by index — a later delete would drop an earlier add.
