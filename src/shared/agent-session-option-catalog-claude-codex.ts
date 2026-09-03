@@ -174,6 +174,9 @@ export const CLAUDE_SESSION_OPTION_CATALOG: AgentSessionOptionCatalog = {
     }
   },
   unknownModelOptions: [claudeEffort(true)],
+  discoveredModelsReplaceSeed: true,
+  // Why: list_models omits Fable until interactive /model collects one-time consent.
+  consentGatedModelIds: ['fable'],
   listModels: {
     command: `echo '${CLAUDE_MODEL_LIST_STDIN.trim()}' | claude ${CLAUDE_MODEL_LIST_ARGS.join(' ')}`,
     parse: parseClaudeCatalogModels

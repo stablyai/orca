@@ -1,5 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { mergeDiscoveredAuthoritativeModels } from '../../../../shared/agent-session-option-catalog'
+import {
+  mergeDiscoveredAuthoritativeModels,
+  type CatalogModel
+} from '../../../../shared/agent-session-option-catalog'
+import { CLAUDE_SESSION_OPTION_CATALOG } from '../../../../shared/agent-session-option-catalog-claude-codex'
 import { GROK_SESSION_OPTION_CATALOG } from '../../../../shared/agent-session-option-catalog-grok'
 import { updateNativeChatSessionOptionDefaults } from '../../../../shared/native-chat-session-option-defaults'
 import type { PersistedNativeChatSessionOptions } from '../../../../shared/native-chat-session-options'
@@ -92,5 +96,62 @@ describe('retired grok model untracking', () => {
     // A typed id the list does carry still persists as before.
     surface.recordOutgoingCommand('/model grok-5')
     expect(persisted().grok?.model).toBe('grok-5')
+  })
+})
+
+describe('retired Claude model untracking', () => {
+  beforeEach(() => clearNativeChatSessionOptionCacheForTests())
+
+  const discoveredClaude = (): CatalogModel[] => [
+    {
+      ...CLAUDE_SESSION_OPTION_CATALOG.models.find((model) => model.id === 'fable')!,
+      isDefault: true,
+      options: CLAUDE_SESSION_OPTION_CATALOG.models.find((model) => model.id === 'fable')!.options
+    },
+    { id: 'sonnet', label: 'Sonnet', options: [] }
+  ]
+
+  function createClaudeSurface(args?: Partial<CreateNativeChatPtySessionOptionsArgs>): {
+    surface: NativeChatPtySessionOptionsSurface
+    persisted: () => PersistedNativeChatSessionOptions
+  } {
+    let persisted: PersistedNativeChatSessionOptions = {}
+    const surface = createNativeChatPtySessionOptions({
+      agent: 'claude',
+      scopeKey: 'claude-pty-1',
+      mode: 'live',
+      dispatchCommand: vi.fn(),
+      persistSelection: ({ modelId, optionId, value, adoptModelAsLaunchDefault }) => {
+        persisted = updateNativeChatSessionOptionDefaults({
+          persisted,
+          agent: 'claude',
+          modelId,
+          optionId,
+          value,
+          adoptModelAsLaunchDefault
+        })
+      },
+      ...args
+    })!
+    return { surface, persisted: () => persisted }
+  }
+
+  it('untracks an omitted Claude alias', () => {
+    seedNativeChatAppliedSessionOptions('claude-pty-1', 'claude', { model: 'opus' })
+    const { surface, persisted } = createClaudeSurface()
+
+    surface.replaceModels(discoveredClaude())
+
+    expect(readNativeChatSessionOptionCache('claude-pty-1')?.model).toBeUndefined()
+    expect(persisted().claude).toBeUndefined()
+  })
+
+  it('does not adopt an omitted typed Claude alias as launch default', () => {
+    const { surface, persisted } = createClaudeSurface({ initialModels: discoveredClaude() })
+
+    surface.recordOutgoingCommand('/model opus')
+    expect(persisted().claude?.model).toBeUndefined()
+    surface.recordOutgoingCommand('/model fable')
+    expect(persisted().claude?.model).toBe('fable')
   })
 })

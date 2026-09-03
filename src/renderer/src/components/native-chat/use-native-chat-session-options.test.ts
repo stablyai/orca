@@ -82,8 +82,9 @@ describe('useNativeChatSessionOptions model reporting', () => {
     await waitFor(() =>
       expect(modelDescriptor(result.current.snapshot).currentValue).toBe('opus[1m]')
     )
-    // The invented family row is gone: every choice is one the host listed.
+    // Invented family rows stay absent; only consent-gated Fable is restored.
     expect(modelDescriptor(result.current.snapshot).choices.map((choice) => choice.value)).toEqual([
+      'fable',
       'opus[1m]',
       'haiku'
     ])
@@ -130,7 +131,7 @@ describe('useNativeChatSessionOptions model reporting', () => {
     await waitFor(() =>
       expect(
         modelDescriptor(result.current.snapshot).choices.map((choice) => choice.value)
-      ).toEqual(['opus[1m]', 'haiku'])
+      ).toEqual(['fable', 'opus[1m]', 'haiku'])
     )
     expect(modelDescriptor(result.current.snapshot).currentValue).toBeUndefined()
   })
@@ -171,7 +172,7 @@ describe('useNativeChatSessionOptions model reporting', () => {
     await waitFor(() =>
       expect(
         modelDescriptor(result.current.snapshot).choices.map((choice) => choice.value)
-      ).toEqual(['opus[1m]', 'haiku'])
+      ).toEqual(['fable', 'opus[1m]', 'haiku'])
     )
     expect(modelDescriptor(result.current.snapshot).currentValue).toBeUndefined()
   })

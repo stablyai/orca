@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useSyncExternalStore } from 'react'
 import type { AgentType } from '../../../../shared/agent-status-types'
 import {
+  discoveredModelsDefineCatalogMembership,
   getAgentSessionOptionCatalog,
   type CatalogModel
 } from '../../../../shared/agent-session-option-catalog'
@@ -68,7 +69,8 @@ export async function retirePersistedModelMissingFromDiscovery(
   agent: AgentType,
   models: readonly CatalogModel[]
 ): Promise<void> {
-  if (!getAgentSessionOptionCatalog(agent)?.discoveredModelsAreAuthoritative) {
+  const catalog = getAgentSessionOptionCatalog(agent)
+  if (!catalog || !discoveredModelsDefineCatalogMembership(catalog)) {
     return
   }
   // An empty list means the probe failed, not that the account has no models.

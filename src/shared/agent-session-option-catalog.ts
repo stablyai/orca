@@ -40,6 +40,16 @@ export function getAgentSessionOptionCatalog(agent: AgentType): AgentSessionOpti
   return CATALOGS[agent] ?? null
 }
 
+/** Whether a successful discovery result defines the catalog's model membership. */
+export function discoveredModelsDefineCatalogMembership(
+  catalog: AgentSessionOptionCatalog
+): boolean {
+  return (
+    catalog.discoveredModelsReplaceSeed === true ||
+    catalog.discoveredModelsAreAuthoritative === true
+  )
+}
+
 export function findCatalogModel(
   catalog: AgentSessionOptionCatalog,
   modelId: string
@@ -69,6 +79,19 @@ export function mergeCatalogModels(
     return { ...model, ...live, options: model.options }
   })
   return [...merged, ...discoveredById.values()]
+}
+
+/** Keep only consent-gated seed rows a replacing probe legitimately omitted. */
+export function mergeDiscoveredModelsWithConsentGatedSeeds(
+  catalog: AgentSessionOptionCatalog,
+  discovered: readonly CatalogModel[]
+): CatalogModel[] {
+  const consentGatedIds = catalog.consentGatedModelIds ?? []
+  const discoveredIds = new Set(discovered.map((model) => model.id))
+  const missingConsentGatedModels = catalog.models.filter(
+    (model) => consentGatedIds.includes(model.id) && !discoveredIds.has(model.id)
+  )
+  return [...missingConsentGatedModels, ...discovered]
 }
 
 /** Discovery decides membership; the seed keeps its option menus, which discovery never carries.

@@ -1,7 +1,9 @@
 import type { AgentType } from '../../../../shared/agent-status-types'
 import {
+  discoveredModelsDefineCatalogMembership,
   getAgentSessionOptionCatalog,
   mergeCatalogModels,
+  mergeDiscoveredModelsWithConsentGatedSeeds,
   mergeDiscoveredAuthoritativeModels,
   type CatalogModel
 } from '../../../../shared/agent-session-option-catalog'
@@ -54,7 +56,8 @@ export function resolveNativeChatLaunchSessionOptions(
   agent: AgentType
 ): Record<string, SessionOptionValue> | undefined {
   const values = resolveNativeChatSessionOptionDefaults(persisted, agent)
-  if (!values || !getAgentSessionOptionCatalog(agent)?.discoveredModelsAreAuthoritative) {
+  const catalog = getAgentSessionOptionCatalog(agent)
+  if (!values || !catalog || !discoveredModelsDefineCatalogMembership(catalog)) {
     return values
   }
   let probed = false
@@ -101,12 +104,11 @@ export function ensureNativeChatModelEnrichment(args: {
       if (!discovered || discovered.length === 0) {
         return
       }
-      entry.models =
-        args.agent === 'claude'
-          ? [...discovered]
-          : catalog.discoveredModelsAreAuthoritative
-            ? mergeDiscoveredAuthoritativeModels(catalog.models, discovered)
-            : mergeCatalogModels(catalog.models, discovered)
+      entry.models = catalog.discoveredModelsReplaceSeed
+        ? mergeDiscoveredModelsWithConsentGatedSeeds(catalog, discovered)
+        : catalog.discoveredModelsAreAuthoritative
+          ? mergeDiscoveredAuthoritativeModels(catalog.models, discovered)
+          : mergeCatalogModels(catalog.models, discovered)
       for (const listener of entry.listeners) {
         listener([...entry.models])
       }

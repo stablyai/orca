@@ -60,6 +60,16 @@ describe('retirePersistedModelMissingFromDiscovery', () => {
     })
   })
 
+  it('clears a persisted Claude alias omitted by a replacing probe', async () => {
+    persist({ claude: { model: 'opus', valuesByModel: { opus: { effort: 'high' } } } })
+    await retirePersistedModelMissingFromDiscovery('claude', models('fable', 'sonnet'))
+    expect(mocks.storeState.updateSettings).toHaveBeenCalledWith({
+      nativeChatSessionOptions: {
+        claude: { valuesByModel: { opus: { effort: 'high' } } }
+      }
+    })
+  })
+
   it('keeps a persisted id the probe still lists', async () => {
     persist({ grok: { model: 'grok-4.5' } })
     await retirePersistedModelMissingFromDiscovery('grok', models('grok-4.5', 'grok-build'))

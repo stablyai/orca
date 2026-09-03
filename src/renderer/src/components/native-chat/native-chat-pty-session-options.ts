@@ -1,4 +1,5 @@
 import {
+  discoveredModelsDefineCatalogMembership,
   getAgentSessionOptionCatalog,
   type CatalogModel
 } from '../../../../shared/agent-session-option-catalog'
@@ -80,7 +81,7 @@ export function createNativeChatPtySessionOptions(
    *  the picker via re-injection and re-persist the fatal `-m` on any later option
    *  write, undoing the settings retirement. */
   const untrackRetiredModel = (): boolean => {
-    if (!catalog.discoveredModelsAreAuthoritative || !modelsAreDiscovered) {
+    if (!discoveredModelsDefineCatalogMembership(catalog) || !modelsAreDiscovered) {
       return false
     }
     const trackedId = typeof record.model?.value === 'string' ? record.model.value : null
@@ -143,7 +144,8 @@ export function createNativeChatPtySessionOptions(
    *  adopting either would emit an `-m` that is fatal on an account without it. */
   const modelIsAdoptableAsLaunchDefault = (modelId: string): boolean =>
     modelsAreDiscovered
-      ? !catalog.discoveredModelsAreAuthoritative || models.some((model) => model.id === modelId)
+      ? !discoveredModelsDefineCatalogMembership(catalog) ||
+        models.some((model) => model.id === modelId)
       : record.model !== undefined
 
   /** Every persist path — picker applies and typed commands — funnels through here. */

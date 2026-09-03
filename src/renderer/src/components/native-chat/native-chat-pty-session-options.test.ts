@@ -609,12 +609,11 @@ describe('native chat PTY session options', () => {
     })
   })
 
-  it('keeps a tracked alias selectable when the host catalog omits it', async () => {
+  it('drops a tracked Claude alias when the host catalog omits it', () => {
     seedNativeChatAppliedSessionOptions('pty-1', 'claude', {
       model: 'opus',
       effort: 'xhigh'
     })
-    const dispatch = vi.fn()
     const surface = createNativeChatPtySessionOptions({
       agent: 'claude',
       scopeKey: 'pty-1',
@@ -624,23 +623,13 @@ describe('native chat PTY session options', () => {
         { id: 'sonnet', label: 'Sonnet', options: [] }
       ],
       mode: 'live',
-      dispatchCommand: dispatch
+      dispatchCommand: vi.fn()
     })!
 
     expect(surface.getSnapshot()[0].kind).toMatchObject({
-      currentValue: 'opus',
-      choices: expect.arrayContaining([
-        { value: 'opus', label: 'Opus', description: expect.any(String) }
-      ])
+      choices: expect.not.arrayContaining([{ value: 'opus' }])
     })
-    expect(surface.getSnapshot().find(({ id }) => id === 'effort')).toMatchObject({
-      settable: true,
-      kind: { currentValue: 'xhigh' }
-    })
-
-    await surface.setOption('effort', 'high')
-
-    expect(dispatch).toHaveBeenCalledWith('/effort high')
+    expect(readNativeChatSessionOptionCache('pty-1')?.model).toBeUndefined()
   })
 
   it('drops the reconciled row once the tracked model moves onto the host catalog', async () => {

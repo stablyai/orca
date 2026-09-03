@@ -98,7 +98,7 @@ describe('native chat session option enrichment', () => {
     )
   })
 
-  it('uses only discovered Claude rows and capabilities per host', async () => {
+  it('keeps consent-gated Fable while dropping seed aliases the host never listed', async () => {
     mocks.discoverRuntimeCommitMessageModels.mockResolvedValue({
       success: true,
       catalogOrigin: 'probe',
@@ -135,7 +135,11 @@ describe('native chat session option enrichment', () => {
     await vi.waitFor(() => expect(listener).toHaveBeenCalledOnce())
 
     const models = readNativeChatEnrichedModels('claude', 'ssh:host')!
-    expect(models.map(({ id }) => id)).toEqual(['opus[1m]', 'sonnet'])
+    // Why: list_models hides Fable until one-time consent, so its absence is not
+    // evidence the host lacks it; every other omitted seed alias stays absent.
+    expect(models.map(({ id }) => id)).toEqual(['fable', 'opus[1m]', 'sonnet'])
+    expect(models.some(({ id }) => id === 'opus')).toBe(false)
+    expect(models.some(({ id }) => id === 'haiku')).toBe(false)
     const sonnetEffort = models.find(({ id }) => id === 'sonnet')?.options[0]
     expect(sonnetEffort?.kind).toMatchObject({
       type: 'select',
@@ -158,6 +162,50 @@ describe('native chat session option enrichment', () => {
       ]
     })
     expect(readNativeChatEnrichedModels('claude', 'local')).toBeNull()
+  })
+
+  it('keeps a single Fable row with the probe’s option menu when the CLI lists it', async () => {
+    mocks.discoverRuntimeCommitMessageModels.mockResolvedValue({
+      success: true,
+      catalogOrigin: 'probe',
+      models: [
+        {
+          id: 'fable',
+          label: 'Fable',
+          thinkingLevels: [
+            { id: 'high', label: 'High' },
+            { id: 'max', label: 'Max' }
+          ],
+          defaultThinkingLevel: 'high',
+          supportsFastMode: true
+        },
+        {
+          id: 'sonnet',
+          label: 'Sonnet',
+          thinkingLevels: [{ id: 'medium', label: 'Medium' }]
+        }
+      ]
+    })
+    const discover = vi.fn(() =>
+      discoverNativeChatCatalogModels('claude', {
+        settings: {},
+        worktreeId: 'repo::/worktree',
+        worktreePath: '/worktree'
+      })
+    )
+    ensureNativeChatModelEnrichment({ agent: 'claude', hostKey: 'local', discover })
+    await vi.waitFor(() => expect(readNativeChatEnrichedModels('claude', 'local')).not.toBeNull())
+
+    const models = readNativeChatEnrichedModels('claude', 'local')!
+    const fables = models.filter((model) => model.id === 'fable')
+    expect(fables).toHaveLength(1)
+    expect(models.map(({ id }) => id)).toEqual(['fable', 'sonnet'])
+    expect(fables[0].options.map(({ id }) => id)).toEqual(['effort', 'fastMode'])
+    const effort = fables[0].options[0]
+    expect(effort.kind.type === 'select' ? effort.kind.choices.map((c) => c.value) : []).toEqual([
+      'high',
+      'max'
+    ])
   })
 
   it('carries grok’s probed default through discovery to the published rows', async () => {
@@ -222,7 +270,7 @@ describe('native chat session option enrichment', () => {
     expect(published[0]!.isDefault).toBeUndefined()
   })
 
-  it('rejects a spec fallback for grok too, not just claude', async () => {
+  it('rejects a spec fallback for grok, whose probe replaces the seed', async () => {
     // Grok's list replaces the seed rather than extending it, so letting a static
     // fallback through would retire real models and blank the picker.
     mocks.discoverRuntimeCommitMessageModels.mockResolvedValue({
@@ -258,18 +306,25 @@ describe('native chat session option enrichment', () => {
     ).resolves.toEqual([{ id: 'auto', label: 'Auto', options: [] }])
   })
 
-  it('uses the authoritative merge for grok and the additive one for cursor', async () => {
-    // Both branches of the same ternary: deleting the authoritative arm typechecks
-    // and leaves every additive-agent test passing.
+  it('uses the replacing, authoritative, and additive policies independently', async () => {
+    const discoverClaude = vi
+      .fn()
+      .mockResolvedValue([{ id: 'sonnet', label: 'Sonnet', options: [] }])
     const discoverGrok = vi.fn().mockResolvedValue([{ id: 'grok-5', label: 'Grok 5', options: [] }])
     const discoverCursor = vi.fn().mockResolvedValue([{ id: 'extra', label: 'Extra', options: [] }])
+    ensureNativeChatModelEnrichment({ agent: 'claude', hostKey: 'm', discover: discoverClaude })
     ensureNativeChatModelEnrichment({ agent: 'grok', hostKey: 'm', discover: discoverGrok })
     ensureNativeChatModelEnrichment({ agent: 'cursor', hostKey: 'm', discover: discoverCursor })
     await vi.waitFor(() => {
+      expect(readNativeChatEnrichedModels('claude', 'm')).not.toBeNull()
       expect(readNativeChatEnrichedModels('grok', 'm')).not.toBeNull()
       expect(readNativeChatEnrichedModels('cursor', 'm')).not.toBeNull()
     })
 
+    expect(readNativeChatEnrichedModels('claude', 'm')!.map(({ id }) => id)).toEqual([
+      'fable',
+      'sonnet'
+    ])
     expect(readNativeChatEnrichedModels('grok', 'm')!.map(({ id }) => id)).toEqual(['grok-5'])
     expect(readNativeChatEnrichedModels('cursor', 'm')!.map(({ id }) => id)).toContain('auto')
   })
@@ -302,7 +357,23 @@ describe('native chat session option enrichment', () => {
     ).toEqual({ model: 'retired' })
   })
 
-  it('does not advertise the Claude spec fallback when probing is unavailable', async () => {
+  it('drops a persisted Claude alias missing from a replacing probe but keeps Fable', async () => {
+    const persisted = {
+      claude: { model: 'opus', valuesByModel: { opus: { effort: 'high' } } }
+    }
+    const discover = vi.fn().mockResolvedValue([{ id: 'sonnet', label: 'Sonnet', options: [] }])
+    ensureNativeChatModelEnrichment({ agent: 'claude', hostKey: 'local', discover })
+    await vi.waitFor(() => expect(readNativeChatEnrichedModels('claude', 'local')).not.toBeNull())
+
+    expect(resolveNativeChatLaunchSessionOptions(persisted, 'claude')).toBeUndefined()
+    expect(resolveNativeChatLaunchSessionOptions({ claude: { model: 'fable' } }, 'claude')).toEqual(
+      {
+        model: 'fable'
+      }
+    )
+  })
+
+  it('rejects a spec fallback for Claude, whose successful probe replaces the seed', async () => {
     mocks.discoverRuntimeCommitMessageModels.mockResolvedValue({
       success: true,
       catalogOrigin: 'spec',
