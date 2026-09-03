@@ -9,6 +9,7 @@ import type { AgentStatusIpcPayload } from '../../shared/agent-status-types'
 import { getLocalProjectWorktreeGitOptions } from '../project-runtime-git-options'
 import { getRuntimeFileTargetExecutionHostId } from './orca-runtime-files'
 import type { AgentSessionAttachParams } from '../native-chat/agent-session-wire/structured-agent-session-attach'
+import type { AgentSessionWireRefusal } from '../../shared/agent-session-wire'
 import { getSystemCodexHomePath } from '../codex/codex-home-paths'
 import { resolveTuiAgentLaunchEnv } from '../../shared/tui-agent-launch-defaults'
 import { hasPersistedStructuredAgentSessionStore as hasPersistedStructuredAgentSessionStoreOnDisk } from './structured-agent-session-runtime'
@@ -112,17 +113,30 @@ export class OrcaRuntimeWithResolveRecoveredStructuredTuiTranscript extends Orca
     envelope: { sessionId: string; clientOperationId: string }
     worktree: string
     agent: 'codex'
+    initialOptions?: { model: string; effort?: string }
   }): Promise<AgentSessionAttachParams> {
-    return this.resolveStructuredAgentSessionIntent(input, async ({ workspacePath, launchEnv }) => {
-      // A create has no process yet, so the current selection is what it must follow.
-      const preparedHome = await this.prepareCodexStructuredLaunchFn?.({ workspacePath, launchEnv })
-      const configuredHome = launchEnv.CODEX_HOME
-      return (
-        preparedHome?.trim() ||
-        (this.prepareCodexStructuredLaunchFn ? getSystemCodexHomePath() : configuredHome?.trim()) ||
-        getSystemCodexHomePath()
-      )
-    })
+    const resolved = await this.resolveStructuredAgentSessionIntent(
+      input,
+      async ({ workspacePath, launchEnv }) => {
+        // A create has no process yet, so the current selection is what it must follow.
+        const preparedHome = await this.prepareCodexStructuredLaunchFn?.({
+          workspacePath,
+          launchEnv
+        })
+        const configuredHome = launchEnv.CODEX_HOME
+        return (
+          preparedHome?.trim() ||
+          (this.prepareCodexStructuredLaunchFn
+            ? getSystemCodexHomePath()
+            : configuredHome?.trim()) ||
+          getSystemCodexHomePath()
+        )
+      }
+    )
+    if ('ok' in resolved) {
+      throw new Error(resolved.refusal.code)
+    }
+    return resolved
   }
 
   protected async resolveStructuredAgentSessionIntent(
@@ -130,15 +144,24 @@ export class OrcaRuntimeWithResolveRecoveredStructuredTuiTranscript extends Orca
       envelope: { sessionId: string; clientOperationId: string }
       worktree: string
       agent: 'codex'
+      initialOptions?: { model: string; effort?: string }
     },
     resolveAccountHomePath: (context: {
       workspacePath: string
       launchEnv: NodeJS.ProcessEnv
     }) => string | Promise<string>
-  ): Promise<AgentSessionAttachParams> {
+  ): Promise<AgentSessionAttachParams | { ok: false; refusal: AgentSessionWireRefusal }> {
     const support = await this.getStructuredAgentSessionCreateSupport(input.worktree, input.agent)
     if (!support.supported) {
-      throw new Error('structured_agent_session_unsupported')
+      const reason = support.reason ?? 'agent'
+      return {
+        ok: false,
+        refusal: {
+          code: 'structured_agent_session_unsupported',
+          message: `Structured Codex sessions are unsupported for ${reason} execution.`,
+          acquisitionState: 'not-acquired'
+        }
+      }
     }
     const settings = this.requireStore().getSettings()
     const launchEnv = resolveTuiAgentLaunchEnv(input.agent, settings.agentDefaultEnv)
@@ -158,7 +181,8 @@ export class OrcaRuntimeWithResolveRecoveredStructuredTuiTranscript extends Orca
         variable: 'CODEX_HOME',
         path: await resolveAccountHomePath({ workspacePath, launchEnv })
       },
-      runtimeKind: 'native'
+      runtimeKind: 'native',
+      ...(input.initialOptions ? { initialOptions: input.initialOptions } : {})
     }
   }
 

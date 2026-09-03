@@ -1,6 +1,7 @@
 import { toast } from 'sonner'
 import {
   createStructuredCodexSessionLaunchIntent,
+  abandonStructuredAgentSessionLaunchIntent,
   launchStructuredCodexSession,
   StructuredAgentSessionCreateRefusalError,
   type StructuredAgentSessionLaunchIntent
@@ -12,9 +13,23 @@ type StructuredLaunchState = {
   intent: StructuredAgentSessionLaunchIntent
   promise: Promise<string>
   visibilityUnknown: boolean
+  cancelled: boolean
 }
 
 const pendingStructuredLaunchesByWorktree = new Map<string, StructuredLaunchState>()
+
+class StructuredAgentSessionLaunchCancelledError extends Error {
+  constructor() {
+    super('structured session launch cancelled')
+    this.name = 'StructuredAgentSessionLaunchCancelledError'
+  }
+}
+
+function throwIfLaunchCancelled(state: StructuredLaunchState): void {
+  if (state.cancelled) {
+    throw new StructuredAgentSessionLaunchCancelledError()
+  }
+}
 
 function trackLaunchSettlement(
   worktreeId: string,
@@ -58,10 +73,15 @@ async function verifyPublishedSession(intent: StructuredAgentSessionLaunchIntent
 }
 
 async function retrySameIntent(state: StructuredLaunchState, priorError: unknown): Promise<string> {
+  throwIfLaunchCancelled(state)
   try {
     await launchStructuredCodexSession(state.intent)
+    throwIfLaunchCancelled(state)
     return await verifyPublishedSession(state.intent)
   } catch (error) {
+    if (state.cancelled) {
+      throw new StructuredAgentSessionLaunchCancelledError()
+    }
     if (error instanceof StructuredAgentSessionCreateRefusalError) {
       throw error
     }
@@ -75,9 +95,13 @@ async function retrySameIntent(state: StructuredLaunchState, priorError: unknown
 }
 
 async function launchAndReconcile(state: StructuredLaunchState): Promise<string> {
+  throwIfLaunchCancelled(state)
   try {
     await launchStructuredCodexSession(state.intent)
   } catch (error) {
+    if (state.cancelled) {
+      throw new StructuredAgentSessionLaunchCancelledError()
+    }
     if (error instanceof StructuredAgentSessionCreateRefusalError) {
       throw error
     }
@@ -88,13 +112,18 @@ async function launchAndReconcile(state: StructuredLaunchState): Promise<string>
     }
   }
   try {
+    throwIfLaunchCancelled(state)
     return await verifyPublishedSession(state.intent)
   } catch (error) {
+    if (state.cancelled) {
+      throw new StructuredAgentSessionLaunchCancelledError()
+    }
     return retrySameIntent(state, error)
   }
 }
 
 async function reconcileUnknownLaunch(state: StructuredLaunchState): Promise<string> {
+  throwIfLaunchCancelled(state)
   state.visibilityUnknown = false
   try {
     return await verifyPublishedSession(state.intent)
@@ -115,7 +144,8 @@ function launchStructuredCodexSessionOnce(worktreeId: string): Promise<string> {
   const state: StructuredLaunchState = {
     intent: createStructuredCodexSessionLaunchIntent(worktreeId),
     promise: Promise.resolve(''),
-    visibilityUnknown: false
+    visibilityUnknown: false,
+    cancelled: false
   }
   state.promise = launchAndReconcile(state)
   pendingStructuredLaunchesByWorktree.set(worktreeId, state)
@@ -123,8 +153,23 @@ function launchStructuredCodexSessionOnce(worktreeId: string): Promise<string> {
   return state.promise
 }
 
+/** Stop retries for a launch whose tab the user explicitly closed. */
+export function cancelStructuredCodexLaunch(worktreeId: string, sessionId: string): boolean {
+  const state = pendingStructuredLaunchesByWorktree.get(worktreeId)
+  if (!state || state.intent.sessionId !== sessionId) {
+    return false
+  }
+  state.cancelled = true
+  pendingStructuredLaunchesByWorktree.delete(worktreeId)
+  abandonStructuredAgentSessionLaunchIntent(state.intent)
+  return true
+}
+
 export function startStructuredCodexLaunch(worktreeId: string): void {
   void launchStructuredCodexSessionOnce(worktreeId).catch((error) => {
+    if (error instanceof StructuredAgentSessionLaunchCancelledError) {
+      return
+    }
     toast.error(
       translate(
         'components.native-chat.structuredSessionLaunchFailed',

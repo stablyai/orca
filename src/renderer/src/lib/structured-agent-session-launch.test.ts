@@ -4,7 +4,8 @@ import type { RuntimeMobileSessionTabsResult } from '../../../shared/runtime-ses
 
 const mocks = vi.hoisted(() => ({
   createIntent: vi.fn(),
-  launch: vi.fn()
+  launch: vi.fn(),
+  abandonIntent: vi.fn()
 }))
 
 vi.mock('sonner', () => ({
@@ -19,6 +20,7 @@ vi.mock('@/lib/launch-structured-codex-session', () => {
   return {
     createStructuredCodexSessionLaunchIntent: mocks.createIntent,
     launchStructuredCodexSession: mocks.launch,
+    abandonStructuredAgentSessionLaunchIntent: mocks.abandonIntent,
     StructuredAgentSessionCreateRefusalError
   }
 })
@@ -36,7 +38,10 @@ import {
   type StructuredAgentSessionLaunchIntent
 } from '@/lib/launch-structured-codex-session'
 import { refreshLocalStructuredSessionTabs } from '@/runtime/local-structured-session-tabs-sync'
-import { startStructuredCodexLaunch } from './structured-agent-session-launch'
+import {
+  cancelStructuredCodexLaunch,
+  startStructuredCodexLaunch
+} from './structured-agent-session-launch'
 
 function launchIntent(
   worktreeId: string,
@@ -89,6 +94,28 @@ describe('startStructuredCodexLaunch', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     mocks.createIntent.mockImplementation((worktreeId: string) => launchIntent(worktreeId))
+  })
+
+  it('cancels a close-racing launch without retrying an already-closed session', async () => {
+    const worktreeId = 'wt-close-race'
+    const intent = launchIntent(worktreeId, 'session-close-race')
+    let resolveRefresh!: (snapshots: RuntimeMobileSessionTabsResult[]) => void
+    mocks.createIntent.mockReturnValueOnce(intent)
+    mocks.launch.mockResolvedValueOnce(intent.sessionId)
+    vi.mocked(refreshLocalStructuredSessionTabs).mockImplementationOnce(
+      () => new Promise<RuntimeMobileSessionTabsResult[]>((resolve) => (resolveRefresh = resolve))
+    )
+
+    startStructuredCodexLaunch(worktreeId)
+    await vi.waitFor(() => expect(refreshLocalStructuredSessionTabs).toHaveBeenCalledOnce())
+
+    expect(cancelStructuredCodexLaunch(worktreeId, intent.sessionId)).toBe(true)
+    resolveRefresh([])
+    await flushLaunchSettlement()
+
+    expect(mocks.launch).toHaveBeenCalledOnce()
+    expect(toast.error).not.toHaveBeenCalled()
+    expect(mocks.abandonIntent).toHaveBeenCalledWith(intent)
   })
 
   it('opens the chat without an informational progress toast', async () => {
