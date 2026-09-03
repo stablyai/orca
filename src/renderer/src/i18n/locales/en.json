@@ -8556,6 +8556,15 @@
             "fastDescription": "Extra multiplier while scrolling with a modifier key.",
             "tui": "TUI",
             "tuiDescription": "Discrete wheel reports for full-screen terminal apps."
+          },
+          "minimumContrast": {
+            "title": "Minimum Contrast Ratio",
+            "description": "Lifts terminal foreground colors that sit too close to the background. Leave blank for automatic, or set 1 to render program colors exactly as sent.",
+            "automatic": "Automatic: {{light}} on light backgrounds, {{dark}} on dark.",
+            "disabled": "Correction off. Programs that rely on low contrast, like Powerline separators, render as sent.",
+            "pinned": "Foreground colors are lifted until they reach {{ratio}}:1 against the background.",
+            "placeholder": "Auto",
+            "suffix": "blank = automatic, 1 = off"
           }
         },
         "TerminalSettingsPreview": {
@@ -10290,6 +10299,19 @@
               "title": "Theme Mode",
               "keyword_target": "target",
               "keyword_editing": "editing"
+            },
+            "minimumContrast": {
+              "title": "Minimum Contrast Ratio",
+              "description": "Lifts terminal foreground colors that sit too close to the background. Leave blank for automatic, or set 1 to render program colors exactly as sent.",
+              "contrast": "contrast",
+              "minimum": "minimum",
+              "ratio": "ratio",
+              "readability": "readability",
+              "wcag": "wcag",
+              "powerline": "powerline",
+              "statusline": "statusline",
+              "dim": "dim",
+              "colors": "colors"
             }
           },
           "windows": {

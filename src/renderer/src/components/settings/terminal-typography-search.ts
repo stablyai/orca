@@ -128,6 +128,55 @@ export const getTerminalRenderingSearchEntries = createLocalizedCatalog(() => [
       ...translateSearchKeyword('auto.components.settings.terminal.search.7d924d870d', 'graphics'),
       ...translateSearchKeyword('auto.components.settings.terminal.search.1abcf4d7de', 'linux')
     ]
+  },
+  {
+    title: translate(
+      'auto.components.settings.terminal.search.minimumContrast.title',
+      'Minimum Contrast Ratio'
+    ),
+    description: translate(
+      'auto.components.settings.terminal.search.minimumContrast.description',
+      'Lifts terminal foreground colors that sit too close to the background. Leave blank for automatic, or set 1 to render program colors exactly as sent.'
+    ),
+    keywords: [
+      ...translateSearchKeyword('auto.components.settings.terminal.search.f66a7cf715', 'terminal'),
+      ...translateSearchKeyword(
+        'auto.components.settings.terminal.search.minimumContrast.contrast',
+        'contrast'
+      ),
+      ...translateSearchKeyword(
+        'auto.components.settings.terminal.search.minimumContrast.minimum',
+        'minimum'
+      ),
+      ...translateSearchKeyword(
+        'auto.components.settings.terminal.search.minimumContrast.ratio',
+        'ratio'
+      ),
+      ...translateSearchKeyword(
+        'auto.components.settings.terminal.search.minimumContrast.readability',
+        'readability'
+      ),
+      ...translateSearchKeyword(
+        'auto.components.settings.terminal.search.minimumContrast.wcag',
+        'wcag'
+      ),
+      ...translateSearchKeyword(
+        'auto.components.settings.terminal.search.minimumContrast.powerline',
+        'powerline'
+      ),
+      ...translateSearchKeyword(
+        'auto.components.settings.terminal.search.minimumContrast.statusline',
+        'statusline'
+      ),
+      ...translateSearchKeyword(
+        'auto.components.settings.terminal.search.minimumContrast.dim',
+        'dim'
+      ),
+      ...translateSearchKeyword(
+        'auto.components.settings.terminal.search.minimumContrast.colors',
+        'colors'
+      )
+    ]
   }
 ])
 

@@ -141,6 +141,10 @@ export type GlobalSettings = {
   terminalPaneOpacityTransitionMs: number
   terminalDividerThicknessPx: number
   terminalBackgroundOpacity?: number
+  /** xterm minimumContrastRatio floor for terminal panes (#10754). Undefined keeps the automatic,
+   *  background-luminance-gated floor (3 dark / 4.5 light); 1 disables contrast correction so TUIs
+   *  that rely on deliberately low contrast (Powerline seams, dimmed secondary text) render as sent. */
+  terminalMinimumContrastRatio?: number
   terminalColorOverrides?: TerminalColorOverrides
   terminalPaddingX?: number
   terminalPaddingY?: number

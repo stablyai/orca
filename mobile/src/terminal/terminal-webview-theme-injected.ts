@@ -5,7 +5,8 @@ import { colors } from '../theme/mobile-theme'
 // #7934/#10104): a dark composed background gets a mild floor of 3 to rescue near-background body text
 // (e.g. Antigravity's #262b30 on #1e242a) without over-brightening vibrant ANSI colors; a light
 // background keeps the WCAG-AA 4.5 floor. Gate on the composed background luminance, not app mode,
-// because either theme slot can hold either kind of theme.
+// because either theme slot can hold either kind of theme. An explicit desktop override published on
+// the theme payload (#10754) wins over the luminance gate; older hosts simply omit it.
 export const TERMINAL_WEBVIEW_THEME_JS = `
   var DARK_BG_MIN_CONTRAST = 3;
   var LIGHT_BG_MIN_CONTRAST = 4.5;
@@ -63,6 +64,12 @@ export const TERMINAL_WEBVIEW_THEME_JS = `
     return (Math.max(la, lb) + 0.05) / (Math.min(la, lb) + 0.05);
   }
 
+  // Clamp an explicit desktop override to xterm's 1-21 range; null means "no usable override".
+  function normalizeTerminalContrastOverride(value) {
+    if (typeof value !== 'number' || !isFinite(value)) return null;
+    return Math.min(21, Math.max(1, value));
+  }
+
   // Pick the xterm minimumContrastRatio floor from the composed terminal background.
   // Unparseable input defaults to the dark floor so agent output never stays invisible.
   function resolveTerminalContrastFloor(background) {
@@ -100,7 +107,13 @@ export const TERMINAL_WEBVIEW_THEME_JS = `
     var background = terminalTheme.background || '${colors.terminalBg}';
     document.documentElement.style.background = background;
     document.body.style.background = background;
-    terminalMinimumContrastRatio = resolveTerminalContrastFloor(background);
+    // Why prefer the published value: the desktop user may have lowered or disabled the floor (#10754);
+    // an older host omits the field and the luminance gate stays authoritative.
+    var publishedFloor = normalizeTerminalContrastOverride(
+      input && typeof input === 'object' ? input.minimumContrastRatio : undefined
+    );
+    terminalMinimumContrastRatio =
+      publishedFloor === null ? resolveTerminalContrastFloor(background) : publishedFloor;
     if (term) {
       term.options.theme = terminalTheme;
       term.options.minimumContrastRatio = terminalMinimumContrastRatio;

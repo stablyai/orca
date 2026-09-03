@@ -1,11 +1,42 @@
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import {
+  NumberField,
   SettingsRow,
   SettingsSegmentedControl,
   SettingsSubsectionHeader
 } from './SettingsFormControls'
 import { SearchableSetting } from './SearchableSetting'
+import {
+  DARK_BG_MIN_CONTRAST,
+  LIGHT_BG_MIN_CONTRAST,
+  MAX_TERMINAL_CONTRAST_RATIO,
+  MIN_TERMINAL_CONTRAST_RATIO,
+  normalizeTerminalMinimumContrastRatio
+} from '@/lib/terminal-contrast-correction'
 import { translate } from '@/i18n/i18n'
+
+// Why spell out the automatic pair: the effective floor depends on the composed pane background, so
+// the row can only describe the rule, not a single number.
+function describeMinimumContrastRatio(value: number | undefined): string {
+  if (value === undefined) {
+    return translate(
+      'auto.components.settings.TerminalPane.minimumContrast.automatic',
+      'Automatic: {{light}} on light backgrounds, {{dark}} on dark.',
+      { light: LIGHT_BG_MIN_CONTRAST, dark: DARK_BG_MIN_CONTRAST }
+    )
+  }
+  if (value === MIN_TERMINAL_CONTRAST_RATIO) {
+    return translate(
+      'auto.components.settings.TerminalPane.minimumContrast.disabled',
+      'Correction off. Programs that rely on low contrast, like Powerline separators, render as sent.'
+    )
+  }
+  return translate(
+    'auto.components.settings.TerminalPane.minimumContrast.pinned',
+    'Foreground colors are lifted until they reach {{ratio}}:1 against the background.',
+    { ratio: value }
+  )
+}
 
 type TerminalRenderingSectionProps = {
   settings: GlobalSettings
@@ -16,6 +47,10 @@ export function TerminalRenderingSection({
   settings,
   updateSettings
 }: TerminalRenderingSectionProps): React.JSX.Element {
+  const effectiveMinimumContrastRatio = normalizeTerminalMinimumContrastRatio(
+    settings.terminalMinimumContrastRatio
+  )
+
   return (
     <section key="rendering" className="space-y-3">
       <SettingsSubsectionHeader
@@ -89,6 +124,53 @@ export function TerminalRenderingSection({
                 ]}
               />
             }
+          />
+        </SearchableSetting>
+
+        <SearchableSetting
+          title={translate(
+            'auto.components.settings.TerminalPane.minimumContrast.title',
+            'Minimum Contrast Ratio'
+          )}
+          description={translate(
+            'auto.components.settings.TerminalPane.minimumContrast.description',
+            'Lifts terminal foreground colors that sit too close to the background. Leave blank for automatic, or set 1 to render program colors exactly as sent.'
+          )}
+          keywords={[
+            'terminal',
+            'contrast',
+            'minimum',
+            'ratio',
+            'readability',
+            'accessibility',
+            'wcag',
+            'powerline',
+            'statusline',
+            'dim',
+            'washed out',
+            'colors'
+          ]}
+        >
+          <NumberField
+            label={translate(
+              'auto.components.settings.TerminalPane.minimumContrast.title',
+              'Minimum Contrast Ratio'
+            )}
+            description={describeMinimumContrastRatio(effectiveMinimumContrastRatio)}
+            value={effectiveMinimumContrastRatio}
+            min={MIN_TERMINAL_CONTRAST_RATIO}
+            max={MAX_TERMINAL_CONTRAST_RATIO}
+            step={0.5}
+            placeholder={translate(
+              'auto.components.settings.TerminalPane.minimumContrast.placeholder',
+              'Auto'
+            )}
+            suffix={translate(
+              'auto.components.settings.TerminalPane.minimumContrast.suffix',
+              'blank = automatic, 1 = off'
+            )}
+            onChange={(value) => updateSettings({ terminalMinimumContrastRatio: value })}
+            onClear={() => updateSettings({ terminalMinimumContrastRatio: undefined })}
           />
         </SearchableSetting>
       </div>
