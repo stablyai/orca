@@ -9,6 +9,7 @@ import {
   isRemoteRuntimePtyId
 } from './terminal-pty-identities'
 import { omitUnverifiedPtyLossTabIds } from './terminal-unverified-pty-loss'
+import { clearWorktreeSleepIntent } from '@/lib/worktree-sleep-intent'
 import { omitDisownedPtyIds } from './terminal-disowned-pty-sources'
 
 export function createTerminalPtyBindingActions(
@@ -120,6 +121,8 @@ export function createTerminalPtyBindingActions(
           }
           break
         }
+        // Why: a bound PTY means the workspace is awake by any route (CLI, automation, client wake), not only activation.
+        clearWorktreeSleepIntent(worktreeId)
         // Why: the first active PTY changes sorting, except activation-spawn side effects.
         const isFirstPty = existingPtyIds.length === 0
         const isActiveWorktree = worktreeId != null && s.activeWorktreeId === worktreeId

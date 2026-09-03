@@ -141,15 +141,16 @@ export async function runSleepWorktrees(worktreeIds: readonly string[]): Promise
     shutdownWorktreeBrowsers,
     shutdownWorktreeTerminals
   } = useAppStore.getState()
-  let activeSleepIntentWorktreeId: string | null = null
-  if (activeWorktreeId && worktreeIds.includes(activeWorktreeId)) {
-    const restoreSidebarPosition = preserveSidebarWorktreePosition(activeWorktreeId)
-    // Why: clearing the active workspace can unmount TerminalPanes before
-    // shutdownWorktreeTerminals writes PTY suppressions. Use a non-rendering
-    // intent marker so those exits do not stamp activity, without inserting an
-    // extra Zustand update that can disturb the sidebar's scroll restoration.
-    markWorktreeSleepIntent(activeWorktreeId)
-    activeSleepIntentWorktreeId = activeWorktreeId
+  // Why: mark before any teardown so exits do not stamp activity and the panes
+  // left mounted stay cold until an explicit wake (#10205). Kept off the store
+  // so it cannot disturb the sidebar's scroll restoration.
+  for (const worktreeId of worktreeIds) {
+    markWorktreeSleepIntent(worktreeId)
+  }
+  const sleptActiveWorktreeId =
+    activeWorktreeId && worktreeIds.includes(activeWorktreeId) ? activeWorktreeId : null
+  if (sleptActiveWorktreeId) {
+    const restoreSidebarPosition = preserveSidebarWorktreePosition(sleptActiveWorktreeId)
     setActiveWorktree(null)
     restoreSidebarPosition()
   }
@@ -192,12 +193,12 @@ export async function runSleepWorktrees(worktreeIds: readonly string[]): Promise
       }
     }
   } finally {
-    if (activeSleepIntentWorktreeId) {
-      clearWorktreeSleepIntent(activeSleepIntentWorktreeId)
-      if (failedWorktreeIds.has(activeSleepIntentWorktreeId)) {
-        // Why: any failed sleep step must leave the workspace visible and retryable.
-        setActiveWorktree(activeSleepIntentWorktreeId)
-      }
+    // Why: a failed sleep leaves the workspace awake and retryable.
+    for (const worktreeId of failedWorktreeIds) {
+      clearWorktreeSleepIntent(worktreeId)
+    }
+    if (sleptActiveWorktreeId && failedWorktreeIds.has(sleptActiveWorktreeId)) {
+      setActiveWorktree(sleptActiveWorktreeId)
     }
   }
   if (errors.length > 0) {

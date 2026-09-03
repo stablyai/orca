@@ -9,6 +9,7 @@ import {
 } from '../listing/detected-worktree-meta'
 import { shouldDeferActivationTerminalPrep } from './activation-terminal-prep'
 import { deriveActiveSurfaceForWorktree } from '../../tabs/tabs-surface'
+import { clearWorktreeSleepIntent } from '@/lib/worktree-sleep-intent'
 
 export function createSetActiveFolderWorkspace(
   set: WorktreeSliceSet,
@@ -20,6 +21,7 @@ export function createSetActiveFolderWorkspace(
     if (!workspace) {
       return
     }
+    clearWorktreeSleepIntent(workspaceKey)
     if (shouldDeferActivationTerminalPrep()) {
       markInputQuietSchedulerInput()
     }

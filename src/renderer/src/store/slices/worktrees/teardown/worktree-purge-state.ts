@@ -8,6 +8,7 @@ import { createWorktreePurgeOmitters } from './worktree-purge-omitters'
 import { removeDeleteStatesForWorktreeIds } from './worktree-delete-state'
 import { removeWorktreeVisitEntriesForTargets } from '@/lib/worktree-visit-recency'
 import { forgetAmbiguousOwnerWarnings } from '../listing/worktree-owner-settings'
+import { clearWorktreeSleepIntent } from '@/lib/worktree-sleep-intent'
 
 export function buildWorktreePurgeState(
   s: AppState,
@@ -18,6 +19,10 @@ export function buildWorktreePurgeState(
   )
   const worktreeIdSet = new Set(normalizedTargets.map((target) => target.id))
   pruneHostedReviewLinkMutationGenerations(worktreeIdSet)
+  // Why: ids are repo::path, so a worktree recreated at the same path must not inherit a stale sleep.
+  for (const id of worktreeIdSet) {
+    clearWorktreeSleepIntent(id)
+  }
   // Why: every authoritative and explicit purge converges here, so a deleted path can't inherit stale UI state.
   forgetHugeRepoWarningDismissalsForWorktrees(worktreeIdSet)
   forgetAmbiguousOwnerWarnings(worktreeIdSet)

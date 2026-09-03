@@ -95,19 +95,17 @@ describe('runSleepWorktree', () => {
     expect(activeClear).toBeLessThan(browsersCall)
   })
 
-  it('marks active sleep intent before clearing the active slept worktree', async () => {
+  it('marks sleep intent before clearing the active slept worktree and keeps it after teardown', async () => {
     mocks.state.activeWorktreeId = 'wt-1'
 
     await runSleepWorktree('wt-1')
 
     expect(mocks.markWorktreeSleepIntent).toHaveBeenCalledWith('wt-1')
-    expect(mocks.clearWorktreeSleepIntent).toHaveBeenCalledWith('wt-1')
     const markCall = mocks.markWorktreeSleepIntent.mock.invocationCallOrder[0]
     const activeClear = mocks.state.setActiveWorktree.mock.invocationCallOrder[0]
-    const terminalShutdown = mocks.state.shutdownWorktreeTerminals.mock.invocationCallOrder[0]
-    const clearCall = mocks.clearWorktreeSleepIntent.mock.invocationCallOrder[0]
     expect(markCall).toBeLessThan(activeClear)
-    expect(terminalShutdown).toBeLessThan(clearCall)
+    // Why: the marker outlives a successful sleep so mounted panes stay cold until an explicit wake.
+    expect(mocks.clearWorktreeSleepIntent).not.toHaveBeenCalled()
   })
 
   it('preserves active row position through section-scoped sidebar row ids', async () => {
@@ -181,14 +179,15 @@ describe('runSleepWorktree', () => {
     expect(pinnedGetBoundingClientRect).not.toHaveBeenCalled()
   })
 
-  it('leaves activeWorktreeId alone when sleeping a background worktree', async () => {
+  it('leaves activeWorktreeId alone and marks a background worktree slept', async () => {
     mocks.state.activeWorktreeId = 'wt-other'
 
     await runSleepWorktree('wt-1')
 
     expect(mocks.state.setActiveWorktree).not.toHaveBeenCalled()
     expect(mocks.state.suppressPtyExit).not.toHaveBeenCalled()
-    expect(mocks.markWorktreeSleepIntent).not.toHaveBeenCalled()
+    expect(mocks.markWorktreeSleepIntent).toHaveBeenCalledWith('wt-1')
+    expect(mocks.clearWorktreeSleepIntent).not.toHaveBeenCalled()
   })
 
   it('surfaces a toast and skips terminals when browsers throws', async () => {
