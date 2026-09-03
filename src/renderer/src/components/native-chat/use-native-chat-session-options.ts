@@ -28,6 +28,11 @@ import {
   resolveNativeChatModelDiscoveryContext
 } from './native-chat-session-option-discovery'
 import { readClaudeSessionOptionsFromTerminalScreen } from './claude-terminal-session-options'
+import { createNativeChatReadRetryTimer } from './native-chat-read-retry-timer'
+
+/** How long to keep looking for Claude's startup frame. Covers a cold CLI start
+ *  behind SSH latency, after which the frame has likely scrolled out anyway. */
+const CLAUDE_FRAME_READ_WINDOW_MS = 60_000
 
 const EMPTY_SNAPSHOT: SessionOptionDescriptor[] = []
 const subscribeEmpty = (): (() => void) => () => {}
@@ -160,7 +165,13 @@ export function useNativeChatSessionOptions(args: {
     }
     let cancelled = false
     reportedScreenRef.current = null
-    const reportCurrentValues = async (): Promise<void> => {
+    const retryTimer = createNativeChatReadRetryTimer()
+    const startedAt = Date.now()
+    const modelIsKnown = (): boolean =>
+      surface
+        .getSnapshot()
+        .some((descriptor) => descriptor.id === 'model' && descriptor.valueSource !== 'unknown')
+    const reportCurrentValues = async (attempt: number): Promise<void> => {
       let authoritativeScreen: string | null = null
       if (targetPtyId && window.api?.pty?.getMainBufferSnapshot) {
         try {
@@ -195,10 +206,22 @@ export function useNativeChatSessionOptions(args: {
         surface.reportSessionOptions(reportedValues)
         return
       }
+      // Why: the pane mounts on the spawned pty, well before the CLI paints the
+      // frame carrying the model, so a single read at mount usually finds nothing.
+      if (cancelled || Date.now() - startedAt >= CLAUDE_FRAME_READ_WINDOW_MS) {
+        return
+      }
+      retryTimer.schedule(attempt, () => {
+        // A pick or typed /model already named the model; the startup frame is stale by then.
+        if (!modelIsKnown()) {
+          void reportCurrentValues(attempt + 1)
+        }
+      })
     }
-    void reportCurrentValues()
+    void reportCurrentValues(0)
     return () => {
       cancelled = true
+      retryTimer.cancel()
     }
   }, [agent, discoveryContext, readTerminalScreen, surface, targetPtyId])
 

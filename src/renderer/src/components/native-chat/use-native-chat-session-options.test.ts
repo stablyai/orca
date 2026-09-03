@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 
-import { renderHook, waitFor } from '@testing-library/react'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { act, renderHook, waitFor } from '@testing-library/react'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { CatalogModel } from '../../../../shared/agent-session-option-catalog'
 import { clearNativeChatModelEnrichmentForTests } from './native-chat-session-option-enrichment'
 
@@ -25,6 +25,9 @@ import { useNativeChatSessionOptions } from './use-native-chat-session-options'
 const CLAUDE_SCREEN =
   'Claude Code v2.1.220\r\nOpus 5 (1M context) with high effort · API Usage Billing\r\n~/repo'
 
+// The frame Claude paints for a session that started on a different model.
+const CLAUDE_SCREEN_HAIKU = 'Claude Code v2.1.220\r\nHaiku 4.5 · API Usage Billing\r\n~/repo'
+
 const DISCOVERED: CatalogModel[] = [
   { id: 'opus[1m]', label: 'Opus (1M context)', options: [] },
   { id: 'haiku', label: 'Haiku', options: [] }
@@ -38,11 +41,82 @@ function modelDescriptor(snapshot: { id: string; kind: unknown }[]): {
   return model?.kind as { currentValue?: string; choices: { value: string }[] }
 }
 
+function selectedValue(snapshot: { id: string; kind: unknown }[], id: string): string | undefined {
+  const descriptor = snapshot.find((entry) => entry.id === id)
+  return (descriptor?.kind as { currentValue?: string } | undefined)?.currentValue
+}
+
 describe('useNativeChatSessionOptions model reporting', () => {
   beforeEach(() => {
     clearNativeChatModelEnrichmentForTests()
     discoverModels.mockReset()
     Object.defineProperty(window, 'api', { configurable: true, value: undefined })
+  })
+
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
+  it('keeps reading until Claude paints its startup frame', async () => {
+    // The pane mounts as soon as the pty exists, seconds before the CLI paints its
+    // frame, so the read at mount finds a blank screen. Without a retry the picker
+    // never learns the model and the model-scoped effort row never appears at all.
+    vi.useFakeTimers()
+    discoverModels.mockResolvedValue(null)
+    let screen: string | null = null
+    const readTerminalScreen = (): string | null => screen
+    const dispatchCommand = vi.fn()
+
+    const { result } = renderHook(() =>
+      useNativeChatSessionOptions({
+        agent: 'claude',
+        terminalTabId: 'tab-late-frame',
+        targetPtyId: 'pty-late-frame',
+        dispatchCommand,
+        readTerminalScreen
+      })
+    )
+
+    expect(selectedValue(result.current.snapshot, 'model')).toBeUndefined()
+
+    screen = CLAUDE_SCREEN
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1_000)
+    })
+
+    expect(selectedValue(result.current.snapshot, 'model')).toBe('opus')
+    expect(selectedValue(result.current.snapshot, 'effort')).toBe('high')
+  })
+
+  it('lets a pick made before the frame lands survive a later read', async () => {
+    // The startup frame names the model the session began with, so a read that
+    // outlives the user's own switch would silently repaint the stale one.
+    vi.useFakeTimers()
+    discoverModels.mockResolvedValue(null)
+    let screen: string | null = null
+    const dispatchCommand = vi.fn().mockResolvedValue(undefined)
+
+    const { result } = renderHook(() =>
+      useNativeChatSessionOptions({
+        agent: 'claude',
+        terminalTabId: 'tab-early-pick',
+        targetPtyId: 'pty-early-pick',
+        dispatchCommand,
+        readTerminalScreen: () => screen
+      })
+    )
+
+    await act(async () => {
+      await result.current.surface?.setOption('model', 'sonnet')
+    })
+    expect(selectedValue(result.current.snapshot, 'model')).toBe('sonnet')
+
+    screen = CLAUDE_SCREEN_HAIKU
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(30_000)
+    })
+
+    expect(selectedValue(result.current.snapshot, 'model')).toBe('sonnet')
   })
 
   it('re-resolves the reported model against models discovered after the read', async () => {
