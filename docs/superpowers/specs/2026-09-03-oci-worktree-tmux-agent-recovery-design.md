@@ -57,6 +57,81 @@ compatible with its session-name and layout behavior for local recovery tests.
 The coordinator never independently creates or orders provider windows; its
 restore path calls the setup hook and only starts providers in a session that
 the hook created during that invocation.
+Raw tmux provider events do not use the Orca provider-session relay as their
+manifest source. On newly created sessions, the setup hook sets these
+session-scoped tmux environment values before any provider is started:
+
+```text
+ORCA_OCI_SESSION_MANIFEST=<manifest path>
+ORCA_OCI_WORKTREE_PATH=<canonical worktree path>
+ORCA_OCI_REPO_ROOT=<canonical repository root>
+ORCA_OCI_PROVIDER_EVENT_WRITER=/srv/script/orca-worktree-session-manifest.sh
+```
+
+The writer path is host-local and may be overridden only by focused tests.
+
+
+The provider-native SessionStart adapters then have one explicit path:
+
+- Claude and Codex use the generated managed hook scripts in
+  `src/main/claude/hook-service.ts#getManagedScript` and
+  `src/main/codex/codex-hook-script.ts#getManagedScript`. When
+  `ORCA_OCI_SESSION_MANIFEST` and `ORCA_OCI_PROVIDER_EVENT_WRITER` are set,
+  their guarded `SessionStart` branch sends the native JSON hook payload to:
+
+  ```text
+  "$ORCA_OCI_PROVIDER_EVENT_WRITER" record \
+    --manifest "$ORCA_OCI_SESSION_MANIFEST" \
+    --provider <provider> \
+    --worktree "$ORCA_OCI_WORKTREE_PATH" \
+    --repo-root "$ORCA_OCI_REPO_ROOT" \
+    --payload-stdin
+  ```
+
+  The adapter extracts only the provider's native `session_id`; it never
+  parses terminal output. The normal Orca status-hook path remains separate.
+- OMP loads `/srv/script/orca-omp-worktree-session-hook.ts`, installed as the
+  host-local auto-discovered hook extension under `~/.omp/agent/hooks/`. Its
+  `session_start` handler reads `ctx.sessionManager.getSessionId()` and
+  `ctx.sessionManager.getSessionFile()`, then invokes the same writer with the
+  exact ID and optional resume file path. It is a provider hook event, never
+  terminal-output parsing.
+
+The writer realpaths and validates `ORCA_OCI_WORKTREE_PATH`, verifies that
+`git -C` reports the same `ORCA_OCI_REPO_ROOT`, rejects a mismatched manifest
+argument, and atomically updates only that provider's field. Missing provider
+hook configuration means no locator is published; recovery remains
+`RECOVERY_REQUIRED`. Managed Orca panes do not set `ORCA_OCI_*` and therefore
+do not write this manifest.
+
+The setup implementation must treat provider-hook adapter installation and the
+writer's executable path as a preflight dependency. It may not silently rely
+on a running Orca UI, a stale `ORCA_AGENT_HOOK_*` endpoint, or an implicit
+relay association.
+
+The setup hook must remove a partially created session if four-window creation
+fails. Existing sessions remain untouched.
+
+Initial rollout does not mutate legacy sessions that predate the four-window
+layout. The operator must archive and recreate each such session once; only
+new sessions receive the layout automatically.
+
+Provider command dispatch is additionally gated by a non-mutating binary/flag
+preflight on the new session's target host. The preflight checks the exact
+resume subcommand/selector and permission flags for that provider. An
+unsupported binary or flag records `RECOVERY_REQUIRED` and sends no provider
+command; it never substitutes another flag or selector.
+
+Recovery is deliberately one-shot per created tmux session. If a provider
+start or preflight partially fails, the coordinator leaves the session and
+window as shell plus `RECOVERY_REQUIRED`; a later reconciliation sees the
+existing session and sends no second provider command. Manual archive and
+recreate is required after correcting the failure, preventing duplicate
+provider processes or concurrent writers.
+
+The setup hook's single-owner contract is the only layout definition. The
+coordinator must not duplicate or reinterpret it.
+
 
 `restore_worktree_sessions()` continues to enumerate Orca's worktree inventory,
 skip non-local paths, call the setup hook, observe which session name was newly
@@ -106,6 +181,11 @@ The permission-bypass flags are an explicit OCI-only policy. They are not sent
 to hp_v2. OMP has no `dangerously-skip-permissions` flag; `--auto-approve` plus
 `--approval-mode=yolo` is its installed CLI approval policy and must remain a
 provider-specific command contract.
+The command rows above are the recovery argv after the provider preflight. The
+preflight must verify the installed provider help output exposes every
+selector and permission flag used by that row. A preflight failure is a
+provider-local `RECOVERY_REQUIRED`, not a downgrade to another approval mode.
+
 
 A provider resume failure, including a missing or mismatched manifest locator,
 returns the window to an ordinary shell and records `RECOVERY_REQUIRED`. It
@@ -137,16 +217,23 @@ and never committed to the worktree. Its minimum schema is:
 }
 ```
 
-Entries are updated only from the provider's authoritative session-start
-identity event or the existing Orca provider-session relay; the implementation
-must not infer an ID from terminal text, file mtime, or a global recent-session
-picker. A manifest is consumed only when its recorded `worktreePath` and
-`repoRoot` match the canonical realpaths of the target session. A moved or
-renamed worktree does not reuse the old manifest automatically.
+Entries are updated only by the explicit provider-native SessionStart adapter
+path defined in the chosen approach. The implementation must not infer an ID
+from terminal text, file mtime, a global recent-session picker, or a relay
+event that lacks the raw session's `ORCA_OCI_*` context. The writer receives a
+normalized provider locator from the adapter, realpaths and validates the
+worktree/root pair, then atomically updates the matching manifest. For OMP,
+`resumeFilePath` is stored only when
+`ctx.sessionManager.getSessionFile()` supplies the authoritative path;
+otherwise the exact OMP session ID remains the locator.
 
-If the provider hook/relay cannot publish an exact locator, that provider stays
-at `RECOVERY_REQUIRED` after reboot. The system does not downgrade to
+A manifest is consumed only when its recorded `worktreePath` and `repoRoot`
+match the canonical realpaths of the target session. A moved or renamed
+worktree does not reuse the old manifest automatically. A missing adapter,
+missing locator, malformed locator, or failed path/root validation leaves that
+provider at `RECOVERY_REQUIRED` after reboot. The system does not downgrade to
 `--last`, `--continue`, or a fresh session.
+
 
 The manifest stores provider locators only; it stores no API credentials,
 approval tokens, or conversation content.
@@ -188,6 +275,14 @@ expected for the separate managed terminal path.
 | non-local/Windows worktree path | skip it; do not create an OCI tmux session |
 | managed worker request | create a separate Orca managed terminal/worktree, never a tmux child |
 
+Recovery is deliberately one-shot per created tmux session. If a provider
+start or preflight partially fails, the coordinator leaves the session and
+window as shell plus `RECOVERY_REQUIRED`; a later reconciliation sees the
+existing session and sends no second provider command. Manual archive and
+recreate is required after correcting the failure, preventing duplicate
+provider processes or concurrent writers.
+
+
 A resume restores provider conversation context only. It does not claim that a
 previous command, test, child process, or terminal output was restored.
 
@@ -195,6 +290,9 @@ The operational change is limited to:
 
 - the authoritative Orca local setup hook and its `/srv/script` test copy, for
   creating the four-window layout;
+- the provider-native raw-session event adapters and OMP hook extension that
+  feed the manifest writer without using the Orca managed relay;
+
 - a host-local provider-session manifest writer/reader and focused tests;
 - `/srv/script/orca-coordinator.sh`, for provider-specific exact-locator
   recovery on newly created sessions and strict failure handling;
@@ -233,6 +331,17 @@ The manifest tests must assert:
   mismatch yields `RECOVERY_REQUIRED`;
 - no provider ID is inferred from recent-session ordering or terminal text.
 
+The event-path tests must assert:
+
+- Claude/Codex SessionStart payloads reach the writer with the native
+  `session_id`;
+- OMP `session_start` reaches the writer with
+  `ctx.sessionManager.getSessionId()` and its optional session file;
+- absent or mismatched `ORCA_OCI_*` context cannot write another worktree's
+  manifest;
+- no manifest update depends on terminal text, mtime, or recent-session order.
+
+
 The coordinator test must assert:
 
 - `ensure-session` restores missing local worktree sessions;
@@ -250,6 +359,15 @@ Run CLI help probes for the installed Codex, Claude, and OMP versions and keep
 the exact-resume assertions aligned with
 `getAgentResumeArgv()`/`buildAgentResumeStartupPlan()`. Do not infer a
 provider's resume syntax from another provider.
+
+Provider preflight tests must cover the installed Codex, Claude, and OMP
+selector/permission flags, with unsupported flags producing
+`RECOVERY_REQUIRED` and no downgrade.
+
+Recovery idempotency tests must cover a second coordinator invocation after
+each provider preflight/start failure: it must leave the existing session
+untouched and send no duplicate provider command. A failed partial layout must
+be removed by setup so a later setup can retry creation.
 
 The UI-visible managed-worker acceptance remains a separate Orca UI/AgentMap
 smoke check. It must verify a managed worker has its own terminal and managed
