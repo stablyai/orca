@@ -1,9 +1,16 @@
 import { execFile } from 'node:child_process'
 import { createHash } from 'node:crypto'
+import { userInfo } from 'node:os'
 
 const ACTIVE_CLAUDE_SERVICE = 'Claude Code-credentials'
 const ORCA_CLAUDE_SERVICE = 'Orca Claude Code Managed Credentials'
 const KEYCHAIN_COMMAND_TIMEOUT_MS = 3_000
+// Why: Claude Code only accepts a Keychain account name matching this pattern and
+// substitutes CLAUDE_CODE_FALLBACK_USER for anything else, so an SSO-provisioned
+// `$USER` like `first@example.com` is stored under the fallback. Deriving the name
+// any other way makes every lookup miss the item Claude Code actually wrote.
+const KEYCHAIN_ACCOUNT_PATTERN = /^[a-zA-Z0-9._-]+$/
+const CLAUDE_CODE_FALLBACK_USER = 'claude-code-user'
 
 type SecurityCommandResult = {
   stdout: string
@@ -79,7 +86,13 @@ export async function deleteManagedClaudeKeychainCredentials(accountId: string):
 }
 
 function getKeychainUser(): string {
-  return process.env.USER || process.env.USERNAME || 'user'
+  let user: string | undefined
+  try {
+    user = process.env.USER || process.env.USERNAME || userInfo().username
+  } catch {
+    return CLAUDE_CODE_FALLBACK_USER
+  }
+  return user && KEYCHAIN_ACCOUNT_PATTERN.test(user) ? user : CLAUDE_CODE_FALLBACK_USER
 }
 
 function getActiveClaudeService(configDir?: string): string {
