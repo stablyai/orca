@@ -77,7 +77,11 @@ export type UISlicePreferences = {
   setAgentsReadFilter: (v: ThreadReadFilter) => void
   agentsGroupBy: ActivityGroupBy
   setAgentsGroupBy: (v: ActivityGroupBy) => void
+  /** Transient section keys used by the compact sidebar overflow menu. */
+  sidebarSectionHeaderKeys: readonly string[]
+  setSidebarSectionHeaderKeys: (keys: readonly string[]) => void
   collapsedGroups: Set<string>
+  setCollapsedGroups: (keys: Iterable<string>) => void
   toggleCollapsedGroup: (key: string) => void
   worktreeCardProperties: WorktreeCardProperty[]
   _worktreeCardModeDefaulted: boolean

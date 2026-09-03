@@ -22,12 +22,18 @@ import {
 
 export const SIDEBAR_HEADER_WIDE_MIN_WIDTH = 235
 
+export function useSidebarHeaderCompact(): boolean {
+  return useAppStore((s) => s.sidebarWidth < SIDEBAR_HEADER_WIDE_MIN_WIDTH)
+}
+
 function CompactWorkspaceOverflow({
   preserveWorkspaceBoardOpen,
-  onMenuOpenChange
+  onMenuOpenChange,
+  extraItems
 }: {
   preserveWorkspaceBoardOpen: boolean
   onMenuOpenChange?: (open: boolean) => void
+  extraItems?: React.ReactNode
 }): React.JSX.Element {
   const openModal = useAppStore((s) => s.openModal)
   const [open, setOpen] = useState(false)
@@ -75,6 +81,7 @@ function CompactWorkspaceOverflow({
         data-workspace-board-preserve-open={boardAttr}
       >
         <WorkspaceOptionsMenuItems preserveWorkspaceBoardOpen={preserveWorkspaceBoardOpen} />
+        {extraItems}
         <DropdownMenuSeparator />
         <DropdownMenuItem onSelect={() => openModal('add-repo')}>
           <FolderPlus className="size-3.5" strokeWidth={2.25} />
@@ -87,14 +94,15 @@ function CompactWorkspaceOverflow({
 
 export function SidebarHeaderActions({
   onWorkspaceBoardMenuOpenChange,
-  hideWorkspaceOptions = false
+  hideWorkspaceOptions = false,
+  extraItems
 }: {
   onWorkspaceBoardMenuOpenChange: (open: boolean) => void
   hideWorkspaceOptions?: boolean
+  extraItems?: React.ReactNode
 }): React.JSX.Element {
-  const sidebarWidth = useAppStore((s) => s.sidebarWidth)
   const newWorktreeShortcutLabel = useShortcutLabel('workspace.create')
-  const compact = sidebarWidth < SIDEBAR_HEADER_WIDE_MIN_WIDTH
+  const compact = useSidebarHeaderCompact()
 
   if (compact) {
     return (
@@ -128,6 +136,7 @@ export function SidebarHeaderActions({
           <CompactWorkspaceOverflow
             preserveWorkspaceBoardOpen
             onMenuOpenChange={onWorkspaceBoardMenuOpenChange}
+            extraItems={extraItems}
           />
         )}
       </div>

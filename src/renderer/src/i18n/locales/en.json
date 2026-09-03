@@ -6224,6 +6224,10 @@
           "projectOnly": "Added in this project only.",
           "useGlobalFor": "Use global for {{value0}}",
           "useGlobal": "Use global"
+        },
+        "SidebarCollapseAllButton": {
+          "collapseAll": "Collapse all",
+          "expandAll": "Expand all"
         }
       },
       "shared": {

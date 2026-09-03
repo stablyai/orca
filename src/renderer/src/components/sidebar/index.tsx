@@ -64,6 +64,9 @@ function Sidebar({
   const setAgentGroupBy = useAppStore((s) => s.setAgentsGroupBy)
   const [agentQuery, setAgentQuery] = React.useState('')
   const [agentOptionsTarget, setAgentOptionsTarget] = React.useState<HTMLDivElement | null>(null)
+  const [projectsOptionsTarget, setProjectsOptionsTarget] = React.useState<HTMLDivElement | null>(
+    null
+  )
   const agentsScrollTopRef = React.useRef(0)
   // Held here so collapsed groups (and the layout the saved scrollTop assumes)
   // survive the Agents list unmounting on sidebar body switches.
@@ -164,6 +167,7 @@ function Sidebar({
             <SidebarHeader
               onWorkspaceBoardMenuOpenChange={setWorkspaceBoardMenuOpen}
               activityOptionsTarget={setAgentOptionsTarget}
+              projectsOptionsTarget={setProjectsOptionsTarget}
             />
             {sidebarBody === 'agents' ? (
               <React.Suspense fallback={<div className="min-h-0 flex-1" />}>
@@ -188,6 +192,7 @@ function Sidebar({
                 onWorkspaceBoardDragPreviewStart={previewWorkspaceBoardFromDrag}
                 onWorkspaceBoardDragPreviewCommit={solidifyWorkspaceBoardFromDrag}
                 onWorkspaceBoardDragPreviewCancel={cancelWorkspaceBoardDragPreview}
+                projectsOptionsTarget={projectsOptionsTarget}
               />
             )}
 

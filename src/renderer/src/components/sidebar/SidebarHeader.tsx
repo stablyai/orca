@@ -2,21 +2,24 @@ import React, { useId } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useAppStore } from '@/store'
 import { translate } from '@/i18n/i18n'
-import { SidebarHeaderActions } from './sidebar-header-actions'
+import { SidebarHeaderActions, useSidebarHeaderCompact } from './sidebar-header-actions'
 import { Button } from '@/components/ui/button'
 import { Popover, PopoverAnchor, PopoverArrow, PopoverContent } from '@/components/ui/popover'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { Sparkles, Bell } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { SidebarCollapseAllMenuItem } from './SidebarCollapseAllButton'
 
 type SidebarHeaderProps = {
   onWorkspaceBoardMenuOpenChange: (open: boolean) => void
   activityOptionsTarget?: React.Ref<HTMLDivElement>
+  projectsOptionsTarget?: React.Ref<HTMLDivElement>
 }
 
 const SidebarHeader = React.memo(function SidebarHeader({
   onWorkspaceBoardMenuOpenChange,
-  activityOptionsTarget
+  activityOptionsTarget,
+  projectsOptionsTarget
 }: SidebarHeaderProps) {
   // Subscribe this memoized header to locale changes before using translate().
   useTranslation()
@@ -25,6 +28,7 @@ const SidebarHeader = React.memo(function SidebarHeader({
   const setSidebarBody = useAppStore((s) => s.setSidebarBody)
   const updateSettings = useAppStore((s) => s.updateSettings)
   const agentsViewActive = sidebarBody === 'agents'
+  const compact = useSidebarHeaderCompact()
   const agentsSidebarIntroShown = useAppStore((s) => s.settings?.agentsSidebarIntroShown === true)
   const migratedFromExperimental = useAppStore(
     (s) => s.settings?.agentsSidebarMigratedFromExperimental === true
@@ -53,6 +57,13 @@ const SidebarHeader = React.memo(function SidebarHeader({
         </span>
       </div>
       <div className="flex shrink-0 items-center gap-1">
+        {!agentsViewActive && !compact ? (
+          <div
+            ref={projectsOptionsTarget}
+            className="flex items-center empty:hidden"
+            data-sidebar-project-options-target=""
+          />
+        ) : null}
         <Popover
           open={introOpen}
           onOpenChange={(open) => {
@@ -123,6 +134,7 @@ const SidebarHeader = React.memo(function SidebarHeader({
         <SidebarHeaderActions
           onWorkspaceBoardMenuOpenChange={onWorkspaceBoardMenuOpenChange}
           hideWorkspaceOptions={agentsViewActive}
+          extraItems={!agentsViewActive && compact ? <SidebarCollapseAllMenuItem /> : null}
         />
       </div>
     </div>

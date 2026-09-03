@@ -2,6 +2,7 @@
 
 import React, { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
+import { fireEvent } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import SidebarHeader from './SidebarHeader'
 
@@ -18,6 +19,9 @@ type MockState = {
   groupBy: string
   sidebarBody: 'workspaces' | 'agents'
   sidebarWidth: number
+  sidebarSectionHeaderKeys: readonly string[]
+  collapsedGroups: Set<string>
+  setCollapsedGroups: (keys: Iterable<string>) => void
   setSidebarBody: (body: 'workspaces' | 'agents') => void
   openModal: (modal: string, data?: unknown) => void
   updateSettings: (patch: Record<string, unknown>) => void
@@ -100,6 +104,9 @@ beforeEach(() => {
     groupBy: 'repo',
     sidebarBody: 'workspaces',
     sidebarWidth: 280,
+    sidebarSectionHeaderKeys: ['pinned', 'repo:orca'],
+    collapsedGroups: new Set(['lineage:parent']),
+    setCollapsedGroups: vi.fn(),
     setSidebarBody: vi.fn(),
     openModal: vi.fn(),
     updateSettings: vi.fn(),
@@ -117,6 +124,45 @@ afterEach(() => {
 })
 
 describe('SidebarHeader', () => {
+  it('renders the project options target only in the workspaces view', () => {
+    act(() => {
+      root.render(
+        <SidebarHeader
+          onWorkspaceBoardMenuOpenChange={vi.fn()}
+          projectsOptionsTarget={() => undefined}
+        />
+      )
+    })
+
+    expect(container.querySelector('[data-sidebar-project-options-target]')).toBeTruthy()
+
+    mockState.sidebarBody = 'agents'
+    act(() => {
+      root.render(
+        <SidebarHeader
+          onWorkspaceBoardMenuOpenChange={vi.fn()}
+          projectsOptionsTarget={() => undefined}
+        />
+      )
+    })
+
+    expect(container.querySelector('[data-sidebar-project-options-target]')).toBeNull()
+  })
+
+  it('omits the project options target when the header is compact', () => {
+    mockState.sidebarWidth = 220
+    act(() => {
+      root.render(
+        <SidebarHeader
+          onWorkspaceBoardMenuOpenChange={vi.fn()}
+          projectsOptionsTarget={() => undefined}
+        />
+      )
+    })
+
+    expect(container.querySelector('[data-sidebar-project-options-target]')).toBeNull()
+  })
+
   it('keeps New workspace clickable with zero projects, since the composer adds the first one', () => {
     act(() => {
       root.render(<SidebarHeader onWorkspaceBoardMenuOpenChange={vi.fn()} />)
@@ -257,6 +303,34 @@ describe('SidebarHeader', () => {
       newWorkspaceButton().click()
     })
     expect(mocks.openWorkspaceCreationComposerWithTourHandoff).toHaveBeenCalledTimes(1)
+  })
+
+  it('runs Collapse all from the compact overflow menu', () => {
+    mockState.sidebarWidth = 220
+    act(() => {
+      root.render(<SidebarHeader onWorkspaceBoardMenuOpenChange={vi.fn()} />)
+    })
+
+    const moreActions = container.querySelector<HTMLButtonElement>(
+      '[aria-label="More workspace actions"]'
+    )
+    expect(moreActions).toBeTruthy()
+    act(() => {
+      if (moreActions) {
+        fireEvent.pointerDown(moreActions, { button: 0, ctrlKey: false })
+      }
+    })
+    const collapseAllItem = Array.from(
+      document.querySelectorAll<HTMLElement>('[role="menuitem"]')
+    ).find((item) => item.textContent === 'Collapse all')
+    expect(collapseAllItem).toBeTruthy()
+
+    act(() => {
+      collapseAllItem?.click()
+    })
+    expect(mockState.setCollapsedGroups).toHaveBeenCalledWith(
+      new Set(['lineage:parent', 'pinned', 'repo:orca'])
+    )
   })
 
   it('does not reset a persisted agents body before settings hydrate', () => {

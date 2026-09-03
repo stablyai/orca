@@ -1,4 +1,5 @@
-import React, { useCallback, useMemo } from 'react'
+import React, { useCallback, useEffect, useMemo } from 'react'
+import { createPortal } from 'react-dom'
 import { useAppStore } from '@/store'
 import { useShallow } from 'zustand/react/shallow'
 import {
@@ -37,11 +38,18 @@ import { useVisibleSidebarWorktrees } from './worktree-list/listing/use-visible-
 import { useWorktreeStatusMutations } from './worktree-list/drag/use-status-mutations'
 import { shouldFiltersHideAllRows } from './sidebar-empty-state-gate'
 import { buildWorktreeManualOrderCatalog } from './worktree-manual-order-catalog'
+import { SidebarCollapseAllButton } from './SidebarCollapseAllButton'
+import {
+  collapseAllSectionKeys,
+  collectSectionHeaderKeys,
+  expandAllSectionKeys
+} from './worktree-list/grouping/section-header-keys'
 
 type WorktreeListProps = {
   scrollOffsetRef: React.MutableRefObject<number>
   scrollAnchorRef: React.MutableRefObject<VirtualizedScrollAnchor>
   workspaceBoardOpen?: boolean
+  projectsOptionsTarget?: HTMLElement | null
   onWorkspaceBoardDragPreviewStart?: () => void
   onWorkspaceBoardDragPreviewCommit?: () => void
   onWorkspaceBoardDragPreviewCancel?: () => void
@@ -51,6 +59,7 @@ const WorktreeList = React.memo(function WorktreeList({
   scrollOffsetRef,
   scrollAnchorRef,
   workspaceBoardOpen = false,
+  projectsOptionsTarget,
   onWorkspaceBoardDragPreviewStart = NOOP_WORKSPACE_BOARD_DRAG_PREVIEW_CALLBACK,
   onWorkspaceBoardDragPreviewCommit = NOOP_WORKSPACE_BOARD_DRAG_PREVIEW_CALLBACK,
   onWorkspaceBoardDragPreviewCancel = NOOP_WORKSPACE_BOARD_DRAG_PREVIEW_CALLBACK
@@ -84,6 +93,8 @@ const WorktreeList = React.memo(function WorktreeList({
   const clearPendingRevealWorktreeId = useAppStore((s) => s.clearPendingRevealWorktreeId)
   const clearPendingRevealSidebarRow = useAppStore((s) => s.clearPendingRevealSidebarRow)
   const collapsedGroups = useAppStore((s) => s.collapsedGroups)
+  const setCollapsedGroups = useAppStore((s) => s.setCollapsedGroups)
+  const setSidebarSectionHeaderKeys = useAppStore((s) => s.setSidebarSectionHeaderKeys)
   const toggleGroup = useAppStore((s) => s.toggleCollapsedGroup)
   const projectGroups = useAppStore((s) => s.projectGroups ?? EMPTY_PROJECT_GROUPS)
   const folderWorkspaces = useAppStore((s) => s.folderWorkspaces)
@@ -174,6 +185,19 @@ const WorktreeList = React.memo(function WorktreeList({
     visibleWorkspaceHostIds: filterState.visibleWorkspaceHostIds,
     workspaceHostScope: filterState.workspaceHostScope
   })
+  const sectionHeaderKeys = useMemo(() => collectSectionHeaderKeys(rowModel.rows), [rowModel.rows])
+  useEffect(() => {
+    setSidebarSectionHeaderKeys(sectionHeaderKeys)
+  }, [sectionHeaderKeys, setSidebarSectionHeaderKeys])
+  // Why: the compact overflow item reads this field; clear it only on unmount so a
+  // row-model change never flashes the item away.
+  useEffect(() => () => setSidebarSectionHeaderKeys([]), [setSidebarSectionHeaderKeys])
+  const collapseAllSections = useCallback(() => {
+    setCollapsedGroups(collapseAllSectionKeys(collapsedGroups, sectionHeaderKeys))
+  }, [collapsedGroups, sectionHeaderKeys, setCollapsedGroups])
+  const expandAllSections = useCallback(() => {
+    setCollapsedGroups(expandAllSectionKeys(collapsedGroups))
+  }, [collapsedGroups, setCollapsedGroups])
   const selection = useSidebarWorktreeSelection({
     sectionRows: rowModel.sectionRows,
     pinnedDisplayPolicy
@@ -253,13 +277,33 @@ const WorktreeList = React.memo(function WorktreeList({
     placeholderRepoCount: rowModel.placeholderRepoIds.size,
     importedWorktreeCardCount: externalWorktreeCards.importedWorktreesByRepo.size
   })
+  // Why: the header button must exist in both branches so wide and compact modes agree.
+  const collapseAllPortal = projectsOptionsTarget
+    ? createPortal(
+        <SidebarCollapseAllButton
+          headerKeys={sectionHeaderKeys}
+          collapsedGroups={collapsedGroups}
+          onCollapseAll={collapseAllSections}
+          onExpandAll={expandAllSections}
+          compact={false}
+        />,
+        projectsOptionsTarget
+      )
+    : null
+
   // Why: when active filters hide every row, the Clear Filters empty state must win over Project Group headers.
   if (rowModel.rows.length === 0 || filtersHideAllRows) {
-    return <SidebarWorktreeListEmptyState hasFilters={hasFilters} onClearFilters={clearFilters} />
+    return (
+      <>
+        {collapseAllPortal}
+        <SidebarWorktreeListEmptyState hasFilters={hasFilters} onClearFilters={clearFilters} />
+      </>
+    )
   }
 
   return (
     <>
+      {collapseAllPortal}
       <SidebarWorktreeListDialogs
         dialogs={projectGroupDialogs}
         repos={repos}
