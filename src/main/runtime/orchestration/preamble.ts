@@ -81,12 +81,31 @@ Slack, GitHub comments, or any other channel to reach a human during the run.
   # Never encode failure only in prose and never silently exit.
   # Include BOTH taskId and dispatchId in the payload so a late completion
   # from a failed retry cannot complete the current dispatch.
+  #
+  # RULE: worker_done is terminal, not a progress report. It settles the task
+  # and revokes your dispatch capability the moment it lands, so a mid-run
+  # update sent this way ends your run and makes every later worker_done and
+  # heartbeat fail. For an interim update use --type status below.
   ${cli} orchestration send --from ${params.workerHandle}${capabilityFlag} \\
-    --type worker_done --subject "<short status>" \\
+    --type worker_done --subject "<short completion headline>" \\
     --body "<3-sentence summary: what you did, what you found, what's left>" \\
     --task-id ${params.taskId} --dispatch-id ${params.dispatchId} --outcome succeeded \\
     --files-modified "path/a,path/b" \\
     --report-path "<optional: path to the full artifact>"
+
+  # Report mid-run progress without ending the task.
+  #
+  # RULE: use status for "phase one is done, starting phase two" progress —
+  # you are neither finished nor blocked, and heartbeat carries no body to
+  # say it in. Put the headline in --subject: the coordinator loop logs the
+  # subject and leaves the body for whoever opens the message.
+  #
+  # It does not replace the commands below: ask when you need an answer,
+  # escalation when you are blocked, worker_done only when the task is over.
+  ${cli} orchestration send --from ${params.workerHandle}${capabilityFlag} \\
+    --type status --subject "<short progress headline>" \\
+    --body "<what just finished, what you are starting next>" \\
+    --task-id ${params.taskId} --dispatch-id ${params.dispatchId}
 
   # BEHAVIOR RULE: send a heartbeat every ${HEARTBEAT_INTERVAL_MIN} minutes
   # while actively working on the task. The coordinator uses this to
