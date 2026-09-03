@@ -12,6 +12,8 @@ export type ServePairingReadiness =
       webClientUrl: string | null
       scope: 'runtime' | 'mobile'
       qr: string | null
+      /** Present when the offer carries a tailcat address blob; the URL above already embeds it. */
+      tunnel?: { kind: 'tailcat'; token: string }
     }
   | {
       available: false
@@ -117,6 +119,9 @@ function renderHumanReadiness(readiness: ServeReadiness): string {
     }
     if (readiness.pairing.scope === 'mobile' && readiness.pairing.qr) {
       lines.push(`Mobile pairing QR:\n${readiness.pairing.qr}`)
+    }
+    if (readiness.pairing.tunnel) {
+      lines.push(`Tailcat tunnel: ${readiness.pairing.tunnel.token}`)
     }
     lines.push(`Pairing URL: ${readiness.pairing.url}`)
   } else {

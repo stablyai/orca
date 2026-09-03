@@ -58,6 +58,17 @@ export function createRuntimeEnvironmentsApi(): NonNullable<
           message: translateHostAccessLinkError(parsed.kind)
         }
       }
+      // Why: the browser has no tunnel dialer; refusing here beats dialing a fallback that cannot answer.
+      if (parsed.value.pairing.tunnel) {
+        return {
+          ok: false,
+          kind: 'access-link-invalid',
+          message: translate(
+            'auto.web.webPreloadApi.tunnelPairingUnsupported',
+            'This link uses a Tailcat tunnel, which a browser cannot dial. Add it from the Orca desktop app instead.'
+          )
+        }
+      }
       if (parsed.value.endpointKind === 'loopback' && !allowLoopback) {
         return {
           ok: false,

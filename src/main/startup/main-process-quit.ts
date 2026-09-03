@@ -3,6 +3,7 @@ import { closeAllWatchers } from '../ipc/filesystem-watcher'
 import { disposeWorktreeBaseDirectoryWatchers } from '../ipc/worktree-base-directory-watcher'
 import { stopFolderRepoGitUpgradeWatch } from '../ipc/folder-repo-git-upgrade'
 import { killAllPty } from '../ipc/pty'
+import { disposeTailcatTunnel } from '../tunnel/tailcat-tunnel-host'
 import { disconnectDaemon, shutdownDaemon } from '../daemon/daemon-init'
 import { beginSshShutdown } from '../ipc/ssh-shutdown-drain'
 import { agentHookServer } from '../agent-hooks/server'
@@ -192,6 +193,8 @@ function installWillQuitHandler(): void {
     // Why immediately before store.flushAsync() with no await in between: beginSshShutdown() marks every
     // active SSH lease detached in memory synchronously, and that flush is what persists it.
     const sshShutdown = beginSshShutdown()
+    // Why: tailcat children outlive the runtime otherwise, serving a tunnel into a dead port.
+    void disposeTailcatTunnel().catch(() => {})
     killAllPty()
     const watcherShutdown = shutdownWatchersOnce()
     const storeFlush = state.store?.flushAsync() ?? Promise.resolve()

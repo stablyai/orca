@@ -83,7 +83,7 @@ export async function getRuntimeEnvironmentStatus(
           },
           _meta: { runtimeId: environment.runtimeId }
         },
-        pairing.endpoint
+        pairing.tunnel ? null : pairing.endpoint
       ),
       environment.id
     )
@@ -112,7 +112,7 @@ export async function getRuntimeEnvironmentStatus(
     }
   }
   return attachRemoteControlDiagnostics(
-    withTailscaleHintForResponse(response, pairing.endpoint),
+    withTailscaleHintForResponse(response, pairing.tunnel ? null : pairing.endpoint),
     environment.id
   )
 }

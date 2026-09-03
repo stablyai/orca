@@ -5,6 +5,7 @@ import {
   RuntimePairingGeneratorForm,
   type RuntimePairingIntent
 } from './RuntimePairingGeneratorForm'
+import type { TailcatTunnelStatus } from '../../../../shared/tailcat-tunnel-status'
 
 function renderForm(
   intent: RuntimePairingIntent,
@@ -13,7 +14,8 @@ function renderForm(
     address: string
     runtimePairingUrl: string
     webClientUrl: string
-  }
+  },
+  tunnelStatus: TailcatTunnelStatus | null = null
 ): string {
   return renderToStaticMarkup(
     <TooltipProvider>
@@ -24,6 +26,7 @@ function renderForm(
         selectedAddress={selectedAddress}
         refreshingNetworkInterfaces={false}
         isGeneratingPairing={false}
+        tunnelStatus={tunnelStatus}
         webClientUrl={generated?.webClientUrl ?? null}
         runtimePairingUrl={generated?.runtimePairingUrl ?? null}
         copiedTarget={null}
@@ -64,5 +67,33 @@ describe('RuntimePairingGeneratorForm', () => {
 
     expect(markup).toContain('The connection address changed.')
     expect(markup).not.toContain('stale-secret')
+  })
+
+  it('blocks the tunnel intent until the tailcat CLI is found', () => {
+    const missing = renderForm('tunnel', '127.0.0.1', undefined, {
+      installed: false,
+      binaryPath: null,
+      installHint: 'Install the tailcat CLI.',
+      compatible: null,
+      version: null,
+      incompatibleReason: null,
+      server: { state: 'stopped', port: null }
+    })
+    expect(missing).toContain('role="alert"')
+    expect(missing).toContain('Install the tailcat CLI.')
+    expect(missing).not.toContain('id="runtime-pairing-custom-address"')
+    expect(missing).not.toContain('role="combobox"')
+
+    const installed = renderForm('tunnel', '127.0.0.1', undefined, {
+      installed: true,
+      binaryPath: '/opt/homebrew/bin/tailcat',
+      installHint: 'Install the tailcat CLI.',
+      compatible: true,
+      version: 'v0.4.0',
+      incompatibleReason: null,
+      server: { state: 'running', port: 6768 }
+    })
+    expect(installed).not.toContain('role="alert"')
+    expect(installed).toContain('Tunnel running.')
   })
 })

@@ -14,6 +14,8 @@ import { HEADLESS_RUNTIME_WINDOW_ID } from '../../shared/runtime-types'
 import { OffscreenBrowserBackend } from '../browser/offscreen-browser-backend'
 import { browserManager } from '../browser/browser-manager'
 import { DesktopRelayService } from '../runtime/relay/desktop-relay-service'
+import { attachTailcatTunnel } from '../tunnel/tailcat-tunnel-host'
+import { DEFAULT_WS_PORT } from '../runtime/runtime-rpc/runtime-rpc-pairing-types'
 import { getServeOptions, getBundledWebClientRoot, printServeReady } from './main-process-serve'
 import {
   bindTerminalRuntimeStartupServices,
@@ -42,6 +44,10 @@ type RuntimeService = NonNullable<typeof state.runtime>
 export type MainProcessRuntimeLaunchOptions = {
   openMainWindow: (options?: { revealOnDidFinishLoad?: boolean }) => BrowserWindow
   handleMacAppActivation: () => void
+}
+
+function servesTunnelOnly(serveOptions: NonNullable<ReturnType<typeof getServeOptions>>): boolean {
+  return serveOptions.tailcat && !serveOptions.pairingAddress
 }
 
 function settleDesktopActivation(): void {
@@ -76,7 +82,9 @@ function installRuntimeRpc(
     enableWebSocket: true,
     // Why: STA-2370 — the desktop app binds the WS listener to loopback until the user pairs a device;
     // `orca serve` is an explicit remote opt-in, and E2E keeps the wide bind its harness connects over.
-    exposeNetworkByDefault: Boolean(serveOptions) || isE2E,
+    // Why: a tunnel-only serve (`--tailcat` with no `--pairing-address`) is reached through tailcat's
+    // loopback proxy, so widening the listener would expose it for nothing.
+    exposeNetworkByDefault: (serveOptions !== null && !servesTunnelOnly(serveOptions)) || isE2E,
     ...(isE2E ? { wsPort: e2eWsPort } : {}),
     ...(devWsPort !== undefined ? { wsPort: devWsPort } : {}),
     ...(serveOptions?.wsPort !== undefined
@@ -84,6 +92,14 @@ function installRuntimeRpc(
           wsPort: serveOptions.wsPort,
           // Why: only explicit `orca serve --port` overrides a stale STA-1511 fallback (issue #8535); default/dev stay fallback-first for pairing stability.
           preferPinnedWsPort: true
+        }
+      : {}),
+    // Why: every Tailcat link embeds the port, so a tunnel serve binds exactly one port or fails.
+    ...(serveOptions?.tailcat
+      ? {
+          wsPort: serveOptions.wsPort ?? DEFAULT_WS_PORT,
+          preferPinnedWsPort: true,
+          requirePinnedWsPort: true
         }
       : {}),
     webClientRoot: getBundledWebClientRoot()
@@ -154,6 +170,8 @@ async function launchServeMode(
     console.error('[runtime] Failed to start headless RPC transport:', error)
     throw error
   })
+  // Why: links already handed out with a tunnel token are dead until the tunnel is back up.
+  await attachTailcatTunnel(runtimeRpc, getCanonicalUserDataPath())
   settleDesktopActivation()
   // Why: every attempt must reach app.quit(); a page beforeunload can veto an earlier signal.
   registerServeSignalHandlers(process, () => app.quit())
@@ -227,6 +245,8 @@ async function launchDesktopMode(
   ])
   if (!runtimeRpcStartResult.ok) {
     void showRuntimeRpcStartupFailureDialog(win, runtimeRpcStartResult.error)
+  } else {
+    void attachTailcatTunnel(runtimeRpc, getCanonicalUserDataPath())
   }
   const cloudAuth = getOrcaCloudAuthConfig()
   if (cloudAuth.configured) {

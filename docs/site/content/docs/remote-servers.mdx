@@ -129,9 +129,9 @@ Install Orca and its bundled CLI on the server, then run:
 <Callout title="On Linux, start it with orca-ide serve">
   The Linux CLI is named `orca-ide`, because GNOME Orca's screen reader already owns
   `/usr/bin/orca`. A packaged `orca serve` does write a bare `orca` into `~/.local/bin`, but only
-  while it is starting, so that shim can never be the command that starts the server. Read
-  `orca serve` as `orca-ide serve` throughout this page when the host is Linux. See
-  [Install → Linux](/docs/install#linux).
+  while it is starting, so that shim can never be the command that starts the server. Read `orca
+  serve` as `orca-ide serve` throughout this page when the host is Linux. See [Install →
+  Linux](/docs/install#linux).
 </Callout>
 
 ```bash
@@ -160,6 +160,44 @@ orca serve --port 6768 --pairing-address 100.64.1.20
 ```
 
 Use only one host mode at a time. If the Orca desktop app is already sharing that computer, do not start a second `orca serve` process for the same setup.
+
+### Anywhere via Tailcat
+
+[Tailcat](https://github.com/tailscale/tailcat) is Tailscale's open-source CLI for encrypted peer-to-peer
+connections that need no account, tailnet, or VPN. Orca can share a server through it, so a client on any
+network reaches the server without a private network path.
+
+Install the `tailcat` CLI on both computers (`brew install tailcat`, or a release from the Tailcat
+repository). Then either:
+
+- **Desktop app:** under **Advertise this app as a server**, choose **Anywhere via Tailcat** and generate
+  the link.
+- **`orca serve`:** add `--tailcat`:
+
+```bash
+# macOS
+orca serve --tailcat
+# Linux
+orca-ide serve --tailcat
+```
+
+The pairing link carries the server's Tailcat address, and the client dials it through its own `tailcat`
+CLI. The runtime's WebSocket listener stays on loopback; only the tunnel reaches it. Orca keeps a
+persistent Tailcat key under its data directory, so the link survives restarts, and it restarts the tunnel
+on launch while any Tailcat link is still granted.
+
+Tailcat links pin the runtime port, so `orca serve --tailcat` binds exactly `--port` (default 6768) or
+fails rather than moving to another port. Orca checks the installed `tailcat` before using it and needs
+release 0.4 or newer. Only the Orca desktop app can open a Tailcat link today: Orca Mobile and the
+browser client refuse it, and `--tailcat` cannot be combined with `--mobile-pairing`. Orca versions
+that predate Tailcat refuse the link as invalid instead of dialing an unreachable address.
+
+<Callout title="Trust boundary">
+  The Tailcat address in the link is a bearer capability: anyone holding the link can reach the
+  tunnel, and the E2EE device token then decides whether they get in. Revoking the grant is what
+  closes access. Connections bootstrap through Tailcat's public relay and upgrade to a direct path
+  when NAT allows; the relay carries only WireGuard ciphertext.
+</Callout>
 
 ### Mobile from a headless server
 

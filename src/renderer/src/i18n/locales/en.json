@@ -329,7 +329,8 @@
         "loopbackPairingBlocked": "This access link points back to this device.",
         "remotePairingUnreachable": "Cannot reach Orca at {{endpoint}}.",
         "remotePairingInvalidDetails": "This access link contains invalid connection details.",
-        "remotePairingSaveFailed": "Orca verified the host but could not save it. Check browser storage and try again."
+        "remotePairingSaveFailed": "Orca verified the host but could not save it. Check browser storage and try again.",
+        "tunnelPairingUnsupported": "This link uses a Tailcat tunnel, which a browser cannot dial. Add it from the Orca desktop app instead."
       },
       "web": {
         "preload": {
@@ -8009,7 +8010,8 @@
           "troubleshootStepRegenerate": "Generate a new access link and use only the newest link here.",
           "troubleshootTunnel": "Using an SSH local forward? Return to Connect to a host, paste the loopback link, then enable “I am using an SSH tunnel” under Advanced.",
           "cloudVmWorkflow": "Cloud VM",
-          "cloudVmWorkflowHelp": "Manage recipe-created cloud machines"
+          "cloudVmWorkflowHelp": "Manage recipe-created cloud machines",
+          "tailcatTunnel": "Connects over a Tailcat tunnel"
         },
         "RuntimePairingGeneratedUrlRows": {
           "0495f68959": "Copy {{value0}}"
@@ -8061,7 +8063,18 @@
           "localLinkHelp": "This link only works in a browser or Orca client running on this computer.",
           "noExternalAddress": "No address for another device was found. Connect this computer to a LAN or Tailscale, refresh, or choose Custom address.",
           "staleAddress": "The connection address changed. Generate a new link for {{address}}.",
-          "customInvalid": "Enter a valid host, host:port, IPv6 address, or ws(s):// URL."
+          "customInvalid": "Enter a valid host, host:port, IPv6 address, or ws(s):// URL.",
+          "tunnelAnywhere": "Anywhere via Tailcat",
+          "tunnelAnywhereHelp": "Encrypted peer-to-peer tunnel, no account or VPN needed",
+          "tunnelTitle": "Tailcat tunnel",
+          "tunnelChecking": "Checking for the tailcat CLI…",
+          "tunnelMissing": "The tailcat CLI was not found on this computer. {{hint}}",
+          "tunnelHelp": "The link carries this computer’s tunnel address, so the other Orca reaches it from any network. It needs the tailcat CLI installed too.",
+          "tunnelRunning": "Tunnel running.",
+          "tunnelStarting": "Tunnel starting…",
+          "tunnelFailed": "The tunnel failed to start. Generating a link tries again.",
+          "tunnelIdle": "The tunnel starts when you generate a link.",
+          "tunnelIncompatible": "This tailcat build cannot be used: {{reason}}"
         },
         "Settings": {
           "3bf149e873": "Project Settings > {{value0}}",

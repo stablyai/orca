@@ -1,5 +1,10 @@
 #!/usr/bin/env node
 import {
+  disposeTailcatTunnel,
+  registerTailcatTunnelDialer
+} from '../main/tunnel/tailcat-tunnel-dialer-registration'
+import { getDefaultUserDataPath } from './runtime/metadata'
+import {
   findCommandSpec,
   isCommandGroup,
   normalizeCommandPositionals,
@@ -153,6 +158,18 @@ export async function main(
     const remoteEnvironment =
       hostEnvironmentId ??
       (typeof environmentSelector === 'string' ? environmentSelector : suppressed)
+    // Why: a paired server shared over Tailcat is only reachable through the tunnel dialer. Registering
+    // spawns nothing, so it is safe for every remote-capable command; it logs to stderr to keep `--json`
+    // stdout clean, and a failure here must never block a local command.
+    if (!ignoreRemoteSelection) {
+      try {
+        registerTailcatTunnelDialer(getDefaultUserDataPath(), {
+          logf: (message) => process.stderr.write(`[tunnel] ${message}\n`)
+        })
+      } catch {
+        // Why: no user data path means no paired servers to reach either.
+      }
+    }
     let client: RuntimeClient | undefined
     await dispatch(parsed.commandPath, {
       flags: parsed.flags,
@@ -174,6 +191,9 @@ export async function main(
   } catch (error) {
     reportCliError(error, json, { commandPath: parsed.commandPath })
     process.exitCode = 1
+  } finally {
+    // Why: the proxy child must not outlive the command that needed it.
+    await disposeTailcatTunnel()
   }
 }
 

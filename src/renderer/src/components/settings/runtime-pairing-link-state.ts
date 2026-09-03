@@ -2,12 +2,19 @@ import type { RuntimePairingReach } from '../../../../shared/runtime-pairing-rea
 
 export const RUNTIME_PAIRING_LOOPBACK_ADDRESS = '127.0.0.1'
 
-export type RuntimePairingIntent = 'another' | 'local' | 'custom'
+export type RuntimePairingIntent = 'another' | 'local' | 'custom' | 'tunnel'
 
 // Why: only "This computer only" declines off-host reach. Custom is the SSH-tunnel/reverse-proxy field, so
 // even a loopback-looking custom address (`127.0.0.1:8443`) needs the listener open behind the tunnel.
+// Tailcat proxies into loopback itself, so that link must not widen the listener either.
 export function runtimePairingReachForIntent(intent: RuntimePairingIntent): RuntimePairingReach {
-  return intent === 'local' ? 'this-computer' : 'network'
+  return intent === 'local' || intent === 'tunnel' ? 'this-computer' : 'network'
+}
+
+export function runtimePairingTransportForIntent(
+  intent: RuntimePairingIntent
+): 'tailcat' | undefined {
+  return intent === 'tunnel' ? 'tailcat' : undefined
 }
 
 export type RuntimePairingUrlGeneratorProps = {
@@ -62,7 +69,7 @@ export function selectRuntimePairingIntent(
 ): string {
   runtimePairingLinkCache.intent = intent
   const selectedAddress =
-    intent === 'local'
+    intent === 'local' || intent === 'tunnel'
       ? RUNTIME_PAIRING_LOOPBACK_ADDRESS
       : intent === 'another'
         ? (networkInterfaces[0]?.address ?? '')

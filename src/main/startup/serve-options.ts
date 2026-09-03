@@ -11,6 +11,8 @@ export type ServeOptions = {
   mobilePairing: boolean
   recipeJson: boolean
   projectRoot: string | null
+  /** Share the runtime over a tailcat tunnel and embed its token in the pairing offer. */
+  tailcat: boolean
 }
 
 function optionsBeforeTerminator(argv: readonly string[]): readonly string[] {
@@ -119,6 +121,7 @@ export function getServeOptions(argv: readonly string[]): ServeOptions {
     noPairing: lastBooleanValue(optionsArgv, ['--serve-no-pairing', '--no-pairing']),
     mobilePairing: lastBooleanValue(optionsArgv, ['--serve-mobile-pairing', '--mobile-pairing']),
     recipeJson: lastBooleanValue(optionsArgv, ['--serve-recipe-json', '--recipe-json']),
+    tailcat: lastBooleanValue(optionsArgv, ['--serve-tailcat', '--tailcat']),
     projectRoot: valueAfter(
       optionsArgv,
       ['--serve-project-root', '--project-root'],

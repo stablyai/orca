@@ -6,12 +6,15 @@ import { Label } from '../ui/label'
 import { RuntimeAccessGrantList } from './RuntimeAccessGrantList'
 import { translate } from '@/i18n/i18n'
 import { RuntimePairingGeneratorForm } from './RuntimePairingGeneratorForm'
+import { useGeneratedUrlCopy } from './use-generated-url-copy'
+import { useTailcatTunnelStatus } from './use-tailcat-tunnel-status'
 import {
   RUNTIME_PAIRING_LOOPBACK_ADDRESS,
   cacheGeneratedRuntimePairingLink,
   clearGeneratedRuntimePairingLink,
   runtimePairingLinkCache,
   runtimePairingReachForIntent,
+  runtimePairingTransportForIntent,
   selectRuntimePairingIntent,
   type RuntimePairingIntent,
   type RuntimePairingUrlGeneratorProps
@@ -43,31 +46,13 @@ export function RuntimePairingUrlGenerator({
   const [isLoadingAccessGrants, setIsLoadingAccessGrants] = useState(false)
   const [refreshingNetworkInterfaces, setRefreshingNetworkInterfaces] = useState(false)
   const [revokingGrantId, setRevokingGrantId] = useState<string | null>(null)
-  const [copiedTarget, setCopiedTarget] = useState<'web' | 'pairing' | null>(null)
   const [isGeneratingPairing, setIsGeneratingPairing] = useState(false)
   const networkInterfaceLoadIdRef = useRef(0)
   const accessGrantLoadIdRef = useRef(0)
-  const copiedTargetResetTimerRef = useRef<number | null>(null)
   const mountedRef = useMountedRef()
-
-  const clearCopiedTargetResetTimer = useCallback((): void => {
-    if (copiedTargetResetTimerRef.current === null) {
-      return
-    }
-    window.clearTimeout(copiedTargetResetTimerRef.current)
-    copiedTargetResetTimerRef.current = null
-  }, [])
-
-  const setContainerNode = useCallback(
-    (node: HTMLDivElement | null): void => {
-      // Why: copy feedback timers are owned by this settings surface; clear
-      // them when Settings collapses or navigates away.
-      if (!node) {
-        clearCopiedTargetResetTimer()
-      }
-    },
-    [clearCopiedTargetResetTimer]
-  )
+  const { copiedTarget, copyGeneratedUrl, setContainerNode } = useGeneratedUrlCopy()
+  // Why: a generate attempt starts the tunnel, so its result is worth re-reading once it settles.
+  const tunnelStatus = useTailcatTunnelStatus(intent === 'tunnel', isGeneratingPairing)
 
   const loadRuntimeAccessGrants = useCallback(
     async (options: { showToastOnError?: boolean } = {}): Promise<void> => {
@@ -191,7 +176,8 @@ export function RuntimePairingUrlGenerator({
         rotate: true,
         // Why: main gates the one-way network widen on this, so the declared choice must travel with the
         // address — the address alone cannot tell "This computer only" from a loopback tunnel front-end.
-        reach: runtimePairingReachForIntent(intent)
+        reach: runtimePairingReachForIntent(intent),
+        transport: runtimePairingTransportForIntent(intent)
       })
       if (!result.available) {
         clearGeneratedUrls()
@@ -302,44 +288,6 @@ export function RuntimePairingUrlGenerator({
     }
   }
 
-  const copyGeneratedUrl = async (target: 'web' | 'pairing', value: string): Promise<void> => {
-    try {
-      await window.api.ui.writeClipboardText(value)
-      if (mountedRef.current) {
-        clearCopiedTargetResetTimer()
-        setCopiedTarget(target)
-        copiedTargetResetTimerRef.current = window.setTimeout(() => {
-          copiedTargetResetTimerRef.current = null
-          if (mountedRef.current) {
-            setCopiedTarget((current) => (current === target ? null : current))
-          }
-        }, 1400)
-        toast.success(
-          target === 'web'
-            ? translate(
-                'auto.components.settings.RuntimePairingUrlGenerator.13704d635e',
-                'Copied web client URL.'
-              )
-            : translate(
-                'auto.components.settings.RuntimePairingUrlGenerator.df0aa45a86',
-                'Copied pairing URL.'
-              )
-        )
-      }
-    } catch (error) {
-      if (mountedRef.current) {
-        toast.error(
-          error instanceof Error
-            ? error.message
-            : translate(
-                'auto.components.settings.RuntimePairingUrlGenerator.d6c081adf4',
-                'Failed to copy URL.'
-              )
-        )
-      }
-    }
-  }
-
   const containerClassName = framed
     ? 'space-y-3 rounded-lg border border-border/50 bg-muted/25 p-3'
     : 'space-y-4'
@@ -361,6 +309,11 @@ export function RuntimePairingUrlGenerator({
   }
 
   const updateIntent = (nextIntent: RuntimePairingIntent): void => {
+    // Why: "This computer only" and Tailcat both advertise loopback, so the address alone cannot tell a
+    // stale link from a current one; a link is only current for the intent that generated it.
+    if (nextIntent !== intent) {
+      clearGeneratedUrls()
+    }
     setIntent(nextIntent)
     setSelectedAddress(
       selectRuntimePairingIntent(
@@ -397,6 +350,7 @@ export function RuntimePairingUrlGenerator({
           selectedAddress={selectedAddress}
           refreshingNetworkInterfaces={refreshingNetworkInterfaces}
           isGeneratingPairing={isGeneratingPairing}
+          tunnelStatus={tunnelStatus}
           webClientUrl={webClientUrl}
           runtimePairingUrl={runtimePairingUrl}
           copiedTarget={copiedTarget}

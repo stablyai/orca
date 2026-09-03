@@ -3,6 +3,7 @@ import type { MobileRelayStatus } from '../../shared/mobile-relay-status'
 import type { MobilePairingConnectionMode } from '../../shared/mobile-pairing-connection-mode'
 import type { RuntimePairingReach } from '../../shared/runtime-pairing-reach'
 import type { MobileRelayMintFailure } from '../../shared/mobile-relay-mint-failure'
+import type { TailcatTunnelStatus } from '../../shared/tailcat-tunnel-status'
 import type { PreloadApi } from '../api-types'
 
 export const mobileApi = {
@@ -48,8 +49,13 @@ export const mobileApi = {
     // Why: the widen is one-way and host-wide, so main must gate it on the reach the user picked, not
     // on how the typed address happens to look (a Custom loopback may front an SSH tunnel).
     reach?: RuntimePairingReach
+    transport?: 'tailcat'
   }): Promise<
-    | { available: false; reason?: 'network_exposure_failed'; guidance?: string }
+    | {
+        available: false
+        reason?: 'network_exposure_failed' | 'tunnel_unavailable'
+        guidance?: string
+      }
     | {
         available: true
         pairingUrl: string
@@ -58,6 +64,8 @@ export const mobileApi = {
         deviceId: string
       }
   > => ipcRenderer.invoke('mobile:getRuntimePairingUrl', args),
+
+  getTunnelStatus: (): Promise<TailcatTunnelStatus> => ipcRenderer.invoke('tunnel:getStatus'),
 
   listDevices: (): Promise<{
     devices: { deviceId: string; name: string; pairedAt: number; lastSeenAt: number }[]
