@@ -467,7 +467,8 @@
             "catalog": {
               "f8b8ca2711": "Zed",
               "d62b12e98a": "Cursor",
-              "173553f73a": "VS Code"
+              "173553f73a": "VS Code",
+              "00451c5ef5": "IntelliJ IDEA"
             }
           }
         },
@@ -8426,6 +8427,8 @@
             "4497e2e2bb": "リッチ Markdown の編集中に、ブラウザのスペルミス下線と修正候補を表示します。",
             "e61157e926": "エディターのワードラップ",
             "005be5c699": "水平スクロールを使わずに、ファイルエディターで長い行を折り返します。",
+            "19f5fffa01": "jetbrains",
+            "33fb604df4": "intellij",
             "editorFontFamily": "エディターフォント",
             "editorFontFamilyDesc": "ファイルエディターと差分ビューで使用されるフォント。空の場合はターミナルフォントに従います。",
             "externalWorktrees": "外部ワークツリー",

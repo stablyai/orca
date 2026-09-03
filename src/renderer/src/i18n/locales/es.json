@@ -467,7 +467,8 @@
             "catalog": {
               "f8b8ca2711": "Zed",
               "d62b12e98a": "Cursor",
-              "173553f73a": "VS Code"
+              "173553f73a": "VS Code",
+              "00451c5ef5": "IntelliJ IDEA"
             }
           }
         },
@@ -8404,6 +8405,8 @@
             "4497e2e2bb": "Muestra subrayados y sugerencias ortográficas del navegador al editar Rich Markdown.",
             "e61157e926": "Ajuste de línea en el editor",
             "005be5c699": "Ajusta las líneas largas en editores de archivos en lugar de requerir desplazamiento horizontal.",
+            "19f5fffa01": "jetbrains",
+            "33fb604df4": "intellij",
             "editorFontFamily": "Fuente del editor",
             "editorFontFamilyDesc": "Fuente utilizada por los editores de archivos y vistas de diferencias. Dejar vacío para seguir la fuente de la terminal.",
             "externalWorktrees": "Worktrees externos",

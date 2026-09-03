@@ -470,7 +470,8 @@
             "catalog": {
               "f8b8ca2711": "Zed",
               "d62b12e98a": "Cursor",
-              "173553f73a": "VS Code"
+              "173553f73a": "VS Code",
+              "00451c5ef5": "IntelliJ IDEA"
             }
           }
         },
@@ -8394,6 +8395,8 @@
             "4497e2e2bb": "리치 Markdown을 편집하는 동안 브라우저 맞춤법 밑줄과 제안을 표시합니다.",
             "e61157e926": "편집기 자동 줄 바꿈",
             "005be5c699": "가로 스크롤 대신 파일 편집기에서 긴 줄을 자동으로 줄 바꿈합니다.",
+            "19f5fffa01": "jetbrains",
+            "33fb604df4": "intellij",
             "editorFontFamily": "편집기 글꼴",
             "editorFontFamilyDesc": "파일 편집기 및 diff 보기에서 사용되는 글꼴입니다. 비워두면 터미널 글꼴을 따릅니다.",
             "externalWorktrees": "외부 작업 트리",

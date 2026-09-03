@@ -470,7 +470,8 @@
             "catalog": {
               "f8b8ca2711": "Zed",
               "d62b12e98a": "Cursor",
-              "173553f73a": "VS Code"
+              "173553f73a": "VS Code",
+              "00451c5ef5": "IntelliJ IDEA"
             }
           }
         },
@@ -8437,6 +8438,8 @@
             "4497e2e2bb": "在编辑富 Markdown 时显示浏览器拼写下划线和建议。",
             "e61157e926": "编辑器自动换行",
             "005be5c699": "在文件编辑器中自动换行长行，而无需水平滚动。",
+            "19f5fffa01": "jetbrains",
+            "33fb604df4": "intellij",
             "editorFontFamily": "编辑器字体",
             "editorFontFamilyDesc": "文件编辑器和差异视图使用的字体，留空则跟随终端字体。",
             "externalWorktrees": "外部工作树",

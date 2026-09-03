@@ -40,6 +40,31 @@ describe('OpenInMenuSetting presets', () => {
 
     expect(icon.props.className).toContain('dark:invert')
   })
+
+  it('offers IntelliJ IDEA with the Toolbox launcher command and a bundled icon', () => {
+    const idea = requirePreset('intellij-idea')
+
+    expect(idea.command).toBe('idea')
+    expect(typeof idea.iconSrc === 'string' && idea.iconSrc.length > 0).toBe(true)
+  })
+
+  it('renders the bundled product icon for the IntelliJ IDEA preset', () => {
+    const icon = OpenInApplicationIcon({ application: { command: 'idea' } })
+
+    // Bundled asset (data URI or hashed .svg), never the shared favicon fallback.
+    expect(icon.props.src).not.toContain('google.com/s2/favicons')
+    expect(icon.props.src).toMatch(/^data:image\/svg|\.svg$/)
+  })
+
+  it('creates a stable row for the IntelliJ IDEA preset', () => {
+    const idea = requirePreset('intellij-idea')
+
+    expect(createPresetOpenInApplication(idea)).toEqual({
+      id: 'intellij-idea',
+      label: 'IntelliJ IDEA',
+      command: 'idea'
+    })
+  })
 })
 
 describe('OpenInMenuSetting application drafts', () => {

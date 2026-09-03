@@ -683,7 +683,8 @@
             "catalog": {
               "f8b8ca2711": "Zed",
               "d62b12e98a": "Cursor",
-              "173553f73a": "VS Code"
+              "173553f73a": "VS Code",
+              "00451c5ef5": "IntelliJ IDEA"
             }
           }
         },
@@ -9448,6 +9449,8 @@
             "6c2ce8457c": "file explorer",
             "c9d9636f24": "finder",
             "68d03d9980": "vscode",
+            "19f5fffa01": "jetbrains",
+            "33fb604df4": "intellij",
             "ebf8f056b5": "zed",
             "0cb3d94f00": "cursor",
             "8fb00fcd05": "launcher",
