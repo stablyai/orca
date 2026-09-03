@@ -45,14 +45,7 @@ describeOnWindows('custom agent Windows argument round-trip', () => {
   ) {
     return runProcess({
       program: 'powershell.exe',
-      args: [
-        '-NoProfile',
-        '-NonInteractive',
-        '-ExecutionPolicy',
-        'Bypass',
-        '-Command',
-        `${launch.command}${suffix}`
-      ],
+      args: ['-NoProfile', '-NonInteractive', '-Command', `${launch.command}${suffix}`],
       env: { ...process.env, ...env, ...launch.env },
       timeoutMs: 30_000
     })

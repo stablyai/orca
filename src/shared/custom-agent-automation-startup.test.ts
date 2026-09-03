@@ -39,18 +39,15 @@ describe('buildCustomAgentAutomationStartupPlan', () => {
       platform: 'win32',
       shell: 'powershell'
     })
-    const encodedArgv = plan?.env?.ORCA_CUSTOM_AGENT_WINDOWS_ARGV_V1
+    const encodedLaunch = plan?.env?.ORCA_CUSTOM_AGENT_WINDOWS_RUNNER_V1
 
-    expect(encodedArgv).toBeTypeOf('string')
-    if (!encodedArgv) {
-      throw new Error('Missing Windows argv transport')
+    expect(encodedLaunch).toBeTypeOf('string')
+    if (!encodedLaunch) {
+      throw new Error('Missing Windows launch transport')
     }
-    expect(JSON.parse(Buffer.from(encodedArgv, 'base64').toString('utf8'))).toEqual([
-      'codex',
-      '--model',
-      'luna',
-      'Review & fix'
-    ])
+    const launch = JSON.parse(Buffer.from(encodedLaunch, 'base64').toString('utf8'))
+    expect(launch.executable).toBe('codex')
+    expect(launch.runner).toContain('"--model" "luna" "Review & fix"')
   })
 
   it('uses the provider follow-up path when the base agent requires stdin', () => {

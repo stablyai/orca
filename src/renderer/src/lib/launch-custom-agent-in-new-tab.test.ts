@@ -143,7 +143,7 @@ describe('launchCustomAgentInNewTab', () => {
 
     expect(mocks.queueTabStartupCommand).toHaveBeenCalledWith('tab-1', {
       command: expect.stringMatching(/^powershell\.exe .* & set "/),
-      env: { ORCA_CUSTOM_AGENT_WINDOWS_ARGV_V1: expect.any(String) }
+      env: { ORCA_CUSTOM_AGENT_WINDOWS_RUNNER_V1: expect.any(String) }
     })
   })
 

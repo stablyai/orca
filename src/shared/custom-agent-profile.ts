@@ -1,6 +1,6 @@
 import type { AgentStartupShell } from './tui-agent-startup-shell'
 import { buildShellCommandFromArgv } from './tui-agent-startup-shell'
-import { encodePowerShellCommand } from './powershell-command-encoding'
+import { quoteWindowsCmdArgument } from './child-process/windows-command-line'
 import type { TuiAgent } from './tui-agent'
 import { isTuiAgent } from './tui-agent-config'
 import { TUI_AGENT_DISPLAY_NAMES } from './tui-agent-display-names'
@@ -15,8 +15,7 @@ const EXECUTABLE_MAX = 4096
 const WINDOWS_ENV_VALUE_CHARS_MAX = 32_767
 
 function fitsWindowsEnvironmentValue(argv: readonly string[]): boolean {
-  const bytes = new TextEncoder().encode(JSON.stringify(argv)).byteLength
-  return 4 * Math.ceil(bytes / 3) <= WINDOWS_ENV_VALUE_CHARS_MAX
+  return buildWindowsRunnerPayload(argv).length <= WINDOWS_ENV_VALUE_CHARS_MAX
 }
 
 function hasControlCharacter(value: string): boolean {
@@ -42,7 +41,8 @@ export type CustomAgentLaunch = {
   env?: Record<string, string>
 }
 
-const WINDOWS_ARGV_ENV = 'ORCA_CUSTOM_AGENT_WINDOWS_ARGV_V1'
+const WINDOWS_RUNNER_ENV = 'ORCA_CUSTOM_AGENT_WINDOWS_RUNNER_V1'
+const WINDOWS_EXECUTABLE_ENV = 'ORCA_CUSTOM_AGENT_WINDOWS_EXECUTABLE_V1'
 
 function boundedSafeString(value: unknown, max: number, trim: boolean): string | null {
   if (typeof value !== 'string' || hasControlCharacter(value)) {
@@ -194,61 +194,39 @@ function encodeUtf8Base64(value: string): string {
   return btoa(binary)
 }
 
+function buildWindowsRunnerPayload(argv: readonly string[]): string {
+  const args = argv.slice(1).map(quoteWindowsCmdArgument).join(' ').replaceAll('%', '%%')
+  const command = `"%${WINDOWS_EXECUTABLE_ENV}%"${args ? ` ${args}` : ''}`
+  return encodeUtf8Base64(
+    JSON.stringify({
+      executable: argv[0],
+      runner: `@echo off\r\n@chcp 65001 >nul\r\n${command}\r\nexit /b %errorlevel%\r\n`
+    })
+  )
+}
+
 function buildCustomAgentWindowsLaunch(
   argv: readonly [string, ...string[]],
   shell: 'cmd' | 'powershell'
 ): CustomAgentLaunch {
   const script = [
-    `$payload = $env:${WINDOWS_ARGV_ENV}`,
-    `Remove-Item Env:${WINDOWS_ARGV_ENV} -ErrorAction SilentlyContinue`,
-    '$decodedArgv = [Text.Encoding]::UTF8.GetString([Convert]::FromBase64String($payload)) | ConvertFrom-Json',
-    '$argv = @($decodedArgv)',
-    'function Quote-CmdArgument([string]$value) {',
-    "  $quoted = '\"'",
-    '  $backslashes = 0',
-    '  foreach ($character in $value.ToCharArray()) {',
-    '    if ($character -eq [char]92) { $backslashes += 1; continue }',
-    '    if ($character -eq [char]34) {',
-    "      $quoted += (-join ('\\' * ($backslashes * 2))) + '\"\"'",
-    '      $backslashes = 0',
-    '      continue',
-    '    }',
-    "    if ($character -eq '%') {",
-    "      $quoted += (-join ('\\' * ($backslashes * 2))) + '\"^%\"'",
-    '      $backslashes = 0',
-    '      continue',
-    '    }',
-    "    $quoted += (-join ('\\' * $backslashes)) + $character",
-    '    $backslashes = 0',
-    '  }',
-    "  return $quoted + (-join ('\\' * ($backslashes * 2))) + '\"'",
-    '}',
-    '$agentCommand = [string]$argv[0]',
-    '$escapedCommand = [Management.Automation.WildcardPattern]::Escape($agentCommand)',
-    '$resolvedCommand = (Get-Command -Name $escapedCommand -CommandType Application -ErrorAction Stop | Select-Object -First 1).Source',
-    '$encodedCommand = Quote-CmdArgument $resolvedCommand',
-    "$encodedArgs = @($argv | Select-Object -Skip 1 | ForEach-Object { Quote-CmdArgument ([string]$_) }) -join ' '",
-    "$runnerCommand = $encodedCommand + $(if ($encodedArgs) { ' ' + $encodedArgs } else { '' })",
-    "$runnerCommand = $runnerCommand.Replace('%', '%%')",
+    `$runnerPayload = $env:${WINDOWS_RUNNER_ENV};`,
+    `Remove-Item Env:${WINDOWS_RUNNER_ENV} -ErrorAction SilentlyContinue;`,
+    '$launch = [Text.Encoding]::UTF8.GetString([Convert]::FromBase64String($runnerPayload)) | ConvertFrom-Json;',
+    '$escapedCommand = [Management.Automation.WildcardPattern]::Escape([string]$launch.executable);',
+    `$env:${WINDOWS_EXECUTABLE_ENV} = (Get-Command -Name $escapedCommand -CommandType Application -ErrorAction Stop | Select-Object -First 1).Source;`,
     "$runnerPath = [IO.Path]::Combine([IO.Path]::GetTempPath(), 'orca-agent-' + [Guid]::NewGuid().ToString('N') + '.cmd')",
-    "$runnerLines = @('@echo off', '@chcp 65001 >nul', $runnerCommand, 'exit /b %errorlevel%')",
-    '$runnerExit = 1',
-    'try {',
-    '  [IO.File]::WriteAllLines($runnerPath, $runnerLines, [Text.UTF8Encoding]::new($false))',
-    '  & cmd.exe /d /q /v:off /c $runnerPath',
-    '  $runnerExit = $LASTEXITCODE',
-    '} finally {',
-    '  Remove-Item -LiteralPath $runnerPath -Force -ErrorAction SilentlyContinue',
-    '}',
-    'exit $runnerExit'
-  ].join('\n')
-  const invocation = `powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -EncodedCommand ${encodePowerShellCommand(script)}`
+    '; $runnerExit = 1; try {',
+    '[IO.File]::WriteAllText($runnerPath, [string]$launch.runner, [Text.UTF8Encoding]::new($false));',
+    '& cmd.exe /d /q /v:off /c $runnerPath; $runnerExit = $LASTEXITCODE',
+    `} finally { Remove-Item Env:${WINDOWS_EXECUTABLE_ENV} -ErrorAction SilentlyContinue; Remove-Item -LiteralPath $runnerPath -Force -ErrorAction SilentlyContinue };`
+  ].join(' ')
   const command =
     shell === 'cmd'
-      ? `${invocation} & set "${WINDOWS_ARGV_ENV}="`
-      : `${invocation}; $orcaAgentExit = $LASTEXITCODE; Remove-Item Env:${WINDOWS_ARGV_ENV} -ErrorAction SilentlyContinue; & cmd.exe /d /c exit $orcaAgentExit`
+      ? `powershell.exe -NoProfile -NonInteractive -Command "${script} exit $runnerExit" & set "${WINDOWS_RUNNER_ENV}="`
+      : `${script} & cmd.exe /d /c exit $runnerExit`
   return {
     command,
-    env: { [WINDOWS_ARGV_ENV]: encodeUtf8Base64(JSON.stringify(argv)) }
+    env: { [WINDOWS_RUNNER_ENV]: buildWindowsRunnerPayload(argv) }
   }
 }

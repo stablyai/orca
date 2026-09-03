@@ -210,18 +210,18 @@ describe('custom agent profiles', () => {
       args: ['--model', 'luna pro', '$HOME', '']
     } as const
     const powershellLaunch = buildCustomAgentLaunch(profile, 'powershell')
-    expect(powershellLaunch.command).toMatch(
-      /^powershell\.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -EncodedCommand [A-Za-z0-9+/=]+; \$orcaAgentExit = \$LASTEXITCODE; Remove-Item Env:ORCA_CUSTOM_AGENT_WINDOWS_ARGV_V1 -ErrorAction SilentlyContinue; & cmd\.exe \/d \/c exit \$orcaAgentExit$/
+    expect(powershellLaunch.command).toContain(
+      '$runnerPayload = $env:ORCA_CUSTOM_AGENT_WINDOWS_RUNNER_V1'
     )
+    expect(powershellLaunch.command).not.toMatch(/powershell\.exe|-EncodedCommand|-ExecutionPolicy/)
     expect(powershellLaunch.command).not.toContain(profile.executable)
     expect(powershellLaunch.env).toBeDefined()
     expect(buildCustomAgentLaunch(profile, 'posix')).toEqual({
       command: `'C:'"\\\\"'Program Files'"\\\\"'Codex'"\\\\"'codex.exe' '--model' 'luna pro' '$HOME' ''`
     })
     const cmdLaunch = buildCustomAgentLaunch(profile, 'cmd')
-    expect(cmdLaunch.command).toMatch(
-      /^powershell\.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -EncodedCommand [A-Za-z0-9+/=]+ & set "ORCA_CUSTOM_AGENT_WINDOWS_ARGV_V1="$/
-    )
+    expect(cmdLaunch.command).toMatch(/^powershell\.exe -NoProfile -NonInteractive -Command "/)
+    expect(cmdLaunch.command).not.toMatch(/-EncodedCommand|-ExecutionPolicy/)
     expect(cmdLaunch.command).not.toContain(profile.executable)
     expect(cmdLaunch.env).toEqual(powershellLaunch.env)
   })
