@@ -202,6 +202,19 @@ export function resolveTerminalShortcutAction(
     !event.metaKey &&
     !event.altKey &&
     !event.shiftKey &&
+    (event.key === 'm' || event.key === 'M' || event.code === 'KeyM')
+  ) {
+    // Why: Ctrl+M is historically CR (same byte as Enter). xterm collapses it to
+    // bare CR, so Grok Build's multiline toggle never sees a distinct chord (#9736).
+    // Forward kitty CSI-u (codepoint 109 = 'm', modifier 5 = Ctrl) like Ctrl+Enter.
+    return { type: 'sendInput', data: '\x1b[109;5u' }
+  }
+
+  if (
+    event.ctrlKey &&
+    !event.metaKey &&
+    !event.altKey &&
+    !event.shiftKey &&
     event.key === 'Backspace'
   ) {
     return { type: 'sendInput', data: '\x17' }
