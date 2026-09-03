@@ -235,13 +235,21 @@ export function parseCursorModels(stdout: string): CommitMessageModel[] {
 export function parseAntigravityModels(stdout: string): CommitMessageModel[] {
   const models: CommitMessageModel[] = []
   for (const rawLine of iterateModelOutputLines(stdout)) {
-    const id = rawLine.trim()
-    if (id.length === 0) {
+    const trimmed = rawLine.trim()
+    if (trimmed.length === 0 || trimmed.toLowerCase().startsWith('fetching')) {
+      continue
+    }
+    const tabIndex = trimmed.indexOf('\t')
+    const modelName =
+      tabIndex === -1
+        ? trimmed
+        : trimmed.slice(tabIndex + 1).trim() || trimmed.slice(0, tabIndex).trim()
+    if (modelName.length === 0) {
       continue
     }
     models.push({
-      id,
-      label: id
+      id: modelName,
+      label: modelName
     })
   }
   return uniqueModels(models)

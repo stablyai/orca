@@ -159,7 +159,7 @@ describe('planCommitMessageGeneration', () => {
     const result = planCommitMessageGeneration(
       {
         agentId: 'antigravity',
-        model: 'Gemini 3.7 Flash (High)'
+        model: 'Gemini 3.8 Flash (High)'
       },
       'PROMPT'
     )
@@ -173,7 +173,7 @@ describe('planCommitMessageGeneration', () => {
           'PROMPT',
           '--sandbox',
           '--model',
-          'Gemini 3.7 Flash (High)'
+          'Gemini 3.8 Flash (High)'
         ],
         stdinPayload: null,
         label: 'Antigravity'

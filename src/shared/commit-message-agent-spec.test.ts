@@ -401,11 +401,28 @@ describe('model discovery parsers', () => {
     ])
   })
 
-  it('parses Antigravity model output', () => {
+  it('parses Antigravity model output with tab-separated slug and display name', () => {
     const output = [
-      'Gemini 3.5 Flash (Medium)',
-      'Gemini 3.5 Flash (High)',
-      'Gemini 3.5 Flash (Low)',
+      'Fetching available models...',
+      'gemini-3.8-flash-medium\tGemini 3.8 Flash (Medium)',
+      'gemini-3.8-flash-high\tGemini 3.8 Flash (High)',
+      'gemini-3.8-flash-low\tGemini 3.8 Flash (Low)',
+      'claude-sonnet-4-6\tClaude Sonnet 4.6 (Thinking)'
+    ].join('\n')
+
+    expect(parseAntigravityModels(output)).toEqual([
+      { id: 'Gemini 3.8 Flash (Medium)', label: 'Gemini 3.8 Flash (Medium)' },
+      { id: 'Gemini 3.8 Flash (High)', label: 'Gemini 3.8 Flash (High)' },
+      { id: 'Gemini 3.8 Flash (Low)', label: 'Gemini 3.8 Flash (Low)' },
+      { id: 'Claude Sonnet 4.6 (Thinking)', label: 'Claude Sonnet 4.6 (Thinking)' }
+    ])
+  })
+
+  it('parses legacy Antigravity single-column model output', () => {
+    const output = [
+      'Gemini 3.8 Flash (Medium)',
+      'Gemini 3.8 Flash (High)',
+      'Gemini 3.8 Flash (Low)',
       'Gemini 3.1 Pro (Low)',
       'Gemini 3.1 Pro (High)',
       'Claude Sonnet 4.6 (Thinking)',
@@ -414,9 +431,9 @@ describe('model discovery parsers', () => {
     ].join('\n')
 
     expect(parseAntigravityModels(output)).toEqual([
-      { id: 'Gemini 3.5 Flash (Medium)', label: 'Gemini 3.5 Flash (Medium)' },
-      { id: 'Gemini 3.5 Flash (High)', label: 'Gemini 3.5 Flash (High)' },
-      { id: 'Gemini 3.5 Flash (Low)', label: 'Gemini 3.5 Flash (Low)' },
+      { id: 'Gemini 3.8 Flash (Medium)', label: 'Gemini 3.8 Flash (Medium)' },
+      { id: 'Gemini 3.8 Flash (High)', label: 'Gemini 3.8 Flash (High)' },
+      { id: 'Gemini 3.8 Flash (Low)', label: 'Gemini 3.8 Flash (Low)' },
       { id: 'Gemini 3.1 Pro (Low)', label: 'Gemini 3.1 Pro (Low)' },
       { id: 'Gemini 3.1 Pro (High)', label: 'Gemini 3.1 Pro (High)' },
       { id: 'Claude Sonnet 4.6 (Thinking)', label: 'Claude Sonnet 4.6 (Thinking)' },
@@ -574,8 +591,8 @@ describe('buildArgs (Antigravity)', () => {
   const spec = getCommitMessageAgentSpec('antigravity')!
 
   it('runs agy with --print, --sandbox, and --model flags', () => {
-    const args = spec.buildArgs({ prompt: 'PROMPT', model: 'Gemini 3.7 Flash (Medium)' })
-    expect(args).toEqual(['--print', 'PROMPT', '--sandbox', '--model', 'Gemini 3.7 Flash (Medium)'])
+    const args = spec.buildArgs({ prompt: 'PROMPT', model: 'Gemini 3.8 Flash (Medium)' })
+    expect(args).toEqual(['--print', 'PROMPT', '--sandbox', '--model', 'Gemini 3.8 Flash (Medium)'])
     expect(spec.promptDelivery).toBe('argv')
   })
 
@@ -585,7 +602,7 @@ describe('buildArgs (Antigravity)', () => {
     expect(spec.modelDiscovery?.args).toEqual(['models'])
   })
 
-  it('uses Gemini 3.7 Flash (Medium) as default model', () => {
-    expect(COMMIT_MESSAGE_AGENT_SPECS.antigravity?.defaultModelId).toBe('Gemini 3.7 Flash (Medium)')
+  it('uses Gemini 3.8 Flash (Medium) as default model', () => {
+    expect(COMMIT_MESSAGE_AGENT_SPECS.antigravity?.defaultModelId).toBe('Gemini 3.8 Flash (Medium)')
   })
 })
