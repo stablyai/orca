@@ -341,7 +341,12 @@ describe('RuntimeFileCommands', () => {
       const target = absoluteFileTarget(result)
 
       await rm(artifactPath)
-      await writeFile(artifactPath, 'changed!')
+      // Why: the replacement must differ in SIZE, not just content. Freshness is
+      // decided by dev:ino:nlink:size:mtimeMs, and a delete-and-recreate reuses the
+      // inode while coarse filesystem timestamps often land in the same tick — so a
+      // same-length rewrite is observationally identical to the original and slips
+      // through. See #16002 for the underlying gap.
+      await writeFile(artifactPath, 'changed to a longer body!')
 
       await expect(
         commands.readTerminalArtifactPreview(
