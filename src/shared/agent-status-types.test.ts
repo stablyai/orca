@@ -276,6 +276,31 @@ Fix dispatch fallback preview for normalized status prompts`
     expect(AGENT_STATUS_INTERACTIVE_PROMPT_MAX_LENGTH).toBe(16000)
   })
 
+  it('detaches capped interactivePrompt JSON without changing its code units', () => {
+    const promptJson = JSON.stringify({ questions: [{ question: 'Choose', options: ['a', 'b'] }] })
+    const interactivePrompt = `${promptJson}${' '.repeat(
+      AGENT_STATUS_INTERACTIVE_PROMPT_MAX_LENGTH - promptJson.length + 500
+    )}`
+    const result = parseAgentStatusPayload(JSON.stringify({ state: 'waiting', interactivePrompt }))
+
+    expect(result!.interactivePrompt).toBe(
+      interactivePrompt.slice(0, AGENT_STATUS_INTERACTIVE_PROMPT_MAX_LENGTH)
+    )
+    expect(result!.interactivePrompt).toHaveLength(AGENT_STATUS_INTERACTIVE_PROMPT_MAX_LENGTH)
+    // The detaching copy must not disturb the embedded JSON clients re-parse.
+    expect(JSON.parse(result!.interactivePrompt!)).toEqual(JSON.parse(promptJson))
+  })
+
+  it('drops a cap-bound high surrogate from a detached interactivePrompt', () => {
+    const interactivePrompt = `${'x'.repeat(AGENT_STATUS_INTERACTIVE_PROMPT_MAX_LENGTH - 1)}\u{1f680}${' '.repeat(500)}`
+    const result = parseAgentStatusPayload(JSON.stringify({ state: 'waiting', interactivePrompt }))
+
+    expect(result!.interactivePrompt).toBe(
+      'x'.repeat(AGENT_STATUS_INTERACTIVE_PROMPT_MAX_LENGTH - 1)
+    )
+    expect(result!.interactivePrompt).toHaveLength(AGENT_STATUS_INTERACTIVE_PROMPT_MAX_LENGTH - 1)
+  })
+
   it('leaves interactivePrompt undefined when absent or non-string', () => {
     expect(parseAgentStatusPayload('{"state":"working"}')!.interactivePrompt).toBeUndefined()
     expect(
