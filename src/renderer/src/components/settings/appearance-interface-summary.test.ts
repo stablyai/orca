@@ -14,6 +14,18 @@ describe('resolveInterfaceSectionSummary', () => {
     expect(resolveInterfaceSectionSummary(settings)).toBe('Dark · 中文（简体） · Inter')
   })
 
+  it('qualifies the dark label with the pure-black variant', () => {
+    const settings = {
+      ...getDefaultSettings('/tmp'),
+      theme: 'system' as const,
+      darkAppearanceVariant: 'pure-black' as const,
+      uiLanguage: 'system' as const,
+      appFontFamily: 'Inter'
+    }
+
+    expect(resolveInterfaceSectionSummary(settings)).toBe('System · Pure Black · System · Inter')
+  })
+
   it('falls back to the default font label when app font is empty', () => {
     const settings = {
       ...getDefaultSettings('/tmp'),

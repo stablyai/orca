@@ -357,6 +357,34 @@
   --tab-group-split-divider-strong: #a1a1aa;
 }
 
+/* ── Pure Black (OLED) dark variant ──────────────────── */
+
+/* Why: dark mode separates canvas/card/popover by lightness (#0a0a0a → #171717
+   → #262626). Pure black collapses those tiers to #000 for OLED panels, so the
+   separation has to move to the hairline tokens instead — every `--border` and
+   `--input` here is deliberately brighter than its `.dark` counterpart. Only
+   surface/hairline tokens are overridden; hues, status, and git colors are
+   inherited from `.dark` so the two variants stay in sync. */
+.dark.pure-black {
+  --background: #000000;
+  --editor-surface: #000000;
+  --card: #000000;
+  /* The one surface that keeps a lift: `--shadow-floating` is invisible on #000,
+     so menus need their own value plus the brighter border to read as floating. */
+  --popover: #0d0d0d;
+  --secondary: #171717;
+  --muted: #141414;
+  --accent: #232323;
+  --border: rgb(255 255 255 / 0.12);
+  --input: rgb(255 255 255 / 0.2);
+  --worktree-sidebar: #000000;
+  --worktree-sidebar-accent: #1c1c1c;
+  --worktree-sidebar-border: rgb(255 255 255 / 0.12);
+  --sidebar: #000000;
+  --sidebar-accent: #1a1a1a;
+  --sidebar-border: rgb(255 255 255 / 0.12);
+}
+
 .plugin-security-chrome {
   /* Why: plugin themes may style the app, but provenance and consent must
      retain host-owned contrast so a pack cannot disguise a trust decision. */

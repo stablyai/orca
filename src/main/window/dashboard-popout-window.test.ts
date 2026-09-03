@@ -144,8 +144,12 @@ import { readBrowserClientHostIdArgument } from '../../shared/browser-client-hos
 
 type FakeWindow = InstanceType<typeof BrowserWindowMock>
 
-function makeStore(ui: Record<string, unknown> = {}): {
+function makeStore(
+  ui: Record<string, unknown> = {},
+  settings: Record<string, unknown> = {}
+): {
   getUI: () => Record<string, unknown>
+  getSettings: () => Record<string, unknown>
   updateUI: ReturnType<typeof vi.fn>
   onUIChanged: ReturnType<typeof vi.fn>
   emitUIChanged: (next: Record<string, unknown>) => void
@@ -155,6 +159,7 @@ function makeStore(ui: Record<string, unknown> = {}): {
   const uiChangeUnsubscribe = vi.fn()
   return {
     getUI: () => ui,
+    getSettings: () => settings,
     updateUI: vi.fn(),
     onUIChanged: vi.fn((listener: (next: Record<string, unknown>) => void) => {
       listeners.push(listener)
@@ -250,6 +255,12 @@ describe('createOrFocusDashboardPopout', () => {
     const win = instances[0]
     expect(win.loadFile).not.toHaveBeenCalled()
     expect(win.loadURL).toHaveBeenCalledWith(`${RENDERER_URL}/popout.html?view=kanban`)
+  })
+
+  it('paints the pre-renderer fill black when the pure-black variant is persisted', () => {
+    createOrFocusDashboardPopout(makeStore({}, { darkAppearanceVariant: 'pure-black' }) as never)
+
+    expect(instances[0].options.backgroundColor).toBe('#000000')
   })
 
   it('focuses the existing window instead of creating a second one', () => {

@@ -7,6 +7,7 @@ import remarkGfm from 'remark-gfm'
 import { monaco } from '@/lib/monaco-setup'
 import { computeEditorFontSize, resolveEditorFontFamily } from '@/lib/editor-font-zoom'
 import { resolveDocumentTheme } from '@/lib/document-theme'
+import { useMonacoDarkThemeName } from '@/lib/monaco-editor-theme'
 import { useAppStore } from '@/store'
 import { installEditorSaveShortcut, installMonacoEditorFindShortcut } from './editor-shortcuts'
 import { getIpynbCodeCellEditorHeight, getIpynbCodeCellPreviewLines } from './ipynb-code-cell-lines'
@@ -67,6 +68,7 @@ function IpynbCodeCellEditor({
   const fontSize = computeEditorFontSize(settings?.terminalFontSize ?? 13, editorFontZoomLevel)
   const editorHeight = getIpynbCodeCellEditorHeight(source, fontSize)
   const isDark = resolveDocumentTheme(settings?.theme ?? 'system')
+  const monacoDarkTheme = useMonacoDarkThemeName()
   const lines = useMemo(() => getIpynbCodeCellPreviewLines(source), [source])
   const handleMount: OnMount = useCallback((editorInstance, monacoInstance) => {
     editorInstance.focus()
@@ -91,8 +93,8 @@ function IpynbCodeCellEditor({
   }, [])
 
   useEffect(() => {
-    monaco.editor.setTheme(isDark ? 'vs-dark' : 'vs')
-  }, [isDark])
+    monaco.editor.setTheme(isDark ? monacoDarkTheme : 'vs')
+  }, [isDark, monacoDarkTheme])
 
   if (!active) {
     return (
@@ -124,7 +126,7 @@ function IpynbCodeCellEditor({
         height={editorHeight}
         defaultLanguage={cell.language}
         language={cell.language}
-        theme={isDark ? 'vs-dark' : 'vs'}
+        theme={isDark ? monacoDarkTheme : 'vs'}
         value={source}
         onMount={handleMount}
         onChange={(value) => onChange(value ?? '')}

@@ -2,6 +2,7 @@ import { BrowserWindow, nativeTheme, powerMonitor, screen } from 'electron'
 import { is } from '@electron-toolkit/utils'
 import { join } from 'node:path'
 import { getAppIconPath } from '../app-icon'
+import { resolveChromeBackgroundColor } from '../../shared/dark-appearance-variant'
 import { browserManager } from '../browser/browser-manager'
 import { getBrowserClientHostId } from '../browser/browser-client-host-id'
 import { formatBrowserClientHostIdArgument } from '../../shared/browser-client-host-id-argument'
@@ -94,7 +95,10 @@ export function createMainWindow(
     acceptFirstMouse: true,
     // Why: auto-hide the Windows/Linux menu bar to save a row (Alt reveals it); macOS uses the system menu bar anyway.
     autoHideMenuBar: true,
-    backgroundColor: nativeTheme.shouldUseDarkColors ? '#0a0a0a' : '#ffffff',
+    backgroundColor: resolveChromeBackgroundColor({
+      dark: nativeTheme.shouldUseDarkColors,
+      variant: settings?.darkAppearanceVariant
+    }),
     // Why: macOS 'hiddenInset' keeps native traffic lights in our custom titlebar; Windows 'hidden' removes the OS title bar so it doesn't double up.
     titleBarStyle:
       process.platform === 'darwin'

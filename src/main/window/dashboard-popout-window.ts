@@ -8,6 +8,7 @@ import { sendToTrustedUIRenderer } from '../ipc/ui'
 import { installPrivilegedWindowNavigationPolicy } from './privileged-window-navigation'
 import { stepUIZoomLevel, type UIZoomDirection } from '../../shared/ui-zoom-level'
 import { nativeZoomCommandMatchesKeybindings } from '../../shared/window-shortcut-policy'
+import { resolveChromeBackgroundColor } from '../../shared/dark-appearance-variant'
 import {
   keybindingMatchesAction,
   type KeybindingActionId,
@@ -168,7 +169,10 @@ export function createOrFocusDashboardPopout(
     title: 'Orca Agent Dashboard',
     show: false,
     autoHideMenuBar: true,
-    backgroundColor: nativeTheme.shouldUseDarkColors ? '#0a0a0a' : '#ffffff',
+    backgroundColor: resolveChromeBackgroundColor({
+      dark: nativeTheme.shouldUseDarkColors,
+      variant: store?.getSettings().darkAppearanceVariant
+    }),
     // Why: the pop-out uses a standard native frame so it is movable, closable,
     // and minimizable on every platform without reimplementing the main
     // window's custom titlebar/drag-region/window-control chrome. The main

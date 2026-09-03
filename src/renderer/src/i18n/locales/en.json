@@ -137,6 +137,12 @@
       "menuBarIcon": {
         "title": "Show Menu Bar Icon",
         "description": "Keep an Orca shortcut and activity indicator in the macOS menu bar."
+      },
+      "darkAppearance": {
+        "title": "Dark Appearance",
+        "description": "Pure Black drops the app surfaces to #000 for OLED displays. Applies whenever the dark theme is active.",
+        "default": "Default",
+        "pureBlack": "Pure Black"
       }
     },
     "browser": {

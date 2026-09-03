@@ -31,6 +31,24 @@ export const getThemeEntries = createLocalizedCatalog((): SettingsSearchEntry[] 
   }
 ])
 
+export const getDarkAppearanceEntries = createLocalizedCatalog((): SettingsSearchEntry[] => [
+  {
+    title: translate('settings.appearance.darkAppearance.title', 'Dark Appearance'),
+    description: translate(
+      'settings.appearance.darkAppearance.description',
+      'Pure Black drops the app surfaces to #000 for OLED displays. Applies whenever the dark theme is active.'
+    ),
+    keywords: [
+      ...translateSearchKeyword('settings.appearance.darkAppearance.pureBlack', 'pure black'),
+      // Untranslated on purpose: users search the panel-tech names verbatim.
+      'oled',
+      'amoled',
+      'true black',
+      'contrast'
+    ]
+  }
+])
+
 export const getLanguageEntries = createLocalizedCatalog((): SettingsSearchEntry[] => [
   {
     title: translate('settings.appearance.language.title', 'Language'),
@@ -232,6 +250,7 @@ function buildAppearancePaneSearchEntries(
   return [
     ...getAppearanceSectionEntries(),
     ...getThemeEntries(),
+    ...getDarkAppearanceEntries(),
     ...(SHOW_UI_LANGUAGE_SETTING ? getLanguageEntries() : []),
     ...getTypographyEntries(),
     ...getZoomEntries(),

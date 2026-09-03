@@ -1,8 +1,13 @@
 import type { GlobalSettings } from '../../../shared/global-settings-types'
+import type { DarkAppearanceVariant } from '../../../shared/ui-chrome-types'
+import { isPureBlackVariant } from '../../../shared/dark-appearance-variant'
 
 export type DocumentThemePreference = GlobalSettings['theme']
 
 export const THEME_TRANSITION_DISABLED_CLASS = 'theme-transition-disabled'
+
+/** Paired with `.dark` in `main.css`; harmless while `light` is resolved. */
+export const PURE_BLACK_CLASS = 'pure-black'
 
 const DARK_MODE_QUERY = '(prefers-color-scheme: dark)'
 
@@ -96,4 +101,16 @@ export function applyDocumentTheme(
     pendingTransitionDisableFrames.push(secondFrame)
   })
   pendingTransitionDisableFrames.push(firstFrame)
+}
+
+/**
+ * Toggled independently of `applyDocumentTheme` so imperative theme previews
+ * (settings, onboarding) cannot drop the variant the user already picked.
+ */
+export function applyDarkAppearanceVariant(
+  variant: DarkAppearanceVariant | null | undefined,
+  options: { root?: ThemeRoot } = {}
+): void {
+  const root = options.root ?? document.documentElement
+  root.classList.toggle(PURE_BLACK_CLASS, isPureBlackVariant(variant))
 }

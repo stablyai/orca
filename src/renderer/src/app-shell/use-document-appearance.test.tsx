@@ -6,11 +6,13 @@ import { useAppStore } from '../store'
 
 const mocks = vi.hoisted(() => ({
   applyDocumentTheme: vi.fn(),
+  applyDarkAppearanceVariant: vi.fn(),
   buildAppFontFamily: vi.fn((fontFamily: string | null | undefined) => fontFamily ?? '')
 }))
 
 vi.mock('../lib/document-theme', () => ({
-  applyDocumentTheme: mocks.applyDocumentTheme
+  applyDocumentTheme: mocks.applyDocumentTheme,
+  applyDarkAppearanceVariant: mocks.applyDarkAppearanceVariant
 }))
 
 vi.mock('@/lib/app-font-family', () => ({
@@ -28,6 +30,7 @@ const initialState = useAppStore.getState()
 describe('useDocumentAppearance', () => {
   beforeEach(() => {
     mocks.applyDocumentTheme.mockReset()
+    mocks.applyDarkAppearanceVariant.mockReset()
     mocks.buildAppFontFamily.mockClear()
     useAppStore.setState({
       settings: {
@@ -74,5 +77,19 @@ describe('useDocumentAppearance', () => {
     expect(mocks.buildAppFontFamily).toHaveBeenLastCalledWith('Monaco')
     expect(mocks.buildAppFontFamily).toHaveBeenCalledTimes(2)
     unmount()
+  })
+
+  it('applies the persisted dark appearance variant', () => {
+    useAppStore.setState({
+      settings: {
+        ...getDefaultSettings('/tmp'),
+        theme: 'dark',
+        darkAppearanceVariant: 'pure-black'
+      }
+    })
+
+    renderHook(() => useDocumentAppearance())
+
+    expect(mocks.applyDarkAppearanceVariant).toHaveBeenLastCalledWith('pure-black')
   })
 })

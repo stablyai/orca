@@ -28,6 +28,7 @@ import type { TuiAgent } from './tui-agent'
 import type {
   AgentDashboardMode,
   BranchPrefixStrategy,
+  DarkAppearanceVariant,
   FloatingTerminalTriggerLocation,
   LeftSidebarAppearanceMode,
   OpenInApplication,
@@ -74,6 +75,8 @@ export type GlobalSettings = {
   branchPrefix: BranchPrefixStrategy
   branchPrefixCustom: string
   theme: 'system' | 'dark' | 'light'
+  /** Dark-mode surface family. Optional so profiles saved before it stay on the gray tiers. */
+  darkAppearanceVariant?: DarkAppearanceVariant
   /** Controls the left sidebar surface without changing terminal brightness. */
   leftSidebarAppearanceMode: LeftSidebarAppearanceMode
   leftSidebarTintColor?: string
