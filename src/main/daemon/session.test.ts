@@ -31,7 +31,8 @@ function createMockSubprocess() {
     },
     get pid() {
       return pid
-    },    get pauseCalls() {
+    },
+    get pauseCalls() {
       return pauseCalls
     },
     get resumeCalls() {

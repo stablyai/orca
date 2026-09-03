@@ -79,9 +79,6 @@ export function createDaemonPtySubprocessHandle(args: {
     shellPathEnv: args.env.PATH,
     ...(slavePath ? { slavePath } : {}),
     ...(Object.keys(spawnIdentity).length > 0 ? { spawnIdentity } : {}),
-    ...(args.rootCreationTimeMs !== undefined
-      ? { rootCreationTimeMs: args.rootCreationTimeMs }
-      : {}),
     ...(args.startupCommandDeliveredInShellArgs
       ? { startupCommandDeliveredInShellArgs: true }
       : {}),

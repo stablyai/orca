@@ -197,9 +197,9 @@ describe('verifyWindowsTreeKillTarget with a spawn-anchored creation time', () =
     ).resolves.toBe('foreign')
   })
 
-  it('degrades to the ancestry walk when the table carries no creation times', async () => {
-    // Older addon builds expose the rows without the field; refusing there
-    // would reintroduce the orphaned-tree failures (#9045).
+  it('returns unknown when the table carries no creation times', async () => {
+    // A spawn baseline without a fresh creation time proves nothing either
+    // way, so verification must refuse rather than authorize taskkill.
     const readIdentityRows = vi.fn().mockResolvedValue([identityRow(4242, ORCA_PID)])
     await expect(
       verifyWindowsTreeKillTarget(4242, {
@@ -208,7 +208,7 @@ describe('verifyWindowsTreeKillTarget with a spawn-anchored creation time', () =
         platform: 'win32',
         expectedCreationTimeMs: SPAWNED_AT
       })
-    ).resolves.toBe('own')
+    ).resolves.toBe('unknown')
   })
 
   it('returns unknown when the identity table is unavailable', async () => {

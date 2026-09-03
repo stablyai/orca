@@ -185,11 +185,11 @@ export async function verifyWindowsTreeKillTarget(
     return verdict
   }
   const root = rows.find((row) => row.pid === rootPid)
-  // Why degrade instead of refuse: hosts whose table has no creation-time
-  // field cannot prove a recycle either way, and refusing would reintroduce
-  // the orphaned-tree failures the fallback exists to prevent (#9045).
+  // Why unknown instead of own: with a spawn baseline set, a row without a
+  // creation time cannot prove this PID is still the spawned root. Refusing
+  // leaves a possible orphan; allowing taskkill risks an unrelated tree.
   if (typeof root?.creationTimeMs !== 'number') {
-    return 'own'
+    return 'unknown'
   }
   return root.creationTimeMs === deps.expectedCreationTimeMs ? 'own' : 'foreign'
 }
