@@ -170,6 +170,22 @@ async function openMobileFileTapAsync<T extends FileTapSessionTab>(
     options.openBrowser(filesystemPathToFileUri(resolved.openTarget.absolutePath))
     return
   }
+  if (
+    classifyMobileArtifact(openedPath) === 'html' &&
+    resolved.openTarget?.kind === 'worktree-file'
+  ) {
+    options.pushPreviewRoute(
+      createMobileFilePreviewHref({
+        hostId: options.hostId,
+        worktreeId: resolvedWorktreeId,
+        source: 'worktree',
+        relativePath: openedPath,
+        name: displayNameFromPath(openedPath),
+        ...(resolvedWorktreeName ? { worktreeName: resolvedWorktreeName } : {})
+      })
+    )
+    return
+  }
   const openResponse = await options.client.sendRequest(
     'files.open',
     { worktree: resolvedWorktree, relativePath: openedPath },
