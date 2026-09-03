@@ -2,20 +2,26 @@ import type {
   RuntimeTerminalClose,
   RuntimeTerminalCreate,
   RuntimeTerminalFocus,
+  RuntimeTerminalIdentityProofBegin,
+  RuntimeTerminalIdentityProofComplete,
   RuntimeTerminalListResult,
   RuntimeTerminalRead,
   RuntimeTerminalRename,
   RuntimeTerminalSend,
   RuntimeTerminalShow,
   RuntimeTerminalSplit,
-  RuntimeTerminalWait
+  RuntimeTerminalWait,
+  RuntimeStatus
 } from '../../shared/runtime-types'
+import { TERMINAL_IDENTITY_PROOF_RUNTIME_CAPABILITY } from '../../shared/protocol-version'
 import type { CommandHandler } from '../dispatch'
 import { shouldUseRendererBackedInteractiveTerminal } from '../codex-command-classification'
 import {
   formatTerminalClose,
   formatTerminalCreate,
   formatTerminalFocus,
+  formatTerminalIdentityProofBegin,
+  formatTerminalIdentityProofComplete,
   formatTerminalList,
   formatTerminalRead,
   formatTerminalRename,
@@ -43,6 +49,18 @@ import {
 // timeout. Even without an explicit server timeout, the client must allow
 // long waits instead of failing at the generic 15s transport cap.
 const DEFAULT_TERMINAL_WAIT_RPC_TIMEOUT_MS = 5 * 60 * 1000
+
+async function requireTerminalIdentityProofCapability(
+  client: Parameters<CommandHandler>[0]['client']
+) {
+  const status = await client.call<RuntimeStatus>('status.get')
+  if (!status.result.capabilities?.includes(TERMINAL_IDENTITY_PROOF_RUNTIME_CAPABILITY)) {
+    throw new RuntimeClientError(
+      'incompatible_runtime',
+      'This Orca host cannot prove the visible terminal binding and assign a conflict-free title within the authoritative worktree scope. Update Orca on the host and try again.'
+    )
+  }
+}
 
 /** A false stop receipt is an error only when the host supplied a liveness verdict. */
 function terminalCloseFailure(close: RuntimeTerminalClose): RuntimeClientError | null {
@@ -170,6 +188,25 @@ export const TERMINAL_HANDLERS: Record<string, CommandHandler> = {
       title: getOptionalStringFlag(flags, 'title') ?? null
     })
     printResult(result, json, formatTerminalRename)
+  },
+  'terminal identity-proof begin': async ({ flags, client, json }) => {
+    await requireTerminalIdentityProofCapability(client)
+    const result = await client.call<{ proof: RuntimeTerminalIdentityProofBegin }>(
+      'terminal.identityProof.begin',
+      { worktree: getRequiredStringFlag(flags, 'worktree') }
+    )
+    printResult(result, json, formatTerminalIdentityProofBegin)
+  },
+  'terminal identity-proof complete': async ({ flags, client, json }) => {
+    await requireTerminalIdentityProofCapability(client)
+    const result = await client.call<{ proof: RuntimeTerminalIdentityProofComplete }>(
+      'terminal.identityProof.complete',
+      {
+        challengeId: getRequiredStringFlag(flags, 'challenge'),
+        title: getRequiredStringFlag(flags, 'title')
+      }
+    )
+    printResult(result, json, formatTerminalIdentityProofComplete)
   },
   'terminal create': async ({ flags, client, cwd, json }) => {
     if (client.isRemote && !flags.has('worktree')) {

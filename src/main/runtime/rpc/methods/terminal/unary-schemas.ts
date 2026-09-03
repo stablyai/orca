@@ -79,6 +79,27 @@ export const TerminalRename = TerminalHandle.extend({
   })
 })
 
+export const TerminalIdentityProofBegin = z.object({
+  worktree: requiredString('Missing worktree selector').pipe(z.string().max(32_768))
+})
+
+export const TerminalIdentityProofComplete = z.object({
+  challengeId: z.uuid('Invalid terminal identity challenge'),
+  title: z
+    .string()
+    .trim()
+    .min(1, 'Missing terminal identity title')
+    .max(120, 'Terminal identity title is too long')
+    .refine(
+      (value) =>
+        [...value].every((character) => {
+          const code = character.codePointAt(0) ?? 0
+          return code >= 32 && (code < 127 || code > 159)
+        }),
+      { message: 'Terminal identity title cannot contain control characters' }
+    )
+})
+
 export const TerminalSend = TerminalHandle.extend({
   text: OptionalString,
   enter: z.unknown().optional(),

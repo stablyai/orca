@@ -198,6 +198,30 @@ export type RuntimeTerminalRename = {
   title: string | null
 }
 
+export type RuntimeTerminalIdentityBinding = {
+  handle: string
+  worktreeId: string
+  tabId: string
+  leafId: string
+  ptyId: string
+  incarnationId: PtyIncarnationId
+  executionHostId: ExecutionHostId
+  topologyRevision: number
+}
+
+export type RuntimeTerminalIdentityProofBegin = {
+  challengeId: string
+  marker: string
+  expiresAt: number
+  worktreeId: string
+  executionHostId: ExecutionHostId
+}
+
+export type RuntimeTerminalIdentityProofComplete = {
+  rename: RuntimeTerminalRename
+  binding: RuntimeTerminalIdentityBinding
+}
+
 export type RuntimeTerminalSend = {
   handle: string
   accepted: boolean

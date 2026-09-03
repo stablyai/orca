@@ -1,5 +1,5 @@
 // @ts-nocheck -- mechanically split from OrcaRuntimeService; behavior is covered by AST equivalence and characterization tests.
-import { OrcaRuntimeWithRemoveManagedWorktree } from './orca-runtime-remove-managed-worktree'
+import { OrcaRuntimeWithTerminalIdentityProof } from './orca-runtime-terminal-identity-proof'
 import type { ExecutionHostId } from '../../shared/execution-host'
 import type { RuntimeWorktreeRemovalTarget } from './runtime-worktree-selection'
 import { resolveRuntimeWorktreeRemovalTarget } from './runtime-worktree-removal-target'
@@ -23,7 +23,7 @@ import {
   resolveTuiAgentLaunchEnv
 } from '../../shared/tui-agent-launch-defaults'
 
-export class OrcaRuntimeWithResolveWorktreeRemovalTarget extends OrcaRuntimeWithRemoveManagedWorktree {
+export class OrcaRuntimeWithResolveWorktreeRemovalTarget extends OrcaRuntimeWithTerminalIdentityProof {
   protected async resolveWorktreeRemovalTarget(
     worktreeSelector: string,
     requiredHostId?: ExecutionHostId

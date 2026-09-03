@@ -3,6 +3,8 @@ import type { RpcRequest } from './core'
 
 export function needsLocalCallerFingerprint(request: RpcRequest, params: unknown): boolean {
   return (
+    request.method === 'terminal.identityProof.begin' ||
+    request.method === 'terminal.identityProof.complete' ||
     request.method.startsWith('orchestration.federation') ||
     (!!request.orchestrationRequestId && isOrchestrationMutation(request.method, params))
   )

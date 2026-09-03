@@ -49,6 +49,23 @@ describe('mapRuntimeError', () => {
     }
   )
 
+  it.each([
+    'terminal_identity_challenge_not_found',
+    'terminal_identity_proof_ambiguous',
+    'terminal_identity_proof_capacity',
+    'terminal_identity_proof_expired',
+    'terminal_identity_proof_identity_changed',
+    'terminal_identity_proof_invalid_name',
+    'terminal_identity_proof_name_conflict',
+    'terminal_identity_proof_not_found',
+    'terminal_identity_proof_unverifiable'
+  ])('preserves terminal identity proof failure %s', (code) => {
+    expect(mapRuntimeError('req_1', { runtimeId: 'runtime-1' }, new Error(code))).toMatchObject({
+      ok: false,
+      error: { code, message: code }
+    })
+  })
+
   it.each(['agent_prompt_blocked', 'agent_prompt_stalled', 'request_aborted'])(
     'preserves the agent prompt failure %s',
     (code) => {

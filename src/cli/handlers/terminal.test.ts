@@ -4,6 +4,7 @@ import { parseArgs } from '../args'
 import { printHelp } from '../help'
 import { COMMAND_SPECS } from '../specs'
 import { TERMINAL_HANDLERS } from './terminal'
+import { TERMINAL_IDENTITY_PROOF_RUNTIME_CAPABILITY } from '../../shared/protocol-version'
 
 const ORIGINAL_EXIT_CODE = process.exitCode
 
@@ -243,5 +244,97 @@ describe('terminal send CLI', () => {
       interrupt: false,
       client: { id: 'orca-cli', type: 'desktop' }
     })
+  })
+})
+
+describe('terminal identity proof CLI', () => {
+  afterEach(() => {
+    vi.restoreAllMocks()
+  })
+
+  it('preflights the capability before issuing and completing a proof', async () => {
+    const challengeId = '00000000-0000-4000-8000-000000000001'
+    const call = vi
+      .fn()
+      .mockResolvedValueOnce({
+        result: { capabilities: [TERMINAL_IDENTITY_PROOF_RUNTIME_CAPABILITY] }
+      })
+      .mockResolvedValueOnce({
+        result: {
+          proof: {
+            challengeId,
+            marker: 'ORCA_TERMINAL_IDENTITY_PROOF_V1:marker',
+            expiresAt: 100,
+            worktreeId: 'repo::/worktree',
+            executionHostId: 'local'
+          }
+        }
+      })
+      .mockResolvedValueOnce({
+        result: { capabilities: [TERMINAL_IDENTITY_PROOF_RUNTIME_CAPABILITY] }
+      })
+      .mockResolvedValueOnce({
+        result: {
+          proof: {
+            rename: { handle: 'term-1', tabId: 'tab-1', title: 'agent-name' },
+            binding: {
+              handle: 'term-1',
+              worktreeId: 'repo::/worktree',
+              tabId: 'tab-1',
+              leafId: 'leaf-1',
+              ptyId: 'pty-1',
+              incarnationId: 'inc-1',
+              executionHostId: 'local',
+              topologyRevision: 1
+            }
+          }
+        }
+      })
+    vi.spyOn(console, 'log').mockImplementation(() => {})
+    const client = { call } as unknown as RuntimeClient
+
+    await TERMINAL_HANDLERS['terminal identity-proof begin']({
+      flags: new Map([['worktree', 'path:/tmp/worktree']]),
+      client,
+      cwd: '/tmp/worktree',
+      json: true
+    })
+    await TERMINAL_HANDLERS['terminal identity-proof complete']({
+      flags: new Map([
+        ['challenge', challengeId],
+        ['title', 'agent-name']
+      ]),
+      client,
+      cwd: '/tmp/worktree',
+      json: true
+    })
+
+    expect(call).toHaveBeenNthCalledWith(1, 'status.get')
+    expect(call).toHaveBeenNthCalledWith(2, 'terminal.identityProof.begin', {
+      worktree: 'path:/tmp/worktree'
+    })
+    expect(call).toHaveBeenNthCalledWith(3, 'status.get')
+    expect(call).toHaveBeenNthCalledWith(4, 'terminal.identityProof.complete', {
+      challengeId,
+      title: 'agent-name'
+    })
+  })
+
+  it('does not call proof or rename methods against an older host', async () => {
+    const call = vi.fn().mockResolvedValue({ result: { capabilities: [] } })
+
+    await expect(
+      TERMINAL_HANDLERS['terminal identity-proof begin']({
+        flags: new Map([['worktree', 'path:/tmp/worktree']]),
+        client: { call } as unknown as RuntimeClient,
+        cwd: '/tmp/worktree',
+        json: true
+      })
+    ).rejects.toMatchObject({
+      code: 'incompatible_runtime',
+      message: expect.stringContaining('within the authoritative worktree scope')
+    })
+    expect(call).toHaveBeenCalledTimes(1)
+    expect(call).toHaveBeenCalledWith('status.get')
   })
 })

@@ -19,6 +19,12 @@ const METHOD_CASES: readonly (readonly [string, unknown, boolean])[] = [
   ['terminal.agentStatus', { terminal: 'term' }, false],
   ['terminal.rename', { terminal: 'term', title: null }, false],
   ['terminal.clearBuffer', { terminal: 'term' }, false],
+  ['terminal.identityProof.begin', { worktree: 'worktree' }, false],
+  [
+    'terminal.identityProof.complete',
+    { challengeId: '00000000-0000-4000-8000-000000000001', title: 'agent-name' },
+    false
+  ],
   ['terminal.send', { terminal: 'term', text: 'x' }, false],
   ['terminal.wait', { terminal: 'term', for: 'exit' }, false],
   ['terminal.create', {}, false],
@@ -64,11 +70,11 @@ async function invoke(name: string, params: unknown, runtime: Partial<OrcaRuntim
 
 describe('terminal RPC manifest characterization', () => {
   it('preserves all method names, order, streaming flags, and parseable minimum inputs', () => {
-    expect(TERMINAL_METHODS).toHaveLength(33)
+    expect(TERMINAL_METHODS).toHaveLength(35)
     expect(TERMINAL_METHODS.map((method) => [method.name, 'stream' in method])).toEqual(
       METHOD_CASES.map(([name, _params, stream]) => [name, stream])
     )
-    expect(new Set(TERMINAL_METHODS.map((method) => method.name)).size).toBe(33)
+    expect(new Set(TERMINAL_METHODS.map((method) => method.name)).size).toBe(35)
     for (const [name, params] of METHOD_CASES) {
       expect(() => schemaFor(name).parse(params), name).not.toThrow()
     }
@@ -104,6 +110,12 @@ describe('terminal RPC manifest characterization', () => {
         viewport: { cols: 1001, rows: 501 }
       })
     ).not.toThrow()
+    expect(() =>
+      schemaFor('terminal.identityProof.complete').parse({
+        challengeId: '00000000-0000-4000-8000-000000000001',
+        title: `agent\u0085name`
+      })
+    ).toThrow()
   })
 
   it('keeps multiplex control objects strict while subscribe remains skew-tolerant', () => {

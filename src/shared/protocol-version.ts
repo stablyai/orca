@@ -98,6 +98,8 @@ export const TERMINAL_QUERY_REPLY_INPUT_RUNTIME_CAPABILITY =
 // Why: paired clients may unmount xterm only when the host can return a
 // bounded, sequenced scrollback snapshot for lossless reveal.
 export const TERMINAL_PAIRED_PARKING_RUNTIME_CAPABILITY = 'terminal.paired-parking.v1' as const
+// Why: older hosts cannot atomically prove a caller-owned visible PTY incarnation and rename it.
+export const TERMINAL_IDENTITY_PROOF_RUNTIME_CAPABILITY = 'terminal.identity-proof.v1' as const
 // Why: older hosts lack the targeted settings RPCs and strip agentPrompt from
 // terminal creation, so mobile must hide Quick Commands unless both are present.
 export const TERMINAL_QUICK_COMMANDS_RUNTIME_CAPABILITY = 'terminal.quick-commands.v1' as const
@@ -215,6 +217,7 @@ export const RUNTIME_CAPABILITIES = [
   AI_VAULT_SESSION_TITLES_RUNTIME_CAPABILITY,
   TERMINAL_QUERY_REPLY_INPUT_RUNTIME_CAPABILITY,
   TERMINAL_PAIRED_PARKING_RUNTIME_CAPABILITY,
+  TERMINAL_IDENTITY_PROOF_RUNTIME_CAPABILITY,
   TERMINAL_QUICK_COMMANDS_RUNTIME_CAPABILITY,
   WORKTREE_CREATE_IDEMPOTENCY_RUNTIME_CAPABILITY,
   TERMINAL_CREATE_IDEMPOTENCY_RUNTIME_CAPABILITY,

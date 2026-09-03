@@ -39,6 +39,8 @@ export {
   formatTerminalClose,
   formatTerminalCreate,
   formatTerminalFocus,
+  formatTerminalIdentityProofBegin,
+  formatTerminalIdentityProofComplete,
   formatTerminalList,
   formatTerminalRead,
   formatTerminalRename,

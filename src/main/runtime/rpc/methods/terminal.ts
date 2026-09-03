@@ -2,6 +2,7 @@ import type { RpcAnyMethod } from '../core'
 import { TERMINAL_LIFECYCLE_METHODS } from './terminal/terminal-lifecycle-methods'
 import { TERMINAL_MULTIPLEX_METHODS } from './terminal/terminal-multiplex-method'
 import { TERMINAL_QUERY_METHODS } from './terminal/terminal-query-methods'
+import { TERMINAL_IDENTITY_PROOF_METHODS } from './terminal/terminal-identity-proof-methods'
 import { TERMINAL_SEND_METHODS } from './terminal/terminal-send-method'
 import { TERMINAL_SUBSCRIBE_METHODS } from './terminal/terminal-subscribe-method'
 import {
@@ -13,6 +14,7 @@ import {
 // public entry point owns registration rather than forwarding an aggregated child export.
 export const TERMINAL_METHODS: RpcAnyMethod[] = [
   ...TERMINAL_QUERY_METHODS,
+  ...TERMINAL_IDENTITY_PROOF_METHODS,
   ...TERMINAL_SEND_METHODS,
   ...TERMINAL_LIFECYCLE_METHODS,
   ...TERMINAL_VIEWPORT_METHODS_BEFORE_STREAMS,

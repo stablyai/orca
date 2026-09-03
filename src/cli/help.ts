@@ -185,6 +185,7 @@ export function formatFlagHelp(flag: string): string {
     'display-name': '--display-name <name>  Override the Orca display name',
     'element-index': '--element-index <n>   Element index from get-app-state',
     title: '--title <text>         Custom title for the terminal tab (omit to reset)',
+    challenge: '--challenge <id>      Runtime-issued short-lived identity challenge',
     enter: '--enter                Append Enter after sending text',
     force:
       '--force                Force worktree removal when supported; does not force branch deletion',

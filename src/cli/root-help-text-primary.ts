@@ -86,6 +86,7 @@ export const ROOT_HELP_TEXT_PRIMARY = [
   '  terminal stop             Stop terminals for a worktree',
   '  terminal create           Create a terminal session in a worktree',
   '  terminal rename           Set or clear the title of a terminal tab',
+  '  terminal identity-proof   Prove and name the current visible terminal',
   '  terminal split            Split an existing terminal pane',
   '  terminal switch           Bring a terminal tab to the foreground',
   '  terminal focus            Alias for terminal switch',

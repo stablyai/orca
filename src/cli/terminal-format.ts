@@ -4,6 +4,8 @@ import type {
   RuntimeTerminalClose,
   RuntimeTerminalCreate,
   RuntimeTerminalFocus,
+  RuntimeTerminalIdentityProofBegin,
+  RuntimeTerminalIdentityProofComplete,
   RuntimeTerminalListHostScope,
   RuntimeTerminalListResult,
   RuntimeTerminalVisualLayout,
@@ -195,6 +197,24 @@ export function formatTerminalRename(result: { rename: RuntimeTerminalRename }):
   return result.rename.title
     ? `Renamed terminal ${result.rename.handle} to "${result.rename.title}".`
     : `Cleared title for terminal ${result.rename.handle}.`
+}
+
+export function formatTerminalIdentityProofBegin(result: {
+  proof: RuntimeTerminalIdentityProofBegin
+}): string {
+  return [
+    `challenge: ${result.proof.challengeId}`,
+    `marker: ${result.proof.marker}`,
+    `expiresAt: ${new Date(result.proof.expiresAt).toISOString()}`,
+    'After this marker is visible in the current Orca terminal, run terminal identity-proof complete with this challenge.'
+  ].join('\n')
+}
+
+export function formatTerminalIdentityProofComplete(result: {
+  proof: RuntimeTerminalIdentityProofComplete
+}): string {
+  const { binding, rename } = result.proof
+  return `Proved terminal ${rename.handle} and assigned conflict-free title "${rename.title}" within worktree ${binding.worktreeId} (tab=${binding.tabId} leaf=${binding.leafId} incarnation=${binding.incarnationId}).`
 }
 
 export function formatTerminalCreate(result: { terminal: RuntimeTerminalCreate }): string {
