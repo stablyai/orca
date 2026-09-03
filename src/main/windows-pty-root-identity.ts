@@ -1,4 +1,5 @@
 import { queryWindowsProcessRowsFresh } from './providers/windows-foreground-process-rows'
+import { readWindowsProcessTableFresh } from './windows/windows-process-table'
 
 /**
  * Whether a PID still sits inside this process's own subtree. Note this is
@@ -22,6 +23,15 @@ type ProcessLink = { pid: number; ppid: number }
 
 export type WindowsProcessLinkReader = () => Promise<readonly ProcessLink[] | null>
 
+/** Identity row: ancestry links plus the spawn-anchored creation time. */
+export type WindowsIdentityRow = {
+  pid: number
+  ppid: number
+  creationTimeMs?: number
+}
+
+export type WindowsIdentityRowReader = () => Promise<readonly WindowsIdentityRow[] | null>
+
 /**
  * Classify `rootPid` by walking its ancestry back to `ownerPid`. A recycled PID
  * usually belongs to an unrelated process whose chain never passes through Orca,
@@ -31,9 +41,8 @@ export type WindowsProcessLinkReader = () => Promise<readonly ProcessLink[] | nu
  * Known limit (#10680): a recycle that lands on one of our OWN descendants —
  * another pane's shell, an agent CLI, a `git.exe` we spawned — still reads
  * `own`. That is not remote during teardown, when Orca is itself the process
- * allocating pids. Closing it needs real identity (a `Win32_Process.CreationDate`
- * baseline, the analogue of the POSIX `lstart` check, or an inherited handle /
- * Job Object).
+ * allocating pids. Pass `expectedCreationTimeMs` (captured at spawn) to close
+ * it: a recycled PID has a different creation time and resolves `foreign`.
  */
 export function classifyWindowsTreeKillTarget(
   rootPid: number,
@@ -80,13 +89,13 @@ export function classifyWindowsTreeKillTarget(
   return 'foreign'
 }
 
-function readLinksBeforeDeadline(
-  readRows: WindowsProcessLinkReader,
+function readLinksBeforeDeadline<T>(
+  readRows: () => Promise<T | null>,
   timeoutMs: number
-): Promise<readonly ProcessLink[] | null> {
+): Promise<T | null> {
   return new Promise((resolve) => {
     let settled = false
-    const finish = (rows: readonly ProcessLink[] | null): void => {
+    const finish = (rows: T | null): void => {
       if (settled) {
         return
       }
@@ -97,14 +106,30 @@ function readLinksBeforeDeadline(
     const timer = setTimeout(() => finish(null), timeoutMs)
     timer.unref?.()
     try {
-      void readRows().then(
-        (rows) => finish(rows),
-        () => finish(null)
-      )
+      void Promise.resolve()
+        .then(readRows)
+        .then(
+          (rows) => finish(rows),
+          () => finish(null)
+        )
     } catch {
       finish(null)
     }
   })
+}
+
+/** Fresh native rows with creation times; null when the table is unreadable. */
+async function readIdentityRowsFresh(): Promise<readonly WindowsIdentityRow[] | null> {
+  try {
+    const rows = await readWindowsProcessTableFresh()
+    return rows.map((row) => ({
+      pid: row.pid,
+      ppid: row.ppid,
+      ...(typeof row.creationTimeMs === 'number' ? { creationTimeMs: row.creationTimeMs } : {})
+    }))
+  } catch {
+    return null
+  }
 }
 
 /**
@@ -117,9 +142,18 @@ export async function verifyWindowsTreeKillTarget(
   rootPid: number,
   deps: {
     readRows?: WindowsProcessLinkReader
+    readIdentityRows?: WindowsIdentityRowReader
     ownerPid?: number
     platform?: NodeJS.Platform
     timeoutMs?: number
+    /**
+     * Creation time captured at spawn. When set, an `own` ancestry verdict
+     * additionally requires the root row's creation time to match — a
+     * recycled PID landing on another Orca descendant resolves `foreign`
+     * instead (#10680). When the table carries no creation times (older
+     * addon builds), verification degrades to the ancestry walk.
+     */
+    expectedCreationTimeMs?: number
   } = {}
 ): Promise<WindowsTreeKillTarget> {
   // Why: the CIM/wmic probes exist only on Windows, so there is nothing to verify
@@ -127,12 +161,35 @@ export async function verifyWindowsTreeKillTarget(
   if ((deps.platform ?? process.platform) !== 'win32') {
     return 'unknown'
   }
+  const timeoutMs = deps.timeoutMs ?? WINDOWS_ROOT_IDENTITY_TIMEOUT_MS
+  if (deps.expectedCreationTimeMs === undefined) {
+    const rows = await readLinksBeforeDeadline(
+      deps.readRows ?? queryWindowsProcessRowsFresh,
+      timeoutMs
+    )
+    if (!rows) {
+      return 'unknown'
+    }
+    return classifyWindowsTreeKillTarget(rootPid, rows, deps.ownerPid ?? process.pid)
+  }
   const rows = await readLinksBeforeDeadline(
-    deps.readRows ?? queryWindowsProcessRowsFresh,
-    deps.timeoutMs ?? WINDOWS_ROOT_IDENTITY_TIMEOUT_MS
+    deps.readIdentityRows ?? readIdentityRowsFresh,
+    timeoutMs
   )
   if (!rows) {
     return 'unknown'
   }
-  return classifyWindowsTreeKillTarget(rootPid, rows, deps.ownerPid ?? process.pid)
+  const ownerPid = deps.ownerPid ?? process.pid
+  const verdict = classifyWindowsTreeKillTarget(rootPid, rows, ownerPid)
+  if (verdict !== 'own') {
+    return verdict
+  }
+  const root = rows.find((row) => row.pid === rootPid)
+  // Why degrade instead of refuse: hosts whose table has no creation-time
+  // field cannot prove a recycle either way, and refusing would reintroduce
+  // the orphaned-tree failures the fallback exists to prevent (#9045).
+  if (typeof root?.creationTimeMs !== 'number') {
+    return 'own'
+  }
+  return root.creationTimeMs === deps.expectedCreationTimeMs ? 'own' : 'foreign'
 }

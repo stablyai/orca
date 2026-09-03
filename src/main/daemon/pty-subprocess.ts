@@ -3,6 +3,7 @@ import { normalizePtySize } from './daemon-pty-size'
 import { TerminalAttachCanceledError } from './daemon-errors'
 import { createDaemonPtyEnvironment } from './pty-subprocess/spawn-environment'
 import { createPtyShellLaunchPlan } from './pty-subprocess/shell-launch-plan'
+import { captureSpawnedRootCreationTimeMs } from './pty-subprocess/spawn-root-identity'
 import { spawnNativeDaemonPty, type SpawnedDaemonPty } from './pty-subprocess/native-pty-spawn'
 import {
   formatPtySpawnError,
@@ -109,6 +110,9 @@ export async function createPtySubprocess(opts: PtySubprocessOptions): Promise<S
     reportsChildExitStatus: spawned.reportsChildExitStatus,
     requestedCwd: opts.cwd,
     sessionId: opts.sessionId,
-    startupAgentRecognition: launch.startupAgentRecognition
+    startupAgentRecognition: launch.startupAgentRecognition,
+    // Why after spawn, not at sweep: only a value captured while this PID is
+    // necessarily the just-spawned root can anchor the tree-kill probe (#10680).
+    rootCreationTimeMs: await captureSpawnedRootCreationTimeMs(spawned.process.pid)
   })
 }

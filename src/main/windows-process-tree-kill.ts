@@ -12,7 +12,7 @@ export const WINDOWS_PROCESS_TREE_KILL_TIMEOUT_MS = 5_000
  */
 export function terminateWindowsProcessTree(
   rootPid: number,
-  deps: { execFileImpl?: typeof execFile } = {}
+  deps: { execFileImpl?: typeof execFile; timeoutMs?: number } = {}
 ): Promise<void> {
   if (!Number.isInteger(rootPid) || rootPid <= 0) {
     return Promise.resolve()
@@ -24,7 +24,7 @@ export function terminateWindowsProcessTree(
       ['/pid', String(rootPid), '/T', '/F'],
       {
         // Why: a wedged taskkill must not block killRoot forever (#10004 review).
-        timeout: WINDOWS_PROCESS_TREE_KILL_TIMEOUT_MS,
+        timeout: deps.timeoutMs ?? WINDOWS_PROCESS_TREE_KILL_TIMEOUT_MS,
         windowsHide: true
       },
       () => {

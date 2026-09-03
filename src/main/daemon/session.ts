@@ -134,6 +134,9 @@ export class Session {
     return this.subprocess.pid
   }
 
+  /** Spawn-captured tree-kill identity; undefined where never captured. */
+  get spawnIdentity() { return this.subprocess.spawnIdentity }
+
   /** Terminate this session's pty job object. `unavailable` is not proof of death. */
   terminateOwnedTree(): JobTerminationOutcome {
     return this.subprocess.terminateOwnedTree()

@@ -2,7 +2,7 @@ import { win32 as pathWin32 } from 'node:path'
 import { isWindowsGitBashShellPath, resolveWindowsGitBashShellPath } from '../../git-bash'
 import { isPwshAvailable } from '../../pwsh'
 import { isHostCodexHomeForWsl, isWslCodexHomeForHost } from '../../pty/codex-home-wsl-env'
-import { addOrcaWslInteropEnv } from '../../pty/wsl-orca-env'
+import { addOrcaWslInteropEnv, stampPtyTreeIdMarker } from '../../pty/wsl-orca-env'
 import {
   POWERLEVEL10K_WIZARD_DISABLE_ENV,
   seedPowerlevel10kWizardEnv
@@ -48,6 +48,16 @@ export type PtyShellLaunchPlan = {
   startupCommandDeliveredInShellArgs: boolean
   windowsFallbackAttempts: WindowsShellSpawnAttempt[]
   startupAgentRecognition: RecognizedAgentProcess | null
+}
+
+/**
+ * Finalize env for a WSL spawn: stamp this session's guest tree marker,
+ * then register the WSLENV imports. The marker must be set first — the
+ * interop helper only passes through variables already present.
+ */
+export function applyWslSpawnEnv(env: Record<string, string>, sessionId: string): void {
+  stampPtyTreeIdMarker(env, sessionId)
+  addOrcaWslInteropEnv(env)
 }
 
 export function createPtyShellLaunchPlan(
@@ -178,7 +188,9 @@ export function createPtyShellLaunchPlan(
       delete env.ORCA_CODEX_HOME
     }
     if (pathWin32.basename(shellPath).toLowerCase() === 'wsl.exe') {
-      addOrcaWslInteropEnv(env)
+      // Why one call: every WSL spawn funnels through this branch, and the
+      // marker names this session's guest tree for shutdown.
+      applyWslSpawnEnv(env, opts.sessionId)
     }
   } else {
     rescrubDaemonPtyEnvironment(env, opts)

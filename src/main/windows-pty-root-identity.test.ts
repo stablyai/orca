@@ -159,6 +159,86 @@ describe('verifyWindowsTreeKillTarget', () => {
   })
 })
 
+describe('verifyWindowsTreeKillTarget with a spawn-anchored creation time', () => {
+  const SPAWNED_AT = 1_784_000_000_000
+  const identityRow = (pid: number, ppid: number, creationTimeMs?: number) =>
+    creationTimeMs === undefined ? { pid, ppid } : { pid, ppid, creationTimeMs }
+
+  it('keeps an own verdict when the root creation time matches the spawn baseline', async () => {
+    const readIdentityRows = vi
+      .fn()
+      .mockResolvedValue([identityRow(4242, ORCA_PID, SPAWNED_AT)])
+    await expect(
+      verifyWindowsTreeKillTarget(4242, {
+        readIdentityRows,
+        ownerPid: ORCA_PID,
+        platform: 'win32',
+        expectedCreationTimeMs: SPAWNED_AT
+      })
+    ).resolves.toBe('own')
+  })
+
+  it('resolves foreign when the PID was recycled onto another Orca descendant (#10680)', async () => {
+    // Same shape as the ancestry-only hole above, but the occupant started
+    // later than the recorded root — a different process wearing our PID.
+    const readIdentityRows = vi.fn().mockResolvedValue([
+      identityRow(ORCA_PID, 900, SPAWNED_AT - 60_000),
+      identityRow(7000, ORCA_PID, SPAWNED_AT - 30_000),
+      identityRow(7100, 7000, SPAWNED_AT - 10_000),
+      identityRow(4242, 7100, SPAWNED_AT + 5_000)
+    ])
+    await expect(
+      verifyWindowsTreeKillTarget(4242, {
+        readIdentityRows,
+        ownerPid: ORCA_PID,
+        platform: 'win32',
+        expectedCreationTimeMs: SPAWNED_AT
+      })
+    ).resolves.toBe('foreign')
+  })
+
+  it('degrades to the ancestry walk when the table carries no creation times', async () => {
+    // Older addon builds expose the rows without the field; refusing there
+    // would reintroduce the orphaned-tree failures (#9045).
+    const readIdentityRows = vi.fn().mockResolvedValue([identityRow(4242, ORCA_PID)])
+    await expect(
+      verifyWindowsTreeKillTarget(4242, {
+        readIdentityRows,
+        ownerPid: ORCA_PID,
+        platform: 'win32',
+        expectedCreationTimeMs: SPAWNED_AT
+      })
+    ).resolves.toBe('own')
+  })
+
+  it('returns unknown when the identity table is unavailable', async () => {
+    const readIdentityRows = vi.fn().mockResolvedValue(null)
+    await expect(
+      verifyWindowsTreeKillTarget(4242, {
+        readIdentityRows,
+        ownerPid: ORCA_PID,
+        platform: 'win32',
+        expectedCreationTimeMs: SPAWNED_AT
+      })
+    ).resolves.toBe('unknown')
+  })
+
+  it('keeps the link-reader path untouched when no baseline is set', async () => {
+    const readRows = vi.fn().mockResolvedValue([link(4242, ORCA_PID)])
+    const readIdentityRows = vi.fn()
+    await expect(
+      verifyWindowsTreeKillTarget(4242, {
+        readRows,
+        readIdentityRows,
+        ownerPid: ORCA_PID,
+        platform: 'win32'
+      })
+    ).resolves.toBe('own')
+    expect(readRows).toHaveBeenCalledOnce()
+    expect(readIdentityRows).not.toHaveBeenCalled()
+  })
+})
+
 // Regression guard on the DEFAULT reader, which the cases above bypass by
 // injecting readRows: worktree delete tears down PTYs 32-wide, so a probe that
 // reads the table uncached takes 32 full process-table scans per delete — the

@@ -87,6 +87,10 @@ describe('TerminalHost', () => {
   })
 
   afterEach(async () => {
+    // Why reset first: a test's custom descendant-sweep mock (e.g. a
+    // never-resolving snapshot) must not also govern this cleanup dispose()
+    // for whatever agent session it left behind.
+    killWithDescendantSweepMock.mockReset()
     await host.dispose()
     if (platformDescriptor) {
       Object.defineProperty(process, 'platform', platformDescriptor)
@@ -824,7 +828,12 @@ describe('TerminalHost', () => {
       // below). See docs/fix-pty-fd-leak.md.
       expect(lastSubprocess.forceKill).toHaveBeenCalled()
       expect(lastSubprocess.dispose).toHaveBeenCalled()
+      expect(killWithDescendantSweepMock).not.toHaveBeenCalled()
     })
+
+    // Agent-session descendant sweep on dispose is covered in
+    // terminal-host-dispose-agent-descendant-sweep.test.ts (kept out of this
+    // file to stay under the max-lines budget).
 
     it('releases held shell-ready marker prefixes before final checkpoint', async () => {
       await host.dispose()
