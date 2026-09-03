@@ -36,123 +36,90 @@ function checkpointFile(
   }
 }
 
-class BoundedJsonWriter {
-  private output = ''
-  private chunk = ''
+/** Tracks how many UTF-8 bytes `JSON.stringify` would emit. `add` returning false unwinds the
+ *  whole walk, so an over-limit checkpoint is abandoned partway instead of measured whole. */
+class JsonByteBudget {
   private bytes = 0
-  private exceeded = false
 
   constructor(private readonly maxBytes: number) {}
 
-  append(value: string, bytes: number): boolean {
-    if (this.bytes + bytes > this.maxBytes) {
-      this.exceeded = true
-      this.output = ''
-      this.chunk = ''
-      return false
-    }
+  remaining(): number {
+    return this.maxBytes - this.bytes
+  }
+
+  add(bytes: number): boolean {
     this.bytes += bytes
-    this.chunk += value
-    if (this.chunk.length >= 16 * 1024) {
-      this.output += this.chunk
-      this.chunk = ''
-    }
-    return true
-  }
-
-  result(): string | null {
-    return this.exceeded ? null : this.output + this.chunk
+    return this.bytes <= this.maxBytes
   }
 }
 
-function escapedCodeUnit(codeUnit: number): string | null {
-  switch (codeUnit) {
-    case 0x08:
-      return '\\b'
-    case 0x09:
-      return '\\t'
-    case 0x0a:
-      return '\\n'
-    case 0x0c:
-      return '\\f'
-    case 0x0d:
-      return '\\r'
-    case 0x22:
-      return '\\"'
-    case 0x5c:
-      return '\\\\'
-    default:
-      return codeUnit < 0x20 ? `\\u${codeUnit.toString(16).padStart(4, '0')}` : null
-  }
-}
+const MEASURE_CHUNK_CODE_UNITS = 8 * 1024
 
-function appendJsonString(writer: BoundedJsonWriter, value: string): boolean {
-  if (!writer.append('"', 1)) {
-    return false
-  }
-  let spanStart = 0
-  let spanBytes = 0
-  for (let index = 0; index < value.length; index += 1) {
-    const codeUnit = value.charCodeAt(index)
-    let escaped = escapedCodeUnit(codeUnit)
-    if (codeUnit >= 0xd800 && codeUnit <= 0xdbff) {
-      const next = value.charCodeAt(index + 1)
-      if (next >= 0xdc00 && next <= 0xdfff) {
-        spanBytes += 4
-        index += 1
+function measureJsonString(budget: JsonByteBudget, value: string): boolean {
+  const remaining = budget.remaining()
+  let bytes = 2
+  let index = 0
+  // Why: test the budget per chunk, not per code unit — a multi-megabyte scrollback still
+  // bails within one chunk of going over, without paying a compare on every character.
+  while (index < value.length) {
+    const chunkEnd = Math.min(value.length, index + MEASURE_CHUNK_CODE_UNITS)
+    for (; index < chunkEnd; index += 1) {
+      const codeUnit = value.charCodeAt(index)
+      if (codeUnit === 0x22 || codeUnit === 0x5c) {
+        bytes += 2
+      } else if (codeUnit < 0x20) {
+        bytes +=
+          codeUnit === 0x08 ||
+          codeUnit === 0x09 ||
+          codeUnit === 0x0a ||
+          codeUnit === 0x0c ||
+          codeUnit === 0x0d
+            ? 2
+            : 6
+      } else if (codeUnit < 0x80) {
+        bytes += 1
+      } else if (codeUnit < 0x800) {
+        bytes += 2
+      } else if (codeUnit >= 0xd800 && codeUnit <= 0xdbff) {
+        const next = value.charCodeAt(index + 1)
+        if (next >= 0xdc00 && next <= 0xdfff) {
+          bytes += 4
+          index += 1
+        } else {
+          bytes += 6
+        }
+      } else if (codeUnit >= 0xdc00 && codeUnit <= 0xdfff) {
+        bytes += 6
       } else {
-        escaped = `\\u${codeUnit.toString(16)}`
+        bytes += 3
       }
-    } else if (codeUnit >= 0xdc00 && codeUnit <= 0xdfff) {
-      escaped = `\\u${codeUnit.toString(16)}`
-    } else if (escaped === null) {
-      spanBytes += codeUnit < 0x80 ? 1 : codeUnit < 0x800 ? 2 : 3
     }
-
-    if (escaped !== null) {
-      if (
-        (index > spanStart && !writer.append(value.slice(spanStart, index), spanBytes)) ||
-        !writer.append(escaped, escaped.length)
-      ) {
-        return false
-      }
-      spanStart = index + 1
-      spanBytes = 0
-    } else if (index + 1 - spanStart >= 16 * 1024) {
-      if (!writer.append(value.slice(spanStart, index + 1), spanBytes)) {
-        return false
-      }
-      spanStart = index + 1
-      spanBytes = 0
+    if (bytes > remaining) {
+      return budget.add(bytes)
     }
   }
-  if (spanStart < value.length && !writer.append(value.slice(spanStart), spanBytes)) {
-    return false
-  }
-  return writer.append('"', 1)
+  return budget.add(bytes)
 }
 
 function omittedByJson(value: unknown): boolean {
   return value === undefined || typeof value === 'function' || typeof value === 'symbol'
 }
 
-function appendJsonValue(
-  writer: BoundedJsonWriter,
+function measureJsonValue(
+  budget: JsonByteBudget,
   value: unknown,
   activeObjects: Set<object>
 ): boolean {
   if (value === null) {
-    return writer.append('null', 4)
+    return budget.add(4)
   }
   switch (typeof value) {
     case 'string':
-      return appendJsonString(writer, value)
+      return measureJsonString(budget, value)
     case 'boolean':
-      return writer.append(value ? 'true' : 'false', value ? 4 : 5)
-    case 'number': {
-      const json = Number.isFinite(value) ? JSON.stringify(value) : 'null'
-      return writer.append(json, json.length)
-    }
+      return budget.add(value ? 4 : 5)
+    case 'number':
+      return budget.add(Number.isFinite(value) ? JSON.stringify(value).length : 4)
     case 'bigint':
       throw new TypeError('Do not know how to serialize a BigInt')
     case 'undefined':
@@ -169,26 +136,28 @@ function appendJsonValue(
   activeObjects.add(value)
   try {
     if (Array.isArray(value)) {
-      if (!writer.append('[', 1)) {
+      // Why: both brackets are charged up front — the running total only has to be right at
+      // the end, and pre-charging the closer keeps the exit paths from having to add it.
+      if (!budget.add(2)) {
         return false
       }
       for (let index = 0; index < value.length; index += 1) {
-        if (index > 0 && !writer.append(',', 1)) {
+        if (index > 0 && !budget.add(1)) {
           return false
         }
+        // Why: JSON.stringify renders holes and non-serializable elements as null.
         const entry = value[index]
-        if (omittedByJson(entry)) {
-          if (!writer.append('null', 4)) {
-            return false
-          }
-        } else if (!appendJsonValue(writer, entry, activeObjects)) {
+        const fits = omittedByJson(entry)
+          ? budget.add(4)
+          : measureJsonValue(budget, entry, activeObjects)
+        if (!fits) {
           return false
         }
       }
-      return writer.append(']', 1)
+      return true
     }
 
-    if (!writer.append('{', 1)) {
+    if (!budget.add(2)) {
       return false
     }
     let entries = 0
@@ -198,25 +167,32 @@ function appendJsonValue(
         continue
       }
       if (
-        (entries > 0 && !writer.append(',', 1)) ||
-        !appendJsonString(writer, key) ||
-        !writer.append(':', 1) ||
-        !appendJsonValue(writer, entry, activeObjects)
+        (entries > 0 && !budget.add(1)) ||
+        !measureJsonString(budget, key) ||
+        !budget.add(1) ||
+        !measureJsonValue(budget, entry, activeObjects)
       ) {
         return false
       }
       entries += 1
     }
-    return writer.append('}', 1)
+    return true
   } finally {
     activeObjects.delete(value)
   }
 }
 
 function stringifyWithinLimit(checkpoint: TerminalCheckpointFile, maxBytes: number): string | null {
-  const writer = new BoundedJsonWriter(maxBytes)
-  appendJsonValue(writer, checkpoint, new Set())
-  return writer.result()
+  // Why: size the checkpoint first so an over-cap payload is never handed to JSON.stringify,
+  // then let the native serializer emit the JSON — it is far faster than emitting it by hand.
+  if (!measureJsonValue(new JsonByteBudget(maxBytes), checkpoint, new Set())) {
+    return null
+  }
+  const json = JSON.stringify(checkpoint)
+  if (Buffer.byteLength(json, 'utf8') > maxBytes) {
+    throw new Error('Terminal checkpoint size estimator mismatch')
+  }
+  return json
 }
 
 async function replaySnapshot(snapshot: TerminalSnapshot): Promise<HeadlessEmulator> {
