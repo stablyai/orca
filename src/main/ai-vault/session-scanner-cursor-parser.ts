@@ -15,6 +15,7 @@ import {
   sessionIdFromFileName,
   updateTimeline
 } from './session-scanner-accumulator'
+import { resolveCursorTranscriptCwd } from './session-scanner-cursor-project-cwd'
 import {
   asRecord,
   extractContentText,
@@ -76,10 +77,16 @@ function consumeCursorRecordLine(accumulator: SessionAccumulator, line: string):
 }
 
 export function createCursorSessionResumeState(file: FileWithMtime): ResumableSessionParseState {
-  return accumulatorFoldResumeState(
-    createAccumulator({ agent: 'cursor', file, sessionId: sessionIdFromFileName(file.path) }),
-    consumeCursorRecordLine
-  )
+  const accumulator = createAccumulator({
+    agent: 'cursor',
+    file,
+    sessionId: sessionIdFromFileName(file.path)
+  })
+  // Why: Cursor JSONL has no cwd field; legacy paths encode the workspace only
+  // as ~/.cursor/projects/<slug>/…, so without this sessions group under
+  // "Unknown location" and drop out of Workspace scope (#13931).
+  accumulator.cwd = resolveCursorTranscriptCwd(file.path)
+  return accumulatorFoldResumeState(accumulator, consumeCursorRecordLine)
 }
 
 async function parseCursorSessionLines(args: {
