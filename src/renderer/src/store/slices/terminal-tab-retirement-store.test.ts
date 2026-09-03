@@ -169,7 +169,7 @@ describe('terminal tab retirement store boundary', () => {
     expect(store.getState().pendingColdRestoreByPtyId['pty-shared']).toBe(coldRestore)
   })
 
-  it('reconciles natural exit without issuing teardown or revoking resume authority', async () => {
+  it('preserves resume authority after an unexpected PTY loss', async () => {
     const store = createRetirementStore()
     const record = sleepingRecord('tab-1:leaf-1', 'tab-1')
     seedStore(store, {
