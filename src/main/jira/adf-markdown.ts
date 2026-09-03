@@ -1,4 +1,5 @@
 import { escapeMarkdownLinkDestination } from './adf-media-destination'
+import { applyAdfTextMarks } from './adf-text-marks'
 
 type JiraAdfRecord = Record<string, unknown>
 
@@ -138,7 +139,7 @@ function renderInline(node: unknown, options?: AdfToMarkdownOptions): string {
 
   const record = node as JiraAdfRecord
   if (typeof record.text === 'string') {
-    return record.text
+    return applyAdfTextMarks(record.text, record.marks)
   }
   if (record.type === 'hardBreak') {
     return '\n'
