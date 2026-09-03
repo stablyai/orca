@@ -87,6 +87,7 @@ export async function getStatusOp(
   const lineStatsWriteToken =
     params.includeLineStats === false ? null : beginGitStatusLineStatsCacheWrite(lineStatsCacheKey)
   const includeIgnored = params.includeIgnored === true
+  const showSubmoduleChanges = params.showSubmoduleChanges === true
   // Why: untrusted RPC input spliced into a git argv — only an OID shape may pass.
   const branchLineTotalMergeBase = readGitBranchLineTotalMergeBaseParam(
     params.branchLineTotalMergeBase
@@ -105,6 +106,11 @@ export async function getStatusOp(
   ]
   if (includeIgnored) {
     statusArgs.push('--ignored=matching')
+  }
+  // Why: mirror the desktop read — `.gitmodules` `ignore = all` would otherwise
+  // drop every submodule entry before the parser sees it.
+  if (showSubmoduleChanges) {
+    statusArgs.push('--ignore-submodules=none')
   }
   // Why: attach rejection ownership before awaiting marker I/O, so a fast Git failure cannot become unhandled.
   const statusSettlementPromise = Promise.allSettled([

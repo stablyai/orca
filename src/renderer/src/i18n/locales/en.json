@@ -9978,7 +9978,9 @@
             "projectRuntime": "Project Runtime",
             "projectRuntimeDescription": "Choose whether this project runs on Windows or WSL.",
             "externalWorktrees": "External worktrees",
-            "externalWorktreesDescription": "Override whether worktrees created outside Orca appear for this project."
+            "externalWorktreesDescription": "Override whether worktrees created outside Orca appear for this project.",
+            "showSubmoduleChanges": "Show Submodule Changes",
+            "showSubmoduleChangesDescription": "Read submodule changes in Source Control even when this repo hides them."
           }
         },
         "runtime": {
@@ -11568,6 +11570,11 @@
         },
         "NativeChatSupportedAgents": {
           "label": "Supported agents:"
+        },
+        "RepositorySubmoduleChangesSection": {
+          "title": "Show Submodule Changes",
+          "description": "Read submodule changes in Source Control even when this repo hides them.",
+          "longDescription": "A repo whose .gitmodules sets ignore = all reports no submodule changes at all, so Source Control stays empty while you work inside a submodule. Turn this on to list them anyway. Each changed submodule adds one row you can expand for its per-file changes, including submodules whose recorded commit simply moved."
         }
       },
       "right": {

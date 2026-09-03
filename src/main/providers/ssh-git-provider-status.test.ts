@@ -69,6 +69,29 @@ describe('SshGitProvider', () => {
     )
   })
 
+  it('getStatus forwards the submodule opt-in only when requested', async () => {
+    mux.request.mockResolvedValue({ entries: [], conflictOperation: 'unknown' })
+
+    await provider.getStatus('/home/user/repo', { showSubmoduleChanges: true })
+    await provider.getStatus('/home/user/repo', { showSubmoduleChanges: false })
+
+    expect(mux.request).toHaveBeenNthCalledWith(
+      1,
+      'git.status',
+      {
+        worktreePath: '/home/user/repo',
+        showSubmoduleChanges: true
+      },
+      { signal: expect.any(AbortSignal) }
+    )
+    expect(mux.request).toHaveBeenNthCalledWith(
+      2,
+      'git.status',
+      { worktreePath: '/home/user/repo' },
+      { signal: expect.any(AbortSignal) }
+    )
+  })
+
   it('getStatus forwards upstream-negative-cache bypass only when requested', async () => {
     const statusResult = { entries: [], conflictOperation: 'unknown' }
     mux.request.mockResolvedValue(statusResult)

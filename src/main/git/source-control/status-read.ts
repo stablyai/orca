@@ -62,6 +62,9 @@ function getStatusReadKey(worktreePath: string, options: GetStatusOptions): stri
     // this fork point, so a shared lease must never serve one to the other.
     options.branchLineTotalMergeBase ?? '',
     options.bypassEffectiveUpstreamNegativeCache === true,
+    // Why: this adds submodule entries, so a shared lease must not serve a read
+    // taken without it.
+    options.showSubmoduleChanges === true,
     limit,
     // Why: this changes which entries survive, so it must not share a cache slot.
     options.sharedLinkPaths ?? []
@@ -130,6 +133,11 @@ async function runGetStatus(
   ]
   if (options.includeIgnored) {
     statusArgs.push('--ignored=matching')
+  }
+  // Why: without this, git honors `.gitmodules` `ignore = all` and omits every
+  // submodule entry, so Source Control has no row to expand.
+  if (options.showSubmoduleChanges) {
+    statusArgs.push('--ignore-submodules=none')
   }
 
   // Why: stream + parse and stop at `limit` so a huge un-ignored folder can't buffer enough to crash the process.

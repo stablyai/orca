@@ -299,13 +299,14 @@ describe('getStatus', () => {
       getStatus('/repo', { bypassEffectiveUpstreamNegativeCache: true }),
       getStatus('/repo', { limit: 1 }),
       getStatus('/repo', { sharedLinkPaths: ['node_modules'] }),
-      getStatus('/repo', { admissionTier: 'interactive' })
+      getStatus('/repo', { admissionTier: 'interactive' }),
+      getStatus('/repo', { showSubmoduleChanges: true })
     ]
 
-    await vi.waitFor(() => expect(statusCommandCalls).toBe(10))
+    await vi.waitFor(() => expect(statusCommandCalls).toBe(11))
     releases.splice(0).forEach((release) => release())
     await Promise.all(reads)
-    expect(statusCommandCalls).toBe(10)
+    expect(statusCommandCalls).toBe(11)
   })
 
   it('clears in-flight status reads when a mutation runs', async () => {

@@ -17,6 +17,7 @@ export async function getRuntimeGitStatus(
     bypassEffectiveUpstreamNegativeCache?: boolean
     reuseLineStats?: boolean
     branchLineTotalMergeBase?: string
+    showSubmoduleChanges?: boolean
     signal?: AbortSignal
   }
 ): Promise<GitStatusResult> {
@@ -32,6 +33,8 @@ export async function getRuntimeGitStatus(
   const branchLineTotalArgs = options?.branchLineTotalMergeBase
     ? { branchLineTotalMergeBase: options.branchLineTotalMergeBase }
     : {}
+  // Why: the repo opted in, so every transport must ask git for submodule rows.
+  const submoduleChangeArgs = options?.showSubmoduleChanges ? { showSubmoduleChanges: true } : {}
   if (target.kind === 'local' || !context.worktreeId) {
     return callLocalGitStatus(
       {
@@ -42,7 +45,8 @@ export async function getRuntimeGitStatus(
         ...includeLineStatsArgs,
         ...upstreamCacheBypassArgs,
         ...lineStatsReuseArgs,
-        ...branchLineTotalArgs
+        ...branchLineTotalArgs,
+        ...submoduleChangeArgs
       },
       options?.signal
     )
@@ -57,7 +61,8 @@ export async function getRuntimeGitStatus(
       ...includeLineStatsArgs,
       ...upstreamCacheBypassArgs,
       ...lineStatsReuseArgs,
-      ...branchLineTotalArgs
+      ...branchLineTotalArgs,
+      ...submoduleChangeArgs
     },
     {
       timeoutMs: 15_000,

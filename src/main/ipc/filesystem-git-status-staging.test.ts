@@ -142,6 +142,36 @@ describe('registerFilesystemHandlers', () => {
     })
   })
 
+  it('reads the submodule opt-in off the repo record for local status', async () => {
+    const optedInStore = {
+      ...store,
+      getRepos: () => [
+        {
+          ...store.getRepos()[0],
+          showSubmoduleChanges: true
+        }
+      ],
+      getAllWorktreeMeta: () => ({
+        [`repo-1::${WORKTREE_FEATURE_PATH}`]: {}
+      })
+    }
+    registerWorktreeRootsForRepo(optedInStore as never, 'repo-1', [
+      REPO_PATH,
+      WORKTREE_FEATURE_PATH
+    ])
+    getStatusMock.mockResolvedValue({ entries: [] })
+
+    registerFilesystemHandlers(optedInStore as never)
+
+    await handlers.get('git:status')!(null, { worktreePath: WORKTREE_FEATURE_PATH })
+
+    expect(getStatusMock).toHaveBeenCalledWith(WORKTREE_FEATURE_PATH, {
+      admissionTier: 'status',
+      includeIgnored: false,
+      showSubmoduleChanges: true
+    })
+  })
+
   it('allows git operations on the known repo root without rebuilding the worktree cache', async () => {
     getStatusMock.mockResolvedValue({ entries: [] })
 
