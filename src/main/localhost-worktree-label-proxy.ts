@@ -12,6 +12,7 @@ import {
   getLocalhostWorktreeHostLabel,
   getLocalhostWorktreeRouteKey
 } from '../shared/localhost-worktree-labels'
+import { localhostWorktreeFaviconForRequest } from './localhost-worktree-favicon'
 
 type RegisteredRoute = LocalhostWorktreeLabelRoute & {
   label: string
@@ -126,6 +127,19 @@ export class LocalhostWorktreeLabelProxy {
     if (!route) {
       response.writeHead(404, { 'content-type': 'text/plain; charset=utf-8' })
       response.end('Unknown Orca localhost label.')
+      return
+    }
+
+    // Why: favicon paths are intercepted here so tabs show a worktree-colored
+    // icon; every other request still streams through untouched.
+    const favicon = localhostWorktreeFaviconForRequest(route.label, request)
+    if (favicon) {
+      response.writeHead(200, {
+        'content-type': favicon.contentType,
+        'content-length': favicon.body.byteLength,
+        'cache-control': 'no-store'
+      })
+      response.end(request.method === 'HEAD' ? undefined : favicon.body)
       return
     }
 

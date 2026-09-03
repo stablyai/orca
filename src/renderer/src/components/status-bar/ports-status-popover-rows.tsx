@@ -15,6 +15,7 @@ import {
 } from '@/lib/workspace-port-actions'
 import type { WorkspacePortGroup } from '@/lib/workspace-port-groups'
 import { useLocalhostLabelRouteForPort } from '@/lib/workspace-port-localhost-label-selector'
+import { localhostWorktreeColorForRoute } from '@/lib/workspace-port-worktree-color'
 import { getActiveRuntimeTarget } from '@/runtime/runtime-rpc-client'
 import { useAppStore } from '@/store'
 import { getRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
@@ -278,6 +279,11 @@ export function WorkspaceGroupRows({
   group: WorkspacePortGroup
   activeWorktreeId: string | null
 }): React.JSX.Element {
+  // Why: a group's ports all share one owning worktree, so the first port's
+  // label route carries the group's worktree color.
+  const localhostColor = localhostWorktreeColorForRoute(
+    useLocalhostLabelRouteForPort(group.ports[0] ?? null)
+  )
   const handleGoToWorkspace = useCallback(
     (event: React.MouseEvent<HTMLButtonElement>) => {
       event.stopPropagation()
@@ -297,8 +303,17 @@ export function WorkspaceGroupRows({
   return (
     <section className="border-t border-border/40 first:border-t-0">
       <div className="sticky top-0 z-10 flex items-center justify-between gap-2 border-b border-border/40 bg-popover px-3 py-2">
-        <span className="min-w-0 truncate text-[12px] font-medium text-foreground">
-          {group.displayName}
+        <span className="flex min-w-0 items-center gap-1.5">
+          {localhostColor ? (
+            <span
+              aria-hidden
+              className="size-1.5 shrink-0 rounded-full"
+              style={{ backgroundColor: localhostColor }}
+            />
+          ) : null}
+          <span className="min-w-0 truncate text-[12px] font-medium text-foreground">
+            {group.displayName}
+          </span>
         </span>
         <div className="flex shrink-0 items-center gap-1">
           <PortAction

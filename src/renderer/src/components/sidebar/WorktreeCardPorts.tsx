@@ -15,6 +15,7 @@ import {
   resolvePortOpenInOrcaBrowser
 } from '@/lib/workspace-port-actions'
 import { useLocalhostLabelRouteForPort } from '@/lib/workspace-port-localhost-label-selector'
+import { localhostWorktreeColorForRoute } from '@/lib/workspace-port-worktree-color'
 import { addressForPort } from '@/lib/workspace-port-urls'
 import type { WorkspacePort } from '../../../../shared/workspace-ports'
 import {
@@ -31,6 +32,11 @@ export function WorktreeCardPortsTrigger({
   ports
 }: WorktreeCardPortsProps): React.JSX.Element | null {
   const recordFeatureInteraction = useAppStore((s) => s.recordFeatureInteraction)
+  // Why: a worktree card's ports all share one owner, so the first port's
+  // label route carries the card's worktree color.
+  const localhostColor = localhostWorktreeColorForRoute(
+    useLocalhostLabelRouteForPort(ports[0] ?? null)
+  )
 
   if (ports.length === 0) {
     return null
@@ -39,7 +45,7 @@ export function WorktreeCardPortsTrigger({
   return (
     <button
       type="button"
-      className="inline-flex size-3.5 shrink-0 items-center justify-center rounded text-muted-foreground/70 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-worktree-sidebar-ring"
+      className="relative inline-flex size-3.5 shrink-0 items-center justify-center rounded text-muted-foreground/70 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-worktree-sidebar-ring"
       aria-label={translate(
         'auto.components.sidebar.WorktreeCardPorts.fed49903c9',
         '{{value0}} live {{value1}}',
@@ -51,6 +57,13 @@ export function WorktreeCardPortsTrigger({
       }}
     >
       <Plug className="size-3.5" />
+      {localhostColor ? (
+        <span
+          aria-hidden
+          className="absolute -right-0.5 -top-0.5 size-1.5 rounded-full"
+          style={{ backgroundColor: localhostColor }}
+        />
+      ) : null}
     </button>
   )
 }

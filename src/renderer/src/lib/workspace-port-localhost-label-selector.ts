@@ -31,12 +31,14 @@ export function resolveLocalhostLabelRouteForPort(
   return localhostWorktreeLabelRouteForPort({ port, repo, project, settings: state.settings })
 }
 
+// Why: accepts null so components can keep the hook unconditional above
+// their empty-ports early returns.
 export function useLocalhostLabelRouteForPort(
-  port: WorkspacePort
+  port: WorkspacePort | null
 ): LocalhostWorktreeLabelRoute | null {
   const settings = useAppStore((s) => s.settings)
-  const portWorktreeId = port.kind === 'workspace' ? port.owner.worktreeId : null
-  const portRepoId = port.kind === 'workspace' ? port.owner.repoId : null
+  const portWorktreeId = port?.kind === 'workspace' ? port.owner.worktreeId : null
+  const portRepoId = port?.kind === 'workspace' ? port.owner.repoId : null
   const repo = useAppStore((s) =>
     portRepoId ? ((s.repos ?? []).find((entry) => entry.id === portRepoId) ?? null) : null
   )
@@ -48,5 +50,8 @@ export function useLocalhostLabelRouteForPort(
       ? ((s.projects ?? []).find((entry) => entry.id === worktree.projectId) ?? null)
       : null
   )
+  if (!port) {
+    return null
+  }
   return localhostWorktreeLabelRouteForPort({ port, repo, project, settings })
 }

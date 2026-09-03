@@ -1,6 +1,7 @@
 import http from 'node:http'
 import type { AddressInfo } from 'node:net'
 import { afterEach, describe, expect, it } from 'vitest'
+import { getLocalhostWorktreeFaviconIco } from './localhost-worktree-favicon'
 import { LocalhostWorktreeLabelProxy } from './localhost-worktree-label-proxy'
 
 const upstreamServers: http.Server[] = []
@@ -23,8 +24,9 @@ async function startUpstream(
 }
 
 function fetchThroughProxy(
-  labeledUrl: string
-): Promise<{ status: number; body: string; headers: http.IncomingHttpHeaders }> {
+  labeledUrl: string,
+  method = 'GET'
+): Promise<{ status: number; body: string; bytes: Buffer; headers: http.IncomingHttpHeaders }> {
   const url = new URL(labeledUrl)
   return new Promise((resolve, reject) => {
     // Why: *.orca.localhost is not resolvable DNS; connect to the proxy on
@@ -34,18 +36,21 @@ function fetchThroughProxy(
         host: '127.0.0.1',
         port: Number(url.port),
         path: `${url.pathname}${url.search}`,
+        method,
         headers: { host: url.host }
       },
       (response) => {
         const chunks: Buffer[] = []
         response.on('data', (chunk) => chunks.push(Buffer.from(chunk)))
-        response.on('end', () =>
+        response.on('end', () => {
+          const bytes = Buffer.concat(chunks)
           resolve({
             status: response.statusCode ?? 0,
-            body: Buffer.concat(chunks).toString('utf8'),
+            body: bytes.toString('utf8'),
+            bytes,
             headers: response.headers
           })
-        )
+        })
       }
     )
     request.on('error', reject)
@@ -106,6 +111,81 @@ describe('localhost worktree label proxy', () => {
 
     expect(result.status).toBe(200)
     expect(result.body).toBe('ok')
+  })
+
+  it('serves a generated worktree favicon for /favicon.ico without touching the app', async () => {
+    let upstreamHits = 0
+    const port = await startUpstream((_request, response) => {
+      upstreamHits += 1
+      response.end('app favicon')
+    })
+    const proxy = new LocalhostWorktreeLabelProxy()
+    const { url } = await proxy.registerRoute({
+      targetUrl: `http://localhost:${port}/`,
+      projectName: 'Snap Studio',
+      worktreeName: 'analytics'
+    })
+    const labeled = new URL(url)
+    labeled.pathname = '/favicon.ico'
+    labeled.search = '?v=2'
+
+    const result = await fetchThroughProxy(labeled.toString())
+
+    expect(result.status).toBe(200)
+    expect(result.headers['content-type']).toBe('image/x-icon')
+    expect(result.headers['cache-control']).toBe('no-store')
+    expect(result.bytes.equals(getLocalhostWorktreeFaviconIco('analytics'))).toBe(true)
+    expect(upstreamHits).toBe(0)
+  })
+
+  it('serves an svg worktree favicon for /favicon.svg', async () => {
+    const port = await startUpstream((_request, response) => {
+      response.end('ok')
+    })
+    const proxy = new LocalhostWorktreeLabelProxy()
+    const { url } = await proxy.registerRoute({
+      targetUrl: `http://localhost:${port}/`,
+      projectName: 'Snap Studio',
+      worktreeName: 'analytics'
+    })
+    const labeled = new URL(url)
+    labeled.pathname = '/favicon.svg'
+
+    const result = await fetchThroughProxy(labeled.toString())
+
+    expect(result.status).toBe(200)
+    expect(result.headers['content-type']).toBe('image/svg+xml; charset=utf-8')
+    expect(result.body).toContain('<svg')
+    expect(result.body).toContain('>A</text>')
+  })
+
+  it('still proxies non-GET favicon requests and non-favicon paths to the app', async () => {
+    const seenPaths: string[] = []
+    const port = await startUpstream((request, response) => {
+      seenPaths.push(`${request.method} ${request.url}`)
+      response.end('from app')
+    })
+    const proxy = new LocalhostWorktreeLabelProxy()
+    const { url } = await proxy.registerRoute({
+      targetUrl: `http://localhost:${port}/`,
+      projectName: 'Snap Studio',
+      worktreeName: 'analytics'
+    })
+    const labeled = new URL(url)
+    labeled.pathname = '/assets/favicon-abc123.png'
+
+    const result = await fetchThroughProxy(labeled.toString())
+
+    expect(result.status).toBe(200)
+    expect(result.body).toBe('from app')
+
+    const postFavicon = new URL(url)
+    postFavicon.pathname = '/favicon.ico'
+    const postResult = await fetchThroughProxy(postFavicon.toString(), 'POST')
+
+    expect(postResult.status).toBe(200)
+    expect(postResult.body).toBe('from app')
+    expect(seenPaths).toEqual(['GET /assets/favicon-abc123.png', 'POST /favicon.ico'])
   })
 
   it('returns 404 for unregistered orca.localhost labels', async () => {
