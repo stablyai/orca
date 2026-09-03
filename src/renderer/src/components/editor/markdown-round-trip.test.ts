@@ -110,6 +110,50 @@ describe('rich markdown round trip', () => {
     expect(roundTripMarkdown('<!-- comment -->\n')).toBe('<!-- comment -->')
   })
 
+  it('preserves mermaid line breaks in list-prefixed fenced blocks', () => {
+    const input = ['- ```mermaid', '  graph TD', '  A[Line 1<br/>Line 2] --> B', '  ```', ''].join(
+      '\n'
+    )
+    const output = roundTripMarkdown(input)
+    expect(output).toContain('```mermaid')
+    expect(output).toContain('A[Line 1<br/>Line 2] --> B')
+    expect(output).not.toContain('&lt;br/&gt;')
+  })
+
+  it('preserves mermaid line breaks in blockquote-prefixed fenced blocks', () => {
+    const input = ['> ```mermaid', '> graph TD', '> A[Line 1<br/>Line 2] --> B', '> ```', ''].join(
+      '\n'
+    )
+    const output = roundTripMarkdown(input)
+    expect(output).toContain('```mermaid')
+    expect(output).toContain('A[Line 1<br/>Line 2] --> B')
+    expect(output).not.toContain('&lt;br/&gt;')
+  })
+
+  it('preserves bare br tags in mermaid fenced blocks', () => {
+    const input = ['```mermaid', 'graph TD', 'A[Line 1<br>Line 2] --> B', '```', ''].join('\n')
+    const output = roundTripMarkdown(input)
+    expect(output).toContain('```mermaid')
+    expect(output).toContain('A[Line 1<br>Line 2] --> B')
+    expect(output).not.toContain('[[ORCA_RICH_MD:')
+    expect(output).not.toContain('&lt;br&gt;')
+  })
+
+  it('preserves mermaid line breaks in nested blockquote fenced blocks', () => {
+    const input = [
+      '>> ```mermaid',
+      '>> graph TD',
+      '>> A[Line 1<br/>Line 2] --> B',
+      '>> ```',
+      ''
+    ].join('\n')
+    const output = roundTripMarkdown(input)
+    expect(output).toContain('```mermaid')
+    expect(output).toContain('A[Line 1<br/>Line 2] --> B')
+    expect(output).not.toContain('[[ORCA_RICH_MD:')
+    expect(output).not.toContain('&lt;br/&gt;')
+  })
+
   it('preserves editable details blocks', () => {
     expect(roundTripMarkdown('<details><summary>Toggle</summary><p>Body</p></details>\n')).toBe(
       '<details class="orca-details">\n<summary>Toggle</summary>\n\nBody\n\n</details>'

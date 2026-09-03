@@ -26,6 +26,34 @@ describe('normalizeMarkdownReferenceLinks', () => {
     expect(normalizeMarkdownReferenceLinks(markdown)).toBe(markdown)
   })
 
+  it('ignores definitions in container-prefixed fenced mermaid blocks', () => {
+    const markdown = [
+      '- ```mermaid',
+      '  graph TD',
+      '  A[Line 1<br/>Line 2] --> B',
+      '  [docs]: https://example.com/docs',
+      '  ```',
+      '',
+      '[Docs]'
+    ].join('\n')
+
+    expect(normalizeMarkdownReferenceLinks(markdown)).toBe(markdown)
+  })
+
+  it('ignores definitions in nested blockquote mermaid fences', () => {
+    const markdown = [
+      '>> ```mermaid',
+      '>> graph TD',
+      '>> A[Line 1<br/>Line 2] --> B',
+      '>> [docs]: https://example.com/docs',
+      '>> ```',
+      '',
+      '[Docs]'
+    ].join('\n')
+
+    expect(normalizeMarkdownReferenceLinks(markdown)).toBe(markdown)
+  })
+
   it('scans newline-heavy documents without splitting into line arrays', () => {
     const split = vi.spyOn(String.prototype, 'split')
     const body = Array.from({ length: 5000 }, (_, index) => `line ${index + 1}`).join('\n')
