@@ -20,6 +20,7 @@ describe('mission.plan', () => {
   let runtime: OrcaRuntimeService
 
   function setup(): void {
+    vi.stubEnv('ORCA_MISSION_DEFAULT_AGENT', '')
     vi.mocked(generateTextFromPrompt).mockReset()
     vi.mocked(detectInstalledAgentsWithShellPathHydration).mockReset()
     vi.mocked(detectInstalledAgentsWithShellPathHydration).mockResolvedValue(['pi', 'codex'])
@@ -53,6 +54,7 @@ describe('mission.plan', () => {
   }
 
   afterEach(() => {
+    vi.unstubAllEnvs()
     vi.restoreAllMocks()
   })
 

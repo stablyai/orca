@@ -25,7 +25,7 @@ vi.mock('child_process', () => ({
 }))
 
 vi.mock('../../shared/child-process/run-process', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('../../shared/child-process/run-process')>()
+  const actual = (await importOriginal()) as object
   return { ...actual, spawnProcess: spawnManagedMock }
 })
 
