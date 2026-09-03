@@ -2,7 +2,7 @@ import { X } from 'lucide-react'
 import type { CSSProperties, JSX } from 'react'
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog'
 import { cn } from '@/lib/utils'
-import type { ImageViewerImageDimensions } from './image-viewer-zoom'
+import type { SurfaceContentDimensions } from './surface-zoom'
 import { translate } from '@/i18n/i18n'
 
 type ImageViewerPopupProps = {
@@ -10,7 +10,7 @@ type ImageViewerPopupProps = {
   isOpen: boolean
   previewUrl: string
   zoomPercent: number
-  imageLayoutSize: ImageViewerImageDimensions | null
+  imageLayoutSize: SurfaceContentDimensions | null
   imageLayoutStyle: CSSProperties | undefined
   onOpenChange: (open: boolean) => void
   setSurfaceRef: (surface: HTMLDivElement | null) => void

@@ -5,20 +5,20 @@ import { cn } from '@/lib/utils'
 import ImageViewerPopup from './ImageViewerPopup'
 import PdfViewer from './PdfViewer'
 import {
-  type ApplyImageViewerZoomChange,
-  applyAnchoredImageViewerZoomChange,
-  applyImageSurfaceWheel,
+  type ApplySurfaceZoomChange,
+  applyAnchoredSurfaceZoomChange,
+  applySurfaceWheel,
   getElementSurfaceSize,
-  getImageLayoutStyle
-} from './image-viewer-dom-zoom'
+  getSurfaceLayoutStyle
+} from './surface-dom-zoom'
 import {
-  IMAGE_VIEWER_ZOOM_STEP,
-  MAX_IMAGE_VIEWER_ZOOM,
-  MIN_IMAGE_VIEWER_ZOOM,
-  type ImageViewerImageDimensions,
-  type ImageViewerSurfaceSize,
-  getZoomedImageLayoutSize
-} from './image-viewer-zoom'
+  SURFACE_ZOOM_STEP,
+  MAX_SURFACE_ZOOM,
+  MIN_SURFACE_ZOOM,
+  type SurfaceContentDimensions,
+  type SurfaceSize,
+  getZoomedSurfaceLayoutSize
+} from './surface-zoom'
 import { translate } from '@/i18n/i18n'
 import { buildImageDataUri } from '../../../../shared/image-data-uri'
 
@@ -46,9 +46,9 @@ export default function ImageViewer({
   const [popupZoom, setPopupZoom] = useState(1)
   const inlineSurfaceRef = useRef<HTMLDivElement | null>(null)
   const popupSurfaceRef = useRef<HTMLDivElement | null>(null)
-  const [inlineSurfaceSize, setInlineSurfaceSize] = useState<ImageViewerSurfaceSize | null>(null)
-  const [popupSurfaceSize, setPopupSurfaceSize] = useState<ImageViewerSurfaceSize | null>(null)
-  const [imageDimensions, setImageDimensions] = useState<ImageViewerImageDimensions | null>(null)
+  const [inlineSurfaceSize, setInlineSurfaceSize] = useState<SurfaceSize | null>(null)
+  const [popupSurfaceSize, setPopupSurfaceSize] = useState<SurfaceSize | null>(null)
+  const [imageDimensions, setImageDimensions] = useState<SurfaceContentDimensions | null>(null)
   const [failedPreviewSrc, setFailedPreviewSrc] = useState<string | null>(null)
 
   const filename = useMemo(() => filePath.split(/[/\\]/).pop() || filePath, [filePath])
@@ -85,8 +85,8 @@ export default function ImageViewer({
     () =>
       isIntrinsicLayout
         ? null
-        : getZoomedImageLayoutSize({
-            imageDimensions,
+        : getZoomedSurfaceLayoutSize({
+            contentDimensions: imageDimensions,
             surfaceSize: inlineSurfaceSize,
             zoom: inlineZoom
           }),
@@ -94,26 +94,26 @@ export default function ImageViewer({
   )
   const popupImageLayoutSize = useMemo(
     () =>
-      getZoomedImageLayoutSize({
-        imageDimensions,
+      getZoomedSurfaceLayoutSize({
+        contentDimensions: imageDimensions,
         surfaceSize: popupSurfaceSize,
         zoom: popupZoom
       }),
     [imageDimensions, popupSurfaceSize, popupZoom]
   )
   const inlineImageLayoutStyle = useMemo(
-    () => getImageLayoutStyle(inlineImageLayoutSize),
+    () => getSurfaceLayoutStyle(inlineImageLayoutSize),
     [inlineImageLayoutSize]
   )
   const popupImageLayoutStyle = useMemo(
-    () => getImageLayoutStyle(popupImageLayoutSize),
+    () => getSurfaceLayoutStyle(popupImageLayoutSize),
     [popupImageLayoutSize]
   )
-  const applyInlineZoomChange = useCallback<ApplyImageViewerZoomChange>((getNextZoom, anchor) => {
-    applyAnchoredImageViewerZoomChange(inlineSurfaceRef.current, setInlineZoom, getNextZoom, anchor)
+  const applyInlineZoomChange = useCallback<ApplySurfaceZoomChange>((getNextZoom, anchor) => {
+    applyAnchoredSurfaceZoomChange(inlineSurfaceRef.current, setInlineZoom, getNextZoom, anchor)
   }, [])
-  const applyPopupZoomChange = useCallback<ApplyImageViewerZoomChange>((getNextZoom, anchor) => {
-    applyAnchoredImageViewerZoomChange(popupSurfaceRef.current, setPopupZoom, getNextZoom, anchor)
+  const applyPopupZoomChange = useCallback<ApplySurfaceZoomChange>((getNextZoom, anchor) => {
+    applyAnchoredSurfaceZoomChange(popupSurfaceRef.current, setPopupZoom, getNextZoom, anchor)
   }, [])
   const openPopup = useCallback(() => {
     setPopupZoom(inlineZoom)
@@ -130,13 +130,13 @@ export default function ImageViewer({
   )
   const handleInlineImageSurfaceWheel = useCallback(
     (event: WheelEvent) => {
-      applyImageSurfaceWheel(event, applyInlineZoomChange)
+      applySurfaceWheel(event, applyInlineZoomChange)
     },
     [applyInlineZoomChange]
   )
   const handlePopupImageSurfaceWheel = useCallback(
     (event: WheelEvent) => {
-      applyImageSurfaceWheel(event, applyPopupZoomChange)
+      applySurfaceWheel(event, applyPopupZoomChange)
     },
     [applyPopupZoomChange]
   )
@@ -313,9 +313,9 @@ export default function ImageViewer({
               type="button"
               className="rounded p-1 hover:bg-accent hover:text-foreground disabled:opacity-50"
               onClick={() =>
-                applyInlineZoomChange((currentZoom) => currentZoom / IMAGE_VIEWER_ZOOM_STEP)
+                applyInlineZoomChange((currentZoom) => currentZoom / SURFACE_ZOOM_STEP)
               }
-              disabled={inlineZoom <= MIN_IMAGE_VIEWER_ZOOM}
+              disabled={inlineZoom <= MIN_SURFACE_ZOOM}
               title={translate('auto.components.editor.ImageViewer.be27304574', 'Zoom out')}
             >
               <ZoomOut size={14} />
@@ -333,9 +333,9 @@ export default function ImageViewer({
               type="button"
               className="rounded p-1 hover:bg-accent hover:text-foreground disabled:opacity-50"
               onClick={() =>
-                applyInlineZoomChange((currentZoom) => currentZoom * IMAGE_VIEWER_ZOOM_STEP)
+                applyInlineZoomChange((currentZoom) => currentZoom * SURFACE_ZOOM_STEP)
               }
-              disabled={inlineZoom >= MAX_IMAGE_VIEWER_ZOOM}
+              disabled={inlineZoom >= MAX_SURFACE_ZOOM}
               title={translate('auto.components.editor.ImageViewer.3c9217f5a6', 'Zoom in')}
             >
               <ZoomIn size={14} />

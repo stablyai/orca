@@ -718,10 +718,9 @@
 }
 .mermaid-viewer-canvas {
   display: flex;
-  align-items: flex-start;
-  justify-content: center;
   min-height: 100%;
-  padding: 32px 24px;
+  /* Keep in sync with MERMAID_CANVAS_PADDING in MermaidZoomSurface.tsx. */
+  padding: 24px;
 }
 .mermaid-viewer-canvas .mermaid-block {
   width: 100%;
@@ -729,6 +728,24 @@
 .mermaid-viewer-canvas .mermaid-block svg {
   width: 100%;
   height: auto;
+}
+/* Why: auto margins center the diagram without clipping its leading edge once
+   zoom makes it overflow, which justify-content: center would do, and flex: none
+   keeps the flex parent from shrinking a zoomed box back to the pane width. */
+.mermaid-diagram-box {
+  flex: none;
+  margin: auto;
+}
+/* Once the zoom surface has measured the diagram it sizes this box in pixels,
+   so the SVG fills the box instead of the pane. */
+.mermaid-diagram-box[data-zoom-layout='true'] .mermaid-block,
+.mermaid-diagram-box[data-zoom-layout='true'] .mermaid-block svg {
+  width: 100%;
+  height: 100%;
+}
+/* Why: mermaid writes an inline max-width on the svg, which would cap the box. */
+.mermaid-diagram-box[data-zoom-layout='true'] .mermaid-block svg {
+  max-width: none !important;
 }
 
 .markdown-body ul,

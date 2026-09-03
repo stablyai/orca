@@ -1,7 +1,7 @@
 import React, { useLayoutEffect, useRef } from 'react'
 import { useAppStore } from '@/store'
 import { scrollTopCache, setWithLRU } from '@/lib/scroll-cache'
-import MermaidBlock from './MermaidBlock'
+import MermaidZoomSurface from './MermaidZoomSurface'
 
 type MermaidViewerProps = {
   content: string
@@ -92,13 +92,13 @@ export default function MermaidViewer({
   }, [scrollCacheKey, content])
 
   return (
-    <div ref={rootRef} className="mermaid-viewer h-full min-h-0 overflow-auto scrollbar-editor">
-      <div className="mermaid-viewer-canvas">
-        {/* Why: DOMPurify's SVG profile strips <foreignObject> elements that
-           mermaid uses for HTML labels. Force SVG-native <text> labels so
-           they survive sanitization — same fix as the markdown preview path. */}
-        <MermaidBlock content={content.trim()} isDark={isDark} htmlLabels={false} />
-      </div>
-    </div>
+    // Why: remounting per file gives each diagram its own zoom level without
+    // deriving state from props.
+    <MermaidZoomSurface
+      key={filePath}
+      content={content.trim()}
+      isDark={isDark}
+      surfaceRef={rootRef}
+    />
   )
 }
