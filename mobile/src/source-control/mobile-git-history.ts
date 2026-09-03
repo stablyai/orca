@@ -1,6 +1,10 @@
 import type { GitHistoryItem, GitHistoryResult } from '../../../src/shared/git-history-types'
 import type { RpcClient } from '../transport/rpc-client'
 import type { RpcSuccess } from '../transport/types'
+import {
+  isMobileFolderWorkspaceId,
+  MOBILE_FOLDER_WORKSPACE_UNSUPPORTED_MESSAGE
+} from './mobile-folder-workspace-selector'
 
 export type MobileCommitRow = {
   id: string
@@ -60,6 +64,11 @@ export async function fetchMobileGitHistory(
   worktreeId: string,
   limit = 50
 ): Promise<GitHistoryResult> {
+  // Why: git.history is unrouted for folder: selectors; skip the RPC so the
+  // list shows a clear unsupported state instead of selector_not_found (#11153).
+  if (isMobileFolderWorkspaceId(worktreeId)) {
+    throw new Error(MOBILE_FOLDER_WORKSPACE_UNSUPPORTED_MESSAGE)
+  }
   const response = await client.sendRequest('git.history', {
     worktree: `id:${worktreeId}`,
     limit

@@ -1,6 +1,12 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import type { GitHistoryItem, GitHistoryResult } from '../../../src/shared/git-history-types'
-import { formatCommitTime, mapMobileCommitRows, toMobileCommitRow } from './mobile-git-history'
+import { MOBILE_FOLDER_WORKSPACE_UNSUPPORTED_MESSAGE } from './mobile-folder-workspace-selector'
+import {
+  fetchMobileGitHistory,
+  formatCommitTime,
+  mapMobileCommitRows,
+  toMobileCommitRow
+} from './mobile-git-history'
 
 const NOW = 1_000_000_000_000
 
@@ -62,5 +68,25 @@ describe('mapMobileCommitRows', () => {
   it('maps all items', () => {
     const result = { items: [item(), item({ id: 'c'.repeat(40) })] } as GitHistoryResult
     expect(mapMobileCommitRows(result, NOW)).toHaveLength(2)
+  })
+})
+
+describe('fetchMobileGitHistory', () => {
+  it('fails fast for folder workspaces without calling git.history', async () => {
+    const sendRequest = vi.fn()
+    await expect(fetchMobileGitHistory({ sendRequest }, 'folder:group-1')).rejects.toThrow(
+      MOBILE_FOLDER_WORKSPACE_UNSUPPORTED_MESSAGE
+    )
+    expect(sendRequest).not.toHaveBeenCalled()
+  })
+
+  it('requests history for real worktrees', async () => {
+    const result = { items: [item()] } as GitHistoryResult
+    const sendRequest = vi.fn().mockResolvedValue({ ok: true, result })
+    await expect(fetchMobileGitHistory({ sendRequest }, 'wt-123', 25)).resolves.toEqual(result)
+    expect(sendRequest).toHaveBeenCalledWith('git.history', {
+      worktree: 'id:wt-123',
+      limit: 25
+    })
   })
 })

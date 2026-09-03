@@ -26,9 +26,9 @@ import {
 } from './mobile-git-status'
 import { getMobileCommitFailureStagedEntries } from './mobile-commit-failure-recovery'
 import { useMobileSourceControlCommitFailure } from './use-mobile-source-control-commit-failure'
+import { formatMobileFolderAwareBranchLabel } from './mobile-folder-workspace-selector'
 import {
   buildMobileGitStatusEntryViews,
-  formatBranchLabel,
   type MobileBranchEntryView
 } from './mobile-source-control-screen-state'
 
@@ -160,7 +160,11 @@ export function useMobileSourceControlState(params: MobileSourceControlStatePara
     () => entries.some((entry) => entry.conflictStatus === 'unresolved'),
     [entries]
   )
-  const branchLabel = formatBranchLabel(status?.branch, status?.head)
+  const branchLabel = formatMobileFolderAwareBranchLabel(
+    worktreeId,
+    status?.branch,
+    status?.head
+  )
   const upstream = status?.upstreamStatus
   const upstreamKnown = upstream !== undefined
   const syncLabel =

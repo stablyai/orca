@@ -4,6 +4,10 @@ import type { RpcClient } from '../transport/rpc-client'
 import type { ConnectionState, RpcSuccess } from '../transport/types'
 import { resolveMobileBranchCompareBaseRef } from './mobile-branch-base-ref'
 import {
+  shouldLoadMobileBranchCompare,
+  shouldRetryMobileStatusSelectorNotFound
+} from './mobile-folder-workspace-selector'
+import {
   isMobileGitUnavailable,
   isMobileGitTransientRefreshError,
   type MobileGitStatusResult
@@ -91,6 +95,15 @@ export function useMobileSourceControlLoaders(params: Params): MobileSourceContr
         currentBranchCompareIdentityRef.current === loadKey
 
       if (!worktreeId || !client || connState !== 'connected') {
+        if (isCurrentLoad()) {
+          setBranchCompareState({ kind: 'idle' })
+        }
+        return false
+      }
+
+      // Why: git.branchCompare is unrouted for folder: selectors; skip instead of
+      // firing a guaranteed selector_not_found (issue #11153).
+      if (!shouldLoadMobileBranchCompare(worktreeId)) {
         if (isCurrentLoad()) {
           setBranchCompareState({ kind: 'idle' })
         }
@@ -221,7 +234,8 @@ export function useMobileSourceControlLoaders(params: Params): MobileSourceContr
               return false
             }
             const shouldRetry =
-              response.error?.code === 'selector_not_found' ||
+              (response.error?.code === 'selector_not_found' &&
+                shouldRetryMobileStatusSelectorNotFound(worktreeId)) ||
               isMobileGitTransientRefreshError(response.error?.code, response.error?.message)
             if (shouldRetry && attempt < SELECTOR_RETRY_COUNT) {
               await wait(SELECTOR_RETRY_DELAY_MS)
