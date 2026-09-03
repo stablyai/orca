@@ -177,6 +177,12 @@ function refineBreakerFromSnapshot(): void {
       for (const bucket of ['core', 'search', 'graphql'] as GhRateLimitBucket[]) {
         const b = result.snapshot[bucket]
         if (b.limit > 0 && b.remaining <= 0) {
+          // Why: refine the fallback block down to GitHub's real reset. The
+          // fallback (e.g. search's 70s) can overshoot the real reset (search
+          // resets ≤60s); recordGhPrimaryRateLimit is extend-only (Math.max),
+          // so clear the existing block first to let a sooner real reset
+          // replace it instead of being discarded.
+          clearGhRateLimitBlock(bucket)
           recordGhPrimaryRateLimit(bucket, b.resetAt * 1000)
         } else if (b.limit > 0) {
           clearGhRateLimitBlock(bucket)
