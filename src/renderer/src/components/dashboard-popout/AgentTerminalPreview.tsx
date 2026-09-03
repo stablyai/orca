@@ -17,6 +17,7 @@ import { installPreviewTerminalCompatibility } from './preview-terminal-compatib
 import { createPreviewClipboardPaster } from './preview-terminal-paste'
 import { installPreviewImeBridge, type PreviewImeBridge } from './preview-terminal-ime-bridge'
 import type { DashboardCardTerminalInput } from '../../../../shared/dashboard-snapshot'
+import { parseAppSshPtyId } from '../../../../shared/ssh-pty-id'
 import { translate } from '@/i18n/i18n'
 import { getBuiltinTheme, resolveEffectiveTerminalAppearance } from '@/lib/terminal-theme'
 import { cn } from '@/lib/utils'
@@ -430,10 +431,15 @@ export function AgentTerminalPreview({
     >
       {ptyGone ? (
         <div className="absolute inset-0 flex items-center justify-center px-2.5 py-8 text-center text-[11px] text-muted-foreground">
-          {translate(
-            'dashboardPopout.terminal.closed',
-            "No live terminal — this agent's pane has closed."
-          )}
+          {parseAppSshPtyId(ptyId)
+            ? translate(
+                'dashboardPopout.terminal.remoteUnavailable',
+                'Live preview is unavailable for this remote session — open the worktree to view the terminal.'
+              )
+            : translate(
+                'dashboardPopout.terminal.closed',
+                "No live terminal — this agent's pane has closed."
+              )}
         </div>
       ) : null}
       <div

@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { TerminalLeafId } from '../../../../shared/stable-pane-id'
 import { handleFocusTerminalPaneDetail } from './focus-terminal-pane-event'
+import { consumePendingPaneFocus, queuePaneFocus } from '@/lib/pending-pane-focus'
 
 const LEAF_ID = '11111111-1111-4111-8111-111111111111' as TerminalLeafId
 const OTHER_LEAF_ID = '22222222-2222-4222-8222-222222222222' as TerminalLeafId
@@ -119,5 +120,22 @@ describe('handleFocusTerminalPaneDetail', () => {
     expect(container.classList.contains('pane-focus-rim-flash')).toBe(false)
     expect(acknowledgeAgents).not.toHaveBeenCalled()
     expect(surfaceStaleAgentRow).toHaveBeenCalledWith('tab-1', LEAF_ID)
+  })
+
+  it('clears a parked focus for the tab once the live listener resolves it', () => {
+    const { manager } = createManager()
+    queuePaneFocus('tab-1', { tabId: 'tab-1', leafId: LEAF_ID })
+
+    handleFocusTerminalPaneDetail(
+      { tabId: 'tab-1', leafId: LEAF_ID },
+      {
+        tabId: 'tab-1',
+        manager,
+        acknowledgeAgents: vi.fn(),
+        surfaceStaleAgentRow: vi.fn()
+      }
+    )
+
+    expect(consumePendingPaneFocus('tab-1')).toBeNull()
   })
 })

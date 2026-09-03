@@ -1,6 +1,7 @@
 import { useEffect } from 'react'
 import { useAppStore, type AppState } from '@/store'
 import { activateTabAndFocusPane } from '@/lib/activate-tab-and-focus-pane'
+import { activateAndRevealWorktree } from '@/lib/worktree-activation'
 import { runSleepWorktree } from '../sidebar/sleep-worktree-flow'
 import type { RepoIcon } from '../../../../shared/repo-icon'
 import { buildDashboardSnapshot, type DashboardSnapshotState } from './build-dashboard-snapshot'
@@ -133,7 +134,13 @@ export function useDashboardPopoutBridge(enabled: boolean): void {
       return
     }
     return window.api.dashboard.onRevealAgent((args) => {
-      useAppStore.getState().setActiveWorktree(args.worktreeId, args.executionHostId)
+      // Why: bare setActiveWorktree skips setActiveView('terminal') and the
+      // initial-terminal/session-resume guards a remote worktree needs before
+      // its pane can mount and receive the focus event.
+      activateAndRevealWorktree(args.worktreeId, {
+        revealInSidebar: false,
+        executionHostId: args.executionHostId
+      })
       activateTabAndFocusPane(args.tabId, args.leafId, { flashFocusedPane: true })
     })
   }, [enabled])

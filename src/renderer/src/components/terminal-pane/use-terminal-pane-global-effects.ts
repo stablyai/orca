@@ -12,6 +12,7 @@ import type { IDisposable } from '@xterm/xterm'
 import { handleTerminalFileDrop } from './terminal-drop-handler'
 import { handleFocusTerminalPaneDetail } from './focus-terminal-pane-event'
 import { surfaceStaleAgentRow } from './stale-agent-row'
+import { useConsumePendingPaneFocus } from './use-pending-pane-focus-consumer'
 import { useAppStore } from '@/store'
 import { useTerminalScrollVisibilityMemory } from './use-terminal-scroll-visibility-memory'
 import { useTerminalContainerFitSync } from './use-terminal-container-fit-sync'
@@ -236,6 +237,8 @@ export function useTerminalPaneGlobalEffects({
     window.addEventListener(FOCUS_TERMINAL_PANE_EVENT, onFocusPane)
     return () => window.removeEventListener(FOCUS_TERMINAL_PANE_EVENT, onFocusPane)
   }, [tabId, managerRef, scheduleFollowOutputIfNeeded])
+
+  useConsumePendingPaneFocus({ tabId, managerRef, scheduleFollowOutputIfNeeded })
 
   useEffect(() => {
     const onPasteText = (event: Event): void => {

@@ -627,6 +627,15 @@ describe('AgentTerminalPreview', () => {
     expect(view.queryByText(/No live terminal/)).not.toBeInTheDocument()
   })
 
+  it('shows a remote-specific message instead of "closed" when an SSH pty has no snapshot', async () => {
+    connect.mockResolvedValueOnce({ snapshot: null, replay: [] })
+    const sshPtyId = `ssh:${encodeURIComponent('conn-1')}@@pty-1`
+    const view = render(<AgentTerminalPreview ptyId={sshPtyId} />)
+
+    await waitFor(() => expect(view.getByText(/remote session/)).toBeInTheDocument())
+    expect(view.queryByText(/No live terminal/)).not.toBeInTheDocument()
+  })
+
   it('claims a grid sized to the dialog box and never re-requests an unchanged target', async () => {
     vi.useFakeTimers()
     const view = render(<AgentTerminalPreview ptyId="pty-1" />)

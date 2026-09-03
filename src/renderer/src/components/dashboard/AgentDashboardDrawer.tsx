@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { useAppStore } from '@/store'
 import { Sheet, SheetContent, SheetTitle } from '@/components/ui/sheet'
 import { activateTabAndFocusPane } from '@/lib/activate-tab-and-focus-pane'
+import { activateAndRevealWorktree } from '@/lib/worktree-activation'
 import { AgentKanbanBoard } from '../dashboard-popout/AgentKanbanBoard'
 import type { AgentRevealArgs } from '../dashboard-popout/AgentTerminalDialog'
 import {
@@ -47,7 +48,13 @@ function AgentDashboardDrawerBody({
   }, [])
   const handleRevealAgent = useCallback(
     (args: AgentRevealArgs) => {
-      useAppStore.getState().setActiveWorktree(args.worktreeId, args.executionHostId)
+      // Why: bare setActiveWorktree skips setActiveView('terminal') and the
+      // initial-terminal/session-resume guards a remote worktree needs before
+      // its pane can mount and receive the focus event.
+      activateAndRevealWorktree(args.worktreeId, {
+        revealInSidebar: false,
+        executionHostId: args.executionHostId
+      })
       activateTabAndFocusPane(args.tabId, args.leafId, { flashFocusedPane: true })
       onClose()
     },
