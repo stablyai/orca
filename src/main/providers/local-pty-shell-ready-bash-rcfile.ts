@@ -52,6 +52,8 @@ __orca_restore_agent_teams_path
 ${getPosixOmpShellWrapper()}
 # Why: Codex must keep using Orca's runtime CODEX_HOME after profile scripts.
 [[ -n "\${ORCA_CODEX_HOME:-}" ]] && export CODEX_HOME="\${ORCA_CODEX_HOME}"
+# Why: Claude must keep using Orca's runtime config directory after profile scripts.
+[[ -n "\${ORCA_CLAUDE_CONFIG_DIR:-}" ]] && export CLAUDE_CONFIG_DIR="\${ORCA_CLAUDE_CONFIG_DIR}"
 ${getPosixCodexShellLaunchPreflight()}
 # Why: emit OSC 133 C/D so terminal-command-lifecycle can drop stale agent
 # status when the foreground command (e.g. an interrupted Claude/Codex CLI)

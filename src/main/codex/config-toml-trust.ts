@@ -15,7 +15,7 @@ import { removeHookTrustContent, upsertHookTrustContent } from './config-toml-ho
 import { CodexHookTrustEntryMap, readHookTrustContent } from './config-toml-hook-trust-read'
 import { upsertProjectTrustContent } from './config-toml-project-trust'
 import { escapeTomlBasicString, parseProjectTomlHeaderPath } from './config-toml-syntax'
-import { observe } from './codex-path-observation'
+import { observe } from '../../shared/filesystem-observation'
 
 export type CodexEventLabel =
   | 'pre_tool_use'

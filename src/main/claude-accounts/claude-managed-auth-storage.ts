@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, lstatSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { join, relative, resolve, sep } from 'node:path'
 import { parseWslUncPath } from '../../shared/wsl-paths'
 import { toWindowsWslPath } from '../wsl'
@@ -11,9 +11,15 @@ import {
 } from './managed-auth-path'
 import {
   deleteManagedClaudeKeychainCredentials,
-  readManagedClaudeKeychainCredentials,
-  writeManagedClaudeKeychainCredentials
+  deleteActiveClaudeKeychainCredentialsStrict,
+  isTransientKeychainError,
+  readActiveClaudeKeychainCredentialsStrict,
+  writeActiveClaudeKeychainCredentials
 } from './keychain'
+import {
+  clearClaudeStaleFallbackMark,
+  markClaudeStaleFallbackPending
+} from './claude-stale-fallback-marker'
 
 export type ClaudeManagedAuthLocation = {
   managedAuthPath: string
@@ -34,6 +40,24 @@ export type ClaudeManagedAuthTarget = {
 
 function shellQuote(value: string): string {
   return `'${value.replace(/'/g, "'\\''")}'`
+}
+
+/**
+ * A snapshot is a rollback source, so it must fail closed.
+ *
+ * Why not best-effort null: `null` means "this account had no credential", and a rollback acting
+ * on that deletes the credential the account still has. A Keychain we could not read is not an
+ * absent credential, so a transient failure aborts the snapshot instead of forging one.
+ */
+async function readScopedCredentialsForSnapshot(configDir: string): Promise<string | null> {
+  try {
+    return await readActiveClaudeKeychainCredentialsStrict(configDir)
+  } catch (error) {
+    if (isTransientKeychainError(error)) {
+      throw error
+    }
+    return null
+  }
 }
 
 export class ClaudeManagedAuthStorage {
@@ -74,11 +98,17 @@ export class ClaudeManagedAuthStorage {
     credentialsJson: string
   ): Promise<void> {
     const trustedPath = await this.assertOwned(managedAuthPath, accountId)
-    if (process.platform === 'darwin') {
-      await writeManagedClaudeKeychainCredentials(accountId, credentialsJson)
-    } else {
+    if (process.platform !== 'darwin') {
       writeClaudeManagedAuthFile(trustedPath, '.credentials.json', credentialsJson)
+      return
     }
+    await writeActiveClaudeKeychainCredentials(credentialsJson, trustedPath)
+    // The CLI keeps one live store: once its Keychain write lands it drops the fallback file, so
+    // leaving ours behind resurrects the token we just replaced on the next outage read. Mark
+    // first so a crash between write and clear still fails closed.
+    markClaudeStaleFallbackPending(trustedPath)
+    rmSync(join(trustedPath, '.credentials.json'), { force: true })
+    clearClaudeStaleFallbackMark(trustedPath)
   }
 
   async writeOauthAccount(
@@ -102,7 +132,7 @@ export class ClaudeManagedAuthStorage {
     return {
       credentialsJson:
         process.platform === 'darwin'
-          ? await readManagedClaudeKeychainCredentials(accountId)
+          ? await readScopedCredentialsForSnapshot(trustedPath)
           : readClaudeManagedAuthFile(trustedPath, '.credentials.json'),
       oauthAccountJson: readClaudeManagedAuthFile(trustedPath, 'oauth-account.json')
     }
@@ -116,8 +146,8 @@ export class ClaudeManagedAuthStorage {
     const trustedPath = await this.assertOwned(managedAuthPath, accountId)
     if (process.platform === 'darwin') {
       await (snapshot.credentialsJson !== null
-        ? writeManagedClaudeKeychainCredentials(accountId, snapshot.credentialsJson)
-        : deleteManagedClaudeKeychainCredentials(accountId))
+        ? writeActiveClaudeKeychainCredentials(snapshot.credentialsJson, trustedPath)
+        : deleteActiveClaudeKeychainCredentialsStrict(trustedPath))
     } else if (snapshot.credentialsJson !== null) {
       writeClaudeManagedAuthFile(trustedPath, '.credentials.json', snapshot.credentialsJson)
     } else {
@@ -139,13 +169,23 @@ export class ClaudeManagedAuthStorage {
   }
 
   async remove(accountId: string, candidatePath: string): Promise<void> {
+    let trustedPath: string | null = null
     try {
       const managedAuthPath = await this.assertOwned(candidatePath, accountId)
+      trustedPath = managedAuthPath
       rmSync(resolve(managedAuthPath, '..'), { recursive: true, force: true })
     } catch (error) {
       console.warn('[claude-accounts] Refusing to remove untrusted managed auth:', error)
     }
     await deleteManagedClaudeKeychainCredentials(accountId)
+    if (process.platform === 'darwin' && trustedPath) {
+      try {
+        await deleteActiveClaudeKeychainCredentialsStrict(trustedPath)
+      } catch (error) {
+        // Why: account removal must not be blocked by a stale or inaccessible scoped Keychain item.
+        console.warn('[claude-accounts] Failed to remove scoped Claude Keychain credentials', error)
+      }
+    }
   }
 
   async assertOwned(candidatePath: string, expectedAccountId?: string): Promise<string> {
@@ -229,7 +269,13 @@ export class ClaudeManagedAuthStorage {
     if (process.platform !== 'win32') {
       if (
         !existsSync(candidatePath) ||
-        !existsSync(join(candidatePath, '.orca-managed-claude-auth'))
+        !existsSync(join(candidatePath, '.orca-managed-claude-auth')) ||
+        lstatSync(candidatePath).isSymbolicLink() ||
+        lstatSync(join(candidatePath, '.orca-managed-claude-auth')).isSymbolicLink() ||
+        !lstatSync(join(candidatePath, '.orca-managed-claude-auth')).isFile() ||
+        (expectedAccountId !== undefined &&
+          readFileSync(join(candidatePath, '.orca-managed-claude-auth'), 'utf-8').trim() !==
+            expectedAccountId)
       ) {
         throw new Error('Managed Claude auth storage is not owned by Orca.')
       }
@@ -249,6 +295,8 @@ export class ClaudeManagedAuthStorage {
           'managed_root="${HOME%/}/.local/share/orca/claude-accounts"',
           'candidate_real=$(readlink -f -- "$candidate")',
           'managed_root_real=$(readlink -f -- "$managed_root")',
+          'test ! -L "$candidate"',
+          'test ! -L "$candidate_real/.orca-managed-claude-auth"',
           'test -f "$candidate_real/.orca-managed-claude-auth"',
           expected,
           'case "$candidate_real" in "$managed_root_real"/*/auth) printf "%s\\n" "$candidate_real" ;; *) exit 35 ;; esac'

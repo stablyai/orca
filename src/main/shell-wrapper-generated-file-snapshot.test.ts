@@ -67,6 +67,7 @@ async function expectWrapperFiles(transport: string, root: string): Promise<void
  */
 const CONTRACT_GLOBALS = new Set([
   'BUFFER',
+  'CLAUDE_CONFIG_DIR',
   'CODEX_HOME',
   'HISTFILE',
   'MIMOCODE_HOME',

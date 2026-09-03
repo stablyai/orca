@@ -1,5 +1,13 @@
 import { vi } from 'vitest'
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  realpathSync,
+  rmSync,
+  writeFileSync
+} from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { getDefaultSettings } from '../../shared/constants'
@@ -19,7 +27,10 @@ export const testState = {
   throwRuntimeKeychainWrite: false,
   throwLegacyRuntimeKeychainWrite: false,
   throwScopedKeychainWrite: false,
+  throwManagedKeychainRead: false,
+  scopedKeychainWriteErrorMessage: 'scoped keychain write failed',
   runtimeWriteConfigDir: null as string | null,
+  scopedKeychainCredentialsByConfigDir: new Map<string, string>(),
   managedKeychainCredentials: new Map<string, string>()
 }
 
@@ -59,13 +70,11 @@ export function createKeychainMock() {
     }),
     writeActiveClaudeKeychainCredentials: vi.fn(async (contents: string, configDir?: string) => {
       if (configDir) {
-        if (configDir !== expectedRuntimeConfigDir()) {
-          throw new Error(`Unexpected Claude config dir: ${configDir}`)
-        }
         if (testState.throwScopedKeychainWrite) {
-          throw new Error('scoped keychain write failed')
+          throw new Error(testState.scopedKeychainWriteErrorMessage)
         }
         testState.scopedKeychainCredentials = contents
+        testState.scopedKeychainCredentialsByConfigDir.set(configDir, contents)
       } else {
         testState.legacyKeychainCredentials = contents
       }
@@ -73,15 +82,14 @@ export function createKeychainMock() {
     }),
     deleteActiveClaudeKeychainCredentials: vi.fn(async () => {
       testState.scopedKeychainCredentials = null
+      testState.scopedKeychainCredentialsByConfigDir.clear()
       testState.legacyKeychainCredentials = null
       testState.activeKeychainCredentials = null
     }),
     deleteActiveClaudeKeychainCredentialsStrict: vi.fn(async (configDir?: string) => {
       if (configDir) {
-        if (configDir !== expectedRuntimeConfigDir()) {
-          throw new Error(`Unexpected Claude config dir: ${configDir}`)
-        }
         testState.scopedKeychainCredentials = null
+        testState.scopedKeychainCredentialsByConfigDir.delete(configDir)
       } else {
         testState.legacyKeychainCredentials = null
       }
@@ -93,9 +101,10 @@ export function createKeychainMock() {
             if (testState.throwScopedKeychainRead) {
               throw new Error('scoped keychain read failed')
             }
-            return configDir === expectedRuntimeConfigDir()
-              ? testState.scopedKeychainCredentials
-              : null
+            if (configDir !== expectedRuntimeConfigDir()) {
+              return testState.scopedKeychainCredentialsByConfigDir.get(configDir) ?? null
+            }
+            return testState.scopedKeychainCredentials
           })()
         : (() => {
             if (testState.throwLegacyKeychainRead) {
@@ -106,24 +115,41 @@ export function createKeychainMock() {
     ),
     writeActiveClaudeKeychainCredentialsForRuntime: vi.fn(
       async (contents: string, configDir: string) => {
-        if (configDir !== expectedRuntimeConfigDir()) {
-          throw new Error(`Unexpected Claude config dir: ${configDir}`)
-        }
         if (testState.throwRuntimeKeychainWrite) {
           throw new Error('runtime keychain write failed')
         }
         testState.runtimeWriteConfigDir = configDir
         testState.scopedKeychainCredentials = contents
+        testState.scopedKeychainCredentialsByConfigDir.set(configDir, contents)
         if (testState.throwLegacyRuntimeKeychainWrite) {
-          throw new Error('legacy runtime keychain write failed')
+          console.warn(
+            '[claude-runtime-auth] Failed to refresh legacy shared Keychain:',
+            new Error('legacy runtime keychain write failed')
+          )
+          return
         }
         testState.legacyKeychainCredentials = contents
         testState.activeKeychainCredentials = contents
       }
     ),
-    readManagedClaudeKeychainCredentials: vi.fn(
-      async (accountId: string) => testState.managedKeychainCredentials.get(accountId) ?? null
-    ),
+    isTransientKeychainError: (error: unknown) => {
+      const message = String((error as { message?: unknown })?.message ?? error).toLowerCase()
+      return (
+        message.includes('locked') ||
+        message.includes('interaction is not allowed') ||
+        message.includes('no user interaction') ||
+        message.includes('user canceled') ||
+        message.includes('user cancelled') ||
+        message.includes('name or passphrase') ||
+        message.includes('timed out')
+      )
+    },
+    readManagedClaudeKeychainCredentials: vi.fn(async (accountId: string) => {
+      if (testState.throwManagedKeychainRead) {
+        throw new Error('managed keychain read failed')
+      }
+      return testState.managedKeychainCredentials.get(accountId) ?? null
+    }),
     writeManagedClaudeKeychainCredentials: vi.fn(async (accountId: string, contents: string) => {
       testState.managedKeychainCredentials.set(accountId, contents)
     })
@@ -151,6 +177,7 @@ export function resetRuntimeAuthTestState(): void {
   testState.throwLegacyRuntimeKeychainWrite = false
   testState.throwScopedKeychainWrite = false
   testState.runtimeWriteConfigDir = null
+  testState.scopedKeychainCredentialsByConfigDir.clear()
   testState.managedKeychainCredentials.clear()
   testState.userDataDir = mkdtempSync(join(tmpdir(), 'orca-claude-runtime-'))
   testState.fakeHomeDir = mkdtempSync(join(tmpdir(), 'orca-claude-home-'))
@@ -202,7 +229,19 @@ export function createManagedClaudeAuth(
   writeFileSync(join(managedAuthPath, '.credentials.json'), credentialsJson, 'utf-8')
   writeFileSync(join(managedAuthPath, 'oauth-account.json'), oauthAccountJson, 'utf-8')
   testState.managedKeychainCredentials.set(accountId, credentialsJson)
+  // Production keeps ONE store per account on darwin: the Keychain item the CLI derives from the
+  // account's own dir. Seed that too, or fixtures model a second copy that no longer exists.
+  testState.scopedKeychainCredentialsByConfigDir.set(realpathSync(managedAuthPath), credentialsJson)
   return managedAuthPath
+}
+
+// Why: the scoped Keychain mock keys managed config dirs by path, so setting the shared field
+// leaves the bridge reading whatever the previous launch wrote.
+export function setScopedKeychainCredentialsForManagedPath(
+  managedAuthPath: string,
+  credentialsJson: string
+): void {
+  testState.scopedKeychainCredentialsByConfigDir.set(realpathSync(managedAuthPath), credentialsJson)
 }
 
 export function createClaudeAccount(
@@ -256,14 +295,36 @@ export function createClaudeCredentialsWithoutEmail(
   })}\n`
 }
 
+/**
+ * Models the store the CLI owns, which is what production now reads and writes: the config-dir
+ * scoped Keychain item with the same-home `.credentials.json` as its fallback. Reading the old
+ * account-id-keyed service here would assert against a store nothing writes any more, and every
+ * such test would pass while exercising nothing.
+ */
 export function readManagedCredentialsForTest(
   accountId: string,
   managedAuthPath: string
 ): string | null {
   if (process.platform === 'darwin') {
-    return testState.managedKeychainCredentials.get(accountId) ?? null
+    // Fixtures seed both darwin stores, so order decides what this returns. Production writes
+    // exactly one per account: the account-id-keyed service for a pre-isolation account, the
+    // CLI-owned scoped item for an isolated one. This helper serves the legacy lane, so it reads
+    // the id-keyed service first; isolated-lane tests assert against
+    // `testState.scopedKeychainCredentialsByConfigDir` directly, which is the store that matters
+    // there and reads far more clearly at the call site.
+    const idKeyed = testState.managedKeychainCredentials.get(accountId)
+    if (idKeyed !== undefined) {
+      return idKeyed
+    }
+    const scoped =
+      testState.scopedKeychainCredentialsByConfigDir.get(managedAuthPath) ??
+      testState.scopedKeychainCredentialsByConfigDir.get(realpathSync(managedAuthPath))
+    if (scoped !== undefined) {
+      return scoped
+    }
   }
-  return readFileSync(join(managedAuthPath, '.credentials.json'), 'utf-8')
+  const filePath = join(managedAuthPath, '.credentials.json')
+  return existsSync(filePath) ? readFileSync(filePath, 'utf-8') : null
 }
 
 export function readRuntimeOauthAccountForTest(): unknown {

@@ -23,7 +23,7 @@ import {
 import { stripRemotePaneEnvWhenHooksDisabled } from '../provider/liveness'
 import { isTuiAgent } from '../../../../shared/tui-agent-config'
 import { isClaudeAuthSwitchInProgress } from '../../../claude-accounts/live-pty-gate'
-import { hasClaudeAuthEnvConflict } from '../../../claude-accounts/environment'
+import { applyClaudeEnvPatch, hasClaudeAuthEnvConflict } from '../../../claude-accounts/environment'
 import {
   isSafePtySessionId,
   mintPtySessionId,
@@ -129,10 +129,18 @@ export async function prepareRuntimePtySpawn(
   // Why: the drop still applies here, but this controller's result has no field for
   // notifyResumeUnavailable — runtime/relay panes start fresh without the notice.
   ctx.launchCommand = codexResumeLaunch.command
-  ctx.claudeAuth =
-    ctx.isClaudeLaunch && ctx.deps.prepareClaudeAuth
-      ? await ctx.deps.prepareClaudeAuth(ctx.codexSelectionTarget)
-      : null
+  try {
+    ctx.claudeAuth =
+      !ctx.preAdoptedStablePane &&
+      !args.connectionId &&
+      (ctx.isClaudeLaunch || !ctx.launchCommand) &&
+      ctx.deps.prepareClaudeAuth
+        ? await ctx.deps.prepareClaudeAuth(ctx.codexSelectionTarget)
+        : null
+  } catch (error) {
+    console.warn('[claude-runtime-auth] Failed to prepare Claude auth; continuing launch', error)
+    ctx.claudeAuth = null
+  }
   if (ctx.isClaudeLaunch && isClaudeAuthSwitchInProgress()) {
     throw new Error('A Claude account switch is in progress. Try again after it finishes.')
   }
@@ -163,7 +171,11 @@ export async function prepareRuntimePtySpawn(
     }
   }
   const sshScopedEnv = stripRemotePaneEnvWhenHooksDisabled(args.connectionId, args.env)
-  ctx.env = ctx.claudeAuth ? { ...sshScopedEnv, ...ctx.claudeAuth.envPatch } : sshScopedEnv
+  ctx.env = ctx.claudeAuth
+    ? applyClaudeEnvPatch({ ...sshScopedEnv }, ctx.claudeAuth.envPatch, {
+        stripAuthEnv: ctx.claudeAuth.stripAuthEnv
+      })
+    : sshScopedEnv
   ctx.requestedAgentTeamsPath = ctx.env?.ORCA_AGENT_TEAMS_TEAM_ID
     ? ctx.env[resolvePathEnvKey(ctx.env, process.platform)]
     : undefined

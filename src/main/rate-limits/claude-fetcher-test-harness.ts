@@ -37,7 +37,7 @@ export function restorePlatform(): void {
 /** Default happy-path state: darwin, no keychain credentials, OAuth usage 12/34, PTY session 56. */
 export function primeClaudeFetcherMocks(mocks: ClaudeFetcherHoistedMocks): void {
   setPlatform('darwin')
-  vi.clearAllMocks()
+  vi.resetAllMocks()
   mocks.readFileMock.mockRejectedValue(new Error('missing file'))
   vi.mocked(readActiveClaudeKeychainCredentials).mockResolvedValue(null)
   vi.mocked(readActiveClaudeKeychainCredentialsStrict).mockResolvedValue(null)

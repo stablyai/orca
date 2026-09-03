@@ -6,7 +6,7 @@ import { join } from 'node:path'
 import type { ClaudeManagedAccount } from '../../shared/managed-account-types'
 import {
   readActiveClaudeKeychainCredentialsStrict,
-  writeManagedClaudeKeychainCredentials
+  writeActiveClaudeKeychainCredentials
 } from './keychain'
 import { restorePlatform, setPlatform } from './claude-account-service-test-harness'
 
@@ -45,7 +45,7 @@ describe('ClaudeAccountService.addAccountFromConfigDir', () => {
     rmSync(managedRoot, { recursive: true, force: true })
     sourceDir = null
     vi.mocked(readActiveClaudeKeychainCredentialsStrict).mockReset()
-    vi.mocked(writeManagedClaudeKeychainCredentials).mockReset().mockResolvedValue()
+    vi.mocked(writeActiveClaudeKeychainCredentials).mockReset().mockResolvedValue()
   })
 
   afterEach(() => {
@@ -134,9 +134,11 @@ describe('ClaudeAccountService.addAccountFromConfigDir', () => {
     await service.addAccountFromConfigDir(sourceDir)
 
     expect(readActiveClaudeKeychainCredentialsStrict).toHaveBeenCalledWith(sourceDir)
-    expect(writeManagedClaudeKeychainCredentials).toHaveBeenCalledWith(
-      expect.any(String),
-      '{"claudeAiOauth":{"accessToken":"scoped"}}'
+    // A captured credential is stored where the CLI will look for it — the config-dir scoped
+    // item — not in Orca's old account-id-keyed service.
+    expect(writeActiveClaudeKeychainCredentials).toHaveBeenCalledWith(
+      '{"claudeAiOauth":{"accessToken":"scoped"}}',
+      expect.any(String)
     )
   })
 
@@ -188,9 +190,11 @@ describe('ClaudeAccountService.addAccountFromConfigDir', () => {
         .digest('hex')
     })
 
-    expect(writeManagedClaudeKeychainCredentials).toHaveBeenCalledWith(
-      expect.any(String),
-      newCredentials
+    // A captured credential is stored where the CLI will look for it — the config-dir scoped
+    // item — not in Orca's old account-id-keyed service.
+    expect(writeActiveClaudeKeychainCredentials).toHaveBeenCalledWith(
+      newCredentials,
+      expect.any(String)
     )
     expect(deps.getSettings().claudeManagedAccounts[0]?.email).toBe('new@example.com')
   })

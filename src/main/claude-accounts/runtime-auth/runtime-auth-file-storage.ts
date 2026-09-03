@@ -1,6 +1,7 @@
-import { chmodSync, existsSync, mkdirSync, readFileSync } from 'node:fs'
+import { chmodSync, mkdirSync, readFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { app } from 'electron'
+import { observe } from '../../../shared/filesystem-observation'
 import { writeFileAtomically } from '../../codex-accounts/fs-utils'
 import { ClaudeRuntimeAuthState } from './runtime-auth-state'
 
@@ -36,11 +37,11 @@ export class ClaudeRuntimeAuthFileStorage extends ClaudeRuntimeAuthState {
   }
 
   protected fileContentsEqual(targetPath: string, contents: string): boolean {
-    try {
-      return existsSync(targetPath) && readFileSync(targetPath, 'utf-8') === contents
-    } catch {
-      return false
+    const observation = observe(() => readFileSync(targetPath, 'utf-8'))
+    if (observation.kind === 'indeterminate') {
+      throw observation.error
     }
+    return observation.kind === 'present' && observation.value === contents
   }
 
   protected ensureOwnerOnlyMode(targetPath: string): void {
@@ -55,11 +56,15 @@ export class ClaudeRuntimeAuthFileStorage extends ClaudeRuntimeAuthState {
   }
 
   protected readJsonObject(targetPath: string): Record<string, unknown> | null {
-    if (!existsSync(targetPath)) {
+    const observation = observe(() => readFileSync(targetPath, 'utf-8'))
+    if (observation.kind === 'absent') {
       return {}
     }
+    if (observation.kind === 'indeterminate') {
+      return null
+    }
     try {
-      const parsed = JSON.parse(readFileSync(targetPath, 'utf-8')) as unknown
+      const parsed = JSON.parse(observation.value) as unknown
       if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
         return parsed as Record<string, unknown>
       }

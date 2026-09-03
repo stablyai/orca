@@ -3,8 +3,8 @@ import { mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import {
-  readManagedClaudeKeychainCredentials,
-  writeManagedClaudeKeychainCredentials
+  readActiveClaudeKeychainCredentialsStrict,
+  writeActiveClaudeKeychainCredentials
 } from './keychain'
 import {
   resetClaudeKeychainMocks,
@@ -132,8 +132,8 @@ describe('ClaudeAccountService credential capture', () => {
     mkdirSync(managedAuthPath, { recursive: true })
     writeFileSync(join(managedAuthPath, '.orca-managed-claude-auth'), 'account-1\n', 'utf-8')
     writeFileSync(join(managedAuthPath, 'oauth-account.json'), '{"oldOauth":true}\n', 'utf-8')
-    vi.mocked(readManagedClaudeKeychainCredentials).mockResolvedValue('{"old":true}\n')
-    vi.mocked(writeManagedClaudeKeychainCredentials)
+    vi.mocked(readActiveClaudeKeychainCredentialsStrict).mockResolvedValue('{"old":true}\n')
+    vi.mocked(writeActiveClaudeKeychainCredentials)
       .mockResolvedValueOnce()
       .mockRejectedValueOnce(new Error('managed restore failed'))
     let settings = {
@@ -206,8 +206,8 @@ describe('ClaudeAccountService credential capture', () => {
     mkdirSync(managedAuthPath, { recursive: true })
     writeFileSync(join(managedAuthPath, '.orca-managed-claude-auth'), 'account-1\n', 'utf-8')
     writeFileSync(join(managedAuthPath, 'oauth-account.json'), '{"oldOauth":true}\n', 'utf-8')
-    vi.mocked(readManagedClaudeKeychainCredentials).mockResolvedValue('{"old":true}\n')
-    vi.mocked(writeManagedClaudeKeychainCredentials)
+    vi.mocked(readActiveClaudeKeychainCredentialsStrict).mockResolvedValue('{"old":true}\n')
+    vi.mocked(writeActiveClaudeKeychainCredentials)
       .mockRejectedValueOnce(new Error('new credentials failed'))
       .mockRejectedValueOnce(new Error('credential rollback failed'))
     let settings = {

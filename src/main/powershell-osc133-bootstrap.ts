@@ -41,6 +41,7 @@ const POWERSHELL_OSC133_BOOTSTRAP = `# Orca OSC 133 shell integration for PowerS
 if ($env:ORCA_OPENCODE_CONFIG_DIR) { $env:OPENCODE_CONFIG_DIR = $env:ORCA_OPENCODE_CONFIG_DIR }
 if ($env:ORCA_MIMOCODE_HOME) { $env:MIMOCODE_HOME = $env:ORCA_MIMOCODE_HOME }
 if ($env:ORCA_CODEX_HOME) { $env:CODEX_HOME = $env:ORCA_CODEX_HOME }
+if ($env:ORCA_CLAUDE_CONFIG_DIR) { $env:CLAUDE_CONFIG_DIR = $env:ORCA_CLAUDE_CONFIG_DIR }
 
 if ($ExecutionContext.SessionState.LanguageMode -eq "FullLanguage" -and
     ((-not (Test-Path variable:global:__OrcaOsc133State)) -or

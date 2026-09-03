@@ -14,7 +14,7 @@ export function classifyClaudeOAuthUsageError(error: unknown): ClaudeUsageErrorC
       return terminal('rate-limited')
     }
     if (error.status === 401) {
-      return recoverableAuth('stale-token')
+      return terminal('token_expired')
     }
     if (error.status === 403) {
       return error.message.includes('user:profile')

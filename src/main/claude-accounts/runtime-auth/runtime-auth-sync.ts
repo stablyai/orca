@@ -23,12 +23,25 @@ export class ClaudeRuntimeAuthSync extends ClaudeRuntimeAuthPreparationService {
       this.lastSyncedAccountId
     )
     this.managedRefreshDeferredByLivePtyAccountId = null
-    const previousManagedCredentialsJson = previousAccount
-      ? await this.readManagedCredentials(previousAccount)
-      : null
-    const previousManagedOauthAccount = previousAccount
-      ? await this.readManagedOauthAccount(previousAccount)
-      : null
+    // Per-account Claude config dirs are self-contained; syncing them into the
+    // shared ~/.claude would recreate the stale-sibling race this isolation removes.
+    if (activeAccount?.managedAuthRuntime === 'host') {
+      this.clearLastWrittenRuntimeState()
+      this.lastSyncedAccountId = activeAccount.id
+      return
+    }
+    // Why: an isolated account's credentials live in its own home and were never materialized
+    // into the shared runtime, so there is nothing here to read back — and adopting a shared blob
+    // into it would store another account's token, or a spent one, under this account.
+    const previousIsIsolated = previousAccount?.managedAuthRuntime === 'host'
+    const previousManagedCredentialsJson =
+      previousAccount && !previousIsIsolated
+        ? await this.readManagedCredentials(previousAccount)
+        : null
+    const previousManagedOauthAccount =
+      previousAccount && !previousIsIsolated
+        ? await this.readManagedOauthAccount(previousAccount)
+        : null
     if (previousAccount && previousAccount.id !== activeAccount?.id) {
       if (previousManagedCredentialsJson) {
         const outgoingReadBackResult = await this.readBackRefreshedTokens(
@@ -136,7 +149,15 @@ export class ClaudeRuntimeAuthSync extends ClaudeRuntimeAuthPreparationService {
       console.warn(
         '[claude-runtime-auth] Active managed account is not owned by Orca, restoring system default'
       )
-      if (this.lastSyncedAccountId !== null) {
+      if (activeAccount.managedAuthRuntime === undefined) {
+        if (!this.readSystemDefaultSnapshot(this.getSystemDefaultSnapshotPath())) {
+          await this.captureSystemDefaultSnapshot({ force: false })
+        }
+      }
+      if (
+        this.lastSyncedAccountId !== null &&
+        (activeAccount.managedAuthRuntime !== undefined || previousAccount?.id !== activeAccount.id)
+      ) {
         if (
           previousAccount &&
           (previousAccount.id !== activeAccount.id ||
@@ -161,7 +182,15 @@ export class ClaudeRuntimeAuthSync extends ClaudeRuntimeAuthPreparationService {
       console.warn(
         '[claude-runtime-auth] Active managed account is missing or has invalid credentials, restoring system default'
       )
-      if (this.lastSyncedAccountId !== null) {
+      if (activeAccount.managedAuthRuntime === undefined) {
+        if (!this.readSystemDefaultSnapshot(this.getSystemDefaultSnapshotPath())) {
+          await this.captureSystemDefaultSnapshot({ force: false })
+        }
+      }
+      if (
+        this.lastSyncedAccountId !== null &&
+        (activeAccount.managedAuthRuntime !== undefined || previousAccount?.id !== activeAccount.id)
+      ) {
         if (
           previousAccount &&
           (previousAccount.id !== activeAccount.id ||
@@ -256,10 +285,9 @@ export class ClaudeRuntimeAuthSync extends ClaudeRuntimeAuthPreparationService {
       }
     }
 
-    const paths = this.pathResolver.getRuntimePaths()
     this.writeRuntimeCredentials(credentialsJson)
-    if (process.platform === 'darwin') {
-      // Why: Claude Code 2.1+ reads the scoped service, older builds the legacy unsuffixed one; runtime switching must satisfy both.
+    if (process.platform === 'darwin' && activeAccount.managedAuthRuntime === undefined) {
+      const paths = this.pathResolver.getRuntimePaths()
       try {
         await writeActiveClaudeKeychainCredentialsForRuntime(credentialsJson, paths.configDir)
       } catch (error) {

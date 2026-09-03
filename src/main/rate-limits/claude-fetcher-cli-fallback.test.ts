@@ -151,7 +151,7 @@ describe('fetchClaudeRateLimits', () => {
     expect(fetchViaPty).not.toHaveBeenCalled()
   })
 
-  it('uses CLI fallback for OAuth auth failures when automatic repair is safe', async () => {
+  it('reports OAuth auth failures without refreshing or CLI fallback', async () => {
     const configDir = '/Users/test/.claude'
     const authPreparation: ClaudeRuntimeAuthPreparation = {
       configDir,
@@ -182,18 +182,15 @@ describe('fetchClaudeRateLimits', () => {
 
     await expect(fetchClaudeRateLimits({ authPreparation })).resolves.toMatchObject({
       provider: 'claude',
-      status: 'ok',
-      session: { usedPercent: 56 },
-      usageMetadata: {
-        source: 'cli',
-        attemptedSources: ['oauth', 'cli']
-      }
+      status: 'error',
+      error: 'Claude OAuth token expired',
+      usageMetadata: { failureKind: 'token_expired', attemptedSources: ['oauth'] }
     })
 
-    expect(fetchViaPty).toHaveBeenCalledWith({ authPreparation })
+    expect(fetchViaPty).not.toHaveBeenCalled()
   })
 
-  it('re-reads credentials and retries OAuth once after CLI repair', async () => {
+  it('does not re-read or retry OAuth after an expired token', async () => {
     const configDir = '/Users/test/.claude'
     const authPreparation: ClaudeRuntimeAuthPreparation = {
       configDir,
@@ -247,26 +244,13 @@ describe('fetchClaudeRateLimits', () => {
 
     await expect(fetchClaudeRateLimits({ authPreparation })).resolves.toMatchObject({
       provider: 'claude',
-      status: 'ok',
-      session: { usedPercent: 14 },
-      weekly: { usedPercent: 27 },
-      usageMetadata: {
-        source: 'oauth',
-        attemptedSources: ['oauth', 'cli'],
-        credentialSource: 'scoped-keychain'
-      }
+      status: 'error',
+      error: 'Claude OAuth token expired',
+      usageMetadata: { failureKind: 'token_expired', attemptedSources: ['oauth'] }
     })
 
-    expect(fetchViaPty).toHaveBeenCalledWith({ authPreparation })
-    expect(netFetchMock).toHaveBeenNthCalledWith(
-      2,
-      'https://api.anthropic.com/api/oauth/usage',
-      expect.objectContaining({
-        headers: expect.objectContaining({
-          Authorization: 'Bearer repaired-oauth-token'
-        })
-      })
-    )
+    expect(fetchViaPty).not.toHaveBeenCalled()
+    expect(netFetchMock).toHaveBeenCalledTimes(1)
   })
 
   it('explains auth failures when a live Claude terminal owns managed refresh', async () => {
@@ -304,8 +288,8 @@ describe('fetchClaudeRateLimits', () => {
     ).resolves.toMatchObject({
       provider: 'claude',
       status: 'error',
-      error:
-        'Claude usage refresh is waiting for the live Claude terminal to rotate its credentials.'
+      error: 'Claude OAuth token expired',
+      usageMetadata: { failureKind: 'token_expired' }
     })
 
     expect(fetchViaPty).not.toHaveBeenCalled()
@@ -328,7 +312,6 @@ describe('fetchClaudeRateLimits', () => {
         'Claude usage refresh is waiting for the live Claude terminal to rotate its credentials.',
       usageMetadata: {
         failureKind: 'deferred-by-live-session',
-        deferredByLiveClaudeSession: true,
         attemptedSources: []
       }
     })

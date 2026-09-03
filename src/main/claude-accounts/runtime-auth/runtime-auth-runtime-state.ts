@@ -1,4 +1,5 @@
 import { existsSync, readFileSync, rmSync } from 'node:fs'
+import { join } from 'node:path'
 import type { ClaudeManagedAccount } from '../../../shared/managed-account-types'
 import {
   deleteActiveClaudeKeychainCredentialsStrict,
@@ -149,8 +150,12 @@ export class ClaudeRuntimeAuthRuntimeState extends ClaudeRuntimeAuthKeychainSnap
     )
   }
 
-  protected readRuntimeOauthAccount(): unknown {
-    const configPath = this.pathResolver.getRuntimePaths().configPath
+  // Why: the CLI keeps .claude.json inside a custom config dir, so credentials read from a managed
+  // dir must be identified against that dir's record, not the shared one.
+  protected readRuntimeOauthAccount(configDir?: string): unknown {
+    const configPath = configDir
+      ? join(configDir, '.claude.json')
+      : this.pathResolver.getRuntimePaths().configPath
     if (!existsSync(configPath)) {
       return null
     }

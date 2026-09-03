@@ -7,7 +7,7 @@ import { isRemoteAgentHooksEnabled } from '../../../../shared/agent-hook-relay'
 import { isOpaqueRemintedPaneKey } from '../../../../shared/pane-key-alias'
 import { isValidTerminalTabId } from '../../../../shared/terminal-tab-id'
 import { isClaudeAuthSwitchInProgress } from '../../../claude-accounts/live-pty-gate'
-import { hasClaudeAuthEnvConflict } from '../../../claude-accounts/environment'
+import { applyClaudeEnvPatch, hasClaudeAuthEnvConflict } from '../../../claude-accounts/environment'
 import { LocalPtyProvider } from '../../../providers/local-pty-provider'
 import { resolvePathEnvKey } from '../../../pty/windows-environment-path'
 import { routesFreshSpawnsToLocalProvider } from '../host-env/fresh-spawn-routing'
@@ -32,7 +32,9 @@ export async function assemblePtyIpcSpawnEnv(ctx: PtyIpcSpawnState): Promise<voi
   // Why: forward pane env to SSH only when the relay hook path is enabled, or a newer relay could emit statuses this build can't route.
   const sshSourceEnv = stripRemotePaneEnvWhenHooksDisabled(args.connectionId, args.env)
   const baseEnvWithAuth = ctx.claudeAuth
-    ? { ...sshSourceEnv, ...ctx.claudeAuth.envPatch }
+    ? applyClaudeEnvPatch({ ...sshSourceEnv }, ctx.claudeAuth.envPatch, {
+        stripAuthEnv: ctx.claudeAuth.stripAuthEnv
+      })
     : sshSourceEnv
   const spawnPaneKey = baseEnvWithAuth?.ORCA_PANE_KEY
   const parsedSpawnPaneKey = parseValidPaneKey(spawnPaneKey)

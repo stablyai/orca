@@ -282,6 +282,18 @@ describe('provider usage error copy', () => {
     expect(getProviderUsageErrorMessage(p)).toBe('Claude sign-in credentials could not be read.')
   })
 
+  it('surfaces when a managed Claude launch fell back to personal sign-in', () => {
+    const p = provider({
+      error: 'managed Claude Keychain unavailable',
+      usageMetadata: { failureKind: 'managed-keychain-unavailable' }
+    })
+
+    expect(getProviderUsageStatusLabel(p)).toBe('Managed sign-in unavailable')
+    expect(getProviderUsageErrorMessage(p)).toBe(
+      'Claude could not load the selected managed sign-in. This session is using your personal Claude sign-in.'
+    )
+  })
+
   it('uses structured unavailable copy for Claude CLI usage shell failures', () => {
     const p = provider({
       error: 'Claude plan usage is unavailable for this Claude CLI session.',

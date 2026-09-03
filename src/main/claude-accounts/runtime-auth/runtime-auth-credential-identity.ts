@@ -57,6 +57,20 @@ export class ClaudeRuntimeAuthCredentialIdentity extends ClaudeRuntimeAuthFileSt
     )
   }
 
+  protected runtimeCredentialsCanReplaceManagedCredentials(
+    runtimeCredentialsJson: string,
+    managedCredentialsJson: string
+  ): boolean {
+    const fresher = this.runtimeCredentialsAreFresher(
+      runtimeCredentialsJson,
+      managedCredentialsJson
+    )
+    const rotated =
+      this.compareRefreshTokens(runtimeCredentialsJson, managedCredentialsJson) === 'different'
+    const older = this.runtimeCredentialsAreOlder(runtimeCredentialsJson, managedCredentialsJson)
+    return fresher || (rotated && !older)
+  }
+
   protected chooseFreshestReadBackCandidate(
     candidates: {
       credentialsJson: string

@@ -1,3 +1,4 @@
+import { copyFileSync, existsSync, lstatSync, mkdirSync, symlinkSync } from 'node:fs'
 import { join } from 'node:path'
 import type { ClaudeManagedAccount } from '../../../shared/managed-account-types'
 import { resolveLocalAccountRuntimeTarget } from '../../../shared/local-account-runtime'
@@ -9,7 +10,9 @@ import {
   type ClaudeAccountSelectionTarget
 } from '../runtime-selection'
 import { ClaudeRuntimeAuthSnapshotRestore } from './runtime-auth-snapshot-restore'
+import { CLAUDE_MANAGED_AUTH_UNOWNED_PROVENANCE } from './runtime-auth-types'
 import type { ClaudeRuntimeAuthPreparation } from './runtime-auth-types'
+import { resolveOwnedClaudeManagedAuthPath } from '../managed-auth-path'
 
 export class ClaudeRuntimeAuthPreparationService extends ClaudeRuntimeAuthSnapshotRestore {
   protected getPreparation(target?: ClaudeAccountSelectionTarget): ClaudeRuntimeAuthPreparation {
@@ -20,6 +23,19 @@ export class ClaudeRuntimeAuthPreparationService extends ClaudeRuntimeAuthSnapsh
     )
     const activeAccountId = getSelectedClaudeAccountIdForTarget(settings, normalizedTarget)
     const activeAccount = this.getActiveAccount(settings.claudeManagedAccounts, activeAccountId)
+    // An explicit user config root is authoritative; account selection must not
+    // silently redirect a pane away from it.
+    if (process.env.CLAUDE_CONFIG_DIR?.trim()) {
+      return {
+        configDir: paths.configDir,
+        runtime: normalizedTarget.runtime,
+        wslDistro: normalizedTarget.wslDistro,
+        wslLinuxConfigDir: null,
+        envPatch: paths.envPatch,
+        stripAuthEnv: false,
+        provenance: 'system:explicit-config-dir'
+      }
+    }
     if (
       normalizeClaudeAccountSelectionTarget(normalizedTarget).runtime === 'wsl' &&
       activeAccount?.managedAuthRuntime === 'wsl' &&
@@ -30,7 +46,10 @@ export class ClaudeRuntimeAuthPreparationService extends ClaudeRuntimeAuthSnapsh
         runtime: 'wsl',
         wslDistro: activeAccount.wslDistro ?? null,
         wslLinuxConfigDir: activeAccount.wslLinuxAuthPath,
-        envPatch: { CLAUDE_CONFIG_DIR: activeAccount.wslLinuxAuthPath },
+        envPatch: {
+          CLAUDE_CONFIG_DIR: activeAccount.wslLinuxAuthPath,
+          ORCA_CLAUDE_CONFIG_DIR: activeAccount.wslLinuxAuthPath
+        },
         stripAuthEnv: true,
         provenance: `managed:${activeAccount.id}:wsl:${activeAccount.wslDistro ?? ''}`
       }
@@ -63,20 +82,54 @@ export class ClaudeRuntimeAuthPreparationService extends ClaudeRuntimeAuthSnapsh
         provenance: `wsl:${normalizeClaudeAccountSelectionTarget(normalizedTarget).wslDistro ?? '__default__'}:system`
       }
     }
+    let managedRoutingFailed = false
+    if (activeAccount?.managedAuthRuntime === 'host') {
+      const managedPath = resolveOwnedClaudeManagedAuthPath(
+        activeAccount.id,
+        activeAccount.managedAuthPath,
+        { adoptLegacyMarker: true }
+      )
+      if (managedPath) {
+        if (!provisionClaudeManagedHome(paths.configDir, managedPath)) {
+          console.warn(
+            '[claude-runtime-auth] Refusing managed Claude routing after home provisioning failed'
+          )
+          managedRoutingFailed = true
+        } else {
+          return {
+            configDir: managedPath,
+            runtime: 'host',
+            wslDistro: null,
+            wslLinuxConfigDir: null,
+            envPatch: {
+              CLAUDE_CONFIG_DIR: managedPath,
+              ORCA_CLAUDE_CONFIG_DIR: managedPath
+            },
+            stripAuthEnv: true,
+            provenance: `managed:${activeAccount.id}`
+          }
+        }
+      } else {
+        managedRoutingFailed = true
+      }
+    }
     return {
       configDir: paths.configDir,
       runtime: 'host',
       wslDistro: null,
       wslLinuxConfigDir: null,
       envPatch: paths.envPatch,
-      stripAuthEnv: Boolean(activeAccountId && activeAccount?.managedAuthRuntime !== 'wsl'),
+      stripAuthEnv: Boolean(activeAccountId && activeAccount?.managedAuthRuntime === 'host'),
       managedRefreshDeferredByLivePty: Boolean(
         activeAccountId &&
-        activeAccount?.managedAuthRuntime !== 'wsl' &&
+        activeAccount?.managedAuthRuntime === 'host' &&
         this.managedRefreshDeferredByLivePtyAccountId === activeAccountId
       ),
-      provenance:
-        activeAccountId && activeAccount?.managedAuthRuntime !== 'wsl'
+      // Why: this pane is on the personal login; labelling it `managed:` hides that from
+      // every consumer, including the usage lane that reports the numbers.
+      provenance: managedRoutingFailed
+        ? CLAUDE_MANAGED_AUTH_UNOWNED_PROVENANCE
+        : activeAccountId && activeAccount?.managedAuthRuntime === 'host'
           ? `managed:${activeAccountId}`
           : 'system'
     }
@@ -112,4 +165,38 @@ export class ClaudeRuntimeAuthPreparationService extends ClaudeRuntimeAuthSnapsh
     const defaultDistro = getDefaultWslDistro()
     return defaultDistro ? { runtime: 'wsl', wslDistro: defaultDistro } : target
   }
+}
+
+// Keep account homes useful without copying credential-bearing runtime state.
+// Missing user resources are linked once; existing files remain user-owned.
+function provisionClaudeManagedHome(systemConfigDir: string, managedPath: string): boolean {
+  if (systemConfigDir === managedPath) {
+    return true
+  }
+  const resources = ['settings.json', 'CLAUDE.md', 'projects', 'plugins'] as const
+  let succeeded = true
+  for (const name of resources) {
+    const source = join(systemConfigDir, name)
+    const target = join(managedPath, name)
+    if (!existsSync(source) || existsSync(target)) {
+      continue
+    }
+    try {
+      const sourceIsDirectory = lstatSync(source).isDirectory()
+      mkdirSync(managedPath, { recursive: true, mode: 0o700 })
+      if (process.platform === 'win32') {
+        if (sourceIsDirectory) {
+          symlinkSync(source, target, 'junction')
+        } else {
+          copyFileSync(source, target)
+        }
+      } else {
+        symlinkSync(source, target, sourceIsDirectory ? 'dir' : 'file')
+      }
+    } catch {
+      // Do not route into a partially provisioned home.
+      succeeded = false
+    }
+  }
+  return succeeded
 }

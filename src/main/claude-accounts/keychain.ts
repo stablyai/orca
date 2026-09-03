@@ -43,7 +43,25 @@ export async function writeActiveClaudeKeychainCredentialsForRuntime(
   const scopedService = getActiveClaudeService(configDir)
   await writeKeychainPassword(scopedService, user, contents)
   if (scopedService !== ACTIVE_CLAUDE_SERVICE) {
+    await syncLegacySharedClaudeKeychainForPre21Cli(contents, user)
+  }
+}
+
+async function syncLegacySharedClaudeKeychainForPre21Cli(
+  contents: string,
+  user: string
+): Promise<void> {
+  try {
     await writeKeychainPassword(ACTIVE_CLAUDE_SERVICE, user, contents)
+  } catch (error) {
+    // Why: pre-2.1 CLIs only read this shared service; retire it when Step 2 isolates accounts.
+    const code = error && typeof error === 'object' && 'code' in error ? error.code : undefined
+    const stderr =
+      error && typeof error === 'object' && 'stderr' in error ? error.stderr : undefined
+    console.warn('[claude-runtime-auth] Failed to refresh legacy shared Keychain', {
+      code: typeof code === 'string' ? code : undefined,
+      stderr: typeof stderr === 'string' ? stderr.slice(0, 200) : undefined
+    })
   }
 }
 
@@ -82,13 +100,18 @@ function getKeychainUser(): string {
   return process.env.USER || process.env.USERNAME || 'user'
 }
 
-function getActiveClaudeService(configDir?: string): string {
+export function getActiveClaudeService(configDir?: string): string {
   if (!configDir) {
     return ACTIVE_CLAUDE_SERVICE
   }
-  // Why: Claude Code 2.1+ scopes macOS Keychain credentials by config dir
-  // using the first 8 hex chars of sha256(CLAUDE_CONFIG_DIR).
-  const suffix = createHash('sha256').update(configDir).digest('hex').slice(0, 8)
+  // Why: Claude Code 2.1+ scopes macOS Keychain credentials by config dir using the first 8 hex
+  // chars of sha256 over the NFC-normalized env literal. macOS hands back decomposed (NFD) paths,
+  // so skipping the normalize yields a different service name than the CLI reads — and a missing
+  // Keychain item fails over to the file silently, with no error anywhere.
+  const suffix = createHash('sha256')
+    .update(configDir.normalize('NFC'), 'utf8')
+    .digest('hex')
+    .slice(0, 8)
   return `${ACTIVE_CLAUDE_SERVICE}-${suffix}`
 }
 
@@ -161,6 +184,26 @@ function execSecurity(
       throw error
     }
   })
+}
+
+// Why: a locked or prompt-blocked Keychain is recoverable by the user, so it must not trigger a
+// plaintext credential fallback the way a structurally unavailable Keychain does.
+export function isTransientKeychainError(error: unknown): boolean {
+  const message =
+    error && typeof error === 'object'
+      ? `${String((error as { stderr?: unknown }).stderr ?? '')} ${String(
+          (error as { message?: unknown }).message ?? ''
+        )}`.toLowerCase()
+      : String(error).toLowerCase()
+  return (
+    message.includes('locked') ||
+    message.includes('interaction is not allowed') ||
+    message.includes('no user interaction') ||
+    message.includes('user canceled') ||
+    message.includes('user cancelled') ||
+    message.includes('name or passphrase') ||
+    message.includes('timed out')
+  )
 }
 
 function isKeychainNotFoundError(error: unknown): boolean {

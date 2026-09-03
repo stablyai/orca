@@ -35,6 +35,7 @@ function getRelayZshWrapperSpec(): ZshStartupHookSpec {
       agentTeamsPath: false,
       remoteCliBinDir: true,
       codexHome: false,
+      claudeConfigDir: false,
       codexLaunchPreflight: false
     }
   }

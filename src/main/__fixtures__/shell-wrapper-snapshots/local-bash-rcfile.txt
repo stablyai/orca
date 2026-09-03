@@ -101,6 +101,8 @@ fi
 
 # Why: Codex must keep using Orca's runtime CODEX_HOME after profile scripts.
 [[ -n "${ORCA_CODEX_HOME:-}" ]] && export CODEX_HOME="${ORCA_CODEX_HOME}"
+# Why: Claude must keep using Orca's runtime config directory after profile scripts.
+[[ -n "${ORCA_CLAUDE_CONFIG_DIR:-}" ]] && export CLAUDE_CONFIG_DIR="${ORCA_CLAUDE_CONFIG_DIR}"
 # Why: a typed alias expands inside the shell, after pane launch prep.
 # Why unalias inside the substitution: an alias named codex makes command -v
 # report the alias text, and the subshell leaves the user's own alias intact.

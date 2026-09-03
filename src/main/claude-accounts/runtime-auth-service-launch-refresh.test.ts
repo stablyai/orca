@@ -199,7 +199,7 @@ describe('ClaudeRuntimeAuthService', () => {
       // A live Claude owns the credentials; refreshing here would race its
       // rotation, so the proactive refresh must be skipped entirely.
       expect(refreshClaudeOauthCredentials).not.toHaveBeenCalled()
-      expect(preparation.managedRefreshDeferredByLivePty).toBe(true)
+      expect(preparation.managedRefreshDeferredByLivePty).toBe(false)
     } finally {
       markClaudePtyExited('pty-live-1')
       vi.mocked(isOauthTokenExpiring).mockReturnValue(false)

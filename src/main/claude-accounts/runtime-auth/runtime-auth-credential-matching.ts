@@ -1,6 +1,6 @@
 import type { ClaudeManagedAccount } from '../../../shared/managed-account-types'
 import { ClaudeRuntimeAuthRuntimeState } from './runtime-auth-runtime-state'
-import type { ClaudeReadBackMatch } from './runtime-auth-types'
+import { RUNTIME_OAUTH_ACCOUNT_PARSE_ERROR, type ClaudeReadBackMatch } from './runtime-auth-types'
 
 export class ClaudeRuntimeAuthCredentialMatching extends ClaudeRuntimeAuthRuntimeState {
   protected async findManagedAccountForRuntimeCredentials(
@@ -115,6 +115,29 @@ export class ClaudeRuntimeAuthCredentialMatching extends ClaudeRuntimeAuthRuntim
     }
 
     return 'match'
+  }
+
+  // Why: an unreadable identity record and one naming another account demand opposite responses —
+  // hold off when we cannot tell, revert when we can. Only the home's record can prove this;
+  // credential blobs carry no identity fields.
+  protected runtimeIdentityIsProvablyForeign(
+    runtimeOauthAccount: unknown,
+    account: ClaudeManagedAccount
+  ): boolean {
+    if (runtimeOauthAccount === RUNTIME_OAUTH_ACCOUNT_PARSE_ERROR || !runtimeOauthAccount) {
+      return false
+    }
+    const identity = this.readIdentityFromOauthAccount(runtimeOauthAccount)
+    const accountEmail = this.normalizeField(account.email)
+    if (identity.email !== null && accountEmail !== null && identity.email !== accountEmail) {
+      return true
+    }
+    const accountOrganizationUuid = this.normalizeField(account.organizationUuid)
+    return (
+      identity.organizationUuid !== null &&
+      accountOrganizationUuid !== null &&
+      identity.organizationUuid !== accountOrganizationUuid
+    )
   }
 
   protected liveRuntimeCredentialsCanUpdateActiveAccount(

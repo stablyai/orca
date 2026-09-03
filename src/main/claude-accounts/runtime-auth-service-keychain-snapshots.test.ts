@@ -575,7 +575,7 @@ describe('ClaudeRuntimeAuthService', () => {
     expect(testState.legacyKeychainCredentials).toBe(systemCredentials)
   })
 
-  it('restores scoped keychain after legacy runtime keychain write fails', async () => {
+  it('allows Claude launch when the legacy compatibility keychain write fails', async () => {
     const runtimeCredentialsPath = join(testState.fakeHomeDir, '.claude', '.credentials.json')
     const systemCredentials = createClaudeCredentialsJson('system@example.com', 'system')
     const managedCredentials = createClaudeCredentialsJson('user@example.com', 'managed')
@@ -596,13 +596,18 @@ describe('ClaudeRuntimeAuthService', () => {
     const service = new ClaudeRuntimeAuthService(store as never)
     settings.activeClaudeManagedAccountId = 'account-1'
     testState.throwLegacyRuntimeKeychainWrite = true
-    await expect(service.syncForCurrentSelection()).rejects.toThrow(
-      'legacy runtime keychain write failed'
-    )
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
 
-    expect(readFileSync(runtimeCredentialsPath, 'utf-8')).toBe(systemCredentials)
-    expect(testState.scopedKeychainCredentials).toBe(systemCredentials)
+    await expect(service.prepareForClaudeLaunch()).resolves.toMatchObject({ runtime: 'host' })
+
+    expect(readFileSync(runtimeCredentialsPath, 'utf-8')).toBe(managedCredentials)
+    expect(testState.scopedKeychainCredentials).toBe(managedCredentials)
     expect(testState.legacyKeychainCredentials).toBe(systemCredentials)
+    expect(warn).toHaveBeenCalledWith(
+      '[claude-runtime-auth] Failed to refresh legacy shared Keychain:',
+      expect.any(Error)
+    )
+    warn.mockRestore()
   })
 
   it('keeps managed ownership baseline when keychain restore fails and retries', async () => {

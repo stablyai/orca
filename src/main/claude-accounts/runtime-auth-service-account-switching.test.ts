@@ -44,7 +44,15 @@ describe('ClaudeRuntimeAuthService', () => {
   it('reads back refreshed file credentials when keychain reads fail', async () => {
     const runtimeCredentialsPath = join(testState.fakeHomeDir, '.claude', '.credentials.json')
     const originalCredentials = createClaudeCredentialsJson('user@example.com', 'original')
-    const refreshedCredentials = createClaudeCredentialsJson('user@example.com', 'refreshed')
+    // A real refresh moves the expiry out. Same-expiry blobs are not "fresher", and since the
+    // durable-Keychain-failure path now falls back to this account's own credentials file rather
+    // than reading as empty, an equally-stale runtime blob is correctly left unadopted.
+    const refreshedCredentials = createClaudeCredentialsJson(
+      'user@example.com',
+      'refreshed',
+      null,
+      Date.now() + 600_000
+    )
     const managedAuthPath = createManagedClaudeAuth(
       testState.userDataDir,
       'account-1',

@@ -3844,16 +3844,24 @@
             "1804cd8c3f": "Refreshing sign-in",
             "f8f0f9d8cc": "Network issue",
             "bf2e739f18": "Sign-in unavailable",
+            "7fe52bf9dc": "Managed sign-in unavailable",
+            "3ac91d7e42": "Account files missing",
+            "c47a1e90b3": "Signed in as another account",
             "f8b8dbed85": "Usage unavailable",
             "3d3c9c0c1f": "Claude usage will refresh after the live Claude terminal rotates its credentials.",
             "42fdd4da1d": "Claude sign-in is being refreshed. Agent sessions may still be signed in.",
             "c06c1d215d": "Claude usage could not be refreshed because the network request failed.",
             "cabdc2a9e0": "Claude sign-in credentials could not be read.",
+            "9195af66c1": "Claude could not load the selected managed sign-in. This session is using your personal Claude sign-in.",
+            "5d0b8c1af7": "The selected Claude account’s files are missing or unreadable. This session is using your personal Claude sign-in.",
+            "8b2f4c6d19": "This Claude account’s home is signed in as a different account. Run /login in its terminal to sign back in.",
             "a7517cccb6": "Claude usage is unavailable right now.",
             "e2c6a4f917": "Run Grok to refresh",
             "d1b7f509ac": "Run grok in a terminal on the computer running Orca and wait for it to start. If prompted, complete sign-in, then retry usage. You do not need to send a chat message.",
             "f90b3d7a16": "Run Kimi to refresh",
-            "a37e8c15d4": "Run kimi in a terminal on the computer running Orca and wait for it to start, then retry usage."
+            "a37e8c15d4": "Run kimi in a terminal on the computer running Orca and wait for it to start, then retry usage.",
+            "b1f47ac902": "Sign-in expired",
+            "c93a6be741": "The stored Claude sign-in has expired. Run Claude to refresh it."
           },
           "SshTargetStatusRow": {
             "sshHost": "SSH Host"

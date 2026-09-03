@@ -17,7 +17,8 @@ import {
   markCopiedResource,
   targetIsOwnedFallbackCopy
 } from './codex-managed-home-resource-copy-marker'
-import { observe, observeResolvedPathEntry } from './codex-path-observation'
+import { observe } from '../../shared/filesystem-observation'
+import { observeResolvedPathEntry } from './codex-path-observation'
 
 const CODEX_GLOBAL_INSTRUCTIONS_ENTRY = 'AGENTS.md'
 

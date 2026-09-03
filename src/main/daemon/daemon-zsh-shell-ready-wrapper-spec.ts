@@ -14,6 +14,7 @@ export function getDaemonZshWrapperSpec(): ZshStartupHookSpec {
       agentTeamsPath: true,
       remoteCliBinDir: false,
       codexHome: true,
+      claudeConfigDir: true,
       codexLaunchPreflight: true
     }
   }

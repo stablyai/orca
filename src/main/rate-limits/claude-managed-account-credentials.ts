@@ -1,13 +1,19 @@
 import { existsSync, lstatSync, readFileSync } from 'node:fs'
 import path from 'node:path'
+import { isDefinitiveAbsence } from '../../shared/definitive-filesystem-absence'
 import { parseWslUncPath } from '../../shared/wsl-paths'
 import {
-  deleteActiveClaudeKeychainCredentialsStrict,
   readActiveClaudeKeychainCredentialsStrict,
-  readManagedClaudeKeychainCredentials,
-  writeActiveClaudeKeychainCredentials,
-  writeManagedClaudeKeychainCredentials
+  writeActiveClaudeKeychainCredentials
 } from '../claude-accounts/keychain'
+import {
+  CLAUDE_CREDENTIALS_ABSENT,
+  classifyClaudeCredentialsBlob,
+  claudeCredentialsUnavailable,
+  readComposedClaudeCredentials,
+  type ClaudeCredentialReadResult
+} from '../claude-accounts/claude-credential-read-result'
+import { hasClaudeStaleFallbackMark } from '../claude-accounts/claude-stale-fallback-marker'
 import {
   readClaudeManagedAuthFile,
   resolveOwnedClaudeManagedAuthPath,
@@ -47,13 +53,44 @@ export function resolveClaudeManagedCredentialsLocation(
 export async function readClaudeManagedCredentialsJson(
   location: ClaudeManagedCredentialsLocation
 ): Promise<string | null> {
-  try {
-    return location.kind === 'keychain'
-      ? await readManagedClaudeKeychainCredentials(location.accountId)
-      : readClaudeManagedAuthFile(location.managedAuthPath, '.credentials.json')
-  } catch {
-    return null
+  const result = await readClaudeManagedCredentialsObserved(location)
+  return result.kind === 'present' ? result.credentialsJson : null
+}
+
+export type ClaudeManagedCredentialsReadResult = ClaudeCredentialReadResult
+
+/**
+ * Reads the account's credential from the store the CLI itself owns: on macOS the config-dir
+ * scoped Keychain item, with the same-home `.credentials.json` as the CLI's own durable fallback.
+ *
+ * Why not the account-id-keyed service any more: that was Orca's private second copy, and keeping
+ * it in step with the CLI's rotations is the reconciliation this refactor removes.
+ */
+export async function readClaudeManagedCredentialsObserved(
+  location: ClaudeManagedCredentialsLocation
+): Promise<ClaudeManagedCredentialsReadResult> {
+  if (location.kind !== 'keychain') {
+    try {
+      return classifyClaudeCredentialsBlob(
+        readClaudeManagedAuthFile(location.managedAuthPath, '.credentials.json')
+      )
+    } catch (error) {
+      return isDefinitiveAbsence(error)
+        ? CLAUDE_CREDENTIALS_ABSENT
+        : claudeCredentialsUnavailable('malformed')
+    }
   }
+  return readComposedClaudeCredentials({
+    readScopedKeychain: () => readActiveClaudeKeychainCredentialsStrict(location.managedAuthPath),
+    hasStaleFallbackMarker: () => hasClaudeStaleFallbackMark(location.managedAuthPath),
+    readSameHomeFile: () => {
+      try {
+        return readClaudeManagedAuthFile(location.managedAuthPath, '.credentials.json')
+      } catch {
+        return null
+      }
+    }
+  })
 }
 
 export async function writeClaudeManagedCredentialsJson(
@@ -61,7 +98,7 @@ export async function writeClaudeManagedCredentialsJson(
   credentialsJson: string
 ): Promise<void> {
   if (location.kind === 'keychain') {
-    await writeManagedClaudeKeychainCredentials(location.accountId, credentialsJson)
+    await writeActiveClaudeKeychainCredentials(credentialsJson, location.managedAuthPath)
   } else {
     writeClaudeManagedAuthFile(location.managedAuthPath, '.credentials.json', credentialsJson)
   }
@@ -97,31 +134,18 @@ function resolveOwnedWslClaudeManagedAuthPath(account: InactiveClaudeAccount): s
   }
 }
 
+/**
+ * No-op passthrough, deliberately kept as a seam.
+ *
+ * Why it must not stage: it used to write the credential into the config-dir scoped Keychain item
+ * and delete it in `finally`. That item is now the CLI's own live store, so the delete would sign
+ * the user out every time the usage panel was opened. The credential is already where the CLI
+ * keeps it; a usage read needs no staging at all.
+ */
 export async function withClaudeManagedPreviewKeychainCredentials<T>(
-  location: ClaudeManagedCredentialsLocation,
-  credentialsJson: string,
+  _location: ClaudeManagedCredentialsLocation,
+  _credentialsJson: string,
   operation: () => Promise<T>
 ): Promise<T> {
-  if (location.kind !== 'keychain') {
-    return operation()
-  }
-  await writeActiveClaudeKeychainCredentials(credentialsJson, location.managedAuthPath)
-  try {
-    return await operation()
-  } finally {
-    await deleteActiveClaudeKeychainCredentialsStrict(location.managedAuthPath).catch(() => {})
-  }
-}
-
-export async function readStagedClaudeManagedPreviewCredentials(
-  location: ClaudeManagedCredentialsLocation
-): Promise<string | null> {
-  if (location.kind !== 'keychain') {
-    return null
-  }
-  try {
-    return await readActiveClaudeKeychainCredentialsStrict(location.managedAuthPath)
-  } catch {
-    return null
-  }
+  return operation()
 }

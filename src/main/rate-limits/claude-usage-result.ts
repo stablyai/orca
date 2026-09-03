@@ -5,6 +5,11 @@ import type {
   UsageRateLimitSource
 } from '../../shared/rate-limit-types'
 import type { ClaudeRuntimeAuthPreparation } from '../claude-accounts/runtime-auth-service'
+import {
+  CLAUDE_MANAGED_AUTH_UNOWNED_PROVENANCE,
+  CLAUDE_MANAGED_FOREIGN_LOGIN_PROVENANCE,
+  CLAUDE_MANAGED_KEYCHAIN_UNAVAILABLE_PROVENANCE
+} from '../claude-accounts/runtime-auth/runtime-auth-types'
 import type { ClaudeOAuthCredentialReadResult } from './claude-oauth-credentials'
 import { OAuthUsageError } from './claude-oauth-usage-error'
 
@@ -72,10 +77,19 @@ export function metadataForClaudeUsageAttempt(input: {
   deferredByLiveClaudeSession?: boolean
   retryAtMs?: number
 }): UsageRateLimitMetadata {
+  const degradedProvenance = input.authPreparation?.provenance
+  const failureKind =
+    degradedProvenance === CLAUDE_MANAGED_KEYCHAIN_UNAVAILABLE_PROVENANCE
+      ? 'managed-keychain-unavailable'
+      : degradedProvenance === CLAUDE_MANAGED_AUTH_UNOWNED_PROVENANCE
+        ? 'managed-auth-unowned'
+        : degradedProvenance === CLAUDE_MANAGED_FOREIGN_LOGIN_PROVENANCE
+          ? 'managed-foreign-login'
+          : input.failureKind
   return {
     source: input.source,
     attemptedSources: [...input.attemptedSources],
-    failureKind: input.failureKind,
+    failureKind,
     credentialSource: input.oauthCredentials.source,
     authProvenance: input.authPreparation?.provenance ?? 'system',
     deferredByLiveClaudeSession: input.deferredByLiveClaudeSession,

@@ -53,7 +53,20 @@ export function finalizeWindowsLocalPtySpawnEnvironment(args: {
     }
     if (env.CLAUDE_CONFIG_DIR) {
       // Why: managed WSL Claude passes a Linux CLAUDE_CONFIG_DIR through wsl.exe; non-default vars need WSLENV import.
-      addWslEnvKeys(env, ['CLAUDE_CONFIG_DIR'])
+      const claudeConfigWslInfo = parseWslPath(env.CLAUDE_CONFIG_DIR)
+      if (claudeConfigWslInfo) {
+        if (plan.launchWslDistro && plan.launchWslDistro !== claudeConfigWslInfo.distro) {
+          delete env.CLAUDE_CONFIG_DIR
+          delete env.ORCA_CLAUDE_CONFIG_DIR
+        } else {
+          env.CLAUDE_CONFIG_DIR = claudeConfigWslInfo.linuxPath
+          env.ORCA_CLAUDE_CONFIG_DIR = claudeConfigWslInfo.linuxPath
+          addWslEnvKeys(env, ['CLAUDE_CONFIG_DIR', 'ORCA_CLAUDE_CONFIG_DIR'])
+        }
+      } else {
+        env.ORCA_CLAUDE_CONFIG_DIR ??= env.CLAUDE_CONFIG_DIR
+        addWslEnvKeys(env, ['CLAUDE_CONFIG_DIR', 'ORCA_CLAUDE_CONFIG_DIR'])
+      }
     }
     if (env[ORCA_HERMES_STARTUP_QUERY_ENV] !== undefined) {
       // Why: wsl.exe drops custom Windows env vars; the startup wrapper needs this imported inside WSL.
@@ -63,6 +76,10 @@ export function finalizeWindowsLocalPtySpawnEnvironment(args: {
     // Why: WSL Codex homes are Linux paths Windows can't use; also drop ORCA_CODEX_HOME (shell-ready restores CODEX_HOME from it).
     delete env.CODEX_HOME
     delete env.ORCA_CODEX_HOME
+  }
+
+  if (pathWin32.basename(plan.shellPath).toLowerCase() !== 'wsl.exe' && env.CLAUDE_CONFIG_DIR) {
+    env.ORCA_CLAUDE_CONFIG_DIR ??= env.CLAUDE_CONFIG_DIR
   }
 
   const shellBasename = pathWin32.basename(plan.shellPath).toLowerCase()

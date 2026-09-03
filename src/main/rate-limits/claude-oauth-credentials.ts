@@ -6,6 +6,7 @@ import {
   readActiveClaudeKeychainCredentialsStrict
 } from '../claude-accounts/keychain'
 import type { ClaudeRuntimeAuthPreparation } from '../claude-accounts/runtime-auth-service'
+import { startSpan } from '../observability/tracer'
 
 type ClaudeCredentials = {
   claudeAiOauth?: {
@@ -136,15 +137,30 @@ export async function readClaudeOAuthCredentials(
   options?: ClaudeOAuthCredentialReadOptions
 ): Promise<ClaudeOAuthCredentialReadResult> {
   const keychain = await readFromKeychain(options?.keychainConfigDir)
+  const decision = startSpan('claude.credentials.read', {
+    attributes: {
+      store: options?.keychainConfigDir ? 'scoped-keychain' : 'default-keychain',
+      keychain_available: !keychain.keychainUnavailable,
+      has_token: Boolean(keychain.token),
+      has_refresh_token: keychain.hasRefreshableCredentials
+    }
+  })
   if (keychain.token || keychain.hasRefreshableCredentials) {
+    decision.setAttribute('selected_source', keychain.source)
+    decision.end()
     return keychain
   }
 
   const file = await readFromCredentialsFile(options?.credentialsFileConfigDir)
   if (file.token || file.hasRefreshableCredentials) {
+    decision.setAttribute('selected_source', file.source)
+    decision.end()
     return file
   }
-  return keychain.keychainUnavailable ? keychain : emptyClaudeOAuthCredentialReadResult()
+  const result = keychain.keychainUnavailable ? keychain : emptyClaudeOAuthCredentialReadResult()
+  decision.setAttribute('selected_source', result.source)
+  decision.end()
+  return result
 }
 
 export function resolveClaudeOAuthCredentialReadOptions(

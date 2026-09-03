@@ -46,6 +46,8 @@ export type ZshWrapperRestoreSpec = {
   codexHome: boolean
   /** The `codex()` wrapper that runs Orca's launch preflight. */
   codexLaunchPreflight: boolean
+  /** Orca's runtime Claude config directory. */
+  claudeConfigDir: boolean
 }
 
 export type ZshStartupHookSpec = {
@@ -75,6 +77,8 @@ const MIMOCODE_HOME_RESTORE = `[[ -n "\${ORCA_MIMOCODE_HOME:-}" ]] && export MIM
 const REMOTE_CLI_BIN_DIR_RESTORE = `[[ -n "\${ORCA_REMOTE_CLI_BIN_DIR:-}" ]] && case ":$PATH:" in *:"\${ORCA_REMOTE_CLI_BIN_DIR}":*) ;; *) export PATH="\${ORCA_REMOTE_CLI_BIN_DIR}:$PATH" ;; esac`
 const CODEX_HOME_RESTORE = `# Why: Codex must keep using Orca's runtime CODEX_HOME after rc files.
 [[ -n "\${ORCA_CODEX_HOME:-}" ]] && export CODEX_HOME="\${ORCA_CODEX_HOME}"`
+const CLAUDE_CONFIG_DIR_RESTORE = `# Why: Claude must keep using Orca's runtime config directory after rc files.
+[[ -n "\${ORCA_CLAUDE_CONFIG_DIR:-}" ]] && export CLAUDE_CONFIG_DIR="\${ORCA_CLAUDE_CONFIG_DIR}"`
 
 /**
  * The OSC 133 hooks, defined at top level so their bodies are parsed before the
@@ -125,6 +129,7 @@ function getOverlayRestoreBlocks(spec: ZshStartupHookSpec): (string | null)[] {
     spec.restores.remoteCliBinDir ? REMOTE_CLI_BIN_DIR_RESTORE : null,
     getPosixOmpShellWrapper(),
     spec.restores.codexHome ? CODEX_HOME_RESTORE : null,
+    spec.restores.claudeConfigDir ? CLAUDE_CONFIG_DIR_RESTORE : null,
     spec.restores.codexLaunchPreflight ? getPosixCodexShellLaunchPreflight() : null
   ]
 }

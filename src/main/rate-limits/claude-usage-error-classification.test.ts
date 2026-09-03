@@ -6,14 +6,14 @@ import {
 import { OAuthUsageError } from './claude-oauth-usage-error'
 
 describe('classifyClaudeOAuthUsageError', () => {
-  it('treats OAuth unauthorized as stale-token repair/fallback', () => {
+  it('reports OAuth unauthorized as an expired token without refreshing', () => {
     expect(
       classifyClaudeOAuthUsageError(new OAuthUsageError('Invalid OAuth token', 401, true))
     ).toMatchObject({
-      failureKind: 'stale-token',
-      shouldAttemptDelegatedRefresh: true,
-      shouldAttemptCliFallback: true,
-      terminal: false
+      failureKind: 'token_expired',
+      shouldAttemptDelegatedRefresh: false,
+      shouldAttemptCliFallback: false,
+      terminal: true
     })
   })
 
