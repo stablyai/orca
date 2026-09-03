@@ -24,7 +24,9 @@ const CWD = '/repo/orca-app'
 const SESSION = 'omp-session'
 const IDLE_TITLE = `π - ${SESSION} - orca-app`
 
-function createHarness(options: { paneKey?: string; isIdle?: () => boolean } = {}): Harness {
+function createHarness(
+  options: { paneKey?: string; isIdle?: () => boolean; kind?: 'pi' | 'omp' } = {}
+): Harness {
   const titles: string[] = []
   const ctx: TitlebarContext = {
     ui: {
@@ -61,7 +63,7 @@ function createHarness(options: { paneKey?: string; isIdle?: () => boolean } = {
   } as Record<string, unknown>
   context.globalThis = context
 
-  const output = ts.transpileModule(getPiTitlebarExtensionSource(), {
+  const output = ts.transpileModule(getPiTitlebarExtensionSource(options.kind), {
     compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2020 }
   }).outputText
   runInNewContext(output, context)
@@ -210,13 +212,26 @@ describe('getPiTitlebarExtensionSource', () => {
   })
 
   it('keeps spinning across a non-terminal OMP agent_end', async () => {
-    const harness = createHarness()
+    const harness = createHarness({ kind: 'omp' })
 
     await harness.callHook('agent_start')
     await harness.callHook('agent_end', { willContinue: true })
 
     expect(vi.getTimerCount()).toBe(1)
     expect(harness.lastTitle()).toMatch(BRAILLE_RE)
+  })
+
+  it('stops a terminal OMP spinner without waiting for ctx.isIdle', async () => {
+    const isIdle = vi.fn(() => false)
+    const harness = createHarness({ kind: 'omp', isIdle })
+
+    await harness.callHook('agent_start')
+    await harness.callHook('agent_end', { willContinue: false })
+
+    expect(isIdle).not.toHaveBeenCalled()
+    expect(vi.getTimerCount()).toBe(0)
+    expect(harness.lastTitle()).toBe(IDLE_TITLE)
+    expect(harness.lastTitle()).not.toMatch(BRAILLE_RE)
   })
 
   it('waits for modern runtimes to become idle after agent_end', async () => {
