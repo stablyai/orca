@@ -848,27 +848,32 @@ Include the manifest path/schema, exact provider commands, Codex managed-home re
 After the `/srv/script` copy and focused tests pass, refresh the live managed
 scripts through the supported CLI. `agent hooks on` alone does not guarantee a
 refresh: `src/cli/handlers/agent-hooks.ts:setAgentHooksEnabled()` calls
-`updateRunningRuntime()`, which sends `settings.update` with
-`agentStatusHooksEnabled: true`; when a reachable runtime already has that
-setting `true`, `src/main/ipc/settings.ts`'s `hookSettingChanged` guard is
-false, `applyAgentStatusHooksEnabled()`/`installManagedAgentHooks()` is never
-called, and the CLI falls through to `getManagedAgentHookStatuses()`, a
-read-only status probe. Since hooks are already enabled in the normal
-operator flow, this is the common case, not an edge case. Force the actual
-state transition instead: run `agent hooks off` immediately followed by
-`agent hooks on`. Both calls change `agentStatusHooksEnabled`, so
-`hookSettingChanged` is true both times, `applyAgentStatusHooksEnabled(true, …)`
-runs, and `installManagedAgentHooks()`'s unconditional
-`refreshExistingManagedScripts()` regenerates the Claude/Codex managed
-scripts from the amended source before the presence-gated install step. When
-the runtime is unreachable, the CLI's offline `setAgentHooksEnabled()` path
-calls `applyAgentStatusHooksEnabled()` directly on every invocation and does
-not need the off/on toggle. The raw OMP recovery extension is not installed
-by this managed-hook refresh; the live setup hook installs it under the OMP
-agent directory's `extensions` child and selects it through
-`ORCA_OMP_STATUS_EXTENSION`. Do not treat `agent hooks status` or a single
-`agent hooks on` against an already-enabled reachable runtime as deployment
-or refresh.
+`updateRunningRuntime()`, which sends the `settings.update` RPC with
+`agentStatusHooksEnabled: true` through
+`src/main/runtime/rpc/methods/client-ui.ts`'s `settings.update` method into
+`runtime.updateClientSettings()`. That resolves to
+`src/main/runtime/runtime-client-settings.ts:RuntimeClientSettings.update()`,
+which reconciles managed hooks only when
+`before !== updates.agentStatusHooksEnabled` (or the disabled-agent set
+changes); when a reachable runtime already has that setting `true`, this gate
+is false, `reconcileManagedAgentHooks()`/`applyAgentStatusHooksEnabled()`/
+`installManagedAgentHooks()` is never called, and the CLI falls through to
+`getManagedAgentHookStatuses()`, a read-only status probe. Since hooks are
+already enabled in the normal operator flow, this is the common case, not an
+edge case. Force the actual state transition instead: run `agent hooks off`
+immediately followed by `agent hooks on`. Both calls change
+`agentStatusHooksEnabled`, so the gate is true both times,
+`applyAgentStatusHooksEnabled(true, …)` runs, and
+`installManagedAgentHooks()`'s unconditional `refreshExistingManagedScripts()`
+regenerates the Claude/Codex managed scripts from the amended source before
+the presence-gated install step. When the runtime is unreachable, the CLI's
+offline `setAgentHooksEnabled()` path calls `applyAgentStatusHooksEnabled()`
+directly on every invocation and does not need the off/on toggle. The raw OMP
+recovery extension is not installed by this managed-hook refresh; the live
+setup hook installs it under the OMP agent directory's `extensions` child and
+selects it through `ORCA_OMP_STATUS_EXTENSION`. Do not treat `agent hooks
+status` or a single `agent hooks on` against an already-enabled reachable
+runtime as deployment or refresh.
 
 Verify the resulting artifacts and returned statuses before updating the live setup hook:
 

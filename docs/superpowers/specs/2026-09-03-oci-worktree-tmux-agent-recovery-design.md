@@ -522,15 +522,18 @@ only by the coordinator/host owner.
 
 Before claiming recovery support, record the focused test output and verify
 that provider resume is attempted only for newly created sessions. For live
-managed-hook deployment, `src/main/ipc/settings.ts`'s `hookSettingChanged`
-guard skips `applyAgentStatusHooksEnabled()`/`installManagedAgentHooks()`
-whenever a reachable runtime already has the requested
-`agentStatusHooksEnabled` value, so a single `agent hooks on` against an
-already-enabled runtime falls through
-`src/cli/handlers/agent-hooks.ts:setAgentHooksEnabled()` to the read-only
-`getManagedAgentHookStatuses()` path and refreshes nothing. Use `agent hooks
-off` immediately followed by `agent hooks on` to force the state transition
-that runs `installManagedAgentHooks()`'s unconditional
+managed-hook deployment, the reachable-runtime `agent hooks on/off` CLI path
+sends the `settings.update` RPC (`src/main/runtime/rpc/methods/client-ui.ts`)
+into `runtime.updateClientSettings()`, which resolves to
+`src/main/runtime/runtime-client-settings.ts:RuntimeClientSettings.update()`.
+That method reconciles managed hooks only when
+`before !== updates.agentStatusHooksEnabled` (or the disabled-agent set
+changes); a single `agent hooks on` against an already-enabled reachable
+runtime leaves that gate false, so
+`src/cli/handlers/agent-hooks.ts:setAgentHooksEnabled()` falls through to the
+read-only `getManagedAgentHookStatuses()` path and refreshes nothing. Use
+`agent hooks off` immediately followed by `agent hooks on` to force the state
+transition that runs `installManagedAgentHooks()`'s unconditional
 `refreshExistingManagedScripts()`; the CLI's offline path calls
 `applyAgentStatusHooksEnabled()` directly on every invocation and needs no
 toggle. This refreshes the managed Claude/Codex artifacts; it does not
