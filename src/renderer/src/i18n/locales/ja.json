@@ -3023,6 +3023,10 @@
             "chooseAction": "アクションを選択してください。",
             "searchProvider": "{{value0}} で検索"
           },
+          "TabBarRunScriptButton": {
+            "runScript": "Run Script",
+            "runScriptTooltip": "Run a package.json script"
+          },
           "TabBarQuickCommandsButton": {
             "a2c7a33831": "コマンド",
             "20bbd75896": "コマンドはありません",

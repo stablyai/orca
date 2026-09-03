@@ -13,6 +13,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import TabBar from '../tab-bar/TabBar'
 
 import { TabBarQuickCommandsButton } from '../tab-bar/TabBarQuickCommandsButton'
+import { TabBarRunScriptButton } from '../tab-bar/TabBarRunScriptButton'
 import { useTabGroupWorkspaceModel } from './useTabGroupWorkspaceModel'
 import { closeTerminalTab } from '../terminal/terminal-tab-actions'
 import { resolveGroupTabFromVisibleId } from './tab-group-visible-id'
@@ -272,6 +273,9 @@ export default function TabGroupPanel({
             <div className={focusedActionChromeClassName}>
               {isFocused ? (
                 <TabBarQuickCommandsButton worktreeId={worktreeId} groupId={groupId} />
+              ) : null}
+              {isFocused ? (
+                <TabBarRunScriptButton worktreeId={worktreeId} groupId={groupId} />
               ) : null}
               {isFocused && hasSplitGroups ? (
                 <Tooltip>

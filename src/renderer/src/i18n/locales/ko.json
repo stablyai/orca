@@ -3028,6 +3028,10 @@
             "chooseAction": "작업을 선택하세요.",
             "searchProvider": "{{value0}}에서 검색"
           },
+          "TabBarRunScriptButton": {
+            "runScript": "Run Script",
+            "runScriptTooltip": "Run a package.json script"
+          },
           "TabBarQuickCommandsButton": {
             "a2c7a33831": "명령",
             "20bbd75896": "명령 없음",

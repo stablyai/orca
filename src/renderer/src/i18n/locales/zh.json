@@ -3038,6 +3038,10 @@
             "chooseAction": "请选择一项操作。",
             "searchProvider": "使用 {{value0}} 搜索"
           },
+          "TabBarRunScriptButton": {
+            "runScript": "Run Script",
+            "runScriptTooltip": "Run a package.json script"
+          },
           "TabBarQuickCommandsButton": {
             "a2c7a33831": "命令",
             "20bbd75896": "无命令",

@@ -3397,6 +3397,10 @@
             "openPage": "Open page",
             "omniboxPlaceholderWithHistory": "Search open tabs, history, files, URLs, agents…"
           },
+          "TabBarRunScriptButton": {
+            "runScript": "Run Script",
+            "runScriptTooltip": "Run a package.json script"
+          },
           "TabBarQuickCommandsButton": {
             "a2c7a33831": "Command",
             "20bbd75896": "No commands",
