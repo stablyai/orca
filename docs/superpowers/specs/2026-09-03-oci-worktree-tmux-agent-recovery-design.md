@@ -170,6 +170,42 @@ skip non-local paths, call the setup hook, observe which session name was newly
 created, load the matching host-local provider-session manifest, and start
 provider recovery only for that newly created session. An existing session is
 never modified or sent a resume command.
+## Coordinator-only OCI OMP fallback
+
+The existing `orca-coordinator.sh oci-omp-run` route is an explicit
+coordinator-only fallback, not a second implementation of the four-window tmux
+recovery surface:
+
+```text
+hp_v2 ready          -> existing Orca/hp_v2 orchestration remains preferred
+explicit oci-omp-run -> direct OMP subprocess -> stdout relay to caller
+```
+This contract is carried by
+`/srv/script/oci-omp-fallback.sh` and
+`/srv/script/oci-omp-fallback.conf`, dispatched only by
+`/srv/script/orca-coordinator.sh`, with focused coverage in
+`/srv/script/oci-omp-fallback.test.sh`. `/srv/script/worker-preamble.md`
+continues to prohibit worker-side direct invocation.
+
+
+The fallback creates no child tmux session and no PTY. It never passes
+`--no-session`; it invokes OMP with a stable `--profile`, origin-scoped
+`--session-dir`, `--cwd`, `--no-pty`, and `-p`. The first request omits
+`--resume`. A later request for the same stable origin validates its state and
+passes the saved native `sessionId` with `--resume`.
+
+Its origin-keyed state is separate from the per-worktree manifest and contains
+the stable origin, opaque coordinator `workerId`, native `sessionId`,
+`sessionFile` evidence path, profile, session directory, cwd, and update time.
+Only `sessionId` reaches `--resume`; `sessionFile` is not a locator for the
+tmux manifest and does not create an OMP `resumeFilePath` field. The fallback's
+session ID uses the same trim/empty/512-character/leading-dash/control-character
+boundary before state persistence and before `--resume`; invalid state fails
+closed without invoking OMP.
+
+The worker preamble forbids direct fallback invocation and direct child-agent
+launch. The fallback is a control-plane relay only and never creates an Orca
+managed-worker identity or AgentMap edge.
 
 ## Session layout
 
@@ -257,13 +293,16 @@ path defined in the chosen approach. The generated Claude/Codex recorder may
 pass each captured payload to the writer, but the writer accepts only a
 `SessionStart` payload for a manifest mutation. An ordinary provider event
 therefore may invoke the writer but must produce no manifest change. The
-implementation must not infer an ID from terminal text, file mtime, a global
-recent-session picker, or a relay event that lacks the raw session's
-`ORCA_OCI_*` context. The writer receives a normalized provider locator from
-the adapter, realpaths and validates the worktree/root pair, then atomically
-updates the matching manifest. OMP's `getSessionFile()` is a persistence gate
-only; it is never serialized as `resumeFilePath` or used as the OCI resume
-target.
+For the tmux manifest, the implementation must not infer an ID from terminal
+text, file mtime, a global recent-session picker, or a relay event that lacks
+the raw session's `ORCA_OCI_*` context. The separate coordinator-only fallback
+may scan its stable origin-keyed session directory only to identify the
+persistent session record produced by its own direct subprocess; that state
+never feeds this manifest. The writer receives a normalized provider locator
+from the adapter, realpaths and validates the worktree/root pair, then
+atomically updates the matching manifest. OMP's `getSessionFile()` is a
+persistence gate only; it is never serialized as `resumeFilePath` or used as
+the OCI resume target.
 
 All Claude, Codex, and OMP IDs use the same trust boundary as
 `normalizeAgentProviderSession` in `src/shared/agent-session-resume.ts`: trim
@@ -302,7 +341,9 @@ A UI-visible worker is created through Orca managed orchestration and receives
 its own managed terminal/worktree identity. It is not placed into one of the
 four existing tmux windows. The current `/srv/workspace/orca` OMP work session
 must not directly start, stop, resume, or kill that worker; the permitted
-coordinator/control-plane dispatch path owns the lifecycle.
+coordinator/control-plane dispatch path owns the lifecycle. The explicit
+coordinator-only `oci-omp-run` fallback is allowed only on that control-plane
+path and remains outside managed-worker lifecycle.
 
 Raw `tmux send-keys` provider startup is therefore intentionally invisible to
 managed orchestration lineage. Dashboard cards and AgentMap edges are only
@@ -320,6 +361,7 @@ expected for the separate managed terminal path.
 | wrong session path or pane CWD | fail the recovery for that session; do not start a provider |
 | non-local/Windows worktree path | skip it; do not create an OCI tmux session |
 | managed worker request | create a separate Orca managed terminal/worktree, never a tmux child |
+| explicit coordinator `oci-omp-run` fallback | run direct persistent non-PTY OMP; relay stdout; save state and resume later requests by origin |
 
 Recovery is deliberately one-shot per created tmux session. If a provider
 start or preflight partially fails, the coordinator leaves the session and
@@ -345,6 +387,9 @@ The operational change is limited to:
 - focused shell tests for hook layout, manifest matching, and coordinator
   recovery behavior;
 - operational project facts documenting the OCI session and provider policy.
+- the existing coordinator-only `oci-omp-run` fallback and its
+  origin/profile/session state, which must remain separate from tmux recovery
+  and inaccessible to worker panes;
 
 The existing Codex invocation must use
 `--dangerously-bypass-approvals-and-sandbox`, not Claude's
@@ -423,6 +468,18 @@ The coordinator test must assert:
 - an existing session is not resumed again;
 - an unreachable hp_v2 runtime does not destroy the OCI keeper or local session
   inventory.
+The coordinator-only fallback test must assert:
+
+- `oci-omp-run` is callable only through the coordinator wrapper;
+- hp_v2 orchestration remains preferred when its runtime is ready;
+- the helper uses direct `--no-pty -p` execution with stable `--profile`,
+  `--session-dir`, and `--cwd`, without tmux/PTY/`--no-session` launchers;
+- the first request has no `--resume`, a follow-up uses the same origin state
+  and saved native `sessionId` with `--resume`, and stdout is relayed unchanged;
+- the saved state preserves the same opaque `workerId` and origin while its
+  `sessionFile` remains evidence rather than a resume locator;
+- overlong, leading-dash, control-character, or malformed saved IDs fail
+  closed before OMP invocation.
 
 
 Run CLI help probes for the installed Codex, Claude, and OMP versions and keep
@@ -448,11 +505,13 @@ The UI-visible managed-worker acceptance remains a separate Orca UI/AgentMap
 smoke check. It must verify a managed worker has its own terminal and managed
 lineage; it must not expect a raw tmux window to become a card.
 
-Read-only source inspection, ShellCheck, and focused shell tests run on OCI.
-Project pnpm gates, builds, packaging, and Electron validation remain hp_v2-only
-through the coordinator. No hp_v2 reboot is required for normal OCI session
-recovery verification; a controlled OCI tmux-service restart or host reboot
-scenario must be performed only by the coordinator/host owner.
+Read-only source inspection, ShellCheck, and focused shell tests run on OCI;
+the focused set includes `/srv/script/oci-omp-fallback.test.sh` for the
+coordinator-only persistent direct-OMP route. Project pnpm gates, builds,
+packaging, and Electron validation remain hp_v2-only through the coordinator.
+No hp_v2 reboot is required for normal OCI session recovery verification; a
+controlled OCI tmux-service restart or host reboot scenario must be performed
+only by the coordinator/host owner.
 
 Before claiming recovery support, record the focused test output and verify
 that provider resume is attempted only for newly created sessions. For live
