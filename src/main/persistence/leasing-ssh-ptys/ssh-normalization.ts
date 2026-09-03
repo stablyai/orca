@@ -73,7 +73,13 @@ export function normalizeSshRemotePtyLease(value: unknown): SshRemotePtyLease | 
     createdAt: typeof raw.createdAt === 'number' ? raw.createdAt : now,
     updatedAt: typeof raw.updatedAt === 'number' ? raw.updatedAt : now,
     ...(typeof raw.lastAttachedAt === 'number' ? { lastAttachedAt: raw.lastAttachedAt } : {}),
-    ...(typeof raw.lastDetachedAt === 'number' ? { lastDetachedAt: raw.lastDetachedAt } : {})
+    ...(typeof raw.lastDetachedAt === 'number' ? { lastDetachedAt: raw.lastDetachedAt } : {}),
+    // Whitelisted or the loader would strip them on every launch, and a superseded predecessor
+    // would come back reattachable — the fan-out this mark exists to prevent.
+    ...(typeof raw.supersededBy === 'string' && raw.supersededBy.length > 0
+      ? { supersededBy: raw.supersededBy }
+      : {}),
+    ...(raw.relayIdRecycled === true ? { relayIdRecycled: true as const } : {})
   }
 }
 

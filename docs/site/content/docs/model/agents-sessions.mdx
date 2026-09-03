@@ -3,7 +3,7 @@ title: Agents & sessions
 description: State dots, restart chips, and the lifecycle of an agent session.
 ---
 
-import { Callout } from '@/components/docs/prose';
+import { Callout } from '@/components/docs/prose'
 
 An **agent session** is one CLI agent running in one terminal in one worktree. Orca tracks its lifecycle so you always know which sessions are working and which are idle — without you having to click into each tab to check.
 
@@ -76,5 +76,6 @@ When an agent exits (clean or crash), the tab shows a **Restart** chip. One clic
 1. **Exit** — the process ends; the Restart chip appears.
 
 <Callout>
-For the exact detection rules, see the `terminal wait --for tui-idle` command in the [Orca CLI](/docs/cli/overview).
+  For the exact detection rules, see the `terminal wait --for tui-idle` command in the [Orca
+  CLI](/docs/cli/overview).
 </Callout>

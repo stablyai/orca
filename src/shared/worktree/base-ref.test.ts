@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { resolveWorktreeAddBaseRef } from './base-ref'
+import { resolveWorktreeAddBaseRef, worktreeBaseRefFamily } from './base-ref'
 
 describe('resolveWorktreeAddBaseRef', () => {
   it('leaves fully qualified refs unchanged', async () => {
@@ -60,5 +60,33 @@ describe('resolveWorktreeAddBaseRef', () => {
     const refExists = vi.fn(async () => false)
 
     await expect(resolveWorktreeAddBaseRef('abc1234', refExists)).resolves.toBe('abc1234')
+  })
+})
+
+describe('worktreeBaseRefFamily', () => {
+  it('gives a local branch and its remote-tracking copies the same family', () => {
+    expect(worktreeBaseRefFamily('refs/heads/main')).toBe('main')
+    expect(worktreeBaseRefFamily('refs/remotes/origin/main')).toBe('main')
+    expect(worktreeBaseRefFamily('refs/remotes/upstream/main')).toBe('main')
+  })
+
+  it('keeps the full branch path for slash-containing branches', () => {
+    expect(worktreeBaseRefFamily('refs/heads/release/24.1')).toBe('release/24.1')
+    expect(worktreeBaseRefFamily('refs/remotes/origin/release/24.1')).toBe('release/24.1')
+  })
+
+  it('separates different branches', () => {
+    expect(worktreeBaseRefFamily('refs/heads/main')).not.toBe(
+      worktreeBaseRefFamily('refs/heads/release')
+    )
+  })
+
+  it('has no family for anything that is not a branch ref', () => {
+    expect(worktreeBaseRefFamily('abc1234')).toBeNull()
+    expect(worktreeBaseRefFamily('main')).toBeNull()
+    expect(worktreeBaseRefFamily('refs/tags/v1.0.0')).toBeNull()
+    expect(worktreeBaseRefFamily('refs/pull/123/head')).toBeNull()
+    expect(worktreeBaseRefFamily('refs/remotes/origin/HEAD')).toBeNull()
+    expect(worktreeBaseRefFamily('refs/remotes/origin')).toBeNull()
   })
 })

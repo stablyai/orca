@@ -8,6 +8,7 @@ import {
   makeCreatedAgentWorktree as makeWorktree,
   seedEmptyActivatableWorktree
 } from '@/lib/worktree-activation-created-agent-test-state'
+import { waitForWorktreeAgentActivationGateForTests } from './worktree-agent-activation-gate'
 
 const initialAppStoreState = useAppStore.getState()
 
@@ -224,13 +225,26 @@ describe('activating a folder workspace whose last terminal was closed', () => {
 
   // Why: the opt-out must mean the same thing on both workspace shapes, or routing a
   // file link through a folder workspace would silently regress to seeding a shell.
-  it('leaves the row empty when the caller opens its own surface', () => {
+  it('leaves the row empty when the caller opens its own surface', async () => {
     seedEmptiedFolderWorkspaceOnTwoHosts()
+    useAppStore.setState({
+      workspaceSessionReady: true,
+      terminalStartupRestorationReady: true
+    })
+    vi.stubGlobal('window', {
+      api: {
+        runtime: {
+          call: vi.fn(async () => ({ ok: true, result: { snapshots: [] } }))
+        },
+        pty: { listSessions: vi.fn(async () => []) }
+      }
+    })
 
     const result = activateAndRevealFolderWorkspace(FOLDER_ID, {
       executionHostId: 'local',
       providesInitialSurface: true
     })
+    await waitForWorktreeAgentActivationGateForTests(FOLDER_KEY)
 
     expect(result).not.toBe(false)
     expect(result === false ? null : result.primaryTabId).toBeNull()

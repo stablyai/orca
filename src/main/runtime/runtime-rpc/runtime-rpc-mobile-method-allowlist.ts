@@ -227,6 +227,7 @@ export const MOBILE_RPC_METHOD_ALLOWLIST = new Set([
   'agentTeams.tmuxCompat',
   'terminal.clearBuffer',
   'terminal.close',
+  'terminal.closeAll',
   'terminal.closeTab',
   'terminal.create',
   'terminal.createAgentSession',

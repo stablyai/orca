@@ -20,6 +20,7 @@ import {
   removeWorktreeMetadataForHost
 } from '../loading-store/worktree-identity-metadata'
 import type { WorktreeMeta } from '../../../shared/worktree/meta-types'
+import { fillDefaultWorktreeMetaFields } from '../../../shared/worktree/meta-persisted-defaults'
 
 // Why: worktrees deleted outside Orca orphan their worktreeMeta, so the map grew monotonically (63% dead on a heavy install).
 // GC stays narrow: local-host entries only (a local existsSync would falsely condemn SSH/WSL remote paths) and only after a 30-day idle grace.
@@ -143,6 +144,9 @@ export function normalizeWorktreeLinkedItemMetadata(state: PersistedState): bool
       changed = true
       continue
     }
+    // Not `changed`: the serializer omits these slots deliberately, so re-filling them is how the
+    // on-disk shape is already canonical -- flagging it would force a full rewrite on every launch.
+    fillDefaultWorktreeMetaFields(meta)
     changed = normalizeLinkedMetadata(meta) || changed
   }
   const rawIdentityMetadata = state.worktreeMetaByIdentity as unknown
@@ -161,6 +165,7 @@ export function normalizeWorktreeLinkedItemMetadata(state: PersistedState): bool
       changed = true
       continue
     }
+    fillDefaultWorktreeMetaFields(meta)
     changed = normalizeLinkedMetadata(meta) || changed
   }
 

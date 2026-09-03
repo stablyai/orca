@@ -139,5 +139,6 @@ export async function assemblePtyIpcSpawnEnv(ctx: PtyIpcSpawnState): Promise<voi
   // Why: SSH can strip ORCA_PANE_KEY when remote hooks are off; IPC tab/leaf metadata still names the pane.
   ctx.reservationPaneKey = ctx.metadataPaneKey ?? ctx.validatedPaneKey
   ctx.validatedLeafId = ctx.verifiedLeafId ?? ctx.metadataLeafId
+  ctx.spawnTiming.mark('pane_env')
   await assemblePtyIpcSpawnCodexEnv(ctx)
 }

@@ -3,7 +3,7 @@
 import type { CSSProperties, ReactNode } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { tmpdir } from 'node:os'
-import { cleanup, render } from '@testing-library/react'
+import { cleanup, render, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { getDefaultSettings } from '../../../../shared/constants'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
@@ -32,11 +32,18 @@ vi.mock('@/hooks/useSidebarResize', () => ({
 }))
 
 vi.mock('@/components/ui/tooltip', () => ({
-  TooltipProvider: ({ children }: { children: ReactNode }) => <>{children}</>
+  TooltipProvider: ({ children }: { children: ReactNode }) => <>{children}</>,
+  Tooltip: ({ children }: { children: ReactNode }) => <>{children}</>,
+  TooltipTrigger: ({ children }: { children: ReactNode }) => <>{children}</>,
+  TooltipContent: ({ children }: { children: ReactNode }) => <>{children}</>
 }))
 
-vi.mock('./SidebarHeader', () => ({
-  default: () => <div data-testid="sidebar-header" />
+vi.mock('./SidebarHeader', () => ({ default: () => <div data-testid="sidebar-header" /> }))
+
+vi.mock('./SidebarAgentsList', () => ({
+  default: ({ query }: { query: string }) => (
+    <div data-testid="sidebar-agents-list" data-query={query} />
+  )
 }))
 
 vi.mock('./SidebarNav', () => ({
@@ -218,5 +225,22 @@ describe('Sidebar', () => {
     }
 
     expect(fetchAllWorktrees).not.toHaveBeenCalled()
+  })
+
+  it('closes the dashboard drawer when the dashboard experiment is disabled', async () => {
+    setSidebarState({
+      ...getDefaultSettings(tmpdir()),
+      experimentalAgentDashboardPopout: false
+    })
+    const setAgentDashboardDrawerOpen = vi.fn()
+    mocks.state = {
+      ...mocks.state,
+      agentDashboardDrawerOpen: true,
+      setAgentDashboardDrawerOpen
+    }
+
+    render(sidebarElement())
+
+    await waitFor(() => expect(setAgentDashboardDrawerOpen).toHaveBeenCalledWith(false))
   })
 })

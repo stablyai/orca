@@ -101,7 +101,8 @@ describe('registerPtyHandlers', () => {
       await expect(handlers.get('pty:inspectProcess')!(null, { id })).resolves.toEqual({
         foregroundProcess: null,
         hasChildProcesses: false,
-        unavailable: true
+        verdict: 'unverifiable',
+        reason: 'terminal_gone'
       })
       expect(inspectProcess).not.toHaveBeenCalled()
     }
@@ -514,7 +515,8 @@ describe('registerPtyHandlers', () => {
     await expect(handlers.get('pty:inspectProcess')!(null, { id: 'gone-pty' })).resolves.toEqual({
       foregroundProcess: null,
       hasChildProcesses: false,
-      unavailable: true
+      verdict: 'unverifiable',
+      reason: 'terminal_gone'
     })
   })
 })

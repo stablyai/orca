@@ -103,6 +103,32 @@ describe('parseClaudeModelList', () => {
     expect(parseClaudeModelList(hostile)).toEqual([])
   })
 
+  it('drops the disabled placeholder row the CLI advertises for a model it cannot run', () => {
+    // Captured from `claude` 2.1.237: Fable 5.1 is announced but gated on 2.1.255+.
+    const parsed = parseClaudeModelList(
+      controlResponseLine([
+        { value: 'sonnet', displayName: 'Sonnet' },
+        {
+          value: 'cc-update-required-1',
+          resolvedModel: 'cc-update-required-1',
+          displayName: 'Fable 5.1 (disabled)',
+          description: 'Update to 2.1.255+ to use Fable 5.1',
+          supportsEffort: true,
+          supportedEffortLevels: ['low', 'medium', 'high', 'xhigh', 'max'],
+          disabled: true
+        }
+      ])
+    )
+    expect(parsed.map(({ id }) => id)).toEqual(['sonnet'])
+  })
+
+  it('keeps a model that reports disabled as anything other than true', () => {
+    const parsed = parseClaudeModelList(
+      controlResponseLine([{ value: 'fable', displayName: 'Fable', disabled: false }])
+    )
+    expect(parsed.map(({ id }) => id)).toEqual(['fable'])
+  })
+
   it('ignores effort levels when the model does not declare effort support', () => {
     const parsed = parseClaudeModelList(
       controlResponseLine([

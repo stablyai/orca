@@ -114,6 +114,7 @@ describe('PR E2E gate contract', () => {
     expect(prWorkflow.jobs['e2e-paths'].outputs.test_files).toBe(
       '${{ steps.filter.outputs.test_files }}'
     )
+    expect(prWorkflow.jobs.e2e.with.ref).toBe('${{ github.event.pull_request.head.sha }}')
     expect(prWorkflow.jobs.e2e.with.test_files).toBe('${{ needs.e2e-paths.outputs.test_files }}')
   })
 
@@ -266,6 +267,7 @@ describe('PR E2E gate contract', () => {
       'tests/e2e/pty-input-write-queue-ssh.spec.ts',
       'tests/e2e/ssh-cold-activation-restore.spec.ts',
       'tests/e2e/ssh-docker-reconnect-pane-restore.spec.ts',
+      'tests/e2e/ssh-docker-transport-drop-recovery.spec.ts',
       'tests/e2e/ssh-port-forward-lifecycle.spec.ts',
       'tests/e2e/ssh-reconnect-tab-destruction.spec.ts',
       'tests/e2e/ssh-startup-exec-readiness.spec.ts',
@@ -314,6 +316,11 @@ describe('PR E2E gate contract', () => {
 
     expect(
       selectPrE2eSpecs(['src/renderer/src/hooks/remote-workspace-session-merge.test.ts'])
+    ).toEqual([])
+    expect(
+      selectPrE2eSpecs([
+        'src/renderer/src/hooks/__tests__/remote-workspace-target-sync-test-harness.ts'
+      ])
     ).toEqual([])
   })
 
@@ -464,6 +471,50 @@ describe('PR E2E gate contract', () => {
       expect(selectPrE2eSpecs([source.replace(/\.tsx?$/, '.test.ts')]), source).toEqual([])
       expect(existsSync(join(projectDir, spec)), spec).toBe(true)
     }
+    const parkedSplitSpec = 'tests/e2e/terminal-parked-cli-split.spec.ts'
+    for (const source of [
+      'src/main/window/attach-main-window-services.ts',
+      'src/preload/api/ui-command-event-api.ts',
+      'src/preload/index.ts',
+      'src/renderer/src/components/terminal-pane/terminal-pane-split-request-routing.ts',
+      'src/renderer/src/components/terminal-pane/use-terminal-pane-lifecycle.ts',
+      'src/renderer/src/components/terminal-pane/use-terminal-tab-cold-parking.ts',
+      'src/renderer/src/hooks/ipc-events/terminal-ui-routing-ipc-bridge.ts'
+    ]) {
+      expect(selectPrE2eSpecs([source]), source).toContain(parkedSplitSpec)
+      expect(selectPrE2eSpecs([source.replace(/\.ts$/, '.test.ts')]), source).not.toContain(
+        parkedSplitSpec
+      )
+    }
+    expect(existsSync(join(projectDir, parkedSplitSpec)), parkedSplitSpec).toBe(true)
+
+    const restartContinuitySpec = 'tests/e2e/paired-remote-terminal-serve-restart-binding.spec.ts'
+    for (const source of [
+      'src/main/daemon/daemon-attach-only-retirement.ts',
+      'src/main/daemon/daemon-pty-applied-size.ts',
+      'src/main/daemon/daemon-pty-session-control.ts',
+      'src/main/daemon/daemon-pty-spawn-result.ts',
+      'src/renderer/src/components/terminal-pane/remote-runtime-pty-transport.ts',
+      'src/renderer/src/components/terminal-pane/terminal-error-accumulation.ts',
+      'src/renderer/src/runtime/web-runtime-session.ts',
+      'src/renderer/src/runtime/web-session-tabs-sync.ts',
+      'src/renderer/src/runtime/web-session-terminal-orphan-recovery.ts',
+      'src/renderer/src/runtime/web-session-terminal-orphan-recovery-adoption.ts',
+      'src/renderer/src/runtime/web-session-terminal-orphan-recovery-surface.ts',
+      'src/renderer/src/runtime/web-session-terminal-orphan-recovery-inventory.ts',
+      'src/renderer/src/runtime/web-session-terminal-orphan-recovery-inventory-validation.ts',
+      'src/renderer/src/runtime/web-session-terminal-orphan-recovery-cache.ts',
+      'src/renderer/src/runtime/web-session-terminal-orphan-recovery-pane.ts',
+      'src/renderer/src/runtime/web-session-terminal-orphan-recovery-queue.ts',
+      'src/renderer/src/runtime/web-session-terminal-orphan-recovery-rpc-lane.ts',
+      'src/renderer/src/runtime/web-session-terminal-orphan-topology.ts'
+    ]) {
+      expect(selectPrE2eSpecs([source]), source).toContain(restartContinuitySpec)
+      expect(selectPrE2eSpecs([source.replace(/\.ts$/, '.test.ts')]), source).not.toContain(
+        restartContinuitySpec
+      )
+    }
+    expect(existsSync(join(projectDir, restartContinuitySpec)), restartContinuitySpec).toBe(true)
     const quickCommandSpec = 'tests/e2e/terminal-quick-command-pre-bind-recovery.spec.ts'
     for (const source of [
       'src/renderer/src/components/terminal-pane/pty-connection.ts',

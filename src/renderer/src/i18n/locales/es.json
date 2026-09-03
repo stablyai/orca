@@ -2741,7 +2741,8 @@
             "e4aa243f8c": "Reiniciar servicio",
             "a7e2fd2699": "abre un issue",
             "5c8ce20be6": "Si esto persiste, por favor",
-            "cc6d997c65": "Reinicia el servicio del terminal desde aquí para borrar el estado obsoleto."
+            "cc6d997c65": "Reinicia el servicio del terminal desde aquí para borrar el estado obsoleto.",
+            "remoteTerminalClosed": "La terminal remota se cerró."
           },
           "TerminalProcessExitOverlay": {
             "capacityTitle": "Se alcanzó el límite de consolas de Git Bash",
@@ -2880,7 +2881,7 @@
           "TerminalRemoteRuntimeReconnectBanner": {
             "retryingTitle": "Reconnecting to remote runtime",
             "disconnectedTitle": "Remote runtime disconnected",
-            "retryingBody": "Orca will retry for up to one minute. This terminal will resume if the connection returns.",
+            "retryingBody": "Orca is retrying automatically. This terminal will resume if the connection returns.",
             "disconnectedBody": "Automatic retries stopped. Reconnect to resume this terminal session.",
             "reconnectButton": "Reconnect"
           }
@@ -3012,7 +3013,8 @@
             "25dc1cd653": "Abrir archivo",
             "7cdf8ee0c8": "Abrir URL",
             "b27864279e": "Iniciar agente",
-            "0e5b7a3f16": "Buscar pestañas abiertas, archivos, URL y agentes…",
+            "omniboxPlaceholderWithHistory": "Buscar pestañas abiertas, historial, archivos, URL y agentes…",
+            "openPage": "Abrir página",
             "8f0a1c4d92": "Cambiar a la pestaña",
             "2c38630a01": "El espacio de trabajo ya no existe",
             "4f0d9a71c2": "La pestaña ya no existe",
@@ -3058,7 +3060,6 @@
                 "classifier": {
                   "42e6262ae9": "No hay acción disponible.",
                   "097a982ee0": "Cargando archivos...",
-                  "c41f8d20b7": "Buscar pestañas abiertas, archivos, URL y agentes…",
                   "90eb94dc48": "Introduce una URL http:// o https://.",
                   "5553b283ce": "Introduce una URL o ruta de archivo.",
                   "queryTooLarge": "El texto de búsqueda es demasiado grande.",
@@ -4403,12 +4404,15 @@
           "keepDefaultBranchAria": "Mantener visible la rama predeterminada al ocultar los espacios de trabajo en reposo"
         },
         "SidebarHeader": {
+          "projects": "Proyectos",
           "92154beb7e": "Nuevo espacio de trabajo",
           "49f62c5665": "Tablero de espacios de trabajo",
           "5c9c7c16aa": "Agregar un proyecto para crear espacios de trabajo",
           "ca6f729da2": "Nuevo espacio de trabajo ({{value0}})",
           "a30e34eb5c": "Cerrar tablero del espacio de trabajo",
-          "25a95899c9": "Agregar proyecto"
+          "25a95899c9": "Agregar proyecto",
+          "spaces": "Espacios",
+          "views": "Vista de la barra lateral"
         },
         "SidebarNav": {
           "80611a8b10": "Buscar",
@@ -8230,7 +8234,8 @@
             },
             "agentDashboard": {
               "title": "Panel de agentes",
-              "description": "Tablero Kanban para monitorear agentes en diferentes worktrees, en ventana o como ventana emergente."
+              "description": "Tablero Kanban para monitorear agentes en diferentes worktrees, en ventana o como ventana emergente.",
+              "dashboard": "panel"
             }
           }
         },
@@ -13714,6 +13719,35 @@
         }
       },
       "automations": {
+        "AutomationListToolbar": {
+          "runs": "Ejecuciones"
+        },
+        "AutomationRunsDashboard": {
+          "search": "Buscar ejecuciones…",
+          "filters": "Filtros",
+          "host": "Host",
+          "status": "Estado",
+          "refresh": "Actualizar ejecuciones",
+          "successful24h": "Exitosas · 24 h",
+          "failed24h": "Fallidas · 24 h",
+          "successful7d": "Exitosas · 7 días",
+          "failed7d": "Fallidas · 7 días",
+          "historyUnavailableOne": "El historial de ejecuciones no está disponible para 1 automatización. Los recuentos solo incluyen el historial disponible.",
+          "historyUnavailableMany": "El historial de ejecuciones no está disponible para {{count}} automatizaciones. Los recuentos solo incluyen el historial disponible.",
+          "automation": "Automatización",
+          "triggered": "Activada",
+          "trigger": "Activar",
+          "loading": "Cargando ejecuciones…",
+          "noRuns": "Aún no hay ejecuciones",
+          "emptyDescription": "Las ejecuciones aparecerán aquí después de activar una automatización.",
+          "runs": "Ejecuciones",
+          "local": "Local",
+          "remote": "Remoto"
+        },
+        "AutomationsPageBreadcrumb": {
+          "ariaLabel": "Ruta de navegación de automatizaciones",
+          "runDetails": "Detalles de la ejecución"
+        },
         "AutomationCustomCronPanel": {
           "3e3b2c369f": "expresión cron",
           "e81a02d61b": "Ingrese un cron válido de cinco campos antes de guardar.",
@@ -14142,9 +14176,10 @@
           "b29191b3e0": "worktree",
           "8c3b621ddf": "Proyecto",
           "4a3986b200": "Estado",
-          "770d458144": "Agrupar actividad del agente por",
+          "770d458144": "Agrupar por",
           "795cbf26e2": "Filtrar...",
           "4616ea39fd": "Ir al workspace",
+          "markThreadRead": "Marcar hilo como leído",
           "59b131fbd9": "Marcar hilo como no leído",
           "beb2c19173": "No leído",
           "5651b216c6": "Proyecto desconocido",
@@ -14694,6 +14729,13 @@
       "sent": "El contexto de la sesión se envió a {{agent}} en una sesión nueva.",
       "deliveryFailed": "La nueva sesión de {{agent}} se inició, pero no se pudo enviar su contexto.",
       "launchFailed": "No se pudo iniciar una sesión nueva de {{agent}}."
+    },
+    "terminalPane": {
+      "TerminalContextMenu": {
+        "copySessionId": "Copiar ID de sesión",
+        "copySessionIdSuccess": "ID de sesión copiado",
+        "copySessionIdError": "No se pudo copiar el ID de sesión"
+      }
     }
   },
   "dashboardPopout": {
@@ -14791,7 +14833,8 @@
   },
   "dashboard": {
     "sidebar": {
-      "label": "Panel de agentes"
+      "label": "Agentes",
+      "dashboardLabel": "Panel de agentes"
     }
   },
   "browser": {
@@ -14831,6 +14874,21 @@
         "addressInUse": "Another process may be holding the port. Restart Orca to try again.",
         "unknown": "Restart Orca to try again."
       }
+    }
+  },
+  "agentsSidebarIntro": {
+    "migrated": {
+      "title": "Los agentes son más fáciles de encontrar",
+      "description": "Tu vista de Agentes ahora es una pestaña dedicada de la barra lateral. Tu actividad y filtros se conservan.",
+      "dismiss": "Entendido",
+      "action": "Abrir Agentes"
+    },
+    "new": {
+      "title": "Conoce tu pestaña de Agentes",
+      "description": "Ve en qué están trabajando tus agentes, qué está terminado y dónde necesitas intervenir.",
+      "hide": "Ocultar Agentes",
+      "action": "Probar Agentes",
+      "hiddenToast": "La pestaña Agentes está oculta. Vuelve a activarla en Configuración → Experimental."
     }
   }
 }

@@ -1,5 +1,5 @@
 import { createRequire } from 'node:module'
-import { createProcessTableSnapshotReader } from '../../shared/process-table-snapshot'
+import { createProcessTableSnapshotReader } from '../../shared/process-table-snapshot-reader'
 import { readWindowsProcessRowsWithCim } from './windows-process-table-cim-scan'
 
 /**
@@ -23,6 +23,10 @@ import { readWindowsProcessRowsWithCim } from './windows-process-table-cim-scan'
  *   pid+ppid+name        15.9 / 17.5 ms
  *   +memory +commandLine 30.6 / 33.7 ms
  *   PowerShell CIM        706 / 723  ms
+ *
+ * Those are the module's published figures for both extra fields together; the
+ * only flag set this module asks for is `CommandLine` (+ `CreationTime`, free),
+ * which sits between the two rows and has not been separately measured.
  */
 
 export type WindowsProcessRow = {
@@ -31,8 +35,6 @@ export type WindowsProcessRow = {
   name: string
   /** Full command line. Empty when the process denied a query handle. */
   command: string
-  /** Working set in bytes, or undefined when not requested/queryable. */
-  memoryBytes?: number
   /** Process creation time in Unix milliseconds, when the native snapshot provides it. */
   creationTimeMs?: number
 }
@@ -41,7 +43,6 @@ type NativeProcessInfo = {
   pid: number
   ppid: number
   name: string
-  memory?: number
   commandLine?: string
   creationTimeMs?: number
 }
@@ -49,7 +50,6 @@ type NativeProcessInfo = {
 type WindowsProcessTreeModule = {
   ProcessDataFlag: {
     None: number
-    Memory: number
     CommandLine: number
     CreationTime?: number
   }
@@ -82,7 +82,10 @@ type WindowsProcessTreeAddon = {
   ) => void
 }
 
-/** Mirrors the package's enum; the addon takes the raw bit field. */
+/**
+ * Mirrors the package's enum; the addon takes the raw bit field. `Memory` (1)
+ * is listed for completeness and is deliberately never set — see `flags` below.
+ */
 const PROCESS_DATA_FLAG = { None: 0, Memory: 1, CommandLine: 2 } as const
 
 /** Staged beside the relay bundle by build-relay; see RELAY_ARTIFACTS. */
@@ -190,16 +193,16 @@ function readNativeRows(): Promise<WindowsProcessRow[]> {
   }
   const readId = ++readSequence
   const readerEpoch = nativeReaderEpoch
-  // Why always both flags: each adds an OpenProcess per process (Memory a
-  // GetProcessMemoryInfo, CommandLine a PEB read), so asking for less would be
-  // cheaper -- 15.9ms p50 versus 30.6ms at 1050 processes. But every read shares
-  // one snapshot so a 32-wide teardown collapses into a single scan, and that
-  // snapshot has to satisfy every caller. Splitting the cache per field set
-  // would restore exactly the fan-out it exists to prevent.
-  const flags =
-    native.ProcessDataFlag.Memory |
-    native.ProcessDataFlag.CommandLine |
-    (native.ProcessDataFlag.CreationTime ?? 0)
+  // Why CommandLine but not Memory: each flag costs one OpenProcess per process
+  // inside the addon (process.cc), and every caller of this table matches on
+  // `command`, while nothing reads a working set off it -- the Resource Manager
+  // runs its own CIM sweep because it needs commit and CPU time in one pass, and
+  // `process.cc` truncates the working set into a DWORD anyway. Dropping Memory
+  // halves the per-snapshot handle count; the remaining flags stay in ONE flag
+  // set because every read shares one snapshot, so a 32-wide teardown collapses
+  // into a single scan. Splitting the cache per field set would restore exactly
+  // the fan-out it exists to prevent.
+  const flags = native.ProcessDataFlag.CommandLine | (native.ProcessDataFlag.CreationTime ?? 0)
   return new Promise((resolve, reject) => {
     // Hoisted so a synchronous throw from getAllProcesses can clear it. An
     // orphaned timer would otherwise fire later and wedge a reader that had
@@ -241,7 +244,6 @@ function readNativeRows(): Promise<WindowsProcessRow[]> {
             ppid: row.ppid,
             name: row.name,
             command: row.commandLine ?? '',
-            memoryBytes: row.memory,
             ...(typeof row.creationTimeMs === 'number'
               ? { creationTimeMs: row.creationTimeMs }
               : {})

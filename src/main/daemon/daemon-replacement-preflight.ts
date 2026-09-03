@@ -3,7 +3,11 @@ import type { DaemonReplaceReason } from '../../shared/daemon-lifecycle-telemetr
 import { isDaemonStaleForCurrentBundle } from './daemon-bundle-staleness'
 import { DaemonEndpointOwnershipError } from './daemon-endpoint-adoption'
 import { checkDaemonHealth, getMacDaemonSystemResolverHealth } from './daemon-health'
-import { getAliveDaemonSessionCount, probeDaemonSocket as probeSocket } from './daemon-launch-paths'
+import {
+  DAEMON_SOCKET_PROBE_TIMEOUT_MS,
+  getAliveDaemonSessionCount,
+  probeDaemonSocket as probeSocket
+} from './daemon-launch-paths'
 import { trackDaemonReplaced } from './daemon-lifecycle-event'
 import { getDaemonLaunchIdentity } from './daemon-pid-identity'
 import { cleanupDaemonForProtocol } from './daemon-protocol-cleanup'
@@ -12,7 +16,9 @@ import { killStaleDaemon } from './daemon-stale-kill'
 import { getMacDaemonTccAttributionHealth } from './daemon-tcc-attribution'
 import { PROTOCOL_VERSION } from './types'
 
-// Why: extra hello+listSessions probes (~5s each) giving a wedged-but-connectable daemon ~60s grace to answer and keep its live sessions before a permanent wedge (#8689) is replaced; raise only alongside the fail-open cap.
+// Why a count on top of the wall clock: DAEMON_RECOVERY_BUDGET_MS ends the grace, but a socket
+// that accepts and then resets the hello answers both probes instantly, so without this the loop
+// would spin hot for the whole budget.
 export const WEDGED_DAEMON_GRACE_RETRIES = 11
 
 type PreserveDaemon = (mode?: 'degraded-new-pty-fallback') => Promise<DaemonProcessHandle>
@@ -22,6 +28,8 @@ type ReplacementPreflightOptions = {
   socketPath: string
   tokenPath: string
   entryPath: string
+  /** Absolute deadline for the whole adopt-or-replace decision; see DAEMON_RECOVERY_BUDGET_MS. */
+  recoveryDeadlineMs: number
   attributedReason: DaemonReplaceReason | null
   releaseAdoptionClient: () => void
   preserveDaemon: PreserveDaemon
@@ -35,6 +43,7 @@ export async function prepareDaemonReplacement(
     socketPath,
     tokenPath,
     entryPath,
+    recoveryDeadlineMs,
     attributedReason,
     releaseAdoptionClient,
     preserveDaemon
@@ -50,7 +59,11 @@ export async function prepareDaemonReplacement(
   if (health === 'healthy') {
     const resolverHealth = await getMacDaemonSystemResolverHealth(socketPath, tokenPath)
     if (resolverHealth === 'unhealthy') {
-      const liveSessionCount = await getAliveDaemonSessionCount(socketPath, tokenPath)
+      const liveSessionCount = await getAliveDaemonSessionCount(
+        socketPath,
+        tokenPath,
+        recoveryDeadlineMs
+      )
       if (liveSessionCount !== 0) {
         console.warn(
           liveSessionCount === null
@@ -81,7 +94,14 @@ export async function prepareDaemonReplacement(
         const replacementLabel = stalePackagedBundle
           ? 'launched before the current app bundle was installed'
           : 'launched from a different app path'
-        if (await shouldPreserveDaemonWithLiveSessions(socketPath, tokenPath, replacementLabel)) {
+        if (
+          await shouldPreserveDaemonWithLiveSessions(
+            socketPath,
+            tokenPath,
+            recoveryDeadlineMs,
+            replacementLabel
+          )
+        ) {
           return preserveDaemon()
         }
         console.warn(
@@ -105,7 +125,11 @@ export async function prepareDaemonReplacement(
         if (attributionHealth === 'severed') {
           // Why: replacing with live sessions would kill them; Settings → Developer
           // Permissions surfaces the Manage Sessions → Restart remedy instead.
-          const liveSessionCount = await getAliveDaemonSessionCount(socketPath, tokenPath)
+          const liveSessionCount = await getAliveDaemonSessionCount(
+            socketPath,
+            tokenPath,
+            recoveryDeadlineMs
+          )
           if (liveSessionCount === 0) {
             console.warn(
               '[daemon] Replacing daemon whose macOS TCC attribution is severed (spawning app binary no longer exists)'
@@ -124,16 +148,26 @@ export async function prepareDaemonReplacement(
     }
   } else {
     // Why: a busy machine can time out the health check on a live daemon; re-verify with a session list before killing its sessions.
-    let liveSessionCount = await getAliveDaemonSessionCount(socketPath, tokenPath)
+    let liveSessionCount = await getAliveDaemonSessionCount(
+      socketPath,
+      tokenPath,
+      recoveryDeadlineMs
+    )
     // Why: a wedged-but-connectable daemon (Windows update relaunch) may still own live sessions, so grace-retry before replacing; a permanent wedge (#8689) exhausts the grace, and 'rejected' skips it (handshake refused = never adoptable).
+    // Why the clock term: without it the grace is however long the probes happen to take, which
+    // ran past the startup PTY gate's fail-open cap and hung terminal restore (STA-5732).
     let graceRetry = 0
     while (
       liveSessionCount === null &&
       health !== 'rejected' &&
       graceRetry < WEDGED_DAEMON_GRACE_RETRIES &&
-      (await probeSocket(socketPath))
+      Date.now() < recoveryDeadlineMs &&
+      (await probeSocket(
+        socketPath,
+        Math.max(1, Math.min(DAEMON_SOCKET_PROBE_TIMEOUT_MS, recoveryDeadlineMs - Date.now()))
+      ))
     ) {
-      liveSessionCount = await getAliveDaemonSessionCount(socketPath, tokenPath)
+      liveSessionCount = await getAliveDaemonSessionCount(socketPath, tokenPath, recoveryDeadlineMs)
       graceRetry++
     }
     if (liveSessionCount !== null && liveSessionCount > 0) {
@@ -213,9 +247,14 @@ export async function prepareDaemonReplacement(
 async function shouldPreserveDaemonWithLiveSessions(
   socketPath: string,
   tokenPath: string,
+  recoveryDeadlineMs: number,
   replacementLabel: string
 ): Promise<boolean> {
-  const liveSessionCount = await getAliveDaemonSessionCount(socketPath, tokenPath)
+  const liveSessionCount = await getAliveDaemonSessionCount(
+    socketPath,
+    tokenPath,
+    recoveryDeadlineMs
+  )
   if (liveSessionCount === 0) {
     return false
   }

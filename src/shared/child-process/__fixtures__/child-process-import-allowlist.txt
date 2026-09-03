@@ -23,6 +23,11 @@
 #
 # daemon-launched-child.ts holds daemon-init.ts's fork() site; splitting that
 # file moved the import, it did not add one.
+#
+# Likewise the agent-browser-bridge-* and ipc/filesystem/* entries: splitting
+# agent-browser-bridge.ts and ipc/filesystem.ts moved these imports, it did not
+# add any. Only -execution.ts and -raw-process.ts spawn, and both already pass
+# windowsHide; the other four import ChildProcess as a type only.
 src/cli/handlers/account.ts
 src/cli/handlers/core.ts
 src/cli/handlers/interactive-login-interruption.ts
@@ -41,12 +46,16 @@ src/main/ai-vault/session-scanner-service-spawn.ts
 src/main/ai-vault/session-scanner-service-test-child.ts
 src/main/app-icon.ts
 src/main/automations/precheck-runner.ts
-src/main/browser/agent-browser-bridge.ts
-src/main/browser/browser-cookie-import.ts
+src/main/browser/agent-browser-bridge-execution.ts
+src/main/browser/agent-browser-bridge-raw-process.ts
+src/main/browser/agent-browser-bridge-state.ts
+src/main/browser/agent-browser-bridge-types.ts
 src/main/browser/browser-route-egress-electron-launch.ts
 src/main/browser/browser-route-persisted-worker-electron-process.ts
 src/main/claude-accounts/keychain.ts
-src/main/codex-accounts/runtime-home-service.ts
+src/main/codex-accounts/legacy-wsl-runtime-auth-drain-recovery-script-harness.ts
+src/main/codex-accounts/legacy-wsl-runtime-auth-drain-script-harness.ts
+src/main/codex-accounts/legacy-wsl-runtime-auth-drain-script-interference-shims.ts
 src/main/codex-accounts/service.ts
 src/main/codex/codex-app-server-client.ts
 src/main/codex/codex-app-server-posix-supervisor.ts
@@ -86,7 +95,8 @@ src/main/ipc/developer-permissions.ts
 src/main/ipc/filesystem-list-files-git-fallback.ts
 src/main/ipc/filesystem-list-files.ts
 src/main/ipc/filesystem-watcher-wsl.ts
-src/main/ipc/filesystem.ts
+src/main/ipc/filesystem/filesystem-handler-context.ts
+src/main/ipc/filesystem/filesystem-search-handlers.ts
 src/main/ipc/local-network-connection-test.ts
 src/main/ipc/macos-keyboard-layout-snapshot.ts
 src/main/ipc/notebook.ts
@@ -128,7 +138,6 @@ src/main/pty/posix-pty-process-groups.ts
 src/main/pty/windows-environment-path.ts
 src/main/rate-limits/codex-fetcher.ts
 src/main/rate-limits/gemini-cli-oauth-extractor.ts
-src/main/runtime/orca-runtime-files.ts
 src/main/runtime/tls-certificate.ts
 src/main/runtime/windows-default-route-interfaces.ts
 src/main/runtime/windows-mobile-firewall.ts
@@ -141,10 +150,8 @@ src/main/ssh/system-ssh-dynamic-forward-process.ts
 src/main/ssh/system-ssh-file-transfer.ts
 src/main/ssh/system-ssh-forward-process.ts
 src/main/ssh/system-ssh-operation-lifecycle.ts
-src/main/startup/appimage-cli-redirect.ts
 src/main/startup/ensure-virtual-display.ts
 src/main/startup/hydrate-shell-path.ts
-src/main/startup/packaged-cli-entry-redirect.ts
 src/main/startup/windows-install-dir-acl-probe.ts
 src/main/startup/windows-user-data-acl.ts
 src/main/win32-utils.ts
@@ -174,7 +181,7 @@ src/relay/workspace-space-scan.ts
 src/shared/ephemeral-vm-recipe-process.ts
 src/shared/ephemeral-vm-recipe-runner.ts
 src/shared/fish-binary-requirement.ts
-src/shared/process-table-snapshot.ts
+src/shared/process-table-snapshot-reader.ts
 src/shared/pty-slave-line-discipline-echo.ts
 src/shared/ripgrep-process-availability.ts
 src/shared/secure-path-windows-acl.ts

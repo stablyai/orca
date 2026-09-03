@@ -70,7 +70,10 @@ const STATUS_BY_ATTENTION_CLASS: Record<SmartClass, WorktreeStatus | null> = {
   1: 'permission',
   2: 'done',
   3: 'working',
-  4: null
+  // Why null for 4: an unverifiable pane has no reported state to name, so it falls through
+  // to the live-PTY branch below and reads 'active' — never 'working' and never 'done'.
+  4: null,
+  5: null
 }
 
 export function resolveRecentWorkspaceTabAttention(

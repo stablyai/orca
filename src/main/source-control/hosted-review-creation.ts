@@ -1,3 +1,4 @@
+import type { ExecutionHostId } from '../../shared/execution-host'
 import type {
   CreateHostedReviewInput,
   CreateHostedReviewResult,
@@ -23,25 +24,31 @@ import {
   stripRefPrefix
 } from './hosted-review-creation-git-state'
 import { isProviderAuthenticated, reviewCopy } from './hosted-review-creation-provider'
+import { hostedReviewSshConnectionId } from './hosted-review-execution-host'
 import {
   getHostedReviewLocalGitOptions,
   type HostedReviewExecutionOptions
 } from './hosted-review-git-options'
 
-type HostedReviewCreationEligibilityInput = HostedReviewCreationEligibilityArgs & {
-  connectionId?: string | null
+// `connectionId` is dropped rather than carried: the wire arg still declares it for older peers,
+// but nothing on this side may read it — the resolved host is the only routing answer here.
+type HostedReviewCreationEligibilityInput = Omit<
+  HostedReviewCreationEligibilityArgs,
+  'connectionId'
+> & {
+  executionHostId: ExecutionHostId
   // Why: only the create-time preflight sets this; the renderer's probe leaves it unset to auto-correct a local-only parent.
   enforceBaseOnRemote?: boolean
 } & HostedReviewExecutionOptions
 
 async function validateCurrentBranchCanCreateReview(
   repoPath: string,
-  connectionId: string | null | undefined,
+  executionHostId: ExecutionHostId,
   input: CreateHostedReviewInput,
   options: HostedReviewExecutionOptions = {}
 ): Promise<CreateHostedReviewResult | null> {
   const requestedHead = input.head ? stripRefPrefix(input.head).trim() : ''
-  const currentBranch = await getCurrentBranch(repoPath, connectionId, options)
+  const currentBranch = await getCurrentBranch(repoPath, executionHostId, options)
   const copy = reviewCopy(input.provider)
   if (requestedHead && requestedHead !== currentBranch) {
     return {
@@ -53,8 +60,8 @@ async function validateCurrentBranchCanCreateReview(
 
   try {
     const [dirty, upstreamStatus] = await Promise.all([
-      hasUncommittedChanges(repoPath, connectionId, options),
-      getHostedReviewUpstreamStatus(repoPath, connectionId, options)
+      hasUncommittedChanges(repoPath, executionHostId, options),
+      getHostedReviewUpstreamStatus(repoPath, executionHostId, options)
     ])
     const submittedBase = normalizeHostedReviewBaseRef(input.base)
     const eligibility = await getHostedReviewCreationEligibility({
@@ -65,7 +72,7 @@ async function validateCurrentBranchCanCreateReview(
       hasUpstream: upstreamStatus.hasUpstream,
       ahead: upstreamStatus.ahead,
       behind: upstreamStatus.behind,
-      connectionId,
+      executionHostId,
       // Why: last gate before the create, which targets the submitted base verbatim — enforce it exists on the remote.
       enforceBaseOnRemote: true,
       ...options
@@ -96,19 +103,19 @@ export async function getHostedReviewCreationEligibility(
   const branch = stripRefPrefix(args.branch).trim()
   const provider = await detectHostedReviewProvider({
     repoPath: args.repoPath,
-    connectionId: args.connectionId,
+    executionHostId: args.executionHostId,
     ...hostedReviewExecutionContext(args)
   })
   // Why: the base is only a candidate; fall back to repo default so a local-only parent targets a remote-resolvable ref.
   const candidateBase = args.base?.trim() || null
   const candidateBaseOnRemote =
     candidateBase != null &&
-    (await baseRefExistsOnRemote(candidateBase, args.repoPath, args.connectionId, args))
+    (await baseRefExistsOnRemote(candidateBase, args.repoPath, args.executionHostId, args))
   let defaultBaseRef: string | null
   if (candidateBase && candidateBaseOnRemote) {
     defaultBaseRef = candidateBase
   } else {
-    const repoDefaultBaseRef = await getDefaultBaseRef(args.repoPath, args.connectionId, args)
+    const repoDefaultBaseRef = await getDefaultBaseRef(args.repoPath, args.executionHostId, args)
     defaultBaseRef = repoDefaultBaseRef ?? candidateBase
   }
   const baseBranch = defaultBaseRef ? normalizeHostedReviewBaseRef(defaultBaseRef) : null
@@ -125,7 +132,7 @@ export async function getHostedReviewCreationEligibility(
       linkedBitbucketPR: args.linkedBitbucketPR ?? null,
       linkedAzureDevOpsPR: args.linkedAzureDevOpsPR ?? null,
       linkedGiteaPR: args.linkedGiteaPR ?? null,
-      connectionId: args.connectionId ?? null,
+      executionHostId: args.executionHostId,
       // Why: eligibility is only ever asked for the worktree the user is acting
       // on, so it earns the fast tier. Without it a review opened outside Orca
       // in the last no-review interval would leave Create enabled (#11532).
@@ -145,7 +152,11 @@ export async function getHostedReviewCreationEligibility(
       : 'not_found'
   const githubRepository =
     provider === 'github'
-      ? await getRepoSlug(args.repoPath, args.connectionId, args).catch(() => null)
+      ? await getRepoSlug(
+          args.repoPath,
+          hostedReviewSshConnectionId(args.executionHostId),
+          args
+        ).catch(() => null)
       : null
   const baseResult = {
     provider,
@@ -195,7 +206,7 @@ export async function getHostedReviewCreationEligibility(
   const authenticated = await isProviderAuthenticated(
     provider,
     args.repoPath,
-    args.connectionId,
+    args.executionHostId,
     args
   )
   if (!authenticated) {
@@ -230,7 +241,7 @@ export async function getHostedReviewCreationEligibility(
 export async function createHostedReview(
   repoPath: string,
   input: CreateHostedReviewInput,
-  connectionId?: string | null,
+  executionHostId: ExecutionHostId,
   options: HostedReviewExecutionOptions = {}
 ): Promise<CreateHostedReviewResult> {
   if (!supportsHostedReviewCreation(input.provider)) {
@@ -242,7 +253,7 @@ export async function createHostedReview(
   }
   const provider = await getForgeProviderForRepository({
     repoPath,
-    connectionId,
+    executionHostId,
     ...hostedReviewExecutionContext(options)
   })
   if (provider?.id !== input.provider || !provider.createReview) {
@@ -253,19 +264,24 @@ export async function createHostedReview(
       error: `Creating ${copy.reviewLabel}s requires a ${copy.providerName} remote.`
     }
   }
-  const blocked = await validateCurrentBranchCanCreateReview(repoPath, connectionId, input, options)
+  const blocked = await validateCurrentBranchCanCreateReview(
+    repoPath,
+    executionHostId,
+    input,
+    options
+  )
   if (blocked) {
     return blocked
   }
   const localGitOptions = getHostedReviewLocalGitOptions(options)
   const result =
     Object.keys(localGitOptions).length > 0
-      ? await provider.createReview(repoPath, input, connectionId, options)
-      : await provider.createReview(repoPath, input, connectionId)
+      ? await provider.createReview(repoPath, input, executionHostId, options)
+      : await provider.createReview(repoPath, input, executionHostId)
   if (result.ok) {
     // Why (#11532): the branch cache holds a "no review" answer for far longer
     // than a poll interval, so Orca's own creation must retire it at once.
-    invalidateHostedReviewBranchCache(repoPath, connectionId)
+    invalidateHostedReviewBranchCache(repoPath, executionHostId)
   }
   return result
 }

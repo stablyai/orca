@@ -9,6 +9,8 @@ export type RemoteTerminalStreamStall = {
 
 export type RemoteTerminalStreamWatchdog = {
   beginOutputDelivery: (bytes: number) => () => void
+  /** Bytes whose ACK frame reached the transport, releasing the host's window. */
+  recordOutputAcknowledged: (bytes: number) => void
   completeCommandResponseProbe: () => void
   recordCommandInput: (text: string) => void
   recordInbound: () => void
@@ -21,6 +23,9 @@ export function createRemoteTerminalStreamWatchdog(
   let responseTimer: ReturnType<typeof setTimeout> | null = null
   let deliveryTimer: ReturnType<typeof setTimeout> | null = null
   let outstandingDeliveryBytes = 0
+  // Why separate from parse credit: the host reopens its window on ACK frames, so bytes parsed but not yet ACKed are still the credit whose loss stops output.
+  let unacknowledgedBytes = 0
+  let deliveryPendingSinceMs: number | null = null
   let lastInboundAtMs = Date.now()
   let commandResponseProbePending = false
   let disposed = false
@@ -54,23 +59,29 @@ export function createRemoteTerminalStreamWatchdog(
       reason
     })
   }
-  const armDeliveryTimer = (): void => {
-    clearDeliveryTimer()
-    if (outstandingDeliveryBytes <= 0 || disposed) {
+  // Why anchored, never restarted: a deadline re-armed by sibling settles is postponed forever, and one cleared at zero parse credit can only re-arm from inbound output — which is what the stall stops.
+  const syncDeliveryTimer = (): void => {
+    if (disposed || outstandingDeliveryBytes + unacknowledgedBytes <= 0) {
+      clearDeliveryTimer()
+      deliveryPendingSinceMs = null
       return
     }
-    deliveryTimer = setTimeout(
-      () => trip('delivery-credit-timeout'),
-      REMOTE_TERMINAL_DELIVERY_STALL_TIMEOUT_MS
+    deliveryPendingSinceMs ??= Date.now()
+    if (deliveryTimer) {
+      return
+    }
+    const remainingMs = Math.max(
+      0,
+      REMOTE_TERMINAL_DELIVERY_STALL_TIMEOUT_MS - (Date.now() - deliveryPendingSinceMs)
     )
+    deliveryTimer = setTimeout(() => trip('delivery-credit-timeout'), remainingMs)
   }
 
   return {
     beginOutputDelivery(bytes) {
       outstandingDeliveryBytes += bytes
-      if (!deliveryTimer) {
-        armDeliveryTimer()
-      }
+      unacknowledgedBytes += bytes
+      syncDeliveryTimer()
       let settled = false
       return () => {
         if (settled || disposed) {
@@ -78,8 +89,15 @@ export function createRemoteTerminalStreamWatchdog(
         }
         settled = true
         outstandingDeliveryBytes = Math.max(0, outstandingDeliveryBytes - bytes)
-        armDeliveryTimer()
+        syncDeliveryTimer()
       }
+    },
+    recordOutputAcknowledged(bytes) {
+      if (disposed) {
+        return
+      }
+      unacknowledgedBytes = Math.max(0, unacknowledgedBytes - bytes)
+      syncDeliveryTimer()
     },
     completeCommandResponseProbe() {
       commandResponseProbePending = false
@@ -103,6 +121,8 @@ export function createRemoteTerminalStreamWatchdog(
       clearResponseTimer()
       clearDeliveryTimer()
       outstandingDeliveryBytes = 0
+      unacknowledgedBytes = 0
+      deliveryPendingSinceMs = null
     }
   }
 }

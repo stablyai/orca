@@ -16,7 +16,7 @@ import {
   type DockerSshRelayTarget
 } from './helpers/docker-ssh-relay-target'
 import { connectDockerSshRelayTarget } from './helpers/docker-ssh-relay-connection'
-import { waitForActiveWorktree, waitForSessionReady } from './helpers/store'
+import { ensureTerminalVisible, waitForActiveWorktree, waitForSessionReady } from './helpers/store'
 import {
   execInTerminal,
   focusLastTerminalPane,
@@ -31,6 +31,7 @@ import { HARD_FREEZE_LAG_MS, SOFT_FREEZE_LAG_MS } from './helpers/remote-session
 const RUN_DOCKER_SSH = process.env.ORCA_E2E_SSH_DOCKER === '1'
 const REPORT_DIR = path.join(process.cwd(), 'test-results', 'freeze-repro')
 const SESSION_SPLITS = 5
+const FLOOD_READ_CHARS = 80_000
 
 function shellQuote(value: string): string {
   return `'${value.replaceAll("'", "'\\''")}'`
@@ -52,38 +53,75 @@ function continuousFloodCommand(runId: string, index: number): string {
 test.describe('R2 Docker SSH bulk-open freeze', () => {
   test.skip(!RUN_DOCKER_SSH, 'Set ORCA_E2E_SSH_DOCKER=1 to run Docker SSH freeze repro')
 
-  test('bulk-open many flooding SSH terminals and measure renderer lag @freeze-repro', async ({
+  // Fixme: un-rotted and measurable, but its oracle is wall-clock and does not survive a change of
+  // host, so it cannot gate. Three runs of the same measurement path:
+  //
+  //   host                    hiddenFlood   bulkOpen   interaction
+  //   developer workstation         2.1ms     41.5ms        53.6ms
+  //   GitHub ubuntu runner A        1.5ms   2575.6ms      3464.2ms
+  //   GitHub ubuntu runner B        0.2ms    397.4ms      3386.7ms
+  //
+  // Two separate problems, and neither is the product. `bulkOpenMaxLagMs` swings 6.5x between two
+  // CI runs of the same code, so a fixed threshold on it is a coin flip; `interactionProbeMs` sits
+  // stably ~64x over the workstation figure, because it times two `setActiveView` round trips
+  // through a double rAF — a view remount cost, not the renderer freeze #16764 reports. It shares
+  // SOFT/HARD_FREEZE_LAG_MS with the lag probe only because both are milliseconds. `hardFreeze`
+  // has never tripped on any host; the failure is always the soft budget.
+  //
+  // Not converted to a ratio against a calibration run: with a 6.5x within-host swing on the very
+  // quantity that would be normalized, a threshold picked from three samples is the same arbitrary
+  // constant in dimensionless clothing. Gating needs a distribution first.
+  //
+  // Kept executable rather than deleted: flip `test.fixme` back to `test` to run it, which is how
+  // the numbers above were taken. Tracked in stablyai/orca#16764.
+  //
+  // The cost is real and is recorded in run-ssh-docker-e2e.mjs: 5 simultaneously flooding SSH panes
+  // exercise writer saturation, ACK/credit accounting and per-pane polling together, and nothing
+  // else covers that combination. It is a gap, not coverage living somewhere else.
+  test.fixme('bulk-open many flooding SSH terminals and measure renderer lag @freeze-repro', async ({
     orcaPage,
     registerPostElectronShutdownCleanup
-  }) => {
+  }, testInfo) => {
     test.setTimeout(420_000)
     let target: DockerSshRelayTarget | null = null
     try {
-      target = startDockerSshRelayTarget()
+      target = startDockerSshRelayTarget(testInfo)
       registerPostElectronShutdownCleanup(async () => {
         if (target) {
           cleanupDockerSshRelayTarget(target)
         }
       })
 
+      // Why: session restore must settle before the remote worktree is added, or the
+      // seeded terminal tab races tab hydration and never binds to the remote PTY.
+      await waitForSessionReady(orcaPage)
+      await waitForActiveWorktree(orcaPage)
       await connectDockerSshRelayTarget(orcaPage, target, {
         remotePath: DOCKER_SSH_RELAY_REMOTE_REPO_PATH
       })
-      await waitForSessionReady(orcaPage)
-      await waitForActiveWorktree(orcaPage)
 
       const runId = `${Date.now()}`
       // First terminal on the SSH worktree.
-      await waitForActiveTerminalManager(orcaPage)
-      await execInTerminal(orcaPage, continuousFloodCommand(runId, 0))
-      await waitForTerminalOutput(orcaPage, `READY:SSH_BULK_${runId}_0`, 60_000)
+      await ensureTerminalVisible(orcaPage, 45_000)
+      await waitForActiveTerminalManager(orcaPage, 60_000)
+      const firstPtyId = await waitForActivePanePtyId(orcaPage, 60_000)
+      await execInTerminal(orcaPage, firstPtyId, continuousFloodCommand(runId, 0))
+      // Why: the one-shot READY line is buried by the 2KB/8ms flood within ~16ms, so it is
+      // unobservable through the terminal read window. The repeating BG marker is the only
+      // stable readiness signal, and it also proves the pane is actually flooding.
+      await waitForTerminalOutput(orcaPage, `BG:SSH_BULK_${runId}_0:`, 60_000, FLOOD_READ_CHARS)
 
       for (let i = 1; i < SESSION_SPLITS; i += 1) {
-        await splitActiveTerminalPane(orcaPage)
+        await splitActiveTerminalPane(orcaPage, 'vertical')
         await focusLastTerminalPane(orcaPage)
-        await waitForActivePanePtyId(orcaPage, 30_000)
-        await execInTerminal(orcaPage, continuousFloodCommand(runId, i))
-        await waitForTerminalOutput(orcaPage, `READY:SSH_BULK_${runId}_${i}`, 60_000)
+        const panePtyId = await waitForActivePanePtyId(orcaPage, 30_000)
+        await execInTerminal(orcaPage, panePtyId, continuousFloodCommand(runId, i))
+        await waitForTerminalOutput(
+          orcaPage,
+          `BG:SSH_BULK_${runId}_${i}:`,
+          60_000,
+          FLOOD_READ_CHARS
+        )
       }
 
       // Leave the workspace view so panes go inactive while flooding.

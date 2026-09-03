@@ -6,6 +6,7 @@ import { getFolderWorkspaceConnectionId } from '@/lib/folder-workspace-connectio
 import { parseWorkspaceKey } from '../../../shared/workspace-scope'
 import { isWindowsAbsolutePathLike } from '../../../shared/cross-platform-path'
 import { repoIsRemote } from '../../../shared/agent-launch-remote'
+import { getRepoSshConnectionId } from '../../../shared/execution-host'
 import { isWslUncPath } from '../../../shared/wsl-paths'
 
 type LaunchStore = ReturnType<typeof useAppStore.getState>
@@ -41,14 +42,18 @@ export function resolveAgentBackgroundLaunchHost(args: {
 }): AgentBackgroundLaunchHost {
   const { store, worktreeId, worktreePath, repo } = args
   if (repo) {
+    // Why: SSH ownership has two spellings, so the raw field spawns an `executionHostId: 'ssh:*'`-only
+    // repo on the client with a remote path. One resolution feeds the route, the trust write and the
+    // launch shape, which must not disagree about the host.
+    const sshConnectionId = getRepoSshConnectionId(repo)
     return {
-      connectionId: repo.connectionId ?? null,
+      connectionId: sshConnectionId,
       platform: getAgentLaunchPlatformForRepo(
         repo,
-        repo.connectionId ? undefined : getLocalProjectExecutionRuntimeContext(store, worktreeId)
+        sshConnectionId ? undefined : getLocalProjectExecutionRuntimeContext(store, worktreeId)
       ),
       isRemote: repoIsRemote(repo),
-      expectedConnectionId: repo.connectionId ?? null
+      expectedConnectionId: sshConnectionId
     }
   }
   const folderWorkspaceConnectionId = resolveFolderWorkspaceConnectionIdForLaunch(store, worktreeId)

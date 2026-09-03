@@ -11,6 +11,12 @@ describe('localization package scripts', () => {
     expect(scripts['verify:localization-extraction']).toBeDefined()
   })
 
+  it('keeps the runtime-required English subset generated and checked', () => {
+    expect(scripts['verify:localization-runtime-catalog']).toBeDefined()
+    expect(scripts['sync:localization-runtime-catalog']).toBeDefined()
+    expect(scripts.lint).toContain('verify:localization-runtime-catalog')
+  })
+
   it('does not expose whole-catalog translation and repair commands', () => {
     expect(scripts['bootstrap:locale-catalog']).toBeUndefined()
     expect(scripts['bootstrap:zh-catalog']).toBeUndefined()

@@ -74,7 +74,8 @@ export function normalizeAntigravityEvent(
     toolName: snapshot.toolName,
     toolInput: snapshot.toolInput,
     interactivePrompt: snapshot.interactivePrompt,
-    lastAssistantMessage: snapshot.lastAssistantMessage
+    lastAssistantMessage: snapshot.lastAssistantMessage,
+    lastAssistantMessageIsToolOutput: snapshot.lastAssistantMessageIsToolOutput
   })
   // Why: Antigravity can emit Stop with fullyIdle=false between tool steps; only a fully idle Stop is terminal, else the sidebar bounces done -> working and ignores later tool updates.
   if (eventName === 'Stop' && !stopStillBusy && transcriptPath) {

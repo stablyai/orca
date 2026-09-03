@@ -1,25 +1,45 @@
-import React from 'react'
-import { BellDot, Search } from 'lucide-react'
-import { Input } from '@/components/ui/input'
+import React, { useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react'
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue
-} from '@/components/ui/select'
-import { Toggle } from '@/components/ui/toggle'
-import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
+  defaultRangeExtractor,
+  measureElement as measureVirtualElementSize,
+  observeElementRect,
+  useVirtualizer,
+  type Range
+} from '@tanstack/react-virtual'
 import { cn } from '@/lib/utils'
 import { translate } from '@/i18n/i18n'
-import { ActivityStatusGroupHeader, ActivityThreadOptionsMenu } from './activity-thread-controls'
-import { ActivityThreadRow } from './activity-thread-row'
+import { ActivityThreadListToolbar } from './activity-thread-list-toolbar'
+import {
+  getActiveStickyHeaderIndex,
+  getActiveStickyHeaderIndexForScroll,
+  getPreviousStickyHeaderIndex
+} from '../sidebar/worktree-list/viewport/virtual-rows'
+import { ActivityThreadVirtualRow } from './activity-thread-virtual-row'
+import { ActivityThreadListResizeHandle } from './activity-thread-list-resize-handle'
+import {
+  buildActivityVirtualItems,
+  estimateActivityVirtualItemSize,
+  findActivityThreadItemIndex,
+  getActivityHeaderItemIndexes,
+  getActivityVirtualItemKey
+} from './activity-thread-virtual-items'
+import { ActivityThreadCollapseContext } from './activity-thread-collapse-context'
 import type {
   ActivityGroupBy,
   ActivityThreadGroup,
   AgentPaneThread,
   ThreadReadFilter
 } from './activity-thread-types'
+
+const ZERO_RECT_FALLBACK_VIEWPORT = { width: 320, height: 600 }
+const observeActivityListRect: typeof observeElementRect = (instance, cb) =>
+  observeElementRect(instance, (rect) => {
+    cb(rect.height > 0 ? rect : ZERO_RECT_FALLBACK_VIEWPORT)
+  })
+
+// A saved offset the content cannot contain yet is restored once it can; past
+// this window it is stale (the list shrank) and restoring would yank the viewport.
+const DEFERRED_SCROLL_RESTORE_WINDOW_MS = 3000
 
 export function ActivityThreadListPane({
   threadListRef,
@@ -32,21 +52,35 @@ export function ActivityThreadListPane({
   readFilter,
   onReadFilterChange,
   compactMode,
+  showChildAgents,
   hasUnreadThreads,
   onCompactModeChange,
+  onShowChildAgentsChange,
   onMarkAllThreadsRead,
+  hasCompletedThreads,
+  onClearCompleted,
   visibleThreadGroups,
   visibleThreadCount,
   selectedPaneKey,
   onSelectThread,
   onJumpToWorkspace,
+  onMarkThreadRead,
   onMarkThreadUnread,
   canJumpToWorkspace,
+  allowMarkUnreadWhenSelected = false,
+  showJumpAction = true,
   isThreadListResizing,
-  onResizeStart
+  onResizeStart,
+  showFilterControls = true,
+  showOptionsMenu = true,
+  showInlineActions = true,
+  scopeFilterRow,
+  collapsedGroupKeys,
+  onToggleGroupCollapse,
+  scrollTopRef
 }: {
-  threadListRef: React.RefObject<HTMLDivElement | null>
-  threadListWidth: number
+  threadListRef?: React.RefObject<HTMLDivElement | null>
+  threadListWidth?: number
   activityFilterInputRef: React.RefObject<HTMLInputElement | null>
   query: string
   onQueryChange: (query: string) => void
@@ -55,163 +89,310 @@ export function ActivityThreadListPane({
   readFilter: ThreadReadFilter
   onReadFilterChange: (readFilter: ThreadReadFilter) => void
   compactMode: boolean
+  showChildAgents?: boolean
   hasUnreadThreads: boolean
   onCompactModeChange: (compactMode: boolean) => void
-  onMarkAllThreadsRead: () => void
+  onShowChildAgentsChange?: (showChildAgents: boolean) => void
+  onMarkAllThreadsRead?: () => void
+  hasCompletedThreads?: boolean
+  onClearCompleted?: () => void
   visibleThreadGroups: ActivityThreadGroup[]
   visibleThreadCount: number
   selectedPaneKey: string | null
   onSelectThread: (thread: AgentPaneThread) => void
   onJumpToWorkspace: (thread: AgentPaneThread) => void
+  onMarkThreadRead: (thread: AgentPaneThread) => void
   onMarkThreadUnread: (thread: AgentPaneThread) => void
   canJumpToWorkspace: (thread: AgentPaneThread) => boolean
-  isThreadListResizing: boolean
-  onResizeStart: React.MouseEventHandler<HTMLDivElement>
+  allowMarkUnreadWhenSelected?: boolean
+  showJumpAction?: boolean
+  isThreadListResizing?: boolean
+  onResizeStart?: React.MouseEventHandler<HTMLDivElement>
+  showFilterControls?: boolean
+  showOptionsMenu?: boolean
+  showInlineActions?: boolean
+  /** Rendered between the toolbar and the list; carries the active-scope chips row. */
+  scopeFilterRow?: React.ReactNode
+  collapsedGroupKeys?: ReadonlySet<string>
+  onToggleGroupCollapse?: (groupKey: string) => void
+  /** Optional view-local scroll memory; updated without triggering React renders. */
+  scrollTopRef?: React.MutableRefObject<number>
 }): React.JSX.Element {
+  const [internalCollapsedGroupKeys, setInternalCollapsedGroupKeys] = useState<Set<string>>(
+    () => new Set()
+  )
+  // Precedence: explicit props, then a caller-owned context (hosts that unmount
+  // the pane on body switches), then pane-local state.
+  const contextCollapse = useContext(ActivityThreadCollapseContext)
+  const isControlled = collapsedGroupKeys !== undefined && onToggleGroupCollapse !== undefined
+  const effectiveCollapsedGroupKeys = isControlled
+    ? collapsedGroupKeys
+    : (contextCollapse?.collapsedGroupKeys ?? internalCollapsedGroupKeys)
+  const handleToggleGroup = isControlled
+    ? onToggleGroupCollapse
+    : (contextCollapse?.onToggleGroupCollapse ??
+      ((groupKey: string) => {
+        setInternalCollapsedGroupKeys((prev) => {
+          const next = new Set(prev)
+          if (next.has(groupKey)) {
+            next.delete(groupKey)
+          } else {
+            next.add(groupKey)
+          }
+          return next
+        })
+      }))
+
+  const scrollContainerRef = useRef<HTMLDivElement | null>(null)
+  const hasRestoredScrollRef = useRef(false)
+  const handleScroll = useCallback(
+    (event: React.UIEvent<HTMLDivElement>) => {
+      if (!scrollTopRef) {
+        return
+      }
+      const scrollTop = event.currentTarget.scrollTop
+      // A clamp-to-0 fired before the deferred restore must not wipe the saved offset.
+      if (!hasRestoredScrollRef.current) {
+        if (scrollTop === 0) {
+          return
+        }
+        hasRestoredScrollRef.current = true
+      }
+      scrollTopRef.current = scrollTop
+    },
+    [scrollTopRef]
+  )
+  const virtualItems = useMemo(
+    () =>
+      buildActivityVirtualItems({
+        groups: visibleThreadGroups,
+        groupBy,
+        collapsedGroupKeys: effectiveCollapsedGroupKeys
+      }),
+    [visibleThreadGroups, groupBy, effectiveCollapsedGroupKeys]
+  )
+  const headerItemIndexes = useMemo(
+    () => getActivityHeaderItemIndexes(virtualItems),
+    [virtualItems]
+  )
+  const selectedItemIndex = useMemo(
+    () => findActivityThreadItemIndex(virtualItems, selectedPaneKey),
+    [virtualItems, selectedPaneKey]
+  )
+
+  // Why keyed on virtualItems: getItemKey identity is a measurement-memo input in tanstack
+  // virtual. A per-render closure recomputes every row on unrelated re-renders; a fully stable
+  // one would miss same-count reorders. Changing exactly with the items is the correct middle.
+  const getItemKey = useCallback(
+    (index: number) => {
+      const item = virtualItems[index]
+      return item ? getActivityVirtualItemKey(item) : `__stale_${index}`
+    },
+    [virtualItems]
+  )
+  const virtualizer = useVirtualizer({
+    count: virtualItems.length,
+    getScrollElement: () => scrollContainerRef.current,
+    estimateSize: (index) => estimateActivityVirtualItemSize(virtualItems[index], compactMode),
+    getItemKey,
+    measureElement: (element, entry, instance) => {
+      const measured = measureVirtualElementSize(element, entry, instance)
+      if (measured > 0) {
+        return measured
+      }
+      const index = Number.parseInt(element.getAttribute('data-index') ?? '', 10)
+      return estimateActivityVirtualItemSize(
+        Number.isNaN(index) ? undefined : virtualItems[index],
+        compactMode
+      )
+    },
+    rangeExtractor: useCallback(
+      (range: Range) => {
+        const activeStickyIndex =
+          groupBy !== 'none'
+            ? getActiveStickyHeaderIndex(headerItemIndexes, range.startIndex)
+            : null
+        const previousStickyIndex =
+          activeStickyIndex !== null
+            ? getPreviousStickyHeaderIndex(headerItemIndexes, activeStickyIndex)
+            : null
+        const indexSet = new Set(defaultRangeExtractor(range))
+        if (activeStickyIndex !== null) {
+          indexSet.add(activeStickyIndex)
+        }
+        if (previousStickyIndex !== null) {
+          indexSet.add(previousStickyIndex)
+        }
+        if (selectedItemIndex !== null && selectedItemIndex >= 0) {
+          indexSet.add(selectedItemIndex)
+        }
+        return Array.from(indexSet).sort((a, b) => a - b)
+      },
+      [groupBy, headerItemIndexes, selectedItemIndex]
+    ),
+    overscan: 8,
+    observeElementRect: observeActivityListRect,
+    useFlushSync: false
+  })
+
+  // Row heights differ between densities; drop stale measurements on toggle (not on mount).
+  const measuredCompactModeRef = useRef(compactMode)
+  useEffect(() => {
+    if (measuredCompactModeRef.current === compactMode) {
+      return
+    }
+    measuredCompactModeRef.current = compactMode
+    virtualizer.measure()
+  }, [virtualizer, compactMode])
+
+  // Restore only once the (estimated) content can contain the saved offset, so a
+  // pre-hydration mount doesn't clamp the restore to 0.
+  const totalSize = virtualizer.getTotalSize()
+  const restoreArmedAtRef = useRef<number | null>(null)
+  useEffect(() => {
+    if (!scrollTopRef || hasRestoredScrollRef.current) {
+      return
+    }
+    if (restoreArmedAtRef.current === null) {
+      restoreArmedAtRef.current = Date.now()
+    } else if (Date.now() - restoreArmedAtRef.current > DEFERRED_SCROLL_RESTORE_WINDOW_MS) {
+      // The list stayed too small for the saved offset (it shrank); firing the
+      // restore on some later growth would yank the viewport out from the user.
+      hasRestoredScrollRef.current = true
+      scrollTopRef.current = 0
+      return
+    }
+    const scrollContainer = scrollContainerRef.current
+    if (!scrollContainer) {
+      return
+    }
+    // Against the max offset, not the content height: a viewport taller than the
+    // remaining content clamps the assignment to 0 and burns the one restore.
+    const maxScrollTop = Math.max(0, totalSize - scrollContainer.clientHeight)
+    if (scrollTopRef.current > maxScrollTop) {
+      return
+    }
+    scrollContainer.scrollTop = scrollTopRef.current
+    hasRestoredScrollRef.current = true
+  }, [scrollTopRef, totalSize])
+
+  const scrollOffset = virtualizer.scrollOffset ?? 0
+  const activeStickyHeaderIndex =
+    groupBy !== 'none'
+      ? getActiveStickyHeaderIndexForScroll({
+          rangeStartIndex: virtualizer.range?.startIndex ?? 0,
+          scrollOffset,
+          stickyHeaderIndexes: headerItemIndexes,
+          virtualItems: virtualizer.getVirtualItems()
+        })
+      : null
+
+  const resizable = onResizeStart !== undefined
   return (
     <aside
       ref={threadListRef}
-      className="relative flex min-h-0 shrink-0 flex-col border-r border-border"
-      style={{ width: threadListWidth }}
+      className={cn(
+        'relative flex min-h-0 flex-col',
+        resizable ? 'shrink-0 border-r border-border' : 'min-w-0 flex-1'
+      )}
+      style={resizable ? { width: threadListWidth } : undefined}
     >
-      <div className="shrink-0 border-b border-border px-2 pt-2 pb-2">
-        <div className="flex items-center gap-2">
-          <div className="relative min-w-0 flex-1">
-            <Search className="pointer-events-none absolute left-2 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
-            <Input
-              ref={activityFilterInputRef}
-              value={query}
-              onChange={(event) => onQueryChange(event.target.value)}
-              placeholder={translate(
-                'auto.components.activity.ActivityPrototypePage.795cbf26e2',
-                'Filter...'
-              )}
-              className="h-8 w-full pl-7 text-xs"
-            />
-          </div>
-          <Select
-            value={groupBy}
-            onValueChange={(value) => onGroupByChange(value as ActivityGroupBy)}
+      <ActivityThreadListToolbar
+        activityFilterInputRef={activityFilterInputRef}
+        query={query}
+        onQueryChange={onQueryChange}
+        groupBy={groupBy}
+        onGroupByChange={onGroupByChange}
+        readFilter={readFilter}
+        onReadFilterChange={onReadFilterChange}
+        compactMode={compactMode}
+        showChildAgents={showChildAgents}
+        hasUnreadThreads={hasUnreadThreads}
+        onCompactModeChange={onCompactModeChange}
+        onShowChildAgentsChange={onShowChildAgentsChange}
+        onMarkAllThreadsRead={onMarkAllThreadsRead}
+        hasCompletedThreads={hasCompletedThreads}
+        onClearCompleted={onClearCompleted}
+        resizable={resizable}
+        showFilterControls={showFilterControls}
+        showOptionsMenu={showOptionsMenu}
+        showInlineActions={showInlineActions}
+      />
+      {scopeFilterRow}
+      <div className="relative min-h-0 flex-1">
+        <div
+          ref={scrollContainerRef}
+          onScroll={scrollTopRef ? handleScroll : undefined}
+          className="h-full overflow-y-auto overflow-x-hidden px-1.5 pb-1.5 pt-px scrollbar-sleek"
+        >
+          <div
+            className="relative w-full"
+            style={{ height: virtualizer.getTotalSize() }}
+            data-activity-virtual-list=""
           >
-            <SelectTrigger
-              size="sm"
-              className="h-8 w-[128px] shrink-0 px-2 text-xs"
-              aria-label={translate(
-                'auto.components.activity.ActivityPrototypePage.770d458144',
-                'Group agent activity by'
-              )}
-            >
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent align="end">
-              <SelectItem value="status">
-                {translate('auto.components.activity.ActivityPrototypePage.4a3986b200', 'Status')}
-              </SelectItem>
-              <SelectItem value="project">
-                {translate('auto.components.activity.ActivityPrototypePage.8c3b621ddf', 'Project')}
-              </SelectItem>
-              <SelectItem value="worktree">
-                {translate('auto.components.activity.ActivityPrototypePage.b29191b3e0', 'Worktree')}
-              </SelectItem>
-              <SelectItem value="agent">
-                {translate('auto.components.activity.ActivityPrototypePage.f6396e1f85', 'Agent')}
-              </SelectItem>
-            </SelectContent>
-          </Select>
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Toggle
-                pressed={readFilter === 'unread'}
-                onPressedChange={(pressed) => onReadFilterChange(pressed ? 'unread' : 'all')}
-                variant="outline"
-                size="sm"
-                className={cn(
-                  'size-8 shrink-0 p-0',
-                  readFilter === 'unread'
-                    ? '!border-primary !bg-primary !text-primary-foreground shadow-xs ring-2 ring-primary/35 hover:!bg-primary/90 hover:!text-primary-foreground'
-                    : 'text-muted-foreground hover:text-foreground'
-                )}
-                aria-label={translate(
-                  'auto.components.activity.ActivityPrototypePage.d1a88df9a8',
-                  'Show unread threads only'
-                )}
-              >
-                <BellDot className="size-3.5" />
-              </Toggle>
-            </TooltipTrigger>
-            <TooltipContent side="bottom">
+            {virtualizer.getVirtualItems().map((virtualRow) => {
+              const item = virtualItems[virtualRow.index]
+              if (!item) {
+                return null
+              }
+              const isActiveSticky =
+                item.type === 'header' && virtualRow.index === activeStickyHeaderIndex
+              return (
+                <div
+                  key={virtualRow.key}
+                  ref={virtualizer.measureElement}
+                  data-index={virtualRow.index}
+                  data-activity-sticky-header={item.type === 'header' ? '' : undefined}
+                  data-activity-sticky-header-active={isActiveSticky ? '' : undefined}
+                  className={cn(
+                    'left-0 right-0 w-full',
+                    isActiveSticky
+                      ? cn(
+                          'sticky -top-px z-20',
+                          resizable ? 'bg-background' : 'bg-worktree-sidebar'
+                        )
+                      : 'absolute top-0'
+                  )}
+                  style={
+                    isActiveSticky ? undefined : { transform: `translateY(${virtualRow.start}px)` }
+                  }
+                >
+                  <ActivityThreadVirtualRow
+                    item={item}
+                    collapsed={
+                      item.type === 'header' && effectiveCollapsedGroupKeys.has(item.group.key)
+                    }
+                    onToggleGroup={handleToggleGroup}
+                    selectedPaneKey={selectedPaneKey}
+                    onSelectThread={onSelectThread}
+                    onJumpToWorkspace={onJumpToWorkspace}
+                    onMarkThreadRead={onMarkThreadRead}
+                    onMarkThreadUnread={onMarkThreadUnread}
+                    canJumpToWorkspace={canJumpToWorkspace}
+                    compactMode={compactMode}
+                    allowMarkUnreadWhenSelected={allowMarkUnreadWhenSelected}
+                    showJumpAction={showJumpAction}
+                  />
+                </div>
+              )
+            })}
+          </div>
+          {visibleThreadCount === 0 ? (
+            <div className="px-3 py-8 text-center text-xs text-muted-foreground">
               {translate(
-                'auto.components.activity.ActivityPrototypePage.d1a88df9a8',
-                'Show unread threads only'
+                'auto.components.activity.ActivityPrototypePage.7cd632006b',
+                'No agent activity matches these filters.'
               )}
-            </TooltipContent>
-          </Tooltip>
-          {/* Why (overflow menu): "Mark all read" is low-frequency and destructive-feeling; behind `…` keeps the toolbar on the frequent Filter + unread toggle. */}
-          <ActivityThreadOptionsMenu
-            compactMode={compactMode}
-            hasUnreadThreads={hasUnreadThreads}
-            onCompactModeChange={onCompactModeChange}
-            onMarkAllThreadsRead={onMarkAllThreadsRead}
-          />
+            </div>
+          ) : null}
         </div>
       </div>
-      <div className="min-h-0 flex-1 overflow-auto scrollbar-sleek">
-        {visibleThreadGroups.map((group) => (
-          <section
-            key={group.key}
-            aria-label={translate(
-              'auto.components.activity.ActivityPrototypePage.a2b4437bfb',
-              '{{value0}} activity',
-              { value0: group.label }
-            )}
-          >
-            <ActivityStatusGroupHeader group={group} />
-            {group.threads.map((thread) => (
-              <ActivityThreadRow
-                key={thread.paneKey}
-                thread={thread}
-                selected={thread.paneKey === selectedPaneKey}
-                onSelect={() => onSelectThread(thread)}
-                onJump={() => onJumpToWorkspace(thread)}
-                onMarkUnread={() => onMarkThreadUnread(thread)}
-                canJump={canJumpToWorkspace(thread)}
-                compactMode={compactMode}
-              />
-            ))}
-          </section>
-        ))}
-        {visibleThreadCount === 0 ? (
-          <div className="px-3 py-8 text-sm text-muted-foreground">
-            {translate(
-              'auto.components.activity.ActivityPrototypePage.7cd632006b',
-              'No agent activity matches these filters.'
-            )}
-          </div>
-        ) : null}
-      </div>
-      <div
-        aria-label={translate(
-          'auto.components.activity.ActivityPrototypePage.443690186e',
-          'Resize activity thread list'
-        )}
-        title={translate(
-          'auto.components.activity.ActivityPrototypePage.866083500b',
-          'Drag to resize'
-        )}
-        className={cn(
-          'group absolute -right-1.5 top-0 z-20 flex h-full w-3 cursor-col-resize items-stretch justify-center',
-          isThreadListResizing && 'bg-ring/10'
-        )}
-        onMouseDown={onResizeStart}
-        role="separator"
-      >
-        <div
-          className={cn(
-            'h-full w-px bg-border transition-colors group-hover:bg-ring/50',
-            isThreadListResizing && 'bg-ring'
-          )}
+      {resizable ? (
+        <ActivityThreadListResizeHandle
+          isResizing={isThreadListResizing}
+          onResizeStart={onResizeStart}
         />
-      </div>
+      ) : null}
     </aside>
   )
 }

@@ -1,3 +1,4 @@
+import type { ExecutionHostId } from '../../shared/execution-host'
 import type {
   CreateStackedHostedReviewInput,
   CreateStackedHostedReviewResult,
@@ -13,17 +14,17 @@ import type { HostedReviewExecutionOptions } from './hosted-review-git-options'
 export async function createStackedHostedReview(
   repoPath: string,
   input: CreateStackedHostedReviewInput,
-  connectionId?: string | null,
+  executionHostId: ExecutionHostId,
   options: HostedReviewExecutionOptions = {}
 ): Promise<CreateStackedHostedReviewResult> {
-  const plan = await prepareGitHubStackedPullRequest(repoPath, input, connectionId, options)
+  const plan = await prepareGitHubStackedPullRequest(repoPath, input, executionHostId, options)
   if (!plan.ok) {
     return plan
   }
 
   let currentReview: (HostedReviewSummary & { number: number }) | null = plan.currentReview
   if (!currentReview) {
-    const created = await createHostedReview(repoPath, input, connectionId, options)
+    const created = await createHostedReview(repoPath, input, executionHostId, options)
     if (!created.ok) {
       if (!created.existingReview?.number) {
         return created
@@ -54,7 +55,7 @@ export async function createStackedHostedReview(
     repository: plan.repository,
     parentReview: plan.parentReview,
     currentReview,
-    connectionId,
+    executionHostId,
     options
   })
 }

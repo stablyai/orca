@@ -23,7 +23,10 @@ type GlueSegment = { text: string; tail: number } | null
 export function selectGluedPendingIds(
   messages: readonly NativeChatMessage[],
   pending: readonly MobileNativeChatPendingMessage[],
-  excludedPendingIds: ReadonlySet<string> = NO_PENDING_IDS
+  excludedPendingIds: ReadonlySet<string> = NO_PENDING_IDS,
+  /** Image echoes whose local preview has been rebound onto its transcript row.
+   *  Until that happens an image echo must stay put, so it is not a glue segment. */
+  reboundImagePendingIds: ReadonlySet<string> = NO_PENDING_IDS
 ): ReadonlySet<string> {
   const retired = new Set<string>()
   if (pending.length < 2) {
@@ -44,9 +47,14 @@ export function selectGluedPendingIds(
       item.baselineTailMessageId === null
         ? -1
         : (messageIndexById.get(item.baselineTailMessageId) ?? null)
+    // An image send glues onto the input line like any other, so once its preview is
+    // rebound its text is a real segment of the resulting row. While it is still
+    // unbound it stays a barrier: retiring it early would drop the phone-local photo,
+    // which the transcript's host path cannot render.
+    const unboundImage = Boolean(item.images?.length) && !reboundImagePendingIds.has(item.id)
     return excludedPendingIds.has(item.id) ||
       !item.baselineResolved ||
-      item.images?.length ||
+      unboundImage ||
       text === '' ||
       tail === null
       ? null
@@ -146,6 +154,10 @@ export function retireLandedMobileNativeChatPending(
     }
   }
   const landedPendingIds = new Set<string>()
+  // Why a separate set: a barrier preserves adjacency after a landing consumed a whole
+  // row. An image landing can share its row with the send glued after it, so treating it
+  // as a barrier would strand that send in a run of one and keep its echo forever.
+  const exactLandedIds = new Set<string>()
   for (const item of current) {
     if (landedImagePendingIds.has(item.id)) {
       landedPendingIds.add(item.id)
@@ -164,9 +176,10 @@ export function retireLandedMobileNativeChatPending(
         : (landedCounts.get(normalizeReconcileText(item.text)) ?? 0) >= item.expectedOccurrence
     if (landed) {
       landedPendingIds.add(item.id)
+      exactLandedIds.add(item.id)
     }
   }
-  const glued = selectGluedPendingIds(messages, current, landedPendingIds)
+  const glued = selectGluedPendingIds(messages, current, exactLandedIds, landedImagePendingIds)
   return landedPendingIds.size === 0 && glued.size === 0
     ? current
     : current.filter((item) => !landedPendingIds.has(item.id) && !glued.has(item.id))

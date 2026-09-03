@@ -82,14 +82,18 @@ describe('Gitea pull request creation', () => {
     globalThis.fetch = fetchMock as never
 
     await expect(
-      createGiteaPullRequest('/repo', {
-        provider: 'gitea',
-        base: 'origin/main',
-        head: 'refs/heads/feature/gitea',
-        title: 'Add Gitea create',
-        body: 'Body',
-        draft: true
-      })
+      createGiteaPullRequest(
+        '/repo',
+        {
+          provider: 'gitea',
+          base: 'origin/main',
+          head: 'refs/heads/feature/gitea',
+          title: 'Add Gitea create',
+          body: 'Body',
+          draft: true
+        },
+        'local'
+      )
     ).resolves.toEqual({
       ok: true,
       number: 13,
@@ -126,7 +130,7 @@ describe('Gitea pull request creation', () => {
           head: 'feature/gitea',
           title: 'Remote Gitea create'
         },
-        'ssh-1'
+        'ssh:ssh-1'
       )
     ).resolves.toMatchObject({
       ok: true,
@@ -144,12 +148,16 @@ describe('Gitea pull request creation', () => {
     ) as never
 
     await expect(
-      createGiteaPullRequest('/repo', {
-        provider: 'gitea',
-        base: 'main',
-        head: 'feature/gitea',
-        title: 'Add Gitea create'
-      })
+      createGiteaPullRequest(
+        '/repo',
+        {
+          provider: 'gitea',
+          base: 'main',
+          head: 'feature/gitea',
+          title: 'Add Gitea create'
+        },
+        'local'
+      )
     ).resolves.toMatchObject({
       ok: false,
       code: 'validation'

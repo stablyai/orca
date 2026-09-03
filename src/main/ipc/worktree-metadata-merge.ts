@@ -18,6 +18,10 @@ export function mergeWorktree(
   const branchShort = git.branch.replace(/^refs\/heads\//, '')
   const creatorProvenance = normalizeWorkspaceCreatorProvenance(meta?.creatorProvenance)
   const worktreeId = `${repoId}::${git.path}`
+  const automaticDisplayName = branchShort || defaultDisplayName || basename(git.path)
+  // CLI-created labels predate displayNameIsPinned but are still explicit names.
+  const legacyCliDisplayNameIsPinned =
+    meta?.displayNameIsPinned === undefined && meta?.cliProvenance?.kind === 'created-by-cli'
   return {
     id: worktreeId,
     ...(meta?.instanceId && meta.hostId
@@ -46,7 +50,19 @@ export function mergeWorktree(
     isBare: git.isBare,
     ...(git.isSparse === true ? { isSparse: true } : {}),
     isMainWorktree: git.isMainWorktree,
-    displayName: meta?.displayName || branchShort || defaultDisplayName || basename(git.path),
+    // Automatic labels follow the live branch; persisted values are only authoritative when pinned.
+    displayName:
+      meta?.displayNameIsPinned === false
+        ? automaticDisplayName
+        : meta?.displayName || automaticDisplayName,
+    displayNameMode:
+      meta?.displayNameIsPinned === true || legacyCliDisplayNameIsPinned
+        ? 'fixed'
+        : meta?.displayNameIsPinned === false
+          ? 'automatic'
+          : meta?.displayName && meta.displayName.trim() !== branchShort
+            ? 'fixed'
+            : 'automatic',
     comment: meta?.comment || '',
     linkedIssue: meta?.linkedIssue ?? null,
     linkedPR: meta?.linkedPR ?? null,

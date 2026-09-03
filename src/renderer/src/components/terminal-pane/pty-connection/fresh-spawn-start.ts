@@ -21,7 +21,20 @@ export function bindStartFreshSpawn(session: ConnectPanePtySession): void {
     startupOverride?: PendingStartupCommand | null,
     options: FreshSpawnOptions = {}
   ): Promise<string | null> => {
+    const releaseDeferredCwdFence = (): void => {
+      if (!session.transport.getPtyId()) {
+        // An abandoned spawn never reaches connect(), so nothing else would ever
+        // drain the pre-connect buffer or settle its acknowledged-write promises.
+        session.transport.abandonPreconnectInput?.()
+        try {
+          session.deps.onDeferredCwdSpawnFailed?.()
+        } catch {
+          // A cleanup callback must not turn a settled spawn into an unhandled rejection.
+        }
+      }
+    }
     if (session.isLegacyWorkerAutomaticResumeBlocked()) {
+      releaseDeferredCwdFence()
       return Promise.resolve(null)
     }
     if (useAppStore.getState().deleteStateByWorktreeId?.[session.deps.worktreeId]?.isDeleting) {
@@ -29,9 +42,13 @@ export function bindStartFreshSpawn(session: ConnectPanePtySession): void {
       // filesystem teardown. A fresh shell must not spawn into a directory the
       // removal is about to delete (main fences it anyway), and the pane is
       // about to unmount — so skip the doomed respawn instead of racing it.
+      releaseDeferredCwdFence()
       return Promise.resolve(null)
     }
     session.authoritativeReattachGeneration += 1
+    // Every fresh connect creates or rebinds a PTY. Do not let a legacy
+    // response that omits `incarnationId` inherit the predecessor's fence.
+    session.remotePtyIncarnationId = null
     session.clearPaneMode2031State()
     session.clearHiddenOutputRestoreState()
     // Why: a canceled old replay clear can preserve xterm's native
@@ -163,6 +180,7 @@ export function bindStartFreshSpawn(session: ConnectPanePtySession): void {
               ? spawnedPtyId
               : session.transport.getPtyId()
         if (resolvedPtyId && !session.claimCapturedDirectSshRetryPty(resolvedPtyId)) {
+          releaseDeferredCwdFence()
           session.finishReattachLiveDataDeferral(false, outputCallbacks.generation)
           // Why: an outstanding declare keeps main's cooperation gate suppressing
           // this paneKey's daemon-snapshot seed until something releases it.
@@ -173,6 +191,10 @@ export function bindStartFreshSpawn(session: ConnectPanePtySession): void {
           spawnedPtyId && typeof spawnedPtyId === 'object' && 'id' in spawnedPtyId
             ? spawnedPtyId
             : null
+        // Old hosts may return a string or an object without the optional
+        // field; either way remote evidence must remain client-only
+        // unverifiable until a stamped attach result arrives.
+        session.remotePtyIncarnationId = connectResult?.incarnationId ?? null
         if (connectResult?.isReattach) {
           session.pendingStartupCommand = null
           const accepted = await session.handleReattachResult(
@@ -187,6 +209,10 @@ export function bindStartFreshSpawn(session: ConnectPanePtySession): void {
             void window.api.pty.settlePaneSerializer(session.cacheKey, gen).catch(() => {})
           } else if (typeof gen === 'number') {
             void window.api.pty.clearPendingPaneSerializer(session.cacheKey, gen).catch(() => {})
+          }
+          if (!accepted) {
+            // A rejected reattach ends this spawn; nothing later clears the fence.
+            releaseDeferredCwdFence()
           }
           return accepted ? resolvedPtyId : null
         }
@@ -246,6 +272,7 @@ export function bindStartFreshSpawn(session: ConnectPanePtySession): void {
           session.reconcilePtySizeAfterSpawn(resolvedPtyId, session.cols, session.rows)
         }
         if (!resolvedPtyId) {
+          releaseDeferredCwdFence()
           clearPreSignaledSerializer()
           session.finishReattachLiveDataDeferral(false, outputCallbacks.generation)
           return null
@@ -274,6 +301,7 @@ export function bindStartFreshSpawn(session: ConnectPanePtySession): void {
         return resolvedPtyId
       })
       .catch(async () => {
+        releaseDeferredCwdFence()
         session.finishReattachLiveDataDeferral(false, outputCallbacks.generation)
         if (
           session.paneStartup?.launchConfig ||

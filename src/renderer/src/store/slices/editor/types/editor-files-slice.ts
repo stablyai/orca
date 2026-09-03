@@ -33,7 +33,7 @@ export type EditorFilesSlice = {
   activeFileIdByWorktree: Record<string, string | null> // worktreeId -> last active file
   activeTabTypeByWorktree: Record<string, WorkspaceVisibleTabType> // worktreeId -> last active tab type
   activeTabType: WorkspaceVisibleTabType
-  setActiveTabType: (type: WorkspaceVisibleTabType) => void
+  setActiveTabType: (type: WorkspaceVisibleTabType, worktreeId?: string) => void
   openFile: (
     file: Omit<OpenFile, 'id' | 'isDirty'>,
     options?: {

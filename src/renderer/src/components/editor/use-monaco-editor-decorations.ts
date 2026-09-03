@@ -52,9 +52,14 @@ export function useMonacoEditorDecorations(params: {
     }
   }, [editorRef, language, markdownDocuments])
 
+  // Why: content changes are already covered by the controller's own
+  // `onDidChangeModelContent` subscription (which also catches programmatic
+  // edits this effect never saw), so mirroring `content` here only doubled the
+  // debounce timer churn per keystroke. A language swap on a retained model has
+  // no content event, so that trigger stays.
   useEffect(() => {
     markdownDocLinkDecorationsRef.current?.refresh()
-  }, [content, language])
+  }, [language])
 
   useEffect(() => {
     const ed = mountedEditor

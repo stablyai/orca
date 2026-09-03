@@ -49,7 +49,14 @@ export function useGitLabReviewActions(
         setReviewerOptionsLoading(false)
       }
     }
-  }, [mountedRef, repoSelector, reviewerOptions, reviewerOptionsLoading])
+  }, [
+    mountedRef,
+    repoSelector,
+    reviewerOptions,
+    reviewerOptionsLoading,
+    setReviewerOptions,
+    setReviewerOptionsLoading
+  ])
 
   const handleSetReviewers = useCallback(
     async (nextReviewers: GitLabAssignableUser[]): Promise<void> => {
@@ -101,7 +108,16 @@ export function useGitLabReviewActions(
         }
       }
     },
-    [details, item, mountedRef, repoSelector]
+    [
+      details,
+      item,
+      mountedRef,
+      repoSelector,
+      setDetails,
+      setReviewerDraftId,
+      setReviewerOptions,
+      setReviewerUpdating
+    ]
   )
 
   const handleSubmitInlineComment = useCallback(async (): Promise<void> => {
@@ -185,7 +201,10 @@ export function useGitLabReviewActions(
     inlineCommentLine,
     item,
     mountedRef,
-    repoSelector
+    repoSelector,
+    setDetails,
+    setInlineCommentBody,
+    setInlineCommentSubmitting
   ])
 
   const handleResolveDiscussion = useCallback(
@@ -228,7 +247,7 @@ export function useGitLabReviewActions(
         }
       }
     },
-    [item, repoSelector, mountedRef]
+    [item, repoSelector, mountedRef, setDetails, setResolvingThreadId]
   )
 
   return {

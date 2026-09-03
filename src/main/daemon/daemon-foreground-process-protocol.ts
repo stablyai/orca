@@ -16,4 +16,7 @@ export type ConfirmShellForegroundRequest = Omit<GetForegroundProcessRequest, 't
 
 export type InspectProcessRequest = Omit<GetForegroundProcessRequest, 'type'> & {
   type: 'inspectProcess'
+  payload: GetForegroundProcessRequest['payload'] & {
+    expectedIncarnationId?: string
+  }
 }

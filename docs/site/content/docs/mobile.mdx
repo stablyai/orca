@@ -3,12 +3,15 @@ title: Mobile companion
 description: Pair the Orca mobile app to your desktop to monitor agents and unstick worktrees from your phone.
 ---
 
-import { Callout } from '@/components/docs/prose';
+import { Callout } from '@/components/docs/prose'
 
 The Orca mobile companion is an iOS/Android app that pairs with your desktop Orca and gives you a read-mostly view of running agents — agent status, recent terminal scrollback, and the controls you actually want from a phone (replying to a prompt, sleeping a worktree, reviewing source control, switching agent accounts). Pairing is one-time and the desktop is always the source of truth.
 
 <Callout title="Beta">
-The mobile companion is in beta. Install iOS from the [App Store](https://apps.apple.com/us/app/orca-ide/id6766130217), join the [TestFlight preview channel](https://testflight.apple.com/join/YjeGMQBA), or install Android from the [current APK 0.0.46](https://github.com/stablyai/orca/releases/download/mobile-android-v0.0.46/app-release.apk).
+  The mobile companion is in beta. Install iOS from the [App
+  Store](https://apps.apple.com/us/app/orca-ide/id6766130217), join the [TestFlight preview
+  channel](https://testflight.apple.com/join/YjeGMQBA), or install Android from the [current APK
+  0.0.46](https://github.com/stablyai/orca/releases/download/mobile-android-v0.0.46/app-release.apk).
 </Callout>
 
 ## What you can do from mobile
@@ -110,5 +113,8 @@ The mobile terminal has a dedicated **Terminal settings** screen (Settings → T
 - **Can't reach desktop** — phone and desktop must share a network path (LAN, Tailscale, or the pairing path you used). Closing the desktop app drops the connection; reopen desktop and the phone reconnects automatically.
 
 <Callout title="Next steps">
-Pair mobile notifications with [desktop notifications](/docs/notifications) so agent-finished alerts reach the right device. For headless machines, use [Remote Orca Server](/docs/remote-servers) mobile pairing. Track provider usage on desktop and mobile under [Usage & rate-limit tracking](/docs/agents/usage-tracking).
+  Pair mobile notifications with [desktop notifications](/docs/notifications) so agent-finished
+  alerts reach the right device. For headless machines, use [Remote Orca
+  Server](/docs/remote-servers) mobile pairing. Track provider usage on desktop and mobile under
+  [Usage & rate-limit tracking](/docs/agents/usage-tracking).
 </Callout>

@@ -154,7 +154,7 @@ describe('RuntimeFileCommands', () => {
         repoId: 'repo-1',
         path: '/remote/repo'
       },
-      connectionId: 'ssh-1'
+      executionHostId: 'ssh:ssh-1'
     }))
     const { commands } = createRuntimeFileCommands({
       openFile,

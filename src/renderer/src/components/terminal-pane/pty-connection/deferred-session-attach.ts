@@ -3,12 +3,9 @@ import { useAppStore } from '@/store'
 import { isRuntimeOwnedSshTargetId } from '../../../../../shared/execution-host'
 import { resolveSshPaneConnectGate } from '../ssh-pane-connect-gate'
 
-import {
-  isSshSessionExpiredError,
-  waitForUserInitiatedSshConnect,
-  waitForSshConnection
-} from './ssh-session-connect'
+import { waitForUserInitiatedSshConnect, waitForSshConnection } from './ssh-session-connect'
 import { isRemoteRuntimePtyId } from './paired-parked-terminal-restore'
+import { isSshSessionGoneError } from './pty-connect-limits'
 import { toProcessExitStartup } from './process-exit-startup'
 
 import type { ConnectPanePtySession } from './connect-pane-pty-session'
@@ -17,6 +14,10 @@ import { runDeferredSessionReattachChoice } from './deferred-session-reattach-ch
 import { recoverUnverifiableDirectSshReattach } from './direct-ssh-reattach-recovery'
 
 export function runDeferredSessionAttach(session: ConnectPanePtySession): void {
+  const isCurrentPaneTransport = (): boolean =>
+    !session.disposed &&
+    session.deps.paneTransportsRef.current.get(session.pane.id) === session.transport
+
   // Why: trigger the deferred SSH connect per-tab (not per-target) so multiple tabs for one target reattach independently.
   // Must run before session-id resolution: the SSH provider isn't registered until connect succeeds.
   if (session.connectionId) {
@@ -76,7 +77,7 @@ export function runDeferredSessionAttach(session: ConnectPanePtySession): void {
           console.warn('[pty-connection] needsPassphrasePrompt probe failed:', err)
           // Why: on probe failure fall through to auto-connect rather than stranding the tab — a stuck tab is worse than a surprising prompt.
         }
-        if (session.disposed || !session.capturedDirectSshRetryLeaseMatches()) {
+        if (!isCurrentPaneTransport() || !session.capturedDirectSshRetryLeaseMatches()) {
           return
         }
         if (needsPrompt) {
@@ -87,7 +88,7 @@ export function runDeferredSessionAttach(session: ConnectPanePtySession): void {
             // Wait for the user-driven connect (sidebar card control or terminal reconnect overlay → passphrase → ssh.connect) to complete.
             // Why: resolve on terminal-failure statuses too ('auth-failed'/'error'/'reconnection-failed') so it can't hang forever if the user cancels or the connect fails.
             const outcome = await waitForUserInitiatedSshConnect(session)
-            if (session.disposed || !session.capturedDirectSshRetryLeaseMatches()) {
+            if (!isCurrentPaneTransport() || !session.capturedDirectSshRetryLeaseMatches()) {
               return
             }
             if (outcome === 'cancelled') {
@@ -102,17 +103,17 @@ export function runDeferredSessionAttach(session: ConnectPanePtySession): void {
 
         // Why: wait for the shared SSH connection (multiple panes/tabs may need it) before PTY reattach, rather than returning early when it's in-flight.
         const connectResult = await waitForSshConnection(session.connectionId)
-        if (session.disposed || !session.capturedDirectSshRetryLeaseMatches()) {
+        if (!isCurrentPaneTransport() || !session.capturedDirectSshRetryLeaseMatches()) {
           return
         }
         if (!connectResult.connected) {
           session.reportError(`SSH connection failed: ${connectResult.error}`)
           return
         }
-        useAppStore.getState().removeDeferredSshReconnectTarget(session.connectionId)
-        if (session.disposed) {
+        if (!isCurrentPaneTransport()) {
           return
         }
+        useAppStore.getState().removeDeferredSshReconnectTarget(session.connectionId)
         if (pendingSessionId) {
           if (session.isLegacyWorkerAutomaticResumeBlocked()) {
             if (session.attachRetainedLegacyPty(pendingSessionId)) {
@@ -125,6 +126,9 @@ export function runDeferredSessionAttach(session: ConnectPanePtySession): void {
             `[pty-connection] Attempting reattach for tab=${session.deps.tabId} sessionId=${pendingSessionId}`
           )
           // Why: consume redundant restore metadata before attach, but keep a sole deferred ID until the host gives a conclusive result.
+          if (!isCurrentPaneTransport()) {
+            return
+          }
           if (!deferredSessionIsOnlyRetryBinding) {
             useAppStore.getState().removeDeferredSshSessionId(session.deps.tabId)
           }
@@ -146,17 +150,23 @@ export function runDeferredSessionAttach(session: ConnectPanePtySession): void {
           session.clearHiddenOutputRestoreState()
           const outputCallbacks = session.captureTransportOutputCallbacks(
             (message) => {
-              if (isSshSessionExpiredError(message)) {
+              if (isSshSessionGoneError(message)) {
                 expiredReattachError = true
                 return
               }
-              if (!session.isCapturedDirectSshReattachCurrent(pendingSessionId)) {
+              if (
+                !isCurrentPaneTransport() ||
+                !session.isCapturedDirectSshReattachCurrent(pendingSessionId)
+              ) {
                 return
               }
               session.reportError(message)
             },
             toProcessExitStartup(coldRestoreStartup ?? session.paneStartup)
           )
+          const isCurrentReattach = (): boolean =>
+            isCurrentPaneTransport() &&
+            outputCallbacks.generation === session.transportStreamGeneration
           session.beginReattachLiveDataDeferral(outputCallbacks.generation)
           session.transportConnectInFlightSince = Date.now()
           const reattachPromise = session.transport.connect({
@@ -191,7 +201,7 @@ export function runDeferredSessionAttach(session: ConnectPanePtySession): void {
             })
           const trackedReattachPromise = Promise.resolve(reattachPromise)
             .then(async (result) => {
-              if (outputCallbacks.generation !== session.transportStreamGeneration) {
+              if (!isCurrentReattach()) {
                 session.finishReattachLiveDataDeferral(false, outputCallbacks.generation)
                 await clearPreSignaledSerializer()
                 return
@@ -208,14 +218,14 @@ export function runDeferredSessionAttach(session: ConnectPanePtySession): void {
               if (!result && expiredReattachError) {
                 session.finishReattachLiveDataDeferral(false, outputCallbacks.generation)
                 await clearPreSignaledSerializer()
-                if (session.disposed) {
+                if (!isCurrentReattach()) {
                   return
                 }
                 if (session.rejectObsoleteDirectSshReattach(pendingSessionId)) {
                   return
                 }
                 useAppStore.getState().removeDeferredSshSessionId(session.deps.tabId)
-                session.deps.clearExitedPanePtyLayoutBinding(session.pane.id, pendingSessionId)
+                session.clearExitedPanePtyLayoutBinding(pendingSessionId)
                 session.deps.clearTabPtyId(session.deps.tabId, pendingSessionId)
                 session.startFreshColdRestoreAgentResume(coldRestoreStartup, {
                   forceBlankRestoredViewport: true
@@ -238,6 +248,7 @@ export function runDeferredSessionAttach(session: ConnectPanePtySession): void {
               if (
                 deferredSessionIsOnlyRetryBinding &&
                 (accepted || sessionExpired) &&
+                isCurrentReattach() &&
                 session.isCapturedDirectSshReattachCurrent(pendingSessionId)
               ) {
                 useAppStore.getState().removeDeferredSshSessionId(session.deps.tabId)
@@ -267,18 +278,15 @@ export function runDeferredSessionAttach(session: ConnectPanePtySession): void {
               session.finishReattachLiveDataDeferral(false, outputCallbacks.generation)
               await clearPreSignaledSerializer()
               console.warn(`[pty-connection] Reattach FAILED for tab=${session.deps.tabId}:`, err)
-              if (
-                session.disposed ||
-                outputCallbacks.generation !== session.transportStreamGeneration
-              ) {
+              if (!isCurrentReattach()) {
                 return
               }
               if (session.rejectObsoleteDirectSshReattach(pendingSessionId)) {
                 return
               }
-              if (isSshSessionExpiredError(err)) {
+              if (isSshSessionGoneError(err)) {
                 useAppStore.getState().removeDeferredSshSessionId(session.deps.tabId)
-                session.deps.clearExitedPanePtyLayoutBinding(session.pane.id, pendingSessionId)
+                session.clearExitedPanePtyLayoutBinding(pendingSessionId)
                 session.deps.clearTabPtyId(session.deps.tabId, pendingSessionId)
                 session.startFreshColdRestoreAgentResume(coldRestoreStartup, {
                   forceBlankRestoredViewport: true

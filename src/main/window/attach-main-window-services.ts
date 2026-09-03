@@ -13,7 +13,6 @@ import { setWorktreeCatalogRemoteClientNotifier } from '../ipc/watched-worktree-
 import { registerWorktreeHandlers } from '../ipc/worktrees'
 import { registerWorkspaceCleanupHandlers } from '../ipc/workspace-cleanup'
 import {
-  getLocalPtyProvider,
   registerPtyHandlers,
   type CodexHomePtySpawnedLifecycleArgs,
   type GetSelectedCodexHomePath,
@@ -70,7 +69,7 @@ export function attachMainWindowServices(
   }
 ): void {
   registerAppReloadHandler(mainWindow, options?.onBeforeRendererReload)
-  registerRepoHandlers(mainWindow, store)
+  registerRepoHandlers(mainWindow, store, runtime)
   // Why: repo IPC mutations must also invalidate paired clients' catalogs (#11994).
   setRepoRemoteClientNotifier(runtime)
   setWorktreeCatalogRemoteClientNotifier(runtime)
@@ -83,7 +82,7 @@ export function attachMainWindowServices(
   // Why: folder projects get no watch target, so an external `git init` needs its own
   // marker poll to upgrade them without a restart (#11477).
   startFolderRepoGitUpgradeWatch(store, mainWindow)
-  registerWorkspaceCleanupHandlers(store, { runtime, getLocalPtyProvider })
+  registerWorkspaceCleanupHandlers(store)
   registerPtyHandlers(
     mainWindow,
     runtime,

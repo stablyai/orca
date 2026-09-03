@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { AgentSessionRecordStore } from '../../runtime/agent-session-record-store'
-import { openAgentSessionJournal } from '../agent-session-journal/journal-store'
+import { openAgentSessionJournal } from '../agent-session-journal/journal-store-factory'
 import { StructuredTuiTranscriptCatchup } from './structured-tui-transcript-catchup'
 
 const NOW = 1_800_000_000_000
@@ -103,7 +103,8 @@ function createCatchup(input: Awaited<ReturnType<typeof createCatchupFixture>>) 
       hasProviderChild: false,
       journal: input.journal,
       params: {} as never,
-      fence: input.fence
+      fence: input.fence,
+      acquisitionGeneration: null
     }),
     schedule: async (_sessionId, task) => task(),
     publish: vi.fn(),

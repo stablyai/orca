@@ -48,7 +48,7 @@ export function settleSshPtyModelAdmissionFailure(args: {
   entry: AdmissionEntry
   error: Error
   migratingPtys: ReadonlySet<string>
-  closingGenerations: Set<number>
+  closingGenerations: { add: (generation: number) => void }
   release: (key: SshPtyModelAdmissionKey, charge: AdmissionCharge) => void
   closeGeneration: (providerGeneration: number) => void
   cleanup: (id: string, usage: PtyUsage) => void

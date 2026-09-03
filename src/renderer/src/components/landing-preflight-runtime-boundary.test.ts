@@ -15,6 +15,11 @@ const status = (overrides: Partial<PreflightStatus> = {}): PreflightStatus => ({
   ...overrides
 })
 
+function setDocumentVisibility(state: 'visible' | 'hidden'): void {
+  Object.defineProperty(document, 'visibilityState', { configurable: true, get: () => state })
+  document.dispatchEvent(new Event('visibilitychange'))
+}
+
 const githubRepo: Repo = {
   id: 'github',
   path: '/repos/github',
@@ -27,6 +32,7 @@ const githubRepo: Repo = {
 
 beforeEach(() => {
   vi.useFakeTimers()
+  setDocumentVisibility('visible')
   refresh.mockClear()
   invalidate.mockClear()
   useAppStore.setState(useAppStore.getInitialState(), true)
@@ -35,6 +41,7 @@ beforeEach(() => {
 
 afterEach(() => {
   cleanup()
+  setDocumentVisibility('visible')
   vi.useRealTimers()
   useAppStore.setState(useAppStore.getInitialState(), true)
 })
@@ -105,6 +112,29 @@ describe('landing preflight runtime boundary', () => {
 
     expect(invalidate).toHaveBeenCalledTimes(1)
     expect(refresh).not.toHaveBeenCalled()
+    view.unmount()
+  })
+
+  it('stops the 30s preflight poll while hidden and lets the reveal refresh instead', () => {
+    useAppStore.setState({ repos: [githubRepo], preflightStatus: status() })
+    const view = renderHook(() => useLandingPreflightRuntime())
+    refresh.mockClear()
+
+    expect(vi.getTimerCount()).toBe(1)
+    act(() => setDocumentVisibility('hidden'))
+    expect(vi.getTimerCount()).toBe(0)
+
+    // Five poll windows pass behind a hidden window with no IPC at all.
+    act(() => vi.advanceTimersByTime(150_000))
+    expect(refresh).not.toHaveBeenCalled()
+
+    // The sibling visibilitychange handler force-refreshes on reveal, so the
+    // banner is current the moment it can be seen; the poll re-arms behind it.
+    act(() => setDocumentVisibility('visible'))
+    expect(refresh).toHaveBeenCalledTimes(1)
+    expect(refresh).toHaveBeenCalledWith({ force: true })
+    expect(vi.getTimerCount()).toBe(1)
+
     view.unmount()
   })
 

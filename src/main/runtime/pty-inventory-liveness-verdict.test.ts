@@ -89,7 +89,9 @@ describe('inventory sweep liveness verdicts', () => {
 
     runtime.onPtyExit(REMOTE_PTY_ID, -1, undefined, { hostExitConfirmed: true })
 
-    expect(runtime.getPtyLivenessVerdict(REMOTE_PTY_ID)).toBeNull()
+    // A host-delivered exit frame is the one signal that observes the process, so it both clears
+    // the lost-contact doubt and is retained as the certificate itself.
+    expect(runtime.getPtyLivenessVerdict(REMOTE_PTY_ID)).toEqual({ status: 'exited' })
   })
 
   it('records lost contact when no provider can answer for the PTY', async () => {
@@ -109,6 +111,23 @@ describe('inventory sweep liveness verdicts', () => {
     await runtime.listTerminals(`id:${WORKTREE_ID}`)
 
     // An observed absence is the death certificate callers already act on.
+    expect(runtime.getPtyLivenessVerdict(REMOTE_PTY_ID)).toBeNull()
+  })
+
+  it('records no death certificate when a listing of the owning host omits the PTY', async () => {
+    // The host answered and named a sibling on the same relay, so this is the strongest absence the
+    // inventory can report — and it is still not a certificate. `pty.listProcesses` returns the
+    // relay's CURRENT session map, so a relay that restarted omits every id the previous one minted
+    // (ids are `pty2:<ptyIdMintEpoch>:<n>` with a fresh epoch per relay start) whether or not those
+    // shells ever died. Recording `exited` here would only relocate the fabrication that
+    // handlePtyReattachFailure was corrected for (docs/reference/ssh-execution-boundary.md).
+    const runtime = makeRuntimeMissingFromInventory(
+      () => false,
+      vi.fn(async () => [{ id: 'ssh:conn-1@@relay-sibling', worktreeId: WORKTREE_ID }])
+    )
+
+    await runtime.listTerminals(`id:${WORKTREE_ID}`)
+
     expect(runtime.getPtyLivenessVerdict(REMOTE_PTY_ID)).toBeNull()
   })
 

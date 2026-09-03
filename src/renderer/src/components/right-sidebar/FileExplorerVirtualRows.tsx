@@ -6,7 +6,7 @@ import type { GitFileStatus } from '../../../../shared/git-status-types'
 import { FileExplorerRow } from './FileExplorerRow'
 import { InlineInputRow, type InlineInput } from './file-explorer-inline-input-row'
 import { shouldShowIgnoredDecoration, STATUS_COLORS } from './status-display'
-import type { DirCache, TreeNode } from './file-explorer-types'
+import type { TreeNode } from './file-explorer-types'
 import type { FileExplorerRowProjection } from './file-explorer-row-projection'
 import type { RuntimeFileOperationArgs } from '@/runtime/runtime-file-client'
 
@@ -22,7 +22,7 @@ type FileExplorerVirtualRowsProps = {
   ignoredByRelativePath: Set<string>
   expanded: Set<string>
   canCollapseFolderSubtree?: boolean
-  dirCache: Record<string, DirCache>
+  loadingDirPaths: ReadonlySet<string>
   selectedPaths: Set<string>
   activeFileId: string | null
   flashingPath: string | null
@@ -69,7 +69,7 @@ export function FileExplorerVirtualRows(props: FileExplorerVirtualRowsProps): Re
     ignoredByRelativePath,
     expanded,
     canCollapseFolderSubtree = true,
-    dirCache,
+    loadingDirPaths,
     selectedPaths,
     activeFileId,
     flashingPath,
@@ -171,7 +171,7 @@ export function FileExplorerVirtualRows(props: FileExplorerVirtualRowsProps): Re
             <FileExplorerRow
               node={n}
               isExpanded={expanded.has(n.path)}
-              isLoading={n.isDirectory && Boolean(dirCache[n.path]?.loading)}
+              isLoading={n.isDirectory && loadingDirPaths.has(n.path)}
               isSelected={selectedPaths.has(n.path) || activeFileId === n.path}
               selectedPaths={selectedPaths}
               isFlashing={flashingPath === n.path}

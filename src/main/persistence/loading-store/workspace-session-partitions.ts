@@ -5,6 +5,7 @@ import {
   type ExecutionHostId
 } from '../../../shared/execution-host'
 import { parseWorkspaceSessionSalvaging } from '../../../shared/workspace-session-salvage'
+import { withoutRedundantGlobalFields } from '../../../shared/workspace-session-host-field-ownership'
 
 export function workspaceSessionSalvageLogDetails(result: {
   droppedCount: number
@@ -21,7 +22,8 @@ export function workspaceSessionSalvageLogDetails(result: {
  *  Each partition is zod-validated independently, so one corrupt host drops to defaults without taking out the others. Idempotent. */
 export function parseWorkspaceSessionsByHostId(
   raw: unknown,
-  defaults: WorkspaceSessionState
+  defaults: WorkspaceSessionState,
+  localSession?: WorkspaceSessionState
 ): { partitions: Partial<Record<ExecutionHostId, WorkspaceSessionState>>; repaired: boolean } {
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
     return { partitions: {}, repaired: raw !== undefined }
@@ -50,7 +52,12 @@ export function parseWorkspaceSessionsByHostId(
       )
       repaired = true
     }
-    partitions[hostId] = { ...defaults, ...result.value }
+    // Runs before the defaults spread, so a field the type requires comes back at its default
+    // rather than going missing.
+    partitions[hostId] = {
+      ...defaults,
+      ...withoutRedundantGlobalFields(result.value, localSession)
+    }
   }
   return { partitions, repaired }
 }

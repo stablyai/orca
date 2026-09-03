@@ -36,7 +36,8 @@ import type {
   BrowserSessionProfileCreateOptions,
   BrowserSessionProfileScope,
   BrowserSessionProfileSource,
-  BrowserViewportOverride
+  BrowserViewportOverride,
+  BrowserViewportScrollState
 } from '../../shared/browser-workspace-types'
 import type {
   BrowserClientPageRendererOutcome,
@@ -77,6 +78,10 @@ export type BrowserApi = {
     browserPageId: string
     override: BrowserViewportOverride | null
   }) => Promise<boolean>
+  reportViewportScrollState?: (args: {
+    browserPageId: string
+    state: BrowserViewportScrollState
+  }) => void
   setAnnotationViewportBridge: (args: BrowserSetAnnotationViewportBridgeArgs) => Promise<boolean>
   /** Publishes a client-hosted page's url/title to its runtime over that runtime's host lease. */
   publishClientPageMetadata: (args: {

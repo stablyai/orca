@@ -3,6 +3,7 @@ import type { ExecutionHostId } from '../../../../../../shared/execution-host'
 import type { WorktreeSliceSet } from '../listing/worktree-slice-types'
 import { removeDeleteStatesForWorktreeIds } from './worktree-delete-state'
 import { removeWorktreeVisitEntries } from '@/lib/worktree-visit-recency'
+import { forgetAmbiguousOwnerWarnings } from '../listing/worktree-owner-settings'
 
 export function applyRemoveWorktreeSuccessState(
   set: WorktreeSliceSet,
@@ -10,6 +11,9 @@ export function applyRemoveWorktreeSuccessState(
   tabIds: Set<string>,
   executionHostId?: ExecutionHostId
 ): void {
+  // Why outside `set`: it is module-scope, not store state. Dropping it also
+  // re-arms the once-per-workspace warning if this id is ever added back.
+  forgetAmbiguousOwnerWarnings([worktreeId])
   set((s) => {
     const next = { ...s.worktreesByRepo }
     for (const repoId of Object.keys(next)) {
@@ -25,6 +29,7 @@ export function applyRemoveWorktreeSuccessState(
     }
     const nextNativeChatLaunchPromptByTabId = { ...s.nativeChatLaunchPromptByTabId }
     const nextNativeChatLaunchDraftByTabId = { ...s.nativeChatLaunchDraftByTabId }
+    const nextUnverifiedPtyLossTabIds = { ...s.unverifiedPtyLossTabIds }
     // Why: closeTab deletes these per-tab maps but removeWorktree missed them, leaking a split pane's expand flags.
     const nextExpandedPaneByTabId = { ...s.expandedPaneByTabId }
     const nextCanExpandPaneByTabId = { ...s.canExpandPaneByTabId }
@@ -35,6 +40,7 @@ export function applyRemoveWorktreeSuccessState(
       delete nextAutomaticAgentResumeClaimsByTabId[tabId]
       delete nextNativeChatLaunchPromptByTabId[tabId]
       delete nextNativeChatLaunchDraftByTabId[tabId]
+      delete nextUnverifiedPtyLossTabIds[tabId]
       delete nextExpandedPaneByTabId[tabId]
       delete nextCanExpandPaneByTabId[tabId]
     }
@@ -170,6 +176,7 @@ export function applyRemoveWorktreeSuccessState(
       automaticAgentResumeClaimsByTabId: nextAutomaticAgentResumeClaimsByTabId,
       nativeChatLaunchPromptByTabId: nextNativeChatLaunchPromptByTabId,
       nativeChatLaunchDraftByTabId: nextNativeChatLaunchDraftByTabId,
+      unverifiedPtyLossTabIds: nextUnverifiedPtyLossTabIds,
       terminalLayoutsByTabId: nextLayouts,
       expandedPaneByTabId: nextExpandedPaneByTabId,
       canExpandPaneByTabId: nextCanExpandPaneByTabId,

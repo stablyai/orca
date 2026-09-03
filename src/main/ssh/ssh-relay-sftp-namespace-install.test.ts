@@ -85,12 +85,14 @@ import {
   RELAY_DEPLOY_TIMEOUT_MS
 } from './ssh-relay-deploy-timing'
 import { parseUnameToRelayPlatform } from './relay-protocol'
+import { decodeRemotePowerShellScript } from './ssh-remote-powershell'
 import {
   abandonInstall,
   finalizeInstall,
   isRelayAlreadyInstalled
 } from './ssh-relay-versioned-install'
 import { tryAcquireRelayRepairLock } from './ssh-relay-repair-lock'
+import { BOTH_NATIVE_DEPS_MISSING_PROBE } from './ssh-relay-native-deps-install-fixture'
 import type { SshConnection } from './ssh-connection'
 import type { SftpNamespacePathMapping } from './sftp-namespace-resolution'
 
@@ -103,6 +105,9 @@ const RELAY_SUFFIX = '.orca-remote/relay-0.1.0+testhash'
 const SHELL_RELAY_DIR = `${SHELL_HOME}/${RELAY_SUFFIX}`
 const SFTP_RELAY_DIR = `${SFTP_HOME}/${RELAY_SUFFIX}`
 const MARKER_PATTERN = /\.sftp-namespace-[0-9a-f]{32}/
+// Stdout of the relay-side pty-master cloexec patch, which runs on Linux hosts once a
+// freshly installed node-pty loads (#17915).
+const NPTY_CLOEXEC_PATCHED = 'ORCA-NPTY-CLOEXEC:patched\n'
 const STAGE_OWNER = '.sftp-namespace-00000000000000000000000000000000'
 const STAGE_RESERVED = `__ORCA_UPLOAD_STAGE_SLOT__${STAGE_OWNER}:slot-0`
 const STAGE_PROMOTED = `__ORCA_UPLOAD_STAGE_PROMOTION__${STAGE_OWNER}:PROMOTED`
@@ -154,8 +159,7 @@ function issuedMarkerNames(): string[] {
 }
 
 function decodeCommand(command: string): string {
-  const match = command.match(/-EncodedCommand\s+([A-Za-z0-9+/=]+)/)
-  return match ? Buffer.from(match[1], 'base64').toString('utf16le') : command
+  return decodeRemotePowerShellScript(command)
 }
 
 function execCommands(): string[] {
@@ -250,10 +254,13 @@ const POSIX_FIRST_INSTALL = [
   '', // chmod staged node
   '', // final install namespace marker
   STAGE_PROMOTED,
+  '', // shared native-deps cache probe (miss)
   '', // npm install native deps
   '', // chmod prebuilds
   'ORCA-NPTY-PROBE-OK\n',
   '', // rm probe stderr
+  NPTY_CLOEXEC_PATCHED,
+  '', // promote into the shared native-deps cache
   '', // clean stage root
   'DEAD',
   '', // publish the per-launch credential
@@ -267,10 +274,13 @@ const POSIX_SYSTEM_SSH_FIRST_INSTALL = [
   STAGE_RESERVED,
   '', // chmod staged node
   STAGE_PROMOTED,
+  '', // shared native-deps cache probe (miss)
   '', // npm install native deps
   '', // chmod prebuilds
   'ORCA-NPTY-PROBE-OK\n',
   '', // rm probe stderr
+  NPTY_CLOEXEC_PATCHED,
+  '', // promote into the shared native-deps cache
   '', // clean stage root
   'DEAD',
   '', // publish the per-launch credential
@@ -281,13 +291,14 @@ const POSIX_SYSTEM_SSH_FIRST_INSTALL = [
 const POSIX_REPAIR = [
   '__ORCA_REMOTE_PLATFORM__ Linux x86_64',
   SHELL_HOME,
-  'MISSING', // probe before the repair lock
-  'MISSING', // re-probe under the lock
+  BOTH_NATIVE_DEPS_MISSING_PROBE, // probe before the repair lock: the marker names both deps
+  BOTH_NATIVE_DEPS_MISSING_PROBE, // re-probe under the lock
   '', // install-owner marker
   '', // npm install native deps
   '', // chmod prebuilds
   'ORCA-NPTY-PROBE-OK\n',
   '', // rm probe stderr
+  NPTY_CLOEXEC_PATCHED,
   'DEAD',
   '', // publish the per-launch credential
   'READY'
@@ -692,12 +703,13 @@ describe('relay repair writes on a split SFTP namespace', () => {
     feed([
       '__ORCA_REMOTE_PLATFORM__ Linux x86_64',
       SHELL_HOME,
-      'MISSING',
-      'MISSING',
+      BOTH_NATIVE_DEPS_MISSING_PROBE,
+      BOTH_NATIVE_DEPS_MISSING_PROBE,
       '', // npm install native deps
       '', // chmod prebuilds
       'ORCA-NPTY-PROBE-OK\n',
       '', // rm probe stderr
+      NPTY_CLOEXEC_PATCHED,
       'DEAD',
       '', // remote credential generation
       'READY'
@@ -716,13 +728,19 @@ describe('relay repair writes on a split SFTP namespace', () => {
 
   it('degrades to shell paths when marker creation fails outright', async () => {
     const conn = makeConnection(capture)
-    feed(['__ORCA_REMOTE_PLATFORM__ Linux x86_64', SHELL_HOME, 'MISSING', 'MISSING'])
+    feed([
+      '__ORCA_REMOTE_PLATFORM__ Linux x86_64',
+      SHELL_HOME,
+      BOTH_NATIVE_DEPS_MISSING_PROBE,
+      BOTH_NATIVE_DEPS_MISSING_PROBE
+    ])
     vi.mocked(execCommand).mockRejectedValueOnce(new Error('read-only file system'))
     feed([
       '', // npm install native deps
       '', // chmod prebuilds
       'ORCA-NPTY-PROBE-OK\n',
       '', // rm probe stderr
+      NPTY_CLOEXEC_PATCHED,
       'DEAD',
       '', // remote credential generation
       'READY'
@@ -742,7 +760,12 @@ describe('relay repair writes on a split SFTP namespace', () => {
 
   it('keeps the repair lock when marker creation has unconfirmed termination', async () => {
     const conn = makeConnection(capture)
-    feed(['__ORCA_REMOTE_PLATFORM__ Linux x86_64', SHELL_HOME, 'MISSING', 'MISSING'])
+    feed([
+      '__ORCA_REMOTE_PLATFORM__ Linux x86_64',
+      SHELL_HOME,
+      BOTH_NATIVE_DEPS_MISSING_PROBE,
+      BOTH_NATIVE_DEPS_MISSING_PROBE
+    ])
     vi.mocked(execCommand).mockRejectedValueOnce(
       Object.assign(new Error('marker teardown unconfirmed'), { sshChannelCloseConfirmed: false })
     )

@@ -13,12 +13,36 @@ import {
 import { clearRuntimeCompatibilityCacheForTests } from './runtime-rpc-client'
 import { TERMINAL_INPUT_MAX_BYTES } from '../../../shared/terminal-input'
 import { useAppStore } from '../store'
+import type { RemoteForegroundEvidence } from '../../../shared/foreground-process-evidence'
+import {
+  clientOnlyUnverifiableInspection,
+  type ClientOnlyUnverifiableInspection
+} from '../../../shared/terminal-process-inspection'
 
 const LEAF_ID = '11111111-1111-4111-8111-111111111111'
 const PANE_KEY = `tab-1:${LEAF_ID}`
 
 function makeByteOversizedTerminalInput(): string {
   return '😀'.repeat(Math.floor(TERMINAL_INPUT_MAX_BYTES / 4) + 1)
+}
+
+function liveEvidence(ptyId: string, processName = 'bash'): RemoteForegroundEvidence {
+  return {
+    authorityGeneration: 'authority-1',
+    observationEpoch: 1,
+    capturedAgeMs: 0,
+    ptyId,
+    ptyIncarnationId: 'incarnation-1',
+    verdict: 'live',
+    processName,
+    fence: {
+      platform: 'posix',
+      shellPid: 1,
+      shellStartTime: '1',
+      tty: '/dev/pts/1',
+      foregroundPgid: 1
+    }
+  }
 }
 
 describe('runtime terminal owner routing', () => {
@@ -35,7 +59,13 @@ describe('runtime terminal owner routing', () => {
     vi.clearAllMocks()
     runtimeCall.mockResolvedValue({
       ok: true,
-      result: { process: { foregroundProcess: 'bash', hasChildProcesses: true } },
+      result: {
+        process: {
+          foregroundProcess: 'bash',
+          hasChildProcesses: true,
+          foregroundProcessEvidence: liveEvidence('terminal-1')
+        }
+      },
       _meta: { runtimeId: 'runtime-1' }
     })
     runtimeTransportCall.mockImplementation((args: RuntimeEnvironmentCallRequest) => {
@@ -104,7 +134,7 @@ describe('runtime terminal owner routing', () => {
         { activeRuntimeEnvironmentId: 'env-2' },
         'remote:env-1@@terminal-1'
       )
-    ).resolves.toEqual({ foregroundProcess: 'bash', hasChildProcesses: true })
+    ).resolves.toMatchObject({ foregroundProcess: 'bash', hasChildProcesses: true })
 
     expect(runtimeCall).toHaveBeenCalledWith({
       selector: 'env-1',
@@ -116,11 +146,11 @@ describe('runtime terminal owner routing', () => {
     expect(localHasChildren).not.toHaveBeenCalled()
   })
 
-  it('preserves unavailable inspection from the PTY owning environment', async () => {
+  it('maps an old host inspection to client-only unverifiable', async () => {
     runtimeCall.mockResolvedValue({
       ok: true,
       result: {
-        process: { foregroundProcess: null, hasChildProcesses: true, unavailable: true }
+        process: { foregroundProcess: 'codex', hasChildProcesses: true }
       },
       _meta: { runtimeId: 'runtime-1' }
     })
@@ -132,15 +162,20 @@ describe('runtime terminal owner routing', () => {
       )
     ).resolves.toEqual({
       foregroundProcess: null,
-      hasChildProcesses: true,
-      unavailable: true
+      hasChildProcesses: false,
+      verdict: 'unverifiable',
+      reason: 'old_host'
     })
   })
 
   it('uses strict main-process inspection for a direct SSH PTY', async () => {
-    localInspect.mockResolvedValue({ foregroundProcess: 'codex', hasChildProcesses: true })
+    localInspect.mockResolvedValue({
+      foregroundProcess: 'codex',
+      hasChildProcesses: true,
+      foregroundProcessEvidence: liveEvidence('pty-1', 'codex')
+    })
 
-    await expect(inspectRuntimeTerminalProcess(null, 'ssh:host@@pty-1')).resolves.toEqual({
+    await expect(inspectRuntimeTerminalProcess(null, 'ssh:host@@pty-1')).resolves.toMatchObject({
       foregroundProcess: 'codex',
       hasChildProcesses: true
     })
@@ -149,22 +184,22 @@ describe('runtime terminal owner routing', () => {
     expect(localHasChildren).not.toHaveBeenCalled()
   })
 
-  it('preserves unavailable inspection for a direct SSH PTY', async () => {
+  it('maps an old direct SSH host to client-only unverifiable', async () => {
     localInspect.mockResolvedValue({
       foregroundProcess: null,
-      hasChildProcesses: true,
-      unavailable: true
+      hasChildProcesses: true
     })
 
     await expect(inspectRuntimeTerminalProcess(null, 'ssh:host@@pty-1')).resolves.toEqual({
       foregroundProcess: null,
-      hasChildProcesses: true,
-      unavailable: true
+      hasChildProcesses: false,
+      verdict: 'unverifiable',
+      reason: 'old_host'
     })
   })
 
   it.each(['no_connected_pty', 'terminal_handle_stale', 'terminal_gone'])(
-    'reports %s remote process inspection as unavailable',
+    'reports %s remote process inspection as client-only unverifiable',
     async (code) => {
       runtimeCall.mockResolvedValue({
         ok: false,
@@ -176,9 +211,64 @@ describe('runtime terminal owner routing', () => {
           { activeRuntimeEnvironmentId: 'env-2' },
           'remote:env-1@@terminal-stale'
         )
-      ).resolves.toEqual({ foregroundProcess: null, hasChildProcesses: false, unavailable: true })
+      ).resolves.toEqual({
+        foregroundProcess: null,
+        hasChildProcesses: false,
+        verdict: 'unverifiable',
+        reason: 'terminal_gone'
+      })
     }
   )
+
+  it('maps lost contact and timeout to client-only unverifiable results', async () => {
+    runtimeCall.mockRejectedValueOnce(new Error('SSH connection lost, reconnecting...'))
+    await expect(
+      inspectRuntimeTerminalProcess(
+        { activeRuntimeEnvironmentId: 'env-2' },
+        'remote:env-1@@terminal-transport'
+      )
+    ).resolves.toEqual({
+      foregroundProcess: null,
+      hasChildProcesses: false,
+      verdict: 'unverifiable',
+      reason: 'transport_loss'
+    })
+
+    runtimeCall.mockRejectedValueOnce(new Error('Request timed out before completion'))
+    await expect(
+      inspectRuntimeTerminalProcess(
+        { activeRuntimeEnvironmentId: 'env-2' },
+        'remote:env-1@@terminal-timeout'
+      )
+    ).resolves.toMatchObject({ verdict: 'unverifiable', reason: 'timeout' })
+  })
+
+  it('keeps client-only unverifiable free of host metadata', () => {
+    type HostFieldsCannotBeConstructed = ClientOnlyUnverifiableInspection extends {
+      authorityGeneration?: never
+      observationEpoch?: never
+      capturedAgeMs?: never
+      ptyId?: never
+      ptyIncarnationId?: never
+    }
+      ? true
+      : false
+    const typeProof: HostFieldsCannotBeConstructed = true
+    expect(typeProof).toBe(true)
+    const result = clientOnlyUnverifiableInspection('transport_loss')
+    expect(result).not.toHaveProperty('authorityGeneration')
+    expect(result).not.toHaveProperty('foregroundProcessEvidence')
+  })
+
+  it('still throws an unclassified programming error', async () => {
+    runtimeCall.mockRejectedValueOnce(new Error('inspection invariant violated'))
+    await expect(
+      inspectRuntimeTerminalProcess(
+        { activeRuntimeEnvironmentId: 'env-2' },
+        'remote:env-1@@terminal-bug'
+      )
+    ).rejects.toThrow('inspection invariant violated')
+  })
 
   it('records accepted fire-and-forget runtime input against the owning pane key', async () => {
     runtimeCall.mockResolvedValue({

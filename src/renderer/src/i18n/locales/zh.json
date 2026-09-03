@@ -2756,7 +2756,8 @@
             "e4aa243f8c": "重新启动守护进程",
             "a7e2fd2699": "提交议题",
             "5c8ce20be6": "如果这种情况持续存在，请",
-            "cc6d997c65": "从此处重新启动终端守护进程以清除失效的守护进程状态。"
+            "cc6d997c65": "从此处重新启动终端守护进程以清除失效的守护进程状态。",
+            "remoteTerminalClosed": "远程终端已关闭。"
           },
           "TerminalProcessExitOverlay": {
             "capacityTitle": "已达到 Git Bash 控制台上限",
@@ -2895,7 +2896,7 @@
           "TerminalRemoteRuntimeReconnectBanner": {
             "retryingTitle": "正在重新连接到远程运行时",
             "disconnectedTitle": "远程运行时已断开连接",
-            "retryingBody": "Orca 将重试最多一分钟。如果连接恢复，此终端将恢复。",
+            "retryingBody": "Orca 正在自动重试。如果连接恢复，此终端将恢复。",
             "disconnectedBody": "自动重试已停止。重新连接以恢复此终端会话。",
             "reconnectButton": "重新连接"
           }
@@ -3027,7 +3028,8 @@
             "25dc1cd653": "打开文件",
             "7cdf8ee0c8": "打开网址",
             "b27864279e": "启动智能体",
-            "0e5b7a3f16": "搜索打开的标签页、文件、URL 和智能体…",
+            "omniboxPlaceholderWithHistory": "搜索打开的标签页、历史记录、文件、URL 和智能体…",
+            "openPage": "打开页面",
             "8f0a1c4d92": "切换到标签页",
             "2c38630a01": "工作区已不存在",
             "4f0d9a71c2": "标签页已不存在",
@@ -3073,7 +3075,6 @@
                 "classifier": {
                   "42e6262ae9": "没有可用的操作。",
                   "097a982ee0": "正在加载文件...",
-                  "c41f8d20b7": "搜索打开的标签页、文件、URL 和智能体…",
                   "90eb94dc48": "输入 http:// 或 https:// URL。",
                   "5553b283ce": "输入 URL 或文件路径。",
                   "queryTooLarge": "搜索文本过长。",
@@ -3921,7 +3922,9 @@
           "searchLinks": "搜索链接",
           "deleteSkills": "删除技能…"
         },
-        "SkillShareSelectionControls": { "01c5a15e02": "共享技能" },
+        "SkillShareSelectionControls": {
+          "01c5a15e02": "共享技能"
+        },
         "SkillRow": {
           "updatedUnknown": "无日期",
           "pathCopied": "路径已复制",
@@ -3931,13 +3934,17 @@
           "viewDetails": "查看详情",
           "deleteSkill": "删除…"
         },
-        "SkillsList": { "listLabel": "技能" },
+        "SkillsList": {
+          "listLabel": "技能"
+        },
         "sourceStatus": {
           "missing": "未找到文件夹",
           "remoteRepo": "远程仓库 — 未扫描",
           "unavailable": "未扫描"
         },
-        "sources": { "heading": "技能文件夹" },
+        "sources": {
+          "heading": "技能文件夹"
+        },
         "sourceKind": {
           "home": "主目录",
           "workspace": "工作区",
@@ -3967,7 +3974,10 @@
           "deleteLinkOne": "{{count}} 个链接",
           "deleteLinkOther": "{{count}} 个链接"
         },
-        "filter": { "allAgents": "所有 Agent", "sharedAgent": "共享 (.agents)" },
+        "filter": {
+          "allAgents": "所有 Agent",
+          "sharedAgent": "共享 (.agents)"
+        },
         "SkillsSelectionHeader": {
           "exit": "退出选择",
           "exitTooltip": "退出选择 · Esc",
@@ -3976,7 +3986,11 @@
           "clear": "清除",
           "deleteTitle": "选择要删除的技能"
         },
-        "SkillDetailDialog": { "agents": "Agent", "updated": "已更新", "copy": "复制" },
+        "SkillDetailDialog": {
+          "agents": "Agent",
+          "updated": "已更新",
+          "copy": "复制"
+        },
         "SkillFreshnessNudge": {
           "titleOne": "已安装的 Orca 技能已过期",
           "titleMany": "{{value0}} 个已安装的 Orca 技能已过期",
@@ -4419,12 +4433,15 @@
           "keepDefaultBranchAria": "隐藏休眠工作区时仍显示默认分支"
         },
         "SidebarHeader": {
+          "projects": "项目",
           "92154beb7e": "新工作区",
           "49f62c5665": "工作区板",
           "5c9c7c16aa": "添加项目以创建工作区",
           "ca6f729da2": "新工作区 ({{value0}})",
           "a30e34eb5c": "关闭工作区板",
-          "25a95899c9": "添加项目"
+          "25a95899c9": "添加项目",
+          "spaces": "空间",
+          "views": "侧边栏视图"
         },
         "SidebarNav": {
           "80611a8b10": "搜索",
@@ -6017,7 +6034,7 @@
           "80c454e8a6": "将此与您的提供商的缓存 TTL 相匹配。"
         },
         "GeneralEditorSettingsSection": {
-          "f80603d293": "在丰富的编辑器模式和智能体切换操作中显示本地 Markdown 注释控件。",
+          "f80603d293": "在富文本编辑器模式和智能体切换操作中显示本地 Markdown 注释控件。",
           "4edc104f0f": "Markdown 评审笔记",
           "5f02e6fb21": "在富文本编辑器模式下显示本地 Markdown 评审笔记控件。",
           "51161d1647": "编辑文件时显示小地图概述。",
@@ -8250,7 +8267,8 @@
             },
             "agentDashboard": {
               "title": "智能体仪表盘",
-              "description": "用于监控跨工作树的智能体的看板，支持窗口内或弹出窗口显示。"
+              "description": "用于监控跨工作树的智能体的看板，支持窗口内或弹出窗口显示。",
+              "dashboard": "仪表盘"
             }
           }
         },
@@ -12880,9 +12898,9 @@
           "8915726e93": "复制路径"
         },
         "EditorContent": {
-          "56dba34e1a": "（在源模式下编辑）",
+          "56dba34e1a": "（在源码模式下编辑）",
           "e4b074749d": "前言",
-          "9640d1d3db": "预览此差异的修改版本。切换到源模式以检查更改。",
+          "9640d1d3db": "预览此差异的修改版本。切换到源码模式以检查更改。",
           "78541e254e": "二进制文件已更改",
           "c88c73a0d3": "加载差异...",
           "b9de81ba52": "二进制文件——无法显示",
@@ -12906,12 +12924,12 @@
           "84cdc0794b": "重命名",
           "1bb1e226ec": "重命名文件 {{value0}}",
           "5447c4f68f": "目录",
-          "146cb5473c": "目录可在丰富模式或预览模式下使用",
+          "146cb5473c": "目录可在富文本模式或预览模式下使用",
           "e836faacfa": "切换到并排差异",
           "94756f08ba": "切换到内联差异",
           "c98ce191da": "此差异没有可打开的修改端文件",
           "9b80bbe1de": "打开文件选项卡",
-          "f0fd4174b5": "打开文件选项卡以使用丰富的 Markdown 编辑",
+          "f0fd4174b5": "打开文件选项卡以使用富文本 Markdown 编辑",
           "a10d9b8337": "打开文件",
           "2076ecfc9c": "上一个更改",
           "631dab0df3": "下一个更改"
@@ -12933,8 +12951,8 @@
           "4837f3f578": "更改",
           "ac3bb87913": "编辑",
           "0d193dc03c": "预览",
-          "aff15f94f5": "丰富的编辑器",
-          "4d6ccb7ba6": "来源"
+          "aff15f94f5": "富文本编辑器",
+          "4d6ccb7ba6": "源码"
         },
         "ImageDiffViewer": {
           "a651be62b0": "修改的",
@@ -13106,8 +13124,8 @@
         },
         "RichMarkdownErrorBoundary": {
           "aad0998127": "重试",
-          "4a5de9f2f0": "切换到源模式，或单击“重试”以重新加载丰富视图。",
-          "dfdf1cacd4": "丰富的 Markdown 编辑器遇到了意外错误，并被重置以保持 Orca 的其余部分响应。"
+          "4a5de9f2f0": "切换到源码模式，或单击“重试”以重新加载富文本视图。",
+          "dfdf1cacd4": "富文本 Markdown 编辑器遇到了意外错误，并被重置以保持 Orca 的其余部分响应。"
         },
         "RichMarkdownLinkBubble": {
           "1c99b726e0": "删除链接",
@@ -13757,6 +13775,35 @@
         }
       },
       "automations": {
+        "AutomationListToolbar": {
+          "runs": "运行"
+        },
+        "AutomationRunsDashboard": {
+          "search": "搜索运行…",
+          "filters": "筛选条件",
+          "host": "主机",
+          "status": "状态",
+          "refresh": "刷新运行",
+          "successful24h": "成功 · 24 小时",
+          "failed24h": "失败 · 24 小时",
+          "successful7d": "成功 · 7 天",
+          "failed7d": "失败 · 7 天",
+          "historyUnavailableOne": "1 个自动化的运行历史不可用。计数仅包含可用的历史记录。",
+          "historyUnavailableMany": "{{count}} 个自动化的运行历史不可用。计数仅包含可用的历史记录。",
+          "automation": "自动化",
+          "triggered": "已触发",
+          "trigger": "触发",
+          "loading": "正在加载运行…",
+          "noRuns": "尚无运行",
+          "emptyDescription": "触发自动化后，运行记录会显示在这里。",
+          "runs": "运行",
+          "local": "本地",
+          "remote": "远程"
+        },
+        "AutomationsPageBreadcrumb": {
+          "ariaLabel": "自动化面包屑导航",
+          "runDetails": "运行详情"
+        },
         "AutomationCustomCronPanel": {
           "3e3b2c369f": "cron",
           "e81a02d61b": "保存前输入有效的五字段 cron。",
@@ -14185,9 +14232,10 @@
           "b29191b3e0": "工作树",
           "8c3b621ddf": "项目",
           "4a3986b200": "状态",
-          "770d458144": "对智能体活动进行分组",
+          "770d458144": "分组方式",
           "795cbf26e2": "筛选...",
           "4616ea39fd": "跳转到工作区",
+          "markThreadRead": "将话题标记为已读",
           "59b131fbd9": "将话题标记为未读",
           "beb2c19173": "未读",
           "5651b216c6": "未知项目",
@@ -14798,6 +14846,13 @@
       "sent": "已将会话上下文发送到新的 {{agent}} 会话。",
       "deliveryFailed": "新的 {{agent}} 会话已启动，但无法发送上下文。",
       "launchFailed": "无法启动新的 {{agent}} 会话。"
+    },
+    "terminalPane": {
+      "TerminalContextMenu": {
+        "copySessionId": "复制会话 ID",
+        "copySessionIdSuccess": "已复制会话 ID",
+        "copySessionIdError": "复制会话 ID 失败"
+      }
     }
   },
   "dashboardPopout": {
@@ -14895,7 +14950,8 @@
   },
   "dashboard": {
     "sidebar": {
-      "label": "智能体仪表盘"
+      "label": "智能体",
+      "dashboardLabel": "智能体仪表盘"
     }
   },
   "browser": {
@@ -14935,6 +14991,21 @@
         "addressInUse": "另一个进程可能占用了端口。请重启 Orca 以重试。",
         "unknown": "请重启 Orca 以重试。"
       }
+    }
+  },
+  "agentsSidebarIntro": {
+    "migrated": {
+      "title": "智能体更容易找到了",
+      "description": "智能体视图现在是侧边栏的专用标签页。你的活动和筛选条件都会保留。",
+      "dismiss": "知道了",
+      "action": "打开智能体"
+    },
+    "new": {
+      "title": "认识你的智能体标签页",
+      "description": "查看智能体正在做什么、哪些已完成，以及哪些需要你介入。",
+      "hide": "隐藏智能体",
+      "action": "试用智能体",
+      "hiddenToast": "智能体标签页已隐藏。可在设置 → 实验性功能中重新启用。"
     }
   }
 }

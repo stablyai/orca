@@ -8,11 +8,7 @@ import {
 } from './tab-create-entry-action'
 import { findMatchingTabAgentLaunchOptions } from './tab-agent-launch-options'
 import { findMatchingTabCreateMenuOptions } from './tab-create-menu-options'
-import {
-  getActiveOptionId,
-  isActiveEntryOption,
-  type ActiveOption
-} from './tab-create-entry-active-option'
+import { getActiveOptionId, type ActiveOption } from './tab-create-entry-active-option'
 import {
   EntryActionRow,
   EntryStatusRow,
@@ -20,6 +16,9 @@ import {
   resultOptionDomId
 } from './TabBarCreateEntryRow'
 import { dropFileEntriesCoveredByTabResults } from './open-tab-entry-dedupe'
+import { insertHistoryRowsBelowFileMatches } from './tab-create-entry-history-placement'
+import { useOmniboxBrowserHistory } from './use-omnibox-browser-history'
+import { useTabEntryMenuReturnFocus } from './use-tab-entry-menu-return-focus'
 import { activateOpenTabSearchResult } from './open-tab-selection-routing'
 import { useTabCreateEntrySearchResults } from './use-tab-create-entry-search-results'
 import { DEFAULT_SEARCH_ENGINE } from '../../../../shared/browser-url'
@@ -34,6 +33,8 @@ import {
   getTabEntryOmniboxPlaceholder
 } from './tab-create-entry-copy'
 import { EMPTY_AGENT_OPTIONS, EMPTY_MENU_OPTIONS } from './tab-create-entry-empty-options'
+import { useStructuredCodexLaunchStatus } from '@/lib/structured-agent-session-launch'
+import type { TabEntryActionClassification } from './tab-create-entry-classifier'
 import type { TabBarCreateEntryProps } from './tab-create-entry-props'
 
 export default function TabBarCreateEntry(props: TabBarCreateEntryProps): React.JSX.Element {
@@ -59,6 +60,7 @@ function TabBarCreateEntrySession({
   const [error, setError] = useState<string | null>(null)
   const [switchError, setSwitchError] = useState<string | null>(null)
   const [selectionGuidance, setSelectionGuidance] = useState<string | null>(null)
+  const structuredCodexLaunchStatus = useStructuredCodexLaunchStatus(worktreeId)
   // null = follow ranking (deferred tabs can prepend); set on arrow keys only.
   const [pinnedOptionId, setPinnedOptionId] = useState<string | null>(null)
   const inputRef = useRef<HTMLInputElement>(null)
@@ -98,34 +100,7 @@ function TabBarCreateEntrySession({
     (state) => state.browserDefaultSearchEngine ?? DEFAULT_SEARCH_ENGINE
   )
 
-  // Why: once ArrowDown moves focus into the static menu list, ArrowUp on the
-  // first item should return to the search box so the keyboard trip isn't
-  // one-way. Capture phase beats Radix's roving-focus handler.
-  useEffect(() => {
-    if (!menuOpen) {
-      return
-    }
-    const input = inputRef.current
-    const menu = input?.closest<HTMLElement>('[role="menu"]')
-    if (!input || !menu) {
-      return
-    }
-    const handleMenuKeyDown = (event: KeyboardEvent): void => {
-      if (event.key !== 'ArrowUp') {
-        return
-      }
-      const firstItem = menu.querySelector(
-        '[role="menuitem"]:not([data-disabled]):not([aria-disabled="true"])'
-      )
-      if (firstItem && document.activeElement === firstItem) {
-        event.preventDefault()
-        event.stopPropagation()
-        input.focus()
-      }
-    }
-    menu.addEventListener('keydown', handleMenuKeyDown, true)
-    return () => menu.removeEventListener('keydown', handleMenuKeyDown, true)
-  }, [menuOpen])
+  useTabEntryMenuReturnFocus(inputRef, menuOpen)
 
   useEffect(() => {
     if (!menuOpen) {
@@ -165,6 +140,11 @@ function TabBarCreateEntrySession({
     tabResults,
     worktreePath
   ])
+  const historyRows = useOmniboxBrowserHistory({
+    enabled: menuOpen && !terminalQueryMode,
+    query,
+    tabResults
+  })
   const matchingAgentOptions = useMemo(
     () =>
       terminalQueryMode
@@ -188,10 +168,7 @@ function TabBarCreateEntrySession({
       kind: 'agent' as const,
       option
     })),
-    ...options.filter(isActiveEntryOption).map((option) => ({
-      kind: 'entry' as const,
-      option
-    }))
+    ...insertHistoryRowsBelowFileMatches(options, historyRows)
   ]
   const { activeSelectedIndex, selectedActiveOption } = useNetworkSafeTabEntrySelection({
     activeOptions,
@@ -251,20 +228,23 @@ function TabBarCreateEntrySession({
       return
     }
     if (selectedOption.kind === 'agent') {
+      if (selectedOption.option.agent === 'codex' && structuredCodexLaunchStatus === 'pending') {
+        return
+      }
       onLaunchAgent?.(selectedOption.option.agent)
       onDidOpenEntry?.()
       return
     }
+    // A history row is a navigation, so it rides the entry-open path the typed-URL
+    // row already uses — routing, worktree targeting and SSH resolution included.
+    const classification: TabEntryActionClassification =
+      selectedOption.kind === 'history'
+        ? { kind: 'explicit-url', url: selectedOption.option.entry.url }
+        : selectedOption.option.classification
     setPending(true)
     setError(null)
     const submissionId = ++submissionIdRef.current
-    void onOpenEntry({
-      query,
-      worktreeId,
-      groupId,
-      fileList,
-      classification: selectedOption.option.classification
-    })
+    void onOpenEntry({ query, worktreeId, groupId, fileList, classification })
       .then(() => {
         if (submissionIdRef.current === submissionId) {
           onDidOpenEntry?.()
@@ -399,8 +379,26 @@ function TabBarCreateEntrySession({
                 id={resultOptionDomId(index)}
                 option={option}
                 selected={index === activeSelectedIndex}
-                disabled={disabled || pending}
-                loading={pending && index === activeSelectedIndex}
+                labelOverride={
+                  option.kind === 'agent' &&
+                  option.option.agent === 'codex' &&
+                  structuredCodexLaunchStatus === 'pending'
+                    ? 'Starting Codex chat…'
+                    : undefined
+                }
+                disabled={
+                  disabled ||
+                  pending ||
+                  (option.kind === 'agent' &&
+                    option.option.agent === 'codex' &&
+                    structuredCodexLaunchStatus === 'pending')
+                }
+                loading={
+                  (pending && index === activeSelectedIndex) ||
+                  (option.kind === 'agent' &&
+                    option.option.agent === 'codex' &&
+                    structuredCodexLaunchStatus === 'pending')
+                }
                 onClick={() => {
                   setSelectionGuidance(null)
                   submitOption(option)

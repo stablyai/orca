@@ -5,6 +5,7 @@ import { requestScrollToCurrentWorkspaceRevealAndRename } from '@/lib/scroll-to-
 import { showTerminalShortcutCaptureNotification } from '@/lib/terminal-shortcut-capture-notification'
 import { shouldShowWorktreeHistoryControls } from '../lib/titlebar-worktree-history-controls'
 import { TOGGLE_WORKSPACE_BOARD_EVENT } from '../components/sidebar/useWorkspaceBoardPanel'
+import { requestTerminalTabRename } from '../components/tab-bar/terminal-tab-rename-request'
 import {
   deleteHoveredWorkspaceImmediately,
   resolveHoveredWorkspaceDeleteTarget
@@ -180,7 +181,7 @@ export function createAppCommandHandlers(
         ) {
           return false
         }
-        return claim('tab.rename', () => store.setRenamingTabId(store.activeTabId!))
+        return claim('tab.rename', () => requestTerminalTabRename(store.activeTabId!))
       }
     ],
     [

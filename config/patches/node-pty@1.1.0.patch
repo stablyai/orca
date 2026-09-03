@@ -138,8 +138,34 @@ index 8c4fca9022a6d6f015bca87f61625cde2278f428..0a01730616488119aa21ef441cf3c441
  process.exit(0);
  //# sourceMappingURL=conpty_console_list_agent.js.map
 \ No newline at end of file
+diff --git a/lib/terminal.js b/lib/terminal.js
+index e2f9bc9131077b53ebc32d207207ad82804ff185..6c63bfaaf75128d88f9a2efece13476348780cfd 100644
+--- a/lib/terminal.js
++++ b/lib/terminal.js
+@@ -172,6 +172,21 @@ var Terminal = /** @class */ (function () {
+         this.end = function () { };
+         this._writable = false;
+         this._readable = false;
++        // Orca: libuv closes the master fd on EIO/EOF, and the kernel may hand
++        // that number straight to the next open(2). Retire it in the same block
++        // that gives up the handle so no later ioctl can address a reused fd.
++        // Inert on Windows, where `_fd` is written once and never read back.
++        // Upstream named this mechanism in microsoft/node-pty#220 ("fd number got
++        // reattached to something else"), closed 2025-12-19 as completed after
++        // only improving the error message; #827 is still open. Windows guards in
++        // windowsPtyAgent.ts, Unix does not. Orca tracking: #18109.
++        this._fd = -1;
++        // Orca: the write stream holds its own copy of that number, so retiring
++        // `_fd` alone leaves the queued and in-flight writes addressing it.
++        // Undefined on Windows and on `UnixTerminal.open()` handles.
++        if (this._writeStream) {
++            this._writeStream.dispose();
++        }
+     };
+     Terminal.prototype._parseEnv = function (env) {
+         var keys = Object.keys(env || {});
 diff --git a/lib/unixTerminal.js b/lib/unixTerminal.js
-index 1ec12f796a822c78fba9ad7f6448c3987e325c23..cec8b67aef02f8199e5606a0d257088bf1865877 100644
+index 1ec12f796a822c78fba9ad7f6448c3987e325c23..d838d795ecb9ea72e3bcc31113344947c006af7e 100644
 --- a/lib/unixTerminal.js
 +++ b/lib/unixTerminal.js
 @@ -28,8 +28,12 @@ var native = utils_1.loadNativeModule('pty');
@@ -157,6 +183,56 @@ index 1ec12f796a822c78fba9ad7f6448c3987e325c23..cec8b67aef02f8199e5606a0d257088b
  var DEFAULT_FILE = 'sh';
  var DEFAULT_NAME = 'xterm';
  var DESTROY_SOCKET_TIMEOUT_MS = 200;
+@@ -234,6 +238,11 @@ var UnixTerminal = /** @class */ (function (_super) {
+          * Gets the name of the process.
+          */
+         get: function () {
++            // Orca: tcgetpgrp on a retired fd would name whatever process now
++            // owns that descriptor, so a closed master reports the spawn file.
++            if (this._fd < 0) {
++                return this._file;
++            }
+             if (process.platform === 'darwin') {
+                 var title = pty.process(this._fd);
+                 return (title !== 'kernel_task') ? title : this._file;
+@@ -250,6 +259,11 @@ var UnixTerminal = /** @class */ (function (_super) {
+         if (cols <= 0 || rows <= 0 || isNaN(cols) || isNaN(rows) || cols === Infinity || rows === Infinity) {
+             throw new Error('resizing must be done using positive cols and rows');
+         }
++        // Orca: a retired master is unreachable rather than EBADF-or-worse; cols
++        // and rows stay at the last size actually applied instead of a claim.
++        if (this._fd < 0) {
++            return;
++        }
+         pty.resize(this._fd, cols, rows);
+         this._cols = cols;
+         this._rows = rows;
+@@ -287,8 +301,15 @@ var CustomWriteStream = /** @class */ (function () {
+     CustomWriteStream.prototype.dispose = function () {
+         clearImmediate(this._writeImmediate);
+         this._writeImmediate = undefined;
++        // Orca: retire this stream's own copy of the master fd and drop what has
++        // not shipped, so nothing queued here reaches a reused descriptor.
++        this._fd = -1;
++        this._writeQueue.length = 0;
+     };
+     CustomWriteStream.prototype.write = function (data) {
++        if (this._fd < 0) {
++            return;
++        }
+         // Writes are put in a queue and processed asynchronously in order to handle
+         // backpressure from the kernel buffer.
+         var buffer = typeof data === 'string'
+@@ -304,7 +325,8 @@ var CustomWriteStream = /** @class */ (function () {
+     CustomWriteStream.prototype._processWriteQueue = function () {
+         var _this = this;
+         this._writeImmediate = undefined;
+-        if (this._writeQueue.length === 0) {
++        // Orca: an in-flight fs.write can re-enter here after dispose().
++        if (this._fd < 0 || this._writeQueue.length === 0) {
+             return;
+         }
+         var task = this._writeQueue[0];
 diff --git a/src/conpty_console_list_agent.ts b/src/conpty_console_list_agent.ts
 index 181ccabbbe9c4948a9725fb1db907a68e9de01fc..67f31facf85562b67adbfbd04ce28ddd8eeb4a79 100644
 --- a/src/conpty_console_list_agent.ts
@@ -176,7 +252,7 @@ index 181ccabbbe9c4948a9725fb1db907a68e9de01fc..67f31facf85562b67adbfbd04ce28ddd
  process.send!({ consoleProcessList });
  process.exit(0);
 diff --git a/src/unix/pty.cc b/src/unix/pty.cc
-index 7b4b9e1f990fbf95b51528bb56dc9717f5b87532..383df0c9c48355547c65e6c9bbba593d15c4dd44 100644
+index 7b4b9e1f990fbf95b51528bb56dc9717f5b87532..2ae787c5bd4f3eba470584dc658a01a52c690e0a 100644
 --- a/src/unix/pty.cc
 +++ b/src/unix/pty.cc
 @@ -23,7 +23,9 @@
@@ -215,7 +291,17 @@ index 7b4b9e1f990fbf95b51528bb56dc9717f5b87532..383df0c9c48355547c65e6c9bbba593d
  /* Some platforms name VWERASE and VDISCARD differently */
  #if !defined(VWERASE) && defined(VWERSE)
  #define VWERASE	VWERSE
-@@ -237,13 +258,23 @@ pty_getproc(int, char *);
+@@ -228,6 +249,9 @@ Napi::Value PtyGetProc(const Napi::CallbackInfo& info);
+ static int
+ pty_nonblock(int);
+ 
++static int
++pty_cloexec(int);
++
+ #if defined(__APPLE__)
+ static char *
+ pty_getproc(int);
+@@ -237,13 +261,23 @@ pty_getproc(int, char *);
  #endif
  
  #if defined(__APPLE__) || defined(__OpenBSD__)
@@ -240,7 +326,7 @@ index 7b4b9e1f990fbf95b51528bb56dc9717f5b87532..383df0c9c48355547c65e6c9bbba593d
  #endif
  
  struct DelBuf {
-@@ -367,10 +398,11 @@ Napi::Value PtyFork(const Napi::CallbackInfo& info) {
+@@ -367,14 +401,18 @@ Napi::Value PtyFork(const Napi::CallbackInfo& info) {
      argv[i + 3] = strdup(arg.c_str());
    }
  
@@ -256,7 +342,48 @@ index 7b4b9e1f990fbf95b51528bb56dc9717f5b87532..383df0c9c48355547c65e6c9bbba593d
    }
    if (pty_nonblock(master) == -1) {
      throw Napi::Error::New(napiEnv, "Could not set master fd to nonblocking.");
-@@ -684,15 +716,73 @@ pty_getproc(int fd, char *tty) {
+   }
++  if (pty_cloexec(master) == -1) {
++    throw Napi::Error::New(napiEnv, "Could not set master fd to close-on-exec.");
++  }
+ #else
+   int argc = argv_.Length();
+   int argl = argc + 2;
+@@ -445,6 +483,9 @@ Napi::Value PtyFork(const Napi::CallbackInfo& info) {
+       if (pty_nonblock(master) == -1) {
+         throw Napi::Error::New(napiEnv, "Could not set master fd to nonblocking.");
+       }
++      if (pty_cloexec(master) == -1) {
++        throw Napi::Error::New(napiEnv, "Could not set master fd to close-on-exec.");
++      }
+   }
+ #endif
+ 
+@@ -586,6 +627,23 @@ pty_nonblock(int fd) {
+   return fcntl(fd, F_SETFL, flags | O_NONBLOCK);
+ }
+ 
++/**
++ * Orca: close-on-exec FD
++ *
++ * forkpty()/posix_openpt() have no atomic O_CLOEXEC, so a master left without
++ * FD_CLOEXEC is inherited by every later child of this process -- including
++ * later pty children -- which keeps its /dev/pts device and buffers alive long
++ * after its own session ends (#8362).
++ */
++
++static int
++pty_cloexec(int fd) {
++  int flags = fcntl(fd, F_GETFD);
++  if (flags == -1) return -1;
++  if (flags & FD_CLOEXEC) return 0;
++  return fcntl(fd, F_SETFD, flags | FD_CLOEXEC);
++}
++
+ /**
+  * pty_getproc
+  * Taken from tmux.
+@@ -684,15 +742,73 @@ pty_getproc(int fd, char *tty) {
  #endif
  
  #if defined(__APPLE__)
@@ -332,7 +459,7 @@ index 7b4b9e1f990fbf95b51528bb56dc9717f5b87532..383df0c9c48355547c65e6c9bbba593d
  
    for (; count < 3; count++) {
      low_fds[count] = posix_openpt(O_RDWR);
-@@ -706,80 +796,118 @@ pty_posix_spawn(char** argv, char** env,
+@@ -706,80 +822,118 @@ pty_posix_spawn(char** argv, char** env,
                POSIX_SPAWN_SETSID;
    *master = posix_openpt(O_RDWR);
    if (*master == -1) {
@@ -789,3 +916,200 @@ index 7b286d3d644c26141df516929703aa6e129df4b2..ec6bf3932c65b89c013ff133dc6bf46a
    return exports;
  };
  
+diff --git a/lib/windowsPtyAgent.js b/lib/windowsPtyAgent.js
+index a358ffb..fb3a96f 100644
+--- a/lib/windowsPtyAgent.js
++++ b/lib/windowsPtyAgent.js
+@@ -136,6 +136,9 @@ var WindowsPtyAgent = /** @class */ (function () {
+         if (this._useConpty) {
+             if (!this._useConptyDll) {
+                 this._inSocket.readable = false;
++                // The non-DLL path previously only flipped `readable`, leaving the
++                // conin PipeWrap alive until the host exited (#947).
++                this._inSocket.destroy();
+                 this._outSocket.readable = false;
+                 this._getConsoleProcessList().then(function (consoleProcessList) {
+                     consoleProcessList.forEach(function (pid) {
+diff --git a/lib/windowsTerminal.js b/lib/windowsTerminal.js
+index 3c38f89..e20b3e6 100644
+--- a/lib/windowsTerminal.js
++++ b/lib/windowsTerminal.js
+@@ -50,6 +50,27 @@ var WindowsTerminal = /** @class */ (function (_super) {
+         // Create new termal.
+         _this._agent = new windowsPtyAgent_1.WindowsPtyAgent(file, args, parsedEnv, cwd, _this._cols, _this._rows, false, opt.useConpty, opt.useConptyDll, opt.conptyInheritCursor);
+         _this._socket = _this._agent.outSocket;
++        // Attach before readiness so a broken ConPTY output pipe cannot be unhandled.
++        _this._socket.on('error', function (err) {
++            var code = err && err.code;
++            // PTY output can report EPIPE before `_close()` wins the race.
++            _this._close();
++            if (code === 'EPIPE' || code === 'ERR_STREAM_PUSH_AFTER_EOF' || code === 'ERR_STREAM_DESTROYED') {
++                return;
++            }
++            // EIO, happens when someone closes our child process: the only process
++            // in the terminal.
++            // node < 0.6.14: errno 5
++            // node >= 0.6.14: read EIO
++            if (typeof code === 'string') {
++                if (~code.indexOf('errno 5') || ~code.indexOf('EIO'))
++                    return;
++            }
++            // Throw anything else.
++            if (_this.listeners('error').length < 2) {
++                throw err;
++            }
++        });
+         // Not available until `ready` event emitted.
+         _this._pid = _this._agent.innerPid;
+         _this._fd = _this._agent.fd;
+@@ -76,23 +99,6 @@ var WindowsTerminal = /** @class */ (function (_super) {
+                     _this._deferreds = [];
+                 }
+             });
+-            // Shutdown if `error` event is emitted.
+-            _this._socket.on('error', function (err) {
+-                // Close terminal session.
+-                _this._close();
+-                // EIO, happens when someone closes our child process: the only process
+-                // in the terminal.
+-                // node < 0.6.14: errno 5
+-                // node >= 0.6.14: read EIO
+-                if (err.code) {
+-                    if (~err.code.indexOf('errno 5') || ~err.code.indexOf('EIO'))
+-                        return;
+-                }
+-                // Throw anything else.
+-                if (_this.listeners('error').length < 2) {
+-                    throw err;
+-                }
+-            });
+             // Cleanup after the socket is closed.
+             _this._socket.on('close', function () {
+                 _this.emit('exit', _this._agent.exitCode);
+@@ -103,6 +109,20 @@ var WindowsTerminal = /** @class */ (function (_super) {
+         _this._name = name;
+         _this._readable = true;
+         _this._writable = true;
++        // A ConPTY input-pipe error must retire only this terminal. Without a listener, Node promotes
++        // errors such as write EAGAIN to uncaughtException and kills every PTY in the daemon.
++        _this._agent.inSocket.on('error', function () {
++            if (!_this._writable) {
++                return;
++            }
++            _this._close();
++            try {
++                _this._agent.kill();
++            }
++            catch (_a) {
++                // The failing pipe may have raced process exit; the terminal is already unwritable.
++            }
++        });
+         _this._forwardEvents();
+         return _this;
+     }
+@@ -196,4 +216,4 @@ var WindowsTerminal = /** @class */ (function (_super) {
+     return WindowsTerminal;
+ }(terminal_1.Terminal));
+ exports.WindowsTerminal = WindowsTerminal;
+-//# sourceMappingURL=windowsTerminal.js.map
+\ No newline at end of file
++//# sourceMappingURL=windowsTerminal.js.map
+diff --git a/src/windowsPtyAgent.ts b/src/windowsPtyAgent.ts
+index d705444..ce611b8 100644
+--- a/src/windowsPtyAgent.ts
++++ b/src/windowsPtyAgent.ts
+@@ -143,6 +143,9 @@ export class WindowsPtyAgent {
+     if (this._useConpty) {
+       if (!this._useConptyDll) {
+         this._inSocket.readable = false;
++        // The non-DLL path previously only flipped `readable`, leaving the
++        // conin PipeWrap alive until the host exited (#947).
++        this._inSocket.destroy();
+         this._outSocket.readable = false;
+         this._getConsoleProcessList().then(consoleProcessList => {
+           consoleProcessList.forEach((pid: number) => {
+diff --git a/src/windowsTerminal.ts b/src/windowsTerminal.ts
+index 13f6c6d..eda63c8 100644
+--- a/src/windowsTerminal.ts
++++ b/src/windowsTerminal.ts
+@@ -51,6 +51,30 @@ export class WindowsTerminal extends Terminal {
+     this._agent = new WindowsPtyAgent(file, args, parsedEnv, cwd, this._cols, this._rows, false, opt.useConpty, opt.useConptyDll, opt.conptyInheritCursor);
+     this._socket = this._agent.outSocket;
+-
++
++    // Attach before readiness so a broken ConPTY output pipe cannot be unhandled.
++    this._socket.on('error', err => {
++      const code = (<any>err).code;
++
++      // PTY output can report EPIPE before `_close()` wins the race.
++      this._close();
++      if (code === 'EPIPE' || code === 'ERR_STREAM_PUSH_AFTER_EOF' || code === 'ERR_STREAM_DESTROYED') {
++        return;
++      }
++
++      // EIO, happens when someone closes our child process: the only process
++      // in the terminal.
++      // node < 0.6.14: errno 5
++      // node >= 0.6.14: read EIO
++      if (typeof code === 'string') {
++        if (~code.indexOf('errno 5') || ~code.indexOf('EIO')) return;
++      }
++
++      // Throw anything else.
++      if (this.listeners('error').length < 2) {
++        throw err;
++      }
++    });
++
+     // Not available until `ready` event emitted.
+     this._pid = this._agent.innerPid;
+     this._fd = this._agent.fd;
+@@ -82,25 +108,6 @@ export class WindowsTerminal extends Terminal {
+         }
+       });
+-
++
+-      // Shutdown if `error` event is emitted.
+-      this._socket.on('error', err => {
+-        // Close terminal session.
+-        this._close();
+-
+-        // EIO, happens when someone closes our child process: the only process
+-        // in the terminal.
+-        // node < 0.6.14: errno 5
+-        // node >= 0.6.14: read EIO
+-        if ((<any>err).code) {
+-          if (~(<any>err).code.indexOf('errno 5') || ~(<any>err).code.indexOf('EIO')) return;
+-        }
+-
+-        // Throw anything else.
+-        if (this.listeners('error').length < 2) {
+-          throw err;
+-        }
+-      });
+-
+       // Cleanup after the socket is closed.
+       this._socket.on('close', () => {
+         this.emit('exit', this._agent.exitCode);
+@@ -114,6 +121,19 @@ export class WindowsTerminal extends Terminal {
+-
++
+     this._readable = true;
+     this._writable = true;
++    // A ConPTY input-pipe error must retire only this terminal. Without a listener, Node promotes
++    // errors such as write EAGAIN to uncaughtException and kills every PTY in the daemon.
++    this._agent.inSocket.on('error', () => {
++      if (!this._writable) {
++        return;
++      }
++      this._close();
++      try {
++        this._agent.kill();
++      } catch {
++        // The failing pipe may have raced process exit; the terminal is already unwritable.
++      }
++    });
+-
++
+     this._forwardEvents();
+   }

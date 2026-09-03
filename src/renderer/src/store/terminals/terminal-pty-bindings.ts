@@ -8,6 +8,8 @@ import {
   isCurrentDirectSshAuthority,
   isRemoteRuntimePtyId
 } from './terminal-pty-identities'
+import { omitUnverifiedPtyLossTabIds } from './terminal-unverified-pty-loss'
+import { omitDisownedPtyIds } from './terminal-disowned-pty-sources'
 
 export function createTerminalPtyBindingActions(
   set: TerminalStoreSet,
@@ -61,6 +63,30 @@ export function createTerminalPtyBindingActions(
           : existingPtyIds.includes(ptyId)
             ? existingPtyIds
             : [...existingPtyIds, ptyId]
+        // Keep provider handle rotation atomic across tab and pane ownership.
+        let nextTerminalLayoutsByTabId = s.terminalLayoutsByTabId
+        if (replacementPtyId) {
+          const existingLayout = s.terminalLayoutsByTabId[tabId]
+          const existingBindings = existingLayout?.ptyIdsByLeafId
+          if (existingLayout && existingBindings) {
+            let changed = false
+            const nextBindings = Object.fromEntries(
+              Object.entries(existingBindings).map(([leafId, currentPtyId]) => {
+                if (currentPtyId !== replacementPtyId) {
+                  return [leafId, currentPtyId]
+                }
+                changed = true
+                return [leafId, ptyId]
+              })
+            )
+            if (changed) {
+              nextTerminalLayoutsByTabId = {
+                ...s.terminalLayoutsByTabId,
+                [tabId]: { ...existingLayout, ptyIdsByLeafId: nextBindings }
+              }
+            }
+          }
+        }
         let nextTabsByWorktree = s.tabsByWorktree
         for (const [wId, tabs] of Object.entries(s.tabsByWorktree)) {
           const index = tabs.findIndex((t) => t.id === tabId)
@@ -112,6 +138,15 @@ export function createTerminalPtyBindingActions(
           // Why: handle rotation keeps the same terminal lifecycle; an intentional exit racing the rotation must stay suppressed once.
           nextSuppressedPtyExitIds[ptyId] = true
         }
+        const nextUnverifiedPtyLossTabIds = s.unverifiedPtyLossTabIds[tabId]
+          ? omitUnverifiedPtyLossTabIds(s.unverifiedPtyLossTabIds, [tabId])
+          : s.unverifiedPtyLossTabIds
+        // Why: a redeployed relay renumbers from pty-1, so a recorded disownership must not outlive
+        // the id it described once a live PTY answers to that id again.
+        const nextDisownedPtyIds = omitDisownedPtyIds(
+          s.disownedPtyIds,
+          replacementPtyId ? [ptyId, replacementPtyId] : [ptyId]
+        )
         const hasReplacementPendingRestart = replacementPtyId
           ? replacementPtyId in s.pendingCodexPaneRestartIds
           : false
@@ -222,12 +257,21 @@ export function createTerminalPtyBindingActions(
             ...s.lastKnownRelayPtyIdByTabId,
             [tabId]: ptyId
           },
+          ...(nextUnverifiedPtyLossTabIds !== s.unverifiedPtyLossTabIds
+            ? { unverifiedPtyLossTabIds: nextUnverifiedPtyLossTabIds }
+            : {}),
+          ...(nextDisownedPtyIds !== s.disownedPtyIds
+            ? { disownedPtyIds: nextDisownedPtyIds }
+            : {}),
           suppressedPtyExitIds: nextSuppressedPtyExitIds,
           pendingCodexPaneRestartIds: nextPendingCodexPaneRestartIds,
           codexRestartNoticeByPtyId: nextCodexRestartNoticeByPtyId,
           migrationUnsupportedByPtyId: nextMigrationUnsupportedByPtyId,
           directSshPaneRetryByTabId: nextDirectSshPaneRetryByTabId,
           directSshLivePtyBindingByTabId: nextDirectSshLivePtyBindingByTabId,
+          ...(nextTerminalLayoutsByTabId !== s.terminalLayoutsByTabId
+            ? { terminalLayoutsByTabId: nextTerminalLayoutsByTabId }
+            : {}),
           ...(shouldBumpSortEpoch ? { sortEpoch: s.sortEpoch + 1 } : {})
         }
       })

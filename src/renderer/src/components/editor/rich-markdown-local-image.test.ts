@@ -4,7 +4,7 @@ import { Editor } from '@tiptap/core'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createRichMarkdownExtensions } from './rich-markdown-extensions'
 import { createRichMarkdownEditorCodec } from './rich-markdown-source-transport'
-import { resetLocalImageSrcStateForTests } from './useLocalImageSrc'
+import { releaseLocalImageSrc, resetLocalImageSrcStateForTests } from './useLocalImageSrc'
 import { setRichMarkdownImageResolverContext } from './rich-markdown-image-context'
 
 async function flushPromises(): Promise<void> {
@@ -18,6 +18,7 @@ describe('rich markdown local images', () => {
   beforeEach(() => {
     resetLocalImageSrcStateForTests()
     vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:rich-local-image')
+    vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => undefined)
     globalThis.window.api = {
       ...globalThis.window.api,
       fs: {
@@ -59,6 +60,29 @@ describe('rich markdown local images', () => {
         filePath: '/repo/docs/diagram.png',
         connectionId: undefined
       })
+      expect(host.querySelector('img')?.src).toBe('blob:rich-local-image')
+    } finally {
+      editor.destroy()
+    }
+  })
+
+  it('keeps a displayed image leased when another surface releases the same cache entry', async () => {
+    const host = document.createElement('div')
+    document.body.appendChild(host)
+    const editor = new Editor({
+      element: host,
+      extensions: createRichMarkdownExtensions({ codec: createRichMarkdownEditorCodec() }),
+      content: '![](diagram.png)',
+      contentType: 'markdown'
+    })
+
+    try {
+      setRichMarkdownImageResolverContext(editor, { filePath: '/repo/docs/readme.md' })
+      await flushPromises()
+
+      releaseLocalImageSrc('diagram.png', '/repo/docs/readme.md')
+
+      expect(URL.revokeObjectURL).not.toHaveBeenCalledWith('blob:rich-local-image')
       expect(host.querySelector('img')?.src).toBe('blob:rich-local-image')
     } finally {
       editor.destroy()

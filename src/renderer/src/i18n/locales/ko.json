@@ -2746,7 +2746,8 @@
             "e4aa243f8c": "데몬 재시작",
             "a7e2fd2699": "이슈 등록",
             "5c8ce20be6": "문제가 계속되면",
-            "cc6d997c65": "오래된 데몬 상태를 지우려면 여기에서 terminal 데몬을 다시 시작하세요."
+            "cc6d997c65": "오래된 데몬 상태를 지우려면 여기에서 terminal 데몬을 다시 시작하세요.",
+            "remoteTerminalClosed": "원격 터미널이 종료되었습니다."
           },
           "TerminalProcessExitOverlay": {
             "capacityTitle": "Git Bash 콘솔 한도에 도달했습니다",
@@ -2885,7 +2886,7 @@
           "TerminalRemoteRuntimeReconnectBanner": {
             "retryingTitle": "원격 런타임에 다시 연결 중",
             "disconnectedTitle": "원격 런타임 연결 끊김",
-            "retryingBody": "Orca는 최대 1분간 재시도합니다. 연결이 복원되면 이 터미널이 재개됩니다.",
+            "retryingBody": "Orca가 자동으로 재시도합니다. 연결이 복원되면 이 터미널이 재개됩니다.",
             "disconnectedBody": "자동 재시도가 중지되었습니다. 이 터미널 세션을 재개하려면 다시 연결하세요.",
             "reconnectButton": "다시 연결"
           }
@@ -3017,7 +3018,8 @@
             "25dc1cd653": "파일 열기",
             "7cdf8ee0c8": "URL 열기",
             "b27864279e": "agent 실행",
-            "0e5b7a3f16": "열린 탭, 파일, URL, agent 검색…",
+            "omniboxPlaceholderWithHistory": "열린 탭, 방문 기록, 파일, URL, agent 검색…",
+            "openPage": "페이지 열기",
             "8f0a1c4d92": "탭으로 전환",
             "2c38630a01": "워크스페이스가 더 이상 존재하지 않습니다",
             "4f0d9a71c2": "탭이 더 이상 존재하지 않습니다",
@@ -3063,7 +3065,6 @@
                 "classifier": {
                   "42e6262ae9": "사용할 수 있는 작업이 없습니다.",
                   "097a982ee0": "파일 로드 중...",
-                  "c41f8d20b7": "열린 탭, 파일, URL, agent 검색…",
                   "90eb94dc48": "http:// 또는 https:// URL을 입력하세요.",
                   "5553b283ce": "URL 또는 파일 경로를 입력하세요.",
                   "queryTooLarge": "검색 텍스트가 너무 큽니다.",
@@ -3911,7 +3912,9 @@
           "searchLinks": "링크 검색",
           "deleteSkills": "스킬 삭제…"
         },
-        "SkillShareSelectionControls": { "01c5a15e02": "스킬 공유" },
+        "SkillShareSelectionControls": {
+          "01c5a15e02": "스킬 공유"
+        },
         "SkillRow": {
           "updatedUnknown": "날짜 없음",
           "pathCopied": "경로 복사됨",
@@ -3921,13 +3924,17 @@
           "viewDetails": "세부 정보 보기",
           "deleteSkill": "삭제…"
         },
-        "SkillsList": { "listLabel": "스킬" },
+        "SkillsList": {
+          "listLabel": "스킬"
+        },
         "sourceStatus": {
           "missing": "폴더를 찾을 수 없음",
           "remoteRepo": "원격 리포지토리 — 검색 안 됨",
           "unavailable": "검색 안 됨"
         },
-        "sources": { "heading": "스킬 폴더" },
+        "sources": {
+          "heading": "스킬 폴더"
+        },
         "sourceKind": {
           "home": "홈",
           "workspace": "워크스페이스",
@@ -3949,7 +3956,10 @@
           "linkOne": "링크 {{count}}개",
           "linkOther": "링크 {{count}}개"
         },
-        "filter": { "allAgents": "모든 에이전트", "sharedAgent": "공유됨 (.agents)" },
+        "filter": {
+          "allAgents": "모든 에이전트",
+          "sharedAgent": "공유됨 (.agents)"
+        },
         "SkillsSelectionHeader": {
           "exit": "선택 나가기",
           "exitTooltip": "선택 나가기 · Esc",
@@ -3958,7 +3968,11 @@
           "clear": "지우기",
           "deleteTitle": "삭제할 스킬 선택"
         },
-        "SkillDetailDialog": { "agents": "에이전트", "updated": "업데이트됨", "copy": "복사" },
+        "SkillDetailDialog": {
+          "agents": "에이전트",
+          "updated": "업데이트됨",
+          "copy": "복사"
+        },
         "SkillFreshnessNudge": {
           "titleOne": "설치된 Orca 스킬이 오래되었습니다",
           "titleMany": "설치된 Orca 스킬 {{value0}}개가 오래되었습니다",
@@ -4376,12 +4390,15 @@
           "keepDefaultBranchAria": "슬립 중인 워크스페이스를 숨겨도 기본 브랜치는 계속 표시"
         },
         "SidebarHeader": {
+          "projects": "프로젝트",
           "92154beb7e": "새로운 워크스페이스",
           "49f62c5665": "워크스페이스 보드",
           "5c9c7c16aa": "워크스페이스를 만들려면 프로젝트를 추가하세요.",
           "ca6f729da2": "새 워크스페이스({{value0}})",
           "a30e34eb5c": "워크스페이스 보드 닫기",
-          "25a95899c9": "프로젝트 추가"
+          "25a95899c9": "프로젝트 추가",
+          "spaces": "스페이스",
+          "views": "사이드바 보기"
         },
         "SidebarNav": {
           "80611a8b10": "검색",
@@ -8207,7 +8224,8 @@
             },
             "agentDashboard": {
               "title": "에이전트 대시보드",
-              "description": "워크트리 전반에 걸친 에이전트를 모니터링하는 칸반 보드. 윈도우 내 또는 팝업으로 표시됩니다."
+              "description": "워크트리 전반에 걸친 에이전트를 모니터링하는 칸반 보드. 윈도우 내 또는 팝업으로 표시됩니다.",
+              "dashboard": "대시보드"
             }
           }
         },
@@ -13757,6 +13775,35 @@
         }
       },
       "automations": {
+        "AutomationListToolbar": {
+          "runs": "실행"
+        },
+        "AutomationRunsDashboard": {
+          "search": "실행 검색…",
+          "filters": "필터",
+          "host": "호스트",
+          "status": "상태",
+          "refresh": "실행 새로 고침",
+          "successful24h": "성공 · 24시간",
+          "failed24h": "실패 · 24시간",
+          "successful7d": "성공 · 7일",
+          "failed7d": "실패 · 7일",
+          "historyUnavailableOne": "자동화 1개의 실행 기록을 사용할 수 없습니다. 집계에는 사용 가능한 기록만 포함됩니다.",
+          "historyUnavailableMany": "자동화 {{count}}개의 실행 기록을 사용할 수 없습니다. 집계에는 사용 가능한 기록만 포함됩니다.",
+          "automation": "자동화",
+          "triggered": "트리거됨",
+          "trigger": "트리거",
+          "loading": "실행 로드 중…",
+          "noRuns": "아직 실행이 없습니다",
+          "emptyDescription": "자동화를 트리거하면 여기에 실행이 표시됩니다.",
+          "runs": "실행",
+          "local": "로컬",
+          "remote": "원격"
+        },
+        "AutomationsPageBreadcrumb": {
+          "ariaLabel": "자동화 탐색경로",
+          "runDetails": "실행 세부정보"
+        },
         "AutomationCustomCronPanel": {
           "3e3b2c369f": "Cron 식",
           "e81a02d61b": "저장하기 전에 유효한 5개 필드 크론을 입력하세요.",
@@ -14185,9 +14232,10 @@
           "b29191b3e0": "워크트리",
           "8c3b621ddf": "프로젝트",
           "4a3986b200": "상태",
-          "770d458144": "agent 활동 그룹화 기준",
+          "770d458144": "그룹화 기준",
           "795cbf26e2": "필터...",
           "4616ea39fd": "워크스페이스로 이동",
+          "markThreadRead": "스레드를 읽은 것으로 표시",
           "59b131fbd9": "스레드를 읽지 않은 것으로 표시",
           "beb2c19173": "읽지 않음",
           "5651b216c6": "알 수 없는 프로젝트",
@@ -14798,6 +14846,13 @@
       "sent": "세션 컨텍스트를 새 {{agent}} 세션으로 보냈습니다.",
       "deliveryFailed": "새 {{agent}} 세션은 시작되었지만 컨텍스트를 보내지 못했습니다.",
       "launchFailed": "새 {{agent}} 세션을 시작할 수 없습니다."
+    },
+    "terminalPane": {
+      "TerminalContextMenu": {
+        "copySessionId": "세션 ID 복사",
+        "copySessionIdSuccess": "세션 ID를 복사했습니다",
+        "copySessionIdError": "세션 ID를 복사하지 못했습니다"
+      }
     }
   },
   "dashboardPopout": {
@@ -14895,7 +14950,8 @@
   },
   "dashboard": {
     "sidebar": {
-      "label": "에이전트 대시보드"
+      "label": "에이전트",
+      "dashboardLabel": "에이전트 대시보드"
     }
   },
   "browser": {
@@ -14935,6 +14991,21 @@
         "addressInUse": "Another process may be holding the port. Restart Orca to try again.",
         "unknown": "Restart Orca to try again."
       }
+    }
+  },
+  "agentsSidebarIntro": {
+    "migrated": {
+      "title": "에이전트를 더 쉽게 찾을 수 있습니다",
+      "description": "에이전트 보기가 이제 사이드바 전용 탭이 되었습니다. 활동과 필터는 그대로 유지됩니다.",
+      "dismiss": "확인",
+      "action": "에이전트 열기"
+    },
+    "new": {
+      "title": "에이전트 탭을 만나보세요",
+      "description": "에이전트가 무엇을 작업 중인지, 무엇이 완료되었는지, 어디에 개입이 필요한지 확인하세요.",
+      "hide": "에이전트 숨기기",
+      "action": "에이전트 사용해 보기",
+      "hiddenToast": "에이전트 탭이 숨겨졌습니다. 설정 → 실험 기능에서 다시 활성화하세요."
     }
   }
 }

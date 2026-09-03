@@ -16,6 +16,11 @@ import {
   retainLocalWatcherPhysicalFailure,
   trackDetachedLocalUnsubscribe
 } from './filesystem-watcher-listener-lifecycle'
+import { createDebouncedBatch } from './filesystem-watcher-batch-control'
+import { mapWithConcurrency } from '../../shared/map-with-concurrency'
+
+// Why: matches the watcher subprocess budget in parcel-watcher-event-delivery.ts.
+const DIRECTORY_STAT_CONCURRENCY = 8
 
 // ── Event coalescing ─────────────────────────────────────────────────
 // Why: keep the last event per path in a flush window; delete→create emits both (delete cleans the subtree, create refreshes the parent), create→delete is dropped (§4.4).
@@ -94,50 +99,96 @@ function emitOverflowPayload(root: WatchedRoot): void {
 }
 
 async function flushBatch(root: WatchedRoot): Promise<void> {
+  if (root.batch.cancelled) {
+    return
+  }
+  if (root.batch.flushInFlight) {
+    root.batch.flushQueued = true
+    return
+  }
+
+  root.batch.flushInFlight = true
+  if (root.batch.timer) {
+    clearTimeout(root.batch.timer)
+    root.batch.timer = null
+  }
   const overflowed = root.batch.overflowed
   const rawEvents = root.batch.events.splice(0)
   root.batch.overflowed = false
-  root.batch.timer = null
   root.batch.firstEventAt = 0
 
-  if ((rawEvents.length === 0 && !overflowed) || root.listeners.size === 0) {
-    return
-  }
+  try {
+    if ((rawEvents.length === 0 && !overflowed) || root.listeners.size === 0) {
+      return
+    }
 
-  if (overflowed || rawEvents.length > MAX_BATCHED_WATCHER_EVENTS) {
-    // Why: deletion storms can be too large to coalesce/stat per path; one overflow asks the renderer for the same conservative refresh.
-    emitOverflowPayload(root)
-    return
-  }
-
-  const coalesced = coalesceEvents(rawEvents)
-
-  const events: FsChangeEvent[] = await Promise.all(
-    coalesced.map(async (evt) => {
-      // Why: a deleted path can't be stat'd; leave isDirectory undefined and let the renderer infer from dirCache.
-      const isDirectory = evt.type === 'delete' ? undefined : await tryStatIsDirectory(evt.path)
-
-      return {
-        kind: evt.type,
-        absolutePath: evt.path,
-        isDirectory
+    if (overflowed || rawEvents.length > MAX_BATCHED_WATCHER_EVENTS) {
+      // Why: deletion storms can be too large to coalesce/stat per path; one overflow asks the renderer for the same conservative refresh.
+      if (!root.batch.cancelled) {
+        emitOverflowPayload(root)
       }
-    })
-  )
+      return
+    }
 
-  const payload: FsChangedPayload = {
-    worktreePath: root.rootPath,
-    events
-  }
+    const coalesced = coalesceEvents(rawEvents)
 
-  for (const [, wc] of root.listeners) {
-    if (!wc.isDestroyed()) {
-      wc.send('fs:changed', payload)
+    // Why: a full batch is up to MAX_BATCHED_WATCHER_EVENTS paths; unbounded stat() would swamp
+    // libuv's 4-thread pool, which also serves git reads and persistence writes.
+    const events: FsChangeEvent[] = await mapWithConcurrency(
+      coalesced,
+      DIRECTORY_STAT_CONCURRENCY,
+      async (evt) => {
+        // Why: a deleted path can't be stat'd; leave isDirectory undefined and let the renderer infer from dirCache.
+        const isDirectory = evt.type === 'delete' ? undefined : await tryStatIsDirectory(evt.path)
+
+        return {
+          kind: evt.type,
+          absolutePath: evt.path,
+          isDirectory
+        }
+      }
+    )
+
+    if (root.batch.cancelled || root.listeners.size === 0) {
+      return
+    }
+
+    const payload: FsChangedPayload = {
+      worktreePath: root.rootPath,
+      events
+    }
+
+    for (const [, wc] of root.listeners) {
+      if (!wc.isDestroyed()) {
+        wc.send('fs:changed', payload)
+      }
+    }
+  } finally {
+    root.batch.flushInFlight = false
+    if (root.batch.flushQueued) {
+      root.batch.flushQueued = false
+      if (
+        !root.batch.cancelled &&
+        // Why: an armed timer still owns its debounce window; draining here would split related events across payloads.
+        !root.batch.timer &&
+        (root.batch.events.length > 0 || root.batch.overflowed)
+      ) {
+        // Drain the queued batch only after the current payload has settled,
+        // preserving watcher event ordering without dropping a storm tail.
+        void flushBatch(root)
+      }
     }
   }
 }
 
 export function scheduleLocalBatchFlush(root: WatchedRoot): void {
+  if (root.batch.cancelled) {
+    return
+  }
+  if (root.batch.flushInFlight) {
+    root.batch.flushQueued = true
+  }
+
   const now = Date.now()
 
   if (root.batch.firstEventAt === 0) {
@@ -148,6 +199,7 @@ export function scheduleLocalBatchFlush(root: WatchedRoot): void {
   if (now - root.batch.firstEventAt >= WATCH_BATCH_MAX_WAIT_MS) {
     if (root.batch.timer) {
       clearTimeout(root.batch.timer)
+      root.batch.timer = null
     }
     void flushBatch(root)
     return
@@ -157,7 +209,11 @@ export function scheduleLocalBatchFlush(root: WatchedRoot): void {
   if (root.batch.timer) {
     clearTimeout(root.batch.timer)
   }
-  root.batch.timer = setTimeout(() => void flushBatch(root), WATCH_BATCH_TRAILING_MS)
+  // Why: clear the handle as it fires so `batch.timer` means "a debounce window is still open", which gates the queued drain.
+  root.batch.timer = setTimeout(() => {
+    root.batch.timer = null
+    void flushBatch(root)
+  }, WATCH_BATCH_TRAILING_MS)
 }
 
 // ── Watcher creation ─────────────────────────────────────────────────
@@ -170,7 +226,7 @@ export async function createLocalWatcher(
   const root: WatchedRoot = {
     subscription: null!,
     listeners: new Map(),
-    batch: { events: [], overflowed: false, timer: null, firstEventAt: 0 },
+    batch: createDebouncedBatch(),
     rootPath
   }
 
@@ -211,6 +267,9 @@ export async function createLocalWatcher(
           return
         }
 
+        if (root.batch.cancelled) {
+          return
+        }
         queueWatcherEvents(root.batch, events)
         scheduleLocalBatchFlush(root)
       },

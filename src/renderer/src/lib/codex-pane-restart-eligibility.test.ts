@@ -103,7 +103,12 @@ describe('isCodexRestartEligiblePane', () => {
     // Why: a stale remote handle reports the last-known name; it is not evidence.
     expect(
       isCodexRestartEligiblePane({
-        inspection: { foregroundProcess: 'codex', hasChildProcesses: true, unavailable: true },
+        inspection: {
+          foregroundProcess: null,
+          hasChildProcesses: false,
+          verdict: 'unverifiable',
+          reason: 'terminal_gone'
+        },
         launchAgent: 'codex'
       })
     ).toBe(false)

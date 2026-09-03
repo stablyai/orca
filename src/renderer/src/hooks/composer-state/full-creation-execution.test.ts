@@ -79,8 +79,11 @@ describe('useFullCreationExecution cancellation', () => {
         .fn<FullCreationExecutionInput['prepareFullSubmit']>()
         .mockResolvedValue(prepared),
       resolvedInitialWorkspaceStatus: undefined,
+      selectedRepoExecutionHostId: 'local',
       selectedRepoIsGit: true,
+      selectedRepoIsRemote: false,
       setSidebarOpen: vi.fn<FullCreationExecutionInput['setSidebarOpen']>(),
+      settings: null,
       sparseEnabled: false,
       taskSourceContext: null,
       telemetrySource: undefined,

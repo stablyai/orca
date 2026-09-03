@@ -5,9 +5,16 @@ import type {
 import type { NativeChatBlock } from '../../shared/native-chat-types'
 import {
   boundInlineText,
+  boundToolInput,
   DEFAULT_JOURNAL_PAYLOAD_LIMITS
 } from '../native-chat/agent-session-journal/journal-payload-bounds'
 import { unhandledProviderFrameJournalItem } from '../native-chat/agent-session-wire/unhandled-provider-frame'
+import type { CodexTurnOrdinals } from './codex-turn-ordinals'
+export {
+  CodexTurnOrdinals,
+  MAX_CODEX_TURN_ORDINAL_BYTES,
+  MAX_CODEX_TURN_ORDINAL_ENTRIES
+} from './codex-turn-ordinals'
 
 // Codex thread items → journal item bodies and durable identities.
 //
@@ -46,44 +53,6 @@ export function readCodexThreadItem(value: unknown): CodexThreadItem | null {
     : null
 }
 
-/**
- * Ordinals for one thread, assigned on first sight and never reassigned.
- *
- * Non-message items are given no ordinal at all rather than a number from a
- * second counter: a counter that a resumed history cannot reproduce is worse
- * than no key, because it would look reconcilable and reconcile wrongly.
- */
-export class CodexTurnOrdinals {
-  private readonly turns = new Map<string, { assigned: Map<string, number>; next: number }>()
-
-  ordinalFor(threadId: string, turnId: string, codexItemId: string): number {
-    const turnKey = `${encodeURIComponent(threadId)}:${encodeURIComponent(turnId)}`
-    let turn = this.turns.get(turnKey)
-    if (!turn) {
-      turn = { assigned: new Map(), next: 0 }
-      this.turns.set(turnKey, turn)
-    }
-    const existing = turn.assigned.get(codexItemId)
-    if (existing !== undefined) {
-      return existing
-    }
-    const ordinal = turn.next
-    turn.assigned.set(codexItemId, ordinal)
-    turn.next += 1
-    return ordinal
-  }
-
-  /** Releases a finished turn's per-item map while keeping its counter, so a
-   *  straggler frame can never be assigned an ordinal the turn already used —
-   *  a reused slot would upsert another item's journal row. */
-  forgetTurn(threadId: string, turnId: string): void {
-    const turn = this.turns.get(`${encodeURIComponent(threadId)}:${encodeURIComponent(turnId)}`)
-    if (turn) {
-      turn.assigned = new Map()
-    }
-  }
-}
-
 function readRecord(value: unknown): Record<string, unknown> {
   return typeof value === 'object' && value !== null ? (value as Record<string, unknown>) : {}
 }
@@ -119,6 +88,16 @@ function readString(source: Record<string, unknown>, key: string): string | null
   return typeof value === 'string' && value.length > 0 ? value : null
 }
 
+function readFirstString(source: Record<string, unknown>, keys: readonly string[]): string | null {
+  for (const key of keys) {
+    const value = readString(source, key)
+    if (value !== null) {
+      return value
+    }
+  }
+  return null
+}
+
 function readTextContent(source: Record<string, unknown>, key: string): string | null {
   const direct = readString(source, key)
   if (direct) {
@@ -143,9 +122,12 @@ function readTextContent(source: Record<string, unknown>, key: string): string |
 
 /** `userMessage` carries structured content parts; `agentMessage` a flat text. */
 export function codexMessageBlocks(item: CodexThreadItem): NativeChatBlock[] {
-  const text = readString(item, 'text')
+  const text =
+    item.type === 'agentMessage'
+      ? (readString(item, 'text') ?? readTextContent(item, 'content'))
+      : readString(item, 'text')
   if (text !== null) {
-    return [{ type: 'text', text }]
+    return [{ type: 'text', text: boundInlineText(text, DEFAULT_JOURNAL_PAYLOAD_LIMITS).text }]
   }
   const content = item.content
   if (!Array.isArray(content)) {
@@ -158,7 +140,10 @@ export function codexMessageBlocks(item: CodexThreadItem): NativeChatBlock[] {
     }
     const partText = readString(part as Record<string, unknown>, 'text')
     if (partText !== null) {
-      blocks.push({ type: 'text', text: partText })
+      blocks.push({
+        type: 'text',
+        text: boundInlineText(partText, DEFAULT_JOURNAL_PAYLOAD_LIMITS).text
+      })
       continue
     }
     const record = part as Record<string, unknown>
@@ -192,13 +177,16 @@ export type CodexJournalItem = {
 }
 
 function commandItem(item: CodexThreadItem): CodexJournalItem {
-  const output = readString(item, 'aggregatedOutput')
+  const output = readFirstString(item, ['aggregatedOutput', 'aggregated_output'])
   const bounded = output === null ? null : boundInlineText(output, DEFAULT_JOURNAL_PAYLOAD_LIMITS)
   return {
     body: {
       kind: 'tool-call',
       name: 'shell',
-      input: { command: item.command ?? null, cwd: item.cwd ?? null },
+      input: boundToolInput(
+        { command: item.command ?? null, cwd: item.cwd ?? null },
+        DEFAULT_JOURNAL_PAYLOAD_LIMITS
+      ),
       state: commandState(item),
       ...(bounded === null ? {} : { output: bounded.bounded })
     },
@@ -224,7 +212,7 @@ function fileChangeItem(item: CodexThreadItem): CodexJournalItem {
       body: {
         kind: 'tool-call',
         name: 'apply_patch',
-        input: { changes: item.changes ?? null },
+        input: boundToolInput({ changes: item.changes ?? null }, DEFAULT_JOURNAL_PAYLOAD_LIMITS),
         state: commandState(item)
       },
       blobs: [],
@@ -294,7 +282,11 @@ export function codexItemBody(item: CodexThreadItem): AgentJournalItemBody | nul
 
 /** Snapshot body for text still streaming, before its item completes. */
 export function codexStreamingMessageBody(text: string): AgentJournalItemBody {
-  return { kind: 'message', role: 'assistant', blocks: [{ type: 'text', text }] }
+  return {
+    kind: 'message',
+    role: 'assistant',
+    blocks: [{ type: 'text', text: boundInlineText(text, DEFAULT_JOURNAL_PAYLOAD_LIMITS).text }]
+  }
 }
 
 /** Snapshot body for any item-level stream, keyed onto its parent item. */

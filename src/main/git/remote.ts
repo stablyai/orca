@@ -4,11 +4,17 @@ import {
 } from '../../shared/git-remote-error'
 import { resolveEffectiveGitUpstream } from '../../shared/git-effective-upstream'
 import { gitRefTargetsBranchOnRemote } from '../../shared/git-remote-branch-name'
+import { findGitRemoteNameByFetchUrl } from '../../shared/git-remote-url-index'
 import type { GitPushTarget } from '../../shared/worktree/types'
 import type { GitRuntimeOptions } from './git-runtime-options'
 import { gitOptionsForWorktree } from './git-runtime-options'
+import {
+  postponeRepoRefMaintenance,
+  withRepoRefMaintenancePaused
+} from './local-repo-ref-maintenance'
 import { validateGitPushTarget } from './push-target-validation'
 import { gitExecFileAsync } from './runner'
+import { fetchForkRemoteWithStaleRefspecRepair } from './fork-remote-stale-branch-refspec'
 import { runWithGitReadCacheInvalidation } from './status'
 import { runWithGitWorktreeOperationLock } from '../../shared/git-worktree-operation-lock'
 
@@ -79,6 +85,8 @@ type ConfiguredPushRemote = {
   branchRemote: string | null
 }
 
+// One `git remote -v` instead of `git remote` plus a serial `git remote get-url`
+// per remote; both print the same insteadOf-expanded fetch URL.
 async function findRemoteNameForUrl(
   worktreePath: string,
   remoteUrl: string,
@@ -86,30 +94,13 @@ async function findRemoteNameForUrl(
 ): Promise<string | null> {
   try {
     const { stdout } = await gitExecFileAsync(
-      ['remote'],
+      ['remote', '-v'],
       gitOptionsForWorktree(worktreePath, options)
     )
-    const remotes = stdout
-      .split(/\r?\n/)
-      .map((line) => line.trim())
-      .filter(Boolean)
-    for (const remoteName of remotes) {
-      try {
-        const { stdout: urlStdout } = await gitExecFileAsync(
-          ['remote', 'get-url', remoteName],
-          gitOptionsForWorktree(worktreePath, options)
-        )
-        if (urlStdout.trim() === remoteUrl) {
-          return remoteName
-        }
-      } catch {
-        // Ignore a remote that disappeared or has no fetch URL.
-      }
-    }
+    return findGitRemoteNameByFetchUrl(stdout, (candidateUrl) => candidateUrl === remoteUrl)
   } catch {
     return null
   }
-  return null
 }
 
 async function normalizePushRemote(
@@ -136,11 +127,17 @@ async function getConfiguredPushRemote(
   if (!remote) {
     return null
   }
+  const normalizedRemote = await normalizePushRemote(worktreePath, remote, options)
+  // The two usually name the same URL; resolving it twice reads the remote table twice.
+  if (!branchRemote) {
+    return { remote: normalizedRemote, branchRemote: null }
+  }
   return {
-    remote: await normalizePushRemote(worktreePath, remote, options),
-    branchRemote: branchRemote
-      ? await normalizePushRemote(worktreePath, branchRemote, options)
-      : null
+    remote: normalizedRemote,
+    branchRemote:
+      branchRemote === remote
+        ? normalizedRemote
+        : await normalizePushRemote(worktreePath, branchRemote, options)
   }
 }
 
@@ -259,8 +256,11 @@ export async function gitPull(
   // Why: plain `git pull` uses the user's configured pull strategy (merge by
   // default) so diverged branches reconcile instead of erroring out. Conflicts
   // surface through the existing conflict-resolution flow.
-  await runWithGitWorktreeOperationLock(worktreePath, options.signal, () =>
-    runWithGitReadCacheInvalidation(() => gitPullWithArgs(worktreePath, [], pushTarget, options))
+  postponeRepoRefMaintenance()
+  await withRepoRefMaintenancePaused('git-pull', () =>
+    runWithGitWorktreeOperationLock(worktreePath, options.signal, () =>
+      runWithGitReadCacheInvalidation(() => gitPullWithArgs(worktreePath, [], pushTarget, options))
+    )
   )
 }
 
@@ -269,9 +269,12 @@ export async function gitFastForward(
   pushTarget?: GitPushTarget,
   options: GitRuntimeOptions = {}
 ): Promise<void> {
-  await runWithGitWorktreeOperationLock(worktreePath, options.signal, () =>
-    runWithGitReadCacheInvalidation(() =>
-      gitPullWithArgs(worktreePath, ['--ff-only'], pushTarget, options)
+  postponeRepoRefMaintenance()
+  await withRepoRefMaintenancePaused('git-fast-forward', () =>
+    runWithGitWorktreeOperationLock(worktreePath, options.signal, () =>
+      runWithGitReadCacheInvalidation(() =>
+        gitPullWithArgs(worktreePath, ['--ff-only'], pushTarget, options)
+      )
     )
   )
 }
@@ -281,16 +284,28 @@ export async function gitFetch(
   pushTarget?: GitPushTarget,
   options: GitRuntimeOptions = {}
 ): Promise<void> {
+  // `--prune` deletes remote-tracking refs, which needs the `packed-refs` lock a
+  // running idle pack holds while it rewrites -- ~1.4s at most. This is the user
+  // clicking Fetch, so wait that window out rather than letting it fail on the lock.
+  postponeRepoRefMaintenance()
   try {
-    if (pushTarget) {
-      const target = await validateGitPushTarget(worktreePath, pushTarget, options)
-      await gitExecFileAsync(
-        ['fetch', '--prune', target.remoteName],
-        gitOptionsForWorktree(worktreePath, options)
-      )
-      return
-    }
-    await gitExecFileAsync(['fetch', '--prune'], gitOptionsForWorktree(worktreePath, options))
+    await withRepoRefMaintenancePaused('git-fetch', async () => {
+      if (pushTarget) {
+        const target = await validateGitPushTarget(worktreePath, pushTarget, options)
+        const runtimeOptions = gitOptionsForWorktree(worktreePath, options)
+        await fetchForkRemoteWithStaleRefspecRepair(
+          (args, cwd) => gitExecFileAsync(args, { ...runtimeOptions, cwd }),
+          worktreePath,
+          target.remoteName,
+          () =>
+            gitExecFileAsync(['fetch', '--prune', target.remoteName], runtimeOptions).then(
+              () => undefined
+            )
+        )
+        return
+      }
+      await gitExecFileAsync(['fetch', '--prune'], gitOptionsForWorktree(worktreePath, options))
+    })
   } catch (error) {
     throw new Error(normalizeGitErrorMessage(error, 'fetch'))
   }

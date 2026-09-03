@@ -91,6 +91,7 @@ export function registerWorktreeCatalogHandlers(context: WorktreeIpcContext): vo
         let freshScan = true
         let sideEffectToken: DetectedWorktreeSideEffectToken | undefined
         let metadataPrune: DetectedWorktreeMetadataPrune | undefined
+        let hygieneDue: boolean | undefined
         if (isFolderRepo(repo)) {
           return listVisibleFolderWorkspaces(store, repo)
         } else if (repo.connectionId) {
@@ -121,6 +122,7 @@ export function registerWorktreeCatalogHandlers(context: WorktreeIpcContext): vo
           freshScan = scan.fresh
           sideEffectToken = scan.sideEffectToken
           metadataPrune = scan.metadataPrune
+          hygieneDue = scan.hygieneDue
         }
         if (freshScan) {
           await applyFreshDetectedWorktreeScanSideEffects(
@@ -129,7 +131,8 @@ export function registerWorktreeCatalogHandlers(context: WorktreeIpcContext): vo
             gitWorktrees,
             metadataPrune,
             {
-              sideEffectToken
+              sideEffectToken,
+              ...(hygieneDue === undefined ? {} : { hygieneDue })
             }
           )
         }
@@ -183,6 +186,7 @@ export function registerWorktreeCatalogHandlers(context: WorktreeIpcContext): vo
       let freshScan = true
       let sideEffectToken: DetectedWorktreeSideEffectToken | undefined
       let metadataPrune: DetectedWorktreeMetadataPrune | undefined
+      let hygieneDue: boolean | undefined
       if (isFolderRepo(repo)) {
         return listVisibleFolderWorkspaces(store, repo)
       } else if (repo.connectionId) {
@@ -213,10 +217,12 @@ export function registerWorktreeCatalogHandlers(context: WorktreeIpcContext): vo
         freshScan = scan.fresh
         sideEffectToken = scan.sideEffectToken
         metadataPrune = scan.metadataPrune
+        hygieneDue = scan.hygieneDue
       }
       if (freshScan) {
         await applyFreshDetectedWorktreeScanSideEffects(store, repo, gitWorktrees, metadataPrune, {
-          sideEffectToken
+          sideEffectToken,
+          ...(hygieneDue === undefined ? {} : { hygieneDue })
         })
       }
       loggedWorktreeListFailures.delete(`${repo.id}:${repo.path}`)

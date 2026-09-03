@@ -49,13 +49,15 @@ function createPlatformAssertion() {
 function createService(
   blocker = createBlocker(),
   macosAssertion = createPlatformAssertion(),
-  linuxAssertion = createPlatformAssertion()
+  linuxAssertion = createPlatformAssertion(),
+  platform: NodeJS.Platform = 'linux'
 ): AgentAwakeService {
   return new AgentAwakeService({
     blocker,
     linuxAssertion,
     macosAssertion,
     now: () => 1_000,
+    platform,
     powerMonitor: null,
     logger: {
       debug: vi.fn(),
@@ -65,6 +67,18 @@ function createService(
 }
 
 describe('AgentAwakeService platform assertions', () => {
+  it('uses caffeinate without Electron display blocking on macOS', () => {
+    const blocker = createBlocker()
+    const macosAssertion = createPlatformAssertion()
+    const service = createService(blocker, macosAssertion, createPlatformAssertion(), 'darwin')
+
+    service.setEnabled(true)
+    service.setStatuses([workingStatus()])
+
+    expect(macosAssertion.start).toHaveBeenCalledTimes(1)
+    expect(blocker.start).not.toHaveBeenCalled()
+  })
+
   it('keeps Electron blocker active when macOS assertion start fails', () => {
     const blocker = createBlocker()
     const macosAssertion = createPlatformAssertion()
@@ -72,7 +86,7 @@ describe('AgentAwakeService platform assertions', () => {
     macosAssertion.start.mockImplementation(() => {
       throw new Error('caffeinate failed')
     })
-    const service = createService(blocker, macosAssertion, linuxAssertion)
+    const service = createService(blocker, macosAssertion, linuxAssertion, 'darwin')
 
     service.setEnabled(true)
     service.setStatuses([workingStatus()])
@@ -83,6 +97,20 @@ describe('AgentAwakeService platform assertions', () => {
     expect(macosAssertion.stop).toHaveBeenCalled()
     expect(linuxAssertion.start).toHaveBeenCalledTimes(1)
     expect(linuxAssertion.stop).toHaveBeenCalled()
+  })
+
+  it('drops the display-blocking fallback after caffeinate recovers', () => {
+    const blocker = createBlocker()
+    const macosAssertion = createPlatformAssertion()
+    macosAssertion.start.mockImplementationOnce(() => false).mockImplementation(() => true)
+    const service = createService(blocker, macosAssertion, createPlatformAssertion(), 'darwin')
+
+    service.setEnabled(true)
+    service.setStatuses([workingStatus()])
+    expect(blocker.start).toHaveBeenCalledWith('prevent-display-sleep')
+
+    service.setStatuses([{ ...workingStatus(), receivedAt: 1_001 }])
+    expect(blocker.stop).toHaveBeenCalledWith(1)
   })
 
   it('keeps Electron blocker active when Linux assertion start fails', () => {

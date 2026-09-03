@@ -131,6 +131,9 @@ jobs:
       - name: Enforce max-lines ratchet
         run: pnpm run check:max-lines-ratchet
 
+      - name: Enforce ts-nocheck ratchet
+        run: pnpm run check:ts-nocheck-ratchet
+
       - name: Enforce runtime Electron-import ratchet
         run: pnpm run check:runtime-electron-ratchet
 
@@ -148,6 +151,12 @@ jobs:
 
       - name: Verify localization catalog
         run: pnpm run verify:localization-catalog
+
+      # Why: the renderer ships only the English entries i18next cannot rebuild
+      # from each call site's inline default, so the generated subset has to
+      # track en.json and those defaults.
+      - name: Verify runtime-required localization catalog
+        run: pnpm run verify:localization-runtime-catalog
 
       # Why: extraction writes sorted evidence to an isolated temporary path,
       # so feature PRs need one normalized AST pass rather than a three-OS matrix.
@@ -620,6 +629,8 @@ jobs:
     needs: [code_paths]
     if: needs.code_paths.outputs.package == 'true'
     runs-on: ubuntu-latest
+    # Let the serial Docker gates reach their own deadlines and report cleanup failures.
+    timeout-minutes: 90
 
     steps:
       - name: Checkout
@@ -675,13 +686,44 @@ jobs:
       - name: Build native components
         run: pnpm run build:native
 
+      - name: Install Linux package tooling
+        run: sudo apt-get update && sudo apt-get install -y cpio rpm
+
       - name: Package unpacked app
         env:
           ORCA_REUSE_PREPARED_NATIVE_RUNTIME: '1'
-        run: pnpm exec electron-builder --config config/electron-builder.config.cjs --linux AppImage --x64 --publish never
+        run: pnpm exec electron-builder --config config/electron-builder.config.cjs --linux AppImage deb rpm --x64 --publish never
+
+      - name: Verify root-package marker payloads
+        run: |
+          set -euo pipefail
+          version="$(node -p "require('./package.json').version")"
+          deb="dist/orca-ide_${version}_amd64.deb"
+          rpm="dist/orca-ide-${version}.x86_64.rpm"
+          test -s "$deb"
+          test -s "$rpm"
+          deb_marker="$(dpkg-deb --fsys-tarfile "$deb" | tar -xOf - ./opt/Orca/resources/package-type)"
+          rpm_marker="$(rpm2cpio "$rpm" | cpio --quiet --extract --to-stdout ./opt/Orca/resources/package-type)"
+          [[ "$deb_marker" == deb ]] || { echo "Expected deb marker, got: $deb_marker"; exit 1; }
+          [[ "$rpm_marker" == rpm ]] || { echo "Expected rpm marker, got: $rpm_marker"; exit 1; }
 
       - name: Verify headless serve signal shutdown
         run: node config/scripts/run-headless-serve-shutdown-docker.mjs --appimage dist/orca-linux.AppImage
+
+      - name: Verify extracted launcher serve signal shutdown
+        run: >-
+          node config/scripts/run-headless-serve-shutdown-docker.mjs
+          --appimage dist/orca-linux.AppImage --entrypoint launcher
+
+      - name: Verify AppImage CLI registration and serve signal shutdown
+        run: >-
+          node config/scripts/run-headless-serve-shutdown-docker.mjs
+          --appimage dist/orca-linux.AppImage --entrypoint appimage
+          --signal-target serving-electron --int-delivery pid
+
+      # A default container reproduces the hostile AppImage launch environment.
+      - name: Verify Linux CLI launch contract
+        run: node config/scripts/run-linux-cli-launch-contract-docker.mjs --appimage dist/orca-linux.AppImage
 
       - name: Smoke packaged CLI
         run: node config/scripts/smoke-packaged-cli.mjs --app-dir=dist/linux-unpacked
@@ -861,6 +903,9 @@ jobs:
       contents: read
     uses: ./.github/workflows/e2e.yml
     with:
+      # The synthetic pull-request merge ref can disappear while this reusable
+      # workflow is queued. The head SHA is immutable and works for every PR.
+      ref: ${{ github.event.pull_request.head.sha }}
       test_files: ${{ needs.e2e-paths.outputs.test_files }}
       ssh_source_changed: ${{ needs.e2e-paths.outputs.ssh_source_changed }}
 

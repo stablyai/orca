@@ -2741,7 +2741,8 @@
             "e4aa243f8c": "デーモンを再起動します",
             "a7e2fd2699": "Issue を登録",
             "5c8ce20be6": "この状態が続く場合は、",
-            "cc6d997c65": "ここからターミナルデーモンを再起動して、古いデーモン状態をクリアします。"
+            "cc6d997c65": "ここからターミナルデーモンを再起動して、古いデーモン状態をクリアします。",
+            "remoteTerminalClosed": "リモートターミナルが閉じられました。"
           },
           "TerminalProcessExitOverlay": {
             "capacityTitle": "Git Bash のコンソール上限に達しました",
@@ -2880,7 +2881,7 @@
           "TerminalRemoteRuntimeReconnectBanner": {
             "retryingTitle": "リモートランタイムに再接続中",
             "disconnectedTitle": "リモートランタイムが切断されました",
-            "retryingBody": "Orca は最大1分間再試行します。接続が復元されると、このターミナルが再開されます。",
+            "retryingBody": "Orca は自動的に再試行します。接続が復元されると、このターミナルが再開されます。",
             "disconnectedBody": "自動再試行が停止しました。このターミナルセッションを再開するには再接続してください。",
             "reconnectButton": "再接続"
           }
@@ -3012,7 +3013,8 @@
             "25dc1cd653": "ファイルを開く",
             "7cdf8ee0c8": "URLを開く",
             "b27864279e": "Agent を起動",
-            "0e5b7a3f16": "開いているタブ、ファイル、URL、Agent を検索…",
+            "omniboxPlaceholderWithHistory": "開いているタブ、履歴、ファイル、URL、Agent を検索…",
+            "openPage": "ページを開く",
             "8f0a1c4d92": "タブに切り替える",
             "2c38630a01": "ワークスペースは存在しません",
             "4f0d9a71c2": "タブは存在しません",
@@ -3058,7 +3060,6 @@
                 "classifier": {
                   "42e6262ae9": "利用可能な操作はありません。",
                   "097a982ee0": "ファイルを読み込み中…",
-                  "c41f8d20b7": "開いているタブ、ファイル、URL、Agent を検索…",
                   "90eb94dc48": "http:// または https:// URL を入力します。",
                   "5553b283ce": "URL またはファイルパスを入力します。",
                   "queryTooLarge": "検索テキストが大きすぎます。",
@@ -4384,12 +4385,15 @@
           "keepDefaultBranchAria": "スリープ中のワークスペースを非表示にしてもデフォルトのブランチは表示したままにする"
         },
         "SidebarHeader": {
+          "projects": "プロジェクト",
           "92154beb7e": "新規ワークスペース",
           "49f62c5665": "ワークスペースボード",
           "5c9c7c16aa": "プロジェクトを追加してワークスペースを作成する",
           "ca6f729da2": "新規ワークスペース ({{value0}})",
           "a30e34eb5c": "ワークスペースボードを閉じる",
-          "25a95899c9": "プロジェクトを追加"
+          "25a95899c9": "プロジェクトを追加",
+          "spaces": "スペース",
+          "views": "サイドバービュー"
         },
         "SidebarNav": {
           "80611a8b10": "検索",
@@ -8252,7 +8256,8 @@
             },
             "agentDashboard": {
               "title": "Agent ダッシュボード",
-              "description": "ワークツリー Agent を監視するカンバンボード。ウィンドウ内またはポップアウトで表示できます。"
+              "description": "ワークツリー Agent を監視するカンバンボード。ウィンドウ内またはポップアウトで表示できます。",
+              "dashboard": "ダッシュボード"
             }
           }
         },
@@ -13714,6 +13719,35 @@
         }
       },
       "automations": {
+        "AutomationListToolbar": {
+          "runs": "実行"
+        },
+        "AutomationRunsDashboard": {
+          "search": "実行を検索…",
+          "filters": "フィルター",
+          "host": "ホスト",
+          "status": "ステータス",
+          "refresh": "実行を更新",
+          "successful24h": "成功 · 24時間",
+          "failed24h": "失敗 · 24時間",
+          "successful7d": "成功 · 7日間",
+          "failed7d": "失敗 · 7日間",
+          "historyUnavailableOne": "1件の自動化で実行履歴を利用できません。カウントには利用可能な履歴のみが含まれます。",
+          "historyUnavailableMany": "{{count}}件の自動化で実行履歴を利用できません。カウントには利用可能な履歴のみが含まれます。",
+          "automation": "自動化",
+          "triggered": "トリガー済み",
+          "trigger": "トリガー",
+          "loading": "実行を読み込み中…",
+          "noRuns": "実行はまだありません",
+          "emptyDescription": "自動化がトリガーされると、ここに実行が表示されます。",
+          "runs": "実行",
+          "local": "ローカル",
+          "remote": "リモート"
+        },
+        "AutomationsPageBreadcrumb": {
+          "ariaLabel": "自動化のパンくずリスト",
+          "runDetails": "実行の詳細"
+        },
         "AutomationCustomCronPanel": {
           "3e3b2c369f": "クロン式",
           "e81a02d61b": "保存する前に、有効な 5 フィールドの cron を入力してください。",
@@ -14142,9 +14176,10 @@
           "b29191b3e0": "ワークツリー",
           "8c3b621ddf": "プロジェクト",
           "4a3986b200": "状態",
-          "770d458144": "Agent のアクティビティをグループ化する",
+          "770d458144": "グループ化",
           "795cbf26e2": "フィルター…",
           "4616ea39fd": "ワークスペースにジャンプ",
+          "markThreadRead": "スレッドを既読としてマーク",
           "59b131fbd9": "スレッドを未読としてマークする",
           "beb2c19173": "未読",
           "5651b216c6": "不明なプロジェクト",
@@ -14694,6 +14729,13 @@
       "sent": "セッションコンテキストを新規 {{agent}} セッションに送信しました。",
       "deliveryFailed": "新規 {{agent}} セッションは開始しましたが、コンテキストを送信できませんでした。",
       "launchFailed": "新規 {{agent}} セッションを開始できませんでした。"
+    },
+    "terminalPane": {
+      "TerminalContextMenu": {
+        "copySessionId": "セッション ID をコピー",
+        "copySessionIdSuccess": "セッション ID をコピーしました",
+        "copySessionIdError": "セッション ID のコピーに失敗しました"
+      }
     }
   },
   "dashboardPopout": {
@@ -14791,7 +14833,8 @@
   },
   "dashboard": {
     "sidebar": {
-      "label": "Agent ダッシュボード"
+      "label": "Agent",
+      "dashboardLabel": "Agent ダッシュボード"
     }
   },
   "browser": {
@@ -14831,6 +14874,21 @@
         "addressInUse": "別のプロセスがポートを使用している可能性があります。Orca を再起動してから、もう一度お試しください。",
         "unknown": "Orca を再起動してから、もう一度お試しください。"
       }
+    }
+  },
+  "agentsSidebarIntro": {
+    "migrated": {
+      "title": "Agent が見つけやすくなりました",
+      "description": "Agent ビューはサイドバーの専用タブになりました。アクティビティとフィルターはそのまま引き継がれます。",
+      "dismiss": "OK",
+      "action": "Agent を開く"
+    },
+    "new": {
+      "title": "Agent タブのご紹介",
+      "description": "Agent が何に取り組んでいるか、何が完了したか、どこで対応が必要かを確認できます。",
+      "hide": "Agent を隠す",
+      "action": "Agent を試す",
+      "hiddenToast": "Agent タブを非表示にしました。設定 → 実験的機能で再度有効にできます。"
     }
   }
 }

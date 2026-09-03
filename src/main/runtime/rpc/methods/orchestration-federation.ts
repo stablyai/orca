@@ -98,6 +98,7 @@ export const ORCHESTRATION_FEDERATION_ATTACH_METHODS: RpcMethod[] = [
             name: params.name as string,
             baseBranch: params.baseBranch,
             displayName: params.displayName,
+            displayNameKind: params.displayNameKind,
             comment: params.comment,
             // setupDecision runs setup without the legacy runHooks activation side effect.
             runHooks: false,

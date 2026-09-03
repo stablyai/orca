@@ -8,7 +8,7 @@
 // between publishing the snapshot and truncating the log leaves the log a
 // superset of the tail, and recovery unions the two by sequence — never a hole.
 
-import { appendFile, mkdir, open, readFile, type FileHandle } from 'node:fs/promises'
+import { appendFile, mkdir, open, readFile, stat, type FileHandle } from 'node:fs/promises'
 import { randomUUID } from 'node:crypto'
 import { join } from 'node:path'
 import { durableWriteTempPath, renameDurable, writeFileDurable } from '../../durable-file-write'
@@ -22,6 +22,7 @@ import {
   isAdmissibleAgentJournalSubmission
 } from '../../../shared/agent-session-journal-schemas'
 import { parseJournalRow, serializeJournalRow, type JournalRow } from './journal-row-schema'
+import { assertJournalPhysicalCapacity } from './journal-physical-quota'
 
 export const JOURNAL_LOG_FILE = 'log.jsonl'
 export const JOURNAL_SNAPSHOT_FILE = 'snapshot.json'
@@ -48,6 +49,8 @@ export type JournalSnapshotFile = {
    *  still reconciles into the bubble it belongs to. */
   aliases: { providerItemId: string; itemId: string }[]
   tombstones: { itemId: string; revision: number }[]
+  /** Bounded by compaction retention; used to deduplicate a replayed settlement. */
+  appliedSettlementIds?: string[]
   tail: JournalRow[]
 }
 
@@ -107,7 +110,31 @@ export async function readJournalSnapshot(journalDir: string): Promise<JournalSn
   }
 }
 
-export async function quarantineInvalidJournalSnapshot(journalDir: string): Promise<string> {
+export async function quarantineInvalidJournalSnapshot(
+  journalDir: string,
+  quota?: { sessionId: string; maxBytes: number }
+): Promise<string> {
+  // Rename is normally same-filesystem and size-neutral, but admission must
+  // happen before retaining evidence so a full journal never creates an
+  // unbounded quarantine artifact (or relies on a copy fallback).
+  if (quota) {
+    const source = join(journalDir, JOURNAL_SNAPSHOT_FILE)
+    // Account for the complete source bytes: rename is usually neutral, but a
+    // cross-device/filesystem fallback may briefly retain both inodes.
+    const sourceBytes = await stat(source)
+      .then((info) => info.size)
+      .catch((error) => {
+        if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
+          return 0
+        }
+        throw error
+      })
+    await assertJournalPhysicalCapacity({
+      journalDir,
+      ...quota,
+      peakAdditionalBytes: sourceBytes
+    })
+  }
   const source = join(journalDir, JOURNAL_SNAPSHOT_FILE)
   const target = join(journalDir, `quarantine-snapshot-${Date.now()}-${randomUUID()}.json`)
   await renameDurable(source, target)
@@ -189,6 +216,8 @@ function isJournalSnapshotFile(value: unknown): value is JournalSnapshotFile {
     // seeding iterates this collection, so a JSON-valid wrong shape must land
     // in quarantine rather than throw through startup restoration.
     (snapshot.tombstones === undefined || arrayOf(snapshot.tombstones, isTombstone)) &&
+    (snapshot.appliedSettlementIds === undefined ||
+      arrayOf(snapshot.appliedSettlementIds, (entry) => typeof entry === 'string')) &&
     arrayOf(snapshot.tail, (row) => parseJournalRow(JSON.stringify(row)).ok)
   )
 }

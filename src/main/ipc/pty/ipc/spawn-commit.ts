@@ -102,6 +102,7 @@ export async function commitPtyIpcSpawn(ctx: PtyIpcSpawnState): Promise<PtySpawn
         ? {
             tabId: args.tabId,
             leafId: ctx.metadataLeafId,
+            ...(ctx.preAllocatedHandle ? { terminalHandle: ctx.preAllocatedHandle } : {}),
             ...(ctx.result.incarnationId ? { incarnationId: ctx.result.incarnationId } : {}),
             ...(agentLaunchAuthority ? { agentLaunchAuthority } : {}),
             ...(providerReattachLaunchIdentity ? { providerReattachLaunchIdentity } : {})

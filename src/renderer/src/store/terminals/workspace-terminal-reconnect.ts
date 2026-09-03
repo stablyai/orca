@@ -50,18 +50,6 @@ export function createWorkspaceTerminalReconnectActions(
       const repoById = buildByIdIndex(get().repos)
       for (const worktreeId of ids) {
         const tabs = tabsByWorktree[worktreeId] ?? []
-        const worktree = worktreeById.get(worktreeId)
-        const repo = worktree ? (repoById.get(worktree.repoId) ?? null) : null
-        // Why: only allow deferred reattach when the SSH connection is active; reattaching to a not-yet-connected relay (deferred/passphrase targets) would fail.
-        const sshTargetId = options?.directSshAuthority.targetId ?? repo?.connectionId ?? null
-        const sshState = sshTargetId ? get().sshConnectionStates.get(sshTargetId) : null
-        const sshConnected = sshTargetId != null && sshState?.status === 'connected'
-        const supportsDeferredReattach = options
-          ? sshConnected
-          : !repo?.connectionId || sshConnected
-        console.debug(
-          `[reconnect-terminals] worktree=${worktreeId} connectionId=${repo?.connectionId} sshStatus=${sshState?.status} supportsDeferredReattach=${supportsDeferredReattach}`
-        )
         const targetTabIds = pendingReconnectTabByWorktree[worktreeId] ?? []
         const tabsToReconnect: TerminalTab[] =
           targetTabIds.length > 0
@@ -84,11 +72,8 @@ export function createWorkspaceTerminalReconnectActions(
               ? undefined
               : pendingPtyId
           const hasLeafMappings = Object.keys(leafPtyMap).length > 0
-          // Why: publish live PTY hints before mount; pty-connection reattaches later.
-          console.debug(
-            `[reconnect-terminals] tab=${tabId} tabLevelPtyId=${tabLevelPtyId} supportsDeferredReattach=${supportsDeferredReattach} hasLeafMappings=${hasLeafMappings}`
-          )
-          // Why: populate ptyIdsByTabId so the sessions status segment maps daemon IDs to tabs; otherwise all sessions look like orphans until the pane mounts.
+          // Why: publish live PTY hints before mount (pty-connection reattaches later) so the
+          // sessions status segment maps daemon IDs to tabs; otherwise all sessions look like orphans until the pane mounts.
           // A row whose tab.ptyId went to the canonical row has no tab-level id left, but its own leaf PTYs still need advertising.
           const allPtyIds = hasLeafMappings
             ? (Object.values(leafPtyMap).filter(Boolean) as string[])

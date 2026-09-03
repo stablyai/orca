@@ -210,12 +210,13 @@ it('rejects completion inspection when no daemon owns the session', async () => 
   await expect(router.inspectProcess('unmapped-session')).rejects.toThrow('terminal_gone')
 })
 
-it('preserves unavailable inspection from the owning legacy daemon', async () => {
+it('preserves client-only unverifiable inspection from the owning legacy daemon', async () => {
   const legacy = createAdapter('legacy', ['legacy-session'])
   vi.mocked(legacy.inspectProcess).mockResolvedValue({
     foregroundProcess: null,
-    hasChildProcesses: true,
-    unavailable: true
+    hasChildProcesses: false,
+    verdict: 'unverifiable',
+    reason: 'old_host'
   })
   const router = new DaemonPtyRouter({
     current: createAdapter('current'),
@@ -225,8 +226,9 @@ it('preserves unavailable inspection from the owning legacy daemon', async () =>
 
   await expect(router.inspectProcess('legacy-session')).resolves.toEqual({
     foregroundProcess: null,
-    hasChildProcesses: true,
-    unavailable: true
+    hasChildProcesses: false,
+    verdict: 'unverifiable',
+    reason: 'old_host'
   })
 })
 

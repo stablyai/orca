@@ -3,7 +3,7 @@ title: Chat UI (native chat)
 description: Optional chat surface over supported agent terminals — skills, model pickers, and transcript view.
 ---
 
-import { Callout } from '@/components/docs/prose';
+import { Callout } from '@/components/docs/prose'
 
 Chat UI is an experimental view layered on supported agent terminal sessions. The terminal remains the source of truth; Chat UI is a structured transcript + composer for the same PTY. Transcript decoding covers **Claude**, **Codex**, **Grok**, and **OMP** — OMP sessions open in Chat UI like the others instead of staying raw-terminal-only.
 
@@ -30,5 +30,6 @@ When Claude shows an **AskUserQuestion** (or similar structured permission/quest
 Chat UI ships on desktop for supported local and remote (paired server) agent sessions. The [mobile companion](/docs/mobile) reuses chat-style transcript patterns for the same paired sessions.
 
 <Callout title="Experimental">
-Transcript fidelity, streaming, and terminal parity are still under active tuning. Prefer the raw TUI when you need every OSC/status detail.
+  Transcript fidelity, streaming, and terminal parity are still under active tuning. Prefer the raw
+  TUI when you need every OSC/status detail.
 </Callout>

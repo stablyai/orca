@@ -207,7 +207,9 @@ export class WslCliInstaller {
       throw new Error(status.detail ?? 'WSL CLI registration is unavailable.')
     }
     if (status.state === 'conflict') {
-      throw new Error(`Refusing to replace non-Orca command at ${status.commandPath}.`)
+      throw new Error(
+        `Refusing to replace non-Orca command at ${status.commandPath}. Remove it and register again if it is no longer needed.`
+      )
     }
 
     await this.run(

@@ -3,6 +3,7 @@ import type * as ReactModule from 'react'
 
 const mocks = vi.hoisted(() => ({
   callRuntimeRpc: vi.fn(),
+  cancelStructuredCodexLaunch: vi.fn(),
   closeBrowserTab: vi.fn(),
   closeFile: vi.fn(),
   closeStructuredAgentSession: vi.fn(),
@@ -71,6 +72,10 @@ vi.mock('@/runtime/structured-agent-session-close', () => ({
   closeStructuredAgentSession: mocks.closeStructuredAgentSession
 }))
 
+vi.mock('@/lib/structured-agent-session-launch', () => ({
+  cancelStructuredCodexLaunch: mocks.cancelStructuredCodexLaunch
+}))
+
 vi.mock('@/runtime/runtime-worktree-selector', () => ({
   toRuntimeWorktreeSelector: (worktreeId: string) => `id:${worktreeId}`
 }))
@@ -124,6 +129,7 @@ describe('structured agent-session close ordering', () => {
     closeItem(AGENT_TAB.id)
 
     await vi.waitFor(() => expect(order).toEqual(['agent-close', 'tab-close', 'local-remove']))
+    expect(mocks.cancelStructuredCodexLaunch).toHaveBeenCalledWith('wt-1', 'session-1')
   })
 
   it('keeps the tab available when owner disposal fails, so close can be retried', async () => {
@@ -138,5 +144,17 @@ describe('structured agent-session close ordering', () => {
 
     expect(mocks.callRuntimeRpc).not.toHaveBeenCalled()
     expect(mocks.closeUnifiedTab).not.toHaveBeenCalled()
+  })
+
+  it('cancels reconciling launches before a bulk close', async () => {
+    const { closeMany } = useTabGroupTabCloseCommands({
+      worktreeId: 'wt-1',
+      groupTabs: [AGENT_TAB]
+    })
+
+    closeMany([AGENT_TAB.id])
+
+    expect(mocks.cancelStructuredCodexLaunch).toHaveBeenCalledWith('wt-1', 'session-1')
+    await vi.waitFor(() => expect(mocks.closeUnifiedTab).toHaveBeenCalledWith(AGENT_TAB.id))
   })
 })

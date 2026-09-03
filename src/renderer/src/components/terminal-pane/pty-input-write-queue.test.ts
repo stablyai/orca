@@ -18,6 +18,7 @@ import {
   needsCookedEchoSafeQueryReply
 } from '../../../../shared/terminal-query-reply'
 import { installTerminalCapabilityReplyHandlers } from './terminal-capability-replies'
+import { createDeferred, flushAsyncTicks } from './pty-connection-test-async'
 
 const WHEEL_UP_REPORT = '\x1b[<64;60;20M'
 
@@ -430,6 +431,126 @@ describe('pty input write queue', () => {
     }
   })
 
+  it('serializes accepted input at its invocation position', async () => {
+    const acceptedWrite = createDeferred<boolean>()
+    const delivered: string[] = []
+    const queue = createPtyInputWriteQueue({
+      isWritable: () => true,
+      write: (_id, data) => delivered.push(`ordinary:${data}`),
+      writeAccepted: async (_id, data) => {
+        delivered.push(`accepted:${data}`)
+        return acceptedWrite.promise
+      }
+    })
+
+    expect(queue.enqueue('pty-1', 'first')).toBe(true)
+    const accepted = queue.enqueueAccepted('pty-1', 'second')
+    expect(queue.enqueue('pty-1', 'third')).toBe(true)
+    expect(queue.enqueueQueryReply('pty-1', 'fourth')).toBe(true)
+    await flushAsyncTicks()
+
+    expect(delivered).toEqual(['ordinary:first', 'accepted:second'])
+
+    acceptedWrite.resolve(true)
+    await expect(accepted).resolves.toBe(true)
+    await queue.waitForDrain()
+
+    expect(delivered).toEqual([
+      'ordinary:first',
+      'accepted:second',
+      'ordinary:third',
+      'ordinary:fourth'
+    ])
+  })
+
+  it('reserves one drain before an accepted write enqueues reentrantly', async () => {
+    const acceptedWrite = createDeferred<boolean>()
+    const delivered: string[] = []
+    let reentered = false
+    let queue!: ReturnType<typeof createPtyInputWriteQueue>
+    queue = createPtyInputWriteQueue({
+      isWritable: () => true,
+      write: (_id, data) => delivered.push(`ordinary:${data}`),
+      writeAccepted: async (_id, data) => {
+        delivered.push(`accepted:${data}`)
+        if (!reentered) {
+          reentered = true
+          queue.enqueue('pty-1', 'later')
+        }
+        return acceptedWrite.promise
+      }
+    })
+
+    const accepted = queue.enqueueAccepted('pty-1', 'first')
+    await flushAsyncTicks()
+
+    expect(delivered).toEqual(['accepted:first'])
+
+    acceptedWrite.resolve(true)
+    await expect(accepted).resolves.toBe(true)
+    await queue.waitForDrain()
+
+    expect(delivered).toEqual(['accepted:first', 'ordinary:later'])
+  })
+
+  it('keeps draining fresh input when an accepted write clears reentrantly', async () => {
+    const acceptedWrite = createDeferred<boolean>()
+    const delivered: string[] = []
+    let queue!: ReturnType<typeof createPtyInputWriteQueue>
+    queue = createPtyInputWriteQueue({
+      isWritable: () => true,
+      write: (_id, data) => delivered.push(`ordinary:${data}`),
+      writeAccepted: (_id, data) => {
+        delivered.push(`accepted:${data}`)
+        queue.clear()
+        queue.enqueue('pty-1', 'fresh')
+        return acceptedWrite.promise
+      }
+    })
+
+    const accepted = queue.enqueueAccepted('pty-1', 'stale')
+
+    await expect(accepted).resolves.toBe(false)
+    await queue.waitForDrain()
+    expect(delivered).toEqual(['accepted:stale', 'ordinary:fresh'])
+
+    acceptedWrite.resolve(true)
+    await flushAsyncTicks()
+
+    expect(delivered).toEqual(['accepted:stale', 'ordinary:fresh'])
+  })
+
+  it('clear settles active and pending accepted input before same-id queue reuse', async () => {
+    const acceptedWrite = createDeferred<boolean>()
+    const acceptedStarted = createDeferred<void>()
+    const delivered: string[] = []
+    const queue = createPtyInputWriteQueue({
+      isWritable: () => true,
+      write: (_id, data) => delivered.push(`ordinary:${data}`),
+      writeAccepted: async (_id, data) => {
+        delivered.push(`accepted:${data}`)
+        acceptedStarted.resolve()
+        return acceptedWrite.promise
+      }
+    })
+    const active = queue.enqueueAccepted('pty-1', 'stale-active')
+    const pending = queue.enqueueAccepted('pty-1', 'stale-pending')
+    await acceptedStarted.promise
+
+    queue.clear()
+    expect(queue.enqueue('pty-1', 'fresh')).toBe(true)
+
+    await expect(active).resolves.toBe(false)
+    await expect(pending).resolves.toBe(false)
+    await queue.waitForDrain()
+    expect(delivered).toEqual(['accepted:stale-active', 'ordinary:fresh'])
+
+    acceptedWrite.resolve(true)
+    await flushAsyncTicks()
+
+    expect(delivered).toEqual(['accepted:stale-active', 'ordinary:fresh'])
+  })
+
   it('reports the pty id that failed so a rebound owner can ignore the drain failure', async () => {
     const failure = new Error('yield failed')
     const onDrainFailure = vi.fn()
@@ -620,5 +741,25 @@ describe('pty input write queue', () => {
     await queue.waitForDrain()
 
     expect(extractReplyWrites(writes)).toEqual([reply, reply])
+  })
+
+  it('does not retain a reaction record per acknowledged write', async () => {
+    // Regression: racing every accepted write against one queue-lifetime promise
+    // retained a reaction until that promise settled — ~440 bytes per write.
+    const queue = createPtyInputWriteQueue({
+      isWritable: () => true,
+      write: () => undefined,
+      writeAccepted: async () => true,
+      yieldBetweenWrites: async () => undefined
+    })
+    globalThis.gc?.()
+    const heapBefore = process.memoryUsage().heapUsed
+    for (let index = 0; index < 20_000; index += 1) {
+      await queue.enqueueAccepted('pty-1', 'x')
+    }
+    await queue.waitForDrain()
+    globalThis.gc?.()
+    const growthMb = (process.memoryUsage().heapUsed - heapBefore) / 1024 / 1024
+    expect(growthMb).toBeLessThan(2)
   })
 })

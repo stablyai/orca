@@ -18,6 +18,9 @@ import type { AppState } from '@/store/types'
 // Why: the real entry-action module pulls in runtime IPC + the app store; the
 // keyboard behavior under test only needs a controllable option list.
 const entryOptionsMock = vi.hoisted(() => ({ options: [] as TabEntryOption[] }))
+const structuredLaunchMock = vi.hoisted(() => ({
+  status: 'idle' as 'idle' | 'pending' | 'unknown'
+}))
 vi.mock('./tab-create-entry-action', () => ({
   getTabEntryOptions: () => entryOptionsMock.options,
   createTabEntryAllowAbsolutePathsSelector: () => () => true,
@@ -34,6 +37,9 @@ vi.mock('../quick-open-file-list', () => ({
 vi.mock('@/lib/agent-catalog', () => ({
   getAgentCatalog: () => [],
   AgentIcon: () => null
+}))
+vi.mock('@/lib/structured-agent-session-launch', () => ({
+  useStructuredCodexLaunchStatus: () => structuredLaunchMock.status
 }))
 
 import TabBarCreateEntry from './TabBarCreateEntry'
@@ -170,6 +176,7 @@ afterEach(() => {
   act(() => root.unmount())
   container.remove()
   vi.clearAllMocks()
+  structuredLaunchMock.status = 'idle'
 })
 
 describe('TabBarCreateEntry keyboard navigation', () => {
@@ -260,6 +267,29 @@ describe('TabBarCreateEntry keyboard navigation', () => {
     expect(onLaunchAgent).toHaveBeenCalledWith('gemini')
   })
 
+  it('does not relaunch Codex when a structured launch is already pending', () => {
+    structuredLaunchMock.status = 'pending'
+    const agentOptions: TabAgentLaunchOption[] = [
+      { agent: 'codex', aliases: ['codex'], label: 'Codex' }
+    ]
+    const onLaunchAgent = vi.fn()
+    mount(
+      <TabBarCreateEntry
+        worktreeId="wt"
+        groupId="g"
+        menuOpen
+        agentOptions={agentOptions}
+        onOpenEntry={vi.fn().mockResolvedValue(undefined)}
+        onLaunchAgent={onLaunchAgent}
+      />
+    )
+
+    setQuery('cod')
+    submitForm()
+
+    expect(onLaunchAgent).not.toHaveBeenCalled()
+  })
+
   it('exposes the highlighted row to assistive tech via aria-activedescendant', () => {
     entryOptionsMock.options = [fileOption('a.ts'), fileOption('b.ts'), fileOption('c.ts')]
     mount(
@@ -306,7 +336,7 @@ describe('TabBarCreateEntry keyboard navigation', () => {
 
     const input = container.querySelector('input')!
     const placeholder = input.getAttribute('placeholder')
-    expect(placeholder).toBe('Search open tabs, files, URLs, agents\u2026')
+    expect(placeholder).toBe('Search open tabs, history, files, URLs, agents\u2026')
     expect(input.getAttribute('aria-label')).toBe(placeholder)
   })
 

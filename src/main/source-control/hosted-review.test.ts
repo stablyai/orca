@@ -101,7 +101,7 @@ describe('getHostedReviewForBranch', () => {
     await expect(
       getHostedReviewForBranch({
         repoPath: '/repo',
-        connectionId: 'ssh-1',
+        executionHostId: 'ssh:ssh-1',
         branch: 'refs/heads/feature'
       })
     ).resolves.toEqual({
@@ -138,6 +138,7 @@ describe('getHostedReviewForBranch', () => {
 
     await expect(
       getHostedReviewForBranch({
+        executionHostId: 'local',
         repoPath: '/repo',
         branch: 'feature',
         linkedGitHubPR: 3
@@ -147,7 +148,7 @@ describe('getHostedReviewForBranch', () => {
       number: 3,
       status: 'pending'
     })
-    expect(getPRForBranchOutcomeMock).toHaveBeenCalledWith('/repo', 'feature', 3, undefined, null, {
+    expect(getPRForBranchOutcomeMock).toHaveBeenCalledWith('/repo', 'feature', 3, null, null, {
       currentHeadOid: null
     })
   })
@@ -168,6 +169,7 @@ describe('getHostedReviewForBranch', () => {
 
     await expect(
       getHostedReviewForBranch({
+        executionHostId: 'local',
         repoPath: '/repo',
         branch: 'feature/wsl',
         linkedBitbucketPR: 22,
@@ -180,14 +182,14 @@ describe('getHostedReviewForBranch', () => {
     })
 
     const executionOptions = { localGitExecOptions: { wslDistro: 'Ubuntu' } }
-    expect(getProjectSlugMock).toHaveBeenCalledWith('/repo', undefined, executionOptions)
-    expect(getRepoSlugMock).toHaveBeenCalledWith('/repo', undefined, executionOptions)
-    expect(getBitbucketRepoSlugMock).toHaveBeenCalledWith('/repo', undefined, executionOptions)
+    expect(getProjectSlugMock).toHaveBeenCalledWith('/repo', null, executionOptions)
+    expect(getRepoSlugMock).toHaveBeenCalledWith('/repo', null, executionOptions)
+    expect(getBitbucketRepoSlugMock).toHaveBeenCalledWith('/repo', null, executionOptions)
     expect(getBitbucketPullRequestForBranchMock).toHaveBeenCalledWith(
       '/repo',
       'feature/wsl',
       22,
-      undefined,
+      null,
       executionOptions
     )
   })
@@ -211,6 +213,7 @@ describe('getHostedReviewForBranch', () => {
 
     await expect(
       getHostedReviewForBranch({
+        executionHostId: 'local',
         repoPath: '/repo',
         branch: '',
         fallbackGitHubPR: 42
@@ -220,7 +223,7 @@ describe('getHostedReviewForBranch', () => {
       number: 42,
       status: 'success'
     })
-    expect(getPRForBranchOutcomeMock).toHaveBeenCalledWith('/repo', '', null, undefined, 42, {
+    expect(getPRForBranchOutcomeMock).toHaveBeenCalledWith('/repo', '', null, null, 42, {
       acceptMergedFallbackPR: true,
       currentHeadOid: null
     })
@@ -244,7 +247,7 @@ describe('getHostedReviewForBranch', () => {
     await expect(
       getHostedReviewForBranch({
         repoPath: '/repo',
-        connectionId: 'ssh-1',
+        executionHostId: 'ssh:ssh-1',
         branch: 'feature/bitbucket',
         linkedBitbucketPR: 11
       })
@@ -292,7 +295,7 @@ describe('getHostedReviewForBranch', () => {
     await expect(
       getHostedReviewForBranch({
         repoPath: '/repo',
-        connectionId: 'ssh-1',
+        executionHostId: 'ssh:ssh-1',
         branch: 'feature/gitea',
         linkedGiteaPR: 14
       })
@@ -340,7 +343,7 @@ describe('getHostedReviewForBranch', () => {
     await expect(
       getHostedReviewForBranch({
         repoPath: '/repo',
-        connectionId: 'ssh-1',
+        executionHostId: 'ssh:ssh-1',
         branch: 'feature/azure',
         linkedAzureDevOpsPR: 21
       })

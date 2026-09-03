@@ -3,17 +3,33 @@ title: Orca CLI reference
 description: Commands, selectors, and agent-friendly patterns for driving Orca from a shell.
 ---
 
-import { Callout } from '@/components/docs/prose';
+import { Callout } from '@/components/docs/prose'
 
 The `orca` CLI talks to a running Orca runtime. Use it when a shell script or agent needs to inspect worktrees, launch terminals, open files, automate the built-in browser, or report progress back into Orca.
 
 ## Verify the runtime
 
-Register the CLI under [Settings → General → Orca CLI](/docs/settings), then check that it can reach Orca:
+Register the CLI under [Settings → General → Orca CLI](/docs/settings), then check that it can reach Orca.
+
+<Callout title="On Linux the command is orca-ide">
+  GNOME Orca — the screen reader that ships with most GNOME desktops — already owns `/usr/bin/orca`,
+  so Orca's Linux CLI installs as `orca-ide`. Do not check for it with `command -v orca`: that
+  succeeds on a GNOME desktop and resolves to the screen reader, not to Orca. This page writes
+  `orca` throughout — read it as `orca-ide` on Linux. See [Install → Linux](/docs/install#linux).
+</Callout>
+
+On macOS and Windows:
 
 ```bash
 command -v orca
 orca status --json
+```
+
+On Linux:
+
+```bash
+command -v orca-ide
+orca-ide status --json
 ```
 
 If Orca is not already running:
@@ -111,12 +127,21 @@ orca terminal split --terminal <handle> --direction horizontal --command "npm ru
 orca terminal rename --terminal <handle> --title "runner" --json
 orca terminal switch --terminal <handle> --json
 orca terminal close --terminal <handle> --json
+orca terminal close --worktree active --all --json
 ```
 
 Omit `--terminal` to target the active terminal in the current worktree. Read before sending when you are not sure what the terminal is waiting for.
 
+Close stops the process as part of removing the terminal. Use `--terminal <handle>` for one
+terminal, or `--worktree <selector> --all` to durably close every terminal in exactly that
+workspace, including its saved layouts and agent-resume records. Use workspace Sleep when those
+terminals should resume later. If the execution host cannot confirm that every PTY stopped, bulk
+close returns a failing `unverifiable` result rather than claiming the processes exited.
+`terminal stop` remains only for compatibility with older tooling.
+
 <Callout title="Terminal handles">
-Terminal handles are runtime-scoped. If Orca restarts or a command reports a stale terminal handle, run `orca terminal list --json` and reacquire the handle.
+  Terminal handles are runtime-scoped. If Orca restarts or a command reports a stale terminal
+  handle, run `orca terminal list --json` and reacquire the handle.
 </Callout>
 
 `terminal list` reports each terminal's `executionHostId` when Orca can verify it, plus a result-level `hostScope` with covered and omitted host IDs. Treat a missing host identity or scope as **unverifiable**, not local. A missing terminal is evidence that it exited only when its execution host is listed in `hostScope.hostIds`.
