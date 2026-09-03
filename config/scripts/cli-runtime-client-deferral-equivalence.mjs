@@ -131,10 +131,7 @@ function run(entry, argv, env) {
   }
 }
 
-// Every case must produce identical bytes on both arms. The runtime-dependent
-// ones (status/worktree list) are pointed at an empty user-data dir so the
-// answer is deterministic "not running" rather than whatever the dev machine
-// happens to be doing.
+/** Builds deterministic and seeded-fuzz invocations whose outputs must remain byte-equivalent. */
 function buildCases(isolatedUserData) {
   const isolated = { ORCA_USER_DATA_PATH: isolatedUserData }
   const cases = [
@@ -170,13 +167,12 @@ function buildCases(isolatedUserData) {
     [['status', '--json'], { ...isolated, ORCA_ENVIRONMENT: 'no-such-environment' }],
     // ...and must stay suppressed for the local-only command groups.
     //
-    // NOTE: the only commands that both live in a suppressed group AND touch
-    // ctx.client are `agent hooks on|off`, which rewrite the user's real agent
-    // hook configuration in ~/.claude and friends — far outside
-    // ORCA_USER_DATA_PATH. They are deliberately NOT invoked here. The
-    // null-vs-undefined suppression they would exercise is covered
-    // side-effect-free by the constructor-argument assertions in
-    // src/cli/runtime-client-deferral.test.ts instead.
+    // NOTE: the commands that both live in a suppressed group AND touch
+    // ctx.client are `agent hooks on|off` and `host list`. The former rewrites
+    // the user's real agent hook configuration in ~/.claude and friends — far
+    // outside ORCA_USER_DATA_PATH — so it is deliberately NOT invoked here.
+    // Both commands' null-vs-undefined suppression is covered side-effect-free
+    // by constructor-argument assertions in runtime-client-deferral.test.ts.
     [['environment', 'list', '--json'], { ...isolated, ORCA_ENVIRONMENT: 'no-such-environment' }],
     [['environment', 'list', '--json'], { ...isolated, ORCA_PAIRING_CODE: 'not-a-pairing-code' }],
     [['agent-context', '--json'], { ...isolated, ORCA_PAIRING_CODE: 'not-a-pairing-code' }],

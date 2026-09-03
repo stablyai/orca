@@ -62,7 +62,8 @@ import * as dispatchModule from './dispatch'
 
 const CLI_DIR = __dirname
 
-describe('RuntimeClient module-graph deferral', () => {
+/** Registers checks that local-only CLI paths defer or suppress RuntimeClient construction. */
+function registerRuntimeClientDeferralTests(): void {
   let logSpy: ReturnType<typeof vi.spyOn>
   let errorSpy: ReturnType<typeof vi.spyOn>
 
@@ -123,21 +124,22 @@ describe('RuntimeClient module-graph deferral', () => {
     expect(constructorArgsMock).not.toHaveBeenCalled()
   })
 
-  // Why: `agent hooks on|off` are the only commands that both sit in a
-  // suppressed group and touch ctx.client, and they rewrite the real ~/.claude
-  // hook config — so the byte-for-byte equivalence script cannot invoke them.
-  // Assert the constructor arguments directly instead: `null` (not `undefined`)
-  // is what stops the ORCA_* env fallback re-activating for local-only groups.
+  // Why: `agent hooks on|off` and `host list` sit in suppressed groups but still
+  // touch ctx.client. The former rewrites the real ~/.claude hook config, so the
+  // byte-for-byte equivalence script cannot invoke it. Assert the constructor
+  // arguments directly instead: `null` (not `undefined`) is what stops the
+  // ORCA_* env fallback re-activating for local-only groups.
   //
   // `constructs` is declared per case and asserted BEFORE the args, because
-  // only `agent hooks off` reads ctx.client. Looping over `mock.calls` alone
-  // would pass vacuously for the other four, and would keep passing if the one
-  // case that carries the null-vs-undefined coverage stopped constructing at
-  // all. The zero rows are not filler: they assert the deferral itself — a
-  // local-only group must reach its handler without building a client.
+  // only `agent hooks off` and `host list` read ctx.client. Looping over
+  // `mock.calls` alone would pass vacuously for the other four, and would keep
+  // passing if the cases that carry the null-vs-undefined coverage stopped
+  // constructing at all. The zero rows are not filler: they assert the deferral
+  // itself — a local-only group must reach its handler without building a client.
   const SUPPRESSED_GROUPS: [name: string, argv: string[], constructs: number][] = [
     ['agent', ['agent', 'hooks', 'off'], 1],
     ['environment', ['environment', 'list'], 0],
+    ['host', ['host', 'list'], 1],
     ['serve', ['serve'], 0],
     ['vm', ['vm', 'recipe', 'doctor'], 0],
     ['agent-context', ['agent-context'], 0]
@@ -175,7 +177,7 @@ describe('RuntimeClient module-graph deferral', () => {
     }
   )
 
-  // Why: four of the five groups above never read ctx.client, so they can only
+  // Why: four of the six groups above never read ctx.client, so they can only
   // assert that no client is built — not that suppression forwards `null`.
   // Stub dispatch and read the getter directly so every group asserts the
   // constructor arguments unconditionally, exactly once.
@@ -256,4 +258,6 @@ describe('RuntimeClient module-graph deferral', () => {
 
     expect(constructorArgsMock).toHaveBeenCalledTimes(1)
   })
-})
+}
+
+describe('RuntimeClient module-graph deferral', registerRuntimeClientDeferralTests)
