@@ -124,6 +124,7 @@ export function registerBrowserSessionProfileHandlers(): void {
         profileId: string
         browserFamily: string
         browserProfile?: string
+        customBrowserId?: string
       }
     ): Promise<BrowserCookieImportResult | null> => {
       if (!isTrustedBrowserRenderer(event.sender)) {
@@ -133,7 +134,8 @@ export function registerBrowserSessionProfileHandlers(): void {
         environmentId: args.environmentId,
         browserProfileId: args.profileId,
         browserFamily: args.browserFamily,
-        browserProfile: args.browserProfile
+        browserProfile: args.browserProfile,
+        customBrowserId: args.customBrowserId
       })
     }
   )

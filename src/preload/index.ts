@@ -3099,6 +3099,7 @@ const api = {
       profileId: string
       browserFamily: string
       browserProfile?: string
+      customBrowserId?: string
     }): Promise<
       { ok: true; profileId: string; summary: unknown } | { ok: false; reason: string } | null
     > => ipcRenderer.invoke('browser:session:importFromBrowserForClientHost', args),

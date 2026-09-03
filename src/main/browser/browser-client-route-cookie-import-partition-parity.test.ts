@@ -6,7 +6,7 @@ import type {
 
 const {
   bindingStore,
-  detectInstalledBrowsersMock,
+  detectAllBrowsersMock,
   getProfileMock,
   getRouteIdentityMock,
   importCookiesFromBrowserMock,
@@ -20,7 +20,7 @@ const {
     findPartitionByFingerprint: vi.fn(() => null as string | null),
     rebind: vi.fn()
   },
-  detectInstalledBrowsersMock: vi.fn(),
+  detectAllBrowsersMock: vi.fn(),
   getProfileMock: vi.fn(),
   getRouteIdentityMock: vi.fn(),
   importCookiesFromBrowserMock: vi.fn(),
@@ -29,7 +29,7 @@ const {
 }))
 
 vi.mock('./browser-cookie-import', () => ({
-  detectInstalledBrowsers: detectInstalledBrowsersMock,
+  detectAllBrowsers: detectAllBrowsersMock,
   importCookiesFromBrowser: importCookiesFromBrowserMock,
   selectBrowserProfile: vi.fn()
 }))
@@ -129,7 +129,7 @@ async function pagePartition(host: BrowserNetworkExecutionHost): Promise<string>
 async function importPartition(): Promise<string> {
   bindingStore.get.mockReturnValue(null)
   getProfileMock.mockReturnValue({ id: browserProfileId, partition: 'persist:legacy-server' })
-  detectInstalledBrowsersMock.mockReturnValue([
+  detectAllBrowsersMock.mockResolvedValue([
     { family: 'chrome', label: 'Chrome', profiles: [], selectedProfile: 'Default' }
   ])
   importCookiesFromBrowserMock.mockResolvedValue({ ok: true, summary: { importedCookies: 1 } })

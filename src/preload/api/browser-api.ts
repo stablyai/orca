@@ -161,6 +161,7 @@ export type BrowserApi = {
     profileId: string
     browserFamily: string
     browserProfile?: string
+    customBrowserId?: string
   }) => Promise<BrowserCookieImportResult | null>
   /** Import-source badges for one environment's client-hosted jars, keyed by profile id. */
   sessionClientRouteImportSources: (args: {
