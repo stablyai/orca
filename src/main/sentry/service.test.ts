@@ -2,8 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const mocks = vi.hoisted(() => ({
   request: vi.fn(),
-  readConnection: vi.fn(),
-  readToken: vi.fn()
+  readCredential: vi.fn()
 }))
 
 vi.mock('./api-client', () => ({
@@ -14,12 +13,17 @@ vi.mock('./api-client', () => ({
 
 vi.mock('./credential-store', () => ({
   clearSentryCredential: vi.fn(),
-  readSentryConnectionFile: mocks.readConnection,
-  readSentryToken: mocks.readToken,
+  readSentryCredential: mocks.readCredential,
   saveSentryCredential: vi.fn()
 }))
 
-import { getSentryIssue, listSentryEvents, listSentryIssues, updateSentryIssue } from './service'
+import {
+  getSentryIssue,
+  listSentryAssignees,
+  listSentryEvents,
+  listSentryIssues,
+  updateSentryIssue
+} from './service'
 
 const HEADERS = new Headers()
 const ISSUE = {
@@ -32,12 +36,12 @@ const ISSUE = {
 
 beforeEach(() => {
   mocks.request.mockReset()
-  mocks.readConnection.mockReturnValue({
+  mocks.readCredential.mockReturnValue({
+    token: 'token',
     baseUrl: 'https://sentry.example',
     organization: { id: '1', slug: 'acme', name: 'Acme' },
     organizations: [{ id: '1', slug: 'acme', name: 'Acme' }]
   })
-  mocks.readToken.mockReturnValue('token')
 })
 
 describe('Sentry issue routes', () => {
@@ -65,6 +69,23 @@ describe('Sentry issue routes', () => {
       '/api/0/issues/42/',
       '/api/0/issues/42/events/',
       '/api/0/issues/42/'
+    ])
+  })
+
+  it('uses the nested user id for member assignees', async () => {
+    mocks.request
+      .mockResolvedValueOnce({
+        value: [{ id: 'member-7', user: { id: 'user-9', name: 'Ada' } }],
+        headers: HEADERS
+      })
+      .mockResolvedValueOnce({
+        value: [{ id: 'team-3', slug: 'backend' }],
+        headers: HEADERS
+      })
+
+    await expect(listSentryAssignees()).resolves.toEqual([
+      { type: 'user', id: 'user-9', name: 'Ada', email: null },
+      { type: 'team', id: 'team-3', name: 'backend', email: null }
     ])
   })
 })

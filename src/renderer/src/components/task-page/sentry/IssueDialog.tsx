@@ -24,14 +24,31 @@ import {
 } from '@/components/ui/select'
 import { ExternalLink, Loader2, Play } from 'lucide-react'
 import { toast } from 'sonner'
+import { translate } from '@/i18n/i18n'
 
 function EventDetails({ event }: { event: SentryEvent }): React.JSX.Element {
   return (
     <div className="space-y-4 rounded-md border border-border/60 bg-muted/20 p-3 text-xs">
       <div className="flex flex-wrap gap-x-4 gap-y-1 text-muted-foreground">
         <span>{event.dateCreated}</span>
-        {event.environment ? <span>Environment: {event.environment}</span> : null}
-        {event.release ? <span>Release: {event.release}</span> : null}
+        {event.environment ? (
+          <span>
+            {translate(
+              'auto.components.task.page.sentry.IssueDialog.environment',
+              'Environment: {{environment}}',
+              { environment: event.environment }
+            )}
+          </span>
+        ) : null}
+        {event.release ? (
+          <span>
+            {translate(
+              'auto.components.task.page.sentry.IssueDialog.release',
+              'Release: {{release}}',
+              { release: event.release }
+            )}
+          </span>
+        ) : null}
       </div>
       {event.exceptions.map((exception) => (
         <section
@@ -39,7 +56,7 @@ function EventDetails({ event }: { event: SentryEvent }): React.JSX.Element {
           className="space-y-2"
         >
           <h4 className="font-medium text-foreground">
-            {exception.type ?? 'Exception'}
+            {exception.type ?? translate("auto.components.task.page.sentry.IssueDialog.99c35fd668", "Exception")}
             {exception.value ? `: ${exception.value}` : ''}
           </h4>
           <div className="space-y-1 font-mono">
@@ -48,7 +65,7 @@ function EventDetails({ event }: { event: SentryEvent }): React.JSX.Element {
                 key={`${frame.module ?? ''}:${frame.filename ?? ''}:${frame.function ?? ''}:${frame.lineNo ?? ''}:${frame.columnNo ?? ''}`}
                 className={frame.inApp ? 'text-foreground' : 'text-muted-foreground'}
               >
-                {frame.function ?? '(anonymous)'} · {frame.filename ?? frame.module ?? 'unknown'}
+                {frame.function ?? translate("auto.components.task.page.sentry.IssueDialog.cf6cfdbab1", "(anonymous)")} · {frame.filename ?? frame.module ?? translate("auto.components.task.page.sentry.IssueDialog.88de792616", "unknown")}
                 {frame.lineNo ? `:${frame.lineNo}` : ''}
                 {frame.contextLine ? (
                   <div className="pl-4 text-muted-foreground">{frame.contextLine}</div>
@@ -60,7 +77,7 @@ function EventDetails({ event }: { event: SentryEvent }): React.JSX.Element {
       ))}
       {event.breadcrumbs.length ? (
         <section className="space-y-2">
-          <h4 className="font-medium text-foreground">Breadcrumbs</h4>
+          <h4 className="font-medium text-foreground">{translate("auto.components.task.page.sentry.IssueDialog.c8567d99ef", "Breadcrumbs")}</h4>
           {event.breadcrumbs.map((breadcrumb) => (
             <div
               key={`${breadcrumb.timestamp ?? ''}:${breadcrumb.category ?? ''}:${breadcrumb.type ?? ''}:${breadcrumb.message ?? ''}`}
@@ -75,10 +92,10 @@ function EventDetails({ event }: { event: SentryEvent }): React.JSX.Element {
           ))}
         </section>
       ) : null}
-      {event.request ? <JsonSection title="Request" value={event.request} /> : null}
-      {event.user ? <JsonSection title="User" value={event.user} /> : null}
+      {event.request ? <JsonSection title={translate("auto.components.task.page.sentry.IssueDialog.68b449622e", "Request")} value={event.request} /> : null}
+      {event.user ? <JsonSection title={translate("auto.components.task.page.sentry.IssueDialog.9ae09a0aa3", "User")} value={event.user} /> : null}
       {Object.keys(event.contexts).length ? (
-        <JsonSection title="Contexts" value={event.contexts} />
+        <JsonSection title={translate("auto.components.task.page.sentry.IssueDialog.0eb65b92f3", "Contexts")} value={event.contexts} />
       ) : null}
     </div>
   )
@@ -112,6 +129,7 @@ export function SentryIssueDialog({
   const [nextCursor, setNextCursor] = useState<string | null>(null)
   const [assignees, setAssignees] = useState<SentryAssignee[]>([])
   const [loading, setLoading] = useState(false)
+  const [loadingMore, setLoadingMore] = useState(false)
   const [mutating, setMutating] = useState(false)
   const issueId = issue?.id
 
@@ -135,7 +153,7 @@ export function SentryIssueDialog({
       .catch(
         (error) =>
           active &&
-          toast.error(error instanceof Error ? error.message : 'Could not load Sentry events.')
+          toast.error(error instanceof Error ? error.message : translate("auto.components.task.page.sentry.IssueDialog.84784c841c", "Could not load Sentry events."))
       )
       .finally(() => active && setLoading(false))
     return () => {
@@ -156,9 +174,25 @@ export function SentryIssueDialog({
       }
       onChanged(result.issue)
     } catch {
-      toast.error('Couldn’t verify the Sentry update. Refresh the issue before retrying.')
+      toast.error(translate("auto.components.task.page.sentry.IssueDialog.81296c63c8", "Couldn’t verify the Sentry update. Refresh the issue before retrying."))
     } finally {
       setMutating(false)
+    }
+  }
+
+  const loadMoreEvents = async (): Promise<void> => {
+    if (!issue || !nextCursor || loadingMore) {
+      return
+    }
+    setLoadingMore(true)
+    try {
+      const page = await sentryListEvents(settings, issue.id, nextCursor)
+      setEvents((current) => [...current, ...page.items])
+      setNextCursor(page.nextCursor)
+    } catch (cause) {
+      toast.error(cause instanceof Error ? cause.message : translate("auto.components.task.page.sentry.IssueDialog.c8a29ced35", "Could not load more Sentry events."))
+    } finally {
+      setLoadingMore(false)
     }
   }
 
@@ -184,8 +218,7 @@ export function SentryIssueDialog({
                     onClick={() => void window.api.shell.openUrl(issue.permalink)}
                   >
                     <ExternalLink className="size-4" />
-                    Sentry
-                  </Button>
+                    {translate("auto.components.task.page.sentry.IssueDialog.988d5a95c9", "Sentry")}</Button>
                   <Button
                     size="sm"
                     onClick={() =>
@@ -193,8 +226,7 @@ export function SentryIssueDialog({
                     }
                   >
                     <Play className="size-4" />
-                    Start work
-                  </Button>
+                    {translate("auto.components.task.page.sentry.IssueDialog.0e84aad685", "Start work")}</Button>
                 </div>
               </div>
             </DialogHeader>
@@ -214,9 +246,9 @@ export function SentryIssueDialog({
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="unresolved">Unresolved</SelectItem>
-                  <SelectItem value="resolved">Resolved</SelectItem>
-                  <SelectItem value="ignored">Ignored</SelectItem>
+                  <SelectItem value="unresolved">{translate("auto.components.task.page.sentry.IssueDialog.35272a9b4a", "Unresolved")}</SelectItem>
+                  <SelectItem value="resolved">{translate("auto.components.task.page.sentry.IssueDialog.370d6d84de", "Resolved")}</SelectItem>
+                  <SelectItem value="ignored">{translate("auto.components.task.page.sentry.IssueDialog.dd56c9ba3f", "Ignored")}</SelectItem>
                 </SelectContent>
               </Select>
               <Select
@@ -230,9 +262,9 @@ export function SentryIssueDialog({
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="low">Low</SelectItem>
-                  <SelectItem value="medium">Medium</SelectItem>
-                  <SelectItem value="high">High</SelectItem>
+                  <SelectItem value="low">{translate("auto.components.task.page.sentry.IssueDialog.940da58543", "Low")}</SelectItem>
+                  <SelectItem value="medium">{translate("auto.components.task.page.sentry.IssueDialog.3a5949be6a", "Medium")}</SelectItem>
+                  <SelectItem value="high">{translate("auto.components.task.page.sentry.IssueDialog.38f65ba46e", "High")}</SelectItem>
                 </SelectContent>
               </Select>
               <Select
@@ -247,10 +279,10 @@ export function SentryIssueDialog({
                 }
               >
                 <SelectTrigger className="h-8 w-52">
-                  <SelectValue placeholder="Assignee" />
+                  <SelectValue placeholder={translate("auto.components.task.page.sentry.IssueDialog.9a4ae1908e", "Assignee")} />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="unassigned">Unassigned</SelectItem>
+                  <SelectItem value="unassigned">{translate("auto.components.task.page.sentry.IssueDialog.f1c1ec43e6", "Unassigned")}</SelectItem>
                   {assignees.map((assignee) => (
                     <SelectItem
                       key={`${assignee.type}:${assignee.id}`}
@@ -268,14 +300,14 @@ export function SentryIssueDialog({
             <ScrollArea className="min-h-0 flex-1 pr-4">
               <div className="space-y-5 py-4">
                 <section className="grid grid-cols-2 gap-3 text-sm md:grid-cols-4">
-                  <Stat label="Events" value={issue.count.toLocaleString()} />
-                  <Stat label="Users" value={issue.userCount.toLocaleString()} />
-                  <Stat label="First seen" value={issue.firstSeen} />
-                  <Stat label="Last seen" value={issue.lastSeen} />
+                  <Stat label={translate("auto.components.task.page.sentry.IssueDialog.1e0a3492cb", "Events")} value={issue.count.toLocaleString()} />
+                  <Stat label={translate("auto.components.task.page.sentry.IssueDialog.8a51dbfd31", "Users")} value={issue.userCount.toLocaleString()} />
+                  <Stat label={translate("auto.components.task.page.sentry.IssueDialog.236cba9e5c", "First seen")} value={issue.firstSeen} />
+                  <Stat label={translate("auto.components.task.page.sentry.IssueDialog.7fc2dbf1cf", "Last seen")} value={issue.lastSeen} />
                 </section>
                 {issue.latestEvent ? <EventDetails event={issue.latestEvent} /> : null}
                 <section className="space-y-3">
-                  <h3 className="font-medium">Events</h3>
+                  <h3 className="font-medium">{translate("auto.components.task.page.sentry.IssueDialog.1e0a3492cb", "Events")}</h3>
                   {loading ? (
                     <Loader2 className="size-5 animate-spin text-muted-foreground" />
                   ) : (
@@ -285,15 +317,11 @@ export function SentryIssueDialog({
                     <Button
                       variant="outline"
                       size="sm"
-                      onClick={() =>
-                        void sentryListEvents(settings, issue.id, nextCursor).then((page) => {
-                          setEvents((current) => [...current, ...page.items])
-                          setNextCursor(page.nextCursor)
-                        })
-                      }
+                      disabled={loadingMore}
+                      onClick={() => void loadMoreEvents()}
                     >
-                      Load more events
-                    </Button>
+                      {loadingMore ? <Loader2 className="size-4 animate-spin" /> : null}
+                      {translate("auto.components.task.page.sentry.IssueDialog.30efbe0085", "Load more events")}</Button>
                   ) : null}
                 </section>
               </div>

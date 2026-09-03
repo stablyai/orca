@@ -2539,6 +2539,13 @@
             }
           }
         },
+        "sentry": {
+          "integration": {
+            "card": {
+              "65e65f6e78": "{{value0}} connected"
+            }
+          }
+        },
         "settingOwnership": {
           "clientDefaultProjectScopes": "Client default + project scopes",
           "terminalQuickCommands": "Commands are saved on this client, then scoped globally or to a project setup so they run from the selected terminal context."
@@ -3453,6 +3460,12 @@
                   "3e00e8ebd4": "Loading Linear"
                 }
               }
+            }
+          },
+          "sentry": {
+            "IssueDialog": {
+              "8ca4924fee": "Release:",
+              "e05a585f5f": "Environment:"
             }
           }
         }

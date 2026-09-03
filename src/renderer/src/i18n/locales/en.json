@@ -2240,7 +2240,8 @@
         "linearModeHasWorktreeTooltip": "Linear tickets linked to an Orca workspace",
         "linearEmptyHasWorktree": "No Linear tickets are linked to an Orca workspace yet. Start work from a Linear issue to see it here.",
         "linearOpenAttachedWorkspace": "Open workspace attached to {{value0}}",
-        "linearWorktreesColumn": "Workspaces"
+        "linearWorktreesColumn": "Workspaces",
+        "sentry": "Sentry"
       },
       "Terminal": {
         "73768427cf": "Close",
@@ -6224,6 +6225,9 @@
           "projectOnly": "Added in this project only.",
           "useGlobalFor": "Use global for {{value0}}",
           "useGlobal": "Use global"
+        },
+        "SidebarTaskNavButton": {
+          "8dcf47f2f2": "Open Sentry issues"
         }
       },
       "shared": {
@@ -8405,7 +8409,9 @@
           "integrationsHint": "Credentials for all providers also live under",
           "integrationsLink": "Integrations",
           "skillHint": ". After Linear is connected, usage examples stay under Settings → Linear.",
-          "incompleteBannerBodyWithLinear": "Hide providers you do not use, or expand a card and finish its steps. For Linear: API access, the agent skill, and Show in Tasks."
+          "incompleteBannerBodyWithLinear": "Hide providers you do not use, or expand a card and finish its steps. For Linear: API access, the agent skill, and Show in Tasks.",
+          "1cba89d28a": "Sentry",
+          "2b17a67319": "Connect Sentry Cloud or self-hosted Sentry and show issues in Tasks."
         },
         "TerminalAppearanceSection": {
           "a14a427ae4": "Thickness of the pane divider line.",
@@ -11577,6 +11583,33 @@
         },
         "NativeChatSupportedAgents": {
           "label": "Supported agents:"
+        },
+        "TaskSourceSimpleSetup": {
+          "baaebad650": "Connect Sentry",
+          "709d36f8c7": "Add Sentry Cloud or a self-hosted instance with an auth token.",
+          "d64c6c6162": "Manage access",
+          "37f0453bd2": "Add Sentry access"
+        },
+        "sentry": {
+          "integration": {
+            "card": {
+              "85e231fa1b": "Sentry connection works.",
+              "f77fd46260": "Could not test the Sentry connection.",
+              "65e65f6e78": "{{value0}} connected",
+              "44597e225a": "Browse and triage Sentry issues.",
+              "1255726ada": "Change access",
+              "7d879829aa": "Connect Sentry",
+              "b68ec41a71": "Test",
+              "975e204557": "Could not disconnect from Sentry.",
+              "c6df63df00": "Disconnect",
+              "02a0fbad1b": "The selected execution host stores the token. Tokens need event:read; triage needs event:write or event:admin.",
+              "name": "Sentry",
+              "organizationConnected": "{{organizationName}} connected",
+              "organization": "Organization",
+              "connected": "Connected",
+              "notConnected": "Not connected"
+            }
+          }
         }
       },
       "right": {
@@ -15921,6 +15954,12 @@
         "AutomationsPageBreadcrumb": {
           "ariaLabel": "Automations breadcrumb",
           "runDetails": "Run details"
+        },
+        "sourceDisplay": {
+          "sentry": "Sentry"
+        },
+        "targetAvailability": {
+          "sentry": "Sentry"
         }
       },
       "agent": {
@@ -16274,6 +16313,70 @@
                 }
               }
             }
+          },
+          "sentry": {
+            "Content": {
+              "78d5b2169a": "Connect Sentry",
+              "c6ed210867": "Connect an organization to browse errors, inspect events, and start workspaces.",
+              "5be30b3ff0": "24 hours",
+              "f9f4523be0": "7 days",
+              "2f69b48145": "14 days",
+              "a502b35389": "30 days",
+              "eb7d38e761": "Last seen",
+              "25b700d4a8": "First seen",
+              "4f38f202dc": "Events",
+              "7299517360": "Users",
+              "b05286cc83": "Sentry search query",
+              "25172c3f31": "Search",
+              "f50a8e43b5": "Refresh Sentry issues",
+              "ffe7c243dc": "No Sentry issues match these filters.",
+              "7e214329ca": "Open Sentry",
+              "e51fc0fbd7": "Sentry connection works.",
+              "29e70b2996": "Could not test the Sentry connection.",
+              "9063f9b03b": "Test connection",
+              "b381f3e7a1": "Could not disconnect from Sentry.",
+              "b0ac878654": "Disconnect",
+              "e67bacb7cf": "Load more",
+              "minutesAgo": "{{minutes}}m ago",
+              "hoursAgo": "{{hours}}h ago",
+              "daysAgo": "{{days}}d ago",
+              "selectedCount": "{{total}} selected",
+              "loadFailed": "Could not load Sentry issues.",
+              "statusFailed": "Could not read Sentry connection.",
+              "catalogFailed": "Could not load Sentry projects and environments.",
+              "organizationFailed": "Could not change the Sentry organization."
+            },
+            "IssueDialog": {
+              "e05a585f5f": "Environment:",
+              "8ca4924fee": "Release:",
+              "99c35fd668": "Exception",
+              "cf6cfdbab1": "(anonymous)",
+              "88de792616": "unknown",
+              "c8567d99ef": "Breadcrumbs",
+              "68b449622e": "Request",
+              "9ae09a0aa3": "User",
+              "0eb65b92f3": "Contexts",
+              "84784c841c": "Could not load Sentry events.",
+              "81296c63c8": "Couldn’t verify the Sentry update. Refresh the issue before retrying.",
+              "c8a29ced35": "Could not load more Sentry events.",
+              "988d5a95c9": "Sentry",
+              "0e84aad685": "Start work",
+              "35272a9b4a": "Unresolved",
+              "370d6d84de": "Resolved",
+              "dd56c9ba3f": "Ignored",
+              "940da58543": "Low",
+              "3a5949be6a": "Medium",
+              "38f65ba46e": "High",
+              "9a4ae1908e": "Assignee",
+              "f1c1ec43e6": "Unassigned",
+              "1e0a3492cb": "Events",
+              "8a51dbfd31": "Users",
+              "236cba9e5c": "First seen",
+              "7fc2dbf1cf": "Last seen",
+              "30efbe0085": "Load more events",
+              "environment": "Environment: {{environment}}",
+              "release": "Release: {{release}}"
+            }
           }
         }
       },
@@ -16591,6 +16694,23 @@
       "HostedReviewUnlinkMenuItem": {
         "label": "Unlink {{value0}} from workspace",
         "description": "Orca will hide {{value0}} {{value1}} details for this workspace. The {{value0}} and branch on {{value2}} won’t be changed."
+      },
+      "sentry": {
+        "connect": {
+          "dialog": {
+            "95856ffe39": "Connect Sentry",
+            "5968e4b379": "Base URL",
+            "4790ee6d53": "Auth token",
+            "7471c5d890": "Use a token with event:read. Triage also needs event:write or event:admin.",
+            "4c04d2f996": "Organization",
+            "5a5acff1a4": "Select an organization",
+            "112c98c590": "Cancel",
+            "aaf36ea058": "Use organization",
+            "e6ab4ce1a8": "Connect",
+            "connectFailed": "Could not connect to Sentry.",
+            "organizationFailed": "Could not select the organization."
+          }
+        }
       }
     },
     "i18n": {

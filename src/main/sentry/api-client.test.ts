@@ -15,6 +15,12 @@ describe('Sentry API client', () => {
     )
   })
 
+  it('rejects base URLs that could expose the auth token', () => {
+    expect(() => normalizeSentryBaseUrl('http://errors.example.test')).toThrow(
+      'must use HTTPS'
+    )
+  })
+
   it('reads cursors only when the Link entry has results', () => {
     const headers = new Headers({
       link: '<https://sentry.io/api/0/issues/?cursor=0:0:1>; rel="previous"; results="false"; cursor="0:0:1", <https://sentry.io/api/0/issues/?cursor=0:50:0>; rel="next"; results="true"; cursor="0:50:0"'

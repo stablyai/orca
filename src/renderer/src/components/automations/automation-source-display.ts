@@ -1,5 +1,6 @@
 import { getExecutionHostLabel } from '../../../../shared/execution-host'
 import type { TaskSourceContext } from '../../../../shared/task-source-context'
+import { translate } from '@/i18n/i18n'
 
 export type AutomationSourceDisplay = {
   label: string
@@ -42,7 +43,7 @@ function getProviderLabel(provider: TaskSourceContext['provider']): string {
     case 'jira':
       return 'Jira'
     case 'sentry':
-      return 'Sentry'
+      return translate('auto.components.automations.sourceDisplay.sentry', 'Sentry')
   }
 }
 

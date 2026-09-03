@@ -16,7 +16,8 @@ const mocks = vi.hoisted(() => ({
     error: null,
     skills: [],
     refresh: vi.fn()
-  }
+  },
+  sentryStatus: vi.fn()
 }))
 
 vi.mock('@/store', () => ({
@@ -46,7 +47,7 @@ vi.mock('@/hooks/useInstalledAgentSkills', () => ({
 }))
 
 vi.mock('@/runtime/runtime-sentry-client', () => ({
-  sentryStatus: () => Promise.resolve({ connected: true })
+  sentryStatus: mocks.sentryStatus
 }))
 
 const ALL_PROVIDERS: readonly TaskProvider[] = ['github', 'gitlab', 'linear', 'jira', 'sentry']
@@ -74,6 +75,8 @@ async function renderProbe(
 }
 
 beforeEach(() => {
+  mocks.sentryStatus.mockReset()
+  mocks.sentryStatus.mockResolvedValue({ connected: true })
   mocks.state = {
     settings: {},
     preflightStatus: {
@@ -172,5 +175,27 @@ describe('useTaskSourceProviderReadiness', () => {
 
     await renderProbe(['github', 'linear', 'jira'])
     expect(latest?.jira.visible).toBe(true)
+  })
+
+  it('ignores an older Sentry status response after a refresh', async () => {
+    let resolveFirst: ((value: { connected: boolean }) => void) | undefined
+    mocks.sentryStatus
+      .mockReturnValueOnce(
+        new Promise<{ connected: boolean }>((resolve) => {
+          resolveFirst = resolve
+        })
+      )
+      .mockResolvedValueOnce({ connected: true })
+
+    await renderProbe()
+    await act(async () => {
+      window.dispatchEvent(new Event('sentry-connection-changed'))
+    })
+    expect(latest?.sentry.connected).toBe(true)
+
+    await act(async () => {
+      resolveFirst?.({ connected: false })
+    })
+    expect(latest?.sentry.connected).toBe(true)
   })
 })
