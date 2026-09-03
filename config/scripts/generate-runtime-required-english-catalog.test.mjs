@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 
 import {
   buildRuntimeRequiredCatalog,
+  collectRuntimeRequiredCatalogProblems,
   collectRuntimeRequiredKeys
 } from './generate-runtime-required-english-catalog.mjs'
 
@@ -38,6 +39,50 @@ describe('runtime-required English catalog rule', () => {
 
   it('keeps a plural entry even when a call site spells it identically', () => {
     expect(collectRuntimeRequiredKeys(entries, references).has('count.thing_one')).toBe(true)
+  })
+
+  // The generated file is committed, so a walk-order difference between a
+  // contributor's machine and CI would make the gate flap forever.
+  it('produces byte-identical output whatever order the call sites are visited in', () => {
+    const shuffled = references.toReversed()
+    const forward = JSON.stringify(
+      buildRuntimeRequiredCatalog(entries, collectRuntimeRequiredKeys(entries, references)),
+      null,
+      2
+    )
+    const reversed = JSON.stringify(
+      buildRuntimeRequiredCatalog(entries, collectRuntimeRequiredKeys(entries, shuffled)),
+      null,
+      2
+    )
+
+    expect(reversed).toBe(forward)
+    // Code-unit order, not locale collation: `sort()` must stay locale-free.
+    expect(Object.keys(JSON.parse(forward))).toEqual(['count', 'plain'])
+  })
+
+  it('accepts a subset carrying entries that are no longer required', () => {
+    const required = collectRuntimeRequiredKeys(entries, references)
+    const shipped = new Map([...required].map((key) => [key, entries.get(key)]))
+    shipped.set('plain.match', 'Save')
+
+    const problems = collectRuntimeRequiredCatalogProblems(entries, required, shipped)
+
+    expect(problems.missing).toEqual([])
+    expect(problems.contradicting).toEqual([])
+    expect(problems.superfluous).toEqual(['plain.match'])
+  })
+
+  it('rejects a subset that is missing a required entry or contradicts en.json', () => {
+    const required = collectRuntimeRequiredKeys(entries, references)
+    const shipped = new Map([...required].map((key) => [key, entries.get(key)]))
+    shipped.delete('plain.drift')
+    shipped.set('plain.conflicting', 'Stale text')
+
+    const problems = collectRuntimeRequiredCatalogProblems(entries, required, shipped)
+
+    expect(problems.missing).toEqual(['plain.drift'])
+    expect(problems.contradicting).toEqual(['plain.conflicting'])
   })
 
   it('rebuilds the nested catalog shape with the English values', () => {

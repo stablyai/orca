@@ -2,7 +2,7 @@
 
 import { act, type ReactNode } from 'react'
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store'
 import type { FolderWorkspace } from '../../../../shared/folder-workspace-types'
 import type { LinearIssue } from '../../../../shared/linear/issue-types'
@@ -11,6 +11,7 @@ import type { WorktreeMeta } from '../../../../shared/worktree/meta-types'
 import type { WorktreeMetaUpdateOptions } from '@/store/slices/worktree-helpers'
 import type { Worktree } from '../../../../shared/worktree/types'
 import { folderWorkspaceKey } from '../../../../shared/workspace-scope'
+import { primeEmojiShortcodeCatalog } from '@/lib/emoji-shortcode-catalog-loader'
 
 // Why: Radix tooltips need a provider the dialog does not own, and the menu's
 // portal needs real layout. Stand-ins keep these tests on provider selection.
@@ -208,6 +209,12 @@ function openIssueButton(): HTMLButtonElement {
 }
 
 describe('WorktreeMetaDialog issue link row', () => {
+  // The hook primes this on mount; production users cannot type before it
+  // resolves, but a test can, so await it up front.
+  beforeAll(async () => {
+    await primeEmojiShortcodeCatalog()
+  })
+
   beforeEach(() => {
     useAppStore.setState(initialState, true)
     updateWorktreeMeta.mockReset()

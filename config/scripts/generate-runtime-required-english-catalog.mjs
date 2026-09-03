@@ -116,6 +116,34 @@ async function collectReferences(root) {
   return references
 }
 
+/**
+ * Why not a byte-for-byte comparison: the shipped subset only has to be *safe*,
+ * and safety is "every required entry is present, and nothing it ships
+ * contradicts en.json". An entry that stopped being required is dead weight,
+ * never a wrong string — so an unrelated PR adding an ordinary key never
+ * invalidates every other open branch's copy of this file.
+ */
+export function collectRuntimeRequiredCatalogProblems(catalogEntries, requiredKeys, shipped) {
+  const missing = [...requiredKeys].filter((key) => !shipped.has(key)).sort()
+  const contradicting = [...shipped.keys()]
+    .filter((key) => catalogEntries.get(key) !== shipped.get(key))
+    .sort()
+  const superfluous = [...shipped.keys()].filter(
+    (key) => !requiredKeys.has(key) && catalogEntries.has(key)
+  )
+  return { missing, contradicting, superfluous }
+}
+
+function reportKeys(label, keys) {
+  console.error(`${label}:`)
+  for (const key of keys.slice(0, 20)) {
+    console.error(`  ${key}`)
+  }
+  if (keys.length > 20) {
+    console.error(`  ...and ${keys.length - 20} more`)
+  }
+}
+
 export async function main(root = process.cwd(), argv = process.argv.slice(2)) {
   const fix = argv.includes('--fix')
   const catalogEntries = flattenCatalogEntries(
@@ -123,28 +151,47 @@ export async function main(root = process.cwd(), argv = process.argv.slice(2)) {
   )
   const references = await collectReferences(root)
   const requiredKeys = collectRuntimeRequiredKeys(catalogEntries, references)
-  const expected = `${JSON.stringify(buildRuntimeRequiredCatalog(catalogEntries, requiredKeys), null, 2)}\n`
   const outputPath = path.join(root, RUNTIME_REQUIRED_RELATIVE_PATH)
-  const actual = await fs.readFile(outputPath, 'utf8').catch(() => null)
 
-  if (actual === expected) {
+  if (fix) {
+    const catalog = buildRuntimeRequiredCatalog(catalogEntries, requiredKeys)
+    await fs.writeFile(outputPath, `${JSON.stringify(catalog, null, 2)}\n`, 'utf8')
     console.log(
-      `en-runtime-required.json is current: ${requiredKeys.size} of ${catalogEntries.size} English entries must ship in the boot bundle.`
+      `Wrote ${requiredKeys.size} of ${catalogEntries.size} English entries to en-runtime-required.json.`
     )
     return 0
   }
 
-  if (!fix) {
-    console.error(
-      'src/renderer/src/i18n/en-runtime-required.json is stale (it is generated from en.json plus the inline defaults at each call site).'
-    )
+  const shipped = flattenCatalogEntries(JSON.parse(await fs.readFile(outputPath, 'utf8')))
+  const { missing, contradicting, superfluous } = collectRuntimeRequiredCatalogProblems(
+    catalogEntries,
+    requiredKeys,
+    shipped
+  )
+
+  if (missing.length > 0 || contradicting.length > 0) {
+    console.error('src/renderer/src/i18n/en-runtime-required.json no longer covers en.json.')
+    console.error('')
+    if (missing.length > 0) {
+      reportKeys(
+        'Entries i18next cannot rebuild from a call site default, but that are not shipped',
+        missing
+      )
+    }
+    if (contradicting.length > 0) {
+      reportKeys('Shipped entries whose text disagrees with en.json', contradicting)
+    }
+    console.error('')
     console.error('Run `pnpm run sync:localization-runtime-catalog` to regenerate it.')
     return 1
   }
 
-  await fs.writeFile(outputPath, expected, 'utf8')
+  const superfluousNote =
+    superfluous.length > 0
+      ? `, ${superfluous.length} shipped entry/entries are no longer required (harmless; sync to drop them).`
+      : '.'
   console.log(
-    `Wrote ${requiredKeys.size} of ${catalogEntries.size} English entries to en-runtime-required.json.`
+    `en-runtime-required.json covers en.json: ${requiredKeys.size} of ${catalogEntries.size} English entries must ship in the boot bundle${superfluousNote}`
   )
   return 0
 }

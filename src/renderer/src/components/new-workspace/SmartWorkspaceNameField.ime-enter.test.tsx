@@ -2,9 +2,10 @@
 
 import React, { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store'
 import SmartWorkspaceNameField from './SmartWorkspaceNameField'
+import { primeEmojiShortcodeCatalog } from '@/lib/emoji-shortcode-catalog-loader'
 
 vi.mock('@/store', () => {
   const state = {
@@ -354,6 +355,12 @@ describe('SmartWorkspaceNameField Linear URL loading', () => {
 })
 
 describe('SmartWorkspaceNameField emoji shortcodes', () => {
+  // The hook primes this on mount; production users cannot type before it
+  // resolves, but a test can, so await it up front.
+  beforeAll(async () => {
+    await primeEmojiShortcodeCatalog()
+  })
+
   it('replaces a completed shortcode as it is typed', () => {
     const onValueChange = vi.fn()
     const input = renderEmojiField('Launch ', onValueChange)
