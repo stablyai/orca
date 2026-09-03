@@ -1,0 +1,25 @@
+(** Fixture for the MLX grammar: OCaml with JSX expressions. Every construct
+    here is one a plain OCaml grammar reads as comparison operators. *)
+
+let greeting = "hello"
+
+let plain () = <div className="card">{React.string greeting}</div>
+
+let capitalised () = <Button onClick={fun _ -> print_endline "hi"} disabled=true />
+
+let self_closing () = <br />
+
+let nested () =
+  <ul className="list">
+    <li key="a">{React.string "first"}</li>
+    <li key="b">{React.string "second"}</li>
+  </ul>
+
+let punned ~value () = <input value />
+
+let spread props () = <Foo.Bar {...props} />
+
+(* A real comparison must stay an operator, not open a tag. *)
+let compared a b = a < b && b > a
+
+let after_jsx = 1

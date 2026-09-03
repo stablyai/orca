@@ -1,5 +1,6 @@
 import {
   FileBox,
+  FileCode,
   FileCog,
   FileJson,
   FileKey,
@@ -23,6 +24,9 @@ export const FILE_ICON_BY_NAME: Record<string, LucideIcon> = {
   '.gitattributes': FileSliders,
   '.gitignore': FileSliders,
   '.npmrc': FileSliders,
+  // Why: an OCaml toplevel script, not config — extension lookup misses it
+  // because the name is all-suffix.
+  '.ocamlinit': FileCode,
   '.prettierrc': FileSliders,
   '.prettierrc.json': FileJson,
   '.prettierrc.yaml': FileSliders,
