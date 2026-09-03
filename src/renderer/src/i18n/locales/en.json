@@ -9485,6 +9485,12 @@
             "005be5c699": "Wrap long lines in file editors instead of requiring horizontal scrolling.",
             "editorFontFamily": "Editor Font Family",
             "editorFontFamilyDesc": "Font used by file editors and diff views. Leave empty to follow the terminal font.",
+            "defaultEditor": "Default Editor",
+            "defaultEditorDesc": "Editor used when opening files: Orca built-in, system default, or a custom command in a terminal.",
+            "defaultEditorExternal": "external",
+            "defaultEditorTerminal": "terminal",
+            "defaultEditorHelix": "helix",
+            "defaultEditorVim": "vim",
             "externalWorktrees": "External worktrees",
             "externalWorktreesDescription": "Choose whether worktrees created outside Orca appear by default."
           }
@@ -11371,6 +11377,15 @@
           "devChannelUnsupported": "{{value0}} builds are produced only for {{value1}}. Linux stays on Stable or RC.",
           "downloadInstaller": "Download installer",
           "manualInstallHint": "{{value0}} builds are unsigned on Windows, so the in-app updater cannot install one over a signed build. Run the downloaded installer once — Windows will warn about an unknown publisher — and every later switch, including back to Stable, works from here."
+        },
+        "DefaultEditorSetting": {
+          "title": "Default Editor",
+          "description": "Which editor opens files when you open them from the file tree, search, terminal links, or quick open.",
+          "builtin": "Orca built-in",
+          "system": "System default",
+          "custom": "Custom command",
+          "commandPlaceholder": "helix, vim, code -r, …",
+          "commandHint": "Runs in a new terminal tab with the file path appended."
         },
         "VoiceMicrophoneSetting": {
           "systemDefault": "System default",

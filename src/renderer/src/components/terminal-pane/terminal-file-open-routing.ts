@@ -2,6 +2,7 @@ import { absolutePathToFileUri } from '@/components/editor/markdown-internal-lin
 import { getWorkspaceFilePreviewPlan, openFileInBrowserTab } from '@/lib/file-preview'
 import { downloadAndOpenRemoteTerminalFile } from './terminal-remote-file-download-open'
 import { detectLanguage } from '@/lib/language-detect'
+import { routeFileOpenToDefaultEditor } from '@/lib/default-editor-routing'
 import { findWorkspaceFileRoute } from '@/lib/runtime-workspace-file-route'
 import { isPathInsideWorktree, toWorktreeRelativePath } from '@/lib/terminal-links'
 import {
@@ -250,6 +251,24 @@ export function openDetectedFilePath(
         providesInitialSurface: true,
         ...(targetExecutionHostId ? { executionHostId: targetExecutionHostId } : {})
       })
+    }
+
+    // Why: Shift+Cmd/Ctrl keeps its explicit system-default escape hatch; plain
+    // clicks honor the Default Editor setting instead.
+    if (!openWithSystemDefault) {
+      const routing = await routeFileOpenToDefaultEditor({
+        filePath: mappedFilePath,
+        worktreeId: worktreeId || '',
+        worktreePath,
+        runtimeEnvironmentId,
+        connectionId: fileContext.connectionId ?? null
+      })
+      if (requestId !== latestOpenDetectedFilePathRequestId) {
+        return
+      }
+      if (routing !== 'builtin' && routing !== 'remote') {
+        return
+      }
     }
 
     const language = detectLanguage(mappedFilePath)

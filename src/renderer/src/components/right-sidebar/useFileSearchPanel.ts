@@ -227,7 +227,7 @@ export function useFileSearchPanel(explorerView: 'files' | 'search'): FileSearch
 
   const handleMatchClick = useCallback(
     (fileResult: SearchFileResult, match: SearchMatch) => {
-      openMatchResult({
+      void openMatchResult({
         resultOwner: deferredSearchResults.owner,
         fileResult,
         match,
