@@ -30,9 +30,7 @@ vi.mock('../git/repo', () => ({
   isGitRepo: vi.fn().mockReturnValue(true),
   getRepoName: vi.fn().mockImplementation((path: string) => path.split('/').pop()),
   getBaseRefDefault: vi.fn().mockResolvedValue('origin/main'),
-  searchBaseRefs: vi.fn().mockResolvedValue([]),
-  BASE_REF_SEARCH_ARGS: ['for-each-ref'],
-  filterBaseRefSearchOutput: vi.fn().mockReturnValue([])
+  searchBaseRefs: vi.fn().mockResolvedValue([])
 }))
 
 vi.mock('./registered-worktree-roots-cache', () => ({ invalidateAuthorizedRootsCache: vi.fn() }))

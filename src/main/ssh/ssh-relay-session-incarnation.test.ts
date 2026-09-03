@@ -76,8 +76,7 @@ vi.mock('../ipc/pty', () => ({
   deletePtyOwnership: vi.fn(),
   setPtyOwnership: vi.fn(),
   restorePtyIncarnation: vi.fn(),
-  isCurrentPtyExit: vi.fn(() => true),
-  answerStartupTerminalColorQueriesForPty: vi.fn((_id: string, data: string) => data)
+  isCurrentPtyExit: vi.fn(() => true)
 }))
 vi.mock('../providers/ssh-filesystem-dispatch', () => ({
   registerSshFilesystemProvider: vi.fn(),

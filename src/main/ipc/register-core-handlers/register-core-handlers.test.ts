@@ -140,7 +140,7 @@ vi.mock('electron', () => ({
   }
 }))
 
-vi.mock('../../shared/runtime-environment-store', () => ({
+vi.mock('../../../shared/runtime-environment-store', () => ({
   listEnvironments: listEnvironmentsMock
 }))
 
