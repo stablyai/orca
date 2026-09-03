@@ -909,19 +909,13 @@ html.native-shell .app-layout {
   user-select: none;
 }
 
-[data-terminal-focus-release-surface='true'] {
+/* Why: the tab strips sit where a native titlebar would be, so they carry the
+   window drag region. Never gate this on renderer state: Electron hit-tests
+   app-region at mousedown, so a surface that is no-drag when the press lands
+   swallows that press into the renderer instead of moving the window. */
+[data-window-drag-strip='true'] {
   -webkit-app-region: drag;
-}
-
-/* Why: Electron drag regions swallow renderer pointer events. While regular
-   xterm owns focus, make the next top-chrome click observable so it can release
-   terminal zoom ownership; after release these surfaces become draggable again. */
-:root[data-regular-terminal-input-focused] .titlebar,
-:root[data-regular-terminal-input-focused] .titlebar-left,
-:root[data-regular-terminal-input-focused] .window-controls-titlebar-spacer,
-:root[data-regular-terminal-input-focused] .right-sidebar-header-drag,
-:root[data-regular-terminal-input-focused] [data-terminal-focus-release-surface='true'] {
-  -webkit-app-region: no-drag;
+  user-select: none;
 }
 
 .right-sidebar-header-no-drag {
