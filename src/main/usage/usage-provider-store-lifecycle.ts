@@ -24,7 +24,9 @@ type UsageProviderStoreState<SourceKey extends string> = {
 type UsageProviderScanProjection<
   SourceKey extends string,
   State extends UsageProviderStoreState<SourceKey>
-> = Pick<State, SourceKey | 'sessions' | 'dailyAggregates'>
+> = Pick<State, SourceKey | 'sessions' | 'dailyAggregates'> & {
+  sourceProjectionChanged?: boolean
+}
 
 type UsageProviderStoreLifecycleConfig<
   SourceKey extends string,
@@ -129,6 +131,7 @@ export abstract class UsageProviderStoreLifecycle<
       return
     }
 
+    const previousScanError = this.state.scanState.lastScanError
     this.state.scanState.lastScanStartedAt = Date.now()
     this.state.scanState.lastScanError = null
 
@@ -138,20 +141,27 @@ export abstract class UsageProviderStoreLifecycle<
         const repos = this.store.getRepos()
         const worktreesByRepo = loadKnownUsageWorktreesByRepo(this.store, repos)
         const worktreeFingerprint = getUsageWorktreeFingerprint(worktreesByRepo)
+        const previousWorktreeFingerprint = this.state.worktreeFingerprint
         const result = await this.config.scan(
           createWorktreeRefs(repos, worktreesByRepo),
           this.state.worktreeFingerprint === worktreeFingerprint
             ? this.state[this.config.sourceKey]
             : this.config.createDefaultState()[this.config.sourceKey]
         )
-        this.state[this.config.sourceKey] = result[this.config.sourceKey]
+        this.state[this.config.sourceKey] = result[this.config.sourceKey] as State[SourceKey]
         this.state.sessions = result.sessions
         this.state.dailyAggregates = result.dailyAggregates
         this.state.worktreeFingerprint = worktreeFingerprint
         this.state.scanState.lastScanCompletedAt = Date.now()
         this.state.scanState.lastScanError = null
         // Persistence failures do not turn a successful source scan into a scan failure.
-        await this.writeToDisk().catch(() => {})
+        if (
+          result.sourceProjectionChanged !== false ||
+          previousWorktreeFingerprint !== worktreeFingerprint ||
+          previousScanError !== null
+        ) {
+          await this.writeToDisk().catch(() => {})
+        }
       } catch (error) {
         this.state.scanState.lastScanError = error instanceof Error ? error.message : String(error)
         await this.writeToDisk().catch(() => {})

@@ -30,7 +30,8 @@ function createEmptyScanResult() {
   return {
     processedDatabases: [],
     sessions: [],
-    dailyAggregates: []
+    dailyAggregates: [],
+    sourceProjectionChanged: false
   }
 }
 

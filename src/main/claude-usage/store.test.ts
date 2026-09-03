@@ -62,7 +62,8 @@ describe('ClaudeUsageStore', () => {
     vi.mocked(scanClaudeUsageFiles).mockResolvedValue({
       processedFiles: [],
       sessions: [],
-      dailyAggregates: []
+      dailyAggregates: [],
+      sourceProjectionChanged: false
     })
     vi.useFakeTimers()
     vi.setSystemTime(new Date('2026-04-09T12:00:00.000-04:00'))

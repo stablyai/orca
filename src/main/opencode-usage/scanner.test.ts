@@ -463,11 +463,13 @@ describe('scanOpenCodeUsageDatabases', () => {
     ])
 
     const first = await scanOpenCodeUsageDatabases([], [])
+    expect(first.sourceProjectionChanged).toBe(true)
     expect(
       first.dailyAggregates.reduce((total, aggregate) => total + aggregate.inputTokens, 0)
     ).toBe(1050)
 
     const second = await scanOpenCodeUsageDatabases([], first.processedDatabases)
+    expect(second.sourceProjectionChanged).toBe(false)
     expect(
       second.dailyAggregates.reduce((total, aggregate) => total + aggregate.inputTokens, 0)
     ).toBe(1050)
@@ -479,6 +481,7 @@ describe('scanOpenCodeUsageDatabases', () => {
     db.close()
 
     const third = await scanOpenCodeUsageDatabases([], second.processedDatabases)
+    expect(third.sourceProjectionChanged).toBe(true)
     expect(
       third.dailyAggregates.reduce((total, aggregate) => total + aggregate.inputTokens, 0)
     ).toBe(1250)

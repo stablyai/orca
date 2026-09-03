@@ -52,7 +52,9 @@ type TestState = {
   dailyAggregates: TestDailyAggregate[]
   scanState: TestScanState
 }
-type TestScanResult = Pick<TestState, 'processedSources' | 'sessions' | 'dailyAggregates'>
+type TestScanResult = Pick<TestState, 'processedSources' | 'sessions' | 'dailyAggregates'> & {
+  sourceProjectionChanged?: boolean
+}
 type TestScan = (
   worktrees: UsageScanWorktreeRef[],
   previous: TestSource[]
@@ -231,6 +233,34 @@ describe('UsageProviderStoreLifecycle', () => {
     })
     expect(writeProbe.opens).toBe(1)
     expect(store.getState().processedSources).toEqual([{ id: 'source' }])
+  })
+
+  it('does not rewrite the cache when every source projection is unchanged', async () => {
+    const source = { id: 'source' }
+    const store = createStore()
+    store.replaceState(
+      makeState({
+        worktreeFingerprint: EMPTY_WORKTREE_FINGERPRINT,
+        processedSources: [source],
+        sessions: [{ id: 'session' }],
+        scanState: { enabled: true, lastScanCompletedAt: NOW - 10 * 60_000 }
+      })
+    )
+    scan.mockResolvedValueOnce({
+      processedSources: [source],
+      sessions: [{ id: 'session' }],
+      dailyAggregates: [],
+      sourceProjectionChanged: false
+    })
+
+    await store.refresh()
+
+    expect(store.getScanState()).toMatchObject({
+      lastScanCompletedAt: NOW,
+      lastScanError: null
+    })
+    expect(writeProbe.opens).toBe(0)
+    expect(writeProbe.renames).toBe(0)
   })
 
   it('vetoes a superseded generation before rename', async () => {

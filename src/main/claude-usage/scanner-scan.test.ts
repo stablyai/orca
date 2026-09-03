@@ -338,6 +338,7 @@ describe('scanClaudeUsageFiles', () => {
     const { scanClaudeUsageFiles } = await import('./scanner')
 
     const first = await scanClaudeUsageFiles([])
+    expect(first.sourceProjectionChanged).toBe(true)
     expect(first.processedFiles[0]?.ownedDedupeKeys).toEqual(['msg_1:req_1'])
 
     // A fork appears later while the original stays unchanged (cache reuse).
@@ -347,6 +348,7 @@ describe('scanClaudeUsageFiles', () => {
     )
 
     const second = await scanClaudeUsageFiles([], first.processedFiles)
+    expect(second.sourceProjectionChanged).toBe(true)
     const totalInput = second.dailyAggregates.reduce(
       (sum, aggregate) => sum + aggregate.inputTokens,
       0
@@ -360,6 +362,7 @@ describe('scanClaudeUsageFiles', () => {
 
     // Rescanning with the full cache stays stable.
     const third = await scanClaudeUsageFiles([], second.processedFiles)
+    expect(third.sourceProjectionChanged).toBe(false)
     expect(third.dailyAggregates.reduce((sum, aggregate) => sum + aggregate.inputTokens, 0)).toBe(
       150
     )
