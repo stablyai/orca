@@ -2,8 +2,21 @@ import type { TerminalExitCause } from '../../shared/terminal-exit-cause'
 
 import type { JobTerminationOutcome } from '../windows/windows-pty-job'
 
+/**
+ * Spawn-captured tree-kill identity. The Windows root creation time anchors
+ * the identity probe against PID recycling (#10680); the WSL guest marker
+ * names this session's guest tree inside the distro, where the Windows job
+ * cannot reach. Fields are absent where never captured.
+ */
+export type SpawnTreeIdentity = {
+  rootCreationTimeMs?: number
+  ptyTreeId?: string
+}
+
 export type SubprocessHandle = {
   pid: number
+  /** Spawn-captured tree-kill identity; undefined where never captured. */
+  spawnIdentity?: SpawnTreeIdentity
   /** Live foreground process name of the PTY (node-pty's `.process`), e.g.
    *  'claude' / 'codex' / 'zsh'. Null once the child has exited. */
   getForegroundProcess(): string | null

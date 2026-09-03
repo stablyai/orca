@@ -5,7 +5,12 @@ import {
   SETUP_AGENT_SEQUENCE_STARTUP_COMMAND_ENV,
   SETUP_AGENT_SEQUENCE_STARTUP_SCRIPT_ENV
 } from '../../shared/setup-agent-sequencing'
-import { addOrcaWslInteropEnv, stampWslOrchestrationCompatibilityHost } from './wsl-orca-env'
+import {
+  addOrcaWslInteropEnv,
+  ORCA_PTY_TREE_ID_ENV,
+  stampPtyTreeIdMarker,
+  stampWslOrchestrationCompatibilityHost
+} from './wsl-orca-env'
 
 describe('addOrcaWslInteropEnv', () => {
   it('marks the Orca terminal handle for Windows to WSL env import', () => {
@@ -243,5 +248,32 @@ describe('addOrcaWslInteropEnv', () => {
     addOrcaWslInteropEnv(env)
     expect(env.WSLENV).not.toContain('OPENCODE_CONFIG_DIR')
     expect(env.WSLENV).not.toContain('ORCA_OPENCODE_CONFIG_DIR')
+  })
+})
+
+describe('stampPtyTreeIdMarker', () => {
+  it('stamps a usable session id for the guest tree kill', () => {
+    const env: Record<string, string> = {}
+    expect(stampPtyTreeIdMarker(env, 'repo::C:\\work@@a1b2c3d4')).toBe(true)
+    expect(env[ORCA_PTY_TREE_ID_ENV]).toBe('repo::C:\\work@@a1b2c3d4')
+  })
+
+  it.each([[undefined], [''], ['sess\n@@evil'], ['sess\r@@evil'], ['x'.repeat(513)]])(
+    'skips the unusable marker %p',
+    (sessionId) => {
+      const env: Record<string, string> = {}
+      expect(stampPtyTreeIdMarker(env, sessionId as string)).toBe(false)
+      expect(env[ORCA_PTY_TREE_ID_ENV]).toBeUndefined()
+    }
+  )
+
+  it('registers the marker for WSLENV import only when stamped', () => {
+    const stamped: Record<string, string> = { [ORCA_PTY_TREE_ID_ENV]: 'sess@@a1b2c3d4' }
+    addOrcaWslInteropEnv(stamped)
+    expect(stamped.WSLENV?.split(':')).toContain(`${ORCA_PTY_TREE_ID_ENV}/u`)
+
+    const bare: Record<string, string> = { ORCA_TERMINAL_HANDLE: 'term_wsl' }
+    addOrcaWslInteropEnv(bare)
+    expect(bare.WSLENV).not.toContain(ORCA_PTY_TREE_ID_ENV)
   })
 })

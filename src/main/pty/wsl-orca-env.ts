@@ -12,6 +12,44 @@ import { getShellReadyWrapperRoot } from '../providers/local-pty-shell-ready-wra
 
 const WSLENV_ENTRY_SEPARATOR = ':'
 
+/**
+ * Guest-side tree marker: stamped on every WSL session spawn and inherited
+ * by all guest descendants. Daemon shutdown kills the marked guest tree
+ * from inside the distro, which the Windows job object cannot reach.
+ */
+export const ORCA_PTY_TREE_ID_ENV = 'ORCA_PTY_TREE_ID'
+
+/**
+ * Whether a tree marker survives the guest-side fixed-string match. Control
+ * characters would split the environ line the killer greps for, so they
+ * disqualify the marker and callers degrade to Windows-side cleanup alone.
+ */
+export function isUsablePtyTreeMarker(value: string | undefined): value is string {
+  if (!value || value.length === 0 || value.length > 512) {
+    return false
+  }
+  // Why includes, not a character-class regex: control characters are
+  // exactly what no-control-regex forbids matching, and only these three
+  // can split the environ line the guest killer greps for.
+  return !value.includes('\0') && !value.includes('\n') && !value.includes('\r')
+}
+
+/**
+ * Stamp the guest tree marker for a WSL spawn. False (marker skipped) when
+ * the id is missing or unusable — callers then degrade to Windows-side
+ * cleanup alone. Session ids are renderer-influenced, so validate here.
+ */
+export function stampPtyTreeIdMarker(
+  env: Record<string, string>,
+  sessionId: string | undefined
+): boolean {
+  if (!isUsablePtyTreeMarker(sessionId)) {
+    return false
+  }
+  env[ORCA_PTY_TREE_ID_ENV] = sessionId
+  return true
+}
+
 function parseWslenvEntries(value: string | undefined): string[] {
   return value ? value.split(WSLENV_ENTRY_SEPARATOR).filter(Boolean) : []
 }
@@ -72,6 +110,9 @@ export function addOrcaWslInteropEnv(env: Record<string, string>): void {
   // Why: wsl.exe only imports selected Windows env vars, so WSL needs the wrapper root, pane identity, and hook/OMP coordinates at start.
   const passthroughEntries = [
     'ORCA_TERMINAL_HANDLE/u',
+    // Why /u: the marker is an opaque id, never a path; the guest killer
+    // matches it byte-for-byte, so translation would corrupt it.
+    `${ORCA_PTY_TREE_ID_ENV}/u`,
     'ORCA_USER_DATA_PATH/p',
     // Why /p: the guest reads the content-addressed wrapper tree through /mnt/c,
     // and it cannot derive the hash segment from ORCA_USER_DATA_PATH alone.

@@ -7,6 +7,11 @@ vi.mock('../pty-descendant-termination', () => ({
   killWithDescendantSweep: killWithDescendantSweepMock
 }))
 
+const runWslGuestTreeKillMock = vi.hoisted(() => vi.fn())
+vi.mock('./wsl-guest-tree-kill', () => ({
+  runWslGuestTreeKill: runWslGuestTreeKillMock
+}))
+
 function createMockAgentSubprocess(): SubprocessHandle & { exit: (code: number) => void } {
   let onExit: ((code: number) => void) | undefined
   return {
@@ -25,6 +30,26 @@ function createMockAgentSubprocess(): SubprocessHandle & { exit: (code: number) 
     }),
     dispose: vi.fn()
   } as unknown as SubprocessHandle & { exit: (code: number) => void }
+}
+
+function sweepDeps(): {
+  ownsRoot?: unknown
+  awaitEscalation?: unknown
+  sweepTimeoutMs?: unknown
+  expectedRootCreationTimeMs?: unknown
+} {
+  // Why last call, not first: this file issues one sweep per test without a
+  // mock reset, so calls[0] belongs to an earlier test.
+  const lastCall = killWithDescendantSweepMock.mock.calls.at(-1)
+  if (!lastCall) {
+    throw new Error('expected a sweep call')
+  }
+  return lastCall[2] as {
+    ownsRoot?: unknown
+    awaitEscalation?: unknown
+    sweepTimeoutMs?: unknown
+    expectedRootCreationTimeMs?: unknown
+  }
 }
 
 describe('TerminalHost dispose agent descendant sweep', () => {
@@ -114,5 +139,87 @@ describe('TerminalHost dispose agent descendant sweep', () => {
     // with a second, redundant force-kill after the sweep settles.
     expect(subprocess.forceKill).toHaveBeenCalledOnce()
     expect(subprocess.dispose).toHaveBeenCalledOnce()
+  })
+
+  it('bounds the shutdown sweep and anchors it to the spawn-captured root', async () => {
+    const subprocess = createMockAgentSubprocess()
+    subprocess.spawnIdentity = { rootCreationTimeMs: 777 }
+    const host = new TerminalHost({ spawnSubprocess: () => subprocess })
+    await host.createOrAttach({
+      sessionId: 'agent-1',
+      cols: 80,
+      rows: 24,
+      launchAgent: 'claude',
+      streamClient: { onData: vi.fn(), onExit: vi.fn() }
+    })
+
+    killWithDescendantSweepMock.mockImplementationOnce(async (_pid, killRoot) => {
+      killRoot()
+    })
+    await host.dispose()
+
+    // The daemon race cuts escalation, never the kill: the sweep carries an
+    // explicit budget, and the Windows probe checks the root's creation
+    // time so a recycled PID cannot read as ours (#10680).
+    expect(sweepDeps().sweepTimeoutMs).toBeTypeOf('number')
+    expect(sweepDeps().expectedRootCreationTimeMs).toBe(777)
+  })
+
+  it('cleans the WSL guest tree alongside the Windows-side sweep', async () => {
+    const platformDescriptor = Object.getOwnPropertyDescriptor(process, 'platform')
+    Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
+    try {
+      const subprocess = createMockAgentSubprocess()
+      subprocess.spawnIdentity = { ptyTreeId: 'sess@@abc123' }
+      const host = new TerminalHost({ spawnSubprocess: () => subprocess })
+      await host.createOrAttach({
+        sessionId: 'agent-1',
+        cols: 80,
+        rows: 24,
+        launchAgent: 'claude',
+        shellOverride: 'wsl.exe',
+        terminalWindowsWslDistro: 'Ubuntu',
+        streamClient: { onData: vi.fn(), onExit: vi.fn() }
+      })
+
+      killWithDescendantSweepMock.mockImplementationOnce(async (_pid, killRoot) => {
+        killRoot()
+      })
+      runWslGuestTreeKillMock.mockResolvedValue(undefined)
+      await host.dispose()
+
+      // The job/verify path cannot reach the WSL2 VM, so the guest tree is
+      // named by its spawn marker and killed from inside the distro while
+      // the Windows-side sweep tears down wsl.exe itself.
+      expect(runWslGuestTreeKillMock).toHaveBeenCalledWith({
+        distro: 'Ubuntu',
+        treeId: 'sess@@abc123'
+      })
+      expect(killWithDescendantSweepMock).toHaveBeenCalled()
+    } finally {
+      if (platformDescriptor) {
+        Object.defineProperty(process, 'platform', platformDescriptor)
+      }
+    }
+  })
+
+  it('skips the guest kill for non-WSL agent sessions', async () => {
+    const subprocess = createMockAgentSubprocess()
+    const host = new TerminalHost({ spawnSubprocess: () => subprocess })
+    await host.createOrAttach({
+      sessionId: 'agent-1',
+      cols: 80,
+      rows: 24,
+      launchAgent: 'claude',
+      streamClient: { onData: vi.fn(), onExit: vi.fn() }
+    })
+
+    runWslGuestTreeKillMock.mockClear()
+    killWithDescendantSweepMock.mockImplementationOnce(async (_pid, killRoot) => {
+      killRoot()
+    })
+    await host.dispose()
+
+    expect(runWslGuestTreeKillMock).not.toHaveBeenCalled()
   })
 })

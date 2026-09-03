@@ -1,10 +1,8 @@
 import { execFile } from 'node:child_process'
-import type { JobTerminationOutcome } from './windows/windows-pty-job'
-import { terminateWindowsProcessTree, type WindowsTreeKiller } from './windows-process-tree-kill'
 import {
-  verifyWindowsTreeKillTarget,
-  type WindowsTreeKillTarget
-} from './windows-pty-root-identity'
+  runWindowsSweepWithDeadline,
+  type WindowsSweepDeps
+} from './pty-descendant-sweep-budget'
 
 export const DESCENDANT_KILL_GRACE_MS = 2_000
 export const DESCENDANT_SNAPSHOT_TIMEOUT_MS = 1_000
@@ -233,37 +231,19 @@ export async function captureDescendantSnapshot(
   return collectDescendantRows(rootPid, capture.rows, capture.capturedAtMs)
 }
 
-type KillSweepDeps = SnapshotDeps &
-  TerminateDeps & {
-    ownsRoot?: () => boolean
-    /**
-     * Terminate the PTY's job object. Returns `unavailable` when this tree has
-     * no job, which is not permission to assume it is gone.
-     */
-    terminateOwnedTree?: () => JobTerminationOutcome
-    /** Injectable Windows tree killer (defaults to taskkill /T /F). */
-    killWindowsTree?: WindowsTreeKiller
-    /** Injectable Windows root-identity probe (defaults to a live process query). */
-    verifyTreeKillTarget?: (rootPid: number) => Promise<WindowsTreeKillTarget>
-  }
+type KillSweepDeps = SnapshotDeps & TerminateDeps & WindowsSweepDeps
 
 /**
  * Standard agent-session kill sequencing.
  * - POSIX: snapshot the descendant tree, signal members, then killRoot.
- * - Windows: terminate the PTY's job object, which is exact and needs no
- *   identity probe. Only when this build has no job does it fall back to the
- *   old scheme — a process-table scrape gating `taskkill /T /F` on a
- *   parent-pid walk, which refuses whenever it cannot prove ownership and so
- *   leaves the tree running (#9045, #10475).
+ * - Windows: see runWindowsSweepWithDeadline — the PTY's job object first
+ *   (exact, no probe), else the identity-gated `taskkill /T /F` fallback.
  * Callers must not signal the root before this runs on POSIX — a dead root's
  * descendants reparent to pid 1 and become unfindable. Snapshot failure
  * degrades to killRoot alone on POSIX. killRoot always runs right after the
  * SIGTERM sweep (POSIX) or the identity probe (Windows/WSL fallback),
  * regardless of `awaitEscalation` — only the promise this function returns,
- * not killRoot's own timing, is delayed by it. On Windows this also means
- * killRoot never waits on `taskkill /T /F` itself, which carries its own
- * multi-second timeout that stacked behind the identity probe could exceed
- * a caller's shutdown budget and skip the native force-kill entirely.
+ * not killRoot's own timing, is delayed by it.
  */
 export async function killWithDescendantSweep(
   rootPid: number,
@@ -272,41 +252,11 @@ export async function killWithDescendantSweep(
 ): Promise<void> {
   const platform = deps.platform ?? process.platform
   if (platform === 'win32') {
-    let treeKillEscalation: Promise<void> = Promise.resolve()
-    try {
-      if ((deps.ownsRoot?.() ?? true) && Number.isInteger(rootPid) && rootPid > 0) {
-        // Why first: the job names the tree Orca created, so it is immune to the
-        // pid recycling the probe below exists to guard against, and it reaches
-        // descendants that reparented away from the shell.
-        if (deps.terminateOwnedTree?.() === 'terminated') {
-          return
-        }
-        // Why: ownsRoot() is JS state only, and node-pty's ConPTY exit watcher closes
-        // the last shell handle before it queues the JS exit callback — Windows may
-        // already have recycled this PID while the map still looks live. taskkill /T /F
-        // on a recycled PID force-kills an unrelated tree, so demand OS identity first.
-        // This also covers the WSL fallback (a wsl.exe root's job never reaches guest
-        // processes, so terminateOwnedTree reports `unavailable` and lands here too).
-        const verify = deps.verifyTreeKillTarget ?? verifyWindowsTreeKillTarget
-        const target = await verify(rootPid).catch((): WindowsTreeKillTarget => 'unknown')
-        // Re-check ownership: the identity query awaits, so exit can land meanwhile.
-        if (target === 'own' && (deps.ownsRoot?.() ?? true)) {
-          const killTree = deps.killWindowsTree ?? terminateWindowsProcessTree
-          // Why not awaited here: taskkill's own WINDOWS_PROCESS_TREE_KILL_TIMEOUT_MS
-          // stacked behind WINDOWS_ROOT_IDENTITY_TIMEOUT_MS above can exceed the
-          // daemon's SHUTDOWN_TIMEOUT_MS, which let killRoot get skipped entirely
-          // when the outer shutdown race gave up first. Run it as a bounded
-          // escalation instead, exactly like the POSIX SIGKILL sweep below, so
-          // killRoot always fires on schedule and this only delays an opt-in await.
-          treeKillEscalation = killTree(rootPid).catch(() => {})
-        }
-      }
-    } finally {
-      killRoot()
-    }
-    if (deps.awaitEscalation) {
-      await treeKillEscalation
-    }
+    // Why dispatched out: the Windows fallback carries probe scaling, an
+    // escalation race, and a killRoot deadline that do not fit this module's
+    // line budget. POSIX needs none of that — its snapshot, grace window,
+    // and re-read are already constant-bounded.
+    await runWindowsSweepWithDeadline(rootPid, killRoot, deps)
     return
   }
 

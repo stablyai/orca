@@ -1,6 +1,32 @@
 import { killWithDescendantSweep } from '../pty-descendant-termination'
 import type { Session } from './session'
 import type { TakePendingOutputResult, TerminalSnapshot } from './types'
+import { runWslGuestTreeKill } from './wsl-guest-tree-kill'
+
+/**
+ * Bound for one session's descendant sweep at daemon shutdown. Fits inside
+ * daemon-entry's SHUTDOWN_TIMEOUT_MS with headroom for checkpoints: the
+ * sweep's killRoot fires by this deadline and only the escalation wait is
+ * cut, never the kill itself.
+ */
+const DAEMON_SWEEP_TIMEOUT_MS = 4_000
+
+/**
+ * Guest-side tree kill for a WSL agent session. Null when there is no guest
+ * tree to name (non-WSL, or spawned before the marker existed) — the
+ * Windows-side sweep then runs alone, as before.
+ */
+function startWslGuestTreeKill(session: Session): Promise<void> | null {
+  if (process.platform !== 'win32') {
+    return null
+  }
+  const { wslDistro } = session
+  const ptyTreeId = session.spawnIdentity?.ptyTreeId
+  if (!wslDistro || !ptyTreeId) {
+    return null
+  }
+  return runWslGuestTreeKill({ distro: wslDistro, treeId: ptyTreeId })
+}
 
 function checkpointTerminalHostSessions(
   sessions: ReadonlyMap<string, Session>,
@@ -52,11 +78,11 @@ async function disposeTerminalHostSessions(sessions: Iterable<Session>): Promise
         // function's own return: the daemon process exits right after
         // shutdown resolves, which would otherwise drop the grace-window
         // SIGKILL escalation's unref'd timer mid-flight and leave
-        // SIGTERM-ignoring children alive (bounded to ~DESCENDANT_KILL_GRACE_MS
-        // + DESCENDANT_SNAPSHOT_TIMEOUT_MS, well inside daemon-entry's
-        // SHUTDOWN_TIMEOUT_MS).
+        // SIGTERM-ignoring children alive. The sweep below carries an
+        // explicit DAEMON_SWEEP_TIMEOUT_MS bound, so the wait cannot exceed
+        // the daemon's shutdown budget either.
         let forceKillPromise: Promise<void> = Promise.resolve()
-        await killWithDescendantSweep(
+        const sweepSettled = killWithDescendantSweep(
           session.pid,
           () => {
             forceKillPromise = session.forceKillAndDisposeSubprocess()
@@ -68,9 +94,17 @@ async function disposeTerminalHostSessions(sessions: Iterable<Session>): Promise
           {
             ownsRoot: () => session.isAlive,
             terminateOwnedTree: () => session.terminateOwnedTree(),
+            expectedRootCreationTimeMs: session.spawnIdentity?.rootCreationTimeMs,
+            sweepTimeoutMs: DAEMON_SWEEP_TIMEOUT_MS,
             awaitEscalation: true
           }
         )
+        // Why concurrent, not sequential: the guest kill uses a fresh wsl.exe
+        // client, so the Windows-side sweep tearing down this session's own
+        // wsl.exe cannot disturb it — and sequential timeouts would stack
+        // past the daemon's shutdown budget. Both sides are bounded, so the
+        // slower one, not the sum, decides the cost.
+        await Promise.all([sweepSettled, startWslGuestTreeKill(session)])
         await forceKillPromise
         return
       }
