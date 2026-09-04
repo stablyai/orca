@@ -1,4 +1,10 @@
 import AsyncStorage from '@react-native-async-storage/async-storage'
+import {
+  MOBILE_PUSH_AGENT_STATES,
+  MOBILE_PUSH_SOURCES,
+  type MobilePushAgentState,
+  type MobilePushFilter
+} from '../../../src/shared/mobile-push-contract'
 
 const PINS_PREFIX = 'orca:pins:'
 const NOTIF_KEY = 'orca:pushNotificationsEnabled'
@@ -28,6 +34,93 @@ export async function loadPushNotificationsEnabled(): Promise<boolean> {
 
 export async function savePushNotificationsEnabled(enabled: boolean): Promise<void> {
   await AsyncStorage.setItem(NOTIF_KEY, String(enabled))
+}
+
+// Why a second key rather than reusing NOTIF_KEY: that one gates local banners
+// scheduled from the live socket, which work with Orca open and share no token
+// with anyone. Background push hands a native token to Apple/Google and needs
+// its own explicit, default-off consent.
+const REMOTE_PUSH_KEY = 'orca:remotePushEnabled'
+const REMOTE_PUSH_AGENT_STATES_KEY = 'orca:remotePushAgentStates'
+const REMOTE_PUSH_HOST_REGISTRATIONS_KEY = 'orca:remotePushHostRegistrations'
+
+// Aliased from the shared contract rather than restated: the host validates what the
+// phone sends against those exact members. `sources` is fixed here — the two
+// sub-switches only ever narrow agentStates.
+export type RemotePushAgentState = MobilePushAgentState
+export type RemotePushFilter = MobilePushFilter
+
+export async function loadRemotePushEnabled(): Promise<boolean> {
+  try {
+    return (await AsyncStorage.getItem(REMOTE_PUSH_KEY)) === 'true'
+  } catch {
+    return false
+  }
+}
+
+export async function saveRemotePushEnabled(enabled: boolean): Promise<void> {
+  await AsyncStorage.setItem(REMOTE_PUSH_KEY, String(enabled))
+}
+
+function remotePushAgentStates(value: unknown): RemotePushAgentState[] {
+  return stringArray(value).filter((state): state is RemotePushAgentState =>
+    (MOBILE_PUSH_AGENT_STATES as readonly string[]).includes(state)
+  )
+}
+
+// Both states default on; an absent key is a device that never opened the section.
+export async function loadRemotePushAgentStates(): Promise<readonly RemotePushAgentState[]> {
+  try {
+    const raw = await AsyncStorage.getItem(REMOTE_PUSH_AGENT_STATES_KEY)
+    return raw === null ? MOBILE_PUSH_AGENT_STATES : remotePushAgentStates(JSON.parse(raw))
+  } catch {
+    return MOBILE_PUSH_AGENT_STATES
+  }
+}
+
+export async function saveRemotePushAgentStates(
+  states: readonly RemotePushAgentState[]
+): Promise<void> {
+  await AsyncStorage.setItem(REMOTE_PUSH_AGENT_STATES_KEY, JSON.stringify([...states]))
+}
+
+export async function loadRemotePushFilter(): Promise<RemotePushFilter> {
+  return { sources: MOBILE_PUSH_SOURCES, agentStates: await loadRemotePushAgentStates() }
+}
+
+// Why persisted: switching off while a host is offline leaves a token the gateway
+// would still push to. The pending list is the phone's side of the desktop's
+// unregister outbox — it survives a restart so the retry actually happens.
+export type RemotePushHostRegistrations = {
+  readonly registeredHostIds: readonly string[]
+  readonly pendingUnregisterHostIds: readonly string[]
+}
+
+const EMPTY_REMOTE_PUSH_HOST_REGISTRATIONS: RemotePushHostRegistrations = {
+  registeredHostIds: [],
+  pendingUnregisterHostIds: []
+}
+
+export async function loadRemotePushHostRegistrations(): Promise<RemotePushHostRegistrations> {
+  try {
+    const raw = await AsyncStorage.getItem(REMOTE_PUSH_HOST_REGISTRATIONS_KEY)
+    if (!raw) {
+      return EMPTY_REMOTE_PUSH_HOST_REGISTRATIONS
+    }
+    const parsed = JSON.parse(raw) as Record<string, unknown>
+    return {
+      registeredHostIds: stringArray(parsed.registeredHostIds),
+      pendingUnregisterHostIds: stringArray(parsed.pendingUnregisterHostIds)
+    }
+  } catch {
+    return EMPTY_REMOTE_PUSH_HOST_REGISTRATIONS
+  }
+}
+
+export async function saveRemotePushHostRegistrations(
+  value: RemotePushHostRegistrations
+): Promise<void> {
+  await AsyncStorage.setItem(REMOTE_PUSH_HOST_REGISTRATIONS_KEY, JSON.stringify(value))
 }
 
 const TEXT_SCALE_KEY = 'orca:terminalTextScale'

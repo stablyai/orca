@@ -10,6 +10,11 @@ import { OrcaLogo } from '../src/components/OrcaLogo'
 import { RpcClientProvider } from '../src/transport/client-context'
 import { getNotificationNavigationTarget } from '../src/notifications/notification-routing'
 import { useOpenNotificationRoute } from '../src/notifications/use-open-notification-route'
+import {
+  pushNotificationRouteData,
+  shouldSuppressForegroundPush
+} from '../src/notifications/push-receive'
+import { startPushTokenSync } from '../src/notifications/push-registration'
 import { loadHostCatalog } from '../src/transport/host-store'
 import { extractPairingCodeFromUrl } from '../src/transport/pairing'
 import { recoverMobileRelayPairing } from '../src/transport/mobile-relay-pairing-recovery'
@@ -25,12 +30,19 @@ SplashScreen.preventAutoHideAsync()
 // app is active. This runs once at module load time before any notification
 // is scheduled.
 Notifications.setNotificationHandler({
-  handleNotification: async () => ({
-    shouldShowBanner: true,
-    shouldShowList: true,
-    shouldPlaySound: true,
-    shouldSetBadge: false
-  })
+  handleNotification: async (notification) => {
+    // Why the check: a gateway push can arrive for an event the socket already
+    // delivered, and only the handler can stop the OS drawing a second banner.
+    const suppressed = await shouldSuppressForegroundPush(notification.request.content.data).catch(
+      () => false
+    )
+    return {
+      shouldShowBanner: !suppressed,
+      shouldShowList: !suppressed,
+      shouldPlaySound: !suppressed,
+      shouldSetBadge: false
+    }
+  }
 })
 
 export default function RootLayout() {
@@ -43,6 +55,10 @@ export default function RootLayout() {
     // reconcile the server result before another scan can replace that journal.
     void recoverMobileRelayPairing()
   }, [])
+
+  // Why: a rolled APNs/FCM token stops delivering silently, so every paired host
+  // has to be re-registered with the new one as soon as the provider hands it over.
+  useEffect(() => startPushTokenSync(), [])
 
   // Why: route `orca://pair?...` deep links to the confirm screen so
   // the same pairing flow runs whether the link arrived via QR scan,
@@ -96,7 +112,9 @@ export default function RootLayout() {
 
     async function getNavigationTarget(data: unknown) {
       const hosts = await loadHostCatalog().catch(() => null)
-      return getNotificationNavigationTarget(data, {
+      // A gateway push names its host by key fingerprint, not by this device's hostId.
+      const routeData = hosts ? pushNotificationRouteData(data, hosts) : data
+      return getNotificationNavigationTarget(routeData, {
         knownHostIds: hosts ? new Set(hosts.map((host) => host.id)) : undefined,
         credentialStatusByHostId: hosts
           ? new Map(hosts.map((host) => [host.id, host.credentialStatus]))
