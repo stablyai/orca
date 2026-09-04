@@ -1,5 +1,5 @@
 import type { PiAgentKind } from '../../shared/pi-agent-kind'
-import { getPiAgentOmpRuntimeDetectionSourceLines } from './agent-status-runtime-detection-source'
+import { getPiAgentStatusRuntimeDetectionSourceLines } from './agent-status-runtime-detection-source'
 
 export const ORCA_PI_EXTENSION_FILE = 'orca-titlebar-spinner.ts'
 
@@ -17,7 +17,7 @@ export function getPiTitlebarExtensionSource(kind: PiAgentKind = 'pi'): string {
     "  '\\u2807',",
     "  '\\u280f'",
     ']',
-    ...getPiAgentOmpRuntimeDetectionSourceLines(kind === 'omp'),
+    ...getPiAgentStatusRuntimeDetectionSourceLines(kind),
     '',
     'const FRAME_INTERVAL_MS = 80',
     'const AGENT_END_IDLE_RECHECK_MS = 25',

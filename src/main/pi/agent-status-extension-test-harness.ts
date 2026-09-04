@@ -15,9 +15,8 @@ export type HookContext = {
 
 export type HookHandler = (event?: unknown, context?: HookContext) => Promise<void> | void
 
-export type FakeCurlChild = {
+type FakeCurlChild = {
   on: ReturnType<typeof vi.fn>
-  emit: (event: string, value?: unknown) => void
   stdin: {
     on: ReturnType<typeof vi.fn>
     end: ReturnType<typeof vi.fn>
@@ -28,7 +27,6 @@ export type AgentStatusExtensionHarness = {
   fetchMock: ReturnType<typeof vi.fn>
   spawnMock: ReturnType<typeof vi.fn>
   spawnedChildren: FakeCurlChild[]
-  timeoutHandles: ReturnType<typeof setTimeout>[]
   fsMock: {
     existsSync: ReturnType<typeof vi.fn>
     readFileSync: ReturnType<typeof vi.fn>
@@ -77,16 +75,8 @@ export function createAgentStatusExtensionHarness(args: {
 
   const spawnedChildren: FakeCurlChild[] = []
   const spawnMock = vi.fn(() => {
-    const listeners = new Map<string, ((...values: unknown[]) => void)[]>()
     const child: FakeCurlChild = {
-      on: vi.fn((event: string, listener: (...values: unknown[]) => void) => {
-        listeners.set(event, [...(listeners.get(event) ?? []), listener])
-      }),
-      emit: (event, value) => {
-        for (const listener of listeners.get(event) ?? []) {
-          listener(value)
-        }
-      },
+      on: vi.fn(),
       stdin: {
         on: vi.fn(),
         end: vi.fn()
@@ -135,14 +125,6 @@ export function createAgentStatusExtensionHarness(args: {
     title: args.title ?? 'node',
     argv: args.argv ?? ['node', '/usr/bin/orca']
   }
-  const timeoutHandles: ReturnType<typeof setTimeout>[] = []
-  const trackedSetTimeout = ((
-    ...params: Parameters<typeof setTimeout>
-  ): ReturnType<typeof setTimeout> => {
-    const timeout = setTimeout(...params)
-    timeoutHandles.push(timeout)
-    return timeout
-  }) as typeof setTimeout
 
   const context = {
     module,
@@ -159,7 +141,7 @@ export function createAgentStatusExtensionHarness(args: {
     Buffer,
     URL,
     AbortController,
-    setTimeout: trackedSetTimeout,
+    setTimeout,
     clearTimeout
   } as Record<string, unknown>
   context.globalThis = context
@@ -192,7 +174,6 @@ export function createAgentStatusExtensionHarness(args: {
     fetchMock,
     spawnMock,
     spawnedChildren,
-    timeoutHandles,
     fsMock,
     handlers,
     processEnv: processMock.env,
