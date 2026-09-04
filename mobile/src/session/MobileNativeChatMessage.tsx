@@ -150,7 +150,9 @@ function Prose({
     // markdown renderer's light-on-dark palette.
     if (invert) {
       return (
-        <Text style={[styles.userText, { fontSize: TEXT_SIZE * fontScale }]}>{block.text}</Text>
+        <Text selectable style={[styles.userText, { fontSize: TEXT_SIZE * fontScale }]}>
+          {block.text}
+        </Text>
       )
     }
     return (

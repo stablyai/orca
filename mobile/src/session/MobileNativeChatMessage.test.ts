@@ -152,4 +152,12 @@ describe('MobileNativeChatMessage', () => {
     expect(tree.root.findAllByType('ChevronDown' as never)).toHaveLength(1)
     expect(tree.root.findAllByType('SquareChevronRight' as never)).toHaveLength(1)
   })
+
+  it('makes outgoing bubble text selectable for long-press copy', () => {
+    const tree = render(userMessage([{ type: 'text', text: 'copy me back' }]))
+    const bubble = tree.root
+      .findAllByType('Text' as never)
+      .find((node) => String(node.children.join('')) === 'copy me back')
+    expect(bubble?.props.selectable).toBe(true)
+  })
 })
