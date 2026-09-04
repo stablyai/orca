@@ -9,6 +9,7 @@ const {
   recordUpdaterLifecycleMock,
   requestServeUpdateHandoffMock,
   failServeUpdateHandoffMock,
+  hasServeUpdateSupervisorMock,
   resetHandlers
 } = vi.hoisted(() => {
   const appHandlers = new Map<string, ((...args: unknown[]) => void)[]>()
@@ -59,6 +60,7 @@ const {
     recordUpdaterLifecycleMock: vi.fn(),
     requestServeUpdateHandoffMock: vi.fn(() => true),
     failServeUpdateHandoffMock: vi.fn(),
+    hasServeUpdateSupervisorMock: vi.fn(() => true),
     resetHandlers: () => {
       appHandlers.clear()
       updaterHandlers.clear()
@@ -106,7 +108,7 @@ vi.mock('./updater-lifecycle-diagnostics', () => ({
 vi.mock('./serve-update-handoff', () => ({
   failServeUpdateHandoff: failServeUpdateHandoffMock,
   getServeUpdateHandoffFailure: vi.fn(() => null),
-  hasServeUpdateSupervisor: vi.fn(() => true),
+  hasServeUpdateSupervisor: hasServeUpdateSupervisorMock,
   requestServeUpdateHandoff: requestServeUpdateHandoffMock
 }))
 
@@ -130,6 +132,7 @@ describe('headless serve update install handoff', () => {
     recordUpdaterLifecycleMock.mockReset()
     requestServeUpdateHandoffMock.mockReset().mockReturnValue(true)
     failServeUpdateHandoffMock.mockReset()
+    hasServeUpdateSupervisorMock.mockReset().mockReturnValue(true)
     resetHandlers()
   })
 
@@ -528,5 +531,29 @@ describe('headless serve update install handoff', () => {
       reason: 'manual-service-update-required'
     })
     expect(() => checkForRemoteServerUpdate('runtime-1')).toThrow('remote_update_manual_required')
+  })
+
+  it('gates supervised-serve remote control on the Linux serve update supervisor', async () => {
+    // Why: the Linux verdict must match what installRemoteServerUpdate accepts — no
+    // supervisor means automatic upgrades would terminate the unit with no way back.
+    const { getRemoteServerUpdateSupport, setupAutoUpdater } = await loadUpdaterModule()
+
+    hasServeUpdateSupervisorMock.mockReturnValue(false)
+    setupAutoUpdater({ webContents: { send: vi.fn() } } as never, {
+      getLastUpdateCheckAt: () => Date.now(),
+      installMode: 'supervised-headless-serve'
+    })
+    expect(getRemoteServerUpdateSupport()).toEqual({
+      installMode: 'supervised-headless-serve',
+      automatic: false,
+      reason: 'updater-unavailable'
+    })
+
+    hasServeUpdateSupervisorMock.mockReturnValue(true)
+    expect(getRemoteServerUpdateSupport()).toEqual({
+      installMode: 'supervised-headless-serve',
+      automatic: true,
+      reason: 'available'
+    })
   })
 })

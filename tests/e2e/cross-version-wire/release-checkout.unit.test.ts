@@ -12,6 +12,7 @@ import {
 } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, relative } from 'node:path'
+import { fileURLToPath } from 'node:url'
 import { lock } from 'proper-lockfile'
 import { afterEach, describe, expect, it } from 'vitest'
 import { forceTerminateProcessTree } from '../../../src/shared/child-process/process-tree-termination'
@@ -102,13 +103,57 @@ type ObservedMaterializerChild = {
   output: () => string
 }
 
-function startMaterializerChild(
+/**
+ * Why a JS compile of the harness and not the .ts URL: the rival runs under plain
+ * `process.execPath`. On Node ≥22.18 / 24 (CI) type stripping imports `.ts` harnesses
+ * directly, but distro Node 22 builds without strip-types reject the extension and the
+ * child dies before writing its first marker. esbuild is already in the repo's dev
+ * dependency tree; compiling the harness graph to one cjs file keeps the child runnable
+ * on both.
+ */
+let compiledHarnessUrl: string | undefined
+async function compiledHarnessModuleUrl(): Promise<string> {
+  if (compiledHarnessUrl) {
+    return compiledHarnessUrl
+  }
+  const { build } = await import('esbuild')
+  const entry = fileURLToPath(new URL('./release-checkout.ts', import.meta.url))
+  // Why esm and not cjs: the harness graph reads `import.meta.dirname`; cjs output
+  // would leave it undefined and break REPO_ROOT resolution in the child. The banner
+  // shims esm's lack of require for the cjs-transpiled proper-lockfile graph.
+  const result = await build({
+    entryPoints: [entry],
+    bundle: true,
+    platform: 'node',
+    format: 'esm',
+    target: 'node18',
+    write: false,
+    logLevel: 'silent',
+    banner: {
+      js: [
+        'import { createRequire as __orcaCreateRequire } from "node:module"',
+        'const require = __orcaCreateRequire(import.meta.url)'
+      ].join('\n')
+    }
+  })
+  // Why this directory and not a scratch tmpdir: the compiled module derives REPO_ROOT
+  // from its own `import.meta.dirname` (three levels up), so it must sit at the same
+  // depth inside the repo. The gitignored checkout cache is exactly that.
+  const compileDir = join(REPO_ROOT, 'tests', 'e2e', '.cross-version-checkouts', '.compiled')
+  mkdirSync(compileDir, { recursive: true })
+  const harnessPath = join(compileDir, 'release-checkout-compiled.mjs')
+  writeFileSync(harnessPath, result.outputFiles[0]!.text)
+  compiledHarnessUrl = new URL(`file://${harnessPath}`).href
+  return compiledHarnessUrl
+}
+
+async function startMaterializerChild(
   scratch: string,
   name: string,
   config: MaterializerChildConfig
-): ObservedMaterializerChild {
+): Promise<ObservedMaterializerChild> {
   const script = join(scratch, `${name}.mjs`)
-  const harnessUrl = new URL('./release-checkout.ts', import.meta.url).href
+  const harnessUrl = await compiledHarnessModuleUrl()
   writeFileSync(
     script,
     [
@@ -206,7 +251,7 @@ async function runContentionPhase(
   }
 
   try {
-    rival = startMaterializerChild(scratch, `rival-${phase}`, {
+    rival = await startMaterializerChild(scratch, `rival-${phase}`, {
       cacheRoot: join(published.root, '..', '..'),
       ref: published.ref,
       resultPath,
@@ -345,7 +390,7 @@ describe('release checkout materialization', () => {
       }
     })
     const active = await stagingReady
-    const rival = startMaterializerChild(scratch, 'heartbeat-rival', {
+    const rival = await startMaterializerChild(scratch, 'heartbeat-rival', {
       cacheRoot,
       ref: 'v1.4.190',
       resultPath,
@@ -390,7 +435,7 @@ describe('release checkout materialization', () => {
     const cacheRoot = temporaryCacheRoot()
     const scratch = temporaryCacheRoot()
     const stagingMarker = join(scratch, 'crashed-staging')
-    const crashed = startMaterializerChild(scratch, 'crashing-publisher', {
+    const crashed = await startMaterializerChild(scratch, 'crashing-publisher', {
       cacheRoot,
       ref: 'v1.4.190',
       stagingMarker,

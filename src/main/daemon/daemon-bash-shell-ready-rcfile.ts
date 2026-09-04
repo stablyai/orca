@@ -96,6 +96,9 @@ __orca_osc133_preexec() {
     # The prefix is only special while bash-preexec prompt hooks run.
     __bp_*) [[ -n "\${__orca_in_prompt_command:-}" ]] && return 0 ;;
   esac
+  # Why BASHPID: PS0/command-substitution subshells inherit this DEBUG trap but
+  # must not emit markers or run the user's trap for the substitution's internals.
+  [[ "$BASHPID" == "$$" ]] || return 0
   __orca_run_user_debug_trap
   # Why: a framework (bash-preexec/starship) may replace our DEBUG trap at the
   # first prompt; __orca_osc133_epilogue re-takes it each prompt and stores the
