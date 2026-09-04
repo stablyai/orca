@@ -108,6 +108,8 @@ import {
   MIN_SSH_RELAY_GRACE_PERIOD_SECONDS
 } from '../../shared/ssh-types'
 
+// CI control (temporary, see the ssh-docker-transport-drop-recovery:337 investigation): a
+// comment-only diff that still selects the SSH e2e lane, so the lane's failures can be attributed.
 export type RelayDeployResult = {
   transport: MultiplexerTransport
   serverBuildId?: string
