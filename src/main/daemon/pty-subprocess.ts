@@ -127,6 +127,8 @@ export type PtySubprocessOptions = {
    *  Overrides env.COMSPEC / env.SHELL resolution inside the daemon so a user
    *  who picks "New WSL terminal" from the "+" menu actually gets WSL. */
   shellOverride?: string
+  /** Current pane explicitly selected the local host instead of its project runtime. */
+  forceHostRuntime?: boolean
   terminalWindowsWslDistro?: string | null
   terminalWindowsPowerShellImplementation?: 'auto' | 'powershell.exe' | 'pwsh.exe'
   onMacosTccSpawnStrategy?: (strategy: 'wrapped' | 'direct') => void
@@ -644,7 +646,7 @@ export function createPtySubprocess(opts: PtySubprocessOptions): SubprocessHandl
   env.LANG ??= 'en_US.UTF-8'
   // Why: shellOverride must win over env.COMSPEC, or Windows always resolves to cmd.exe/PowerShell regardless of the user's pick.
   const resolvedWslContext = resolveWslSessionContext(opts)
-  // Why: older persisted tabs can carry a PowerShell/cmd shellOverride; ignore it so WSL reconnects still enter the distro.
+  // Why: older WSL tabs can retain host-shell metadata; session identity wins unless this spawn explicitly forces the host.
   let shellPath = resolvedWslContext ? 'wsl.exe' : opts.shellOverride || resolvePtyShellPath(env)
   let shellArgs: string[]
   let startupCommandDeliveredInShellArgs = false

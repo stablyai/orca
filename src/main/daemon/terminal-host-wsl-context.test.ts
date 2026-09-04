@@ -172,4 +172,47 @@ describe('TerminalHost WSL context', () => {
       }
     }
   })
+
+  it('lets explicit host authority defeat stale WSL session identity', () => {
+    const platform = Object.getOwnPropertyDescriptor(process, 'platform')
+    Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
+    try {
+      const args = {
+        cwd: 'C:\\Users\\jin\\repo',
+        sessionId: 'repo::\\\\wsl.localhost\\Ubuntu\\home\\jin\\repo@@deadbeef',
+        shellOverride: 'cmd.exe'
+      }
+
+      expect(resolveWslSessionContext(args)).toEqual({
+        distro: 'Ubuntu',
+        treatPosixCwdAsWsl: true
+      })
+      expect(resolveWslSessionContext({ ...args, forceHostRuntime: true })).toBeUndefined()
+      expect(
+        resolveWslSessionContext({
+          ...args,
+          shellOverride: undefined,
+          forceHostRuntime: true
+        })
+      ).toBeUndefined()
+      expect(
+        resolveWslSessionContext({
+          ...args,
+          cwd: '\\\\wsl.localhost\\Ubuntu\\home\\jin\\repo',
+          forceHostRuntime: true
+        })
+      ).toEqual({ distro: 'Ubuntu', treatPosixCwdAsWsl: true })
+      expect(
+        resolveWslSessionContext({
+          ...args,
+          shellOverride: 'wsl.exe',
+          forceHostRuntime: true
+        })
+      ).toEqual({ distro: 'Ubuntu', treatPosixCwdAsWsl: true })
+    } finally {
+      if (platform) {
+        Object.defineProperty(process, 'platform', platform)
+      }
+    }
+  })
 })

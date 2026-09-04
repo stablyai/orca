@@ -18,7 +18,7 @@ export type AgentResumeLaunchTargetArgs = {
   connectionId: string | null | undefined
   /** Pane/workspace execution owner; only a 'local' host is the one `terminalWindowsShell` describes. */
   executionHostId: string | null
-  worktreePath: string | null | undefined
+  cwd: string | null | undefined
   terminalWindowsShell: string | null | undefined
   /** Per-tab Windows shell override, which beats the global setting at spawn time. */
   tabShellOverride?: string | null
@@ -31,7 +31,7 @@ function resolveResumeLaunchPlatform(args: AgentResumeLaunchTargetArgs): NodeJS.
   if (args.projectRuntime?.status === 'resolved' && args.projectRuntime.runtime.kind === 'wsl') {
     return 'linux'
   }
-  if (args.connectionId || (args.worktreePath && isWslUncPath(args.worktreePath))) {
+  if (args.connectionId || (args.cwd && isWslUncPath(args.cwd))) {
     return 'linux'
   }
   return CLIENT_PLATFORM

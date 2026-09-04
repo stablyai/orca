@@ -13,6 +13,8 @@ import { existsSync } from 'node:fs'
 import * as pty from 'node-pty'
 import { getDefaultWslDistro, parseWslPath, isWslAvailableAsync } from '../wsl'
 import { splitWorktreeIdForFilesystem } from '../../shared/worktree-id'
+import { isWindowsAbsolutePathLike } from '../../shared/cross-platform-path'
+import { isWslShellName } from '../../shared/local-windows-terminal-runtime'
 import { isBracketedPasteSafeShell } from '../../shared/startup-command-submission'
 import {
   injectHistoryEnv,
@@ -567,8 +569,17 @@ export class LocalPtyProvider implements IPtyProvider {
       assertSafeAgentStartupCwd(cwd, args.command)
     }
     const wslInfo = process.platform === 'win32' ? parseWslPath(cwd) : null
+    const requestedShellFamily =
+      args.shellOverride || this.opts.getWindowsShell?.() || process.env.COMSPEC || 'powershell.exe'
+    const nativeCwdSelectsHostShell =
+      args.forceHostRuntime === true &&
+      wslInfo === null &&
+      isWindowsAbsolutePathLike(cwd) &&
+      !isWslShellName(requestedShellFamily)
     const worktreeWslContext =
-      process.platform === 'win32' ? getWslContextFromWorktreeId(args.worktreeId) : undefined
+      process.platform === 'win32' && !nativeCwdSelectsHostShell
+        ? getWslContextFromWorktreeId(args.worktreeId)
+        : undefined
     const preferredWslContext =
       process.platform === 'win32'
         ? getWslContextFromPreferredDistro(args.terminalWindowsWslDistro)
@@ -596,11 +607,6 @@ export class LocalPtyProvider implements IPtyProvider {
       validationCwd = resolved.validationCwd
     } else if (process.platform === 'win32') {
       // Why: shellOverride opens one tab in a non-default shell without changing the user's setting; it wins over the setting.
-      const requestedShellFamily =
-        args.shellOverride ||
-        this.opts.getWindowsShell?.() ||
-        process.env.COMSPEC ||
-        'powershell.exe'
       const shellFamily = worktreeWslContext ? 'wsl.exe' : requestedShellFamily
       if (!launchWslContext && pathWin32.basename(shellFamily).toLowerCase() === 'wsl.exe') {
         launchWslContext = getWslContextFromPreferredDistro(getDefaultWslDistro())

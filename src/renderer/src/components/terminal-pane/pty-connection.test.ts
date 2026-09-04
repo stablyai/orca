@@ -8409,9 +8409,13 @@ describe('connectPanePty', () => {
 
   // Regression (#12320): a cold restore after reboot typed PowerShell single quotes into
   // cmd.exe tabs, so the agent CLI rejected the resume argv ("unexpected argument").
+  const DEFAULT_WINDOWS_COLD_RESTORE_CWD = 'C:\\Users\\neil\\orca\\workspaces\\orca\\feature'
   async function runWindowsColdRestoreResume(args: {
     terminalWindowsShell: string
     tabShellOverride?: string
+    worktreePath?: string
+    cwd?: string
+    forceHostRuntime?: boolean
   }): Promise<string | undefined> {
     const restoreNavigator = temporarilySetNavigatorUserAgent(
       'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'
@@ -8458,7 +8462,8 @@ describe('connectPanePty', () => {
             {
               id: 'tab-1',
               ptyId: 'restored-session',
-              ...(args.tabShellOverride ? { shellOverride: args.tabShellOverride } : {})
+              ...(args.tabShellOverride ? { shellOverride: args.tabShellOverride } : {}),
+              ...(args.forceHostRuntime ? { forceHostRuntime: true } : {})
             }
           ]
         },
@@ -8480,9 +8485,20 @@ describe('connectPanePty', () => {
             capturedAt: 1,
             updatedAt: 1
           }
+        },
+        worktreesByRepo: {
+          repo1: [
+            {
+              id: 'wt-1',
+              repoId: 'repo1',
+              path: args.worktreePath ?? DEFAULT_WINDOWS_COLD_RESTORE_CWD,
+              displayName: 'feat/notis'
+            }
+          ]
         }
       } as StoreState
       const deps = createDeps({
+        cwd: args.cwd ?? DEFAULT_WINDOWS_COLD_RESTORE_CWD,
         restoredLeafId: LEAF_2,
         restoredPtyIdByLeafId: { [LEAF_2]: 'restored-session' }
       })
@@ -8523,6 +8539,19 @@ describe('connectPanePty', () => {
     await expect(
       runWindowsColdRestoreResume({ terminalWindowsShell: 'powershell.exe' })
     ).resolves.toBe("codex '--dangerously-bypass-approvals-and-sandbox' 'resume' 'codex-session-1'")
+  })
+
+  it('uses the native spawn cwd when the catalog still points at WSL', async () => {
+    await expect(
+      runWindowsColdRestoreResume({
+        terminalWindowsShell: 'cmd.exe',
+        worktreePath: '\\\\wsl.localhost\\Ubuntu\\home\\neil\\repo',
+        cwd: 'C:\\Users\\neil\\orca\\workspaces\\orca\\feature',
+        forceHostRuntime: true
+      })
+    ).resolves.toBe('codex "--dangerously-bypass-approvals-and-sandbox" "resume" "codex-session-1"')
+    expect(createdTransportOptions.at(-1)).toMatchObject({ forceHostRuntime: true })
+    expect(createdTransportOptions.at(-1)).not.toHaveProperty('cwdFallback')
   })
 
   it('keeps a contentless reattach when the sleeping record represents a live session', async () => {

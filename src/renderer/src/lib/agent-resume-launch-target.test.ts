@@ -23,7 +23,7 @@ const LOCAL_WINDOWS_ARGS: AgentResumeLaunchTargetArgs = {
   projectRuntime: undefined,
   connectionId: null,
   executionHostId: 'local',
-  worktreePath: 'C:\\Users\\neil\\orca\\workspaces\\orca\\feature',
+  cwd: 'C:\\Users\\neil\\orca\\workspaces\\orca\\feature',
   terminalWindowsShell: null
 }
 
@@ -98,10 +98,10 @@ describe('resolveAgentResumeLaunchTarget on a Windows client', () => {
     ).resolves.toEqual({ platform: 'win32', shell: undefined })
   })
 
-  it('keeps POSIX quoting for a WSL UNC worktree', async () => {
+  it('keeps POSIX quoting for a WSL UNC cwd', async () => {
     await expect(
       resolveWith({
-        worktreePath: '\\\\wsl.localhost\\Ubuntu\\home\\neil\\repo',
+        cwd: '\\\\wsl.localhost\\Ubuntu\\home\\neil\\repo',
         terminalWindowsShell: 'cmd.exe'
       })
     ).resolves.toEqual({ platform: 'linux', shell: undefined })
@@ -141,7 +141,7 @@ describe('resolveAgentResumeLaunchTarget off Windows', () => {
   it('ignores a stale Windows shell setting on a mac client', async () => {
     await expect(
       resolveWith({
-        worktreePath: '/Users/neil/repo',
+        cwd: '/Users/neil/repo',
         terminalWindowsShell: 'cmd.exe'
       })
     ).resolves.toEqual({ platform: 'darwin', shell: undefined })

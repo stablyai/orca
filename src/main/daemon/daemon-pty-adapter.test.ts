@@ -105,6 +105,7 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
     cwd?: string
     env?: Record<string, string>
     command?: string
+    forceHostRuntime?: boolean
   } | null
   let subprocessDataOnSubscribe: string | undefined
   let daemonLog: DaemonFileLog
@@ -147,6 +148,50 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
     expect(adapter.supportsAgentSessionCreateOperations()).toBe(true)
     expect(legacy.supportsAgentSessionCreateOperations()).toBe(false)
     legacy.dispose()
+  })
+
+  it('fails closed when forced-host authority reaches an older daemon', async () => {
+    const legacy = new DaemonPtyAdapter({ socketPath, tokenPath, protocolVersion: 33 })
+
+    try {
+      await expect(
+        legacy.spawn({
+          cols: 80,
+          rows: 24,
+          forceHostRuntime: true
+        })
+      ).rejects.toThrow('force_host_runtime_daemon_protocol_unavailable')
+    } finally {
+      legacy.dispose()
+    }
+  })
+
+  it('does not fail closed before an older daemon handles attach-only reattachment', async () => {
+    const legacy = new DaemonPtyAdapter({ socketPath, tokenPath, protocolVersion: 33 })
+
+    try {
+      await expect(
+        legacy.spawn({
+          sessionId: 'legacy-session',
+          cols: 80,
+          rows: 24,
+          attachOnly: true,
+          forceHostRuntime: true
+        })
+      ).rejects.toThrow('Protocol version mismatch')
+    } finally {
+      legacy.dispose()
+    }
+  })
+
+  it('forwards forced-host authority to the current daemon', async () => {
+    await adapter.spawn({
+      cols: 80,
+      rows: 24,
+      forceHostRuntime: true
+    })
+
+    expect(lastSpawnOpts?.forceHostRuntime).toBe(true)
   })
 
   afterEach(async () => {

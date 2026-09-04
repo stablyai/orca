@@ -557,6 +557,7 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
   const {
     cwd,
     cwdFallback,
+    forceHostRuntime,
     env,
     envToDelete,
     command,
@@ -808,12 +809,13 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
       try {
         // Why: cwd fallback is only for fresh local spawns — reattach keeps the session's cwd and SSH transports resolve cwd on the remote host.
         const shouldSendLocalCwdFallback =
-          cwdFallback === 'worktree' && !connectionId && !admittedSessionId
+          cwdFallback === 'worktree' && !forceHostRuntime && !connectionId && !admittedSessionId
         const result = await window.api.pty.spawn({
           cols: options.cols ?? 80,
           rows: options.rows ?? 24,
           cwd,
           ...(shouldSendLocalCwdFallback ? { cwdFallback } : {}),
+          ...(forceHostRuntime ? { forceHostRuntime: true } : {}),
           env: options.env ?? env,
           ...((options.envToDelete ?? envToDelete)
             ? { envToDelete: options.envToDelete ?? envToDelete }

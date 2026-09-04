@@ -81,6 +81,8 @@ export type PtySpawnOptions = {
    *  changing the user's persistent default shell setting. Only consulted on
    *  Windows; ignored on macOS/Linux where shell selection is not exposed. */
   shellOverride?: string
+  /** Current pane explicitly selected the local host instead of its project runtime. */
+  forceHostRuntime?: boolean
   /** Preferred WSL distro for generic `wsl.exe` launches. Worktree/session
    *  distro still wins when the cwd already identifies a WSL distro. */
   terminalWindowsWslDistro?: string | null

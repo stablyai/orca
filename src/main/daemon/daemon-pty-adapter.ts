@@ -38,6 +38,7 @@ import {
   type TakePendingOutputResult
 } from './types'
 import {
+  FORCE_HOST_RUNTIME_DAEMON_PROTOCOL_VERSION,
   GET_SIZE_PROTOCOL_VERSION,
   HISTORY_SEED_TRANSFER_PROTOCOL_VERSION,
   SNAPSHOT_SERIALIZER_FIDELITY_DAEMON_PROTOCOL_VERSION,
@@ -386,6 +387,15 @@ export class DaemonPtyAdapter implements IPtyProvider {
     operation: PendingDaemonSpawnOperation,
     historyRecovery: HistoryRecoveryContext
   ): Promise<PtySpawnResult> {
+    // Why: an attach-only request starts no shell, so a preserved pre-v34 owner can safely keep its existing runtime.
+    const attachOnly = opts.attachOnly === true
+    if (
+      opts.forceHostRuntime &&
+      !attachOnly &&
+      this.protocolVersion < FORCE_HOST_RUNTIME_DAEMON_PROTOCOL_VERSION
+    ) {
+      throw new Error('force_host_runtime_daemon_protocol_unavailable')
+    }
     if (
       opts.agentSessionEnsure &&
       this.protocolVersion < AGENT_SESSION_CLAIM_DAEMON_PROTOCOL_VERSION
@@ -394,7 +404,6 @@ export class DaemonPtyAdapter implements IPtyProvider {
     }
     const requestedSessionId = opts.sessionId!
     // Why: v30 daemons survive upgrades; reject their accidental create result before publication.
-    const attachOnly = opts.attachOnly === true
     const emulateLegacyAttachOnly =
       attachOnly && this.protocolVersion < STABLE_PANE_ATTACH_ONLY_DAEMON_PROTOCOL_VERSION
     let sessionId = requestedSessionId
@@ -402,7 +411,8 @@ export class DaemonPtyAdapter implements IPtyProvider {
       cwd: opts.cwd,
       sessionId,
       shellOverride: opts.shellOverride,
-      terminalWindowsWslDistro: opts.terminalWindowsWslDistro
+      terminalWindowsWslDistro: opts.terminalWindowsWslDistro,
+      forceHostRuntime: opts.forceHostRuntime
     })?.distro
     const freezeHistory = async (): Promise<void> => {
       if (!this.historyManager) {
@@ -522,6 +532,7 @@ export class DaemonPtyAdapter implements IPtyProvider {
         ...(attachOnly && !emulateLegacyAttachOnly ? { attachOnly: true } : {}),
         // Why: without forwarding the override, the daemon falls back to cmd.exe/PowerShell, ignoring the shell the renderer chose; this matches LocalPtyProvider.
         shellOverride: attachOnly ? undefined : opts.shellOverride,
+        forceHostRuntime: attachOnly ? undefined : opts.forceHostRuntime,
         terminalWindowsWslDistro: attachOnly ? undefined : opts.terminalWindowsWslDistro,
         terminalWindowsPowerShellImplementation: attachOnly
           ? undefined

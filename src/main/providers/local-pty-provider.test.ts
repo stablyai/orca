@@ -1308,6 +1308,32 @@ describe('LocalPtyProvider', () => {
       )
     })
 
+    it('keeps a native Windows cwd on the requested host shell when worktree context is WSL', async () => {
+      const platform = Object.getOwnPropertyDescriptor(process, 'platform')
+      Object.defineProperty(process, 'platform', { value: 'win32' })
+
+      try {
+        await provider.spawn({
+          cols: 80,
+          rows: 24,
+          cwd: 'C:\\Users\\jin\\repo',
+          shellOverride: 'cmd.exe',
+          forceHostRuntime: true,
+          worktreeId: 'repo::\\\\wsl.localhost\\Ubuntu\\home\\jin\\repo'
+        })
+      } finally {
+        if (platform) {
+          Object.defineProperty(process, 'platform', platform)
+        }
+      }
+
+      expect(spawnMock).toHaveBeenCalledWith(
+        'cmd.exe',
+        ['/K', 'chcp 65001 > nul'],
+        expect.objectContaining({ cwd: 'C:\\Users\\jin\\repo' })
+      )
+    })
+
     it('resolves the Git Bash default shell and preserves the requested cwd', async () => {
       const platform = Object.getOwnPropertyDescriptor(process, 'platform')
       const originalProgramFiles = process.env.ProgramFiles

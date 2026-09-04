@@ -53,6 +53,13 @@ function findClaudeExecutableIndex(tokens: readonly string[], shell: AgentStartu
   return -1
 }
 
+export function isResumeArgvSafe(resumeArgv: readonly string[], shell: AgentStartupShell): boolean {
+  return (
+    shell !== 'cmd' ||
+    resumeArgv.slice(1).every((value) => !/[\^&|<>()%!"]/.test(value) && !value.endsWith('\\'))
+  )
+}
+
 /** Joins the resolved base command with the agent's resume argv. Claude goes
  * through the selector guard below; other agents keep plain appending. */
 export function buildAgentResumeLaunchCommand(

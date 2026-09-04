@@ -3785,7 +3785,10 @@ export function connectPanePty(
     // Why: only fresh local IPC spawns may recover from a saved startup cwd
     // whose directory was deleted (#7239); remote-runtime and SSH spawns
     // resolve cwd on another host and must keep exact cwd semantics.
-    ...(runtimeEnvironmentId === null && !connectionId ? { cwdFallback: 'worktree' as const } : {}),
+    ...(runtimeEnvironmentId === null && !connectionId && !tab?.forceHostRuntime
+      ? { cwdFallback: 'worktree' as const }
+      : {}),
+    ...(tab?.forceHostRuntime ? { forceHostRuntime: true } : {}),
     env: paneEnv,
     ...(paneStartup?.envToDelete ? { envToDelete: paneStartup.envToDelete } : {}),
     command: shouldDeliverStartupViaTerminalPaste ? undefined : paneStartup?.command,
@@ -5031,13 +5034,13 @@ export function connectPanePty(
       const launchConfig =
         (useLiveEntry && entry ? state.getAgentLaunchConfigForStatusEntry(entry) : undefined) ??
         matchingSleepingLaunchConfig
-      // Why: the resume line is typed into this pane's live shell, so its quoting must
-      // follow the tab's effective Windows shell, not the win32 PowerShell default.
+      // Why: quote for the shell selected by this exact spawn. The catalog worktree path
+      // can still be WSL UNC while a restored pane's authoritative cwd is native Windows.
       const resumeTarget = resolveAgentResumeLaunchTarget({
         projectRuntime,
         connectionId,
         executionHostId,
-        worktreePath: worktree?.path,
+        cwd: deps.cwd,
         terminalWindowsShell: state.settings?.terminalWindowsShell,
         tabShellOverride: shellOverride
       })

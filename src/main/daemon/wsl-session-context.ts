@@ -3,6 +3,7 @@ import { isWslShellName } from '../../shared/local-windows-terminal-runtime'
 import { getDefaultWslDistro, parseWslPath } from '../wsl'
 import { parsePtySessionId } from './pty-session-id'
 import { parseWslUncPath } from '../../shared/wsl-paths'
+import { isWindowsAbsolutePathLike } from '../../shared/cross-platform-path'
 
 export type WslSessionContext = {
   distro: string
@@ -30,6 +31,7 @@ export function resolveWslSessionContext(args: {
   sessionId?: string
   shellOverride?: string
   terminalWindowsWslDistro?: string | null
+  forceHostRuntime?: boolean
 }): WslSessionContext | undefined {
   if (process.platform !== 'win32') {
     return undefined
@@ -37,6 +39,14 @@ export function resolveWslSessionContext(args: {
   const cwdDistro = args.cwd ? parseWslUncPath(args.cwd)?.distro : undefined
   if (cwdDistro) {
     return { distro: cwdDistro, treatPosixCwdAsWsl: true }
+  }
+  if (
+    args.forceHostRuntime === true &&
+    args.cwd &&
+    isWindowsAbsolutePathLike(args.cwd) &&
+    !isWslShellName(args.shellOverride ?? '')
+  ) {
+    return undefined
   }
   return (
     (args.sessionId ? getWslContextFromSessionId(args.sessionId) : undefined) ??

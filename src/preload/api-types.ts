@@ -1467,6 +1467,8 @@ export type PreloadApi = {
       rows: number
       cwd?: string
       cwdFallback?: 'worktree'
+      /** Current pane explicitly selected the local host instead of its project runtime. */
+      forceHostRuntime?: boolean
       env?: Record<string, string>
       envToDelete?: string[]
       command?: string

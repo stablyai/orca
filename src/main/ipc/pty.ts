@@ -5817,6 +5817,8 @@ export function registerPtyHandlers(
         cwd?: string
         // Why: fresh local spawns opt into recovering a saved cwd whose dir was deleted (#7239); reattach/remote need exact cwd, so the flag alone isn't sufficient.
         cwdFallback?: 'worktree'
+        /** Current pane explicitly selected the local host instead of its project runtime. */
+        forceHostRuntime?: boolean
         env?: Record<string, string>
         envToDelete?: string[]
         command?: string
@@ -5969,7 +5971,10 @@ export function registerPtyHandlers(
         if (!preAdoptedStablePane) {
           // Why: reattach needs exact cwd, SSH cannot probe locally, and successful stable-pane adoption needs no launch preflight.
           const requestedMissingCwdFallback =
-            !args.connectionId && !args.sessionId && args.cwdFallback === 'worktree'
+            !args.connectionId &&
+            !args.sessionId &&
+            args.forceHostRuntime !== true &&
+            args.cwdFallback === 'worktree'
           const isPosixStartupCwd = args.cwd?.startsWith('/') === true
           const startupWorkspaceCwd =
             requestedMissingCwdFallback && isPosixStartupCwd
@@ -6097,7 +6102,8 @@ export function registerPtyHandlers(
               cwd,
               sessionId: effectiveSessionId,
               shellOverride: terminalRuntimeOptions.shellOverride,
-              terminalWindowsWslDistro: terminalRuntimeOptions.terminalWindowsWslDistro
+              terminalWindowsWslDistro: terminalRuntimeOptions.terminalWindowsWslDistro,
+              forceHostRuntime: args.forceHostRuntime === true
             })?.distro ?? null)
           : null
         const initialSelectionTarget = getCodexSelectionTargetForPty(
@@ -6391,6 +6397,7 @@ export function registerPtyHandlers(
           cols: args.cols,
           rows: args.rows,
           cwd,
+          ...(args.forceHostRuntime === true ? { forceHostRuntime: true } : {}),
           ...(prevalidatedCwd && !isDaemonHostSpawn ? { prevalidatedCwd } : {}),
           env: spawnEnv,
           ...(isMintedSessionId ? { isNewSession: true } : {})

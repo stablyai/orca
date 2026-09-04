@@ -20,7 +20,7 @@ import { inlineAgentDraftFitsPlatform } from './agent-draft-platform-limit'
 import type { TuiAgent } from './types'
 import type { SessionOptionValue } from './native-chat-session-options'
 import { resolveAgentLaunchCommand } from './tui-agent-launch-command'
-import { buildAgentResumeLaunchCommand } from './agent-resume-launch-command'
+import { buildAgentResumeLaunchCommand, isResumeArgvSafe } from './agent-resume-launch-command'
 
 export type AgentStartupPlan = {
   agent: TuiAgent
@@ -204,6 +204,9 @@ export function buildAgentResumeStartupPlan(args: {
     return null
   }
   const shell = resolveStartupShell(args.platform, args.shell)
+  if (!isResumeArgvSafe(argv, shell)) {
+    return null
+  }
   const config = TUI_AGENT_CONFIG[args.agent]
   const resolvedAgentCommand = args.agentCommand?.trim()
   const baseCommand = resolvedAgentCommand

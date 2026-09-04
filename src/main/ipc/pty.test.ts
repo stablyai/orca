@@ -12328,6 +12328,53 @@ describe('registerPtyHandlers', () => {
     expect(result.startupCwdFallback).toEqual({ kind: 'worktree', cwd: worktreePath })
   })
 
+  it('threads forced-host authority without allowing a missing-cwd fallback', async () => {
+    const providerSpawn = vi.fn().mockResolvedValue({ id: 'pty-forced-host' })
+    installDaemonTestProvider({ spawn: providerSpawn })
+    registerPtyHandlers(mainWindow as never)
+    const missingCwd = 'C:\\Users\\alice\\repo\\deleted-folder'
+    statSyncMock.mockImplementation((target: string) => {
+      if (target === missingCwd) {
+        throw Object.assign(new Error('ENOENT'), { code: 'ENOENT' })
+      }
+      return { isDirectory: () => true, mode: 0o755 }
+    })
+
+    const result = (await handlers.get('pty:spawn')!(null, {
+      cols: 80,
+      rows: 24,
+      cwd: missingCwd,
+      cwdFallback: 'worktree',
+      forceHostRuntime: true,
+      worktreeId: 'repo-1::\\\\wsl.localhost\\Ubuntu\\home\\alice\\repo'
+    })) as { startupCwdFallback?: { kind: string; cwd: string } }
+
+    expect(providerSpawn).toHaveBeenCalledWith(
+      expect.objectContaining({
+        cwd: 'C:/Users/alice/repo/deleted-folder',
+        forceHostRuntime: true
+      })
+    )
+    expect(result.startupCwdFallback).toBeUndefined()
+  })
+
+  it('does not treat a truthy non-boolean IPC value as forced-host authority', async () => {
+    const providerSpawn = vi.fn().mockResolvedValue({ id: 'pty-not-forced-host' })
+    installDaemonTestProvider({ spawn: providerSpawn })
+    registerPtyHandlers(mainWindow as never)
+
+    await handlers.get('pty:spawn')!(null, {
+      cols: 80,
+      rows: 24,
+      cwd: 'C:\\Users\\alice\\repo',
+      forceHostRuntime: 'false'
+    } as never)
+
+    expect(providerSpawn).toHaveBeenCalledWith(
+      expect.not.objectContaining({ forceHostRuntime: true })
+    )
+  })
+
   it.each(['/home/alice/repo', '/a', '/c'])(
     'keeps an existing POSIX startup cwd for the selected WSL runtime (%s)',
     async (startupCwd) => {

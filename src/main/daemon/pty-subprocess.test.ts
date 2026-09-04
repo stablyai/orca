@@ -2437,6 +2437,35 @@ describe('createPtySubprocess', () => {
     )
   })
 
+  it('keeps a native Windows cwd on cmd when the session id retains a WSL worktree', () => {
+    const proc = mockPtyProcess()
+    spawnMock.mockReturnValue(proc)
+    const platform = Object.getOwnPropertyDescriptor(process, 'platform')
+
+    Object.defineProperty(process, 'platform', { value: 'win32' })
+
+    try {
+      createPtySubprocess({
+        sessionId: 'repo::\\\\wsl.localhost\\Ubuntu\\home\\jin\\repo@@deadbeef',
+        cols: 80,
+        rows: 24,
+        cwd: 'C:\\repo\\orca',
+        shellOverride: 'cmd.exe',
+        forceHostRuntime: true
+      })
+    } finally {
+      if (platform) {
+        Object.defineProperty(process, 'platform', platform)
+      }
+    }
+
+    expect(spawnMock).toHaveBeenCalledWith(
+      'cmd.exe',
+      ['/K', 'chcp 65001 > nul'],
+      expect.objectContaining({ cwd: 'C:\\repo\\orca' })
+    )
+  })
+
   it('embeds short PowerShell startup commands in the Windows shell launch', () => {
     const proc = mockPtyProcess()
     spawnMock.mockReturnValue(proc)
