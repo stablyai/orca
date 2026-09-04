@@ -10,6 +10,7 @@ import type { E2EEKeypair } from '../e2ee-keypair'
 import type { UnpairedDeviceAuthThrottle } from '../rpc/unpaired-device-auth-throttle'
 import type { MobileSocketWiring } from '../rpc/mobile-socket-wiring'
 import { RelayRevokeOutbox } from '../relay/relay-revoke-outbox'
+import { PushUnregisterOutbox } from '../push/push-unregister-outbox'
 import { RuntimeBinaryMessageRouter } from '../runtime-binary-message-router'
 import type { RuntimeMetadataOwnershipWatch } from '../runtime-metadata-ownership-watch'
 import { RUNTIME_METADATA_OWNERSHIP_POLL_MS } from '../runtime-metadata-ownership-watch'
@@ -56,6 +57,7 @@ export class RuntimeRpcState {
   protected readonly browserHostLongPollCapPerDevice: number
   protected readonly specializedLongPollCap: number
   protected readonly relayRevokeOutbox: RelayRevokeOutbox
+  protected readonly pushUnregisterOutbox: PushUnregisterOutbox
   protected deviceRegistry: DeviceRegistry | null = null
   protected e2eeKeypair: E2EEKeypair | null = null
   protected pairingInitializationFailure: PairingOfferUnavailable | null = null
@@ -129,5 +131,6 @@ export class RuntimeRpcState {
     this.browserHostLongPollCapPerDevice = Math.max(1, Math.floor(this.browserHostLongPollCap / 2))
     this.specializedLongPollCap = Math.max(1, Math.floor(longPollCap * SPECIALIZED_LONG_POLL_SHARE))
     this.relayRevokeOutbox = new RelayRevokeOutbox(userDataPath)
+    this.pushUnregisterOutbox = new PushUnregisterOutbox(userDataPath)
   }
 }

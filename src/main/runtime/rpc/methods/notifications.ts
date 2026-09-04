@@ -1,4 +1,10 @@
 import { z } from 'zod'
+import {
+  MOBILE_PUSH_AGENT_STATES,
+  MOBILE_PUSH_APNS_ENVIRONMENTS,
+  MOBILE_PUSH_PLATFORMS,
+  MOBILE_PUSH_SOURCES
+} from '../../../../shared/mobile-push-contract'
 import { defineStreamingMethod, defineMethod, type RpcAnyMethod } from '../core'
 
 // Why: monotonically increasing per-process counter eliminates the
@@ -28,6 +34,27 @@ const NotificationGetMissedSinceParams = z.object({
   lastSeenSeq: z.number().int().min(0, 'lastSeenSeq must be a non-negative integer'),
   epoch: z.string().optional()
 })
+
+// Why: the phone owns which alerts are worth waking it for; the host stores the
+// filter per device and applies it before it ever calls the gateway. Native push
+// tokens are long (FCM registration strings), so the bound is generous.
+const NotificationPushFilterParams = z.object({
+  sources: z.array(z.enum(MOBILE_PUSH_SOURCES)).max(MOBILE_PUSH_SOURCES.length),
+  agentStates: z.array(z.enum(MOBILE_PUSH_AGENT_STATES)).max(MOBILE_PUSH_AGENT_STATES.length)
+})
+
+const NotificationRegisterPushParams = z
+  .object({
+    platform: z.enum(MOBILE_PUSH_PLATFORMS),
+    token: z.string().min(1).max(4096),
+    apnsEnvironment: z.enum(MOBILE_PUSH_APNS_ENVIRONMENTS).optional(),
+    filter: NotificationPushFilterParams
+  })
+  // Why: an APNs token is only routable against the environment it was minted in,
+  // so a missing environment must fail loudly rather than default to production.
+  .refine((params) => params.platform !== 'ios' || params.apnsEnvironment !== undefined, {
+    message: 'apnsEnvironment is required for ios'
+  })
 
 // Why: notifications.subscribe streams desktop notification events to mobile
 // clients over WebSocket. The mobile client shows a local push notification
@@ -80,6 +107,31 @@ export const NOTIFICATION_METHODS: readonly RpcAnyMethod[] = [
     handler: async (params, { runtime }) => {
       const missed = runtime.getMissedNotificationsSince(params.lastSeenSeq, params.epoch)
       return { notifications: missed, epoch: runtime.getMobileNotificationEpoch() }
+    }
+  }),
+  defineMethod({
+    name: 'notifications.registerPush',
+    params: NotificationRegisterPushParams,
+    // Why: the registration is keyed by the revocable paired device identity, never
+    // by anything the caller can assert, so an in-process or CLI caller has no device
+    // to register and is refused outright.
+    handler: async (params, { runtime, clientKind, pairedDeviceId }) => {
+      if (clientKind !== 'mobile' || !pairedDeviceId) {
+        return { registered: false, reason: 'not_mobile' }
+      }
+      return await runtime.registerMobilePushDevice({ deviceId: pairedDeviceId, ...params })
+    }
+  }),
+  defineMethod({
+    name: 'notifications.unregisterPush',
+    params: null,
+    // Deleting the gateway token is durable (outbox), so an offline gateway still
+    // reports success to the phone that asked to stop being pushed to.
+    handler: async (_params, { runtime, clientKind, pairedDeviceId }) => {
+      if (clientKind !== 'mobile' || !pairedDeviceId) {
+        return { unregistered: false }
+      }
+      return await runtime.unregisterMobilePushDevice(pairedDeviceId)
     }
   })
 ]

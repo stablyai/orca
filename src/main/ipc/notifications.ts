@@ -142,7 +142,10 @@ export function registerNotificationHandlers(store: Store, runtime?: OrcaRuntime
             title: notificationOptions.title,
             body: notificationOptions.body,
             worktreeId: args.worktreeId,
-            ...(args.notificationId ? { notificationId: args.notificationId } : {})
+            ...(args.notificationId ? { notificationId: args.notificationId } : {}),
+            // Why: background push needs the agent's real state to pick "needs input"
+            // vs "finished" — and to stay silent while the agent is still working.
+            ...(args.agentState ? { agentState: args.agentState } : {})
           })
         }
       }
