@@ -33,6 +33,13 @@ function requiredInteger(source, pattern, label) {
   return value
 }
 
+// A tfvars file states only what it overrides, so an absent key means the variable default holds.
+// Reading the default as the fallback keeps this honest either way.
+function overriddenInteger(override, overridePattern, source, pattern, label) {
+  if (!overridePattern.test(override)) return requiredInteger(source, pattern, label)
+  return requiredInteger(override, overridePattern, label)
+}
+
 function productionCells(source, defaultPoolMax) {
   const fencedMatch = source.match(/relay_gce_fenced_cells\s*=\s*\[([^\]]*)\]/)
   if (!fencedMatch) throw new Error('could not read fenced Relay cells')
@@ -52,11 +59,13 @@ function productionCells(source, defaultPoolMax) {
 }
 
 export function calculateRelayCloudSqlConnectionBudget(inputs) {
+  const pushDraw = inputs.pushInstances * inputs.pushPoolMax
   const consumers = {
     cells: inputs.cellPoolTotal + inputs.asiaCellCount * inputs.asiaPoolMax,
     directors: inputs.directorInstances * inputs.directorPoolMax,
     auth: inputs.authInstances * inputs.authPoolMax,
-    api: inputs.apiInstances * inputs.apiPoolMax
+    api: inputs.apiInstances * inputs.apiPoolMax,
+    push: pushDraw
   }
   const configuredMaximum = Object.values(consumers).reduce((total, value) => total + value, 0)
   const retainedDirectorRollback = inputs.directorInstances * inputs.directorPoolMax
@@ -64,6 +73,11 @@ export function calculateRelayCloudSqlConnectionBudget(inputs) {
     relayDirectorCandidate: retainedDirectorRollback * 2,
     apiCandidate: retainedDirectorRollback + inputs.apiInstances * inputs.apiPoolMax,
     authCandidate: retainedDirectorRollback + inputs.authInstances * inputs.authPoolMax,
+    // The push candidate doubles rather than adding one copy, like the director candidate and
+    // unlike the API and auth ones: cloud-push-deploy.yml probes a *tagged* revision, which is
+    // directly addressable and so sits outside the service-wide instance cap, letting the
+    // candidate and the serving revision each reach push_max_instances at the same time.
+    pushCandidate: retainedDirectorRollback + pushDraw * 2,
     relayCells: retainedDirectorRollback
   }
   const rolloutOverlap = Math.max(...Object.values(candidateOverlap))
@@ -130,6 +144,20 @@ export function readRelayCloudSqlConnectionBudget({
       terraformVariables,
       /variable\s+"relay_director_database_pool_max"[\s\S]*?default\s*=\s*(\d+)/,
       'director pool maximum'
+    ),
+    // The mobile push gateway shares this instance. Its draw was invisible here until Terraform
+    // declared the pool: docs/push-gateway.md, "Shape".
+    pushInstances: overriddenInteger(
+      productionTfvars,
+      /^\s*push_max_instances\s*=\s*(\d+)/m,
+      terraformVariables,
+      /variable\s+"push_max_instances"[\s\S]*?default\s*=\s*(\d+)/,
+      'push gateway instances'
+    ),
+    pushPoolMax: requiredInteger(
+      terraformVariables,
+      /variable\s+"push_database_pool_max"[\s\S]*?default\s*=\s*(\d+)/,
+      'push gateway pool maximum'
     ),
     authInstances: apps.authInstances,
     authPoolMax: apps.authPoolMax,

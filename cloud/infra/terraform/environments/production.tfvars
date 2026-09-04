@@ -412,6 +412,9 @@ relay_alert_notification_channels = ["projects/onorca-cloud/notificationChannels
 # Mobile push gateway. Production is the only environment that runs one; the runtime account,
 # the three Apple secrets, and their accessor bindings already exist and are imported once
 # (see docs/push-gateway.md).
-push_gateway_enabled       = true
-push_base_url              = "https://push.onorca.dev"
+push_gateway_enabled = true
+push_base_url        = "https://push.onorca.dev"
+# Sized so the gateway's rollout overlap, the retained director rollback plus its doubled draw,
+# stays under the API candidate's, which keeps the checked Cloud SQL connection budget green.
+push_max_instances         = 2
 manage_push_domain_mapping = true

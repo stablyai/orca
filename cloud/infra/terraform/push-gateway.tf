@@ -40,9 +40,10 @@ locals {
 
   push_fqdn = replace(replace(var.push_base_url, "https://", ""), "http://", "")
 
-  # The shared production deploy identity runs `cloud-push-deploy.yml`. Its Cloud Run and
-  # service-account grants are scoped to this service alone; the account itself is declared in
-  # relay-github-actions.tf and is production-only.
+  # The shared production deploy identity runs `cloud-push-deploy.yml`. The grants this file adds
+  # are scoped to this service and its runtime account alone, but the workflow inherits every
+  # other grant that account already holds for the relay; see the deploy-identity section below.
+  # The account itself is declared in relay-github-actions.tf and is production-only.
   push_gateway_deploy_count = (
     var.push_gateway_enabled && local.relay_create_production_ops_identity ? 1 : 0
   )
@@ -227,6 +228,14 @@ resource "google_cloud_run_v2_service" "push" {
         value = local.push_fcm_project_id
       }
 
+      # Declared rather than left to the application default, so the gateway's share of the
+      # shared Cloud SQL connection budget is a value this root states and the precondition
+      # below can bound.
+      env {
+        name  = "ORCA_PUSH_DATABASE_POOL_MAX"
+        value = tostring(var.push_database_pool_max)
+      }
+
       env {
         name = "ORCA_PUSH_DATABASE_URL"
 
@@ -284,6 +293,19 @@ resource "google_cloud_run_v2_service" "push" {
   # 100% LATEST would silently undo either, and this root carries unrelated standing drift, so
   # that apply need not be a push change at all.
   lifecycle {
+    # Why: the gateway draws instances x pool from the shared Cloud SQL instance, and a rollout
+    # doubles it, because the tagged candidate is directly addressable and sits outside the
+    # service-wide cap. The instance's 400 connections were already spoken for by the relay
+    # cells, directors, auth, and API, which left five: 4 is the whole of the gateway's share and
+    # it fits, with the doubled 8 still under the API candidate's rollout overlap, the term
+    # dev/scripts/relay-cloud-sql-connection-budget.mjs maximizes over. A fifth connection here
+    # puts the checked budget over its ceiling and blocks Deploy Relay Asia Topology, which gates
+    # on it, so catch a raise at plan time rather than in someone else's rollout.
+    precondition {
+      condition     = var.push_max_instances * var.push_database_pool_max <= 4
+      error_message = "Push gateway instances x database pool must stay within its 4-connection share of the shared Cloud SQL instance."
+    }
+
     ignore_changes = [
       client,
       client_version,
@@ -327,8 +349,19 @@ resource "google_cloud_run_domain_mapping" "push" {
 
 # --- Deploy identity grants -------------------------------------------------------------------
 # `cloud-push-deploy.yml` authenticates as the shared production deploy account, because that
-# account is the one the foundation root grants the Cloud SQL rollout lease to. These three
-# bindings are the whole of its authority over the push gateway.
+# account is the one the foundation root grants the Cloud SQL rollout lease to; the grant names
+# that account and nothing else, so a dedicated push identity could not take the lease from this
+# root and the gateway's schema rollout could not be serialized against the relay's.
+#
+# The three bindings below are the whole of that account's authority over the *push gateway*, but
+# they are not the whole of what the workflow can do. Adding `push-deploy.yml` to the provider's
+# allowlist in relay-github-actions.tf gives the run the account's entire existing authority:
+# Artifact Registry writer on `orca-cloud`, `roles/run.developer` on the relay director and the
+# fence broker, accessor and version-adder on the relay regional-placement secret, and
+# service-account user on the relay runtime identities. That widening was accepted deliberately
+# as the price of the lease. It is bounded by the provider condition, which admits this exact
+# workflow file on `main` in the `production` environment only, and by the workflow itself, which
+# is dispatch-only behind a typed confirmation.
 
 resource "google_cloud_run_v2_service_iam_member" "github_production_push_developer" {
   count = local.push_gateway_deploy_count

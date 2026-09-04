@@ -37,12 +37,15 @@ jobs:
       IMAGE_NAME: push
       PUSH_ORIGIN: https://push.onorca.dev
       PUSH_RUNTIME_SERVICE_ACCOUNT: orca-cloud-push@onorca-cloud.iam.gserviceaccount.com
-      # Ceiling the tagged candidate, matching push_max_instances in
-      # environments/production.tfvars. A tagged revision is directly addressable and so sits
-      # outside the service-wide cap: without this the candidate and the serving revision could
-      # each reach the ceiling and double the gateway's Cloud SQL draw during the probe window.
-      # Terraform still owns the value; this only fails a deploy that would exceed it.
-      PUSH_MAX_INSTANCES: 4
+      # Scaling the serving revision must already hold, matching push_min_instances and
+      # push_max_instances. Terraform owns both, and the candidate inherits them from the
+      # service, so this deploy never passes a scaling flag: doing so would write a
+      # Terraform-owned field that `lifecycle.ignore_changes` does not cover, and a later
+      # `push_max_instances` raise would then be reverted by every deploy. These two values
+      # are the expected shape, asserted before the candidate is created and again on the
+      # candidate itself, so a deploy that would change the gateway's Cloud SQL draw fails.
+      PUSH_MIN_INSTANCES: 1
+      PUSH_MAX_INSTANCES: 2
       CONFIRMATION: ${{ inputs.confirmation }}
     steps:
       - uses: actions/checkout@v4
@@ -60,18 +63,15 @@ jobs:
 
       - uses: google-github-actions/setup-gcloud@v2
 
-      # Held across the deploy, not just a separate schema step: the gateway opens its pool and
-      # applies its schema while the new revision starts, so the revision is the schema step.
-      - uses: ./.github/actions/cloud-sql-rollout-lease
-        with:
-          bucket: onorca-cloud-terraform-state
-          object: terraform/state/cloud-sql-rollout/production.lock
-
       - uses: docker/setup-buildx-action@v3
 
       - name: Configure Docker auth
         run: gcloud auth configure-docker "${GCP_REGION}-docker.pkg.dev" --quiet
 
+      # Why: the build runs before the lease. Artifact Registry is not the Cloud SQL instance,
+      # and a multi-minute image build inside the lease blocks every relay deploy and rehome for
+      # its duration. The lease below covers exactly the connection-budget window: deploy, probe,
+      # shift.
       - name: Build and publish the immutable gateway image
         shell: bash
         run: |
@@ -86,7 +86,18 @@ jobs:
             >> "${GITHUB_ENV}"
           echo "IMAGE_DIGEST=${digest}" >> "${GITHUB_ENV}"
 
-      - name: Record the serving revision before the rollout
+      # Held across the deploy, not just a separate schema step: the gateway opens its pool and
+      # applies its schema while the new revision starts, so the revision is the schema step.
+      - uses: ./.github/actions/cloud-sql-rollout-lease
+        with:
+          bucket: onorca-cloud-terraform-state
+          object: terraform/state/cloud-sql-rollout/production.lock
+
+      # Why: the candidate inherits the serving revision's scaling. A serving revision that has
+      # drifted below the floor would hand the candidate a cold start on every notification, and
+      # one that has drifted above the ceiling would hand it a larger Cloud SQL draw than the
+      # rollout lease was taken for. Refuse to inherit either rather than latch it.
+      - name: Record the serving revision and require its Terraform-owned scaling
         shell: bash
         run: |
           set -euo pipefail
@@ -95,6 +106,21 @@ jobs:
             | jq -r '[.status.traffic[] | select((.percent // 0) > 0)]
                      | if length == 1 and .[0].percent == 100 then .[0].revisionName else empty end')"
           test -n "${serving}"
+          floor="$(gcloud run revisions describe "${serving}" \
+            --project "${GCP_PROJECT_ID}" --region "${GCP_REGION}" \
+            --format="value(metadata.annotations['autoscaling.knative.dev/minScale'])")"
+          if [[ "${floor:-0}" -lt "${PUSH_MIN_INSTANCES}" ]]; then
+            echo "serving revision ${serving} holds ${floor:-0} minimum instances," \
+              "below ${PUSH_MIN_INSTANCES}; deploying would inherit and latch it." >&2
+            echo "Restore the floor first: gcloud run services update ${SERVICE_NAME}" \
+              "--region ${GCP_REGION} --min-instances=${PUSH_MIN_INSTANCES}" >&2
+            exit 1
+          fi
+          ceiling="$(gcloud run revisions describe "${serving}" \
+            --project "${GCP_PROJECT_ID}" --region "${GCP_REGION}" \
+            --format="value(metadata.annotations['autoscaling.knative.dev/maxScale'])")"
+          test "${ceiling}" = "${PUSH_MAX_INSTANCES}"
+          echo "serving revision ${serving} holds ${floor} minimum and ${ceiling} maximum instances"
           echo "ROLLBACK_REVISION=${serving}" >> "${GITHUB_ENV}"
 
       # No traffic and a per-revision tag: the candidate boots, applies schema, and is probed on
@@ -110,7 +136,6 @@ jobs:
             --image "${IMAGE}" \
             --tag "${tag}" \
             --no-traffic \
-            --max-instances "${PUSH_MAX_INSTANCES}" \
             --quiet
           candidate="$(gcloud run services describe "${SERVICE_NAME}" \
             --project "${GCP_PROJECT_ID}" --region "${GCP_REGION}" --format=json \
@@ -121,7 +146,11 @@ jobs:
           echo "CANDIDATE_REVISION=$(jq -r '.revisionName' <<< "${candidate}")" >> "${GITHUB_ENV}"
           echo "CANDIDATE_URL=$(jq -r '.url' <<< "${candidate}")" >> "${GITHUB_ENV}"
 
-      - name: Require the candidate to serve the exact image
+      # A tagged revision is directly addressable and sits outside the service-wide cap, so the
+      # candidate and the serving revision each draw up to the ceiling during the probe window.
+      # The lease is taken for exactly that doubling; a candidate that inherited a wider ceiling
+      # would exceed it, so the inherited scaling is asserted here too.
+      - name: Require the candidate to serve the exact image and inherited scaling
         shell: bash
         run: |
           set -euo pipefail
@@ -130,6 +159,10 @@ jobs:
             --format='value(spec.containers[0].image)')"
           test "${served}" = "${IMAGE}"
           test "${CANDIDATE_REVISION}" != "${ROLLBACK_REVISION}"
+          candidate_ceiling="$(gcloud run revisions describe "${CANDIDATE_REVISION}" \
+            --project "${GCP_PROJECT_ID}" --region "${GCP_REGION}" \
+            --format="value(metadata.annotations['autoscaling.knative.dev/maxScale'])")"
+          test "${candidate_ceiling}" = "${PUSH_MAX_INSTANCES}"
 
       - name: Probe the candidate readiness endpoint
         shell: bash
@@ -154,6 +187,10 @@ jobs:
       # runtime account's FCM grant end to end without delivering anything: validate_only stops
       # Google before any push, and the deliberately invalid token means a healthy credential
       # answers INVALID_ARGUMENT. PERMISSION_DENIED is the failure this step exists to catch.
+      #
+      # Only the four verdicts below are conclusive. A 429, a 5xx, or a transport failure says
+      # nothing about the credential, so it is retried rather than treated as either answer; a
+      # denied credential still fails on the first attempt, without burning the retries.
       - name: Prove the runtime identity can reach FCM
         shell: bash
         run: |
@@ -162,13 +199,20 @@ jobs:
             --impersonate-service-account "${PUSH_RUNTIME_SERVICE_ACCOUNT}")"
           test -n "${token}"
           body='{"validate_only":true,"message":{"token":"orca-push-deploy-probe-invalid-token","notification":{"title":"Orca","body":"deploy probe"}}}'
-          code="$(curl -sS -o "${RUNNER_TEMP}/push-fcm.json" -w '%{http_code}' --max-time 20 \
-            -X POST "https://fcm.googleapis.com/v1/projects/${GCP_PROJECT_ID}/messages:send" \
-            -H "Authorization: Bearer ${token}" \
-            -H 'Content-Type: application/json' \
-            --data "${body}" || true)"
-          status="$(jq -r '.error.status // empty' < "${RUNNER_TEMP}/push-fcm.json")"
-          echo "FCM validate-only send returned HTTP ${code} status ${status:-OK}"
+          for attempt in $(seq 1 5); do
+            code="$(curl -sS -o "${RUNNER_TEMP}/push-fcm.json" -w '%{http_code}' --max-time 20 \
+              -X POST "https://fcm.googleapis.com/v1/projects/${GCP_PROJECT_ID}/messages:send" \
+              -H "Authorization: Bearer ${token}" \
+              -H 'Content-Type: application/json' \
+              --data "${body}" || true)"
+            status="$(jq -r '.error.status // empty' < "${RUNNER_TEMP}/push-fcm.json" || true)"
+            echo "attempt ${attempt}: FCM validate-only send returned HTTP ${code} status ${status:-OK}"
+            if test "${status}" = PERMISSION_DENIED || test "${status}" = INVALID_ARGUMENT ||
+              test "${code}" = 401 || test "${code}" = 403; then
+              break
+            fi
+            sleep 5
+          done
           if test "${status}" = PERMISSION_DENIED || test "${code}" = 401 || test "${code}" = 403; then
             echo "the push runtime identity cannot send through FCM" >&2
             exit 1
@@ -189,13 +233,15 @@ jobs:
             | jq -r '[.status.traffic[] | select((.percent // 0) > 0)]
                      | if length == 1 and .[0].percent == 100 then .[0].revisionName else empty end')"
           test "${serving}" = "${CANDIDATE_REVISION}"
+          echo "TRAFFIC_SHIFTED=true" >> "${GITHUB_ENV}"
 
-      - name: Verify the public origin after the shift
+      # Why: the summary is written before the origin check, not after it. Once traffic has
+      # moved, the rollback target is the single thing an operator needs, and a summary that only
+      # appeared on success would be missing in exactly the run that needs it.
+      - name: Publish the rollout summary
         shell: bash
         run: |
           set -euo pipefail
-          code="$(curl -sS -o /dev/null -w '%{http_code}' --max-time 10 "${PUSH_ORIGIN}/ready")"
-          test "${code}" = 200
           {
             echo '### Push gateway deployed'
             echo
@@ -206,6 +252,74 @@ jobs:
             echo "Rollback: \`gcloud run services update-traffic ${SERVICE_NAME}" \
               "--region ${GCP_REGION} --to-revisions ${ROLLBACK_REVISION}=100\`"
           } >> "${GITHUB_STEP_SUMMARY}"
+
+      - name: Verify the public origin after the shift
+        shell: bash
+        run: |
+          set -euo pipefail
+          for attempt in $(seq 1 30); do
+            code="$(curl -sS -o /dev/null -w '%{http_code}' --max-time 10 \
+              "${PUSH_ORIGIN}/ready" || true)"
+            if test "${code}" = 200; then
+              echo "${PUSH_ORIGIN} is ready after ${attempt} attempt(s)"
+              exit 0
+            fi
+            echo "attempt ${attempt}: ${PUSH_ORIGIN}/ready returned ${code}"
+            sleep 5
+          done
+          echo "${PUSH_ORIGIN} never reported ready after the shift" >&2
+          exit 1
+
+      # Why: everything after the shift runs with production on the candidate. A failure there
+      # is not a failure to deploy, it is a live gateway that has to go back, so the traffic move
+      # is undone here rather than left to whoever reads the run.
+      - name: Roll traffic back to the previous revision
+        if: ${{ failure() && env.TRAFFIC_SHIFTED == 'true' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "${ROLLBACK_REVISION:-}"
+          gcloud run services update-traffic "${SERVICE_NAME}" \
+            --project "${GCP_PROJECT_ID}" \
+            --region "${GCP_REGION}" \
+            --to-revisions "${ROLLBACK_REVISION}=100" \
+            --quiet
+          serving="$(gcloud run services describe "${SERVICE_NAME}" \
+            --project "${GCP_PROJECT_ID}" --region "${GCP_REGION}" --format=json \
+            | jq -r '[.status.traffic[] | select((.percent // 0) > 0)]
+                     | if length == 1 and .[0].percent == 100 then .[0].revisionName else empty end')"
+          test "${serving}" = "${ROLLBACK_REVISION}"
+          {
+            echo
+            echo '### Push gateway rolled back'
+            echo
+            echo "Traffic returned to \`${ROLLBACK_REVISION}\`; the candidate" \
+              "\`${CANDIDATE_REVISION}\` no longer serves."
+          } >> "${GITHUB_STEP_SUMMARY}"
+
+      # Why: a candidate that never took traffic is a revision holding a warm floor and a Cloud
+      # SQL pool for nothing. Its tag comes off first, because Cloud Run refuses to delete a
+      # revision a traffic target still names, and clearing CANDIDATE_TAG makes the always() tag
+      # step below a no-op rather than a second failure.
+      - name: Delete the candidate revision that never took traffic
+        if: ${{ failure() && env.TRAFFIC_SHIFTED != 'true' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "${CANDIDATE_REVISION:-}" || exit 0
+          if test -n "${CANDIDATE_TAG:-}"; then
+            gcloud run services update-traffic "${SERVICE_NAME}" \
+              --project "${GCP_PROJECT_ID}" \
+              --region "${GCP_REGION}" \
+              --remove-tags "${CANDIDATE_TAG}" \
+              --quiet
+            echo "CANDIDATE_TAG=" >> "${GITHUB_ENV}"
+          fi
+          gcloud run revisions delete "${CANDIDATE_REVISION}" \
+            --project "${GCP_PROJECT_ID}" \
+            --region "${GCP_REGION}" \
+            --quiet
+          echo "deleted the candidate revision ${CANDIDATE_REVISION}"
 
       - name: Drop the candidate traffic tag
         if: always()

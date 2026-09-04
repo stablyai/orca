@@ -21,7 +21,8 @@ edit plus a second set of Apple credentials.
 | --- | --- | --- |
 | Cloud Run service | `orca-cloud-push` | `push_cloud_run_service_name` |
 | Region | `us-central1` | `region` |
-| Instances | min 1, max 4 | `push_min_instances`, `push_max_instances` |
+| Instances | min 1, max 2 | `push_min_instances`, `push_max_instances` |
+| Database pool | 2 per instance | `push_database_pool_max` |
 | Concurrency | 80 | `push_concurrency` |
 | Ingress | all | `INGRESS_TRAFFIC_ALL` |
 | Invoker | IAM disabled | `invoker_iam_disabled = true` on the service |
@@ -29,8 +30,24 @@ edit plus a second set of Apple credentials.
 | Database | `orca_push` on the shared Cloud SQL instance | `google_sql_database.push` |
 | Hostname | `push.onorca.dev` | `push_base_url` |
 
-The minimum of one instance is deliberate. A cold start delays a notification past the point
-where it is worth showing, and the three-second coalescing window lives in instance memory.
+The minimum of one instance is deliberate and did not move when the ceiling came down to two. A
+cold start delays a notification past the point where it is worth showing, and the three-second
+coalescing window lives in instance memory, so the floor is what keeps a notification prompt. The
+ceiling is a different question, answered below.
+
+The maximum and the pool are set by the connection budget, not by the gateway's own appetite. Two
+instances times a two-connection pool is a draw of 4, and a rollout doubles it to 8, because the
+tagged candidate is directly addressable and sits outside the service-wide cap. The shared Cloud
+SQL instance's 400 connections were already spoken for by the relay cells, the directors, auth,
+and the API, which left five. Four is the whole of the room there was, and the gateway fits in
+it.
+
+Two connections per instance is enough for the work. A send runs two or three short queries, so
+at concurrency 80 requests queue against the pool for microseconds rather than holding it. A
+`lifecycle` precondition refuses a plan whose instances times pool exceeds 4, because a fifth
+connection puts the checked budget over its ceiling and blocks `Deploy Relay Asia Topology`,
+which gates on it. `dev/scripts/relay-cloud-sql-connection-budget.mjs` counts the gateway and
+prints the whole picture.
 
 Authentication is the host proof in `POST /v1/host/challenge`, not Cloud Run IAM, so the service
 opts out of invoker IAM with `invoker_iam_disabled = true`, exactly as the relay director does.
@@ -47,6 +64,7 @@ Set on the container by Terraform:
 | `ORCA_PUSH_PUBLIC_URL` | `push_base_url` |
 | `ORCA_PUSH_FCM_PROJECT_ID` | `push_fcm_project_id`, empty means `project_id` |
 | `ORCA_PUSH_DATABASE_URL` | Secret `orca-cloud-push-database-url`, version `latest` |
+| `ORCA_PUSH_DATABASE_POOL_MAX` | `push_database_pool_max`, 2 per instance |
 | `ORCA_PUSH_APNS_KEY` | Secret `orca-cloud-push-apns-key`, version `latest` |
 | `ORCA_PUSH_APNS_KEY_ID` | Secret `orca-cloud-push-apns-key-id`, version `latest` |
 | `ORCA_PUSH_APPLE_TEAM_ID` | Secret `orca-cloud-push-apple-team-id`, version `latest` |
@@ -130,28 +148,55 @@ It authenticates as the shared production deploy identity through
 `PRODUCTION_GCP_RELAY_DEPLOY_WORKLOAD_IDENTITY_PROVIDER` and
 `PRODUCTION_GCP_RELAY_DEPLOY_SERVICE_ACCOUNT`, which are already published. No new GitHub
 variable is required. That account was chosen because the Cloud SQL rollout lease grant is
-foundation-owned and already names it; a dedicated identity could not take that lease from this
-root. Its authority over the gateway is exactly three bindings in `push-gateway.tf`: Cloud Run
-developer on this one service, service-account user on the runtime account, and token creator on
-the runtime account.
+foundation-owned and names only that account; a dedicated identity could not take that lease from
+this root, and the gateway's schema rollout has to serialize against the relay's.
+
+**That choice widens what this workflow can reach, and the widening is deliberate.** Adding
+`push-deploy.yml` to the provider allowlist gives the run the account's whole existing authority,
+not only the push bindings: Artifact Registry writer on `orca-cloud`, `roles/run.developer` on
+the relay director and the fence broker, accessor and version-adder on the relay
+regional-placement secret, and service-account user on the relay runtime identities. It was
+accepted as the price of the lease. What `push-gateway.tf` adds on top is three bindings scoped
+to the gateway alone: Cloud Run developer on this one service, and service-account user plus
+token creator on the runtime account. The bound on the rest is the provider condition, which
+admits this exact workflow file on `main` in the `production` environment only, and the workflow
+itself, which is dispatch-only behind a typed confirmation.
 
 The run, in order:
 
-1. Takes the production Cloud SQL rollout lease and holds it for the whole run. The gateway
-   applies its schema while the new revision starts, so the revision **is** the schema step;
-   there is no separate migration command to wrap.
-2. Builds `apps/push/Dockerfile` with the `cloud/` build context and pushes to the existing
+1. Builds `apps/push/Dockerfile` with the `cloud/` build context and pushes to the existing
    `orca-cloud` Artifact Registry repository as `push:sha-<commit>`, then resolves the digest.
-3. Records the currently serving revision as the rollback target.
+   This happens **before** the lease is taken. Artifact Registry is not the Cloud SQL instance,
+   and a multi-minute build inside the lease would block every relay deploy and rehome for its
+   duration.
+2. Takes the production Cloud SQL rollout lease and holds it from here to the end. The gateway
+   applies its schema while the new revision starts, so the revision **is** the schema step;
+   there is no separate migration command to wrap. The lease therefore covers exactly the
+   connection-budget window: deploy, probe, shift.
+3. Records the currently serving revision as the rollback target, and requires it to still hold
+   the Terraform-owned floor and ceiling. The candidate inherits that scaling, so a drifted
+   serving revision would be latched rather than corrected.
 4. `gcloud run deploy --no-traffic` with a per-run traffic tag, so the candidate boots and
-   applies schema while every phone still reaches the previous revision.
+   applies schema while every phone still reaches the previous revision. The deploy passes no
+   scaling flag: the shape is Terraform's, and the candidate's inherited ceiling is asserted
+   instead.
 5. Probes the tagged candidate's own `/ready`, up to 30 times at five-second intervals.
 6. Sends a validate-only FCM message as the runtime identity, by impersonation. See below.
-7. Shifts 100% of traffic to the candidate, verifies it is the only revision serving, and
-   checks `https://push.onorca.dev/ready`.
-8. Always removes the traffic tag, so tags do not accumulate across runs.
+7. Shifts 100% of traffic to the candidate and verifies it is the only revision serving.
+8. Writes the run summary, including the rollback command, before checking the public origin, so
+   the summary exists even when the check that follows does not pass.
+9. Checks `https://push.onorca.dev/ready`, up to 30 times at five-second intervals, since the
+   origin can lag the traffic move by a few seconds.
+10. Always removes the traffic tag, so tags do not accumulate across runs.
 
-Rolling back is a traffic move, printed in the run summary:
+**Failure after the shift rolls itself back.** Everything from step 8 on runs with production
+already on the candidate, so a failure there is not a failed deploy, it is a live gateway that
+has to go back. The run returns traffic to the recorded rollback revision, verifies the move, and
+reports it in the summary. A failure *before* the shift leaves production untouched and deletes
+the candidate revision, which otherwise sits holding a warm instance and a Cloud SQL pool for
+nothing.
+
+To move traffic by hand, from the revision named in the run summary:
 
 ```sh
 gcloud run services update-traffic orca-cloud-push \
@@ -167,7 +212,9 @@ mints an access token for `orca-cloud-push@onorca-cloud.iam.gserviceaccount.com`
 `validate_only: true` with a token that cannot exist. `validate_only` stops Google before any
 delivery, and a healthy credential answers `INVALID_ARGUMENT` because the device token is
 garbage. `PERMISSION_DENIED`, `401`, and `403` are the failures the step exists to catch, and
-they fail the run before traffic moves. Probing as the deploy identity instead would prove
+they fail the run immediately, before traffic moves. Those four answers are the only conclusive
+ones: a `429`, a `5xx`, or a transport failure says nothing about the credential, so the send is
+retried up to five times at five-second intervals rather than read as either verdict. Probing as the deploy identity instead would prove
 something true about the wrong account.
 
 ## Rotating the APNs key

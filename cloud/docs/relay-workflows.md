@@ -411,20 +411,31 @@ Artifact Registry repository, and its rollout lease.
 It needs **no new GitHub environment variable.** It authenticates as the shared production deploy
 identity through the already-published `PRODUCTION_GCP_RELAY_DEPLOY_WORKLOAD_IDENTITY_PROVIDER`
 and `PRODUCTION_GCP_RELAY_DEPLOY_SERVICE_ACCOUNT`, and reads `PRODUCTION_GCP_REGION` like the
-rest. That account holds the foundation-owned Cloud SQL rollout lease grant, which a dedicated
-identity could not be given from this root. Its authority over the gateway is three bindings in
-`infra/terraform/push-gateway.tf` and nothing wider: Cloud Run developer on that one service, and
-service-account user plus token creator on the gateway's runtime account.
+rest. That account holds the foundation-owned Cloud SQL rollout lease grant, which names it and nothing
+else, so a dedicated identity could not be given that lease from this root.
+
+`infra/terraform/push-gateway.tf` adds three bindings scoped to the gateway: Cloud Run developer
+on that one service, and service-account user plus token creator on the gateway's runtime
+account. Those three are not the workflow's whole authority. Running as the shared account gives
+the run every role that account already holds for the relay: Artifact Registry writer on
+`orca-cloud`, `roles/run.developer` on the relay director and the fence broker, accessor and
+version-adder on the relay regional-placement secret, and service-account user on the relay
+runtime identities. That widening was accepted as the price of the lease, and it is bounded by
+the provider condition and by the workflow being dispatch-only behind a typed confirmation.
 
 The provider's workflow allowlist gained exactly one entry, `cloud-push-deploy.yml`, on `main` in
 the `production` environment. That entry is required: the allowlist compares complete workflow
 refs by equality, so the `cloud-` filename prefix alone does not admit a new file.
 
-The run takes the production rollout lease and holds it across the deploy, because the gateway
-applies its schema while the new revision starts. It builds `apps/push/Dockerfile`, deploys with
-`--no-traffic` behind a per-run traffic tag, probes the candidate's own `/ready`, proves the
-runtime identity can reach FCM with a validate-only send, and only then shifts 100% of traffic.
-There is no staging gateway, so there is no staging counterpart to run first.
+The run builds `apps/push/Dockerfile` **before** taking the lease, so an image build never blocks
+a relay deploy or rehome, then holds the production rollout lease across the deploy itself,
+because the gateway applies its schema while the new revision starts. Under the lease it checks
+the serving revision's Terraform-owned scaling, deploys with `--no-traffic` behind a per-run
+traffic tag and no scaling flag of its own, probes the candidate's own `/ready`, proves the
+runtime identity can reach FCM with a validate-only send, and only then shifts 100% of traffic. A
+failure after the shift returns traffic to the recorded rollback revision; a failure before it
+deletes the candidate. There is no staging gateway, so there is no staging counterpart to run
+first.
 
 Full runbook, including the APNs key rotation and the DNS record the `stablyai/orca-cloud` apps
 root still owes, is in `docs/push-gateway.md`.

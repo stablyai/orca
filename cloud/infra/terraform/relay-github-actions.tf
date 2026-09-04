@@ -21,8 +21,13 @@ locals {
     "operate-relay-asia-admission.yml",
     "publish-relay-production.yml",
     # The push gateway deploy runs as this account because the Cloud SQL rollout lease grant is
-    # foundation-owned and already names it; a dedicated identity could not take that lease.
-    # Its authority over the gateway is three bindings in push-gateway.tf and nothing more.
+    # foundation-owned and names only this account; a dedicated identity could not take that
+    # lease, and the gateway's schema rollout has to serialize against the relay's.
+    #
+    # This entry therefore grants that workflow every role the account already holds, not just
+    # the three push bindings in push-gateway.tf: Artifact Registry writer, run.developer on the
+    # relay director and fence broker, relay secret accessor and version-adder, and
+    # serviceAccountUser on the relay runtime identities. Accepted as the price of the lease.
     "push-deploy.yml"
   ]
   github_production_relay_capacity_workflow_file     = "deploy-relay-production-capacity.yml"
