@@ -94,7 +94,11 @@ export function createTerminalTabCreationActions(
         const defaultTitle = `Terminal ${nextOrdinal}`
         const quickCommandLabel = options?.quickCommandLabel?.trim()
         const startupCwd = options?.startupCwd
-        const remoteConnectionId = getRemoteConnectionIdForWorktree(s, worktreeId)
+        const remoteConnectionId = getRemoteConnectionIdForWorktree(
+          s,
+          worktreeId,
+          options?.executionHostId
+        )
         const isRemoteWorktree = Boolean(remoteConnectionId)
         const isWslWorktree = worktreeUsesWslPath(s, worktreeId)
         const createdShellOverride = resolveCreatedTabShellOverride(

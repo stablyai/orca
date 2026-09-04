@@ -105,6 +105,19 @@ export function createWorktreePurgeOmitters(
     }
     return changed ? out : obj
   }
+  // Why a list and not a map: the two session-grid preferences are flat arrays of tab ids,
+  // so `omitByTabId` cannot reach them. Identity-guarded — an unchanged array must not read
+  // as a local edit to the persisted-UI writer, which is what would re-send it on every purge.
+  const omitTabIdsFromList = (ids: readonly string[]): string[] => {
+    // Null-tolerant like omitByPaneKeyTabPrefix: worktree-isolation callers pass a partial
+    // state omitting these slices (production store always inits them to []).
+    if (!ids) {
+      return ids
+    }
+    return ids.some((id) => doomedTabIds.has(id))
+      ? ids.filter((id) => !doomedTabIds.has(id))
+      : (ids as string[])
+  }
   const omitByBrowserWorkspaceId = <T>(obj: Record<string, T>): Record<string, T> => {
     let changed = false
     const out = { ...obj }
@@ -147,6 +160,7 @@ export function createWorktreePurgeOmitters(
     omitRetiredDirectSshLedgerByTabId,
     omitByPtyId,
     omitByPaneKeyTabPrefix,
+    omitTabIdsFromList,
     omitByBrowserWorkspaceId,
     omitByPageId,
     omitByFileId

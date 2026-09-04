@@ -1,6 +1,7 @@
 import type { TerminalState } from './terminal-state'
 import type { Tab } from '../../../../shared/tab-types'
 import type { TerminalLayoutSnapshot, TerminalTab } from '../../../../shared/terminal-tab-types'
+import type { ExecutionHostId } from '../../../../shared/execution-host'
 import type { TuiAgent } from '../../../../shared/tui-agent'
 import type { WorkspaceSessionState } from '../../../../shared/workspace-session-state-types'
 import type { SetupSplitDirection } from '../../../../shared/worktree/launch-types'
@@ -82,6 +83,11 @@ export type TerminalActions = {
       viewMode?: Tab['viewMode']
       startupCwd?: string
       forceHostRuntime?: boolean
+      /** The host the caller picked when its surface listed one row per host. `worktreeId`
+       *  carries no host, so a repo attached both locally and over SSH publishes the same
+       *  id twice; only a REMOTE pick is taken as given, since `local` in a workspace
+       *  catalog means "nothing named a host". */
+      executionHostId?: ExecutionHostId
     }
   ) => TerminalTab
   openNewTerminalTabInActiveWorkspace: (groupId: string) => Promise<void>
