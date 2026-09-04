@@ -2574,7 +2574,7 @@
         "skipCommands": "Skip commands",
         "connectProject": "Connect {{name}}",
         "promptLabel": "Prompt",
-        "promptPlaceholderNoAgent": "Choose an agent to send it a first prompt",
+        "promptPlaceholderNoAgent": "Choose an agent to send a first prompt",
         "promptPlaceholder": "Sent to the agent as soon as the workspace is ready"
       },
       "NewWorkspaceComposerModal": {

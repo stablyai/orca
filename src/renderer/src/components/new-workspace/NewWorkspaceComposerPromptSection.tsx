@@ -33,7 +33,7 @@ export function NewWorkspaceComposerPromptSection({
           disabled
             ? translate(
                 'auto.components.NewWorkspaceComposerCard.promptPlaceholderNoAgent',
-                'Choose an agent to send it a first prompt'
+                'Choose an agent to send a first prompt'
               )
             : translate(
                 'auto.components.NewWorkspaceComposerCard.promptPlaceholder',

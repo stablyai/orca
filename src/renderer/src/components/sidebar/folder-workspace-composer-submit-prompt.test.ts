@@ -4,11 +4,29 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { FolderWorkspace } from '../../../../shared/folder-workspace-types'
 import type { ProjectGroup } from '../../../../shared/project-group-types'
 
-const mocks = vi.hoisted(() => ({ activateAndRevealFolderWorkspace: vi.fn() }))
+const mocks = vi.hoisted(() => ({
+  activateAndRevealFolderWorkspace: vi.fn(),
+  planAgentSessionLaunch: vi.fn(() => ({ route: 'terminal-tui' })),
+  beginStructuredAgentSessionProvisionalLaunch: vi.fn()
+}))
 
 vi.mock('@/lib/worktree-activation', async (importOriginal) => {
   const actual = await importOriginal<Record<string, unknown>>()
   return { ...actual, activateAndRevealFolderWorkspace: mocks.activateAndRevealFolderWorkspace }
+})
+
+vi.mock('@/lib/agent-session-launch-plan', async (importOriginal) => {
+  const actual = await importOriginal<Record<string, unknown>>()
+  return { ...actual, planAgentSessionLaunch: mocks.planAgentSessionLaunch }
+})
+
+vi.mock('@/lib/agent-session/structured-agent-session-provisional-tab', async (importOriginal) => {
+  const actual = await importOriginal<Record<string, unknown>>()
+  return {
+    ...actual,
+    beginStructuredAgentSessionProvisionalLaunch:
+      mocks.beginStructuredAgentSessionProvisionalLaunch
+  }
 })
 
 import { submitFolderWorkspaceCreate } from './folder-workspace-composer-submit'
@@ -50,6 +68,9 @@ describe('submitFolderWorkspaceCreate typed prompt', () => {
 
   afterEach(() => {
     mocks.activateAndRevealFolderWorkspace.mockReset()
+    mocks.planAgentSessionLaunch.mockReset()
+    mocks.planAgentSessionLaunch.mockReturnValue({ route: 'terminal-tui' })
+    mocks.beginStructuredAgentSessionProvisionalLaunch.mockReset()
     Reflect.deleteProperty(window, 'api')
   })
 
@@ -78,6 +99,45 @@ describe('submitFolderWorkspaceCreate typed prompt', () => {
       expect.objectContaining({ pendingFirstAgentMessageRename: true })
     )
   })
+
+  // Why: the planner is the one place the launch prompt is handed off — routing and the
+  // structured session both read it from there, so a regression here sends the note instead.
+  it.each(['codex', 'claude'] as const)(
+    'hands the typed prompt to the launch planner for %s',
+    async (agent) => {
+      mocks.planAgentSessionLaunch.mockReturnValue({ route: 'structured-native-chat' })
+      mocks.beginStructuredAgentSessionProvisionalLaunch.mockImplementation(
+        (args: { beforeOpen?: () => boolean }) => {
+          args.beforeOpen?.()
+          return null
+        }
+      )
+
+      await submitFolderWorkspaceCreate({
+        projectGroup: PROJECT_GROUP,
+        name: '',
+        lastAutoName: '',
+        linkedWorkItem: null,
+        note: 'card note',
+        agentPrompt: 'Fix the flaky checkout flow',
+        quickAgent: agent,
+        autoRenameBranchFromWork: true,
+        agentCmdOverrides: {},
+        createFolderWorkspace: vi.fn(async () => WORKSPACE),
+        onOpenChange: vi.fn()
+      })
+
+      // Delivery mode is pinned too: a typed prompt with nothing linked must submit, not draft.
+      expect(mocks.planAgentSessionLaunch).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.objectContaining({
+          prompt: 'Fix the flaky checkout flow',
+          promptDelivery: 'auto-submit'
+        })
+      )
+      expect(mocks.beginStructuredAgentSessionProvisionalLaunch).toHaveBeenCalled()
+    }
+  )
 
   it('still launches the note when no prompt is typed', async () => {
     await submitFolderWorkspaceCreate({
