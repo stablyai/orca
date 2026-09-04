@@ -1,17 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
-import { useAppStore } from '@/store'
 import { isShellProcess } from '../../../shared/agent-detection'
-import { worktreeUsesRemoteConnection } from '@/store/terminals/terminal-workspace-routing'
-import { hasRemoteRuntimePtyForTab } from './tab-agent-remote-pty-selector'
-import { isTerminalLeafId, makePaneKey } from '../../../shared/stable-pane-id'
-import {
-  resolveFocusedCompletedTabAgent,
-  resolveFocusedRetainedTabAgent,
-  resolveFocusedTabAgent,
-  resolveSiblingCompletedTabAgent,
-  resolveSiblingRetainedTabAgent,
-  resolveSiblingTabAgent
-} from './tab-agent'
+import { useTabAgentStoreSignals } from './tab-agent-store-signals'
 import {
   isClaudeIdentityFrameTitle,
   resolveExplicitTerminalTitleAgentType
@@ -184,84 +173,22 @@ export function resolveTabAgentFromSignals(args: {
  * 7. Sibling-pane identity (live, then completed/retained) — split-tab fallback.
  */
 export function useTabAgent(tab: TerminalTab): TuiAgent | null {
-  const focusedHookAgent = useAppStore((s) =>
-    resolveFocusedTabAgent(s.agentStatusByPaneKey, s.terminalLayoutsByTabId[tab.id], tab.id)
-  )
-  const siblingHookAgent = useAppStore((s) =>
-    resolveSiblingTabAgent(s.agentStatusByPaneKey, s.terminalLayoutsByTabId[tab.id], tab.id)
-  )
-  const focusedCompletedHookAgent = useAppStore(
-    (s) =>
-      resolveFocusedCompletedTabAgent(
-        s.agentStatusByPaneKey,
-        s.terminalLayoutsByTabId[tab.id],
-        tab.id
-      ) ??
-      resolveFocusedRetainedTabAgent(
-        s.retainedAgentsByPaneKey,
-        s.terminalLayoutsByTabId[tab.id],
-        tab.id
-      )
-  )
-  const siblingCompletedHookAgent = useAppStore(
-    (s) =>
-      resolveSiblingCompletedTabAgent(
-        s.agentStatusByPaneKey,
-        s.terminalLayoutsByTabId[tab.id],
-        tab.id
-      ) ??
-      resolveSiblingRetainedTabAgent(
-        s.retainedAgentsByPaneKey,
-        s.terminalLayoutsByTabId[tab.id],
-        tab.id
-      )
-  )
+  // Why one subscription and not thirteen: this hook mounts once per tab-bar tab AND once
+  // per session-grid card, so its listener count multiplies by every mounted surface.
+  const {
+    focusedHookAgent,
+    siblingHookAgent,
+    focusedCompletedHookAgent,
+    siblingCompletedHookAgent,
+    processAgent,
+    processShellForeground,
+    sleepingSessionAgent,
+    ptyId,
+    completedHookScopeKnown,
+    isRemoteLike,
+    clearTabLaunchAgent
+  } = useTabAgentStoreSignals(tab.id, tab.worktreeId)
   const hasCompletedHook = focusedCompletedHookAgent !== null
-  const clearTabLaunchAgent = useAppStore((s) => s.clearTabLaunchAgent)
-  const focusedPaneKey = useAppStore((s) => {
-    const activeLeafId = s.terminalLayoutsByTabId[tab.id]?.activeLeafId
-    return activeLeafId && isTerminalLeafId(activeLeafId) ? makePaneKey(tab.id, activeLeafId) : null
-  })
-  const processAgent = useAppStore((s) =>
-    focusedPaneKey ? (s.paneForegroundAgentByPaneKey[focusedPaneKey]?.agent ?? null) : null
-  )
-  const processShellForeground = useAppStore((s) =>
-    focusedPaneKey
-      ? Boolean(s.paneForegroundAgentByPaneKey[focusedPaneKey]?.shellForeground)
-      : false
-  )
-  // Why: a hibernated pane's session record is the freshest identity once PTY, hook, and process signals are all gone.
-  const sleepingSessionAgent = useAppStore((s) =>
-    focusedPaneKey ? (s.sleepingAgentSessionsByPaneKey[focusedPaneKey]?.agent ?? null) : null
-  )
-
-  // Focused pane's PTY; only used to reset per-process-generation signals on respawn.
-  const ptyId = useAppStore((s) => {
-    const layout = s.terminalLayoutsByTabId[tab.id]
-    const activeLeafId = layout?.activeLeafId
-    const leafPty = activeLeafId ? layout?.ptyIdsByLeafId?.[activeLeafId] : undefined
-    if (leafPty) {
-      return leafPty
-    }
-    const ptyIds = s.ptyIdsByTabId[tab.id] ?? []
-    return ptyIds.length === 1 ? ptyIds[0]! : null
-  })
-  // Why: with no layout to place a completed row, only a single-pane tab may treat it as focused-pane exit evidence.
-  const completedHookScopeKnown = useAppStore((s) => {
-    const layout = s.terminalLayoutsByTabId[tab.id]
-    if (layout?.activeLeafId && isTerminalLeafId(layout.activeLeafId)) {
-      return true
-    }
-    return (s.ptyIdsByTabId[tab.id] ?? []).length <= 1
-  })
-  const hasRemoteRuntimePty = useAppStore((s) =>
-    hasRemoteRuntimePtyForTab(
-      s.ptyIdsByTabId[tab.id],
-      s.terminalLayoutsByTabId[tab.id]?.ptyIdsByLeafId
-    )
-  )
-  const isRemoteWorktree = useAppStore((s) => worktreeUsesRemoteConnection(s, tab.worktreeId))
-  const isRemoteLike = isRemoteWorktree || hasRemoteRuntimePty
 
   const [hasObservedAgentSignal, setHasObservedAgentSignal] = useState(false)
   const hasObservedAgentSignalRef = useRef(false)
