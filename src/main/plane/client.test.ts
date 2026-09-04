@@ -127,6 +127,8 @@ describe('connect', () => {
     const plane = await loadPlaneModules()
     await plane.connect(CONNECT_ARGS)
 
+    // Why: a followed redirect would replay X-API-Key against the new origin.
+    expect(netFetchMock.mock.calls[0]?.[1]?.redirect).toBe('error')
     const headers = new Headers(netFetchMock.mock.calls[0]?.[1]?.headers)
     expect(headers.get('x-api-key')).toBe('plane_api_secret')
     expect(headers.get('user-agent')).toBe('Orca')
@@ -265,9 +267,51 @@ describe('rate limit admission', () => {
     expect(released).toBe(1)
 
     // The budget is now parked; a follow-up must not reach the network.
-    const second = plane.planeRequest(client, 'workspaces/acme/projects/')
+    const controller = new AbortController()
+    const second = plane.planeRequest(client, 'workspaces/acme/projects/', {
+      signal: controller.signal
+    })
     await new Promise((resolve) => setTimeout(resolve, 50))
     expect(released).toBe(1)
-    void second.catch(() => undefined)
+    // Abort so the throttle timer does not outlive the test.
+    controller.abort()
+    await expect(second).rejects.toMatchObject({ name: 'AbortError' })
+  })
+
+  it('keeps the pool slot until the response body is consumed', async () => {
+    // Regression: the slot was released once headers arrived, so five stalled
+    // bodies could be in flight against a pool of four.
+    const bodyControllers: ReadableStreamDefaultController<Uint8Array>[] = []
+    netFetchMock.mockImplementation(
+      async () =>
+        new Response(
+          new ReadableStream<Uint8Array>({
+            start(controller) {
+              bodyControllers.push(controller)
+            }
+          }),
+          { status: 200, headers: { 'content-type': 'application/json' } }
+        )
+    )
+
+    const plane = await loadPlaneModules()
+    const client = { workspace: { ...workspaceFixture }, apiToken: 'plane_api_secret' }
+    const requests = Array.from({ length: 5 }, () =>
+      plane.planeRequest(client, 'workspaces/acme/projects/')
+    )
+    await new Promise((resolve) => setTimeout(resolve, 20))
+    expect(netFetchMock).toHaveBeenCalledTimes(4)
+
+    const finishBody = (controller: ReadableStreamDefaultController<Uint8Array>): void => {
+      controller.enqueue(new TextEncoder().encode('{"results":[]}'))
+      controller.close()
+    }
+    finishBody(bodyControllers[0]!)
+    await requests[0]
+    await new Promise((resolve) => setTimeout(resolve, 20))
+    expect(netFetchMock).toHaveBeenCalledTimes(5)
+
+    bodyControllers.slice(1).forEach(finishBody)
+    await Promise.all(requests)
   })
 })

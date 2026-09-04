@@ -49,6 +49,14 @@ describe('listAllPages', () => {
     })
   })
 
+  it.each([
+    ['a string', 'oops'],
+    ['an object', { a: 1 }]
+  ])('treats %s under results as an empty page instead of spreading it', async (_, results) => {
+    const fetchPage = vi.fn(async () => ({ results, next_page_results: false }))
+    await expect(listAllPages<string>(fetchPage)).resolves.toEqual({ items: [], truncated: false })
+  })
+
   it('treats a missing results field as an empty page', async () => {
     await expect(listAllPages<string>(async () => ({}))).resolves.toEqual({
       items: [],

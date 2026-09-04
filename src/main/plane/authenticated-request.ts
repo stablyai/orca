@@ -220,37 +220,41 @@ async function execute(
 ): Promise<unknown> {
   await admit(budgetKey, init?.signal)
   const deadline = withDeadline(init?.signal)
-  let response: Response
+  let retry = false
+  let result: unknown = null
+  // Why: net.fetch resolves at the headers. The slot and the deadline have to
+  // cover the body read too, or a stalled body escapes both bounds.
   try {
-    response = await planeFetch(url, {
+    const response = await planeFetch(url, {
       ...init,
       headers: buildHeaders(apiToken, init),
+      // Why: a redirect would carry X-API-Key to whatever origin the server
+      // named; the API never redirects a well-formed call.
+      redirect: 'error',
       signal: deadline.signal
     })
+    noteRateLimitHeaders(budgetKey, response.headers)
+    if (response.status === 429) {
+      // Why: every 429 parks the budget, not only the one that is retried.
+      // Otherwise a repeated 429 -- especially one carrying no
+      // x-ratelimit-remaining -- would leave the next caller sending at once.
+      noteRateLimited(budgetKey, response.headers)
+      if (attempt === 0) {
+        retry = true
+      } else {
+        throw new PlaneApiError(await readPlaneError(response), response.status)
+      }
+    } else if (!response.ok) {
+      throw new PlaneApiError(await readPlaneError(response), response.status)
+    } else if (response.status !== 204) {
+      result = await response.json()
+    }
   } finally {
     deadline.done()
     release()
   }
-
-  noteRateLimitHeaders(budgetKey, response.headers)
-
-  if (response.status === 429 && attempt === 0) {
-    noteRateLimited(budgetKey, response.headers)
-    return execute(budgetKey, url, apiToken, init, attempt + 1)
-  }
-  if (!response.ok) {
-    // Why: only the first 429 took the retry path above. Without this a
-    // repeated 429 -- especially one carrying no x-ratelimit-remaining -- would
-    // leave the budget clear and the next caller would send immediately.
-    if (response.status === 429) {
-      noteRateLimited(budgetKey, response.headers)
-    }
-    throw new PlaneApiError(await readPlaneError(response), response.status)
-  }
-  if (response.status === 204) {
-    return null
-  }
-  return response.json()
+  // The retry re-admits from scratch, after the first slot has been given back.
+  return retry ? execute(budgetKey, url, apiToken, init, attempt + 1) : result
 }
 
 /**

@@ -116,7 +116,7 @@ describe('work item update normalization', () => {
     await invoke('plane:updateWorkItem', {
       project,
       workItemId: 'wi-1',
-      updates: { assigneeIds: null, labelIds: ['l-1', '', 'l-2'] }
+      updates: { assigneeIds: null, labelIds: ['l-1', '', ' l-2 '] }
     })
     const { updates } = operations.planeUpdateWorkItem.mock.calls[0]?.[0] ?? {}
     expect(updates).toEqual({ assigneeIds: null, labelIds: ['l-1', 'l-2'] })

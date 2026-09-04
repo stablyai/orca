@@ -37,7 +37,9 @@ export async function listAllPages<T>(
       return { items: items.slice(0, maxItems), truncated: items.length > maxItems }
     }
     const typed = (payload ?? {}) as PlanePage<T>
-    items.push(...(typed.results ?? []))
+    // Why: the payload is unvalidated JSON; a proxy error page or an odd
+    // deployment can put a string or object under `results`.
+    items.push(...(Array.isArray(typed.results) ? typed.results : []))
     const hasMore = Boolean(typed.next_page_results && typed.next_cursor)
     // Why: data ending exactly on the bound is complete, not truncated. Checking
     // the bound first made a project of exactly 100 items report a false

@@ -117,7 +117,9 @@ export async function createWorkItem(
     })) as Record<string, unknown> | null
     const id = typeof created?.id === 'string' ? created.id : null
     const sequenceId = Number(created?.sequence_id)
-    if (!id || !Number.isInteger(sequenceId)) {
+    // Why: matches parsePlaneWorkItemKey, so the key handed back never fails
+    // the parser on its way back in.
+    if (!id || !Number.isSafeInteger(sequenceId) || sequenceId <= 0) {
       return { ok: false, error: 'Plane accepted the work item but returned no identifier.' }
     }
     const key = `${project.identifier}-${sequenceId}`

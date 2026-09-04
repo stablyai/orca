@@ -38,7 +38,9 @@ function clampLimit(value: unknown, fallback: number, max = 100): number {
 
 function normalizeIdArray(value: unknown): string[] {
   return Array.isArray(value)
-    ? value.filter((entry): entry is string => typeof entry === 'string' && entry.trim() !== '')
+    ? value
+        .filter((entry): entry is string => typeof entry === 'string' && entry.trim() !== '')
+        .map((entry) => entry.trim())
     : []
 }
 

@@ -25,7 +25,7 @@ describe('base url schemes', () => {
   it.each(['ftp://plane.internal', 'file:///etc/passwd', 'javascript://plane.so'])(
     'rejects %s, which would leak the api token or hand net.fetch an arbitrary origin',
     (value) => {
-      expect(() => normalizePlaneBaseUrl(value)).toThrow('Plane URL must use http or https.')
+      expect(() => normalizePlaneBaseUrl(value)).toThrow('Plane URL must use https')
     }
   )
 
@@ -40,8 +40,17 @@ describe('base url schemes', () => {
     )
   })
 
-  it('still allows http for a loopback or intranet instance', () => {
-    expect(normalizePlaneBaseUrl('http://plane.internal:8080')).toBe('http://plane.internal:8080')
+  it.each(['http://localhost:8080', 'http://127.0.0.1:8000', 'http://[::1]:8000'])(
+    'still allows plain http for the loopback instance %s',
+    (value) => {
+      expect(normalizePlaneBaseUrl(value)).toBe(value)
+    }
+  )
+
+  it('rejects plain http off the loopback, which would send the token in the clear', () => {
+    expect(() => normalizePlaneBaseUrl('http://plane.internal:8080')).toThrow(
+      'Plane URL must use https'
+    )
   })
 })
 

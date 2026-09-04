@@ -24,87 +24,8 @@ export function TaskPagePlaneSurface({
   onHide: () => void
   onStartWorkspace: (item: PlaneWorkItem) => void
 }): React.JSX.Element {
-  const settings = useAppStore((state) => state.settings)
   const { status, checking, error: statusError, refresh } = usePlaneConnection()
   const [connectOpen, setConnectOpen] = useState(false)
-  const [projects, setProjects] = useState<PlaneProject[]>([])
-  const [projectId, setProjectId] = useState('')
-  const [items, setItems] = useState<PlaneWorkItem[]>([])
-  const [loading, setLoading] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-  const [refreshNonce, setRefreshNonce] = useState(0)
-  const project = projects.find((entry) => entry.id === projectId) ?? projects[0]
-
-  useEffect(() => {
-    if (!status.connected) {
-      return
-    }
-    // Why: a superseded response must not write state. Every other provider
-    // effect in TaskPage guards the same way.
-    let cancelled = false
-    void planeListProjects(settings, {})
-      .then((next) => {
-        if (cancelled) {
-          return
-        }
-        setProjects(next)
-        setProjectId((current) => current || next[0]?.id || '')
-      })
-      .catch((cause) => {
-        if (cancelled) {
-          return
-        }
-        setError(
-          cause instanceof Error
-            ? cause.message
-            : translate(
-                'auto.components.TaskPagePlaneSurface.projectsError',
-                'Unable to load projects'
-              )
-        )
-      })
-    return () => {
-      cancelled = true
-    }
-  }, [settings, status.connected])
-
-  useEffect(() => {
-    if (!project) {
-      return
-    }
-    // Why: switching project mid-flight would otherwise let the previous
-    // project's rows land under the new selection.
-    let cancelled = false
-    setLoading(true)
-    setError(null)
-    void planeListWorkItems(settings, { project, limit: 100 })
-      .then((result) => {
-        if (!cancelled) {
-          setItems(result.items)
-        }
-      })
-      .catch((cause) => {
-        if (cancelled) {
-          return
-        }
-        setError(
-          cause instanceof Error
-            ? cause.message
-            : translate(
-                'auto.components.TaskPagePlaneSurface.workItemsError',
-                'Unable to load work items'
-              )
-        )
-      })
-      .finally(() => {
-        if (!cancelled) {
-          setLoading(false)
-        }
-      })
-    return () => {
-      cancelled = true
-    }
-  }, [project, refreshNonce, settings])
 
   if (checking) {
     return (
@@ -148,6 +69,99 @@ export function TaskPagePlaneSurface({
       </>
     )
   }
+
+  // Why: keyed by the active workspace so projects and work items from a
+  // previous connection are dropped with the component rather than lingering
+  // until the next fetch lands.
+  return (
+    <PlaneWorkspaceWorkItems
+      key={status.activeWorkspaceId ?? 'active'}
+      onStartWorkspace={onStartWorkspace}
+    />
+  )
+}
+
+function PlaneWorkspaceWorkItems({
+  onStartWorkspace
+}: {
+  onStartWorkspace: (item: PlaneWorkItem) => void
+}): React.JSX.Element {
+  const settings = useAppStore((state) => state.settings)
+  const [projects, setProjects] = useState<PlaneProject[]>([])
+  const [projectId, setProjectId] = useState('')
+  const [items, setItems] = useState<PlaneWorkItem[]>([])
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [refreshNonce, setRefreshNonce] = useState(0)
+  const project = projects.find((entry) => entry.id === projectId) ?? projects[0]
+
+  useEffect(() => {
+    // Why: a superseded response must not write state. Every other provider
+    // effect in TaskPage guards the same way.
+    let cancelled = false
+    void planeListProjects(settings, {})
+      .then((next) => {
+        if (cancelled) {
+          return
+        }
+        setProjects(next)
+        setProjectId((current) => current || next[0]?.id || '')
+      })
+      .catch((cause) => {
+        if (cancelled) {
+          return
+        }
+        setError(
+          cause instanceof Error
+            ? cause.message
+            : translate(
+                'auto.components.TaskPagePlaneSurface.projectsError',
+                'Unable to load projects'
+              )
+        )
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [settings])
+
+  useEffect(() => {
+    if (!project) {
+      return
+    }
+    // Why: switching project mid-flight would otherwise let the previous
+    // project's rows land under the new selection.
+    let cancelled = false
+    setLoading(true)
+    setError(null)
+    void planeListWorkItems(settings, { project, limit: 100 })
+      .then((result) => {
+        if (!cancelled) {
+          setItems(result.items)
+        }
+      })
+      .catch((cause) => {
+        if (cancelled) {
+          return
+        }
+        setError(
+          cause instanceof Error
+            ? cause.message
+            : translate(
+                'auto.components.TaskPagePlaneSurface.workItemsError',
+                'Unable to load work items'
+              )
+        )
+      })
+      .finally(() => {
+        if (!cancelled) {
+          setLoading(false)
+        }
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [project, refreshNonce, settings])
 
   return (
     <div className="flex min-h-0 max-h-full flex-col overflow-hidden rounded-md border border-border/50 bg-background shadow-sm">

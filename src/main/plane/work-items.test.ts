@@ -380,6 +380,14 @@ describe('writes', () => {
     })
   })
 
+  it('reports a create whose sequence id the key parser would refuse', async () => {
+    netFetchMock.mockResolvedValueOnce(jsonResponse({ id: 'wi-9', sequence_id: 0 }, 201))
+    const { createWorkItem } = await loadWorkItems()
+    await expect(
+      createWorkItem(client, project, { projectId: project.id, title: 'New work' })
+    ).resolves.toMatchObject({ ok: false })
+  })
+
   it('reports a create that returned no identifier rather than pretending success', async () => {
     netFetchMock.mockResolvedValueOnce(jsonResponse({}, 201))
     const { createWorkItem } = await loadWorkItems()

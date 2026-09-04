@@ -13,12 +13,11 @@ export function normalizePlaneBaseUrl(baseUrl: string): string {
   const trimmed = baseUrl.trim()
   const withProtocol = /^[a-z][a-z0-9+.-]*:\/\//i.test(trimmed) ? trimmed : `https://${trimmed}`
   const url = new URL(withProtocol)
-  // Why: the API token travels in an X-API-Key header on every request. Any
-  // other scheme would either send it in the clear through a non-TLS transport
-  // or hand an arbitrary origin to net.fetch, and plane.connect is reachable
-  // from a paired remote client.
-  if (url.protocol !== 'https:' && url.protocol !== 'http:') {
-    throw new Error('Plane URL must use http or https.')
+  // Why: the API token travels in an X-API-Key header on every request, and
+  // plane.connect is reachable from a paired remote client. Plain http is only
+  // tolerated for a loopback host, where nothing leaves the machine.
+  if (url.protocol !== 'https:' && !(url.protocol === 'http:' && isLoopbackHost(url.hostname))) {
+    throw new Error('Plane URL must use https (http is only allowed for localhost).')
   }
   // Why: the normalized url is persisted in plane-workspaces.json and handed
   // back by status to any renderer or paired client. A password embedded here
@@ -103,6 +102,11 @@ export function planeWorkspaceToViewer(workspace: PlaneWorkspace | null): PlaneV
 
 function readString(value: unknown): string | undefined {
   return typeof value === 'string' && value.trim().length > 0 ? value.trim() : undefined
+}
+
+function isLoopbackHost(hostname: string): boolean {
+  const host = hostname.toLowerCase()
+  return host === 'localhost' || host === '[::1]' || /^127\.\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(host)
 }
 
 function safeHostname(value: string): string {
