@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { Loader2, MessageSquarePlus } from 'lucide-react'
 import AgentCombobox from '@/components/agent/AgentCombobox'
 import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
 import {
   Dialog,
   DialogContent,
@@ -29,8 +30,11 @@ import {
   detectAgentSessionContinuationAgents,
   launchAgentSessionContinuation
 } from '@/lib/launch-agent-session-continuation'
+import { launchAgentSessionContinuationInNewWorktree } from '@/lib/launch-agent-session-continuation-worktree'
 import { useAppStore } from '@/store'
 import { isTuiAgentEnabled } from '../../../../shared/tui-agent-selection'
+import { isGitRepoKind } from '../../../../shared/repo-kind'
+import { splitWorktreeIdForFilesystem } from '../../../../shared/worktree/id'
 import type { TuiAgent } from '../../../../shared/tui-agent'
 import { chooseInitialContinuationAgent } from './agent-session-continuation-selection'
 
@@ -41,6 +45,22 @@ type AgentSessionContinuationDialogProps = {
 }
 
 const EMPTY_DISABLED_AGENTS: TuiAgent[] = []
+
+type ContinuationDestination = 'current' | 'new-worktree'
+
+// Why: the source tab title usually already carries the ticket id, so the branch
+// name is a confirmation rather than a fresh decision.
+function suggestBranchName(sourceTitle: string | null | undefined): string {
+  const title = sourceTitle?.trim() ?? ''
+  const ticket = /[A-Z]{2,}[-/]\d+/.exec(title)?.[0]
+  if (ticket) {
+    return ticket.replace('/', '-')
+  }
+  return title
+    .replace(/[^A-Za-z0-9._-]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 40)
+}
 
 export function AgentSessionContinuationDialog({
   open,
@@ -55,7 +75,19 @@ export function AgentSessionContinuationDialog({
   const [detectionFailed, setDetectionFailed] = useState(false)
   const [starting, setStarting] = useState(false)
   const [showStarting, setShowStarting] = useState(false)
+  const [destination, setDestination] = useState<ContinuationDestination>('current')
+  const [branchName, setBranchName] = useState('')
+  const [baseRef, setBaseRef] = useState('')
+  const repos = useAppStore((state) => state.repos)
   const disabledAgents = settings?.disabledTuiAgents ?? EMPTY_DISABLED_AGENTS
+  const sourceRepoId = request
+    ? (splitWorktreeIdForFilesystem(request.worktreeId)?.repoId ?? null)
+    : null
+  // Why: folder workspaces have no branches, so a new worktree is not a destination there.
+  const canCreateWorktree = useMemo(() => {
+    const repo = sourceRepoId ? repos.find((entry) => entry.id === sourceRepoId) : null
+    return Boolean(repo && isGitRepoKind(repo))
+  }, [repos, sourceRepoId])
 
   const agents = useMemo(
     () =>
@@ -76,6 +108,9 @@ export function AgentSessionContinuationDialog({
     setDetectedAgents([])
     setSelectedAgent(null)
     setContextMode('focused')
+    setDestination('current')
+    setBranchName(suggestBranchName(request.source.sourceTitle))
+    setBaseRef('')
     void detectAgentSessionContinuationAgents(request.worktreeId)
       .then((detected) => {
         if (cancelled) {
@@ -129,15 +164,27 @@ export function AgentSessionContinuationDialog({
       return
     }
     setStarting(true)
-    const launched = await launchAgentSessionContinuation({
-      agent: selectedAgent,
-      prompt,
-      worktreeId: request.worktreeId,
-      groupId: request.groupId,
-      workspacePath: request.workspacePath,
-      initialCwd: request.initialCwd,
-      launchSource: request.launchSource
-    })
+    const launched =
+      destination === 'new-worktree' && sourceRepoId
+        ? launchAgentSessionContinuationInNewWorktree({
+            agent: selectedAgent,
+            prompt,
+            repoId: sourceRepoId,
+            branchName: branchName.trim(),
+            baseBranch: baseRef.trim() || null,
+            sourceTitle: request.source.sourceTitle,
+            telemetrySource:
+              request.launchSource === 'sidebar' ? 'sidebar' : 'terminal_context_menu'
+          })
+        : await launchAgentSessionContinuation({
+            agent: selectedAgent,
+            prompt,
+            worktreeId: request.worktreeId,
+            groupId: request.groupId,
+            workspacePath: request.workspacePath,
+            initialCwd: request.initialCwd,
+            launchSource: request.launchSource
+          })
     setStarting(false)
     if (launched) {
       onOpenChange(false)
@@ -148,7 +195,13 @@ export function AgentSessionContinuationDialog({
   const sourceAgentLabel = request?.source.sourceAgent
     ? getAgentLabel(request.source.sourceAgent)
     : null
-  const startDisabled = detecting || starting || agents.length === 0 || !selectedAgent
+  const creatingWorktree = destination === 'new-worktree'
+  const startDisabled =
+    detecting ||
+    starting ||
+    agents.length === 0 ||
+    !selectedAgent ||
+    (creatingWorktree && !branchName.trim())
 
   return (
     <Dialog
@@ -274,7 +327,65 @@ export function AgentSessionContinuationDialog({
             </p>
           </div>
 
-          {request?.initialCwd ? (
+          {canCreateWorktree ? (
+            <div className="min-w-0 space-y-1.5">
+              <label className="text-xs font-medium">
+                {translate('components.agentSessionContinuation.destination', 'Destination')}
+              </label>
+              <Select
+                value={destination}
+                onValueChange={(value) => setDestination(value as ContinuationDestination)}
+              >
+                <SelectTrigger className="min-w-0 w-full" size="sm">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="current">
+                    {translate(
+                      'components.agentSessionContinuation.destinationCurrent',
+                      'This workspace'
+                    )}
+                  </SelectItem>
+                  <SelectItem value="new-worktree">
+                    {translate(
+                      'components.agentSessionContinuation.destinationNewWorktree',
+                      'New worktree'
+                    )}
+                  </SelectItem>
+                </SelectContent>
+              </Select>
+              {creatingWorktree ? (
+                <div className="min-w-0 space-y-1.5 pt-1">
+                  <Input
+                    value={branchName}
+                    onChange={(event) => setBranchName(event.target.value)}
+                    placeholder={translate(
+                      'components.agentSessionContinuation.branchNamePlaceholder',
+                      'Branch name'
+                    )}
+                    className="min-w-0 w-full"
+                  />
+                  <Input
+                    value={baseRef}
+                    onChange={(event) => setBaseRef(event.target.value)}
+                    placeholder={translate(
+                      'components.agentSessionContinuation.baseRefPlaceholder',
+                      'Base ref (defaults to the project base)'
+                    )}
+                    className="min-w-0 w-full"
+                  />
+                  <p className="text-[11px] leading-4 text-muted-foreground">
+                    {translate(
+                      'components.agentSessionContinuation.destinationNewWorktreeDescription',
+                      'Creates the worktree, then starts the Agent there with this context. Uncommitted changes stay in the source workspace.'
+                    )}
+                  </p>
+                </div>
+              ) : null}
+            </div>
+          ) : null}
+
+          {!creatingWorktree && request?.initialCwd ? (
             <div className="text-[11px] text-muted-foreground">
               {translate('components.agentSessionContinuation.startsIn', 'Starts in:')}{' '}
               <span className="break-all font-mono text-foreground/80">{request.initialCwd}</span>
