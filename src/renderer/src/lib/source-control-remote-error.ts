@@ -1,5 +1,6 @@
 import {
   formatSubmodulePushFailureDetail,
+  GIT_FAILURE_DETAIL_ELISION_MARKER,
   stripCredentialsFromMessage
 } from '../../../shared/git-remote-error'
 import {
@@ -23,21 +24,68 @@ function truncateDetail(detail: string): string {
   return `${detail.slice(0, REMOTE_OPERATION_DETAIL_MAX_LENGTH).trimEnd()}...`
 }
 
+// Why: git's own lines usually end in a period, and the "…. Check your remote access" templates below
+// append their own — without this the toast reads "Permission denied (publickey)..".
+function withoutTrailingPeriod(detail: string): string {
+  return detail.endsWith('.') ? detail.slice(0, -1) : detail
+}
+
+/** Electron wraps every rejected `ipcMain.handle` before the renderer sees it, on the first line only. */
+const IPC_INVOKE_PREFIX = /^Error invoking remote method '[^']*': (?:\w*Error: )?/
+/** Node's execFile rejection preamble names the argv Orca ran, so such a line is never git's own reason. */
+const COMMAND_PREAMBLE_LINE = /Command failed:/
+/**
+ * The one `fatal:` that diagnoses nothing: it says git never got to talk to the remote, and hands the
+ * question upstream to whatever did the talking. Every other `fatal:` is git's own finding, reached
+ * over a transport that worked, so nothing ssh printed before it can outrank it. Kept to this single
+ * verdict deliberately: it is the only one where ssh is guaranteed to have stated its own reason last
+ * (a denial, a refused connection, a host-key failure), so deferring cannot surface a bare advisory.
+ */
+const GIT_DEFERS_TO_TRANSPORT = /^Could not read from remote repository/i
+
+// Why: a detail is either something to show or nothing at all. An empty string is neither — it
+// survives every `??` below and reaches the user as a blank toast, which says less than a generic one.
+function emptyToNull(detail: string): string | null {
+  return detail.length > 0 ? detail : null
+}
+
 function extractPublishFailureDetail(message: string): string | null {
   let remoteDetail: string | null = null
+  let causeBeforeFatal: string | null = null
 
   for (const rawLine of iterateRemoteErrorLines(message)) {
-    const line = rawLine.trim()
+    const line = rawLine.trim().replace(IPC_INVOKE_PREFIX, '')
     if (!line) {
       continue
     }
     if (line.startsWith('fatal:')) {
-      return truncateDetail(stripCredentialsFromMessage(line.slice('fatal:'.length).trim()))
-    }
-    if (remoteDetail === null && line.startsWith('remote:')) {
-      remoteDetail = truncateDetail(
-        stripCredentialsFromMessage(line.slice('remote:'.length).trim())
+      // Why: whose finding this is, not where it sits. git defers to the transport only when its own
+      // verdict is the "never delivered" wrapper; then the reason is the transport's last word above.
+      // Otherwise git reached the remote and diagnosed the failure itself, and ssh's preamble is noise
+      // that carries identity-file and known_hosts paths out of the user's home.
+      const verdict = line.slice('fatal:'.length).trim()
+      return (
+        (GIT_DEFERS_TO_TRANSPORT.test(verdict) ? causeBeforeFatal : null) ??
+        emptyToNull(truncateDetail(stripCredentialsFromMessage(verdict)))
       )
+    }
+    if (line.startsWith('remote:')) {
+      // Why: a bare `remote:` with nothing after it is not a detail — `??=` would latch the empty
+      // string and every `?? fallback` below would then keep it, blanking the toast.
+      remoteDetail ??= emptyToNull(
+        truncateDetail(stripCredentialsFromMessage(line.slice('remote:'.length).trim()))
+      )
+      continue
+    }
+    // Why: only git's own local transport lines count as the cause. `remote:` is server chatter
+    // (progress, policy notes) that git's `fatal:` verdict should still outrank, a wrapper preamble
+    // names Orca's argv rather than anything git reported, and the elision marker is our own
+    // truncation bookkeeping — showing it as the reason tells the user nothing at all.
+    if (!COMMAND_PREAMBLE_LINE.test(line) && line !== GIT_FAILURE_DETAIL_ELISION_MARKER) {
+      // Why: the *last* such line, not the first — within the transport's own output. ssh states its
+      // verdict as it gives up, after every advisory it had to offer (`no such identity: <home
+      // path>`, `Load key "<home path>": bad permissions`, the changed-host-key banner).
+      causeBeforeFatal = truncateDetail(stripCredentialsFromMessage(line))
     }
   }
 
@@ -63,6 +111,22 @@ function* iterateRemoteErrorLines(message: string): Generator<string> {
   if (lineStart <= message.length) {
     yield message.slice(lineStart)
   }
+}
+
+// Why: the last resort when no line stood out — and still a line, never the blob. git's closing
+// diagnostic is last; everything above it can be ssh's preamble, which names files under the user's
+// home. Electron's `Error invoking remote method …` wrapper is Orca's own framing, never git's, so it
+// is stripped here the same way the line scan strips it.
+function rawMessageDetail(message: string): string | null {
+  const scrubbed = stripCredentialsFromMessage(message.replace(IPC_INVOKE_PREFIX, ''))
+  let lastDiagnostic = ''
+  for (const rawLine of iterateRemoteErrorLines(scrubbed)) {
+    const line = rawLine.trim()
+    if (line && line !== GIT_FAILURE_DETAIL_ELISION_MARKER) {
+      lastDiagnostic = line
+    }
+  }
+  return emptyToNull(truncateDetail(lastDiagnostic))
 }
 
 function resolveSubmodulePushFailureMessage(
@@ -254,7 +318,7 @@ export function resolveRemoteOperationErrorMessage(
     // keeps the toast human-readable while preserving the actionable fatal reason.
     const detail = extractPublishFailureDetail(error.message)
     if (detail) {
-      return `Publish Branch failed. ${detail}. Check your remote access and try again.`
+      return `Publish Branch failed. ${withoutTrailingPeriod(detail)}. Check your remote access and try again.`
     }
 
     return 'Publish Branch failed. Check your remote access and try again.'
@@ -266,7 +330,7 @@ export function resolveRemoteOperationErrorMessage(
     // auth / protected-branch reasons stay actionable.
     const detail = extractPublishFailureDetail(error.message)
     if (detail) {
-      return `Sync failed. ${detail}. Check your remote access and try again.`
+      return `Sync failed. ${withoutTrailingPeriod(detail)}. Check your remote access and try again.`
     }
     return 'Sync failed. Check your connection and try again.'
   }
@@ -274,7 +338,7 @@ export function resolveRemoteOperationErrorMessage(
   if (options?.isForcePush) {
     const detail = extractPublishFailureDetail(error.message)
     if (detail) {
-      return `Force Push failed. ${detail}. Check your remote access and try again.`
+      return `Force Push failed. ${withoutTrailingPeriod(detail)}. Check your remote access and try again.`
     }
     return 'Force Push failed. Check your connection and try again.'
   }
@@ -284,33 +348,37 @@ export function resolveRemoteOperationErrorMessage(
     // connection message for auth errors, protected branches, etc.
     const detail = extractPublishFailureDetail(error.message)
     if (detail) {
-      return `Push failed. ${detail}. Check your remote access and try again.`
+      return `Push failed. ${withoutTrailingPeriod(detail)}. Check your remote access and try again.`
     }
     return 'Push failed. Check your connection and try again.'
   }
 
   if (options?.isFetch) {
-    const detail =
-      extractPublishFailureDetail(error.message) ??
-      truncateDetail(stripCredentialsFromMessage(error.message))
-    return `Fetch failed. ${detail}`
+    const detail = extractPublishFailureDetail(error.message) ?? rawMessageDetail(error.message)
+    return detail ? `Fetch failed. ${detail}` : 'Fetch failed. Check your connection and try again.'
   }
 
   if (options?.isFastForward) {
-    const detail =
-      extractPublishFailureDetail(error.message) ??
-      truncateDetail(stripCredentialsFromMessage(error.message))
-    return `Fast-forward failed. ${detail}`
+    const detail = extractPublishFailureDetail(error.message) ?? rawMessageDetail(error.message)
+    return detail
+      ? `Fast-forward failed. ${detail}`
+      : 'Fast-forward failed. Check your connection and try again.'
   }
 
   if (options?.isRebase) {
-    const detail =
-      extractPublishFailureDetail(error.message) ??
-      truncateDetail(stripCredentialsFromMessage(error.message))
-    return `Rebase failed. ${detail}`
+    const detail = extractPublishFailureDetail(error.message) ?? rawMessageDetail(error.message)
+    return detail
+      ? `Rebase failed. ${detail}`
+      : 'Rebase failed. Check your connection and try again.'
   }
 
-  return error.message
+  // Why: unlabeled callers (Pull) share the toast's one-line budget, and git output reaching here is
+  // multi-line, so pick the same actionable line the labeled operations do instead of dumping the blob.
+  return (
+    extractPublishFailureDetail(error.message) ??
+    rawMessageDetail(error.message) ??
+    REMOTE_OPERATION_FAILED_MESSAGE
+  )
 }
 
 export { isNonFastForwardRemoteError }
