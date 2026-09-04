@@ -14,12 +14,22 @@ export type ClientIpRateLimiterOptions = {
 
 type Bucket = { tokens: number; updatedAt: number }
 
-// Cloud Run appends the caller to x-forwarded-for, so the first hop is the real
-// client. Off Cloud Run every caller shares one bucket, which throttles rather
-// than opens: the alternative would be a free pass for a missing header.
-export function readClientIp(context: Context): string {
-  const first = context.req.header('x-forwarded-for')?.split(',')[0]?.trim()
-  if (first) return first
+// Read x-forwarded-for from the right. Cloud Run appends the connecting peer,
+// so the last value is the only one it wrote; everything to its left is
+// whatever the caller sent and can be a fresh forgery on every request.
+// trustedProxyHops is how many appenders sit between Cloud Run and the client
+// (0 today, 1 once a load balancer fronts it). A header too short for that
+// depth is not trusted at all and falls through to the shared bucket, which
+// throttles rather than opens.
+export function readClientIp(context: Context, trustedProxyHops = 0): string {
+  const hops =
+    context.req
+      .header('x-forwarded-for')
+      ?.split(',')
+      .map((hop) => hop.trim())
+      .filter((hop) => hop.length > 0) ?? []
+  const client = hops[hops.length - 1 - trustedProxyHops]
+  if (client) return client
   return context.req.header('x-real-ip')?.trim() || UNKNOWN_CLIENT_IP
 }
 
@@ -79,13 +89,19 @@ export class ClientIpRateLimiter {
   }
 }
 
+export type ClientIpRateLimitOptions = {
+  trustedProxyHops?: number
+  onLimited?: () => void
+}
+
 export function clientIpRateLimit(
   limiter: ClientIpRateLimiter,
-  onLimited?: () => void
+  options: ClientIpRateLimitOptions = {}
 ): MiddlewareHandler {
+  const trustedProxyHops = options.trustedProxyHops ?? 0
   return async (context, next) => {
-    if (!limiter.allow(readClientIp(context))) {
-      onLimited?.()
+    if (!limiter.allow(readClientIp(context, trustedProxyHops))) {
+      options.onLimited?.()
       return context.json({ error: 'rate_limited' }, 429)
     }
     await next()

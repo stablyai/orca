@@ -33,7 +33,10 @@ const EnvSchema = z.object({
     .int()
     .nonnegative()
     .max(60_000)
-    .default(PUSH_LIMITS.coalesceWindowMs)
+    .default(PUSH_LIMITS.coalesceWindowMs),
+  // How many proxies append to x-forwarded-for after the client. 0 is Cloud Run
+  // alone; raise it to 1 when a load balancer fronts the service.
+  ORCA_PUSH_TRUSTED_PROXY_HOPS: z.coerce.number().int().nonnegative().max(8).default(0)
 })
 
 export type ApnsCredentials = { keyPem: string; keyId: string; teamId: string }
@@ -48,6 +51,7 @@ export type PushConfig = {
   apnsTopic: string
   fcmProjectId: string
   coalesceMs: number
+  trustedProxyHops: number
 }
 
 function canonicalOrigin(value: string, name: string): string {
@@ -95,6 +99,7 @@ export function loadPushConfig(env: NodeJS.ProcessEnv = process.env): PushConfig
     apns: readApnsCredentials(parsed),
     apnsTopic: parsed.ORCA_PUSH_APNS_TOPIC,
     fcmProjectId: parsed.ORCA_PUSH_FCM_PROJECT_ID,
-    coalesceMs: parsed.ORCA_PUSH_COALESCE_MS
+    coalesceMs: parsed.ORCA_PUSH_COALESCE_MS,
+    trustedProxyHops: parsed.ORCA_PUSH_TRUSTED_PROXY_HOPS
   }
 }

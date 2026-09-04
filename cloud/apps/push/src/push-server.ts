@@ -98,9 +98,10 @@ export function createPushServer(
   })
   const ready = createPushReadiness(database, { now })
   const unauthenticatedIps = new ClientIpRateLimiter({ now })
-  const limitUnauthenticatedIp = clientIpRateLimit(unauthenticatedIps, () =>
-    observability.record('ip_rate_limited')
-  )
+  const limitUnauthenticatedIp = clientIpRateLimit(unauthenticatedIps, {
+    trustedProxyHops: config.trustedProxyHops,
+    onLimited: () => observability.record('ip_rate_limited')
+  })
   const app = new Hono<{ Variables: PushVariables }>()
 
   app.get('/health', (context) => context.json({ ok: true, pushProtocol: 1 }))

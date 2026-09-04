@@ -45,7 +45,8 @@ export function testPushConfig(): PushConfig {
     apns: { keyPem: privateKey, keyId: 'ABCDE12345', teamId: 'TEAM123456' },
     apnsTopic: 'com.stably.orca.mobile',
     fcmProjectId: 'onorca-cloud',
-    coalesceMs: PUSH_LIMITS.coalesceWindowMs
+    coalesceMs: PUSH_LIMITS.coalesceWindowMs,
+    trustedProxyHops: 0
   }
 }
 

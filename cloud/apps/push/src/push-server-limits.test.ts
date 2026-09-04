@@ -104,9 +104,10 @@ describe('push gateway request limits', () => {
       v: 1,
       hostPublicKeyB64: hostPublicKeyB64(createPushHostKeypair(62))
     })
+    // Cloud Run appends the peer, so the caller's own IP is the last value.
     const headers = {
       'content-type': 'application/json',
-      'x-forwarded-for': `${CLIENT_IP}, 10.0.0.1`
+      'x-forwarded-for': `10.0.0.1, ${CLIENT_IP}`
     }
     for (let index = 0; index < PUSH_LIMITS.unauthenticatedRequestsPerMinutePerIp; index++) {
       const allowed = await harness.server.app.request('/v1/host/challenge', {
@@ -135,10 +136,18 @@ describe('push gateway request limits', () => {
 
     const other = await harness.server.app.request('/v1/host/challenge', {
       method: 'POST',
-      headers: { ...headers, 'x-forwarded-for': OTHER_CLIENT_IP },
+      headers: { ...headers, 'x-forwarded-for': `10.0.0.1, ${OTHER_CLIENT_IP}` },
       body
     })
     expect(other.status).toBe(200)
+
+    // A caller rewriting the left of the chain lands in its own bucket anyway.
+    const spoofed = await harness.server.app.request('/v1/host/challenge', {
+      method: 'POST',
+      headers: { ...headers, 'x-forwarded-for': `198.51.100.250, ${CLIENT_IP}` },
+      body
+    })
+    expect(spoofed.status).toBe(429)
   })
 
   it('lets a throttled client back in once the window refills', async () => {

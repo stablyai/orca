@@ -24,7 +24,8 @@ describe('push gateway config', () => {
       apns: undefined,
       apnsTopic: PUSH_DEFAULTS.apnsTopic,
       fcmProjectId: PUSH_DEFAULTS.fcmProjectId,
-      coalesceMs: PUSH_LIMITS.coalesceWindowMs
+      coalesceMs: PUSH_LIMITS.coalesceWindowMs,
+      trustedProxyHops: 0
     })
   })
 
@@ -40,7 +41,8 @@ describe('push gateway config', () => {
       ORCA_PUSH_APPLE_TEAM_ID: 'TEAM123456',
       ORCA_PUSH_APNS_TOPIC: 'com.stably.orca.mobile.dev',
       ORCA_PUSH_FCM_PROJECT_ID: 'onorca-staging',
-      ORCA_PUSH_COALESCE_MS: '1500'
+      ORCA_PUSH_COALESCE_MS: '1500',
+      ORCA_PUSH_TRUSTED_PROXY_HOPS: '1'
     })
     expect(config).toMatchObject({
       port: 9090,
@@ -48,6 +50,7 @@ describe('push gateway config', () => {
       dataDir: '/var/lib/push',
       apns: { keyPem, keyId: 'ABCDE12345', teamId: 'TEAM123456' },
       apnsTopic: 'com.stably.orca.mobile.dev',
+      trustedProxyHops: 1,
       fcmProjectId: 'onorca-staging',
       coalesceMs: 1500
     })

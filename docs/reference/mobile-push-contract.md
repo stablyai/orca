@@ -126,9 +126,14 @@ host restart can re-read it. iOS token is 64 hex chars; Android token is the FCM
   body declares no length. Over the cap → 413 `{ "error": "request_too_large" }`.
 - `POST /v1/host/challenge` and `POST /v1/host/session` are the only unauthenticated routes. They share
   one token bucket per client IP, 30 requests per minute, refilling continuously. Over the bucket → 429
-  `{ "error": "rate_limited" }`. The client IP is the first `x-forwarded-for` hop, which Cloud Run sets,
-  falling back to `x-real-ip` and then to a single shared bucket. The bucket is per instance and in
-  memory, so the effective cap scales with the instance count; it exists to blunt a flood, not to meter.
+  `{ "error": "rate_limited" }`. The client IP is the **last** `x-forwarded-for` hop, not the first:
+  Cloud Run appends the connecting peer, so everything left of that value is caller-supplied and can be
+  a fresh forgery on every request, which would hand a flood a new bucket each time.
+  `ORCA_PUSH_TRUSTED_PROXY_HOPS` (default 0) says how many appenders sit between the platform and the
+  client, so a future load balancer sets it to 1. A header with fewer hops than that depth is not
+  trusted at all. Falls back to `x-real-ip` and then to a single shared bucket. The bucket is per
+  instance and in memory, so the effective cap scales with the instance count; it exists to blunt a
+  flood, not to meter.
 
 ### Coalescing (gateway)
 
@@ -176,7 +181,8 @@ Logging: aggregate counters only. Never log tokens, titles, bodies, or raw finge
 `PORT`, `ORCA_PUSH_PUBLIC_URL`, `ORCA_PUSH_DATABASE_URL` (absent → SQLite under `ORCA_PUSH_DATA_DIR`),
 `ORCA_PUSH_APNS_KEY` (PEM text), `ORCA_PUSH_APNS_KEY_ID`, `ORCA_PUSH_APPLE_TEAM_ID`,
 `ORCA_PUSH_APNS_TOPIC` (default `com.stably.orca.mobile`), `ORCA_PUSH_FCM_PROJECT_ID` (default
-`onorca-cloud`), `ORCA_PUSH_COALESCE_MS` (default 3000).
+`onorca-cloud`), `ORCA_PUSH_COALESCE_MS` (default 3000), `ORCA_PUSH_TRUSTED_PROXY_HOPS` (default 0,
+proxies appending to `x-forwarded-for` after the client).
 Secret Manager names (already exist in `onorca-cloud`): `orca-cloud-push-apns-key`,
 `orca-cloud-push-apns-key-id`, `orca-cloud-push-apple-team-id`. Runtime SA:
 `orca-cloud-push@onorca-cloud.iam.gserviceaccount.com` (already has FCM admin + secret accessor).
