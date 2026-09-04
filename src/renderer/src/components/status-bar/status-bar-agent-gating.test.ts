@@ -10,6 +10,11 @@ describe('isStatusBarItemAvailable', () => {
     expect(isStatusBarItemAvailable('resource-usage', [])).toBe(true)
     expect(isStatusBarItemAvailable('ports', [])).toBe(true)
     expect(isStatusBarItemAvailable('opencode-go', [])).toBe(true)
+    // Why: Z.AI auth lives in opencode's auth store, not a CLI on PATH, so it
+    // must never be hidden by agent detection.
+    expect(isStatusBarItemAvailable('zai', null)).toBe(true)
+    expect(isStatusBarItemAvailable('zai', [])).toBe(true)
+    expect(isStatusBarItemAvailable('zai', ['claude', 'codex'])).toBe(true)
   })
 
   it('keeps CLI items visible while detection is in flight', () => {

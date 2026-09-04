@@ -3265,7 +3265,8 @@
             "d79c3362c4": "5h",
             "d7a0668acc": "opencode-go",
             "fda8146810": "Open Kimi usage details",
-            "grokUsageAria": "Open Grok usage details"
+            "grokUsageAria": "Open Grok usage details",
+            "zaiUsageAria": "Open Z.AI usage details"
           },
           "WorkspaceSpaceCompactPanel": {
             "2837dc7c72": "cancelling",

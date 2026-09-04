@@ -33,7 +33,8 @@
         "resourceUsageToggleDescription": "リソースマネージャーを表示します。クリックすると、CPU、メモリ、セッション、デーモンコントロール、ワークスペースディスクスキャンの情報を確認できます。",
         "portsToggleDescription": "ライブワークスペースポートを表示します。ワークスペーススコープのポートと外部リスナーの場合はこれをクリックします。",
         "antigravityToggleDescription": "アクティブなワークスペースの Antigravity サブスクリプション使用量を表示します。",
-        "grokToggleDescription": "Grok CLI でサインインしている場合に Grok サブスクリプションのクレジット使用量を表示します。"
+        "grokToggleDescription": "Grok CLI でサインインしている場合に Grok サブスクリプションのクレジット使用量を表示します。",
+        "zaiToggleDescription": "opencode 認証でサインインしているときに、Z.AI Coding Plan の使用状況を表示します。"
       },
       "menuBarIcon": {
         "title": "メニューバーアイコンを表示",
@@ -3296,6 +3297,8 @@
             "antigravityUsageDetails": "Antigravity の使用状況詳細を開く",
             "grokUsageAria": "Grok の使用状況詳細を開く",
             "grokUsageMenu": "Grok の使用状況",
+            "zaiUsageAria": "Z.AI の使用状況詳細を開く",
+            "zaiUsageMenu": "Z.AI の使用状況",
             "floatingTerminalNewActivity": "{{label}}、新規アクティビティ",
             "codexSignInSuccess": "Codex にサインインしました",
             "codexSignInError": "Codex のサインインに失敗しました。もう一度お試しください。"
@@ -3458,6 +3461,7 @@
             "c06c1d215d": "ネットワークリクエストに失敗したため、Claude 使用量を更新できませんでした。",
             "cabdc2a9e0": "Claude サインイン認証情報を読み取れませんでした。",
             "a7517cccb6": "Claude 使用量は現在利用できません。",
+            "zaiAuthRecovery": "ターミナルで opencode auth login を実行し、Z.AI Coding Plan を選択してサインインを完了してから、使用状況を再試行してください。",
             "e2c6a4f917": "Grok を実行して更新",
             "d1b7f509ac": "Orca を実行しているコンピュータのターミナルで grok を実行し、起動するまで待ってください。サインインを求められた場合は完了してから、使用状況を再取得してください。チャットメッセージを送る必要はありません。",
             "f90b3d7a16": "Kimi を実行して更新",
@@ -7956,10 +7960,15 @@
             "antigravityKeyword": "antigravity",
             "f8e2a1c4b6": "Grok の使用状況",
             "e7d1b0f3a5": "Grok CLI OAuth から Grok の週次クレジット使用量を表示します。",
+            "zaiUsageTitle": "Z.AI の使用状況",
+            "zaiUsageDescription": "ステータスバーに Z.AI Coding Plan の使用状況を表示します。",
             "d6c0a9e2f4": "grok",
             "c5b9f8d1e3": "xai",
             "usagePercentageDisplayTitle": "使用率",
-            "usagePercentageDisplayDescription": "プロバイダーの制限を使用済みまたは残りの割合で表示するかを選択します。"
+            "usagePercentageDisplayDescription": "プロバイダーの制限を使用済みまたは残りの割合で表示するかを選択します。",
+            "zaiKeyword": "z.ai",
+            "zaiGlmKeyword": "glm",
+            "zaiOpencodeKeyword": "opencode"
           }
         },
         "auto": {

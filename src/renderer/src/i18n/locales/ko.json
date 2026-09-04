@@ -33,7 +33,8 @@
         "resourceUsageToggleDescription": "리소스 관리자를 표시합니다. 클릭하면 CPU, 메모리, 세션, 데몬 제어, 워크스페이스 디스크 스캔을 볼 수 있습니다.",
         "portsToggleDescription": "라이브 워크스페이스 포트를 표시합니다. 워크스페이스 범위 포트 및 외부 수신기를 보려면 클릭하세요.",
         "antigravityToggleDescription": "활성 워크스페이스에 대한 Antigravity 구독 사용량을 표시합니다.",
-        "grokToggleDescription": "Grok CLI로 로그인한 경우 Grok 구독 크레딧 사용량을 표시합니다."
+        "grokToggleDescription": "Grok CLI로 로그인한 경우 Grok 구독 크레딧 사용량을 표시합니다.",
+        "zaiToggleDescription": "opencode 인증으로 로그인한 경우 Z.AI Coding Plan 사용량을 표시합니다."
       },
       "menuBarIcon": {
         "title": "메뉴 바 아이콘 표시",
@@ -3301,6 +3302,8 @@
             "antigravityUsageDetails": "Antigravity 사용량 세부 정보 열기",
             "grokUsageAria": "Grok 사용량 세부 정보 열기",
             "grokUsageMenu": "Grok 사용량",
+            "zaiUsageAria": "Z.AI 사용량 세부 정보 열기",
+            "zaiUsageMenu": "Z.AI 사용량",
             "floatingTerminalNewActivity": "{{label}}, 새 활동",
             "codexSignInSuccess": "Codex에 로그인했습니다",
             "codexSignInError": "Codex 로그인에 실패했습니다. 다시 시도해 주세요."
@@ -3463,6 +3466,7 @@
             "c06c1d215d": "네트워크 요청 실패로 Claude 사용량을 새로 고칠 수 없습니다.",
             "cabdc2a9e0": "Claude 로그인 자격 증명을 읽을 수 없습니다.",
             "a7517cccb6": "현재 Claude 사용량을 사용할 수 없습니다.",
+            "zaiAuthRecovery": "터미널에서 opencode auth login을 실행하고 Z.AI Coding Plan을 선택하여 로그인을 완료한 후 사용량 조회를 다시 시도하세요.",
             "e2c6a4f917": "Run Grok to refresh",
             "d1b7f509ac": "Run grok in a terminal on the computer running Orca and wait for it to start. If prompted, complete sign-in, then retry usage. You do not need to send a chat message.",
             "f90b3d7a16": "Run Kimi to refresh",
@@ -7924,10 +7928,15 @@
             "antigravityKeyword": "antigravity",
             "f8e2a1c4b6": "Grok 사용량",
             "e7d1b0f3a5": "Grok CLI OAuth에서 Grok 주간 크레딧 사용량을 표시합니다.",
+            "zaiUsageTitle": "Z.AI 사용량",
+            "zaiUsageDescription": "상태 표시줄에 Z.AI Coding Plan 사용량을 표시합니다.",
             "d6c0a9e2f4": "grok",
             "c5b9f8d1e3": "xai",
             "usagePercentageDisplayTitle": "사용량 백분율",
-            "usagePercentageDisplayDescription": "공급자 한도를 사용한 비율 또는 남은 비율로 표시할지 선택합니다."
+            "usagePercentageDisplayDescription": "공급자 한도를 사용한 비율 또는 남은 비율로 표시할지 선택합니다.",
+            "zaiKeyword": "z.ai",
+            "zaiGlmKeyword": "glm",
+            "zaiOpencodeKeyword": "opencode"
           }
         },
         "auto": {
