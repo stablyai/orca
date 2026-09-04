@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Repo } from '../../shared/repo-types'
 import { removeRuntimeRegisteredRemoteWorktree } from './runtime-registered-remote-worktree-removal'
 
@@ -48,6 +48,11 @@ function baseArgs() {
     finishRemoval: vi.fn()
   }
 }
+
+beforeEach(() => {
+  getArchiveHooksForRemovalMock.mockReset()
+  runRemoteArchiveHookMock.mockReset()
+})
 
 describe('removeRuntimeRegisteredRemoteWorktree', () => {
   it('keys the archive hook off the resolved connection id, not repo.connectionId', async () => {
