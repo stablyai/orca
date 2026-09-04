@@ -7024,7 +7024,10 @@
           "localLinkHelp": "此链接仅在运行于此计算机上的浏览器或 Orca 客户端中有效。",
           "noExternalAddress": "未找到其他设备的地址。将此计算机连接到 LAN 或 Tailscale，刷新，或选择“自定义地址”。",
           "staleAddress": "连接地址已更改。为 {{address}} 生成新链接。",
-          "customInvalid": "请输入有效的主机、主机:端口、IPv6 地址或 ws(s):// URL。"
+          "customInvalid": "请输入有效的主机、主机:端口、IPv6 地址或 ws(s):// URL。",
+          "cloudflareTunnel": "Cloudflare Tunnel",
+          "cloudflareTunnelHelp": "Reach this server from outside your network",
+          "copiedTunnelCommand": "Copied tunnel command."
         },
         "Settings": {
           "3bf149e873": "项目设置 > {{value0}}",
@@ -10336,6 +10339,17 @@
           "accessHint": "允许麦克风访问以列出输入设备。",
           "allowAccess": "允许访问"
         },
+        "CloudflareTunnelFields": {
+          "startTunnel": "Start the tunnel on this computer",
+          "startTunnelHelp": "Run this where Orca is running and leave it open. It prints a public URL.",
+          "commandLabel": "Tunnel command",
+          "addressLabel": "Tunnel URL",
+          "addressPlaceholder": "https://example.trycloudflare.com",
+          "addressHint": "Paste the URL cloudflared printed. Orca connects to it over wss://.",
+          "addressInvalid": "Enter the public https:// or wss:// URL that cloudflared printed.",
+          "quickTunnelWarning": "Quick tunnel URLs change every time cloudflared restarts. Generate a new link after each restart.",
+          "exposureNote": "The tunnel makes this Orca server reachable from the internet while it runs. Revoke the access grant below when you are done.",
+          "commandUnavailable": "The runtime port is not available yet. Reopen this pane once the Orca server is listening."
         "GlobalWorktreeVisibilitySourcesSetting": {
           "saveFailed": "无法保存可见性默认设置。",
           "updateServer": "请更新此服务器以配置来源默认设置。",

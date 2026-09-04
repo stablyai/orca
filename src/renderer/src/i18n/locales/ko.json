@@ -6981,7 +6981,10 @@
           "localLinkHelp": "이 링크는 이 컴퓨터에서 실행 중인 브라우저 또는 Orca 클라이언트에서만 작동합니다.",
           "noExternalAddress": "다른 기기용 주소를 찾지 못했습니다. 이 컴퓨터를 LAN 또는 Tailscale에 연결한 후 새로 고치거나 사용자 지정 주소를 선택하세요.",
           "staleAddress": "연결 주소가 변경되었습니다. {{address}}용 새 링크를 생성하세요.",
-          "customInvalid": "올바른 호스트, 호스트:포트, IPv6 주소 또는 ws(s):// URL을 입력하세요."
+          "customInvalid": "올바른 호스트, 호스트:포트, IPv6 주소 또는 ws(s):// URL을 입력하세요.",
+          "cloudflareTunnel": "Cloudflare Tunnel",
+          "cloudflareTunnelHelp": "Reach this server from outside your network",
+          "copiedTunnelCommand": "Copied tunnel command."
         },
         "Settings": {
           "3bf149e873": "프로젝트 설정 > {{value0}}",
@@ -10285,6 +10288,17 @@
           "createWorkspace": "워크스페이스를 만들고 실행 위치에서 해당 레시피를 선택하세요.",
           "openSetup": "환경 레시피 설정"
         },
+        "CloudflareTunnelFields": {
+          "startTunnel": "Start the tunnel on this computer",
+          "startTunnelHelp": "Run this where Orca is running and leave it open. It prints a public URL.",
+          "commandLabel": "Tunnel command",
+          "addressLabel": "Tunnel URL",
+          "addressPlaceholder": "https://example.trycloudflare.com",
+          "addressHint": "Paste the URL cloudflared printed. Orca connects to it over wss://.",
+          "addressInvalid": "Enter the public https:// or wss:// URL that cloudflared printed.",
+          "quickTunnelWarning": "Quick tunnel URLs change every time cloudflared restarts. Generate a new link after each restart.",
+          "exposureNote": "The tunnel makes this Orca server reachable from the internet while it runs. Revoke the access grant below when you are done.",
+          "commandUnavailable": "The runtime port is not available yet. Reopen this pane once the Orca server is listening."
         "GlobalWorktreeVisibilitySourcesSetting": {
           "saveFailed": "가시성 기본값을 저장할 수 없습니다.",
           "updateServer": "소스 기본값을 구성하려면 이 서버를 업데이트하세요.",

@@ -8068,7 +8068,10 @@
           "localLinkHelp": "This link only works in a browser or Orca client running on this computer.",
           "noExternalAddress": "No address for another device was found. Connect this computer to a LAN or Tailscale, refresh, or choose Custom address.",
           "staleAddress": "The connection address changed. Generate a new link for {{address}}.",
-          "customInvalid": "Enter a valid host, host:port, IPv6 address, or ws(s):// URL."
+          "customInvalid": "Enter a valid host, host:port, IPv6 address, or ws(s):// URL.",
+          "cloudflareTunnel": "Cloudflare Tunnel",
+          "cloudflareTunnelHelp": "Reach this server from outside your network",
+          "copiedTunnelCommand": "Copied tunnel command."
         },
         "Settings": {
           "3bf149e873": "Project Settings > {{value0}}",
@@ -11724,6 +11727,17 @@
             }
           }
         },
+        "CloudflareTunnelFields": {
+          "startTunnel": "Start the tunnel on this computer",
+          "startTunnelHelp": "Run this where Orca is running and leave it open. It prints a public URL.",
+          "commandLabel": "Tunnel command",
+          "addressLabel": "Tunnel URL",
+          "addressPlaceholder": "https://example.trycloudflare.com",
+          "addressHint": "Paste the URL cloudflared printed. Orca connects to it over wss://.",
+          "addressInvalid": "Enter the public https:// or wss:// URL that cloudflared printed.",
+          "quickTunnelWarning": "Quick tunnel URLs change every time cloudflared restarts. Generate a new link after each restart.",
+          "exposureNote": "The tunnel makes this Orca server reachable from the internet while it runs. Revoke the access grant below when you are done.",
+          "commandUnavailable": "The runtime port is not available yet. Reopen this pane once the Orca server is listening."
         "GlobalWorktreeVisibilitySourcesSetting": {
           "saveFailed": "Could not save visibility defaults.",
           "updateServer": "Update this server to configure source defaults.",
