@@ -183,6 +183,13 @@ test('the FCM probe is validate-only and separates a bad token from a bad creden
     /--impersonate-service-account "\$\{PUSH_RUNTIME_SERVICE_ACCOUNT\}"/,
     'the probe must exercise the runtime credential, not the deploy identity'
   )
+  // Why: that token reads the Apple signing key. Masking it means a later `set -x` or a
+  // debug re-run cannot print it into a public log.
+  assert.match(
+    probe,
+    /test -n "\$\{token\}"\n {10}echo "::add-mask::\$\{token\}"/,
+    'the impersonated token must be masked before anything else runs'
+  )
   assert.match(workflow, /PUSH_RUNTIME_SERVICE_ACCOUNT: orca-cloud-push@onorca-cloud\.iam\.gserviceaccount\.com/)
 })
 

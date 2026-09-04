@@ -1,5 +1,5 @@
 import { PUSH_LIMITS } from '@orca-cloud/push-contract'
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   createPushHostKeypair,
   hostPublicKeyB64
@@ -171,16 +171,37 @@ describe('push gateway request limits', () => {
     ).toBe(200)
   })
 
-  it('never throttles an authenticated device or send route', async () => {
+  it('gives the authenticated routes their own, wider bucket per client ip', async () => {
     const sessionToken = await harness.signIn(createPushHostKeypair(64))
-    for (let index = 0; index < PUSH_LIMITS.unauthenticatedRequestsPerMinutePerIp + 5; index++) {
-      const listed = await harness.authorized(
-        '/v1/devices',
-        { headers: { 'x-forwarded-for': CLIENT_IP } },
-        sessionToken
-      )
+    const headers = { 'x-forwarded-for': CLIENT_IP }
+    for (let index = 0; index < PUSH_LIMITS.authenticatedRequestsPerMinutePerIp; index++) {
+      const listed = await harness.authorized('/v1/devices', { headers }, sessionToken)
       expect(listed.status).toBe(200)
     }
+    const limited = await harness.authorized('/v1/devices', { headers }, sessionToken)
+    expect(limited.status).toBe(429)
+    // The handshake bucket is untouched by any of that.
+    const challenge = await harness.server.app.request('/v1/host/challenge', {
+      method: 'POST',
+      headers: { ...headers, 'content-type': 'application/json' },
+      body: JSON.stringify({ v: 1, hostPublicKeyB64: hostPublicKeyB64(createPushHostKeypair(67)) })
+    })
+    expect(challenge.status).toBe(200)
+  })
+
+  it('caps a flood of forged bearers before any of them reaches the session lookup', async () => {
+    const headers = { 'x-forwarded-for': CLIENT_IP }
+    const [before] = await harness.database.query('SELECT COUNT(*) AS sessions FROM push_sessions')
+    for (let index = 0; index < PUSH_LIMITS.authenticatedRequestsPerMinutePerIp; index++) {
+      const refused = await harness.authorized('/v1/send', { method: 'POST', headers }, 'forged')
+      expect(refused.status).toBe(401)
+    }
+    const limited = await harness.authorized('/v1/send', { method: 'POST', headers }, 'forged')
+    expect(limited.status).toBe(429)
+    expect(await limited.json()).toEqual({ error: 'rate_limited' })
+    expect(harness.server.unauthenticatedIps.trackedIpCount()).toBe(0)
+    const [after] = await harness.database.query('SELECT COUNT(*) AS sessions FROM push_sessions')
+    expect(Number(after?.sessions)).toBe(Number(before?.sessions))
   })
 
   it('answers 409 once a host has registered its device allowance', async () => {
@@ -206,6 +227,26 @@ describe('push gateway request limits', () => {
     expect(((await listed.json()) as { devices: unknown[] }).devices).toHaveLength(
       PUSH_LIMITS.maxDevicesPerHost
     )
+  })
+
+  // Why: a database error carries the failing row in its message. The response
+  // and the log must both stop at the error's name.
+  it('answers an unexpected route failure with a bare 500 and logs only the name', async () => {
+    const sessionToken = await harness.signIn(createPushHostKeypair(66))
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+    try {
+      await harness.database.close()
+      const response = await harness.authorized('/v1/devices', {}, sessionToken)
+      expect(response.status).toBe(500)
+      expect(await response.json()).toEqual({ error: 'internal' })
+      const logged = warn.mock.calls.map((call) => String(call[0])).join('\n')
+      expect(logged).toContain('"event":"orca_push_request_failed"')
+      expect(logged).not.toContain('SELECT')
+      expect(logged).not.toContain('push_devices')
+      expect(harness.server.observability.consume().request_error).toBe(1)
+    } finally {
+      warn.mockRestore()
+    }
   })
 
   it('charges a repeated registration id once and returns one result', async () => {

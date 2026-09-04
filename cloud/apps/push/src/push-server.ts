@@ -102,7 +102,30 @@ export function createPushServer(
     trustedProxyHops: config.trustedProxyHops,
     onLimited: () => observability.record('ip_rate_limited')
   })
+  // Why a second bucket: a bearer has to be looked up before it can be refused,
+  // and that lookup takes one of very few pool connections. Capping the caller
+  // first keeps a flood of forged bearers from starving real hosts of the pool.
+  const authenticatedIps = new ClientIpRateLimiter({
+    now,
+    capacity: PUSH_LIMITS.authenticatedRequestsPerMinutePerIp
+  })
+  const limitAuthenticatedIp = clientIpRateLimit(authenticatedIps, {
+    trustedProxyHops: config.trustedProxyHops,
+    onLimited: () => observability.record('ip_rate_limited')
+  })
   const app = new Hono<{ Variables: PushVariables }>()
+  // Hono's default handler prints the whole error, and a pg error carries the
+  // offending row in `detail`. Only the error's name may reach the logs.
+  app.onError((error, context) => {
+    observability.record('request_error')
+    console.warn(
+      JSON.stringify({
+        event: 'orca_push_request_failed',
+        error: error instanceof Error ? error.name : 'unknown'
+      })
+    )
+    return context.json({ error: 'internal' }, 500)
+  })
 
   app.get('/health', (context) => context.json({ ok: true, pushProtocol: 1 }))
   app.get('/ready', async (context) =>
@@ -123,9 +146,10 @@ export function createPushServer(
     await next()
     return
   }
-  app.use('/v1/devices', bearerSession)
-  app.use('/v1/devices/*', bearerSession)
-  app.use('/v1/send', bearerSession)
+  // `/v1/devices/*` matches `/v1/devices` itself; a second registration for the
+  // bare path would run both middlewares twice on it.
+  app.use('/v1/devices/*', limitAuthenticatedIp, bearerSession)
+  app.use('/v1/send', limitAuthenticatedIp, bearerSession)
 
   app.post('/v1/host/challenge', limitUnauthenticatedIp, limitBody, async (context) => {
     const body = PushHostChallengeRequestSchema.safeParse(

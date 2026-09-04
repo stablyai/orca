@@ -70,6 +70,28 @@ describe('send schemas', () => {
       .toBe(false)
   })
 
+  it('rejects a notification id that could not be sent as a collapse header', () => {
+    for (const notificationId of ['line\nbreak', 'nul\0byte', 'émoji', '\t']) {
+      expect(
+        PushSendRequestSchema.safeParse({
+          v: 1,
+          registrationIds: ['reg-1'],
+          notification: { ...notification(), notificationId }
+        }).success
+      ).toBe(false)
+    }
+    expect(
+      PushSendRequestSchema.safeParse({
+        v: 1,
+        registrationIds: ['reg-1'],
+        notification: {
+          ...notification(),
+          notificationId: 'agent:repo%3A%3A%2FUsers%2Fme:pane-1:1700000000000'
+        }
+      }).success
+    ).toBe(true)
+  })
+
   it('dedupes repeated registration ids and keeps the first-seen order', () => {
     const parsed = PushSendRequestSchema.safeParse({
       v: 1,

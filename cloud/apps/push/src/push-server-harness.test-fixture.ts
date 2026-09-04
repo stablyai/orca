@@ -157,7 +157,8 @@ export async function createPushServerHarness() {
     },
     close: async (): Promise<void> => {
       server.coalescer.stop()
-      await database.close()
+      // A test may close the database itself to provoke a route failure.
+      await database.close().catch(() => undefined)
     }
   }
 }

@@ -97,6 +97,11 @@ resource "google_sql_database" "push" {
   project  = var.project_id
   name     = "orca_push"
   instance = local.relay_database_instance_name
+
+  # Why: this database holds every live device token. Disabling the gateway must not drop it.
+  lifecycle {
+    prevent_destroy = true
+  }
 }
 
 resource "random_password" "push_database" {
@@ -160,6 +165,12 @@ resource "google_secret_manager_secret" "push_provider" {
 
   replication {
     auto {}
+  }
+
+  # Why: Apple issues a `.p8` once and Secret Manager has no undelete. Turning the gateway off
+  # must fail the plan rather than destroy the only copy of the signing key.
+  lifecycle {
+    prevent_destroy = true
   }
 }
 

@@ -198,6 +198,7 @@ jobs:
           token="$(gcloud auth print-access-token \
             --impersonate-service-account "${PUSH_RUNTIME_SERVICE_ACCOUNT}")"
           test -n "${token}"
+          echo "::add-mask::${token}"
           body='{"validate_only":true,"message":{"token":"orca-push-deploy-probe-invalid-token","notification":{"title":"Orca","body":"deploy probe"}}}'
           for attempt in $(seq 1 5); do
             code="$(curl -sS -o "${RUNNER_TEMP}/push-fcm.json" -w '%{http_code}' --max-time 20 \

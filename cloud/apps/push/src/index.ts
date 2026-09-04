@@ -5,7 +5,7 @@ import { createPushServer } from './push-server.js'
 const CHALLENGE_PRUNE_INTERVAL_MS = 60_000
 const SESSION_PRUNE_INTERVAL_MS = 10 * 60_000
 const SEND_LOG_PRUNE_INTERVAL_MS = 30 * 60_000
-const STALE_HOST_PRUNE_INTERVAL_MS = 6 * 60 * 60_000
+const STALE_HOST_PRUNE_INTERVAL_MS = 30 * 60_000
 
 const config = loadPushConfig()
 const database = await openPushDatabase({

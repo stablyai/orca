@@ -77,6 +77,10 @@ Terraform owns the three Apple secret **names, labels, and replication, and neve
 The `.p8` is issued by the Apple developer portal, so a Terraform-managed version would put the
 private key in state and would fight the rotation below. The database URL secret is different:
 Terraform generates that password, so it owns that version, exactly as `relay-database.tf` does.
+That puts the generated password and the full database URL in the state bucket, which the shared
+deploy identity can read; the Apple key never appears there. The three Apple secrets and the
+`orca_push` database carry `prevent_destroy`, so disabling the gateway fails the plan instead
+of deleting the only copy of the signing key or every live device token.
 
 ## Importing what already exists
 
@@ -279,6 +283,11 @@ Two independent limits, both enforced in the gateway and both returning HTTP 200
 | 60 sends per rolling hour | per `hostFingerprint` |
 | 200 sends per rolling day | per `registrationId` |
 | 20 `registrationIds` | per request, hard cap, HTTP 400 over it |
+
+Ahead of all three sit two per-client-IP token buckets that answer HTTP 429: 30 requests per
+minute on the two unauthenticated handshake routes, and 240 per minute on every other `/v1`
+route, applied before the bearer is looked up so that a flood of forged bearers cannot spend
+the two-connection pool on session lookups. Both are per instance and in memory.
 
 `push_send_log` backs the two rolling counts and is pruned after 25 hours. Upstream of all
 three, FCM V1 bills project quota against `ORCA_PUSH_FCM_PROJECT_ID`, which is why the runtime

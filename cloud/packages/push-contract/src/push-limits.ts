@@ -20,11 +20,17 @@ export const PUSH_LIMITS = {
   sendLogRetentionMs: 25 * 60 * 60 * 1000,
   notificationTtlSeconds: 4 * 60 * 60,
   apnsCollapseIdMaxBytes: 64,
-  // A host row outlives its devices only long enough to survive a phone swap.
-  hostRetentionMs: 30 * 24 * 60 * 60 * 1000,
+  // Nothing reads a host row, and any keypair mints one for free, so a host
+  // with no registration left is kept only long enough to survive a phone swap.
+  hostRetentionMs: 60 * 60 * 1000,
   // The challenge and session routes are the only unauthenticated writes, so
   // they are capped per client IP before any key material is generated.
-  unauthenticatedRequestsPerMinutePerIp: 30
+  unauthenticatedRequestsPerMinutePerIp: 30,
+  // Every other route looks its bearer up in the database before it can refuse
+  // it, so a flood of forged bearers is capped per client IP ahead of that.
+  // Wide enough for an office NAT full of hosts, each of which sends at most
+  // its hourly quota plus a registration per connect.
+  authenticatedRequestsPerMinutePerIp: 240
 } as const
 
 export const PUSH_DEFAULTS = {

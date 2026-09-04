@@ -51,7 +51,10 @@ describe('push contract limits', () => {
       sessionTtlMs: 86_400_000,
       sendLogRetentionMs: 90_000_000,
       notificationTtlSeconds: 14_400,
-      apnsCollapseIdMaxBytes: 64
+      apnsCollapseIdMaxBytes: 64,
+      hostRetentionMs: 3_600_000,
+      unauthenticatedRequestsPerMinutePerIp: 30,
+      authenticatedRequestsPerMinutePerIp: 240
     })
     expect(PUSH_DEFAULTS.apnsTopic).toBe('com.stably.orca.mobile')
     expect(PUSH_DEFAULTS.fcmProjectId).toBe('onorca-cloud')
