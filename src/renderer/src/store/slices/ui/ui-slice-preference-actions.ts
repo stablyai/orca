@@ -185,7 +185,24 @@ export function createUiPreferenceActions(set: UISliceSet, get: UISliceGet): Par
       window.api.ui.set({ agentsGroupBy: v }).catch(console.error)
     },
 
+    sidebarSectionHeaderKeys: [],
+    setSidebarSectionHeaderKeys: (keys) =>
+      set((s) => {
+        if (
+          s.sidebarSectionHeaderKeys.length === keys.length &&
+          keys.every((key, index) => s.sidebarSectionHeaderKeys[index] === key)
+        ) {
+          return s
+        }
+        return { sidebarSectionHeaderKeys: [...keys] }
+      }),
+
     collapsedGroups: new Set<string>(),
+    setCollapsedGroups: (keys) => {
+      const next = new Set(keys)
+      set({ collapsedGroups: next })
+      window.api.ui.set({ collapsedGroups: [...next] }).catch(console.error)
+    },
     toggleCollapsedGroup: (key) =>
       set((s) => {
         const next = new Set(s.collapsedGroups)
