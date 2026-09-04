@@ -23,6 +23,11 @@ function resolveUnitName(): string {
   return process.env.ORCA_SERVE_UPDATE_UNIT_NAME ?? DEFAULT_SERVE_UPDATE_UNIT_NAME
 }
 
+/** The unit name the spooled request names; tests override via ORCA_SERVE_UPDATE_UNIT_NAME. */
+export function getServeUpdateUnitName(): string {
+  return resolveUnitName()
+}
+
 function writeJsonFile(path: string, value: unknown, mode: number): boolean {
   const temporaryPath = `${path}.${process.pid}.tmp`
   try {
@@ -42,6 +47,13 @@ function writeJsonFile(path: string, value: unknown, mode: number): boolean {
 
 export function writeUpdateRequest(request: Omit<ServeUpdateRequest, 'schemaVersion'>): boolean {
   return writeJsonFile(getRequestPath(resolveSpoolDir()), { schemaVersion: 2, ...request }, 0o664)
+}
+
+/** Captured download metadata the spooled request carries; the helper re-hashes independently. */
+export type ServeUpdateSpoolArtifact = {
+  artifactPath: string
+  sha512: string
+  targetVersion: string
 }
 
 export function clearUpdateRequest(): void {
@@ -90,6 +102,9 @@ export function readServeUpdateResultFor(
     const result = parseServeUpdateResult(raw)
     if (!result) {
       return null
+    }
+    if (result.phase === 'accepted') {
+      return { verdict: 'accepted', message: '' }
     }
     if (result.phase === 'ok') {
       return { verdict: 'accepted', message: '' }

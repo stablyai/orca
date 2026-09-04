@@ -35,6 +35,7 @@ import { CliInstaller } from '../cli/cli-installer'
 import { installLinuxBareOrcaDispatcher } from '../cli/linux-bare-orca-dispatcher'
 import { scheduleAllPendingHistoryTreeRemovals } from '../terminal-history-deletion'
 import { triggerStartupNotificationRegistration } from '../ipc/startup-notification-registration'
+import { initializeServeAutoUpdater } from './serve-updater-init'
 import { mainProcessState as state } from './main-process-state'
 import { logStartupMilestone } from './startup-diagnostics'
 
@@ -202,6 +203,11 @@ async function launchServeMode(
   // Why: serve deletes worktrees too, and the history GC that normally drains delete tombstones is
   // armed from the main window — without this, a quit mid-removal leaks the tree until a desktop launch.
   scheduleAllPendingHistoryTreeRemovals()
+  // Why here and not in a window path: serve never opens a window, so setupAutoUpdater would
+  // otherwise never run and `updater.getStatus` would report updater-unavailable forever.
+  // Post-whenReady is required by electron-updater; ahead of printServeReady so clients pairing
+  // at first contact already see the real update verdict.
+  initializeServeAutoUpdater(runtime.getRuntimeId(), () => state.store!)
   await printServeReady(serveOptions)
 }
 
