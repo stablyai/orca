@@ -109,6 +109,16 @@ function dismissButtonClassTokens(markup: string): string[] {
   return dismissButtonClass(markup).split(/\s+/).filter(Boolean)
 }
 
+function sendTargetButtonClassTokens(markup: string): string[] {
+  const match = markup.match(
+    /<button\b(?=[^>]*aria-label="Send to this agent")[^>]*class="([^"]*)"/
+  )
+  if (!match) {
+    throw new Error('Expected send target button in rendered markup')
+  }
+  return match[1].split(/\s+/).filter(Boolean)
+}
+
 function tokenCount(markup: string, token: string): number {
   return classTokens(markup).filter((classToken) => classToken === token).length
 }
@@ -188,6 +198,19 @@ describe('DashboardAgentRow', () => {
     expect(tokens).toContain('w-12')
     expect(markup).toContain('lucide-send')
     expect(markup).not.toContain('aria-label="Dismiss agent"')
+  })
+
+  it('keeps a localized send-target label on one line and bounded in width', () => {
+    const markup = renderSendTargetRow({ sendTargetStatus: 'eligible' })
+    const tokens = sendTargetButtonClassTokens(markup)
+
+    // Why: the button is a fixed-height overlay, so a label that wraps escapes it
+    // and overlaps the row. CJK labels break between characters, and a long
+    // unbreakable word grows left over the agent name.
+    expect(tokens).toContain('h-5')
+    expect(tokens).toContain('whitespace-nowrap')
+    expect(tokens).toContain('max-w-28')
+    expect(markup).toContain('min-w-0 truncate')
   })
 
   it('marks disabled send-target rows as muted without an eligibility ring', () => {

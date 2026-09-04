@@ -74,7 +74,10 @@ export function DashboardAgentRowTrailingControls({
           onKeyDown={stopKeyDown}
           disabled={sendTargetStatus === 'sending'}
           className={cn(
-            'worktree-agent-send-target-button absolute right-0 top-1/2 z-10 inline-flex h-5 -translate-y-1/2 items-center gap-1 rounded-md border px-1.5 text-[10px] font-medium leading-none transition-[background-color,border-color,color,opacity]',
+            // Why nowrap + max-w: the button is a fixed-height overlay, so a label
+            // that wraps escapes it and overlaps the row. CJK breaks between
+            // characters, and an unbreakable word grows left over the agent name.
+            'worktree-agent-send-target-button absolute right-0 top-1/2 z-10 inline-flex h-5 max-w-28 -translate-y-1/2 items-center gap-1 whitespace-nowrap rounded-md border px-1.5 text-[10px] font-medium leading-none transition-[background-color,border-color,color,opacity]',
             sendTargetStatus === 'sending' && 'cursor-progress opacity-75'
           )}
           aria-label={translate(
@@ -86,8 +89,10 @@ export function DashboardAgentRowTrailingControls({
             'Send to this agent'
           )}
         >
-          <Send className="size-3" />
-          <span>{translate('auto.components.dashboard.DashboardAgentRow.912e136cd9', 'Send')}</span>
+          <Send className="size-3 shrink-0" />
+          <span className="min-w-0 truncate">
+            {translate('auto.components.dashboard.DashboardAgentRow.912e136cd9', 'Send')}
+          </span>
         </button>
       )}
       {!sendTargetStatus && hideDismiss && relativeTimestamp !== null && (
