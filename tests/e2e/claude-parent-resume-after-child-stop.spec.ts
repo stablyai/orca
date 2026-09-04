@@ -85,4 +85,5 @@ test('keeps the Claude parent working after its runtime child stops', async ({
     background_tasks: []
   })
   await expect(agentRow.getByLabel('Done').first()).toBeVisible()
+  await expect(agentRow.getByLabel('Working').first()).toBeHidden()
 })
