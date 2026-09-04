@@ -2,7 +2,8 @@
 // generations) hits the same Windows stickiness — AV/indexers/late handle releases surface transient
 // EBUSY/ENOTEMPTY/EPERM on a tree Node just emptied. One helper so no call site forgets the retries.
 
-import { rm } from 'node:fs/promises'
+import { rm as nodeFsRm } from 'node:fs/promises'
+import { createRequire } from 'node:module'
 import { win32 } from 'node:path'
 import { setTimeout as delay } from 'node:timers/promises'
 import { isWindowsAbsolutePathLike } from '../shared/cross-platform-path'
@@ -10,6 +11,26 @@ import { isWslUncPath } from '../shared/wsl-paths'
 import { transientLockRemovalOptions } from '../shared/windows-transient-lock-removal'
 
 const WINDOWS_REMOVE_RETRY_DELAYS_MS = [250, 500, 1_000, 2_000]
+
+const requireFromMain = createRequire(__filename)
+
+type HostTreeRm = typeof nodeFsRm
+
+// Why: Electron patches node:fs so `.asar` archives look like read-only
+// directories; recursive rm walks into them and never unlinks the file.
+function loadHostTreeRm(): HostTreeRm {
+  try {
+    const originalFs = requireFromMain('original-fs') as {
+      promises?: { rm?: HostTreeRm }
+    }
+    if (typeof originalFs.promises?.rm === 'function') {
+      return originalFs.promises.rm.bind(originalFs.promises) as HostTreeRm
+    }
+  } catch {
+    // original-fs is Electron-only; Node tests and non-Electron hosts fall back.
+  }
+  return nodeFsRm
+}
 
 /** Convert a native host filesystem path to the Win32 long-path namespace. */
 export function toHostFilesystemPath(targetPath: string): string {
@@ -47,11 +68,12 @@ export async function removeHostTree(targetPath: string): Promise<void> {
   // Why: large Windows trees commonly surface transient ENOTEMPTY/EPERM while Node walks and
   // removes nested directories; Node's own retries absorb that before the loop below has to.
   const rmOptions = transientLockRemovalOptions()
+  const hostTreeRm = loadHostTreeRm()
   let attempt = 0
 
   while (true) {
     try {
-      await rm(removalPath, rmOptions)
+      await hostTreeRm(removalPath, rmOptions)
       return
     } catch (error) {
       if (attempt >= retryDelays.length || !isTransientWindowsRemovalError(error)) {
