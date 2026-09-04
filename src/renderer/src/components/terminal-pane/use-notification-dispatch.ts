@@ -5,6 +5,7 @@ import { getRepoMapFromState, getWorktreeMapFromState } from '@/store/selectors'
 import { playDesktopNotificationSound } from '@/lib/desktop-notification-sound'
 import { showBlockedNotificationFallbackToast } from '@/lib/blocked-notification-fallback'
 import { buildAgentNotificationId } from '../../../../shared/agent-notification-id'
+import { parseWorkspaceKey } from '../../../../shared/workspace-scope'
 import { shareCompatibleTitleIdentityGroup } from '../../../../shared/agent-title-owner'
 import {
   isFreshNonDoneAgentStatus,
@@ -183,7 +184,15 @@ export function dispatchTerminalNotification(
   // construction; coupling the notification dispatcher to it would silently
   // drop the repo label if that format ever changes. The worktree object
   // itself is the source of truth for its owning repo.
-  const worktree = getWorktreeMapFromState(state).get(worktreeId)
+  // Folder workspaces are keyed `folder:<id>` and exist only in
+  // getKnownWorktreeById (#2989); without resolving them here the OS
+  // notification title falls back to the raw workspace key instead of the
+  // workspace name. Git worktrees keep the map path unchanged.
+  const worktree =
+    getWorktreeMapFromState(state).get(worktreeId) ??
+    (parseWorkspaceKey(worktreeId)?.type === 'folder'
+      ? state.getKnownWorktreeById(worktreeId)
+      : undefined)
   const repo = worktree ? getRepoMapFromState(state).get(worktree.repoId) : null
   const customSoundId = state.settings?.notifications?.customSoundId ?? 'system'
   const customSoundVolume = state.settings?.notifications?.customSoundVolume ?? null

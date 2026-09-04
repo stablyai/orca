@@ -6,6 +6,7 @@ import {
 } from '../../../../shared/agent-status-types'
 import type { TerminalLayoutSnapshot } from '../../../../shared/terminal-tab-types'
 import { buildAgentNotificationId } from '../../../../shared/agent-notification-id'
+import { findKnownWorktreeById } from '../../store/slices/worktrees/listing/detected-worktree-meta'
 
 type MockState = {
   activeWorktreeId: string | null
@@ -28,6 +29,9 @@ type MockState = {
     }[]
   >
   repos: { id: string; displayName?: string; connectionId?: string | null }[]
+  folderWorkspaces: { id: string; projectGroupId: string; name: string; folderPath: string }[]
+  detectedWorktreesByRepo: Record<string, unknown[]>
+  getKnownWorktreeById: (worktreeId: string) => unknown
   settings: {
     experimentalTerminalAttention?: boolean
     notifications?: {
@@ -139,6 +143,15 @@ describe('dispatchTerminalNotification', () => {
         ]
       },
       repos: [{ id: 'repo1', displayName: 'orca', connectionId: null }],
+      folderWorkspaces: [],
+      detectedWorktreesByRepo: {},
+      // The real resolver, bound to this mock state — keeps the folder tests
+      // exercising the actual folder-workspace projection.
+      getKnownWorktreeById: (worktreeId: string) =>
+        findKnownWorktreeById(
+          mockState as unknown as Parameters<typeof findKnownWorktreeById>[0],
+          worktreeId
+        ),
       settings: { experimentalTerminalAttention: true, notifications: { customSoundPath: null } },
       markWorktreeUnread: vi.fn(),
       markTerminalTabUnread: vi.fn(),
@@ -876,5 +889,49 @@ describe('dispatchTerminalNotification', () => {
     expect(mockState.markWorktreeUnread).not.toHaveBeenCalled()
     expect(mockState.markTerminalTabUnread).not.toHaveBeenCalled()
     expect(mockState.markTerminalPaneUnread).not.toHaveBeenCalled()
+  })
+
+  it('resolves a folder workspace name for folder: workspace keys', () => {
+    mockState.folderWorkspaces = [
+      {
+        id: 'fw-1',
+        projectGroupId: 'group-1',
+        name: 'API-792 : Make portal permissions available',
+        folderPath: '/home/user/workspaces/api-792'
+      }
+    ]
+
+    dispatchTerminalNotification('folder:fw-1', {
+      source: 'agent-task-complete',
+      agentStatusSnapshot: {
+        state: 'done',
+        prompt: 'review the PR',
+        agentType: 'claude',
+        stateStartedAt: Date.now()
+      }
+    })
+
+    expect(getLastNotificationDispatchArg()).toMatchObject({
+      worktreeId: 'folder:fw-1',
+      worktreeLabel: 'API-792 : Make portal permissions available',
+      // Folder workspaces have no repo row; the title is the workspace name alone.
+      repoLabel: undefined
+    })
+  })
+
+  it('falls back to the raw key only when no folder workspace matches it', () => {
+    dispatchTerminalNotification('folder:unknown-workspace', {
+      source: 'agent-task-complete',
+      agentStatusSnapshot: {
+        state: 'done',
+        prompt: 'review the PR',
+        agentType: 'claude',
+        stateStartedAt: Date.now()
+      }
+    })
+
+    expect(getLastNotificationDispatchArg()).toMatchObject({
+      worktreeLabel: 'folder:unknown-workspace'
+    })
   })
 })
