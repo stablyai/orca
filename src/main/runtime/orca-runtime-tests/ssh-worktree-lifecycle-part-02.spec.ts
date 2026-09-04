@@ -461,7 +461,14 @@ describe('OrcaRuntimeService', () => {
     vi.mocked(getEffectiveHooksFromConfig).mockReturnValue({
       scripts: { archive: 'pnpm worktree:archive' }
     })
-    const runtime = new OrcaRuntimeService(remoteStore as never)
+    const ptyProvider = {
+      listProcesses: vi.fn().mockResolvedValue([]),
+      shutdown: vi.fn().mockResolvedValue(undefined),
+      deleteWorktreeHistory: vi.fn().mockResolvedValue(undefined)
+    }
+    const runtime = new OrcaRuntimeService(remoteStore as never, undefined, {
+      getSshProvider: () => ptyProvider as never
+    })
 
     try {
       await runtime.removeManagedWorktree('path:/remote/feature', true, true)
@@ -522,7 +529,14 @@ describe('OrcaRuntimeService', () => {
     vi.mocked(getEffectiveHooksFromConfig).mockReturnValue({
       scripts: { archive: 'pnpm worktree:archive' }
     })
-    const runtime = new OrcaRuntimeService(remoteStore as never)
+    const ptyProvider = {
+      listProcesses: vi.fn().mockResolvedValue([]),
+      shutdown: vi.fn().mockResolvedValue(undefined),
+      deleteWorktreeHistory: vi.fn().mockResolvedValue(undefined)
+    }
+    const runtime = new OrcaRuntimeService(remoteStore as never, undefined, {
+      getSshProvider: () => ptyProvider as never
+    })
 
     let result: RemoveWorktreeResult & { warning?: string }
     try {
