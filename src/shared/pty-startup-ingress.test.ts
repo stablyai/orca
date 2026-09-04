@@ -234,20 +234,36 @@ describe('PtyStartupIngress', () => {
     expect(visible(malformedEmissions)).toBe('\x1b]10;not-a-query\x07')
   })
 
-  it('releases a partial query immediately when source authority closes', () => {
+  it('leaves an unarmed partial query on the renderer path', () => {
     const emissions: PtyIngressEmission[] = []
     const ingress = new PtyStartupIngress({
-      intent: { colors: COLORS, deadlineMs: 5_000 },
       ownerBackend: 'posix-pty',
       write: () => {},
       onEmission: (emission) => emissions.push(emission)
     })
 
     ingress.accept('\x1b]10;')
-    expect(emissions).toEqual([])
+    expect(visible(emissions)).toBe('\x1b]10;')
     ingress.closeQueryAuthority()
 
     expect(visible(emissions)).toBe('\x1b]10;')
+  })
+
+  it('hands an armed WSL query to its renderer because host echo containment is unavailable', () => {
+    const writes: string[] = []
+    const emissions: PtyIngressEmission[] = []
+    const wslIngress = new PtyStartupIngress({
+      intent: { colors: COLORS, deadlineMs: 5_000 },
+      ownerBackend: 'windows-wsl',
+      write: (data) => writes.push(data),
+      onEmission: (emission) => emissions.push(emission)
+    })
+    wslIngress.closeQueryAuthority()
+    wslIngress.accept('\x1b]10;?\x07')
+
+    expect(writes).toEqual([])
+    expect(visible(emissions)).toBe('\x1b]10;?\x07')
+    wslIngress.drainAndClose()
   })
 
   it('keeps POSIX, WSL, malformed, and unrelated output unchanged', () => {
@@ -422,18 +438,20 @@ describe('PtyStartupIngress', () => {
     expect(visible(emissions)).toBe('')
   })
 
-  it('keeps the synchronous write for ConPTY-hosted wsl.exe panes', () => {
+  it('keeps source ownership before visibility for ConPTY-hosted wsl.exe panes', () => {
     // Why: a Windows-hosted pty must be answered before conhost's own responder.
     const writes: string[] = []
+    const emissions: PtyIngressEmission[] = []
     const ingress = new PtyStartupIngress({
       intent: { colors: COLORS, deadlineMs: 5_000 },
       ownerBackend: 'windows-wsl',
       write: (data) => writes.push(data),
-      onEmission: () => {}
+      onEmission: (emission) => emissions.push(emission)
     })
 
     ingress.accept('\x1b]10;?\x07')
     expect(writes).toEqual([FOREGROUND_REPLY])
+    expect(visible(emissions)).toBe('')
     ingress.drainAndClose()
   })
 
@@ -787,6 +805,24 @@ describe('PtyStartupIngress', () => {
     ingress.accept(POSIX_COOKED_ECHOES[1]?.(FOREGROUND_REPLY) ?? '')
     ingress.drainAndClose()
     expect(visible(emissions)).toBe('')
+  })
+
+  it('suppresses zsh line-editor echoes from consecutive startup color replies', () => {
+    const { ingress, writes, emissions } = createHarness()
+    ingress.accept('\x1b]10;?\x07\x1b]11;?\x07')
+    expect(writes).toEqual([FOREGROUND_REPLY, BACKGROUND_REPLY])
+
+    ingress.accept(FOREGROUND_REPLY.replaceAll('\x1b', '^['))
+    ingress.accept(BACKGROUND_REPLY.replaceAll('\x1b', '^['))
+
+    const firstZshEcho = '\x071\b10;rgb:2e2e/3434/3434\x07'
+    const split = firstZshEcho.indexOf('/3434', firstZshEcho.indexOf('/3434') + 1)
+    ingress.accept(`\rFIXTURE% ${firstZshEcho.slice(0, split)}`)
+    ingress.accept(firstZshEcho.slice(split))
+    ingress.accept('\x07' + '11;rgb:ffff/ffff/ffff\x07')
+    ingress.drainAndClose()
+
+    expect(visible(emissions)).toBe('\rFIXTURE% ')
   })
 
   it('suppresses the kernel caret echo', () => {

@@ -315,7 +315,7 @@ describe('registerPtyHandlers', () => {
       vi.useRealTimers()
     }
   })
-  it('does not answer ordinary terminal OSC color queries in main', async () => {
+  it('answers plain-shell startup OSC color queries before renderer batching', async () => {
     vi.useFakeTimers()
     const mockProc = createMockProc()
     spawnMock.mockReturnValue(mockProc.proc)
@@ -331,16 +331,20 @@ describe('registerPtyHandlers', () => {
           background: '#111111'
         }
       })) as { id: string }
+      mockProc.proc.write.mockClear()
       mainWindow.webContents.send.mockClear()
 
       const query = '\x1b]10;?\x1b\\\x1b]11;?\x1b\\'
       mockProc.emitData(`${query}ready`)
 
-      expect(mockProc.proc.write).not.toHaveBeenCalled()
+      expect(mockProc.proc.write).toHaveBeenCalledWith('\x1b]10;rgb:eeee/eeee/eeee\x1b\\')
       vi.advanceTimersByTime(2)
+      expect(mockProc.proc.write).toHaveBeenCalledWith('\x1b]11;rgb:1111/1111/1111\x1b\\')
       expect(mainWindow.webContents.send).toHaveBeenCalledWith('pty:data', {
         id: spawnResult.id,
-        data: `${query}ready`
+        data: 'ready',
+        rawLength: `${query}ready`.length,
+        transformed: true
       })
     } finally {
       vi.useRealTimers()

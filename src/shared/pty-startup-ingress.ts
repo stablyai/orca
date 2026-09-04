@@ -130,7 +130,11 @@ export class PtyStartupIngress {
         this.processEchoSpan(operation.chunk)
         return
       case 'close-query':
-        if (this.ownerBackend !== 'windows-conpty') {
+        // A visible renderer must not preempt an armed POSIX owner before the shell's startup probes.
+        if (
+          this.ownerBackend !== 'windows-conpty' &&
+          !(this.ownerBackend === 'posix-pty' && this.intent && this.queryOpen)
+        ) {
           this.queryOpen = false
           // Why the echo hold deliberately survives this, unlike `snapshot`: the
           // handoff ends query *authority*, but a reply already on the wire is still
