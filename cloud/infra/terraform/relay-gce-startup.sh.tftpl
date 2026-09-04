@@ -109,6 +109,9 @@ docker run --detach \
   --user 0:0 \
   --volume "$${cloudsql_dir}:/cloudsql" \
   '${cloud_sql_proxy_image}' \
+%{ if cloud_sql_private_ip ~}
+  --private-ip \
+%{ endif ~}
   --unix-socket=/cloudsql \
   '${cloud_sql_connection_name}'
 

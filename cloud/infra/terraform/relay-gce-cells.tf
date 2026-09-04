@@ -242,6 +242,7 @@ resource "google_compute_instance_template" "relay_gce_cell" {
     artifact_registry_host          = "${var.region}-docker.pkg.dev"
     relay_image                     = each.value.image
     cloud_sql_proxy_image           = var.relay_gce_cloud_sql_proxy_image
+    cloud_sql_private_ip            = var.relay_cloud_sql_private_ip
     # Keep cell-only plans independent from unrelated database configuration drift.
     cloud_sql_connection_name = local.relay_database_connection_name
   })
