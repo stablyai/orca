@@ -1,80 +1,47 @@
 import { describe, expect, it } from 'vitest'
-import nacl from 'tweetnacl'
-import { deriveHostFingerprint } from './host-fingerprint.js'
+import { createHmac } from 'node:crypto'
+import vector from '../../../packages/push-contract/src/push-host-proof-vector.json' with { type: 'json' }
+import { answerPushHostChallenge, createPushHostKeypair } from './host-challenge-answering.test-fixture.js'
 import { PushHostChallengeStore } from './host-challenge-store.js'
+import { deriveHostFingerprint } from './host-fingerprint.js'
 import { openInMemoryPushDatabase } from './push-database.js'
-// Why: the gateway's challenge builder and the desktop's answerer were written
-// separately. This is the only test that runs the real desktop code against a
-// real gateway-issued challenge, so a transcript field drift fails here first.
-import { answerPushHostChallenge } from '../../../../src/main/runtime/push/push-host-proof.js'
 
-const GATEWAY_ORIGIN = 'https://push.onorca.dev'
-
+// Why: the desktop answers challenges in a workspace this one cannot import.
+// Both sides replay the same checked-in vector, so a transcript drift on
+// either side fails in that side's own suite.
 describe('desktop host proof interop', () => {
-  it('desktop answers a gateway-issued challenge and the gateway accepts it once', async () => {
+  it('the checked-in vector answers to the same proof the fixture host computes', () => {
+    const secretKey = new Uint8Array(Buffer.from(vector.hostSecretKeyB64, 'base64'))
+    const keypair = { publicKey: new Uint8Array(Buffer.from(vector.hostPublicKeyB64, 'base64')), secretKey }
+    expect(deriveHostFingerprint(keypair.publicKey)).toBe(vector.hostFingerprint)
+    const proof = answerPushHostChallenge(vector.challenge, {
+      gatewayOrigin: vector.gatewayOrigin,
+      keypair,
+      now: () => vector.issuedAt + 1_000
+    })
+    const expected = createHmac('sha256', Buffer.from(vector.challengeSecretB64, 'base64'))
+      .update(Buffer.from('orca-push-host-proof/v1\0ack\0'))
+      .update(Buffer.from(vector.transcriptB64, 'base64'))
+      .digest('base64')
+    expect(proof).toBe(expected)
+  })
+
+  it('a live challenge from the store round-trips through the fixture host once', async () => {
     const database = await openInMemoryPushDatabase()
-    const store = new PushHostChallengeStore(database, GATEWAY_ORIGIN)
-    const host = nacl.box.keyPair()
-    const hostPublicKeyB64 = Buffer.from(host.publicKey).toString('base64')
-
-    const challenge = await store.issue(hostPublicKeyB64)
+    const store = new PushHostChallengeStore(database, vector.gatewayOrigin)
+    const keypair = createPushHostKeypair(11)
+    const challenge = await store.issue(Buffer.from(keypair.publicKey).toString('base64'))
     expect(challenge).not.toBeNull()
-
-    const proof = answerPushHostChallenge(
-      {
-        challengeId: challenge!.challengeId,
-        gatewayEphemeralPublicKeyB64: challenge!.gatewayEphemeralPublicKeyB64,
-        nonceB64: challenge!.nonceB64,
-        ciphertextB64: challenge!.ciphertextB64,
-        expiresAt: challenge!.expiresAt
-      },
-      {
-        gatewayOrigin: GATEWAY_ORIGIN,
-        hostFingerprint: deriveHostFingerprint(host.publicKey),
-        hostPublicKey: host.publicKey,
-        hostSecretKey: host.secretKey,
-        onInvalid: (reason: string) => {
-          throw new Error(`desktop rejected gateway challenge: ${reason}`)
-        }
-      }
-    )
+    const proof = answerPushHostChallenge(challenge!, { gatewayOrigin: vector.gatewayOrigin, keypair })
     expect(proof).not.toBeNull()
-
     expect(await store.verify(challenge!.challengeId, proof!)).toEqual({
       ok: true,
-      hostFingerprint: deriveHostFingerprint(host.publicKey)
+      hostFingerprint: deriveHostFingerprint(keypair.publicKey)
     })
     expect(await store.verify(challenge!.challengeId, proof!)).toEqual({
       ok: false,
       reason: 'already_consumed'
     })
-    await database.close()
-  })
-
-  it('desktop refuses a challenge issued for a different gateway origin', async () => {
-    const database = await openInMemoryPushDatabase()
-    const store = new PushHostChallengeStore(database, 'https://push.example.invalid')
-    const host = nacl.box.keyPair()
-    const challenge = await store.issue(Buffer.from(host.publicKey).toString('base64'))
-    const reasons: string[] = []
-    const proof = answerPushHostChallenge(
-      {
-        challengeId: challenge!.challengeId,
-        gatewayEphemeralPublicKeyB64: challenge!.gatewayEphemeralPublicKeyB64,
-        nonceB64: challenge!.nonceB64,
-        ciphertextB64: challenge!.ciphertextB64,
-        expiresAt: challenge!.expiresAt
-      },
-      {
-        gatewayOrigin: GATEWAY_ORIGIN,
-        hostFingerprint: deriveHostFingerprint(host.publicKey),
-        hostPublicKey: host.publicKey,
-        hostSecretKey: host.secretKey,
-        onInvalid: (reason: string) => reasons.push(reason)
-      }
-    )
-    expect(proof).toBeNull()
-    expect(reasons.join(' ')).toContain('gatewayOrigin')
     await database.close()
   })
 })
