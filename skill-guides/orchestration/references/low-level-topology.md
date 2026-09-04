@@ -19,6 +19,13 @@ resource row. `worker-show`, `worker-read`, and `worker-list` report the lane as
 `unsupervised`; `worker-stop` and `worker-abandon` do not close that process, and
 settled retain/release take no process action.
 
+A dispatch without `--inject` is recorded only: the Task turns `dispatched` and
+the terminal is never told. The response reports `injected: false` (newer
+runtimes also return a `warning` saying so). Deliver the prompt yourself, or
+reset the Task (`ORCA orchestration task-update --id <task_id> --status failed`,
+then the same command with `--status ready`) before dispatching again with
+`--inject`.
+
 Use `worker-start --terminal <handle>` when lifecycle ownership of an existing
 agent terminal is required. Never imply that low-level dispatch retroactively
 owns a process, never use it to route around the nested-depth limit, and never

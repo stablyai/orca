@@ -19,6 +19,7 @@ export const ORCHESTRATION_DISPATCH_HANDLER: Record<string, CommandHandler> = {
       injected?: boolean
       dryRun?: boolean
       preamble?: string
+      warning?: string
     }>(client, flags, 'orchestration.dispatch', {
       task: getRequiredStringFlag(flags, 'task'),
       run: getOptionalStringFlag(flags, 'run'),
@@ -33,7 +34,8 @@ export const ORCHESTRATION_DISPATCH_HANDLER: Record<string, CommandHandler> = {
       if (value.dryRun) {
         return value.preamble ?? ''
       }
-      const base = `Dispatched ${value.dispatch?.task_id} -> ${value.dispatch?.id} [${value.dispatch?.status}]`
+      const dispatched = `Dispatched ${value.dispatch?.task_id} -> ${value.dispatch?.id} [${value.dispatch?.status}]`
+      const base = value.warning ? `${dispatched}\nWarning: ${value.warning}` : dispatched
       return value.preamble ? `${base}\n\n--- Preamble ---\n${value.preamble}` : base
     })
   }
