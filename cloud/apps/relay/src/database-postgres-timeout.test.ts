@@ -119,6 +119,39 @@ describe('PostgreSQL schema startup', () => {
   })
 
   it.each([
+    ['42710', 'CREATE TABLE IF NOT EXISTS test'],
+    ['42P07', 'CREATE TABLE IF NOT EXISTS test'],
+    ['42P07', 'CREATE INDEX IF NOT EXISTS test_index ON test(id)'],
+    ['42P07', 'CREATE UNIQUE INDEX IF NOT EXISTS test_index ON test(id)']
+  ])('retries the committed-winner %s collision for %s', async (code, statement) => {
+    vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+    const collision = Object.assign(new Error('already exists'), { code })
+    const query = vi
+      .fn<(statement: string) => Promise<unknown>>()
+      .mockRejectedValueOnce(collision)
+      .mockResolvedValue(undefined)
+
+    await applyPostgresSchema([statement], query, { wait: async () => undefined })
+
+    expect(query).toHaveBeenCalledTimes(2)
+  })
+
+  it.each([
+    ['42710', 'CREATE INDEX IF NOT EXISTS test_index ON test(id)'],
+    ['42710', 'CREATE TABLE test'],
+    ['42P07', 'CREATE TABLE test'],
+    ['42P07', 'CREATE INDEX test_index ON test(id)']
+  ])('does not retry %s for %s', async (code, statement) => {
+    const error = Object.assign(new Error('already exists'), { code })
+    const query = vi.fn<(statement: string) => Promise<unknown>>().mockRejectedValue(error)
+    const pause = vi.fn(async () => undefined)
+
+    await expect(applyPostgresSchema([statement], query, { wait: pause })).rejects.toBe(error)
+
+    expect(pause).not.toHaveBeenCalled()
+  })
+
+  it.each([
     ['pg_type_typname_nsp_index', 'CREATE TABLE test'],
     ['pg_class_relname_nsp_index', 'CREATE INDEX test_index ON test(id)']
   ])('does not retry %s for non-idempotent DDL', async (constraint, statement) => {
