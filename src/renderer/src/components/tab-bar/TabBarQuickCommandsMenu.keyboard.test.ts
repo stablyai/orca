@@ -131,8 +131,10 @@ function makeProps() {
     addHosts: [],
     hostLoadFailed: false,
     hostOwnershipPending: false,
+    canDuplicateCommand: () => true,
     onAddCommand: vi.fn(),
     onDeleteCommand: vi.fn(),
+    onDuplicateCommand: vi.fn(),
     onEditCommand: vi.fn(),
     onMenuOpen: vi.fn(),
     onRunCommand: vi.fn()

@@ -16,6 +16,7 @@ type QuickCommandsToolbarProps = {
   selectedHostId: ExecutionHostId
   onHostChange: (hostId: ExecutionHostId) => void
   canAdd: boolean
+  atCommandLimit: boolean
   onAdd: () => void
   repos: readonly Repo[]
   effectiveSelection: ReadonlySet<string>
@@ -34,6 +35,7 @@ export function QuickCommandsToolbar({
   selectedHostId,
   onHostChange,
   canAdd,
+  atCommandLimit,
   onAdd,
   repos,
   effectiveSelection,
@@ -104,7 +106,16 @@ export function QuickCommandsToolbar({
         type="button"
         variant="outline"
         size="sm"
-        disabled={!canAdd}
+        disabled={!canAdd || atCommandLimit}
+        // Why: a disabled button with no reason reads as a bug; name the cap.
+        title={
+          atCommandLimit
+            ? translate(
+                'auto.components.settings.QuickCommandsPane.7c6d5e4f2a',
+                'Quick command limit reached'
+              )
+            : undefined
+        }
         onClick={onAdd}
         className="ml-auto"
       >

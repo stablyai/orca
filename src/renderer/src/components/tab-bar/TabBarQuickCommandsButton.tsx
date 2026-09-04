@@ -7,9 +7,12 @@ import {
   TerminalQuickCommandDialog
 } from '@/components/terminal-quick-commands/TerminalQuickCommandDialog'
 import {
+  canAddTerminalQuickCommand,
+  duplicateTerminalQuickCommand,
   getTerminalQuickCommandScope,
   isTerminalQuickCommandComplete
 } from '../../../../shared/terminal-quick-commands'
+import { createBrowserUuid } from '@/lib/browser-uuid'
 import { getRepoIdFromWorktreeId } from '../../../../shared/worktree/id'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
 import { runQuickCommandInNewTab } from '@/lib/run-quick-command-in-new-tab'
@@ -124,6 +127,27 @@ export function TabBarQuickCommandsButton({
     }
   }
 
+  // Why: the cap is per host, so count the owning host's full list rather than
+  // the scope-filtered commands rendered in the menu.
+  const getHostCommands = (hostId: ExecutionHostId): readonly TerminalQuickCommand[] =>
+    hosts.find((host) => host.hostId === hostId)?.commands ?? []
+
+  const handleDuplicateCommand = (entry: HostedTerminalQuickCommand): void => {
+    const hostCommands = getHostCommands(entry.hostId)
+    if (!canAddTerminalQuickCommand(hostCommands)) {
+      return
+    }
+    setEditor({
+      mode: 'add',
+      hostId: entry.hostId,
+      command: duplicateTerminalQuickCommand(
+        entry.command,
+        `quick-command-${createBrowserUuid()}`,
+        hostCommands
+      )
+    })
+  }
+
   const handleDeleteCommand = async (entry: HostedTerminalQuickCommand): Promise<void> => {
     const { command } = entry
     const confirmed = await confirm({
@@ -222,9 +246,11 @@ export function TabBarQuickCommandsButton({
         hostOwnershipPending={remoteHostPending}
         onMenuOpen={refreshRemoteHost}
         onAddCommand={addRepoCommand}
+        canDuplicateCommand={(entry) => canAddTerminalQuickCommand(getHostCommands(entry.hostId))}
         onEditCommand={(entry) =>
           setEditor({ mode: 'edit', command: entry.command, hostId: entry.hostId })
         }
+        onDuplicateCommand={handleDuplicateCommand}
         onDeleteCommand={(entry) => void handleDeleteCommand(entry)}
         onRunCommand={handleRun}
       />

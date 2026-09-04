@@ -251,6 +251,61 @@ export function buildTerminalQuickCommandInput(command: TerminalCommandQuickComm
   return command.appendEnter ? `${command.command}\r` : command.command
 }
 
+// Why: the space before "(copy)" is optional so a label that is exactly "(copy)"
+// renumbers instead of chaining; the digit run is bounded because anything longer
+// is user text, not a copy index, and would overflow past Number's safe range.
+const COPY_LABEL_SUFFIX_RE = /^(.*?)\s*\(copy(?: ([1-9]\d{0,5}))?\)$/
+
+// Why: duplicating "Deploy (copy)" must yield "(copy 2)", not "(copy) (copy)",
+// so repeated duplication stays readable instead of growing a suffix chain.
+function buildDuplicateTerminalQuickCommandLabel(
+  label: string,
+  existingLabels: ReadonlySet<string>
+): string {
+  const trimmed = label.trim()
+  const match = COPY_LABEL_SUFFIX_RE.exec(trimmed)
+  const base = match ? match[1] : trimmed
+  // Why: a non-advancing counter would spin the uniqueness loop forever.
+  const parsed = match ? Number(match[2] ?? 1) : 0
+  let counter = Number.isSafeInteger(parsed) ? parsed + 1 : 1
+
+  // Why: truncate the base, not the suffix — a clipped "(cop" reads as corruption
+  // — then trim, since the save path trims and the copy must match what persists.
+  const buildLabel = (index: number): string => {
+    const suffix = index <= 1 ? ' (copy)' : ` (copy ${index})`
+    const room = MAX_QUICK_COMMAND_LABEL_LENGTH - suffix.length
+    return `${base.slice(0, Math.max(0, room)).trimEnd()}${suffix}`.trim()
+  }
+
+  let candidate = buildLabel(counter)
+  while (existingLabels.has(candidate)) {
+    counter += 1
+    candidate = buildLabel(counter)
+  }
+  return candidate
+}
+
+// Why: duplicating carries every field except identity, so new fields on the
+// command type are copied automatically instead of being silently dropped.
+export function duplicateTerminalQuickCommand(
+  command: TerminalQuickCommand,
+  id: string,
+  existingCommands: readonly TerminalQuickCommand[] = []
+): TerminalQuickCommand {
+  const existingLabels = new Set(existingCommands.map((entry) => entry.label))
+  return {
+    ...command,
+    id,
+    label: buildDuplicateTerminalQuickCommandLabel(command.label, existingLabels)
+  }
+}
+
+export function canAddTerminalQuickCommand(
+  commands: readonly TerminalQuickCommand[] = []
+): boolean {
+  return commands.length < MAX_QUICK_COMMANDS
+}
+
 const LINE_BREAK_RE = /\r\n|\r|\n/
 
 // Why: quick-command lines are independent shell commands; one shell command

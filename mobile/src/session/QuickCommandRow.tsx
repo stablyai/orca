@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { View, Text, Pressable, StyleSheet } from 'react-native'
 import * as Clipboard from 'expo-clipboard'
-import { Check, Copy, Pencil, Play, Trash2 } from 'lucide-react-native'
+import { Check, Copy, CopyPlus, Pencil, Play, Trash2 } from 'lucide-react-native'
 import { colors, spacing, typography } from '../theme/mobile-theme'
 import { MobileAgentIcon } from '../components/MobileAgentIcon'
 import type { TerminalQuickCommand } from '../../../src/shared/terminal-quick-command-types'
@@ -16,7 +16,9 @@ type QuickCommandRowProps = {
   first: boolean
   onLaunch: (command: TerminalQuickCommand) => void
   onEdit: (command: TerminalQuickCommand) => void
+  onDuplicate: (command: TerminalQuickCommand) => void
   onDelete: (command: TerminalQuickCommand) => void
+  canDuplicate: boolean
   disabled: boolean
 }
 
@@ -30,7 +32,9 @@ export function QuickCommandRow({
   first,
   onLaunch,
   onEdit,
+  onDuplicate,
   onDelete,
+  canDuplicate,
   disabled
 }: QuickCommandRowProps) {
   const isAgent = isAgentQuickCommand(command)
@@ -90,6 +94,7 @@ export function QuickCommandRow({
   }
 
   const copyDisabled = disabled || !canCopy
+  const duplicateDisabled = disabled || !canDuplicate
   const copyLabel =
     copyStatus === 'copied'
       ? 'Copied'
@@ -148,6 +153,22 @@ export function QuickCommandRow({
         ) : (
           <Copy size={15} color={copyIconColor} />
         )}
+      </Pressable>
+      <Pressable
+        style={({ pressed }) => [
+          styles.rowAction,
+          !canDuplicate && styles.disabled,
+          pressed && !duplicateDisabled && styles.pressed
+        ]}
+        disabled={duplicateDisabled}
+        onPress={() => onDuplicate(command)}
+        accessibilityRole="button"
+        accessibilityLabel={
+          canDuplicate ? `Duplicate ${command.label}` : 'Quick command limit reached'
+        }
+        accessibilityState={{ disabled: duplicateDisabled }}
+      >
+        <CopyPlus size={15} color={colors.textSecondary} />
       </Pressable>
       <Pressable
         style={({ pressed }) => [styles.rowAction, pressed && !disabled && styles.pressed]}

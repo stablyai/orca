@@ -1,10 +1,11 @@
-import { Check, Copy, Pencil, TerminalSquare, Trash2 } from 'lucide-react'
+import { Check, Copy, CopyPlus, Pencil, TerminalSquare, Trash2 } from 'lucide-react'
 import type { Repo } from '../../../../shared/repo-types'
 import type {
   TerminalQuickCommand,
   TerminalQuickCommandScope
 } from '../../../../shared/terminal-quick-command-types'
 import {
+  canAddTerminalQuickCommand,
   getTerminalQuickCommandBody,
   getTerminalQuickCommandScope,
   isTerminalAgentQuickCommand
@@ -41,12 +42,16 @@ function getRunModeLabel(command: TerminalQuickCommand): string {
 function QuickCommandRow({
   command,
   repoById,
+  canDuplicate,
   onEdit,
+  onDuplicate,
   onRemove
 }: {
   command: TerminalQuickCommand
   repoById: Map<string, Pick<Repo, 'displayName' | 'path' | 'badgeColor'>>
+  canDuplicate: boolean
   onEdit: (command: TerminalQuickCommand) => void
+  onDuplicate: (command: TerminalQuickCommand) => void
   onRemove: (command: TerminalQuickCommand) => void
 }): React.JSX.Element {
   const scope = getTerminalQuickCommandScope(command)
@@ -69,6 +74,14 @@ function QuickCommandRow({
     'Edit {{value0}}',
     { value0: commandName }
   )
+  const duplicateLabel = canDuplicate
+    ? translate('auto.components.settings.QuickCommandsPane.4f2a1c8b3d', 'Duplicate {{value0}}', {
+        value0: commandName
+      })
+    : translate(
+        'auto.components.settings.QuickCommandsPane.7c6d5e4f2a',
+        'Quick command limit reached'
+      )
 
   return (
     <div className="group/qc flex items-center gap-3 rounded-md px-2 py-2.5 transition-colors hover:bg-accent/60 focus-within:bg-accent/60">
@@ -140,6 +153,17 @@ function QuickCommandRow({
           type="button"
           variant="ghost"
           size="icon-sm"
+          disabled={!canDuplicate}
+          aria-label={duplicateLabel}
+          title={duplicateLabel}
+          onClick={() => onDuplicate(command)}
+        >
+          <CopyPlus />
+        </Button>
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon-sm"
           aria-label={translate(
             'auto.components.settings.QuickCommandsPane.8764c6e9e4',
             'Remove {{value0}}',
@@ -205,6 +229,7 @@ export function QuickCommandsList({
   hasQuery,
   repoById,
   onEdit,
+  onDuplicate,
   onRemove
 }: {
   commands: TerminalQuickCommand[]
@@ -212,11 +237,13 @@ export function QuickCommandsList({
   hasQuery: boolean
   repoById: Map<string, Pick<Repo, 'displayName' | 'path' | 'badgeColor'>>
   onEdit: (command: TerminalQuickCommand) => void
+  onDuplicate: (command: TerminalQuickCommand) => void
   onRemove: (command: TerminalQuickCommand) => void
 }): React.JSX.Element {
   if (visibleCommands.length === 0) {
     return <QuickCommandsEmptyState hasCommands={commands.length > 0} hasQuery={hasQuery} />
   }
+  const canDuplicate = canAddTerminalQuickCommand(commands)
   return (
     <div className="-mx-2 divide-y divide-border/50">
       {visibleCommands.map((command) => (
@@ -224,7 +251,9 @@ export function QuickCommandsList({
           key={command.id}
           command={command}
           repoById={repoById}
+          canDuplicate={canDuplicate}
           onEdit={onEdit}
+          onDuplicate={onDuplicate}
           onRemove={onRemove}
         />
       ))}
