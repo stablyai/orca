@@ -9,7 +9,7 @@ const WINDOWS_GIT_BASH_RUNTIME_HOME_UNSAFE = '*\\&*|*\\^*|*\\(*|*\\)*|*\\;*|*,*|
 
 export function wrapRuntimeHomeHookCommand(
   scriptBaseName: string,
-  options: { neutralJsonWhenMissing?: boolean } = {}
+  options: { neutralJsonWhenMissing?: boolean; includeWindowsBranch?: boolean } = {}
 ): string {
   if (!MANAGED_SCRIPT_BASE_NAME.test(scriptBaseName)) {
     throw new Error(`Invalid managed script base name: ${scriptBaseName}`)
@@ -20,6 +20,13 @@ export function wrapRuntimeHomeHookCommand(
   const posixScript = `"\${HOME-}/.orca/agent-hooks/${scriptBaseName}.sh"`
   const drain = POSIX_HOOK_STDIN_DRAIN_COMMAND
   const missingScriptFallback = options.neutralJsonWhenMissing ? `${drain}; printf '{}\\n'` : drain
+  const posixBranch = `if [ -f ${posixScript} ] && [ -r ${posixScript} ] && [ -x ${posixScript} ]; then /bin/sh ${posixScript}; else ${missingScriptFallback}; fi`
+  // Why: POSIX installs must not mention SYSTEMROOT. Grok scans the whole command string and skips
+  // when a required $VAR is unset, including a Windows branch this host never takes (#17202).
+  const includeWindowsBranch = options.includeWindowsBranch ?? true
+  if (!includeWindowsBranch) {
+    return `if [ -z "\${HOME-}" ]; then ${missingScriptFallback}; else ${posixBranch}; fi`
+  }
   const powershell = '"${SYSTEMROOT-}/System32/WindowsPowerShell/v1.0/powershell.exe"'
   const powershellFallback = options.neutralJsonWhenMissing ? "; Write-Output '{}'" : ''
   const powershellCommand = `$homePath = $env:HOME -replace '^/([A-Za-z])/', '$1:/'; $scriptPath = Join-Path $homePath '.orca\\agent-hooks\\${scriptBaseName}.cmd'; if (Test-Path -LiteralPath $scriptPath -PathType Leaf) { & $scriptPath; exit $LASTEXITCODE }; [Console]::In.ReadToEnd() | Out-Null${powershellFallback}; exit 0`
@@ -28,7 +35,6 @@ export function wrapRuntimeHomeHookCommand(
   const powershellInvocation = `${powershell} ${WINDOWS_POWERSHELL_HOOK_SWITCHES} -EncodedCommand ${encodedCommand}`
   const encodedWindowsBranch = `if [ -f ${powershell} ]; then ${powershellInvocation}; else ${missingScriptFallback}; fi`
   const windowsBranch = `if [ -f ${windowsScript} ]; then case "\${HOME-}" in ${WINDOWS_GIT_BASH_RUNTIME_HOME_UNSAFE}) ${encodedWindowsBranch} ;; *) ${windowsScript} ;; esac; else ${missingScriptFallback}; fi`
-  const posixBranch = `if [ -f ${posixScript} ] && [ -r ${posixScript} ] && [ -x ${posixScript} ]; then /bin/sh ${posixScript}; else ${missingScriptFallback}; fi`
   // Why: OSTYPE is shell-owned, so platform selection adds no process to every hook invocation.
   return `if [ -z "\${HOME-}" ]; then ${missingScriptFallback}; else case "\${OSTYPE-}" in msys*|cygwin*|win32*) ${windowsBranch} ;; *) ${posixBranch} ;; esac; fi`
 }

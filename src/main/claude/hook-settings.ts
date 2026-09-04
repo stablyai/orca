@@ -141,13 +141,17 @@ export function getRemoteConfigPath(remoteHome: string, settings = CLAUDE_HOOK_S
 
 export function getManagedCommand(
   scriptPath: string,
-  options: { neutralJsonWhenMissing?: boolean } = {}
+  options: { neutralJsonWhenMissing?: boolean; includeWindowsBranch?: boolean } = {}
 ): string {
   const scriptFileName = basename(scriptPath)
   const extension = extname(scriptFileName)
   return wrapRuntimeHomeHookCommand(
     extension ? scriptFileName.slice(0, -extension.length) : scriptFileName,
-    options
+    {
+      ...options,
+      // Why: POSIX local installs must not embed SYSTEMROOT; Grok scans the whole string (#17202).
+      includeWindowsBranch: options.includeWindowsBranch ?? process.platform === 'win32'
+    }
   )
 }
 
@@ -189,7 +193,11 @@ export function hasSameManagedHookInvocation(
 }
 
 export function getRemoteManagedCommand(scriptPath: string): string {
-  return getManagedCommand(scriptPath, { neutralJsonWhenMissing: true })
+  // Why: SSH/WSL remotes are POSIX; embedding SYSTEMROOT in that command makes Grok skip it (#17202).
+  return getManagedCommand(scriptPath, {
+    neutralJsonWhenMissing: true,
+    includeWindowsBranch: false
+  })
 }
 
 export function applyManagedHooks(

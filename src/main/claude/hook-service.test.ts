@@ -240,9 +240,15 @@ describe('ClaudeHookService.install', () => {
         readFileSync(join(tmpHome, '.claude', 'settings.json'), 'utf-8')
       ) as { statusLine?: { type: string; command: string } }
       expect(settings.statusLine?.type).toBe('command')
-      expect(settings.statusLine?.command).toContain(
-        '"${HOME-}/.orca/agent-hooks/claude-statusline.cmd"'
-      )
+      // Why: POSIX installs omit the Windows branch so Grok cannot scan SYSTEMROOT (#17202).
+      if (process.platform === 'win32') {
+        expect(settings.statusLine?.command).toContain(
+          '"${HOME-}/.orca/agent-hooks/claude-statusline.cmd"'
+        )
+      } else {
+        expect(settings.statusLine?.command).not.toMatch(/SYSTEMROOT/i)
+        expect(settings.statusLine?.command).not.toContain('.cmd')
+      }
       expect(settings.statusLine?.command).toContain(
         '"${HOME-}/.orca/agent-hooks/claude-statusline.sh"'
       )
@@ -530,6 +536,8 @@ describe('ClaudeHookService.installRemote', () => {
       const cmd = parsed.hooks[event][0].hooks[0].command as string
       expect(cmd).toContain('"${HOME-}/.orca/agent-hooks/claude-hook.sh"')
       expect(cmd).not.toContain('/home/dev/.orca/agent-hooks/claude-hook.sh')
+      expect(cmd).not.toMatch(/SYSTEMROOT/i)
+      expect(cmd).not.toContain('.cmd')
     }
     // Managed script body
     const script = fs.files.get('/home/dev/.orca/agent-hooks/claude-hook.sh')
@@ -627,7 +635,13 @@ describe('OpenClaudeHookService-compatible install', () => {
       for (const event of ['UserPromptSubmit', 'Stop', 'StopFailure']) {
         const command = parsed.hooks[event][0].hooks[0].command as string
         expect(isOpenClaudeManagedCommand(command)).toBe(true)
-        expect(command).toContain('"${HOME-}/.orca/agent-hooks/openclaude-hook.cmd"')
+        // Why: POSIX installs omit the Windows branch so Grok cannot scan SYSTEMROOT (#17202).
+        if (process.platform === 'win32') {
+          expect(command).toContain('"${HOME-}/.orca/agent-hooks/openclaude-hook.cmd"')
+        } else {
+          expect(command).not.toMatch(/SYSTEMROOT/i)
+          expect(command).not.toContain('.cmd')
+        }
         expect(command).toContain('"${HOME-}/.orca/agent-hooks/openclaude-hook.sh"')
         expect(command).not.toContain(tmpHome.replaceAll('\\', '/'))
       }
