@@ -3,11 +3,53 @@ import { isTerminalLeafId, makePaneKey, parsePaneKey } from '../../../shared/sta
 
 type PaneLeafRemap = Map<string, Map<string, string>>
 
+/**
+ * Resolves the pane key a legacy entry should move to, or `null` when it stays put.
+ * Mirrors the classification the rewrite pass below applies.
+ */
+function resolveRemappedPaneKey(
+  paneKey: string,
+  leafIdByInputLeafIdByTabId: PaneLeafRemap
+): string | null {
+  if (parsePaneKey(paneKey)) {
+    return null
+  }
+  const delimiter = paneKey.indexOf(':')
+  if (delimiter <= 0 || delimiter === paneKey.length - 1) {
+    return null
+  }
+  const remappedLeafId = leafIdByInputLeafIdByTabId
+    .get(paneKey.slice(0, delimiter))
+    ?.get(paneKey.slice(delimiter + 1))
+  if (!remappedLeafId || !isTerminalLeafId(remappedLeafId)) {
+    return null
+  }
+  try {
+    return makePaneKey(paneKey.slice(0, delimiter), remappedLeafId)
+  } catch {
+    return null
+  }
+}
+
 function remapPaneKeys<T extends number>(
   values: Record<string, T> | undefined,
   leafIdByInputLeafIdByTabId: PaneLeafRemap
 ): { values: Record<string, T> | undefined; changed: boolean } {
   if (!values || Object.keys(values).length === 0) {
+    return { values, changed: false }
+  }
+
+  // Why the classify-first pass: these maps grow with every pane ever opened and this runs on
+  // every session write, but post-migration no key is ever rewritten. Rebuilding the whole
+  // object only to discard it was pure garbage; the rewrite below is unchanged.
+  let requiresRemap = false
+  for (const paneKey of Object.keys(values)) {
+    if (resolveRemappedPaneKey(paneKey, leafIdByInputLeafIdByTabId) !== null) {
+      requiresRemap = true
+      break
+    }
+  }
+  if (!requiresRemap) {
     return { values, changed: false }
   }
 
@@ -18,33 +60,14 @@ function remapPaneKeys<T extends number>(
     next[paneKey] = existing === undefined ? value : (Math.max(existing, value) as T)
   }
   for (const [paneKey, value] of Object.entries(values)) {
-    const parsed = parsePaneKey(paneKey)
-    if (parsed) {
+    const remappedPaneKey = resolveRemappedPaneKey(paneKey, leafIdByInputLeafIdByTabId)
+    if (remappedPaneKey === null) {
       setValue(paneKey, value)
       continue
     }
-
-    const delimiter = paneKey.indexOf(':')
-    if (delimiter <= 0 || delimiter === paneKey.length - 1) {
-      setValue(paneKey, value)
-      continue
-    }
-
-    const tabId = paneKey.slice(0, delimiter)
-    const legacyLeafId = paneKey.slice(delimiter + 1)
-    const remappedLeafId = leafIdByInputLeafIdByTabId.get(tabId)?.get(legacyLeafId)
-    if (!remappedLeafId || !isTerminalLeafId(remappedLeafId)) {
-      setValue(paneKey, value)
-      continue
-    }
-
-    try {
-      // Carry values over when a legacy leaf is promoted to a UUID.
-      setValue(makePaneKey(tabId, remappedLeafId), value)
-      changed = true
-    } catch {
-      setValue(paneKey, value)
-    }
+    // Carry values over when a legacy leaf is promoted to a UUID.
+    setValue(remappedPaneKey, value)
+    changed = true
   }
 
   return { values: next, changed }

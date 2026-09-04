@@ -51,12 +51,40 @@ export function getUtf8ByteLength(text: string): number {
   return measureUtf8ByteLength(text).byteLength
 }
 
+// Why a native encode: the per-code-unit JS scan below walks whole terminal scrollback buffers on
+// the session-write path. `encodeInto` answers "does this fit in maxBytes?" in C++ — it stops at
+// the destination's end, so `read < text.length` means the text needs more than maxBytes. The
+// scratch buffer is reused across calls, and anything larger than the cap falls back to the scan.
+const MAX_UTF8_SCRATCH_BYTES = 1024 * 1024
+let utf8Encoder: TextEncoder | null = null
+let utf8Scratch: Uint8Array | null = null
+
+function fitsWithinUtf8ScratchLimit(text: string, maxBytes: number): boolean | null {
+  if (
+    !Number.isSafeInteger(maxBytes) ||
+    maxBytes <= 0 ||
+    maxBytes > MAX_UTF8_SCRATCH_BYTES ||
+    typeof TextEncoder === 'undefined'
+  ) {
+    return null
+  }
+  utf8Encoder ??= new TextEncoder()
+  if (!utf8Scratch || utf8Scratch.length < maxBytes) {
+    utf8Scratch = new Uint8Array(maxBytes)
+  }
+  return utf8Encoder.encodeInto(text, utf8Scratch.subarray(0, maxBytes)).read === text.length
+}
+
 export function isUtf8ByteLengthWithinLimit(text: string, maxBytes: number): boolean {
   if (text.length === 0) {
     return true
   }
   if (text.length > maxBytes) {
     return false
+  }
+  const fitsNatively = fitsWithinUtf8ScratchLimit(text, maxBytes)
+  if (fitsNatively !== null) {
+    return fitsNatively
   }
   return !measureUtf8ByteLength(text, { stopAfterBytes: maxBytes }).exceededLimit
 }
