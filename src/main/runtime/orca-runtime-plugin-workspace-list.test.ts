@@ -18,8 +18,6 @@ type PluginWorkspaceListResult = {
     hostId: string
     branch?: string
     displayName: string
-    workspaceStatus?: string
-    comment?: string
   }[]
 }
 
@@ -80,22 +78,17 @@ describe('OrcaRuntimeService.listPluginWorkspaces', () => {
           ref: 'identity:wt2%3Assh%253Atarget%3Ainstance%2Fone',
           hostId: 'ssh:target',
           branch: 'feature/plugin-list',
-          displayName: 'Plugin listing',
-          workspaceStatus: 'in-progress',
-          comment: 'runtime-owned'
+          displayName: 'Plugin listing'
         },
         {
           ref: 'identity:wt2%3Alocal%3Adetached',
           hostId: 'local',
-          displayName: 'Detached',
-          comment: ''
+          displayName: 'Detached'
         },
         {
           ref: 'id:folder%20id%2Fone',
           hostId: 'runtime:peer',
-          displayName: 'Notes',
-          workspaceStatus: 'ready',
-          comment: 'folder-owned'
+          displayName: 'Notes'
         }
       ]
     })
@@ -141,9 +134,7 @@ describe('OrcaRuntimeService.listPluginWorkspaces', () => {
     expect(result.workspaces[998]?.ref).toBe('identity:wt2%3Alocal%3Ainstance-998')
     expect(result.workspaces[999]).toMatchObject({
       ref: 'id:first-folder',
-      displayName: 'x'.repeat(512),
-      workspaceStatus: 'x'.repeat(128),
-      comment: 'x'.repeat(4096)
+      displayName: 'x'.repeat(512)
     })
     expect(result.workspaces.some(({ ref }) => ref === 'id:excluded-folder')).toBe(false)
   })
@@ -194,11 +185,7 @@ describe('OrcaRuntimeService.listPluginWorkspaces', () => {
 
   it('omits unaddressable legacy rows without suppressing valid catalog entries', async () => {
     const runtime = createRuntime(
-      [
-        worktree(0, { identity: undefined }),
-        worktree(1, { hostId: undefined }),
-        worktree(2)
-      ],
+      [worktree(0, { identity: undefined }), worktree(1, { hostId: undefined }), worktree(2)],
       [
         {
           id: 'folder-after-legacy',
@@ -215,8 +202,7 @@ describe('OrcaRuntimeService.listPluginWorkspaces', () => {
           ref: 'identity:wt2%3Alocal%3Ainstance-2',
           hostId: 'local',
           branch: 'branch-2',
-          displayName: 'Worktree 2',
-          comment: 'Comment 2'
+          displayName: 'Worktree 2'
         },
         {
           ref: 'id:folder-after-legacy',

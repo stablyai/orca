@@ -89,7 +89,9 @@ describe('pluginWorkspaceRefSchema', () => {
     ['path', { path: '/private/repo' }],
     ['path-derived id', { id: 'repo::/private/repo' }],
     ['nested internal record', { git: { path: '/private/repo' } }],
-    ['unknown key', { provider: 'ssh' }]
+    ['unknown key', { provider: 'ssh' }],
+    ['workspace status', { workspaceStatus: 'ready' }],
+    ['workspace comment', { comment: 'private note' }]
   ])('rejects a listed workspace containing %s', (_name, extra) => {
     expect(
       listSpec.result.safeParse({
@@ -101,9 +103,7 @@ describe('pluginWorkspaceRefSchema', () => {
   it.each([
     ['hostId', { hostId: 'h'.repeat(1025) }],
     ['branch', { branch: 'b'.repeat(513) }],
-    ['displayName', { displayName: 'd'.repeat(513) }],
-    ['workspaceStatus', { workspaceStatus: 's'.repeat(129) }],
-    ['comment', { comment: 'c'.repeat(4097) }]
+    ['displayName', { displayName: 'd'.repeat(513) }]
   ])('rejects a listed workspace with oversized %s', (_name, override) => {
     expect(
       listSpec.result.safeParse({

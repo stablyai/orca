@@ -99,9 +99,7 @@ const workspaceListResult = z
             ref: pluginWorkspaceRefWireSchema,
             hostId: z.string().max(1024),
             branch: z.string().max(512).optional(),
-            displayName: z.string().max(512),
-            workspaceStatus: z.string().max(128).optional(),
-            comment: z.string().max(4096).optional()
+            displayName: z.string().max(512)
           })
           .strict()
       )
