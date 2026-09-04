@@ -194,6 +194,7 @@ const LINUX_PACKAGE_PREFIXES = [
 
 const WINDOWS_PACKAGE_PREFIXES = [
   ...SHARED_PACKAGE_PREFIXES,
+  'config/nsis/',
   'native/windows-cli-launcher/',
   'native/computer-use-windows/',
   'resources/win32/',

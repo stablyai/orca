@@ -854,6 +854,12 @@ jobs:
           ORCA_REUSE_PREPARED_NATIVE_RUNTIME: '1'
         run: pnpm exec electron-builder --config config/electron-builder.config.cjs --dir
 
+      # Compile both installer and uninstaller hooks against the real bundled plugins.
+      - name: Compile NSIS installer
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+        run: pnpm exec electron-builder --config config/electron-builder.config.cjs --win nsis --prepackaged dist/win-unpacked --publish never
+
       - name: Smoke packaged Windows PTY native capability
         run: pnpm run smoke:windows-pty-native-capability -- --exe=dist/win-unpacked/Orca.exe
 

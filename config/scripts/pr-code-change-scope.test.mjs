@@ -100,6 +100,19 @@ describe('docs-only path classification', () => {
 })
 
 describe('per-job path classification', () => {
+  it('compiles Windows installers for NSIS-only changes', () => {
+    expectClassification(['config/nsis/orca-installer-hooks.nsh'], { package_windows: true })
+    const steps = prWorkflow.jobs.package_windows.steps
+    const compileIndex = steps.findIndex((step) => step.name === 'Compile NSIS installer')
+    expect(compileIndex).toBeGreaterThan(
+      steps.findIndex((step) => step.name === 'Package unpacked app')
+    )
+    expect(steps[compileIndex].run).toContain('--win nsis --prepackaged dist/win-unpacked')
+    expect(steps[compileIndex].run).toContain('--publish never')
+    expect(steps[compileIndex]['continue-on-error']).not.toBe(true)
+    expect(steps[compileIndex].if).toBeUndefined()
+  })
+
   it('runs every expensive job on an empty diff rather than skipping by accident', () => {
     const result = classifyPrJobs([])
     expect(result.should_run).toBe(true)

@@ -24,7 +24,9 @@ const stripNsisCommentLines = (source) =>
 const readInstallerHooks = () => readFile(electronBuilderConfig.nsis.include, 'utf8')
 
 const extractNsisMacro = (source, name) => {
-  const match = source.match(new RegExp(`!macro\\s+${name}\\b[\\s\\S]*?!macroend`))
+  const match = stripNsisCommentLines(source).match(
+    new RegExp(`^[\\t ]*!macro[\\t ]+${name}\\b[\\s\\S]*?^[\\t ]*!macroend\\b`, 'm')
+  )
   expect(match, `${name} macro`).not.toBeNull()
   return match[0]
 }
@@ -122,6 +124,29 @@ describe('electron-builder markdown file associations', () => {
 })
 
 describe('electron-builder app-running check', () => {
+  it.each([';', '#'])('rejects a macro disabled with %s comments', async (prefix) => {
+    const macro = extractNsisMacro(await readInstallerHooks(), 'customCheckAppRunning')
+    const disabled = macro
+      .split('\n')
+      .map((line) => `${prefix} ${line}`)
+      .join('\n')
+    expect(() => extractNsisMacro(disabled, 'customCheckAppRunning')).toThrow()
+  })
+
+  it('ignores commented calls and macro terminators', () => {
+    const source = [
+      '!macro example',
+      '; !macroend',
+      '# ${nsProcess::FindProcess}',
+      '  DetailPrint "still inside"',
+      '!macroend'
+    ].join('\n')
+    const macro = extractNsisMacro(source, 'example')
+    expect(macro).toContain('DetailPrint "still inside"')
+    expect(macro).not.toContain('nsProcess::FindProcess')
+    expect(() => extractNsisMacro('DetailPrint "!macro example"\n!macroend', 'example')).toThrow()
+  })
+
   it('uses the bundled native process plugin instead of a child shell', async () => {
     const macro = extractNsisMacro(await readInstallerHooks(), 'customCheckAppRunning')
 
