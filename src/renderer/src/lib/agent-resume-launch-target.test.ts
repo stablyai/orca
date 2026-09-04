@@ -1,5 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { AgentResumeLaunchTargetArgs } from './agent-resume-launch-target'
+import type {
+  AgentResumeLaunchTarget,
+  AgentResumeLaunchTargetArgs
+} from './agent-resume-launch-target'
+import { buildAgentResumeStartupPlan } from '../../../shared/tui-agent-resume-startup'
 
 function setNavigatorUserAgent(userAgent: string): () => void {
   const original = Object.getOwnPropertyDescriptor(globalThis, 'navigator')
@@ -23,13 +27,13 @@ const LOCAL_WINDOWS_ARGS: AgentResumeLaunchTargetArgs = {
   projectRuntime: undefined,
   connectionId: null,
   executionHostId: 'local',
-  worktreePath: 'C:\\Users\\neil\\orca\\workspaces\\orca\\feature',
+  cwd: 'C:\\Users\\neil\\orca\\workspaces\\orca\\feature',
   terminalWindowsShell: null
 }
 
 async function resolveWith(
   overrides: Partial<AgentResumeLaunchTargetArgs>
-): Promise<{ platform: NodeJS.Platform; shell: string | undefined }> {
+): Promise<AgentResumeLaunchTarget> {
   const { resolveAgentResumeLaunchTarget } = await import('./agent-resume-launch-target')
   return resolveAgentResumeLaunchTarget({
     ...LOCAL_WINDOWS_ARGS,
@@ -98,10 +102,10 @@ describe('resolveAgentResumeLaunchTarget on a Windows client', () => {
     ).resolves.toEqual({ platform: 'win32', shell: undefined })
   })
 
-  it('keeps POSIX quoting for a WSL UNC worktree', async () => {
+  it('keeps POSIX quoting for a WSL UNC cwd', async () => {
     await expect(
       resolveWith({
-        worktreePath: '\\\\wsl.localhost\\Ubuntu\\home\\neil\\repo',
+        cwd: '\\\\wsl.localhost\\Ubuntu\\home\\neil\\repo',
         terminalWindowsShell: 'cmd.exe'
       })
     ).resolves.toEqual({ platform: 'linux', shell: undefined })
@@ -124,6 +128,40 @@ describe('resolveAgentResumeLaunchTarget on a Windows client', () => {
       })
     ).resolves.toEqual({ platform: 'linux', shell: undefined })
   })
+
+  it('keeps OMO session argv on the host shell when cold restore overrides stale WSL runtime', async () => {
+    const transcriptPath = 'C:\\Users\\Administrator\\.omo\\agent\\sessions\\repo\\session.jsonl'
+    const forcedHostRestore = {
+      projectRuntime: {
+        status: 'resolved',
+        runtime: {
+          kind: 'wsl',
+          hostPlatform: 'wsl',
+          distro: 'Ubuntu',
+          projectId: 'repo-1',
+          reason: 'project-override',
+          cacheKey: 'repo-1:wsl:Ubuntu'
+        }
+      },
+      forceHostRuntime: true,
+      terminalWindowsShell: 'cmd.exe'
+    } as const
+    const target = await resolveWith(forcedHostRestore)
+
+    const startup = buildAgentResumeStartupPlan({
+      agent: 'pi',
+      providerSession: {
+        key: 'session_id',
+        id: 'omo-session-1',
+        transcriptPath
+      },
+      cmdOverrides: { pi: 'omo' },
+      platform: target.platform,
+      shell: target.shell
+    })
+
+    expect(startup?.launchCommand).toBe(`omo "--session" "${transcriptPath}"`)
+  })
 })
 
 describe('resolveAgentResumeLaunchTarget off Windows', () => {
@@ -141,7 +179,7 @@ describe('resolveAgentResumeLaunchTarget off Windows', () => {
   it('ignores a stale Windows shell setting on a mac client', async () => {
     await expect(
       resolveWith({
-        worktreePath: '/Users/neil/repo',
+        cwd: '/Users/neil/repo',
         terminalWindowsShell: 'cmd.exe'
       })
     ).resolves.toEqual({ platform: 'darwin', shell: undefined })

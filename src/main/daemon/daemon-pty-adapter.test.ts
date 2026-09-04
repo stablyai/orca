@@ -12,6 +12,7 @@ import {
 import type * as DaemonHealthModule from './daemon-health'
 import type * as DaemonTccAttributionModule from './daemon-tcc-attribution'
 import type * as DaemonBundleStalenessModule from './daemon-bundle-staleness'
+import { FORCE_HOST_RUNTIME_DAEMON_PROTOCOL_VERSION } from './daemon-protocol-version'
 
 const {
   getMacDaemonSystemResolverHealthMock,
@@ -67,6 +68,7 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
     cwd?: string
     env?: Record<string, string>
     command?: string
+    forceHostRuntime?: boolean
   } | null
   let daemonLogEvents: string[]
 
@@ -99,6 +101,69 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
     expect(adapter.supportsAgentSessionCreateOperations()).toBe(true)
     expect(legacy.supportsAgentSessionCreateOperations()).toBe(false)
     legacy.dispose()
+  })
+
+  it('fails closed when forced-host authority reaches an older daemon', async () => {
+    const legacy = new DaemonPtyAdapter({
+      socketPath,
+      tokenPath,
+      protocolVersion: FORCE_HOST_RUNTIME_DAEMON_PROTOCOL_VERSION - 1
+    })
+
+    try {
+      await expect(
+        legacy.spawn({
+          cols: 80,
+          rows: 24,
+          forceHostRuntime: true
+        })
+      ).rejects.toThrow('force_host_runtime_daemon_protocol_unavailable')
+    } finally {
+      legacy.dispose()
+    }
+  })
+
+  it('omits creation-only host authority from older-daemon attach requests', async () => {
+    const ensureConnectedSpy = vi
+      .spyOn(DaemonClient.prototype, 'ensureConnected')
+      .mockResolvedValue()
+    const requestSpy = vi.spyOn(DaemonClient.prototype, 'request').mockResolvedValue({
+      isNew: false,
+      pid: 123,
+      shellState: 'unsupported',
+      snapshot: null
+    } as never)
+    const legacy = new DaemonPtyAdapter({
+      socketPath,
+      tokenPath,
+      protocolVersion: FORCE_HOST_RUNTIME_DAEMON_PROTOCOL_VERSION - 1
+    })
+
+    try {
+      await legacy.spawn({
+        sessionId: 'legacy-session',
+        cols: 80,
+        rows: 24,
+        attachOnly: true,
+        forceHostRuntime: true
+      })
+      const createPayload = requestSpy.mock.calls.find(([type]) => type === 'createOrAttach')?.[1]
+      expect(createPayload).not.toHaveProperty('forceHostRuntime')
+    } finally {
+      legacy.dispose()
+      requestSpy.mockRestore()
+      ensureConnectedSpy.mockRestore()
+    }
+  })
+
+  it('forwards forced-host authority to the current daemon', async () => {
+    await adapter.spawn({
+      cols: 80,
+      rows: 24,
+      forceHostRuntime: true
+    })
+
+    expect(lastSpawnOpts?.forceHostRuntime).toBe(true)
   })
 
   afterEach(async () => {

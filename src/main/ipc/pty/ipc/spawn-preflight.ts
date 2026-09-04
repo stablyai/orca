@@ -75,7 +75,10 @@ export async function preparePtyIpcSpawnPreflight(ctx: PtyIpcSpawnState): Promis
   if (!ctx.preAdoptedStablePane) {
     // Why: reattach needs exact cwd, SSH cannot probe locally, and successful stable-pane adoption needs no launch preflight.
     const requestedMissingCwdFallback =
-      !args.connectionId && !args.sessionId && args.cwdFallback === 'worktree'
+      !args.connectionId &&
+      !args.sessionId &&
+      args.forceHostRuntime !== true &&
+      args.cwdFallback === 'worktree'
     const isPosixStartupCwd = args.cwd?.startsWith('/') === true
     const startupWorkspaceCwd =
       requestedMissingCwdFallback && isPosixStartupCwd
@@ -200,7 +203,7 @@ export async function preparePtyIpcSpawnPreflight(ctx: PtyIpcSpawnState): Promis
       ? resolveLocalWindowsTerminalRuntimeOptions({
           requestedShellOverride: args.shellOverride,
           settings: ctx.deps.getSettings?.(),
-          projectRuntime: args.projectRuntime,
+          projectRuntime: args.forceHostRuntime === true ? undefined : args.projectRuntime,
           fallbackHostShell: process.env.COMSPEC || 'powershell.exe'
         })
       : { shellOverride: args.shellOverride, terminalWindowsWslDistro: null }
@@ -213,7 +216,8 @@ export async function preparePtyIpcSpawnPreflight(ctx: PtyIpcSpawnState): Promis
         cwd: ctx.cwd,
         sessionId: ctx.effectiveSessionId,
         shellOverride: ctx.terminalRuntimeOptions.shellOverride,
-        terminalWindowsWslDistro: ctx.terminalRuntimeOptions.terminalWindowsWslDistro
+        terminalWindowsWslDistro: ctx.terminalRuntimeOptions.terminalWindowsWslDistro,
+        forceHostRuntime: args.forceHostRuntime === true
       })?.distro ?? null)
     : null
   const initialSelectionTarget = getCodexSelectionTargetForPty(

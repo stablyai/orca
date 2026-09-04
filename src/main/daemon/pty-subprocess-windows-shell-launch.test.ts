@@ -347,6 +347,32 @@ describe('createPtySubprocess', () => {
     )
   })
 
+  it('keeps a native Windows cwd on cmd when the session id retains a WSL worktree', async () => {
+    const proc = mockPtyProcess()
+    spawnMock.mockReturnValue(proc)
+    const platform = Object.getOwnPropertyDescriptor(process, 'platform')
+    Object.defineProperty(process, 'platform', { value: 'win32' })
+
+    try {
+      await createPtySubprocess({
+        sessionId: 'repo::\\\\wsl.localhost\\Ubuntu\\home\\jin\\repo@@deadbeef',
+        cols: 80,
+        rows: 24,
+        cwd: 'C:\\repo\\orca',
+        shellOverride: 'cmd.exe',
+        forceHostRuntime: true
+      })
+    } finally {
+      if (platform) {
+        Object.defineProperty(process, 'platform', platform)
+      }
+    }
+
+    const [shellPath, , spawnOptions] = spawnMock.mock.calls.at(-1) ?? []
+    expect(shellPath).toBe('cmd.exe')
+    expect(spawnOptions).toEqual(expect.objectContaining({ cwd: 'C:\\repo\\orca' }))
+  })
+
   it('rejects a missing explicit native Windows cwd before node-pty spawn', async () => {
     const platform = Object.getOwnPropertyDescriptor(process, 'platform')
     Object.defineProperty(process, 'platform', { value: 'win32' })

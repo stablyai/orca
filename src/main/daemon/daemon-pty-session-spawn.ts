@@ -5,7 +5,10 @@ import type {
   PendingDaemonSpawnOperation
 } from './daemon-pty-runtime-state'
 import { trackDaemonPtyCwdDeniedIfDiverged } from './daemon-adoption-telemetry-event'
-import { STABLE_PANE_ATTACH_ONLY_DAEMON_PROTOCOL_VERSION } from './daemon-protocol-version'
+import {
+  FORCE_HOST_RUNTIME_DAEMON_PROTOCOL_VERSION,
+  STABLE_PANE_ATTACH_ONLY_DAEMON_PROTOCOL_VERSION
+} from './daemon-protocol-version'
 import { TerminalKilledError } from './daemon-pty-lifecycle-errors'
 import { DaemonPtySpawnResult } from './daemon-pty-spawn-result'
 import type { DaemonPtySpawnContext } from './daemon-pty-spawn-request'
@@ -66,7 +69,8 @@ export abstract class DaemonPtySessionSpawn extends DaemonPtySpawnResult {
       cwd: opts.cwd,
       sessionId: opts.sessionId,
       shellOverride: opts.shellOverride,
-      terminalWindowsWslDistro: opts.terminalWindowsWslDistro
+      terminalWindowsWslDistro: opts.terminalWindowsWslDistro,
+      forceHostRuntime: opts.forceHostRuntime
     })
     if (
       opts.attachOnly === true ||
@@ -104,6 +108,14 @@ export abstract class DaemonPtySessionSpawn extends DaemonPtySpawnResult {
     operation: PendingDaemonSpawnOperation,
     historyRecovery: HistoryRecoveryContext
   ): Promise<PtySpawnResult> {
+    const attachOnly = opts.attachOnly === true
+    if (
+      opts.forceHostRuntime &&
+      !attachOnly &&
+      this.protocolVersion < FORCE_HOST_RUNTIME_DAEMON_PROTOCOL_VERSION
+    ) {
+      throw new Error('force_host_runtime_daemon_protocol_unavailable')
+    }
     if (
       opts.agentSessionEnsure &&
       this.protocolVersion < AGENT_SESSION_CLAIM_DAEMON_PROTOCOL_VERSION
@@ -112,7 +124,6 @@ export abstract class DaemonPtySessionSpawn extends DaemonPtySpawnResult {
     }
     const requestedSessionId = opts.sessionId!
     // Why: v30 daemons survive upgrades; reject their accidental create result before publication.
-    const attachOnly = opts.attachOnly === true
     const emulateLegacyAttachOnly =
       attachOnly && this.protocolVersion < STABLE_PANE_ATTACH_ONLY_DAEMON_PROTOCOL_VERSION
     let sessionId = requestedSessionId
@@ -120,7 +131,8 @@ export abstract class DaemonPtySessionSpawn extends DaemonPtySpawnResult {
       cwd: opts.cwd,
       sessionId,
       shellOverride: opts.shellOverride,
-      terminalWindowsWslDistro: opts.terminalWindowsWslDistro
+      terminalWindowsWslDistro: opts.terminalWindowsWslDistro,
+      forceHostRuntime: opts.forceHostRuntime
     })?.distro
     let activeSpawnContext: DaemonPtySpawnContext | null = null
     const freezeHistory = async (): Promise<void> => {

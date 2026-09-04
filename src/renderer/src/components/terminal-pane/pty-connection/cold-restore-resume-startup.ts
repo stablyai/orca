@@ -49,15 +49,16 @@ export function bindBuildColdRestoreAgentResumeStartup(session: ConnectPanePtySe
     const launchConfig =
       (useLiveEntry && entry ? state.getAgentLaunchConfigForStatusEntry(entry) : undefined) ??
       matchingSleepingLaunchConfig
-    // Why: the resume line is typed into this pane's live shell, so its quoting must
-    // follow the tab's effective Windows shell, not the win32 PowerShell default.
+    // Why: quote for the shell selected by this exact spawn. The catalog worktree path
+    // can still be WSL UNC while a restored pane's authoritative cwd is native Windows.
     const resumeTarget = resolveAgentResumeLaunchTarget({
       projectRuntime: session.projectRuntime,
       connectionId: session.connectionId,
       executionHostId: session.executionHostId,
-      worktreePath: session.worktree?.path,
+      cwd: session.deps.cwd,
       terminalWindowsShell: state.settings?.terminalWindowsShell,
-      tabShellOverride: session.shellOverride
+      tabShellOverride: session.shellOverride,
+      forceHostRuntime: session.tab?.forceHostRuntime === true
     })
     const startupPlan = buildAgentResumeStartupPlan({
       agent,

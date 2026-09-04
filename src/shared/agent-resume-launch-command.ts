@@ -1,4 +1,4 @@
-import type { ResumableTuiAgent } from './agent-session-resume'
+import { hasUnsafeProviderSessionIdChars, type ResumableTuiAgent } from './agent-session-resume'
 import {
   isPosixStartupShell,
   quoteStartupArg,
@@ -54,20 +54,59 @@ function findClaudeExecutableIndex(tokens: readonly string[], shell: AgentStartu
   return -1
 }
 
+export function isResumeArgvSafe(resumeArgv: readonly string[], shell: AgentStartupShell): boolean {
+  if (resumeArgv.slice(1).some(hasUnsafeProviderSessionIdChars)) {
+    return false
+  }
+  return (
+    shell !== 'cmd' ||
+    resumeArgv.slice(1).every((value) => !/[\^&|<>()%!"]/.test(value) && !value.endsWith('\\'))
+  )
+}
+
+const CMD_ENV_RESUME_AGENTS = new Set<ResumableTuiAgent>(['pi', 'prime-agent', 'omp'])
+export const AGENT_RESUME_COMMAND_ENV = 'ORCA_AGENT_RESUME_COMMAND'
+export const AGENT_RESUME_ARGV_ENV = 'ORCA_AGENT_RESUME_ARGV'
+export const AGENT_RESUME_ENV_LAUNCH_COMMAND = 'orca agent resume-env'
+
+export type AgentResumeLaunch = {
+  command: string
+  env?: Record<string, string>
+}
+
 /** Joins the resolved base command with the agent's resume argv. Claude goes
  * through the selector guard below; other agents keep plain appending. */
-export function buildAgentResumeLaunchCommand(
+export function buildAgentResumeLaunch(
   agent: ResumableTuiAgent,
   baseCommand: string,
   resumeArgv: readonly string[],
   shell: AgentStartupShell
-): string {
+): AgentResumeLaunch | null {
   const argv = resumeArgv.slice(1)
+  if (argv.some(hasUnsafeProviderSessionIdChars)) {
+    return null
+  }
+  if (!isResumeArgvSafe(resumeArgv, shell)) {
+    if (
+      shell !== 'cmd' ||
+      !CMD_ENV_RESUME_AGENTS.has(agent) ||
+      argv.some((value) => value.includes('"') || value.endsWith('\\'))
+    ) {
+      return null
+    }
+    return {
+      command: AGENT_RESUME_ENV_LAUNCH_COMMAND,
+      env: {
+        [AGENT_RESUME_COMMAND_ENV]: baseCommand,
+        [AGENT_RESUME_ARGV_ENV]: JSON.stringify(argv)
+      }
+    }
+  }
   if (agent === 'claude') {
-    return buildClaudeResumeLaunchCommand(baseCommand, argv, shell)
+    return { command: buildClaudeResumeLaunchCommand(baseCommand, argv, shell) }
   }
   const resumeArgs = argv.map((arg) => quoteStartupArg(arg, shell)).join(' ')
-  return resumeArgs ? `${baseCommand} ${resumeArgs}` : baseCommand
+  return { command: resumeArgs ? `${baseCommand} ${resumeArgs}` : baseCommand }
 }
 
 /** Builds the Claude cold-restore launch command: strips any resume/continue

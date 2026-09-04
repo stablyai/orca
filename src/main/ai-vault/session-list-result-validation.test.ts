@@ -2,6 +2,28 @@ import { describe, expect, it } from 'vitest'
 import { parseAiVaultListResult } from './session-list-result-validation'
 
 describe('parseAiVaultListResult', () => {
+  it('drops sessions with control characters in resume fields', () => {
+    for (const override of [
+      { sessionId: 'session-1\nwhoami' },
+      { filePath: '/tmp/session.jsonl\rwhoami' },
+      { resumeCommand: 'codex resume session-1\nwhoami' }
+    ]) {
+      const parsed = parseAiVaultListResult({
+        sessions: [validSession('safe-session'), { ...validSession(), ...override }],
+        issues: [],
+        scannedAt: '2026-07-27T00:00:00.000Z'
+      })
+
+      expect(parsed.sessions.map((session) => session.sessionId)).toEqual(['safe-session'])
+      expect(parsed.issues).toContainEqual(
+        expect.objectContaining({
+          path: 'aiVault.listSessions',
+          message: expect.stringContaining('Skipped 1 invalid')
+        })
+      )
+    }
+  })
+
   it('keeps valid sessions when another wire entry is malformed', () => {
     const parsed = parseAiVaultListResult({
       sessions: [validSession(), { id: 42 }],

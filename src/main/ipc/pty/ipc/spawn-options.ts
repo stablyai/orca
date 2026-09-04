@@ -55,6 +55,7 @@ export async function buildPtyIpcSpawnOptions(
     ...(ctx.prevalidatedCwd && !ctx.isDaemonHostSpawn
       ? { prevalidatedCwd: ctx.prevalidatedCwd }
       : {}),
+    ...(args.forceHostRuntime === true ? { forceHostRuntime: true } : {}),
     env: ctx.spawnEnv,
     historyIsolationEnabled: ctx.deps.getSettings?.()?.terminalScopeHistoryByWorktree ?? true,
     ...(ctx.isMintedSessionId ? { isNewSession: true } : {})

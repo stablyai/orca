@@ -23,6 +23,7 @@ export const ptySessionControlApi = {
     rows: number
     cwd?: string
     cwdFallback?: 'worktree'
+    forceHostRuntime?: boolean
     env?: Record<string, string>
     envToDelete?: string[]
     command?: string

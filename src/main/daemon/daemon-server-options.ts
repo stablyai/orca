@@ -35,6 +35,7 @@ export type DaemonServerOptions = {
     env?: Record<string, string>
     command?: string
     shellOverride?: string
+    forceHostRuntime?: boolean
     isCanceled?: () => boolean
   }) => SubprocessHandle | Promise<SubprocessHandle>
 }

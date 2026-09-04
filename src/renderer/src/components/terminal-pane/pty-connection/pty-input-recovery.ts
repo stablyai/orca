@@ -48,9 +48,12 @@ export function installPtyInputRecovery(session: ConnectPanePtySession): void {
     // Why: only fresh local IPC spawns may recover from a saved startup cwd
     // whose directory was deleted (#7239); remote-runtime and SSH spawns
     // resolve cwd on another host and must keep exact cwd semantics.
-    ...(session.runtimeEnvironmentId === null && !session.connectionId
+    ...(session.runtimeEnvironmentId === null &&
+    !session.connectionId &&
+    !session.tab?.forceHostRuntime
       ? { cwdFallback: 'worktree' as const }
       : {}),
+    ...(session.tab?.forceHostRuntime ? { forceHostRuntime: true } : {}),
     env: session.paneEnv,
     ...(session.paneStartup?.envToDelete ? { envToDelete: session.paneStartup.envToDelete } : {}),
     command: session.shouldDeliverStartupViaTerminalPaste

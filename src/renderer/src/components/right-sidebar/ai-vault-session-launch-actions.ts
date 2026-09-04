@@ -45,7 +45,7 @@ export function useAiVaultSessionLaunchActions({
     useState<AgentSessionContinuationRequest | null>(null)
 
   const buildResumeCommand = useCallback(
-    (session: AiVaultSession, worktreeId?: string | null): string =>
+    (session: AiVaultSession, worktreeId?: string | null): string | null =>
       buildAiVaultResumeCopyCommandForWorktree({
         state: useAppStore.getState(),
         worktreeId: worktreeId ?? activeWorktreeId ?? activeWorktree?.id ?? null,
@@ -70,7 +70,17 @@ export function useAiVaultSessionLaunchActions({
     async (session: AiVaultSession, worktreeId?: string | null): Promise<void> => {
       try {
         const preparedSession = await prepareAiVaultSessionForResume(session)
-        await window.api.ui.writeClipboardText(buildResumeCommand(preparedSession, worktreeId))
+        const command = buildResumeCommand(preparedSession, worktreeId)
+        if (!command) {
+          toast.error(
+            translate(
+              'auto.components.right.sidebar.AiVaultPanel.resumeCommandRequiresOrca',
+              'This session path can only be resumed inside Orca.'
+            )
+          )
+          return
+        }
+        await window.api.ui.writeClipboardText(command)
         toast.success(
           translate(
             'auto.components.right.sidebar.AiVaultPanel.resumeCommandCopied',

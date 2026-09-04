@@ -92,6 +92,22 @@ describe('invalidateAiVaultSessionListCache generation guard', () => {
     expect(listRunningWslHomeDirsAsync).toHaveBeenCalledTimes(1)
   })
 
+  it('rejects invalid local session fields before caching', async () => {
+    scanAiVaultSessionsInWorker.mockResolvedValueOnce({
+      sessions: [{ sessionId: 'session-1\nwhoami' }],
+      issues: [],
+      scannedAt: 'scan-invalid'
+    } as never)
+
+    await expect(listAiVaultSessions()).rejects.toThrow(
+      'all supplied Agent Session History sessions were invalid'
+    )
+
+    scanAiVaultSessionsInWorker.mockResolvedValueOnce(scanResult('scan-valid'))
+    await expect(listAiVaultSessions()).resolves.toEqual(scanResult('scan-valid'))
+    expect(scanAiVaultSessionsInWorker).toHaveBeenCalledTimes(2)
+  })
+
   it('resolves homes only for distros currently reported as running', async () => {
     listRunningWslHomeDirsAsync.mockResolvedValue(['\\\\wsl.localhost\\Ubuntu\\home\\ada'])
 
