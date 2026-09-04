@@ -95,6 +95,9 @@ describe('launchAgentInNewTab paired web runtime', () => {
       agent: 'claude',
       viewMode: 'terminal'
     })
+    // Why (#15373): an unconfigured client must not push the built-in YOLO default onto a host
+    // whose own Agent Permissions say Manual; omission keeps the host's choice.
+    expect(mocks.createWebRuntimeSessionTerminal.mock.calls[0]?.[0]).not.toHaveProperty('agentArgs')
     expect(mocks.createTab).not.toHaveBeenCalled()
     await Promise.resolve()
     expect(mocks.setActiveTabType).toHaveBeenCalledWith('terminal')
@@ -131,8 +134,48 @@ describe('launchAgentInNewTab paired web runtime', () => {
       startupCommandDelivery: 'shell-ready',
       prompt: 'fix the spinner',
       promptDelivery: 'auto-submit',
+      agentArgs: '--model gpt-5 --reasoning-effort high',
       viewMode: 'terminal'
     })
     expect(mocks.createTab).not.toHaveBeenCalled()
+  })
+
+  it('sends an explicit empty agentArgs override when the client is configured for Manual', async () => {
+    // Why (#15373): Manual is stored as an empty-string entry; without it riding
+    // along, a headless host re-resolved its own defaults and relaunched YOLO.
+    store.settings.agentDefaultArgs = { claude: '' }
+    const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
+
+    const result = launchAgentInNewTab({
+      agent: 'claude',
+      worktreeId: 'wt-1',
+      groupId: 'group-1'
+    })
+
+    expect(result).toEqual(expect.objectContaining({ tabId: null }))
+    expect(mocks.createWebRuntimeSessionTerminal).toHaveBeenCalledWith(
+      expect.objectContaining({
+        agent: 'claude',
+        agentArgs: ''
+      })
+    )
+  })
+
+  it('forwards caller-supplied agent args even when the client has no configured default', async () => {
+    const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
+
+    launchAgentInNewTab({
+      agent: 'claude',
+      worktreeId: 'wt-1',
+      groupId: 'group-1',
+      agentArgs: '--permission-mode plan'
+    })
+
+    expect(mocks.createWebRuntimeSessionTerminal).toHaveBeenCalledWith(
+      expect.objectContaining({
+        agent: 'claude',
+        agentArgs: '--permission-mode plan'
+      })
+    )
   })
 })

@@ -79,16 +79,24 @@ export function getTuiAgentDefaultEnv(agent: TuiAgent): Record<string, string> {
   return { ...DEFAULT_TUI_AGENT_ENV[agent] }
 }
 
+/** Manual is stored as `''`, so the key's presence — not its truthiness — is the user's explicit choice. */
+export function hasConfiguredTuiAgentLaunchArgs(
+  agent: TuiAgent,
+  configuredArgs: Partial<Record<TuiAgent, string>> | null | undefined
+): boolean {
+  return Boolean(
+    configuredArgs &&
+    Object.hasOwn(configuredArgs, agent) &&
+    typeof configuredArgs[agent] === 'string'
+  )
+}
+
 export function resolveTuiAgentLaunchArgs(
   agent: TuiAgent,
   configuredArgs: Partial<Record<TuiAgent, string>> | null | undefined
 ): string {
-  if (
-    configuredArgs &&
-    Object.hasOwn(configuredArgs, agent) &&
-    typeof configuredArgs[agent] === 'string'
-  ) {
-    return configuredArgs[agent] ?? ''
+  if (hasConfiguredTuiAgentLaunchArgs(agent, configuredArgs)) {
+    return configuredArgs?.[agent] ?? ''
   }
   return getTuiAgentDefaultArgs(agent)
 }
