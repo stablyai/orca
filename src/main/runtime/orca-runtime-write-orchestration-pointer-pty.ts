@@ -10,10 +10,14 @@ import { isTuiAgent } from '../../shared/tui-agent-config'
 import { resolvePublishedPaneAgentIdentity } from '../../shared/published-pane-agent-identity'
 import type { RuntimeTerminalSummary, RuntimeWorktreePsSummary } from '../../shared/runtime-types'
 import type { RuntimeWorktreeSummaryPathIndex } from './runtime-worktree-summary-paths'
-import { parseRuntimeWorktreeId } from './runtime-worktree-path-identity'
 import { findRuntimeWorktreeSummaryByPath } from './runtime-worktree-summary-paths'
 import type { ResolvedWorktree } from './runtime-worktree-path-identity'
-import { getLatestLeafTitle } from './runtime-worktree-status-projection'
+import { parseRuntimeWorktreeId } from './runtime-worktree-path-identity'
+import {
+  getLatestLeafTitle,
+  getLatestPtyTitle,
+  maxTimestamp
+} from './runtime-worktree-status-projection'
 import { parseAppSshPtyId } from '../../shared/ssh-pty-id'
 import { isTerminalLeafId, makePaneKey } from '../../shared/stable-pane-id'
 
@@ -124,7 +128,22 @@ export class OrcaRuntimeWithWriteOrchestrationPointerPty extends OrcaRuntimeWith
     const tab = this.tabs.get(leaf.tabId) ?? null
 
     const pty = leaf.ptyId ? this.ptysById.get(leaf.ptyId) : undefined
-    const title = getLatestLeafTitle(leaf, tab?.title ?? null)
+    const mobileTerminalTab = this.mobileSessionTabsByWorktree
+      .get(leaf.worktreeId)
+      ?.tabs.find(
+        (candidate) =>
+          candidate.type === 'terminal' &&
+          candidate.parentTabId === leaf.tabId &&
+          candidate.leafId === leaf.leafId
+      )
+    const title =
+      getLatestLeafTitle(leaf, tab?.title ?? null) ??
+      (pty ? (getLatestPtyTitle(pty) ?? pty.controllerTitle) : null) ??
+      mobileTerminalTab?.title ??
+      null
+    const parsedWorktree = parseRuntimeWorktreeId(leaf.worktreeId)
+    const lastOutputAt = maxTimestamp(leaf.lastOutputAt, pty?.lastOutputAt ?? null)
+    const preview = leaf.preview || pty?.preview || ''
     // Why: leaf.connected mirrors the renderer graph (`ptyId !== null`), so a
     // restored surface whose PTY died with a prior run still reads connected.
     // Demote only on a controller-proven absence, and only for locally-scoped
@@ -146,15 +165,15 @@ export class OrcaRuntimeWithWriteOrchestrationPointerPty extends OrcaRuntimeWith
       incarnationId: pty?.incarnationId ?? null,
       orphaned: false,
       worktreeId: leaf.worktreeId,
-      worktreePath: worktree?.path ?? '',
+      worktreePath: worktree?.path ?? parsedWorktree?.worktreePath ?? '',
       branch: worktree?.branch ?? '',
       tabId: leaf.tabId,
       leafId: leaf.leafId,
       title,
       connected: provenAbsent ? false : leaf.connected,
       writable: provenAbsent ? false : leaf.writable,
-      lastOutputAt: leaf.lastOutputAt,
-      preview: leaf.preview,
+      lastOutputAt,
+      preview,
       ...(leaf.lastExitCause ? { exitCause: leaf.lastExitCause } : {}),
       ...this.terminalExecutionHostField(leaf.ptyId, leaf.worktreeId),
       ...this.resolvePaneAgentIdentityField(

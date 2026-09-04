@@ -142,6 +142,79 @@ describe('listTerminals execution-host identity', () => {
     expect(terminals[0]?.executionHostId).toBe('runtime:env-7')
   })
 
+  it('keeps mirrored paired-runtime terminal metadata when the local profile lacks that repo', async () => {
+    const worktreeId = 'repo-runtime::/Users/me/remote/project'
+    const ptyId = 'remote:env-7@@handle-1'
+    const runtime = makeRuntime([], {
+      ...makeStore(),
+      getRepos: vi.fn(() => []),
+      getRepo: vi.fn(() => undefined),
+      getWorkspaceSessionHostIds: vi.fn(() => ['local', 'runtime:env-7'])
+    })
+    const internals = runtime as unknown as {
+      recordPtyWorktree: (
+        ptyId: string,
+        worktreeId: string,
+        state?: Record<string, unknown>
+      ) => void
+      mobileSessionTabsByWorktree: Map<string, unknown>
+    }
+    internals.recordPtyWorktree(ptyId, worktreeId, { connected: true })
+    runtime.seedTerminalRestoreTail(ptyId, { text: 'remote restored output\r\n' })
+    internals.mobileSessionTabsByWorktree.set(worktreeId, {
+      worktree: worktreeId,
+      publicationEpoch: 'renderer:test',
+      snapshotVersion: 1,
+      activeGroupId: null,
+      activeTabId: 'tab-remote::leaf-remote',
+      activeTabType: 'terminal',
+      tabs: [
+        {
+          type: 'terminal',
+          id: 'tab-remote::leaf-remote',
+          parentTabId: 'tab-remote',
+          leafId: 'leaf-remote',
+          ptyId,
+          title: 'Remote snapshot title',
+          isActive: true
+        }
+      ]
+    })
+    runtime.syncWindowGraph(1, {
+      tabs: [
+        {
+          tabId: 'tab-remote',
+          worktreeId,
+          title: '',
+          activeLeafId: 'leaf-remote',
+          layout: null
+        }
+      ],
+      leaves: [
+        {
+          tabId: 'tab-remote',
+          worktreeId,
+          leafId: 'leaf-remote',
+          paneRuntimeId: 1,
+          ptyId,
+          paneTitle: null,
+          title: ''
+        }
+      ]
+    })
+
+    const result = await runtime.listTerminals()
+
+    expect(result.hostScope?.hostIds).toEqual(['local'])
+    expect(result.hostScope?.omittedHostIds).toEqual(['runtime:env-7'])
+    expect(result.terminals[0]).toMatchObject({
+      executionHostId: 'runtime:env-7',
+      worktreePath: '/Users/me/remote/project',
+      title: 'Remote snapshot title',
+      preview: 'remote restored output'
+    })
+  })
+
   it('leaves the host unset — never local — for a paired PTY that names no environment', async () => {
     const runtime = makeRuntime([
       { worktreeId: LOCAL_WORKTREE_ID, leafId: REMOTE_LEAF_ID, ptyId: 'remote:handle-1' }
