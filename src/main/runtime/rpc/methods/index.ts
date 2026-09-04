@@ -16,6 +16,7 @@ import { ORCHESTRATION_METHODS } from './orchestration'
 import { NOTIFICATION_METHODS } from './notifications'
 import { STATS_METHODS } from './stats'
 import { DIAGNOSTICS_METHODS } from './diagnostics'
+import { AGENT_HOOK_METHODS } from './agent-hooks'
 import { ACCOUNT_METHODS } from './accounts'
 import { PREFLIGHT_METHODS } from './preflight'
 import { COMPUTER_METHODS } from './computer'
@@ -45,7 +46,6 @@ import { UPDATER_METHODS } from './updater'
 import { AGENT_SESSION_METHODS } from './agent-session'
 import { STRUCTURED_AGENT_SESSION_METHODS } from './structured-agent-session'
 import { ARTIFACT_METHODS } from './artifacts'
-import { AGENT_HOOK_METHODS } from './agent-hooks'
 
 // Why: a flat manifest keeps registration order explicit and provides one
 // grep-point for "what methods does the RPC server expose?" — useful when

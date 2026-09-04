@@ -4,6 +4,7 @@ import { homedir, userInfo } from 'node:os'
 import { promisify } from 'node:util'
 import { installRemoteManagedAgentHooks } from './remote-managed-hook-installers'
 import type { AgentHookTarget } from '../../shared/agent-hook-types'
+import type { AgentHookInstallManagedHooksResult } from '../../shared/agent-hook-relay'
 import { createManagedHookLocalFilesystem } from './managed-hook-local-filesystem'
 import { withManagedHookInstallLock } from './managed-hook-install-lock'
 import {
@@ -14,11 +15,6 @@ import {
 const execFileAsync = promisify(execFile)
 const GROK_HOME_MAX_LENGTH = 4096
 const GROK_HOME_PROBE_TIMEOUT_MS = 8_000
-
-export type ManagedHookInstallSummary = {
-  installers: number
-  errors: number
-}
 
 function defaultGrokHome(home: string): string {
   return `${home.replace(/\/+$/, '') || home}/.grok`
@@ -77,12 +73,12 @@ export async function installManagedHooks(options?: {
   signal?: AbortSignal
   hostKeyFingerprint?: string
   agents?: readonly AgentHookTarget[]
-}): Promise<ManagedHookInstallSummary> {
+}): Promise<AgentHookInstallManagedHooksResult> {
   options?.signal?.throwIfAborted()
   // Why: empty/omitted allowlist fails closed before any home/host probes.
   const agents = options?.agents ?? []
   if (agents.length === 0) {
-    return { installers: 0, errors: 0 }
+    return { home: homedir(), installers: 0, errors: 0, statuses: [] }
   }
   const home = homedir()
   const grokHomeDir = await resolveRelayGrokHome(home, options?.signal)
@@ -105,8 +101,10 @@ export async function installManagedHooks(options?: {
         }
       )
       return {
+        home,
         installers: results.length,
-        errors: results.filter((result) => result.state === 'error').length
+        errors: results.filter((result) => result.state === 'error').length,
+        statuses: results
       }
     },
     hostIdentity

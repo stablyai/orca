@@ -10,7 +10,10 @@ import {
   type RuntimeRpcSuccess,
   getDefaultUserDataPath
 } from '../runtime-client'
-import type { AgentHookInstallStatus } from '../../shared/agent-hook-types'
+import type {
+  AgentHookInstallStatus,
+  RemoteAgentHookInstallReport
+} from '../../shared/agent-hook-types'
 import { getDefaultPersistedState } from '../../shared/constants'
 import { normalizeDisabledTuiAgents } from '../../shared/tui-agent-selection'
 import type { GlobalSettings } from '../../shared/global-settings-types'
@@ -26,6 +29,7 @@ type AgentHookCommandResult = {
   settingsPath: string
   appliedBy: 'runtime' | 'offline'
   statuses: AgentHookInstallStatus[]
+  remotes?: RemoteAgentHookInstallReport[] | null
 }
 
 // Covers managed-home verification, WSL identity, trust grant, and bounded app-server reap.
@@ -180,14 +184,29 @@ function formatAgentHookCommandResult(result: AgentHookCommandResult): string {
   const statusSummary = result.statuses
     .map((status) => `${status.agent}: ${status.state}`)
     .join('\n')
-  return [
+  const lines = [
     `agentStatusHooksEnabled: ${result.enabled}`,
     `appliedBy: ${result.appliedBy}`,
     `settingsPath: ${result.settingsPath}`,
     statusSummary
-  ]
-    .filter(Boolean)
-    .join('\n')
+  ].filter(Boolean)
+  if (result.remotes === null) {
+    lines.push('ssh: unavailable — runtime is not reachable')
+  }
+  for (const remote of result.remotes ?? []) {
+    lines.push(formatRemoteReport(remote))
+  }
+  return lines.join('\n')
+}
+
+/** Formats one remote host's managed-hook install report for human CLI output. */
+function formatRemoteReport(remote: RemoteAgentHookInstallReport): string {
+  const header = `ssh:${remote.targetId}: ${remote.state}${remote.detail ? ` — ${remote.detail}` : ''}`
+  const agentLines = remote.statuses.map((status) => {
+    const detail = status.state !== 'installed' && status.detail ? ` — ${status.detail}` : ''
+    return `  ${status.agent}: ${status.state}${detail}`
+  })
+  return [header, ...agentLines].join('\n')
 }
 
 async function setAgentHooksEnabled(
@@ -206,6 +225,26 @@ async function setAgentHooksEnabled(
     appliedBy: updatedRuntime ? 'runtime' : 'offline',
     statuses
   }
+}
+
+/** Reads hook status from the runtime when it is reachable.
+ *
+ * Only a reachable runtime knows SSH-host state; transport failures must
+ * surface instead of printing a false local green.
+ */
+async function fetchRuntimeHookStatuses(client: RuntimeClient): Promise<{
+  local: AgentHookInstallStatus[]
+  remotes: RemoteAgentHookInstallReport[]
+} | null> {
+  const status = await client.getCliStatus()
+  if (!status.result.runtime.reachable) {
+    return null
+  }
+  const response = await client.call<{
+    local: AgentHookInstallStatus[]
+    remotes: RemoteAgentHookInstallReport[]
+  }>('agentHooks.status', undefined, { timeoutMs: 10_000 })
+  return response.result
 }
 
 export const AGENT_HOOK_HANDLERS: Record<string, CommandHandler> = {
@@ -233,12 +272,14 @@ export const AGENT_HOOK_HANDLERS: Record<string, CommandHandler> = {
         settings.agentStatusHooksEnabled && !settings.disabledTuiAgents.includes('codex')
     })
   },
-  'agent hooks status': async ({ json }) => {
+  'agent hooks status': async ({ client, json }) => {
+    const runtimeStatuses = await fetchRuntimeHookStatuses(client)
     const result: AgentHookCommandResult = {
       enabled: readHookSettingsFromDisk().agentStatusHooksEnabled,
       settingsPath: getDataPath(),
-      appliedBy: 'offline',
-      statuses: getManagedAgentHookStatuses()
+      appliedBy: runtimeStatuses ? 'runtime' : 'offline',
+      statuses: runtimeStatuses?.local ?? getManagedAgentHookStatuses(),
+      remotes: runtimeStatuses?.remotes ?? null
     }
     printResult(localSuccess(result), json, formatAgentHookCommandResult)
   },
