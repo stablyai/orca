@@ -124,7 +124,8 @@ export async function executeWorktreeRemoval(
     return removalResult ?? {}
   }
 
-  const hooks = await getArchiveHooksForRemoval(repo)
+  const remoteConnectionId = repo.connectionId ?? undefined
+  const hooks = await getArchiveHooksForRemoval(repo, remoteConnectionId)
 
   const archiveScript = hooks?.scripts.archive
 
@@ -133,10 +134,15 @@ export async function executeWorktreeRemoval(
     // 'remote' would file every local archive hook under the SSH breakdown.
     await withWorktreeRemoveStageSpan(
       'archive_hook',
-      repo.connectionId ? 'remote' : 'local',
+      remoteConnectionId ? 'remote' : 'local',
       async () => {
-        const result = repo.connectionId
-          ? await runRemoteArchiveHook(repo, canonicalWorktreePath, archiveScript)
+        const result = remoteConnectionId
+          ? await runRemoteArchiveHook(
+              repo,
+              remoteConnectionId,
+              canonicalWorktreePath,
+              archiveScript
+            )
           : await runHook(
               'archive',
               canonicalWorktreePath,
@@ -151,7 +157,6 @@ export async function executeWorktreeRemoval(
     )
   }
 
-  const remoteConnectionId = repo.connectionId ?? undefined
   if (remoteConnectionId) {
     return removeRegisteredRemoteWorktree(
       context,

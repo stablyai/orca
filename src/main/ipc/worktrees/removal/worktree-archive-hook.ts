@@ -10,12 +10,15 @@ import { getSetupRunnerEnvVars } from '../../../setup-hook-env-vars'
 
 const WORKTREE_ARCHIVE_HOOK_TIMEOUT_MS = 120_000
 
-export async function getArchiveHooksForRemoval(repo: Repo): Promise<OrcaHooks | null> {
-  if (!repo.connectionId) {
+export async function getArchiveHooksForRemoval(
+  repo: Repo,
+  connectionId: string | undefined
+): Promise<OrcaHooks | null> {
+  if (!connectionId) {
     return getEffectiveHooks(repo)
   }
 
-  const fsProvider = getSshFilesystemProvider(repo.connectionId)
+  const fsProvider = getSshFilesystemProvider(connectionId)
   if (!fsProvider) {
     return getEffectiveHooksFromConfig(repo, null)
   }
@@ -31,14 +34,15 @@ export async function getArchiveHooksForRemoval(repo: Repo): Promise<OrcaHooks |
 
 export async function runRemoteArchiveHook(
   repo: Repo,
+  connectionId: string | undefined,
   worktreePath: string,
   script: string
 ): Promise<{ success: boolean; output: string }> {
-  if (!repo.connectionId) {
+  if (!connectionId) {
     return { success: true, output: '' }
   }
 
-  const provider = requireSshGitProvider(repo.connectionId)
+  const provider = requireSshGitProvider(connectionId)
   const env = getSetupRunnerEnvVars(repo, worktreePath)
   const isWindowsRemote = isWindowsAbsolutePathLike(worktreePath)
   const result = await provider

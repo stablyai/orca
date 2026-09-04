@@ -490,6 +490,73 @@ describe('OrcaRuntimeService', () => {
     expect(gitProvider.removeWorktree).toHaveBeenCalledWith('/remote/feature', true)
   })
 
+  // Regression: repo.connectionId can be null for an `ssh:`-only row (#11163-class bug); the
+  // archive hook must key off the resolved removal route's connectionId, not repo.connectionId.
+  it('runs archive hooks using the resolved connection id when repo.connectionId is null', async () => {
+    const remoteRepo = {
+      id: TEST_REPO_ID,
+      path: '/remote/repo',
+      displayName: 'repo',
+      badgeColor: 'blue',
+      addedAt: 1
+    }
+    const remoteStore = { ...store, getRepos: () => [remoteRepo], getRepo: () => remoteRepo }
+    const gitProvider = {
+      listWorktrees: vi.fn().mockResolvedValue([
+        {
+          path: '/remote/repo',
+          head: 'main',
+          branch: 'refs/heads/main',
+          isBare: false,
+          isMainWorktree: true
+        },
+        {
+          path: '/remote/feature',
+          head: 'abc',
+          branch: 'feature/foo',
+          isBare: false,
+          isMainWorktree: false
+        }
+      ]),
+      removeWorktree: vi.fn().mockResolvedValue(undefined),
+      execNonInteractive: vi.fn().mockResolvedValue({
+        stdout: '',
+        stderr: '',
+        exitCode: 0,
+        timedOut: false
+      })
+    }
+    registerSshGitProvider('ssh-1', gitProvider as never)
+    vi.mocked(getEffectiveHooks).mockReturnValue(null)
+    vi.mocked(getEffectiveHooksFromConfig).mockReturnValue({
+      scripts: { archive: 'pnpm worktree:archive' }
+    })
+    const ptyProvider = {
+      listProcesses: vi.fn().mockResolvedValue([]),
+      shutdown: vi.fn().mockResolvedValue(undefined),
+      deleteWorktreeHistory: vi.fn().mockResolvedValue(undefined)
+    }
+    const runtime = new OrcaRuntimeService(remoteStore as never, undefined, {
+      getSshProvider: () => ptyProvider as never
+    })
+
+    try {
+      await runtime.removeManagedWorktree('path:/remote/feature', true, true, false, 'ssh:ssh-1')
+    } finally {
+      unregisterSshGitProvider('ssh-1')
+    }
+
+    expect(gitProvider.execNonInteractive).toHaveBeenCalledWith(
+      '/bin/bash',
+      ['-lc', 'pnpm worktree:archive'],
+      '/remote/feature',
+      expect.any(Number),
+      undefined,
+      expect.anything()
+    )
+    expect(gitProvider.removeWorktree).toHaveBeenCalledWith('/remote/feature', true)
+  })
+
   it('warns instead of running the archive hook for CLI SSH removal without --run-hooks', async () => {
     const remoteRepo = {
       id: TEST_REPO_ID,

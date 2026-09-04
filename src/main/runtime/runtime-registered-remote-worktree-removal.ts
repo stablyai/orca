@@ -36,10 +36,15 @@ export async function removeRuntimeRegisteredRemoteWorktree(args: {
 }): Promise<RemoveWorktreeResult & { warning?: string }> {
   const { repo, target, registeredWorktree, provider, connectionId } = args
   const canonicalPath = registeredWorktree.path
-  const hooks = await getArchiveHooksForRemoval(repo)
+  const hooks = await getArchiveHooksForRemoval(repo, connectionId)
   let warning: string | undefined
   if (hooks?.scripts.archive && args.runHooks) {
-    const hookResult = await runRemoteArchiveHook(repo, canonicalPath, hooks.scripts.archive)
+    const hookResult = await runRemoteArchiveHook(
+      repo,
+      connectionId,
+      canonicalPath,
+      hooks.scripts.archive
+    )
     if (!hookResult.success) {
       console.error(`[hooks] archive hook failed for ${canonicalPath}:`, hookResult.output)
     }
