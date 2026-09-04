@@ -15304,8 +15304,18 @@
                 "removeWorktree": "remove worktree",
                 "trashWorktree": "trash worktree",
                 "addQuickCommand": "add quick command",
-                "newQuickCommand": "new quick command"
-              }
+                "newQuickCommand": "new quick command",
+                "splitChatRight": "split chat right",
+                "moveChatRight": "move chat right",
+                "chatPaneRight": "chat pane right",
+                "splitChatDown": "split chat down",
+                "moveChatDown": "move chat down",
+                "chatPaneBelow": "chat pane below"
+              },
+              "splitChatRight": "Split Chat Right",
+              "splitChatRightDescription": "Open the active chat in a split pane to the right.",
+              "splitChatDown": "Split Chat Down",
+              "splitChatDownDescription": "Open the active chat in a split pane below."
             }
           },
           "palette": {

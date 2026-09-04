@@ -16,7 +16,8 @@ const mocks = vi.hoisted(() => ({
   store: null as null | { setState: (state: Partial<MockAppState>) => void },
   focusGroup: vi.fn(),
   mountsByTabId: new Map<string, number>(),
-  unmountsByTabId: new Map<string, number>()
+  unmountsByTabId: new Map<string, number>(),
+  groupIdByTabId: new Map<string, string | undefined>()
 }))
 
 vi.mock('@/store', async () => {
@@ -53,11 +54,14 @@ vi.mock('./NativeChatView', async () => {
   return {
     default: function MockNativeChatView({
       tabId,
+      groupId,
       isVisible
     }: {
       tabId: string
+      groupId?: string
       isVisible: boolean
     }) {
+      mocks.groupIdByTabId.set(tabId, groupId)
       useEffect(() => {
         mocks.mountsByTabId.set(tabId, (mocks.mountsByTabId.get(tabId) ?? 0) + 1)
         return () => {
@@ -87,6 +91,7 @@ describe('StructuredAgentSessionPaneOverlayLayer', () => {
     mocks.focusGroup.mockClear()
     mocks.mountsByTabId.clear()
     mocks.unmountsByTabId.clear()
+    mocks.groupIdByTabId.clear()
     mocks.store?.setState(createState(FIRST_TAB_ID))
   })
 
@@ -125,6 +130,12 @@ describe('StructuredAgentSessionPaneOverlayLayer', () => {
     expect(mocks.mountsByTabId.get(FIRST_TAB_ID)).toBe(1)
     expect(mocks.mountsByTabId.get(SECOND_TAB_ID)).toBe(1)
     expect(mocks.unmountsByTabId.size).toBe(0)
+    expect(mocks.groupIdByTabId).toEqual(
+      new Map([
+        [FIRST_TAB_ID, GROUP_ID],
+        [SECOND_TAB_ID, GROUP_ID]
+      ])
+    )
   })
 
   it('routes overlay interaction back to the owning split group', () => {

@@ -53,6 +53,9 @@ import { useNativeChatFileLinkClick } from './use-native-chat-file-link-click'
 import type { NativeChatResolvedViewProps } from './native-chat-view-types'
 import { useNativeChatFileLinkContext } from './use-native-chat-file-link-context'
 import { NativeChatOrchestrationPausedNotice } from './NativeChatOrchestrationPausedNotice'
+import { matchNativeChatSplitShortcut } from './native-chat-split-shortcut'
+import { getShortcutPlatform } from '@/lib/shortcut-platform'
+import { formatShortcutLabel } from '@/hooks/useShortcutLabel'
 
 /** Renders the bridge UI after NativeChatSessionGate resolves its agent session. */
 export function NativeChatResolvedView({
@@ -75,6 +78,7 @@ export function NativeChatResolvedView({
   const runtimeEnvironmentId = useAppStore((s) =>
     selectNativeChatRuntimeEnvironmentId(s, terminalTabId)
   )
+  const keybindings = useAppStore((s) => s.keybindings)
   const liveSession = useNativeChatRetainedSession({
     paneKey,
     agent,
@@ -142,6 +146,10 @@ export function NativeChatResolvedView({
   const contextMenu = useNativeChatContextMenu({
     rootRef,
     onSwitchToTerminal,
+    splitShortcutLabels: {
+      right: formatShortcutLabel('terminal.splitRight', keybindings),
+      down: formatShortcutLabel('terminal.splitDown', keybindings)
+    },
     actions: {
       onPaste: pasteClipboardIntoComposer,
       ...(contextMenuActions ?? emptyNativeChatContextMenuActions)
@@ -348,6 +356,19 @@ export function NativeChatResolvedView({
         }
       }}
       onKeyDownCapture={(event) => {
+        const splitDirection = event.repeat
+          ? null
+          : matchNativeChatSplitShortcut(event, getShortcutPlatform(), keybindings)
+        if (splitDirection && contextMenuActions) {
+          event.preventDefault()
+          event.stopPropagation()
+          if (splitDirection === 'right') {
+            contextMenuActions.onSplitRight()
+          } else {
+            contextMenuActions.onSplitDown()
+          }
+          return
+        }
         // Backspace/Delete outside an input focuses the composer (like typing)
         // but inserts nothing — let the now-focused field handle the keystroke.
         if (shouldFocusNativeChatComposerFromEditingKey(event)) {
