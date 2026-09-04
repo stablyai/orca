@@ -12,6 +12,13 @@ on:
       # Why: the mobile terminal link parsers are conformance-tested against
       # these shared fixtures; desktop-side fixture edits must re-run this suite.
       - 'src/shared/terminal-file-link-conformance.ts'
+      # Why all of src/shared: mobile's tsconfig pulls 300+ files from it, and the
+      # typecheck baseline now matches on message text, so a desktop-side rename can
+      # reword a mobile diagnostic and redden this job for an unrelated author.
+      - 'src/shared/**'
+      # Why: the mobile typecheck runs through this script and its baseline.
+      - 'config/scripts/typecheck-diagnostic-baseline.mjs'
+      - 'mobile/typecheck-test-diagnostics.json'
       # Why: this job holds the only checks that load the Fastfile, so edits to
       # it or to the release workflow it guards must re-run them.
       - '.github/workflows/mobile.yml'
@@ -34,6 +41,31 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          filter: blob:none
+
+      - name: Load base mobile diagnostic baseline
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          set -euo pipefail
+          git cat-file -e "$BASE_SHA^{commit}"
+          # Why ls-tree --full-tree: it answers "does the base have this file" from tree
+          # objects alone, so a missing baseline is distinguishable from a git failure.
+          # Anything other than a clean absence aborts the step rather than silently
+          # leaving the growth guard unset, which would pass as "no drift".
+          # Why a bare assignment: inside `[ -n "$(...)" ]` the substitution's exit status
+          # is discarded, so a git failure would read as "base has no baseline" and pass.
+          base_entry="$(git ls-tree -r --full-tree --name-only "$BASE_SHA" -- mobile/typecheck-test-diagnostics.json)"
+          if [ -n "$base_entry" ]; then
+            base_baseline="$RUNNER_TEMP/typecheck-mobile-base.json"
+            git show "$BASE_SHA:mobile/typecheck-test-diagnostics.json" > "$base_baseline"
+            echo "TYPECHECK_BASELINE_BASE_PATH=$base_baseline" >> "$GITHUB_ENV"
+            echo "Mobile growth guard ACTIVE against $BASE_SHA."
+          else
+            echo "::warning::Mobile growth guard INACTIVE: base $BASE_SHA has no baseline yet. Expected only on the PR that introduces it."
+          fi
 
       - name: Setup Node.js
         uses: actions/setup-node@v6

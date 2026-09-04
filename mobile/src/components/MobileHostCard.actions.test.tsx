@@ -1,4 +1,5 @@
 import { createElement } from 'react'
+import { Text } from 'react-native'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { ConnectionVerdict } from '../transport/connection-health'
@@ -36,7 +37,7 @@ const loaded: HostWorktreeInfo = {
   countsProvenAt: Date.now()
 }
 
-describe('MobileHostCard', () => {
+describe('MobileHostCard actions', () => {
   let renderer: ReactTestRenderer | null = null
 
   afterEach(() => {
@@ -69,7 +70,7 @@ describe('MobileHostCard', () => {
       )
     })
     return renderer!.root
-      .findAllByType('Text')
+      .findAllByType(Text)
       .flatMap((node) => node.children.filter((child) => typeof child === 'string'))
   }
 

@@ -1,0 +1,1461 @@
+{
+  "version": 1,
+  "diagnostics": [
+    {
+      "file": "tests/e2e/activity-agent-pane-isolation.spec.ts",
+      "line": 159,
+      "column": 13,
+      "code": 2551,
+      "message": "Property 'toggleWorktreeCardProperty' does not exist on type 'AppState'. Did you mean 'worktreeCardProperties'?"
+    },
+    {
+      "file": "tests/e2e/agent-dashboard-status-burst.spec.ts",
+      "line": 45,
+      "column": 11,
+      "code": 2322,
+      "message": "Type '\"drawer\"' is not assignable to type 'AgentDashboardMode | undefined'."
+    },
+    {
+      "file": "tests/e2e/ai-vault-typing-bench-renderer-probe.ts",
+      "line": 85,
+      "column": 9,
+      "code": 2322,
+      "message": "Type 'number' is not assignable to type 'null'."
+    },
+    {
+      "file": "tests/e2e/app-menu-paste-ownership.spec.ts",
+      "line": 75,
+      "column": 15,
+      "code": 2339,
+      "message": "Property 'customTitle' does not exist on type '{ id: string; title?: string | undefined; }'."
+    },
+    {
+      "file": "tests/e2e/artificial-opencode-main-pressure-scenario.ts",
+      "line": 244,
+      "column": 5,
+      "code": 2345,
+      "message": "Argument of type 'Awaited<TMainPressure> | null' is not assignable to parameter of type 'ScrollMainPressureSnapshot | null'.\n  Type 'Awaited<TMainPressure>' is not assignable to type 'ScrollMainPressureSnapshot | null'.\n    Type 'TMainPressure | (TMainPressure extends object & { then(onfulfilled: infer F, ...args: infer _): any; } ? F extends (value: infer V, ...args: infer _) => any ? Awaited<...> : never : TMainPressure)' is not assignable to type 'ScrollMainPressureSnapshot | null'.\n      Type '(null | undefined) & TMainPressure' is not assignable to type 'ScrollMainPressureSnapshot | null'.\n        Type 'undefined & TMainPressure' is not assignable to type 'ScrollMainPressureSnapshot | null'.\n          Type 'undefined & TMainPressure' is not assignable to type 'ScrollMainPressureSnapshot'.\n            Type 'Awaited<TMainPressure>' is not assignable to type 'ScrollMainPressureSnapshot'.\n              Type 'TMainPressure | (TMainPressure extends object & { then(onfulfilled: infer F, ...args: infer _): any; } ? F extends (value: infer V, ...args: infer _) => any ? Awaited<...> : never : TMainPressure)' is not assignable to type 'ScrollMainPressureSnapshot'.\n                Type '(null | undefined) & TMainPressure' is not assignable to type 'ScrollMainPressureSnapshot'.\n                  Type 'undefined & TMainPressure' is not assignable to type 'ScrollMainPressureSnapshot'."
+    },
+    {
+      "file": "tests/e2e/artificial-opencode-terminal-load.spec.ts",
+      "line": 450,
+      "column": 23,
+      "code": 2339,
+      "message": "Property 'rendererDroppedBacklogs' does not exist on type 'TerminalOutputSchedulerDebugSnapshot'."
+    },
+    {
+      "file": "tests/e2e/automation-hidden-terminal-first-mount.spec.ts",
+      "line": 99,
+      "column": 13,
+      "code": 2322,
+      "message": "Type '\"automation_hidden_first_mount_e2e\"' is not assignable to type '\"command_palette\" | \"conflict_resolution\" | \"diff_notes_send\" | \"new_workspace_composer\" | \"notes_send\" | \"onboarding\" | \"quick_command\" | \"shortcut\" | \"sidebar\" | \"source_control_recovery\" | ... 4 more ... | \"workspace_jump_palette\"'."
+    },
+    {
+      "file": "tests/e2e/automation-prompt-disclosure.spec.ts",
+      "line": 37,
+      "column": 36,
+      "code": 2339,
+      "message": "Property 'create' does not exist on type 'AutomationsApi'."
+    },
+    {
+      "file": "tests/e2e/automation-prompt-disclosure.spec.ts",
+      "line": 42,
+      "column": 36,
+      "code": 2339,
+      "message": "Property 'create' does not exist on type 'AutomationsApi'."
+    },
+    {
+      "file": "tests/e2e/automation-prompt-disclosure.spec.ts",
+      "line": 59,
+      "column": 36,
+      "code": 2339,
+      "message": "Property 'create' does not exist on type 'AutomationsApi'."
+    },
+    {
+      "file": "tests/e2e/browser-split-find-shortcut.spec.ts",
+      "line": 147,
+      "column": 27,
+      "code": 2322,
+      "message": "Type 'string' is not assignable to type '\"alt\" | \"capslock\" | \"cmd\" | \"command\" | \"control\" | \"ctrl\" | \"isautorepeat\" | \"iskeypad\" | \"left\" | \"leftbuttondown\" | \"meta\" | \"middlebuttondown\" | \"numlock\" | \"right\" | \"rightbuttondown\" | \"shift\"'."
+    },
+    {
+      "file": "tests/e2e/browser-split-find-shortcut.spec.ts",
+      "line": 152,
+      "column": 27,
+      "code": 2322,
+      "message": "Type 'string' is not assignable to type '\"alt\" | \"capslock\" | \"cmd\" | \"command\" | \"control\" | \"ctrl\" | \"isautorepeat\" | \"iskeypad\" | \"left\" | \"leftbuttondown\" | \"meta\" | \"middlebuttondown\" | \"numlock\" | \"right\" | \"rightbuttondown\" | \"shift\"'."
+    },
+    {
+      "file": "tests/e2e/browser-split-find-shortcut.spec.ts",
+      "line": 46,
+      "column": 3,
+      "code": 2322,
+      "message": "Type '{ firstBrowserPageId: string | null | undefined; firstBrowserTabId: string; secondBrowserTabId: string; }' is not assignable to type 'BrowserSplitFixture'.\n  Types of property 'firstBrowserPageId' are incompatible.\n    Type 'string | null | undefined' is not assignable to type 'string'.\n      Type 'undefined' is not assignable to type 'string'."
+    },
+    {
+      "file": "tests/e2e/browser-tab.spec.ts",
+      "line": 555,
+      "column": 68,
+      "code": 2769,
+      "message": "No overload matches this call.\n  The last overload gave the following error.\n    Argument of type '{ once: boolean; }' is not assignable to parameter of type 'boolean | undefined'."
+    },
+    {
+      "file": "tests/e2e/browser-tab.spec.ts",
+      "line": 600,
+      "column": 85,
+      "code": 2322,
+      "message": "Type 'string' is not assignable to type '\"alt\" | \"capslock\" | \"cmd\" | \"command\" | \"control\" | \"ctrl\" | \"isautorepeat\" | \"iskeypad\" | \"left\" | \"leftbuttondown\" | \"meta\" | \"middlebuttondown\" | \"numlock\" | \"right\" | \"rightbuttondown\" | \"shift\"'."
+    },
+    {
+      "file": "tests/e2e/browser-tab.spec.ts",
+      "line": 601,
+      "column": 83,
+      "code": 2322,
+      "message": "Type 'string' is not assignable to type '\"alt\" | \"capslock\" | \"cmd\" | \"command\" | \"control\" | \"ctrl\" | \"isautorepeat\" | \"iskeypad\" | \"left\" | \"leftbuttondown\" | \"meta\" | \"middlebuttondown\" | \"numlock\" | \"right\" | \"rightbuttondown\" | \"shift\"'."
+    },
+    {
+      "file": "tests/e2e/browser-tab.spec.ts",
+      "line": 665,
+      "column": 69,
+      "code": 2769,
+      "message": "No overload matches this call.\n  The last overload gave the following error.\n    Argument of type '{ once: boolean; }' is not assignable to parameter of type 'boolean | undefined'."
+    },
+    {
+      "file": "tests/e2e/chinese-ime-chat-input-repro.spec.ts",
+      "line": 679,
+      "column": 23,
+      "code": 2345,
+      "message": "Argument of type 'CDPSession | null' is not assignable to parameter of type 'CDPSession'.\n  Type 'null' is not assignable to type 'CDPSession'."
+    },
+    {
+      "file": "tests/e2e/chinese-ime-chat-input-repro.spec.ts",
+      "line": 697,
+      "column": 23,
+      "code": 2345,
+      "message": "Argument of type 'CDPSession | null' is not assignable to parameter of type 'CDPSession'.\n  Type 'null' is not assignable to type 'CDPSession'."
+    },
+    {
+      "file": "tests/e2e/chinese-ime-chat-input-repro.spec.ts",
+      "line": 717,
+      "column": 23,
+      "code": 2345,
+      "message": "Argument of type 'CDPSession | null' is not assignable to parameter of type 'CDPSession'.\n  Type 'null' is not assignable to type 'CDPSession'."
+    },
+    {
+      "file": "tests/e2e/combined-diff-scroll-restore.spec.ts",
+      "line": 403,
+      "column": 36,
+      "code": 2339,
+      "message": "Property 'x' does not exist on type 'never'."
+    },
+    {
+      "file": "tests/e2e/combined-diff-scroll-restore.spec.ts",
+      "line": 403,
+      "column": 49,
+      "code": 2339,
+      "message": "Property 'y' does not exist on type 'never'."
+    },
+    {
+      "file": "tests/e2e/completed-worker-retirement-resume.spec.ts",
+      "line": 29,
+      "column": 43,
+      "code": 2322,
+      "message": "Type '[{ PATH: string; ORCA_E2E_CODEX_LIFECYCLE_LEDGER: string; }, { option: true; }]' is not assignable to type '[TestFixtureValue<ProcessEnv, PlaywrightTestArgs & PlaywrightTestOptions & OrcaTestFixtures & PlaywrightWorkerArgs & PlaywrightWorkerOptions & OrcaWorkerFixtures>, { ...; }] | TestFixtureValue<...> | undefined'.\n  Type '[{ PATH: string; ORCA_E2E_CODEX_LIFECYCLE_LEDGER: string; }, { option: true; }]' is not assignable to type 'TestFixture<ProcessEnv, PlaywrightTestArgs & PlaywrightTestOptions & OrcaTestFixtures & PlaywrightWorkerArgs & PlaywrightWorkerOptions & OrcaWorkerFixtures> | [...]'.\n    Type '[{ PATH: string; ORCA_E2E_CODEX_LIFECYCLE_LEDGER: string; }, { option: true; }]' is not assignable to type '[TestFixtureValue<ProcessEnv, PlaywrightTestArgs & PlaywrightTestOptions & OrcaTestFixtures & PlaywrightWorkerArgs & PlaywrightWorkerOptions & OrcaWorkerFixtures>, { ...; }]'.\n      Type at position 1 in source is not compatible with type at position 1 in target.\n        Object literal may only specify known properties, and 'option' does not exist in type '{ scope: \"test\"; timeout?: number | undefined; title?: string | undefined; box?: \"self\" | boolean | undefined; }'."
+    },
+    {
+      "file": "tests/e2e/daemon-generation-legacy-close-safety.spec.ts",
+      "line": 103,
+      "column": 5,
+      "code": 2353,
+      "message": "Object literal may only specify known properties, and 'windowsHide' does not exist in type 'ForkOptions'."
+    },
+    {
+      "file": "tests/e2e/daemon-generation-reconnect-safety.spec.ts",
+      "line": 137,
+      "column": 5,
+      "code": 2353,
+      "message": "Object literal may only specify known properties, and 'windowsHide' does not exist in type 'ForkOptions'."
+    },
+    {
+      "file": "tests/e2e/editable-context-paste-ownership.spec.ts",
+      "line": 54,
+      "column": 15,
+      "code": 2339,
+      "message": "Property 'customTitle' does not exist on type '{ id: string; title?: string | undefined; }'."
+    },
+    {
+      "file": "tests/e2e/ephemeral-vm-provisioned-root.spec.ts",
+      "line": 115,
+      "column": 50,
+      "code": 2345,
+      "message": "Argument of type 'DockerSshRelayTarget | null' is not assignable to parameter of type 'DockerSshRelayTarget'.\n  Type 'null' is not assignable to type 'DockerSshRelayTarget'."
+    },
+    {
+      "file": "tests/e2e/fixtures/daemon-generation-legacy-close-client.ts",
+      "line": 161,
+      "column": 56,
+      "code": 2345,
+      "message": "Argument of type 'string | null | undefined' is not assignable to parameter of type '{ deadlineMs?: number | undefined; } | undefined'.\n  Type 'null' is not assignable to type '{ deadlineMs?: number | undefined; } | undefined'."
+    },
+    {
+      "file": "tests/e2e/fixtures/daemon-generation-legacy-close-client.ts",
+      "line": 210,
+      "column": 34,
+      "code": 2339,
+      "message": "Property 'parentTabId' does not exist on type 'RuntimeMobileSessionSnapshotTab'.\n  Property 'parentTabId' does not exist on type 'RuntimeMobileSessionBrowserTab'."
+    },
+    {
+      "file": "tests/e2e/fixtures/daemon-generation-legacy-close-client.ts",
+      "line": 213,
+      "column": 41,
+      "code": 2339,
+      "message": "Property 'leafId' does not exist on type 'RuntimeMobileSessionSnapshotTab'.\n  Property 'leafId' does not exist on type 'RuntimeMobileSessionBrowserTab'."
+    },
+    {
+      "file": "tests/e2e/fixtures/daemon-generation-legacy-close-client.ts",
+      "line": 217,
+      "column": 34,
+      "code": 2339,
+      "message": "Property 'parentTabId' does not exist on type 'RuntimeMobileSessionSnapshotTab'.\n  Property 'parentTabId' does not exist on type 'RuntimeMobileSessionBrowserTab'."
+    },
+    {
+      "file": "tests/e2e/fixtures/daemon-generation-legacy-close-client.ts",
+      "line": 219,
+      "column": 35,
+      "code": 2339,
+      "message": "Property 'leafId' does not exist on type 'RuntimeMobileSessionSnapshotTab'.\n  Property 'leafId' does not exist on type 'RuntimeMobileSessionBrowserTab'."
+    },
+    {
+      "file": "tests/e2e/fixtures/daemon-generation-reconnect-client.ts",
+      "line": 162,
+      "column": 54,
+      "code": 2345,
+      "message": "Argument of type 'string | null | undefined' is not assignable to parameter of type '{ deadlineMs?: number | undefined; } | undefined'.\n  Type 'null' is not assignable to type '{ deadlineMs?: number | undefined; } | undefined'."
+    },
+    {
+      "file": "tests/e2e/fixtures/daemon-generation-reconnect-client.ts",
+      "line": 275,
+      "column": 92,
+      "code": 2345,
+      "message": "Argument of type 'DaemonPtyRouter | null' is not assignable to parameter of type 'DaemonPtyRouter'.\n  Type 'null' is not assignable to type 'DaemonPtyRouter'."
+    },
+    {
+      "file": "tests/e2e/fixtures/daemon-lifecycle-entry.ts",
+      "line": 5,
+      "column": 15,
+      "code": 2459,
+      "message": "Module '\"../../../src/main/daemon/session\"' declares 'SubprocessHandle' locally, but it is not exported."
+    },
+    {
+      "file": "tests/e2e/github-cli-stall-repro.spec.ts",
+      "line": 116,
+      "column": 59,
+      "code": 2322,
+      "message": "Type '{ id: string; type: string; number: number; title: string; state: string; url: string; labels: never[]; updatedAt: string; author: string; repoId: string; }' is not assignable to type 'GitHubWorkItem'.\n  Types of property 'type' are incompatible.\n    Type 'string' is not assignable to type '\"issue\" | \"pr\"'."
+    },
+    {
+      "file": "tests/e2e/github-cli-stall-repro.spec.ts",
+      "line": 59,
+      "column": 7,
+      "code": 2322,
+      "message": "Type '[{ PATH: string; ORCA_GH_EXEC_TIMEOUT_MS: string; }, { option: true; }]' is not assignable to type '[TestFixtureValue<ProcessEnv, PlaywrightTestArgs & PlaywrightTestOptions & OrcaTestFixtures & PlaywrightWorkerArgs & PlaywrightWorkerOptions & OrcaWorkerFixtures>, { ...; }] | TestFixtureValue<...> | undefined'.\n  Type '[{ PATH: string; ORCA_GH_EXEC_TIMEOUT_MS: string; }, { option: true; }]' is not assignable to type 'TestFixture<ProcessEnv, PlaywrightTestArgs & PlaywrightTestOptions & OrcaTestFixtures & PlaywrightWorkerArgs & PlaywrightWorkerOptions & OrcaWorkerFixtures> | [...]'.\n    Type '[{ PATH: string; ORCA_GH_EXEC_TIMEOUT_MS: string; }, { option: true; }]' is not assignable to type '[TestFixtureValue<ProcessEnv, PlaywrightTestArgs & PlaywrightTestOptions & OrcaTestFixtures & PlaywrightWorkerArgs & PlaywrightWorkerOptions & OrcaWorkerFixtures>, { ...; }]'.\n      Type at position 1 in source is not compatible with type at position 1 in target.\n        Object literal may only specify known properties, and 'option' does not exist in type '{ scope: \"test\"; timeout?: number | undefined; title?: string | undefined; box?: \"self\" | boolean | undefined; }'."
+    },
+    {
+      "file": "tests/e2e/github-created-issue-start-prefill.spec.ts",
+      "line": 102,
+      "column": 7,
+      "code": 2322,
+      "message": "Type '[{ PATH: string; }, { option: true; }]' is not assignable to type '[TestFixtureValue<ProcessEnv, PlaywrightTestArgs & PlaywrightTestOptions & OrcaTestFixtures & PlaywrightWorkerArgs & PlaywrightWorkerOptions & OrcaWorkerFixtures>, { ...; }] | TestFixtureValue<...> | undefined'.\n  Type '[{ PATH: string; }, { option: true; }]' is not assignable to type 'TestFixture<ProcessEnv, PlaywrightTestArgs & PlaywrightTestOptions & OrcaTestFixtures & PlaywrightWorkerArgs & PlaywrightWorkerOptions & OrcaWorkerFixtures> | [...]'.\n    Type '[{ PATH: string; }, { option: true; }]' is not assignable to type '[TestFixtureValue<ProcessEnv, PlaywrightTestArgs & PlaywrightTestOptions & OrcaTestFixtures & PlaywrightWorkerArgs & PlaywrightWorkerOptions & OrcaWorkerFixtures>, { ...; }]'.\n      Type at position 1 in source is not compatible with type at position 1 in target.\n        Object literal may only specify known properties, and 'option' does not exist in type '{ scope: \"test\"; timeout?: number | undefined; title?: string | undefined; box?: \"self\" | boolean | undefined; }'."
+    },
+    {
+      "file": "tests/e2e/golden-worktree-create-switch.spec.ts",
+      "line": 25,
+      "column": 53,
+      "code": 2345,
+      "message": "Argument of type 'string' is not assignable to parameter of type 'WorktreeRemovalTarget'."
+    },
+    {
+      "file": "tests/e2e/headless-serve-desktop-activation.spec.ts",
+      "line": 143,
+      "column": 7,
+      "code": 2322,
+      "message": "Type 'ProcessEnv' is not assignable to type '{ [key: string]: string; }'.\n  'string' index signatures are incompatible.\n    Type 'string | undefined' is not assignable to type 'string'.\n      Type 'undefined' is not assignable to type 'string'."
+    },
+    {
+      "file": "tests/e2e/helpers/daemon-generation-safety-fixtures.ts",
+      "line": 93,
+      "column": 7,
+      "code": 2353,
+      "message": "Object literal may only specify known properties, and 'windowsHide' does not exist in type 'ForkOptions'."
+    },
+    {
+      "file": "tests/e2e/helpers/dead-terminal.ts",
+      "line": 129,
+      "column": 55,
+      "code": 2345,
+      "message": "Argument of type 'string' is not assignable to parameter of type 'WorktreeRemovalTarget'."
+    },
+    {
+      "file": "tests/e2e/helpers/headless-paired-runtime-host.ts",
+      "line": 128,
+      "column": 9,
+      "code": 2322,
+      "message": "Type 'ProcessEnv' is not assignable to type '{ [key: string]: string; }'.\n  'string' index signatures are incompatible.\n    Type 'string | undefined' is not assignable to type 'string'.\n      Type 'undefined' is not assignable to type 'string'."
+    },
+    {
+      "file": "tests/e2e/helpers/headless-paired-runtime-host.ts",
+      "line": 165,
+      "column": 26,
+      "code": 2345,
+      "message": "Argument of type 'string | null' is not assignable to parameter of type 'PathLike'.\n  Type 'null' is not assignable to type 'PathLike'."
+    },
+    {
+      "file": "tests/e2e/helpers/headless-paired-runtime-host.ts",
+      "line": 177,
+      "column": 49,
+      "code": 2345,
+      "message": "Argument of type 'ElectronApplication | undefined' is not assignable to parameter of type 'ElectronApplication'.\n  Type 'undefined' is not assignable to type 'ElectronApplication'."
+    },
+    {
+      "file": "tests/e2e/helpers/headless-paired-runtime-host.ts",
+      "line": 181,
+      "column": 27,
+      "code": 2345,
+      "message": "Argument of type 'string | null' is not assignable to parameter of type 'PathLike'.\n  Type 'null' is not assignable to type 'PathLike'."
+    },
+    {
+      "file": "tests/e2e/helpers/nested-runtime-ssh-client-route.ts",
+      "line": 117,
+      "column": 29,
+      "code": 2339,
+      "message": "Property 'targets' does not exist on type 'RuntimeEnvironmentSshBucket'."
+    },
+    {
+      "file": "tests/e2e/helpers/nested-runtime-ssh-client-route.ts",
+      "line": 74,
+      "column": 37,
+      "code": 18047,
+      "message": "'state.settings' is possibly 'null'."
+    },
+    {
+      "file": "tests/e2e/helpers/paired-terminal-cold-activation-oracle.ts",
+      "line": 141,
+      "column": 70,
+      "code": 2538,
+      "message": "Type 'null' cannot be used as an index type."
+    },
+    {
+      "file": "tests/e2e/helpers/paired-terminal-cold-activation-oracle.ts",
+      "line": 161,
+      "column": 22,
+      "code": 18047,
+      "message": "'originalPtyIds' is possibly 'null'."
+    },
+    {
+      "file": "tests/e2e/helpers/pr-comments-sidebar-fixture.ts",
+      "line": 125,
+      "column": 32,
+      "code": 6133,
+      "message": "'repoPath' is declared but its value is never read."
+    },
+    {
+      "file": "tests/e2e/helpers/pr-comments-sidebar-fixture.ts",
+      "line": 95,
+      "column": 20,
+      "code": 2345,
+      "message": "Argument of type '(current: AppState) => { prCache: { [x: string]: CacheEntry<PRInfo> | { data: PRInfo; fetchedAt: number; }; }; repos: Repo[]; gitStatusByWorktree: { ...; }; ... 7 more ...; setUpstreamStatus: () => undefined; }' is not assignable to parameter of type 'Partial<AppState> | ((state: AppState) => Partial<AppState>)'.\n  Type '(current: AppState) => { prCache: { [x: string]: CacheEntry<PRInfo> | { data: PRInfo; fetchedAt: number; }; }; repos: Repo[]; gitStatusByWorktree: { ...; }; ... 7 more ...; setUpstreamStatus: () => undefined; }' is not assignable to type '(state: AppState) => Partial<AppState>'.\n    Type '{ prCache: { [x: string]: CacheEntry<PRInfo> | { data: PRInfo; fetchedAt: number; }; }; repos: Repo[]; gitStatusByWorktree: { [x: string]: never[] | GitUncommittedEntry[]; }; ... 7 more ...; setUpstreamStatus: () => undefined; }' is not assignable to type 'Partial<AppState>'.\n      The types returned by 'fetchUpstreamStatus(...)' are incompatible between these types.\n        Type 'Promise<undefined>' is not assignable to type 'Promise<GitUpstreamStatus | null>'.\n          Type 'undefined' is not assignable to type 'GitUpstreamStatus | null'."
+    },
+    {
+      "file": "tests/e2e/helpers/shortcuts.ts",
+      "line": 35,
+      "column": 16,
+      "code": 2345,
+      "message": "Argument of type '\"Shift\"' is not assignable to parameter of type '\"Control\" | \"Meta\"'."
+    },
+    {
+      "file": "tests/e2e/helpers/shortcuts.ts",
+      "line": 37,
+      "column": 14,
+      "code": 2345,
+      "message": "Argument of type 'string' is not assignable to parameter of type '\"Control\" | \"Meta\"'."
+    },
+    {
+      "file": "tests/e2e/helpers/source-control-ai-generation.ts",
+      "line": 111,
+      "column": 20,
+      "code": 2345,
+      "message": "Argument of type '(current: AppState) => { repos: Repo[]; gitStatusByWorktree: { [x: string]: never[] | GitUncommittedEntry[]; }; remoteStatusesByWorktree: { [x: string]: GitUpstreamStatus | { ...; }; }; ... 4 more ...; setUpstreamStatus: () => undefined; }' is not assignable to parameter of type 'Partial<AppState> | ((state: AppState) => Partial<AppState>)'.\n  Type '(current: AppState) => { repos: Repo[]; gitStatusByWorktree: { [x: string]: never[] | GitUncommittedEntry[]; }; remoteStatusesByWorktree: { [x: string]: GitUpstreamStatus | { ...; }; }; ... 4 more ...; setUpstreamStatus: () => undefined; }' is not assignable to type '(state: AppState) => Partial<AppState>'.\n    Type '{ repos: Repo[]; gitStatusByWorktree: { [x: string]: never[] | GitUncommittedEntry[]; }; remoteStatusesByWorktree: { [x: string]: GitUpstreamStatus | { ...; }; }; ... 4 more ...; setUpstreamStatus: () => undefined; }' is not assignable to type 'Partial<AppState>'.\n      The types returned by 'fetchUpstreamStatus(...)' are incompatible between these types.\n        Type 'Promise<undefined>' is not assignable to type 'Promise<GitUpstreamStatus | null>'.\n          Type 'undefined' is not assignable to type 'GitUpstreamStatus | null'."
+    },
+    {
+      "file": "tests/e2e/helpers/source-control-ai-generation.ts",
+      "line": 216,
+      "column": 20,
+      "code": 2551,
+      "message": "Property 'gitBranchCompareEntriesByWorktree' does not exist on type 'AppState'. Did you mean 'gitBranchChangesByWorktree'?"
+    },
+    {
+      "file": "tests/e2e/helpers/source-control-ai-generation.ts",
+      "line": 284,
+      "column": 20,
+      "code": 2551,
+      "message": "Property 'gitBranchCompareEntriesByWorktree' does not exist on type 'AppState'. Did you mean 'gitBranchChangesByWorktree'?"
+    },
+    {
+      "file": "tests/e2e/helpers/ssh-port-forward-transport-evidence.ts",
+      "line": 93,
+      "column": 42,
+      "code": 2345,
+      "message": "Argument of type 'SshConnectionState' is not assignable to parameter of type 'CapturedSshState'.\n  Types of property 'providerEpoch' are incompatible.\n    Type 'SshProviderEpoch | null | undefined' is not assignable to type 'string | undefined'.\n      Type 'null' is not assignable to type 'string | undefined'."
+    },
+    {
+      "file": "tests/e2e/helpers/store.ts",
+      "line": 61,
+      "column": 37,
+      "code": 2741,
+      "message": "Property 'customTitle' is missing in type '{ id: string; title: string; }' but required in type 'TerminalTabSummary'."
+    },
+    {
+      "file": "tests/e2e/helpers/store.ts",
+      "line": 91,
+      "column": 9,
+      "code": 18048,
+      "message": "'activeGroup.tabOrder.length' is possibly 'undefined'."
+    },
+    {
+      "file": "tests/e2e/helpers/store.ts",
+      "line": 93,
+      "column": 14,
+      "code": 18048,
+      "message": "'activeGroup' is possibly 'undefined'."
+    },
+    {
+      "file": "tests/e2e/helpers/terminal-pane-operations.ts",
+      "line": 49,
+      "column": 15,
+      "code": 2339,
+      "message": "Property 'movePane' does not exist on type 'PaneManagerLike'."
+    },
+    {
+      "file": "tests/e2e/helpers/terminal-pty-write-spy.ts",
+      "line": 93,
+      "column": 52,
+      "code": 2345,
+      "message": "Argument of type 'typeof CrossProcessExports' is not assignable to parameter of type 'number'."
+    },
+    {
+      "file": "tests/e2e/helpers/terminal.ts",
+      "line": 55,
+      "column": 25,
+      "code": 2345,
+      "message": "Argument of type 'string | null' is not assignable to parameter of type 'string'.\n  Type 'null' is not assignable to type 'string'."
+    },
+    {
+      "file": "tests/e2e/issue-12656-terminal-link-tooltip.spec.ts",
+      "line": 146,
+      "column": 57,
+      "code": 2339,
+      "message": "Property 'tabId' does not exist on type 'never'."
+    },
+    {
+      "file": "tests/e2e/issue-12656-terminal-link-tooltip.spec.ts",
+      "line": 150,
+      "column": 36,
+      "code": 2345,
+      "message": "Argument of type 'LinkProbe | null' is not assignable to parameter of type 'LinkProbe'.\n  Type 'null' is not assignable to type 'LinkProbe'."
+    },
+    {
+      "file": "tests/e2e/issue-12656-terminal-link-tooltip.spec.ts",
+      "line": 151,
+      "column": 43,
+      "code": 18047,
+      "message": "'probe' is possibly 'null'."
+    },
+    {
+      "file": "tests/e2e/issue-12656-terminal-link-tooltip.spec.ts",
+      "line": 155,
+      "column": 60,
+      "code": 2339,
+      "message": "Property 'tabId' does not exist on type 'never'."
+    },
+    {
+      "file": "tests/e2e/issue-12656-terminal-link-tooltip.spec.ts",
+      "line": 165,
+      "column": 46,
+      "code": 18047,
+      "message": "'probe' is possibly 'null'."
+    },
+    {
+      "file": "tests/e2e/issue-12656-terminal-link-tooltip.spec.ts",
+      "line": 167,
+      "column": 60,
+      "code": 2339,
+      "message": "Property 'tabId' does not exist on type 'never'."
+    },
+    {
+      "file": "tests/e2e/korean-ime-terminal-shift-enter-commit.spec.ts",
+      "line": 483,
+      "column": 19,
+      "code": 2769,
+      "message": "No overload matches this call.\n  The last overload gave the following error.\n    Argument of type 'boolean | undefined' is not assignable to parameter of type 'ConditionBody<PlaywrightTestArgs & PlaywrightTestOptions & OrcaTestFixtures & PlaywrightWorkerArgs & PlaywrightWorkerOptions & OrcaWorkerFixtures>'.\n      Type 'undefined' is not assignable to type 'ConditionBody<PlaywrightTestArgs & PlaywrightTestOptions & OrcaTestFixtures & PlaywrightWorkerArgs & PlaywrightWorkerOptions & OrcaWorkerFixtures>'."
+    },
+    {
+      "file": "tests/e2e/large-diff-freeze-repro.spec.ts",
+      "line": 203,
+      "column": 79,
+      "code": 2345,
+      "message": "Argument of type '{ path: string; status: GitFileStatus; oldPath?: string | undefined; conflictKind?: GitConflictKind | undefined; conflictStatus?: GitConflictResolutionStatus | undefined; ... 5 more ...; area: string; }[]' is not assignable to parameter of type 'GitUncommittedEntry[]'.\n  Type '{ path: string; status: GitFileStatus; oldPath?: string; conflictKind?: GitConflictKind; conflictStatus?: GitConflictResolutionStatus; conflictStatusSource?: GitConflictStatusSource; ... 4 more ...; area: string; }' is not assignable to type 'GitUncommittedEntry'.\n    Types of property 'area' are incompatible.\n      Type 'string' is not assignable to type 'GitStagingArea'."
+    },
+    {
+      "file": "tests/e2e/linear-issue-view-persistence.spec.ts",
+      "line": 202,
+      "column": 17,
+      "code": 2352,
+      "message": "Conversion of type '{ readonly \"linear-team-a\": readonly [{ readonly id: 'linear-state-a'; readonly name: 'In Review'; readonly type: 'started'; readonly color: '#888888'; readonly position: 1; }]; readonly \"linear-team-b\": readonly [{ ...; }]; }' to type 'Record<string, { readonly id: \"linear-state-a\"; readonly name: \"In Review\"; readonly type: \"started\"; readonly color: \"#888888\"; readonly position: 1; }[]>' may be a mistake because neither type sufficiently overlaps with the other. If this was intentional, convert the expression to 'unknown' first.\n  Property '\"linear-team-a\"' is incompatible with index signature.\n    The type 'readonly [{ readonly id: \"linear-state-a\"; readonly name: \"In Review\"; readonly type: \"started\"; readonly color: \"#888888\"; readonly position: 1; }]' is 'readonly' and cannot be assigned to the mutable type '{ readonly id: \"linear-state-a\"; readonly name: \"In Review\"; readonly type: \"started\"; readonly color: \"#888888\"; readonly position: 1; }[]'."
+    },
+    {
+      "file": "tests/e2e/live-background-terminal-mount-authority.spec.ts",
+      "line": 546,
+      "column": 11,
+      "code": 2322,
+      "message": "Type '{ mode?: \"auto\" | \"override\" | undefined; setupRunPolicy?: SetupRunPolicy; commandSourcePolicy?: HookCommandSourcePolicy; scripts?: { setup: string; archive: string; } | undefined; setupAgentStartupPolicy: \"start-immediately\"; }' is not assignable to type 'RepoHookSettings'.\n  Types of property 'mode' are incompatible.\n    Type '\"auto\" | \"override\" | undefined' is not assignable to type '\"auto\" | \"override\"'.\n      Type 'undefined' is not assignable to type '\"auto\" | \"override\"'."
+    },
+    {
+      "file": "tests/e2e/live-background-terminal-mount-authority.spec.ts",
+      "line": 655,
+      "column": 51,
+      "code": 2345,
+      "message": "Argument of type 'string | null' is not assignable to parameter of type 'string'.\n  Type 'null' is not assignable to type 'string'."
+    },
+    {
+      "file": "tests/e2e/live-background-terminal-mount-authority.spec.ts",
+      "line": 673,
+      "column": 51,
+      "code": 2345,
+      "message": "Argument of type 'string | null' is not assignable to parameter of type 'string'.\n  Type 'null' is not assignable to type 'string'."
+    },
+    {
+      "file": "tests/e2e/live-background-terminal-mount-authority.spec.ts",
+      "line": 763,
+      "column": 59,
+      "code": 2345,
+      "message": "Argument of type 'string | null' is not assignable to parameter of type 'string'.\n  Type 'null' is not assignable to type 'string'."
+    },
+    {
+      "file": "tests/e2e/live-background-terminal-mount-authority.spec.ts",
+      "line": 777,
+      "column": 51,
+      "code": 2345,
+      "message": "Argument of type 'string | null' is not assignable to parameter of type 'string'.\n  Type 'null' is not assignable to type 'string'."
+    },
+    {
+      "file": "tests/e2e/live-background-terminal-mount-authority.spec.ts",
+      "line": 804,
+      "column": 51,
+      "code": 2345,
+      "message": "Argument of type 'string | null' is not assignable to parameter of type 'string'.\n  Type 'null' is not assignable to type 'string'."
+    },
+    {
+      "file": "tests/e2e/live-background-terminal-mount-authority.spec.ts",
+      "line": 82,
+      "column": 7,
+      "code": 2322,
+      "message": "Type '[{ PATH: string; ORCA_E2E_CODEX_SPAWN_LEDGER: string; ORCA_E2E_SETUP_LEDGER: string; ORCA_E2E_CANARY_LEDGER: string; ORCA_E2E_SIGNAL_LEDGER: string; }, { option: true; }]' is not assignable to type '[TestFixtureValue<ProcessEnv, PlaywrightTestArgs & PlaywrightTestOptions & OrcaTestFixtures & PlaywrightWorkerArgs & PlaywrightWorkerOptions & OrcaWorkerFixtures>, { ...; }] | TestFixtureValue<...> | undefined'.\n  Type '[{ PATH: string; ORCA_E2E_CODEX_SPAWN_LEDGER: string; ORCA_E2E_SETUP_LEDGER: string; ORCA_E2E_CANARY_LEDGER: string; ORCA_E2E_SIGNAL_LEDGER: string; }, { option: true; }]' is not assignable to type 'TestFixture<ProcessEnv, PlaywrightTestArgs & PlaywrightTestOptions & OrcaTestFixtures & PlaywrightWorkerArgs & PlaywrightWorkerOptions & OrcaWorkerFixtures> | [...]'.\n    Type '[{ PATH: string; ORCA_E2E_CODEX_SPAWN_LEDGER: string; ORCA_E2E_SETUP_LEDGER: string; ORCA_E2E_CANARY_LEDGER: string; ORCA_E2E_SIGNAL_LEDGER: string; }, { option: true; }]' is not assignable to type '[TestFixtureValue<ProcessEnv, PlaywrightTestArgs & PlaywrightTestOptions & OrcaTestFixtures & PlaywrightWorkerArgs & PlaywrightWorkerOptions & OrcaWorkerFixtures>, { ...; }]'.\n      Type at position 1 in source is not compatible with type at position 1 in target.\n        Object literal may only specify known properties, and 'option' does not exist in type '{ scope: \"test\"; timeout?: number | undefined; title?: string | undefined; box?: \"self\" | boolean | undefined; }'."
+    },
+    {
+      "file": "tests/e2e/local-worktree-visibility-runtime-active.spec.ts",
+      "line": 67,
+      "column": 32,
+      "code": 2345,
+      "message": "Argument of type '(current: AppState) => { settings: { workspaceDir?: string | undefined; worktreeVisibilityDefaults?: WorktreeVisibilityDefaults | undefined; ... 207 more ...; activeRuntimeEnvironmentId: string; }; }' is not assignable to parameter of type 'Partial<AppState> | ((state: AppState) => Partial<AppState>)'.\n  Type '(current: AppState) => { settings: { workspaceDir?: string | undefined; worktreeVisibilityDefaults?: WorktreeVisibilityDefaults | undefined; ... 207 more ...; activeRuntimeEnvironmentId: string; }; }' is not assignable to type '(state: AppState) => Partial<AppState>'.\n    Type '{ settings: { workspaceDir?: string | undefined; worktreeVisibilityDefaults?: WorktreeVisibilityDefaults; hostSettingOverrides?: Partial<Record<ExecutionHostId, HostSettingOverrides>>; ... 206 more ...; activeRuntimeEnvironmentId: string; }; }' is not assignable to type 'Partial<AppState>'.\n      The types of 'settings.workspaceDir' are incompatible between these types.\n        Type 'string | undefined' is not assignable to type 'string'.\n          Type 'undefined' is not assignable to type 'string'."
+    },
+    {
+      "file": "tests/e2e/multi-client-navigation-isolation.spec.ts",
+      "line": 301,
+      "column": 15,
+      "code": 18048,
+      "message": "'state' is possibly 'undefined'."
+    },
+    {
+      "file": "tests/e2e/multi-client-navigation-isolation.spec.ts",
+      "line": 301,
+      "column": 15,
+      "code": 2531,
+      "message": "Object is possibly 'null'."
+    },
+    {
+      "file": "tests/e2e/nested-runtime-ssh-lifecycle.spec.ts",
+      "line": 725,
+      "column": 31,
+      "code": 2551,
+      "message": "Property 'switchRuntimeEnvironment' does not exist on type 'AppState'. Did you mean 'setRuntimeEnvironments'?"
+    },
+    {
+      "file": "tests/e2e/onboarding.spec.ts",
+      "line": 507,
+      "column": 32,
+      "code": 2339,
+      "message": "Property 'requestPermission' does not exist on type 'NotificationsApi'."
+    },
+    {
+      "file": "tests/e2e/orchestration-legacy-worker-missing-terminal-recovery.spec.ts",
+      "line": 335,
+      "column": 60,
+      "code": 2345,
+      "message": "Argument of type 'string | null' is not assignable to parameter of type 'string'.\n  Type 'null' is not assignable to type 'string'."
+    },
+    {
+      "file": "tests/e2e/orchestration-legacy-worker-missing-terminal-recovery.spec.ts",
+      "line": 337,
+      "column": 68,
+      "code": 2345,
+      "message": "Argument of type 'string | null' is not assignable to parameter of type 'string'.\n  Type 'null' is not assignable to type 'string'."
+    },
+    {
+      "file": "tests/e2e/orchestration-worker-settlement-release-cli.spec.ts",
+      "line": 99,
+      "column": 7,
+      "code": 2322,
+      "message": "Type '[{ PATH: string; ORCA_E2E_CLI_ENTRY: string; ORCA_E2E_CLI_LEDGER: string; }, { option: true; }]' is not assignable to type '[TestFixtureValue<ProcessEnv, PlaywrightTestArgs & PlaywrightTestOptions & OrcaTestFixtures & PlaywrightWorkerArgs & PlaywrightWorkerOptions & OrcaWorkerFixtures>, { ...; }] | TestFixtureValue<...> | undefined'.\n  Type '[{ PATH: string; ORCA_E2E_CLI_ENTRY: string; ORCA_E2E_CLI_LEDGER: string; }, { option: true; }]' is not assignable to type 'TestFixture<ProcessEnv, PlaywrightTestArgs & PlaywrightTestOptions & OrcaTestFixtures & PlaywrightWorkerArgs & PlaywrightWorkerOptions & OrcaWorkerFixtures> | [...]'.\n    Type '[{ PATH: string; ORCA_E2E_CLI_ENTRY: string; ORCA_E2E_CLI_LEDGER: string; }, { option: true; }]' is not assignable to type '[TestFixtureValue<ProcessEnv, PlaywrightTestArgs & PlaywrightTestOptions & OrcaTestFixtures & PlaywrightWorkerArgs & PlaywrightWorkerOptions & OrcaWorkerFixtures>, { ...; }]'.\n      Type at position 1 in source is not compatible with type at position 1 in target.\n        Object literal may only specify known properties, and 'option' does not exist in type '{ scope: \"test\"; timeout?: number | undefined; title?: string | undefined; box?: \"self\" | boolean | undefined; }'."
+    },
+    {
+      "file": "tests/e2e/orchestration-worker-terminal-visibility.spec.ts",
+      "line": 75,
+      "column": 7,
+      "code": 2322,
+      "message": "Type '[{ PATH: string; ORCA_E2E_SPAWN_LEDGER: string; ORCA_E2E_INTERRUPTION_LEDGER: string; }, { option: true; }]' is not assignable to type '[TestFixtureValue<ProcessEnv, PlaywrightTestArgs & PlaywrightTestOptions & OrcaTestFixtures & PlaywrightWorkerArgs & PlaywrightWorkerOptions & OrcaWorkerFixtures>, { ...; }] | TestFixtureValue<...> | undefined'.\n  Type '[{ PATH: string; ORCA_E2E_SPAWN_LEDGER: string; ORCA_E2E_INTERRUPTION_LEDGER: string; }, { option: true; }]' is not assignable to type 'TestFixture<ProcessEnv, PlaywrightTestArgs & PlaywrightTestOptions & OrcaTestFixtures & PlaywrightWorkerArgs & PlaywrightWorkerOptions & OrcaWorkerFixtures> | [...]'.\n    Type '[{ PATH: string; ORCA_E2E_SPAWN_LEDGER: string; ORCA_E2E_INTERRUPTION_LEDGER: string; }, { option: true; }]' is not assignable to type '[TestFixtureValue<ProcessEnv, PlaywrightTestArgs & PlaywrightTestOptions & OrcaTestFixtures & PlaywrightWorkerArgs & PlaywrightWorkerOptions & OrcaWorkerFixtures>, { ...; }]'.\n      Type at position 1 in source is not compatible with type at position 1 in target.\n        Object literal may only specify known properties, and 'option' does not exist in type '{ scope: \"test\"; timeout?: number | undefined; title?: string | undefined; box?: \"self\" | boolean | undefined; }'."
+    },
+    {
+      "file": "tests/e2e/packaged-mixed-version-browser-placement.spec.ts",
+      "line": 199,
+      "column": 7,
+      "code": 2322,
+      "message": "Type 'RuntimeStatus' is not assignable to type '{ capabilities: string[]; }'.\n  Types of property 'capabilities' are incompatible.\n    Type 'RuntimeCapability[] | undefined' is not assignable to type 'string[]'.\n      Type 'undefined' is not assignable to type 'string[]'."
+    },
+    {
+      "file": "tests/e2e/packaged-mixed-version-browser-placement.spec.ts",
+      "line": 214,
+      "column": 47,
+      "code": 2345,
+      "message": "Argument of type 'ElectronApplication | undefined' is not assignable to parameter of type 'ElectronApplication'.\n  Type 'undefined' is not assignable to type 'ElectronApplication'."
+    },
+    {
+      "file": "tests/e2e/paired-quick-open-large-tree.spec.ts",
+      "line": 110,
+      "column": 12,
+      "code": 18046,
+      "message": "'stat' is of type 'unknown'."
+    },
+    {
+      "file": "tests/e2e/paired-quick-open-large-tree.spec.ts",
+      "line": 111,
+      "column": 12,
+      "code": 18046,
+      "message": "'stat' is of type 'unknown'."
+    },
+    {
+      "file": "tests/e2e/paired-quick-open-large-tree.spec.ts",
+      "line": 163,
+      "column": 12,
+      "code": 18046,
+      "message": "'response.result' is of type 'unknown'."
+    },
+    {
+      "file": "tests/e2e/paired-quick-open-large-tree.spec.ts",
+      "line": 77,
+      "column": 18,
+      "code": 18046,
+      "message": "'response.result' is of type 'unknown'."
+    },
+    {
+      "file": "tests/e2e/paired-quick-open-large-tree.spec.ts",
+      "line": 78,
+      "column": 23,
+      "code": 18046,
+      "message": "'response.result' is of type 'unknown'."
+    },
+    {
+      "file": "tests/e2e/paired-quick-open-large-tree.spec.ts",
+      "line": 79,
+      "column": 22,
+      "code": 18046,
+      "message": "'response.result' is of type 'unknown'."
+    },
+    {
+      "file": "tests/e2e/paired-remote-browser-link-open-routing.spec.ts",
+      "line": 275,
+      "column": 66,
+      "code": 2345,
+      "message": "Argument of type 'string' is not assignable to parameter of type 'ExecutionHostId | undefined'."
+    },
+    {
+      "file": "tests/e2e/paired-remote-pane-layout-retry.spec.ts",
+      "line": 176,
+      "column": 11,
+      "code": 18047,
+      "message": "'client' is possibly 'null'."
+    },
+    {
+      "file": "tests/e2e/paired-remote-pane-layout-retry.spec.ts",
+      "line": 179,
+      "column": 14,
+      "code": 18047,
+      "message": "'client' is possibly 'null'."
+    },
+    {
+      "file": "tests/e2e/paired-remote-pane-layout-retry.spec.ts",
+      "line": 81,
+      "column": 9,
+      "code": 2339,
+      "message": "Property 'parentLayout' does not exist on type 'RuntimeMobileSessionClientTab'.\n  Property 'parentLayout' does not exist on type 'RuntimeMobileSessionBrowserTab'."
+    },
+    {
+      "file": "tests/e2e/paired-remote-terminal-browser-link.spec.ts",
+      "line": 81,
+      "column": 39,
+      "code": 18046,
+      "message": "'sessionResponse.result' is of type 'unknown'."
+    },
+    {
+      "file": "tests/e2e/paired-remote-terminal-browser-link.spec.ts",
+      "line": 84,
+      "column": 37,
+      "code": 18046,
+      "message": "'browserResponse.result' is of type 'unknown'."
+    },
+    {
+      "file": "tests/e2e/paired-remote-terminal-browser-link.spec.ts",
+      "line": 85,
+      "column": 27,
+      "code": 18046,
+      "message": "'sessionResponse.result' is of type 'unknown'."
+    },
+    {
+      "file": "tests/e2e/paired-remote-terminal-host-restart-background-sync.spec.ts",
+      "line": 292,
+      "column": 25,
+      "code": 2345,
+      "message": "Argument of type '\"editor\"' is not assignable to parameter of type 'TopLevelView'."
+    },
+    {
+      "file": "tests/e2e/paired-remote-terminal-parked-reveal-interactivity.spec.ts",
+      "line": 227,
+      "column": 30,
+      "code": 2339,
+      "message": "Property 'paneLayout' does not exist on type 'TerminalTab'."
+    },
+    {
+      "file": "tests/e2e/paired-remote-terminal-parked-reveal-interactivity.spec.ts",
+      "line": 227,
+      "column": 62,
+      "code": 2339,
+      "message": "Property 'paneLayout' does not exist on type 'TerminalTab'."
+    },
+    {
+      "file": "tests/e2e/paired-remote-terminal-stall-recovery.spec.ts",
+      "line": 375,
+      "column": 38,
+      "code": 18047,
+      "message": "'observer' is possibly 'null'."
+    },
+    {
+      "file": "tests/e2e/paired-remote-terminal-stall-recovery.spec.ts",
+      "line": 472,
+      "column": 38,
+      "code": 18047,
+      "message": "'observer' is possibly 'null'."
+    },
+    {
+      "file": "tests/e2e/paired-remote-terminal-stall-recovery.spec.ts",
+      "line": 576,
+      "column": 13,
+      "code": 18047,
+      "message": "'observer' is possibly 'null'."
+    },
+    {
+      "file": "tests/e2e/paired-startup-exec-readiness.spec.ts",
+      "line": 147,
+      "column": 15,
+      "code": 18048,
+      "message": "'client' is possibly 'undefined'."
+    },
+    {
+      "file": "tests/e2e/plugin-demo.spec.ts",
+      "line": 175,
+      "column": 59,
+      "code": 2345,
+      "message": "Argument of type 'string' is not assignable to parameter of type 'WorktreeRemovalTarget'."
+    },
+    {
+      "file": "tests/e2e/plugin-marketplace-content.spec.ts",
+      "line": 277,
+      "column": 62,
+      "code": 2345,
+      "message": "Argument of type 'ProcessEnv' is not assignable to parameter of type 'Record<string, string>'.\n  'string' index signatures are incompatible.\n    Type 'string | undefined' is not assignable to type 'string'.\n      Type 'undefined' is not assignable to type 'string'."
+    },
+    {
+      "file": "tests/e2e/pr11346-selected-runtime-identity-oracle.ts",
+      "line": 120,
+      "column": 7,
+      "code": 2322,
+      "message": "Type '(repoId: string, options?: WorktreeFetchOptions | undefined) => Promise<boolean>' is not assignable to type '{ (repoId: string, options: DirectSshWorktreeFetchOptions): Promise<HostQualifiedDetectedWorktreeResult>; (repoId: string, options?: WorktreeFetchOptions | undefined): Promise<...>; }'.\n  Type 'Promise<boolean>' is not assignable to type 'Promise<HostQualifiedDetectedWorktreeResult>'.\n    Type 'boolean' is not assignable to type 'HostQualifiedDetectedWorktreeResult'."
+    },
+    {
+      "file": "tests/e2e/pr11346-selected-runtime-identity-oracle.ts",
+      "line": 206,
+      "column": 9,
+      "code": 2322,
+      "message": "Type '{ [x: string]: { head: string; branch: string; isBare: boolean; isSparse?: boolean; locked?: boolean; lockReason?: string; prunable?: boolean; prunableReason?: string; isMainWorktree: boolean; ... 45 more ...; runtimeOwnerEnvironmentId: null; }[] | Worktree[]; }' is not assignable to type 'Record<string, Worktree[]>'.\n  'string' index signatures are incompatible.\n    Type '{ head: string; branch: string; isBare: boolean; isSparse?: boolean | undefined; locked?: boolean | undefined; lockReason?: string | undefined; prunable?: boolean | undefined; prunableReason?: string | undefined; ... 46 more ...; runtimeOwnerEnvironmentId: null; }[] | Worktree[]' is not assignable to type 'Worktree[]'.\n      Type '{ head: string; branch: string; isBare: boolean; isSparse?: boolean | undefined; locked?: boolean | undefined; lockReason?: string | undefined; prunable?: boolean | undefined; prunableReason?: string | undefined; ... 46 more ...; runtimeOwnerEnvironmentId: null; }[]' is not assignable to type 'Worktree[]'.\n        Type '{ head: string; branch: string; isBare: boolean; isSparse?: boolean; locked?: boolean; lockReason?: string; prunable?: boolean; prunableReason?: string; isMainWorktree: boolean; id: string; ... 44 more ...; runtimeOwnerEnvironmentId: null; }' is not assignable to type 'Worktree'.\n          Type '{ head: string; branch: string; isBare: boolean; isSparse?: boolean; locked?: boolean; lockReason?: string; prunable?: boolean; prunableReason?: string; isMainWorktree: boolean; id: string; ... 44 more ...; runtimeOwnerEnvironmentId: null; }' is not assignable to type '{ id: string; instanceId?: string | undefined; identity?: WorktreeIdentity | undefined; repoId: string; projectId?: string | undefined; hostId?: ExecutionHostId | undefined; ... 38 more ...; cliProvenance?: CliWorkspaceProvenance | undefined; }'.\n            Types of property 'runtimeOwnerEnvironmentId' are incompatible.\n              Type 'null' is not assignable to type 'string | undefined'."
+    },
+    {
+      "file": "tests/e2e/project-group-manual-sort.spec.ts",
+      "line": 146,
+      "column": 19,
+      "code": 2345,
+      "message": "Argument of type 'ProjectGroup' is not assignable to parameter of type 'never'."
+    },
+    {
+      "file": "tests/e2e/project-group-manual-sort.spec.ts",
+      "line": 150,
+      "column": 27,
+      "code": 2339,
+      "message": "Property 'id' does not exist on type 'never'."
+    },
+    {
+      "file": "tests/e2e/project-group-manual-sort.spec.ts",
+      "line": 151,
+      "column": 27,
+      "code": 2339,
+      "message": "Property 'id' does not exist on type 'never'."
+    },
+    {
+      "file": "tests/e2e/project-group-manual-sort.spec.ts",
+      "line": 152,
+      "column": 29,
+      "code": 2339,
+      "message": "Property 'id' does not exist on type 'never'."
+    },
+    {
+      "file": "tests/e2e/project-group-manual-sort.spec.ts",
+      "line": 153,
+      "column": 27,
+      "code": 2339,
+      "message": "Property 'id' does not exist on type 'never'."
+    },
+    {
+      "file": "tests/e2e/remote-session-bulk-open-freeze-repro.spec.ts",
+      "line": 188,
+      "column": 22,
+      "code": 2339,
+      "message": "Property 'dispose' does not exist on type 'never'."
+    },
+    {
+      "file": "tests/e2e/remote-session-bulk-open-freeze-repro.spec.ts",
+      "line": 189,
+      "column": 26,
+      "code": 2339,
+      "message": "Property 'dispose' does not exist on type 'never'."
+    },
+    {
+      "file": "tests/e2e/restored-terminal-input-readiness.unit.test.ts",
+      "line": 74,
+      "column": 39,
+      "code": 2493,
+      "message": "Tuple type '[data: string]' of length '1' has no element at index '1'."
+    },
+    {
+      "file": "tests/e2e/setup-guide-sidebar.spec.ts",
+      "line": 262,
+      "column": 9,
+      "code": 2322,
+      "message": "Type '{ terminalBell?: boolean | undefined; suppressWhenFocused?: boolean | undefined; customSoundId?: \"beep\" | \"blip\" | \"blop\" | \"bong\" | \"clack\" | \"custom\" | \"ding\" | \"sonar\" | \"system\" | \"thump\" | \"two-tone\" | undefined; customSoundPath?: string | ... 1 more ... | undefined; customSoundVolume?: number | undefined; enab...' is not assignable to type 'NotificationSettings'.\n  Types of property 'terminalBell' are incompatible.\n    Type 'boolean | undefined' is not assignable to type 'boolean'.\n      Type 'undefined' is not assignable to type 'boolean'."
+    },
+    {
+      "file": "tests/e2e/setup-guide-sidebar.spec.ts",
+      "line": 292,
+      "column": 15,
+      "code": 2322,
+      "message": "Type '{ id: string; path: string; displayName: string; badgeColor: string; repoIcon?: RepoIcon | null; upstream?: GitHubRepositoryIdentity | null; addedAt: number; gitUsername?: string; worktreeBaseRef?: string; ... 21 more ...; hookSettings: { mode: string; commandSourcePolicy: string; scripts: { setup: string; archive: ...' is not assignable to type 'Repo'.\n  Types of property 'kind' are incompatible.\n    Type 'string' is not assignable to type 'RepoKind | undefined'."
+    },
+    {
+      "file": "tests/e2e/setup-guide-sidebar.spec.ts",
+      "line": 292,
+      "column": 28,
+      "code": 2322,
+      "message": "Type '{ badgeColor: string; repoIcon?: RepoIcon | null; upstream?: GitHubRepositoryIdentity | null; addedAt: number; gitUsername?: string; worktreeBaseRef?: string; worktreeBasePath?: string; ... 23 more ...; displayName: string; }' is not assignable to type 'Repo'.\n  Types of property 'kind' are incompatible.\n    Type 'string' is not assignable to type 'RepoKind | undefined'."
+    },
+    {
+      "file": "tests/e2e/setup-guide-sidebar.spec.ts",
+      "line": 306,
+      "column": 7,
+      "code": 2322,
+      "message": "Type '{ [x: string]: { id: string; title: string; }[]; }' is not assignable to type 'Record<string, TerminalTab[]>'.\n  'string' index signatures are incompatible.\n    Type '{ id: string; title: string; }[]' is not assignable to type 'TerminalTab[]'.\n      Type '{ id: string; title: string; }' is missing the following properties from type 'TerminalTab': ptyId, worktreeId, customTitle, color, and 2 more."
+    },
+    {
+      "file": "tests/e2e/setup-guide-sidebar.spec.ts",
+      "line": 310,
+      "column": 9,
+      "code": 2739,
+      "message": "Type '{ root: { type: \"split\"; direction: \"horizontal\"; first: { type: \"leaf\"; leafId: string; }; second: { type: \"leaf\"; leafId: string; }; }; }' is missing the following properties from type 'TerminalLayoutSnapshot': activeLeafId, expandedLeafId"
+    },
+    {
+      "file": "tests/e2e/sidebar-agent-row-identity.spec.ts",
+      "line": 53,
+      "column": 13,
+      "code": 2551,
+      "message": "Property 'toggleWorktreeCardProperty' does not exist on type 'AppState'. Did you mean 'worktreeCardProperties'?"
+    },
+    {
+      "file": "tests/e2e/source-control-create-pr-intent-switch.spec.ts",
+      "line": 101,
+      "column": 24,
+      "code": 2345,
+      "message": "Argument of type '(current: AppState) => { getHostedReviewCreationEligibility: () => Promise<{ provider: \"github\"; review: null; canCreate: false; blockedReason: \"needs_push\"; nextAction: \"push\"; defaultBaseRef: string; head: string; title?: undefined; body?: undefined; } | { ...; }>; ... 5 more ...; remoteStatusesByWorktree: { ...; ...' is not assignable to parameter of type 'Partial<AppState> | ((state: AppState) => Partial<AppState>)'.\n  Type '(current: AppState) => { getHostedReviewCreationEligibility: () => Promise<{ provider: \"github\"; review: null; canCreate: false; blockedReason: \"needs_push\"; nextAction: \"push\"; defaultBaseRef: string; head: string; title?: undefined; body?: undefined; } | { ...; }>; ... 5 more ...; remoteStatusesByWorktree: { ...; ...' is not assignable to type '(state: AppState) => Partial<AppState>'.\n    Type '{ getHostedReviewCreationEligibility: () => Promise<{ provider: \"github\"; review: null; canCreate: false; blockedReason: \"needs_push\"; nextAction: \"push\"; defaultBaseRef: string; head: string; title?: undefined; body?: undefined; } | { ...; }>; ... 5 more ...; remoteStatusesByWorktree: { ...; }; }' is not assignable to type 'Partial<AppState>'.\n      The types returned by 'getHostedReviewCreationEligibility(...)' are incompatible between these types.\n        Type 'Promise<{ provider: \"github\"; review: null; canCreate: false; blockedReason: \"needs_push\"; nextAction: \"push\"; defaultBaseRef: string; head: string; title?: undefined; body?: undefined; } | { provider: \"github\"; ... 7 more ...; head: string; }>' is not assignable to type 'Promise<HostedReviewCreationEligibility>'.\n          Type '{ provider: \"github\"; review: null; canCreate: false; blockedReason: \"needs_push\"; nextAction: \"push\"; defaultBaseRef: string; head: string; title?: undefined; body?: undefined; } | { provider: \"github\"; ... 7 more ...; head: string; }' is not assignable to type 'HostedReviewCreationEligibility'.\n            Property 'reviewLookupOutcome' is missing in type '{ provider: 'github'; review: null; canCreate: false; blockedReason: 'needs_push'; nextAction: 'push'; defaultBaseRef: string; head: string; title?: undefined; body?: undefined; }' but required in type 'HostedReviewCreationEligibility'."
+    },
+    {
+      "file": "tests/e2e/source-control-create-pr.spec.ts",
+      "line": 146,
+      "column": 20,
+      "code": 2345,
+      "message": "Argument of type '(current: AppState) => { repos: Repo[]; gitStatusByWorktree: { [x: string]: never[] | GitUncommittedEntry[]; }; remoteStatusesByWorktree: { [x: string]: GitUpstreamStatus | { ...; }; }; ... 7 more ...; createHostedReview: (repoPath: string, input: CreateHostedReviewStoreInput) => Promise<...>; }' is not assignable to parameter of type 'Partial<AppState> | ((state: AppState) => Partial<AppState>)'.\n  Type '(current: AppState) => { repos: Repo[]; gitStatusByWorktree: { [x: string]: never[] | GitUncommittedEntry[]; }; remoteStatusesByWorktree: { [x: string]: GitUpstreamStatus | { ...; }; }; ... 7 more ...; createHostedReview: (repoPath: string, input: CreateHostedReviewStoreInput) => Promise<...>; }' is not assignable to type '(state: AppState) => Partial<AppState>'.\n    Type '{ repos: Repo[]; gitStatusByWorktree: { [x: string]: never[] | GitUncommittedEntry[]; }; remoteStatusesByWorktree: { [x: string]: GitUpstreamStatus | { ...; }; }; ... 7 more ...; createHostedReview: (repoPath: string, input: CreateHostedReviewStoreInput) => Promise<...>; }' is not assignable to type 'Partial<AppState>'.\n      The types returned by 'fetchUpstreamStatus(...)' are incompatible between these types.\n        Type 'Promise<undefined>' is not assignable to type 'Promise<GitUpstreamStatus | null>'.\n          Type 'undefined' is not assignable to type 'GitUpstreamStatus | null'."
+    },
+    {
+      "file": "tests/e2e/source-control-create-pr.spec.ts",
+      "line": 40,
+      "column": 27,
+      "code": 18048,
+      "message": "'window.__store' is possibly 'undefined'."
+    },
+    {
+      "file": "tests/e2e/ssh-ai-vault-session-history.spec.ts",
+      "line": 55,
+      "column": 13,
+      "code": 2322,
+      "message": "Type 'string' is not assignable to type 'ExecutionHostScope | undefined'."
+    },
+    {
+      "file": "tests/e2e/ssh-docker-bulk-open-freeze-repro.spec.ts",
+      "line": 62,
+      "column": 16,
+      "code": 2554,
+      "message": "Expected 1 arguments, but got 0."
+    },
+    {
+      "file": "tests/e2e/ssh-docker-bulk-open-freeze-repro.spec.ts",
+      "line": 78,
+      "column": 13,
+      "code": 2554,
+      "message": "Expected 3 arguments, but got 2."
+    },
+    {
+      "file": "tests/e2e/ssh-docker-bulk-open-freeze-repro.spec.ts",
+      "line": 82,
+      "column": 15,
+      "code": 2554,
+      "message": "Expected 2 arguments, but got 1."
+    },
+    {
+      "file": "tests/e2e/ssh-docker-bulk-open-freeze-repro.spec.ts",
+      "line": 85,
+      "column": 15,
+      "code": 2554,
+      "message": "Expected 3 arguments, but got 2."
+    },
+    {
+      "file": "tests/e2e/ssh-docker-relay-perf.spec.ts",
+      "line": 101,
+      "column": 9,
+      "code": 2304,
+      "message": "Cannot find name 'Page'."
+    },
+    {
+      "file": "tests/e2e/ssh-docker-relay-perf.spec.ts",
+      "line": 121,
+      "column": 40,
+      "code": 2304,
+      "message": "Cannot find name 'Page'."
+    },
+    {
+      "file": "tests/e2e/ssh-docker-relay-perf.spec.ts",
+      "line": 131,
+      "column": 43,
+      "code": 2304,
+      "message": "Cannot find name 'Page'."
+    },
+    {
+      "file": "tests/e2e/ssh-docker-relay-perf.spec.ts",
+      "line": 137,
+      "column": 40,
+      "code": 2304,
+      "message": "Cannot find name 'Page'."
+    },
+    {
+      "file": "tests/e2e/ssh-docker-relay-perf.spec.ts",
+      "line": 143,
+      "column": 37,
+      "code": 2304,
+      "message": "Cannot find name 'Page'."
+    },
+    {
+      "file": "tests/e2e/ssh-route-error-card-preview.spec.ts",
+      "line": 80,
+      "column": 38,
+      "code": 2554,
+      "message": "Expected 1 arguments, but got 0."
+    },
+    {
+      "file": "tests/e2e/staging-skill-sharing.spec.ts",
+      "line": 208,
+      "column": 68,
+      "code": 2345,
+      "message": "Argument of type 'null' is not assignable to parameter of type 'string'."
+    },
+    {
+      "file": "tests/e2e/staging-skill-sharing.spec.ts",
+      "line": 211,
+      "column": 71,
+      "code": 2345,
+      "message": "Argument of type 'null' is not assignable to parameter of type 'string'."
+    },
+    {
+      "file": "tests/e2e/staging-skill-sharing.spec.ts",
+      "line": 423,
+      "column": 12,
+      "code": 18048,
+      "message": "'skill.canonicalPath' is possibly 'undefined'."
+    },
+    {
+      "file": "tests/e2e/staging-skill-sharing.spec.ts",
+      "line": 426,
+      "column": 12,
+      "code": 18048,
+      "message": "'skill.canonicalPath' is possibly 'undefined'."
+    },
+    {
+      "file": "tests/e2e/staging-skill-sharing.spec.ts",
+      "line": 457,
+      "column": 28,
+      "code": 2339,
+      "message": "Property 'executionTarget' does not exist on type '{ scope: \"workspace\"; worktreeId?: string | undefined; folderWorkspaceId?: string | undefined; } | { scope: \"global\"; environmentId?: string | undefined; executionTarget?: { kind: \"host\"; } | { ...; } | { ...; } | undefined; }'.\n  Property 'executionTarget' does not exist on type '{ scope: \"workspace\"; worktreeId?: string | undefined; folderWorkspaceId?: string | undefined; }'."
+    },
+    {
+      "file": "tests/e2e/tab-rename-paste-ownership.spec.ts",
+      "line": 39,
+      "column": 15,
+      "code": 2339,
+      "message": "Property 'customTitle' does not exist on type '{ id: string; title?: string | undefined; }'."
+    },
+    {
+      "file": "tests/e2e/tab-rename.spec.ts",
+      "line": 53,
+      "column": 17,
+      "code": 2339,
+      "message": "Property 'customTitle' does not exist on type '{ id: string; title?: string | undefined; }'."
+    },
+    {
+      "file": "tests/e2e/tabs.spec.ts",
+      "line": 191,
+      "column": 47,
+      "code": 2345,
+      "message": "Argument of type 'string | undefined' is not assignable to parameter of type 'string'.\n  Type 'undefined' is not assignable to type 'string'."
+    },
+    {
+      "file": "tests/e2e/tabs.spec.ts",
+      "line": 199,
+      "column": 47,
+      "code": 2345,
+      "message": "Argument of type 'string | null' is not assignable to parameter of type 'string'.\n  Type 'null' is not assignable to type 'string'."
+    },
+    {
+      "file": "tests/e2e/tabs.spec.ts",
+      "line": 249,
+      "column": 11,
+      "code": 18048,
+      "message": "'activeGroup.tabOrder.length' is possibly 'undefined'."
+    },
+    {
+      "file": "tests/e2e/tabs.spec.ts",
+      "line": 251,
+      "column": 11,
+      "code": 18048,
+      "message": "'activeGroup' is possibly 'undefined'."
+    },
+    {
+      "file": "tests/e2e/tabs.spec.ts",
+      "line": 252,
+      "column": 11,
+      "code": 18048,
+      "message": "'activeGroup' is possibly 'undefined'."
+    },
+    {
+      "file": "tests/e2e/tabs.spec.ts",
+      "line": 253,
+      "column": 14,
+      "code": 18048,
+      "message": "'activeGroup' is possibly 'undefined'."
+    },
+    {
+      "file": "tests/e2e/tabs.spec.ts",
+      "line": 255,
+      "column": 34,
+      "code": 18048,
+      "message": "'activeGroup' is possibly 'undefined'."
+    },
+    {
+      "file": "tests/e2e/tasks-page.spec.ts",
+      "line": 318,
+      "column": 58,
+      "code": 2339,
+      "message": "Property 'remove' does not exist on type 'Node'."
+    },
+    {
+      "file": "tests/e2e/tasks-page.spec.ts",
+      "line": 349,
+      "column": 61,
+      "code": 2339,
+      "message": "Property 'remove' does not exist on type 'Node'."
+    },
+    {
+      "file": "tests/e2e/tasks-page.spec.ts",
+      "line": 390,
+      "column": 69,
+      "code": 2339,
+      "message": "Property 'remove' does not exist on type 'Node'."
+    },
+    {
+      "file": "tests/e2e/terminal-codex-hidden-startup-background.spec.ts",
+      "line": 141,
+      "column": 40,
+      "code": 2339,
+      "message": "Property '_core' does not exist on type 'Terminal'."
+    },
+    {
+      "file": "tests/e2e/terminal-codex-hidden-startup-background.spec.ts",
+      "line": 346,
+      "column": 14,
+      "code": 2339,
+      "message": "Property 'modelBackgroundCells' does not exist on type 'never'."
+    },
+    {
+      "file": "tests/e2e/terminal-codex-hidden-startup-background.spec.ts",
+      "line": 346,
+      "column": 44,
+      "code": 2339,
+      "message": "Property 'cellWidth' does not exist on type 'never'."
+    },
+    {
+      "file": "tests/e2e/terminal-codex-hidden-startup-background.spec.ts",
+      "line": 346,
+      "column": 63,
+      "code": 2339,
+      "message": "Property 'cellHeight' does not exist on type 'never'."
+    },
+    {
+      "file": "tests/e2e/terminal-codex-home.spec.ts",
+      "line": 57,
+      "column": 19,
+      "code": 2339,
+      "message": "Property 'codexHome' does not exist on type 'never'."
+    },
+    {
+      "file": "tests/e2e/terminal-codex-home.spec.ts",
+      "line": 57,
+      "column": 42,
+      "code": 2339,
+      "message": "Property 'orcaCodexHome' does not exist on type 'never'."
+    },
+    {
+      "file": "tests/e2e/terminal-codex-local-typing-latency.spec.ts",
+      "line": 121,
+      "column": 39,
+      "code": 2339,
+      "message": "Property '_core' does not exist on type 'Terminal'."
+    },
+    {
+      "file": "tests/e2e/terminal-codex-skill-preview-artifact-repro.spec.ts",
+      "line": 129,
+      "column": 7,
+      "code": 2322,
+      "message": "Type '{ mode?: \"auto\" | \"override\" | undefined; commandSourcePolicy?: HookCommandSourcePolicy; scripts?: { setup: string; archive: string; } | undefined; setupRunPolicy: \"run-by-default\"; setupAgentStartupPolicy: \"start-immediately\"; }' is not assignable to type 'RepoHookSettings'.\n  Types of property 'mode' are incompatible.\n    Type '\"auto\" | \"override\" | undefined' is not assignable to type '\"auto\" | \"override\"'.\n      Type 'undefined' is not assignable to type '\"auto\" | \"override\"'."
+    },
+    {
+      "file": "tests/e2e/terminal-codex-skill-preview-artifact-repro.spec.ts",
+      "line": 555,
+      "column": 3,
+      "code": 2739,
+      "message": "Type '{ matches: boolean; diffPixels: number; diffRatio: number; width: number; height: number; leftPane: PaneDescriptor; beforeContent: string; afterContent: string; }' is missing the following properties from type 'ArtifactCapture': changedPixels, totalPixels"
+    },
+    {
+      "file": "tests/e2e/terminal-foreground-confirmation.unit.test.ts",
+      "line": 70,
+      "column": 7,
+      "code": 2322,
+      "message": "Type 'Mock<Constructable | Procedure>' is not assignable to type '(entry: PaneForegroundAgentEntry) => void'.\n  Type 'MockInstance<Constructable | Procedure> & (new (...args: any[]) => any) & {}' is not assignable to type '(entry: PaneForegroundAgentEntry) => void'.\n    Type 'MockInstance<Constructable | Procedure> & (new (...args: any[]) => any) & {}' provides no match for the signature '(entry: PaneForegroundAgentEntry): void'."
+    },
+    {
+      "file": "tests/e2e/terminal-foreground-redraw-freeze.spec.ts",
+      "line": 195,
+      "column": 13,
+      "code": 18049,
+      "message": "'manager' is possibly 'null' or 'undefined'."
+    },
+    {
+      "file": "tests/e2e/terminal-foreground-redraw-freeze.spec.ts",
+      "line": 204,
+      "column": 11,
+      "code": 18049,
+      "message": "'manager' is possibly 'null' or 'undefined'."
+    },
+    {
+      "file": "tests/e2e/terminal-long-table-scroll-restore.spec.ts",
+      "line": 198,
+      "column": 37,
+      "code": 2339,
+      "message": "Property '_core' does not exist on type 'Terminal'."
+    },
+    {
+      "file": "tests/e2e/terminal-opencode-emoji-table-rendering.spec.ts",
+      "line": 196,
+      "column": 38,
+      "code": 2339,
+      "message": "Property '_core' does not exist on type 'Terminal'."
+    },
+    {
+      "file": "tests/e2e/terminal-osc8-cold-park-restore.spec.ts",
+      "line": 149,
+      "column": 41,
+      "code": 2345,
+      "message": "Argument of type 'string | null' is not assignable to parameter of type 'string'.\n  Type 'null' is not assignable to type 'string'."
+    },
+    {
+      "file": "tests/e2e/terminal-osc8-cold-park-restore.spec.ts",
+      "line": 157,
+      "column": 56,
+      "code": 2345,
+      "message": "Argument of type 'string | null' is not assignable to parameter of type 'string'.\n  Type 'null' is not assignable to type 'string'."
+    },
+    {
+      "file": "tests/e2e/terminal-osc8-cold-park-restore.spec.ts",
+      "line": 160,
+      "column": 39,
+      "code": 2345,
+      "message": "Argument of type 'string | null' is not assignable to parameter of type 'string'.\n  Type 'null' is not assignable to type 'string'."
+    },
+    {
+      "file": "tests/e2e/terminal-osc8-cold-park-restore.spec.ts",
+      "line": 166,
+      "column": 41,
+      "code": 2345,
+      "message": "Argument of type 'string | null' is not assignable to parameter of type 'string'.\n  Type 'null' is not assignable to type 'string'."
+    },
+    {
+      "file": "tests/e2e/terminal-pane-divider-capture-loss.spec.ts",
+      "line": 101,
+      "column": 9,
+      "code": 2322,
+      "message": "Type 'ITerminalDimensions | null' is not assignable to type 'null'.\n  Type 'ITerminalDimensions' is not assignable to type 'null'."
+    },
+    {
+      "file": "tests/e2e/terminal-pane-divider-capture-loss.spec.ts",
+      "line": 145,
+      "column": 59,
+      "code": 2339,
+      "message": "Property 'pointerId' does not exist on type 'Event'."
+    },
+    {
+      "file": "tests/e2e/terminal-pane-title-strip-placement.spec.ts",
+      "line": 172,
+      "column": 11,
+      "code": 18048,
+      "message": "'titleBar' is possibly 'undefined'."
+    },
+    {
+      "file": "tests/e2e/terminal-raster-artifact-analysis.ts",
+      "line": 270,
+      "column": 18,
+      "code": 2339,
+      "message": "Property '__terminalOutputSchedulerDebug' does not exist on type 'Window & typeof globalThis'."
+    },
+    {
+      "file": "tests/e2e/terminal-raster-artifact-analysis.ts",
+      "line": 58,
+      "column": 11,
+      "code": 18047,
+      "message": "'pane' is possibly 'null'."
+    },
+    {
+      "file": "tests/e2e/terminal-raster-artifact-analysis.ts",
+      "line": 58,
+      "column": 25,
+      "code": 2339,
+      "message": "Property '_core' does not exist on type 'Terminal'."
+    },
+    {
+      "file": "tests/e2e/terminal-raster-artifact-analysis.ts",
+      "line": 59,
+      "column": 11,
+      "code": 18047,
+      "message": "'pane' is possibly 'null'."
+    },
+    {
+      "file": "tests/e2e/terminal-raster-artifact-analysis.ts",
+      "line": 59,
+      "column": 25,
+      "code": 2339,
+      "message": "Property '_core' does not exist on type 'Terminal'."
+    },
+    {
+      "file": "tests/e2e/terminal-raster-artifact-analysis.ts",
+      "line": 82,
+      "column": 38,
+      "code": 2339,
+      "message": "Property '_core' does not exist on type 'Terminal'."
+    },
+    {
+      "file": "tests/e2e/terminal-raw-emoji-table-scroll-restore.spec.ts",
+      "line": 206,
+      "column": 15,
+      "code": 2322,
+      "message": "Type 'null' is not assignable to type 'BrowserTerminalPane'."
+    },
+    {
+      "file": "tests/e2e/terminal-raw-emoji-table-scroll-restore.spec.ts",
+      "line": 208,
+      "column": 13,
+      "code": 2322,
+      "message": "Type 'BrowserTerminalPane | null' is not assignable to type 'BrowserTerminalPane'.\n  Type 'null' is not assignable to type 'BrowserTerminalPane'."
+    },
+    {
+      "file": "tests/e2e/terminal-raw-emoji-table-scroll-restore.spec.ts",
+      "line": 406,
+      "column": 56,
+      "code": 2339,
+      "message": "Property 'id' does not exist on type 'BrowserTerminalPane'."
+    },
+    {
+      "file": "tests/e2e/terminal-reveal-paused-render-repro.spec.ts",
+      "line": 468,
+      "column": 42,
+      "code": 2339,
+      "message": "Property 'scheduleRevealRepaint' does not exist on type 'PaneManagerLike'."
+    },
+    {
+      "file": "tests/e2e/terminal-reveal-paused-render-repro.spec.ts",
+      "line": 588,
+      "column": 42,
+      "code": 2339,
+      "message": "Property 'scheduleRevealPresent' does not exist on type 'PaneManagerLike'."
+    },
+    {
+      "file": "tests/e2e/terminal-shortcuts.spec.ts",
+      "line": 376,
+      "column": 5,
+      "code": 18047,
+      "message": "'pane' is possibly 'null'."
+    },
+    {
+      "file": "tests/e2e/terminal-shortcuts.spec.ts",
+      "line": 665,
+      "column": 16,
+      "code": 2339,
+      "message": "Property 'translateBufferLineToString' does not exist on type 'IBuffer'."
+    },
+    {
+      "file": "tests/e2e/terminal-sleep-wake-restore.spec.ts",
+      "line": 101,
+      "column": 3,
+      "code": 2322,
+      "message": "Type '{ activeTabId: string | null; activeWorktreeId: string | null; tabs: { id: string; ptyId: string | null; generation: number | undefined; pendingActivationSpawn: number | boolean | undefined; }[]; ptyIdsByTabId: { ...; }; ptyIdsByLeafIdByTabId: { ...; }; }' is not assignable to type 'SleepWakeTerminalDebug'.\n  Types of property 'tabs' are incompatible.\n    Type '{ id: string; ptyId: string | null; generation: number | undefined; pendingActivationSpawn: number | boolean | undefined; }[]' is not assignable to type '{ id: string; ptyId?: string | undefined; generation?: number | undefined; pendingActivationSpawn?: number | boolean | undefined; }[]'.\n      Type '{ id: string; ptyId: string | null; generation: number | undefined; pendingActivationSpawn: number | boolean | undefined; }' is not assignable to type '{ id: string; ptyId?: string | undefined; generation?: number | undefined; pendingActivationSpawn?: number | boolean | undefined; }'.\n        Types of property 'ptyId' are incompatible.\n          Type 'string | null' is not assignable to type 'string | undefined'.\n            Type 'null' is not assignable to type 'string | undefined'."
+    },
+    {
+      "file": "tests/e2e/terminal-tab-switch-visual-restore.spec.ts",
+      "line": 458,
+      "column": 39,
+      "code": 2339,
+      "message": "Property '_core' does not exist on type 'Terminal'."
+    },
+    {
+      "file": "tests/e2e/terminal-tui-wheel-drain.spec.ts",
+      "line": 98,
+      "column": 23,
+      "code": 2339,
+      "message": "Property '_core' does not exist on type 'Terminal'."
+    },
+    {
+      "file": "tests/e2e/terminal-tui-wheel-reports.spec.ts",
+      "line": 155,
+      "column": 25,
+      "code": 2339,
+      "message": "Property '_core' does not exist on type 'Terminal'."
+    },
+    {
+      "file": "tests/e2e/terminal-tui-wheel-reports.spec.ts",
+      "line": 63,
+      "column": 25,
+      "code": 2339,
+      "message": "Property '_core' does not exist on type 'Terminal'."
+    },
+    {
+      "file": "tests/e2e/terminal-warm-reattach-split-live-output.spec.ts",
+      "line": 197,
+      "column": 55,
+      "code": 2345,
+      "message": "Argument of type 'string | null' is not assignable to parameter of type 'string'.\n  Type 'null' is not assignable to type 'string'."
+    },
+    {
+      "file": "tests/e2e/workspace-space-git-status.spec.ts",
+      "line": 128,
+      "column": 15,
+      "code": 2322,
+      "message": "Type '{ worktreeId: string; repoId: string; repoDisplayName: string; repoPath: string; displayName: string; path: string; branch: string; isMainWorktree: boolean; isRemote: boolean; isSparse: boolean | undefined; ... 10 more ...; omittedTopLevelSizeBytes: number; }[]' is not assignable to type 'WorkspaceSpaceWorktree[]'.\n  Type '{ worktreeId: string; repoId: string; repoDisplayName: string; repoPath: string; displayName: string; path: string; branch: string; isMainWorktree: boolean; isRemote: boolean; isSparse: boolean | undefined; ... 10 more ...; omittedTopLevelSizeBytes: number; }' is not assignable to type 'WorkspaceSpaceWorktree'.\n    Types of property 'isSparse' are incompatible.\n      Type 'boolean | undefined' is not assignable to type 'boolean'.\n        Type 'undefined' is not assignable to type 'boolean'."
+    },
+    {
+      "file": "tests/e2e/worktree-card-downward-drag.spec.ts",
+      "line": 89,
+      "column": 42,
+      "code": 2339,
+      "message": "Property 'get' does not exist on type 'readonly WorktreeMetaBatchUpdate[]'."
+    },
+    {
+      "file": "tests/e2e/worktree-jump-palette-filter.spec.ts",
+      "line": 66,
+      "column": 11,
+      "code": 2322,
+      "message": "Type 'Repo | { badgeColor: string; repoIcon?: RepoIcon | null | undefined; upstream?: GitHubRepositoryIdentity | null | undefined; addedAt: number; ... 26 more ...; executionHostId: string; }' is not assignable to type 'Repo'.\n  Type '{ badgeColor: string; repoIcon?: RepoIcon | null; upstream?: GitHubRepositoryIdentity | null; addedAt: number; kind?: RepoKind; gitUsername?: string; worktreeBaseRef?: string; worktreeBasePath?: string; ... 22 more ...; executionHostId: string; }' is not assignable to type 'Repo'.\n    Types of property 'executionHostId' are incompatible.\n      Type 'string' is not assignable to type '\"local\" | `runtime:${string}` | `ssh:${string}` | null | undefined'."
+    },
+    {
+      "file": "tests/e2e/worktree-jump-palette-filter.spec.ts",
+      "line": 69,
+      "column": 11,
+      "code": 2322,
+      "message": "Type '{ badgeColor: string; repoIcon?: RepoIcon | null; upstream?: GitHubRepositoryIdentity | null; addedAt: number; kind?: RepoKind; gitUsername?: string; worktreeBaseRef?: string; worktreeBasePath?: string; ... 22 more ...; executionHostId: string; }' is not assignable to type 'Repo'.\n  Types of property 'executionHostId' are incompatible.\n    Type 'string' is not assignable to type '\"local\" | `runtime:${string}` | `ssh:${string}` | null | undefined'."
+    },
+    {
+      "file": "tests/e2e/worktree-jump-palette-filter.spec.ts",
+      "line": 73,
+      "column": 9,
+      "code": 2322,
+      "message": "Type '{ [x: string]: { head: string; isBare: boolean; isSparse?: boolean; locked?: boolean; lockReason?: string; prunable?: boolean; prunableReason?: string; instanceId?: string; identity?: WorktreeIdentity; ... 46 more ...; hostId: string; }[] | Worktree[]; }' is not assignable to type 'Record<string, Worktree[]>'.\n  'string' index signatures are incompatible.\n    Type '{ head: string; isBare: boolean; isSparse?: boolean | undefined; locked?: boolean | undefined; lockReason?: string | undefined; prunable?: boolean | undefined; prunableReason?: string | undefined; ... 48 more ...; hostId: string; }[] | Worktree[]' is not assignable to type 'Worktree[]'.\n      Type '{ head: string; isBare: boolean; isSparse?: boolean | undefined; locked?: boolean | undefined; lockReason?: string | undefined; prunable?: boolean | undefined; prunableReason?: string | undefined; ... 48 more ...; hostId: string; }[]' is not assignable to type 'Worktree[]'.\n        Type '{ head: string; isBare: boolean; isSparse?: boolean; locked?: boolean; lockReason?: string; prunable?: boolean; prunableReason?: string; instanceId?: string; identity?: WorktreeIdentity; projectId?: string; ... 45 more ...; hostId: string; }' is not assignable to type 'Worktree'.\n          Type '{ head: string; isBare: boolean; isSparse?: boolean; locked?: boolean; lockReason?: string; prunable?: boolean; prunableReason?: string; instanceId?: string; identity?: WorktreeIdentity; projectId?: string; ... 45 more ...; hostId: string; }' is not assignable to type '{ id: string; instanceId?: string | undefined; identity?: WorktreeIdentity | undefined; repoId: string; projectId?: string | undefined; hostId?: ExecutionHostId | undefined; ... 38 more ...; cliProvenance?: CliWorkspaceProvenance | undefined; }'.\n            Types of property 'hostId' are incompatible.\n              Type 'string' is not assignable to type 'ExecutionHostId | undefined'."
+    },
+    {
+      "file": "tests/e2e/worktree-lineage-agent-expansion.spec.ts",
+      "line": 32,
+      "column": 13,
+      "code": 2551,
+      "message": "Property 'toggleWorktreeCardProperty' does not exist on type 'AppState'. Did you mean 'worktreeCardProperties'?"
+    },
+    {
+      "file": "tests/e2e/worktree-lineage-state.ts",
+      "line": 101,
+      "column": 15,
+      "code": 2551,
+      "message": "Property 'toggleWorktreeCardProperty' does not exist on type 'AppState'. Did you mean 'worktreeCardProperties'?"
+    },
+    {
+      "file": "tests/e2e/worktree-scroll-to-current.spec.ts",
+      "line": 265,
+      "column": 9,
+      "code": 2322,
+      "message": "Type 'string' is not assignable to type 'WorkspaceKey | null | undefined'."
+    }
+  ]
+}

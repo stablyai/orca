@@ -22,17 +22,36 @@ function createOutputDir(): string {
   return outputDir
 }
 
+function outputChunk(
+  name: string,
+  code: string,
+  imports: string[] = [],
+  isEntry = true
+): Rollup.OutputChunk {
+  const fileName = `${name}.js`
+  // Rolldown brands chunks with a runtime-only symbol that fixture objects cannot construct.
+  return {
+    type: 'chunk',
+    code,
+    dynamicImports: [],
+    exports: [],
+    facadeModuleId: null,
+    fileName,
+    imports,
+    isDynamicEntry: false,
+    isEntry,
+    map: null,
+    modules: {},
+    moduleIds: [],
+    name,
+    preliminaryFileName: fileName,
+    sourcemapFileName: null
+  } as unknown as Rollup.OutputChunk
+}
+
 function createBundle(code = ''): Rollup.OutputBundle {
   return {
-    'daemon-entry.js': {
-      type: 'chunk',
-      code,
-      dynamicImports: [],
-      fileName: 'daemon-entry.js',
-      imports: [],
-      isEntry: true,
-      name: 'daemon-entry'
-    } as Rollup.OutputChunk
+    'daemon-entry.js': outputChunk('daemon-entry', code)
   }
 }
 
@@ -172,15 +191,7 @@ describe('worker thread entry guard', () => {
   }
 
   function workerChunk(name: string, code: string, imports: string[] = []): Rollup.OutputChunk {
-    return {
-      type: 'chunk',
-      code,
-      dynamicImports: [],
-      fileName: `${name}.js`,
-      imports,
-      isEntry: true,
-      name
-    } as Rollup.OutputChunk
+    return outputChunk(name, code, imports)
   }
 
   it('rejects an Electron require reachable from a worker entry', () => {
@@ -214,15 +225,7 @@ describe('worker thread entry guard', () => {
         'require("./chunks/shared.js")',
         ['chunks/shared.js']
       ),
-      'chunks/shared.js': {
-        type: 'chunk',
-        code: 'require("electron")',
-        dynamicImports: [],
-        fileName: 'chunks/shared.js',
-        imports: [],
-        isEntry: false,
-        name: 'shared'
-      } as Rollup.OutputChunk
+      'chunks/shared.js': outputChunk('chunks/shared', 'require("electron")', [], false)
     } as Rollup.OutputBundle
 
     expect(() => runWorkerWriteBundle(plugin, bundle)).toThrow('chunks/shared.js')

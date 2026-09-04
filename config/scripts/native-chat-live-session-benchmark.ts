@@ -39,6 +39,8 @@ let contentSink = ''
 let pendingMatchSink: Set<number> | null = null
 let userRowSink: readonly NativeChatUserRow[] | null = null
 const benchmarkStartedAt = performance.now()
+// Sinks are assigned inside benchmark callbacks, so tsc narrows them to never at the asserts.
+const readSinks = () => ({ session: sessionSink, pendingMatch: pendingMatchSink })
 
 function proseFixture(count: number, bytes: number, withTurnId: boolean): NativeChatMessage[] {
   const payload = 'Ab Cd  '.repeat(Math.ceil(bytes / 7)).slice(0, bytes)
@@ -326,10 +328,10 @@ benchmark(
 )
 
 strictEqual(checksum, expectedChecksum, 'benchmark checksum accounting drifted')
-strictEqual(sessionSink?.sessionId, 'benchmark', 'session outputs did not escape')
+strictEqual(readSinks().session?.sessionId, 'benchmark', 'session outputs did not escape')
 strictEqual(Array.isArray(messageArraySink), true, 'message arrays did not escape')
 strictEqual(contentSink.length > 0, true, 'message content did not escape')
-strictEqual(pendingMatchSink instanceof Set, true, 'pending baseline scan did not escape')
+strictEqual(readSinks().pendingMatch instanceof Set, true, 'pending baseline scan did not escape')
 strictEqual(Array.isArray(userRowSink), true, 'user row scan did not escape')
 console.log(
   `validated=${validatedCases} cases, checksum=${checksum}, capped calibrations=${cappedCalibrations}, runtime=${(

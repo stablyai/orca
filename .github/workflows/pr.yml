@@ -239,7 +239,31 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v6
         with:
+          fetch-depth: 0
+          filter: blob:none
           persist-credentials: false
+
+      - name: Load base E2E diagnostic baseline
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          set -euo pipefail
+          git cat-file -e "$BASE_SHA^{commit}"
+          # Why ls-tree --full-tree: it answers "does the base have this file" from tree
+          # objects alone, so a missing baseline is distinguishable from a git failure.
+          # Anything other than a clean absence aborts the step rather than silently
+          # leaving the growth guard unset, which would pass as "no drift".
+          # Why a bare assignment: inside `[ -n "$(...)" ]` the substitution's exit status
+          # is discarded, so a git failure would read as "base has no baseline" and pass.
+          base_entry="$(git ls-tree -r --full-tree --name-only "$BASE_SHA" -- config/typecheck-e2e-diagnostics.json)"
+          if [ -n "$base_entry" ]; then
+            base_baseline="$RUNNER_TEMP/typecheck-e2e-base.json"
+            git show "$BASE_SHA:config/typecheck-e2e-diagnostics.json" > "$base_baseline"
+            echo "TYPECHECK_BASELINE_BASE_PATH=$base_baseline" >> "$GITHUB_ENV"
+            echo "E2E growth guard ACTIVE against $BASE_SHA."
+          else
+            echo "::warning::E2E growth guard INACTIVE: base $BASE_SHA has no baseline yet. Expected only on the PR that introduces it."
+          fi
 
       - uses: ./.github/actions/install-node-dependencies
 

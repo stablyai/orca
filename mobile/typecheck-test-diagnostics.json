@@ -1,0 +1,2560 @@
+{
+  "version": 1,
+  "diagnostics": [
+    {
+      "file": "mobile/src/accounts-route-reset-credit.test.ts",
+      "line": 174,
+      "column": 20,
+      "code": 2345,
+      "message": "Argument of type '\"Pressable\"' is not assignable to parameter of type 'ElementType'."
+    },
+    {
+      "file": "mobile/src/accounts-route-reset-credit.test.ts",
+      "line": 180,
+      "column": 20,
+      "code": 2345,
+      "message": "Argument of type '\"Pressable\"' is not assignable to parameter of type 'ElementType'."
+    },
+    {
+      "file": "mobile/src/accounts-route-reset-credit.test.ts",
+      "line": 182,
+      "column": 26,
+      "code": 2345,
+      "message": "Argument of type '\"Text\"' is not assignable to parameter of type 'ElementType'."
+    },
+    {
+      "file": "mobile/src/browser/mobile-browser-frameless-stream.test.tsx",
+      "line": 107,
+      "column": 38,
+      "code": 2454,
+      "message": "Variable 'renderer' is used before being assigned."
+    },
+    {
+      "file": "mobile/src/browser/mobile-browser-frameless-stream.test.tsx",
+      "line": 109,
+      "column": 20,
+      "code": 2345,
+      "message": "Argument of type '\"View\"' is not assignable to parameter of type 'ElementType'."
+    },
+    {
+      "file": "mobile/src/browser/mobile-browser-frameless-stream.test.tsx",
+      "line": 149,
+      "column": 22,
+      "code": 2345,
+      "message": "Argument of type '\"Image\"' is not assignable to parameter of type 'ElementType'."
+    },
+    {
+      "file": "mobile/src/browser/mobile-browser-frameless-stream.test.tsx",
+      "line": 58,
+      "column": 38,
+      "code": 2345,
+      "message": "Argument of type '\"ActivityIndicator\"' is not assignable to parameter of type 'ElementType'."
+    },
+    {
+      "file": "mobile/src/components/agent-monitoring-indicators.test.ts",
+      "line": 53,
+      "column": 7,
+      "code": 2322,
+      "message": "Type 'ReactTestRenderer' is not assignable to type 'MonitoringTestRenderer'.\n  The types of 'root.findByType' are incompatible between these types.\n    Type '(type: ElementType) => ReactTestInstance' is not assignable to type '(type: string) => { props: Record<string, unknown>; }'.\n      Types of parameters 'type' and 'type' are incompatible.\n        Type 'string' is not assignable to type 'ElementType'."
+    },
+    {
+      "file": "mobile/src/components/agent-monitoring-indicators.test.ts",
+      "line": 66,
+      "column": 7,
+      "code": 2322,
+      "message": "Type 'ReactTestRenderer' is not assignable to type 'MonitoringTestRenderer'.\n  The types of 'root.findByType' are incompatible between these types.\n    Type '(type: ElementType) => ReactTestInstance' is not assignable to type '(type: string) => { props: Record<string, unknown>; }'.\n      Types of parameters 'type' and 'type' are incompatible.\n        Type 'string' is not assignable to type 'ElementType'."
+    },
+    {
+      "file": "mobile/src/components/agent-monitoring-indicators.test.ts",
+      "line": 81,
+      "column": 7,
+      "code": 2322,
+      "message": "Type 'ReactTestRenderer' is not assignable to type 'MonitoringTestRenderer'.\n  The types of 'root.findByType' are incompatible between these types.\n    Type '(type: ElementType) => ReactTestInstance' is not assignable to type '(type: string) => { props: Record<string, unknown>; }'.\n      Types of parameters 'type' and 'type' are incompatible.\n        Type 'string' is not assignable to type 'ElementType'."
+    },
+    {
+      "file": "mobile/src/components/bottom-drawer-close-lifecycle.test.ts",
+      "line": 20,
+      "column": 9,
+      "code": 2769,
+      "message": "No overload matches this call.\n  The last overload gave the following error.\n    Argument of type '{ visible: boolean; onClose: () => void; onAfterClose: () => void; }' is not assignable to parameter of type 'Attributes & Props'.\n      Property 'children' is missing in type '{ visible: boolean; onClose: () => void; onAfterClose: () => void; }' but required in type 'Props'."
+    },
+    {
+      "file": "mobile/src/components/bottom-drawer-close-lifecycle.test.ts",
+      "line": 41,
+      "column": 9,
+      "code": 2769,
+      "message": "No overload matches this call.\n  The last overload gave the following error.\n    Argument of type '{ visible: boolean; onClose: () => void; onAfterClose: () => void; }' is not assignable to parameter of type 'Attributes & Props'.\n      Property 'children' is missing in type '{ visible: boolean; onClose: () => void; onAfterClose: () => void; }' but required in type 'Props'."
+    },
+    {
+      "file": "mobile/src/components/bottom-drawer-close-lifecycle.test.ts",
+      "line": 49,
+      "column": 35,
+      "code": 2345,
+      "message": "Argument of type '\"MountedBottomDrawer\"' is not assignable to parameter of type 'ElementType'."
+    },
+    {
+      "file": "mobile/src/components/codex-reset-credit-capability.test.ts",
+      "line": 72,
+      "column": 38,
+      "code": 2345,
+      "message": "Argument of type '\"CapabilityResult\"' is not assignable to parameter of type 'ElementType'."
+    },
+    {
+      "file": "mobile/src/components/codex-reset-credit-capability.test.ts",
+      "line": 75,
+      "column": 38,
+      "code": 2345,
+      "message": "Argument of type '\"CapabilityResult\"' is not assignable to parameter of type 'ElementType'."
+    },
+    {
+      "file": "mobile/src/components/CodexResetCreditAction.test.ts",
+      "line": 44,
+      "column": 45,
+      "code": 2345,
+      "message": "Argument of type '\"Pressable\"' is not assignable to parameter of type 'ElementType'."
+    },
+    {
+      "file": "mobile/src/components/CodexResetCreditAction.test.ts",
+      "line": 56,
+      "column": 45,
+      "code": 2345,
+      "message": "Argument of type '\"Pressable\"' is not assignable to parameter of type 'ElementType'."
+    },
+    {
+      "file": "mobile/src/components/CodexResetCreditAction.test.ts",
+      "line": 58,
+      "column": 22,
+      "code": 2345,
+      "message": "Argument of type '\"Text\"' is not assignable to parameter of type 'ElementType'."
+    },
+    {
+      "file": "mobile/src/components/HostProtocolGate.test.ts",
+      "line": 120,
+      "column": 44,
+      "code": 2345,
+      "message": "Argument of type '\"Pressable\"' is not assignable to parameter of type 'ElementType'."
+    },
+    {
+      "file": "mobile/src/components/HostProtocolGate.test.ts",
+      "line": 197,
+      "column": 22,
+      "code": 2345,
+      "message": "Argument of type '\"View\"' is not assignable to parameter of type 'ElementType'."
+    },
+    {
+      "file": "mobile/src/components/HostProtocolGate.test.ts",
+      "line": 59,
+      "column": 5,
+      "code": 2769,
+      "message": "No overload matches this call.\n  The last overload gave the following error.\n    Argument of type '{ hostId: string; }' is not assignable to parameter of type 'Attributes & Props'.\n      Property 'children' is missing in type '{ hostId: string; }' but required in type 'Props'."
+    },
+    {
+      "file": "mobile/src/components/mobile-agent-icon-gradient.test.ts",
+      "line": 55,
+      "column": 12,
+      "code": 18047,
+      "message": "'renderer' is possibly 'null'."
+    },
+    {
+      "file": "mobile/src/components/mobile-agent-icon-gradient.test.ts",
+      "line": 55,
+      "column": 40,
+      "code": 2345,
+      "message": "Argument of type '\"Stop\"' is not assignable to parameter of type 'ElementType'."
+    },
+    {
+      "file": "mobile/src/components/MobileHomeQuickActions.test.ts",
+      "line": 22,
+      "column": 73,
+      "code": 2769,
+      "message": "No overload matches this call.\n  The last overload gave the following error.\n    Argument of type 'unknown' is not assignable to parameter of type 'Attributes | null | undefined'."
+    },
+    {
+      "file": "mobile/src/components/MobileHomeQuickActions.test.ts",
+      "line": 73,
+      "column": 41,
+      "code": 2345,
+      "message": "Argument of type '\"Pressable\"' is not assignable to parameter of type 'ElementType'."
+    },
+    {
+      "file": "mobile/src/components/MobileHomeQuickActions.test.ts",
+      "line": 77,
+      "column": 38,
+      "code": 2345,
+      "message": "Argument of type '\"PickerModal\"' is not assignable to parameter of type 'ElementType'."
+    },
+    {
+      "file": "mobile/src/components/MobileHostCard.test.ts",
+      "line": 118,
+      "column": 30,
+      "code": 18047,
+      "message": "'renderer' is possibly 'null'."
+    },
+    {
+      "file": "mobile/src/components/MobileHostCard.test.ts",
+      "line": 118,
+      "column": 58,
+      "code": 2345,
+      "message": "Argument of type '\"Pressable\"' is not assignable to parameter of type 'ElementType'."
+    },
+    {
+      "file": "mobile/src/components/MobileHostCard.test.ts",
+      "line": 155,
+      "column": 30,
+      "code": 18047,
+      "message": "'renderer' is possibly 'null'."
+    },
+    {
+      "file": "mobile/src/components/MobileHostCard.test.ts",
+      "line": 155,
+      "column": 58,
+      "code": 2345,
+      "message": "Argument of type '\"Pressable\"' is not assignable to parameter of type 'ElementType'."
+    },
+    {
+      "file": "mobile/src/components/MobileHostCard.test.ts",
+      "line": 160,
+      "column": 7,
+      "code": 18047,
+      "message": "'renderer' is possibly 'null'."
+    },
+    {
+      "file": "mobile/src/components/MobileHostCard.test.ts",
+      "line": 161,
+      "column": 24,
+      "code": 2345,
+      "message": "Argument of type '\"Text\"' is not assignable to parameter of type 'ElementType'."
+    },
+    {
+      "file": "mobile/src/components/MobileHostCard.test.ts",
+      "line": 194,
+      "column": 30,
+      "code": 18047,
+      "message": "'renderer' is possibly 'null'."
+    },
+    {
+      "file": "mobile/src/components/MobileHostCard.test.ts",
+      "line": 194,
+      "column": 58,
+      "code": 2345,
+      "message": "Argument of type '\"Pressable\"' is not assignable to parameter of type 'ElementType'."
+    },
+    {
+      "file": "mobile/src/components/MobileHostCard.test.ts",
+      "line": 66,
+      "column": 21,
+      "code": 18047,
+      "message": "'renderer' is possibly 'null'."
+    },
+    {
+      "file": "mobile/src/components/MobileHostCard.test.ts",
+      "line": 66,
+      "column": 49,
+      "code": 2345,
+      "message": "Argument of type '\"Pressable\"' is not assignable to parameter of type 'ElementType'."
+    },
+    {
+      "file": "mobile/src/components/MobileHostCard.test.ts",
+      "line": 74,
+      "column": 12,
+      "code": 18047,
+      "message": "'renderer' is possibly 'null'."
+    },
+    {
+      "file": "mobile/src/components/MobileHostCard.test.ts",
+      "line": 74,
+      "column": 40,
+      "code": 2345,
+      "message": "Argument of type '\"MoreVertical\"' is not assignable to parameter of type 'ElementType'."
+    },
+    {
+      "file": "mobile/src/components/MobileHostCard.test.ts",
+      "line": 75,
+      "column": 12,
+      "code": 18047,
+      "message": "'renderer' is possibly 'null'."
+    },
+    {
+      "file": "mobile/src/components/MobileHostCard.test.ts",
+      "line": 75,
+      "column": 40,
+      "code": 2345,
+      "message": "Argument of type '\"ChevronRight\"' is not assignable to parameter of type 'ElementType'."
+    },
+    {
+      "file": "mobile/src/components/MobileMarkdown.file-links.test.ts",
+      "line": 9,
+      "column": 48,
+      "code": 2554,
+      "message": "Expected 0 arguments, but got 1."
+    },
+    {
+      "file": "mobile/src/components/MobileRichMarkdownEditor.test.tsx",
+      "line": 21,
+      "column": 48,
+      "code": 2769,
+      "message": "No overload matches this call.\n  The last overload gave the following error.\n    Argument of type 'unknown' is not assignable to parameter of type 'ReactNode'."
+    },
+    {
+      "file": "mobile/src/components/NewWorktreeModal.test.tsx",
+      "line": 66,
+      "column": 51,
+      "code": 2367,
+      "message": "This comparison appears to be unintentional because the types 'ElementType' and '\"PickerListDrawer\"' have no overlap."
+    },
+    {
+      "file": "mobile/src/components/NewWorktreeModal.test.tsx",
+      "line": 74,
+      "column": 7,
+      "code": 2367,
+      "message": "This comparison appears to be unintentional because the types 'ElementType' and '\"TextInput\"' have no overlap."
+    },
+    {
+      "file": "mobile/src/components/PickerModal.accessibility.test.ts",
+      "line": 57,
+      "column": 47,
+      "code": 2345,
+      "message": "Argument of type '\"Pressable\"' is not assignable to parameter of type 'ElementType'."
+    },
+    {
+      "file": "mobile/src/components/pr-sidebar/PRCommentsSection.test.ts",
+      "line": 100,
+      "column": 17,
+      "code": 2345,
+      "message": "Argument of type 'ReactTestInstance' is not assignable to parameter of type '{ props: { onPress: () => void; }; }'.\n  Types of property 'props' are incompatible.\n    Property 'onPress' is missing in type '{ [propName: string]: any; }' but required in type '{ onPress: () => void; }'."
+    },
+    {
+      "file": "mobile/src/components/pr-sidebar/PRCommentsSection.test.ts",
+      "line": 101,
+      "column": 40,
+      "code": 2345,
+      "message": "Argument of type '\"PRCommentCard\"' is not assignable to parameter of type 'ElementType'."
+    },
+    {
+      "file": "mobile/src/components/pr-sidebar/PRCommentsSection.test.ts",
+      "line": 104,
+      "column": 17,
+      "code": 2345,
+      "message": "Argument of type 'ReactTestInstance' is not assignable to parameter of type '{ props: { onPress: () => void; }; }'.\n  Types of property 'props' are incompatible.\n    Property 'onPress' is missing in type '{ [propName: string]: any; }' but required in type '{ onPress: () => void; }'."
+    },
+    {
+      "file": "mobile/src/components/pr-sidebar/PRCommentsSection.test.ts",
+      "line": 105,
+      "column": 40,
+      "code": 2345,
+      "message": "Argument of type '\"PRCommentCard\"' is not assignable to parameter of type 'ElementType'."
+    },
+    {
+      "file": "mobile/src/components/pr-sidebar/PRCommentsSection.test.ts",
+      "line": 107,
+      "column": 17,
+      "code": 2345,
+      "message": "Argument of type 'ReactTestInstance' is not assignable to parameter of type '{ props: { onPress: () => void; }; }'.\n  Types of property 'props' are incompatible.\n    Property 'onPress' is missing in type '{ [propName: string]: any; }' but required in type '{ onPress: () => void; }'."
+    },
+    {
+      "file": "mobile/src/components/pr-sidebar/PRCommentsSection.test.ts",
+      "line": 108,
+      "column": 40,
+      "code": 2345,
+      "message": "Argument of type '\"PRCommentCard\"' is not assignable to parameter of type 'ElementType'."
+    },
+    {
+      "file": "mobile/src/components/pr-sidebar/PRCommentsSection.test.ts",
+      "line": 111,
+      "column": 17,
+      "code": 2345,
+      "message": "Argument of type 'ReactTestInstance' is not assignable to parameter of type '{ props: { onPress: () => void; }; }'.\n  Types of property 'props' are incompatible.\n    Property 'onPress' is missing in type '{ [propName: string]: any; }' but required in type '{ onPress: () => void; }'."
+    },
+    {
+      "file": "mobile/src/components/pr-sidebar/PRCommentsSection.test.ts",
+      "line": 112,
+      "column": 40,
+      "code": 2345,
+      "message": "Argument of type '\"PRCommentCard\"' is not assignable to parameter of type 'ElementType'."
+    },
+    {
+      "file": "mobile/src/components/pr-sidebar/PRCommentsSection.test.ts",
+      "line": 68,
+      "column": 20,
+      "code": 2345,
+      "message": "Argument of type '\"Pressable\"' is not assignable to parameter of type 'ElementType'."
+    },
+    {
+      "file": "mobile/src/components/pr-sidebar/PRCommentsSection.test.ts",
+      "line": 74,
+      "column": 20,
+      "code": 2345,
+      "message": "Argument of type '\"Pressable\"' is not assignable to parameter of type 'ElementType'."
+    },
+    {
+      "file": "mobile/src/components/pr-sidebar/PRCommentsSection.test.ts",
+      "line": 98,
+      "column": 40,
+      "code": 2345,
+      "message": "Argument of type '\"PRCommentCard\"' is not assignable to parameter of type 'ElementType'."
+    },
+    {
+      "file": "mobile/src/components/WorktreeAgentList.test.tsx",
+      "line": 59,
+      "column": 47,
+      "code": 2345,
+      "message": "Argument of type '\"Pressable\"' is not assignable to parameter of type 'ElementType'."
+    },
+    {
+      "file": "mobile/src/components/WorktreeAgentList.test.tsx",
+      "line": 62,
+      "column": 41,
+      "code": 2345,
+      "message": "Argument of type '\"WorktreeAgentRow\"' is not assignable to parameter of type 'ElementType'."
+    },
+    {
+      "file": "mobile/src/components/WorktreeAgentList.test.tsx",
+      "line": 67,
+      "column": 38,
+      "code": 2345,
+      "message": "Argument of type '\"Pressable\"' is not assignable to parameter of type 'ElementType'."
+    },
+    {
+      "file": "mobile/src/components/WorktreeAgentList.test.tsx",
+      "line": 70,
+      "column": 41,
+      "code": 2345,
+      "message": "Argument of type '\"WorktreeAgentRow\"' is not assignable to parameter of type 'ElementType'."
+    },
+    {
+      "file": "mobile/src/components/WorktreeAgentList.test.tsx",
+      "line": 84,
+      "column": 41,
+      "code": 2345,
+      "message": "Argument of type '\"Pressable\"' is not assignable to parameter of type 'ElementType'."
+    },
+    {
+      "file": "mobile/src/components/WorktreeAgentList.test.tsx",
+      "line": 85,
+      "column": 41,
+      "code": 2345,
+      "message": "Argument of type '\"WorktreeAgentRow\"' is not assignable to parameter of type 'ElementType'."
+    },
+    {
+      "file": "mobile/src/components/WorktreeAgentList.test.tsx",
+      "line": 99,
+      "column": 38,
+      "code": 2345,
+      "message": "Argument of type '\"Pressable\"' is not assignable to parameter of type 'ElementType'."
+    },
+    {
+      "file": "mobile/src/diagnostics/connection-diagnostics-submission.test.ts",
+      "line": 12,
+      "column": 7,
+      "code": 2345,
+      "message": "Argument of type 'Mock<{ (input: URL | RequestInfo, init?: RequestInit | undefined): Promise<Response>; (input: string | URL | Request, init?: RequestInit | undefined): Promise<...>; (input: RequestInfo, init?: RequestInit | undefined): Promise<...>; }>' is not assignable to parameter of type '{ (input: URL | RequestInfo, init?: RequestInit | undefined): Promise<Response>; (input: string | URL | Request, init?: RequestInit | undefined): Promise<...>; (input: RequestInfo, init?: RequestInit | undefined): Promise<...>; } | undefined'.\n  Type 'Mock<{ (input: URL | RequestInfo, init?: RequestInit | undefined): Promise<Response>; (input: string | URL | Request, init?: RequestInit | undefined): Promise<...>; (input: RequestInfo, init?: RequestInit | undefined): Promise<...>; }>' is not assignable to type '{ (input: URL | RequestInfo, init?: RequestInit | undefined): Promise<Response>; (input: string | URL | Request, init?: RequestInit | undefined): Promise<...>; (input: RequestInfo, init?: RequestInit | undefined): Promise<...>; }'.\n    Types of parameters 'input' and 'input' are incompatible.\n      Type 'URL | RequestInfo' is not assignable to type 'RequestInfo'.\n        Type 'URL' is not assignable to type 'RequestInfo'.\n          Type 'URL' is missing the following properties from type 'Request': cache, credentials, destination, headers, and 18 more."
+    },
+    {
+      "file": "mobile/src/diagnostics/connection-diagnostics-submission.test.ts",
+      "line": 31,
+      "column": 9,
+      "code": 2345,
+      "message": "Argument of type 'Mock<{ (input: URL | RequestInfo, init?: RequestInit | undefined): Promise<Response>; (input: string | URL | Request, init?: RequestInit | undefined): Promise<...>; (input: RequestInfo, init?: RequestInit | undefined): Promise<...>; }>' is not assignable to parameter of type '{ (input: URL | RequestInfo, init?: RequestInit | undefined): Promise<Response>; (input: string | URL | Request, init?: RequestInit | undefined): Promise<...>; (input: RequestInfo, init?: RequestInit | undefined): Promise<...>; } | undefined'.\n  Type 'Mock<{ (input: URL | RequestInfo, init?: RequestInit | undefined): Promise<Response>; (input: string | URL | Request, init?: RequestInit | undefined): Promise<...>; (input: RequestInfo, init?: RequestInit | undefined): Promise<...>; }>' is not assignable to type '{ (input: URL | RequestInfo, init?: RequestInit | undefined): Promise<Response>; (input: string | URL | Request, init?: RequestInit | undefined): Promise<...>; (input: RequestInfo, init?: RequestInit | undefined): Promise<...>; }'.\n    Types of parameters 'input' and 'input' are incompatible.\n      Type 'URL | RequestInfo' is not assignable to type 'RequestInfo'.\n        Type 'URL' is not assignable to type 'RequestInfo'.\n          Type 'URL' is missing the following properties from type 'Request': cache, credentials, destination, headers, and 18 more."
+    },
+    {
+      "file": "mobile/src/dictation/mobile-dictation-setup.test.ts",
+      "line": 105,
+      "column": 11,
+      "code": 2741,
+      "message": "Property 'dictationMode' is missing in type '{ enabled: true; selectedModelId: string; models: never[]; }' but required in type 'RuntimeSpeechSetupState'."
+    },
+    {
+      "file": "mobile/src/dictation/mobile-dictation-setup.test.ts",
+      "line": 181,
+      "column": 24,
+      "code": 2345,
+      "message": "Argument of type '{ enabled: true; selectedModelId: string; models: RuntimeSpeechModelSummary[]; }' is not assignable to parameter of type 'RuntimeSpeechSetupState'.\n  Property 'dictationMode' is missing in type '{ enabled: true; selectedModelId: string; models: RuntimeSpeechModelSummary[]; }' but required in type 'RuntimeSpeechSetupState'."
+    },
+    {
+      "file": "mobile/src/dictation/mobile-dictation-setup.test.ts",
+      "line": 188,
+      "column": 24,
+      "code": 2345,
+      "message": "Argument of type '{ enabled: false; selectedModelId: string; models: RuntimeSpeechModelSummary[]; }' is not assignable to parameter of type 'RuntimeSpeechSetupState'.\n  Property 'dictationMode' is missing in type '{ enabled: false; selectedModelId: string; models: RuntimeSpeechModelSummary[]; }' but required in type 'RuntimeSpeechSetupState'."
+    },
+    {
+      "file": "mobile/src/dictation/mobile-dictation-setup.test.ts",
+      "line": 195,
+      "column": 24,
+      "code": 2345,
+      "message": "Argument of type '{ enabled: true; selectedModelId: string; models: RuntimeSpeechModelSummary[]; }' is not assignable to parameter of type 'RuntimeSpeechSetupState'.\n  Property 'dictationMode' is missing in type '{ enabled: true; selectedModelId: string; models: RuntimeSpeechModelSummary[]; }' but required in type 'RuntimeSpeechSetupState'."
+    },
+    {
+      "file": "mobile/src/dictation/mobile-dictation-setup.test.ts",
+      "line": 201,
+      "column": 29,
+      "code": 2345,
+      "message": "Argument of type '{ enabled: true; selectedModelId: string; models: never[]; }' is not assignable to parameter of type 'RuntimeSpeechSetupState'.\n  Property 'dictationMode' is missing in type '{ enabled: true; selectedModelId: string; models: never[]; }' but required in type 'RuntimeSpeechSetupState'."
+    },
+    {
+      "file": "mobile/src/dictation/mobile-dictation-setup.test.ts",
+      "line": 65,
+      "column": 11,
+      "code": 2741,
+      "message": "Property 'dictationMode' is missing in type '{ enabled: false; selectedModelId: string; models: never[]; }' but required in type 'RuntimeSpeechSetupState'."
+    },
+    {
+      "file": "mobile/src/dictation/mobile-dictation-setup.test.ts",
+      "line": 72,
+      "column": 11,
+      "code": 2741,
+      "message": "Property 'dictationMode' is missing in type '{ enabled: false; selectedModelId: string; models: never[]; }' but required in type 'RuntimeSpeechSetupState'."
+    },
+    {
+      "file": "mobile/src/dictation/mobile-dictation-setup.test.ts",
+      "line": 98,
+      "column": 11,
+      "code": 2741,
+      "message": "Property 'dictationMode' is missing in type '{ enabled: true; selectedModelId: string; models: never[]; }' but required in type 'RuntimeSpeechSetupState'."
+    },
+    {
+      "file": "mobile/src/files/MobileFileExplorerPanel.test.ts",
+      "line": 138,
+      "column": 20,
+      "code": 2345,
+      "message": "Argument of type '\"Pressable\"' is not assignable to parameter of type 'ElementType'."
+    },
+    {
+      "file": "mobile/src/files/MobileFileExplorerPanel.test.ts",
+      "line": 150,
+      "column": 20,
+      "code": 2345,
+      "message": "Argument of type '\"Text\"' is not assignable to parameter of type 'ElementType'."
+    },
+    {
+      "file": "mobile/src/files/MobileFileExplorerPanel.test.ts",
+      "line": 38,
+      "column": 13,
+      "code": 2769,
+      "message": "No overload matches this call.\n  The last overload gave the following error.\n    Argument of type 'unknown' is not assignable to parameter of type 'ReactNode'."
+    },
+    {
+      "file": "mobile/src/files/MobileFileMarkdownPreview.test.ts",
+      "line": 55,
+      "column": 20,
+      "code": 2345,
+      "message": "Argument of type '\"Pressable\"' is not assignable to parameter of type 'ElementType'."
+    },
+    {
+      "file": "mobile/src/hooks/mobile-dictation-desktop-start.test.ts",
+      "line": 117,
+      "column": 5,
+      "code": 2322,
+      "message": "Type '() => void' is not assignable to type '() => undefined'.\n  Type 'void' is not assignable to type 'undefined'."
+    },
+    {
+      "file": "mobile/src/hooks/mobile-dictation-desktop-start.test.ts",
+      "line": 178,
+      "column": 5,
+      "code": 2322,
+      "message": "Type '() => void' is not assignable to type '() => undefined'.\n  Type 'void' is not assignable to type 'undefined'."
+    },
+    {
+      "file": "mobile/src/hooks/mobile-dictation-desktop-start.test.ts",
+      "line": 72,
+      "column": 5,
+      "code": 2322,
+      "message": "Type '() => void' is not assignable to type '() => undefined'.\n  Type 'void' is not assignable to type 'undefined'."
+    },
+    {
+      "file": "mobile/src/hooks/mobile-dictation-desktop-start.test.ts",
+      "line": 92,
+      "column": 7,
+      "code": 2322,
+      "message": "Type '() => void' is not assignable to type '() => undefined'.\n  Type 'void' is not assignable to type 'undefined'."
+    },
+    {
+      "file": "mobile/src/hooks/use-now.test.ts",
+      "line": 62,
+      "column": 15,
+      "code": 2769,
+      "message": "No overload matches this call.\n  Overload 1 of 2, '(callback: () => Promise<VoidOrUndefinedOnly>): Promise<undefined>', gave the following error.\n    Type 'VitestUtils' is missing the following properties from type 'Promise<VoidOrUndefinedOnly>': then, catch, finally, [Symbol.toStringTag]\n  Overload 2 of 2, '(callback: () => VoidOrUndefinedOnly): DebugPromiseLike', gave the following error.\n    Type 'VitestUtils' is not assignable to type 'VoidOrUndefinedOnly'."
+    },
+    {
+      "file": "mobile/src/hooks/use-now.test.ts",
+      "line": 66,
+      "column": 15,
+      "code": 2769,
+      "message": "No overload matches this call.\n  Overload 1 of 2, '(callback: () => Promise<VoidOrUndefinedOnly>): Promise<undefined>', gave the following error.\n    Type 'VitestUtils' is missing the following properties from type 'Promise<VoidOrUndefinedOnly>': then, catch, finally, [Symbol.toStringTag]\n  Overload 2 of 2, '(callback: () => VoidOrUndefinedOnly): DebugPromiseLike', gave the following error.\n    Type 'VitestUtils' is not assignable to type 'VoidOrUndefinedOnly'."
+    },
+    {
+      "file": "mobile/src/hooks/use-now.test.ts",
+      "line": 72,
+      "column": 15,
+      "code": 2769,
+      "message": "No overload matches this call.\n  Overload 1 of 2, '(callback: () => Promise<VoidOrUndefinedOnly>): Promise<undefined>', gave the following error.\n    Type 'VitestUtils' is missing the following properties from type 'Promise<VoidOrUndefinedOnly>': then, catch, finally, [Symbol.toStringTag]\n  Overload 2 of 2, '(callback: () => VoidOrUndefinedOnly): DebugPromiseLike', gave the following error.\n    Type 'VitestUtils' is not assignable to type 'VoidOrUndefinedOnly'."
+    },
+    {
+      "file": "mobile/src/hooks/use-now.test.ts",
+      "line": 78,
+      "column": 15,
+      "code": 2769,
+      "message": "No overload matches this call.\n  Overload 1 of 2, '(callback: () => Promise<VoidOrUndefinedOnly>): Promise<undefined>', gave the following error.\n    Type 'VitestUtils' is missing the following properties from type 'Promise<VoidOrUndefinedOnly>': then, catch, finally, [Symbol.toStringTag]\n  Overload 2 of 2, '(callback: () => VoidOrUndefinedOnly): DebugPromiseLike', gave the following error.\n    Type 'VitestUtils' is not assignable to type 'VoidOrUndefinedOnly'."
+    },
+    {
+      "file": "mobile/src/host-edit-route-accessibility.test.ts",
+      "line": 82,
+      "column": 48,
+      "code": 2345,
+      "message": "Argument of type '\"TextInput\"' is not assignable to parameter of type 'ElementType'."
+    },
+    {
+      "file": "mobile/src/host-edit-save-flow.test.ts",
+      "line": 107,
+      "column": 38,
+      "code": 2345,
+      "message": "Argument of type '\"Text\"' is not assignable to parameter of type 'ElementType'."
+    },
+    {
+      "file": "mobile/src/host-edit-save-flow.test.ts",
+      "line": 287,
+      "column": 40,
+      "code": 2345,
+      "message": "Argument of type '\"TextInput\"' is not assignable to parameter of type 'ElementType'."
+    },
+    {
+      "file": "mobile/src/host-edit-save-flow.test.ts",
+      "line": 297,
+      "column": 40,
+      "code": 2345,
+      "message": "Argument of type '\"TextInput\"' is not assignable to parameter of type 'ElementType'."
+    },
+    {
+      "file": "mobile/src/host-edit-save-flow.test.ts",
+      "line": 307,
+      "column": 40,
+      "code": 2345,
+      "message": "Argument of type '\"TextInput\"' is not assignable to parameter of type 'ElementType'."
+    },
+    {
+      "file": "mobile/src/host-edit-save-flow.test.ts",
+      "line": 77,
+      "column": 20,
+      "code": 2345,
+      "message": "Argument of type '\"TextInput\"' is not assignable to parameter of type 'ElementType'."
+    },
+    {
+      "file": "mobile/src/host-edit-save-flow.test.ts",
+      "line": 89,
+      "column": 20,
+      "code": 2345,
+      "message": "Argument of type '\"Pressable\"' is not assignable to parameter of type 'ElementType'."
+    },
+    {
+      "file": "mobile/src/mock-server-key-pair.test.ts",
+      "line": 63,
+      "column": 11,
+      "code": 2339,
+      "message": "Property 'unref' does not exist on type 'number'."
+    },
+    {
+      "file": "mobile/src/notifications/mobile-notifications.test.ts",
+      "line": 130,
+      "column": 5,
+      "code": 2349,
+      "message": "This expression is not callable.\n  Type 'never' has no call signatures."
+    },
+    {
+      "file": "mobile/src/notifications/mobile-notifications.test.ts",
+      "line": 139,
+      "column": 5,
+      "code": 2349,
+      "message": "This expression is not callable.\n  Type 'never' has no call signatures."
+    },
+    {
+      "file": "mobile/src/notifications/mobile-notifications.test.ts",
+      "line": 148,
+      "column": 5,
+      "code": 2349,
+      "message": "This expression is not callable.\n  Type 'never' has no call signatures."
+    },
+    {
+      "file": "mobile/src/notifications/mobile-notifications.test.ts",
+      "line": 186,
+      "column": 5,
+      "code": 2349,
+      "message": "This expression is not callable.\n  Type 'never' has no call signatures."
+    },
+    {
+      "file": "mobile/src/notifications/mobile-notifications.test.ts",
+      "line": 193,
+      "column": 5,
+      "code": 2349,
+      "message": "This expression is not callable.\n  Type 'never' has no call signatures."
+    },
+    {
+      "file": "mobile/src/notifications/mobile-notifications.test.ts",
+      "line": 230,
+      "column": 5,
+      "code": 2349,
+      "message": "This expression is not callable.\n  Type 'never' has no call signatures."
+    },
+    {
+      "file": "mobile/src/notifications/mobile-notifications.test.ts",
+      "line": 238,
+      "column": 5,
+      "code": 2349,
+      "message": "This expression is not callable.\n  Type 'never' has no call signatures."
+    },
+    {
+      "file": "mobile/src/notifications/mobile-notifications.test.ts",
+      "line": 270,
+      "column": 5,
+      "code": 2349,
+      "message": "This expression is not callable.\n  Type 'never' has no call signatures."
+    },
+    {
+      "file": "mobile/src/notifications/mobile-notifications.test.ts",
+      "line": 278,
+      "column": 5,
+      "code": 2349,
+      "message": "This expression is not callable.\n  Type 'never' has no call signatures."
+    },
+    {
+      "file": "mobile/src/notifications/mobile-notifications.test.ts",
+      "line": 286,
+      "column": 5,
+      "code": 2349,
+      "message": "This expression is not callable.\n  Type 'never' has no call signatures."
+    },
+    {
+      "file": "mobile/src/notifications/mobile-notifications.test.ts",
+      "line": 290,
+      "column": 5,
+      "code": 2349,
+      "message": "This expression is not callable.\n  Type 'never' has no call signatures."
+    },
+    {
+      "file": "mobile/src/notifications/mobile-notifications.test.ts",
+      "line": 317,
+      "column": 5,
+      "code": 2349,
+      "message": "This expression is not callable.\n  Type 'never' has no call signatures."
+    },
+    {
+      "file": "mobile/src/notifications/mobile-notifications.test.ts",
+      "line": 348,
+      "column": 7,
+      "code": 2349,
+      "message": "This expression is not callable.\n  Type 'never' has no call signatures."
+    },
+    {
+      "file": "mobile/src/notifications/mobile-notifications.test.ts",
+      "line": 350,
+      "column": 7,
+      "code": 2349,
+      "message": "This expression is not callable.\n  Type 'never' has no call signatures."
+    },
+    {
+      "file": "mobile/src/notifications/mobile-notifications.test.ts",
+      "line": 354,
+      "column": 7,
+      "code": 2349,
+      "message": "This expression is not callable.\n  Type 'never' has no call signatures."
+    },
+    {
+      "file": "mobile/src/notifications/mobile-notifications.test.ts",
+      "line": 359,
+      "column": 7,
+      "code": 2349,
+      "message": "This expression is not callable.\n  Type 'never' has no call signatures."
+    },
+    {
+      "file": "mobile/src/notifications/mobile-notifications.test.ts",
+      "line": 495,
+      "column": 12,
+      "code": 2352,
+      "message": "Conversion of type 'NotificationRequestInput' to type '{ content: { data: { notificationId: string; }; }; }' may be a mistake because neither type sufficiently overlaps with the other. If this was intentional, convert the expression to 'unknown' first.\n  The types of 'content.data' are incompatible between these types.\n    Type 'Record<string, unknown> | undefined' is not comparable to type '{ notificationId: string; }'.\n      Property 'notificationId' is missing in type 'Record<string, unknown>' but required in type '{ notificationId: string; }'."
+    },
+    {
+      "file": "mobile/src/notifications/mobile-notifications.test.ts",
+      "line": 674,
+      "column": 12,
+      "code": 2352,
+      "message": "Conversion of type 'NotificationRequestInput' to type '{ content: { data: { notificationId: string; }; }; }' may be a mistake because neither type sufficiently overlaps with the other. If this was intentional, convert the expression to 'unknown' first.\n  The types of 'content.data' are incompatible between these types.\n    Type 'Record<string, unknown> | undefined' is not comparable to type '{ notificationId: string; }'.\n      Property 'notificationId' is missing in type 'Record<string, unknown>' but required in type '{ notificationId: string; }'."
+    },
+    {
+      "file": "mobile/src/notifications/mobile-notifications.test.ts",
+      "line": 869,
+      "column": 58,
+      "code": 2345,
+      "message": "Argument of type '(method: string) => Promise<{ ok: true; result: { epoch: string; notifications: { type: string; notificationId: string; notificationSeq: number; notificationEpoch: string; title: string; body: string; }[]; }; } | { ...; }>' is not assignable to parameter of type '(method: string, params?: unknown, options?: SendRequestOptions | undefined) => Promise<RpcResponse>'.\n  Type 'Promise<{ ok: true; result: { epoch: string; notifications: { type: string; notificationId: string; notificationSeq: number; notificationEpoch: string; title: string; body: string; }[]; }; } | { ok: true; result: { ...; }; }>' is not assignable to type 'Promise<RpcResponse>'.\n    Type '{ ok: true; result: { epoch: string; notifications: { type: string; notificationId: string; notificationSeq: number; notificationEpoch: string; title: string; body: string; }[]; }; } | { ok: true; result: { ...; }; }' is not assignable to type 'RpcResponse'.\n      Type '{ ok: true; result: { epoch: string; notifications: { type: string; notificationId: string; notificationSeq: number; notificationEpoch: string; title: string; body: string; }[]; }; }' is not assignable to type 'RpcResponse'.\n        Type '{ ok: true; result: { epoch: string; notifications: { type: string; notificationId: string; notificationSeq: number; notificationEpoch: string; title: string; body: string; }[]; }; }' is missing the following properties from type 'RpcSuccess': id, _meta"
+    },
+    {
+      "file": "mobile/src/notifications/notification-delivery-ordering.test.ts",
+      "line": 119,
+      "column": 5,
+      "code": 2349,
+      "message": "This expression is not callable.\n  Type 'never' has no call signatures."
+    },
+    {
+      "file": "mobile/src/notifications/notification-delivery-ordering.test.ts",
+      "line": 123,
+      "column": 5,
+      "code": 2349,
+      "message": "This expression is not callable.\n  Type 'never' has no call signatures."
+    },
+    {
+      "file": "mobile/src/notifications/notification-delivery-ordering.test.ts",
+      "line": 192,
+      "column": 5,
+      "code": 2349,
+      "message": "This expression is not callable.\n  Type 'never' has no call signatures."
+    },
+    {
+      "file": "mobile/src/notifications/notification-delivery-ordering.test.ts",
+      "line": 197,
+      "column": 5,
+      "code": 2349,
+      "message": "This expression is not callable.\n  Type 'never' has no call signatures."
+    },
+    {
+      "file": "mobile/src/notifications/notification-delivery-ordering.test.ts",
+      "line": 230,
+      "column": 7,
+      "code": 2349,
+      "message": "This expression is not callable.\n  Type 'never' has no call signatures."
+    },
+    {
+      "file": "mobile/src/notifications/notification-delivery-ordering.test.ts",
+      "line": 231,
+      "column": 7,
+      "code": 2349,
+      "message": "This expression is not callable.\n  Type 'never' has no call signatures."
+    },
+    {
+      "file": "mobile/src/onboarding/legacy-notification-opt-in-route.test.ts",
+      "line": 32,
+      "column": 49,
+      "code": 2322,
+      "message": "Type 'readonly [] | readonly [\"first-host\", \"second-host\"] | undefined' is not assignable to type 'string | string[] | undefined'.\n  Type 'readonly []' is not assignable to type 'string | string[] | undefined'.\n    The type 'readonly []' is 'readonly' and cannot be assigned to the mutable type 'string[]'."
+    },
+    {
+      "file": "mobile/src/onboarding/mobile-onboarding-screen.test.ts",
+      "line": 89,
+      "column": 41,
+      "code": 2345,
+      "message": "Argument of type '\"MobileOnboardingPage\"' is not assignable to parameter of type 'ElementType'."
+    },
+    {
+      "file": "mobile/src/onboarding/MobileOnboardingPage.test.ts",
+      "line": 12,
+      "column": 48,
+      "code": 2769,
+      "message": "No overload matches this call.\n  The last overload gave the following error.\n    Argument of type 'unknown' is not assignable to parameter of type 'ReactNode'."
+    },
+    {
+      "file": "mobile/src/onboarding/MobileOnboardingPage.test.ts",
+      "line": 63,
+      "column": 17,
+      "code": 2367,
+      "message": "This comparison appears to be unintentional because the types 'ElementType' and '\"Pressable\"' have no overlap."
+    },
+    {
+      "file": "mobile/src/onboarding/MobileOnboardingPage.test.ts",
+      "line": 94,
+      "column": 50,
+      "code": 2345,
+      "message": "Argument of type '\"ScrollView\"' is not assignable to parameter of type 'ElementType'."
+    },
+    {
+      "file": "mobile/src/session/ai-vault-resume-launch.test.ts",
+      "line": 266,
+      "column": 9,
+      "code": 2353,
+      "message": "Object literal may only specify known properties, and 'activate' does not exist in type 'MobileAiVaultResumeLaunch & { clientMutationId?: string | undefined; }'."
+    },
+    {
+      "file": "mobile/src/session/mobile-file-tap-open.test.ts",
+      "line": 115,
+      "column": 7,
+      "code": 2322,
+      "message": "Type '{ sendRequest: Mock<() => Promise<unknown>>; }' is not assignable to type 'Pick<RpcClient, \"sendRequest\">'.\n  The types returned by 'sendRequest(...)' are incompatible between these types.\n    Type 'Promise<unknown>' is not assignable to type 'Promise<RpcResponse>'.\n      Type 'unknown' is not assignable to type 'RpcResponse'."
+    },
+    {
+      "file": "mobile/src/session/mobile-file-tap-open.test.ts",
+      "line": 162,
+      "column": 7,
+      "code": 2322,
+      "message": "Type '{ sendRequest: Mock<() => Promise<unknown>>; }' is not assignable to type 'Pick<RpcClient, \"sendRequest\">'.\n  The types returned by 'sendRequest(...)' are incompatible between these types.\n    Type 'Promise<unknown>' is not assignable to type 'Promise<RpcResponse>'.\n      Type 'unknown' is not assignable to type 'RpcResponse'."
+    },
+    {
+      "file": "mobile/src/session/mobile-file-tap-open.test.ts",
+      "line": 213,
+      "column": 7,
+      "code": 2322,
+      "message": "Type '{ sendRequest: Mock<() => Promise<unknown>>; }' is not assignable to type 'Pick<RpcClient, \"sendRequest\">'.\n  The types returned by 'sendRequest(...)' are incompatible between these types.\n    Type 'Promise<unknown>' is not assignable to type 'Promise<RpcResponse>'.\n      Type 'unknown' is not assignable to type 'RpcResponse'."
+    },
+    {
+      "file": "mobile/src/session/mobile-file-tap-open.test.ts",
+      "line": 267,
+      "column": 7,
+      "code": 2322,
+      "message": "Type '{ sendRequest: Mock<() => Promise<unknown>>; }' is not assignable to type 'Pick<RpcClient, \"sendRequest\">'.\n  The types returned by 'sendRequest(...)' are incompatible between these types.\n    Type 'Promise<unknown>' is not assignable to type 'Promise<RpcResponse>'.\n      Type 'unknown' is not assignable to type 'RpcResponse'."
+    },
+    {
+      "file": "mobile/src/session/mobile-file-tap-open.test.ts",
+      "line": 308,
+      "column": 7,
+      "code": 2322,
+      "message": "Type '{ sendRequest: Mock<() => Promise<unknown>>; }' is not assignable to type 'Pick<RpcClient, \"sendRequest\">'.\n  The types returned by 'sendRequest(...)' are incompatible between these types.\n    Type 'Promise<unknown>' is not assignable to type 'Promise<RpcResponse>'.\n      Type 'unknown' is not assignable to type 'RpcResponse'."
+    },
+    {
+      "file": "mobile/src/session/mobile-file-tap-open.test.ts",
+      "line": 361,
+      "column": 7,
+      "code": 2322,
+      "message": "Type '{ sendRequest: Mock<() => Promise<unknown>>; }' is not assignable to type 'Pick<RpcClient, \"sendRequest\">'.\n  The types returned by 'sendRequest(...)' are incompatible between these types.\n    Type 'Promise<unknown>' is not assignable to type 'Promise<RpcResponse>'.\n      Type 'unknown' is not assignable to type 'RpcResponse'."
+    },
+    {
+      "file": "mobile/src/session/mobile-file-tap-open.test.ts",
+      "line": 402,
+      "column": 7,
+      "code": 2322,
+      "message": "Type '{ sendRequest: Mock<() => Promise<unknown>>; }' is not assignable to type 'Pick<RpcClient, \"sendRequest\">'.\n  The types returned by 'sendRequest(...)' are incompatible between these types.\n    Type 'Promise<unknown>' is not assignable to type 'Promise<RpcResponse>'.\n      Type 'unknown' is not assignable to type 'RpcResponse'."
+    },
+    {
+      "file": "mobile/src/session/mobile-file-tap-open.test.ts",
+      "line": 46,
+      "column": 7,
+      "code": 2322,
+      "message": "Type '{ sendRequest: Mock<() => Promise<unknown>>; }' is not assignable to type 'Pick<RpcClient, \"sendRequest\">'.\n  The types returned by 'sendRequest(...)' are incompatible between these types.\n    Type 'Promise<unknown>' is not assignable to type 'Promise<RpcResponse>'.\n      Type 'unknown' is not assignable to type 'RpcResponse'."
+    },
+    {
+      "file": "mobile/src/session/mobile-file-tap-open.test.ts",
+      "line": 465,
+      "column": 7,
+      "code": 2322,
+      "message": "Type '{ sendRequest: Mock<() => Promise<unknown>>; }' is not assignable to type 'Pick<RpcClient, \"sendRequest\">'.\n  The types returned by 'sendRequest(...)' are incompatible between these types.\n    Type 'Promise<unknown>' is not assignable to type 'Promise<RpcResponse>'.\n      Type 'unknown' is not assignable to type 'RpcResponse'."
+    },
+    {
+      "file": "mobile/src/session/mobile-file-tap-open.test.ts",
+      "line": 510,
+      "column": 7,
+      "code": 2322,
+      "message": "Type '{ sendRequest: Mock<() => Promise<unknown>>; }' is not assignable to type 'Pick<RpcClient, \"sendRequest\">'.\n  The types returned by 'sendRequest(...)' are incompatible between these types.\n    Type 'Promise<unknown>' is not assignable to type 'Promise<RpcResponse>'.\n      Type 'unknown' is not assignable to type 'RpcResponse'."
+    },
+    {
+      "file": "mobile/src/session/mobile-file-tap-open.test.ts",
+      "line": 548,
+      "column": 7,
+      "code": 2322,
+      "message": "Type '{ sendRequest: Mock<() => Promise<unknown>>; }' is not assignable to type 'Pick<RpcClient, \"sendRequest\">'.\n  The types returned by 'sendRequest(...)' are incompatible between these types.\n    Type 'Promise<unknown>' is not assignable to type 'Promise<RpcResponse>'.\n      Type 'unknown' is not assignable to type 'RpcResponse'."
+    },
+    {
+      "file": "mobile/src/session/mobile-file-tap-open.test.ts",
+      "line": 593,
+      "column": 7,
+      "code": 2322,
+      "message": "Type '{ sendRequest: Mock<() => Promise<unknown>>; }' is not assignable to type 'Pick<RpcClient, \"sendRequest\">'.\n  The types returned by 'sendRequest(...)' are incompatible between these types.\n    Type 'Promise<unknown>' is not assignable to type 'Promise<RpcResponse>'.\n      Type 'unknown' is not assignable to type 'RpcResponse'."
+    },
+    {
+      "file": "mobile/src/session/mobile-file-tap-open.test.ts",
+      "line": 641,
+      "column": 7,
+      "code": 2322,
+      "message": "Type '{ sendRequest: Mock<() => Promise<unknown>>; }' is not assignable to type 'Pick<RpcClient, \"sendRequest\">'.\n  The types returned by 'sendRequest(...)' are incompatible between these types.\n    Type 'Promise<unknown>' is not assignable to type 'Promise<RpcResponse>'.\n      Type 'unknown' is not assignable to type 'RpcResponse'."
+    },
+    {
+      "file": "mobile/src/session/mobile-native-chat-open-file.test.ts",
+      "line": 120,
+      "column": 33,
+      "code": 2345,
+      "message": "Argument of type '{ pathText: string; client: { sendRequest: ReturnType<typeof vi.fn>; }; hostId: string; worktreeId: string; pushPreviewRoute: Mock<Procedure>; openBrowser: Mock<Procedure>; ... 7 more ...; onOpenFailed: Mock<...>; }' is not assignable to parameter of type 'OpenMobileNativeChatFileTapOptions<any>'.\n  The types of 'client.sendRequest' are incompatible between these types.\n    Type 'Mock<Procedure | Constructable>' is not assignable to type '(method: string, params?: unknown, options?: SendRequestOptions | undefined) => Promise<RpcResponse>'.\n      Type 'MockInstance<Procedure | Constructable> & (new (...args: any[]) => any) & {}' is not assignable to type '(method: string, params?: unknown, options?: SendRequestOptions | undefined) => Promise<RpcResponse>'.\n        Type 'MockInstance<Procedure | Constructable> & (new (...args: any[]) => any) & {}' provides no match for the signature '(method: string, params?: unknown, options?: SendRequestOptions | undefined): Promise<RpcResponse>'."
+    },
+    {
+      "file": "mobile/src/session/mobile-native-chat-open-file.test.ts",
+      "line": 153,
+      "column": 33,
+      "code": 2345,
+      "message": "Argument of type '{ pathText: string; client: { sendRequest: ReturnType<typeof vi.fn>; }; hostId: string; worktreeId: string; pushPreviewRoute: Mock<Procedure>; openBrowser: Mock<Procedure>; ... 7 more ...; onOpenFailed: Mock<...>; }' is not assignable to parameter of type 'OpenMobileNativeChatFileTapOptions<any>'.\n  The types of 'client.sendRequest' are incompatible between these types.\n    Type 'Mock<Procedure | Constructable>' is not assignable to type '(method: string, params?: unknown, options?: SendRequestOptions | undefined) => Promise<RpcResponse>'.\n      Type 'MockInstance<Procedure | Constructable> & (new (...args: any[]) => any) & {}' is not assignable to type '(method: string, params?: unknown, options?: SendRequestOptions | undefined) => Promise<RpcResponse>'.\n        Type 'MockInstance<Procedure | Constructable> & (new (...args: any[]) => any) & {}' provides no match for the signature '(method: string, params?: unknown, options?: SendRequestOptions | undefined): Promise<RpcResponse>'."
+    },
+    {
+      "file": "mobile/src/session/mobile-native-chat-open-file.test.ts",
+      "line": 168,
+      "column": 33,
+      "code": 2345,
+      "message": "Argument of type '{ pathText: string; client: { sendRequest: ReturnType<typeof vi.fn>; }; hostId: string; worktreeId: string; pushPreviewRoute: Mock<Procedure>; openBrowser: Mock<Procedure>; ... 7 more ...; onOpenFailed: Mock<...>; }' is not assignable to parameter of type 'OpenMobileNativeChatFileTapOptions<any>'.\n  The types of 'client.sendRequest' are incompatible between these types.\n    Type 'Mock<Procedure | Constructable>' is not assignable to type '(method: string, params?: unknown, options?: SendRequestOptions | undefined) => Promise<RpcResponse>'.\n      Type 'MockInstance<Procedure | Constructable> & (new (...args: any[]) => any) & {}' is not assignable to type '(method: string, params?: unknown, options?: SendRequestOptions | undefined) => Promise<RpcResponse>'.\n        Type 'MockInstance<Procedure | Constructable> & (new (...args: any[]) => any) & {}' provides no match for the signature '(method: string, params?: unknown, options?: SendRequestOptions | undefined): Promise<RpcResponse>'."
+    },
+    {
+      "file": "mobile/src/session/mobile-native-chat-open-file.test.ts",
+      "line": 188,
+      "column": 33,
+      "code": 2345,
+      "message": "Argument of type '{ pathText: string; getSessionTabs: () => { id: string; relativePath: string; }[]; getActiveSessionTabId: () => string; switchSessionTab: Mock<Procedure>; scheduleDelayedAction: Mock<...>; ... 8 more ...; onOpenFailed: Mock<...>; }' is not assignable to parameter of type 'OpenMobileNativeChatFileTapOptions<{ id: string; relativePath: string; }>'.\n  The types of 'client.sendRequest' are incompatible between these types.\n    Type 'Mock<Procedure | Constructable>' is not assignable to type '(method: string, params?: unknown, options?: SendRequestOptions | undefined) => Promise<RpcResponse>'.\n      Type 'MockInstance<Procedure | Constructable> & (new (...args: any[]) => any) & {}' is not assignable to type '(method: string, params?: unknown, options?: SendRequestOptions | undefined) => Promise<RpcResponse>'.\n        Type 'MockInstance<Procedure | Constructable> & (new (...args: any[]) => any) & {}' provides no match for the signature '(method: string, params?: unknown, options?: SendRequestOptions | undefined): Promise<RpcResponse>'."
+    },
+    {
+      "file": "mobile/src/session/mobile-native-chat-open-file.test.ts",
+      "line": 58,
+      "column": 33,
+      "code": 2345,
+      "message": "Argument of type '{ pathText: string; client: { sendRequest: ReturnType<typeof vi.fn>; }; hostId: string; worktreeId: string; pushPreviewRoute: Mock<Procedure>; openBrowser: Mock<Procedure>; ... 7 more ...; onOpenFailed: Mock<...>; }' is not assignable to parameter of type 'OpenMobileNativeChatFileTapOptions<any>'.\n  The types of 'client.sendRequest' are incompatible between these types.\n    Type 'Mock<Procedure | Constructable>' is not assignable to type '(method: string, params?: unknown, options?: SendRequestOptions | undefined) => Promise<RpcResponse>'.\n      Type 'MockInstance<Procedure | Constructable> & (new (...args: any[]) => any) & {}' is not assignable to type '(method: string, params?: unknown, options?: SendRequestOptions | undefined) => Promise<RpcResponse>'.\n        Type 'MockInstance<Procedure | Constructable> & (new (...args: any[]) => any) & {}' provides no match for the signature '(method: string, params?: unknown, options?: SendRequestOptions | undefined): Promise<RpcResponse>'."
+    },
+    {
+      "file": "mobile/src/session/mobile-native-chat-open-file.test.ts",
+      "line": 87,
+      "column": 33,
+      "code": 2345,
+      "message": "Argument of type '{ pathText: string; nativeChatContext: { tabId: string; sessionId: string; }; client: { sendRequest: ReturnType<typeof vi.fn>; }; hostId: string; worktreeId: string; pushPreviewRoute: Mock<Procedure>; ... 8 more ...; onOpenFailed: Mock<...>; }' is not assignable to parameter of type 'OpenMobileNativeChatFileTapOptions<any>'.\n  The types of 'client.sendRequest' are incompatible between these types.\n    Type 'Mock<Procedure | Constructable>' is not assignable to type '(method: string, params?: unknown, options?: SendRequestOptions | undefined) => Promise<RpcResponse>'.\n      Type 'MockInstance<Procedure | Constructable> & (new (...args: any[]) => any) & {}' is not assignable to type '(method: string, params?: unknown, options?: SendRequestOptions | undefined) => Promise<RpcResponse>'.\n        Type 'MockInstance<Procedure | Constructable> & (new (...args: any[]) => any) & {}' provides no match for the signature '(method: string, params?: unknown, options?: SendRequestOptions | undefined): Promise<RpcResponse>'."
+    },
+    {
+      "file": "mobile/src/session/mobile-session-tab-activation.test.ts",
+      "line": 75,
+      "column": 57,
+      "code": 2345,
+      "message": "Argument of type '{ worktree: string; tabId: string; notifyClients: false; navigation: \"caller\"; }' is not assignable to parameter of type 'MobileSessionTabActivationParams'.\n  Property 'intent' is missing in type '{ worktree: string; tabId: string; notifyClients: false; navigation: \"caller\"; }' but required in type 'MobileSessionTabActivationParams'."
+    },
+    {
+      "file": "mobile/src/session/mobile-terminal-records.test.ts",
+      "line": 144,
+      "column": 15,
+      "code": 2322,
+      "message": "Type 'string' is not assignable to type '\"working\" | \"blocked\" | \"waiting\" | \"done\"'."
+    },
+    {
+      "file": "mobile/src/session/MobileMarkdownReader.test.tsx",
+      "line": 101,
+      "column": 40,
+      "code": 2345,
+      "message": "Argument of type '\"Text\"' is not assignable to parameter of type 'ElementType'."
+    },
+    {
+      "file": "mobile/src/session/MobileMarkdownReader.test.tsx",
+      "line": 108,
+      "column": 40,
+      "code": 2345,
+      "message": "Argument of type '\"Text\"' is not assignable to parameter of type 'ElementType'."
+    },
+    {
+      "file": "mobile/src/session/MobileMarkdownReader.test.tsx",
+      "line": 18,
+      "column": 47,
+      "code": 2769,
+      "message": "No overload matches this call.\n  The last overload gave the following error.\n    Argument of type 'unknown' is not assignable to parameter of type 'ReactNode'."
+    },
+    {
+      "file": "mobile/src/session/MobileNativeChatComposer.test.ts",
+      "line": 15,
+      "column": 48,
+      "code": 2769,
+      "message": "No overload matches this call.\n  The last overload gave the following error.\n    Argument of type 'unknown' is not assignable to parameter of type 'ReactNode'."
+    },
+    {
+      "file": "mobile/src/session/MobileNativeChatComposer.test.ts",
+      "line": 172,
+      "column": 7,
+      "code": 2352,
+      "message": "Conversion of type 'ReactTestInstance' to type '{ props: { accessibilityState: { disabled: boolean; }; }; }' may be a mistake because neither type sufficiently overlaps with the other. If this was intentional, convert the expression to 'unknown' first.\n  Types of property 'props' are incompatible.\n    Property 'accessibilityState' is missing in type '{ [propName: string]: any; }' but required in type '{ accessibilityState: { disabled: boolean; }; }'."
+    },
+    {
+      "file": "mobile/src/session/MobileNativeChatComposer.test.ts",
+      "line": 173,
+      "column": 19,
+      "code": 2367,
+      "message": "This comparison appears to be unintentional because the types 'ElementType' and '\"Pressable\"' have no overlap."
+    },
+    {
+      "file": "mobile/src/session/MobileNativeChatComposer.test.ts",
+      "line": 250,
+      "column": 49,
+      "code": 2367,
+      "message": "This comparison appears to be unintentional because the types 'ElementType' and '\"TextInput\"' have no overlap."
+    },
+    {
+      "file": "mobile/src/session/MobileNativeChatComposer.test.ts",
+      "line": 273,
+      "column": 20,
+      "code": 2352,
+      "message": "Conversion of type 'ReactTestInstance[]' to type '{ props: { source: { uri: string; }; }; }[]' may be a mistake because neither type sufficiently overlaps with the other. If this was intentional, convert the expression to 'unknown' first.\n  Type 'ReactTestInstance' is not comparable to type '{ props: { source: { uri: string; }; }; }'.\n    Types of property 'props' are incompatible.\n      Property 'source' is missing in type '{ [propName: string]: any; }' but required in type '{ source: { uri: string; }; }'."
+    },
+    {
+      "file": "mobile/src/session/MobileNativeChatComposer.test.ts",
+      "line": 273,
+      "column": 53,
+      "code": 2367,
+      "message": "This comparison appears to be unintentional because the types 'ElementType' and '\"Image\"' have no overlap."
+    },
+    {
+      "file": "mobile/src/session/MobileNativeChatComposer.test.ts",
+      "line": 278,
+      "column": 20,
+      "code": 2352,
+      "message": "Conversion of type 'ReactTestInstance[]' to type '{ props: { onPress: () => void; }; }[]' may be a mistake because neither type sufficiently overlaps with the other. If this was intentional, convert the expression to 'unknown' first.\n  Type 'ReactTestInstance' is not comparable to type '{ props: { onPress: () => void; }; }'.\n    Types of property 'props' are incompatible.\n      Property 'onPress' is missing in type '{ [propName: string]: any; }' but required in type '{ onPress: () => void; }'."
+    },
+    {
+      "file": "mobile/src/session/MobileNativeChatComposer.test.ts",
+      "line": 279,
+      "column": 17,
+      "code": 2367,
+      "message": "This comparison appears to be unintentional because the types 'ElementType' and '\"Pressable\"' have no overlap."
+    },
+    {
+      "file": "mobile/src/session/MobileNativeChatComposer.test.ts",
+      "line": 315,
+      "column": 37,
+      "code": 2367,
+      "message": "This comparison appears to be unintentional because the types 'ElementType' and '\"TextInput\"' have no overlap."
+    },
+    {
+      "file": "mobile/src/session/MobileNativeChatComposer.test.ts",
+      "line": 315,
+      "column": 7,
+      "code": 2352,
+      "message": "Conversion of type 'ReactTestInstance' to type '{ props: { selection?: { start: number; end: number; } | undefined; onSelectionChange: (e: { nativeEvent: { selection: { end: number; }; }; }) => void; }; }' may be a mistake because neither type sufficiently overlaps with the other. If this was intentional, convert the expression to 'unknown' first.\n  Types of property 'props' are incompatible.\n    Property 'onSelectionChange' is missing in type '{ [propName: string]: any; }' but required in type '{ selection?: { start: number; end: number; } | undefined; onSelectionChange: (e: { nativeEvent: { selection: { end: number; }; }; }) => void; }'."
+    },
+    {
+      "file": "mobile/src/session/MobileNativeChatComposer.test.ts",
+      "line": 327,
+      "column": 29,
+      "code": 2352,
+      "message": "Conversion of type 'ReactTestInstance' to type '{ props: { onPress: () => void; }; }' may be a mistake because neither type sufficiently overlaps with the other. If this was intentional, convert the expression to 'unknown' first.\n  Types of property 'props' are incompatible.\n    Property 'onPress' is missing in type '{ [propName: string]: any; }' but required in type '{ onPress: () => void; }'."
+    },
+    {
+      "file": "mobile/src/session/MobileNativeChatComposer.test.ts",
+      "line": 328,
+      "column": 17,
+      "code": 2367,
+      "message": "This comparison appears to be unintentional because the types 'ElementType' and '\"Pressable\"' have no overlap."
+    },
+    {
+      "file": "mobile/src/session/MobileNativeChatComposer.test.ts",
+      "line": 352,
+      "column": 19,
+      "code": 2352,
+      "message": "Conversion of type 'ReactTestInstance' to type '{ props: { onSelectionChange: (e: { nativeEvent: { selection: { end: number; }; }; }) => void; }; }' may be a mistake because neither type sufficiently overlaps with the other. If this was intentional, convert the expression to 'unknown' first.\n  Types of property 'props' are incompatible.\n    Property 'onSelectionChange' is missing in type '{ [propName: string]: any; }' but required in type '{ onSelectionChange: (e: { nativeEvent: { selection: { end: number; }; }; }) => void; }'."
+    },
+    {
+      "file": "mobile/src/session/MobileNativeChatComposer.test.ts",
+      "line": 352,
+      "column": 49,
+      "code": 2367,
+      "message": "This comparison appears to be unintentional because the types 'ElementType' and '\"TextInput\"' have no overlap."
+    },
+    {
+      "file": "mobile/src/session/MobileNativeChatComposer.test.ts",
+      "line": 357,
+      "column": 26,
+      "code": 2367,
+      "message": "This comparison appears to be unintentional because the types 'ElementType' and '\"Text\"' have no overlap."
+    },
+    {
+      "file": "mobile/src/session/MobileNativeChatComposer.test.ts",
+      "line": 372,
+      "column": 19,
+      "code": 2367,
+      "message": "This comparison appears to be unintentional because the types 'ElementType' and '\"Pressable\"' have no overlap."
+    },
+    {
+      "file": "mobile/src/session/MobileNativeChatComposer.test.ts",
+      "line": 42,
+      "column": 66,
+      "code": 2769,
+      "message": "No overload matches this call.\n  The last overload gave the following error.\n    Argument of type 'unknown' is not assignable to parameter of type 'ReactNode'."
+    },
+    {
+      "file": "mobile/src/session/MobileNativeChatComposer.test.ts",
+      "line": 75,
+      "column": 12,
+      "code": 2352,
+      "message": "Conversion of type 'ReactTestInstance' to type '{ props: { onPress: () => Promise<void>; }; }' may be a mistake because neither type sufficiently overlaps with the other. If this was intentional, convert the expression to 'unknown' first.\n  Types of property 'props' are incompatible.\n    Property 'onPress' is missing in type '{ [propName: string]: any; }' but required in type '{ onPress: () => Promise<void>; }'."
+    },
+    {
+      "file": "mobile/src/session/MobileNativeChatComposer.test.ts",
+      "line": 76,
+      "column": 17,
+      "code": 2367,
+      "message": "This comparison appears to be unintentional because the types 'ElementType' and '\"Pressable\"' have no overlap."
+    },
+    {
+      "file": "mobile/src/session/MobileNativeChatComposer.test.ts",
+      "line": 99,
+      "column": 35,
+      "code": 2345,
+      "message": "Argument of type '\"TextInput\"' is not assignable to parameter of type 'ElementType'."
+    },
+    {
+      "file": "mobile/src/session/MobileNativeChatMessage.test.ts",
+      "line": 13,
+      "column": 42,
+      "code": 2769,
+      "message": "No overload matches this call.\n  The last overload gave the following error.\n    Argument of type 'unknown' is not assignable to parameter of type 'ReactNode'."
+    },
+    {
+      "file": "mobile/src/session/MobileNativeChatMessage.test.ts",
+      "line": 15,
+      "column": 42,
+      "code": 2769,
+      "message": "No overload matches this call.\n  The last overload gave the following error.\n    Argument of type 'unknown' is not assignable to parameter of type 'ReactNode'."
+    },
+    {
+      "file": "mobile/src/session/MobileNativeChatOverlay.test.ts",
+      "line": 43,
+      "column": 49,
+      "code": 2769,
+      "message": "No overload matches this call.\n  The last overload gave the following error.\n    Argument of type '{ controller: MobileNativeChatController; images: never; onMicPress: Mock<Procedure>; micActive: false; dictationMode: \"toggle\"; onMicPressIn: Mock<...>; ... 4 more ...; keyboardInset: number; }' is not assignable to parameter of type 'Attributes & Props'.\n      Property 'onOpenFile' is missing in type '{ controller: MobileNativeChatController; images: never; onMicPress: Mock<Procedure>; micActive: false; dictationMode: \"toggle\"; onMicPressIn: Mock<...>; ... 4 more ...; keyboardInset: number; }' but required in type 'Props'."
+    },
+    {
+      "file": "mobile/src/session/MobileNativeChatOverlay.test.ts",
+      "line": 80,
+      "column": 52,
+      "code": 2367,
+      "message": "This comparison appears to be unintentional because the types 'ElementType' and '\"ChatView\"' have no overlap."
+    },
+    {
+      "file": "mobile/src/session/MobileNativeChatPermission.test.ts",
+      "line": 35,
+      "column": 20,
+      "code": 18047,
+      "message": "'renderer' is possibly 'null'."
+    },
+    {
+      "file": "mobile/src/session/MobileNativeChatPermission.test.ts",
+      "line": 35,
+      "column": 45,
+      "code": 2345,
+      "message": "Argument of type '\"Pressable\"' is not assignable to parameter of type 'ElementType'."
+    },
+    {
+      "file": "mobile/src/session/MobileNativeChatSessionOptionPickers.test.ts",
+      "line": 103,
+      "column": 5,
+      "code": 2352,
+      "message": "Conversion of type 'ReactTestInstance' to type '{ props: { onPress: () => void; accessibilityLabel?: string | undefined; disabled?: boolean | undefined; accessibilityRole?: string | undefined; accessibilityState?: { disabled?: boolean | undefined; } | undefined; }; }' may be a mistake because neither type sufficiently overlaps with the other. If this was intentional, convert the expression to 'unknown' first.\n  Types of property 'props' are incompatible.\n    Property 'onPress' is missing in type '{ [propName: string]: any; }' but required in type '{ onPress: () => void; accessibilityLabel?: string | undefined; disabled?: boolean | undefined; accessibilityRole?: string | undefined; accessibilityState?: { disabled?: boolean | undefined; } | undefined; }'."
+    },
+    {
+      "file": "mobile/src/session/MobileNativeChatSessionOptionPickers.test.ts",
+      "line": 105,
+      "column": 9,
+      "code": 2367,
+      "message": "This comparison appears to be unintentional because the types 'ElementType' and '\"Pressable\"' have no overlap."
+    },
+    {
+      "file": "mobile/src/session/MobileNativeChatSessionOptionPickers.test.ts",
+      "line": 129,
+      "column": 26,
+      "code": 2367,
+      "message": "This comparison appears to be unintentional because the types 'ElementType' and '\"Text\"' have no overlap."
+    },
+    {
+      "file": "mobile/src/session/MobileNativeChatSessionOptionPickers.test.ts",
+      "line": 135,
+      "column": 22,
+      "code": 2367,
+      "message": "This comparison appears to be unintentional because the types 'ElementType' and '\"Pressable\"' have no overlap."
+    },
+    {
+      "file": "mobile/src/session/MobileNativeChatSessionOptionPickers.test.ts",
+      "line": 176,
+      "column": 26,
+      "code": 2367,
+      "message": "This comparison appears to be unintentional because the types 'ElementType' and '\"Text\"' have no overlap."
+    },
+    {
+      "file": "mobile/src/session/MobileNativeChatSessionOptionPickers.test.ts",
+      "line": 184,
+      "column": 38,
+      "code": 2345,
+      "message": "Argument of type '\"BottomDrawer\"' is not assignable to parameter of type 'ElementType'."
+    },
+    {
+      "file": "mobile/src/session/MobileNativeChatSessionOptionPickers.test.ts",
+      "line": 27,
+      "column": 66,
+      "code": 2769,
+      "message": "No overload matches this call.\n  The last overload gave the following error.\n    Argument of type 'unknown' is not assignable to parameter of type 'ReactNode'."
+    },
+    {
+      "file": "mobile/src/session/MobileNativeChatView.test.ts",
+      "line": 117,
+      "column": 48,
+      "code": 2367,
+      "message": "This comparison appears to be unintentional because the types 'ElementType' and '\"FlatList\"' have no overlap."
+    },
+    {
+      "file": "mobile/src/session/MobileNativeChatView.test.ts",
+      "line": 122,
+      "column": 48,
+      "code": 2367,
+      "message": "This comparison appears to be unintentional because the types 'ElementType' and '\"FlatList\"' have no overlap."
+    },
+    {
+      "file": "mobile/src/session/MobileNativeChatView.test.ts",
+      "line": 133,
+      "column": 42,
+      "code": 2367,
+      "message": "This comparison appears to be unintentional because the types 'ElementType' and '\"Composer\"' have no overlap."
+    },
+    {
+      "file": "mobile/src/session/MobileNativeChatView.test.ts",
+      "line": 140,
+      "column": 26,
+      "code": 2367,
+      "message": "This comparison appears to be unintentional because the types 'ElementType' and '\"Text\"' have no overlap."
+    },
+    {
+      "file": "mobile/src/session/MobileNativeChatView.test.ts",
+      "line": 146,
+      "column": 22,
+      "code": 2352,
+      "message": "Conversion of type 'ReactTestInstance' to type '{ props: { onPress: () => Promise<boolean>; }; }' may be a mistake because neither type sufficiently overlaps with the other. If this was intentional, convert the expression to 'unknown' first.\n  Types of property 'props' are incompatible.\n    Property 'onPress' is missing in type '{ [propName: string]: any; }' but required in type '{ onPress: () => Promise<boolean>; }'."
+    },
+    {
+      "file": "mobile/src/session/MobileNativeChatView.test.ts",
+      "line": 146,
+      "column": 52,
+      "code": 2367,
+      "message": "This comparison appears to be unintentional because the types 'ElementType' and '\"Composer\"' have no overlap."
+    },
+    {
+      "file": "mobile/src/session/MobileNativeChatView.test.ts",
+      "line": 211,
+      "column": 29,
+      "code": 2769,
+      "message": "No overload matches this call.\n  Overload 1 of 2, '(callback: () => Promise<VoidOrUndefinedOnly>): Promise<undefined>', gave the following error.\n    Type 'Promise<VitestUtils>' is not assignable to type 'Promise<VoidOrUndefinedOnly>'.\n      Type 'VitestUtils' is not assignable to type 'VoidOrUndefinedOnly'.\n  Overload 2 of 2, '(callback: () => VoidOrUndefinedOnly): DebugPromiseLike', gave the following error.\n    Type 'Promise<VitestUtils>' is not assignable to type 'VoidOrUndefinedOnly'."
+    },
+    {
+      "file": "mobile/src/session/MobileNativeChatView.test.ts",
+      "line": 216,
+      "column": 29,
+      "code": 2769,
+      "message": "No overload matches this call.\n  Overload 1 of 2, '(callback: () => Promise<VoidOrUndefinedOnly>): Promise<undefined>', gave the following error.\n    Type 'Promise<VitestUtils>' is not assignable to type 'Promise<VoidOrUndefinedOnly>'.\n      Type 'VitestUtils' is not assignable to type 'VoidOrUndefinedOnly'.\n  Overload 2 of 2, '(callback: () => VoidOrUndefinedOnly): DebugPromiseLike', gave the following error.\n    Type 'Promise<VitestUtils>' is not assignable to type 'VoidOrUndefinedOnly'."
+    },
+    {
+      "file": "mobile/src/session/MobileNativeChatView.test.ts",
+      "line": 218,
+      "column": 29,
+      "code": 2769,
+      "message": "No overload matches this call.\n  Overload 1 of 2, '(callback: () => Promise<VoidOrUndefinedOnly>): Promise<undefined>', gave the following error.\n    Type 'Promise<VitestUtils>' is not assignable to type 'Promise<VoidOrUndefinedOnly>'.\n      Type 'VitestUtils' is not assignable to type 'VoidOrUndefinedOnly'.\n  Overload 2 of 2, '(callback: () => VoidOrUndefinedOnly): DebugPromiseLike', gave the following error.\n    Type 'Promise<VitestUtils>' is not assignable to type 'VoidOrUndefinedOnly'."
+    },
+    {
+      "file": "mobile/src/session/MobileNativeChatView.test.ts",
+      "line": 231,
+      "column": 29,
+      "code": 2769,
+      "message": "No overload matches this call.\n  Overload 1 of 2, '(callback: () => Promise<VoidOrUndefinedOnly>): Promise<undefined>', gave the following error.\n    Type 'Promise<VitestUtils>' is not assignable to type 'Promise<VoidOrUndefinedOnly>'.\n      Type 'VitestUtils' is not assignable to type 'VoidOrUndefinedOnly'.\n  Overload 2 of 2, '(callback: () => VoidOrUndefinedOnly): DebugPromiseLike', gave the following error.\n    Type 'Promise<VitestUtils>' is not assignable to type 'VoidOrUndefinedOnly'."
+    },
+    {
+      "file": "mobile/src/session/MobileNativeChatView.test.ts",
+      "line": 233,
+      "column": 29,
+      "code": 2769,
+      "message": "No overload matches this call.\n  Overload 1 of 2, '(callback: () => Promise<VoidOrUndefinedOnly>): Promise<undefined>', gave the following error.\n    Type 'Promise<VitestUtils>' is not assignable to type 'Promise<VoidOrUndefinedOnly>'.\n      Type 'VitestUtils' is not assignable to type 'VoidOrUndefinedOnly'.\n  Overload 2 of 2, '(callback: () => VoidOrUndefinedOnly): DebugPromiseLike', gave the following error.\n    Type 'Promise<VitestUtils>' is not assignable to type 'VoidOrUndefinedOnly'."
+    },
+    {
+      "file": "mobile/src/session/MobileNativeChatView.test.ts",
+      "line": 236,
+      "column": 29,
+      "code": 2769,
+      "message": "No overload matches this call.\n  Overload 1 of 2, '(callback: () => Promise<VoidOrUndefinedOnly>): Promise<undefined>', gave the following error.\n    Type 'Promise<VitestUtils>' is not assignable to type 'Promise<VoidOrUndefinedOnly>'.\n      Type 'VitestUtils' is not assignable to type 'VoidOrUndefinedOnly'.\n  Overload 2 of 2, '(callback: () => VoidOrUndefinedOnly): DebugPromiseLike', gave the following error.\n    Type 'Promise<VitestUtils>' is not assignable to type 'VoidOrUndefinedOnly'."
+    },
+    {
+      "file": "mobile/src/session/QuickCommandsList.test.ts",
+      "line": 63,
+      "column": 46,
+      "code": 2345,
+      "message": "Argument of type '\"TextInput\"' is not assignable to parameter of type 'ElementType'."
+    },
+    {
+      "file": "mobile/src/session/QuickCommandsList.test.ts",
+      "line": 89,
+      "column": 41,
+      "code": 2345,
+      "message": "Argument of type '\"TextInput\"' is not assignable to parameter of type 'ElementType'."
+    },
+    {
+      "file": "mobile/src/session/QuickCommandsSheet.test.ts",
+      "line": 117,
+      "column": 41,
+      "code": 2345,
+      "message": "Argument of type '\"QuickCommandsList\"' is not assignable to parameter of type 'ElementType'."
+    },
+    {
+      "file": "mobile/src/session/QuickCommandsSheet.test.ts",
+      "line": 118,
+      "column": 46,
+      "code": 2345,
+      "message": "Argument of type '\"QuickCommandEditorForm\"' is not assignable to parameter of type 'ElementType'."
+    },
+    {
+      "file": "mobile/src/session/QuickCommandsSheet.test.ts",
+      "line": 123,
+      "column": 51,
+      "code": 2345,
+      "message": "Argument of type '\"QuickCommandEditorForm\"' is not assignable to parameter of type 'ElementType'."
+    },
+    {
+      "file": "mobile/src/session/QuickCommandsSheet.test.ts",
+      "line": 154,
+      "column": 44,
+      "code": 2345,
+      "message": "Argument of type '\"QuickCommandsList\"' is not assignable to parameter of type 'ElementType'."
+    },
+    {
+      "file": "mobile/src/session/QuickCommandsSheet.test.ts",
+      "line": 157,
+      "column": 41,
+      "code": 2345,
+      "message": "Argument of type '\"QuickCommandEditorForm\"' is not assignable to parameter of type 'ElementType'."
+    },
+    {
+      "file": "mobile/src/session/QuickCommandsSheet.test.ts",
+      "line": 180,
+      "column": 44,
+      "code": 2345,
+      "message": "Argument of type '\"QuickCommandsList\"' is not assignable to parameter of type 'ElementType'."
+    },
+    {
+      "file": "mobile/src/session/QuickCommandsSheet.test.ts",
+      "line": 184,
+      "column": 38,
+      "code": 2345,
+      "message": "Argument of type '\"QuickCommandEditorForm\"' is not assignable to parameter of type 'ElementType'."
+    },
+    {
+      "file": "mobile/src/session/QuickCommandsSheet.test.ts",
+      "line": 203,
+      "column": 41,
+      "code": 2345,
+      "message": "Argument of type '\"QuickCommandsList\"' is not assignable to parameter of type 'ElementType'."
+    },
+    {
+      "file": "mobile/src/session/QuickCommandsSheet.test.ts",
+      "line": 95,
+      "column": 41,
+      "code": 2345,
+      "message": "Argument of type '\"QuickCommandsList\"' is not assignable to parameter of type 'ElementType'."
+    },
+    {
+      "file": "mobile/src/session/use-mobile-diff-review-send-actions.test.ts",
+      "line": 40,
+      "column": 26,
+      "code": 2322,
+      "message": "Type '\"none\"' is not assignable to type 'GitConflictOperation'."
+    },
+    {
+      "file": "mobile/src/session/use-mobile-diff-review-send-actions.test.ts",
+      "line": 74,
+      "column": 7,
+      "code": 2322,
+      "message": "Type 'Mock<Procedure | Constructable>' is not assignable to type 'Dispatch<SetStateAction<string | null>>'.\n  Type 'MockInstance<Procedure | Constructable> & (new (...args: any[]) => any) & {}' is not assignable to type 'Dispatch<SetStateAction<string | null>>'.\n    Type 'MockInstance<Procedure | Constructable> & (new (...args: any[]) => any) & {}' provides no match for the signature '(value: SetStateAction<string | null>): void'."
+    },
+    {
+      "file": "mobile/src/session/use-mobile-diff-review-send-actions.test.ts",
+      "line": 75,
+      "column": 7,
+      "code": 2322,
+      "message": "Type 'Mock<Procedure | Constructable>' is not assignable to type 'Dispatch<SetStateAction<SendSheetState | null>>'.\n  Type 'MockInstance<Procedure | Constructable> & (new (...args: any[]) => any) & {}' is not assignable to type 'Dispatch<SetStateAction<SendSheetState | null>>'.\n    Type 'MockInstance<Procedure | Constructable> & (new (...args: any[]) => any) & {}' provides no match for the signature '(value: SetStateAction<SendSheetState | null>): void'."
+    },
+    {
+      "file": "mobile/src/session/use-mobile-diff-review-send-actions.test.ts",
+      "line": 76,
+      "column": 7,
+      "code": 2322,
+      "message": "Type 'Mock<Procedure | Constructable>' is not assignable to type '(comments: DiffComment[], reviewState: MobileDiffReviewState) => Promise<void>'.\n  Type 'MockInstance<Procedure | Constructable> & (new (...args: any[]) => any) & {}' is not assignable to type '(comments: DiffComment[], reviewState: MobileDiffReviewState) => Promise<void>'.\n    Type 'MockInstance<Procedure | Constructable> & (new (...args: any[]) => any) & {}' provides no match for the signature '(comments: DiffComment[], reviewState: MobileDiffReviewState): Promise<void>'."
+    },
+    {
+      "file": "mobile/src/session/use-mobile-file-tap-handlers.test.ts",
+      "line": 52,
+      "column": 41,
+      "code": 2345,
+      "message": "Argument of type '{ client: { sendRequest: Mock<Procedure | Constructable>; }; hostId: string; worktreeId: string; worktreeName: string; nativeChatSessionId: string; activeHandleRef: { ...; }; ... 8 more ...; reportChatTapFailure: Mock<...>; }' is not assignable to parameter of type 'MobileFileTapHandlerOptions<any>'.\n  The types of 'client.sendRequest' are incompatible between these types.\n    Type 'Mock<Procedure | Constructable>' is not assignable to type '(method: string, params?: unknown, options?: SendRequestOptions | undefined) => Promise<RpcResponse>'.\n      Type 'MockInstance<Procedure | Constructable> & (new (...args: any[]) => any) & {}' is not assignable to type '(method: string, params?: unknown, options?: SendRequestOptions | undefined) => Promise<RpcResponse>'.\n        Type 'MockInstance<Procedure | Constructable> & (new (...args: any[]) => any) & {}' provides no match for the signature '(method: string, params?: unknown, options?: SendRequestOptions | undefined): Promise<RpcResponse>'."
+    },
+    {
+      "file": "mobile/src/session/use-mobile-native-chat-answer-send.test.ts",
+      "line": 136,
+      "column": 27,
+      "code": 2769,
+      "message": "No overload matches this call.\n  Overload 1 of 2, '(callback: () => Promise<VoidOrUndefinedOnly>): Promise<undefined>', gave the following error.\n    Type 'Promise<VitestUtils>' is not assignable to type 'Promise<VoidOrUndefinedOnly>'.\n      Type 'VitestUtils' is not assignable to type 'VoidOrUndefinedOnly'.\n  Overload 2 of 2, '(callback: () => VoidOrUndefinedOnly): DebugPromiseLike', gave the following error.\n    Type 'Promise<VitestUtils>' is not assignable to type 'VoidOrUndefinedOnly'."
+    },
+    {
+      "file": "mobile/src/session/use-mobile-native-chat-answer-send.test.ts",
+      "line": 138,
+      "column": 27,
+      "code": 2769,
+      "message": "No overload matches this call.\n  Overload 1 of 2, '(callback: () => Promise<VoidOrUndefinedOnly>): Promise<undefined>', gave the following error.\n    Type 'Promise<VitestUtils>' is not assignable to type 'Promise<VoidOrUndefinedOnly>'.\n      Type 'VitestUtils' is not assignable to type 'VoidOrUndefinedOnly'.\n  Overload 2 of 2, '(callback: () => VoidOrUndefinedOnly): DebugPromiseLike', gave the following error.\n    Type 'Promise<VitestUtils>' is not assignable to type 'VoidOrUndefinedOnly'."
+    },
+    {
+      "file": "mobile/src/session/use-mobile-native-chat-answer-send.test.ts",
+      "line": 140,
+      "column": 27,
+      "code": 2769,
+      "message": "No overload matches this call.\n  Overload 1 of 2, '(callback: () => Promise<VoidOrUndefinedOnly>): Promise<undefined>', gave the following error.\n    Type 'Promise<VitestUtils>' is not assignable to type 'Promise<VoidOrUndefinedOnly>'.\n      Type 'VitestUtils' is not assignable to type 'VoidOrUndefinedOnly'.\n  Overload 2 of 2, '(callback: () => VoidOrUndefinedOnly): DebugPromiseLike', gave the following error.\n    Type 'Promise<VitestUtils>' is not assignable to type 'VoidOrUndefinedOnly'."
+    },
+    {
+      "file": "mobile/src/session/use-mobile-native-chat-answer-send.test.ts",
+      "line": 159,
+      "column": 27,
+      "code": 2769,
+      "message": "No overload matches this call.\n  Overload 1 of 2, '(callback: () => Promise<VoidOrUndefinedOnly>): Promise<undefined>', gave the following error.\n    Type 'Promise<VitestUtils>' is not assignable to type 'Promise<VoidOrUndefinedOnly>'.\n      Type 'VitestUtils' is not assignable to type 'VoidOrUndefinedOnly'.\n  Overload 2 of 2, '(callback: () => VoidOrUndefinedOnly): DebugPromiseLike', gave the following error.\n    Type 'Promise<VitestUtils>' is not assignable to type 'VoidOrUndefinedOnly'."
+    },
+    {
+      "file": "mobile/src/session/use-mobile-native-chat-answer-send.test.ts",
+      "line": 189,
+      "column": 27,
+      "code": 2769,
+      "message": "No overload matches this call.\n  Overload 1 of 2, '(callback: () => Promise<VoidOrUndefinedOnly>): Promise<undefined>', gave the following error.\n    Type 'Promise<VitestUtils>' is not assignable to type 'Promise<VoidOrUndefinedOnly>'.\n      Type 'VitestUtils' is not assignable to type 'VoidOrUndefinedOnly'.\n  Overload 2 of 2, '(callback: () => VoidOrUndefinedOnly): DebugPromiseLike', gave the following error.\n    Type 'Promise<VitestUtils>' is not assignable to type 'VoidOrUndefinedOnly'."
+    },
+    {
+      "file": "mobile/src/session/use-mobile-native-chat-answer-send.test.ts",
+      "line": 190,
+      "column": 27,
+      "code": 2769,
+      "message": "No overload matches this call.\n  Overload 1 of 2, '(callback: () => Promise<VoidOrUndefinedOnly>): Promise<undefined>', gave the following error.\n    Type 'Promise<VitestUtils>' is not assignable to type 'Promise<VoidOrUndefinedOnly>'.\n      Type 'VitestUtils' is not assignable to type 'VoidOrUndefinedOnly'.\n  Overload 2 of 2, '(callback: () => VoidOrUndefinedOnly): DebugPromiseLike', gave the following error.\n    Type 'Promise<VitestUtils>' is not assignable to type 'VoidOrUndefinedOnly'."
+    },
+    {
+      "file": "mobile/src/session/use-mobile-native-chat-answer-send.test.ts",
+      "line": 207,
+      "column": 27,
+      "code": 2769,
+      "message": "No overload matches this call.\n  Overload 1 of 2, '(callback: () => Promise<VoidOrUndefinedOnly>): Promise<undefined>', gave the following error.\n    Type 'Promise<VitestUtils>' is not assignable to type 'Promise<VoidOrUndefinedOnly>'.\n      Type 'VitestUtils' is not assignable to type 'VoidOrUndefinedOnly'.\n  Overload 2 of 2, '(callback: () => VoidOrUndefinedOnly): DebugPromiseLike', gave the following error.\n    Type 'Promise<VitestUtils>' is not assignable to type 'VoidOrUndefinedOnly'."
+    },
+    {
+      "file": "mobile/src/session/use-mobile-native-chat-answer-send.test.ts",
+      "line": 250,
+      "column": 27,
+      "code": 2769,
+      "message": "No overload matches this call.\n  Overload 1 of 2, '(callback: () => Promise<VoidOrUndefinedOnly>): Promise<undefined>', gave the following error.\n    Type 'Promise<VitestUtils>' is not assignable to type 'Promise<VoidOrUndefinedOnly>'.\n      Type 'VitestUtils' is not assignable to type 'VoidOrUndefinedOnly'.\n  Overload 2 of 2, '(callback: () => VoidOrUndefinedOnly): DebugPromiseLike', gave the following error.\n    Type 'Promise<VitestUtils>' is not assignable to type 'VoidOrUndefinedOnly'."
+    },
+    {
+      "file": "mobile/src/session/use-mobile-native-chat-answer-send.test.ts",
+      "line": 352,
+      "column": 27,
+      "code": 2769,
+      "message": "No overload matches this call.\n  Overload 1 of 2, '(callback: () => Promise<VoidOrUndefinedOnly>): Promise<undefined>', gave the following error.\n    Type 'Promise<VitestUtils>' is not assignable to type 'Promise<VoidOrUndefinedOnly>'.\n      Type 'VitestUtils' is not assignable to type 'VoidOrUndefinedOnly'.\n  Overload 2 of 2, '(callback: () => VoidOrUndefinedOnly): DebugPromiseLike', gave the following error.\n    Type 'Promise<VitestUtils>' is not assignable to type 'VoidOrUndefinedOnly'."
+    },
+    {
+      "file": "mobile/src/session/use-mobile-native-chat-answer-send.test.ts",
+      "line": 396,
+      "column": 27,
+      "code": 2769,
+      "message": "No overload matches this call.\n  Overload 1 of 2, '(callback: () => Promise<VoidOrUndefinedOnly>): Promise<undefined>', gave the following error.\n    Type 'Promise<VitestUtils>' is not assignable to type 'Promise<VoidOrUndefinedOnly>'.\n      Type 'VitestUtils' is not assignable to type 'VoidOrUndefinedOnly'.\n  Overload 2 of 2, '(callback: () => VoidOrUndefinedOnly): DebugPromiseLike', gave the following error.\n    Type 'Promise<VitestUtils>' is not assignable to type 'VoidOrUndefinedOnly'."
+    },
+    {
+      "file": "mobile/src/session/use-mobile-native-chat-answer-send.test.ts",
+      "line": 453,
+      "column": 27,
+      "code": 2769,
+      "message": "No overload matches this call.\n  Overload 1 of 2, '(callback: () => Promise<VoidOrUndefinedOnly>): Promise<undefined>', gave the following error.\n    Type 'Promise<VitestUtils>' is not assignable to type 'Promise<VoidOrUndefinedOnly>'.\n      Type 'VitestUtils' is not assignable to type 'VoidOrUndefinedOnly'.\n  Overload 2 of 2, '(callback: () => VoidOrUndefinedOnly): DebugPromiseLike', gave the following error.\n    Type 'Promise<VitestUtils>' is not assignable to type 'VoidOrUndefinedOnly'."
+    },
+    {
+      "file": "mobile/src/session/use-mobile-native-chat-drafts.test.ts",
+      "line": 187,
+      "column": 17,
+      "code": 2769,
+      "message": "No overload matches this call.\n  Overload 1 of 2, '(callback: () => Promise<VoidOrUndefinedOnly>): Promise<undefined>', gave the following error.\n    Type 'VitestUtils' is missing the following properties from type 'Promise<VoidOrUndefinedOnly>': then, catch, finally, [Symbol.toStringTag]\n  Overload 2 of 2, '(callback: () => VoidOrUndefinedOnly): DebugPromiseLike', gave the following error.\n    Type 'VitestUtils' is not assignable to type 'VoidOrUndefinedOnly'."
+    },
+    {
+      "file": "mobile/src/session/use-mobile-native-chat-drafts.test.ts",
+      "line": 464,
+      "column": 17,
+      "code": 2769,
+      "message": "No overload matches this call.\n  Overload 1 of 2, '(callback: () => Promise<VoidOrUndefinedOnly>): Promise<undefined>', gave the following error.\n    Type 'VitestUtils' is missing the following properties from type 'Promise<VoidOrUndefinedOnly>': then, catch, finally, [Symbol.toStringTag]\n  Overload 2 of 2, '(callback: () => VoidOrUndefinedOnly): DebugPromiseLike', gave the following error.\n    Type 'VitestUtils' is not assignable to type 'VoidOrUndefinedOnly'."
+    },
+    {
+      "file": "mobile/src/session/use-mobile-native-chat-drafts.test.ts",
+      "line": 511,
+      "column": 17,
+      "code": 2769,
+      "message": "No overload matches this call.\n  Overload 1 of 2, '(callback: () => Promise<VoidOrUndefinedOnly>): Promise<undefined>', gave the following error.\n    Type 'VitestUtils' is missing the following properties from type 'Promise<VoidOrUndefinedOnly>': then, catch, finally, [Symbol.toStringTag]\n  Overload 2 of 2, '(callback: () => VoidOrUndefinedOnly): DebugPromiseLike', gave the following error.\n    Type 'VitestUtils' is not assignable to type 'VoidOrUndefinedOnly'."
+    },
+    {
+      "file": "mobile/src/session/use-mobile-native-chat-drafts.test.ts",
+      "line": 568,
+      "column": 17,
+      "code": 2769,
+      "message": "No overload matches this call.\n  Overload 1 of 2, '(callback: () => Promise<VoidOrUndefinedOnly>): Promise<undefined>', gave the following error.\n    Type 'VitestUtils' is missing the following properties from type 'Promise<VoidOrUndefinedOnly>': then, catch, finally, [Symbol.toStringTag]\n  Overload 2 of 2, '(callback: () => VoidOrUndefinedOnly): DebugPromiseLike', gave the following error.\n    Type 'VitestUtils' is not assignable to type 'VoidOrUndefinedOnly'."
+    },
+    {
+      "file": "mobile/src/session/use-mobile-native-chat-drafts.test.ts",
+      "line": 587,
+      "column": 17,
+      "code": 2769,
+      "message": "No overload matches this call.\n  Overload 1 of 2, '(callback: () => Promise<VoidOrUndefinedOnly>): Promise<undefined>', gave the following error.\n    Type 'VitestUtils' is missing the following properties from type 'Promise<VoidOrUndefinedOnly>': then, catch, finally, [Symbol.toStringTag]\n  Overload 2 of 2, '(callback: () => VoidOrUndefinedOnly): DebugPromiseLike', gave the following error.\n    Type 'VitestUtils' is not assignable to type 'VoidOrUndefinedOnly'."
+    },
+    {
+      "file": "mobile/src/session/use-mobile-native-chat-drafts.test.ts",
+      "line": 589,
+      "column": 17,
+      "code": 2769,
+      "message": "No overload matches this call.\n  Overload 1 of 2, '(callback: () => Promise<VoidOrUndefinedOnly>): Promise<undefined>', gave the following error.\n    Type 'VitestUtils' is missing the following properties from type 'Promise<VoidOrUndefinedOnly>': then, catch, finally, [Symbol.toStringTag]\n  Overload 2 of 2, '(callback: () => VoidOrUndefinedOnly): DebugPromiseLike', gave the following error.\n    Type 'VitestUtils' is not assignable to type 'VoidOrUndefinedOnly'."
+    },
+    {
+      "file": "mobile/src/session/use-mobile-native-chat-drafts.test.ts",
+      "line": 624,
+      "column": 17,
+      "code": 2769,
+      "message": "No overload matches this call.\n  Overload 1 of 2, '(callback: () => Promise<VoidOrUndefinedOnly>): Promise<undefined>', gave the following error.\n    Type 'VitestUtils' is missing the following properties from type 'Promise<VoidOrUndefinedOnly>': then, catch, finally, [Symbol.toStringTag]\n  Overload 2 of 2, '(callback: () => VoidOrUndefinedOnly): DebugPromiseLike', gave the following error.\n    Type 'VitestUtils' is not assignable to type 'VoidOrUndefinedOnly'."
+    },
+    {
+      "file": "mobile/src/session/use-mobile-native-chat-drafts.test.ts",
+      "line": 658,
+      "column": 17,
+      "code": 2769,
+      "message": "No overload matches this call.\n  Overload 1 of 2, '(callback: () => Promise<VoidOrUndefinedOnly>): Promise<undefined>', gave the following error.\n    Type 'VitestUtils' is missing the following properties from type 'Promise<VoidOrUndefinedOnly>': then, catch, finally, [Symbol.toStringTag]\n  Overload 2 of 2, '(callback: () => VoidOrUndefinedOnly): DebugPromiseLike', gave the following error.\n    Type 'VitestUtils' is not assignable to type 'VoidOrUndefinedOnly'."
+    },
+    {
+      "file": "mobile/src/session/use-mobile-native-chat-drafts.test.ts",
+      "line": 685,
+      "column": 17,
+      "code": 2769,
+      "message": "No overload matches this call.\n  Overload 1 of 2, '(callback: () => Promise<VoidOrUndefinedOnly>): Promise<undefined>', gave the following error.\n    Type 'VitestUtils' is missing the following properties from type 'Promise<VoidOrUndefinedOnly>': then, catch, finally, [Symbol.toStringTag]\n  Overload 2 of 2, '(callback: () => VoidOrUndefinedOnly): DebugPromiseLike', gave the following error.\n    Type 'VitestUtils' is not assignable to type 'VoidOrUndefinedOnly'."
+    },
+    {
+      "file": "mobile/src/session/use-mobile-native-chat-drafts.test.ts",
+      "line": 711,
+      "column": 17,
+      "code": 2769,
+      "message": "No overload matches this call.\n  Overload 1 of 2, '(callback: () => Promise<VoidOrUndefinedOnly>): Promise<undefined>', gave the following error.\n    Type 'VitestUtils' is missing the following properties from type 'Promise<VoidOrUndefinedOnly>': then, catch, finally, [Symbol.toStringTag]\n  Overload 2 of 2, '(callback: () => VoidOrUndefinedOnly): DebugPromiseLike', gave the following error.\n    Type 'VitestUtils' is not assignable to type 'VoidOrUndefinedOnly'."
+    },
+    {
+      "file": "mobile/src/session/use-mobile-native-chat-drafts.test.ts",
+      "line": 761,
+      "column": 17,
+      "code": 2769,
+      "message": "No overload matches this call.\n  Overload 1 of 2, '(callback: () => Promise<VoidOrUndefinedOnly>): Promise<undefined>', gave the following error.\n    Type 'VitestUtils' is missing the following properties from type 'Promise<VoidOrUndefinedOnly>': then, catch, finally, [Symbol.toStringTag]\n  Overload 2 of 2, '(callback: () => VoidOrUndefinedOnly): DebugPromiseLike', gave the following error.\n    Type 'VitestUtils' is not assignable to type 'VoidOrUndefinedOnly'."
+    },
+    {
+      "file": "mobile/src/session/use-mobile-native-chat-file-search.test.ts",
+      "line": 110,
+      "column": 27,
+      "code": 2769,
+      "message": "No overload matches this call.\n  Overload 1 of 2, '(callback: () => Promise<VoidOrUndefinedOnly>): Promise<undefined>', gave the following error.\n    Type 'Promise<VitestUtils>' is not assignable to type 'Promise<VoidOrUndefinedOnly>'.\n      Type 'VitestUtils' is not assignable to type 'VoidOrUndefinedOnly'.\n  Overload 2 of 2, '(callback: () => VoidOrUndefinedOnly): DebugPromiseLike', gave the following error.\n    Type 'Promise<VitestUtils>' is not assignable to type 'VoidOrUndefinedOnly'."
+    },
+    {
+      "file": "mobile/src/session/use-mobile-native-chat-file-search.test.ts",
+      "line": 136,
+      "column": 27,
+      "code": 2769,
+      "message": "No overload matches this call.\n  Overload 1 of 2, '(callback: () => Promise<VoidOrUndefinedOnly>): Promise<undefined>', gave the following error.\n    Type 'Promise<VitestUtils>' is not assignable to type 'Promise<VoidOrUndefinedOnly>'.\n      Type 'VitestUtils' is not assignable to type 'VoidOrUndefinedOnly'.\n  Overload 2 of 2, '(callback: () => VoidOrUndefinedOnly): DebugPromiseLike', gave the following error.\n    Type 'Promise<VitestUtils>' is not assignable to type 'VoidOrUndefinedOnly'."
+    },
+    {
+      "file": "mobile/src/session/use-mobile-native-chat-file-search.test.ts",
+      "line": 138,
+      "column": 27,
+      "code": 2769,
+      "message": "No overload matches this call.\n  Overload 1 of 2, '(callback: () => Promise<VoidOrUndefinedOnly>): Promise<undefined>', gave the following error.\n    Type 'Promise<VitestUtils>' is not assignable to type 'Promise<VoidOrUndefinedOnly>'.\n      Type 'VitestUtils' is not assignable to type 'VoidOrUndefinedOnly'.\n  Overload 2 of 2, '(callback: () => VoidOrUndefinedOnly): DebugPromiseLike', gave the following error.\n    Type 'Promise<VitestUtils>' is not assignable to type 'VoidOrUndefinedOnly'."
+    },
+    {
+      "file": "mobile/src/session/use-mobile-native-chat-file-search.test.ts",
+      "line": 51,
+      "column": 27,
+      "code": 2769,
+      "message": "No overload matches this call.\n  Overload 1 of 2, '(callback: () => Promise<VoidOrUndefinedOnly>): Promise<undefined>', gave the following error.\n    Type 'Promise<VitestUtils>' is not assignable to type 'Promise<VoidOrUndefinedOnly>'.\n      Type 'VitestUtils' is not assignable to type 'VoidOrUndefinedOnly'.\n  Overload 2 of 2, '(callback: () => VoidOrUndefinedOnly): DebugPromiseLike', gave the following error.\n    Type 'Promise<VitestUtils>' is not assignable to type 'VoidOrUndefinedOnly'."
+    },
+    {
+      "file": "mobile/src/session/use-mobile-native-chat-file-search.test.ts",
+      "line": 54,
+      "column": 27,
+      "code": 2769,
+      "message": "No overload matches this call.\n  Overload 1 of 2, '(callback: () => Promise<VoidOrUndefinedOnly>): Promise<undefined>', gave the following error.\n    Type 'Promise<VitestUtils>' is not assignable to type 'Promise<VoidOrUndefinedOnly>'.\n      Type 'VitestUtils' is not assignable to type 'VoidOrUndefinedOnly'.\n  Overload 2 of 2, '(callback: () => VoidOrUndefinedOnly): DebugPromiseLike', gave the following error.\n    Type 'Promise<VitestUtils>' is not assignable to type 'VoidOrUndefinedOnly'."
+    },
+    {
+      "file": "mobile/src/session/use-mobile-native-chat-file-search.test.ts",
+      "line": 79,
+      "column": 27,
+      "code": 2769,
+      "message": "No overload matches this call.\n  Overload 1 of 2, '(callback: () => Promise<VoidOrUndefinedOnly>): Promise<undefined>', gave the following error.\n    Type 'Promise<VitestUtils>' is not assignable to type 'Promise<VoidOrUndefinedOnly>'.\n      Type 'VitestUtils' is not assignable to type 'VoidOrUndefinedOnly'.\n  Overload 2 of 2, '(callback: () => VoidOrUndefinedOnly): DebugPromiseLike', gave the following error.\n    Type 'Promise<VitestUtils>' is not assignable to type 'VoidOrUndefinedOnly'."
+    },
+    {
+      "file": "mobile/src/session/use-mobile-native-chat-file-search.test.ts",
+      "line": 83,
+      "column": 27,
+      "code": 2769,
+      "message": "No overload matches this call.\n  Overload 1 of 2, '(callback: () => Promise<VoidOrUndefinedOnly>): Promise<undefined>', gave the following error.\n    Type 'Promise<VitestUtils>' is not assignable to type 'Promise<VoidOrUndefinedOnly>'.\n      Type 'VitestUtils' is not assignable to type 'VoidOrUndefinedOnly'.\n  Overload 2 of 2, '(callback: () => VoidOrUndefinedOnly): DebugPromiseLike', gave the following error.\n    Type 'Promise<VitestUtils>' is not assignable to type 'VoidOrUndefinedOnly'."
+    },
+    {
+      "file": "mobile/src/session/use-mobile-native-chat-file-search.test.ts",
+      "line": 99,
+      "column": 27,
+      "code": 2769,
+      "message": "No overload matches this call.\n  Overload 1 of 2, '(callback: () => Promise<VoidOrUndefinedOnly>): Promise<undefined>', gave the following error.\n    Type 'Promise<VitestUtils>' is not assignable to type 'Promise<VoidOrUndefinedOnly>'.\n      Type 'VitestUtils' is not assignable to type 'VoidOrUndefinedOnly'.\n  Overload 2 of 2, '(callback: () => VoidOrUndefinedOnly): DebugPromiseLike', gave the following error.\n    Type 'Promise<VitestUtils>' is not assignable to type 'VoidOrUndefinedOnly'."
+    },
+    {
+      "file": "mobile/src/session/use-mobile-native-chat-image-attachments.test.ts",
+      "line": 115,
+      "column": 28,
+      "code": 2345,
+      "message": "Argument of type '{ base64: string; uri: string; }[]' is not assignable to parameter of type 'AsyncIterable<PickedMobileImage>'.\n  Property '[Symbol.asyncIterator]' is missing in type '{ base64: string; uri: string; }[]' but required in type 'AsyncIterable<PickedMobileImage>'."
+    },
+    {
+      "file": "mobile/src/session/use-mobile-native-chat-image-attachments.test.ts",
+      "line": 136,
+      "column": 28,
+      "code": 2345,
+      "message": "Argument of type '{ base64: string; uri: string; }[]' is not assignable to parameter of type 'AsyncIterable<PickedMobileImage>'.\n  Property '[Symbol.asyncIterator]' is missing in type '{ base64: string; uri: string; }[]' but required in type 'AsyncIterable<PickedMobileImage>'."
+    },
+    {
+      "file": "mobile/src/session/use-mobile-native-chat-image-attachments.test.ts",
+      "line": 199,
+      "column": 28,
+      "code": 2345,
+      "message": "Argument of type '{ base64: string; uri: string; }[]' is not assignable to parameter of type 'AsyncIterable<PickedMobileImage>'.\n  Property '[Symbol.asyncIterator]' is missing in type '{ base64: string; uri: string; }[]' but required in type 'AsyncIterable<PickedMobileImage>'."
+    },
+    {
+      "file": "mobile/src/session/use-mobile-native-chat-image-attachments.test.ts",
+      "line": 233,
+      "column": 30,
+      "code": 2345,
+      "message": "Argument of type '{ base64: string; uri: string; }[]' is not assignable to parameter of type 'AsyncIterable<PickedMobileImage>'.\n  Property '[Symbol.asyncIterator]' is missing in type '{ base64: string; uri: string; }[]' but required in type 'AsyncIterable<PickedMobileImage>'."
+    },
+    {
+      "file": "mobile/src/session/use-mobile-native-chat-image-attachments.test.ts",
+      "line": 271,
+      "column": 28,
+      "code": 2345,
+      "message": "Argument of type '{ base64: string; uri: string; }[]' is not assignable to parameter of type 'AsyncIterable<PickedMobileImage>'.\n  Property '[Symbol.asyncIterator]' is missing in type '{ base64: string; uri: string; }[]' but required in type 'AsyncIterable<PickedMobileImage>'."
+    },
+    {
+      "file": "mobile/src/session/use-mobile-native-chat-image-attachments.test.ts",
+      "line": 312,
+      "column": 28,
+      "code": 2345,
+      "message": "Argument of type '{ base64: string; uri: string; }[]' is not assignable to parameter of type 'AsyncIterable<PickedMobileImage>'.\n  Property '[Symbol.asyncIterator]' is missing in type '{ base64: string; uri: string; }[]' but required in type 'AsyncIterable<PickedMobileImage>'."
+    },
+    {
+      "file": "mobile/src/session/use-mobile-native-chat-image-attachments.test.ts",
+      "line": 336,
+      "column": 28,
+      "code": 2345,
+      "message": "Argument of type '{ base64: string; uri: string; }[]' is not assignable to parameter of type 'AsyncIterable<PickedMobileImage>'.\n  Property '[Symbol.asyncIterator]' is missing in type '{ base64: string; uri: string; }[]' but required in type 'AsyncIterable<PickedMobileImage>'."
+    },
+    {
+      "file": "mobile/src/session/use-mobile-native-chat-image-attachments.test.ts",
+      "line": 356,
+      "column": 28,
+      "code": 2345,
+      "message": "Argument of type '{ base64: string; uri: string; }[]' is not assignable to parameter of type 'AsyncIterable<PickedMobileImage>'.\n  Property '[Symbol.asyncIterator]' is missing in type '{ base64: string; uri: string; }[]' but required in type 'AsyncIterable<PickedMobileImage>'."
+    },
+    {
+      "file": "mobile/src/session/use-mobile-native-chat-image-attachments.test.ts",
+      "line": 378,
+      "column": 28,
+      "code": 2345,
+      "message": "Argument of type '{ base64: string; uri: string; }[]' is not assignable to parameter of type 'AsyncIterable<PickedMobileImage>'.\n  Property '[Symbol.asyncIterator]' is missing in type '{ base64: string; uri: string; }[]' but required in type 'AsyncIterable<PickedMobileImage>'."
+    },
+    {
+      "file": "mobile/src/session/use-mobile-native-chat-image-attachments.test.ts",
+      "line": 417,
+      "column": 28,
+      "code": 2345,
+      "message": "Argument of type '{ base64: string; uri: string; }[]' is not assignable to parameter of type 'AsyncIterable<PickedMobileImage>'.\n  Property '[Symbol.asyncIterator]' is missing in type '{ base64: string; uri: string; }[]' but required in type 'AsyncIterable<PickedMobileImage>'."
+    },
+    {
+      "file": "mobile/src/session/use-mobile-native-chat-image-attachments.test.ts",
+      "line": 429,
+      "column": 28,
+      "code": 2345,
+      "message": "Argument of type 'never[]' is not assignable to parameter of type 'AsyncIterable<PickedMobileImage>'.\n  Property '[Symbol.asyncIterator]' is missing in type 'never[]' but required in type 'AsyncIterable<PickedMobileImage>'."
+    },
+    {
+      "file": "mobile/src/session/use-mobile-native-chat-image-attachments.test.ts",
+      "line": 445,
+      "column": 28,
+      "code": 2345,
+      "message": "Argument of type '{ base64: string; uri: string; }[]' is not assignable to parameter of type 'AsyncIterable<PickedMobileImage>'.\n  Property '[Symbol.asyncIterator]' is missing in type '{ base64: string; uri: string; }[]' but required in type 'AsyncIterable<PickedMobileImage>'."
+    },
+    {
+      "file": "mobile/src/session/use-mobile-native-chat-image-attachments.test.ts",
+      "line": 479,
+      "column": 28,
+      "code": 2345,
+      "message": "Argument of type '{ base64: string; uri: string; }[]' is not assignable to parameter of type 'AsyncIterable<PickedMobileImage>'.\n  Property '[Symbol.asyncIterator]' is missing in type '{ base64: string; uri: string; }[]' but required in type 'AsyncIterable<PickedMobileImage>'."
+    },
+    {
+      "file": "mobile/src/session/use-mobile-native-chat-image-attachments.test.ts",
+      "line": 502,
+      "column": 28,
+      "code": 2345,
+      "message": "Argument of type '{ base64: string; uri: string; }[]' is not assignable to parameter of type 'AsyncIterable<PickedMobileImage>'.\n  Property '[Symbol.asyncIterator]' is missing in type '{ base64: string; uri: string; }[]' but required in type 'AsyncIterable<PickedMobileImage>'."
+    },
+    {
+      "file": "mobile/src/session/use-mobile-native-chat-image-attachments.test.ts",
+      "line": 551,
+      "column": 28,
+      "code": 2345,
+      "message": "Argument of type '{ base64: string; uri: string; }[]' is not assignable to parameter of type 'AsyncIterable<PickedMobileImage>'.\n  Property '[Symbol.asyncIterator]' is missing in type '{ base64: string; uri: string; }[]' but required in type 'AsyncIterable<PickedMobileImage>'."
+    },
+    {
+      "file": "mobile/src/session/use-mobile-native-chat-image-attachments.test.ts",
+      "line": 587,
+      "column": 28,
+      "code": 2345,
+      "message": "Argument of type '{ base64: string; uri: string; }[]' is not assignable to parameter of type 'AsyncIterable<PickedMobileImage>'.\n  Property '[Symbol.asyncIterator]' is missing in type '{ base64: string; uri: string; }[]' but required in type 'AsyncIterable<PickedMobileImage>'."
+    },
+    {
+      "file": "mobile/src/session/use-mobile-native-chat-image-attachments.test.ts",
+      "line": 625,
+      "column": 28,
+      "code": 2345,
+      "message": "Argument of type '{ base64: string; uri: string; }[]' is not assignable to parameter of type 'AsyncIterable<PickedMobileImage>'.\n  Property '[Symbol.asyncIterator]' is missing in type '{ base64: string; uri: string; }[]' but required in type 'AsyncIterable<PickedMobileImage>'."
+    },
+    {
+      "file": "mobile/src/session/use-mobile-native-chat-image-attachments.test.ts",
+      "line": 679,
+      "column": 28,
+      "code": 2345,
+      "message": "Argument of type '{ base64: string; uri: string; }[]' is not assignable to parameter of type 'AsyncIterable<PickedMobileImage>'.\n  Property '[Symbol.asyncIterator]' is missing in type '{ base64: string; uri: string; }[]' but required in type 'AsyncIterable<PickedMobileImage>'."
+    },
+    {
+      "file": "mobile/src/session/use-mobile-native-chat-image-attachments.test.ts",
+      "line": 721,
+      "column": 28,
+      "code": 2345,
+      "message": "Argument of type '{ base64: string; uri: string; }[]' is not assignable to parameter of type 'AsyncIterable<PickedMobileImage>'.\n  Property '[Symbol.asyncIterator]' is missing in type '{ base64: string; uri: string; }[]' but required in type 'AsyncIterable<PickedMobileImage>'."
+    },
+    {
+      "file": "mobile/src/session/use-mobile-native-chat-image-attachments.test.ts",
+      "line": 765,
+      "column": 28,
+      "code": 2345,
+      "message": "Argument of type '{ base64: string; uri: string; }[]' is not assignable to parameter of type 'AsyncIterable<PickedMobileImage>'.\n  Property '[Symbol.asyncIterator]' is missing in type '{ base64: string; uri: string; }[]' but required in type 'AsyncIterable<PickedMobileImage>'."
+    },
+    {
+      "file": "mobile/src/session/use-mobile-native-chat-image-attachments.test.ts",
+      "line": 809,
+      "column": 30,
+      "code": 2345,
+      "message": "Argument of type '{ base64: string; uri: string; }[]' is not assignable to parameter of type 'AsyncIterable<PickedMobileImage>'.\n  Property '[Symbol.asyncIterator]' is missing in type '{ base64: string; uri: string; }[]' but required in type 'AsyncIterable<PickedMobileImage>'."
+    },
+    {
+      "file": "mobile/src/session/use-mobile-native-chat-image-attachments.test.ts",
+      "line": 810,
+      "column": 30,
+      "code": 2345,
+      "message": "Argument of type '{ base64: string; uri: string; }[]' is not assignable to parameter of type 'AsyncIterable<PickedMobileImage>'.\n  Property '[Symbol.asyncIterator]' is missing in type '{ base64: string; uri: string; }[]' but required in type 'AsyncIterable<PickedMobileImage>'."
+    },
+    {
+      "file": "mobile/src/session/use-mobile-native-chat-image-attachments.test.ts",
+      "line": 887,
+      "column": 28,
+      "code": 2345,
+      "message": "Argument of type '{ base64: string; uri: string; }[]' is not assignable to parameter of type 'AsyncIterable<PickedMobileImage>'.\n  Property '[Symbol.asyncIterator]' is missing in type '{ base64: string; uri: string; }[]' but required in type 'AsyncIterable<PickedMobileImage>'."
+    },
+    {
+      "file": "mobile/src/session/use-mobile-native-chat-input-lease.test.ts",
+      "line": 33,
+      "column": 15,
+      "code": 2769,
+      "message": "No overload matches this call.\n  Overload 1 of 2, '(callback: () => Promise<VoidOrUndefinedOnly>): Promise<undefined>', gave the following error.\n    Type 'boolean | undefined' is not assignable to type 'Promise<VoidOrUndefinedOnly>'.\n      Type 'undefined' is not assignable to type 'Promise<VoidOrUndefinedOnly>'.\n  Overload 2 of 2, '(callback: () => VoidOrUndefinedOnly): DebugPromiseLike', gave the following error.\n    Type 'boolean | undefined' is not assignable to type 'VoidOrUndefinedOnly'.\n      Type 'boolean' is not assignable to type 'VoidOrUndefinedOnly'."
+    },
+    {
+      "file": "mobile/src/session/use-mobile-native-chat-stop.test.ts",
+      "line": 179,
+      "column": 27,
+      "code": 2769,
+      "message": "No overload matches this call.\n  Overload 1 of 2, '(callback: () => Promise<VoidOrUndefinedOnly>): Promise<undefined>', gave the following error.\n    Type 'Promise<VitestUtils>' is not assignable to type 'Promise<VoidOrUndefinedOnly>'.\n      Type 'VitestUtils' is not assignable to type 'VoidOrUndefinedOnly'.\n  Overload 2 of 2, '(callback: () => VoidOrUndefinedOnly): DebugPromiseLike', gave the following error.\n    Type 'Promise<VitestUtils>' is not assignable to type 'VoidOrUndefinedOnly'."
+    },
+    {
+      "file": "mobile/src/session/use-mobile-native-chat-stop.test.ts",
+      "line": 71,
+      "column": 27,
+      "code": 2769,
+      "message": "No overload matches this call.\n  Overload 1 of 2, '(callback: () => Promise<VoidOrUndefinedOnly>): Promise<undefined>', gave the following error.\n    Type 'Promise<VitestUtils>' is not assignable to type 'Promise<VoidOrUndefinedOnly>'.\n      Type 'VitestUtils' is not assignable to type 'VoidOrUndefinedOnly'.\n  Overload 2 of 2, '(callback: () => VoidOrUndefinedOnly): DebugPromiseLike', gave the following error.\n    Type 'Promise<VitestUtils>' is not assignable to type 'VoidOrUndefinedOnly'."
+    },
+    {
+      "file": "mobile/src/session/use-mobile-native-chat-stop.test.ts",
+      "line": 98,
+      "column": 27,
+      "code": 2769,
+      "message": "No overload matches this call.\n  Overload 1 of 2, '(callback: () => Promise<VoidOrUndefinedOnly>): Promise<undefined>', gave the following error.\n    Type 'Promise<VitestUtils>' is not assignable to type 'Promise<VoidOrUndefinedOnly>'.\n      Type 'VitestUtils' is not assignable to type 'VoidOrUndefinedOnly'.\n  Overload 2 of 2, '(callback: () => VoidOrUndefinedOnly): DebugPromiseLike', gave the following error.\n    Type 'Promise<VitestUtils>' is not assignable to type 'VoidOrUndefinedOnly'."
+    },
+    {
+      "file": "mobile/src/session/use-throttled-latest-value.test.ts",
+      "line": 46,
+      "column": 15,
+      "code": 2769,
+      "message": "No overload matches this call.\n  Overload 1 of 2, '(callback: () => Promise<VoidOrUndefinedOnly>): Promise<undefined>', gave the following error.\n    Type 'VitestUtils' is missing the following properties from type 'Promise<VoidOrUndefinedOnly>': then, catch, finally, [Symbol.toStringTag]\n  Overload 2 of 2, '(callback: () => VoidOrUndefinedOnly): DebugPromiseLike', gave the following error.\n    Type 'VitestUtils' is not assignable to type 'VoidOrUndefinedOnly'."
+    },
+    {
+      "file": "mobile/src/session/use-throttled-latest-value.test.ts",
+      "line": 56,
+      "column": 15,
+      "code": 2769,
+      "message": "No overload matches this call.\n  Overload 1 of 2, '(callback: () => Promise<VoidOrUndefinedOnly>): Promise<undefined>', gave the following error.\n    Type 'VitestUtils' is missing the following properties from type 'Promise<VoidOrUndefinedOnly>': then, catch, finally, [Symbol.toStringTag]\n  Overload 2 of 2, '(callback: () => VoidOrUndefinedOnly): DebugPromiseLike', gave the following error.\n    Type 'VitestUtils' is not assignable to type 'VoidOrUndefinedOnly'."
+    },
+    {
+      "file": "mobile/src/source-control/mobile-create-pr-action.test.ts",
+      "line": 14,
+      "column": 3,
+      "code": 2322,
+      "message": "Type '{ provider: HostedReviewProvider; review: HostedReviewSummary | null; canCreate: boolean; ... 7 more ...; stackedCreationSupported?: boolean | undefined; }' is not assignable to type 'HostedReviewCreationEligibility'.\n  Types of property 'reviewLookupOutcome' are incompatible.\n    Type 'HostedReviewLookupOutcome | undefined' is not assignable to type 'HostedReviewLookupOutcome'.\n      Type 'undefined' is not assignable to type 'HostedReviewLookupOutcome'."
+    },
+    {
+      "file": "mobile/src/source-control/mobile-create-pr-action.test.ts",
+      "line": 63,
+      "column": 56,
+      "code": 2304,
+      "message": "Cannot find name 'HostedReviewProvider'."
+    },
+    {
+      "file": "mobile/src/source-control/mobile-hosted-review-create-intent-runner.test.ts",
+      "line": 169,
+      "column": 11,
+      "code": 2322,
+      "message": "Type '{ entries: unknown[]; conflictOperation: string; branch: string; head: string; upstreamStatus: { hasUpstream: boolean; ahead: number; behind: number; }; }' is not assignable to type 'GitStatusResult'.\n  Types of property 'entries' are incompatible.\n    Type 'unknown[]' is not assignable to type 'GitUncommittedEntry[]'.\n      Type 'unknown' is not assignable to type 'GitUncommittedEntry'."
+    },
+    {
+      "file": "mobile/src/source-control/mobile-hosted-review-create-intent-runner.test.ts",
+      "line": 182,
+      "column": 11,
+      "code": 2322,
+      "message": "Type '{ entries: unknown[]; conflictOperation: string; branch: string; head: string; upstreamStatus: { hasUpstream: boolean; ahead: number; behind: number; }; }' is not assignable to type 'GitStatusResult'.\n  Types of property 'entries' are incompatible.\n    Type 'unknown[]' is not assignable to type 'GitUncommittedEntry[]'.\n      Type 'unknown' is not assignable to type 'GitUncommittedEntry'."
+    },
+    {
+      "file": "mobile/src/source-control/mobile-hosted-review-create-intent-runner.test.ts",
+      "line": 194,
+      "column": 11,
+      "code": 2322,
+      "message": "Type '{ entries: unknown[]; conflictOperation: string; branch: string; head: string; upstreamStatus: { hasUpstream: boolean; ahead: number; behind: number; }; }' is not assignable to type 'GitStatusResult'.\n  Types of property 'entries' are incompatible.\n    Type 'unknown[]' is not assignable to type 'GitUncommittedEntry[]'.\n      Type 'unknown' is not assignable to type 'GitUncommittedEntry'."
+    },
+    {
+      "file": "mobile/src/source-control/MobileGitHistoryList.test.tsx",
+      "line": 148,
+      "column": 17,
+      "code": 2367,
+      "message": "This comparison appears to be unintentional because the types 'ElementType' and '\"Pressable\"' have no overlap."
+    },
+    {
+      "file": "mobile/src/source-control/use-mobile-hosted-review-eligibility.test.ts",
+      "line": 19,
+      "column": 3,
+      "code": 2322,
+      "message": "Type '{ provider: HostedReviewProvider; review: HostedReviewSummary | null; canCreate: boolean; ... 7 more ...; stackedCreationSupported?: boolean | undefined; }' is not assignable to type 'HostedReviewCreationEligibility'.\n  Types of property 'reviewLookupOutcome' are incompatible.\n    Type 'HostedReviewLookupOutcome | undefined' is not assignable to type 'HostedReviewLookupOutcome'.\n      Type 'undefined' is not assignable to type 'HostedReviewLookupOutcome'."
+    },
+    {
+      "file": "mobile/src/terminal/terminal-caret-rendering-oracle.test.ts",
+      "line": 78,
+      "column": 60,
+      "code": 2345,
+      "message": "Argument of type '(this: EventTarget, type: string, listener: EventListenerOrEventListenerObject, options?: boolean | AddEventListenerOptions) => void' is not assignable to parameter of type '(type: string, callback: EventListenerOrEventListenerObject | null, options?: boolean | AddEventListenerOptions | undefined) => void'.\n  Types of parameters 'listener' and 'callback' are incompatible.\n    Type 'EventListenerOrEventListenerObject | null' is not assignable to type 'EventListenerOrEventListenerObject'.\n      Type 'null' is not assignable to type 'EventListenerOrEventListenerObject'."
+    },
+    {
+      "file": "mobile/src/terminal/terminal-caret-rendering-oracle.test.ts",
+      "line": 95,
+      "column": 63,
+      "code": 2345,
+      "message": "Argument of type '(this: EventTarget, type: string, listener: EventListenerOrEventListenerObject, options?: boolean | EventListenerOptions) => void' is not assignable to parameter of type '(type: string, callback: EventListenerOrEventListenerObject | null, options?: boolean | EventListenerOptions | undefined) => void'.\n  Types of parameters 'listener' and 'callback' are incompatible.\n    Type 'EventListenerOrEventListenerObject | null' is not assignable to type 'EventListenerOrEventListenerObject'.\n      Type 'null' is not assignable to type 'EventListenerOrEventListenerObject'."
+    },
+    {
+      "file": "mobile/src/terminal/terminal-webview-engine-error.test.ts",
+      "line": 241,
+      "column": 30,
+      "code": 2339,
+      "message": "Property 'root' does not exist on type 'never'."
+    },
+    {
+      "file": "mobile/src/terminal/terminal-webview-engine-error.test.ts",
+      "line": 64,
+      "column": 44,
+      "code": 2345,
+      "message": "Argument of type '\"WebView\"' is not assignable to parameter of type 'ElementType'."
+    },
+    {
+      "file": "mobile/src/terminal/terminal-webview-engine-error.test.ts",
+      "line": 72,
+      "column": 20,
+      "code": 2345,
+      "message": "Argument of type '\"Text\"' is not assignable to parameter of type 'ElementType'."
+    },
+    {
+      "file": "mobile/src/terminal/terminal-webview-query-reply-routing.test.ts",
+      "line": 40,
+      "column": 44,
+      "code": 2345,
+      "message": "Argument of type '\"WebView\"' is not assignable to parameter of type 'ElementType'."
+    },
+    {
+      "file": "mobile/src/terminal/terminal-webview-wheel-scroll.test.ts",
+      "line": 178,
+      "column": 45,
+      "code": 2345,
+      "message": "Argument of type 'Mock<Procedure | Constructable>' is not assignable to parameter of type '(lines: number) => void'.\n  Type 'MockInstance<Procedure | Constructable> & (new (...args: any[]) => any) & {}' is not assignable to type '(lines: number) => void'.\n    Type 'MockInstance<Procedure | Constructable> & (new (...args: any[]) => any) & {}' provides no match for the signature '(lines: number): void'."
+    },
+    {
+      "file": "mobile/src/terminal/terminal-webview-wheel-scroll.test.ts",
+      "line": 182,
+      "column": 38,
+      "code": 2322,
+      "message": "Type 'Mock<Procedure | Constructable>' is not assignable to type '(data: string) => void'.\n  Type 'MockInstance<Procedure | Constructable> & (new (...args: any[]) => any) & {}' is not assignable to type '(data: string) => void'.\n    Type 'MockInstance<Procedure | Constructable> & (new (...args: any[]) => any) & {}' provides no match for the signature '(data: string): void'."
+    },
+    {
+      "file": "mobile/src/transport/client-context.test.ts",
+      "line": 458,
+      "column": 15,
+      "code": 18047,
+      "message": "'renderer' is possibly 'null'."
+    },
+    {
+      "file": "mobile/src/transport/connection-revival-triggers.test.ts",
+      "line": 51,
+      "column": 28,
+      "code": 2345,
+      "message": "Argument of type 'Mock<Procedure | Constructable>' is not assignable to parameter of type '() => void'.\n  Type 'MockInstance<Procedure | Constructable> & (new (...args: any[]) => any) & {}' is not assignable to type '() => void'.\n    Type 'MockInstance<Procedure | Constructable> & (new (...args: any[]) => any) & {}' provides no match for the signature '(): void'."
+    },
+    {
+      "file": "mobile/src/transport/connection-revival-triggers.test.ts",
+      "line": 59,
+      "column": 28,
+      "code": 2345,
+      "message": "Argument of type 'Mock<Procedure | Constructable>' is not assignable to parameter of type '() => void'.\n  Type 'MockInstance<Procedure | Constructable> & (new (...args: any[]) => any) & {}' is not assignable to type '() => void'.\n    Type 'MockInstance<Procedure | Constructable> & (new (...args: any[]) => any) & {}' provides no match for the signature '(): void'."
+    },
+    {
+      "file": "mobile/src/transport/connection-revival-triggers.test.ts",
+      "line": 68,
+      "column": 28,
+      "code": 2345,
+      "message": "Argument of type 'Mock<Procedure | Constructable>' is not assignable to parameter of type '() => void'.\n  Type 'MockInstance<Procedure | Constructable> & (new (...args: any[]) => any) & {}' is not assignable to type '() => void'.\n    Type 'MockInstance<Procedure | Constructable> & (new (...args: any[]) => any) & {}' provides no match for the signature '(): void'."
+    },
+    {
+      "file": "mobile/src/transport/connection-revival-triggers.test.ts",
+      "line": 74,
+      "column": 28,
+      "code": 2345,
+      "message": "Argument of type 'Mock<Procedure | Constructable>' is not assignable to parameter of type '() => void'.\n  Type 'MockInstance<Procedure | Constructable> & (new (...args: any[]) => any) & {}' is not assignable to type '() => void'.\n    Type 'MockInstance<Procedure | Constructable> & (new (...args: any[]) => any) & {}' provides no match for the signature '(): void'."
+    },
+    {
+      "file": "mobile/src/transport/connection-revival-triggers.test.ts",
+      "line": 80,
+      "column": 28,
+      "code": 2345,
+      "message": "Argument of type 'Mock<Procedure | Constructable>' is not assignable to parameter of type '() => void'.\n  Type 'MockInstance<Procedure | Constructable> & (new (...args: any[]) => any) & {}' is not assignable to type '() => void'.\n    Type 'MockInstance<Procedure | Constructable> & (new (...args: any[]) => any) & {}' provides no match for the signature '(): void'."
+    },
+    {
+      "file": "mobile/src/transport/connection-revival-triggers.test.ts",
+      "line": 88,
+      "column": 60,
+      "code": 2345,
+      "message": "Argument of type 'Mock<Procedure | Constructable>' is not assignable to parameter of type '(reason: \"app-resume\" | \"network-change\") => void'.\n  Type 'MockInstance<Procedure | Constructable> & (new (...args: any[]) => any) & {}' is not assignable to type '(reason: \"app-resume\" | \"network-change\") => void'.\n    Type 'MockInstance<Procedure | Constructable> & (new (...args: any[]) => any) & {}' provides no match for the signature '(reason: \"app-resume\" | \"network-change\"): void'."
+    },
+    {
+      "file": "mobile/src/transport/host-credential-cleanup.test.ts",
+      "line": 146,
+      "column": 5,
+      "code": 2349,
+      "message": "This expression is not callable.\n  Type 'never' has no call signatures."
+    },
+    {
+      "file": "mobile/src/transport/host-credential-cleanup.test.ts",
+      "line": 171,
+      "column": 5,
+      "code": 2349,
+      "message": "This expression is not callable.\n  Type 'never' has no call signatures."
+    },
+    {
+      "file": "mobile/src/transport/host-credential-cleanup.test.ts",
+      "line": 262,
+      "column": 5,
+      "code": 2349,
+      "message": "This expression is not callable.\n  Type 'never' has no call signatures."
+    },
+    {
+      "file": "mobile/src/transport/host-edit-navigation.test.ts",
+      "line": 121,
+      "column": 9,
+      "code": 2345,
+      "message": "Argument of type '{ push: () => never; }' is not assignable to parameter of type 'HostStackRouter'.\n  Property 'replace' is missing in type '{ push: () => never; }' but required in type 'HostStackRouter'."
+    },
+    {
+      "file": "mobile/src/transport/host-list-load-sharing.test.ts",
+      "line": 22,
+      "column": 37,
+      "code": 2345,
+      "message": "Argument of type 'Mock<() => Promise<HostProfile[]>>' is not assignable to parameter of type '() => Promise<HostListSnapshot>'.\n  Type 'Promise<HostProfile[]>' is not assignable to type 'Promise<HostListSnapshot>'.\n    Type 'HostProfile[]' is missing the following properties from type 'HostListSnapshot': catalog, profiles"
+    },
+    {
+      "file": "mobile/src/transport/host-list-load-sharing.test.ts",
+      "line": 23,
+      "column": 38,
+      "code": 2345,
+      "message": "Argument of type 'Mock<() => Promise<HostProfile[]>>' is not assignable to parameter of type '() => Promise<HostListSnapshot>'.\n  Type 'Promise<HostProfile[]>' is not assignable to type 'Promise<HostListSnapshot>'.\n    Type 'HostProfile[]' is missing the following properties from type 'HostListSnapshot': catalog, profiles"
+    },
+    {
+      "file": "mobile/src/transport/host-removal-lifecycle.test.ts",
+      "line": 43,
+      "column": 5,
+      "code": 2349,
+      "message": "This expression is not callable.\n  Type 'never' has no call signatures."
+    },
+    {
+      "file": "mobile/src/transport/host-status-gates.test.ts",
+      "line": 114,
+      "column": 17,
+      "code": 2339,
+      "message": "Property 'unmount' does not exist on type 'never'."
+    },
+    {
+      "file": "mobile/src/transport/host-status-gates.test.ts",
+      "line": 144,
+      "column": 21,
+      "code": 2339,
+      "message": "Property 'floatingWorkspaceEnabled' does not exist on type 'never'."
+    },
+    {
+      "file": "mobile/src/transport/host-status-gates.test.ts",
+      "line": 178,
+      "column": 17,
+      "code": 2339,
+      "message": "Property 'unmount' does not exist on type 'never'."
+    },
+    {
+      "file": "mobile/src/transport/host-status-gates.test.ts",
+      "line": 205,
+      "column": 21,
+      "code": 2339,
+      "message": "Property 'hostCapabilities' does not exist on type 'never'."
+    },
+    {
+      "file": "mobile/src/transport/host-status-gates.test.ts",
+      "line": 212,
+      "column": 17,
+      "code": 2339,
+      "message": "Property 'unmount' does not exist on type 'never'."
+    },
+    {
+      "file": "mobile/src/transport/host-status-gates.test.ts",
+      "line": 78,
+      "column": 17,
+      "code": 2339,
+      "message": "Property 'unmount' does not exist on type 'never'."
+    },
+    {
+      "file": "mobile/src/transport/host-store.test.ts",
+      "line": 596,
+      "column": 5,
+      "code": 2349,
+      "message": "This expression is not callable.\n  Type 'never' has no call signatures."
+    },
+    {
+      "file": "mobile/src/transport/host-store.test.ts",
+      "line": 625,
+      "column": 5,
+      "code": 2349,
+      "message": "This expression is not callable.\n  Type 'never' has no call signatures."
+    },
+    {
+      "file": "mobile/src/transport/mobile-endpoint-supervisor-nudge.test.ts",
+      "line": 180,
+      "column": 5,
+      "code": 2349,
+      "message": "This expression is not callable.\n  Type 'never' has no call signatures."
+    },
+    {
+      "file": "mobile/src/transport/mobile-relay-background-grace.test.ts",
+      "line": 33,
+      "column": 9,
+      "code": 2741,
+      "message": "Property '__promisify__' is missing in type 'MockInstance<() => ReturnType<typeof setTimeout>> & { (): number; new (): number; } & {}' but required in type 'typeof setTimeout'."
+    },
+    {
+      "file": "mobile/src/transport/mobile-relay-background-grace.test.ts",
+      "line": 52,
+      "column": 9,
+      "code": 2741,
+      "message": "Property '__promisify__' is missing in type 'MockInstance<(next: any) => ReturnType<typeof setTimeout>> & { (next: any): number; new (next: any): number; } & {}' but required in type 'typeof setTimeout'."
+    },
+    {
+      "file": "mobile/src/transport/mobile-relay-background-lifecycle.test.ts",
+      "line": 155,
+      "column": 5,
+      "code": 2349,
+      "message": "This expression is not callable.\n  Type 'never' has no call signatures."
+    },
+    {
+      "file": "mobile/src/transport/mobile-relay-direct-upgrade.test.ts",
+      "line": 110,
+      "column": 26,
+      "code": 2339,
+      "message": "Property 'mock' does not exist on type '(method: string, params?: unknown, options?: SendRequestOptions | undefined) => Promise<RpcResponse>'."
+    },
+    {
+      "file": "mobile/src/transport/mobile-relay-outage-escalation.test.ts",
+      "line": 28,
+      "column": 44,
+      "code": 2322,
+      "message": "Type 'number' is not assignable to type 'null'."
+    },
+    {
+      "file": "mobile/src/transport/mobile-relay-pairing-recovery.test.ts",
+      "line": 134,
+      "column": 44,
+      "code": 2345,
+      "message": "Argument of type '{ loadJournal: Mock<() => Promise<{ metadata: { winner: \"relay\" | \"direct\"; authorizationMode: \"relay-basis\" | \"authenticated-direct\"; v: 1; journalId: string; offerFingerprint: string; host: { id: string; name: string; endpoint: string; publicKeyB64: string; lastConnected: number; }; relay: { ...; }; installReqId: ...' is not assignable to parameter of type 'Partial<RecoveryDependencies>'.\n  Types of property 'connectRelay' are incompatible.\n    Type 'Mock<Procedure | Constructable>' is not assignable to type '((args: { relay: { v: 1; directorUrl: string; cellUrl: string; assignmentEpoch: number; relayHostId: string; inviteToken: string; inviteExpiresAt: number; e2eeFraming: 2; }; deviceToken: string; desktopPublicKeyB64: string; ... 4 more ...; onLog?: ConnectionLogSink | undefined; }) => PairingCandidateClient) | undefi...'.\n      Type 'MockInstance<Procedure | Constructable> & (new (...args: any[]) => any) & {}' is not assignable to type '((args: { relay: { v: 1; directorUrl: string; cellUrl: string; assignmentEpoch: number; relayHostId: string; inviteToken: string; inviteExpiresAt: number; e2eeFraming: 2; }; deviceToken: string; desktopPublicKeyB64: string; ... 4 more ...; onLog?: ConnectionLogSink | undefined; }) => PairingCandidateClient) | undefi...'."
+    },
+    {
+      "file": "mobile/src/transport/mobile-relay-pairing-recovery.test.ts",
+      "line": 185,
+      "column": 44,
+      "code": 2345,
+      "message": "Argument of type '{ loadJournal: Mock<() => Promise<{ metadata: { winner: \"relay\" | \"direct\"; authorizationMode: \"relay-basis\" | \"authenticated-direct\"; v: 1; journalId: string; offerFingerprint: string; host: { id: string; name: string; endpoint: string; publicKeyB64: string; lastConnected: number; }; relay: { ...; }; installReqId: ...' is not assignable to parameter of type 'Partial<RecoveryDependencies>'.\n  Types of property 'connectRelay' are incompatible.\n    Type 'Mock<Procedure | Constructable>' is not assignable to type '((args: { relay: { v: 1; directorUrl: string; cellUrl: string; assignmentEpoch: number; relayHostId: string; inviteToken: string; inviteExpiresAt: number; e2eeFraming: 2; }; deviceToken: string; desktopPublicKeyB64: string; ... 4 more ...; onLog?: ConnectionLogSink | undefined; }) => PairingCandidateClient) | undefi...'.\n      Type 'MockInstance<Procedure | Constructable> & (new (...args: any[]) => any) & {}' is not assignable to type '((args: { relay: { v: 1; directorUrl: string; cellUrl: string; assignmentEpoch: number; relayHostId: string; inviteToken: string; inviteExpiresAt: number; e2eeFraming: 2; }; deviceToken: string; desktopPublicKeyB64: string; ... 4 more ...; onLog?: ConnectionLogSink | undefined; }) => PairingCandidateClient) | undefi...'."
+    },
+    {
+      "file": "mobile/src/transport/mobile-relay-pairing-recovery.test.ts",
+      "line": 217,
+      "column": 44,
+      "code": 2345,
+      "message": "Argument of type '{ loadJournal: Mock<() => Promise<{ metadata: { winner: \"relay\" | \"direct\"; authorizationMode: \"relay-basis\" | \"authenticated-direct\"; v: 1; journalId: string; offerFingerprint: string; host: { id: string; name: string; endpoint: string; publicKeyB64: string; lastConnected: number; }; relay: { ...; }; installReqId: ...' is not assignable to parameter of type 'Partial<RecoveryDependencies>'.\n  Types of property 'connectRelay' are incompatible.\n    Type 'Mock<Procedure | Constructable>' is not assignable to type '((args: { relay: { v: 1; directorUrl: string; cellUrl: string; assignmentEpoch: number; relayHostId: string; inviteToken: string; inviteExpiresAt: number; e2eeFraming: 2; }; deviceToken: string; desktopPublicKeyB64: string; ... 4 more ...; onLog?: ConnectionLogSink | undefined; }) => PairingCandidateClient) | undefi...'.\n      Type 'MockInstance<Procedure | Constructable> & (new (...args: any[]) => any) & {}' is not assignable to type '((args: { relay: { v: 1; directorUrl: string; cellUrl: string; assignmentEpoch: number; relayHostId: string; inviteToken: string; inviteExpiresAt: number; e2eeFraming: 2; }; deviceToken: string; desktopPublicKeyB64: string; ... 4 more ...; onLog?: ConnectionLogSink | undefined; }) => PairingCandidateClient) | undefi...'."
+    },
+    {
+      "file": "mobile/src/transport/mobile-relay-pairing-recovery.test.ts",
+      "line": 218,
+      "column": 63,
+      "code": 2493,
+      "message": "Tuple type '[]' of length '0' has no element at index '0'."
+    },
+    {
+      "file": "mobile/src/transport/mobile-relay-pairing-recovery.test.ts",
+      "line": 219,
+      "column": 12,
+      "code": 18048,
+      "message": "'written' is possibly 'undefined'."
+    },
+    {
+      "file": "mobile/src/transport/mobile-relay-pairing-recovery.test.ts",
+      "line": 235,
+      "column": 44,
+      "code": 2345,
+      "message": "Argument of type '{ now: () => number; loadJournal: Mock<() => Promise<{ metadata: { winner: \"relay\" | \"direct\"; authorizationMode: \"relay-basis\" | \"authenticated-direct\"; v: 1; journalId: string; offerFingerprint: string; ... 4 more ...; pendingResumeTokenHash: string; }; secrets: MobileRelayPairingJournalSecrets; }>>; ... 8 more .....' is not assignable to parameter of type 'Partial<RecoveryDependencies>'.\n  Types of property 'connectRelay' are incompatible.\n    Type 'Mock<Procedure | Constructable>' is not assignable to type '((args: { relay: { v: 1; directorUrl: string; cellUrl: string; assignmentEpoch: number; relayHostId: string; inviteToken: string; inviteExpiresAt: number; e2eeFraming: 2; }; deviceToken: string; desktopPublicKeyB64: string; ... 4 more ...; onLog?: ConnectionLogSink | undefined; }) => PairingCandidateClient) | undefi...'.\n      Type 'MockInstance<Procedure | Constructable> & (new (...args: any[]) => any) & {}' is not assignable to type '((args: { relay: { v: 1; directorUrl: string; cellUrl: string; assignmentEpoch: number; relayHostId: string; inviteToken: string; inviteExpiresAt: number; e2eeFraming: 2; }; deviceToken: string; desktopPublicKeyB64: string; ... 4 more ...; onLog?: ConnectionLogSink | undefined; }) => PairingCandidateClient) | undefi...'."
+    },
+    {
+      "file": "mobile/src/transport/mobile-relay-pairing-recovery.test.ts",
+      "line": 249,
+      "column": 44,
+      "code": 2345,
+      "message": "Argument of type '{ now: () => number; loadJournal: Mock<() => Promise<{ metadata: { winner: \"relay\" | \"direct\"; authorizationMode: \"relay-basis\" | \"authenticated-direct\"; v: 1; journalId: string; offerFingerprint: string; ... 4 more ...; pendingResumeTokenHash: string; }; secrets: MobileRelayPairingJournalSecrets; }>>; ... 8 more .....' is not assignable to parameter of type 'Partial<RecoveryDependencies>'.\n  Types of property 'connectRelay' are incompatible.\n    Type 'Mock<Procedure | Constructable>' is not assignable to type '((args: { relay: { v: 1; directorUrl: string; cellUrl: string; assignmentEpoch: number; relayHostId: string; inviteToken: string; inviteExpiresAt: number; e2eeFraming: 2; }; deviceToken: string; desktopPublicKeyB64: string; ... 4 more ...; onLog?: ConnectionLogSink | undefined; }) => PairingCandidateClient) | undefi...'.\n      Type 'MockInstance<Procedure | Constructable> & (new (...args: any[]) => any) & {}' is not assignable to type '((args: { relay: { v: 1; directorUrl: string; cellUrl: string; assignmentEpoch: number; relayHostId: string; inviteToken: string; inviteExpiresAt: number; e2eeFraming: 2; }; deviceToken: string; desktopPublicKeyB64: string; ... 4 more ...; onLog?: ConnectionLogSink | undefined; }) => PairingCandidateClient) | undefi...'."
+    },
+    {
+      "file": "mobile/src/transport/mobile-relay-pairing-recovery.test.ts",
+      "line": 269,
+      "column": 44,
+      "code": 2345,
+      "message": "Argument of type '{ now: () => number; writeCredentialBundle: Mock<() => Promise<never>>; loadJournal: Mock<() => Promise<{ metadata: { winner: \"relay\" | \"direct\"; authorizationMode: \"relay-basis\" | \"authenticated-direct\"; ... 7 more ...; pendingResumeTokenHash: string; }; secrets: MobileRelayPairingJournalSecrets; }>>; ... 7 more .....' is not assignable to parameter of type 'Partial<RecoveryDependencies>'.\n  Types of property 'connectRelay' are incompatible.\n    Type 'Mock<Procedure | Constructable>' is not assignable to type '((args: { relay: { v: 1; directorUrl: string; cellUrl: string; assignmentEpoch: number; relayHostId: string; inviteToken: string; inviteExpiresAt: number; e2eeFraming: 2; }; deviceToken: string; desktopPublicKeyB64: string; ... 4 more ...; onLog?: ConnectionLogSink | undefined; }) => PairingCandidateClient) | undefi...'.\n      Type 'MockInstance<Procedure | Constructable> & (new (...args: any[]) => any) & {}' is not assignable to type '((args: { relay: { v: 1; directorUrl: string; cellUrl: string; assignmentEpoch: number; relayHostId: string; inviteToken: string; inviteExpiresAt: number; e2eeFraming: 2; }; deviceToken: string; desktopPublicKeyB64: string; ... 4 more ...; onLog?: ConnectionLogSink | undefined; }) => PairingCandidateClient) | undefi...'."
+    },
+    {
+      "file": "mobile/src/transport/mobile-relay-pairing-recovery.test.ts",
+      "line": 39,
+      "column": 3,
+      "code": 2502,
+      "message": "'journal' is referenced directly or indirectly in its own type annotation."
+    },
+    {
+      "file": "mobile/src/transport/mobile-relay-pairing-recovery.test.ts",
+      "line": 52,
+      "column": 3,
+      "code": 2502,
+      "message": "'journal' is referenced directly or indirectly in its own type annotation."
+    },
+    {
+      "file": "mobile/src/transport/mobile-relay-pairing-rejection-escalation.test.ts",
+      "line": 47,
+      "column": 44,
+      "code": 2322,
+      "message": "Type 'number' is not assignable to type 'null'."
+    },
+    {
+      "file": "mobile/src/transport/mobile-relay-physical-client.test.ts",
+      "line": 105,
+      "column": 32,
+      "code": 2352,
+      "message": "Conversion of type 'undefined' to type 'string' may be a mistake because neither type sufficiently overlaps with the other. If this was intentional, convert the expression to 'unknown' first."
+    },
+    {
+      "file": "mobile/src/transport/mobile-relay-physical-client.test.ts",
+      "line": 105,
+      "column": 62,
+      "code": 2493,
+      "message": "Tuple type '[]' of length '0' has no element at index '0'."
+    },
+    {
+      "file": "mobile/src/transport/mobile-relay-reconnect-controller.test.ts",
+      "line": 321,
+      "column": 21,
+      "code": 2352,
+      "message": "Conversion of type '{ getFailure: () => RelayOuterError; }' to type 'MobileRelayRpcSession' may be a mistake because neither type sufficiently overlaps with the other. If this was intentional, convert the expression to 'unknown' first.\n  Type '{ getFailure: () => RelayOuterError; }' is missing the following properties from type 'RpcClient': sendRequest, subscribe, updateTerminalSubscriptionViewport, getState, and 5 more."
+    },
+    {
+      "file": "mobile/src/transport/mobile-relay-resume-director.test.ts",
+      "line": 31,
+      "column": 12,
+      "code": 2493,
+      "message": "Tuple type '[]' of length '0' has no element at index '0'."
+    },
+    {
+      "file": "mobile/src/transport/mobile-relay-resume-director.test.ts",
+      "line": 31,
+      "column": 17,
+      "code": 2493,
+      "message": "Tuple type '[]' of length '0' has no element at index '1'."
+    },
+    {
+      "file": "mobile/src/transport/mobile-relay-resume-director.test.ts",
+      "line": 35,
+      "column": 29,
+      "code": 2339,
+      "message": "Property 'body' does not exist on type 'never'."
+    },
+    {
+      "file": "mobile/src/transport/mobile-relay-rpc-session-liveness.test.ts",
+      "line": 84,
+      "column": 29,
+      "code": 2352,
+      "message": "Conversion of type 'undefined' to type 'string' may be a mistake because neither type sufficiently overlaps with the other. If this was intentional, convert the expression to 'unknown' first."
+    },
+    {
+      "file": "mobile/src/transport/mobile-relay-rpc-session-liveness.test.ts",
+      "line": 84,
+      "column": 7,
+      "code": 2493,
+      "message": "Tuple type '[]' of length '0' has no element at index '0'."
+    },
+    {
+      "file": "mobile/src/transport/mobile-relay-rpc-session.test.ts",
+      "line": 148,
+      "column": 40,
+      "code": 2352,
+      "message": "Conversion of type 'undefined' to type 'string' may be a mistake because neither type sufficiently overlaps with the other. If this was intentional, convert the expression to 'unknown' first."
+    },
+    {
+      "file": "mobile/src/transport/mobile-relay-rpc-session.test.ts",
+      "line": 148,
+      "column": 70,
+      "code": 2493,
+      "message": "Tuple type '[]' of length '0' has no element at index '0'."
+    },
+    {
+      "file": "mobile/src/transport/mobile-relay-rpc-session.test.ts",
+      "line": 177,
+      "column": 39,
+      "code": 2352,
+      "message": "Conversion of type 'undefined' to type 'string' may be a mistake because neither type sufficiently overlaps with the other. If this was intentional, convert the expression to 'unknown' first."
+    },
+    {
+      "file": "mobile/src/transport/mobile-relay-rpc-session.test.ts",
+      "line": 177,
+      "column": 69,
+      "code": 2493,
+      "message": "Tuple type '[]' of length '0' has no element at index '0'."
+    },
+    {
+      "file": "mobile/src/transport/mobile-relay-rpc-session.test.ts",
+      "line": 71,
+      "column": 30,
+      "code": 2352,
+      "message": "Conversion of type 'undefined' to type 'string' may be a mistake because neither type sufficiently overlaps with the other. If this was intentional, convert the expression to 'unknown' first."
+    },
+    {
+      "file": "mobile/src/transport/mobile-relay-rpc-session.test.ts",
+      "line": 71,
+      "column": 60,
+      "code": 2493,
+      "message": "Tuple type '[]' of length '0' has no element at index '0'."
+    },
+    {
+      "file": "mobile/src/transport/mobile-relay-runtime-failover.test.ts",
+      "line": 274,
+      "column": 30,
+      "code": 2345,
+      "message": "Argument of type 'null' is not assignable to parameter of type '{ v: 1; hostId: string; deviceToken: string; current: { token: string; hash: string; version: number; expiresAt: number; }; grace?: { token: string; hash: string; version: number; expiresAt: number; } | undefined; pending?: { ...; } | undefined; invite?: { ...; } | undefined; }'."
+    },
+    {
+      "file": "mobile/src/transport/pairing-relay-candidate.test.ts",
+      "line": 325,
+      "column": 35,
+      "code": 2493,
+      "message": "Tuple type '[]' of length '0' has no element at index '0'."
+    },
+    {
+      "file": "mobile/src/transport/pre-profile-pairing-coordinator.test.ts",
+      "line": 359,
+      "column": 42,
+      "code": 2345,
+      "message": "Argument of type '(connectArgs: any) => RpcClient' is not assignable to parameter of type '() => RpcClient'.\n  Target signature provides too few arguments. Expected 1 or more, but got 0."
+    },
+    {
+      "file": "mobile/src/transport/pre-profile-pairing-coordinator.test.ts",
+      "line": 359,
+      "column": 43,
+      "code": 7006,
+      "message": "Parameter 'connectArgs' implicitly has an 'any' type."
+    },
+    {
+      "file": "mobile/src/transport/pre-profile-pairing-coordinator.test.ts",
+      "line": 412,
+      "column": 42,
+      "code": 2345,
+      "message": "Argument of type '(connectArgs: any) => RpcClient' is not assignable to parameter of type '() => RpcClient'.\n  Target signature provides too few arguments. Expected 1 or more, but got 0."
+    },
+    {
+      "file": "mobile/src/transport/pre-profile-pairing-coordinator.test.ts",
+      "line": 412,
+      "column": 43,
+      "code": 7006,
+      "message": "Parameter 'connectArgs' implicitly has an 'any' type."
+    },
+    {
+      "file": "mobile/src/transport/rpc-client-synthesized-close-diagnostics.test.ts",
+      "line": 132,
+      "column": 8,
+      "code": 7006,
+      "message": "Parameter 'call' implicitly has an 'any' type."
+    },
+    {
+      "file": "mobile/src/transport/rpc-client-synthesized-close-diagnostics.test.ts",
+      "line": 141,
+      "column": 50,
+      "code": 7006,
+      "message": "Parameter 'call' implicitly has an 'any' type."
+    },
+    {
+      "file": "mobile/src/transport/rpc-client-synthesized-close-diagnostics.test.ts",
+      "line": 75,
+      "column": 14,
+      "code": 7006,
+      "message": "Parameter 'call' implicitly has an 'any' type."
+    },
+    {
+      "file": "mobile/src/transport/rpc-client-synthesized-close-diagnostics.test.ts",
+      "line": 76,
+      "column": 11,
+      "code": 7006,
+      "message": "Parameter 'call' implicitly has an 'any' type."
+    },
+    {
+      "file": "mobile/src/transport/rpc-session-liveness-watchdog.test.ts",
+      "line": 125,
+      "column": 18,
+      "code": 7006,
+      "message": "Parameter 'next' implicitly has an 'any' type."
+    },
+    {
+      "file": "mobile/src/transport/rpc-session-liveness-watchdog.test.ts",
+      "line": 125,
+      "column": 7,
+      "code": 2741,
+      "message": "Property '__promisify__' is missing in type '(next: any) => ReturnType<typeof setTimeout>' but required in type 'typeof setTimeout'."
+    },
+    {
+      "file": "mobile/src/transport/rpc-session-liveness-watchdog.test.ts",
+      "line": 135,
+      "column": 5,
+      "code": 2349,
+      "message": "This expression is not callable.\n  Type 'never' has no call signatures."
+    },
+    {
+      "file": "mobile/src/transport/rpc-session-liveness-watchdog.test.ts",
+      "line": 137,
+      "column": 5,
+      "code": 2349,
+      "message": "This expression is not callable.\n  Type 'never' has no call signatures."
+    },
+    {
+      "file": "mobile/src/transport/rpc-session-liveness-watchdog.test.ts",
+      "line": 149,
+      "column": 18,
+      "code": 7006,
+      "message": "Parameter 'callback' implicitly has an 'any' type."
+    },
+    {
+      "file": "mobile/src/transport/rpc-session-liveness-watchdog.test.ts",
+      "line": 149,
+      "column": 7,
+      "code": 2741,
+      "message": "Property '__promisify__' is missing in type '(callback: any) => ReturnType<typeof setTimeout>' but required in type 'typeof setTimeout'."
+    },
+    {
+      "file": "mobile/src/transport/rpc-session-liveness-watchdog.test.ts",
+      "line": 97,
+      "column": 7,
+      "code": 2322,
+      "message": "Type 'Mock<typeof setTimeout>' is not assignable to type 'typeof setTimeout | undefined'.\n  Type 'Mock<typeof setTimeout>' is not assignable to type 'typeof setTimeout'.\n    Types of parameters 'handler' and 'handler' are incompatible.\n      Type 'TimerHandler' is not assignable to type '(...args: any[]) => void'.\n        Type 'string' is not assignable to type '(...args: any[]) => void'."
+    },
+    {
+      "file": "mobile/src/transport/runtime-capability-probe.test.ts",
+      "line": 181,
+      "column": 5,
+      "code": 2349,
+      "message": "This expression is not callable.\n  Type 'never' has no call signatures."
+    },
+    {
+      "file": "mobile/src/transport/settings-host-client-lifecycle.test.ts",
+      "line": 11,
+      "column": 8,
+      "code": 2724,
+      "message": "'\"./client-context\"' has no exported member named 'RpcClientContextValue'. Did you mean 'useRpcClientContext'?"
+    },
+    {
+      "file": "mobile/src/transport/settings-host-client-lifecycle.test.ts",
+      "line": 185,
+      "column": 13,
+      "code": 7031,
+      "message": "Binding element 'hostId' implicitly has an 'any' type."
+    },
+    {
+      "file": "mobile/src/transport/settings-host-client-lifecycle.test.ts",
+      "line": 273,
+      "column": 15,
+      "code": 18047,
+      "message": "'renderer' is possibly 'null'."
+    },
+    {
+      "file": "mobile/src/transport/settings-host-client-lifecycle.test.ts",
+      "line": 365,
+      "column": 15,
+      "code": 18047,
+      "message": "'renderer' is possibly 'null'."
+    },
+    {
+      "file": "mobile/src/worktree/agent-row-display.test.ts",
+      "line": 12,
+      "column": 3,
+      "code": 2322,
+      "message": "Type '{ paneKey: string; parentPaneKey: string | null; state: AgentStatusState; workingMode?: AgentWorkingMode | undefined; ... 10 more ...; restoredUnconfirmed?: boolean | undefined; }' is not assignable to type 'RuntimeWorktreeAgentRow'.\n  Types of property 'taskTitle' are incompatible.\n    Type 'string | null | undefined' is not assignable to type 'string | null'.\n      Type 'undefined' is not assignable to type 'string | null'."
+    },
+    {
+      "file": "mobile/src/worktree/agent-row-lineage.test.ts",
+      "line": 10,
+      "column": 3,
+      "code": 2322,
+      "message": "Type '{ paneKey: string; parentPaneKey: string | null; state: AgentStatusState; workingMode?: AgentWorkingMode | undefined; ... 10 more ...; restoredUnconfirmed?: boolean | undefined; }' is not assignable to type 'RuntimeWorktreeAgentRow'.\n  Types of property 'taskTitle' are incompatible.\n    Type 'string | null | undefined' is not assignable to type 'string | null'.\n      Type 'undefined' is not assignable to type 'string | null'."
+    },
+    {
+      "file": "mobile/src/worktree/host-worktree-refresh.test.ts",
+      "line": 51,
+      "column": 47,
+      "code": 2322,
+      "message": "Type 'Mock<Procedure | Constructable>' is not assignable to type '(options?: WorktreeRefreshOptions | undefined) => Promise<void>'.\n  Type 'MockInstance<Procedure | Constructable> & (new (...args: any[]) => any) & {}' is not assignable to type '(options?: WorktreeRefreshOptions | undefined) => Promise<void>'.\n    Type 'MockInstance<Procedure | Constructable> & (new (...args: any[]) => any) & {}' provides no match for the signature '(options?: WorktreeRefreshOptions | undefined): Promise<void>'."
+    },
+    {
+      "file": "mobile/src/worktree/host-worktree-refresh.test.ts",
+      "line": 51,
+      "column": 63,
+      "code": 2322,
+      "message": "Type 'Mock<Procedure | Constructable>' is not assignable to type '(options?: RepoRefreshOptions | undefined) => Promise<void>'.\n  Type 'MockInstance<Procedure | Constructable> & (new (...args: any[]) => any) & {}' is not assignable to type '(options?: RepoRefreshOptions | undefined) => Promise<void>'.\n    Type 'MockInstance<Procedure | Constructable> & (new (...args: any[]) => any) & {}' provides no match for the signature '(options?: RepoRefreshOptions | undefined): Promise<void>'."
+    },
+    {
+      "file": "mobile/src/worktree/workspace-view-settings.test.ts",
+      "line": 12,
+      "column": 7,
+      "code": 2741,
+      "message": "Property 'alwaysShowDefaultBranch' is missing in type '{ groupMode: \"repo\"; sortMode: \"recent\"; hideSleeping: false; hideDefaultBranch: false; filterRepoIds: never[]; collapsedGroups: never[]; workspaceStatuses: readonly [{ readonly id: \"completed\"; readonly label: \"Done\"; readonly color: \"conductor-done\"; readonly icon: \"conductor-done\"; }, { ...; }, { ...; }, { ...; }...' but required in type 'MobileViewState'."
+    },
+    {
+      "file": "mobile/src/worktree/worktree-list-completeness.test.ts",
+      "line": 39,
+      "column": 7,
+      "code": 2741,
+      "message": "Property 'alwaysShowDefaultBranch' is missing in type '{ groupMode: \"repo\"; sortMode: \"recent\"; hideSleeping: false; hideDefaultBranch: false; filterRepoIds: never[]; collapsedGroups: never[]; workspaceStatuses: readonly [{ readonly id: \"completed\"; readonly label: \"Done\"; readonly color: \"conductor-done\"; readonly icon: \"conductor-done\"; }, { ...; }, { ...; }, { ...; }...' but required in type 'MobileViewState'."
+    },
+    {
+      "file": "mobile/src/worktree/worktree-list-snapshot.test.ts",
+      "line": 8,
+      "column": 3,
+      "code": 2322,
+      "message": "Type '{ paneKey: string; parentPaneKey: string | null; state: AgentStatusState; workingMode?: AgentWorkingMode | undefined; ... 10 more ...; restoredUnconfirmed?: boolean | undefined; }' is not assignable to type 'RuntimeWorktreeAgentRow'.\n  Types of property 'taskTitle' are incompatible.\n    Type 'string | null | undefined' is not assignable to type 'string | null'.\n      Type 'undefined' is not assignable to type 'string | null'."
+    }
+  ]
+}

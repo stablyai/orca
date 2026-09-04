@@ -1,10 +1,10 @@
 {
-  // NOT ENFORCED YET, and deliberately so: tests/ has never been typechecked, so this currently
-  // reports ~198 errors across ~94 files. Wiring it into `typecheck` or CI today would just paint
-  // the whole build red. It earns its place anyway — pointing it at the SSH reconnect spec found
-  // two real bugs a passing suite had hidden (a targetId read off the wrong type, and a required
-  // argument omitted), because that spec had never actually executed. Run `pnpm typecheck:e2e`,
-  // fix a file, repeat; when the count reaches zero, add it to the `typecheck` chain.
+  // Enforced by `pnpm typecheck`; pre-existing diagnostic identities and counts are ratcheted
+  // in typecheck-e2e-diagnostics.json so the backlog only shrinks. Identity is
+  // {file, code, message} without line/column, so a new error is caught unless it exactly
+  // matches one that was fixed in the same file. Regenerate with `pnpm typecheck:e2e:write`.
+  // Renaming a file, or a type whose name these messages quote, reads as growth against the
+  // PR base and regenerating cannot clear it; fix those diagnostics instead.
   "extends": "@electron-toolkit/tsconfig/tsconfig.node.json",
   // Why: specs import renderer and main modules directly, so the ambient declarations those
   // modules rely on (vite client types, build-time defines) have to be in the program too.
@@ -16,6 +16,8 @@
   ],
   "exclude": ["../tests/e2e/.cross-version-checkouts/**"],
   "compilerOptions": {
+    "incremental": true,
+    "tsBuildInfoFile": "./tsconfig.e2e.tsbuildinfo",
     // Why: specs run browser code inside page.evaluate, so the DOM lib has to be visible here
     // even though the harness itself is Node.
     "lib": ["ESNext", "DOM", "DOM.Iterable"],
