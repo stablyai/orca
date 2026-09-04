@@ -1,4 +1,4 @@
-import type { PlaneWorkItem, PlaneWorkspace } from './plane-types'
+import type { PlaneWorkspace } from './plane-types'
 
 /**
  * Plane exposes a work item under two routes: the shareable `/browse/PROJ-123/`
@@ -80,59 +80,6 @@ export function buildPlaneWorkItemUrl(
 ): string {
   const appUrl = workspace.appUrl.replace(/\/+$/, '')
   return `${appUrl}/${encodeURIComponent(workspace.slug)}/browse/${encodeURIComponent(workItemKey)}/`
-}
-
-export function getMatchingPlaneWorkspaces(
-  parsed: ParsedPlaneWorkItemUrl,
-  workspaces: readonly PlaneWorkspace[]
-): PlaneWorkspace[] {
-  return workspaces.filter((workspace) => {
-    const identity = getPlaneWorkspaceIdentity(workspace.appUrl)
-    return (
-      identity !== null &&
-      identity.origin === parsed.origin &&
-      identity.basePath === parsed.basePath &&
-      workspace.slug.toLowerCase() === parsed.workspaceSlug.toLowerCase()
-    )
-  })
-}
-
-/**
- * Guards against a lookup in the wrong workspace returning a same-key item:
- * the resolved work item must round-trip back to the URL that requested it.
- */
-export function isResolvedPlaneWorkItemMatch(
-  parsed: ParsedPlaneWorkItemUrl,
-  workspace: PlaneWorkspace,
-  workItem: PlaneWorkItem
-): boolean {
-  // Plane discriminates workspaces by path segment, not origin, so two
-  // workspaces on one host can each own a PROJ-123. The requested url must
-  // belong to this workspace before its key is trusted.
-  if (getMatchingPlaneWorkspaces(parsed, [workspace]).length !== 1) {
-    return false
-  }
-  if (workItem.workspaceId !== undefined && workItem.workspaceId !== workspace.id) {
-    return false
-  }
-  if (parsed.workItemKey && workItem.key.toUpperCase() !== parsed.workItemKey) {
-    return false
-  }
-  if (parsed.workItemId && workItem.id.toLowerCase() !== parsed.workItemId) {
-    return false
-  }
-  const canonical = parsePlaneWorkItemUrl(workItem.url)
-  return canonical !== null && getMatchingPlaneWorkspaces(canonical, [workspace]).length === 1
-}
-
-function getPlaneWorkspaceIdentity(
-  value: string
-): Pick<ParsedPlaneWorkItemUrl, 'origin' | 'basePath'> | null {
-  const url = safeUrl(value)
-  if (!url || url.search.length > 0 || url.hash.length > 0) {
-    return null
-  }
-  return { origin: url.origin.toLowerCase(), basePath: normalizeBasePath(url.pathname) }
 }
 
 function safeUrl(value: string): URL | null {

@@ -1,6 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest'
 import {
-  clearRateLimit,
   getThrottleWaitMs,
   noteRateLimited,
   noteRateLimitHeaders,
@@ -89,14 +88,6 @@ describe('noteRateLimited', () => {
 
   it('caps the reported wait so a bad header cannot stall a caller', () => {
     expect(noteRateLimited('ws-1', headers({ 'retry-after': '9999' }), NOW)).toBe(60_000)
-  })
-})
-
-describe('clearRateLimit', () => {
-  it('releases a parked workspace on reconnect', () => {
-    noteRateLimited('ws-1', headers({}), NOW)
-    clearRateLimit('ws-1')
-    expect(getThrottleWaitMs('ws-1', NOW)).toBe(0)
   })
 })
 

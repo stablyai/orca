@@ -64,10 +64,6 @@ export function noteRateLimited(
   return getThrottleWaitMs(budgetKey, now)
 }
 
-export function clearRateLimit(budgetKey: string): void {
-  throttledUntilByBudget.delete(budgetKey)
-}
-
 export function resetRateLimitState(): void {
   throttledUntilByBudget.clear()
 }
