@@ -151,6 +151,12 @@ describe('TerminalWebView engine errors', () => {
       act(() => {
         vi.advanceTimersByTime(15000)
       })
+      // Why: the watchdog now probes a possibly-live document first; the error only
+      // lands after the ping grace window expires unanswered.
+      expect(onEngineError).not.toHaveBeenCalled()
+      act(() => {
+        vi.advanceTimersByTime(2500)
+      })
 
       expect(onEngineError).toHaveBeenCalledWith(
         'Terminal did not initialize - no ready signal from the terminal view'
