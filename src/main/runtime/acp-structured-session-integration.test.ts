@@ -415,4 +415,24 @@ describe('a structured ACP session over agentSession.*', () => {
     expect(acp.live().calls.map((call) => call.method)).toEqual(['authenticate', 'session/new'])
     expect(acp.live().calls[0]?.params).toEqual({ methodId: 'cursor_login' })
   })
+
+  it('switches grok to claude on the same session without dropping the journal', async () => {
+    const created = await ok<{ fence: number }>('agentSession.create', createIntentParams('grok'))
+    const body = { kind: 'message', role: 'user', blocks: [{ type: 'text', text: 'hi' }] }
+    await ok('agentSession.send', {
+      envelope: envelope('agentSession.send', { body }, created.fence),
+      body
+    })
+    const fields = { agent: 'claude' as const, model: 'sonnet' }
+    const switched = await ok<{ agent: string }>('agentSession.switchProvider', {
+      envelope: envelope('agentSession.switchProvider', fields, created.fence),
+      ...fields
+    })
+    expect(switched.agent).toBe('claude')
+    expect(acp.connections[0]?.closed).toBe(true)
+    expect(acp.connections).toHaveLength(2)
+    expect(acp.live().launch.command).toBe('npx')
+    expect(acp.live().calls.some((call) => call.method === 'session/new')).toBe(true)
+    expect(acp.live().calls.some((call) => call.method === 'session/load')).toBe(false)
+  })
 })

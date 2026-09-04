@@ -109,13 +109,65 @@ describe('useStructuredAgentSession options', () => {
 
     expect(result.current.optionSnapshot.find((entry) => entry.id === 'model')?.kind).toMatchObject(
       {
-        currentValue: 'gpt-fast'
+        currentValue: 'codex:gpt-fast'
       }
     )
     expect(
       result.current.optionSnapshot.find((entry) => entry.id === 'effort')?.kind
     ).toMatchObject({
       currentValue: 'low'
+    })
+  })
+
+  it('refreshes effort choices returned by the selected model', async () => {
+    let selected = false
+    mocks.call.mockImplementation((_target, method) => {
+      if (method === 'agentSession.options') {
+        return Promise.resolve(
+          selected
+            ? {
+                models: [
+                  {
+                    id: 'gpt-fast',
+                    label: 'GPT Fast',
+                    isDefault: true,
+                    efforts: [
+                      { value: 'low', label: 'Low' },
+                      { value: 'xhigh', label: 'Extra high' }
+                    ]
+                  }
+                ],
+                current: { model: 'gpt-fast', effort: 'xhigh' }
+              }
+            : OPTIONS
+        )
+      }
+      selected = method === 'agentSession.setOption' || selected
+      return Promise.resolve({
+        ok: true,
+        value: { key: 'model', value: 'gpt-fast', options: { model: 'gpt-fast', effort: 'xhigh' } }
+      })
+    })
+    const { result } = renderHook(() =>
+      useStructuredAgentSession({
+        sessionId: 'session-1',
+        target: LOCAL_TARGET,
+        agent: 'codex',
+        isVisible: true
+      })
+    )
+    await waitFor(() => expect(result.current.optionSnapshot).toHaveLength(2))
+    await act(async () => {
+      await result.current.setStructuredOption('model', 'codex:gpt-fast')
+    })
+    expect(
+      result.current.optionSnapshot.find((option) => option.id === 'effort')?.kind
+    ).toMatchObject({
+      currentValue: 'xhigh',
+      choices: [
+        { value: 'low', label: 'Low' },
+        { value: 'xhigh', label: 'Extra high' }
+      ]
     })
   })
 
@@ -263,6 +315,108 @@ describe('useStructuredAgentSession options', () => {
       )
     ).toEqual([3, 4])
     expect(mocks.operationId).toHaveBeenCalledTimes(1)
+  })
+
+  it('routes a cross-provider model pick to switchProvider', async () => {
+    mocks.call.mockImplementation((_target, method) => {
+      if (method === 'agentSession.options') {
+        return Promise.resolve({
+          models: [{ id: 'grok-4.6', label: 'Grok 4.6', isDefault: true, efforts: [] }],
+          current: { model: 'grok-4.6' }
+        })
+      }
+      if (method === 'agentSession.switchProvider') {
+        return Promise.resolve({ ok: true, value: { agent: 'claude', provider: 'claude' } })
+      }
+      return Promise.resolve({ supported: true, canSwitchProvider: true })
+    })
+    const { result } = renderHook(() =>
+      useStructuredAgentSession({
+        sessionId: 'session-1',
+        target: LOCAL_TARGET,
+        agent: 'grok',
+        isVisible: true,
+        worktreeId: 'workspace-1'
+      })
+    )
+    await waitFor(() =>
+      expect(result.current.optionSnapshot.find((entry) => entry.id === 'model')).toBeTruthy()
+    )
+    await act(async () => {
+      expect(await result.current.setStructuredOption('model', 'claude:sonnet')).toBe(true)
+    })
+    expect(
+      mocks.call.mock.calls.some(([, method]) => method === 'agentSession.switchProvider')
+    ).toBe(true)
+  })
+
+  it('retires a completed switch operation even when the stream advances the fence first', async () => {
+    let reply!: (value: unknown) => void
+    mocks.call.mockImplementation((_target, method) => {
+      if (method === 'agentSession.options') {
+        return Promise.resolve(OPTIONS)
+      }
+      if (method === 'agentSession.switchProvider') {
+        return new Promise((resolve) => {
+          reply = resolve
+        })
+      }
+      return Promise.resolve({ supported: true, canSwitchProvider: true })
+    })
+    const { result, rerender } = renderHook(() =>
+      useStructuredAgentSession({
+        sessionId: 'session-1',
+        target: LOCAL_TARGET,
+        agent: 'codex',
+        isVisible: true,
+        worktreeId: 'workspace-1'
+      })
+    )
+    await waitFor(() => expect(result.current.optionSnapshot).toHaveLength(2))
+    let switching!: Promise<boolean>
+    act(() => {
+      switching = result.current.setStructuredOption('model', 'claude:sonnet')
+    })
+    fence = 4
+    rerender()
+    await act(async () => {
+      reply({ ok: true, fence: 4, value: { agent: 'claude', provider: 'claude' } })
+      expect(await switching).toBe(true)
+    })
+    await act(async () => {
+      const next = result.current.setStructuredOption('model', 'claude:sonnet')
+      reply({ ok: true, fence: 4, value: { agent: 'claude', provider: 'claude' } })
+      await next
+    })
+    const calls = mocks.call.mock.calls.filter(
+      ([, method]) => method === 'agentSession.switchProvider'
+    )
+    expect(calls.map(([, , params]) => params.envelope.clientOperationId)).toEqual([
+      'operation-1',
+      'operation-2'
+    ])
+  })
+
+  it('leaves other providers disabled when the host does not advertise switching', async () => {
+    mocks.call.mockImplementation((_target, method) =>
+      Promise.resolve(method === 'agentSession.options' ? OPTIONS : { supported: true })
+    )
+    const { result } = renderHook(() =>
+      useStructuredAgentSession({
+        sessionId: 'session-1',
+        target: LOCAL_TARGET,
+        agent: 'codex',
+        isVisible: true,
+        worktreeId: 'workspace-1'
+      })
+    )
+    await waitFor(() => expect(result.current.optionSnapshot).toHaveLength(2))
+    await act(async () => {
+      expect(await result.current.setStructuredOption('model', 'claude:sonnet')).toBe(false)
+    })
+    expect(
+      mocks.call.mock.calls.some(([, method]) => method === 'agentSession.switchProvider')
+    ).toBe(false)
   })
 
   it('ignores an option failure from a superseded fence', async () => {

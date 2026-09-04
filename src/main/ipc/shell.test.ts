@@ -3,6 +3,7 @@ import { normalize, resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
 
 const {
+  authorizeExternalPathMock,
   getSpawnArgsForWindowsMock,
   handleMock,
   openPathMock,
@@ -12,6 +13,7 @@ const {
   spawnMock,
   statMock
 } = vi.hoisted(() => ({
+  authorizeExternalPathMock: vi.fn(),
   getSpawnArgsForWindowsMock: vi.fn(),
   handleMock: vi.fn(),
   openPathMock: vi.fn(),
@@ -53,6 +55,10 @@ vi.mock('../codex-cli/command', () => ({
 vi.mock('../win32-utils', () => ({
   getCmdExePath: () => 'C:\\Windows\\System32\\cmd.exe',
   getSpawnArgsForWindows: getSpawnArgsForWindowsMock
+}))
+
+vi.mock('./filesystem-auth', () => ({
+  authorizeExternalPath: authorizeExternalPathMock
 }))
 
 import { EXTERNAL_EDITOR_CLI_COMMAND, registerShellHandlers } from './shell'
@@ -102,6 +108,7 @@ describe('registerShellHandlers', () => {
 
   beforeEach(() => {
     handleMock.mockReset()
+    authorizeExternalPathMock.mockReset()
     getSpawnArgsForWindowsMock.mockReset()
     openPathMock.mockReset()
     resolveCliCommandMock.mockReset()
@@ -129,6 +136,28 @@ describe('registerShellHandlers', () => {
     }
     return call[1] as (event: unknown, ...args: unknown[]) => Promise<unknown>
   }
+
+  it('authorizes a picked attachment so composer preview can read files outside allowed roots', async () => {
+    showOpenDialogMock.mockResolvedValue({
+      canceled: false,
+      filePaths: ['/Users/kaylee/Downloads/logo.png']
+    })
+
+    const handler = getHandler('shell:pickAttachment')
+    await expect(handler({})).resolves.toBe('/Users/kaylee/Downloads/logo.png')
+    expect(authorizeExternalPathMock).toHaveBeenCalledWith('/Users/kaylee/Downloads/logo.png')
+  })
+
+  it('does not authorize when attachment picking is canceled', async () => {
+    showOpenDialogMock.mockResolvedValue({
+      canceled: true,
+      filePaths: []
+    })
+
+    const handler = getHandler('shell:pickAttachment')
+    await expect(handler({})).resolves.toBeNull()
+    expect(authorizeExternalPathMock).not.toHaveBeenCalled()
+  })
 
   it('picks audio files with a constrained native dialog filter', async () => {
     showOpenDialogMock.mockResolvedValue({

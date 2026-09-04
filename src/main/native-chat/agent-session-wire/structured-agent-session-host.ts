@@ -55,6 +55,10 @@ import type {
   StructuredAgentSessionHostSession
 } from './structured-agent-session-host-types'
 import { readStructuredAgentSessionHistoryResult } from './structured-agent-session-history-result'
+import {
+  switchStructuredAgentSessionProvider,
+  type StructuredAgentSessionSwitchProviderParams
+} from './structured-agent-session-provider-switch'
 import { retryPendingStructuredAgentSessionSettlement } from './structured-agent-session-settlement-retry'
 import { StructuredAgentSessionEventRecovery } from './structured-agent-session-event-recovery'
 export type { StructuredAgentSessionHostDeps } from './structured-agent-session-host-types'
@@ -238,12 +242,11 @@ export class StructuredAgentSessionHost {
     })
   }
 
-  attach(
+  attach = (
     caller: StructuredAgentSessionCaller,
     params: AgentSessionAttachParams
-  ): Promise<AgentSessionMutationResult<AgentSessionAttachResult>> {
-    return attachStructuredAgentSession(this.attachContext(), caller.callerKey, params)
-  }
+  ): Promise<AgentSessionMutationResult<AgentSessionAttachResult>> =>
+    attachStructuredAgentSession(this.attachContext(), caller.callerKey, params)
 
   flushStreamedEvents = (sessionId: string): Promise<void> =>
     this.runtimeState.flushEventSink(sessionId)
@@ -290,6 +293,11 @@ export class StructuredAgentSessionHost {
     params: Parameters<typeof setStructuredAgentSessionOption>[2]
   ): ReturnType<typeof setStructuredAgentSessionOption> =>
     setStructuredAgentSessionOption(this.mutationContext(), caller, params)
+
+  switchProvider = (
+    caller: StructuredAgentSessionCaller,
+    params: StructuredAgentSessionSwitchProviderParams
+  ) => switchStructuredAgentSessionProvider(this.attachContext(), caller.callerKey, params)
 
   readOptions = (sessionId: string): Promise<AgentSessionOptionsResult> =>
     readStructuredAgentSessionOptions(this.mutationContext(), sessionId)

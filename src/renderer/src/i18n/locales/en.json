@@ -16726,7 +16726,9 @@
         "pendingAttachmentLimit": "Too many attachments are waiting. Finish composing before attaching more.",
         "viewAttachment": "View image",
         "imagePreview": "Full-size image preview",
-        "imagePreviewUnavailable": "Preview unavailable"
+        "imagePreviewUnavailable": "Preview unavailable",
+        "searchModels": "Search models",
+        "noMatchingModels": "No matching models"
       },
       "tool": {
         "running": "Running…",
@@ -16746,6 +16748,9 @@
       },
       "providerFrame": {
         "byteLength": "{{value0}} bytes"
+      },
+      "continuationPrompt": {
+        "summary": "Continue from prior session"
       },
       "status": {
         "responding": "Agent is responding",

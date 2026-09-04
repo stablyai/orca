@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useAppStore } from '../../store'
 import { useNativeChatLaunchDraftSignal } from './use-native-chat-launch-draft-adoption'
 import { useNativeChatRetainedSession } from './use-native-chat-retained-session'
+import { useNativeChatProviderHandoff } from './use-native-chat-provider-handoff'
 import { isNativeChatTranscriptUnsettled } from './use-native-chat-live-session'
 import { selectNativeChatViewState } from './native-chat-view-state'
 import { NativeChatMessageList } from './NativeChatMessageList'
@@ -64,6 +65,7 @@ export function NativeChatResolvedView({
   terminalTabId,
   ownsTabWideLaunchDraft,
   onSwitchToTerminal,
+  onSwitchProvider,
   readTerminalScreen,
   contextMenuActions,
   orchestrationDispatchStatus
@@ -73,7 +75,7 @@ export function NativeChatResolvedView({
   const runtimeEnvironmentId = useAppStore((s) =>
     selectNativeChatRuntimeEnvironmentId(s, terminalTabId)
   )
-  const session = useNativeChatRetainedSession({
+  const liveSession = useNativeChatRetainedSession({
     paneKey,
     agent,
     sessionId,
@@ -81,6 +83,15 @@ export function NativeChatResolvedView({
     runtimeEnvironmentId,
     enabled: isVisible
   })
+  const { session, switchProvider, switchingProvider, hasProviderHistory } =
+    useNativeChatProviderHandoff({
+      liveSession,
+      paneKey,
+      agent,
+      targetPtyId,
+      transcriptPath,
+      onSwitchProvider
+    })
   const launchPrompt = useAppStore((s) => s.nativeChatLaunchPromptByTabId[terminalTabId] ?? null)
   const clearNativeChatLaunchPrompt = useAppStore((s) => s.clearNativeChatLaunchPrompt)
   const paneLaunchPrompt = launchPrompt?.agent === agent ? launchPrompt : null
@@ -367,6 +378,7 @@ export function NativeChatResolvedView({
         ) : (
           <NativeChatMessageList
             session={sessionWithPending}
+            preserveMessageOrder={hasProviderHistory}
             isWorking={isWorking}
             expandSignal={false}
             fontScale={fontScale.scale}
@@ -400,13 +412,14 @@ export function NativeChatResolvedView({
           paneKey={paneKey}
           targetPtyId={targetPtyId}
           agent={agent}
-          canSend={canSend}
+          canSend={canSend && !switchingProvider}
           isWorking={isWorking}
           onStop={stopAgent}
           onOptimisticSend={onOptimisticSend}
           onOptimisticSendCanceled={onOptimisticSendCanceled}
           onSlashCommand={onSlashCommand}
           onSwitchToTerminal={onSwitchToTerminal}
+          onSwitchProvider={onSwitchProvider ? switchProvider : undefined}
           readTerminalScreen={readTerminalScreen}
           launchSeed={{ ...launchDraftSignal, ownsTabWideLaunchDraft }}
         />

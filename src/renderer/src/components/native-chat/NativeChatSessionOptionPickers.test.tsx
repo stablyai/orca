@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 
-import { cleanup, render, screen, waitFor } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import type * as ReactModule from 'react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { SessionOptionDescriptor } from '../../../../shared/native-chat-session-options'
@@ -15,6 +15,10 @@ vi.mock('@/i18n/i18n', () => ({
       fallback
     )
   }
+}))
+
+vi.mock('@/lib/agent-catalog', () => ({
+  AgentIcon: ({ agent }: { agent: string }) => <span data-testid="agent-icon" data-agent={agent} />
 }))
 
 vi.mock('@/components/ui/button', () => ({
@@ -501,5 +505,82 @@ describe('NativeChatSessionOptionPickers', () => {
       />
     )
     expect(screen.getByText('Sent to the agent — not confirmed')).not.toBeNull()
+  })
+
+  it('filters grouped model choices from the search field', async () => {
+    render(
+      <NativeChatSessionOptionPickers
+        surface={surface}
+        snapshot={[
+          model({
+            kind: {
+              type: 'select',
+              currentValue: 'grok:grok-4.6',
+              choices: [
+                { value: 'grok:grok-4.6', label: 'Grok 4.6', group: 'Grok' },
+                { value: 'claude:sonnet', label: 'Sonnet', group: 'Claude' }
+              ]
+            }
+          })
+        ]}
+        isWorking={false}
+      />
+    )
+    fireEvent.click(screen.getByRole('button', { name: 'Model Grok 4.6' }))
+    const menu = await screen.findByRole('dialog')
+    expect(screen.getByLabelText('Search models')).toBeTruthy()
+    expect(within(menu).getByText('Sonnet')).toBeTruthy()
+    fireEvent.change(screen.getByLabelText('Search models'), { target: { value: 'sonnet' } })
+    expect(within(menu).getByText('Sonnet')).toBeTruthy()
+    await waitFor(() => expect(within(menu).queryByText('Grok 4.6')).toBeNull())
+  })
+
+  it('shows the provider logo to the left of each namespaced model', async () => {
+    render(
+      <NativeChatSessionOptionPickers
+        surface={surface}
+        snapshot={[
+          model({
+            kind: {
+              type: 'select',
+              currentValue: 'grok:grok-4.6',
+              choices: [
+                { value: 'grok:grok-4.6', label: 'Grok 4.6', group: 'Grok' },
+                { value: 'claude:sonnet', label: 'Sonnet', group: 'Claude' }
+              ]
+            }
+          })
+        ]}
+        isWorking={false}
+      />
+    )
+    const trigger = screen.getByRole('button', { name: 'Model Grok 4.6' })
+    expect(within(trigger).getByTestId('agent-icon').getAttribute('data-agent')).toBe('grok')
+
+    fireEvent.click(screen.getByRole('button', { name: 'Model Grok 4.6' }))
+    const menu = await screen.findByRole('dialog')
+    expect(
+      within(within(menu).getByText('Grok 4.6').closest('[cmdk-item]') as HTMLElement)
+        .getByTestId('agent-icon')
+        .getAttribute('data-agent')
+    ).toBe('grok')
+    expect(
+      within(within(menu).getByText('Sonnet').closest('[cmdk-item]') as HTMLElement)
+        .getByTestId('agent-icon')
+        .getAttribute('data-agent')
+    ).toBe('claude')
+    const grokRow = within(menu).getByText('Grok 4.6').closest('[cmdk-item]') as HTMLElement
+    const grokIcon = within(grokRow).getByTestId('agent-icon')
+    expect(
+      grokIcon.compareDocumentPosition(within(grokRow).getByText('Grok 4.6')) &
+        Node.DOCUMENT_POSITION_FOLLOWING
+    ).not.toBe(0)
+  })
+
+  it('does not invent a provider logo for ungrouped models', () => {
+    render(
+      <NativeChatSessionOptionPickers surface={surface} snapshot={[model()]} isWorking={false} />
+    )
+    expect(screen.queryByTestId('agent-icon')).toBeNull()
   })
 })

@@ -8,6 +8,7 @@
 
 import type { AgentJournalMessageItem } from '../../../shared/agent-session-journal-types'
 import { agentJournalItemKey } from '../../../shared/agent-session-journal-item-key'
+import { withStructuredSessionContinuation } from './structured-agent-session-continuation'
 import type {
   AgentSessionCancelResult,
   AgentSessionSendResult,
@@ -61,7 +62,7 @@ async function dispatchSafely(
     return await ctx.adapter.dispatch({
       sessionId: ctx.sessionId,
       clientMessageId,
-      body,
+      body: withStructuredSessionContinuation(ctx.journal.snapshot(), clientMessageId, body),
       fence: ctx.fence
     })
   } catch (error) {

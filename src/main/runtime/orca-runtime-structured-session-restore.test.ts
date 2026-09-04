@@ -334,4 +334,32 @@ describe('structured session cold restoration', () => {
     const snapshot = await runtime.listMobileSessionTabs('id:workspace-1')
     expect(snapshot.tabs).toEqual([])
   })
+
+  it('updates the agent and title of an existing structured tab in place', async () => {
+    const runtime = new OrcaRuntimeService()
+    await runtime.publishStructuredAgentSessionTab({
+      workspaceId: 'workspace-1',
+      sessionId: 'session-1',
+      agent: 'grok',
+      activate: true
+    })
+    await runtime.publishStructuredAgentSessionTab({
+      workspaceId: 'workspace-1',
+      sessionId: 'session-1',
+      agent: 'claude',
+      activate: true
+    })
+    const snapshot = await runtime.listMobileSessionTabs('id:workspace-1')
+    expect(snapshot.tabs.filter((tab) => tab.type === 'agent-session')).toHaveLength(1)
+    expect(snapshot.tabs).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          type: 'agent-session',
+          id: 'agent-session:session-1',
+          agent: 'claude',
+          title: 'Claude Chat'
+        })
+      ])
+    )
+  })
 })

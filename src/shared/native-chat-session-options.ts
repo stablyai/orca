@@ -4,6 +4,8 @@ export type SessionOptionSelectChoice = {
   value: string
   label: string
   description?: string
+  group?: string
+  disabled?: boolean
 }
 
 /** `default` is the catalog's own value shown before anything is observed —

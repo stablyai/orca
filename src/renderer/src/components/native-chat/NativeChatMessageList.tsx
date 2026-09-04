@@ -22,6 +22,7 @@ import {
   NativeChatImageAttachments,
   ProviderFrameRow
 } from './NativeChatTranscriptChrome'
+import { NativeChatUserMessageRow } from './NativeChatUserMessageRow'
 import type { RuntimeFileOperationArgs } from '@/runtime/runtime-file-client'
 
 export { ProviderFrameRow } from './NativeChatTranscriptChrome'
@@ -91,42 +92,15 @@ function MessageRow({
 
   if (isUser) {
     return (
-      <div ref={rowRef} className="flex flex-col items-end gap-0.5">
-        {/* User turns get a distinct muted fill (not the card/canvas color) so
-            the prompt reads apart from the assistant's body copy. */}
-        <div className="max-w-[85%] rounded-lg rounded-tr-sm bg-muted px-3.5 py-2.5 text-sm text-foreground">
-          {markdown ? (
-            <>
-              <NativeChatImageAttachments
-                blocks={prose}
-                runtimeContext={runtimeContext}
-                enablePreview={runtimeContext !== undefined}
-              />
-              <CommentMarkdown
-                content={markdown}
-                variant="document"
-                className="text-sm"
-                onLinkClick={onLinkClick}
-                allowFileUriLinks={allowFileUriLinks}
-              />
-            </>
-          ) : (
-            <NativeChatImageAttachments
-              blocks={prose}
-              runtimeContext={runtimeContext}
-              enablePreview={runtimeContext !== undefined}
-            />
-          )}
-        </div>
-        {deliveryFailed ? (
-          <div className="max-w-[85%] text-[11px] text-destructive/80">
-            {translate(
-              'components.native-chat.launchPromptNotDelivered',
-              'Not delivered — check the terminal'
-            )}
-          </div>
-        ) : null}
-      </div>
+      <NativeChatUserMessageRow
+        rowRef={rowRef}
+        markdown={markdown}
+        prose={prose}
+        onLinkClick={onLinkClick}
+        allowFileUriLinks={allowFileUriLinks}
+        deliveryFailed={deliveryFailed}
+        runtimeContext={runtimeContext}
+      />
     )
   }
 
@@ -188,6 +162,7 @@ export function NativeChatMessageList({
   workingStartedAt,
   failedDeliveryMessageIds,
   showTurnStatus = true,
+  preserveMessageOrder = false,
   runtimeContext
 }: {
   session: NativeChatLiveSession
@@ -202,6 +177,8 @@ export function NativeChatMessageList({
   failedDeliveryMessageIds?: ReadonlySet<string>
   /** Turn timing/disclosure is available only on the structured Codex lane. */
   showTurnStatus?: boolean
+  /** A provider handoff already orders history across independent transcript clocks. */
+  preserveMessageOrder?: boolean
   runtimeContext?: RuntimeFileOperationArgs | null
 }): React.JSX.Element {
   const scrollRef = useRef<HTMLDivElement | null>(null)
@@ -233,8 +210,13 @@ export function NativeChatMessageList({
 
   // Keep hidden harness turns as fold boundaries, then strip them before render.
   const messages = useMemo(
-    () => stripNoiseMessages(foldToolMessages(orderNativeChatMessages(session.messages))),
-    [session.messages]
+    () =>
+      stripNoiseMessages(
+        foldToolMessages(
+          preserveMessageOrder ? session.messages : orderNativeChatMessages(session.messages)
+        )
+      ),
+    [session.messages, preserveMessageOrder]
   )
   const showTypingIndicator = showTurnStatus
     ? isWorking

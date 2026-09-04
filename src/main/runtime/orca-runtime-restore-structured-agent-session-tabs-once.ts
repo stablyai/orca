@@ -86,9 +86,6 @@ export class OrcaRuntimeWithRestoreStructuredAgentSessionTabsOnce extends OrcaRu
     const existing = this.mobileSessionTabsByWorktree.get(input.workspaceId)
     const id = `agent-session:${input.sessionId}`
     if (existing?.tabs.some((tab) => tab.id === id)) {
-      if (!input.activate) {
-        return
-      }
       const priorGroups = existing.tabGroups ?? []
       const groupId =
         priorGroups.find((group) => group.tabOrder.includes(id))?.id ??
@@ -98,13 +95,26 @@ export class OrcaRuntimeWithRestoreStructuredAgentSessionTabsOnce extends OrcaRu
       const snapshot: RuntimeMobileSessionTabsSnapshot = {
         ...existing,
         snapshotVersion: existing.snapshotVersion + 1,
-        activeGroupId: groupId ?? existing.activeGroupId,
-        activeTabId: id,
-        activeTabType: 'agent-session',
-        tabGroups: priorGroups.map((group) =>
-          group.id === groupId ? { ...group, activeTabId: id } : group
-        ),
-        tabs: existing.tabs.map((tab) => ({ ...tab, isActive: tab.id === id }))
+        ...(input.activate
+          ? {
+              activeGroupId: groupId ?? existing.activeGroupId,
+              activeTabId: id,
+              activeTabType: 'agent-session' as const,
+              tabGroups: priorGroups.map((group) =>
+                group.id === groupId ? { ...group, activeTabId: id } : group
+              )
+            }
+          : {}),
+        tabs: existing.tabs.map((tab) =>
+          tab.id === id && tab.type === 'agent-session'
+            ? {
+                ...tab,
+                agent: input.agent,
+                title: structuredAgentSessionTabTitle(input.agent),
+                isActive: input.activate ? true : tab.isActive
+              }
+            : { ...tab, isActive: input.activate ? tab.id === id : tab.isActive }
+        )
       }
       this.storeMobileSessionSnapshot(input.workspaceId, snapshot)
       if (input.notify !== false) {

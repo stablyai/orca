@@ -99,6 +99,14 @@ function hostStub(): StructuredAgentSessionHost {
     setSessionTabVisibility: vi.fn(async () => undefined),
     respondToPrompt: vi.fn(async () => ({ ok: true, replayed: false })),
     setOption: vi.fn(async () => ({ ok: true, replayed: false })),
+    switchProvider: vi.fn(async () => ({
+      ok: true,
+      replayed: false,
+      value: { agent: 'claude', provider: 'claude' }
+    })),
+    listSessionTabs: vi.fn(() => [
+      { sessionId: SESSION, workspaceId: 'workspace-1', agent: 'grok' }
+    ]),
     handoffStatus: vi.fn(async () => ({ owner: 'native' })),
     readOptions: vi.fn(async () => ({
       models: [{ id: 'gpt-live', label: 'GPT Live', isDefault: true, efforts: [] }],
@@ -203,7 +211,7 @@ describe('capability gating', () => {
     }
     // Bump deliberately: the whole agentSession.* surface is behind the structured capability,
     // so an additive method is invisible to old clients and needs no protocol bump.
-    expect(STRUCTURED_AGENT_SESSION_METHODS).toHaveLength(16)
+    expect(STRUCTURED_AGENT_SESSION_METHODS).toHaveLength(17)
   })
 
   it('hides the surface from a declared client that did not advertise it', async () => {
@@ -289,6 +297,71 @@ describe('method routing', () => {
     expect(hostCalls.attach.mock.calls[0]?.[1]).not.toHaveProperty('providerHandle')
     expect(runtimeCalls.publishStructuredAgentSessionTab).toHaveBeenCalledWith(
       expect.objectContaining({ sessionId: SESSION, activate: true })
+    )
+  })
+
+  it('switches provider on the attached session and republishes the tab agent', async () => {
+    hostCalls.listSessionTabs
+      .mockReturnValueOnce([{ sessionId: SESSION, workspaceId: 'workspace-1', agent: 'grok' }])
+      .mockReturnValue([{ sessionId: SESSION, workspaceId: 'workspace-1', agent: 'claude' }])
+    const fields = { agent: 'claude' as const, model: 'sonnet' }
+    const response = await call(
+      'agentSession.switchProvider',
+      {
+        envelope: envelope({
+          payloadFingerprint: computeAgentSessionPayloadFingerprint({
+            method: 'agentSession.switchProvider',
+            sessionId: SESSION,
+            fields
+          })
+        }),
+        ...fields
+      },
+      STRUCTURED_CLIENT
+    )
+    expect(response).toMatchObject({
+      ok: true,
+      result: { ok: true, value: { agent: 'claude', provider: 'claude' } }
+    })
+    expect(hostCalls.switchProvider).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        agent: 'claude',
+        provider: 'claude',
+        model: 'sonnet'
+      })
+    )
+    expect(runtimeCalls.publishStructuredAgentSessionTab).toHaveBeenCalledWith(
+      expect.objectContaining({ sessionId: SESSION, agent: 'claude', activate: true })
+    )
+  })
+
+  it('keeps current provider metadata when replaying an earlier switch', async () => {
+    hostCalls.switchProvider.mockResolvedValueOnce({
+      ok: true,
+      replayed: true,
+      value: { agent: 'claude', provider: 'claude' }
+    })
+    hostCalls.listSessionTabs.mockReturnValue([
+      { sessionId: SESSION, workspaceId: 'workspace-1', agent: 'grok' }
+    ])
+    const fields = { agent: 'claude' as const, model: 'sonnet' }
+    await call(
+      'agentSession.switchProvider',
+      {
+        envelope: envelope({
+          payloadFingerprint: computeAgentSessionPayloadFingerprint({
+            method: 'agentSession.switchProvider',
+            sessionId: SESSION,
+            fields
+          })
+        }),
+        ...fields
+      },
+      STRUCTURED_CLIENT
+    )
+    expect(runtimeCalls.publishStructuredAgentSessionTab).toHaveBeenCalledWith(
+      expect.objectContaining({ agent: 'grok', activate: false })
     )
   })
 

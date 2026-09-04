@@ -25,6 +25,7 @@ const StructuredAgentSessionOverlaySlot = memo(function StructuredAgentSessionOv
   isActive,
   target,
   allowFileUriLinks,
+  worktreeId,
   onFocusOwningGroup
 }: {
   tab: StructuredAgentSessionTab
@@ -32,6 +33,7 @@ const StructuredAgentSessionOverlaySlot = memo(function StructuredAgentSessionOv
   isActive: boolean
   target: RuntimeClientTarget
   allowFileUriLinks: boolean
+  worktreeId: string
   onFocusOwningGroup: ((groupId: string) => void) | undefined
 }): React.JSX.Element {
   const anchorName = groupId !== undefined ? tabGroupBodyAnchorName(groupId) : undefined
@@ -74,6 +76,7 @@ const StructuredAgentSessionOverlaySlot = memo(function StructuredAgentSessionOv
         isVisible={isActive}
         target={target}
         allowFileUriLinks={allowFileUriLinks}
+        worktreeId={worktreeId}
       />
     </div>
   )
@@ -128,6 +131,7 @@ const StructuredAgentSessionPaneOverlayLayer = memo(
             isActive={Boolean(isWorktreeActive && groupActiveTabById.get(tab.groupId) === tab.id)}
             target={target}
             allowFileUriLinks={allowFileUriLinks}
+            worktreeId={worktreeId}
             onFocusOwningGroup={focusOwningGroup}
           />
         ))}

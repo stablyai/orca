@@ -16,6 +16,7 @@ import {
   resolveNativeChatLeafRoute,
   type NativeChatLeafRoute
 } from '../native-chat/native-chat-leaf-routing'
+import { isNativeChatProviderSwitching } from '../native-chat/native-chat-provider-continuation'
 import type { TerminalPaneTitleController } from './use-terminal-pane-title-state'
 
 export function useTerminalPaneChatState(controller: TerminalPaneTitleController) {
@@ -177,7 +178,7 @@ export function useTerminalPaneChatState(controller: TerminalPaneTitleController
   )
   const handleConfirmedAgentExit = useCallback(
     (leafId: string): void => {
-      if (leafId !== chatLeafId) {
+      if (leafId !== chatLeafId || isNativeChatProviderSwitching(makePaneKey(tabId, leafId))) {
         return
       }
       const panes = managerRef.current?.getPanes() ?? []
@@ -200,7 +201,8 @@ export function useTerminalPaneChatState(controller: TerminalPaneTitleController
       chatLeafId,
       isChatEligibleForLeaf,
       isChatViewMode,
-      structuredSessionId
+      structuredSessionId,
+      tabId
     ]
   )
   useEffect(() => {

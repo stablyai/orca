@@ -182,6 +182,14 @@ export const SetOptionParams = z
   })
   .strict()
 
+export const SwitchProviderParams = z
+  .object({
+    envelope: MutationEnvelope,
+    agent: z.enum(['codex', 'claude', 'openclaude', 'grok', 'cursor']),
+    model: Identifier('Invalid model').optional()
+  })
+  .strict()
+
 export const OptionsParams = z.object({ sessionId: SessionId }).strict()
 
 /** One surface's claim on one session. The id names the surface, not the client: two chat views

@@ -47,4 +47,10 @@ describe('Grok first-user prompt text', () => {
       'fix the flaky vault tests'
     )
   })
+  it('excludes workspace rules bundled after the bootstrap git status', () => {
+    const bootstrap =
+      '<user_info>Runtime</user_info>\n<git_status>Snapshot</git_status>\nRules context:\n<rules>Project guidance</rules>'
+    expect(isGrokBootstrapContextText(bootstrap)).toBe(true)
+    expect(extractGrokFirstUserPromptText(bootstrap)).toBeNull()
+  })
 })

@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 
 import { AcpStructuredSessionAdapter } from './acp-structured-session-adapter'
 import type { AcpJsonRpcConnection, AcpJsonRpcConnectionHandlers } from './acp-jsonrpc-connection'
@@ -157,6 +157,50 @@ describe('AcpStructuredSessionAdapter', () => {
     })
     expect(cancelled).toEqual({ cancelled: true })
     expect(connection.calls.at(-1)).toMatchObject({ method: 'session/cancel' })
+  })
+
+  it('restores model and effort and retains a child whose exit is unproven', async () => {
+    const connection = fakeConnection({
+      onRequest: (method) =>
+        method === 'session/new'
+          ? {
+              sessionId: 'grok-restored',
+              configOptions: [
+                { id: 'model_id', category: 'model', currentValue: 'grok-default' },
+                { id: 'reasoning_effort', category: 'thought_level', currentValue: 'low' }
+              ]
+            }
+          : {}
+    })
+    const close = vi.fn().mockResolvedValueOnce(false).mockResolvedValueOnce(true)
+    connection.close = close
+    const adapter = new AcpStructuredSessionAdapter({
+      openConnection: async () => connection,
+      resolveLaunch: async () => ({ command: 'grok', args: ['agent', 'stdio'], cwd: '/repo' }),
+      readProcessStartTime: async () => 1
+    })
+    await adapter.acquire({
+      identity: {
+        sessionId: 'restore',
+        workspaceId: 'folder-workspace',
+        hostId: 'local',
+        agent: 'grok',
+        providerHandle: { kind: 'opaque', agent: 'grok', value: 'pending' }
+      },
+      fence: 2,
+      spawnToken: 'spawn-restored',
+      options: { model: 'grok-selected', effort: 'high' }
+    })
+    expect((await adapter.readOptions({ sessionId: 'restore', fence: 2 })).current).toEqual({
+      model: 'grok-selected',
+      effort: 'high'
+    })
+    expect(
+      await adapter.setOption({ sessionId: 'restore', fence: 2, key: 'effort', value: 'xhigh' })
+    ).toMatchObject({ model: 'grok-selected', effort: 'xhigh' })
+    expect(await adapter.closeSession('restore')).toBe(false)
+    expect(await adapter.closeSession('restore')).toBe(true)
+    expect(close).toHaveBeenCalledTimes(2)
   })
 
   it('authenticates Cursor with cursor_login and answers a permission card', async () => {

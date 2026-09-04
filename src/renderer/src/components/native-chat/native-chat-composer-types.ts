@@ -6,6 +6,7 @@ import type {
 } from '../../../../shared/native-chat-session-options'
 import type { NativeChatLaunchDraft } from '@/lib/native-chat-launch-prompt'
 import type { NativeChatComposerImageAttachment } from './NativeChatComposerField'
+import type { NativeChatSwitchProvider } from './use-native-chat-provider-models'
 
 export type NativeChatOptionPickerRequest = {
   id: string
@@ -24,6 +25,7 @@ export type NativeChatStructuredComposerTransport = {
 }
 
 export type NativeChatComposerProps = {
+  onSwitchProvider?: NativeChatSwitchProvider
   /** Tab hosting the agent; used to resolve the live ptyId + runtime settings. */
   terminalTabId: string
   /** Stable split-leaf identity; unlike a PTY id, this survives reconnects. */

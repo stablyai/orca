@@ -1,11 +1,17 @@
 // @vitest-environment happy-dom
 
-import { renderHook, waitFor } from '@testing-library/react'
+import { act, renderHook, waitFor } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { CatalogModel } from '../../../../shared/agent-session-option-catalog'
 import { clearNativeChatModelEnrichmentForTests } from './native-chat-session-option-enrichment'
 
 const discoverModels = vi.fn<() => Promise<readonly CatalogModel[] | null>>()
+vi.mock('@/lib/connection-context', () => ({ getConnectionIdFromState: () => null }))
+vi.mock('@/lib/launch-agent-session-continuation', () => ({
+  detectAgentSessionContinuationAgents: async () => ['claude', 'codex', 'grok', 'cursor']
+}))
+const tabsByWorktree = { workspace: [{ id: 'tab-terminal' }] }
+const settings = vi.hoisted(() => ({ experimentalStructuredNativeChat: false }))
 
 vi.mock('./native-chat-session-option-discovery', () => ({
   resolveNativeChatModelDiscoveryContext: () => ({ hostKey: 'host', runtime: null }),
@@ -13,9 +19,13 @@ vi.mock('./native-chat-session-option-discovery', () => ({
 }))
 
 vi.mock('../../store', () => ({
-  useAppStore: Object.assign(() => undefined, {
-    getState: () => ({ settings: {}, updateSettings: async () => undefined })
-  })
+  useAppStore: Object.assign(
+    (selector: (state: { settings: { experimentalStructuredNativeChat: boolean } }) => unknown) =>
+      selector({ settings, tabsByWorktree } as never),
+    {
+      getState: () => ({ settings, tabsByWorktree, updateSettings: async () => undefined })
+    }
+  )
 }))
 
 import { useNativeChatSessionOptions } from './use-native-chat-session-options'
@@ -42,7 +52,53 @@ describe('useNativeChatSessionOptions model reporting', () => {
   beforeEach(() => {
     clearNativeChatModelEnrichmentForTests()
     discoverModels.mockReset()
+    settings.experimentalStructuredNativeChat = false
     Object.defineProperty(window, 'api', { configurable: true, value: undefined })
+  })
+
+  it('offers the searchable provider groups in an existing terminal chat', () => {
+    settings.experimentalStructuredNativeChat = true
+    discoverModels.mockReturnValue(new Promise(() => {}))
+
+    const { result } = renderHook(() =>
+      useNativeChatSessionOptions({
+        agent: 'claude',
+        terminalTabId: 'tab-terminal',
+        targetPtyId: 'pty-terminal',
+        dispatchCommand: vi.fn()
+      })
+    )
+
+    expect(
+      modelDescriptor(result.current.snapshot).choices.map((choice) => choice.value.split(':')[0])
+    ).toEqual(expect.arrayContaining(['claude', 'codex', 'grok', 'cursor']))
+  })
+
+  it('routes a different provider to the handoff and keeps same-provider models on the existing command path', async () => {
+    discoverModels.mockReturnValue(new Promise(() => {}))
+    const onSwitchProvider = vi.fn().mockResolvedValue(undefined)
+    const dispatchCommand = vi.fn().mockResolvedValue(undefined)
+    const { result } = renderHook(() =>
+      useNativeChatSessionOptions({
+        agent: 'grok',
+        terminalTabId: 'tab-terminal',
+        targetPtyId: 'pty-switch',
+        dispatchCommand,
+        onSwitchProvider
+      })
+    )
+    await waitFor(() =>
+      expect(
+        modelDescriptor(result.current.snapshot).choices.find((choice) =>
+          choice.value.startsWith('codex:')
+        )
+      ).toMatchObject({ disabled: false })
+    )
+    await act(() => result.current.surface!.setOption('model', 'codex:gpt-5.6-sol'))
+    expect(onSwitchProvider).toHaveBeenCalledWith('codex', 'gpt-5.6-sol')
+    expect(dispatchCommand).not.toHaveBeenCalled()
+    await act(() => result.current.surface!.setOption('model', 'grok:grok-4.5'))
+    expect(dispatchCommand).toHaveBeenCalledWith('/model grok-4.5')
   })
 
   it('re-resolves the reported model against models discovered after the read', async () => {
@@ -74,19 +130,22 @@ describe('useNativeChatSessionOptions model reporting', () => {
       })
     )
 
-    await waitFor(() => expect(modelDescriptor(result.current.snapshot).currentValue).toBe('opus'))
+    await waitFor(() =>
+      expect(modelDescriptor(result.current.snapshot).currentValue).toBe('claude:opus')
+    )
 
     frameVisible = false
     resolveDiscovery(DISCOVERED)
 
     await waitFor(() =>
-      expect(modelDescriptor(result.current.snapshot).currentValue).toBe('opus[1m]')
+      expect(modelDescriptor(result.current.snapshot).currentValue).toBe('claude:opus[1m]')
     )
     // The invented family row is gone: every choice is one the host listed.
-    expect(modelDescriptor(result.current.snapshot).choices.map((choice) => choice.value)).toEqual([
-      'opus[1m]',
-      'haiku'
-    ])
+    expect(
+      modelDescriptor(result.current.snapshot)
+        .choices.filter((choice) => choice.value.startsWith('claude:'))
+        .map((choice) => choice.value.slice(7))
+    ).toEqual(['opus[1m]', 'haiku'])
   })
 
   it('does not re-resolve a late snapshot from the previous pty', async () => {
@@ -129,7 +188,9 @@ describe('useNativeChatSessionOptions model reporting', () => {
 
     await waitFor(() =>
       expect(
-        modelDescriptor(result.current.snapshot).choices.map((choice) => choice.value)
+        modelDescriptor(result.current.snapshot)
+          .choices.filter((choice) => choice.value.startsWith('claude:'))
+          .map((choice) => choice.value.slice(7))
       ).toEqual(['opus[1m]', 'haiku'])
     )
     expect(modelDescriptor(result.current.snapshot).currentValue).toBeUndefined()
@@ -163,14 +224,18 @@ describe('useNativeChatSessionOptions model reporting', () => {
         }),
       { initialProps: { targetPtyId: 'pty-reported' } }
     )
-    await waitFor(() => expect(modelDescriptor(result.current.snapshot).currentValue).toBe('opus'))
+    await waitFor(() =>
+      expect(modelDescriptor(result.current.snapshot).currentValue).toBe('claude:opus')
+    )
 
     rerender({ targetPtyId: 'pty-empty' })
     resolveDiscovery(DISCOVERED)
 
     await waitFor(() =>
       expect(
-        modelDescriptor(result.current.snapshot).choices.map((choice) => choice.value)
+        modelDescriptor(result.current.snapshot)
+          .choices.filter((choice) => choice.value.startsWith('claude:'))
+          .map((choice) => choice.value.slice(7))
       ).toEqual(['opus[1m]', 'haiku'])
     )
     expect(modelDescriptor(result.current.snapshot).currentValue).toBeUndefined()

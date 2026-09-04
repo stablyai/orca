@@ -20,6 +20,8 @@ export type StructuredAgentSessionHostSession = {
   hasProviderChild: boolean
   /** Exact adapter acquisition behind `hasProviderChild`; retained after exit to fence recovery. */
   acquisitionGeneration: string | null
+  /** True while this host is killing one child and acquiring another. Holds must not evict. */
+  replacingProvider?: boolean
 }
 
 export type StructuredAgentSessionHostDeps = {

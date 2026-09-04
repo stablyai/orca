@@ -137,6 +137,31 @@ describe('NativeChatSessionGate', () => {
     )
   })
 
+  it('does not carry a provider session id into a replacement PTY', () => {
+    const renderGate = (ptyId: string, agentStatusEntry?: AgentStatusEntry) => (
+      <NativeChatSessionGate
+        paneKey="tab-1:leaf-1"
+        launchAgent="claude"
+        ptyId={ptyId}
+        agentStatusEntry={agentStatusEntry}
+      >
+        {(resolution) => <div>{resolution.sessionId ?? 'new-session'}</div>}
+      </NativeChatSessionGate>
+    )
+    const view = render(
+      renderGate(
+        'old-pty',
+        entry({
+          paneKey: 'tab-1:leaf-1',
+          agentType: 'claude',
+          providerSession: { key: 'session_id', id: 'old-session' }
+        })
+      )
+    )
+    view.rerender(renderGate('new-pty'))
+    expect(screen.getByText('new-session')).toBeInTheDocument()
+  })
+
   it('does not open native chat from an unsupported title fallback', () => {
     renderResolution({
       paneKey: 'tab-1:leaf-1',

@@ -35,9 +35,16 @@ export function NativeChatStructuredSession(props: {
   agent: AgentType
   isVisible: boolean
   allowFileUriLinks: boolean
+  worktreeId?: string
   orchestrationDispatchStatus?: AgentStatusOrchestrationContext['dispatchStatus']
 }): React.JSX.Element {
-  const controller = useStructuredAgentSession(props)
+  const controller = useStructuredAgentSession({
+    sessionId: props.sessionId,
+    target: props.target,
+    agent: props.agent,
+    isVisible: props.isVisible,
+    worktreeId: props.worktreeId
+  })
   const [composerError, setComposerError] = useState<string | null>(null)
   const [optionPickerRequest, setOptionPickerRequest] = useState<{
     id: string

@@ -110,6 +110,7 @@ describe('decodeGrokTranscriptLine', () => {
 
   it.each([
     '<user_info>bootstrap context</user_info>',
+    '<user_info>Runtime context</user_info>\n<git_status>Snapshot</git_status>\nThe rules section contains context.\n<rules><always_applied_workspace_rules>Project guidance</always_applied_workspace_rules></rules>',
     [{ type: 'text', text: '<USER_INFO>bootstrap context</USER_INFO>' }],
     [
       {

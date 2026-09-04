@@ -3,6 +3,7 @@ import { NativeChatStructuredSession } from './NativeChatStructuredSession'
 import { NativeChatResolvedView } from './NativeChatResolvedView'
 import { useNativeChatStatusEntry } from './use-native-chat-status-entry'
 import type { NativeChatViewProps } from './native-chat-view-types'
+import { useNativeChatProviderContinuation } from './native-chat-provider-continuation'
 
 export type { NativeChatViewProps } from './native-chat-view-types'
 
@@ -25,17 +26,26 @@ function NativeChatBridgeView({
   onSwitchToTerminal,
   readTerminalScreen,
   contextMenuActions,
+  onSwitchProvider,
   orchestrationDispatchStatus
 }: Exclude<NativeChatViewProps, { mode: 'structured' }>): React.JSX.Element {
   const { entry: agentStatusEntry, paneKey } = useNativeChatStatusEntry(
     terminalTabId,
     preferredPaneKey
   )
+  const continuation = useNativeChatProviderContinuation(paneKey)
+  const switchedAgent =
+    continuation &&
+    targetPtyId &&
+    (continuation.targetPtyId === targetPtyId ||
+      (!continuation.targetPtyId && targetPtyId !== continuation.sourcePtyId))
+      ? continuation.agent
+      : null
   return (
     <NativeChatSessionGate
       paneKey={paneKey}
-      launchAgent={launchAgent}
-      resolvedAgent={resolvedAgent}
+      launchAgent={switchedAgent ?? launchAgent}
+      resolvedAgent={switchedAgent ?? resolvedAgent}
       agentStatusEntry={agentStatusEntry}
       ptyId={targetPtyId}
     >
@@ -52,6 +62,7 @@ function NativeChatBridgeView({
           onSwitchToTerminal={onSwitchToTerminal}
           readTerminalScreen={readTerminalScreen}
           contextMenuActions={contextMenuActions}
+          onSwitchProvider={onSwitchProvider}
           orchestrationDispatchStatus={orchestrationDispatchStatus}
         />
       )}

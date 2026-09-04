@@ -90,7 +90,9 @@ export function isGrokBootstrapContextText(text: string): boolean {
   // so real prompts mentioning either tag still count as user asks.
   return (
     remainder.length === 0 ||
-    (remainder.startsWith('<git_status>') && remainder.endsWith('</git_status>'))
+    (remainder.startsWith('<git_status>') &&
+      (remainder.endsWith('</git_status>') ||
+        (remainder.includes('<rules>') && remainder.endsWith('</rules>'))))
   )
 }
 

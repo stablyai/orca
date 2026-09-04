@@ -16,6 +16,7 @@ import {
   resolveVsCodeRemoteSshLaunchSpec
 } from '../external-editor-launch'
 import { resolveVsCodeSshAuthority } from '../ssh/vscode-ssh-authority'
+import { authorizeExternalPath } from './filesystem-auth'
 
 export { EXTERNAL_EDITOR_CLI_COMMAND }
 
@@ -233,7 +234,14 @@ export function registerShellHandlers(store: Store): void {
     if (result.canceled || result.filePaths.length === 0) {
       return null
     }
-    return result.filePaths[0]
+    const selectedPath = result.filePaths[0]
+    if (!selectedPath) {
+      return null
+    }
+    // Why: the dialog can return Downloads/Desktop paths outside every
+    // allowed root; without this the composer's thumbnail read is denied.
+    authorizeExternalPath(selectedPath)
+    return selectedPath
   })
 
   // Why: window.prompt() and <input type="file"> are unreliable in Electron,

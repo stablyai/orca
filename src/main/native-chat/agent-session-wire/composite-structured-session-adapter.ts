@@ -97,8 +97,11 @@ export class CompositeStructuredSessionAdapter implements StructuredAgentSession
     run: (adapter: StructuredAgentSessionAdapter) => Promise<boolean>
   ): Promise<boolean> {
     const adapter = this.liveAdapter(sessionId)
-    return run(adapter).finally(() => {
-      this.owners.delete(sessionId)
+    return run(adapter).then((stopped) => {
+      if (stopped && this.owners.get(sessionId) === adapter) {
+        this.owners.delete(sessionId)
+      }
+      return stopped
     })
   }
 }

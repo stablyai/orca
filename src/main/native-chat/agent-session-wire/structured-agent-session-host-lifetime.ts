@@ -31,7 +31,8 @@ function hasProviderChild(
   context: StructuredAgentSessionLifetimeContext,
   sessionId: string
 ): boolean {
-  return context.sessions.get(sessionId)?.hasProviderChild === true
+  const session = context.sessions.get(sessionId)
+  return session?.hasProviderChild === true || session?.replacingProvider === true
 }
 
 /** Runs the eviction steps under a deadline. A step that fails — or runs out of time — aborts the

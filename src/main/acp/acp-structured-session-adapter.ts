@@ -1,14 +1,11 @@
 import { randomUUID } from 'node:crypto'
 import { parseAgentJournalItemKey } from '../../shared/agent-session-journal-item-key'
 import { acpSpawnRecipe, isAcpStructuredAgent } from '../../shared/acp-agent-recipes'
-import type { AgentJournalMessageItem } from '../../shared/agent-session-journal-types'
 import type {
   AgentSessionAcquisition,
-  AgentSessionDispatchOutcome,
   StructuredAgentSessionAcquireInput,
   StructuredAgentSessionAdapter,
-  StructuredAgentSessionLifecycleEvent,
-  StructuredAgentSessionSetOptionInput
+  StructuredAgentSessionLifecycleEvent
 } from '../native-chat/agent-session-wire/structured-agent-session-adapter'
 import { AgentSessionOptionRejectedError } from '../native-chat/agent-session-wire/structured-agent-session-option-error'
 import { supportsCodexStructuredLocation } from '../codex/codex-structured-location-support'
@@ -60,16 +57,17 @@ type AcpSession = {
 
 export class AcpStructuredSessionAdapter implements StructuredAgentSessionAdapter {
   private readonly sessions = new Map<string, AcpSession>()
+  private readonly connections = new Map<string, AcpJsonRpcConnection>()
   private readonly openConnection: typeof openAcpJsonRpcConnection
 
   constructor(private readonly deps: AcpStructuredSessionAdapterDeps) {
     this.openConnection = deps.openConnection ?? openAcpJsonRpcConnection
   }
 
-  supportsCreate = (
-    location: Parameters<NonNullable<StructuredAgentSessionAdapter['supportsCreate']>>[0],
-    agent: string
-  ): boolean =>
+  supportsCreate: NonNullable<StructuredAgentSessionAdapter['supportsCreate']> = (
+    location,
+    agent
+  ) =>
     isAcpStructuredAgent(agent) &&
     Boolean(acpSpawnRecipe(agent)) &&
     supportsCodexStructuredLocation(location)
@@ -133,6 +131,7 @@ export class AcpStructuredSessionAdapter implements StructuredAgentSessionAdapte
       }
     })
     live.connection = connection
+    this.connections.set(input.identity.sessionId, connection)
     const pid = connection.pid
     if (pid === undefined) {
       await connection.close()
@@ -173,6 +172,20 @@ export class AcpStructuredSessionAdapter implements StructuredAgentSessionAdapte
       promptCount: 0,
       assistant: { text: '' }
     })
+    for (const key of ['model', 'effort'] as const) {
+      const value = input.options?.[key]
+      if (
+        value &&
+        value !== this.sessions.get(input.identity.sessionId)?.config.result.current[key]
+      ) {
+        await this.setOption({
+          sessionId: input.identity.sessionId,
+          fence: input.fence,
+          key,
+          value
+        })
+      }
+    }
     const observedAt = this.deps.now?.() ?? Date.now()
     return {
       process: {
@@ -192,12 +205,7 @@ export class AcpStructuredSessionAdapter implements StructuredAgentSessionAdapte
     }
   }
 
-  dispatch = async (input: {
-    sessionId: string
-    clientMessageId: string
-    body: AgentJournalMessageItem
-    fence: number
-  }): Promise<AgentSessionDispatchOutcome> => {
+  dispatch: StructuredAgentSessionAdapter['dispatch'] = async (input) => {
     const session = this.sessions.get(input.sessionId)
     if (!session) {
       return { state: 'rejected', reason: 'ACP session is not live' }
@@ -235,11 +243,7 @@ export class AcpStructuredSessionAdapter implements StructuredAgentSessionAdapte
     }
   }
 
-  cancelTurn = async (input: {
-    sessionId: string
-    turnId: string
-    fence: number
-  }): Promise<{ cancelled: boolean }> => {
+  cancelTurn: StructuredAgentSessionAdapter['cancelTurn'] = async (input) => {
     const session = this.sessions.get(input.sessionId)
     if (!session) {
       return { cancelled: false }
@@ -248,13 +252,7 @@ export class AcpStructuredSessionAdapter implements StructuredAgentSessionAdapte
     return { cancelled: true }
   }
 
-  answerPrompt = async (input: {
-    sessionId: string
-    itemId: string
-    kind: 'approval' | 'question'
-    optionId: string
-    fence: number
-  }): Promise<void> => {
+  answerPrompt: StructuredAgentSessionAdapter['answerPrompt'] = async (input) => {
     const session = this.sessions.get(input.sessionId)
     const identity = parseAgentJournalItemKey(input.itemId)
     const pendingKey = identity?.provider === 'legacy' ? identity.recordId : input.itemId
@@ -274,9 +272,7 @@ export class AcpStructuredSessionAdapter implements StructuredAgentSessionAdapte
     })
   }
 
-  setOption = async (
-    input: StructuredAgentSessionSetOptionInput
-  ): Promise<void | Readonly<Record<string, string>>> => {
+  setOption: StructuredAgentSessionAdapter['setOption'] = async (input) => {
     const session = this.sessions.get(input.sessionId)
     if (!session) {
       return
@@ -292,16 +288,20 @@ export class AcpStructuredSessionAdapter implements StructuredAgentSessionAdapte
     } catch (error) {
       throw new AgentSessionOptionRejectedError(error)
     }
-    return Object.fromEntries(session.config.values)
+    return { ...Object.fromEntries(session.config.values), ...session.config.result.current }
   }
 
   readOptions = async (input: { sessionId: string; fence: number }) =>
     this.sessions.get(input.sessionId)?.config.result ?? { models: [], current: { model: '' } }
 
   closeSession = async (sessionId: string): Promise<boolean> => {
-    const session = this.sessions.get(sessionId)
-    this.sessions.delete(sessionId)
-    return session ? session.connection.close() : true
+    const connection = this.connections.get(sessionId)
+    const stopped = connection ? await connection.close() : true
+    if (stopped && this.connections.get(sessionId) === connection) {
+      this.connections.delete(sessionId)
+      this.sessions.delete(sessionId)
+    }
+    return stopped
   }
 
   disposeSession = (sessionId: string): Promise<boolean> => this.closeSession(sessionId)
@@ -309,6 +309,6 @@ export class AcpStructuredSessionAdapter implements StructuredAgentSessionAdapte
   releaseAcquisition = (input: { sessionId: string }): Promise<boolean> =>
     this.closeSession(input.sessionId)
   closeAll = async (): Promise<void> => {
-    await Promise.all([...this.sessions.keys()].map((id) => this.closeSession(id)))
+    await Promise.all([...this.connections.keys()].map((id) => this.closeSession(id)))
   }
 }
