@@ -22,6 +22,7 @@ import { CopilotHookService, copilotHookService } from '../copilot/hook-service'
 import { HermesHookService, hermesHookService } from '../hermes/hook-service'
 import { DevinHookService, devinHookService } from '../devin/hook-service'
 import { KimiHookService, kimiHookService } from '../kimi/hook-service'
+import { polytokenHookService } from '../polytoken/hook-service'
 import { openClaudeHookService } from '../openclaude/hook-service'
 import { MANAGED_AGENT_HOOK_INSTALLERS } from './managed-agent-hook-controls'
 import {
@@ -708,21 +709,20 @@ describe('remote hook service installers', () => {
       ['copilot', copilotHookService],
       ['hermes', hermesHookService],
       ['devin', devinHookService],
-      ['kimi', kimiHookService]
+      ['kimi', kimiHookService],
+      ['polytoken', polytokenHookService]
     ])
 
     // Guard against a service silently missing from the map above as new agents land.
-    for (const [agent] of MANAGED_AGENT_HOOK_INSTALLERS) {
-      expect(servicesByAgent.has(agent)).toBe(true)
-    }
+    const unmapped = MANAGED_AGENT_HOOK_INSTALLERS.filter(([agent]) => !servicesByAgent.has(agent))
+    expect(unmapped.map(([agent]) => agent)).toEqual([])
 
     const registered = new Set<string>(REMOTE_MANAGED_HOOK_INSTALLER_AGENTS)
-    const missing: string[] = []
-    for (const [agent, service] of servicesByAgent) {
-      if (typeof service.installRemote === 'function' && !registered.has(agent)) {
-        missing.push(agent)
-      }
-    }
+    const missing = [...servicesByAgent]
+      .filter(
+        ([agent, service]) => typeof service.installRemote === 'function' && !registered.has(agent)
+      )
+      .map(([agent]) => agent)
     expect(missing).toEqual([])
   })
 

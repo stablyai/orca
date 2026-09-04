@@ -1737,7 +1737,10 @@
               "workspaceCards": "workspace cards",
               "workspaceOptions": "workspace options",
               "worktreeCards": "worktree cards"
-            }
+            },
+            "zaiGlmKeyword": "glm",
+            "zaiKeyword": "z.ai",
+            "zaiOpencodeKeyword": "opencode"
           }
         },
         "artifacts": {

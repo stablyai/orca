@@ -16,10 +16,28 @@ export const RESUMABLE_TUI_AGENTS = [
   'omp',
   'prime-agent',
   'copilot',
-  'kimi'
+  'kimi',
+  'polytoken'
 ] as const satisfies readonly TuiAgent[]
 
 export type ResumableTuiAgent = (typeof RESUMABLE_TUI_AGENTS)[number]
+
+// Why: these agents announce a session (with resume identity) before any turn starts; the
+// listener lands that as a metadata-only row and the host accepts it only for this list.
+export const PROVIDER_SESSION_ONLY_TUI_AGENTS = [
+  'pi',
+  'prime-agent',
+  'polytoken'
+] as const satisfies readonly ResumableTuiAgent[]
+
+export function isProviderSessionOnlyAgent(
+  value: unknown
+): value is (typeof PROVIDER_SESSION_ONLY_TUI_AGENTS)[number] {
+  return (
+    typeof value === 'string' &&
+    (PROVIDER_SESSION_ONLY_TUI_AGENTS as readonly string[]).includes(value)
+  )
+}
 
 export type AgentProviderSessionKey = 'session_id' | 'conversation_id'
 
@@ -196,8 +214,10 @@ export function extractAgentProviderSession(
     }
     case 'gemini':
     case 'droid':
-    // Why: Kimi Code posts a Claude-shaped `session_id` (e.g. session_<uuid>).
+    // Why: Kimi Code posts a Claude-shaped `session_id` (e.g. session_<uuid>), and
+    // Polytoken's session_start hook carries the same key for `polytoken continue <id>`.
     // falls through
+    case 'polytoken':
     case 'kimi': {
       const id = readSessionId(payload, ['session_id'])
       return id ? { key: 'session_id', id } : null
@@ -291,5 +311,7 @@ export function getAgentResumeArgv(
     // Why: Kimi resumes by id with --session; sessions are work-dir-scoped (enforced by callers).
     case 'kimi':
       return providerSession.key === 'session_id' ? ['kimi', '--session', id] : null
+    case 'polytoken':
+      return providerSession.key === 'session_id' ? ['polytoken', 'continue', id] : null
   }
 }
