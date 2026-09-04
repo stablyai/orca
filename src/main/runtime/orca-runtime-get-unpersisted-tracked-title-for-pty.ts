@@ -171,13 +171,16 @@ export class OrcaRuntimeWithGetUnpersistedTrackedTitleForPty extends OrcaRuntime
       lastTitleFactAtMs: null,
       chunkTouchedSessionTabs: false,
       pendingFacts: [],
-      // Why: command-code facts exist only for the pty:sideEffect channel —
-      // headless serve skips the per-chunk scrape entirely. The detector
-      // self-arms on the Command Code banner; the spawn command (when main
-      // saw one) mirrors the renderer detector's startupCommand fast-arm.
+      // Why: scrape facts exist only for the pty:sideEffect channel — headless
+      // serve skips the per-chunk fact scrape. Detectors self-arm on their
+      // banner; the spawn command (when main saw one) mirrors the renderer
+      // detector's startupCommand fast-arm.
       commandCodeDetector: this.terminalSideEffectConsumerAvailable
         ? this.createTerminalSideEffectCommandCodeDetector(ptyId)
-        : null
+        : null,
+      // Why separate: IBM Bob has no hooks or title status, so prompt-submission
+      // verification depends on this scrape even when no consumer wants facts.
+      promptLifecycleDetector: this.createPromptLifecycleOutputObserver(ptyId)
     }
     this.ptyTitleTrackersByPtyId.set(ptyId, entry)
     return entry

@@ -94,6 +94,9 @@ export type RuntimePtyTitleTrackerEntry = {
   chunkTouchedSessionTabs: boolean
   pendingFacts: TerminalSideEffectFact[]
   commandCodeDetector: { observe: (data: string) => boolean } | null
+  // Why: feeds recordAgentPromptLifecycleState for scraped agents that emit no
+  // hooks or title status (IBM Bob); independent of fact consumers.
+  promptLifecycleDetector: { observe: (data: string) => boolean } | null
 }
 
 export type RuntimeHeadlessTerminal = {

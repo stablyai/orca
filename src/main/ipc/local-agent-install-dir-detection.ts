@@ -1,1 +1,4 @@
-export { detectCommandsInInstallDirs } from '../../shared/local-agent-install-dir-detection'
+export {
+  detectCommandsInInstallDirs,
+  resolveCommandsInInstallDirs
+} from '../../shared/local-agent-install-dir-detection'

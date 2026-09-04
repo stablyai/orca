@@ -96,6 +96,35 @@ describe('terminal side-effect fact channel', () => {
     })
   })
 
+  it('emits agent-output facts for IBM Bob and tracks its approval prompt', () => {
+    const { runtime, batches } = createSideEffectRuntime()
+    syncSinglePty(runtime)
+
+    runtime.noteTerminalSpawnCommand('pty-1', 'bob chat --trust')
+    runtime.onPtyData(
+      'pty-1',
+      ' ❯ run the tests\r\n ⠋ Processing… (Enter to steer, Tab to queue)\r\n',
+      100
+    )
+    expect(batches.at(-1)?.facts).toEqual([
+      { kind: 'agent-output-working', agent: 'bob', prompt: 'run the tests' }
+    ])
+
+    runtime.onPtyData('pty-1', '  Approve commands:\r\n  → Approve Once\r\n    Reject\r\n', 101)
+    expect(batches.at(-1)?.facts).toEqual([
+      { kind: 'agent-output-waiting', agent: 'bob', prompt: 'run the tests' }
+    ])
+
+    runtime.onPtyData(
+      'pty-1',
+      '• done\r\n  ❯   Build Anything, @ for context, / for commands, $ for skills\r\n',
+      102
+    )
+    expect(batches.at(-1)?.facts).toEqual([
+      { kind: 'agent-output-done', agent: 'bob', prompt: 'run the tests' }
+    ])
+  })
+
   it('prefers the tracked title over a stale renderer lastTitle in the hydration seed', async () => {
     const { runtime } = createSideEffectRuntime()
     const serializeBuffer = vi.fn().mockResolvedValue({

@@ -11,11 +11,11 @@ import {
   isAgentTaskCompleteOsNotificationEnabledFromState,
   isAgentTaskCompleteTrackingEnabledFromState
 } from './agent-task-complete-policy'
-import { createCommandCodeOutputStatusDetector } from '../../../../shared/command-code-output-status'
+import { createAgentOutputStatusObserver } from '../../../../shared/agent-output-status-profiles'
 import { createOsc133CommandFinishedScanner } from '../../../../shared/terminal-osc133-command-finished'
 import {
   createParkedTerminalCommandStatusPolicy,
-  readInFlightCommandCodeTurn
+  readInFlightAgentOutputTurn
 } from './parked-terminal-command-status'
 import { subscribeToPtyData } from './pty-data-sidecar-subscriptions'
 import { createPtyOutputProcessor } from './pty-transport'
@@ -231,10 +231,19 @@ export function startParkedTerminalByteWatcher(
   // unseeded it would never scrape the turn's return to the idle composer.
   const commandCodeOutputStatusDetector = factSideEffectAuthority
     ? null
-    : createCommandCodeOutputStatusDetector({
-        inFlightTurn: readInFlightCommandCodeTurn(paneKey),
-        onWorking: commandStatusPolicy.onCommandCodeWorking,
-        onDone: commandStatusPolicy.onCommandCodeDone
+    : createAgentOutputStatusObserver({
+        readInFlightTurn: (agent) => readInFlightAgentOutputTurn(paneKey, agent),
+        // Why: Command Code keeps its own policy entry points (and tests); other
+        // scraped agents share the generic ones, mirroring main's fact split.
+        onWorking: (agent, prompt) =>
+          agent === 'command-code'
+            ? commandStatusPolicy.onCommandCodeWorking(prompt)
+            : commandStatusPolicy.onAgentOutputWorking(agent, prompt),
+        onDone: (agent, prompt) =>
+          agent === 'command-code'
+            ? commandStatusPolicy.onCommandCodeDone(prompt)
+            : commandStatusPolicy.onAgentOutputDone(agent, prompt),
+        onWaiting: commandStatusPolicy.onAgentOutputWaiting
       })
   const unregisterFactConsumer = factSideEffectAuthority
     ? registerTerminalSideEffectFactConsumer({
@@ -245,6 +254,9 @@ export function startParkedTerminalByteWatcher(
           onCommandFinished: commandStatusPolicy.onCommandFinished,
           onCommandCodeWorking: commandStatusPolicy.onCommandCodeWorking,
           onCommandCodeDone: commandStatusPolicy.onCommandCodeDone,
+          onAgentOutputWorking: commandStatusPolicy.onAgentOutputWorking,
+          onAgentOutputDone: commandStatusPolicy.onAgentOutputDone,
+          onAgentOutputWaiting: commandStatusPolicy.onAgentOutputWaiting,
           onPrLink: (link) =>
             useAppStore.getState().observeTerminalGitHubPullRequestLink(worktreeId, link)
         },

@@ -123,6 +123,7 @@ export class OrcaRuntimeWithApplyTrackedPtyTitle extends OrcaRuntimeWithGetUnper
   /** Cancel the per-PTY title tracker (stale-title timer included) on PTY
    *  teardown so it cannot fire into pruned records. */
   protected disposePtyTitleTracker(ptyId: string): void {
+    this.clearAgentOutputIdleSettle(ptyId)
     this.ptyTitleTrackersByPtyId.get(ptyId)?.tracker.dispose()
     this.ptyTitleTrackersByPtyId.delete(ptyId)
     this.ptyForegroundAgent.clearDelayedSnapshot(ptyId)

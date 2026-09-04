@@ -4,7 +4,11 @@ import type {
   RuntimePtyTitleTrackerEntry,
   RuntimePtyWorktreeRecord
 } from './runtime-terminal-state-records'
-import { createCommandCodeOutputStatusDetector } from '../../shared/command-code-output-status'
+import {
+  AGENT_OUTPUT_DONE_SETTLE_MS,
+  AGENT_OUTPUT_STATUS_PROFILES,
+  createAgentOutputStatusObserver
+} from '../../shared/agent-output-status-profiles'
 import { extractLastOsc7Uri, extractOscScanTail } from '../daemon/osc7-uri-extraction'
 import { parseFileUriPathParts } from '../daemon/osc7-file-uri'
 import { splitWorktreeIdForFilesystem } from '../../shared/worktree/id'
@@ -17,15 +21,70 @@ export class OrcaRuntimeWithCreateTerminalSideEffectCommandCodeDetector extends 
   protected createTerminalSideEffectCommandCodeDetector(
     ptyId: string
   ): NonNullable<RuntimePtyTitleTrackerEntry['commandCodeDetector']> {
-    return createCommandCodeOutputStatusDetector({
-      startupCommand: this.terminalSpawnCommandsByPtyId.get(ptyId) ?? null,
-      onWorking: (prompt) => {
-        this.recordTerminalSideEffectFact(ptyId, { kind: 'command-code-working', prompt })
+    // Why: profiles that feed the prompt lifecycle are scraped by the always-on
+    // lifecycle observer (which also emits their facts), so each chunk is scanned
+    // once per profile. Command Code keeps its legacy fact kinds so what hosts
+    // publish for it is unchanged for older clients.
+    return createAgentOutputStatusObserver(
+      {
+        startupCommand: this.terminalSpawnCommandsByPtyId.get(ptyId) ?? null,
+        onWorking: (_agent, prompt) => {
+          this.recordTerminalSideEffectFact(ptyId, { kind: 'command-code-working', prompt })
+        },
+        onDone: (_agent, prompt) => {
+          this.recordTerminalSideEffectFact(ptyId, { kind: 'command-code-done', prompt })
+        }
       },
-      onDone: (prompt) => {
-        this.recordTerminalSideEffectFact(ptyId, { kind: 'command-code-done', prompt })
-      }
-    })
+      AGENT_OUTPUT_STATUS_PROFILES.filter((profile) => !profile.feedsPromptLifecycle)
+    )
+  }
+
+  // Why: a pending idle settle belongs to one process generation; it must not
+  // stamp a replacement process (same PTY id) as idle.
+  protected clearAgentOutputIdleSettle(ptyId: string): void {
+    const timer = this.agentOutputIdleSettleTimersByPtyId.get(ptyId)
+    if (timer !== undefined) {
+      clearTimeout(timer)
+      this.agentOutputIdleSettleTimersByPtyId.delete(ptyId)
+    }
+  }
+
+  protected createPromptLifecycleOutputObserver(
+    ptyId: string
+  ): RuntimePtyTitleTrackerEntry['promptLifecycleDetector'] {
+    const profiles = AGENT_OUTPUT_STATUS_PROFILES.filter((profile) => profile.feedsPromptLifecycle)
+    if (profiles.length === 0) {
+      return null
+    }
+    return createAgentOutputStatusObserver(
+      {
+        startupCommand: this.terminalSpawnCommandsByPtyId.get(ptyId) ?? null,
+        onWorking: (agent, prompt) => {
+          this.clearAgentOutputIdleSettle(ptyId)
+          this.recordTerminalSideEffectFact(ptyId, { kind: 'agent-output-working', agent, prompt })
+          this.recordAgentPromptLifecycleState(ptyId, 'working')
+        },
+        onDone: (agent, prompt) => {
+          this.recordTerminalSideEffectFact(ptyId, { kind: 'agent-output-done', agent, prompt })
+          // Why: the composer repaints mid-turn; like the renderer's done settle,
+          // only record idle if no working/waiting repaint arrives in the window.
+          this.clearAgentOutputIdleSettle(ptyId)
+          this.agentOutputIdleSettleTimersByPtyId.set(
+            ptyId,
+            setTimeout(() => {
+              this.agentOutputIdleSettleTimersByPtyId.delete(ptyId)
+              this.recordAgentPromptLifecycleState(ptyId, 'idle')
+            }, AGENT_OUTPUT_DONE_SETTLE_MS)
+          )
+        },
+        onWaiting: (agent, prompt) => {
+          this.clearAgentOutputIdleSettle(ptyId)
+          this.recordTerminalSideEffectFact(ptyId, { kind: 'agent-output-waiting', agent, prompt })
+          this.recordAgentPromptLifecycleState(ptyId, 'permission')
+        }
+      },
+      profiles
+    )
   }
 
   protected extractLastOsc7CwdForPty(

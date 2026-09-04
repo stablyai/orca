@@ -66,6 +66,17 @@ describe('tui agent permissions', () => {
     )
   })
 
+  it('drives the IBM Bob yolo profile from the chat --auto-approve flag', () => {
+    // Why: Bob Shell 2.x deprecated `--yolo`; `--auto-approve` is the `bob chat` equivalent.
+    expect(YOLO_TUI_AGENT_ARGS.bob).toBe('--auto-approve')
+    expect(
+      resolveTuiAgentPermissionMode({ agent: 'bob', agentArgs: '--auto-approve', agentEnv: {} })
+    ).toBe('yolo')
+    expect(resolveTuiAgentPermissionMode({ agent: 'bob', agentArgs: '', agentEnv: {} })).toBe(
+      'manual'
+    )
+  })
+
   it('resolves custom Codex permission arguments as mixed', () => {
     expect(
       resolveTuiAgentPermissionMode({

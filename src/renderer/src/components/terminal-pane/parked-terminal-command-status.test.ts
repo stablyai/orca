@@ -115,6 +115,105 @@ describe('createParkedTerminalCommandStatusPolicy', () => {
     policy.dispose()
   })
 
+  it('seeds a scraped Bob working row and a waiting row on its approval prompt', async () => {
+    mockStoreState.tabsByWorktree[WORKTREE_ID] = [{ id: TAB_ID, launchAgent: 'bob' }]
+    const policy = await createPolicy(PTY_ID_LOCAL)
+
+    policy.onAgentOutputWorking('bob', 'run the tests')
+    expect(mockStoreState.setAgentStatus).toHaveBeenLastCalledWith(
+      PANE_KEY,
+      expect.objectContaining({ state: 'working', prompt: 'run the tests', agentType: 'bob' }),
+      '✳ Build feature',
+      undefined,
+      ROUTING
+    )
+
+    policy.onAgentOutputWaiting('bob', 'run the tests')
+    expect(mockStoreState.setAgentStatus).toHaveBeenLastCalledWith(
+      PANE_KEY,
+      expect.objectContaining({ state: 'waiting', prompt: 'run the tests', agentType: 'bob' }),
+      '✳ Build feature',
+      undefined,
+      ROUTING
+    )
+    policy.dispose()
+  })
+
+  it("does not lend another agent's prompt to an empty Bob working seed", async () => {
+    mockStoreState.agentStatusByPaneKey[PANE_KEY] = makeStatusEntry({
+      state: 'working',
+      prompt: 'claude was here',
+      agentType: 'claude'
+    })
+    mockStoreState.paneForegroundAgentByPaneKey[PANE_KEY] = {
+      agent: 'bob'
+    } as PaneForegroundAgentEntry
+    const policy = await createPolicy(PTY_ID_LOCAL)
+
+    policy.onAgentOutputWorking('bob', '')
+
+    expect(mockStoreState.setAgentStatus).toHaveBeenLastCalledWith(
+      PANE_KEY,
+      expect.objectContaining({ state: 'working', prompt: '', agentType: 'bob' }),
+      '✳ Build feature',
+      undefined,
+      ROUTING
+    )
+    policy.dispose()
+  })
+
+  it('rejects a scraped Bob row when another agent owns the pane', async () => {
+    mockStoreState.tabsByWorktree[WORKTREE_ID] = [{ id: TAB_ID, launchAgent: 'claude' }]
+    const policy = await createPolicy(PTY_ID_LOCAL)
+
+    policy.onAgentOutputWorking('bob', 'run the tests')
+
+    expect(mockStoreState.setAgentStatus).not.toHaveBeenCalled()
+    policy.dispose()
+  })
+
+  it('settles a scraped Bob turn to done from a waiting row', async () => {
+    mockStoreState.agentStatusByPaneKey[PANE_KEY] = makeStatusEntry({
+      state: 'waiting',
+      prompt: 'run the tests',
+      agentType: 'bob'
+    })
+    const policy = await createPolicy(PTY_ID_LOCAL)
+
+    policy.onAgentOutputDone('bob', 'run the tests')
+    vi.advanceTimersByTime(DONE_SETTLE_MS)
+
+    expect(mockStoreState.setAgentStatus).toHaveBeenCalledWith(
+      PANE_KEY,
+      expect.objectContaining({ state: 'done', prompt: 'run the tests', agentType: 'bob' }),
+      '✳ Build feature',
+      undefined,
+      ROUTING
+    )
+    policy.dispose()
+  })
+
+  it('settles a scraped Bob turn to done after the window', async () => {
+    mockStoreState.agentStatusByPaneKey[PANE_KEY] = makeStatusEntry({
+      state: 'working',
+      prompt: 'run the tests',
+      agentType: 'bob'
+    })
+    const policy = await createPolicy(PTY_ID_LOCAL)
+
+    policy.onAgentOutputDone('bob', 'run the tests')
+    vi.advanceTimersByTime(DONE_SETTLE_MS)
+
+    expect(mockStoreState.setAgentStatus).toHaveBeenCalledWith(
+      PANE_KEY,
+      expect.objectContaining({ state: 'done', prompt: 'run the tests', agentType: 'bob' }),
+      '✳ Build feature',
+      undefined,
+      ROUTING
+    )
+    policy.dispose()
+  })
+
   it('writes nothing when connection routing does not resolve', async () => {
     resolveLiveAgentStatusConnectionRouting.mockReturnValue(undefined)
     const policy = await createPolicy(PTY_ID_LOCAL)
@@ -290,7 +389,7 @@ describe('createParkedTerminalCommandStatusPolicy', () => {
 
     expect(mockStoreState.setAgentStatus).not.toHaveBeenCalled()
     vi.advanceTimersByTime(1)
-    expect(revealedPaneSettle).toHaveBeenCalledExactlyOnceWith('Fix the spinner')
+    expect(revealedPaneSettle).toHaveBeenCalledExactlyOnceWith('Fix the spinner', 'command-code')
   })
 
   // Why: the transferred window is still a settle window — a working repaint from the
@@ -406,35 +505,42 @@ describe('createParkedTerminalCommandStatusPolicy', () => {
   })
 })
 
-describe('readInFlightCommandCodeTurn', () => {
+describe('readInFlightAgentOutputTurn', () => {
   beforeEach(() => {
     vi.resetModules()
     mockStoreState = makeMockStoreState()
   })
 
-  it('returns only a working command-code turn', async () => {
-    const { readInFlightCommandCodeTurn } = await import('./parked-terminal-command-status')
+  it('returns only an in-flight turn of the requested agent', async () => {
+    const { readInFlightAgentOutputTurn } = await import('./parked-terminal-command-status')
 
     mockStoreState.agentStatusByPaneKey[PANE_KEY] = makeStatusEntry({
       state: 'working',
       prompt: 'Fix the spinner',
       agentType: 'command-code'
     })
-    expect(readInFlightCommandCodeTurn(PANE_KEY)).toEqual({ prompt: 'Fix the spinner' })
+    expect(readInFlightAgentOutputTurn(PANE_KEY, 'command-code')).toEqual({
+      prompt: 'Fix the spinner'
+    })
+    expect(readInFlightAgentOutputTurn(PANE_KEY, 'bob')).toBeNull()
+
+    mockStoreState.agentStatusByPaneKey[PANE_KEY] = makeStatusEntry({
+      state: 'waiting',
+      prompt: 'run the tests',
+      agentType: 'bob'
+    })
+    expect(readInFlightAgentOutputTurn(PANE_KEY, 'bob')).toEqual({ prompt: 'run the tests' })
 
     // Why 'done' excluded: a stale done row would arm the scrape against whatever
-    // process replaced the Command Code TUI.
+    // process replaced the TUI.
     mockStoreState.agentStatusByPaneKey[PANE_KEY] = makeStatusEntry({
       state: 'done',
       prompt: 'Fix the spinner',
       agentType: 'command-code'
     })
-    expect(readInFlightCommandCodeTurn(PANE_KEY)).toBeNull()
-
-    mockStoreState.agentStatusByPaneKey[PANE_KEY] = makeStatusEntry({ agentType: 'claude' })
-    expect(readInFlightCommandCodeTurn(PANE_KEY)).toBeNull()
+    expect(readInFlightAgentOutputTurn(PANE_KEY, 'command-code')).toBeNull()
 
     delete mockStoreState.agentStatusByPaneKey[PANE_KEY]
-    expect(readInFlightCommandCodeTurn(PANE_KEY)).toBeNull()
+    expect(readInFlightAgentOutputTurn(PANE_KEY, 'command-code')).toBeNull()
   })
 })

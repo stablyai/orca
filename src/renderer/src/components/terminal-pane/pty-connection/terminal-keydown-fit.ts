@@ -140,6 +140,9 @@ export function installTerminalKeydownFit(session: ConnectPanePtySession): void 
         // renderer seeds also write), so main only emits scrape facts.
         onCommandCodeWorking: session.seedCommandCodeOutputWorkingStatus,
         onCommandCodeDone: session.scheduleCommandCodeOutputDoneStatus,
+        onAgentOutputWorking: (agent, prompt) => session.seedAgentOutputRow(agent, 'working', prompt),
+        onAgentOutputDone: session.scheduleAgentOutputDoneStatus,
+        onAgentOutputWaiting: (agent, prompt) => session.seedAgentOutputRow(agent, 'waiting', prompt),
         ...(session.shouldOwnAgentStatusInRenderer
           ? { onAgentStatus: (payload) => session.handleRendererOwnedAgentStatus(payload) }
           : {}),

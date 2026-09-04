@@ -30,7 +30,7 @@ describe('command code done settle window', () => {
     expect(settle).not.toHaveBeenCalled()
 
     vi.advanceTimersByTime(1)
-    expect(settle).toHaveBeenCalledExactlyOnceWith('Fix the spinner')
+    expect(settle).toHaveBeenCalledExactlyOnceWith('Fix the spinner', 'command-code')
   })
 
   // Why: this is the park/reveal contract — the deadline is the turn's, not the owner's.
@@ -48,7 +48,7 @@ describe('command code done settle window', () => {
 
     vi.advanceTimersByTime(100)
     expect(parkedWatcherSettle).not.toHaveBeenCalled()
-    expect(revealedPaneSettle).toHaveBeenCalledExactlyOnceWith('Fix the spinner')
+    expect(revealedPaneSettle).toHaveBeenCalledExactlyOnceWith('Fix the spinner', 'command-code')
   })
 
   // Why identity-checked: a late release from the previous owner must not unregister the successor.
@@ -61,7 +61,7 @@ describe('command code done settle window', () => {
     openCommandCodeDoneSettle(PANE_KEY, 'Fix the spinner')
     vi.advanceTimersByTime(COMMAND_CODE_OUTPUT_DONE_SETTLE_MS)
 
-    expect(successorSettle).toHaveBeenCalledExactlyOnceWith('Fix the spinner')
+    expect(successorSettle).toHaveBeenCalledExactlyOnceWith('Fix the spinner', 'command-code')
   })
 
   it('drops the window when a working repaint cancels it', () => {
@@ -93,7 +93,7 @@ describe('command code done settle window', () => {
     openCommandCodeDoneSettle(PANE_KEY, 'second turn')
     vi.advanceTimersByTime(COMMAND_CODE_OUTPUT_DONE_SETTLE_MS)
 
-    expect(settle).toHaveBeenCalledExactlyOnceWith('second turn')
+    expect(settle).toHaveBeenCalledExactlyOnceWith('second turn', 'command-code')
   })
 
   it('scopes windows per pane key', () => {
@@ -108,6 +108,6 @@ describe('command code done settle window', () => {
     vi.advanceTimersByTime(COMMAND_CODE_OUTPUT_DONE_SETTLE_MS)
 
     expect(settle).not.toHaveBeenCalled()
-    expect(otherSettle).toHaveBeenCalledExactlyOnceWith('theirs')
+    expect(otherSettle).toHaveBeenCalledExactlyOnceWith('theirs', 'command-code')
   })
 })

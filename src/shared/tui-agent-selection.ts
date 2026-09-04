@@ -27,6 +27,9 @@ export const TUI_AGENT_AUTO_PICK_ORDER = [
   'crush',
   'aug',
   'autohand',
+  // Why: the `bob` binary is also the Neovim version manager, so IBM Bob stays out of
+  // the auto-pick head where a false positive would be picked first.
+  'bob',
   'cline',
   'codebuff',
   'command-code',
@@ -44,7 +47,9 @@ export const TUI_AGENT_AUTO_PICK_ORDER = [
 
 // Why: fresh installs should expose Claude Agent Teams in agent pickers; the
 // persistence migration separately preserves the old hidden default for legacy profiles.
-export const DEFAULT_DISABLED_TUI_AGENTS = [] as const satisfies readonly TuiAgent[]
+// Why bob: `bob` is also the Neovim version manager binary and detection is a bare PATH
+// lookup, so IBM Bob is opt-in rather than shown to everyone holding the other tool.
+export const DEFAULT_DISABLED_TUI_AGENTS = ['bob'] as const satisfies readonly TuiAgent[]
 
 export function pickTuiAgent(
   preferred: TuiAgent | 'blank' | null | undefined,

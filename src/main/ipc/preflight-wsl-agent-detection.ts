@@ -10,13 +10,14 @@ export type WslPreflightTarget = {
   distro?: string
 }
 
+/** Guest commands found on the login PATH, keyed to the absolute path each resolved to. */
 export async function detectWslCommandsOnPath(
   wslTarget: WslPreflightTarget,
   commands: readonly string[]
-): Promise<Set<string>> {
+): Promise<Map<string, string>> {
   const uniqueCommands = [...new Set(commands.filter(Boolean))]
   if (uniqueCommands.length === 0) {
-    return new Set()
+    return new Map()
   }
 
   const commandList = uniqueCommands.map(shellQuote).join(' ')
@@ -57,11 +58,11 @@ export async function detectWslCommandsOnPath(
     // runProcess resolves on a timeout and on a non-zero exit, so partial
     // stdout would otherwise read as a complete answer.
     if (result.timedOut || result.code !== 0) {
-      return new Set()
+      return new Map()
     }
     return parseWslDetectedCommands(result.stdout)
   } catch {
-    return new Set()
+    return new Map()
   }
 }
 
@@ -69,8 +70,8 @@ function shellQuote(value: string): string {
   return `'${value.replace(/'/g, "'\\''")}'`
 }
 
-function parseWslDetectedCommands(stdout: string): Set<string> {
-  const found = new Set<string>()
+function parseWslDetectedCommands(stdout: string): Map<string, string> {
+  const found = new Map<string, string>()
   for (const rawLine of stdout.split(/\r?\n/)) {
     const line = rawLine.trim()
     if (!line.startsWith(WSL_AGENT_DETECTION_PREFIX)) {
@@ -85,8 +86,8 @@ function parseWslDetectedCommands(stdout: string): Set<string> {
     const resolvedPath = payload.slice(separatorIndex + 1)
     // Why: a real guest executable always resolves to a POSIX-absolute path, so
     // a Windows-style C:\ path here is spoofed/non-guest output, not an install.
-    if (path.posix.isAbsolute(resolvedPath)) {
-      found.add(command)
+    if (path.posix.isAbsolute(resolvedPath) && !found.has(command)) {
+      found.set(command, resolvedPath)
     }
   }
   return found

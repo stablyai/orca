@@ -8,6 +8,11 @@ import { isPwshAvailableAsync } from '../main/pwsh'
 import { isWslAvailableAsync, listWslDistrosAsync } from '../main/wsl'
 import { isGitBashAvailable } from '../main/git-bash'
 import { buildPosixCommandPathLookupScript } from '../shared/posix-command-path-lookup'
+import { runProcess } from '../shared/child-process/run-process'
+import {
+  excludeMisidentifiedAgents,
+  type SerializedIdentityExclusion
+} from '../shared/tui-agent-identity-exclusion'
 
 const execFileAsync = promisify(execFile)
 
@@ -30,7 +35,10 @@ type AgentDetectionCommand = {
   cmd: string
   requiredCommands?: readonly string[]
   unsupportedRuntimes?: readonly AgentDetectionRuntime[]
+  identityExclusion?: SerializedIdentityExclusion
 }
+
+const IDENTITY_PROBE_TIMEOUT_MS = 5000
 
 const SUPPORTED_POSIX_SHELLS = new Set(['sh', 'dash', 'bash', 'zsh', 'fish'])
 const CONSERVATIVE_SYSTEM_SHELL_DIRS = new Set(['/bin', '/usr/bin'])
@@ -70,27 +78,38 @@ export class PreflightHandler {
     const results = await Promise.all(
       probeCommands.map(async (cmd) => ({
         cmd,
-        installed: await this.isCommandOnPath(cmd)
+        resolvedPath: await this.resolveCommandPath(cmd)
       }))
     )
-    const foundCommands = new Set(
-      results.filter((result) => result.installed).map(({ cmd }) => cmd)
-    )
-
-    return {
-      agents: [
-        ...new Set(
-          commands
-            .filter(
-              (command) =>
-                !isDetectionUnsupportedInRuntime(command, process.platform) &&
-                foundCommands.has(command.cmd) &&
-                (command.requiredCommands ?? []).every((required) => foundCommands.has(required))
-            )
-            .map(({ id }) => id)
-        )
-      ]
+    const foundPaths = new Map<string, string>()
+    for (const { cmd, resolvedPath } of results) {
+      if (resolvedPath) {
+        foundPaths.set(cmd, resolvedPath)
+      }
     }
+    const foundCommands = new Set(foundPaths.keys())
+
+    const detected = [
+      ...new Set(
+        commands
+          .filter(
+            (command) =>
+              !isDetectionUnsupportedInRuntime(command, process.platform) &&
+              foundCommands.has(command.cmd) &&
+              (command.requiredCommands ?? []).every((required) => foundCommands.has(required))
+          )
+          .map(({ id }) => id)
+      )
+    ]
+    // Why here too: a same-named unrelated tool on the SSH host would otherwise be
+    // reported as the agent; the client cannot probe a remote binary itself.
+    const agents = await excludeMisidentifiedAgents(
+      commands,
+      detected,
+      foundCommands,
+      (cmd, args) => runIdentityProbe(foundPaths.get(cmd), args)
+    )
+    return { agents }
   }
 
   private async detectWindowsTerminalCapabilities(): Promise<{
@@ -119,9 +138,29 @@ export class PreflightHandler {
   // startup files sourced. Ask the user's configured shell so agent dirs added
   // by zsh/bash/fish startup hooks match the remote terminal experience.
   // Windows has no POSIX shell on native OpenSSH hosts, so use where.exe there.
-  private async isCommandOnPath(command: string): Promise<boolean> {
-    return isCommandOnPathForRelay(command)
+  private async resolveCommandPath(command: string): Promise<string | null> {
+    return resolveCommandPathForRelay(command)
   }
+}
+
+async function runIdentityProbe(
+  program: string | undefined,
+  args: readonly string[]
+): Promise<{ stdout: string; stderr: string }> {
+  if (!program) {
+    throw new Error('no resolved path to probe')
+  }
+  // Why runProcess: it starts Windows `.cmd` shims, which execFile cannot without a shell.
+  const result = await runProcess({
+    program,
+    args,
+    env: buildRelayCommandEnv(process.env, process.platform),
+    timeoutMs: IDENTITY_PROBE_TIMEOUT_MS
+  })
+  if (result.timedOut || result.code !== 0) {
+    throw new Error(`${program} exited with ${result.code ?? result.signal ?? 'timeout'}`)
+  }
+  return { stdout: result.stdout, stderr: result.stderr }
 }
 
 function isDetectionUnsupportedInRuntime(
@@ -172,6 +211,14 @@ export async function isCommandOnPathForRelay(
   command: string,
   options: RelayCommandLookupOptions = {}
 ): Promise<boolean> {
+  return (await resolveCommandPathForRelay(command, options)) !== null
+}
+
+/** Absolute path the lookup reported for `command`, or null when no probe found one. */
+export async function resolveCommandPathForRelay(
+  command: string,
+  options: RelayCommandLookupOptions = {}
+): Promise<string | null> {
   const platform = options.platform ?? process.platform
   const env = options.env ?? process.env
   const specs = buildCommandLookupSpecs(command, platform, env, options.accountLoginShell)
@@ -184,31 +231,37 @@ export async function isCommandOnPathForRelay(
         timeout: 5000,
         ...(spec.windowsHide ? { windowsHide: true } : {})
       })
-      if (hasAbsoluteCommandPath(stdout, platform)) {
-        return true
+      const resolved = findAbsoluteCommandPath(stdout, platform)
+      if (resolved) {
+        return resolved
       }
     } catch {
       // Try the inherited-PATH fallback before reporting the agent missing.
     }
   }
 
-  return false
+  return null
 }
 
 export function hasAbsoluteCommandPath(output: string, platform: NodeJS.Platform): boolean {
+  return findAbsoluteCommandPath(output, platform) !== null
+}
+
+function findAbsoluteCommandPath(output: string, platform: NodeJS.Platform): string | null {
   const pathOps = platform === 'win32' ? win32 : path
-  return output
-    .split(/\r?\n/)
-    .map((line) => line.trim())
-    .some((line) => {
-      const resolvedPath =
-        platform === 'win32'
-          ? line
-          : line.startsWith(AGENT_PATH_PREFIX)
-            ? line.slice(AGENT_PATH_PREFIX.length)
-            : ''
-      return pathOps.isAbsolute(resolvedPath)
-    })
+  for (const rawLine of output.split(/\r?\n/)) {
+    const line = rawLine.trim()
+    const resolvedPath =
+      platform === 'win32'
+        ? line
+        : line.startsWith(AGENT_PATH_PREFIX)
+          ? line.slice(AGENT_PATH_PREFIX.length)
+          : ''
+    if (pathOps.isAbsolute(resolvedPath)) {
+      return resolvedPath
+    }
+  }
+  return null
 }
 
 function buildPosixCommandLookupSpec(command: string, shell: string): CommandLookupSpec {

@@ -106,6 +106,56 @@ describe('agent prompt submission runtime', () => {
     expect(writes.filter((data) => data === '\r')).toHaveLength(1)
   })
 
+  it('accepts an IBM Bob turn proven by its output scrape', async () => {
+    // Why: Bob emits no hooks or title status; the scrape feeds the prompt lifecycle.
+    vi.useFakeTimers()
+    const { runtime, handle, writes } = await createPromptRuntime((runtime, data) => {
+      if (data === '\r') {
+        runtime.onPtyData(
+          'pty-prompt',
+          ' ❯ review this\r\n ⠋ Processing… (Enter to steer, Tab to queue)\r\n',
+          Date.now()
+        )
+      }
+    })
+    runtime.onPtyData(
+      'pty-prompt',
+      '  ❯   Build Anything, @ for context, / for commands, $ for skills\r\n',
+      Date.now()
+    )
+    const submission = runtime.sendTerminalAgentPrompt(handle, 'review this')
+
+    await vi.runAllTimersAsync()
+
+    await expect(submission).resolves.toBeTruthy()
+    expect(writes.filter((data) => data === '\r')).toHaveLength(1)
+  })
+
+  it('does not send Enter while IBM Bob shows an approval prompt', async () => {
+    vi.useFakeTimers()
+    const { runtime, handle, writes } = await createPromptRuntime((runtime, data) => {
+      if (data.includes(AGENT_PROMPT_BRACKETED_PASTE_END)) {
+        runtime.onPtyData(
+          'pty-prompt',
+          '  Approve commands:\r\n  → Approve Once\r\n    Reject\r\n',
+          Date.now()
+        )
+      }
+    })
+    runtime.onPtyData(
+      'pty-prompt',
+      '  ❯   Build Anything, @ for context, / for commands, $ for skills\r\n',
+      Date.now()
+    )
+    const submission = runtime.sendTerminalAgentPrompt(handle, 'review this')
+    const rejected = expect(submission).rejects.toThrow('agent_prompt_blocked')
+
+    await vi.runAllTimersAsync()
+
+    await rejected
+    expect(writes).not.toContain('\r')
+  })
+
   it('does not send Enter after a permission state appears', async () => {
     vi.useFakeTimers()
     const { runtime, handle, writes } = await createPromptRuntime((runtime, data) => {
