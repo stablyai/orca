@@ -26,5 +26,21 @@ describe('terminal wait results', () => {
       { kind: 'operator_close' },
       { kind: 'operator_close' }
     ])
+    expect(results.map((result) => result.observedState)).toEqual([
+      'exited',
+      'agent-approval-prompt',
+      'exited',
+      'agent-approval-prompt'
+    ])
+  })
+
+  it('reports tui-idle when a running terminal satisfies an idle wait', () => {
+    expect(
+      buildTerminalWaitResult('terminal', 'tui-idle', {
+        connected: true,
+        lastExitCode: null,
+        lastExitCause: null
+      }).observedState
+    ).toBe('tui-idle')
   })
 })

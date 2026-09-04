@@ -234,6 +234,9 @@ export function formatTerminalWait(result: { wait: RuntimeTerminalWait }): strin
     `status: ${result.wait.status}`,
     `exitCode: ${result.wait.exitCode ?? 'null'}`
   ]
+  if (result.wait.observedState) {
+    lines.splice(3, 0, `observedState: ${result.wait.observedState}`)
+  }
   if (result.wait.blockedReason) {
     lines.push(`blockedReason: ${result.wait.blockedReason}`)
   }

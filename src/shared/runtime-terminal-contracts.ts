@@ -322,10 +322,16 @@ export type RuntimeTerminalWaitBlockedReason =
   | 'codex-interactive-prompt'
   | 'agent-approval-prompt'
 
+export type RuntimeTerminalWaitObservedState =
+  | RuntimeTerminalState
+  | RuntimeTerminalWaitCondition
+  | RuntimeTerminalWaitBlockedReason
+
 export type RuntimeTerminalWait = {
   handle: string
   condition: RuntimeTerminalWaitCondition
   satisfied: boolean
+  observedState?: RuntimeTerminalWaitObservedState
   status: RuntimeTerminalState
   exitCode: number | null
   exitCause?: TerminalExitCause
