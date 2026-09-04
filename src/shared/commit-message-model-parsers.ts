@@ -2,6 +2,7 @@ import { assertJsonTextStructureWithinLimits } from './json-text-structure-limit
 import { parseClaudeModelList } from './claude-model-list-probe'
 import { labelFromModelId } from './model-id-label'
 import type { CommitMessageModel, ThinkingLevel } from './commit-message-agent-spec'
+import { PI_THINKING_LEVELS, parsePiModelTableRow } from './pi-model-list-probe'
 
 export const COMMIT_MESSAGE_MODEL_JSON_STRUCTURE_LIMITS = {
   structuralTokens: 64 * 1024,
@@ -148,72 +149,27 @@ export function parseLineModels(stdout: string): CommitMessageModel[] {
 export function parsePiModels(stdout: string): CommitMessageModel[] {
   const models: CommitMessageModel[] = []
   for (const rawLine of iterateModelOutputLines(stdout)) {
-    const parts = getPiModelTableFields(rawLine, 6)
-    if (parts.length < 6 || parts[0] === 'provider') {
+    const row = parsePiModelTableRow(rawLine)
+    if (!row) {
       continue
     }
 
-    const [provider, model, , , thinking] = parts
-    const id = `${provider}/${model}`
+    const id = `${row.provider}/${row.model}`
     models.push({
       id,
-      label: `${labelFromModelId(provider)} ${labelFromModelId(model)}`,
-      ...(thinking === 'yes'
+      label: `${labelFromModelId(row.provider)} ${labelFromModelId(row.model)}`,
+      ...(row.thinking
         ? {
-            thinkingLevels: [
-              { id: 'off', label: 'Off' },
-              { id: 'low', label: 'Low' },
-              { id: 'medium', label: 'Medium' },
-              { id: 'high', label: 'High' },
-              { id: 'xhigh', label: 'Extra High' }
-            ],
+            thinkingLevels: PI_THINKING_LEVELS.map((level) => ({
+              id: level.id,
+              label: level.label
+            })),
             defaultThinkingLevel: 'low'
           }
         : {})
     })
   }
   return uniqueModels(models)
-}
-
-// Why: model discovery output can include paste-sized noisy lines; only the first fields matter.
-function getPiModelTableFields(line: string, maxFields: number): string[] {
-  const fields: string[] = []
-  let tokenStart = -1
-
-  for (let index = 0; index <= line.length; index += 1) {
-    const isEnd = index === line.length
-    if (!isEnd && !isPiModelTableWhitespace(line.charCodeAt(index))) {
-      if (tokenStart === -1) {
-        tokenStart = index
-      }
-      continue
-    }
-    if (tokenStart !== -1) {
-      fields.push(line.slice(tokenStart, index))
-      tokenStart = -1
-      if (fields.length >= maxFields) {
-        break
-      }
-    }
-  }
-
-  return fields
-}
-
-function isPiModelTableWhitespace(code: number): boolean {
-  return (
-    code === 32 ||
-    (code >= 9 && code <= 13) ||
-    code === 160 ||
-    code === 5760 ||
-    (code >= 8192 && code <= 8202) ||
-    code === 8232 ||
-    code === 8233 ||
-    code === 8239 ||
-    code === 8287 ||
-    code === 12288 ||
-    code === 65279
-  )
 }
 
 export function parseCursorModels(stdout: string): CommitMessageModel[] {

@@ -370,10 +370,12 @@ describe('model discovery parsers', () => {
         label: 'Github Copilot GPT 5.4 Mini',
         thinkingLevels: [
           { id: 'off', label: 'Off' },
+          { id: 'minimal', label: 'Minimal' },
           { id: 'low', label: 'Low' },
           { id: 'medium', label: 'Medium' },
           { id: 'high', label: 'High' },
-          { id: 'xhigh', label: 'Extra High' }
+          { id: 'xhigh', label: 'Extra High' },
+          { id: 'max', label: 'Max' }
         ],
         defaultThinkingLevel: 'low'
       },

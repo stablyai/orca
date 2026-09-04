@@ -54,6 +54,24 @@ describe('tui agent startup session options', () => {
     expect(plan?.sessionOptions).toEqual({ model: 'custom-codex-model', effort: 'high' })
   })
 
+  it('launches a Pi worker with a model and thinking level without persisting them', () => {
+    const plan = buildAgentStartupPlan({
+      agent: 'pi',
+      prompt: '',
+      cmdOverrides: {},
+      platform: 'linux',
+      allowEmptyPromptLaunch: true,
+      sessionOptions: { model: 'google/gemini-3-pro', effort: 'xhigh' },
+      sessionOptionsOverrideAgentArgs: true,
+      agentArgs: '--continue'
+    })
+    expect(plan?.launchCommand).toBe(
+      "pi '--continue' '--model' 'google/gemini-3-pro' '--thinking' 'xhigh'"
+    )
+    expect(plan?.launchConfig.agentCommand).toBe("pi '--continue'")
+    expect(plan?.sessionOptions).toEqual({ model: 'google/gemini-3-pro', effort: 'xhigh' })
+  })
+
   it('inserts worker preferences before an argument terminator', () => {
     const plan = buildAgentStartupPlan({
       agent: 'codex',

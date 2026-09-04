@@ -33,6 +33,38 @@ describe('orchestration worker launch preferences', () => {
     ).toEqual({ model: 'gpt-5.6-sol' })
   })
 
+  it('does not invent a Pi thinking level when only a model is requested', () => {
+    expect(
+      resolveWorkerLaunchPreferences({ agent: 'pi', model: 'google/gemini-3-pro' }).preferences
+    ).toEqual({ model: 'google/gemini-3-pro' })
+  })
+
+  it('passes an opaque Pi model and thinking level through the shared catalog', () => {
+    expect(
+      resolveWorkerLaunchPreferences({
+        agent: 'pi',
+        model: 'google/gemini-3-pro',
+        effort: 'xhigh'
+      })
+    ).toEqual({
+      preferences: { model: 'google/gemini-3-pro', effort: 'xhigh' },
+      receipt: {
+        requested: { agent: 'pi', model: 'google/gemini-3-pro', effort: 'xhigh' },
+        effective: { agent: 'pi', model: 'google/gemini-3-pro', effort: 'xhigh' }
+      }
+    })
+  })
+
+  it('rejects an unsupported Pi thinking level', () => {
+    expect(() =>
+      resolveWorkerLaunchPreferences({
+        agent: 'pi',
+        model: 'google/gemini-3-pro',
+        effort: 'future-effort'
+      })
+    ).toThrow('does not support effort future-effort')
+  })
+
   it.each([
     {
       model: 'gpt-5.6-sol',

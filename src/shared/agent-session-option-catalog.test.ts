@@ -121,6 +121,31 @@ describe('agent session option catalog', () => {
     expect(sonnet.options.map(({ id }) => id)).toEqual(['effort'])
   })
 
+  it('discovers Pi provider models and maps worker effort to thinking', () => {
+    const catalog = getAgentSessionOptionCatalog('pi')!
+    const parsed = catalog.listModels!.parse(
+      [
+        'provider  model         context  max-out  thinking  images',
+        'google    gemini-3-pro  1M       64K      yes       yes',
+        'ollama    llama3.1:8b   128K     8K       no        no',
+        'google    gemini-3-pro  1M       64K      yes       yes',
+        'No models available. Use /login to log into a provider via OAuth or API key.',
+        'See the docs for more information about listing models here',
+        'noise'
+      ].join('\n')
+    )
+    expect(parsed.map(({ id }) => id)).toEqual(['google/gemini-3-pro', 'ollama/llama3.1:8b'])
+    expect(
+      resolveAgentSessionOptionLaunch('pi', {
+        model: 'google/gemini-3-pro',
+        effort: 'xhigh'
+      })
+    ).toEqual({
+      args: ['--model', 'google/gemini-3-pro', '--thinking', 'xhigh'],
+      appliedValues: { model: 'google/gemini-3-pro', effort: 'xhigh' }
+    })
+  })
+
   it('parses Cursor model discovery without treating headings as models', () => {
     const parsed = getAgentSessionOptionCatalog('cursor')!.listModels!.parse(
       'Available models:\n- auto (default)\n- gpt-5.3-codex\nmodels\n'
