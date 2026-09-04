@@ -4,6 +4,7 @@ import { buildDispatchPreamble } from '../../orchestration/preamble'
 import { resolveDispatchCreator } from './orchestration-dispatch-creator'
 import { buildInjectRejectionMessage } from './orchestration-inject-rejection-message'
 import { resolveRunScope } from './orchestration-run-scope'
+import { resolveTaskTerminalProvenance } from './orchestration-task-provenance'
 import { DispatchParams, DispatchShowParams } from './orchestration-schemas'
 
 export const ORCHESTRATION_DISPATCH_METHODS: RpcMethod[] = [
@@ -68,6 +69,7 @@ export const ORCHESTRATION_DISPATCH_METHODS: RpcMethod[] = [
       if (task.status !== 'ready') {
         throw new Error(`Task ${params.task} is ${task.status}; only ready tasks can be dispatched`)
       }
+      const provenance = await resolveTaskTerminalProvenance(runtime, to)
 
       // Why: injecting the preamble into a bare shell dumps it as shell commands (gibberish), so require a detected agent first.
       if (params.inject) {
@@ -101,6 +103,7 @@ export const ORCHESTRATION_DISPATCH_METHODS: RpcMethod[] = [
         creator: resolveDispatchCreator(runtime, params.from),
         maxDepth: runtime.getNestedWorkerMaxDepth()
       })
+      db.updateTaskProvenance(task.id, provenance)
       const dispatchCapability = params.inject
         ? db.mintDispatchCapability({
             dispatchId: ctx.id,

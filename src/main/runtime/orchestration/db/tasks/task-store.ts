@@ -18,6 +18,8 @@ export function createTask(
     deps?: string[]
     parentId?: string
     createdByTerminalHandle?: string
+    worktreeId?: string
+    branch?: string | null
     createdByPaneKey?: string
     createdByProcessIncarnation?: string
     createdByRunGeneration?: number
@@ -48,11 +50,12 @@ export function createTask(
   this.db
     .prepare(
       `INSERT INTO tasks (
-         id, run_id, parent_id, created_by_terminal_handle, created_by_pane_key,
+         id, run_id, parent_id, created_by_terminal_handle, worktree_id, branch,
+         created_by_pane_key,
          created_by_process_incarnation, created_by_run_generation,
          task_title, display_name, spec, status, deps
        ) VALUES (
-         ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
+         ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
          CASE WHEN EXISTS (
            SELECT 1
            FROM json_each(?) requested
@@ -69,6 +72,8 @@ export function createTask(
       runId,
       task.parentId ?? null,
       task.createdByTerminalHandle ?? null,
+      task.worktreeId ?? null,
+      task.branch ?? null,
       task.createdByPaneKey ?? null,
       task.createdByProcessIncarnation ?? null,
       task.createdByRunGeneration ?? null,
@@ -144,6 +149,27 @@ export function listTasks(
   return this.db.prepare('SELECT * FROM tasks ORDER BY created_at').all() as TaskRow[]
 }
 
+export function updateTaskProvenance(
+  this: OrchestrationDb,
+  taskId: string,
+  provenance: { worktreeId?: string | null; branch?: string | null }
+): TaskRow | undefined {
+  const updates: string[] = []
+  const params: (string | null)[] = []
+  if ('worktreeId' in provenance) {
+    updates.push('worktree_id = ?')
+    params.push(provenance.worktreeId ?? null)
+  }
+  if ('branch' in provenance) {
+    updates.push('branch = ?')
+    params.push(provenance.branch ?? null)
+  }
+  if (updates.length > 0) {
+    this.db.prepare(`UPDATE tasks SET ${updates.join(', ')} WHERE id = ?`).run(...params, taskId)
+  }
+  return this.getTask(taskId)
+}
+
 // Why: the correlated indexed lookup avoids materializing every retained Dispatch before filtering Tasks.
 export function listTasksWithDispatch(
   this: OrchestrationDb,
@@ -151,6 +177,7 @@ export function listTasksWithDispatch(
     status?: TaskStatus
     ready?: boolean
     runId?: string
+    worktreeId?: string
   }
 ): (TaskRow & {
   assignee_handle: string | null
@@ -161,6 +188,10 @@ export function listTasksWithDispatch(
   if (filter?.runId) {
     whereClauses.push('t.run_id = ?')
     params.push(filter.runId)
+  }
+  if (filter?.worktreeId) {
+    whereClauses.push('t.worktree_id = ?')
+    params.push(filter.worktreeId)
   }
   if (filter?.ready) {
     whereClauses.push("t.status = 'ready'")
@@ -218,6 +249,7 @@ export type TaskStoreMethods = {
   createTask: typeof createTask
   getTask: typeof getTask
   listTasks: typeof listTasks
+  updateTaskProvenance: typeof updateTaskProvenance
   listTasksWithDispatch: typeof listTasksWithDispatch
   promoteReadyTasks: typeof promoteReadyTasks
 }
@@ -227,6 +259,7 @@ export function attachTaskStore(ctor: { prototype: object }): void {
     createTask,
     getTask,
     listTasks,
+    updateTaskProvenance,
     listTasksWithDispatch,
     promoteReadyTasks
   })

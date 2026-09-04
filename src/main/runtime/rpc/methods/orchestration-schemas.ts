@@ -190,6 +190,7 @@ export const TaskListParams = z.object({
   // Why: server-side truncation keeps --brief cheap over SSH/relay instead of shipping full specs the CLI throws away.
   brief: OptionalBoolean,
   run: OptionalString,
+  worktree: OptionalString,
   callerTerminalHandle: OptionalString
 })
 

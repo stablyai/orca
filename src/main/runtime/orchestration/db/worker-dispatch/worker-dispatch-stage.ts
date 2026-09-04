@@ -44,6 +44,12 @@ export function recordWorkerStage(
       params.lastError ?? current.last_error,
       params.dispatchId
     )
+  if (params.worktreeId) {
+    const dispatch = this.getDispatchContextById(params.dispatchId)
+    if (dispatch) {
+      this.updateTaskProvenance(dispatch.task_id, { worktreeId: params.worktreeId })
+    }
+  }
   return this.getWorkerDispatch(params.dispatchId) as WorkerDispatchRow
 }
 

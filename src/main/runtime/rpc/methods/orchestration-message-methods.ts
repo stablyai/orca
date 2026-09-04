@@ -5,6 +5,7 @@ import { ORCHESTRATION_LEGACY_RUN_ID } from '../../../../shared/orchestration-rp
 import { abbreviateOrchestrationTasks } from '../../../../shared/orchestration-task-summary'
 import { parseOrchestrationTaskDepsFlag } from '../../orchestration/task-deps-flag'
 import { resolveRunScope } from './orchestration-run-scope'
+import { resolveTaskTerminalProvenance } from './orchestration-task-provenance'
 import {
   ReplyParams,
   InboxParams,
@@ -119,9 +120,13 @@ export const ORCHESTRATION_MESSAGE_METHODS: RpcMethod[] = [
   defineMethod({
     name: 'orchestration.taskCreate',
     params: TaskCreateParams,
-    handler: (params, { orchestrationCompatibilityEvidence, runtime, legacyCoordinatorRunId }) => {
+    handler: async (
+      params,
+      { orchestrationCompatibilityEvidence, runtime, legacyCoordinatorRunId }
+    ) => {
       const db = runtime.getOrchestrationDb()
       const deps = params.deps ? parseOrchestrationTaskDepsFlag(params.deps) : undefined
+      const provenance = await resolveTaskTerminalProvenance(runtime, params.callerTerminalHandle)
       const run = resolveRunScope(runtime, {
         runId: params.run,
         callerTerminalHandle: params.callerTerminalHandle,
@@ -139,6 +144,8 @@ export const ORCHESTRATION_MESSAGE_METHODS: RpcMethod[] = [
         deps,
         parentId: params.parent,
         createdByTerminalHandle: params.callerTerminalHandle,
+        worktreeId: provenance.worktreeId,
+        branch: provenance.branch ?? undefined,
         ...(creatorAuthority?.paneKey && creatorAuthority.processIncarnation
           ? {
               createdByPaneKey: creatorAuthority.paneKey,
@@ -172,7 +179,8 @@ export const ORCHESTRATION_MESSAGE_METHODS: RpcMethod[] = [
       const joined = db.listTasksWithDispatch({
         status: params.status as TaskStatus,
         ready: params.ready,
-        runId: run.id
+        runId: run.id,
+        worktreeId: params.worktree
       })
       const tasks = joined.map((row) => {
         const { assignee_handle, dispatch_id, ...base } = row

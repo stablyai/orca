@@ -3,6 +3,7 @@ import type { RpcContext } from '../core'
 import { createOrchestrationRpcHarness } from './orchestration-rpc-test-harness'
 import type { OrchestrationDb } from '../../orchestration/db'
 import type { OrcaRuntimeService } from '../../orca-runtime'
+import type { RuntimeTerminalSummary } from '../../../../shared/runtime-terminal-contracts'
 import { buildInjectRejectionMessage } from './orchestration-inject-rejection-message'
 import { createRootDispatch } from '../../orchestration/db/root-dispatch-test-fixture'
 
@@ -23,6 +24,26 @@ describe('orchestration RPC methods', () => {
 
   async function call(name: string, params: Record<string, unknown>) {
     return h.call(name, params, ctx)
+  }
+
+  function makeTerminalSummary(
+    handle: string,
+    opts: Partial<RuntimeTerminalSummary> = {}
+  ): RuntimeTerminalSummary {
+    return {
+      handle,
+      ptyId: opts.ptyId ?? handle,
+      worktreeId: opts.worktreeId ?? 'wt_default',
+      worktreePath: opts.worktreePath ?? '/tmp/wt',
+      branch: opts.branch ?? 'main',
+      tabId: opts.tabId ?? 'tab_1',
+      leafId: opts.leafId ?? handle,
+      title: opts.title ?? null,
+      connected: opts.connected ?? true,
+      writable: opts.writable ?? true,
+      lastOutputAt: opts.lastOutputAt ?? null,
+      preview: opts.preview ?? ''
+    }
   }
 
   describe('orchestration.taskCreate', () => {
@@ -85,6 +106,30 @@ describe('orchestration RPC methods', () => {
         created_by_pane_key: coordinatorPaneKey,
         created_by_process_incarnation: 'pty-creator:incarnation-a',
         created_by_run_generation: 1
+      })
+    })
+
+    it('records the caller terminal worktree and branch when creating a task', async () => {
+      setup()
+      vi.spyOn(runtime, 'getTerminalPaneKey').mockImplementation((handle) =>
+        handle === 'term_creator' ? coordinatorPaneKey : null
+      )
+      vi.spyOn(runtime, 'showTerminal').mockResolvedValue(
+        makeTerminalSummary('term_creator', {
+          worktreeId: 'repo::/worktrees/feature-a',
+          branch: 'feature-a'
+        }) as never
+      )
+
+      const result = (await call('orchestration.taskCreate', {
+        spec: 'spawn related workspace',
+        callerTerminalHandle: 'term_creator'
+      })) as { task: { id: string } }
+
+      expect(db.getTask(result.task.id)).toMatchObject({
+        created_by_terminal_handle: 'term_creator',
+        worktree_id: 'repo::/worktrees/feature-a',
+        branch: 'feature-a'
       })
     })
 
@@ -151,6 +196,21 @@ describe('orchestration RPC methods', () => {
       // Dispatched tasks surface the active dispatch.
       expect(dispatched?.assignee_handle).toBe('term_worker')
       expect(dispatched?.dispatch_id).toBe(ctx.id)
+    })
+
+    it('filters task-list by recorded worktree provenance', async () => {
+      setup()
+      db.createTask({ spec: 'repo A', worktreeId: 'repo::/a', branch: 'feature/a' })
+      db.createTask({ spec: 'repo B', worktreeId: 'repo::/b', branch: 'feature/b' })
+
+      const result = (await call('orchestration.taskList', {
+        worktree: 'repo::/b'
+      })) as { count: number; tasks: { spec: string; worktree_id: string | null }[] }
+
+      expect(result.count).toBe(1)
+      expect(result.tasks).toEqual([
+        expect.objectContaining({ spec: 'repo B', worktree_id: 'repo::/b', branch: 'feature/b' })
+      ])
     })
   })
 
@@ -224,6 +284,28 @@ describe('orchestration RPC methods', () => {
           : null
       )
     }
+
+    it('clears stale branch provenance when the dispatched terminal is branchless', async () => {
+      setup()
+      const task = db.createTask({
+        spec: 'active work',
+        worktreeId: 'repo::/worktrees/old',
+        branch: 'old-branch'
+      })
+      vi.spyOn(runtime, 'showTerminal').mockResolvedValue(
+        makeTerminalSummary('term_worker', {
+          worktreeId: 'repo::/worktrees/worker',
+          branch: ''
+        }) as never
+      )
+
+      await call('orchestration.dispatch', { task: task.id, to: 'term_worker' })
+
+      expect(db.getTask(task.id)).toMatchObject({
+        worktree_id: 'repo::/worktrees/worker',
+        branch: null
+      })
+    })
 
     it('dispatches a task to a terminal', async () => {
       setup()

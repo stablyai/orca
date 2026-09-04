@@ -50,6 +50,8 @@ export const ORCHESTRATION_TASK_HANDLERS: Record<string, CommandHandler> = {
         status: string
         assignee_handle?: string | null
         dispatch_id?: string | null
+        worktree_id?: string | null
+        branch?: string | null
         spec_truncated?: boolean
       }[]
       count: number
@@ -60,6 +62,7 @@ export const ORCHESTRATION_TASK_HANDLERS: Record<string, CommandHandler> = {
       ready: flags.has('ready') ? true : undefined,
       brief: brief ? true : undefined,
       run,
+      worktree: getOptionalStringFlag(flags, 'worktree'),
       callerTerminalHandle
     })
     // Why: only older runtimes (no spec_truncated) skip server-side abbreviation and need this client-side fallback.

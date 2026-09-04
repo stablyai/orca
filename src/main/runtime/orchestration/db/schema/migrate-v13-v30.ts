@@ -183,6 +183,15 @@ export function applySchemaMigrationsV13ToV30(this: OrchestrationDb, current: nu
             AND pane_key IS NOT NULL;
       `)
   }
+  if (current < 31) {
+    if (!this.hasColumn('tasks', 'worktree_id')) {
+      this.db.exec('ALTER TABLE tasks ADD COLUMN worktree_id TEXT')
+    }
+    if (!this.hasColumn('tasks', 'branch')) {
+      this.db.exec('ALTER TABLE tasks ADD COLUMN branch TEXT')
+    }
+    this.db.exec('CREATE INDEX IF NOT EXISTS idx_tasks_worktree ON tasks(worktree_id)')
+  }
   this.db.exec(`
       CREATE INDEX IF NOT EXISTS idx_dispatch_assignee_pane_leaf
         ON dispatch_contexts(${DISPATCH_PANE_KEY_MATCH_SUFFIX_SQL})

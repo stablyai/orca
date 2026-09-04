@@ -250,6 +250,8 @@ export type TaskRow = {
   run_id: string
   parent_id: string | null
   created_by_terminal_handle: string | null
+  worktree_id: string | null
+  branch: string | null
   created_by_pane_key: string | null
   created_by_process_incarnation: string | null
   created_by_run_generation: number | null
