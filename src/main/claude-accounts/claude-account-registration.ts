@@ -185,7 +185,7 @@ export class ClaudeAccountRegistration {
       claudeManagedAccounts: [...previousSettings.claudeManagedAccounts, account],
       activeClaudeManagedAccountId: selection.host,
       activeClaudeManagedAccountIdsByRuntime: selection
-    })
+    }, { notifyListeners: true })
     this.dependencies.runtimeAuth.clearLastWrittenCredentialsJson(accountId)
     this.dependencies.rateLimits.evictInactiveClaudeCache(accountId)
     return this.dependencies.selection.snapshot()

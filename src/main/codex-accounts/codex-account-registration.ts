@@ -124,7 +124,7 @@ export class CodexAccountRegistration {
       codexManagedAccounts: updatedAccounts,
       activeCodexManagedAccountId: activeSelection.host,
       activeCodexManagedAccountIdsByRuntime: activeSelection
-    })
+    }, { notifyListeners: true })
     this.dependencies.configMirror.safeSyncToManagedHomes()
     this.dependencies.runtimeHome.clearLastWrittenAuthJson(accountId)
     this.dependencies.runtimeHome.syncForCurrentSelection(accountTarget)
@@ -178,7 +178,7 @@ export class CodexAccountRegistration {
         account.id,
         targetSelection
       )
-    })
+    }, { notifyListeners: true })
     try {
       this.dependencies.configMirror.safeSyncToManagedHomes()
       this.dependencies.runtimeHome.clearLastWrittenAuthJson(account.id)
@@ -193,7 +193,7 @@ export class CodexAccountRegistration {
         codexManagedAccounts: settings.codexManagedAccounts,
         activeCodexManagedAccountId: settings.activeCodexManagedAccountId,
         activeCodexManagedAccountIdsByRuntime: settings.activeCodexManagedAccountIdsByRuntime
-      })
+      }, { notifyListeners: true })
       // Why: a failed post-write step must restore both persisted selection and
       // the runtime home it drives before the new managed home is removed.
       try {
