@@ -34,11 +34,10 @@ export async function authenticateAcpConnection(
   connection: AcpJsonRpcConnection
 ): Promise<void> {
   const methods = connection.initialize.authMethods ?? []
-  if (agent === 'cursor') {
-    await connection.request('authenticate', { methodId: 'cursor_login' })
-    return
-  }
-  const methodId = methods.find((method) => typeof method.id === 'string')?.id
+  const methodId =
+    agent === 'cursor' && methods.some((method) => method.id === 'cursor_login')
+      ? 'cursor_login'
+      : methods.find((method) => typeof method.id === 'string')?.id
   if (methodId) {
     await connection.request('authenticate', { methodId })
   }

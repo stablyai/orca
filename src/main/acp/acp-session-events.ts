@@ -1,9 +1,10 @@
+import { readFile } from 'node:fs/promises'
+import { extname } from 'node:path'
 import type { AgentJournalItemBody } from '../../shared/agent-session-journal-types'
-import { filesystemPathToFileUri } from '../../shared/file-uri-path'
 import type { StructuredAgentSessionAcquireInput } from '../native-chat/agent-session-wire/structured-agent-session-adapter'
 import type { AcpJsonRpcServerRequest } from './acp-jsonrpc-connection'
 
-export type AcpPendingPrompt = { id: number | string; kind: 'approval' | 'question' }
+export type AcpPendingPrompt = { id: number | string; kind: 'approval' | 'question' | 'plan' }
 
 type SessionUpdate = {
   sessionUpdate?: string
@@ -14,10 +15,18 @@ type SessionUpdate = {
   rawInput?: unknown
 }
 
-export function acpPromptBlocks(
+const IMAGE_MIME_BY_EXTENSION: Record<string, string> = {
+  '.gif': 'image/gif',
+  '.jpeg': 'image/jpeg',
+  '.jpg': 'image/jpeg',
+  '.png': 'image/png',
+  '.webp': 'image/webp'
+}
+
+export async function acpPromptBlocks(
   body: { blocks: { type: string; text?: string; path?: string }[] },
   imageCapable: boolean
-): { ok: true; prompt: Record<string, unknown>[] } | { ok: false; reason: string } {
+): Promise<{ ok: true; prompt: Record<string, unknown>[] } | { ok: false; reason: string }> {
   const parts: Record<string, unknown>[] = []
   for (const block of body.blocks) {
     if (block.type === 'text' && block.text && block.text.length > 0) {
@@ -26,16 +35,54 @@ export function acpPromptBlocks(
       if (!imageCapable) {
         return { ok: false, reason: 'ACP session does not accept images' }
       }
-      if (block.path) {
-        parts.push({
-          type: 'resource_link',
-          uri: filesystemPathToFileUri(block.path),
-          name: block.path
-        })
+      const image = await acpImageBlock(block.path)
+      if (!image.ok) {
+        return image
       }
+      parts.push(image.block)
     }
   }
   return { ok: true, prompt: parts.length > 0 ? parts : [{ type: 'text', text: '' }] }
+}
+
+export function acpPromptReply(
+  pending: AcpPendingPrompt,
+  questionId: string,
+  optionId: string
+): unknown {
+  if (pending.kind === 'question') {
+    return {
+      outcome: {
+        outcome: 'answered',
+        answers: [{ questionId, selectedOptionIds: [optionId] }]
+      }
+    }
+  }
+  if (pending.kind === 'plan') {
+    return { outcome: { outcome: optionId === 'accept' ? 'accepted' : 'rejected' } }
+  }
+  return { outcome: { outcome: 'selected', optionId } }
+}
+
+async function acpImageBlock(
+  path: string | undefined
+): Promise<{ ok: true; block: Record<string, unknown> } | { ok: false; reason: string }> {
+  if (!path) {
+    return { ok: false, reason: 'ACP image is missing a local path' }
+  }
+  const mimeType = IMAGE_MIME_BY_EXTENSION[extname(path).toLowerCase()]
+  if (!mimeType) {
+    return { ok: false, reason: `ACP session does not support the image type ${extname(path)}` }
+  }
+  try {
+    const data = await readFile(path)
+    if (data.byteLength === 0) {
+      return { ok: false, reason: 'ACP image is empty' }
+    }
+    return { ok: true, block: { type: 'image', mimeType, data: data.toString('base64') } }
+  } catch {
+    return { ok: false, reason: 'ACP image could not be read' }
+  }
 }
 
 export function applyAcpSessionUpdate(input: {
@@ -160,12 +207,12 @@ export function applyAcpServerRequest(input: {
     return 'handled'
   }
   if (input.request.method === 'cursor/create_plan') {
-    const params = (input.request.params ?? {}) as { plan?: string; title?: string }
+    const params = (input.request.params ?? {}) as { plan?: string; title?: string; name?: string }
     const itemId = `plan-${String(input.request.id)}`
-    input.pending.set(itemId, { id: input.request.id, kind: 'approval' })
+    input.pending.set(itemId, { id: input.request.id, kind: 'plan' })
     appendPrompt(input, itemId, {
       kind: 'approval',
-      title: params.title ?? 'Plan approval',
+      title: params.name ?? params.title ?? 'Plan approval',
       detail: params.plan ?? null,
       options: [
         { id: 'accept', label: 'Accept' },

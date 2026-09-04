@@ -6,6 +6,21 @@ import type {
 } from '../../../shared/agent-session-journal-types'
 
 const CAPTURE_LIMIT = 36_000
+const SWITCH_READY_PREFIX = 'provider-switch-ready:'
+const SWITCH_PREFIX = 'provider-switch:'
+
+function providerSwitchFence(clientMessageId: string): number | null {
+  const prefix = clientMessageId.startsWith(SWITCH_READY_PREFIX)
+    ? SWITCH_READY_PREFIX
+    : clientMessageId.startsWith(SWITCH_PREFIX)
+      ? SWITCH_PREFIX
+      : null
+  if (!prefix) {
+    return null
+  }
+  const fence = Number(clientMessageId.slice(prefix.length))
+  return Number.isFinite(fence) ? fence : null
+}
 
 export function withStructuredSessionContinuation(
   snapshot: AgentJournalSnapshot,
@@ -14,16 +29,17 @@ export function withStructuredSessionContinuation(
 ): AgentJournalMessageItem {
   const boundary = snapshot.items.findLastIndex((item) => {
     const identity = parseAgentJournalItemKey(item.itemId)
-    return identity?.provider === 'orca' && identity.clientMessageId.startsWith('provider-switch:')
+    return identity?.provider === 'orca' && providerSwitchFence(identity.clientMessageId) !== null
   })
   if (boundary === -1) {
     return body
   }
   const identity = parseAgentJournalItemKey(snapshot.items[boundary]!.itemId)
   const switchFence =
-    identity?.provider === 'orca'
-      ? Number(identity.clientMessageId.slice('provider-switch:'.length))
-      : Number.NaN
+    identity?.provider === 'orca' ? providerSwitchFence(identity.clientMessageId) : null
+  if (switchFence === null) {
+    return body
+  }
   if (
     snapshot.submissions.some(
       (submission) =>

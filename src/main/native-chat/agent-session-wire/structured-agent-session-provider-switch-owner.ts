@@ -1,5 +1,6 @@
 import { activeStructuredAgentSessionTurnId } from '../../../shared/structured-agent-session-projection'
 import { structuredSwitchableAgentLabel } from '../../../shared/structured-agent-session-switchable-models'
+import type { AgentSessionRecord } from '../../../shared/agent-session-record'
 import { AGENT_SESSION_LEASE_TTL_MS } from '../../runtime/agent-session-record-store'
 import { replaceAgentSessionProvider } from '../../runtime/agent-session-provider-replacement'
 import {
@@ -51,35 +52,36 @@ export async function performProviderSwitch(
   }
   eventSink.unbind()
   const spawnToken = context.mintSpawnToken()
-  const replaced = {
-    record: await context.deps.store.transitionHandoff(
-      sessionId,
-      (record) =>
-        replaceAgentSessionProvider({
-          record,
-          expectedFence: session.fence,
-          provider: params.provider,
-          accountHome: params.accountHome,
-          spawnToken,
-          claimKeyId: context.deps.claimKeyId,
-          handoffOperationId: params.envelope.clientOperationId,
-          now: context.now(),
-          leaseTtlMs: AGENT_SESSION_LEASE_TTL_MS,
-          ...(params.model ? { model: params.model } : {})
-        }).record
-    )
-  }
-  session.params = {
-    envelope: params.envelope,
-    location: session.params.location,
-    provider: params.provider,
-    agent: params.agent,
-    accountHome: params.accountHome,
-    runtimeKind: 'native'
-  }
-  session.fence = replaced.record.lease.runtimeFence
-  session.replacingProvider = true
+  let replaced: { record: AgentSessionRecord } | undefined
   try {
+    replaced = {
+      record: await context.deps.store.transitionHandoff(
+        sessionId,
+        (record) =>
+          replaceAgentSessionProvider({
+            record,
+            expectedFence: session.fence,
+            provider: params.provider,
+            accountHome: params.accountHome,
+            spawnToken,
+            claimKeyId: context.deps.claimKeyId,
+            handoffOperationId: params.envelope.clientOperationId,
+            now: context.now(),
+            leaseTtlMs: AGENT_SESSION_LEASE_TTL_MS,
+            ...(params.model ? { model: params.model } : {})
+          }).record
+      )
+    }
+    session.params = {
+      envelope: params.envelope,
+      location: session.params.location,
+      provider: params.provider,
+      agent: params.agent,
+      accountHome: params.accountHome,
+      runtimeKind: 'native'
+    }
+    session.fence = replaced.record.lease.runtimeFence
+    session.replacingProvider = true
     await session.journal.appendItem(
       { provider: 'orca', clientMessageId: `provider-switch:${session.fence}` },
       { kind: 'status', text: `Switching to ${structuredSwitchableAgentLabel(params.agent)}.` },
@@ -95,12 +97,12 @@ export async function performProviderSwitch(
       fence: session.fence,
       publish: () => context.publish(sessionId, session.journal)
     })
-    const barrier = await eventSink.drained()
-    if (!barrier.ok) {
-      throw barrier.error
+    const drain = await eventSink.drained()
+    if (!drain.ok) {
+      throw drain.error
     }
     await session.journal.appendItem(
-      { provider: 'orca', clientMessageId: `provider-switch:${session.fence}` },
+      { provider: 'orca', clientMessageId: `provider-switch-ready:${session.fence}` },
       { kind: 'status', text: `Now talking to ${structuredSwitchableAgentLabel(params.agent)}.` },
       { fence: session.fence }
     )
@@ -118,8 +120,8 @@ export async function performProviderSwitch(
     }
     eventSink.close()
     context.discardEventSink(sessionId)
-    const failedToken = replaced.record.lease.reservedSpawnToken
-    if (failedToken) {
+    const failedToken = replaced?.record.lease.reservedSpawnToken
+    if (failedToken && replaced) {
       const settled = await context.deps.store.settleFailedAcquisition({
         sessionId,
         fence: replaced.record.lease.runtimeFence,

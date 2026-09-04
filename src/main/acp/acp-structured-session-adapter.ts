@@ -21,6 +21,7 @@ import {
 } from './acp-session-config'
 import {
   acpPromptBlocks,
+  acpPromptReply,
   applyAcpServerRequest,
   applyAcpSessionUpdate,
   type AcpPendingPrompt
@@ -84,6 +85,7 @@ export class AcpStructuredSessionAdapter implements StructuredAgentSessionAdapte
       spawnToken: input.spawnToken
     })
     const generation = randomUUID()
+    const pendingPermissions = new Map<string, AcpPendingPrompt>()
     const live: { connection?: AcpJsonRpcConnection } = {}
     const connection = await this.openConnection(launch, {
       onNotification: (method, params) => {
@@ -108,7 +110,7 @@ export class AcpStructuredSessionAdapter implements StructuredAgentSessionAdapte
           agent: session?.agent ?? input.identity.agent,
           acpSessionId: session?.acpSessionId ?? input.identity.sessionId,
           request,
-          pending: session?.pendingPermissions ?? new Map(),
+          pending: pendingPermissions,
           events: input.events
         })
         if (handled === 'ignored') {
@@ -168,7 +170,7 @@ export class AcpStructuredSessionAdapter implements StructuredAgentSessionAdapte
       acquisitionGeneration: generation,
       imageCapable: connection.initialize.agentCapabilities?.promptCapabilities?.image === true,
       config,
-      pendingPermissions: new Map(),
+      pendingPermissions,
       promptCount: 0,
       assistant: { text: '' }
     })
@@ -210,7 +212,7 @@ export class AcpStructuredSessionAdapter implements StructuredAgentSessionAdapte
     if (!session) {
       return { state: 'rejected', reason: 'ACP session is not live' }
     }
-    const prompt = acpPromptBlocks(input.body, session.imageCapable)
+    const prompt = await acpPromptBlocks(input.body, session.imageCapable)
     if (!prompt.ok) {
       return { state: 'rejected', reason: prompt.reason }
     }
@@ -261,15 +263,7 @@ export class AcpStructuredSessionAdapter implements StructuredAgentSessionAdapte
       return
     }
     session.pendingPermissions.delete(pendingKey)
-    if (pending.kind === 'question') {
-      session.connection.respond(pending.id, {
-        answers: [{ id: input.itemId, optionId: input.optionId }]
-      })
-      return
-    }
-    session.connection.respond(pending.id, {
-      outcome: { outcome: 'selected', optionId: input.optionId }
-    })
+    session.connection.respond(pending.id, acpPromptReply(pending, pendingKey, input.optionId))
   }
 
   setOption: StructuredAgentSessionAdapter['setOption'] = async (input) => {

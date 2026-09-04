@@ -283,10 +283,8 @@ describe('switchProvider', () => {
     if (items.ok) {
       expect(items.page.items.some((item) => item.body.kind === 'message')).toBe(true)
       expect(
-        items.page.items.some(
-          (item) => item.body.kind === 'status' && item.body.text.includes('Claude')
-        )
-      ).toBe(true)
+        items.page.items.flatMap((item) => (item.body.kind === 'status' ? [item.body.text] : []))
+      ).toEqual(['Switching to Claude.', 'Now talking to Claude.'])
     }
     expect(setOption).toHaveBeenCalledWith(
       expect.objectContaining({ key: 'model', value: 'sonnet' })

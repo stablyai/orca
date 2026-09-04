@@ -78,6 +78,24 @@ describe('replaceAgentSessionProvider', () => {
     )
   })
 
+  it('keeps non-model options when the replacement names a model', () => {
+    const record = agentSessionRecordFixture()
+    record.options = { model: 'opus', approvalPolicy: 'on-request', personality: 'pragmatic' }
+    const result = replaceAgentSessionProvider(replaceArgs({ record, model: 'grok-4.6' }))
+    expect(result.record.options).toEqual({
+      model: 'grok-4.6',
+      approvalPolicy: 'on-request',
+      personality: 'pragmatic'
+    })
+  })
+
+  it('keeps prior options when the replacement does not name a model', () => {
+    const record = agentSessionRecordFixture()
+    record.options = { approvalPolicy: 'on-request' }
+    const result = replaceAgentSessionProvider(replaceArgs({ record }))
+    expect(result.record.options).toEqual({ approvalPolicy: 'on-request' })
+  })
+
   it('honours a recovery floor when minting the next fence', () => {
     const record = agentSessionRecordFixture()
     record.lease.minimumNextFence = 12

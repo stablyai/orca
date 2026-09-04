@@ -85,11 +85,12 @@ export async function openAcpJsonRpcConnection(
     { resolve: (value: unknown) => void; reject: (error: Error) => void }
   >()
 
-  const write = (message: unknown): void => {
-    if (child.stdin.destroyed) {
-      return
+  const write = (message: unknown): boolean => {
+    if (child.stdin.destroyed || !child.stdin.writable) {
+      return false
     }
     child.stdin.write(`${JSON.stringify(message)}\n`)
+    return true
   }
 
   const framer = createIncrementalNdjsonFramer(
@@ -192,7 +193,14 @@ export async function openAcpJsonRpcConnection(
           reject(error)
         }
       })
-      write({ jsonrpc: '2.0', id, method, params: params ?? {} })
+      if (!write({ jsonrpc: '2.0', id, method, params: params ?? {} })) {
+        pending
+          .get(id)
+          ?.reject(
+            new AcpJsonRpcRequestError(`ACP ${method} could not be written; stdin is closed`)
+          )
+        pending.delete(id)
+      }
     })
   }
 

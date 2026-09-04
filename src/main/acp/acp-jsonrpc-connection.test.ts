@@ -97,4 +97,20 @@ describe('ACP JSON-RPC connection', () => {
       openAcpJsonRpcConnection({ command: 'missing', args: [] }, {}, () => fake.child as never)
     ).rejects.toBeInstanceOf(AcpJsonRpcRequestError)
   })
+
+  it('rejects in-flight requests when stdin is closed while the child is alive', async () => {
+    const fake = fakeAcpChild()
+    const connection = await openAcpJsonRpcConnection(
+      { command: 'grok', args: ['agent', 'stdio'] },
+      {},
+      () => fake.child as never
+    )
+    fake.child.stdin.destroy()
+    await expect(
+      connection.request('session/prompt', { sessionId: 'sess-1' }, { timeoutMs: 0 })
+    ).rejects.toMatchObject({
+      name: 'AcpJsonRpcRequestError',
+      message: 'ACP session/prompt could not be written; stdin is closed'
+    })
+  })
 })

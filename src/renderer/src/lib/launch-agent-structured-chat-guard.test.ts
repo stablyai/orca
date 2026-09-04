@@ -185,10 +185,20 @@ describe('structured chat adoption guard on the launch path', () => {
     expect(mockCreateTab).not.toHaveBeenCalled()
   })
 
+  it('takes the structured path for OpenClaude', async () => {
+    const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
+
+    const result = launchAgentInNewTab({ agent: 'openclaude', worktreeId: 'wt-1' })
+
+    expect(result).toMatchObject({ tabId: null, focusAfterMenuClose: 'structured-session' })
+    expect(mockCreateStructuredCodexSessionLaunchIntent).toHaveBeenCalledWith('wt-1', 'openclaude')
+    expect(mockCreateTab).not.toHaveBeenCalled()
+  })
+
   it('keeps a native-chat agent with no structured adapter on the terminal-backed path', async () => {
     const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
 
-    launchAgentInNewTab({ agent: 'openclaude', worktreeId: 'wt-1' })
+    launchAgentInNewTab({ agent: 'omp', worktreeId: 'wt-1' })
 
     expect(mockCreateStructuredCodexSessionLaunchIntent).not.toHaveBeenCalled()
     expect(mockCreateTab).toHaveBeenCalled()
@@ -236,6 +246,22 @@ describe('structured chat adoption guard on the launch path', () => {
       undefined,
       expect.objectContaining({ launchAgent: 'codex' })
     )
+  })
+
+  it('falls back to the terminal TUI when Cursor structured launch is refused', async () => {
+    const { StructuredAgentSessionCreateRefusalError } =
+      await import('./launch-structured-agent-session')
+    mockLaunchStructuredCodexSession.mockRejectedValueOnce(
+      new StructuredAgentSessionCreateRefusalError('structured_agent_session_unsupported')
+    )
+    const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
+
+    launchAgentInNewTab({ agent: 'cursor', worktreeId: 'wt-1' })
+
+    await vi.waitFor(() => expect(mockCreateTab).toHaveBeenCalledOnce())
+    expect(mockCreateTab).toHaveBeenCalledWith('wt-1', undefined, undefined, {
+      launchAgent: 'cursor'
+    })
   })
 
   it('falls back to the preserved terminal launch on a definitive refusal', async () => {

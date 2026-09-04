@@ -1,7 +1,11 @@
+import { mkdtemp, writeFile } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { describe, expect, it, vi } from 'vitest'
 
 import { AcpStructuredSessionAdapter } from './acp-structured-session-adapter'
 import type { AcpJsonRpcConnection, AcpJsonRpcConnectionHandlers } from './acp-jsonrpc-connection'
+import { agentJournalItemKey } from '../../shared/agent-session-journal-item-key'
 import type { AgentJournalItemBody } from '../../shared/agent-session-journal-types'
 import type { StructuredAgentSessionEventSink } from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
 import type { AgentSessionExecutionLocation } from '../../shared/agent-session-record'
@@ -301,8 +305,151 @@ describe('AcpStructuredSessionAdapter', () => {
     })
     expect(connection.replies.at(-1)).toMatchObject({
       id: 8,
-      result: { answers: [{ id: 'q1', optionId: 'a' }] }
+      result: {
+        outcome: {
+          outcome: 'answered',
+          answers: [{ questionId: 'q1', selectedOptionIds: ['a'] }]
+        }
+      }
     })
+    const journalQuestionId = agentJournalItemKey({
+      provider: 'legacy',
+      agent: 'cursor',
+      sessionId: 'cursor-sess',
+      recordId: 'q1'
+    })
+    handlers.onServerRequest?.({
+      id: 9,
+      method: 'cursor/ask_question',
+      params: {
+        questions: [{ id: 'q1', prompt: 'Again?', options: [{ id: 'a', label: 'A' }] }]
+      }
+    })
+    await adapter.answerPrompt({
+      sessionId: 'orca-cursor',
+      itemId: journalQuestionId,
+      kind: 'question',
+      optionId: 'a',
+      fence: 1
+    })
+    expect(connection.replies.at(-1)).toMatchObject({
+      id: 9,
+      result: {
+        outcome: {
+          outcome: 'answered',
+          answers: [{ questionId: 'q1', selectedOptionIds: ['a'] }]
+        }
+      }
+    })
+    handlers.onServerRequest?.({
+      id: 10,
+      method: 'cursor/create_plan',
+      params: { name: 'Ship it', plan: '1. Build' }
+    })
+    expect(items.find((item) => item.body.kind === 'approval')?.body).toMatchObject({
+      title: 'Read file'
+    })
+    expect(items.findLast((item) => item.body.kind === 'approval')?.body).toMatchObject({
+      title: 'Ship it'
+    })
+    await adapter.answerPrompt({
+      sessionId: 'orca-cursor',
+      itemId: 'plan-10',
+      kind: 'approval',
+      optionId: 'accept',
+      fence: 1
+    })
+    expect(connection.replies.at(-1)).toEqual({
+      id: 10,
+      result: { outcome: { outcome: 'accepted' } }
+    })
+  })
+
+  it('does not authenticate Cursor when the agent advertises no auth methods', async () => {
+    const connection = fakeConnection({
+      initialize: { authMethods: [] },
+      onRequest: (method) => (method === 'session/new' ? { sessionId: 'cursor-sess' } : {})
+    })
+    const adapter = new AcpStructuredSessionAdapter({
+      openConnection: async () => connection,
+      resolveLaunch: async () => ({ command: 'agent', args: ['acp'], cwd: '/repo' }),
+      readProcessStartTime: async () => 1
+    })
+    await adapter.acquire({
+      identity: {
+        sessionId: 'orca-cursor-no-auth',
+        workspaceId: 'ws-1',
+        hostId: 'local',
+        agent: 'cursor',
+        providerHandle: { kind: 'opaque', agent: 'cursor', value: 'pending' }
+      },
+      fence: 1,
+      spawnToken: 'token-no-auth'
+    })
+    expect(connection.calls.some((call) => call.method === 'authenticate')).toBe(false)
+  })
+
+  it('answers a permission that arrived before the session was registered', async () => {
+    const items: { body: AgentJournalItemBody }[] = []
+    const sink: StructuredAgentSessionEventSink = {
+      appendItem: (_identity, body) => {
+        items.push({ body })
+      },
+      appendTombstone: () => undefined,
+      publish: () => undefined
+    }
+    let handlers: AcpJsonRpcConnectionHandlers = {}
+    const connection = fakeConnection({
+      initialize: { authMethods: [{ id: 'cursor_login' }] },
+      onRequest: (method) => {
+        if (method === 'authenticate') {
+          handlers.onServerRequest?.({
+            id: 3,
+            method: 'session/request_permission',
+            params: {
+              toolCall: { title: 'Early', toolCallId: 'early-perm' },
+              options: [{ optionId: 'allow-once', name: 'Allow once' }]
+            }
+          })
+          return {}
+        }
+        if (method === 'session/new') {
+          return { sessionId: 'cursor-sess' }
+        }
+        return {}
+      }
+    })
+    const adapter = new AcpStructuredSessionAdapter({
+      openConnection: async (_launch, nextHandlers) => {
+        handlers = nextHandlers ?? {}
+        return connection
+      },
+      resolveLaunch: async () => ({ command: 'agent', args: ['acp'], cwd: '/repo' }),
+      readProcessStartTime: async () => 1
+    })
+    await adapter.acquire({
+      identity: {
+        sessionId: 'orca-cursor-early',
+        workspaceId: 'ws-1',
+        hostId: 'local',
+        agent: 'cursor',
+        providerHandle: { kind: 'opaque', agent: 'cursor', value: 'pending' }
+      },
+      fence: 1,
+      spawnToken: 'token-early',
+      events: sink
+    })
+    expect(items.some((item) => item.body.kind === 'approval')).toBe(true)
+    await adapter.answerPrompt({
+      sessionId: 'orca-cursor-early',
+      itemId: 'early-perm',
+      kind: 'approval',
+      optionId: 'allow-once',
+      fence: 1
+    })
+    expect(connection.replies).toEqual([
+      { id: 3, result: { outcome: { outcome: 'selected', optionId: 'allow-once' } } }
+    ])
   })
 
   it('rejects an image prompt when the agent did not advertise image capability', async () => {
@@ -343,5 +490,51 @@ describe('AcpStructuredSessionAdapter', () => {
       state: 'rejected',
       reason: 'ACP session does not accept images'
     })
+  })
+
+  it('sends image content to an image-capable ACP agent', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'orca-acp-image-'))
+    const path = join(dir, 'shot.png')
+    const png = Buffer.from(
+      'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==',
+      'base64'
+    )
+    await writeFile(path, png)
+    const connection = fakeConnection({
+      initialize: { agentCapabilities: { promptCapabilities: { image: true } } },
+      onRequest: (method) => (method === 'session/new' ? { sessionId: 'grok-sess' } : {})
+    })
+    const adapter = new AcpStructuredSessionAdapter({
+      openConnection: async () => connection,
+      resolveLaunch: async () => ({ command: 'grok', args: ['agent', 'stdio'], cwd: '/repo' }),
+      readProcessStartTime: async () => 1
+    })
+    await adapter.acquire({
+      identity: {
+        sessionId: 'orca-image',
+        workspaceId: 'ws-1',
+        hostId: 'local',
+        agent: 'grok',
+        providerHandle: { kind: 'opaque', agent: 'grok', value: 'pending' }
+      },
+      fence: 1,
+      spawnToken: 'token-image'
+    })
+    const dispatched = await adapter.dispatch({
+      sessionId: 'orca-image',
+      clientMessageId: 'msg-img',
+      fence: 1,
+      body: {
+        kind: 'message',
+        role: 'user',
+        blocks: [{ type: 'image-ref', path }]
+      }
+    })
+    expect(dispatched.state).toBe('accepted')
+    expect(connection.calls.find((call) => call.method === 'session/prompt')?.params).toMatchObject(
+      {
+        prompt: [{ type: 'image', mimeType: 'image/png', data: png.toString('base64') }]
+      }
+    )
   })
 })

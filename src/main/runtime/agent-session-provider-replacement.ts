@@ -88,7 +88,7 @@ export function replaceAgentSessionProvider(
         accountHome: request.accountHome,
         providerHandleChain: [],
         launchArgs: request.launchArgs ? [...request.launchArgs] : undefined,
-        options: request.model ? { model: request.model } : undefined,
+        options: request.model ? { ...record.options, model: request.model } : record.options,
         updatedAt: request.now
       },
       {

@@ -207,26 +207,25 @@ function launchAgentInNewTabInternal(
       : worktreeId.startsWith('folder:')
         ? 'folder'
         : 'git-worktree'
-  const launchRoute = forceLegacy
-    ? 'legacy-native-chat'
-    : resolveAgentLaunchRoute({
-        agent,
-        settings: store.settings,
-        executionHostId: getExecutionHostIdForWorktree(store, worktreeId),
-        platform: CLIENT_PLATFORM,
-        hostCapabilities: readLocalRuntimeCapabilities(),
-        workspaceKind,
-        projectRuntime: getLocalProjectExecutionRuntimeContext(store, worktreeId),
-        promptDelivery: viewModePromptDelivery,
-        launchText: trimmedPrompt,
-        nativeChatTranscriptIsLocalReadable:
-          initialViewModeOptions.nativeChatTranscriptIsLocalReadable,
-        requiresTuiLaunchCustomization:
-          Boolean(initialCwd?.trim()) ||
-          hasExplicitTuiAgentArgs(agent, agentArgs) ||
-          hasExplicitTuiLaunchCustomization(store.settings, agent),
-        initialSessionOptions: startupPlan.sessionOptions
-      })
+  const launchRoute = resolveAgentLaunchRoute({
+    agent,
+    settings: forceLegacy
+      ? { ...store.settings, experimentalStructuredNativeChat: false }
+      : store.settings,
+    executionHostId: getExecutionHostIdForWorktree(store, worktreeId),
+    platform: CLIENT_PLATFORM,
+    hostCapabilities: readLocalRuntimeCapabilities(),
+    workspaceKind,
+    projectRuntime: getLocalProjectExecutionRuntimeContext(store, worktreeId),
+    promptDelivery: viewModePromptDelivery,
+    launchText: trimmedPrompt,
+    nativeChatTranscriptIsLocalReadable: initialViewModeOptions.nativeChatTranscriptIsLocalReadable,
+    requiresTuiLaunchCustomization:
+      Boolean(initialCwd?.trim()) ||
+      hasExplicitTuiAgentArgs(agent, agentArgs) ||
+      hasExplicitTuiLaunchCustomization(store.settings, agent),
+    initialSessionOptions: startupPlan.sessionOptions
+  })
   if (launchRoute === 'structured-native-chat' && isAcpStructuredAgent(agent)) {
     const structuredLaunch = startStructuredAgentLaunch(worktreeId, agent, {
       prompt: trimmedPrompt,
@@ -260,7 +259,7 @@ function launchAgentInNewTabInternal(
   const tab = store.createTab(worktreeId, groupId, undefined, {
     launchAgent: agent,
     quickCommandLabel,
-    ...initialViewModeProps
+    ...(launchRoute === 'legacy-native-chat' ? initialViewModeProps : {})
   })
   seedNativeChatAppliedSessionOptions(tab.id, agent, startupPlan.sessionOptions)
   if (initialCwd?.trim()) {

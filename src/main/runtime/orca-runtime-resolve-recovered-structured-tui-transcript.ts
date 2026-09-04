@@ -126,17 +126,15 @@ export class OrcaRuntimeWithResolveRecoveredStructuredTuiTranscript extends Orca
       })
     }
     if (input.agent !== 'codex') {
-      return this.resolveStructuredAgentSessionIntent(
-        input,
-        async ({ workspacePath, launchEnv }) => {
-          const variable = acpAccountHomeVariable(input.agent)
-          return (
-            (variable ? launchEnv[variable]?.trim() : undefined) ||
-            launchEnv.HOME?.trim() ||
-            workspacePath
-          )
-        }
-      )
+      return this.resolveStructuredAgentSessionIntent(input, async ({ launchEnv }) => {
+        const variable = acpAccountHomeVariable(input.agent)
+        return (
+          (variable ? launchEnv[variable]?.trim() : undefined) ||
+          launchEnv.HOME?.trim() ||
+          launchEnv.USERPROFILE?.trim() ||
+          homedir()
+        )
+      })
     }
     return this.resolveStructuredAgentSessionIntent(input, async ({ workspacePath, launchEnv }) => {
       // A create has no process yet, so the current selection is what it must follow.

@@ -20,9 +20,7 @@ export function NativeChatSessionGate({
   const currentResolution = resolveNativeChatSession(input)
   const previousResolution =
     lastResolutionRef.current?.paneKey === input.paneKey &&
-    (!input.ptyId ||
-      !lastResolutionRef.current.ptyId ||
-      input.ptyId === lastResolutionRef.current.ptyId)
+    (!input.ptyId || input.ptyId === lastResolutionRef.current.ptyId)
       ? lastResolutionRef.current
       : null
   const resolution = (() => {
