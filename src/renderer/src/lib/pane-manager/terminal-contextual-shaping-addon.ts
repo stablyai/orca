@@ -4,7 +4,9 @@ type JoinRange = [number, number]
 
 // Fast Mono (github.com/Born2Root/Fast-Font) picks word-initial glyphs via
 // `calt` rules that depend on the WHOLE word, so it must be shaped as whole
-// words; the font is strictly monospace, so joined runs stay on the cell grid.
+// words. The font is monospace, but at fractional device sizes its advance
+// drifts against the integer cell grid — the bundled addon-webgl patch
+// quantizes joined-run ink to the grid, which keeps these runs cell-aligned.
 const FAST_FONT_PATTERN = /fast[ _-]?mono/i
 const WORD_RUN_PATTERN = /[\p{L}\p{M}]{2,}/gu
 
