@@ -219,6 +219,8 @@ function renderCard(
   act(() => {
     root.render(
       <NewWorkspaceComposerCard
+        agentPrompt=""
+        onAgentPromptChange={() => {}}
         quickAgent={null}
         onQuickAgentChange={() => {}}
         eligibleRepos={[]}
