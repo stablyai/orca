@@ -23,17 +23,17 @@ function sortAndLimitIssues(issues: JiraIssue[], limit: number): JiraIssue[] {
     .slice(0, limit)
 }
 
-function filterToJql(filter: JiraIssueFilter): string {
+export function filterToJql(filter: JiraIssueFilter): string {
   if (filter === 'assigned') {
-    return 'assignee = currentUser() AND resolution = Unresolved ORDER BY updated DESC'
+    return 'assignee = currentUser() AND statusCategory != Done ORDER BY updated DESC'
   }
   if (filter === 'reported') {
-    return 'reporter = currentUser() AND resolution = Unresolved ORDER BY updated DESC'
+    return 'reporter = currentUser() AND statusCategory != Done ORDER BY updated DESC'
   }
   if (filter === 'done') {
-    return 'assignee = currentUser() AND resolution IS NOT EMPTY ORDER BY updated DESC'
+    return 'assignee = currentUser() AND statusCategory = Done ORDER BY updated DESC'
   }
-  return 'resolution = Unresolved ORDER BY updated DESC'
+  return 'statusCategory != Done ORDER BY updated DESC'
 }
 
 async function searchIssuesForClient(
