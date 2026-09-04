@@ -78,6 +78,9 @@ function toWorktreeRootPathFlavor(rootPath: string, cwd: string, path: string): 
   return toWindowsWslPath(path, distro)
 }
 
+/**
+ * Resolves a CLI file path to a runtime relative path, normalizing dot segments.
+ */
 async function resolveFilePath(
   ctx: HandlerContext,
   worktree: string,
@@ -85,7 +88,7 @@ async function resolveFilePath(
 ): Promise<string> {
   if (!isRuntimePathAbsolute(path)) {
     const normalized = normalizeRuntimePathDots(path)
-    if (normalized === '.' || normalized === '') {
+    if (normalized === '.') {
       throw new RuntimeClientError(
         'invalid_argument',
         'The selected worktree root is a directory, not a file-open target.'

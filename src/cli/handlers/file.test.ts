@@ -131,7 +131,11 @@ describe('orca file CLI handlers', () => {
   })
 
   it('rejects relative worktree root paths like . or ./ as a file-open target', async () => {
-    queueFixtures(callMock, worktreeListFixture([buildWorktree('/tmp/repo', 'feature')]))
+    queueFixtures(
+      callMock,
+      worktreeListFixture([buildWorktree('/tmp/repo', 'feature')]),
+      worktreeListFixture([buildWorktree('/tmp/repo', 'feature')])
+    )
 
     const priorExitCode = process.exitCode
 

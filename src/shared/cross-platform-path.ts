@@ -266,11 +266,24 @@ function isWindowsPathFlavor(value: string): boolean {
   return /^[A-Za-z]:[\\/]/.test(value) || value.includes('\\') || value.startsWith('//')
 }
 
+/** Detects Windows flavor for dot normalization without treating every backslash as a separator. */
+function isWindowsDotsFlavor(value: string): boolean {
+  // Why: backslash is a valid POSIX filename character; only drive/UNC roots and leading .\.. prove Windows.
+  return isWindowsAbsolutePathLike(value) || value.startsWith('.\\') || value.startsWith('..\\')
+}
+
+/**
+ * Strips redundant dot segments from a runtime path, preserving `..` traversal.
+ */
 export function normalizeRuntimePathDots(
   value: string,
-  pathFlavor: 'posix' | 'windows' = isWindowsPathFlavor(value) ? 'windows' : 'posix'
+  pathFlavor: 'posix' | 'windows' = isWindowsDotsFlavor(value) ? 'windows' : 'posix'
 ): string {
-  const normalized = normalizeRuntimePathSeparators(value)
+  // Why: fold backslashes only for Windows flavor so POSIX names like `src/foo\bar.ts` survive.
+  const normalized =
+    pathFlavor === 'windows'
+      ? normalizeRuntimePathSeparators(value)
+      : collapseRuntimePathSlashes(value)
   const { root, rest } = splitRuntimePathRoot(normalized, pathFlavor)
   const segments: string[] = []
   for (const segment of rest.split('/')) {

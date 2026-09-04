@@ -286,4 +286,8 @@ describe('normalizeRuntimePathDots', () => {
     expect(normalizeRuntimePathDots('../outside.tsx')).toBe('../outside.tsx')
     expect(normalizeRuntimePathDots('..\\outside.tsx')).toBe('../outside.tsx')
   })
+
+  it('preserves backslashes in POSIX filenames', () => {
+    expect(normalizeRuntimePathDots('src/foo\\bar.ts')).toBe('src/foo\\bar.ts')
+  })
 })
