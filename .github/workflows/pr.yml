@@ -121,6 +121,9 @@ jobs:
       - name: Enforce React Doctor on changed lines
         run: pnpm run check:react-doctor:changed -- "${{ github.event.pull_request.base.sha }}"
 
+      - name: Enforce no local reference provenance in changed files
+        run: pnpm run check:reference-provenance:changed -- "${{ github.event.pull_request.base.sha }}"
+
       - name: Check Zustand selector fan-out budget
         run: pnpm run check:zustand-selector-fanout
 

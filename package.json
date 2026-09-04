@@ -19,6 +19,7 @@
     "audit:dead-code": "pnpm dlx knip@5.88.1 --config config/knip.json",
     "check:code-quality:changed": "node config/scripts/check-changed-code-quality.mjs",
     "check:react-doctor:changed": "node config/scripts/check-react-doctor-changed.mjs",
+    "check:reference-provenance:changed": "node config/scripts/check-local-reference-provenance.mjs",
     "check:zustand-selector-fanout": "node config/scripts/zustand-selector-fanout-benchmark.mjs --check",
     "doctor": "pnpm dlx react-doctor@0.9.1 . --no-telemetry",
     "lint:react-doctor": "oxlint --config config/oxlint-react-doctor.json",
