@@ -706,6 +706,40 @@ describe('hosted review slice', () => {
     expect(mockApi.hostedReview.forBranch).toHaveBeenCalledTimes(2)
   })
 
+  it('revalidates instead of serving a stale merged review on the stale-while-revalidate path', async () => {
+    const mergedAtHead: HostedReviewInfo = {
+      provider: 'github',
+      number: 7,
+      title: 'Merged at head',
+      state: 'merged',
+      url: 'https://github.com/acme/orca/pull/7',
+      status: 'success',
+      updatedAt: '2026-05-10T00:00:00.000Z',
+      mergeable: 'MERGEABLE',
+      headSha: 'aaaaaaa'
+    }
+    mockApi.hostedReview.forBranch.mockResolvedValueOnce(mergedAtHead).mockResolvedValueOnce(null)
+    const store = makeStore()
+
+    await expect(
+      store.getState().fetchHostedReviewForBranch('/repo', 'feature/merged', {
+        currentHeadOid: 'aaaaaaa'
+      })
+    ).resolves.toEqual(mergedAtHead)
+
+    // Worktree advanced off the merged head. Even on the stale-while-revalidate
+    // fast path — where a fresh cache would normally be served immediately —
+    // the now-stale merged card must not flash; the read revalidates
+    // synchronously and reflects the branch-only result.
+    await expect(
+      store.getState().fetchHostedReviewForBranch('/repo', 'feature/merged', {
+        staleWhileRevalidate: true,
+        currentHeadOid: 'bbbbbbb'
+      })
+    ).resolves.toBeNull()
+    expect(mockApi.hostedReview.forBranch).toHaveBeenCalledTimes(2)
+  })
+
   it('serves a cached merged review whose confirmed contained head matches the worktree', async () => {
     const mergedBehindHead: HostedReviewInfo = {
       provider: 'github',
