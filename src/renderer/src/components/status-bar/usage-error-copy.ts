@@ -26,6 +26,9 @@ export function getProviderDisplayName(provider: ProviderRateLimits['provider'])
   if (provider === 'grok') {
     return 'Grok'
   }
+  if (provider === 'zai') {
+    return 'Z.AI'
+  }
   return provider
 }
 
@@ -181,6 +184,17 @@ export function getProviderUsageErrorMessage(p: ProviderRateLimits): string {
   }
   if (isUsageRateLimitError(p.error)) {
     return p.error
+  }
+  if (
+    p.provider === 'zai' &&
+    (p.usageMetadata?.failureKind === 'stale-token' ||
+      p.usageMetadata?.failureKind === 'missing-credentials')
+  ) {
+    // Why: Z.AI usage reads opencode's credential store; re-auth happens in the opencode CLI, not Orca.
+    return translate(
+      'auto.components.status.bar.tooltip.zaiAuthRecovery',
+      'Run opencode auth login in a terminal, choose Z.AI Coding Plan, and complete sign-in, then retry usage.'
+    )
   }
   if (isUsageAuthError(p.error)) {
     const name = getProviderDisplayName(p.provider)

@@ -12,6 +12,8 @@ export function createRateLimitsApi(): NonNullable<Partial<PreloadApi>['rateLimi
     antigravity: null,
     minimax: null,
     grok: null,
+    zai: null,
+    zaiAuthConfigured: false,
     minimaxCookieConfigured: false,
     grokAuthConfigured: false,
     claudeTarget: { runtime: 'host', wslDistro: null },

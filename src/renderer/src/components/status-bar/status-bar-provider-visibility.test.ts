@@ -74,6 +74,7 @@ function usageSettings(overrides: Partial<UsageProviderSettings> = {}): UsagePro
     antigravityUsageConfigured: false,
     minimaxCookieConfigured: false,
     grokAuthConfigured: false,
+    zaiAuthConfigured: false,
     ...overrides
   }
 }
@@ -128,6 +129,7 @@ describe('hasUsageProviderSettings', () => {
     )
     expect(hasUsageProviderSettings(usageSettings({ minimaxCookieConfigured: true }))).toBe(true)
     expect(hasUsageProviderSettings(usageSettings({ grokAuthConfigured: true }))).toBe(true)
+    expect(hasUsageProviderSettings(usageSettings({ zaiAuthConfigured: true }))).toBe(true)
   })
 
   it('does not treat empty or unloaded settings as configured', () => {
@@ -202,6 +204,14 @@ describe('hasUsageProviderSettingsForProvider', () => {
     ).toBe(true)
     expect(hasUsageProviderSettingsForProvider('grok', usageSettings())).toBe(false)
     expect(hasUsageProviderSettingsForProvider('grok', null)).toBe(false)
+  })
+
+  it('treats zaiAuthConfigured as the durable signal for Z.AI', () => {
+    expect(
+      hasUsageProviderSettingsForProvider('zai', usageSettings({ zaiAuthConfigured: true }))
+    ).toBe(true)
+    expect(hasUsageProviderSettingsForProvider('zai', usageSettings())).toBe(false)
+    expect(hasUsageProviderSettingsForProvider('zai', null)).toBe(false)
   })
 })
 
@@ -359,6 +369,35 @@ describe('getVisibleUsageProvider', () => {
       )
     ).toBe(null)
   })
+
+  it('keeps Z.AI visible while the snapshot is pending when auth is configured', () => {
+    const visible = getVisibleUsageProvider('zai', null, usageSettings({ zaiAuthConfigured: true }))
+    expect(visible).toMatchObject({
+      provider: 'zai',
+      status: 'fetching',
+      session: null,
+      weekly: null
+    })
+  })
+
+  it('keeps a configured Z.AI failure visible instead of flapping the bar', () => {
+    // Why: an auth hiccup on a configured provider is a *configured* provider
+    // failing, so the error state stays visible with its recovery copy.
+    const failing = provider('error', {
+      provider: 'zai',
+      error: 'Z.AI usage could not be refreshed: not logged in'
+    })
+    expect(
+      getVisibleUsageProvider('zai', failing, usageSettings({ zaiAuthConfigured: true }))
+    ).toBe(failing)
+  })
+
+  it('hides Z.AI when auth is not configured and the snapshot is unavailable', () => {
+    expect(getVisibleUsageProvider('zai', null, usageSettings())).toBe(null)
+    expect(
+      getVisibleUsageProvider('zai', provider('unavailable', { provider: 'zai' }), usageSettings())
+    ).toBe(null)
+  })
 })
 
 describe('isUsageEmptyState', () => {
@@ -373,7 +412,8 @@ describe('isUsageEmptyState', () => {
           kimi: null,
           antigravity: null,
           minimax: null,
-          grok: null
+          grok: null,
+          zai: null
         },
         usageSettings()
       )
@@ -391,7 +431,8 @@ describe('isUsageEmptyState', () => {
           kimi: provider('unavailable', { provider: 'kimi' }),
           antigravity: undefined,
           minimax: undefined,
-          grok: undefined
+          grok: undefined,
+          zai: undefined
         },
         usageSettings()
       )
@@ -409,7 +450,8 @@ describe('isUsageEmptyState', () => {
           kimi: provider('unavailable', { provider: 'kimi' }),
           antigravity: provider('unavailable', { provider: 'antigravity' }),
           minimax: provider('unavailable', { provider: 'minimax' }),
-          grok: provider('unavailable', { provider: 'grok' })
+          grok: provider('unavailable', { provider: 'grok' }),
+          zai: provider('unavailable', { provider: 'zai' })
         },
         usageSettings()
       )
@@ -427,7 +469,8 @@ describe('isUsageEmptyState', () => {
           kimi: provider('unavailable', { provider: 'kimi' }),
           antigravity: provider('unavailable', { provider: 'antigravity' }),
           minimax: provider('unavailable', { provider: 'minimax' }),
-          grok: provider('unavailable', { provider: 'grok' })
+          grok: provider('unavailable', { provider: 'grok' }),
+          zai: provider('unavailable', { provider: 'zai' })
         },
         usageSettings({
           codexManagedAccounts: [
@@ -456,7 +499,8 @@ describe('isUsageEmptyState', () => {
           kimi: null,
           antigravity: null,
           minimax: null,
-          grok: null
+          grok: null,
+          zai: null
         },
         null
       )
@@ -474,7 +518,8 @@ describe('isUsageEmptyState', () => {
           kimi: provider('unavailable', { provider: 'kimi' }),
           antigravity: null,
           minimax: provider('unavailable', { provider: 'minimax' }),
-          grok: provider('unavailable', { provider: 'grok' })
+          grok: provider('unavailable', { provider: 'grok' }),
+          zai: provider('unavailable', { provider: 'zai' })
         },
         usageSettings()
       )
@@ -492,7 +537,8 @@ describe('isUsageEmptyState', () => {
           kimi: provider('unavailable', { provider: 'kimi' }),
           antigravity: null,
           grok: provider('unavailable', { provider: 'grok' }),
-          minimax: provider('unavailable', { provider: 'minimax' })
+          minimax: provider('unavailable', { provider: 'minimax' }),
+          zai: provider('unavailable', { provider: 'zai' })
         },
         usageSettings({ antigravityUsageConfigured: true, geminiCliOAuthEnabled: true })
       )
@@ -512,10 +558,30 @@ describe('isUsageEmptyState', () => {
           kimi: provider('unavailable', { provider: 'kimi' }),
           antigravity: null,
           grok: provider('unavailable', { provider: 'grok' }),
-          minimax: provider('unavailable', { provider: 'minimax' })
+          minimax: provider('unavailable', { provider: 'minimax' }),
+          zai: provider('unavailable', { provider: 'zai' })
         },
         usageSettings({ antigravityUsageConfigured: true })
       )
     ).toBe(true)
+  })
+
+  it('does not show the setup CTA while a configured Z.AI snapshot is still pending', () => {
+    expect(
+      isUsageEmptyState(
+        {
+          claude: provider('unavailable', { provider: 'claude' }),
+          codex: provider('unavailable', { provider: 'codex' }),
+          gemini: provider('unavailable'),
+          opencodeGo: provider('unavailable', { provider: 'opencode-go' }),
+          kimi: provider('unavailable', { provider: 'kimi' }),
+          antigravity: null,
+          grok: provider('unavailable', { provider: 'grok' }),
+          minimax: provider('unavailable', { provider: 'minimax' }),
+          zai: null
+        },
+        usageSettings({ zaiAuthConfigured: true })
+      )
+    ).toBe(false)
   })
 })

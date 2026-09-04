@@ -596,7 +596,9 @@ describe('client UI RPC methods', () => {
     ['browserImportHintHidden', { browserImportHintHidden: true }],
     ['mobileEmulatorTabIntroDismissed', { mobileEmulatorTabIntroDismissed: true }],
     ['mobileEmulatorAgentSetupDismissed', { mobileEmulatorAgentSetupDismissed: true }],
-    ['alwaysShowDefaultBranchWorkspace', { alwaysShowDefaultBranchWorkspace: false }]
+    ['alwaysShowDefaultBranchWorkspace', { alwaysShowDefaultBranchWorkspace: false }],
+    ['statusBarItems.zai', { statusBarItems: ['claude', 'codex', 'zai'] }],
+    ['_zaiStatusBarDefaultAdded', { _zaiStatusBarDefaultAdded: true }]
   ])('accepts %s, which the renderer persists through ui.set', async (_label, payload) => {
     const runtime = {
       getRuntimeId: () => 'test-runtime',

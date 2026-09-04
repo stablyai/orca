@@ -1,6 +1,5 @@
 import type { UISlice, UISliceGet, UISliceSet } from './ui-slice-contract'
 import type { AppState } from '../../types'
-import type { PersistedUIState } from '../../../../../shared/persisted-ui-state-types'
 import { normalizeRightSidebarRoute } from '../../right-sidebar-route'
 import {
   applyManualRepoOrder,
@@ -38,12 +37,10 @@ import { normalizeStatusBarUsageMode } from '../../../../../shared/status-bar-us
 import { normalizeBrowserPageZoomLevel } from '../../../../../shared/browser-page-zoom'
 import { normalizeKagiSessionLink } from '../../../../../shared/browser-url'
 import { isReleaseChannel } from '../../../../../shared/release-channel'
-import type { StatusBarItem } from '../../../../../shared/ui-chrome-types'
 import {
   filterSetupScriptPromptDismissalsToValidRepos,
   sanitizeSetupScriptPromptDismissals
 } from '../../../lib/setup-script-prompt'
-import { isBundledPetId, DEFAULT_PET_ID } from '../../../components/pet/pet-models'
 import { getRepoHostIdentity } from '../repo-host-identity'
 import type { PersistedUIWriteBaseline } from '../persisted-ui-write-baseline'
 import {
@@ -60,40 +57,17 @@ import {
   sanitizeWorkspaceCleanupDismissals,
   sanitizePersistedSidebarWidth,
   hydratedUIPartialMatchesState,
-  migrateStatusBarItems,
   clampPetSize
 } from './ui-slice-hydration-sanitizers'
-import { hydrateAgentReadState, sanitizeTaskResumeState } from './ui-slice-hydration-values'
+import { hydrateStatusBarItems } from './status-bar-default-hydration'
+import {
+  hydrateAgentReadState,
+  hydratePetSelection,
+  sanitizeTaskResumeState
+} from './ui-slice-hydration-values'
 
 const MAX_LEFT_SIDEBAR_WIDTH = 500
 const MAX_RIGHT_SIDEBAR_WIDTH = 4000
-const DEFAULT_ON_PORTS_STATUS_BAR_ITEM: StatusBarItem = 'ports'
-const DEFAULT_ON_KIMI_STATUS_BAR_ITEM: StatusBarItem = 'kimi'
-const DEFAULT_ON_MINIMAX_STATUS_BAR_ITEM: StatusBarItem = 'minimax'
-const DEFAULT_ON_ANTIGRAVITY_STATUS_BAR_ITEM: StatusBarItem = 'antigravity'
-const DEFAULT_ON_GROK_STATUS_BAR_ITEM: StatusBarItem = 'grok'
-
-function hydrateStatusBarItems(ui: PersistedUIState): StatusBarItem[] {
-  let items = migrateStatusBarItems(ui.statusBarItems)
-  const defaults = [
-    ['_portsStatusBarDefaultAdded', DEFAULT_ON_PORTS_STATUS_BAR_ITEM],
-    ['_kimiStatusBarDefaultAdded', DEFAULT_ON_KIMI_STATUS_BAR_ITEM],
-    ['_minimaxStatusBarDefaultAdded', DEFAULT_ON_MINIMAX_STATUS_BAR_ITEM],
-    ['_antigravityStatusBarDefaultAdded', DEFAULT_ON_ANTIGRAVITY_STATUS_BAR_ITEM],
-    ['_grokStatusBarDefaultAdded', DEFAULT_ON_GROK_STATUS_BAR_ITEM]
-  ] as const
-  for (const [flag, item] of defaults) {
-    if (!ui[flag] && !items.includes(item)) {
-      items = [...items, item]
-    }
-  }
-  if (typeof window !== 'undefined' && defaults.some(([flag]) => !ui[flag])) {
-    window.api.ui
-      .set({ statusBarItems: items, ...Object.fromEntries(defaults.map(([flag]) => [flag, true])) })
-      .catch(console.error)
-  }
-  return items
-}
 
 export function createUiHydrationActions(set: UISliceSet, _get: UISliceGet): Partial<UISlice> {
   return {
@@ -105,13 +79,7 @@ export function createUiHydrationActions(set: UISliceSet, _get: UISliceGet): Par
         const validRepoHostIdentities = new Set(s.repos.map(getRepoHostIdentity))
         const persistedFilterRepoIds = sanitizePersistedRepoIds(ui.filterRepoIds)
         const persistedAgentsFilterRepoIds = sanitizePersistedRepoIds(ui.agentsFilterRepoIds)
-        // Why: pre-rename builds used sidekick* keys; read as fallback only so new pet* writes win after upgrade.
-        const customPets = Array.isArray(ui.customPets)
-          ? ui.customPets
-          : Array.isArray(ui.customSidekicks)
-            ? ui.customSidekicks
-            : []
-        const petId = ui.petId ?? ui.sidekickId
+        const { customPets, petId } = hydratePetSelection(ui)
         // Migration: one-shot old-'recent'→'smart' runs in main (_sortBySmartMigrated), not here, so a deliberate 'recent' choice survives restart.
         const sortBy = ui.sortBy
         const statusBarItemsWithGrok = hydrateStatusBarItems(ui)
@@ -210,20 +178,7 @@ export function createUiHydrationActions(set: UISliceSet, _get: UISliceGet): Par
             fallback: PET_SIZE_DEFAULT
           }),
           customPets,
-          // Why: fall back to default when the persisted id is unknown (e.g. custom pet removed elsewhere) so the overlay renders.
-          petId: ((): string => {
-            const id = petId
-            if (typeof id !== 'string') {
-              return DEFAULT_PET_ID
-            }
-            if (isBundledPetId(id)) {
-              return id
-            }
-            if (customPets.some((m) => m.id === id)) {
-              return id
-            }
-            return DEFAULT_PET_ID
-          })(),
+          petId,
           dismissedUpdateVersion: ui.dismissedUpdateVersion ?? null,
           // Why: a persisted value from a build that knew a different channel set
           // would otherwise survive as-is; activeChannel only falls back on null,

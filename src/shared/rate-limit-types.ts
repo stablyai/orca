@@ -55,6 +55,7 @@ export type ProviderRateLimits = {
     | 'minimax'
     | 'grok'
     | 'antigravity'
+    | 'zai'
   /** 5-hour session window, null if not available. */
   session: RateLimitWindow | null
   /** 7-day weekly window, null if not available. */
@@ -124,6 +125,17 @@ export type RateLimitState = {
   antigravity: ProviderRateLimits | null
   minimax: ProviderRateLimits | null
   grok: ProviderRateLimits | null
+  /**
+   * Z.AI Coding Plan snapshot. Optional on the wire: hosts from before the
+   * Z.AI integration omit it, so consumers must treat a missing key as
+   * "unconfigured" rather than a settled null snapshot.
+   */
+  zai?: ProviderRateLimits | null
+  /**
+   * True when main found a Z.AI Coding Plan key in opencode's auth store.
+   * Optional on the wire for the same old-host reason as `zai`.
+   */
+  zaiAuthConfigured?: boolean
   /**
    * True when a MiniMax session cookie is persisted on disk. The cookie lives
    * outside GlobalSettings, so this flag is the durable signal that the

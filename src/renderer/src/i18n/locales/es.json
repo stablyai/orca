@@ -33,7 +33,8 @@
         "resourceUsageToggleDescription": "Muestra el Administrador de recursos. Haz clic para ver CPU, memoria, sesiones, controles del daemon y análisis de disco de los espacios de trabajo.",
         "portsToggleDescription": "Muestra los puertos activos de los espacios de trabajo. Haz clic para ver los puertos de cada espacio de trabajo y los puertos externos.",
         "antigravityToggleDescription": "Muestra el uso de suscripción de Antigravity para el espacio de trabajo activo.",
-        "grokToggleDescription": "Muestra el uso de créditos de suscripción de Grok cuando has iniciado sesión con Grok CLI."
+        "grokToggleDescription": "Muestra el uso de créditos de suscripción de Grok cuando has iniciado sesión con Grok CLI.",
+        "zaiToggleDescription": "Muestra el uso del plan Z.AI Coding Plan cuando inicias sesión mediante la autenticación de opencode."
       },
       "menuBarIcon": {
         "title": "Mostrar icono en la barra de menús",
@@ -3296,6 +3297,8 @@
             "antigravityUsageDetails": "Abrir detalles de uso de Antigravity",
             "grokUsageAria": "Abrir detalles de uso de Grok",
             "grokUsageMenu": "Uso de Grok",
+            "zaiUsageAria": "Abrir detalles de uso de Z.AI",
+            "zaiUsageMenu": "Uso de Z.AI",
             "floatingTerminalNewActivity": "{{label}}, nueva actividad",
             "codexSignInSuccess": "Sesión iniciada en Codex",
             "codexSignInError": "No se pudo iniciar sesión en Codex. Inténtalo de nuevo."
@@ -3458,6 +3461,7 @@
             "c06c1d215d": "No se pudo actualizar el uso de Claude porque falló la solicitud de red.",
             "cabdc2a9e0": "No se pudieron leer las credenciales de inicio de sesión de Claude.",
             "a7517cccb6": "El uso de Claude no está disponible ahora.",
+            "zaiAuthRecovery": "Ejecuta opencode auth login en una terminal, elige Z.AI Coding Plan, completa el inicio de sesión y vuelve a intentar consultar el uso.",
             "e2c6a4f917": "Run Grok to refresh",
             "d1b7f509ac": "Run grok in a terminal on the computer running Orca and wait for it to start. If prompted, complete sign-in, then retry usage. You do not need to send a chat message.",
             "f90b3d7a16": "Run Kimi to refresh",
@@ -7934,10 +7938,15 @@
             "antigravityKeyword": "antigravity",
             "f8e2a1c4b6": "Uso de Grok",
             "e7d1b0f3a5": "Muestra el uso semanal de créditos de Grok desde OAuth de Grok CLI.",
+            "zaiUsageTitle": "Uso de Z.AI",
+            "zaiUsageDescription": "Muestra el uso del plan Z.AI Coding Plan en la barra de estado.",
             "d6c0a9e2f4": "grok",
             "c5b9f8d1e3": "xai",
             "usagePercentageDisplayTitle": "Porcentajes de uso",
-            "usagePercentageDisplayDescription": "Elige si los límites del proveedor muestran el porcentaje usado o restante."
+            "usagePercentageDisplayDescription": "Elige si los límites del proveedor muestran el porcentaje usado o restante.",
+            "zaiKeyword": "z.ai",
+            "zaiGlmKeyword": "glm",
+            "zaiOpencodeKeyword": "opencode"
           }
         },
         "auto": {
