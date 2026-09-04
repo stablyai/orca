@@ -5330,14 +5330,27 @@
           "3e102f111c": "All hosts",
           "visibleHostsCount": "{{value0}} hosts"
         },
+        "sidebarAgentOptions": {
+          "allAgents": "All agents",
+          "visibleAgentsCount": "{{value0}} agents"
+        },
+        "SidebarAgentFilterSection": {
+          "agent": "Agent"
+        },
+        "SidebarAgentScopeStrip": {
+          "scopedTo": "{{value0}} visible",
+          "backToAll": "All agents"
+        },
         "SidebarHostScopeStrip": {
           "scopedTo": "{{value0}} visible",
           "backToAll": "All hosts"
         },
         "SidebarWorkspaceOptionsMenu": {
           "hosts": "Hosts",
+          "agents": "Agent",
           "showSection": "Show",
           "allHostsDetail": "Show every host",
+          "allAgentsDetail": "Show every agent",
           "configuredSshHost": "Configured SSH",
           "projectSshHost": "Project SSH",
           "activeRuntimeHost": "Active server",
@@ -5986,7 +5999,8 @@
           "b6c7d8e9f0": "Task status sync could not finish.",
           "c7d8e9f0a1": "{{value0}} updated",
           "d8e9f0a1b2": "{{value0}} skipped",
-          "e9f0a1b2c3": "{{value0}} failed"
+          "e9f0a1b2c3": "{{value0}} failed",
+          "noWorkspacesMatchFilters": "No workspaces match the current filters"
         },
         "WorktreeParentPickerPopover": {
           "failedSetParent": "Failed to set parent worktree",

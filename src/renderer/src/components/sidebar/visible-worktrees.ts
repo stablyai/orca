@@ -1,5 +1,4 @@
 import type { Repo } from '../../../../shared/repo-types'
-import type { TerminalTab } from '../../../../shared/terminal-tab-types'
 import type { WorktreeLineage } from '../../../../shared/worktree/lineage-types'
 export type { SidebarFilterState } from './visible-worktree-kinds'
 export {
@@ -29,9 +28,7 @@ import { getAllWorktreesFromState, getRepoMapFromState } from '@/store/selectors
 import {
   ALL_EXECUTION_HOSTS_SCOPE,
   getSettingsFocusedExecutionHostId,
-  getWorktreeExecutionHostId,
-  type ExecutionHostId,
-  type ExecutionHostScope
+  getWorktreeExecutionHostId
 } from '../../../../shared/execution-host'
 import {
   getCyclicProjectedWorktreeLineageIds,
@@ -48,6 +45,11 @@ import {
 } from './workspace-creator-visibility'
 import { isDefaultBranchWorkspace } from './default-branch-workspace'
 import { getLineageAncestorIndex, getSortedWorktreeRankIndex } from './visible-worktree-indexes'
+import {
+  collectScopedAgentTypesByWorktree,
+  filterWorktreesBySelectedAgents
+} from './workspace-agent-filter-evidence'
+import type { VisibleWorktreeOptions } from './visible-worktree-options'
 import { getWorktreeHostIdentity } from '../../../../shared/worktree/host-qualified-identity'
 
 /**
@@ -62,28 +64,6 @@ import { getWorktreeHostIdentity } from '../../../../shared/worktree/host-qualif
  * Why shared: the sidebar pipeline and the jump palette both apply this, and a
  * second copy is how the two surfaces drift.
  */
-type VisibleWorktreeOptions = {
-  filterRepoIds: readonly string[]
-  showSleepingWorkspaces: boolean
-  tabsByWorktree: Record<string, Pick<TerminalTab, 'id'>[]> | null
-  ptyIdsByTabId: Record<string, string[]> | null
-  browserTabsByWorktree?: Record<string, { id: string }[]> | null
-  worktreeIdsWithLiveAgent: ReadonlySet<string>
-  hideDefaultBranchWorkspace: boolean
-  hideAutomationGeneratedWorkspaces: boolean
-  hideCliCreatedWorkspaces: boolean
-  hideDetachedHeadWorkspaces: boolean
-  hideWorkspacesFromOtherDevices: boolean
-  pairedDeviceIdsByEnvironment: ReadonlyMap<string, string>
-  alwaysShowDefaultBranchWorkspace?: boolean
-  repoMap: Map<string, Repo>
-  workspaceHostScope: ExecutionHostScope
-  visibleWorkspaceHostIds?: readonly ExecutionHostId[] | null
-  defaultHostId: ExecutionHostId
-  worktreeLineageById: Record<string, WorktreeLineage>
-  injectLineageAncestors?: boolean
-  forcedVisibleWorktreeIds?: readonly string[]
-}
 
 export function computeVisibleWorktrees(
   worktreesByRepo: Record<string, Worktree[]>,
@@ -120,6 +100,11 @@ export function computeVisibleWorktrees(
   if (opts.hideDetachedHeadWorkspaces) {
     all = all.filter((w) => !isDetachedHeadWorkspace(w))
   }
+
+  all = filterWorktreesBySelectedAgents(all, opts.filterAgentIds, {
+    tabsByWorktree: opts.tabsByWorktree,
+    agentTypesByWorktree: opts.agentTypesByWorktree
+  })
 
   const visibleHostIds =
     opts.visibleWorkspaceHostIds ??
@@ -293,6 +278,14 @@ export function buildVisibleWorktreeOptionsFromState(
         )
       : EMPTY_PAIRED_DEVICE_IDS_BY_ENVIRONMENT,
     alwaysShowDefaultBranchWorkspace: state.alwaysShowDefaultBranchWorkspace,
+    filterAgentIds: state.filterAgentIds,
+    agentTypesByWorktree: collectScopedAgentTypesByWorktree({
+      filterAgentIds: state.filterAgentIds,
+      agentStatusByPaneKey: state.agentStatusByPaneKey,
+      retainedAgentsByPaneKey: state.retainedAgentsByPaneKey,
+      sleepingAgentSessionsByPaneKey: state.sleepingAgentSessionsByPaneKey,
+      tabsByWorktree: state.tabsByWorktree
+    }),
     repoMap,
     workspaceHostScope: state.workspaceHostScope,
     visibleWorkspaceHostIds: state.visibleWorkspaceHostIds,

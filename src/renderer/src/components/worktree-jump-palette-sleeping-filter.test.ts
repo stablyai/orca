@@ -4,6 +4,9 @@ import type { Worktree } from '../../../shared/worktree/types'
 import { readWorktreeJumpPaletteSource } from './worktree-jump-palette-source.test-support'
 
 const worktreeSource = readWorktreeJumpPaletteSource('use-worktree-jump-palette-worktrees.ts')
+const visibilitySource = readWorktreeJumpPaletteSource(
+  'worktree-jump-palette-empty-query-visibility.ts'
+)
 const storeSource = readWorktreeJumpPaletteSource('use-worktree-jump-palette-store-state.ts')
 
 function makeWorktree(overrides: Partial<Worktree> = {}): Worktree {
@@ -35,15 +38,11 @@ describe('Cmd+J empty-query "Hide sleeping" pass (#8873)', () => {
   // call the shared predicate. A behavioral copy here would not catch a
   // hand-rolled duplicate creeping back in.
   it('routes the sleeping sweep through the shared exemption predicate', () => {
-    const start = worktreeSource.indexOf('const emptyQueryVisibleWorktrees = useMemo(')
-    expect(start).toBeGreaterThanOrEqual(0)
-    const end = worktreeSource.indexOf('const { visibleWorktreesForState', start)
-    const filterPass = worktreeSource.slice(start, end)
-
-    expect(filterPass).toContain(
-      '!isSleepingSweepExemptWorkspace(worktree, alwaysShowDefaultBranchWorkspace)'
+    expect(worktreeSource).toContain('filterEmptyQueryVisibleWorktrees({')
+    expect(visibilitySource).toContain(
+      '!isSleepingSweepExemptWorkspace(worktree, args.alwaysShowDefaultBranchWorkspace)'
     )
-    expect(filterPass).toContain('alwaysShowDefaultBranchWorkspace,')
+    expect(visibilitySource).toContain('alwaysShowDefaultBranchWorkspace')
   })
 
   it('reads the flag from the same store field the sidebar uses', () => {

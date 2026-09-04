@@ -100,6 +100,7 @@ export function useWorktreeJumpPaletteStoreState({
   const alwaysShowDefaultBranchWorkspace = useAppStore(
     (state) => state.alwaysShowDefaultBranchWorkspace
   )
+  const filterAgentIds = useAppStore((state) => state.filterAgentIds)
   const lastVisitedAtByWorktreeId = useAppStore((state) => state.lastVisitedAtByWorktreeId)
   const workspacePortScan = useAppStore((state) => state.workspacePortScan?.result ?? null)
   const openNewBrowserTabInActiveWorkspace = useAppStore(
@@ -175,6 +176,7 @@ export function useWorktreeJumpPaletteStoreState({
     hideWorkspacesFromOtherDevices,
     showSleepingWorkspaces,
     alwaysShowDefaultBranchWorkspace,
+    filterAgentIds,
     lastVisitedAtByWorktreeId,
     workspacePortScan,
     openNewBrowserTabInActiveWorkspace,

@@ -4517,8 +4517,10 @@
           "680043342f": "compacto",
           "c7591b6014": "repositorio",
           "hosts": "Hosts",
+          "agents": "Agente",
           "showSection": "Mostrar",
           "allHostsDetail": "Mostrar todos los hosts",
+          "allAgentsDetail": "Mostrar todos los agentes",
           "configuredSshHost": "SSH configurado",
           "projectSshHost": "SSH del proyecto",
           "activeRuntimeHost": "Servidor activo",
@@ -5105,6 +5107,17 @@
           "3e102f111c": "Todos los hosts",
           "visibleHostsCount": "{{value0}} hosts"
         },
+        "sidebarAgentOptions": {
+          "allAgents": "Todos los agentes",
+          "visibleAgentsCount": "{{value0}} agentes"
+        },
+        "SidebarAgentFilterSection": {
+          "agent": "Agente"
+        },
+        "SidebarAgentScopeStrip": {
+          "scopedTo": "Mostrando {{value0}}",
+          "backToAll": "Todos los agentes"
+        },
         "SidebarHostScopeStrip": {
           "scopedTo": "{{value0}} visible",
           "backToAll": "Todos los hosts"
@@ -5162,7 +5175,8 @@
           "b6c7d8e9f0": "No se pudo completar la sincronización del estado de la tarea.",
           "c7d8e9f0a1": "{{value0}} actualizado",
           "d8e9f0a1b2": "{{value0}} omitido",
-          "e9f0a1b2c3": "{{value0}} falló"
+          "e9f0a1b2c3": "{{value0}} falló",
+          "noWorkspacesMatchFilters": "Ningún espacio de trabajo coincide con los filtros actuales"
         },
         "WorktreeParentPickerPopover": {
           "failedSetParent": "No se pudo establecer el worktree padre",

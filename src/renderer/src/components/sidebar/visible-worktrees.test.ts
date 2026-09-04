@@ -85,6 +85,7 @@ function visibleOptions(overrides: Partial<VisibleOptions> = {}): VisibleOptions
     hideDetachedHeadWorkspaces: false,
     hideWorkspacesFromOtherDevices: false,
     pairedDeviceIdsByEnvironment: new Map(),
+    filterAgentIds: null,
     repoMap,
     workspaceHostScope: 'all',
     defaultHostId: LOCAL_EXECUTION_HOST_ID,

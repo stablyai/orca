@@ -15,6 +15,7 @@ export function useSidebarWorktreeFilters() {
   const hideDetachedHeadWorkspaces = useAppStore((s) => s.hideDetachedHeadWorkspaces)
   const hideWorkspacesFromOtherDevices = useAppStore((s) => s.hideWorkspacesFromOtherDevices)
   const alwaysShowDefaultBranchWorkspace = useAppStore((s) => s.alwaysShowDefaultBranchWorkspace)
+  const filterAgentIds = useAppStore((s) => s.filterAgentIds)
   const visibleWorkspaceHostIds = useAppStore((s) => s.visibleWorkspaceHostIds)
   const workspaceHostScope = useAppStore((s) => s.workspaceHostScope)
 
@@ -30,6 +31,7 @@ export function useSidebarWorktreeFilters() {
     (s) => s.setAlwaysShowDefaultBranchWorkspace
   )
   const setFilterRepoIds = useAppStore((s) => s.setFilterRepoIds)
+  const setFilterAgentIds = useAppStore((s) => s.setFilterAgentIds)
   const setVisibleWorkspaceHostIds = useAppStore((s) => s.setVisibleWorkspaceHostIds)
 
   // Why: count hideDefaultBranchWorkspace as a filter so the Clear Filters escape hatch stays reachable when it alone empties the list.
@@ -43,6 +45,7 @@ export function useSidebarWorktreeFilters() {
       hideDetachedHeadWorkspaces,
       hideWorkspacesFromOtherDevices,
       alwaysShowDefaultBranchWorkspace,
+      filterAgentIds,
       visibleWorkspaceHostIds,
       workspaceHostScope
     }),
@@ -55,6 +58,7 @@ export function useSidebarWorktreeFilters() {
       hideDetachedHeadWorkspaces,
       hideWorkspacesFromOtherDevices,
       alwaysShowDefaultBranchWorkspace,
+      filterAgentIds,
       visibleWorkspaceHostIds,
       workspaceHostScope
     ]
@@ -86,6 +90,9 @@ export function useSidebarWorktreeFilters() {
     if (actions.resetAlwaysShowDefaultBranchWorkspace) {
       setAlwaysShowDefaultBranchWorkspace(true)
     }
+    if (actions.resetFilterAgentIds) {
+      setFilterAgentIds(null)
+    }
     if (actions.resetVisibleWorkspaceHostIds) {
       setVisibleWorkspaceHostIds(null)
     }
@@ -98,6 +105,7 @@ export function useSidebarWorktreeFilters() {
     setHideDetachedHeadWorkspaces,
     setHideWorkspacesFromOtherDevices,
     setAlwaysShowDefaultBranchWorkspace,
+    setFilterAgentIds,
     setVisibleWorkspaceHostIds,
     filterState
   ])

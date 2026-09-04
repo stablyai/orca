@@ -1,14 +1,7 @@
 import { useMemo } from 'react'
-import {
-  isAutomationGeneratedWorkspace,
-  isCliCreatedWorkspace,
-  isDetachedHeadWorkspace,
-  isSleepingSweepExemptWorkspace
-} from '@/components/sidebar/visible-worktrees'
-import { isDefaultBranchWorkspace } from '@/components/sidebar/default-branch-workspace'
 import { sortWorktreesSmart } from '@/components/sidebar/smart-sort'
 import { buildWorktreeChecksReviewIndex } from '@/components/cmd-j/worktree-checks-review-index'
-import { getLiveAgentStatusByWorktreeId, isInactiveWorkspace } from '@/lib/worktree-activity-state'
+import { getLiveAgentStatusByWorktreeId } from '@/lib/worktree-activity-state'
 import { orderEmptyQueryWorktrees } from '@/lib/order-empty-query-worktrees'
 import {
   getWorktreePaletteSearchScope,
@@ -17,8 +10,7 @@ import {
 import { buildPaletteWorktreeIndex, resolvePaletteWorktree } from '@/lib/palette-repo-resolution'
 import {
   EMPTY_PAIRED_DEVICE_IDS_BY_ENVIRONMENT,
-  getPairedDeviceIdsByEnvironment,
-  isWorkspaceFromOtherDevice
+  getPairedDeviceIdsByEnvironment
 } from '@/components/sidebar/workspace-creator-visibility'
 import type { Worktree } from '../../../shared/worktree/types'
 import { EMPTY_SORTED_WORKTREES } from './worktree-jump-palette-model'
@@ -26,6 +18,7 @@ import type { WorktreeJumpPaletteFilter } from './use-worktree-jump-palette-filt
 import type { WorktreeJumpPaletteLocalState } from './use-worktree-jump-palette-local-state'
 import type { WorktreeJumpPaletteStoreState } from './use-worktree-jump-palette-store-state'
 import { buildWorktreeJumpPaletteDocumentIndex } from './worktree-jump-palette-document-index'
+import { filterEmptyQueryVisibleWorktrees } from './worktree-jump-palette-empty-query-visibility'
 import { buildWorktreeJumpPaletteWorktreeMaps } from './worktree-jump-palette-worktree-maps'
 
 type WorktreeJumpPaletteWorktreesInput = WorktreeJumpPaletteStoreState &
@@ -50,6 +43,9 @@ export function useWorktreeJumpPaletteWorktrees({
   hideWorkspacesFromOtherDevices,
   showSleepingWorkspaces,
   alwaysShowDefaultBranchWorkspace,
+  filterAgentIds,
+  retainedAgentsByPaneKey,
+  sleepingAgentSessionsByPaneKey,
   ptyIdsByTabId,
   browserTabsByWorktree,
   activeWorktreeId,
@@ -92,50 +88,32 @@ export function useWorktreeJumpPaletteWorktrees({
   )
   const emptyQueryVisibleWorktrees = useMemo(
     () =>
-      allWorktrees.filter((worktree) => {
-        if (worktree.isArchived) {
-          return false
-        }
-        if (filterPredicate && !filterPredicate.matchesWorktree(worktree)) {
-          return false
-        }
-        if (hideDefaultBranchWorkspace && isDefaultBranchWorkspace(worktree)) {
-          return false
-        }
-        if (hideAutomationGeneratedWorkspaces && isAutomationGeneratedWorkspace(worktree)) {
-          return false
-        }
-        if (hideCliCreatedWorkspaces && isCliCreatedWorkspace(worktree)) {
-          return false
-        }
-        if (hideDetachedHeadWorkspaces && isDetachedHeadWorkspace(worktree)) {
-          return false
-        }
-        if (
-          hideWorkspacesFromOtherDevices &&
-          isWorkspaceFromOtherDevice(worktree, pairedDeviceIdsByEnvironment)
-        ) {
-          return false
-        }
-        if (
-          !showSleepingWorkspaces &&
-          !isSleepingSweepExemptWorkspace(worktree, alwaysShowDefaultBranchWorkspace) &&
-          isInactiveWorkspace(
-            worktree.id,
-            tabsByWorktree,
-            ptyIdsByTabId,
-            browserTabsByWorktree,
-            worktreeIdsWithLiveAgent
-          )
-        ) {
-          return false
-        }
-        return true
+      filterEmptyQueryVisibleWorktrees({
+        allWorktrees,
+        filterPredicate,
+        hideDefaultBranchWorkspace,
+        hideAutomationGeneratedWorkspaces,
+        hideCliCreatedWorkspaces,
+        hideDetachedHeadWorkspaces,
+        hideWorkspacesFromOtherDevices,
+        showSleepingWorkspaces,
+        alwaysShowDefaultBranchWorkspace,
+        filterAgentIds,
+        agentStatusByPaneKey,
+        retainedAgentsByPaneKey,
+        sleepingAgentSessionsByPaneKey,
+        tabsByWorktree,
+        ptyIdsByTabId,
+        browserTabsByWorktree,
+        pairedDeviceIdsByEnvironment,
+        worktreeIdsWithLiveAgent
       }),
     [
+      agentStatusByPaneKey,
       allWorktrees,
       alwaysShowDefaultBranchWorkspace,
       browserTabsByWorktree,
+      filterAgentIds,
       filterPredicate,
       hideAutomationGeneratedWorkspaces,
       hideCliCreatedWorkspaces,
@@ -144,7 +122,9 @@ export function useWorktreeJumpPaletteWorktrees({
       hideWorkspacesFromOtherDevices,
       pairedDeviceIdsByEnvironment,
       ptyIdsByTabId,
+      retainedAgentsByPaneKey,
       showSleepingWorkspaces,
+      sleepingAgentSessionsByPaneKey,
       tabsByWorktree,
       worktreeIdsWithLiveAgent
     ]

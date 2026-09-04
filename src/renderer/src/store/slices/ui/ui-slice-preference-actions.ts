@@ -37,6 +37,7 @@ import {
   normalizeWorkspaceStatuses,
   WORKSPACE_BOARD_COLUMN_WIDTH_DEFAULT
 } from '../../../../../shared/workspace-statuses'
+import { normalizeFilterAgentIds } from '../../../../../shared/workspace-agent-filter'
 
 export function createUiPreferenceActions(set: UISliceSet, get: UISliceGet): Partial<UISlice> {
   return {
@@ -115,6 +116,12 @@ export function createUiPreferenceActions(set: UISliceSet, get: UISliceGet): Par
     setHideWorkspacesFromOtherDevices: (v) => set({ hideWorkspacesFromOtherDevices: v }),
     alwaysShowDefaultBranchWorkspace: true,
     setAlwaysShowDefaultBranchWorkspace: (v) => set({ alwaysShowDefaultBranchWorkspace: v }),
+    filterAgentIds: null,
+    setFilterAgentIds: (ids) => {
+      const filterAgentIds = normalizeFilterAgentIds(ids)
+      set({ filterAgentIds })
+      window.api.ui.set({ filterAgentIds }).catch(console.error)
+    },
 
     showDotfilesByWorktree: {},
     setShowDotfilesForWorktree: (worktreeId, showDotfiles) =>
