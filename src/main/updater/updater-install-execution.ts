@@ -19,7 +19,6 @@ import type { ServeUpdateVerdict } from '../../shared/serve-update-spool'
 import { captureServeUpdateAppImage } from '../serve-update-artifact-capture'
 import { UpdaterPackageRecovery } from './updater-package-recovery'
 
-/** How long the app waits for the root helper's verdict before assuming the worst. */
 const SERVE_UPDATE_VERDICT_TIMEOUT_MS = 90_000
 const SERVE_UPDATE_VERDICT_POLL_MS = 500
 
@@ -163,9 +162,7 @@ export abstract class UpdaterInstallExecution extends UpdaterPackageRecovery {
         this.resetQuitForUpdateState()
         return
       }
-      recordUpdaterLifecycle('headless_serve_update_accepted', {
-        version: pendingVersion || null
-      })
+      recordUpdaterLifecycle('headless_serve_update_accepted', { version: pendingVersion || null })
       // Why before quit: the helper needs the unit stop to look like a supervised exit, and
       // pre-quit cleanup (auth preservation) must still run while this process is alive.
       await this.runBeforeUpdateQuitCleanup()
