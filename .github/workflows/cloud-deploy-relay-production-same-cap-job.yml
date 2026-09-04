@@ -1,0 +1,641 @@
+name: Deploy Relay Production Same-Cap Job
+
+on:
+  workflow_call:
+    inputs:
+      mode: { required: true, type: string }
+      target-cell-id: { required: true, type: string }
+      target-image-digest: { required: true, type: string }
+      rollback-image-digest: { required: true, type: string }
+      target-rehome-protocol: { required: true, type: string }
+      rollback-rehome-protocol: { required: true, type: string }
+      expected-selector-generation: { required: true, type: string }
+      expected-existing-only-cells: { required: true, type: string }
+      expected-migration-only-cells: { required: true, type: string }
+      expected-general-cells: { required: true, type: string }
+      expected-rehome-generation: { required: true, type: string }
+      monitor-run-id: { required: true, type: string }
+      monitor-run-attempt: { required: true, type: string }
+      wave-index: { required: true, type: string }
+
+permissions:
+  actions: read
+  contents: read
+  id-token: write
+
+defaults:
+  run:
+    working-directory: cloud
+
+jobs:
+  rollout:
+    if: ${{ github.ref == 'refs/heads/main' }}
+    runs-on: blacksmith-2vcpu-ubuntu-2204
+    timeout-minutes: 75
+    environment: production
+    env:
+      GCP_PROJECT_ID: onorca-cloud
+      GCP_REGION: ${{ vars.PRODUCTION_GCP_REGION }}
+      DIRECTOR_ORIGIN: https://relay.onorca.dev
+      IMAGE_REPOSITORY: us-central1-docker.pkg.dev/onorca-cloud/orca-cloud/relay
+      TARGET_CELL_ID: ${{ inputs.target-cell-id }}
+      DEPLOY_MODE: ${{ inputs.mode }}
+      TARGET_IMAGE_DIGEST: ${{ inputs.target-image-digest }}
+      ROLLBACK_IMAGE_DIGEST: ${{ inputs.rollback-image-digest }}
+      TARGET_REHOME_PROTOCOL: ${{ inputs.target-rehome-protocol }}
+      ROLLBACK_REHOME_PROTOCOL: ${{ inputs.rollback-rehome-protocol }}
+      EXPECTED_SELECTOR_GENERATION: ${{ inputs.expected-selector-generation }}
+      EXPECTED_EXISTING_ONLY_CELLS: ${{ inputs.expected-existing-only-cells }}
+      EXPECTED_MIGRATION_ONLY_CELLS: ${{ inputs.expected-migration-only-cells }}
+      EXPECTED_GENERAL_CELLS: ${{ inputs.expected-general-cells }}
+      EXPECTED_REHOME_GENERATION: ${{ inputs.expected-rehome-generation }}
+      WAVE_INDEX: ${{ inputs.wave-index }}
+      MONITOR_RUN_ID: ${{ inputs.monitor-run-id }}
+      MONITOR_RUN_ATTEMPT: ${{ inputs.monitor-run-attempt }}
+      OUTPUT_DIRECTORY: ${{ github.workspace }}/relay-monitor-evidence
+    steps:
+      - name: Require exact reusable-workflow configuration
+        working-directory: .
+        env:
+          DEPLOY_WIF: ${{ vars.PRODUCTION_GCP_RELAY_DEPLOY_WORKLOAD_IDENTITY_PROVIDER }}
+          DEPLOY_SERVICE_ACCOUNT: ${{ vars.PRODUCTION_GCP_RELAY_DEPLOY_SERVICE_ACCOUNT }}
+          CAPACITY_WIF: ${{ vars.PRODUCTION_GCP_RELAY_CAPACITY_WORKLOAD_IDENTITY_PROVIDER }}
+          CAPACITY_SERVICE_ACCOUNT: ${{ vars.PRODUCTION_GCP_RELAY_CAPACITY_SERVICE_ACCOUNT }}
+          DIRECTOR_RUNTIME_SERVICE_ACCOUNT: ${{ vars.PRODUCTION_GCP_RELAY_DIRECTOR_RUNTIME_SERVICE_ACCOUNT }}
+        run: |
+          [[ "${DEPLOY_MODE}" =~ ^(verify|apply|rollback)$ ]]
+          [[ "${TARGET_IMAGE_DIGEST}" =~ ^sha256:[a-f0-9]{64}$ ]]
+          [[ "${ROLLBACK_IMAGE_DIGEST}" =~ ^sha256:[a-f0-9]{64}$ ]]
+          test "${TARGET_IMAGE_DIGEST}" != "${ROLLBACK_IMAGE_DIGEST}"
+          [[ "${TARGET_REHOME_PROTOCOL}" =~ ^[01]$ ]]
+          [[ "${ROLLBACK_REHOME_PROTOCOL}" =~ ^[01]$ ]]
+          [[ "${EXPECTED_SELECTOR_GENERATION}" =~ ^(0|[1-9][0-9]*)$ ]]
+          [[ "${EXPECTED_REHOME_GENERATION}" =~ ^(0|[1-9][0-9]*)$ ]]
+          [[ "${WAVE_INDEX}" =~ ^[0-3]$ ]]
+          if test "${DEPLOY_MODE}" = verify; then
+            EFFECTIVE_SELECTOR_GENERATION="${EXPECTED_SELECTOR_GENERATION}"
+          else
+            EFFECTIVE_SELECTOR_GENERATION="$((EXPECTED_SELECTOR_GENERATION + (2 * WAVE_INDEX)))"
+          fi
+          echo "EFFECTIVE_SELECTOR_GENERATION=${EFFECTIVE_SELECTOR_GENERATION}" >> "${GITHUB_ENV}"
+          if test "${DEPLOY_MODE}" != verify && test "${GITHUB_RUN_ATTEMPT}" != 1; then
+            echo "mutations are single-dispatch: re-runs replay aged evidence," >&2
+            echo "so recover each remaining cell with its own fresh monitor" >&2
+            echo "dry-run and canary-apply dispatch instead" >&2
+            exit 1
+          fi
+          test -n "${GCP_REGION}"
+          test -n "${DEPLOY_WIF}"
+          test -n "${DEPLOY_SERVICE_ACCOUNT}"
+          test -n "${CAPACITY_WIF}"
+          test -n "${CAPACITY_SERVICE_ACCOUNT}"
+          test -n "${DIRECTOR_RUNTIME_SERVICE_ACCOUNT}"
+
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with: { package_json_file: cloud/package.json }
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - run: pnpm install --frozen-lockfile
+
+      - uses: hashicorp/setup-terraform@v3
+        with: { terraform_wrapper: false }
+
+      - name: Require fresh aggregate monitor evidence reference
+        if: ${{ inputs.mode != 'verify' }}
+        run: |
+          [[ "${MONITOR_RUN_ID}" =~ ^[1-9][0-9]*$ ]]
+          [[ "${MONITOR_RUN_ATTEMPT}" =~ ^[1-9][0-9]*$ ]]
+
+      - name: Download private aggregate monitor evidence
+        if: ${{ inputs.mode != 'verify' }}
+        uses: actions/download-artifact@v4
+        with:
+          name: relay-monitor-dry-run-${{ inputs.monitor-run-id }}-${{ inputs.monitor-run-attempt }}
+          path: ${{ github.workspace }}/relay-monitor-evidence
+          github-token: ${{ github.token }}
+          run-id: ${{ inputs.monitor-run-id }}
+
+      - name: Verify monitor evidence provenance
+        if: ${{ inputs.mode != 'verify' }}
+        run: |
+          node dev/scripts/relay-monitor-evidence.mjs verify-authority \
+            --directory "${OUTPUT_DIRECTORY}" \
+            --incident-id "relay-${MONITOR_RUN_ID}-dry-run" \
+            --run-id "${MONITOR_RUN_ID}" \
+            --run-attempt "${MONITOR_RUN_ATTEMPT}" \
+            --commit-sha "${GITHUB_SHA}" \
+            --mode dry-run \
+            --required-migration-policy strict \
+            --wave-index "${WAVE_INDEX}"
+
+      - name: Download this wave's single-use safety authority
+        if: ${{ inputs.mode != 'verify' }}
+        uses: actions/download-artifact@v4
+        with:
+          name: relay-same-cap-monitor-consumed-${{ inputs.monitor-run-id }}-${{ inputs.monitor-run-attempt }}
+          path: ${{ runner.temp }}/relay-same-cap-monitor-authority
+          github-token: ${{ github.token }}
+          run-id: ${{ github.run_id }}
+
+      - name: Require safety evidence consumed by this workflow
+        if: ${{ inputs.mode != 'verify' }}
+        run: |
+          # Mutations are single-dispatch: a fresh dispatch cannot resume a
+          # partial batch (the canary authority binds the batch-entry selector
+          # generation), so each remaining cell is recovered by its own fresh
+          # monitor dry-run and canary-apply dispatch, never by re-running
+          # aged evidence.
+          test "${GITHUB_RUN_ATTEMPT}" = 1
+          MARKER_NAME="relay-same-cap-monitor-consumed-${MONITOR_RUN_ID}-${MONITOR_RUN_ATTEMPT}"
+          test "$(< "${RUNNER_TEMP}/relay-same-cap-monitor-authority/${MARKER_NAME}")" = \
+            "${GITHUB_RUN_ID}"
+
+      - id: deploy-auth
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ vars.PRODUCTION_GCP_RELAY_DEPLOY_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ vars.PRODUCTION_GCP_RELAY_DEPLOY_SERVICE_ACCOUNT }}
+          token_format: id_token
+          id_token_audience: https://relay.onorca.dev/v1/admin/drain
+          id_token_include_email: true
+
+      - uses: google-github-actions/setup-gcloud@v2
+
+      - uses: ./.github/actions/cloud-sql-rollout-lease
+        with:
+          bucket: onorca-cloud-terraform-state
+          object: terraform/state/cloud-sql-rollout/production.lock
+          release: 'false'
+
+      - name: Recheck aggregate SQL, pool, reconnect, migration, and selector safety
+        if: ${{ inputs.mode != 'verify' }}
+        env:
+          ORCA_RELAY_ADMIN_ID_TOKEN: ${{ steps.deploy-auth.outputs.id_token }}
+        run: |
+          RETRY_ARGS=()
+          if test "${WAVE_INDEX}" != 0; then RETRY_ARGS=(--retry-freshness); fi
+          pnpm incident:relay-preflight -- \
+            --state-file "${OUTPUT_DIRECTORY}/relay-${MONITOR_RUN_ID}-dry-run.state.json" \
+            --wave-index "${WAVE_INDEX}" "${RETRY_ARGS[@]}"
+
+      - name: Require durable rehome disabled and exact selector
+        env:
+          ORCA_RELAY_ADMIN_ID_TOKEN: ${{ steps.deploy-auth.outputs.id_token }}
+        run: |
+          node dev/scripts/operate-relay-regional-rehome.mjs \
+            --mode inspect \
+            --director-origin "${DIRECTOR_ORIGIN}" \
+            --expected-selector-generation "${EFFECTIVE_SELECTOR_GENERATION}" \
+            --expected-existing-only-cells "${EXPECTED_EXISTING_ONLY_CELLS}" \
+            --expected-migration-only-cells "${EXPECTED_MIGRATION_ONLY_CELLS}" \
+            --expected-general-cells "${EXPECTED_GENERAL_CELLS}" \
+            --expected-control-generation "${EXPECTED_REHOME_GENERATION}" \
+            | jq -e '.control.enabled == false' >/dev/null
+
+      - name: Initialize the exact production backend
+        run: node dev/scripts/infra.mjs init --env production
+
+      - name: Resolve immutable same-cap cell configuration
+        shell: bash
+        run: |
+          TARGET_HOSTNAME="${TARGET_CELL_ID#production-gce-}"
+          case "${TARGET_HOSTNAME}" in
+            c7|c8|c9|c10|c13|c14|c15|c16|c19|c20|c21|c22|c23|c24|c25|c26)
+              EXPECTED_HARD_CAP=1000
+              EXPECTED_REGION=us-central1
+              ;;
+            c27|c28|c29)
+              EXPECTED_HARD_CAP=3000
+              EXPECTED_REGION=asia-east2
+              ;;
+            *) exit 1 ;;
+          esac
+          EXPECTED_UNOBSERVED_BOUND=60
+          CELL_ORIGIN="https://${TARGET_HOSTNAME}.relay.onorca.dev"
+          CELLS_JSON="$(terraform -chdir=infra/terraform console \
+            -var-file=environments/production.tfvars \
+            <<< 'jsonencode(var.relay_gce_cells)' | jq -er '.')"
+          SOURCE_CELLS="$(terraform -chdir=infra/terraform console \
+            -var-file=environments/production.tfvars \
+            <<< 'jsonencode(var.relay_region_rehome_source_cell_ids)' | jq -er '.')"
+          if test "${EXPECTED_REGION}" = us-central1; then
+            jq -e --arg cell "${TARGET_CELL_ID}" 'index($cell) != null' \
+              <<< "${SOURCE_CELLS}" >/dev/null
+          fi
+          CURRENT_SHAPE="$(jq -cer --arg cell "${TARGET_CELL_ID}" '.[$cell]' <<< "${CELLS_JSON}")"
+          test "$(jq -r '.connection_hard_cap' <<< "${CURRENT_SHAPE}")" = "${EXPECTED_HARD_CAP}"
+          test "$(jq -r '.connection_unobserved_bound' <<< "${CURRENT_SHAPE}")" = \
+            "${EXPECTED_UNOBSERVED_BOUND}"
+          TARGET_ZONE="$(jq -r '.zone' <<< "${CURRENT_SHAPE}")"
+          MIG_NAME="orca-cloud-relay-gce-${TARGET_HOSTNAME}"
+          if test "${DEPLOY_MODE}" = rollback; then
+            DESIRED_IMAGE_DIGEST="${ROLLBACK_IMAGE_DIGEST}"
+            CURRENT_IMAGE_DIGEST="${TARGET_IMAGE_DIGEST}"
+            DESIRED_REHOME_PROTOCOL="${ROLLBACK_REHOME_PROTOCOL}"
+            CURRENT_REHOME_PROTOCOL="${TARGET_REHOME_PROTOCOL}"
+          else
+            DESIRED_IMAGE_DIGEST="${TARGET_IMAGE_DIGEST}"
+            CURRENT_IMAGE_DIGEST="${ROLLBACK_IMAGE_DIGEST}"
+            DESIRED_REHOME_PROTOCOL="${TARGET_REHOME_PROTOCOL}"
+            CURRENT_REHOME_PROTOCOL="${ROLLBACK_REHOME_PROTOCOL}"
+          fi
+          DESIRED_IMAGE="${IMAGE_REPOSITORY}@${DESIRED_IMAGE_DIGEST}"
+          OVERRIDE_CELLS_JSON="$(jq -ce --arg cell "${TARGET_CELL_ID}" \
+            --arg image "${DESIRED_IMAGE}" '.[$cell].image = $image' <<< "${CELLS_JSON}")"
+          jq -n --argjson cells "${OVERRIDE_CELLS_JSON}" \
+            '{relay_gce_cells:$cells}' > "${RUNNER_TEMP}/relay-same-cap.tfvars.json"
+          SERVED_DIGEST="$(gcloud artifacts docker images describe "${DESIRED_IMAGE}" \
+            --project "${GCP_PROJECT_ID}" --format='value(image_summary.digest)')"
+          test "${SERVED_DIGEST}" = "${DESIRED_IMAGE_DIGEST}"
+          {
+            echo "TARGET_HOSTNAME=${TARGET_HOSTNAME}"
+            echo "CELL_ORIGIN=${CELL_ORIGIN}"
+            echo "TARGET_ZONE=${TARGET_ZONE}"
+            echo "MIG_NAME=${MIG_NAME}"
+            echo "EXPECTED_HARD_CAP=${EXPECTED_HARD_CAP}"
+            echo "EXPECTED_UNOBSERVED_BOUND=${EXPECTED_UNOBSERVED_BOUND}"
+            echo "EXPECTED_REGION=${EXPECTED_REGION}"
+            echo "DESIRED_IMAGE=${DESIRED_IMAGE}"
+            echo "DESIRED_IMAGE_DIGEST=${DESIRED_IMAGE_DIGEST}"
+            echo "CURRENT_IMAGE_DIGEST=${CURRENT_IMAGE_DIGEST}"
+            echo "DESIRED_REHOME_PROTOCOL=${DESIRED_REHOME_PROTOCOL}"
+            echo "CURRENT_REHOME_PROTOCOL=${CURRENT_REHOME_PROTOCOL}"
+          } >> "${GITHUB_ENV}"
+
+      - name: Verify exact current generation, digest, cap, and rollback point
+        env:
+          ORCA_RELAY_ADMIN_ID_TOKEN: ${{ steps.deploy-auth.outputs.id_token }}
+        run: |
+          CURRENT_RUNTIME="$(curl --fail-with-body --max-time 30 \
+            --request POST "${CELL_ORIGIN}/v1/admin/runtime-status" \
+            --header "Authorization: Bearer ${ORCA_RELAY_ADMIN_ID_TOKEN}" \
+            --header 'Content-Type: application/json' --data '{"v":1}')"
+          # A rollback that failed between template apply and admission restore
+          # leaves the cell already on the rollback image; resume from that
+          # state instead of demanding the pre-rollback predecessor.
+          LIVE_IMAGE_DIGEST="$(jq -r '.imageDigest' <<< "${CURRENT_RUNTIME}")"
+          if test "${DEPLOY_MODE}" = rollback \
+            && test "${LIVE_IMAGE_DIGEST}" = "${DESIRED_IMAGE_DIGEST}"; then
+            ROLLBACK_RESUME=true
+            PREDECESSOR_IMAGE_DIGEST="${DESIRED_IMAGE_DIGEST}"
+            PREDECESSOR_REHOME_PROTOCOL="${DESIRED_REHOME_PROTOCOL}"
+          else
+            ROLLBACK_RESUME=false
+            PREDECESSOR_IMAGE_DIGEST="${CURRENT_IMAGE_DIGEST}"
+            PREDECESSOR_REHOME_PROTOCOL="${CURRENT_REHOME_PROTOCOL}"
+          fi
+          RESTORED_MIGRATION_CELLS="$(jq -rn \
+            --arg value "${EXPECTED_MIGRATION_ONLY_CELLS/none/}" \
+            --arg target "${TARGET_CELL_ID}" \
+            '$value | split(",") | map(select(length > 0 and . != $target)) | unique | join(",")')"
+          RESTORED_GENERAL_CELLS="$(jq -rn \
+            --arg value "${EXPECTED_GENERAL_CELLS/none/}" \
+            --arg target "${TARGET_CELL_ID}" \
+            '$value | split(",") | map(select(length > 0)) + [$target] | unique | join(",")')"
+          test -n "${RESTORED_MIGRATION_CELLS}" || RESTORED_MIGRATION_CELLS=none
+          test -n "${RESTORED_GENERAL_CELLS}" || RESTORED_GENERAL_CELLS=none
+          ISOLATED_MIGRATION_CELLS="$(jq -rn \
+            --arg value "${EXPECTED_MIGRATION_ONLY_CELLS/none/}" \
+            --arg target "${TARGET_CELL_ID}" \
+            '$value | split(",") | map(select(length > 0)) + [$target] | unique | join(",")')"
+          ISOLATED_GENERAL_CELLS="$(jq -rn \
+            --arg value "${EXPECTED_GENERAL_CELLS/none/}" \
+            --arg target "${TARGET_CELL_ID}" \
+            '$value | split(",") | map(select(length > 0 and . != $target)) | unique | join(",")')"
+          test -n "${ISOLATED_MIGRATION_CELLS}" || ISOLATED_MIGRATION_CELLS=none
+          test -n "${ISOLATED_GENERAL_CELLS}" || ISOLATED_GENERAL_CELLS=none
+          {
+            echo "ROLLBACK_RESUME=${ROLLBACK_RESUME}"
+            # The failsafe consumes these; deriving them here keeps them
+            # defined for a failure in any later step.
+            echo "ISOLATED_MIGRATION_CELLS=${ISOLATED_MIGRATION_CELLS}"
+            echo "ISOLATED_GENERAL_CELLS=${ISOLATED_GENERAL_CELLS}"
+            # No restart happens on resume, so isolate below is skipped and
+            # cannot advance the selector generation.
+            echo "SELECTOR_GENERATION_AFTER_ISOLATE=${EFFECTIVE_SELECTOR_GENERATION}"
+            # A failed-canary rollback enters with the target migration-only,
+            # so the restore inspect cannot reuse the entry membership inputs.
+            echo "RESTORED_MIGRATION_CELLS=${RESTORED_MIGRATION_CELLS}"
+            echo "RESTORED_GENERAL_CELLS=${RESTORED_GENERAL_CELLS}"
+          } >> "${GITHUB_ENV}"
+          if ! jq -e --arg cell "${TARGET_CELL_ID}" --arg origin "${CELL_ORIGIN}" \
+            --arg digest "${PREDECESSOR_IMAGE_DIGEST}" \
+            --arg region "${EXPECTED_REGION}" \
+            --argjson hardCap "${EXPECTED_HARD_CAP}" \
+            --argjson unobservedBound "${EXPECTED_UNOBSERVED_BOUND}" \
+            --argjson protocol "${PREDECESSOR_REHOME_PROTOCOL}" \
+            --argjson drainingOk "$(test "${DEPLOY_MODE}" = rollback \
+              && test "${ROLLBACK_RESUME}" != true && echo true || echo false)" \
+            '.role == "cell" and .cellId == $cell and .cellUrl == $origin and
+             (.region == $region or
+              ($region == "us-central1" and $protocol == 0 and .region == null)) and
+             .imageDigest == $digest and
+             .connectionCapacity.hardCap == $hardCap and
+             .connectionCapacity.unobservedBound == $unobservedBound and
+             (.draining == false or $drainingOk) and
+             (.regionalRehomeProtocol // 0) == $protocol' <<< "${CURRENT_RUNTIME}" >/dev/null
+          then
+            jq -r --arg cell "${TARGET_CELL_ID}" --arg origin "${CELL_ORIGIN}" \
+              --arg digest "${PREDECESSOR_IMAGE_DIGEST}" \
+              --arg region "${EXPECTED_REGION}" \
+              --argjson hardCap "${EXPECTED_HARD_CAP}" \
+              --argjson unobservedBound "${EXPECTED_UNOBSERVED_BOUND}" \
+              --argjson protocol "${PREDECESSOR_REHOME_PROTOCOL}" \
+              --argjson drainingOk "$(test "${DEPLOY_MODE}" = rollback \
+              && test "${ROLLBACK_RESUME}" != true && echo true || echo false)" \
+              '[
+                if .role != "cell" then "role" else empty end,
+                if .cellId != $cell then "cellId" else empty end,
+                if .cellUrl != $origin then "cellUrl" else empty end,
+                if (.region != $region and
+                    ($region != "us-central1" or $protocol != 0 or .region != null))
+                  then "region" else empty end,
+                if .imageDigest != $digest then "imageDigest" else empty end,
+                if .connectionCapacity.hardCap != $hardCap then "hardCap" else empty end,
+                if .connectionCapacity.unobservedBound != $unobservedBound then "unobservedBound" else empty end,
+                if (.draining != false and ($drainingOk | not)) then "draining" else empty end,
+                if (.regionalRehomeProtocol // 0) != $protocol then "regionalRehomeProtocol" else empty end
+              ] | "runtime predecessor mismatch fields=" + join(",")' \
+              <<< "${CURRENT_RUNTIME}" >&2
+            exit 1
+          fi
+          # The exact legacy digest binds omitted pre-region fields to US and protocol 0.
+          jq -r '[
+            if .region == null then "region" else empty end,
+            if .regionalRehomeProtocol == null then "regionalRehomeProtocol" else empty end
+          ] | if length > 0 then "runtime predecessor normalized legacy fields=" + join(",") else empty end' \
+            <<< "${CURRENT_RUNTIME}"
+          CURRENT_DIRECTOR_STATUS="$(curl --fail-with-body --max-time 30 \
+            --request POST "${DIRECTOR_ORIGIN}/v1/admin/cell-status" \
+            --header "Authorization: Bearer ${ORCA_RELAY_ADMIN_ID_TOKEN}" \
+            --header 'Content-Type: application/json' \
+            --data "$(jq -cn --arg cell "${TARGET_CELL_ID}" '{v:1,cellId:$cell}')")"
+          SOURCE_INCARNATION="$(jq -er '.status.runtime.cellIncarnation' \
+            <<< "${CURRENT_DIRECTOR_STATUS}")"
+          if test "${ROLLBACK_RESUME}" = true && ! jq -e \
+            '.status.admissionState == "migration-only"' \
+            <<< "${CURRENT_DIRECTOR_STATUS}" >/dev/null; then
+            echo 'resume requires the isolated migration-only cell a failed rollback leaves' >&2
+            exit 1
+          fi
+          [[ "${SOURCE_INCARNATION}" =~ ^[0-9a-f-]{36}$ ]]
+          echo "SOURCE_INCARNATION=${SOURCE_INCARNATION}" >> "${GITHUB_ENV}"
+          # Rollback is the documented recovery from a failed canary, which
+          # leaves the cell migration-only (and possibly still marked
+          # draining); apply and verify still require a pristine general cell.
+          if test "${DEPLOY_MODE}" = rollback; then
+            PRECHECK_ADMISSION=general-or-migration-only
+            PRECHECK_DRAINING=either
+          else
+            PRECHECK_ADMISSION=general
+            PRECHECK_DRAINING=forbidden
+          fi
+          node dev/scripts/verify-relay-capacity-transition.mjs \
+            --director-origin "${DIRECTOR_ORIGIN}" --cell-origin "${CELL_ORIGIN}" \
+            --cell-id "${TARGET_CELL_ID}" --hard-cap "${EXPECTED_HARD_CAP}" \
+            --unobserved-bound "${EXPECTED_UNOBSERVED_BOUND}" \
+            --heartbeat fresh --admission "${PRECHECK_ADMISSION}" \
+            --draining "${PRECHECK_DRAINING}" --activity allowed \
+            --expected-image-digests "${PREDECESSOR_IMAGE_DIGEST}"
+
+      - name: Finish read-only verification
+        if: ${{ inputs.mode == 'verify' }}
+        run: echo 'Exact same-cap rollback point verified.'
+
+      - name: Reversibly isolate and drain only the selected cell
+        if: ${{ inputs.mode != 'verify' && env.ROLLBACK_RESUME != 'true' }}
+        env:
+          ORCA_RELAY_ADMIN_ID_TOKEN: ${{ steps.deploy-auth.outputs.id_token }}
+        run: |
+          echo "MUTATION_STARTED=true" >> "${GITHUB_ENV}"
+          # A cell isolated by a failed canary is already migration-only, so
+          # isolate is a no-op there that does not advance the selector; the
+          # result's generation is authoritative either way.
+          ISOLATE_RESULT="$(node dev/scripts/prepare-relay-production-capacity-canary.mjs \
+            --director-origin "${DIRECTOR_ORIGIN}" --cell-origin "${CELL_ORIGIN}" \
+            --cell-id "${TARGET_CELL_ID}" --mode isolate)"
+          echo "${ISOLATE_RESULT}"
+          ISOLATE_GENERATION="$(jq -er '.generation' <<< "${ISOLATE_RESULT}")"
+          echo "SELECTOR_GENERATION_AFTER_ISOLATE=${ISOLATE_GENERATION}" >> "${GITHUB_ENV}"
+          node dev/scripts/prepare-relay-production-capacity-canary.mjs \
+            --director-origin "${DIRECTOR_ORIGIN}" --cell-origin "${CELL_ORIGIN}" \
+            --cell-id "${TARGET_CELL_ID}" --mode drain
+          node dev/scripts/verify-relay-capacity-transition.mjs \
+            --director-origin "${DIRECTOR_ORIGIN}" --cell-origin "${CELL_ORIGIN}" \
+            --cell-id "${TARGET_CELL_ID}" --hard-cap "${EXPECTED_HARD_CAP}" \
+            --unobserved-bound "${EXPECTED_UNOBSERVED_BOUND}" \
+            --heartbeat either --admission migration-only --draining required \
+            --activity restart-safe --expected-image-digests "${CURRENT_IMAGE_DIGEST}" \
+            --timeout-ms 900000
+
+      - id: capacity-auth
+        if: ${{ inputs.mode != 'verify' }}
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ vars.PRODUCTION_GCP_RELAY_CAPACITY_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ vars.PRODUCTION_GCP_RELAY_CAPACITY_SERVICE_ACCOUNT }}
+
+      - name: Require converged Terraform state and a stable MIG on resume
+        if: ${{ inputs.mode != 'verify' && env.ROLLBACK_RESUME == 'true' }}
+        shell: bash
+        env:
+          DIRECTOR_RUNTIME_SERVICE_ACCOUNT: ${{ vars.PRODUCTION_GCP_RELAY_DIRECTOR_RUNTIME_SERVICE_ACCOUNT }}
+        run: |
+          # Zero resource changes prove the prior run's apply completed and no
+          # restart will follow, keeping the incarnation check honest. Root
+          # outputs may lag a targeted apply, so judge resource_changes only.
+          terraform -chdir=infra/terraform plan \
+            -var-file=environments/production.tfvars \
+            -var-file="${RUNNER_TEMP}/relay-same-cap.tfvars.json" \
+            "-target=google_compute_instance_template.relay_gce_cell[\"${TARGET_CELL_ID}\"]" \
+            "-target=google_compute_instance_group_manager.relay_gce_cell[\"${TARGET_CELL_ID}\"]" \
+            -out="${RUNNER_TEMP}/relay-same-cap-resume.tfplan"
+          if ! terraform -chdir=infra/terraform show -json \
+            "${RUNNER_TEMP}/relay-same-cap-resume.tfplan" \
+            | jq -e '[.resource_changes[]?
+                | select(.change.actions | any(. != "no-op" and . != "read"))]
+                | length == 0' >/dev/null
+          then
+            # An apply that failed before its template apply also resumes here
+            # (the cell still serves the rollback image), and repo drift since
+            # the cell's last roll (for example newly added rehome trust
+            # config) then legitimately replaces the template. Nothing is
+            # applied on resume either way, so accept exactly the drift the
+            # reviewed validator would let a real apply ship for the image the
+            # cell already serves: the template leaves and re-enters the
+            # rollback image, as exactly the template-and-MIG change pair.
+            terraform -chdir=infra/terraform show -json \
+              "${RUNNER_TEMP}/relay-same-cap-resume.tfplan" \
+              | jq -r '"resume found unconverged resources: " +
+                  ([.resource_changes[]?
+                    | select(.change.actions | any(. != "no-op" and . != "read"))
+                    | .address] | join(","))'
+            echo 'requiring reviewed rollback-image drift'
+            terraform -chdir=infra/terraform show -json \
+              "${RUNNER_TEMP}/relay-same-cap-resume.tfplan" \
+              | node dev/scripts/validate-relay-capacity-plan.mjs \
+                --mode same-cap-cell --cell-id "${TARGET_CELL_ID}" \
+                --hard-cap "${EXPECTED_HARD_CAP}" \
+                --unobserved-bound "${EXPECTED_UNOBSERVED_BOUND}" \
+                --image "${DESIRED_IMAGE}" \
+                --rollback-image "${DESIRED_IMAGE}" \
+                --rehome-director-service-account "${DIRECTOR_RUNTIME_SERVICE_ACCOUNT}" \
+                --rehome-audience https://relay.onorca.dev/v1/admin/host-drain \
+              | jq -e '.changes == 2' >/dev/null
+          fi
+          gcloud compute instance-groups managed wait-until "${MIG_NAME}" --stable \
+            --project "${GCP_PROJECT_ID}" --zone "${TARGET_ZONE}" --timeout 900
+
+      - name: Apply only the selected same-cap template and MIG
+        if: ${{ inputs.mode != 'verify' && env.ROLLBACK_RESUME != 'true' }}
+        shell: bash
+        env:
+          CAPACITY_SERVICE_ACCOUNT: ${{ vars.PRODUCTION_GCP_RELAY_CAPACITY_SERVICE_ACCOUNT }}
+          DIRECTOR_RUNTIME_SERVICE_ACCOUNT: ${{ vars.PRODUCTION_GCP_RELAY_DIRECTOR_RUNTIME_SERVICE_ACCOUNT }}
+        run: |
+          terraform -chdir=infra/terraform plan \
+            -var-file=environments/production.tfvars \
+            -var-file="${RUNNER_TEMP}/relay-same-cap.tfvars.json" \
+            "-target=google_compute_instance_template.relay_gce_cell[\"${TARGET_CELL_ID}\"]" \
+            "-target=google_compute_instance_group_manager.relay_gce_cell[\"${TARGET_CELL_ID}\"]" \
+            -out="${RUNNER_TEMP}/relay-same-cap.tfplan"
+          terraform -chdir=infra/terraform show -json "${RUNNER_TEMP}/relay-same-cap.tfplan" \
+            | node dev/scripts/validate-relay-capacity-plan.mjs \
+              --mode same-cap-cell --cell-id "${TARGET_CELL_ID}" \
+              --hard-cap "${EXPECTED_HARD_CAP}" \
+              --unobserved-bound "${EXPECTED_UNOBSERVED_BOUND}" --image "${DESIRED_IMAGE}" \
+              --rollback-image "${IMAGE_REPOSITORY}@${CURRENT_IMAGE_DIGEST}" \
+              --rehome-director-service-account "${DIRECTOR_RUNTIME_SERVICE_ACCOUNT}" \
+              --rehome-audience https://relay.onorca.dev/v1/admin/host-drain
+          terraform -chdir=infra/terraform apply -auto-approve \
+            "${RUNNER_TEMP}/relay-same-cap.tfplan"
+          gcloud compute instance-groups managed wait-until "${MIG_NAME}" --stable \
+            --project "${GCP_PROJECT_ID}" --zone "${TARGET_ZONE}" --timeout 900
+
+      - id: post-auth
+        if: ${{ inputs.mode != 'verify' }}
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ vars.PRODUCTION_GCP_RELAY_DEPLOY_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ vars.PRODUCTION_GCP_RELAY_DEPLOY_SERVICE_ACCOUNT }}
+          token_format: id_token
+          id_token_audience: https://relay.onorca.dev/v1/admin/drain
+          id_token_include_email: true
+
+      - name: Verify new incarnation, exact image, protocol, and durable safety
+        if: ${{ inputs.mode != 'verify' }}
+        env:
+          ORCA_RELAY_ADMIN_ID_TOKEN: ${{ steps.post-auth.outputs.id_token }}
+        run: |
+          node dev/scripts/verify-relay-capacity-transition.mjs \
+            --director-origin "${DIRECTOR_ORIGIN}" --cell-origin "${CELL_ORIGIN}" \
+            --cell-id "${TARGET_CELL_ID}" --hard-cap "${EXPECTED_HARD_CAP}" \
+            --unobserved-bound "${EXPECTED_UNOBSERVED_BOUND}" \
+            --heartbeat fresh --admission migration-only --draining forbidden \
+            --activity allowed --expected-image-digests "${DESIRED_IMAGE_DIGEST}" \
+            --regional-rehome-protocol "${DESIRED_REHOME_PROTOCOL}" --timeout-ms 900000
+          TARGET_RUNTIME="$(curl --fail-with-body --max-time 30 \
+            --request POST "${CELL_ORIGIN}/v1/admin/runtime-status" \
+            --header "Authorization: Bearer ${ORCA_RELAY_ADMIN_ID_TOKEN}" \
+            --header 'Content-Type: application/json' --data '{"v":1}')"
+          jq -e --arg digest "${DESIRED_IMAGE_DIGEST}" \
+            --argjson protocol "${DESIRED_REHOME_PROTOCOL}" \
+            '.imageDigest == $digest and (.regionalRehomeProtocol // 0) == $protocol' \
+            <<< "${TARGET_RUNTIME}" >/dev/null
+          TARGET_DIRECTOR_STATUS="$(curl --fail-with-body --max-time 30 \
+            --request POST "${DIRECTOR_ORIGIN}/v1/admin/cell-status" \
+            --header "Authorization: Bearer ${ORCA_RELAY_ADMIN_ID_TOKEN}" \
+            --header 'Content-Type: application/json' \
+            --data "$(jq -cn --arg cell "${TARGET_CELL_ID}" '{v:1,cellId:$cell}')")"
+          TARGET_INCARNATION="$(jq -er '.status.runtime.cellIncarnation' \
+            <<< "${TARGET_DIRECTOR_STATUS}")"
+          if test "${ROLLBACK_RESUME}" = true; then
+            echo "MUTATION_STARTED=true" >> "${GITHUB_ENV}"
+            # No restart happened; the incarnation legitimately stays put.
+            test "${TARGET_INCARNATION}" = "${SOURCE_INCARNATION}"
+          else
+            test "${TARGET_INCARNATION}" != "${SOURCE_INCARNATION}"
+          fi
+          echo "TARGET_INCARNATION=${TARGET_INCARNATION}" >> "${GITHUB_ENV}"
+          node dev/scripts/operate-relay-regional-rehome.mjs \
+            --mode inspect --director-origin "${DIRECTOR_ORIGIN}" \
+            --expected-selector-generation "${SELECTOR_GENERATION_AFTER_ISOLATE}" \
+            --expected-existing-only-cells "${EXPECTED_EXISTING_ONLY_CELLS}" \
+            --expected-migration-only-cells "${ISOLATED_MIGRATION_CELLS}" \
+            --expected-general-cells "${ISOLATED_GENERAL_CELLS}" \
+            --expected-control-generation "${EXPECTED_REHOME_GENERATION}" \
+            | jq -e '.control.enabled == false' >/dev/null
+
+      - name: Prove exact per-host trust and idempotent no-neighbor behavior
+        if: ${{ inputs.mode != 'verify' && ((inputs.mode == 'rollback' && inputs.rollback-rehome-protocol == '1') || (inputs.mode != 'rollback' && inputs.target-rehome-protocol == '1')) }}
+        env:
+          ORCA_RELAY_ADMIN_ID_TOKEN: ${{ steps.post-auth.outputs.id_token }}
+        run: |
+          node dev/scripts/probe-relay-rehome-trust.mjs \
+            --director-origin "${DIRECTOR_ORIGIN}" --cell-id "${TARGET_CELL_ID}" \
+            --cell-incarnation "${TARGET_INCARNATION}"
+
+      - name: Restore only the verified selected cell to general admission
+        if: ${{ inputs.mode != 'verify' }}
+        env:
+          ORCA_RELAY_ADMIN_ID_TOKEN: ${{ steps.post-auth.outputs.id_token }}
+        run: |
+          echo "MUTATION_STARTED=true" >> "${GITHUB_ENV}"
+          ACTIVATE_RESULT="$(node dev/scripts/prepare-relay-production-capacity-canary.mjs \
+            --director-origin "${DIRECTOR_ORIGIN}" --cell-origin "${CELL_ORIGIN}" \
+            --cell-id "${TARGET_CELL_ID}" --mode activate)"
+          echo "${ACTIVATE_RESULT}"
+          SELECTOR_GENERATION_AFTER_ACTIVATE="$(jq -er '.generation' \
+            <<< "${ACTIVATE_RESULT}")"
+          node dev/scripts/verify-relay-capacity-transition.mjs \
+            --director-origin "${DIRECTOR_ORIGIN}" --cell-origin "${CELL_ORIGIN}" \
+            --cell-id "${TARGET_CELL_ID}" --hard-cap "${EXPECTED_HARD_CAP}" \
+            --unobserved-bound "${EXPECTED_UNOBSERVED_BOUND}" \
+            --heartbeat fresh --admission general --draining forbidden --activity allowed \
+            --expected-image-digests "${DESIRED_IMAGE_DIGEST}" \
+            --regional-rehome-protocol "${DESIRED_REHOME_PROTOCOL}"
+          node dev/scripts/operate-relay-regional-rehome.mjs \
+            --mode inspect --director-origin "${DIRECTOR_ORIGIN}" \
+            --expected-selector-generation "${SELECTOR_GENERATION_AFTER_ACTIVATE}" \
+            --expected-existing-only-cells "${EXPECTED_EXISTING_ONLY_CELLS}" \
+            --expected-migration-only-cells "${RESTORED_MIGRATION_CELLS}" \
+            --expected-general-cells "${RESTORED_GENERAL_CELLS}" \
+            --expected-control-generation "${EXPECTED_REHOME_GENERATION}" \
+            | jq -e '.control.enabled == false' >/dev/null
+
+      - id: cleanup-auth
+        if: ${{ failure() && inputs.mode != 'verify' }}
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ vars.PRODUCTION_GCP_RELAY_DEPLOY_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ vars.PRODUCTION_GCP_RELAY_DEPLOY_SERVICE_ACCOUNT }}
+          token_format: id_token
+          id_token_audience: https://relay.onorca.dev/v1/admin/drain
+          id_token_include_email: true
+
+      - name: Keep a failed cell isolated and rehome disabled
+        if: ${{ failure() && inputs.mode != 'verify' }}
+        continue-on-error: true
+        env:
+          ORCA_RELAY_ADMIN_ID_TOKEN: ${{ steps.cleanup-auth.outputs.id_token }}
+        run: |
+          test "${MUTATION_STARTED:-false}" = true || exit 0
+          ISOLATE_RESULT="$(node dev/scripts/prepare-relay-production-capacity-canary.mjs \
+            --director-origin "${DIRECTOR_ORIGIN}" --cell-origin "${CELL_ORIGIN}" \
+            --cell-id "${TARGET_CELL_ID}" --mode isolate)"
+          echo "${ISOLATE_RESULT}"
+          # The isolate result carries the authoritative post-isolate generation;
+          # fixed offsets are wrong whenever an earlier isolate was a no-op.
+          FAILSAFE_GENERATION="$(jq -er '.generation' <<< "${ISOLATE_RESULT}")"
+          node dev/scripts/operate-relay-regional-rehome.mjs \
+            --mode inspect --director-origin "${DIRECTOR_ORIGIN}" \
+            --expected-selector-generation "${FAILSAFE_GENERATION}" \
+            --expected-existing-only-cells "${EXPECTED_EXISTING_ONLY_CELLS}" \
+            --expected-migration-only-cells "${ISOLATED_MIGRATION_CELLS}" \
+            --expected-general-cells "${ISOLATED_GENERAL_CELLS}" \
+            --expected-control-generation "${EXPECTED_REHOME_GENERATION}"

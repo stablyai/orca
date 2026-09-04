@@ -27,7 +27,7 @@ afterEach(() => {
   }
 })
 
-describe('SSH relay node-pty pty-master close-on-exec patch', () => {
+describe('SSH relay node-pty pty fd-leak patch', () => {
   it('adds the forkpty close-on-exec call and reverts to the published bytes', () => {
     const fixture = writeRelayFixture()
 
@@ -42,6 +42,27 @@ describe('SSH relay node-pty pty-master close-on-exec patch', () => {
 
     expect(revertNodePtyMasterCloexecSource(fixture.root)).toBe(true)
     expect(readFileSync(fixture.sourcePath, 'utf8')).toBe(STOCK_SOURCE)
+  })
+
+  it('rewrites the Apple branch, which is the only one macOS executes', () => {
+    const fixture = writeRelayFixture()
+    patchNodePtyMasterCloexecSource(fixture.root)
+    const patched = readFileSync(fixture.sourcePath, 'utf8')
+
+    // Stock's cleanup never runs: the first posix_openpt() already returns >= 2, so the loop
+    // breaks with count == 0 -- and where it does run it closes low_fds[count], never low_fds[0].
+    expect(STOCK_SOURCE).toContain('for (; count > 0; count--) {')
+    expect(patched).not.toContain('for (; count > 0; count--) {')
+    expect(patched).toContain('int low_fds[3] = {-1, -1, -1};')
+    expect(patched).toContain('for (size_t i = 0; i <= count && i < 3; i++) {')
+
+    // `default:` sits in the `#else` arm of PtyFork's `#if defined(__APPLE__)`, so marking only
+    // the forkpty call site left the master macOS actually opens unmarked.
+    expect(patched).toContain(
+      '  if (pty_cloexec(master) == -1) {\n' +
+        '    throw Napi::Error::New(napiEnv, "Could not set master fd to close-on-exec.");\n' +
+        '  }\n#else\n'
+    )
   })
 
   it('refuses a different node-pty version or an unrecognized source', () => {
@@ -139,19 +160,81 @@ describe('SSH relay node-pty pty-master close-on-exec patch', () => {
     expect(readFileSync(fixture.sourcePath, 'utf8')).toBe(STOCK_SOURCE)
   })
 
-  it('never compiles on a platform that does not leak', () => {
-    for (const platform of ['darwin', 'win32']) {
-      const fixture = writeRelayFixture()
-      const calls = []
-      const status = applyNodePtyMasterCloexecPatch(fixture.root, {
-        platform,
-        rebuild: () => calls.push('rebuild'),
-        verify: () => 'isolated'
-      })
-      expect(status).toBe('skipped:not-linux')
-      expect(calls).toEqual([])
-      expect(readFileSync(fixture.sourcePath, 'utf8')).toBe(STOCK_SOURCE)
-    }
+  it('never compiles on a platform with no pty fds to leak', () => {
+    const fixture = writeRelayFixture()
+    const calls = []
+    const status = applyNodePtyMasterCloexecPatch(fixture.root, {
+      platform: 'win32',
+      rebuild: () => calls.push('rebuild'),
+      verify: () => 'isolated'
+    })
+    expect(status).toBe('skipped:unsupported-platform')
+    expect(calls).toEqual([])
+    expect(readFileSync(fixture.sourcePath, 'utf8')).toBe(STOCK_SOURCE)
+  })
+
+  it('compiles a macOS install out from under its shipped prebuild', () => {
+    // macOS has no build/ at all: node-pty runs `prebuilds/darwin-<arch>`, built from the leaky
+    // source. Moving `prebuilds` aside is what both arms the rollback and makes node-pty's own
+    // install script fall through from "prebuild found" to node-gyp.
+    const fixture = writeRelayFixture({ platform: 'darwin' })
+    const prebuildsPresentDuringRebuild = []
+
+    const status = applyNodePtyMasterCloexecPatch(fixture.root, {
+      platform: 'darwin',
+      arch: fixture.arch,
+      rebuild: () => {
+        prebuildsPresentDuringRebuild.push(existsSync(fixture.prebuildsDir))
+        writeCompiledBuild(fixture, 'patched-build')
+      },
+      verify: () => 'isolated'
+    })
+
+    expect(status).toBe('patched')
+    expect(prebuildsPresentDuringRebuild).toEqual([false])
+    expect(readFileSync(fixture.compiledPath, 'utf8')).toBe('patched-build')
+    // The published tree must hold no unpatched binary: node-pty's loader checks build/Release
+    // first, but falls back to a prebuild if that ever fails to load.
+    expect(existsSync(fixture.prebuildsDir)).toBe(false)
+    expect(existsSync(fixture.backupDir)).toBe(false)
+  })
+
+  it('restores the macOS prebuild when the first compile fails', () => {
+    // A macOS host has no toolchain guarantee at all, so this is the common failure, not the rare
+    // one -- and the relay has to come back on the prebuild exactly as it was installed.
+    const fixture = writeRelayFixture({ platform: 'darwin' })
+
+    const status = applyNodePtyMasterCloexecPatch(fixture.root, {
+      platform: 'darwin',
+      arch: fixture.arch,
+      rebuild: () => {
+        writeCompiledBuild(fixture, 'half-built')
+        throw new Error('npm rebuild node-pty exited 1: no C++ toolchain')
+      },
+      verify: () => 'isolated'
+    })
+
+    expect(status).toContain('failed:')
+    expect(readFileSync(fixture.buildPath, 'utf8')).toBe('stock-build')
+    expect(existsSync(fixture.compiledPath)).toBe(false)
+    expect(readFileSync(fixture.sourcePath, 'utf8')).toBe(STOCK_SOURCE)
+    expect(existsSync(fixture.skipMarkerPath)).toBe(true)
+  })
+
+  it('will not rebuild a macOS install that has no prebuild to fall back on', () => {
+    const fixture = writeRelayFixture({ platform: 'darwin', build: false })
+    const calls = []
+
+    const status = applyNodePtyMasterCloexecPatch(fixture.root, {
+      platform: 'darwin',
+      arch: fixture.arch,
+      rebuild: () => calls.push('rebuild'),
+      verify: () => 'isolated'
+    })
+
+    expect(status).toBe('skipped:no-prebuild')
+    expect(calls).toEqual([])
+    expect(readFileSync(fixture.sourcePath, 'utf8')).toBe(STOCK_SOURCE)
   })
 
   it('leaves an already patched install alone', () => {
@@ -201,19 +284,35 @@ describe('SSH relay node-pty pty-master close-on-exec patch', () => {
   })
 })
 
-function writeRelayFixture({ version = '1.1.0', source = STOCK_SOURCE, build = true } = {}) {
+/**
+ * `buildPath` is the working build the patch has to be able to fall back on, which differs by
+ * platform: Linux compiles into build/Release at install time, macOS runs a shipped prebuild and
+ * has no build/ at all. `compiledPath` is where the rebuild writes on either.
+ */
+function writeRelayFixture({
+  version = '1.1.0',
+  source = STOCK_SOURCE,
+  build = true,
+  platform = 'linux',
+  arch = 'arm64'
+} = {}) {
   const root = mkdtempSync(join(projectDir, '.node-pty-cloexec-patch-test-'))
   cleanupDirs.push(root)
   const nodePtyDir = join(root, 'node_modules', 'node-pty')
   const sourcePath = join(nodePtyDir, 'src', 'unix', 'pty.cc')
-  const buildPath = join(nodePtyDir, 'build', 'Release', 'pty.node')
+  const compiledPath = join(nodePtyDir, 'build', 'Release', 'pty.node')
+  const prebuildsDir = join(nodePtyDir, 'prebuilds')
   mkdirSync(join(nodePtyDir, 'src', 'unix'), { recursive: true })
   writeFileSync(join(nodePtyDir, 'package.json'), JSON.stringify({ version }))
   writeFileSync(sourcePath, source)
   const fixture = {
     root,
+    arch,
     sourcePath,
-    buildPath,
+    compiledPath,
+    prebuildsDir,
+    buildPath:
+      platform === 'darwin' ? join(prebuildsDir, `darwin-${arch}`, 'pty.node') : compiledPath,
     backupDir: join(nodePtyDir, '.orca-cloexec-prepatch-release'),
     skipMarkerPath: join(root, SKIP_MARKER_FILENAME)
   }
@@ -226,4 +325,9 @@ function writeRelayFixture({ version = '1.1.0', source = STOCK_SOURCE, build = t
 function writeBuild(fixture, contents) {
   mkdirSync(resolve(fixture.buildPath, '..'), { recursive: true })
   writeFileSync(fixture.buildPath, contents)
+}
+
+function writeCompiledBuild(fixture, contents) {
+  mkdirSync(resolve(fixture.compiledPath, '..'), { recursive: true })
+  writeFileSync(fixture.compiledPath, contents)
 }

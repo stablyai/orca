@@ -4,7 +4,9 @@ import { TERMINAL_PANE_SPLIT_SOURCES } from '../../../../../shared/feature-educa
 import { isTuiAgent } from '../../../../../shared/tui-agent-config'
 
 export const TerminalHandle = z.object({
-  terminal: requiredString('Missing terminal handle')
+  terminal: requiredString('Missing terminal handle'),
+  // Additive fence understood by newer hosts; legacy hosts safely ignore it.
+  expectedIncarnationId: requiredString('Missing PTY incarnation').optional()
 })
 
 export const TerminalFocus = TerminalHandle.extend({
@@ -180,6 +182,8 @@ export const TerminalSplit = TerminalHandle.extend({
 export const TerminalStop = z.object({
   worktree: requiredString('Missing worktree selector')
 })
+
+export const TerminalCloseAll = TerminalStop
 
 export const TerminalSleep = TerminalStop
 

@@ -5,6 +5,7 @@ import { LEGACY_RUN_ID } from '../contract-constants'
 import { generateId } from '../generated-id'
 import type { TaskRuntimeLineageRow } from '../run-list-page'
 import type { OrchestrationDb } from '../orchestration-db'
+import { selectColumns, TASK_COLUMNS } from '../row-column-lists'
 
 // ── Tasks ──
 
@@ -81,24 +82,8 @@ export function createTask(
   return this.db.prepare('SELECT * FROM tasks WHERE id = ?').get(id) as TaskRow
 }
 
-// Why: return the active creator Dispatch proof with the Task read; runtime still owns pane/process currency.
-export function getTask(this: OrchestrationDb, id: string): TaskRow | undefined
-export function getTask(
-  this: OrchestrationDb,
-  id: string,
-  dispatchRunId: string
-): TaskRuntimeLineageRow | undefined
-export function getTask(
-  this: OrchestrationDb,
-  id: string,
-  dispatchRunId?: string
-): TaskRow | TaskRuntimeLineageRow | undefined {
-  if (dispatchRunId === undefined) {
-    return this.db.prepare('SELECT * FROM tasks WHERE id = ?').get(id) as TaskRow | undefined
-  }
-  return this.db
-    .prepare(
-      `SELECT t.*,
+// Why: hoisted and wildcard-free so the per-publish lineage lookup hits the SyncDatabase statement cache.
+const TASK_RUNTIME_LINEAGE_SQL = `SELECT ${selectColumns(TASK_COLUMNS, 't')},
          creator.id AS creator_dispatch_id,
          creator.run_id AS creator_dispatch_run_id,
          creator.assignee_pane_key AS creator_dispatch_pane_key,
@@ -114,8 +99,25 @@ export function getTask(
          LIMIT 1
        )
        WHERE t.id = ?`
-    )
-    .get(dispatchRunId, id) as TaskRuntimeLineageRow | undefined
+
+// Why: return the active creator Dispatch proof with the Task read; runtime still owns pane/process currency.
+export function getTask(this: OrchestrationDb, id: string): TaskRow | undefined
+export function getTask(
+  this: OrchestrationDb,
+  id: string,
+  dispatchRunId: string
+): TaskRuntimeLineageRow | undefined
+export function getTask(
+  this: OrchestrationDb,
+  id: string,
+  dispatchRunId?: string
+): TaskRow | TaskRuntimeLineageRow | undefined {
+  if (dispatchRunId === undefined) {
+    return this.db.prepare('SELECT * FROM tasks WHERE id = ?').get(id) as TaskRow | undefined
+  }
+  return this.db.prepare(TASK_RUNTIME_LINEAGE_SQL).get(dispatchRunId, id) as
+    | TaskRuntimeLineageRow
+    | undefined
 }
 
 export function listTasks(

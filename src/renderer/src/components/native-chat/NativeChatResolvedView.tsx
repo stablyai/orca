@@ -130,6 +130,7 @@ export function NativeChatResolvedView({
   })
   const contextMenu = useNativeChatContextMenu({
     rootRef,
+    onSwitchToTerminal,
     actions: {
       onPaste: pasteClipboardIntoComposer,
       ...(contextMenuActions ?? emptyNativeChatContextMenuActions)

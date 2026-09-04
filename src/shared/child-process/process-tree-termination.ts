@@ -1,4 +1,5 @@
 import { spawn as nodeSpawn, type ChildProcess } from 'node:child_process'
+import { notifyProcessTreeKill } from './process-tree-kill-observer'
 
 const PROBE_INTERVAL_MS = 25
 const SUBPROCESS_TIMEOUT_MS = 2_000
@@ -10,6 +11,10 @@ const MAX_PS_OUTPUT_BYTES = 8 * 1024 * 1024
  * POSIX precondition: the child must have been spawned `detached`. The signal
  * goes to the process group `-child.pid`, so a child that is not its own group
  * leader would hand it to whatever group it inherited instead.
+ *
+ * Runs in every host — Electron main, the daemon, the relay, the CLI — so the
+ * main-process own-Chromium guard cannot reach here; the exit check below is
+ * what keeps the Windows branch off a pid that is no longer ours.
  */
 export function signalProcessTree(child: ChildProcess, signal?: NodeJS.Signals): Promise<boolean> {
   if (!child.pid) {
@@ -17,10 +22,30 @@ export function signalProcessTree(child: ChildProcess, signal?: NodeJS.Signals):
     return Promise.resolve(true)
   }
   if (process.platform === 'win32') {
-    return taskkillTree(child, signal)
+    // Why the exit check: once the child is reaped its pid is Windows' to
+    // reissue, and `taskkill /t /f` walks whatever tree owns it *now* — a
+    // recycled pid can be one of Orca's own Chromium processes (#10680). The
+    // POSIX branch below cannot hit this: killing a reaped group is ESRCH.
+    //
+    // Why `false`: this is exactly what a taskkill against a reaped pid already
+    // resolved to (non-zero exit -> killRoot + `false`), so skipping the unsafe
+    // spawn must not also flip the termination barrier to "verified". Reporting
+    // `true` here would release the git admission grant on root exit instead of
+    // on `close`, admitting the next git command while a descendant that
+    // inherited the pipes still holds the repo.
+    if (hasExited(child)) {
+      killRoot(child, signal)
+      return Promise.resolve(false)
+    }
+    return taskkillTree(child, child.pid, signal)
   }
   try {
     process.kill(-child.pid, signal)
+    notifyProcessTreeKill({
+      pid: child.pid,
+      site: 'run-process-tree',
+      scope: 'posix-process-group'
+    })
     return Promise.resolve(true)
   } catch {
     return Promise.resolve(!processGroupExists(child.pid))
@@ -38,11 +63,20 @@ export async function forceTerminateProcessTree(child: ChildProcess): Promise<bo
   return true
 }
 
-function taskkillTree(child: ChildProcess, signal?: NodeJS.Signals): Promise<boolean> {
+/** A stubbed child leaves both undefined; only a real code or signal proves exit. */
+function hasExited(child: ChildProcess): boolean {
+  return (child.exitCode ?? null) !== null || (child.signalCode ?? null) !== null
+}
+
+function taskkillTree(
+  child: ChildProcess,
+  rootPid: number,
+  signal?: NodeJS.Signals
+): Promise<boolean> {
   return new Promise((resolve) => {
     let killer: ChildProcess
     try {
-      killer = nodeSpawn('taskkill', ['/pid', String(child.pid), '/t', '/f'], {
+      killer = nodeSpawn('taskkill', ['/pid', String(rootPid), '/t', '/f'], {
         stdio: 'ignore',
         windowsHide: true,
         shell: false
@@ -52,6 +86,7 @@ function taskkillTree(child: ChildProcess, signal?: NodeJS.Signals): Promise<boo
       resolve(false)
       return
     }
+    notifyProcessTreeKill({ pid: rootPid, site: 'run-process-tree', scope: 'win-taskkill-tree' })
     let settled = false
     const finish = (fallback: boolean): void => {
       if (settled) {

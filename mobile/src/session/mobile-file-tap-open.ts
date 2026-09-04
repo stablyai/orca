@@ -36,8 +36,10 @@ export type OpenMobileFileTapOptions<T extends FileTapSessionTab> = {
     activated: boolean
     activationSeq: number
     latestActivationSeq: number
-    sourceTerminalHandle: string
+    sourceTerminalHandle: string | null
     activeTerminalHandle: string | null
+    sourceSessionTabId?: string | null
+    activeSessionTabId?: string | null
     activeTabType: string | null
   }
   switchSessionTab: (tab: T) => void

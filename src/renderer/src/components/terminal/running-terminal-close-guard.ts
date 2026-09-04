@@ -4,6 +4,7 @@ import { useRunningTerminalCloseConfirmStore } from '@/store/running-terminal-cl
 import type { TerminalTabCloseReason } from '@/store/slices/terminal-tab-retirement'
 import type { AppState } from '@/store/types'
 import { resolveBusyPtyCloseCopyKind } from './terminal-close-copy-kind'
+import { isClientOnlyUnverifiableInspection } from '../../../../shared/terminal-process-inspection'
 
 export type RunningTerminalCloseGuardOptions = {
   force?: boolean
@@ -134,8 +135,8 @@ export function guardRunningTerminalClose(params: {
         const result = results[index]
         return (
           result?.status === 'fulfilled' &&
-          result.value.hasChildProcesses &&
-          result.value.unavailable !== true
+          !isClientOnlyUnverifiableInspection(result.value) &&
+          result.value.hasChildProcesses
         )
       })
       if (busyPtyIds.length === 0) {

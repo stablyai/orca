@@ -3,6 +3,8 @@ import NativeChatView from '../native-chat/NativeChatView'
 import { makePaneKey } from '../../../../shared/stable-pane-id'
 import { canContinueAgentSessionInNewSession } from './terminal-agent-session-continuation'
 import type { TerminalPaneController } from './use-terminal-pane-controller'
+import { useAppStore } from '@/store'
+import { resolvePaneAgentSessionId } from './pane-agent-session-id'
 
 export function TerminalPaneNativeChatPortal({
   controller
@@ -30,6 +32,11 @@ export function TerminalPaneNativeChatPortal({
     tabId,
     unifiedTabId
   } = controller
+  const chatPaneSessionId = useAppStore((state) =>
+    effectiveChatViewMode && chatPane
+      ? resolvePaneAgentSessionId(state, makePaneKey(tabId, chatPane.leafId))
+      : null
+  )
   if (!effectiveChatViewMode || !chatPane?.container) {
     return null
   }
@@ -78,6 +85,9 @@ export function TerminalPaneNativeChatPortal({
             onCopyTerminalId: () =>
               void contextMenu.runForPane(chatPane.id, contextMenu.onCopyTerminalId),
             onCopyPaneId: () => void contextMenu.runForPane(chatPane.id, contextMenu.onCopyPaneId),
+            canCopyAgentSessionId: chatPaneSessionId !== null,
+            onCopyAgentSessionId: () =>
+              void contextMenu.runForPane(chatPane.id, contextMenu.onCopyAgentSessionId),
             canClosePane: managedPanes.length > 1,
             onClosePane: () => contextMenu.runForPane(chatPane.id, contextMenu.onClosePane)
           }}

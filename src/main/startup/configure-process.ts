@@ -117,20 +117,37 @@ export function patchPackagedProcessPath(): void {
   }
 
   const home = process.env.HOME ?? ''
-  const extraPaths: string[] = []
+  // Why two lists: a seed exists so a GUI-launched Electron can *find* a tool
+  // its minimal PATH omits. Putting one ahead of the inherited PATH does more
+  // than that — it re-ranks binaries the user already has, and `~/bin` and
+  // `~/.local/bin` are arbitrary user-writable directories that can shadow any
+  // system tool. On the #18234 reporter's box `~/.local/bin/gh` is a wrapper
+  // around `mise x gh -- gh`; hoisting it over /usr/bin/gh made us run the
+  // wrapper where their own shell ran the real binary, and the inner bare `gh`
+  // then resolved back to the wrapper. So: append these, and let a real
+  // ordering opinion come from the login shell via mergePathSegments.
+  const isGenericUserBinDir = (path: string): boolean =>
+    process.platform !== 'win32' &&
+    home !== '' &&
+    (path === join(home, 'bin') || path === join(home, '.local/bin'))
+  const appendPaths: string[] = []
+  // Why these still lead: version-manager shims must beat a system install or
+  // an nvm/mise/asdf user gets the wrong runtime, which is the whole reason
+  // this seeding is ordered rather than appended (see hydrate-shell-path.ts).
+  const prependPaths: string[] = []
 
   if (process.platform !== 'win32') {
-    extraPaths.push('/opt/homebrew/bin', '/opt/homebrew/sbin', '/usr/local/bin', '/usr/local/sbin')
+    appendPaths.push('/opt/homebrew/bin', '/opt/homebrew/sbin', '/usr/local/bin', '/usr/local/sbin')
 
     if (process.platform === 'linux') {
       // Why: snap and Linuxbrew ship on Linux only, so seeding them elsewhere adds phantom PATH entries every spawn must stat.
-      extraPaths.push('/snap/bin', '/home/linuxbrew/.linuxbrew/bin')
+      appendPaths.push('/snap/bin', '/home/linuxbrew/.linuxbrew/bin')
     }
 
-    extraPaths.push('/nix/var/nix/profiles/default/bin')
+    appendPaths.push('/nix/var/nix/profiles/default/bin')
 
     if (home) {
-      extraPaths.push(
+      appendPaths.push(
         join(home, 'bin'),
         join(home, '.local/bin'),
         join(home, '.nix-profile/bin'),
@@ -142,18 +159,24 @@ export function patchPackagedProcessPath(): void {
   }
 
   // Why: version-manager CLIs use env-node shebangs, so node must be on PATH or spawns fail (also seeds Windows user-local dirs).
-  extraPaths.push(...getVersionManagerBinPaths())
+  // Why the filter: that list carries `~/bin` and `~/.local/bin` too, because
+  // bun/pnpm/npm --user also install there. Those two are generic user bin
+  // directories, not a version manager's own shim directory, so they hold
+  // whatever the user last dropped in them and must not outrank a system dir.
+  // The specific dirs (.volta/bin, .asdf/shims, mise shims, .bun/bin, …) keep
+  // leading, which is what the ordering was actually for.
+  prependPaths.push(...getVersionManagerBinPaths().filter((path) => !isGenericUserBinDir(path)))
 
   const pathKey = process.platform === 'win32' && process.env.Path !== undefined ? 'Path' : 'PATH'
   const currentPath = process.env[pathKey] ?? ''
   const pathDelimiter = getProcessPathDelimiter()
-  const existing = new Set(currentPath.split(pathDelimiter))
-  const missing = extraPaths.filter((path) => !existing.has(path))
+  const currentSegments = currentPath.split(pathDelimiter).filter(Boolean)
+  const existing = new Set(currentSegments)
+  const prepend = prependPaths.filter((path) => !existing.has(path))
+  const append = appendPaths.filter((path) => !existing.has(path) && !prepend.includes(path))
 
-  if (missing.length > 0) {
-    process.env[pathKey] = [...missing, ...currentPath.split(pathDelimiter).filter(Boolean)].join(
-      pathDelimiter
-    )
+  if (prepend.length > 0 || append.length > 0) {
+    process.env[pathKey] = [...prepend, ...currentSegments, ...append].join(pathDelimiter)
   }
 }
 

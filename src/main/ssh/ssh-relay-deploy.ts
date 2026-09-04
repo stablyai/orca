@@ -52,6 +52,7 @@ import {
   RELAY_DEPLOY_TIMEOUT_MS
 } from './ssh-relay-deploy-timing'
 import { createSshOperationAbortError, shellEscape } from './ssh-connection-utils'
+import { isWindowsRelayPlatform } from '../../shared/relay-artifacts'
 import {
   probeBuildToolchain,
   formatMissingToolchainError,
@@ -85,6 +86,14 @@ import { powerShellCommand, powerShellLiteral, powerShellNativeArg } from './ssh
 import { relaySocketNameForInstanceId } from './ssh-relay-instance-id'
 import { resolveRelayEndpointBeforeRelaunch } from './ssh-relay-endpoint-takeover'
 import { sweepSupersededRelayEndpoints } from './ssh-relay-superseded-endpoints'
+import {
+  parseShortRelaySocketDir,
+  remoteSocketPathFitsLimit,
+  resolveShortRelaySocketDirCommand,
+  shortRelaySocketPath,
+  shortRelayVersionSegment,
+  SHORT_RELAY_SOCKET_DIR_PREFIX
+} from './relay-socket-path-limit'
 import { isSshSessionLimitError } from './ssh-session-limit-error'
 import {
   isWindowsRelayPipePath,
@@ -598,6 +607,13 @@ async function deployAndLaunchRelayAttempt(
         remoteHome,
         currentRelayDir: remoteRelayDir,
         sockName: relaySocketNameForInstanceId(relayInstanceId),
+        // Set only when this launch relocated past sun_path; the sweep must not reap
+        // the socket the transport it just handed back is talking to.
+        ...(launched.sockPath.startsWith(SHORT_RELAY_SOCKET_DIR_PREFIX)
+          ? {
+              currentShortSocketDir: launched.sockPath.slice(0, launched.sockPath.lastIndexOf('/'))
+            }
+          : {}),
         nodePath: launched.nodePath
       })
     )
@@ -730,27 +746,29 @@ const NODE_PTY_CONSOLE_LIST_PATCH_FILENAME = 'node-pty-1.1.0-console-list-agent-
 const NODE_PTY_MASTER_CLOEXEC_PATCH_FILENAME = 'node-pty-1.1.0-master-cloexec-patch.cjs'
 const NODE_PTY_CLOEXEC_STATUS_PREFIX = 'ORCA-NPTY-CLOEXEC:'
 /**
- * Whether the tree the patch left behind still leaks the pty master into every later child.
- * `fixed` is the only outcome a shared cache entry may be published from.
+ * Whether the tree the patch left behind still leaks a pty fd -- the master into every later child
+ * on Linux, a throwaway /dev/ptmx per spawn on macOS. `fixed` is the only outcome a shared cache
+ * entry may be published from.
  */
 type NodePtyMasterCloexecOutcome = 'fixed' | 'unfixed'
 /**
  * The statuses that leave a non-leaking tree. Deliberately an allowlist, not a `failed:` denylist:
- * the script's `skipped:` family is mixed. `skipped:not-linux` is a platform that never leaks, but
- * `skipped:earlier-attempt-failed`, `skipped:no-compiled-build`, `skipped:unexpected-source` and
- * the two `skipped:<errno>` forms all mean the patch was refused and the leaky build is still on
- * disk -- indistinguishable from `failed:` as far as what gets published.
+ * the script's `skipped:` family is mixed. `skipped:unsupported-platform` is a platform that never
+ * leaks, but `skipped:earlier-attempt-failed`, `skipped:no-compiled-build`, `skipped:no-prebuild`,
+ * `skipped:unexpected-source` and the two `skipped:<errno>` forms all mean the patch was refused
+ * and the leaky build is still on disk -- indistinguishable from `failed:` as far as what gets
+ * published.
  */
 const NODE_PTY_CLOEXEC_FIXED_STATUSES: ReadonlySet<string> = new Set([
   'patched',
-  // The rebuild ran from patched source; only the isolation check could not observe the result.
-  // An unobservable check is not a failed patch, and treating it as one would disable the shared
-  // cache on every host without `lsof`.
+  // The rebuild ran from patched source; only the leak check could not observe the result. An
+  // unobservable check is not a failed patch, and treating it as one would disable the shared
+  // cache on every host without `/proc` or `lsof`.
   'patched-unverified',
   'already-patched',
-  // Unreachable while the platform gate below short-circuits first, but it is the one `skipped:`
-  // that means "nothing to fix" rather than "would not fix it".
-  'skipped:not-linux'
+  // Unreachable while the platform gate below short-circuits Windows first, but it is the one
+  // `skipped:` that means "nothing to fix" rather than "would not fix it".
+  'skipped:unsupported-platform'
 ])
 // Exported for the relay-native-dependency-coverage test, which asserts every
 // native addon the relay bundle imports is either installed here or explicitly
@@ -826,7 +844,7 @@ async function probeRequiredNativeDeps(
           hostPlatform,
           nodePath,
           remoteDir,
-          `try { & ${powerShellLiteral(nodePath)} -e ${powerShellNativeArg(probeJs)} } catch { 'MISSING' }`
+          `try { & ${powerShellLiteral(nodePath)} -e ${powerShellNativeArg(probeJs)}; if ($LASTEXITCODE -ne 0) { 'MISSING' } } catch { 'MISSING' }`
         )
       : // Why: no `2>/dev/null` — it discarded the only line that says why node never reached the
         // script. stderr stays its own stream so it can't be mistaken for the verdict, mirroring
@@ -854,10 +872,17 @@ async function probeRequiredNativeDeps(
       return { status: 'unverifiable', missing: [] }
     }
     return { status: 'blocked', missing }
-  } catch {
+  } catch (error) {
     signal?.throwIfAborted()
     // Why: an unanswered probe says nothing about the deps; reporting MISSING here reset and
     // recompiled healthy relays, turning one dropped exec channel into a multi-minute reconnect.
+    // Why: the wrongful rebuild was the only visible symptom, so without this line a dropped exec
+    // channel leaves no trace at all.
+    console.warn(
+      `[ssh-relay] Native deps probe unanswered at ${remoteDir}; treating as unverifiable: ${
+        error instanceof Error ? error.message : String(error)
+      }`
+    )
     return { status: 'unverifiable', missing: [] }
   }
 }
@@ -1278,7 +1303,7 @@ async function installNativeDeps(
 }
 
 /**
- * Re-apply the pty-master FD_CLOEXEC patch the app gets from pnpm to the host's npm copy (#17915).
+ * Re-apply the pty fd-leak patch the app gets from pnpm to the host's npm copy (#17915).
  *
  * Why it is safe to rebuild under a live relay: this only runs from installNativeDeps, so only on a
  * freshly created directory or a locked repair, and a relay already serving PTYs has pty.node mapped
@@ -1302,9 +1327,11 @@ async function applyNodePtyMasterCloexecPatch(
   nodePath: string,
   signal?: AbortSignal
 ): Promise<NodePtyMasterCloexecOutcome> {
-  // Linux is the only relay platform that takes forkpty()'s no-O_CLOEXEC path; macOS and Windows
-  // ship prebuilds, so forcing a rebuild there would add a first compile to fix nothing.
-  if (isWindowsRemoteHost(hostPlatform) || !platform.startsWith('linux')) {
+  // Both Unix relay platforms leak, by different bugs: Linux inherits the master through forkpty()'s
+  // no-O_CLOEXEC path, macOS orphans one throwaway /dev/ptmx fd per spawn in pty_posix_spawn. Only
+  // Windows, which has no fds, is short-circuited -- and answering 'fixed' from a gate that ran
+  // nothing is exactly how a leaking darwin tree got published to the shared cache.
+  if (isWindowsRemoteHost(hostPlatform) || isWindowsRelayPlatform(platform)) {
     return 'fixed'
   }
   try {
@@ -1636,9 +1663,13 @@ async function launchRelay(
   const escapedNode = shellEscape(nodePath)
   // Why: remoteRelayDir is shared across Orca targets for one account; hashing the target ID into the socket name stops cross-target attach.
   const sockName = relaySocketNameForInstanceId(relayInstanceId)
-  const sockFile = relayEndpointForHost(hostPlatform, remoteDir, sockName)
-  const endpointDir = relayHookEndpointDirForHost(hostPlatform, remoteDir, sockFile)
+  const defaultSockFile = relayEndpointForHost(hostPlatform, remoteDir, sockName)
+  const endpointDir = relayHookEndpointDirForHost(hostPlatform, remoteDir, defaultSockFile)
   const credentialFile = joinRemotePath(hostPlatform, remoteDir, `${sockName}.credential`)
+  // Why: a long remote $HOME pushes the default endpoint past sun_path and bind fails with a bare `listen EINVAL` (#10726).
+  const sockFile = remoteSocketPathFitsLimit(hostPlatform, defaultSockFile)
+    ? defaultSockFile
+    : await resolveShortPosixRelaySocketPath(conn, remoteDir, sockName, defaultSockFile, signal)
 
   if (isWindowsRemoteHost(hostPlatform)) {
     const activePipeMarkerPath = windowsActivePipeMarkerPath(hostPlatform, remoteDir, sockName)
@@ -1720,7 +1751,10 @@ async function launchRelay(
     signal
   })
   // Why: --log-file lets the relay rotate relay.log in-process; the shell redirect stays to capture pre-JS boot/crash output.
-  const launchCmd = `cd ${escapedDir} && chmod 600 ${shellEscape(credentialFile)} && nohup ${escapedNode} relay.js --detached --grace-time ${graceTime} --sock-path ${shellEscape(sockFile)} --credential-file ${shellEscape(credentialFile)} --log-file ${shellEscape(logFile)} > ${shellEscape(logFile)} 2>&1 </dev/null &`
+  // Why: the relay derives its hook endpoint dir from the socket path; pin it back under the relay dir when the socket moved to /tmp.
+  const endpointDirArg =
+    sockFile === defaultSockFile ? '' : ` --endpoint-dir ${shellEscape(endpointDir)}`
+  const launchCmd = `cd ${escapedDir} && chmod 600 ${shellEscape(credentialFile)} && nohup ${escapedNode} relay.js --detached --grace-time ${graceTime} --sock-path ${shellEscape(sockFile)}${endpointDirArg} --credential-file ${shellEscape(credentialFile)} --log-file ${shellEscape(logFile)} > ${shellEscape(logFile)} 2>&1 </dev/null &`
   const launchChannel = await conn.exec(launchCmd, { signal })
   launchChannel.on('data', () => {})
   launchChannel.on('error', () => {})
@@ -1779,6 +1813,44 @@ async function launchRelay(
     sockPath: sockFile,
     credentialFile
   }
+}
+
+/**
+ * Move the endpoint under a `$HOME`-independent base so its length is bounded.
+ *
+ * The hashed socket name is preserved in full: only the directory shrinks, so the
+ * short form stays deterministic per target and cannot collide with another target.
+ * The version directory's identity comes along as a hashed segment, so a later build
+ * still binds a path of its own rather than the one its predecessor is holding.
+ */
+async function resolveShortPosixRelaySocketPath(
+  conn: SshConnection,
+  remoteDir: string,
+  sockName: string,
+  defaultSockFile: string,
+  signal?: AbortSignal
+): Promise<string> {
+  const versionSegment = shortRelayVersionSegment(remoteDir.slice(remoteDir.lastIndexOf('/') + 1))
+  const output = await execCommand(conn, resolveShortRelaySocketDirCommand(versionSegment), {
+    signal
+  }).catch((err: unknown) => {
+    if (isUnconfirmedSshCommandTermination(err)) {
+      throw err
+    }
+    signal?.throwIfAborted()
+    return ''
+  })
+  const shortDir = parseShortRelaySocketDir(output, versionSegment)
+  if (!shortDir) {
+    throw new Error(
+      `Relay socket path ${defaultSockFile} exceeds the remote Unix socket limit and no short socket directory could be created on the host.`
+    )
+  }
+  const shortSockFile = shortRelaySocketPath(shortDir, sockName)
+  console.warn(
+    `[ssh-relay] Socket path too long for sun_path; using ${shortSockFile} instead of ${defaultSockFile}`
+  )
+  return shortSockFile
 }
 
 function waitForRelayPoll(delayMs: number, signal?: AbortSignal): Promise<void> {

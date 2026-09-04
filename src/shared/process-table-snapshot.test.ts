@@ -7,17 +7,22 @@ const { execFileMock } = vi.hoisted(() => ({ execFileMock: vi.fn() }))
 vi.mock('node:child_process', () => ({ execFile: execFileMock }))
 
 import {
-  buildProcessTableIndex,
   createProcessTableSnapshotReader,
-  getProcessTableIndex,
   getProcessTableSnapshot,
   getStrictProcessTableSnapshot,
+  PS_MAX_BUFFER_BYTES,
+  resetProcessTableSnapshotForTests
+} from './process-table-snapshot-reader'
+import {
   parseProcessTableRows,
   parseStrictProcessTableRows,
-  ProcessTableCaptureError,
-  resetProcessTableSnapshotForTests,
-  type ProcessTableIndexStats
+  ProcessTableCaptureError
 } from './process-table-snapshot'
+import {
+  buildProcessTableIndex,
+  getProcessTableIndex,
+  type ProcessTableIndexStats
+} from './process-table-index'
 
 function deferred<T>(): {
   promise: Promise<T>
@@ -261,7 +266,14 @@ describe('shared process-table capture', () => {
 
     expect(forks()).toBe(1)
     expect(strict).toEqual([
-      { pid: 100, ppid: 1, pgid: 100, tpgid: 100, stat: 'Ss+', command: '/bin/zsh' }
+      {
+        pid: 100,
+        ppid: 1,
+        pgid: 100,
+        tpgid: 100,
+        stat: 'Ss+',
+        command: '/bin/zsh'
+      }
     ])
   })
 
@@ -293,7 +305,12 @@ describe('parseProcessTableRows', () => {
     )
     expect(rows).toEqual([
       { pid: 501, ppid: 1, stat: 'S', command: '/bin/zsh' },
-      { pid: 600, ppid: 501, stat: 'S+', command: 'node /path/bin/codex --flag' }
+      {
+        pid: 600,
+        ppid: 501,
+        stat: 'S+',
+        command: 'node /path/bin/codex --flag'
+      }
     ])
   })
 
@@ -320,11 +337,46 @@ describe('parseStrictProcessTableRows', () => {
         stat: 'I',
         command: '[pool_workqueue_release]'
       },
-      { pid: 4, ppid: 2, pgid: 0, tpgid: -1, stat: 'I', command: '[kworker/R-rcu_g]' },
-      { pid: 5, ppid: 2, pgid: 0, tpgid: -1, stat: 'I', command: '[kworker/R-sync_wq]' },
-      { pid: 6, ppid: 2, pgid: 0, tpgid: -1, stat: 'I', command: '[kworker/R-slub_]' },
-      { pid: 100, ppid: 1, pgid: 100, tpgid: 100, stat: 'Ss+', command: '/bin/bash -l' },
-      { pid: 101, ppid: 100, pgid: 101, tpgid: 101, stat: 'S+', command: 'node /opt/codex' }
+      {
+        pid: 4,
+        ppid: 2,
+        pgid: 0,
+        tpgid: -1,
+        stat: 'I',
+        command: '[kworker/R-rcu_g]'
+      },
+      {
+        pid: 5,
+        ppid: 2,
+        pgid: 0,
+        tpgid: -1,
+        stat: 'I',
+        command: '[kworker/R-sync_wq]'
+      },
+      {
+        pid: 6,
+        ppid: 2,
+        pgid: 0,
+        tpgid: -1,
+        stat: 'I',
+        command: '[kworker/R-slub_]'
+      },
+      {
+        pid: 100,
+        ppid: 1,
+        pgid: 100,
+        tpgid: 100,
+        stat: 'Ss+',
+        command: '/bin/bash -l'
+      },
+      {
+        pid: 101,
+        ppid: 100,
+        pgid: 101,
+        tpgid: 101,
+        stat: 'S+',
+        command: 'node /opt/codex'
+      }
     ])
   })
 
@@ -334,7 +386,14 @@ describe('parseStrictProcessTableRows', () => {
         ' PID PPID PGID TPGID STAT COMMAND\r\n 100 1 100 101 Ss /bin/zsh -l\r\n 101 100 101 101 S+ node /opt/codex --flag  value\r\n'
       )
     ).toEqual([
-      { pid: 100, ppid: 1, pgid: 100, tpgid: 101, stat: 'Ss', command: '/bin/zsh -l' },
+      {
+        pid: 100,
+        ppid: 1,
+        pgid: 100,
+        tpgid: 101,
+        stat: 'Ss',
+        command: '/bin/zsh -l'
+      },
       {
         pid: 101,
         ppid: 100,
@@ -348,10 +407,24 @@ describe('parseStrictProcessTableRows', () => {
 
   it('accepts no-controlling-tty sentinels for later unverifiable classification', () => {
     expect(parseStrictProcessTableRows('100 1 100 0 Ss /bin/zsh')).toEqual([
-      { pid: 100, ppid: 1, pgid: 100, tpgid: 0, stat: 'Ss', command: '/bin/zsh' }
+      {
+        pid: 100,
+        ppid: 1,
+        pgid: 100,
+        tpgid: 0,
+        stat: 'Ss',
+        command: '/bin/zsh'
+      }
     ])
     expect(parseStrictProcessTableRows('100 1 100 -1 Ss /bin/zsh')).toEqual([
-      { pid: 100, ppid: 1, pgid: 100, tpgid: -1, stat: 'Ss', command: '/bin/zsh' }
+      {
+        pid: 100,
+        ppid: 1,
+        pgid: 100,
+        tpgid: -1,
+        stat: 'Ss',
+        command: '/bin/zsh'
+      }
     ])
   })
 
@@ -416,7 +489,11 @@ describe('getProcessTableIndex', () => {
 
   it('keeps the memo out of measured builds so a cache hit cannot satisfy a perf gate', () => {
     const rows = parseProcessTableRows('100 1 Ss bash')
-    const stats: ProcessTableIndexStats = { indexBuilds: 0, rowVisits: 0, indexLookups: 0 }
+    const stats: ProcessTableIndexStats = {
+      indexBuilds: 0,
+      rowVisits: 0,
+      indexLookups: 0
+    }
 
     const memoized = getProcessTableIndex(rows)
     const measured = buildProcessTableIndex(rows, stats)
@@ -426,5 +503,100 @@ describe('getProcessTableIndex', () => {
     expect(stats).toEqual({ indexBuilds: 1, rowVisits: 1, indexLookups: 0 })
     // The measured build must not evict or replace the shared memo.
     expect(getProcessTableIndex(rows)).toBe(memoized)
+  })
+})
+
+describe('process-table capture completeness', () => {
+  const NODE_DEFAULT_MAX_BUFFER_BYTES = 1024 * 1024
+
+  beforeEach(() => {
+    execFileMock.mockReset()
+    resetProcessTableSnapshotForTests()
+  })
+
+  /**
+   * Emulate Node's own execFile buffering: over `maxBuffer` it kills the child and
+   * calls back with ERR_CHILD_PROCESS_STDIO_MAXBUFFER plus the truncated bytes. A
+   * mock that always resolves would hide the very ceiling under test.
+   */
+  function mockPsWithNodeBufferSemantics(stdout: string): void {
+    execFileMock.mockImplementation(
+      (_command: string, _args: string[], options: unknown, callback: unknown) => {
+        const done = callback as (err: unknown, result: { stdout: string; stderr: string }) => void
+        const maxBuffer =
+          (options as { maxBuffer?: number })?.maxBuffer ?? NODE_DEFAULT_MAX_BUFFER_BYTES
+        if (Buffer.byteLength(stdout, 'utf-8') > maxBuffer) {
+          const error = Object.assign(new Error('stdout maxBuffer length exceeded'), {
+            code: 'ERR_CHILD_PROCESS_STDIO_MAXBUFFER'
+          })
+          done(error, { stdout: stdout.slice(0, maxBuffer), stderr: '' })
+          return
+        }
+        done(null, { stdout, stderr: '' })
+      }
+    )
+  }
+
+  function busyHostTable(processCount: number): string {
+    // ~285 bytes/row, so 4k processes clears 1MB the way a real busy host does.
+    const argv = `/usr/bin/node ${'--inspect-brk-and-a-long-flag '.repeat(8)}server.js`
+    return `${Array.from(
+      { length: processCount },
+      (_, index) => `${1000 + index} 1 ${1000 + index} ${1000 + index} S+ ${argv}`
+    ).join('\n')}\n`
+  }
+
+  it('reads a busy host whose table overflows execFile 1MB default', async () => {
+    const table = busyHostTable(4_000)
+    expect(Buffer.byteLength(table, 'utf-8')).toBeGreaterThan(NODE_DEFAULT_MAX_BUFFER_BYTES)
+    mockPsWithNodeBufferSemantics(table)
+
+    // Without an explicit maxBuffer this rejects, so the whole subsystem degrades
+    // to "unverifiable" on every capture for as long as the host stays busy.
+    await expect(getProcessTableSnapshot()).resolves.toHaveLength(4_000)
+  })
+
+  it('reports a truncated capture as unreadable rather than a silently short table', async () => {
+    const table = busyHostTable(200)
+    const truncated = table + 'x'.repeat(PS_MAX_BUFFER_BYTES - table.length)
+    // A capture that stopped at the ceiling but still resolved: the lenient parser
+    // drops the cut tail without complaint, so 200 of N processes would read as
+    // the complete list — a false "no agent" the execution boundary forbids.
+    expect(parseProcessTableRows(truncated)).toHaveLength(200)
+    execFileMock.mockImplementation(
+      (_command: string, _args: string[], _options: unknown, callback: unknown) => {
+        ;(callback as (err: unknown, result: { stdout: string; stderr: string }) => void)(null, {
+          stdout: truncated,
+          stderr: ''
+        })
+      }
+    )
+
+    await expect(getProcessTableSnapshot()).rejects.toThrow(ProcessTableCaptureError)
+    await expect(getProcessTableSnapshot()).rejects.toThrow('capture_truncated')
+  })
+
+  it('names a buffer-ceiling rejection as truncation on both views', async () => {
+    mockPsWithNodeBufferSemantics('x'.repeat(PS_MAX_BUFFER_BYTES + 1))
+
+    await expect(getProcessTableSnapshot()).rejects.toThrow('capture_truncated')
+    resetProcessTableSnapshotForTests()
+    await expect(getStrictProcessTableSnapshot()).rejects.toThrow('capture_truncated')
+  })
+
+  it('reports an empty capture as unreadable rather than an empty process table', async () => {
+    // The lenient view used to answer [] here: zero processes on a machine that is
+    // by definition running at least `ps` itself.
+    execFileMock.mockImplementation(
+      (_command: string, _args: string[], _options: unknown, callback: unknown) => {
+        ;(callback as (err: unknown, result: { stdout: string; stderr: string }) => void)(null, {
+          stdout: '   \n',
+          stderr: ''
+        })
+      }
+    )
+
+    await expect(getProcessTableSnapshot()).rejects.toThrow(ProcessTableCaptureError)
+    await expect(getProcessTableSnapshot()).rejects.toThrow('empty_capture')
   })
 })

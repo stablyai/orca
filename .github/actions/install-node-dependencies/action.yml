@@ -39,6 +39,9 @@ runs:
       with:
         install: false
 
+    # Why both lockfiles: setup-node keys the pnpm store on the root lockfile alone, so
+    # jobs that also install mobile restored a store with none of the React Native tree
+    # in it and re-downloaded the lot on every run.
     - name: Setup Node.js
       id: default-node
       if: inputs.node-version == ''
@@ -46,6 +49,9 @@ runs:
       with:
         node-version-file: package.json
         cache: pnpm
+        cache-dependency-path: |
+          pnpm-lock.yaml
+          mobile/pnpm-lock.yaml
 
     - name: Setup requested Node.js
       id: requested-node
@@ -54,6 +60,9 @@ runs:
       with:
         node-version: ${{ inputs.node-version }}
         cache: pnpm
+        cache-dependency-path: |
+          pnpm-lock.yaml
+          mobile/pnpm-lock.yaml
 
     - name: Validate native runtime
       shell: bash

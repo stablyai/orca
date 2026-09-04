@@ -7,6 +7,7 @@ import { resolvePullRequestDiffBase } from './git-pull-request-diff-base.mjs'
 import { resolveOxlintInvocation } from './oxlint-cli-invocation.mjs'
 
 const SOURCE_FILE_PATTERN = /\.(?:[cm]?[jt]sx?)$/
+const ROOT_CODE_QUALITY_IGNORED_PREFIXES = ['cloud/']
 export const OXLINT_SCANS = [
   {
     // Why: no --config, so Oxlint keeps discovering nested configs. Pinning the root
@@ -73,6 +74,10 @@ function splitNullDelimited(output) {
   return output.split('\0').filter(Boolean)
 }
 
+export function isRootCodeQualityPath(file) {
+  return !ROOT_CODE_QUALITY_IGNORED_PREFIXES.some((prefix) => file.startsWith(prefix))
+}
+
 function resolveBase(root, requestedBase) {
   for (const candidate of [
     requestedBase,
@@ -107,7 +112,11 @@ export function collectAddedLineRanges(root, requestedBase) {
   const rangesByFile = new Map()
 
   for (const file of changedFiles) {
-    if (!SOURCE_FILE_PATTERN.test(file) || !existsSync(path.join(root, file))) {
+    if (
+      !isRootCodeQualityPath(file) ||
+      !SOURCE_FILE_PATTERN.test(file) ||
+      !existsSync(path.join(root, file))
+    ) {
       continue
     }
     const diff = runGit(root, ['diff', '--unified=0', '--no-color', comparisonBase, '--', file])
@@ -119,7 +128,11 @@ export function collectAddedLineRanges(root, requestedBase) {
 
   for (const file of untrackedFiles) {
     const absolutePath = path.join(root, file)
-    if (!SOURCE_FILE_PATTERN.test(file) || !existsSync(absolutePath)) {
+    if (
+      !isRootCodeQualityPath(file) ||
+      !SOURCE_FILE_PATTERN.test(file) ||
+      !existsSync(absolutePath)
+    ) {
       continue
     }
     const lineCount = readFileSync(absolutePath, 'utf8').split(/\r?\n/).length

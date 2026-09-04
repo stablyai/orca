@@ -1,5 +1,9 @@
-import type { Page } from '@playwright/test'
+import path from 'node:path'
+import { readFileSync } from 'node:fs'
+import type { ElectronApplication, Page } from '@playwright/test'
 import { test, expect } from './helpers/orca-app'
+import { DEFAULT_LOCAL_ORCA_PROFILE_ID } from '../../src/shared/orca-profiles'
+import { sshRemotePtyLeaseAllowsReattach, type SshRemotePtyLease } from '../../src/shared/ssh-types'
 import { ensureTerminalVisible, waitForActiveWorktree, waitForSessionReady } from './helpers/store'
 import {
   execInTerminal,
@@ -47,6 +51,59 @@ async function readSshStatus(orcaPage: Page, targetId: string) {
     (targetId) => window.__store?.getState().sshConnectionStates.get(targetId)?.status ?? null,
     targetId
   )
+}
+
+/**
+ * Every lease `reattachKnownPtys` would feed to `pty.attach` on the next connect, read from the
+ * durable store rather than from the renderer — leases are main-owned and never published.
+ *
+ * Goes through the shipped `sshRemotePtyLeaseAllowsReattach` predicate so the measurement cannot
+ * drift from the fan-out it exists to bound.
+ */
+function readSshLeases(userDataDir: string, targetId: string): SshRemotePtyLease[] {
+  const dataPath = path.join(
+    userDataDir,
+    'profiles',
+    DEFAULT_LOCAL_ORCA_PROFILE_ID,
+    'orca-data.json'
+  )
+  const parsed = JSON.parse(readFileSync(dataPath, 'utf8')) as {
+    sshRemotePtyLeases?: SshRemotePtyLease[]
+  }
+  return (parsed.sshRemotePtyLeases ?? []).filter((lease) => lease.targetId === targetId)
+}
+
+function readReattachablePtyIds(userDataDir: string, targetId: string): string[] {
+  return readSshLeases(userDataDir, targetId)
+    .filter(sshRemotePtyLeaseAllowsReattach)
+    .map((lease) => lease.ptyId)
+    .sort()
+}
+
+/**
+ * Everything a cardinality failure needs to be diagnosable from the report alone.
+ *
+ * Worth keeping rather than reducing to a count: when this first failed, the count said only "2",
+ * and it was the per-row fields that ruled out the obvious causes — the rows agreed on worktree,
+ * tab and leaf, so the pane identity was never the problem.
+ */
+function describeSshLeases(userDataDir: string, targetId: string): string {
+  return JSON.stringify(
+    readSshLeases(userDataDir, targetId).map((lease) => ({
+      ptyId: lease.ptyId,
+      state: lease.state,
+      worktreeId: lease.worktreeId,
+      leafId: lease.leafId,
+      tabId: lease.tabId,
+      supersededBy: lease.supersededBy,
+      relayIdRecycled: lease.relayIdRecycled,
+      reattachable: sshRemotePtyLeaseAllowsReattach(lease)
+    }))
+  )
+}
+
+function readUserDataDir(electronApp: ElectronApplication): Promise<string> {
+  return electronApp.evaluate(({ app }) => app.getPath('userData'))
 }
 
 /**
@@ -117,7 +174,9 @@ test.describe('SSH transport drop recovery', () => {
   // run after the flood produces no output within the poll budget. Same shape as #18018 (deaf pane
   // after a stalled host resumes), and not caused by this spec. Tracked there; the three verdict
   // assertions around it stay enforced.
-  test.fixme('stays bounded when a disconnected shell floods its pty', async ({ orcaPage }, testInfo) => {
+  test.fixme('stays bounded when a disconnected shell floods its pty', async ({
+    orcaPage
+  }, testInfo) => {
     test.slow()
     // Timeouts here are deliberately generous: this guards memory, not latency. A 48MB flood plus a
     // reconnect lands near 60s wall-clock end to end, so a 60s bind timeout was marginal and made
@@ -253,6 +312,89 @@ test.describe('SSH transport drop recovery', () => {
         `printf 'KILL_AFTER_%s\\n' ${afterSuffix}`
       )
       await waitForTerminalOutput(orcaPage, afterMarker, 60_000)
+    } finally {
+      if (target) {
+        clearDockerSshRelayFaults(target)
+        cleanupDockerSshRelayTarget(target)
+      }
+    }
+  })
+
+  /**
+   * The cardinality half of the same fault, which the verdict test above cannot see: it asserts the
+   * pane is re-backed, not what the pane's PREVIOUS shells left behind in the store.
+   *
+   * A pane re-leases under a new relay pty id on every relay restart, and nothing else retires the
+   * predecessor. When supersession fails, each generation leaves one more `expired`-but-unsuperseded
+   * lease that `reattachKnownPtys` still asks about — one extra `pty.attach` round trip on every
+   * later connect, forever, growing linearly with reconnect count. Measured as leases rather than
+   * as latency because latency hides the growth until it is already large.
+   *
+   * The reattachable set must stay at exactly one per pane. It must not go to zero either: a lease
+   * wrongly superseded is a running remote shell the pane can no longer find, which is the worse
+   * failure (docs/reference/ssh-execution-boundary.md).
+   */
+  test('keeps one reattachable lease per pane across repeated relay restarts', async ({
+    orcaPage,
+    electronApp
+  }, testInfo) => {
+    test.slow()
+    let target: DockerSshRelayTarget | null = null
+    try {
+      target = startDockerSshRelayTarget(testInfo)
+      enableDockerSshRelayTargetShellTitle(target)
+      await waitForSessionReady(orcaPage)
+      await waitForActiveWorktree(orcaPage)
+      const remote = await connectDockerSshRelayTarget(orcaPage, target)
+      await ensureTerminalVisible(orcaPage, 45_000)
+      await waitForActiveTerminalManager(orcaPage, 60_000)
+      await waitForActivePanePtyId(orcaPage, 60_000)
+
+      const userDataDir = await readUserDataDir(electronApp)
+      const generations: string[][] = []
+
+      for (let generation = 1; generation <= 5; generation++) {
+        expect(
+          killDockerSshRelayDaemon(target),
+          'no relay process was found to kill'
+        ).toBeGreaterThan(0)
+        await expect
+          .poll(() => readSshStatus(orcaPage, remote.targetId), {
+            timeout: 120_000,
+            message: `SSH target never reconnected after relay kill ${generation}`
+          })
+          .toBe('connected')
+        await waitForActiveTerminalManager(orcaPage, 120_000)
+        // The pane must be usable again before the count is meaningful: recovery is what mints the
+        // successor lease that retires the generation before it.
+        const ptyId = await waitForActivePanePtyId(orcaPage, 120_000)
+        const marker = `LEASE_GEN_${generation}_${Date.now()}`
+        await execInTerminal(orcaPage, ptyId, `printf '%s\\n' ${marker}`)
+        await waitForTerminalOutput(orcaPage, marker, 60_000)
+
+        try {
+          await expect
+            .poll(() => readReattachablePtyIds(userDataDir, remote.targetId).length, {
+              timeout: 60_000
+            })
+            .toBe(1)
+        } catch (error) {
+          // Why re-thrown with the rows: the count alone cannot say WHICH predecessor stayed
+          // reattachable, and the user-data dir is torn down before the report is read.
+          throw new Error(
+            `reattachable lease count never settled at 1 in generation ${generation}; leases: ${describeSshLeases(userDataDir, remote.targetId)}`,
+            { cause: error }
+          )
+        }
+        generations.push(readReattachablePtyIds(userDataDir, remote.targetId))
+      }
+
+      // Stated as the whole sequence so a regression reports the growth, not just its endpoint —
+      // the reported shape was 2, 3, 4, 5, 6 across five restarts.
+      expect(
+        generations.map((ptyIds) => ptyIds.length),
+        `reattachable lease count per generation: ${JSON.stringify(generations)}`
+      ).toEqual([1, 1, 1, 1, 1])
     } finally {
       if (target) {
         clearDockerSshRelayFaults(target)

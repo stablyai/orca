@@ -53,6 +53,18 @@ Orca targets macOS, Linux, and Windows. Keep all platform-dependent behavior beh
 - **WSL commands**: build argv with `buildWslExecArgs` (always `--exec` — under `--`, `wsl.exe` expands `$name` in every argument and silently rewrites the script), and fence anything whose stdout you parse with `buildWslCapturedLoginShellCommand`, because the interactive login shell prints the distro banner to stdout. See [`docs/reference/wsl-command-execution.md`](./docs/reference/wsl-command-execution.md).
 - **Linux native modules**: keep the glibc floor at Ubuntu 20.04 / glibc 2.31. A module compiled from source on a newer runner can reference symbol versions absent on the floor and crash the app on startup. See [`docs/reference/linux-glibc-compatibility.md`](./docs/reference/linux-glibc-compatibility.md); packaging fails if a bundled native binary needs newer glibc.
 
+## Localization (i18n)
+
+All user-facing copy is localized. `src/renderer/src/i18n/locales/en.json` is the source of truth; the `zh`, `ja`, `ko`, and `es` catalogs mirror its keys. Strings reach the UI through `translate('auto.<key>', 'English fallback')` — never hardcode display text.
+
+When you touch user-facing copy, keep all five catalogs in sync:
+
+- **New strings** — wrap them in `translate(...)` with an English fallback, run `pnpm sync:localization-catalog` to register the keys in `en.json` and add placeholders to every other locale, then `pnpm bootstrap:<locale>-catalog` (e.g. `bootstrap:ja-catalog`) to translate the placeholders.
+- **Reworded strings** — changing the value of an existing key updates only `en.json`. The other locales keep the key with its old translation, and **the lint checks will not catch this**: `verify:localization-catalog` enforces key _parity_, not translation _freshness_. Update the same key in `zh/ja/ko/es` by hand, or re-translate it via `bootstrap:<locale>-catalog`.
+- **Removed strings** — delete the key from _every_ locale; the parity check rejects a key that exists in one catalog but not another.
+
+Before pushing copy changes, run `pnpm verify:localization-catalog` and `pnpm verify:localization-coverage` (both also run in `pnpm lint`).
+
 ## SSH Use Case
 
 All changes must consider the SSH use case. Don't assume local-only execution. Before changing anything that reports on, stops, or lists remote work, follow [`docs/reference/ssh-execution-boundary.md`](./docs/reference/ssh-execution-boundary.md): the execution host owns everything that touches execution, and loss of contact is never evidence of process death — the verdict vocabulary is `live` / `unverifiable` / `exited`, with no synonyms.

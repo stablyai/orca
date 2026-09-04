@@ -111,7 +111,7 @@ function hostStub(): StructuredAgentSessionHost {
   return hostCalls as unknown as StructuredAgentSessionHost
 }
 
-function dispatcher(): RpcDispatcher {
+function dispatcher(runtimeOverrides: Record<string, unknown> = {}): RpcDispatcher {
   runtimeCalls = {
     getStructuredAgentSessionCreateSupport: vi.fn(async () => ({ supported: true })),
     resolveStructuredAgentSessionCreateIntent: vi.fn(async (params) => ({
@@ -134,7 +134,8 @@ function dispatcher(): RpcDispatcher {
     registerSubscriptionCleanup: vi.fn(),
     cleanupSubscription: vi.fn(),
     cleanupSubscriptionsByPrefix: vi.fn(),
-    ...runtimeCalls
+    ...runtimeCalls,
+    ...runtimeOverrides
   }
   return new RpcDispatcher({
     runtime: runtime as unknown as OrcaRuntimeService,
@@ -151,10 +152,11 @@ async function call(
     clientId?: string
     clientKind?: 'mobile' | 'runtime'
     clientCapabilities?: string[]
-  }
+  },
+  runtimeOverrides: Record<string, unknown> = {}
 ): Promise<RpcResponse> {
   const replies: RpcResponse[] = []
-  await dispatcher().dispatchStreaming(
+  await dispatcher(runtimeOverrides).dispatchStreaming(
     request(method, params),
     (raw) => replies.push(JSON.parse(raw) as RpcResponse),
     client
@@ -168,6 +170,10 @@ async function call(
 
 const STRUCTURED_CLIENT = {
   clientKind: 'runtime' as const,
+  clientCapabilities: [STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY]
+}
+const STRUCTURED_MOBILE_CLIENT = {
+  clientKind: 'mobile' as const,
   clientCapabilities: [STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY]
 }
 
@@ -186,6 +192,18 @@ describe('capability gating', () => {
     expect(response).toMatchObject({ ok: true, result: { ok: true } })
     expect(hostCalls.close).toHaveBeenCalledWith(SESSION)
     expect(hostCalls.setSessionTabVisibility).toHaveBeenCalledWith(SESSION, false)
+    expect(hostCalls.setSessionTabVisibility.mock.invocationCallOrder[0]).toBeLessThan(
+      hostCalls.close.mock.invocationCallOrder[0]!
+    )
+  })
+
+  it('does not stop the provider when durable tab retirement fails', async () => {
+    hostCalls.setSessionTabVisibility.mockRejectedValueOnce(new Error('visibility write failed'))
+
+    const response = await call('agentSession.close', { sessionId: SESSION }, STRUCTURED_CLIENT)
+
+    expect(response).toMatchObject({ ok: false })
+    expect(hostCalls.close).not.toHaveBeenCalled()
   })
 
   it('advertises the capability without bumping the protocol version', () => {
@@ -250,6 +268,25 @@ describe('capability gating', () => {
     expect(hostCalls.send).toHaveBeenCalledTimes(1)
   })
 
+  it('requires the host structured-chat setting for mobile clients', async () => {
+    const response = await call('agentSession.send', sendParams(), STRUCTURED_MOBILE_CLIENT, {
+      getClientSettings: () => ({ experimentalStructuredNativeChat: false })
+    })
+    expect(response).toMatchObject({
+      ok: false,
+      error: { message: expect.stringContaining('structured_agent_session_unsupported') }
+    })
+    expect(hostCalls.send).not.toHaveBeenCalled()
+  })
+
+  it('serves mobile clients only after capability and setting negotiation', async () => {
+    const response = await call('agentSession.send', sendParams(), STRUCTURED_MOBILE_CLIENT, {
+      getClientSettings: () => ({ experimentalStructuredNativeChat: true })
+    })
+    expect(response).toMatchObject({ ok: true })
+    expect(hostCalls.send).toHaveBeenCalledTimes(1)
+  })
+
   it('serves an in-process caller, which negotiates no capabilities at all', async () => {
     const response = await call('agentSession.send', sendParams())
     expect(response).toMatchObject({ ok: true })
@@ -290,6 +327,37 @@ describe('method routing', () => {
     expect(runtimeCalls.publishStructuredAgentSessionTab).toHaveBeenCalledWith(
       expect.objectContaining({ sessionId: SESSION, activate: true })
     )
+  })
+
+  it('reports an unknown create outcome when attach commits before tab publication fails', async () => {
+    const worktree = 'id:workspace-1'
+    const params = {
+      envelope: envelope({
+        expectedRuntimeFence: null,
+        payloadFingerprint: computeAgentSessionPayloadFingerprint({
+          method: 'agentSession.create',
+          sessionId: SESSION,
+          fields: { worktree, agent: 'codex' }
+        })
+      }),
+      worktree,
+      agent: 'codex'
+    }
+
+    const response = await call('agentSession.create', params, STRUCTURED_CLIENT, {
+      publishStructuredAgentSessionTab: vi.fn(async () => {
+        throw new Error('publish failed')
+      })
+    })
+
+    expect(hostCalls.attach).toHaveBeenCalledOnce()
+    expect(response).toMatchObject({
+      ok: true,
+      result: {
+        ok: false,
+        refusal: { code: 'agent_session_operation_unknown' }
+      }
+    })
   })
 
   it('separates create from ensure by the fence the client may declare', async () => {

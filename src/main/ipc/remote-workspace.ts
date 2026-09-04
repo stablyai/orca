@@ -2,14 +2,20 @@ import { ipcMain, type BrowserWindow } from 'electron'
 import type { Store } from '../persistence'
 import { getActiveMultiplexer, getSshConnectionStore } from './ssh'
 import { exportRemoteWorkspaceSession } from '../../shared/remote-workspace-session-projection'
-import type {
-  RemoteWorkspaceChangedEvent,
-  RemoteWorkspaceObservedPatchResult,
-  RemoteWorkspaceSession
+import {
+  REMOTE_WORKSPACE_CHANGED_NOTIFICATION,
+  REMOTE_WORKSPACE_STALE_NOTIFICATION,
+  type RemoteWorkspaceChangedEvent,
+  type RemoteWorkspaceObservedPatchResult,
+  type RemoteWorkspaceObservedSnapshot,
+  type RemoteWorkspaceSession
 } from '../../shared/remote-workspace-types'
 import type { WorkspaceSessionState } from '../../shared/workspace-session-state-types'
 import { getRepoIdFromWorktreeId } from '../../shared/worktree/id'
-import { parseExecutionHostId } from '../../shared/execution-host'
+import {
+  createRepoRowExecutionHostLookup,
+  resolveWorktreeExecutionHost
+} from '../../shared/worktree-execution-host-resolution'
 import { getRemoteWorkspaceNamespace } from './remote-workspace-namespace'
 import { registerRemoteWorkspaceNotificationHandler } from './remote-workspace-events'
 import { CLIENT_ID } from './remote-workspace-client-identity'
@@ -29,6 +35,10 @@ import {
   rememberRemoteWorkspaceSnapshot
 } from './remote-workspace-snapshot-cache'
 import { normalizeSnapshot } from './remote-workspace-snapshot-normalization'
+import {
+  _resetRemoteWorkspaceStaleResyncForTests,
+  resyncStaleRemoteWorkspace
+} from './remote-workspace-stale-resync'
 
 let mainWindowGetter: (() => BrowserWindow | null) | null = null
 let unregisterRemoteWorkspaceNotifications: (() => void) | null = null
@@ -36,6 +46,7 @@ let unregisterRemoteWorkspaceNotifications: (() => void) | null = null
 export function _resetRemoteWorkspaceCachesForTests(): void {
   clearRemoteWorkspaceSnapshotCache()
   clearRemoteWorkspacePatchTails()
+  _resetRemoteWorkspaceStaleResyncForTests()
 }
 
 export function _getRemoteWorkspaceCacheSizesForTests(): {
@@ -100,12 +111,15 @@ function targetForWorktree(
   worktreeId: string,
   executionHostId?: string
 ): string | null {
-  const parsedHostId = parseExecutionHostId(executionHostId)
-  if (parsedHostId?.kind === 'ssh') {
-    return parsedHostId.targetId
-  }
-  const repoId = getRepoIdFromWorktreeId(worktreeId)
-  return store.getRepo(repoId)?.connectionId ?? null
+  // Why: this decides which SSH target a workspace session is exported to. The old fallback read
+  // `getRepo(id)?.connectionId`, which is host-blind — the same repo id can name rows on several
+  // hosts, so a session could be published to a machine that never owned the worktree (#11163).
+  // Unresolvable ownership exports to nobody rather than guessing.
+  const resolution = resolveWorktreeExecutionHost(
+    createRepoRowExecutionHostLookup(store.getRepos()),
+    { repoId: getRepoIdFromWorktreeId(worktreeId), hostId: executionHostId ?? null }
+  )
+  return resolution.kind === 'resolved' ? resolution.connectionId : null
 }
 
 function exportSessionForTarget(
@@ -119,12 +133,40 @@ function exportSessionForTarget(
   })
 }
 
+function sendRemoteWorkspaceChanged(
+  targetId: string,
+  snapshot: RemoteWorkspaceObservedSnapshot,
+  sourceClientId: string | undefined
+): void {
+  const event: RemoteWorkspaceChangedEvent = {
+    targetId,
+    snapshot,
+    ...(sourceClientId !== undefined ? { sourceClientId } : {})
+  }
+  const win = mainWindowGetter?.()
+  if (win && !win.isDestroyed()) {
+    win.webContents.send('remoteWorkspace:changed', event)
+  }
+}
+
 export function handleRemoteWorkspaceNotification(
   targetId: string,
   method: string,
   params: Record<string, unknown>
 ): void {
-  if (method !== 'workspace.changed') {
+  if (method === REMOTE_WORKSPACE_STALE_NOTIFICATION) {
+    const target = getSshConnectionStore()?.getTarget(targetId)
+    if (!target) {
+      return
+    }
+    // No sourceClientId on the resynced event: the marker names no author, and guessing one would
+    // let the renderer's own-echo filter discard another device's change.
+    void resyncStaleRemoteWorkspace(target, (snapshot) =>
+      sendRemoteWorkspaceChanged(targetId, snapshot, undefined)
+    )
+    return
+  }
+  if (method !== REMOTE_WORKSPACE_CHANGED_NOTIFICATION) {
     return
   }
   const target = getSshConnectionStore()?.getTarget(targetId)
@@ -139,15 +181,7 @@ export function handleRemoteWorkspaceNotification(
     sourceClientId === CLIENT_ID
       ? rememberLocallyPatchedRemoteWorkspaceSnapshot(targetId, snapshot)
       : rememberRemoteWorkspaceSnapshot(targetId, snapshot)
-  const event: RemoteWorkspaceChangedEvent = {
-    targetId,
-    snapshot: observedSnapshot,
-    sourceClientId
-  }
-  const win = mainWindowGetter?.()
-  if (win && !win.isDestroyed()) {
-    win.webContents.send('remoteWorkspace:changed', event)
-  }
+  sendRemoteWorkspaceChanged(targetId, observedSnapshot, sourceClientId)
 }
 
 export function registerRemoteWorkspaceHandlers(

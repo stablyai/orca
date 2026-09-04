@@ -91,12 +91,23 @@ export const STRUCTURED_AGENT_SESSION_METHODS: RpcAnyMethod[] = [
           envelope: { ...params.envelope, payloadFingerprint: hostFingerprint }
         })
         if (result.ok && resolved.agent === 'codex') {
-          await ctx.runtime.publishStructuredAgentSessionTab({
-            workspaceId: resolved.location.workspaceId,
-            sessionId: result.value.sessionId,
-            agent: 'codex',
-            activate: true
-          })
+          try {
+            await ctx.runtime.publishStructuredAgentSessionTab({
+              workspaceId: resolved.location.workspaceId,
+              sessionId: result.value.sessionId,
+              agent: 'codex',
+              activate: true
+            })
+          } catch (error) {
+            console.warn('[agent-session] create committed before tab publication failed', error)
+            return {
+              ok: false,
+              refusal: {
+                code: 'agent_session_operation_unknown',
+                message: 'The Codex chat may have been created, but its tab could not be confirmed.'
+              }
+            }
+          }
         }
         return result
       }
@@ -129,11 +140,11 @@ export const STRUCTURED_AGENT_SESSION_METHODS: RpcAnyMethod[] = [
     params: OptionsParams,
     handler: async (params, ctx) => {
       const host = requireHost(ctx)
-      await host.close(params.sessionId)
       // Terminal-disposal closes use this RPC without the session-tabs retirement RPC.
       if (typeof host.setSessionTabVisibility === 'function') {
         await host.setSessionTabVisibility(params.sessionId, false)
       }
+      await host.close(params.sessionId)
       return { ok: true as const }
     }
   }),

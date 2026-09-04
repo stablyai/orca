@@ -16,6 +16,13 @@ const REPO = '/repo-root'
 const FORK_SSH = 'git@github.com:contributor/orca.git'
 const FORK_HTTPS = 'https://github.com/contributor/orca.git'
 
+/** Real `git remote -v` shape: a fetch row and a push row per remote, tab-separated. */
+export function renderRemoteVerbose(remotes: Record<string, string>): string {
+  return Object.entries(remotes)
+    .flatMap(([name, url]) => [`${name}\t${url} (fetch)`, `${name}\t${url} (push)`])
+    .join('\n')
+}
+
 // A stateful fake git: `remotes` maps name -> url. `remote add` mutates it so
 // later lookups see the new remote, matching real git behavior. Defaults
 // `symbolic-ref --short HEAD` to a real branch name, since a worktree's HEAD
@@ -30,6 +37,9 @@ function makeRepoExec(
     }
     if (args[0] === 'remote' && args.length === 1) {
       return { stdout: Object.keys(remotes).join('\n'), stderr: '' }
+    }
+    if (args[0] === 'remote' && args[1] === '-v' && args.length === 2) {
+      return { stdout: renderRemoteVerbose(remotes), stderr: '' }
     }
     if (args[0] === 'remote' && args[1] === 'get-url') {
       const url = remotes[args[2]!]

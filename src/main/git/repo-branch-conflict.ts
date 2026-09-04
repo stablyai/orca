@@ -147,10 +147,12 @@ export function getBranchConflictKind(
   const execOptions = gitExecOptions(path, options)
   const runLocalGit = (
     argv: string[],
-    commandOptions?: ExactRefProbeExecOptions & { stdin?: string }
+    commandOptions?: ExactRefProbeExecOptions & { stdin?: string },
+    captureWslLoginShellOutput = false
   ): Promise<{ stdout: string }> =>
     gitExecFileAsync(argv, {
       ...execOptions,
+      ...(captureWslLoginShellOutput ? { captureWslLoginShellOutput: true } : {}),
       ...(commandOptions?.maxBuffer === undefined ? {} : { maxBuffer: commandOptions.maxBuffer }),
       ...(commandOptions?.timeoutMs === undefined ? {} : { timeout: commandOptions.timeoutMs }),
       ...(commandOptions?.stdin === undefined ? {} : { stdin: commandOptions.stdin })
@@ -160,7 +162,13 @@ export function getBranchConflictKind(
     branchName,
     allowedBaseRef,
     {},
-    (argv, commandOptions) => runLocalGit(argv, commandOptions)
+    // Why fenced: the batch decides from stdout, and a WSL login-shell fallback writes
+    // the distro's rc/motd banner to that same stream. The extra lines break the
+    // one-line-per-ref contract, so every batch came back undecided and fell through to
+    // one `show-ref` subprocess per remote -- the exact cost the batch exists to remove.
+    // `show-ref --verify --quiet` prints nothing and is read by exit code, so it needs
+    // no fence; the capture wrapper preserves the payload's exit status either way.
+    (argv, commandOptions) => runLocalGit(argv, commandOptions, true)
   )
 }
 

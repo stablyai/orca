@@ -167,7 +167,7 @@ export class OrcaRuntimeWithSyncMobileSessionTabs extends OrcaRuntimeWithWriteOr
       const storedVersion = existing
         ? Math.max(nextSnapshot.snapshotVersion, existing.snapshotVersion + 1)
         : nextSnapshot.snapshotVersion
-      this.mobileSessionTabsByWorktree.set(
+      this.storeMobileSessionSnapshot(
         snapshot.worktree,
         storedVersion === nextSnapshot.snapshotVersion
           ? nextSnapshot
@@ -195,7 +195,7 @@ export class OrcaRuntimeWithSyncMobileSessionTabs extends OrcaRuntimeWithWriteOr
             preserved.tabs.length === existing.tabs.length &&
             preserved.tabs.every((tab, index) => tab === existing.tabs[index])
           if (!preservedIsNoOp) {
-            this.mobileSessionTabsByWorktree.set(worktreeId, preserved)
+            this.storeMobileSessionSnapshot(worktreeId, preserved)
           }
           // Why: the stored entry is no longer the renderer's publication, so a
           // future renderer frame must be re-merged even if it reuses the pair.

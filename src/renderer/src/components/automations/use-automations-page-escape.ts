@@ -18,6 +18,9 @@ export function useAutomationsPageEscape({
     isDetailOpen,
     selectedAutomationRunPageId,
     selectedExternalRunPage,
+    pageView,
+    runPageOrigin,
+    setPageView,
     setActivePaneTab,
     setIsDetailOpen,
     setSelectedAutomationRunPageId,
@@ -61,6 +64,15 @@ export function useAutomationsPageEscape({
         }
       }
 
+      if (pageView === 'run') {
+        event.preventDefault()
+        setSelectedAutomationRunPageId(null)
+        setPageView(runPageOrigin === 'automation' ? 'automations' : 'runs')
+        setIsDetailOpen(runPageOrigin === 'automation')
+        setActivePaneTab(runPageOrigin === 'automation' ? 'runs' : 'overview')
+        return
+      }
+
       if (isDetailOpen) {
         event.preventDefault()
         if (selectedExternalRunPage) {
@@ -73,6 +85,12 @@ export function useAutomationsPageEscape({
         }
         setIsDetailOpen(false)
         setActivePaneTab('overview')
+        return
+      }
+
+      if (pageView === 'runs') {
+        event.preventDefault()
+        setPageView('automations')
         return
       }
 
@@ -89,11 +107,14 @@ export function useAutomationsPageEscape({
     deleteTarget,
     externalDeleteTarget,
     isDetailOpen,
+    pageView,
+    runPageOrigin,
     selectedAutomationRunPageId,
     selectedExternalRunPage,
     setActivePaneTab,
     setIsDetailOpen,
     setSelectedAutomationRunPageId,
-    setSelectedExternalRunPage
+    setSelectedExternalRunPage,
+    setPageView
   ])
 }

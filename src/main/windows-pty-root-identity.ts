@@ -1,4 +1,5 @@
 import { queryWindowsProcessRowsFresh } from './providers/windows-foreground-process-rows'
+import { readOrcaChromiumProcessPids } from './orca-chromium-process-pids'
 
 /**
  * Whether a PID still sits inside this process's own subtree. Note this is
@@ -33,17 +34,25 @@ export type WindowsProcessLinkReader = () => Promise<readonly ProcessLink[] | nu
  * `own`. That is not remote during teardown, when Orca is itself the process
  * allocating pids. Closing it needs real identity (a `Win32_Process.CreationDate`
  * baseline, the analogue of the POSIX `lstart` check, or an inherited handle /
- * Job Object).
+ * Job Object). The Chromium-process half of it IS closed: `ownChromiumPids`
+ * refuses any pid Electron is currently accounting for.
  */
 export function classifyWindowsTreeKillTarget(
   rootPid: number,
   rows: readonly ProcessLink[],
-  ownerPid: number
+  ownerPid: number,
+  ownChromiumPids: ReadonlySet<number> = readOrcaChromiumProcessPids()
 ): WindowsTreeKillTarget {
   // Why: our own pid is never a PTY root, so reading it here means the pid is
   // corrupt. `foreign` is the refusing verdict, which is what that must get —
   // `taskkill /T /F` on ourselves would take Orca and every pane down with it.
   if (!Number.isInteger(rootPid) || rootPid <= 0 || rootPid === ownerPid) {
+    return 'foreign'
+  }
+  // Same reasoning one hop out: our renderer, GPU and utility children are all
+  // direct children of ownerPid, so the ancestry walk below calls them `own` and
+  // hands teardown a licence to taskkill /T /F Orca's own UI (#10680).
+  if (ownChromiumPids.has(rootPid)) {
     return 'foreign'
   }
   const parentByPid = new Map<number, number | null>()
@@ -118,6 +127,7 @@ export async function verifyWindowsTreeKillTarget(
   deps: {
     readRows?: WindowsProcessLinkReader
     ownerPid?: number
+    ownChromiumPids?: ReadonlySet<number>
     platform?: NodeJS.Platform
     timeoutMs?: number
   } = {}
@@ -134,5 +144,10 @@ export async function verifyWindowsTreeKillTarget(
   if (!rows) {
     return 'unknown'
   }
-  return classifyWindowsTreeKillTarget(rootPid, rows, deps.ownerPid ?? process.pid)
+  return classifyWindowsTreeKillTarget(
+    rootPid,
+    rows,
+    deps.ownerPid ?? process.pid,
+    deps.ownChromiumPids ?? readOrcaChromiumProcessPids()
+  )
 }

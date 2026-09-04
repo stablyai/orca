@@ -183,7 +183,13 @@ export function startPreparation({
       await cleanupStalePreparations(preparationHostKey(repoPathKey, wslDistro), repoPath, options)
       await mkdir(toHostFilesystemPath(preparationRoot), { recursive: true })
       // Already canonical, so the add re-resolves nothing.
-      await prepareWorktreeCreateCheckout(repoPath, preparedPath, canonicalBase, lockReason, options)
+      await prepareWorktreeCreateCheckout(
+        repoPath,
+        preparedPath,
+        canonicalBase,
+        lockReason,
+        options
+      )
     })()
   } satisfies PreparationEntry)
   preparations.set(key, entry)

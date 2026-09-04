@@ -1,6 +1,7 @@
 /* eslint-disable max-lines */
 // Why: worktree create helpers (local + remote) split out of worktrees.ts; the cohesive create flow runs this file just over the per-file line limit.
 
+import { getRepoHostedReviewExecutionHostId } from '../source-control/hosted-review-execution-host'
 import type { BrowserWindow } from 'electron'
 import { posix, win32 } from 'node:path'
 import { existsSync } from 'node:fs'
@@ -955,7 +956,7 @@ function getSelectedReviewLookupHints(args: SelectedReviewBranchInput): {
 }
 
 async function getSelectedHostedReviewForBranch(
-  repo: Pick<Repo, 'path' | 'connectionId'>,
+  repo: Pick<Repo, 'path' | 'connectionId' | 'executionHostId'>,
   branchName: string,
   args: SelectedReviewBranchInput
 ): Promise<{ matchesSelected: boolean; number: number } | null> {
@@ -965,7 +966,7 @@ async function getSelectedHostedReviewForBranch(
   }
   const review = await getHostedReviewForBranch({
     repoPath: repo.path,
-    connectionId: repo.connectionId ?? null,
+    executionHostId: getRepoHostedReviewExecutionHostId(repo),
     branch: branchName,
     ...getSelectedReviewLookupHints(args)
   })

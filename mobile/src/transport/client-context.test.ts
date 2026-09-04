@@ -146,8 +146,8 @@ beforeEach(() => {
 })
 
 describe('useHostClient', () => {
-  it('rebinds when Expo reuses a screen between two connected cached hosts', async () => {
-    const host2 = { ...HOST, id: 'host-2', name: 'Host 2' }
+  it('rebinds the client and its authenticated identity together across cached hosts', async () => {
+    const host2 = { ...HOST, id: 'host-2', name: 'Host 2', deviceToken: 'token-2' }
     const client1 = makeFakeClient('connected')
     const client2 = makeFakeClient('connected')
     connectMock.mockReturnValueOnce(client1).mockReturnValueOnce(client2)
@@ -155,11 +155,13 @@ describe('useHostClient', () => {
 
     let selectedHostId = HOST.id
     let selectedClient: RpcClient | null = null
+    let selectedClientId: string | null = null
     let selectedState: ConnectionState = 'disconnected'
     let renderer: ReactTestRenderer | null = null
     function Probe(): null {
       const selected = useHostClient(selectedHostId)
       selectedClient = selected.client
+      selectedClientId = selected.clientId
       selectedState = selected.state
       useHostClient(host2.id)
       return null
@@ -171,16 +173,18 @@ describe('useHostClient', () => {
         await Promise.resolve()
       })
       expect(selectedClient).toBe(client1)
+      expect(selectedClientId).toBe(HOST.deviceToken)
       expect(selectedState).toBe('connected')
 
       selectedHostId = host2.id
-      client2.emitState('disconnected')
       await act(async () => {
+        client2.emitState('disconnected')
         renderer?.update(createElement(RpcClientProvider, null, createElement(Probe)))
         await Promise.resolve()
       })
 
       expect(selectedClient).toBe(client2)
+      expect(selectedClientId).toBe(host2.deviceToken)
       expect(selectedState).toBe('disconnected')
       expect(connectMock).toHaveBeenCalledTimes(2)
     } finally {

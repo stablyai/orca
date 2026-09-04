@@ -105,6 +105,13 @@ type EventedProcess = EventEmitter & {
   killed: boolean
 }
 
+// Windows writes read their source asynchronously before spawning, so a close emitted straight
+// after the call can beat the listener. Emit it from the spawn instead.
+function closeOnceSpawned(proc: EventedProcess): EventedProcess {
+  setImmediate(() => proc.emit('close', 0, null))
+  return proc
+}
+
 function createEventedProcess(): EventedProcess {
   const proc = new EventEmitter() as EventedProcess
   proc.stdin = Object.assign(new EventEmitter(), {
@@ -266,6 +273,52 @@ describe('spawnSystemSsh', () => {
     expect(args).not.toContain('-i')
     expect(args).not.toContain('IdentityAgent=/tmp/agent.sock')
     expect(args).not.toContain('ProxyCommand=ignored')
+  })
+
+  it('states the stored endpoint when no Host block claims the alias', () => {
+    // A wildcard `Host *` supplies the proxy for every alias, so an alias whose own block is gone
+    // still reads as config-backed and gets dialled bare - the #11746 P1.
+    const args = buildSshArgs(
+      createTarget({
+        source: 'ssh-config',
+        configHost: 'prod',
+        host: '10.0.0.5',
+        port: 2222,
+        username: 'deploy'
+      }),
+      { aliasClaimedByConfig: false }
+    )
+
+    expect(args).toContain('Hostname=10.0.0.5')
+    expect(args.slice(args.indexOf('-p'))).toContain('2222')
+    expect(args.slice(args.indexOf('-l'))).toContain('deploy')
+    // The alias is still the destination so OpenSSH keeps applying the wildcard's proxy.
+    expect(args.at(-1)).toBe('prod')
+    expect(args).not.toContain('deploy@prod')
+    expect(args).not.toContain('-i')
+    expect(args).not.toContain('-J')
+  })
+
+  it('stays a no-op when the stored endpoint matches the unclaimed alias', () => {
+    const args = buildSshArgs(
+      createTarget({ source: 'ssh-config', configHost: 'prod', host: 'prod', username: '' }),
+      { aliasClaimedByConfig: false }
+    )
+
+    expect(args.some((arg) => arg.startsWith('Hostname='))).toBe(false)
+    expect(args).not.toContain('-p')
+    expect(args).not.toContain('-l')
+    expect(args.at(-1)).toBe('prod')
+  })
+
+  it('leaves a manual target alone even when nothing claims its alias', () => {
+    const args = buildSshArgs(
+      createTarget({ source: 'manual', configHost: 'prod', host: '10.0.0.5', port: 2222 }),
+      { aliasClaimedByConfig: false }
+    )
+
+    expect(args.some((arg) => arg.startsWith('Hostname='))).toBe(false)
+    expect(args).toContain('deploy@prod')
   })
 
   it('passes an explicit main-owned OpenSSH config as one argument', () => {
@@ -658,7 +711,7 @@ describe('spawnSystemSsh', () => {
 
   it('writes files to Windows system SSH targets with PowerShell stdin bytes', async () => {
     const proc = createEventedProcess()
-    spawnMock.mockReturnValue(proc)
+    spawnMock.mockImplementation(() => closeOnceSpawned(proc))
     const hostPlatform = getRemoteHostPlatform('win32-x64')
 
     const promise = writeFileViaSystemSsh(
@@ -667,7 +720,6 @@ describe('spawnSystemSsh', () => {
       '0.1.0',
       { hostPlatform }
     )
-    proc.emit('close', 0, null)
 
     await expect(promise).resolves.toBeUndefined()
     const args = spawnMock.mock.calls[0][1] as string[]
@@ -679,7 +731,7 @@ describe('spawnSystemSsh', () => {
 
   it('writes binary buffers to Windows system SSH targets with CreateNew mode', async () => {
     const proc = createEventedProcess()
-    spawnMock.mockReturnValue(proc)
+    spawnMock.mockImplementation(() => closeOnceSpawned(proc))
     const hostPlatform = getRemoteHostPlatform('win32-x64')
 
     const promise = writeBufferViaSystemSsh(
@@ -688,7 +740,6 @@ describe('spawnSystemSsh', () => {
       Buffer.from('png'),
       { hostPlatform, exclusive: true }
     )
-    proc.emit('close', 0, null)
 
     await expect(promise).resolves.toBeUndefined()
     const args = spawnMock.mock.calls[0][1] as string[]
@@ -729,7 +780,7 @@ describe('spawnSystemSsh', () => {
 
   it('forces standalone SSH for Windows file writes when requested', async () => {
     const proc = createEventedProcess()
-    spawnMock.mockReturnValue(proc)
+    spawnMock.mockImplementation(() => closeOnceSpawned(proc))
     const hostPlatform = getRemoteHostPlatform('win32-x64')
 
     const promise = writeFileViaSystemSsh(
@@ -738,7 +789,6 @@ describe('spawnSystemSsh', () => {
       '0.1.0',
       { hostPlatform, disableControlMaster: true }
     )
-    proc.emit('close', 0, null)
 
     await expect(promise).resolves.toBeUndefined()
     const args = spawnMock.mock.calls[0][1] as string[]
@@ -747,7 +797,7 @@ describe('spawnSystemSsh', () => {
     expect(args[standaloneControlIdx + 1]).toBe('none')
   })
 
-  it('uploads directories to Windows system SSH targets in one PowerShell batch', async () => {
+  it('uploads a Windows directory as a mkdir batch plus per-file writes, never one blob', async () => {
     const localDir = mkdtempSync(join(tmpdir(), 'orca-system-ssh-upload-'))
     writeFileSync(join(localDir, 'relay.js'), 'console.log("relay")')
     const spawned: EventedProcess[] = []
@@ -770,24 +820,17 @@ describe('spawnSystemSsh', () => {
     }
 
     const commands = spawnMock.mock.calls.map((call) => (call[1] as string[]).at(-1) ?? '')
-    expect(commands).toHaveLength(1)
+    // #16432: directories first (metadata only), then the file bytes on their own stdin. One batch
+    // meant base64-ing the whole bundle into a single PowerShell string, which the remote never read.
+    expect(commands).toHaveLength(2)
     expect(commands.every((command) => command.includes('powershell.exe'))).toBe(true)
     expect(commands.every((command) => !command.includes('/bin/sh'))).toBe(true)
     expect(commands.join('\n')).not.toContain('tar -xzf')
-    const payload = JSON.parse(spawned[0].stdin.end.mock.calls[0]?.[0] as string) as {
-      kind: string
-      path: string
-      contentsBase64?: string
-    }[]
-    expect(payload).toEqual(
-      expect.arrayContaining([
-        { kind: 'directory', path: 'C:/Users/me/.orca-remote/relay' },
-        {
-          kind: 'file',
-          path: 'C:/Users/me/.orca-remote/relay/relay.js',
-          contentsBase64: Buffer.from('console.log("relay")').toString('base64')
-        }
-      ])
+    expect(JSON.parse(spawned[0].stdin.end.mock.calls[0]?.[0] as string)).toEqual([
+      'C:/Users/me/.orca-remote/relay'
+    ])
+    expect(Buffer.from(spawned[1].stdin.end.mock.calls[0]?.[0] as Buffer).toString('utf-8')).toBe(
+      'console.log("relay")'
     )
   })
 

@@ -4,6 +4,7 @@ import { defineMethod, type RpcAnyMethod } from '../core'
 import { CloseLifecycleTab, CloseTab } from './session-tabs-schemas'
 import { assertProjectedSessionTabVisible } from './session-tab-browser-placement-projection'
 import { projectSessionTabsForClient } from './session-tabs-inventory'
+import { isStructuredNativeChatEnabled } from './structured-agent-session-policy'
 
 export const SESSION_TAB_CLOSE_METHODS: RpcAnyMethod[] = [
   defineMethod({
@@ -14,7 +15,10 @@ export const SESSION_TAB_CLOSE_METHODS: RpcAnyMethod[] = [
         const visible = projectSessionTabsForClient(
           await context.runtime.listMobileSessionTabs(params.worktree, context.pairedDeviceId),
           context.clientKind,
-          context.clientCapabilities
+          context.clientCapabilities,
+          context.clientKind === 'mobile'
+            ? isStructuredNativeChatEnabled(context.runtime)
+            : undefined
         )
         assertProjectedSessionTabVisible(visible, params.tabId)
       }
@@ -80,7 +84,10 @@ export const SESSION_TAB_CLOSE_METHODS: RpcAnyMethod[] = [
         const visible = projectSessionTabsForClient(
           await context.runtime.listMobileSessionTabs(params.worktree, context.pairedDeviceId),
           context.clientKind,
-          context.clientCapabilities
+          context.clientCapabilities,
+          context.clientKind === 'mobile'
+            ? isStructuredNativeChatEnabled(context.runtime)
+            : undefined
         )
         assertProjectedSessionTabVisible(visible, params.tabId)
       }

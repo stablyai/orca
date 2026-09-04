@@ -20,7 +20,8 @@ export function useTerminalBrowserRetention(controller: TerminalParkingFoundatio
     mountedWorktreeIdsRef,
     renderedActiveWorktreeId,
     setBrowserGuestRetentionRevision,
-    workspaceSurfaces
+    workspaceSurfaceIds,
+    workspaceSurfaceIdSet
   } = controller
 
   useEffect(() => {
@@ -42,9 +43,8 @@ export function useTerminalBrowserRetention(controller: TerminalParkingFoundatio
     }
     const recency = browserGuestWorktreeRecencyRef.current
     touchBrowserGuestWorktreeRecency(recency, renderedActiveWorktreeId)
-    const surfaceIds = new Set(workspaceSurfaces.map((workspace) => workspace.id))
     for (let index = recency.length - 1; index >= 0; index--) {
-      if (!surfaceIds.has(recency[index])) {
+      if (!workspaceSurfaceIdSet.has(recency[index])) {
         recency.splice(index, 1)
       }
     }
@@ -55,7 +55,7 @@ export function useTerminalBrowserRetention(controller: TerminalParkingFoundatio
     const recencyIds = new Set(recency)
     const orderedWorktreeIds = [
       ...recency,
-      ...workspaceSurfaces.map((workspace) => workspace.id).filter((id) => !recencyIds.has(id))
+      ...workspaceSurfaceIds.filter((id) => !recencyIds.has(id))
     ]
     const evictedWorktreeIds = selectBrowserGuestEvictionWorktreeIds({
       orderedWorktreeIds,
@@ -82,7 +82,7 @@ export function useTerminalBrowserRetention(controller: TerminalParkingFoundatio
     // oxlint-disable-next-line react-hooks/exhaustive-deps -- controller refs preserve their original stable identities.
   }, [
     renderedActiveWorktreeId,
-    workspaceSurfaces,
+    workspaceSurfaceIds,
     browserGuestRetentionBudgetEnabled,
     browserGuestRetentionRevision
   ])

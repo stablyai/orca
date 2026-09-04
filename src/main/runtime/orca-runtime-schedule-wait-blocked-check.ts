@@ -5,8 +5,13 @@ import {
   WAIT_BLOCKED_KEYWORD_CARRY_CHARS,
   WAIT_BLOCKED_KEYWORD_PATTERN
 } from './orca-runtime-postlude'
-import { MAX_TAIL_CHARS } from './terminal-tail-limits'
-import type { TerminalTailWaitState } from './terminal-wait-tail-state'
+import {
+  appendWaitBlockedCarry,
+  createWaitBlockedCheckState,
+  readWaitBlockedCarry,
+  resetWaitBlockedCarry,
+  type WaitBlockedCheckState
+} from './wait-blocked-check-state'
 import {
   computeTerminalTailWaitState,
   tailGainedNewerBlockedReason
@@ -19,19 +24,16 @@ export class OrcaRuntimeWithScheduleWaitBlockedCheck extends OrcaRuntimeWithOnPt
   protected scheduleWaitBlockedCheck(ptyId: string, appendedText: string, at: number): void {
     let state = this.waitBlockedCheckStateByPtyId.get(ptyId)
     if (!state) {
-      state = { lastAt: 0, lastWaitState: null, appended: '', keywordCarry: '', timer: null }
+      state = createWaitBlockedCheckState()
       this.waitBlockedCheckStateByPtyId.set(ptyId, state)
     }
-    const appendedLower = appendedText.toLowerCase()
-    const keywordHit = WAIT_BLOCKED_KEYWORD_PATTERN.test(`${state.keywordCarry}${appendedLower}`)
-    state.keywordCarry = appendedLower.slice(-WAIT_BLOCKED_KEYWORD_CARRY_CHARS)
-    // Why the cap keeps the tail: the accumulated text only anchors boundary-
-    // spanning prompt detection; anything past the tail cap has scrolled out
-    // of the retained tail the check reads anyway.
-    state.appended =
-      state.appended.length + appendedText.length > MAX_TAIL_CHARS
-        ? `${state.appended}${appendedText}`.slice(-MAX_TAIL_CHARS)
-        : `${state.appended}${appendedText}`
+    // Why lowercase the joined window and not the chunk: the carry is already
+    // lowercase, so this is one folded copy instead of a discarded per-chunk copy
+    // plus the concatenation the pattern flattens anyway.
+    const keywordWindow = `${state.keywordCarry}${appendedText}`.toLowerCase()
+    const keywordHit = WAIT_BLOCKED_KEYWORD_PATTERN.test(keywordWindow)
+    state.keywordCarry = keywordWindow.slice(-WAIT_BLOCKED_KEYWORD_CARRY_CHARS)
+    appendWaitBlockedCarry(state.appended, appendedText)
     const elapsed = at - state.lastAt
     if (keywordHit || elapsed >= WAIT_BLOCKED_CHECK_MIN_INTERVAL_MS || elapsed < 0) {
       this.runWaitBlockedCheck(ptyId, state, at)
@@ -48,20 +50,10 @@ export class OrcaRuntimeWithScheduleWaitBlockedCheck extends OrcaRuntimeWithOnPt
     }
   }
 
-  protected runWaitBlockedCheck(
-    ptyId: string,
-    state: {
-      lastAt: number
-      lastWaitState: TerminalTailWaitState | null
-      appended: string
-      keywordCarry: string
-      timer: ReturnType<typeof setTimeout> | null
-    },
-    at: number
-  ): void {
+  protected runWaitBlockedCheck(ptyId: string, state: WaitBlockedCheckState, at: number): void {
     const pty = this.ptysById.get(ptyId)
     if (!pty) {
-      state.appended = ''
+      resetWaitBlockedCarry(state.appended)
       return
     }
     const nextWaitState = computeTerminalTailWaitState(
@@ -74,13 +66,19 @@ export class OrcaRuntimeWithScheduleWaitBlockedCheck extends OrcaRuntimeWithOnPt
       signal: null,
       fromTail: false
     }
-    if (tailGainedNewerBlockedReason(previousWaitState, nextWaitState, state.appended)) {
+    if (
+      tailGainedNewerBlockedReason(
+        previousWaitState,
+        nextWaitState,
+        readWaitBlockedCarry(state.appended)
+      )
+    ) {
       pty.waitBlockedAt = at
       this.recordAgentPromptPermissionObservation(ptyId)
     }
     state.lastAt = at
     state.lastWaitState = nextWaitState
-    state.appended = ''
+    resetWaitBlockedCarry(state.appended)
   }
 
   // Why: the scanner's first run after a restore seed compares against a null
@@ -95,7 +93,7 @@ export class OrcaRuntimeWithScheduleWaitBlockedCheck extends OrcaRuntimeWithOnPt
     }
     let state = this.waitBlockedCheckStateByPtyId.get(ptyId)
     if (!state) {
-      state = { lastAt: 0, lastWaitState: null, appended: '', keywordCarry: '', timer: null }
+      state = createWaitBlockedCheckState()
       this.waitBlockedCheckStateByPtyId.set(ptyId, state)
     }
     if (state.lastWaitState === null) {

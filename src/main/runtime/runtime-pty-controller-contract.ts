@@ -10,6 +10,7 @@ import type { PtyIncarnationId } from '../../shared/pty-incarnation'
 import type { PtyBindingSourceExpectation } from '../persistence'
 import type { ExecutionHostId } from '../../shared/execution-host'
 import type { PtyProviderBufferSnapshot, PtyProcessInfo, PtySpawnResult } from '../providers/types'
+import type { PtyProcessInspection } from '../providers/pty-process-inspection'
 
 export type RuntimePtyController = {
   claimStablePaneCreate?(args: {
@@ -107,8 +108,9 @@ export type RuntimePtyController = {
   getCwd?(ptyId: string): Promise<string | null>
   getForegroundProcess(ptyId: string): Promise<string | null>
   inspectProcess?(
-    ptyId: string
-  ): Promise<{ foregroundProcess: string | null; hasChildProcesses: boolean; unavailable?: true }>
+    ptyId: string,
+    options?: { expectedIncarnationId?: PtyIncarnationId }
+  ): Promise<PtyProcessInspection>
   confirmForegroundProcess?(ptyId: string): Promise<string | null>
   confirmShellForeground?(ptyId: string): Promise<boolean>
   hasChildProcesses?(ptyId: string): Promise<boolean>
@@ -118,15 +120,19 @@ export type RuntimePtyController = {
   hasPty?(ptyId: string): boolean | null
   listProcesses?(
     connectionId?: string | null,
-    opts?: { deadlineMs?: number }
+    opts?: { deadlineMs?: number; includeForegroundProcessEvidence?: boolean }
   ): Promise<PtyProcessInfo[]>
-  listProcessesWithHostScope?(opts?: { deadlineMs?: number }): Promise<{
+  listProcessesWithHostScope?(opts?: {
+    deadlineMs?: number
+    includeForegroundProcessEvidence?: boolean
+  }): Promise<{
     processes: PtyProcessInfo[]
     hostIds: ExecutionHostId[]
   }>
+  supportsForegroundProcessEvidence?(connectionId?: string | null): Promise<boolean>
   serializeBuffer?(
     ptyId: string,
-    opts?: { scrollbackRows?: number; altScreenForcesZeroRows?: boolean }
+    opts?: { scrollbackRows?: number }
   ): Promise<{
     data: string
     cols: number

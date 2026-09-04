@@ -33,6 +33,7 @@ import {
   getTabEntryOmniboxPlaceholder
 } from './tab-create-entry-copy'
 import { EMPTY_AGENT_OPTIONS, EMPTY_MENU_OPTIONS } from './tab-create-entry-empty-options'
+import { useStructuredCodexLaunchStatus } from '@/lib/structured-agent-session-launch'
 import type { TabEntryActionClassification } from './tab-create-entry-classifier'
 import type { TabBarCreateEntryProps } from './tab-create-entry-props'
 
@@ -59,6 +60,7 @@ function TabBarCreateEntrySession({
   const [error, setError] = useState<string | null>(null)
   const [switchError, setSwitchError] = useState<string | null>(null)
   const [selectionGuidance, setSelectionGuidance] = useState<string | null>(null)
+  const structuredCodexLaunchStatus = useStructuredCodexLaunchStatus(worktreeId)
   // null = follow ranking (deferred tabs can prepend); set on arrow keys only.
   const [pinnedOptionId, setPinnedOptionId] = useState<string | null>(null)
   const inputRef = useRef<HTMLInputElement>(null)
@@ -226,6 +228,9 @@ function TabBarCreateEntrySession({
       return
     }
     if (selectedOption.kind === 'agent') {
+      if (selectedOption.option.agent === 'codex' && structuredCodexLaunchStatus === 'pending') {
+        return
+      }
       onLaunchAgent?.(selectedOption.option.agent)
       onDidOpenEntry?.()
       return
@@ -374,8 +379,26 @@ function TabBarCreateEntrySession({
                 id={resultOptionDomId(index)}
                 option={option}
                 selected={index === activeSelectedIndex}
-                disabled={disabled || pending}
-                loading={pending && index === activeSelectedIndex}
+                labelOverride={
+                  option.kind === 'agent' &&
+                  option.option.agent === 'codex' &&
+                  structuredCodexLaunchStatus === 'pending'
+                    ? 'Starting Codex chat…'
+                    : undefined
+                }
+                disabled={
+                  disabled ||
+                  pending ||
+                  (option.kind === 'agent' &&
+                    option.option.agent === 'codex' &&
+                    structuredCodexLaunchStatus === 'pending')
+                }
+                loading={
+                  (pending && index === activeSelectedIndex) ||
+                  (option.kind === 'agent' &&
+                    option.option.agent === 'codex' &&
+                    structuredCodexLaunchStatus === 'pending')
+                }
                 onClick={() => {
                   setSelectionGuidance(null)
                   submitOption(option)

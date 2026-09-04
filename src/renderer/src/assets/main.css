@@ -1956,7 +1956,9 @@ html.native-shell .app-layout {
     transform 120ms cubic-bezier(0.2, 0.8, 0.2, 1),
     width 120ms cubic-bezier(0.2, 0.8, 0.2, 1),
     opacity 80ms ease-out;
-  will-change: transform, width, opacity;
+  /* Why no `width`: it is not compositable, so hinting it only pins a layer that
+     has to be re-rastered every frame of the transition anyway. */
+  will-change: transform, opacity;
 }
 
 [data-workspace-board-card-drop-indicator='true']::before,

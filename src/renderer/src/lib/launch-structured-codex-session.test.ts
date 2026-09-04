@@ -45,14 +45,17 @@ describe('structured Codex launch', () => {
     }))
 
     const intent = createStructuredCodexSessionLaunchIntent('workspace-1')
-    const sessionId = await launchStructuredCodexSession(intent)
+    const receipt = await launchStructuredCodexSession(intent)
     const params = vi.mocked(callStructuredAgentSession).mock.calls[0]?.[2] as {
       envelope: { sessionId: string; payloadFingerprint: string }
       worktree: string
       agent: 'codex'
     }
 
-    expect(sessionId).toMatch(/^codex_[A-Za-z0-9_]{36}$/)
+    expect(receipt).toEqual({
+      sessionId: expect.stringMatching(/^codex_[A-Za-z0-9_]{36}$/),
+      fence: 1
+    })
     expect(callStructuredAgentSession).toHaveBeenCalledWith(
       { kind: 'local' },
       'agentSession.create',

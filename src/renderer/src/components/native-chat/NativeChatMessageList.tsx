@@ -16,33 +16,15 @@ import { shouldShowNativeChatTypingIndicator } from './native-chat-typing-indica
 import { NativeChatWorkingStatus } from './NativeChatWorkingStatus'
 import { useNativeChatTurnStatus } from './use-native-chat-turn-status'
 import { nativeChatProseToMarkdown } from './native-chat-prose'
+import { NativeChatTypingIndicatorRow } from './NativeChatTypingIndicatorRow'
 import {
   NativeChatAgentControls,
   NativeChatImageAttachments,
   ProviderFrameRow
 } from './NativeChatTranscriptChrome'
+import type { RuntimeFileOperationArgs } from '@/runtime/runtime-file-client'
 
 export { ProviderFrameRow } from './NativeChatTranscriptChrome'
-
-function TypingIndicatorRow(): React.JSX.Element {
-  return (
-    <div
-      className="flex items-center justify-start"
-      aria-label={translate('components.native-chat.status.responding', 'Agent is responding')}
-      aria-live="polite"
-    >
-      <div className="flex h-8 items-center gap-1.5 text-muted-foreground">
-        {[0, 1, 2].map((i) => (
-          <span
-            key={i}
-            className="size-1.5 animate-bounce rounded-full bg-muted-foreground/70"
-            style={{ animationDelay: `${i * 160}ms` }}
-          />
-        ))}
-      </div>
-    </div>
-  )
-}
 
 function geometryOf(el: HTMLElement): ScrollGeometry {
   return { scrollTop: el.scrollTop, scrollHeight: el.scrollHeight, clientHeight: el.clientHeight }
@@ -62,7 +44,8 @@ function MessageRow({
   allowFileUriLinks = false,
   deliveryFailed = false,
   activityExpandOverride,
-  structuredActivityUi = true
+  structuredActivityUi = true,
+  runtimeContext
 }: {
   message: NativeChatMessage
   expandSignal: boolean
@@ -74,6 +57,7 @@ function MessageRow({
   deliveryFailed?: boolean
   activityExpandOverride?: boolean
   structuredActivityUi?: boolean
+  runtimeContext?: RuntimeFileOperationArgs | null
 }): React.JSX.Element | null {
   const rowRef = useRef<HTMLDivElement | null>(null)
   const { prose, tools } = useMemo(() => splitNativeChatBlocks(message.blocks), [message.blocks])
@@ -113,7 +97,11 @@ function MessageRow({
         <div className="max-w-[85%] rounded-lg rounded-tr-sm bg-muted px-3.5 py-2.5 text-sm text-foreground">
           {markdown ? (
             <>
-              <NativeChatImageAttachments blocks={prose} />
+              <NativeChatImageAttachments
+                blocks={prose}
+                runtimeContext={runtimeContext}
+                enablePreview={runtimeContext !== undefined}
+              />
               <CommentMarkdown
                 content={markdown}
                 variant="document"
@@ -123,7 +111,11 @@ function MessageRow({
               />
             </>
           ) : (
-            <NativeChatImageAttachments blocks={prose} />
+            <NativeChatImageAttachments
+              blocks={prose}
+              runtimeContext={runtimeContext}
+              enablePreview={runtimeContext !== undefined}
+            />
           )}
         </div>
         {deliveryFailed ? (
@@ -152,7 +144,11 @@ function MessageRow({
         isSystem && 'text-xs text-muted-foreground'
       )}
     >
-      <NativeChatImageAttachments blocks={prose} />
+      <NativeChatImageAttachments
+        blocks={prose}
+        runtimeContext={runtimeContext}
+        enablePreview={runtimeContext !== undefined}
+      />
       {markdown ? (
         <CommentMarkdown
           content={markdown}
@@ -191,7 +187,8 @@ export function NativeChatMessageList({
   allowFileUriLinks = false,
   workingStartedAt,
   failedDeliveryMessageIds,
-  showTurnStatus = true
+  showTurnStatus = true,
+  runtimeContext
 }: {
   session: NativeChatLiveSession
   isWorking: boolean
@@ -205,6 +202,7 @@ export function NativeChatMessageList({
   failedDeliveryMessageIds?: ReadonlySet<string>
   /** Turn timing/disclosure is available only on the structured Codex lane. */
   showTurnStatus?: boolean
+  runtimeContext?: RuntimeFileOperationArgs | null
 }): React.JSX.Element {
   const scrollRef = useRef<HTMLDivElement | null>(null)
   const contentRef = useRef<HTMLDivElement | null>(null)
@@ -231,7 +229,6 @@ export function NativeChatMessageList({
 
   const stuckToBottomRef = useRef(stuckToBottom)
   stuckToBottomRef.current = stuckToBottom
-
   const { hasMore, loadingEarlier, loadEarlier } = session
 
   // Keep hidden harness turns as fold boundaries, then strip them before render.
@@ -401,6 +398,7 @@ export function NativeChatMessageList({
                   deliveryFailed={failedDeliveryMessageIds?.has(message.id) === true}
                   structuredActivityUi={showTurnStatus}
                   activityExpandOverride={turnKey ? expandedTurnIds.has(turnKey) : undefined}
+                  runtimeContext={runtimeContext}
                 />
                 {showTurnStatus &&
                 status &&
@@ -430,7 +428,7 @@ export function NativeChatMessageList({
               workedSeconds={turnStatuses.active.workedSeconds}
             />
           ) : null}
-          {!showTurnStatus && showTypingIndicator ? <TypingIndicatorRow /> : null}
+          {!showTurnStatus && showTypingIndicator ? <NativeChatTypingIndicatorRow /> : null}
         </div>
       </div>
       {showJump ? (

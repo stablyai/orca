@@ -1,0 +1,33 @@
+{
+  "name": "orca-cloud",
+  "private": true,
+  "version": "0.0.0",
+  "packageManager": "pnpm@10.24.0",
+  "engines": {
+    "node": ">=24 <27",
+    "pnpm": ">=10"
+  },
+  "scripts": {
+    "build": "pnpm -r build",
+    "dev": "pnpm --filter @orca-cloud/relay dev",
+    "incident:relay": "pnpm --filter @orca-cloud/relay-ops incident:monitor",
+    "incident:relay-preflight": "pnpm --filter @orca-cloud/relay-ops incident:preflight",
+    "infra:apply": "node dev/scripts/infra.mjs apply",
+    "infra:init": "node dev/scripts/infra.mjs init",
+    "infra:plan": "node dev/scripts/infra.mjs plan",
+    "lint": "pnpm -r lint",
+    "load:relay:controls": "node dev/scripts/load-relay-controls.mjs",
+    "load:relay:model": "node dev/scripts/run-relay-load-model.mjs",
+    "load:relay:recovery-gate": "node dev/scripts/run-relay-recovery-wave-gate.mjs",
+    "ops:relay": "pnpm --filter @orca-cloud/relay-ops dev",
+    "pretest": "node --test dev/scripts/capture-terraform-plan-baseline.test.mjs dev/scripts/operate-relay-asia-admission.test.mjs dev/scripts/prepare-relay-asia-director-cells.test.mjs dev/scripts/prepare-relay-asia-topology-input.test.mjs dev/scripts/production-cloud-sql-rollout-lock.test.mjs dev/scripts/read-relay-serving-regional-placement-version.test.mjs dev/scripts/relay-asia-admission-workflow.test.mjs dev/scripts/relay-asia-rollout-evidence.test.mjs dev/scripts/relay-asia-topology-workflow.test.mjs dev/scripts/relay-cloud-sql-connection-budget.test.mjs dev/scripts/relay-load-reader-evidence.test.mjs dev/scripts/relay-staging-deploy-identity.test.mjs dev/scripts/sanitize-relay-asia-admission-result.test.mjs dev/scripts/terraform-root-partition.test.mjs dev/scripts/validate-relay-asia-topology-plan.test.mjs ../.github/actions/cloud-sql-rollout-lease/action-contract.test.mjs ../.github/actions/cloud-sql-rollout-lease/storage-lease.test.mjs",
+    "test": "pnpm -r test && node --test dev/scripts/classify-relay-production-capacity-director.test.mjs dev/scripts/classify-relay-staging-bootstrap.test.mjs dev/scripts/deploy-relay-blue-green.test.mjs dev/scripts/deploy-relay-gce-candidate.test.mjs dev/scripts/deploy-relay-gce-multi-target.test.mjs dev/scripts/github-smoke-token.test.mjs dev/scripts/infra.test.mjs dev/scripts/operate-relay-regional-rehome.test.mjs dev/scripts/power-staging-relay.test.mjs dev/scripts/prepare-relay-capacity-canary.test.mjs dev/scripts/prepare-relay-production-capacity-canary.test.mjs dev/scripts/probe-relay-legacy-admission.test.mjs dev/scripts/probe-relay-rehome-trust.test.mjs dev/scripts/production-cell-image-digest-consistency.test.mjs dev/scripts/read-relay-production-capacity-identity.test.mjs dev/scripts/relay-admission-selector.test.mjs dev/scripts/relay-gce-terraform-fence.test.mjs dev/scripts/relay-load-connection-failure.test.mjs dev/scripts/relay-load-control-peer.test.mjs dev/scripts/relay-load-director-capacity-gate.test.mjs dev/scripts/relay-load-model.test.mjs dev/scripts/relay-load-phase-barrier.test.mjs dev/scripts/relay-load-placement-boundary.test.mjs dev/scripts/relay-load-profile.test.mjs dev/scripts/relay-load-rebind-boundary.test.mjs dev/scripts/relay-load-region-behavior.test.mjs dev/scripts/relay-load-request-unit-boundary.test.mjs dev/scripts/relay-load-run-lifecycle.test.mjs dev/scripts/relay-monitor-evidence.test.mjs dev/scripts/relay-production-capacity-wave.test.mjs dev/scripts/relay-production-capacity-workflow.test.mjs dev/scripts/relay-production-identity-boundaries.test.mjs dev/scripts/relay-production-same-cap-wave.test.mjs dev/scripts/relay-public-workflow-contract.test.mjs dev/scripts/relay-recovery-wave-gate.test.mjs dev/scripts/relay-region-observation-evidence.test.mjs dev/scripts/relay-regional-rehome-workflow.test.mjs dev/scripts/relay-rehome-aggregate-evidence.test.mjs dev/scripts/relay-repository.test.mjs dev/scripts/relay-staging-c4-refresh-workflow.test.mjs dev/scripts/relay-staging-capacity-identity.test.mjs dev/scripts/staging-relay-apply-guard.test.mjs dev/scripts/validate-relay-capacity-plan.test.mjs dev/scripts/verify-relay-capacity-transition.test.mjs dev/scripts/verify-relay-legacy-bootstrap.test.mjs dev/scripts/workload-identity-attribute-conditions.test.mjs",
+    "typecheck": "pnpm -r typecheck"
+  },
+  "devDependencies": {
+    "@types/node": "^24.10.0",
+    "tsx": "^4.21.0",
+    "typescript": "^5.9.3",
+    "vitest": "^4.0.8"
+  }
+}

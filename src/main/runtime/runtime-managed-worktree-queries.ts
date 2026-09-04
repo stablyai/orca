@@ -1,7 +1,8 @@
 import type { DetectedWorktreeListResult, Worktree } from '../../shared/worktree/types'
 import type { Repo } from '../../shared/repo-types'
 import type { RuntimeWorktreeListResult } from '../../shared/runtime-types'
-import { getRepoExecutionHostId } from '../../shared/execution-host'
+import { getRepoExecutionHostId, type ExecutionHostId } from '../../shared/execution-host'
+import { buildWorktreeListingPage } from './worktree-listing-host-scope'
 import { readWorktreeMetaForHost } from '../persistence/host-qualified-worktree-meta'
 import { getRepoOwnedWorktreeMeta } from '../worktree-metadata-ownership'
 import type { WorktreeMeta } from '../../shared/worktree/meta-types'
@@ -38,6 +39,8 @@ type Dependencies = {
   resolveRepo(selector: string): Promise<Repo>
   selectRepos(selector: string): Repo[]
   scanRepo(repo: Repo): Promise<RuntimeWorktreeScanResult>
+  /** Hosts this runtime has repos or workspaces on, so a host with no rows is still named. */
+  listKnownHostIds(): Iterable<ExecutionHostId>
 }
 
 /**
@@ -100,11 +103,9 @@ export class RuntimeManagedWorktreeQueries {
         (!repoId || worktree.repoId === repoId) &&
         this.isVisible(worktree, matchers.get(worktree.repoId), sourceDefaultsSupported)
     )
-    return {
-      worktrees: worktrees.slice(0, limit),
-      totalCount: worktrees.length,
-      truncated: worktrees.length > limit
-    }
+    // Why: a `--repo` listing was scoped by the caller, so naming every configured host as
+    // omitted would report a gap the caller deliberately excluded.
+    return buildWorktreeListingPage(worktrees, limit, repoId ? [] : this.deps.listKnownHostIds())
   }
 
   resolveRepoForConnection(selector: string, connectionId?: string | null): Promise<Repo> {

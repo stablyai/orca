@@ -29,6 +29,7 @@ import {
 import {
   createAutomationRun as createAutomationRunOperation,
   listAutomationRuns as listAutomationRunsOperation,
+  listAutomationRunsPage as listAutomationRunsOperationPage,
   recordRepeatedAutomationSkip as recordRepeatedAutomationSkipOperation,
   snapshotAutomationRunWorkspaceDisplayName as snapshotAutomationRunWorkspaceDisplayNameOperation,
   updateAutomationRun as updateAutomationRunOperation,
@@ -122,6 +123,15 @@ export class AutomationPersistence {
     return listAutomationRunsOperation(
       this[automationPersistenceContext].runtime.state,
       automationId
+    )
+  }
+
+  listAutomationRunsPage(automationId?: string, limit?: number, cursor?: string) {
+    return listAutomationRunsOperationPage(
+      this[automationPersistenceContext].runtime.state,
+      automationId,
+      limit,
+      cursor
     )
   }
 

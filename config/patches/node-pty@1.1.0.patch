@@ -138,8 +138,34 @@ index 8c4fca9022a6d6f015bca87f61625cde2278f428..0a01730616488119aa21ef441cf3c441
  process.exit(0);
  //# sourceMappingURL=conpty_console_list_agent.js.map
 \ No newline at end of file
+diff --git a/lib/terminal.js b/lib/terminal.js
+index e2f9bc9131077b53ebc32d207207ad82804ff185..6c63bfaaf75128d88f9a2efece13476348780cfd 100644
+--- a/lib/terminal.js
++++ b/lib/terminal.js
+@@ -172,6 +172,21 @@ var Terminal = /** @class */ (function () {
+         this.end = function () { };
+         this._writable = false;
+         this._readable = false;
++        // Orca: libuv closes the master fd on EIO/EOF, and the kernel may hand
++        // that number straight to the next open(2). Retire it in the same block
++        // that gives up the handle so no later ioctl can address a reused fd.
++        // Inert on Windows, where `_fd` is written once and never read back.
++        // Upstream named this mechanism in microsoft/node-pty#220 ("fd number got
++        // reattached to something else"), closed 2025-12-19 as completed after
++        // only improving the error message; #827 is still open. Windows guards in
++        // windowsPtyAgent.ts, Unix does not. Orca tracking: #18109.
++        this._fd = -1;
++        // Orca: the write stream holds its own copy of that number, so retiring
++        // `_fd` alone leaves the queued and in-flight writes addressing it.
++        // Undefined on Windows and on `UnixTerminal.open()` handles.
++        if (this._writeStream) {
++            this._writeStream.dispose();
++        }
+     };
+     Terminal.prototype._parseEnv = function (env) {
+         var keys = Object.keys(env || {});
 diff --git a/lib/unixTerminal.js b/lib/unixTerminal.js
-index 1ec12f796a822c78fba9ad7f6448c3987e325c23..cec8b67aef02f8199e5606a0d257088bf1865877 100644
+index 1ec12f796a822c78fba9ad7f6448c3987e325c23..d838d795ecb9ea72e3bcc31113344947c006af7e 100644
 --- a/lib/unixTerminal.js
 +++ b/lib/unixTerminal.js
 @@ -28,8 +28,12 @@ var native = utils_1.loadNativeModule('pty');
@@ -157,6 +183,56 @@ index 1ec12f796a822c78fba9ad7f6448c3987e325c23..cec8b67aef02f8199e5606a0d257088b
  var DEFAULT_FILE = 'sh';
  var DEFAULT_NAME = 'xterm';
  var DESTROY_SOCKET_TIMEOUT_MS = 200;
+@@ -234,6 +238,11 @@ var UnixTerminal = /** @class */ (function (_super) {
+          * Gets the name of the process.
+          */
+         get: function () {
++            // Orca: tcgetpgrp on a retired fd would name whatever process now
++            // owns that descriptor, so a closed master reports the spawn file.
++            if (this._fd < 0) {
++                return this._file;
++            }
+             if (process.platform === 'darwin') {
+                 var title = pty.process(this._fd);
+                 return (title !== 'kernel_task') ? title : this._file;
+@@ -250,6 +259,11 @@ var UnixTerminal = /** @class */ (function (_super) {
+         if (cols <= 0 || rows <= 0 || isNaN(cols) || isNaN(rows) || cols === Infinity || rows === Infinity) {
+             throw new Error('resizing must be done using positive cols and rows');
+         }
++        // Orca: a retired master is unreachable rather than EBADF-or-worse; cols
++        // and rows stay at the last size actually applied instead of a claim.
++        if (this._fd < 0) {
++            return;
++        }
+         pty.resize(this._fd, cols, rows);
+         this._cols = cols;
+         this._rows = rows;
+@@ -287,8 +301,15 @@ var CustomWriteStream = /** @class */ (function () {
+     CustomWriteStream.prototype.dispose = function () {
+         clearImmediate(this._writeImmediate);
+         this._writeImmediate = undefined;
++        // Orca: retire this stream's own copy of the master fd and drop what has
++        // not shipped, so nothing queued here reaches a reused descriptor.
++        this._fd = -1;
++        this._writeQueue.length = 0;
+     };
+     CustomWriteStream.prototype.write = function (data) {
++        if (this._fd < 0) {
++            return;
++        }
+         // Writes are put in a queue and processed asynchronously in order to handle
+         // backpressure from the kernel buffer.
+         var buffer = typeof data === 'string'
+@@ -304,7 +325,8 @@ var CustomWriteStream = /** @class */ (function () {
+     CustomWriteStream.prototype._processWriteQueue = function () {
+         var _this = this;
+         this._writeImmediate = undefined;
+-        if (this._writeQueue.length === 0) {
++        // Orca: an in-flight fs.write can re-enter here after dispose().
++        if (this._fd < 0 || this._writeQueue.length === 0) {
+             return;
+         }
+         var task = this._writeQueue[0];
 diff --git a/src/conpty_console_list_agent.ts b/src/conpty_console_list_agent.ts
 index 181ccabbbe9c4948a9725fb1db907a68e9de01fc..67f31facf85562b67adbfbd04ce28ddd8eeb4a79 100644
 --- a/src/conpty_console_list_agent.ts

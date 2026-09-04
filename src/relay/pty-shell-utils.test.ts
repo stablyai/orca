@@ -13,10 +13,11 @@ vi.mock('child_process', () => ({
 
 import { resetWindowsProcessRowsSnapshotForTests } from '../main/providers/windows-foreground-process-rows'
 import { __setWindowsProcessTreeLoaderForTests } from '../main/windows/windows-process-table'
-import { resetProcessTableSnapshotForTests } from '../shared/process-table-snapshot'
+import { resetProcessTableSnapshotForTests } from '../shared/process-table-snapshot-reader'
 import {
   getForegroundProcessName,
   isProcessAlive,
+  processHasChildren,
   resolveDefaultCwd,
   resolveWindowsDefaultShell
 } from './pty-shell-utils'
@@ -299,10 +300,34 @@ describe('resolveDefaultCwd', () => {
 })
 
 describe('getForegroundProcessName', () => {
-  it('returns clear non-wrapper foregrounds without process-table enrichment', async () => {
-    await expect(getForegroundProcessName(100, 'vim')).resolves.toBe('vim')
+  it('keeps a non-agent foreground name when the process table shows no agent', async () => {
+    await withProcessPlatform('darwin', async () => {
+      mockExecFile((_command, args) => {
+        if (args[0] === '-axo') {
+          return { stdout: ['100 99 Ss   zsh -l', '101 100 S+   vim notes.md'].join('\n') }
+        }
+        return new Error('unexpected command')
+      })
 
-    expect(execFileMock).not.toHaveBeenCalled()
+      await expect(getForegroundProcessName(100, 'vim')).resolves.toBe('vim')
+    })
+  })
+
+  it('resolves a macOS p_comm basename to the agent that owns the foreground', async () => {
+    // Why: node-pty reports the native Claude binary as its version directory (`2.1.258`);
+    // answering with that name downgrades agent prompts to unframed chunks (STA-4577).
+    await withProcessPlatform('darwin', async () => {
+      mockExecFile((_command, args) => {
+        if (args[0] === '-axo') {
+          return {
+            stdout: ['100 99 Ss   zsh -l', '101 100 S+   claude --model haiku'].join('\n')
+          }
+        }
+        return new Error('unexpected command')
+      })
+
+      await expect(getForegroundProcessName(100, '2.1.258')).resolves.toBe('claude')
+    })
   })
 
   it('recognizes SSH relay node-wrapped agents from descendant command lines', async () => {
@@ -499,5 +524,89 @@ describe('getForegroundProcessName', () => {
     })
 
     await expect(getForegroundProcessName(100)).resolves.toBe('bash')
+  })
+})
+
+describe('processHasChildren', () => {
+  // Why these assert on argv, not just the answer: the defect in #13537 was the
+  // cost of the answer. `pgrep -P` forks per pane per poll and opens six procfs
+  // files per host process to resolve one ppid, so the contract worth pinning is
+  // "no fork of its own, and share the foreground lookup's cached table".
+  const PS_TABLE = ['100 1 Ss bash', '101 100 S+ node /opt/codex', '200 1 Ss zsh'].join('\n')
+
+  it('answers from the shared process table without forking pgrep', async () => {
+    await withProcessPlatform('linux', async () => {
+      mockExecFile((_command, args) => {
+        if (args[0] === '-axo') {
+          return { stdout: PS_TABLE }
+        }
+        return new Error('unexpected command')
+      })
+
+      await expect(processHasChildren(100)).resolves.toBe(true)
+      await expect(processHasChildren(200)).resolves.toBe(false)
+
+      expect(execFileMock.mock.calls.map((call) => call[0])).not.toContain('pgrep')
+    })
+  })
+
+  it('shares one process-table capture across a burst of panes', async () => {
+    await withProcessPlatform('linux', async () => {
+      mockExecFile((_command, args) => {
+        if (args[0] === '-axo') {
+          return { stdout: PS_TABLE }
+        }
+        return new Error('unexpected command')
+      })
+
+      const answers = await Promise.all([
+        processHasChildren(100),
+        processHasChildren(100),
+        processHasChildren(200),
+        getForegroundProcessName(100, 'bash')
+      ])
+
+      expect(answers).toEqual([true, true, false, 'codex'])
+      expect(execFileMock).toHaveBeenCalledTimes(1)
+    })
+  })
+
+  it('rescans for a close decision rather than serving a table from inside the TTL', async () => {
+    await withProcessPlatform('linux', async () => {
+      let table = PS_TABLE
+      mockExecFile((_command, args) => {
+        if (args[0] === '-axo') {
+          return { stdout: table }
+        }
+        return new Error('unexpected command')
+      })
+
+      // The poll answers from the cache, which is the whole point of the memo.
+      await expect(processHasChildren(200)).resolves.toBe(false)
+      table = [PS_TABLE, '201 200 S+ npm run build'].join('\n')
+      await expect(processHasChildren(200)).resolves.toBe(false)
+      expect(execFileMock).toHaveBeenCalledTimes(1)
+
+      // A close or cleanup acts on the answer once and destructively, so a
+      // child started inside the 500ms window has to be visible to it.
+      await expect(processHasChildren(200, { fresh: true })).resolves.toBe(true)
+      expect(execFileMock).toHaveBeenCalledTimes(2)
+    })
+  })
+
+  it('reports no children when the process table is unreadable', async () => {
+    await withProcessPlatform('linux', async () => {
+      mockExecFile(() => new Error('ps table unavailable'))
+
+      await expect(processHasChildren(100)).resolves.toBe(false)
+    })
+  })
+
+  it('spawns nothing on Windows, where the answer was always false', async () => {
+    await withProcessPlatform('win32', async () => {
+      await expect(processHasChildren(100)).resolves.toBe(false)
+
+      expect(execFileMock).not.toHaveBeenCalled()
+    })
   })
 })

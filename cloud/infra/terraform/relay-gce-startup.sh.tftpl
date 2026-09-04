@@ -1,0 +1,136 @@
+#!/bin/bash
+set -euo pipefail
+
+readonly metadata_url="http://metadata.google.internal/computeMetadata/v1"
+readonly state_dir="/var/lib/orca-relay"
+readonly cloudsql_dir="$${state_dir}/cloudsql"
+readonly docker_config_dir="$${state_dir}/docker"
+readonly env_file="$${state_dir}/relay.env"
+
+# COS mounts /root read-only, and neither the plaintext environment nor pull credential should survive bootstrap.
+trap 'rm -f "$${env_file}"; rm -rf "$${docker_config_dir}"' EXIT
+
+mkdir -p "$${cloudsql_dir}" "$${docker_config_dir}"
+chmod 0700 "$${state_dir}"
+chmod 0700 "$${docker_config_dir}"
+chmod 0777 "$${cloudsql_dir}"
+export DOCKER_CONFIG="$${docker_config_dir}"
+
+# Startup metadata can run before COS has made the Docker socket usable.
+systemctl start docker
+for _ in $(seq 1 60); do
+  if docker info >/dev/null 2>&1; then
+    break
+  fi
+  sleep 1
+done
+docker info >/dev/null
+
+metadata_access_token() {
+  curl --fail --silent --show-error \
+    --header 'Metadata-Flavor: Google' \
+    "$${metadata_url}/instance/service-accounts/default/token" \
+    | sed -n 's/.*"access_token":"\([^"]*\)".*/\1/p'
+}
+
+read_secret() {
+  local secret_name="$1"
+  local token="$2"
+  local encoded
+  encoded="$(curl --fail --silent --show-error \
+    --header "Authorization: Bearer $${token}" \
+    "https://secretmanager.googleapis.com/v1/projects/${project_id}/secrets/$${secret_name}/versions/latest:access" \
+    | sed -n 's/.*"data":[[:space:]]*"\([^"]*\)".*/\1/p')"
+  test -n "$${encoded}"
+  printf '%s' "$${encoded}" | tr '_-' '/+' | base64 --decode
+}
+
+access_token="$(metadata_access_token)"
+test -n "$${access_token}"
+database_url="$(read_secret '${database_secret}' "$${access_token}")"
+assignment_key="$(read_secret '${assignment_secret}' "$${access_token}")"
+
+umask 077
+{
+  printf 'DATABASE_URL=%s\n' "$${database_url}"
+  printf 'ORCA_RELAY_ASSIGNMENT_SIGNING_KEY=%s\n' "$${assignment_key}"
+  printf 'ORCA_RELAY_PUBLIC_URL=%s\n' '${cell_url}'
+  printf 'ORCA_RELAY_CELL_URL=%s\n' '${cell_url}'
+  printf 'ORCA_RELAY_AUTH_ISSUER=%s\n' '${auth_issuer}'
+  printf 'ORCA_RELAY_AUTH_AUDIENCE=orca-relay\n'
+  printf 'ORCA_RELAY_JWKS_URL=%s/.well-known/jwks.json\n' '${auth_issuer}'
+  printf 'ORCA_RELAY_ROLE=cell\n'
+  printf 'ORCA_RELAY_CELL_ID=%s\n' '${cell_id}'
+%{ if include_cell_region ~}
+  printf 'ORCA_RELAY_REGION=%s\n' '${cell_region}'
+%{ endif ~}
+  printf 'ORCA_RELAY_CELL_CAPACITY=%s\n' '${capacity_requests}'
+%{ if include_database_pool_max ~}
+  printf 'ORCA_RELAY_DATABASE_POOL_MAX=%s\n' '${database_pool_max}'
+%{ endif ~}
+%{ if connection_hard_cap != null ~}
+  printf 'ORCA_RELAY_CELL_CONNECTION_HARD_CAP=%s\n' '${connection_hard_cap}'
+  printf 'ORCA_RELAY_CELL_CONNECTION_UNOBSERVED_BOUND=%s\n' '${connection_unobserved_bound}'
+%{ endif ~}
+  printf 'ORCA_RELAY_CELLS_JSON=[]\n'
+  printf 'ORCA_RELAY_ADMIN_AUDIENCE=%s/v1/admin/drain\n' '${director_url}'
+  printf 'ORCA_RELAY_DEPLOY_SERVICE_ACCOUNT=%s\n' '${deploy_service_account}'
+  printf 'ORCA_RELAY_CAPACITY_SERVICE_ACCOUNT=%s\n' '${capacity_service_account}'
+%{ if asia_proof_service_account != "" ~}
+  printf 'ORCA_RELAY_ASIA_PROOF_SERVICE_ACCOUNT=%s\n' '${asia_proof_service_account}'
+%{ endif ~}
+  printf 'ORCA_RELAY_RUNTIME_SERVICE_ACCOUNT=%s\n' '${runtime_service_account}'
+%{ if rehome_source_enabled ~}
+  printf 'ORCA_RELAY_REHOME_DIRECTOR_SERVICE_ACCOUNT=%s\n' '${rehome_director_service_account}'
+  printf 'ORCA_RELAY_REHOME_AUDIENCE=%s\n' '${rehome_audience}'
+%{ endif ~}
+  printf 'ORCA_RELAY_DIRECTOR_URL=%s\n' '${director_url}'
+  printf 'ORCA_RELAY_HEARTBEAT_AUDIENCE=%s/v1/admin/cell-heartbeat\n' '${director_url}'
+  printf 'ORCA_RELAY_IMAGE_DIGEST=%s\n' '${trimprefix(regex("@sha256:[a-f0-9]{64}$", relay_image), "@")}'
+} > "$${env_file}"
+unset database_url assignment_key
+
+# COS has no long-lived registry credential; use a short metadata token only for the pull.
+printf '%s' "$${access_token}" \
+  | docker login --username oauth2accesstoken --password-stdin 'https://${artifact_registry_host}'
+docker pull '${relay_image}'
+docker logout '${artifact_registry_host}' >/dev/null 2>&1 || true
+unset access_token
+docker pull '${cloud_sql_proxy_image}'
+
+docker rm --force orca-relay cloud-sql-proxy >/dev/null 2>&1 || true
+# The persistent COS state directory can retain a dead proxy's socket across VM reboots.
+find "$${cloudsql_dir}" -type s -name '.s.PGSQL.5432' -delete
+docker run --detach \
+  --name cloud-sql-proxy \
+  --restart always \
+  --security-opt no-new-privileges \
+  --cap-drop ALL \
+  --user 0:0 \
+  --volume "$${cloudsql_dir}:/cloudsql" \
+  '${cloud_sql_proxy_image}' \
+  --unix-socket=/cloudsql \
+  '${cloud_sql_connection_name}'
+
+# Readiness depends on the proxy socket, so do not start the relay into a known SQL failure.
+for _ in $(seq 1 60); do
+  if find "$${cloudsql_dir}" -type s -name '.s.PGSQL.5432' -print -quit | grep -q .; then
+    break
+  fi
+  sleep 1
+done
+find "$${cloudsql_dir}" -type s -name '.s.PGSQL.5432' -print -quit | grep -q .
+
+docker run --detach \
+  --name orca-relay \
+  --restart always \
+  --stop-timeout 300 \
+  --security-opt no-new-privileges \
+  --cap-drop ALL \
+  --publish 8080:8080 \
+  --volume "$${cloudsql_dir}:/cloudsql" \
+  --env-file "$${env_file}" \
+  '${relay_image}'
+
+# GCE cells feed the same privacy-safe aggregate metrics as Cloud Run without app credentials.
+systemctl start logging-agent.target

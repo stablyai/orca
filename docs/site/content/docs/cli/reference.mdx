@@ -127,9 +127,17 @@ orca terminal split --terminal <handle> --direction horizontal --command "npm ru
 orca terminal rename --terminal <handle> --title "runner" --json
 orca terminal switch --terminal <handle> --json
 orca terminal close --terminal <handle> --json
+orca terminal close --worktree active --all --json
 ```
 
 Omit `--terminal` to target the active terminal in the current worktree. Read before sending when you are not sure what the terminal is waiting for.
+
+Close stops the process as part of removing the terminal. Use `--terminal <handle>` for one
+terminal, or `--worktree <selector> --all` to durably close every terminal in exactly that
+workspace, including its saved layouts and agent-resume records. Use workspace Sleep when those
+terminals should resume later. If the execution host cannot confirm that every PTY stopped, bulk
+close returns a failing `unverifiable` result rather than claiming the processes exited.
+`terminal stop` remains only for compatibility with older tooling.
 
 <Callout title="Terminal handles">
   Terminal handles are runtime-scoped. If Orca restarts or a command reports a stale terminal

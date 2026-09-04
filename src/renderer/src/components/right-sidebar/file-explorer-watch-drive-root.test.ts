@@ -12,7 +12,6 @@ function processRootEvent(root: string, event: FsChangeEvent): ReturnType<typeof
   const refreshDir = vi.fn()
   const rootCache: DirCache = {
     children: [],
-    loading: false,
     operationOwner: { kind: 'local' }
   }
 

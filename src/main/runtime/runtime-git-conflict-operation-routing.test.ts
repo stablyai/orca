@@ -22,6 +22,7 @@ describe('getRuntimeGitConflictOperation', () => {
     const commands = new RuntimeGitStatusCommands({
       resolveRuntimeGitTarget: async () => ({
         worktree: { path: '/home/me/repo/feature' },
+        executionHostId: 'local',
         localGitOptions: { wslDistro: 'Ubuntu' }
       })
     } as never)

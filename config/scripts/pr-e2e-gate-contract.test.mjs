@@ -114,6 +114,7 @@ describe('PR E2E gate contract', () => {
     expect(prWorkflow.jobs['e2e-paths'].outputs.test_files).toBe(
       '${{ steps.filter.outputs.test_files }}'
     )
+    expect(prWorkflow.jobs.e2e.with.ref).toBe('${{ github.event.pull_request.head.sha }}')
     expect(prWorkflow.jobs.e2e.with.test_files).toBe('${{ needs.e2e-paths.outputs.test_files }}')
   })
 

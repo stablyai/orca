@@ -79,6 +79,7 @@ export function createHostClientSelectors(
   return {
     getKnownState,
     getState: (hostId: string): ConnectionState => getKnownState(hostId) ?? 'disconnected',
+    getClientId: (hostId: string): string | null => entries.get(hostId)?.clientId ?? null,
     getReconnectAttempt: (hostId: string): number =>
       entries.get(hostId)?.client.getReconnectAttempt() ?? 0,
     getLastConnectedAt: (hostId: string): number | null =>

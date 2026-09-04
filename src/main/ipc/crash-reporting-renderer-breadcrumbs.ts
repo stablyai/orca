@@ -131,7 +131,38 @@ function rendererBreadcrumbCoalesceKey(
           data?.errorMessage
         ]
       : [data?.reasonStack, data?.reasonType, data?.reasonName]
-  return JSON.stringify([name, message, ...sourceIdentity])
+  // Why: error storms re-serialize the same message + up-to-4KB stack per event just to build a map key — reuse the last key on field-equality.
+  if (
+    lastCoalesceKey !== null &&
+    lastCoalesceName === name &&
+    lastCoalesceMessage === message &&
+    arraysShallowEqual(lastCoalesceSource, sourceIdentity)
+  ) {
+    return lastCoalesceKey
+  }
+  const key = JSON.stringify([name, message, ...sourceIdentity])
+  lastCoalesceName = name
+  lastCoalesceMessage = message
+  lastCoalesceSource = sourceIdentity
+  lastCoalesceKey = key
+  return key
+}
+
+let lastCoalesceName: string | null = null
+let lastCoalesceMessage: string | undefined
+let lastCoalesceSource: unknown[] | null = null
+let lastCoalesceKey: string | null = null
+
+function arraysShallowEqual(a: unknown[] | null, b: unknown[]): boolean {
+  if (!a || a.length !== b.length) {
+    return false
+  }
+  for (let i = 0; i < a.length; i++) {
+    if (a[i] !== b[i]) {
+      return false
+    }
+  }
+  return true
 }
 
 export function recordRendererBreadcrumbFromRenderer(

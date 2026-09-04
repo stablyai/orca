@@ -28,7 +28,8 @@ export function useRemoteBrowserPageInputQueue(): {
   remoteWheelFrameRef: React.MutableRefObject<number | null>
   remoteWheelInFlightRef: React.MutableRefObject<boolean>
 } {
-  const remoteInputQueueRef = useRef<Promise<unknown>>(Promise.resolve())
+  const remoteInputQueueRef = useRef<Promise<unknown>>(undefined!)
+  remoteInputQueueRef.current ??= Promise.resolve()
   const pendingRemoteWheelRef = useRef<PendingRemoteBrowserWheel | null>(null)
   const remoteWheelFrameRef = useRef<number | null>(null)
   const remoteWheelInFlightRef = useRef(false)

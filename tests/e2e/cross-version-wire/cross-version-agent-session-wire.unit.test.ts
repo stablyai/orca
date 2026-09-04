@@ -35,6 +35,7 @@ const SESSION = 'session-alpha'
 const WORKSPACE = 'workspace-1'
 const THREAD = '019fd532-7c11-7a90-b6de-4e1a2c3d5f60'
 const NOW = 1_800_000_000_000
+const CLIENT_CAPABILITY_UPDATE_METHOD = 'runtime.clientCapabilities.update'
 
 /** Every method the structured surface publishes: the host method it must reach,
  *  and the result it must hand back. A gate that hides one method and leaks
@@ -482,6 +483,49 @@ describe('cross-version structured agent sessions', () => {
       },
       SUITE_TIMEOUT_MS
     )
+  })
+
+  describe('post-auth mobile capability negotiation', () => {
+    it('is an additive method that lets the current host record mobile capabilities', async () => {
+      const updates: string[][] = []
+
+      const replies = await callBuild(
+        current,
+        CLIENT_CAPABILITY_UPDATE_METHOD,
+        { clientCapabilities: [STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY] },
+        {
+          clientKind: 'mobile',
+          clientCapabilities: [],
+          updateClientCapabilities: (capabilities) => updates.push([...capabilities])
+        }
+      )
+
+      expect(current.methodNames).toContain(CLIENT_CAPABILITY_UPDATE_METHOD)
+      expect(current.protocolVersion).toBe(baseline.protocolVersion)
+      expect(replies).toHaveLength(1)
+      expect(replies[0]).toMatchObject({
+        ok: true,
+        result: { clientCapabilities: [STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY] }
+      })
+      expect(updates).toEqual([[STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY]])
+    })
+
+    it('gets a normal answer from an old host instead of changing the auth shape', async () => {
+      const replies = await callBuild(
+        baseline,
+        CLIENT_CAPABILITY_UPDATE_METHOD,
+        { clientCapabilities: [STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY] },
+        { clientKind: 'mobile', clientCapabilities: [] }
+      )
+
+      expect(replies).toHaveLength(1)
+      if (!baseline.methodNames.includes(CLIENT_CAPABILITY_UPDATE_METHOD)) {
+        expect(replies[0]).toMatchObject({
+          ok: false,
+          error: { code: 'method_not_found' }
+        })
+      }
+    })
   })
 
   describe('an old client against a structured-owned AI Vault row', () => {

@@ -30,7 +30,7 @@ export function killSourceControlAgentProcess(
     return Promise.resolve()
   }
   if (process.platform === 'win32') {
-    return terminateWindowsProcessTree(pid)
+    return terminateWindowsProcessTree(pid, { site: 'source-control-text-generation' })
   }
   try {
     child.kill('SIGKILL')

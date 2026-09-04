@@ -32,9 +32,17 @@ async function createRepo(): Promise<string> {
   return repoPath
 }
 
+// Why unique across calls: an empty commit's hash covers only parent, tree, message and a
+// one-second-granularity timestamp. On a fast runner the whole 100-commit build finishes inside
+// one second, so a post-reset `commit 0` off the same fork point hashed identically to the first
+// `commit 0` of the chain and Git handed back that same object — leaving the branch 99/0 apart
+// instead of 100/1.
+let emptyCommitSequence = 0
+
 function commitEmpty(repoPath: string, count: number): void {
   for (let index = 0; index < count; index += 1) {
-    git(repoPath, ['commit', '--quiet', '--allow-empty', '-m', `commit ${index}`])
+    emptyCommitSequence += 1
+    git(repoPath, ['commit', '--quiet', '--allow-empty', '-m', `commit ${emptyCommitSequence}`])
   }
 }
 

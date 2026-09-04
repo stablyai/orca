@@ -13,7 +13,12 @@ import type { AutomationHostCatalogEntry } from './automation-host-catalog-types
 import type { AutomationCreateDestination } from './automation-create-destination'
 import type { AutomationListRow } from './automation-list-row-identity'
 import { EMPTY_AUTOMATION_LIST_FILTER, type AutomationListFilter } from './automation-list-view'
-import type { AutomationPaneTab, SelectedExternalRunPage } from './automation-page-state'
+import type {
+  AutomationPaneTab,
+  AutomationRunPageOrigin,
+  AutomationsPageView,
+  SelectedExternalRunPage
+} from './automation-page-state'
 import type { ExternalAutomationScope } from './external-automation-scope-client'
 import type { SelectedAutomationRunHistoryOutcome } from './use-selected-automation-run-history'
 import type { AutomationsPageStoreState } from './use-automations-page-store-state'
@@ -60,6 +65,8 @@ export function useAutomationsPageLocalState(store: AutomationsPageStoreState) {
   const [editingHostStableKey, setEditingHostStableKey] = useState<string | null>(null)
   const moveCreationKeysRef = useRef(new Map<string, string>())
   const [relativeNow, setRelativeNow] = useState(() => Date.now())
+  const [pageView, setPageView] = useState<AutomationsPageView>('automations')
+  const [runPageOrigin, setRunPageOrigin] = useState<AutomationRunPageOrigin>('runs')
   const [activePaneTab, setActivePaneTab] = useState<AutomationPaneTab>('overview')
   const [selectedAutomationRunPageId, setSelectedAutomationRunPageId] = useState<string | null>(
     null
@@ -186,6 +193,10 @@ export function useAutomationsPageLocalState(store: AutomationsPageStoreState) {
     moveCreationKeysRef,
     relativeNow,
     setRelativeNow,
+    pageView,
+    setPageView,
+    runPageOrigin,
+    setRunPageOrigin,
     activePaneTab,
     setActivePaneTab,
     selectedAutomationRunPageId,

@@ -2,15 +2,14 @@ import { ipcRenderer } from 'electron'
 import type { PtyModelRestoreNeededEvent } from '../../shared/pty-model-restore-marker'
 import type { TerminalSideEffectBatch } from '../../shared/terminal-side-effect-facts'
 import type { PreloadApi } from '../api-types'
+import type { TerminalProcessInspection } from '../../shared/terminal-process-inspection'
 
 export const ptyStreamAndSerializationApi = {
   inspectProcess: (
-    id: string
-  ): Promise<{
-    foregroundProcess: string | null
-    hasChildProcesses: boolean
-    unavailable?: true
-  }> => ipcRenderer.invoke('pty:inspectProcess', { id }),
+    id: string,
+    options?: { expectedIncarnationId?: string }
+  ): Promise<TerminalProcessInspection> =>
+    ipcRenderer.invoke('pty:inspectProcess', { id, ...options }),
   confirmForegroundProcess: (id: string): Promise<string | null> =>
     ipcRenderer.invoke('pty:confirmForegroundProcess', { id }),
   getCwd: (id: string): Promise<string> => ipcRenderer.invoke('pty:getCwd', { id }),
@@ -69,6 +68,8 @@ export const ptyStreamAndSerializationApi = {
       preserveRendererBinding?: boolean
       /** Which lifetime of `id` died; absent when the execution host predates the field. */
       incarnationId?: string
+      /** Set only when the owning relay disowned this id; never a claim that the process died. */
+      ptySourceDisowned?: true
     }) => void
   ): (() => void) => {
     const listener = (
@@ -78,6 +79,7 @@ export const ptyStreamAndSerializationApi = {
         code: number
         preserveRendererBinding?: boolean
         incarnationId?: string
+        ptySourceDisowned?: true
       }
     ) => callback(data)
     ipcRenderer.on('pty:exit', listener)
@@ -92,7 +94,7 @@ export const ptyStreamAndSerializationApi = {
     callback: (data: {
       requestId: string
       ptyId: string
-      opts?: { scrollbackRows?: number; altScreenForcesZeroRows?: boolean }
+      opts?: { scrollbackRows?: number }
     }) => void
   ): (() => void) => {
     const listener = (
@@ -100,7 +102,7 @@ export const ptyStreamAndSerializationApi = {
       data: {
         requestId: string
         ptyId: string
-        opts?: { scrollbackRows?: number; altScreenForcesZeroRows?: boolean }
+        opts?: { scrollbackRows?: number }
       }
     ) => callback(data)
     ipcRenderer.on('pty:serializeBuffer:request', listener)

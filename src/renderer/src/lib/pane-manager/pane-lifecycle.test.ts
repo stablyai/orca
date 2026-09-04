@@ -4,6 +4,7 @@ import type { ManagedPaneInternal } from './pane-manager-types'
 import {
   attachWebgl,
   markComplexScriptOutput,
+  primeTerminalWebglAddon,
   resetTerminalWebglSuggestion
 } from './pane-webgl-renderer'
 import { attachLigatures, disposePane, openTerminal } from './pane-lifecycle'
@@ -199,7 +200,8 @@ describe('buildDefaultTerminalOptions', () => {
 })
 
 describe('attachWebgl', () => {
-  beforeEach(() => {
+  beforeEach(async () => {
+    await primeTerminalWebglAddon()
     webglMock.contextLossHandler = null
     webglMock.clearTextureAtlas.mockClear()
     webglMock.dispose.mockClear()

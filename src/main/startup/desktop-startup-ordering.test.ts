@@ -183,6 +183,48 @@ describe('startup ordering', () => {
     )
   })
 
+  it('keeps the git-environment barrier off the PTY startup services', () => {
+    const barrierSource = readFileSync(
+      join(process.cwd(), 'src/main/startup/main-process-ipc-bootstrap.ts'),
+      'utf8'
+    )
+    const launchSource = readFileSync(
+      join(process.cwd(), 'src/main/startup/main-process-runtime-launch.ts'),
+      'utf8'
+    )
+    const gitBarrierStart = barrierSource.indexOf(
+      "ipcMain.handle('app:awaitGitEnvironmentStartupBarrier'"
+    )
+    const gitBarrierEnd = barrierSource.indexOf(
+      "'app:prepareTerminalStartupRestoration'",
+      gitBarrierStart
+    )
+    expect(gitBarrierStart).toBeGreaterThanOrEqual(0)
+    expect(gitBarrierEnd).toBeGreaterThan(gitBarrierStart)
+    const gitBarrier = barrierSource.slice(gitBarrierStart, gitBarrierEnd)
+    // The git environment fence is shell PATH + WSL registration; a daemon PTY provider or a
+    // hook-server bind here puts terminal startup back in front of worktree hydration.
+    expect(gitBarrier).toContain('state.shellPathReady')
+    expect(gitBarrier).toContain('state.managedWslCliStartupBarrierReady')
+    expect(gitBarrier).not.toContain('firstWindowStartupServicesReady')
+    // The published promise must be the same one the terminal startup services wait on.
+    expect(launchSource).toContain('state.shellPathReady = shellPathReady')
+    expect(launchSource.indexOf('state.shellPathReady = shellPathReady')).toBeLessThan(
+      launchSource.indexOf('await launchDesktopMode(')
+    )
+    // Terminal restoration itself must still fence on the first-window services.
+    const restorationStart = barrierSource.indexOf(
+      "ipcMain.handle('app:prepareTerminalStartupRestoration'"
+    )
+    const restorationEnd = barrierSource.indexOf(
+      "'app:recoverLegacyWorkerTerminalsForRendererStartup'",
+      restorationStart
+    )
+    expect(barrierSource.slice(restorationStart, restorationEnd)).toContain(
+      'state.firstWindowStartupServicesReady'
+    )
+  })
+
   it('reconciles retained Codex homes after authoritative daemon inventory', () => {
     const source = readFileSync(
       join(process.cwd(), 'src/main/startup/main-process-pty-startup.ts'),

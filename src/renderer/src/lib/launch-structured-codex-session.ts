@@ -75,7 +75,7 @@ export function abandonStructuredAgentSessionLaunchIntent(
 
 export async function launchStructuredCodexSession(
   intent: StructuredAgentSessionLaunchIntent
-): Promise<string> {
+): Promise<Pick<AgentSessionAttachResult, 'sessionId' | 'fence'>> {
   const result = await callStructuredAgentSession<
     AgentSessionMutationResult<AgentSessionAttachResult>
   >({ kind: 'local' }, 'agentSession.create', intent.params)
@@ -83,5 +83,5 @@ export async function launchStructuredCodexSession(
     abandonStructuredAgentSessionLaunchIntent(intent)
     throw new StructuredAgentSessionCreateRefusalError(result.refusal.message)
   }
-  return result.value.sessionId
+  return { sessionId: result.value.sessionId, fence: result.value.fence }
 }

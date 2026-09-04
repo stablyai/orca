@@ -157,7 +157,8 @@ export type TerminalWaiter = {
   resolve: (result: RuntimeTerminalWait) => void
   reject: (error: Error) => void
   timeout: NodeJS.Timeout | null
-  pollInterval: NodeJS.Timeout | null
+  /** Retires this waiter from the shared idle-poll sweep; null when not polling. */
+  cancelIdlePoll: (() => void) | null
   abortCleanup: (() => void) | null
 }
 

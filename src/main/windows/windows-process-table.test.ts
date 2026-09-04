@@ -52,21 +52,24 @@ describe('windows process table', () => {
   it('maps native rows, defaulting an unreadable command line to empty', async () => {
     const rows = await readWindowsProcessTableFresh()
     expect(rows).toEqual([
-      { pid: process.pid, ppid: 0, name: 'vitest.exe', command: '', memoryBytes: undefined },
+      { pid: process.pid, ppid: 0, name: 'vitest.exe', command: '' },
       {
         pid: 100,
         ppid: 4,
         name: 'orca.exe',
         command: '"C:/a b/orca.exe" --x',
-        memoryBytes: 4096,
         creationTimeMs: 1_700_000_000_000
       }
     ])
   })
 
-  it('requests memory and command line together', async () => {
+  it('requests the command line and creation time, never memory', async () => {
     await readWindowsProcessTableFresh()
-    expect(getAllProcesses.mock.calls[0]?.[1]).toBe(7)
+    // CommandLine (2) | CreationTime (4). The Memory bit (1) stays clear: the
+    // addon opens a second PROCESS_VM_READ handle per process to serve it and
+    // nothing reads a working set off this table.
+    expect(getAllProcesses.mock.calls[0]?.[1]).toBe(6)
+    expect((getAllProcesses.mock.calls[0]?.[1] as number) & 1).toBe(0)
   })
 
   it('only advertises PID-safe ownership when the native creation-time field exists', () => {
@@ -400,20 +403,19 @@ describe('resolving the native reader', () => {
     })
     const rows = await readWindowsProcessTableFresh()
     expect(rows).toEqual([
-      { pid: process.pid, ppid: 0, name: 'vitest.exe', command: '', memoryBytes: undefined },
+      { pid: process.pid, ppid: 0, name: 'vitest.exe', command: '' },
       {
         pid: 100,
         ppid: 4,
         name: 'orca.exe',
         command: '"C:/a b/orca.exe" --x',
-        memoryBytes: 4096,
         creationTimeMs: 1_700_000_000_000
       }
     ])
     expect(isWindowsProcessTableAvailable()).toBe(true)
   })
 
-  it('asks the addon for memory and command line, as the package path does', async () => {
+  it('asks the addon for the command line but not memory, as the package path does', async () => {
     const addon = addonReturning(NATIVE)
     __setWindowsProcessTreeRequireForTests((specifier: string) => {
       if (specifier === ADDON_SPECIFIER) {
@@ -422,9 +424,10 @@ describe('resolving the native reader', () => {
       throw new Error('MODULE_NOT_FOUND')
     })
     await readWindowsProcessTableFresh()
-    // Memory | CommandLine. A bare snapshot would silently drop the command
-    // line every agent-recognition caller matches on first.
-    expect(addon.getProcessList).toHaveBeenCalledWith(expect.any(Function), 3)
+    // CommandLine only: a bare snapshot would silently drop the command line
+    // every agent-recognition caller matches on first, and the relay addon
+    // exposes no CreationTime bit to add.
+    expect(addon.getProcessList).toHaveBeenCalledWith(expect.any(Function), 2)
   })
 
   it('reaches the CIM scan when neither the package nor the addon is present', async () => {

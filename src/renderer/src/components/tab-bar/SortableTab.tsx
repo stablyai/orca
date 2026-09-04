@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { useSortable } from '@dnd-kit/sortable'
 import { X, Minimize2, Pin } from 'lucide-react'
 import { stripLeadingAgentTitleDecoration } from '../../../../shared/agent-title-decoration'
@@ -17,6 +17,7 @@ import {
   type DropIndicator
 } from './drop-indicator'
 import { preventMiddleButtonDefault } from './middle-button-default-guard'
+import { useSortableTabRename } from './use-sortable-tab-rename'
 import { SortableTabContextMenu } from './SortableTabContextMenu'
 import { translate } from '@/i18n/i18n'
 import { TAB_CONTAINER_WIDTH_CLASSES, TAB_LABEL_WIDTH_CLASSES } from './tab-width-rules'
@@ -51,6 +52,12 @@ type SortableTabProps = {
   dragData: TabDragItemData
   dropIndicator?: DropIndicator
   includeTopTabBorder?: boolean
+  /** True when this agent terminal can switch between the terminal and native chat views; surfaces the "Switch view" context-menu item. */
+  canToggleViewMode?: boolean
+  /** True when the tab is currently showing the native chat view. */
+  isChatView?: boolean
+  /** Toggle the tab between terminal and native chat view. */
+  onToggleViewMode?: () => void
 }
 
 export const CLOSE_ALL_CONTEXT_MENUS_EVENT = 'orca-close-all-context-menus'
@@ -76,7 +83,10 @@ export default function SortableTab({
   onToggleExpand,
   dragData,
   dropIndicator,
-  includeTopTabBorder = true
+  includeTopTabBorder = true,
+  canToggleViewMode = false,
+  isChatView = false,
+  onToggleViewMode
 }: SortableTabProps): React.JSX.Element {
   // Why: agent-completion unread exists even with terminal-attention off; collapse both sources to one primitive so unrelated tabs don't re-render.
   const hasUnreadActivity = useAppStore((s) =>
@@ -97,8 +107,6 @@ export default function SortableTab({
       terminalLayout: s.terminalLayoutsByTabId?.[tab.id]
     })
   )
-  const renamingTabId = useAppStore((s) => s.renamingTabId)
-  const setRenamingTabId = useAppStore((s) => s.setRenamingTabId)
 
   // Why: shellOverride is stamped at create time, so changing the default shell later won't repaint existing tabs.
   const shellForIcon = tab.shellOverride
@@ -119,61 +127,23 @@ export default function SortableTab({
   // Why: no transform/transition/opacity so tabs stay anchored during drag, only the insertion bar moves (see TabBar.tsx).
   const [menuOpen, setMenuOpen] = useState(false)
   const [menuPoint, setMenuPoint] = useState({ x: 0, y: 0 })
-  const [isEditing, setIsEditing] = useState(false)
+  const {
+    isEditing,
+    renameValue,
+    setRenameValue,
+    handleRenameOpen,
+    commitRename,
+    cancelRename,
+    setRenameInputElement
+  } = useSortableTabRename({
+    tabId: tab.id,
+    title: tab.title,
+    customTitle: tab.customTitle,
+    onSetCustomTitle
+  })
   // Why: a live working/needs-input state is newer than a prior-turn unread, so it owns the icon until the turn ends.
   const showUnreadActivity =
     hasUnreadActivity && !isEditing && !isTerminalTabActivityLive(activityStatus)
-  const [renameValue, setRenameValue] = useState('')
-  const renameFocusFrameRef = useRef<number | null>(null)
-  // Why: onBlur fires during Input unmount; mark rename resolved so it can't re-commit and overwrite discarded edits.
-  const committedOrCancelledRef = useRef(false)
-
-  const handleRenameOpen = useCallback(() => {
-    committedOrCancelledRef.current = false
-    // Why: snapshot title once; don't refresh if tab.title changes mid-edit (e.g. OSC) so the user's edits aren't overwritten.
-    setRenameValue(tab.customTitle ?? tab.title)
-    setIsEditing(true)
-  }, [tab.customTitle, tab.title])
-
-  const commitRename = useCallback(() => {
-    if (committedOrCancelledRef.current) {
-      return
-    }
-    committedOrCancelledRef.current = true
-    const trimmed = renameValue.trim()
-    onSetCustomTitle(tab.id, trimmed.length > 0 ? trimmed : null)
-    setIsEditing(false)
-  }, [renameValue, onSetCustomTitle, tab.id])
-
-  const cancelRename = useCallback(() => {
-    committedOrCancelledRef.current = true
-    setIsEditing(false)
-  }, [])
-
-  const setRenameInputElement = useCallback((input: HTMLInputElement | null) => {
-    if (renameFocusFrameRef.current !== null) {
-      cancelAnimationFrame(renameFocusFrameRef.current)
-      renameFocusFrameRef.current = null
-    }
-    if (!input) {
-      return
-    }
-    // Why: defer past Radix menu teardown/focus restore; key off input mount so title updates don't re-select edited text.
-    renameFocusFrameRef.current = requestAnimationFrame(() => {
-      renameFocusFrameRef.current = null
-      input.focus()
-      input.select()
-    })
-  }, [])
-
-  // Why: the tab.rename shortcut routes through store renamingTabId; open the editor and clear it so it fires once.
-  useEffect(() => {
-    if (renamingTabId !== tab.id) {
-      return
-    }
-    handleRenameOpen()
-    setRenamingTabId(null)
-  }, [renamingTabId, tab.id, handleRenameOpen, setRenamingTabId])
 
   useEffect(() => {
     const closeMenu = (): void => setMenuOpen(false)
@@ -426,6 +396,9 @@ export default function SortableTab({
         onRenameOpen={handleRenameOpen}
         onSetTabColor={onSetTabColor}
         onTogglePin={onTogglePin}
+        canToggleViewMode={canToggleViewMode}
+        isChatView={isChatView}
+        onToggleViewMode={onToggleViewMode}
       />
     </>
   )

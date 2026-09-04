@@ -47,7 +47,7 @@ export function useTerminalPaneCloseActions(controller: TerminalPaneBindingContr
         const leafId = manager.getLeafId(paneId)
         if (leafId) {
           useAppStore.getState().setCacheTimerStartedAt(makePaneKey(tabId, leafId), null)
-          useAppStore.getState().dropAgentStatus(makePaneKey(tabId, leafId))
+          useAppStore.getState().dropAgentStatus(makePaneKey(tabId, leafId), { paneRemoved: true })
         }
         setTerminalErrorsByPaneId((current) => clearPaneTerminalError(current, paneId))
         if (leafId) {

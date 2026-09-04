@@ -216,6 +216,33 @@ export type SshRemotePtyLease = {
   /** A stop this client asked for and could not confirm, replayed on the next handshake to this
    *  same target. See `shared/ssh-pending-pty-kill.ts`. Never on the wire — client-local. */
   pendingKill?: SshPendingPtyKill
+  /** Stored-form ptyId of the newer lease that won this pane, written only by supersession — which
+   *  already holds the winner in hand. Cleared whenever this id is re-upserted live, so a RECYCLED
+   *  relay id cannot inherit its predecessor's mark. */
+  supersededBy?: string
+  /** The host listed this ptyId under a different PTY incarnation, so the id no longer routes to
+   *  this lease's shell. Written only by the pending-stop replay's `relay-id-recycled` retirement. */
+  relayIdRecycled?: true
+}
+
+/**
+ * `expired` says only that the CLIENT lost its route, never that the remote shell died
+ * (docs/reference/ssh-execution-boundary.md), so it covers two unrelated cases. Two writers can
+ * prove the route is dead for good — a newer lease won the pane, or the relay handed the id to
+ * another shell — and re-adopting either is the 2 -> 19 -> 20 lease fan-out or a pane handed to a
+ * stranger's process. An `expired` lease carrying neither mark is an orphan, not a corpse, and a
+ * reattach is the only thing that can tell those apart.
+ */
+export function sshRemotePtyLeaseAllowsReattach(
+  lease: Pick<SshRemotePtyLease, 'state' | 'supersededBy' | 'relayIdRecycled'>
+): boolean {
+  if (lease.state === 'terminated') {
+    return false
+  }
+  return (
+    lease.state !== 'expired' ||
+    (lease.supersededBy === undefined && lease.relayIdRecycled !== true)
+  )
 }
 
 /** Main-owned relay lease needed to reclaim PTY delivery after a desktop restart. */

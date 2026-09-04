@@ -60,6 +60,7 @@ function makeTarget(path: string, overrides: Partial<RuntimeGitTarget> = {}): Ru
       path,
       git: { path, branch: 'main', isBare: false, isMainWorktree: false, head: 'a'.repeat(40) }
     } as RuntimeGitTarget['worktree'],
+    executionHostId: 'local',
     ...overrides
   }
 }
@@ -148,7 +149,7 @@ describe('RuntimeGitGenerationCommands admission', () => {
     })
     const commands = makeCommands(
       makeTarget('/remote/repo', {
-        connectionId: 'conn-1',
+        executionHostId: 'ssh:conn-1',
         localGitOptions: { wslDistro: 'Ubuntu' }
       })
     )

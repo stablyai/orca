@@ -1,6 +1,5 @@
 import { spawn } from 'node:child_process'
-import { constants } from 'node:fs'
-import { lstat, open, readdir } from 'node:fs/promises'
+import { lstat, readdir } from 'node:fs/promises'
 import { join as pathJoin } from 'node:path'
 import { pipeline } from 'node:stream/promises'
 import type { SshTarget } from '../../shared/ssh-types'
@@ -22,7 +21,12 @@ import {
   waitForProcess,
   type ProcessResult
 } from './system-ssh-operation-lifecycle'
-import { writeBufferViaSystemSsh } from './system-ssh-file-binary-transfer'
+import {
+  uploadFileViaSystemSsh,
+  WINDOWS_STDIN_WRITE_CHUNK_BYTES,
+  WINDOWS_STDIN_WRITE_TIMEOUT_MS,
+  writeBufferViaSystemSsh
+} from './system-ssh-file-binary-transfer'
 
 type SystemSshOperationOptions = SystemSshBuildArgsOptions & {
   signal?: AbortSignal
@@ -109,33 +113,36 @@ async function uploadDirectoryViaSystemSshWindows(
   if (!hostPlatform) {
     throw new Error('Windows system SSH upload requires a remote host platform')
   }
-  const entries = await collectWindowsUploadEntries(
-    localDir,
-    remoteDir,
-    hostPlatform,
-    options.signal
-  )
-  await writeWindowsUploadPackageViaSystemSsh(target, entries, options)
+  const plan = await collectWindowsUploadPlan(localDir, remoteDir, hostPlatform, options.signal)
+  await createWindowsUploadDirectories(target, plan.directories, options)
+  for (const file of plan.files) {
+    throwIfAborted(options.signal)
+    // Reuses the single-file upload: it already opens O_NOFOLLOW, verifies the source did not
+    // change under it, and splits the bytes into stdin-sized writes staged under a partial name.
+    await uploadFileViaSystemSsh(target, file.localPath, file.remotePath, options)
+  }
 }
 
-type WindowsUploadEntry =
-  | {
-      kind: 'directory'
-      path: string
-    }
-  | {
-      kind: 'file'
-      path: string
-      contentsBase64: string
-    }
+type WindowsUploadPlan = {
+  directories: string[]
+  files: { localPath: string; remotePath: string }[]
+}
 
-async function collectWindowsUploadEntries(
+/**
+ * #16432: this used to base64 every artifact into one JSON array and push the whole ~1.9MB string
+ * into one PowerShell stdin. Base64 inflates the payload 1.33x, and Windows PowerShell 5.1 cannot
+ * read a stdin that large over a non-pty ssh exec — it blocks forever instead of failing. Nothing
+ * about a directory upload requires one frame: the plan carries paths only, and the bytes go per
+ * file, in writes bounded by WINDOWS_STDIN_WRITE_CHUNK_BYTES.
+ */
+async function collectWindowsUploadPlan(
   localDir: string,
   remoteDir: string,
   hostPlatform: RemoteHostPlatform,
-  signal: AbortSignal | undefined
-): Promise<WindowsUploadEntry[]> {
-  const entries: WindowsUploadEntry[] = [{ kind: 'directory', path: remoteDir }]
+  signal: AbortSignal | undefined,
+  plan: WindowsUploadPlan = { directories: [], files: [] }
+): Promise<WindowsUploadPlan> {
+  plan.directories.push(remoteDir)
   const dirEntries = await readdir(localDir, { withFileTypes: true })
   for (const entry of dirEntries) {
     throwIfAborted(signal)
@@ -146,75 +153,68 @@ async function collectWindowsUploadEntries(
       continue
     }
     if (statResult.isDirectory()) {
-      entries.push(
-        ...(await collectWindowsUploadEntries(localPath, remotePath, hostPlatform, signal))
-      )
+      await collectWindowsUploadPlan(localPath, remotePath, hostPlatform, signal, plan)
       continue
     }
-    const buffer = await readLocalUploadFile(localPath, statResult)
-    entries.push({ kind: 'file', path: remotePath, contentsBase64: buffer.toString('base64') })
+    plan.files.push({ localPath, remotePath })
   }
-  return entries
+  return plan
 }
 
-async function writeWindowsUploadPackageViaSystemSsh(
+// Why the JSON envelope survives here: a path list is metadata, so this payload stays in the
+// hundreds of bytes even for a deep tree. Batched anyway, so a pathological tree cannot walk back
+// into the same stdin size that wedges PowerShell.
+async function createWindowsUploadDirectories(
   target: SshTarget,
-  entries: WindowsUploadEntry[],
+  directories: readonly string[],
   options: SystemSshOperationOptions
 ): Promise<void> {
-  throwIfAborted(options.signal)
-  const channel = spawnSystemSshCommand(target, makeWindowsUploadPackageCommand(), {
-    wrapCommand: false,
-    ...getSystemSshBuildArgsFromOperationOptions(options)
-  })
-  const closePromise = awaitWithSystemSshAbort(
-    options.signal,
-    () => channel.close(),
-    waitForChannelClose(channel, 'windows relay upload')
-  )
-  if (!options.signal?.aborted) {
-    channel.stdin.end(JSON.stringify(entries))
-  }
-  await closePromise
-}
-
-async function readLocalUploadFile(
-  localPath: string,
-  statResult: Awaited<ReturnType<typeof lstat>>
-): Promise<Buffer> {
-  const handle = await open(localPath, constants.O_RDONLY | (constants.O_NOFOLLOW ?? 0))
-  try {
-    const openedStat = await handle.stat()
-    if (
-      !openedStat.isFile() ||
-      openedStat.size !== statResult.size ||
-      (statResult.ino !== 0 && openedStat.ino !== 0 && openedStat.ino !== statResult.ino) ||
-      (statResult.dev !== 0 && openedStat.dev !== 0 && openedStat.dev !== statResult.dev)
-    ) {
-      throw new Error(`File changed during upload: ${localPath}`)
+  let batch: string[] = []
+  let batchBytes = 0
+  const flush = async (): Promise<void> => {
+    if (batch.length === 0) {
+      return
     }
-    return await handle.readFile()
-  } finally {
-    await handle.close()
+    const payload = JSON.stringify(batch)
+    batch = []
+    batchBytes = 0
+    throwIfAborted(options.signal)
+    const channel = spawnSystemSshCommand(target, makeWindowsCreateDirectoriesCommand(), {
+      wrapCommand: false,
+      ...getSystemSshBuildArgsFromOperationOptions(options)
+    })
+    const closePromise = awaitWithSystemSshAbort(
+      options.signal,
+      () => channel.close(),
+      waitForChannelClose(channel, 'windows relay upload mkdir', WINDOWS_STDIN_WRITE_TIMEOUT_MS)
+    )
+    if (!options.signal?.aborted) {
+      channel.stdin.end(payload)
+    }
+    await closePromise
   }
+  for (const directory of directories) {
+    const entryBytes = Buffer.byteLength(directory) + 4
+    if (batch.length > 0 && batchBytes + entryBytes > WINDOWS_STDIN_WRITE_CHUNK_BYTES) {
+      await flush()
+    }
+    batch.push(directory)
+    batchBytes += entryBytes
+  }
+  await flush()
 }
 
-function makeWindowsUploadPackageCommand(): string {
+function makeWindowsCreateDirectoriesCommand(): string {
   return powerShellCommand(
     [
       '$ErrorActionPreference = "Stop"',
-      '$json = [Console]::In.ReadToEnd()',
+      // The reporter measured this reader surviving 50KB where `[Console]::In` wedged at the same
+      // size (#16432); the batch above stays under that.
+      '$reader = New-Object System.IO.StreamReader([Console]::OpenStandardInput())',
+      'try { $json = $reader.ReadToEnd() } finally { $reader.Dispose() }',
       'if ([string]::IsNullOrWhiteSpace($json)) { return }',
-      '$items = $json | ConvertFrom-Json',
-      'foreach ($item in @($items)) {',
-      '  $path = [string]$item.path',
-      '  if ($item.kind -eq "directory") {',
-      '    $null = [System.IO.Directory]::CreateDirectory($path)',
-      '    continue',
-      '  }',
-      '  $parent = [System.IO.Path]::GetDirectoryName($path)',
-      '  if ($parent) { $null = [System.IO.Directory]::CreateDirectory($parent) }',
-      '  [System.IO.File]::WriteAllBytes($path, [Convert]::FromBase64String([string]$item.contentsBase64))',
+      'foreach ($path in @($json | ConvertFrom-Json)) {',
+      '  $null = [System.IO.Directory]::CreateDirectory([string]$path)',
       '}'
     ].join('; ')
   )

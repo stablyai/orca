@@ -153,8 +153,10 @@ describe('remoteWorkspace:setForConnectedTargets', () => {
   const muxByTargetId = new Map<string, { request: ReturnType<typeof vi.fn> }>()
   const getRepoMock = vi.fn<Store['getRepo']>()
   const getWorkspaceSessionMock = vi.fn<Store['getWorkspaceSession']>()
+  // Ownership resolution reads the catalog, not one id-keyed row, so the fake has to project one.
   const store = {
     getRepo: getRepoMock,
+    getRepos: () => [getRepoMock('repo-target-1')].filter(Boolean),
     getWorkspaceSession: getWorkspaceSessionMock
   } as unknown as Store
 

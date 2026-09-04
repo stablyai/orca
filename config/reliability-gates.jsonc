@@ -6141,10 +6141,11 @@
         "https://github.com/stablyai/orca/pull/8706",
         "https://github.com/stablyai/orca/issues/14524"
       ],
-      "invariant": "Close permanently removes the owned provider session, agent descendants, persisted tab/layout authority, and resume authority even when no TerminalPane is mounted; final-pane CLI close commits durable tab retirement before PTY stop can publish graph loss, does not acknowledge before that retirement, and treats the later exit retirement as idempotent. A persisted explicit-empty state prevents initial-tab fallback from repopulating the workspace after reload or restart. A handle remains valid while the same provider-attested PTY incarnation survives renderer reload or re-key, and becomes stale without adopting a replacement incarnation. A terminating id remains reserved through natural exit, duplicate callers await the same completion, and immediate teardown upgrades any graceful request without signalling a recycled PID or a descendant tree after root ownership is lost; process-table work is locale-stable, bounded, fresh for each post-start request, same-turn coalesced, and begins within the requesting caller's deadline, including bulk worktree cleanup; detach and park preserve ownership; aliases prevent a detached agent's immutable physical pane key from being retired with its former tab.",
-      "oracle": "Capture exact tab, pane, PTY, handle, incarnation, and persisted layout identities. Final-pane terminal.close must invoke one durability-acknowledged tab retirement before exact PTY teardown; controlled PTY exit and graph removal afterward must remain idempotent, omit the target from persistence and provider inventory, and leave an unrelated canary handle live. The ordinary path stays pending until the persisted row is removed and never falls back to the fire-and-forget pane event; reload/restart must keep the explicitly emptied worktree at zero terminal tabs and provider sessions. Reloading the renderer with the same tab/pane/PTY/incarnation must keep the handle readable; changing only the incarnation behind the same PTY id, losing the authoritative graph, or superseding the renderer handle with a preallocated handle must reject the old handle with terminal_handle_stale. Parked-close tests prove the exact PTY disappears; descendant/process tests keep natural exits reserved, upgrade teardown safely, bound/coalesce process-table work, and protect recycled identities.",
+      "invariant": "Close permanently removes the owned provider session, agent descendants, persisted tab/layout authority, and resume authority even when no TerminalPane is mounted; final-pane CLI close commits durable tab retirement before PTY stop can publish graph loss, does not acknowledge before that retirement, and treats the later exit retirement as idempotent. Workspace-wide CLI close applies that same durable contract to every terminal in exactly one worktree, including pinned and persisted-only surfaces, without touching sibling-worktree PTYs or resume records. A persisted explicit-empty state prevents initial-tab fallback from repopulating the workspace after reload or restart. A handle remains valid while the same provider-attested PTY incarnation survives renderer reload or re-key, and becomes stale without adopting a replacement incarnation. A terminating id remains reserved through natural exit, duplicate callers await the same completion, and immediate teardown upgrades any graceful request without signalling a recycled PID or a descendant tree after root ownership is lost; process-table work is locale-stable, bounded, fresh for each post-start request, same-turn coalesced, and begins within the requesting caller's deadline, including bulk worktree cleanup; detach and park preserve ownership; aliases prevent a detached agent's immutable physical pane key from being retired with its former tab.",
+      "oracle": "Capture exact tab, pane, PTY, handle, incarnation, and persisted layout identities. Final-pane terminal.close must invoke one durability-acknowledged tab retirement before exact PTY teardown; controlled PTY exit and graph removal afterward must remain idempotent, omit the target from persistence and provider inventory, and leave an unrelated canary handle live. terminal.closeAll must force-retire every pinned and unpinned target surface, clear its persisted agent-resume and incarnation records, await authoritative PTY exit, preserve a sibling worktree's tab, PTY, and resume authority, and return an unverifiable failure instead of claiming exit when the owning host does not confirm a stop. The ordinary path stays pending until the persisted row is removed and never falls back to the fire-and-forget pane event; reload/restart must keep the explicitly emptied worktree at zero terminal tabs and provider sessions. Reloading the renderer with the same tab/pane/PTY/incarnation must keep the handle readable; changing only the incarnation behind the same PTY id, losing the authoritative graph, or superseding the renderer handle with a preallocated handle must reject the old handle with terminal_handle_stale. Parked-close tests prove the exact PTY disappears; descendant/process tests keep natural exits reserved, upgrade teardown safely, bound/coalesce process-table work, and protect recycled identities.",
       "commands": [
         "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/orca-runtime-terminal-close-continuity.test.ts",
+        "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/orca-runtime.test.ts",
         "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/terminal/initial-terminal.test.ts src/renderer/src/lib/worktree-activation-default-tabs.test.ts src/renderer/src/store/slices/terminals-explicit-empty-hydration.test.ts",
         "pnpm dlx node@24 ./node_modules/vitest/vitest.mjs run --config config/vitest.config.ts src/main/agent-hooks/server-pane-authority.test.ts src/main/ipc/agent-hooks.test.ts src/main/ipc/agent-pane-authority-ownership.test.ts src/main/ipc/pty-management.test.ts src/main/persistence-initial-load.test.ts src/main/persistence-pane-identity-migration.test.ts src/main/persistence-pty-binding-reconciliation.test.ts src/renderer/src/store/slices/agent-pane-authority.test.ts src/renderer/src/store/slices/terminal-pane-detach-agent-identity.test.ts src/renderer/src/store/slices/terminal-tab-retirement.test.ts src/renderer/src/store/slices/terminal-tab-retirement-store.test.ts tests/e2e/completed-worker-retirement-resume.unit.test.ts src/renderer/src/components/shared/kill-all-terminal-surfaces.test.ts",
         "pnpm exec vitest run --config config/vitest.config.ts src/main/pty-descendant-termination.test.ts src/main/daemon/session.test.ts src/main/daemon/terminal-host.test.ts src/main/providers/local-pty-provider-shutdown.test.ts src/main/runtime/worktree-teardown.test.ts",
@@ -6156,6 +6157,7 @@
       ],
       "testFiles": [
         "src/main/runtime/orca-runtime-terminal-close-continuity.test.ts",
+        "src/main/runtime/orca-runtime.test.ts",
         "src/renderer/src/components/terminal/initial-terminal.test.ts",
         "src/renderer/src/lib/worktree-activation-default-tabs.test.ts",
         "src/renderer/src/store/slices/terminals-explicit-empty-hydration.test.ts",
@@ -6184,6 +6186,12 @@
         "tests/e2e/headless-serve-cli-terminal-retention-parity.spec.ts"
       ],
       "assertionRefs": [
+        {
+          "file": "src/main/runtime/orca-runtime.test.ts",
+          "assertions": [
+            "workspace-wide close force-retires pinned and unpinned tabs, clears resume/incarnation state, awaits both target PTYs, preserves the sibling worktree, and reports an unconfirmed stop as unverifiable"
+          ]
+        },
         {
           "file": "src/main/runtime/orca-runtime-terminal-close-continuity.test.ts",
           "assertions": [
@@ -13862,6 +13870,90 @@
       ],
       "knownGaps": ["No manifest command yet.", "No Windows CJK/emoji repaint command is wired."],
       "demotionRule": "Cannot promote if the oracle is screenshot-only or environment-skipped."
+    },
+    {
+      "id": "terminal-render.foreground-repair-span",
+      "title": "A forced foreground repaint covers every row the write changed",
+      "maturity": "experimental",
+      "protection": "partial",
+      "owner": "terminal-rendering",
+      "layer": "renderer-unit",
+      "surfaces": [
+        "foreground PTY output",
+        "in-place agent redraws",
+        "erase-in-line/display",
+        "alternate screen",
+        "scroll",
+        "wide glyphs"
+      ],
+      "platforms": ["macos", "linux", "windows"],
+      "providers": ["local", "daemon", "ssh", "remote-runtime"],
+      "coveredPlatforms": ["macos"],
+      "coveredProviders": [],
+      "coverageNotes": "Renderer-unit convergence corpus over a real xterm parser, plus manual CDP pixel evidence on the macOS WebGL renderer. The repaint span is provider-independent because it is computed from xterm's parse, not from the transport; SSH/WSL/remote were not exercised live.",
+      "motivatingLinks": [
+        "https://github.com/stablyai/orca/pull/2669",
+        "https://github.com/stablyai/orca/pull/4669",
+        "https://github.com/stablyai/orca/pull/8178"
+      ],
+      "invariant": "The row span Orca asks xterm to repaint after a forced foreground refresh must cover every viewport row whose rendered content changed during that write, plus the cursor row before and after it; when the span cannot be established — unobservable parse, viewport scroll, or a normal/alternate buffer flip — the whole viewport must be repainted.",
+      "oracle": "A real @xterm/headless parser replays an adversarial corpus (in-place bottom-row redraws, standalone CR overwrite, backspace, erase-in-line, erase-in-display above and below the cursor, full clear, wide CJK, emoji, combining marks, ZWJ sequences, scroll-region insert/delete, reverse index, DEC 2026 frames, alternate-screen enter and exit, viewport scroll, narrow panes). Each viewport row is serialized cell-by-cell with its attributes before and after the write, and every row that differs must fall inside the span the settle path requested. A vacuity guard asserts each case actually moves the screen.",
+      "commands": [
+        "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/lib/pane-manager/terminal-foreground-repair-convergence.test.ts"
+      ],
+      "testFiles": [
+        "src/renderer/src/lib/pane-manager/terminal-foreground-repair-convergence.test.ts"
+      ],
+      "assertionRefs": [
+        {
+          "file": "src/renderer/src/lib/pane-manager/terminal-foreground-repair-convergence.test.ts",
+          "assertions": [
+            "every viewport row whose serialized cells changed lies inside the requested repaint span",
+            "the cursor row before and after the write is inside the requested repaint span",
+            "viewport scroll and alternate-screen transitions still request the whole grid",
+            "an unobservable parse span falls back to the whole grid",
+            "an in-place bottom-row redraw narrows well below the full grid"
+          ]
+        }
+      ],
+      "evidenceRuns": [
+        {
+          "date": "2026-09-02",
+          "runner": "local",
+          "platform": "macos",
+          "result": "passed",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/lib/pane-manager/terminal-foreground-repair-convergence.test.ts",
+          "durationSeconds": 1,
+          "summary": "25 cases passed against a real xterm parser; paired CDP run on a 4-pane macOS WebGL dev build produced screenshots byte-identical to a forced full model rebuild."
+        }
+      ],
+      "runtimeBudget": {
+        "p95Seconds": 15,
+        "scope": "Renderer-unit convergence corpus"
+      },
+      "flakeHistory": {
+        "status": "not-started",
+        "evidence": "New deterministic gate; no soak history yet."
+      },
+      "redGreenEvidence": {
+        "status": "complete",
+        "evidence": "Narrowing the span to the cursor rows alone (dropping xterm's parse span) fails the claude-style in-place redraw and erase-in-display-above cases; reading buffer indices instead of viewport rows made the corpus vacuous and is now blocked by the changed-row guard."
+      },
+      "performanceBudget": {
+        "required": true,
+        "evidence": "Measured on a focused, visible 4-pane macOS dev build under an agent-style in-place redraw load: rendered cells/s 157,708 -> 30,139 and forEachDecorationAtCell 320,868/s -> 60,652/s with render frames/s unchanged (59.8 -> 60.5)."
+      },
+      "promotionCriteria": [
+        "Add Windows DOM-renderer coverage for the synchronous repair branch.",
+        "Wire pixel or cell evidence for the alternate-screen and reflow paths into CI rather than manual CDP runs.",
+        "Keep a full-grid fallback assertion for every new span-narrowing condition."
+      ],
+      "knownGaps": [
+        "No CI-wired pixel oracle; WebGL convergence evidence was collected manually over CDP.",
+        "Windows ConPTY synchronous repair path is covered only by the shared corpus, not on a Windows runner.",
+        "SSH/WSL/remote providers were not exercised live; the span is transport-independent by construction."
+      ],
+      "demotionRule": "Demote or block if a narrowing condition is added without a matching convergence case, if the corpus stops asserting that each case changes at least one row, or if a repaint regression is reported for in-place agent redraws."
     },
     {
       "id": "terminal-shell.windows-resolution-parity",

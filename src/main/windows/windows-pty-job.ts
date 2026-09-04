@@ -1,5 +1,6 @@
 import type { IPty } from 'node-pty'
 import { createRequire } from 'node:module'
+import { recordSelfInitiatedTreeKill } from '../crash-reporting/self-initiated-tree-kill-log'
 
 /**
  * Job-object ownership for a ConPTY's process tree.
@@ -93,11 +94,25 @@ export function terminatePtyJob(proc: IPty): JobTerminationOutcome {
   if (!target || !native) {
     return 'unavailable'
   }
+  let terminated: boolean
   try {
-    return native.terminateJob(target.id, target.shellPid) ? 'terminated' : 'unavailable'
+    terminated = native.terminateJob(target.id, target.shellPid)
   } catch {
     return 'unavailable'
   }
+  if (!terminated) {
+    return 'unavailable'
+  }
+  // Outside the try: that catch is the native-refusal contract, and a throw from
+  // the breadcrumb path would downgrade a real termination to `unavailable`,
+  // escalating callers to the pid-addressed taskkill this instrumentation exists
+  // to constrain.
+  recordSelfInitiatedTreeKill({
+    pid: target.shellPid,
+    site: 'windows-pty-job-teardown',
+    scope: 'win-pty-job'
+  })
+  return 'terminated'
 }
 
 /**

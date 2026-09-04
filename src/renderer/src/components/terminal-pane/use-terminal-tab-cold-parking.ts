@@ -16,6 +16,11 @@ import {
 } from '../activity/activity-terminal-portal'
 import { getTerminalTabColdParkRecheckDelayMs } from './terminal-cold-park-recheck-deadlines'
 import {
+  clearTerminalTabColdParkRecheckTimers,
+  reconcileTerminalTabColdParkRecheckTimers,
+  type TerminalTabColdParkRecheckTimers
+} from './terminal-cold-park-recheck-timers'
+import {
   TERMINAL_TAB_COLD_PARK_DELAY_MS,
   selectPairedRuntimeParkingEnvironmentIdsFromState,
   selectColdParkedTerminalTabs
@@ -120,14 +125,17 @@ export function useTerminalTabColdParking(args: {
   )
   const terminalTabHiddenSinceRef = useRef(new Map<string, number>())
   // Why: view switches hide every tab at once, so the park clock cannot rank them.
-  const terminalTabActivationOrderRef = useRef(createTerminalTabActivationOrder())
+  const terminalTabActivationOrderRef = useRef<ReturnType<typeof createTerminalTabActivationOrder>>(
+    undefined!
+  )
+  terminalTabActivationOrderRef.current ??= createTerminalTabActivationOrder()
   // Why (shared measure-clock contract with Terminal.tsx): tab hiddenSince
   // survives a background-measure window so per-tab park deadlines stay in
   // sync with the worktree retention/TTL clock, and a post-measure cool-down
   // re-grants the hysteresis so measure end can't immediately re-park.
   const wasMeasuringHiddenWorktreeRef = useRef(false)
   const measureParkCooldownUntilRef = useRef<number | null>(null)
-  const terminalTabParkingTimersRef = useRef(new Map<string, number>())
+  const terminalTabParkingTimersRef = useRef<TerminalTabColdParkRecheckTimers>(new Map())
   const parkVerdictRecordsRef = useRef(new Map<string, ParkVerdictFlipRecord>())
   const [terminalTabParkingRevision, setTerminalTabParkingRevision] = useState(0)
   const [coldParkedTerminalTabIds, setColdParkedTerminalTabIds] = useState<ReadonlySet<string>>(
@@ -138,12 +146,7 @@ export function useTerminalTabColdParking(args: {
 
   useEffect(() => {
     const timers = terminalTabParkingTimersRef.current
-    return () => {
-      for (const timer of timers.values()) {
-        window.clearTimeout(timer)
-      }
-      timers.clear()
-    }
+    return () => clearTerminalTabColdParkRecheckTimers(timers)
   }, [])
 
   // Why: per-tab cold-park policy — hiddenSince bookkeeping, parked-set
@@ -151,11 +154,6 @@ export function useTerminalTabColdParking(args: {
   // re-renders exactly when the hysteresis elapses instead of polling.
   useEffect(() => {
     const timers = terminalTabParkingTimersRef.current
-    for (const timer of timers.values()) {
-      window.clearTimeout(timer)
-    }
-    timers.clear()
-
     const nowMs = Date.now()
     const overrides = getTerminalParkingPolicyOverrides()
     const currentTerminalTabIds = new Set(terminalTabs.map((tab) => tab.id))
@@ -232,6 +230,7 @@ export function useTerminalTabColdParking(args: {
       setColdParkedTerminalTabIds(parkedTabIds)
     }
 
+    const recheckDeadlineMsByTabId = new Map<string, number>()
     for (const candidate of candidates) {
       if (
         candidate.isVisible ||
@@ -250,14 +249,16 @@ export function useTerminalTabColdParking(args: {
         ...overrides
       })
       if (delayMs !== null && delayMs > 0) {
-        const tabId = candidate.id
-        const timer = window.setTimeout(() => {
-          timers.delete(tabId)
-          setTerminalTabParkingRevision((revision) => revision + 1)
-        }, delayMs)
-        timers.set(tabId, timer)
+        recheckDeadlineMsByTabId.set(candidate.id, nowMs + delayMs)
       }
     }
+
+    reconcileTerminalTabColdParkRecheckTimers({
+      timers,
+      deadlineMsByTabId: recheckDeadlineMsByTabId,
+      nowMs,
+      onDeadline: () => setTerminalTabParkingRevision((revision) => revision + 1)
+    })
     // eslint-disable-next-line react-hooks/exhaustive-deps -- semantic keys own the tab and assignment dependencies.
   }, [
     activityTerminalPortals,

@@ -5,21 +5,18 @@
 // handed a session it cannot render or drive — and, just as importantly, cannot make the host EXIST
 // by calling into it, which is an observable side effect.
 
-import { STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY } from '../../../../shared/protocol-version'
 import { getStructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/structured-agent-session-registry'
 import type { StructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/structured-agent-session-host'
 import type { StructuredAgentSessionCaller } from '../../../native-chat/agent-session-wire/structured-agent-session-host-types'
 import type { RpcContext } from '../core'
+import { supportsStructuredAgentSessions } from './structured-agent-session-policy'
 
 /**
  * In-process callers are the same build as the host, so they carry no negotiated
  * capability list; every remote client must say it can read structured sessions.
  */
 export function supportsStructuredSessions(ctx: RpcContext): boolean {
-  return (
-    ctx.clientKind === undefined ||
-    (ctx.clientCapabilities?.includes(STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY) ?? false)
-  )
+  return supportsStructuredAgentSessions(ctx)
 }
 
 export function requireStructuredCapability(ctx: RpcContext): void {

@@ -60,6 +60,48 @@ export type TabsProjectionCache = {
   entries: Map<string, TabsProjectionCacheEntry>
   projection: string
 }
+export type OpenFilesProjectionCacheEntry = {
+  file: AppState['openFiles'][number]
+  projection: string
+}
+export type OpenFilesProjectionCache = {
+  source: AppState['openFiles']
+  entries: Map<string, OpenFilesProjectionCacheEntry>
+  projection: string
+}
+export type BrowserWorkspacesProjectionCacheEntry = {
+  workspaces: NonNullable<AppState['browserTabsByWorktree'][string]>
+  keyJson: string
+  projection: string
+}
+export type BrowserWorkspacesProjectionCache = {
+  source: AppState['browserTabsByWorktree']
+  entries: Map<string, BrowserWorkspacesProjectionCacheEntry>
+  projection: string
+}
+export type BrowserPagesProjectionCacheEntry = {
+  pages: NonNullable<AppState['browserPagesByWorkspace'][string]>
+  keyJson: string
+  projection: string
+}
+export type BrowserPagesProjectionCache = {
+  source: AppState['browserPagesByWorkspace']
+  entries: Map<string, BrowserPagesProjectionCacheEntry>
+  projection: string
+}
+/** One dirty file's FNV draft stamp plus its pre-serialized projection fragment. */
+export type EditorDraftHashCacheEntry = {
+  content: string
+  hash: string
+  fileIdJson: string
+  projection: string
+}
+export type EditorDraftHashCache = {
+  source: AppState['editorDrafts']
+  entries: Map<string, EditorDraftHashCacheEntry>
+  hashByFileId: Map<string, string>
+  projection: string
+}
 export type AgentStatusProjectionCacheEntry = {
   entry: AppState['agentStatusByPaneKey'][string]
   projection: string
