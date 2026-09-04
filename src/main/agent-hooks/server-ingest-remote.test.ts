@@ -122,6 +122,74 @@ describe('AgentHookServer ingestRemote', () => {
     )
   })
 
+  // Why: metadata-only rows are accepted for every agent that announces its session before a
+  // turn (pi, prime-agent, polytoken), gated on that agent being able to resume from the row.
+  // prime-agent rows were silently dropped before the list was shared; pin the acceptance.
+  it('accepts prime-agent and polytoken metadata-only session envelopes that can resume', () => {
+    const server = new AgentHookServer()
+    const listener = vi.fn()
+    server.setListener(listener)
+
+    server.ingestRemote(
+      {
+        paneKey: PANE,
+        tabId: 'tab-1',
+        worktreeId: 'wt-1',
+        providerSessionOnly: true,
+        providerSession: {
+          key: 'session_id',
+          id: 'prime-session-1',
+          transcriptPath: '/tmp/prime-session-1.jsonl'
+        },
+        payload: { state: 'done', prompt: '', agentType: 'prime-agent' }
+      },
+      'conn-1'
+    )
+    expect(listener).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        paneKey: PANE,
+        providerSessionOnly: true,
+        payload: expect.objectContaining({ agentType: 'prime-agent' }),
+        providerSession: expect.objectContaining({ id: 'prime-session-1' })
+      })
+    )
+
+    server.ingestRemote(
+      {
+        paneKey: PANE,
+        tabId: 'tab-1',
+        worktreeId: 'wt-1',
+        providerSessionOnly: true,
+        providerSession: { key: 'session_id', id: '0a6mht-drum' },
+        payload: { state: 'done', prompt: '', agentType: 'polytoken' }
+      },
+      'conn-1'
+    )
+    expect(listener).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        paneKey: PANE,
+        providerSessionOnly: true,
+        payload: expect.objectContaining({ agentType: 'polytoken' }),
+        providerSession: { key: 'session_id', id: '0a6mht-drum' }
+      })
+    )
+    expect(listener).toHaveBeenCalledTimes(2)
+
+    // A prime-agent row without its transcript path cannot resume, so it is still dropped.
+    server.ingestRemote(
+      {
+        paneKey: PANE,
+        tabId: 'tab-1',
+        worktreeId: 'wt-1',
+        providerSessionOnly: true,
+        providerSession: { key: 'session_id', id: 'prime-session-2' },
+        payload: { state: 'done', prompt: '', agentType: 'prime-agent' }
+      },
+      'conn-1'
+    )
+    expect(listener).toHaveBeenCalledTimes(2)
+  })
+
   it('rejects invalid remote metadata-only session envelopes', () => {
     const server = new AgentHookServer()
     const listener = vi.fn()
