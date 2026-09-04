@@ -26,6 +26,19 @@ type PluginConsentDialogProps = {
   ) => Promise<void>
 }
 
+const capabilityIdentities = new WeakMap<object, number>()
+let nextCapabilityIdentity = 0
+
+function capabilityIdentity(capability: object): number {
+  const existing = capabilityIdentities.get(capability)
+  if (existing !== undefined) {
+    return existing
+  }
+  nextCapabilityIdentity += 1
+  capabilityIdentities.set(capability, nextCapabilityIdentity)
+  return nextCapabilityIdentity
+}
+
 function trustTier(plugin: PluginHostListEntry): string {
   if (plugin.hasWorker) {
     return translate(
@@ -183,9 +196,9 @@ export function PluginConsentDialog({
                   )}
                 </p>
                 <div className="space-y-2">
-                  {plugin.capabilities.map((capability, index) => (
+                  {plugin.capabilities.map((capability) => (
                     <div
-                      key={`${JSON.stringify(capability)}\u0000${index}`}
+                      key={capabilityIdentity(capability)}
                       className="flex items-start gap-2 text-sm leading-6"
                     >
                       <Check
