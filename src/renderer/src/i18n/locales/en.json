@@ -8456,7 +8456,8 @@
           "e90afcc44f": "off",
           "16c471ee03": "on",
           "typographyAdvanced": "Typography",
-          "dimUnfocusedPanes": "Dim unfocused panes."
+          "dimUnfocusedPanes": "Dim unfocused panes.",
+          "ghostty_choose_config_file": "Choose Config File"
         },
         "TerminalAdvancedTypographyControls": {
           "f5fa1a08f1": "Bold Font Weight",
@@ -10419,7 +10420,10 @@
             "agent": "agent",
             "process": "process",
             "prompt": "prompt",
-            "stop": "stop"
+            "stop": "stop",
+            "ghostty_choose_config_file": "Choose Config File",
+            "ghostty_choose_config_file_description": "Import a Ghostty config from a file you pick instead of the discovered paths.",
+            "file": "file"
           },
           "windows": {
             "search": {
@@ -11741,6 +11745,9 @@
         },
         "NativeChatSupportedAgents": {
           "label": "Supported agents:"
+        },
+        "useGhosttyImport": {
+          "unknown_error": "Unknown error"
         }
       },
       "right": {

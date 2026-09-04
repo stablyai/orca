@@ -1,5 +1,5 @@
 import { ipcRenderer } from 'electron'
-import type { GhosttyImportPreview } from '../../shared/global-settings-types'
+import type { GhosttyImportPreview, GhosttyImportSource } from '../../shared/global-settings-types'
 import type {
   WarpThemeImportPreview,
   WarpThemeImportSource
@@ -22,8 +22,8 @@ export const settingsApi = {
 
   listFonts: (): Promise<string[]> => ipcRenderer.invoke('settings:listFonts'),
 
-  previewGhosttyImport: (): Promise<GhosttyImportPreview> =>
-    ipcRenderer.invoke('settings:previewGhosttyImport'),
+  previewGhosttyImport: (source?: GhosttyImportSource): Promise<GhosttyImportPreview> =>
+    ipcRenderer.invoke('settings:previewGhosttyImport', source),
 
   previewWarpThemeImport: (source: WarpThemeImportSource): Promise<WarpThemeImportPreview> =>
     ipcRenderer.invoke('settings:previewWarpThemeImport', source),

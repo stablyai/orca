@@ -484,8 +484,13 @@ export type OrcaWorkspaceLayout = {
   nestWorkspaces: boolean
 }
 
+/** Where the Ghostty import reads its config from: the auto-discovered paths, or a file the user picks. */
+export type GhosttyImportSource = { kind: 'auto' } | { kind: 'chooseFile' }
+
 export type GhosttyImportPreview = {
   found: boolean
+  /** True when the user dismissed the native picker without selecting anything. */
+  canceled?: boolean
   configPath?: string
   configPaths?: string[]
   diff: Partial<GlobalSettings>

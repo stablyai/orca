@@ -67,14 +67,14 @@
     "kind": "object-property:keywords",
     "text": "Ghostty",
     "dynamic": false,
-    "count": 2
+    "count": 3
   },
   {
     "filePath": "src/renderer/src/components/settings/terminal-advanced-platform-search.ts",
     "kind": "object-property:keywords",
     "text": "ghostty",
     "dynamic": false,
-    "count": 2
+    "count": 3
   },
   {
     "filePath": "src/renderer/src/components/settings/terminal-pane-appearance-search.ts",

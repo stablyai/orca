@@ -1,6 +1,11 @@
 import { useState } from 'react'
-import type { GhosttyImportPreview, GlobalSettings } from '../../../../shared/global-settings-types'
+import type {
+  GhosttyImportPreview,
+  GhosttyImportSource,
+  GlobalSettings
+} from '../../../../shared/global-settings-types'
 import { useMountedRef } from '../../hooks/useMountedRef'
+import { translate } from '@/i18n/i18n'
 
 export type UseGhosttyImportReturn = {
   open: boolean
@@ -9,6 +14,7 @@ export type UseGhosttyImportReturn = {
   applied: boolean
   applyError: string | null
   handleClick: () => Promise<void>
+  handleChooseFileClick: () => Promise<void>
   handleApply: () => Promise<void>
   handleOpenChange: (open: boolean) => void
 }
@@ -28,23 +34,49 @@ export function useGhosttyImport(
   const [applyError, setApplyError] = useState<string | null>(null)
   const mountedRef = useMountedRef()
 
-  async function handleClick(): Promise<void> {
-    setOpen(true)
+  async function previewSource(source: GhosttyImportSource): Promise<GhosttyImportPreview> {
     setLoading(true)
     try {
-      const result = await window.api.settings.previewGhosttyImport()
-      if (mountedRef.current) {
+      const result = await window.api.settings.previewGhosttyImport(source)
+      // Why: a dismissed native picker keeps whatever preview was already
+      // showing instead of wiping it with an empty result.
+      if (mountedRef.current && !result.canceled) {
         setPreview(result)
       }
+      return result
     } catch (err) {
-      const message = err instanceof Error ? err.message : 'Unknown error'
-      if (mountedRef.current) {
-        setPreview({ found: false, diff: {}, unsupportedKeys: [], error: message })
+      const message =
+        err instanceof Error
+          ? err.message
+          : translate('auto.components.settings.useGhosttyImport.unknown_error', 'Unknown error')
+      const failure: GhosttyImportPreview = {
+        found: false,
+        diff: {},
+        unsupportedKeys: [],
+        error: message
       }
+      if (mountedRef.current) {
+        setPreview(failure)
+      }
+      return failure
     } finally {
       if (mountedRef.current) {
         setLoading(false)
       }
+    }
+  }
+
+  async function handleClick(): Promise<void> {
+    setOpen(true)
+    await previewSource({ kind: 'auto' })
+  }
+
+  async function handleChooseFileClick(): Promise<void> {
+    // Why: go straight to the native picker and only surface the modal once
+    // there is a config to preview — canceling leaves settings untouched.
+    const result = await previewSource({ kind: 'chooseFile' })
+    if (mountedRef.current && !result.canceled) {
+      setOpen(true)
     }
   }
 
@@ -97,6 +129,7 @@ export function useGhosttyImport(
     applied,
     applyError,
     handleClick,
+    handleChooseFileClick,
     handleApply,
     handleOpenChange
   }
