@@ -35,6 +35,32 @@ function setUserAgent(userAgent: string): void {
   })
 }
 
+function appendContentEditable(value = ''): HTMLDivElement {
+  const editor = document.createElement('div')
+  editor.contentEditable = 'true'
+  editor.textContent = value
+  document.body.appendChild(editor)
+  const range = document.createRange()
+  range.selectNodeContents(editor)
+  range.collapse(false)
+  const selection = document.getSelection()
+  selection?.removeAllRanges()
+  selection?.addRange(range)
+  return editor
+}
+
+function dispatchNativeClipboardPaste(target: HTMLElement, text: string): ClipboardEvent {
+  const clipboardData = new DataTransfer()
+  clipboardData.setData('text/plain', text)
+  const event = new ClipboardEvent('paste', {
+    bubbles: true,
+    cancelable: true,
+    clipboardData
+  })
+  target.dispatchEvent(event)
+  return event
+}
+
 function appendTextarea(value = ''): HTMLTextAreaElement {
   const textarea = document.createElement('textarea')
   textarea.value = value
@@ -139,6 +165,8 @@ afterEach(async () => {
   setUserAgent(originalUserAgent)
   vi.clearAllMocks()
   vi.useRealTimers()
+  Reflect.deleteProperty(document, 'execCommand')
+  Reflect.deleteProperty(document, 'queryCommandSupported')
 })
 
 describe('usePrimarySelectionPaste', () => {
@@ -287,6 +315,75 @@ describe('usePrimarySelectionPaste', () => {
     })
 
     expect(nativeBeforeInput.defaultPrevented).toBe(false)
+  })
+
+  it('swallows the post-gesture Linux native clipboard paste on contenteditable targets', async () => {
+    setUserAgent('Mozilla/5.0 (X11; Linux x86_64)')
+    readPrimarySelectionTextMock.mockResolvedValue('from-elsewhere')
+    Object.defineProperty(document, 'execCommand', {
+      configurable: true,
+      value: vi.fn((command: string, _showUI: boolean, text: string) => {
+        if (command !== 'insertText' || !(document.activeElement instanceof HTMLElement)) {
+          return false
+        }
+        document.activeElement.textContent = `${document.activeElement.textContent ?? ''}${text}`
+        return true
+      })
+    })
+    Object.defineProperty(document, 'queryCommandSupported', {
+      configurable: true,
+      value: vi.fn(() => true)
+    })
+    await renderProbe()
+    const editor = appendContentEditable()
+    editor.focus()
+    let nativePaste!: ClipboardEvent
+    let laterPaste!: ClipboardEvent
+
+    await act(async () => {
+      dispatchMiddleMouseDown(editor)
+      dispatchMiddleMouseUp(editor)
+      await flushPromises()
+      nativePaste = dispatchNativeClipboardPaste(editor, 'clip-text')
+      laterPaste = dispatchNativeClipboardPaste(editor, 'clip-text')
+    })
+
+    expect(editor.textContent).toBe('from-elsewhere')
+    expect(nativePaste.defaultPrevented).toBe(true)
+    expect(laterPaste.defaultPrevented).toBe(false)
+  })
+
+  it('does not arm post-gesture native clipboard paste suppression on macOS', async () => {
+    setUserAgent('Mozilla/5.0 (Macintosh; Intel Mac OS X 14_0)')
+    readPrimarySelectionTextMock.mockResolvedValue('from-elsewhere')
+    Object.defineProperty(document, 'execCommand', {
+      configurable: true,
+      value: vi.fn((command: string, _showUI: boolean, text: string) => {
+        if (command !== 'insertText' || !(document.activeElement instanceof HTMLElement)) {
+          return false
+        }
+        document.activeElement.textContent = `${document.activeElement.textContent ?? ''}${text}`
+        return true
+      })
+    })
+    Object.defineProperty(document, 'queryCommandSupported', {
+      configurable: true,
+      value: vi.fn(() => true)
+    })
+    await renderProbe()
+    const editor = appendContentEditable()
+    editor.focus()
+    let nativePaste!: ClipboardEvent
+
+    await act(async () => {
+      dispatchMiddleMouseDown(editor)
+      dispatchMiddleMouseUp(editor)
+      await flushPromises()
+      nativePaste = dispatchNativeClipboardPaste(editor, 'clip-text')
+    })
+
+    expect(editor.textContent).toBe('from-elsewhere')
+    expect(nativePaste.defaultPrevented).toBe(false)
   })
 
   it('does not keep middle-click ownership after the gesture window expires', async () => {
