@@ -27,6 +27,69 @@ describe('keybindings', () => {
     ).toBe(true)
   })
 
+  it('keeps the session grid unassigned, matching its top-level view siblings', () => {
+    const definition = getKeybindingDefinition('view.sessions.toggle')
+    expect(definition?.title).toBe('Toggle Session Grid')
+    expect(definition?.group).toBe('Global')
+    expect(definition?.allowInTerminal).toBe(true)
+    for (const platform of ['darwin', 'linux', 'win32'] as KeybindingPlatform[]) {
+      expect(getEffectiveKeybindingsForAction('view.sessions.toggle', platform)).toEqual([])
+    }
+    // Mod+Shift+G belongs to Show Source Control and to the terminal's find-previous.
+    expect(
+      keybindingMatchesAction(
+        'view.sessions.toggle',
+        { key: 'G', code: 'KeyG', control: false, meta: true, alt: false, shift: true },
+        'darwin'
+      )
+    ).toBe(false)
+    expect(
+      keybindingMatchesAction(
+        'view.sessions.toggle',
+        { key: 'g', code: 'KeyG', control: false, meta: true, alt: true, shift: false },
+        'darwin',
+        { 'view.sessions.toggle': ['Mod+Alt+G'] }
+      )
+    ).toBe(true)
+  })
+
+  it('ships the session grid page keys bound bare, with Alt+Arrow as the secondary', () => {
+    for (const platform of ['darwin', 'linux', 'win32'] as KeybindingPlatform[]) {
+      expect(getEffectiveKeybindingsForAction('sessions.grid.nextPage', platform)).toEqual([
+        'PageDown',
+        'Alt+ArrowDown'
+      ])
+      expect(getEffectiveKeybindingsForAction('sessions.grid.prevPage', platform)).toEqual([
+        'PageUp',
+        'Alt+ArrowUp'
+      ])
+    }
+    expect(getKeybindingDefinition('sessions.grid.nextPage')?.allowInTerminal).toBe(true)
+    expect(
+      keybindingMatchesAction(
+        'sessions.grid.prevPage',
+        { key: 'PageUp', code: 'PageUp', control: false, meta: false, alt: false, shift: false },
+        'linux'
+      )
+    ).toBe(true)
+    // An override replaces the defaults, so a user can hand PageDown back to the terminal.
+    expect(
+      keybindingMatchesAction(
+        'sessions.grid.nextPage',
+        {
+          key: 'PageDown',
+          code: 'PageDown',
+          control: false,
+          meta: false,
+          alt: false,
+          shift: false
+        },
+        'linux',
+        { 'sessions.grid.nextPage': ['Mod+Alt+N'] }
+      )
+    ).toBe(false)
+  })
+
   it('names terminal title shortcuts after pane menu actions', () => {
     const setTitle = getKeybindingDefinition('terminal.setTitle')
     const clearTitle = getKeybindingDefinition('terminal.clearPaneTitle')
