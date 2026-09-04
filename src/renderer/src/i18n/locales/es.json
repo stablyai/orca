@@ -2950,7 +2950,7 @@
             "8e9d603a09": "Desanclar pestaña"
           },
           "QuickLaunchButton": {
-            "348a04c1ad": "Ajustes de Agents…",
+            "348a04c1ad": "Ajustes de agentes…",
             "ec2adf093e": "Iniciar {{value0}} en un nuevo terminal",
             "465e432ef1": "No se pudo generar el comando de inicio para {{value0}}.",
             "e518f544b1": "No se detectaron agentes",
@@ -4427,7 +4427,10 @@
           "196c1b5362": "Abrir tareas de GitLab",
           "0ccba862b8": "Abrir tareas de GitHub",
           "fee535205b": "Tareas",
-          "d599269755": "Ocultar de la barra lateral"
+          "d599269755": "Ocultar de la barra lateral",
+          "sessions": "Sesiones",
+          "artifacts": "Artefactos",
+          "skills": "Habilidades"
         },
         "SidebarRepositoryFilterSection": {
           "d3a9c4cea1": "Limpiar",
@@ -14507,6 +14510,107 @@
         "description": "Anida este espacio de trabajo bajo otro en la barra lateral. No cambia la rama base.",
         "searchPlaceholder": "Buscar espacios de trabajo...",
         "noMatches": "No hay coincidencias."
+      },
+      "session": {
+        "grid": {
+          "SessionGridToolbar": {
+            "8909cc10c3": "Automático",
+            "816c044c89": "Fila por fila",
+            "11c7b51380": "Página por página",
+            "5f1c42d996": "Desplazamiento libre",
+            "33561c90fb": "Terminal",
+            "b2bd7400d7": "Cuadrícula",
+            "859362a60c": "+ rueda desplaza {{value0}}",
+            "c3a3a9b070": "la cuadrícula",
+            "a83c6228b3": "la terminal",
+            "b99757367b": "Volver al espacio de trabajo",
+            "71bc1856d3": "Nueva sesión",
+            "b0fdffe943": "Página anterior",
+            "7d252cff08": "Página siguiente",
+            "5931c68e4d": "Distribución de la cuadrícula",
+            "1f61e1b041": "Desplazamiento",
+            "a28cc8ef24": "Mostrar celdas vacías"
+          },
+          "SessionGridViewMenu": {
+            "zoom": "Zoom",
+            "zoomOut": "Alejar",
+            "zoomReset": "Restablecer zoom",
+            "zoomIn": "Acercar",
+            "trigger": "Vista",
+            "showHidden": "Mostrar sesiones ocultas"
+          },
+          "SessionGridStateControl": {
+            "all": "Todos",
+            "group": "Estado",
+            "compactLabel": "Estado: {{value0}}"
+          },
+          "SessionGridWorkspacePicker": {
+            "all": "Todos los espacios",
+            "trigger": "Espacio de trabajo: {{value0}}",
+            "search": "Buscar espacios de trabajo…",
+            "empty": "No hay espacios de trabajo que coincidan"
+          },
+          "SessionsGridPage": {
+            "emptyClearFiltersAction": "Quitar filtros",
+            "emptyFilteredBody": "Hay sesiones abiertas, pero los filtros de la barra de herramientas las ocultan.",
+            "emptyFilteredTitle": "Ninguna sesión coincide con estos filtros",
+            "02aa208e3c": "No hay sesiones de terminal abiertas en ningún espacio de trabajo.",
+            "emptyHiddenBody": "Has ocultado estas tarjetas de la cuadrícula. Sus sesiones siguen en ejecución.",
+            "emptyHiddenTitle": "Todas las sesiones están ocultas",
+            "emptyRevealAction": "Mostrar sesiones ocultas",
+            "3b6b0870de": "Nueva sesión",
+            "c406fd4604": "No hay sesiones activas"
+          },
+          "SessionGridCard": {
+            "3cb420110d": "Cerrar sesión",
+            "dcbfba372d": "Ampliar a la vista de pestañas"
+          },
+          "session": {
+            "grid": {
+              "worktree": {
+                "catalog": {
+                  "bdc7918d99": "Espacio de trabajo",
+                  "3c706dc992": "Proyecto"
+                }
+              },
+              "visibility": {
+                "labels": {
+                  "f32a13596e": "Ocultar de la cuadrícula de sesiones",
+                  "366251c781": "Mostrar en la cuadrícula de sesiones"
+                }
+              },
+              "items": {
+                "builder": {
+                  "5c39f0175d": "Terminal",
+                  "allWorkspaces": "Todos los espacios",
+                  "6d07bd7ce3": "Proyecto"
+                }
+              }
+            }
+          },
+          "SessionGridLaunchPicker": {
+            "noDetected": "No se detectaron agentes",
+            "back": "Volver a los espacios de trabajo",
+            "inThisGrid": "En esta cuadrícula",
+            "default": "Predeterminado",
+            "launchIn": "Iniciar en {{value0}}",
+            "terminalShell": "Terminal de comandos",
+            "search": "Buscar espacios de trabajo…",
+            "empty": "No hay espacios de trabajo que coincidan",
+            "agentSettings": "Ajustes de agentes…",
+            "noEnabled": "No hay agentes habilitados"
+          },
+          "SessionGridEmptySlot": {
+            "ad86c2342f": "Iniciar aquí una terminal o un agente",
+            "dbcddec0c0": "Nueva sesión"
+          },
+          "SessionGridOffscreenAttentionPill": {
+            "213f12b348": "{{count}} sesión sin ver más abajo",
+            "67c954bd0e": "{{count}} sesiones sin ver más arriba",
+            "956f07e0bb": "{{count}} sesiones sin ver más abajo",
+            "54a50fe32f": "{{count}} sesión sin ver más arriba"
+          }
+        }
       }
     },
     "i18n": {
@@ -14682,7 +14786,8 @@
         "allow": "Permitir",
         "deny": "Denegar"
       },
-      "launchPromptNotDelivered": "No entregado — revisa la terminal"
+      "launchPromptNotDelivered": "No entregado — revisa la terminal",
+      "structuredSessionLaunchPending": "Iniciando chat de {{value0}}…"
     },
     "tab": {
       "bar": {
@@ -14777,10 +14882,10 @@
       "description": "The dashboard could not finish rendering. Retry to remount it, or reopen it."
     },
     "bucket": {
-      "attention": "Needs You",
-      "working": "Working",
-      "idle": "Idle",
-      "empty": "None",
+      "attention": "Te necesita",
+      "working": "Trabajando",
+      "idle": "Inactivo",
+      "empty": "Ninguno",
       "done": "Finalizado"
     },
     "title": "Agents",
@@ -14803,9 +14908,12 @@
       "subagents_other": "{{count}} subagentes"
     },
     "terminal": {
-      "closed": "No live terminal — this agent's pane has closed.",
-      "focusWorktree": "Open worktree",
-      "close": "Close"
+      "closed": "No hay una terminal activa: el panel de este agente se ha cerrado.",
+      "focusWorktree": "Abrir espacio de trabajo",
+      "close": "Cerrar",
+      "remotePreviewUnavailable": "No hay vista previa de esta sesión remota. Abre el espacio de trabajo para ver la terminal.",
+      "starting": "Iniciando sesión…",
+      "unavailable": "Vista previa no disponible. Reintentando…"
     },
     "close": "Close dashboard",
     "settingsTooltip": "Configuración del tablero",
@@ -14897,6 +15005,19 @@
       "hide": "Ocultar Agentes",
       "action": "Probar Agentes",
       "hiddenToast": "La pestaña Agentes está oculta. Vuelve a activarla en Configuración → Experimental."
+    }
+  },
+  "sessionGrid": {
+    "wheel": {
+      "label": "Rueda sobre terminales",
+      "focus": "Según foco",
+      "focusHint": "Desplaza la terminal con foco; en el resto, la cuadrícula. {{shift}} + rueda invierte el destino."
+    },
+    "terminal": {
+      "retry": "Reintentar",
+      "reconnectTimedOut": "Se agotó el tiempo de reconexión",
+      "load": "Cargar sesión",
+      "notConnected": "Sesión sin conectar"
     }
   }
 }

@@ -16587,5 +16587,12 @@
   },
   "quickOpen": {
     "moreMatchesAvailable": "D'autres correspondances sont peut-être disponibles. Affinez votre recherche pour réduire les résultats."
+  },
+  "sessionGrid": {
+    "wheel": {
+      "label": "Molette sur les terminaux",
+      "focus": "Selon le focus",
+      "focusHint": "Fait défiler le terminal ayant le focus ; sinon, la grille. {{shift}} + molette inverse la cible."
+    }
   }
 }
