@@ -24,6 +24,7 @@ import {
   isAllowedPushTargetRemoteConflict,
   isMatchingSelectedGitHubPr
 } from './selected-review-branch'
+import { confirmsSelectedGitHubPrByNumber } from '../github/selected-pr-branch-confirmation'
 import {
   canCheckoutExistingLocalBranch,
   getLocalGitHubPrForBranch,
@@ -136,14 +137,35 @@ export async function resolveRuntimeLocalWorktreeCreateCandidate(args: {
         let existingPR: Awaited<ReturnType<typeof getPRForBranch>> | null = null
         const selectedReview = getSelectedReviewBranch(args.request)
         if (selectedReview?.provider === 'github') {
+          let lookupFailed = false
           try {
             existingPR = await getLocalGitHubPrForBranch(
               args.repo.path,
               branchName,
               args.localWorktreeGitOptions
             )
-          } catch {}
+          } catch {
+            lookupFailed = true
+          }
           if (isMatchingSelectedGitHubPr(existingPR, args.request, branchName)) {
+            branchConflictKind = null
+            selectedReviewConflictMatched = true
+          } else if (
+            !lookupFailed &&
+            !existingPR &&
+            (await confirmsSelectedGitHubPrByNumber({
+              lookupByNumber: (linkedPRNumber) =>
+                getLocalGitHubPrForBranch(
+                  args.repo.path,
+                  branchName,
+                  args.localWorktreeGitOptions,
+                  linkedPRNumber
+                ),
+              linkedPR: args.request.linkedPR,
+              branchNameOverride: args.request.branchNameOverride,
+              branchName
+            }))
+          ) {
             branchConflictKind = null
             selectedReviewConflictMatched = true
           }
