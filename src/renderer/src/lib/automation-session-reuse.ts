@@ -13,6 +13,7 @@ export type ReusableAutomationSession = {
 export function findReusableAutomationSession(args: {
   automationId: string
   agentId: TuiAgent
+  customAgentProfileId?: string | null
   worktreeId: string
   currentRunId: string
   runs: AutomationRun[]
@@ -21,6 +22,9 @@ export function findReusableAutomationSession(args: {
     'agentStatusByPaneKey' | 'ptyIdsByTabId' | 'terminalLayoutsByTabId' | 'unifiedTabsByWorktree'
   >
 }): ReusableAutomationSession | null {
+  if (args.customAgentProfileId) {
+    return null
+  }
   const { automationId, agentId, worktreeId, currentRunId, runs, state } = args
   const worktreeTabs = state.unifiedTabsByWorktree[worktreeId] ?? []
   const terminalTabIds = new Set(

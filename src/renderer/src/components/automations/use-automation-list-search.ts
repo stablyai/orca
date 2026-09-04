@@ -13,6 +13,7 @@ import {
   type AutomationWorkspaceNameLookup
 } from './automation-list-search-rows'
 import type { ExternalAutomationListEntry } from './external-automation-list-entries'
+import { useAppStore } from '@/store'
 
 /** Counts the empty-state view consumes, so it never recomputes what search already knows. */
 export type AutomationListSearchCounts = {
@@ -85,10 +86,11 @@ export function useAutomationListSearch({
   const activeListSearchQuery =
     deferredListSearchResolution.status === 'active' ? deferredListSearchResolution.query : null
   const isListSearchActive = activeListSearchQuery !== null
+  const customAgentProfiles = useAppStore((state) => state.settings?.customAgentProfiles)
 
   const automationSearchSources = useMemo(
-    () => buildAutomationSearchRowSources(rows, { repoMap, worktreeMap }),
-    [rows, repoMap, worktreeMap]
+    () => buildAutomationSearchRowSources(rows, { repoMap, worktreeMap, customAgentProfiles }),
+    [rows, repoMap, worktreeMap, customAgentProfiles]
   )
   const automationSearchRows = useAutomationSearchRows(automationSearchSources)
 

@@ -41,6 +41,7 @@ export function handleTerminalWorkspaceKeyDown(
     handleCloseBrowserTab,
     handleCloseFile,
     handleNewAgentTab,
+    handleNewCustomAgentTab,
     handleNewBrowserTab,
     handleNewFile,
     handleNewSimulatorTab,
@@ -89,7 +90,9 @@ export function handleTerminalWorkspaceKeyDown(
     if (agentShortcut.actionId) {
       event.preventDefault()
       notifyTerminalCapture(agentShortcut.actionId)
-      if (agentShortcut.agent) {
+      if (agentShortcut.customAgentProfileId) {
+        handleNewCustomAgentTab(agentShortcut.customAgentProfileId)
+      } else if (agentShortcut.agent) {
         handleNewAgentTab(agentShortcut.agent)
       } else {
         toast.message(

@@ -1,6 +1,7 @@
 import { getAutomationRunRepoId } from '../../../../shared/automation-run-identity'
 import type { Automation } from '../../../../shared/automations-types'
 import type { Repo } from '../../../../shared/repo-types'
+import type { CustomAgentProfile } from '../../../../shared/custom-agent-profile'
 import type { AutomationListRow } from './automation-list-row-identity'
 import { getAgentLabel } from './automation-draft-model'
 import {
@@ -31,6 +32,7 @@ export type AutomationWorkspaceNameLookup = ReadonlyMap<string, { displayName?: 
 export type AutomationSearchRowContext = {
   repoMap: ReadonlyMap<string, Repo>
   worktreeMap?: AutomationWorkspaceNameLookup
+  customAgentProfiles?: readonly CustomAgentProfile[]
 }
 
 function buildAutomationWorkspaceSearchText(
@@ -60,7 +62,11 @@ export function buildAutomationSearchFields(
       path: repo?.path
     }),
     workspace: buildAutomationWorkspaceSearchText(automation, context.worktreeMap),
-    agent: getAgentLabel(automation.agentId),
+    agent: getAgentLabel(
+      automation.agentId,
+      automation.customAgentProfileId,
+      context.customAgentProfiles
+    ),
     // The row's own host: a lookup by automation id would give two hosts' rows
     // one label, so a search for host B could only ever match host A's row.
     host: row.hostLabel,

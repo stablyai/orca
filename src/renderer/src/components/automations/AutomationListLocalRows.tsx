@@ -41,7 +41,6 @@ import {
 import { AutomationListLastRunCell } from './AutomationListLastRunCell'
 import { formatAutomationDateTimeWithRelative } from './automation-page-parts'
 import { getAutomationTargetAvailability } from './automation-target-availability'
-import { getAgentLabel } from './automation-draft-model'
 import type { AutomationListRow } from './automation-list-row-identity'
 import {
   formatAutomationCost,
@@ -57,6 +56,7 @@ import {
 import { isPortaledRowMenuClick, isRowActivationKey } from '@/lib/list-row-interaction'
 import { AutomationListStatusCell } from './AutomationListStatusCell'
 import { translate } from '@/i18n/i18n'
+import { useAutomationAgentLabel } from './use-automation-agent-label'
 
 export type AutomationListLocalRowsProps = {
   rows: readonly AutomationListRow[]
@@ -135,6 +135,7 @@ export function AutomationListLocalRows({
   onToggle,
   onDelete
 }: AutomationListLocalRowsProps): React.JSX.Element {
+  const getAutomationAgentLabel = useAutomationAgentLabel()
   const allows = (row: AutomationListRow, action: AutomationRowAction): boolean =>
     isActionEnabled?.(row, action) ?? true
   return (
@@ -163,7 +164,6 @@ export function AutomationListLocalRows({
           ? formatAutomationDateTimeWithRelative(automation.nextRunAt, relativeNow)
           : translate('auto.components.automations.enablement.paused', 'Paused')
         const isSelected = isSelectedLocal && selectedRowKey === row.key
-        const agentLabel = getAgentLabel(automation.agentId)
         const hostId =
           automation.runContext?.hostId ??
           (automationRepo ? getRepoExecutionHostId(automationRepo) : null)
@@ -172,7 +172,7 @@ export function AutomationListLocalRows({
           (hostId
             ? (hostLabelById.get(hostId) ?? getExecutionHostLabel(hostId))
             : getLocalExecutionHostLabel())
-        const agentTooltipLabel = `${agentLabel} · ${hostLabel} · ${automationUsageText(row.usageSummary ?? undefined)}`
+        const agentTooltipLabel = `${getAutomationAgentLabel(automation)} · ${hostLabel} · ${automationUsageText(row.usageSummary ?? undefined)}`
         const canRunNow = automationRunAvailability.canRunNow && allows(row, 'run')
         const lastRun = lastRunByAutomationId.get(automation.id)
         // Without a fetched run, the row's projected summary carries the newest

@@ -173,6 +173,36 @@ describe('launchAgentBackgroundSession', () => {
     expect(result).toMatchObject({ tabId, paneKey, ptyId: 'pty-1' })
   })
 
+  it('launches a custom profile with its base provider identity', async () => {
+    const { launchAgentBackgroundSession } = await import('./launch-agent-background-session')
+    mockSpawn.mockResolvedValue({ id: 'pty-custom' })
+
+    await launchAgentBackgroundSession({
+      agent: 'codex',
+      customAgentProfile: {
+        id: 'codex-luna',
+        name: 'Codex Luna',
+        baseAgent: 'codex',
+        baseAgentExecutable: 'codex',
+        executable: 'codex',
+        args: ['--model', 'luna']
+      },
+      worktreeId: 'wt-1',
+      prompt: 'run the automation'
+    })
+
+    expect(mockSpawn).toHaveBeenCalledWith(
+      expect.objectContaining({
+        command: "'codex' '--model' 'luna' 'run the automation'",
+        launchAgent: 'codex',
+        launchConfig: expect.objectContaining({
+          agentCommand: "'codex'",
+          agentArgs: "'--model' 'luna'"
+        })
+      })
+    )
+  })
+
   it('does not create or mount the tab while the explicit PTY spawn is unresolved', async () => {
     let resolveSpawn!: (result: { id: string }) => void
     mockSpawn.mockReturnValueOnce(

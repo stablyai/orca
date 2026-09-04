@@ -177,6 +177,45 @@ describe('AgentCombobox', () => {
     expect(markup).not.toContain('Blank Terminal')
   })
 
+  it('selects a custom profile while preserving its provider icon', () => {
+    const onValueChange = vi.fn()
+    const onCustomValueChange = vi.fn()
+    const { rerender } = render(
+      <AgentCombobox
+        agents={AGENT_CATALOG}
+        value="codex"
+        onValueChange={onValueChange}
+        customAgents={[{ id: 'codex-luna', label: 'Codex Luna', cmd: 'codex', baseAgent: 'codex' }]}
+        customValue={null}
+        onCustomValueChange={onCustomValueChange}
+        allowBlankTerminal={false}
+      />
+    )
+
+    fireEvent.click(screen.getByRole('combobox'))
+    fireEvent.click(screen.getByRole('option', { name: 'Codex Luna' }))
+    expect(onCustomValueChange).toHaveBeenCalledWith('codex-luna')
+    expect(onValueChange).not.toHaveBeenCalled()
+
+    rerender(
+      <AgentCombobox
+        agents={AGENT_CATALOG}
+        value="codex"
+        onValueChange={onValueChange}
+        customAgents={[{ id: 'codex-luna', label: 'Codex Luna', cmd: 'codex', baseAgent: 'codex' }]}
+        customValue="codex-luna"
+        onCustomValueChange={onCustomValueChange}
+        allowBlankTerminal={false}
+      />
+    )
+    expect(screen.getByRole('combobox').textContent).toContain('Codex Luna')
+
+    fireEvent.click(screen.getByRole('combobox'))
+    fireEvent.click(screen.getByRole('option', { name: 'Claude' }))
+    expect(onCustomValueChange).toHaveBeenLastCalledWith(null)
+    expect(onValueChange).toHaveBeenCalledWith('claude')
+  })
+
   it('uses the bundled OpenClaude favicon crop instead of Claude or GitHub artwork', () => {
     const markup = renderToStaticMarkup(<AgentIcon agent="openclaude" />)
 
