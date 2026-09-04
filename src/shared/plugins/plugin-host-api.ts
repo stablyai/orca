@@ -156,7 +156,7 @@ export const PLUGIN_HOST_API_V0: readonly PluginHostMethodSpec[] = [
     scope: 'plugin-private',
     capability: 'storage',
     mutation: false,
-    panel: false,
+    panel: true,
     params: storageGetParams,
     result: storageGetResult
   }),
