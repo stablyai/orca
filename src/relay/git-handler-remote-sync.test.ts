@@ -738,12 +738,15 @@ describe('GitHandler', () => {
 
     it('rethrows upstreamStatus failures that are not "no upstream configured"', async () => {
       // Why: the catch only swallows "no upstream"; other errors must surface so auth/corruption failures aren't masked.
+      // Why no message matcher: git's fatal text for a non-repo varies with the environment
+      // (e.g. "Stopping at filesystem boundary" when TMPDIR is a different filesystem) —
+      // surfacing-vs-swallowing is the contract, not the wording.
       const nonRepoDir = path.join(tmpDir, 'not-a-repo')
       await fs.mkdir(nonRepoDir, { recursive: true })
 
       await expect(
         dispatcher.callRequest('git.upstreamStatus', { worktreePath: nonRepoDir })
-      ).rejects.toThrow(/not a git repository/i)
+      ).rejects.toThrow(Error)
     })
   })
 })
