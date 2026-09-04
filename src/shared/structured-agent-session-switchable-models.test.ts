@@ -15,6 +15,7 @@ const modelDescriptor = (
   id: 'model',
   label: 'Model',
   category: 'model',
+  transport: 'agent-session',
   kind: { type: 'select', currentValue, choices },
   valueSource: 'applied',
   settable: true

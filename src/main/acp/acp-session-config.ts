@@ -13,7 +13,9 @@ export type AcpConfigIndex = {
   modelId: string | null
   effortId: string | null
   modeId: string | null
-  result: AgentSessionOptionsResult
+  result: Omit<AgentSessionOptionsResult, 'current'> & {
+    current: { model: string; effort?: string }
+  }
 }
 
 function stringValue(value: unknown): string | null {

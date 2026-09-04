@@ -113,6 +113,17 @@ export type AgentJournalResolution = {
 export type AgentJournalPromptOption = {
   id: string
   label: string
+  description?: string
+}
+
+export type AgentJournalQuestion = {
+  id: string
+  question: string
+  header?: string
+  multiSelect: boolean
+  options: AgentJournalPromptOption[]
+  /** Present when the provider accepts an answer outside the offered options. */
+  freeTextQuestionId?: string
 }
 
 export type AgentJournalApprovalItem = {
@@ -127,6 +138,7 @@ export type AgentJournalQuestionItem = {
   kind: 'question'
   question: string
   options: AgentJournalPromptOption[]
+  questions?: AgentJournalQuestion[]
   /** Present when the provider accepts an answer outside the offered options. */
   freeTextQuestionId?: string
   resolution: AgentJournalResolution

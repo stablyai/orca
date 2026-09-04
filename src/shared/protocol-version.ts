@@ -126,6 +126,10 @@ export const AGENT_SESSION_OMP_RESUME_PATH_RUNTIME_CAPABILITY =
 // can neither display nor drive. The host also refuses every agentSession.*
 // method from a connection that does not advertise this.
 export const STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY = 'agent-session.structured.v1' as const
+// Why: mobile clients advertise Claude-structured session support during E2EE
+// pairing so the desktop can keep structured-specific affordances enabled.
+export const CLAUDE_STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY =
+  'agent-session.structured.claude.v1' as const
 // Why: paired structured clients explicitly hold every visible session surface, allowing the host
 // to stop provider children after the last surface closes without tying lifetime to a transport.
 export const STRUCTURED_AGENT_SESSION_HOLD_RUNTIME_CAPABILITY =

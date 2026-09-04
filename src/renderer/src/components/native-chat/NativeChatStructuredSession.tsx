@@ -4,6 +4,7 @@ import type {
   AgentStatusOrchestrationContext,
   AgentType
 } from '../../../../shared/agent-status-types'
+import { encodeAgentSessionQuestionAnswers } from '../../../../shared/agent-session-question-answer'
 import { dispatchStructuredAgentSessionComposerCommand } from '../../../../shared/structured-agent-session-composer'
 import { structuredAgentSessionPaneKey } from '../../../../shared/structured-agent-session-projection'
 import type { NativeChatLiveSession } from './use-native-chat-live-session'
@@ -92,6 +93,21 @@ export function NativeChatStructuredSession(props: {
   const fileLinkClick = useNativeChatFileLinkClick(props.allowFileUriLinks ? fileLinkContext : null)
   const prompt = controller.prompts[0] ?? null
   const questionBody = prompt?.body.kind === 'question' ? prompt.body : null
+  const questions =
+    questionBody?.questions ??
+    (questionBody
+      ? [
+          {
+            id: questionBody.freeTextQuestionId ?? 'q1',
+            question: questionBody.question,
+            options: questionBody.options,
+            multiSelect: false,
+            ...(questionBody.freeTextQuestionId
+              ? { freeTextQuestionId: questionBody.freeTextQuestionId }
+              : {})
+          }
+        ]
+      : [])
   const retryableOutboxEntry =
     controller.outbox.find((entry) => entry.state === 'unconfirmed') ??
     controller.outbox.find(
@@ -173,17 +189,39 @@ export function NativeChatStructuredSession(props: {
       ) : null}
       {prompt && questionBody ? (
         <NativeChatQuestionCard
+          key={`${prompt.itemId}:${prompt.revision}`}
           prompt={{
-            questions: [
-              {
-                question: questionBody.question,
-                multiSelect: false,
-                options: questionBody.options.map((option) => ({ label: option.label }))
-              }
-            ]
+            questions: questions.map((question) => ({
+              question: question.question,
+              ...(question.header ? { header: question.header } : {}),
+              multiSelect: question.multiSelect,
+              options: question.options.map((option) => ({
+                label: option.label,
+                ...(option.description ? { description: option.description } : {})
+              }))
+            }))
           }}
-          allowOther={Boolean(questionBody.freeTextQuestionId)}
+          allowOther={questions.map((question) => Boolean(question.freeTextQuestionId))}
           onAnswer={(answers) => {
+            if (questionBody.questions) {
+              const grouped = questions.map((question, questionIndex) => {
+                const answer = answers[questionIndex]
+                const other = answer?.other?.trim()
+                const optionIds = (answer?.indices ?? []).flatMap((optionIndex) => {
+                  const optionId = question.options[optionIndex]?.id
+                  return optionId ? [optionId] : []
+                })
+                return {
+                  questionId: question.id,
+                  optionIds: question.multiSelect || !other ? optionIds : [],
+                  ...(other ? { other } : {})
+                }
+              })
+              if (grouped.every((answer) => answer.optionIds.length > 0 || answer.other)) {
+                void controller.respond(prompt, encodeAgentSessionQuestionAnswers(grouped))
+              }
+              return
+            }
             const index = answers[0]?.indices[0]
             const other = answers[0]?.other?.trim()
             const optionId =

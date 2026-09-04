@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import {
+  CLAUDE_STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY,
   STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY,
   type RuntimeCapability
 } from '../../../../shared/protocol-version'
@@ -67,12 +68,23 @@ describe('session tab structured capability mutations', () => {
       expect(fixture.calls[method.runtimeMethod]).toHaveBeenCalledOnce()
     })
 
-    it(`rejects ${method.name} for a legacy Claude row`, async () => {
+    it(`rejects ${method.name} on a Claude row the client never negotiated`, async () => {
       const fixture = createFixture([STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY])
       const response = await fixture.dispatch(method.name, method.params('claude-session'))
 
       expect(response.ok).toBe(false)
       expect(fixture.calls[method.runtimeMethod]).not.toHaveBeenCalled()
+    })
+
+    it(`allows ${method.name} for a client that negotiated Claude rows`, async () => {
+      const fixture = createFixture([
+        STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY,
+        CLAUDE_STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY
+      ])
+      const response = await fixture.dispatch(method.name, method.params('claude-session'))
+
+      expect(response.ok).toBe(true)
+      expect(fixture.calls[method.runtimeMethod]).toHaveBeenCalledOnce()
     })
   }
 

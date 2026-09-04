@@ -1,5 +1,6 @@
 import {
   AGENT_SESSION_BOUNDARY_RUNTIME_CAPABILITY,
+  CLAUDE_STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY,
   type RuntimeCapability
 } from '../../../../shared/protocol-version'
 import type {
@@ -24,7 +25,14 @@ export function projectSessionTabAgentStatus<TPayload extends SessionTabsPayload
     structuredNativeChatEnabled
   })
   let projected = structuredVisible ? payload : projectAgentSessionTabsOut(payload, () => true)
-  if (structuredVisible && clientKind !== undefined) {
+  // Why: a paired client renders only codex structured tabs unless it says otherwise
+  // (mobile's resolveMobileNativeChat returns null for every other agent), so an
+  // ungated row would list and select into a pane that shows neither chat nor terminal.
+  if (
+    structuredVisible &&
+    clientKind !== undefined &&
+    !clientCapabilities?.includes(CLAUDE_STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY)
+  ) {
     projected = projectAgentSessionTabsOut(projected, (tab) => tab.agent !== 'codex')
   }
   // Why: only paired runtimes have legacy `done` completion side effects; mobile must keep its row without changing the exact v2 auth shape.

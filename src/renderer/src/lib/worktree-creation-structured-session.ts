@@ -2,10 +2,10 @@ import { useAppStore } from '@/store'
 import { ensureWorktreeHasInitialTerminal } from '@/lib/worktree-initial-terminal-seeding'
 import { activateAndRevealWorktree, type ActivateAndRevealResult } from '@/lib/worktree-activation'
 import {
-  cancelStructuredCodexLaunch,
-  startStructuredCodexLaunch
+  cancelStructuredAgentLaunch,
+  startStructuredAgentLaunch
 } from '@/lib/structured-agent-session-launch'
-import { StructuredAgentSessionCreateRefusalError } from '@/lib/launch-structured-codex-session'
+import { StructuredAgentSessionCreateRefusalError } from '@/lib/launch-structured-agent-session'
 import { activateStructuredAgentSessionById } from '@/lib/structured-agent-session-tab-activation'
 import { preflightAgentTrust } from '@/lib/agent-trust-preflight'
 import type { WorktreeCreationRequest } from '@/lib/pending-worktree-creation'
@@ -49,20 +49,21 @@ export async function launchStructuredWorktreeSession(args: {
   let { activation, primaryTabId } = args
   let accepted = true
   let visibilityUnknown = false
-  if (!isAcpStructuredAgent(args.request.agent)) {
+  const agent = args.request.agent
+  if (!isAcpStructuredAgent(agent)) {
     return { accepted, cancelled: false, visibilityUnknown, activation, primaryTabId }
   }
   if (!useAppStore.getState().pendingWorktreeCreations[args.creationId]) {
     return { accepted, cancelled: true, visibilityUnknown, activation, primaryTabId }
   }
 
-  const launch = startStructuredCodexLaunch(
+  const launch = startStructuredAgentLaunch(
     args.worktreeId,
+    agent,
     args.recoverUnknownLaunch
-      ? { agent: args.request.agent }
+      ? {}
       : {
-          prompt: args.request.launchDraftPrompt ?? args.request.quickPrompt,
-          agent: args.request.agent
+          prompt: args.request.launchDraftPrompt ?? args.request.quickPrompt
         }
   )
   let cancelled = false
@@ -71,7 +72,7 @@ export async function launchStructuredWorktreeSession(args: {
       return
     }
     cancelled = true
-    cancelStructuredCodexLaunch(args.worktreeId, launch.sessionId)
+    cancelStructuredAgentLaunch(args.worktreeId, launch.sessionId)
   }
   const unsubscribe = useAppStore.subscribe((state) => {
     if (!state.pendingWorktreeCreations[args.creationId]) {

@@ -83,6 +83,11 @@ const STRUCTURED_CALLS: {
     result: { ok: true, replayed: false, value: { agent: 'claude', provider: 'claude' } }
   },
   {
+    method: 'agentSession.requestHandoff',
+    hostMethod: 'requestHandoff',
+    result: { status: { owner: 'native' } }
+  },
+  {
     method: 'agentSession.handoffStatus',
     hostMethod: 'handoffStatus',
     result: { owner: 'native' }
@@ -202,6 +207,14 @@ function paramsFor(method: string): unknown {
       const fields = { itemId: 'item-1', expectedRevision: 1, optionId: 'allow' }
       return { envelope: envelope({ method, fields, fence }), ...fields }
     }
+    case 'agentSession.requestHandoff': {
+      const fields = {
+        direction: 'to-tui' as const,
+        mode: 'now' as const,
+        action: 'start' as const
+      }
+      return { envelope: envelope({ method, fields, fence }), ...fields }
+    }
     case 'agentSession.setOption': {
       const fields = { key: 'model', value: 'gpt-5' }
       return { envelope: envelope({ method, fields, fence }), ...fields }
@@ -295,6 +308,10 @@ async function callBuild(
 function structuredHostStub(): Record<string, ReturnType<typeof vi.fn>> {
   return {
     attach: vi.fn(async () => ({ ok: true, replayed: false, value: { sessionId: SESSION } })),
+    // Attach-shaped entries take a client-supplied location, so the host is asked whether it
+    // supports creating there. A real host always answers; leaving it unstubbed made every
+    // `ensure` refuse for the harness's own reason rather than the location's.
+    supportsCreate: vi.fn(() => true),
     send: vi.fn(async () => ({ ok: true, replayed: false })),
     cancel: vi.fn(async () => ({ ok: true, replayed: false })),
     close: vi.fn(async () => undefined),
@@ -739,6 +756,10 @@ describe('cross-version structured agent sessions', () => {
     /** Phase 2 owns provider processes; the adapter is the only stub here. */
     function adapter(): StructuredAgentSessionAdapter {
       return {
+        // Every real adapter answers this; without it adapterSupportsCreate falls through to
+        // `supportsLocation`, which this fake also lacks, so the client-supplied-location gate
+        // refused for the fake's silence rather than for the location.
+        supportsCreate: () => true,
         acquire: async ({ fence }) => ({
           process: {
             hostId: 'local',

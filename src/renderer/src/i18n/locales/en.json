@@ -6969,8 +6969,8 @@
             "defaultViewTerminal": "Terminal chat",
             "defaultViewNative": "Chat UI",
             "structuredTitle": "Use updated structured native chat",
-            "structuredCopy": "Opt in to the host-owned structured Codex runtime. Off keeps the existing terminal-backed chat path.",
-            "structuredScope": "Local macOS and Linux sessions only for now. Windows, WSL, and remote execution hosts (including SSH) continue to use terminal chat.",
+            "structuredCopy": "Opt in to the host-owned structured chat runtime for Codex and Claude. Off keeps the existing terminal-backed chat path.",
+            "structuredScope": "Local sessions only for now. WSL and remote execution hosts (including SSH) continue to use terminal chat, and Windows falls back to it unless Orca can read process start times.",
             "structuredToggleLabel": "Toggle updated structured native chat"
           },
           "agentDashboard": {
@@ -17019,9 +17019,42 @@
         "message": "Structured Chat blocks terminal prompts and sends. Orchestration messages remain queued; switch to Terminal, then check the Orca inbox with",
         "command": "orca orchestration check"
       },
-      "structuredSessionCloseFailed": "Could not close this Codex chat",
-      "structuredSessionLaunchFailed": "Could not open Codex chat",
-      "structuredSessionCloseFailedDescription": "The terminal stayed open so the provider remains recoverable."
+      "structuredSessionCloseFailed": "Could not close this chat session",
+      "structuredSessionLaunchFailed": "Could not open {{value0}} chat",
+      "structuredSessionLaunchPending": "Starting {{value0}} chat…",
+      "structuredSessionCloseFailedDescription": "The terminal stayed open so the provider remains recoverable.",
+      "handoff": {
+        "stage": {
+          "finishingChat": "Finishing chat session…",
+          "finishingTerminal": "Finishing agent terminal…",
+          "openingTerminal": "Opening agent terminal…",
+          "resumingChat": "Resuming chat session…",
+          "verifyingTerminal": "Verifying agent terminal…",
+          "verifyingChat": "Verifying chat session…",
+          "recovering": "Recovering agent session…",
+          "manualRecovery": "Agent session needs recovery"
+        },
+        "switchingOwner": "Switching session owner…",
+        "mode": {
+          "switching": "Switching",
+          "terminal": "Terminal",
+          "chat": "Chat"
+        },
+        "switchingAfterTurn": "Switching after this turn",
+        "returningAfterTurn": "Returning after this turn",
+        "cancel": "Cancel",
+        "switchAfterTurn": "Switch after this turn",
+        "stopTurnAndSwitch": "Stop turn and switch",
+        "openAgentTui": "Open agent TUI",
+        "returnAfterTurn": "Return after this turn",
+        "returnToChat": "Return to chat",
+        "agentOpenOnHost": "Agent is open in terminal on {{value0}}.",
+        "agentOpen": "Agent is open in terminal.",
+        "exitTerminal": "Exit the agent terminal to continue in chat.",
+        "retryProof": "Retry proof",
+        "retry": "Retry",
+        "details": "Details"
+      }
     },
     "tab": {
       "bar": {

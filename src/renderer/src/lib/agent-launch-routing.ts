@@ -100,7 +100,10 @@ export function resolveAgentLaunchRoute(input: AgentLaunchRoutingInput): AgentLa
     input.requiresTuiLaunchCustomization !== true &&
     !hasInitialSessionOptions &&
     input.executionHostId === 'local' &&
-    input.platform !== 'win32' &&
+    // Codex's Windows refusal is deliberate and settled elsewhere, so it stays a client-side
+    // answer. Claude's is measured by the executing host at create time (agentSession.createSupport)
+    // because only that host knows whether it can read a provider child's start time.
+    (input.agent !== 'codex' || input.platform !== 'win32') &&
     !runtimeRefused &&
     input.hostCapabilities.includes(STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY)
 

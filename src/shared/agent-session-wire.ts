@@ -259,5 +259,11 @@ export type AgentSessionOptionsResult = {
   current: {
     model: string
     effort?: string
+    /**
+     * Option ids whose value the provider reported back, not merely accepted.
+     * Optional: a host that predates it sends nothing and the client keeps
+     * treating the value as unconfirmed, which is what it was before.
+     */
+    confirmed?: readonly string[]
   }
 }

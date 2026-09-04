@@ -1,3 +1,5 @@
+import { fakeClaude } from '../claude/claude-structured-session-test-support'
+import { claudeSessionIdForOrcaSession } from '../claude/claude-structured-launch-resolution'
 // Structured ACP session over `agentSession.*` with a scripted stdio child.
 
 import { mkdtemp, rm } from 'node:fs/promises'
@@ -266,7 +268,10 @@ function textOf(item: AgentJournalRenderItem): string {
     : ''
 }
 
+let claude: ReturnType<typeof fakeClaude>
+
 beforeEach(async () => {
+  claude = fakeClaude({ initSessionId: claudeSessionIdForOrcaSession(SESSION) })
   operations = 0
   root = await mkdtemp(join(tmpdir(), 'orca-acp-integration-'))
   acp = fakeAcp()
@@ -282,9 +287,12 @@ beforeEach(async () => {
         stateDirectory: root,
         hostId: 'local',
         claimKeyId: 'key-1',
+        resolveClaudeAuthPolicy: () => ({ stripAuthEnv: true }),
         resolveWorkspacePath: async (workspaceId) => `/repos/${workspaceId}`,
         resolveEnvironment: async () => ({ PATH: '/bin' }),
         openAcpConnection: acp.openConnection,
+        openClaudeConnection: claude.openConnection,
+        resolveClaudeCommand: () => 'claude',
         readProcessStartTime: async () => 1_700_000_000_000
       }).then(() => undefined),
     registerOwnedSubscriptionCleanup: vi.fn((_id: string, dispose: () => void) => ({
@@ -398,9 +406,12 @@ describe('a structured ACP session over agentSession.*', () => {
           stateDirectory: root,
           hostId: 'local',
           claimKeyId: 'key-1',
+          resolveClaudeAuthPolicy: () => ({ stripAuthEnv: true }),
           resolveWorkspacePath: async (workspaceId) => `/repos/${workspaceId}`,
           resolveEnvironment: async () => ({ PATH: '/bin' }),
           openAcpConnection: acp.openConnection,
+          openClaudeConnection: claude.openConnection,
+          resolveClaudeCommand: () => 'claude',
           readProcessStartTime: async () => 1_700_000_000_000
         }).then(() => undefined),
       registerOwnedSubscriptionCleanup: vi.fn((_id: string, dispose: () => void) => ({
@@ -423,16 +434,18 @@ describe('a structured ACP session over agentSession.*', () => {
       envelope: envelope('agentSession.send', { body }, created.fence),
       body
     })
-    const fields = { agent: 'claude' as const, model: 'sonnet' }
+    const fields = { agent: 'claude' as const, model: 'claude-sonnet-5' }
     const switched = await ok<{ agent: string }>('agentSession.switchProvider', {
       envelope: envelope('agentSession.switchProvider', fields, created.fence),
       ...fields
     })
     expect(switched.agent).toBe('claude')
     expect(acp.connections[0]?.closed).toBe(true)
-    expect(acp.connections).toHaveLength(2)
-    expect(acp.live().launch.command).toBe('npx')
-    expect(acp.live().calls.some((call) => call.method === 'session/new')).toBe(true)
-    expect(acp.live().calls.some((call) => call.method === 'session/load')).toBe(false)
+    expect(acp.connections).toHaveLength(1)
+    expect(claude.connections).toHaveLength(1)
+    expect(claude.connections[0]?.calls).toContainEqual({ subtype: 'initialize' })
+    expect(claude.connections[0]?.launch.options.resume).toBeUndefined()
+    const frames = await subscribe('switched-history')
+    expect(itemsOf(frames).map(textOf)).toContain('hi')
   })
 })

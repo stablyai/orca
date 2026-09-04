@@ -190,6 +190,15 @@ export const SwitchProviderParams = z
   })
   .strict()
 
+export const HandoffParams = z
+  .object({
+    envelope: MutationEnvelope,
+    direction: z.enum(['to-tui', 'to-native']),
+    mode: z.enum(['now', 'after-turn', 'stop-turn']),
+    action: z.enum(['start', 'cancel-queued', 'retry', 'recover']).optional()
+  })
+  .strict()
+
 export const OptionsParams = z.object({ sessionId: SessionId }).strict()
 
 /** One surface's claim on one session. The id names the surface, not the client: two chat views

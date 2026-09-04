@@ -1,3 +1,6 @@
+import { createAcpStructuredSessionAdapter } from '../acp/acp-structured-launch'
+import type { openAcpJsonRpcConnection } from '../acp/acp-jsonrpc-connection'
+import { readProcessStartTimeMs } from './agent-session-process-identity-probe'
 // Where the structured agent-session wire becomes a live host on this runtime.
 //
 // Built on the first `agentSession.*` call rather than at startup: the record
@@ -9,33 +12,33 @@
 
 import { existsSync } from 'node:fs'
 import { join } from 'node:path'
-import type { AgentSessionOwnerProbe } from '../../shared/agent-session-lease-adjudication'
 import type { AgentSessionRecord } from '../../shared/agent-session-record'
-import { createAcpStructuredSessionAdapter } from '../acp/acp-structured-launch'
-import type { openAcpJsonRpcConnection } from '../acp/acp-jsonrpc-connection'
 import { createCodexStructuredLaunchResolver } from '../codex/codex-structured-launch-resolution'
 import {
   CodexStructuredSessionAdapter,
   type CodexStructuredSessionAdapterDeps
 } from '../codex/codex-structured-session-adapter'
-import { CompositeStructuredSessionAdapter } from '../native-chat/agent-session-wire/composite-structured-session-adapter'
+import type { ClaudeStructuredSessionAdapterDeps } from '../claude/claude-structured-session-adapter'
 import { StructuredAgentSessionHost } from '../native-chat/agent-session-wire/structured-agent-session-host'
+import { StructuredAgentSessionAdapterRouter } from '../native-chat/agent-session-wire/structured-agent-session-adapter-router'
 import type { StructuredAgentSessionHandoffTransport } from '../native-chat/agent-session-wire/structured-agent-session-handoff-types'
 import { setStructuredAgentSessionHost } from '../native-chat/agent-session-wire/structured-agent-session-registry'
+import {
+  readClaudeManagedAccountGateSettings,
+  type ClaudeManagedAccountGateSettings
+} from '../native-chat/claude-structured-managed-account-support'
 import { AgentSessionRecordStore } from './agent-session-record-store'
 import { agentSessionStorePath } from './agent-session-record-store-file'
 import { stopOrphanAgentSessionChildren } from './agent-session-orphan-child-reaper'
 import {
-  probeAgentSessionProcessIdentities,
-  probeAgentSessionProcessIdentity,
-  probeAgentSessionReservation,
-  readProcessStartTimeMs
-} from './agent-session-process-identity-probe'
-import { findAgentSessionSpawnTokenProcesses } from './agent-session-spawn-token-process-scan'
-import { readEchoedAgentSessionSpawnToken } from './agent-session-spawn-token-readback'
+  createStructuredAgentSessionOwnerProbe,
+  createStructuredAgentSessionOwnerProbes
+} from './structured-agent-session-owner-probe'
 import { agentSessionPtyWriteGate } from './agent-session-pty-write-gate'
 import { resolveLoginShellEnvironment } from '../startup/login-shell-environment'
 import { recordAgentSessionProviderHandle } from './agent-session-provider-handle-transition'
+import type { ClaudeStructuredAuthPolicy } from '../claude-accounts/claude-structured-auth-policy'
+import { createStructuredClaudeRuntimeAdapter } from './structured-claude-runtime-adapter'
 
 /** Sibling of the journal tree rather than inside it: one file adjudicates every
  *  session's lease, while a journal is per session. */
@@ -59,14 +62,21 @@ export type StructuredAgentSessionRuntimeDeps = {
   claimKeyId: string
   resolveWorkspacePath: (workspaceId: string) => Promise<string>
   resolveCodexCommand?: (options?: { pathEnv?: string | null; homePath?: string }) => string
+  resolveClaudeCommand?: () => string
   /** Provider transports are overridden only to drive the runtime against scripted children. */
   openCodexConnection?: CodexStructuredSessionAdapterDeps['openConnection']
   openAcpConnection?: typeof openAcpJsonRpcConnection
+  openClaudeConnection?: ClaudeStructuredSessionAdapterDeps['openConnection']
   /** Scripted app-servers carry fake pids the real start-time read cannot answer for. */
   readProcessStartTime?: CodexStructuredSessionAdapterDeps['readProcessStartTime']
   resolveLaunchArgs?: (provider: AgentSessionRecord['provider']) => Promise<string[]> | string[]
   resolveLaunchEnv?: () => Promise<NodeJS.ProcessEnv>
   resolveLaunchEnvOverlay?: () => Promise<Record<string, string>> | Record<string, string>
+  resolveClaudeLaunchEnv?: () => Promise<Record<string, string>> | Record<string, string>
+  /** Required, and asserted at install time — an absent policy must not degrade to a guess. */
+  resolveClaudeAuthPolicy: () => Promise<ClaudeStructuredAuthPolicy> | ClaudeStructuredAuthPolicy
+  /** Raw settings getter; the reader that fails closed around it is built here, in checked code. */
+  getClaudeManagedAccountGateSettings?: () => ClaudeManagedAccountGateSettings
   resolveEnvironment?: () => Promise<NodeJS.ProcessEnv>
   resolveCodexOverrides?: () => NodeJS.ProcessEnv
   onError?: (input: { scope: string; error: unknown }) => void
@@ -76,12 +86,16 @@ export type StructuredAgentSessionRuntimeDeps = {
 
 type InstalledRuntime = {
   host: StructuredAgentSessionHost
-  adapter: CompositeStructuredSessionAdapter
+  adapter: { closeAll(): Promise<void> }
   /** Resolves after every adapter-exit recovery callback has settled. */
   waitForRecovery: () => Promise<void>
 }
 
 let installing: Promise<InstalledRuntime> | null = null
+
+/** Thrown when the host is installed without a Claude auth policy resolver. */
+export const CLAUDE_STRUCTURED_AUTH_POLICY_REQUIRED =
+  'structured agent-session host requires a Claude auth policy resolver'
 
 /**
  * Runtimes whose teardown did not finish. `installing` is cleared regardless so
@@ -103,7 +117,12 @@ export function ensureStructuredAgentSessionHost(
   return installing.then((installed) => installed.host)
 }
 
-/** Reaps all structured provider children; failed teardown is retried on the next stop. */
+/** Drops the host and reaps every Codex child under it. Runtime teardown and
+ *  test isolation take the same path, so neither can leave a live app-server.
+ *
+ *  A teardown that fails is RETRIED by the next stop rather than forgotten: the
+ *  host keeps every journal whose close rejected, and this is the only handle
+ *  onto that host once the module slot is cleared. */
 export async function stopStructuredAgentSessionRuntime(): Promise<void> {
   const pending = installing
   installing = null
@@ -147,8 +166,14 @@ async function tearDownRuntime(installed: InstalledRuntime): Promise<void> {
 }
 
 async function install(deps: StructuredAgentSessionRuntimeDeps): Promise<InstalledRuntime> {
+  // Why thrown rather than defaulted: the caller is `@ts-nocheck`, so a dropped
+  // field arrives here as `undefined`. Refusing to install is loud; guessing a
+  // policy is the silent under-strip this assertion exists to prevent.
+  if (typeof deps.resolveClaudeAuthPolicy !== 'function') {
+    throw new Error(CLAUDE_STRUCTURED_AUTH_POLICY_REQUIRED)
+  }
   const bootEnvironment = (deps.resolveEnvironment ?? resolveLoginShellEnvironment)()
-  const resolveEnvironment = async (): Promise<NodeJS.ProcessEnv> => ({
+  const resolveCodexEnvironment = async (): Promise<NodeJS.ProcessEnv> => ({
     ...(await bootEnvironment),
     ...(await deps.resolveLaunchEnv?.()),
     ...(await deps.resolveLaunchEnvOverlay?.()),
@@ -181,7 +206,7 @@ async function install(deps: StructuredAgentSessionRuntimeDeps): Promise<Install
       resolveLaunch: createCodexStructuredLaunchResolver({
         store,
         resolveWorkspacePath: deps.resolveWorkspacePath,
-        resolveEnvironment,
+        resolveEnvironment: resolveCodexEnvironment,
         ...(deps.resolveCodexCommand ? { resolveCommand: deps.resolveCodexCommand } : {})
       }),
       ...(deps.openCodexConnection ? { openConnection: deps.openCodexConnection } : {}),
@@ -202,10 +227,40 @@ async function install(deps: StructuredAgentSessionRuntimeDeps): Promise<Install
         })
       }
     })
+    const claude = createStructuredClaudeRuntimeAdapter({
+      store,
+      resolveWorkspacePath: deps.resolveWorkspacePath,
+      ...(deps.resolveClaudeCommand ? { resolveClaudeCommand: deps.resolveClaudeCommand } : {}),
+      ...(deps.resolveClaudeLaunchEnv
+        ? { resolveClaudeLaunchEnv: deps.resolveClaudeLaunchEnv }
+        : {}),
+      resolveClaudeAuthPolicy: deps.resolveClaudeAuthPolicy,
+      ...(deps.getClaudeManagedAccountGateSettings
+        ? {
+            readClaudeManagedAccountGate: () =>
+              readClaudeManagedAccountGateSettings(deps.getClaudeManagedAccountGateSettings!)
+          }
+        : {}),
+      onUnexpectedExit: (event) => {
+        recoveryChain = recoveryChain.then(async () => {
+          try {
+            await host?.handleAdapterEvent(event)
+          } catch (error) {
+            deps.onError?.({ scope: `structured-agent-session-exit:${event.sessionId}`, error })
+          }
+        })
+      },
+      ...(deps.openClaudeConnection ? { openClaudeConnection: deps.openClaudeConnection } : {}),
+      ...(deps.readProcessStartTime ? { readProcessStartTime: deps.readProcessStartTime } : {})
+    })
     const acp = createAcpStructuredSessionAdapter({
       store,
       resolveWorkspacePath: deps.resolveWorkspacePath,
-      resolveEnvironment,
+      resolveEnvironment: async () => ({
+        ...(await bootEnvironment),
+        ...(await deps.resolveLaunchEnv?.()),
+        ...(await deps.resolveLaunchEnvOverlay?.())
+      }),
       readProcessStartTime: deps.readProcessStartTime ?? readProcessStartTimeMs,
       ...(deps.openAcpConnection ? { openConnection: deps.openAcpConnection } : {}),
       onEvent: (event) => {
@@ -221,7 +276,12 @@ async function install(deps: StructuredAgentSessionRuntimeDeps): Promise<Install
         })
       }
     })
-    const adapter = new CompositeStructuredSessionAdapter({ codex, acp })
+    const adapter = new StructuredAgentSessionAdapterRouter(
+      { codex, claude, grok: acp, cursor: acp, openclaude: acp },
+      async () => {
+        await Promise.all([codex.closeAll(), claude.closeAll(), acp.closeAll()])
+      }
+    )
     host = new StructuredAgentSessionHost({
       store,
       adapter,
@@ -264,103 +324,4 @@ async function install(deps: StructuredAgentSessionRuntimeDeps): Promise<Install
     agentSessionPtyWriteGate.detachRecordLookup()
     throw error
   }
-}
-
-/**
- * The lease's only source of truth about a previous owner. Everything it cannot
- * answer PID-reuse-safely reports `indeterminate`. An exact owner stays fenced in `recovering`;
- * an ownerless, unattributable reservation enters `manual-recovery`.
- */
-export function createStructuredAgentSessionOwnerProbe(
-  hostId: string,
-  probe = probeAgentSessionProcessIdentity,
-  findSpawnTokenProcesses = findAgentSessionSpawnTokenProcesses
-): (record: AgentSessionRecord) => Promise<AgentSessionOwnerProbe> {
-  return async (record) => {
-    const owner = record.lease.ownerProcess
-    if (!owner) {
-      if (record.lease.processlessAt !== undefined && record.lease.processlessAt !== null) {
-        return { outcome: 'reservation-unused' }
-      }
-      const spawnToken = record.lease.reservedSpawnToken
-      if (spawnToken === null) {
-        if (record.lease.claimStatus === 'reserved') {
-          return {
-            outcome: 'indeterminate',
-            reason: 'reservation recorded no spawn token to scan for'
-          }
-        }
-        // The token is minted before the child and is the only thing a child could be carrying.
-        // No owner and no token means nothing on any host can be holding this lease — answering
-        // `indeterminate` here is what latches an already-free record into recovery forever.
-        return { outcome: 'reservation-unused' }
-      }
-      // Freeing a reservation needs positive proof that nothing spawned under its token. The scan
-      // answers null where the platform cannot read another process's environment.
-      return probeAgentSessionReservation({
-        spawnToken,
-        findProcessesWithSpawnToken: (token) => findSpawnTokenProcesses(token),
-        hasProviderActivitySinceReservation: async () =>
-          agentSessionReservationTouchedProvider(record)
-      })
-    }
-    if (owner.hostId !== hostId) {
-      // Checking a remote host's pid against this machine's process table is
-      // exactly how a live owner gets declared dead.
-      return {
-        outcome: 'indeterminate',
-        reason: `owner runs on ${owner.hostId}, which this host cannot probe`
-      }
-    }
-    // The env read-back answers on hosts that expose it and null elsewhere, giving the
-    // probe a PID-reuse-safe element even when no start time was recorded.
-    return probe({
-      identity: owner,
-      deps: { readEchoedSpawnToken: readEchoedAgentSessionSpawnToken }
-    })
-  }
-}
-
-export function createStructuredAgentSessionOwnerProbes(
-  hostId: string,
-  probeMany: typeof probeAgentSessionProcessIdentities = probeAgentSessionProcessIdentities,
-  probeOne = createStructuredAgentSessionOwnerProbe(hostId)
-): (records: readonly AgentSessionRecord[]) => Promise<Map<string, AgentSessionOwnerProbe>> {
-  return async (records) => {
-    const results = new Map<string, AgentSessionOwnerProbe>()
-    const localOwners: {
-      record: AgentSessionRecord
-      owner: NonNullable<AgentSessionRecord['lease']['ownerProcess']>
-    }[] = []
-    for (const record of records) {
-      const owner = record.lease.ownerProcess
-      if (owner?.hostId === hostId) {
-        localOwners.push({ record, owner })
-      } else {
-        results.set(record.sessionId, await probeOne(record))
-      }
-    }
-    const probes = await probeMany({
-      identities: localOwners.map(({ owner }) => owner),
-      deps: { readEchoedSpawnToken: readEchoedAgentSessionSpawnToken }
-    })
-    for (const [index, { record }] of localOwners.entries()) {
-      results.set(
-        record.sessionId,
-        probes[index] ?? { outcome: 'indeterminate', reason: 'owner probe returned no result' }
-      )
-    }
-    return results
-  }
-}
-
-/**
- * The only provider-side trace a reservation can leave in its own record: a handle link minted at
- * this fence. `proveAgentSessionOwner` refuses to append one before an identity is committed, so a
- * link at the reservation's fence means a child got far enough to resume the provider thread. It
- * cannot see activity the child produced without proving a handle, which is why it is paired with
- * the token scan rather than trusted alone.
- */
-function agentSessionReservationTouchedProvider(record: AgentSessionRecord): boolean {
-  return record.providerHandleChain.at(-1)?.mintedAtFence === record.lease.runtimeFence
 }

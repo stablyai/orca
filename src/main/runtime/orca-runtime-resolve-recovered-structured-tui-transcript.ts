@@ -4,6 +4,7 @@ import type { AgentSessionOwnerBinding } from '../../shared/agent-session-host-a
 import { agentSessionOwnerBindingsEqual } from '../../shared/claimed-agent-pty-owner-snapshot'
 import { resolvePinnedCodexRolloutProof } from '../codex/codex-tui-rollout-proof'
 import { getStructuredAgentSessionHost } from '../native-chat/agent-session-wire/structured-agent-session-registry'
+import { resolveStructuredAgentSessionCreateSupport } from '../native-chat/structured-agent-session-create-support'
 import { LOCAL_EXECUTION_HOST_ID } from '../../shared/execution-host'
 import type { AgentStatusIpcPayload } from '../../shared/agent-status-types'
 import { getLocalProjectWorktreeGitOptions } from '../project-runtime-git-options'
@@ -13,6 +14,8 @@ import { resolveTuiAgentLaunchEnv } from '../../shared/tui-agent-launch-defaults
 import { hasPersistedStructuredAgentSessionStore as hasPersistedStructuredAgentSessionStoreOnDisk } from './structured-agent-session-runtime'
 import { getProfileUserDataPath } from '../orca-profiles/profile-storage-paths'
 import { acpAccountHomeVariable, acpHandleProvider } from '../../shared/acp-agent-recipes'
+import { homedir } from 'node:os'
+import { join } from 'node:path'
 
 export class OrcaRuntimeWithResolveRecoveredStructuredTuiTranscript extends OrcaRuntimeWithStopStructuredSessionProcess {
   protected async resolveRecoveredStructuredTuiTranscript(input: {
@@ -50,18 +53,14 @@ export class OrcaRuntimeWithResolveRecoveredStructuredTuiTranscript extends Orca
   ): Promise<{ supported: boolean; reason?: 'agent' | 'remote' | 'wsl' }> {
     const location = await this.resolveStructuredAgentSessionLocation(worktreeSelector)
     await this.ensureStructuredAgentSessionHost()
-    if (getStructuredAgentSessionHost()?.supportsCreate(location, agent)) {
-      return { supported: true }
-    }
-    return {
-      supported: false,
-      reason:
-        location.executionHostId !== LOCAL_EXECUTION_HOST_ID
-          ? 'remote'
-          : location.wslDistro
-            ? 'wsl'
-            : 'agent'
-    }
+    // The verdict lives in a typechecked module; this file is @ts-nocheck.
+    return resolveStructuredAgentSessionCreateSupport({
+      agent,
+      location,
+      adapterSupportsCreate:
+        getStructuredAgentSessionHost()?.supportsCreate(location, agent) === true,
+      getSettings: () => this.requireStore().getSettings()
+    })
   }
 
   protected hasProviderSessionObservationSource(): boolean {
@@ -111,6 +110,21 @@ export class OrcaRuntimeWithResolveRecoveredStructuredTuiTranscript extends Orca
     worktree: string
     agent: 'codex' | 'claude' | 'openclaude' | 'grok' | 'cursor'
   }): Promise<AgentSessionAttachParams> {
+    if (input.agent === 'claude') {
+      return this.resolveStructuredAgentSessionIntent(input, async ({ launchEnv, location }) => {
+        return (
+          launchEnv.CLAUDE_CONFIG_DIR?.trim() ||
+          this.accounts
+            .getClaudeConfigDirectory(
+              location.wslDistro
+                ? { runtime: 'wsl', wslDistro: location.wslDistro }
+                : { runtime: 'host' }
+            )
+            ?.trim() ||
+          join(homedir(), '.claude')
+        )
+      })
+    }
     if (input.agent !== 'codex') {
       return this.resolveStructuredAgentSessionIntent(
         input,
@@ -145,6 +159,12 @@ export class OrcaRuntimeWithResolveRecoveredStructuredTuiTranscript extends Orca
     resolveAccountHomePath: (context: {
       workspacePath: string
       launchEnv: NodeJS.ProcessEnv
+      location: {
+        executionHostId: string
+        wslDistro: string | null
+        workspaceId: string
+        workspaceKind: 'folder' | 'git-worktree'
+      }
     }) => string | Promise<string>
   ): Promise<AgentSessionAttachParams> {
     const support = await this.getStructuredAgentSessionCreateSupport(input.worktree, input.agent)
@@ -167,7 +187,7 @@ export class OrcaRuntimeWithResolveRecoveredStructuredTuiTranscript extends Orca
       agent: input.agent,
       accountHome: {
         variable: acpAccountHomeVariable(input.agent) ?? 'CODEX_HOME',
-        path: await resolveAccountHomePath({ workspacePath, launchEnv })
+        path: await resolveAccountHomePath({ workspacePath, launchEnv, location })
       },
       runtimeKind: 'native'
     }

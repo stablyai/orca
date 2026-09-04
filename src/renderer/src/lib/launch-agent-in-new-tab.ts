@@ -32,7 +32,7 @@ import { getConnectionIdFromState } from '@/lib/connection-context'
 import { resolveInitialNativeChatSessionOptions } from '@/components/native-chat/native-chat-launch-session-options'
 import { seedNativeChatAppliedSessionOptions } from '@/components/native-chat/native-chat-session-option-cache'
 import { isAcpStructuredAgent } from '../../../shared/acp-agent-recipes'
-import { startStructuredCodexLaunch } from '@/lib/structured-agent-session-launch'
+import { startStructuredAgentLaunch } from '@/lib/structured-agent-session-launch'
 import {
   hasExplicitTuiLaunchCustomization,
   hasExplicitTuiAgentArgs,
@@ -228,11 +228,10 @@ function launchAgentInNewTabInternal(
         initialSessionOptions: startupPlan.sessionOptions
       })
   if (launchRoute === 'structured-native-chat' && isAcpStructuredAgent(agent)) {
-    const structuredLaunch = startStructuredCodexLaunch(worktreeId, {
+    const structuredLaunch = startStructuredAgentLaunch(worktreeId, agent, {
       prompt: trimmedPrompt,
       ...(promptDelivery === 'submit-after-ready' ? { promptDelivery } : {}),
-      onPromptDelivered,
-      agent
+      onPromptDelivered
     })
     void structuredLaunch
       .claimDefinitiveRefusalFallback(() => {
