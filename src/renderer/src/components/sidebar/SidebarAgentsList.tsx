@@ -82,7 +82,8 @@ export default function SidebarAgentsList({
     markAllThreadsRead,
     hasUnreadThreads,
     hasCompletedThreads,
-    handleClearCompleted
+    handleClearCompleted,
+    handleClearThread
   } = useActivityThreadActionBindings({
     visibleThreads,
     markAllReadThreads,
@@ -157,6 +158,7 @@ export default function SidebarAgentsList({
         onJumpToWorkspace={jumpToWorkspace}
         onMarkThreadRead={markThreadRead}
         onMarkThreadUnread={markThreadUnread}
+        onClearThread={handleClearThread}
         canJumpToWorkspace={canJumpToWorkspace}
         allowMarkUnreadWhenSelected
         showJumpAction={false}
