@@ -4,6 +4,8 @@ import { createBackgroundSleepingAgentWakeDispatcher } from '@/lib/wake-sleeping
 import { attachMobileMarkdownBridge } from '@/runtime/mobile-markdown-bridge'
 import { resetAgentHookCompletionNotificationCoordinators } from '../agent-hook-completion-notifications'
 import { useAppStore } from '../../store'
+import { normalizeExecutionHostId } from '../../../../shared/execution-host'
+import { focusNotificationPaneAfterActivation } from './notification-pane-focus'
 import { registerAgentStatusIpcBridge } from './agent-status-ipc-bridge'
 import { registerBrowserRequestIpcBridge } from './browser-request-ipc-bridge'
 import { registerBrowserStateIpcBridge } from './browser-state-ipc-bridge'
@@ -80,22 +82,55 @@ export function installAppLifetimeIpcEvents(
   registerSettingsAndSidebarIpcBridge(unsubs)
   registerWorkspaceShortcutIpcBridge(unsubs)
   registerOsMarkdownFileOpenBridge(unsubs)
+  // Why: latest click wins — an earlier intent must not steal focus after a newer one resolves.
+  let latestActivateWorktreeIntent = 0
   unsubs.push(
-    window.api.ui.onActivateWorktree(({ repoId, worktreeId, setup, startup, defaultTabs }) => {
-      void worktreeRuntime
-        .activateNotifiedWorktree(
-          {
-            type: 'activateWorktree',
-            repoId,
-            worktreeId,
-            ...(setup ? { setup } : {}),
-            ...(startup ? { startup } : {}),
-            ...(defaultTabs ? { defaultTabs } : {})
-          },
-          { allowRuntimeEnvironment: false }
-        )
-        .catch((error) => console.error('Failed to activate CLI-created worktree:', error))
-    })
+    window.api.ui.onActivateWorktree(
+      ({
+        repoId,
+        worktreeId,
+        setup,
+        startup,
+        defaultTabs,
+        notificationPaneKey,
+        executionHostId
+      }) => {
+        const intent = ++latestActivateWorktreeIntent
+        const notificationExecutionHostId = normalizeExecutionHostId(executionHostId)
+        void worktreeRuntime
+          .activateNotifiedWorktree(
+            {
+              type: 'activateWorktree',
+              worktreeId,
+              ...(repoId ? { repoId } : {}),
+              ...(setup ? { setup } : {}),
+              ...(startup ? { startup } : {}),
+              ...(defaultTabs ? { defaultTabs } : {}),
+              ...(notificationPaneKey !== undefined ? { notificationPaneKey } : {}),
+              ...(notificationExecutionHostId
+                ? { executionHostId: notificationExecutionHostId }
+                : {})
+            },
+            {
+              // Why: a notification click names its own host, so it may target a runtime workspace.
+              allowRuntimeEnvironment: notificationPaneKey !== undefined,
+              isCurrentLocalIntent: () => intent === latestActivateWorktreeIntent
+            }
+          )
+          .then(async (activated) => {
+            if (!activated || intent !== latestActivateWorktreeIntent) {
+              return
+            }
+            await focusNotificationPaneAfterActivation({
+              worktreeId,
+              notificationPaneKey,
+              executionHostId: notificationExecutionHostId,
+              isCurrentIntent: () => intent === latestActivateWorktreeIntent
+            })
+          })
+          .catch((error) => console.error('Failed to activate CLI-created worktree:', error))
+      }
+    )
   )
 
   registerTerminalPresentationIpcBridge(unsubs)

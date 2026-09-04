@@ -26,6 +26,7 @@ import {
   isOrcaWindowForegroundFocused,
   isVisibleForegroundPaneKey
 } from './terminal-notification-pane-visibility'
+import { getNotificationNavigationTarget } from './notification-navigation-target'
 
 const AGENT_NOTIFICATION_SNAPSHOT_MAX_AGE_MS = 10_000
 
@@ -185,6 +186,7 @@ export function dispatchTerminalNotification(
   // itself is the source of truth for its owning repo.
   const worktree = getWorktreeMapFromState(state).get(worktreeId)
   const repo = worktree ? getRepoMapFromState(state).get(worktree.repoId) : null
+  const notificationTarget = getNotificationNavigationTarget(state, worktreeId, event.paneKey)
   const customSoundId = state.settings?.notifications?.customSoundId ?? 'system'
   const customSoundVolume = state.settings?.notifications?.customSoundVolume ?? null
   // Why: pane keys are reused across turns. A rich OS notification must not
@@ -217,7 +219,7 @@ export function dispatchTerminalNotification(
       source: event.source,
       ...(notificationId ? { notificationId } : {}),
       worktreeId,
-      paneKey: event.paneKey,
+      ...notificationTarget,
       repoLabel: repo?.displayName,
       worktreeLabel: worktree?.displayName || worktree?.branch || worktreeId,
       hasMultipleActiveRepos: countReposNeedingNotificationDisambiguation(state) > 1,
