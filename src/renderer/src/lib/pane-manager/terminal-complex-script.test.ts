@@ -404,3 +404,206 @@ describe('nativeWindowsRewriteNeedsFollowupRenderRefresh', () => {
     ).toBe(false)
   })
 })
+
+describe('terminalOutputPrefersRenderRefresh single-pass classification', () => {
+  const EMOJI_PRESENTATION_PATTERN = /\p{Emoji_Presentation}/u
+
+  function isInRange(value: number, start: number, end: number): boolean {
+    return value >= start && value <= end
+  }
+
+  function isRendererRiskCodePoint(value: number): boolean {
+    return (
+      isInRange(value, 0x0590, 0x08ff) ||
+      value === 0x200d ||
+      isInRange(value, 0x1100, 0x11ff) ||
+      isInRange(value, 0x2e80, 0x9fff) ||
+      isInRange(value, 0xa960, 0xa97f) ||
+      isInRange(value, 0xac00, 0xd7ff) ||
+      isInRange(value, 0xd800, 0xdfff) ||
+      isInRange(value, 0xf900, 0xfaff) ||
+      isInRange(value, 0xfe10, 0xfe1f) ||
+      isInRange(value, 0xfe30, 0xfe4f) ||
+      isInRange(value, 0xfb1d, 0xfdff) ||
+      isInRange(value, 0xfe00, 0xfe0f) ||
+      isInRange(value, 0xfe70, 0xfeff) ||
+      isInRange(value, 0xff00, 0xffef) ||
+      value === 0xfffd ||
+      isInRange(value, 0x10ec0, 0x10eff) ||
+      isInRange(value, 0x1e900, 0x1e95f) ||
+      isInRange(value, 0x20000, 0x2fa1f) ||
+      isInRange(value, 0x30000, 0x3134f) ||
+      isInRange(value, 0xe0100, 0xe01ef)
+    )
+  }
+
+  function sgrParamCode(param: string | undefined): number | null {
+    if (!param) {
+      return null
+    }
+    const [head] = param.split(':')
+    const value = Number.parseInt(head ?? '', 10)
+    return Number.isFinite(value) ? value : null
+  }
+
+  function sgrSequenceSetsBackground(params: string): boolean {
+    const parts = params.split(';')
+    for (let i = 0; i < parts.length; i += 1) {
+      const value = sgrParamCode(parts[i])
+      if (value === null) {
+        continue
+      }
+      if (isInRange(value, 40, 47) || isInRange(value, 100, 107)) {
+        return true
+      }
+      if (value === 48) {
+        return true
+      }
+      if (value === 38 && !parts[i]?.includes(':')) {
+        const mode = sgrParamCode(parts[i + 1])
+        if (mode === 5) {
+          i += 2
+        } else if (mode === 2) {
+          i += 4
+        } else {
+          i += 1
+        }
+      }
+    }
+    return false
+  }
+
+  /** The pre-optimization multi-pass classifier, kept verbatim as the oracle. */
+  function referencePrefersRenderRefresh(data: string): boolean {
+    // eslint-disable-next-line no-control-regex -- terminal escape sequences contain control bytes
+    const sgrPattern = /\x1b\[([0-9:;]*)m/g
+    for (let match = sgrPattern.exec(data); match; match = sgrPattern.exec(data)) {
+      if (sgrSequenceSetsBackground(match[1] ?? '')) {
+        return true
+      }
+    }
+    let hasNonAscii = false
+    for (let i = 0; i < data.length; i += 1) {
+      if (data.charCodeAt(i) > 0x7f) {
+        hasNonAscii = true
+        break
+      }
+    }
+    if (!hasNonAscii) {
+      return false
+    }
+    if (EMOJI_PRESENTATION_PATTERN.test(data)) {
+      return true
+    }
+    for (let i = 0; i < data.length; i += 1) {
+      const codePoint = data.codePointAt(i)
+      if (codePoint === undefined) {
+        continue
+      }
+      if (isRendererRiskCodePoint(codePoint)) {
+        return true
+      }
+      if (codePoint > 0xffff) {
+        i += 1
+      }
+    }
+    return false
+  }
+
+  const corpus = [
+    '',
+    'plain ascii log line',
+    'npm run build \x1b[32mdone\x1b[0m',
+    '\x1b[1;38;5;214mwarn\x1b[0m ready',
+    '\x1b[41mred background\x1b[49m',
+    '\x1b[48;5;238m dim \x1b[0m',
+    '\x1b[48;2;12;34;56m truecolor \x1b[0m',
+    '\x1b[100mbright background\x1b[0m',
+    '\x1b[38;5;3;44mfg then bg\x1b[0m',
+    '\x1b[38;2;1;2;3;41mfg truecolor then bg\x1b[0m',
+    '\x1b[38:5:9mcolon fg\x1b[0m',
+    // 38;2 consumes four parameters, so this 44 is the blue component, not a background.
+    '\x1b[38;2;1;2;44m',
+    // The colon form does not consume trailing parameters, so this 44 is a background.
+    '\x1b[38:5:1;44m',
+    '\x1b[38:2::1:2:3;44m',
+    '\x1b[m',
+    '\x1b[;m',
+    '\x1b[38m',
+    '\x1b[38;m',
+    '\x1b[38;5m',
+    '\x1b[39;49m',
+    '\x1b[\x1b[41m',
+    '\x1b[41',
+    '\x1b[<0;1;2M',
+    '\x1b[2K\x1b[1;1H',
+    'spinner \x1b[?25l',
+    'box drawing \u251c\u2500',
+    'braille spinner \u283b',
+    'block \u2588',
+    'powerline \ue0b0',
+    'emoji rocket \u{1f680}',
+    'emoji zwj \u{1f469}\u200d\u{1f4bb}',
+    'variation \u2665\ufe0f',
+    'cjk \u76f4\u63a5',
+    'hangul \ud130',
+    'hebrew \u05e9',
+    'arabic \u0627',
+    'replacement \ufffd',
+    'lone surrogate \ud83d',
+    'astral tail \u{2f81a}',
+    // An astral code point outside every risk range must advance past both halves.
+    'math bold \u{1d400} x',
+    '\x1b[41m\u{1f680}',
+    '\u{1f680}\x1b[41m'
+  ]
+
+  it('classifies the full corpus exactly as the multi-pass version did', () => {
+    for (const sample of corpus) {
+      expect([sample, terminalOutputPrefersRenderRefresh(sample)]).toEqual([
+        sample,
+        referencePrefersRenderRefresh(sample)
+      ])
+    }
+  })
+
+  it('classifies randomly assembled agent-like chunks the same way', () => {
+    let seed = 0x51f3a7d
+    const random = (): number => {
+      seed = (seed * 1103515245 + 12345) & 0x7fffffff
+      return seed / 0x7fffffff
+    }
+    for (let iteration = 0; iteration < 600; iteration++) {
+      let sample = ''
+      const pieces = 1 + Math.floor(random() * 6)
+      for (let piece = 0; piece < pieces; piece++) {
+        sample += corpus[Math.floor(random() * corpus.length)] ?? ''
+      }
+      expect([sample, terminalOutputPrefersRenderRefresh(sample)]).toEqual([
+        sample,
+        referencePrefersRenderRefresh(sample)
+      ])
+    }
+  })
+
+  it('classifies random SGR parameter runs the same way', () => {
+    const parameterAlphabet = '0123456789;:'
+    let seed = 0x7c1de91
+    const random = (): number => {
+      seed = (seed * 1103515245 + 12345) & 0x7fffffff
+      return seed / 0x7fffffff
+    }
+    for (let iteration = 0; iteration < 4000; iteration++) {
+      let params = ''
+      const length = Math.floor(random() * 12)
+      for (let index = 0; index < length; index++) {
+        params += parameterAlphabet[Math.floor(random() * parameterAlphabet.length)]
+      }
+      const sample = `\x1b[${params}m`
+      expect([sample, terminalOutputPrefersRenderRefresh(sample)]).toEqual([
+        sample,
+        referencePrefersRenderRefresh(sample)
+      ])
+    }
+  })
+})

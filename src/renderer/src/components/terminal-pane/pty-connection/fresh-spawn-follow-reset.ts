@@ -90,9 +90,10 @@ export function bindFreshSpawnFollowReset(session: ConnectPanePtySession): void 
     const scanData = session.foregroundRefreshRiskScanTail
       ? `${session.foregroundRefreshRiskScanTail}${data}`
       : data
-    const prefersRefresh =
-      (scanData.includes('\x1b[') || session.containsNonAsciiOutput(scanData)) &&
-      terminalOutputPrefersRenderRefresh(scanData)
+    // No pre-gate: terminalOutputPrefersRenderRefresh is a single pass that already
+    // answers false for a chunk with neither `ESC [` nor a non-ASCII code unit, so the
+    // old guard only added scans of its own.
+    const prefersRefresh = terminalOutputPrefersRenderRefresh(scanData)
     session.foregroundRefreshRiskScanTail = trailingIncompleteCsiSequence(scanData)
     return prefersRefresh
   }

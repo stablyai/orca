@@ -99,16 +99,19 @@ export function createTerminalPixelSizeQueryResponder(
       if (queryIndex === -1) {
         break
       }
-      const query = input.slice(queryIndex, queryIndex + 5)
-      if (query === '\x1b[14t') {
-        respond(true)
-        offset = queryIndex + 5
-        continue
-      }
-      if (query === '\x1b[16t') {
-        respond(false)
-        offset = queryIndex + 5
-        continue
+      // Compared by code unit so the per-CSI scan allocates nothing; a query
+      // truncated at the buffer end yields NaN here and matches neither form,
+      // exactly as the short slice did.
+      const isPixelSizeQuery =
+        input.charCodeAt(queryIndex + 2) === 0x31 /* 1 */ &&
+        input.charCodeAt(queryIndex + 4) === 0x74 /* t */
+      if (isPixelSizeQuery) {
+        const kind = input.charCodeAt(queryIndex + 3)
+        if (kind === 0x34 /* 4 -> CSI 14 t */ || kind === 0x36 /* 6 -> CSI 16 t */) {
+          respond(kind === 0x34)
+          offset = queryIndex + 5
+          continue
+        }
       }
       offset = queryIndex + 2
     }

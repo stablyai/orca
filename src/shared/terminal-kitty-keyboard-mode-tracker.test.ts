@@ -294,4 +294,28 @@ describe('TerminalKittyKeyboardModeTracker', () => {
       expect(softReset.hasProvenBaseline).toBe(true)
     })
   })
+  describe('shared module-scope scan pattern', () => {
+    it('keeps interleaved trackers independent despite the shared /g regex', () => {
+      const first = new TerminalKittyKeyboardModeTracker()
+      const second = new TerminalKittyKeyboardModeTracker()
+      // Long leading text pushes lastIndex far past 0 on the first scan.
+      const padding = 'x'.repeat(4000)
+      first.scan(`${padding}\x1b[>1u`)
+      second.scan('\x1b[>7u')
+      first.scan('\x1b[=9;1u')
+      expect(first.flags).toBe(9)
+      expect(second.flags).toBe(7)
+    })
+
+    it('produces the same result when the same bytes are rescanned', () => {
+      const data = '\x1b[>3uhello\x1b[?1049h\x1b[=5;1u\x1b[?1049l\x1b[<u'
+      const once = new TerminalKittyKeyboardModeTracker()
+      once.scan(data)
+      const twice = new TerminalKittyKeyboardModeTracker()
+      twice.scan(data)
+      twice.scan('')
+      expect(twice.flags).toBe(once.flags)
+      expect(twice.isAlternateScreen).toBe(once.isAlternateScreen)
+    })
+  })
 })

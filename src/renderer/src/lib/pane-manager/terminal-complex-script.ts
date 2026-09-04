@@ -4,7 +4,6 @@
 const EMOJI_PRESENTATION_PATTERN = /\p{Emoji_Presentation}/u
 const ESCAPE_CHARACTER = String.fromCharCode(0x1b)
 const REWRITE_CSI_SCAN_TAIL_MAX_CHARS = 64
-const SGR_SEQUENCE_PATTERN = new RegExp(`${ESCAPE_CHARACTER}\\[([0-9:;]*)m`, 'g')
 
 function containsStandaloneCarriageReturn(data: string): boolean {
   let index = data.indexOf('\r')
@@ -66,54 +65,94 @@ function isEastAsianRendererRiskCodePoint(value: number): boolean {
   )
 }
 
-function sgrParamCode(param: string | undefined): number | null {
-  if (!param) {
-    return null
-  }
-  const [head] = param.split(':')
-  const value = Number.parseInt(head ?? '', 10)
-  return Number.isFinite(value) ? value : null
-}
-
-function sgrSequenceSetsBackground(params: string): boolean {
-  const parts = params.split(';')
-  for (let i = 0; i < parts.length; i += 1) {
-    const value = sgrParamCode(parts[i])
-    if (value === null) {
+/** End of the `[0-9:;]*` parameter run the SGR pattern accepts, starting at `start`. */
+function sgrParameterRunEnd(data: string, start: number): number {
+  let index = start
+  while (index < data.length) {
+    const code = data.charCodeAt(index)
+    if ((code >= 0x30 && code <= 0x39) || code === 0x3a || code === 0x3b) {
+      index += 1
       continue
     }
-    if (isInRange(value, 40, 47) || isInRange(value, 100, 107)) {
-      return true
+    break
+  }
+  return index
+}
+
+/** `sgrSequenceSetsBackground` over a substring range, so no parameter string is materialized. */
+function sgrRangeSetsBackground(data: string, start: number, end: number): boolean {
+  let partStart = start
+  for (;;) {
+    let partEnd = partStart
+    while (partEnd < end && data.charCodeAt(partEnd) !== 0x3b) {
+      partEnd += 1
     }
-    if (value === 48) {
-      return true
-    }
-    if (value === 38 && !parts[i]?.includes(':')) {
-      const mode = sgrParamCode(parts[i + 1])
-      if (mode === 5) {
-        i += 2
-      } else if (mode === 2) {
-        i += 4
-      } else {
-        i += 1
+    const value = sgrParamCodeInRange(data, partStart, partEnd)
+    let extraParts = 0
+    if (value !== null) {
+      if (isInRange(value, 40, 47) || isInRange(value, 100, 107) || value === 48) {
+        return true
       }
+      if (value === 38 && !rangeIncludesColon(data, partStart, partEnd)) {
+        const nextEnd = nextPartEnd(data, partEnd + 1, end)
+        const mode = nextEnd === -1 ? null : sgrParamCodeInRange(data, partEnd + 1, nextEnd)
+        extraParts = mode === 5 ? 2 : mode === 2 ? 4 : 1
+      }
+    }
+    let remainingSkips = 1 + extraParts
+    let cursor = partEnd
+    while (remainingSkips > 0) {
+      if (cursor >= end) {
+        // Ran off the end of the parameter list, exactly as the old index loop did.
+        return false
+      }
+      cursor += 1
+      remainingSkips -= 1
+      if (remainingSkips > 0) {
+        while (cursor < end && data.charCodeAt(cursor) !== 0x3b) {
+          cursor += 1
+        }
+      }
+    }
+    partStart = cursor
+  }
+}
+
+function nextPartEnd(data: string, start: number, end: number): number {
+  if (start > end) {
+    return -1
+  }
+  let index = start
+  while (index < end && data.charCodeAt(index) !== 0x3b) {
+    index += 1
+  }
+  return index
+}
+
+function rangeIncludesColon(data: string, start: number, end: number): boolean {
+  for (let index = start; index < end; index++) {
+    if (data.charCodeAt(index) === 0x3a) {
+      return true
     }
   }
   return false
 }
 
-function containsBackgroundSgr(data: string): boolean {
-  SGR_SEQUENCE_PATTERN.lastIndex = 0
-  for (
-    let match = SGR_SEQUENCE_PATTERN.exec(data);
-    match;
-    match = SGR_SEQUENCE_PATTERN.exec(data)
-  ) {
-    if (sgrSequenceSetsBackground(match[1] ?? '')) {
-      return true
+/** `sgrParamCode` over a range: null for an empty part or a part with no leading digits. */
+function sgrParamCodeInRange(data: string, start: number, end: number): number | null {
+  let index = start
+  let value = 0
+  let digits = 0
+  while (index < end) {
+    const code = data.charCodeAt(index)
+    if (code === 0x3a) {
+      break
     }
+    value = value * 10 + (code - 0x30)
+    digits += 1
+    index += 1
   }
-  return false
+  return digits === 0 ? null : value
 }
 
 function containsRewriteEraseSequence(data: string): boolean {
@@ -230,40 +269,44 @@ export function nativeWindowsRewriteNeedsFollowupRenderRefresh(args: {
   return args.isNativeWindowsConpty && args.isForeground && args.isInPlaceRewrite
 }
 
+/**
+ * The classification is an OR of independent predicates, so one walk answers
+ * the background-SGR scan, the non-ASCII gate and the renderer-risk code-point
+ * cascade together. The emoji property regex still runs last, and only when the
+ * chunk has non-ASCII at all — no ASCII code point has Emoji_Presentation, and
+ * every renderer-risk range starts above U+007F, so the gate is unchanged.
+ */
 export function terminalOutputPrefersRenderRefresh(data: string): boolean {
-  if (containsBackgroundSgr(data)) {
-    return true
-  }
-
   let hasNonAscii = false
   for (let i = 0; i < data.length; i += 1) {
-    if (data.charCodeAt(i) > 0x7f) {
+    const code = data.charCodeAt(i)
+    if (code > 0x7f) {
       hasNonAscii = true
-      break
+      const codePoint = data.codePointAt(i) ?? code
+      if (isRendererRiskCodePoint(codePoint)) {
+        return true
+      }
+      if (codePoint > 0xffff) {
+        i += 1
+      }
+      continue
+    }
+    if (code === 0x1b && data.charCodeAt(i + 1) === 0x5b) {
+      const parametersEnd = sgrParameterRunEnd(data, i + 2)
+      if (
+        data.charCodeAt(parametersEnd) === 0x6d &&
+        sgrRangeSetsBackground(data, i + 2, parametersEnd)
+      ) {
+        return true
+      }
+      // Deliberately resumes at i + 1: a nested ESC[ inside a run that is not an
+      // SGR sequence was found by the old global regex too.
     }
   }
   if (!hasNonAscii) {
-    // Why: Codex-style terminal redraws are usually ASCII; avoid the Unicode
-    // emoji/property regex and code-point walk on the hottest output path.
     return false
   }
-
-  if (EMOJI_PRESENTATION_PATTERN.test(data)) {
-    return true
-  }
-  for (let i = 0; i < data.length; i += 1) {
-    const codePoint = data.codePointAt(i)
-    if (codePoint === undefined) {
-      continue
-    }
-    if (isRendererRiskCodePoint(codePoint)) {
-      return true
-    }
-    if (codePoint > 0xffff) {
-      i += 1
-    }
-  }
-  return false
+  return EMOJI_PRESENTATION_PATTERN.test(data)
 }
 
 export function terminalOutputContainsEastAsianRendererRisk(data: string): boolean {

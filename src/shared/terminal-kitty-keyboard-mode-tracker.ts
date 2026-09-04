@@ -8,6 +8,12 @@ const KITTY_SCAN_TAIL_LIMIT = 4096
 // mirrored stacks unboundedly while the renderer's own stacks stay at 16.
 const KITTY_STACK_LIMIT = 16
 
+// Module scope so a per-write RegExp is not constructed on the hot output path.
+// Stateful (/g): every use must reset lastIndex first. Safe because the exec
+// loop below is synchronous and calls nothing that can re-enter the scanner.
+// oxlint-disable-next-line no-control-regex -- terminal escape sequences require control chars
+const KITTY_MODE_PATTERN = /\x1bc|(?:\x1b\[|\x9b)(?:!p|\?([0-9;]+)([hl])|([<>=])([0-9;]*)u)/g
+
 /** A pushed flags slot plus whether the value it will restore was ever proven. */
 type KittyStackFrame = { flags: number; known: boolean }
 
@@ -157,10 +163,9 @@ export class TerminalKittyKeyboardModeTracker {
   private scanInternal(data: string, replay: boolean): void {
     const input = this.scanTail + data
     this.scanTail = this.extractScanTail(input)
-    // oxlint-disable-next-line no-control-regex -- terminal escape sequences require control chars
-    const kittyModeRe = /\x1bc|(?:\x1b\[|\x9b)(?:!p|\?([0-9;]+)([hl])|([<>=])([0-9;]*)u)/g
+    KITTY_MODE_PATTERN.lastIndex = 0
     let match: RegExpExecArray | null
-    while ((match = kittyModeRe.exec(input)) !== null) {
+    while ((match = KITTY_MODE_PATTERN.exec(input)) !== null) {
       if (match[0] === '\x1bc') {
         // RIS resets kitty state and returns to the main screen.
         const tail = this.scanTail

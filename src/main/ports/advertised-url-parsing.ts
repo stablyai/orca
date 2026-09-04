@@ -70,9 +70,79 @@ function mayContainHttpUrl(text: string): boolean {
     (text.includes('h') || text.includes('H')) &&
     (text.includes('t') || text.includes('T')) &&
     (text.includes('p') || text.includes('P')) &&
-    text.includes(':') &&
-    text.includes('/')
+    mayContainSchemeSeparator(text)
   )
+}
+
+/**
+ * Whether `://` can survive `stripTerminalControls`. A plain `includes('://')`
+ * would be wrong: stripping never inserts ':' or '/', but it does DELETE escape
+ * sequences and control bytes, so `https:<ESC>[0m//host` really does become a
+ * URL. This scan therefore tolerates exactly the spans stripping can remove
+ * between the colon and the two slashes, and errs towards keeping a candidate.
+ */
+function mayContainSchemeSeparator(text: string): boolean {
+  let colon = text.indexOf(':')
+  while (colon !== -1) {
+    let index = skipStrippableSpan(text, colon + 1)
+    if (text.charCodeAt(index) === 0x2f) {
+      index = skipStrippableSpan(text, index + 1)
+      if (text.charCodeAt(index) === 0x2f) {
+        return true
+      }
+    }
+    colon = text.indexOf(':', colon + 1)
+  }
+  return false
+}
+
+/** Advances past every byte at `start` that stripping deletes; TAB/LF/CR survive it. */
+function skipStrippableSpan(text: string, start: number): number {
+  let index = start
+  for (;;) {
+    const code = text.charCodeAt(index)
+    if (code === 0x1b) {
+      index = escapeSequenceEnd(text, index)
+      continue
+    }
+    // The CONTROL_PATTERN class, minus the bytes that survive as text.
+    if (code === 0x7f || (code < 0x20 && code !== 0x09 && code !== 0x0a && code !== 0x0d)) {
+      index += 1
+      continue
+    }
+    return index
+  }
+}
+
+/** End of the span the strippers delete for the ESC at `start` (never fewer than one byte). */
+function escapeSequenceEnd(text: string, start: number): number {
+  const next = text.charCodeAt(start + 1)
+  if (next === 0x5d) {
+    // OSC: needs its terminator, otherwise only the `ESC ]` introducer is removed.
+    for (let index = start + 2; index < text.length; index++) {
+      const code = text.charCodeAt(index)
+      if (code === 0x07) {
+        return index + 1
+      }
+      if (code === 0x1b && text.charCodeAt(index + 1) === 0x5c) {
+        return index + 2
+      }
+    }
+    return start + 2
+  }
+  if (next === 0x5b) {
+    // CSI, including the cursor-move form that is replaced rather than deleted.
+    for (let index = start + 2; index < text.length; index++) {
+      const code = text.charCodeAt(index)
+      if (code >= 0x20 && code <= 0x3f) {
+        continue
+      }
+      return code >= 0x40 && code <= 0x7e ? index + 1 : start + 2
+    }
+    return start + 2
+  }
+  // A single-character escape, or a bare ESC the control class removes on its own.
+  return next >= 0x40 && next <= 0x5f ? start + 2 : start + 1
 }
 
 function lastLineBreak(text: string): number {

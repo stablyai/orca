@@ -372,3 +372,81 @@ describe('installTerminalCapabilityReplyHandlers', () => {
     }
   })
 })
+
+describe('createTerminalPixelSizeQueryResponder scanning', () => {
+  /** The pre-optimization slice-and-compare scan, kept as the differential oracle. */
+  function referenceScan(chunks: readonly string[]): boolean[] {
+    const seen: boolean[] = []
+    let pending = ''
+    for (const data of chunks) {
+      const input = pending + data
+      pending = input.endsWith('\x1b') || input.endsWith('\x1b[') ? input.slice(-2) : ''
+      let offset = 0
+      while (offset < input.length) {
+        const queryIndex = input.indexOf('\x1b[', offset)
+        if (queryIndex === -1) {
+          break
+        }
+        const query = input.slice(queryIndex, queryIndex + 5)
+        if (query === '\x1b[14t') {
+          seen.push(true)
+          offset = queryIndex + 5
+          continue
+        }
+        if (query === '\x1b[16t') {
+          seen.push(false)
+          offset = queryIndex + 5
+          continue
+        }
+        offset = queryIndex + 2
+      }
+    }
+    return seen
+  }
+
+  function actualScan(chunks: readonly string[]): boolean[] {
+    const sendInput = vi.fn<(data: string) => boolean>(() => true)
+    const observe = createTerminalPixelSizeQueryResponder(
+      { cols: 100, rows: 40, element: createElement(900, 720) },
+      sendInput
+    )
+    for (const chunk of chunks) {
+      observe(chunk)
+    }
+    return sendInput.mock.calls.map(([reply]) => reply.startsWith('\x1b[4;'))
+  }
+
+  function expectSameScan(chunks: readonly string[]): boolean[] {
+    const actual = actualScan(chunks)
+    expect(actual).toEqual(referenceScan(chunks))
+    return actual
+  }
+
+  it('recognizes exactly the same CSI <n> t sequences as before', () => {
+    for (let value = 0; value <= 40; value++) {
+      const chunk = `\x1b[${value}t`
+      const seen = expectSameScan([chunk])
+      expect(seen).toEqual(value === 14 ? [true] : value === 16 ? [false] : [])
+    }
+  })
+
+  it('ignores pixel-size queries truncated at the end of the buffer', () => {
+    for (const truncated of ['\x1b', '\x1b[', '\x1b[1', '\x1b[14', '\x1b[16', '\x1b[1t']) {
+      expect(expectSameScan([truncated])).toEqual([])
+    }
+  })
+
+  it('matches the reference scan over an agent-like corpus at every split', () => {
+    const corpus =
+      'prompt \x1b[14t\x1b[0m\x1b[16t\x1b[?25l\x1b[2K\x1b[14\x1b[14t tail \x1b[6n\x1b[<0;1;2M\x1b[14t'
+    for (let offset = 0; offset <= corpus.length; offset++) {
+      expectSameScan([corpus.slice(0, offset), corpus.slice(offset)])
+    }
+  })
+
+  it('matches the reference scan for a query split across three chunks', () => {
+    expectSameScan(['\x1b', '[14', 't'])
+    expectSameScan(['\x1b[', '1', '4t'])
+    expectSameScan(['text\x1b[1', '6t more'])
+  })
+})

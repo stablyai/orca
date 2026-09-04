@@ -1,6 +1,11 @@
 import { describe, expect, it, vi } from 'vitest'
 import { AdvertisedUrlWatcher } from './advertised-url-watcher'
-import { classifyHost, extractUrlCandidates, stripTerminalControls } from './advertised-url-parsing'
+import {
+  classifyHost,
+  extractUrlCandidates,
+  PtyBuffer,
+  stripTerminalControls
+} from './advertised-url-parsing'
 
 const WORKTREE = 'repo::/repo'
 const PTY = 'pty-1'
@@ -403,5 +408,94 @@ describe('AdvertisedUrlWatcher.lookupBest', () => {
     watcher.ingest('pty-2', 'B: https://custom.example.com:3001/\n')
     const best = watcher.lookupBest([WORKTREE, 'repo::/wt2'], 3001)
     expect(best?.host).toBe('custom.example.com')
+  })
+})
+
+describe('PtyBuffer scheme pre-scan', () => {
+  function finalize(text: string): string {
+    return new PtyBuffer().ingest(text)
+  }
+
+  /** What the ingest gate must never hide: URLs the strip+extract pipeline would find. */
+  function urlsWithoutGate(text: string): string[] {
+    return extractUrlCandidates(stripTerminalControls(text)).map((url) => url.href)
+  }
+
+  function urlsThroughIngest(text: string): string[] {
+    return extractUrlCandidates(finalize(text)).map((url) => url.href)
+  }
+
+  it('skips control-stripping for lines that cannot carry a scheme separator', () => {
+    // Ordinary prose and paths satisfied the old h/t/p + ':' + '/' gate.
+    expect(finalize('[INFO] wrote output path: /tmp/thing.ts\n')).toBe('')
+    expect(finalize('\x1b[32m  https  \x1b[0m ratio 3:1 and a/b\n')).toBe('')
+    expect(finalize('no scheme here at all\n')).toBe('')
+  })
+
+  it('still finalizes lines whose scheme separator is intact', () => {
+    expect(urlsThroughIngest('  Local:   http://localhost:5173/\n')).toEqual([
+      'http://localhost:5173/'
+    ])
+  })
+
+  it('keeps a URL whose scheme separator is split by an ANSI escape', () => {
+    const cases = [
+      'Network: https:\x1b[0m//192.168.1.5:3001/\n',
+      'Network: https:/\x1b[0m/192.168.1.5:3001/\n',
+      'Network: https:\x1b]0;title\u0007//192.168.1.5:3001/\n',
+      'Network: https:\u0001//192.168.1.5:3001/\n',
+      'Network: https:\x1b\u0040//192.168.1.5:3001/\n'
+    ]
+    for (const text of cases) {
+      expect([text, urlsThroughIngest(text)]).toEqual([text, urlsWithoutGate(text)])
+      expect(urlsThroughIngest(text)).toHaveLength(1)
+    }
+  })
+
+  it('never hides a URL the ungated pipeline would have found', () => {
+    const fragments = [
+      'Local:',
+      '  ',
+      'https:',
+      'http:',
+      '/',
+      '//',
+      'localhost:5173',
+      '192.168.1.5:3001',
+      '/path',
+      '\x1b[0m',
+      '\x1b[38;5;214m',
+      '\x1b[1;5H',
+      '\x1b[2K',
+      '\x1b]0;title\u0007',
+      '\x1b]8;;',
+      '\x1b]0;broken\x1bx',
+      '\x1b\u0040',
+      '\x1b',
+      '\u0001',
+      '\u007f',
+      '\u0009',
+      ' ratio 3:1 ',
+      'path: /tmp/x',
+      'plain text'
+    ]
+    let seed = 0x1d3f57b
+    const random = (): number => {
+      seed = (seed * 1103515245 + 12345) & 0x7fffffff
+      return seed / 0x7fffffff
+    }
+    for (let iteration = 0; iteration < 3000; iteration++) {
+      let text = ''
+      const pieces = 1 + Math.floor(random() * 8)
+      for (let piece = 0; piece < pieces; piece++) {
+        text += fragments[Math.floor(random() * fragments.length)] ?? ''
+      }
+      text += '\n'
+      const expected = urlsWithoutGate(text)
+      if (expected.length === 0) {
+        continue
+      }
+      expect([text, urlsThroughIngest(text)]).toEqual([text, expected])
+    }
   })
 })
