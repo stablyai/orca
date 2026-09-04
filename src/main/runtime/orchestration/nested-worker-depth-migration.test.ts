@@ -34,6 +34,7 @@ describe('nested worker depth migration (v30)', () => {
     const oldDb = new Database(dbPath)
     oldDb.exec('ALTER TABLE dispatch_contexts DROP COLUMN depth')
     oldDb.exec('ALTER TABLE remote_dispatch_attachments DROP COLUMN depth')
+    oldDb.exec('ALTER TABLE runs DROP COLUMN parent_dispatch_id')
     oldDb.pragma('user_version = 29')
     oldDb
       .prepare(
@@ -66,6 +67,9 @@ describe('nested worker depth migration (v30)', () => {
         .prepare("SELECT depth FROM remote_dispatch_attachments WHERE dispatch_id = 'ctx_remote'")
         .get()
     ).toEqual({ depth: 1 })
+    expect(
+      sqlite.prepare("SELECT parent_dispatch_id FROM runs WHERE id = 'run_legacy_local'").get()
+    ).toEqual({ parent_dispatch_id: null })
   })
 
   it('leaves an upgraded in-flight worker unable to spawn at the default cap', () => {

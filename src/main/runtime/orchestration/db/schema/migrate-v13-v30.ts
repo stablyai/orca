@@ -183,6 +183,9 @@ export function applySchemaMigrationsV13ToV30(this: OrchestrationDb, current: nu
             AND pane_key IS NOT NULL;
       `)
   }
+  if (current < 31 && !this.hasColumn('runs', 'parent_dispatch_id')) {
+    this.db.exec('ALTER TABLE runs ADD COLUMN parent_dispatch_id TEXT')
+  }
   this.db.exec(`
       CREATE INDEX IF NOT EXISTS idx_dispatch_assignee_pane_leaf
         ON dispatch_contexts(${DISPATCH_PANE_KEY_MATCH_SUFFIX_SQL})

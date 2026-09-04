@@ -1,7 +1,12 @@
 import { parsePaneKey } from '../../../../../shared/stable-pane-id'
-import type { DispatchContextRow } from '../../types'
+import type {
+  DispatchContextRow,
+  RemoteDispatchAttachmentRow,
+  RunParentDispatch
+} from '../../types'
 import {
   DISPATCH_PANE_KEY_MATCH_SUFFIX_SQL,
+  REMOTE_ATTACHMENT_PANE_KEY_MATCH_SUFFIX_SQL,
   isEquivalentPaneKey,
   paneKeyMatchSuffix
 } from '../pane-key-match'
@@ -32,6 +37,59 @@ export function getActiveDispatchForTerminal(
   assigneePaneKey?: string
 ): DispatchContextRow | undefined {
   return this.findActiveDispatchForAssignee(handle, assigneePaneKey)
+}
+
+/** Resolve one attested origin across local Dispatch rows and live federated attachments. */
+export function getActiveRunParentDispatch(
+  this: OrchestrationDb,
+  assigneePaneKey?: string,
+  processIncarnation?: string
+): RunParentDispatch | undefined {
+  if (!assigneePaneKey || !processIncarnation || !parsePaneKey(assigneePaneKey)) {
+    return undefined
+  }
+  const matches: RunParentDispatch[] = []
+  const localRows = this.db
+    .prepare(
+      `SELECT * FROM dispatch_contexts
+       WHERE process_incarnation = ? AND assignee_pane_key IS NOT NULL
+         AND status IN ('pending', 'dispatched') AND capability_revoked_at IS NULL
+         AND ${DISPATCH_PANE_KEY_MATCH_SUFFIX_SQL} = ?`
+    )
+    .all(processIncarnation, paneKeyMatchSuffix(assigneePaneKey)) as DispatchContextRow[]
+  for (const row of localRows) {
+    if (
+      row.assignee_pane_key &&
+      row.process_incarnation === processIncarnation &&
+      isEquivalentPaneKey(row.assignee_pane_key, assigneePaneKey)
+    ) {
+      matches.push({
+        dispatchId: row.id,
+        source: 'local',
+        paneKey: assigneePaneKey,
+        processIncarnation
+      })
+    }
+  }
+  const remoteRows = this.db
+    .prepare(
+      `SELECT * FROM remote_dispatch_attachments
+       WHERE process_incarnation = ? AND pane_key IS NOT NULL
+         AND state IN ('starting', 'ready', 'start_unknown', 'stopping', 'stop_unknown')
+         AND ${REMOTE_ATTACHMENT_PANE_KEY_MATCH_SUFFIX_SQL} = ?`
+    )
+    .all(processIncarnation, paneKeyMatchSuffix(assigneePaneKey)) as RemoteDispatchAttachmentRow[]
+  for (const row of remoteRows) {
+    if (row.pane_key !== null && isEquivalentPaneKey(row.pane_key, assigneePaneKey)) {
+      matches.push({
+        dispatchId: row.dispatch_id,
+        source: 'remote',
+        paneKey: assigneePaneKey,
+        processIncarnation
+      })
+    }
+  }
+  return matches.length === 1 ? matches[0] : undefined
 }
 
 /**
@@ -169,6 +227,7 @@ export function getLatestDispatchForTerminal(
 
 export type DispatchLookupMethods = {
   getActiveDispatchForTerminal: typeof getActiveDispatchForTerminal
+  getActiveRunParentDispatch: typeof getActiveRunParentDispatch
   hasAnyDispatchContexts: typeof hasAnyDispatchContexts
   getActiveDispatchForIdentity: typeof getActiveDispatchForIdentity
   getActiveDispatchMailboxOwners: typeof getActiveDispatchMailboxOwners
@@ -180,6 +239,7 @@ export type DispatchLookupMethods = {
 export function attachDispatchLookup(ctor: { prototype: object }): void {
   Object.assign(ctor.prototype, {
     getActiveDispatchForTerminal,
+    getActiveRunParentDispatch,
     hasAnyDispatchContexts,
     getActiveDispatchForIdentity,
     getActiveDispatchMailboxOwners,

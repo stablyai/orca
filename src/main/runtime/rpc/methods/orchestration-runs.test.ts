@@ -87,6 +87,285 @@ describe('orchestration RPC methods', () => {
       expect(current.run?.id).toBe(created.run.id)
     })
 
+    it('links a worker-created sub-Run to its active origin Dispatch', async () => {
+      setup(false)
+      const workerPane = 'tab_worker:bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb'
+      const workerProcess = 'runtime_test:term_worker:1'
+      vi.spyOn(runtime, 'getTerminalPaneKey').mockImplementation((handle) =>
+        handle === 'term_coord' ? coordinatorPaneKey : workerPane
+      )
+      vi.spyOn(runtime, 'getOrchestrationDispatchAuthority').mockImplementation((handle) =>
+        handle === 'term_worker'
+          ? ({ paneKey: workerPane, processIncarnation: workerProcess } as never)
+          : null
+      )
+      const root = db.createRun({
+        objective: 'supervise worker',
+        coordinatorHandle: 'term_coord',
+        coordinatorPaneKey
+      })
+      const task = db.createTask({ spec: 'worker task', runId: root.id })
+      const dispatch = db.createDispatchContext({
+        taskId: task.id,
+        assigneeHandle: 'term_worker',
+        assigneePaneKey: workerPane,
+        processIncarnation: workerProcess,
+        creator: { kind: 'system' },
+        maxDepth: 2
+      })
+
+      const created = (await call('orchestration.runCreate', {
+        objective: 'worker sub-run',
+        from: 'term_worker'
+      })) as { run: { id: string; parent_dispatch_id: string | null } }
+
+      expect(created.run.parent_dispatch_id).toBe(dispatch.id)
+      expect(db.listRuns().runs.find((run) => run.id === created.run.id)).toMatchObject({
+        parent_dispatch_id: dispatch.id
+      })
+      const shown = (await call('orchestration.runShow', { id: created.run.id })) as {
+        run: { parent_dispatch_id: string | null }
+      }
+      const listed = (await call('orchestration.runList', {})) as {
+        runs: { id: string; parent_dispatch_id: string | null }[]
+      }
+      expect(shown.run.parent_dispatch_id).toBe(dispatch.id)
+      expect(listed.runs.find((run) => run.id === created.run.id)?.parent_dispatch_id).toBe(
+        dispatch.id
+      )
+      db.completeDispatch(dispatch.id)
+      expect(db.getRun(created.run.id)?.parent_dispatch_id).toBe(dispatch.id)
+    })
+
+    it('links a federated worker-created sub-Run to its remote origin Dispatch', async () => {
+      setup(false)
+      const workerPane = 'tab_remote:cccccccc-cccc-4ccc-8ccc-cccccccccccc'
+      const workerProcess = 'remote_runtime:pty:1'
+      vi.spyOn(runtime, 'getTerminalPaneKey').mockReturnValue(workerPane)
+      vi.spyOn(runtime, 'getOrchestrationDispatchAuthority').mockReturnValue({
+        paneKey: workerPane,
+        processIncarnation: workerProcess
+      } as never)
+      db.createRemoteDispatchAttachment({
+        dispatchId: 'ctx_remote',
+        taskId: 'task_remote',
+        homePeerFingerprint: 'home-peer',
+        protocolVersion: 1,
+        runtimeEpoch: 'remote-runtime',
+        mutationReceipt: {
+          callerFingerprint: 'home-peer',
+          requestId: 'request-remote',
+          method: 'orchestration.federationAttachStart',
+          payloadHash: 'payload-remote'
+        }
+      })
+      db.prepareRemoteAttachmentAuthority({
+        dispatchId: 'ctx_remote',
+        paneKey: workerPane,
+        processIncarnation: workerProcess,
+        worktreeId: 'repo::folder-workspace',
+        terminalHandle: 'term_remote',
+        setupState: 'not_applicable',
+        effects: []
+      })
+      db.markRemoteAttachmentReady('ctx_remote')
+
+      const created = (await call('orchestration.runCreate', {
+        objective: 'federated worker sub-run',
+        from: 'term_remote'
+      })) as { run: { parent_dispatch_id: string | null } }
+
+      expect(created.run.parent_dispatch_id).toBe('ctx_remote')
+    })
+
+    it('does not link a restarted terminal to a stale active Dispatch', async () => {
+      setup(false)
+      const workerPane = 'tab_worker:dddddddd-dddd-4ddd-8ddd-dddddddddddd'
+      vi.spyOn(runtime, 'getTerminalPaneKey').mockReturnValue(workerPane)
+      vi.spyOn(runtime, 'getOrchestrationDispatchAuthority').mockReturnValue({
+        paneKey: workerPane,
+        processIncarnation: 'runtime_test:term_worker:new'
+      } as never)
+      const root = db.createRun({
+        objective: 'supervise worker',
+        coordinatorHandle: 'term_coord',
+        coordinatorPaneKey
+      })
+      const task = db.createTask({ spec: 'worker task', runId: root.id })
+      db.createDispatchContext({
+        taskId: task.id,
+        assigneeHandle: 'term_worker',
+        assigneePaneKey: workerPane,
+        processIncarnation: 'runtime_test:term_worker:old',
+        creator: { kind: 'system' },
+        maxDepth: 2
+      })
+
+      const created = (await call('orchestration.runCreate', {
+        objective: 'root after process restart',
+        from: 'term_worker'
+      })) as { run: { parent_dispatch_id: string | null } }
+
+      expect(created.run.parent_dispatch_id).toBeNull()
+    })
+
+    it('fails closed when one worker identity has local and federated parents', async () => {
+      setup(false)
+      const workerPane = 'tab_worker:eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee'
+      const workerProcess = 'runtime_test:term_worker:1'
+      vi.spyOn(runtime, 'getTerminalPaneKey').mockReturnValue(workerPane)
+      vi.spyOn(runtime, 'getOrchestrationDispatchAuthority').mockReturnValue({
+        paneKey: workerPane,
+        processIncarnation: workerProcess
+      } as never)
+      const root = db.createRun({
+        objective: 'supervise worker',
+        coordinatorHandle: 'term_coord',
+        coordinatorPaneKey
+      })
+      const task = db.createTask({ spec: 'local worker task', runId: root.id })
+      db.createDispatchContext({
+        taskId: task.id,
+        assigneeHandle: 'term_worker',
+        assigneePaneKey: workerPane,
+        processIncarnation: workerProcess,
+        creator: { kind: 'system' },
+        maxDepth: 2
+      })
+      db.createRemoteDispatchAttachment({
+        dispatchId: 'ctx_remote_duplicate',
+        taskId: 'task_remote',
+        homePeerFingerprint: 'home-peer',
+        protocolVersion: 1,
+        runtimeEpoch: 'remote-runtime',
+        mutationReceipt: {
+          callerFingerprint: 'home-peer',
+          requestId: 'request-duplicate',
+          method: 'orchestration.federationAttachStart',
+          payloadHash: 'payload-duplicate'
+        }
+      })
+      db.prepareRemoteAttachmentAuthority({
+        dispatchId: 'ctx_remote_duplicate',
+        paneKey: workerPane,
+        processIncarnation: workerProcess,
+        worktreeId: 'repo::folder-workspace',
+        terminalHandle: 'term_remote',
+        setupState: 'not_applicable',
+        effects: []
+      })
+      db.markRemoteAttachmentReady('ctx_remote_duplicate')
+
+      const created = (await call('orchestration.runCreate', {
+        objective: 'ambiguous worker sub-run',
+        from: 'term_worker'
+      })) as { run: { parent_dispatch_id: string | null } }
+
+      expect(created.run.parent_dispatch_id).toBeNull()
+    })
+
+    it('does not retain a parent link when the origin Dispatch is no longer active', () => {
+      setup(false)
+      const run = db.createRun({
+        objective: 'root',
+        coordinatorHandle: 'term_coord',
+        coordinatorPaneKey
+      })
+      const task = db.createTask({ spec: 'worker task', runId: run.id })
+      const dispatch = db.createDispatchContext({
+        taskId: task.id,
+        assigneeHandle: 'term_worker',
+        assigneePaneKey: 'tab_worker:bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb',
+        processIncarnation: 'runtime_test:term_worker:1',
+        creator: { kind: 'system' },
+        maxDepth: 2
+      })
+      db.completeDispatch(dispatch.id)
+      const subRun = db.createRun({
+        objective: 'late retry',
+        coordinatorHandle: 'term_worker',
+        coordinatorPaneKey: 'tab_worker:bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb',
+        parentDispatch: {
+          dispatchId: dispatch.id,
+          source: 'local',
+          paneKey: 'tab_worker:bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb',
+          processIncarnation: 'runtime_test:term_worker:1'
+        }
+      })
+      expect(subRun.parent_dispatch_id).toBeNull()
+    })
+
+    it('does not link a superseded Dispatch with a revoked capability', async () => {
+      setup(false)
+      const workerPane = 'tab_worker:abababab-abab-4aba-8aba-abababababab'
+      const workerProcess = 'runtime_test:term_worker:1'
+      vi.spyOn(runtime, 'getTerminalPaneKey').mockReturnValue(workerPane)
+      vi.spyOn(runtime, 'getOrchestrationDispatchAuthority').mockReturnValue({
+        paneKey: workerPane,
+        processIncarnation: workerProcess
+      } as never)
+      const root = db.createRun({
+        objective: 'root',
+        coordinatorHandle: 'term_coord',
+        coordinatorPaneKey
+      })
+      const task = db.createTask({ spec: 'worker task', runId: root.id })
+      const dispatch = db.createDispatchContext({
+        taskId: task.id,
+        assigneeHandle: 'term_worker',
+        assigneePaneKey: workerPane,
+        processIncarnation: workerProcess,
+        creator: { kind: 'system' },
+        maxDepth: 2
+      })
+      db.revokeDispatchCapability(dispatch.id)
+
+      const created = (await call('orchestration.runCreate', {
+        objective: 'superseded worker sub-run',
+        from: 'term_worker'
+      })) as { run: { parent_dispatch_id: string | null } }
+
+      expect(created.run.parent_dispatch_id).toBeNull()
+    })
+
+    it('revalidates the origin process identity inside the Run write transaction', () => {
+      setup(false)
+      const workerPane = 'tab_worker:ffffffff-ffff-4fff-8fff-ffffffffffff'
+      const root = db.createRun({
+        objective: 'root',
+        coordinatorHandle: 'term_coord',
+        coordinatorPaneKey
+      })
+      const task = db.createTask({ spec: 'worker task', runId: root.id })
+      const dispatch = db.createDispatchContext({
+        taskId: task.id,
+        assigneeHandle: 'term_worker',
+        assigneePaneKey: workerPane,
+        processIncarnation: 'runtime_test:term_worker:old',
+        creator: { kind: 'system' },
+        maxDepth: 2
+      })
+      db.mintDispatchCapability({
+        dispatchId: dispatch.id,
+        paneKey: workerPane,
+        processIncarnation: 'runtime_test:term_worker:new'
+      })
+
+      const subRun = db.createRun({
+        objective: 'stale identity retry',
+        coordinatorHandle: 'term_worker',
+        coordinatorPaneKey: workerPane,
+        parentDispatch: {
+          dispatchId: dispatch.id,
+          source: 'local',
+          paneKey: workerPane,
+          processIncarnation: 'runtime_test:term_worker:old'
+        }
+      })
+
+      expect(subRun.parent_dispatch_id).toBeNull()
+    })
+
     it('requires runtime-observed stable pane identity for binding', async () => {
       setup(false)
       vi.spyOn(runtime, 'getTerminalPaneKey').mockReturnValue(null)

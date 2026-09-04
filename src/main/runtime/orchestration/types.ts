@@ -44,12 +44,21 @@ export type RunRow = {
   id: string
   objective: string
   home_database: string
+  /** Dispatch that created this Run, when a worker starts a sub-Run. */
+  parent_dispatch_id: string | null
   coordinator_handle: string | null
   coordinator_pane_key: string | null
   consumer_generation: number
   legacy: number
   created_at: string
   updated_at: string
+}
+
+export type RunParentDispatch = {
+  dispatchId: string
+  source: 'local' | 'remote'
+  paneKey: string
+  processIncarnation: string
 }
 
 export type DeliveryStatus = 'outstanding' | 'acknowledged' | 'fenced'
