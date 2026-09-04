@@ -27,7 +27,11 @@ import {
   discoverNativeChatCatalogModels,
   resolveNativeChatModelDiscoveryContext
 } from './native-chat-session-option-discovery'
-import { readClaudeSessionOptionsFromTerminalScreen } from './claude-terminal-session-options'
+import { findTabAgentEntry } from './native-chat-tab-agent-entry'
+import {
+  readReportedSessionOptionsFromTerminalScreen,
+  reportedNativeChatModelValues
+} from './native-chat-terminal-session-options'
 
 const EMPTY_SNAPSHOT: SessionOptionDescriptor[] = []
 const subscribeEmpty = (): (() => void) => () => {}
@@ -90,60 +94,85 @@ export function useNativeChatSessionOptions(args: {
   dispatchCommand: NativeChatSessionOptionDispatchCommand
   onAgentPicker?: () => void
   readTerminalScreen?: () => string | null
+  /** Live model from agent-status hooks; authority over a launch-seeded guess. */
+  reportedModel?: string | null
 }): {
   surface: NativeChatPtySessionOptionsSurface | null
   snapshot: SessionOptionDescriptor[]
 } {
-  const { agent, terminalTabId, targetPtyId, dispatchCommand, onAgentPicker, readTerminalScreen } =
-    args
+  const {
+    agent,
+    terminalTabId,
+    targetPtyId,
+    dispatchCommand,
+    onAgentPicker,
+    readTerminalScreen,
+    reportedModel: reportedModelOverride
+  } = args
+  const statusModel = useSyncExternalStore(
+    (onStoreChange) => {
+      const subscribe = useAppStore.subscribe
+      return typeof subscribe === 'function' ? subscribe(onStoreChange) : () => {}
+    },
+    () =>
+      findTabAgentEntry(useAppStore.getState().agentStatusByPaneKey ?? {}, terminalTabId)?.model ??
+      null,
+    () => null
+  )
+  const reportedModel = reportedModelOverride ?? statusModel ?? null
   // The screen text that last parsed into reported values, so a later model
   // discovery can re-resolve it against the host's real ids.
   const reportedScreenRef = useRef<string | null>(null)
+  // Pty whose TUI already named the model. Written only after a committed
+  // scrape — never during render, and never cleared by a later unparseable frame.
+  const tuiSeededPtyIdRef = useRef<string | null>(null)
+  const previousHookModelRef = useRef<string | null>(null)
   const discoveryContext = useMemo(
     () => resolveNativeChatModelDiscoveryContext(terminalTabId),
     [terminalTabId]
   )
-  const surface = useMemo(() => {
+  const { surface, seededFromScreen } = useMemo(() => {
     // Why: native chat currently attaches only after startup is already queued;
     // exposing a draft picker here would claim it can still mutate that command.
     if (!targetPtyId) {
-      return null
+      return { surface: null, seededFromScreen: false }
     }
     const scopeKey = targetPtyId ?? terminalTabId
     const discoveredModels = discoveryContext
       ? readNativeChatEnrichedModels(agent, discoveryContext.hostKey)
       : null
-    const reportedValues =
-      agent === 'claude'
-        ? readClaudeSessionOptionsFromTerminalScreen(
-            readTerminalScreen?.(),
-            discoveredModels ?? undefined
-          )
-        : null
-    return createNativeChatPtySessionOptions({
+    const screenValues = readReportedSessionOptionsFromTerminalScreen(
       agent,
-      scopeKey,
-      ...(targetPtyId ? { fallbackScopeKey: terminalTabId } : {}),
-      // Why: the catalog seed carries version-neutral family labels, so it is
-      // safe on every host while the once-per-host probe runs or after it fails
-      // — without it the whole picker would pop in late or never appear.
-      ...(discoveryContext ? { initialModels: discoveredModels ?? undefined } : {}),
-      mode: targetPtyId ? 'live' : 'draft',
-      reportedValues,
-      dispatchCommand,
-      onAgentPicker,
-      persistSelection: ({ modelId, optionId, value, adoptModelAsLaunchDefault }) =>
-        enqueueSessionOptionSettingsWrite((persisted) =>
-          updateNativeChatSessionOptionDefaults({
-            persisted,
-            agent,
-            modelId,
-            optionId,
-            value,
-            adoptModelAsLaunchDefault
-          })
-        )
-    })
+      readTerminalScreen?.(),
+      discoveredModels ?? undefined
+    )
+    return {
+      surface: createNativeChatPtySessionOptions({
+        agent,
+        scopeKey,
+        ...(targetPtyId ? { fallbackScopeKey: terminalTabId } : {}),
+        // Why: the catalog seed carries version-neutral family labels, so it is
+        // safe on every host while the once-per-host probe runs or after it fails
+        // — without it the whole picker would pop in late or never appear.
+        ...(discoveryContext ? { initialModels: discoveredModels ?? undefined } : {}),
+        mode: targetPtyId ? 'live' : 'draft',
+        reportedValues: screenValues,
+        dispatchCommand,
+        onAgentPicker,
+        persistSelection: ({ modelId, optionId, value, adoptModelAsLaunchDefault }) =>
+          enqueueSessionOptionSettingsWrite((persisted) =>
+            updateNativeChatSessionOptionDefaults({
+              persisted,
+              agent,
+              modelId,
+              optionId,
+              value,
+              adoptModelAsLaunchDefault
+            })
+          )
+      }),
+      seededFromScreen: screenValues != null
+    }
   }, [
     agent,
     dispatchCommand,
@@ -155,11 +184,14 @@ export function useNativeChatSessionOptions(args: {
   ])
 
   useEffect(() => {
-    if (!surface || agent !== 'claude') {
+    if (!surface || (agent !== 'claude' && agent !== 'codex')) {
       return
     }
     let cancelled = false
     reportedScreenRef.current = null
+    if (seededFromScreen && targetPtyId) {
+      tuiSeededPtyIdRef.current = targetPtyId
+    }
     const reportCurrentValues = async (): Promise<void> => {
       let authoritativeScreen: string | null = null
       if (targetPtyId && window.api?.pty?.getMainBufferSnapshot) {
@@ -178,7 +210,8 @@ export function useNativeChatSessionOptions(args: {
         ? readNativeChatEnrichedModels(agent, discoveryContext.hostKey)
         : null
       for (const screen of [authoritativeScreen, readTerminalScreen?.() ?? null]) {
-        const reportedValues = readClaudeSessionOptionsFromTerminalScreen(
+        const reportedValues = readReportedSessionOptionsFromTerminalScreen(
+          agent,
           screen,
           models ?? undefined
         )
@@ -192,6 +225,7 @@ export function useNativeChatSessionOptions(args: {
           return
         }
         reportedScreenRef.current = screen
+        tuiSeededPtyIdRef.current = targetPtyId
         surface.reportSessionOptions(reportedValues)
         return
       }
@@ -200,7 +234,33 @@ export function useNativeChatSessionOptions(args: {
     return () => {
       cancelled = true
     }
-  }, [agent, discoveryContext, readTerminalScreen, surface, targetPtyId])
+  }, [agent, discoveryContext, readTerminalScreen, seededFromScreen, surface, targetPtyId])
+
+  // Hook reports follow later /model and provider-fallback changes. The first
+  // slug is skipped only when the TUI screen already named the model — otherwise
+  // a late SessionStart would be the only evidence of a fallback.
+  useEffect(() => {
+    previousHookModelRef.current = null
+  }, [surface])
+  useEffect(() => {
+    if (!surface) {
+      return
+    }
+    const values = reportedNativeChatModelValues(agent, reportedModel)
+    const matched = typeof values?.model === 'string' ? values.model : null
+    if (!matched || !values) {
+      return
+    }
+    const previous = previousHookModelRef.current
+    if (previous === matched) {
+      return
+    }
+    previousHookModelRef.current = matched
+    if (!previous && (seededFromScreen || tuiSeededPtyIdRef.current === targetPtyId)) {
+      return
+    }
+    surface.reportSessionOptions(values)
+  }, [agent, reportedModel, seededFromScreen, surface, targetPtyId])
 
   useEffect(() => {
     if (!surface || !discoveryContext) {
@@ -211,9 +271,9 @@ export function useNativeChatSessionOptions(args: {
       discoveryContext.hostKey,
       (models) => {
         surface.replaceModels(models)
-        const screen = agent === 'claude' ? reportedScreenRef.current : null
+        const screen = agent === 'claude' || agent === 'codex' ? reportedScreenRef.current : null
         const reportedValues = screen
-          ? readClaudeSessionOptionsFromTerminalScreen(screen, models)
+          ? readReportedSessionOptionsFromTerminalScreen(agent, screen, models)
           : null
         if (reportedValues) {
           surface.reportSessionOptions(reportedValues)

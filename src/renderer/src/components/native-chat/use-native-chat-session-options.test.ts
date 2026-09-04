@@ -19,11 +19,20 @@ vi.mock('../../store', () => ({
 }))
 
 import { useNativeChatSessionOptions } from './use-native-chat-session-options'
+import {
+  clearNativeChatSessionOptionCacheForTests,
+  seedNativeChatAppliedSessionOptions
+} from './native-chat-session-option-cache'
 
 // A 1M-context Opus session: the frame names the resolved model while the
 // host's discovered catalog names the alias.
 const CLAUDE_SCREEN =
   'Claude Code v2.1.220\r\nOpus 5 (1M context) with high effort · API Usage Billing\r\n~/repo'
+
+// Codex `model-with-reasoning` + `task-progress` status line captured from the
+// reporter's TUI (STA-4317): slug + effort + service tier, then a ` · ` item.
+const CODEX_STATUS_LINE =
+  '> Find and fix a bug in @filename\r\ngpt-5.6-luna max fast · ████████░░░░'
 
 const DISCOVERED: CatalogModel[] = [
   { id: 'opus[1m]', label: 'Opus (1M context)', options: [] },
@@ -38,9 +47,15 @@ function modelDescriptor(snapshot: { id: string; kind: unknown }[]): {
   return model?.kind as { currentValue?: string; choices: { value: string }[] }
 }
 
+function effortValue(snapshot: { id: string; kind: unknown }[]): string | undefined {
+  const effort = snapshot.find((descriptor) => descriptor.id === 'effort')
+  return (effort?.kind as { currentValue?: string } | undefined)?.currentValue
+}
+
 describe('useNativeChatSessionOptions model reporting', () => {
   beforeEach(() => {
     clearNativeChatModelEnrichmentForTests()
+    clearNativeChatSessionOptionCacheForTests()
     discoverModels.mockReset()
     Object.defineProperty(window, 'api', { configurable: true, value: undefined })
   })
@@ -174,5 +189,117 @@ describe('useNativeChatSessionOptions model reporting', () => {
       ).toEqual(['opus[1m]', 'haiku'])
     )
     expect(modelDescriptor(result.current.snapshot).currentValue).toBeUndefined()
+  })
+
+  it('keeps Codex UI and TUI on the same model for a plain session', async () => {
+    const { result } = renderHook(() =>
+      useNativeChatSessionOptions({
+        agent: 'codex',
+        terminalTabId: 'tab-codex-plain',
+        targetPtyId: 'pty-codex-plain',
+        dispatchCommand: vi.fn(),
+        readTerminalScreen: () => CODEX_STATUS_LINE
+      })
+    )
+
+    await waitFor(() =>
+      expect(modelDescriptor(result.current.snapshot).currentValue).toBe('gpt-5.6-luna')
+    )
+    expect(effortValue(result.current.snapshot)).toBe('max')
+  })
+
+  it('follows a mid-session Codex model change reported by the agent hook', async () => {
+    seedNativeChatAppliedSessionOptions('pty-codex-mid', 'codex', { model: 'gpt-5.6-terra' })
+    const { result, rerender } = renderHook(
+      ({ reportedModel }) =>
+        useNativeChatSessionOptions({
+          agent: 'codex',
+          terminalTabId: 'tab-codex-mid',
+          targetPtyId: 'pty-codex-mid',
+          dispatchCommand: vi.fn(),
+          reportedModel
+        }),
+      { initialProps: { reportedModel: 'gpt-5.6-terra' as string | null } }
+    )
+
+    await waitFor(() =>
+      expect(modelDescriptor(result.current.snapshot).currentValue).toBe('gpt-5.6-terra')
+    )
+
+    rerender({ reportedModel: 'gpt-5.6-sol' })
+
+    await waitFor(() =>
+      expect(modelDescriptor(result.current.snapshot).currentValue).toBe('gpt-5.6-sol')
+    )
+  })
+
+  it('shows the Codex TUI’s effective model after a provider fallback, not the launched one', async () => {
+    seedNativeChatAppliedSessionOptions('pty-codex-fallback', 'codex', {
+      model: 'gpt-5.6-terra',
+      effort: 'ultra'
+    })
+    const { result } = renderHook(() =>
+      useNativeChatSessionOptions({
+        agent: 'codex',
+        terminalTabId: 'tab-codex-fallback',
+        targetPtyId: 'pty-codex-fallback',
+        dispatchCommand: vi.fn(),
+        readTerminalScreen: () => CODEX_STATUS_LINE
+      })
+    )
+
+    await waitFor(() =>
+      expect(modelDescriptor(result.current.snapshot).currentValue).toBe('gpt-5.6-luna')
+    )
+    expect(effortValue(result.current.snapshot)).toBe('max')
+  })
+
+  it('does not let a late hook model replace a TUI seed after the frame scrolls away', async () => {
+    // Why: the first SessionStart slug is the launched id. Once the TUI has
+    // named the effective model, a later render that can no longer parse the
+    // frame must not treat that slug as a fresh report.
+    seedNativeChatAppliedSessionOptions('pty-codex-scrolled', 'codex', {
+      model: 'gpt-5.6-terra'
+    })
+    const { result, rerender } = renderHook(
+      ({ reportedModel, frameVisible }) =>
+        useNativeChatSessionOptions({
+          agent: 'codex',
+          terminalTabId: 'tab-codex-scrolled',
+          targetPtyId: 'pty-codex-scrolled',
+          dispatchCommand: vi.fn(),
+          readTerminalScreen: () =>
+            frameVisible ? CODEX_STATUS_LINE : 'conversation has scrolled past the frame',
+          reportedModel
+        }),
+      { initialProps: { reportedModel: null as string | null, frameVisible: true } }
+    )
+
+    await waitFor(() =>
+      expect(modelDescriptor(result.current.snapshot).currentValue).toBe('gpt-5.6-luna')
+    )
+
+    rerender({ reportedModel: 'gpt-5.6-terra', frameVisible: false })
+
+    await waitFor(() =>
+      expect(modelDescriptor(result.current.snapshot).currentValue).toBe('gpt-5.6-luna')
+    )
+  })
+
+  it('treats a Codex catalog label and id as the same model', async () => {
+    seedNativeChatAppliedSessionOptions('pty-codex-label', 'codex', { model: 'gpt-5.6-terra' })
+    const { result } = renderHook(() =>
+      useNativeChatSessionOptions({
+        agent: 'codex',
+        terminalTabId: 'tab-codex-label',
+        targetPtyId: 'pty-codex-label',
+        dispatchCommand: vi.fn(),
+        reportedModel: 'GPT-5.6 Luna'
+      })
+    )
+
+    await waitFor(() =>
+      expect(modelDescriptor(result.current.snapshot).currentValue).toBe('gpt-5.6-luna')
+    )
   })
 })

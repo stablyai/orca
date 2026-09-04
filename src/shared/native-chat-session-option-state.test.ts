@@ -55,6 +55,15 @@ describe('matchNativeChatCatalogModelId', () => {
       'sonnet'
     )
     expect(matchNativeChatCatalogModelId(CODEX_SESSION_OPTION_CATALOG, 'gpt-5.5')).toBe('gpt-5.5')
+    expect(matchNativeChatCatalogModelId(CODEX_SESSION_OPTION_CATALOG, 'gpt-5.6-terra')).toBe(
+      'gpt-5.6-terra'
+    )
+    expect(matchNativeChatCatalogModelId(CODEX_SESSION_OPTION_CATALOG, 'GPT-5.6 Terra')).toBe(
+      'gpt-5.6-terra'
+    )
+    expect(
+      matchNativeChatCatalogModelId(CODEX_SESSION_OPTION_CATALOG, 'gpt-5.6-luna max fast')
+    ).toBe('gpt-5.6-luna')
   })
 
   it('returns null for unrecognized reports', () => {
