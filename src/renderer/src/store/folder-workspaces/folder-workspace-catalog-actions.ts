@@ -1,6 +1,7 @@
 import type { StateCreator } from 'zustand'
 import type { AppState } from '../types'
 import { getActiveRuntimeTarget, settingsForRuntimeOwner } from '../../runtime/runtime-rpc-client'
+import type { ExecutionHostId } from '../../../../shared/execution-host'
 import type { FetchedFolderWorkspaceCatalog } from './folder-workspace-catalog'
 import type { HostCatalogFence } from '../host-catalog-fencing'
 import type { RepoSlice } from '../repos/repo-state'
@@ -94,15 +95,26 @@ export function createFolderWorkspaceCatalogActions(
         })
       }
 
-      let failed = false
+      const hydratedFolderWorkspaceHostIds = new Set<ExecutionHostId>()
+      const clearRestoredOwnersForHydratedHosts = (): void => {
+        set((s) => ({
+          restoredRuntimeHostIdByWorkspaceSessionKey: clearRestoredFolderWorkspaceSessionOwners(
+            s.restoredRuntimeHostIdByWorkspaceSessionKey,
+            s,
+            { hydratedFolderWorkspaceHostIds }
+          )
+        }))
+      }
       try {
         const target = { kind: 'local' as const }
         const fence = claimHostCatalogFence(get, 'folder-workspaces', target)
-        applyCatalog(await fetchFolderWorkspaceCatalogForTarget(target, get().projectGroups), fence)
+        const catalog = await fetchFolderWorkspaceCatalogForTarget(target, get().projectGroups)
+        applyCatalog(catalog, fence)
+        hydratedFolderWorkspaceHostIds.add(catalog.hostId)
       } catch (err) {
-        failed = true
         console.error('Failed to fetch local folder workspaces for all-host load:', err)
       }
+      clearRestoredOwnersForHydratedHosts()
       if (options?.remoteHosts === 'skip') {
         return
       }
@@ -116,12 +128,10 @@ export function createFolderWorkspaceCatalogActions(
           }
           const fence = claimHostCatalogFence(get, 'folder-workspaces', target)
           try {
-            applyCatalog(
-              await fetchFolderWorkspaceCatalogForTarget(target, get().projectGroups),
-              fence
-            )
+            const catalog = await fetchFolderWorkspaceCatalogForTarget(target, get().projectGroups)
+            applyCatalog(catalog, fence)
+            hydratedFolderWorkspaceHostIds.add(catalog.hostId)
           } catch (err) {
-            failed = true
             console.warn(
               `Skipped folder workspaces for runtime environment ${environment.id}:`,
               err
@@ -129,14 +139,7 @@ export function createFolderWorkspaceCatalogActions(
           }
         })
       )
-      if (!failed) {
-        set((s) => ({
-          restoredRuntimeHostIdByWorkspaceSessionKey: clearRestoredFolderWorkspaceSessionOwners(
-            s.restoredRuntimeHostIdByWorkspaceSessionKey,
-            s
-          )
-        }))
-      }
+      clearRestoredOwnersForHydratedHosts()
     }
   }
 }
