@@ -242,7 +242,7 @@ export async function submitFolderWorkspaceCreate({
     let structuredLaunchAccepted = structuredLaunch
     if (structuredLaunch && quickAgent === 'codex') {
       const launch = startStructuredCodexLaunch(folderWorkspaceKey(workspace.id), {
-        prompt: launchDraftPrompt ?? note
+        prompt: launchDraftPrompt ?? launchPrompt
       })
       const refusalFallback = launch.claimDefinitiveRefusalFallback(async () => {
         structuredLaunchAccepted = false

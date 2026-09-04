@@ -4,11 +4,25 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { FolderWorkspace } from '../../../../shared/folder-workspace-types'
 import type { ProjectGroup } from '../../../../shared/project-group-types'
 
-const mocks = vi.hoisted(() => ({ activateAndRevealFolderWorkspace: vi.fn() }))
+const mocks = vi.hoisted(() => ({
+  activateAndRevealFolderWorkspace: vi.fn(),
+  resolveAgentLaunchRoute: vi.fn(() => 'terminal-tui'),
+  startStructuredCodexLaunch: vi.fn()
+}))
 
 vi.mock('@/lib/worktree-activation', async (importOriginal) => {
   const actual = await importOriginal<Record<string, unknown>>()
   return { ...actual, activateAndRevealFolderWorkspace: mocks.activateAndRevealFolderWorkspace }
+})
+
+vi.mock('@/lib/agent-launch-routing', async (importOriginal) => {
+  const actual = await importOriginal<Record<string, unknown>>()
+  return { ...actual, resolveAgentLaunchRoute: mocks.resolveAgentLaunchRoute }
+})
+
+vi.mock('@/lib/structured-agent-session-launch', async (importOriginal) => {
+  const actual = await importOriginal<Record<string, unknown>>()
+  return { ...actual, startStructuredCodexLaunch: mocks.startStructuredCodexLaunch }
 })
 
 import { submitFolderWorkspaceCreate } from './folder-workspace-composer-submit'
@@ -50,6 +64,9 @@ describe('submitFolderWorkspaceCreate typed prompt', () => {
 
   afterEach(() => {
     mocks.activateAndRevealFolderWorkspace.mockReset()
+    mocks.resolveAgentLaunchRoute.mockReset()
+    mocks.resolveAgentLaunchRoute.mockReturnValue('terminal-tui')
+    mocks.startStructuredCodexLaunch.mockReset()
     Reflect.deleteProperty(window, 'api')
   })
 
@@ -77,6 +94,37 @@ describe('submitFolderWorkspaceCreate typed prompt', () => {
     expect(createFolderWorkspace).toHaveBeenCalledWith(
       expect.objectContaining({ pendingFirstAgentMessageRename: true })
     )
+  })
+
+  // Why: the structured route bypasses the startup command, so it needs its own
+  // prompt hand-off — a regression here silently sends the note instead.
+  it('hands the typed prompt to a structured Codex launch', async () => {
+    mocks.resolveAgentLaunchRoute.mockReturnValue('structured-native-chat')
+    mocks.startStructuredCodexLaunch.mockReturnValue({
+      sessionId: 'session-1',
+      launchResult: Promise.resolve(),
+      isVisibilityUnknown: () => false,
+      releaseCallerAfterUnknownOutcome: () => {},
+      claimDefinitiveRefusalFallback: () => Promise.resolve()
+    })
+
+    await submitFolderWorkspaceCreate({
+      projectGroup: PROJECT_GROUP,
+      name: '',
+      lastAutoName: '',
+      linkedWorkItem: null,
+      note: 'card note',
+      agentPrompt: 'Fix the flaky checkout flow',
+      quickAgent: 'codex',
+      autoRenameBranchFromWork: true,
+      agentCmdOverrides: {},
+      createFolderWorkspace: vi.fn(async () => WORKSPACE),
+      onOpenChange: vi.fn()
+    })
+
+    expect(mocks.startStructuredCodexLaunch).toHaveBeenCalledWith(expect.any(String), {
+      prompt: 'Fix the flaky checkout flow'
+    })
   })
 
   it('still launches the note when no prompt is typed', async () => {
