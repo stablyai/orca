@@ -37,6 +37,12 @@ locals {
       description = "Relay PostgreSQL transactions that exhausted bounded retry."
       filter      = "((resource.type=\"cloud_run_revision\" AND (${local.relay_service_log_filter})) OR resource.type=\"gce_instance\") AND jsonPayload.event=\"orca_relay_postgres_transaction_exhausted\""
     }
+    cell_process_exit = {
+      # The docker event stream is the only per-exit line: the relay's own crash footer only
+      # appears for unhandled rejections, and `container start` also counts healthy first boots.
+      description = "Relay cell container exits, one Docker `container die` event per process exit."
+      filter      = "resource.type=\"gce_instance\" AND logName=\"projects/${var.project_id}/logs/cos_system\" AND jsonPayload.SYSLOG_IDENTIFIER=\"docker\" AND jsonPayload.MESSAGE:\"container die\" AND jsonPayload.MESSAGE:\"name=orca-relay)\""
+    }
     cloud_sql_wal_checkpoint = {
       description = "Cloud SQL checkpoints triggered by WAL volume instead of the timed schedule; a sustained run is the fsync loop that stalled every relay process at once on 2026-09-04."
       filter      = "resource.type=\"cloudsql_database\" AND resource.labels.database_id=\"${var.project_id}:${local.relay_database_instance_name}\" AND textPayload:\"checkpoint starting: wal\""
@@ -632,4 +638,175 @@ resource "google_monitoring_alert_policy" "relay_cloud_nat_port_drops" {
     content   = "Relay cells reach Cloud SQL's public IP through this NAT. Port exhaustion makes every cell's Cloud SQL Auth Proxy dial time out at once, which reads as a fleet-wide SQL stall with a healthy database. Check `nat/port_usage` per VM and raise `max_ports_per_vm` in `relay-gce-foundation.tf`, or move the database to a private IP."
     mime_type = "text/markdown"
   }
+}
+
+resource "google_monitoring_alert_policy" "relay_cell_process_exit" {
+  project               = var.project_id
+  display_name          = "Orca Relay: cell process exits"
+  combiner              = "OR"
+  enabled               = true
+  notification_channels = var.relay_alert_notification_channels
+
+  conditions {
+    display_name = "Cell container exits above 3 in 15 minutes"
+
+    condition_threshold {
+      filter          = "resource.type=\"gce_instance\" AND metric.type=\"logging.googleapis.com/user/orca_relay_cell_process_exit\""
+      comparison      = "COMPARISON_GT"
+      threshold_value = 3
+      duration        = "0s"
+
+      aggregations {
+        alignment_period     = "900s"
+        per_series_aligner   = "ALIGN_SUM"
+        cross_series_reducer = "REDUCE_SUM"
+        group_by_fields      = ["resource.label.\"instance_id\""]
+      }
+
+      trigger {
+        count = 1
+      }
+    }
+  }
+
+  documentation {
+    content   = "A Relay GCE cell restarted its container more than three times in 15 minutes. Each exit drops every host and phone on that cell, and 201 exits went unpaged over 48 h on 2026-09-04. The instance hostname is `relay-<cell>-<suffix>`; read `jsonPayload.MESSAGE` on `cos_system` for the exit code and the container's own stderr for the stack before blaming MIG autoheal or load. A same-capacity roll is the remedy when the running image is behind."
+    mime_type = "text/markdown"
+  }
+
+  depends_on = [google_logging_metric.relay_incident]
+}
+
+# Why: the four signals that had to be assembled by hand during the 2026-09-04 incident.
+resource "google_monitoring_dashboard" "relay_incident" {
+  project = var.project_id
+
+  dashboard_json = jsonencode({
+    displayName = "Orca Relay: incident overview"
+    mosaicLayout = {
+      columns = 12
+      tiles = [
+        {
+          xPos   = 0
+          yPos   = 0
+          width  = 3
+          height = 4
+          widget = {
+            title = "Cloud SQL WAL checkpoints"
+            xyChart = {
+              dataSets = [{
+                plotType   = "LINE"
+                targetAxis = "Y1"
+                timeSeriesQuery = {
+                  timeSeriesFilter = {
+                    filter = "metric.type=\"logging.googleapis.com/user/orca_relay_cloud_sql_wal_checkpoint\" AND resource.type=\"cloudsql_database\""
+                    aggregation = {
+                      alignmentPeriod    = "300s"
+                      perSeriesAligner   = "ALIGN_SUM"
+                      crossSeriesReducer = "REDUCE_SUM"
+                    }
+                  }
+                }
+              }]
+              yAxis = {
+                label = "checkpoints"
+                scale = "LINEAR"
+              }
+            }
+          }
+        },
+        {
+          xPos   = 3
+          yPos   = 0
+          width  = 3
+          height = 4
+          widget = {
+            title = "Cloud NAT dropped packets"
+            xyChart = {
+              dataSets = [{
+                plotType   = "LINE"
+                targetAxis = "Y1"
+                timeSeriesQuery = {
+                  timeSeriesFilter = {
+                    filter = "metric.type=\"router.googleapis.com/nat/dropped_sent_packets_count\" AND resource.type=\"nat_gateway\" AND resource.label.\"gateway_name\"=monitoring.regex.full_match(\"${local.relay_gce_name}(-.*)?\")"
+                    aggregation = {
+                      alignmentPeriod    = "60s"
+                      perSeriesAligner   = "ALIGN_SUM"
+                      crossSeriesReducer = "REDUCE_SUM"
+                      groupByFields      = ["resource.label.\"gateway_name\"", "metric.label.\"reason\""]
+                    }
+                  }
+                }
+              }]
+              yAxis = {
+                label = "packets"
+                scale = "LINEAR"
+              }
+            }
+          }
+        },
+        {
+          xPos   = 6
+          yPos   = 0
+          width  = 3
+          height = 4
+          widget = {
+            title = "Auth refresh 401s"
+            xyChart = {
+              dataSets = [{
+                plotType   = "LINE"
+                targetAxis = "Y1"
+                timeSeriesQuery = {
+                  timeSeriesFilter = {
+                    filter = "metric.type=\"logging.googleapis.com/user/orca_auth_refresh_401\""
+                    aggregation = {
+                      alignmentPeriod    = "300s"
+                      perSeriesAligner   = "ALIGN_SUM"
+                      crossSeriesReducer = "REDUCE_SUM"
+                    }
+                  }
+                }
+              }]
+              yAxis = {
+                label = "rejections"
+                scale = "LINEAR"
+              }
+            }
+          }
+        },
+        {
+          xPos   = 9
+          yPos   = 0
+          width  = 3
+          height = 4
+          widget = {
+            title = "Standing desktop controls (fleet sum)"
+            xyChart = {
+              dataSets = [{
+                plotType   = "LINE"
+                targetAxis = "Y1"
+                timeSeriesQuery = {
+                  timeSeriesFilter = {
+                    # ALIGN_MEAN, not ALIGN_SUM: each process reports its standing control count once per interval.
+                    filter = "metric.type=\"logging.googleapis.com/user/orca_relay_controls\""
+                    aggregation = {
+                      alignmentPeriod    = "300s"
+                      perSeriesAligner   = "ALIGN_MEAN"
+                      crossSeriesReducer = "REDUCE_SUM"
+                    }
+                  }
+                }
+              }]
+              yAxis = {
+                label = "controls"
+                scale = "LINEAR"
+              }
+            }
+          }
+        }
+      ]
+    }
+  })
+
+  depends_on = [google_logging_metric.relay_incident, google_logging_metric.relay_snapshot]
 }
