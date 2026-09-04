@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { useCallback, useState } from 'react'
 import type { AgentSessionPromptResult } from '../../../src/shared/agent-session-wire'
 import type { StructuredAgentSessionState } from '../../../src/shared/structured-agent-session-reducer'
 import {
@@ -30,15 +30,14 @@ export function useMobileStructuredPromptResponses(args: {
   respondQuestion: (answer: string) => Promise<boolean>
 } {
   const { mutate, onSendError, sessionKey, stateRef } = args
-  // Partially answered grouped question, held only until its last step is submitted.
-  const [groupedDraft, setGroupedDraft] = useState<GroupedQuestionDraft | null>(null)
-  const groupedDraftRef = useRef(groupedDraft)
-  useLayoutEffect(() => {
-    groupedDraftRef.current = groupedDraft
-  }, [groupedDraft])
-  useEffect(() => {
-    setGroupedDraft(null)
-  }, [sessionKey])
+  // Partially answered grouped question, held only until its last step is submitted. The session it
+  // was collected in is stored with it and checked on read, so switching sessions drops the draft
+  // without an effect that would render the stale one for a frame first.
+  const [collected, setCollected] = useState<{
+    sessionKey: string
+    draft: GroupedQuestionDraft
+  } | null>(null)
+  const groupedDraft = collected?.sessionKey === sessionKey ? collected.draft : null
 
   const respondPermission = useCallback(
     async (optionId: string): Promise<boolean> => {
@@ -70,12 +69,12 @@ export function useMobileStructuredPromptResponses(args: {
         ? advanceGroupedQuestion({
             response: answer,
             questions: prompt.body.questions,
-            draft: groupedDraftRef.current,
+            draft: groupedDraft,
             promptKey: groupedQuestionPromptKey(prompt.itemId, prompt.revision)
           })
         : null
       if (grouped?.kind === 'advance') {
-        setGroupedDraft(grouped.draft)
+        setCollected({ sessionKey, draft: grouped.draft })
         return true
       }
       const target =
@@ -92,7 +91,7 @@ export function useMobileStructuredPromptResponses(args: {
       )
       if (grouped && result.status !== 'rejected') {
         // The group left the phone; a retry must start from the first question, not a stale tail.
-        setGroupedDraft(null)
+        setCollected(null)
       }
       if (result.status === 'unknown') {
         onSendError('Answer unconfirmed — check chat before retrying')
@@ -100,7 +99,7 @@ export function useMobileStructuredPromptResponses(args: {
       }
       return result.status === 'accepted'
     },
-    [mutate, onSendError, stateRef]
+    [groupedDraft, mutate, onSendError, sessionKey, stateRef]
   )
 
   return { groupedDraft, respondPermission, respondQuestion }
