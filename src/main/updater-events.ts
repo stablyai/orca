@@ -61,6 +61,8 @@ type UpdaterHandlerContext = {
   setAvailableReleaseUrl: (releaseUrl: string | null) => void
   setAvailableVersion: (version: string | null) => void
   setUserInitiatedCheck: (value: boolean) => void
+  /** Serve-only: retain the download metadata the supervised spool request is built from. */
+  recordSupervisedServeDownloadInfo?: (info: unknown) => void
 }
 
 export function registerAutoUpdaterHandlers({
@@ -88,6 +90,7 @@ export function registerAutoUpdaterHandlers({
   markMissingManifestPrereleaseFallbackChecking,
   performQuitAndInstall,
   shouldDeferMacQuitForInstall,
+  recordSupervisedServeDownloadInfo,
   recordCompletedUpdateCheck,
   restoreReleaseUpdateSource,
   sendCheckFailureStatus,
@@ -287,6 +290,7 @@ export function registerAutoUpdaterHandlers({
     }
     const macInstallerReady = process.platform === 'darwin' ? isMacInstallerReady() : true
     recordUpdaterLifecycle('update_downloaded', { version: info.version, macInstallerReady })
+    recordSupervisedServeDownloadInfo?.(info)
     const linuxPackageStatus = resolveLinuxPackageDownloadedStatus(info)
     if (linuxPackageStatus) {
       sendStatus(linuxPackageStatus)
