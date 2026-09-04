@@ -66,6 +66,7 @@ export function ActivityThreadListPane({
   onJumpToWorkspace,
   onMarkThreadRead,
   onMarkThreadUnread,
+  onClearThread,
   canJumpToWorkspace,
   allowMarkUnreadWhenSelected = false,
   showJumpAction = true,
@@ -74,7 +75,6 @@ export function ActivityThreadListPane({
   showFilterControls = true,
   showOptionsMenu = true,
   showInlineActions = true,
-  scopeFilterRow,
   collapsedGroupKeys,
   onToggleGroupCollapse,
   scrollTopRef
@@ -103,6 +103,7 @@ export function ActivityThreadListPane({
   onJumpToWorkspace: (thread: AgentPaneThread) => void
   onMarkThreadRead: (thread: AgentPaneThread) => void
   onMarkThreadUnread: (thread: AgentPaneThread) => void
+  onClearThread?: (thread: AgentPaneThread) => void
   canJumpToWorkspace: (thread: AgentPaneThread) => boolean
   allowMarkUnreadWhenSelected?: boolean
   showJumpAction?: boolean
@@ -112,7 +113,6 @@ export function ActivityThreadListPane({
   showOptionsMenu?: boolean
   showInlineActions?: boolean
   /** Rendered between the toolbar and the list; carries the active-scope chips row. */
-  scopeFilterRow?: React.ReactNode
   collapsedGroupKeys?: ReadonlySet<string>
   onToggleGroupCollapse?: (groupKey: string) => void
   /** Optional view-local scroll memory; updated without triggering React renders. */
@@ -318,7 +318,6 @@ export function ActivityThreadListPane({
         showOptionsMenu={showOptionsMenu}
         showInlineActions={showInlineActions}
       />
-      {scopeFilterRow}
       <div className="relative min-h-0 flex-1">
         <div
           ref={scrollContainerRef}
@@ -368,6 +367,7 @@ export function ActivityThreadListPane({
                     onJumpToWorkspace={onJumpToWorkspace}
                     onMarkThreadRead={onMarkThreadRead}
                     onMarkThreadUnread={onMarkThreadUnread}
+                    onClearThread={onClearThread}
                     canJumpToWorkspace={canJumpToWorkspace}
                     compactMode={compactMode}
                     allowMarkUnreadWhenSelected={allowMarkUnreadWhenSelected}

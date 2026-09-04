@@ -1,5 +1,6 @@
 import type React from 'react'
 import { translate } from '@/i18n/i18n'
+import { isClearableActivityThread } from './activity-clear-completed'
 import { ActivityStatusGroupHeader } from './activity-thread-controls'
 import { ActivityThreadRow } from './activity-thread-row'
 import type { ActivityVirtualItemDescriptor } from './activity-thread-virtual-items'
@@ -13,6 +14,7 @@ export function ActivityThreadVirtualRow({
   onJumpToWorkspace,
   onMarkThreadRead,
   onMarkThreadUnread,
+  onClearThread,
   canJumpToWorkspace,
   compactMode,
   allowMarkUnreadWhenSelected,
@@ -26,6 +28,7 @@ export function ActivityThreadVirtualRow({
   onJumpToWorkspace: Parameters<typeof ActivityThreadRow>[0]['onJump']
   onMarkThreadRead: Parameters<typeof ActivityThreadRow>[0]['onMarkRead']
   onMarkThreadUnread: Parameters<typeof ActivityThreadRow>[0]['onMarkUnread']
+  onClearThread?: Parameters<typeof ActivityThreadRow>[0]['onClear']
   canJumpToWorkspace: (
     thread: Extract<ActivityVirtualItemDescriptor, { type: 'thread' }>['thread']
   ) => boolean
@@ -61,7 +64,9 @@ export function ActivityThreadVirtualRow({
         onJump={onJumpToWorkspace}
         onMarkRead={onMarkThreadRead}
         onMarkUnread={onMarkThreadUnread}
+        onClear={onClearThread}
         canJump={canJumpToWorkspace(item.thread)}
+        canClear={isClearableActivityThread(item.thread) && !!onClearThread}
         compactMode={compactMode}
         disableMarkUnread={item.thread.paneKey === selectedPaneKey && !allowMarkUnreadWhenSelected}
         showJumpAction={showJumpAction}

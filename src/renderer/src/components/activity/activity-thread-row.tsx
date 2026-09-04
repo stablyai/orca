@@ -1,5 +1,5 @@
 import React from 'react'
-import { Bell, ExternalLink } from 'lucide-react'
+import { Bell, ExternalLink, X } from 'lucide-react'
 import { AgentIcon } from '@/lib/agent-catalog'
 import { agentTypeToIconAgent, formatAgentTypeLabel } from '@/lib/agent-status'
 import { Button } from '@/components/ui/button'
@@ -23,10 +23,12 @@ export const ActivityThreadRow = React.memo(function ActivityThreadRow({
   onJump,
   onMarkRead,
   onMarkUnread,
+  onClear,
   canJump,
   compactMode,
   disableMarkUnread = false,
-  showJumpAction = true
+  showJumpAction = true,
+  canClear = false
 }: {
   thread: AgentPaneThread
   selected: boolean
@@ -34,10 +36,12 @@ export const ActivityThreadRow = React.memo(function ActivityThreadRow({
   onJump: (thread: AgentPaneThread) => void
   onMarkRead: (thread: AgentPaneThread) => void
   onMarkUnread: (thread: AgentPaneThread) => void
+  onClear?: (thread: AgentPaneThread) => void
   canJump: boolean
   compactMode: boolean
   disableMarkUnread?: boolean
   showJumpAction?: boolean
+  canClear?: boolean
 }): React.JSX.Element {
   const { taskTitle, statusLine, statusKind, needsAttention, workspaceLabel } =
     activityThreadRowCopy(thread)
@@ -151,6 +155,43 @@ export const ActivityThreadRow = React.memo(function ActivityThreadRow({
                       {translate(
                         'auto.components.activity.ActivityPrototypePage.4616ea39fd',
                         'Jump to workspace'
+                      )}
+                    </TooltipContent>
+                  </Tooltip>
+                </span>
+              ) : null}
+              {canClear && onClear ? (
+                <span
+                  className={cn(
+                    'inline-flex shrink-0 items-center transition-opacity',
+                    'can-hover:pointer-events-none can-hover:invisible can-hover:opacity-0',
+                    'group-hover:pointer-events-auto group-hover:visible group-hover:opacity-100'
+                  )}
+                >
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon-xs"
+                        className="size-4 p-0 text-muted-foreground hover:text-foreground"
+                        aria-label={translate(
+                          'auto.components.activity.ActivityThreadRow.clearNotification',
+                          'Clear notification'
+                        )}
+                        onClick={(event) => {
+                          event.stopPropagation()
+                          onClear(thread)
+                        }}
+                        onMouseDown={(event) => event.stopPropagation()}
+                      >
+                        <X className="size-2.5" />
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent side="left">
+                      {translate(
+                        'auto.components.activity.ActivityThreadRow.clearNotification',
+                        'Clear notification'
                       )}
                     </TooltipContent>
                   </Tooltip>

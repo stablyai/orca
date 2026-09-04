@@ -97,6 +97,16 @@ function evictPersistedStatuses(identities: readonly AgentStatusCacheIdentity[])
 }
 
 /**
+ * Clear a single activity thread with an undo window.
+ */
+export function clearSingleActivityThread(thread: AgentPaneThread): boolean {
+  if (!isClearableActivityThread(thread)) {
+    return false
+  }
+  return clearCompletedActivity([thread])
+}
+
+/**
  * Clear completed/interrupted activity threads with an undo window.
  *
  * Live agent status, resume identity, and attention/working rows are untouched:

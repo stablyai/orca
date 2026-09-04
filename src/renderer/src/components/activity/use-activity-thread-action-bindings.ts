@@ -1,5 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef } from 'react'
-import { clearCompletedActivity, isClearableActivityThread } from './activity-clear-completed'
+import {
+  clearCompletedActivity,
+  clearSingleActivityThread,
+  isClearableActivityThread
+} from './activity-clear-completed'
 import { createActivityThreadActions } from './activity-thread-actions'
 import type { AgentPaneThread } from './activity-thread-types'
 
@@ -12,6 +16,7 @@ type ActivityThreadActionBindings = {
   hasUnreadThreads: boolean
   hasCompletedThreads: boolean
   handleClearCompleted: () => void
+  handleClearThread: (thread: AgentPaneThread) => void
 }
 
 /**
@@ -66,6 +71,15 @@ export function useActivityThreadActionBindings({
   const handleClearCompleted = useCallback(() => {
     clearCompletedActivity(visibleThreadsRef.current)
   }, [])
+  const handleClearThread = useCallback((thread: AgentPaneThread) => {
+    clearSingleActivityThread(thread)
+  }, [])
 
-  return { ...actions, hasUnreadThreads, hasCompletedThreads, handleClearCompleted }
+  return {
+    ...actions,
+    hasUnreadThreads,
+    hasCompletedThreads,
+    handleClearCompleted,
+    handleClearThread
+  }
 }
