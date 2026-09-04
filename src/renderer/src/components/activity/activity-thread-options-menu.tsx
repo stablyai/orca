@@ -80,6 +80,12 @@ export function ActivityThreadOptionsMenu({
 }): React.JSX.Element {
   const skipCloseAutoFocusRef = React.useRef(false)
   const scopeFilterActive = useActivityScopeFilterActive()
+  const optionsLabel = scopeFilterActive
+    ? translate(
+        'auto.components.activity.ActivityPrototypePage.threadListOptionsFiltered',
+        'Thread list options, filters active'
+      )
+    : translate('auto.components.activity.ActivityPrototypePage.db8a1878b5', 'Thread list options')
 
   return (
     <DropdownMenu>
@@ -93,10 +99,7 @@ export function ActivityThreadOptionsMenu({
                 variant="ghost"
                 size="icon-xs"
                 className="relative text-muted-foreground"
-                aria-label={translate(
-                  'auto.components.activity.ActivityPrototypePage.db8a1878b5',
-                  'Thread list options'
-                )}
+                aria-label={optionsLabel}
               >
                 <ListFilter className="size-3.5" strokeWidth={2.25} />
                 {scopeFilterActive ? (

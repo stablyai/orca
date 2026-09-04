@@ -14180,12 +14180,16 @@
           "770d458144": "Agrupar por",
           "795cbf26e2": "Filtrar...",
           "4616ea39fd": "Ir al workspace",
+          "threadListOptionsFiltered": "Opciones de lista de hilos, filtros activos",
           "markThreadRead": "Marcar hilo como leído",
           "59b131fbd9": "Marcar hilo como no leído",
           "beb2c19173": "No leído",
           "5651b216c6": "Proyecto desconocido",
           "22b22034bc": "Terminal independiente no disponible en Actividad.",
           "afdc2139a8": "Terminal de Agent cerrada. Abre una nueva terminal en este workspace para continuar."
+        },
+        "ActivityThreadRow": {
+          "clearNotification": "Borrar notificación"
         },
         "ActivityTitlebarControls": {
           "f915168c8e": "no leído",

@@ -14236,12 +14236,16 @@
           "770d458144": "分组方式",
           "795cbf26e2": "筛选...",
           "4616ea39fd": "跳转到工作区",
+          "threadListOptionsFiltered": "线程列表选项，筛选器已启用",
           "markThreadRead": "将话题标记为已读",
           "59b131fbd9": "将话题标记为未读",
           "beb2c19173": "未读",
           "5651b216c6": "未知项目",
           "22b22034bc": "独立终端在活动中不可用。",
           "afdc2139a8": "智能体终端关闭。在此工作区中打开一个新终端以继续。"
+        },
+        "ActivityThreadRow": {
+          "clearNotification": "清除通知"
         },
         "ActivityTitlebarControls": {
           "f915168c8e": "未读",

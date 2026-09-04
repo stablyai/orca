@@ -29,7 +29,7 @@ function ActivityThreadRowAction({
           type="button"
           variant="ghost"
           size="icon-xs"
-          className="size-4 p-0 text-muted-foreground opacity-100 transition-opacity hover:text-foreground can-hover:opacity-0 group-hover:opacity-100 focus-visible:opacity-100"
+          className="size-4 p-0 text-muted-foreground transition-opacity hover:text-foreground can-hover:pointer-events-none can-hover:opacity-0 can-hover:group-hover:pointer-events-auto can-hover:group-hover:opacity-100 focus-visible:opacity-100"
           aria-label={label}
           onClick={(event) => {
             event.stopPropagation()

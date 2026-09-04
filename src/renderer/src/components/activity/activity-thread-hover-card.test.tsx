@@ -165,6 +165,8 @@ describe('ActivityThreadHoverCard and ActivityThreadRow', () => {
     )
     expect(clearButton).not.toBeNull()
     expect(clearButton?.className).toContain('focus-visible:opacity-100')
+    expect(clearButton?.className).toContain('can-hover:pointer-events-none')
+    expect(clearButton?.className).toContain('can-hover:group-hover:pointer-events-auto')
     expect(clearButton?.className).not.toContain('invisible')
 
     act(() => clearButton?.click())

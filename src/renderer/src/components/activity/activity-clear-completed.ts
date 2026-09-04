@@ -96,9 +96,7 @@ function evictPersistedStatuses(identities: readonly AgentStatusCacheIdentity[])
   }
 }
 
-/**
- * Clear a single activity thread silently (no toast notification).
- */
+/** Clear one completed thread immediately; bulk clearing owns the undo toast. */
 export function clearActivityThread(thread: AgentPaneThread): boolean {
   const state = useAppStore.getState()
   const plan = planClearCompletedActivity([thread], state)

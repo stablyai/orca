@@ -14258,12 +14258,16 @@
           "770d458144": "그룹화 기준",
           "795cbf26e2": "필터...",
           "4616ea39fd": "워크스페이스로 이동",
+          "threadListOptionsFiltered": "스레드 목록 옵션, 필터 활성화됨",
           "markThreadRead": "스레드를 읽은 것으로 표시",
           "59b131fbd9": "스레드를 읽지 않은 것으로 표시",
           "beb2c19173": "읽지 않음",
           "5651b216c6": "알 수 없는 프로젝트",
           "22b22034bc": "활동에서는 독립형 terminal을 사용할 수 없습니다.",
           "afdc2139a8": "Agent terminal이 닫혔습니다. 계속하려면 이 워크스페이스에서 새 terminal을 여세요."
+        },
+        "ActivityThreadRow": {
+          "clearNotification": "알림 지우기"
         },
         "ActivityTitlebarControls": {
           "f915168c8e": "읽지 않음",

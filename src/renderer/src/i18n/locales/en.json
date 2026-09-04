@@ -16161,7 +16161,8 @@
           "search": "Search",
           "showUnreadOnly": "Show unread only",
           "showChildAgents": "Show child agents",
-          "activityOptions": "Activity options"
+          "activityOptions": "Activity options",
+          "threadListOptionsFiltered": "Thread list options, filters active"
         },
         "clearCompleted": {
           "clearedOne": "Cleared 1 completed agent",

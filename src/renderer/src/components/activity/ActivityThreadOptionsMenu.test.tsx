@@ -5,6 +5,7 @@ import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { TooltipProvider } from '@/components/ui/tooltip'
+import { useAppStore } from '@/store'
 import { ActivityThreadOptionsMenu } from './ActivityPrototypePage'
 import type { ActivityGroupBy } from './activity-thread-types'
 
@@ -46,6 +47,7 @@ describe('ActivityThreadOptionsMenu', () => {
   let root: Root
 
   beforeEach(() => {
+    useAppStore.setState({ agentsVisibleHostIds: null, agentsFilterRepoIds: [] })
     container = document.createElement('div')
     document.body.appendChild(container)
     root = createRoot(container)
@@ -55,6 +57,20 @@ describe('ActivityThreadOptionsMenu', () => {
     act(() => root.unmount())
     container.remove()
     document.body.replaceChildren()
+  })
+
+  it('exposes an active persisted scope visually and in the trigger label', async () => {
+    useAppStore.setState({ agentsVisibleHostIds: ['local'] })
+
+    await act(async () => {
+      root.render(<Harness />)
+    })
+
+    const trigger = container.querySelector<HTMLButtonElement>(
+      'button[aria-label="Thread list options, filters active"]'
+    )
+    expect(trigger).not.toBeNull()
+    expect(trigger?.querySelector('[data-scope-filter-dot]')).not.toBeNull()
   })
 
   it('opens without recursively updating composed Radix trigger refs', async () => {
@@ -191,7 +207,7 @@ describe('ActivityThreadOptionsMenu', () => {
     expect(document.body.textContent).toContain(
       'Filters the activity list to show only threads with unread updates.'
     )
-    expect(unreadItem?.querySelector('svg.lucide-check')).toBeNull()
+    expect(document.querySelector('[data-unread-dot]')).toBeNull()
   })
 
   it('renders show child agents checkbox when onShowChildAgentsChange is provided', async () => {
