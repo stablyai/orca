@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { RpcClient } from '../transport/rpc-client'
 import { markRpcDeliveryUnknown } from '../transport/rpc-delivery-ambiguity'
-import { createMobileStructuredCodexSession } from './mobile-structured-agent-session-launch'
+import { createMobileStructuredAgentSession } from './mobile-structured-agent-session-launch'
 
 function clientReturning(
   ...responses: unknown[]
@@ -36,11 +36,13 @@ const acceptedCreateResult = {
 }
 const acceptedCreate = { ok: true, result: acceptedCreateResult }
 
-describe('mobile structured Codex launch', () => {
+describe('mobile structured agent-session launch', () => {
   it('creates through the structured agent-session intent after support is confirmed', async () => {
     const client = clientReturning({ ok: true, result: { supported: true } }, acceptedCreate)
 
-    await expect(createMobileStructuredCodexSession(client, 'workspace-1')).resolves.toMatchObject({
+    await expect(
+      createMobileStructuredAgentSession(client, 'workspace-1', 'codex')
+    ).resolves.toMatchObject({
       kind: 'created',
       sessionId: expect.stringMatching(/^codex_[A-Za-z0-9_]{8,128}$/)
     })
@@ -67,10 +69,51 @@ describe('mobile structured Codex launch', () => {
     expect(params.envelope.sessionId).toMatch(/^codex_[A-Za-z0-9_]{8,128}$/)
   })
 
+  it('creates a Claude session through the same envelope, keyed to the claude provider', async () => {
+    const client = clientReturning(
+      { ok: true, result: { supported: true } },
+      {
+        ok: true,
+        result: {
+          ...acceptedCreateResult,
+          value: { ...acceptedCreateResult.value, sessionId: 'claude_session_1' }
+        }
+      }
+    )
+
+    await expect(
+      createMobileStructuredAgentSession(client, 'workspace-1', 'claude')
+    ).resolves.toMatchObject({ kind: 'created', sessionId: 'claude_session_1' })
+    expect(client.sendRequest).toHaveBeenNthCalledWith(1, 'agentSession.createSupport', {
+      worktree: 'id:workspace-1',
+      agent: 'claude'
+    })
+    const params = client.sendRequest.mock.calls[1]?.[1] as {
+      envelope: { sessionId: string; payloadFingerprint: string }
+      agent: string
+    }
+    expect(params.agent).toBe('claude')
+    expect(params.envelope.sessionId).toMatch(/^claude_[A-Za-z0-9_]{8,128}$/)
+    expect(params.envelope.payloadFingerprint).toMatch(/^[0-9a-f]{64}$/)
+  })
+
+  it('names the refusing agent in the failure copy rather than always saying Codex', async () => {
+    const client = clientReturning(
+      { ok: true, result: { supported: true } },
+      { ok: false, error: { code: 'agent_session_refused', message: '' } }
+    )
+
+    await expect(
+      createMobileStructuredAgentSession(client, 'workspace-1', 'claude')
+    ).resolves.toEqual({ kind: 'failed', message: 'Could not open Claude chat.' })
+  })
+
   it('reports unsupported without creating a terminal when the structured path is unavailable', async () => {
     const client = clientReturning({ ok: true, result: { supported: false, reason: 'remote' } })
 
-    await expect(createMobileStructuredCodexSession(client, 'workspace-1')).resolves.toEqual({
+    await expect(
+      createMobileStructuredAgentSession(client, 'workspace-1', 'codex')
+    ).resolves.toEqual({
       kind: 'unsupported',
       reason: 'remote'
     })
@@ -85,7 +128,9 @@ describe('mobile structured Codex launch', () => {
     }))
     client.sendRequest.mockRejectedValue(markRpcDeliveryUnknown(new Error('response lost')))
 
-    await expect(createMobileStructuredCodexSession(client, 'workspace-1')).resolves.toMatchObject({
+    await expect(
+      createMobileStructuredAgentSession(client, 'workspace-1', 'codex')
+    ).resolves.toMatchObject({
       kind: 'unknown'
     })
     expect(client.sendRequest.mock.calls.map(([method]) => method)).toEqual([
@@ -105,7 +150,9 @@ describe('mobile structured Codex launch', () => {
     client.sendRequest.mockRejectedValueOnce(markRpcDeliveryUnknown(new Error('response lost')))
     client.sendRequest.mockRejectedValueOnce(new Error('connection interrupted'))
 
-    await expect(createMobileStructuredCodexSession(client, 'workspace-1')).resolves.toMatchObject({
+    await expect(
+      createMobileStructuredAgentSession(client, 'workspace-1', 'codex')
+    ).resolves.toMatchObject({
       kind: 'unknown'
     })
   })
@@ -118,7 +165,9 @@ describe('mobile structured Codex launch', () => {
     }))
     client.sendRequest.mockRejectedValue(new Error('internal error after commit'))
 
-    await expect(createMobileStructuredCodexSession(client, 'workspace-1')).resolves.toMatchObject({
+    await expect(
+      createMobileStructuredAgentSession(client, 'workspace-1', 'codex')
+    ).resolves.toMatchObject({
       kind: 'unknown'
     })
     expect(client.sendRequest.mock.calls.map(([method]) => method)).toEqual([
@@ -135,7 +184,9 @@ describe('mobile structured Codex launch', () => {
       { ok: true, result: { ok: true, value: { sessionId: '' } } }
     )
 
-    await expect(createMobileStructuredCodexSession(client, 'workspace-1')).resolves.toMatchObject({
+    await expect(
+      createMobileStructuredAgentSession(client, 'workspace-1', 'codex')
+    ).resolves.toMatchObject({
       kind: 'unknown'
     })
   })

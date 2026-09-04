@@ -1,13 +1,13 @@
 import type { AgentSessionHandleProvider } from '../../../shared/agent-session-provider-handle'
 import type {
   AgentSessionAttachResult,
-  AgentSessionMutationEnvelope,
   AgentSessionMutationResult
 } from '../../../shared/agent-session-wire'
 import {
-  createStructuredAgentSessionOperationId,
-  structuredAgentSessionPayloadFingerprint
-} from '../../../shared/structured-agent-session-mutation'
+  createStructuredAgentSessionId,
+  structuredAgentSessionCreateParams,
+  type StructuredAgentSessionCreateParams
+} from '../../../shared/structured-agent-session-create'
 import { hasRuntimeRpcErrorCode } from '../../../shared/runtime-rpc-error-code'
 import { isDefinitiveAgentSessionCreateRefusal } from '../../../shared/agent-session-definitive-refusal'
 import { callStructuredAgentSession } from '@/runtime/structured-agent-session-client'
@@ -19,12 +19,6 @@ import {
   resolveWebSessionVisibleTabId
 } from '@/runtime/web-session-focus-intent'
 import { LOCAL_STRUCTURED_SESSION_OWNER } from '@/runtime/local-structured-session-tabs-sync'
-
-type StructuredAgentSessionCreateParams = {
-  envelope: AgentSessionMutationEnvelope
-  worktree: string
-  agent: AgentSessionHandleProvider
-}
 
 export type StructuredAgentSessionLaunchIntent = {
   sessionId: string
@@ -96,8 +90,7 @@ export function createStructuredAgentSessionLaunchIntent(
   worktreeId: string,
   agent: AgentSessionHandleProvider
 ): StructuredAgentSessionLaunchIntent {
-  const sessionId = `${agent}_${crypto.randomUUID().replaceAll('-', '_')}`
-  const fields = { worktree: toRuntimeWorktreeSelector(worktreeId), agent }
+  const sessionId = createStructuredAgentSessionId(agent, () => crypto.randomUUID())
   const state = useAppStore.getState()
   recordWebSessionFocusIntent(
     { environmentId: LOCAL_STRUCTURED_SESSION_OWNER },
@@ -110,19 +103,12 @@ export function createStructuredAgentSessionLaunchIntent(
     sessionId,
     worktreeId,
     agent,
-    params: {
-      envelope: {
-        sessionId,
-        clientOperationId: createStructuredAgentSessionOperationId(() => crypto.randomUUID()),
-        expectedRuntimeFence: null,
-        payloadFingerprint: structuredAgentSessionPayloadFingerprint({
-          method: 'agentSession.create',
-          sessionId,
-          fields
-        })
-      },
-      ...fields
-    }
+    params: structuredAgentSessionCreateParams({
+      sessionId,
+      worktree: toRuntimeWorktreeSelector(worktreeId),
+      agent,
+      randomUuid: () => crypto.randomUUID()
+    })
   }
 }
 

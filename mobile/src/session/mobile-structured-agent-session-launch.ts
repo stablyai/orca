@@ -1,90 +1,79 @@
+import type { AgentSessionHandleProvider } from '../../../src/shared/agent-session-provider-handle'
 import type {
   AgentSessionAttachResult,
   AgentSessionMutationResult
 } from '../../../src/shared/agent-session-wire'
 import { isDefinitiveAgentSessionCreateRefusal } from '../../../src/shared/agent-session-definitive-refusal'
-import { structuredAgentSessionPayloadFingerprint } from '../../../src/shared/structured-agent-session-mutation'
+import {
+  createStructuredAgentSessionId,
+  structuredAgentSessionCreateParams,
+  type StructuredAgentSessionCreateParams
+} from '../../../src/shared/structured-agent-session-create'
+import { TUI_AGENT_DISPLAY_NAMES } from '../../../src/shared/tui-agent-display-names'
 import type { RpcClient } from '../transport/rpc-client'
-import { structuredSessionOperationId } from './mobile-structured-agent-session-rpc'
+import { structuredSessionRandomUuid } from './mobile-structured-agent-session-rpc'
 
 type StructuredCreateSupport = {
   supported?: boolean
   reason?: 'agent' | 'remote' | 'wsl'
 }
 
-export type MobileStructuredCodexLaunchResult =
+export type MobileStructuredAgentLaunchResult =
   | { kind: 'created'; sessionId: string }
   | { kind: 'unsupported'; reason?: StructuredCreateSupport['reason'] }
   | { kind: 'failed'; message: string }
   | { kind: 'unknown'; message: string }
 
-type StructuredCreateParams = {
-  envelope: {
-    sessionId: string
-    clientOperationId: string
-    expectedRuntimeFence: null
-    payloadFingerprint: string
-  }
+function createParamsFor(
+  agent: AgentSessionHandleProvider,
   worktree: string
-  agent: 'codex'
+): StructuredAgentSessionCreateParams {
+  return structuredAgentSessionCreateParams({
+    sessionId: createStructuredAgentSessionId(agent, structuredSessionRandomUuid),
+    worktree,
+    agent,
+    randomUuid: structuredSessionRandomUuid
+  })
 }
 
-function createStructuredCodexSessionId(): string {
-  return `codex_${createRandomUuid().replaceAll('-', '_')}`
-}
-
-function createRandomUuid(): string {
-  if (typeof globalThis.crypto?.randomUUID === 'function') {
-    return globalThis.crypto.randomUUID()
-  }
-  return Array.from({ length: 32 }, () => Math.floor(Math.random() * 16).toString(16)).join('')
-}
-
-function createStructuredCodexSessionParams(worktreeId: string): StructuredCreateParams {
-  const sessionId = createStructuredCodexSessionId()
-  const worktree = `id:${worktreeId}`
-  const fields = { worktree, agent: 'codex' as const }
-  return {
-    envelope: {
-      sessionId,
-      clientOperationId: structuredSessionOperationId(),
-      expectedRuntimeFence: null,
-      payloadFingerprint: structuredAgentSessionPayloadFingerprint({
-        method: 'agentSession.create',
-        sessionId,
-        fields
-      })
-    },
-    ...fields
-  }
-}
-
-function unknownCreateResult(error: unknown): MobileStructuredCodexLaunchResult {
+function unknownCreateResult(
+  agent: AgentSessionHandleProvider,
+  error: unknown
+): MobileStructuredAgentLaunchResult {
   const message = error instanceof Error ? error.message.trim() : ''
-  return {
-    kind: 'unknown',
-    message: message || 'The Codex chat result could not be confirmed.'
-  }
+  return { kind: 'unknown', message: message || unconfirmedMessage(agent) }
 }
 
-function classifyCreateRefusal(code: string, message: string): MobileStructuredCodexLaunchResult {
+function unconfirmedMessage(agent: AgentSessionHandleProvider): string {
+  return `The ${TUI_AGENT_DISPLAY_NAMES[agent]} chat result could not be confirmed.`
+}
+
+function failedMessage(agent: AgentSessionHandleProvider): string {
+  return `Could not open ${TUI_AGENT_DISPLAY_NAMES[agent]} chat.`
+}
+
+/** Only a refusal the host names as definitive may become `failed`; anything else keeps the
+ *  outcome unknown so no legacy sibling terminal is created for a session that may exist. */
+function classifyCreateRefusal(
+  agent: AgentSessionHandleProvider,
+  code: string,
+  message: string
+): MobileStructuredAgentLaunchResult {
   if (!isDefinitiveAgentSessionCreateRefusal(code)) {
-    return unknownCreateResult(new Error(message))
+    return unknownCreateResult(agent, new Error(message))
   }
-  return { kind: 'failed', message: message || 'Could not open Codex chat.' }
+  return { kind: 'failed', message: message || failedMessage(agent) }
 }
 
-export async function createMobileStructuredCodexSession(
+export async function createMobileStructuredAgentSession(
   client: RpcClient,
-  worktreeId: string
-): Promise<MobileStructuredCodexLaunchResult> {
+  worktreeId: string,
+  agent: AgentSessionHandleProvider
+): Promise<MobileStructuredAgentLaunchResult> {
   const worktree = `id:${worktreeId}`
   let supportResponse
   try {
-    supportResponse = await client.sendRequest('agentSession.createSupport', {
-      worktree,
-      agent: 'codex'
-    })
+    supportResponse = await client.sendRequest('agentSession.createSupport', { worktree, agent })
   } catch {
     // A support probe has no side effect; an unavailable probe safely degrades to terminal chat.
     return { kind: 'unsupported' }
@@ -102,7 +91,7 @@ export async function createMobileStructuredCodexSession(
     return { kind: 'unsupported', reason: support?.reason }
   }
 
-  const params = createStructuredCodexSessionParams(worktreeId)
+  const params = createParamsFor(agent, worktree)
   let response
   try {
     response = await client.sendRequest('agentSession.create', params, {
@@ -118,12 +107,12 @@ export async function createMobileStructuredCodexSession(
       })
     } catch (retryError) {
       // A second transport error cannot disprove the first attempt committed.
-      return unknownCreateResult(retryError)
+      return unknownCreateResult(agent, retryError)
     }
   }
 
   if (!response || typeof response !== 'object' || typeof response.ok !== 'boolean') {
-    return unknownCreateResult(new Error('The Codex chat result could not be confirmed.'))
+    return unknownCreateResult(agent, new Error(unconfirmedMessage(agent)))
   }
   if (!response.ok) {
     if (
@@ -131,13 +120,13 @@ export async function createMobileStructuredCodexSession(
       typeof response.error !== 'object' ||
       typeof response.error.code !== 'string'
     ) {
-      return unknownCreateResult(new Error('The Codex chat result could not be confirmed.'))
+      return unknownCreateResult(agent, new Error(unconfirmedMessage(agent)))
     }
-    return classifyCreateRefusal(response.error.code, response.error.message)
+    return classifyCreateRefusal(agent, response.error.code, response.error.message)
   }
   const result = response.result as AgentSessionMutationResult<AgentSessionAttachResult>
   if (!result || typeof result !== 'object' || typeof result.ok !== 'boolean') {
-    return unknownCreateResult(new Error('The Codex chat result could not be confirmed.'))
+    return unknownCreateResult(agent, new Error(unconfirmedMessage(agent)))
   }
   if (!result.ok) {
     if (
@@ -145,16 +134,16 @@ export async function createMobileStructuredCodexSession(
       typeof result.refusal !== 'object' ||
       typeof result.refusal.code !== 'string'
     ) {
-      return unknownCreateResult(new Error('The Codex chat result could not be confirmed.'))
+      return unknownCreateResult(agent, new Error(unconfirmedMessage(agent)))
     }
-    return classifyCreateRefusal(result.refusal.code, result.refusal.message)
+    return classifyCreateRefusal(agent, result.refusal.code, result.refusal.message)
   }
   if (
     !result.value ||
     typeof result.value.sessionId !== 'string' ||
     !result.value.sessionId.trim()
   ) {
-    return unknownCreateResult(new Error('The Codex chat result could not be confirmed.'))
+    return unknownCreateResult(agent, new Error(unconfirmedMessage(agent)))
   }
   return { kind: 'created', sessionId: result.value.sessionId }
 }
