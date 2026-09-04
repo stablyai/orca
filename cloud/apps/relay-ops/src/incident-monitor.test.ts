@@ -131,6 +131,10 @@ describe('incident monitor evaluator', () => {
     healthy.sources['relay-logs']!.signals['relay.postgres_retry_exhausted'] = signal(220)
     expect(evaluateIncidentSample(healthy, startedAt).status).toBe('green')
 
+    const atLimit = healthySample()
+    atLimit.sources['relay-logs']!.signals['relay.postgres_retry_exhausted'] = signal(300)
+    expect(evaluateIncidentSample(atLimit, startedAt).status).toBe('green')
+
     const incident = healthySample()
     incident.sources['relay-logs']!.signals['relay.postgres_retry_exhausted'] = signal(301)
     expect(evaluateIncidentSample(incident, startedAt)).toMatchObject({
