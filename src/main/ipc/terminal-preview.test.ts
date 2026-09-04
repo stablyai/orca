@@ -59,6 +59,9 @@ function makeRuntime() {
     registerRawTerminalViewSubscriber: vi.fn(() => releaseRawView),
     writeTerminalPreviewInput: vi.fn(async () => true),
     ensureHeadlessTerminalForViewer: vi.fn(),
+    verifyTerminalPreviewLiveness: vi.fn(
+      async (): Promise<'live' | 'unverifiable' | 'exited'> => 'unverifiable'
+    ),
     updateRemoteDesktopViewer: vi.fn(async () => true),
     unregisterRemoteDesktopViewer: vi.fn(async () => true),
     getTerminalSize: vi.fn((): { cols: number; rows: number } | null => ({ cols: 80, rows: 20 }))
@@ -506,8 +509,29 @@ describe('registerTerminalPreviewHandlers', () => {
 
     await expect(
       handlers.get('terminalPreview:connect')!(eventFor(sender), { ptyId: 'missing' })
-    ).resolves.toEqual({ snapshot: null, replay: [] })
+    ).resolves.toEqual({ snapshot: null, replay: [], liveness: 'unverifiable' })
     expect(runtime.unsubscribe).toHaveBeenCalledTimes(1)
+    expect(runtime.releaseRawView).toHaveBeenCalledTimes(1)
+  })
+
+  it('reports exit only when the execution host verifies it', async () => {
+    const runtime = makeRuntime()
+    runtime.serializeTerminalBuffer.mockResolvedValueOnce(null)
+    runtime.verifyTerminalPreviewLiveness.mockResolvedValueOnce('exited')
+    registerTerminalPreviewHandlers(runtime as never)
+    await expect(
+      handlers.get('terminalPreview:connect')!(eventFor(makeSender()), { ptyId: 'gone' })
+    ).resolves.toEqual({ snapshot: null, replay: [], liveness: 'exited' })
+    expect(runtime.verifyTerminalPreviewLiveness).toHaveBeenCalledWith('gone')
+  })
+
+  it('does not turn serializer exceptions into process exits', async () => {
+    const runtime = makeRuntime()
+    runtime.serializeTerminalBuffer.mockRejectedValueOnce(new Error('transport unavailable'))
+    registerTerminalPreviewHandlers(runtime as never)
+    await expect(
+      handlers.get('terminalPreview:connect')!(eventFor(makeSender()), { ptyId: 'p1' })
+    ).resolves.toEqual({ snapshot: null, replay: [], liveness: 'unverifiable' })
     expect(runtime.releaseRawView).toHaveBeenCalledTimes(1)
   })
 

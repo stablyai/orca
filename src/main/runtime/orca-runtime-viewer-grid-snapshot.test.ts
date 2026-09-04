@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import type * as GitUsernameModule from '../git/git-username'
 import { OrcaRuntimeService } from './orca-runtime'
+import { HeadlessEmulator } from '../daemon/headless-emulator'
 
 vi.mock('../git/worktree', () => ({
   listWorktrees: vi.fn().mockResolvedValue([
@@ -126,6 +127,52 @@ const internals = (runtime: OrcaRuntimeService) =>
   }
 
 describe('viewer snapshot at the PTY grid', () => {
+  it('does not turn loss of host contact during a preview probe into an exit', async () => {
+    const runtime = new OrcaRuntimeService(store)
+    let answer!: (live: boolean | null) => void
+    runtime.setPtyController({
+      hasPty: () => false,
+      probePtyLiveness: () =>
+        new Promise<boolean | null>((resolve) => {
+          answer = resolve
+        })
+    } as never)
+    const pending = runtime.verifyTerminalPreviewLiveness('ssh:box:pty-1')
+    runtime.markPtyLivenessUnverifiable('ssh:box:pty-1', 'host disconnected')
+    answer(false)
+    expect(await pending).toBe('unverifiable')
+  })
+
+  it('preserves alternate-screen rows when narrowing a serialized provider frame', async () => {
+    const source = new HeadlessEmulator({ cols: 80, rows: 24 })
+    await source.write(`\x1b[?1049h\x1b[1;1H${'A'.repeat(80)}\x1b[2;1HSECOND ROW\x1b[3;1HTHIRD ROW`)
+    const frame = source.getSnapshot({ scrollbackRows: 24 })
+    source.resize(40, 24)
+    const expected = source.getVisibleLines()
+    const { runtime } = createRuntimeWithRendererPane({
+      ptySize: { cols: 40, rows: 24 },
+      rendererFrame: null,
+      rendererRegistered: () => false,
+      providerFrame: {
+        data: frame.rehydrateSequences + frame.snapshotAnsi,
+        cols: 80,
+        rows: 24,
+        seq: 0
+      }
+    })
+    internals(runtime).providerSnapshotPreferredPtys.add('pty-1')
+    try {
+      const snapshot = await runtime.serializeTerminalBuffer('pty-1', { scrollbackRows: 24 })
+      const emulator = internals(runtime).headlessTerminals.get('pty-1')!
+        .emulator as HeadlessEmulator
+      expect(snapshot).toMatchObject({ cols: 40, rows: 24 })
+      expect(emulator.getVisibleLines()).toEqual(expected)
+    } finally {
+      source.dispose()
+      internals(runtime).headlessTerminals.get('pty-1')?.emulator.dispose()
+    }
+  })
+
   it('serves an empty frame at the PTY grid rather than the parked pane default', async () => {
     const { runtime } = createRuntimeWithRendererPane({
       ptySize: { cols: 85, rows: 22 },

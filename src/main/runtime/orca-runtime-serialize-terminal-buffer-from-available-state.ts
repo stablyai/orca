@@ -7,6 +7,8 @@ import { TrailingTerminalOutputCapture } from './terminal-output-trailing-captur
 
 type ReframeSource = {
   data: string
+  cols: number
+  rows: number
   scrollbackAnsi?: string
   seq?: number
   cwd?: string | null
@@ -161,7 +163,7 @@ export class OrcaRuntimeWithSerializeTerminalBufferFromAvailableState extends Or
    * A frame's content re-laid-out at the PTY's real grid. The source (the
    * parked pane's xterm, or the daemon's emulator for an adopted session) is
    * at a size that is not the PTY's, and the headless emulator has nothing
-   * newer: seed the emulator with the source's bytes at the PTY size, replay
+   * newer: restore at the source size, resize to the PTY grid, replay
    * the bytes published since the source's `seq`, and read it back. Same
    * shape as mobile's recovery reseed.
    */
@@ -192,8 +194,9 @@ export class OrcaRuntimeWithSerializeTerminalBufferFromAvailableState extends Or
     const trailingOutput = trailing.after(source.seq)
     this.replaceHeadlessTerminalFromRendererSnapshotForRecovery(
       ptyId,
-      { ...source, data, cols: ptySize.cols, rows: ptySize.rows },
-      trailingOutput ?? []
+      { ...source, data },
+      trailingOutput ?? [],
+      ptySize
     )
     const state = this.headlessTerminals.get(ptyId)
     if (state && typeof source.seq === 'number') {

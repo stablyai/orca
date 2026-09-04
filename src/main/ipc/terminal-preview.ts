@@ -119,7 +119,7 @@ export function registerTerminalPreviewHandlers(runtime: OrcaRuntimeService): vo
         }
       } catch {
         subscription.dispose()
-        return { snapshot: null, replay: [] }
+        return { snapshot: null, replay: [], liveness: 'unverifiable' }
       }
       if (subscription.disposed) {
         return { snapshot: null, replay: [] }
@@ -127,7 +127,11 @@ export function registerTerminalPreviewHandlers(runtime: OrcaRuntimeService): vo
       if (!snapshot) {
         // Why: a failed lookup has no future live boundary; release raw presence even if the renderer never invokes unsubscribe.
         subscription.dispose()
-        return { snapshot: null, replay: [] }
+        return {
+          snapshot: null,
+          replay: [],
+          liveness: await runtime.verifyTerminalPreviewLiveness(ptyId)
+        }
       }
       previewSize = { cols: snapshot.cols, rows: snapshot.rows }
 

@@ -16,7 +16,8 @@ import { resolveTerminalMinimumContrastRatio } from '@/lib/terminal-contrast-cor
 /** Options a live settings change can write onto an open preview terminal. */
 export function buildPreviewAppearanceOptions(
   settings: GlobalSettings | null,
-  macOptionIsMeta: boolean
+  macOptionIsMeta: boolean,
+  fontSizeOverride?: number
 ): Partial<ITerminalOptions> {
   const cursorStyle = settings?.terminalCursorStyle ?? 'block'
   const fontWeights = resolveTerminalFontWeights(
@@ -24,7 +25,7 @@ export function buildPreviewAppearanceOptions(
     settings?.terminalFontWeightBold
   )
   return {
-    fontSize: settings?.terminalFontSize ?? 14,
+    fontSize: fontSizeOverride ?? settings?.terminalFontSize ?? 14,
     fontFamily: buildFontFamily(settings?.terminalFontFamily ?? ''),
     fontWeight: fontWeights.fontWeight,
     fontWeightBold: fontWeights.fontWeightBold,
@@ -57,6 +58,7 @@ export function buildPreviewTerminalOptions(args: {
   macOptionIsMeta: boolean
   theme: ITheme | null
   themeMode: 'dark' | 'light'
+  fontSize?: number
   cols: number
   rows: number
   scrollback: number
@@ -72,7 +74,7 @@ export function buildPreviewTerminalOptions(args: {
   }
   return {
     ...buildDefaultTerminalOptions(),
-    ...buildPreviewAppearanceOptions(args.settings, args.macOptionIsMeta),
+    ...buildPreviewAppearanceOptions(args.settings, args.macOptionIsMeta, args.fontSize),
     ...hostCompatibility,
     cols: args.cols,
     rows: args.rows,
