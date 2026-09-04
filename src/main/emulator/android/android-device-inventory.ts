@@ -3,6 +3,7 @@ import type { AndroidSdkPaths } from './android-sdk-discovery'
 import { adbDevicesArgs, parseAdbDevices, type AndroidAdbDevice } from './adb-devices'
 import { listAvdsArgs, parseAvdList } from './avd-manager'
 import type { EmulatorDevice } from '../backends/emulator-backend'
+import { inspectAndroidDeviceControlCapabilities } from './android-device-control-capabilities'
 
 // Android device discovery: turns raw `adb`/`emulator` output into the
 // cross-backend EmulatorDevice list and resolves AVD names to running serials.
@@ -61,8 +62,24 @@ export async function listAndroidDevices(
     runner(sdk.emulator, listAvdsArgs)
   ])
   const avds = parseAvdList(avdsResult.stdout)
-  const runningAvdBySerial = await resolveRunningAvdNames(runner, sdk, running)
-  return mergeAndroidDevices(running, avds, runningAvdBySerial)
+  const [runningAvdBySerial, controlCapabilities] = await Promise.all([
+    resolveRunningAvdNames(runner, sdk, running),
+    inspectRunningAndroidDeviceCapabilities(runner, sdk, running)
+  ])
+  return mergeAndroidDevices(running, avds, runningAvdBySerial, controlCapabilities)
+}
+async function inspectRunningAndroidDeviceCapabilities(
+  runner: AndroidCommandRunner,
+  sdk: AndroidSdkPaths,
+  running: AndroidAdbDevice[]
+): Promise<Map<string, NonNullable<EmulatorDevice['controlCapabilities']>>> {
+  const entries = await Promise.all(
+    running.map(
+      async (device) =>
+        [device.serial, await inspectAndroidDeviceControlCapabilities(runner, sdk, device)] as const
+    )
+  )
+  return new Map(entries)
 }
 
 // `adb -s <serial> emu avd name` prints the AVD name then a trailing "OK" line.
@@ -79,7 +96,11 @@ function firstNonStatusLine(stdout: string): string | null {
 export function mergeAndroidDevices(
   running: AndroidAdbDevice[],
   avds: string[],
-  runningAvdBySerial: Map<string, string>
+  runningAvdBySerial: Map<string, string>,
+  controlCapabilities: ReadonlyMap<
+    string,
+    NonNullable<EmulatorDevice['controlCapabilities']>
+  > = new Map()
 ): EmulatorDevice[] {
   const devices: EmulatorDevice[] = []
   const bootedAvdNames = new Set(runningAvdBySerial.values())
@@ -92,7 +113,8 @@ export function mergeAndroidDevices(
       name: avdName ?? device.model ?? device.serial,
       state: 'booted',
       detail: device.isEmulator ? 'emulator' : 'device',
-      isAvailable: true
+      isAvailable: true,
+      controlCapabilities: controlCapabilities.get(device.serial)
     })
   }
 

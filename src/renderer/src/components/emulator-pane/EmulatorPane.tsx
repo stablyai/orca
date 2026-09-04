@@ -1,9 +1,14 @@
+import { useRef, useState } from 'react'
+import { toast } from 'sonner'
 import type { Tab } from '../../../../shared/tab-types'
+import { extractIpcErrorMessage } from '@/lib/ipc-error'
+import { translate } from '@/i18n/i18n'
 import { EmulatorPaneToolbar } from './emulator-pane-toolbar'
 import { EmulatorDeviceFrame } from './emulator-device-frame'
 import { MobileEmulatorAgentSetupGuideLayer } from './MobileEmulatorAgentSetupGuideLayer'
 import { useEmulatorPaneSession } from './use-emulator-pane-session'
-import { translate } from '@/i18n/i18n'
+import { saveEmulatorScreenshot } from './save-emulator-screenshot'
+import { useEmulatorPaneZoom } from './emulator-pane-zoom'
 
 type EmulatorPaneProps = {
   tab?: Tab
@@ -13,6 +18,9 @@ type EmulatorPaneProps = {
 }
 
 export default function EmulatorPane({ tab, worktreeId, isActive = true }: EmulatorPaneProps) {
+  const screenshotCanvasRef = useRef<HTMLCanvasElement | null>(null)
+  const [screenshotAvailable, setScreenshotAvailable] = useState(false)
+  const [savingScreenshot, setSavingScreenshot] = useState(false)
   const {
     devices,
     selectedUdid,
@@ -25,17 +33,52 @@ export default function EmulatorPane({ tab, worktreeId, isActive = true }: Emula
     sendButton,
     sendGesture,
     sendRotate,
+    sendPosture,
+    displayCommandPending,
     displayName,
     previewUrl,
     wsUrl,
     streamKey,
     isLive,
-    visualOrientation
+    visualOrientation,
+    selectedDevice,
+    session
   } = useEmulatorPaneSession({
     worktreeId,
     tabId: tab?.id,
     autoAttachOnMount: isActive
   })
+  const zoom = useEmulatorPaneZoom(selectedUdid)
+  const saveScreenshot = async (): Promise<void> => {
+    const canvas = screenshotCanvasRef.current
+    if (!canvas || savingScreenshot) {
+      return
+    }
+    setSavingScreenshot(true)
+    try {
+      const result = await saveEmulatorScreenshot(canvas, new Date())
+      if (!result.canceled) {
+        toast.success(
+          translate(
+            'auto.components.emulator.pane.EmulatorPane.savedScreenshot',
+            'Saved emulator screenshot'
+          )
+        )
+      }
+    } catch (error) {
+      toast.error(
+        extractIpcErrorMessage(
+          error,
+          translate(
+            'auto.components.emulator.pane.EmulatorPane.saveScreenshotFailed',
+            'Could not save emulator screenshot'
+          )
+        )
+      )
+    } finally {
+      setSavingScreenshot(false)
+    }
+  }
 
   return (
     <div
@@ -55,7 +98,20 @@ export default function EmulatorPane({ tab, worktreeId, isActive = true }: Emula
         onAttach={() => void attach(selectedUdid ?? undefined)}
         onShutdown={() => void shutdown(selectedUdid ?? undefined)}
         onHome={() => void sendButton('home')}
-        onRotate={() => void sendRotate()}
+        onRotate={() => void sendRotate('left')}
+        backend={session?.info?.backend ?? selectedDevice?.backend}
+        androidControls={{
+          displayCommandPending,
+          screenshotAvailable,
+          savingScreenshot,
+          zoomPercentage: zoom.percentage,
+          zoomAvailability: zoom.availability,
+          onButton: (name, options) => void sendButton(name, options),
+          onPosture: (posture) => void sendPosture(posture),
+          onRotate: (direction) => void sendRotate(direction),
+          onScreenshot: () => void saveScreenshot(),
+          onZoomChange: (action) => zoom.zoom(action)
+        }}
       />
 
       {error ? (
@@ -85,6 +141,12 @@ export default function EmulatorPane({ tab, worktreeId, isActive = true }: Emula
             isActive={isActive}
             onTap={(x, y) => void sendTap(x, y)}
             onGesture={(points) => void sendGesture(points)}
+            onScreenshotCanvasChange={(canvas) => {
+              screenshotCanvasRef.current = canvas
+              setScreenshotAvailable(canvas !== null)
+            }}
+            zoomState={zoom.state}
+            onZoomMetrics={zoom.setMetrics}
           />
         </MobileEmulatorAgentSetupGuideLayer>
       </div>

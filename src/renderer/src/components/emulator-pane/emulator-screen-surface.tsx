@@ -26,6 +26,7 @@ type EmulatorScreenSurfaceProps = {
   onPointerDown: PointerEventHandler<HTMLDivElement>
   onPointerMove: PointerEventHandler<HTMLDivElement>
   onPointerUp: PointerEventHandler<HTMLDivElement>
+  onScreenshotCanvasChange: (canvas: HTMLCanvasElement | null) => void
   onStreamError: () => void
   onStreamSize: (size: StreamSize) => void
   onWheel: WheelEventHandler<HTMLDivElement>
@@ -49,6 +50,7 @@ export function EmulatorScreenSurface({
   onPointerDown,
   onPointerMove,
   onPointerUp,
+  onScreenshotCanvasChange,
   onStreamError,
   onStreamSize,
   onWheel,
@@ -89,6 +91,7 @@ export function EmulatorScreenSurface({
           doubles up with iOS's real status bar and makes bezels lie. */}
       <EmulatorScreenStreamContent
         loading={loading}
+        onScreenshotCanvasChange={onScreenshotCanvasChange}
         onStreamError={onStreamError}
         onStreamSize={onStreamSize}
         previewUrl={previewUrl}

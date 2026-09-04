@@ -22,7 +22,7 @@ describe('EmulatorSessionRegistry backend tagging', () => {
     expect(session?.streamCodec).toBe('mjpeg')
   })
 
-  it('carries streamCodec back through getActiveForWorktree', () => {
+  it('carries backend and streamCodec back through getActiveForWorktree', () => {
     const registry = new EmulatorSessionRegistry()
     registry.registerActive(
       'wt1',
@@ -30,6 +30,7 @@ describe('EmulatorSessionRegistry backend tagging', () => {
       { backend: 'android' }
     )
     const info = registry.getActiveForWorktree('wt1')
+    expect(info?.backend).toBe('android')
     expect(info?.streamCodec).toBe('h264')
   })
 })

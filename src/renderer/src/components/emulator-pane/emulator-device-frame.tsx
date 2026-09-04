@@ -8,12 +8,14 @@ import {
   type WheelEvent
 } from 'react'
 import {
-  fitDeviceFrameToPane,
   resolveVisualStreamGeometry,
   resolveDeviceFrameKind,
   type EmulatorDeviceVisualOrientation,
   type StreamSize
 } from './emulator-device-frame-layout'
+import type { EmulatorZoomMetrics, EmulatorZoomState } from './emulator-pane-zoom'
+import { useCenterAnchoredEmulatorScroll } from './use-center-anchored-emulator-scroll'
+import { useEmulatorDeviceFrameLayout } from './use-emulator-device-frame-layout'
 import {
   buildWheelGesturePoints,
   clampEmulatorScreenPoint,
@@ -45,7 +47,12 @@ type EmulatorDeviceFrameProps = {
   isActive: boolean
   onTap: (x: number, y: number) => void
   onGesture: (points: EmulatorGesturePoint[]) => void
+  onScreenshotCanvasChange?: (canvas: HTMLCanvasElement | null) => void
+  zoomState?: EmulatorZoomState
+  onZoomMetrics?: (metrics: EmulatorZoomMetrics | null) => void
 }
+
+const noopScreenshotCanvasChange = (): void => {}
 
 const MAX_GESTURE_SAMPLES = 32,
   WHEEL_GESTURE_IDLE_MS = 80
@@ -71,7 +78,10 @@ export function EmulatorDeviceFrame({
   visualOrientation,
   isActive,
   onTap,
-  onGesture
+  onGesture,
+  onScreenshotCanvasChange = noopScreenshotCanvasChange,
+  zoomState,
+  onZoomMetrics
 }: EmulatorDeviceFrameProps) {
   const { paneRef, paneSize } = useEmulatorPaneSize()
   const pointerSamplesRef = useRef<PointerSample[] | null>(null)
@@ -324,18 +334,13 @@ export function EmulatorDeviceFrame({
     },
     [canInteract, flushWheelGesture, sendTouch, visualStreamGeometry]
   )
-
   const handleStreamSize = useCallback((size: NonNullable<StreamSize>) => {
     setStreamError(false)
     setStreamSize((current) =>
       current?.width === size.width && current.height === size.height ? current : size
     )
   }, [])
-
-  const handleStreamError = useCallback(() => {
-    setStreamError(true)
-  }, [])
-
+  const handleStreamError = useCallback(() => setStreamError(true), [])
   // Why: a hidden/occluded window (or a background tab) still receives emulator
   // frames, including over SSH; parking the stream avoids background decode/IPC
   // churn while staying attached. isActive covers the background-tab case;
@@ -347,22 +352,30 @@ export function EmulatorDeviceFrame({
   // Why: serve-sim may keep portrait-sized pixels for portrait-locked apps; the
   // physical frame still follows the last successful rotate request.
   const screenAspectRatio = visualStreamGeometry.aspectRatio
-  const frameKind = useMemo(
-    () => resolveDeviceFrameKind(deviceName, streamAspectRatio),
-    [deviceName, streamAspectRatio]
-  )
-  const frameLayout = useMemo(
-    () => fitDeviceFrameToPane(paneSize, screenAspectRatio, frameKind),
-    [frameKind, screenAspectRatio, paneSize]
+  const frameKind = resolveDeviceFrameKind(deviceName, streamAspectRatio)
+  const frameLayout = useEmulatorDeviceFrameLayout({
+    paneSize,
+    frameKind,
+    screenAspectRatio,
+    visualStreamSize: visualStreamGeometry.size,
+    zoomState,
+    onZoomMetrics
+  })
+  const centerScrollRef = useCenterAnchoredEmulatorScroll(
+    paneSize,
+    frameLayout ? { width: frameLayout.width, height: frameLayout.height } : null
   )
 
   return (
     <div
-      ref={paneRef}
-      className="flex min-h-0 flex-1 items-center justify-center overflow-hidden bg-muted"
+      ref={(node) => {
+        paneRef.current = node
+        centerScrollRef.current = node
+      }}
+      className="scrollbar-sleek flex min-h-0 flex-1 items-center justify-center overflow-auto bg-muted"
     >
       <div
-        className="relative"
+        className="relative m-auto shrink-0"
         style={{
           width: frameLayout ? `${frameLayout.width}px` : '100%',
           maxWidth: frameLayout ? undefined : '460px',
@@ -393,6 +406,7 @@ export function EmulatorDeviceFrame({
             onPointerDown={handlePointerDown}
             onPointerMove={handlePointerMove}
             onPointerUp={handlePointerUp}
+            onScreenshotCanvasChange={onScreenshotCanvasChange}
             onStreamError={handleStreamError}
             onStreamSize={handleStreamSize}
             onWheel={handleWheel}

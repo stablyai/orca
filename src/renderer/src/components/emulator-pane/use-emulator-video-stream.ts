@@ -35,27 +35,40 @@ function newVideoStreamId(): string {
   return globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random()}`
 }
 
+function scheduleFirstFrameTimeout(onTimeout: () => void): ReturnType<typeof setTimeout> {
+  return setTimeout(onTimeout, 10_000)
+}
+
 export function useEmulatorVideoStream(
   deviceId: string | undefined,
   streamKey: string | undefined,
   enabled: boolean,
-  onSize?: (size: StreamSize) => void
-): { canvasRef: React.RefObject<HTMLCanvasElement | null>; error: string | null } {
+  onSize?: (size: StreamSize) => void,
+  onScreenshotCanvasChange?: (canvas: HTMLCanvasElement | null) => void
+): {
+  canvasRef: React.RefObject<HTMLCanvasElement | null>
+  error: string | null
+} {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const [error, setError] = useState<string | null>(null)
   const onSizeRef = useRef(onSize)
+  const onScreenshotCanvasChangeRef = useRef(onScreenshotCanvasChange)
   onSizeRef.current = onSize
+  onScreenshotCanvasChangeRef.current = onScreenshotCanvasChange
 
   useEffect(() => {
     const api = (window as { api?: { emulator?: EmulatorVideoApi } }).api?.emulator
     if (!enabled || !deviceId) {
       setError(null)
+      onScreenshotCanvasChangeRef.current?.(null)
       return
     }
     if (!api?.startVideoStream) {
+      onScreenshotCanvasChangeRef.current?.(null)
       return
     }
     setError(null)
+    onScreenshotCanvasChangeRef.current?.(null)
     const DecoderCtor = (globalThis as { VideoDecoder?: typeof VideoDecoder }).VideoDecoder
     const ChunkCtor = (globalThis as { EncodedVideoChunk?: typeof EncodedVideoChunk })
       .EncodedVideoChunk
@@ -66,6 +79,7 @@ export function useEmulatorVideoStream(
 
     let disposed = false
     let configured = false
+    let screenshotCanvasPublished = false
     let timestamp = 0
     let configBytes: Uint8Array | null = null
     const currentStreamId = newVideoStreamId()
@@ -79,6 +93,15 @@ export function useEmulatorVideoStream(
       context?.clearRect(0, 0, canvas.width, canvas.height)
     }
 
+    let firstFrameTimeout: ReturnType<typeof setTimeout> | null = null
+
+    const clearFirstFrameTimeout = (): void => {
+      if (firstFrameTimeout) {
+        clearTimeout(firstFrameTimeout)
+        firstFrameTimeout = null
+      }
+    }
+
     const decoder = new DecoderCtor({
       output: (frame) => {
         if (!disposed && ctx && canvas) {
@@ -89,23 +112,20 @@ export function useEmulatorVideoStream(
             canvas.width = frame.displayWidth
             canvas.height = frame.displayHeight
           }
-          ctx.drawImage(frame, 0, 0)
+          try {
+            ctx.drawImage(frame, 0, 0)
+            if (!screenshotCanvasPublished) {
+              screenshotCanvasPublished = true
+              onScreenshotCanvasChangeRef.current?.(canvas)
+            }
+          } catch (error) {
+            fatal(error instanceof Error ? error.message : 'Failed to draw an Android video frame.')
+          }
         }
         frame.close()
       },
       error: (err) => fatal(err.message)
     })
-
-    let firstFrameTimeout: ReturnType<typeof setTimeout> | null = setTimeout(() => {
-      fatal('Android video stream did not deliver a frame.')
-    }, 10_000)
-
-    const clearFirstFrameTimeout = (): void => {
-      if (firstFrameTimeout) {
-        clearTimeout(firstFrameTimeout)
-        firstFrameTimeout = null
-      }
-    }
 
     const stopStream = (): void => {
       if (streamId) {
@@ -125,6 +145,7 @@ export function useEmulatorVideoStream(
       unsubMeta = undefined
       unsubFrame = undefined
       stopStream()
+      onScreenshotCanvasChangeRef.current?.(null)
       if (decoder.state !== 'closed') {
         decoder.close()
       }
@@ -137,6 +158,9 @@ export function useEmulatorVideoStream(
       setError(message)
       cleanup()
     }
+    firstFrameTimeout = scheduleFirstFrameTimeout(() => {
+      fatal('Android video stream did not deliver a frame.')
+    })
 
     unsubMeta = api.onVideoStreamMeta?.((msg) => {
       if (!disposed && msg.streamId === streamId && msg.deviceId === deviceId) {
@@ -166,10 +190,7 @@ export function useEmulatorVideoStream(
         configBytes = data
         return
       }
-      if (!configured) {
-        return
-      }
-      if (decoder.state === 'closed') {
+      if (!configured || decoder.state === 'closed') {
         return
       }
       let chunkData = data

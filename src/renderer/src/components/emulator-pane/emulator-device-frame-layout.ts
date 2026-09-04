@@ -105,10 +105,51 @@ function measureChrome(screenSize: PaneSize, kind: DeviceFrameKind) {
   const hardwareOutset = kind === 'phone' ? clamp(shortSide * 0.012, 3, 7) : 0
   const sideButtonThickness = kind === 'phone' ? clamp(shortSide * 0.01, 3, 6) : 0
 
+  return { bezel, hardwareOutset, sideButtonThickness }
+}
+
+export function layoutDeviceFrameAtScreenSize(
+  screenSize: PaneSize,
+  kind: DeviceFrameKind
+): DeviceFrameLayout {
+  const { bezel, hardwareOutset, sideButtonThickness } = measureChrome(screenSize, kind)
+  const shellWidth = screenSize.width + bezel * 2
+  const shellHeight = screenSize.height + bezel * 2
+  const shortSide = Math.min(screenSize.width, screenSize.height)
+  const outerRadius =
+    kind === 'phone' ? clamp(shortSide * 0.135, 44, 92) : clamp(shortSide * 0.065, 24, 56)
+  const innerRadius =
+    kind === 'phone' ? clamp(outerRadius - bezel, 34, 82) : clamp(outerRadius - bezel * 0.7, 18, 48)
+
   return {
-    bezel,
+    kind,
+    width: shellWidth + hardwareOutset * 2,
+    height: shellHeight,
+    shellWidth,
+    shellHeight,
     hardwareOutset,
+    bezel,
+    outerRadius,
+    innerRadius,
     sideButtonThickness
+  }
+}
+
+export function scaleDeviceFrameLayout(
+  layout: DeviceFrameLayout,
+  scale: number
+): DeviceFrameLayout {
+  return {
+    ...layout,
+    width: layout.width * scale,
+    height: layout.height * scale,
+    shellWidth: layout.shellWidth * scale,
+    shellHeight: layout.shellHeight * scale,
+    hardwareOutset: layout.hardwareOutset * scale,
+    bezel: layout.bezel * scale,
+    outerRadius: layout.outerRadius * scale,
+    innerRadius: layout.innerRadius * scale,
+    sideButtonThickness: layout.sideButtonThickness * scale
   }
 }
 
@@ -135,37 +176,10 @@ export function fitDeviceFrameToPane(
     )
     const availableHeight = Math.max(1, paneSize.height - chrome.bezel * 2 - FIT_MARGIN_PX)
     screenSize = fitScreenToPane(
-      {
-        width: availableWidth,
-        height: availableHeight
-      },
+      { width: availableWidth, height: availableHeight },
       screenAspectRatio
     )
   }
 
-  if (!screenSize) {
-    return null
-  }
-
-  const { bezel, hardwareOutset, sideButtonThickness } = measureChrome(screenSize, kind)
-  const shellWidth = screenSize.width + bezel * 2
-  const shellHeight = screenSize.height + bezel * 2
-  const shortSide = Math.min(screenSize.width, screenSize.height)
-  const outerRadius =
-    kind === 'phone' ? clamp(shortSide * 0.135, 44, 92) : clamp(shortSide * 0.065, 24, 56)
-  const innerRadius =
-    kind === 'phone' ? clamp(outerRadius - bezel, 34, 82) : clamp(outerRadius - bezel * 0.7, 18, 48)
-
-  return {
-    kind,
-    width: shellWidth + hardwareOutset * 2,
-    height: shellHeight,
-    shellWidth,
-    shellHeight,
-    hardwareOutset,
-    bezel,
-    outerRadius,
-    innerRadius,
-    sideButtonThickness
-  }
+  return screenSize ? layoutDeviceFrameAtScreenSize(screenSize, kind) : null
 }
