@@ -337,8 +337,8 @@ export type CellInventoryLockMode =
   // Never queue: the caller handles database_lock_unavailable and moves on.
   | 'nowait'
   // A sweep can enter here, so keep the pool default. Failing sooner would turn
-  // ordinary contention into a 55P03 the retry wrapper reports as terminal, and
-  // one terminal failure freezes the incident gate.
+  // ordinary contention into a 55P03 the retry wrapper reports as terminal, which
+  // spends the incident gate's bounded exhausted-retry budget (300 per 5 min).
   | 'pool-default'
 // Why: stranded detection (issue #225) needs a grant old enough that a real
 // attach would have registered (the 90s activity lease covers dial +

@@ -300,8 +300,8 @@ describe('bounded cell-inventory lock wait', () => {
   })
 })
 
-// Why: the incident monitor freezes at zero exhausted transactions. A sweep that
-// steps aside must not spend the retry budget or report a terminal failure.
+// Why: exhausted transactions count against the incident monitor's bounded bar.
+// A sweep that steps aside must not spend the retry budget or report a terminal failure.
 describe('sweep lock skips stay off the transaction retry counters', () => {
   it('reports neither a retry nor an exhaustion when NOWAIT finds the lock held', async () => {
     const database = await openFakePostgres()

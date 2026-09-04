@@ -170,8 +170,8 @@ describe('cell inventory lock call-site census', () => {
   })
 
   // Why: this is the whole point of the classification. A shorter wait on a
-  // sweep-reachable site turns contention into a terminal transaction failure,
-  // and relayPostgresRetryExhausted freezes the incident gate at zero.
+  // sweep-reachable site turns contention into a terminal transaction failure
+  // that counts against the incident gate's relayPostgresRetryExhausted bar.
   // Why: the hold distribution is what the 500ms bound will be tuned against, so
   // a mode that stops asking for it goes unmeasured in exactly the lane that
   // matters. Nothing else in the suite reads the pool-default branch.
