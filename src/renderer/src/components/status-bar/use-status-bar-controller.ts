@@ -2,12 +2,13 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { useShortcutLabel } from '@/hooks/useShortcutLabel'
 import { useAppStore } from '../../store'
 import { selectFloatingWorkspaceHasUnread } from '../../store/selectors'
-import type { ProviderRateLimits } from '../../../../shared/rate-limit-types'
+import type { ProviderRateLimits, RateLimitState } from '../../../../shared/rate-limit-types'
 import { normalizeUsagePercentageDisplay } from '../../../../shared/usage-percentage-display'
 import { normalizeStatusBarUsageMode } from '../../../../shared/status-bar-usage-mode'
 import { isStatusBarItemAvailable } from './status-bar-agent-gating'
 import { getVisibleUsageProvider, isUsageEmptyState } from './status-bar-provider-visibility'
 import { getUsageProviderAccountsSectionId } from './usage-provider-settings-target'
+import { buildUsageRosterProviders } from './usage-roster-order'
 import { CLOSE_ALL_CONTEXT_MENUS_EVENT, useStatusBarMenuFocusHandoff } from './ProviderDetailsMenu'
 import { observeStatusBarContainer } from './status-bar-container-observer'
 
@@ -100,6 +101,13 @@ export function useStatusBarController(floatingTerminalOpen: boolean) {
   }
 
   const { claude, codex, gemini, opencodeGo, kimi, antigravity, minimax, grok } = rateLimits
+  // Why: Z.AI's snapshot and auth flag arrive from main's RateLimitState; read them
+  // defensively so an older process without the keys stays unconfigured, matching
+  // the renderer-HMR tolerance used for the other provider snapshots.
+  const { zai, zaiAuthConfigured } = rateLimits as RateLimitState & {
+    zai?: ProviderRateLimits | null
+    zaiAuthConfigured?: boolean
+  }
 
   // Why: a bar is earned by a live snapshot or durable Settings setup; detection-gating hides per-CLI bars when the agent isn't on PATH.
   // Why: Antigravity has no persisted credential, so a checked status item + detected CLI is the durable "show its slot" signal.
@@ -112,7 +120,8 @@ export function useStatusBarController(floatingTerminalOpen: boolean) {
     ...settings,
     antigravityUsageConfigured,
     minimaxCookieConfigured: rateLimits.minimaxCookieConfigured,
-    grokAuthConfigured: rateLimits.grokAuthConfigured
+    grokAuthConfigured: rateLimits.grokAuthConfigured,
+    zaiAuthConfigured: zaiAuthConfigured === true
   }
   const visibleClaude = getVisibleUsageProvider('claude', claude, usageSettings)
   const visibleCodex = getVisibleUsageProvider('codex', codex, usageSettings)
@@ -121,6 +130,7 @@ export function useStatusBarController(floatingTerminalOpen: boolean) {
   const visibleAntigravity = getVisibleUsageProvider('antigravity', antigravity, usageSettings)
   const visibleMiniMax = getVisibleUsageProvider('minimax', minimax, usageSettings)
   const visibleGrok = getVisibleUsageProvider('grok', grok, usageSettings)
+  const visibleZai = getVisibleUsageProvider('zai', zai, usageSettings)
   const showClaude =
     visibleClaude !== null &&
     statusBarItems.includes('claude') &&
@@ -150,6 +160,8 @@ export function useStatusBarController(floatingTerminalOpen: boolean) {
   // Why: OpenCode Go is web/cookie-auth, not a CLI on PATH, so detection-gating doesn't apply.
   const visibleOpencodeGo = getVisibleUsageProvider('opencode-go', opencodeGo, usageSettings)
   const showOpencodeGo = visibleOpencodeGo !== null && statusBarItems.includes('opencode-go')
+  // Why: Z.AI reads opencode's auth store, not a CLI on PATH, so detection-gating doesn't apply.
+  const showZai = visibleZai !== null && statusBarItems.includes('zai')
   const showSsh = statusBarItems.includes('ssh')
   const showResourceUsage = statusBarItems.includes('resource-usage')
   const showPorts = statusBarItems.includes('ports')
@@ -159,6 +171,7 @@ export function useStatusBarController(floatingTerminalOpen: boolean) {
   const hasVisibleUsageMeters =
     showClaude ||
     showCodex ||
+    showZai ||
     showGemini ||
     showOpencodeGo ||
     showKimi ||
@@ -168,7 +181,7 @@ export function useStatusBarController(floatingTerminalOpen: boolean) {
   const anyVisible = hasVisibleUsageMeters || showResourceUsage
   // Why: include Settings so durable managed accounts count — a configured user isn't shown the empty state while snapshots hydrate.
   const isEmptyUsageState = isUsageEmptyState(
-    { claude, codex, gemini, opencodeGo, kimi, antigravity, minimax, grok },
+    { claude, codex, gemini, opencodeGo, kimi, antigravity, minimax, grok, zai },
     usageSettings
   )
   // Why: one-time nudge — once dismissed, stays hidden even if providers reconnect later.
@@ -176,6 +189,7 @@ export function useStatusBarController(floatingTerminalOpen: boolean) {
   const anyFetching =
     claude?.status === 'fetching' ||
     codex?.status === 'fetching' ||
+    zai?.status === 'fetching' ||
     gemini?.status === 'fetching' ||
     opencodeGo?.status === 'fetching' ||
     kimi?.status === 'fetching' ||
@@ -192,16 +206,17 @@ export function useStatusBarController(floatingTerminalOpen: boolean) {
 
   // Why: the roster must contain only status items the user left visible;
   // otherwise an empty trigger would bypass those visibility controls.
-  const rosterProviders = [
-    showClaude ? visibleClaude : null,
-    showCodex ? visibleCodex : null,
-    showGemini ? visibleGemini : null,
-    showAntigravity ? visibleAntigravity : null,
-    showOpencodeGo ? visibleOpencodeGo : null,
-    showKimi ? visibleKimi : null,
-    showMiniMax ? visibleMiniMax : null,
-    showGrok ? visibleGrok : null
-  ].filter((p): p is ProviderRateLimits => p !== null)
+  const rosterProviders = buildUsageRosterProviders({
+    claude: showClaude ? visibleClaude : null,
+    codex: showCodex ? visibleCodex : null,
+    zai: showZai ? visibleZai : null,
+    gemini: showGemini ? visibleGemini : null,
+    antigravity: showAntigravity ? visibleAntigravity : null,
+    opencodeGo: showOpencodeGo ? visibleOpencodeGo : null,
+    kimi: showKimi ? visibleKimi : null,
+    minimax: showMiniMax ? visibleMiniMax : null,
+    grok: showGrok ? visibleGrok : null
+  })
 
   const handleManageAccounts = (): void => {
     setUsageMenuOpen(false)

@@ -2,6 +2,7 @@ import { readFile, writeFile, rename } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import path from 'node:path'
 import { net } from 'electron'
+import { readOpenCodeAuthJson } from '../opencode/opencode-auth-store'
 import { extractOAuthClientCredentials } from './gemini-cli-oauth-extractor'
 
 const API_TIMEOUT_MS = 10_000
@@ -28,27 +29,15 @@ type AuthJson = {
 }
 
 export async function readAuthJson(): Promise<AuthJson | null> {
-  const candidates = [
-    process.env.APPDATA ? path.join(process.env.APPDATA, 'opencode', 'auth.json') : null,
-    process.env.XDG_DATA_HOME
-      ? path.join(process.env.XDG_DATA_HOME, 'opencode', 'auth.json')
-      : null,
-    path.join(homedir(), '.local', 'share', 'opencode', 'auth.json'),
-    path.join(homedir(), 'Library', 'Application Support', 'opencode', 'auth.json')
-  ].filter((candidate): candidate is string => candidate !== null)
-
-  for (const candidate of candidates) {
-    try {
-      const raw = await readFile(candidate, 'utf-8')
-      return JSON.parse(raw) as AuthJson
-    } catch (err) {
-      if (err && typeof err === 'object' && 'code' in err && err.code === 'ENOENT') {
-        continue
-      }
-      throw err
-    }
+  // Why: candidate discovery/parse policy is shared with the Z.AI Coding Plan
+  // reader; this wrapper preserves the historical throw-on-error contract.
+  const result = await readOpenCodeAuthJson()
+  if (result.status === 'ok') {
+    return result.auth as AuthJson
   }
-
+  if (result.status === 'error') {
+    throw new Error(result.error)
+  }
   return null
 }
 

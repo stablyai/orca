@@ -171,6 +171,50 @@ describe('UsageRow', () => {
     expect(markup).not.toContain('Resets in')
   })
 
+  it('renders Z.AI session and weekly windows in verbose and compact modes', () => {
+    const zai: ProviderRateLimits = {
+      provider: 'zai',
+      session: {
+        usedPercent: 25,
+        windowMinutes: 300,
+        resetsAt: null,
+        resetDescription: null
+      },
+      weekly: {
+        usedPercent: 60,
+        windowMinutes: 10_080,
+        resetsAt: null,
+        resetDescription: null
+      },
+      updatedAt: 0,
+      status: 'ok',
+      error: null
+    }
+    const render = (mode: 'verbose' | 'compact') =>
+      renderToStaticMarkup(
+        <UsageRow
+          p={zai}
+          display="used"
+          mode={mode}
+          state={{ kind: 'usage', statusLabel: null }}
+          showSignInAction={false}
+          now={mocks.now}
+        />
+      )
+
+    const verbose = render('verbose')
+    expect(verbose.match(/data-usage-window=/g)).toHaveLength(2)
+    expect(verbose).toContain('5h')
+    expect(verbose).toContain('25%')
+    expect(verbose).toContain('wk')
+    expect(verbose).toContain('60%')
+
+    const compact = render('compact')
+    expect(compact.match(/data-usage-window=/g)).toHaveLength(1)
+    expect(compact).toContain('60%')
+    expect(compact).not.toContain('25%')
+  })
+
   it('uses the same compact selection for Claude subscription windows', () => {
     const markup = renderToStaticMarkup(
       <UsageRow

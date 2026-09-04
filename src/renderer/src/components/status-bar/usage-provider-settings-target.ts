@@ -19,7 +19,8 @@ export function getUsageProviderAccountsSectionId(
     case 'grok':
       return 'accounts-grok'
     case 'kimi':
-      // Why: Orca must not mutate Kimi's CLI-owned credential lifecycle.
+    case 'zai':
+      // Why: credentials are CLI-owned (Kimi CLI, opencode auth) — Orca must not mutate them.
       return null
   }
 }
