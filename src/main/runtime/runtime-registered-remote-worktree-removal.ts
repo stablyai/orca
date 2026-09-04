@@ -3,9 +3,12 @@ import type { RemoveWorktreeResult } from '../../shared/worktree/create-types'
 import type { Repo } from '../../shared/repo-types'
 import type { SshGitProvider } from '../providers/ssh-git-provider'
 import { cleanupUnusedWorktreePushTargetRemoteSsh } from '../ipc/worktree-remote'
+import {
+  getArchiveHooksForRemoval,
+  runRemoteArchiveHook
+} from '../ipc/worktrees/removal/worktree-archive-hook'
 import type { RuntimeStore } from './runtime-store-contract'
 import type { RuntimeWorktreeRemovalTarget } from './runtime-worktree-selection'
-
 export async function removeRuntimeRegisteredRemoteWorktree(args: {
   repo: Repo
   target: RuntimeWorktreeRemovalTarget
@@ -16,6 +19,7 @@ export async function removeRuntimeRegisteredRemoteWorktree(args: {
   /** From the resolved removal route; `repo.connectionId!` answered null for an `ssh:`-only row. */
   connectionId: string
   force: boolean
+  runHooks: boolean
   allowUnverifiedPtyStop: boolean
   deleteBranch: boolean
   acquireWatcherRemoval: (
@@ -29,8 +33,20 @@ export async function removeRuntimeRegisteredRemoteWorktree(args: {
     fallbackHead: string | undefined
   ) => RemoveWorktreeResult
   finishRemoval: (result: RemoveWorktreeResult) => void
-}): Promise<RemoveWorktreeResult> {
+}): Promise<RemoveWorktreeResult & { warning?: string }> {
   const { repo, target, registeredWorktree, provider, connectionId } = args
+  const canonicalPath = registeredWorktree.path
+  const hooks = await getArchiveHooksForRemoval(repo)
+  let warning: string | undefined
+  if (hooks?.scripts.archive && args.runHooks) {
+    const hookResult = await runRemoteArchiveHook(repo, canonicalPath, hooks.scripts.archive)
+    if (!hookResult.success) {
+      console.error(`[hooks] archive hook failed for ${canonicalPath}:`, hookResult.output)
+    }
+  } else if (hooks?.scripts.archive) {
+    warning = `orca.yaml archive hook skipped for ${canonicalPath}; pass --run-hooks to run it.`
+    console.warn(`[hooks] ${warning}`)
+  }
   const removeOptions = !args.deleteBranch ? { deleteBranch: args.deleteBranch } : {}
   const gate = await args.acquireWatcherRemoval(registeredWorktree.path, connectionId)
   let rawResult: RemoveWorktreeResult | undefined
@@ -54,5 +70,5 @@ export async function removeRuntimeRegisteredRemoteWorktree(args: {
   )
   await args.deleteHistory()
   args.finishRemoval(result)
-  return result
+  return { ...result, ...(warning ? { warning } : {}) }
 }
