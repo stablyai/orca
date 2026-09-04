@@ -132,5 +132,5 @@ describe('issue 4631 terminal hover link-provider repro', () => {
     })
 
     expect(buildElapsedMs + extractElapsedMs + elapsedMs).toBeLessThan(100)
-  }, 120_000)
+  })
 })
