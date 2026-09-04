@@ -49,7 +49,10 @@ export async function readPresentedPushSeenKeys(
 }
 
 /**
- * Claim the tray's keys on the session, skipping any from a dead counter lifetime.
+ * Claim the tray's keys on the session, skipping any that do not name the live
+ * counter lifetime. A push without an epoch cannot be tied to this counter, and
+ * the desktop always sends one, so it is left unclaimed rather than allowed to
+ * swallow a real event at the same seq.
  *
  * The watermark is deliberately untouched: a push seq proves one event was shown,
  * not that everything below it was, and advancing past a gap would make the desktop
@@ -60,11 +63,7 @@ export function markPresentedPushesSeen(
   keys: readonly PresentedPushSeenKey[]
 ): void {
   for (const { key, epoch } of keys) {
-    if (
-      epoch != null &&
-      session.lastDeliveredEpoch != null &&
-      epoch !== session.lastDeliveredEpoch
-    ) {
+    if (epoch == null || epoch !== session.lastDeliveredEpoch) {
       continue
     }
     session.seen.add(key)

@@ -11,6 +11,7 @@ import { RpcClientProvider } from '../src/transport/client-context'
 import { getNotificationNavigationTarget } from '../src/notifications/notification-routing'
 import { useOpenNotificationRoute } from '../src/notifications/use-open-notification-route'
 import {
+  isRemotePushTrigger,
   pushNotificationRouteData,
   shouldSuppressForegroundPush
 } from '../src/notifications/push-receive'
@@ -116,10 +117,17 @@ export default function RootLayout() {
       }
     }
 
-    async function getNavigationTarget(data: unknown) {
+    async function getNavigationTarget(notification: Notifications.Notification) {
       const hosts = await loadHostCatalog().catch(() => null)
+      const data: unknown = notification.request.content.data
       // A gateway push names its host by key fingerprint, not by this device's hostId.
-      const routeData = hosts ? pushNotificationRouteData(data, hosts) : data
+      // With no catalog to resolve against, such a push stays unrouted instead of
+      // falling back to whatever hostId its raw data carries.
+      const routeData = pushNotificationRouteData(
+        data,
+        hosts ?? [],
+        isRemotePushTrigger(notification.request.trigger)
+      )
       return getNotificationNavigationTarget(routeData, {
         knownHostIds: hosts ? new Set(hosts.map((host) => host.id)) : undefined,
         credentialStatusByHostId: hosts
@@ -148,7 +156,7 @@ export default function RootLayout() {
         }
       }
 
-      const target = await getNavigationTarget(response.notification.request.content.data)
+      const target = await getNavigationTarget(response.notification)
       clearLastNotificationResponse()
       if (disposed) {
         return

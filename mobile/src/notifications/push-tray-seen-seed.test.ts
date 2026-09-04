@@ -101,6 +101,17 @@ describe('markPresentedPushesSeen', () => {
     expect(session.lastDeliveredSeq).toBe(0)
   })
 
+  it('drops a key that names no counter lifetime at all', () => {
+    const session = getHostNotificationSession('host-1')
+    session.lastDeliveredEpoch = 'epoch-1'
+
+    markPresentedPushesSeen(session, [{ key: 'seq:4', epoch: undefined }])
+
+    // The desktop always sends an epoch; a key without one cannot be shown to belong
+    // to this counter, and claiming it would drop the real bell at seq 4.
+    expect(session.seen.has('seq:4')).toBe(false)
+  })
+
   it('drops a key from a desktop lifetime that has already been retired', () => {
     const session = getHostNotificationSession('host-1')
     session.lastDeliveredEpoch = 'epoch-2'

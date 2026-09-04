@@ -41,6 +41,11 @@ export async function shouldSuppressForegroundPush(data: unknown): Promise<boole
   // reconnect replays the desktop's whole retained buffer.
   seedWatermarkFromStorage(session, hostId)
   await session.watermarkSeeded
+  // A push that names no counter lifetime cannot claim a seq-derived key: the
+  // desktop always sends the epoch, so this is shown as-is and never marked.
+  if (payload.notificationEpoch == null) {
+    return false
+  }
   // The seen keys are seq-derived, so a push from a new desktop lifetime must void
   // them before its own key is tested against a counter that no longer exists.
   adoptNotificationEpoch(session, hostId, payload.notificationEpoch)
@@ -61,6 +66,15 @@ export async function shouldSuppressForegroundPush(data: unknown): Promise<boole
   return false
 }
 
+/** Whether the OS says a notification came from a provider rather than this app. */
+export function isRemotePushTrigger(trigger: unknown): boolean {
+  return (
+    typeof trigger === 'object' &&
+    trigger !== null &&
+    (trigger as { readonly type?: unknown }).type === 'push'
+  )
+}
+
 /**
  * Notification data a tap can route with: the gateway names the host by fingerprint,
  * so it is mapped back to this device's hostId. Locally scheduled data passes
@@ -68,15 +82,18 @@ export async function shouldSuppressForegroundPush(data: unknown): Promise<boole
  *
  * Why null and not the raw data when the fingerprint does not resolve: a gateway
  * payload is attacker-adjacent input, and passing it on would let a stray `hostId`
- * beside the `orca` block route a tap at a host the push never named.
+ * beside the `orca` block route a tap at a host the push never named. A remote
+ * push with no fingerprint at all is the same input minus the block, so it is
+ * unrouted too rather than handed to the local path as if this app scheduled it.
  */
 export function pushNotificationRouteData(
   data: unknown,
-  hosts: readonly { readonly id: string; readonly publicKeyB64: string }[]
+  hosts: readonly { readonly id: string; readonly publicKeyB64: string }[],
+  remote = false
 ): unknown {
   const payload = readOrcaPushPayload(data)
   if (!payload) {
-    return data
+    return remote ? null : data
   }
   const hostId = resolveHostIdForFingerprint(payload.hostFingerprint, hosts)
   if (!hostId) {

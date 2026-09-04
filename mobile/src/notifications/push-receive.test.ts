@@ -8,7 +8,11 @@ import {
   getHostNotificationSession,
   resetHostNotificationSessionsForTests
 } from './notification-reconnect-catchup'
-import { pushNotificationRouteData, shouldSuppressForegroundPush } from './push-receive'
+import {
+  isRemotePushTrigger,
+  pushNotificationRouteData,
+  shouldSuppressForegroundPush
+} from './push-receive'
 
 vi.mock('../transport/host-store', () => ({ loadHostCatalog: vi.fn() }))
 
@@ -48,17 +52,29 @@ beforeEach(() => {
 
 describe('shouldSuppressForegroundPush', () => {
   it('suppresses a push whose id and seq the socket already delivered', async () => {
-    getHostNotificationSession('host-1').seen.add('id:agent:one#7')
+    const session = getHostNotificationSession('host-1')
+    session.lastDeliveredEpoch = 'epoch-1'
+    session.seen.add('id:agent:one#7')
 
     await expect(
       shouldSuppressForegroundPush(
-        apnsData({ hostFingerprint, notificationId: 'agent:one', notificationSeq: 7 })
+        apnsData({
+          hostFingerprint,
+          notificationId: 'agent:one',
+          notificationSeq: 7,
+          notificationEpoch: 'epoch-1'
+        })
       )
     ).resolves.toBe(true)
   })
 
   it('shows an unseen push and marks it so the socket replay is dropped', async () => {
-    const data = apnsData({ hostFingerprint, notificationId: 'agent:one', notificationSeq: 7 })
+    const data = apnsData({
+      hostFingerprint,
+      notificationId: 'agent:one',
+      notificationSeq: 7,
+      notificationEpoch: 'epoch-1'
+    })
 
     await expect(shouldSuppressForegroundPush(data)).resolves.toBe(false)
 
@@ -67,23 +83,53 @@ describe('shouldSuppressForegroundPush', () => {
   })
 
   it('reads the flat stringified fields an FCM data message carries', async () => {
-    getHostNotificationSession('host-1').seen.add('id:agent:one#7')
+    const session = getHostNotificationSession('host-1')
+    session.lastDeliveredEpoch = 'epoch-1'
+    session.seen.add('id:agent:one#7')
 
     await expect(
       shouldSuppressForegroundPush(
-        fcmData({ hostFingerprint, notificationId: 'agent:one', notificationSeq: 7 })
+        fcmData({
+          hostFingerprint,
+          notificationId: 'agent:one',
+          notificationSeq: 7,
+          notificationEpoch: 'epoch-1'
+        })
       )
     ).resolves.toBe(true)
   })
 
   it('keys a terminal bell on its seq alone, since it carries no notification id', async () => {
-    getHostNotificationSession('host-1').seen.add('seq:4')
+    const session = getHostNotificationSession('host-1')
+    session.lastDeliveredEpoch = 'epoch-1'
+    session.seen.add('seq:4')
 
     await expect(
       shouldSuppressForegroundPush(
-        apnsData({ hostFingerprint, source: 'terminal-bell', notificationSeq: 4 })
+        apnsData({
+          hostFingerprint,
+          source: 'terminal-bell',
+          notificationSeq: 4,
+          notificationEpoch: 'epoch-1'
+        })
       )
     ).resolves.toBe(true)
+  })
+
+  it('shows a push that names no counter lifetime without letting it claim a key', async () => {
+    const session = getHostNotificationSession('host-1')
+    session.lastDeliveredEpoch = 'epoch-1'
+    session.seen.add('seq:4')
+
+    // Without an epoch the seq cannot be tied to this counter, so a forged seq:4
+    // must neither be swallowed against it nor stop the real bell at seq 4.
+    await expect(
+      shouldSuppressForegroundPush(apnsData({ hostFingerprint, notificationSeq: 4 }))
+    ).resolves.toBe(false)
+    await expect(
+      shouldSuppressForegroundPush(apnsData({ hostFingerprint, notificationSeq: 5 }))
+    ).resolves.toBe(false)
+    expect(session.seen.has('seq:5')).toBe(false)
   })
 
   it('voids seen keys from a previous desktop lifetime before testing its own', async () => {
@@ -190,6 +236,28 @@ describe('pushNotificationRouteData', () => {
     const data = pushNotificationRouteData(apnsData({ hostFingerprint: '0123456789abcdef' }), hosts)
 
     expect(getNotificationNavigationTarget(data)).toBeNull()
+  })
+
+  it('leaves a remote push unrouted when no host catalog could be read', () => {
+    const data = { hostId: 'host-1', orca: { hostFingerprint, notificationId: 'agent:one' } }
+
+    expect(pushNotificationRouteData(data, [], true)).toBeNull()
+  })
+
+  it('leaves a remote push with no fingerprint unrouted instead of treating it as local', () => {
+    const data = { hostId: 'host-1', worktreeId: 'wt-1', source: 'agent-task-complete' }
+
+    expect(pushNotificationRouteData(data, hosts, true)).toBeNull()
+    // The same shape from this app's own scheduler still routes.
+    expect(pushNotificationRouteData(data, hosts, false)).toBe(data)
+  })
+
+  it('recognises only a provider-delivered trigger as remote', () => {
+    expect(isRemotePushTrigger({ type: 'push' })).toBe(true)
+    expect(isRemotePushTrigger({ type: 'timeInterval', seconds: 1 })).toBe(false)
+    expect(isRemotePushTrigger({ channelId: 'orca-desktop' })).toBe(false)
+    expect(isRemotePushTrigger(null)).toBe(false)
+    expect(isRemotePushTrigger(undefined)).toBe(false)
   })
 
   it('drops a gateway payload that pairs an unresolvable fingerprint with a stray hostId', () => {
