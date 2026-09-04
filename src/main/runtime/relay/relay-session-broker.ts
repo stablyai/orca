@@ -6,6 +6,7 @@ import type {
   MobileRelayEndpoint,
   PairingProvisionRelayParams
 } from '../../../shared/mobile-relay-credential-contract'
+import type { RelayHostCloseReason } from '../../../shared/relay-host-close-reason'
 import type { DeviceCredentialInstallAuthorization } from './relay-control-requests'
 import {
   deriveRelayHostId,
@@ -180,7 +181,7 @@ export class RelaySessionBroker {
     return result
   }
 
-  closeNow(): void {
+  closeNow(hostCloseReason?: RelayHostCloseReason): void {
     if (this.closed) {
       return
     }
@@ -190,7 +191,7 @@ export class RelaySessionBroker {
       clearTimeout(this.refreshTimer)
       this.refreshTimer = null
     }
-    this.originPool.closeNow()
+    this.originPool.closeNow(hostCloseReason)
     if (publishOffline) {
       this.options.onStatus('offline')
     }

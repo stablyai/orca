@@ -4,6 +4,7 @@ import type { MobileSocketWiring } from '../rpc/mobile-socket-wiring'
 import { RelayControlOrigin } from './relay-control-origin'
 import type { RelayControlClient } from './relay-control-client'
 import type { RelayDrainMessage } from './relay-control-protocol'
+import type { RelayHostCloseReason } from '../../../shared/relay-host-close-reason'
 import { RelayDrainRetrySchedule } from './relay-drain-retry-schedule'
 import { RelayHttpError, requestRelayAssignment, type RelayAssignment } from './relay-http-client'
 import type { RelayBrokerStatus, RelayIdentity } from './relay-session-broker-contract'
@@ -79,7 +80,7 @@ export class RelayOriginPool {
     }
   }
 
-  closeNow(): void {
+  closeNow(hostCloseReason?: RelayHostCloseReason): void {
     if (this.closed) {
       return
     }
@@ -94,7 +95,7 @@ export class RelayOriginPool {
     }
     this.drainTimers.clear()
     for (const origin of this.origins) {
-      origin.closeNow()
+      origin.closeNow(hostCloseReason)
     }
     this.origins.clear()
     this.drainingOrigins.clear()
