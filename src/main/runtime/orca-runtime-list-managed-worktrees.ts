@@ -19,8 +19,48 @@ import {
   killWorkspacePort,
   scanWorkspacePortProbes
 } from '../ports/workspace-port-ownership'
+import { folderExecutionHostId } from './runtime-skill-install-authority'
+import { PLUGIN_WORKSPACE_LIST_LIMIT } from '../../shared/plugins/plugin-host-file-api'
+
+const capPluginWorkspaceText = (value: string, limit: number) => value.slice(0, limit)
 
 export class OrcaRuntimeWithListManagedWorktrees extends OrcaRuntimeWithRestoreStructuredAgentSessionTabsOnce {
+  async listPluginWorkspaces() {
+    const worktrees = (await this.listResolvedWorktrees()).flatMap((worktree) => {
+      if (!worktree.identity || !worktree.hostId) {
+        return []
+      }
+      return [
+        {
+          ref: `identity:${encodeURIComponent(worktree.identity.key)}`,
+          hostId: worktree.hostId,
+          ...(worktree.git.branch
+            ? { branch: capPluginWorkspaceText(worktree.git.branch, 512) }
+            : {}),
+          displayName: capPluginWorkspaceText(worktree.displayName, 512),
+          ...(worktree.workspaceStatus !== undefined
+            ? { workspaceStatus: capPluginWorkspaceText(worktree.workspaceStatus, 128) }
+            : {}),
+          ...(worktree.comment !== undefined
+            ? { comment: capPluginWorkspaceText(worktree.comment, 4096) }
+            : {})
+        }
+      ]
+    })
+    const folders = (this.store?.getFolderWorkspaces?.() ?? []).map((folder) => ({
+      ref: `id:${encodeURIComponent(folder.id)}`,
+      hostId: folderExecutionHostId(folder),
+      displayName: capPluginWorkspaceText(folder.name, 512),
+      ...(folder.workspaceStatus !== undefined
+        ? { workspaceStatus: capPluginWorkspaceText(folder.workspaceStatus, 128) }
+        : {}),
+      ...(folder.comment !== undefined
+        ? { comment: capPluginWorkspaceText(folder.comment, 4096) }
+        : {})
+    }))
+    return { workspaces: [...worktrees, ...folders].slice(0, PLUGIN_WORKSPACE_LIST_LIMIT) }
+  }
+
   listManagedWorktrees(
     repoSelector?: string,
     limit = DEFAULT_WORKTREE_LIST_LIMIT,

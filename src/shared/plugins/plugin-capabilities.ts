@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { pluginCapabilityPathsSchema } from './plugin-capability-scope'
 
 /**
  * Plugin capability model v0. The manifest declares capabilities, the user
@@ -7,26 +8,49 @@ import { z } from 'zod'
  * API). Electron-free: shared by desktop main, headless serve, the relay
  * conformance path, and tests.
  *
- * v0 is a closed set of unscoped kinds so a typo (or a capability from a newer
- * Orca) fails manifest validation instead of silently granting nothing.
- * Scoped kinds (net:fetch hosts, process:exec globs) arrive in later phases.
+ * The kind set is closed so a typo (or a capability from a newer Orca) fails
+ * manifest validation instead of silently granting nothing. Most kinds are
+ * unscoped; `files:read` carries the globs it is granted over.
  */
 
-export const PLUGIN_CAPABILITY_KINDS = [
+export const PLUGIN_UNSCOPED_CAPABILITY_KINDS = [
   'workspace:read',
   'terminal:send',
   'notifications:show',
   'storage',
   'secrets',
   'events:subscribe',
-  'settings:own'
+  'settings:own',
+  'workspace:list'
+] as const
+
+export const PLUGIN_SCOPED_CAPABILITY_KINDS = ['files:read'] as const
+
+// Derived rather than written out flat so the kinds are spelled exactly once.
+export const PLUGIN_CAPABILITY_KINDS = [
+  ...PLUGIN_UNSCOPED_CAPABILITY_KINDS,
+  ...PLUGIN_SCOPED_CAPABILITY_KINDS
 ] as const
 
 export type PluginCapabilityKind = (typeof PLUGIN_CAPABILITY_KINDS)[number]
 
-// Strict object (not a bare enum) so scoped fields can be added per-kind later
-// without changing the manifest shape.
-export const pluginCapabilitySchema = z.object({ kind: z.enum(PLUGIN_CAPABILITY_KINDS) }).strict()
+// Why `kind` is the only key here, strictly: the parsed object for an unscoped kind
+// must carry nothing else, or its canonical encoding moves. A shared scope field
+// with a default on the common schema would materialise a second key on every kind,
+// change all seven pre-existing encodings, and drop every installed plugin to
+// pending re-approval with no error raised.
+export const unscopedPluginCapabilitySchema = z
+  .object({ kind: z.enum(PLUGIN_UNSCOPED_CAPABILITY_KINDS) })
+  .strict()
+
+export const scopedFilesReadCapabilitySchema = z
+  .object({ kind: z.literal('files:read'), paths: pluginCapabilityPathsSchema })
+  .strict()
+
+export const pluginCapabilitySchema = z.discriminatedUnion('kind', [
+  unscopedPluginCapabilitySchema,
+  scopedFilesReadCapabilitySchema
+])
 
 export type PluginCapability = z.infer<typeof pluginCapabilitySchema>
 
@@ -40,7 +64,9 @@ export const PLUGIN_CAPABILITY_DESCRIPTIONS: Record<PluginCapabilityKind, string
   secrets: "Store and read secrets in the plugin's own encrypted vault",
   'events:subscribe':
     'Get notified when worktrees are created or removed and when agent status changes',
-  'settings:own': "Read and change the plugin's own settings"
+  'settings:own': "Read and change the plugin's own settings",
+  'workspace:list': 'Read the name, branch, and host of all your worktrees',
+  'files:read': 'Read files inside your worktrees that match the file patterns this plugin declares'
 }
 
 /**

@@ -11169,7 +11169,14 @@
             "storage": "Store data in the plugin's own storage folder",
             "secrets": "Store and read secrets in the plugin's own encrypted vault",
             "eventsSubscribe": "Get notified when worktrees are created or removed and when agent status changes",
-            "settingsOwn": "Read and change the plugin's own settings"
+            "settingsOwn": "Read and change the plugin's own settings",
+            "workspaceList": "Read the name, branch, and host of all your worktrees",
+            "filesRead": "Read files in your worktrees that match these patterns",
+            "filePatterns": "File patterns",
+            "wholeWorktree": "Whole worktree",
+            "wholeWorktreeExplanation": "This plugin can read files throughout each worktree, except the sensitive paths Orca always blocks.",
+            "alwaysBlocked": "Always blocked",
+            "blockedExplanation": "Orca blocks these sensitive path families even when a file pattern matches:"
           },
           "decisionFailed": "Could not save the permission decision. Try again."
         },
@@ -11273,7 +11280,8 @@
           "blocked": "Orca's safety list blocks this plugin: {{value0}}",
           "current": "This exact plugin content is already installed.",
           "close": "Close",
-          "cancel": "Cancel",
+          "cancelInstallation": "Cancel installation",
+          "cancelUpdate": "Cancel update",
           "update": "Update plugin",
           "install": "Install plugin"
         },

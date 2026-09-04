@@ -9957,7 +9957,8 @@
             "storage": "플러그인 자체 저장소 폴더에 데이터 저장",
             "secrets": "플러그인 자체 암호화 금고에 비밀 저장 및 읽기",
             "eventsSubscribe": "워크트리가 생성되거나 제거되고 에이전트 상태가 변경될 때 알림 받기",
-            "settingsOwn": "플러그인 자체 설정 읽기 및 변경"
+            "settingsOwn": "플러그인 자체 설정 읽기 및 변경",
+            "workspaceList": "모든 워크트리의 이름, 브랜치 및 호스트 읽기"
           },
           "decisionFailed": "권한 결정을 저장할 수 없습니다. 다시 시도하세요."
         },
@@ -10061,7 +10062,8 @@
           "blocked": "Orca 안전 목록이 이 플러그인을 차단했습니다: {{value0}}",
           "current": "이 플러그인 내용이 이미 설치되어 있습니다.",
           "close": "닫기",
-          "cancel": "취소",
+          "cancelInstallation": "설치 취소",
+          "cancelUpdate": "업데이트 취소",
           "update": "플러그인 업데이트",
           "install": "플러그인 설치"
         },

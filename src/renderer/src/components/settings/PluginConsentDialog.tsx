@@ -7,7 +7,7 @@ import { Button } from '../ui/button'
 import { PluginVmRecipeConsentPreview } from './PluginVmRecipeConsentPreview'
 import { PluginKeybindingConsentPreview } from './PluginKeybindingConsentPreview'
 import { PluginConsentProvenance } from './PluginConsentProvenance'
-import { pluginCapabilityDescription } from './plugin-capability-presentation'
+import { PluginCapabilityPresentation } from './plugin-capability-presentation'
 import {
   Dialog,
   DialogContent,
@@ -183,15 +183,19 @@ export function PluginConsentDialog({
                   )}
                 </p>
                 <div className="space-y-2">
-                  {plugin.capabilities.map((capability) => (
-                    <div key={capability.kind} className="flex items-start gap-2 text-sm leading-6">
-                      <Check className="mt-1 size-3.5 shrink-0 text-muted-foreground" />
-                      <span>
-                        {pluginCapabilityDescription(capability.kind, capability.description)}{' '}
-                        <span className="font-mono text-[11px] text-muted-foreground">
-                          ({capability.kind})
-                        </span>
-                      </span>
+                  {plugin.capabilities.map((capability, index) => (
+                    <div
+                      key={`${JSON.stringify(capability)}\u0000${index}`}
+                      className="flex items-start gap-2 text-sm leading-6"
+                    >
+                      <Check
+                        aria-hidden="true"
+                        className="mt-1 size-3.5 shrink-0 text-muted-foreground"
+                      />
+                      <PluginCapabilityPresentation
+                        capability={capability}
+                        fallback={capability.description}
+                      />
                     </div>
                   ))}
                 </div>

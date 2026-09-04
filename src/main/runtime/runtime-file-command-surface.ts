@@ -7,6 +7,8 @@ type RuntimeFileCommandName =
   | 'openMobileFile'
   | 'openMobileDiff'
   | 'readMobileFile'
+  | 'resolvePluginFileAuthority'
+  | 'executePluginFileMethod'
   | 'resolveTerminalPath'
   | 'readTerminalArtifactFile'
   | 'readTerminalArtifactPreview'
@@ -45,6 +47,8 @@ export function installRuntimeFileCommandSurface(
     openMobileFile: commands.openMobileFile.bind(commands),
     openMobileDiff: commands.openMobileDiff.bind(commands),
     readMobileFile: commands.readMobileFile.bind(commands),
+    resolvePluginFileAuthority: commands.resolvePluginFileAuthority.bind(commands),
+    executePluginFileMethod: commands.executePluginFileMethod.bind(commands),
     resolveTerminalPath: commands.resolveTerminalPath.bind(commands),
     readTerminalArtifactFile: commands.readTerminalArtifactFile.bind(commands),
     readTerminalArtifactPreview: commands.readTerminalArtifactPreview.bind(commands),

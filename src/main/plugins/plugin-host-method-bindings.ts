@@ -7,6 +7,7 @@ import {
   type PluginHostMethodSpec
 } from '../../shared/plugins/plugin-host-api'
 import type { PluginEventName } from '../../shared/plugins/plugin-manifest'
+import type { PluginCapability } from '../../shared/plugins/plugin-capabilities'
 
 export type PluginWorktreeContext = {
   worktreeId: string
@@ -17,6 +18,12 @@ export type PluginWorktreeContext = {
 /** Structural service surface the facade delegates to. Desktop main binds it
  *  over runtime services; relay policy and conformance tests bind fakes. */
 export type PluginHostServices = {
+  executeAuthorizedPluginHostCall(
+    method: string,
+    params: unknown,
+    grant: PluginCapability
+  ): Promise<{ authorized: false } | { authorized: true; value: unknown }>
+  listPluginWorkspaces(): Promise<unknown>
   resolveActiveWorktreeContext(): Promise<PluginWorktreeContext | null>
   listWorktreeTerminals(worktreeId: string): Promise<{ id: string }[]>
   sendTerminalText(
@@ -53,7 +60,7 @@ export type BoundPluginHostMethod = {
   spec: PluginHostMethodSpec
   handler: (
     params: unknown,
-    ctx: { pluginId: string; services: PluginHostServices }
+    ctx: { pluginId: string; services: PluginHostServices; grant: PluginCapability }
   ) => Promise<unknown>
 }
 
@@ -68,7 +75,30 @@ function definePluginMethod(
   return [name, { spec, handler }]
 }
 
+async function executeAuthorizedValue(
+  services: PluginHostServices,
+  method: string,
+  params: unknown,
+  grant: PluginCapability
+): Promise<unknown> {
+  const result = await services.executeAuthorizedPluginHostCall(method, params, grant)
+  if (!result.authorized) {
+    throw new Error('resource denied')
+  }
+  return result.value
+}
+
 const HANDLERS = new Map<string, BoundPluginHostMethod>([
+  definePluginMethod('files.read', (params, { services, grant }) =>
+    executeAuthorizedValue(services, 'files.read', params, grant)
+  ),
+  definePluginMethod('files.stat', (params, { services, grant }) =>
+    executeAuthorizedValue(services, 'files.stat', params, grant)
+  ),
+  definePluginMethod('files.readDir', (params, { services, grant }) =>
+    executeAuthorizedValue(services, 'files.readDir', params, grant)
+  ),
+  definePluginMethod('workspace.list', (_params, { services }) => services.listPluginWorkspaces()),
   definePluginMethod('workspace.readContext', async (_params, { services }) => {
     const context = await services.resolveActiveWorktreeContext()
     if (!context) {
