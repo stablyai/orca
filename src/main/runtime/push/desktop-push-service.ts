@@ -13,12 +13,19 @@ import { PushDispatcher } from './push-dispatcher'
 import { PushGatewayClient } from './push-gateway-client'
 import type { PushUnregisterOutbox } from './push-unregister-outbox'
 
+const OUTBOX_RETRY_BASE_MS = 30_000
+const OUTBOX_RETRY_MAX_MS = 10 * 60_000
+
+type RegisterStorageFailure = 'not_mobile' | 'registration_storage_failed'
+
 type DesktopPushServiceOptions = {
   runtime: OrcaRuntimeService
   runtimeRpc: OrcaRuntimeRpcServer
   gatewayUrl: string
   /** Test seam: lets a suite drive the service without a live gateway. */
   client?: PushGatewayClient
+  /** Test seam: lets a suite drive the outbox backoff without real timers. */
+  scheduleRetry?: (run: () => void, delayMs: number) => void
 }
 
 export class DesktopPushService {
@@ -28,8 +35,13 @@ export class DesktopPushService {
   private readonly outbox: PushUnregisterOutbox
   private readonly client: PushGatewayClient
   private readonly dispatcher: PushDispatcher
+  private readonly scheduleRetry: (run: () => void, delayMs: number) => void
   private unsubscribe: (() => void) | null = null
-  private flushing = false
+  private flushLoop: Promise<void> | null = null
+  private flushRequested = false
+  private retryArmed = false
+  private retryDelayMs = OUTBOX_RETRY_BASE_MS
+  private stopped = false
 
   private constructor(
     options: DesktopPushServiceOptions,
@@ -42,6 +54,12 @@ export class DesktopPushService {
     this.client = client
     this.outbox = options.runtimeRpc.getPushUnregisterOutbox()
     this.dispatcher = new PushDispatcher({ client, registry })
+    this.scheduleRetry =
+      options.scheduleRetry ??
+      ((run, delayMs) => {
+        // Why: a queued gateway delete must never hold the app open at quit.
+        setTimeout(run, delayMs).unref?.()
+      })
   }
 
   /** Returns null when the mobile runtime never came up, so there is nothing to push for. */
@@ -57,6 +75,7 @@ export class DesktopPushService {
   }
 
   start(): void {
+    this.stopped = false
     this.runtime.setMobilePushRegistrar(this)
     this.unsubscribe = this.runtime.onNotificationDispatched((event) => {
       this.dispatcher.enqueue(event)
@@ -70,6 +89,7 @@ export class DesktopPushService {
   }
 
   stop(): void {
+    this.stopped = true
     this.unsubscribe?.()
     this.unsubscribe = null
     this.runtimeRpc.setOnPushUnregisterQueued(null)
@@ -87,14 +107,16 @@ export class DesktopPushService {
         reason: result.reason === 'unreachable' ? 'gateway_unreachable' : 'gateway_rejected'
       }
     }
-    this.registry.setPushRegistration(input.deviceId, {
-      registrationId: result.registrationId,
-      platform: input.platform,
-      filter: input.filter,
-      registeredAt: Date.now()
-    })
+    const failure = this.storeRegistration(input, result.registrationId)
+    if (failure) {
+      // Why: the gateway now holds a token this host will never push to. Queue its
+      // delete instead of leaking it until the phone happens to register again.
+      this.outbox.enqueue({ registrationId: result.registrationId, deviceId: input.deviceId })
+    }
     void this.flushUnregisterOutbox()
-    return { registered: true, registrationId: result.registrationId }
+    return failure
+      ? { registered: false, reason: failure }
+      : { registered: true, registrationId: result.registrationId }
   }
 
   async unregister(deviceId: string): Promise<{ unregistered: boolean }> {
@@ -110,23 +132,85 @@ export class DesktopPushService {
     return { unregistered: true }
   }
 
+  /** Joining an in-flight drain still waits for the item this call queued. */
   async flushUnregisterOutbox(): Promise<void> {
-    if (this.flushing) {
-      return
+    this.flushRequested = true
+    this.flushLoop ??= this.runFlushLoop().finally(() => {
+      this.flushLoop = null
+    })
+    await this.flushLoop
+  }
+
+  private async runFlushLoop(): Promise<void> {
+    while (this.flushRequested && !this.stopped) {
+      // Cleared before the pass, so a delete queued mid-drain earns another one.
+      this.flushRequested = false
+      if (await this.drainPending()) {
+        this.scheduleFlushRetry()
+      } else {
+        this.retryDelayMs = OUTBOX_RETRY_BASE_MS
+      }
     }
-    this.flushing = true
+  }
+
+  /** Returns the refusal reason when a gateway-accepted registration cannot be stored. */
+  private storeRegistration(
+    input: MobilePushRegisterInput,
+    registrationId: string
+  ): RegisterStorageFailure | null {
     try {
-      // Safe to iterate while removing: the outbox swaps in a new array per write.
-      for (const item of this.outbox.pending()) {
+      const stored = this.registry.setPushRegistration(input.deviceId, {
+        registrationId,
+        platform: input.platform,
+        filter: input.filter,
+        registeredAt: Date.now()
+      })
+      // False means the device was removed or left mobile scope while the gateway
+      // call was in flight.
+      return stored ? null : 'not_mobile'
+    } catch (error) {
+      console.warn('[push] Failed to persist a push registration:', error)
+      return 'registration_storage_failed'
+    }
+  }
+
+  /** Returns true when the pass left behind an item the gateway may still accept. */
+  private async drainPending(): Promise<boolean> {
+    const attempted = new Set<string>()
+    let retryable = false
+    for (;;) {
+      // Re-read per item: a snapshot taken at loop entry misses anything queued
+      // while an await was in flight, and the outbox swaps arrays on every write.
+      const item = this.outbox.pending().find((candidate) => !attempted.has(candidate.reqId))
+      if (!item) {
+        return retryable
+      }
+      attempted.add(item.reqId)
+      try {
         const result = await this.client.deleteDevice(item.registrationId)
         if (result.deleted || !result.retryable) {
           this.outbox.remove(item.reqId)
+        } else {
+          retryable = true
         }
+      } catch (error) {
+        // One bad delete must not strand the rest of the queue.
+        console.warn('[push] Failed to drain the push unregister outbox:', error)
+        retryable = true
       }
-    } catch (error) {
-      console.warn('[push] Failed to drain the push unregister outbox:', error)
-    } finally {
-      this.flushing = false
     }
+  }
+
+  private scheduleFlushRetry(): void {
+    if (this.retryArmed || this.stopped) {
+      return
+    }
+    this.retryArmed = true
+    const delayMs = this.retryDelayMs
+    this.retryDelayMs = Math.min(delayMs * 2, OUTBOX_RETRY_MAX_MS)
+    this.scheduleRetry(() => {
+      this.retryArmed = false
+      void this.flushUnregisterOutbox()
+    }, delayMs)
   }
 }

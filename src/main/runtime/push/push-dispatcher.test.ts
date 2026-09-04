@@ -132,6 +132,43 @@ describe('PushDispatcher', () => {
     })
   })
 
+  it('fans out past the per-request cap instead of starving the extra devices', async () => {
+    const devices = Array.from({ length: 25 }, (_, index) => ({
+      deviceId: `device-${index}`,
+      pushRegistration: registration({ registrationId: `reg-${index}` })
+    }))
+    const harness = createHarness({ devices })
+
+    harness.dispatcher.enqueue(notification())
+    await flush()
+
+    expect(harness.sends).toHaveLength(2)
+    expect(harness.sends[0]?.registrationIds).toHaveLength(20)
+    expect(harness.sends[1]?.registrationIds).toEqual([
+      'reg-20',
+      'reg-21',
+      'reg-22',
+      'reg-23',
+      'reg-24'
+    ])
+  })
+
+  it('drops a dead registration reported by a later chunk', async () => {
+    const devices = Array.from({ length: 25 }, (_, index) => ({
+      deviceId: `device-${index}`,
+      pushRegistration: registration({ registrationId: `reg-${index}` })
+    }))
+    const harness = createHarness({
+      devices,
+      results: [{ registrationId: 'reg-24', status: 'dead' }]
+    })
+
+    harness.dispatcher.enqueue(notification())
+    await flush()
+
+    expect(harness.cleared).toEqual(['device-24'])
+  })
+
   it('never pushes a dismissal', async () => {
     const harness = createHarness({
       devices: [{ deviceId: 'a', pushRegistration: registration() }]

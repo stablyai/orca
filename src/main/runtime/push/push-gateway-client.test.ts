@@ -19,7 +19,9 @@ function jsonResponse(status: number, body: unknown): Response {
   })
 }
 
-function createFakeGateway(options: { sessionTtlMs?: number; devicesStatus?: number } = {}): {
+function createFakeGateway(
+  options: { sessionTtlMs?: number; devicesStatus?: number; rejectBearer?: boolean } = {}
+): {
   client: PushGatewayClient
   calls: Recorded[]
   expireSession: () => void
@@ -30,6 +32,7 @@ function createFakeGateway(options: { sessionTtlMs?: number; devicesStatus?: num
   const now = { value: NOW }
   const calls: Recorded[] = []
   const liveTokens = new Set<string>()
+  const knownRegistrations = new Set<string>()
   let issued = 0
   let pendingProof: string | null = null
 
@@ -68,18 +71,27 @@ function createFakeGateway(options: { sessionTtlMs?: number; devicesStatus?: num
       })
     }
     const bearer = headers.get('authorization')?.replace('Bearer ', '') ?? ''
-    if (!liveTokens.has(bearer)) {
+    if (options.rejectBearer || !liveTokens.has(bearer)) {
       return jsonResponse(401, { error: 'session_expired' })
     }
     if (url.endsWith('/v1/devices')) {
-      return options.devicesStatus
-        ? jsonResponse(options.devicesStatus, { error: 'nope' })
-        : jsonResponse(200, { registrationId: 'reg-1' })
+      if (options.devicesStatus) {
+        return jsonResponse(options.devicesStatus, { error: 'nope' })
+      }
+      knownRegistrations.add('reg-1')
+      return jsonResponse(200, { registrationId: 'reg-1' })
     }
     if (url.endsWith('/v1/send')) {
       return jsonResponse(200, { results: [{ registrationId: 'reg-1', status: 'queued' }] })
     }
-    return new Response(null, { status: 204 })
+    // Why explicit: a catch-all 204 would report every delete as accepted and
+    // leave the 404 branch of deleteDevice untested.
+    const deleted = /\/v1\/devices\/([^/]+)$/.exec(url)
+    if (deleted && init?.method === 'DELETE') {
+      const registrationId = decodeURIComponent(deleted[1] ?? '')
+      return new Response(null, { status: knownRegistrations.has(registrationId) ? 204 : 404 })
+    }
+    throw new Error(`unexpected request: ${init?.method ?? 'GET'} ${url}`)
   }) as unknown as typeof globalThis.fetch
 
   return {
@@ -193,8 +205,37 @@ describe('PushGatewayClient', () => {
     })
   })
 
+  it('treats a delete the gateway accepted as done', async () => {
+    const gateway = createFakeGateway()
+    await gateway.client.registerDevice(REGISTER_INPUT)
+
+    expect(await gateway.client.deleteDevice('reg-1')).toEqual({ deleted: true, retryable: false })
+    expect(gateway.calls.at(-1)).toMatchObject({ method: 'DELETE' })
+  })
+
   it('treats a delete of an unknown registration as done', async () => {
     const gateway = createFakeGateway()
-    expect(await gateway.client.deleteDevice('reg-1')).toEqual({ deleted: true, retryable: false })
+
+    expect(await gateway.client.deleteDevice('reg-gone')).toEqual({
+      deleted: true,
+      retryable: false
+    })
+  })
+
+  it('reports a 401 that survives the forced re-auth as unreachable', async () => {
+    const gateway = createFakeGateway({ rejectBearer: true })
+
+    expect(await gateway.client.registerDevice(REGISTER_INPUT)).toEqual({
+      ok: false,
+      reason: 'unreachable'
+    })
+    // Exactly one forced re-auth, not a handshake loop.
+    expect(gateway.calls.filter((call) => call.url.endsWith('/v1/host/challenge'))).toHaveLength(2)
+  })
+
+  it('keeps an unreachable-classified 401 retryable for a queued delete', async () => {
+    const gateway = createFakeGateway({ rejectBearer: true })
+
+    expect(await gateway.client.deleteDevice('reg-1')).toEqual({ deleted: false, retryable: true })
   })
 })

@@ -38,7 +38,17 @@ export type MobilePushRegisterInput = {
 
 export type MobilePushRegisterResult =
   | { registered: true; registrationId: string }
-  | { registered: false; reason: 'gateway_unreachable' | 'gateway_rejected' | 'not_mobile' }
+  | {
+      registered: false
+      // `registration_storage_failed`: the gateway accepted the token but the host
+      // could not persist it, so the phone must register again rather than believe
+      // a push route that does not exist.
+      reason:
+        | 'gateway_unreachable'
+        | 'gateway_rejected'
+        | 'not_mobile'
+        | 'registration_storage_failed'
+    }
 
 function isStringMember<T extends string>(value: unknown, members: readonly T[]): value is T {
   return typeof value === 'string' && (members as readonly string[]).includes(value)

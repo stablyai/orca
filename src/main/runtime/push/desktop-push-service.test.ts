@@ -14,7 +14,14 @@ const REGISTER_INPUT = {
   filter: { sources: ['agent-task-complete'] as const, agentStates: ['finished'] as const }
 }
 
-function createService(options: { registerFails?: boolean; deleteFails?: boolean } = {}): {
+function createService(
+  options: {
+    registerFails?: boolean
+    deleteFails?: boolean
+    /** Runs before each delete resolves, so a suite can queue work mid-flush. */
+    onDelete?: (registrationId: string) => void
+  } = {}
+): {
   service: DesktopPushService
   registry: DeviceRegistry
   outbox: PushUnregisterOutbox
@@ -22,6 +29,7 @@ function createService(options: { registerFails?: boolean; deleteFails?: boolean
   deletes: string[]
   send: ReturnType<typeof vi.fn>
   dispatch: (event: MobileNotificationEvent) => void
+  retries: { run: () => void; delayMs: number }[]
 } {
   const userDataPath = mkdtempSync(join(tmpdir(), 'orca-push-service-'))
   const registry = new DeviceRegistry(userDataPath)
@@ -54,17 +62,22 @@ function createService(options: { registerFails?: boolean; deleteFails?: boolean
     ),
     deleteDevice: vi.fn(async (registrationId: string) => {
       deletes.push(registrationId)
+      options.onDelete?.(registrationId)
       return options.deleteFails
         ? { deleted: false, retryable: true }
         : { deleted: true, retryable: false }
     }),
     send: vi.fn(async () => ({ ok: true, results: [] }) as const)
   }
+  const retries: { run: () => void; delayMs: number }[] = []
   const service = DesktopPushService.create({
     runtime: runtime as never,
     runtimeRpc: runtimeRpc as never,
     gatewayUrl: 'https://push.onorca.dev',
-    client: client as never
+    client: client as never,
+    scheduleRetry: (run, delayMs) => {
+      retries.push({ run, delayMs })
+    }
   })!
 
   service.start()
@@ -75,7 +88,8 @@ function createService(options: { registerFails?: boolean; deleteFails?: boolean
     deviceId: device.deviceId,
     deletes,
     send: client.send,
-    dispatch: (event) => listener?.(event)
+    dispatch: (event) => listener?.(event),
+    retries
   }
 }
 
@@ -148,6 +162,83 @@ describe('DesktopPushService', () => {
 
     expect(harness.deletes).toEqual(['reg-stale'])
     expect(harness.outbox.pending()).toEqual([])
+  })
+
+  it('unregisters at the gateway when the device stopped being a phone mid-register', async () => {
+    const harness = createService()
+    vi.spyOn(harness.registry, 'setPushRegistration').mockReturnValue(false)
+
+    expect(
+      await harness.service.register({ deviceId: harness.deviceId, ...REGISTER_INPUT })
+    ).toEqual({ registered: false, reason: 'not_mobile' })
+    // register() kicks the flush off without awaiting it; join the same run.
+    await harness.service.flushUnregisterOutbox()
+    expect(harness.deletes).toEqual(['reg-1'])
+    expect(harness.outbox.pending()).toEqual([])
+  })
+
+  it('unregisters at the gateway when the registration cannot be written', async () => {
+    const harness = createService({ deleteFails: true })
+    vi.spyOn(harness.registry, 'setPushRegistration').mockImplementation(() => {
+      throw new Error('disk full')
+    })
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+
+    expect(
+      await harness.service.register({ deviceId: harness.deviceId, ...REGISTER_INPUT })
+    ).toEqual({ registered: false, reason: 'registration_storage_failed' })
+    // The gateway kept the token, so the delete stays queued until it lands.
+    expect(harness.outbox.pending()).toEqual([
+      expect.objectContaining({ registrationId: 'reg-1', deviceId: harness.deviceId })
+    ])
+    warn.mockRestore()
+  })
+
+  it('drains a delete queued while a flush is already running', async () => {
+    let queued = false
+    const harness = createService({
+      onDelete: () => {
+        if (queued) {
+          return
+        }
+        queued = true
+        harness.outbox.enqueue({ registrationId: 'reg-late', deviceId: 'device-late' })
+        // Mirrors unregister(): the trigger arrives while the flush is mid-await.
+        void harness.service.flushUnregisterOutbox()
+      }
+    })
+    harness.outbox.enqueue({ registrationId: 'reg-first', deviceId: 'device-first' })
+
+    await harness.service.flushUnregisterOutbox()
+
+    expect(harness.deletes).toEqual(['reg-first', 'reg-late'])
+    expect(harness.outbox.pending()).toEqual([])
+  })
+
+  it('retries a failed drain on a capped backoff instead of waiting for a relaunch', async () => {
+    const harness = createService({ deleteFails: true })
+    harness.outbox.enqueue({ registrationId: 'reg-stuck', deviceId: 'device-1' })
+
+    await harness.service.flushUnregisterOutbox()
+    expect(harness.retries.map((entry) => entry.delayMs)).toEqual([30_000])
+
+    harness.retries[0]?.run()
+    await new Promise((resolve) => setImmediate(resolve))
+    expect(harness.deletes).toEqual(['reg-stuck', 'reg-stuck'])
+    expect(harness.retries.map((entry) => entry.delayMs)).toEqual([30_000, 60_000])
+    expect(harness.outbox.pending()).toHaveLength(1)
+  })
+
+  it('stops re-arming the retry once the service is stopped', async () => {
+    const harness = createService({ deleteFails: true })
+    harness.outbox.enqueue({ registrationId: 'reg-stuck', deviceId: 'device-1' })
+    await harness.service.flushUnregisterOutbox()
+
+    harness.service.stop()
+    harness.retries[0]?.run()
+    await new Promise((resolve) => setImmediate(resolve))
+
+    expect(harness.retries).toHaveLength(1)
   })
 
   it('pushes a dispatched notification through the subscribed dispatcher', async () => {

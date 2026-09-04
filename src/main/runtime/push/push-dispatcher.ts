@@ -11,8 +11,8 @@ import type { MobileNotificationEvent } from '../runtime-mobile-notification-con
 import type { PushGatewayClient, PushSendNotification } from './push-gateway-client'
 
 const PUSH_RETRY_DELAY_MS = 2_000
-// The gateway rejects a whole request above this; a host with more paired phones
-// than this still pushes to the first 20 rather than to none.
+// The gateway rejects a whole request above this, so a host with more paired
+// phones fans out across several sends rather than starving the extras.
 const MAX_REGISTRATIONS_PER_SEND = 20
 const PUSH_TITLE_MAX_LENGTH = 80
 const PUSH_BODY_MAX_LENGTH = 180
@@ -76,8 +76,13 @@ export class PushDispatcher {
   enqueue(event: MobileNotificationEvent): void {
     try {
       const plan = this.planSend(event)
-      if (plan) {
-        void this.deliver(plan.targets, plan.notification, 0)
+      if (!plan) {
+        return
+      }
+      // Each chunk is its own request, so its retry and dead-drop are independent.
+      for (let start = 0; start < plan.targets.length; start += MAX_REGISTRATIONS_PER_SEND) {
+        const chunk = plan.targets.slice(start, start + MAX_REGISTRATIONS_PER_SEND)
+        void this.deliver(chunk, plan.notification, 0)
       }
     } catch (error) {
       console.warn('[push] Failed to prepare a push notification:', error)
@@ -99,19 +104,16 @@ export class PushDispatcher {
     if (agentState === undefined) {
       return null
     }
-    const targets = this.registry
-      .listDevices()
-      .flatMap((device) => {
-        const registration = device.pushRegistration
-        if (!registration || !registration.filter.sources.includes(source)) {
-          return []
-        }
-        if (agentState !== null && !registration.filter.agentStates.includes(agentState)) {
-          return []
-        }
-        return [{ deviceId: device.deviceId, registrationId: registration.registrationId }]
-      })
-      .slice(0, MAX_REGISTRATIONS_PER_SEND)
+    const targets = this.registry.listDevices().flatMap((device) => {
+      const registration = device.pushRegistration
+      if (!registration || !registration.filter.sources.includes(source)) {
+        return []
+      }
+      if (agentState !== null && !registration.filter.agentStates.includes(agentState)) {
+        return []
+      }
+      return [{ deviceId: device.deviceId, registrationId: registration.registrationId }]
+    })
     if (targets.length === 0) {
       return null
     }
