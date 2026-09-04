@@ -122,6 +122,26 @@ describe('purgeStaleRuntimeHostState project groups', () => {
     expect(s.sortEpoch).toBe(epochBefore + 1)
   })
 
+  it('keeps a sibling runtime’s mirrored copy of a shared group id', () => {
+    const store = createTestStore()
+    const sharedId = 'g-shared'
+    const removedCopy = makeGroup({ id: sharedId, executionHostId: RUNTIME_A })
+    const siblingCopy = makeGroup({ id: sharedId, executionHostId: RUNTIME_B })
+    seedStore(store, {
+      projectGroups: [removedCopy, siblingCopy]
+    })
+    const epochBefore = store.getState().sortEpoch
+
+    store.getState().purgeStaleRuntimeHostState(['env-a'])
+
+    const s = store.getState()
+    // Only the row owned by the removed runtime is dropped; the sibling
+    // runtime's copy of the same group id survives untouched.
+    expect(s.projectGroups).toEqual([siblingCopy])
+    expect(s.projectGroups[0]).toBe(siblingCopy)
+    expect(s.sortEpoch).toBe(epochBefore + 1)
+  })
+
   it('is a no-op for a non-matching env: group rows keep their reference', () => {
     const store = createTestStore()
     const localGroup = makeGroup({ id: 'gLocal', executionHostId: null })

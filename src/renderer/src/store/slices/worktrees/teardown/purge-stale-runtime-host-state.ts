@@ -63,8 +63,18 @@ export function createPurgeStaleRuntimeHostState(
         }
       }
       const groupsChanged = droppedGroupIds.size > 0
+      // Why: dropping rows by group id alone would also remove a sibling
+      // runtime's (or local) mirrored copy of a shared group id — the exact
+      // cross-host case applyProjectGroupDeleteCascade defends via its
+      // isDeletedGroup check. A row is dropped only when its id was collected
+      // from the removed runtime's own rows AND this row is itself owned by a
+      // removed runtime host.
       const survivingGroups = groupsChanged
-        ? projectGroups.filter((group) => !droppedGroupIds.has(group.id))
+        ? projectGroups.filter(
+            (group) =>
+              !droppedGroupIds.has(group.id) ||
+              !isRemovedRuntimeHostId(group.executionHostId, removed)
+          )
         : projectGroups
       // Why: mirror the delete cascade's host guard for folder workspaces — a
       // workspace is retired only when it belongs to a dropped group on the
