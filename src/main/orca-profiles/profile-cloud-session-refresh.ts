@@ -13,6 +13,7 @@ import {
   cloudSessionIdentity,
   tombstoneCloudSession
 } from './profile-cloud-session-mutation'
+import { emitOrcaCloudSessionInvalidated } from './profile-cloud-session-invalidation'
 
 const CLOUD_SESSION_REFRESH_SKEW_MS = 60_000
 
@@ -66,6 +67,9 @@ function clearCloudSessionIfUnchanged(
     )
   }
   clearOrcaCloudSession(profileId, userDataPath)
+  // Why: the renderer cached auth status at startup; without this it keeps
+  // showing "Connected" until the app restarts.
+  emitOrcaCloudSessionInvalidated()
 }
 
 async function refreshStoredCloudSession(

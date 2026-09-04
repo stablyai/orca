@@ -36,6 +36,8 @@ vi.mock('./profile-cloud-client', async (importOriginal) => {
 vi.mock('./profile-cloud-index', () => ({ linkOrcaProfileToCloud: linkMock }))
 
 import { readFreshOrcaCloudSession } from './profile-cloud-session-refresh'
+import { OrcaCloudRequestError } from './profile-cloud-client'
+import { onOrcaCloudSessionInvalidated } from './profile-cloud-session-invalidation'
 
 const config = {} as OrcaCloudAuthConfig
 const active = {
@@ -109,5 +111,48 @@ describe('profile cloud session refresh', () => {
     expect(firstResult).toEqual(secondResult)
     expect(saveIfCurrentMock).toHaveBeenCalledTimes(1)
     expect(linkMock).toHaveBeenCalledTimes(1)
+  })
+
+  it('notifies subscribers when an auth failure clears the stored session', async () => {
+    const invalidated = vi.fn()
+    const unsubscribe = onOrcaCloudSessionInvalidated(invalidated)
+    refreshMock.mockRejectedValue(new OrcaCloudRequestError(401))
+
+    await expect(readFreshOrcaCloudSession(config, active, '/data')).resolves.toEqual({
+      status: 'reconnect-required'
+    })
+
+    expect(clearMock).toHaveBeenCalledTimes(1)
+    expect(invalidated).toHaveBeenCalledTimes(1)
+    unsubscribe()
+  })
+
+  it('stays silent when a concurrent rotation already replaced the failed session', async () => {
+    const invalidated = vi.fn()
+    const unsubscribe = onOrcaCloudSessionInvalidated(invalidated)
+    refreshMock.mockRejectedValue(new OrcaCloudRequestError(401))
+    readMock.mockReturnValueOnce({
+      status: 'found',
+      session: staleSession,
+      persistence: 'memory-only'
+    })
+    readMock.mockReturnValueOnce({
+      status: 'found',
+      session: staleSession,
+      persistence: 'memory-only'
+    })
+    readMock.mockReturnValue({
+      status: 'found',
+      session: { ...staleSession, refreshToken: 'rotated-refresh' },
+      persistence: 'memory-only'
+    })
+
+    await expect(readFreshOrcaCloudSession(config, active, '/data')).resolves.toEqual({
+      status: 'reconnect-required'
+    })
+
+    expect(clearMock).not.toHaveBeenCalled()
+    expect(invalidated).not.toHaveBeenCalled()
+    unsubscribe()
   })
 })
