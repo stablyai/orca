@@ -18,6 +18,7 @@ const RPC_TO_RUNTIME_COMMAND = {
   'git.commitDiff': 'getRuntimeGitCommitDiff',
   'git.branchCompare': 'getRuntimeGitBranchCompare',
   'git.commitCompare': 'getRuntimeGitCommitCompare',
+  'git.blame': 'getRuntimeGitBlame',
   'git.upstreamStatus': 'getRuntimeGitUpstreamStatus',
   'git.fetch': 'fetchRuntimeGit',
   'git.forkSync': 'syncRuntimeGitForkDefaultBranch',

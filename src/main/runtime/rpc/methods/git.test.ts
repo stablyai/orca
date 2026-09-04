@@ -126,6 +126,54 @@ describe('git RPC methods', () => {
     })
   })
 
+  it('returns blame lines for a selected file', async () => {
+    const runtime = {
+      getRuntimeId: () => 'test-runtime',
+      getRuntimeGitBlame: vi.fn().mockResolvedValue({
+        status: 'ready',
+        lines: [
+          {
+            line: 1,
+            commitOid: 'a'.repeat(40),
+            author: 'Ada',
+            authorTime: 1,
+            summary: 'Add'
+          }
+        ]
+      })
+    } as unknown as OrcaRuntimeService
+    const dispatcher = new RpcDispatcher({ runtime, methods: GIT_METHODS })
+
+    const response = await dispatcher.dispatch(
+      makeRequest('git.blame', { worktree: 'id:wt-1', filePath: 'src/index.ts' })
+    )
+
+    expect(runtime.getRuntimeGitBlame).toHaveBeenCalledWith('id:wt-1', 'src/index.ts', undefined)
+    expect(response).toMatchObject({
+      ok: true,
+      result: { status: 'ready', lines: [expect.objectContaining({ author: 'Ada' })] }
+    })
+  })
+
+  it('forwards an optional blame revision', async () => {
+    const runtime = {
+      getRuntimeId: () => 'test-runtime',
+      getRuntimeGitBlame: vi.fn().mockResolvedValue({ status: 'ready', lines: [] })
+    } as unknown as OrcaRuntimeService
+    const dispatcher = new RpcDispatcher({ runtime, methods: GIT_METHODS })
+    const commitId = 'a'.repeat(40)
+
+    await dispatcher.dispatch(
+      makeRequest('git.blame', {
+        worktree: 'id:wt-1',
+        filePath: 'src/index.ts',
+        revision: commitId
+      })
+    )
+
+    expect(runtime.getRuntimeGitBlame).toHaveBeenCalledWith('id:wt-1', 'src/index.ts', commitId)
+  })
+
   it('returns ignored paths for selected explorer rows', async () => {
     const runtime = {
       getRuntimeId: () => 'test-runtime',

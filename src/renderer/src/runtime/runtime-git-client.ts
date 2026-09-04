@@ -4,6 +4,7 @@ import {
   getRuntimeGitBranchDiff as getRuntimeGitBranchDiffImplementation,
   getRuntimeGitCommitCompare as getRuntimeGitCommitCompareImplementation,
   getRuntimeGitCommitDiff as getRuntimeGitCommitDiffImplementation,
+  getRuntimeGitBlame as getRuntimeGitBlameImplementation,
   getRuntimeGitDiff as getRuntimeGitDiffImplementation
 } from './runtime-git-diff-client'
 import {
@@ -74,6 +75,7 @@ export const rebaseRuntimeGitFromBase = rebaseRuntimeGitFromBaseImplementation
 export const pushRuntimeGit = pushRuntimeGitImplementation
 export const getRuntimeGitBranchDiff = getRuntimeGitBranchDiffImplementation
 export const getRuntimeGitCommitDiff = getRuntimeGitCommitDiffImplementation
+export const getRuntimeGitBlame = getRuntimeGitBlameImplementation
 export const commitRuntimeGit = commitRuntimeGitImplementation
 export const generateRuntimeCommitMessage = generateRuntimeCommitMessageImplementation
 export const discoverRuntimeCommitMessageModels = discoverRuntimeCommitMessageModelsImplementation

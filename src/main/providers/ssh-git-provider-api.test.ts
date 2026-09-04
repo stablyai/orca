@@ -36,6 +36,7 @@ describe('SshGitProvider public API parity', () => {
       'listLocalBranches',
       'getBranchCompare',
       'getCommitCompare',
+      'getBlame',
       'getUpstreamStatus',
       'pushBranch',
       'pullBranch',
@@ -64,7 +65,7 @@ describe('SshGitProvider public API parity', () => {
       'getRemoteCommitUrl'
     ] as const
 
-    expect(methods).toHaveLength(52)
+    expect(methods).toHaveLength(53)
     for (const method of methods) {
       expect(provider[method], method).toBeTypeOf('function')
     }

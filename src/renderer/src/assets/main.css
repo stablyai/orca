@@ -2229,6 +2229,27 @@ html.native-shell .app-layout {
   opacity: 0.92;
 }
 
+.monaco-editor .orca-git-line-blame {
+  box-sizing: border-box;
+  max-width: 60ch;
+  padding-left: 2ch;
+  color: var(--muted-foreground, #8b949e);
+  cursor: pointer;
+  font-style: italic;
+  font-weight: 400;
+  opacity: 0.55;
+  overflow: hidden;
+  pointer-events: auto;
+  text-overflow: ellipsis;
+  user-select: none;
+  white-space: nowrap;
+}
+
+.monaco-editor .orca-git-line-blame:hover {
+  opacity: 0.9;
+  text-decoration: underline;
+}
+
 /* Why: Monaco's find-widget button tooltips (Close, Find in Selection, etc.)
    render inside a `.context-view` wrapper → `.workbench-hover-container` →
    `.workbench-hover.compact`, positioned above the target button. The wrapper's

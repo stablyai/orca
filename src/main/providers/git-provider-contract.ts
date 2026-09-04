@@ -1,3 +1,4 @@
+import type { GitBlameResult } from '../../shared/git-blame'
 import type {
   GitBranchCompareResult,
   GitCommitCompareResult,
@@ -53,6 +54,7 @@ export type IGitProvider = {
     options?: { admissionTier?: GitAdmissionTier }
   ): Promise<GitBranchCompareResult>
   getCommitCompare(worktreePath: string, commitId: string): Promise<GitCommitCompareResult>
+  getBlame(worktreePath: string, filePath: string, revision?: string): Promise<GitBlameResult>
   getUpstreamStatus(worktreePath: string, pushTarget?: GitPushTarget): Promise<GitUpstreamStatus>
   pushBranch(
     worktreePath: string,

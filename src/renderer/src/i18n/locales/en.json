@@ -7005,6 +7005,8 @@
           "80c454e8a6": "Match this to your provider's cache TTL."
         },
         "GeneralEditorSettingsSection": {
+          "gitLineBlame": "Git Line Blame",
+          "gitLineBlameDesc": "Show who last changed the current line. Click the annotation to open that commit’s diff.",
           "f80603d293": "Show local markdown note controls in rich editor mode and agent handoff actions.",
           "4edc104f0f": "Markdown Review Notes",
           "5f02e6fb21": "Show local markdown review note controls in rich editor mode.",
@@ -9488,6 +9490,13 @@
             "e3919429c0": "overview",
             "9c72990db8": "minimap",
             "716a4dfb1f": "Show the minimap overview when editing a file.",
+            "gitLineBlame": "Git Line Blame",
+            "gitLineBlameDesc": "Show who last changed the current line. Click the annotation to open that commit’s diff.",
+            "gitKw": "git",
+            "blameKw": "blame",
+            "gitlensKw": "gitlens",
+            "authorKw": "author",
+            "commitKw": "commit",
             "6f584fcb48": "Minimap",
             "19baae651b": "sidebar",
             "973ed6bfbf": "combined diff",
@@ -14431,6 +14440,11 @@
         }
       },
       "editor": {
+        "gitLineBlame": {
+          "uncommittedLabel": "Not Committed Yet",
+          "uncommittedToast": "This line is not committed yet.",
+          "openFailed": "Failed to open commit diff"
+        },
         "ChangesModeView": {
           "ef25ae2d09": "No uncommitted changes.",
           "052c184f24": "Text diff is unavailable for this file.",

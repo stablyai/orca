@@ -16,6 +16,7 @@ import {
 import { computeDiff, type GitExec } from './git-handler-ops'
 import { checkIgnoredPathsOp } from './git-handler-check-ignore'
 import { loadGitHistoryFromExecutor } from '../shared/git-history'
+import { blameFile } from './git-handler-blame-ops'
 import { stableInFlightKey } from '../shared/in-flight-promise-dedupe'
 
 function resolveSubmoduleStatusArea(
@@ -96,6 +97,13 @@ export class GitHandlerReadOperations extends GitHandlerOperationContext {
       limit: typeof params.limit === 'number' ? params.limit : undefined,
       baseRef: typeof params.baseRef === 'string' ? params.baseRef : null
     })
+  }
+
+  async blame(params: Record<string, unknown>) {
+    const worktreePath = params.worktreePath as string
+    const filePath = params.filePath as string
+    const revision = typeof params.revision === 'string' ? params.revision : undefined
+    return blameFile(this.git.bind(this), worktreePath, filePath, revision)
   }
 
   async getDiff(params: Record<string, unknown>, context?: RequestContext) {

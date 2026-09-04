@@ -81,6 +81,10 @@ describe('getDefaultSettings', () => {
     expect(getDefaultSettings('/tmp').editorWordWrap).toBe(true)
   })
 
+  it('keeps editor git line blame enabled by default', () => {
+    expect(getDefaultSettings('/tmp').editorGitLineBlameEnabled).toBe(true)
+  })
+
   it('keeps rich Markdown spellcheck enabled by default', () => {
     expect(getDefaultSettings('/tmp').richMarkdownSpellcheckEnabled).toBe(true)
   })

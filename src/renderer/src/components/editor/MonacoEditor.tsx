@@ -13,6 +13,7 @@ import { isLinuxUserAgent } from '../terminal-pane/pane-helpers'
 import { buildFileEditorWordWrapOptions } from './file-editor-word-wrap-options'
 import { getMonacoAutoHeightForContent, isMonacoAutoHeightCapped } from './monaco-auto-height'
 import { monacoFindOptions } from './monaco-find-options'
+import { useGitLineBlame } from './useGitLineBlame'
 import { useMonacoRevealScheduler } from './use-monaco-reveal-scheduler'
 import type { MonacoContentSyncMode } from './monaco-content-sync'
 import { useMonacoContentSyncBridge } from './use-monaco-content-sync-bridge'
@@ -86,6 +87,16 @@ export default function MonacoEditor({
 
   const settings = useAppStore((s) => s.settings)
   const editorFontZoomLevel = useAppStore((s) => s.editorFontZoomLevel)
+  useGitLineBlame({
+    editor: mountedEditor,
+    enabled:
+      !autoHeight &&
+      !liveTail &&
+      Boolean(worktreeId) &&
+      settings?.editorGitLineBlameEnabled !== false,
+    worktreeId,
+    relativePath
+  })
   const setPendingEditorReveal = useAppStore((s) => s.setPendingEditorReveal)
   const setEditorCursorLine = useAppStore((s) => s.setEditorCursorLine)
   const editorFontSize = computeEditorFontSize(

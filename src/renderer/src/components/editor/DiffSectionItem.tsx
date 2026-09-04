@@ -7,10 +7,7 @@ import { useAppStore } from '@/store'
 import { computeDiffEditorFontSize, resolveEditorFontFamily } from '@/lib/editor-font-zoom'
 import { selectWorktreeDiffComments } from '@/store/worktree-diff-comments-selector'
 import { useDiffCommentDecorator } from '../diff-comments/useDiffCommentDecorator'
-import {
-  getDiffCommentPopoverLeft,
-  getDiffCommentPopoverTop
-} from '../diff-comments/diff-comment-popover-position'
+import { getDiffCommentPopoverLeft } from '../diff-comments/diff-comment-popover-position'
 import { applyDiffEditorLineNumberOptions } from './diff-editor-line-number-options'
 import { DiffSectionHeader } from './DiffSectionHeader'
 import type { DiffComment } from '../../../../shared/diff-comment-types'
@@ -21,6 +18,8 @@ import { useDiffSectionLayoutMetrics } from './useDiffSectionLayoutMetrics'
 import { getLiveDiffSectionRenderLimit } from './diff-section-live-render-limit'
 import { useDiffSectionFallbackCleanup } from './useDiffSectionFallbackCleanup'
 import { submitDiffSectionComment } from './diff-section-comment-submit'
+import { useDiffCommentPopoverLayout } from './useDiffCommentPopoverLayout'
+import { useDiffPaneGitLineBlame } from './useDiffPaneGitLineBlame'
 import type { DiffSectionItemProps } from './diff-section-item-props'
 import { useDiffSectionModelLifecycle } from './use-diff-section-model-lifecycle'
 
@@ -33,6 +32,9 @@ export function DiffSectionItem({
   settings,
   sectionHeight,
   worktreeId,
+  originalBlamePath,
+  originalBlameRevision,
+  modifiedBlameRevision,
   loadSection,
   loadDeferredSection,
   retrySection,
@@ -80,7 +82,15 @@ export function DiffSectionItem({
     editorFontZoomLevel
   )
 
-  const [modifiedEditor, setModifiedEditor] = useState<monacoEditor.ICodeEditor | null>(null)
+  const { modifiedEditor, setOriginalEditor, setModifiedEditor } = useDiffPaneGitLineBlame({
+    worktreeId,
+    relativePath: section.path,
+    originalBlamePath,
+    originalBlameRevision,
+    modifiedBlameRevision,
+    widgetKeyPrefix: `diff:${section.key}`,
+    extraEnabled: !section.collapsed
+  })
   const diffEditorRef = useRef<monacoEditor.IStandaloneDiffEditor | null>(null)
   const sectionBodyRef = useRef<HTMLDivElement | null>(null)
   const lineNumberOptionsSubRef = useRef<{ dispose: () => void } | null>(null)
@@ -135,35 +145,12 @@ export function DiffSectionItem({
     onPendingScrollConsumed: () => setScrollToDiffCommentId(null)
   })
 
-  useEffect(() => {
-    if (!modifiedEditor || !popover) {
-      return
-    }
-    const update = (): void => {
-      const lineHeight = modifiedEditor.getOption(monaco.editor.EditorOption.lineHeight)
-      const top = getDiffCommentPopoverTop(modifiedEditor, popover.lineNumber, lineHeight)
-      if (top == null) {
-        setPopover(null)
-        return
-      }
-      const left = getDiffCommentPopoverLeft(modifiedEditor, sectionBodyRef.current)
-      setPopover((prev) =>
-        prev ? { ...prev, top, left: left == null ? prev.left : left, lineHeight } : prev
-      )
-    }
-    const scrollSub = modifiedEditor.onDidScrollChange(update)
-    const contentSub = modifiedEditor.onDidContentSizeChange(update)
-    const layoutSub = modifiedEditor.onDidLayoutChange(update)
-    return () => {
-      scrollSub.dispose()
-      contentSub.dispose()
-      layoutSub.dispose()
-    }
-    // Why: depend on popover.lineNumber (not the whole popover object) so the
-    // effect doesn't re-subscribe on every top update it dispatches. The guard
-    // on `popover` above handles the popover-closed case.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [modifiedEditor, popover?.lineNumber])
+  useDiffCommentPopoverLayout({
+    editor: modifiedEditor,
+    popover,
+    containerRef: sectionBodyRef,
+    setPopover
+  })
 
   useEffect(() => {
     const diffEditor = diffEditorRef.current
@@ -213,6 +200,7 @@ export function DiffSectionItem({
     lineNumberOptionsSubRef.current?.dispose()
     lineNumberOptionsSubRef.current = applyDiffEditorLineNumberOptions(editor, sideBySide)
     const modified = editor.getModifiedEditor()
+    const original = editor.getOriginalEditor()
 
     // Why: measuring before Monaco computes hidden unchanged regions records
     // full-file height, making virtualized combined diffs jump as rows remount.
@@ -250,6 +238,7 @@ export function DiffSectionItem({
       markDiffLayoutReady()
     }
 
+    setOriginalEditor(original)
     setModifiedEditor(modified)
     // Why: Monaco disposes inner editors when the DiffEditor container is
     // unmounted (e.g. section collapse, tab change). Clearing the state
@@ -270,6 +259,7 @@ export function DiffSectionItem({
         modifiedEditorsRef.current.delete(index)
       }
       setModifiedEditor(null)
+      setOriginalEditor(null)
       setPopover(null)
     })
 
@@ -278,7 +268,6 @@ export function DiffSectionItem({
     }
 
     modifiedEditorsRef.current.set(index, modified)
-    const original = editor.getOriginalEditor()
     const cleanupSaveShortcut = installEditorSaveShortcut(modified.getContainerDomNode(), () =>
       handleSectionSaveRef.current(index)
     )

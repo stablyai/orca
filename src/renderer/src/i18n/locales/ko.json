@@ -5992,6 +5992,8 @@
           "80c454e8a6": "이를 공급자의 캐시 TTL과 일치시킵니다."
         },
         "GeneralEditorSettingsSection": {
+          "gitLineBlame": "Git 줄 Blame",
+          "gitLineBlameDesc": "현재 줄을 마지막으로 바꾼 사람과 커밋을 보여 줍니다. 주석을 클릭하면 해당 커밋 diff가 열립니다.",
           "f80603d293": "리치 에디터 모드 및 agent 전달 작업에서 로컬 markdown 메모 컨트롤을 표시합니다.",
           "4edc104f0f": "Markdown 리뷰 노트",
           "5f02e6fb21": "리치 에디터 모드에서 로컬 markdown 리뷰 노트 컨트롤을 표시합니다.",
@@ -8322,6 +8324,13 @@
             "e3919429c0": "개요",
             "9c72990db8": "미니맵",
             "716a4dfb1f": "파일을 편집할 때 미니맵 개요를 표시합니다.",
+            "gitLineBlame": "Git 줄 Blame",
+            "gitLineBlameDesc": "현재 줄을 마지막으로 바꾼 사람과 커밋을 보여 줍니다. 주석을 클릭하면 해당 커밋 diff가 열립니다.",
+            "gitKw": "git",
+            "blameKw": "blame",
+            "gitlensKw": "gitlens",
+            "authorKw": "작성자",
+            "commitKw": "커밋",
             "6f584fcb48": "미니맵",
             "19baae651b": "사이드바",
             "973ed6bfbf": "결합된 차이",
@@ -12804,6 +12813,11 @@
         }
       },
       "editor": {
+        "gitLineBlame": {
+          "uncommittedLabel": "아직 커밋되지 않음",
+          "uncommittedToast": "이 줄은 아직 커밋되지 않았습니다.",
+          "openFailed": "커밋 diff를 열지 못했습니다"
+        },
         "ChangesModeView": {
           "ef25ae2d09": "commit 되지 않은 변경 사항이 없습니다.",
           "052c184f24": "이 파일에는 텍스트 비교를 사용할 수 없습니다.",

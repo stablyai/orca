@@ -2,6 +2,7 @@ import { translate } from '@/i18n/i18n'
 import type { OpenFile } from '@/store/slices/editor'
 import type { GitDiffResult } from '../../../../shared/git-diff-compare-types'
 import { getDiffContentSignature } from './diff-content-signature'
+import { getFileDiffBlameRevisions } from './diff-blame-revisions'
 import { DiffViewer, ImageDiffViewer, MarkdownPreview } from './editor-lazy-views'
 import { ExternalFileChangeBanner } from './ExternalFileChangeBanner'
 import type { useMarkdownDocuments } from './useMarkdownDocuments'
@@ -138,6 +139,7 @@ export function EditorDiffFileSurface({
   const diffReloadNonce = activeFile.diffContentReloadNonce ?? 0
   const originalModelKey = `${diffViewStateKey}:original:${getDiffContentSignature(diffContent.originalContent)}`
   const modifiedModelKey = `${diffViewStateKey}:modified:${getDiffContentSignature(diffContent.modifiedContent)}:${diffReloadNonce}`
+  const blameRevisions = getFileDiffBlameRevisions(activeFile)
   const diffViewer = (
     <DiffViewer
       // Why: content refreshes via modifiedModelKey; keying off content too would remount Monaco and flash on every save.
@@ -152,6 +154,9 @@ export function EditorDiffFileSurface({
       language={resolvedLanguage}
       filePath={activeFile.filePath}
       relativePath={activeFile.relativePath}
+      originalBlamePath={activeFile.branchOldPath}
+      originalBlameRevision={blameRevisions.originalRevision}
+      modifiedBlameRevision={blameRevisions.modifiedRevision}
       sideBySide={sideBySide}
       editable={isEditable}
       worktreeId={activeFile.worktreeId}

@@ -1,3 +1,4 @@
+import type { GitBlameResult } from '../../shared/git-blame'
 import type {
   GitBranchCompareResult,
   GitCommitCompareResult,
@@ -12,6 +13,7 @@ import {
   getCommitDiff,
   getDiff
 } from '../git/status'
+import { getFileBlame } from '../git/blame'
 import { awaitWindowsHostGitEnvironmentReady } from '../git/runner'
 import type { GitAdmissionTier } from '../git/command-runner/git-exec-options'
 import { normalizeRuntimeRelativePath } from './runtime-relative-paths'
@@ -80,6 +82,25 @@ export class RuntimeGitDiffCommands {
       ...localGitOptionsForTarget(target),
       admissionTier: 'interactive'
     })
+  }
+
+  async getRuntimeGitBlame(
+    worktreeSelector: string,
+    filePath: string,
+    revision?: string
+  ): Promise<GitBlameResult> {
+    const target = await this.host.resolveRuntimeGitTarget(worktreeSelector)
+    const relativePath = normalizeRuntimeGitRelativePath(filePath)
+    const provider = requireRuntimeGitProvider(target)
+    if (provider) {
+      return provider.getBlame(target.worktree.path, relativePath, revision)
+    }
+    return getFileBlame(
+      target.worktree.path,
+      relativePath,
+      { ...localGitOptionsForTarget(target), admissionTier: 'interactive' },
+      revision
+    )
   }
 
   async getRuntimeGitBranchDiff(

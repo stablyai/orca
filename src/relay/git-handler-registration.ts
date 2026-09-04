@@ -13,6 +13,7 @@ export function registerGitHandlers(
   )
   dispatcher.onRequest('git.checkIgnored', (p) => handlers.read.checkIgnored(p))
   dispatcher.onRequest('git.history', (p) => handlers.read.history(p))
+  dispatcher.onRequest('git.blame', (p) => handlers.read.blame(p))
   dispatcher.onRequest('git.commit', (p) => handlers.changes.commit(p))
   dispatcher.onRequest('git.diff', (p, context) => handlers.read.getDiff(p, context))
   dispatcher.onRequest('git.stage', (p) => handlers.changes.stage(p))

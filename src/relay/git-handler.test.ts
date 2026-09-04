@@ -42,6 +42,7 @@ describe('GitHandler', () => {
     expect(methods).toContain('git.status')
     expect(methods).toContain('git.checkIgnored')
     expect(methods).toContain('git.history')
+    expect(methods).toContain('git.blame')
     expect(methods).toContain('git.commit')
     expect(methods).toContain('git.diff')
     expect(methods).toContain('git.stage')

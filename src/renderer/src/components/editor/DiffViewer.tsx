@@ -9,10 +9,7 @@ import { useContextualCopySetup } from './useContextualCopySetup'
 import { selectWorktreeDiffComments } from '@/store/worktree-diff-comments-selector'
 import { useDiffCommentDecorator } from '../diff-comments/useDiffCommentDecorator'
 import { DiffCommentPopover } from '../diff-comments/DiffCommentPopover'
-import {
-  getDiffCommentPopoverLeft,
-  getDiffCommentPopoverTop
-} from '../diff-comments/diff-comment-popover-position'
+import { getDiffCommentPopoverLeft } from '../diff-comments/diff-comment-popover-position'
 import { applyDiffEditorLineNumberOptions } from './diff-editor-line-number-options'
 import type { DiffComment } from '../../../../shared/diff-comment-types'
 import { isDiffComment } from '@/lib/diff-comment-compat'
@@ -28,6 +25,9 @@ import { buildDiffEditorWordWrapOptions } from './diff-editor-word-wrap-options'
 import { useDiffEditorRegistration } from './diff-navigation-context'
 import { preserveDiffViewStateAcrossModelSwaps } from './diff-model-swap-view-state'
 import { monacoFindOptions } from './monaco-find-options'
+import { submitDiffViewerComment } from './diff-viewer-comment-submit'
+import { useDiffCommentPopoverLayout } from './useDiffCommentPopoverLayout'
+import { useDiffPaneGitLineBlame } from './useDiffPaneGitLineBlame'
 
 export default function DiffViewer({
   modelKey,
@@ -48,7 +48,10 @@ export default function DiffViewer({
   onContentChange,
   onSave,
   largeDiffRenderLimit,
-  largeDiffSaveContentAvailable
+  largeDiffSaveContentAvailable,
+  originalBlamePath,
+  originalBlameRevision,
+  modifiedBlameRevision
 }: DiffViewerProps): React.JSX.Element {
   const settings = useAppStore((s) => s.settings)
   const editorFontZoomLevel = useAppStore((s) => s.editorFontZoomLevel)
@@ -75,7 +78,6 @@ export default function DiffViewer({
   const { registerDiffEditor, unregisterDiffEditor } = useDiffEditorRegistration()
   const diffBodyRef = useRef<HTMLDivElement | null>(null)
   const lineNumberOptionsSubRef = useRef<{ dispose: () => void } | null>(null)
-  const [modifiedEditor, setModifiedEditor] = useState<editor.ICodeEditor | null>(null)
   const [popover, setPopover] = useState<{
     lineNumber: number
     startLine?: number
@@ -88,6 +90,15 @@ export default function DiffViewer({
     () => largeDiffRenderLimit ?? getLargeDiffRenderLimit({ originalContent, modifiedContent }),
     [largeDiffRenderLimit, originalContent, modifiedContent]
   )
+  const { modifiedEditor, setOriginalEditor, setModifiedEditor } = useDiffPaneGitLineBlame({
+    worktreeId,
+    relativePath,
+    originalBlamePath,
+    originalBlameRevision,
+    modifiedBlameRevision,
+    widgetKeyPrefix: 'diff',
+    extraEnabled: renderLimit.limited !== true
+  })
   const hasLineCommentAction = Boolean(worktreeId || onAddLineComment)
 
   // Why: only forward the pending scroll id when this viewer owns the comment, else unrelated viewers race to ack it.
@@ -127,33 +138,12 @@ export default function DiffViewer({
     onPendingScrollConsumed: () => setScrollToDiffCommentId(null)
   })
 
-  useEffect(() => {
-    if (!modifiedEditor || !popover) {
-      return
-    }
-    const update = (): void => {
-      const lineHeight = modifiedEditor.getOption(monaco.editor.EditorOption.lineHeight)
-      const top = getDiffCommentPopoverTop(modifiedEditor, popover.lineNumber, lineHeight)
-      if (top == null) {
-        setPopover(null)
-        return
-      }
-      const left = getDiffCommentPopoverLeft(modifiedEditor, diffBodyRef.current)
-      setPopover((prev) =>
-        prev ? { ...prev, top, left: left == null ? prev.left : left, lineHeight } : prev
-      )
-    }
-    const scrollSub = modifiedEditor.onDidScrollChange(update)
-    const contentSub = modifiedEditor.onDidContentSizeChange(update)
-    const layoutSub = modifiedEditor.onDidLayoutChange(update)
-    return () => {
-      scrollSub.dispose()
-      contentSub.dispose()
-      layoutSub.dispose()
-    }
-    // Why: depend on popover.lineNumber (not the whole object) so the effect doesn't re-subscribe on every top update.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [modifiedEditor, popover?.lineNumber])
+  useDiffCommentPopoverLayout({
+    editor: modifiedEditor,
+    popover,
+    containerRef: diffBodyRef,
+    setPopover
+  })
 
   // Why: center the first diff from a dedicated effect (not handleMount) so it runs after the decorator's view zones, which would otherwise shift content downward.
   const didAutoScrollFirstDiffRef = useRef(false)
@@ -228,42 +218,25 @@ export default function DiffViewer({
     if (fallenBackEditor) {
       unregisterDiffEditor(fallenBackEditor)
     }
+    setOriginalEditor(null)
     setModifiedEditor(null)
     setPopover(null)
-  }, [unregisterDiffEditor])
+  }, [setModifiedEditor, setOriginalEditor, unregisterDiffEditor])
 
   const handleSubmitComment = async (body: string): Promise<void> => {
     if (!popover) {
       return
     }
-    if (onAddLineComment) {
-      const ok = await onAddLineComment({
-        lineNumber: popover.lineNumber,
-        startLine: popover.startLine,
-        body
-      })
-      if (ok) {
-        setPopover(null)
-      }
-      return
-    }
-    if (!worktreeId) {
-      return
-    }
-    // Why: await persistence — a null result (failed save) keeps the popover open for retry instead of losing the draft.
-    const result = await addDiffComment({
-      worktreeId,
-      filePath: relativePath,
-      source: 'diff',
-      startLine: popover.startLine,
-      lineNumber: popover.lineNumber,
+    const submitted = await submitDiffViewerComment({
+      addDiffComment,
       body,
-      side: 'modified'
+      onAddLineComment,
+      popover,
+      relativePath,
+      worktreeId
     })
-    if (result) {
+    if (submitted) {
       setPopover(null)
-    } else {
-      console.error('Failed to add diff comment — draft preserved')
     }
   }
 
@@ -299,6 +272,7 @@ export default function DiffViewer({
 
       setupCopy(originalEditor, monaco, filePath, propsRef)
       setupCopy(modifiedEditor, monaco, filePath, propsRef)
+      setOriginalEditor(originalEditor)
       setModifiedEditor(modifiedEditor)
 
       // Why: restore full diff view state (not just scrollTop) so cursor/selection stay consistent across both panes.
@@ -341,11 +315,22 @@ export default function DiffViewer({
         lineNumberOptionsSubRef.current = null
         diffEditorRef.current = null
         unregisterDiffEditor(diffEditor)
+        setOriginalEditor(null)
         setModifiedEditor(null)
         setPopover(null)
       })
     },
-    [editable, setupCopy, modelKey, filePath, sideBySide, registerDiffEditor, unregisterDiffEditor]
+    [
+      editable,
+      setupCopy,
+      modelKey,
+      filePath,
+      sideBySide,
+      registerDiffEditor,
+      unregisterDiffEditor,
+      setOriginalEditor,
+      setModifiedEditor
+    ]
   )
 
   // Why: snapshot view state on deactivation (layoutEffect cleanup fires before unmount), not on scroll.
