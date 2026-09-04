@@ -13,6 +13,17 @@ export const TerminalFocus = TerminalHandle.extend({
   navigation: z.enum(['caller', 'host']).optional()
 })
 
+/**
+ * `terminal.inspectProcess` carries one member the sibling handle methods must not: whether the
+ * caller's answer decides something once, which is what licenses the host to pay for a process-table
+ * read. Extended rather than added to `TerminalHandle` so `clearBuffer`/`agentStatus`/`isRunningAgent`
+ * keep refusing an option they have no use for.
+ */
+export const TerminalInspectProcess = TerminalHandle.extend({
+  // Additive request member understood by newer hosts; legacy hosts safely ignore it.
+  scanChildProcesses: z.boolean().optional()
+})
+
 export const TerminalListParams = z.object({
   worktree: OptionalString,
   limit: OptionalFiniteNumber,

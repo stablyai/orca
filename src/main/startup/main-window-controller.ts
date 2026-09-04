@@ -10,7 +10,10 @@ import { resolveConsent } from '../telemetry/consent'
 import { trackAppOpenedOnce } from '../telemetry/client'
 import { ensureWindowsUserDataAclGrant } from './windows-user-data-acl'
 import { probeWindowsInstallDirAcl } from './windows-install-dir-acl-probe'
-import { startWindowsInstallDirAclRepairIfPoisoned } from './windows-install-dir-acl-recovery'
+import {
+  noteWindowsInstallDirAclProbePending,
+  startWindowsInstallDirAclRepairIfPoisoned
+} from './windows-install-dir-acl-recovery'
 import { logStartupMilestone } from './startup-diagnostics'
 import { notifyMainWindowBecameVisible } from '../window/main-window-visibility'
 import { setTrayAttention } from '../tray/system-tray'
@@ -74,7 +77,7 @@ export function openMainWindow(options: { revealOnDidFinishLoad?: boolean } = {}
     })
     // Why here: read-only, and the install DACL is the one thing a 0x80000003
     // child death cannot tell us about itself. See electron/electron#51761.
-    probeWindowsInstallDirAcl({
+    const probeDispatched = probeWindowsInstallDirAcl({
       isServeMode: state.isServeMode,
       onDone: (data) =>
         startWindowsInstallDirAclRepairIfPoisoned(data, {
@@ -83,6 +86,12 @@ export function openMainWindow(options: { revealOnDidFinishLoad?: boolean } = {}
           appVersion: app.getVersion()
         })
     })
+    // Why gated on the dispatch: the probe is once-per-process while openMainWindow
+    // re-runs on every reopen, so arming this again would wait on a verdict that
+    // already landed — and drop every GPU crash for the grace window.
+    if (probeDispatched) {
+      noteWindowsInstallDirAclProbePending()
+    }
   }
   const window = createMainWindow(store, {
     getIsQuitting: () => state.isQuitting,

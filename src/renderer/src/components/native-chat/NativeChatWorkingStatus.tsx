@@ -3,6 +3,21 @@ import { ChevronRight } from 'lucide-react'
 import { translate } from '@/i18n/i18n'
 import { useNow } from '@/hooks/use-now'
 
+/** Format turn time without exposing an ever-growing raw seconds count. */
+export function formatNativeChatDuration(seconds: number): string {
+  const totalSeconds = Number.isFinite(seconds) ? Math.max(0, Math.floor(seconds)) : 0
+  if (totalSeconds < 60) {
+    return `${totalSeconds}s`
+  }
+  const minutes = Math.floor(totalSeconds / 60)
+  const remainingSeconds = totalSeconds % 60
+  if (minutes < 60) {
+    return `${minutes}m ${remainingSeconds}s`
+  }
+  const hours = Math.floor(minutes / 60)
+  return `${hours}h ${minutes % 60}m ${remainingSeconds}s`
+}
+
 export function NativeChatWorkingStatus({
   startedAt,
   thinking,
@@ -30,13 +45,13 @@ export function NativeChatWorkingStatus({
 
   const label =
     workedSeconds != null
-      ? translate('components.native-chat.status.workedFor', 'Worked for {{value0}} seconds', {
-          value0: workedSeconds
+      ? translate('components.native-chat.status.workedFor', 'Worked for {{value0}}', {
+          value0: formatNativeChatDuration(workedSeconds)
         })
       : thinking
         ? translate('components.native-chat.status.thinking', 'Thinking')
-        : translate('components.native-chat.status.workingFor', 'Working for {{value0}} seconds', {
-            value0: elapsedSeconds
+        : translate('components.native-chat.status.workingFor', 'Working for {{value0}}', {
+            value0: formatNativeChatDuration(elapsedSeconds)
           })
 
   const className = `flex min-h-8 items-center gap-1 text-sm text-muted-foreground${thinking ? '' : ' border-b border-border'}`

@@ -32,6 +32,7 @@ import {
 } from '../../../shared/agent-session-mutation-envelope'
 import type { AgentSessionRecordStore } from '../../runtime/agent-session-record-store'
 import { agentSessionProviderHandleChainHead } from '../../../shared/agent-session-provider-handle'
+import { agentSessionJournalCloseRetries } from '../agent-session-journal/journal-close-retry'
 import { journalDirectoryFor } from '../agent-session-journal/journal-paths'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import {
@@ -171,9 +172,18 @@ export async function attachJournal(input: {
     fence,
     historyFilePath
   })
-  return {
-    ...opened,
-    unconfirmedClientMessageIds: await opened.journal.markPendingSubmissionsUnknown(fence)
+  try {
+    // That await is a WRITE. A failure in it leaves the journal with no caller
+    // holding a reference to close it.
+    return {
+      ...opened,
+      unconfirmedClientMessageIds: await opened.journal.markPendingSubmissionsUnknown(fence)
+    }
+  } catch (error) {
+    // A rejected close leaves the handle open, so the journal is retained for a
+    // later retry rather than dropped along with the only reference to it.
+    await agentSessionJournalCloseRetries.closeOrRetain(opened.journal)
+    throw error
   }
 }
 

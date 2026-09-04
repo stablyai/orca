@@ -160,7 +160,8 @@ describe('relay/desktop unmerged-entry porcelain parity', () => {
     const unmergedLines = [
       'u UU N... 100644 100644 100644 100644 aa bb cc plain.ts',
       'u UD N... 100644 100644 000000 100644 aa bb cc "present \\303\\251.ts"',
-      'u UD N... 100644 100644 000000 100644 aa bb cc "missing \\303\\251.ts"',
+      // mW=000000: real Git reports an absent working-tree path this way, and the file is not created below.
+      'u UD N... 100644 100644 000000 000000 aa bb cc "missing \\303\\251.ts"',
       'u DD N... 100644 100644 000000 000000 aa bb cc both-gone.ts'
     ]
     const git = vi.fn<GitExec>(async (args) => {

@@ -8,12 +8,14 @@ import type {
 } from '../../../shared/agent-session-record'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../shared/execution-host'
 import { AgentSessionRecordStore } from '../../runtime/agent-session-record-store'
-import { openAgentSessionJournal } from '../agent-session-journal/journal-store-factory'
+import { createTrackedJournalOpener } from '../agent-session-journal/journal-store-test-open'
 import { createDeferredStructuredAgentSessionEventSink } from './structured-agent-session-event-sink'
 import {
   acquireNativeHandoffOwner,
   structuredTuiTranscriptImportOptions
 } from './structured-agent-session-host-handoff'
+
+const journals = createTrackedJournalOpener()
 
 function importRecord(provider: 'claude' | 'codex', accountHome: string): AgentSessionRecord {
   return {
@@ -54,6 +56,7 @@ describe('native handoff acquisition', () => {
   })
 
   afterEach(async () => {
+    await journals.closeAll()
     await rm(root, { recursive: true, force: true })
   })
 
@@ -82,7 +85,7 @@ describe('native handoff acquisition', () => {
       },
       now
     })
-    const journal = await openAgentSessionJournal({
+    const journal = await journals.open({
       identity: {
         sessionId,
         workspaceId: location.workspaceId,

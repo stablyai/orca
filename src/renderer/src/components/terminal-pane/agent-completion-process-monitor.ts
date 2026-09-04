@@ -101,6 +101,9 @@ export function createAgentCompletionProcessMonitor({
     enqueueAgentProcessInspection({
       priority,
       canRun: () => !state.disposed,
+      // Local reads all resolve out of one process-table capture; remote ones each cost their
+      // own execution-host round trip and stay admitted one at a time.
+      sharesHostObservation: options.isRemotePtyId?.(ptyId) !== true,
       run: async () => {
         let inspectedRecognizedAgent = false
         let inspectionSucceeded = false

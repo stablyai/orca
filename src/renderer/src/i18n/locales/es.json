@@ -20,7 +20,8 @@
         "chinese": "中文（简体）",
         "korean": "한국어",
         "japanese": "日本語",
-        "spanish": "Español"
+        "spanish": "Español",
+        "french": "Français"
       },
       "statusBar": {
         "claudeToggleDescription": "Muestra el consumo de tokens y el costo de Claude para el espacio de trabajo activo.",
@@ -1923,7 +1924,7 @@
       "Terminal": {
         "73768427cf": "Cerrar",
         "f82e9f02df": "Cancelar",
-        "7958465754": "Hay terminales locales con procesos en ejecución. ¿Cerrar la ventana de todos modos?",
+        "7958465754": "Hay terminales con procesos en ejecución. ¿Cerrar la ventana de todos modos?",
         "2fa9c69ff3": "¿Cerrar ventana?",
         "cd51e28d8b": "Guardar",
         "0037b21794": "No guardar",

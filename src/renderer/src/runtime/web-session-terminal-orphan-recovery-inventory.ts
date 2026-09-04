@@ -18,6 +18,7 @@ import {
   type RecoverySurface
 } from './web-session-terminal-orphan-recovery-surface'
 import { runInTerminalRecoveryRpcLane } from './web-session-terminal-orphan-recovery-rpc-lane'
+import { hostScopeCensusIsComplete } from '../../../shared/runtime-listing-host-scope'
 
 type RuntimeCall = (args: {
   selector: string
@@ -163,9 +164,9 @@ export async function resolveTerminalOrphanInventory(args: {
       listedByHandle.set(terminal.handle, terminal)
     }
   }
-  // Older hosts omit hostScope entirely; an unscoped absence cannot prove a PTY exited.
-  const hostScopeUnverifiable =
-    listed.hostScope === undefined || listed.hostScope.omittedHostIds.length > 0
+  // Older hosts omit hostScope entirely; an unscoped absence cannot prove a PTY exited. A peer
+  // runtime named in `omittedHostIds` is disclosure rather than a gap this host owed (#18595).
+  const hostScopeUnverifiable = !hostScopeCensusIsComplete(listed.hostScope)
   const dispositions = new Map<string, RecoveryDisposition>()
   const claims: RuntimeTerminalOrphanAdoptionClaim[] = []
   for (const surface of inventorySurfaces) {

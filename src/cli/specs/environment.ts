@@ -10,7 +10,8 @@ export const ENVIRONMENT_COMMAND_SPECS: CommandSpec[] = [
     notes: [
       'Answers "what can I target and what do I pass" in one place: this machine, the SSH targets registered on it, and the Orca servers paired with it.',
       'The three kinds are reached differently. A paired Orca server is a connection, selected with --environment <name>. An SSH target is a machine the connected Orca host reaches, selected with --host ssh:<id>. Passing one where the other belongs is the most common way to get an empty or missing-host answer.',
-      "SSH targets are read from the Orca host you are currently connected to, so this lists that host's targets and not another server's."
+      "SSH targets are read from this machine's own Orca runtime, so this lists that machine's targets and not another server's. Run `orca host list` on the other machine to see the targets registered there.",
+      '--environment and --pairing-code are rejected rather than ignored: paired servers come from this machine\u2019s pairing store, so a routed answer would describe two machines at once.'
     ],
     examples: ['orca host list', 'orca host list --json']
   },
@@ -25,7 +26,10 @@ export const ENVIRONMENT_COMMAND_SPECS: CommandSpec[] = [
     path: ['environment', 'list'],
     summary: 'List saved Orca runtime environments',
     usage: 'orca environment list [--json]',
-    allowedFlags: [...GLOBAL_FLAGS]
+    allowedFlags: [...GLOBAL_FLAGS],
+    notes: [
+      'Answers from this machine\u2019s pairing store. --environment and --pairing-code are rejected rather than ignored, because there is no other host that could answer.'
+    ]
   },
   {
     path: ['environment', 'show'],

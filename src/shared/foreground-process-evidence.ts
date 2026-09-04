@@ -17,14 +17,20 @@ export type ForegroundProcessEvidence =
   | ({
       verdict: 'live'
       processName: string | null
-      /** True only when the host observed every process group attached to this PTY's terminal to be
-       *  the shell's own, with none of them stopped — i.e. nothing is running in the pane, in the
-       *  foreground OR the background, and nothing sits suspended.
+      /** True only when the host observed BOTH units a forced stop can reach to hold nothing but
+       *  the shell: every process group attached to this PTY's terminal is the shell's own with
+       *  none of them stopped, AND the shell's own process group has no other member anywhere on
+       *  the host. I.e. nothing is running in the pane, in the foreground OR the background, and
+       *  nothing sits suspended.
        *
        *  Deliberately not `tpgid === pgid`: a job the user backgrounded with `&` and a job the user
        *  suspended with Ctrl-Z both hand the terminal back to the shell, so a foreground-only
-       *  predicate reads them as idle. This one is measured against the same set of process groups
-       *  a forced stop would SIGKILL.
+       *  predicate reads them as idle. Deliberately not the tty alone either: with job control off
+       *  (`set +m`) a background job keeps the shell's pgid, and a child that drops the controlling
+       *  terminal leaves every tty index entirely — both are still inside `killpg`'s reach.
+       *
+       *  The name is tty-shaped for wire reasons only. It shipped that way and old clients read it;
+       *  the value has only ever become stricter, which makes an old client skip more, never less.
        *
        *  False means something IS running, named or not. Absent from a host that predates the
        *  field, which is neither: a reader deciding whether the pane is idle must require `true`

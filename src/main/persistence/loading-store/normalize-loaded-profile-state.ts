@@ -25,6 +25,7 @@ import {
   normalizeLoadedProjectCatalog
 } from './normalize-loaded-state-collections'
 import { normalizeRetiredNameRegistryMap } from './retired-name-registry-normalization'
+import { hydrateWorktreeMetaAliasProjection } from './worktree-meta-alias-projection'
 
 export function normalizeLoadedProfileState(
   parsed: PersistedState,
@@ -53,6 +54,13 @@ export function normalizeLoadedProfileState(
     folderWorkspaceDiffComments: normalizeFolderWorkspaceDiffComments(
       parsed.folderWorkspaceDiffComments
     ),
+    // Rebuilds the identity rows the serializer left to the locator map, and restores the shared
+    // object reference JSON.parse splits. Not `markNeedsSave`: this IS the canonical on-disk shape.
+    // Conditional so a file with no identity map keeps none, rather than gaining an own key whose
+    // value is `undefined`.
+    ...(parsed.worktreeMetaByIdentity === undefined
+      ? {}
+      : { worktreeMetaByIdentity: hydrateWorktreeMetaAliasProjection(parsed) }),
     worktreeLineageById: parsed.worktreeLineageById ?? {},
     mobileClientTabSelectionsByDeviceId: normalizePersistedMobileClientTabSelections(
       parsed.mobileClientTabSelectionsByDeviceId

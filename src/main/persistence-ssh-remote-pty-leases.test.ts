@@ -526,12 +526,9 @@ describe('Store', () => {
     store.markSshRemotePtyLeases('ssh-1', 'terminated')
 
     const session = store.getWorkspaceSession()
-    expect(store.getSshRemotePtyLeases('ssh-1')).toEqual([
-      expect.objectContaining({
-        ptyId: 'remote-pty',
-        state: 'terminated'
-      })
-    ])
+    // The scrub is what retires the row: with no binding left naming the id, the tombstone routes
+    // nothing and is dropped in the same write.
+    expect(store.getSshRemotePtyLeases('ssh-1')).toEqual([])
     expect(session.tabsByWorktree.wt1[0].ptyId).toBeNull()
     expect(session.terminalLayoutsByTabId.tab1.ptyIdsByLeafId).toEqual({})
   })
@@ -622,12 +619,8 @@ describe('Store', () => {
 
     store.markSshRemotePtyLease('ssh-1', 'ssh:ssh-1@@remote-pty', 'terminated')
 
-    expect(store.getSshRemotePtyLeases('ssh-1')).toEqual([
-      expect.objectContaining({
-        ptyId: 'remote-pty',
-        state: 'terminated'
-      })
-    ])
+    // An unresolved id would have left the lease `attached`; this unbound row is retired instead.
+    expect(store.getSshRemotePtyLeases('ssh-1')).toEqual([])
   })
 
   // `expired` never means the shell exited — every writer records that the CLIENT lost its route
@@ -658,12 +651,7 @@ describe('Store', () => {
     store.markSshRemotePtyLease('ssh-1', 'ssh:ssh-1@@remote-pty', 'terminated')
 
     const session = store.getWorkspaceSession()
-    expect(store.getSshRemotePtyLeases('ssh-1')).toEqual([
-      expect.objectContaining({
-        ptyId: 'remote-pty',
-        state: 'terminated'
-      })
-    ])
+    expect(store.getSshRemotePtyLeases('ssh-1')).toEqual([])
     expect(session.tabsByWorktree.wt1[0].ptyId).toBeNull()
     expect(session.terminalLayoutsByTabId.tab1.ptyIdsByLeafId).toEqual({})
   })

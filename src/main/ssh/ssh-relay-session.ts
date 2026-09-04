@@ -2322,6 +2322,12 @@ export class SshRelaySession {
     if (!shouldContinue()) {
       return
     }
+    // Why immediately before the read: a pane's binding is written by several writers, and the
+    // renderer's debounced layout publish lands long after the spawn commit that leased the pty —
+    // so a predecessor that was still bound at spawn time never gets marked by a spawn-side
+    // trigger. Re-deriving from each pane's CURRENT binding here is what actually bounds this set,
+    // and it repairs stores that already accumulated these rows.
+    this.store.reconcileSshRemotePtyLeasesForTarget(this.targetId)
     // Why not `state !== 'expired'`: that state covers both a superseded sibling (re-adopting it is
     // the 2 -> 19 -> 20 fan-out) and an orphan whose reattach merely lost contact. Only the first
     // carries a retirement mark, and only it has to be skipped.

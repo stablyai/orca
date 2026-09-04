@@ -15,8 +15,8 @@ export const INCIDENT_MONITOR_THRESHOLDS = {
   // Why: healthy latest-sum backends idle near 100 but spike to 216 in 1-minute
   // bursts (~10 min/day exceeded the old bar of 160 on 2026-08-26, freezing a
   // pre-drain gate on baseline noise). 250 clears measured healthy peaks while
-  // firing well before the verified 400-connection ceiling; pool-wait and
-  // exhausted-retry signals keep their strict thresholds.
+  // firing well before the verified 400-connection ceiling; the retry signals
+  // below discriminate incident-class contention.
   cloudSqlBackends: 250,
   // Bound the observed recovery load; deadlocks remain zero-tolerance.
   cloudSqlLockWaits: 20,
@@ -32,13 +32,35 @@ export const INCIDENT_MONITOR_THRESHOLDS = {
   relayPoolWaiting: 800,
   relayPoolWaitMs: 2_500,
   // Why: successful lock retries are the contention machinery working, not harm.
-  // Healthy 2026-08-26 baseline bursts to 234/5min (26% of windows crossed the old
-  // bar of 20, set unmeasured at the monitor's 2026-07-28 birth); the 2026-08-23
-  // incident ran ~2,200-3,000/5min. 300 clears healthy bursts with ~10x incident
-  // margin; relayPostgresRetryExhausted below stays at zero tolerance, so any
-  // transaction that terminally fails still freezes the gate.
-  relayPostgresRetries: 300,
-  relayPostgresRetryExhausted: 0,
+  // Recalibrated 2026-09-04 from 300, which was set 2026-08-26 when healthy bursts
+  // reached 234/5min. The global relay_cells FOR UPDATE lock has since become the
+  // fleet's steady state: measured fleet-wide (director + cells, summed per five
+  // minutes) 2026-09-03T05Z..2026-09-04T05Z p50 430 / p90 924 / p99 1320 / max
+  // 1504, with 55% of windows over 300 and only 22% of 15-minute gates clean, so
+  // the bar blocked the very cell roll that carries the 500 ms lock wait (#18521)
+  // and the beginProof crash guard to the cells. The 2026-08-23 lock incident on
+  // this same metric peaked at 1510 in one window and 646 in the next, so it is
+  // not separable from today's contention by retries alone; it is caught by
+  // relayPostgresRetryExhausted (467 at the peak vs a 300 bar), director
+  // concurrency, and the pool bars. 2000 passes every healthy 15-minute window
+  // measured in the last 24 h and still fences unbounded growth. Re-tighten once
+  // the fleet is on the 500 ms lock wait and the baseline is re-measured.
+  relayPostgresRetries: 2000,
+  // Why: 300 per five minutes, recalibrated 2026-09-04 from a bar of zero that no
+  // production window has cleared since #18521 shipped to the director. That
+  // change cut the request-path cell-inventory wait from the 1 s pool lock_timeout
+  // to 500 ms, so a contended waiter now fails fast (one /v1/assign 503 with
+  // Retry-After, which the client retries) instead of succeeding slowly, and the
+  // exhaustion count became a steady-state contention rate rather than an
+  // anomaly. Measured fleet-wide (director + cells) per five minutes over
+  // 2026-09-03T03Z..2026-09-04T02Z: every one of 236 windows was non-zero;
+  // quiet hours p50 2 / max 36; pre-#18521 daytime p50 10 / p90 25 / max 87;
+  // post-#18521 p50 42 / p90 147 / max 220. The 2026-08-23 lock incident peaked
+  // at 467. 300 clears every measured healthy window and still sits below the
+  // incident shape; retries above fence only unbounded growth.
+  // User-facing /v1/assign 503 share did not move with #18521 (13.9% old image
+  // vs 12.3% new, same evening), so exhaustion is not a proxy for user harm.
+  relayPostgresRetryExhausted: 300,
   // Why: public admission is a per-instance semaphore, so fleet assignment capacity is
   // concurrency x instances. A floor of 1 let the 2026-08-04 collapse from five instances
   // to two pass unnoticed, which is the exact failure this monitor exists to catch. Keep in

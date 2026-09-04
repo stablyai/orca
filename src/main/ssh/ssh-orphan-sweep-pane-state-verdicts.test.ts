@@ -68,6 +68,44 @@ const CAPTURES = {
       ' 3159  3158  3159  3158 T    sleep 300',
       ' 3160     1     1    -1 R    ps -axo pid=,ppid=,pgid=,tpgid=,stat=,command='
     ]
+  },
+  /** `set +m; sleep 300 &`. With job control OFF the job does not get its own process group — it
+   *  keeps the SHELL's pgid. So the tty carries exactly one process group, and that group is
+   *  running a build. Reproduced independently on a real Ubuntu host through an Orca pane. */
+  setMinusMBackground: {
+    rootPid: 12,
+    table: [
+      '    1     0     1    -1 Ss   /bin/bash /work/run.sh',
+      '   11     1     1    -1 S    python3 /work/pty-scenario.py setm_background',
+      '   12    11    12    12 Ss+  bash -i',
+      '   13    12    12    12 S+   sleep 300',
+      '   14    11     1    -1 R    ps -axo pid=,ppid=,pgid=,tpgid=,stat=,command='
+    ]
+  },
+  /** A `set +m` job that drops its controlling terminal (`ioctl(TIOCNOTTY)` with no `setsid`). It
+   *  keeps the shell's pgid, reports `tpgid == -1`, and is absent from `ps -t <tty>` and from every
+   *  tty-keyed index — while `killpg(shellPgid)` still reaches it. */
+  nottyGroupMember: {
+    rootPid: 16,
+    table: [
+      '    1     0     1    -1 Ss   /bin/bash /work/run.sh',
+      '   15     1     1    -1 S    python3 /work/pty-scenario.py notty_member',
+      '   16    15    16    16 Ss+  bash -i',
+      '   17    16    16    -1 S    python3 -c import fcntl,os,time;fd=os.open("/dev/tty",os.O_RDWR);fcntl.ioctl(fd,0x5422);os.close(fd);time.sleep(300)',
+      '   18    15     1    -1 R    ps -axo pid=,ppid=,pgid=,tpgid=,stat=,command='
+    ]
+  },
+  /** A `set +m` job that double-forks. pid 22 keeps the shell's pgid and tty but reparented to pid
+   *  1, so the ppid walk from `rootPid` never reaches it and it can never be named. */
+  doubleForkedGroupMember: {
+    rootPid: 20,
+    table: [
+      '    1     0     1    -1 Ss   /bin/bash /work/run.sh',
+      '   19     1     1    -1 S    python3 /work/pty-scenario.py double_fork',
+      '   20    19    20    20 Ss+  bash -i',
+      '   22     1    20    20 S+   python3 -c import os,sys,time;p=os.fork() if p:     print("GRANDCHILD:%d"%p);sys.stdout.flush();os._exit(0) time.sleep(300)',
+      '   23    19     1    -1 R    ps -axo pid=,ppid=,pgid=,tpgid=,stat=,command='
+    ]
   }
 } as const
 
@@ -147,6 +185,15 @@ describe('what the host publishes about a pane, read by the sweep', () => {
     expect(shellShape(CAPTURES.background)).toBe(shellShape(CAPTURES.idle))
     expect(shellShape(CAPTURES.ctrlz)).toBe(shellShape(CAPTURES.idle))
     expect(shellShape(CAPTURES.foreground)).not.toBe(shellShape(CAPTURES.idle))
+
+    // Same premise for the `set +m` captures, minus `ppid`: their harness keeps its parent alive
+    // rather than reparenting the shell to init, and the ppid is the one field of the shape the
+    // predicate never reads.
+    const paneShape = (capture: { rootPid: number; table: readonly string[] }): string =>
+      shellShape(capture).split(' ').slice(1).join(' ')
+    expect(paneShape(CAPTURES.setMinusMBackground)).toBe(paneShape(CAPTURES.idle))
+    expect(paneShape(CAPTURES.nottyGroupMember)).toBe(paneShape(CAPTURES.idle))
+    expect(paneShape(CAPTURES.doubleForkedGroupMember)).toBe(paneShape(CAPTURES.idle))
   })
 
   it('sweeps an idle shell', async () => {
@@ -187,6 +234,58 @@ describe('what the host publishes about a pane, read by the sweep', () => {
     expect(evidence).toMatchObject({ shellOwnsEveryTtyProcessGroup: false })
 
     const plan = await planFor(CAPTURES.ctrlz)
+    expect(plan.sweep).toEqual([])
+    expect(skipReason(plan)).toBe('host does not attest an idle shell')
+  })
+
+  // The tty is not the unit the stop operates on. `forceKillPosixPtyProcessGroups` collects the
+  // groups on the tty and then `killpg`s each one, so anything sharing the shell's pgid dies with
+  // it — including members the tty index cannot see at all. All three captures below reproduce on
+  // real Linux: before the group-membership half of the predicate they published
+  // `shellOwnsEveryTtyProcessGroup: true`, planned a SWEEP, and the planted pid was GONE after the
+  // real `forceKillPosixPtyProcessGroups` call.
+  it('never sweeps a pane whose background job shares the shell pgid under `set +m`', async () => {
+    // pid 13 is `sleep 300` — stand in `pnpm build`. Its pgid IS the shell's, so the tty carries
+    // exactly one process group and the tty half of the predicate reads the pane as idle.
+    const rows = parseStrictProcessTableRows(CAPTURES.setMinusMBackground.table.join('\n'))
+    const tty = rows.filter((row) => row.tpgid === CAPTURES.setMinusMBackground.rootPid)
+    expect(new Set(tty.map((row) => row.pgid))).toEqual(new Set([12]))
+    expect(tty.map((row) => row.pid)).toEqual([12, 13])
+
+    const evidence = await publish(CAPTURES.setMinusMBackground)
+    expect(evidence).toMatchObject({ shellOwnsEveryTtyProcessGroup: false })
+
+    const plan = await planFor(CAPTURES.setMinusMBackground)
+    expect(plan.sweep).toEqual([])
+    expect(skipReason(plan)).toBe('host does not attest an idle shell')
+  })
+
+  it('never sweeps a pane whose group member dropped the controlling terminal', async () => {
+    // pid 17 kept the shell's pgid and called `ioctl(TIOCNOTTY)`, so it reports `tpgid == -1`,
+    // never appears in `ps -t <tty>`, and no tty-shaped index — not process groups, not pids —
+    // can observe it. `killpg(16)` reaches it regardless.
+    const rows = parseStrictProcessTableRows(CAPTURES.nottyGroupMember.table.join('\n'))
+    expect(rows.filter((row) => row.tpgid === 16).map((row) => row.pid)).toEqual([16])
+    expect(rows.filter((row) => row.pgid === 16).map((row) => row.pid)).toEqual([16, 17])
+
+    const evidence = await publish(CAPTURES.nottyGroupMember)
+    expect(evidence).toMatchObject({ shellOwnsEveryTtyProcessGroup: false })
+
+    const plan = await planFor(CAPTURES.nottyGroupMember)
+    expect(plan.sweep).toEqual([])
+    expect(skipReason(plan)).toBe('host does not attest an idle shell')
+  })
+
+  it('never sweeps a pane whose group member double-forked away from the shell', async () => {
+    // pid 22 reparented to pid 1, so the ppid walk from rootPid cannot reach it and the named-
+    // process backstop can never fire. It still holds the shell's pgid.
+    const rows = parseStrictProcessTableRows(CAPTURES.doubleForkedGroupMember.table.join('\n'))
+    expect(rows.find((row) => row.pid === 22)).toMatchObject({ ppid: 1, pgid: 20, tpgid: 20 })
+
+    const evidence = await publish(CAPTURES.doubleForkedGroupMember)
+    expect(evidence).toMatchObject({ processName: null, shellOwnsEveryTtyProcessGroup: false })
+
+    const plan = await planFor(CAPTURES.doubleForkedGroupMember)
     expect(plan.sweep).toEqual([])
     expect(skipReason(plan)).toBe('host does not attest an idle shell')
   })

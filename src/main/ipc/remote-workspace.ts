@@ -1,5 +1,6 @@
 import { ipcMain, type BrowserWindow } from 'electron'
 import type { Store } from '../persistence'
+import type { Repo } from '../../shared/repo-types'
 import { getActiveMultiplexer, getSshConnectionStore } from './ssh'
 import { exportRemoteWorkspaceSession } from '../../shared/remote-workspace-session-projection'
 import {
@@ -107,7 +108,7 @@ function getExpectedHostObservationTokens(
 }
 
 function targetForWorktree(
-  store: Store,
+  repoLookup: ReturnType<typeof createRepoRowExecutionHostLookup<Repo>>,
   worktreeId: string,
   executionHostId?: string
 ): string | null {
@@ -115,21 +116,49 @@ function targetForWorktree(
   // `getRepo(id)?.connectionId`, which is host-blind — the same repo id can name rows on several
   // hosts, so a session could be published to a machine that never owned the worktree (#11163).
   // Unresolvable ownership exports to nobody rather than guessing.
-  const resolution = resolveWorktreeExecutionHost(
-    createRepoRowExecutionHostLookup(store.getRepos()),
-    { repoId: getRepoIdFromWorktreeId(worktreeId), hostId: executionHostId ?? null }
-  )
+  const resolution = resolveWorktreeExecutionHost(repoLookup, {
+    repoId: getRepoIdFromWorktreeId(worktreeId),
+    hostId: executionHostId ?? null
+  })
   return resolution.kind === 'resolved' ? resolution.connectionId : null
 }
 
+/**
+ * Resolve each worktree's owning connection at most once for a whole publish.
+ *
+ * Why this is shared and not per target: `targetForWorktree` computes a connection id from the
+ * repo catalog alone — only the final `=== targetId` differs — so exporting to N targets used to
+ * repeat the identical resolution N times over every worktree key. `store.getRepos()` also
+ * re-hydrates every repo row on each call, and the projection asks this question once per key of
+ * `tabsByWorktree`, `activeTabIdByWorktree`, `lastVisitedAtByWorktreeId` and
+ * `defaultTerminalTabsAppliedByWorktreeId`.
+ */
+function createWorktreeTargetResolver(
+  repoLookup: ReturnType<typeof createRepoRowExecutionHostLookup<Repo>>
+): (worktreeId: string, executionHostId?: string) => string | null {
+  const resolved = new Map<string, string | null>()
+  return (worktreeId, executionHostId) => {
+    // Host id participates in resolution, so it has to participate in the key. NUL cannot appear
+    // in either id, so it is a collision-free separator.
+    const key = `${worktreeId}\u0000${executionHostId ?? ''}`
+    const cached = resolved.get(key)
+    if (cached !== undefined) {
+      return cached
+    }
+    const connectionId = targetForWorktree(repoLookup, worktreeId, executionHostId)
+    resolved.set(key, connectionId)
+    return connectionId
+  }
+}
+
 function exportSessionForTarget(
-  store: Store,
+  resolveWorktreeTarget: (worktreeId: string, executionHostId?: string) => string | null,
   targetId: string,
   session: WorkspaceSessionState
 ): RemoteWorkspaceSession {
   return exportRemoteWorkspaceSession(session, {
     isTargetWorktree: (worktreeId, executionHostId) =>
-      targetForWorktree(store, worktreeId, executionHostId) === targetId
+      resolveWorktreeTarget(worktreeId, executionHostId) === targetId
   })
 }
 
@@ -245,12 +274,21 @@ export function registerRemoteWorkspaceHandlers(
             (target) => hydratedTargetIds.has(target.id) && getActiveMultiplexer(target.id)
           ) ?? []
 
+      if (targets.length === 0) {
+        // Nothing to project onto, so skip the session and repo-catalog reads entirely.
+        return []
+      }
+
       const workspaceSession = args.session ?? store.getWorkspaceSession()
+      // One repo read, and ownership resolutions shared across targets: neither depends on the target.
+      const resolveWorktreeTarget = createWorktreeTargetResolver(
+        createRepoRowExecutionHostLookup(store.getRepos())
+      )
       const results = await Promise.all(
         targets.map(async (target) => {
           // Why: each target has its own revision stream. Keep same-target
           // writes queued, but do not let one slow relay block others.
-          const session = exportSessionForTarget(store, target.id, workspaceSession)
+          const session = exportSessionForTarget(resolveWorktreeTarget, target.id, workspaceSession)
           const result = await queueRemoteWorkspacePatch(target.id, async () => {
             const current =
               getCachedRemoteWorkspaceSnapshot(target.id) ?? (await getRemoteSnapshot(target))

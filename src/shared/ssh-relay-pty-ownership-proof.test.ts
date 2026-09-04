@@ -146,6 +146,58 @@ describe('planRelayPtySweep', () => {
     expect(reasonFor(plan, 'pty-1')).toBe('host attests another client created it')
   })
 
+  // The age gate is the one comparison in the file that a malformed field defaults toward the
+  // kill: the sum goes `NaN`, and `NaN > budget` is FALSE, so the entry PASSES the freshness gate
+  // and proceeds toward the stop. Nothing validated this record on the sweep path —
+  // `mapSshPtyProcessList` checks the ownership fields and spreads the rest through.
+  it.each([
+    ['missing', undefined],
+    ['a string', '0' as unknown],
+    ['NaN', Number.NaN],
+    ['Infinity', Number.POSITIVE_INFINITY],
+    ['negative', -1],
+    ['fractional', 1.5]
+  ])('never sweeps when the host stamped capturedAgeMs %s', (_label, capturedAgeMs) => {
+    const plan = planRelayPtySweep(
+      [
+        orphan({
+          foregroundProcessEvidence: {
+            ...idleShell(),
+            capturedAgeMs
+          } as unknown as ForegroundProcessEvidence
+        })
+      ],
+      context()
+    )
+
+    expect(plan.sweep).toEqual([])
+    expect(reasonFor(plan, 'pty-1')).toBe('host foreground observation is malformed')
+  })
+
+  it('never sweeps on an evidence record whose other host stamps are malformed', () => {
+    const plan = planRelayPtySweep(
+      [
+        orphan({
+          foregroundProcessEvidence: {
+            ...idleShell(),
+            authorityGeneration: ''
+          } as ForegroundProcessEvidence
+        })
+      ],
+      context()
+    )
+
+    expect(plan.sweep).toEqual([])
+    expect(reasonFor(plan, 'pty-1')).toBe('host foreground observation is malformed')
+  })
+
+  it('never sweeps when this client cannot compute an age budget', () => {
+    const plan = planRelayPtySweep([orphan()], context({ evidenceAgeSinceListingMs: Number.NaN }))
+
+    expect(plan.sweep).toEqual([])
+    expect(reasonFor(plan, 'pty-1')).toBe('sweep has no usable evidence-age budget')
+  })
+
   it('never sweeps a PTY younger than the floor', () => {
     const plan = planRelayPtySweep(
       [orphan({ hostAgeMs: RELAY_PTY_SWEEP_MIN_AGE_MS - 1 })],

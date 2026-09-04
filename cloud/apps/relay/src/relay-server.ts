@@ -31,6 +31,16 @@ import { createRelayTokenVerifier, readBearer } from './relay-token-verifier.js'
 import { closeRelayWebSocket } from './relay-websocket-close.js'
 import { ProcessQueuedByteBudget } from './splice-forwarder.js'
 
+// A malformed percent-escape in the request target must be a client error, never a URIError
+// thrown out of the `upgrade` listener (which is uncaught and kills the process).
+function decodePathSegment(value: string): string | null {
+  try {
+    return decodeURIComponent(value)
+  } catch {
+    return null
+  }
+}
+
 function rejectUpgrade(socket: NodeJS.WritableStream, status: number, message: string): void {
   socket.write(`HTTP/1.1 ${status} ${message}\r\nConnection: close\r\nContent-Length: 0\r\n\r\n`)
   if ('destroy' in socket && typeof socket.destroy === 'function') socket.destroy()
@@ -278,8 +288,8 @@ export function createRelayServer(
       return
     }
     if (url.pathname.startsWith('/v1/connect/')) {
-      const hostId = decodeURIComponent(url.pathname.slice('/v1/connect/'.length))
-      if (!/^[A-Za-z0-9_-]{16}$/.test(hostId)) {
+      const hostId = decodePathSegment(url.pathname.slice('/v1/connect/'.length))
+      if (hostId === null || !/^[A-Za-z0-9_-]{16}$/.test(hostId)) {
         rejectUpgrade(socket, 429, 'Too Many Requests')
         return
       }
@@ -373,7 +383,7 @@ export function createRelayServer(
         rejectUpgrade(socket, 404, 'Not Found')
         return
       }
-      const connId = decodeURIComponent(url.pathname.slice('/v1/host/data/'.length))
+      const connId = decodePathSegment(url.pathname.slice('/v1/host/data/'.length))
       if (!connId || connId.length > 128) {
         rejectUpgrade(socket, 429, 'Too Many Requests')
         return

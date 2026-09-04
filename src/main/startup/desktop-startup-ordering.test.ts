@@ -66,7 +66,12 @@ describe('startup ordering', () => {
     )
     expect(desktopStartup).toContain('recordRuntimeRpcStartFailure(')
     // Why: `void`, not `await` — awaiting the dialog would park the rest of startup behind a modal.
-    expect(desktopStartup).toMatch(/void showRuntimeRpcStartupFailureDialog\(\s*win,/)
+    // It chains off the i18n barrier (published before this phase starts) so the translated strings
+    // it reads are loaded, which is a wait on i18n only, never on the dialog itself.
+    expect(desktopStartup).toMatch(
+      /void state\.mainProcessI18nReady\.then\(\(\) =>\s*showRuntimeRpcStartupFailureDialog\(\s*win,/
+    )
+    expect(desktopStartup).not.toMatch(/await[^\n]*showRuntimeRpcStartupFailureDialog\(/)
     // Why (#11025): a bare console.error here is exactly what left the CLI dead but the app healthy.
     expect(desktopStartup).not.toContain(
       "console.error('[runtime] Failed to start local RPC transport:'"

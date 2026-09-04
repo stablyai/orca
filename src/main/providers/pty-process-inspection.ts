@@ -11,14 +11,24 @@ export type PtyProcessInspection = TerminalProcessInspection
 type CompletionSensitivePtyProvider = IPtyProvider & {
   inspectProcess?: (
     id: string,
-    options?: { expectedIncarnationId?: PtyIncarnationId }
+    options?: PtyProcessInspectionOptions
   ) => Promise<PtyProcessInspection>
+}
+
+/**
+ * `scanChildProcesses` marks a read whose answer decides something once, rather than a poll that
+ * self-corrects on its next tick. Only hosts where the child answer costs a process-table read
+ * act on it; everywhere else the answer was already captured.
+ */
+export type PtyProcessInspectionOptions = {
+  expectedIncarnationId?: PtyIncarnationId
+  scanChildProcesses?: boolean
 }
 
 export async function inspectPtyProviderProcess(
   provider: IPtyProvider,
   ptyId: string,
-  options?: { expectedIncarnationId?: PtyIncarnationId }
+  options?: PtyProcessInspectionOptions
 ): Promise<PtyProcessInspection> {
   if (provider.hasPty?.(ptyId) === false) {
     throw new Error('terminal_gone')
@@ -37,7 +47,7 @@ export async function inspectPtyProviderProcess(
 export async function inspectPtyProviderProcessForRenderer(
   provider: IPtyProvider,
   ptyId: string,
-  options?: { expectedIncarnationId?: PtyIncarnationId }
+  options?: PtyProcessInspectionOptions
 ): Promise<PtyProcessInspection> {
   try {
     return await inspectPtyProviderProcess(provider, ptyId, options)

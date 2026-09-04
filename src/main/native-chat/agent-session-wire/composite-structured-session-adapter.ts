@@ -1,3 +1,4 @@
+import { adapterSupportsCreate } from './structured-agent-session-provider-support'
 import type { AgentSessionExecutionLocation } from '../../../shared/agent-session-record'
 import type {
   AgentSessionAcquisition,
@@ -19,7 +20,7 @@ export class CompositeStructuredSessionAdapter implements StructuredAgentSession
   }
 
   supportsCreate = (location: AgentSessionExecutionLocation, agent: string): boolean => {
-    return this.forAgent(agent).supportsCreate?.(location, agent) ?? false
+    return adapterSupportsCreate(this.forAgent(agent), location, agent)
   }
 
   supportsLocation = (location: AgentSessionExecutionLocation): boolean => {

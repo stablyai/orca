@@ -49,12 +49,23 @@ describe('activity thread host routing', () => {
   const setActiveWorktree = vi.fn()
   const acknowledgeAgents = vi.fn()
   const setSelectedPaneKey = vi.fn()
+  let state: Record<string, unknown>
+
+  function makeActions(): ReturnType<typeof createActivityThreadActions> {
+    return createActivityThreadActions({
+      getMarkAllReadThreads: () => [thread],
+      acknowledgeAgents,
+      unacknowledgeAgents: vi.fn(),
+      setSelectedPaneKey
+    })
+  }
 
   beforeEach(() => {
     vi.clearAllMocks()
     mocks.activateStructuredAgentSessionTab.mockReturnValue(false)
+    mocks.activateAndRevealWorkspace.mockReturnValue({ primaryTabId: null })
     getKnownWorktreeById.mockReturnValue(thread.worktree)
-    mocks.getState.mockReturnValue({
+    state = {
       getKnownWorktreeById,
       worktreesByRepo: { [thread.worktree.repoId]: [thread.worktree] },
       detectedWorktreesByRepo: {},
@@ -77,21 +88,19 @@ describe('activity thread host routing', () => {
       setActiveRepo: vi.fn(),
       setActiveWorktree,
       setActiveTabType: vi.fn()
-    })
+    }
+    mocks.getState.mockImplementation(() => state)
   })
 
-  it('selects the matching host when the same workspace id is active elsewhere', () => {
-    const actions = createActivityThreadActions({
-      getMarkAllReadThreads: () => [thread],
-      acknowledgeAgents,
-      unacknowledgeAgents: vi.fn(),
-      setSelectedPaneKey
+  it('routes the row click through the full activation sequence for the matching host', () => {
+    makeActions().selectThread(thread)
+
+    // Bare setActiveWorktree skips setActiveView('terminal'), initial-terminal seeding and
+    // sleeping-session resume — the workspace dispatcher is the only path that runs them.
+    expect(mocks.activateAndRevealWorkspace).toHaveBeenCalledWith(thread.worktree.id, {
+      executionHostId: REMOTE_HOST
     })
-
-    actions.selectThread(thread)
-
-    expect(getKnownWorktreeById).toHaveBeenCalledWith(thread.worktree.id, REMOTE_HOST)
-    expect(setActiveWorktree).toHaveBeenCalledWith(thread.worktree.id, REMOTE_HOST)
+    expect(setActiveWorktree).not.toHaveBeenCalled()
     expect(mocks.activateTabAndFocusPane).toHaveBeenCalledWith(
       thread.tab.id,
       '11111111-1111-4111-8111-111111111111',
@@ -99,23 +108,56 @@ describe('activity thread host routing', () => {
     )
   })
 
-  it('activates a structured agent session instead of looking for a terminal pane', () => {
-    mocks.activateStructuredAgentSessionTab.mockReturnValue(true)
-    mocks.getState.mockReturnValue({
-      ...mocks.getState(),
-      tabsByWorktree: { [thread.worktree.id]: [] },
-      unifiedTabsByWorktree: {
-        [thread.worktree.id]: [{ id: thread.tab.id, contentType: 'agent-session' }]
-      }
-    })
-    const actions = createActivityThreadActions({
-      getMarkAllReadThreads: () => [thread],
-      acknowledgeAgents,
-      unacknowledgeAgents: vi.fn(),
-      setSelectedPaneKey
+  it('opens a cold-parked remote thread whose tab activation revives', () => {
+    // The reported SSH symptom: the tab is not resident because the session was never
+    // revived, so a residency probe before activation made the click a silent no-op.
+    state.tabsByWorktree = {}
+    mocks.activateAndRevealWorkspace.mockImplementation(() => {
+      state.tabsByWorktree = { [thread.worktree.id]: [thread.tab] }
+      return { primaryTabId: thread.tab.id }
     })
 
-    actions.selectThread(thread)
+    makeActions().selectThread(thread)
+
+    expect(setSelectedPaneKey).toHaveBeenCalledWith(thread.paneKey)
+    expect(mocks.activateAndRevealWorkspace).toHaveBeenCalledWith(thread.worktree.id, {
+      executionHostId: REMOTE_HOST
+    })
+    expect(mocks.activateTabAndFocusPane).toHaveBeenCalledWith(
+      thread.tab.id,
+      '11111111-1111-4111-8111-111111111111',
+      { flashFocusedPane: true, scrollToBottomIfOutputSinceLastView: true }
+    )
+  })
+
+  it('still activates the workspace when a retained thread has no tab to focus', () => {
+    state.tabsByWorktree = {}
+
+    makeActions().selectThread(thread)
+
+    expect(mocks.activateAndRevealWorkspace).toHaveBeenCalledWith(thread.worktree.id, {
+      executionHostId: REMOTE_HOST
+    })
+    expect(mocks.activateTabAndFocusPane).not.toHaveBeenCalled()
+  })
+
+  it('focuses nothing when the workspace itself is gone', () => {
+    mocks.activateAndRevealWorkspace.mockReturnValue(false)
+
+    makeActions().selectThread(thread)
+
+    expect(mocks.activateStructuredAgentSessionTab).not.toHaveBeenCalled()
+    expect(mocks.activateTabAndFocusPane).not.toHaveBeenCalled()
+  })
+
+  it('activates a structured agent session instead of looking for a terminal pane', () => {
+    mocks.activateStructuredAgentSessionTab.mockReturnValue(true)
+    state.tabsByWorktree = { [thread.worktree.id]: [] }
+    state.unifiedTabsByWorktree = {
+      [thread.worktree.id]: [{ id: thread.tab.id, contentType: 'agent-session' }]
+    }
+
+    makeActions().selectThread(thread)
 
     expect(mocks.activateStructuredAgentSessionTab).toHaveBeenCalledWith({
       worktreeId: thread.worktree.id,
@@ -126,14 +168,8 @@ describe('activity thread host routing', () => {
 
   it('jumps to and probes the matching host-qualified workspace', () => {
     expect(hasActivityThreadWorkspace(thread)).toBe(true)
-    const actions = createActivityThreadActions({
-      getMarkAllReadThreads: () => [thread],
-      acknowledgeAgents,
-      unacknowledgeAgents: vi.fn(),
-      setSelectedPaneKey
-    })
 
-    actions.jumpToWorkspace(thread)
+    makeActions().jumpToWorkspace(thread)
 
     expect(acknowledgeAgents).toHaveBeenCalledWith([thread.paneKey])
     expect(mocks.activateAndRevealWorkspace).toHaveBeenCalledWith(thread.worktree.id, {

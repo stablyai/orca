@@ -1,5 +1,6 @@
 import { activateTabAndFocusPane } from '@/lib/activate-tab-and-focus-pane'
 import { activateStructuredAgentSessionTab } from '@/lib/structured-agent-session-tab-activation'
+import { activateAndRevealWorkspace } from '@/lib/worktree-activation'
 import { jumpToWorktreeFromSidebar } from '@/lib/worktree-jump-navigation'
 import { useAppStore } from '@/store'
 import {
@@ -74,38 +75,31 @@ export function createActivityThreadActions({
   }
 
   const activateThreadTarget = (thread: AgentPaneThread): void => {
-    const state = useAppStore.getState()
     const executionHostId = getActivityThreadExecutionHostId(
       thread,
-      getSettingsFocusedExecutionHostId(state.settings)
+      getSettingsFocusedExecutionHostId(useAppStore.getState().settings)
     )
-    const worktree = state.getKnownWorktreeById(thread.worktree.id, executionHostId)
-    if (!worktree) {
+    // Why the full sequence (not bare setActiveWorktree): a cold-parked thread — the normal
+    // state of an SSH session that was never revived — has no resident tab until
+    // resumeSleepingAgentSessionsForWorktree/ensureWorktreeHasInitialTerminal run inside here.
+    // Probing tab residency first is what made a remote row click a silent no-op (#16731).
+    if (activateAndRevealWorkspace(thread.worktree.id, { executionHostId }) === false) {
       return
-    }
-    const liveTabs = state.tabsByWorktree[worktree.id] ?? []
-    const hasLiveTerminal = liveTabs.some((tab) => tab.id === thread.tab.id)
-    const hasLiveAgentSession = (state.unifiedTabsByWorktree?.[worktree.id] ?? []).some(
-      (tab) => tab.id === thread.tab.id && tab.contentType === 'agent-session'
-    )
-    // Why: retained threads can outlive their target; reorienting the workspace for a
-    // dead terminal or structured session would just confuse the user.
-    if (!hasLiveTerminal && !hasLiveAgentSession) {
-      return
-    }
-    if (state.activeRepoId !== worktree.repoId) {
-      state.setActiveRepo(worktree.repoId)
     }
     if (
-      state.activeWorktreeId !== worktree.id ||
-      state.activeWorkspaceExecutionHostId !== executionHostId
+      activateStructuredAgentSessionTab({ worktreeId: thread.worktree.id, tabId: thread.tab.id })
     ) {
-      state.setActiveWorktree(worktree.id, executionHostId)
-    }
-    if (activateStructuredAgentSessionTab({ worktreeId: worktree.id, tabId: thread.tab.id })) {
       return
     }
-    state.setActiveTabType('terminal')
+    // Read post-activation: the tab this thread points at may have only just been revived.
+    const activated = useAppStore.getState()
+    const liveTabs = activated.tabsByWorktree[thread.worktree.id] ?? []
+    if (!liveTabs.some((tab) => tab.id === thread.tab.id)) {
+      // Retained threads outlive their tab; the workspace is still activated, but there is
+      // no pane to focus and focusing a sibling would be worse than focusing nothing.
+      return
+    }
+    activated.setActiveTabType('terminal')
     const parsed = parsePaneKey(thread.paneKey)
     activateTabAndFocusPane(
       thread.tab.id,

@@ -23,8 +23,10 @@ describe('readResourceInventory', () => {
         calls += 1
         return new Response(null, { status: 200 })
       },
-      async () => {
-        waits += 1
+      {
+        wait: async () => {
+          waits += 1
+        }
       }
     )
 
@@ -45,8 +47,10 @@ describe('readResourceInventory', () => {
         calls.set(path, call)
         return new Response(null, { status: path === '/ready' && call === 1 ? 503 : 200 })
       },
-      async (ms) => {
-        waits.push(ms)
+      {
+        wait: async (ms) => {
+          waits.push(ms)
+        }
       }
     )
 
@@ -65,15 +69,128 @@ describe('readResourceInventory', () => {
         calls += 1
         return new Response(null, { status: 503 })
       },
-      async (ms) => {
-        waits.push(ms)
+      {
+        wait: async (ms) => {
+          waits.push(ms)
+        }
       }
     )
 
     expect(result.health).toBe(false)
     expect(result.ready).toBe(false)
     expect(calls).toBe(4)
+    // A refusing endpoint is a reading, so only the independent retry runs.
     expect(waits).toEqual([11_000])
+  })
+
+  it('treats a thrown fetch as no reading and re-asks that path once', async () => {
+    const calls: string[] = []
+    const waits: number[] = []
+    const result = await probeEndpointHealth(
+      'https://c9.relay.onorca.dev',
+      async (input) => {
+        const path = new URL(String(input)).pathname
+        calls.push(path)
+        if (path === '/health' && calls.filter((call) => call === '/health').length === 1) {
+          throw new TypeError('fetch failed')
+        }
+        return new Response(null, { status: 200 })
+      },
+      {
+        wait: async (ms) => {
+          waits.push(ms)
+        }
+      }
+    )
+
+    expect(result.health).toBe(true)
+    expect(result.ready).toBe(true)
+    expect(calls.filter((call) => call === '/health')).toEqual(['/health', '/health'])
+    expect(waits).toEqual([1_000])
+  })
+
+  it('fails closed when both attempts of a path throw', async () => {
+    const calls: string[] = []
+    const waits: number[] = []
+    const result = await probeEndpointHealth(
+      'https://c9.relay.onorca.dev',
+      async (input) => {
+        const path = new URL(String(input)).pathname
+        calls.push(path)
+        if (path === '/health') throw new TypeError('fetch failed')
+        return new Response(null, { status: 200 })
+      },
+      {
+        wait: async (ms) => {
+          waits.push(ms)
+        }
+      }
+    )
+
+    expect(result.health).toBe(false)
+    expect(calls.filter((call) => call === '/health')).toHaveLength(4)
+    expect(waits).toEqual([1_000, 11_000, 1_000])
+  })
+
+  it('accepts an auth-shaped endpoint that serves no readiness path', async () => {
+    const calls: string[] = []
+    const waits: number[] = []
+    const result = await probeEndpointHealth(
+      'https://login.onorca.dev',
+      async (input) => {
+        const path = new URL(String(input)).pathname
+        calls.push(path)
+        return new Response(null, { status: path === '/ready' ? 404 : 200 })
+      },
+      {
+        requiresReady: false,
+        wait: async (ms) => {
+          waits.push(ms)
+        }
+      }
+    )
+
+    expect(result.health).toBe(true)
+    expect(result.ready).toBeNull()
+    expect(calls).toEqual(['/health'])
+    expect(waits).toEqual([])
+  })
+
+  it('still requires readiness for the director and cells', async () => {
+    const waits: number[] = []
+    const result = await probeEndpointHealth(
+      'https://relay.onorca.dev',
+      async (input) => new Response(null, {
+        status: new URL(String(input)).pathname === '/ready' ? 503 : 200
+      }),
+      {
+        wait: async (ms) => {
+          waits.push(ms)
+        }
+      }
+    )
+
+    expect(result.health).toBe(true)
+    expect(result.ready).toBe(false)
+    expect(waits).toEqual([11_000])
+  })
+
+  it('measures latency as the answering round trip, not the retry delay', async () => {
+    let healthCalls = 0
+    const result = await probeEndpointHealth(
+      'https://c9.relay.onorca.dev',
+      async (input) => {
+        if (new URL(String(input)).pathname !== '/health') return new Response(null, { status: 200 })
+        healthCalls += 1
+        if (healthCalls === 1) throw new TypeError('fetch failed')
+        return new Response(null, { status: 200 })
+      },
+      { wait: async (ms) => await new Promise((resolve) => setTimeout(resolve, Math.min(ms, 60))) }
+    )
+
+    expect(result.health).toBe(true)
+    expect(result.latencyMs).not.toBeNull()
+    expect(result.latencyMs!).toBeLessThan(60)
   })
 
   it('uses aggregate REST inventory without probing sleeping staging endpoints', async () => {

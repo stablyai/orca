@@ -173,7 +173,7 @@ export class OrcaRuntimeWithRestoreStructuredAgentSessionTabsOnce extends OrcaRu
 
   async inspectTerminalProcess(
     terminalSelector: string,
-    options?: { expectedIncarnationId?: string }
+    options?: { expectedIncarnationId?: string; scanChildProcesses?: boolean }
   ): Promise<PtyProcessInspection> {
     const leaf = this.resolveLiveLeafForHandle(terminalSelector)
     if (!leaf?.ptyId || !this.ptyController) {

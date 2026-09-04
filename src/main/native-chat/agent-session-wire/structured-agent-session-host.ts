@@ -49,16 +49,14 @@ import {
   type StructuredAgentSessionMutationContext
 } from './structured-agent-session-host-mutations'
 import { StructuredAgentSessionReadableRestorer } from './structured-agent-session-readable-restorer'
+import { tearDownStructuredAgentSessionHost } from './structured-agent-session-host-teardown'
 import type {
   StructuredAgentSessionCaller,
   StructuredAgentSessionHostDeps,
   StructuredAgentSessionHostSession
 } from './structured-agent-session-host-types'
 import { readStructuredAgentSessionHistoryResult } from './structured-agent-session-history-result'
-import {
-  switchStructuredAgentSessionProvider,
-  type StructuredAgentSessionSwitchProviderParams
-} from './structured-agent-session-provider-switch'
+import { switchStructuredAgentSessionProvider } from './structured-agent-session-provider-switch'
 import { retryPendingStructuredAgentSessionSettlement } from './structured-agent-session-settlement-retry'
 import { StructuredAgentSessionEventRecovery } from './structured-agent-session-event-recovery'
 export type { StructuredAgentSessionHostDeps } from './structured-agent-session-host-types'
@@ -112,6 +110,8 @@ export class StructuredAgentSessionHost {
       resolveRecovery: (sessionId) => this.runtimeState.resolveRecovery(sessionId),
       serialize: (sessionId, task) => this.serialize(sessionId, task),
       hasSession: (sessionId) => this.sessions.has(sessionId),
+      // Site 10: cannot overwrite a live entry — the restorer returns early on
+      // `hasSession` inside the same serialized step as this `set`.
       onReadable: (sessionId, restored) => this.sessions.set(sessionId, restored),
       restoreHandoff: (sessionId) => this.handoffs.restore(sessionId)
     })
@@ -252,11 +252,16 @@ export class StructuredAgentSessionHost {
     this.runtimeState.flushEventSink(sessionId)
 
   async flushAllStreamedEvents(): Promise<void> {
-    this.holds.dispose()
-    this.runtimeState.stopLeaseRenewal()
-    this.handoffs.stopTuiHistoryCatchup()
-    await this.tasks.drainAttaches()
-    await this.runtimeState.flushAllEventSinks()
+    await tearDownStructuredAgentSessionHost({
+      phases: [
+        { name: 'dispose-holds', run: () => this.holds.dispose() },
+        { name: 'stop-lease-renewal', run: () => this.runtimeState.stopLeaseRenewal() },
+        { name: 'stop-tui-catchup', run: () => this.handoffs.stopTuiHistoryCatchup() },
+        { name: 'drain-attaches', run: () => this.tasks.drainAttaches() },
+        { name: 'flush-event-sinks', run: () => this.runtimeState.flushAllEventSinks() }
+      ],
+      sessions: this.sessions
+    })
   }
 
   private mutationContext(): StructuredAgentSessionMutationContext {
@@ -296,7 +301,7 @@ export class StructuredAgentSessionHost {
 
   switchProvider = (
     caller: StructuredAgentSessionCaller,
-    params: StructuredAgentSessionSwitchProviderParams
+    params: Parameters<typeof switchStructuredAgentSessionProvider>[2]
   ) => switchStructuredAgentSessionProvider(this.attachContext(), caller.callerKey, params)
 
   readOptions = (sessionId: string): Promise<AgentSessionOptionsResult> =>

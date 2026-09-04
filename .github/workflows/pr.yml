@@ -28,6 +28,7 @@ jobs:
     outputs:
       should_run: ${{ steps.filter.outputs.should_run }}
       native_cache_changed: ${{ steps.filter.outputs.native_cache_changed }}
+      mobile_dependencies: ${{ steps.filter.outputs.mobile_dependencies }}
       static_analysis: ${{ steps.filter.outputs.static_analysis }}
       typecheck: ${{ steps.filter.outputs.typecheck }}
       git_compatibility: ${{ steps.filter.outputs.git_compatibility }}
@@ -94,6 +95,25 @@ jobs:
 
       - name: Enforce type-aware code-quality baseline
         run: pnpm run audit:code-quality:type-aware
+
+      # Why: the changed-code gate lints mobile files too, and its type-aware pass
+      # resolves types from mobile/node_modules. Mobile is a separate pnpm project,
+      # so the root install above leaves it empty and every mobile type degrades to
+      # an `error` type — reported as phantom findings against the changed lines.
+      # Why no --ignore-scripts, unlike the root install: mobile's postinstall generates
+      # the gitignored terminal/mermaid webview engine modules that tracked source imports,
+      # and skipping it degrades those very types the step exists to resolve. The drift
+      # guard mirrors the root install so a stale mobile lockfile fails by name — mobile's
+      # lockfile carries patchedDependencies that a silent rewrite would drop.
+      - name: Install mobile dependencies
+        if: needs.code_paths.outputs.mobile_dependencies == 'true'
+        working-directory: mobile
+        run: |
+          pnpm install --frozen-lockfile
+          if [ "$(git -C "$GITHUB_WORKSPACE" rev-parse --is-inside-work-tree 2>/dev/null)" = true ]; then
+            git -C "$GITHUB_WORKSPACE" diff --exit-code -- \
+              mobile/package.json mobile/pnpm-lock.yaml mobile/pnpm-workspace.yaml
+          fi
 
       - name: Enforce changed-code quality
         run: pnpm run check:code-quality:changed -- "${{ github.event.pull_request.base.sha }}"
@@ -360,7 +380,7 @@ jobs:
       - uses: ./.github/actions/install-node-dependencies
 
       # Why: the check rebuilds every package in the manifest from a pinned upstream
-      # commit — @xterm/xterm and the two addons, each built twice (once unmodified to
+      # commit — @xterm/xterm and its three addons, each built twice (once unmodified to
       # prove the toolchain still reproduces the published bundles, once patched). Caching
       # the npm metadata and the shallow clone keeps the repeated cost to the builds
       # themselves; the key is the manifest, so a commit, package or toolchain bump
@@ -796,6 +816,7 @@ jobs:
           src/main/cli/wsl-cli-powershell-boundary.test.ts
           src/main/cursor/hook-service.test.ts
           src/main/orca-profiles/profile-index-store.test.ts
+          src/main/startup/windows-install-dir-acl-repair.win32.test.ts
           src/main/runtime/repo-worktree-admin-fingerprint.test.ts
           src/main/runtime/worktree-scan-admin-fingerprint-gate.test.ts
           src/shared/secure-file-fsync-flags.test.ts

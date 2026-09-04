@@ -114,7 +114,7 @@ export async function captureWorkerOutputArchive(args: {
   }
 }
 
-function boundArchiveLines(lines: string[]): { lines: string[]; truncated: boolean } {
+export function boundArchiveLines(lines: string[]): { lines: string[]; truncated: boolean } {
   let total = 0
   for (const line of lines) {
     total += line.length + 1
@@ -122,18 +122,21 @@ function boundArchiveLines(lines: string[]): { lines: string[]; truncated: boole
   if (total <= TERMINAL_ARCHIVE_MAX_CHARS) {
     return { lines, truncated: false }
   }
-  const kept: string[] = []
+  // Collected newest-first and reversed once: unshift per line is O(n^2) and the
+  // char budget admits ~260k blank lines.
+  const keptReversed: string[] = []
   let budget = TERMINAL_ARCHIVE_MAX_CHARS
   for (let index = lines.length - 1; index >= 0; index -= 1) {
     const cost = lines[index].length + 1
     if (cost > budget) {
-      if (kept.length === 0 && budget > 1) {
-        kept.unshift(lines[index].slice(-(budget - 1)))
+      if (keptReversed.length === 0 && budget > 1) {
+        keptReversed.push(lines[index].slice(-(budget - 1)))
       }
       break
     }
-    kept.unshift(lines[index])
+    keptReversed.push(lines[index])
     budget -= cost
   }
-  return { lines: kept, truncated: true }
+  keptReversed.reverse()
+  return { lines: keptReversed, truncated: true }
 }

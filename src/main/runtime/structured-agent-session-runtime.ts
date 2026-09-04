@@ -83,6 +83,15 @@ type InstalledRuntime = {
 
 let installing: Promise<InstalledRuntime> | null = null
 
+/**
+ * Runtimes whose teardown did not finish. `installing` is cleared regardless so
+ * nothing new attaches, but dropping the runtime as well would strand every
+ * journal the host retained for a retry: `tearDownStructuredAgentSessionHost`
+ * deliberately keeps a failed close indexed, and only a later stop through this
+ * same runtime can reach those entries again.
+ */
+const pendingTeardown = new Set<InstalledRuntime>()
+
 export function ensureStructuredAgentSessionHost(
   deps: StructuredAgentSessionRuntimeDeps
 ): Promise<StructuredAgentSessionHost> {
@@ -94,19 +103,36 @@ export function ensureStructuredAgentSessionHost(
   return installing.then((installed) => installed.host)
 }
 
-/** Drops the host and reaps every structured provider child under it. */
+/** Reaps all structured provider children; failed teardown is retried on the next stop. */
 export async function stopStructuredAgentSessionRuntime(): Promise<void> {
   const pending = installing
   installing = null
   setStructuredAgentSessionHost(null)
   agentSessionPtyWriteGate.detachRecordLookup()
-  if (!pending) {
-    return
+  const outstanding = [...pendingTeardown]
+  pendingTeardown.clear()
+  const installed = pending ? await pending.catch(() => null) : null
+  if (installed) {
+    outstanding.push(installed)
   }
-  const installed = await pending.catch(() => null)
-  if (!installed) {
-    return
+  const failures: unknown[] = []
+  for (const runtime of outstanding) {
+    try {
+      await tearDownRuntime(runtime)
+    } catch (error) {
+      pendingTeardown.add(runtime)
+      failures.push(error)
+    }
   }
+  if (failures.length === 1) {
+    throw failures[0]
+  }
+  if (failures.length > 1) {
+    throw new AggregateError(failures, 'structured agent-session runtime teardown failed')
+  }
+}
+
+async function tearDownRuntime(installed: InstalledRuntime): Promise<void> {
   // Drain an in-flight recovery before stopping children; recovery may still
   // be writing lifecycle rows or acquiring a replacement child.
   await installed.waitForRecovery()

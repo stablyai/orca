@@ -357,6 +357,16 @@ describe('renderer startup runtime routing', () => {
     expect(reconnectIndex).toBeGreaterThan(capabilityIndex)
   })
 
+  it('skips startup structured tab projection while the host setting is off', () => {
+    const source = readSource(STARTUP_HYDRATION_PATH)
+    const projectIndex = source.indexOf("timeRendererStartupStep('project-structured-session-tabs'")
+
+    expect(projectIndex).toBeGreaterThanOrEqual(0)
+    expect(source.slice(projectIndex - 180, projectIndex)).toContain(
+      'settings?.experimentalStructuredNativeChat === true'
+    )
+  })
+
   it('orders packaged restoration before adoption, projection, and default creation', () => {
     // Why this file: the startup sequence moved out of App.tsx into the hydration hook;
     // the ordering it asserts is unchanged, only the module that now spells it out.

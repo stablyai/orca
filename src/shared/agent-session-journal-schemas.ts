@@ -1,11 +1,12 @@
 // ─── Canonical runtime schemas for the journal render model ─────────────────
-// The journal admits JSON it did not just write — snapshot files and log rows
-// re-enter from disk and are republished to clients — while the reducer, the
+// The journal admits JSON it did not just write — persisted rows re-enter from
+// SQLite on replay and are republished to clients — while the reducer, the
 // shared projection, and the prompt surfaces dereference nested fields without
 // guards. These schemas are the single deep validators for that render model:
 // admission must reject a JSON-valid but structurally wrong item (a question
-// whose `options` are null, a prompt without its `resolution`) so corruption
-// lands in quarantine instead of throwing mid-render.
+// whose `options` are null, a prompt without its `resolution`) so the row is
+// rejected at replay, where a repair can delete it, instead of throwing
+// mid-render.
 //
 // Discriminants (`kind`, known block `type`s) are validated deeply. Open string
 // fields (roles, dispatch/tool states) stay type-checked, never enum-checked,
@@ -154,8 +155,8 @@ export function isAdmissibleAgentJournalSubmission(
   return AgentJournalSubmissionSchema.safeParse(value).success
 }
 
-/** Compile-time proof that every canonical value is admissible, so admission
- *  can never quarantine a row a writer in this build produced. The schemas are
+/** Compile-time proof that every canonical value is admissible, so replay can
+ *  never reject a row a writer in this build produced. The schemas are
  *  deliberately wider on open string fields, so only this direction holds. */
 type Admits<T extends true> = T
 export type CanonicalJournalShapesAreAdmissible = [

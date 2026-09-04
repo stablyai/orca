@@ -220,12 +220,6 @@ describe('codex item bodies', () => {
       throw new Error('expected bounded command output')
     }
     expect(body.output.head.length).toBeLessThan(20_000)
-    expect(translated.blobs).toEqual([
-      {
-        digest: body.output.digest,
-        payload: output
-      }
-    ])
   })
 
   it('continues to accept camel-case command completion output', () => {

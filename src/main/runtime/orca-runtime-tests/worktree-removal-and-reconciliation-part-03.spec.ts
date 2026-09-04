@@ -193,41 +193,69 @@ describe('OrcaRuntimeService', () => {
   })
 
   it('does not coalesce concurrent same-id removals on different hosts', async () => {
+    const baseRepo = store.getRepos()[0]!
+    // The second owner names its host only in the migrated spelling, so its removal must reach the
+    // SSH host rather than joining the local one and running `git worktree remove` here.
+    const remoteRepo = { ...baseRepo, path: '/remote/repo', executionHostId: 'ssh:host-b' }
     const runtimeStore = {
       ...store,
-      getRepos: () => [
-        { ...store.getRepos()[0], executionHostId: 'local' },
-        { ...store.getRepos()[0], executionHostId: 'runtime:env-1' }
-      ]
+      getRepos: () => [{ ...baseRepo, executionHostId: 'local' }, remoteRepo]
     }
     const runtime = createWorktreeRemovalRuntime(runtimeStore)
     vi.spyOn(runtime, 'acquireFileWatcherRemoval').mockResolvedValue({ finish: vi.fn() })
     const bothStarted = deferred<void>()
     const finishRemovals = deferred<void>()
     let startedCount = 0
-    vi.mocked(removeWorktree).mockImplementation(async () => {
+    const startRemoval = async (): Promise<Record<string, never>> => {
       startedCount += 1
       if (startedCount === 2) {
         bothStarted.resolve()
       }
       await finishRemovals.promise
       return {}
-    })
+    }
+    vi.mocked(removeWorktree).mockImplementation(startRemoval)
+    const provider = {
+      exec: vi.fn().mockResolvedValue({ stdout: '', stderr: '' }),
+      listWorktrees: vi.fn().mockResolvedValue([
+        {
+          path: remoteRepo.path,
+          head: 'main',
+          branch: 'main',
+          isBare: false,
+          isMainWorktree: true
+        },
+        {
+          path: TEST_WORKTREE_PATH,
+          head: 'def456',
+          branch: 'feature/test',
+          isBare: false,
+          isMainWorktree: false
+        }
+      ]),
+      removeWorktree: vi.fn().mockImplementation(startRemoval)
+    }
+    registerSshGitProvider('host-b', provider as never)
 
-    const local = runtime.removeManagedWorktree(TEST_WORKTREE_ID, true, false, false, 'local')
-    const paired = runtime.removeManagedWorktree(
-      TEST_WORKTREE_ID,
-      true,
-      false,
-      false,
-      'runtime:env-1'
-    )
+    try {
+      const local = runtime.removeManagedWorktree(TEST_WORKTREE_ID, true, false, false, 'local')
+      const remote = runtime.removeManagedWorktree(
+        TEST_WORKTREE_ID,
+        true,
+        false,
+        false,
+        'ssh:host-b'
+      )
 
-    await bothStarted.promise
-    expect(removeWorktree).toHaveBeenCalledTimes(2)
+      await bothStarted.promise
+      expect(removeWorktree).toHaveBeenCalledTimes(1)
+      expect(provider.removeWorktree).toHaveBeenCalledTimes(1)
 
-    finishRemovals.resolve()
-    await expect(Promise.all([local, paired])).resolves.toEqual([{}, {}])
+      finishRemovals.resolve()
+      await expect(Promise.all([local, remote])).resolves.toEqual([{}, {}])
+    } finally {
+      unregisterSshGitProvider('host-b')
+    }
   })
 
   it('rejects concurrent runtime worktree removals for the same id with different options', async () => {

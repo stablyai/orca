@@ -29,6 +29,10 @@ const STALE_SINCE_LAST_CONNECT_MS = 60_000
 // instead of leaving the user staring at a generic "Can't connect".
 const TAILSCALE_HINT = 'check Tailscale'
 
+// No hint field: the remedy is the label, and appending "— check Tailscale" to
+// it would be wrong advice for a desktop that is reachable but signed out.
+const SIGNED_OUT_LABEL = 'Desktop signed out — sign in to Orca on your desktop to reconnect'
+
 export type ConnectionVerdict =
   | { kind: 'normal'; label: string }
   | { kind: 'warning'; label: string; hint?: string } // "Can't connect"
@@ -54,6 +58,10 @@ export function classifyConnection(args: {
   // The desktop has repeatedly refused this device's relay credential — retrying
   // cannot fix it, so it outranks any "still connecting" reading (STA-4681).
   pairingRejected?: boolean
+  // The relay says the desktop's last control close named its own Orca Cloud
+  // sign-out. Retrying is still correct and still happens on the same cadence,
+  // but only the desktop's owner can end it, so the label has to say so.
+  hostSignedOut?: boolean
   nowMs?: number
 }): ConnectionVerdict {
   const { state, reconnectAttempts, lastConnectedAt } = args
@@ -68,6 +76,17 @@ export function classifyConnection(args: {
 
   if (state === 'connected') {
     return { kind: 'normal', label: 'Connected' }
+  }
+
+  // Ahead of the attempt thresholds: this is evidence, not an inference from a
+  // failure streak, and waiting twelve dials to show it wastes the whole point.
+  // Below auth-failed because a revoked pairing cannot be fixed by signing in.
+  if (args.hostSignedOut) {
+    return {
+      kind: 'unreachable',
+      label: SIGNED_OUT_LABEL,
+      reason: lastConnectedAt == null ? 'never-connected' : 'stale'
+    }
   }
 
   // A disconnected pending path can survive a cleared retry timer during a

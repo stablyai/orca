@@ -105,7 +105,8 @@ export class AgentAwakeService {
   }
 
   setStatuses(statuses: AgentAwakeStatus[]): void {
-    this.statuses = statuses.map((status) => ({ ...status }))
+    // Copy the array, not every row: the hook server allocates each row fresh per event.
+    this.statuses = [...statuses]
     this.refresh('status-change')
   }
 
@@ -171,7 +172,8 @@ export class AgentAwakeService {
 
   private getEligibleRunningStatusCount(): number {
     const now = this.now()
-    return this.statuses.filter((status) => this.isWakeEligible(status, now)).length
+    // Counted in place: the filtered array was only ever measured, and this runs per hook event.
+    return this.statuses.reduce((count, s) => count + (this.isWakeEligible(s, now) ? 1 : 0), 0)
   }
 
   private isWakeEligible(status: AgentAwakeStatus, now: number): boolean {

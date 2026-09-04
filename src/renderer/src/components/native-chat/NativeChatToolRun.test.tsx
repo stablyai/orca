@@ -99,7 +99,9 @@ describe('NativeChatToolRun', () => {
 
     const { container } = render(<NativeChatToolRun blocks={blocks} expandSignal={false} />)
 
-    expect(screen.getByText('Running cat package.json')).toBeInTheDocument()
+    const activeLabel = screen.getByText('Running cat package.json')
+    expect(activeLabel).toBeInTheDocument()
+    expect(activeLabel).toHaveClass('animate-pulse', 'motion-reduce:animate-none')
     expect(screen.queryByText('Running date')).toBeNull()
     expect(screen.queryByText('Running pwd')).toBeNull()
     expect(screen.queryByText('Ran 3 commands and used 1 tool')).toBeNull()

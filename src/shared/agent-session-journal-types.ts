@@ -58,13 +58,15 @@ export type AgentJournalItemIdentity =
 
 // ─── Bounded payloads ───────────────────────────────────────────────────────
 
-/** A tool output or diff body clipped to a head plus a content-addressed
- *  remainder. Crossing a bound sets `truncated`; it never silently drops. */
+/** A tool output or diff body clipped to a head. The remainder is DISCARDED,
+ *  never stored: crossing a bound sets `truncated` and the two fields below
+ *  describe what was dropped, so it is marked rather than silently lost. */
 export type AgentJournalBoundedPayload = {
   head: string
   /** Byte length of the ORIGINAL payload, not of `head`. */
   byteLength: number
-  /** sha256 of the original payload, and the blob store key when `truncated`. */
+  /** sha256 of the original payload — identification only; nothing stores or
+   *  retrieves the discarded remainder by it. */
   digest: string
   truncated: boolean
 }

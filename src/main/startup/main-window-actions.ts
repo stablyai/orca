@@ -12,7 +12,10 @@ import { ensureAutoUpdaterConfigured } from '../window/attach-main-window-servic
 import { focusExistingMainWindow, safelyRevealWindow } from '../window/focus-existing-window'
 import { mainProcessState as state } from './main-process-state'
 import { loadMainWindow } from '../window/createMainWindow'
-import { describeInstallDirAclPoison } from './windows-install-dir-acl-recovery'
+import {
+  describeInstallDirAclPoison,
+  isBlockingInstallDirAclRepairInFlight
+} from './windows-install-dir-acl-recovery'
 import { presentRendererRecoveryPrompt } from '../window/renderer-recovery-prompt'
 
 // The window module injects this callback to avoid a cycle between actions and lifecycle code.
@@ -28,6 +31,9 @@ export function focusExistingWindow(): void {
     app,
     getWindow: () => state.mainWindow,
     openWindow,
+    // Why: a 20s blank launch invites a second double-click, and icacls is rewriting
+    // the per-file DACLs a fresh renderer would read. The gated launch opens the window.
+    canOpenWindow: () => !isBlockingInstallDirAclRepairInFlight(),
     warn: console.warn
   })
 }

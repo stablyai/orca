@@ -82,24 +82,38 @@ function relayReattachBinds(
 }
 
 /**
- * Both binding writers land before the lease upsert — spawn asserts that ordering directly, and
- * the relay's reattach binds the pane before `markSshRemotePtyLeasesAttachedAsync`. Supersession
- * therefore sees a session already naming the arriving shell.
+ * One reconnect's worth of writes, in the order the spawn commits actually issue them: the lease
+ * row first — so a force-quit in the renderer's debounce window cannot leave a running remote shell
+ * with no lease to reattach it — then the binding, then the binding-side supersession trigger.
+ *
+ * This suite used to bind BEFORE upserting, an order no caller uses. Under that order supersession
+ * always saw a session already naming the arriving shell and passed; under production's order it
+ * bailed on the predecessor's binding every time and never re-ran, so the guard could not catch the
+ * per-reconnect lease growth it exists to pin.
  *
  * Goes through `persistPtyBinding` rather than `setWorkspaceSession` because that is the writer
  * production uses; a raw session write is reconciled back to the attached lease's PTY by binding
  * recovery, which would make the fixture disagree with the real flow.
  */
-function paneBindsTo(
+function paneSpawnCommits(
   store: ReturnType<typeof createStore>,
-  args: { tabId: string; leafId: string; ptyId: string }
+  args: { tabId: string; leafId: string; ptyId: string; leaseTabId?: string }
 ): void {
+  store.upsertSshRemotePtyLease({
+    targetId: TARGET,
+    ptyId: args.ptyId,
+    worktreeId: WORKTREE,
+    tabId: args.leaseTabId ?? args.tabId,
+    leafId: args.leafId,
+    state: 'attached'
+  })
   store.persistPtyBinding({
     worktreeId: WORKTREE,
     tabId: args.tabId,
     leafId: args.leafId,
     ptyId: args.ptyId
   })
+  store.supersedeSshRemotePtyLeasesForBoundPane(TARGET, args.leafId)
 }
 
 function liveLeasePtyIds(store: ReturnType<typeof createStore>): string[] {
@@ -300,8 +314,7 @@ describe('STA-3077: one pane keeps at most one live remote lease', () => {
     const lease = { targetId: TARGET, worktreeId: WORKTREE, tabId: TAB, leafId: TEST_LEAF_1 }
     store.upsertSshRemotePtyLease({ ...lease, ptyId: 'pty-1', state: 'attached' })
 
-    paneBindsTo(store, { tabId: TAB, leafId: TEST_LEAF_1, ptyId: 'pty-2' })
-    store.upsertSshRemotePtyLease({ ...lease, ptyId: 'pty-2', state: 'attached' })
+    paneSpawnCommits(store, { tabId: TAB, leafId: TEST_LEAF_1, ptyId: 'pty-2' })
 
     expect(liveLeasePtyIds(store)).toEqual(['pty-2'])
   })
@@ -314,8 +327,7 @@ describe('STA-3077: one pane keeps at most one live remote lease', () => {
     const lease = { targetId: TARGET, worktreeId: WORKTREE, tabId: TAB, leafId: TEST_LEAF_1 }
     store.upsertSshRemotePtyLease({ ...lease, ptyId: 'pty-1', state: 'attached' })
 
-    paneBindsTo(store, { tabId: TAB, leafId: TEST_LEAF_1, ptyId: 'pty-2' })
-    store.upsertSshRemotePtyLease({ ...lease, ptyId: 'pty-2', state: 'attached' })
+    paneSpawnCommits(store, { tabId: TAB, leafId: TEST_LEAF_1, ptyId: 'pty-2' })
 
     const predecessor = store.getSshRemotePtyLeases(TARGET).find((entry) => entry.ptyId === 'pty-1')
     expect(predecessor?.state).toBe('expired')
@@ -325,11 +337,9 @@ describe('STA-3077: one pane keeps at most one live remote lease', () => {
   it('holds the live lease count flat across ten reconnects of one pane', async () => {
     const store = await createStore()
     store.setWorkspaceSession(sessionWithPane({ tabId: TAB, leafId: TEST_LEAF_1, ptyId: 'pty-0' }))
-    const lease = { targetId: TARGET, worktreeId: WORKTREE, tabId: TAB, leafId: TEST_LEAF_1 }
 
     for (let reconnect = 0; reconnect < 10; reconnect++) {
-      paneBindsTo(store, { tabId: TAB, leafId: TEST_LEAF_1, ptyId: `pty-${reconnect}` })
-      store.upsertSshRemotePtyLease({ ...lease, ptyId: `pty-${reconnect}`, state: 'attached' })
+      paneSpawnCommits(store, { tabId: TAB, leafId: TEST_LEAF_1, ptyId: `pty-${reconnect}` })
     }
 
     expect(liveLeasePtyIds(store)).toEqual(['pty-9'])
@@ -349,17 +359,14 @@ describe('STA-3077: one pane keeps at most one live remote lease', () => {
       state: 'attached'
     })
 
-    paneBindsTo(store, { tabId: TAB, leafId: TEST_LEAF_1, ptyId: 'pty-2' })
     // The successor's lease names the tab the pane sits in NOW; the predecessor's still names the
     // one it was written in. Only the leaf is common, so keying on the tab would stop the two
     // competing and leave both live — the cardinality growth.
-    store.upsertSshRemotePtyLease({
-      targetId: TARGET,
-      ptyId: 'pty-2',
-      worktreeId: WORKTREE,
-      tabId: OTHER_TAB,
+    paneSpawnCommits(store, {
+      tabId: TAB,
       leafId: TEST_LEAF_1,
-      state: 'attached'
+      ptyId: 'pty-2',
+      leaseTabId: OTHER_TAB
     })
 
     expect(liveLeasePtyIds(store)).toEqual(['pty-2'])
@@ -394,8 +401,7 @@ describe('STA-3077: one pane keeps at most one live remote lease', () => {
     const lease = { targetId: TARGET, worktreeId: WORKTREE, tabId: TAB, leafId: TEST_LEAF_1 }
     store.upsertSshRemotePtyLease({ ...lease, ptyId: 'pty-1', state: 'attached' })
 
-    paneBindsTo(store, { tabId: TAB, leafId: TEST_LEAF_1, ptyId: 'pty-2' })
-    store.upsertSshRemotePtyLease({ ...lease, ptyId: 'pty-2', state: 'attached' })
+    paneSpawnCommits(store, { tabId: TAB, leafId: TEST_LEAF_1, ptyId: 'pty-2' })
 
     expect(liveLeasePtyIds(store).sort()).toEqual(['pty-2', 'sibling-pty'])
   })
@@ -455,8 +461,7 @@ describe('STA-3077: `expired` separates a superseded sibling from an orphan', ()
   it('never bulk-reattaches a superseded sibling', async () => {
     const store = await storeWithPane('pty-1')
 
-    paneBindsTo(store, { tabId: TAB, leafId: TEST_LEAF_1, ptyId: 'pty-2' })
-    store.upsertSshRemotePtyLease({ ...paneLease, ptyId: 'pty-2', state: 'attached' })
+    paneSpawnCommits(store, { tabId: TAB, leafId: TEST_LEAF_1, ptyId: 'pty-2' })
 
     const predecessor = store.getSshRemotePtyLeases(TARGET).find((entry) => entry.ptyId === 'pty-1')
     expect(predecessor).toMatchObject({ state: 'expired', supersededBy: 'pty-2' })
@@ -469,8 +474,7 @@ describe('STA-3077: `expired` separates a superseded sibling from an orphan', ()
     store.setWorkspaceSession(sessionWithPane({ tabId: TAB, leafId: TEST_LEAF_1, ptyId: 'pty-0' }))
 
     for (let reconnect = 0; reconnect < 10; reconnect++) {
-      paneBindsTo(store, { tabId: TAB, leafId: TEST_LEAF_1, ptyId: `pty-${reconnect}` })
-      store.upsertSshRemotePtyLease({ ...paneLease, ptyId: `pty-${reconnect}`, state: 'attached' })
+      paneSpawnCommits(store, { tabId: TAB, leafId: TEST_LEAF_1, ptyId: `pty-${reconnect}` })
     }
 
     expect(bulkReattachPtyIds(store)).toEqual(['pty-9'])
@@ -496,8 +500,7 @@ describe('STA-3077: `expired` separates a superseded sibling from an orphan', ()
     store.markSshRemotePtyLease(TARGET, 'pty-1', 'expired')
     const orphanUpdatedAt = store.getSshRemotePtyLeases(TARGET)[0].updatedAt
 
-    paneBindsTo(store, { tabId: TAB, leafId: TEST_LEAF_1, ptyId: 'pty-2' })
-    store.upsertSshRemotePtyLease({ ...paneLease, ptyId: 'pty-2', state: 'attached' })
+    paneSpawnCommits(store, { tabId: TAB, leafId: TEST_LEAF_1, ptyId: 'pty-2' })
 
     const predecessor = store.getSshRemotePtyLeases(TARGET).find((entry) => entry.ptyId === 'pty-1')
     expect(predecessor).toMatchObject({ state: 'expired', supersededBy: 'pty-2' })
@@ -510,8 +513,7 @@ describe('STA-3077: `expired` separates a superseded sibling from an orphan', ()
   // belongs to the lease that lost, never to whatever claims the id next.
   it('clears the supersession mark when the id is re-upserted as a live lease', async () => {
     const store = await storeWithPane('pty-1')
-    paneBindsTo(store, { tabId: TAB, leafId: TEST_LEAF_1, ptyId: 'pty-2' })
-    store.upsertSshRemotePtyLease({ ...paneLease, ptyId: 'pty-2', state: 'attached' })
+    paneSpawnCommits(store, { tabId: TAB, leafId: TEST_LEAF_1, ptyId: 'pty-2' })
 
     // A restarted relay hands `pty-1` to a new shell for a different pane.
     store.upsertSshRemotePtyLease({

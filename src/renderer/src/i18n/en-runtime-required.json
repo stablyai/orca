@@ -3717,6 +3717,16 @@
           "readyOneOne": "1 workspace found, with 1 cleanup suggestion."
         }
       }
+    },
+    "onboarding": {
+      "integrations": {
+        "capabilities": {
+          "browseIssues": "Browse GitHub issues and pull requests in the Tasks view without leaving Orca",
+          "managePullRequests": "Read, comment on, and merge pull requests without leaving Orca",
+          "reviewStatus": "See issue state, review status, and CI checks on every worktree",
+          "startWorkspaceFromIssue": "Start a workspace from any GitHub issue or pull request, prefilled with its title and context"
+        }
+      }
     }
   },
   "dashboard": {

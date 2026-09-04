@@ -56,6 +56,13 @@
     "count": 1
   },
   {
+    "filePath": "src/renderer/src/components/settings/appearance-search.ts",
+    "kind": "object-property:keywords",
+    "text": "Langue",
+    "dynamic": false,
+    "count": 1
+  },
+  {
     "filePath": "src/renderer/src/components/settings/terminal-advanced-platform-search.ts",
     "kind": "object-property:keywords",
     "text": "Ghostty",

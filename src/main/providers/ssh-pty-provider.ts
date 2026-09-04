@@ -63,7 +63,7 @@ export class SshPtyProvider implements IPtyProvider {
     this.rpcOperations.getForegroundProcess(id)
   inspectProcess = (
     id: string,
-    options?: { expectedIncarnationId?: string }
+    options?: { expectedIncarnationId?: string; scanChildProcesses?: boolean }
   ): Promise<PtyProcessInspection> => this.rpcOperations.inspectProcess(id, options)
   serialize = (ids: string[]): Promise<string> => this.rpcOperations.serialize(ids)
   revive = (state: string): Promise<void> => this.rpcOperations.revive(state)

@@ -44,6 +44,7 @@ patchedDependencies:
   node-pty@1.1.0: config/patches/node-pty@1.1.0.patch
   '@xterm/addon-ligatures@0.11.0-beta.300': config/patches/@xterm__addon-ligatures@0.11.0-beta.300.patch
   '@xterm/addon-webgl@0.20.0-beta.299': config/patches/@xterm__addon-webgl@0.20.0-beta.299.patch
+  '@xterm/addon-search@0.17.0-beta.300': config/patches/@xterm__addon-search@0.17.0-beta.300.patch
   '@xterm/addon-serialize@0.15.0-beta.300': config/patches/@xterm__addon-serialize@0.15.0-beta.300.patch
   '@xterm/xterm@6.1.0-beta.303': config/patches/@xterm__xterm@6.1.0-beta.303.patch
   lint-staged@16.4.0: config/patches/lint-staged@16.4.0.patch

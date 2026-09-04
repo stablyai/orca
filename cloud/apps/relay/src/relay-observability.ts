@@ -1,6 +1,7 @@
 import { monitorEventLoopDelay, performance } from 'node:perf_hooks'
 import type { RelayRegion } from '@orca-cloud/relay-contract'
 import type { ControlRenewalOutcome } from './assignment-store.js'
+import type { CellInventoryHoldCounts } from './cell-inventory-hold-samples.js'
 import type { PostgresPoolPressureCounts } from './postgres-pool-pressure.js'
 import type { RelayReadinessObservation } from './relay-readiness.js'
 
@@ -20,7 +21,9 @@ export function observedRelayRequests(counts: RelayRuntimeCounts): number {
   return counts.preAuthConnections + counts.controls + counts.splices + counts.pendingSplices
 }
 
-export type RelayProcessCounts = RelayRuntimeCounts & PostgresPoolPressureCounts
+export type RelayProcessCounts = RelayRuntimeCounts &
+  PostgresPoolPressureCounts &
+  Partial<CellInventoryHoldCounts>
 
 export type RegionalRehomeRuntimeSafety = {
   observedAt: number

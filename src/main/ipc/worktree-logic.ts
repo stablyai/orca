@@ -4,8 +4,14 @@ import type { Repo } from '../../shared/repo-types'
 import { isWindowsAbsolutePathLike, resolveRuntimePath } from '../../shared/cross-platform-path'
 import { isWslUncPath, resolveWslRepoWorktreeBasePath } from '../../shared/wsl-paths'
 import { splitWorktreeId } from '../../shared/worktree/id'
-import { replaceKnownEmojiWithShortcodes } from '../../shared/emoji-shortcode-catalog'
+import {
+  replaceKnownEmojiWithShortcodes,
+  setEmojiShortcodeDatasetLoader
+} from '../../shared/emoji-shortcode-catalog'
+import { requireEmojiShortcodeDataset } from './deferred-emoji-shortcode-dataset'
 import { getWslHome, getWslHomeAsync, parseWslPath } from '../wsl'
+
+setEmojiShortcodeDatasetLoader(requireEmojiShortcodeDataset)
 
 type WorktreePathSettings = Pick<GlobalSettings, 'nestWorkspaces' | 'workspaceDir'> & {
   /** Distro to mirror the workspace root into when the repo itself sits on a

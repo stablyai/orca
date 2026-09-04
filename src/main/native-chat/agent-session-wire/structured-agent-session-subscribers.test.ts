@@ -1,4 +1,4 @@
-import { appendFile, mkdtemp, rm } from 'node:fs/promises'
+import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
@@ -11,26 +11,30 @@ import {
   REMOTE_RUNTIME_MAX_OUTBOUND_JSON_BYTES,
   serializeRemoteRuntimePayload
 } from '../../../shared/remote-runtime-memory-limits'
-import { JOURNAL_LOG_FILE } from '../agent-session-journal/journal-log-file'
-import { serializeJournalRow, type JournalRow } from '../agent-session-journal/journal-row-schema'
-import { openAgentSessionJournal } from '../agent-session-journal/journal-store-factory'
+import { openJournalDatabase } from '../agent-session-journal/journal-database'
+import { journalDatabaseFile } from '../agent-session-journal/journal-paths'
+import { insertJournalRow } from '../agent-session-journal/journal-row-table'
+import type { JournalRow } from '../agent-session-journal/journal-row-schema'
+import { createTrackedJournalOpener } from '../agent-session-journal/journal-store-test-open'
 import { AgentSessionSubscribers } from './structured-agent-session-subscribers'
 
 const SESSION = 'subscriber-session'
 
 let root: string
+const journals = createTrackedJournalOpener()
 
 beforeEach(async () => {
   root = await mkdtemp(join(tmpdir(), 'orca-agent-subscribers-'))
 })
 
 afterEach(async () => {
+  await journals.closeAll()
   await rm(root, { recursive: true, force: true })
 })
 
 describe('AgentSessionSubscribers', () => {
   it('publishes the current fence when a resumed cursor is already caught up', async () => {
-    const journal = await openAgentSessionJournal({
+    const journal = await journals.open({
       identity: {
         sessionId: SESSION,
         workspaceId: 'workspace-1',
@@ -67,7 +71,7 @@ describe('AgentSessionSubscribers', () => {
   })
 
   it('publishes handoff-only changes without serializing a transcript snapshot', async () => {
-    const journal = await openAgentSessionJournal({
+    const journal = await journals.open({
       identity: {
         sessionId: SESSION,
         workspaceId: 'workspace-1',
@@ -112,7 +116,7 @@ describe('AgentSessionSubscribers', () => {
 
   it('catches a subscriber up past a pre-existing unsendable removal with a bounded reset', async () => {
     const journalDir = join(root, 'oversized-removal-journal')
-    const seeded = await openAgentSessionJournal({
+    const seeded = await journals.open({
       identity: {
         sessionId: SESSION,
         workspaceId: 'workspace-1',
@@ -150,12 +154,20 @@ describe('AgentSessionSubscribers', () => {
         ts: 2_001
       }
     ]
-    await appendFile(
-      join(journalDir, JOURNAL_LOG_FILE),
-      `${rows.map(serializeJournalRow).join('\n')}\n`,
-      'utf-8'
-    )
-    const journal = await openAgentSessionJournal({
+    // Staged straight into the session database, exactly as a previous writer
+    // would have committed them.
+    await seeded.close()
+    const opened = openJournalDatabase(journalDatabaseFile(journalDir))
+    try {
+      opened.db.exec('BEGIN IMMEDIATE')
+      for (const row of rows) {
+        insertJournalRow(opened.db, SESSION, row)
+      }
+      opened.db.exec('COMMIT')
+    } finally {
+      opened.db.close()
+    }
+    const journal = await journals.open({
       identity: {
         sessionId: SESSION,
         workspaceId: 'workspace-1',

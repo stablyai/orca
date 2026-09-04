@@ -8,6 +8,7 @@ import {
   isUnsupportedMergeTreeMergeBaseError,
   isUnsupportedMergeTreeWriteTreeError
 } from './git-merge-tree-capability'
+import { isBranchCheckedOutInWorktreeError } from './git-branch-delete-refusal'
 import { isForEachRefExcludeUnsupportedError } from './git-ref-command-capabilities'
 import { isNoWriteFetchHeadUnsupportedError } from './git-fetch-head-capability'
 import {
@@ -138,6 +139,29 @@ describeBinaryCompatibility('real Git binary compatibility', () => {
     await expect(
       runGit(['rev-parse', '--show-toplevel', '--git-common-dir'])
     ).resolves.toBeDefined()
+  })
+
+  // Why pin this: worktree removal decides whether to prune and retry `branch -d` by
+  // matching Git's refusal text, and the wording moved inside the supported range
+  // (<=2.40 "Cannot delete branch 'x' checked out at", >=2.43 "cannot delete branch 'x'
+  // used by worktree at"). It is also the only evidence that the refusal is a stderr
+  // message on every supported Git rather than something a caller could read off stdout.
+  it('refuses to delete a branch another worktree holds, on stderr, in a recognized wording', async () => {
+    await runGit(['worktree', 'add', '-b', 'compat-held', 'held-wt'])
+    try {
+      const refusal = await runGit(['branch', '-d', '--', 'compat-held']).then(
+        () => null,
+        (error: unknown) => error
+      )
+      expect(refusal).not.toBeNull()
+      expect(isBranchCheckedOutInWorktreeError(refusal)).toBe(true)
+      const streams = refusal as { stdout?: string; stderr?: string }
+      expect(streams.stderr ?? '').toMatch(/delete branch .*compat-held/i)
+      expect(streams.stdout ?? '').toBe('')
+    } finally {
+      await runGit(['worktree', 'remove', '--force', 'held-wt'])
+      await runGit(['branch', '-D', 'compat-held'])
+    }
   })
 
   it('deregisters a worktree whose directory was renamed away', async () => {

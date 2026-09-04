@@ -1,14 +1,18 @@
+import { readFileSync, readdirSync } from 'node:fs'
 import { cp, mkdir, mkdtemp, readFile, readdir, rm, stat, writeFile } from 'node:fs/promises'
 import { createRequire } from 'node:module'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { dirname, join, relative, resolve } from 'node:path'
 import { describe, expect, it } from 'vitest'
 
 const require = createRequire(import.meta.url)
+const projectRoot = resolve(import.meta.dirname, '..', '..')
 const electronBuilderConfig = require('../electron-builder.config.cjs')
 const {
   createPackagedRuntimeNodeModuleResources,
   findAsarEntry,
+  isPackagedExternalSpecifier,
+  packageNameFromSpecifier,
   prunePackagedNodePty,
   prunePackagedParcelWatcher,
   prunePackagedSherpaOnnx,
@@ -305,4 +309,92 @@ describe('packaged runtime resources', () => {
       }
     }
   )
+})
+
+// Why source-anchored: the bundler renames a createRequire()'d require, so
+// verifyPackagedMainRuntimeDeps' `require("x")` scan cannot see these specifiers — packaging
+// stays green while the packaged app throws MODULE_NOT_FOUND the first time the path runs.
+function collectLazyRequireSpecifiers(directory, found = new Map()) {
+  for (const entry of readdirSync(directory, { withFileTypes: true })) {
+    const entryPath = join(directory, entry.name)
+    if (entry.isDirectory()) {
+      collectLazyRequireSpecifiers(entryPath, found)
+      continue
+    }
+    if (!entry.isFile() || !entry.name.endsWith('.ts') || entry.name.includes('.test.')) {
+      continue
+    }
+    const source = readFileSync(entryPath, 'utf8')
+    if (!source.includes('createRequire(')) {
+      continue
+    }
+    for (const match of source.matchAll(/\brequire[A-Za-z0-9_]*\(\s*'([^']+)'\s*\)/g)) {
+      if (isPackagedExternalSpecifier(match[1])) {
+        found.set(match[1], relative(projectRoot, entryPath).replaceAll('\\', '/'))
+      }
+    }
+  }
+  return found
+}
+
+function packagedResourceDestinations(platform) {
+  return new Set(
+    (electronBuilderConfig[platform].extraResources ?? []).map((resource) =>
+      String(resource.to).replaceAll('\\', '/')
+    )
+  )
+}
+
+describe('lazily required packages reach Resources/node_modules', () => {
+  it('copies every createRequire specifier main uses into the packaged resource plan', () => {
+    const specifiers = collectLazyRequireSpecifiers(join(projectRoot, 'src', 'main'))
+    expect(specifiers.size).toBeGreaterThan(0)
+
+    const destinations = {
+      win: packagedResourceDestinations('win'),
+      mac: packagedResourceDestinations('mac'),
+      linux: packagedResourceDestinations('linux')
+    }
+    for (const [specifier, source] of specifiers) {
+      const packageName = packageNameFromSpecifier(specifier)
+      const covered = (platform) =>
+        destinations[platform].has(`node_modules/${packageName}`) ||
+        destinations[platform].has(`node_modules/${specifier}`)
+      // Windows carries the full closure, so an uncovered specifier is uncovered everywhere.
+      expect(
+        covered('win'),
+        `${source} lazily requires '${specifier}', but nothing copies it to Resources/node_modules`
+      ).toBe(true)
+      if (covered('mac') && covered('linux')) {
+        continue
+      }
+      // Only the Windows-native loaders may be absent from the mac/linux plans.
+      expect(source, `'${specifier}' is packaged for Windows only`).toContain('windows')
+    }
+  })
+
+  it('resolves the copied emoji dataset the way the packaged main bundle does', async () => {
+    const resourcesDir = await mkdtemp(join(tmpdir(), 'orca-lazy-require-'))
+    try {
+      const datasetPath = 'node_modules/emojibase-data/en/shortcodes/emojibase.json'
+      const entry = electronBuilderConfig.mac.extraResources.find(
+        (resource) => String(resource.to) === datasetPath
+      )
+      expect(entry).toBeDefined()
+      const destination = join(resourcesDir, ...datasetPath.split('/'))
+      await mkdir(dirname(destination), { recursive: true })
+      await cp(join(projectRoot, ...String(entry.from).split('/')), destination)
+
+      // app.asar's parent is Resources, so main's bare require walks into Resources/node_modules.
+      const packagedMainDir = join(resourcesDir, 'app.asar', 'out', 'main')
+      await mkdir(packagedMainDir, { recursive: true })
+      const probe = join(packagedMainDir, 'probe.cjs')
+      await writeFile(probe, 'module.exports = require', 'utf8')
+
+      const dataset = require(probe)('emojibase-data/en/shortcodes/emojibase.json')
+      expect(Object.keys(dataset).length).toBeGreaterThan(1000)
+    } finally {
+      await rm(resourcesDir, { recursive: true, force: true })
+    }
+  })
 })

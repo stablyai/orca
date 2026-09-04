@@ -99,8 +99,8 @@ durably marked consumed before mutation and cannot authorize another run.
 | Cloud SQL deadlocks | over 0 |
 | Relay pool waiters | over 800 |
 | Relay pool wait | over 2,500 ms |
-| PostgreSQL retries in five minutes | over 300 |
-| Exhausted PostgreSQL retries | over 0 |
+| PostgreSQL retries in five minutes | over 2,000 |
+| Exhausted PostgreSQL retries in five minutes | over 300 |
 | Director instances | outside 5–6 |
 | Director CPU or memory | over 80% |
 | Director concurrency | over 64 |
@@ -132,15 +132,41 @@ heartbeats, and matching live admission.
   10 minutes over the old bar of 160 — enough to freeze roughly one in ten
   15-minute pre-drain gates on baseline noise. 250 clears measured healthy
   peaks and still fires well before the verified 400-connection ceiling;
-  pool waiters, pool wait latency, and exhausted retries keep their strict
-  thresholds.
+  pool waiters and pool wait latency keep their strict thresholds.
 - Recalibrated the PostgreSQL-retry freeze from 20 to 300 per five minutes
   (2026-08-26). Basis, measured from
   `jsonPayload.event="orca_relay_postgres_transaction_retry"` in production
   logs: healthy-day bursts reach 234/5min with zero exhausted retries and 26%
   of five-minute windows over 20, while the 2026-08-23 lock-contention
-  incident ran roughly 2,200–3,000/5min. Exhausted retries stay at zero
-  tolerance.
+  incident ran roughly 2,200–3,000/5min by raw log-line count (the gate's
+  own `orca_relay_postgres_retries` metric read 1,510 for that window; see the
+  2026-09-04 entry).
+- Recalibrated the PostgreSQL-retry freeze from 300 to 2,000 per five minutes
+  (2026-09-04). Basis: the global `relay_cells FOR UPDATE` lock made
+  successful retries a steady-state rate. Measured fleet-wide (director +
+  cells, summed per five minutes from the `orca_relay_postgres_retries`
+  log metric) over 2026-09-03T05Z..2026-09-04T05Z: p50 430 / p90 924 /
+  p99 1,320 / max 1,504; 55% of windows over 300; only 22% of 15-minute gates
+  clean at 300 versus 100% at 2,000. Three read-only dry-runs on 2026-09-04
+  froze on this bar (runs 33836470590, 33838698725) or on a genuine six-cell
+  crash storm (33837160275), blocking the same-cap roll that carries #18521
+  and the `beginProof` crash guard to the 23 cells. The 2026-08-23 incident
+  on this metric peaked at 1,510 then 646, so retries alone no longer
+  separate it from today's baseline; the exhausted-retry bar (incident peak
+  467 vs bar 300), director concurrency, and the pool bars carry that role.
+  Re-tighten after the fleet is on the 500 ms lock wait.
+- Recalibrated the exhausted-PostgreSQL-retry freeze from 0 to 300 per five
+  minutes (2026-09-04). Basis: #18521 cut the request-path cell-inventory
+  lock wait from the 1 s pool `lock_timeout` to 500 ms, so contended waiters
+  now fail fast (one `/v1/assign` 503 with `Retry-After`) instead of
+  succeeding slowly, and `orca_relay_postgres_transaction_exhausted` became
+  a steady contention rate. Measured fleet-wide per five minutes over
+  2026-09-03T03Z..2026-09-04T02Z: 236 of 236 windows non-zero; quiet hours
+  p50 2 / max 36; pre-#18521 daytime p50 10 / p90 25 / max 87; post-#18521
+  p50 42 / p90 147 / max 220; the 2026-08-23 incident peaked at 467. Every
+  pre-drain dry-run since the director deploy froze at minute one on this
+  bar, which blocked the cell roll that carries the same fix to the 23 GCE
+  cells. `/v1/assign` 503 share was unchanged by #18521 (13.9% vs 12.3%).
 - Added a fail-closed state machine with latched threshold freezes,
   generation-scoped checkpoint boundaries, continuity-reset evidence, cadence
   accounting, restart-gap recovery, and the 15-minute pre-drain gate.

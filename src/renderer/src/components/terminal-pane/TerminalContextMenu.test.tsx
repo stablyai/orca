@@ -77,6 +77,9 @@ function renderMenu(overrides: Record<string, unknown> = {}): string {
     canContinueAgentSessionInNewSession: false,
     onContinueAgentSessionInNewSession: vi.fn(),
     onForkAgentSession: vi.fn(),
+    canToggleNativeChat: false,
+    isNativeChatView: false,
+    onToggleNativeChat: vi.fn(),
     onCopyAgentSessionContext: vi.fn(),
     quickCommandHosts: [
       { hostId: 'local' as const, label: 'Local Linux', repoCommands: [], globalCommands: [] }

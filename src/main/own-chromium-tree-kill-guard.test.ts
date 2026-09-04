@@ -143,6 +143,40 @@ describe('refusing to tree-kill our own Chromium processes', () => {
     )
   })
 
+  /**
+   * Fail-open is the deliberate choice — see `orca-chromium-process-pids.ts` for
+   * why refusing everything is worse — so the crumb is the only thing that keeps
+   * an unreadable metrics table distinguishable from a host that has no Chromium.
+   */
+  it('leaves proof, and still admits the kill, when the Chromium metrics cannot be read', () => {
+    appMetricsMock.mockImplementation(() => {
+      throw new Error('getAppMetrics unavailable')
+    })
+
+    expect([...readOrcaChromiumProcessPids()]).toEqual([])
+    // Coalesced: the gate reads this set on every kill, so a broken table must
+    // not evict the ring it shares with the refusal crumb.
+    expect([...readOrcaChromiumProcessPids()]).toEqual([])
+    expect(
+      admitSelfInitiatedTreeKill({
+        pid: RENDERER_PID,
+        site: 'pty-descendant-sweep',
+        scope: 'win-taskkill-tree'
+      })
+    ).toBe(true)
+
+    expect(
+      getCrashBreadcrumbSnapshot().filter(
+        (breadcrumb) => breadcrumb.name === 'own_chromium_pids_unreadable'
+      )
+    ).toEqual([
+      expect.objectContaining({
+        name: 'own_chromium_pids_unreadable',
+        data: expect.objectContaining({ cause: 'getAppMetrics unavailable' })
+      })
+    ])
+  })
+
   it('refuses an own-Chromium pid at the gate the account teardowns share', () => {
     expect(
       admitSelfInitiatedTreeKill({

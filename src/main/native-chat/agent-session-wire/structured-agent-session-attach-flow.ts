@@ -58,8 +58,9 @@ export type AttachFlowInput = {
   onAcquiring?: () => Promise<void> | void
   /** Settles writes already captured by the superseded journal before opening another. */
   beforeJournalOpen?: () => Promise<void> | void
-  /** Removes any partial host publication after journal attachment fails. */
-  onAttachFailed?: () => void
+  /** Removes any partial host publication after journal attachment fails, and
+   *  closes the journal handle of the map entry it drops. Awaited: see eviction. */
+  onAttachFailed?: () => Promise<void>
 }
 
 export async function performAttach(
@@ -216,7 +217,9 @@ async function settlePostAcquisitionAttachFailure(
     exitProof =
       error instanceof AgentSessionAcquisitionExitUnprovenError ? 'unproven' : 'exit-proven'
   }
-  input.onAttachFailed?.()
+  // Why: the close is awaited so the map entry is gone only once its handle is
+  // released, but a failed close must not also cost the store settlement below.
+  await Promise.resolve(input.onAttachFailed?.()).catch(() => undefined)
   try {
     await input.store.settleFailedPostAcquisitionAttachment({
       sessionId: record.sessionId,

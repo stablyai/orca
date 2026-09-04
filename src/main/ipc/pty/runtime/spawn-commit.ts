@@ -1,8 +1,6 @@
 import { isValidTerminalTabId } from '../../../../shared/terminal-tab-id'
-import { isTerminalLeafId } from '../../../../shared/stable-pane-id'
 import { ptyOwnership, ptyIncarnationById, deletePtyOwnership } from '../provider/ownership-state'
 import { ptySizes } from '../delivery/visibility-state'
-import { getRelayPtyId } from '../provider/registry'
 import {
   shouldSkipCodexHomeEnvForWindowsShell,
   recordCodexPaneAccountForSpawn,
@@ -25,6 +23,7 @@ import {
   requestKindSchema
 } from '../../../../shared/telemetry-events'
 import { persistAdmittedStablePaneBinding } from '../pane/stable-owner'
+import { claimSshPaneLease } from '../pane/ssh-pane-lease-claim'
 import {
   isNativeWindowsLocalPtySpawn,
   markNativeWindowsConptyPty
@@ -114,23 +113,15 @@ export async function commitRuntimePtySpawn(ctx: RuntimePtySpawnState) {
   ) {
     markNativeWindowsConptyPty(ctx.result.id)
   }
-  const persistSshLease = (): void => {
-    if (!ctx.deps.store || !args.connectionId) {
-      return
-    }
-    // Why: SSH leases keep relay ids for remote reconciliation, while session bindings keep app-facing ids for hydration.
-    ctx.deps.store.upsertSshRemotePtyLease({
-      targetId: args.connectionId,
-      ptyId: getRelayPtyId(args.connectionId, ctx.result.id),
-      ...(typeof args.worktreeId === 'string' ? { worktreeId: args.worktreeId } : {}),
-      ...(typeof args.tabId === 'string' ? { tabId: args.tabId } : {}),
-      ...(typeof args.leafId === 'string' && isTerminalLeafId(args.leafId)
-        ? { leafId: args.leafId }
-        : {}),
-      state: 'attached',
-      lastAttachedAt: Date.now()
+  const persistSshLease = (): void =>
+    claimSshPaneLease({
+      store: ctx.deps.store,
+      connectionId: args.connectionId,
+      ptyId: ctx.result.id,
+      worktreeId: args.worktreeId,
+      tabId: args.tabId,
+      leafId: args.leafId
     })
-  }
   if (!ctx.hostSessionBinding) {
     persistSshLease()
   }

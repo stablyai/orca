@@ -191,3 +191,10 @@ test('director rollout has a strict one-time identity bootstrap', () => {
   assert.ok(candidateProof > 0 && candidateProof < trafficMove)
   assert.equal(script.indexOf('verifyRehomeDisabled', trafficMove), -1)
 })
+
+test('rehome job pipes every control result through tee under pipefail', () => {
+  const job = workflow('operate-relay-production-rehome-job.yml')
+  // Without `shell: bash` the step exit code is tee's, so a thrown inspect/apply passes green.
+  assert.match(job, /defaults:\n  run:\n(?:    #.*\n)*    shell: bash\n/)
+  assert.ok((job.match(/\| tee "\$\{RUNNER_TEMP\}/g) ?? []).length >= 5)
+})

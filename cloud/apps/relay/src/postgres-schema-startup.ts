@@ -22,15 +22,37 @@ function wait(delayMs: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, delayMs))
 }
 
+const CREATE_TABLE_IF_NOT_EXISTS = /^\s*CREATE\s+TABLE\s+IF\s+NOT\s+EXISTS\b/i
+const CREATE_INDEX_IF_NOT_EXISTS = /^\s*CREATE\s+(?:UNIQUE\s+)?INDEX\s+IF\s+NOT\s+EXISTS\b/i
+
+// `IF NOT EXISTS` only checks the name before the catalog inserts, so the loser of a concurrent
+// CREATE can fail on the catalog unique index (23505) or, when the winner has already committed by
+// the time the loser reaches TypeCreate/heap_create_with_catalog, on the name check those routines
+// repeat (42710 duplicate type, 42P07 duplicate relation). Each is a no-op on the next attempt.
+function concurrentCreateCollision(
+  value: { code?: unknown; constraint?: unknown },
+  statement: string
+): boolean {
+  if (CREATE_TABLE_IF_NOT_EXISTS.test(statement)) {
+    return (
+      (value.code === '23505' && value.constraint === 'pg_type_typname_nsp_index') ||
+      value.code === '42710' ||
+      value.code === '42P07'
+    )
+  }
+  if (CREATE_INDEX_IF_NOT_EXISTS.test(statement)) {
+    return (
+      (value.code === '23505' && value.constraint === 'pg_class_relname_nsp_index') ||
+      value.code === '42P07'
+    )
+  }
+  return false
+}
+
 function retryableSchemaError(error: unknown, statement: string): boolean {
   const value = error as { code?: unknown; constraint?: unknown }
   return (
-    RETRYABLE_SCHEMA_CODES.has(String(value.code)) ||
-    (value.code === '23505' &&
-      ((value.constraint === 'pg_type_typname_nsp_index' &&
-        /^\s*CREATE\s+TABLE\s+IF\s+NOT\s+EXISTS\b/i.test(statement)) ||
-        (value.constraint === 'pg_class_relname_nsp_index' &&
-          /^\s*CREATE\s+(?:UNIQUE\s+)?INDEX\s+IF\s+NOT\s+EXISTS\b/i.test(statement))))
+    RETRYABLE_SCHEMA_CODES.has(String(value.code)) || concurrentCreateCollision(value, statement)
   )
 }
 

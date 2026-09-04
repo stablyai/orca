@@ -2,6 +2,7 @@ import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import * as ptyChildProcessInspection from './pty-child-process-inspection'
 import * as ptyShellUtils from './pty-shell-utils'
 import * as processTableSnapshotReader from '../shared/process-table-snapshot-reader'
 
@@ -92,7 +93,7 @@ describe('PtyHandler', () => {
   })
 
   it('rescans the process table for a close decision but not for a poll', async () => {
-    const hasChildren = vi.mocked(ptyShellUtils.processHasChildren)
+    const hasChildren = vi.mocked(ptyChildProcessInspection.processHasChildren)
     const snapshot = vi
       .spyOn(processTableSnapshotReader, 'getStrictProcessTableSnapshotWithAge')
       .mockResolvedValue({

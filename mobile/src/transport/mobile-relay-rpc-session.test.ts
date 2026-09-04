@@ -55,7 +55,7 @@ function openSession() {
   })
 }
 
-async function authenticateSession() {
+async function confirmResume() {
   const session = openSession()
   fakes.linkOptions!.onHello({
     type: 'relay-hello',
@@ -93,9 +93,39 @@ async function authenticateSession() {
       _meta: { runtimeId: 'runtime-1' }
     })
   )
+  await vi.waitFor(() => expect(fakes.sendText).toHaveBeenCalledTimes(2))
+  const capabilityRequest = JSON.parse(fakes.sendText.mock.calls[1]![0] as string) as {
+    id: string
+    method: string
+    deviceToken: string
+    params: { clientCapabilities?: string[] }
+  }
+  return { session, confirmationRequest: request, capabilityRequest }
+}
+
+async function authenticateSession(capabilitySupported = true) {
+  const { session, confirmationRequest, capabilityRequest } = await confirmResume()
+  expect(session.getState()).toBe('handshaking')
+  fakes.linkOptions!.onText(
+    JSON.stringify(
+      capabilitySupported
+        ? {
+            id: capabilityRequest.id,
+            ok: true,
+            result: capabilityRequest.params,
+            _meta: { runtimeId: 'runtime-1' }
+          }
+        : {
+            id: capabilityRequest.id,
+            ok: false,
+            error: { code: 'method_not_found', message: 'Unknown method' },
+            _meta: { runtimeId: 'runtime-1' }
+          }
+    )
+  )
   await vi.waitFor(() => expect(session.getState()).toBe('connected'))
   fakes.sendText.mockClear()
-  return { session, confirmationRequest: request }
+  return { session, confirmationRequest, capabilityRequest }
 }
 
 describe('mobile relay RPC session', () => {
@@ -107,7 +137,7 @@ describe('mobile relay RPC session', () => {
   afterEach(() => vi.useRealTimers())
 
   it('requires exact resume observations and confirms by request ID before becoming connected', async () => {
-    const { session, confirmationRequest } = await authenticateSession()
+    const { session, confirmationRequest, capabilityRequest } = await authenticateSession()
 
     expect(fakes.linkOptions).toMatchObject({
       endpoint: relay,
@@ -121,7 +151,30 @@ describe('mobile relay RPC session', () => {
     })
     expect(confirmationRequest.params).not.toHaveProperty('relayDeviceId')
     expect(confirmationRequest.params).not.toHaveProperty('acceptedCredentialVersion')
+    expect(capabilityRequest).toMatchObject({
+      method: 'runtime.clientCapabilities.update',
+      params: {
+        clientCapabilities: expect.arrayContaining(['agent-session.structured.v1'])
+      },
+      deviceToken: 'device-token'
+    })
     expect(session.getAttachDeadlineAt()).toEqual(expect.any(Number))
+  })
+
+  it('connects when an older runtime rejects capability negotiation', async () => {
+    const { session } = await authenticateSession(false)
+
+    expect(session.getState()).toBe('connected')
+    expect(session.getFailure()).toBeNull()
+  })
+
+  it('connects when the relay never answers capability negotiation', async () => {
+    const { session } = await confirmResume()
+
+    // Why: the advisory's own deadline used to fail confirmResume, so a link too slow to
+    // answer within the request timeout never published 'connected' — it just redialled.
+    await vi.waitFor(() => expect(session.getState()).toBe('connected'), { timeout: 5_000 })
+    expect(session.getFailure()).toBeNull()
   })
 
   // Why: ConnectionState stays 'connecting' until relay-hello, so the migration bound

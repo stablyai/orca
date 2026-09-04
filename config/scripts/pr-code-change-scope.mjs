@@ -228,6 +228,7 @@ const WINDOWS_PACKAGE_TESTS = [
   'src/main/cli/wsl-cli-powershell-boundary.test.ts',
   'src/main/cursor/hook-service.test.ts',
   'src/main/orca-profiles/profile-index-store.test.ts',
+  'src/main/startup/windows-install-dir-acl-repair.win32.test.ts',
   'src/main/runtime/repo-worktree-admin-fingerprint.test.ts',
   'src/main/runtime/worktree-scan-admin-fingerprint-gate.test.ts',
   'src/shared/secure-file-fsync-flags.test.ts',
@@ -263,6 +264,14 @@ export function shouldRunPrChecks(changedFiles) {
   return changedFiles.some((file) => !isDocsOnlyPath(file) && !isDesktopIrrelevantPath(file))
 }
 
+export function needsMobileDependencies(changedFiles) {
+  // Why: static analysis lints CHANGED files, mobile ones included, and its
+  // type-aware pass resolves types from mobile/node_modules. Mobile is a
+  // separate pnpm project, so without this the root-only install leaves every
+  // mobile type an `error` type and the gate reports phantom findings.
+  return changedFiles.length === 0 || changedFiles.some((file) => file.startsWith('mobile/'))
+}
+
 export function classifyPrJobs(changedFiles) {
   const emptyDiff = changedFiles.length === 0
   const shouldRun = shouldRunPrChecks(changedFiles)
@@ -276,6 +285,7 @@ export function classifyPrJobs(changedFiles) {
   return {
     should_run: shouldRun,
     native_cache_changed: shouldRun && (emptyDiff || changedFiles.some(isNativeCacheInputPath)),
+    mobile_dependencies: shouldRun && needsMobileDependencies(changedFiles),
     ...jobs
   }
 }

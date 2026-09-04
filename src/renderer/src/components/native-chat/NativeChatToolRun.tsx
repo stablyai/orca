@@ -227,7 +227,7 @@ export function NativeChatToolRun({
           <span className="flex size-6 shrink-0 items-center justify-center text-muted-foreground">
             <ActiveToolIcon className="size-4" />
           </span>
-          <span className="min-w-0 flex-1 truncate text-foreground/85">
+          <span className="min-w-0 flex-1 animate-pulse truncate text-foreground/85 motion-reduce:animate-none">
             {activeToolLabel(latestActiveCall)}
           </span>
           {open ? <ChevronRight className="size-3.5 rotate-90 text-muted-foreground" /> : null}

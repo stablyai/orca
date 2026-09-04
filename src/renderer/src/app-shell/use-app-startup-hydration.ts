@@ -274,9 +274,11 @@ export function useAppStartupHydration(onOnboardingLoaded: (state: OnboardingSta
           await timeRendererStartupStep('recover-legacy-worker-terminals-post-reconnect', () =>
             window.api.app.recoverLegacyWorkerTerminalsForRendererStartup()
           )
-          await timeRendererStartupStep('project-structured-session-tabs', () =>
-            restoreLocalStructuredSessionTabsOnce()
-          )
+          if (useAppStore.getState().settings?.experimentalStructuredNativeChat === true) {
+            await timeRendererStartupStep('project-structured-session-tabs', () =>
+              restoreLocalStructuredSessionTabsOnce()
+            )
+          }
           if (cancelled) {
             return
           }

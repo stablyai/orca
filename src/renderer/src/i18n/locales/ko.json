@@ -20,7 +20,8 @@
         "chinese": "中文（简体）",
         "korean": "한국어",
         "japanese": "日本語",
-        "spanish": "Español"
+        "spanish": "Español",
+        "french": "Français"
       },
       "statusBar": {
         "claudeToggleDescription": "활성 워크스페이스에 대한 Claude 토큰 및 비용 사용량을 표시합니다.",
@@ -1928,7 +1929,7 @@
       "Terminal": {
         "73768427cf": "닫기",
         "f82e9f02df": "취소",
-        "7958465754": "실행 중인 프로세스가 있는 로컬 terminals이 있습니다. 그래도 창을 닫으시겠습니까?",
+        "7958465754": "실행 중인 프로세스가 있는 terminals이 있습니다. 그래도 창을 닫으시겠습니까?",
         "2fa9c69ff3": "창을 닫으시겠습니까?",
         "cd51e28d8b": "저장",
         "0037b21794": "저장하지 않음",
@@ -10289,6 +10290,28 @@
           "updateServer": "소스 기본값을 구성하려면 이 서버를 업데이트하세요.",
           "updateServerDefaults": "표시 기본값을 구성하려면 이 서버를 업데이트하세요."
         },
+        "orcaAccount": {
+          "connected": "연결됨",
+          "reconnectRequired": "세션이 만료되었습니다. 클라우드 기능을 사용하려면 다시 로그인하세요.",
+          "unavailable": "이 빌드에서는 Orca 로그인을 사용할 수 없습니다.",
+          "signedOut": "로그인하여 아티팩트 및 Orca Relay를 비롯한 클라우드 기능으로 Orca를 확장하세요.",
+          "checking": "계정 상태 확인 중…",
+          "account": "Orca 계정",
+          "signOut": "로그아웃",
+          "signingIn": "로그인 중…",
+          "signInAgain": "다시 로그인",
+          "signIn": "Orca 로그인",
+          "title": "Orca 계정",
+          "description": "작업을 즉시 공유하고 어디서나 Orca Mobile로 데스크톱에 연결하세요.",
+          "searchDescription": "아티팩트 및 Orca Relay에서 사용하는 계정에 로그인하거나 로그아웃합니다.",
+          "benefitsTitle": "계정에 포함된 기능",
+          "artifactsTitle": "아티팩트 공유",
+          "artifactsDescription": "HTML 및 Markdown 파일을 게시하고 Orca에서 모든 공유 링크를 관리합니다.",
+          "relayTitle": "Orca Relay",
+          "relayDescription": "셀룰러 또는 모든 Wi-Fi 네트워크를 통해 Orca Mobile을 이 데스크톱에 연결합니다.",
+          "skillsTitle": "스킬 공유",
+          "skillsDescription": "단일 스킬 또는 전체 세트를 비공개 링크로 공유하고 사용하는 모든 기기에 설치하세요."
+        },
         "automations": {
           "title": "자동화",
           "description": "에이전트 작업을 예약하고 사이드바에 자동화 표시 여부를 선택합니다.",
@@ -14616,6 +14639,41 @@
     }
   },
   "components": {
+    "onboarding": {
+      "flow": {
+        "stepTooltip": {
+          "agent": "기본 Agent",
+          "theme": "테마",
+          "windowsTerminal": "Windows 터미널",
+          "notifications": "알림",
+          "integrations": "연동"
+        },
+        "actions": {
+          "addFirstProject": "첫 프로젝트 추가",
+          "continue": "계속",
+          "openingAddProject": "프로젝트 추가 화면을 여는 중…"
+        }
+      },
+      "skipConfirmation": {
+        "skip": "건너뛰기",
+        "keepGoing": "아니요, 계속하기"
+      },
+      "theme": {
+        "hints": {
+          "system": "OS 설정에 맞춤",
+          "dark": "눈이 편안한 화면",
+          "light": "밝고 선명한 화면"
+        }
+      },
+      "integrations": {
+        "capabilities": {
+          "startWorkspaceFromIssue": "GitHub 이슈나 PR에서 제목과 컨텍스트가 미리 채워진 워크스페이스를 시작합니다",
+          "browseIssues": "Orca를 떠나지 않고 작업 화면에서 GitHub 이슈와 PR을 탐색합니다",
+          "reviewStatus": "모든 워크트리에서 이슈 상태, 리뷰 상태 및 CI 체크를 확인합니다",
+          "managePullRequests": "Orca를 떠나지 않고 PR을 읽고, 댓글을 달고, 병합합니다"
+        }
+      }
+    },
     "native-chat": {
       "composer": {
         "imageUnsupported": "이 에이전트는 이미지 붙여넣기를 지원하지 않습니다.",

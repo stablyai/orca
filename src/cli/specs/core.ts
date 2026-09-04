@@ -1,5 +1,6 @@
 import type { CommandSpec } from '../args'
 import { GLOBAL_FLAGS } from '../args'
+import { WORKTREE_LISTING_SCOPE_NOTES } from './worktree-listing-scope-notes'
 import { SERVE_COMMAND_SPECS } from './serve'
 import { TERMINAL_CLOSE_COMMAND_SPEC } from './terminal-close'
 
@@ -65,7 +66,8 @@ export const CORE_COMMAND_SPECS: CommandSpec[] = [
     path: ['worktree', 'list'],
     summary: 'List Orca-managed worktrees',
     usage: 'orca worktree list [--repo <selector>] [--limit <n>] [--json]',
-    allowedFlags: [...GLOBAL_FLAGS, 'repo', 'limit']
+    allowedFlags: [...GLOBAL_FLAGS, 'repo', 'limit'],
+    notes: [...WORKTREE_LISTING_SCOPE_NOTES]
   },
   {
     path: ['worktree', 'show'],
@@ -180,7 +182,8 @@ export const CORE_COMMAND_SPECS: CommandSpec[] = [
     path: ['worktree', 'ps'],
     summary: 'Show a compact orchestration summary across worktrees',
     usage: 'orca worktree ps [--limit <n>] [--json]',
-    allowedFlags: [...GLOBAL_FLAGS, 'limit']
+    allowedFlags: [...GLOBAL_FLAGS, 'limit'],
+    notes: [...WORKTREE_LISTING_SCOPE_NOTES]
   },
   {
     path: ['terminal', 'list'],

@@ -392,9 +392,9 @@
   z-index: 40 !important;
 }
 
-/* Keep interruption controls above unrelated updater/onboarding chrome. */
+/* Above the z-40 updater/onboarding chrome, below the floating workspace panel's z-45. */
 .native-chat-pane-shell:has([data-native-chat-working='true']) {
-  z-index: 50;
+  z-index: 44;
 }
 
 [data-sonner-toaster] [data-sonner-toast][data-styled='true'] {

@@ -10,11 +10,11 @@ import type { RelayDispatcher, RequestContext } from './dispatcher'
 import {
   resolveDefaultShell,
   resolveProcessCwd,
-  processHasChildren,
   getForegroundProcessName,
   isProcessAlive,
   listShellProfiles
 } from './pty-shell-utils'
+import { inspectPtyChildProcesses, processHasChildren } from './pty-child-process-inspection'
 import { getRelayShellLaunchConfig, isRelayWslShell } from './pty-shell-launch'
 import { RetiredPaneSurfaceRegistry } from './retired-pane-surfaces'
 import { addWslEnvKeys } from '../shared/wsl-env'
@@ -35,6 +35,7 @@ import {
   type RelaySpawnCwdResolution
 } from './pty-spawn-cwd'
 import { PhysicalExitTracker } from '../shared/physical-exit-tracker'
+import { PTY_ATTACH_PROVEN_EXITED_MARKER } from '../shared/pty-attach-absence-evidence'
 import { SHELL_READY_MARKER_PREFIX } from '../main/shell-ready-marker-scanner'
 import {
   createShellStartupOutputScanState,
@@ -54,6 +55,7 @@ import {
 import { isTuiAgent } from '../shared/tui-agent-config'
 import type { TuiAgent } from '../shared/tui-agent'
 import { forceKillPosixPtyProcessGroups } from '../main/pty/posix-pty-process-groups'
+import type { PtyChildProcessVerdict } from '../shared/terminal-process-inspection'
 import { terminatePtyJob } from '../main/windows/windows-pty-job'
 import { stripInheritedBuildModeEnv } from '../main/pty/build-mode-env'
 import { stripLegacyTerminalShimEnv } from '../main/pty/legacy-terminal-shim-dir'
@@ -2055,7 +2057,11 @@ export class PtyHandler {
 
     // Why: verify liveness because shells can exit without node-pty onExit.
     if (this.reapPtyProvenExited(managed)) {
-      throw new Error(`PTY "${id}" not found`)
+      // Why the marker: this is the ONLY not-found answer backed by a liveness check. The unmarked
+      // one above is also thrown for an id this session map never had — every id minted before a
+      // relay restart — so a client that cannot tell them apart certifies deaths it never observed
+      // (docs/reference/ssh-execution-boundary.md).
+      throw new Error(`PTY "${id}" not found (${PTY_ATTACH_PROVEN_EXITED_MARKER})`)
     }
 
     // Why: legacy `pty-N` ids repeated across relay generations; reject conflicting identities.
@@ -2605,6 +2611,7 @@ export class PtyHandler {
   private async inspectProcess(params: Record<string, unknown>): Promise<{
     foregroundProcess: string | null
     hasChildProcesses: boolean
+    childProcessEvidence?: PtyChildProcessVerdict
     foregroundProcessEvidence?: RemoteForegroundEvidence
   }> {
     pruneRetiredPtyIncarnations(this.retiredIncarnations)
@@ -2711,14 +2718,28 @@ export class PtyHandler {
       evidence?.verdict === 'live'
         ? (evidence.processName ?? managed.pty.process) || null
         : managed.pty.process || null
+    // Derive child liveness from the same capture; do not fork a second process-table probe for
+    // each field/pane in an event burst.
+    //
+    // Why Windows is gated on the caller asking: this is the one field whose Windows answer costs
+    // a process-table read, and `inspectProcess` is the polled path (750ms/2000ms per tracked
+    // pane). A relay host has no `@vscode/windows-process-tree`, so the read falls back to the
+    // 1.36s CIM scan, and polling that would reinstate exactly the fork storm the shared table
+    // exists to prevent (#15209, #15036). Close and cleanup decisions ask for the scan by name;
+    // a poll gets the honest `unverifiable` instead of a fabricated negative.
+    const childProcessEvidence: PtyChildProcessVerdict = rows
+      ? rows.some((row) => row.ppid === managed.pty.pid)
+        ? 'children'
+        : 'no-children'
+      : process.platform === 'win32' && params.scanChildProcesses !== true
+        ? 'unverifiable'
+        : await inspectPtyChildProcesses(managed.pty.pid)
     return {
       foregroundProcess,
-      // Derive child liveness from the same capture; do not fork a second
-      // process-table probe for each field/pane in an event burst. Windows
-      // has no evidence capture, so preserve the compatibility child probe.
-      hasChildProcesses: rows
-        ? rows.some((row) => row.ppid === managed.pty.pid)
-        : await processHasChildren(managed.pty.pid),
+      // `unverifiable` keeps spelling itself `false` on the compatibility field, which is what
+      // every client too old to read the verdict receives.
+      hasChildProcesses: childProcessEvidence === 'children',
+      childProcessEvidence,
       ...(evidence ? { foregroundProcessEvidence: evidence } : {})
     }
   }

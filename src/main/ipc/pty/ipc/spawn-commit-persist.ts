@@ -134,6 +134,13 @@ export async function persistPtyIpcSpawnCommit(ctx: PtyIpcSpawnState): Promise<{
       })
     }
   }
+  // Why here and not at the upsert: this path leases before it binds, so supersession fenced on the
+  // pane's binding still named the predecessor and bailed on every reconnect — one more reattachable
+  // lease, and one more `pty.attach`, per reconnect forever. Runs after whichever binding write this
+  // commit made, so the lease/binding order no longer decides.
+  if (ctx.deps.store && args.connectionId && ctx.validatedLeafId !== null) {
+    ctx.deps.store.supersedeSshRemotePtyLeasesForBoundPane(args.connectionId, ctx.validatedLeafId)
+  }
   // Why: when the renderer has declared it will own the serializer for this paneKey, suppress the daemon-snapshot seed so its hydration path is sole authority (keyed on paneKey since the ptyId isn't known yet). See docs/mobile-prefer-renderer-scrollback.md.
   const rendererPreSignaled = ctx.validatedPaneKey
     ? pendingByPaneKey.has(ctx.validatedPaneKey)

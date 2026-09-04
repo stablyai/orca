@@ -451,7 +451,7 @@ describe('palette live status', () => {
     expect(dotLabels()).toEqual(['Needs permission'])
   })
 
-  it('cuts the pip out of the dialog surface, and out of accent when selected', async () => {
+  it('keeps the attention glyph knockout popover-colored when its row is selected', async () => {
     setAgentState('working')
     await act(async () => {
       testRoot.render(
@@ -469,18 +469,11 @@ describe('palette live status', () => {
         </PaletteLiveStatusProvider>
       )
     })
-    const pip = testContainer.querySelector<HTMLElement>('[aria-hidden="true"].rounded-full')
+    const pip = testContainer.querySelector<HTMLElement>('[aria-hidden="true"]')
     expect(pip).not.toBeNull()
-    // Why popover and not background: the CommandDialog surface is --popover (#171717 dark), while
-    // --background is the app canvas (#0a0a0a) — the mismatch punched a dark halo through each row.
     expect(pip?.className).toContain('bg-popover')
     expect(pip?.className).toContain('ring-popover')
-    expect(pip?.className).not.toContain('bg-background')
-    expect(pip?.className).toContain(
-      'group-data-[selected=true]:bg-[var(--jump-palette-selection-surface)]'
-    )
-    expect(pip?.className).toContain(
-      'group-data-[selected=true]:ring-[var(--jump-palette-selection-surface)]'
-    )
+    expect(pip?.className).toContain('rounded-full')
+    expect(pip?.className).not.toContain('group-data-[selected=true]')
   })
 })

@@ -111,11 +111,12 @@ overrides:
 patchedDependencies:
   '@vscode/windows-process-tree@0.8.0': 9217ef36c01ed74127fef5512b0c92089cdbf820fd6c109dd671137eebdc7585
   '@xterm/addon-ligatures@0.11.0-beta.300': 47405b9994b5acf1b4e90b49250358c1ca03649854d59560e7732b72fe336920
+  '@xterm/addon-search@0.17.0-beta.300': eee5338dd2621ece46e79c61ec06766cd7fadaf79ffdb24e2a8ab68e97ef31f0
   '@xterm/addon-serialize@0.15.0-beta.300': 851eac3d75e6d8c013b9f4c053e61d824b23965cb19ecc28e335e05059f3a294
   '@xterm/addon-webgl@0.20.0-beta.299': 94687e89a0115e6e6aa102837f986debdc029c091527ee5eb4a4e17ceaf9473e
   '@xterm/xterm@6.1.0-beta.303': 98756bcedc402bcdb7c6ab7b015d2e59cd18e97b03a2c06a27e95bb3ba429d9d
   lint-staged@16.4.0: 7333b3837f80a7fbd045964db6d76ba4fc118e49134bdbabb00585b6b7b60673
-  node-pty@1.1.0: e262847f57a1d4d3f2287a843822f7dcf3c9d8655892b07a69eba464e1317eaa
+  node-pty@1.1.0: 7cc9d45f3d2c38f142490d0805e75db55f0eef5174ad41c4b52abc5fbe079ad1
 
 importers:
 
@@ -156,7 +157,7 @@ importers:
         version: 3.3.1
       node-pty:
         specifier: ^1.1.0
-        version: 1.1.0(patch_hash=e262847f57a1d4d3f2287a843822f7dcf3c9d8655892b07a69eba464e1317eaa)
+        version: 1.1.0(patch_hash=7cc9d45f3d2c38f142490d0805e75db55f0eef5174ad41c4b52abc5fbe079ad1)
       posthog-node:
         specifier: ^5.33.3
         version: 5.33.3
@@ -319,7 +320,7 @@ importers:
         version: 0.11.0-beta.300(patch_hash=47405b9994b5acf1b4e90b49250358c1ca03649854d59560e7732b72fe336920)(@xterm/xterm@6.1.0-beta.303(patch_hash=98756bcedc402bcdb7c6ab7b015d2e59cd18e97b03a2c06a27e95bb3ba429d9d))
       '@xterm/addon-search':
         specifier: 0.17.0-beta.300
-        version: 0.17.0-beta.300(@xterm/xterm@6.1.0-beta.303(patch_hash=98756bcedc402bcdb7c6ab7b015d2e59cd18e97b03a2c06a27e95bb3ba429d9d))
+        version: 0.17.0-beta.300(patch_hash=eee5338dd2621ece46e79c61ec06766cd7fadaf79ffdb24e2a8ab68e97ef31f0)(@xterm/xterm@6.1.0-beta.303(patch_hash=98756bcedc402bcdb7c6ab7b015d2e59cd18e97b03a2c06a27e95bb3ba429d9d))
       '@xterm/addon-unicode11':
         specifier: 0.10.0-beta.300
         version: 0.10.0-beta.300(@xterm/xterm@6.1.0-beta.303(patch_hash=98756bcedc402bcdb7c6ab7b015d2e59cd18e97b03a2c06a27e95bb3ba429d9d))
@@ -9754,7 +9755,7 @@ snapshots:
       lru-cache: 11.5.1
       opentype.js: 2.0.0
 
-  '@xterm/addon-search@0.17.0-beta.300(@xterm/xterm@6.1.0-beta.303(patch_hash=98756bcedc402bcdb7c6ab7b015d2e59cd18e97b03a2c06a27e95bb3ba429d9d))':
+  '@xterm/addon-search@0.17.0-beta.300(patch_hash=eee5338dd2621ece46e79c61ec06766cd7fadaf79ffdb24e2a8ab68e97ef31f0)(@xterm/xterm@6.1.0-beta.303(patch_hash=98756bcedc402bcdb7c6ab7b015d2e59cd18e97b03a2c06a27e95bb3ba429d9d))':
     dependencies:
       '@xterm/xterm': 6.1.0-beta.303(patch_hash=98756bcedc402bcdb7c6ab7b015d2e59cd18e97b03a2c06a27e95bb3ba429d9d)
 
@@ -12194,7 +12195,7 @@ snapshots:
 
   node-int64@0.4.0: {}
 
-  node-pty@1.1.0(patch_hash=e262847f57a1d4d3f2287a843822f7dcf3c9d8655892b07a69eba464e1317eaa):
+  node-pty@1.1.0(patch_hash=7cc9d45f3d2c38f142490d0805e75db55f0eef5174ad41c4b52abc5fbe079ad1):
     dependencies:
       node-addon-api: 7.1.1
 
