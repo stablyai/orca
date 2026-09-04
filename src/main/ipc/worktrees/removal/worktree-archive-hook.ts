@@ -10,6 +10,7 @@ import { getSetupRunnerEnvVars } from '../../../setup-hook-env-vars'
 
 const WORKTREE_ARCHIVE_HOOK_TIMEOUT_MS = 120_000
 
+/** Resolves the effective archive hook for a removal, reading `orca.yaml` over SSH when `connectionId` is set. */
 export async function getArchiveHooksForRemoval(
   repo: Repo,
   connectionId: string | undefined
@@ -32,6 +33,7 @@ export async function getArchiveHooksForRemoval(
   }
 }
 
+/** Runs the configured archive hook over the resolved SSH connection before a worktree is removed. */
 export async function runRemoteArchiveHook(
   repo: Repo,
   connectionId: string | undefined,

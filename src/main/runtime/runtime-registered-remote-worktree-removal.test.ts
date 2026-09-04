@@ -16,6 +16,7 @@ vi.mock('../ipc/worktree-remote', () => ({
 
 const TEST_WORKTREE_PATH = '/remote/feature'
 
+/** Minimal args for removeRuntimeRegisteredRemoteWorktree; override per test with `{ ...baseArgs(), ... }`. */
 function baseArgs() {
   // Why: repo.connectionId left undefined on purpose — the resolved removal route's
   // connectionId is the only correct source, per worktree-removal-execution-host-route.ts.

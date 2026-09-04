@@ -29,6 +29,7 @@ import { removeUnregisteredWorktree } from './remove-unregistered-worktree'
 import { removeRegisteredRemoteWorktree } from './remove-registered-remote-worktree'
 import { removeRegisteredLocalWorktree } from './remove-registered-local-worktree'
 
+/** Removes a repo's worktree: runs its archive hook if configured, then dispatches to the local, SSH, or unregistered-path handler. */
 export async function executeWorktreeRemoval(
   context: WorktreeIpcContext,
   args: RemoveWorktreeArgs,

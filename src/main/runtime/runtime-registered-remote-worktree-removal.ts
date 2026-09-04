@@ -9,6 +9,8 @@ import {
 } from '../ipc/worktrees/removal/worktree-archive-hook'
 import type { RuntimeStore } from './runtime-store-contract'
 import type { RuntimeWorktreeRemovalTarget } from './runtime-worktree-selection'
+
+/** Removes an SSH-registered worktree: optionally runs its archive hook, then stops PTYs and deletes it via the provider. */
 export async function removeRuntimeRegisteredRemoteWorktree(args: {
   repo: Repo
   target: RuntimeWorktreeRemovalTarget
