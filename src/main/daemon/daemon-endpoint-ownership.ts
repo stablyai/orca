@@ -1,8 +1,6 @@
 /* Who may serve on the daemon's canonical endpoint name: only a daemon publishing itself onto it,
    and only by replacing an entry it has itself just proven dead. Rationale and traps: AGENTS.md. */
-import { randomBytes } from 'node:crypto'
 import { linkSync, lstatSync, renameSync, statSync, unlinkSync } from 'node:fs'
-import { dirname, join } from 'node:path'
 import { endpointIsProvenDead, type SocketProbeOutcome } from './daemon-endpoint-probe'
 
 // Retried only when another publisher demonstrably took the name, so a small bound suffices.
@@ -11,15 +9,8 @@ const PUBLISH_ATTEMPTS = 3
 /** A daemon endpoint, identified by its directory entry. dev+ino only; birth time is unreliable. */
 export type DaemonSocketIdentity = { dev: bigint; ino: bigint }
 
-/**
- * A private, same-directory name to bind before publishing the canonical endpoint.
- *
- * `.p`, not the `.b` this used to be: released builds sweep that pattern on age alone. Replaces the
- * basename rather than extending the path, so the ~104-byte `sockaddr_un.sun_path` budget holds.
- */
-export function getDaemonSocketBindPath(socketPath: string): string {
-  return join(dirname(socketPath), `.p${randomBytes(5).toString('hex')}`)
-}
+/** Defined with the other endpoint names; the budget it protects is checked there too. */
+export { getDaemonSocketBindPath } from './daemon-runtime-paths'
 
 /**
  * Only `occupied` establishes that someone else owns the endpoint, and only then may the caller
