@@ -75,7 +75,7 @@ describe('push host challenge store', () => {
     })
   })
 
-  it('rejects a challenge past its ttl plus the skew tolerance', async () => {
+  it('rejects a challenge the moment its own ttl elapses', async () => {
     const host = createPushHostKeypair(4)
     const challenge = await store.issue(hostPublicKeyB64(host))
     const proof = answerPushHostChallenge(challenge!, {
@@ -83,14 +83,14 @@ describe('push host challenge store', () => {
       keypair: host,
       now: () => clock
     })!
-    clock += PUSH_LIMITS.challengeTtlMs + PUSH_LIMITS.clockSkewToleranceMs + 1
+    clock += PUSH_LIMITS.challengeTtlMs + 1
     await expect(store.verify(challenge!.challengeId, proof)).resolves.toEqual({
       ok: false,
       reason: 'expired'
     })
   })
 
-  it('still accepts a proof inside the skew tolerance', async () => {
+  it('spends no skew tolerance on its own expiry, so the ttl is the whole window', async () => {
     const host = createPushHostKeypair(5)
     const challenge = await store.issue(hostPublicKeyB64(host))
     const proof = answerPushHostChallenge(challenge!, {
@@ -98,8 +98,41 @@ describe('push host challenge store', () => {
       keypair: host,
       now: () => clock
     })!
+    // A proof that the host would still consider in-window is refused here: the
+    // gateway issued expires_at against this clock and needs no allowance.
     clock += PUSH_LIMITS.challengeTtlMs + PUSH_LIMITS.clockSkewToleranceMs - 1
+    await expect(store.verify(challenge!.challengeId, proof)).resolves.toEqual({
+      ok: false,
+      reason: 'expired'
+    })
+  })
+
+  it('accepts a proof that lands just inside the ttl', async () => {
+    const host = createPushHostKeypair(26)
+    const challenge = await store.issue(hostPublicKeyB64(host))
+    const proof = answerPushHostChallenge(challenge!, {
+      gatewayOrigin: GATEWAY_ORIGIN,
+      keypair: host,
+      now: () => clock
+    })!
+    clock += PUSH_LIMITS.challengeTtlMs
     await expect(store.verify(challenge!.challengeId, proof)).resolves.toMatchObject({ ok: true })
+  })
+
+  it('keeps an expired row long enough to answer expired rather than unknown', async () => {
+    const host = createPushHostKeypair(27)
+    const challenge = await store.issue(hostPublicKeyB64(host))
+    const proof = answerPushHostChallenge(challenge!, {
+      gatewayOrigin: GATEWAY_ORIGIN,
+      keypair: host,
+      now: () => clock
+    })!
+    clock += PUSH_LIMITS.challengeTtlMs + 1
+    expect(await store.pruneExpired()).toBe(0)
+    await expect(store.verify(challenge!.challengeId, proof)).resolves.toEqual({
+      ok: false,
+      reason: 'expired'
+    })
   })
 
   it('refuses a wrong host: the box will not open and a foreign proof will not match', async () => {
@@ -148,6 +181,58 @@ describe('push host challenge store', () => {
     })
     await expect(store.issue('not-base64!!')).resolves.toBeNull()
     await expect(store.issue(Buffer.alloc(31, 1).toString('base64'))).resolves.toBeNull()
+  })
+
+  it('creates no host row until a proof succeeds', async () => {
+    const host = createPushHostKeypair(30)
+    const challenge = await store.issue(hostPublicKeyB64(host))
+    const [beforeProof] = await database.query('SELECT COUNT(*) AS hosts FROM push_hosts')
+    expect(Number(beforeProof?.hosts)).toBe(0)
+
+    const proof = answerPushHostChallenge(challenge!, {
+      gatewayOrigin: GATEWAY_ORIGIN,
+      keypair: host,
+      now: () => clock
+    })!
+    await expect(store.verify(challenge!.challengeId, proof)).resolves.toMatchObject({ ok: true })
+    const [row] = await database.query('SELECT host_public_key, last_seen_at FROM push_hosts')
+    expect(row?.host_public_key).toBe(hostPublicKeyB64(host))
+    expect(Number(row?.last_seen_at)).toBe(clock)
+  })
+
+  it('leaves no host row behind when a challenge is never answered', async () => {
+    for (let index = 0; index < 5; index++) {
+      await store.issue(hostPublicKeyB64(createPushHostKeypair(40 + index)))
+    }
+    const [row] = await database.query('SELECT COUNT(*) AS hosts FROM push_hosts')
+    expect(Number(row?.hosts)).toBe(0)
+  })
+
+  it('prunes a host past retention only when it has no registration left', async () => {
+    const stale = createPushHostKeypair(50)
+    const kept = createPushHostKeypair(51)
+    for (const host of [stale, kept]) {
+      const challenge = await store.issue(hostPublicKeyB64(host))
+      const proof = answerPushHostChallenge(challenge!, {
+        gatewayOrigin: GATEWAY_ORIGIN,
+        keypair: host,
+        now: () => clock
+      })!
+      await store.verify(challenge!.challengeId, proof)
+    }
+    await database.query(
+      `INSERT INTO push_devices (registration_id, host_fingerprint, device_id, platform, token,
+       filter_json, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+      ['reg-1', deriveHostFingerprint(kept.publicKey), 'device-1', 'android', 'token', '{}', clock, clock]
+    )
+
+    clock += PUSH_LIMITS.hostRetentionMs
+    expect(await store.pruneStaleHosts()).toBe(0)
+    clock += 1
+    expect(await store.pruneStaleHosts()).toBe(1)
+    const [row] = await database.query('SELECT host_fingerprint FROM push_hosts')
+    expect(row?.host_fingerprint).toBe(deriveHostFingerprint(kept.publicKey))
   })
 
   it('prunes challenges that fell out of the skew window', async () => {

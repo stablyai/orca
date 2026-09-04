@@ -42,7 +42,9 @@ export const PUSH_ERROR_CODES = [
   'invalid_token',
   'session_expired',
   'not_found',
+  'too_many_devices',
   'request_too_large',
+  'rate_limited',
   'dependency_unavailable'
 ] as const
 

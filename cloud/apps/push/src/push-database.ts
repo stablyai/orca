@@ -17,6 +17,9 @@ export interface PushDatabase {
   readonly dialect: 'sqlite' | 'postgres'
   query(sql: string, params?: unknown[]): Promise<SqlRow[]>
   transaction<T>(operation: (transaction: PushDatabase) => Promise<T>): Promise<T>
+  // Serializes every transaction that reads then writes the same identity's
+  // quota rows. Must be called inside a transaction; it releases at commit.
+  lockQuotaScope(key: string): Promise<void>
   close(): Promise<void>
 }
 
@@ -45,6 +48,10 @@ class SqliteTransaction implements PushDatabase {
   async transaction<T>(operation: (transaction: PushDatabase) => Promise<T>): Promise<T> {
     return await operation(this)
   }
+
+  // BEGIN IMMEDIATE already holds the single writer lock for the whole
+  // transaction, so there is nothing narrower left to take.
+  async lockQuotaScope(): Promise<void> {}
 
   async close(): Promise<void> {}
 }
@@ -96,6 +103,12 @@ class PostgresTransaction implements PushDatabase {
 
   async transaction<T>(operation: (transaction: PushDatabase) => Promise<T>): Promise<T> {
     return await operation(this)
+  }
+
+  // READ COMMITTED lets a concurrent count-then-insert read the same
+  // under-quota total, so the identity is serialized for the whole transaction.
+  async lockQuotaScope(key: string): Promise<void> {
+    await this.query('SELECT pg_advisory_xact_lock(hashtext(?::text))', [key])
   }
 
   async close(): Promise<void> {}
@@ -157,6 +170,12 @@ class PostgresDatabase implements PushDatabase {
       await waitForPostgresRetry()
     }
     throw new Error('postgres_transaction_retry_exhausted')
+  }
+
+  // An advisory transaction lock taken outside a transaction is released by the
+  // implicit commit before the caller reads anything, which protects nothing.
+  async lockQuotaScope(): Promise<void> {
+    throw new Error('lock_quota_scope_requires_transaction')
   }
 
   async close(): Promise<void> {

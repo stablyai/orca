@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { PUSH_LIMITS } from './push-limits.js'
 import { OpaqueIdSchema } from './wire-scalars.js'
 
 export const PushPlatformSchema = z.enum(['ios', 'android'])
@@ -86,7 +87,7 @@ export const PushDeviceSummarySchema = z
   .strict()
 
 export const PushDeviceListResponseSchema = z
-  .object({ devices: z.array(PushDeviceSummarySchema).max(1024) })
+  .object({ devices: z.array(PushDeviceSummarySchema).max(PUSH_LIMITS.maxDevicesPerListResponse) })
   .strict()
 
 export type PushPlatform = z.infer<typeof PushPlatformSchema>

@@ -23,10 +23,13 @@ export const PushNotificationSchema = z
 export const PushSendRequestSchema = z
   .object({
     v: z.literal(1),
+    // Deduped before the gateway sees it: a repeated id would otherwise reserve
+    // quota twice and inflate the coalesced count for one banner.
     registrationIds: z
       .array(OpaqueIdSchema)
       .min(1)
-      .max(PUSH_LIMITS.maxRegistrationIdsPerSend),
+      .max(PUSH_LIMITS.maxRegistrationIdsPerSend)
+      .transform((ids) => [...new Set(ids)]),
     notification: PushNotificationSchema
   })
   .strict()

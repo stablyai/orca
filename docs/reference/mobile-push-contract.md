@@ -46,8 +46,15 @@ The host keypair is X25519 (box), so it cannot sign. Reuse the relay's challenge
   `protocol="orca-push-host-proof/v1"`, `version=0x01`, `gatewayOrigin`, `gatewayEphemeralPublicKey`,
   `challengeNonce`, `challengeId`, `issuedAt` (u64be ms), `expiresAt` (u64be ms), `hostFingerprint`,
   `hostPublicKey`.
-- Challenge TTL 10 s. Clock skew tolerance 30 s. Store challenge (id, secret hash, host, expiry) in DB
-  so any Cloud Run instance can verify.
+- Challenge TTL 10 s, and 10 s is the whole window the gateway honours. The 30 s clock skew tolerance
+  is the host's alone: it validates a timestamp the gateway chose, so it needs the allowance and the
+  gateway does not. A gateway that subtracted the tolerance from its own check would run a 40 s TTL.
+  Store challenge (id, secret hash, host fingerprint, host public key, expiry) in DB so any Cloud Run
+  instance can verify. Expired rows are pruned 30 s late so a slow proof reads as expired rather than
+  as an unknown challenge.
+- Issuing a challenge writes no `push_hosts` row. It is unauthenticated, so a `push_hosts` row would be
+  a free permanent write for any caller. The row is upserted in `POST /v1/host/session` once the proof
+  verifies, from the public key the challenge row carries.
 
 `POST /v1/host/session`
 ```json
@@ -74,7 +81,11 @@ The host keypair is X25519 (box), so it cannot sign. Reuse the relay's challenge
               "agentStates": ["needs-input", "finished"] } }
 ```
 → 200 `{ "registrationId": "<opaque>" }`. Upsert keyed by (hostFingerprint, deviceId); a new token
-replaces the old. `filter` is stored but enforced by the host (see desktop); gateway stores it only so a
+replaces the old. `deviceId` is caller-chosen, so a host is capped at 64 registrations: the 65th
+distinct `deviceId` → 409 `{ "error": "too_many_devices" }`. Re-registering a `deviceId` the host
+already owns is always accepted, and deleting a registration frees its slot. `GET /v1/devices` is
+bounded at 1024 rows to match its response schema, which the per-host cap keeps well out of reach.
+`filter` is stored but enforced by the host (see desktop); gateway stores it only so a
 host restart can re-read it. iOS token is 64 hex chars; Android token is the FCM registration string.
 
 `DELETE /v1/devices/:registrationId` (Bearer) → 204. Only the owning host may delete.
@@ -103,13 +114,30 @@ host restart can re-read it. iOS token is 64 hex chars; Android token is the FCM
   unregistered; the host must drop the registration. Never block the socket fan-out on this call.
 - Quota: 60 sends per hostFingerprint per rolling hour, 200 per registration per rolling day. Over quota
   → `rate_limited` per result, HTTP 200. Whole request over a hard cap of 20 registrationIds → 400.
+  The cap counts the ids as sent; the gateway then dedupes them, so a repeated id spends quota once,
+  yields one result, and counts once toward `coalescedCount`. `results` may therefore be shorter than
+  `registrationIds`, and callers must match a result by its `registrationId`, never by position.
+- Both quota counters are reserved under a per-host lock held for the whole transaction. PostgreSQL
+  reads at READ COMMITTED, so a concurrent count-then-insert would otherwise admit a whole burst.
+
+### Request limits and unauthenticated abuse
+
+- Every POST is capped at 16 KiB by a streaming body limit, not by `Content-Length` alone: a chunked
+  body declares no length. Over the cap → 413 `{ "error": "request_too_large" }`.
+- `POST /v1/host/challenge` and `POST /v1/host/session` are the only unauthenticated routes. They share
+  one token bucket per client IP, 30 requests per minute, refilling continuously. Over the bucket → 429
+  `{ "error": "rate_limited" }`. The client IP is the first `x-forwarded-for` hop, which Cloud Run sets,
+  falling back to `x-real-ip` and then to a single shared bucket. The bucket is per instance and in
+  memory, so the effective cap scales with the instance count; it exists to blunt a flood, not to meter.
 
 ### Coalescing (gateway)
 
 Per registrationId, hold sends for 3 s. If one event arrives, send it as-is. If N>1 arrive, send one
 summary: title `Orca`, body `<N> agents need attention` (or `<N> updates` when no needs-input), data
 carries the latest event's fields plus `coalescedCount`. Collapse id for a summary is
-`host:<hostFingerprint>` so a later summary replaces it.
+`host:<hostFingerprint>` so a later summary replaces it. The window is held in memory per gateway
+instance, so with more than one instance a burst can produce up to one summary per instance; accepted
+for this release, and the collapse id keeps the phone showing one banner.
 
 ### Provider payloads
 
@@ -131,8 +159,10 @@ metadata server or `GOOGLE_APPLICATION_CREDENTIALS` locally):
 
 ### Gateway storage (Postgres in prod, SQLite in tests, same pattern as `cloud/apps/relay/src/database.ts`)
 
-- `push_hosts(host_fingerprint pk, host_public_key, created_at, last_seen_at)`
-- `push_challenges(challenge_id pk, host_fingerprint, secret_hash, transcript, expires_at, consumed_at)`
+- `push_hosts(host_fingerprint pk, host_public_key, created_at, last_seen_at)`, written only on a
+  verified proof and pruned after 30 d of no contact when no `push_devices` row still names the host
+- `push_challenges(challenge_id pk, host_fingerprint, host_public_key, secret_hash, transcript,
+  expires_at, consumed_at)`
 - `push_sessions(token_hash pk, host_fingerprint, expires_at, created_at)`
 - `push_devices(registration_id pk, host_fingerprint, device_id, platform, token, apns_environment,
   filter_json, dead_at, created_at, updated_at, unique(host_fingerprint, device_id))`
@@ -158,12 +188,19 @@ Secret Manager names (already exist in `onorca-cloud`): `orca-cloud-push-apns-ke
 - RPC `notifications.registerPush` params `{ platform, token, apnsEnvironment?, filter }` (same shapes
   as the gateway `POST /v1/devices` minus deviceId, which comes from `ctx.pairedDeviceId`). Returns
   `{ registered: true, registrationId } | { registered: false, reason: 'gateway_unreachable' |
-  'gateway_rejected' | 'not_mobile' }`. Persists `pushRegistration: { registrationId, platform, filter,
-  registeredAt }` on `DeviceEntry` in `device-registry.ts` (new optional field, tolerated by old
-  registries).
+  'gateway_rejected' | 'not_mobile' | 'registration_storage_failed' }`. Persists `pushRegistration:
+  { registrationId, platform, filter, registeredAt }` on `DeviceEntry` in `device-registry.ts` (new
+  optional field, tolerated by old registries). When the gateway accepted the token but the host could
+  not store it — the device left mobile scope mid-call (`not_mobile`) or the registry write threw
+  (`registration_storage_failed`) — the host queues the gateway delete in the unregister outbox rather
+  than leaking a registration nothing will ever push to. Phones must treat any `registered: false` as
+  "retry later", so an unknown reason string is safe to add.
 - RPC `notifications.unregisterPush` params null → `{ unregistered: boolean }`. Removes the field and
   enqueues a gateway delete in a durable outbox (`src/main/runtime/push/push-unregister-outbox.ts`,
-  modelled on `relay-revoke-outbox.ts`). Unpair/revoke (`revokeMobileDevice`) enqueues the same.
+  modelled on `relay-revoke-outbox.ts`). Unpair/revoke (`revokeMobileDevice`) enqueues the same. The
+  drain re-reads the queue as it goes, so a delete queued mid-drain lands in the same pass, and a pass
+  that leaves retryable items schedules an unref'd backoff retry (30 s, doubling, capped at 10 min)
+  instead of waiting for the next launch.
 - Both RPCs added to `runtime-rpc-mobile-method-allowlist.ts`.
 - Push client `src/main/runtime/push/push-gateway-client.ts`: challenge/proof/session with token cache,
   register, delete, send. Node `fetch`. Gateway URL from `profile-cloud-auth-config.ts`
@@ -174,8 +211,10 @@ Secret Manager names (already exist in `onorca-cloud`): `orca-cloud-push-apns-ke
 - Dispatch hook: in `RuntimeMobileNotificationController.dispatch`, after the socket fan-out, call
   `pushDispatcher.enqueue(eventWithSeq)`. The dispatcher applies each device's `filter`, skips `dismiss`
   events, maps `agentState` to `needs-input | finished` (blocked/waiting → needs-input, else finished),
-  batches all matching registrationIds into one `POST /v1/send`, and drops registrations the gateway
-  reports `dead`. Fire-and-forget with one retry after 2 s; never throws into dispatch.
+  batches matching registrationIds into `POST /v1/send` requests of at most 20 registrations each (the
+  gateway's per-request cap; extra devices get their own request rather than being dropped), and drops
+  registrations the gateway reports `dead`. Fire-and-forget with one retry after 2 s per request; never
+  throws into dispatch.
 - Add `agentState` to `MobileNotificationDispatchEvent` and set it in `src/main/ipc/notifications.ts`
   from `args.agentState`. Fix `buildAgentTaskCompleteNotificationOptions` so `working|running|busy`
   never yields "finished" (title says "working" and the dispatcher treats it as not-final, i.e. no push).

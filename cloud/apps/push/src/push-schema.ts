@@ -11,6 +11,9 @@ CREATE TABLE IF NOT EXISTS push_hosts (
 CREATE TABLE IF NOT EXISTS push_challenges (
   challenge_id TEXT PRIMARY KEY,
   host_fingerprint TEXT NOT NULL,
+  -- Carried here so a host row is only written once a proof succeeds; an
+  -- unauthenticated challenge must not be able to create one.
+  host_public_key TEXT NOT NULL,
   secret_hash TEXT NOT NULL,
   transcript TEXT NOT NULL,
   expires_at BIGINT NOT NULL,
@@ -52,10 +55,17 @@ CREATE INDEX IF NOT EXISTS push_send_log_host_sent_at ON push_send_log(host_fing
 CREATE INDEX IF NOT EXISTS push_send_log_registration_sent_at
   ON push_send_log(registration_id, sent_at);
 CREATE INDEX IF NOT EXISTS push_send_log_sent_at ON push_send_log(sent_at);
+
+-- The stale-host pruner scans by last contact. Its owning-host subquery rides
+-- the push_devices_host_device index.
+CREATE INDEX IF NOT EXISTS push_hosts_last_seen_at ON push_hosts(last_seen_at);
 `
 
 export function pushSchemaStatements(): string[] {
-  return PUSH_SCHEMA.split(';')
+  // Comments are stripped before the split so a ';' inside one cannot cut a
+  // statement in half and hand SQLite an "incomplete input" fragment.
+  return PUSH_SCHEMA.replace(/--[^\n]*/g, '')
+    .split(';')
     .map((statement) => statement.trim())
     .filter((statement) => statement.length > 0)
 }

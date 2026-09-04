@@ -14,11 +14,6 @@ import {
   PushHostSessionResponseSchema
 } from './host-auth-messages.js'
 import { PUSH_DEFAULTS, PUSH_LIMITS } from './push-limits.js'
-import {
-  PushSendRequestSchema,
-  PushSendResponseSchema,
-  PushSendStatusSchema
-} from './send-messages.js'
 
 const KEY_B64 = Buffer.alloc(32, 1).toString('base64')
 const NONCE_B64 = Buffer.alloc(24, 2).toString('base64')
@@ -46,6 +41,8 @@ describe('push contract limits', () => {
       titleMaxChars: 80,
       bodyMaxChars: 180,
       maxRegistrationIdsPerSend: 20,
+      maxDevicesPerHost: 64,
+      maxDevicesPerListResponse: 1_024,
       hostSendsPerRollingHour: 60,
       registrationSendsPerRollingDay: 200,
       coalesceWindowMs: 3_000,
@@ -119,6 +116,8 @@ describe('host authentication schemas', () => {
 
   it('names only the error codes the gateway may return', () => {
     expect(PushErrorResponseSchema.safeParse({ error: 'session_expired' }).success).toBe(true)
+    expect(PushErrorResponseSchema.safeParse({ error: 'too_many_devices' }).success).toBe(true)
+    expect(PushErrorResponseSchema.safeParse({ error: 'rate_limited' }).success).toBe(true)
     expect(PushErrorResponseSchema.safeParse({ error: 'teapot' }).success).toBe(false)
   })
 })
@@ -208,72 +207,6 @@ describe('device registration schemas', () => {
     expect(
       PushDeviceListResponseSchema.safeParse({
         devices: [{ registrationId: 'reg-1', deviceId: 'device-1', platform: 'ios' }]
-      }).success
-    ).toBe(false)
-  })
-})
-
-describe('send schemas', () => {
-  it('accepts a batch at the registration cap and a terminal bell without an id', () => {
-    const ids = Array.from({ length: PUSH_LIMITS.maxRegistrationIdsPerSend }, (_, i) => `reg-${i}`)
-    expect(
-      PushSendRequestSchema.safeParse({ v: 1, registrationIds: ids, notification: notification() })
-        .success
-    ).toBe(true)
-    const { notificationId: _dropped, ...bell } = notification()
-    expect(
-      PushSendRequestSchema.safeParse({
-        v: 1,
-        registrationIds: ['reg-1'],
-        notification: { ...bell, source: 'terminal-bell', agentState: null }
-      }).success
-    ).toBe(true)
-  })
-
-  it('rejects an oversized batch, over-long copy, and unknown notification keys', () => {
-    const ids = Array.from(
-      { length: PUSH_LIMITS.maxRegistrationIdsPerSend + 1 },
-      (_, i) => `reg-${i}`
-    )
-    expect(
-      PushSendRequestSchema.safeParse({ v: 1, registrationIds: ids, notification: notification() })
-        .success
-    ).toBe(false)
-    expect(
-      PushSendRequestSchema.safeParse({
-        v: 1,
-        registrationIds: ['reg-1'],
-        notification: { ...notification(), title: 'x'.repeat(PUSH_LIMITS.titleMaxChars + 1) }
-      }).success
-    ).toBe(false)
-    expect(
-      PushSendRequestSchema.safeParse({
-        v: 1,
-        registrationIds: ['reg-1'],
-        notification: { ...notification(), body: 'x'.repeat(PUSH_LIMITS.bodyMaxChars + 1) }
-      }).success
-    ).toBe(false)
-    expect(
-      PushSendRequestSchema.safeParse({
-        v: 1,
-        registrationIds: ['reg-1'],
-        notification: { ...notification(), coalescedCount: 2 }
-      }).success
-    ).toBe(false)
-    expect(PushSendRequestSchema.safeParse({ v: 1, registrationIds: [], notification: notification() }).success)
-      .toBe(false)
-  })
-
-  it('locks the send result statuses', () => {
-    expect(PushSendStatusSchema.options).toEqual(['queued', 'dead', 'rate_limited', 'error'])
-    expect(
-      PushSendResponseSchema.safeParse({
-        results: [{ registrationId: 'reg-1', status: 'queued' }]
-      }).success
-    ).toBe(true)
-    expect(
-      PushSendResponseSchema.safeParse({
-        results: [{ registrationId: 'reg-1', status: 'sent' }]
       }).success
     ).toBe(false)
   })

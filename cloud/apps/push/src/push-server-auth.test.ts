@@ -32,6 +32,7 @@ describe('push gateway authentication and device routes', () => {
         throw new Error('no connection')
       },
       transaction: async (operation) => await operation(unreachable),
+      lockQuotaScope: async () => undefined,
       close: async () => undefined
     }
     const broken = createPushServer(testPushConfig(), unreachable, {

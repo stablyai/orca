@@ -69,23 +69,24 @@ export class PushHostChallengeStore {
     const expectedProof = createHmac('sha256', challengeSecret)
       .update(buildPushHostProofMacInput(transcript))
       .digest()
-    await this.database.transaction(async (transaction) => {
-      await this.rememberHost(transaction, hostFingerprint, hostPublicKeyB64, issuedAt)
-      await transaction.query(
-        `INSERT INTO push_challenges
-         (challenge_id, host_fingerprint, secret_hash, transcript, expires_at, consumed_at)
-         VALUES (?, ?, ?, ?, ?, NULL)`,
-        [
-          challengeId,
-          hostFingerprint,
-          // The stored digest is of the ack the secret produces, never of the
-          // secret itself: a database reader must not be able to forge a proof.
-          sha256(expectedProof),
-          Buffer.from(transcript).toString('base64'),
-          expiresAt
-        ]
-      )
-    })
+    // No push_hosts row yet: issuing is unauthenticated, so anyone could
+    // otherwise fill the table. The key rides the challenge until verify() proves it.
+    await this.database.query(
+      `INSERT INTO push_challenges
+       (challenge_id, host_fingerprint, host_public_key, secret_hash, transcript, expires_at,
+        consumed_at)
+       VALUES (?, ?, ?, ?, ?, ?, NULL)`,
+      [
+        challengeId,
+        hostFingerprint,
+        hostPublicKeyB64,
+        // The stored digest is of the ack the secret produces, never of the
+        // secret itself: a database reader must not be able to forge a proof.
+        sha256(expectedProof),
+        Buffer.from(transcript).toString('base64'),
+        expiresAt
+      ]
+    )
     return {
       challengeId,
       gatewayEphemeralPublicKeyB64: Buffer.from(ephemeral.publicKey).toString('base64'),
@@ -100,7 +101,7 @@ export class PushHostChallengeStore {
     const proof = decodeCanonicalBase64(proofB64, 32)
     return await this.database.transaction<PushProofVerification>(async (transaction) => {
       const [row] = await transaction.query(
-        `SELECT host_fingerprint, secret_hash, expires_at, consumed_at
+        `SELECT host_fingerprint, host_public_key, secret_hash, expires_at, consumed_at
          FROM push_challenges WHERE challenge_id = ?`,
         [challengeId]
       )
@@ -109,9 +110,9 @@ export class PushHostChallengeStore {
         return { ok: false, reason: 'already_consumed' }
       }
       const now = this.now()
-      if (now - PUSH_LIMITS.clockSkewToleranceMs > Number(row.expires_at)) {
-        return { ok: false, reason: 'expired' }
-      }
+      // No skew allowance here: the gateway set expires_at from this same clock.
+      // The tolerance belongs to the host, which validates a foreign timestamp.
+      if (now > Number(row.expires_at)) return { ok: false, reason: 'expired' }
       if (!proof || !equalDigest(sha256(proof), String(row.secret_hash))) {
         return { ok: false, reason: 'proof_mismatch' }
       }
@@ -122,19 +123,35 @@ export class PushHostChallengeStore {
         [now, challengeId]
       )
       if (Number(consumed?.changes ?? 0) !== 1) return { ok: false, reason: 'already_consumed' }
-      await transaction.query(
-        'UPDATE push_hosts SET last_seen_at = ? WHERE host_fingerprint = ?',
-        [now, String(row.host_fingerprint)]
+      await this.rememberHost(
+        transaction,
+        String(row.host_fingerprint),
+        String(row.host_public_key),
+        now
       )
       return { ok: true, hostFingerprint: String(row.host_fingerprint) }
     })
   }
 
+  // Rows outlive the expiry check by the skew tolerance so a late proof reads
+  // as 'expired' rather than as an unknown challenge.
   async pruneExpired(): Promise<number> {
     const cutoff = this.now() - PUSH_LIMITS.clockSkewToleranceMs
     const [result] = await this.database.query('DELETE FROM push_challenges WHERE expires_at < ?', [
       cutoff
     ])
+    return Number(result?.changes ?? 0)
+  }
+
+  // A host that stopped proving and has no registration left is dead weight;
+  // its public key is recoverable from the desktop on the next challenge.
+  async pruneStaleHosts(): Promise<number> {
+    const [result] = await this.database.query(
+      `DELETE FROM push_hosts
+       WHERE last_seen_at < ?
+         AND host_fingerprint NOT IN (SELECT host_fingerprint FROM push_devices)`,
+      [this.now() - PUSH_LIMITS.hostRetentionMs]
+    )
     return Number(result?.changes ?? 0)
   }
 

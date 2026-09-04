@@ -1,11 +1,14 @@
 import { randomUUID } from 'node:crypto'
-import type {
-  ApnsEnvironment,
-  PushDeviceSummary,
-  PushNotificationFilter,
-  PushPlatform
+import {
+  PUSH_LIMITS,
+  type ApnsEnvironment,
+  type PushDeviceSummary,
+  type PushNotificationFilter,
+  type PushPlatform
 } from '@orca-cloud/push-contract'
 import type { PushDatabase, SqlRow } from './push-database.js'
+
+const DEVICE_CAP_LOCK_PREFIX = 'orca-push-device-cap:'
 
 export type PushDeviceRegistration = {
   registrationId: string
@@ -16,6 +19,10 @@ export type PushDeviceRegistration = {
   apnsEnvironment?: ApnsEnvironment
   dead: boolean
 }
+
+export type PushDeviceUpsertResult =
+  | { ok: true; registrationId: string }
+  | { ok: false; reason: 'too_many_devices' }
 
 export type PushDeviceUpsert = {
   hostFingerprint: string
@@ -49,10 +56,13 @@ export class PushDeviceRegistryStore {
 
   // The registration id is stable for a (host, device) pair so a re-registered
   // phone keeps the id the desktop already persisted; only the token rotates.
-  async upsert(input: PushDeviceUpsert): Promise<string> {
+  async upsert(input: PushDeviceUpsert): Promise<PushDeviceUpsertResult> {
     const now = this.now()
     const filterJson = JSON.stringify(input.filter)
-    return await this.database.transaction(async (transaction) => {
+    return await this.database.transaction<PushDeviceUpsertResult>(async (transaction) => {
+      // deviceId is caller-chosen, so counting and inserting must not interleave
+      // or a burst of new ids would walk straight past the cap.
+      await transaction.lockQuotaScope(`${DEVICE_CAP_LOCK_PREFIX}${input.hostFingerprint}`)
       const [existing] = await transaction.query(
         'SELECT registration_id FROM push_devices WHERE host_fingerprint = ? AND device_id = ?',
         [input.hostFingerprint, input.deviceId]
@@ -73,7 +83,14 @@ export class PushDeviceRegistryStore {
             registrationId
           ]
         )
-        return registrationId
+        return { ok: true, registrationId }
+      }
+      const [countRow] = await transaction.query(
+        'SELECT COUNT(*) AS devices FROM push_devices WHERE host_fingerprint = ?',
+        [input.hostFingerprint]
+      )
+      if (Number(countRow?.devices ?? 0) >= PUSH_LIMITS.maxDevicesPerHost) {
+        return { ok: false, reason: 'too_many_devices' }
       }
       const registrationId = randomUUID()
       await transaction.query(
@@ -93,7 +110,7 @@ export class PushDeviceRegistryStore {
           now
         ]
       )
-      return registrationId
+      return { ok: true, registrationId }
     })
   }
 
@@ -107,9 +124,11 @@ export class PushDeviceRegistryStore {
 
   async list(hostFingerprint: string): Promise<PushDeviceSummary[]> {
     const rows = await this.database.query(
+      // Bounded to what PushDeviceListResponseSchema will accept, so an
+      // oversized table degrades to a truncated list instead of a 500.
       `SELECT registration_id, device_id, platform, dead_at
-       FROM push_devices WHERE host_fingerprint = ? ORDER BY created_at ASC`,
-      [hostFingerprint]
+       FROM push_devices WHERE host_fingerprint = ? ORDER BY created_at ASC LIMIT ?`,
+      [hostFingerprint, PUSH_LIMITS.maxDevicesPerListResponse]
     )
     return rows.map((row) => ({
       registrationId: String(row.registration_id),

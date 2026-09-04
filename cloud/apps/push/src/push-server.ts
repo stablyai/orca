@@ -8,8 +8,10 @@ import {
   type PushSendResult
 } from '@orca-cloud/push-contract'
 import { Hono, type MiddlewareHandler } from 'hono'
+import { bodyLimit } from 'hono/body-limit'
 import { ApnsClient } from './apns-client.js'
 import { createApnsHttp2Transport, type ApnsTransport } from './apns-http2-transport.js'
+import { clientIpRateLimit, ClientIpRateLimiter } from './client-ip-rate-limit.js'
 import { PushCoalescer } from './coalescer.js'
 import type { PushConfig } from './config.js'
 import { PushDeviceRegistryStore } from './device-registry-store.js'
@@ -46,9 +48,12 @@ export function readBearer(header: string | undefined): string | null {
   return scheme?.toLowerCase() === 'bearer' && token.length > 0 ? token : null
 }
 
-function tooLarge(contentLength: string | undefined): boolean {
-  return Number(contentLength ?? 0) > PUSH_LIMITS.maxHttpBodyBytes
-}
+// Hono's body limit, not a Content-Length check: a chunked body declares no
+// length, and req.json() would buffer all of it before any handler ran.
+const limitBody = bodyLimit({
+  maxSize: PUSH_LIMITS.maxHttpBodyBytes,
+  onError: (context) => context.json({ error: 'request_too_large' }, 413)
+})
 
 export function createPushServer(
   config: PushConfig,
@@ -92,6 +97,10 @@ export function createPushServer(
     onDeliveryFailed: () => observability.record('delivery_error')
   })
   const ready = createPushReadiness(database, { now })
+  const unauthenticatedIps = new ClientIpRateLimiter({ now })
+  const limitUnauthenticatedIp = clientIpRateLimit(unauthenticatedIps, () =>
+    observability.record('ip_rate_limited')
+  )
   const app = new Hono<{ Variables: PushVariables }>()
 
   app.get('/health', (context) => context.json({ ok: true, pushProtocol: 1 }))
@@ -117,10 +126,7 @@ export function createPushServer(
   app.use('/v1/devices/*', bearerSession)
   app.use('/v1/send', bearerSession)
 
-  app.post('/v1/host/challenge', async (context) => {
-    if (tooLarge(context.req.header('content-length'))) {
-      return context.json({ error: 'request_too_large' }, 413)
-    }
+  app.post('/v1/host/challenge', limitUnauthenticatedIp, limitBody, async (context) => {
     const body = PushHostChallengeRequestSchema.safeParse(
       await context.req.json().catch(() => null)
     )
@@ -135,10 +141,7 @@ export function createPushServer(
     return context.json(response)
   })
 
-  app.post('/v1/host/session', async (context) => {
-    if (tooLarge(context.req.header('content-length'))) {
-      return context.json({ error: 'request_too_large' }, 413)
-    }
+  app.post('/v1/host/session', limitUnauthenticatedIp, limitBody, async (context) => {
     const body = PushHostSessionRequestSchema.safeParse(await context.req.json().catch(() => null))
     if (!body.success) return context.json({ error: 'invalid_request' }, 400)
     const verification = await challenges.verify(body.data.challengeId, body.data.proofB64)
@@ -153,15 +156,12 @@ export function createPushServer(
     return context.json(await sessions.create(verification.hostFingerprint))
   })
 
-  app.post('/v1/devices', async (context) => {
-    if (tooLarge(context.req.header('content-length'))) {
-      return context.json({ error: 'request_too_large' }, 413)
-    }
+  app.post('/v1/devices', limitBody, async (context) => {
     const body = PushDeviceRegistrationRequestSchema.safeParse(
       await context.req.json().catch(() => null)
     )
     if (!body.success) return context.json({ error: 'invalid_request' }, 400)
-    const registrationId = await devices.upsert({
+    const registered = await devices.upsert({
       hostFingerprint: context.get('hostFingerprint'),
       deviceId: body.data.deviceId,
       platform: body.data.platform,
@@ -171,8 +171,12 @@ export function createPushServer(
         : { apnsEnvironment: body.data.apnsEnvironment }),
       filter: body.data.filter
     })
+    if (!registered.ok) {
+      observability.record('device_rejected')
+      return context.json({ error: 'too_many_devices' }, 409)
+    }
     observability.record('device_registered')
-    return context.json({ registrationId })
+    return context.json({ registrationId: registered.registrationId })
   })
 
   app.delete('/v1/devices/:registrationId', async (context) => {
@@ -189,10 +193,7 @@ export function createPushServer(
     context.json({ devices: await devices.list(context.get('hostFingerprint')) })
   )
 
-  app.post('/v1/send', async (context) => {
-    if (tooLarge(context.req.header('content-length'))) {
-      return context.json({ error: 'request_too_large' }, 413)
-    }
+  app.post('/v1/send', limitBody, async (context) => {
     const body = PushSendRequestSchema.safeParse(await context.req.json().catch(() => null))
     if (!body.success) return context.json({ error: 'invalid_request' }, 400)
     const hostFingerprint = context.get('hostFingerprint')
@@ -229,6 +230,7 @@ export function createPushServer(
     sessions,
     devices,
     quota,
+    unauthenticatedIps,
     coalescer,
     observability,
     ready,

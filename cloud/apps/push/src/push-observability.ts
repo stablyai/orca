@@ -1,9 +1,11 @@
 type PushCounterName =
+  | 'ip_rate_limited'
   | 'challenge_issued'
   | 'challenge_rejected'
   | 'session_issued'
   | 'session_rejected'
   | 'device_registered'
+  | 'device_rejected'
   | 'device_deleted'
   | 'send_queued'
   | 'send_dead'
@@ -14,11 +16,13 @@ type PushCounterName =
   | 'delivery_error'
 
 const COUNTER_NAMES: PushCounterName[] = [
+  'ip_rate_limited',
   'challenge_issued',
   'challenge_rejected',
   'session_issued',
   'session_rejected',
   'device_registered',
+  'device_rejected',
   'device_deleted',
   'send_queued',
   'send_dead',
