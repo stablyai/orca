@@ -15,6 +15,7 @@ import {
 } from './serve-update-spool'
 
 const VALID_REQUEST = {
+  runtimeId: 'rt-1',
   fromVersion: '1.4.197',
   targetVersion: '1.4.198',
   artifactPath: '/home/orca/.cache/orca-updater/pending/orca-1.4.198.AppImage',
