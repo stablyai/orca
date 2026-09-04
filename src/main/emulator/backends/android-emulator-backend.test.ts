@@ -88,7 +88,16 @@ describe('AndroidEmulatorBackend', () => {
         name: 'Pixel_7',
         state: 'booted',
         detail: 'emulator',
-        isAvailable: true
+        isAvailable: true,
+        controlCapabilities: {
+          shutdown: true,
+          power: true,
+          volume: true,
+          overview: true,
+          foldable: false,
+          wearButton1: false,
+          wearButton2: false
+        }
       },
       {
         backend: 'android',

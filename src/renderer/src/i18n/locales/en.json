@@ -14311,7 +14311,31 @@
       "emulator": {
         "pane": {
           "EmulatorPane": {
-            "59b08fa031": "No emulator connected"
+            "59b08fa031": "No emulator connected",
+            "savedScreenshot": "Saved emulator screenshot",
+            "saveScreenshotFailed": "Could not save emulator screenshot"
+          },
+          "androidToolbar": {
+            "Power": "Power",
+            "Volume Up": "Volume Up",
+            "Volume Down": "Volume Down",
+            "Rotate Left": "Rotate Left",
+            "Rotate Right": "Rotate Right",
+            "Take Screenshot": "Take Screenshot",
+            "Zoom": "Zoom",
+            "Back": "Back",
+            "Home": "Home",
+            "Overview": "Overview",
+            "Fold": "Fold",
+            "Unfold": "Unfold",
+            "Button 1": "Button 1",
+            "Button 2": "Button 2",
+            "More": "More",
+            "Zoom In": "Zoom In",
+            "Zoom Out": "Zoom Out",
+            "Zoom to Actual Size (100%)": "Zoom to Actual Size (100%)",
+            "Zoom to Fit in Window": "Zoom to Fit in Window",
+            "Zoom to Fit Display in Window": "Zoom to Fit Display in Window"
           },
           "emulator": {
             "device": {

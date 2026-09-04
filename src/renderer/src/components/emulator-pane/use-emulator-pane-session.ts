@@ -4,11 +4,9 @@ import { useAppStore } from '@/store'
 import {
   deviceLabel,
   simulatorPreviewStreamUrl,
-  type EmulatorPaneSession,
-  type SimulatorDeviceRow
+  type EmulatorPaneSession
 } from './emulator-pane-types'
 import { markSimulatorDeviceBooted, markSimulatorDeviceShutdown } from './emulator-device-state'
-import { toSimulatorDeviceRows, type RawEmulatorDevice } from './emulator-device-row-mapping'
 import { useEmulatorPaneControls } from './use-emulator-pane-controls'
 import { useEmulatorPaneSessionEvents } from './use-emulator-pane-session-events'
 import {
@@ -22,6 +20,7 @@ import { buildEmulatorPaneSessionView } from './emulator-pane-session-view'
 import { resolveEmulatorAttachTarget } from './emulator-attach-target'
 import { useEmulatorPaneLifecycle } from './use-emulator-pane-lifecycle'
 import { useEmulatorPaneShutdown } from './use-emulator-pane-shutdown'
+import { useEmulatorDeviceInventory } from './use-emulator-device-inventory'
 import { emulatorPaneErrorMessage } from './emulator-pane-error-message'
 
 type UseEmulatorPaneSessionArgs = {
@@ -35,7 +34,6 @@ export function useEmulatorPaneSession({
   tabId,
   autoAttachOnMount
 }: UseEmulatorPaneSessionArgs) {
-  const [devices, setDevices] = useState<SimulatorDeviceRow[]>([])
   const configuredDefaultUdid = useAppStore(
     (state) => state.settings?.mobileEmulatorDefaultDeviceUdid ?? null
   )
@@ -57,47 +55,36 @@ export function useEmulatorPaneSession({
   const [streamKey, setStreamKey] = useState<string | null>(prelaunchedState.streamKey)
   const mountedRef = useRef(true)
   const liveTargetRef = useRef<string | null>(prelaunchedState.liveTarget)
-  const deviceRefreshErrorRef = useRef<unknown>(null)
   const suppressAutoAttachRef = useRef(false)
+  const { devices, setDevices, deviceRefreshErrorRef, refreshDevices } = useEmulatorDeviceInventory(
+    { mountedRef, setError }
+  )
   const refreshStreamKey = useCallback(() => setStreamKey(String(Date.now())), [])
+  const onControlError = useCallback((controlError: unknown) => {
+    if (mountedRef.current) {
+      setError(emulatorPaneErrorMessage(controlError, 'Could not control emulator.'))
+    }
+  }, [])
+  const onControlSuccess = useCallback(() => {
+    if (mountedRef.current) {
+      setError(null)
+    }
+  }, [])
   const {
     sendTap,
     sendButton,
     sendGesture,
     sendRotate,
+    sendPosture,
     visualOrientation,
+    displayCommandPending,
     resetVisualOrientation
-  } = useEmulatorPaneControls(worktreeId, refreshStreamKey)
-
-  const refreshDevices = useCallback(async (bootedTarget?: string | null) => {
-    try {
-      // Unified list so Android devices/AVDs appear alongside iOS simulators.
-      const raw = (await callRuntimeRpc(
-        { kind: 'local' },
-        'emulator.listDevices',
-        {}
-      )) as RawEmulatorDevice[]
-      const list = toSimulatorDeviceRows(raw)
-      const next = markSimulatorDeviceBooted(list, bootedTarget)
-      if (!mountedRef.current) {
-        return next
-      }
-      const hadRefreshError = deviceRefreshErrorRef.current !== null
-      deviceRefreshErrorRef.current = null
-      setDevices(next)
-      if (hadRefreshError) {
-        setError(null)
-      }
-      return next
-    } catch (error) {
-      deviceRefreshErrorRef.current = error
-      if (mountedRef.current) {
-        setDevices([])
-        setError(emulatorPaneErrorMessage(error, 'Could not list emulator devices.'))
-      }
-      return []
-    }
-  }, [])
+  } = useEmulatorPaneControls({
+    worktreeId,
+    onControlError,
+    onControlSuccess,
+    onDisplaySettled: refreshStreamKey
+  })
 
   const applySession = useCallback(
     (info: EmulatorPaneSession['info'], attached = true, deviceRows = devices) => {
@@ -132,7 +119,7 @@ export function useEmulatorPaneSession({
         useAppStore.getState().setTabLabel(tabId, displayName)
       }
     },
-    [devices, resetVisualOrientation, tabId]
+    [devices, resetVisualOrientation, setDevices, tabId]
   )
 
   const clearSessionAfterShutdown = useCallback(
@@ -154,7 +141,7 @@ export function useEmulatorPaneSession({
         useAppStore.getState().setTabLabel(tabId, row?.name || 'Mobile Emulator')
       }
     },
-    [devices, resetVisualOrientation, selectedUdid, session, tabId]
+    [devices, resetVisualOrientation, selectedUdid, session, setDevices, tabId]
   )
 
   const attach = useCallback(
@@ -243,11 +230,13 @@ export function useEmulatorPaneSession({
     [
       applySession,
       configuredDefaultUdid,
+      deviceRefreshErrorRef,
       devices,
       loading,
       refreshDevices,
       resetVisualOrientation,
       selectedUdid,
+      setDevices,
       tabId,
       worktreeId
     ]
@@ -310,6 +299,8 @@ export function useEmulatorPaneSession({
     sendButton,
     sendGesture,
     sendRotate,
+    sendPosture,
+    displayCommandPending,
     visualOrientation,
     displayName: view.displayName,
     previewUrl: view.previewUrl,

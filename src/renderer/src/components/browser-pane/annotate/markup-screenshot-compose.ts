@@ -9,7 +9,7 @@
 
 import { scaleShape, type MarkupShape } from './markup-drawing-model'
 import { drawShapes } from './markup-shape-render'
-
+import { canvasToPngDataUrl } from '@/lib/canvas-png-data-url'
 export type MarkupComposeResult = {
   dataUrl: string
   // Why: PNG only — the clipboard:writeImage handler accepts a PNG data URL and
@@ -141,27 +141,7 @@ function downscaleCanvas(source: HTMLCanvasElement, factor: number): HTMLCanvasE
   return next
 }
 
-// Encodes a canvas to a PNG data URL. Prefers toBlob because Chromium encodes it
-// off the main thread — a multi-megapixel toData('image/png') is synchronous and
-// freezes the renderer. Falls back to the sync encode if toBlob yields no blob.
-function canvasToPngDataUrl(canvas: HTMLCanvasElement): Promise<string> {
-  return new Promise((resolve, reject) => {
-    canvas.toBlob((blob) => {
-      if (!blob) {
-        try {
-          resolve(canvas.toDataURL('image/png'))
-        } catch (error) {
-          reject(error instanceof Error ? error : new Error('markup compose: toDataURL failed'))
-        }
-        return
-      }
-      const reader = new FileReader()
-      reader.onload = () => resolve(reader.result as string)
-      reader.onerror = () => reject(reader.error ?? new Error('markup compose: blob read failed'))
-      reader.readAsDataURL(blob)
-    }, 'image/png')
-  })
-}
+// PNG encoding is shared with the raw emulator framebuffer export.
 
 // Encodes a PNG within budget: full size, then progressively smaller. Always
 // returns a PNG (best effort at the smallest step) so the clipboard handler

@@ -1,9 +1,13 @@
+import type { EmulatorDeviceControlCapabilities } from '../../../../shared/emulator-device-controls'
+
 export type SimulatorDeviceRow = {
   name: string
   udid: string
   state: string
   runtime?: string
   isAvailable?: boolean
+  backend?: 'ios' | 'android'
+  controlCapabilities?: EmulatorDeviceControlCapabilities
 }
 
 export type EmulatorStreamInfo = {
@@ -14,6 +18,7 @@ export type EmulatorStreamInfo = {
   url?: string
   wsUrl?: string
   state?: string
+  backend?: 'ios' | 'android'
 }
 
 export type EmulatorPaneSession = {
