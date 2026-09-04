@@ -134,6 +134,15 @@ host restart can re-read it. iOS token is 64 hex chars; Android token is the FCM
   trusted at all. Falls back to `x-real-ip` and then to a single shared bucket. The bucket is per
   instance and in memory, so the effective cap scales with the instance count; it exists to blunt a
   flood, not to meter.
+- Every other `/v1` route is capped by a second, wider bucket per client IP, 240 requests per minute,
+  applied **before** the bearer is looked up. A bearer has to be read from the database before it can
+  be refused, and that read takes one of only two pool connections per instance, so without this cap
+  a flood of forged bearers would starve real hosts of the pool while every one of them got a 401.
+- The gateway cannot prove that a host owns the token it registers: any host with a session may
+  register any well-formed token and send text to it, within its own quota. The phone drops such a push
+  in the foreground because the fingerprint resolves to no paired host, and never routes a tap on it,
+  but the OS banner shows while the app is backgrounded. Reaching it needs the victim's native token,
+  which the gateway never returns and which only the phone and its host ever see.
 
 ### Coalescing (gateway)
 
@@ -165,7 +174,10 @@ metadata server or `GOOGLE_APPLICATION_CREDENTIALS` locally):
 ### Gateway storage (Postgres in prod, SQLite in tests, same pattern as `cloud/apps/relay/src/database.ts`)
 
 - `push_hosts(host_fingerprint pk, host_public_key, created_at, last_seen_at)`, written only on a
-  verified proof and pruned after 30 d of no contact when no `push_devices` row still names the host
+  verified proof and pruned after 1 h of no contact when no `push_devices` row still names the host.
+  Nothing reads it, and any keypair mints a host for free, so it is not allowed to accumulate.
+- `push_sessions` holds one row per host: minting a session deletes the host's earlier one, since a
+  desktop holds a single session and only re-proves once it is gone.
 - `push_challenges(challenge_id pk, host_fingerprint, host_public_key, secret_hash, transcript,
   expires_at, consumed_at)`
 - `push_sessions(token_hash pk, host_fingerprint, expires_at, created_at)`
@@ -194,7 +206,12 @@ Secret Manager names (already exist in `onorca-cloud`): `orca-cloud-push-apns-ke
 - RPC `notifications.registerPush` params `{ platform, token, apnsEnvironment?, filter }` (same shapes
   as the gateway `POST /v1/devices` minus deviceId, which comes from `ctx.pairedDeviceId`). Returns
   `{ registered: true, registrationId } | { registered: false, reason: 'gateway_unreachable' |
-  'gateway_rejected' | 'not_mobile' | 'registration_storage_failed' }`. Persists `pushRegistration:
+  'gateway_rejected' | 'not_mobile' | 'registration_storage_failed' | 'throttled' }`. A device may
+  register at most 10 times per minute (`throttled` beyond that, its earlier registration untouched):
+  each call is a gateway write plus a synchronous registry write on the main thread, and a paired
+  phone could otherwise loop it. The unregister RPC is not throttled, since with nothing registered it
+  is a lookup and with something registered it can only run once per successful register. The params
+  schema is strict, so a caller-supplied `deviceId` is an error, not a key silently dropped. Persists `pushRegistration:
   { registrationId, platform, filter, registeredAt }` on `DeviceEntry` in `device-registry.ts` (new
   optional field, tolerated by old registries). When the gateway accepted the token but the host could
   not store it — the device left mobile scope mid-call (`not_mobile`) or the registry write threw
