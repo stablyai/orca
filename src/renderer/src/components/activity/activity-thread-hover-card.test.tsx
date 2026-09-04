@@ -68,7 +68,8 @@ function Harness({
   onSelect = vi.fn(),
   onJump = vi.fn(),
   onMarkRead = vi.fn(),
-  onMarkUnread = vi.fn()
+  onMarkUnread = vi.fn(),
+  onClear
 }: {
   thread: AgentPaneThread
   selected?: boolean
@@ -76,6 +77,7 @@ function Harness({
   onJump?: () => void
   onMarkRead?: () => void
   onMarkUnread?: () => void
+  onClear?: (thread: AgentPaneThread) => void
 }): ReactElement {
   return (
     <TooltipProvider>
@@ -86,6 +88,7 @@ function Harness({
         onJump={onJump}
         onMarkRead={onMarkRead}
         onMarkUnread={onMarkUnread}
+        onClear={onClear}
         canJump={true}
         compactMode={false}
       />
@@ -145,6 +148,28 @@ describe('ActivityThreadHoverCard and ActivityThreadRow', () => {
     })
 
     expect(onMarkRead).toHaveBeenCalledWith(thread)
+    expect(onSelect).not.toHaveBeenCalled()
+  })
+
+  it('clears from a keyboard-reachable row action without selecting the row', async () => {
+    const thread = createTestThread()
+    const onClear = vi.fn()
+    const onSelect = vi.fn()
+
+    await act(async () => {
+      root.render(<Harness thread={thread} onClear={onClear} onSelect={onSelect} />)
+    })
+
+    const clearButton = container.querySelector<HTMLButtonElement>(
+      'button[aria-label="Clear notification"]'
+    )
+    expect(clearButton).not.toBeNull()
+    expect(clearButton?.className).toContain('focus-visible:opacity-100')
+    expect(clearButton?.className).not.toContain('invisible')
+
+    act(() => clearButton?.click())
+
+    expect(onClear).toHaveBeenCalledWith(thread)
     expect(onSelect).not.toHaveBeenCalled()
   })
 

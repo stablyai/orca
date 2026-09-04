@@ -13,6 +13,38 @@ import { ActivityThreadHoverCard } from './activity-thread-hover-card'
 import { activityThreadRowCopy } from './activity-thread-presentation'
 import type { AgentPaneThread } from './activity-thread-types'
 
+function ActivityThreadRowAction({
+  label,
+  onClick,
+  children
+}: {
+  label: string
+  onClick: () => void
+  children: React.ReactNode
+}): React.JSX.Element {
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon-xs"
+          className="size-4 p-0 text-muted-foreground opacity-100 transition-opacity hover:text-foreground can-hover:opacity-0 group-hover:opacity-100 focus-visible:opacity-100"
+          aria-label={label}
+          onClick={(event) => {
+            event.stopPropagation()
+            onClick()
+          }}
+          onMouseDown={(event) => event.stopPropagation()}
+        >
+          {children}
+        </Button>
+      </TooltipTrigger>
+      <TooltipContent side="left">{label}</TooltipContent>
+    </Tooltip>
+  )
+}
+
 // Why React.memo: rows are pure functions of these props; thread identity is stable across
 // query/selection/group re-renders, so memo keeps a keystroke or selection change from
 // re-rendering every mounted row. Callbacks take the thread so parents can pass stable handlers.
@@ -27,8 +59,7 @@ export const ActivityThreadRow = React.memo(function ActivityThreadRow({
   canJump,
   compactMode,
   disableMarkUnread = false,
-  showJumpAction = true,
-  canClear = false
+  showJumpAction = true
 }: {
   thread: AgentPaneThread
   selected: boolean
@@ -41,7 +72,6 @@ export const ActivityThreadRow = React.memo(function ActivityThreadRow({
   compactMode: boolean
   disableMarkUnread?: boolean
   showJumpAction?: boolean
-  canClear?: boolean
 }): React.JSX.Element {
   const { taskTitle, statusLine, statusKind, needsAttention, workspaceLabel } =
     activityThreadRowCopy(thread)
@@ -121,78 +151,26 @@ export const ActivityThreadRow = React.memo(function ActivityThreadRow({
                 {workspaceLabel}
               </span>
               {canJump && showJumpAction ? (
-                <span
-                  className={cn(
-                    'inline-flex shrink-0 items-center transition-opacity',
-                    'can-hover:pointer-events-none can-hover:invisible can-hover:opacity-0',
-                    'group-hover:pointer-events-auto group-hover:visible group-hover:opacity-100'
+                <ActivityThreadRowAction
+                  label={translate(
+                    'auto.components.activity.ActivityPrototypePage.4616ea39fd',
+                    'Jump to workspace'
                   )}
+                  onClick={() => onJump(thread)}
                 >
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="icon-xs"
-                        className="size-4 p-0 text-muted-foreground hover:text-foreground"
-                        aria-label={translate(
-                          'auto.components.activity.ActivityPrototypePage.4616ea39fd',
-                          'Jump to workspace'
-                        )}
-                        onClick={(event) => {
-                          event.stopPropagation()
-                          onJump(thread)
-                        }}
-                        onMouseDown={(event) => event.stopPropagation()}
-                      >
-                        <ExternalLink className="size-2.5" />
-                      </Button>
-                    </TooltipTrigger>
-                    <TooltipContent side="left">
-                      {translate(
-                        'auto.components.activity.ActivityPrototypePage.4616ea39fd',
-                        'Jump to workspace'
-                      )}
-                    </TooltipContent>
-                  </Tooltip>
-                </span>
+                  <ExternalLink className="size-2.5" />
+                </ActivityThreadRowAction>
               ) : null}
-              {canClear && onClear ? (
-                <span
-                  className={cn(
-                    'inline-flex shrink-0 items-center transition-opacity',
-                    'can-hover:pointer-events-none can-hover:invisible can-hover:opacity-0',
-                    'group-hover:pointer-events-auto group-hover:visible group-hover:opacity-100'
+              {onClear ? (
+                <ActivityThreadRowAction
+                  label={translate(
+                    'auto.components.activity.ActivityThreadRow.clearNotification',
+                    'Clear notification'
                   )}
+                  onClick={() => onClear(thread)}
                 >
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="icon-xs"
-                        className="size-4 p-0 text-muted-foreground hover:text-foreground"
-                        aria-label={translate(
-                          'auto.components.activity.ActivityThreadRow.clearNotification',
-                          'Clear notification'
-                        )}
-                        onClick={(event) => {
-                          event.stopPropagation()
-                          onClear(thread)
-                        }}
-                        onMouseDown={(event) => event.stopPropagation()}
-                      >
-                        <X className="size-2.5" />
-                      </Button>
-                    </TooltipTrigger>
-                    <TooltipContent side="left">
-                      {translate(
-                        'auto.components.activity.ActivityThreadRow.clearNotification',
-                        'Clear notification'
-                      )}
-                    </TooltipContent>
-                  </Tooltip>
-                </span>
+                  <X className="size-2.5" />
+                </ActivityThreadRowAction>
               ) : null}
               <span className="inline-flex size-3.5 shrink-0 items-center justify-center">
                 {thread.unread ? (

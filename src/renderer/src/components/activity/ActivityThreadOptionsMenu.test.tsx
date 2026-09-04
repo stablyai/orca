@@ -159,7 +159,7 @@ describe('ActivityThreadOptionsMenu', () => {
     expect(document.body.textContent).toContain('Show unread only')
   })
 
-  it('explains show unread threads only on hover and shows unread dot when hasUnreadThreads is true', async () => {
+  it('explains show unread threads only on hover without a second unread state marker', async () => {
     const onToggleUnread = vi.fn()
     await act(async () => {
       root.render(
@@ -191,7 +191,7 @@ describe('ActivityThreadOptionsMenu', () => {
     expect(document.body.textContent).toContain(
       'Filters the activity list to show only threads with unread updates.'
     )
-    expect(document.querySelector('[data-unread-dot]')).not.toBeNull()
+    expect(unreadItem?.querySelector('svg.lucide-check')).toBeNull()
   })
 
   it('renders show child agents checkbox when onShowChildAgentsChange is provided', async () => {

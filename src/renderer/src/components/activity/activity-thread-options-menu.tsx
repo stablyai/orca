@@ -101,7 +101,7 @@ export function ActivityThreadOptionsMenu({
                 <ListFilter className="size-3.5" strokeWidth={2.25} />
                 {scopeFilterActive ? (
                   <span
-                    className="absolute right-0.5 top-0.5 size-1.5 rounded-full bg-primary ring-1 ring-worktree-sidebar"
+                    className="absolute right-0.5 top-0.5 size-1.5 rounded-full bg-foreground"
                     aria-hidden="true"
                     data-scope-filter-dot=""
                   />
@@ -160,13 +160,6 @@ export function ActivityThreadOptionsMenu({
                         'Show unread only'
                       )}
                     </span>
-                    {hasUnreadThreads ? (
-                      <span
-                        className="size-1.5 shrink-0 rounded-full bg-primary"
-                        aria-hidden="true"
-                        data-unread-dot=""
-                      />
-                    ) : null}
                     {unreadOnly ? <Check className="size-3.5" /> : null}
                   </DropdownMenuCheckboxItem>
                 </TooltipTrigger>

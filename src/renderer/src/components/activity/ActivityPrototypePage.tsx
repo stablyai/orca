@@ -248,8 +248,7 @@ export default function ActivityPrototypePage(): React.JSX.Element {
     markAllThreadsRead,
     hasUnreadThreads,
     hasCompletedThreads,
-    handleClearCompleted,
-    handleClearThread
+    handleClearCompleted
   } = useActivityThreadActionBindings({
     visibleThreads,
     markAllReadThreads,
@@ -338,7 +337,6 @@ export default function ActivityPrototypePage(): React.JSX.Element {
           onJumpToWorkspace={jumpToWorkspace}
           onMarkThreadRead={markThreadRead}
           onMarkThreadUnread={markThreadUnread}
-          onClearThread={handleClearThread}
           canJumpToWorkspace={canJumpToWorkspace}
           isThreadListResizing={isThreadListResizing}
           onResizeStart={onResizeStart}

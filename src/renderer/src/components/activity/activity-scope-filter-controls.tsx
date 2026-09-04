@@ -54,7 +54,7 @@ export function ActivityScopeFilterMenuSections(): React.JSX.Element | null {
  * filter that survives restarts can't silently hide running agents.
  */
 export function useActivityScopeFilterActive(): boolean {
-  const agentsVisibleHostIds = useAppStore((s) => s.agentsVisibleHostIds)
-  const agentsFilterRepoIds = useAppStore((s) => s.agentsFilterRepoIds)
-  return agentsVisibleHostIds !== null || agentsFilterRepoIds.length > 0
+  return useAppStore(
+    (state) => state.agentsVisibleHostIds !== null || state.agentsFilterRepoIds.length > 0
+  )
 }
