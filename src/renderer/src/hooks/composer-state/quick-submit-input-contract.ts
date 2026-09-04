@@ -2,6 +2,7 @@ import type { ComposerModel } from './composer-model'
 
 export type QuickSubmitPreparationInput = Pick<
   ComposerModel,
+  | 'agentPrompt'
   | 'branchAutoNameRef'
   | 'branchNameOverridePreservesNameEdits'
   | 'checkedHooksContextKey'
