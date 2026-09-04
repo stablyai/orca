@@ -89,6 +89,14 @@ export function dismissAvailableUpdate(): void {
   updater.dismissAvailableUpdate()
 }
 
-export function setupAutoUpdater(mainWindow: BrowserWindow, opts?: UpdaterSetupOptions): void {
+export function setupAutoUpdater(
+  mainWindow: BrowserWindow | null,
+  opts?: UpdaterSetupOptions
+): void {
   updater.setupAutoUpdater(mainWindow, opts)
+}
+
+/** Binds the serve runtime id so the supervised install request can echo it to the helper. */
+export function setServeUpdateRuntimeId(runtimeId: string): void {
+  updater.setServeUpdateRuntimeId(runtimeId)
 }
