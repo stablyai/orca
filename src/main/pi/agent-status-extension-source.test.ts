@@ -349,6 +349,7 @@ describe('getPiAgentStatusExtensionSource', () => {
     expect(command).toBe('/mnt/c/Windows/System32/curl.exe')
     expect(args).toEqual([
       '-sS',
+      '-f',
       '--connect-timeout',
       '3',
       '--max-time',
@@ -367,11 +368,12 @@ describe('getPiAgentStatusExtensionSource', () => {
       '@-',
       'http://127.0.0.1:4321/hook/omp'
     ])
-    // Why: delivery must be fire-and-forget off the pi event loop — no
-    // blocking wait — with the payload fed via stdin, never argv.
+    // Why: curl completion is observed by the background delivery queue without
+    // blocking the Pi event handler, and the payload stays off argv.
     expect(options).toEqual({ stdio: ['pipe', 'ignore', 'ignore'] })
     const child = harness.spawnedChildren[0]
     expect(child?.on).toHaveBeenCalledWith('error', expect.any(Function))
+    expect(child?.on).toHaveBeenCalledWith('close', expect.any(Function))
     expect(child?.stdin.on).toHaveBeenCalledWith('error', expect.any(Function))
     expect(child?.stdin.end).toHaveBeenCalledWith(
       JSON.stringify({
@@ -384,6 +386,7 @@ describe('getPiAgentStatusExtensionSource', () => {
         payload: { hook_event_name: 'agent_start' }
       })
     )
+    child?.emit('close', 0)
   })
 
   it('uses current Windows coordinates when a same-token guest endpoint is stale', async () => {
@@ -409,6 +412,7 @@ describe('getPiAgentStatusExtensionSource', () => {
     expect(harness.fetchMock.mock.calls[0]?.[0]).toBe('http://127.0.0.1:9999/hook/prime-agent')
     await vi.waitFor(() => expect(harness.spawnMock).toHaveBeenCalledTimes(1))
     expect(harness.spawnMock.mock.calls[0]?.[1]).toContain('http://127.0.0.1:4321/hook/prime-agent')
+    harness.spawnedChildren[0]?.emit('close', 0)
   })
 
   it('probes WSL evidence and the curl path once per process', async () => {
@@ -427,9 +431,12 @@ describe('getPiAgentStatusExtensionSource', () => {
     })
 
     await harness.callHook('agent_start')
+    await vi.waitFor(() => expect(harness.spawnMock).toHaveBeenCalledTimes(1))
     await harness.callHook('agent_end')
+    harness.spawnedChildren[0]?.emit('close', 0)
 
     await vi.waitFor(() => expect(harness.spawnMock).toHaveBeenCalledTimes(2))
+    harness.spawnedChildren[1]?.emit('close', 0)
     // Why: WSL-ness and curl.exe presence are process-lifetime constants;
     // the per-event failure path must not re-probe /proc or /mnt/c.
     const procReads = harness.fsMock.readFileSync.mock.calls.filter(([path]) =>

@@ -32,6 +32,7 @@ describe('OMP agent_end delivery', () => {
     await vi.waitFor(() => expect(harness.fetchMock).toHaveBeenCalledTimes(1))
     await harness.callHook('agent_end', { willContinue: false })
     await vi.waitFor(() => expect(harness.fetchMock).toHaveBeenCalledTimes(2))
+    await vi.waitFor(() => expect(harness.timeoutHandles.at(-1)?.hasRef()).toBe(true))
 
     await vi.advanceTimersByTimeAsync(250)
     await vi.waitFor(() => expect(harness.fetchMock).toHaveBeenCalledTimes(3))
@@ -62,6 +63,46 @@ describe('OMP agent_end delivery', () => {
       'agent_end',
       'before_agent_start'
     ])
+  })
+
+  it('retries when the WSL curl bridge reports failure', async () => {
+    vi.useFakeTimers()
+    const harness = createAgentStatusExtensionHarness({
+      kind: 'omp',
+      env: { WSL_DISTRO_NAME: 'Ubuntu' },
+      existsSync: (path) => path === '/mnt/c/Windows/System32/curl.exe',
+      fetchImpl: vi.fn(async () => {
+        throw new Error('guest loopback unreachable')
+      })
+    })
+
+    await harness.callHook('agent_end', { willContinue: false })
+    await vi.waitFor(() => expect(harness.spawnMock).toHaveBeenCalledTimes(1))
+    harness.spawnedChildren[0]?.emit('close', 22)
+
+    await vi.advanceTimersByTimeAsync(250)
+    await vi.waitFor(() => expect(harness.fetchMock).toHaveBeenCalledTimes(2))
+    await vi.waitFor(() => expect(harness.spawnMock).toHaveBeenCalledTimes(2))
+    harness.spawnedChildren[1]?.emit('close', 0)
+  })
+
+  it('uses the WSL curl bridge for non-2xx guest responses', async () => {
+    vi.useFakeTimers()
+    const harness = createAgentStatusExtensionHarness({
+      kind: 'omp',
+      env: { WSL_DISTRO_NAME: 'Ubuntu' },
+      existsSync: (path) => path === '/mnt/c/Windows/System32/curl.exe',
+      fetchImpl: vi.fn(async () => ({ ok: false }))
+    })
+
+    await harness.callHook('agent_end', { willContinue: false })
+    await vi.waitFor(() => expect(harness.spawnMock).toHaveBeenCalledTimes(1))
+    expect(harness.spawnMock.mock.calls[0]?.[1]).toContain('-f')
+    harness.spawnedChildren[0]?.emit('close', 0)
+
+    await vi.advanceTimersByTimeAsync(5_000)
+    expect(harness.fetchMock).toHaveBeenCalledTimes(1)
+    expect(harness.spawnMock).toHaveBeenCalledTimes(1)
   })
 
   it('does not retry failed Pi completion posts', async () => {

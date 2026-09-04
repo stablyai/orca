@@ -229,23 +229,11 @@ describe('getPiTitlebarExtensionSource', () => {
     expect(harness.lastTitle()).toMatch(BRAILLE_RE)
   })
 
-  it('stops a terminal OMP spinner without waiting for ctx.isIdle', async () => {
-    const isIdle = vi.fn(() => false)
-    const harness = createHarness({ kind: 'omp', isIdle })
-
-    await harness.callHook('agent_start')
-    await harness.callHook('agent_end', { willContinue: false })
-
-    expect(isIdle).not.toHaveBeenCalled()
-    expect(vi.getTimerCount()).toBe(0)
-    expect(harness.lastTitle()).toBe(IDLE_TITLE)
-    expect(harness.lastTitle()).not.toMatch(BRAILLE_RE)
-  })
-
   it.each([
+    ['configured OMP', { kind: 'omp' as const }],
     ['process title', { title: 'omp' }],
     ['argv', { argv: ['node', '/usr/local/bin/omp'] }]
-  ])('stops a terminal runtime-routed OMP spinner detected from %s', async (_name, runtime) => {
+  ])('stops a terminal OMP spinner for %s', async (_name, runtime) => {
     const isIdle = vi.fn(() => false)
     const harness = createHarness({ ...runtime, isIdle })
 
@@ -255,7 +243,6 @@ describe('getPiTitlebarExtensionSource', () => {
     expect(isIdle).not.toHaveBeenCalled()
     expect(vi.getTimerCount()).toBe(0)
     expect(harness.lastTitle()).toBe(IDLE_TITLE)
-    expect(harness.lastTitle()).not.toMatch(BRAILLE_RE)
   })
 
   it('waits for modern runtimes to become idle after agent_end', async () => {

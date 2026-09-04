@@ -1,9 +1,11 @@
 import type { PiAgentKind } from '../../shared/pi-agent-kind'
 
 export function getPiAgentOmpRuntimeDetectionSourceLines(configuredOmp: boolean): string[] {
+  if (configuredOmp) {
+    return ['function isOmpRuntime(): boolean {', '  return true', '}']
+  }
+
   return [
-    `const CONFIGURED_OMP_RUNTIME = ${configuredOmp}`,
-    '',
     'function processName(value: unknown): string {',
     "  return String(value || '').split(/[\\\\/]/).pop()?.toLowerCase() || ''",
     '}',
@@ -12,10 +14,6 @@ export function getPiAgentOmpRuntimeDetectionSourceLines(configuredOmp: boolean)
     '',
     'function isOmpRuntime(): boolean {',
     '  if (cachedOmpRuntime !== null) return cachedOmpRuntime',
-    '  if (CONFIGURED_OMP_RUNTIME) {',
-    '    cachedOmpRuntime = true',
-    '    return true',
-    '  }',
     '  const executableNames = [',
     '    processName(process.title),',
     '    processName(process.env._),',
