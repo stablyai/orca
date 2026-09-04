@@ -301,12 +301,9 @@ resource "google_cloud_run_v2_service" "push" {
   ]
 }
 
-# Google issues and renews the certificate for the mapping. The DNS record itself lives in the
-# apps root in stablyai/orca-cloud, which owns the onorca.dev zone.
-#
-# TODO(stablyai/orca-cloud apps root): add the push gateway record to the onorca.dev zone:
-#   push.onorca.dev.  CNAME  ghs.googlehosted.com.
-# `terraform output push_dns_record` in this root prints the same three fields.
+# Google issues and renews the certificate for the mapping. The DNS record itself is a
+# hand-managed Cloudflare CNAME to ghs.googlehosted.com, like relay.onorca.dev; this root has no
+# Cloudflare surface by design. `terraform output push_dns_record` prints the record.
 resource "google_cloud_run_domain_mapping" "push" {
   count = var.push_gateway_enabled && var.manage_push_domain_mapping ? 1 : 0
 

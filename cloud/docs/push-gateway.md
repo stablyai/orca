@@ -241,15 +241,17 @@ surfaces as `RESOURCE_EXHAUSTED` and is not something the per-host limits can pr
 Logging is aggregate counters only. Never log a token, a title, a body, or a full fingerprint;
 the first four characters of a fingerprint are the most that may appear.
 
-## DNS: one record the other repository owns
+## DNS: one hand-managed record
 
 The Cloud Run domain mapping is created here, and Google issues and renews the certificate. The
-`onorca.dev` zone is not in this root: it belongs to the apps root in `stablyai/orca-cloud`. The
-mapping stays pending until that repository publishes:
+`onorca.dev` zone is not in this root: it is a Cloudflare zone whose Terraform-managed records
+live in the apps root in `stablyai/orca-cloud`, and whose relay and auth records are managed by
+hand. The push record follows the relay's precedent and was created by hand on 2026-09-04:
 
 ```text
-push.onorca.dev.  CNAME  ghs.googlehosted.com.
+push.onorca.dev.  CNAME  ghs.googlehosted.com.   (DNS only, not proxied)
 ```
 
-`terraform -chdir=infra/terraform output push_dns_record` prints the same three fields, and
-`push-gateway.tf` carries the matching TODO next to the mapping.
+`terraform -chdir=infra/terraform output push_dns_record` prints the same three fields. If the
+record is ever lost, recreate it exactly like that; Cloudflare proxying blocks certificate
+issuance and breaks Cloud Run host routing.
