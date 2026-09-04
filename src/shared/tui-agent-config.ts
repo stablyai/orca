@@ -207,6 +207,14 @@ const TUI_AGENT_CONFIG_SOURCE: Record<TuiAgent, TuiAgentConfigSource> = {
     detectCmd: 'codebuff',
     promptInjectionMode: 'stdin-after-start'
   },
+  freebuff: {
+    detectCmd: 'freebuff',
+    launchCmd: 'freebuff',
+    expectedProcess: 'freebuff',
+    // Why: Freebuff is built on Codebuff's open framework (CodebuffAI/freebuff),
+    // so it shares the same bare-TUI + paste-after-start contract.
+    promptInjectionMode: 'stdin-after-start'
+  },
   'command-code': {
     // Why: use the full name (not its `cmd` alias) so detection doesn't collide with Windows' built-in cmd.exe.
     detectCmd: 'command-code',
@@ -301,16 +309,4 @@ export function isTuiAgent(value: unknown): value is TuiAgent {
 
 export function getTuiAgentDetectCommands(config: TuiAgentConfig): string[] {
   return [config.detectCmd, ...(config.detectCmdAliases ?? [])]
-}
-
-export function getTuiAgentLaunchCommand(
-  config: TuiAgentConfig,
-  platform: NodeJS.Platform,
-  opts?: { isRemote?: boolean }
-): string {
-  // Why: local-only orca-ide rename (avoids GNOME Orca clash) must not leak to Linux remotes, whose relay shim is always `orca`.
-  if (opts?.isRemote && platform === 'linux') {
-    return config.launchCmd
-  }
-  return config.launchCmdByPlatform?.[platform] ?? config.launchCmd
 }

@@ -34,6 +34,9 @@ export const SKILLS_CLI_AGENT_KEY_BY_TUI_AGENT = {
   aug: 'augment',
   cline: 'cline',
   codebuff: null,
+  // Why: the skills CLI has no Freebuff key (verified against its namespace);
+  // universal-only installs keep working like codebuff.
+  freebuff: null,
   'command-code': 'command-code',
   continue: 'continue',
   cursor: 'cursor',

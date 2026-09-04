@@ -2,7 +2,8 @@ import type React from 'react'
 import { ClaudeIcon, DroidIcon, OpenAIIcon } from '@/components/status-bar/icons'
 import openClaudeLogoUrl from '../../../../resources/openclaude-logo.png?url'
 import type { TuiAgent } from '../../../shared/tui-agent'
-import { getTuiAgentLaunchCommand, TUI_AGENT_CONFIG } from '../../../shared/tui-agent-config'
+import { TUI_AGENT_CONFIG } from '../../../shared/tui-agent-config'
+import { getTuiAgentLaunchCommand } from '../../../shared/tui-agent-launch-command'
 import {
   AgentLetterIcon,
   AiderIcon,
@@ -219,6 +220,13 @@ export const getAgentCatalog = createLocalizedCatalog((): AgentCatalogEntry[] =>
     cmd: 'codebuff',
     faviconDomain: 'codebuff.com',
     homepageUrl: 'https://www.codebuff.com/docs/help/quick-start'
+  },
+  {
+    id: 'freebuff',
+    label: translate('auto.lib.agent.catalog.b0b350de65', 'Freebuff'),
+    cmd: 'freebuff',
+    faviconDomain: 'freebuff.com',
+    homepageUrl: 'https://freebuff.com/cli'
   },
   {
     id: 'command-code',
