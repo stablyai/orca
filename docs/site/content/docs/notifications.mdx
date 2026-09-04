@@ -29,3 +29,13 @@ Pick a custom desktop notification sound per category under [Settings → Notifi
 Supported formats: MP3, WAV, OGG, M4A, AAC, FLAC. One file applies to all delivered desktop notifications.
 
 When you use a custom sound, set its playback volume from the same settings pane.
+
+## Background notifications on your phone
+
+The Orca mobile app shows an agent-finished or needs-input alert while it is open and connected to your desktop. To keep receiving them while the app is in the background or closed, turn on **Background notifications** in the phone's Notifications settings. It is off by default.
+
+When it is on, your desktop sends each alert to Orca's push service, which delivers it through Apple or Google to your phone. The alert shows the same title and text as the desktop notification. What leaves your computer is that text, your phone's push token, and opaque host and device ids. Orca's push service keeps the text only long enough to send it and never writes it to storage. Apple and Google can read it in transit, as they can for any app's notifications. The service is open source in the Orca repository under `cloud/apps/push`.
+
+Turning the switch off, or unpairing the phone from the desktop, deletes the token from the push service. Two sub-switches let you receive only **Needs input** or only **Task finished** alerts.
+
+Background notifications need a paired desktop that has been updated to advertise the feature; the phone hides the switch otherwise. They do not fire from a headless `orca serve` host, because agent-completion detection runs in the desktop app. On Android they need Google Play services, so de-Googled phones keep the in-app behaviour only.
