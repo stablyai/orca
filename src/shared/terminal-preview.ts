@@ -1,3 +1,5 @@
+import type { PtyLivenessVerdict } from './pty-liveness-verdict'
+
 export type TerminalPreviewSnapshot = {
   /** Which main-side buffer served this frame; a preview retries when a fallback lags a claim. */
   source?: 'headless' | 'renderer' | 'provider'
@@ -26,6 +28,8 @@ export type TerminalPreviewReplayChunk = {
 
 export type TerminalPreviewConnectResult = {
   snapshot: TerminalPreviewSnapshot | null
+  /** Missing on older peers; missing snapshots never establish process exit by themselves. */
+  liveness?: PtyLivenessVerdict['status']
   /** Live bytes captured while the snapshot was being serialized. */
   replay: TerminalPreviewReplayChunk[]
   /** Snapshot acquisition overflowed twice; refresh without blanking the existing view. */

@@ -4,6 +4,7 @@ import type { PtyLivenessVerdict } from '../../shared/pty-liveness-verdict'
 import type { DriverState } from './orca-runtime-core'
 import { clampTerminalViewport } from './terminal-viewport'
 import { getPtyTerminalState, getTerminalState } from './terminal-wait-results'
+import { withTimeout } from './runtime-async-boundaries'
 
 // Orphaned verdicts are bounded; active PTYs retain theirs until new evidence resolves them.
 const MAX_TRACKED_PTY_LIVENESS_VERDICTS = 256
@@ -48,6 +49,24 @@ export class OrcaRuntimeWithMarkPtyLivenessUnverifiable extends OrcaRuntimeWithO
    */
   getPtyLivenessVerdict(ptyId: string): PtyLivenessVerdict | null {
     return this.ptyLivenessVerdictByPtyId.get(ptyId)?.verdict ?? null
+  }
+
+  async verifyTerminalPreviewLiveness(ptyId: string): Promise<PtyLivenessVerdict['status']> {
+    if (this.isPtyKnownExited(ptyId)) {
+      return 'exited'
+    }
+    if (this.getPtyLivenessVerdict(ptyId)?.status === 'unverifiable') {
+      return 'unverifiable'
+    }
+    const generation = this.getPtyLifecycleGeneration(ptyId)
+    const absent = await withTimeout(this.isLeafPtyProvenAbsent(ptyId), 2_000, false)
+    if (
+      generation !== this.getPtyLifecycleGeneration(ptyId) ||
+      this.getPtyLivenessVerdict(ptyId)?.status === 'unverifiable'
+    ) {
+      return 'unverifiable'
+    }
+    return this.controllerKnowsPtyIsLive(ptyId) ? 'live' : absent ? 'exited' : 'unverifiable'
   }
 
   protected isPtyKnownExited(ptyId: string): boolean {
