@@ -191,6 +191,7 @@ export class OrcaRuntimeWithRemoveManagedWorktree extends OrcaRuntimeWithCreateM
             store,
             provider: provider!,
             force,
+            runHooks,
             allowUnverifiedPtyStop,
             deleteBranch,
             acquireWatcherRemoval: this.acquireFileWatcherRemoval,
