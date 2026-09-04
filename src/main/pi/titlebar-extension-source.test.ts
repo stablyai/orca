@@ -25,7 +25,13 @@ const SESSION = 'omp-session'
 const IDLE_TITLE = `π - ${SESSION} - orca-app`
 
 function createHarness(
-  options: { paneKey?: string; isIdle?: () => boolean; kind?: 'pi' | 'omp' } = {}
+  options: {
+    paneKey?: string
+    isIdle?: () => boolean
+    kind?: 'pi' | 'omp'
+    title?: string
+    argv?: string[]
+  } = {}
 ): Harness {
   const titles: string[] = []
   const ctx: TitlebarContext = {
@@ -51,7 +57,9 @@ function createHarness(
     exports: module.exports,
     process: {
       env: { ORCA_PANE_KEY: options.paneKey ?? 'pane-1' },
-      cwd: () => CWD
+      cwd: () => CWD,
+      title: options.title ?? 'node',
+      argv: options.argv ?? ['node', '/usr/local/bin/pi']
     },
     console: { warn: vi.fn(), error: vi.fn(), log: vi.fn() },
     Promise,
@@ -224,6 +232,22 @@ describe('getPiTitlebarExtensionSource', () => {
   it('stops a terminal OMP spinner without waiting for ctx.isIdle', async () => {
     const isIdle = vi.fn(() => false)
     const harness = createHarness({ kind: 'omp', isIdle })
+
+    await harness.callHook('agent_start')
+    await harness.callHook('agent_end', { willContinue: false })
+
+    expect(isIdle).not.toHaveBeenCalled()
+    expect(vi.getTimerCount()).toBe(0)
+    expect(harness.lastTitle()).toBe(IDLE_TITLE)
+    expect(harness.lastTitle()).not.toMatch(BRAILLE_RE)
+  })
+
+  it.each([
+    ['process title', { title: 'omp' }],
+    ['argv', { argv: ['node', '/usr/local/bin/omp'] }]
+  ])('stops a terminal runtime-routed OMP spinner detected from %s', async (_name, runtime) => {
+    const isIdle = vi.fn(() => false)
+    const harness = createHarness({ ...runtime, isIdle })
 
     await harness.callHook('agent_start')
     await harness.callHook('agent_end', { willContinue: false })
