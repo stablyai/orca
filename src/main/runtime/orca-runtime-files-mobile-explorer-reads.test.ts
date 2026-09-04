@@ -130,6 +130,40 @@ describe('RuntimeFileCommands', () => {
     expect(resolveAuthorizedPathMock).not.toHaveBeenCalled()
   })
 
+  it('reports SSH directory symlinks as non-directories to match local traversal', async () => {
+    const resolveRuntimeFileTarget = vi.fn(async () => ({
+      worktree: { id: 'wt-1', repoId: 'repo-1', path: '/remote/repo' },
+      executionHostId: 'ssh:ssh-1'
+    }))
+    const { commands } = createRuntimeFileCommands({ resolveRuntimeFileTarget })
+    const readDir = vi.fn().mockResolvedValue([
+      { name: 'docs-link', isDirectory: true, isSymlink: true },
+      { name: 'docs', isDirectory: true, isSymlink: false },
+      { name: 'README.md', isDirectory: false, isSymlink: false }
+    ])
+    vi.mocked(getSshFilesystemProvider).mockReturnValue({
+      realpath: vi.fn(async (path: string) => path),
+      readDir
+    } as never)
+
+    await expect(
+      commands.executePluginFileMethod('files.readDir', 'identity:opaque', '', {
+        paths: ['**']
+      })
+    ).resolves.toEqual({
+      authorized: true,
+      value: {
+        entries: [
+          { name: 'docs', isDirectory: true },
+          { name: 'docs-link', isDirectory: false },
+          { name: 'README.md', isDirectory: false }
+        ]
+      }
+    })
+    expect(readDir).toHaveBeenCalledWith('/remote/repo')
+    expect(resolveAuthorizedPathMock).not.toHaveBeenCalled()
+  })
+
   it.each(['files.read', 'files.stat', 'files.readDir'] as const)(
     'refuses hostile SSH canonicalization for %s without remote content or local fallback',
     async (method) => {

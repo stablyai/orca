@@ -71,7 +71,12 @@ export class RuntimeFileCommandsWithSearchRemoteQuickOpenFilePaths extends Runti
       }
     }
     const entries = provider
-      ? sortDirEntries(await provider.readDir(canonicalTarget))
+      ? sortDirEntries(
+          (await provider.readDir(canonicalTarget)).map((entry) => ({
+            ...entry,
+            isDirectory: entry.isDirectory && !entry.isSymlink
+          }))
+        )
       : sortDirEntries(
           (await readdir(canonicalTarget, { withFileTypes: true })).map((entry) => ({
             name: entry.name,
