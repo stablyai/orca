@@ -1,3 +1,4 @@
+import { readFile } from 'node:fs/promises'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const {
@@ -48,6 +49,34 @@ vi.mock('./internals', () => ({
 
 import { updateIssueBySlug } from './mutations'
 import { getWorkItemDetailsBySlug } from './work-item-details'
+
+function expectNoRawBodyField(args: unknown): asserts args is string[] {
+  expect(Array.isArray(args)).toBe(true)
+  const list = args as string[]
+  for (let i = 0; i < list.length; i++) {
+    expect(list[i]).not.toMatch(/^body=/)
+    if (
+      list[i] === '--raw-field' ||
+      list[i] === '-f' ||
+      list[i] === '--field' ||
+      list[i] === '-F'
+    ) {
+      expect(list[i + 1]).not.toMatch(/^body=/)
+    }
+  }
+}
+
+function mockRunRestJsonCapture(): unknown[] {
+  const payloads: unknown[] = []
+  runRestMock.mockImplementation(async (args: string[]) => {
+    expectNoRawBodyField(args)
+    const inputIndex = args.indexOf('--input')
+    expect(inputIndex).toBeGreaterThanOrEqual(0)
+    payloads.push(JSON.parse(await readFile(args[inputIndex + 1]!, 'utf8')))
+    return { ok: true, data: { id: 1 } }
+  })
+  return payloads
+}
 
 describe('updateIssueBySlug', () => {
   beforeEach(() => {
@@ -208,11 +237,32 @@ describe('updateIssueBySlug', () => {
       { encoding: 'utf-8', host: 'github.corp.example' }
     )
     expect(runRestMock).toHaveBeenCalledWith(
-      ['-X', 'PATCH', 'repos/acme/widgets/issues/12', '--raw-field', 'title=New title'],
+      ['-X', 'PATCH', 'repos/acme/widgets/issues/12', '--input', expect.any(String)],
       undefined,
       'core',
       { host: 'github.corp.example' }
     )
+  })
+
+  it('sends title and body through --input JSON', async () => {
+    const payloads = mockRunRestJsonCapture()
+
+    await expect(
+      updateIssueBySlug({
+        owner: 'acme',
+        repo: 'widgets',
+        number: 12,
+        updates: { title: 'New title', body: 'Updated body' }
+      })
+    ).resolves.toEqual({ ok: true })
+
+    expect(runRestMock).toHaveBeenCalledWith(
+      ['-X', 'PATCH', 'repos/acme/widgets/issues/12', '--input', expect.any(String)],
+      undefined,
+      'core',
+      { host: 'github.com' }
+    )
+    expect(payloads[0]).toEqual({ title: 'New title', body: 'Updated body' })
   })
 })
 

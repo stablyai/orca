@@ -12,6 +12,7 @@ import {
   validateSlugArgs
 } from './internals'
 import { classifyProjectError, rateLimitedError } from './project-error-classification'
+import { withGhApiJsonInput } from '../gh-api-json-input'
 import type { GitHubProjectMutationResult } from '../../../shared/github/project-result-types'
 import type { UpdateIssueBySlugArgs } from '../../../shared/github/project-request-types'
 
@@ -44,18 +45,20 @@ export async function updateIssueBySlug(
   }
   const { title, body } = args.updates
   if (title !== undefined || body !== undefined) {
-    const patchArgs = ['-X', 'PATCH', base]
+    const payload: Record<string, unknown> = {}
     if (title !== undefined) {
-      patchArgs.push('--raw-field', `title=${title}`)
+      payload.title = title
     }
     if (body !== undefined) {
-      patchArgs.push('--raw-field', `body=${body}`)
+      payload.body = body
     }
-    const result = await runRest<unknown>(
-      patchArgs,
-      undefined,
-      'core',
-      projectGhExecOptions(args.host)
+    const result = await withGhApiJsonInput(payload, (inputArgs) =>
+      runRest<unknown>(
+        ['-X', 'PATCH', base, ...inputArgs],
+        undefined,
+        'core',
+        projectGhExecOptions(args.host)
+      )
     )
     if (!result.ok) {
       return { ok: false, error: result.error }
