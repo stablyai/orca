@@ -24,6 +24,7 @@ import { execCommand, isUnconfirmedSshCommandTermination } from './ssh-relay-dep
 import { isWindowsRemoteHost, type RemoteHostPlatform } from './ssh-remote-platform'
 
 // CI control experiment: comment-only edit to select the SSH e2e lane. No behavior change.
+// Re-pushed after marking the PR ready: pr.yml gates the e2e lane on draft != true.
 export type RelayEndpointVerdict = 'live' | 'unverifiable' | 'exited'
 
 export type RelayEndpointEvidence =
