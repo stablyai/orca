@@ -6,7 +6,7 @@ import {
   getLaunchableWorkItemDraftContent,
   getLinkedWorkItemPromptContext,
   LINKED_CONTEXT_BLOCK_MAX_CHARS,
-  resolveQuickCreateLinkedWorkItemPrompt
+  resolveQuickCreateAgentPrompt
 } from './linked-work-item-context'
 
 const LINEAR_ITEM = {
@@ -180,9 +180,9 @@ describe('getLinkedWorkItemPromptContext', () => {
   })
 })
 
-describe('resolveQuickCreateLinkedWorkItemPrompt', () => {
+describe('resolveQuickCreateAgentPrompt', () => {
   it('drafts the note above the link-only Linear reference', () => {
-    const result = resolveQuickCreateLinkedWorkItemPrompt(
+    const result = resolveQuickCreateAgentPrompt(
       { number: 0, ...LINEAR_ITEM },
       'typed fallback note'
     )
@@ -203,16 +203,13 @@ describe('resolveQuickCreateLinkedWorkItemPrompt', () => {
 
   it('falls back to typed-only note when no identifier or URL is usable', () => {
     expect(
-      resolveQuickCreateLinkedWorkItemPrompt(
-        { provider: 'linear', number: 0, url: '' },
-        '  use this note  '
-      )
+      resolveQuickCreateAgentPrompt({ provider: 'linear', number: 0, url: '' }, '  use this note  ')
     ).toEqual({ prompt: 'use this note', draftPrompt: null })
   })
 
   it('drafts the note above a labeled Linear URL when the identifier is missing', () => {
     expect(
-      resolveQuickCreateLinkedWorkItemPrompt(
+      resolveQuickCreateAgentPrompt(
         { provider: 'linear', number: 0, url: 'https://linear.app/acme/issue/ENG-123/test' },
         'note'
       )
@@ -224,13 +221,47 @@ describe('resolveQuickCreateLinkedWorkItemPrompt', () => {
 
   it('drafts the note above the URL for non-Linear quick creates', () => {
     expect(
-      resolveQuickCreateLinkedWorkItemPrompt(
+      resolveQuickCreateAgentPrompt(
         { number: 42, url: 'https://github.com/acme/repo/issues/42' },
         'note'
       )
     ).toEqual({
       prompt: '',
       draftPrompt: 'note\n\nhttps://github.com/acme/repo/issues/42'
+    })
+  })
+
+  it('submits a typed prompt at launch when nothing is linked', () => {
+    expect(resolveQuickCreateAgentPrompt(null, '', '  ship the parser fix  ')).toEqual({
+      prompt: 'ship the parser fix',
+      draftPrompt: null
+    })
+  })
+
+  it('keeps the workspace note out of a typed prompt when nothing is linked', () => {
+    expect(resolveQuickCreateAgentPrompt(null, 'card note', 'ship the parser fix')).toEqual({
+      prompt: 'ship the parser fix',
+      draftPrompt: null
+    })
+  })
+
+  it('drafts a typed prompt above linked context so the linked prose stays reviewable', () => {
+    const result = resolveQuickCreateAgentPrompt(
+      { number: 42, url: 'https://github.com/acme/repo/issues/42' },
+      'note',
+      'ship the parser fix'
+    )
+
+    expect(result).toEqual({
+      prompt: '',
+      draftPrompt: 'ship the parser fix\n\nnote\n\nhttps://github.com/acme/repo/issues/42'
+    })
+  })
+
+  it('ignores a blank typed prompt', () => {
+    expect(resolveQuickCreateAgentPrompt(null, '', '   ')).toEqual({
+      prompt: '',
+      draftPrompt: null
     })
   })
 })

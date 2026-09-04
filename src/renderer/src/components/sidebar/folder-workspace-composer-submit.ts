@@ -62,6 +62,7 @@ type SubmitFolderWorkspaceCreateParams = {
   linkedWorkItem: LinkedWorkItemSummary | null
   linkedTaskSourceContext?: TaskSourceContext | null
   note: string
+  agentPrompt?: string
   quickAgent: TuiAgent | null
   autoRenameBranchFromWork: boolean | undefined
   agentCmdOverrides: Record<string, string> | undefined
@@ -84,6 +85,7 @@ export async function submitFolderWorkspaceCreate({
   linkedWorkItem,
   linkedTaskSourceContext,
   note,
+  agentPrompt = '',
   quickAgent,
   autoRenameBranchFromWork,
   agentCmdOverrides,
@@ -112,12 +114,16 @@ export async function submitFolderWorkspaceCreate({
     isRemote: launchIsRemote,
     terminalWindowsShell
   })
+  // Why: folder workspaces have always launched the note as the agent's first
+  // message; a typed prompt takes over that role when the user writes one.
+  const launchPrompt = agentPrompt.trim() || note
   const startupPlan =
     quickAgent && linkedWorkItem
       ? buildFolderWorkspaceLinkedStartupPlan({
           agent: quickAgent,
           linkedWorkItem,
           note,
+          agentPrompt,
           agentCmdOverrides,
           agentArgs,
           agentEnv,
@@ -129,7 +135,7 @@ export async function submitFolderWorkspaceCreate({
       : quickAgent
         ? buildAgentStartupPlan({
             agent: quickAgent,
-            prompt: note,
+            prompt: launchPrompt,
             cmdOverrides: agentCmdOverrides ?? {},
             agentArgs,
             agentEnv,
@@ -143,7 +149,9 @@ export async function submitFolderWorkspaceCreate({
   // Why: the argv-prefill plan carries the draft inside `launchCommand`, so
   // `startupPlan.draftPrompt` alone can't tell whether this launch has one.
   const launchDraftPrompt =
-    quickAgent && linkedWorkItem ? resolveFolderWorkspaceLaunchDraft(linkedWorkItem, note) : null
+    quickAgent && linkedWorkItem
+      ? resolveFolderWorkspaceLaunchDraft(linkedWorkItem, note, agentPrompt)
+      : null
   const agentLaunchRoute = quickAgent
     ? resolveAgentLaunchRoute({
         agent: quickAgent,
@@ -155,7 +163,7 @@ export async function submitFolderWorkspaceCreate({
         hostCapabilities: readLocalRuntimeCapabilities(),
         workspaceKind: 'folder',
         promptDelivery: launchDraftPrompt ? 'draft' : 'auto-submit',
-        launchText: launchDraftPrompt ?? note,
+        launchText: launchDraftPrompt ?? launchPrompt,
         nativeChatTranscriptIsLocalReadable: !launchIsRemote,
         requiresTuiLaunchCustomization:
           hasExplicitTuiAgentArgs(quickAgent, agentArgs) ||
@@ -171,7 +179,7 @@ export async function submitFolderWorkspaceCreate({
     !name.trim() &&
     !linkedWorkItem &&
     Boolean(quickAgent) &&
-    note.trim().length > 0
+    launchPrompt.trim().length > 0
 
   const workspace = await createFolderWorkspace({
     projectGroupId: projectGroup.id,

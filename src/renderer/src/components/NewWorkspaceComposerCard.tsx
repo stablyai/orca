@@ -27,6 +27,7 @@ import { NewWorkspaceComposerAdvancedSection } from './new-workspace/NewWorkspac
 import { NewWorkspaceComposerAgentSection } from './new-workspace/NewWorkspaceComposerAgentSection'
 import { NewWorkspaceComposerFooter } from './new-workspace/NewWorkspaceComposerFooter'
 import { NewWorkspaceComposerNameSection } from './new-workspace/NewWorkspaceComposerNameSection'
+import { NewWorkspaceComposerPromptSection } from './new-workspace/NewWorkspaceComposerPromptSection'
 import { NewWorkspaceComposerProjectSection } from './new-workspace/NewWorkspaceComposerProjectSection'
 import {
   EMPTY_EPHEMERAL_VM_RECIPES,
@@ -321,6 +322,7 @@ export default function NewWorkspaceComposerCard(
           selectedProjectName={selectedProjectName}
         />
         <NewWorkspaceComposerNameSection {...props} onNamePlainEnter={handleNamePlainEnter} />
+        <NewWorkspaceComposerPromptSection {...props} />
         <NewWorkspaceComposerAgentSection
           {...props}
           visibleQuickAgents={visibleQuickAgents}
