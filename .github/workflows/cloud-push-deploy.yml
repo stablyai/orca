@@ -1,0 +1,220 @@
+name: Deploy Push Gateway Production
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirmation:
+        description: Enter DEPLOY_PUSH_GATEWAY to shift production traffic
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  id-token: write
+
+# The gateway applies its own schema at startup against the shared Cloud SQL instance, so a
+# deploy is a connection-budget rollout and belongs in the same serialized group as the relay.
+concurrency:
+  group: production-cloud-sql-rollout
+  cancel-in-progress: false
+
+defaults:
+  run:
+    working-directory: cloud
+
+jobs:
+  deploy:
+    if: >-
+      ${{ vars.ORCA_CLOUD_OPERATIONS_ENABLED == 'true' &&
+      github.ref == 'refs/heads/main' }}
+    runs-on: blacksmith-2vcpu-ubuntu-2204
+    environment: production
+    env:
+      GCP_PROJECT_ID: onorca-cloud
+      GCP_REGION: ${{ vars.PRODUCTION_GCP_REGION }}
+      SERVICE_NAME: orca-cloud-push
+      REPOSITORY_ID: orca-cloud
+      IMAGE_NAME: push
+      PUSH_ORIGIN: https://push.onorca.dev
+      PUSH_RUNTIME_SERVICE_ACCOUNT: orca-cloud-push@onorca-cloud.iam.gserviceaccount.com
+      # Ceiling the tagged candidate, matching push_max_instances in
+      # environments/production.tfvars. A tagged revision is directly addressable and so sits
+      # outside the service-wide cap: without this the candidate and the serving revision could
+      # each reach the ceiling and double the gateway's Cloud SQL draw during the probe window.
+      # Terraform still owns the value; this only fails a deploy that would exceed it.
+      PUSH_MAX_INSTANCES: 4
+      CONFIRMATION: ${{ inputs.confirmation }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Require the explicit deploy confirmation
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "${CONFIRMATION}" = DEPLOY_PUSH_GATEWAY
+
+      - uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ vars.PRODUCTION_GCP_RELAY_DEPLOY_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ vars.PRODUCTION_GCP_RELAY_DEPLOY_SERVICE_ACCOUNT }}
+
+      - uses: google-github-actions/setup-gcloud@v2
+
+      # Held across the deploy, not just a separate schema step: the gateway opens its pool and
+      # applies its schema while the new revision starts, so the revision is the schema step.
+      - uses: ./.github/actions/cloud-sql-rollout-lease
+        with:
+          bucket: onorca-cloud-terraform-state
+          object: terraform/state/cloud-sql-rollout/production.lock
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Configure Docker auth
+        run: gcloud auth configure-docker "${GCP_REGION}-docker.pkg.dev" --quiet
+
+      - name: Build and publish the immutable gateway image
+        shell: bash
+        run: |
+          set -euo pipefail
+          image_tag="${GCP_REGION}-docker.pkg.dev/${GCP_PROJECT_ID}/${REPOSITORY_ID}/${IMAGE_NAME}:sha-${GITHUB_SHA}"
+          docker build -f apps/push/Dockerfile -t "${image_tag}" .
+          docker push "${image_tag}"
+          digest="$(gcloud artifacts docker images describe "${image_tag}" \
+            --format='value(image_summary.digest)')"
+          [[ "${digest}" =~ ^sha256:[a-f0-9]{64}$ ]]
+          echo "IMAGE=${GCP_REGION}-docker.pkg.dev/${GCP_PROJECT_ID}/${REPOSITORY_ID}/${IMAGE_NAME}@${digest}" \
+            >> "${GITHUB_ENV}"
+          echo "IMAGE_DIGEST=${digest}" >> "${GITHUB_ENV}"
+
+      - name: Record the serving revision before the rollout
+        shell: bash
+        run: |
+          set -euo pipefail
+          serving="$(gcloud run services describe "${SERVICE_NAME}" \
+            --project "${GCP_PROJECT_ID}" --region "${GCP_REGION}" --format=json \
+            | jq -r '[.status.traffic[] | select((.percent // 0) > 0)]
+                     | if length == 1 and .[0].percent == 100 then .[0].revisionName else empty end')"
+          test -n "${serving}"
+          echo "ROLLBACK_REVISION=${serving}" >> "${GITHUB_ENV}"
+
+      # No traffic and a per-revision tag: the candidate boots, applies schema, and is probed on
+      # its own URL while every phone and desktop still reaches the previous revision.
+      - name: Deploy the candidate revision with no traffic
+        shell: bash
+        run: |
+          set -euo pipefail
+          tag="c${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          gcloud run deploy "${SERVICE_NAME}" \
+            --project "${GCP_PROJECT_ID}" \
+            --region "${GCP_REGION}" \
+            --image "${IMAGE}" \
+            --tag "${tag}" \
+            --no-traffic \
+            --max-instances "${PUSH_MAX_INSTANCES}" \
+            --quiet
+          candidate="$(gcloud run services describe "${SERVICE_NAME}" \
+            --project "${GCP_PROJECT_ID}" --region "${GCP_REGION}" --format=json \
+            | jq -er --arg tag "${tag}" \
+              '[.status.traffic[] | select(.tag == $tag)]
+               | if length == 1 then .[0] else error("tagged candidate is not unique") end')"
+          echo "CANDIDATE_TAG=${tag}" >> "${GITHUB_ENV}"
+          echo "CANDIDATE_REVISION=$(jq -r '.revisionName' <<< "${candidate}")" >> "${GITHUB_ENV}"
+          echo "CANDIDATE_URL=$(jq -r '.url' <<< "${candidate}")" >> "${GITHUB_ENV}"
+
+      - name: Require the candidate to serve the exact image
+        shell: bash
+        run: |
+          set -euo pipefail
+          served="$(gcloud run revisions describe "${CANDIDATE_REVISION}" \
+            --project "${GCP_PROJECT_ID}" --region "${GCP_REGION}" \
+            --format='value(spec.containers[0].image)')"
+          test "${served}" = "${IMAGE}"
+          test "${CANDIDATE_REVISION}" != "${ROLLBACK_REVISION}"
+
+      - name: Probe the candidate readiness endpoint
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ "${CANDIDATE_URL}" =~ ^https://[^/]+$ ]]
+          for attempt in $(seq 1 30); do
+            code="$(curl -sS -o "${RUNNER_TEMP}/push-ready.json" -w '%{http_code}' \
+              --max-time 10 "${CANDIDATE_URL}/ready" || true)"
+            if test "${code}" = 200; then
+              jq -e . < "${RUNNER_TEMP}/push-ready.json" > /dev/null
+              echo "candidate ${CANDIDATE_REVISION} is ready after ${attempt} attempt(s)"
+              exit 0
+            fi
+            echo "attempt ${attempt}: /ready returned ${code}"
+            sleep 5
+          done
+          echo "candidate ${CANDIDATE_REVISION} never reported ready" >&2
+          exit 1
+
+      # Why: a gateway that boots and answers /ready can still be unable to send. This proves the
+      # runtime account's FCM grant end to end without delivering anything: validate_only stops
+      # Google before any push, and the deliberately invalid token means a healthy credential
+      # answers INVALID_ARGUMENT. PERMISSION_DENIED is the failure this step exists to catch.
+      - name: Prove the runtime identity can reach FCM
+        shell: bash
+        run: |
+          set -euo pipefail
+          token="$(gcloud auth print-access-token \
+            --impersonate-service-account "${PUSH_RUNTIME_SERVICE_ACCOUNT}")"
+          test -n "${token}"
+          body='{"validate_only":true,"message":{"token":"orca-push-deploy-probe-invalid-token","notification":{"title":"Orca","body":"deploy probe"}}}'
+          code="$(curl -sS -o "${RUNNER_TEMP}/push-fcm.json" -w '%{http_code}' --max-time 20 \
+            -X POST "https://fcm.googleapis.com/v1/projects/${GCP_PROJECT_ID}/messages:send" \
+            -H "Authorization: Bearer ${token}" \
+            -H 'Content-Type: application/json' \
+            --data "${body}" || true)"
+          status="$(jq -r '.error.status // empty' < "${RUNNER_TEMP}/push-fcm.json")"
+          echo "FCM validate-only send returned HTTP ${code} status ${status:-OK}"
+          if test "${status}" = PERMISSION_DENIED || test "${code}" = 401 || test "${code}" = 403; then
+            echo "the push runtime identity cannot send through FCM" >&2
+            exit 1
+          fi
+          test "${status}" = INVALID_ARGUMENT
+
+      - name: Shift all traffic to the verified candidate
+        shell: bash
+        run: |
+          set -euo pipefail
+          gcloud run services update-traffic "${SERVICE_NAME}" \
+            --project "${GCP_PROJECT_ID}" \
+            --region "${GCP_REGION}" \
+            --to-revisions "${CANDIDATE_REVISION}=100" \
+            --quiet
+          serving="$(gcloud run services describe "${SERVICE_NAME}" \
+            --project "${GCP_PROJECT_ID}" --region "${GCP_REGION}" --format=json \
+            | jq -r '[.status.traffic[] | select((.percent // 0) > 0)]
+                     | if length == 1 and .[0].percent == 100 then .[0].revisionName else empty end')"
+          test "${serving}" = "${CANDIDATE_REVISION}"
+
+      - name: Verify the public origin after the shift
+        shell: bash
+        run: |
+          set -euo pipefail
+          code="$(curl -sS -o /dev/null -w '%{http_code}' --max-time 10 "${PUSH_ORIGIN}/ready")"
+          test "${code}" = 200
+          {
+            echo '### Push gateway deployed'
+            echo
+            echo "Revision: \`${CANDIDATE_REVISION}\`"
+            echo
+            echo "Image: \`${IMAGE_DIGEST}\`"
+            echo
+            echo "Rollback: \`gcloud run services update-traffic ${SERVICE_NAME}" \
+              "--region ${GCP_REGION} --to-revisions ${ROLLBACK_REVISION}=100\`"
+          } >> "${GITHUB_STEP_SUMMARY}"
+
+      - name: Drop the candidate traffic tag
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "${CANDIDATE_TAG:-}" || exit 0
+          gcloud run services update-traffic "${SERVICE_NAME}" \
+            --project "${GCP_PROJECT_ID}" \
+            --region "${GCP_REGION}" \
+            --remove-tags "${CANDIDATE_TAG}" \
+            --quiet

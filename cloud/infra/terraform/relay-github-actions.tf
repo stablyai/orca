@@ -19,7 +19,11 @@ locals {
     "deploy-relay-production-multi-target.yml",
     "deploy-relay-production.yml",
     "operate-relay-asia-admission.yml",
-    "publish-relay-production.yml"
+    "publish-relay-production.yml",
+    # The push gateway deploy runs as this account because the Cloud SQL rollout lease grant is
+    # foundation-owned and already names it; a dedicated identity could not take that lease.
+    # Its authority over the gateway is three bindings in push-gateway.tf and nothing more.
+    "push-deploy.yml"
   ]
   github_production_relay_capacity_workflow_file     = "deploy-relay-production-capacity.yml"
   github_production_relay_capacity_job_workflow_file = "deploy-relay-production-capacity-job.yml"

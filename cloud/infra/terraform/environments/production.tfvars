@@ -408,3 +408,10 @@ relay_region_rehome_source_cell_ids = [
 # Slack #orca-relay-alerts, created out of band on 2026-08-05. Declared here because an apply
 # was otherwise going to strip it from every policy, leaving the alerts firing at nobody.
 relay_alert_notification_channels = ["projects/onorca-cloud/notificationChannels/4879431412695417284"]
+
+# Mobile push gateway. Production is the only environment that runs one; the runtime account,
+# the three Apple secrets, and their accessor bindings already exist and are imported once
+# (see docs/push-gateway.md).
+push_gateway_enabled       = true
+push_base_url              = "https://push.onorca.dev"
+manage_push_domain_mapping = true

@@ -81,3 +81,7 @@ relay_gce_cells = {
 }
 
 relay_region_rehome_source_cell_ids = ["staging-gce-c2", "staging-gce-c3"]
+
+# No staging push gateway by decision (mobile-push-contract.md, "Non-goals"). Stated rather than
+# left to the default so a future staging gateway is one obvious edit.
+push_gateway_enabled = false

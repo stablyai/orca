@@ -400,3 +400,31 @@ after checkout and authentication, before package installation, revision checks,
 Their typed confirmations are `PAUSE_REGIONAL_REHOMING` and `DISABLE_REGIONAL_REHOMING`. Keep the
 default 3,600,000 ms drain grace so existing splices can finish. The job summary contains only fresh
 aggregate active, receipt, registration, completion, and abort counts.
+
+## Mobile push gateway
+
+`Deploy Push Gateway Production` (`.github/workflows/cloud-push-deploy.yml`) is the deploy path
+for `orca-cloud-push`, the mobile push gateway. It is the one `cloud-*` workflow that is not a
+relay operation, and it is here because it shares this repository's Cloud SQL instance, its
+Artifact Registry repository, and its rollout lease.
+
+It needs **no new GitHub environment variable.** It authenticates as the shared production deploy
+identity through the already-published `PRODUCTION_GCP_RELAY_DEPLOY_WORKLOAD_IDENTITY_PROVIDER`
+and `PRODUCTION_GCP_RELAY_DEPLOY_SERVICE_ACCOUNT`, and reads `PRODUCTION_GCP_REGION` like the
+rest. That account holds the foundation-owned Cloud SQL rollout lease grant, which a dedicated
+identity could not be given from this root. Its authority over the gateway is three bindings in
+`infra/terraform/push-gateway.tf` and nothing wider: Cloud Run developer on that one service, and
+service-account user plus token creator on the gateway's runtime account.
+
+The provider's workflow allowlist gained exactly one entry, `cloud-push-deploy.yml`, on `main` in
+the `production` environment. That entry is required: the allowlist compares complete workflow
+refs by equality, so the `cloud-` filename prefix alone does not admit a new file.
+
+The run takes the production rollout lease and holds it across the deploy, because the gateway
+applies its schema while the new revision starts. It builds `apps/push/Dockerfile`, deploys with
+`--no-traffic` behind a per-run traffic tag, probes the candidate's own `/ready`, proves the
+runtime identity can reach FCM with a validate-only send, and only then shifts 100% of traffic.
+There is no staging gateway, so there is no staging counterpart to run first.
+
+Full runbook, including the APNs key rotation and the DNS record the `stablyai/orca-cloud` apps
+root still owes, is in `docs/push-gateway.md`.

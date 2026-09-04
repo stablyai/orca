@@ -484,3 +484,90 @@ variable "relay_gce_cloud_sql_proxy_image" {
     error_message = "relay_gce_cloud_sql_proxy_image must be pinned by sha256 digest."
   }
 }
+
+# --- Mobile push gateway ---------------------------------------------------------------------
+# There is no staging push gateway by decision, so this defaults false and only
+# environments/production.tfvars turns it on. Everything in push-gateway.tf is behind it.
+variable "push_gateway_enabled" {
+  type        = bool
+  description = "Create the Orca mobile push gateway, its database, secrets, and identity."
+  default     = false
+}
+
+variable "push_base_url" {
+  type        = string
+  description = "Public TLS origin of the mobile push gateway."
+  default     = "https://push.onorca.dev"
+
+  validation {
+    condition     = can(regex("^https://[^/]+$", var.push_base_url))
+    error_message = "push_base_url must be an HTTPS origin with no path."
+  }
+}
+
+variable "push_cloud_run_service_name" {
+  type        = string
+  description = "Cloud Run service name for the mobile push gateway."
+  default     = "orca-cloud-push"
+}
+
+variable "push_cloud_run_image" {
+  type        = string
+  description = "Initial image for the Terraform-created push gateway service; deploys own it after."
+  default     = "us-docker.pkg.dev/cloudrun/container/hello"
+}
+
+variable "push_cloud_run_cpu" {
+  type        = string
+  description = "CPU limit for the push gateway container."
+  default     = "1"
+}
+
+variable "push_cloud_run_memory" {
+  type        = string
+  description = "Memory limit for the push gateway container."
+  default     = "512Mi"
+}
+
+# Why: a cold start would delay a notification past the point where it is worth showing, and the
+# 3 s coalescing window lives in instance memory, so the floor is one warm instance.
+variable "push_min_instances" {
+  type        = number
+  description = "Minimum instances for the push gateway."
+  default     = 1
+}
+
+variable "push_max_instances" {
+  type        = number
+  description = "Maximum instances for the push gateway."
+  default     = 4
+
+  validation {
+    condition     = var.push_max_instances >= 1
+    error_message = "The push gateway needs at least one instance."
+  }
+}
+
+variable "push_concurrency" {
+  type        = number
+  description = "Cloud Run concurrency for short-lived push gateway HTTP requests."
+  default     = 80
+}
+
+variable "push_request_timeout_seconds" {
+  type        = number
+  description = "Cloud Run timeout for push gateway requests; every route is short-lived."
+  default     = 30
+}
+
+variable "push_fcm_project_id" {
+  type        = string
+  description = "Firebase project for FCM V1 sends; empty uses project_id."
+  default     = ""
+}
+
+variable "manage_push_domain_mapping" {
+  type        = bool
+  description = "Manage the push gateway Cloud Run domain mapping; the DNS record stays in the apps root."
+  default     = false
+}
