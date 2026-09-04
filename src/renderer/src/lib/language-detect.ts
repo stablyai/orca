@@ -43,6 +43,7 @@ const EXT_TO_LANGUAGE: Record<string, string> = {
   // lookup below covers the compound form, so the single entry is enough.
   '.liquid': 'liquid',
   '.xml': 'xml',
+  '.xaml': 'xml',
   '.svg': 'xml',
   '.py': 'python',
   '.rs': 'rust',
