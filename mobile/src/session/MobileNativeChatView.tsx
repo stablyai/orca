@@ -8,8 +8,8 @@ import {
   Text,
   View
 } from 'react-native'
-import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { GestureDetector, GestureHandlerRootView } from 'react-native-gesture-handler'
+import Animated from 'react-native-reanimated'
 import { ArrowDown, ChevronsDownUp, ChevronsUpDown, Square } from 'lucide-react-native'
 import type { AskAnswerSelection, AskPrompt } from '../../../src/shared/native-chat-ask'
 import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
@@ -21,6 +21,11 @@ import {
   type MobileNativeChatPendingItem
 } from './mobile-native-chat-render-data'
 import { useMobileNativeChatPinchGesture } from './use-mobile-native-chat-pinch-gesture'
+import { useMobileNativeChatKeyboardLift } from './use-mobile-native-chat-keyboard-lift'
+import {
+  useSettledInputLockReason,
+  type MobileNativeChatInputLockReason
+} from './use-mobile-native-chat-input-lock'
 import { MobileAgentWorkingIndicator } from './MobileAgentWorkingIndicator'
 import type { PendingNativeChatImage } from './mobile-native-chat-image-attachment'
 import { MobileNativeChatComposer } from './MobileNativeChatComposer'
@@ -33,11 +38,7 @@ import { MobileNativeChatQuestion } from './MobileNativeChatQuestion'
 import { mobileChatQuestionKey, type MobileChatQuestion } from './mobile-native-chat-question'
 import type { MobileNativeChatStatus } from './use-mobile-native-chat-session'
 
-const INPUT_LOCK_SETTLE_MS = 600
-
-/** Why the composer input is locked: the transport is disconnected, or the
- *  terminal subscription has not acknowledged its input lease yet. */
-export type MobileNativeChatInputLockReason = 'disconnected' | 'waiting'
+export type { MobileNativeChatInputLockReason }
 
 type Props = {
   /** Raw transcript, only for telling "still loading" from "loaded and empty". */
@@ -166,12 +167,9 @@ export function MobileNativeChatView({
   onOpenFile,
   keyboardInset = 0
 }: Props): React.JSX.Element {
-  const insets = useSafeAreaInsets()
   const listRef = useRef<FlatList<NativeChatMessage>>(null)
   const [toolsExpanded, setToolsExpanded] = useState(false)
-  // Lift the composer clear of the keyboard, plus the bottom safe-area so it
-  // never sits under the home indicator / nav bar (mirrors the terminal dock).
-  const bottomPad = keyboardInset > 0 ? keyboardInset + insets.bottom : insets.bottom
+  const { dismissMode, padStyle } = useMobileNativeChatKeyboardLift(keyboardInset)
   const [atBottom, setAtBottom] = useState(true)
   const sendScrollTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const { fontScale, pinchGesture } = useMobileNativeChatPinchGesture()
@@ -199,12 +197,17 @@ export function MobileNativeChatView({
     [messages, folded, streaming, pending, imagePreviewsByMessageId]
   )
 
-  // Follow the tail as the conversation grows and keep the newest message above
-  // the keyboard when it opens — but only when already pinned to the bottom, so
-  // we don't yank the user away while they read history. (Also fires on keyboard
-  // close, which is harmless while atBottom.)
+  // Follow growth and keyboard opening only while the user remains at the tail.
+  const previousKeyboardInset = useRef(keyboardInset)
   useEffect(() => {
-    if (data.length === 0 || !atBottom) {
+    // A keyboard reaching zero is usually the user's own downward swipe, and the
+    // viewport growing behind it can hold `atBottom` true — so following the tail
+    // here would undo the scroll they just made. Only a full close counts, so a
+    // merely shorter keyboard still follows. `onContentSizeChange` is untouched:
+    // it fires on content, not viewport, so it cannot re-trigger this.
+    const keyboardLeaving = keyboardInset === 0 && previousKeyboardInset.current > 0
+    previousKeyboardInset.current = keyboardInset
+    if (data.length === 0 || !atBottom || keyboardLeaving) {
       return
     }
     const t = setTimeout(() => listRef.current?.scrollToEnd({ animated: true }), 60)
@@ -269,21 +272,10 @@ export function MobileNativeChatView({
   const emptyState = mobileNativeChatEmptyState(status, agent ?? null, error)
   const showLoading = status === 'loading' && messages.length === 0
 
-  // A dead PTY emits subscribed→end; settle both edges so its false lease cannot flash the composer enabled.
-  const rawLockReason = inputLockReason ?? null
-  const rawLockHeld = rawLockReason !== null
-  const [lockHeld, setLockHeld] = useState(false)
-  useEffect(() => {
-    if (rawLockHeld === lockHeld) {
-      return
-    }
-    const timer = setTimeout(() => setLockHeld(rawLockHeld), INPUT_LOCK_SETTLE_MS)
-    return () => clearTimeout(timer)
-  }, [lockHeld, rawLockHeld])
-  const lockReason = lockHeld ? (rawLockReason ?? 'waiting') : null
+  const lockReason = useSettledInputLockReason(inputLockReason ?? null)
 
   return (
-    <View style={[styles.root, { paddingBottom: bottomPad }]}>
+    <Animated.View style={[styles.root, padStyle]}>
       {showLoading ? (
         <View style={styles.center}>
           <ActivityIndicator color={colors.textSecondary} />
@@ -300,6 +292,7 @@ export function MobileNativeChatView({
               // Let link/file taps land while the composer keyboard is up
               // instead of being swallowed by the dismiss gesture.
               keyboardShouldPersistTaps="handled"
+              keyboardDismissMode={dismissMode}
               onScroll={onScroll}
               scrollEventThrottle={32}
               onContentSizeChange={() => {
@@ -464,6 +457,6 @@ export function MobileNativeChatView({
         filePaths={filePaths}
         onNeedFiles={onNeedFiles}
       />
-    </View>
+    </Animated.View>
   )
 }
