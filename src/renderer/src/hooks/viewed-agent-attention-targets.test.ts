@@ -6,7 +6,7 @@ import {
   computeViewedAgentCompletionPaneKey,
   resolveAutoAckTabTargets,
   shouldClearViewedAgentWorktreeUnread
-} from './useAutoAckViewedAgent'
+} from './viewed-agent-attention-targets'
 import { createTestStore, makeTab } from '../store/slices/store-test-helpers'
 import { selectFloatingWorkspaceHasUnread } from '../store/selectors'
 import type { RetainedAgentEntry } from '../store/slices/agent-status'
@@ -386,13 +386,21 @@ describe('shouldClearViewedAgentWorktreeUnread', () => {
 
 describe('resolveAutoAckTabTargets', () => {
   const FLOATING_TAB_ID = 'tab-floating'
+  const GRID_TAB_ID = 'tab-grid'
   const baseState = {
     activeView: 'terminal',
     activeTabId: 'tab-1',
     activeWorktreeId: 'wt-1',
+    activeSessionGridTabId: null,
+    sessionsGridFilter: 'all' as const,
+    sessionsGridHiddenTabIds: [] as string[],
     activeTabIdByWorktree: {
       'wt-1': 'tab-1',
       [FLOATING_TERMINAL_WORKTREE_ID]: FLOATING_TAB_ID
+    },
+    tabsByWorktree: {
+      'wt-1': [makeTab({ id: 'tab-1', worktreeId: 'wt-1' })],
+      'wt-2': [makeTab({ id: GRID_TAB_ID, worktreeId: 'wt-2' })]
     }
   }
 
@@ -434,6 +442,92 @@ describe('resolveAutoAckTabTargets', () => {
         { floatingPanelVisible: true }
       )
     ).toEqual([{ tabId: FLOATING_TAB_ID, worktreeId: 'wt-1' }])
+  })
+
+  // The grid lists every workspace, so the selected card's worktree is the one that owns
+  // the tab — not `activeWorktreeId`, which is whatever the sidebar last pointed at.
+  it('scans the selected grid card in the sessions view, under its own worktree', () => {
+    expect(
+      resolveAutoAckTabTargets(
+        { ...baseState, activeView: 'sessions', activeSessionGridTabId: GRID_TAB_ID },
+        { floatingPanelVisible: false }
+      )
+    ).toEqual([{ tabId: GRID_TAB_ID, worktreeId: 'wt-2' }])
+  })
+
+  // Opening the grid must not ack anything on its own: nine cards on screen are nine
+  // turns across five surfaces, and none of them has been looked at yet.
+  it('scans nothing in the sessions view until a card is selected', () => {
+    expect(
+      resolveAutoAckTabTargets(
+        { ...baseState, activeView: 'sessions', activeSessionGridTabId: null },
+        { floatingPanelVisible: false }
+      )
+    ).toEqual([])
+  })
+
+  it('leaves the grid selection alone while the terminal view is on screen', () => {
+    expect(
+      resolveAutoAckTabTargets(
+        { ...baseState, activeSessionGridTabId: GRID_TAB_ID },
+        { floatingPanelVisible: false }
+      )
+    ).toEqual([{ tabId: 'tab-1', worktreeId: 'wt-1' }])
+  })
+
+  /**
+   * A sighting is a card the grid is SHOWING, not an id the store still remembers. Being in
+   * `tabsByWorktree` is not enough: the card can have been hidden, filtered out, or closed
+   * since it was picked, and acking it there clears its signal on five surfaces for a turn
+   * nobody saw. This is membership, not viewport awareness — scroll position is deliberately
+   * not consulted.
+   */
+  const gridState = { ...baseState, activeView: 'sessions', activeSessionGridTabId: GRID_TAB_ID }
+
+  it('skips a selection whose card the workspace filter has taken off the board', () => {
+    expect(
+      resolveAutoAckTabTargets(
+        { ...gridState, sessionsGridFilter: 'wt-1' },
+        { floatingPanelVisible: false }
+      )
+    ).toEqual([])
+  })
+
+  it('scans it again under a workspace filter that does show it', () => {
+    expect(
+      resolveAutoAckTabTargets(
+        { ...gridState, sessionsGridFilter: 'wt-2' },
+        { floatingPanelVisible: false }
+      )
+    ).toEqual([{ tabId: GRID_TAB_ID, worktreeId: 'wt-2' }])
+  })
+
+  // A workspace filter naming somewhere with no sessions is not a filter the grid applies.
+  it('ignores a workspace filter no open session answers to', () => {
+    expect(
+      resolveAutoAckTabTargets(
+        { ...gridState, sessionsGridFilter: 'wt-gone' },
+        { floatingPanelVisible: false }
+      )
+    ).toEqual([{ tabId: GRID_TAB_ID, worktreeId: 'wt-2' }])
+  })
+
+  it('skips a selection the user hid from the grid', () => {
+    expect(
+      resolveAutoAckTabTargets(
+        { ...gridState, sessionsGridHiddenTabIds: [GRID_TAB_ID] },
+        { floatingPanelVisible: false }
+      )
+    ).toEqual([])
+  })
+
+  it('skips a selection whose tab has since been closed', () => {
+    expect(
+      resolveAutoAckTabTargets(
+        { ...gridState, tabsByWorktree: { 'wt-1': baseState.tabsByWorktree['wt-1'] } },
+        { floatingPanelVisible: false }
+      )
+    ).toEqual([])
   })
 })
 
