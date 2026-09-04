@@ -15,6 +15,8 @@ export class TerminalContextualShapingAddon implements ITerminalAddon {
   private terminal: Terminal | null = null
   private joinerId: number | null = null
 
+  /** Register the whole-word joiner on the terminal and refresh visible rows
+   *  so already-rendered runs pick up word-dependent shaping immediately. */
   activate(terminal: Terminal): void {
     this.terminal = terminal
     this.joinerId = terminal.registerCharacterJoiner((text) => {
@@ -32,6 +34,8 @@ export class TerminalContextualShapingAddon implements ITerminalAddon {
     terminal.refresh(0, terminal.rows - 1)
   }
 
+  /** Deregister the joiner and drop the terminal reference. Safe to call
+   *  twice, and safe when the terminal is already gone. */
   dispose(): void {
     if (this.joinerId !== null) {
       try {

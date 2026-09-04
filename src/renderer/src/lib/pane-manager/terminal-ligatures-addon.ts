@@ -97,6 +97,8 @@ function createCachedCharacterJoiner(
  *  Active TUIs repaint mostly unchanged rows, while the upstream fallback
  *  matcher otherwise retries every known ligature at every character. */
 export class TerminalLigaturesAddon extends LigaturesAddon {
+  /** Activate the addon through a proxy that hands every registered character
+   *  joiner its own bounded row-text cache (see LigatureRangeCache). */
   override activate(terminal: Terminal): void {
     // Why one cache per joiner (not one shared cache): the cache is keyed only
     // by row text, so a shared instance made one joiner's cached result

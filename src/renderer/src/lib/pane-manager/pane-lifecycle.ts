@@ -140,14 +140,19 @@ export function attachLigatures(pane: ManagedPaneInternal): void {
   if (pane.ligaturesAddon) {
     return
   }
+  // Hoisted so the failure path can dispose addons that loaded before the
+  // failure: a half-attached pair leaves an active character joiner on the
+  // terminal, and a retry would then stack a duplicate joiner.
+  let ligaturesAddon: TerminalLigaturesAddon | null = null
+  let contextualShapingAddon: TerminalContextualShapingAddon | null = null
   try {
-    const ligaturesAddon = new TerminalLigaturesAddon()
+    ligaturesAddon = new TerminalLigaturesAddon()
     pane.terminal.loadAddon(ligaturesAddon)
     pane.ligaturesAddon = ligaturesAddon
     // Why: Fast-family fonts pick word-initial glyphs from the whole word, so
     // their letter runs need a whole-word joiner; rides the ligature lifecycle
     // so both toggle from a single place.
-    const contextualShapingAddon = new TerminalContextualShapingAddon()
+    contextualShapingAddon = new TerminalContextualShapingAddon()
     pane.terminal.loadAddon(contextualShapingAddon)
     pane.contextualShapingAddon = contextualShapingAddon
     // Why: ligatures can be enabled after rows already rendered, especially
@@ -163,6 +168,19 @@ export function attachLigatures(pane: ManagedPaneInternal): void {
     rebuildAttachedWebgl(pane)
   } catch (err) {
     console.warn('[terminal] ligatures addon failed to attach for pane', pane.id, err)
+    // Roll back in reverse registration order: if the ligatures addon loaded
+    // but the shaping load failed, the shaping joiner is already live on the
+    // terminal and an un-disposed joiner survives until pane dispose.
+    try {
+      contextualShapingAddon?.dispose()
+    } catch {
+      /* ignore */
+    }
+    try {
+      ligaturesAddon?.dispose()
+    } catch {
+      /* ignore */
+    }
     pane.ligaturesAddon = null
     pane.contextualShapingAddon = null
   }
