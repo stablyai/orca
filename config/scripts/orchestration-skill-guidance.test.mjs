@@ -24,6 +24,38 @@ function getSection(markdown, heading) {
   return match?.[1] ?? ''
 }
 
+function getBashCodeBlock(markdown, marker) {
+  const codeBlock = [...markdown.matchAll(/```bash\r?\n([\s\S]*?)\r?\n```/g)].find(([, content]) =>
+    content.includes(marker)
+  )?.[1]
+
+  expect(codeBlock).toBeDefined()
+
+  return codeBlock ?? ''
+}
+
+function getOrchestrationCommandLines(codeBlock) {
+  return codeBlock
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter((line) => line.startsWith('orca orchestration '))
+}
+
+function getWorkerStartCommandLines(codeBlock) {
+  return getOrchestrationCommandLines(codeBlock).filter((line) =>
+    line.startsWith('orca orchestration worker-start ')
+  )
+}
+
+function expectDefaultWorkerStartCommands(codeBlock, expectedCommands) {
+  const commands = getWorkerStartCommandLines(codeBlock)
+
+  expect(commands).not.toEqual(
+    expect.arrayContaining([expect.stringMatching(/\s--(?:agent|model|effort)(?:\s|$)/)])
+  )
+  expect(commands).toEqual(expectedCommands)
+}
+
 describe('orchestration skill guidance', () => {
   it('keeps external browser routing at the OS/page boundary', () => {
     const description = readFileSync(guidePath, 'utf8').replace(/\s+/gu, ' ')
@@ -130,7 +162,13 @@ describe('orchestration skill guidance', () => {
       'never base it on the current feature branch unless the user explicitly asks'
     )
     expect(skill).toContain(
-      'orca worktree create --name <task-name> --no-parent --agent codex --prompt'
+      'orca worktree create --name <task-name> --no-parent --agent <agent> --prompt'
+    )
+    expect(fullHandoffs).toContain(
+      'Direct `worktree create` and `terminal create` handoffs do not use `worker-start`, so Settings > Orchestration worker defaults are not injected'
+    )
+    expect(fullHandoffs).toContain(
+      "pass the user's requested agent explicitly, or ask when none is specified."
     )
     expect(fullHandoffs).toContain(
       'Before creating a new worktree from an active feature branch, decide and state whether the desired Orca lineage is child or top-level'
@@ -292,12 +330,146 @@ describe('orchestration skill guidance', () => {
 
   it('documents per-invocation model and effort for supervised workers', () => {
     const workerLoop = getSection(readSkill(), 'Preferred Supervised Worker Loop')
+    const overrideExample = getBashCodeBlock(
+      workerLoop,
+      'orca orchestration worker-start --task <task_id> --worktree current --agent claude --model opus --effort high --json'
+    )
 
     expect(workerLoop).toContain('opaque provider model id with `--model`')
+    expect(workerLoop).toContain(
+      'pass an opaque provider model id with `--model` only when the user names a model or the task requires that exact model; pass `--effort` only when the user names an effort level or the task requires that exact effort, and that agent/model supports it.'
+    )
+    expect(workerLoop).not.toContain(
+      'pass `--effort` only when the user names an effort level and that agent/model supports it.'
+    )
+    expect(workerLoop).toContain(
+      'Naming only an agent is not a model request: pass `--agent` alone so the stored model and effort defaults for that agent still apply.'
+    )
+    expect(workerLoop).not.toContain(
+      'For a per-invocation Claude, Codex, or Cursor launch requested by the user'
+    )
     expect(workerLoop).toContain('`--effort` requires `--model`')
+    expect(workerLoop).toContain(
+      'A requested effort with no named model therefore cannot be applied on its own: ask the user which model to pair with it rather than substituting one.'
+    )
     expect(workerLoop).toContain('neither option can combine with `--terminal`')
+    expect(workerLoop).toContain(
+      'use the following only when the user has specifically requested Claude `opus` at high effort'
+    )
     expect(workerLoop).toContain('--agent claude --model opus --effort high --json')
+    expect(getOrchestrationCommandLines(overrideExample)).toEqual([
+      'orca orchestration worker-start --task <task_id> --worktree current --agent claude --model opus --effort high --json'
+    ])
     expect(workerLoop).toContain('`launch.requested` and `launch.effective`')
+  })
+
+  it('prefers configured worker defaults for ordinary supervised launches', () => {
+    const workerLoop = getSection(readSkill(), 'Preferred Supervised Worker Loop')
+    const ordinaryExample = getBashCodeBlock(
+      workerLoop,
+      'orca orchestration worker-start --task <task_a> --worktree current'
+    )
+    const mixedAgentExample = getBashCodeBlock(
+      workerLoop,
+      'orca orchestration worker-start --task <task_a> --worktree current --agent codex --json'
+    )
+    const newWorktreeExample = getBashCodeBlock(
+      workerLoop,
+      'orca orchestration worker-start --task <task_id> --worktree new-child'
+    )
+
+    expect(workerLoop).toContain(
+      'Unless the user or task requests a specific agent, model, or effort, omit `--agent`, ' +
+        '`--model`, and `--effort` from `worker-start`.'
+    )
+    expect(workerLoop).toContain(
+      "Omitted fields use the user's Settings > Orchestration Worker defaults"
+    )
+    expect(workerLoop).toContain('inspect `launch.requested` and `launch.effective` in the receipt')
+    expect(workerLoop).toContain(
+      "Specify these flags only when the user requests that choice or the task requires a specific agent's unique capability."
+    )
+    expect(workerLoop).toContain(
+      'Quality, depth, thoroughness, or meticulousness language is not a request for a specific agent, model, or effort; treat it as one only when the user names an agent, model, or effort level.'
+    )
+    expect(workerLoop).toContain(
+      "A coordinator's quality judgment—results seem shallow, a deeper second pass or retry seems useful, or a stronger model seems preferable—is never permission to override the user's defaults, including for a deep second pass, retry, or verification; if a stronger model or effort is genuinely needed, the coordinator must stop and ask the user directly in its own turn, then wait for the answer—there is no CLI path for this: `ask` is worker-to-coordinator and fails with `dispatch_inactive` from a coordinator, while a decision gate records a coordinator-managed DAG decision rather than reaching the user."
+    )
+    expect(workerLoop).not.toContain(
+      'if a stronger model or effort is genuinely needed, ask the user through `ask` or a decision gate.'
+    )
+    expect(workerLoop).toContain(
+      "If worker-start fails with `agent_unconfigured`, no default worker agent is configured and the coordinator has no basis to pick one: stop and ask the user which agent to launch, in the coordinator's own turn, the same way you would for a stronger model or effort, then retry that launch with the user's answer as an explicit `--agent`."
+    )
+    expect(workerLoop).toContain(
+      'Never resolve `agent_unconfigured` by choosing an agent yourself, and tell the user to set a default worker agent in Settings > Orchestration so later launches stay flag-free.'
+    )
+    expect(workerLoop).toContain(
+      'This is missing-configuration recovery, not permission to override defaults.'
+    )
+    expect(workerLoop).toContain(
+      'Mixing agents counts as an exception only when the user requests multiple agents or the task specifies them; do not mix agents for coordinator-chosen diversity.'
+    )
+    expect(workerLoop).toContain(
+      'reusing a terminal does not inject the configured worker defaults.'
+    )
+    expectDefaultWorkerStartCommands(ordinaryExample, [
+      'orca orchestration worker-start --task <task_a> --worktree current --json',
+      'orca orchestration worker-start --task <task_b> --worktree current --json'
+    ])
+    expect(getOrchestrationCommandLines(ordinaryExample)).toEqual([
+      'orca orchestration run-create --objective "<objective>" --json',
+      'orca orchestration task-create --spec "<worker A task>" --json',
+      'orca orchestration task-create --spec "<worker B task>" --json',
+      'orca orchestration worker-start --task <task_a> --worktree current --json',
+      'orca orchestration worker-start --task <task_b> --worktree current --json'
+    ])
+    expect(
+      workerLoop.indexOf(
+        'orca orchestration worker-start --task <task_a> --worktree current --json'
+      )
+    ).toBeLessThan(
+      workerLoop.indexOf(
+        'orca orchestration worker-start --task <task_a> --worktree current --agent codex --json'
+      )
+    )
+    expect(getWorkerStartCommandLines(mixedAgentExample)).toEqual([
+      'orca orchestration worker-start --task <task_a> --worktree current --agent codex --json',
+      'orca orchestration worker-start --task <task_b> --worktree current --agent claude --json'
+    ])
+    expect(
+      getWorkerStartCommandLines(mixedAgentExample).every((command) => command.includes('--agent'))
+    ).toBe(true)
+    expectDefaultWorkerStartCommands(newWorktreeExample, [
+      'orca orchestration worker-start --task <task_id> --worktree new-child --name <name> --setup run --json',
+      'orca orchestration worker-start --task <task_id> --worktree new-top-level --name <name> --setup run --json'
+    ])
+    expect(getWorkerStartCommandLines(newWorktreeExample)).toContain(
+      'orca orchestration worker-start --task <task_id> --worktree new-child --name <name> --setup run --json'
+    )
+    expect(getWorkerStartCommandLines(newWorktreeExample)).toContain(
+      'orca orchestration worker-start --task <task_id> --worktree new-top-level --name <name> --setup run --json'
+    )
+  })
+
+  it('keeps retries on configured agent, model, and effort defaults', () => {
+    const workerLoop = getSection(readSkill(), 'Preferred Supervised Worker Loop')
+    const retryExample = getBashCodeBlock(
+      workerLoop,
+      'orca orchestration worker-start --task <task_id> --retry-of <dispatch_id> --worktree current'
+    )
+
+    expect(workerLoop).toContain(
+      'explicit `--on`/`--worktree` placement and an explicit choice between a new agent terminal (omit `--terminal`) and an existing terminal (`--terminal <handle>`)'
+    )
+    expect(workerLoop).toContain(
+      'A new launch still follows the defaults rule above for `--agent`, `--model`, and `--effort`'
+    )
+    expect(workerLoop).toContain('a failed worker is not a reason to promote its model')
+    expect(workerLoop).toContain('Retry does not silently inherit placement.')
+    expectDefaultWorkerStartCommands(retryExample, [
+      'orca orchestration worker-start --task <task_id> --retry-of <dispatch_id> --worktree current --json'
+    ])
   })
 
   it('never authorizes release from idle, timeout, or worker-side triggers', () => {
@@ -344,7 +516,7 @@ describe('orchestration skill guidance', () => {
     const messaging = getSection(skill, 'Messaging')
     const workerTerminals = getSection(skill, 'Worker Terminals')
     const agentFirstExample = workerTerminals.match(
-      /```bash\norca worktree create --name <task-name> --agent codex --setup run --json\n[\s\S]*?```/
+      /```bash\norca worktree create --name <task-name> --agent <agent> --setup run --json\n[\s\S]*?```/
     )?.[0]
 
     expect(workerTerminals).toContain('For an allowed new worktree, use agent-first:')
@@ -353,6 +525,15 @@ describe('orchestration skill guidance', () => {
       'repo setup and default-terminal settings may add intentional tabs or splits'
     )
     expect(workerTerminals).toContain('without configured default tabs')
+    expect(workerTerminals).toContain(
+      'orca terminal create --worktree active --title <task-name> --command "<agent>" --json'
+    )
+    expect(workerTerminals).toContain(
+      'orca worktree create --name <task-name> --agent <agent> --setup run --json'
+    )
+    expect(workerTerminals).toContain(
+      'orca terminal create --worktree <selector> --command "<agent>" --json'
+    )
     expect(workerTerminals).toContain(
       'only after `terminal list` or `terminal show` confirms it is an unused shell'
     )

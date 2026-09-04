@@ -211,7 +211,23 @@ Two limits worth knowing:
 
 Use `worker-start` for the normal supervised path. It composes the existing worktree, terminal, readiness, and dispatch primitives while returning exact created/reused effects. Agents still choose placement and concurrency; Orca does not schedule workers or infer conflicts.
 
+Unless the user or task requests a specific agent, model, or effort, omit `--agent`, `--model`, and `--effort` from `worker-start`. Omitted fields use the user's Settings > Orchestration Worker defaults; inspect `launch.requested` and `launch.effective` in the receipt to confirm the applied values. Specify these flags only when the user requests that choice or the task requires a specific agent's unique capability. Quality, depth, thoroughness, or meticulousness language is not a request for a specific agent, model, or effort; treat it as one only when the user names an agent, model, or effort level. A coordinator's quality judgment—results seem shallow, a deeper second pass or retry seems useful, or a stronger model seems preferable—is never permission to override the user's defaults, including for a deep second pass, retry, or verification; if a stronger model or effort is genuinely needed, the coordinator must stop and ask the user directly in its own turn, then wait for the answer—there is no CLI path for this: `ask` is worker-to-coordinator and fails with `dispatch_inactive` from a coordinator, while a decision gate records a coordinator-managed DAG decision rather than reaching the user. Mixing agents counts as an exception only when the user requests multiple agents or the task specifies them; do not mix agents for coordinator-chosen diversity.
+
+If worker-start fails with `agent_unconfigured`, no default worker agent is configured and the coordinator has no basis to pick one: stop and ask the user which agent to launch, in the coordinator's own turn, the same way you would for a stronger model or effort, then retry that launch with the user's answer as an explicit `--agent`. Never resolve `agent_unconfigured` by choosing an agent yourself, and tell the user to set a default worker agent in Settings > Orchestration so later launches stay flag-free. This is missing-configuration recovery, not permission to override defaults.
+
 Create the Run and every independent Task first, then start all independent workers before waiting:
+
+For the usual configured-default launch, omit launch preference flags:
+
+```bash
+orca orchestration run-create --objective "<objective>" --json
+orca orchestration task-create --spec "<worker A task>" --json
+orca orchestration task-create --spec "<worker B task>" --json
+orca orchestration worker-start --task <task_a> --worktree current --json
+orca orchestration worker-start --task <task_b> --worktree current --json
+```
+
+For user-requested or task-specified mixed-agent parallel work, specify each agent:
 
 ```bash
 orca orchestration run-create --objective "<objective>" --json
@@ -221,22 +237,22 @@ orca orchestration worker-start --task <task_a> --worktree current --agent codex
 orca orchestration worker-start --task <task_b> --worktree current --agent claude --json
 ```
 
-`current` and exact existing worktrees create a fresh agent terminal and do not rerun setup. Reuse an existing agent only with `--terminal <handle>`.
+`current` and exact existing worktrees create a fresh agent terminal and do not rerun setup. Reuse an existing agent only with `--terminal <handle>`; reusing a terminal does not inject the configured worker defaults.
 
-For a per-invocation Claude, Codex, or Cursor launch, pass an opaque provider model id with `--model`; add `--effort` only when that agent/model supports the level. These options apply only to fresh agent terminals, override general agent default arguments, and are reported under `launch.requested` and `launch.effective` in the receipt:
+For a per-invocation Claude, Codex, or Cursor launch, pass an opaque provider model id with `--model` only when the user names a model or the task requires that exact model; pass `--effort` only when the user names an effort level or the task requires that exact effort, and that agent/model supports it. Naming only an agent is not a model request: pass `--agent` alone so the stored model and effort defaults for that agent still apply. These options apply only to fresh agent terminals, override general agent default arguments, and are reported under `launch.requested` and `launch.effective` in the receipt. For example, use the following only when the user has specifically requested Claude `opus` at high effort:
 
 ```bash
 orca orchestration worker-start --task <task_id> --worktree current --agent claude --model opus --effort high --json
 ```
 
-`--effort` requires `--model`, and neither option can combine with `--terminal`. A connected worker server must advertise launch-preference support before Orca forwards either option.
+`--effort` requires `--model`, and neither option can combine with `--terminal`. A requested effort with no named model therefore cannot be applied on its own: ask the user which model to pair with it rather than substituting one. A connected worker server must advertise launch-preference support before Orca forwards either option.
 
 For a new worktree, setup runs by default and agent-first creation reuses the returned startup agent terminal:
 
 ```bash
-orca orchestration worker-start --task <task_id> --worktree new-child --name <name> --agent codex --setup run --json
+orca orchestration worker-start --task <task_id> --worktree new-child --name <name> --setup run --json
 # Independent/top-level:
-orca orchestration worker-start --task <task_id> --worktree new-top-level --name <name> --agent codex --setup run --json
+orca orchestration worker-start --task <task_id> --worktree new-top-level --name <name> --setup run --json
 ```
 
 Setup normally starts alongside the agent. Only a repository explicitly configured with `wait-for-setup` delays agent launch until setup succeeds. Use `--setup skip` or `--setup inherit` only for a concrete reason.
@@ -247,7 +263,7 @@ To run the worker on another connected Orca server, add `--on <saved-environment
 
 ```bash
 # Mac Run home -> Windows worker (the reverse is identical from a Windows Run home)
-orca orchestration worker-start --task <task_id> --on windows --worktree new-top-level --repo <exact_remote_repo_selector> --name <name> --agent codex --setup run --json
+orca orchestration worker-start --task <task_id> --on windows --worktree new-top-level --repo <exact_remote_repo_selector> --name <name> --setup run --json
 orca orchestration worker-show --dispatch <dispatch_id> --json
 orca orchestration worker-read --dispatch <dispatch_id> --limit 50 --json
 orca orchestration send --to dispatch:<dispatch_id> --subject "Follow-up" --body "<attempt-specific guidance>" --json
@@ -296,9 +312,15 @@ Recovery is conditional, never a fixed destructive sequence:
 
 - The response was lost and named no Dispatch: run `orca orchestration request-show --request <request_id> --json` first. It is read-only. `completed` means the mutation already took effect. `pending` means the original mutation is still running or Orca restarted before recording its outcome. For either state, replaying the original command with `--retry-request <request_id>` reuses the same operation identity so Orca can replay, join, or safely recover it without starting a separate duplicate. `absent` means this runtime holds no receipt under your caller identity and is not proof that nothing happened; inspect the affected state before deciding whether to retry.
 - `worker-show --dispatch <id>` says `ready`: keep waiting or read bounded output.
-- It proves `failed` or `stopped`: start a replacement with `worker-start --task <task> --retry-of <id>` plus an explicit `--on`/`--worktree` and `--agent`/`--terminal` choice. Retry does not silently inherit placement.
+- It proves `failed` or `stopped`: start a replacement with `worker-start --task <task> --retry-of <id>` plus explicit `--on`/`--worktree` placement and an explicit choice between a new agent terminal (omit `--terminal`) and an existing terminal (`--terminal <handle>`). A new launch still follows the defaults rule above for `--agent`, `--model`, and `--effort`; a failed worker is not a reason to promote its model. Retry does not silently inherit placement.
 - It remains `outcome_unknown`: either `worker-stop --dispatch <id>` and inspect again, or explicitly `worker-abandon --dispatch <id>` while accepting that resources may still be live. Abandon performs no remote, process, or filesystem action.
 - `worker-stop` closes only the exact supervised agent terminal. It never deletes the worktree, setup terminal, configured tabs, or unrelated processes.
+
+For a new retry in the current worktree:
+
+```bash
+orca orchestration worker-start --task <task_id> --retry-of <dispatch_id> --worktree current --json
+```
 
 Low-level `worktree create`, `terminal create`, and `dispatch --inject` remain valid recipes for custom argv or topology that `worker-start` does not express.
 
@@ -328,10 +350,12 @@ Supervised orchestration remains available only when the user explicitly asks fo
 
 Do not run `orca orchestration task-create`, `orca orchestration dispatch --inject`, or `orca orchestration check --wait` for full handoffs. `task-create` is also forbidden because it records coordinator-owned tracking state; if a task row is needed, the user asked for supervised orchestration. Do not create a `taskId`/`dispatchId`, inject a lifecycle preamble, wait for completion, or read the worker terminal after prompt delivery except to avoid losing the initial prompt.
 
+Direct `worktree create` and `terminal create` handoffs do not use `worker-start`, so Settings > Orchestration worker defaults are not injected; pass the user's requested agent explicitly, or ask when none is specified.
+
 New top-level worktree handoff:
 
 ```bash
-orca worktree create --name <task-name> --no-parent --agent codex --prompt "<task brief>" --setup run --json
+orca worktree create --name <task-name> --no-parent --agent <agent> --prompt "<task brief>" --setup run --json
 ```
 
 Before creating a new worktree from an active feature branch, decide and state whether the desired Orca lineage is child or top-level. Use child worktree lineage only when the new work is conceptually stacked under or dependent on the active worktree. For independent repo-wide fixes, standalone feature work, or unrelated follow-up tasks, create a top-level worktree with `--no-parent`.
@@ -344,7 +368,7 @@ orca terminal send --terminal <handle> --text "<task brief>" --enter --json
 
 Custom Codex model/effort handoff:
 
-`orca worktree create --agent codex --prompt ...` launches the known Codex agent but does not accept Codex-specific `--model` or `-c model_reasoning_effort=...` arguments. When the user asks for a specific Codex model or effort, create the independent worktree first, launch Codex with the requested command in that worktree, wait only for TUI readiness if prompt delivery would otherwise race startup, send the prompt, and stop.
+`orca worktree create --agent <agent> --prompt ...` launches the selected agent but does not accept Codex-specific `--model` or `-c model_reasoning_effort=...` arguments. When the user asks for a specific Codex model or effort, create the independent worktree first, launch Codex with the requested command in that worktree, wait only for TUI readiness if prompt delivery would otherwise race startup, send the prompt, and stop.
 
 The two-step custom-argv path cannot enforce a repository's explicit `wait-for-setup` startup policy because the later `terminal create` is not the startup owned by `worktree create`. Use it only when the repository starts agents immediately. If the repository requires `wait-for-setup`, use an agent-first configured launcher that can preserve sequencing, or stop and ask rather than silently bypassing the policy.
 
@@ -368,7 +392,7 @@ Wait only for `tui-idle` when needed to avoid losing the prompt. Do not monitor 
 Choose the worker location before creating a terminal. `Fresh worker` means a fresh agent session, not a new git worktree. For parallel work, create one fresh agent terminal per worker in the same required worktree, falling back to the active worktree when none is named. If the task says current worktree only, depends on uncommitted files/artifacts, or must validate/PR the current branch, keep every worker in the active worktree:
 
 ```bash
-orca terminal create --worktree active --title <task-name> --command "codex" --json
+orca terminal create --worktree active --title <task-name> --command "<agent>" --json
 orca terminal wait --terminal <handle> --for tui-idle --timeout-ms 60000 --json
 orca orchestration dispatch --task <task_id> --to <handle> --inject --json
 ```
@@ -380,7 +404,7 @@ When a new worktree is allowed, use child lineage for isolated work that is stac
 For every new worktree, pass `--setup run` so any configured repository setup hook runs. This does not mean waiting for setup before agent launch: preserve the repository's startup policy, whose default starts setup and the agent side by side. Use `--setup skip` or `--setup inherit` only when there is a concrete task-specific reason, and state that reason before creating the worktree. This rule does not rerun setup for current or existing worktrees.
 
 ```bash
-orca worktree create --name <task-name> --agent codex --setup run --json
+orca worktree create --name <task-name> --agent <agent> --setup run --json
 # or: --agent claude | omp | pi | grok | ...
 # Read <handle> from agentTerminalHandle, falling back to startupTerminal.handle.
 orca terminal wait --terminal <handle> --for tui-idle --timeout-ms 60000 --json
@@ -406,7 +430,7 @@ orca terminal read --terminal <handle> --json
 orca terminal send --terminal <handle> --text <text> --enter --json
 ```
 
-If an older CLI rejects `worktree create --agent`, create the worktree normally, then run `orca terminal create --worktree <selector> --command "codex" --json` or `--command "claude"`.
+If an older CLI rejects `worktree create --agent`, create the worktree normally, then run `orca terminal create --worktree <selector> --command "<agent>" --json`.
 
 Wait for `tui-idle` before dispatching. Always pass `--timeout-ms`; real coding tasks can take 15-60 minutes. During supervision, use rolling `check --wait` windows. If a window returns no matching message, inspect `task-list`, `terminal read`, or `terminal wait --for tui-idle` as a liveness checkpoint; if the terminal is still working or producing activity, keep waiting instead of retrying the task.
 
