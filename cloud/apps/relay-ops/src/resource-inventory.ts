@@ -102,6 +102,7 @@ export type ResourceInventory = {
 
 const unavailableEndpoint = (): EndpointHealth => ({ health: null, ready: null, latencyMs: null })
 const independentEndpointRetryDelayMs = 11_000
+const transientProbeRetryDelayMs = 1_000
 
 function finalSegment(value: string): string {
   return value.split('/').at(-1) ?? value
@@ -138,41 +139,80 @@ async function googleRequest(
   return await response.json()
 }
 
-async function endpointProbe(origin: string, fetchImpl: typeof fetch): Promise<EndpointHealth> {
-  const startedAt = performance.now()
-  const check = async (path: '/health' | '/ready'): Promise<boolean> => {
+// A reading the endpoint actually produced: ok is its answer, latencyMs is that answer's round trip.
+type PathReading = { ok: boolean; latencyMs: number | null }
+
+async function probePath(
+  origin: string,
+  path: '/health' | '/ready',
+  fetchImpl: typeof fetch,
+  wait: (ms: number) => Promise<void>
+): Promise<PathReading> {
+  // null means the request never produced an answer (DNS/TCP/TLS failure or the 8s abort).
+  const attempt = async (): Promise<PathReading | null> => {
+    const startedAt = performance.now()
     try {
       const response = await fetchImpl(`${origin}${path}`, {
         redirect: 'error',
         signal: AbortSignal.timeout(8_000)
       })
-      return response.ok
+      return { ok: response.ok, latencyMs: Math.round(performance.now() - startedAt) }
     } catch {
-      return false
+      return null
     }
   }
-  const [health, ready] = await Promise.all([check('/health'), check('/ready')])
-  return { health, ready, latencyMs: Math.round(performance.now() - startedAt) }
+  const first = await attempt()
+  if (first) return first
+  // A thrown fetch is the absence of a reading, not an unhealthy answer, so re-ask before concluding.
+  await wait(transientProbeRetryDelayMs)
+  return (await attempt()) ?? { ok: false, latencyMs: null }
+}
+
+async function endpointProbe(
+  origin: string,
+  fetchImpl: typeof fetch,
+  requiresReady: boolean,
+  wait: (ms: number) => Promise<void>
+): Promise<EndpointHealth> {
+  const [health, ready] = await Promise.all([
+    probePath(origin, '/health', fetchImpl, wait),
+    requiresReady ? probePath(origin, '/ready', fetchImpl, wait) : null
+  ])
+  // Latency is the slowest answering round trip in this probe; retry delays are not serving latency.
+  const latencies = [health.latencyMs, ready?.latencyMs ?? null].filter(
+    (value): value is number => value !== null
+  )
+  return {
+    health: health.ok,
+    ready: ready ? ready.ok : null,
+    latencyMs: latencies.length > 0 ? Math.max(...latencies) : null
+  }
+}
+
+export type EndpointProbeOptions = {
+  // Auth serves no /ready by design, so it is judged on /health and latency alone.
+  requiresReady?: boolean
+  wait?: (ms: number) => Promise<void>
 }
 
 export async function probeEndpointHealth(
   origin: string,
   fetchImpl: typeof fetch,
-  wait: (ms: number) => Promise<void> = async (ms) =>
-    await new Promise((resolvePromise) => setTimeout(resolvePromise, ms))
+  options: EndpointProbeOptions = {}
 ): Promise<EndpointHealth> {
-  const first = await endpointProbe(origin, fetchImpl)
-  if (
-    first.health &&
-    first.ready &&
-    first.latencyMs !== null &&
-    first.latencyMs <= INCIDENT_MONITOR_THRESHOLDS.endpointLatencyMs
-  ) {
-    return first
-  }
+  const requiresReady = options.requiresReady ?? true
+  const wait = options.wait ??
+    (async (ms: number) => await new Promise((resolvePromise) => setTimeout(resolvePromise, ms)))
+  const accepted = (probe: EndpointHealth): boolean =>
+    probe.health === true &&
+    (!requiresReady || probe.ready === true) &&
+    probe.latencyMs !== null &&
+    probe.latencyMs <= INCIDENT_MONITOR_THRESHOLDS.endpointLatencyMs
+  const first = await endpointProbe(origin, fetchImpl, requiresReady, wait)
+  if (accepted(first)) return first
   // Outwait Relay's ten-second readiness cache before treating the retry as independent.
   await wait(independentEndpointRetryDelayMs)
-  return await endpointProbe(origin, fetchImpl)
+  return await endpointProbe(origin, fetchImpl, requiresReady, wait)
 }
 
 function imageDigest(template: z.infer<typeof TemplateSchema>): string | null {
@@ -338,7 +378,8 @@ export async function readResourceInventory(
     ? [unavailableEndpoint(), unavailableEndpoint()]
     : await Promise.all([
         probeEndpointHealth(environment.directorOrigin, fetchImpl),
-        probeEndpointHealth(environment.authOrigin, fetchImpl)
+        // The auth service exposes no /ready, so requiring it would fail every first probe.
+        probeEndpointHealth(environment.authOrigin, fetchImpl, { requiresReady: false })
       ])
   const cells = await Promise.all(environment.cells.map((cell, index) =>
     readCell(environment, cell, migValues[index] ?? null, token, fetchImpl)
