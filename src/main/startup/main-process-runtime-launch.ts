@@ -161,7 +161,7 @@ async function launchServeMode(
   })
   // Why: a phone paired to a headless host still registers and unregisters its token;
   // it simply never receives a push, because nothing dispatches notifications here.
-  startDesktopPushService(runtime, runtimeRpc)
+  startDesktopPushService(runtimeRpc)
   settleDesktopActivation()
   // Why: every attempt must reach app.quit(); a page beforeunload can veto an earlier signal.
   registerServeSignalHandlers(process, () => app.quit())
@@ -210,7 +210,6 @@ async function launchServeMode(
 }
 
 async function launchDesktopMode(
-  runtime: RuntimeService,
   runtimeRpc: OrcaRuntimeRpcServer,
   shellPathReady: Promise<void>,
   desktopWindow: BrowserWindow | null,
@@ -248,7 +247,7 @@ async function launchDesktopMode(
   await state.initialProxyApplicationReady
   // Why after the proxy await: the push gateway client is an app-owned fetcher, so it must not
   // issue its first request ahead of the persisted proxy.
-  startDesktopPushService(runtime, runtimeRpc)
+  startDesktopPushService(runtimeRpc)
   const cloudAuth = getOrcaCloudAuthConfig()
   if (cloudAuth.configured) {
     try {
@@ -342,11 +341,5 @@ export async function initializeMainProcessRuntimeLaunch(
     await launchServeMode(runtime, runtimeRpc, serveOptions)
     return
   }
-  await launchDesktopMode(
-    runtime,
-    runtimeRpc,
-    shellPathReady,
-    desktopWindow,
-    options.openMainWindow
-  )
+  await launchDesktopMode(runtimeRpc, shellPathReady, desktopWindow, options.openMainWindow)
 }
