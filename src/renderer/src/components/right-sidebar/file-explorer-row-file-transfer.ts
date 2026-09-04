@@ -102,3 +102,19 @@ export async function copyFileToOsClipboard(
     toast.error(extractIpcErrorMessage(error, failureMessage))
   }
 }
+
+export async function openFileInDefaultApp(node: TreeNode): Promise<void> {
+  const failureMessage = translate(
+    'auto.components.right.sidebar.FileExplorerRow.d40c3303f4',
+    "Could not open '{{value0}}' in the default app.",
+    { value0: node.name }
+  )
+  try {
+    const opened = await window.api.shell.openFilePath(node.path)
+    if (!opened) {
+      toast.error(failureMessage)
+    }
+  } catch (error) {
+    toast.error(extractIpcErrorMessage(error, failureMessage))
+  }
+}

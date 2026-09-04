@@ -11879,6 +11879,8 @@
             "3161c4e425": "folder",
             "e887fa4b2e": "Open in Terminal",
             "1d8e182c32": "View File",
+            "d40c3303f4": "Could not open '{{value0}}' in the default app.",
+            "288a8e8081": "Open in Default App",
             "clipboardStagingUnavailable": "Could not copy the file because Orca's temporary storage is unavailable"
           },
           "FileExplorerToolbar": {
