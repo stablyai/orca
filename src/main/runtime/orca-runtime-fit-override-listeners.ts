@@ -133,9 +133,11 @@ export class OrcaRuntimeWithFitOverrideListeners extends OrcaRuntimeWithStopRequ
   // Why: per-PTY hydration state guards against double-hydration. Keys:
   //   'pending'  → maybeHydrateHeadlessFromRenderer is in flight
   //   'done'     → hydration completed (success or skip); never run again
+  //   'awaiting-serializer' → a viewer created a frame-only emulator before
+  //                the pane registered its serializer; the seed is still owed
   // Absent  → hydration has not been considered yet for this PTY.
   // See docs/mobile-prefer-renderer-scrollback.md.
-  protected headlessHydrationState = new Map<string, 'pending' | 'done'>()
+  protected headlessHydrationState = new Map<string, 'pending' | 'done' | 'awaiting-serializer'>()
 
   // Why: mobile-fit overrides are keyed by ptyId (not terminal handle) because
   // handles can be reissued while the PTY identity is stable. In-memory only —

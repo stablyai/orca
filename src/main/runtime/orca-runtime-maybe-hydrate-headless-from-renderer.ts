@@ -12,11 +12,18 @@ export class OrcaRuntimeWithMaybeHydrateHeadlessFromRenderer extends OrcaRuntime
   // trackHeadlessTerminalData chain after the seed via the same writeChain.
   // See docs/mobile-prefer-renderer-scrollback.md.
   protected maybeHydrateHeadlessFromRenderer(ptyId: string): void {
-    if (this.headlessHydrationState.has(ptyId)) {
+    const hydration = this.headlessHydrationState.get(ptyId)
+    if (hydration === 'pending' || hydration === 'done') {
       return
     }
     const providerSnapshotPreferred = this.providerSnapshotPreferredPtys.has(ptyId)
-    if (this.headlessTerminals.has(ptyId) && !providerSnapshotPreferred) {
+    // Why the awaiting check: a viewer's frame-only emulator is not a seed —
+    // counting it as one would skip the renderer's history forever.
+    if (
+      this.headlessTerminals.has(ptyId) &&
+      !providerSnapshotPreferred &&
+      hydration !== 'awaiting-serializer'
+    ) {
       // Daemon-snapshot seed already populated the emulator — skip hydration.
       this.headlessHydrationState.set(ptyId, 'done')
       return
@@ -31,7 +38,7 @@ export class OrcaRuntimeWithMaybeHydrateHeadlessFromRenderer extends OrcaRuntime
       return
     }
 
-    if (providerSnapshotPreferred) {
+    if (providerSnapshotPreferred || hydration === 'awaiting-serializer') {
       // Why: a stream byte can create a partial model before restored history
       // arrives. A mounted renderer snapshot can safely replace that model.
       this.disposeHeadlessTerminal(ptyId)

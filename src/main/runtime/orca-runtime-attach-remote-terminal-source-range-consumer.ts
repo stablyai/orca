@@ -205,4 +205,30 @@ export class OrcaRuntimeWithAttachRemoteTerminalSourceRangeConsumer extends Orca
   hasHeadlessTerminalState(ptyId: string): boolean {
     return this.headlessTerminals.has(ptyId)
   }
+
+  // Why: a preview viewer claims the PTY grid, which parks the desktop pane
+  // at the claimed size. The pane's xterm is then the WRONG source for the
+  // preview's snapshot — it never receives the resize — yet it is the
+  // fallback whenever no headless emulator exists, and one is only created
+  // lazily on the next live byte. An idle pty would keep serving the pane's
+  // stale geometry to every reconnect. Hydrate eagerly so the emulator main
+  // resizes with every claim is the one the preview reads.
+  ensureHeadlessTerminalForViewer(ptyId: string): void {
+    // Why the size gate: an exited or not-yet-spawned pty has no grid to serve
+    // — an emulator built for it would be the parked 80x24 default, disposed
+    // by nothing and blocking the seed a later spawn owes. The size registry
+    // is the runtime's own liveness record on every host, local or SSH.
+    if (!this.getTerminalSize(ptyId)) {
+      return
+    }
+    this.maybeHydrateHeadlessFromRenderer(ptyId)
+    if (!this.headlessTerminals.has(ptyId)) {
+      this.getOrCreateHeadlessTerminal(ptyId)
+      // Why: this emulator holds only the bytes from now on; the pane's
+      // history must still seed it once its serializer registers.
+      if (!this.headlessHydrationState.has(ptyId)) {
+        this.headlessHydrationState.set(ptyId, 'awaiting-serializer')
+      }
+    }
+  }
 }
