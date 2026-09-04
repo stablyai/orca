@@ -278,6 +278,34 @@ describe('rate limit admission', () => {
     await expect(second).rejects.toMatchObject({ name: 'AbortError' })
   })
 
+  it('cancels a stalled first 429 body before retrying', async () => {
+    // Regression: the retry path never read the 429 body, so a stalled one
+    // outlived both the pool slot and the deadline that were meant to bound it.
+    let cancelled = false
+    netFetchMock
+      .mockResolvedValueOnce(
+        new Response(
+          new ReadableStream<Uint8Array>({
+            cancel() {
+              cancelled = true
+            }
+          }),
+          { status: 429, headers: { 'retry-after': '0' } }
+        )
+      )
+      .mockImplementationOnce(async () => {
+        expect(cancelled).toBe(true)
+        return jsonResponse({ results: [] })
+      })
+
+    const plane = await loadPlaneModules()
+    const client = { workspace: { ...workspaceFixture }, apiToken: 'plane_api_secret' }
+    await expect(plane.planeRequest(client, 'workspaces/acme/projects/')).resolves.toEqual({
+      results: []
+    })
+    expect(netFetchMock).toHaveBeenCalledTimes(2)
+  })
+
   it('keeps the pool slot until the response body is consumed', async () => {
     // Regression: the slot was released once headers arrived, so five stalled
     // bodies could be in flight against a pool of four.

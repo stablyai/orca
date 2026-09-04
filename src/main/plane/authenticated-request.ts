@@ -240,6 +240,9 @@ async function execute(
       // x-ratelimit-remaining -- would leave the next caller sending at once.
       noteRateLimited(budgetKey, response.headers)
       if (attempt === 0) {
+        // Why: the body is never read on this path, so cancel it while the
+        // slot and deadline still apply rather than leaving it to stall after.
+        await response.body?.cancel()
         retry = true
       } else {
         throw new PlaneApiError(await readPlaneError(response), response.status)
