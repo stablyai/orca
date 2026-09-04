@@ -3,6 +3,7 @@ import {
   isOpenCodeNativeTitle,
   type AgentStatus
 } from '../../shared/agent-detection'
+import { findCodexReadyPromptIndex } from './codex-ready-header'
 import type { RuntimeTerminalWaitBlockedReason } from '../../shared/runtime-types'
 
 const EXPLICIT_IDLE_TITLE_RE = /(^|\s)(ready|idle|done)(\s|$|[.!?])/i
@@ -101,16 +102,6 @@ function findCursorReadyPromptIndex(normalized: string): number | null {
     return null
   }
   return CURSOR_BUSY_SPINNER_RE.test(normalized.slice(activeIndex)) ? null : activeIndex
-}
-
-function findCodexReadyPromptIndex(normalized: string): number | null {
-  const headerIndex = normalized.lastIndexOf('openai codex')
-  if (headerIndex === -1) {
-    return null
-  }
-  const readySegment = normalized.slice(headerIndex)
-  // Why: Codex prints permissions only in YOLO mode; the stable ready header is OpenAI Codex + model + directory.
-  return readySegment.includes('model:') && readySegment.includes('directory:') ? headerIndex : null
 }
 
 function findAntigravityReadyPromptIndex(normalized: string): number | null {
