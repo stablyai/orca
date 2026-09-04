@@ -7,6 +7,7 @@ import type { RelayDrainMessage } from './relay-control-protocol'
 import type { RelayHostCloseReason } from '../../../shared/relay-host-close-reason'
 import { RelayDrainRetrySchedule } from './relay-drain-retry-schedule'
 import { RelayHttpError, requestRelayAssignment, type RelayAssignment } from './relay-http-client'
+import { relayRenewalDelayMs } from './relay-renewal-jitter'
 import type { RelayBrokerStatus, RelayIdentity } from './relay-session-broker-contract'
 import type { RelayRegion } from './relay-region-preference'
 
@@ -245,8 +246,7 @@ export class RelayOriginPool {
     }
     const now = (this.options.now ?? Date.now)()
     const random = this.options.random ?? Math.random
-    const earlyMs = 60_000 + Math.floor(random() * 60_001)
-    const delay = Math.max(0, origin.controlLeaseExpiresAt - earlyMs - now)
+    const delay = relayRenewalDelayMs(origin.controlLeaseExpiresAt, now, random)
     this.rotationTimer = setTimeout(() => void this.rebindActiveControl(origin), delay)
   }
 

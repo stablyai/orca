@@ -16,6 +16,7 @@ import {
   type RelayAssignment
 } from './relay-http-client'
 import { RelayOriginPool } from './relay-origin-pool'
+import { relayRenewalDelayMs } from './relay-renewal-jitter'
 import type { RelayBrokerStatus, RelaySessionBrokerOptions } from './relay-session-broker-contract'
 
 export type { RelayBrokerStatus } from './relay-session-broker-contract'
@@ -243,8 +244,7 @@ export class RelaySessionBroker {
     }
     const now = (this.options.now ?? Date.now)()
     const random = this.options.random ?? Math.random
-    const earlyMs = 60_000 + Math.floor(random() * 60_001)
-    const delay = Math.max(0, authorization.expiresAt - earlyMs - now)
+    const delay = relayRenewalDelayMs(authorization.expiresAt, now, random)
     this.refreshTimer = setTimeout(() => void this.refreshAuthorization(), delay)
   }
 
