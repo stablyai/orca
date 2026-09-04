@@ -2664,7 +2664,6 @@ private enum Input {
                 throw ProviderError.coded("accessibility_error", "failed to create keyboard event")
             }
             down.keyboardSetUnicodeString(stringLength: 1, unicodeString: &char)
-            up.keyboardSetUnicodeString(stringLength: 1, unicodeString: &char)
             down.post(tap: .cghidEventTap)
             up.post(tap: .cghidEventTap)
         }

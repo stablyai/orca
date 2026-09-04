@@ -34,6 +34,13 @@ final class AgentEntrypointSourceSafetyTests: XCTestCase {
         XCTAssertTrue(source.contains("event.flags = flags\n        event.postToPid(pid)"))
     }
 
+    func testSyntheticTextOnlyCarriesUnicodePayloadOnKeyDown() throws {
+        let source = try agentEntrypointSource()
+
+        XCTAssertTrue(source.contains("down.keyboardSetUnicodeString(stringLength: 1, unicodeString: &char)"))
+        XCTAssertFalse(source.contains("up.keyboardSetUnicodeString(stringLength: 1, unicodeString: &char)"))
+    }
+
     private func agentEntrypointSource() throws -> String {
         let testFile = URL(fileURLWithPath: #filePath)
         let packageRoot = testFile
