@@ -1,6 +1,10 @@
 import type { GitStatusEntry, GitStatusResult } from '../../shared/git-status-types'
 import type { RuntimeFileOpenResult, RuntimeWorktreeRecord } from '../../shared/runtime-types'
-import { isRuntimePathAbsolute, relativePathInsideRoot } from '../../shared/cross-platform-path'
+import {
+  isRuntimePathAbsolute,
+  normalizeRuntimePathDots,
+  relativePathInsideRoot
+} from '../../shared/cross-platform-path'
 import { isWslUncPath, parseWslUncPath, toWindowsWslPath } from '../../shared/wsl-paths'
 import type { CommandHandler, HandlerContext } from '../dispatch'
 import { getOptionalStringFlag, getRequiredStringFlag } from '../flags'
@@ -80,7 +84,14 @@ async function resolveFilePath(
   path: string
 ): Promise<string> {
   if (!isRuntimePathAbsolute(path)) {
-    return path
+    const normalized = normalizeRuntimePathDots(path)
+    if (normalized === '.' || normalized === '') {
+      throw new RuntimeClientError(
+        'invalid_argument',
+        'The selected worktree root is a directory, not a file-open target.'
+      )
+    }
+    return normalized
   }
   // Why: only in-worktree absolute paths should be relativized here; outside paths must reach the runtime guard unchanged.
   const result = await ctx.client.call<{ worktree: RuntimeWorktreeRecord }>('worktree.show', {

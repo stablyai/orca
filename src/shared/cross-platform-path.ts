@@ -266,7 +266,10 @@ function isWindowsPathFlavor(value: string): boolean {
   return /^[A-Za-z]:[\\/]/.test(value) || value.includes('\\') || value.startsWith('//')
 }
 
-function normalizeRuntimePathDots(value: string, pathFlavor: 'posix' | 'windows'): string {
+export function normalizeRuntimePathDots(
+  value: string,
+  pathFlavor: 'posix' | 'windows' = isWindowsPathFlavor(value) ? 'windows' : 'posix'
+): string {
   const normalized = normalizeRuntimePathSeparators(value)
   const { root, rest } = splitRuntimePathRoot(normalized, pathFlavor)
   const segments: string[] = []
