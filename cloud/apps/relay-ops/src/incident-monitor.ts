@@ -15,8 +15,8 @@ export const INCIDENT_MONITOR_THRESHOLDS = {
   // Why: healthy latest-sum backends idle near 100 but spike to 216 in 1-minute
   // bursts (~10 min/day exceeded the old bar of 160 on 2026-08-26, freezing a
   // pre-drain gate on baseline noise). 250 clears measured healthy peaks while
-  // firing well before the verified 400-connection ceiling; pool-wait and
-  // exhausted-retry signals keep their strict thresholds.
+  // firing well before the verified 400-connection ceiling; the retry signals
+  // below discriminate incident-class contention.
   cloudSqlBackends: 250,
   // Bound the observed recovery load; deadlocks remain zero-tolerance.
   cloudSqlLockWaits: 20,
@@ -35,24 +35,23 @@ export const INCIDENT_MONITOR_THRESHOLDS = {
   // Healthy 2026-08-26 baseline bursts to 234/5min (26% of windows crossed the old
   // bar of 20, set unmeasured at the monitor's 2026-07-28 birth); the 2026-08-23
   // incident ran ~2,200-3,000/5min. 300 clears healthy bursts with ~10x incident
-  // margin; relayPostgresRetryExhausted below stays at zero tolerance, so any
-  // transaction that terminally fails still freezes the gate.
+  // margin; relayPostgresRetryExhausted below bounds the terminally failed share.
   relayPostgresRetries: 300,
-  // Why: this bar stays at zero. Cell-inventory contention reaches the retry
-  // wrapper from exactly two kinds of caller, and neither is a sweep tick that
-  // can shrug the failure off:
-  //   - request paths, which take a wait bounded at CELL_INVENTORY_LOCK_TIMEOUT_MS
-  //     (assignment, control activation, activity, admin drain/evacuate/supersede);
-  //   - sweep-reachable code that a request also enters, which keeps the pool
-  //     lock_timeout so it cannot fail faster than before this change: the
-  //     completeEvacuation site that waits, reconcileReservationAccounting, and
-  //     placement re-entered from evacuateDeadCells.
-  // Sweep-only sites take the inventory NOWAIT, so their contention becomes
-  // database_lock_unavailable, which is not a retryable abort and never reaches
-  // this counter. The relay's cell-inventory-lock census test holds that split.
-  // Splitting the metric by the phase label PR #423 put on the log payload would
-  // need a labelled log-based metric, which this signal's counter does not carry.
-  relayPostgresRetryExhausted: 0,
+  // Why: 300 per five minutes, recalibrated 2026-09-04 from a bar of zero that no
+  // production window has cleared since #18521 shipped to the director. That
+  // change cut the request-path cell-inventory wait from the 1 s pool lock_timeout
+  // to 500 ms, so a contended waiter now fails fast (one /v1/assign 503 with
+  // Retry-After, which the client retries) instead of succeeding slowly, and the
+  // exhaustion count became a steady-state contention rate rather than an
+  // anomaly. Measured fleet-wide (director + cells) per five minutes over
+  // 2026-09-03T03Z..2026-09-04T02Z: every one of 236 windows was non-zero;
+  // quiet hours p50 2 / max 36; pre-#18521 daytime p50 10 / p90 25 / max 87;
+  // post-#18521 p50 42 / p90 147 / max 220. The 2026-08-23 lock incident peaked
+  // at 467. 300 clears every measured healthy window and still sits below the
+  // incident shape; relayPostgresRetries above stays the ~10x discriminator.
+  // User-facing /v1/assign 503 share did not move with #18521 (13.9% old image
+  // vs 12.3% new, same evening), so exhaustion is not a proxy for user harm.
+  relayPostgresRetryExhausted: 300,
   // Why: public admission is a per-instance semaphore, so fleet assignment capacity is
   // concurrency x instances. A floor of 1 let the 2026-08-04 collapse from five instances
   // to two pass unnoticed, which is the exact failure this monitor exists to catch. Keep in

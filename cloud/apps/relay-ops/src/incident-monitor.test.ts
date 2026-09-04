@@ -123,15 +123,20 @@ describe('incident monitor evaluator', () => {
     })
   })
 
-  // Why: sweeps no longer reach the retry wrapper, so any exhaustion left in this
-  // counter is a request path that terminally failed. It must still freeze.
-  it('freezes on a single exhausted request-path transaction', () => {
-    const sample = healthySample()
-    sample.sources['relay-logs']!.signals['relay.postgres_retry_exhausted'] = signal(1)
-    expect(evaluateIncidentSample(sample, startedAt)).toMatchObject({
+  // Why: since #18521 the request path fails fast on the cell-inventory lock, so
+  // exhaustion is a steady contention rate (post-#18521 p90 147/5min, max 220),
+  // not an anomaly. The bar bounds it below the 2026-08-23 incident peak of 467.
+  it('tolerates the measured healthy exhaustion rate and freezes above the bar', () => {
+    const healthy = healthySample()
+    healthy.sources['relay-logs']!.signals['relay.postgres_retry_exhausted'] = signal(220)
+    expect(evaluateIncidentSample(healthy, startedAt).status).toBe('green')
+
+    const incident = healthySample()
+    incident.sources['relay-logs']!.signals['relay.postgres_retry_exhausted'] = signal(301)
+    expect(evaluateIncidentSample(incident, startedAt)).toMatchObject({
       status: 'freeze',
       failures: [
-        expect.objectContaining({ signal: 'relay.postgres_retry_exhausted', threshold: 0 })
+        expect.objectContaining({ signal: 'relay.postgres_retry_exhausted', threshold: 300 })
       ]
     })
   })
