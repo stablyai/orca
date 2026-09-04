@@ -16,6 +16,7 @@ import { resolveAgentSessionLaunchRoute } from '@/lib/agent-session-launch-plan'
 
 export function useQuickCreationExecution(input: QuickCreationExecutionInput) {
   const {
+    agentPrompt,
     clearNewWorkspaceDraft,
     createMultiple,
     effectivePresetId,
@@ -99,6 +100,7 @@ export function useQuickCreationExecution(input: QuickCreationExecutionInput) {
         agent,
         linkedWorkItem: submitLinkedWorkItem,
         note: trimmedNote,
+        agentPrompt,
         settings,
         launchHost: selectedRepoAgentLaunchFact,
         shell: selectedRepoStartupShell,
@@ -256,6 +258,7 @@ export function useQuickCreationExecution(input: QuickCreationExecutionInput) {
       }
     },
     [
+      agentPrompt,
       clearNewWorkspaceDraft,
       createMultiple,
       effectivePresetId,

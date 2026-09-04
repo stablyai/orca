@@ -4,7 +4,6 @@ import type { WorktreeCreationRequest } from '@/lib/pending-worktree-creation'
 import type { QuickSubmitOptions } from './quick-creation-request'
 import { findPendingLinkedWorkItemCreationId } from '@/lib/pending-worktree-creation'
 import { useAppStore } from '@/store'
-import { getWorkspaceSeedName } from '@/lib/new-workspace'
 import { settleComposerSubmit } from '@/lib/composer-submit-cancellation'
 import {
   formatWorkspaceCreateError,
@@ -19,10 +18,8 @@ type QuickSubmitActionInput = Pick<
   ComposerModel,
   | 'effectiveLinkedPR'
   | 'executeQuickCreation'
-  | 'fallbackCreatureName'
   | 'isProjectGroupTarget'
   | 'isSubmissionCancelled'
-  | 'linkedPR'
   | 'linkedWorkItem'
   | 'name'
   | 'onCreated'
@@ -42,16 +39,15 @@ type QuickSubmitActionInput = Pick<
   | 'submitFolderTarget'
   | 'taskSourceContext'
   | 'telemetrySource'
+  | 'workspaceSeedName'
 >
 
 export function useQuickSubmitAction(input: QuickSubmitActionInput) {
   const {
     effectiveLinkedPR,
     executeQuickCreation,
-    fallbackCreatureName,
     isProjectGroupTarget,
     isSubmissionCancelled,
-    linkedPR,
     linkedWorkItem,
     name,
     onCreated,
@@ -70,7 +66,8 @@ export function useQuickSubmitAction(input: QuickSubmitActionInput) {
     sparseError,
     submitFolderTarget,
     taskSourceContext,
-    telemetrySource
+    telemetrySource,
+    workspaceSeedName
   } = input
 
   const submitQuick = useCallback(
@@ -80,21 +77,13 @@ export function useQuickSubmitAction(input: QuickSubmitActionInput) {
         return
       }
 
-      const workspaceNameSeed = getWorkspaceSeedName({
-        explicitName: name,
-        prompt: '',
-        linkedIssueNumber: parsedLinkedIssueNumber,
-        linkedPR,
-        fallbackName: fallbackCreatureName
-      })
-
       if (!repoId || !selectedRepo) {
         showProjectRequiredError()
         return
       }
 
       if (
-        !workspaceNameSeed ||
+        !workspaceSeedName ||
         sourceIntentBlocksCreate ||
         selectedRepoRequiresConnection ||
         (requiresExplicitSetupChoice && !setupDecision) ||
@@ -142,7 +131,7 @@ export function useQuickSubmitAction(input: QuickSubmitActionInput) {
         stagingRequest: {
           repoId,
           workspaceRunContext,
-          name: workspaceNameSeed,
+          name: workspaceSeedName,
           ...(parsedLinkedIssueNumber != null ? { linkedIssue: parsedLinkedIssueNumber } : {}),
           ...(effectiveLinkedPR != null ? { linkedPR: effectiveLinkedPR } : {}),
           setupDecision: setupDecision ?? 'inherit',
@@ -176,7 +165,7 @@ export function useQuickSubmitAction(input: QuickSubmitActionInput) {
         await executeQuickCreation(
           smartGitHubSettlement.value,
           requestedAgent,
-          workspaceNameSeed,
+          workspaceSeedName,
           workspaceRunContext,
           repoId,
           options,
@@ -200,10 +189,8 @@ export function useQuickSubmitAction(input: QuickSubmitActionInput) {
     [
       effectiveLinkedPR,
       executeQuickCreation,
-      fallbackCreatureName,
       isProjectGroupTarget,
       isSubmissionCancelled,
-      linkedPR,
       linkedWorkItem,
       name,
       onCreated,
@@ -222,7 +209,8 @@ export function useQuickSubmitAction(input: QuickSubmitActionInput) {
       sparseError,
       submitFolderTarget,
       taskSourceContext,
-      telemetrySource
+      telemetrySource,
+      workspaceSeedName
     ]
   )
 

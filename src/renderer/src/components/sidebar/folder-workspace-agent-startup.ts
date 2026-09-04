@@ -8,7 +8,7 @@ import {
   type ExecutionHostPlatformFact
 } from '@/lib/execution-host-facts'
 import type { AppState } from '@/store/types'
-import { resolveQuickCreateLinkedWorkItemPrompt } from '@/lib/linked-work-item-context'
+import { resolveQuickCreateAgentPrompt } from '@/lib/linked-work-item-context'
 import {
   buildAgentDraftLaunchPlan,
   buildAgentStartupPlan,
@@ -39,9 +39,10 @@ export function getFolderWorkspaceAgentLaunchFact(
 
 export function resolveFolderWorkspaceLaunchDraft(
   linkedWorkItem: LinkedWorkItemSummary,
-  note: string
+  note: string,
+  agentPrompt = ''
 ): string | null {
-  const { prompt, draftPrompt } = resolveQuickCreateLinkedWorkItemPrompt(linkedWorkItem, note)
+  const { prompt, draftPrompt } = resolveQuickCreateAgentPrompt(linkedWorkItem, note, agentPrompt)
   return (draftPrompt ?? prompt.trim()) || null
 }
 
@@ -50,6 +51,7 @@ export function buildFolderWorkspaceLinkedStartupPlan(args: {
   settings?: AgentStartupSettings
   linkedWorkItem: LinkedWorkItemSummary
   note: string
+  agentPrompt?: string
   agentCmdOverrides: Record<string, string> | undefined
   agentArgs?: string | null
   agentEnv?: Record<string, string>
@@ -68,7 +70,11 @@ export function buildFolderWorkspaceLinkedStartupPlan(args: {
   if (args.agentEnv) {
     inputs.agentEnv = args.agentEnv
   }
-  const linkedDraftPrompt = resolveFolderWorkspaceLaunchDraft(args.linkedWorkItem, args.note)
+  const linkedDraftPrompt = resolveFolderWorkspaceLaunchDraft(
+    args.linkedWorkItem,
+    args.note,
+    args.agentPrompt
+  )
   const draftLaunchPlan = linkedDraftPrompt
     ? buildAgentDraftLaunchPlan({
         ...inputs,
