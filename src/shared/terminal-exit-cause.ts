@@ -112,15 +112,12 @@ export function isDeliberateTerminalExit(cause: TerminalExitCause): boolean {
  * `evidence` mirrors what `resolveProcessExitCause` sees, so a caller that
  * knows its host cannot vouch for the child (macOS `login -flpq` wrapper,
  * SSH relay, a bare code with no cause) can refuse to mint a proven exit from
- * an ambiguous `0` — the same evidence the sibling `resolveUnreportedExitCause`
- * relies on. Callers without that knowledge keep the historical behaviour.
+ * an ambiguous `0`, mirroring the distinction `resolveUnreportedExitCause`
+ * already draws. Callers without that knowledge keep the historical behaviour.
  */
 export function isProvenProcessExit(
   exitCode: number,
-  evidence?: {
-    signal?: number | null
-    hostReportsChildExitStatus?: boolean
-  }
+  evidence?: Omit<Parameters<typeof resolveProcessExitCause>[0], 'exitCode'>,
 ): boolean {
   return (
     resolveProcessExitCause({ exitCode, ...(evidence ?? {}) }).kind !== 'unknown'
