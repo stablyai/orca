@@ -1,4 +1,4 @@
-import { useRef } from 'react'
+import { useRef, useState } from 'react'
 import type React from 'react'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import type { TuiAgent } from '../../../../shared/tui-agent'
@@ -107,6 +107,25 @@ export function CommitMessageAiPane({
   const settingsWriteQueueRef = useRef<Promise<void>>(undefined!)
   settingsWriteQueueRef.current ??= Promise.resolve()
 
+  const DEFAULT_GENERATION_TIMEOUT_MS = 60_000
+  const MIN_GENERATION_TIMEOUT_SECONDS = 10
+  const MAX_GENERATION_TIMEOUT_SECONDS = 600
+
+  const [generationTimeoutDraft, setGenerationTimeoutDraft] = useState(() =>
+    String(Math.round((config.generationTimeoutMs ?? DEFAULT_GENERATION_TIMEOUT_MS) / 1000))
+  )
+  // Reconcile draft if the persisted value changed externally.
+  const persistedGenerationTimeoutSeconds = Math.round(
+    (config.generationTimeoutMs ?? DEFAULT_GENERATION_TIMEOUT_MS) / 1000
+  )
+  const persistedGenerationTimeoutDraft = String(persistedGenerationTimeoutSeconds)
+  if (
+    generationTimeoutDraft !== persistedGenerationTimeoutDraft &&
+    document.activeElement?.id !== 'source-control-ai-generation-timeout'
+  ) {
+    setGenerationTimeoutDraft(persistedGenerationTimeoutDraft)
+  }
+
   const localWriteConfig = (patch: SourceControlAiSettingsPatch): Promise<void> => {
     const next = settingsWriteQueueRef.current
       .catch(() => undefined)
@@ -132,6 +151,31 @@ export function CommitMessageAiPane({
 
   const onCustomCommandChange = (value: string): void => {
     void writeConfig({ customAgentCommand: value })
+  }
+
+  const onGenerationTimeoutChange = (value: string): void => {
+    setGenerationTimeoutDraft(value)
+  }
+
+  const commitGenerationTimeout = (): void => {
+    const trimmed = generationTimeoutDraft.trim()
+    if (trimmed === '') {
+      setGenerationTimeoutDraft(persistedGenerationTimeoutDraft)
+      return
+    }
+
+    const seconds = Number.parseInt(trimmed, 10)
+    if (Number.isNaN(seconds)) {
+      setGenerationTimeoutDraft(persistedGenerationTimeoutDraft)
+      return
+    }
+
+    const clamped = Math.max(
+      MIN_GENERATION_TIMEOUT_SECONDS,
+      Math.min(MAX_GENERATION_TIMEOUT_SECONDS, seconds)
+    )
+    void writeConfig({ generationTimeoutMs: clamped * 1000 })
+    setGenerationTimeoutDraft(String(clamped))
   }
 
   const onPrDefaultChange = (
@@ -225,6 +269,77 @@ export function CommitMessageAiPane({
       writeConfig={writeConfig}
     />
   )
+
+  if (
+    matchesSettingsSearch(searchQuery, {
+      title: translate(
+        'auto.components.settings.CommitMessageAiPane.a8f3c1d2e7',
+        'Generation timeout'
+      ),
+      description: translate(
+        'auto.components.settings.CommitMessageAiPane.b2e9d4f5a1',
+        'Maximum time to wait for AI to generate commit messages, branch names, or pull request details before aborting.'
+      ),
+      keywords: [
+        translate('auto.components.settings.CommitMessageAiPane.c7d1e3f8b2', 'timeout'),
+        translate('auto.components.settings.CommitMessageAiPane.d4a2f1c9e8', 'seconds'),
+        translate('auto.components.settings.CommitMessageAiPane.e5b3f2d0c9', 'duration')
+      ]
+    })
+  ) {
+    sections.push(
+      <SearchableSetting
+        key="generation-timeout"
+        title={translate(
+          'auto.components.settings.CommitMessageAiPane.a8f3c1d2e7',
+          'Generation timeout'
+        )}
+        description={translate(
+          'auto.components.settings.CommitMessageAiPane.b2e9d4f5a1',
+          'Maximum time to wait for AI to generate commit messages, branch names, or pull request details before aborting.'
+        )}
+        keywords={['timeout', 'seconds', 'duration']}
+        className="space-y-2 py-2"
+        forceVisible
+      >
+        <div className="space-y-0.5">
+          <Label htmlFor="source-control-ai-generation-timeout">
+            {translate(
+              'auto.components.settings.CommitMessageAiPane.a8f3c1d2e7',
+              'Generation timeout'
+            )}
+          </Label>
+          <p className="text-xs text-muted-foreground">
+            {translate(
+              'auto.components.settings.CommitMessageAiPane.b2e9d4f5a1',
+              'Maximum time to wait for AI to generate commit messages, branch names, or pull request details before aborting.'
+            )}
+          </p>
+          <div className="flex items-center gap-2 mt-1">
+            <Input
+              id="source-control-ai-generation-timeout"
+              type="number"
+              min={10}
+              max={600}
+              step={5}
+              value={generationTimeoutDraft}
+              onChange={(e) => onGenerationTimeoutChange(e.target.value)}
+              onBlur={commitGenerationTimeout}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  commitGenerationTimeout()
+                }
+              }}
+              className="h-8 w-20 text-xs tabular-nums"
+            />
+            <span className="text-xs text-muted-foreground">
+              {translate('auto.components.settings.CommitMessageAiPane.f6c4d3e1b0', 'seconds')}
+            </span>
+          </div>
+        </div>
+      </SearchableSetting>
+    )
+  }
 
   if (
     config.enabled &&

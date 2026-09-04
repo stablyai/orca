@@ -61,7 +61,8 @@ async function executeGenerationPlan(input: {
         plan: input.plan,
         target: input.target,
         emptyResultName: input.emptyResultName,
-        operation: input.operation
+        operation: input.operation,
+        generationTimeoutMs: input.params.generationTimeoutMs
       })
     : runLocalPlanForAgent({
         agentId: input.params.agentId,
@@ -69,7 +70,8 @@ async function executeGenerationPlan(input: {
         target: input.target,
         emptyResultName: input.emptyResultName,
         operation: input.operation,
-        spawnAgent: input.spawnAgent
+        spawnAgent: input.spawnAgent,
+        generationTimeoutMs: input.params.generationTimeoutMs
       })
 }
 

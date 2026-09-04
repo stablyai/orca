@@ -12,7 +12,7 @@ import {
 } from './source-control-generation-lanes'
 import {
   MAX_SOURCE_CONTROL_AGENT_OUTPUT_BYTES,
-  SOURCE_CONTROL_GENERATION_TIMEOUT_MS
+  DEFAULT_SOURCE_CONTROL_GENERATION_TIMEOUT_MS
 } from './source-control-generation-limits'
 import type {
   InternalTextGenerationResult,
@@ -49,7 +49,9 @@ export function runLocalSourceControlPlan(input: {
   wslDistro?: string
   holdHomeLockUntilExit: boolean
   spawnAgent: SpawnSourceControlAgent
+  generationTimeoutMs?: number
 }): LocalProcessExecution<InternalTextGenerationResult> {
+  const timeoutMs = input.generationTimeoutMs ?? DEFAULT_SOURCE_CONTROL_GENERATION_TIMEOUT_MS
   const { plan, cwd, operation, holdHomeLockUntilExit } = input
   let markProcessClosed!: () => void
   const processClosed = new Promise<void>((resolve) => {
@@ -124,9 +126,9 @@ export function runLocalSourceControlPlan(input: {
       startTermination()
       finalize({
         success: false,
-        error: `Generation timed out after ${SOURCE_CONTROL_GENERATION_TIMEOUT_MS / 1000}s.`
+        error: `Generation timed out after ${timeoutMs / 1000}s.`
       })
-    }, SOURCE_CONTROL_GENERATION_TIMEOUT_MS)
+    }, timeoutMs)
 
     const onStdoutData = (chunk: Buffer): void => {
       stdoutBytes += chunk.byteLength

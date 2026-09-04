@@ -99,7 +99,9 @@ describe('registerFilesystemHandlers', () => {
     expect(discoverCommitMessageModelsLocalMock).toHaveBeenCalledWith(
       'codex',
       undefined,
-      'npx codex'
+      'npx codex',
+      undefined,
+      60_000
     )
   })
 
@@ -133,7 +135,8 @@ describe('registerFilesystemHandlers', () => {
       'claude',
       undefined,
       undefined,
-      { cwd: folderPath }
+      { cwd: folderPath },
+      60_000
     )
   })
 
@@ -203,7 +206,8 @@ describe('registerFilesystemHandlers', () => {
         'claude',
         expect.objectContaining({ CLAUDE_CONFIG_DIR: '/home/tester/.claude' }),
         undefined,
-        { cwd: path.resolve(folderPath), wslDistro: 'Ubuntu' }
+        { cwd: path.resolve(folderPath), wslDistro: 'Ubuntu' },
+        60_000
       )
     })
   })
@@ -263,7 +267,8 @@ describe('registerFilesystemHandlers', () => {
         'codex',
         expect.objectContaining({ CODEX_HOME: '/home/tester/.codex' }),
         'npx codex',
-        { cwd: WORKTREE_FEATURE_PATH, wslDistro: 'Ubuntu' }
+        { cwd: WORKTREE_FEATURE_PATH, wslDistro: 'Ubuntu' },
+        60_000
       )
     })
   })
@@ -303,7 +308,8 @@ describe('registerFilesystemHandlers', () => {
       'cursor',
       '/remote/repo',
       expect.any(Function),
-      'npx cursor-agent'
+      'npx cursor-agent',
+      60_000
     )
     const execute = discoverCommitMessageModelsRemoteMock.mock.calls[0]?.[2] as (
       plan: unknown,

@@ -95,6 +95,7 @@ export const RICH_MARKDOWN_MAX_SIZE_BYTES = 600 * 1024
 export const DEFAULT_EDITOR_AUTO_SAVE_DELAY_MS = 1000
 export const MIN_EDITOR_AUTO_SAVE_DELAY_MS = 250
 export const MAX_EDITOR_AUTO_SAVE_DELAY_MS = 10_000
+export const DEFAULT_SOURCE_CONTROL_GENERATION_TIMEOUT_MS = 60_000
 
 // Why: first-time seed only — doubles on each dismissal without starring; later thresholds live in starNagNextThreshold.
 export const STAR_NAG_INITIAL_THRESHOLD = 35

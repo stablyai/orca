@@ -5,7 +5,7 @@ import {
   finalizeFromAgentOutput,
   userFacingUnsafeWindowsBatchArgs
 } from './source-control-agent-failure'
-import { SOURCE_CONTROL_GENERATION_TIMEOUT_MS } from './source-control-generation-limits'
+import { DEFAULT_SOURCE_CONTROL_GENERATION_TIMEOUT_MS } from './source-control-generation-limits'
 import type {
   InternalTextGenerationResult,
   RemoteCommitMessageExecResult,
@@ -18,17 +18,19 @@ export async function runRemoteSourceControlPlan(input: {
   target: RemoteGenerationTarget
   emptyResultName: string
   operation: TextGenerationOperation
+  generationTimeoutMs?: number
 }): Promise<InternalTextGenerationResult> {
   const { plan, target, operation } = input
+  const timeoutMs = input.generationTimeoutMs ?? DEFAULT_SOURCE_CONTROL_GENERATION_TIMEOUT_MS
   let result: RemoteCommitMessageExecResult
   try {
-    result = await target.execute(plan, target.cwd, SOURCE_CONTROL_GENERATION_TIMEOUT_MS, operation)
+    result = await target.execute(plan, target.cwd, timeoutMs, operation)
   } catch (error) {
     console.error('[commit-message] Remote generator request failed:', error)
     if (isSshRequestOutcomeUnverifiable(error)) {
       return {
         success: false,
-        error: `${plan.label} took longer than ${SOURCE_CONTROL_GENERATION_TIMEOUT_MS / 1000}s to respond and may still be running on the remote host.`
+        error: `${plan.label} took longer than ${timeoutMs / 1000}s to respond and may still be running on the remote host.`
       }
     }
     return {
@@ -58,7 +60,7 @@ export async function runRemoteSourceControlPlan(input: {
   if (result.timedOut) {
     return {
       success: false,
-      error: `Generation timed out after ${SOURCE_CONTROL_GENERATION_TIMEOUT_MS / 1000}s.`
+      error: `Generation timed out after ${timeoutMs / 1000}s.`
     }
   }
   return finalizeFromAgentOutput({

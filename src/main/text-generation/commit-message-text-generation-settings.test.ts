@@ -30,7 +30,8 @@ describe('resolveCommitMessageSettings', () => {
         model: 'gpt-5.5',
         thinkingLevel: 'low',
         customPrompt: 'Use Conventional Commits.',
-        commandInputTemplate: '{basePrompt}\n\nUse Conventional Commits.'
+        commandInputTemplate: '{basePrompt}\n\nUse Conventional Commits.',
+        generationTimeoutMs: 60_000
       }
     })
   })
