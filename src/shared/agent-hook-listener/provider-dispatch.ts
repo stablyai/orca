@@ -18,6 +18,7 @@ import { normalizePiCompatibleEvent } from './providers/pi-family-events'
 import { normalizeDroidEvent } from './providers/droid-events'
 import { normalizeCommandCodeEvent } from './providers/command-code-events'
 import { normalizeGrokEvent } from './providers/grok-events'
+import { normalizePolytokenEvent } from './providers/polytoken-events'
 import { normalizeCopilotEvent } from './providers/copilot-events'
 import { normalizeHermesEvent } from './providers/hermes-events'
 import { normalizeDevinEvent } from './providers/devin-events'
@@ -147,6 +148,9 @@ export function normalizeProviderEvent(input: {
       break
     case 'kimi':
       payload = normalizeKimiEvent(state, eventName, promptText, paneKey, hookPayload)
+      break
+    case 'polytoken':
+      payload = normalizePolytokenEvent(state, eventName, promptText, paneKey, hookPayload)
       break
   }
 

@@ -627,4 +627,30 @@ describe('backslash mode reaches every command the user can type (#11375)', () =
 
     expect(plan.ok && plan.plan.args).toContain('/my dir')
   })
+
+  it('plans Polytoken exec with the prompt on stdin only', () => {
+    expect(
+      planCommitMessageGeneration(
+        { agentId: 'polytoken', model: 'zai/glm-5.3-flash', thinkingLevel: 'max' },
+        'PROMPT'
+      )
+    ).toEqual({
+      ok: true,
+      plan: {
+        binary: 'polytoken',
+        args: ['exec', '--model', 'zai/glm-5.3-flash(max)'],
+        stdinPayload: 'PROMPT',
+        label: 'Polytoken'
+      }
+    })
+    expect(
+      planCommitMessageGeneration(
+        { agentId: 'polytoken', model: 'polytoken:configured-default' },
+        'PROMPT'
+      )
+    ).toMatchObject({
+      ok: true,
+      plan: { binary: 'polytoken', args: ['exec'], stdinPayload: 'PROMPT' }
+    })
+  })
 })

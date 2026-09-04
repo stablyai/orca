@@ -716,4 +716,38 @@ describe('tui agent startup plans', () => {
   it('appends Devin default permission-mode bypass before stdin prompt delivery', () => {
     expect(resolveTuiAgentLaunchArgs('devin', null)).toBe('--permission-mode bypass')
   })
+
+  it('launches Polytoken with polytoken new and delivers the prompt through --prompt', () => {
+    const emptyPlan = buildAgentStartupPlan({
+      agent: 'polytoken',
+      prompt: '',
+      cmdOverrides: {},
+      agentArgs: '',
+      platform: 'darwin',
+      allowEmptyPromptLaunch: true
+    })
+    expect(emptyPlan?.launchCommand).toBe('polytoken new')
+    expect(emptyPlan?.expectedProcess).toBe('polytoken')
+
+    const plan = buildAgentStartupPlan({
+      agent: 'polytoken',
+      prompt: "fix Bob's branch\nthen push",
+      cmdOverrides: {},
+      agentArgs: '',
+      platform: 'linux'
+    })
+    expect(plan?.launchCommand).toBe(`polytoken new --prompt 'fix Bob'"'"'s branch\nthen push'`)
+
+    const overridden = buildAgentStartupPlan({
+      agent: 'polytoken',
+      prompt: '-n looks like a flag',
+      // Why: like Kiro's `kiro-cli chat --tui`, an override replaces the whole launch line.
+      cmdOverrides: { polytoken: '/opt/polytoken/bin/polytoken new' },
+      agentArgs: '--working-dir .',
+      platform: 'linux'
+    })
+    expect(overridden?.launchCommand).toBe(
+      "/opt/polytoken/bin/polytoken new '--working-dir' '.' --prompt '-n looks like a flag'"
+    )
+  })
 })

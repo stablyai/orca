@@ -382,4 +382,18 @@ describe('agent process recognition', () => {
       processName: 'grok-0.2.51'
     })
   })
+
+  it('recognizes Polytoken from the bare binary, an absolute path, and a typed launch line', () => {
+    expect(recognizeAgentProcess('polytoken')).toEqual({
+      agent: 'polytoken',
+      processName: 'polytoken'
+    })
+    expect(recognizeAgentProcess('/Users/dev/.local/bin/polytoken')).toEqual({
+      agent: 'polytoken',
+      processName: 'polytoken'
+    })
+    expect(isExpectedAgentProcess('/Users/dev/.local/bin/polytoken', 'polytoken')).toBe(true)
+    expect(isRecognizedAgentType('polytoken')).toBe(true)
+    expect(recognizeAgentProcess('polytoken-daemon')).toBeNull()
+  })
 })

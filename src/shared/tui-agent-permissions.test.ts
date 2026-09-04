@@ -85,4 +85,12 @@ describe('tui agent permissions', () => {
       })
     ).toBe('yolo')
   })
+
+  it('leaves Polytoken out of the yolo profile because it has no per-launch permission flag', () => {
+    expect(YOLO_TUI_AGENT_ARGS).not.toHaveProperty('polytoken')
+    expect(YOLO_TUI_AGENT_ENV).not.toHaveProperty('polytoken')
+    expect(resolveTuiAgentPermissionMode({ agent: 'polytoken', agentArgs: '', agentEnv: {} })).toBe(
+      'manual'
+    )
+  })
 })
