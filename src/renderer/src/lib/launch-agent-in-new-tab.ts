@@ -26,9 +26,11 @@ import {
 import { resolveLocalWindowsAgentStartupShell } from '../../../shared/windows-terminal-shell'
 import { TUI_AGENT_CONFIG } from '../../../shared/tui-agent-config'
 import { seedCommandCodeSubmittedPromptStatus } from '@/lib/command-code-prompt-status-seed'
+import type { ExecutionHostId } from '../../../shared/execution-host'
 import type { TuiAgent } from '../../../shared/tui-agent'
 import type { LaunchSource } from '../../../shared/telemetry-events'
 import { getConnectionIdFromState } from '@/lib/connection-context'
+import { findRepoForHost } from '@/store/slices/repo-host-identity'
 import { resolveInitialNativeChatSessionOptions } from '@/components/native-chat/native-chat-launch-session-options'
 import { seedNativeChatAppliedSessionOptions } from '@/components/native-chat/native-chat-session-option-cache'
 import { startStructuredAgentLaunch } from '@/lib/structured-agent-session-launch'
@@ -44,6 +46,9 @@ import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../shared/constants'
 export type LaunchAgentInNewTabArgs = {
   agent: TuiAgent
   worktreeId: string
+  /** The host the caller picked from a surface listing one row per host. `worktreeId` names
+   *  no host, so without this two publications of it resolve to whichever comes first. */
+  executionHostId?: ExecutionHostId
   /** Tab group the user launched from; keeps split-group launches in that pane instead of the active group. */
   groupId?: string
   /** Optional initial prompt; delivery depends on `promptDelivery` and the agent's prompt mode. */
@@ -61,6 +66,11 @@ export type LaunchAgentInNewTabArgs = {
   launchPlatform?: NodeJS.Platform
   /** Called after the prompt is actually delivered to the agent input path. */
   onPromptDelivered?: () => void
+  /** Whether the new tab takes the foreground. Default true, as the tab bar's `+` expects.
+   *  A caller launching into a workspace it is not standing in — the session grid — passes
+   *  false: `createTab` otherwise moves the GLOBAL `activeTabId`, and the terminal view
+   *  would replace whatever surface the ACTIVE workspace was showing. */
+  activate?: boolean
 }
 
 export type LaunchAgentInNewTabResult = {
@@ -95,6 +105,7 @@ function launchAgentInNewTabInternal(
   const {
     agent,
     worktreeId,
+    executionHostId,
     groupId,
     prompt,
     agentArgs,
@@ -103,11 +114,21 @@ function launchAgentInNewTabInternal(
     launchSource,
     quickCommandLabel,
     launchPlatform,
-    onPromptDelivered
+    onPromptDelivered,
+    activate = true
   } = args
   const store = useAppStore.getState()
-  const worktree = store.allWorktrees?.().find((entry: { id: string }) => entry.id === worktreeId)
-  const repo = worktree ? store.repos?.find((entry) => entry.id === worktree.repoId) : null
+  // Why the host-qualified lookups when a host was picked: a bare-id `find` answers with
+  // whichever publication comes first, and the repo behind it decides the launch platform
+  // and whether the command is built for a remote shell at all.
+  const worktree = executionHostId
+    ? (store.getKnownWorktreeById?.(worktreeId, executionHostId) ?? null)
+    : store.allWorktrees?.().find((entry: { id: string }) => entry.id === worktreeId)
+  const repo = worktree
+    ? executionHostId
+      ? findRepoForHost(store.repos ?? [], worktree.repoId, { hostId: executionHostId })
+      : store.repos?.find((entry) => entry.id === worktree.repoId)
+    : null
   // Why: `store.repos.find` is host-blind and the same repo id can exist on local, SSH and runtime
   // hosts, so the row it returns can belong to a different host than the worktree names (#11163).
   // The shared resolver answers from the worktree's own host; `undefined` (rival rows disagree) is
@@ -189,6 +210,7 @@ function launchAgentInNewTabInternal(
       // Why: omission means terminal locally, but would let a paired host apply
       // its own default; send the client's resolved terminal choice explicitly.
       viewMode: initialViewModeProps.viewMode ?? 'terminal',
+      activate,
       onPromptDelivered
     })
     return {
@@ -258,6 +280,10 @@ function launchAgentInNewTabInternal(
   // Why: queue startup BEFORE TerminalPane mounts — it snapshots pendingStartupByTabId in useState on first render.
   // Why: followup path pastes an unsubmitted draft, so gate the initial chat view like a draft launch, not auto-submit.
   const tab = store.createTab(worktreeId, groupId, undefined, {
+    ...(executionHostId ? { executionHostId } : {}),
+    // Only when it differs from createTab's own default, so the ordinary launch keeps the
+    // exact call shape the tab bar has always made.
+    ...(activate ? {} : { activate: false }),
     launchAgent: agent,
     quickCommandLabel,
     ...initialViewModeProps
@@ -330,7 +356,11 @@ function launchAgentInNewTabInternal(
   }
 
   // Why: without setActiveTabType('terminal') a worktree showing an editor keeps rendering it and the new tab stays hidden.
-  store.setActiveTabType('terminal')
+  // Why gated: this writes the ACTIVE workspace's surface, not the target's, so a background
+  // launch would swap the editor or browser the user left open somewhere else entirely.
+  if (activate) {
+    store.setActiveTabType('terminal')
+  }
 
   // Why: persist tab-bar order so reconcileTabOrder doesn't fall back to terminals-first and jump the new tab to index 0.
   persistAgentLaunchTabOrder(worktreeId, tab.id)

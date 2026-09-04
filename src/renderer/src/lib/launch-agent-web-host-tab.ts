@@ -45,6 +45,8 @@ export function launchAgentInWebHostTab(args: {
   submitPastedPrompt: boolean
   agentArgs?: string | null
   viewMode?: Tab['viewMode']
+  /** Whether the host-created tab takes the foreground; false for a background launch. */
+  activate?: boolean
   onPromptDelivered?: () => void
 }): Promise<{ delivered: boolean; failureNotified: boolean }> {
   const {
@@ -60,6 +62,7 @@ export function launchAgentInWebHostTab(args: {
     submitPastedPrompt,
     agentArgs,
     viewMode,
+    activate = true,
     onPromptDelivered
   } = args
   const hasPrompt = prompt.length > 0
@@ -71,7 +74,7 @@ export function launchAgentInWebHostTab(args: {
     worktreeId,
     environmentId,
     targetGroupId: groupId,
-    activate: true,
+    activate,
     ...(cwd?.trim() ? { cwd } : {}),
     ...(viewMode ? { viewMode } : {}),
     agentSessionKind: 'fresh',
@@ -115,7 +118,9 @@ export function launchAgentInWebHostTab(args: {
       )
       return { delivered: false, failureNotified: true }
     }
-    useAppStore.getState().setActiveTabType('terminal')
+    if (activate) {
+      useAppStore.getState().setActiveTabType('terminal')
+    }
     if (hasPrompt && promptDelivered) {
       onPromptDelivered?.()
     }
