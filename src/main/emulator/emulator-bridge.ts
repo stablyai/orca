@@ -13,6 +13,8 @@ import { listAvailableEmulatorDevices } from './emulator-device-inventory'
 import { deriveAxUrlFromStreamUrl } from './serve-sim-detached-session'
 import { IosEmulatorBackend } from './backends/ios-emulator-backend'
 import { AndroidEmulatorBackend } from './backends/android-emulator-backend'
+import { isAdbNetworkSerial } from './android/adb-network-endpoint'
+import type { AdbConnectionStatus } from './android/adb-device-connection'
 import type {
   EmulatorBackend,
   EmulatorBackendCapabilities,
@@ -61,6 +63,32 @@ export class EmulatorBridge {
 
   async checkServeSimAvailable(): Promise<void> {
     return this.iosBackend.checkServeSimAvailable()
+  }
+
+  // Explicit ADB network device connect/status — the only initiator of `adb
+  // connect` anywhere in the app (never called from availability/boot/pane-open).
+  async adbConnect(address: string): Promise<AdbConnectionStatus> {
+    return this.androidBackend.adbConnection.connect(address)
+  }
+
+  async adbConnectionStatus(address: string): Promise<AdbConnectionStatus> {
+    return this.androidBackend.adbConnection.status(address)
+  }
+
+  // For RPC disconnect/status calls that don't name an address explicitly —
+  // surfaces the manager's own address->serial mapping, no new state owned here.
+  adbCurrentAddress(): string | null {
+    return this.androidBackend.adbConnection.currentAddress()
+  }
+
+  // Explicit Disconnect lifecycle: stop this device's scrcpy helper (+ orphan
+  // forwards) and drop it from the session registry BEFORE `adb disconnect`,
+  // so no session is left pointing at a serial adb no longer recognizes.
+  async adbDisconnect(address: string): Promise<AdbConnectionStatus> {
+    const serial = this.androidBackend.adbConnection.serialFor(address) ?? address
+    await this.androidBackend.stopHelperForDevice(serial, { includeOrphaned: true })
+    this.sessionRegistry.clearSessionAndWorktrees(serial)
+    return this.androidBackend.adbConnection.disconnect(address)
   }
 
   registerActiveEmulator(
@@ -340,6 +368,12 @@ export class EmulatorBridge {
   }
 
   private async backendForDevice(device: string): Promise<EmulatorBackend> {
+    // An ADB TCP address (host:port) is unambiguously Android, even when it is
+    // offline/unrecognized by any backend's ownsDevice — classify it before the
+    // ownership loop so it never falls through to the iOS/host-platform fallback.
+    if (isAdbNetworkSerial(device)) {
+      return this.androidBackend
+    }
     for (const backend of this.backends) {
       if (await backend.ownsDevice(device)) {
         return backend

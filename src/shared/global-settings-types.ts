@@ -405,6 +405,9 @@ export type GlobalSettings = {
   mobileEmulatorEnabled?: boolean
   /** Preferred iOS Simulator UDID for UI auto-attach and agent CLI attach. */
   mobileEmulatorDefaultDeviceUdid?: string | null
+  /** Saved ADB network device address (host:port) for Settings > Mobile Emulator > ADB Device Connection.
+   *  Connection state itself is derived live from `adb devices -l` and is never persisted. */
+  mobileEmulatorAdbAddress?: string | null
   /** Explicit Android SDK root for when auto-discovery (ANDROID_HOME / default path) fails; null (default) auto-discovers. */
   androidSdkPath?: string | null
   /** Auto-restore window (ms) for a phone-fit PTY after the last mobile subscriber leaves.

@@ -11,8 +11,13 @@ import { parseAdbDevices } from './adb-devices'
 const SDK: AndroidSdkPaths = {
   sdkRoot: '/sdk',
   adb: '/sdk/adb',
-  emulator: '/sdk/emulator',
-  avdmanager: '/sdk/avdmanager'
+  avdTools: { emulator: '/sdk/emulator', avdmanager: '/sdk/avdmanager' }
+}
+
+const SDK_NO_AVD_TOOLS: AndroidSdkPaths = {
+  sdkRoot: '/sdk',
+  adb: '/sdk/adb',
+  avdTools: null
 }
 
 const ok = (stdout: string): AndroidCommandResult => ({ stdout, stderr: '', code: 0 })
@@ -64,7 +69,7 @@ describe('listAndroidDevices', () => {
         if (binary === SDK.adb && a === 'devices -l') {
           return 'List of devices attached\nemulator-5554\tdevice'
         }
-        if (binary === SDK.emulator && a === '-list-avds') {
+        if (binary === SDK.avdTools?.emulator && a === '-list-avds') {
           return 'Pixel_7'
         }
         if (binary === SDK.adb && a === '-s emulator-5554 emu avd name') {
@@ -76,6 +81,36 @@ describe('listAndroidDevices', () => {
     const devices = await listAndroidDevices(fake as unknown as AndroidCommandRunner, SDK)
     expect(devices).toHaveLength(1)
     expect(devices[0]).toMatchObject({ id: 'emulator-5554', name: 'Pixel_7', state: 'booted' })
+  })
+
+  it('returns connected devices without invoking the emulator binary when avdTools is null', async () => {
+    const fake = vi.fn(
+      runner((binary, a) => {
+        if (binary === SDK_NO_AVD_TOOLS.adb && a === 'devices -l') {
+          return 'List of devices attached\n192.168.1.5:5555\tdevice model:Pixel_7'
+        }
+        return ''
+      })
+    )
+    const devices = await listAndroidDevices(
+      fake as unknown as AndroidCommandRunner,
+      SDK_NO_AVD_TOOLS
+    )
+    expect(devices).toEqual([
+      {
+        backend: 'android',
+        id: '192.168.1.5:5555',
+        name: 'Pixel_7',
+        state: 'booted',
+        detail: 'device',
+        isAvailable: true
+      }
+    ])
+    // No call should ever target an emulator binary path: only the mandatory adb
+    // binary may be invoked when the SDK has no AVD tooling.
+    for (const call of fake.mock.calls) {
+      expect(call[0]).toBe(SDK_NO_AVD_TOOLS.adb)
+    }
   })
 })
 

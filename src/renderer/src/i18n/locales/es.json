@@ -8590,7 +8590,17 @@
               "c5eca29310": "simulador de iOS",
               "25159de808": "emulador móvil",
               "9595354cff": "Configura la compatibilidad con el emulador móvil para Orca y agentes de codificación.",
-              "cdd3c31918": "Emulador móvil"
+              "cdd3c31918": "Emulador móvil",
+              "849bb5184b": "ADB Device Connection",
+              "a7b8188acc": "Connect an Android device or cloud phone over ADB by address.",
+              "252f15438e": "adb",
+              "7878a18ec0": "device",
+              "badd8f59c3": "address",
+              "ceceed63a7": "tcp",
+              "5a84794ca0": "cloud phone",
+              "4551927ee8": "connect",
+              "78a62cc352": "disconnect",
+              "ded8cfc31c": "network"
             }
           },
           "pane": {
@@ -10284,6 +10294,24 @@
           "saveFailed": "No se pudieron guardar los valores predeterminados de visibilidad.",
           "updateServer": "Actualiza este servidor para configurar los valores predeterminados de las fuentes.",
           "updateServerDefaults": "Actualiza este servidor para configurar los valores predeterminados de visibilidad."
+        },
+        "MobileEmulatorAdbConnection": {
+          "bb9d5d8810": "Connected",
+          "f227da109f": "Connecting…",
+          "24e04bcc2d": "Unauthorized",
+          "87f10ea8c7": "Offline",
+          "ddc15ee405": "Failed",
+          "4fdad1ea69": "Unavailable",
+          "e2763f4f83": "Not connected",
+          "bff8b67049": "Could not reach the ADB connection.",
+          "40a48c3a86": "Enter a device address first.",
+          "4f9f7d7949": "ADB Device Connection",
+          "429d1ea0c4": "Connect an Android device or cloud phone over ADB (host:port). The address must already be reachable from this computer; VPN/tunnel setup is a separate step.",
+          "05a99b8deb": "ADB device connection is not available from this client.",
+          "8c92f2f5f2": "Device address",
+          "215612d345": "Connect",
+          "6f152886ba": "Disconnect",
+          "d92278bd52": "ADB grants shell, install, and debug access to the device — never expose it to an untrusted network."
         }
       },
       "right": {

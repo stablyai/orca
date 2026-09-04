@@ -155,6 +155,16 @@ const ShutdownParams = KillParams.extend({
 
 const ListParams = WorktreeParam
 
+const AdbConnectParams = z.object({
+  address: z.string().min(1),
+  worktree: z.string().optional()
+})
+
+const AdbAddressOptionalParams = z.object({
+  address: z.string().min(1).optional(),
+  worktree: z.string().optional()
+})
+
 export const EMULATOR_METHODS: RpcMethod[] = [
   defineMethod({
     name: 'emulator.list',
@@ -250,5 +260,20 @@ export const EMULATOR_METHODS: RpcMethod[] = [
     name: 'emulator.unregisterActive',
     params: z.object({ worktree: z.string().optional() }).partial(),
     handler: async (params, { runtime }) => runtime.emulatorUnregisterActive(params)
+  }),
+  defineMethod({
+    name: 'emulator.adbConnect',
+    params: AdbConnectParams,
+    handler: async (params, { runtime }) => runtime.emulatorAdbConnect(params)
+  }),
+  defineMethod({
+    name: 'emulator.adbDisconnect',
+    params: AdbAddressOptionalParams,
+    handler: async (params, { runtime }) => runtime.emulatorAdbDisconnect(params)
+  }),
+  defineMethod({
+    name: 'emulator.adbConnectionStatus',
+    params: AdbAddressOptionalParams,
+    handler: async (params, { runtime }) => runtime.emulatorAdbConnectionStatus(params)
   })
 ]

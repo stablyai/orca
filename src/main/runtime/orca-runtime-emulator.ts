@@ -12,6 +12,8 @@ import type { EmulatorSessionInfo } from '../emulator/emulator-types'
 import type { SimulatorDevice } from '../emulator/simctl-simulator-devices'
 import type { EmulatorDevice } from '../emulator/backends/emulator-backend'
 import type { GlobalSettings } from '../../shared/global-settings-types'
+import { RuntimeEmulatorAdbCommands } from './orca-runtime-emulator-adb'
+import { RuntimeEmulatorCapabilityCommands } from './orca-runtime-emulator-capabilities'
 
 // Settings slice the emulator surface needs; keeps the host contract honest (no widening cast).
 type EmulatorHostSettings = Pick<
@@ -31,7 +33,18 @@ export type RuntimeEmulatorCommandHost = {
 type EmulatorTargetParams = { device?: string; emulator?: string; worktree?: string }
 
 export class RuntimeEmulatorCommands {
-  constructor(private readonly host: RuntimeEmulatorCommandHost) {}
+  private readonly adbCommands: RuntimeEmulatorAdbCommands
+  private readonly capabilityCommands: RuntimeEmulatorCapabilityCommands
+
+  constructor(private readonly host: RuntimeEmulatorCommandHost) {
+    this.adbCommands = new RuntimeEmulatorAdbCommands({
+      requireEmulatorBridge: () => this.requireEmulatorBridge()
+    })
+    this.capabilityCommands = new RuntimeEmulatorCapabilityCommands({
+      requireEmulatorBridge: () => this.requireEmulatorBridge(),
+      resolveWorktreeId: (worktree) => this.resolveWorktreeId(worktree)
+    })
+  }
 
   private requireEmulatorBridge(): EmulatorBridge {
     const bridge = this.host.getEmulatorBridge()
@@ -234,65 +247,25 @@ export class RuntimeEmulatorCommands {
     return worktree ? await this.host.resolveEmulatorCleanupWorkspaceId(worktree) : undefined
   }
 
-  async emulatorInstall(
-    params: EmulatorTargetParams & { path: string; reinstall?: boolean }
-  ): Promise<{ ok: true }> {
-    const worktreeId = await this.resolveWorktreeId(params.worktree)
-    await this.requireEmulatorBridge().runCapability(
-      'install',
-      { device: params.device ?? params.emulator, worktreeId },
-      (backend, device) => backend.installApp!(device, params.path, { reinstall: params.reinstall })
-    )
-    return RuntimeEmulatorCommands.OK
-  }
-
-  async emulatorLaunch(
-    params: EmulatorTargetParams & { package: string; activity?: string }
-  ): Promise<{ ok: true }> {
-    const worktreeId = await this.resolveWorktreeId(params.worktree)
-    await this.requireEmulatorBridge().runCapability(
-      'launch',
-      { device: params.device ?? params.emulator, worktreeId },
-      (backend, device) => backend.launchApp!(device, params.package, params.activity)
-    )
-    return RuntimeEmulatorCommands.OK
-  }
-
-  async emulatorPermissions(
-    params: EmulatorTargetParams & {
-      op: 'grant' | 'revoke' | 'reset'
-      package?: string
-      permission?: string
-    }
-  ): Promise<{ ok: true }> {
-    const worktreeId = await this.resolveWorktreeId(params.worktree)
-    await this.requireEmulatorBridge().runCapability(
-      'permissions',
-      { device: params.device ?? params.emulator, worktreeId },
-      (backend, device) =>
-        backend.setPermission!(device, params.op, params.package ?? '', params.permission)
-    )
-    return RuntimeEmulatorCommands.OK
-  }
-
-  async emulatorAx(params: EmulatorTargetParams): Promise<unknown> {
-    const worktreeId = await this.resolveWorktreeId(params.worktree)
-    return this.requireEmulatorBridge().accessibilityTree({
-      device: params.device ?? params.emulator,
-      worktreeId
-    })
-  }
-
-  async emulatorLogcat(
-    params: EmulatorTargetParams & { lines?: number; filters?: string[] }
-  ): Promise<unknown> {
-    const worktreeId = await this.resolveWorktreeId(params.worktree)
-    return this.requireEmulatorBridge().runCapability(
-      'logcat',
-      { device: params.device ?? params.emulator, worktreeId },
-      (backend, device) => backend.logcat!(device, { lines: params.lines, filters: params.filters })
-    )
-  }
+  // Instance-field arrows: bindPrefixedMethods copies own emulator* functions
+  // onto the runtime edge surface (prototype-only binding would drop these).
+  emulatorAdbConnect: RuntimeEmulatorAdbCommands['emulatorAdbConnect'] = (params) =>
+    this.adbCommands.emulatorAdbConnect(params)
+  emulatorAdbDisconnect: RuntimeEmulatorAdbCommands['emulatorAdbDisconnect'] = (params) =>
+    this.adbCommands.emulatorAdbDisconnect(params)
+  emulatorAdbConnectionStatus: RuntimeEmulatorAdbCommands['emulatorAdbConnectionStatus'] = (
+    params
+  ) => this.adbCommands.emulatorAdbConnectionStatus(params)
+  emulatorInstall: RuntimeEmulatorCapabilityCommands['emulatorInstall'] = (params) =>
+    this.capabilityCommands.emulatorInstall(params)
+  emulatorLaunch: RuntimeEmulatorCapabilityCommands['emulatorLaunch'] = (params) =>
+    this.capabilityCommands.emulatorLaunch(params)
+  emulatorPermissions: RuntimeEmulatorCapabilityCommands['emulatorPermissions'] = (params) =>
+    this.capabilityCommands.emulatorPermissions(params)
+  emulatorAx: RuntimeEmulatorCapabilityCommands['emulatorAx'] = (params) =>
+    this.capabilityCommands.emulatorAx(params)
+  emulatorLogcat: RuntimeEmulatorCapabilityCommands['emulatorLogcat'] = (params) =>
+    this.capabilityCommands.emulatorLogcat(params)
 
   async emulatorKill(params: {
     device?: string

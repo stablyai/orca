@@ -117,9 +117,19 @@ function bindPrefixedMethods<T extends object>(
   prefix: string
 ): Partial<PublicMethods<T>> {
   const bound: Record<string, unknown> = {}
-  for (const name of Object.getOwnPropertyNames(Object.getPrototypeOf(instance))) {
-    if (name.startsWith(prefix)) {
-      bound[name] = (instance[name as keyof T] as (...args: unknown[]) => unknown).bind(instance)
+  // Why: include own properties so instance-field command arrows (used to
+  // keep RuntimeEmulatorCommands under max-lines) still reach the surface.
+  const names = new Set([
+    ...Object.getOwnPropertyNames(Object.getPrototypeOf(instance)),
+    ...Object.getOwnPropertyNames(instance)
+  ])
+  for (const name of names) {
+    if (!name.startsWith(prefix)) {
+      continue
+    }
+    const value = instance[name as keyof T]
+    if (typeof value === 'function') {
+      bound[name] = value.bind(instance)
     }
   }
   return bound as Partial<PublicMethods<T>>
