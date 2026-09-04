@@ -65,7 +65,12 @@ vi.mock('./TaskSourceSimpleSetup', () => ({
   JiraSetupSteps: (props: { onOpenIntegrations: () => void }) => {
     mocks.jiraSetupProps.push(props)
     return <div data-testid="jira-setup">Jira setup</div>
-  }
+  },
+  PlaneSetupSteps: () => <div data-testid="plane-setup">Plane setup</div>
+}))
+
+vi.mock('@/hooks/usePlaneConnection', () => ({
+  usePlaneConnection: () => ({ refresh: vi.fn() })
 }))
 
 vi.mock('@/store', () => ({
@@ -137,7 +142,8 @@ describe('TasksPane', () => {
         skillChecking: false,
         visible: true
       },
-      jira: { connected: false, checking: false, visible: false }
+      jira: { connected: false, checking: false, visible: false },
+      plane: { connected: false, checking: false, unavailable: true, visible: false }
     }
   })
 

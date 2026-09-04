@@ -47,9 +47,10 @@ export type WorkspaceIntentWorkItem = {
   type: 'issue' | 'pr' | 'mr'
   number: number
   title: string
-  provider?: 'github' | 'gitlab' | 'linear' | 'jira'
+  provider?: 'github' | 'gitlab' | 'linear' | 'jira' | 'plane'
   linearIdentifier?: string
   jiraIdentifier?: string
+  planeIdentifier?: string
 }
 
 export type WorkspaceIntentName = {
@@ -136,8 +137,40 @@ function compactWords(input: string, maxWords = 4): string {
   return words.map(titleCaseWord).join(' ')
 }
 
+function declaredKeyIdentifier(item: WorkspaceIntentWorkItem): string | undefined {
+  switch (item.provider) {
+    case 'linear':
+      return item.linearIdentifier
+    case 'jira':
+      return item.jiraIdentifier
+    case 'plane':
+      return item.planeIdentifier
+    // Listed rather than defaulted: the exhaustiveness check is what will flag
+    // the next provider added to the union.
+    case 'github':
+    case 'gitlab':
+    case undefined:
+      return undefined
+  }
+}
+
+// Key-based providers each carry their identifier in their own field. The field
+// matching the declared provider wins, so an identifier left behind by another
+// provider on a partially populated item cannot name the workspace. Blank
+// values are skipped so an empty field never masks a populated one.
+function workItemKeyIdentifier(item: WorkspaceIntentWorkItem): string | undefined {
+  return [
+    declaredKeyIdentifier(item),
+    item.linearIdentifier,
+    item.jiraIdentifier,
+    item.planeIdentifier
+  ]
+    .map((identifier) => identifier?.trim())
+    .find((identifier) => identifier)
+}
+
 function compactWorkItemTitle(title: string, item: WorkspaceIntentWorkItem): string {
-  const identifier = item.linearIdentifier ?? item.jiraIdentifier
+  const identifier = workItemKeyIdentifier(item)
   let withoutPrefix = title
     .trim()
     .replace(/^(?:issue|pr|pull request|mr|merge request)\s*[#!]?\d+\s*[:-]\s*/i, '')
@@ -156,11 +189,9 @@ function compactWorkItemTitle(title: string, item: WorkspaceIntentWorkItem): str
 }
 
 function workItemIdentity(item: WorkspaceIntentWorkItem): string {
-  if (item.linearIdentifier) {
-    return item.linearIdentifier.toUpperCase()
-  }
-  if (item.jiraIdentifier) {
-    return item.jiraIdentifier.toUpperCase()
+  const identifier = workItemKeyIdentifier(item)
+  if (identifier) {
+    return identifier.toUpperCase()
   }
   if (item.type === 'pr') {
     return `PR ${item.number}`
@@ -174,7 +205,7 @@ function workItemIdentity(item: WorkspaceIntentWorkItem): string {
 export function getLinkedWorkItemWorkspaceName(
   item: WorkspaceIntentWorkItem
 ): WorkspaceIntentName | null {
-  const identifier = item.linearIdentifier ?? item.jiraIdentifier
+  const identifier = workItemKeyIdentifier(item)
   let subject = getLinkedWorkItemTitleSubject(item) || item.title.trim()
   if (identifier) {
     subject = subject

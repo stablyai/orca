@@ -1,5 +1,6 @@
 import { getExecutionHostLabel } from '../../../../shared/execution-host'
 import type { TaskSourceContext } from '../../../../shared/task-source-context'
+import { getTaskProviderIdentityLabel, getTaskProviderLabel } from '../task-provider-labels'
 
 export type AutomationSourceDisplay = {
   label: string
@@ -13,7 +14,7 @@ export function getAutomationSourceDisplay(
   if (!sourceContext) {
     return null
   }
-  const providerLabel = getProviderLabel(sourceContext.provider)
+  const providerLabel = getTaskProviderLabel(sourceContext.provider)
   const hostLabel =
     hostLabelById?.get(sourceContext.hostId) ?? getExecutionHostLabel(sourceContext.hostId)
   const identityLabel = getSourceIdentityLabel(sourceContext)
@@ -31,34 +32,11 @@ export function getAutomationSourceDisplay(
   return { label, title }
 }
 
-function getProviderLabel(provider: TaskSourceContext['provider']): string {
-  switch (provider) {
-    case 'github':
-      return 'GitHub'
-    case 'gitlab':
-      return 'GitLab'
-    case 'linear':
-      return 'Linear'
-    case 'jira':
-      return 'Jira'
-  }
-}
-
 function getSourceIdentityLabel(sourceContext: TaskSourceContext): string | null {
-  const identity = sourceContext.providerIdentity
-  if (identity) {
-    switch (identity.provider) {
-      case 'github':
-        return `${identity.owner}/${identity.repo}`
-      case 'gitlab':
-        return identity.namespace && identity.project
-          ? `${identity.namespace}/${identity.project}`
-          : (identity.projectId ?? null)
-      case 'linear':
-        return identity.workspaceName ?? identity.workspaceId ?? null
-      case 'jira':
-        return identity.siteUrl ?? identity.siteId ?? null
-    }
+  // A stored identity is authoritative even when it yields no label: falling
+  // back to accountLabel here would append a second source to the row.
+  if (sourceContext.providerIdentity) {
+    return getTaskProviderIdentityLabel(sourceContext.providerIdentity)
   }
   return sourceContext.accountLabel ?? sourceContext.repoId ?? null
 }
