@@ -7,14 +7,14 @@
  * repos/sessions but not its group rows left an empty orphan group in the
  * sidebar that could never be deleted once its owner runtime was gone
  * (stablyai/orca#18364). These cases pin that the removed host's group rows —
- * and the folder workspaces / repo memberships they own — are pruned in the
- * same pass, while local and still-saved sibling-runtime groups survive.
+ * and the folder workspaces they own — are pruned in the same pass, while
+ * local, sibling-runtime, and live-host rows that merely share a group id are
+ * preserved.
  */
 import { describe, expect, it, vi } from 'vitest'
 import { toRuntimeExecutionHostId } from '../../../../shared/execution-host'
 import type { FolderWorkspace } from '../../../../shared/folder-workspace-types'
 import type { ProjectGroup } from '../../../../shared/project-group-types'
-import type { Repo } from '../../../../shared/repo-types'
 
 vi.mock('sonner', () => ({
   toast: { info: vi.fn(), success: vi.fn(), error: vi.fn(), warning: vi.fn() }
@@ -69,14 +69,6 @@ function makeFolderWorkspace(
   } as FolderWorkspace
 }
 
-function repoWithId(
-  id: string,
-  projectGroupId: string | null,
-  overrides: Partial<Repo> = {}
-): Repo {
-  return { ...TEST_REPO, id, displayName: id, projectGroupId, ...overrides }
-}
-
 describe('purgeStaleRuntimeHostState project groups', () => {
   it('drops the removed runtime host’s group subtree and preserves local + sibling-runtime groups', () => {
     const store = createTestStore()
@@ -100,25 +92,34 @@ describe('purgeStaleRuntimeHostState project groups', () => {
     expect(s.sortEpoch).toBe(epochBefore + 1)
   })
 
-  it('cascades dropped groups into folder workspaces and surviving repo memberships', () => {
+  it('drops folder workspaces owned by the removed runtime but preserves live-host copies of the same group id', () => {
     const store = createTestStore()
     const groupA = makeGroup({ id: 'gA', executionHostId: RUNTIME_A })
-    const folderA = makeFolderWorkspace({ id: 'fwA', projectGroupId: groupA.id })
-    // Pathological-but-safe: a local repo still pointing at a dropped runtime group.
-    const localRepoInGroup = repoWithId('repoLocal', groupA.id, { executionHostId: 'local' })
+    // Hostless folder workspace resolves through its group, so it follows the removed runtime.
+    const hostlessFolder = makeFolderWorkspace({ id: 'fw-hostless', projectGroupId: groupA.id })
+    // A sibling-runtime folder workspace sharing the same group id must survive.
+    const liveFolder = makeFolderWorkspace({
+      id: 'fw-live',
+      projectGroupId: groupA.id,
+      executionHostId: RUNTIME_B
+    })
+    const repoRef = TEST_REPO
     seedStore(store, {
       projectGroups: [groupA],
-      folderWorkspaces: [folderA],
-      repos: [localRepoInGroup]
+      folderWorkspaces: [hostlessFolder, liveFolder],
+      repos: [repoRef]
     })
+    const epochBefore = store.getState().sortEpoch
 
     store.getState().purgeStaleRuntimeHostState(['env-a'])
 
     const s = store.getState()
     expect(s.projectGroups).toEqual([])
-    expect(s.folderWorkspaces).toEqual([])
-    // The repo survives (it is local), but its dangling group membership is cleared.
-    expect(s.repos.find((repo) => repo.id === 'repoLocal')?.projectGroupId).toBeNull()
+    expect(s.folderWorkspaces.map((workspace) => workspace.id)).toEqual(['fw-live'])
+    // Surviving repos are never ungrouped by this purge: they are not owned by
+    // the removed runtime, so their group membership is left alone.
+    expect(s.repos[0]).toBe(repoRef)
+    expect(s.sortEpoch).toBe(epochBefore + 1)
   })
 
   it('is a no-op for a non-matching env: group rows keep their reference', () => {
@@ -127,7 +128,7 @@ describe('purgeStaleRuntimeHostState project groups', () => {
     const siblingB = makeGroup({ id: 'gB', executionHostId: RUNTIME_B })
     seedStore(store, {
       projectGroups: [localGroup, siblingB],
-      repos: [repoWithId('repo1', null, { executionHostId: 'local' })]
+      repos: [TEST_REPO]
     })
     const epochBefore = store.getState().sortEpoch
     const groupsRef = store.getState().projectGroups

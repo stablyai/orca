@@ -2,6 +2,7 @@ import type { WorktreePurgeTarget, WorktreeSlice } from '../../worktree-helpers'
 import type { WorktreeSliceGet, WorktreeSliceSet } from '../listing/worktree-slice-types'
 import type { ProjectHostSetup } from '../../../../../../shared/project-types'
 import type { Repo } from '../../../../../../shared/repo-types'
+import type { FolderWorkspace } from '../../../../../../shared/folder-workspace-types'
 import { getProjectGroupSubtreeIds } from '../../../../../../shared/project-groups'
 import type { DetectedWorktreeListResult } from '../../../../../../shared/worktree/types'
 import type { ExecutionHostId } from '../../../../../../shared/execution-host'
@@ -15,6 +16,7 @@ import {
   dropWorktreeRowsForRemovedRuntimeEnvironments,
   isRemovedRuntimeHostId
 } from '../../stale-runtime-host-rows'
+import { getFolderWorkspaceHostId } from '../../../folder-workspaces/folder-workspace-catalog'
 import { buildWorktreePurgeState } from './worktree-purge-state'
 import { removeWorktreeVisitEntriesForTargets } from '@/lib/worktree-visit-recency'
 
@@ -46,7 +48,10 @@ export function createPurgeStaleRuntimeHostState(
       // removed, retiring its repos/sessions but not its group row leaves an
       // empty orphan group in the sidebar that can never be deleted (its owner
       // runtime no longer exists). Drop those rows too — only `runtime:` owners;
-      // local/SSH-owned groups are never touched.
+      // local/SSH-owned groups are never touched. Subtree traversal is scoped to
+      // the removed host's own rows (as applyProjectGroupDeleteCascade does): a
+      // group id can be mirrored on several hosts, and the removed runtime must
+      // not cascade away another host's copy of that id.
       const projectGroups = s.projectGroups ?? []
       const removedRuntimeGroups = projectGroups.filter((group) =>
         isRemovedRuntimeHostId(group.executionHostId, removed)
@@ -61,24 +66,37 @@ export function createPurgeStaleRuntimeHostState(
       const survivingGroups = groupsChanged
         ? projectGroups.filter((group) => !droppedGroupIds.has(group.id))
         : projectGroups
+      // Why: mirror the delete cascade's host guard for folder workspaces — a
+      // workspace is retired only when it belongs to a dropped group on the
+      // removed runtime, never merely because it references a group id that
+      // also existed there. Hostless workspaces resolve through their group and
+      // so follow the removed runtime; live-host copies are preserved.
       const folderWorkspaces = s.folderWorkspaces ?? []
-      const survivingFolderWorkspaces = groupsChanged
-        ? folderWorkspaces.filter(
-            (workspace) =>
-              !workspace.projectGroupId || !droppedGroupIds.has(workspace.projectGroupId)
-          )
-        : folderWorkspaces
-      const folderWorkspacesChanged = survivingFolderWorkspaces !== folderWorkspaces
-      // Why: a surviving repo must never keep pointing at a dropped runtime group.
-      const reposAfterGroupCascade = groupsChanged
-        ? survivingRepos.map((repo) =>
-            repo.projectGroupId && droppedGroupIds.has(repo.projectGroupId)
-              ? { ...repo, projectGroupId: null }
-              : repo
-          )
-        : survivingRepos
-      const reposUngroupedChanged = reposAfterGroupCascade !== survivingRepos
-      const reposChanged = survivingRepos.length !== s.repos.length || reposUngroupedChanged
+      let survivingFolderWorkspaces = folderWorkspaces
+      let folderWorkspacesChanged = false
+      if (groupsChanged) {
+        const nextFolderWorkspaces: FolderWorkspace[] = []
+        for (const workspace of folderWorkspaces) {
+          if (
+            workspace.projectGroupId &&
+            droppedGroupIds.has(workspace.projectGroupId) &&
+            isRemovedRuntimeHostId(getFolderWorkspaceHostId(workspace, projectGroups), removed)
+          ) {
+            folderWorkspacesChanged = true
+            continue
+          }
+          nextFolderWorkspaces.push(workspace)
+        }
+        if (folderWorkspacesChanged) {
+          survivingFolderWorkspaces = nextFolderWorkspaces
+        }
+      }
+      // Why: repos are never ungrouped here — a surviving repo is by definition
+      // not owned by the removed runtime (its rows are removed wholesale), so
+      // ungrouping by group id alone could detach a live host's copy of a
+      // shared id. applyProjectGroupDeleteCascade ungroups only rows the
+      // deleted host owns.
+      const reposChanged = survivingRepos.length !== s.repos.length
 
       // Why: a repoId-less setup on the removed host can still split a surviving project group, so drop every setup it owns.
       const survivingSetups: ProjectHostSetup[] = []
@@ -327,7 +345,7 @@ export function createPurgeStaleRuntimeHostState(
         worktreesChanged || detectedChanged || groupsChanged || folderWorkspacesChanged
       return {
         ...purgeState,
-        ...(reposChanged ? { repos: reposAfterGroupCascade } : {}),
+        ...(reposChanged ? { repos: survivingRepos } : {}),
         ...(setupsChanged ? { projectHostSetups: survivingSetups } : {}),
         ...(groupsChanged ? { projectGroups: survivingGroups } : {}),
         ...(folderWorkspacesChanged
