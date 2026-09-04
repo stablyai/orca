@@ -223,7 +223,7 @@ describe('web AI Vault preload API', () => {
     ])
   })
 
-  it('returns unavailable history for explicit non-runtime host scopes', async () => {
+  it('returns unavailable history for scopes outside the active runtime', async () => {
     const runtimeCalls: { method: string; params: unknown }[] = []
     vi.doMock('./web-runtime-client', () => ({
       WebRuntimeClient: class {
@@ -246,18 +246,15 @@ describe('web AI Vault preload API', () => {
     const { installWebPreloadApi } = await import('./web-preload-api')
     installWebPreloadApi()
 
-    await expect(
-      globals.window.api.aiVault.listSessions({ executionHostScope: 'local' })
-    ).resolves.toEqual({
-      sessions: [],
-      issues: [
-        expect.objectContaining({
-          executionHostId: 'local',
-          agent: 'codex'
-        })
-      ],
-      scannedAt: expect.any(String)
-    })
+    for (const executionHostScope of ['local', 'runtime:unresolved-owner'] as const) {
+      await expect(
+        globals.window.api.aiVault.listSessions({ executionHostScope })
+      ).resolves.toEqual({
+        sessions: [],
+        issues: [expect.objectContaining({ executionHostId: executionHostScope, agent: 'codex' })],
+        scannedAt: expect.any(String)
+      })
+    }
     expect(runtimeCalls).toEqual([])
   })
 })

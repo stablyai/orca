@@ -30,7 +30,10 @@ export async function prepareAiVaultSessionResume(
   assertLegacyAiVaultResumeAllowed(args)
   const executionHost = parseExecutionHostId(args.executionHostId)
   if (executionHost?.kind === 'runtime') {
-    if (!options.prepareRuntimeSessionResume) {
+    if (
+      executionHost.environmentId === 'unresolved-owner' ||
+      !options.prepareRuntimeSessionResume
+    ) {
       throw new Error('The session host is unavailable. Reconnect it and retry resume.')
     }
     return options.prepareRuntimeSessionResume(executionHost.environmentId, args)
