@@ -10,13 +10,18 @@ import {
   deleteHoveredWorkspaceImmediately,
   resolveHoveredWorkspaceDeleteTarget
 } from '../components/sidebar/hovered-workspace-delete'
+import {
+  moveTabToNewPaneColumn,
+  resolveActiveTabPaneColumnMoveTarget
+} from '../components/tab-bar/tab-move-to-pane-column'
 import { useAppStore } from '../store'
 import type { usePluginCommands } from '@/store/plugin-panels'
 import { isGitRepoKind } from '../../../shared/repo-kind'
-import type {
-  KeybindingActionId,
-  KeybindingContext,
-  PhysicalModifierToken
+import {
+  TAB_MOVE_TO_SPLIT_COMMANDS,
+  type KeybindingActionId,
+  type KeybindingContext,
+  type PhysicalModifierToken
 } from '../../../shared/keybindings'
 import { shortcutPlatform } from './app-window-chrome'
 
@@ -117,6 +122,20 @@ export function createAppCommandHandlers(
     run()
     return true
   }
+  /** Claims a move-to-split chord only after the store accepts the move. */
+  const claimMoveTabToSplit = ({
+    id,
+    direction
+  }: (typeof TAB_MOVE_TO_SPLIT_COMMANDS)[number]): boolean => {
+    if (!workspaceChromeActive || floatingWorkspaceFocused) {
+      return false
+    }
+    const target = resolveActiveTabPaneColumnMoveTarget(useAppStore.getState())
+    if (!target || !moveTabToNewPaneColumn({ target, direction })) {
+      return false
+    }
+    return claim(id, () => {})
+  }
   const revealRightSidebarTab = (
     actionId: KeybindingActionId,
     tab: Parameters<AppShortcutActions['setRightSidebarTab']>[0]
@@ -184,6 +203,9 @@ export function createAppCommandHandlers(
         return claim('tab.rename', () => requestTerminalTabRename(store.activeTabId!))
       }
     ],
+    ...TAB_MOVE_TO_SPLIT_COMMANDS.map(
+      (command) => [command.id, () => claimMoveTabToSplit(command)] as const
+    ),
     [
       'workspace.rename',
       () => {

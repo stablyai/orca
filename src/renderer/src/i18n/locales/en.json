@@ -967,6 +967,9 @@
         "preview": {
           "pairedOutsideWorktree": "Files outside the workspace can't be previewed on a paired server yet."
         }
+      },
+      "tabMoveToSplitCopy": {
+        "shortcutTitle": "{{value0}}: {{value1}}"
       }
     },
     "hooks": {

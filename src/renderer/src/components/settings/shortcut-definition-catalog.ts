@@ -13,6 +13,7 @@ import type { TuiAgent } from '../../../../shared/tui-agent'
 import type { ActivePluginCommand } from '@/store/plugin-panels'
 import { buildPluginCommandKeybindingDefinitions } from '@/lib/plugin-command-keybindings'
 import { disabledAgentTabActionIds, groupDefinitions, type ShortcutGroup } from './shortcut-groups'
+import { translateShortcutDefinitionTitle } from '@/lib/tab-move-to-split-copy'
 
 export type ShortcutDefinitionCatalog = {
   groups: ShortcutGroup[]
@@ -31,7 +32,13 @@ export function buildShortcutDefinitionCatalog(options: {
   missionControlConflictMessage: string
 }): ShortcutDefinitionCatalog {
   const pluginDefinitions = buildPluginCommandKeybindingDefinitions(options.pluginCommands)
-  const groups = groupDefinitions(options.disabledTuiAgents, pluginDefinitions)
+  const groups = groupDefinitions(options.disabledTuiAgents, pluginDefinitions).map((group) => ({
+    ...group,
+    items: group.items.map((definition) => ({
+      ...definition,
+      title: translateShortcutDefinitionTitle(definition.id, definition.title)
+    }))
+  }))
   const definitions = groups.flatMap((group) => group.items)
   const definitionsByAction = new Map(definitions.map((definition) => [definition.id, definition]))
   const ignoredConflictActionIds = disabledAgentTabActionIds(options.disabledTuiAgents)
