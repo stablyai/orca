@@ -379,11 +379,13 @@ PROMPT_COMMAND='printf "PROMPT_REMATCH:<%s>\\n" "\${BASH_REMATCH[1]-unset}"'
   })
 
   itWithBash('hides legacy dispatcher commands from a chained DEBUG trap', () => {
+    // Why no one-shot arming: arming via PROMPT_COMMAND is order-fragile — a host
+    // prompt hook appended after __bp_arm (e.g. systemd's OSC context entry) would
+    // consume the armed flag's first DEBUG fire, hiding user commands. The contract
+    // under test is ordering + dispatcher hiding, not arming mechanics.
     const profile = [
-      '__bp_preexec() { [[ -n "${__bp_armed:-}" ]] || return; __bp_armed=""; printf \'PROMPT_PREEXEC:<%s>\\n\' "$BASH_COMMAND"; }',
-      "trap '__bp_preexec' DEBUG",
-      '__bp_arm() { __bp_armed=1; }',
-      'PROMPT_COMMAND=__bp_arm'
+      '__bp_preexec() { printf \'PROMPT_PREEXEC:<%s>\\n\' "$BASH_COMMAND"; }',
+      "trap '__bp_preexec' DEBUG"
     ].join('\n')
     const output = runInteractiveBash(
       profile,
@@ -392,7 +394,25 @@ PROMPT_COMMAND='printf "PROMPT_REMATCH:<%s>\\n" "\${BASH_REMATCH[1]-unset}"'
     )
     const commands = [...output.matchAll(/PROMPT_PREEXEC:<([^>]+)>/g)].map((match) => match[1])
 
-    expect(commands).toEqual(['echo __orca_osc133_probe', 'false', 'exit 0'])
+    // The chained trap must see the real user commands in order and never see
+    // Orca's dispatcher internals. The raw profile trap also fires during the
+    // rcfile init window (before Orca re-traps) and may observe host prompt
+    // hooks (e.g. systemd's OSC context entry) — both are tolerated; dispatch
+    // internals are not.
+    const dispatcherInternals = commands.filter((command) =>
+      /__orca_(?:run_prompt_command_array|finish_legacy_prompt_dispatch|restore_prompt_status|prompt_status_)|eval "\$__orca_prompt_part"|\(\( __orca_exit_code/.test(
+        command
+      )
+    )
+    expect(dispatcherInternals).toEqual([])
+    const expectedUserCommands = ['echo __orca_osc133_probe', 'false', 'exit 0']
+    let seen = 0
+    for (const command of commands) {
+      if (command === expectedUserCommands[seen]) {
+        seen += 1
+      }
+    }
+    expect(seen).toBe(expectedUserCommands.length)
     expectLifecycle(output)
   })
 

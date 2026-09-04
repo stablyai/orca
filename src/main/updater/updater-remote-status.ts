@@ -45,6 +45,16 @@ export abstract class UpdaterRemoteStatus extends UpdaterNudge {
         reason: 'manual-service-update-required'
       }
     }
+    // Why: the verdict must reflect what installRemoteServerUpdate will actually accept —
+    // on supervised Linux serve that is the root helper. Interactive desktop installs
+    // never route through the helper, so the gate must not bind them.
+    if (this.updateInstallMode === 'supervised-headless-serve' && !hasServeUpdateSupervisor()) {
+      return {
+        installMode: this.updateInstallMode,
+        automatic: false,
+        reason: 'updater-unavailable'
+      }
+    }
     return { installMode: this.updateInstallMode, automatic: true, reason: 'available' }
   }
 
