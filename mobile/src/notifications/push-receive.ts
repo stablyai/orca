@@ -2,6 +2,7 @@ import { loadHostCatalog } from '../transport/host-store'
 import {
   adoptNotificationEpoch,
   getHostNotificationSession,
+  seedWatermarkFromStorage,
   seenKeyForEvent
 } from './notification-reconnect-catchup'
 import { resolveHostIdForFingerprint } from './push-host-fingerprint'
@@ -26,15 +27,29 @@ export async function shouldSuppressForegroundPush(data: unknown): Promise<boole
     return false
   }
   const hostId = await resolvePushHostId(payload)
-  // An unresolvable fingerprint is still a real desktop alert; show it rather than
-  // silently drop the one notification we cannot attribute.
+  // Why suppressed rather than shown: the only pushes that outlive their host are
+  // ones a gateway registration still holds after a removal whose unregister never
+  // reached the desktop. A banner naming a host this phone no longer has cannot be
+  // tapped anywhere, so it is noise the user cannot act on or turn off per-host.
   if (!hostId) {
-    return false
+    return true
   }
   const session = getHostNotificationSession(hostId)
+  // Why seeded first: the socket may never have connected this launch (phone on
+  // cellular), leaving lastDeliveredEpoch null. Adopting against an unseeded session
+  // resets the seq to 0 and persists that over a valid watermark, so the next
+  // reconnect replays the desktop's whole retained buffer.
+  seedWatermarkFromStorage(session, hostId)
+  await session.watermarkSeeded
   // The seen keys are seq-derived, so a push from a new desktop lifetime must void
   // them before its own key is tested against a counter that no longer exists.
   adoptNotificationEpoch(session, hostId, payload.notificationEpoch)
+  // Why a coalesced summary is neither suppressed nor marked: it carries only the
+  // latest event's fields, so claiming that key would make the socket swallow the
+  // specific banner for an event the summary only ever counted.
+  if ((payload.coalescedCount ?? 0) > 1) {
+    return false
+  }
   const key = seenKeyForEvent(payload)
   if (!key) {
     return false
@@ -48,8 +63,12 @@ export async function shouldSuppressForegroundPush(data: unknown): Promise<boole
 
 /**
  * Notification data a tap can route with: the gateway names the host by fingerprint,
- * so it is mapped back to this device's hostId. Anything else passes through
- * untouched, which is what keeps locally scheduled taps on their existing path.
+ * so it is mapped back to this device's hostId. Locally scheduled data passes
+ * through untouched, which is what keeps its taps on their existing path.
+ *
+ * Why null and not the raw data when the fingerprint does not resolve: a gateway
+ * payload is attacker-adjacent input, and passing it on would let a stray `hostId`
+ * beside the `orca` block route a tap at a host the push never named.
  */
 export function pushNotificationRouteData(
   data: unknown,
@@ -61,7 +80,7 @@ export function pushNotificationRouteData(
   }
   const hostId = resolveHostIdForFingerprint(payload.hostFingerprint, hosts)
   if (!hostId) {
-    return data
+    return null
   }
   return {
     hostId,

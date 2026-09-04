@@ -30,8 +30,9 @@ const REMOVAL_TIMEOUT_MS = 2_000
 
 type HostPushState = {
   client: PushClient | null
-  // null until probed; reset whenever the client is replaced, since a reconnect
-  // can land on a host that was upgraded (or downgraded) in the meantime.
+  // null until the host ANSWERS; reset whenever the client is replaced, since a
+  // reconnect can land on a host that was upgraded (or downgraded) in the meantime.
+  // A probe that failed leaves it null so the next reconcile asks again.
   supported: boolean | null
   chain: Promise<void>
 }
@@ -41,6 +42,10 @@ type RegistrationRecords = { registered: Set<string>; pending: Set<string> }
 const hostsById = new Map<string, HostPushState>()
 let registrationRecords: RegistrationRecords | null = null
 let tokenPromise: Promise<MobilePushToken | null> | null = null
+// Bumped on every switch change. A register that returns across a bump raced a
+// switch-off whose unregister sweep had already snapshotted `registered`, so
+// recording its success would leave the gateway pushing with the switch showing off.
+let consentGeneration = 0
 
 function hostState(hostId: string): HostPushState {
   let state = hostsById.get(hostId)
@@ -75,22 +80,39 @@ async function mutateRecords(mutate: (value: RegistrationRecords) => void): Prom
 }
 
 async function currentToken(): Promise<MobilePushToken | null> {
-  tokenPromise ??= getDevicePushToken()
+  if (!tokenPromise) {
+    // Why a null answer is not cached: the device may simply have no token YET —
+    // APNs registration still in flight, permission just granted — and holding that
+    // null for the app's lifetime stops every later reconcile from registering.
+    const pending: Promise<MobilePushToken | null> = getDevicePushToken().then((token) => {
+      if (!token && tokenPromise === pending) {
+        tokenPromise = null
+      }
+      return token
+    })
+    tokenPromise = pending
+  }
   return tokenPromise
 }
 
-async function readRemotePushCapability(client: PushClient): Promise<boolean> {
+// null means the host never answered — a timeout, a wedged socket, an error reply.
+// That is not evidence of absence, so the caller must not cache it as "no".
+async function readRemotePushCapability(client: PushClient): Promise<boolean | null> {
   try {
     const response = await client.sendRequest('status.get')
-    if (!response.ok || !response.result || typeof response.result !== 'object') {
+    if (!response.ok) {
+      return null
+    }
+    const result = response.result
+    if (!result || typeof result !== 'object') {
       return false
     }
-    const capabilities = (response.result as { capabilities?: unknown }).capabilities
+    const capabilities = (result as { capabilities?: unknown }).capabilities
     return (
       Array.isArray(capabilities) && capabilities.includes(NOTIFICATIONS_REMOTE_PUSH_CAPABILITY)
     )
   } catch {
-    return false
+    return null
   }
 }
 
@@ -137,18 +159,32 @@ async function reconcileHost(hostId: string): Promise<void> {
   if (!state || !client) {
     return
   }
-  state.supported ??= await readRemotePushCapability(client)
-  if (!state.supported || state.client !== client) {
-    return
-  }
+  const generation = consentGeneration
   const value = await readRecords()
+  // Why this sits ABOVE the capability gate: a pending entry is a switch-off the user
+  // already performed, and gating it on a probe means one unanswered status.get keeps
+  // the gateway pushing to a phone whose switch reads off. Only a host that positively
+  // answered "no" is skipped — it cannot be holding a registration.
   if (value.pending.has(hostId)) {
-    if (await sendUnregister(client, REQUEST_TIMEOUT_MS)) {
+    if (state.supported !== false && (await sendUnregister(client, REQUEST_TIMEOUT_MS))) {
       await mutateRecords((current) => {
         current.pending.delete(hostId)
         current.registered.delete(hostId)
       })
     }
+    return
+  }
+  if (state.supported == null) {
+    const probed = await readRemotePushCapability(client)
+    if (state.client !== client) {
+      return
+    }
+    if (probed == null) {
+      return
+    }
+    state.supported = probed
+  }
+  if (!state.supported || state.client !== client) {
     return
   }
   if (!(await loadRemotePushEnabled())) {
@@ -158,9 +194,17 @@ async function reconcileHost(hostId: string): Promise<void> {
   if (!token) {
     return
   }
-  if (await sendRegister(client, token, await loadRemotePushFilter())) {
-    await mutateRecords((current) => current.registered.add(hostId))
+  if (!(await sendRegister(client, token, await loadRemotePushFilter()))) {
+    return
   }
+  if (generation !== consentGeneration) {
+    // The switch moved while this register was in flight. Recording it would add the
+    // host to `registered` after the sweep read that set, so re-arm the unregister.
+    await mutateRecords((current) => current.pending.add(hostId))
+    void enqueueReconcile(hostId)
+    return
+  }
+  await mutateRecords((current) => current.registered.add(hostId))
 }
 
 function enqueueReconcile(hostId: string): Promise<void> {
@@ -194,6 +238,7 @@ export function attachPushRegistration(hostId: string, client: PushClient): () =
 }
 
 export async function setRemotePushEnabled(enabled: boolean): Promise<void> {
+  consentGeneration++
   await saveRemotePushEnabled(enabled)
   await mutateRecords((current) => {
     if (!enabled) {
@@ -217,7 +262,15 @@ export async function setRemotePushAgentStates(
   await reconcileAllHosts()
 }
 
-/** Best-effort unregister before the host's credentials are deleted. */
+/**
+ * Best-effort unregister before the host's credentials are deleted.
+ *
+ * Why best-effort is all there is: the credentials are the only way back to that
+ * host, so a desktop that was offline here keeps its gateway registration and keeps
+ * pushing to this phone. shouldSuppressForegroundPush drops those in the foreground;
+ * background alerts stop only when that desktop unpairs the phone, or the switch is
+ * turned off here. Documented in docs/site/content/docs/notifications.mdx.
+ */
 export async function unregisterPushForRemovedHost(hostId: string): Promise<void> {
   const state = hostsById.get(hostId)
   if (state?.client && state.supported !== false) {
@@ -244,4 +297,5 @@ export function resetPushRegistrationForTests(): void {
   hostsById.clear()
   registrationRecords = null
   tokenPromise = null
+  consentGeneration = 0
 }

@@ -177,6 +177,61 @@ describe('push registration capability gating', () => {
 
     expect(methodsIn(sent)).toEqual(['status.get'])
   })
+
+  it('asks only once when the host answers that it has no push capability', async () => {
+    const { client, sent } = makeClient(['some-other.v1'])
+    await setRemotePushEnabled(true)
+    attachPushRegistration('host-legacy', client)
+    await flush()
+
+    await setRemotePushAgentStates(['needs-input'])
+    await flush()
+
+    expect(methodsIn(sent)).toEqual(['status.get'])
+  })
+
+  it('re-probes a host whose first status.get never answered', async () => {
+    const sent: string[] = []
+    let probeFails = true
+    const client = {
+      sendRequest: vi.fn(async (method: string) => {
+        sent.push(method)
+        if (method === 'status.get') {
+          if (probeFails) {
+            throw new Error('request timed out')
+          }
+          return ok({ capabilities: [NOTIFICATIONS_REMOTE_PUSH_CAPABILITY] })
+        }
+        return ok({ registered: true, registrationId: 'registration-1' })
+      })
+    }
+    await setRemotePushEnabled(true)
+    attachPushRegistration('host-1', client)
+    await flush()
+    expect(sent).toEqual(['status.get'])
+
+    // A latched `false` would keep this host unregistered for the connection's life.
+    probeFails = false
+    await setRemotePushAgentStates(['needs-input'])
+    await flush()
+
+    expect(sent).toEqual(['status.get', 'status.get', 'notifications.registerPush'])
+  })
+
+  it('retries the device token on the next reconcile after the device had none', async () => {
+    vi.mocked(getDevicePushToken).mockResolvedValueOnce(null).mockResolvedValue(IOS_TOKEN)
+    const { client, sent } = makeClient([NOTIFICATIONS_REMOTE_PUSH_CAPABILITY])
+    await setRemotePushEnabled(true)
+    attachPushRegistration('host-1', client)
+    await flush()
+    expect(methodsIn(sent)).toEqual(['status.get'])
+
+    // A token can be missing only for now — APNs registration still in flight.
+    await setRemotePushAgentStates(['needs-input'])
+    await flush()
+
+    expect(methodsIn(sent)).toContain('notifications.registerPush')
+  })
 })
 
 describe('push registration token and filter changes', () => {
@@ -256,7 +311,9 @@ describe('push unregistration', () => {
     attachPushRegistration('host-1', reconnected.client)
     await flush()
 
-    expect(methodsIn(reconnected.sent)).toEqual(['status.get', 'notifications.unregisterPush'])
+    // No probe first: a pending entry is a switch-off the user already performed, so
+    // it must not wait on a status.get that may never answer.
+    expect(methodsIn(reconnected.sent)).toEqual(['notifications.unregisterPush'])
     expect(stored.pendingUnregisterHostIds).toEqual([])
   })
 
@@ -294,6 +351,62 @@ describe('push unregistration', () => {
 
     await unregisterPushForRemovedHost('host-gone')
 
+    expect(stored).toEqual({ registeredHostIds: [], pendingUnregisterHostIds: [] })
+  })
+
+  it('unregisters a pending host even when its capability probe never answers', async () => {
+    stored = { registeredHostIds: ['host-1'], pendingUnregisterHostIds: ['host-1'] }
+    const sent: string[] = []
+    const client = {
+      sendRequest: vi.fn(async (method: string) => {
+        sent.push(method)
+        if (method === 'status.get') {
+          throw new Error('request timed out')
+        }
+        return ok({ unregistered: true })
+      })
+    }
+
+    attachPushRegistration('host-1', client)
+    await flush()
+
+    // Gating this on the probe leaves the gateway pushing while the switch reads off.
+    expect(sent).toEqual(['notifications.unregisterPush'])
+    expect(stored.pendingUnregisterHostIds).toEqual([])
+  })
+
+  it('re-arms the unregister when the switch goes off while a register is in flight', async () => {
+    const sent: string[] = []
+    let releaseRegister: (() => void) | null = null
+    const client = {
+      sendRequest: vi.fn(async (method: string) => {
+        sent.push(method)
+        if (method === 'status.get') {
+          return ok({ capabilities: [NOTIFICATIONS_REMOTE_PUSH_CAPABILITY] })
+        }
+        if (method === 'notifications.registerPush') {
+          await new Promise<void>((resolve) => {
+            releaseRegister = resolve
+          })
+          return ok({ registered: true, registrationId: 'registration-1' })
+        }
+        return ok({ unregistered: true })
+      })
+    }
+    await setRemotePushEnabled(true)
+    attachPushRegistration('host-1', client)
+    await flush()
+
+    // The sweep snapshots `registered` while this host is still only in flight.
+    const switchedOff = setRemotePushEnabled(false)
+    await flush()
+    releaseRegister?.()
+    await switchedOff
+    await flush()
+
+    // Recording the late success would leave a live gateway registration behind a
+    // switch that reads off, with nothing pending to ever retract it.
+    expect(sent).toContain('notifications.unregisterPush')
     expect(stored).toEqual({ registeredHostIds: [], pendingUnregisterHostIds: [] })
   })
 })

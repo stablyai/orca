@@ -36,6 +36,6 @@ The Orca mobile app shows an agent-finished or needs-input alert while it is ope
 
 When it is on, your desktop sends each alert to Orca's push service, which delivers it through Apple or Google to your phone. The alert shows the same title and text as the desktop notification. What leaves your computer is that text, your phone's push token, and opaque host and device ids. Orca's push service keeps the text only long enough to send it and never writes it to storage. Apple and Google can read it in transit, as they can for any app's notifications. The service is open source in the Orca repository under `cloud/apps/push`.
 
-Turning the switch off, or unpairing the phone from the desktop, deletes the token from the push service. Two sub-switches let you receive only **Needs input** or only **Task finished** alerts.
+Turning the switch off, or unpairing the phone from the desktop, deletes the token from the push service. Two sub-switches let you receive only **Needs input** or only **Task finished** alerts. Removing a host from the phone while that desktop is offline may leave background alerts arriving from it until the desktop is unpaired or the switch is turned off on the phone.
 
 Background notifications need a paired desktop that has been updated to advertise the feature; the phone hides the switch otherwise. They do not fire from a headless `orca serve` host, because agent-completion detection runs in the desktop app. On Android they need Google Play services, so de-Googled phones keep the in-app behaviour only.

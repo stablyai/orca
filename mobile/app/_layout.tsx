@@ -15,6 +15,7 @@ import {
   shouldSuppressForegroundPush
 } from '../src/notifications/push-receive'
 import { startPushTokenSync } from '../src/notifications/push-registration'
+import { ensureDesktopNotificationChannel } from '../src/notifications/desktop-notification-channel'
 import { loadHostCatalog } from '../src/transport/host-store'
 import { extractPairingCodeFromUrl } from '../src/transport/pairing'
 import { recoverMobileRelayPairing } from '../src/transport/mobile-relay-pairing-recovery'
@@ -23,6 +24,11 @@ import { recoverMobileRelayPairing } from '../src/transport/mobile-relay-pairing
 // and ready to render. Without this the user sees a blank white/black frame
 // between the native splash and the first React paint.
 SplashScreen.preventAutoHideAsync()
+
+// Why at boot and not only on subscribe: the gateway's FCM payload targets the
+// 'orca-desktop' channel, and a background push can land before any socket has
+// connected. Android drops a notification whose channel does not exist yet.
+ensureDesktopNotificationChannel()
 
 // Why: without this, expo-notifications silently drops notifications when
 // the app is in the foreground. Setting all three to true makes iOS/Android

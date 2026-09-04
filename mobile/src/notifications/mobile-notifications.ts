@@ -7,12 +7,12 @@ export {
 } from './notification-permissions'
 export { setScheduledNotificationsMaxForTests } from './local-notification-scheduling'
 import {
-  configureNotificationChannel,
   dismissLocalNotification,
   showLocalNotification,
   type DismissNotificationEvent,
   type NotificationEvent
 } from './local-notification-scheduling'
+import { ensureDesktopNotificationChannel } from './desktop-notification-channel'
 import {
   adoptNotificationEpoch,
   catchUpWatermarkSeq,
@@ -26,6 +26,7 @@ import {
   seenKeyForEvent,
   shouldQueueShowForNotificationId
 } from './notification-reconnect-catchup'
+import { markPresentedPushesSeen, readPresentedPushSeenKeys } from './push-tray-seen-seed'
 
 type SubscribeResult = {
   type: 'ready'
@@ -36,7 +37,7 @@ type SubscribeResult = {
 
 // Per-connection subscription; a reconnect `ready` triggers watermarked catch-up (#8129) so already-pushed events aren't re-sent.
 export function subscribeToDesktopNotifications(client: RpcClient, hostId: string): () => void {
-  configureNotificationChannel()
+  ensureDesktopNotificationChannel()
 
   let subscriptionId: string | null = null
   let disposed = false
@@ -147,6 +148,11 @@ export function subscribeToDesktopNotifications(client: RpcClient, hostId: strin
     // Captured before the request: everything at or below it is known delivered, so
     // it is the floor the watermark falls back to if this catch-up never completes.
     const askFrom = catchUpWatermarkSeq(session)
+    // Why started here and applied below: a push the OS drew while Orca was closed was
+    // never marked seen, so the replay would banner it again. The read runs alongside
+    // the request; the keys are claimed inside the queue, after any epoch adoption has
+    // cleared `seen`, so a tray entry cannot resurrect a key from a dead counter.
+    const presentedPushKeys = readPresentedPushSeenKeys(hostId)
     const missed = await client
       .sendRequest('notifications.getMissedSince', {
         lastSeenSeq: askFrom,
@@ -176,6 +182,7 @@ export function subscribeToDesktopNotifications(client: RpcClient, hostId: strin
     // request stays OUTSIDE the queue: sendRequest waits up to 30s, and holding the
     // chain for that would stall live delivery on a slow link.
     await enqueueHostDelivery(session, async () => {
+      markPresentedPushesSeen(session, await presentedPushKeys)
       // Advances only past events this batch settled, so a teardown or a failing show
       // quarantines the true contiguous point instead of the range it never reached.
       let contiguousSeq = askFrom

@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import AsyncStorage from '@react-native-async-storage/async-storage'
 import { sha256 } from '@noble/hashes/sha256'
 import { loadHostCatalog } from '../transport/host-store'
 import type { HostCatalogEntry } from '../transport/types'
@@ -11,10 +12,14 @@ import { pushNotificationRouteData, shouldSuppressForegroundPush } from './push-
 
 vi.mock('../transport/host-store', () => ({ loadHostCatalog: vi.fn() }))
 
+const storage = new Map<string, string>()
+
 vi.mock('@react-native-async-storage/async-storage', () => ({
   default: {
-    getItem: vi.fn(async () => null),
-    setItem: vi.fn(async () => undefined),
+    getItem: vi.fn(async (key: string) => storage.get(key) ?? null),
+    setItem: vi.fn(async (key: string, value: string) => {
+      storage.set(key, value)
+    }),
     removeItem: vi.fn(async () => undefined)
   }
 }))
@@ -36,6 +41,7 @@ function fcmData(orca: Record<string, unknown>): unknown {
 
 beforeEach(() => {
   vi.clearAllMocks()
+  storage.clear()
   resetHostNotificationSessionsForTests()
   vi.mocked(loadHostCatalog).mockResolvedValue(hosts)
 })
@@ -99,12 +105,45 @@ describe('shouldSuppressForegroundPush', () => {
     expect(loadHostCatalog).not.toHaveBeenCalled()
   })
 
-  it('shows a push whose host is no longer paired rather than dropping it silently', async () => {
+  it('suppresses a push for a host this phone no longer has, since its tap routes nowhere', async () => {
     vi.mocked(loadHostCatalog).mockResolvedValue([])
 
     await expect(
       shouldSuppressForegroundPush(apnsData({ hostFingerprint, notificationSeq: 1 }))
+    ).resolves.toBe(true)
+  })
+
+  it('seeds the persisted watermark before adopting, so a push cannot void it', async () => {
+    storage.set(
+      'orca:mobileNotificationsWatermark:host-1',
+      JSON.stringify({ seq: 42, epoch: 'epoch-1' })
+    )
+
+    await shouldSuppressForegroundPush(
+      apnsData({ hostFingerprint, notificationSeq: 43, notificationEpoch: 'epoch-1' })
+    )
+
+    // Unseeded, the null epoch reads as a new counter lifetime: the seq resets to 0
+    // and {seq: 0} is persisted over a watermark the next reconnect still needs.
+    expect(getHostNotificationSession('host-1').lastDeliveredSeq).toBe(42)
+    expect(AsyncStorage.setItem).not.toHaveBeenCalled()
+  })
+
+  it('shows a coalesced summary without claiming the key of the one event it names', async () => {
+    await expect(
+      shouldSuppressForegroundPush(
+        apnsData({
+          hostFingerprint,
+          notificationId: 'agent:one',
+          notificationSeq: 7,
+          coalescedCount: 3
+        })
+      )
     ).resolves.toBe(false)
+
+    // Claiming it would make the socket swallow the banner for agent:one itself,
+    // which the summary only ever counted.
+    expect(getHostNotificationSession('host-1').seen.has('id:agent:one#7')).toBe(false)
   })
 })
 
@@ -151,5 +190,20 @@ describe('pushNotificationRouteData', () => {
     const data = pushNotificationRouteData(apnsData({ hostFingerprint: '0123456789abcdef' }), hosts)
 
     expect(getNotificationNavigationTarget(data)).toBeNull()
+  })
+
+  it('drops a gateway payload that pairs an unresolvable fingerprint with a stray hostId', () => {
+    const data = {
+      hostId: 'host-1',
+      orca: { hostFingerprint: '0123456789abcdef', notificationId: 'agent:one' }
+    }
+
+    // Returning the raw data would let the stray hostId route a tap the push never named.
+    expect(pushNotificationRouteData(data, hosts)).toBeNull()
+    expect(
+      getNotificationNavigationTarget(pushNotificationRouteData(data, hosts), {
+        knownHostIds: new Set(['host-1'])
+      })
+    ).toBeNull()
   })
 })
