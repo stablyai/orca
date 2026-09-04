@@ -108,6 +108,8 @@ import {
   MIN_SSH_RELAY_GRACE_PERIOD_SECONDS
 } from '../../shared/ssh-types'
 
+// CI control (temporary, see the ssh-docker-transport-drop-recovery:337 investigation): a
+// comment-only diff at current main, the A/B partner of the cc9e9ed control.
 export type RelayDeployResult = {
   transport: MultiplexerTransport
   serverBuildId?: string
