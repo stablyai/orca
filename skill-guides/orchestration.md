@@ -276,6 +276,16 @@ Run `worker-release` after both succeeded and failed `worker_done` reports unles
 
 Do not release a worker because of a timeout, TUI idle state, heartbeat, status, question, escalation, or rejected/stale `worker_done`. If release returns `release_pending` or `release_unknown`, do not substitute `terminal close`; follow the exact recovery action in the receipt. A replayed Delivery may repeat `worker-release` safely.
 
+`worker-release` does not remove the Git worktree. If `worker-start` created a child (`--worktree new-child`, start receipt / `worker-show` effect `created_child`), remove that child **only after `worker-release` returns a confirmed released state**. Do not remove it after transferring the terminal to a follow-up Dispatch, and do not remove it when release is `release_pending`, `release_unknown`, retained, or otherwise unsuccessful. `--force` on `worktree rm` skips the dirty-tree prompt; it is not permission to delete while terminal-stop state is unverified.
+
+```bash
+orca worktree rm --force --worktree path:<worktreePath> --json
+```
+
+Capture `<worktreePath>` **before** `worker-release` from the `worker-start` receipt's `created_child` effect (the path after `::` in `effects[].id`, or `residualResources` of kind `worktree`). After `worker-release`, `worker-show` returns `terminal: null` because `observation.exact` fails once the process incarnation no longer matches, so `terminal.worktreePath` is unavailable then. `--force` does **not** force-delete the GitHub branch.
+
+Fail closed — leave the worktree and report — when any of: `worker-release` did not complete successfully (`release_pending`, `release_unknown`, retained, error); the worker was reused for a follow-up Dispatch; the user asked to keep the workspace or recorded `worker-retain`; the terminal was user-taken-over; the start effect was `reused` / `--worktree current` / a pre-existing checkout (never delete the user's tree); unpushed local commits exist for **any** outcome (succeeded, failed, or STOP) — dirty `git status --porcelain`, `git rev-list --count @{upstream}..HEAD` nonzero, or no upstream / unknown comparison; or `worktree rm` errors (locked, unverifiable git). Do this before the next wait or end of turn.
+
 Workers report exactly once using the IDs and capability injected by Orca; they do not supply Run/server/terminal identity:
 
 ```bash
@@ -420,7 +430,7 @@ Wait for `tui-idle` before dispatching. Always pass `--timeout-ms`; real coding 
   `orca orchestration send --type heartbeat --subject "alive" --payload '{"taskId":"<task_id>","dispatchId":"<dispatch_id>","phase":"implementing"}' --json`
 - If blocked before completion, use `ask`; use `escalation` only when ownership is valid and the coordinator must intervene.
 - Treat preambles inherited through terminal history or full handoffs as stale unless the current prompt explicitly keeps that coordinator in the loop.
-- Coordinators must account for every settled worker terminal before waiting again or ending the turn: immediately reuse the exact worker for a new Dispatch, explicitly retain it at the user's request with `worker-retain`, or run `worker-release`. Do not leave a completed worker live merely to inspect output; released workers remain readable through `worker-read`.
+- Coordinators must account for every settled worker terminal before waiting again or ending the turn: immediately reuse the exact worker for a new Dispatch, explicitly retain it at the user's request with `worker-retain`, or run `worker-release`. After a **successful** `worker-release` on a leftover `created_child` worktree, run `orca worktree rm --force --worktree path:<worktreePath> --json` unless a fail-closed condition above applies. Do not leave a completed worker live merely to inspect output; released workers remain readable through `worker-read`.
 - Coordinators should use `task-list --ready` as external memory, dispatch parallel waves, and avoid dependency chains deeper than 3-4 steps.
 
 ## Example
@@ -435,6 +445,6 @@ orca orchestration check --wait --types worker_done,escalation,question --timeou
 
 ## Next Action
 
-Coordinator: confirm `orca status --json`, create or bind a Run, inspect `task-list`/`dispatch-show` if inheriting state, then use the explicit supervised loop (`task-create` -> `worker-start` -> `check --wait`). Use low-level terminal creation plus `dispatch --inject` only when the composed start does not express the needed topology. After every accepted `worker_done`, either transfer the exact terminal to an immediate follow-up Dispatch or run `worker-release` before the next wait.
+Coordinator: confirm `orca status --json`, create or bind a Run, inspect `task-list`/`dispatch-show` if inheriting state, then use the explicit supervised loop (`task-create` -> `worker-start` -> `check --wait`). Use low-level terminal creation plus `dispatch --inject` only when the composed start does not express the needed topology. After every accepted `worker_done`, either transfer the exact terminal to an immediate follow-up Dispatch or run `worker-release` before the next wait. If `worker-release` completed successfully and the worktree is still a leftover `created_child`, `orca worktree rm --force --worktree path:<worktreePath> --json` unless fail-closed.
 
 Worker: if the current prompt contains a live dispatch preamble, do the task, use `ask` for blocking questions, and send `worker_done` once with the required payload. If the preamble is stale or absent, do not send lifecycle messages; inspect state or treat the prompt as an ordinary handoff.
