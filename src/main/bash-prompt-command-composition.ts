@@ -48,6 +48,9 @@ __orca_restore_prompt_status() {
   return "$1"
 }
 __orca_update_user_debug_trap() {
+  # Why BASHPID: PS0/command-substitution subshells run DEBUG traps with a child
+  # PID while $$ stays the shell's — markers there would double-count command starts.
+  [[ "$BASHPID" == "$$" ]] || return 0
   local __orca_debug_trap_spec="$1" __orca_unchanged_debug_trap_spec="$2"
   local __orca_debug_trap_command
   [[ "$__orca_debug_trap_spec" != "$__orca_unchanged_debug_trap_spec" ]] || return 0

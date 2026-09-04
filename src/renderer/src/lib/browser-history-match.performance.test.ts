@@ -47,7 +47,9 @@ describe('browser history match performance budget', () => {
     expect(candidateCount).toBe(MAX_BROWSER_HISTORY_ENTRIES)
   })
 
-  it('prepares a cold corpus within budget', () => {
+  // Why retry: p95 timings on a shared machine spike with transient load; a real
+  // order-of-magnitude regression (the budget's purpose) fails every attempt.
+  it('prepares a cold corpus within budget', { retry: 2 }, () => {
     prepareBrowserHistoryEntries(entries)
     const samples: number[] = []
     for (let run = 0; run < 20; run += 1) {
@@ -60,7 +62,7 @@ describe('browser history match performance budget', () => {
     expect(lowerQuartileSample(samples)).toBeLessThan(prepareMs)
   })
 
-  it('matches one query against the prepared corpus within budget', () => {
+  it('matches one query against the prepared corpus within budget', { retry: 2 }, () => {
     const prepared = prepareBrowserHistoryEntries(entries)
     const run = (): void => {
       matchBrowserHistory({ prepared, query: WORST_QUERY, limit: 3 })
