@@ -104,3 +104,36 @@ describe('mergeWorktree identity projection', () => {
     expect(worktree.suppressedGitHubPR).toBe(42)
   })
 })
+
+describe('mergeWorktree color tag projection', () => {
+  const baseMeta = {
+    displayName: 'feature',
+    comment: '',
+    linkedIssue: null,
+    linkedPR: null,
+    linkedLinearIssue: null,
+    isArchived: false,
+    isUnread: false,
+    isPinned: false,
+    sortOrder: 0,
+    lastActivityAt: 0
+  }
+
+  it('normalizes a persisted tag so the card and the menu compare the same value', () => {
+    expect(mergeWorktree('repo-1', git, { ...baseMeta, colorTag: '#EF4444' }).colorTag).toBe(
+      '#ef4444'
+    )
+  })
+
+  it('projects an untagged workspace as null rather than leaking a stale value', () => {
+    expect(mergeWorktree('repo-1', git, baseMeta).colorTag).toBeNull()
+    expect(mergeWorktree('repo-1', git, { ...baseMeta, colorTag: null }).colorTag).toBeNull()
+    expect(mergeWorktree('repo-1', git, undefined).colorTag).toBeNull()
+  })
+
+  it('drops a corrupted persisted value instead of writing it into a style attribute', () => {
+    expect(
+      mergeWorktree('repo-1', git, { ...baseMeta, colorTag: 'red; background: url(x)' }).colorTag
+    ).toBeNull()
+  })
+})

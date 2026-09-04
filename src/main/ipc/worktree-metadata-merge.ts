@@ -2,6 +2,7 @@ import { basename } from 'node:path'
 import type { WorktreeMeta } from '../../shared/worktree/meta-types'
 import type { GitWorktreeInfo, Worktree } from '../../shared/worktree/types'
 import { DEFAULT_WORKSPACE_STATUS_ID } from '../../shared/workspace-statuses'
+import { normalizeWorkspaceColorTag } from '../../shared/workspace-color-tag'
 import { getLinkedWorkItemMetadata } from './worktree-linked-work-item-metadata'
 import { normalizeWorkspaceCreatorProvenance } from '../../shared/workspace-creator-provenance'
 import { createWorktreeIdentity } from '../../shared/worktree/identity'
@@ -102,6 +103,7 @@ export function mergeWorktree(
     ...(meta?.pushTarget !== undefined ? { pushTarget: meta.pushTarget } : {}),
     ...(meta?.priorWorktreeIds !== undefined ? { priorWorktreeIds: meta.priorWorktreeIds } : {}),
     workspaceStatus: meta?.workspaceStatus ?? DEFAULT_WORKSPACE_STATUS_ID,
+    colorTag: normalizeWorkspaceColorTag(meta?.colorTag),
     // Why: diff comments are persisted on WorktreeMeta and forwarded verbatim
     // so the renderer store mirrors on-disk state.
     diffComments: meta?.diffComments,

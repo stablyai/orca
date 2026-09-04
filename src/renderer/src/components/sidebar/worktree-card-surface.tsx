@@ -2,6 +2,9 @@ import React from 'react'
 import { LoaderCircle } from 'lucide-react'
 
 import { cn } from '@/lib/utils'
+import { translate } from '@/i18n/i18n'
+import { normalizeWorkspaceColorTag } from '../../../../shared/workspace-color-tag'
+import { useWorkspaceColorTagPreviewForWorktree } from './workspace-color-tag-preview'
 import { AutoRenameFailedDialog } from './AutoRenameFailedDialog'
 import WorktreeContextMenu from './WorktreeContextMenu'
 import { WorktreeCardParentContent } from './worktree-card-parent-content'
@@ -40,6 +43,12 @@ export function WorktreeCardSurface({ card }: { card: WorktreeCardController }):
     setShowRenameErrorDialog
   } = card
   const { titleOnlyCard, cardStyle } = presentation
+  // Why: the picker and in-flight writes preview through a transient channel, so a drag never
+  // writes metadata and a slow write still shows on the card; a previewed clear reads as null.
+  const previewColorTag = useWorkspaceColorTagPreviewForWorktree(worktree)
+  const colorTag = normalizeWorkspaceColorTag(
+    previewColorTag === undefined ? worktree.colorTag : previewColorTag
+  )
 
   const parentCardContent = <WorktreeCardParentContent card={card} presentation={presentation} />
 
@@ -81,6 +90,26 @@ export function WorktreeCardSurface({ card }: { card: WorktreeCardController }):
       aria-busy={isDeleting}
       style={cardStyle}
     >
+      {colorTag ? (
+        <>
+          <span
+            data-worktree-card-color-tag={colorTag}
+            aria-hidden="true"
+            className="pointer-events-none absolute inset-y-0 left-0 w-[3px] rounded-l-lg"
+            style={{ backgroundColor: colorTag }}
+          />
+          {/* Why: the strip is decorative, so this is the tag's only evidence at the card level. */}
+          <span className="sr-only">
+            {translate(
+              'auto.components.sidebar.WorktreeCardSurface.colorTag',
+              'Color tag {{value0}}',
+              {
+                value0: colorTag
+              }
+            )}
+          </span>
+        </>
+      ) : null}
       {isDeleting && (
         <div className="absolute inset-0 z-10 flex items-center justify-center rounded-lg bg-background/50 backdrop-blur-[1px]">
           <div className="inline-flex items-center gap-1.5 rounded-full bg-background px-3 py-1 text-[11px] font-medium text-foreground shadow-sm border border-border/50">

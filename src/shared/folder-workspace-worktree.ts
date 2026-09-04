@@ -3,6 +3,7 @@ import type { Worktree } from './worktree/types'
 import { folderWorkspaceKey } from './workspace-scope'
 import { parseExecutionHostId, toSshExecutionHostId } from './execution-host'
 import { normalizeWorkspaceCreatorProvenance } from './workspace-creator-provenance'
+import { normalizeWorkspaceColorTag } from './workspace-color-tag'
 
 export function folderWorkspaceToWorktree(folderWorkspace: FolderWorkspace): Worktree {
   const linkedTask = folderWorkspace.linkedTask
@@ -41,6 +42,7 @@ export function folderWorkspaceToWorktree(folderWorkspace: FolderWorkspace): Wor
     pendingFirstAgentMessageRename: folderWorkspace.pendingFirstAgentMessageRename,
     firstAgentMessageRenameError: folderWorkspace.firstAgentMessageRenameError,
     workspaceStatus: folderWorkspace.workspaceStatus,
+    colorTag: normalizeWorkspaceColorTag(folderWorkspace.colorTag),
     diffComments: folderWorkspace.diffComments,
     path: folderWorkspace.folderPath,
     head: '',

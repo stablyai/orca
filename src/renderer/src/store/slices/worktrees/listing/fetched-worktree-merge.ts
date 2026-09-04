@@ -20,6 +20,11 @@ import {
 import { isCurrentDetectedWorktreeRefresh } from './detected-worktree-refresh-admission'
 import { buildWorktreePurgeState } from '../teardown/worktree-purge-state'
 import { isDisplayNamePersistencePending } from '../metadata/worktree-meta-persist'
+import {
+  fenceStartedAt,
+  preserveConcurrentColorTag,
+  withDetectedOnlyRows
+} from './fetched-worktree-color-tag-fence'
 import { branchName } from '@/lib/git-utils'
 import {
   forgetAuthoritativelyRemovedWorktrees,
@@ -153,11 +158,17 @@ export function mergeFetchedWorktrees(
     const refreshResult = {
       ...args.refresh.result,
       worktrees: preserveConcurrentDisplayName(
-        preserveConcurrentManualOrder(
-          args.refresh.result.worktrees,
-          args.requestStartedWorktrees,
-          currentWorktrees,
-          (worktree) => worktreeMatchesHost(worktree, args.hostId, matchOptions)
+        preserveConcurrentColorTag(
+          preserveConcurrentManualOrder(
+            args.refresh.result.worktrees,
+            args.requestStartedWorktrees,
+            currentWorktrees,
+            (worktree) => worktreeMatchesHost(worktree, args.hostId, matchOptions)
+          ),
+          withDetectedOnlyRows(args.requestStartedWorktrees, args.requestStartedDetectedWorktrees),
+          withDetectedOnlyRows(currentWorktrees, s.detectedWorktreesByRepo[args.repoId]?.worktrees),
+          (worktree) => worktreeMatchesHost(worktree, args.hostId, matchOptions),
+          fenceStartedAt(args)
         ),
         args.requestStartedWorktrees,
         currentWorktrees,

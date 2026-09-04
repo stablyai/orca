@@ -77,6 +77,9 @@ export function useWorktreeContextMenuModel({
     effectiveSelectedWorktrees
   )
   const [createGroupDialogOpen, setCreateGroupDialogOpen] = useState(false)
+  // Why: the color picker opens after the menu closes; without this the lifecycle below completes
+  // and an Agent Map host tears the menu down before the picker's handoff can open it.
+  const [colorPickerActive, setColorPickerActive] = useState(false)
   const createGroupDialogActiveRef = useRef(false)
   const [parentPicker, setParentPicker] = useState<{
     childWorktreeId: string
@@ -247,6 +250,7 @@ export function useWorktreeContextMenuModel({
     if (
       !lifecycleStartedRef.current ||
       menuOpen ||
+      colorPickerActive ||
       createGroupDialogOpen ||
       createGroupDialogActiveRef.current ||
       parentPicker !== null ||
@@ -262,7 +266,7 @@ export function useWorktreeContextMenuModel({
       onLifecycleComplete?.()
     }, 0)
     return () => window.clearTimeout(timer)
-  }, [createGroupDialogOpen, menuOpen, onLifecycleComplete, parentPicker])
+  }, [colorPickerActive, createGroupDialogOpen, menuOpen, onLifecycleComplete, parentPicker])
 
   useEffect(() => {
     const closeMenu = (): void => setMenuOpenState(false)
@@ -283,6 +287,7 @@ export function useWorktreeContextMenuModel({
   )
 
   const {
+    handleAssignColorTag,
     handleAssignWorkspaceStatus,
     handleCloseTerminals,
     handleCopyPath,
@@ -319,7 +324,7 @@ export function useWorktreeContextMenuModel({
     worktree,
     workspaceStatuses
   })
-  const { handleOpenParentPicker, handleParentPickerOpenChange, openPendingParentPicker } =
+  const { handleCloseAutoFocus, handleOpenParentPicker, handleParentPickerOpenChange } =
     useWorktreeParentPickerTransition({
       fallbackTimerRef: parentPickerFallbackTimerRef,
       pendingRef: pendingParentPickerRef,
@@ -336,25 +341,6 @@ export function useWorktreeContextMenuModel({
       contextMenuOpenedAtRef,
       updateWorktreeLineage
     })
-
-  const handleCloseAutoFocus = useCallback(
-    (event: Event) => {
-      // Why: Radix otherwise restores focus to the hidden context-menu trigger.
-      // When Sleep/Delete clears the active workspace and remounts the sidebar,
-      // that focus restore can scroll the virtual list away from the row the
-      // user just acted on.
-      event.preventDefault()
-      if (pendingParentPickerRef.current) {
-        window.setTimeout(openPendingParentPicker, 0)
-        return
-      }
-      const sidebar = scopeRef.current?.closest('[data-worktree-sidebar]')
-      if (sidebar instanceof HTMLElement) {
-        sidebar.focus({ preventScroll: true })
-      }
-    },
-    [openPendingParentPicker]
-  )
 
   return {
     activeContextWorktrees,
@@ -375,6 +361,7 @@ export function useWorktreeContextMenuModel({
     eligibleParentCount,
     effectiveSelectedWorktrees,
     folderWorkspaceId,
+    handleAssignColorTag,
     handleAssignWorkspaceStatus,
     handleCloseAutoFocus,
     handleCloseTerminals,
@@ -408,6 +395,7 @@ export function useWorktreeContextMenuModel({
     removesProject,
     repo,
     scopeRef,
+    setColorPickerActive,
     setContextWorktrees,
     setDeveloperMenuRevealed,
     setMenuOpenState,

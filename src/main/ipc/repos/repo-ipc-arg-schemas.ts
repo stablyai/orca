@@ -155,6 +155,8 @@ export const FolderWorkspaceUpdateArgs = z.object({
       sortOrder: z.number().finite().optional(),
       manualOrder: z.number().finite().optional(),
       workspaceStatus: z.string().optional(),
+      // Why: null is the clear contract; a plain optional string would drop it and leave the old tag.
+      colorTag: z.union([z.string(), z.null()]).optional(),
       createdWithAgent: z.string().refine(isTuiAgent).optional(),
       pendingFirstAgentMessageRename: z.boolean().optional(),
       firstAgentMessageRenameError: z.string().nullable().optional(),

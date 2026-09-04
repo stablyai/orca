@@ -9,6 +9,7 @@ import { normalizeWorkspaceLinkedItem } from '../../../shared/workspace-linked-i
 import { isWorkspaceLinkedItemSourceContextMatch } from '../../../shared/workspace-linked-item-source-context'
 import { folderWorkspaceKey } from '../../../shared/workspace-scope'
 import { removeWorkspaceSessionOwner } from './session-owner-removal'
+import { normalizeWorkspaceColorTag } from '../../../shared/workspace-color-tag'
 
 export type FolderWorkspaceMutationOperations = {
   state: PersistedState
@@ -121,6 +122,7 @@ export class FolderWorkspacePersistenceOperations {
         | 'sortOrder'
         | 'manualOrder'
         | 'workspaceStatus'
+        | 'colorTag'
         | 'createdWithAgent'
         | 'pendingFirstAgentMessageRename'
         | 'firstAgentMessageRenameError'
@@ -186,6 +188,14 @@ export class FolderWorkspacePersistenceOperations {
     }
     if (updates.workspaceStatus !== undefined) {
       workspace.workspaceStatus = updates.workspaceStatus
+    }
+    if (updates.colorTag !== undefined) {
+      const colorTag = normalizeWorkspaceColorTag(updates.colorTag)
+      if (colorTag) {
+        workspace.colorTag = colorTag
+      } else {
+        delete workspace.colorTag
+      }
     }
     if (updates.createdWithAgent !== undefined) {
       workspace.createdWithAgent = updates.createdWithAgent

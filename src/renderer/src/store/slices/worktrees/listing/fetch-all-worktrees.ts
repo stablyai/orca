@@ -40,6 +40,9 @@ export function createFetchAllWorktrees(
         try {
           const requestStartedState = get()
           const requestStartedWorktrees = requestStartedState.worktreesByRepo[r.id]
+          const requestStartedDetectedWorktrees =
+            requestStartedState.detectedWorktreesByRepo[r.id]?.worktrees
+          const requestStartedAt = Date.now()
           const hostId = getRepoExecutionHostId(r)
           const setup = getProjectHostSetupForRepoHost(requestStartedState, r.id, hostId)
           const settings = settingsForKnownRepoOwner(requestStartedState.settings, r)
@@ -67,6 +70,8 @@ export function createFetchAllWorktrees(
             hostId,
             ownerWasMissingAtStart: false,
             requestStartedWorktrees,
+            requestStartedDetectedWorktrees,
+            requestStartedAt,
             setup,
             refresh
           })
@@ -93,6 +98,9 @@ export function createFetchAllWorktrees(
         try {
           const requestStartedState = get()
           const requestStartedWorktrees = requestStartedState.worktreesByRepo[r.id]
+          const requestStartedDetectedWorktrees =
+            requestStartedState.detectedWorktreesByRepo[r.id]?.worktrees
+          const requestStartedAt = Date.now()
           const hostId = getRepoExecutionHostId(r)
           const setup = getProjectHostSetupForRepoHost(requestStartedState, r.id, hostId)
           const parsedHost = parseExecutionHostId(hostId)
@@ -123,6 +131,8 @@ export function createFetchAllWorktrees(
             hostId,
             ownerWasMissingAtStart: false,
             requestStartedWorktrees,
+            requestStartedDetectedWorktrees,
+            requestStartedAt,
             setup,
             refresh,
             purgeRemovedWorktrees: false

@@ -1,4 +1,6 @@
 import { useCallback } from 'react'
+import { toast } from 'sonner'
+import { assignWorkspaceColorTags } from './workspace-color-tag-writes'
 import type { useAppStore } from '@/store'
 import type { Repo } from '../../../../shared/repo-types'
 import type { WorkspaceStatusDefinition, Worktree } from '../../../../shared/worktree/types'
@@ -48,6 +50,19 @@ export function useWorktreeContextMenuCommands(args: {
       { executionHostId: args.worktree.hostId ?? 'local' }
     )
   }, [args])
+  // Why coalesce per target: quick successive assignments (swatch clicks, a picker commit) must
+  // settle in order on a slow host — one write set in flight, and when it lands the newest pending
+  // color for *each* workspace is written. A single "latest batch" slot would let an assignment to
+  // A+C wholesale replace a still-pending assignment to A+B and silently drop B's color.
+  const handleAssignColorTag = useCallback(
+    // Why explicit targets: the picker commits after the menu has closed, when the model's
+    // active selection has already fallen back to the clicked row.
+    (colorTag: string | null, targets: readonly Worktree[] = args.activeContextWorktrees) =>
+      assignWorkspaceColorTags(targets, colorTag, args.updateWorktreeMeta, (message) =>
+        toast.error(message)
+      ),
+    [args]
+  )
   const handleTogglePin = useCallback(() => {
     args.setWorktreesPinnedAndReveal([args.worktree.id], !args.worktree.isPinned)
   }, [args])
@@ -164,6 +179,7 @@ export function useWorktreeContextMenuCommands(args: {
     }
   }, [args.validParentWorktreeId])
   return {
+    handleAssignColorTag,
     handleAssignWorkspaceStatus,
     handleCloseTerminals,
     handleCopyPath,

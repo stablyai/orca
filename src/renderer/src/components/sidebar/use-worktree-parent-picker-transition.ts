@@ -59,5 +59,28 @@ export function useWorktreeParentPickerTransition(args: {
     },
     [args, openPendingParentPicker]
   )
-  return { handleOpenParentPicker, handleParentPickerOpenChange, openPendingParentPicker }
+  const handleCloseAutoFocus = useCallback(
+    (event: Event) => {
+      // Why: Radix otherwise restores focus to the hidden context-menu trigger.
+      // When Sleep/Delete clears the active workspace and remounts the sidebar,
+      // that focus restore can scroll the virtual list away from the row the
+      // user just acted on.
+      event.preventDefault()
+      if (args.pendingRef.current) {
+        window.setTimeout(openPendingParentPicker, 0)
+        return
+      }
+      const sidebar = args.scopeRef.current?.closest('[data-worktree-sidebar]')
+      if (sidebar instanceof HTMLElement) {
+        sidebar.focus({ preventScroll: true })
+      }
+    },
+    [args, openPendingParentPicker]
+  )
+  return {
+    handleCloseAutoFocus,
+    handleOpenParentPicker,
+    handleParentPickerOpenChange,
+    openPendingParentPicker
+  }
 }

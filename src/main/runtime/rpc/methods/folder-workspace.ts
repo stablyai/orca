@@ -57,6 +57,8 @@ const FolderWorkspaceUpdate = z.object({
       sortOrder: OptionalFiniteNumber,
       manualOrder: OptionalFiniteNumber,
       workspaceStatus: OptionalString,
+      // Why: null is the clear contract; OptionalString would drop it on a remote host.
+      colorTag: z.union([z.string(), z.null()]).optional(),
       createdWithAgent: z.string().refine(isTuiAgent).optional(),
       pendingFirstAgentMessageRename: z.boolean().optional(),
       firstAgentMessageRenameError: z.string().nullable().optional(),

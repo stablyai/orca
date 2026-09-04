@@ -24,7 +24,9 @@ import { getCurrentDirectSshAuthority } from './direct-ssh-authority'
 import {
   acquireDetectedWorktreeRefreshLeaseForRepo,
   normalizeNotAdmittedProviderResult,
-  qualifiedProviderResultIsAdmitted
+  qualifiedProviderResultIsAdmitted,
+  forgetLeaseStart,
+  rememberLeaseStart
 } from './detected-worktree-refresh'
 import { isDetectedWorktreeListResult } from './detected-worktree-provider-request'
 import { staleDetectedWorktreeProviderResult } from './detected-worktree-refresh-admission'
@@ -202,6 +204,9 @@ export function acquireDirectSshDetectedWorktreeRefresh(
 ): DirectSshDetectedWorktreeRefresh {
   const requestStartedState = store.getState()
   const requestStartedWorktrees = requestStartedState.worktreesByRepo[request.repoId]
+  const requestStartedDetectedWorktrees =
+    requestStartedState.detectedWorktreesByRepo[request.repoId]?.worktrees
+  const requestStartedAt = Date.now()
   const ownerWasMissingAtStart = !requestStartedState.repos.some(
     (repo) => repo.id === request.repoId
   )
@@ -221,13 +226,29 @@ export function acquireDirectSshDetectedWorktreeRefresh(
     requireAuthoritative: request.requireAuthoritative
   }
   const lease = acquireDetectedWorktreeRefreshLeaseForRepo(settings, request.repoId, options)
+  // Why here and not in merge: merge runs after the provider completes, so the first owner would
+  // stamp completion time and a later joiner would look newer than a write that landed mid-scan.
+  const scanStartedAt = rememberLeaseStart(lease.providerRequestId)
+  // Why once, on either path: the scheduler calls release only to cancel, invalidate, or shut down;
+  // a scan that completes normally is only awaited, so its holder must be forgotten on settlement.
+  let clockForgotten = false
+  const forgetClock = (): void => {
+    if (!clockForgotten) {
+      clockForgotten = true
+      forgetLeaseStart(lease.providerRequestId)
+    }
+  }
+  lease.result.then(forgetClock, forgetClock)
   let mergedResult: HostQualifiedDetectedWorktreeResult | undefined
 
   return {
     waiterLeaseId: lease.waiterLeaseId,
     providerRequestId: lease.providerRequestId,
     result: lease.result,
-    release: lease.release,
+    release: (...args: Parameters<typeof lease.release>) => {
+      forgetClock()
+      return lease.release(...args)
+    },
     merge: (providerResult) => {
       if (mergedResult) {
         return mergedResult
@@ -254,6 +275,7 @@ export function acquireDirectSshDetectedWorktreeRefresh(
       const refresh: AdmittedDetectedWorktreeRefresh = {
         status: 'admitted',
         result: providerResult.result,
+        startedAt: scanStartedAt,
         providerResult,
         executionHostId: request.executionHostId,
         directSshAuthority: request.authority
@@ -265,6 +287,8 @@ export function acquireDirectSshDetectedWorktreeRefresh(
           hostId: request.executionHostId,
           ownerWasMissingAtStart,
           requestStartedWorktrees,
+          requestStartedDetectedWorktrees,
+          requestStartedAt,
           setup,
           refresh
         }

@@ -142,6 +142,9 @@ export const WorktreeSet = WorktreeSelector.extend({
   sparsePresetId: OptionalString,
   baseRef: OptionalString,
   workspaceStatus: OptionalString,
+  // Why: null is the clear contract; OptionalString would drop it and the old tag
+  // would come back on the next refresh from a remote host.
+  colorTag: z.union([z.string(), z.null()]).optional(),
   pushTarget: z
     .object({
       remoteName: z.string(),

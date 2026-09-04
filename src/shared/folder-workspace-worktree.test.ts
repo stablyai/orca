@@ -173,3 +173,18 @@ describe('folderWorkspaceToWorktree', () => {
     expect(gitlabMr.linkedGitLabIssue).toBeNull()
   })
 })
+
+describe('folder workspace color tag projection', () => {
+  it('normalizes a stored tag onto the projected worktree', () => {
+    expect(folderWorkspaceToWorktree(makeFolderWorkspace({ colorTag: '#EF4444' })).colorTag).toBe(
+      '#ef4444'
+    )
+  })
+
+  it('projects an untagged or corrupted folder workspace as null', () => {
+    expect(folderWorkspaceToWorktree(makeFolderWorkspace({})).colorTag).toBeNull()
+    expect(
+      folderWorkspaceToWorktree(makeFolderWorkspace({ colorTag: 'javascript:alert(1)' })).colorTag
+    ).toBeNull()
+  })
+})

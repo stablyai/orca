@@ -461,7 +461,15 @@
                     "pr": {
                       "suppression": "Update the remote runtime to unlink GitHub pull requests"
                     }
-                  }
+                  },
+                  "colorTag": "Update the remote runtime to set workspace colors"
+                }
+              }
+            },
+            "update": {
+              "worktree": {
+                "meta": {
+                  "identityGone": "This workspace is no longer available."
                 }
               }
             }
@@ -532,6 +540,17 @@
             "command": {
               "hosts": {
                 "5b7d781d67": "Failed to save quick command"
+              }
+            }
+          }
+        }
+      },
+      "folder": {
+        "workspaces": {
+          "folder": {
+            "workspace": {
+              "mutations": {
+                "colorTag": "Update the remote runtime to set workspace colors"
               }
             }
           }
@@ -6231,6 +6250,18 @@
           "projectOnly": "Added in this project only.",
           "useGlobalFor": "Use global for {{value0}}",
           "useGlobal": "Use global"
+        },
+        "WorktreeColorTagMenuItems": {
+          "noColor": "No color",
+          "useColor": "Use color {{value0}}",
+          "groupColorMulti": "Group color for selected workspaces",
+          "groupColor": "Group color",
+          "custom": "Custom color",
+          "hex": "Hex color",
+          "removeColor": "Remove color {{value0}}"
+        },
+        "WorktreeCardSurface": {
+          "colorTag": "Color tag {{value0}}"
         }
       },
       "shared": {

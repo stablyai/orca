@@ -34,6 +34,8 @@ export type DetectedWorktreeRefreshOptions = BackgroundRuntimeRefreshOptions & {
 export type AdmittedDetectedWorktreeRefresh = {
   status: 'admitted'
   result: DetectedWorktreeListResult
+  /** When the underlying scan began — earlier than a joining caller's own start. */
+  startedAt?: number
   providerResult?: HostQualifiedDetectedWorktreeResult
   executionHostId: ExecutionHostId
   directSshAuthority?: DirectSshAuthority
@@ -91,6 +93,10 @@ export type FencedWorktreeMergeArgs = {
   ownerWasMissingAtStart: boolean
   missingDirectSshOwnerReposSnapshot?: AppState['repos']
   requestStartedWorktrees: readonly Worktree[] | undefined
+  /** Detected rows at fetch start; lets the color fence cover workspaces visible only there. */
+  requestStartedDetectedWorktrees?: readonly Worktree[]
+  /** When the fetch began; lets a field fence tell a listing that predates a write's landing apart. */
+  requestStartedAt?: number
   setup?: ProjectHostSetup
   refresh: AdmittedDetectedWorktreeRefresh
   purgeRemovedWorktrees?: boolean

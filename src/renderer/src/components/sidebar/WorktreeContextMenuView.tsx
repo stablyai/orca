@@ -34,6 +34,7 @@ import { isEventTargetInsideCurrentTarget } from './worktree-card-dom-events'
 import { translate } from '@/i18n/i18n'
 import { useOptionalShortcutLabel } from '@/hooks/useShortcutLabel'
 import type { WorktreeContextMenuModel } from './use-worktree-context-menu-model'
+import { useWorktreeColorTagPicker } from './use-worktree-color-tag-picker'
 import { WorktreeStatusMenuItems } from './WorktreeStatusMenuItems'
 import { WorktreeContextMenuOverlays } from './WorktreeContextMenuOverlays'
 import {
@@ -48,6 +49,7 @@ import {
 
 export default function WorktreeContextMenuView({ model }: { model: WorktreeContextMenuModel }) {
   const {
+    activeContextWorktrees,
     batchDeleteWorktrees,
     children,
     contentClassName,
@@ -61,6 +63,7 @@ export default function WorktreeContextMenuView({ model }: { model: WorktreeCont
     eligibleParentCount,
     effectiveSelectedWorktrees,
     folderWorkspaceId,
+    handleAssignColorTag,
     handleAssignWorkspaceStatus,
     handleCloseAutoFocus,
     handleCloseTerminals,
@@ -88,6 +91,7 @@ export default function WorktreeContextMenuView({ model }: { model: WorktreeCont
     removesProject,
     repo,
     scopeRef,
+    setColorPickerActive,
     setContextWorktrees,
     setDeveloperMenuRevealed,
     setMenuOpenState,
@@ -101,6 +105,15 @@ export default function WorktreeContextMenuView({ model }: { model: WorktreeCont
     workspaceStatuses
   } = model
   const deleteShortcut = useOptionalShortcutLabel('workspace.delete')
+  const colorTagPicker = useWorktreeColorTagPicker({
+    contextWorktrees: activeContextWorktrees,
+    menuPoint,
+    disabled: deletingContext,
+    isMultiContext,
+    onAssignColorTag: handleAssignColorTag,
+    restoreMenuFocus: handleCloseAutoFocus,
+    onActiveChange: setColorPickerActive
+  })
   return (
     <div
       ref={scopeRef}
@@ -151,11 +164,12 @@ export default function WorktreeContextMenuView({ model }: { model: WorktreeCont
           }}
           onMouseUpCapture={suppressOpeningPointerEvent}
           onClickCapture={suppressOpeningPointerEvent}
-          onCloseAutoFocus={handleCloseAutoFocus}
+          onCloseAutoFocus={colorTagPicker.handleMenuCloseAutoFocus}
         >
           <DropdownMenuLabel className="px-2 py-1 text-[11px] font-medium text-muted-foreground">
             {translate('auto.components.sidebar.WorktreeContextMenu.workspaceSection', 'Workspace')}
           </DropdownMenuLabel>
+          {colorTagPicker.menuItems}
           {!isMultiContext && (
             <DropdownMenuItem onSelect={handleRename} disabled={isDeleting}>
               <Pencil className="size-3.5" />
@@ -380,6 +394,7 @@ export default function WorktreeContextMenuView({ model }: { model: WorktreeCont
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
+      {colorTagPicker.picker}
       <WorktreeContextMenuOverlays model={model} />
     </div>
   )

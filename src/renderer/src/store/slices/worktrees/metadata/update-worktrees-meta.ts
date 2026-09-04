@@ -38,6 +38,7 @@ export function createUpdateWorktreesMeta(
     const folderWorkspaceUpdates: {
       folderWorkspaceId: string
       updates: ReturnType<typeof getFolderWorkspaceMetaUpdates>
+      executionHostId: WorktreeMetaBatchUpdate['executionHostId']
     }[] = []
     for (const entry of updates) {
       const scope = parseWorkspaceKey(entry.worktreeId)
@@ -46,7 +47,8 @@ export function createUpdateWorktreesMeta(
         if (Object.keys(folderUpdates).length > 0) {
           folderWorkspaceUpdates.push({
             folderWorkspaceId: scope.folderWorkspaceId,
-            updates: folderUpdates
+            updates: folderUpdates,
+            executionHostId: entry.executionHostId
           })
         }
       } else {
@@ -85,8 +87,12 @@ export function createUpdateWorktreesMeta(
     })
 
     await Promise.all([
-      ...folderWorkspaceUpdates.map(({ folderWorkspaceId, updates }) =>
-        get().updateFolderWorkspace(folderWorkspaceId, updates)
+      ...folderWorkspaceUpdates.map(({ folderWorkspaceId, updates, executionHostId }) =>
+        get().updateFolderWorkspace(
+          folderWorkspaceId,
+          updates,
+          executionHostId ? { executionHostId } : undefined
+        )
       ),
       ...gitWorktreeUpdates.map(async ({ worktreeId, updates, executionHostId }) => {
         try {
@@ -94,8 +100,21 @@ export function createUpdateWorktreesMeta(
           const ownerHostIds = executionHostId
             ? [executionHostId]
             : getKnownOwnerHostIds(state, worktreeId)
+          // Why the same pin as the single-row path: an identity-less row's fence would otherwise fall
+          // back to id and host and hold a sibling runtime's refresh, and a held listing would never be
+          // reconciled.
           await (ownerHostIds.length === 0
-            ? persistWorktreeMeta(settingsForWorktreeOwner(state, worktreeId), worktreeId, updates)
+            ? persistWorktreeMeta(
+                settingsForWorktreeOwner(state, worktreeId),
+                worktreeId,
+                updates,
+                undefined,
+                {
+                  onHeldColorTagListing: () => {
+                    void get().fetchWorktrees(getRepoIdFromWorktreeId(worktreeId))
+                  }
+                }
+              )
             : Promise.all(
                 ownerHostIds.map((hostId) => {
                   const worktree = getIndexedWorktreesById(state.worktreesByRepo, worktreeId).find(
@@ -106,7 +125,17 @@ export function createUpdateWorktreesMeta(
                     worktreeId,
                     updates,
                     hostId,
-                    worktree?.identity?.key
+                    {
+                      identityKey: worktree?.identity?.key,
+                      runtimeOwnerEnvironmentId: worktree
+                        ? (worktree.runtimeOwnerEnvironmentId ?? null)
+                        : undefined,
+                      onHeldColorTagListing: () => {
+                        void get().fetchWorktrees(getRepoIdFromWorktreeId(worktreeId), {
+                          executionHostId: hostId
+                        })
+                      }
+                    }
                   )
                 })
               ))

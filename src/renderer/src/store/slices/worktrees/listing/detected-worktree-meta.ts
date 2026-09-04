@@ -1,4 +1,5 @@
 import type { AppState } from '../../../types'
+import { getRepoIdFromWorktreeId } from '../../../../../../shared/worktree/id'
 import type { FolderWorkspace } from '../../../../../../shared/folder-workspace-types'
 import type { WorktreeMeta } from '../../../../../../shared/worktree/meta-types'
 import type { DetectedWorktreeListResult, Worktree } from '../../../../../../shared/worktree/types'
@@ -26,7 +27,9 @@ export function applyDetectedWorktreeUpdates(
   detectedWorktreesByRepo: AppState['detectedWorktreesByRepo'],
   worktreeId: string,
   rawUpdates: Partial<WorktreeMeta>,
-  executionHostId?: ExecutionHostId
+  executionHostId?: ExecutionHostId,
+  identityKey?: string,
+  runtimeOwnerEnvironmentId?: string | null
 ): AppState['detectedWorktreesByRepo'] {
   // Why: mirrors applyWorktreeUpdates — detected rows feed the same palette.
   const updates = withoutErasedRequiredWorktreeFields(rawUpdates)
@@ -36,7 +39,13 @@ export function applyDetectedWorktreeUpdates(
   for (const [repoId, result] of Object.entries(detectedWorktreesByRepo)) {
     let repoChanged = false
     const nextWorktrees = result.worktrees.map((worktree) => {
-      if (worktree.id !== worktreeId || !worktreeRowMatchesMetaHost(worktree, executionHostId)) {
+      if (
+        worktree.id !== worktreeId ||
+        !worktreeRowMatchesMetaHost(worktree, executionHostId) ||
+        (identityKey !== undefined && worktree.identity?.key !== identityKey) ||
+        (runtimeOwnerEnvironmentId !== undefined &&
+          (worktree.runtimeOwnerEnvironmentId ?? null) !== runtimeOwnerEnvironmentId)
+      ) {
         return worktree
       }
       repoChanged = true
@@ -66,6 +75,75 @@ export function folderWorkspaceMatchesHost(
       (workspace.connectionId?.trim()
         ? toSshExecutionHostId(workspace.connectionId)
         : LOCAL_EXECUTION_HOST_ID)) === executionHostId
+  )
+}
+
+/**
+ * The row for a canonical identity, or undefined without a key. Deliberately not filtered by the
+ * requested id: a local folder rename retires the path-derived locator, and a write issued from
+ * the still-visible old row must follow the identity to the row's current id rather than recreate
+ * metadata under the retired one. The requested id only picks the repository to search.
+ */
+export function findKnownWorktreeByIdentityKey(
+  state: Pick<AppState, 'worktreesByRepo' | 'detectedWorktreesByRepo'>,
+  worktreeId: string,
+  identityKey: string | undefined
+): Worktree | DetectedWorktreeListResult['worktrees'][number] | undefined {
+  if (identityKey === undefined) {
+    return undefined
+  }
+  const repoId = getRepoIdFromWorktreeId(worktreeId)
+  const visible = state.worktreesByRepo[repoId]?.find(
+    (worktree) => worktree.identity?.key === identityKey
+  )
+  if (visible) {
+    return visible
+  }
+  return state.detectedWorktreesByRepo[repoId]?.worktrees.find(
+    (worktree) => worktree.identity?.key === identityKey
+  )
+}
+
+/** What a caller uses to address one exact row: its identity, or its runtime owner before it has one. */
+export type WorktreeMetaRowPin = { identityKey?: string; runtimeOwnerEnvironmentId?: string | null }
+
+export function isPinnedWorktreeMetaUpdate(pin: WorktreeMetaRowPin | undefined): boolean {
+  return pin?.identityKey !== undefined || pin?.runtimeOwnerEnvironmentId !== undefined
+}
+
+/**
+ * The row a pinned write addresses. Identity wins when the caller knows it. An identity-less row is
+ * picked by id, host, and runtime owner: two paired runtimes can publish one checkout as two rows
+ * sharing id and host, and an id-and-host lookup would land on either. Undefined when nothing pins.
+ */
+export function findPinnedWorktreeRow(
+  state: Pick<AppState, 'worktreesByRepo' | 'detectedWorktreesByRepo' | 'folderWorkspaces'>,
+  worktreeId: string,
+  executionHostId: ExecutionHostId | undefined,
+  pin: WorktreeMetaRowPin | undefined
+): Worktree | DetectedWorktreeListResult['worktrees'][number] | undefined {
+  if (pin?.identityKey !== undefined) {
+    return findKnownWorktreeByIdentityKey(state, worktreeId, pin.identityKey)
+  }
+  const owner = pin?.runtimeOwnerEnvironmentId
+  if (owner === undefined) {
+    return undefined
+  }
+  const ownsRow = (worktree: Worktree): boolean =>
+    worktree.id === worktreeId &&
+    // Why `?? null`: a `null` pin names the row the desktop lists itself, which carries no owner.
+    (worktree.runtimeOwnerEnvironmentId ?? null) === owner &&
+    worktreeRowMatchesMetaHost(worktree, executionHostId)
+  // Why: a folder workspace published by a paired runtime projects that runtime as its owner and
+  // lives in its own list; searching only the git catalogs rejected every such folder as gone.
+  if (parseWorkspaceKey(worktreeId)?.type === 'folder') {
+    const folder = findKnownWorktreeById(state, worktreeId, executionHostId)
+    return folder && ownsRow(folder) ? folder : undefined
+  }
+  const repoId = getRepoIdFromWorktreeId(worktreeId)
+  return (
+    state.worktreesByRepo[repoId]?.find(ownsRow) ??
+    state.detectedWorktreesByRepo[repoId]?.worktrees.find(ownsRow)
   )
 }
 
@@ -137,6 +215,7 @@ export function getFolderWorkspaceMetaUpdates(
     | 'manualOrder'
     | 'lastActivityAt'
     | 'workspaceStatus'
+    | 'colorTag'
     | 'createdWithAgent'
     | 'pendingFirstAgentMessageRename'
     | 'firstAgentMessageRenameError'
@@ -155,6 +234,7 @@ export function getFolderWorkspaceMetaUpdates(
       | 'manualOrder'
       | 'lastActivityAt'
       | 'workspaceStatus'
+      | 'colorTag'
       | 'createdWithAgent'
       | 'pendingFirstAgentMessageRename'
       | 'firstAgentMessageRenameError'
@@ -190,6 +270,9 @@ export function getFolderWorkspaceMetaUpdates(
   }
   if (updates.workspaceStatus !== undefined) {
     next.workspaceStatus = updates.workspaceStatus
+  }
+  if (updates.colorTag !== undefined) {
+    next.colorTag = updates.colorTag
   }
   if (updates.createdWithAgent !== undefined) {
     next.createdWithAgent = updates.createdWithAgent

@@ -9,6 +9,75 @@ import { Label } from './label'
 import { Popover, PopoverContent, PopoverTrigger } from './popover'
 import { translate } from '@/i18n/i18n'
 
+type ColorPickerFieldsProps = {
+  /** Names the control; the wheel's accessible name is derived from it. */
+  label: string
+  inputId: string
+  /** What the wheel shows — always a complete color. */
+  wheelColor: string
+  /** What the hex field holds, complete or not. */
+  draft: string
+  hasInvalidDraft: boolean
+  placeholder?: string
+  onWheelChange: (hex: string) => void
+  onDraftChange: (value: string) => void
+  onDraftFocus?: () => void
+  onDraftBlur?: () => void
+}
+
+/**
+ * The wheel plus validated hex field shared by every color picker surface. Callers own the state
+ * and decide what a change means (immediate onChange, preview-then-commit, …); this keeps the
+ * focus-ring treatment, the mono hex readout, and the invalid-input feedback identical everywhere.
+ */
+export function ColorPickerFields({
+  label,
+  inputId,
+  wheelColor,
+  draft,
+  hasInvalidDraft,
+  placeholder,
+  onWheelChange,
+  onDraftChange,
+  onDraftFocus,
+  onDraftBlur
+}: ColorPickerFieldsProps): React.JSX.Element {
+  return (
+    <div className="space-y-3">
+      <HexColorPicker
+        color={wheelColor}
+        onChange={onWheelChange}
+        aria-label={translate('auto.components.ui.color.picker.1cec618bcc', '{{value0}} picker', {
+          value0: label
+        })}
+        className="[&_.react-colorful__hue]:rounded-b-md [&_.react-colorful__interactive:focus_.react-colorful__pointer]:ring-[3px] [&_.react-colorful__interactive:focus_.react-colorful__pointer]:ring-ring/50 [&_.react-colorful__pointer]:border-popover"
+        style={{ width: '100%', height: 180 }}
+      />
+      <div className="flex items-center justify-between gap-3">
+        <Label htmlFor={inputId}>
+          {translate('auto.components.ui.color.picker.faa855a582', 'Hex')}
+        </Label>
+        <span className="font-mono text-xs uppercase text-muted-foreground">{wheelColor}</span>
+      </div>
+      <Input
+        id={inputId}
+        value={draft}
+        onFocus={onDraftFocus}
+        onChange={(event) => onDraftChange(event.target.value)}
+        onBlur={onDraftBlur}
+        placeholder={placeholder}
+        aria-invalid={hasInvalidDraft}
+        className="font-mono text-xs uppercase"
+      />
+      {hasInvalidDraft ? (
+        <p className="text-xs text-destructive">
+          {translate('auto.components.ui.color.picker.ebcf6ba29e', 'Invalid hex color.')}
+        </p>
+      ) : null}
+    </div>
+  )
+}
+
 type ColorPickerProps = {
   value: string
   onChange: (value: string) => void
@@ -89,53 +158,25 @@ export function ColorPicker({
         </Button>
       </PopoverTrigger>
       <PopoverContent align="start" className="w-64 p-3">
-        <div className="space-y-3">
-          <HexColorPicker
-            color={swatchColor}
-            onChange={updateColor}
-            aria-label={translate(
-              'auto.components.ui.color.picker.1cec618bcc',
-              '{{value0}} picker',
-              { value0: label }
-            )}
-            className="[&_.react-colorful__hue]:rounded-b-md [&_.react-colorful__interactive:focus_.react-colorful__pointer]:ring-[3px] [&_.react-colorful__interactive:focus_.react-colorful__pointer]:ring-ring/50 [&_.react-colorful__pointer]:border-popover"
-            style={{ width: '100%', height: 180 }}
-          />
-          <div className="flex items-center justify-between gap-3">
-            <Label htmlFor={inputId}>
-              {translate('auto.components.ui.color.picker.faa855a582', 'Hex')}
-            </Label>
-            <span className="font-mono text-xs uppercase text-muted-foreground">{swatchColor}</span>
-          </div>
-          <Input
-            id={inputId}
-            value={draft}
-            onFocus={() =>
-              setDraftState({
-                syncedColor: currentColor,
-                draft,
-                isEditing: true
-              })
+        <ColorPickerFields
+          label={label}
+          inputId={inputId}
+          wheelColor={swatchColor}
+          draft={draft}
+          hasInvalidDraft={hasInvalidDraft}
+          placeholder={currentColor}
+          onWheelChange={updateColor}
+          onDraftChange={updateDraft}
+          onDraftFocus={() => setDraftState({ syncedColor: currentColor, draft, isEditing: true })}
+          onDraftBlur={() => {
+            if (draftColor) {
+              setDraftState({ syncedColor: currentColor, draft: draftColor, isEditing: false })
+              onChange(draftColor)
+            } else {
+              setDraftState({ syncedColor: currentColor, draft: currentColor, isEditing: false })
             }
-            onChange={(event) => updateDraft(event.target.value)}
-            onBlur={() => {
-              if (draftColor) {
-                setDraftState({ syncedColor: currentColor, draft: draftColor, isEditing: false })
-                onChange(draftColor)
-              } else {
-                setDraftState({ syncedColor: currentColor, draft: currentColor, isEditing: false })
-              }
-            }}
-            placeholder={currentColor}
-            aria-invalid={hasInvalidDraft}
-            className="font-mono text-xs uppercase"
-          />
-          {hasInvalidDraft ? (
-            <p className="text-xs text-destructive">
-              {translate('auto.components.ui.color.picker.ebcf6ba29e', 'Invalid hex color.')}
-            </p>
-          ) : null}
-        </div>
+          }}
+        />
       </PopoverContent>
     </Popover>
   )

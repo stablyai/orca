@@ -1,7 +1,6 @@
 import type { WorktreeSlice } from '../../worktree-helpers'
 import type { WorktreeSliceGet, WorktreeSliceSet } from '../listing/worktree-slice-types'
 import { translate } from '@/i18n/i18n'
-import { isPositiveHostedReviewNumber } from '../../../../../../shared/hosted-review'
 import { displayNameUpdatePinsLabel } from '../../../../../../shared/worktree/display-name-provenance'
 import { parseWorkspaceKey } from '../../../../../../shared/workspace-scope'
 import { applyWorktreeUpdates, getRepoIdFromWorktreeId } from '../../worktree-helpers'
@@ -10,35 +9,59 @@ import { getGitHubPRCacheKey, getLegacyGitHubPRCacheKey } from '../../github-cac
 import {
   applyDetectedWorktreeUpdates,
   findKnownWorktreeById,
-  getFolderWorkspaceMetaUpdates
+  findPinnedWorktreeRow,
+  isPinnedWorktreeMetaUpdate
 } from '../listing/detected-worktree-meta'
 import {
   bumpHostedReviewLinkMutationGeneration,
-  getHostedReviewLinkForMetaRefresh,
   hasChangedHostedReviewLinkUpdates,
   hasHostedReviewLinkUpdates
 } from './hosted-review-link-mutation'
 import { normalizeHostedReviewLinkReplacementUpdates } from './hosted-review-link-update-normalization'
-import {
-  getHostedReviewPushTargetLookup,
-  resolveGitHubReviewPushTarget
-} from './hosted-review-push-target'
 import { persistWorktreeMeta } from './worktree-meta-persist'
+import { createFailedPersistRecovery } from './failed-persist-recovery'
+import { resolvePinnedOwnerRouting } from './pinned-worktree-owner-routing'
+import { refreshHostedReviewAfterMetaUpdate } from './hosted-review-refresh-after-meta-update'
+import { resolveHostedReviewPushTargetUpdate } from './hosted-review-push-target-resolution'
+import { updateFolderWorkspaceMeta } from './update-folder-workspace-meta'
 import { isRuntimeSelectorNotFoundError } from '../listing/runtime-worktree-rpc-errors'
-import {
-  settingsForWorktreeOwner,
-  trySettingsForWorktreeOwner
-} from '../listing/worktree-owner-settings'
+import { settingsForWorktreeOwner } from '../listing/worktree-owner-settings'
 
 import { findRepoForHost } from '../../repo-host-identity'
 export function createUpdateWorktreeMeta(
   set: WorktreeSliceSet,
   get: WorktreeSliceGet
 ): WorktreeSlice['updateWorktreeMeta'] {
-  return async (worktreeId, updates, options) => {
+  return async (requestedWorktreeId, updates, options) => {
     const shouldApplyUpdate = options?.shouldApply
     const requestedHostId = options?.executionHostId
-    const existingWorktree = findKnownWorktreeById(get(), worktreeId, requestedHostId)
+    // Why: two paired runtimes can publish one checkout as two rows with the same id and host; a
+    // caller that knows the exact row pins it, by identity or, before the row has one, by runtime
+    // owner, so lookup, optimistic apply, rollback, and persistence all agree on the row.
+    const requestedIdentityKey = options?.identityKey
+    const requestedRuntimeOwnerEnvironmentId = options?.runtimeOwnerEnvironmentId
+    const isPinned = isPinnedWorktreeMetaUpdate(options)
+    const pinnedMatch = findPinnedWorktreeRow(get(), requestedWorktreeId, requestedHostId, options)
+    // Why: a folder rename retires the path-derived locator while the old row is still visible; a
+    // pinned write follows the identity to the row's current id so it is never persisted under
+    // the retired one and never rejected as missing once the renamed row has arrived.
+    let worktreeId = pinnedMatch?.id ?? requestedWorktreeId
+    // Why not fall back: the locator is mutable (the row may be gone or its path reused) and local
+    // persistence carries no identity, so a fallback would stamp the value on whatever occupies the
+    // path now, or recreate metadata for a deleted workspace. A pinned owner whose row is gone must
+    // not resolve to its sibling either.
+    const identityGone = () => ({
+      ok: false as const,
+      error: translate(
+        'auto.store.slices.worktrees.metadata.update.worktree.meta.identityGone',
+        'This workspace is no longer available.'
+      )
+    })
+    if (isPinned && !pinnedMatch) {
+      return identityGone()
+    }
+    const existingWorktree =
+      pinnedMatch ?? findKnownWorktreeById(get(), worktreeId, requestedHostId)
     const executionHostId =
       requestedHostId ??
       existingWorktree?.hostId ??
@@ -48,66 +71,33 @@ export function createUpdateWorktreeMeta(
     }
     const workspaceScope = parseWorkspaceKey(worktreeId)
     if (workspaceScope?.type === 'folder') {
-      const folderUpdates = getFolderWorkspaceMetaUpdates(updates)
-      if (Object.keys(folderUpdates).length === 0) {
-        return { ok: true }
-      }
-      try {
-        // Why: a rejected folder update reconciles the optimistic write away, so
-        // reporting ok would show the dialog a save that silently undid itself.
-        const updated = await get().updateFolderWorkspace(
-          workspaceScope.folderWorkspaceId,
-          folderUpdates
-        )
-        return updated
-          ? { ok: true }
-          : {
-              ok: false,
-              error: translate(
-                'auto.store.slices.worktrees.a17f4d2e93',
-                'Could not update this workspace.'
-              )
-            }
-      } catch (err) {
-        console.error('Failed to update folder workspace meta:', err)
-        return { ok: false, error: err instanceof Error ? err.message : String(err) }
-      }
+      return updateFolderWorkspaceMeta(
+        get,
+        workspaceScope.folderWorkspaceId,
+        updates,
+        executionHostId
+      )
     }
     const normalizedUpdates = normalizeHostedReviewLinkReplacementUpdates(updates, existingWorktree)
-    // Why: manual PR linking supplies only the number; resolve the head branch so Push targets the review branch.
-    const linkedPrForPushTarget = isPositiveHostedReviewNumber(normalizedUpdates.linkedPR)
-      ? normalizedUpdates.linkedPR
-      : null
-    // Why: an ambiguous owner must not throw past this update's { ok, error } contract — skip the lookup instead.
-    const pushTargetOwnerSettings =
-      linkedPrForPushTarget !== null &&
-      normalizedUpdates.pushTarget === undefined &&
-      existingWorktree &&
-      !existingWorktree.pushTarget
-        ? trySettingsForWorktreeOwner(get(), worktreeId, executionHostId)
-        : null
-    const resolvedPushTarget =
-      pushTargetOwnerSettings && existingWorktree && linkedPrForPushTarget !== null
-        ? await resolveGitHubReviewPushTarget(
-            pushTargetOwnerSettings,
-            existingWorktree.repoId,
-            linkedPrForPushTarget
-          )
-        : undefined
-    const existingHostedReviewPushTargetLookup = existingWorktree
-      ? getHostedReviewPushTargetLookup(existingWorktree)
-      : null
-    const nextHostedReviewPushTargetLookup = existingWorktree
-      ? getHostedReviewPushTargetLookup({ ...existingWorktree, ...normalizedUpdates })
-      : null
-    // Why: a pushTarget derived from a linked review must not keep steering pushes after it's unlinked or replaced.
-    const shouldClearStaleHostedReviewPushTarget =
-      Boolean(existingWorktree?.pushTarget) &&
-      normalizedUpdates.pushTarget === undefined &&
-      resolvedPushTarget === undefined &&
-      existingHostedReviewPushTargetLookup !== null &&
-      existingHostedReviewPushTargetLookup.key !== nextHostedReviewPushTargetLookup?.key
-    const worktreeForUpdate = get().getKnownWorktreeById(worktreeId, executionHostId)
+    const { resolvedPushTarget, shouldClearStaleHostedReviewPushTarget } =
+      await resolveHostedReviewPushTargetUpdate(
+        get,
+        worktreeId,
+        executionHostId,
+        existingWorktree,
+        normalizedUpdates
+      )
+    // Why re-resolve: the preflight above yields, and catalog reconciliation can remove or replace
+    // the pinned row meanwhile. Reusing the earlier match would let the identity-filtered reducers
+    // update nothing while persistence still wrote through the mutable locator.
+    const pinnedNow = findPinnedWorktreeRow(get(), worktreeId, executionHostId, options)
+    if (isPinned && !pinnedNow) {
+      return identityGone()
+    }
+    // Why adopt the new id: reconciliation can also rename the pinned row during that yield. The
+    // reducers match ids exactly and local IPC rejects a retired locator, so the write follows the row.
+    worktreeId = pinnedNow?.id ?? worktreeId
+    const worktreeForUpdate = pinnedNow ?? get().getKnownWorktreeById(worktreeId, executionHostId)
     if (shouldApplyUpdate && !shouldApplyUpdate(worktreeForUpdate)) {
       return { ok: true }
     }
@@ -156,13 +146,17 @@ export function createUpdateWorktreeMeta(
         s.worktreesByRepo,
         worktreeId,
         enriched,
-        executionHostId
+        executionHostId,
+        requestedIdentityKey,
+        requestedRuntimeOwnerEnvironmentId
       )
       const nextDetectedWorktrees = applyDetectedWorktreeUpdates(
         s.detectedWorktreesByRepo,
         worktreeId,
         enriched,
-        executionHostId
+        executionHostId,
+        requestedIdentityKey,
+        requestedRuntimeOwnerEnvironmentId
       )
       const cacheKey =
         reviewRepo && reviewBranch
@@ -245,55 +239,61 @@ export function createUpdateWorktreeMeta(
       bumpHostedReviewLinkMutationGeneration(worktreeId)
     }
 
+    const { pinnedSettings, recoveryFetchOptions } = resolvePinnedOwnerRouting(
+      get().settings,
+      requestedIdentityKey,
+      worktreeForUpdate,
+      executionHostId,
+      requestedRuntimeOwnerEnvironmentId
+    )
+    const recoverAfterFailedPersist = createFailedPersistRecovery({
+      get,
+      set,
+      worktreeId,
+      executionHostId,
+      enriched,
+      // Why this row: resolved after the preflight, so a color that changed during that yield is
+      // what a rollback restores, not the value the call started from.
+      priorColorTag: worktreeForUpdate?.colorTag ?? null,
+      pin: options,
+      recoveryFetchOptions
+    })
     try {
       await persistWorktreeMeta(
-        settingsForWorktreeOwner(get(), worktreeId, executionHostId),
+        pinnedSettings ?? settingsForWorktreeOwner(get(), worktreeId, executionHostId),
         worktreeId,
         enriched,
         executionHostId ?? existingWorktree?.hostId,
-        worktreeForUpdate?.identity?.key
+        {
+          identityKey: requestedIdentityKey ?? worktreeForUpdate?.identity?.key,
+          // Why `?? null` only for a known row: a row the desktop lists itself has no owner, and the
+          // fence must tell it from a HUB's identity-less sibling; an unknown row stays unknown.
+          runtimeOwnerEnvironmentId:
+            requestedRuntimeOwnerEnvironmentId !== undefined
+              ? requestedRuntimeOwnerEnvironmentId
+              : worktreeForUpdate
+                ? (worktreeForUpdate.runtimeOwnerEnvironmentId ?? null)
+                : undefined,
+          // Why: a listing the fence held may have carried a peer's newer color, and the
+          // notification it came from is not repeated; one refresh after landing settles it.
+          onHeldColorTagListing: () => {
+            void get()
+              .fetchWorktrees(getRepoIdFromWorktreeId(worktreeId), recoveryFetchOptions)
+              .catch(() => false)
+          }
+        }
       )
-      if (
-        !options?.suppressHostedReviewRefresh &&
-        reviewRepo &&
-        reviewBranch &&
-        typeof get().fetchHostedReviewForBranch === 'function'
-      ) {
-        // Why: refetch against post-update links so a cache entry from the previous provider link can't keep showing the removed review.
-        void get().fetchHostedReviewForBranch(reviewRepo.path, reviewBranch, {
-          repoId: reviewRepo.id,
-          repoOwnerExecutionHostId: executionHostId ?? worktreeForUpdate?.hostId,
-          linkedGitHubPR: getHostedReviewLinkForMetaRefresh(
-            targetEnriched,
-            worktreeForUpdate,
-            'linkedPR'
-          ),
-          linkedGitLabMR: getHostedReviewLinkForMetaRefresh(
-            targetEnriched,
-            worktreeForUpdate,
-            'linkedGitLabMR'
-          ),
-          linkedBitbucketPR: getHostedReviewLinkForMetaRefresh(
-            targetEnriched,
-            worktreeForUpdate,
-            'linkedBitbucketPR'
-          ),
-          linkedAzureDevOpsPR: getHostedReviewLinkForMetaRefresh(
-            targetEnriched,
-            worktreeForUpdate,
-            'linkedAzureDevOpsPR'
-          ),
-          linkedGiteaPR: getHostedReviewLinkForMetaRefresh(
-            targetEnriched,
-            worktreeForUpdate,
-            'linkedGiteaPR'
-          ),
-          force: true
-        })
-      }
+      refreshHostedReviewAfterMetaUpdate(get, {
+        suppress: options?.suppressHostedReviewRefresh === true,
+        reviewRepo,
+        reviewBranch,
+        repoOwnerExecutionHostId: executionHostId ?? worktreeForUpdate?.hostId,
+        worktreeForUpdate,
+        targetEnriched
+      })
     } catch (err) {
       if (isRuntimeSelectorNotFoundError(err)) {
-        void get().fetchWorktrees(getRepoIdFromWorktreeId(worktreeId))
+        await recoverAfterFailedPersist()
         return {
           ok: false,
           error: translate(
@@ -303,7 +303,7 @@ export function createUpdateWorktreeMeta(
         }
       }
       console.error('Failed to update worktree meta:', err)
-      void get().fetchWorktrees(getRepoIdFromWorktreeId(worktreeId))
+      await recoverAfterFailedPersist()
       // Why: the refetch above reverts the optimistic write, so a caller that
       // closes its surface on this path shows the user a save that undid itself.
       return { ok: false, error: err instanceof Error ? err.message : String(err) }

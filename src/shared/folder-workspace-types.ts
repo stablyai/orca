@@ -35,6 +35,8 @@ export type FolderWorkspace = {
   /** User-authored sidebar ordering. Higher values render earlier in Manual sort. */
   manualOrder?: number
   workspaceStatus?: WorkspaceStatus
+  /** See {@link WorktreeMeta.colorTag}. */
+  colorTag?: string | null
   createdWithAgent?: TuiAgent
   pendingFirstAgentMessageRename?: boolean
   firstAgentMessageRenameError?: string | null

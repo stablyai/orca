@@ -29,6 +29,8 @@ import {
   TEST_SSH_AUTHORITY
 } from './worktrees-detected-listing-fixtures'
 import { makeWorktree } from './worktrees-slice-test-fixtures'
+import { resetWorktreeMetaWriteTrackingForTests } from './worktrees/metadata/worktree-meta-persist'
+import { folderColorTagWriteFence } from '../folder-workspaces/folder-workspace-color-tag-fence'
 
 /** Bare `vi.fn()` infers @vitest/spy's un-nameable `Procedure`, which breaks declaration emit. */
 export type StubMock<TArgs extends unknown[] = never[]> = Mock<(...args: TArgs) => unknown>
@@ -220,6 +222,8 @@ export function createLocalLineageTestStore(lineage: WorktreeLineage) {
 // earlier describe would silently suppress a row here. Reset for every case, not just the fetch suites.
 export function resetWorktreeSliceModuleMemory() {
   resetAuthoritativelyRemovedWorktreeMemoryForTests()
+  resetWorktreeMetaWriteTrackingForTests()
+  folderColorTagWriteFence.clear()
   mockApi.worktrees.create.mockReset()
   mockApi.worktrees.adoptProvisionedRoot.mockReset()
 }

@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { toRuntimeExecutionHostId } from '../../../../shared/execution-host'
 import type { AppState } from '../types'
 import { toast } from 'sonner'
 import type { RuntimeEnvironmentCallRequest } from '../../runtime/runtime-compatibility-test-fixture'
@@ -467,5 +468,405 @@ describe('worktree remote runtime mutations', () => {
         params: expect.objectContaining({ comment: 'selected' })
       })
     )
+  })
+})
+
+describe('identity-pinned worktree metadata writes', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    resetRemoteRuntimeMocks()
+  })
+
+  // Regression: two paired runtimes publish one nested-SSH checkout as two rows with the same id
+  // and host. The identity key pinned the selector, but the transport was still chosen from id and
+  // host, so the pinned HUB never received the write and a later refresh reverted the color.
+  it('persists through the runtime that owns the pinned row, not the active one', async () => {
+    const store = createTestStore()
+    const shared = makeWorktree({
+      id: 'repo1::/path/shared',
+      repoId: 'repo1',
+      path: '/path/shared',
+      colorTag: null
+    })
+    const viaA = {
+      ...shared,
+      identity: { key: 'k-a' } as never,
+      runtimeOwnerEnvironmentId: 'env-a'
+    }
+    const viaB = {
+      ...shared,
+      identity: { key: 'k-b' } as never,
+      runtimeOwnerEnvironmentId: 'env-b'
+    }
+    runtimeEnvironmentCall.mockResolvedValue({
+      id: 'rpc-set',
+      ok: true,
+      result: { worktree: { ...viaB, colorTag: '#ef4444' } },
+      _meta: { runtimeId: 'runtime-b' }
+    })
+    store.setState({
+      settings: { activeRuntimeEnvironmentId: 'env-a' } as never,
+      worktreesByRepo: { repo1: [viaA, viaB] }
+    } as Partial<AppState>)
+
+    await store
+      .getState()
+      .updateWorktreeMeta(shared.id, { colorTag: '#ef4444' }, { identityKey: 'k-b' })
+
+    expect(mockApi.worktrees.updateMeta).not.toHaveBeenCalled()
+    expect(runtimeEnvironmentCall).toHaveBeenCalledTimes(1)
+    const call = JSON.stringify(runtimeEnvironmentCall.mock.calls[0])
+    expect(call).toContain('env-b')
+    expect(call).not.toContain('env-a')
+    expect(call).toContain('identity:k-b')
+    expect(store.getState().worktreesByRepo.repo1.map((worktree) => worktree.colorTag)).toEqual([
+      null,
+      '#ef4444'
+    ])
+  })
+})
+
+describe('identity-pinned writes when the row is gone or the write fails', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    resetRemoteRuntimeMocks()
+  })
+
+  // Regression: an explicit identity that matched nothing fell back to the mutable id-and-host
+  // locator; the identity-filtered optimistic apply changed nothing, but local persistence carries
+  // no identity, so the color landed on whatever now occupied the path.
+  it('reports not-found for an identity that matches no row and writes nothing', async () => {
+    const store = createTestStore()
+    const row = makeWorktree({
+      id: 'repo1::/path/reused',
+      repoId: 'repo1',
+      path: '/path/reused',
+      identity: { key: 'k-new' } as never,
+      colorTag: null
+    })
+    store.setState({ worktreesByRepo: { repo1: [row] } } as Partial<AppState>)
+
+    const result = await store
+      .getState()
+      .updateWorktreeMeta(row.id, { colorTag: '#ef4444' }, { identityKey: 'k-gone' })
+
+    expect(result.ok).toBe(false)
+    expect(mockApi.worktrees.updateMeta).not.toHaveBeenCalled()
+    expect(runtimeEnvironmentCall).not.toHaveBeenCalled()
+    expect(store.getState().worktreesByRepo.repo1[0]?.colorTag).toBeNull()
+  })
+
+  // Regression: after a pinned write failed, recovery refetched without the owner, so it followed
+  // the focused HUB (or was rejected as ambiguous) and the failed optimistic color stayed visible.
+  it('recovers through the pinned runtime when its write is rejected', async () => {
+    const store = createTestStore()
+    const shared = makeWorktree({
+      id: 'repo1::/path/shared',
+      repoId: 'repo1',
+      path: '/path/shared'
+    })
+    const viaB = {
+      ...shared,
+      identity: { key: 'k-b' } as never,
+      runtimeOwnerEnvironmentId: 'env-b'
+    }
+    runtimeEnvironmentCall.mockRejectedValue(new Error('hub b away'))
+    const fetchWorktrees = vi.fn().mockResolvedValue(undefined)
+    store.setState({
+      settings: { activeRuntimeEnvironmentId: 'env-a' } as never,
+      worktreesByRepo: { repo1: [viaB] },
+      fetchWorktrees
+    } as unknown as Partial<AppState>)
+
+    const result = await store
+      .getState()
+      .updateWorktreeMeta(shared.id, { colorTag: '#ef4444' }, { identityKey: 'k-b' })
+
+    expect(result.ok).toBe(false)
+    expect(fetchWorktrees).toHaveBeenCalledWith('repo1', {
+      executionHostId: toRuntimeExecutionHostId('env-b')
+    })
+  })
+})
+
+describe('identity-pinned writes racing reconciliation, and recovery that cannot refresh', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    resetRemoteRuntimeMocks()
+  })
+
+  // Regression: the pinned row was resolved before the awaited preflight and reused after it. A
+  // replacement arriving during that yield was untouched by the identity-filtered reducers, yet
+  // persistence still wrote through the mutable locator and local IPC carries no identity.
+  it('returns not-found when the pinned row is replaced during the preflight yield', async () => {
+    const store = createTestStore()
+    const original = makeWorktree({
+      id: 'repo1::/path/turnover',
+      repoId: 'repo1',
+      path: '/path/turnover',
+      identity: { key: 'k-old' } as never,
+      colorTag: null
+    })
+    const replacement = { ...original, identity: { key: 'k-new' } as never }
+    store.setState({ worktreesByRepo: { repo1: [original] } } as Partial<AppState>)
+
+    const pending = store
+      .getState()
+      .updateWorktreeMeta(original.id, { colorTag: '#ef4444' }, { identityKey: 'k-old' })
+    store.setState({ worktreesByRepo: { repo1: [replacement] } } as Partial<AppState>)
+    const result = await pending
+
+    expect(result.ok).toBe(false)
+    expect(mockApi.worktrees.updateMeta).not.toHaveBeenCalled()
+    expect(store.getState().worktreesByRepo.repo1[0]?.colorTag).toBeNull()
+  })
+
+  // Regression: recovery after a failed remote write was fire-and-forget; when the same host was
+  // away it failed too, and the optimistic color stayed visible after the picker reported failure.
+  it('rolls the color back locally when the recovery refresh cannot run', async () => {
+    const store = createTestStore()
+    const wt = makeWorktree({
+      id: 'repo1::/path/away',
+      repoId: 'repo1',
+      path: '/path/away',
+      colorTag: '#22c55e'
+    })
+    runtimeEnvironmentCall.mockRejectedValue(new Error('host away'))
+    store.setState({
+      settings: { activeRuntimeEnvironmentId: 'env-1' } as never,
+      worktreesByRepo: { repo1: [wt] },
+      fetchWorktrees: vi.fn().mockResolvedValue(false)
+    } as unknown as Partial<AppState>)
+
+    const result = await store.getState().updateWorktreeMeta(wt.id, { colorTag: '#ef4444' })
+
+    expect(result.ok).toBe(false)
+    expect(store.getState().worktreesByRepo.repo1[0]?.colorTag).toBe('#22c55e')
+  })
+
+  // Regression: the rollback used the color captured before the preflight yield and applied it
+  // unconditionally, so it could restore a value the row no longer had, or overwrite a newer color
+  // that did not belong to the failed write.
+  it('rolls back to the color the row had right before the optimistic apply', async () => {
+    const store = createTestStore()
+    const wt = makeWorktree({
+      id: 'repo1::/path/yield',
+      repoId: 'repo1',
+      path: '/path/yield',
+      colorTag: '#22c55e'
+    })
+    runtimeEnvironmentCall.mockRejectedValue(new Error('host away'))
+    store.setState({
+      settings: { activeRuntimeEnvironmentId: 'env-1' } as never,
+      worktreesByRepo: { repo1: [wt] },
+      fetchWorktrees: vi.fn().mockResolvedValue(false)
+    } as unknown as Partial<AppState>)
+
+    const pending = store.getState().updateWorktreeMeta(wt.id, { colorTag: '#ef4444' })
+    // A refresh lands a different color during the preflight yield, before the optimistic apply.
+    store.setState({
+      worktreesByRepo: { repo1: [{ ...wt, colorTag: '#3b82f6' }] }
+    } as Partial<AppState>)
+    const result = await pending
+
+    expect(result.ok).toBe(false)
+    expect(store.getState().worktreesByRepo.repo1[0]?.colorTag).toBe('#3b82f6')
+  })
+
+  it('leaves a newer color alone when the failed write is no longer what the row shows', async () => {
+    const store = createTestStore()
+    const wt = makeWorktree({
+      id: 'repo1::/path/newer',
+      repoId: 'repo1',
+      path: '/path/newer',
+      colorTag: null
+    })
+    let rejectWrite: (error: Error) => void = () => undefined
+    runtimeEnvironmentCall.mockImplementation(
+      () =>
+        new Promise((_, reject) => {
+          rejectWrite = reject
+        })
+    )
+    store.setState({
+      settings: { activeRuntimeEnvironmentId: 'env-1' } as never,
+      worktreesByRepo: { repo1: [wt] },
+      fetchWorktrees: vi.fn().mockResolvedValue(false)
+    } as unknown as Partial<AppState>)
+
+    const pending = store.getState().updateWorktreeMeta(wt.id, { colorTag: '#ef4444' })
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    expect(store.getState().worktreesByRepo.repo1[0]?.colorTag).toBe('#ef4444')
+    // A newer color arrives while the write is still failing.
+    store.setState({
+      worktreesByRepo: { repo1: [{ ...wt, colorTag: '#3b82f6' }] }
+    } as Partial<AppState>)
+    rejectWrite(new Error('host away'))
+    const result = await pending
+
+    expect(result.ok).toBe(false)
+    expect(store.getState().worktreesByRepo.repo1[0]?.colorTag).toBe('#3b82f6')
+  })
+
+  it('leaves the store to the refresh when recovery succeeds', async () => {
+    const store = createTestStore()
+    const wt = makeWorktree({
+      id: 'repo1::/path/back',
+      repoId: 'repo1',
+      path: '/path/back',
+      colorTag: null
+    })
+    runtimeEnvironmentCall.mockRejectedValue(new Error('blip'))
+    const fetchWorktrees = vi.fn().mockResolvedValue(true)
+    store.setState({
+      settings: { activeRuntimeEnvironmentId: 'env-1' } as never,
+      worktreesByRepo: { repo1: [wt] },
+      fetchWorktrees
+    } as unknown as Partial<AppState>)
+
+    await store.getState().updateWorktreeMeta(wt.id, { colorTag: '#ef4444' })
+
+    expect(fetchWorktrees).toHaveBeenCalledTimes(1)
+    // The refresh is authoritative here; no local rollback is forced on top of it.
+    expect(store.getState().worktreesByRepo.repo1[0]?.colorTag).toBe('#ef4444')
+  })
+})
+
+describe('failure recovery does not delay non-color metadata writes', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    resetRemoteRuntimeMocks()
+  })
+
+  // Regression: the awaited recovery introduced for color rollback was applied to every failed
+  // write, so a failed rename or comment on a disconnected host waited out a second listing
+  // timeout before the UI could report the original failure.
+  it('reports a failed comment write without waiting for the recovery fetch', async () => {
+    const store = createTestStore()
+    const wt = makeWorktree({ id: 'repo1::/path/slow', repoId: 'repo1', path: '/path/slow' })
+    runtimeEnvironmentCall.mockRejectedValue(new Error('host away'))
+    const fetchWorktrees = vi.fn(() => new Promise<boolean>(() => {}))
+    store.setState({
+      settings: { activeRuntimeEnvironmentId: 'env-1' } as never,
+      worktreesByRepo: { repo1: [wt] },
+      fetchWorktrees
+    } as unknown as Partial<AppState>)
+
+    const outcome = await Promise.race([
+      store.getState().updateWorktreeMeta(wt.id, { comment: 'late note' }),
+      new Promise<'timed-out'>((resolve) => setTimeout(() => resolve('timed-out'), 1_000))
+    ])
+
+    expect(outcome).not.toBe('timed-out')
+    expect(outcome).toMatchObject({ ok: false })
+    // Reconciliation was still kicked off, just not waited on.
+    expect(fetchWorktrees).toHaveBeenCalledTimes(1)
+  })
+})
+
+describe('identity-pinned writes across a folder rename', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    resetRemoteRuntimeMocks()
+  })
+
+  // Regression: the identity lookup also required the requested id, so a write from the
+  // still-visible pre-rename row persisted under the retired locator and the renamed row never
+  // received the color — or, once the renamed row had arrived, the identity was reported missing.
+  it('follows the identity to the renamed row and persists under its current id', async () => {
+    const store = createTestStore()
+    const renamed = makeWorktree({
+      id: 'repo1::/path/after',
+      repoId: 'repo1',
+      path: '/path/after',
+      identity: { key: 'k-moved' } as never,
+      colorTag: null
+    })
+    store.setState({ worktreesByRepo: { repo1: [renamed] } } as Partial<AppState>)
+
+    const result = await store
+      .getState()
+      .updateWorktreeMeta(
+        'repo1::/path/before',
+        { colorTag: '#ef4444' },
+        { identityKey: 'k-moved' }
+      )
+
+    expect(result.ok).toBe(true)
+    expect(store.getState().worktreesByRepo.repo1[0]?.colorTag).toBe('#ef4444')
+    expect(mockApi.worktrees.updateMeta).toHaveBeenCalledTimes(1)
+    expect(JSON.stringify(mockApi.worktrees.updateMeta.mock.calls[0])).toContain(
+      'repo1::/path/after'
+    )
+    expect(JSON.stringify(mockApi.worktrees.updateMeta.mock.calls[0])).not.toContain('/path/before')
+  })
+})
+
+describe('identity-pinned writes for rows the desktop lists itself', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    resetRemoteRuntimeMocks()
+  })
+
+  // Regression: the same SSH checkout listed directly by the desktop and through one HUB. The
+  // direct row has an identity but no runtime owner, so routing fell back to the id-and-host
+  // resolver, which picked the HUB and sent it the desktop row's identity selector.
+  it('routes a pinned direct-SSH row through the desktop, not the focused HUB', async () => {
+    const store = createTestStore()
+    const direct = makeWorktree({
+      id: 'repo1::/srv/checkout',
+      repoId: 'repo1',
+      path: '/srv/checkout',
+      hostId: 'ssh:box' as never,
+      identity: { key: 'k-direct' } as never,
+      colorTag: null
+    })
+    store.setState({
+      settings: { activeRuntimeEnvironmentId: 'env-hub' } as never,
+      worktreesByRepo: { repo1: [direct] }
+    } as Partial<AppState>)
+
+    await store
+      .getState()
+      .updateWorktreeMeta(
+        direct.id,
+        { colorTag: '#ef4444' },
+        { identityKey: 'k-direct', executionHostId: 'ssh:box' as never }
+      )
+
+    expect(runtimeEnvironmentCall).not.toHaveBeenCalled()
+    expect(mockApi.worktrees.updateMeta).toHaveBeenCalledTimes(1)
+    expect(store.getState().worktreesByRepo.repo1[0]?.colorTag).toBe('#ef4444')
+  })
+
+  it('scopes recovery for a failed pinned direct-SSH write to that host', async () => {
+    const store = createTestStore()
+    const direct = makeWorktree({
+      id: 'repo1::/srv/away',
+      repoId: 'repo1',
+      path: '/srv/away',
+      hostId: 'ssh:box' as never,
+      identity: { key: 'k-away' } as never,
+      colorTag: null
+    })
+    mockApi.worktrees.updateMeta.mockRejectedValueOnce(new Error('ssh away'))
+    const fetchWorktrees = vi.fn().mockResolvedValue(false)
+    store.setState({
+      settings: { activeRuntimeEnvironmentId: 'env-hub' } as never,
+      worktreesByRepo: { repo1: [direct] },
+      fetchWorktrees
+    } as unknown as Partial<AppState>)
+
+    const result = await store
+      .getState()
+      .updateWorktreeMeta(
+        direct.id,
+        { colorTag: '#ef4444' },
+        { identityKey: 'k-away', executionHostId: 'ssh:box' as never }
+      )
+
+    expect(result.ok).toBe(false)
+    expect(fetchWorktrees).toHaveBeenCalledWith('repo1', { executionHostId: 'ssh:box' })
+    expect(store.getState().worktreesByRepo.repo1[0]?.colorTag).toBeNull()
   })
 })

@@ -1,13 +1,19 @@
 import type { StateCreator } from 'zustand'
 import type { AppState } from '../types'
 import type { FolderWorkspace } from '../../../../shared/folder-workspace-types'
-import { WORKTREE_LINKED_WORK_ITEM_CONTEXT_RUNTIME_CAPABILITY } from '../../../../shared/protocol-version'
+import {
+  WORKSPACE_COLOR_TAG_RUNTIME_CAPABILITY,
+  WORKTREE_LINKED_WORK_ITEM_CONTEXT_RUNTIME_CAPABILITY
+} from '../../../../shared/protocol-version'
+import { translate } from '@/i18n/i18n'
 import {
   assertRuntimeEnvironmentCapability,
   callRuntimeRpc,
   getActiveRuntimeTarget
 } from '../../runtime/runtime-rpc-client'
 import { folderWorkspaceKey } from '../../../../shared/workspace-scope'
+import { normalizeWorkspaceColorTag } from '../../../../shared/workspace-color-tag'
+import { folderColorTagWriteFence } from './folder-workspace-color-tag-fence'
 import { formatFolderWorkspaceCreateError } from '../../lib/folder-workspace-path-status'
 import {
   findFolderWorkspaceOwner,
@@ -135,10 +141,33 @@ export function createFolderWorkspaceMutationActions(
           'Update the remote runtime to link Jira'
         )
       }
+      // Why: an older paired runtime strips colorTag from folderWorkspace.update and still reports
+      // success, so the strip would paint and the next refresh would silently erase it.
+      if (target.kind === 'environment' && 'colorTag' in updates) {
+        await assertRuntimeEnvironmentCapability(
+          target.environmentId,
+          WORKSPACE_COLOR_TAG_RUNTIME_CAPABILITY,
+          translate(
+            'auto.store.folder.workspaces.folder.workspace.mutations.colorTag',
+            'Update the remote runtime to set workspace colors'
+          )
+        )
+      }
       const updateTicket = folderWorkspaceUpdates.begin(
         updateIdentity,
         Object.keys(updates) as FolderWorkspaceUpdateField[]
       )
+      // Why: the folder catalog merges wholesale, so a listing captured before this write and merged
+      // after it would restore the old color; the fence holds such a listing and refetches once.
+      const colorFence =
+        'colorTag' in updates
+          ? folderColorTagWriteFence.begin(folderWorkspaceId, ownerHostId, undefined, undefined, {
+              written: normalizeWorkspaceColorTag(updates.colorTag),
+              onHeldListing: () => {
+                void get().fetchFolderWorkspaces({ runtimeEnvironmentId })
+              }
+            })
+          : undefined
       try {
         const updated =
           target.kind === 'local'
@@ -152,6 +181,7 @@ export function createFolderWorkspaceMutationActions(
                 )
               ).folderWorkspace
         if (!updated) {
+          colorFence?.failed()
           await reconcileFailedFolderWorkspaceUpdate({
             target,
             folderWorkspaceId,
@@ -166,6 +196,7 @@ export function createFolderWorkspaceMutationActions(
         }
         if (updates.diffComments !== undefined && updated.diffComments === undefined) {
           // Why: older paired runtimes strip this optional field; reconcile instead of showing an unsaved note.
+          colorFence?.failed()
           await reconcileFailedFolderWorkspaceUpdate({
             target,
             folderWorkspaceId,
@@ -195,9 +226,11 @@ export function createFolderWorkspaceMutationActions(
               : {})
           }))
         }
+        colorFence?.landed()
         return true
       } catch (err) {
         console.error('Failed to update folder workspace:', err)
+        colorFence?.failed()
         await reconcileFailedFolderWorkspaceUpdate({
           target,
           folderWorkspaceId,

@@ -8,6 +8,7 @@ import {
 import { clearRuntimeCompatibilityCacheForTests } from '../../runtime/runtime-rpc-client'
 import { createTestStore } from './store-test-helpers'
 import { folderWorkspaceKey } from '../../../../shared/workspace-scope'
+import { folderColorTagWriteFence } from '../folder-workspaces/folder-workspace-color-tag-fence'
 
 const folderWorkspacesUpdate = vi.fn()
 const folderWorkspacesDelete = vi.fn()
@@ -70,6 +71,46 @@ beforeEach(() => {
 })
 
 describe('folder workspace owner-routed mutations', () => {
+  // Regression: folder color writes armed no fence, so a catalog listing captured before the write
+  // and merged after it reverted the color.
+  it('arms the folder color fence for the write and releases it once landed', async () => {
+    const folderWorkspace = makeFolderWorkspace({ colorTag: null })
+    folderWorkspacesUpdate.mockResolvedValue({ ...folderWorkspace, colorTag: '#ef4444' })
+    const store = createTestStore()
+    store.setState({
+      projectGroups: [{ ...projectGroup, executionHostId: 'local' }],
+      folderWorkspaces: [folderWorkspace]
+    })
+    const before = Date.now() - 1
+
+    const updated = await store
+      .getState()
+      .updateFolderWorkspace(folderWorkspace.id, { colorTag: '#ef4444' })
+
+    expect(updated).toBe(true)
+    // A listing that started before the landing is held; one that starts after is not.
+    expect(
+      folderColorTagWriteFence.isPending(
+        folderWorkspace.id,
+        'local',
+        before,
+        undefined,
+        undefined,
+        null
+      )
+    ).toBe(true)
+    expect(
+      folderColorTagWriteFence.isPending(
+        folderWorkspace.id,
+        'local',
+        Date.now() + 1000,
+        undefined,
+        undefined,
+        null
+      )
+    ).toBe(false)
+  })
+
   it('persists manual rank through the shared batch metadata boundary', async () => {
     const folderWorkspace = makeFolderWorkspace()
     folderWorkspacesUpdate.mockResolvedValue({ ...folderWorkspace, manualOrder: 9000 })

@@ -14,6 +14,7 @@ import {
 } from './folder-workspace-catalog'
 import { listRuntimeEnvironmentsForAllHostLoad } from '../runtime-catalog-hosts'
 import { getFolderWorkspaceUpdateCoordinator } from './folder-workspace-mutations'
+import { preserveFencedFolderColorTags } from './folder-workspace-color-tag-fence'
 
 export function createFolderWorkspaceCatalogActions(
   set: Parameters<StateCreator<AppState>>[0],
@@ -27,6 +28,7 @@ export function createFolderWorkspaceCatalogActions(
           settingsForRuntimeOwner(get().settings, options?.runtimeEnvironmentId)
         )
         const fence = claimHostCatalogFence(get, 'folder-workspaces', target)
+        const startedAt = Date.now()
         const catalog = await fetchFolderWorkspaceCatalogForTarget(target, get().projectGroups)
         if (!isHostCatalogFenceCurrent(get, fence)) {
           return
@@ -42,10 +44,16 @@ export function createFolderWorkspaceCatalogActions(
               current.projectGroups
             )
           )
-          const { folderWorkspaces } = mergeFetchedFolderWorkspaceCatalog(
+          const merged = mergeFetchedFolderWorkspaceCatalog(
             catalog,
             current.folderWorkspaces,
             current.projectGroups
+          )
+          const folderWorkspaces = preserveFencedFolderColorTags(
+            merged.folderWorkspaces,
+            current.folderWorkspaces,
+            current.projectGroups,
+            startedAt
           )
           return {
             folderWorkspaces,
@@ -64,7 +72,8 @@ export function createFolderWorkspaceCatalogActions(
       // Why: folder workspaces are owned through their project groups; fetch groups first, then merge each host's folder slice.
       const applyCatalog = (
         catalog: FetchedFolderWorkspaceCatalog,
-        fence: HostCatalogFence
+        fence: HostCatalogFence,
+        startedAt: number
       ): void => {
         if (!isHostCatalogFenceCurrent(get, fence)) {
           return
@@ -80,10 +89,16 @@ export function createFolderWorkspaceCatalogActions(
               current.projectGroups
             )
           )
-          const { folderWorkspaces } = mergeFetchedFolderWorkspaceCatalog(
+          const merged = mergeFetchedFolderWorkspaceCatalog(
             catalog,
             current.folderWorkspaces,
             current.projectGroups
+          )
+          const folderWorkspaces = preserveFencedFolderColorTags(
+            merged.folderWorkspaces,
+            current.folderWorkspaces,
+            current.projectGroups,
+            startedAt
           )
           return {
             folderWorkspaces,
@@ -98,7 +113,12 @@ export function createFolderWorkspaceCatalogActions(
       try {
         const target = { kind: 'local' as const }
         const fence = claimHostCatalogFence(get, 'folder-workspaces', target)
-        applyCatalog(await fetchFolderWorkspaceCatalogForTarget(target, get().projectGroups), fence)
+        const startedAt = Date.now()
+        applyCatalog(
+          await fetchFolderWorkspaceCatalogForTarget(target, get().projectGroups),
+          fence,
+          startedAt
+        )
       } catch (err) {
         failed = true
         console.error('Failed to fetch local folder workspaces for all-host load:', err)
@@ -116,9 +136,11 @@ export function createFolderWorkspaceCatalogActions(
           }
           const fence = claimHostCatalogFence(get, 'folder-workspaces', target)
           try {
+            const startedAt = Date.now()
             applyCatalog(
               await fetchFolderWorkspaceCatalogForTarget(target, get().projectGroups),
-              fence
+              fence,
+              startedAt
             )
           } catch (err) {
             failed = true
