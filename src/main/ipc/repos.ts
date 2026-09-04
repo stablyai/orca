@@ -7,7 +7,6 @@ import { z } from 'zod'
 import type { Store } from '../persistence'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
 import type { FolderWorkspace } from '../../shared/folder-workspace-types'
-import type { RepoCliProbe } from '../../shared/repo-managed-cli'
 import type {
   NestedRepoScanResult,
   ProjectGroup,
@@ -62,11 +61,6 @@ import {
 } from '../git/repo-clone-path'
 import type { ClaimedCloneTarget } from '../git/repo-clone-path'
 import { scanNestedRepos } from '../project-groups/nested-repo-discovery'
-import { importRepoManagedProject } from '../project-groups/repo-managed-import'
-import { deriveRepoManagedFolderWorkspace } from '../project-groups/repo-managed-derive'
-import { repoManagedDeriveProgress } from '../../shared/repo-managed-derive-progress'
-import { installRepoCli, probeRepoCli } from '../project-groups/repo-managed-cli'
-import { REPO_MANAGED_MARKERS, REPO_METADATA_DIR } from '../../shared/repo-managed-project'
 import {
   createNestedProjectGroupResolver,
   resolveNestedRepoSelection
@@ -814,7 +808,7 @@ const ProjectGroupCreateArgs = z.object({
   parentPath: z.string().nullable().optional(),
   connectionId: z.string().nullable().optional(),
   parentGroupId: z.string().nullable().optional(),
-  createdFrom: z.enum(['manual', 'folder-scan', 'migration', 'repo-managed']).optional()
+  createdFrom: z.enum(['manual', 'folder-scan', 'migration']).optional()
 })
 
 const ProjectGroupUpdateArgs = z.object({
@@ -1237,31 +1231,6 @@ async function scanNestedReposForIpc(args: {
         ])
         return head?.type === 'file' && objects?.type === 'directory' && refs?.type === 'directory'
       },
-      hasRepoMarker: async (path) => {
-        try {
-          const repoDir = await fsProvider.stat(posix.join(path, REPO_METADATA_DIR))
-          if (repoDir.type !== 'directory') {
-            return false
-          }
-        } catch {
-          return false
-        }
-        for (const markerName of REPO_MANAGED_MARKERS) {
-          try {
-            const marker = await fsProvider.stat(posix.join(path, REPO_METADATA_DIR, markerName))
-            if (
-              marker.type === 'file' ||
-              marker.type === 'directory' ||
-              marker.type === 'symlink'
-            ) {
-              return true
-            }
-          } catch {
-            // Try the next cheap manifest marker.
-          }
-        }
-        return false
-      },
       isSelectedPathGitRepo: async (path) => {
         try {
           return (await gitProvider.isGitRepoAsync(path)).isRepo
@@ -1336,9 +1305,6 @@ export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): v
   ipcMain.removeHandler('projectGroups:importNested')
   ipcMain.removeHandler('folderWorkspaces:list')
   ipcMain.removeHandler('folderWorkspaces:create')
-  ipcMain.removeHandler('folderWorkspaces:deriveRepoManaged')
-  ipcMain.removeHandler('folderWorkspaces:probeRepoCli')
-  ipcMain.removeHandler('folderWorkspaces:installRepoCli')
   ipcMain.removeHandler('folderWorkspaces:update')
   ipcMain.removeHandler('folderWorkspaces:delete')
   ipcMain.removeHandler('folderWorkspaces:getPathStatus')
@@ -1565,60 +1531,6 @@ export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): v
   )
 
   ipcMain.handle(
-    'folderWorkspaces:deriveRepoManaged',
-    async (event, rawArgs: unknown): Promise<FolderWorkspace> => {
-      const args = parseProjectGroupIpcArgs(
-        FolderWorkspaceCreateArgs,
-        rawArgs,
-        'invalid_folder_workspace_derive_args'
-      )
-      const workspace = await deriveRepoManagedFolderWorkspace({
-        store,
-        projectGroupId: args.projectGroupId,
-        name: args.name,
-        connectionId: args.connectionId,
-        linkedTask: args.linkedTask,
-        linkedTaskSourceContext: args.linkedTaskSourceContext,
-        createdWithAgent: args.createdWithAgent,
-        pendingFirstAgentMessageRename: args.pendingFirstAgentMessageRename,
-        onPhase: (phase) => {
-          event.sender.send('folderWorkspaces:deriveProgress', repoManagedDeriveProgress(phase))
-        },
-        onSeedProgress: (progress) => {
-          event.sender.send(
-            'folderWorkspaces:deriveProgress',
-            repoManagedDeriveProgress('seed', progress)
-          )
-        },
-        onSyncProgress: (progress) => {
-          event.sender.send(
-            'folderWorkspaces:deriveProgress',
-            repoManagedDeriveProgress('sync', progress)
-          )
-        }
-      })
-      notifyReposChanged(mainWindow)
-      return workspace
-    }
-  )
-
-  ipcMain.handle(
-    'folderWorkspaces:probeRepoCli',
-    async (_event, rawArgs: unknown): Promise<RepoCliProbe> => {
-      const args = parseProjectGroupIpcArgs(
-        z.object({
-          mainPath: z.string().optional()
-        }),
-        rawArgs ?? {},
-        'invalid_repo_cli_probe_args'
-      )
-      return probeRepoCli({ mainPath: args.mainPath })
-    }
-  )
-
-  ipcMain.handle('folderWorkspaces:installRepoCli', async () => installRepoCli())
-
-  ipcMain.handle(
     'folderWorkspaces:update',
     async (_event, rawArgs: unknown): Promise<FolderWorkspace | null> => {
       const args = parseProjectGroupIpcArgs(
@@ -1770,17 +1682,6 @@ export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): v
           connectionId: args.connectionId,
           options: { timeoutMs: 15_000 }
         }))
-      if (scan.selectedPathKind === 'repo_managed') {
-        const result = importRepoManagedProject({
-          store,
-          parentPath: scan.selectedPath,
-          groupName: args.groupName,
-          connectionId: args.connectionId ?? null
-        })
-        invalidateAuthorizedRootsCache()
-        notifyReposChanged(mainWindow)
-        return result
-      }
       const selection = resolveNestedRepoSelection({ scan, projectPaths: requestedPaths })
       const groupResolver = createNestedProjectGroupResolver({
         parentPath: scan.selectedPath,

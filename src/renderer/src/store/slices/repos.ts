@@ -4,7 +4,6 @@ import { toast } from 'sonner'
 import type { AppState } from '../types'
 import type { SshRepoReadoption } from '../../../../shared/ssh-types'
 import type { FolderWorkspace } from '../../../../shared/folder-workspace-types'
-import type { RepoManagedDeriveProgress } from '../../../../shared/repo-managed-derive-progress'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import type {
   NestedRepoScanResult,
@@ -35,7 +34,6 @@ import {
 } from '../../../../shared/project-host-setup-projection'
 import {
   FOLDER_WORKSPACE_PATH_STATUS_RUNTIME_CAPABILITY,
-  FOLDER_WORKSPACE_REPO_DERIVE_RUNTIME_CAPABILITY,
   PROJECT_HOST_SETUP_RUNTIME_CAPABILITY,
   WORKSPACE_RUN_CONTEXT_RUNTIME_CAPABILITY,
   WORKTREE_LINKED_WORK_ITEM_CONTEXT_RUNTIME_CAPABILITY
@@ -1612,10 +1610,7 @@ function getRuntimeTargetCachePrefix(
   return target.kind === 'local' ? 'local' : `environment:${target.environmentId}`
 }
 
-type FolderWorkspacePathStatusRouteOptions = {
-  runtimeEnvironmentId?: string | null
-  onProgress?: (progress: RepoManagedDeriveProgress) => void
-}
+type FolderWorkspacePathStatusRouteOptions = { runtimeEnvironmentId?: string | null }
 type AddRepoPathRouteOptions = { runtimeEnvironmentId?: string | null }
 type RuntimeCatalogFetchOptions = { runtimeEnvironmentId?: string | null }
 
@@ -1888,18 +1883,6 @@ export type RepoSlice = {
       projectGroupId: string
       name?: string
       folderPath?: string | null
-      connectionId?: string | null
-      linkedTask?: FolderWorkspace['linkedTask']
-      linkedTaskSourceContext?: FolderWorkspace['linkedTaskSourceContext']
-      createdWithAgent?: FolderWorkspace['createdWithAgent']
-      pendingFirstAgentMessageRename?: boolean
-    },
-    options?: FolderWorkspacePathStatusRouteOptions
-  ) => Promise<FolderWorkspace | null>
-  deriveRepoManagedFolderWorkspace: (
-    args: {
-      projectGroupId: string
-      name?: string
       connectionId?: string | null
       linkedTask?: FolderWorkspace['linkedTask']
       linkedTaskSourceContext?: FolderWorkspace['linkedTaskSourceContext']
@@ -2881,53 +2864,6 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
       return ownedWorkspace
     } catch (err) {
       console.error('Failed to create folder workspace:', err)
-      const { title, description } = formatFolderWorkspaceCreateError(err)
-      throw new Error(`${title}. ${description}`)
-    }
-  },
-
-  deriveRepoManagedFolderWorkspace: async (args, options) => {
-    try {
-      const target = getActiveRuntimeTarget(
-        getFolderWorkspacePathStatusRouteSettings(options, get().settings)
-      )
-      if (target.kind === 'environment') {
-        await assertRuntimeEnvironmentCapability(
-          target.environmentId,
-          FOLDER_WORKSPACE_REPO_DERIVE_RUNTIME_CAPABILITY,
-          translate(
-            'auto.store.slices.repos.repoManagedDeriveRuntimeRequired',
-            'Update the remote runtime to derive repo workspaces.'
-          )
-        )
-      }
-      const unsubscribeProgress = window.api.folderWorkspaces.onDeriveProgress?.((progress) => {
-        options?.onProgress?.(progress)
-      })
-      let workspace: FolderWorkspace
-      try {
-        workspace =
-          target.kind === 'local'
-            ? await window.api.folderWorkspaces.deriveRepoManaged(args)
-            : (
-                await callRuntimeRpc<{ folderWorkspace: FolderWorkspace }>(
-                  target,
-                  'folderWorkspace.deriveRepoManaged',
-                  args,
-                  { timeoutMs: 60 * 60 * 1000 }
-                )
-              ).folderWorkspace
-      } finally {
-        unsubscribeProgress?.()
-      }
-      const ownedWorkspace = folderWorkspaceWithFetchedOwner(workspace, target, get().projectGroups)
-      set((s) => ({
-        folderWorkspaces: [ownedWorkspace, ...s.folderWorkspaces],
-        folderWorkspacePathStatuses: {}
-      }))
-      return ownedWorkspace
-    } catch (err) {
-      console.error('Failed to derive repo-managed folder workspace:', err)
       const { title, description } = formatFolderWorkspaceCreateError(err)
       throw new Error(`${title}. ${description}`)
     }

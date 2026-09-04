@@ -7,7 +7,6 @@ import type {
   NestedRepoScanOptions,
   NestedRepoScanResult
 } from '../../shared/project-group-types'
-import { REPO_MANAGED_MARKERS, REPO_METADATA_DIR } from '../../shared/repo-managed-project'
 import { isGitRepo } from '../git/repo'
 
 type NestedRepoDirectoryEntry = {
@@ -22,7 +21,6 @@ type NestedRepoScanFilesystem = {
   joinPath: (parentPath: string, childName: string) => string
   basename: (path: string) => string
   hasGitMarker: (path: string) => Promise<boolean> | boolean
-  hasRepoMarker?: (path: string) => Promise<boolean> | boolean
   isSelectedPathGitRepo: (path: string) => Promise<boolean> | boolean
 }
 
@@ -197,28 +195,6 @@ async function hasGitMarker(dirPath: string): Promise<boolean> {
   return head?.isFile() === true && objects?.isDirectory() === true && refs?.isDirectory() === true
 }
 
-async function pathLooksLikeRepoManagedRoot(dirPath: string): Promise<boolean> {
-  try {
-    const repoDir = await stat(join(dirPath, REPO_METADATA_DIR))
-    if (!repoDir.isDirectory()) {
-      return false
-    }
-  } catch {
-    return false
-  }
-  for (const markerName of REPO_MANAGED_MARKERS) {
-    try {
-      const marker = await stat(join(dirPath, REPO_METADATA_DIR, markerName))
-      if (marker.isFile() || marker.isDirectory()) {
-        return true
-      }
-    } catch {
-      // Try the next cheap manifest marker.
-    }
-  }
-  return false
-}
-
 async function readLocalDirectory(dirPath: string): Promise<NestedRepoDirectoryEntry[]> {
   // Why: Dirent data avoids one stat per child and keeps symlinked directories
   // from expanding the scan outside the selected folder.
@@ -249,7 +225,6 @@ export async function scanNestedRepos(args: {
     joinPath: join,
     basename,
     hasGitMarker,
-    hasRepoMarker: pathLooksLikeRepoManagedRoot,
     isSelectedPathGitRepo: async (path: string) => isGitRepo(path) || (await hasGitMarker(path))
   }
   const buildResult = (selectedPathKind: NestedRepoScanResult['selectedPathKind']) => ({
@@ -277,12 +252,6 @@ export async function scanNestedRepos(args: {
 
   if (await filesystem.isSelectedPathGitRepo(args.path)) {
     return buildResult('git_repo')
-  }
-  if (noteAbort()) {
-    return buildResult('non_git_folder')
-  }
-  if (filesystem.hasRepoMarker && (await filesystem.hasRepoMarker(args.path))) {
-    return buildResult('repo_managed')
   }
   if (noteAbort()) {
     return buildResult('non_git_folder')

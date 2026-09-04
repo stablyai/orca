@@ -99,22 +99,7 @@ export function toLinearLinkedWorkItem(issue: LinearIssue): LinkedWorkItemSummar
   return buildLinearWorkspaceSource(issue)
 }
 
-export function getFolderWorkspacePrimaryActionLabel(args?: {
-  deriveRepoManaged?: boolean
-  isRepoManaged?: boolean
-}): string {
-  if (args?.isRepoManaged && !args.deriveRepoManaged) {
-    return translate(
-      'auto.components.sidebar.FolderWorkspaceComposerDialog.startOnMainTree',
-      'Start on main tree'
-    )
-  }
-  if (args?.isRepoManaged && args.deriveRepoManaged) {
-    return translate(
-      'auto.components.sidebar.FolderWorkspaceComposerDialog.deriveWorkspace',
-      'Derive workspace'
-    )
-  }
+export function getFolderWorkspacePrimaryActionLabel(): string {
   return translate(
     'auto.components.sidebar.FolderWorkspaceComposerDialog.create',
     'Create workspace'

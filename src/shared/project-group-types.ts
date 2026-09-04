@@ -1,4 +1,4 @@
-export type ProjectGroupCreatedFrom = 'manual' | 'folder-scan' | 'migration' | 'repo-managed'
+export type ProjectGroupCreatedFrom = 'manual' | 'folder-scan' | 'migration'
 
 export type ProjectGroup = {
   id: string
@@ -31,7 +31,7 @@ export type NestedRepoCandidate = {
 
 export type NestedRepoScanResult = {
   selectedPath: string
-  selectedPathKind: 'git_repo' | 'non_git_folder' | 'repo_managed'
+  selectedPathKind: 'git_repo' | 'non_git_folder'
   repos: NestedRepoCandidate[]
   truncated: boolean
   timedOut: boolean
