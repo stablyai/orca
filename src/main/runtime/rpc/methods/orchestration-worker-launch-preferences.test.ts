@@ -33,6 +33,31 @@ describe('orchestration worker launch preferences', () => {
     ).toEqual({ model: 'gpt-5.6-sol' })
   })
 
+  it('passes an opaque OpenCode model through the shared catalog', () => {
+    expect(
+      resolveWorkerLaunchPreferences({
+        agent: 'opencode',
+        model: 'xai/grok-4.6'
+      })
+    ).toEqual({
+      preferences: { model: 'xai/grok-4.6' },
+      receipt: {
+        requested: { agent: 'opencode', model: 'xai/grok-4.6', effort: null },
+        effective: { agent: 'opencode', model: 'xai/grok-4.6', effort: null }
+      }
+    })
+  })
+
+  it('rejects OpenCode effort because its TUI has no launch-time variant flag', () => {
+    expect(() =>
+      resolveWorkerLaunchPreferences({
+        agent: 'opencode',
+        model: 'xai/grok-4.6',
+        effort: 'xhigh'
+      })
+    ).toThrow('does not support effort xhigh')
+  })
+
   it.each([
     {
       model: 'gpt-5.6-sol',

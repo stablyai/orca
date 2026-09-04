@@ -54,6 +54,22 @@ describe('tui agent startup session options', () => {
     expect(plan?.sessionOptions).toEqual({ model: 'custom-codex-model', effort: 'high' })
   })
 
+  it('launches an OpenCode worker with a model without persisting it', () => {
+    const plan = buildAgentStartupPlan({
+      agent: 'opencode',
+      prompt: '',
+      cmdOverrides: {},
+      platform: 'linux',
+      allowEmptyPromptLaunch: true,
+      sessionOptions: { model: 'xai/grok-4.6' },
+      sessionOptionsOverrideAgentArgs: true,
+      agentArgs: '--continue'
+    })
+    expect(plan?.launchCommand).toBe("opencode '--continue' '--model' 'xai/grok-4.6'")
+    expect(plan?.launchConfig.agentCommand).toBe("opencode '--continue'")
+    expect(plan?.sessionOptions).toEqual({ model: 'xai/grok-4.6' })
+  })
+
   it('inserts worker preferences before an argument terminator', () => {
     const plan = buildAgentStartupPlan({
       agent: 'codex',

@@ -128,6 +128,27 @@ describe('agent session option catalog', () => {
     expect(parsed.map(({ id }) => id)).toEqual(['auto', 'gpt-5.3-codex'])
   })
 
+  it('discovers OpenCode provider models and maps the selected model', () => {
+    const catalog = getAgentSessionOptionCatalog('opencode')!
+    const parsed = catalog.listModels!.parse(
+      'xai/grok-4.6\nzai-coding-plan/glm-5.3\nalibaba-token-plan/MiniMax-M2.5\ncloudflare-workers-ai/@cf/meta/llama-3.1-8b-instruct\nnoise\n/leading\ntrailing/\nxai/grok-4.6\n'
+    )
+    expect(parsed.map(({ id }) => id)).toEqual([
+      'xai/grok-4.6',
+      'zai-coding-plan/glm-5.3',
+      'alibaba-token-plan/MiniMax-M2.5',
+      'cloudflare-workers-ai/@cf/meta/llama-3.1-8b-instruct'
+    ])
+    expect(
+      resolveAgentSessionOptionLaunch('opencode', {
+        model: 'xai/grok-4.6'
+      })
+    ).toEqual({
+      args: ['--model', 'xai/grok-4.6'],
+      appliedValues: { model: 'xai/grok-4.6' }
+    })
+  })
+
   it('composes Cursor effort and fast mode into the supported slug form', () => {
     const resolved = resolveAgentSessionOptionLaunch('cursor', {
       model: 'gpt-5.3-codex',
