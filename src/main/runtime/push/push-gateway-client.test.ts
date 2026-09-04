@@ -6,7 +6,13 @@ import { PushGatewayClient } from './push-gateway-client'
 const GATEWAY_URL = 'https://push.onorca.dev'
 const NOW = 1_770_000_000_000
 
-type Recorded = { url: string; method: string; authorization: string | null; body: unknown }
+type Recorded = {
+  url: string
+  method: string
+  authorization: string | null
+  body: unknown
+  redirect: RequestRedirect | undefined
+}
 
 function fingerprintOf(publicKey: Uint8Array): string {
   return createHash('sha256').update(publicKey).digest('base64url').slice(0, 16)
@@ -44,7 +50,8 @@ function createFakeGateway(
       url,
       method: init?.method ?? 'GET',
       authorization: headers.get('authorization'),
-      body
+      body,
+      redirect: init?.redirect
     })
     if (url.endsWith('/v1/host/challenge')) {
       const built = buildPushChallengeFixture({
@@ -195,6 +202,18 @@ describe('PushGatewayClient', () => {
       ok: false,
       reason: 'rejected'
     })
+  })
+
+  it('never follows a redirect, on the handshake or on an authorized call', async () => {
+    const gateway = createFakeGateway()
+
+    await gateway.client.registerDevice(REGISTER_INPUT)
+    await gateway.client.deleteDevice('reg-1')
+
+    // A 307 would replay the host proof, then the phone's token, to whatever
+    // origin the redirect named.
+    expect(gateway.calls.length).toBeGreaterThanOrEqual(4)
+    expect(gateway.calls.every((call) => call.redirect === 'error')).toBe(true)
   })
 
   it('reports a gateway 5xx as unreachable so the caller can retry', async () => {

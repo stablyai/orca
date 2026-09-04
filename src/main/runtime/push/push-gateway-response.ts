@@ -20,6 +20,9 @@ export async function postPushGatewayJson(
     const response = await fetchImpl(url, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
+      // A 307 would replay the proof, and later the phone's token, to whatever
+      // origin the redirect named.
+      redirect: 'error',
       signal: AbortSignal.timeout(PUSH_REQUEST_DEADLINE_MS),
       body: JSON.stringify(body)
     })

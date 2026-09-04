@@ -50,6 +50,9 @@ const NotificationRegisterPushParams = z
     apnsEnvironment: z.enum(MOBILE_PUSH_APNS_ENVIRONMENTS).optional(),
     filter: NotificationPushFilterParams
   })
+  // Why strict: the device identity is added by the handler, so a caller-supplied
+  // `deviceId` must be an error, not a key silently dropped.
+  .strict()
   // Why: an APNs token is only routable against the environment it was minted in,
   // so a missing environment must fail loudly rather than default to production.
   .refine((params) => params.platform !== 'ios' || params.apnsEnvironment !== undefined, {
@@ -119,7 +122,8 @@ export const NOTIFICATION_METHODS: readonly RpcAnyMethod[] = [
       if (clientKind !== 'mobile' || !pairedDeviceId) {
         return { registered: false, reason: 'not_mobile' }
       }
-      return await runtime.registerMobilePushDevice({ deviceId: pairedDeviceId, ...params })
+      // The paired identity is spread last so no parameter can ever override it.
+      return await runtime.registerMobilePushDevice({ ...params, deviceId: pairedDeviceId })
     }
   }),
   defineMethod({

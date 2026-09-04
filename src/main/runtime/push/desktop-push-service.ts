@@ -11,6 +11,7 @@ import type { OrcaRuntimeService } from '../orca-runtime'
 import type { OrcaRuntimeRpcServer } from '../runtime-rpc'
 import { PushDispatcher } from './push-dispatcher'
 import { PushGatewayClient } from './push-gateway-client'
+import { PushRegisterThrottle } from './push-register-throttle'
 import type { PushUnregisterOutbox } from './push-unregister-outbox'
 
 const OUTBOX_RETRY_BASE_MS = 30_000
@@ -26,6 +27,8 @@ type DesktopPushServiceOptions = {
   client?: PushGatewayClient
   /** Test seam: lets a suite drive the outbox backoff without real timers. */
   scheduleRetry?: (run: () => void, delayMs: number) => void
+  /** Test seam: lets a suite drive the per-device register bucket on its own clock. */
+  registerThrottle?: PushRegisterThrottle
 }
 
 export class DesktopPushService {
@@ -35,6 +38,7 @@ export class DesktopPushService {
   private readonly outbox: PushUnregisterOutbox
   private readonly client: PushGatewayClient
   private readonly dispatcher: PushDispatcher
+  private readonly registerThrottle: PushRegisterThrottle
   private readonly scheduleRetry: (run: () => void, delayMs: number) => void
   private unsubscribe: (() => void) | null = null
   private flushLoop: Promise<void> | null = null
@@ -54,6 +58,7 @@ export class DesktopPushService {
     this.client = client
     this.outbox = options.runtimeRpc.getPushUnregisterOutbox()
     this.dispatcher = new PushDispatcher({ client, registry })
+    this.registerThrottle = options.registerThrottle ?? new PushRegisterThrottle()
     this.scheduleRetry =
       options.scheduleRetry ??
       ((run, delayMs) => {
@@ -99,6 +104,11 @@ export class DesktopPushService {
   async register(input: MobilePushRegisterInput): Promise<MobilePushRegisterResult> {
     if (this.registry.getDevice(input.deviceId)?.scope !== 'mobile') {
       return { registered: false, reason: 'not_mobile' }
+    }
+    // Unregister needs no bucket: with nothing registered it is a lookup, and
+    // with something registered it can only run once per successful register.
+    if (!this.registerThrottle.allow(input.deviceId)) {
+      return { registered: false, reason: 'throttled' }
     }
     const result = await this.client.registerDevice(input)
     if (!result.ok) {

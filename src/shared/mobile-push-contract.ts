@@ -42,12 +42,14 @@ export type MobilePushRegisterResult =
       registered: false
       // `registration_storage_failed`: the gateway accepted the token but the host
       // could not persist it, so the phone must register again rather than believe
-      // a push route that does not exist.
+      // a push route that does not exist. `throttled`: this device registered too
+      // often in the last minute; whatever it registered before still stands.
       reason:
         | 'gateway_unreachable'
         | 'gateway_rejected'
         | 'not_mobile'
         | 'registration_storage_failed'
+        | 'throttled'
     }
 
 function isStringMember<T extends string>(value: unknown, members: readonly T[]): value is T {

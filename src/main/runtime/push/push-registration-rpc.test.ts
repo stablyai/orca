@@ -82,6 +82,13 @@ describe('notifications.registerPush', () => {
     ).toBe(true)
   })
 
+  it('rejects a caller-supplied device id instead of dropping it', () => {
+    const registerPush = method('notifications.registerPush')
+    expect(
+      registerPush.params!.safeParse({ ...REGISTER_PARAMS, deviceId: 'device-9' }).success
+    ).toBe(false)
+  })
+
   it('rejects a source the contract does not define', () => {
     const registerPush = method('notifications.registerPush')
     expect(

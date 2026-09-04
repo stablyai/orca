@@ -164,6 +164,7 @@ export class PushGatewayClient {
           authorization: `Bearer ${outcome.session.token}`,
           ...(init.body === undefined ? {} : { 'content-type': 'application/json' })
         },
+        redirect: 'error',
         signal: AbortSignal.timeout(PUSH_REQUEST_DEADLINE_MS),
         ...(init.body === undefined ? {} : { body: JSON.stringify(init.body) })
       })

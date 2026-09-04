@@ -5,6 +5,7 @@ import { describe, expect, it, vi } from 'vitest'
 import type { MobileNotificationEvent } from '../runtime-mobile-notification-controller'
 import { DeviceRegistry } from '../device-registry'
 import { DesktopPushService } from './desktop-push-service'
+import { PushRegisterThrottle } from './push-register-throttle'
 import { PushUnregisterOutbox } from './push-unregister-outbox'
 import { createPushHostKeypair } from './push-host-challenge-fixtures'
 
@@ -20,6 +21,7 @@ function createService(
     deleteFails?: boolean
     /** Runs before each delete resolves, so a suite can queue work mid-flush. */
     onDelete?: (registrationId: string) => void
+    now?: () => number
   } = {}
 ): {
   service: DesktopPushService
@@ -77,7 +79,8 @@ function createService(
     client: client as never,
     scheduleRetry: (run, delayMs) => {
       retries.push({ run, delayMs })
-    }
+    },
+    ...(options.now ? { registerThrottle: new PushRegisterThrottle({ now: options.now }) } : {})
   })!
 
   service.start()
@@ -239,6 +242,33 @@ describe('DesktopPushService', () => {
     await new Promise((resolve) => setImmediate(resolve))
 
     expect(harness.retries).toHaveLength(1)
+  })
+
+  it('throttles a device that registers in a loop and lets it back in a minute later', async () => {
+    let clock = 1_700_000_000_000
+    const harness = createService({ now: () => clock })
+    const input = { deviceId: harness.deviceId, ...REGISTER_INPUT }
+
+    for (let index = 0; index < 10; index++) {
+      expect(await harness.service.register(input)).toEqual({
+        registered: true,
+        registrationId: 'reg-1'
+      })
+    }
+    expect(await harness.service.register(input)).toEqual({
+      registered: false,
+      reason: 'throttled'
+    })
+    // The registration it already made stands; only the new write is refused.
+    expect(harness.registry.getDevice(harness.deviceId)?.pushRegistration?.registrationId).toBe(
+      'reg-1'
+    )
+
+    clock += 60_000
+    expect(await harness.service.register(input)).toEqual({
+      registered: true,
+      registrationId: 'reg-1'
+    })
   })
 
   it('pushes a dispatched notification through the subscribed dispatcher', async () => {
