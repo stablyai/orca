@@ -2,8 +2,9 @@ import type { PreflightStatus } from '../../../../preload/api-types'
 
 export type GhStatus = 'checking' | 'connected' | 'not-installed' | 'not-authenticated'
 // Why: parallel to GhStatus — GitLab uses glab and the same three failure
-// modes (probe in-flight / installed-but-unauth / missing entirely).
-export type GlabStatus = GhStatus
+// modes (probe in-flight / installed-but-unauth / missing entirely), plus
+// 'not-configured' because GitLab routing is off until an instance URL is set.
+export type GlabStatus = GhStatus | 'not-configured'
 export type BitbucketStatus = 'checking' | 'connected' | 'not-configured' | 'not-authenticated'
 export type AzureDevOpsStatus = 'checking' | 'configured' | 'not-configured' | 'not-authenticated'
 export type GiteaStatus = 'checking' | 'configured' | 'not-configured' | 'not-authenticated'
@@ -71,6 +72,11 @@ function ghStatusFromPreflight(status: PreflightStatus['gh']): GhStatus {
 }
 
 function glabStatusFromPreflight(status: PreflightStatus['glab']): GlabStatus {
+  // Why: no configured instance means Orca routes nothing to GitLab, so the
+  // actionable step is setting the URL — not installing or logging into glab.
+  if (status && status.configured === false) {
+    return 'not-configured'
+  }
   if (!status?.installed) {
     return 'not-installed'
   }

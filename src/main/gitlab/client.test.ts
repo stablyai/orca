@@ -77,6 +77,30 @@ describe('gitlab client — viewer & paste-URL lookup', () => {
       })
       await expect(getAuthenticatedViewer()).resolves.toBeNull()
     })
+
+    it('pins the lookup to the configured instance', async () => {
+      // Why: an unpinned `glab api user` would identify the user against
+      // whatever host glab infers from cwd/config.
+      glabExecFileAsyncMock.mockResolvedValueOnce({
+        stdout: JSON.stringify({ username: 'alice', email: null })
+      })
+
+      await getAuthenticatedViewer()
+
+      expect(glabExecFileAsyncMock).toHaveBeenCalledWith([
+        'api',
+        '--hostname',
+        'gitlab.com',
+        'user'
+      ])
+    })
+
+    it('fails closed without invoking glab when no instance is configured', async () => {
+      getGlabKnownHostsMock.mockResolvedValue([])
+
+      await expect(getAuthenticatedViewer()).resolves.toBeNull()
+      expect(glabExecFileAsyncMock).not.toHaveBeenCalled()
+    })
   })
 
   describe('getWorkItemByProjectRef', () => {
@@ -227,9 +251,31 @@ describe('gitlab client — viewer & paste-URL lookup', () => {
         }
       ])
       expect(glabExecFileAsyncMock).toHaveBeenCalledWith(
-        ['api', 'todos?state=pending&per_page=50'],
+        ['api', '--hostname', 'gitlab.com', 'todos?state=pending&per_page=50'],
         { cwd: '/repo' }
       )
+    })
+
+    it('pins an unresolved local workspace to the configured instance host', async () => {
+      // Why: an unpinned `glab api todos` would target whatever host glab infers
+      // from cwd/config; folder workspaces have no GitLab origin to resolve.
+      getProjectRefMock.mockResolvedValue(null)
+      glabExecFileAsyncMock.mockResolvedValueOnce({ stdout: '[]' })
+
+      await expect(listTodos('/repo')).resolves.toEqual([])
+
+      expect(glabExecFileAsyncMock).toHaveBeenCalledWith(
+        ['api', '--hostname', 'gitlab.com', 'todos?state=pending&per_page=50'],
+        { cwd: '/repo' }
+      )
+    })
+
+    it('fails closed without invoking glab when no instance is configured', async () => {
+      getGlabKnownHostsMock.mockResolvedValue([])
+      getProjectRefMock.mockResolvedValue(null)
+
+      await expect(listTodos('/repo')).resolves.toEqual([])
+      expect(glabExecFileAsyncMock).not.toHaveBeenCalled()
     })
 
     it('routes local WSL todos through project resolution and glab execution options', async () => {
@@ -241,7 +287,7 @@ describe('gitlab client — viewer & paste-URL lookup', () => {
 
       expect(getProjectRefMock).toHaveBeenCalledWith('/repo', ['gitlab.com'], null, localGitOptions)
       expect(glabExecFileAsyncMock).toHaveBeenCalledWith(
-        ['api', 'todos?state=pending&per_page=50'],
+        ['api', '--hostname', 'gitlab.com', 'todos?state=pending&per_page=50'],
         { cwd: '/repo', wslDistro: 'Ubuntu' }
       )
     })

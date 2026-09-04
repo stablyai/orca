@@ -17,6 +17,20 @@ export const getGitPaneSearchEntries = createLocalizedCatalog(() => [
     ]
   },
   {
+    title: translate('auto.components.settings.git.search.gitlabUrlTitle', 'GitLab URL'),
+    description: translate(
+      'auto.components.settings.git.search.gitlabUrlDescription',
+      'Orca uses this single URL for GitLab operations.'
+    ),
+    keywords: [
+      ...translateSearchKeyword('auto.components.settings.git.search.gitlab', 'gitlab'),
+      ...translateSearchKeyword('auto.components.settings.git.search.gitlabUrl', 'gitlab url'),
+      ...translateSearchKeyword('auto.components.settings.git.search.selfHosted', 'self-hosted'),
+      ...translateSearchKeyword('auto.components.settings.git.search.instance', 'instance'),
+      ...translateSearchKeyword('auto.components.settings.git.search.server', 'server')
+    ]
+  },
+  {
     title: translate(
       'auto.components.settings.git.search.f8bda25f29',
       'Keep Local Main Up to Date'

@@ -115,7 +115,7 @@ describe('gitlab client — combined listWorkItems', () => {
 
     const mergeRequestCallPath = glabApiWithHeadersMock.mock.calls[0][0] as string[]
     const issuesCallPath = glabExecFileAsyncMock.mock.calls[0][0] as string[]
-    expect(mergeRequestCallPath[0]).toContain('search=ambiguous%20selector')
+    expect(mergeRequestCallPath.at(-1)).toContain('search=ambiguous%20selector')
     expect(issuesCallPath.at(-1)).toContain('search=ambiguous%20selector')
   })
 
@@ -127,7 +127,7 @@ describe('gitlab client — combined listWorkItems', () => {
 
     const mergeRequestCallPath = glabApiWithHeadersMock.mock.calls[0][0] as string[]
     const issuesCallPath = glabExecFileAsyncMock.mock.calls[0][0] as string[]
-    const mergeRequestParams = new URLSearchParams(mergeRequestCallPath[0].split('?')[1])
+    const mergeRequestParams = new URLSearchParams(mergeRequestCallPath.at(-1)?.split('?')[1])
     const issueParams = new URLSearchParams(issuesCallPath.at(-1)?.split('?')[1])
     expect(mergeRequestParams.get('page')).toBe('2')
     expect(issueParams.get('page')).toBe('2')

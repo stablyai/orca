@@ -373,6 +373,64 @@ describe('ghExecFileAsync WSL fallback', () => {
     )
   })
 
+  it('keeps a ported GITLAB_HOST bound across the wsl.exe boundary for UNC-cwd calls', async () => {
+    execFileMock.mockImplementation((_binary, _args, options, callback) => {
+      if (typeof options === 'function') {
+        callback = options
+      }
+      callback(null, { stdout: '[]', stderr: '' })
+    })
+
+    await expect(
+      glabExecFileAsync(['api', '--hostname', 'gitlab.example.com:8443', 'projects'], {
+        cwd: String.raw`\\wsl.localhost\Ubuntu\home\jinwoo\stably\noqa`
+      })
+    ).resolves.toEqual({ stdout: '[]', stderr: '' })
+
+    expect(execFileMock).toHaveBeenCalledWith(
+      'wsl.exe',
+      [
+        '-d',
+        'Ubuntu',
+        '--',
+        'bash',
+        '-c',
+        "cd '/home/jinwoo/stably/noqa' && 'glab' 'api' 'projects'"
+      ],
+      expect.objectContaining({
+        env: expect.objectContaining({ GITLAB_HOST: 'gitlab.example.com:8443' })
+      }),
+      expect.any(Function)
+    )
+    expect(execFileMock.mock.calls[0][2].env.WSLENV.split(':')).toContain('GITLAB_HOST')
+  })
+
+  it('keeps a ported GITLAB_HOST bound when falling back to the default WSL distro', async () => {
+    getDefaultWslDistroMock.mockReturnValue('Ubuntu')
+    execFileMock
+      .mockImplementationOnce((_binary, _args, _options, callback) => {
+        callback(Object.assign(new Error('spawn glab ENOENT'), { code: 'ENOENT' }))
+      })
+      .mockImplementationOnce((_binary, _args, _options, callback) => {
+        callback(null, { stdout: '[]', stderr: '' })
+      })
+
+    await expect(
+      glabExecFileAsync(['api', '--hostname', 'gitlab.example.com:8443', 'projects'])
+    ).resolves.toEqual({ stdout: '[]', stderr: '' })
+
+    expect(execFileMock).toHaveBeenNthCalledWith(
+      2,
+      'wsl.exe',
+      ['-d', 'Ubuntu', '--', 'bash', '-c', "'glab' 'api' 'projects'"],
+      expect.objectContaining({
+        env: expect.objectContaining({ GITLAB_HOST: 'gitlab.example.com:8443' })
+      }),
+      expect.any(Function)
+    )
+    expect(execFileMock.mock.calls[1][2].env.WSLENV.split(':')).toContain('GITLAB_HOST')
+  })
+
   it('times out the default-WSL glab fallback and waits for full tree cleanup', async () => {
     vi.useFakeTimers()
     getDefaultWslDistroMock.mockReturnValue('Ubuntu')

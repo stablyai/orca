@@ -1,7 +1,8 @@
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { RpcDispatcher } from '../dispatcher'
 import type { RpcRequest } from '../core'
 import type { OrcaRuntimeService } from '../../orca-runtime'
+import { setConfiguredGitLabUrl } from '../../../gitlab/gitlab-known-host-probe'
 import { GITLAB_METHODS } from './gitlab'
 
 function makeRequest(method: string, params?: unknown): RpcRequest {
@@ -9,6 +10,14 @@ function makeRequest(method: string, params?: unknown): RpcRequest {
 }
 
 describe('gitlab RPC methods', () => {
+  beforeEach(() => {
+    setConfiguredGitLabUrl('https://gitlab.example.com')
+  })
+
+  afterEach(() => {
+    setConfiguredGitLabUrl('')
+  })
+
   it('routes GitLab task queries and mutations to the runtime server', async () => {
     const runtime = {
       getRuntimeId: () => 'test-runtime',
@@ -373,5 +382,174 @@ describe('gitlab RPC methods', () => {
     expect(bounded).toContain('ERROR: Job failed: exit code 1')
     expect(bounded).not.toContain('section_start')
     expect(bounded).not.toContain('line 0\n')
+  })
+
+  // Why: a client-supplied host/projectRef is a `glab --hostname` override that
+  // skips remote resolution, so a crafted RPC payload could otherwise aim
+  // credentialed glab calls at an arbitrary GitLab.
+  describe('configured-instance host guard', () => {
+    const OTHER_HOST = 'gitlab.evil.test'
+
+    function makeGuardRuntime(): OrcaRuntimeService {
+      return {
+        getRuntimeId: () => 'test-runtime',
+        getGitLabRateLimit: vi.fn().mockResolvedValue({ ok: true }),
+        getGitLabRepoJobTrace: vi.fn().mockResolvedValue({ ok: true }),
+        retryGitLabRepoJob: vi.fn().mockResolvedValue({ ok: true }),
+        updateGitLabRepoMRReviewers: vi.fn().mockResolvedValue({ ok: true }),
+        addGitLabRepoMRInlineComment: vi.fn().mockResolvedValue({ ok: true }),
+        getGitLabRepoWorkItemDetails: vi.fn().mockResolvedValue({ body: 'Details' }),
+        getGitLabRepoWorkItemByPath: vi.fn().mockResolvedValue({ id: 'gitlab-issue-7' })
+      } as unknown as OrcaRuntimeService
+    }
+
+    const inlineInput = {
+      body: 'Inline',
+      path: 'src/a.ts',
+      line: 12,
+      baseSha: 'base',
+      startSha: 'start',
+      headSha: 'head'
+    }
+
+    it.each([
+      ['gitlab.jobTrace', { jobId: 99 }, 'getGitLabRepoJobTrace'],
+      ['gitlab.retryJob', { jobId: 99 }, 'retryGitLabRepoJob'],
+      ['gitlab.updateMRReviewers', { iid: 8, reviewerIds: [1] }, 'updateGitLabRepoMRReviewers'],
+      [
+        'gitlab.addMRInlineComment',
+        { iid: 8, input: inlineInput },
+        'addGitLabRepoMRInlineComment'
+      ],
+      ['gitlab.workItemDetails', { iid: 8, type: 'mr' }, 'getGitLabRepoWorkItemDetails']
+    ])('rejects %s for a projectRef on another host', async (method, args, runtimeMethod) => {
+      const runtime = makeGuardRuntime()
+      const dispatcher = new RpcDispatcher({ runtime, methods: GITLAB_METHODS })
+
+      const response = await dispatcher.dispatch(
+        makeRequest(method as string, {
+          repo: 'id:repo-1',
+          ...(args as object),
+          projectRef: { host: OTHER_HOST, path: 'attacker/exfil' }
+        })
+      )
+
+      expect(response).toMatchObject({
+        ok: false,
+        error: { code: 'invalid_argument', message: expect.stringContaining('does not match') }
+      })
+      expect(runtime[runtimeMethod as keyof OrcaRuntimeService]).not.toHaveBeenCalled()
+    })
+
+    it('rejects a pasted work item on another host', async () => {
+      const runtime = makeGuardRuntime()
+      const dispatcher = new RpcDispatcher({ runtime, methods: GITLAB_METHODS })
+
+      const response = await dispatcher.dispatch(
+        makeRequest('gitlab.workItemByPath', {
+          repo: 'id:repo-1',
+          host: OTHER_HOST,
+          path: 'attacker/exfil',
+          iid: 1,
+          type: 'issue'
+        })
+      )
+
+      expect(response).toMatchObject({ ok: false, error: { code: 'invalid_argument' } })
+      expect(runtime.getGitLabRepoWorkItemByPath).not.toHaveBeenCalled()
+    })
+
+    it('rejects a rateLimit host on another host', async () => {
+      const runtime = makeGuardRuntime()
+      const dispatcher = new RpcDispatcher({ runtime, methods: GITLAB_METHODS })
+
+      const response = await dispatcher.dispatch(
+        makeRequest('gitlab.rateLimit', { force: true, host: OTHER_HOST })
+      )
+
+      expect(response).toMatchObject({ ok: false, error: { code: 'invalid_argument' } })
+      expect(runtime.getGitLabRateLimit).not.toHaveBeenCalled()
+    })
+
+    it('rejects any supplied host when no GitLab instance is configured', async () => {
+      setConfiguredGitLabUrl('')
+      const runtime = makeGuardRuntime()
+      const dispatcher = new RpcDispatcher({ runtime, methods: GITLAB_METHODS })
+
+      for (const request of [
+        makeRequest('gitlab.rateLimit', { host: 'gitlab.example.com' }),
+        makeRequest('gitlab.workItemByPath', {
+          repo: 'id:repo-1',
+          host: 'gitlab.example.com',
+          path: 'g/p',
+          iid: 1,
+          type: 'issue'
+        }),
+        makeRequest('gitlab.jobTrace', {
+          repo: 'id:repo-1',
+          jobId: 99,
+          projectRef: { host: 'gitlab.example.com', path: 'g/p' }
+        })
+      ]) {
+        expect(await dispatcher.dispatch(request)).toMatchObject({
+          ok: false,
+          error: {
+            code: 'invalid_argument',
+            message: expect.stringContaining('no GitLab instance is configured')
+          }
+        })
+      }
+      expect(runtime.getGitLabRateLimit).not.toHaveBeenCalled()
+      expect(runtime.getGitLabRepoWorkItemByPath).not.toHaveBeenCalled()
+      expect(runtime.getGitLabRepoJobTrace).not.toHaveBeenCalled()
+    })
+
+    it('canonicalizes a matching host before it reaches the runtime', async () => {
+      const runtime = makeGuardRuntime()
+      const dispatcher = new RpcDispatcher({ runtime, methods: GITLAB_METHODS })
+
+      await dispatcher.dispatch(
+        makeRequest('gitlab.rateLimit', { host: ' GitLab.Example.COM ' })
+      )
+      await dispatcher.dispatch(
+        makeRequest('gitlab.workItemByPath', {
+          repo: 'id:repo-1',
+          host: 'GITLAB.example.com',
+          path: 'g/p',
+          iid: 7,
+          type: 'issue'
+        })
+      )
+      await dispatcher.dispatch(
+        makeRequest('gitlab.jobTrace', {
+          repo: 'id:repo-1',
+          jobId: 99,
+          projectRef: { host: 'GitLab.Example.com', path: 'g/p' }
+        })
+      )
+
+      expect(runtime.getGitLabRateLimit).toHaveBeenCalledWith({ host: 'gitlab.example.com' })
+      expect(runtime.getGitLabRepoWorkItemByPath).toHaveBeenCalledWith(
+        'id:repo-1',
+        { host: 'gitlab.example.com', path: 'g/p' },
+        7,
+        'issue'
+      )
+      expect(runtime.getGitLabRepoJobTrace).toHaveBeenCalledWith('id:repo-1', 99, {
+        host: 'gitlab.example.com',
+        path: 'g/p'
+      })
+    })
+
+    it('leaves an omitted host on the resolved-remote path', async () => {
+      const runtime = makeGuardRuntime()
+      const dispatcher = new RpcDispatcher({ runtime, methods: GITLAB_METHODS })
+
+      await dispatcher.dispatch(makeRequest('gitlab.rateLimit', { force: true }))
+      await dispatcher.dispatch(makeRequest('gitlab.jobTrace', { repo: 'id:repo-1', jobId: 99 }))
+
+      expect(runtime.getGitLabRateLimit).toHaveBeenCalledWith({ force: true })
+      expect(runtime.getGitLabRepoJobTrace).toHaveBeenCalledWith('id:repo-1', 99, undefined)
+    })
   })
 })

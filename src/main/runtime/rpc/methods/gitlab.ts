@@ -2,29 +2,51 @@ import { z } from 'zod'
 import { defineMethod, type RpcMethod } from '../core'
 import { OptionalFiniteNumber, OptionalString, requiredString } from '../schemas'
 import { normalizeGitLabIssueListArgs } from '../../../gitlab/gitlab-preload-args'
-import { toGitLabJobLogExcerptResult } from '../../../../shared/gitlab-job-log-excerpt'
+import { resolveConfiguredGitLabHost } from '../../../gitlab/configured-instance-host-guard'
 
 const RepoSelector = z.object({
   repo: requiredString('Missing repo selector')
 })
 
+// Why: a client-supplied host is a `glab --hostname` override that skips remote
+// resolution, so pin it to the configured instance here at the parse boundary —
+// every method reusing these schemas inherits the guard, and handlers only ever
+// see the canonical host.
+function pinToConfiguredGitLabHost(value: string, ctx: z.RefinementCtx): string {
+  const resolution = resolveConfiguredGitLabHost(value)
+  if (!resolution.ok) {
+    ctx.addIssue({ code: 'custom', message: `Access denied: ${resolution.reason}` })
+    return z.NEVER
+  }
+  return resolution.host
+}
+
+const ConfiguredGitLabHost = z.string().transform(pinToConfiguredGitLabHost)
+
+// Why: an omitted host keeps the resolved-remote path; a supplied one is pinned.
+const OptionalConfiguredGitLabHost = z
+  .unknown()
+  .transform((value) => (typeof value === 'string' && value.length > 0 ? value : undefined))
+  .transform((value, ctx) =>
+    value === undefined ? undefined : pinToConfiguredGitLabHost(value, ctx)
+  )
+  .optional()
+
 const EmptyParams = z.object({}).optional().default({})
 const GitLabRateLimit = z
   .object({
     force: z.boolean().optional(),
-    host: OptionalString
+    host: OptionalConfiguredGitLabHost
   })
   .optional()
   .default({})
 
-// nullish, not optional: renderer callers normalise a missing ref to `null`
-// (`item.projectRef ?? null`), which a bare `.optional()` would reject outright.
 const GitLabProjectRef = z
   .object({
-    host: requiredString('Missing GitLab host'),
+    host: ConfiguredGitLabHost,
     path: requiredString('Missing GitLab project path')
   })
-  .nullish()
+  .optional()
 
 const WorkItemsList = RepoSelector.extend({
   state: z.enum(['opened', 'merged', 'closed', 'all']).optional(),
@@ -36,8 +58,7 @@ const WorkItemsList = RepoSelector.extend({
 const IssuesList = RepoSelector.extend({
   state: z.unknown().optional(),
   assignee: OptionalString,
-  limit: OptionalFiniteNumber,
-  page: OptionalFiniteNumber
+  limit: OptionalFiniteNumber
 })
 
 const CreateIssue = RepoSelector.extend({
@@ -73,8 +94,7 @@ const UpdateMr = RepoSelector.extend({
     title: z.string().optional(),
     body: z.string().optional(),
     addLabels: z.array(z.string()).optional(),
-    removeLabels: z.array(z.string()).optional(),
-    readyForReview: z.literal(true).optional()
+    removeLabels: z.array(z.string()).optional()
   }),
   projectRef: GitLabProjectRef
 })
@@ -126,10 +146,7 @@ const ResolveMRDiscussion = RepoSelector.extend({
 
 const JobTrace = RepoSelector.extend({
   jobId: z.number().int().positive(),
-  projectRef: GitLabProjectRef,
-  // Why: raw CI traces routinely exceed the 1 MB transport frame cap, so callers
-  // that only render an excerpt ask main to bound it before it crosses the wire.
-  logExcerpt: z.boolean().optional()
+  projectRef: GitLabProjectRef
 })
 
 const RetryJob = RepoSelector.extend({
@@ -144,7 +161,7 @@ const WorkItemDetails = RepoSelector.extend({
 })
 
 const WorkItemByPath = RepoSelector.extend({
-  host: requiredString('Missing GitLab host'),
+  host: ConfiguredGitLabHost,
   path: requiredString('Missing GitLab project path'),
   iid: z.number().int().positive(),
   type: z.enum(['issue', 'mr'])
@@ -184,8 +201,7 @@ export const GITLAB_METHODS: RpcMethod[] = [
         params.repo,
         normalized.state,
         normalized.assignee,
-        normalized.limit,
-        normalized.page
+        normalized.limit
       )
     }
   }),
@@ -254,14 +270,8 @@ export const GITLAB_METHODS: RpcMethod[] = [
   defineMethod({
     name: 'gitlab.jobTrace',
     params: JobTrace,
-    handler: async (params, { runtime }) => {
-      const result = await runtime.getGitLabRepoJobTrace(
-        params.repo,
-        params.jobId,
-        params.projectRef
-      )
-      return params.logExcerpt ? toGitLabJobLogExcerptResult(result) : result
-    }
+    handler: async (params, { runtime }) =>
+      runtime.getGitLabRepoJobTrace(params.repo, params.jobId, params.projectRef)
   }),
   defineMethod({
     name: 'gitlab.retryJob',
