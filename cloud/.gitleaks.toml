@@ -13,3 +13,10 @@ description = "Cloud SQL rollout lease holder keys in the action's unit tests"
 regexTarget = "secret"
 paths = ['''\.github/actions/cloud-sql-rollout-lease/[a-z-]+\.test\.mjs$''']
 regexes = ['''^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+/[0-9]+$''']
+
+# RFC 6455 §1.3 example handshake nonce ("the sample nonce" in base64), sent by the raw-socket
+# upgrade tests; the generic key rule reads any base64 header value as a secret.
+[[allowlists]]
+description = "RFC 6455 example Sec-WebSocket-Key in upgrade tests"
+regexTarget = "secret"
+regexes = ['''^dGhlIHNhbXBsZSBub25jZQ==$''']
