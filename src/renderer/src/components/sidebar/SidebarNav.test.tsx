@@ -265,6 +265,20 @@ describe('SidebarNav', () => {
     expect(idle?.querySelector('svg')).toBeNull()
   })
 
+  it('offers Sessions on the desktop but not on the paired web client, which cannot preview terminals', async () => {
+    const desktop = await renderSidebarNav()
+    expect(queryButtonByText(desktop, 'Sessions')).not.toBeNull()
+
+    const globals = globalThis as { __ORCA_WEB_CLIENT__?: boolean }
+    globals.__ORCA_WEB_CLIENT__ = true
+    try {
+      const web = await renderSidebarNav()
+      expect(queryButtonByText(web, 'Sessions')).toBeNull()
+    } finally {
+      delete globals.__ORCA_WEB_CLIENT__
+    }
+  })
+
   it('shows the Mobile entry by default for older settings', () => {
     expect(shouldShowMobileButton(null)).toBe(true)
     expect(shouldShowMobileButton({})).toBe(true)

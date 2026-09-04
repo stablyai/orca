@@ -99,7 +99,7 @@ function renderAgentMenuItems(): string {
     React.createElement(QuickLaunchAgentMenuItems, {
       worktreeId: 'worktree-1',
       groupId: 'group-1',
-      onFocusTerminal: vi.fn()
+      onLaunched: vi.fn()
     })
   )
 }
@@ -212,15 +212,39 @@ describe('shouldShowLaunchWatchdogTimeout', () => {
   it('does not report slow agent readiness once a PTY exists', () => {
     expect(
       shouldShowLaunchWatchdogTimeout({
-        hasPty: true
+        hasPty: true,
+        isWorktreeActive: true,
+        activeView: 'terminal'
       })
     ).toBe(false)
   })
 
-  it('reports launches where no PTY appeared', () => {
+  it('reports launches where no PTY appeared on the workspace in front of the user', () => {
     expect(
       shouldShowLaunchWatchdogTimeout({
-        hasPty: false
+        hasPty: false,
+        isWorktreeActive: true,
+        activeView: 'terminal'
+      })
+    ).toBe(true)
+  })
+
+  it('stays quiet for a launch into a workspace no visible surface shows', () => {
+    expect(
+      shouldShowLaunchWatchdogTimeout({
+        hasPty: false,
+        isWorktreeActive: false,
+        activeView: 'terminal'
+      })
+    ).toBe(false)
+  })
+
+  it('reports a failed grid launch, whose workspace is almost never the active one', () => {
+    expect(
+      shouldShowLaunchWatchdogTimeout({
+        hasPty: false,
+        isWorktreeActive: false,
+        activeView: 'sessions'
       })
     ).toBe(true)
   })

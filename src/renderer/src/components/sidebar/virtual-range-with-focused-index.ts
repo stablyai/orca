@@ -1,6 +1,11 @@
 import { defaultRangeExtractor, type Range } from '@tanstack/react-virtual'
 
-export function extractWorkspaceKanbanLaneRange(
+/**
+ * The virtualizer's range plus one pinned index, so a focused or active item
+ * stays mounted while scrolled out of view — a keyboard-focused lane, or the
+ * session-grid card holding the keyboard.
+ */
+export function extractVirtualRangeWithFocusedIndex(
   range: Range,
   focusedIndex: number | null
 ): number[] {

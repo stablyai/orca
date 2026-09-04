@@ -1,10 +1,8 @@
 import React, { createContext, useContext, useMemo } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import { useAppStore } from '@/store'
-import { AgentStateDot } from '@/components/AgentStateDot'
 import { StateIndicatorTooltip } from '@/components/StateIndicatorTooltip'
 import StatusIndicator from '@/components/sidebar/StatusIndicator'
-import { FilledBellIcon } from '@/components/sidebar/WorktreeCardHelpers'
 import {
   buildExplicitEntriesByTabId,
   type TabPaneInputSources
@@ -22,10 +20,12 @@ import {
 } from '@/lib/recent-workspace-tab-rows'
 import {
   resolveTerminalTabAttentionBadge,
-  terminalTabHasUnreadActivity,
-  type TerminalTabAttentionBadge
+  terminalTabHasUnreadActivity
 } from '@/components/tab-bar/terminal-tab-activity-status'
-import { translate } from '@/i18n/i18n'
+import {
+  TerminalTabAttentionBadgeGlyph,
+  terminalTabAttentionBadgeLabel
+} from '@/components/tab-bar/terminal-tab-attention-badge-glyph'
 import type { LiveAgentWorktreeStatus } from '@/lib/worktree-activity-state'
 import {
   AGENT_STATUS_STALE_AFTER_MS,
@@ -239,15 +239,7 @@ export function PaletteRecentTabStatusDot({
   if (badge == null) {
     return <>{fallback}</>
   }
-  const statusLabel =
-    badge === 'unread'
-      ? // Why the tab-bar key: same bell, same sentence — a fresh key here would ship untranslated
-        // in every non-English locale for the sake of a namespace.
-        translate(
-          'auto.components.tab.bar.TerminalTabLeadingIcon.7ab2964bea',
-          'Unread agent completion'
-        )
-      : getWorktreeStatusLabel(badge)
+  const statusLabel = terminalTabAttentionBadgeLabel(badge)
   // Why: the outer hit target owns the tooltip because the overlaid pip ignores pointer events.
   return (
     <StateIndicatorTooltip label={statusLabel}>
@@ -258,23 +250,10 @@ export function PaletteRecentTabStatusDot({
           className="pointer-events-none absolute -right-0.5 -bottom-0.5 flex items-center justify-center rounded-full bg-popover ring-2 ring-popover"
           aria-hidden="true"
         >
-          <RecentTabAttentionBadgeGlyph badge={badge} />
+          <TerminalTabAttentionBadgeGlyph badge={badge} />
         </span>
         <span className="sr-only">{statusLabel}</span>
       </span>
     </StateIndicatorTooltip>
   )
-}
-
-/** Renders the shared attention glyph — AgentStateDot for agent states, bell for unread. */
-function RecentTabAttentionBadgeGlyph({
-  badge
-}: {
-  badge: TerminalTabAttentionBadge
-}): React.JSX.Element {
-  if (badge === 'unread') {
-    return <FilledBellIcon className="size-2.5 text-amber-500 drop-shadow-sm" />
-  }
-  // Why: AgentStateDot owns working/permission/done glyphs app-wide (spinner / ? / check).
-  return <AgentStateDot state={badge} size="sm" title={null} />
 }
