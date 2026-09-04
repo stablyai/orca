@@ -15,7 +15,7 @@ import { getRenderRowKey } from '../listing/render-row'
 import type { RenderRow } from '../listing/render-row'
 import type { WorktreeListVirtualizer } from './use-virtualizer'
 import { useVirtualRowRemovalAnimation } from './use-row-removal-animation'
-import { getReconciledVirtualScrollOffset } from './scroll-offset-reconcile'
+import { reconcileVirtualizerScrollOffset } from './scroll-offset-reconcile'
 
 const recordKeyCountCache = new WeakMap<Record<string, unknown>, number>()
 
@@ -111,29 +111,27 @@ export function useVirtualRowMeasurementSync(args: {
   ])
 
   const [, rerenderAfterOffsetReconcile] = useReducer((count: number) => count + 1, 0)
+  // Why: a booked-but-unhonored scroll write leaves TanStack ranging and pinning from an
+  // offset the element never reached (see getReconciledVirtualScrollOffset); the element is
+  // the truth, and the re-render lets range and sticky slots follow it. isScrolling is a dep
+  // so a check skipped mid-scroll runs again once scrolling settles.
+  const isVirtualizerScrolling = virtualizer.isScrolling
   useLayoutEffect(() => {
     const el = scrollRef.current
     if (!el) {
       return
     }
-    const reconciled = getReconciledVirtualScrollOffset({
-      believedOffset: virtualizer.scrollOffset,
-      scrollTop: el.scrollTop,
-      scrollHeight: el.scrollHeight,
-      clientHeight: el.clientHeight,
-      isScrolling: virtualizer.isScrolling
-    })
-    if (reconciled === null) {
-      return
+    if (reconcileVirtualizerScrollOffset({ virtualizer, element: el, scrollOffsetRef })) {
+      rerenderAfterOffsetReconcile()
     }
-    // Why: a booked-but-unhonored scroll write leaves TanStack ranging and pinning from
-    // an offset the element never reached (see getReconciledVirtualScrollOffset); the
-    // element is the truth, and the re-render lets range and sticky slots follow it.
-    virtualizer.scrollOffset = reconciled
-    virtualizer.scrollAdjustments = 0
-    scrollOffsetRef.current = reconciled
-    rerenderAfterOffsetReconcile()
-  }, [renderRowKeySignature, scrollOffsetRef, scrollRef, totalSize, virtualizer])
+  }, [
+    isVirtualizerScrolling,
+    renderRowKeySignature,
+    scrollOffsetRef,
+    scrollRef,
+    totalSize,
+    virtualizer
+  ])
 
   useVirtualizedScrollAnchor({
     anchorRef: scrollAnchorRef,

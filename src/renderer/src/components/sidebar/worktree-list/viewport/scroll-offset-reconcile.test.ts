@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import type { VirtualItem } from '@tanstack/react-virtual'
-import { getReconciledVirtualScrollOffset } from './scroll-offset-reconcile'
+import {
+  getReconciledVirtualScrollOffset,
+  reconcileVirtualizerScrollOffset
+} from './scroll-offset-reconcile'
 import { GROUP_HEADER_ROW_HEIGHT, getActiveStickyIndexesForScroll } from './virtual-rows'
 import type { Row } from '../grouping/row-types'
 
@@ -130,5 +133,45 @@ describe('getReconciledVirtualScrollOffset', () => {
         virtualItems
       }).groupIndex
     ).toBe(0)
+  })
+})
+
+describe('reconcileVirtualizerScrollOffset', () => {
+  const unscrollableElement = { scrollTop: 0, scrollHeight: 198, clientHeight: 285 }
+
+  it('waits out an in-flight scroll and re-anchors once it settles', () => {
+    const virtualizer = { scrollOffset: 70, scrollAdjustments: 12, isScrolling: true }
+    const scrollOffsetRef = { current: 70 }
+
+    expect(
+      reconcileVirtualizerScrollOffset({
+        virtualizer,
+        element: unscrollableElement,
+        scrollOffsetRef
+      })
+    ).toBe(false)
+    expect(virtualizer).toMatchObject({ scrollOffset: 70, scrollAdjustments: 12 })
+
+    virtualizer.isScrolling = false
+    expect(
+      reconcileVirtualizerScrollOffset({
+        virtualizer,
+        element: unscrollableElement,
+        scrollOffsetRef
+      })
+    ).toBe(true)
+    expect(virtualizer).toMatchObject({ scrollOffset: 0, scrollAdjustments: 0 })
+    expect(scrollOffsetRef.current).toBe(0)
+  })
+
+  it('reports no change when the belief is already where the element is', () => {
+    const virtualizer = { scrollOffset: 0, scrollAdjustments: 0, isScrolling: false }
+    expect(
+      reconcileVirtualizerScrollOffset({
+        virtualizer,
+        element: unscrollableElement,
+        scrollOffsetRef: { current: 0 }
+      })
+    ).toBe(false)
   })
 })

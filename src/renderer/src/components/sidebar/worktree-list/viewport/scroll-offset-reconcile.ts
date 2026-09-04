@@ -28,3 +28,38 @@ export function getReconciledVirtualScrollOffset(args: {
   }
   return Math.min(args.scrollTop, maxScrollTop)
 }
+
+type ReconcilableVirtualizer = {
+  scrollOffset: number | null
+  scrollAdjustments: number
+  isScrolling: boolean
+}
+
+type ReconcilableScrollElement = Pick<Element, 'scrollTop' | 'scrollHeight' | 'clientHeight'>
+
+/**
+ * Re-anchors the virtualizer to its element when its belief is unreachable and
+ * reports whether anything changed. Nothing is touched while a scroll is in
+ * flight; the caller runs this again when scrolling settles.
+ */
+export function reconcileVirtualizerScrollOffset(args: {
+  virtualizer: ReconcilableVirtualizer
+  element: ReconcilableScrollElement
+  scrollOffsetRef: { current: number }
+}): boolean {
+  const { virtualizer, element, scrollOffsetRef } = args
+  const reconciled = getReconciledVirtualScrollOffset({
+    believedOffset: virtualizer.scrollOffset,
+    scrollTop: element.scrollTop,
+    scrollHeight: element.scrollHeight,
+    clientHeight: element.clientHeight,
+    isScrolling: virtualizer.isScrolling
+  })
+  if (reconciled === null) {
+    return false
+  }
+  virtualizer.scrollOffset = reconciled
+  virtualizer.scrollAdjustments = 0
+  scrollOffsetRef.current = reconciled
+  return true
+}
