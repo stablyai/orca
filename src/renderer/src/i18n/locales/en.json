@@ -6447,7 +6447,7 @@
           "f97b986b7f": "wsl"
         },
         "AgentSkillSetupPanel": {
-          "0b810ec59f": "Press Enter to run the command.",
+          "0b810ec59f": "Press Enter to run the command, then answer the install prompts in this terminal.",
           "ed197f59a2": "Copy command",
           "817d3f9f18": "Copy command",
           "5289300939": "Not installed",
@@ -6459,14 +6459,17 @@
           "copiedCommand": "Copied command.",
           "failedToCopyCommand": "Failed to copy command.",
           "copyCommandAria": "Copy command",
-          "runCommandDescription": "Press Enter to run the command.",
+          "runCommandDescription": "Press Enter to run the command, then answer the install prompts in this terminal.",
           "5f818f12ab": "Preparing...",
           "4c05b9d7cb": "Preparing setup terminal.",
           "installLabel": "Install",
           "updateLabel": "Update",
           "setupCommandFailed": "The setup command exited with code {{value0}}. This error will clear after a successful retry.",
           "setupFailed": "Setup failed",
-          "retrySetup": "Retry"
+          "retrySetup": "Retry",
+          "cancelSetup": "Cancel",
+          "waitingForInput": "Waiting for input",
+          "installing": "Installing..."
         },
         "AgentsPane": {
           "d83834f5e6": "Detecting installed agents…",
@@ -13308,7 +13311,7 @@
           "yoloPermissionsTooltip": "Skip permission checks for agents for less interruptions"
         },
         "FeatureSetupInlineTerminal": {
-          "789b59936e": "Press Enter to run the command and confirm npx if asked. You can also set this up later in Settings.",
+          "789b59936e": "Press Enter to run the command, then answer the install prompts. You can also set this up later in Settings.",
           "47fc6cc6dc": "Skill setup command",
           "c767ab7061": "Skill setup"
         },
@@ -13459,6 +13462,9 @@
               }
             }
           }
+        },
+        "InlineSetupTerminalStallNotice": {
+          "body": "The install is still running and may be waiting for input. Answer the prompts in the terminal — they choose which agents to install into and whether to symlink or copy. You can also copy the command and run it in your own terminal."
         }
       },
       "new": {
@@ -14261,7 +14267,7 @@
             "22e62f3bab": "Claude Code session started"
           },
           "CliSkillSetupTerminal": {
-            "1953e90447": "Press Enter to install the Orca CLI orchestration skill for your agents.",
+            "1953e90447": "Press Enter to install, then answer the prompts for which agents to install into and whether to symlink or copy.",
             "43b60ec5c3": "Orca CLI and orchestration skill install terminal",
             "84e9576dac": "Skill setup",
             "5c3aee22c0": "Copy command",

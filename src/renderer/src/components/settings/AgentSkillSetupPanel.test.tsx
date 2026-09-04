@@ -354,7 +354,8 @@ describe('AgentSkillSetupPanel', () => {
     expect(container?.textContent).toContain(INSTALL_COMMAND)
     expect(mocks.terminalProps.at(-1)).toMatchObject({
       command: INSTALL_COMMAND,
-      description: 'Press Enter to run the command.'
+      description:
+        'Press Enter to run the command, then answer the install prompts in this terminal.'
     })
 
     await act(async () => {

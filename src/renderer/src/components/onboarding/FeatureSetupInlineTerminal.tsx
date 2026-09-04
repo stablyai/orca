@@ -7,6 +7,8 @@ import {
   buildSkillSetupTerminalCommand
 } from '../settings/CliSkillRuntimeSetup'
 import { OnboardingInlineCommandTerminal } from './OnboardingInlineCommandTerminal'
+import { InlineSetupTerminalStallNotice } from './InlineSetupTerminalStallNotice'
+import { useInlineSetupTerminalStall } from './use-inline-setup-terminal-stall'
 import {
   getOnboardingFeatureSetupAgentRuntime,
   type OnboardingFeatureSetupRuntimeContext
@@ -30,6 +32,7 @@ export function FeatureSetupInlineTerminal({
 }: FeatureSetupInlineTerminalProps): React.JSX.Element {
   const terminalOpenedTrackedRef = useRef(false)
   const terminalInteractedTrackedRef = useRef(false)
+  const setupStalled = useInlineSetupTerminalStall(true)
   const activeSkillRuntime = useActiveProjectSkillRuntime()
   const setupRuntime = runtimeContext ?? activeSkillRuntime
   const agentRuntime = getOnboardingFeatureSetupAgentRuntime(setupRuntime)
@@ -75,29 +78,32 @@ export function FeatureSetupInlineTerminal({
   )
 
   return (
-    <OnboardingInlineCommandTerminal
-      command={copiedCommand}
-      prepareCommandForShell={prepareCommandForShell}
-      shellOverride={setupRuntime.terminalShellOverride}
-      forceHostRuntime={Boolean(setupRuntime.installDisabledReason)}
-      title={translate(
-        'auto.components.onboarding.FeatureSetupInlineTerminal.c767ab7061',
-        'Skill setup'
-      )}
-      ariaLabel={translate(
-        'auto.components.onboarding.FeatureSetupInlineTerminal.47fc6cc6dc',
-        'Skill setup command'
-      )}
-      description={translate(
-        'auto.components.onboarding.FeatureSetupInlineTerminal.789b59936e',
-        'Press Enter to run the command and confirm npx if asked. You can also set this up later in Settings.'
-      )}
-      terminalHeightPx={180}
-      terminalTopMarginPx={16}
-      autoScrollIntoView={false}
-      onOpened={trackTerminalOpened}
-      onInteracted={trackTerminalInteraction}
-      onTerminalExit={notifyInstalledAgentSkillsChanged}
-    />
+    <>
+      <InlineSetupTerminalStallNotice stalled={setupStalled} />
+      <OnboardingInlineCommandTerminal
+        command={copiedCommand}
+        prepareCommandForShell={prepareCommandForShell}
+        shellOverride={setupRuntime.terminalShellOverride}
+        forceHostRuntime={Boolean(setupRuntime.installDisabledReason)}
+        title={translate(
+          'auto.components.onboarding.FeatureSetupInlineTerminal.c767ab7061',
+          'Skill setup'
+        )}
+        ariaLabel={translate(
+          'auto.components.onboarding.FeatureSetupInlineTerminal.47fc6cc6dc',
+          'Skill setup command'
+        )}
+        description={translate(
+          'auto.components.onboarding.FeatureSetupInlineTerminal.789b59936e',
+          'Press Enter to run the command, then answer the install prompts. You can also set this up later in Settings.'
+        )}
+        terminalHeightPx={180}
+        terminalTopMarginPx={16}
+        autoScrollIntoView={false}
+        onOpened={trackTerminalOpened}
+        onInteracted={trackTerminalInteraction}
+        onTerminalExit={notifyInstalledAgentSkillsChanged}
+      />
+    </>
   )
 }
