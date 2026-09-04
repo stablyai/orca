@@ -194,6 +194,37 @@ describe('hosted review cache revalidation', () => {
     expect(mockApi.hostedReview.forBranch).toHaveBeenCalledTimes(3)
   })
 
+  it('keeps failed stale-while-revalidate calls behind a minimum interval floor', async () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(0)
+    mockApi.hostedReview.forBranch
+      .mockResolvedValueOnce(review)
+      .mockRejectedValue(new Error('provider outage'))
+    const store = makeStore()
+    const options = { linkedGitHubPR: 42, staleWhileRevalidate: true }
+
+    await store.getState().fetchHostedReviewForBranch('/repo', 'feature/outage', {
+      linkedGitHubPR: 42
+    })
+    vi.setSystemTime(60_001)
+    await store.getState().fetchHostedReviewForBranch('/repo', 'feature/outage', options)
+    await Promise.resolve()
+    await Promise.resolve()
+
+    expect(mockApi.hostedReview.forBranch).toHaveBeenCalledTimes(2)
+
+    // A failed lookup leaves the entry stale, so each caller queues another retry.
+    await store.getState().fetchHostedReviewForBranch('/repo', 'feature/outage', options)
+    await vi.advanceTimersByTimeAsync(0)
+    expect(mockApi.hostedReview.forBranch).toHaveBeenCalledTimes(2)
+
+    // The next retry is admitted only after the explicit floor elapses.
+    await vi.advanceTimersByTimeAsync(2_999)
+    expect(mockApi.hostedReview.forBranch).toHaveBeenCalledTimes(2)
+    await vi.advanceTimersByTimeAsync(1)
+    expect(mockApi.hostedReview.forBranch).toHaveBeenCalledTimes(3)
+  })
+
   it('lets a force refresh supersede queued stale-while-revalidate work', async () => {
     vi.useFakeTimers()
     vi.setSystemTime(0)
