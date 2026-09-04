@@ -73,7 +73,9 @@ export class TerminalPreviewOutputStream {
     readonly contents: WebContents,
     readonly ptyId: string,
     private readonly releaseRawView: () => void,
-    private readonly onDispose: (stream: TerminalPreviewOutputStream) => void
+    private readonly onDispose: (stream: TerminalPreviewOutputStream) => void,
+    /** Which surface on `contents` this stream feeds; '' for the implicit single surface. */
+    readonly surfaceId = ''
   ) {}
 
   get disposed(): boolean {
@@ -175,7 +177,11 @@ export class TerminalPreviewOutputStream {
       return false
     }
     try {
-      this.contents.send('terminalPreview:data', payload)
+      // Why only when named: a renderer that never sent a surfaceId filters on ptyId alone.
+      this.contents.send(
+        'terminalPreview:data',
+        this.surfaceId ? { ...payload, surfaceId: this.surfaceId } : payload
+      )
       return true
     } catch {
       this.dispose()

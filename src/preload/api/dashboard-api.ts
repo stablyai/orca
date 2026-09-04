@@ -5,6 +5,7 @@ import type {
   DashboardSpawnAgentArgs
 } from '../../shared/dashboard-snapshot'
 import type {
+  TerminalPreviewConnectOptions,
   TerminalPreviewConnectResult,
   TerminalPreviewDataPayload
 } from '../../shared/terminal-preview'
@@ -28,15 +29,23 @@ export type DashboardApi = {
   sleepWorkspace: (args: DashboardSleepWorkspaceArgs) => Promise<void>
 }
 
+/** `surfaceId` on every call: which preview of the pty in this window; see TerminalPreviewConnectOptions. */
 export type TerminalPreviewApi = {
   connect: (
     ptyId: string,
-    opts?: { scrollbackRows?: number }
+    opts?: TerminalPreviewConnectOptions
   ) => Promise<TerminalPreviewConnectResult>
   input: (ptyId: string, data: string) => Promise<boolean>
   /** Claim the PTY grid for the preview dialog; resolves to the size actually in effect. */
-  fit: (ptyId: string, cols: number, rows: number) => Promise<{ cols: number; rows: number } | null>
-  ack: (ptyId: string, bytes: number) => Promise<void>
-  unsubscribe: (ptyId: string) => Promise<void>
+  fit: (
+    ptyId: string,
+    cols: number,
+    rows: number,
+    surfaceId?: string
+  ) => Promise<{ cols: number; rows: number } | null>
+  ack: (ptyId: string, bytes: number, surfaceId?: string) => Promise<void>
+  unsubscribe: (ptyId: string, surfaceId?: string) => Promise<void>
+  /** Release several previews' streams and grid claims in one pass; see the main handler for why. */
+  detach: (ptyIds: string[], surfaceId?: string) => Promise<void>
   onData: (callback: (payload: TerminalPreviewDataPayload) => void) => () => void
 }

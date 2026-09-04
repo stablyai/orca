@@ -101,7 +101,8 @@ const TopLevelViewSchema = z.enum([
   'space',
   'skills',
   'artifacts',
-  'mobile'
+  'mobile',
+  'sessions'
 ])
 const UiUpdateFields = z
   .object({
@@ -109,6 +110,15 @@ const UiUpdateFields = z
     lastActiveWorktreeId: NullableString.optional(),
     // Why: sync hydration ignores this persisted startup view, so paired windows stay put.
     activeView: TopLevelViewSchema.optional(),
+    sessionsGridPreset: z.enum(['auto', '1x2', '2x1', '2x2', '3x2', '3x3']).optional(),
+    sessionsGridZoom: z.number().finite().optional(),
+    sessionsGridShowEmpty: z.boolean().optional(),
+    sessionsGridFilter: z.string().optional(),
+    sessionsGridStateFilter: z.enum(['all', 'attention', 'working', 'done', 'idle']).optional(),
+    sessionsGridScrollMode: z.enum(['row', 'page', 'free']).optional(),
+    sessionsGridWheelTarget: z.enum(['auto', 'terminal', 'grid']).optional(),
+    sessionsGridTabOrder: z.array(z.string()).optional(),
+    sessionsGridHiddenTabIds: z.array(z.string()).optional(),
     sidebarWidth: z.number().finite().optional(),
     rightSidebarOpen: z.boolean().optional(),
     rightSidebarTab: RightSidebarTabParam.optional(),
