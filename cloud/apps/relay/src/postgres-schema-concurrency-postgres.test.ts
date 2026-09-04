@@ -34,22 +34,28 @@ describePostgres('PostgreSQL schema concurrency', () => {
   })
 
   it('opens five directors when one new table is absent', async () => {
-    const initial = await openRelayDatabase({ databaseUrl: scopedUrl, dataDir: '' })
-    await initial.query(`DROP TABLE relay_cell_legacy_fence_adoptions`)
-    await initial.close()
+    const reasons: unknown[] = []
+    for (let round = 0; round < 30; round += 1) {
+      const initial = await openRelayDatabase({ databaseUrl: scopedUrl, dataDir: '' })
+      await initial.query(`DROP TABLE relay_cell_legacy_fence_adoptions`)
+      await initial.close()
 
-    const results = await Promise.allSettled(
-      Array.from({ length: 5 }, async (): Promise<RelayDatabase> =>
-        await openRelayDatabase({ databaseUrl: scopedUrl, dataDir: '' })
+      const results = await Promise.allSettled(
+        Array.from({ length: 5 }, async (): Promise<RelayDatabase> =>
+          await openRelayDatabase({ databaseUrl: scopedUrl, dataDir: '' })
+        )
       )
-    )
-    const databases = results.flatMap((result) =>
-      result.status === 'fulfilled' ? [result.value] : []
-    )
-    try {
-      expect(results.every((result) => result.status === 'fulfilled')).toBe(true)
-    } finally {
+      const databases = results.flatMap((result) =>
+        result.status === 'fulfilled' ? [result.value] : []
+      )
       await Promise.all(databases.map(async (database) => await database.close()))
+      for (const result of results) {
+        if (result.status === 'rejected') {
+          const error = result.reason as { code?: unknown; constraint?: unknown; message?: unknown; detail?: unknown; routine?: unknown }
+          reasons.push({ round, code: error.code, constraint: error.constraint, routine: error.routine, message: error.message, detail: error.detail })
+        }
+      }
     }
-  })
+    expect(reasons).toEqual([])
+  }, 120_000)
 })
