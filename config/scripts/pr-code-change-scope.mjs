@@ -232,6 +232,7 @@ const WINDOWS_PACKAGE_TESTS = [
   'src/main/runtime/repo-worktree-admin-fingerprint.test.ts',
   'src/main/runtime/worktree-scan-admin-fingerprint-gate.test.ts',
   'src/shared/secure-file-fsync-flags.test.ts',
+  'src/main/daemon/daemon-pid-publish-disk-contract.test.ts',
   'src/main/ipc/pty-codex-account-attribution.test.ts',
   'src/main/ipc/pty-spawn-env-codex-resume-provenance.test.ts'
 ]

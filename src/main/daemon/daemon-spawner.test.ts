@@ -7,6 +7,7 @@ import {
   DaemonSpawner,
   getDaemonArtifactHoldClaimPath,
   getDaemonPidPath,
+  getDaemonPidPublishClaimPath,
   getDaemonPidSwapClaimPath,
   getDaemonSocketPath,
   getDaemonTokenPath,
@@ -201,9 +202,15 @@ describe('DaemonSpawner', () => {
 })
 
 describe('restoreClaimedDaemonArtifact', () => {
+  /** Routes past the hard-link publish so these cases drive the copy degrade explicitly. */
+  const linkUnsupported = (): never => {
+    throw Object.assign(new Error('injected ENOTSUP'), { code: 'ENOTSUP' })
+  }
+
   it('retains the unique claim when restoration fails without a replacement', () => {
     expect(
       restoreClaimedDaemonArtifact('/claimed', '/canonical', {
+        linkExclusive: linkUnsupported,
         copyExclusive: () => {
           throw new Error('injected ENOSPC')
         },
@@ -218,6 +225,7 @@ describe('restoreClaimedDaemonArtifact', () => {
     try {
       expect(
         restoreClaimedDaemonArtifact('/claimed', canonicalPath, {
+          linkExclusive: linkUnsupported,
           copyExclusive: () => {
             writeFileSync(canonicalPath, 'partial')
             throw Object.assign(new Error('injected ENOSPC'), { code: 'ENOSPC' })
@@ -233,12 +241,14 @@ describe('restoreClaimedDaemonArtifact', () => {
   it('allows claim cleanup after successful restore or a confirmed replacement', () => {
     expect(
       restoreClaimedDaemonArtifact('/claimed', '/canonical', {
+        linkExclusive: linkUnsupported,
         copyExclusive: () => {},
         canonicalExists: () => false
       })
     ).toBe(true)
     expect(
       restoreClaimedDaemonArtifact('/claimed', '/canonical', {
+        linkExclusive: linkUnsupported,
         copyExclusive: () => {
           throw Object.assign(new Error('injected EEXIST'), { code: 'EEXIST' })
         },
@@ -366,7 +376,8 @@ describe('daemon socket publication', () => {
       const names = [
         basename(getDaemonSocketBindPath(getDaemonSocketPath('/tmp/orca-daemon'))),
         basename(getDaemonPidSwapClaimPath('/tmp/orca-daemon/daemon-v32.pid')),
-        basename(getDaemonArtifactHoldClaimPath('/tmp/orca-daemon/daemon-v32.token'))
+        basename(getDaemonArtifactHoldClaimPath('/tmp/orca-daemon/daemon-v32.token')),
+        basename(getDaemonPidPublishClaimPath('/tmp/orca-daemon/daemon-v32.pid'))
       ]
       for (const name of names) {
         expect(name).not.toMatch(RELEASED_SWEEPER_PATTERN)

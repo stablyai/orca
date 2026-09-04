@@ -3,13 +3,16 @@ import {
   constants,
   copyFileSync,
   existsSync,
+  linkSync,
   readFileSync,
   renameSync,
   unlinkSync,
   writeFileSync
 } from 'node:fs'
 import { join } from 'node:path'
+import { fsyncFileSync } from '../../shared/secure-file'
 import { PROTOCOL_VERSION } from './types'
+import { reapOrphanedDaemonPidPublishClaims } from './daemon-pid-publish-claim-reap'
 import { DaemonCrashLoopError, DaemonRespawnThrottle } from './daemon-respawn-throttle'
 
 export type DaemonConnectionInfo = {
@@ -82,6 +85,10 @@ export class DaemonSpawner {
       throw new DaemonCrashLoopError(admission)
     }
 
+    // Why here: every launch funnels through this method, so scratch left by a publisher
+    // that died between claim and publish is reclaimed before the next daemon needs the dir.
+    reapOrphanedDaemonPidPublishClaims(this.runtimeDir)
+
     // Why: a detached daemon may clean up after its parent exits. A unique
     // launch identity keeps it from deleting a replacement daemon's PID file.
     this.handle = await this.launcher(this.socketPath, this.tokenPath, this.pidPath, randomUUID())
@@ -151,11 +158,51 @@ function isMissingFileError(error: unknown): boolean {
   return typeof error === 'object' && error !== null && 'code' in error && error.code === 'ENOENT'
 }
 
+function isExistingFileError(error: unknown): boolean {
+  return typeof error === 'object' && error !== null && 'code' in error && error.code === 'EEXIST'
+}
+
+/**
+ * Scratch for the atomic publish below. Distinct from the swap/hold claims: those can hold
+ * the ONLY copy of a live record and must be restored, while publish scratch holds a record
+ * that was never canonical, so it is always safe to remove once its writer is proven dead
+ * (see daemon-pid-publish-claim-reap.ts).
+ */
+export function getDaemonPidPublishClaimPath(pidPath: string): string {
+  return `${pidPath}.publish-${process.pid}-${randomUUID()}`
+}
+
 export function publishDaemonPidFile(pidPath: string, pidFile: DaemonPidFile): void {
-  writeFileSync(pidPath, serializeDaemonPidFile(pidFile), {
-    mode: 0o600,
-    flag: 'wx'
-  })
+  const claimPath = getDaemonPidPublishClaimPath(pidPath)
+  try {
+    writeFileSync(claimPath, serializeDaemonPidFile(pidFile), { mode: 0o600, flag: 'wx' })
+    // Why: link/rename is atomic for readers but not for power loss. Without the flush, the
+    // canonical name can survive a crash while the bytes do not — a torn record that, for a
+    // retired protocol version, nothing ever heals (daemon-stale-kill only reclaims the
+    // current version's record), permanently vetoing prune of that version.
+    fsyncFileSync(claimPath)
+    try {
+      // Why link and not rename: rename onto an existing path replaces it, silently
+      // dropping the EEXIST that ownership conflicts depend on; link is atomic AND
+      // exclusive on every platform, so a reader sees a complete record or none.
+      linkSync(claimPath, pidPath)
+    } catch (error) {
+      if (isExistingFileError(error)) {
+        throw error
+      }
+      // Why: hard links can be unsupported on exotic volumes. The exclusive direct write
+      // is exactly the pre-atomic behavior, so those filesystems keep a working daemon
+      // instead of trading a torn-write window for no pid record at all.
+      writeFileSync(pidPath, serializeDaemonPidFile(pidFile), { mode: 0o600, flag: 'wx' })
+    }
+  } finally {
+    try {
+      unlinkSync(claimPath)
+    } catch {
+      // Claim never created, or already gone; a leaked claim is reclaimed by the
+      // proven-dead-owner reap at the next launch.
+    }
+  }
 }
 
 /**
@@ -298,27 +345,40 @@ export function restoreClaimedDaemonArtifact(
   claimedPath: string,
   canonicalPath: string,
   operations: {
+    linkExclusive?: (source: string, target: string) => void
     copyExclusive?: (source: string, target: string) => void
     canonicalExists?: (path: string) => boolean
   } = {}
 ): boolean {
+  const linkExclusive = operations.linkExclusive ?? linkSync
   const copyExclusive =
     operations.copyExclusive ??
     ((source: string, target: string) => copyFileSync(source, target, constants.COPYFILE_EXCL))
   const canonicalExists = operations.canonicalExists ?? existsSync
   try {
-    // Why: exclusive restore never overwrites a newer canonical replacement.
-    copyExclusive(claimedPath, canonicalPath)
+    // Why link and not copy: a copy creates the canonical entry and only then streams into
+    // it, so a concurrent reader can catch the record half-written — the same torn record
+    // publishDaemonPidFile links to avoid, and the one nothing heals for a retired protocol
+    // version. link is exclusive too, so a restore still never overwrites a newer canonical
+    // replacement; that invariant is preserved here, not traded away for atomicity.
+    linkExclusive(claimedPath, canonicalPath)
     return true
   } catch (error) {
-    // Why: copy failures can leave a partial canonical file. Only EEXIST proves
-    // another owner had already installed a replacement before our copy.
-    return (
-      typeof error === 'object' &&
-      error !== null &&
-      'code' in error &&
-      error.code === 'EEXIST' &&
-      canonicalExists(canonicalPath)
-    )
+    if (isExistingFileError(error)) {
+      // Why no copy attempt after this: EEXIST already proves a replacement holds the name,
+      // and an exclusive copy could only fail the same way against a live record.
+      return canonicalExists(canonicalPath)
+    }
+    try {
+      // Why: hard links are unsupported on some volumes (exFAT, network mounts). The
+      // exclusive copy is exactly the pre-atomic behaviour, so those filesystems keep a
+      // restorable record instead of losing the claim entirely.
+      copyExclusive(claimedPath, canonicalPath)
+      return true
+    } catch (copyError) {
+      // Why: copy failures can leave a partial canonical file. Only EEXIST proves
+      // another owner had already installed a replacement before our copy.
+      return isExistingFileError(copyError) && canonicalExists(canonicalPath)
+    }
   }
 }
