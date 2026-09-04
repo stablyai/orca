@@ -86,6 +86,15 @@ export class UpdaterSetup extends UpdaterDownloadInstall {
     return super.resolveUpdateInstallMode(isServeMode)
   }
 
+  /**
+   * Records the install mode for a host that never calls `setupAutoUpdater`. Headless serve opens
+   * no window, so without this the mode stayed at its `interactive` default and status reporting
+   * described a desktop install (#14068).
+   */
+  setUpdateInstallMode(mode: UpdateInstallMode): void {
+    this.updateInstallMode = mode
+  }
+
   async getLinuxPackageInstallInstructions(): Promise<LinuxPackageInstallInstructions> {
     return super.getLinuxPackageInstallInstructions()
   }

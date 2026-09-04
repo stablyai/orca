@@ -6,6 +6,7 @@ import {
 } from '../shared/automation-owner-conflict'
 import { automationOwnerConflictRecovery } from './automation-owner-conflict-recovery'
 import { prepareComputerCliJsonResult } from './computer-format'
+import { formatRemoteUpdateSupportLines } from './serve-manual-update-format'
 import type { RuntimeRpcFailure, RuntimeRpcSuccess } from './runtime-client'
 import { RuntimeClientError, RuntimeRpcFailureError } from './runtime/types'
 
@@ -247,7 +248,9 @@ export function formatCliStatus(status: CliStatusResult): string {
     `runtimeReachable: ${status.runtime.reachable}`,
     `runtimeConnectionState: ${status.runtime.connectionState ?? 'unknown'}`,
     `runtimeId: ${status.runtime.runtimeId ?? 'none'}`,
-    `graphState: ${status.graph.state}`
+    `graphState: ${status.graph.state}`,
+    ...(status.runtime.appVersion ? [`appVersion: ${status.runtime.appVersion}`] : []),
+    ...formatRemoteUpdateSupportLines(status.runtime.remoteUpdateSupport)
   ].join('\n')
 }
 

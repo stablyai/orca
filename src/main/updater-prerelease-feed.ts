@@ -4,6 +4,7 @@ import { compareVersions, isPrereleaseVersion, isValidVersion } from './updater-
 
 const ATOM_FEED_URL = 'https://github.com/stablyai/orca/releases.atom'
 const RELEASES_DOWNLOAD_BASE = 'https://github.com/stablyai/orca/releases/download'
+const RELEASES_TAG_BASE = 'https://github.com/stablyai/orca/releases/tag'
 const FETCH_TIMEOUT_MS = 5000
 const MAX_MANIFEST_PROBE_CANDIDATES = 6
 
@@ -14,6 +15,11 @@ const TAG_HREF_RE = /href="https:\/\/github\.com\/stablyai\/orca\/releases\/tag\
 
 export function getReleaseDownloadUrl(tag: string): string {
   return `${RELEASES_DOWNLOAD_BASE}/${encodeURIComponent(tag)}`
+}
+
+/** The browsable release page, where an operator picks the asset for their architecture. */
+export function getReleaseTagUrl(tag: string): string {
+  return `${RELEASES_TAG_BASE}/${encodeURIComponent(tag)}`
 }
 
 function getPlatformManifestName(): string {

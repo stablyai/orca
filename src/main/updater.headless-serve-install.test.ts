@@ -94,7 +94,9 @@ vi.mock('./updater-prerelease-feed', () => ({
     tags: ['v1.0.61'],
     state: 'ready'
   }),
-  getReleaseDownloadUrl: vi.fn()
+  getReleaseDownloadUrl: vi.fn(),
+  getReleaseTagUrl: (tag: string) => `https://github.com/stablyai/orca/releases/tag/${tag}`,
+  normalizeTagToVersion: (tag: string) => tag.replace(/^v/i, '')
 }))
 vi.mock('./update-install-exit-watchdog', () => ({
   armUpdateInstallExitWatchdog: vi.fn(),
@@ -528,5 +530,43 @@ describe('headless serve update install handoff', () => {
       reason: 'manual-service-update-required'
     })
     expect(() => checkForRemoteServerUpdate('runtime-1')).toThrow('remote_update_manual_required')
+  })
+
+  // Why: headless serve opens no window, so setupAutoUpdater never runs. Before #14068 the status
+  // surface reported `interactive` / `updater-unavailable` there — a desktop install with a broken
+  // updater — instead of a server that is correctly refusing to update itself.
+  it('reports the manual update contract on a serve host that never initialized an updater', async () => {
+    const { getRemoteServerUpdateSupport, setUpdateInstallMode } = await loadUpdaterModule()
+    const { startServeManualUpdateReporting, stopServeManualUpdateReporting } =
+      await import('./serve-manual-update-report')
+
+    // Standing in for launchServeMode: no setupAutoUpdater call, so nothing else records the mode.
+    setUpdateInstallMode('unsupported-headless-serve')
+    try {
+      expect(getRemoteServerUpdateSupport()).toEqual({
+        installMode: 'unsupported-headless-serve',
+        automatic: false,
+        reason: 'manual-service-update-required'
+      })
+
+      await startServeManualUpdateReporting({
+        installMode: 'unsupported-headless-serve',
+        intervalMs: 60_000
+      })
+      const support = getRemoteServerUpdateSupport()
+
+      expect(support.reason).toBe('manual-service-update-required')
+      expect(support.manualUpdate).toMatchObject({
+        check: 'update-available',
+        currentVersion: '1.0.51',
+        latestVersion: '1.0.61',
+        releaseUrl: 'https://github.com/stablyai/orca/releases/tag/v1.0.61'
+      })
+      expect(support.manualUpdate?.steps.length).toBeGreaterThan(0)
+      expect(autoUpdaterMock.downloadUpdate).not.toHaveBeenCalled()
+      expect(autoUpdaterMock.quitAndInstall).not.toHaveBeenCalled()
+    } finally {
+      stopServeManualUpdateReporting()
+    }
   })
 })

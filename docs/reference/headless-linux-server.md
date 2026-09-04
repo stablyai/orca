@@ -405,7 +405,9 @@ depend on an interactive shell profile.
 `orca serve` never updates itself. In headless mode Orca wires up no auto-updater
 at all — the built-in updater only runs in the desktop GUI, and no paired mobile
 or web client can trigger it remotely. Upgrading is always a deliberate step:
-replace the AppImage and restart the service.
+replace the AppImage and restart the service. Orca does report when a newer
+release exists and exactly what to run — see
+[Find out an upgrade is due](#find-out-an-upgrade-is-due).
 
 Two facts make the persisted-state transition predictable:
 
@@ -441,9 +443,59 @@ and the stop; Orca does not yet provide an atomic census-and-stop fence.
 
 Rolling back is the case that needs care — see [Roll back](#roll-back).
 
+### Find out an upgrade is due
+
+The server will not update itself, but it does tell you when it is behind. It
+checks the release feed once a day and reports the result through `orca status`:
+
+```console
+$ orca status
+...
+appVersion: 1.4.159
+updateAutomatic: false
+updateInstallMode: unsupported-headless-serve
+updateReason: manual-service-update-required
+updateMethod: appimage
+updateCheck: update-available
+updateLatestVersion: 1.4.200
+updateRelease: https://github.com/stablyai/orca/releases/tag/v1.4.200
+updateSteps:
+  1. Download the Linux AppImage for this machine's architecture from https://github.com/stablyai/orca/releases/tag/v1.4.200 to /opt/orca/orca-linux.AppImage.new
+  2. /usr/bin/sudo /usr/bin/mv -- '/opt/orca/orca-linux.AppImage.new' '/opt/orca/orca-linux.AppImage'
+  3. Restart the service unit that runs `orca serve`. ...
+updateDocs: ...
+```
+
+`orca status --json` carries the same contract under
+`result.runtime.remoteUpdateSupport.manualUpdate`, so a monitoring job can read
+`check` and `latestVersion` instead of scraping the releases API. `check` is
+`pending` before the first check completes, `unavailable` when the feed could
+not be reached or the newest release is still publishing, and `disabled` when the
+operator opted out — none of the three means the server is current.
+`updateMethod` reports `externally-managed` when a repackaged install (AUR, Nix,
+a container rebuild) carries Orca's `package-type` marker but the host has no
+package manager that could apply an Orca package; the steps then point at the
+package manager that installed Orca rather than the release page. A paired desktop client sees the same fields on the runtime
+status it already polls.
+
+Orca prints those commands and never runs them. The service runs unprivileged
+with no authentication agent available, so the privileged install and the
+restart stay the operator's action.
+
+The check is a single outbound request to the GitHub releases feed plus a small
+number of probes confirming the newest release is fully published, once every 24
+hours. It never downloads a build. On an air-gapped or egress-audited host, set
+`ORCA_SERVE_DISABLE_UPDATE_CHECK=1` to switch it off. Add it as one more
+`Environment=` line in the `[Service]` section of the `orca-serve.service` unit
+built in [Systemd Service](#systemd-service), beside the `DISPLAY` and
+`LIBGL_ALWAYS_SOFTWARE` entries already there — do not create a second unit
+file. `orca status` then reports `updateCheck: disabled` and still names the
+install method, so the contract stays readable with no network traffic at all.
+
 ### Record the version you deploy
 
-The bundled CLI launcher prints the Orca build with `orca-ide --version`. For an
+The bundled CLI launcher prints the Orca build with `orca-ide --version`, and
+`orca status` reports the same build as `appVersion`. For an
 extracted deployment, that launcher is
 `squashfs-root/resources/bin/orca-ide`; deb/rpm installs and CLI registration put
 it on `PATH`. Do not use `orca-linux.AppImage --version` for this audit because

@@ -15,7 +15,11 @@ const unavailableSnapshot = (runtimeId: string): RemoteServerUpdaterSnapshot => 
   appVersion: process.env.ORCA_APP_VERSION ?? '0.0.0-dev',
   runtimeId,
   support: {
-    installMode: 'unsupported-headless-serve',
+    // Why: reached only when nothing configured an adapter, which proves the updater is unwired but
+    // proves nothing about the host. Claiming `unsupported-headless-serve` here asserted a serve
+    // install that was never detected, and paired it with the very reason #14068 showed is wrong
+    // for that mode. `interactive` matches the updater's own uninitialized default.
+    installMode: 'interactive',
     automatic: false,
     reason: 'updater-unavailable'
   },

@@ -33,6 +33,8 @@ import {
 import { CliInstaller } from '../cli/cli-installer'
 import { installLinuxBareOrcaDispatcher } from '../cli/linux-bare-orca-dispatcher'
 import { scheduleAllPendingHistoryTreeRemovals } from '../terminal-history-deletion'
+import { resolveUpdateInstallMode, setUpdateInstallMode } from '../updater'
+import { startServeManualUpdateReporting } from '../serve-manual-update-report'
 import { triggerStartupNotificationRegistration } from '../ipc/startup-notification-registration'
 import { mainProcessState as state } from './main-process-state'
 import { logStartupMilestone } from './startup-diagnostics'
@@ -120,6 +122,10 @@ async function launchServeMode(
   runtimeRpc: OrcaRuntimeRpcServer,
   serveOptions: NonNullable<ReturnType<typeof getServeOptions>>
 ): Promise<void> {
+  // Why: serve opens no window, so nothing else records the install mode; set it before the RPC
+  // transport starts or the first status.get describes a desktop install with a broken updater.
+  const serveInstallMode = resolveUpdateInstallMode(true)
+  setUpdateInstallMode(serveInstallMode)
   // Why: give managed WSL launchers a brief chance to migrate before headless PTYs go live, without slow repairs withholding all RPC readiness.
   logStartupMilestone('wsl-cli-barrier-start')
   await state.managedWslCliStartupBarrierReady
@@ -199,6 +205,9 @@ async function launchServeMode(
   // armed from the main window — without this, a quit mid-removal leaks the tree until a desktop launch.
   scheduleAllPendingHistoryTreeRemovals()
   await printServeReady(serveOptions)
+  // Why: after readiness, because stdout is the serve readiness API and this check is network-bound.
+  // Gated on the mode so only a host that actually publishes the contract pays for the egress.
+  void startServeManualUpdateReporting({ installMode: serveInstallMode })
 }
 
 async function launchDesktopMode(

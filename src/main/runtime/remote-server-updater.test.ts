@@ -18,6 +18,17 @@ describe('remote server updater adapter', () => {
     expect(() => installRemoteServerUpdater('runtime-1')).toThrow('remote_update_manual_required')
   })
 
+  // Why: an unconfigured adapter proves the updater is unwired, not that the host is a headless
+  // serve install. Claiming that mode alongside `updater-unavailable` reproduced the exact
+  // mismatched pairing #14068 reported.
+  it('claims no install mode it never detected', () => {
+    expect(getRemoteServerUpdaterSnapshot('runtime-1').support).toEqual({
+      installMode: 'interactive',
+      automatic: false,
+      reason: 'updater-unavailable'
+    })
+  })
+
   it('passes the runtime identity through every configured operation', () => {
     const snapshot = {
       appVersion: '1.5.0',
