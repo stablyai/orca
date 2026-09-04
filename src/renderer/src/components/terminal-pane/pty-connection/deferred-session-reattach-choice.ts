@@ -14,6 +14,7 @@ import {
   isSessionOwnedByWorktree
 } from './paired-parked-terminal-restore'
 import { startDeferredSessionReattach } from './deferred-session-reattach-connect'
+import { attachDetachedOrEagerPty } from './eager-pty-adopt-attach'
 
 import type { ConnectPanePtySession } from './connect-pane-pty-session'
 
@@ -134,29 +135,7 @@ export function runDeferredSessionReattachChoice(session: ConnectPanePtySession)
     } else {
       // Why: surface synchronous attach failures via session.reportError so the pane shows a diagnostic instead of a blank surface.
       // On throw, clear the stale ptyId from the tab and fresh-spawn — else the next remount reads the same dead id and loops here.
-      try {
-        session.clearPaneMode2031State()
-        session.clearHiddenOutputRestoreState()
-        const outputCallbacks = session.captureTransportOutputCallbacks(session.reportError, null)
-        session.transport.attach({
-          existingPtyId: attachPtyId,
-          cols: session.cols,
-          rows: session.rows,
-          callbacks: outputCallbacks.callbacks
-        })
-        const attachedPtyId = session.transport.getPtyId() ?? attachPtyId
-        session.bindActivePanePty(attachedPtyId, {
-          updateTabPtyId: 'if-missing',
-          sampleVisibleForegroundAgent: true
-        })
-        if (attachPtyId === eagerLivePtyId || isRemoteRuntimePtyId(attachedPtyId)) {
-          session.registerPaneSerializerFor(attachedPtyId)
-        }
-      } catch (err) {
-        session.reportError(err instanceof Error ? err.message : String(err))
-        session.deps.clearTabPtyId(session.deps.tabId, attachPtyId)
-        session.startFreshSpawn()
-      }
+      attachDetachedOrEagerPty(session, attachPtyId, eagerLivePtyId)
     }
   } else {
     session.allowInitialIdleCacheSeed = false

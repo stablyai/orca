@@ -123,6 +123,8 @@ describe('launchAgentBackgroundSession', () => {
     )
     expect(mockSpawn).toHaveBeenCalledWith(
       expect.objectContaining({
+        cols: 120,
+        rows: 40,
         cwd: '/repo/worktree',
         command: "claude '--dangerously-skip-permissions' 'run the automation'",
         env: expect.objectContaining({
@@ -161,13 +163,12 @@ describe('launchAgentBackgroundSession', () => {
       recordInteraction: false
     })
     expect(mockUpdateTabPtyId).toHaveBeenCalledWith(tabId, 'pty-1')
-    // The incarnation rides along so a relay-recycled id cannot drain the previous owner's exit
-    // into this handler and tear the session down right after launch.
-    expect(mockRegisterEagerPtyBuffer).toHaveBeenCalledWith(
-      'pty-1',
-      expect.any(Function),
-      'inc-fresh'
-    )
+    // Why: replay at the spawn grid, and pass incarnation so a recycled id cannot
+    // drain the previous owner's exit into this handler.
+    expect(mockRegisterEagerPtyBuffer).toHaveBeenCalledWith('pty-1', expect.any(Function), {
+      captureDims: { cols: 120, rows: 40 },
+      incarnationId: 'inc-fresh'
+    })
     expect(mockSubscribeToPtyData).toHaveBeenCalledWith('pty-1', expect.any(Function))
     expect(mockSubscribeToPtyExit).toHaveBeenCalledWith('pty-1', expect.any(Function))
     expect(result).toMatchObject({ tabId, paneKey, ptyId: 'pty-1' })

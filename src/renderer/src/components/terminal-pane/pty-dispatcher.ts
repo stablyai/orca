@@ -251,12 +251,16 @@ export function subscribeToPtyExit(
 // ─── Eager PTY buffer for reconnection on restart ────────────────────
 // Why: PTYs spawn before TerminalPane mounts; buffer the early shell output (prompt/MOTD) so attach() can replay it.
 
-export type EagerPtyHandle = { flush: () => string; dispose: () => void }
+export type EagerPtyHandle = {
+  peek: () => string
+  flush: () => string
+  dispose: () => void
+  captureDims?: { cols: number; rows: number }
+}
 const eagerPtyHandles = new Map<string, EagerPtyHandle>()
 
-export function getEagerPtyBufferHandle(ptyId: string): EagerPtyHandle | undefined {
-  return eagerPtyHandles.get(ptyId)
-}
+export const getEagerPtyBufferHandle = (ptyId: string): EagerPtyHandle | undefined =>
+  eagerPtyHandles.get(ptyId)
 
 // Why: cap matches TerminalPane's scrollback serialization limit so a restored shell (e.g. tail -f) can't grow unbounded.
 const EAGER_BUFFER_MAX_BYTES = TERMINAL_SCROLLBACK_SESSION_BUFFER_BYTE_LIMIT
@@ -267,7 +271,7 @@ const EAGER_BUFFER_MAX_BYTES = TERMINAL_SCROLLBACK_SESSION_BUFFER_BYTE_LIMIT
 export function registerEagerPtyBuffer(
   ptyId: string,
   onExit: (ptyId: string, code: number) => void,
-  incarnationId?: string
+  options?: { captureDims?: { cols: number; rows: number }; incarnationId?: string }
 ): EagerPtyHandle {
   ensurePtyDispatcher()
   // Why: head index instead of Array.shift() (O(n)) so pre-attach buffering isn't quadratic under many small chunks.
@@ -306,15 +310,19 @@ export function registerEagerPtyBuffer(
   ptyDataHandlers.set(ptyId, dataHandler)
   ptyExitHandlers.set(ptyId, exitHandler)
 
+  const readBufferedData = (): string =>
+    chunks
+      .slice(head)
+      .map((chunk) => chunk.data)
+      .join('')
+
   const handle: EagerPtyHandle = {
+    ...(options?.captureDims ? { captureDims: options.captureDims } : {}),
+    peek: readBufferedData,
     flush() {
-      const data = chunks
-        .slice(head)
-        .map((chunk) => chunk.data)
-        .join('')
+      const data = readBufferedData()
       chunks.length = 0
-      head = 0
-      bufferBytes = 0
+      head = bufferBytes = 0
       return data
     },
     dispose() {
@@ -335,7 +343,7 @@ export function registerEagerPtyBuffer(
   // Why: defer the pre-handler exit one microtask so the caller receives the returned handle before onExit fires.
   queueMicrotask(() => {
     if (ptyExitHandlers.get(ptyId) === exitHandler) {
-      drainPreHandlerPtyExit(ptyId, exitHandler, incarnationId)
+      drainPreHandlerPtyExit(ptyId, exitHandler, options?.incarnationId)
     } else {
       clearPreHandlerPtyState(ptyId)
     }

@@ -1,7 +1,7 @@
 import {
-  registerEagerPtyBuffer,
-  type EagerPtyHandle
-} from '@/components/terminal-pane/pty-dispatcher'
+  BACKGROUND_PTY_SPAWN_SIZE,
+  registerBackgroundEagerPtyBuffer
+} from '@/lib/background-pty-spawn-size'
 import { createBrowserUuid } from '@/lib/browser-uuid'
 import { getSettingsForWorktreeRuntimeOwner } from '@/lib/worktree-runtime-owner'
 import { getActiveRuntimeTarget } from '@/runtime/runtime-rpc-client'
@@ -116,12 +116,12 @@ function persistExitedPaneOutput(tabId: string, leafId: string, output: string):
 // Why the incarnation: a relay-recycled id can hold the previous owner's exit, and draining that
 // into this handler tears the pane down seconds after it launched.
 function registerBackgroundPaneBuffer(tabId: string, leafId: string, pane: SpawnedPane): void {
-  let eagerBuffer: EagerPtyHandle | null = null
+  let eagerBuffer: ReturnType<typeof registerBackgroundEagerPtyBuffer> | null = null
   const onExit = (exitPtyId: string): void => {
     persistExitedPaneOutput(tabId, leafId, eagerBuffer?.flush() ?? '')
     useAppStore.getState().clearTabPtyId(tabId, exitPtyId)
   }
-  eagerBuffer = registerEagerPtyBuffer(pane.ptyId, onExit, pane.incarnationId)
+  eagerBuffer = registerBackgroundEagerPtyBuffer(pane.ptyId, onExit, pane.incarnationId)
 }
 
 function buildSetupCommand(setup: WorktreeSetupLaunch): string {
@@ -145,8 +145,8 @@ async function spawnPane(args: {
   env?: Record<string, string>
 }): Promise<SpawnedPane> {
   const result = await window.api.pty.spawn({
-    cols: 120,
-    rows: 40,
+    cols: BACKGROUND_PTY_SPAWN_SIZE.cols,
+    rows: BACKGROUND_PTY_SPAWN_SIZE.rows,
     cwd: args.worktree.path,
     ...(args.command ? { command: args.command } : {}),
     env: buildPaneEnv(args.worktree.id, args.tabId, args.leafId, args.env),
