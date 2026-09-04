@@ -23,6 +23,7 @@ import { shellEscape } from './ssh-connection-utils'
 import { execCommand, isUnconfirmedSshCommandTermination } from './ssh-relay-deploy-helpers'
 import { isWindowsRemoteHost, type RemoteHostPlatform } from './ssh-remote-platform'
 
+// CI control experiment: comment-only edit to select the SSH e2e lane. No behavior change.
 export type RelayEndpointVerdict = 'live' | 'unverifiable' | 'exited'
 
 export type RelayEndpointEvidence =
