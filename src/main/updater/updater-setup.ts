@@ -111,7 +111,9 @@ export class UpdaterSetup extends UpdaterDownloadInstall {
     super.dismissAvailableUpdate()
   }
 
-  setupAutoUpdater(mainWindow: BrowserWindow, opts?: UpdaterSetupOptions): void {
+  // Why nullable: headless serve arms the updater with no window; every consumer
+  // of mainWindowRef is `?.`-guarded, so null just means "no renderer to publish to".
+  setupAutoUpdater(mainWindow: BrowserWindow | null, opts?: UpdaterSetupOptions): void {
     this.mainWindowRef = mainWindow
     this.onBeforeQuitCleanup = opts?.onBeforeQuit ?? null
     this.onBeforeQuitFailure = opts?.onBeforeQuitFailure ?? 'continue'
@@ -219,7 +221,8 @@ export class UpdaterSetup extends UpdaterDownloadInstall {
       },
       setUserInitiatedCheck: (value) => {
         this.userInitiatedCheck = value
-      }
+      },
+      recordSupervisedServeDownloadInfo: (info) => this.recordSupervisedServeDownloadInfo(info)
     })
 
     void this.checkForUpdateNudge()

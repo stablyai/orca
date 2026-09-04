@@ -9,6 +9,8 @@ export const SERVE_UPDATE_SPOOL_SCHEMA_VERSION = 2
 
 export type ServeUpdateRequest = {
   schemaVersion: typeof SERVE_UPDATE_SPOOL_SCHEMA_VERSION
+  /** Echoed in the result so the app binds the verdict to THIS install attempt. */
+  runtimeId: string
   fromVersion: string
   targetVersion: string
   artifactPath: string
@@ -19,6 +21,7 @@ export type ServeUpdateRequest = {
 }
 
 export type ServeUpdateResult =
+  | { phase: 'accepted' }
   | { phase: 'ok'; targetVersion: string }
   | { phase: 'rejected'; reason: string }
   | { phase: 'failed'; reason: string }
@@ -49,6 +52,8 @@ export function parseServeUpdateRequest(value: unknown): ServeUpdateRequest | nu
   const state = value as Record<string, unknown>
   if (
     state.schemaVersion !== SERVE_UPDATE_SPOOL_SCHEMA_VERSION ||
+    typeof state.runtimeId !== 'string' ||
+    state.runtimeId.length === 0 ||
     typeof state.fromVersion !== 'string' ||
     state.fromVersion.length === 0 ||
     typeof state.targetVersion !== 'string' ||
@@ -71,6 +76,10 @@ export function parseServeUpdateResult(value: unknown): ServeUpdateResult | null
     return null
   }
   const state = value as Record<string, unknown>
+  if (state.phase === 'accepted') {
+    // Pre-quit acknowledgement: the helper has claimed the request and the app may exit.
+    return { phase: 'accepted' }
+  }
   if (state.phase === 'ok') {
     return typeof state.targetVersion === 'string' && state.targetVersion.length > 0
       ? { phase: 'ok', targetVersion: state.targetVersion }
