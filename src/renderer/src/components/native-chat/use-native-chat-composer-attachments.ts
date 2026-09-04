@@ -1,4 +1,4 @@
-import { useCallback, useLayoutEffect, useRef, useState, type RefObject } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useRef, useState, type RefObject } from 'react'
 import { translate } from '@/i18n/i18n'
 import { NATIVE_FILE_DROP_MAX_PATHS } from '../../../../shared/native-file-drop'
 import { isNativeChatImageAttachmentPath } from './native-chat-image-paste'
@@ -8,8 +8,17 @@ import {
   type NativeChatResolvedTarget
 } from './native-chat-composer-target'
 import type { NativeChatComposerImageAttachment } from './NativeChatComposerField'
-import { setBoundedScopeCacheEntry } from './native-chat-composer-scope-cache'
-
+import {
+  clearNativeChatAttachmentCacheForTests,
+  readNativeChatAttachmentCache,
+  writeNativeChatAttachmentCache
+} from './native-chat-attachment-cache'
+import {
+  createPreviewUrlRegistry,
+  releaseAttachmentPreview,
+  removeAttachmentById,
+  trackPreviewUrl
+} from './native-chat-preview-url-lifecycle'
 export type UseNativeChatComposerAttachmentsArgs = {
   attachmentScopeKey: string
   allowWithoutTarget?: boolean
@@ -47,6 +56,10 @@ export function useNativeChatComposerAttachments({
   const [imageAttachments, setImageAttachments] = useState<NativeChatComposerImageAttachment[]>(
     () => readNativeChatAttachmentCache(attachmentScopeKey)
   )
+  // Scope URL ownership so cleanup is idempotent without global history.
+  const livePreviewUrlsRef = useRef(createPreviewUrlRegistry(imageAttachments))
+  const imageAttachmentsRef = useRef(imageAttachments)
+  imageAttachmentsRef.current = imageAttachments
   const imageAttachmentCounter = useRef(0)
   const pendingResolvedPathsRef = useRef<{ path: string; connectionId?: string | null }[]>([])
   const pendingPathLimitRejectedRef = useRef(false)
@@ -59,6 +72,16 @@ export function useNativeChatComposerAttachments({
       pendingPathLimitRejectedRef.current = false
     }
   }, [disabled])
+
+  useEffect(() => {
+    const attachments = imageAttachmentsRef
+    const livePreviewUrls = livePreviewUrlsRef
+    return () => {
+      for (const attachment of attachments.current) {
+        releaseAttachmentPreview(attachment, livePreviewUrls.current)
+      }
+    }
+  }, [])
 
   const updateImageAttachments = useCallback(
     (
@@ -80,8 +103,7 @@ export function useNativeChatComposerAttachments({
     return `${Date.now()}-${imageAttachmentCounter.current}`
   }, [])
 
-  // Local paths are only attachable when the composer's target runs locally;
-  // remote-runtime panes read a different filesystem than the one we resolved.
+  // Remote-runtime panes read a different filesystem than local paths.
   const attachmentTargetBlocked = useCallback((): boolean => {
     const target = resolveTarget()
     return (
@@ -127,6 +149,7 @@ export function useNativeChatComposerAttachments({
         noteAttachmentTargetBlocked()
         return null
       }
+      trackPreviewUrl(previewUrl, livePreviewUrlsRef.current)
       const id = nextAttachmentId()
       updateImageAttachments((prev) => [...prev, { id, path: '', previewUrl, pending: true }])
       return id
@@ -154,7 +177,7 @@ export function useNativeChatComposerAttachments({
 
   const dropPendingImageAttachment = useCallback(
     (id: string) => {
-      updateImageAttachments((prev) => removeAttachmentById(prev, id))
+      updateImageAttachments((prev) => removeAttachmentById(prev, id, livePreviewUrlsRef.current))
     },
     [updateImageAttachments]
   )
@@ -255,69 +278,23 @@ export function useNativeChatComposerAttachments({
     }
     applyResolvedPaths(paths, false, preserveNotice)
   }, [applyResolvedPaths])
-
   return {
     imageAttachments,
     attachResolvedPaths,
     clearImageAttachments: () =>
       updateImageAttachments((prev) => {
-        prev.forEach(releaseAttachmentPreview)
+        prev.forEach((attachment) =>
+          releaseAttachmentPreview(attachment, livePreviewUrlsRef.current)
+        )
         return []
       }),
     flushPendingAttachments,
-    removeImageAttachment: (id) => updateImageAttachments((prev) => removeAttachmentById(prev, id)),
+    removeImageAttachment: (id) =>
+      updateImageAttachments((prev) => removeAttachmentById(prev, id, livePreviewUrlsRef.current)),
     beginPendingImageAttachment,
     resolvePendingImageAttachment,
     dropPendingImageAttachment
   }
 }
 
-/** Object URLs minted from a clipboard blob leak until revoked; data URLs don't. */
-function releaseAttachmentPreview(attachment: NativeChatComposerImageAttachment): void {
-  if (attachment.previewUrl?.startsWith('blob:')) {
-    URL.revokeObjectURL(attachment.previewUrl)
-  }
-}
-
-function removeAttachmentById(
-  attachments: readonly NativeChatComposerImageAttachment[],
-  id: string
-): NativeChatComposerImageAttachment[] {
-  const removed = attachments.find((attachment) => attachment.id === id)
-  if (removed) {
-    releaseAttachmentPreview(removed)
-  }
-  return attachments.filter((attachment) => attachment.id !== id)
-}
-
-const attachmentCache = new Map<string, NativeChatComposerImageAttachment[]>()
-
-export function readNativeChatAttachmentCache(
-  scopeKey: string
-): NativeChatComposerImageAttachment[] {
-  return [...(attachmentCache.get(scopeKey) ?? [])]
-}
-
-function writeNativeChatAttachmentCache(
-  scopeKey: string,
-  cacheable: readonly NativeChatComposerImageAttachment[]
-): void {
-  // A pending chip's save resolves into THIS hook instance; restoring one into a
-  // remount would strand it pending forever, so only settled chips are cached.
-  const attachments = cacheable
-    .filter((attachment) => !attachment.pending)
-    // Preview URLs can retain the full clipboard Blob (or a large data URL) for
-    // the lifetime of the scope cache. Settled attachments reload from their
-    // authorized path after a remount, so never retain the transient preview.
-    .map(({ previewUrl: _previewUrl, ...attachment }) => attachment)
-  if (attachments.length === 0) {
-    attachmentCache.delete(scopeKey)
-    return
-  }
-  // LRU-bounded so pending attachments for permanently-removed panes can't accumulate.
-  setBoundedScopeCacheEntry(attachmentCache, scopeKey, [...attachments])
-}
-
-export function clearNativeChatAttachmentCacheForTests(): void {
-  attachmentCache.clear()
-}
+export { clearNativeChatAttachmentCacheForTests, readNativeChatAttachmentCache }

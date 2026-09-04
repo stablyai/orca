@@ -131,6 +131,39 @@ describe('useNativeChatComposerAttachments', () => {
   afterEach(() => {
     clearNativeChatAttachmentCacheForTests()
     document.body.replaceChildren()
+    vi.restoreAllMocks()
+  })
+
+  it('revokes clipboard preview URLs once when a composer unmounts', async () => {
+    const revoke = vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => undefined)
+    const probe = await renderProbe('preview-cleanup')
+
+    await act(async () => {
+      expect(probe.latest().beginPendingImageAttachment('blob:clipboard-preview')).toBeTruthy()
+    })
+    act(() => probe.root.unmount())
+
+    expect(revoke).toHaveBeenCalledTimes(1)
+    expect(revoke).toHaveBeenCalledWith('blob:clipboard-preview')
+  })
+
+  it('does not double-revoke a preview removed before unmount', async () => {
+    const revoke = vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => undefined)
+    const probe = await renderProbe('preview-remove-cleanup')
+
+    let id: string | null = null
+    await act(async () => {
+      id = probe.latest().beginPendingImageAttachment('blob:clipboard-preview-removed')
+    })
+    await act(async () => {
+      if (id) {
+        probe.latest().removeImageAttachment(id)
+      }
+    })
+    act(() => probe.root.unmount())
+
+    expect(revoke).toHaveBeenCalledTimes(1)
+    expect(revoke).toHaveBeenCalledWith('blob:clipboard-preview-removed')
   })
 
   it('holds attached images as chips (deferred to submit) and restores them on remount', async () => {

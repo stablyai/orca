@@ -23,6 +23,7 @@ import {
   ProviderFrameRow
 } from './NativeChatTranscriptChrome'
 import type { RuntimeFileOperationArgs } from '@/runtime/runtime-file-client'
+import { isPendingMessageId } from './native-chat-pending'
 
 export { ProviderFrameRow } from './NativeChatTranscriptChrome'
 
@@ -45,7 +46,8 @@ function MessageRow({
   deliveryFailed = false,
   activityExpandOverride,
   structuredActivityUi = true,
-  runtimeContext
+  runtimeContext,
+  imagePreviewEnabled = false
 }: {
   message: NativeChatMessage
   expandSignal: boolean
@@ -58,11 +60,17 @@ function MessageRow({
   activityExpandOverride?: boolean
   structuredActivityUi?: boolean
   runtimeContext?: RuntimeFileOperationArgs | null
+  imagePreviewEnabled?: boolean
 }): React.JSX.Element | null {
   const rowRef = useRef<HTMLDivElement | null>(null)
   const { prose, tools } = useMemo(() => splitNativeChatBlocks(message.blocks), [message.blocks])
   const markdown = nativeChatProseToMarkdown(prose)
   const hasImages = prose.some((block) => block.type === 'image-ref')
+  const imageAttachmentProps = {
+    blocks: prose,
+    runtimeContext,
+    enablePreview: imagePreviewEnabled
+  }
   const isUser = message.role === 'user'
   const isReasoning = message.role === 'reasoning'
   const isSystem = message.role === 'system'
@@ -97,11 +105,7 @@ function MessageRow({
         <div className="max-w-[85%] rounded-lg rounded-tr-sm bg-muted px-3.5 py-2.5 text-sm text-foreground">
           {markdown ? (
             <>
-              <NativeChatImageAttachments
-                blocks={prose}
-                runtimeContext={runtimeContext}
-                enablePreview={runtimeContext !== undefined}
-              />
+              <NativeChatImageAttachments {...imageAttachmentProps} />
               <CommentMarkdown
                 content={markdown}
                 variant="document"
@@ -111,11 +115,7 @@ function MessageRow({
               />
             </>
           ) : (
-            <NativeChatImageAttachments
-              blocks={prose}
-              runtimeContext={runtimeContext}
-              enablePreview={runtimeContext !== undefined}
-            />
+            <NativeChatImageAttachments {...imageAttachmentProps} />
           )}
         </div>
         {deliveryFailed ? (
@@ -144,11 +144,7 @@ function MessageRow({
         isSystem && 'text-xs text-muted-foreground'
       )}
     >
-      <NativeChatImageAttachments
-        blocks={prose}
-        runtimeContext={runtimeContext}
-        enablePreview={runtimeContext !== undefined}
-      />
+      <NativeChatImageAttachments {...imageAttachmentProps} />
       {markdown ? (
         <CommentMarkdown
           content={markdown}
@@ -188,7 +184,8 @@ export function NativeChatMessageList({
   workingStartedAt,
   failedDeliveryMessageIds,
   showTurnStatus = true,
-  runtimeContext
+  runtimeContext,
+  imagePreviewMode = 'none'
 }: {
   session: NativeChatLiveSession
   isWorking: boolean
@@ -203,6 +200,7 @@ export function NativeChatMessageList({
   /** Turn timing/disclosure is available only on the structured Codex lane. */
   showTurnStatus?: boolean
   runtimeContext?: RuntimeFileOperationArgs | null
+  imagePreviewMode?: 'none' | 'pending' | 'all'
 }): React.JSX.Element {
   const scrollRef = useRef<HTMLDivElement | null>(null)
   const contentRef = useRef<HTMLDivElement | null>(null)
@@ -399,6 +397,10 @@ export function NativeChatMessageList({
                   structuredActivityUi={showTurnStatus}
                   activityExpandOverride={turnKey ? expandedTurnIds.has(turnKey) : undefined}
                   runtimeContext={runtimeContext}
+                  imagePreviewEnabled={
+                    imagePreviewMode === 'all' ||
+                    (imagePreviewMode === 'pending' && isPendingMessageId(message.id))
+                  }
                 />
                 {showTurnStatus &&
                 status &&

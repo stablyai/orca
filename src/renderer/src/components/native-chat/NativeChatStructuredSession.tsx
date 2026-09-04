@@ -148,6 +148,7 @@ export function NativeChatStructuredSession(props: {
             onLinkClick={fileLinkClick}
             allowFileUriLinks={fileLinkClick !== undefined}
             runtimeContext={props.agent === 'codex' ? imageRuntimeContext : undefined}
+            imagePreviewMode={props.agent === 'codex' ? 'all' : 'none'}
           />
         )}
       </div>

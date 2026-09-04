@@ -68,7 +68,14 @@ function attachmentOwnerStillMatches(
   if (original.kind !== 'ssh') {
     return true
   }
-  return current.kind === 'ssh' && original.connectionId === current.connectionId
+  return (
+    current.kind === 'ssh' &&
+    original.connectionId === current.connectionId &&
+    original.worktreePath === current.worktreePath &&
+    original.expectedExecutionHostId === current.expectedExecutionHostId &&
+    original.expectedSshTargetId === current.expectedSshTargetId &&
+    original.expectedSshConnectionGeneration === current.expectedSshConnectionGeneration
+  )
 }
 
 /**
@@ -106,6 +113,8 @@ export function useNativeChatComposerPaste({
   const disabledRef = useRef(disabled)
   disabledRef.current = disabled
   const acceptsImages = getAgentImageHandling(agent) === 'attachment'
+  const canReadClipboardImageThumbnail =
+    typeof window.api.ui.readClipboardImageThumbnail === 'function'
 
   // Distinguishes 'empty' (no image on the clipboard — text may fall through)
   // from 'failed' (save errored — the flow must stop and say why).
@@ -256,9 +265,10 @@ export function useNativeChatComposerPaste({
       // The in-memory thumbnail probe runs alongside the save rather than before
       // it: it answers first (it never touches disk or the network), so the chip
       // appears while the save is still in flight and text paste stays as fast.
-      const wantsPlaceholder = acceptsImages && ownerAcceptsClipboardImage(owner)
+      const wantsPlaceholder =
+        canReadClipboardImageThumbnail && acceptsImages && ownerAcceptsClipboardImage(owner)
       const thumbnailPromise = wantsPlaceholder
-        ? window.api.ui.readClipboardImageThumbnail().catch(() => null)
+        ? window.api.ui.readClipboardImageThumbnail?.().catch(() => null)
         : Promise.resolve(null)
       const savePromise = saveClipboardImageForOwner(owner)
       const thumbnail = await thumbnailPromise
@@ -300,6 +310,7 @@ export function useNativeChatComposerPaste({
   }, [
     acceptsImages,
     beginPendingImageAttachment,
+    canReadClipboardImageThumbnail,
     dropPendingImageAttachment,
     insertTypedText,
     noteImagesUnsupported,

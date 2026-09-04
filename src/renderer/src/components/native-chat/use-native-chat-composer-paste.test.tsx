@@ -25,6 +25,7 @@ vi.mock('./native-chat-attachment-upload', () => ({
 }))
 
 vi.stubGlobal('window', {
+  location: { pathname: '' },
   api: {
     ui: {
       saveClipboardImageAsTempFile: mocks.saveClipboardImageAsTempFile,
@@ -170,6 +171,7 @@ const sshOwner: NativeChatAttachmentOwner = {
 afterEach(() => {
   root?.unmount()
   root = null
+  delete (window as unknown as { __ORCA_WEB_CLIENT__?: boolean }).__ORCA_WEB_CLIENT__
   vi.clearAllMocks()
 })
 
@@ -294,6 +296,37 @@ describe('useNativeChatComposerPaste', () => {
     expect(setNotice).toHaveBeenCalledWith('Worktree not ready — try again in a moment.')
   })
 
+  it('does not settle an SSH path after the connection generation changes', async () => {
+    let resolveSave: (path: string) => void = () => {}
+    let owner: NativeChatAttachmentOwner = sshOwner
+    mocks.saveClipboardImageAsTempFile.mockReturnValue(
+      new Promise<string>((resolve) => {
+        resolveSave = resolve
+      })
+    )
+    const store = createChipStore()
+    const setNotice = vi.fn()
+    const probe = await renderProbe({
+      resolveAttachmentOwner: () => owner,
+      store,
+      setNotice
+    })
+
+    await act(async () => {
+      probe.latest().handlePaste(imagePasteEvent())
+    })
+    expect(store.chips).toHaveLength(1)
+
+    // A reconnect can reuse the connection ID while changing the session generation.
+    owner = { ...sshOwner, expectedSshConnectionGeneration: 5 }
+    await act(async () => {
+      resolveSave('/remote/tmp/stale-session.png')
+    })
+
+    expect(store.chips).toHaveLength(0)
+    expect(setNotice).toHaveBeenCalledWith('Worktree not ready — try again in a moment.')
+  })
+
   it('shows a pending chip for menu paste from the clipboard thumbnail probe', async () => {
     mocks.readClipboardImageThumbnail.mockResolvedValue({
       dataUrl: 'data:image/png;base64,AAA',
@@ -321,6 +354,26 @@ describe('useNativeChatComposerPaste', () => {
       resolveSave('/tmp/orca-paste-2.png')
     })
     expect(store.chips[0]).toMatchObject({ path: '/tmp/orca-paste-2.png', pending: false })
+  })
+
+  it('keeps the thumbnail probe available for paired web', async () => {
+    ;(window as unknown as { __ORCA_WEB_CLIENT__?: boolean }).__ORCA_WEB_CLIENT__ = true
+    mocks.readClipboardImageThumbnail.mockResolvedValue({
+      dataUrl: 'data:image/png;base64,AAA',
+      width: 1200,
+      height: 800
+    })
+    mocks.saveClipboardImageAsTempFile.mockResolvedValue('/runtime/tmp/orca-paste-web.png')
+    const probe = await renderProbe({
+      resolveAttachmentOwner: () => ({ kind: 'local' })
+    })
+
+    await act(async () => {
+      probe.latest().pasteFromClipboard()
+    })
+
+    expect(mocks.readClipboardImageThumbnail).toHaveBeenCalledOnce()
+    expect(mocks.saveClipboardImageAsTempFile).toHaveBeenCalledOnce()
   })
 
   it('attaches directly when no clipboard preview was available', async () => {
