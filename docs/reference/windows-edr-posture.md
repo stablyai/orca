@@ -31,12 +31,12 @@ administrators can do about it.
 
 Four independent evidence clusters, from six incidents:
 
-| Cluster           | Incidents | Evidence                                                                                                                              |
-| ----------------- | --------- | ------------------------------------------------------------------------------------------------------------------------------------- |
-| **Update**        | A, B, C   | `orca-windows-setup.exe` → `old-uninstaller.exe`, `Uninstall Orca.exe` (electron-builder generates these; they are in no repo file)   |
+| Cluster           | Incidents | Evidence                                                                                                             |
+| ----------------- | --------- | -------------------------------------------------------------------------------------------------------------------- |
+| **Update**        | A, B, C   | `orca-windows-setup.exe` → `old-uninstaller.exe`, `Uninstall Orca.exe` (electron-builder generates these; they are in no repo file) |
 | **Spawn**         | all six   | `Orca.exe` → `orca-terminal-daemon.exe` → `powershell.exe` / `pwsh.exe` / `cmd.exe` / `reg.exe` → `claude.exe`, `gh.exe`, `codex.cmd` |
-| **Process table** | D         | "suspicious memory activity" — `OpenProcess` plus a PEB read against every process on a repeating cadence                             |
-| **Computer use**  | E, F      | `runtime.ps1`, `computer-sidecar.js`, many `operation.json`, a burst of ~10 short-lived `powershell.exe`                              |
+| **Process table** | D         | "suspicious memory activity" — `OpenProcess` plus a PEB read against every process on a repeating cadence            |
+| **Computer use**  | E, F      | `runtime.ps1`, `computer-sidecar.js`, many `operation.json`, a burst of ~10 short-lived `powershell.exe`             |
 
 Incident E is the one to look at hardest: 5 alerts, 37 evidence items, ATT&CK
 **Execution + Collection**, and a description reading _"Screenshots were taken
@@ -155,7 +155,7 @@ Three sites are named in the incident analysis:
 `src/shared/setup-agent-sequencing.ts`,
 `src/shared/windows-cmd-runner-delayed-launch.ts` and
 `src/shared/windows-interactive-login-spawn.ts` each dropped
-`-ExecutionPolicy Bypass` as a measured no-op: the policy gates script _files_,
+`-ExecutionPolicy Bypass` as a measured no-op: the policy gates script *files*,
 never `-EncodedCommand`. Where the bypass was load-bearing it moved in-payload as
 a process-scope `Set-ExecutionPolicy` (`setup-agent-sequencing.ts`), which is the
 pattern to copy rather than restoring the switch — the switch loses to a GPO
@@ -198,7 +198,7 @@ denies the analyser the payload it would otherwise clear.
 The hook launcher is prior art worth knowing about. #16003 measured, on a
 reporting Kaspersky host, that `-WindowStyle Hidden` paired with
 `-EncodedCommand` was denied at `CreateProcess` with exit 126 regardless of
-payload — `exit 0` was denied too. The fix was to stop _spelling_ the flags:
+payload — `exit 0` was denied too. The fix was to stop *spelling* the flags:
 `WINDOWS_POWERSHELL_HOOK_SWITCHES` is now just `-NoProfile`, and separately, in
 #16576, the execution policy bypass moved in-payload as a process-scope
 `Set-ExecutionPolicy` — a real command-line signal reduction, though #16003's
@@ -221,7 +221,7 @@ a quoted token, each `%` is broken with `"^%"`.
 
 The escaping is not decorative. Measured on Windows 11 against a real `.cmd`
 shim, `["a b", 'c"d', "e%F%g", "h&i", "j^k"]` came back as `["a b", 'c"d',
-"e^%F^%g", "h"]` — the `&` truncated the argument _and_ ran the remainder as a
+"e^%F^%g", "h"]` — the `&` truncated the argument *and* ran the remainder as a
 command.
 
 **How an EDR reads it:** caret escaping is the canonical obfuscation marker in
@@ -232,7 +232,7 @@ obfuscated-command-line detector is tuned on.
 ### The spawn tree itself
 
 `Orca.exe` → `orca-terminal-daemon.exe` → a shell → an agent CLI is what a
-terminal multiplexer for coding agents _is_. `reg.exe` appears from
+terminal multiplexer for coding agents *is*. `reg.exe` appears from
 `src/main/win32-utils.ts`,
 `src/main/agent-hooks/managed-hook-owner-identity.ts` and
 `src/relay/pty-shell-utils.ts` (reading the OpenSSH `DefaultShell`).
@@ -240,7 +240,7 @@ terminal multiplexer for coding agents _is_. `reg.exe` appears from
 Nothing here is avoidable in principle. What is controllable is depth and
 breadth: every interpreter hop between Orca and the thing the user asked for adds
 a scored edge, which is why the shipped doctrine of #15520 and #15595 is to
-_shorten the interpreter chain_ rather than to hide a window.
+*shorten the interpreter chain* rather than to hide a window.
 
 ### Computer use: screen capture, synthetic input, runtime-compiled MSIL
 
@@ -256,12 +256,12 @@ then captures the screen through `Graphics.CopyFromScreen`.
 
 That is four separate high-signal behaviours stacked in one process:
 
-| Behaviour                                     | How it is scored                                              |
-| --------------------------------------------- | ------------------------------------------------------------- |
-| `Graphics.CopyFromScreen`                     | **MITRE T1113**, screen capture — Collection tactic           |
-| `SendInput` synthetic keyboard/mouse          | input synthesis against other applications                    |
-| `Add-Type -TypeDefinition` on every operation | MSIL compiled at runtime; incident F's "suspicious MSIL code" |
-| One `powershell.exe` per operation            | a burst of short-lived interpreters under one parent          |
+| Behaviour                                       | How it is scored                                     |
+| ----------------------------------------------- | ---------------------------------------------------- |
+| `Graphics.CopyFromScreen`                       | **MITRE T1113**, screen capture — Collection tactic  |
+| `SendInput` synthetic keyboard/mouse            | input synthesis against other applications           |
+| `Add-Type -TypeDefinition` on every operation   | MSIL compiled at runtime; incident F's "suspicious MSIL code" |
+| One `powershell.exe` per operation              | a burst of short-lived interpreters under one parent |
 
 The bottom two rows are the two the incident text named directly, and they are
 also the two a persistent runtime host would remove: a long-lived helper compiles
@@ -319,16 +319,16 @@ changed. Check the code before relying on it.
 
 The checklist. On Windows, do not reach for:
 
-| Don't                                         | Instead                                                                                                                             |
-| --------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
-| `-ExecutionPolicy Bypass` on the command line | Set the policy in-payload at process scope, as `windows-powershell-hook-launcher.ts` does, or do not run a `.ps1` at all            |
-| `-EncodedCommand`                             | A temp `.ps1` with an argument, or no PowerShell hop: prefer a native API or an existing Node path                                  |
-| `cmd.exe /c` carrying escaped free text       | Spawn the real target directly. `cmd.exe` is only unavoidable for `.cmd`/`.bat`; keep free text out of the line where you can       |
-| Forking `powershell.exe` to read system state | The native reader — [`windows-process-enumeration.md`](./windows-process-enumeration.md) is the standing rule for the process table |
-| A process per operation in a loop             | One long-lived helper with a request channel. A burst of short-lived interpreters under one parent is itself the signal             |
-| `Add-Type -TypeDefinition` at runtime         | A precompiled, signed assembly, or a native helper                                                                                  |
-| Copying our own image under a different name  | An installer or updater that does not need the rename. Where the rename is load-bearing, document it as such                        |
-| Deriving a script runner from a UI preference | [`windows-setup-shell.md`](./windows-setup-shell.md) — the script declares its own interpreter                                      |
+| Don't                                                       | Instead                                                                                                                    |
+| ----------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------- |
+| `-ExecutionPolicy Bypass` on the command line               | Set the policy in-payload at process scope, as `windows-powershell-hook-launcher.ts` does, or do not run a `.ps1` at all    |
+| `-EncodedCommand`                                           | A temp `.ps1` with an argument, or no PowerShell hop: prefer a native API or an existing Node path                          |
+| `cmd.exe /c` carrying escaped free text                     | Spawn the real target directly. `cmd.exe` is only unavoidable for `.cmd`/`.bat`; keep free text out of the line where you can |
+| Forking `powershell.exe` to read system state               | The native reader — [`windows-process-enumeration.md`](./windows-process-enumeration.md) is the standing rule for the process table |
+| A process per operation in a loop                           | One long-lived helper with a request channel. A burst of short-lived interpreters under one parent is itself the signal     |
+| `Add-Type -TypeDefinition` at runtime                       | A precompiled, signed assembly, or a native helper                                                                          |
+| Copying our own image under a different name                | An installer or updater that does not need the rename. Where the rename is load-bearing, document it as such                |
+| Deriving a script runner from a UI preference               | [`windows-setup-shell.md`](./windows-setup-shell.md) — the script declares its own interpreter                              |
 
 Two framing rules that outlast the table:
 
@@ -345,7 +345,7 @@ Two framing rules that outlast the table:
 
 This is the single most important operational point, and it is the one most
 commonly got wrong. The six incidents are **MDE EDR behavioural alerts**.
-Defender Antivirus path exclusions suppress _scan_ detections; they do not
+Defender Antivirus path exclusions suppress *scan* detections; they do not
 suppress EDR behavioural alerts the same way. Adding
 `%LOCALAPPDATA%\Programs\orca\` to the AV exclusion list and expecting the
 incidents to stop will not work.

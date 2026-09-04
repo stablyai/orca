@@ -47,6 +47,12 @@ describe('polytoken config paths', () => {
     expect(resolvePolytokenHooksJsonPath({}, '/home/u')).toBe(
       '/home/u/.config/polytoken/hooks.json'
     )
+    // Why: the XDG contract requires an absolute path; anything else must not redirect the write.
+    for (const relative of ['cfg', './cfg', '../cfg', '  ']) {
+      expect(resolvePolytokenHooksJsonPath({ XDG_CONFIG_HOME: relative }, '/home/u')).toBe(
+        '/home/u/.config/polytoken/hooks.json'
+      )
+    }
     expect(resolveRemotePolytokenHooksJsonPath('/home/remote')).toBe(
       '/home/remote/.config/polytoken/hooks.json'
     )

@@ -32,9 +32,13 @@ export function resolveEnvironmentSkillProviderRoots(
 ): SkillProviderRootOverrides {
   const claudeConfig = normalizedRoot(env.CLAUDE_CONFIG_DIR)
   const grokHome = normalizedRoot(env.GROK_HOME)
+  // Why: Polytoken's global skills live under `$XDG_CONFIG_HOME/polytoken/skills` (default
+  // `~/.config/polytoken/skills`), so a relocated config home moves the discovery root.
+  const xdgConfigHome = normalizedRoot(env.XDG_CONFIG_HOME)
   return {
     ...(claudeConfig ? { claude: join(claudeConfig, 'skills') } : {}),
-    ...(grokHome ? { grok: join(grokHome, 'skills') } : {})
+    ...(grokHome ? { grok: join(grokHome, 'skills') } : {}),
+    ...(xdgConfigHome ? { polytoken: join(xdgConfigHome, 'polytoken', 'skills') } : {})
   }
 }
 

@@ -224,7 +224,7 @@ export function buildSkillDiscoverySources(
     source(
       'home-polytoken',
       'Polytoken home',
-      pathApi.join(home, '.config', 'polytoken', 'skills'),
+      providerRootOverrides.polytoken ?? pathApi.join(home, '.config', 'polytoken', 'skills'),
       'home',
       ['agent-skills'],
       'polytoken'

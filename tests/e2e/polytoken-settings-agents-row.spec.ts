@@ -14,7 +14,11 @@ async function openSettings(page: Page): Promise<void> {
 
 async function dismissTransientAnnouncement(page: Page): Promise<void> {
   const maybeLaterButton = page.getByRole('button', { name: 'Maybe Later' })
-  const visible = await maybeLaterButton.isVisible({ timeout: 1_000 }).catch(() => false)
+  // Why: isVisible() is an instant check; waitFor gives a late announcement a chance to mount.
+  const visible = await maybeLaterButton
+    .waitFor({ state: 'visible', timeout: 1_000 })
+    .then(() => true)
+    .catch(() => false)
   if (visible) {
     await maybeLaterButton.click()
   }
