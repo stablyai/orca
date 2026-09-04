@@ -64,8 +64,10 @@ describe('COMMIT_MESSAGE_AGENT_SPECS', () => {
     const promptIndex = args.indexOf('--prompt')
     expect(promptIndex).toBeGreaterThanOrEqual(0)
     expect(args[promptIndex + 1]).toBe('Name a branch for adding login')
-    expect(args).toContain('--quiet')
-    expect(args).toContain('--thinking')
+    // Why: kimi-code 0.36–0.40 reject --quiet/--thinking/--no-thinking as unknown options (#14771).
+    expect(args).not.toContain('--quiet')
+    expect(args).not.toContain('--thinking')
+    expect(args).not.toContain('--no-thinking')
     expect(args).toEqual(expect.arrayContaining(['--model', 'kimi-code/kimi-for-coding']))
   })
 
@@ -76,15 +78,19 @@ describe('COMMIT_MESSAGE_AGENT_SPECS', () => {
     ])
   })
 
-  it('maps Kimi thinking off and omission to distinct argv', () => {
+  it('does not advertise unsupported Kimi thinking controls', () => {
     const spec = COMMIT_MESSAGE_AGENT_SPECS.kimi!
-    const offArgs = spec.buildArgs({ prompt: 'PROMPT', model: 'default', thinkingLevel: 'off' })
-    const defaultArgs = spec.buildArgs({ prompt: 'PROMPT', model: 'default' })
+    const model = spec.models.find((candidate) => candidate.id === 'kimi-code/kimi-for-coding')
 
-    expect(offArgs).toContain('--no-thinking')
-    expect(offArgs).not.toContain('--thinking')
-    expect(defaultArgs).not.toContain('--thinking')
-    expect(defaultArgs).not.toContain('--no-thinking')
+    expect(model).toBeDefined()
+    expect(model?.thinkingLevels).toBeUndefined()
+    expect(model?.defaultThinkingLevel).toBeUndefined()
+    for (const thinkingLevel of ['on', 'off'] as const) {
+      const args = spec.buildArgs({ prompt: 'PROMPT', model: 'default', thinkingLevel })
+      expect(args).not.toContain('--thinking')
+      expect(args).not.toContain('--no-thinking')
+      expect(args).not.toContain('--quiet')
+    }
   })
 
   it('omits Kimi --model for the config default and an empty model', () => {
