@@ -10,10 +10,12 @@ import { SortableTabContextMenu } from './SortableTabContextMenu'
 
 const storeMock = vi.hoisted(() => ({
   dropUnifiedTab: vi.fn(),
+  toggleSessionsGridHiddenTab: vi.fn(),
   state: {
     keybindings: {},
     unifiedTabsByWorktree: {},
-    groupsByWorktree: {}
+    groupsByWorktree: {},
+    sessionsGridHiddenTabIds: [] as string[]
   } as Record<string, unknown>
 }))
 
@@ -56,6 +58,8 @@ vi.mock('lucide-react', () => ({
   ArrowUp: () => null,
   Columns2: () => null,
   Copy: () => null,
+  Eye: () => null,
+  EyeOff: () => null,
   ListX: () => null,
   MessageSquare: () => null,
   PanelBottomClose: () => null,
@@ -153,9 +157,12 @@ function getLastSplitEvent(spy: ReturnType<typeof vi.spyOn>): CustomEvent {
 
 beforeEach(() => {
   storeMock.dropUnifiedTab.mockReset()
+  storeMock.toggleSessionsGridHiddenTab.mockReset()
   storeMock.state = {
     keybindings: {},
     dropUnifiedTab: storeMock.dropUnifiedTab,
+    sessionsGridHiddenTabIds: [],
+    toggleSessionsGridHiddenTab: storeMock.toggleSessionsGridHiddenTab,
     groupsByWorktree: {
       'wt-1': [
         {
