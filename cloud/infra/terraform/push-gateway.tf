@@ -176,12 +176,16 @@ resource "google_secret_manager_secret_iam_member" "push_provider_runtime_access
 resource "google_cloud_run_v2_service" "push" {
   count = local.push_gateway_count
 
-  project             = var.project_id
-  name                = var.push_cloud_run_service_name
-  location            = var.region
-  ingress             = "INGRESS_TRAFFIC_ALL"
-  deletion_protection = var.environment == "production"
-  labels              = local.relay_shared_labels
+  project  = var.project_id
+  name     = var.push_cloud_run_service_name
+  location = var.region
+  ingress  = "INGRESS_TRAFFIC_ALL"
+  # Why: the host proof in `POST /v1/host/challenge` is the authentication, not Cloud Run IAM.
+  # The project's domain-restricted-sharing policy refuses an `allUsers` invoker binding, so the
+  # service opts out of invoker IAM exactly as the relay director does.
+  invoker_iam_disabled = true
+  deletion_protection  = var.environment == "production"
+  labels               = local.relay_shared_labels
 
   template {
     service_account                  = google_service_account.push_runtime[0].email
@@ -295,18 +299,6 @@ resource "google_cloud_run_v2_service" "push" {
     google_secret_manager_secret_iam_member.push_provider_runtime_accessor,
     google_secret_manager_secret_version.push_database_url
   ]
-}
-
-# The desktop and the phone both reach the gateway unauthenticated; the host proof in
-# `POST /v1/host/challenge` is the authentication, not Cloud Run IAM.
-resource "google_cloud_run_v2_service_iam_member" "push_public_invoker" {
-  count = local.push_gateway_count
-
-  project  = var.project_id
-  location = var.region
-  name     = google_cloud_run_v2_service.push[0].name
-  role     = "roles/run.invoker"
-  member   = "allUsers"
 }
 
 # Google issues and renews the certificate for the mapping. The DNS record itself lives in the

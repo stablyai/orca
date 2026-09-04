@@ -105,7 +105,6 @@
     "google_cloud_run_v2_service_iam_member.github_staging_relay_capacity_developer",
     "google_cloud_run_v2_service_iam_member.github_staging_relay_deploy_auth_developer",
     "google_cloud_run_v2_service_iam_member.github_staging_relay_deploy_director_developer",
-    "google_cloud_run_v2_service_iam_member.push_public_invoker",
     "google_cloud_run_v2_service_iam_member.relay_fence_broker_deploy_invoker",
     "google_cloud_run_v2_service_iam_member.relay_fence_broker_invoker",
     "google_compute_backend_service.relay_gce_cell",

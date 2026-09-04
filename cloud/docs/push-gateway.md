@@ -24,7 +24,7 @@ edit plus a second set of Apple credentials.
 | Instances | min 1, max 4 | `push_min_instances`, `push_max_instances` |
 | Concurrency | 80 | `push_concurrency` |
 | Ingress | all | `INGRESS_TRAFFIC_ALL` |
-| Invoker | `allUsers` | `google_cloud_run_v2_service_iam_member.push_public_invoker` |
+| Invoker | IAM disabled | `invoker_iam_disabled = true` on the service |
 | Runtime identity | `orca-cloud-push@onorca-cloud.iam.gserviceaccount.com` | `google_service_account.push_runtime` |
 | Database | `orca_push` on the shared Cloud SQL instance | `google_sql_database.push` |
 | Hostname | `push.onorca.dev` | `push_base_url` |
@@ -33,9 +33,9 @@ The minimum of one instance is deliberate. A cold start delays a notification pa
 where it is worth showing, and the three-second coalescing window lives in instance memory.
 
 Authentication is the host proof in `POST /v1/host/challenge`, not Cloud Run IAM, so the service
-is invokable by `allUsers`. The relay director reaches the same outcome with
-`invoker_iam_disabled = true`; if the project's domain-restricted-sharing policy ever refuses an
-`allUsers` binding, switch this service to that field rather than granting a narrower principal.
+opts out of invoker IAM with `invoker_iam_disabled = true`, exactly as the relay director does.
+The project's domain-restricted-sharing policy refuses an `allUsers` invoker binding, so that is
+the only way to reach an open service here.
 
 ## Environment
 
@@ -107,7 +107,7 @@ terraform -chdir=infra/terraform import -var-file=environments/production.tfvars
 
 Everything else in `push-gateway.tf` is new and is created by the apply: the `orca_push`
 database and user, the database-URL secret and its accessor, the `roles/cloudsql.client` binding
-on the runtime account, the Cloud Run service, the public invoker, the domain mapping, and the
+on the runtime account, the Cloud Run service, the domain mapping, and the
 three deploy-identity bindings. Save that plan and review it before applying; this root carries
 unrelated standing drift, so an untargeted apply is never automatic.
 
