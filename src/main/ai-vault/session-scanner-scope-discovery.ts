@@ -6,10 +6,13 @@ import {
   wslGatedStat
 } from '../native-chat/wsl-transcript-fs-access'
 import { WslTranscriptFsError } from '../native-chat/wsl-transcript-fs-gate'
-import { isPathInsideOrEqual } from '../../shared/cross-platform-path'
+import { isCaseInsensitiveRuntimeRoot } from '../../shared/cross-platform-path'
 import { encodeClaudeProjectPaths, isClaudeProjectDirInScope } from './claude-project-dir-encoding'
 import type { AiVaultScanIssue } from '../../shared/ai-vault-types'
-import { parseWslUncPath } from '../../shared/wsl-paths'
+import {
+  createWslAliasedPathInsideOrEqualScopeMatcher,
+  wslRootPathAliases
+} from '../../shared/wsl-path-aliases'
 import { recordSessionScanIssue } from './session-scan-issues'
 import type { FileWithMtime } from './session-scanner-types'
 import { errorMessage, extractString, parseJsonObject } from './session-scanner-values'
@@ -82,11 +85,12 @@ export async function discoverInScopeClaudeFiles(args: {
     return []
   }
   const scopeProjectPrefixes = claudeProjectScopePrefixes(args.scopePaths)
+  const ownsScopedCwd = createWslAliasedPathInsideOrEqualScopeMatcher(args.scopePaths)
   const collected = new Map<string, FileWithMtime>()
   for (const rootDir of args.rootDirs) {
     for (const projectDir of await listProjectDirs(rootDir, scopeProjectPrefixes, args.issues)) {
       const cwd = await cachedProjectDirCwd(projectDir, args.issues)
-      if (!cwd || !args.scopePaths.some((scopePath) => isCwdInsideScopePath(scopePath, cwd))) {
+      if (!cwd || !ownsScopedCwd(cwd)) {
         continue
       }
       await collectClaudeFiles({
@@ -101,41 +105,32 @@ export async function discoverInScopeClaudeFiles(args: {
   return [...collected.values()].sort((left, right) => right.mtimeMs - left.mtimeMs)
 }
 
-function claudeProjectScopePrefixes(scopePaths: readonly string[]): Set<string> {
+type ClaudeProjectScopePrefixes = {
+  all: Set<string>
+  caseInsensitive: Set<string>
+}
+
+function claudeProjectScopePrefixes(scopePaths: readonly string[]): ClaudeProjectScopePrefixes {
   const prefixes = new Set<string>()
+  const caseInsensitivePrefixes = new Set<string>()
   for (const scopePath of scopePaths) {
-    for (const candidate of scopePathCandidates(scopePath)) {
+    const rootAliases = wslRootPathAliases(scopePath)
+    const caseInsensitive = rootAliases.some(isCaseInsensitiveRuntimeRoot)
+    for (const candidate of rootAliases) {
       for (const prefix of encodeClaudeProjectPaths(candidate)) {
         prefixes.add(prefix)
+        if (caseInsensitive) {
+          caseInsensitivePrefixes.add(prefix)
+        }
       }
     }
   }
-  return prefixes
-}
-
-function scopePathCandidates(scopePath: string): string[] {
-  const wslScopePath = parseWslUncPath(scopePath)
-  return wslScopePath ? [scopePath, wslScopePath.linuxPath] : [scopePath]
-}
-
-function isCwdInsideScopePath(scopePath: string, cwd: string): boolean {
-  if (isPathInsideOrEqual(scopePath, cwd)) {
-    return true
-  }
-
-  const wslScopePath = parseWslUncPath(scopePath)
-  if (!wslScopePath) {
-    return false
-  }
-
-  // WSL transcripts record Linux cwd values even when the renderer sends the
-  // active worktree as a Windows UNC path.
-  return isPathInsideOrEqual(wslScopePath.linuxPath, cwd)
+  return { all: prefixes, caseInsensitive: caseInsensitivePrefixes }
 }
 
 async function listProjectDirs(
   rootDir: string,
-  scopeProjectPrefixes: ReadonlySet<string>,
+  scopeProjectPrefixes: ClaudeProjectScopePrefixes,
   issues: AiVaultScanIssue[]
 ): Promise<string[]> {
   let entries
@@ -147,7 +142,13 @@ async function listProjectDirs(
   }
   return entries
     .filter(
-      (entry) => entry.isDirectory() && isClaudeProjectDirInScope(entry.name, scopeProjectPrefixes)
+      (entry) =>
+        entry.isDirectory() &&
+        isClaudeProjectDirInScope(
+          entry.name,
+          scopeProjectPrefixes.all,
+          scopeProjectPrefixes.caseInsensitive
+        )
     )
     .map((entry) => join(rootDir, entry.name))
 }

@@ -129,6 +129,45 @@ describe('/shared ai-vault-session-filters (lifted core)', () => {
     expect(groups[0].sessions).toHaveLength(2)
   })
 
+  it('matches a Windows drive workspace against a WSL /mnt/c session cwd', () => {
+    expect(
+      filterAiVaultSessions([{ ...baseSession, cwd: '/mnt/c/Users/neil/orca/orca' }], {
+        query: '',
+        agents: ['claude'],
+        scope: 'workspace',
+        sort: 'updated',
+        activeWorktreePaths: [String.raw`C:\Users\neil\orca\orca`],
+        hideEmptySessions: true
+      }).map((session) => session.id)
+    ).toEqual(['claude:1'])
+  })
+
+  it('matches a Windows drive workspace case-insensitively against a WSL /mnt/c cwd', () => {
+    expect(
+      filterAiVaultSessions([{ ...baseSession, cwd: '/mnt/c/Users/neil/orca/orca' }], {
+        query: '',
+        agents: ['claude'],
+        scope: 'workspace',
+        sort: 'updated',
+        activeWorktreePaths: [String.raw`c:\users\neil\orca\orca`],
+        hideEmptySessions: true
+      })
+    ).toHaveLength(1)
+  })
+
+  it('does not treat a sibling /mnt/c path as the same Windows workspace', () => {
+    expect(
+      filterAiVaultSessions([{ ...baseSession, cwd: '/mnt/c/Users/neil/orca-secret' }], {
+        query: '',
+        agents: ['claude'],
+        scope: 'workspace',
+        sort: 'updated',
+        activeWorktreePaths: [String.raw`C:\Users\neil\orca`],
+        hideEmptySessions: true
+      })
+    ).toEqual([])
+  })
+
   it('folds the two WSL UNC aliases of one folder into a single group', () => {
     const groups = groupAiVaultSessions(
       [

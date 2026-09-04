@@ -1,5 +1,9 @@
 import { useMemo } from 'react'
-import { parseWslUncPath } from '../../../../shared/wsl-paths'
+import {
+  normalizedWslPathCandidateAliases,
+  wslAliasedPathDepth,
+  wslRootPathAliases
+} from '../../../../shared/wsl-path-aliases'
 import { splitWorktreeIdForFilesystem } from '../../../../shared/worktree/id'
 import {
   getRepoExecutionHostId,
@@ -8,7 +12,6 @@ import {
   type ExecutionHostId
 } from '../../../../shared/execution-host'
 import {
-  createNormalizedPathInsideOrEqualMatcher,
   isRuntimePathAbsolute,
   normalizeRuntimePathForComparison
 } from '../../../../shared/cross-platform-path'
@@ -42,9 +45,12 @@ type WorktreeCandidate = {
   hostId: ExecutionHostId
   status: Exclude<AiVaultSessionWorktreeStatus, 'current'>
   source: 'current-path' | 'prior-path'
-  // Precomputed so a 500-session scan doesn't re-normalize ~500 roots per session.
-  ownsNormalizedCwd: (normalizedCwd: string) => boolean
-  normalizedPathLength: number
+  pathDepth: number
+  order: number
+}
+
+type WorktreeCandidateLookup = {
+  candidatesByRoot: ReadonlyMap<string, readonly WorktreeCandidate[]>
 }
 
 export function resolveAiVaultSessionWorktreeInfo({
@@ -59,7 +65,7 @@ export function resolveAiVaultSessionWorktreeInfo({
   activeWorktreeId: string | null
 }): AiVaultSessionWorktreeInfo | null {
   return withAiVaultCurrentWorktreeStatus(
-    resolveWorktreeInfoFromCandidates(session, buildWorktreeCandidates(worktrees, repos)),
+    resolveWorktreeInfoFromCandidates(session, buildWorktreeCandidateLookup(worktrees, repos)),
     activeWorktreeId
   )
 }
@@ -80,20 +86,15 @@ export function withAiVaultCurrentWorktreeStatus(
 
 function resolveWorktreeInfoFromCandidates(
   session: AiVaultSession,
-  candidates: readonly WorktreeCandidate[]
+  lookup: WorktreeCandidateLookup
 ): AiVaultSessionWorktreeInfo | null {
   if (!session.cwd) {
     return null
   }
 
   const sessionHostId = normalizeExecutionHostId(session.executionHostId)
-  const normalizedCwd = normalizeRuntimePathForComparison(session.cwd)
-  const matched = candidates
-    .filter((candidate) => candidate.ownsNormalizedCwd(normalizedCwd))
-    .filter((candidate) => !sessionHostId || candidate.hostId === sessionHostId)
-    .sort(compareWorktreeCandidates)
-
-  const best = matched[0]
+  const cwdAliases = normalizedWslPathCandidateAliases(session.cwd)
+  const best = findBestWorktreeCandidate(lookup, sessionHostId, cwdAliases)
   if (!best) {
     return {
       status: 'unavailable',
@@ -108,6 +109,45 @@ function resolveWorktreeInfoFromCandidates(
     path: best.path,
     worktreeId: best.worktree.id
   }
+}
+
+function findBestWorktreeCandidate(
+  lookup: WorktreeCandidateLookup,
+  sessionHostId: ExecutionHostId | null,
+  normalizedCwdAliases: readonly string[]
+): WorktreeCandidate | null {
+  let best: WorktreeCandidate | null = null
+  for (const cwdAlias of normalizedCwdAliases) {
+    let ancestorPath = cwdAlias
+    while (ancestorPath) {
+      const matchingCandidates = lookup.candidatesByRoot.get(ancestorPath)
+      if (matchingCandidates) {
+        for (const candidate of matchingCandidates) {
+          if (sessionHostId && candidate.hostId !== sessionHostId) {
+            continue
+          }
+          if (!best || compareWorktreeCandidates(candidate, best) < 0) {
+            best = candidate
+          }
+        }
+      }
+      if (ancestorPath === '/' || /^[a-z]:\/$/i.test(ancestorPath)) {
+        break
+      }
+      const separatorIndex = ancestorPath.lastIndexOf('/')
+      if (separatorIndex === -1) {
+        break
+      }
+      if (separatorIndex === 0) {
+        ancestorPath = '/'
+      } else if (separatorIndex === 2 && /^[a-z]:\//i.test(ancestorPath)) {
+        ancestorPath = ancestorPath.slice(0, 3)
+      } else {
+        ancestorPath = ancestorPath.slice(0, separatorIndex)
+      }
+    }
+  }
+  return best
 }
 
 export function extractWorktreePathFromSessionTitle(title: string): string | null {
@@ -134,7 +174,7 @@ export function resolveAiVaultSessionWorktreeDisplay(args: {
   return withAiVaultCurrentWorktreeStatus(
     resolveWorktreeDisplayFromCandidates(
       args.session,
-      buildWorktreeCandidates(args.worktrees, args.repos ?? [])
+      buildWorktreeCandidateLookup(args.worktrees, args.repos ?? [])
     ),
     args.activeWorktreeId
   )
@@ -142,9 +182,9 @@ export function resolveAiVaultSessionWorktreeDisplay(args: {
 
 function resolveWorktreeDisplayFromCandidates(
   session: AiVaultSession,
-  candidates: readonly WorktreeCandidate[]
+  lookup: WorktreeCandidateLookup
 ): AiVaultSessionWorktreeInfo | null {
-  const resolved = resolveWorktreeInfoFromCandidates(session, candidates)
+  const resolved = resolveWorktreeInfoFromCandidates(session, lookup)
   if (resolved) {
     return resolved
   }
@@ -188,20 +228,22 @@ export function useAiVaultSessionWorktreeMap({
   return useMemo(() => {
     // Hoisted out of the per-session loop: candidates and their normalized
     // roots are session-independent.
-    const candidates = buildWorktreeCandidates(worktrees, repos)
-    return new Map(
-      sessions.flatMap((session) => {
-        const worktreeInfo = resolveWorktreeDisplayFromCandidates(session, candidates)
-        return worktreeInfo ? [[session.id, worktreeInfo] as const] : []
-      })
-    )
+    const lookup = buildWorktreeCandidateLookup(worktrees, repos)
+    const worktreeInfoBySessionId = new Map<string, AiVaultSessionWorktreeInfo>()
+    for (const session of sessions) {
+      const worktreeInfo = resolveWorktreeDisplayFromCandidates(session, lookup)
+      if (worktreeInfo) {
+        worktreeInfoBySessionId.set(session.id, worktreeInfo)
+      }
+    }
+    return worktreeInfoBySessionId
   }, [repos, sessions, worktrees])
 }
 
-function buildWorktreeCandidates(
+function buildWorktreeCandidateLookup(
   worktrees: readonly Worktree[],
   repos: readonly Pick<Repo, 'id' | 'connectionId' | 'executionHostId'>[]
-): WorktreeCandidate[] {
+): WorktreeCandidateLookup {
   const candidates: WorktreeCandidate[] = []
   const repoById = new Map(repos.map((repo) => [repo.id, repo]))
   for (const worktree of worktrees) {
@@ -210,40 +252,56 @@ function buildWorktreeCandidates(
       normalizeExecutionHostId(worktree.hostId) ??
       (repo ? getRepoExecutionHostId(repo) : LOCAL_EXECUTION_HOST_ID)
     if (hasUsablePath(worktree.path)) {
-      candidates.push(makeWorktreeCandidate(worktree, worktree.path, hostId, 'current-path'))
+      candidates.push(
+        makeWorktreeCandidate(worktree, worktree.path, hostId, 'current-path', candidates.length)
+      )
     }
     for (const priorWorktreeId of worktree.priorWorktreeIds ?? []) {
       const parsed = splitWorktreeIdForFilesystem(priorWorktreeId)
       if (!parsed || parsed.repoId !== worktree.repoId || !hasUsablePath(parsed.worktreePath)) {
         continue
       }
-      candidates.push(makeWorktreeCandidate(worktree, parsed.worktreePath, hostId, 'prior-path'))
+      candidates.push(
+        makeWorktreeCandidate(
+          worktree,
+          parsed.worktreePath,
+          hostId,
+          'prior-path',
+          candidates.length
+        )
+      )
     }
   }
-  return candidates
+  const candidatesByRoot = new Map<string, WorktreeCandidate[]>()
+  for (const candidate of candidates) {
+    for (const alias of wslRootPathAliases(candidate.path)) {
+      const normalizedRoot = normalizeRuntimePathForComparison(alias)
+      const matchingCandidates = candidatesByRoot.get(normalizedRoot)
+      if (matchingCandidates) {
+        matchingCandidates.push(candidate)
+      } else {
+        candidatesByRoot.set(normalizedRoot, [candidate])
+      }
+    }
+  }
+  return { candidatesByRoot }
 }
 
 function makeWorktreeCandidate(
   worktree: Worktree,
   path: string,
   hostId: ExecutionHostId,
-  source: WorktreeCandidate['source']
+  source: WorktreeCandidate['source'],
+  order: number
 ): WorktreeCandidate {
-  const ownsCwd = createNormalizedPathInsideOrEqualMatcher(path)
-  // A WSL UNC root also owns sessions recorded under its Linux-native cwd.
-  const wslPath = parseWslUncPath(path)
-  const ownsCwdViaWslAlias = wslPath
-    ? createNormalizedPathInsideOrEqualMatcher(wslPath.linuxPath)
-    : null
   return {
     worktree,
     path,
     hostId,
     status: worktree.isArchived ? 'archived' : 'active',
     source,
-    ownsNormalizedCwd: (normalizedCwd) =>
-      ownsCwd(normalizedCwd) || (ownsCwdViaWslAlias?.(normalizedCwd) ?? false),
-    normalizedPathLength: normalizeRuntimePathForComparison(path).length
+    pathDepth: wslAliasedPathDepth(path),
+    order
   }
 }
 
@@ -253,12 +311,12 @@ function hasUsablePath(pathValue: string): boolean {
 }
 
 function compareWorktreeCandidates(left: WorktreeCandidate, right: WorktreeCandidate): number {
-  const lengthDifference = right.normalizedPathLength - left.normalizedPathLength
-  if (lengthDifference !== 0) {
-    return lengthDifference
+  const depthDifference = right.pathDepth - left.pathDepth
+  if (depthDifference !== 0) {
+    return depthDifference
   }
   if (left.source === right.source) {
-    return 0
+    return left.order - right.order
   }
   return left.source === 'current-path' ? -1 : 1
 }

@@ -125,6 +125,7 @@ export function resolveMobileAiVaultSessionResumeTarget(args: {
   const sessionWorktree = resolveMobileAgentHistorySessionWorktree({
     session: args.session,
     worktrees: args.worktrees,
+    repos: args.repos,
     activeWorktreeId: args.activeWorktreeId
   })
   const sessionWorktreeId = canResumeInMobileSessionWorktree(sessionWorktree)

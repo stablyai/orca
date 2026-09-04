@@ -272,6 +272,27 @@ describe('filterAiVaultSessions', () => {
     ).toHaveLength(1)
   })
 
+  it('matches Windows drive workspace paths against WSL /mnt/c session cwd values', () => {
+    expect(
+      filterAiVaultSessions(
+        [
+          {
+            ...baseSession,
+            cwd: '/mnt/c/Users/neil/orca/orca'
+          }
+        ],
+        {
+          query: '',
+          agents: ['claude'],
+          scope: 'workspace',
+          sort: 'updated',
+          activeWorktreePaths: [String.raw`C:\Users\neil\orca\orca`],
+          hideEmptySessions: true
+        }
+      )
+    ).toHaveLength(1)
+  })
+
   it('matches WSL UNC workspace paths against Linux session cwd values', () => {
     expect(
       filterAiVaultSessions(

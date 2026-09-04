@@ -186,6 +186,110 @@ describe('useAiVaultSessionWorktreeMap', () => {
     })
   })
 
+  it('matches a Windows drive worktree against a WSL /mnt/c session cwd', () => {
+    const windowsWorktree = makeWorktree({
+      id: String.raw`repo-1::C:\Users\neil\orca\orca`,
+      path: String.raw`C:\Users\neil\orca\orca`,
+      displayName: 'orca'
+    })
+    const session = makeSession({
+      id: 'claude:mnt-c',
+      cwd: '/mnt/c/Users/neil/orca/orca'
+    })
+
+    const { result } = renderHook(() =>
+      useAiVaultSessionWorktreeMap({
+        sessions: [session],
+        repos,
+        worktrees: [windowsWorktree]
+      })
+    )
+
+    expect(result.current.get(session.id)).toMatchObject({
+      status: 'active',
+      worktreeId: windowsWorktree.id
+    })
+  })
+
+  it('prefers the deepest worktree independently of its WSL alias spelling', () => {
+    const parent = makeWorktree({
+      id: String.raw`repo-1::\\wsl.localhost\Ubuntu\mnt\c\Users\neil\orca`,
+      path: String.raw`\\wsl.localhost\Ubuntu\mnt\c\Users\neil\orca`,
+      displayName: 'parent'
+    })
+    const nested = makeWorktree({
+      id: String.raw`repo-1::C:\Users\neil\orca\app`,
+      path: String.raw`C:\Users\neil\orca\app`,
+      displayName: 'nested'
+    })
+    const session = makeSession({
+      id: 'claude:nested-mnt-c',
+      cwd: '/mnt/c/Users/neil/orca/app/src'
+    })
+
+    const { result } = renderHook(() =>
+      useAiVaultSessionWorktreeMap({ sessions: [session], repos, worktrees: [parent, nested] })
+    )
+
+    expect(result.current.get(session.id)).toMatchObject({ worktreeId: nested.id })
+  })
+
+  it('prefers a drive root over its POSIX /mnt parent', () => {
+    const mountParent = makeWorktree({ id: 'repo-1::/mnt', path: '/mnt' })
+    const driveRoot = makeWorktree({ id: 'repo-1::C:\\', path: 'C:\\' })
+    const session = makeSession({ id: 'claude:drive-root', cwd: '/mnt/c/repo' })
+
+    const { result } = renderHook(() =>
+      useAiVaultSessionWorktreeMap({
+        sessions: [session],
+        repos,
+        worktrees: [mountParent, driveRoot]
+      })
+    )
+
+    expect(result.current.get(session.id)).toMatchObject({ worktreeId: driveRoot.id })
+  })
+
+  it('keeps first-wins ordering for equal-depth WSL aliases', () => {
+    const first = makeWorktree({
+      id: String.raw`repo-1::C:\Repo`,
+      path: String.raw`C:\Repo`,
+      displayName: 'first'
+    })
+    const second = makeWorktree({
+      id: 'repo-1::/mnt/c/repo',
+      path: '/mnt/c/repo',
+      displayName: 'second'
+    })
+    const session = makeSession({ id: 'claude:equal-depth', cwd: '/mnt/c/repo/src' })
+
+    const { result } = renderHook(() =>
+      useAiVaultSessionWorktreeMap({ sessions: [session], repos, worktrees: [first, second] })
+    )
+
+    expect(result.current.get(session.id)).toMatchObject({ worktreeId: first.id })
+  })
+
+  it('keeps raw /mnt paths case-sensitive on SSH hosts', () => {
+    const sshWorktree = makeWorktree({
+      id: 'repo-1::/mnt/c/Users/Neil/repo',
+      path: '/mnt/c/Users/Neil/repo',
+      hostId: 'ssh:linux'
+    })
+    const session = makeSession({
+      id: 'claude:ssh-mnt-c',
+      cwd: '/mnt/c/users/neil/repo/src',
+      executionHostId: 'ssh:linux'
+    })
+
+    const { result } = renderHook(() =>
+      useAiVaultSessionWorktreeMap({ sessions: [session], repos, worktrees: [sshWorktree] })
+    )
+
+    expect(result.current.get(session.id)).toMatchObject({ status: 'unavailable' })
+    expect(result.current.get(session.id)?.worktreeId).toBeUndefined()
+  })
+
   it('does not attribute a session to a workspace that merely shares a path prefix', () => {
     // Guards the candidate matcher's boundary: hoisting the root normalization
     // out of the loop must not degrade containment into a bare startsWith, or
@@ -219,6 +323,10 @@ describe('useAiVaultSessionWorktreeMap', () => {
       makeSession({ id: `codex:s${i}`, cwd: `/repo/w${i % manyWorktrees.length}/src` })
     )
 
+    // Isolate the production fanout from garbage retained by earlier renderHook cases.
+    const gc = (globalThis as { gc?: () => void }).gc
+    gc?.()
+    gc?.()
     const startedAt = performance.now()
     const { result } = renderHook(() =>
       useAiVaultSessionWorktreeMap({

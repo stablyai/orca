@@ -6,8 +6,11 @@ import {
   resolveMobileAgentHistorySessionWorktree
 } from './agent-history-session-worktree'
 
-function session(cwd: string | null): Pick<AiVaultSession, 'cwd'> {
-  return { cwd }
+function session(
+  cwd: string | null,
+  executionHostId: AiVaultSession['executionHostId'] = 'local'
+): Pick<AiVaultSession, 'cwd' | 'executionHostId'> {
+  return { cwd, executionHostId }
 }
 
 function worktree(overrides: Partial<Worktree> & { worktreeId: string; path: string }): Worktree {
@@ -68,6 +71,77 @@ describe('resolveMobileAgentHistorySessionWorktree', () => {
         activeWorktreeId: 'wt-1'
       })
     ).toBeNull()
+  })
+
+  it('matches a Windows drive worktree against a WSL /mnt/c transcript cwd', () => {
+    const resolved = resolveMobileAgentHistorySessionWorktree({
+      session: session('/mnt/c/Users/neil/orca/orca'),
+      worktrees: [
+        worktree({
+          worktreeId: 'win-wsl',
+          path: String.raw`C:\Users\neil\orca\orca`
+        })
+      ],
+      activeWorktreeId: 'win-wsl'
+    })
+    expect(resolved).toMatchObject({ status: 'current', worktreeId: 'win-wsl' })
+  })
+
+  it('does not attribute a local WSL session to a same-path SSH worktree', () => {
+    const resolved = resolveMobileAgentHistorySessionWorktree({
+      session: session('/mnt/c/Users/neil/orca/orca/src'),
+      worktrees: [
+        worktree({
+          worktreeId: 'ssh-mount',
+          path: '/mnt/c/Users/neil/orca/orca',
+          hostId: 'ssh:builder'
+        }),
+        worktree({
+          worktreeId: 'local-drive',
+          path: String.raw`C:\Users\neil\orca\orca`,
+          hostId: 'local'
+        })
+      ],
+      activeWorktreeId: 'ssh-mount'
+    })
+
+    expect(resolved).toMatchObject({ status: 'active', worktreeId: 'local-drive' })
+  })
+
+  it('prefers the deepest worktree independently of its WSL alias spelling', () => {
+    const resolved = resolveMobileAgentHistorySessionWorktree({
+      session: session('/mnt/c/Users/neil/orca/app/src'),
+      worktrees: [
+        worktree({
+          worktreeId: 'parent',
+          path: String.raw`\\wsl.localhost\Ubuntu\mnt\c\Users\neil\orca`
+        }),
+        worktree({
+          worktreeId: 'nested',
+          path: String.raw`C:\Users\neil\orca\app`
+        })
+      ],
+      activeWorktreeId: 'parent'
+    })
+
+    expect(resolved).toMatchObject({ status: 'active', worktreeId: 'nested' })
+  })
+
+  it('prefers a drive-root folder workspace over its POSIX /mnt parent', () => {
+    const resolved = resolveMobileAgentHistorySessionWorktree({
+      session: session('/mnt/c/repo'),
+      worktrees: [
+        worktree({ worktreeId: 'mount-parent', path: '/mnt' }),
+        worktree({
+          worktreeId: 'folder-drive-root',
+          path: 'C:\\',
+          workspaceKind: 'folder-workspace'
+        })
+      ],
+      activeWorktreeId: 'mount-parent'
+    })
+
+    expect(resolved).toMatchObject({ status: 'active', worktreeId: 'folder-drive-root' })
   })
 
   it('matches WSL UNC worktree paths against Linux transcript paths', () => {

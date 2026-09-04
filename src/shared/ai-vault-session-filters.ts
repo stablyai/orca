@@ -3,12 +3,11 @@
 // Metro only watches mobile/ + repo-root src/shared, never src/renderer.
 // INVARIANT: /shared is a leaf — this module must NOT import from src/renderer.
 import {
-  isPathInsideOrEqual,
   normalizeRuntimePathForComparison,
   normalizeRuntimePathSeparators
 } from './cross-platform-path'
 import { isClipboardTextByteLengthOverLimit } from './clipboard-text'
-import { parseWslUncPath } from './wsl-paths'
+import { createWslAliasedPathInsideOrEqualScopeMatcher } from './wsl-path-aliases'
 import type {
   AiVaultAgent,
   AiVaultGroup,
@@ -79,6 +78,10 @@ export function filterAiVaultSessions(
 
   const agentSet = new Set(filters.agents)
   const parsedQuery = parseVaultQuery(filters.query)
+  const ownsWorkspaceCwd =
+    filters.scope === 'workspace'
+      ? createWslAliasedPathInsideOrEqualScopeMatcher(filters.activeWorktreePaths)
+      : null
 
   return sessions
     .filter((session) => {
@@ -98,12 +101,8 @@ export function filterAiVaultSessions(
       }
       if (filters.scope === 'workspace') {
         const cwd = session.cwd
-        if (
-          !cwd ||
-          !filters.activeWorktreePaths.some((pathValue) =>
-            isAiVaultSessionInWorkspacePath(pathValue, cwd)
-          )
-        ) {
+        // WSL transcripts record `/home/...` or `/mnt/c/...` for Windows worktrees.
+        if (!cwd || !ownsWorkspaceCwd?.(cwd)) {
           return false
         }
       }
@@ -274,21 +273,6 @@ function getGroupIdentity(
     }
   }
   return { key: folderGroupKey(session.cwd), label: folderLabel(session.cwd) }
-}
-
-function isAiVaultSessionInWorkspacePath(workspacePath: string, sessionCwd: string): boolean {
-  if (isPathInsideOrEqual(workspacePath, sessionCwd)) {
-    return true
-  }
-
-  const workspaceWslPath = parseWslUncPath(workspacePath)
-  if (!workspaceWslPath) {
-    return false
-  }
-
-  // WSL agent transcripts record Linux cwd values even when Orca stores the
-  // active worktree as a Windows UNC path.
-  return isPathInsideOrEqual(workspaceWslPath.linuxPath, sessionCwd)
 }
 
 function tokenizeQuery(query: string): string[] {

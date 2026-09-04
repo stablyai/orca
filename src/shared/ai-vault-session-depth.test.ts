@@ -82,4 +82,18 @@ describe('Agent Session History depth', () => {
     ])
     expect(truncateAiVaultListResult(loaded, 'unlimited')).toBe(loaded)
   })
+
+  it('keeps a WSL /mnt/c session when the scope path is a Windows drive', () => {
+    const loaded = result([
+      session('global-1', '/other', 6),
+      session('global-2', '/other', 5),
+      session('mnt-c', '/mnt/c/Users/neil/orca/orca', 1)
+    ])
+
+    expect(
+      truncateAiVaultListResult(loaded, 2, [String.raw`C:\Users\neil\orca\orca`]).sessions.map(
+        ({ id }) => id
+      )
+    ).toEqual(['global-1', 'global-2', 'mnt-c'])
+  })
 })

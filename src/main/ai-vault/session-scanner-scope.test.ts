@@ -167,4 +167,46 @@ describe('scanAiVaultSessions scope inclusion', () => {
 
     expect(result.sessions.map((session) => session.sessionId)).toContain('old-wsl-in-scope')
   })
+
+  it('surfaces a WSL /mnt/c session for a Windows-drive workspace past the recency cap', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'orca-ai-vault-scope-mnt-'))
+    tempRoots.push(root)
+    const wslHome = join(root, 'wsl', 'Ubuntu', 'home', 'neil')
+    const claudeRoot = join(wslHome, '.claude', 'projects')
+
+    // Claude in WSL encodes the guest cwd, not the Windows drive spelling.
+    await writeClaudeSession({
+      claudeRoot,
+      dirName: '-mnt-c-users-neil-orca-orca',
+      sessionId: 'old-mnt-c-in-scope',
+      cwd: '/mnt/c/users/neil/orca/orca',
+      iso: '2026-01-01T00:00:00.000Z'
+    })
+    for (let index = 0; index < 4; index++) {
+      await writeClaudeSession({
+        claudeRoot,
+        dirName: `-other-mnt-${index}`,
+        sessionId: `recent-mnt-${index}`,
+        cwd: `/other/mnt/${index}`,
+        iso: `2026-06-2${index}T00:00:00.000Z`
+      })
+    }
+
+    const result = await scanAiVaultSessions(
+      scopedScanOptions(join(root, 'host-claude-projects'), {
+        wslHomeDirs: [wslHome],
+        platform: 'win32',
+        limit: 2,
+        scopePaths: [String.raw`C:\Users\Neil\orca\orca`]
+      })
+    )
+
+    expect(result.sessions.map((session) => session.sessionId)).toContain('old-mnt-c-in-scope')
+    expect(
+      result.sessions.find((session) => session.sessionId === 'old-mnt-c-in-scope')
+    ).toMatchObject({
+      cwd: '/mnt/c/users/neil/orca/orca',
+      agent: 'claude'
+    })
+  })
 })
