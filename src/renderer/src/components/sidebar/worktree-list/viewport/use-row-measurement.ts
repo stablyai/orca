@@ -1,4 +1,4 @@
-import { useCallback, useLayoutEffect, useMemo } from 'react'
+import { useCallback, useLayoutEffect, useMemo, useReducer } from 'react'
 import type React from 'react'
 import { useAppStore } from '@/store'
 import {
@@ -15,6 +15,7 @@ import { getRenderRowKey } from '../listing/render-row'
 import type { RenderRow } from '../listing/render-row'
 import type { WorktreeListVirtualizer } from './use-virtualizer'
 import { useVirtualRowRemovalAnimation } from './use-row-removal-animation'
+import { getReconciledVirtualScrollOffset } from './scroll-offset-reconcile'
 
 const recordKeyCountCache = new WeakMap<Record<string, unknown>, number>()
 
@@ -108,6 +109,31 @@ export function useVirtualRowMeasurementSync(args: {
     renderRowKeySignature,
     virtualizer
   ])
+
+  const [, rerenderAfterOffsetReconcile] = useReducer((count: number) => count + 1, 0)
+  useLayoutEffect(() => {
+    const el = scrollRef.current
+    if (!el) {
+      return
+    }
+    const reconciled = getReconciledVirtualScrollOffset({
+      believedOffset: virtualizer.scrollOffset,
+      scrollTop: el.scrollTop,
+      scrollHeight: el.scrollHeight,
+      clientHeight: el.clientHeight,
+      isScrolling: virtualizer.isScrolling
+    })
+    if (reconciled === null) {
+      return
+    }
+    // Why: a booked-but-unhonored scroll write leaves TanStack ranging and pinning from
+    // an offset the element never reached (see getReconciledVirtualScrollOffset); the
+    // element is the truth, and the re-render lets range and sticky slots follow it.
+    virtualizer.scrollOffset = reconciled
+    virtualizer.scrollAdjustments = 0
+    scrollOffsetRef.current = reconciled
+    rerenderAfterOffsetReconcile()
+  }, [renderRowKeySignature, scrollOffsetRef, scrollRef, totalSize, virtualizer])
 
   useVirtualizedScrollAnchor({
     anchorRef: scrollAnchorRef,
