@@ -26,6 +26,8 @@ export type MigrationUnsupportedPtyEntry = {
 export type AgentStatusIpcPayload = ParsedAgentStatusPayload & {
   paneKey: string
   launchToken?: string
+  /** Agent launch profile the pane spawned under, stamped by main from the spawn record. */
+  launchProfileId?: string
   terminalHandle?: string
   tabId?: string
   worktreeId?: string

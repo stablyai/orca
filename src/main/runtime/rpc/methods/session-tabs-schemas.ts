@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { isAgentLaunchProfileId } from '../../../../shared/agent-launch-profile/agent-launch-profile'
 import { MAX_QUICK_COMMAND_AGENT_PROMPT_LENGTH } from '../../../../shared/terminal-quick-commands'
 import { isTuiAgent } from '../../../../shared/tui-agent-config'
 import type { TuiAgent } from '../../../../shared/tui-agent'
@@ -153,6 +154,8 @@ export const CreateTerminalTab = WorktreeTabSelector.extend({
     .max(MAX_QUICK_COMMAND_AGENT_PROMPT_LENGTH)
     .refine((value) => value.trim().length > 0, { message: 'Agent prompt cannot be empty' })
     .optional(),
+  // Why: shape-only; the host resolves the id against its own catalog (see agent-session).
+  launchProfileId: z.string().refine(isAgentLaunchProfileId, 'Invalid launch profile').optional(),
   // Why: `agent` is the legacy preset field; `launchAgent` is the launch-plan
   // identity used when preserving resume config across runtime boundaries.
   launchAgent: z

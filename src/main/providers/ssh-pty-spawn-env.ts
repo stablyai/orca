@@ -1,3 +1,4 @@
+import { applyLaunchProfileHomeMarkersForRemoteHost } from '../agent-launch-profile/launch-profile-remote-home'
 import { seedPowerlevel10kWizardEnv } from '../pty/powerlevel10k-wizard-env'
 import type { RemoteCliBridgeEnv } from './ssh-pty-provider-contract'
 
@@ -30,6 +31,9 @@ export function buildSshPtySpawnEnv(args: {
   for (const key of args.envToDelete ?? []) {
     delete merged[key]
   }
+  // Why: this lane skips main's host-env builder and the relay never expands values, so the
+  // execution host's probed home is the only place a secondary-home marker can resolve.
+  applyLaunchProfileHomeMarkersForRemoteHost(merged, args.remoteCliBridgeEnv)
   seedPowerlevel10kWizardEnv(merged, { envToDelete: args.envToDelete })
   return merged
 }

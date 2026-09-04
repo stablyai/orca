@@ -50,10 +50,11 @@ export function useMobileSessionPanelRouteActions(scope: MobileSessionPresentati
       : createTabAgentOptions.length > 0
         ? createTabAgentOptions.map((option) => ({
             label: option.label,
+            ...(option.hint ? { hint: option.hint } : {}),
             renderIcon: () => <MobileAgentIcon agentId={option.agent} size={16} />,
             onPress: () => {
               setShowCreateTabDrawer(false)
-              void handleCreateTerminal(option.agent)
+              void handleCreateTerminal(option.agent, undefined, option.launchProfileId)
             }
           }))
         : createTabAgentLoadState === 'loaded'
@@ -100,10 +101,14 @@ export function useMobileSessionPanelRouteActions(scope: MobileSessionPresentati
                 if (!delivery) {
                   return
                 }
-                void handleCreateTerminal(option.agent, {
-                  initialPrompt: delivery.prompt,
-                  onPromptSent: () => void clearDeliveredDiffComments(delivery.comments)
-                })
+                void handleCreateTerminal(
+                  option.agent,
+                  {
+                    initialPrompt: delivery.prompt,
+                    onPromptSent: () => void clearDeliveredDiffComments(delivery.comments)
+                  },
+                  option.launchProfileId
+                )
               }
             }))
           : createTabAgentLoadState === 'loaded'

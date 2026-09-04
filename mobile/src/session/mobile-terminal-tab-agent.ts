@@ -17,8 +17,18 @@ import type { MobileSessionTab } from './mobile-session-route-types'
  */
 type MobileTerminalTabAgentIdentity = {
   title: string
-  agentStatus?: { agentType?: AgentStatusEntry['agentType'] | null } | null
+  agentStatus?: {
+    agentType?: AgentStatusEntry['agentType'] | null
+    launchProfileId?: AgentStatusEntry['launchProfileId'] | null
+  } | null
   launchAgent?: TuiAgent | null
+}
+
+/** The launch profile the host reports for the tab's agent, or null for a default launch. */
+export function resolveMobileTerminalTabLaunchProfileId(
+  tab: MobileTerminalTabAgentIdentity
+): string | null {
+  return tab.agentStatus?.launchProfileId?.trim() || null
 }
 
 /** Agent identity Orca owns, excluding the display-only title fallback. */

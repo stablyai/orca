@@ -1,3 +1,4 @@
+import type { AgentLaunchProfileSetting } from './agent-launch-profile/agent-launch-profile'
 import type { ExecutionHostId } from './execution-host'
 import type { GitHubProjectSettings } from './github/project-types'
 import type { VoiceSettings } from './speech-types'
@@ -376,6 +377,8 @@ export type GlobalSettings = {
   agentDefaultArgs?: Partial<Record<TuiAgent, string>>
   /** Per-agent launch environment defaults used when yolo mode is exposed as env. */
   agentDefaultEnv?: Partial<Record<TuiAgent, Record<string, string>>>
+  /** User-defined launch profiles (args/env per launch) on top of the built-in secondary homes. */
+  agentLaunchProfiles?: AgentLaunchProfileSetting[]
   /** One-shot guard for adding yolo-mode default args to untouched agent launch profiles. */
   agentYoloDefaultsMigrated?: boolean
   /** Why: disabling must persist so startup doesn't reinstall global agent hook entries the user just removed. */

@@ -50,7 +50,7 @@ export async function spawnLocalPty(
     plan
   })
   const finalEnv = envResult instanceof Promise ? await envResult : envResult
-  enforceLocalPtySpawnEnvironmentOverrides(args, finalEnv)
+  enforceLocalPtySpawnEnvironmentOverrides(args, finalEnv, plan)
   const historyResult = finalizeLocalPtySpawnEnvironment({
     spawn: args,
     getOptions,

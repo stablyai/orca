@@ -19,10 +19,7 @@ import {
 import { getLocalProjectExecutionRuntimeContext } from '@/lib/local-preflight-context'
 import { isWebRuntimeSessionActive } from '@/runtime/web-runtime-session'
 import { launchAgentInWebHostTab } from '@/lib/launch-agent-web-host-tab'
-import {
-  resolveTuiAgentLaunchArgs,
-  resolveTuiAgentLaunchEnv
-} from '../../../shared/tui-agent-launch-defaults'
+import { resolveNewTabAgentLaunch } from '@/lib/launch-agent-profile'
 import { resolveLocalWindowsAgentStartupShell } from '../../../shared/windows-terminal-shell'
 import { TUI_AGENT_CONFIG } from '../../../shared/tui-agent-config'
 import { seedCommandCodeSubmittedPromptStatus } from '@/lib/command-code-prompt-status-seed'
@@ -49,6 +46,8 @@ export type LaunchAgentInNewTabArgs = {
   prompt?: string
   /** Optional CLI arguments appended to the selected agent command. */
   agentArgs?: string | null
+  /** Built-in or user-defined launch profile for `agent`; unknown ids fail the launch. */
+  launchProfileId?: string | null
   initialCwd?: string | null
   /** How to deliver the prompt: `draft` leaves it editable, `submit-after-ready` sends it once the TUI is ready. */
   promptDelivery?: 'auto-submit' | 'draft' | 'submit-after-ready'
@@ -97,6 +96,7 @@ function launchAgentInNewTabInternal(
     groupId,
     prompt,
     agentArgs,
+    launchProfileId,
     initialCwd,
     promptDelivery = 'auto-submit',
     launchSource,
@@ -130,11 +130,10 @@ function launchAgentInNewTabInternal(
     terminalWindowsShell: store.settings?.terminalWindowsShell
   })
   const cmdOverrides = store.settings?.agentCmdOverrides ?? {}
-  const effectiveAgentArgs =
-    agentArgs !== undefined
-      ? agentArgs
-      : resolveTuiAgentLaunchArgs(agent, store.settings?.agentDefaultArgs)
-  const agentEnv = resolveTuiAgentLaunchEnv(agent, store.settings?.agentDefaultEnv)
+  const agentLaunch = resolveNewTabAgentLaunch(store.settings, agent, agentArgs, launchProfileId)
+  if (!agentLaunch) {
+    return null
+  }
   const trimmedPrompt = prompt?.trim() ?? ''
   const hasPrompt = trimmedPrompt.length > 0
   const isFollowupPath = TUI_AGENT_CONFIG[agent].promptInjectionMode === 'stdin-after-start'
@@ -155,8 +154,8 @@ function launchAgentInNewTabInternal(
     platform: resolvedLaunchPlatform,
     shell: queuedShell,
     isRemote,
-    agentArgs: effectiveAgentArgs,
-    agentEnv,
+    agentArgs: agentLaunch.agentArgs,
+    agentEnv: agentLaunch.agentEnv,
     sessionOptions: resolveInitialNativeChatSessionOptions(store.settings, initialViewModeOptions)
   }
   const { startupPlan, pasteDraftAfterLaunch, submitPastedPrompt } = planLaunchAgentStartupPrompt({
@@ -185,6 +184,7 @@ function launchAgentInNewTabInternal(
       pastePromptAfterReady: pasteDraftAfterLaunch,
       submitPastedPrompt,
       agentArgs,
+      ...(agentLaunch.launchProfileId ? { launchProfileId: agentLaunch.launchProfileId } : {}),
       // Why: omission means terminal locally, but would let a paired host apply
       // its own default; send the client's resolved terminal choice explicitly.
       viewMode: initialViewModeProps.viewMode ?? 'terminal',

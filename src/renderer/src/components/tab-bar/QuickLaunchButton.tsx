@@ -1,7 +1,17 @@
-import React, { useCallback } from 'react'
+import React, { useCallback, useMemo } from 'react'
 import { Loader2, Settings as SettingsIcon } from 'lucide-react'
 import { toast } from 'sonner'
-import { DropdownMenuItem, DropdownMenuShortcut } from '@/components/ui/dropdown-menu'
+import {
+  DropdownMenuItem,
+  DropdownMenuShortcut,
+  DropdownMenuSub,
+  DropdownMenuSubContent,
+  DropdownMenuSubTrigger
+} from '@/components/ui/dropdown-menu'
+import {
+  agentLaunchProfilesForAgent,
+  resolveAgentLaunchProfiles
+} from '../../../../shared/agent-launch-profile/agent-launch-profile'
 import { getAgentCatalog, AgentIcon } from '@/lib/agent-catalog'
 import { useAppStore } from '@/store'
 import { useAgentDetectionTargetForWorktree } from '@/hooks/useAgentDetectionTarget'
@@ -124,14 +134,21 @@ function QuickLaunchAgentMenuItemsInner({
     openSettingsPage()
   }, [openSettingsPage, openSettingsTarget])
 
+  const launchProfileSettings = useAppStore((s) => s.settings?.agentLaunchProfiles)
+  const launchProfiles = useMemo(
+    () => resolveAgentLaunchProfiles(launchProfileSettings),
+    [launchProfileSettings]
+  )
+
   const runLaunch = useCallback(
-    (agent: TuiAgent) => {
+    (agent: TuiAgent, launchProfileId?: string) => {
       const entry = getCatalogEntry(agent)
       const label = entry?.label ?? agent
       const result = launchAgentInNewTab({
         agent,
         worktreeId,
         groupId,
+        ...(launchProfileId ? { launchProfileId } : {}),
         ...(prompt !== undefined ? { prompt } : {}),
         ...(promptDelivery !== undefined ? { promptDelivery } : {}),
         ...(launchSource !== undefined ? { launchSource } : {}),
@@ -177,6 +194,7 @@ function QuickLaunchAgentMenuItemsInner({
     },
     [worktreeId, groupId, onFocusTerminal, prompt, promptDelivery, launchSource, onPromptDelivered]
   )
+  const profileItemClassName = 'gap-2 rounded-[7px] px-2 py-1.5 text-[12px] leading-5 font-medium'
 
   const enabledDetectedIds = detectedIds ? filterEnabledTuiAgents(detectedIds, disabledAgents) : []
   const agents = detectedIds ? orderAgents(defaultAgent, enabledDetectedIds) : []
@@ -204,20 +222,9 @@ function QuickLaunchAgentMenuItemsInner({
         const menuLabel = isStructuredCodexPending ? 'Starting Codex chat…' : label
         const showsDefaultAgentShortcut =
           newAgentShortcut !== null && defaultAgent !== 'blank' && agent === defaultAgent
-        return (
-          <DropdownMenuItem
-            key={agent}
-            disabled={isStructuredCodexPending}
-            onSelect={() => runLaunch(agent)}
-            className="gap-2 rounded-[7px] px-2 py-1.5 text-[12px] leading-5 font-medium"
-            title={translate(
-              'auto.components.tab.bar.QuickLaunchButton.ec2adf093e',
-              isStructuredCodexPending
-                ? 'Starting Codex chat…'
-                : 'Launch {{value0}} in a new terminal',
-              isStructuredCodexPending ? undefined : { value0: label }
-            )}
-          >
+        const agentProfiles = agentLaunchProfilesForAgent(launchProfiles, agent)
+        const itemContent = (
+          <>
             {isStructuredCodexPending ? (
               <Loader2 className="size-3.5 shrink-0 animate-spin" aria-hidden="true" />
             ) : (
@@ -227,6 +234,64 @@ function QuickLaunchAgentMenuItemsInner({
             {showsDefaultAgentShortcut ? (
               <DropdownMenuShortcut>{newAgentShortcut}</DropdownMenuShortcut>
             ) : null}
+          </>
+        )
+        if (agentProfiles.length > 0) {
+          // Why: a profile is an alternative way to launch the same agent, so it nests under the
+          // agent instead of widening the flat list with one row per account or provider.
+          return (
+            <DropdownMenuSub key={agent}>
+              <DropdownMenuSubTrigger
+                disabled={isStructuredCodexPending}
+                className={profileItemClassName}
+              >
+                {itemContent}
+              </DropdownMenuSubTrigger>
+              <DropdownMenuSubContent className="min-w-48">
+                <DropdownMenuItem
+                  onSelect={() => runLaunch(agent)}
+                  className={profileItemClassName}
+                >
+                  <span className="flex-1">
+                    {translate(
+                      'auto.components.tab.bar.QuickLaunchButton.launchProfileDefault',
+                      'Default launch'
+                    )}
+                  </span>
+                </DropdownMenuItem>
+                {agentProfiles.map((profile) => (
+                  <DropdownMenuItem
+                    key={profile.id}
+                    onSelect={() => runLaunch(agent, profile.id)}
+                    className={profileItemClassName}
+                    title={translate(
+                      'auto.components.tab.bar.QuickLaunchButton.launchProfileTitle',
+                      'Launch {{value0}} with the {{value1}} profile',
+                      { value0: label, value1: profile.label }
+                    )}
+                  >
+                    <span className="flex-1">{profile.label}</span>
+                  </DropdownMenuItem>
+                ))}
+              </DropdownMenuSubContent>
+            </DropdownMenuSub>
+          )
+        }
+        return (
+          <DropdownMenuItem
+            key={agent}
+            disabled={isStructuredCodexPending}
+            onSelect={() => runLaunch(agent)}
+            className={profileItemClassName}
+            title={translate(
+              'auto.components.tab.bar.QuickLaunchButton.ec2adf093e',
+              isStructuredCodexPending
+                ? 'Starting Codex chat…'
+                : 'Launch {{value0}} in a new terminal',
+              isStructuredCodexPending ? undefined : { value0: label }
+            )}
+          >
+            {itemContent}
           </DropdownMenuItem>
         )
       })}

@@ -1,4 +1,5 @@
 import { mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs'
+import { isAgentLaunchProfileId } from '../../shared/agent-launch-profile/agent-launch-profile'
 import { isDefinitiveAbsence } from '../../shared/definitive-filesystem-absence'
 import { dirname, join } from 'node:path'
 import { getOrcaUserDataPath } from './codex-home-paths'
@@ -8,10 +9,12 @@ import type {
   CodexPaneAccountRegistryFile,
   CodexPaneHomeRoute
 } from './codex-pane-account-registry-types'
-import type {
-  CodexEnvironmentHomeOverride,
-  CodexShellStartupHomeOverride
-} from './codex-real-home-path'
+import {
+  isEnvironmentHomeOverride,
+  isPaneAccountRecord,
+  isPaneHomeRoute,
+  isShellStartupHomeOverride
+} from './codex-pane-account-record-validation'
 
 export type {
   CodexPaneAccountRecord,
@@ -138,56 +141,14 @@ function parseRegistry(parsed: unknown): CodexPaneAccountRegistryFile {
           : {}),
         ...(isEnvironmentHomeOverride(record.environmentHomeOverride)
           ? { environmentHomeOverride: record.environmentHomeOverride }
+          : {}),
+        ...(isAgentLaunchProfileId(record.launchProfileId)
+          ? { launchProfileId: record.launchProfileId }
           : {})
       }
     }
   }
   return empty
-}
-
-function isEnvironmentHomeOverride(value: unknown): value is CodexEnvironmentHomeOverride {
-  if (!value || typeof value !== 'object' || Array.isArray(value)) {
-    return false
-  }
-  const context = value as Partial<CodexEnvironmentHomeOverride>
-  return typeof context.codexHome === 'string' && context.codexHome.length > 0
-}
-
-function isShellStartupHomeOverride(value: unknown): value is CodexShellStartupHomeOverride {
-  if (!value || typeof value !== 'object' || Array.isArray(value)) {
-    return false
-  }
-  const context = value as Partial<CodexShellStartupHomeOverride>
-  return (
-    typeof context.home === 'string' &&
-    context.home.length > 0 &&
-    (context.shell === undefined || typeof context.shell === 'string') &&
-    (context.configHome === undefined || typeof context.configHome === 'string') &&
-    typeof context.codexHome === 'string' &&
-    context.codexHome.length > 0
-  )
-}
-
-function isPaneAccountRecord(value: unknown): value is CodexPaneAccountRecord {
-  if (!value || typeof value !== 'object' || Array.isArray(value)) {
-    return false
-  }
-  const record = value as Partial<CodexPaneAccountRecord>
-  return (
-    (record.selectionKey === 'host' ||
-      (typeof record.selectionKey === 'string' && /^wsl:.+/.test(record.selectionKey))) &&
-    (record.accountId === null || typeof record.accountId === 'string')
-  )
-}
-
-function isPaneHomeRoute(value: unknown): value is CodexPaneHomeRoute {
-  return (
-    value === 'real-home' ||
-    value === 'shared-home' ||
-    value === 'account-home' ||
-    value === 'custom-home' ||
-    value === 'wsl-home'
-  )
 }
 
 function writeRegistry(registry: CodexPaneAccountRegistryFile): boolean {

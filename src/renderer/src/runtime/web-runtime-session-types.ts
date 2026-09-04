@@ -33,6 +33,8 @@ export type CreateWebRuntimeSessionTerminalArgs = {
   promptDelivery?: AgentPromptDelivery
   /** Explicit CLI override; omission leaves the remote host's defaults authoritative. */
   agentArgs?: string | null
+  /** Host-validated launch profile; requires the launch-profile capability on the host. */
+  launchProfileId?: string
   launchPreferences?: AgentLaunchPreferences
   providerSession?: AgentProviderSessionMetadata
   viewMode?: 'terminal' | 'chat'

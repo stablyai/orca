@@ -7,6 +7,7 @@ import {
   codexReattachedHomeRouteField
 } from '../host-env/codex-home'
 import { markClaudePtySpawned } from '../../../claude-accounts/live-pty-gate'
+import { recordPaneLaunchProfileForSpawn } from '../../../agent-launch-profile/pane-launch-profile-registry'
 import { registerPty } from '../../../memory/pty-registry'
 import { rememberPaneKeyForPty } from '../pane/key-state'
 import {
@@ -138,6 +139,11 @@ export async function commitRuntimePtySpawn(ctx: RuntimePtySpawnState) {
     launchEnv: args.env,
     target: ctx.codexSelectionTarget,
     settings: ctx.deps.getSettings?.()
+  })
+  recordPaneLaunchProfileForSpawn({
+    ptyId: ctx.result.id,
+    isReattach: ctx.result.isReattach === true,
+    launchEnv: args.env
   })
   if (ctx.hostSessionBinding && !ctx.stablePaneBindingPersisted) {
     try {

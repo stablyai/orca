@@ -14,9 +14,11 @@ import { MobileSessionHeaderIconButton } from './MobileSessionHeaderIconButton'
 import { triggerMediumImpact } from '../platform/haptics'
 import { StatusDot } from '../components/StatusDot'
 import { MobileAgentIcon } from '../components/MobileAgentIcon'
+import { mobileLaunchProfileBadge } from './mobile-launch-profile-labels'
 import {
   getMobileSessionTabTitle,
-  resolveMobileTerminalTabAgentId
+  resolveMobileTerminalTabAgentId,
+  resolveMobileTerminalTabLaunchProfileId
 } from './mobile-terminal-tab-agent'
 import { colors } from '../theme/mobile-theme'
 import { QuickCommandsTabButton } from './QuickCommandsTabButton'
@@ -173,6 +175,17 @@ export function MobileSessionHeader({ controller }: { controller: MobileSessionC
                     (() => {
                       const agentId = resolveMobileTerminalTabAgentId(t)
                       return agentId ? <MobileAgentIcon agentId={agentId} size={13} /> : null
+                    })()}
+                  {t.type === 'terminal' &&
+                    (() => {
+                      const badge = mobileLaunchProfileBadge(
+                        resolveMobileTerminalTabLaunchProfileId(t)
+                      )
+                      return badge ? (
+                        <Text style={styles.tabProfileBadge} numberOfLines={1}>
+                          {badge}
+                        </Text>
+                      ) : null
                     })()}
                   <Text
                     style={[styles.tabText, t.id === activeSessionTabId && styles.tabTextActive]}

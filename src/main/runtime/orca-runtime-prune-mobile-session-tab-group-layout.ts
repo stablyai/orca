@@ -1,6 +1,7 @@
 // @ts-nocheck -- mechanically split from OrcaRuntimeService; behavior is covered by AST equivalence and characterization tests.
 import { OrcaRuntimeWithScheduleMobileSessionTabsChanged } from './orca-runtime-schedule-mobile-session-tabs-changed'
 import type { TabGroupLayoutNode } from '../../shared/tab-types'
+import { getPaneLaunchProfile } from '../agent-launch-profile/pane-launch-profile-registry'
 import type {
   RuntimeMobileSessionSnapshotTab,
   RuntimeMobileSessionTabGroup,
@@ -209,6 +210,10 @@ export class OrcaRuntimeWithPruneMobileSessionTabGroupLayout extends OrcaRuntime
 
   getAgentStatusTerminalHandleForPaneKey(paneKey: string): string | undefined {
     return this.getTerminalHandleForPaneKey(paneKey) ?? undefined
+  }
+
+  getAgentStatusLaunchProfileForPaneKey(paneKey: string): string | undefined {
+    return getPaneLaunchProfile(this.getPtyRecordForPaneKey(paneKey)?.ptyId)
   }
 
   getAgentStatusLaunchConfigForPaneKey(

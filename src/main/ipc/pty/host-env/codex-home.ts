@@ -1,3 +1,8 @@
+import {
+  agentLaunchProfileIdFromEnv,
+  hasAgentLaunchProfileHomeMarker
+} from '../../../../shared/agent-launch-profile/agent-launch-profile'
+import { getCodexSelectionLaneKey } from '../../../../shared/codex-selection-lane'
 import { normalizeRuntimePathForComparison } from '../../../../shared/cross-platform-path'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import { isTuiAgentEnabled } from '../../../../shared/tui-agent-selection'
@@ -230,6 +235,20 @@ export function recordCodexPaneAccountForSpawn(args: {
   settings: GlobalSettings | undefined
 }): void {
   if (!args.ptyId || !args.isDaemonHostSpawn || args.isReattach) {
+    return
+  }
+  // Why: a secondary-home launch runs on a user-owned directory the managed selection never
+  // touched, so attributing it to the selected account would mislabel every stale-pane prompt.
+  const launchProfileId = hasAgentLaunchProfileHomeMarker(args.launchEnv, 'CODEX_HOME')
+    ? agentLaunchProfileIdFromEnv(args.launchEnv)
+    : null
+  if (launchProfileId) {
+    recordCodexPaneAccount(args.ptyId, {
+      selectionKey: getCodexSelectionLaneKey(args.target),
+      accountId: null,
+      homeRoute: 'custom-home',
+      launchProfileId
+    })
     return
   }
   const customHomeOverride = getCustomCodexHomeOverrideForLaunch(args.launchEnv)

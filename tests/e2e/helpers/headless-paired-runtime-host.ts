@@ -81,6 +81,8 @@ export async function launchHeadlessPairedRuntimeHost(
     executablePath?: string
     /** Bind a stable loopback port so `restartServeProcess` can reclaim it. */
     pinnedServePort?: boolean
+    /** Settings merged into the seeded profile before the host starts (e.g. `agentCmdOverrides`). */
+    settings?: Record<string, unknown>
     userDataParent?: string
   } = {}
 ): Promise<HeadlessPairedRuntimeHost> {
@@ -94,9 +96,14 @@ export async function launchHeadlessPairedRuntimeHost(
     agentBrowserSocketDir = options.agentBrowserSocketParent
       ? mkdtempSync(path.join(options.agentBrowserSocketParent, 'orca-ab-'))
       : null
+    const profile = getE2ECompletedOnboardingProfile()
     writeFileSync(
       path.join(userDataDir, 'orca-data.json'),
-      `${JSON.stringify(getE2ECompletedOnboardingProfile(), null, 2)}\n`
+      `${JSON.stringify(
+        { ...profile, settings: { ...profile.settings, ...options.settings } },
+        null,
+        2
+      )}\n`
     )
     const { ELECTRON_RUN_AS_NODE: _unused, ...cleanEnv } = process.env
     void _unused

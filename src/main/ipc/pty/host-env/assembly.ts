@@ -1,4 +1,5 @@
 import { join, delimiter } from 'node:path'
+import { hasAgentLaunchProfileHomeMarker } from '../../../../shared/agent-launch-profile/agent-launch-profile'
 import { resolveSetupAgentSequenceLaunchCommand } from '../../../../shared/setup-agent-sequencing'
 import {
   detectExplicitPiAgentKindFromCommand,
@@ -221,6 +222,11 @@ export function buildPtyHostEnv(
     stripInheritedOrcaCodexHomeOverride(baseEnv)
     delete baseEnv.ORCA_CODEX_LAUNCH_PREFLIGHT
   } else {
+    delete baseEnv.ORCA_CODEX_LAUNCH_PREFLIGHT
+  }
+  if (hasAgentLaunchProfileHomeMarker(baseEnv, 'CODEX_HOME')) {
+    // Why: the preflight repairs hooks inside the managed home; a secondary home is user-owned
+    // and the daemon relocates CODEX_HOME after this env is built.
     delete baseEnv.ORCA_CODEX_LAUNCH_PREFLIGHT
   }
 

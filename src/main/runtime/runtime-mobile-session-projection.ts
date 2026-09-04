@@ -204,6 +204,9 @@ export function projectRuntimeMobileSessionTabs(
               paneKey: normalizedTabAgentStatus.paneKey,
               stateHistory: [],
               agentType: normalizedTabAgentStatus.agentType,
+              ...(normalizedTabAgentStatus.launchProfileId
+                ? { launchProfileId: normalizedTabAgentStatus.launchProfileId }
+                : {}),
               ...(normalizedTabAgentStatus.providerSession
                 ? { providerSession: normalizedTabAgentStatus.providerSession }
                 : {})

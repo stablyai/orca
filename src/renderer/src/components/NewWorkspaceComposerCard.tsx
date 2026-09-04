@@ -25,6 +25,10 @@ import type { RuntimeStatus } from '../../../shared/runtime-types'
 import type { TuiAgent } from '../../../shared/tui-agent'
 import { NewWorkspaceComposerAdvancedSection } from './new-workspace/NewWorkspaceComposerAdvancedSection'
 import { NewWorkspaceComposerAgentSection } from './new-workspace/NewWorkspaceComposerAgentSection'
+import {
+  agentLaunchProfilesForAgent,
+  resolveAgentLaunchProfiles
+} from '../../../shared/agent-launch-profile/agent-launch-profile'
 import { NewWorkspaceComposerFooter } from './new-workspace/NewWorkspaceComposerFooter'
 import { NewWorkspaceComposerNameSection } from './new-workspace/NewWorkspaceComposerNameSection'
 import { NewWorkspaceComposerProjectSection } from './new-workspace/NewWorkspaceComposerProjectSection'
@@ -157,6 +161,17 @@ export default function NewWorkspaceComposerCard(
   const setupSkipButtonLabel = setupConfig?.kind === 'setup' ? 'Skip for now' : 'Skip commands'
   const showSetupAgentStartupPolicy =
     setupControlsEnabled && setupConfig !== null && setupConfig.kind !== 'default-tabs'
+  const agentLaunchProfiles = useAppStore((state) => state.settings?.agentLaunchProfiles)
+  const quickLaunchProfiles = React.useMemo(
+    () =>
+      props.quickAgent
+        ? agentLaunchProfilesForAgent(
+            resolveAgentLaunchProfiles(agentLaunchProfiles),
+            props.quickAgent
+          )
+        : [],
+    [agentLaunchProfiles, props.quickAgent]
+  )
   const agentCatalog = getAgentCatalog()
   const enabledAgentIds = new Set(
     filterEnabledTuiAgents(
@@ -323,6 +338,7 @@ export default function NewWorkspaceComposerCard(
         <NewWorkspaceComposerNameSection {...props} onNamePlainEnter={handleNamePlainEnter} />
         <NewWorkspaceComposerAgentSection
           {...props}
+          quickLaunchProfiles={quickLaunchProfiles}
           visibleQuickAgents={visibleQuickAgents}
           defaultTuiAgent={defaultTuiAgent}
           handleSetDefaultAgent={handleSetDefaultAgent}

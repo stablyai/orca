@@ -3,6 +3,7 @@ import { markNativeWindowsConptyPty } from '../../../runtime/terminal-model-quer
 import { closeStartupQueryAuthorityForPty, getRelayPtyId } from '../provider/registry'
 import { createTerminalSessionStateSaveFailureMessage } from '../../../../shared/terminal-session-state-save-failure'
 import { recordCodexPaneAccountForSpawn } from '../host-env/codex-home'
+import { recordPaneLaunchProfileForSpawn } from '../../../agent-launch-profile/pane-launch-profile-registry'
 import { persistAdmittedStablePaneBinding } from '../pane/stable-owner'
 import {
   pendingByPaneKey,
@@ -50,6 +51,11 @@ export async function persistPtyIpcSpawnCommit(ctx: PtyIpcSpawnState): Promise<{
     launchEnv: ctx.baseEnv,
     target: ctx.codexSelectionTarget,
     settings: ctx.deps.getSettings?.()
+  })
+  recordPaneLaunchProfileForSpawn({
+    ptyId: ctx.result.id,
+    isReattach: ctx.result.isReattach === true,
+    launchEnv: ctx.baseEnv
   })
   ptyOwnership.set(ctx.result.id, args.connectionId ?? null)
   if (ctx.result.incarnationId) {

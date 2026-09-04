@@ -2,6 +2,14 @@ import React from 'react'
 import { ChevronDown, Settings2 } from 'lucide-react'
 import AgentCombobox from '@/components/agent/AgentCombobox'
 import { Button } from '@/components/ui/button'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue
+} from '@/components/ui/select'
+import type { AgentLaunchProfile } from '../../../../shared/agent-launch-profile/agent-launch-profile'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { cn } from '@/lib/utils'
 import { translate } from '@/i18n/i18n'
@@ -11,12 +19,16 @@ type NewWorkspaceComposerAgentSectionProps = Pick<
   NewWorkspaceComposerCardProps,
   | 'quickAgent'
   | 'onQuickAgentChange'
+  | 'quickLaunchProfileId'
+  | 'onQuickLaunchProfileChange'
   | 'onOpenAgentSettings'
   | 'createDisabled'
   | 'onCreate'
   | 'advancedOpen'
   | 'onToggleAdvanced'
 > & {
+  /** Profiles of the selected agent; the picker stays hidden while this is empty. */
+  quickLaunchProfiles: readonly AgentLaunchProfile[]
   visibleQuickAgents: React.ComponentProps<typeof AgentCombobox>['agents']
   defaultTuiAgent: React.ComponentProps<typeof AgentCombobox>['defaultAgent']
   handleSetDefaultAgent: (
@@ -24,9 +36,16 @@ type NewWorkspaceComposerAgentSectionProps = Pick<
   ) => void
 }
 
+// Why: Radix Select rejects an empty value, and a profile id is a lowercase dash slug, so an
+// underscored token can never collide with one.
+const DEFAULT_LAUNCH_VALUE = '__default_launch__'
+
 export function NewWorkspaceComposerAgentSection({
   quickAgent,
   onQuickAgentChange,
+  quickLaunchProfileId,
+  onQuickLaunchProfileChange,
+  quickLaunchProfiles,
   onOpenAgentSettings,
   createDisabled,
   onCreate,
@@ -76,6 +95,38 @@ export function NewWorkspaceComposerAgentSection({
           triggerClassName="h-9 w-full min-w-0 border-input text-sm focus:border-ring focus:ring-[3px] focus:ring-ring/50"
           onTriggerEnter={createDisabled ? undefined : onCreate}
         />
+        {quickLaunchProfiles.length > 0 ? (
+          <Select
+            value={quickLaunchProfileId ?? DEFAULT_LAUNCH_VALUE}
+            onValueChange={(value) =>
+              onQuickLaunchProfileChange(value === DEFAULT_LAUNCH_VALUE ? null : value)
+            }
+          >
+            <SelectTrigger
+              size="sm"
+              className="w-full min-w-0"
+              aria-label={translate(
+                'auto.components.NewWorkspaceComposerCard.launchProfileLabel',
+                'Launch profile'
+              )}
+            >
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value={DEFAULT_LAUNCH_VALUE}>
+                {translate(
+                  'auto.components.NewWorkspaceComposerCard.launchProfileDefault',
+                  'Default launch'
+                )}
+              </SelectItem>
+              {quickLaunchProfiles.map((profile) => (
+                <SelectItem key={profile.id} value={profile.id}>
+                  {profile.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        ) : null}
       </div>
 
       <div className="!mb-2">

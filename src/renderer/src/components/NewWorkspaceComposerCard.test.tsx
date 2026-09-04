@@ -221,6 +221,8 @@ function renderCard(
       <NewWorkspaceComposerCard
         quickAgent={null}
         onQuickAgentChange={() => {}}
+        quickLaunchProfileId={null}
+        onQuickLaunchProfileChange={() => {}}
         eligibleRepos={[]}
         repoId="repo-a"
         projectOptions={projectOptions}
@@ -922,5 +924,14 @@ describe('NewWorkspaceComposerCard note sizing', () => {
     expect(className).toContain('overflow-y-auto')
     expect(className).toContain('scrollbar-sleek')
     expect(className).not.toContain('overflow-hidden')
+  })
+
+  it('offers a launch-profile picker only for agents that have profiles', () => {
+    current = renderCard({ quickAgent: 'codex' })
+    expect(current.container.querySelector('[aria-label="Launch profile"]')).not.toBeNull()
+    unmountCurrent()
+
+    current = renderCard({ quickAgent: 'gemini' })
+    expect(current.container.querySelector('[aria-label="Launch profile"]')).toBeNull()
   })
 })

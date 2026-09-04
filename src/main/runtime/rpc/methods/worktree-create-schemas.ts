@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { isAgentLaunchProfileId } from '../../../../shared/agent-launch-profile/agent-launch-profile'
 import { isTuiAgent } from '../../../../shared/tui-agent-config'
 import { workspaceSourceSchema } from '../../../../shared/telemetry-events'
 import { sleepingAgentLaunchConfigSchema } from '../../../../shared/workspace-session-sleeping-agents'
@@ -109,6 +110,10 @@ export const WorktreeCreate = z
     // Why: CLI clients should not hardcode agent launch quoting because SSH
     // workspaces execute in a different shell than the client process.
     startupAgent: OptionalTuiAgent,
+    startupLaunchProfileId: z
+      .string()
+      .refine(isAgentLaunchProfileId, 'Invalid launch profile')
+      .optional(),
     startupPrompt: OptionalString,
     // Why: task-driven mobile creates need desktop parity: the host chooses
     // the same default/detected agent and drafts the linked issue/PR URL into it.
@@ -135,6 +140,13 @@ export const WorktreeCreate = z
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
         message: 'Choose either one parent selector or --no-parent.'
+      })
+    }
+    if (params.startupLaunchProfileId !== undefined && params.startupAgent === undefined) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['startupLaunchProfileId'],
+        message: 'startupLaunchProfileId requires startupAgent'
       })
     }
     if (params.startupPrompt !== undefined && params.startupAgent === undefined) {

@@ -5,6 +5,7 @@ import type { MobileSessionTab } from './mobile-session-route-types'
 import {
   getMobileSessionTabTitle,
   resolveMobileTerminalTabAgentId,
+  resolveMobileTerminalTabLaunchProfileId,
   resolveMobileTerminalTabOwnedAgentId
 } from './mobile-terminal-tab-agent'
 
@@ -73,6 +74,25 @@ describe('resolveMobileTerminalTabAgentId', () => {
     expect(
       resolveMobileTerminalTabAgentId(terminalTab('Codex ready', { agentType: 'unknown' }))
     ).toBe('codex')
+  })
+})
+
+describe('resolveMobileTerminalTabLaunchProfileId', () => {
+  it('reports the host-stamped launch profile and nothing for a default launch', () => {
+    const tab = terminalTab('Terminal', { agentType: 'codex' })
+    expect(resolveMobileTerminalTabLaunchProfileId(tab)).toBeNull()
+    expect(
+      resolveMobileTerminalTabLaunchProfileId({
+        ...tab,
+        agentStatus: { ...tab.agentStatus!, launchProfileId: 'codex-secondary-home' }
+      })
+    ).toBe('codex-secondary-home')
+    expect(
+      resolveMobileTerminalTabLaunchProfileId({
+        ...tab,
+        agentStatus: { ...tab.agentStatus!, launchProfileId: '  ' }
+      })
+    ).toBeNull()
   })
 })
 

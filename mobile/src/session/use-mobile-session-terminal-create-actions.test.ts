@@ -111,6 +111,28 @@ describe('mobile + Codex tab creation routing', () => {
     expect(scope.unsubscribeTerminal).toHaveBeenCalledWith('existing-terminal')
   })
 
+  it('routes a Codex launch profile through the terminal path with the profile id', async () => {
+    const client = clientReturning(terminalCreateResponse())
+    const scope = createScope(client)
+    let actions: ReturnType<typeof useMobileSessionTerminalCreateActions> | undefined
+    function Harness() {
+      actions = useMobileSessionTerminalCreateActions(scope as never)
+      return null
+    }
+    await act(async () => {
+      renderer = create(createElement(Harness))
+    })
+    await act(async () => {
+      await actions?.handleCreateTerminal('codex', undefined, 'codex-secondary-home')
+    })
+
+    expect(client.sendRequest).toHaveBeenCalledTimes(1)
+    expect(client.sendRequest).toHaveBeenCalledWith(
+      'session.tabs.createTerminal',
+      expect.objectContaining({ agent: 'codex', launchProfileId: 'codex-secondary-home' })
+    )
+  })
+
   it('keeps the legacy terminal path when structured support is disabled', async () => {
     const client = clientReturning(
       { ok: false, error: { code: 'structured_agent_session_unsupported', message: 'off' } },

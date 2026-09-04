@@ -3,6 +3,8 @@ import type { Repo } from '../../shared/repo-types'
 import type { TuiAgent } from '../../shared/tui-agent'
 import type { WorktreeStartupLaunch } from '../../shared/worktree/launch-types'
 import { repoIsRemote } from '../../shared/agent-launch-remote'
+import { applyAgentLaunchProfile } from '../../shared/agent-launch-profile/agent-launch-profile'
+import { resolveRequestedAgentLaunchProfile } from '../agent-launch-profile/requested-launch-profile'
 import { getRepoSshConnectionId } from '../../shared/execution-host'
 import { isTuiAgent, TUI_AGENT_CONFIG } from '../../shared/tui-agent-config'
 import { isTuiAgentEnabled, pickTuiAgent } from '../../shared/tui-agent-selection'
@@ -130,6 +132,7 @@ export function buildWorktreeStartupForAgent(
     agent: TuiAgent
     prompt?: string
     launchPreferences?: AgentLaunchPreferences
+    launchProfileId?: string
     toSessionOptions: (
       preferences?: AgentLaunchPreferences
     ) => Parameters<typeof buildAgentStartupPlan>[0]['sessionOptions'] | undefined
@@ -142,12 +145,21 @@ export function buildWorktreeStartupForAgent(
   const platform = environment.getLaunchPlatform()
   const isRemote = repoIsRemote(repo)
   const sessionOptions = environment.toSessionOptions(environment.launchPreferences)
+  const launch = applyAgentLaunchProfile({
+    profile: resolveRequestedAgentLaunchProfile({
+      agent,
+      launchProfileId: environment.launchProfileId,
+      settings
+    }),
+    agentArgs: resolveTuiAgentLaunchArgs(agent, settings.agentDefaultArgs),
+    agentEnv: resolveTuiAgentLaunchEnv(agent, settings.agentDefaultEnv)
+  })
   const startupPlan = buildAgentStartupPlan({
     agent,
     prompt: environment.prompt ?? '',
     cmdOverrides: settings.agentCmdOverrides ?? {},
-    agentArgs: resolveTuiAgentLaunchArgs(agent, settings.agentDefaultArgs),
-    agentEnv: resolveTuiAgentLaunchEnv(agent, settings.agentDefaultEnv),
+    agentArgs: launch.agentArgs,
+    agentEnv: launch.agentEnv,
     sessionOptions,
     sessionOptionsOverrideAgentArgs: Boolean(sessionOptions),
     platform,

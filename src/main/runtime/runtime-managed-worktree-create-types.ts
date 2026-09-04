@@ -50,6 +50,8 @@ export type RuntimeManagedWorktreeCreateArgs = {
   createdWithAgent?: TuiAgent
   startupAgent?: TuiAgent
   startupLaunchPreferences?: AgentLaunchPreferences
+  /** Launch profile for `startupAgent`; validated against the host catalog at create time. */
+  startupLaunchProfileId?: string
   startupPrompt?: string
   pendingFirstAgentMessageRename?: boolean
   automationProvenance?: AutomationWorkspaceProvenance

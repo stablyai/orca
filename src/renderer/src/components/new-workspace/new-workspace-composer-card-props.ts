@@ -35,6 +35,9 @@ export type NewWorkspaceComposerCardProps = {
   nameInputRef?: React.RefObject<HTMLInputElement | null>
   quickAgent: TuiAgent | null
   onQuickAgentChange: (agent: TuiAgent | null) => void
+  /** Null is the agent's default launch; ids come from the host's launch-profile catalog. */
+  quickLaunchProfileId: string | null
+  onQuickLaunchProfileChange: (launchProfileId: string | null) => void
   eligibleRepos: readonly RepoOption[]
   repoId: string
   projectOptions?: NewWorkspaceProjectOption[]

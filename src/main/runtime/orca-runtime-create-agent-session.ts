@@ -16,6 +16,8 @@ import {
   AGENT_SESSION_OPERATION_PER_CLIENT_LIMIT
 } from './orca-runtime-core'
 import { isTuiAgentEnabled } from '../../shared/tui-agent-selection'
+import { applyAgentLaunchProfile } from '../../shared/agent-launch-profile/agent-launch-profile'
+import { resolveRequestedAgentLaunchProfile } from '../agent-launch-profile/requested-launch-profile'
 import { resolveLocalWindowsAgentStartupShell } from '../../shared/windows-terminal-shell'
 import {
   resolveTuiAgentLaunchArgs,
@@ -138,6 +140,7 @@ export class OrcaRuntimeWithCreateAgentSession extends OrcaRuntimeWithGetAgentSe
             request.launchPreferences?.model ?? null,
             request.launchPreferences?.effort ?? null,
             request.launchPreferences?.mode ?? null,
+            request.launchProfileId ?? null,
             startupCwd ?? null,
             request.presentation ?? null,
             request.placement?.tabId ?? null,
@@ -159,14 +162,24 @@ export class OrcaRuntimeWithCreateAgentSession extends OrcaRuntimeWithGetAgentSe
         isRemote,
         terminalWindowsShell: settings.terminalWindowsShell
       })
+      const launchProfile = resolveRequestedAgentLaunchProfile({
+        agent: request.agent,
+        launchProfileId: request.launchProfileId,
+        settings
+      })
+      const launch = applyAgentLaunchProfile({
+        profile: launchProfile,
+        agentArgs:
+          request.agentArgs !== undefined
+            ? (request.agentArgs ?? '')
+            : resolveTuiAgentLaunchArgs(request.agent, settings.agentDefaultArgs),
+        agentEnv: resolveTuiAgentLaunchEnv(request.agent, settings.agentDefaultEnv)
+      })
       const startupArgs = {
         agent: request.agent,
         cmdOverrides: settings.agentCmdOverrides ?? {},
-        agentArgs:
-          request.agentArgs !== undefined
-            ? request.agentArgs
-            : resolveTuiAgentLaunchArgs(request.agent, settings.agentDefaultArgs),
-        agentEnv: resolveTuiAgentLaunchEnv(request.agent, settings.agentDefaultEnv),
+        agentArgs: request.agentArgs === null && !launchProfile ? null : launch.agentArgs,
+        agentEnv: launch.agentEnv,
         sessionOptions: this.toAgentSessionOptions(request.launchPreferences),
         platform,
         shell,

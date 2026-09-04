@@ -47,7 +47,8 @@ export function useMobileSessionTerminalCreateActions(scope: MobileSessionAttach
     options?: MobileQuickCommandLaunch['options'] & {
       onPromptSent?: () => void
       errorToast?: string
-    }
+    },
+    launchProfileId?: MobileNewTabAgentOption['launchProfileId']
   ) {
     if (!client || creatingTerminalRef.current) {
       return
@@ -63,8 +64,9 @@ export function useMobileSessionTerminalCreateActions(scope: MobileSessionAttach
       .slice(2, 10)}`
 
     try {
-      // Bare Codex launches follow structured support; prompted launches keep their startup semantics.
-      if (agent === 'codex' && options === undefined) {
+      // Bare Codex launches follow structured support; prompted launches keep their startup
+      // semantics, and a launch profile is a PTY launch the structured session cannot carry.
+      if (agent === 'codex' && options === undefined && !launchProfileId) {
         const structured = await createMobileStructuredCodexSession(client, worktreeId)
         if (structured.kind === 'created') {
           const previous = activeHandleRef.current
@@ -102,6 +104,7 @@ export function useMobileSessionTerminalCreateActions(scope: MobileSessionAttach
           : {}),
         ...(options?.agentPrompt ? { agentPrompt: options.agentPrompt } : {}),
         ...(agent ? { agent } : {}),
+        ...(launchProfileId ? { launchProfileId } : {}),
         activate: false,
         select: true,
         navigation: 'caller'

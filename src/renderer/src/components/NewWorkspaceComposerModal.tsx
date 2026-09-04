@@ -21,6 +21,10 @@ import { shouldAllowComposerEnterSubmitTarget } from '@/lib/new-workspace-enter-
 import { isScreenSubmitShortcut } from '@/lib/screen-submit-shortcut'
 import type { GitHubWorkItem } from '../../../shared/github/work-item-types'
 import type { TuiAgent } from '../../../shared/tui-agent'
+import {
+  findAgentLaunchProfile,
+  resolveAgentLaunchProfiles
+} from '../../../shared/agent-launch-profile/agent-launch-profile'
 import type { WorkspaceSource as WorkspaceCreateTelemetrySource } from '../../../shared/workspace-source'
 import type { WorkspaceStatus } from '../../../shared/worktree/types'
 import type { TaskSourceContext } from '../../../shared/task-source-context'
@@ -178,14 +182,29 @@ function QuickTabBody({
     setQuickAgentOverride(resolvedQuickAgentSelection.quickAgentOverride)
   }
   const quickAgent = resolvedQuickAgentSelection.quickAgent
+  const [quickLaunchProfileOverride, setQuickLaunchProfileOverride] = useState<string | null>(null)
+  // Why: the profile belongs to one agent, and the catalog can change under an open composer;
+  // derive validity during render the same way the agent selection repairs itself.
+  const quickLaunchProfileId =
+    quickAgent && quickLaunchProfileOverride
+      ? (findAgentLaunchProfile(
+          resolveAgentLaunchProfiles(settings?.agentLaunchProfiles),
+          quickAgent,
+          quickLaunchProfileOverride
+        )?.id ?? null)
+      : null
+  if (quickLaunchProfileId !== quickLaunchProfileOverride) {
+    setQuickLaunchProfileOverride(quickLaunchProfileId)
+  }
 
   const handleQuickAgentChange = useCallback((agent: TuiAgent | null) => {
     setQuickAgentOverride(agent)
+    setQuickLaunchProfileOverride(null)
   }, [])
 
   const handleCreate = useCallback(async (): Promise<void> => {
-    await submitQuick(quickAgent)
-  }, [quickAgent, submitQuick])
+    await submitQuick(quickAgent, quickLaunchProfileId)
+  }, [quickAgent, quickLaunchProfileId, submitQuick])
   // Why: Add Project layers over the composer as a nested dialog instead of
   // replacing it in the activeModal slot — closing the composer mid-flow (and
   // losing the typed name/prompt) was the old, abrupt behavior. Once opened it
@@ -301,6 +320,8 @@ function QuickTabBody({
         nameInputRef={nameInputRef}
         quickAgent={quickAgent}
         onQuickAgentChange={handleQuickAgentChange}
+        quickLaunchProfileId={quickLaunchProfileId}
+        onQuickLaunchProfileChange={setQuickLaunchProfileOverride}
         {...cardProps}
         primaryActionLabel={primaryActionLabel}
         onOpenAgentSettings={() => setAgentSettingsOpen(true)}

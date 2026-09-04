@@ -15,6 +15,7 @@ import {
   AGENT_SESSION_OPERATION_FUTURE_SKEW_MS,
   parseAgentSessionOperationTimestamp
 } from '../../../../shared/agent-session-host-authority'
+import { isAgentLaunchProfileId } from '../../../../shared/agent-launch-profile/agent-launch-profile'
 import { isTuiAgent } from '../../../../shared/tui-agent-config'
 import { isValidTerminalTabId } from '../../../../shared/terminal-tab-id'
 import type { OrcaRuntimeService } from '../../orca-runtime'
@@ -176,6 +177,9 @@ export const CreateAgentSessionParams: z.ZodType<RuntimeCreateAgentSessionReques
     promptDelivery: PromptDelivery.optional(),
     agentArgs: AgentArgs.optional(),
     launchPreferences: LaunchPreferences.optional(),
+    // Why: shape-only here; the host resolves the id against its own profile list so a client
+    // built for a newer catalog fails with a named error instead of a schema rejection.
+    launchProfileId: z.string().refine(isAgentLaunchProfileId, 'Invalid launch profile').optional(),
     startupCwd: z.string().min(1).max(MAX_WORKTREE_SELECTOR_LENGTH).optional(),
     presentation: Presentation.optional(),
     placement: Placement.optional(),

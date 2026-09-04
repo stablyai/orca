@@ -5,6 +5,8 @@ import type { WorktreeStartupLaunch } from '../../shared/worktree/launch-types'
 import type { TuiAgent } from '../../shared/tui-agent'
 import type { SleepingAgentLaunchConfig } from '../../shared/agent-session-resume'
 import { isTuiAgentEnabled } from '../../shared/tui-agent-selection'
+import { applyAgentLaunchProfile } from '../../shared/agent-launch-profile/agent-launch-profile'
+import { resolveRequestedAgentLaunchProfile } from '../agent-launch-profile/requested-launch-profile'
 import { resolveLocalWindowsAgentStartupShell } from '../../shared/windows-terminal-shell'
 import { buildAgentStartupPlan } from '../../shared/tui-agent-startup'
 import {
@@ -22,6 +24,7 @@ export class OrcaRuntimeWithResolveMobileSessionTerminalCommand extends OrcaRunt
       startupCommandDelivery?: WorktreeStartupLaunch['startupCommandDelivery']
       agent?: TuiAgent
       agentPrompt?: string
+      launchProfileId?: string
       launchConfig?: SleepingAgentLaunchConfig
       launchAgent?: TuiAgent
     }
@@ -59,12 +62,21 @@ export class OrcaRuntimeWithResolveMobileSessionTerminalCommand extends OrcaRunt
       isRemote,
       terminalWindowsShell: settings.terminalWindowsShell
     })
+    const launch = applyAgentLaunchProfile({
+      profile: resolveRequestedAgentLaunchProfile({
+        agent: opts.agent,
+        launchProfileId: opts.launchProfileId,
+        settings
+      }),
+      agentArgs: resolveTuiAgentLaunchArgs(opts.agent, settings.agentDefaultArgs),
+      agentEnv: resolveTuiAgentLaunchEnv(opts.agent, settings.agentDefaultEnv)
+    })
     const startupPlan = buildAgentStartupPlan({
       agent: opts.agent,
       prompt: opts.agentPrompt ?? '',
       cmdOverrides: settings.agentCmdOverrides ?? {},
-      agentArgs: resolveTuiAgentLaunchArgs(opts.agent, settings.agentDefaultArgs),
-      agentEnv: resolveTuiAgentLaunchEnv(opts.agent, settings.agentDefaultEnv),
+      agentArgs: launch.agentArgs,
+      agentEnv: launch.agentEnv,
       platform,
       shell: queuedShell,
       isRemote,

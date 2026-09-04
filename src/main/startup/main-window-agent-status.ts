@@ -72,6 +72,7 @@ export function installMainWindowAgentStatusListeners(options: MainWindowAgentSt
       const runtime = state.runtime
       const orchestration = runtime?.getAgentStatusOrchestrationContextForPaneKey(paneKey)
       const terminalHandle = runtime?.getAgentStatusTerminalHandleForPaneKey(paneKey)
+      const launchProfileId = runtime?.getAgentStatusLaunchProfileForPaneKey(paneKey)
       const suppressSyntheticCodexAutoApprovalTitle =
         payload.agentType === 'codex' &&
         (payload.state === 'waiting' || payload.state === 'blocked')
@@ -86,6 +87,7 @@ export function installMainWindowAgentStatusListeners(options: MainWindowAgentSt
         paneKey,
         ...(launchToken ? { launchToken } : {}),
         ...(terminalHandle ? { terminalHandle } : {}),
+        ...(launchProfileId ? { launchProfileId } : {}),
         tabId,
         worktreeId,
         connectionId,

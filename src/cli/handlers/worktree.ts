@@ -24,7 +24,7 @@ import {
   getRequiredWorktreeSelector,
   resolveCurrentWorktreeSelector
 } from '../selectors'
-import { isTuiAgent } from '../../shared/tui-agent-config'
+import { getWorktreeStartupAgentFlags } from './worktree-startup-agent-flags'
 import { isWorkspaceKey, worktreeWorkspaceKey } from '../../shared/workspace-scope'
 import { printLineageSummary } from './worktree-lineage-summary'
 import {
@@ -103,20 +103,6 @@ function getPresentStringFlag(
     return value
   }
   throw new RuntimeClientError('invalid_argument', `Missing value for --${name}`)
-}
-
-function getOptionalStartupAgent(flags: Map<string, string | boolean>): string | undefined {
-  const agent = getPresentStringFlag(flags, 'agent')
-  if (agent === undefined) {
-    if (flags.has('prompt')) {
-      throw new RuntimeClientError('invalid_argument', '--prompt requires --agent')
-    }
-    return undefined
-  }
-  if (!isTuiAgent(agent)) {
-    throw new RuntimeClientError('invalid_argument', `Unknown TUI agent "${agent}"`)
-  }
-  return agent
 }
 
 function getOptionalSetupDecision(
@@ -216,7 +202,7 @@ export const WORKTREE_HANDLERS: Record<string, CommandHandler> = {
     const explicitParent = await resolveCreateParentSelector(flags, cwd, client)
     const explicitParentWorktree = explicitParent.parentWorktree
     const explicitParentWorkspace = explicitParent.parentWorkspace
-    const startupAgent = getOptionalStartupAgent(flags)
+    const { startupAgent, startupLaunchProfileId } = getWorktreeStartupAgentFlags(flags)
     const setupDecision = getOptionalSetupDecision(flags)
     const noParent = flags.get('no-parent') === true
     const envParentWorkspace =
@@ -268,6 +254,7 @@ export const WORKTREE_HANDLERS: Record<string, CommandHandler> = {
       ...(startupAgent
         ? {
             startupAgent,
+            ...(startupLaunchProfileId ? { startupLaunchProfileId } : {}),
             startupPrompt: getPresentStringFlag(flags, 'prompt', { allowEmpty: true }) ?? ''
           }
         : {})

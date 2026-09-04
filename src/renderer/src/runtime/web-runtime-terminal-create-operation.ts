@@ -14,6 +14,8 @@ import {
 } from './agent-session-create-operation'
 import { runRemoteAgentSessionLaunch } from './remote-agent-session-launch'
 import { unwrapRuntimeRpcResult } from './runtime-rpc-client'
+import { AGENT_SESSION_LAUNCH_PROFILE_RUNTIME_CAPABILITY } from '../../../shared/protocol-version'
+import { assertWebRuntimeLaunchProfileSupported } from './web-runtime-launch-profile-support'
 import { toRuntimeWorktreeSelector } from './runtime-worktree-selector'
 import { resolveWebRuntimeSessionEnvironmentId } from './web-runtime-session-workspace-routing'
 import { recordWebSessionFocusIntent } from './web-session-focus-intent'
@@ -128,6 +130,7 @@ export async function createWebRuntimeSessionTerminalResult(
                         ...(agentArgsOverride !== undefined
                           ? { agentArgs: agentArgsOverride }
                           : {}),
+                        ...(args.launchProfileId ? { launchProfileId: args.launchProfileId } : {}),
                         ...(args.launchPreferences
                           ? { launchPreferences: args.launchPreferences }
                           : {}),
@@ -141,17 +144,20 @@ export async function createWebRuntimeSessionTerminalResult(
                   })) as RuntimeRpcResponse<RuntimeCreateAgentSessionResult>
                 )
               )
-      const resumeHostAuthorityCapability =
-        args.agentSessionKind === 'resume' ? agentResumeHostAuthorityCapability(agent) : undefined
+      const hostAuthorityCapability =
+        args.agentSessionKind === 'resume'
+          ? agentResumeHostAuthorityCapability(agent)
+          : args.launchProfileId
+            ? AGENT_SESSION_LAUNCH_PROFILE_RUNTIME_CAPABILITY
+            : undefined
       const created = await runRemoteAgentSessionLaunch<{
         terminal: CreatedAgentTerminalIdentity
       }>({
         environmentId,
         ...(hostAuthority ? { hostAuthority } : {}),
-        ...(resumeHostAuthorityCapability
-          ? { hostAuthorityCapability: resumeHostAuthorityCapability }
-          : {}),
+        ...(hostAuthorityCapability ? { hostAuthorityCapability } : {}),
         legacy: async () => {
+          await assertWebRuntimeLaunchProfileSupported(environmentId, args.launchProfileId)
           const response = await callEnvironment({
             method: 'session.tabs.createTerminal',
             params: {
@@ -167,6 +173,7 @@ export async function createWebRuntimeSessionTerminalResult(
               ...(args.launchToken ? { launchToken: args.launchToken } : {}),
               ...(args.agent ? { agent: args.agent } : {}),
               ...(args.launchAgent ? { launchAgent: args.launchAgent } : {}),
+              ...(args.launchProfileId ? { launchProfileId: args.launchProfileId } : {}),
               ...(args.viewMode ? { viewMode: args.viewMode } : {}),
               // Why: old hosts understand activate:false; new hosts use select/navigation for caller-local focus.
               activate: false,

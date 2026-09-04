@@ -121,6 +121,18 @@ export const mobileSessionFrameStyles = StyleSheet.create({
   tabTextActive: {
     color: colors.textPrimary
   },
+  // Why: the profile is secondary to the title; a small capsule keeps it readable without
+  // competing with the tab label.
+  tabProfileBadge: {
+    flexShrink: 1,
+    color: colors.textSecondary,
+    fontSize: 10,
+    lineHeight: 14,
+    paddingHorizontal: 5,
+    borderRadius: 7,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.textSecondary
+  },
   newTerminalButton: {
     width: 40,
     height: 36,

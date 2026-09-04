@@ -59,7 +59,7 @@ export type UseComposerStateResult = {
   promptTextareaRef: RefObject<HTMLTextAreaElement | null>
   nameInputRef: RefObject<HTMLInputElement | null>
   submit: () => Promise<void>
-  submitQuick: (agent: TuiAgent | null) => Promise<void>
+  submitQuick: (agent: TuiAgent | null, launchProfileId?: string | null) => Promise<void>
   createDisabled: boolean
   selectAddedProjectRepo: (repoId: string) => void
 }

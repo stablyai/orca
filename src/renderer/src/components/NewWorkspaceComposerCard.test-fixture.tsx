@@ -52,6 +52,8 @@ export async function renderCard(
       <NewWorkspaceComposerCard
         quickAgent={null}
         onQuickAgentChange={() => {}}
+        quickLaunchProfileId={null}
+        onQuickLaunchProfileChange={() => {}}
         eligibleRepos={[]}
         repoId="repo-a"
         projectOptions={projectOptions}

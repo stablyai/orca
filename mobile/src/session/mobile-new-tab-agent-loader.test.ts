@@ -38,7 +38,41 @@ describe('mobile new-tab agent loading', () => {
     ])
     expect(client.sendRequest.mock.calls.map(([method]) => method)).toEqual([
       'preflight.detectAgents',
-      'settings.get'
+      'settings.get',
+      'status.get'
+    ])
+  })
+
+  it('adds launch-profile rows when the host advertises the capability', async () => {
+    const client = createClient(async (method) => {
+      if (method === 'settings.get') {
+        return {
+          ok: true,
+          result: { settings: { defaultTuiAgent: 'codex', disabledTuiAgents: ['claude'] } }
+        }
+      }
+      if (method === 'preflight.detectAgents') {
+        return { ok: true, result: ['claude', 'codex'] }
+      }
+      if (method === 'status.get') {
+        return { ok: true, result: { capabilities: ['agent-session.launch-profile.v1'] } }
+      }
+      throw new Error(`unexpected request: ${method}`)
+    })
+
+    await expect(
+      loadMobileNewTabAgentOptions({
+        client,
+        worktreeId: FLOATING_WORKSPACE_WORKTREE_ID
+      })
+    ).resolves.toEqual([
+      { agent: 'codex', label: 'Codex' },
+      {
+        agent: 'codex',
+        label: 'Codex · secondary home',
+        launchProfileId: 'codex-secondary-home',
+        hint: 'Codex launch profile'
+      }
     ])
   })
 
@@ -66,6 +100,7 @@ describe('mobile new-tab agent loading', () => {
     expect(client.sendRequest.mock.calls.map(([method]) => method)).toEqual([
       'repo.list',
       'settings.get',
+      'status.get',
       'preflight.detectRemoteAgents'
     ])
   })

@@ -1,6 +1,7 @@
 import type { RpcClient } from '../transport/rpc-client'
 import type { RpcFailure, RpcSuccess } from '../transport/types'
 import { isFloatingWorkspaceWorktreeId } from './floating-workspace'
+import { readAgentLaunchProfileCapability } from './mobile-launch-profile-capability'
 import { getRepoIdFromMobileWorktreeId } from './mobile-session-route-helpers'
 import {
   buildMobileNewTabAgentOptions,
@@ -22,9 +23,10 @@ export async function loadMobileNewTabAgentOptions(args: {
   const detectedAgentsRequest = isFloatingWorkspaceWorktreeId(worktreeId)
     ? client.sendRequest('preflight.detectAgents')
     : loadWorkspaceDetectedAgents(client, worktreeId)
-  const [settingsResponse, detectedResponse] = await Promise.all([
+  const [settingsResponse, detectedResponse, launchProfilesSupported] = await Promise.all([
     client.sendRequest('settings.get'),
-    detectedAgentsRequest
+    detectedAgentsRequest,
+    readAgentLaunchProfileCapability(client)
   ])
   if (!settingsResponse.ok) {
     throw new Error((settingsResponse as RpcFailure).error.message)
@@ -39,7 +41,8 @@ export async function loadMobileNewTabAgentOptions(args: {
   ).settings
   return buildMobileNewTabAgentOptions(
     settings,
-    (detectedResponse as RpcSuccess).result as unknown[]
+    (detectedResponse as RpcSuccess).result as unknown[],
+    { launchProfilesSupported }
   )
 }
 

@@ -128,6 +128,8 @@ export type RuntimeCreateAgentSessionRequest = {
   /** Explicit client override. Omission keeps launch defaults host-owned. */
   agentArgs?: string | null
   launchPreferences?: AgentLaunchPreferences
+  /** Built-in or user-defined launch profile; the host validates it against `agent`. */
+  launchProfileId?: string
   startupCwd?: string
   presentation?: RuntimeTerminalPresentation
   placement?: { tabId?: string; leafId?: string }

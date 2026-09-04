@@ -1,3 +1,4 @@
+import { hasAgentLaunchProfileHomeMarker } from '../../../../shared/agent-launch-profile/agent-launch-profile'
 import { getAppEnvironment } from '../../../../shared/app-environment'
 import { isTuiAgent } from '../../../../shared/tui-agent-config'
 import { isAgentStatusHooksEnabled } from '../../../agent-hooks/managed-agent-hook-controls'
@@ -60,8 +61,11 @@ export async function assemblePtyIpcSpawnCodexEnv(ctx: PtyIpcSpawnState): Promis
       workspacePath: ctx.cwd,
       launchAgent: isTuiAgent(args.launchAgent) ? args.launchAgent : undefined
     })) ?? null
+  // Why: a secondary-home profile relocates CODEX_HOME on the execution host, so the managed
+  // selection (and its auth wait) must not be resolved for a launch that never reads it.
+  const codexHomeProfileLaunch = hasAgentLaunchProfileHomeMarker(ctx.baseEnv, 'CODEX_HOME')
   ctx.selectedCodexHomePath =
-    !ctx.preAdoptedStablePane && !args.connectionId
+    !ctx.preAdoptedStablePane && !args.connectionId && !codexHomeProfileLaunch
       ? getCompatibleSelectedCodexHomePath(
           ctx.codexSelectionTarget,
           codexResumeHome
@@ -74,7 +78,12 @@ export async function assemblePtyIpcSpawnCodexEnv(ctx: PtyIpcSpawnState): Promis
             : await selectLaunchCodexHome()
         )
       : null
-  if (!ctx.preAdoptedStablePane && args.launchAgent === 'codex' && args.sessionId === undefined) {
+  if (
+    !ctx.preAdoptedStablePane &&
+    args.launchAgent === 'codex' &&
+    args.sessionId === undefined &&
+    !codexHomeProfileLaunch
+  ) {
     const resolution = resolveCodexHomeAfterManagedAuthReadiness({
       selectedCodexHomePath: ctx.selectedCodexHomePath,
       getSettings: () => ctx.deps.getSettings?.(),

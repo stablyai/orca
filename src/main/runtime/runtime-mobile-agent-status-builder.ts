@@ -11,6 +11,7 @@ import {
   selectRuntimeHookAgentRowForPane
 } from './runtime-mobile-agent-status-projection'
 import type { RuntimeLeafRecord, RuntimePtyWorktreeRecord } from './runtime-terminal-state-records'
+import { getPaneLaunchProfile } from '../agent-launch-profile/pane-launch-profile-registry'
 import type { RuntimeAgentRowSnapshot } from './runtime-worktree-agent-rows'
 import {
   classifyAgentTitle,
@@ -95,6 +96,7 @@ export function buildRuntimeMobileAgentStatus(
   )
   // Why: OSC 9999 hook payload carries real state/prompt/agent; without preferring it, hook-only transitions never surfaced (#7970).
   const liveRow = retained ?? resolveRuntimeHookLiveAgentRow(hookRow.live, pty, nonAgentTitle)
+  const launchProfileId = getPaneLaunchProfile(pty?.ptyId)
   if (liveRow) {
     const liveStatus = normalizeCompatibleAgentStatusEntryForOwner(
       {
@@ -104,6 +106,7 @@ export function buildRuntimeMobileAgentStatus(
         stateStartedAt: liveRow.stateStartedAt,
         stateHistory: [],
         ...(terminalHandle ? { terminalHandle } : {}),
+        ...(launchProfileId ? { launchProfileId } : {}),
         ...((pty?.worktreeId ?? liveRow.worktreeId)
           ? { worktreeId: pty?.worktreeId ?? liveRow.worktreeId }
           : {}),
@@ -143,6 +146,7 @@ export function buildRuntimeMobileAgentStatus(
       stateStartedAt: pty?.lastAgentStatusStartedAtEpochMs ?? evidenceAt,
       paneKey,
       ...(terminalHandle ? { terminalHandle } : {}),
+      ...(launchProfileId ? { launchProfileId } : {}),
       ...(agentType ? { agentType } : {}),
       ...(pty?.worktreeId ? { worktreeId: pty.worktreeId } : {}),
       tabId: tab.parentTabId,

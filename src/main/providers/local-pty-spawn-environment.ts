@@ -1,4 +1,8 @@
 import { mergeGitConfigEnvProtocol } from '../../shared/git-credential-prompt-env'
+import {
+  applyLaunchProfileHomeMarkers,
+  exportLaunchProfileHomesForWsl
+} from '../agent-launch-profile/launch-profile-home'
 import { removeAppImageRuntimeEnv } from '../pty/appimage-terminal-env'
 import { stripInheritedBuildModeEnv } from '../pty/build-mode-env'
 import { removeInheritedNoColor } from '../pty/terminal-color-env'
@@ -69,7 +73,8 @@ export function buildLocalPtySpawnEnvironment(args: {
 
 export function enforceLocalPtySpawnEnvironmentOverrides(
   spawn: PtySpawnOptions,
-  finalEnv: Record<string, string>
+  finalEnv: Record<string, string>,
+  plan?: Pick<LocalPtyLaunchPlan, 'isWslShell' | 'launchWslDistro'>
 ): void {
   // Why: app-level env hooks can re-add scrubbed vars; delete last so shims like Claude Agent Teams keep their PATH.
   for (const key of spawn.envToDelete ?? []) {
@@ -77,5 +82,15 @@ export function enforceLocalPtySpawnEnvironmentOverrides(
   }
   if (spawn.env?.TERM) {
     finalEnv.TERM = spawn.env.TERM
+  }
+  // Why: this lane spawns in-process, so it is the execution host that must turn a launch-profile
+  // home marker into a real path — after the host env (which may have injected a managed home).
+  applyLaunchProfileHomeMarkers({
+    env: finalEnv,
+    isWslLaunch: plan?.isWslShell === true,
+    wslDistro: plan?.launchWslDistro
+  })
+  if (plan?.isWslShell) {
+    exportLaunchProfileHomesForWsl(finalEnv)
   }
 }

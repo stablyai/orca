@@ -37,6 +37,7 @@ import { ORCA_HERMES_STARTUP_QUERY_ENV } from '../../../shared/hermes-startup-qu
 import { WINDOWS_GIT_BASH_SHELL } from '../../../shared/windows-terminal-shell'
 import { getShellLaunchConfig, resolvePtyShellPath } from '../shell-ready'
 import { resolveWslSessionContext } from '../wsl-session-context'
+import { applyLaunchProfileHomeMarkers } from '../../agent-launch-profile/launch-profile-home'
 import { finalizeDaemonPtyEnvironment, rescrubDaemonPtyEnvironment } from './spawn-environment'
 import type { PtySubprocessOptions } from '../pty-subprocess'
 
@@ -55,6 +56,12 @@ export function createPtyShellLaunchPlan(
   env: Record<string, string>
 ): PtyShellLaunchPlan {
   const resolvedWslContext = resolveWslSessionContext(opts)
+  // Why: a launch profile only ships a home marker; only the execution host knows the real path.
+  applyLaunchProfileHomeMarkers({
+    env,
+    isWslLaunch: Boolean(resolvedWslContext),
+    wslDistro: resolvedWslContext?.distro
+  })
   let shellPath = resolvedWslContext ? 'wsl.exe' : opts.shellOverride || resolvePtyShellPath(env)
   let shellArgs: string[]
   let startupCommandDeliveredInShellArgs = false

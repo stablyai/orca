@@ -1611,6 +1611,8 @@
         "startNewWorkspace": "Start new workspace"
       },
       "NewWorkspaceComposerCard": {
+        "launchProfileLabel": "Launch profile",
+        "launchProfileDefault": "Default launch",
         "reuseExistingBranch": "Reuse branch",
         "reuseExistingBranchHint": "Check out the existing branch instead of creating a new one from it.",
         "createMultiple": "Create more",
@@ -3343,7 +3345,9 @@
             "ec2adf093e": "Launch {{value0}} in a new terminal",
             "465e432ef1": "Could not build launch command for {{value0}}.",
             "e518f544b1": "No agents detected",
-            "8dea9b5cdf": "No enabled agents"
+            "8dea9b5cdf": "No enabled agents",
+            "launchProfileDefault": "Default launch",
+            "launchProfileTitle": "Launch {{value0}} with the {{value1}} profile"
           },
           "RecentTabSwitcher": {
             "329638ff6f": "Switch Tab",
@@ -16784,7 +16788,8 @@
         "reconnectTimeout": "The server did not reconnect on the updated version."
       },
       "webRuntimeSession": {
-        "remoteHostDisconnected": "The workspace is not connected to a remote Orca host."
+        "remoteHostDisconnected": "The workspace is not connected to a remote Orca host.",
+        "launchProfileUnsupported": "This Orca host is too old to launch agent profiles. Update the host and try again."
       },
       "gitlabJobTraceClient": {
         "loadFailed": "Failed to load the GitLab job log.",

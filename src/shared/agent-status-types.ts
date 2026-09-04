@@ -117,6 +117,8 @@ export type AgentStatusEntry = {
   agentType?: AgentType
   /** Provider model currently used by this session. */
   model?: string
+  /** Agent launch profile the pane spawned under (secondary home, custom provider); absent for plain launches. */
+  launchProfileId?: string
   /** Composite key: `${tabId}:${leafId}` where leafId is a stable UUID layout leaf. */
   paneKey: string
   /** Runtime terminal handle for matching retained parent rows when the parent

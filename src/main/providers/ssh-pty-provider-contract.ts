@@ -1,6 +1,10 @@
 import type { PtyIncarnationId } from '../../shared/pty-incarnation'
+import type { RemoteHostPlatform } from '../ssh/ssh-remote-platform'
 
 export type RemoteCliBridgeEnv = {
+  /** Probed at connect time; the execution host's home for launch-profile secondary homes. */
+  remoteHome?: string
+  hostPlatform?: RemoteHostPlatform
   binDir: string
   relayDir: string
   nodePath: string

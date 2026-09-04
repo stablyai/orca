@@ -77,6 +77,9 @@ export function buildManagedWorktreeCreateArgs(
         }
       : undefined,
     ...(params.startupAgent ? { startupAgent: params.startupAgent } : {}),
+    ...(params.startupLaunchProfileId
+      ? { startupLaunchProfileId: params.startupLaunchProfileId }
+      : {}),
     ...(params.startupPrompt !== undefined ? { startupPrompt: params.startupPrompt } : {}),
     startupDraft: params.startupDraft,
     lineage: {

@@ -21,6 +21,8 @@ export type CodexPaneAccountRecord = {
   shellStartupHomeOverride?: CodexShellStartupHomeOverride
   /** Rechecked after restart when CODEX_HOME came from the process environment. */
   environmentHomeOverride?: CodexEnvironmentHomeOverride
+  /** Set when the pane launched under an agent launch profile that relocated CODEX_HOME. */
+  launchProfileId?: string
 }
 
 export type CodexPaneAccountRegistryFile = {
