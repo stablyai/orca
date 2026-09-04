@@ -94,6 +94,19 @@ const TUI_AGENT_CONFIG_SOURCE: Record<TuiAgent, TuiAgentConfigSource> = {
     promptInjectionMode: 'argv',
     draftPromptFlag: '--prefill'
   },
+  openzoo: {
+    detectCmd: 'openzoo',
+    // Why: openzoo only wraps Claude Code, so without the `claude` CLI there is nothing to host.
+    detectRequiredCommands: ['claude'],
+    // Why: `openzoo claude` runs the real Claude Code CLI with ANTHROPIC_BASE_URL pointed at
+    // openzoo's local x402 proxy (starting the proxy if needed) and forwards every argument
+    // untouched, so the hosted process is `claude` — same shape as claude-agent-teams. The
+    // bare `openzoo` binary only runs the proxy, so it must never be the launch line.
+    launchCmd: 'openzoo claude',
+    expectedProcess: 'claude',
+    promptInjectionMode: 'argv',
+    draftPromptFlag: '--prefill'
+  },
   codex: {
     detectCmd: 'codex',
     promptInjectionMode: 'argv',

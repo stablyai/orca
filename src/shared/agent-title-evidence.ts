@@ -61,6 +61,7 @@ export type AgentTitleEvidence = {
 const NAME_TOKENS: readonly (readonly [string, TuiAgent])[] = [
   ['claude', 'claude'],
   ['openclaude', 'openclaude'],
+  ['openzoo', 'openzoo'],
   ['codex', 'codex'],
   ['copilot', 'copilot'],
   ['cursor', 'cursor'],

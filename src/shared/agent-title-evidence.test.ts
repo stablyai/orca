@@ -59,6 +59,7 @@ describe('collectAgentTitleEvidence', () => {
   it.each([
     ['claude', 'claude'],
     ['openclaude', 'openclaude'],
+    ['openzoo', 'openzoo'],
     ['codex', 'codex'],
     ['copilot', 'copilot'],
     ['cursor', 'cursor'],

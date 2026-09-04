@@ -2,6 +2,7 @@ import { collectLeafIdsInOrder } from '@/components/terminal-pane/layout-seriali
 import { getRepoMapFromState, getWorktreeMapFromState } from '@/store/selectors'
 import { parsePaneKey } from '../../../../shared/stable-pane-id'
 import type { TerminalPaneLayoutNode } from '../../../../shared/terminal-tab-types'
+import type { TuiAgent } from '../../../../shared/tui-agent'
 import type { AppState } from '../../store/types'
 
 type AgentStatusPaneResolution = {
@@ -12,6 +13,7 @@ type AgentStatusPaneResolution = {
   repoConnectionResolved: boolean
   owningWorktreeId: string | undefined
   titleUsesTabTitle: boolean
+  launchAgent: TuiAgent | undefined
 }
 
 type AgentStatusWorktreeConnectionResolution = {
@@ -23,6 +25,7 @@ type AgentStatusWorktreeConnectionResolution = {
 type IndexedAgentStatusTab = {
   title: string | undefined
   owningWorktreeId: string
+  launchAgent: TuiAgent | undefined
 }
 
 export type AgentStatusPaneRoutingIndex = {
@@ -60,6 +63,7 @@ const unifiedLabelIndexCache = new WeakMap<object, Map<string, Map<string, strin
 const routingIndexCache = new WeakMap<AppState['tabsByWorktree'], AgentStatusPaneRoutingIndex>()
 const NO_UNIFIED_TABS = {}
 
+/** First visible terminal label per tab id for identity fallback when the pane title is empty. */
 function createUnifiedTerminalLabelIndex(
   entries: AppState['unifiedTabsByWorktree'][string] | undefined
 ): Map<string, string | undefined> {
@@ -91,7 +95,11 @@ function getIndexedTabs(
       const tabId = tab.id
       // First wins: the standalone resolver stops at the first worktree owning this tab id.
       if (!tabsById.has(tabId)) {
-        tabsById.set(tabId, { title: tab.title, owningWorktreeId: worktreeId })
+        tabsById.set(tabId, {
+          title: tab.title,
+          owningWorktreeId: worktreeId,
+          launchAgent: tab.launchAgent
+        })
       }
     }
   }
@@ -157,6 +165,7 @@ export function createAgentStatusPaneRoutingIndex(store: AppState): AgentStatusP
   return index
 }
 
+/** Indexed equivalent of `resolveWorktreeConnection` for batch status application. */
 export function resolveWorktreeConnectionFromRoutingIndex(
   index: AgentStatusPaneRoutingIndex,
   worktreeId: string
@@ -173,6 +182,7 @@ export function resolveWorktreeConnectionFromRoutingIndex(
   }
 }
 
+/** Indexed equivalent of `resolvePaneKey`, including the tab's `launchAgent`. */
 export function resolvePaneKeyFromRoutingIndex(
   index: AgentStatusPaneRoutingIndex,
   paneKey: string
@@ -186,7 +196,8 @@ export function resolvePaneKeyFromRoutingIndex(
       repoConnectionId: null,
       repoConnectionResolved: false,
       owningWorktreeId: undefined,
-      titleUsesTabTitle: false
+      titleUsesTabTitle: false,
+      launchAgent: undefined
     }
   }
   const { tabId, leafId } = parsed
@@ -199,7 +210,8 @@ export function resolvePaneKeyFromRoutingIndex(
       repoConnectionId: null,
       repoConnectionResolved: false,
       owningWorktreeId: undefined,
-      titleUsesTabTitle: false
+      titleUsesTabTitle: false,
+      launchAgent: undefined
     }
   }
   const connection = resolveWorktreeConnectionFromRoutingIndex(index, tab.owningWorktreeId)
@@ -219,7 +231,8 @@ export function resolvePaneKeyFromRoutingIndex(
         repoConnectionId: connection.repoConnectionId,
         repoConnectionResolved: connection.repoConnectionResolved,
         owningWorktreeId: tab.owningWorktreeId,
-        titleUsesTabTitle: false
+        titleUsesTabTitle: false,
+        launchAgent: undefined
       }
     }
   }
@@ -233,6 +246,7 @@ export function resolvePaneKeyFromRoutingIndex(
     repoConnectionId: connection.repoConnectionId,
     repoConnectionResolved: connection.repoConnectionResolved,
     owningWorktreeId: tab.owningWorktreeId,
-    titleUsesTabTitle: paneTitle === undefined
+    titleUsesTabTitle: paneTitle === undefined,
+    launchAgent: tab.launchAgent
   }
 }

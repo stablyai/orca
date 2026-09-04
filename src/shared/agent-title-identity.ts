@@ -48,6 +48,7 @@ function computeIsClaudeAgent(title: string): boolean {
 export const isClaudeAgent: (title: string) => boolean =
   memoizeTitleClassification(computeIsClaudeAgent)
 
+/** Catalog display name encoded in a terminal title, or null when the title is not an agent. */
 function computeAgentLabel(title: string): string | null {
   if (isClaudeManagementTitle(title)) {
     return null
@@ -85,6 +86,11 @@ function computeAgentLabel(title: string): string | null {
   }
   if (titleHasAgentName(title, 'openclaude')) {
     return 'OpenClaude'
+  }
+  // Why: the shell shows `openzoo claude` as its title until Claude Code takes over; the
+  // wrapper name is the identity, the trailing `claude` is its subcommand.
+  if (titleHasAgentName(title, 'openzoo')) {
+    return 'OpenZoo'
   }
   if (titleHasAgentName(title, 'copilot')) {
     return 'GitHub Copilot'

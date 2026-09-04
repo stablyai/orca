@@ -25,6 +25,40 @@ describe('agent process recognition', () => {
     expect(isExpectedAgentProcess('/usr/local/bin/openclaude', 'claude')).toBe(false)
   })
 
+  it('recognizes openzoo only through its claude subcommand', () => {
+    // Why: bare `openzoo` runs the x402 proxy; only `openzoo claude` hosts Claude Code.
+    expect(recognizeAgentProcessFromCommandLine('openzoo claude')).toEqual({
+      agent: 'openzoo',
+      processName: 'openzoo'
+    })
+    expect(
+      recognizeAgentProcessFromCommandLine('openzoo claude --dangerously-skip-permissions')
+    ).toEqual({ agent: 'openzoo', processName: 'openzoo' })
+    expect(recognizeAgentProcessFromCommandLine('openzoo')).toBeNull()
+    expect(recognizeAgentProcessFromCommandLine('openzoo proxy')).toBeNull()
+    expect(
+      recognizeAgentProcessFromCommandLine(
+        'node /usr/local/lib/node_modules/openzoo/bin/openzoo.js claude'
+      )
+    ).toEqual({ agent: 'openzoo', processName: 'openzoo' })
+    expect(
+      recognizeAgentProcessFromCommandLine(
+        'node /usr/local/lib/node_modules/openzoo/bin/openzoo.js'
+      )
+    ).toBeNull()
+    // Why: the wrapper forwards argv untouched, so Claude's `-p` one-shot is headless here too.
+    expect(recognizeAgentProcessFromCommandLine('openzoo claude -p "summarize"')).toBeNull()
+    expect(
+      recognizeAgentProcessFromCommandLine('openzoo claude -p "summarize"', {
+        includeHeadlessOneShot: true
+      })
+    ).toEqual({ agent: 'openzoo', processName: 'openzoo' })
+    // Why: the hosted foreground process is the real `claude` binary, which stays Claude's.
+    expect(recognizeAgentProcess('claude')).toEqual({ agent: 'claude', processName: 'claude' })
+    expect(isExpectedAgentProcess('/Users/dev/.local/bin/claude', 'claude')).toBe(true)
+    expect(isRecognizedAgentType('openzoo')).toBe(true)
+  })
+
   it('recognizes the Droid foreground process on Windows', () => {
     expect(recognizeAgentProcess(String.raw`C:\Users\dev\AppData\Roaming\npm\droid.cmd`)).toEqual({
       agent: 'droid',

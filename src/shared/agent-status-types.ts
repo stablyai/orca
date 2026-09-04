@@ -29,6 +29,7 @@ export type AgentWorkingMode = 'monitoring'
 export type WellKnownAgentType =
   | 'claude'
   | 'openclaude'
+  | 'openzoo'
   | 'codex'
   | 'gemini'
   | 'antigravity'

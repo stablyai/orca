@@ -116,6 +116,7 @@ describe('resolveGroupAddress', () => {
     it.each([
       ['@codex', 'codex'],
       ['@openclaude', 'openclaude'],
+      ['@openzoo', 'openzoo'],
       ['@mimo', 'mimo-code'],
       ['@gemini', 'gemini'],
       ['@droid', 'droid'],
