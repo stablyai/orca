@@ -15,6 +15,8 @@ export type DetectedBrowser = {
   keychainAccount?: string
   profiles: BrowserProfile[]
   selectedProfile: string
+  // Stable id for auto-discovered/custom browsers (family 'custom'); absent for hardcoded ones.
+  customBrowserId?: string
 }
 
 export type ChromiumBrowserDef = {

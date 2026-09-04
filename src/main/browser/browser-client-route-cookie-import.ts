@@ -1,6 +1,6 @@
 import type { BrowserCookieImportResult } from '../../shared/browser-workspace-types'
 import {
-  detectInstalledBrowsers,
+  detectAllBrowsers,
   importCookiesFromBrowser,
   selectBrowserProfile,
   type DetectedBrowser
@@ -16,6 +16,7 @@ export type ClientRouteCookieImportRequest = {
   browserProfileId: string
   browserFamily: string
   browserProfile?: string
+  customBrowserId?: string
 }
 
 /**
@@ -37,7 +38,7 @@ export async function importCookiesIntoClientRoutePartition(
   if (!profile) {
     return { ok: false, reason: 'Session profile not found.' }
   }
-  const browser = resolveImportSource(request)
+  const browser = await resolveImportSource(request)
   if ('reason' in browser) {
     return browser
   }
@@ -71,6 +72,8 @@ export async function importCookiesIntoClientRoutePartition(
     profileId: request.browserProfileId,
     source: {
       browserFamily: browser.source.family,
+      // Why: custom browsers share family 'custom'; persist the real name for Settings.
+      ...(browser.source.family === 'custom' ? { sourceLabel: browser.source.label } : {}),
       profileName: importedProfileName(browser.source),
       importedAt: Date.now()
     }
@@ -122,9 +125,9 @@ function bindRoutePartition(
   return derived.partition
 }
 
-function resolveImportSource(
+async function resolveImportSource(
   request: ClientRouteCookieImportRequest
-): { source: DetectedBrowser } | { ok: false; reason: string } {
+): Promise<{ source: DetectedBrowser } | { ok: false; reason: string }> {
   // Why: browserProfile reaches a filesystem path, so reject traversal before use.
   if (
     request.browserProfile &&
@@ -132,7 +135,16 @@ function resolveImportSource(
   ) {
     return { ok: false, reason: 'Invalid browser profile name.' }
   }
-  const browser = detectInstalledBrowsers().find((entry) => entry.family === request.browserFamily)
+  const browsers = await detectAllBrowsers()
+  // Why: custom browsers share family 'custom'; require a customBrowserId to disambiguate
+  // rather than importing the wrong one when more than one is detected.
+  const matches = request.customBrowserId
+    ? browsers.filter((entry) => entry.customBrowserId === request.customBrowserId)
+    : browsers.filter((entry) => entry.family === request.browserFamily)
+  if (!request.customBrowserId && request.browserFamily === 'custom' && matches.length > 1) {
+    return { ok: false, reason: 'Multiple custom browsers detected; customBrowserId is required.' }
+  }
+  const browser = matches[0]
   if (!browser) {
     return { ok: false, reason: 'Browser not found on this system.' }
   }

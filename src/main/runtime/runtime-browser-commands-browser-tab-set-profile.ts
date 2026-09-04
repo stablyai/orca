@@ -17,7 +17,7 @@ import { randomUUID } from 'node:crypto'
 import { ipcMain } from 'electron'
 import { waitForTabRegistration } from '../ipc/browser-tab-registration-wait'
 import type { BrowserSessionUserAgentMode } from '../../shared/browser-workspace-types'
-import { detectInstalledBrowsers } from '../browser/browser-cookie-import'
+import { detectAllBrowsers } from '../browser/browser-cookie-import'
 
 export class RuntimeBrowserCommandsWithBrowserTabSetProfile extends RuntimeBrowserCommandsWithBrowserTabCreate {
   async browserTabSetProfile(
@@ -175,13 +175,16 @@ export class RuntimeBrowserCommandsWithBrowserTabSetProfile extends RuntimeBrows
   }
 
   async browserProfileDetectBrowsers(): Promise<BrowserDetectProfilesResult> {
+    const browsers = await detectAllBrowsers()
     return {
-      // Why: expose only display metadata; filesystem paths and keychain identifiers stay on the runtime server.
-      browsers: detectInstalledBrowsers().map((browser) => ({
+      // Why: expose only display metadata; filesystem paths and keychain identifiers stay on the
+      // runtime server. customBrowserId is the only safe disambiguator for 'custom'-family browsers.
+      browsers: browsers.map((browser) => ({
         family: browser.family,
         label: browser.label,
         profiles: browser.profiles,
-        selectedProfile: browser.selectedProfile
+        selectedProfile: browser.selectedProfile,
+        ...(browser.customBrowserId ? { customBrowserId: browser.customBrowserId } : {})
       }))
     }
   }

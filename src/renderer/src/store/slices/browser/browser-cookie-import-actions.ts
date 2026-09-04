@@ -18,7 +18,12 @@ export function createBrowserCookieImportActions(
   get: BrowserSliceGet
 ): Pick<BrowserSlice, 'importCookiesFromBrowser' | 'clearDefaultSessionCookies'> {
   return {
-    importCookiesFromBrowser: async (profileId, browserFamily, browserProfile?) => {
+    importCookiesFromBrowser: async (
+      profileId,
+      browserFamily,
+      browserProfile?,
+      customBrowserId?
+    ) => {
       const initialState = get()
       const hostId = getBrowserSettingsHostId(initialState)
       const executionHostLabel = selectExecutionHostDisplayLabel(initialState, hostId)
@@ -41,7 +46,8 @@ export function createBrowserCookieImportActions(
             environmentId: runtimeEnvironmentId,
             profileId,
             browserFamily,
-            browserProfile
+            browserProfile,
+            customBrowserId
           })
           ranOnClient = clientHostResult != null
           const result =
@@ -49,7 +55,13 @@ export function createBrowserCookieImportActions(
             (await callRuntimeRpc<BrowserProfileImportFromBrowserResult>(
               { kind: 'environment', environmentId: runtimeEnvironmentId },
               'browser.profileImportFromBrowser',
-              { profileId, browserFamily, browserProfile, supportsPartitionSkippedCookies: true },
+              {
+                profileId,
+                browserFamily,
+                browserProfile,
+                customBrowserId,
+                supportsPartitionSkippedCookies: true
+              },
               { timeoutMs: 30_000 }
             ))
           if (result.ok) {
@@ -112,7 +124,8 @@ export function createBrowserCookieImportActions(
         const result = (await window.api.browser.sessionImportFromBrowser({
           profileId,
           browserFamily,
-          browserProfile
+          browserProfile,
+          customBrowserId
         })) as BrowserCookieImportResult
         if (result.ok) {
           get().recordFeatureInteraction?.('cookie-import')
