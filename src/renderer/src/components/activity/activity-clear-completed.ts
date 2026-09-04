@@ -97,13 +97,21 @@ function evictPersistedStatuses(identities: readonly AgentStatusCacheIdentity[])
 }
 
 /**
- * Clear a single activity thread with an undo window.
+ * Clear a single activity thread silently (no toast notification).
  */
 export function clearSingleActivityThread(thread: AgentPaneThread): boolean {
   if (!isClearableActivityThread(thread)) {
     return false
   }
-  return clearCompletedActivity([thread])
+  const state = useAppStore.getState()
+  const plan = planClearCompletedActivity([thread], state)
+  if (plan.clearedThreadCount === 0) {
+    return false
+  }
+  state.applyActivityClearedAt(plan.cutoffPatch)
+  state.dismissRetainedAgents(plan.retainedSnapshots.map((retained) => retained.entry.paneKey))
+  evictPersistedStatuses(plan.cacheIdentities)
+  return true
 }
 
 /**

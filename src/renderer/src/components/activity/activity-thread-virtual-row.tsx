@@ -56,7 +56,7 @@ export function ActivityThreadVirtualRow({
     )
   }
   return (
-    <div className="pb-1">
+    <div className="pb-0.5">
       <ActivityThreadRow
         thread={item.thread}
         selected={item.thread.paneKey === selectedPaneKey}

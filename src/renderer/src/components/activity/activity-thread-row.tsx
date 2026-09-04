@@ -63,7 +63,7 @@ export const ActivityThreadRow = React.memo(function ActivityThreadRow({
         aria-label={taskTitle}
         aria-current={selected ? 'true' : undefined}
         className={cn(
-          'group relative flex w-full cursor-pointer flex-col gap-1.5 rounded-lg border border-transparent px-1.5 py-2.5 text-left transition-[background-color,border-color,opacity,box-shadow] duration-200 outline-none select-none worktree-sidebar-card-hover focus-visible:ring-1 focus-visible:ring-ring',
+          'group relative flex w-full cursor-pointer flex-col gap-1 rounded-lg border border-transparent px-1.5 py-1.5 text-left transition-[background-color,border-color,opacity,box-shadow] duration-200 outline-none select-none worktree-sidebar-card-hover focus-visible:ring-1 focus-visible:ring-ring',
           selected && 'border-transparent'
         )}
       >
@@ -71,7 +71,7 @@ export const ActivityThreadRow = React.memo(function ActivityThreadRow({
           <span className="mt-0.5 inline-flex shrink-0">
             <ThreadAgentStateIndicator thread={thread} />
           </span>
-          <div className="flex min-w-0 flex-1 flex-col gap-1">
+          <div className="flex min-w-0 flex-1 flex-col gap-0.5">
             {/* Keep the activation target separate from markdown links and row actions. */}
             <button
               type="button"
@@ -86,7 +86,6 @@ export const ActivityThreadRow = React.memo(function ActivityThreadRow({
                 compactMode ? 'truncate' : 'line-clamp-2 break-words',
                 thread.unread ? 'font-semibold text-foreground' : 'font-medium text-foreground'
               )}
-              title={taskTitle}
             >
               {taskTitle}
             </button>
@@ -100,7 +99,6 @@ export const ActivityThreadRow = React.memo(function ActivityThreadRow({
                     compactMode ? 'line-clamp-2' : 'line-clamp-3',
                     '[&_*]:!m-0 [&_*]:!p-0 [&_br]:hidden [&_ol]:list-none [&_ul]:list-none'
                   )}
-                  title={thread.responsePreview}
                 />
               ) : (
                 <div
@@ -109,7 +107,6 @@ export const ActivityThreadRow = React.memo(function ActivityThreadRow({
                     compactMode ? 'line-clamp-2' : 'line-clamp-3',
                     needsAttention ? 'text-agent-question-text' : 'text-foreground/80'
                   )}
-                  title={statusLine}
                 >
                   {statusLine}
                 </div>
