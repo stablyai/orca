@@ -23,6 +23,12 @@ const stripNsisCommentLines = (source) =>
 
 const readInstallerHooks = () => readFile(electronBuilderConfig.nsis.include, 'utf8')
 
+const extractNsisMacro = (source, name) => {
+  const match = source.match(new RegExp(`!macro\\s+${name}\\b[\\s\\S]*?!macroend`))
+  expect(match, `${name} macro`).not.toBeNull()
+  return match[0]
+}
+
 describe('electron-builder markdown file associations', () => {
   // Why: any top-level (or `win.`) fileAssociations entry makes app-builder-lib's NSIS
   // packager emit `!insertmacro APP_ASSOCIATE`, whose first line writes that DEFAULT value
@@ -112,5 +118,16 @@ describe('electron-builder markdown file associations', () => {
     // Without this guard, uninstallOldVersion would kill the daemon on every update —
     // defeating the relocation that keeps terminals alive across updates.
     expect(hooks).toMatch(/\$\{ifNot\}\s+\$\{isUpdated\}/)
+  })
+})
+
+describe('electron-builder app-running check', () => {
+  it('uses the bundled native process plugin instead of a child shell', async () => {
+    const macro = extractNsisMacro(await readInstallerHooks(), 'customCheckAppRunning')
+
+    expect(macro).toContain('${nsProcess::FindProcess}')
+    expect(macro).toContain('${nsProcess::CloseProcess}')
+    expect(macro).toContain('${nsProcess::KillProcess}')
+    expect(macro).not.toMatch(/powershell|nsExec::Exec|!insertmacro\s+(?:FIND|KILL)_PROCESS/i)
   })
 })

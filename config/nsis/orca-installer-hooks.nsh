@@ -3,6 +3,67 @@
 ; electron-builder accepts exactly ONE `nsis.include` file, so every customInstall /
 ; customUnInstall hook Orca needs lives here.
 
+; Native process checks avoid false success when GPO blocks Windows PowerShell
+; while returning exit code 0 (issues #13924, #16528).
+; customCheckAppRunning also prevents electron-builder from expanding its
+; PowerShell-based probe; nsProcess is already bundled by electron-builder.
+!macro customCheckAppRunning
+  ${if} ${isUpdated}
+    ; Preserve electron-builder's update grace period.
+    Sleep 300
+  ${endIf}
+
+  ${nsProcess::FindProcess} "${APP_EXECUTABLE_FILENAME}" $R0
+  ${if} $R0 == 0
+    ${if} ${isUpdated}
+      Sleep 1000
+    ${else}
+      MessageBox MB_OKCANCEL|MB_ICONEXCLAMATION "$(appRunning)" /SD IDOK IDOK orca_stop_app
+      ${nsProcess::Unload}
+      Quit
+    ${endIf}
+
+    orca_stop_app:
+
+    DetailPrint "$(appClosing)"
+    ; Allow state to flush before forcing termination.
+    ${nsProcess::CloseProcess} "${APP_EXECUTABLE_FILENAME}" $R0
+    Sleep 300
+
+    StrCpy $R1 0
+
+    orca_wait_loop:
+      ${nsProcess::FindProcess} "${APP_EXECUTABLE_FILENAME}" $R0
+      ${if} $R0 != 0
+        Goto orca_not_running
+      ${endIf}
+
+      Sleep 1000
+      ${nsProcess::KillProcess} "${APP_EXECUTABLE_FILENAME}" $R0
+
+      ${nsProcess::FindProcess} "${APP_EXECUTABLE_FILENAME}" $R0
+      ${if} $R0 != 0
+        Goto orca_not_running
+      ${endIf}
+
+      DetailPrint `Waiting for "${PRODUCT_NAME}" to close.`
+      Sleep 2000
+
+      IntOp $R1 $R1 + 1
+      ; An elevated process may require manual closure.
+      ${if} $R1 > 1
+        MessageBox MB_RETRYCANCEL|MB_ICONEXCLAMATION "$(appCannotBeClosed)" /SD IDCANCEL IDRETRY orca_wait_loop
+        ${nsProcess::Unload}
+        Quit
+      ${endIf}
+      Goto orca_wait_loop
+
+    orca_not_running:
+  ${endIf}
+
+  ${nsProcess::Unload}
+!macroend
+
 ; ---------------------------------------------------------------------------
 ; Markdown "Open with Orca" (issue #10138)
 ;
