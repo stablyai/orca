@@ -1,8 +1,10 @@
 // @vitest-environment happy-dom
 
+import { tmpdir } from 'node:os'
 import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { getDefaultSettings } from '../../../../shared/constants'
 import type { AppState } from '@/store'
 import { RepositoryIconEmojiPicker } from './RepositoryIconEmojiPicker'
 
@@ -14,9 +16,8 @@ vi.mock('sonner', () => ({
   toast: { error: toastMocks.error }
 }))
 
-// Mock store exposing only the theme value, to verify the minimal-selector subscription.
 const storeMocks = vi.hoisted(() => ({
-  state: { settings: { theme: 'light' } } as Partial<AppState>
+  state: { settings: null } as Partial<AppState>
 }))
 
 vi.mock('@/store', () => ({
@@ -32,14 +33,20 @@ type MockEmojiClickHandler = (data: { emoji: string }) => void
 
 const emojiPickerMocks = vi.hoisted(() => ({
   onEmojiClick: null as MockEmojiClickHandler | null,
-  searchPlaceholder: null as string | null
+  searchPlaceholder: null as string | null,
+  theme: null as string | null
 }))
 
 vi.mock('emoji-picker-react', () => ({
   __esModule: true,
-  default: (props: { onEmojiClick: MockEmojiClickHandler; searchPlaceholder: string }) => {
+  default: (props: {
+    onEmojiClick: MockEmojiClickHandler
+    searchPlaceholder: string
+    theme: string
+  }) => {
     emojiPickerMocks.onEmojiClick = props.onEmojiClick
     emojiPickerMocks.searchPlaceholder = props.searchPlaceholder
+    emojiPickerMocks.theme = props.theme
     return null
   },
   EmojiStyle: { NATIVE: 'native' },
@@ -63,8 +70,10 @@ describe('RepositoryIconEmojiPicker', () => {
     container = document.createElement('div')
     document.body.appendChild(container)
     root = createRoot(container)
+    storeMocks.state.settings = { ...getDefaultSettings(tmpdir()), theme: 'light' }
     emojiPickerMocks.onEmojiClick = null
     emojiPickerMocks.searchPlaceholder = null
+    emojiPickerMocks.theme = null
     toastMocks.error.mockReset()
   })
 
@@ -79,6 +88,19 @@ describe('RepositoryIconEmojiPicker', () => {
     expect(emojiPickerMocks.onEmojiClick).not.toBeNull()
     expect(emojiPickerMocks.searchPlaceholder).toBe('Search emoji')
     expect(container.querySelector('.repo-icon-emoji-picker')).not.toBeNull()
+  })
+
+  it('uses the resolved App Appearance scheme', () => {
+    storeMocks.state.settings = {
+      ...getDefaultSettings(tmpdir()),
+      theme: 'light',
+      leftSidebarAppearanceMode: 'match-terminal',
+      terminalColorOverrides: { background: '#101820' }
+    }
+
+    renderPicker()
+
+    expect(emojiPickerMocks.theme).toBe('dark')
   })
 
   it('saves a valid emoji click through the existing RepoIcon contract', () => {

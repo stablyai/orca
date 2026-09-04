@@ -388,7 +388,7 @@ export default function PdfViewer({
               overflow: 'auto',
               background: 'var(--pdf-viewer-bg, #e4e4e7)'
             }}
-            className="scrollbar-editor dark:[--pdf-viewer-bg:#18181b]"
+            className="scrollbar-editor editor-dark:[--pdf-viewer-bg:#18181b]"
           >
             <div ref={viewerDivRef} className="pdfViewer" />
           </div>

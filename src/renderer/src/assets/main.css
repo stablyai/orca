@@ -25,6 +25,7 @@
 }
 
 @custom-variant dark (&:is(.dark *));
+@custom-variant editor-dark (&:is(.orca-editor-dark *));
 
 /* Why: hover-reveal controls (sidebar/row action buttons) hide with `opacity-0`
    and fade in via `group-hover`. Touch devices have no hover, so those controls
@@ -153,6 +154,8 @@
   --orca-security-border: #e5e5e5;
   --orca-security-input: #e5e5e5;
   --orca-security-ring: #a1a1a1;
+  --app-appearance-base-background: #fff;
+  --app-appearance-base-foreground: #0a0a0a;
   --background: #fff;
   --editor-surface: #ffffff;
   --foreground: #0a0a0a;
@@ -267,6 +270,8 @@
   --orca-security-border: rgb(255 255 255 / 0.07);
   --orca-security-input: rgb(255 255 255 / 0.15);
   --orca-security-ring: #737373;
+  --app-appearance-base-background: #0a0a0a;
+  --app-appearance-base-foreground: #fafafa;
   --background: #0a0a0a;
   --editor-surface: #1e1e1e;
   --foreground: #fafafa;
@@ -357,6 +362,53 @@
   --tab-group-split-divider-strong: #a1a1aa;
 }
 
+:root[data-app-appearance]
+  :is(
+    .editor-content-pane,
+    .markdown-preview-shell,
+    .rich-markdown-editor-layout,
+    .rich-markdown-link-bubble,
+    .rich-markdown-editor-portal
+  ) {
+  /* Hosted editors keep the configured Orca scheme when App Appearance follows
+     a terminal theme with the opposite luminance. Scope the layout so TOCs and
+     portaled editor controls retain the same editor-owned token family. */
+  --background: var(--orca-editor-base-background);
+  --foreground: var(--orca-editor-base-foreground);
+  --card: var(--orca-editor-base-card);
+  --card-foreground: var(--orca-editor-base-card-foreground);
+  --muted: var(--orca-editor-base-muted);
+  --muted-foreground: var(--orca-editor-base-muted-foreground);
+  --accent: var(--orca-editor-base-accent);
+  --accent-foreground: var(--orca-editor-base-accent-foreground);
+  --primary: var(--orca-editor-base-primary);
+  --primary-foreground: var(--orca-editor-base-primary-foreground);
+  --secondary: var(--orca-editor-base-secondary);
+  --secondary-foreground: var(--orca-editor-base-secondary-foreground);
+  --destructive: var(--orca-editor-base-destructive);
+  --destructive-foreground: var(--orca-editor-base-destructive-foreground);
+  --popover: var(--orca-editor-base-popover);
+  --popover-foreground: var(--orca-editor-base-popover-foreground);
+  --border: var(--orca-editor-base-border);
+  --input: var(--orca-editor-base-input);
+  --ring: var(--orca-editor-base-ring);
+  --status-success: var(--orca-editor-base-status-success);
+  --ai-action-accent: var(--orca-editor-base-ai-action-accent);
+  --annotation-highlight: var(--orca-editor-base-annotation-highlight);
+  --markdown-search-match: var(--orca-editor-base-markdown-search-match);
+  --markdown-search-match-active: var(--orca-editor-base-markdown-search-match-active);
+  --git-decoration-modified: var(--orca-editor-base-git-decoration-modified);
+  --git-decoration-renamed: var(--orca-editor-base-git-decoration-renamed);
+  --radius: var(--orca-editor-base-radius);
+  --editor-surface: var(--orca-editor-base-editor-surface);
+}
+
+:root[data-app-appearance]
+  :is(.editor-content-pane, .markdown-preview-shell, .rich-markdown-editor-layout) {
+  background: var(--editor-surface);
+  color: var(--foreground);
+}
+
 .plugin-security-chrome {
   /* Why: plugin themes may style the app, but provenance and consent must
      retain host-owned contrast so a pack cannot disguise a trust decision. */
@@ -444,19 +496,7 @@
      background to the same color; keep the X readable on both Orca themes. */
   color: var(--popover-foreground);
   background: var(--popover);
-  border-color: rgb(0 0 0 / 0.14);
-}
-
-[data-sonner-toaster][data-sonner-theme='dark']
-  [data-sonner-toast][data-styled='true']
-  [data-close-button] {
-  color: var(--popover-foreground);
-  background: var(--popover);
-  border-color: rgb(255 255 255 / 0.14);
-}
-
-.dark [data-sonner-toaster] [data-sonner-toast][data-styled='true'] [data-close-button] {
-  border-color: rgb(255 255 255 / 0.14);
+  border-color: color-mix(in srgb, var(--popover-foreground) 14%, transparent);
 }
 
 [data-sonner-toaster] [data-sonner-toast][data-styled='true'] [data-close-button]:hover {
@@ -1062,7 +1102,7 @@ html.native-shell .app-layout {
   gap: 4px;
   min-height: 36px;
   padding: 6px 14px;
-  background: var(--editor-surface);
+  background: var(--card);
   border-bottom: 1px solid color-mix(in srgb, var(--border) 72%, transparent);
   flex-shrink: 0;
 }
@@ -2742,7 +2782,7 @@ html.native-shell .app-layout {
   background: rgba(59, 130, 246, 0.14);
 }
 
-.dark .orca-diff-comment-range-highlight {
+.orca-editor-dark .orca-diff-comment-range-highlight {
   background: rgba(96, 165, 250, 0.18);
 }
 
@@ -2765,7 +2805,7 @@ html.native-shell .app-layout {
    and a bolded uppercase meta label. Dark mode uses 6% (vs light's 5%)
    to produce roughly the same absolute luminance delta above its editor
    surface — the foreground color is different (white vs black) so equal
-   percentages would not give equal contrast. Override lives in `.dark`. */
+   percentages would not give equal contrast. */
 .orca-diff-comment-card {
   position: relative;
   /* Why: Monaco's view-lines overlay (data-mprt=8) is positioned absolutely on
@@ -2790,7 +2830,7 @@ html.native-shell .app-layout {
     background-color 150ms ease;
 }
 
-.dark .orca-diff-comment-card {
+.orca-editor-dark .orca-diff-comment-card {
   border-color: color-mix(in srgb, var(--foreground) 12%, var(--border));
   background: color-mix(in srgb, var(--foreground) 2%, var(--editor-surface));
   box-shadow:
@@ -2842,7 +2882,7 @@ html.native-shell .app-layout {
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.02);
 }
 
-.dark .orca-diff-comment-actions-pill {
+.orca-editor-dark .orca-diff-comment-actions-pill {
   border-color: color-mix(in srgb, var(--foreground) 14%, var(--border));
   background: color-mix(in srgb, var(--foreground) 4%, var(--editor-surface));
 }
@@ -2937,7 +2977,7 @@ html.native-shell .app-layout {
     0 4px 12px rgba(0, 0, 0, 0.08);
 }
 
-.dark .orca-diff-comment-popover {
+.orca-editor-dark .orca-diff-comment-popover {
   border-color: color-mix(in srgb, var(--foreground) 14%, var(--border));
   background: color-mix(in srgb, var(--foreground) 2%, var(--editor-surface));
   box-shadow:
@@ -2974,7 +3014,7 @@ html.native-shell .app-layout {
     box-shadow 150ms ease;
 }
 
-.dark .orca-diff-comment-popover-textarea {
+.orca-editor-dark .orca-diff-comment-popover-textarea {
   border-color: color-mix(in srgb, var(--foreground) 10%, var(--border));
   background: color-mix(in srgb, var(--foreground) 3%, var(--editor-surface));
 }
@@ -2984,7 +3024,7 @@ html.native-shell .app-layout {
   box-shadow: 0 0 0 2px color-mix(in srgb, var(--ring) 18%, transparent);
 }
 
-.dark .orca-diff-comment-popover-textarea:focus {
+.orca-editor-dark .orca-diff-comment-popover-textarea:focus {
   border-color: color-mix(in srgb, var(--ring) 70%, var(--border));
   box-shadow: 0 0 0 2px color-mix(in srgb, var(--ring) 12%, transparent);
 }
