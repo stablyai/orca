@@ -3,8 +3,9 @@ import type { ManagedPane } from '@/lib/pane-manager/pane-manager'
 import { launchAgentInNewTab } from '@/lib/launch-agent-in-new-tab'
 import {
   buildAgentSessionForkPrompt,
-  buildBoundedSessionTranscript
+  buildFullSessionTranscript
 } from '@/lib/agent-session-fork-context'
+import { DESKTOP_TERMINAL_SCROLLBACK_ROWS_DEFAULT } from '../../../../shared/terminal-scrollback-policy'
 import { activateAndRevealWorktree } from '@/lib/worktree-activation'
 import { useAppStore } from '@/store'
 import { makePaneKey } from '../../../../shared/stable-pane-id'
@@ -169,12 +170,17 @@ export async function copyAgentSessionForkContext(
   return copyForkContext(fork.prompt, fork.pane)
 }
 
-// Why: the standalone "Copy Context" action copies the bounded transcript on its
-// own — for pasting into another tool — so it must not carry the fork prompt's
-// "this is a fork… acknowledge and wait" framing the dialog button uses.
+// Why: standalone Copy Context is for pasting into another tool/model, so it
+// must yield the full cleaned transcript (no fork framing, no char budget)
+// using the pane's configured scrollback depth rather than a short 800-line tail.
 export async function copyAgentSessionContextFromPane(pane: ManagedPane): Promise<boolean> {
-  const transcript = buildBoundedSessionTranscript(
-    pane.serializeAddon.serialize({ scrollback: 800 })
+  const scrollbackRows =
+    typeof pane.terminal.options.scrollback === 'number' &&
+    Number.isFinite(pane.terminal.options.scrollback)
+      ? Math.max(1, Math.floor(pane.terminal.options.scrollback))
+      : DESKTOP_TERMINAL_SCROLLBACK_ROWS_DEFAULT
+  const transcript = buildFullSessionTranscript(
+    pane.serializeAddon.serialize({ scrollback: scrollbackRows })
   )
   if (!transcript) {
     toast.error(
