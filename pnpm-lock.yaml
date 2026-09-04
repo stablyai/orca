@@ -315,6 +315,9 @@ importers:
       '@xterm/addon-fit':
         specifier: 0.12.0-beta.300
         version: 0.12.0-beta.300(@xterm/xterm@6.1.0-beta.303(patch_hash=98756bcedc402bcdb7c6ab7b015d2e59cd18e97b03a2c06a27e95bb3ba429d9d))
+      '@xterm/addon-image':
+        specifier: 0.10.0-beta.300
+        version: 0.10.0-beta.300(@xterm/xterm@6.1.0-beta.303(patch_hash=98756bcedc402bcdb7c6ab7b015d2e59cd18e97b03a2c06a27e95bb3ba429d9d))
       '@xterm/addon-ligatures':
         specifier: 0.11.0-beta.300
         version: 0.11.0-beta.300(patch_hash=47405b9994b5acf1b4e90b49250358c1ca03649854d59560e7732b72fe336920)(@xterm/xterm@6.1.0-beta.303(patch_hash=98756bcedc402bcdb7c6ab7b015d2e59cd18e97b03a2c06a27e95bb3ba429d9d))
@@ -3496,6 +3499,11 @@ packages:
 
   '@xterm/addon-fit@0.12.0-beta.300':
     resolution: {integrity: sha512-geBeBBKqHe0Dmf+rT79wU/rglFJFja1QmKfcgmnQQhJTvAlrP+yHT2s+yy5PBeP8CtGPDvh5UcoWmunR9fBCuQ==}
+    peerDependencies:
+      '@xterm/xterm': ^6.1.0-beta.303
+
+  '@xterm/addon-image@0.10.0-beta.300':
+    resolution: {integrity: sha512-eF19wskh7io1KIFMHkJW0yMSTrDdvALp0ZjI4A27czpdTLquyB8LN0w+wNnpOU7D+B4CZp/8LxNta/LGMRIdCg==}
     peerDependencies:
       '@xterm/xterm': ^6.1.0-beta.303
 
@@ -9746,6 +9754,10 @@ snapshots:
   '@xmldom/xmldom@0.8.13': {}
 
   '@xterm/addon-fit@0.12.0-beta.300(@xterm/xterm@6.1.0-beta.303(patch_hash=98756bcedc402bcdb7c6ab7b015d2e59cd18e97b03a2c06a27e95bb3ba429d9d))':
+    dependencies:
+      '@xterm/xterm': 6.1.0-beta.303(patch_hash=98756bcedc402bcdb7c6ab7b015d2e59cd18e97b03a2c06a27e95bb3ba429d9d)
+
+  '@xterm/addon-image@0.10.0-beta.300(@xterm/xterm@6.1.0-beta.303(patch_hash=98756bcedc402bcdb7c6ab7b015d2e59cd18e97b03a2c06a27e95bb3ba429d9d))':
     dependencies:
       '@xterm/xterm': 6.1.0-beta.303(patch_hash=98756bcedc402bcdb7c6ab7b015d2e59cd18e97b03a2c06a27e95bb3ba429d9d)
 

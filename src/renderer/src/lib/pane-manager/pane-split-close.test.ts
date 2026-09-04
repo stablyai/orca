@@ -100,6 +100,8 @@ function createPane(id: number, webglAddon: unknown): ManagedPaneInternal {
     hasComplexScriptOutput: false,
     webglAddon: webglAddon as never,
     ligaturesAddon: null,
+    imageAddon: null,
+    imageCursorAdvanceDisposable: null,
     fitResizeObserver: null,
     pendingObservedFitRafId: null,
     fitAddon: {} as never,

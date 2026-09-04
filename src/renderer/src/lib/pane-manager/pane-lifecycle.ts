@@ -1,3 +1,5 @@
+import { ImageAddon } from '@xterm/addon-image'
+
 import type { ManagedPaneInternal } from './pane-manager-types'
 import { safeFit } from './pane-tree-ops'
 import {
@@ -20,6 +22,7 @@ import { rebuildAttachedWebgl } from './pane-webgl-reattach'
 import { configureLazyArabicShapingJoiner } from './terminal-arabic-shaping-joiner'
 import { TerminalLigaturesAddon } from './terminal-ligatures-addon'
 import { installTerminalImeCandidateAnchor } from './terminal-ime-candidate-anchor'
+import { attachImageCursorAdvance } from './terminal-image-cursor-advance'
 
 // ---------------------------------------------------------------------------
 // Pane creation, terminal open/close, addon management
@@ -54,6 +57,14 @@ export function openTerminal(pane: ManagedPaneInternal): void {
   terminal.loadAddon(serializeAddon)
   terminal.loadAddon(unicode11Addon)
   terminal.loadAddon(webLinksAddon)
+  // Why size reports stay off: Orca's capability responder already answers
+  // CSI 14t/16t (pty-connection), so xterm's built-in responder would send a
+  // second reply that leaks stray bytes into program stdin (#7329 class).
+  // Storage capped at 64MB (half default) since Orca may have many panes.
+  const imageAddon = new ImageAddon({ enableSizeReports: false, storageLimit: 64 })
+  terminal.loadAddon(imageAddon)
+  pane.imageAddon = imageAddon
+  pane.imageCursorAdvanceDisposable = attachImageCursorAdvance(terminal, imageAddon)
   attachTerminalMouseWheelMultiplier(terminal, {
     getTuiMouseWheelMultiplier: terminalTuiScrollSensitivity
   })
@@ -222,6 +233,13 @@ export function disposePane(
   }
   try {
     pane.ligaturesAddon?.dispose()
+  } catch {
+    /* ignore */
+  }
+  pane.imageCursorAdvanceDisposable?.dispose()
+  pane.imageCursorAdvanceDisposable = null
+  try {
+    pane.imageAddon?.dispose()
   } catch {
     /* ignore */
   }
