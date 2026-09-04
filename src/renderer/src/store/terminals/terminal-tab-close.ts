@@ -16,6 +16,8 @@ import {
 import type { TerminalSlice, TerminalStoreGet, TerminalStoreSet } from './terminal-state'
 import { startTerminalTabProviderRetirement } from './terminal-tab-close-providers'
 import { omitUnverifiedPtyLossTabIds } from './terminal-unverified-pty-loss'
+import { pruneSessionGridTabOrder } from '../slices/session-grid-tab-order'
+import { pruneSessionGridHiddenTabIds } from '../slices/session-grid-hidden-tabs'
 
 export function createTerminalTabCloseActions(
   set: TerminalStoreSet,
@@ -196,6 +198,11 @@ export function createTerminalTabCloseActions(
             nextTabBarOrderByWorktree[wId] = order.filter((entryId) => entryId !== tabId)
           }
         }
+        // Why: the session grid's global order must not accumulate retired ids;
+        // same reason as tabBarOrderByWorktree above. Identity-guarded so an
+        // unrelated close does not trip the persisted-UI writer.
+        const nextSessionsGridTabOrder = pruneSessionGridTabOrder(s.sessionsGridTabOrder, tabId)
+        const nextHiddenTabIds = pruneSessionGridHiddenTabIds(s.sessionsGridHiddenTabIds, tabId)
         // Why: clean up unconsumed snapshot/cold-restore data (e.g. tab closed before TerminalPane mounted) to prevent unbounded store growth across restarts.
         let nextSnapshots = s.pendingSnapshotByPtyId
         let nextColdRestores = s.pendingColdRestoreByPtyId
@@ -239,6 +246,12 @@ export function createTerminalTabCloseActions(
           // Why: skip writing unreadTerminalTabs when unchanged to avoid a no-op state allocation that re-evaluates full-state selectors. Mirrors tabs.ts.
           ...(nextUnreadTerminalTabs !== s.unreadTerminalTabs
             ? { unreadTerminalTabs: nextUnreadTerminalTabs }
+            : {}),
+          ...(nextSessionsGridTabOrder !== s.sessionsGridTabOrder
+            ? { sessionsGridTabOrder: nextSessionsGridTabOrder }
+            : {}),
+          ...(nextHiddenTabIds !== s.sessionsGridHiddenTabIds
+            ? { sessionsGridHiddenTabIds: nextHiddenTabIds }
             : {}),
           ...(nextUnreadTerminalPanes !== s.unreadTerminalPanes
             ? { unreadTerminalPanes: nextUnreadTerminalPanes }

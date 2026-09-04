@@ -15,6 +15,7 @@ import {
   normalizeExecutionHostScope
 } from '../../../../../shared/execution-host'
 import { persistedUIValuesEqual } from '../../../../../shared/persisted-ui-equality'
+import { isPairedWebClientWindow } from '@/lib/desktop-window-chrome'
 import { DEFAULT_STATUS_BAR_ITEMS } from '../../../../../shared/constants'
 import type { UISlice } from './ui-slice-contract'
 
@@ -174,6 +175,13 @@ export function sanitizeWorkspaceCleanupDismissals(
 export function sanitizeHydratedActiveView(value: PersistedUIState['activeView']): TopLevelView {
   // Why: older data (pre-activeView) or a view a different build doesn't have falls back to terminal rather than rendering nothing.
   if (!isTopLevelView(value)) {
+    return 'terminal'
+  }
+  // Why: activeView is shared with paired clients, so a desktop host that was
+  // left on the session grid hands 'sessions' to a web client whose preload has
+  // no terminalPreview transport — every card would stall on connect. The web
+  // client hides its entry points for the same reason.
+  if (value === 'sessions' && isPairedWebClientWindow()) {
     return 'terminal'
   }
   return value

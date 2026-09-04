@@ -5,20 +5,14 @@ import {
   capturePersistedUIWriteBaseline,
   diffPersistedUIWriteFields,
   persistedUIWriteFieldsToWireUpdate,
+  quarantineRejectedPersistedUIWriteFields,
   type PersistedUIWriteBaseline
 } from '../store/slices/persisted-ui-write-baseline'
 
-/**
- * Send one field patch and settle it against the baseline. Fields are marked
- * in flight so a hydration during the round-trip can't revert a newer local
- * flip-back; on ack the patch folds into the baseline (generation-guarded: a
- * hydration during the round trip wins instead) and a debounced trailing
- * flush re-diffs the mirror — an edit made while the write was in flight,
- * which diffed empty against the pre-fold baseline, is re-sent then. A
- * rejected write folds nothing, leaving its fields dirty to re-flush on the
- * next change (no automatic retry loop) — which is why this sends through
- * setWithAck: the web preload's plain set swallows transport failures.
- */
+// Sends one patch through setWithAck (web's plain set swallows transport failures) and folds it
+// into the baseline on ack, generation-guarded so a hydration mid-flight wins. A transport
+// rejection folds nothing — the fields stay dirty for the next edit, never an automatic retry —
+// but a host that refuses the keys outright would refuse them forever, so those are quarantined.
 type PersistedUIWriteController = {
   activate: () => void
   send: (changed: Partial<PersistedUIWriteBaseline>) => void
@@ -84,8 +78,14 @@ function createPersistedUIWriteController(): PersistedUIWriteController {
         useAppStore.getState().notePersistedUIWriteSettled(fields, changed, { sentAtGeneration })
         scheduleTrailing()
       },
-      () => {
-        useAppStore.getState().notePersistedUIWriteSettled(fields, null)
+      (error: unknown) => {
+        // An old host's strict schema rejects the whole batch on one unknown key; folding
+        // those keys as-if-persisted stops them poisoning every later patch, and the
+        // batch-mates they took down with them are re-sent by the trailing flush.
+        const quarantined = quarantineRejectedPersistedUIWriteFields(error, changed)
+        useAppStore
+          .getState()
+          .notePersistedUIWriteSettled(fields, quarantined, { sentAtGeneration })
         // Preserve a pending edit made during this round trip, but don't retry the
         // rejected patch itself: a terminal transport failure must not loop.
         const state = useAppStore.getState()
@@ -97,10 +97,13 @@ function createPersistedUIWriteController(): PersistedUIWriteController {
         const changedDuringFlight = fields.some(
           (field) => !Object.is(current[field], changed[field])
         )
+        const quarantinedFields = Object.keys(quarantined ?? {})
         const shouldRetry =
           changedDuringFlight ||
           Object.keys(dirty).some(
-            (field) => !fields.includes(field as keyof PersistedUIWriteBaseline)
+            (field) =>
+              !fields.includes(field as keyof PersistedUIWriteBaseline) ||
+              (quarantinedFields.length > 0 && !quarantinedFields.includes(field))
           )
         if (shouldRetry) {
           scheduleTrailing()
@@ -126,18 +129,9 @@ function createPersistedUIWriteController(): PersistedUIWriteController {
   return controller
 }
 
-/**
- * Mirrors the sidebar/right-sidebar/filter preferences into the durable UI file.
- *
- * Why field-level diffs (STA-5781): the durable UI state is shared with mobile/web
- * clients, which edit it concurrently. Writing the whole snapshot let this client's
- * stale mirror overwrite fields another client had just changed. The writer now
- * diffs the mirror against the last state hydrated from main and persists only the
- * fields this client changed itself; main merges partial updates field-by-field.
- *
- * Why (#9002): activeView is deliberately kept off this debounced writer. It used to ride the
- * same 150ms save (#8265), so every top-level view switch scheduled a full durable-state write.
- */
+// Mirrors the writer-owned preferences into the durable UI file as field-level diffs (STA-5781:
+// whole-snapshot writes let a stale mirror clobber another client's fields). activeView stays
+// off this debounced writer (#9002) so a view switch never schedules a durable-state write.
 export function usePersistedUIWriter(): void {
   const controller = useMemo(() => createPersistedUIWriteController(), [])
   const persistedUIReady = useAppStore((s) => s.persistedUIReady)
@@ -171,7 +165,16 @@ export function usePersistedUIWriter(): void {
       // Why: "Clear completed" must survive restart, or cleared done/interrupted rows return.
       activityClearedAtByPaneKey: s.activityClearedAtByPaneKey,
       // Why: an explicit "mark unread" must survive restart, or the row comes back read.
-      manuallyUnreadTurnsByPaneKey: s.manuallyUnreadTurnsByPaneKey
+      manuallyUnreadTurnsByPaneKey: s.manuallyUnreadTurnsByPaneKey,
+      sessionsGridPreset: s.sessionsGridPreset,
+      sessionsGridZoom: s.sessionsGridZoom,
+      sessionsGridShowEmpty: s.sessionsGridShowEmpty,
+      sessionsGridFilter: s.sessionsGridFilter,
+      sessionsGridStateFilter: s.sessionsGridStateFilter,
+      sessionsGridScrollMode: s.sessionsGridScrollMode,
+      sessionsGridWheelTarget: s.sessionsGridWheelTarget,
+      sessionsGridTabOrder: s.sessionsGridTabOrder,
+      sessionsGridHiddenTabIds: s.sessionsGridHiddenTabIds
     }))
   )
   useEffect(() => {

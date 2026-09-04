@@ -31,6 +31,7 @@ export function buildWorktreePurgeState(
     omitRetiredDirectSshLedgerByTabId,
     omitByPtyId,
     omitByPaneKeyTabPrefix,
+    omitTabIdsFromList,
     omitByBrowserWorkspaceId,
     omitByPageId,
     omitByFileId
@@ -144,6 +145,11 @@ export function buildWorktreePurgeState(
     activeTabTypeByWorktree: omitByWorktree(s.activeTabTypeByWorktree),
     activeTabIdByWorktree: omitByWorktree(s.activeTabIdByWorktree),
     tabBarOrderByWorktree: omitByWorktree(s.tabBarOrderByWorktree),
+    // Why here and not only in closeTab: removing a repo kills the ptys by hand and comes
+    // straight to this purge, so ids retired that way would sit in these two persisted lists
+    // forever — written to the durable UI file and re-sent on every ui.set. Tab ids never recur.
+    sessionsGridTabOrder: omitTabIdsFromList(s.sessionsGridTabOrder),
+    sessionsGridHiddenTabIds: omitTabIdsFromList(s.sessionsGridHiddenTabIds),
     pendingReconnectTabByWorktree: omitByWorktree(s.pendingReconnectTabByWorktree),
     rightSidebarTabByWorktree: pruneRightSidebarTabByWorktree(),
     rightSidebarExplorerViewByWorktree: omitByWorktree(s.rightSidebarExplorerViewByWorktree ?? {}),

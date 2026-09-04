@@ -25,8 +25,26 @@ export type {
   UISlice
 } from './ui/ui-slice-contract'
 
-export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get) =>
-  ({
+export const createUISlice: StateCreator<AppState, [], [], UISlice> = (write, get) => {
+  const set: typeof write = (partial, replace?) => {
+    const update = (state: AppState): AppState | Partial<AppState> => {
+      const next = typeof partial === 'function' ? partial(state) : partial
+      // Explicit entry (including reopen) and exit clear the visit before attention subscribers see it.
+      if (
+        next.activeView !== undefined &&
+        (next.activeView === 'sessions' || state.activeView === 'sessions')
+      ) {
+        return { ...next, activeSessionGridTabId: null }
+      }
+      return next
+    }
+    if (replace) {
+      write((state) => update(state) as AppState, true)
+    } else {
+      write(update, replace)
+    }
+  }
+  return {
     ...createUiAgentActions(set, get),
     ...createUiTaskActions(set, get),
     ...createUiViewActions(set, get),
@@ -40,4 +58,5 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
     ...createUiPersistenceActions(set, get),
     ...createUiHydrationActions(set, get),
     ...createUiUpdateActions(set, get)
-  }) as UISlice
+  } as UISlice
+}

@@ -10,6 +10,13 @@ import type { LaunchSource } from '../../../../../shared/telemetry-events'
 import type { TaskSourceContext } from '../../../../../shared/task-source-context'
 import type { ExecutionHostId } from '../../../../../shared/execution-host'
 import type { TaskResumeState, TopLevelView } from '../../../../../shared/ui-chrome-types'
+import type {
+  SessionGridFilter,
+  SessionGridLayoutPreset,
+  SessionGridScrollMode,
+  SessionGridStateFilter,
+  SessionGridWheelTarget
+} from '../../../../../shared/session-grid-types'
 
 export type PendingSidebarWorktreeReveal = {
   worktreeId: string
@@ -113,6 +120,7 @@ export type UiViewHistory =
   | 'skills'
   | 'artifacts'
   | 'mobile'
+  | 'sessions'
 
 export type UISliceCore = {
   sidebarOpen: boolean
@@ -148,6 +156,31 @@ export type UISliceCore = {
   previousViewBeforeSkills: Exclude<UiViewHistory, 'skills'>
   previousViewBeforeMobile: Exclude<UiViewHistory, 'mobile'>
   previousViewBeforeArtifacts: Exclude<UiViewHistory, 'artifacts'>
+  previousViewBeforeSessions: Exclude<UiViewHistory, 'sessions'>
+  openSessionsPage: () => void
+  closeSessionsPage: () => void
+  sessionsGridPreset: SessionGridLayoutPreset
+  sessionsGridZoom: number
+  sessionsGridShowEmpty: boolean
+  sessionsGridFilter: SessionGridFilter
+  sessionsGridStateFilter: SessionGridStateFilter
+  sessionsGridScrollMode: SessionGridScrollMode
+  sessionsGridWheelTarget: SessionGridWheelTarget
+  sessionsGridTabOrder: string[]
+  /** Tabs kept out of the grid. A view, not a model: the pty stays live and the tab stays in its tab bar. */
+  sessionsGridHiddenTabIds: string[]
+  activeSessionGridTabId: string | null
+  setSessionsGridPreset: (preset: SessionGridLayoutPreset) => void
+  setSessionsGridZoom: (zoom: number) => void
+  toggleSessionsGridShowEmpty: () => void
+  setSessionsGridFilter: (filter: SessionGridFilter) => void
+  setSessionsGridStateFilter: (filter: SessionGridStateFilter) => void
+  setSessionsGridScrollMode: (mode: SessionGridScrollMode) => void
+  setSessionsGridWheelTarget: (target: SessionGridWheelTarget) => void
+  setSessionsGridTabOrder: (order: string[]) => void
+  setSessionsGridHiddenTabIds: (tabIds: string[]) => void
+  toggleSessionsGridHiddenTab: (tabId: string) => void
+  setActiveSessionGridTabId: (tabId: string | null) => void
   setActiveView: (view: UISliceCore['activeView']) => void
   taskPageData: TaskPageData
   taskResumeState: TaskResumeState | undefined

@@ -14,7 +14,7 @@
  * `purgeWorktreeTerminalState`; project removal did not.
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { createTestStore, makeWorktree } from './store-test-helpers'
+import { createTestStore, makeTab, makeWorktree } from './store-test-helpers'
 import type { Repo } from '../../../../shared/repo-types'
 
 const repo1: Repo = { id: 'repo-1', path: '/r1', displayName: 'R1', badgeColor: '#000', addedAt: 1 }
@@ -45,6 +45,14 @@ function seedTwoProjects(store: ReturnType<typeof createTestStore>): void {
       [repo1.id]: [makeWorktree({ id: W1, repoId: repo1.id, path: '/r1/wt1' })],
       [repo2.id]: [makeWorktree({ id: W2, repoId: repo2.id, path: '/r2/wt1' })]
     },
+    tabsByWorktree: {
+      [W1]: [makeTab({ id: 'tab-w1', worktreeId: W1 })],
+      [W2]: [makeTab({ id: 'tab-w2', worktreeId: W2 })]
+    },
+    // Flat tab-id lists in persisted UI: omitByTabId cannot reach them, and this path
+    // never runs closeTab, which is the only other place they are pruned.
+    sessionsGridTabOrder: ['tab-w1', 'tab-w2'],
+    sessionsGridHiddenTabIds: ['tab-w1', 'tab-w2'],
     // Per-worktree maps that removeProject previously left behind.
     unifiedTabsByWorktree: { [W1]: [], [W2]: [] },
     groupsByWorktree: { [W1]: [], [W2]: [] },
@@ -73,6 +81,25 @@ describe('removeProject purges per-worktree state (leak regression)', () => {
     expect(s.gitStatusHugeByWorktree[W1]).toBeUndefined()
     expect(s.everActivatedWorktreeIds.has(W1)).toBe(false)
     expect(s.localDetectedAgentIdsByContext['repo-1:windows-host']).toBeUndefined()
+    // The two session-grid lists are persisted, so a stranded id is written to disk and
+    // re-sent on every ui.set for the life of the profile.
+    expect(s.sessionsGridTabOrder).toEqual(['tab-w2'])
+    expect(s.sessionsGridHiddenTabIds).toEqual(['tab-w2'])
+  })
+
+  it('leaves both session-grid lists by reference when the removed project owned no listed tab', async () => {
+    const store = createTestStore()
+    seedTwoProjects(store)
+    const order = ['tab-w2']
+    const hidden = ['tab-w2']
+    store.setState({ sessionsGridTabOrder: order, sessionsGridHiddenTabIds: hidden })
+
+    await store.getState().removeProject(repo1.id)
+
+    // An unrelated removal must not read as a persisted-UI edit and schedule a write.
+    const s = store.getState()
+    expect(s.sessionsGridTabOrder).toBe(order)
+    expect(s.sessionsGridHiddenTabIds).toBe(hidden)
   })
 
   it('keeps per-worktree state for projects that are NOT removed', async () => {
@@ -89,5 +116,7 @@ describe('removeProject purges per-worktree state (leak regression)', () => {
     expect(s.gitStatusHugeByWorktree[W2]).toEqual({ limit: 2000 })
     expect(s.everActivatedWorktreeIds.has(W2)).toBe(true)
     expect(s.localDetectedAgentIdsByContext['repo-2:windows-host']).toEqual(['codex'])
+    expect(s.sessionsGridTabOrder).toEqual(['tab-w2'])
+    expect(s.sessionsGridHiddenTabIds).toEqual(['tab-w2'])
   })
 })

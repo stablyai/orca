@@ -1,13 +1,16 @@
+import { serializeSessionGridWheelTarget } from '../../../../shared/session-grid-types'
+import { isHostGatedUiField } from '../../../../shared/host-gated-ui-fields'
 import type { PersistedUIState } from '../../../../shared/persisted-ui-state-types'
+import type {
+  SessionGridFilter,
+  SessionGridLayoutPreset,
+  SessionGridScrollMode,
+  SessionGridStateFilter,
+  SessionGridWheelTarget
+} from '../../../../shared/session-grid-types'
 
-/**
- * Mirror-shaped snapshot of the fields the debounced persisted-UI writer owns.
- *
- * Why (STA-5781): the shared PersistedUIState is edited concurrently by desktop,
- * web, and mobile clients. Whole-snapshot writes let a stale mirror overwrite
- * another client's disjoint fields, so hydration captures this baseline and the
- * writer persists only the fields this client actually changed since then.
- */
+// Why field-level (STA-5781): PersistedUIState is edited concurrently by desktop, web and mobile,
+// so the writer diffs against this hydrated baseline and persists only what this client changed.
 export type PersistedUIWriteBaseline = {
   sidebarWidth: number
   rightSidebarOpen: boolean
@@ -31,6 +34,16 @@ export type PersistedUIWriteBaseline = {
   acknowledgedAgentsByPaneKey: Record<string, number>
   activityClearedAtByPaneKey: Record<string, number>
   manuallyUnreadTurnsByPaneKey: Record<string, number>
+  // Session grid layout: shared across windows and paired clients by design.
+  sessionsGridPreset: SessionGridLayoutPreset
+  sessionsGridZoom: number
+  sessionsGridShowEmpty: boolean
+  sessionsGridFilter: SessionGridFilter
+  sessionsGridStateFilter: SessionGridStateFilter
+  sessionsGridScrollMode: SessionGridScrollMode
+  sessionsGridWheelTarget: SessionGridWheelTarget
+  sessionsGridTabOrder: string[]
+  sessionsGridHiddenTabIds: string[]
 }
 
 // Why `satisfies Record<...>` rather than a keyof[] annotation: a plain `satisfies
@@ -59,7 +72,16 @@ const PERSISTED_UI_WRITE_BASELINE_FIELD_SET = {
   filterRepoIds: true,
   acknowledgedAgentsByPaneKey: true,
   activityClearedAtByPaneKey: true,
-  manuallyUnreadTurnsByPaneKey: true
+  manuallyUnreadTurnsByPaneKey: true,
+  sessionsGridPreset: true,
+  sessionsGridZoom: true,
+  sessionsGridShowEmpty: true,
+  sessionsGridFilter: true,
+  sessionsGridStateFilter: true,
+  sessionsGridScrollMode: true,
+  sessionsGridWheelTarget: true,
+  sessionsGridTabOrder: true,
+  sessionsGridHiddenTabIds: true
 } satisfies Record<keyof PersistedUIWriteBaseline, true>
 
 export const PERSISTED_UI_WRITE_BASELINE_FIELDS = Object.keys(
@@ -96,7 +118,14 @@ function stringArrayEqual(a: readonly string[], b: readonly string[]): boolean {
 }
 
 function writeFieldEqual(field: keyof PersistedUIWriteBaseline, a: unknown, b: unknown): boolean {
-  if (field === 'filterRepoIds') {
+  // Why by value: every drag and every hydration allocates a fresh order array.
+  // Compared by identity, each broadcast would read as an unflushed local edit
+  // and each writer arm would diff non-empty — a write/echo cycle.
+  if (
+    field === 'filterRepoIds' ||
+    field === 'sessionsGridTabOrder' ||
+    field === 'sessionsGridHiddenTabIds'
+  ) {
     return stringArrayEqual(a as readonly string[], b as readonly string[])
   }
   if (
@@ -127,6 +156,37 @@ export function diffPersistedUIWriteFields(
   return changed as Partial<PersistedUIWriteBaseline>
 }
 
+const UNRECOGNIZED_KEY_MESSAGE = /unrecognized key/i
+
+/**
+ * The part of a rejected batch to stop re-sending. Only an `invalid_argument` rejection
+ * quarantines (a transport failure returns null and stays dirty for the next edit): the
+ * strict paired-host schema names the unknown keys, so those are folded; if it names none,
+ * the host-gated members are the only keys an old host can refuse; failing that, the whole batch.
+ */
+export function quarantineRejectedPersistedUIWriteFields(
+  error: unknown,
+  changed: Partial<PersistedUIWriteBaseline>
+): Partial<PersistedUIWriteBaseline> | null {
+  const { code, message } = (error ?? {}) as { code?: unknown; message?: unknown }
+  if (code !== 'invalid_argument') {
+    return null
+  }
+  const sent = Object.keys(changed) as (keyof PersistedUIWriteBaseline)[]
+  const named =
+    typeof message === 'string' && UNRECOGNIZED_KEY_MESSAGE.test(message)
+      ? [...message.matchAll(/"([^"]+)"/g)].map((match) => match[1] ?? '')
+      : []
+  const refused = sent.filter((field) => named.includes(wireNameOf(field)))
+  const gated = sent.filter(isHostGatedUiField)
+  const quarantined = refused.length > 0 ? refused : gated.length > 0 ? gated : sent
+  return Object.fromEntries(quarantined.map((field) => [field, changed[field]]))
+}
+
+function wireNameOf(field: keyof PersistedUIWriteBaseline): string {
+  return field === 'showSleepingWorkspaces' ? 'hideSleepingWorkspaces' : field
+}
+
 /**
  * Convert a mirror-shaped field patch to the ui.set wire shape. Built key-by-key
  * (no spread): a spread is not excess-property-checked, so a future mirror field
@@ -144,6 +204,12 @@ export function persistedUIWriteFieldsToWireUpdate(
     if (field === 'showSleepingWorkspaces') {
       // The mirror keeps the positive form; the durable file keeps the hide form.
       update.hideSleepingWorkspaces = fields.showSleepingWorkspaces !== true
+    } else if (field === 'sessionsGridWheelTarget') {
+      if (fields.sessionsGridWheelTarget !== undefined) {
+        update.sessionsGridWheelTarget = serializeSessionGridWheelTarget(
+          fields.sessionsGridWheelTarget
+        )
+      }
     } else if (field === 'filterRepoIds') {
       // Why: the store keeps this readonly for identity stability, but PersistedUI crosses to
       // main, which owns a mutable array — copy at the boundary rather than widening the wire type.
@@ -161,7 +227,7 @@ export function persistedUIWriteFieldsToWireUpdate(
 
 type SameNameWriteField = Exclude<
   keyof PersistedUIWriteBaseline,
-  'showSleepingWorkspaces' | 'filterRepoIds'
+  'showSleepingWorkspaces' | 'filterRepoIds' | 'sessionsGridWheelTarget'
 >
 
 // Compile check: every non-special mirror field must exist on PersistedUIState

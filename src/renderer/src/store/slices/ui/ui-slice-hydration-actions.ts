@@ -64,6 +64,7 @@ import {
   clampPetSize
 } from './ui-slice-hydration-sanitizers'
 import { hydrateAgentReadState, sanitizeTaskResumeState } from './ui-slice-hydration-values'
+import { hydrateSessionGridState } from './ui-slice-session-grid-hydration'
 
 const MAX_LEFT_SIDEBAR_WIDTH = 500
 const MAX_RIGHT_SIDEBAR_WIDTH = 4000
@@ -282,6 +283,7 @@ export function createUiHydrationActions(set: UISliceSet, _get: UISliceGet): Par
           // Why: restore only on startup; on 'sync' broadcasts it would clobber the window's current per-window view.
           activeView:
             source === 'startup' ? sanitizeHydratedActiveView(ui.activeView) : s.activeView,
+          ...hydrateSessionGridState(ui, s),
           persistedUIReady: true
         }
         // The incoming payload is authoritative for the writer-owned fields, so it becomes the
