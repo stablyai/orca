@@ -30,6 +30,8 @@ import {
   withStalledDockerSshRelayTarget
 } from './helpers/docker-ssh-relay-faults'
 
+import { attachSshRecoveryInputObservation } from './helpers/ssh-recovery-input-observation'
+
 const RUN_DOCKER_SSH = process.env.ORCA_E2E_SSH_DOCKER === '1'
 
 /**
@@ -437,6 +439,7 @@ test.describe('SSH transport drop recovery', () => {
   test('accepts input again after a frozen host resumes', async ({ orcaPage }, testInfo) => {
     test.slow()
     let target: DockerSshRelayTarget | null = null
+    let observationTarget: { targetId: string; ptyId: string } | undefined
     try {
       target = startDockerSshRelayTarget(testInfo)
       enableDockerSshRelayTargetShellTitle(target)
@@ -449,6 +452,18 @@ test.describe('SSH transport drop recovery', () => {
       await waitForActiveTerminalManager(orcaPage, 60_000)
       const ptyId = await waitForActivePanePtyId(orcaPage, 60_000)
 
+      observationTarget = { targetId: remote.targetId, ptyId }
+      const beforeSuffix = Date.now()
+      await execInTerminal(orcaPage, ptyId, `printf 'STALL_BEFORE_%s\\n' ${beforeSuffix}`)
+      await waitForTerminalOutput(orcaPage, `STALL_BEFORE_${beforeSuffix}`, 60_000)
+      await attachSshRecoveryInputObservation(
+        orcaPage,
+        testInfo,
+        remote.targetId,
+        ptyId,
+        'before-freeze'
+      )
+
       await recoverDockerSshRelayAfterFault(orcaPage, remote.targetId, async () => {
         await withStalledDockerSshRelayTarget(target!, async () => {
           await orcaPage.waitForTimeout(30_000)
@@ -459,7 +474,25 @@ test.describe('SSH transport drop recovery', () => {
       const afterSuffix = Date.now()
       const afterMarker = `STALL_AFTER_${afterSuffix}`
       await execInTerminal(orcaPage, ptyId, `printf 'STALL_AFTER_%s\\n' ${afterSuffix}`)
+      await attachSshRecoveryInputObservation(
+        orcaPage,
+        testInfo,
+        remote.targetId,
+        ptyId,
+        'after-write'
+      )
       await waitForTerminalOutput(orcaPage, afterMarker, 60_000)
+    } catch (error) {
+      if (observationTarget) {
+        await attachSshRecoveryInputObservation(
+          orcaPage,
+          testInfo,
+          observationTarget.targetId,
+          observationTarget.ptyId,
+          'failure-before-cleanup'
+        ).catch(() => undefined)
+      }
+      throw error
     } finally {
       if (target) {
         clearDockerSshRelayFaults(target)
