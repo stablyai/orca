@@ -1,4 +1,4 @@
-import { Activity, Plug, Server } from 'lucide-react'
+import { Activity, Gauge, Plug, Server } from 'lucide-react'
 import React from 'react'
 import {
   DropdownMenu,
@@ -162,6 +162,15 @@ export function StatusBarVisibilityMenu({
         >
           <Plug className="size-3.5" />
           {translate('auto.components.status.bar.StatusBar.9659e38343', 'Ports')}
+        </DropdownMenuCheckboxItem>
+        <DropdownMenuCheckboxItem
+          checked={statusBarItems.includes('throughput')}
+          onCheckedChange={() => {
+            toggleStatusBarItem('throughput')
+          }}
+        >
+          <Gauge className="size-3.5" />
+          {translate('auto.components.status.bar.StatusBar.throughput', 'Agent Tokens/sec')}
         </DropdownMenuCheckboxItem>
       </DropdownMenuContent>
     </DropdownMenu>

@@ -45,6 +45,11 @@ const PortsStatusSegment = lazyWithRetry(() =>
 const SshStatusSegment = lazyWithRetry(() =>
   import('./SshStatusSegment').then((module) => ({ default: module.SshStatusSegment }))
 )
+const AgentThroughputStatusSegment = lazyWithRetry(() =>
+  import('./AgentThroughputStatusSegment').then((module) => ({
+    default: module.AgentThroughputStatusSegment
+  }))
+)
 
 export type StatusBarProps = {
   floatingTerminalOpen: boolean
@@ -84,6 +89,7 @@ export function StatusBarSurface({
     showPorts,
     showResourceUsage,
     showSsh,
+    showThroughput,
     statusBarUsageMode,
     usageMenuFocusHandoff,
     usageMenuOpen,
@@ -249,6 +255,7 @@ export function StatusBarSurface({
         <UpdateStatusSegment compact={compact} iconOnly={iconOnly} />
         <React.Suspense fallback={null}>
           {petEnabled ? <PetStatusSegment /> : null}
+          {showThroughput ? <AgentThroughputStatusSegment iconOnly={iconOnly} /> : null}
           {showResourceUsage ? (
             <ResourceUsageStatusSegment compact={compact} iconOnly={iconOnly} />
           ) : null}

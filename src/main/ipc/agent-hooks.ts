@@ -6,6 +6,7 @@ import type {
 import type { AgentInterruptInferenceRequest } from '../../shared/agent-interrupt-intent'
 import type { AgentQuestionAnsweredInferenceRequest } from '../../shared/agent-question-answered-intent'
 import { agentHookServer } from '../agent-hooks/server'
+import { agentThroughputTracker } from '../agent-hooks/agent-throughput-tracker'
 import { getMigrationUnsupportedPtySnapshot } from '../agent-hooks/migration-unsupported-pty-state'
 import { registerAgentPaneAuthorityIpcHandlers } from './agent-pane-authority-ipc'
 import { registerAgentStatusRowTeardownIpcHandlers } from './agent-status-row-teardown-ipc'
@@ -37,6 +38,7 @@ export function registerAgentHookHandlers(
   ipcMain.removeHandler('agentStatus:inferInterrupt')
   ipcMain.removeHandler('agentStatus:inferQuestionAnswered')
   ipcMain.removeHandler('agentStatus:getMigrationUnsupportedSnapshot')
+  ipcMain.removeHandler('agentThroughput:getSnapshot')
   registerAgentStatusRowTeardownIpcHandlers()
   registerAgentPaneAuthorityIpcHandlers({
     ownsPty: createAgentPaneAuthorityOwnership({
@@ -53,6 +55,7 @@ export function registerAgentHookHandlers(
       .getStatusSnapshot()
       .map((entry) => enrichAgentStatusIpcPayload(entry, runtime))
   })
+  ipcMain.handle('agentThroughput:getSnapshot', () => agentThroughputTracker.getSnapshot())
   ipcMain.handle('agentStatus:inferInterrupt', (_event, request: unknown): boolean => {
     if (typeof request !== 'object' || request === null) {
       return false

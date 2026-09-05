@@ -27,6 +27,7 @@ import { createRateLimitSlice } from './slices/rate-limits'
 import { createSshSlice } from './slices/ssh'
 import { createRuntimeEnvironmentSshSlice } from './slices/runtime-environment-ssh'
 import { createAgentStatusSlice } from './slices/agent-status'
+import { createAgentThroughputSlice } from './slices/agent-throughput'
 import { createPaneForegroundAgentSlice } from './slices/pane-foreground-agent'
 import { createDiffCommentsSlice } from './slices/diffComments'
 import { createDetectedAgentsSlice } from './slices/detected-agents'
@@ -89,6 +90,7 @@ export const useAppStore = create<AppState>()(
       ...createSshSlice(...a),
       ...createRuntimeEnvironmentSshSlice(...a),
       ...createAgentStatusSlice(...a),
+      ...createAgentThroughputSlice(...a),
       ...createPaneForegroundAgentSlice(...a),
       ...createDiffCommentsSlice(...a),
       ...createDetectedAgentsSlice(...a),

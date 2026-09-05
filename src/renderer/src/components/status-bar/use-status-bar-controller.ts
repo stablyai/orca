@@ -153,6 +153,7 @@ export function useStatusBarController(floatingTerminalOpen: boolean) {
   const showSsh = statusBarItems.includes('ssh')
   const showResourceUsage = statusBarItems.includes('resource-usage')
   const showPorts = statusBarItems.includes('ports')
+  const showThroughput = statusBarItems.includes('throughput')
   const showFloatingTerminalToggle =
     floatingTerminalEnabled && floatingTerminalTriggerLocation === 'status-bar'
   // Why: meter-only children (excludes resource-usage) so the % display callout anchors to a real meter cluster.
@@ -261,6 +262,7 @@ export function useStatusBarController(floatingTerminalOpen: boolean) {
     showPorts,
     showResourceUsage,
     showSsh,
+    showThroughput,
     statusBarItems,
     statusBarUsageMode,
     toggleStatusBarItem,

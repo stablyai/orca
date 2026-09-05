@@ -116,6 +116,8 @@ export type PersistedUIState = {
   _antigravityStatusBarDefaultAdded?: boolean
   /** One-shot migration flag for adding the default-on Grok status item. */
   _grokStatusBarDefaultAdded?: boolean
+  /** One-shot migration flag for adding the default-on Agent Tokens/sec status item. */
+  _throughputStatusBarDefaultAdded?: boolean
   statusBarItems: StatusBarItem[]
   statusBarVisible: boolean
   /** Why: this is client-side presentation, not a provider/account or execution-host setting. */

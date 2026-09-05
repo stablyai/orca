@@ -12,6 +12,7 @@ import { HOOK_REQUEST_SLOWLORIS_MS } from '../../../shared/agent-hook-listener/l
 import { isHookRequestTruncatedError } from '../../../shared/agent-hook-transport-interference'
 import { drainAgentHookSpool, type SpoolRecord } from '../../../shared/agent-hook-spool'
 import { clearAllListenerCaches } from '../../../shared/agent-hook-listener/listener-state'
+import { agentThroughputTracker } from '../agent-throughput-tracker'
 import { trackEmptyPaneKeyHook } from './server-transport-rules'
 import { AgentHookServerRuntimeEnv } from './server-runtime-env'
 
@@ -115,6 +116,13 @@ export abstract class AgentHookServerLifecycle extends AgentHookServerRuntimeEnv
           const enriched = this.applyNormalizedStatus(event, normalized.onAccepted)
           this.scheduleAssistantMessageRetry(source, aliasedBody, enriched)
           this.scheduleCodexSubagentPoll(source, aliasedBody, enriched)
+          // Why: local loopback only — the session record this reads lives on the execution host.
+          void agentThroughputTracker.observeHook({
+            source,
+            paneKey: event.paneKey,
+            hookEventName: event.hookEventName,
+            body: aliasedBody
+          })
         }
         res.writeHead(204)
         res.end()

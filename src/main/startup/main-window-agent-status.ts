@@ -1,5 +1,6 @@
 import type { BrowserWindow } from 'electron'
 import { agentHookServer } from '../agent-hooks/server'
+import { agentThroughputTracker } from '../agent-hooks/agent-throughput-tracker'
 import { setMigrationUnsupportedPtyListener } from '../agent-hooks/migration-unsupported-pty-state'
 import { getDashboardPopoutWindow } from '../window/dashboard-popout-window'
 import { isAskUserQuestionTool } from '../../shared/agent-question-answered-intent'
@@ -115,11 +116,27 @@ export function installMainWindowAgentStatusListeners(options: MainWindowAgentSt
     }
   )
   agentHookServer.setPaneStatusClearListener((clear) => {
+    // Why: a torn-down pane's throughput sample must not outlive its status row.
+    if ('paneKey' in clear) {
+      agentThroughputTracker.clear(clear.paneKey)
+    }
     if (state.mainWindow?.isDestroyed()) {
       return
     }
     state.mainWindow?.webContents.send('agentStatus:clear', clear)
     getDashboardPopoutWindow()?.webContents.send('agentStatus:clear', clear)
+  })
+  agentThroughputTracker.setListener((sample) => {
+    if (state.mainWindow?.isDestroyed()) {
+      return
+    }
+    state.mainWindow?.webContents.send('agentThroughput:set', sample)
+  })
+  agentThroughputTracker.setClearListener((paneKey) => {
+    if (state.mainWindow?.isDestroyed()) {
+      return
+    }
+    state.mainWindow?.webContents.send('agentThroughput:clear', { paneKey })
   })
   setMigrationUnsupportedPtyListener((event) => {
     if (state.mainWindow?.isDestroyed()) {
@@ -139,6 +156,8 @@ export function clearMainWindowAgentStatusListeners(): void {
   // Why: detach the hook listener on close so the server never fires into destroyed webContents before reopen, and replay runs only on deliberate recreations.
   agentHookServer.setListener(null)
   agentHookServer.setPaneStatusClearListener(null)
+  agentThroughputTracker.setListener(null)
+  agentThroughputTracker.setClearListener(null)
   setMigrationUnsupportedPtyListener(null)
   // Why: stop the spinner timer here — it would fire into destroyed webContents, and per-pane teardown may never run for restored-but-untorn panes.
   stopAllSyntheticTitleSpinners()

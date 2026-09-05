@@ -21,6 +21,12 @@ export function createWebAgentStatusApi(): Partial<PreloadApi> {
       retirePaneAuthority: () => {},
       restorePaneAuthority: () => {},
       transferPaneAuthority: () => {}
+    },
+    // Why: throughput samples come from the desktop's local hook server; the web client has none.
+    agentThroughput: {
+      onSet: () => noopUnsubscribe,
+      onClear: () => noopUnsubscribe,
+      getSnapshot: () => Promise.resolve([])
     }
   }
 }

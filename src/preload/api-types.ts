@@ -9,6 +9,7 @@ import type {
 import type { HooksApi } from './api/agent-hook-api'
 import type { SkillsApi } from './api/agent-skill-api'
 import type { AgentAwakeApi, AgentStatusApi, AgentTrustApi } from './api/agent-status-api'
+import type { AgentThroughputApi } from './api/agent-throughput-api'
 import type {
   ClaudeUsageApi,
   CodexUsageApi,
@@ -148,10 +149,12 @@ export type PreloadApi = {
   gitBash: RuntimeApi['gitBash']
   plugins: PluginsApi
   agentStatus: AgentStatusApi
+  agentThroughput: AgentThroughputApi
   mobile: MobileApi
   speech: SpeechApi
 }
 
+export type { AgentThroughputApi } from './api/agent-throughput-api'
 export type { ClaudeUsageApi, CodexUsageApi, OpenCodeUsageApi } from './api/agent-usage-api'
 export type { AiVaultApi } from './api/ai-vault-api'
 export type { AutomationsApi, ExternalAutomationManagerResult } from './api/automation-api'

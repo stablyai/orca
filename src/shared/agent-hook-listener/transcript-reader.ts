@@ -13,6 +13,14 @@ export function readLastTextFromTranscriptOnce(
   transcriptPath: string,
   extractLineText: (line: string) => string | undefined
 ): string | undefined {
+  return readLastExtractedFromTranscriptOnce(transcriptPath, extractLineText)
+}
+
+/** Scans the transcript newest-first in chunks and returns the first value `extractLine` yields. */
+export function readLastExtractedFromTranscriptOnce<T>(
+  transcriptPath: string,
+  extractLine: (line: string) => T | undefined
+): T | undefined {
   try {
     const stats = statSync(transcriptPath)
     const size = stats.size
@@ -66,7 +74,7 @@ export function readLastTextFromTranscriptOnce(
         if (completeRegion.length > 0) {
           const extracted = findLastExtractedTranscriptLineText(
             completeRegion.toString('utf8'),
-            extractLineText
+            extractLine
           )
           if (extracted !== undefined) {
             return extracted
@@ -82,10 +90,10 @@ export function readLastTextFromTranscriptOnce(
   }
 }
 
-export function findLastExtractedTranscriptLineText(
+export function findLastExtractedTranscriptLineText<T>(
   text: string,
-  extractLineText: (line: string) => string | undefined
-): string | undefined {
+  extractLineText: (line: string) => T | undefined
+): T | undefined {
   let lineEnd = text.length
 
   for (let index = text.length - 1; index >= -1; index--) {
