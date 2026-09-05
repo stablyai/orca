@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto'
 import { readFileSync, rmSync, statSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { delimiter, join, win32 } from 'node:path'
+import { join, win32 } from 'node:path'
 import { runProcess } from './child-process/run-process'
 
 /**
@@ -43,6 +43,7 @@ export type WindowsPowerShellHostAttempt = WindowsPowerShellHostProbeResult & {
 
 export type WindowsPowerShellHostResolution = {
   host: string
+  candidates: string[]
   /** True when no candidate passed and Windows PowerShell was used anyway. */
   fellBack: boolean
   attempts: WindowsPowerShellHostAttempt[]
@@ -66,29 +67,31 @@ function getSystem32PowerShell(env: NodeJS.ProcessEnv): string {
 
 function getPathPwshCandidates(env: NodeJS.ProcessEnv): string[] {
   return (env.PATH ?? env.Path ?? '')
-    .split(delimiter)
+    .split(win32.delimiter)
     .map((entry) => entry.trim())
     .filter(Boolean)
-    .map((directory) => join(directory, 'pwsh.exe'))
+    .map((directory) => win32.join(directory.replace(/^"(.*)"$/, '$1'), 'pwsh.exe'))
 }
 
-/**
- * Ordered by preference: Windows PowerShell 5.1 first, because every existing
- * Orca script was written and tested against it, then PowerShell 7 wherever it
- * installs. The Store build's real path carries its version
- * (WindowsApps\Microsoft.PowerShell_7.6.5.0_x64__…), so only its stable
- * execution alias and PATH entry are worth naming.
- */
+// PS5.1 can pass a probe intermittently on managed PCs, then fail every login.
 export function getWindowsPowerShellHostCandidates(env: NodeJS.ProcessEnv = process.env): string[] {
   const candidates = [
-    getSystem32PowerShell(env),
     win32.join(env.ProgramFiles ?? 'C:\\Program Files', 'PowerShell', '7', 'pwsh.exe'),
     ...(env.LOCALAPPDATA
       ? [win32.join(env.LOCALAPPDATA, 'Microsoft', 'WindowsApps', 'pwsh.exe')]
       : []),
-    ...getPathPwshCandidates(env)
+    ...getPathPwshCandidates(env),
+    getSystem32PowerShell(env)
   ]
-  return [...new Set(candidates)]
+  const seen = new Set<string>()
+  return candidates.filter((candidate) => {
+    const key = candidate.toLowerCase()
+    if (seen.has(key)) {
+      return false
+    }
+    seen.add(key)
+    return true
+  })
 }
 
 /**
@@ -214,7 +217,8 @@ async function runWarmup(
   env: NodeJS.ProcessEnv
 ): Promise<string> {
   const attempts: WindowsPowerShellHostAttempt[] = []
-  for (const candidate of getWindowsPowerShellHostCandidates(env)) {
+  const candidates = getWindowsPowerShellHostCandidates(env)
+  for (const candidate of candidates) {
     if (!isPossibleWindowsPowerShellHost(candidate)) {
       attempts.push({ path: candidate, absent: true, ok: false, durationMs: 0 })
       continue
@@ -224,13 +228,13 @@ async function runWarmup(
     attempts.push({ ...result, path: candidate, durationMs: Date.now() - startedAt })
     if (result.ok) {
       hostCache = { host: candidate }
-      resolutionObserver?.({ host: candidate, fellBack: false, attempts })
+      resolutionObserver?.({ host: candidate, candidates, fellBack: false, attempts })
       return candidate
     }
   }
   hostCache = { host: null, cachedAt: Date.now() }
   const fallback = getSystem32PowerShell(env)
-  resolutionObserver?.({ host: fallback, fellBack: true, attempts })
+  resolutionObserver?.({ host: fallback, candidates, fellBack: true, attempts })
   return fallback
 }
 

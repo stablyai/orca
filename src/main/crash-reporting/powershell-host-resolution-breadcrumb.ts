@@ -1,3 +1,4 @@
+import { win32 } from 'node:path'
 import {
   setWindowsPowerShellHostResolutionObserver,
   warmWindowsPowerShellHostCache,
@@ -5,20 +6,18 @@ import {
 } from '../../shared/windows-powershell-host'
 import { recordDurableCrashBreadcrumb } from './durable-crash-breadcrumb'
 
-// Why bounded: the candidate list grows with PATH, and a breadcrumb carrying
-// forty entries evicts the ring it is meant to be read alongside. The
-// candidates that were actually spawned are the ones worth keeping.
+// Keep separate bounded fields so path redaction and string truncation preserve each result.
 const MAX_REPORTED_ATTEMPTS = 6
 
-function summarizeAttempts(resolution: WindowsPowerShellHostResolution): string {
-  return resolution.attempts
-    .filter((attempt) => !attempt.absent)
-    .slice(0, MAX_REPORTED_ATTEMPTS)
-    .map(
-      (attempt) =>
-        `${attempt.path} ok=${attempt.ok} exit=${attempt.exitCode ?? 'none'} marker=${attempt.markerOk ?? false} timedOut=${attempt.timedOut ?? false} ms=${attempt.durationMs}`
-    )
-    .join(' | ')
+function summarizeAttempts(resolution: WindowsPowerShellHostResolution): Record<string, string> {
+  return Object.fromEntries(
+    resolution.attempts
+      .slice(0, MAX_REPORTED_ATTEMPTS)
+      .map((attempt, index) => [
+        `attempt${index}`,
+        `#${resolution.candidates.indexOf(attempt.path)} ${win32.basename(attempt.path)} absent=${attempt.absent ?? false} ok=${attempt.ok} exit=${attempt.exitCode ?? 'none'} marker=${attempt.markerOk ?? false} timedOut=${attempt.timedOut ?? false} ms=${attempt.durationMs}`
+      ])
+  )
 }
 
 /**
@@ -34,10 +33,14 @@ export function registerPowerShellHostResolutionBreadcrumb(): void {
   setWindowsPowerShellHostResolutionObserver((resolution) => {
     recordDurableCrashBreadcrumb('powershell_host_selected', {
       host: resolution.host,
+      hostName: win32.basename(resolution.host),
+      selectedIndex: resolution.candidates.indexOf(resolution.host),
       fellBack: resolution.fellBack,
       probedCount: resolution.attempts.filter((attempt) => !attempt.absent).length,
-      candidateCount: resolution.attempts.length,
-      attempts: summarizeAttempts(resolution)
+      candidateCount: resolution.candidates.length,
+      skippedCount: resolution.attempts.filter((attempt) => attempt.absent).length,
+      untriedCount: resolution.candidates.length - resolution.attempts.length,
+      ...summarizeAttempts(resolution)
     })
   })
 }

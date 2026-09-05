@@ -11,6 +11,22 @@ import { EventEmitter } from 'node:events'
 import { writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { PassThrough } from 'node:stream'
+import type * as LoginSpawn from '../../shared/windows-interactive-login-spawn'
+
+vi.mock('../../shared/windows-interactive-login-spawn', async () => {
+  const actual = await vi.importActual<typeof LoginSpawn>(
+    '../../shared/windows-interactive-login-spawn'
+  )
+  return {
+    ...actual,
+    buildWindowsHostInteractiveLoginSpawn: (
+      ...args: Parameters<typeof actual.buildWindowsHostInteractiveLoginSpawn>
+    ) => ({
+      ...actual.buildWindowsHostInteractiveLoginSpawn(...args),
+      hasRelayedPid: () => true
+    })
+  }
+})
 import type { GlobalSettings } from '../../shared/global-settings-types'
 import {
   createCodexAuthJson,

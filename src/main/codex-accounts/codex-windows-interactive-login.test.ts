@@ -37,7 +37,7 @@ vi.mock('../../shared/windows-powershell-host', () => ({
 describe('Codex Windows host interactive login', () => {
   registerCodexAccountsTestHomes()
 
-  it('resolves a Windows login whose child has no piped streams', async () => {
+  it.each([true, false])('requires proof of console startup: relayedPid=%s', async (relayedPid) => {
     vi.resetModules()
     const originalPlatform = Object.getOwnPropertyDescriptor(process, 'platform')!
     Object.defineProperty(process, 'platform', { value: 'win32', configurable: true })
@@ -60,7 +60,7 @@ describe('Codex Windows host interactive login', () => {
       args: ['/d', '/c', 'start', '', '/wait', 'C:\\Tools\\codex.cmd', 'login'],
       stdio: 'ignore' as const,
       windowsHide: true,
-      hasRelayedPid: () => true
+      hasRelayedPid: () => relayedPid
     }))
     vi.doMock('node:child_process', () => ({
       execFileSync: vi.fn(),
@@ -80,11 +80,14 @@ describe('Codex Windows host interactive login', () => {
         createRateLimits() as never,
         createRuntimeHome() as never
       )
-      await (
+      const login = (
         service as unknown as {
           runCodexLogin(managedHomePath: string): Promise<void>
         }
       ).runCodexLogin(testState.fakeHomeDir)
+      await (relayedPid
+        ? expect(login).resolves.toBeUndefined()
+        : expect(login).rejects.toThrow('PowerShell could not start the Codex sign-in console'))
 
       expect(buildInteractiveLoginSpawn).toHaveBeenCalledWith('C:\\Tools\\codex.cmd', ['login'])
       expect(spawnMock).toHaveBeenCalledWith(

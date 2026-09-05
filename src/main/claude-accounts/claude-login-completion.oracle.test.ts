@@ -1,6 +1,22 @@
 import { EventEmitter } from 'node:events'
 import { PassThrough } from 'node:stream'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import type * as LoginSpawn from '../../shared/windows-interactive-login-spawn'
+
+vi.mock('../../shared/windows-interactive-login-spawn', async () => {
+  const actual = await vi.importActual<typeof LoginSpawn>(
+    '../../shared/windows-interactive-login-spawn'
+  )
+  return {
+    ...actual,
+    buildWindowsHostInteractiveLoginSpawn: (
+      ...args: Parameters<typeof actual.buildWindowsHostInteractiveLoginSpawn>
+    ) => ({
+      ...actual.buildWindowsHostInteractiveLoginSpawn(...args),
+      hasRelayedPid: () => true
+    })
+  }
+})
 
 const processMocks = vi.hoisted(() => ({
   spawn: vi.fn()

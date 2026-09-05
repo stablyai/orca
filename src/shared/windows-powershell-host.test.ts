@@ -54,9 +54,10 @@ beforeEach(() => {
 })
 
 describe('getWindowsPowerShellHostCandidates', () => {
-  it('offers Windows PowerShell first, then every place PowerShell 7 installs', () => {
+  it('tries every PowerShell 7 location before Windows PowerShell', () => {
     const candidates = getWindowsPowerShellHostCandidates(ENV)
-    expect(candidates[0]).toBe(SYSTEM32_POWERSHELL)
+    expect(candidates[0]).toBe(PROGRAM_FILES_PWSH)
+    expect(candidates.at(-1)).toBe(SYSTEM32_POWERSHELL)
     expect(candidates).toContain(PROGRAM_FILES_PWSH)
     expect(candidates).toContain(WINDOWS_APPS_PWSH)
     expect(candidates).toContain('C:\\Tools\\pwsh.exe')
@@ -97,8 +98,10 @@ describe('getWindowsPowerShellHost', () => {
 })
 
 describe('warmWindowsPowerShellHostCache', () => {
-  it('keeps Windows PowerShell when it can still run a script', async () => {
-    expect(await warmWindowsPowerShellHostCache(vi.fn(found), ENV)).toBe(SYSTEM32_POWERSHELL)
+  it('prefers PowerShell 7 even when Windows PowerShell happens to pass', async () => {
+    const probe = vi.fn(found)
+    expect(await warmWindowsPowerShellHostCache(probe, ENV)).toBe(PROGRAM_FILES_PWSH)
+    expect(probe).not.toHaveBeenCalledWith(SYSTEM32_POWERSHELL)
   })
 
   // Why this is the whole point: on a locked-down fleet powershell.exe exists and
@@ -109,7 +112,44 @@ describe('warmWindowsPowerShellHostCache', () => {
       candidate === PROGRAM_FILES_PWSH ? found() : missed()
     )
     expect(await warmWindowsPowerShellHostCache(probe, ENV)).toBe(PROGRAM_FILES_PWSH)
-    expect(probe).toHaveBeenCalledWith(SYSTEM32_POWERSHELL)
+    expect(probe).not.toHaveBeenCalledWith(SYSTEM32_POWERSHELL)
+  })
+
+  it('deduplicates quoted Windows PATH entries regardless of case or test host platform', () => {
+    const candidates = getWindowsPowerShellHostCandidates({
+      ...ENV,
+      PATH: '"C:\\Program Files\\PowerShell\\7";c:\\program files\\powershell\\7;C:\\Tools'
+    })
+    expect(candidates).toEqual([
+      PROGRAM_FILES_PWSH,
+      WINDOWS_APPS_PWSH,
+      'C:\\Tools\\pwsh.exe',
+      SYSTEM32_POWERSHELL
+    ])
+  })
+
+  it('uses Windows PowerShell when none of the PowerShell 7 hosts works', async () => {
+    const probe = vi.fn((candidate: string) =>
+      candidate === SYSTEM32_POWERSHELL ? found() : missed()
+    )
+    expect(await warmWindowsPowerShellHostCache(probe, ENV)).toBe(SYSTEM32_POWERSHELL)
+    expect(probe.mock.calls.at(-1)).toEqual([SYSTEM32_POWERSHELL])
+  })
+
+  it('shares the pending probe between startup and simultaneous login requests', async () => {
+    let finish!: (result: { ok: boolean }) => void
+    const probe = vi.fn(
+      () =>
+        new Promise<{ ok: boolean }>((resolve) => {
+          finish = resolve
+        })
+    )
+    const startup = warmWindowsPowerShellHostCache(probe, ENV)
+    const login = warmWindowsPowerShellHostCache(probe, ENV)
+    expect(startup).toBe(login)
+    expect(probe).toHaveBeenCalledTimes(1)
+    finish({ ok: true })
+    await expect(login).resolves.toBe(PROGRAM_FILES_PWSH)
   })
 
   it('probes an execution alias instead of skipping it as missing', async () => {
@@ -166,7 +206,8 @@ describe('warmWindowsPowerShellHostCache', () => {
     expect(seen).toHaveLength(1)
     expect(seen[0]?.host).toBe(WINDOWS_APPS_PWSH)
     expect(seen[0]?.fellBack).toBe(false)
-    expect(seen[0]?.attempts.map((attempt) => attempt.path)).toContain(SYSTEM32_POWERSHELL)
+    expect(seen[0]?.candidates).toEqual(getWindowsPowerShellHostCandidates(ENV))
+    expect(seen[0]?.attempts.map((attempt) => attempt.path)).not.toContain(SYSTEM32_POWERSHELL)
   })
 
   it('reports the fallback as a fallback rather than a choice', async () => {

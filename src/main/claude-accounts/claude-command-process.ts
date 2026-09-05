@@ -158,7 +158,14 @@ export async function runClaudeCommandProcess(
       }
       settle(() => {
         if (code === 0 || options?.allowFailure) {
-          recordLoginConsoleStartIfMissed(interactiveLogin, 'claude')
+          if (recordLoginConsoleStartIfMissed(interactiveLogin, 'claude')) {
+            rejectPromise(
+              new Error(
+                'PowerShell could not start the Claude sign-in console. Check that PowerShell 7 is available and try again.'
+              )
+            )
+            return
+          }
           resolvePromise(output)
           return
         }

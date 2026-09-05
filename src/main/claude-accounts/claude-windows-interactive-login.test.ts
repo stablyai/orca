@@ -27,7 +27,7 @@ describe('Claude Windows host interactive login', () => {
     restorePlatform()
   })
 
-  it('resolves a Windows auth login whose child has no piped streams', async () => {
+  it.each([true, false])('requires proof of console startup: relayedPid=%s', async (relayedPid) => {
     setPlatform('win32')
     vi.resetModules()
     const child = new EventEmitter() as EventEmitter & {
@@ -59,7 +59,7 @@ describe('Claude Windows host interactive login', () => {
       ],
       stdio: 'ignore' as const,
       windowsHide: true,
-      hasRelayedPid: () => true
+      hasRelayedPid: () => relayedPid
     }))
     vi.doMock('node:child_process', () => ({ spawn: spawnMock }))
     vi.doMock('../../shared/windows-interactive-login-spawn', () => ({
@@ -73,7 +73,7 @@ describe('Claude Windows host interactive login', () => {
         createService() as never,
         createService() as never
       )
-      await (
+      const login = (
         service as unknown as {
           runClaudeCommand(
             args: string[],
@@ -86,6 +86,9 @@ describe('Claude Windows host interactive login', () => {
         { windowsPath: 'C:\\tmp\\claude-auth', linuxPath: null, wslDistro: null },
         1000
       )
+      await (relayedPid
+        ? expect(login).resolves.toBe('')
+        : expect(login).rejects.toThrow('PowerShell could not start the Claude sign-in console'))
 
       expect(buildInteractiveLoginSpawn).toHaveBeenCalledWith('C:\\Tools\\claude.cmd', [
         'auth',

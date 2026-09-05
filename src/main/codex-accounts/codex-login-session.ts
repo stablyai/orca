@@ -214,7 +214,17 @@ export async function runCodexLoginSession(
           code === 0 ||
           (loginTreeKilledAfterAuth && readLoginAuthSnapshot(authJsonPath) !== null)
         ) {
-          recordLoginConsoleStartIfMissed(spawnConfig.interactiveLogin, 'codex')
+          if (
+            !loginTreeKilledAfterAuth &&
+            recordLoginConsoleStartIfMissed(spawnConfig.interactiveLogin, 'codex')
+          ) {
+            rejectPromise(
+              new Error(
+                'PowerShell could not start the Codex sign-in console. Check that PowerShell 7 is available and try again.'
+              )
+            )
+            return
+          }
           resolvePromise()
           return
         }
