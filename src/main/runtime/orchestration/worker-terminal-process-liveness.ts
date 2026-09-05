@@ -36,6 +36,24 @@ export function parseWorkerTerminalHostScope(value: string | null): WorkerTermin
   return null
 }
 
+// Does `processIncarnation` name exactly this pty's live incarnation? Anchors on the pty id as a
+// prefix and then requires exact `${ptyId}:${incarnationId}` equality, so it is immune to colons
+// on either side (relay/SSH ptyIds, colon-bearing relay incarnationIds). A pty with no (or a
+// whitespace-dirty) incarnationId can never match — the exact-incarnation fence stays intact.
+export function matchesProcessIncarnation(
+  ptyId: string,
+  incarnationId: string | null | undefined,
+  processIncarnation: string
+): boolean {
+  if (!incarnationId || incarnationId !== incarnationId.trim()) {
+    return false
+  }
+  if (!processIncarnation.startsWith(`${ptyId}:`)) {
+    return false
+  }
+  return `${ptyId}:${incarnationId}` === processIncarnation
+}
+
 export function classifyWorkerTerminalProcessIncarnation(
   processIncarnation: string,
   sessions: readonly PtyProcessInfo[]
@@ -44,13 +62,9 @@ export function classifyWorkerTerminalProcessIncarnation(
     processIncarnation.startsWith(`${session.id}:`)
   )
   if (
-    possibleMatches.some((session) => {
-      const incarnationId = session.incarnationId
-      if (!incarnationId || incarnationId !== incarnationId.trim()) {
-        return false
-      }
-      return `${session.id}:${incarnationId}` === processIncarnation
-    })
+    possibleMatches.some((session) =>
+      matchesProcessIncarnation(session.id, session.incarnationId, processIncarnation)
+    )
   ) {
     return 'live'
   }

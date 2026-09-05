@@ -10,6 +10,7 @@ import type { ProjectExecutionRuntimeResolution } from '../../shared/project-exe
 import { resolveLocalProjectRuntimeForWorktreeId } from '../local-project-runtime-resolution'
 import type { RuntimePtyWorktreeRecord } from './runtime-terminal-state-records'
 import { resolveTerminalOrchestrationCliCommand } from './orchestration/cli-command'
+import { matchesProcessIncarnation } from './orchestration/worker-terminal-process-liveness'
 
 export class OrcaRuntimeWithGetOrchestrationDispatchAuthority extends OrcaRuntimeWithVerifyOrchestrationCompatibilityCaller {
   /** Every pane key this PTY could be addressed by, including restored receipts. */
@@ -66,6 +67,36 @@ export class OrcaRuntimeWithGetOrchestrationDispatchAuthority extends OrcaRuntim
         : null,
       hostScope
     }
+  }
+
+  // Recover a live terminal handle for a worker whose durable handle stopped resolving
+  // (renderer graph epoch bump / handle invalidation) while its PTY is still tracked. Fences on
+  // the recorded process incarnation EXACTLY — never a bare ptyId, worktree, or pane — so a
+  // reused ptyId belonging to a different process can never be closed, and fails closed on an
+  // unknown host scope (this is also consumed by workerShow, which does no lease re-check).
+  // Returns a freshly minted live handle, or null when no live PTY carries that exact incarnation.
+  resolveTerminalHandleByProcessIncarnation(
+    processIncarnation: string,
+    serializedHostScope: string | null
+  ): string | null {
+    if (!processIncarnation || !serializedHostScope) {
+      return null
+    }
+    // Scan by the incarnation itself (startsWith + exact equality, mirroring
+    // classifyWorkerTerminalProcessIncarnation) rather than splitting on a colon, so relay/SSH
+    // ptyIds and colon-bearing incarnationIds still match. A pty with no incarnationId can never
+    // match, so the legacy `${runtimeId}:${ptyId}:${ptyGeneration}` fence stays fail-closed.
+    for (const [ptyId, pty] of this.ptysById) {
+      if (!matchesProcessIncarnation(ptyId, pty.incarnationId, processIncarnation)) {
+        continue
+      }
+      const hostScope = this.getOrchestrationCompatibilityHostScope(pty)
+      if (!hostScope || JSON.stringify(hostScope) !== serializedHostScope) {
+        return null
+      }
+      return this.issuePtyHandle(pty)
+    }
+    return null
   }
 
   protected retirePtyAgentLaunchAuthority(ptyId: string): void {

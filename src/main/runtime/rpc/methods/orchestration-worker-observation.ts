@@ -20,24 +20,50 @@ export async function inspectWorkerTerminal(
   reason?: string
   /** Set only on a proven-exact worker parked on a prompt that needs a human. */
   agentWait?: RuntimeTerminalInteractiveWait | null
+  /** The handle that actually resolved: the durable one, or a live handle re-minted from the
+   *  recorded process incarnation after the durable handle went stale. Null when none resolved. */
+  terminalHandle: string | null
 }> {
   const worker = db.getWorkerDispatch(dispatchId)
   const terminalHandle =
     worker?.agent_terminal_handle ?? db.getDispatchContextById(dispatchId)?.assignee_handle
   if (!terminalHandle) {
-    return { terminal: null, exact: false, status: 'unattached' }
+    return { terminal: null, exact: false, status: 'unattached', terminalHandle: null }
   }
-  const terminal = await runtime.showTerminal(terminalHandle).catch(() => null)
+  let effectiveHandle = terminalHandle
+  let terminal = await runtime.showTerminal(effectiveHandle).catch(() => null)
   if (!terminal) {
-    return { terminal: null, exact: false, status: 'missing' }
+    // Why: the durable handle resolves nowhere after a renderer graph epoch bump or handle
+    // invalidation, yet the recorded process incarnation may still name a live PTY. Re-mint a
+    // live handle (incarnation-fenced) so worker-show and release act on the still-running
+    // process instead of reporting it missing — which would leak the agent process tree.
+    // (workerList is a pure DB projection and never calls inspectWorkerTerminal.)
+    const resource = db.getWorkerTerminalResourceByOwner(dispatchId)
+    const reminted = resource?.process_incarnation
+      ? runtime.resolveTerminalHandleByProcessIncarnation(
+          resource.process_incarnation,
+          resource.host_scope
+        )
+      : null
+    if (reminted) {
+      const remintedTerminal = await runtime.showTerminal(reminted).catch(() => null)
+      if (remintedTerminal) {
+        effectiveHandle = reminted
+        terminal = remintedTerminal
+      }
+    }
+  }
+  if (!terminal) {
+    // The re-mint above failed, so no live handle resolved; report the durable handle unresolved.
+    return { terminal: null, exact: false, status: 'missing', terminalHandle: null }
   }
   const exact = db.isDispatchProcessCurrent({
     dispatchId,
-    paneKey: runtime.getTerminalPaneKey(terminalHandle),
-    processIncarnation: runtime.getTerminalProcessIncarnation(terminalHandle)
+    paneKey: runtime.getTerminalPaneKey(effectiveHandle),
+    processIncarnation: runtime.getTerminalProcessIncarnation(effectiveHandle)
   })
   if (!exact) {
-    return { terminal, exact, status: 'identity_changed' }
+    return { terminal, exact, status: 'identity_changed', terminalHandle: effectiveHandle }
   }
   // Why: the aggregate inventory only iterates registered providers, so a dropped
   // relay clears `connected` for every remote PTY at once. Lost contact is not a
@@ -47,18 +73,26 @@ export async function inspectWorkerTerminal(
   // Exact-gated by the early return above: a replaced process's prompt would attribute another
   // lane's blocker to this worker.
   const agentWait = terminal.agentWait
-  const verdict = runtime.getTerminalLivenessVerdict?.(terminalHandle) ?? null
+  const verdict = runtime.getTerminalLivenessVerdict?.(effectiveHandle) ?? null
   if (verdict?.status === 'unverifiable') {
-    return { terminal, exact, status: 'unverifiable', reason: verdict.reason, agentWait }
+    return {
+      terminal,
+      exact,
+      status: 'unverifiable',
+      reason: verdict.reason,
+      agentWait,
+      terminalHandle: effectiveHandle
+    }
   }
   if (verdict?.status === 'live') {
-    return { terminal, exact, status: 'live', agentWait }
+    return { terminal, exact, status: 'live', agentWait, terminalHandle: effectiveHandle }
   }
   return {
     terminal,
     exact,
     status: terminal.connected === false ? 'exited' : 'live',
-    agentWait
+    agentWait,
+    terminalHandle: effectiveHandle
   }
 }
 

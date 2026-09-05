@@ -181,3 +181,97 @@ describe('runtime terminal handle incarnation fencing', () => {
     })
   })
 })
+
+describe('resolveTerminalHandleByProcessIncarnation direct fencing', () => {
+  const LOCAL_SCOPE = JSON.stringify({ kind: 'local', hostId: 'local' })
+  // PTY_ID ('ssh:target@@relay-pty') derives connectionId 'target' via parseAppSshPtyId, so its
+  // host scope is ssh:target rather than local.
+  const SSH_TARGET_SCOPE = JSON.stringify({ kind: 'ssh', targetId: 'target' })
+
+  function seedPty(
+    runtime: OrcaRuntimeService,
+    ptyId: string,
+    incarnationId: string | null,
+    connectionId: string | null = null
+  ): void {
+    runtime.registerPty(ptyId, WORKTREE_ID, connectionId, {
+      tabId: TAB_ID,
+      leafId: LEAF_ID,
+      ...(incarnationId ? { incarnationId } : {})
+    })
+  }
+
+  function resolve(
+    runtime: OrcaRuntimeService,
+    processIncarnation: string,
+    serializedHostScope: string | null
+  ): string | null {
+    return (
+      runtime as unknown as {
+        resolveTerminalHandleByProcessIncarnation(
+          processIncarnation: string,
+          serializedHostScope: string | null
+        ): string | null
+      }
+    ).resolveTerminalHandleByProcessIncarnation(processIncarnation, serializedHostScope)
+  }
+
+  it('mints a live handle for a pty whose exact incarnation and host scope match', () => {
+    const { runtime } = makeRuntime()
+    seedPty(runtime, PTY_ID, 'incarnation-1')
+    const handle = resolve(runtime, `${PTY_ID}:incarnation-1`, SSH_TARGET_SCOPE)
+    expect(handle).toMatch(/^term_/)
+    // Re-minting the same live pty is idempotent.
+    expect(resolve(runtime, `${PTY_ID}:incarnation-1`, SSH_TARGET_SCOPE)).toBe(handle)
+  })
+
+  it('returns null when the recorded incarnationId no longer matches the live pty', () => {
+    const { runtime } = makeRuntime()
+    seedPty(runtime, PTY_ID, 'incarnation-1')
+    expect(resolve(runtime, `${PTY_ID}:incarnation-2`, LOCAL_SCOPE)).toBeNull()
+  })
+
+  it('returns null when the live pty has no incarnationId (legacy runtimeId:ptyId:gen never reaps)', () => {
+    const { runtime } = makeRuntime()
+    seedPty(runtime, PTY_ID, null)
+    // A modern-shaped probe cannot match a pty that carries no incarnationId...
+    expect(resolve(runtime, `${PTY_ID}:incarnation-1`, LOCAL_SCOPE)).toBeNull()
+    // ...and the legacy `${runtimeId}:${ptyId}:${ptyGeneration}` shape stays fail-closed rather
+    // than reap on a ptyGeneration guess.
+    expect(resolve(runtime, `runtime_test:${PTY_ID}:0`, LOCAL_SCOPE)).toBeNull()
+  })
+
+  it('returns null when the host scope does not match', () => {
+    const { runtime } = makeRuntime()
+    seedPty(runtime, PTY_ID, 'incarnation-1')
+    expect(
+      resolve(runtime, `${PTY_ID}:incarnation-1`, JSON.stringify({ kind: 'ssh', targetId: 'nope' }))
+    ).toBeNull()
+  })
+
+  it('returns null when no host scope is supplied (fails closed)', () => {
+    const { runtime } = makeRuntime()
+    seedPty(runtime, PTY_ID, 'incarnation-1')
+    expect(resolve(runtime, `${PTY_ID}:incarnation-1`, null)).toBeNull()
+  })
+
+  it('resolves a colon-bearing SSH/relay incarnationId that lastIndexOf would mis-split', () => {
+    const { runtime } = makeRuntime()
+    // PTY_ID already carries ':' and '@@'; the incarnationId itself also carries colons.
+    seedPty(runtime, PTY_ID, 'relay:conn-3:incarnation-9', 'target')
+    const handle = resolve(
+      runtime,
+      `${PTY_ID}:relay:conn-3:incarnation-9`,
+      JSON.stringify({ kind: 'ssh', targetId: 'target' })
+    )
+    expect(handle).toMatch(/^term_/)
+  })
+
+  it('resolves a Windows repo::C:\\path@@1 ptyId', () => {
+    const { runtime } = makeRuntime()
+    const windowsPtyId = 'repo::C:\\path@@1'
+    seedPty(runtime, windowsPtyId, 'incarnation-win')
+    const handle = resolve(runtime, `${windowsPtyId}:incarnation-win`, LOCAL_SCOPE)
+    expect(handle).toMatch(/^term_/)
+  })
+})

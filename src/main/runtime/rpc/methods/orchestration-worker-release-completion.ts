@@ -108,35 +108,17 @@ async function completeWorkerTerminalReleaseOnce(
   const { runtime, db, dispatchId, resource } = args
   const worker = db.getWorkerDispatch(dispatchId)
   if (!worker || worker.agent_terminal_handle !== resource.terminal_handle) {
-    const retained = db.revertWorkerTerminalReleaseToRetained(resource.id, 'identity_unproven')
-    return {
-      dispatchId,
-      state: 'retained',
-      reason: 'identity_unproven',
-      processAction: 'none',
-      archive: archiveSummary(retained)
-    }
+    return retainWithUnprovenIdentity(dispatchId, db, resource.id)
   }
   const observation = await inspectWorkerTerminal(runtime, db, dispatchId)
+  // The live handle to act on: the durable one, or a handle re-minted from the recorded process
+  // incarnation when the durable handle went stale (inspectWorkerTerminal proved it live).
+  const terminalHandle = observation.terminalHandle ?? resource.terminal_handle
   if (observation.status === 'identity_changed') {
-    const retained = db.revertWorkerTerminalReleaseToRetained(resource.id, 'identity_unproven')
-    return {
-      dispatchId,
-      state: 'retained',
-      reason: 'identity_unproven',
-      processAction: 'none',
-      archive: archiveSummary(retained)
-    }
+    return retainWithUnprovenIdentity(dispatchId, db, resource.id)
   }
-  if (!workerTerminalLeaseIsCurrent(runtime, db, dispatchId, resource)) {
-    const retained = db.revertWorkerTerminalReleaseToRetained(resource.id, 'identity_unproven')
-    return {
-      dispatchId,
-      state: 'retained',
-      reason: 'identity_unproven',
-      processAction: 'none',
-      archive: archiveSummary(retained)
-    }
+  if (!workerTerminalLeaseIsCurrent(runtime, db, dispatchId, resource, terminalHandle)) {
+    return retainWithUnprovenIdentity(dispatchId, db, resource.id)
   }
   if (observation.status === 'missing' || observation.status === 'unattached') {
     if (args.mode === 'recovery') {
@@ -150,8 +132,26 @@ async function completeWorkerTerminalReleaseOnce(
           'The recorded terminal has not been rediscovered yet; recovery will retry after the next terminal inventory.'
       }
     }
-    // Why: the handle resolves nowhere, but the PTY could have been re-homed after a restart —
-    // claiming released would hide a live process; only an exact observation may settle it.
+    // Re-resolution by process incarnation (inspectWorkerTerminal) already failed, so no live PTY
+    // carries this worker's exact incarnation. If that incarnation is provably gone, settle
+    // released; otherwise the process may have been re-homed and only an exact observation may
+    // settle it — concede release_unknown rather than hide, or guess at, a live process.
+    if (
+      resource.process_incarnation &&
+      (await runtime.inspectTerminalProcessIncarnationLiveness(
+        resource.process_incarnation,
+        resource.host_scope
+      )) === 'exited'
+    ) {
+      const settled = db.settleWorkerTerminalRelease(resource.id)
+      runtime.notifyMessageArrived(`dispatch:${dispatchId}`, 'status')
+      return {
+        dispatchId,
+        state: 'released',
+        processAction: 'none',
+        archive: archiveSummary(settled)
+      }
+    }
     const unknown = db.markWorkerTerminalReleaseUnknown(
       resource.id,
       'The recorded terminal no longer resolves; whether its process is gone cannot be proven.'
@@ -174,7 +174,7 @@ async function completeWorkerTerminalReleaseOnce(
     const captured = await captureWorkerOutputArchive({
       runtime,
       dispatchId,
-      terminalHandle: resource.terminal_handle,
+      terminalHandle,
       attachedAtMs: orchestrationTimestampToMs(worker.created_at)
     })
     capturedArchive = { kind: captured.kind, content: JSON.stringify(captured.content) }
@@ -201,19 +201,12 @@ async function completeWorkerTerminalReleaseOnce(
       archive: archiveSummary(releasing)
     }
   }
-  if (!workerTerminalLeaseIsCurrent(runtime, db, dispatchId, releasing)) {
-    const retained = db.revertWorkerTerminalReleaseToRetained(resource.id, 'identity_unproven')
-    return {
-      dispatchId,
-      state: 'retained',
-      reason: 'identity_unproven',
-      processAction: 'none',
-      archive: archiveSummary(retained)
-    }
+  if (!workerTerminalLeaseIsCurrent(runtime, db, dispatchId, releasing, terminalHandle)) {
+    return retainWithUnprovenIdentity(dispatchId, db, resource.id)
   }
 
   try {
-    const close = await runtime.closeTerminal(resource.terminal_handle)
+    const close = await runtime.closeTerminal(terminalHandle)
     if (!close.ptyKilled) {
       const reason = describeUnconfirmedAgentStop(close)
       const unknown = db.markWorkerTerminalReleaseUnknown(resource.id, reason)
@@ -261,22 +254,41 @@ async function completeWorkerTerminalReleaseOnce(
   }
 }
 
+function retainWithUnprovenIdentity(
+  dispatchId: string,
+  db: OrchestrationDb,
+  resourceId: string
+): WorkerReleaseReceipt {
+  const retained = db.revertWorkerTerminalReleaseToRetained(resourceId, 'identity_unproven')
+  return {
+    dispatchId,
+    state: 'retained',
+    reason: 'identity_unproven',
+    processAction: 'none',
+    archive: archiveSummary(retained)
+  }
+}
+
 function workerTerminalLeaseIsCurrent(
   runtime: OrcaRuntimeService,
   db: OrchestrationDb,
   dispatchId: string,
-  resource: WorkerTerminalResourceRow
+  resource: WorkerTerminalResourceRow,
+  terminalHandle: string = resource.terminal_handle
 ): boolean {
   const worker = db.getWorkerDispatch(dispatchId)
-  const authority = runtime.getOrchestrationDispatchAuthority(resource.terminal_handle)
+  // The runtime probes address the live handle (possibly re-minted from the recorded process
+  // incarnation after the durable handle went stale), while the durable identity stays fenced to
+  // the recorded terminal_handle.
+  const authority = runtime.getOrchestrationDispatchAuthority(terminalHandle)
   return Boolean(
     worker?.agent_terminal_handle === resource.terminal_handle &&
     authority &&
     resource.host_scope === JSON.stringify(authority.hostScope) &&
     db.isDispatchProcessCurrent({
       dispatchId,
-      paneKey: runtime.getTerminalPaneKey(resource.terminal_handle),
-      processIncarnation: runtime.getTerminalProcessIncarnation(resource.terminal_handle)
+      paneKey: runtime.getTerminalPaneKey(terminalHandle),
+      processIncarnation: runtime.getTerminalProcessIncarnation(terminalHandle)
     }) &&
     !db.workerTerminalResourceHasIdentityConflict(resource.id)
   )
