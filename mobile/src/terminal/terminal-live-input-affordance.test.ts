@@ -3,6 +3,7 @@ import { readFileSync } from 'node:fs'
 import { readMobileSessionRouteSource } from '../session/mobile-session-route-source-family.test-support'
 
 const commandDockSource = readMobileSessionRouteSource('../session/MobileSessionCommandDock.tsx')
+const liveInputBarSource = readMobileSessionRouteSource('../session/MobileTerminalLiveInputBar.tsx')
 const terminalRuntimeSource = readMobileSessionRouteSource(
   '../session/use-mobile-session-terminal-runtime.ts'
 )
@@ -31,7 +32,8 @@ function liveInputBarBlock(): string {
   expect(start).toBeGreaterThanOrEqual(0)
   const end = commandDockSource.indexOf(') : (', start)
   expect(end).toBeGreaterThan(start)
-  return commandDockSource.slice(start, end)
+  expect(commandDockSource.slice(start, end)).toContain('<MobileTerminalLiveInputBar')
+  return liveInputBarSource
 }
 
 describe('terminal live input affordance', () => {

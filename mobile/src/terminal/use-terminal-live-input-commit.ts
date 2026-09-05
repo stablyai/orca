@@ -1,5 +1,9 @@
 import { useCallback, useEffect, useRef, type RefObject } from 'react'
 import type { TextInput } from 'react-native'
+import {
+  mapTerminalLiveHardwareKeyEvent,
+  type TerminalLiveHardwareKeyEvent
+} from './terminal-live-hardware-key-mapping'
 import { getTerminalLiveSpecialKeyDecision } from './terminal-live-text-commit'
 import { sendTerminalLiveControlAfterPendingFlush } from './terminal-live-control-send-order'
 import type { TerminalLiveAccessoryInput } from './terminal-live-accessory-input'
@@ -49,6 +53,7 @@ type TerminalLiveInputCommitHandlers = {
   ) => Promise<TerminalLiveAccessoryInputCommitResult>
   readonly handleLiveInputChange: (event: TerminalLiveInputChangeEvent) => void
   readonly handleLiveInputKeyPress: (event: TerminalLiveInputKeyPressEvent) => void
+  readonly handleLiveInputHardwareKey: (event: TerminalLiveHardwareKeyEvent) => void
   readonly handleLiveInputSubmit: () => Promise<boolean>
 }
 
@@ -245,6 +250,44 @@ export function useTerminalLiveInputCommit<TTabType extends string>({
     sendLiveTerminalInputRef
   ])
 
+  const handleLiveInputHardwareKey = useCallback(
+    (event: TerminalLiveHardwareKeyEvent) => {
+      if (!connected || !activeHandle || !liveInputTerminalHandles.has(activeHandle)) {
+        return
+      }
+      const ownsPendingState = pendingLiveInputHandleRef.current === activeHandle
+      const decision = mapTerminalLiveHardwareKeyEvent(event, {
+        heldText: ownsPendingState ? heldLiveInputTextRef.current : '',
+        sentText: ownsPendingState ? sentLiveInputTextRef.current : ''
+      })
+      if (decision.kind === 'ignore') {
+        return
+      }
+      if (decision.kind === 'local-edit') {
+        void handleLiveInputAccessoryBytes({
+          bytes: '',
+          localEdit: decision.localEdit
+        })
+        return
+      }
+      advanceLiveInputInteractionGeneration()
+      // Physical controls end the mirror baseline and share the existing send barrier.
+      void sendTerminalLiveControlAfterPendingFlush(
+        () => flushPendingLiveInputBeforeExternalSend(activeHandle),
+        () => sendLiveTerminalInputRef.current(activeHandle, decision.bytes)
+      )
+    },
+    [
+      activeHandle,
+      advanceLiveInputInteractionGeneration,
+      connected,
+      flushPendingLiveInputBeforeExternalSend,
+      handleLiveInputAccessoryBytes,
+      liveInputTerminalHandles,
+      sendLiveTerminalInputRef
+    ]
+  )
+
   return {
     clearPendingLiveInputCommit,
     flushPendingLiveInputBeforeExternalSend,
@@ -252,6 +295,7 @@ export function useTerminalLiveInputCommit<TTabType extends string>({
     handleLiveInputAccessoryBytes,
     handleLiveInputChange,
     handleLiveInputKeyPress,
+    handleLiveInputHardwareKey,
     handleLiveInputSubmit
   }
 }

@@ -1,0 +1,57 @@
+import {
+  NativeModule,
+  requireOptionalNativeModule,
+  type EventSubscription
+} from 'expo-modules-core'
+
+export type HardwareKeyboardNativeCommand = {
+  actionId: string
+  key: string
+  control: boolean
+  meta: boolean
+  alt: boolean
+  shift: boolean
+}
+
+export type HardwareKeyboardCommandEvent = {
+  actionId: string
+  key: string
+}
+
+type HardwareKeyboardNavigationEvents = {
+  onHardwareKeyboardConnectionChanged(event: { connected: boolean }): void
+  onHardwareKeyboardCommand(event: HardwareKeyboardCommandEvent): void
+}
+
+declare class HardwareKeyboardNavigationNativeModule extends NativeModule<HardwareKeyboardNavigationEvents> {
+  setCommands?(commands: HardwareKeyboardNativeCommand[]): void
+  isHardwareKeyboardConnected?(): boolean
+}
+
+const nativeModule = requireOptionalNativeModule<HardwareKeyboardNavigationNativeModule>(
+  'ExpoHardwareKeyboardNavigation'
+)
+
+export function setHardwareKeyboardCommands(commands: HardwareKeyboardNativeCommand[]): void {
+  if (typeof nativeModule?.setCommands === 'function') {
+    nativeModule.setCommands(commands)
+  }
+}
+
+export function isHardwareKeyboardConnected(): boolean {
+  return typeof nativeModule?.isHardwareKeyboardConnected === 'function'
+    ? nativeModule.isHardwareKeyboardConnected()
+    : false
+}
+
+export function addHardwareKeyboardCommandListener(
+  listener: (event: HardwareKeyboardCommandEvent) => void
+): EventSubscription | null {
+  return nativeModule?.addListener('onHardwareKeyboardCommand', listener) ?? null
+}
+
+export function addHardwareKeyboardConnectionListener(
+  listener: (event: { connected: boolean }) => void
+): EventSubscription | null {
+  return nativeModule?.addListener('onHardwareKeyboardConnectionChanged', listener) ?? null
+}

@@ -1,4 +1,5 @@
 import { useCallback } from 'react'
+import { isHardwareKeyboardConnected } from '@orca/expo-hardware-keyboard-navigation'
 import {
   shouldDismissKeyboardAfterTerminalSend,
   type AgentSendKeyboardDismissalTab
@@ -16,6 +17,7 @@ export function useAgentSendKeyboardDismissal(
   return useCallback(
     (origin: AgentSendOrigin, accepted: boolean): void => {
       if (
+        !isHardwareKeyboardConnected() &&
         origin.generation === getSendCompletionGeneration() &&
         shouldDismissKeyboardAfterTerminalSend(origin.tab, accepted)
       ) {

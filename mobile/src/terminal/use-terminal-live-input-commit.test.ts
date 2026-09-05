@@ -8,6 +8,66 @@ import { useTerminalLiveInputCommit } from './use-terminal-live-input-commit'
 
 type TerminalLiveInputCommitHandlers = ReturnType<typeof useTerminalLiveInputCommit<string>>
 
+describe('physical terminal controls', () => {
+  it('holds physical controls behind an unresolved mirror send', async () => {
+    let release: () => void = () => {}
+    const pending = new Promise<void>((resolve) => {
+      release = resolve
+    })
+    const { handlers, sent } = createTerminalLiveInputCommitHarness({
+      waitForSend: (bytes) => (bytes === 'echo' ? pending : Promise.resolve())
+    })
+    changeLiveInput(handlers, 'echo')
+    await vi.waitFor(() => expect(sent).toEqual(['echo']))
+    handlers.handleLiveInputHardwareKey({
+      key: 'c',
+      modifiers: { ctrl: true, alt: false, shift: false, meta: false },
+      repeat: false
+    })
+    await Promise.resolve()
+    expect(sent).toEqual(['echo'])
+    release()
+    await vi.waitFor(() => expect(sent).toEqual(['echo', '\u0003']))
+  })
+  it('flushes the field before Shift+Tab and resets the baseline for subsequent typing', async () => {
+    const { handlers, sent } = createTerminalLiveInputCommitHarness()
+    changeLiveInput(handlers, 'echo')
+    await vi.waitFor(() => expect(sent).toEqual(['echo']))
+    handlers.handleLiveInputHardwareKey({
+      key: 'Tab',
+      modifiers: { ctrl: false, alt: false, shift: true, meta: false },
+      repeat: false
+    })
+    await vi.waitFor(() => expect(sent).toEqual(['echo', '\u001b[Z']))
+    changeLiveInput(handlers, 'x')
+    await vi.waitFor(() => expect(sent).toEqual(['echo', '\u001b[Z', 'x']))
+  })
+
+  it('applies captured backspace through the existing mirror once', async () => {
+    const { handlers, sent, captures } = createTerminalLiveInputCommitHarness()
+    changeLiveInput(handlers, 'ab')
+    await vi.waitFor(() => expect(sent).toEqual(['ab']))
+    handlers.handleLiveInputHardwareKey({
+      key: 'Backspace',
+      modifiers: { ctrl: false, alt: false, shift: false, meta: false },
+      repeat: false
+    })
+    await vi.waitFor(() => expect(sent).toEqual(['ab', '\u007f']))
+    expect(captures.at(-1)).toBe('a')
+  })
+
+  it('does not send physical controls while disconnected', () => {
+    const harness = createTerminalLiveInputCommitHarness()
+    harness.setConnected(false)
+    harness.getHandlers().handleLiveInputHardwareKey({
+      key: 'c',
+      modifiers: { ctrl: true, alt: false, shift: false, meta: false },
+      repeat: false
+    })
+    expect(harness.sent).toEqual([])
+  })
+})
+
 /** `isComposing` omitted models a platform that reports no marked-text range. */
 function changeLiveInput(
   handlers: TerminalLiveInputCommitHandlers,
@@ -30,10 +90,12 @@ type TerminalLiveInputCommitHarness = {
 
 type TerminalLiveInputCommitHarnessOptions = {
   readonly sendResult?: boolean
+  readonly waitForSend?: (bytes: string) => Promise<void>
 }
 
 function createTerminalLiveInputCommitHarness({
-  sendResult = true
+  sendResult = true,
+  waitForSend
 }: TerminalLiveInputCommitHarnessOptions = {}): TerminalLiveInputCommitHarness {
   const activeHandle = 'terminal-a'
   const activeHandleRef: RefObject<string | null> = { current: activeHandle }
@@ -52,6 +114,7 @@ function createTerminalLiveInputCommitHarness({
   const sendLiveTerminalInputRef: RefObject<TerminalLiveInputSender> = {
     current: async (_handle, bytes) => {
       sent.push(bytes)
+      await waitForSend?.(bytes)
       return currentSendResult
     }
   }

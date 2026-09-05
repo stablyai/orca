@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useLocalSearchParams, usePathname, useRouter } from 'expo-router'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useHostProtocolGates } from '../components/HostProtocolGate'
@@ -13,9 +13,13 @@ import {
   useReconnectAttempt,
   useRelayRecoveryStatus
 } from '../transport/client-context-connection-metrics'
-import { applyWorktreeRowDisplayState } from '../worktree/worktree-host-row-identity'
+import {
+  applyWorktreeRowDisplayState,
+  getWorktreeRowIdentity
+} from '../worktree/worktree-host-row-identity'
 import { applyWorktreeHostContextLabels } from '../worktree/worktree-host-context-labels'
 import { useWorkspaceSections } from '../worktree/use-workspace-sections'
+import type { Worktree } from '../worktree/workspace-list-sections'
 import { useHostRepoMetadata } from './use-host-repo-metadata'
 import { useHostScreenIdentity } from './use-host-screen-identity'
 import { useHostScreenState } from './use-host-screen-state'
@@ -29,6 +33,8 @@ export type HostScreenProps = {
   // Route params aren't in scope when rendered from the layout, so the caller passes these explicitly.
   hostId?: string
   action?: string
+  selectedWorktreeId?: string
+  onKeyboardWorktreesChange?: (worktrees: readonly Worktree[]) => void
   onHideSidebar?: () => void
 }
 
@@ -36,6 +42,8 @@ export function useHostScreenController({
   embedded = false,
   hostId: hostIdProp,
   action: actionProp,
+  selectedWorktreeId,
+  onKeyboardWorktreesChange,
   onHideSidebar
 }: HostScreenProps = {}) {
   const params = useLocalSearchParams<{ hostId: string; action?: string; notice?: string }>()
@@ -89,6 +97,9 @@ export function useHostScreenController({
   // Why: resolve `action=newWorktree` before commit, but don't reopen after the user closes while the URL persists.
   if (resolvedRouteActionState !== state.routeActionState) {
     state.setRouteActionState(resolvedRouteActionState)
+    if (action?.startsWith('keyboardSwitcher-')) {
+      state.setShowSearch(true)
+    }
   }
   const showNewWorktree = resolvedRouteActionState.showNewWorktree
 
@@ -96,8 +107,17 @@ export function useHostScreenController({
     // Why: live `worktrees` is authoritative only while connected; under the amber
     // mount default, connecting/handshaking must keep the pre-reconnect list too.
     const base = connState === 'connected' ? state.worktrees : state.lastKnownWorktrees
+    const routeSelected = embedded
+      ? base.find((worktree) => worktree.worktreeId === selectedWorktreeId)
+      : undefined
     return applyWorktreeHostContextLabels(
-      applyWorktreeRowDisplayState(base, state.sleptIds, state.optimisticActiveWorktreeIdentity),
+      applyWorktreeRowDisplayState(
+        base,
+        state.sleptIds,
+        routeSelected
+          ? getWorktreeRowIdentity(routeSelected)
+          : state.optimisticActiveWorktreeIdentity
+      ),
       {
         repoHostIdByRepoId: state.repoHostIdByRepoId,
         hostLabelById: state.hostLabelById,
@@ -106,6 +126,8 @@ export function useHostScreenController({
     )
   }, [
     connState,
+    embedded,
+    selectedWorktreeId,
     state.worktrees,
     state.lastKnownWorktrees,
     state.sleptIds,
@@ -128,6 +150,13 @@ export function useHostScreenController({
   })
   const existingWorktreePaths = useMemo(() => state.worktrees.map((w) => w.path), [state.worktrees])
   const activeWorktreeScroll = useActiveWorktreeScroll(sectionsResult.sections)
+  const keyboardWorktrees = useMemo(
+    () => sectionsResult.sections.flatMap((section) => section.data),
+    [sectionsResult.sections]
+  )
+  useEffect(() => {
+    onKeyboardWorktreesChange?.(keyboardWorktrees)
+  }, [keyboardWorktrees, onKeyboardWorktreesChange])
 
   return {
     actions,

@@ -9,6 +9,7 @@ const sendActionsSource = readMobileSessionRouteSource(
   './use-mobile-session-terminal-send-actions.ts'
 )
 const commandDockSource = readMobileSessionRouteSource('./MobileSessionCommandDock.tsx')
+const liveInputBarSource = readMobileSessionRouteSource('./MobileTerminalLiveInputBar.tsx')
 const tabApplicationSource = readMobileSessionRouteSource('./use-mobile-session-tab-application.ts')
 const terminalListSource = readMobileSessionRouteSource('./use-mobile-session-terminal-list.ts')
 const startupSource = readMobileSessionRouteSource('./use-mobile-session-startup.ts')
@@ -67,7 +68,7 @@ describe('terminal send keyboard dismissal wiring', () => {
   it('dismisses after the live input submits, which is the only Enter path', () => {
     // terminal-live-input.ts deliberately keeps Enter off the key map, so
     // onSubmitEditing is the single send seam for the live field.
-    const slice = sourceSlice(commandDockSource, 'ref={liveInputRef}', 'importantForAutofill="no"')
+    const slice = sourceSlice(liveInputBarSource, 'ref={liveInputRef}', 'importantForAutofill="no"')
     expect(slice).toContain('generation: getSendCompletionGeneration()')
     expect(slice).toContain('const submit = handleLiveInputSubmit()')
     expect(slice).toContain('interaction: getLiveInteractionGeneration()')

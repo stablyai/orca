@@ -1,7 +1,10 @@
 import { describe, expect, it } from 'vitest'
 import { readMobileSessionRouteSource } from '../session/mobile-session-route-source-family.test-support'
 
-const commandDockSource = readMobileSessionRouteSource('../session/MobileSessionCommandDock.tsx')
+const commandDockSource = [
+  readMobileSessionRouteSource('../session/MobileSessionCommandDock.tsx'),
+  readMobileSessionRouteSource('../session/MobileTerminalLiveInputBar.tsx')
+].join('\n')
 
 describe('terminal iOS IME keyboard', () => {
   it('does not force terminal inputs onto the ASCII-only iOS keyboard', () => {

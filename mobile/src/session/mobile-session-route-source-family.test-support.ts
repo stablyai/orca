@@ -43,6 +43,7 @@ export const MOBILE_SESSION_ROUTE_SOURCE_FILES = [
   './MobileSessionContentRow.tsx',
   './MobileSessionActiveContent.tsx',
   './MobileSessionCommandDock.tsx',
+  './MobileTerminalLiveInputBar.tsx',
   './MobileSessionSheets.tsx'
 ] as const
 

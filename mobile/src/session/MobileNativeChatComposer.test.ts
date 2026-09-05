@@ -7,6 +7,26 @@ import { MobileNativeChatComposer as NativeChatComposer } from './MobileNativeCh
 
 const getNoComposerEditGeneration = () => 0
 
+vi.mock('expo-router', async () => {
+  const { useEffect } = await import('react')
+  return { useFocusEffect: useEffect }
+})
+
+vi.mock('@orca/expo-hardware-keyboard', () => ({
+  HardwareKeyboardCaptureView: 'HardwareKeyboardCaptureView'
+}))
+
+vi.mock('@orca/expo-hardware-keyboard-navigation', () => ({
+  isHardwareKeyboardConnected: () => false
+}))
+
+vi.mock('../hardware-keyboard/use-hardware-keyboard-text-input-focus', () => ({
+  useHardwareKeyboardTextInputFocus: () => ({
+    handleTouchStart: vi.fn(),
+    showSoftInputOnFocus: true
+  })
+}))
+
 function MobileNativeChatComposer({
   getComposerEditGeneration = getNoComposerEditGeneration,
   ...props
@@ -98,6 +118,41 @@ describe('MobileNativeChatComposer', () => {
       (node) => node.type === 'Pressable' && node.props.accessibilityLabel === 'Send message'
     ) as { props: { onPress: () => Promise<void> } }
   }
+
+  it('submits a native hardware Return without dismissing the input responder', async () => {
+    const onSend = vi.fn().mockResolvedValue(true)
+    await render(onSend, vi.fn())
+    vi.mocked(Keyboard.dismiss).mockClear()
+    const capture = renderer!.root.findByType('HardwareKeyboardCaptureView')
+    expect(capture.props.mode).toBe('submit')
+    await act(async () =>
+      capture.props.onHardwareKey({ nativeEvent: { key: 'Enter', repeat: false } })
+    )
+    expect(onSend).toHaveBeenCalledWith(' hello ')
+    expect(Keyboard.dismiss).not.toHaveBeenCalled()
+  })
+
+  it('ignores repeated native Return callbacks', async () => {
+    const onSend = vi.fn().mockResolvedValue(true)
+    await render(onSend, vi.fn())
+    const capture = renderer!.root.findByType('HardwareKeyboardCaptureView')
+    await act(async () =>
+      capture.props.onHardwareKey({ nativeEvent: { key: 'Enter', repeat: true } })
+    )
+    expect(onSend).not.toHaveBeenCalled()
+  })
+
+  it('leaves software Return and Shift+Return text editing with the native multiline input', async () => {
+    const onSend = vi.fn().mockResolvedValue(true)
+    const onChangeText = vi.fn()
+    await render(onSend, onChangeText)
+    const input = renderer!.root.findByType('TextInput')
+    expect(input.props.multiline).toBe(true)
+    expect(input.props.onKeyPress).toBeUndefined()
+    await act(async () => input.props.onChangeText(' hello\n'))
+    expect(onChangeText).toHaveBeenCalledWith(' hello\n')
+    expect(onSend).not.toHaveBeenCalled()
+  })
 
   it('reports an accepted send without owning route-scoped draft cleanup', async () => {
     const onChangeText = vi.fn()
