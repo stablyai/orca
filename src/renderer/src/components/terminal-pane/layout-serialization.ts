@@ -231,6 +231,7 @@ export function replayTerminalLayout(
 
     const createdPane = manager.splitPane(paneId, node.direction as TerminalPaneSplitDirection, {
       ratio: node.ratio,
+      activate: focusInitialPane,
       leafId: getLeftmostLeafId(node.second)
     })
     if (!createdPane) {
