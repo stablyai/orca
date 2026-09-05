@@ -192,3 +192,18 @@ export function assertTerminalSendExactPtyBinding(
   }
   throw new Error('terminal_guard_not_writable')
 }
+
+export function assertTerminalSendIncarnation(
+  runtime: OrcaRuntimeService,
+  handle: string,
+  expectedPtyId: string | null | undefined,
+  expectedIncarnationId: string
+): void {
+  if (
+    !expectedPtyId ||
+    runtime.resolveLiveLeafForHandle(handle)?.ptyId !== expectedPtyId ||
+    runtime.getTerminalProcessIncarnation(handle) !== `${expectedPtyId}:${expectedIncarnationId}`
+  ) {
+    throw new Error('terminal_handle_stale')
+  }
+}

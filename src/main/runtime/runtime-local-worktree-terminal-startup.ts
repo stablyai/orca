@@ -64,7 +64,8 @@ export async function startRuntimeLocalWorktreeTerminals(args: {
   ports: Ports
 }): Promise<RuntimeLocalWorktreeTerminalStartupResult> {
   const { request, repo, worktree, setup, defaultTabs, startup, ports } = args
-  const shouldActivate = request.activate === true || request.runHooks === true
+  const shouldActivate =
+    startup?.activate !== false && (request.activate === true || request.runHooks === true)
   let warning = args.warning
   let didSpawnStartup = false
   let didSpawnSetup = false
@@ -99,6 +100,7 @@ export async function startRuntimeLocalWorktreeTerminals(args: {
       }
       const terminal = await ports.createTerminal(`id:${worktree.id}`, {
         command: sequencedStartup.command,
+        ...(sequencedStartup.activate === false ? { activate: false } : {}),
         ...(setup && startup ? { claudeAgentTeamsSourceCommand: startup.command } : {}),
         env: sequencedStartup.env,
         ...(sequencedStartup.launchConfig ? { launchConfig: sequencedStartup.launchConfig } : {}),
@@ -165,7 +167,10 @@ export async function startRuntimeLocalWorktreeTerminals(args: {
     }
   } else if (ports.canSpawn) {
     try {
-      await ports.createTerminal(`id:${worktree.id}`, { surfaceOwner: false })
+      await ports.createTerminal(`id:${worktree.id}`, {
+        surfaceOwner: false,
+        activate: false
+      })
     } catch (error) {
       warning = appendFailure(warning, worktree.path, 'initial', error)
     }

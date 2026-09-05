@@ -472,7 +472,7 @@ describe('staged background worktree creation', () => {
       accountLabel: 'dev@company.test'
     }
     const request = makeRequest({ linkedWorkItem, linkedTaskSourceContext })
-    const expectedOptions = { linkedWorkItem, linkedTaskSourceContext }
+    const expectedOptions = { linkedWorkItem, linkedTaskSourceContext, callerOwnsCompletion: true }
 
     expect(continueBackgroundWorktreeCreation('creation-1', request)).toBe(true)
     await vi.waitFor(() => expect(store.createWorktree).toHaveBeenCalledTimes(1))
@@ -710,10 +710,7 @@ describe('staged background worktree creation', () => {
   })
 
   it('seeds the backend-spawned agent tab, not the worktree default terminal tab', async () => {
-    // Repo default tabs ("dev server", "logs", …) make activation's primaryTabId
-    // a tab that runs no agent; main's startup terminal is the agent's own tab.
-    store.activeView = 'terminal'
-    store.activePendingCreationId = 'creation-1'
+    // Default tabs can make the activation's primary tab differ from the agent's tab.
     store.tabsByWorktree = { 'wt-1': [{ id: 'dev-server' }, { id: 'agent-tab' }] }
     store.createWorktree.mockResolvedValueOnce({
       worktree: { id: 'wt-1', repoId: 'repo-1', path: '/repo/wt-1' },
@@ -742,6 +739,7 @@ describe('staged background worktree creation', () => {
     )
     const createCall = store.createWorktree.mock.calls[0] as unknown[] | undefined
     expect(createCall?.[25]).toEqual({
+      callerOwnsCompletion: true,
       startupDraft: 'https://github.com/o/r/issues/12'
     })
   })

@@ -72,7 +72,8 @@ export async function createRuntimeRemoteManagedWorktree(
   deps.invalidateWorktreeScan(repo.id)
   deps.notifyWorktreesChanged(repo.id)
 
-  const shouldActivate = args.activate === true || args.runHooks === true
+  const shouldActivate =
+    args.startup?.activate !== false && (args.activate === true || args.runHooks === true)
   let warning = result.warning
   let didSpawnStartup = false
   // Why: same no-double-spawn contract as the local path — once runtime
@@ -110,6 +111,7 @@ export async function createRuntimeRemoteManagedWorktree(
       }
       const terminal = await deps.createTerminal(`path:${result.worktree.path}`, {
         command: sequencedStartup.command,
+        ...(sequencedStartup.activate === false ? { activate: false } : {}),
         ...(result.setup && args.startup
           ? { claudeAgentTeamsSourceCommand: args.startup.command }
           : {}),
@@ -224,7 +226,10 @@ export async function createRuntimeRemoteManagedWorktree(
     }
   } else if (!shouldActivate && deps.canSpawn()) {
     try {
-      await deps.createTerminal(`path:${result.worktree.path}`, { surfaceOwner: false })
+      await deps.createTerminal(`path:${result.worktree.path}`, {
+        surfaceOwner: false,
+        activate: false
+      })
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err)
       warning = warning

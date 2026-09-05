@@ -47,6 +47,10 @@ export function buildManagedWorktreeCreateArgs(
     pushTarget: params.pushTarget,
     runHooks: params.runHooks === true,
     activate: params.activate === true,
+    ...(params.startupActivate !== undefined ? { startupActivate: params.startupActivate } : {}),
+    ...(params.awaitTerminalProvisioning !== undefined
+      ? { awaitTerminalProvisioning: params.awaitTerminalProvisioning }
+      : {}),
     // Why: create-activation is the caller's own view intent; without this a paired
     // client's create dragged every other connected client and the host with it.
     // Why 'runtime' only: a phone has no terminal-provisioning renderer, so when it
@@ -69,6 +73,7 @@ export function buildManagedWorktreeCreateArgs(
     startup: params.startupCommand
       ? {
           command: params.startupCommand,
+          ...(params.startupActivate !== undefined ? { activate: params.startupActivate } : {}),
           ...(params.startupEnv ? { env: params.startupEnv } : {}),
           ...(params.startupLaunchConfig ? { launchConfig: params.startupLaunchConfig } : {}),
           ...(params.startupCommandDelivery

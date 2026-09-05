@@ -37,6 +37,7 @@ const TARGET_ID = 'remote-1'
 const REMOTE_PATH = '/srv/app'
 
 type RuntimeInternals = {
+  buildStartupForDraft: (...args: unknown[]) => Promise<unknown>
   resolveRepoSelector: (selector: string) => Promise<unknown>
   createManagedRemoteWorktree: (repo: unknown, args: unknown) => Promise<unknown>
   resolveLineageForWorktreeCreate: (input: unknown) => Promise<unknown>
@@ -152,4 +153,41 @@ describe('createManagedWorktree execution-host routing', () => {
     expect(trustMocks.local).toHaveBeenCalledWith('codex', '/Users/me/notes')
     expect(trustMocks.remote).not.toHaveBeenCalled()
   })
+
+  it.each([undefined, false, true])(
+    'applies startupActivate=%s after host draft construction',
+    async (startupActivate) => {
+      const { runtime, createRemote } = makeRuntime({
+        id: 'repo-remote',
+        path: REMOTE_PATH,
+        kind: 'git',
+        connectionId: TARGET_ID
+      })
+      const startup = { command: 'host-quoted-agent', env: { TOKEN: 'fixture' } }
+      vi.spyOn(runtime as unknown as RuntimeInternals, 'buildStartupForDraft').mockResolvedValue({
+        startup,
+        agent: 'codex',
+        draftPaste: { text: 'task', agent: 'codex' }
+      })
+      await runtime.createManagedWorktree({
+        repoSelector: 'repo-remote',
+        name: 'task',
+        startupDraft: 'task',
+        ...(startupActivate !== undefined ? { startupActivate } : {}),
+        awaitTerminalProvisioning: true
+      })
+      expect(createRemote).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.objectContaining({
+          startup: {
+            ...startup,
+            ...(startupActivate !== undefined ? { activate: startupActivate } : {})
+          },
+          startupDraftPaste: { text: 'task', agent: 'codex' },
+          awaitTerminalProvisioning: true
+        })
+      )
+      expect(startup).not.toHaveProperty('activate')
+    }
+  )
 })

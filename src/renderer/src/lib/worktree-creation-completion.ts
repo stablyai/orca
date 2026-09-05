@@ -1,4 +1,5 @@
 import { useAppStore } from '@/store'
+import { useCreationDraftSession } from './workspace-creation-drafts/creation-draft-session'
 import { ensureAgentStartupInTerminal } from '@/lib/new-workspace'
 import { queueWorkspaceActivationTerminalFocus } from '@/lib/workspace-activation-terminal-focus'
 import { seedAgentTabStateAfterWorktreeCreate } from '@/lib/worktree-creation-agent-seeds'
@@ -38,6 +39,7 @@ export async function completeWorktreeCreation(args: {
   if (
     !args.structuredLaunchAccepted &&
     !request.suppressTerminalFocusOnCompletion &&
+    !useCreationDraftSession.getState().entries[args.creationId]?.buffer.text &&
     args.focusOnCompletion
   ) {
     queueWorkspaceActivationTerminalFocus(args.worktreeId, args.activation)

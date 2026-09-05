@@ -63,7 +63,8 @@ export async function createWorktreeDefaultTabTerminals(
       const terminal = await host.createTerminal(selector, {
         ...(template.title ? { title: template.title } : {}),
         ...(command && defaultTabs.runCommands ? { command } : {}),
-        ...surfacing
+        ...surfacing,
+        ...(surfacing.surfaceOwner === false ? { activate: false } : {})
       })
       handles.push(terminal.handle)
       if (template.color && terminal.tabId) {
@@ -83,7 +84,8 @@ export async function provisionWorktreeTerminals(
   if (!host.canSpawn()) {
     return { setupSpawned: false, setupTerminalHandle: null }
   }
-  const surfacing = args.surfaceOwner === false ? { surfaceOwner: false as const } : {}
+  const surfacing =
+    args.surfaceOwner === false ? { surfaceOwner: false as const, activate: false } : {}
   let setupSpawned = false
   let setupTerminalHandle: string | null = null
   try {

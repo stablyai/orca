@@ -608,115 +608,141 @@ describe('registerWorktreeHandlers', () => {
     })
   })
 
-  it('spawns a startup terminal and setup terminal after local worktree registration', async () => {
-    addWorktreeMock.mockResolvedValue({})
-    listWorktreesMock.mockResolvedValueOnce([
-      {
-        path: '/workspace/improve-dashboard',
-        head: 'def',
-        branch: 'improve-dashboard',
-        isBare: false,
-        isMainWorktree: false
-      }
-    ])
-    loadHooksMock.mockReturnValue({
-      scripts: { setup: 'pnpm install' },
-      setupAgentStartupPolicy: 'wait-for-setup'
-    })
-    getEffectiveHooksMock.mockReturnValue({ scripts: { setup: 'pnpm install' } })
-    getEffectiveHooksFromConfigMock.mockReturnValue({ scripts: { setup: 'pnpm install' } })
-    shouldRunSetupForCreateMock.mockReturnValue(true)
-    expect(createSetupRunnerScriptMock).not.toHaveBeenCalled()
+  it.each([
+    [undefined, 'new-tab'],
+    [false, 'new-tab'],
+    [false, 'split-vertical'],
+    [false, 'split-horizontal']
+  ] as const)(
+    'spawns startup and setup with activation %s in %s after registration',
+    async (activate, setupScriptLaunchMode) => {
+      store.getSettings.mockReturnValue({ ...store.getSettings(), setupScriptLaunchMode })
+      addWorktreeMock.mockResolvedValue({})
+      listWorktreesMock.mockResolvedValueOnce([
+        {
+          path: '/workspace/improve-dashboard',
+          head: 'def',
+          branch: 'improve-dashboard',
+          isBare: false,
+          isMainWorktree: false
+        }
+      ])
+      loadHooksMock.mockReturnValue({
+        scripts: { setup: 'pnpm install' },
+        setupAgentStartupPolicy: 'wait-for-setup'
+      })
+      getEffectiveHooksMock.mockReturnValue({ scripts: { setup: 'pnpm install' } })
+      getEffectiveHooksFromConfigMock.mockReturnValue({ scripts: { setup: 'pnpm install' } })
+      shouldRunSetupForCreateMock.mockReturnValue(true)
+      expect(createSetupRunnerScriptMock).not.toHaveBeenCalled()
 
-    const result = (await handlers['worktrees:create'](null, {
-      repoId: 'repo-1',
-      name: 'improve-dashboard',
-      createdWithAgent: 'claude',
-      startup: {
-        command: 'claude --prefill test',
-        env: { ORCA_AGENT_MODE: 'direct' },
-        viewMode: 'chat',
-        telemetry: {
-          agent_kind: 'claude',
-          launch_source: 'new_workspace_composer',
-          request_kind: 'new'
+      const result = (await handlers['worktrees:create'](null, {
+        repoId: 'repo-1',
+        name: 'improve-dashboard',
+        createdWithAgent: 'claude',
+        startup: {
+          activate,
+          command: 'claude --prefill test',
+          env: { ORCA_AGENT_MODE: 'direct' },
+          viewMode: 'chat',
+          telemetry: {
+            agent_kind: 'claude',
+            launch_source: 'new_workspace_composer',
+            request_kind: 'new'
+          }
+        }
+      })) as {
+        setup?: unknown
+        startupTerminal?: { spawned: boolean; surface?: string }
+        timing?: {
+          phases: { phase: string }[]
+          preparedCheckout?: { status: string; reason?: string }
         }
       }
-    })) as {
-      setup?: unknown
-      startupTerminal?: { spawned: boolean; surface?: string }
-      timing?: {
-        phases: { phase: string }[]
-        preparedCheckout?: { status: string; reason?: string }
-      }
-    }
-    expect(createSetupRunnerScriptMock).toHaveBeenCalledWith(
-      expect.objectContaining({ id: 'repo-1' }),
-      '/workspace/improve-dashboard',
-      'pnpm install',
-      undefined,
-      undefined,
-      'wait-for-setup'
-    )
+      expect(createSetupRunnerScriptMock).toHaveBeenCalledWith(
+        expect.objectContaining({ id: 'repo-1' }),
+        '/workspace/improve-dashboard',
+        'pnpm install',
+        undefined,
+        undefined,
+        'wait-for-setup'
+      )
 
-    expect(runtimeStub.createTerminal).toHaveBeenNthCalledWith(
-      1,
-      'id:repo-1::/workspace/improve-dashboard',
-      {
-        claudeAgentTeamsSourceCommand: 'claude --prefill test',
-        command: 'claude --prefill test',
-        env: { ORCA_AGENT_MODE: 'direct' },
-        launchAgent: 'claude',
-        viewMode: 'chat',
-        startupCommandDelivery: undefined,
-        telemetry: {
-          agent_kind: 'claude',
-          launch_source: 'new_workspace_composer',
-          request_kind: 'new'
-        },
-        activate: true
-      }
-    )
-    expect(runtimeStub.createTerminal).toHaveBeenNthCalledWith(
-      2,
-      'id:repo-1::/workspace/improve-dashboard',
-      {
-        title: 'Setup',
+      expect(runtimeStub.createTerminal).toHaveBeenNthCalledWith(
+        1,
+        'id:repo-1::/workspace/improve-dashboard',
+        {
+          claudeAgentTeamsSourceCommand: 'claude --prefill test',
+          command: 'claude --prefill test',
+          env: { ORCA_AGENT_MODE: 'direct' },
+          launchAgent: 'claude',
+          viewMode: 'chat',
+          startupCommandDelivery: undefined,
+          telemetry: {
+            agent_kind: 'claude',
+            launch_source: 'new_workspace_composer',
+            request_kind: 'new'
+          },
+          activate: activate !== false,
+          ...(activate === false ? { surfaceOwner: false } : {})
+        }
+      )
+      const setupOptions = {
         command: expect.stringContaining('bash /workspace/repo/.git/orca/setup-runner.sh'),
         env: {
           ORCA_ROOT_PATH: '/workspace/repo',
           ORCA_WORKTREE_PATH: '/workspace/improve-dashboard'
         },
-        activate: false
+        activate: false,
+        ...(activate === false ? { surfaceOwner: false } : {})
       }
-    )
-    const startupCreateCall = runtimeStub.createTerminal.mock.calls[0]
-    const setupCreateCall = runtimeStub.createTerminal.mock.calls[1]
-    if (!startupCreateCall || !setupCreateCall) {
-      throw new Error('expected startup and setup terminal calls')
+      if (setupScriptLaunchMode === 'new-tab') {
+        expect(runtimeStub.createTerminal).toHaveBeenNthCalledWith(
+          2,
+          'id:repo-1::/workspace/improve-dashboard',
+          { title: 'Setup', ...setupOptions }
+        )
+      } else {
+        expect(runtimeStub.splitTerminal).toHaveBeenCalledWith('term-startup', {
+          direction: setupScriptLaunchMode === 'split-horizontal' ? 'horizontal' : 'vertical',
+          ...setupOptions
+        })
+      }
+      const startupCreateCall = runtimeStub.createTerminal.mock.calls[0]
+      const setupCreateCall =
+        setupScriptLaunchMode === 'new-tab'
+          ? runtimeStub.createTerminal.mock.calls[1]
+          : runtimeStub.splitTerminal.mock.calls[0]
+      if (!startupCreateCall || !setupCreateCall) {
+        throw new Error('expected startup and setup terminal calls')
+      }
+      const startupCommand = (startupCreateCall[1] as { command: string }).command
+      const setupCommand = (setupCreateCall[1] as { command: string }).command
+      expect(startupCommand).toBe('claude --prefill test')
+      expect(setupCommand).toBe('bash /workspace/repo/.git/orca/setup-runner.sh')
+      expect(result.setup).toBeUndefined()
+      expect(result.startupTerminal).toEqual({
+        spawned: true,
+        handle: 'term-startup',
+        surface: 'visible'
+      })
+      expect(runtimeStub.invalidateWorktreeCatalog).toHaveBeenCalledWith('repo-1')
+      expect(runtimeStub.invalidateWorktreeCatalog.mock.invocationCallOrder[0]).toBeLessThan(
+        runtimeStub.createTerminal.mock.invocationCallOrder[0]
+      )
+      expect(result.timing?.phases.map((phase) => phase.phase)).toEqual(
+        expect.arrayContaining([
+          'git_worktree_add',
+          'list_created_worktree',
+          'resolve_worktreeinclude',
+          'prepare_setup',
+          'spawn_startup_terminal'
+        ])
+      )
+      // Nothing warmed this repo, so the create must report the cold path rather than stay silent.
+      expect(result.timing?.preparedCheckout).toEqual({ status: 'miss', reason: 'none_armed' })
     }
-    const startupCommand = (startupCreateCall[1] as { command: string }).command
-    const setupCommand = (setupCreateCall[1] as { command: string }).command
-    expect(startupCommand).toBe('claude --prefill test')
-    expect(setupCommand).toBe('bash /workspace/repo/.git/orca/setup-runner.sh')
-    expect(result.setup).toBeUndefined()
-    expect(result.startupTerminal).toEqual({ spawned: true, surface: 'visible' })
-    expect(runtimeStub.invalidateWorktreeCatalog).toHaveBeenCalledWith('repo-1')
-    expect(runtimeStub.invalidateWorktreeCatalog.mock.invocationCallOrder[0]).toBeLessThan(
-      runtimeStub.createTerminal.mock.invocationCallOrder[0]
-    )
-    expect(result.timing?.phases.map((phase) => phase.phase)).toEqual(
-      expect.arrayContaining([
-        'git_worktree_add',
-        'list_created_worktree',
-        'resolve_worktreeinclude',
-        'prepare_setup',
-        'spawn_startup_terminal'
-      ])
-    )
-    // Nothing warmed this repo, so the create must report the cold path rather than stay silent.
-    expect(result.timing?.preparedCheckout).toEqual({ status: 'miss', reason: 'none_armed' })
-  })
+  )
 
   it('returns the wrapped setup command when startup spawned but setup creation failed', async () => {
     addWorktreeMock.mockResolvedValue({})

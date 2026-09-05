@@ -14891,5 +14891,32 @@
       "action": "Probar Agentes",
       "hiddenToast": "La pestaña Agentes está oculta. Vuelve a activarla en Configuración → Experimental."
     }
+  },
+  "creationDraft": {
+    "copyFailed": "No se pudo copiar el borrador.",
+    "copySaved": "Se guardó por separado. Usa Copiar borrador para llevar este texto a tu agente.",
+    "copySaveFailed": "No se pudo guardar un borrador por separado. Tu texto sigue aquí.",
+    "discardFailed": "No se pudo descartar el borrador. Tu texto sigue aquí.",
+    "promptLabel": "Borrador del prompt del espacio de trabajo",
+    "promptPlaceholder": "Empieza tu prompt mientras se prepara el espacio de trabajo…",
+    "tooLong": "Ese texto supera el límite de 64 KB por borrador. Se conserva tu texto anterior.",
+    "full": "Los 64 espacios para borradores están ocupados. Descarta un borrador guardado para empezar otro.",
+    "delivered": "Enviado al terminal. Tu borrador se conserva aquí.",
+    "uncertain": "El envío no está confirmado. Revisa el terminal antes de volver a enviar. Tu borrador se conserva aquí.",
+    "sendFailed": "El agente original no está listo para este borrador. Tu texto sigue aquí; puedes copiarlo o volver a intentarlo.",
+    "conflict": "Este borrador cambió en otra ventana. Guarda una copia por separado para conservar tu texto.",
+    "saveFailed": "No se ha guardado. Mantén esta ventana abierta o copia tu texto.",
+    "saving": "Guardando…",
+    "saved": "Guardado en este dispositivo",
+    "saveCopy": "Guardar una copia",
+    "retry": "Reintentar",
+    "openWorkspace": "Abrir espacio de trabajo",
+    "discard": "Descartar",
+    "sending": "Enviando…",
+    "send": "Enviar",
+    "copy": "Copiar borrador",
+    "savedDrafts": "Borradores guardados",
+    "hide": "Ocultar",
+    "loadFailed": "No se pudieron cargar los borradores guardados."
   }
 }

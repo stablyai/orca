@@ -124,7 +124,8 @@ export async function createRuntimeFolderWorktree(args: {
     path: worktree.path,
     branch: worktree.branch
   })
-  const shouldActivate = request.activate === true || request.runHooks === true
+  const shouldActivate =
+    args.startup?.activate !== false && (request.activate === true || request.runHooks === true)
   let warning: string | undefined
   let didSpawnStartup = false
   let startupTerminal: CreateWorktreeResult['startupTerminal']
@@ -136,6 +137,7 @@ export async function createRuntimeFolderWorktree(args: {
       }
       const terminal = await deps.createTerminal(`id:${worktree.id}`, {
         command: args.startup.command,
+        ...(args.startup.activate === false ? { activate: false } : {}),
         env: args.startup.env,
         ...(args.startup.launchConfig ? { launchConfig: args.startup.launchConfig } : {}),
         ...(args.createdWithAgent ? { launchAgent: args.createdWithAgent } : {}),
