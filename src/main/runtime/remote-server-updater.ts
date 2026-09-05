@@ -8,7 +8,7 @@ type RemoteServerUpdaterAdapter = {
   getSnapshot: (runtimeId: string) => RemoteServerUpdaterSnapshot
   check: (runtimeId: string, options?: UpdateCheckOptions) => RemoteServerUpdaterSnapshot
   download: (runtimeId: string) => RemoteServerUpdaterSnapshot
-  install: (runtimeId: string) => RemoteServerUpdateInstallResult
+  install: (runtimeId: string) => Promise<RemoteServerUpdateInstallResult>
 }
 
 const unavailableSnapshot = (runtimeId: string): RemoteServerUpdaterSnapshot => ({
@@ -54,6 +54,8 @@ export function downloadRemoteServerUpdater(runtimeId: string): RemoteServerUpda
   return adapter.download(runtimeId)
 }
 
-export function installRemoteServerUpdater(runtimeId: string): RemoteServerUpdateInstallResult {
+export async function installRemoteServerUpdater(
+  runtimeId: string
+): Promise<RemoteServerUpdateInstallResult> {
   return adapter.install(runtimeId)
 }
