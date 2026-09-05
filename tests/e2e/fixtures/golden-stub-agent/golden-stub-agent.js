@@ -119,5 +119,8 @@ for (const signal of ['SIGINT', 'SIGTERM', 'SIGHUP']) {
   process.on(signal, exitCleanly)
 }
 
+// Repaint when a restored terminal fits to a different grid.
+process.stdout.on('resize', render)
+
 process.stdout.write('\x1b[?1049h')
 render()
