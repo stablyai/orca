@@ -14,8 +14,8 @@ export function getWindowsPowerShellExecutablePath(): string {
  * Switches for the PowerShell that relays hook output and exit status
  * (#14818 — conhost does neither).
  *
- * The command line spells no flag beyond `-NoProfile`, because AV denies the
- * combinations. #16003 measured, on the reporting Kaspersky host:
+ * The command line keeps only the safe profile/input flags because AV denies
+ * the policy/window combinations. #16003 measured, on the reporting Kaspersky host:
  *
  *   -NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -EncodedCommand  126
  *   -NoProfile -WindowStyle Hidden -EncodedCommand                          126
@@ -40,7 +40,8 @@ export function getWindowsPowerShellExecutablePath(): string {
  * AV host for a flicker. The answer is to shorten the interpreter chain — the
  * shipped doctrine of #15520 and #15595 — or a launcher that owns no console.
  */
-export const WINDOWS_POWERSHELL_HOOK_SWITCHES = '-NoProfile'
+// NonInteractive prevents PowerShell 5.1 from reading hook JSON as interactive input.
+export const WINDOWS_POWERSHELL_HOOK_SWITCHES = '-NoProfile -NonInteractive'
 
 // Why: redirected PowerShell progress becomes CLIXML that can corrupt merged JSON
 // output. It must be the FIRST statement: Set-ExecutionPolicy autoloads
