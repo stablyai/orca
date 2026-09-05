@@ -154,7 +154,7 @@ export const ORCHESTRATION_WORKER_CONTROL_METHODS: RpcMethod[] = [
   defineMethod({
     name: 'orchestration.workerRead',
     params: WorkerReadParams,
-    /** Read a worker's output via the handle inspectWorkerTerminal proved live, or the archived tail once the terminal is releasing/released. */
+    /** Read a worker's output via the handle inspectWorkerTerminal proved live, or the archived tail once the terminal is releasing, released, or conceded release_unknown. */
     handler: async (params, { runtime }) => {
       const db = runtime.getOrchestrationDb()
       const federated = db.getFederatedDispatch(params.dispatch)

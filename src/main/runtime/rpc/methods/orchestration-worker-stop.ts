@@ -16,7 +16,7 @@ export const ORCHESTRATION_WORKER_STOP_METHODS: RpcMethod[] = [
   defineMethod({
     name: 'orchestration.workerStop',
     params: WorkerDispatchParams,
-    /** Stop a worker by closing exactly the live handle; a kill the host never confirms settles release_unknown, never a false success. */
+    /** Stop a worker by closing exactly the live handle; a kill the host never confirms marks the dispatch stop_unknown, never a false success. */
     handler: async (params, { runtime, orchestrationMutation }) => {
       const db = runtime.getOrchestrationDb()
       const federated = db.getFederatedDispatch(params.dispatch)
