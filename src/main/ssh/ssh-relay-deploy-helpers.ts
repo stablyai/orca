@@ -258,7 +258,7 @@ export function waitForSentinel(
         return
       }
 
-      bufferedStdout = bufferedStdout.length === 0 ? data : Buffer.concat([bufferedStdout, data])
+      bufferedStdout = startupStdout
     })
   })
 }
