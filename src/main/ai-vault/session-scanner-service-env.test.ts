@@ -120,8 +120,7 @@ describe('buildRelayAiVaultServiceEnv', () => {
     expect(env.HOME).toBe('/home/ada')
   })
 
-  // The sidecar takes remoteHome and hostPlatform from its init message, so an
-  // agent-home override on the remote host is not part of how it finds roots.
+  // Filesystem sources still resolve roots from init rather than agent-home overrides.
   it('withholds the agent-home variables the desktop child needs', () => {
     const env = buildRelayAiVaultServiceEnv(
       { CODEX_HOME: '/remote/.codex', PATH: '/usr/bin' },

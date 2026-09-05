@@ -1,4 +1,4 @@
-import type { AiVaultAgent, AiVaultSession } from '../../shared/ai-vault-types'
+import type { AiVaultAgent, AiVaultListResult, AiVaultSession } from '../../shared/ai-vault-types'
 import type { ExecutionHostId } from '../../shared/execution-host'
 import type { IFilesystemProvider } from '../providers/types'
 import type { RemoteHostPlatform } from '../ssh/ssh-remote-platform'
@@ -18,7 +18,14 @@ export type RemoteScannerContext = {
 export type RemoteSessionFilesystemProvider = Pick<
   IFilesystemProvider,
   'readDir' | 'readFile' | 'stat'
->
+> & {
+  // Only host-local providers may read SQLite; filesystem-only SSH transports cannot.
+  scanMimoSessions?: (args: {
+    remoteHome: string
+    limit: number
+    signal?: AbortSignal
+  }) => Promise<AiVaultListResult>
+}
 
 export type RemoteParserOptions = {
   executionHostId: ExecutionHostId

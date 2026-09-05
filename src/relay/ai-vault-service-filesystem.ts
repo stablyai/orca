@@ -1,9 +1,11 @@
 import { lstat, readdir } from 'node:fs/promises'
 import type { RemoteSessionFilesystemProvider } from '../main/ai-vault/remote-session-scanner-types'
 import { readRelayFileContent } from './fs-handler-file-read'
+import { scanRelayMimoSessions } from './ai-vault-mimo-sessions'
 
 export function createRelayAiVaultFilesystemProvider(): RemoteSessionFilesystemProvider {
   return {
+    scanMimoSessions: scanRelayMimoSessions,
     async readDir(dirPath) {
       const entries = await readdir(dirPath, { withFileTypes: true })
       return entries.map((entry) => ({

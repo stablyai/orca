@@ -28,6 +28,7 @@ import { throwIfAiVaultScanCancelled } from './ai-vault-scan-cancellation'
 import { recordSessionScanIssue } from './session-scan-issues'
 import { limitRemoteScanFilesystemConcurrency } from './remote-session-scan-concurrency'
 import { aiVaultScanLimit } from '../../shared/ai-vault-session-depth'
+import { scanRemoteMimoSessions } from './remote-session-scanner-mimo'
 
 const REMOTE_SCAN_CONCURRENCY = 8
 const REMOTE_PARSE_CANDIDATE_MULTIPLIER = 2
@@ -102,6 +103,16 @@ export async function scanRemoteAiVaultSessions(args: {
     issues,
     limit
   })
+  if (!selectedAgents || selectedAgents.has('mimo-code')) {
+    const mimo = await scanRemoteMimoSessions({
+      ...args,
+      limit: args.scopePaths?.length ? Math.max(limit, REMOTE_SCOPE_PARSE_CANDIDATE_LIMIT) : limit,
+      reportUnsupported: selectedAgents !== null
+    })
+    parsed.sessions.push(...mimo.sessions)
+    issues.push(...mimo.issues)
+  }
+  throwIfAiVaultScanCancelled(args.signal)
   const parsedSessions = dedupeCodexSessionsBySessionId(parsed.sessions)
   const cappedSessions = parsedSessions
     .sort((left, right) => sessionSortTime(right) - sessionSortTime(left))

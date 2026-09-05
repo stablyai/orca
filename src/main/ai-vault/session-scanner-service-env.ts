@@ -92,10 +92,14 @@ export function buildAiVaultServiceEnv(
   return env
 }
 
-/** Relay: the sidecar takes every root from its init message, not the environment. */
+/** Relay: filesystem roots use init; MiMo's database uses the host environment. */
 export function buildRelayAiVaultServiceEnv(
   baseEnv: NodeJS.ProcessEnv = process.env,
   platform: NodeJS.Platform = process.platform
 ): NodeJS.ProcessEnv {
-  return pickAllowedEnv(RUNTIME_ENV_ALLOWLIST, baseEnv, platform)
+  return pickAllowedEnv(
+    [...RUNTIME_ENV_ALLOWLIST, 'MIMOCODE_HOME', 'XDG_DATA_HOME'],
+    baseEnv,
+    platform
+  )
 }
