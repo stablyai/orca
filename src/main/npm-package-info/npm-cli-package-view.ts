@@ -46,27 +46,64 @@ function buildNpmEnv(program: string): NodeJS.ProcessEnv {
   return withCliRuntimeOnPath(program, env)
 }
 
-/**
- * The project `.npmrc` decides which host `npm view` talks to. Anything but
- * https is refused and the caller degrades to the public registry, so a
- * repository cannot aim a hover at a plaintext host of its choosing.
- */
-async function resolvesToHttpsRegistry(program: string, cwd: string): Promise<boolean> {
+/** `null` means the probe itself failed, which is never read as an absent override. */
+async function readNpmConfig(program: string, cwd: string, key: string): Promise<string | null> {
   const probe = await runProcess({
     program,
-    args: ['config', 'get', 'registry'],
+    args: ['config', 'get', key],
     cwd,
     env: buildNpmEnv(program),
     timeoutMs: NPM_VIEW_TIMEOUT_MS
   })
   if (probe.timedOut || probe.code !== 0) {
-    return false
+    return null
   }
+  return probe.stdout.trim()
+}
+
+function isHttpsRegistryUrl(value: string): boolean {
   try {
-    return new URL(probe.stdout.trim()).protocol === 'https:'
+    return new URL(value).protocol === 'https:'
   } catch {
     return false
   }
+}
+
+/** `@scope` of a scoped package name, or `null` for an unscoped one. */
+function packageScope(packageName: string): string | null {
+  return /^@[^/]+(?=\/)/.exec(packageName)?.[0] ?? null
+}
+
+/**
+ * Requires https of every registry key this lookup can resolve through: the
+ * default `registry`, plus `<scope>:registry` when the package is scoped, since
+ * an `.npmrc` can redirect one scope to a plaintext host while leaving the
+ * default on https — and `npm view` would send that scope's credentials there.
+ * Anything else is refused and the caller degrades to the public registry.
+ *
+ * npm prints `undefined` for an unset key. That is not a refusal: it means npm
+ * falls back to the default registry, which the first check already cleared.
+ */
+async function resolvesToHttpsRegistry(
+  program: string,
+  cwd: string,
+  packageName: string
+): Promise<boolean> {
+  const defaultRegistry = await readNpmConfig(program, cwd, 'registry')
+  if (defaultRegistry === null || !isHttpsRegistryUrl(defaultRegistry)) {
+    return false
+  }
+  const scope = packageScope(packageName)
+  if (!scope) {
+    return true
+  }
+  const scopedRegistry = await readNpmConfig(program, cwd, `${scope}:registry`)
+  if (scopedRegistry === null) {
+    return false
+  }
+  return (
+    scopedRegistry === '' || scopedRegistry === 'undefined' || isHttpsRegistryUrl(scopedRegistry)
+  )
 }
 
 /**
@@ -126,7 +163,7 @@ export async function npmCliPackageView(
 
   let result: Awaited<ReturnType<typeof runProcess>>
   try {
-    if (!(await resolvesToHttpsRegistry(program, cwd))) {
+    if (!(await resolvesToHttpsRegistry(program, cwd, packageName))) {
       return { status: 'npm-unresolvable' }
     }
     result = await runProcess({

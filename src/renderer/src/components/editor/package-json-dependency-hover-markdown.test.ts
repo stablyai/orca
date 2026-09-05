@@ -234,3 +234,40 @@ describe('buildPackageJsonDependencyHoverMarkdown source attribution', () => {
     )
   })
 })
+
+/**
+ * The description is the only block emitted without a prefix and it preserves the
+ * registry's own newlines, so a line-leading list marker would render as a list.
+ */
+describe('description block list-marker containment', () => {
+  it.each([
+    ['- first\n- second', '\\- first\n\\- second'],
+    ['1. first\n2. second', '1\\. first\n2\\. second'],
+    ['  - indented', '  \\- indented'],
+    ['--- rule', '\\--- rule']
+  ])('escapes the leading list marker in %j', (description, expected) => {
+    const markdown = buildMarkdown({
+      packageName: 'react',
+      installedVersion: { status: 'not-installed' },
+      result: okResult({ description })
+    })
+
+    expect(markdown).toContain(expected)
+  })
+
+  // Why: `.` and `-` carry no markdown meaning mid-line, and escaping them there
+  // would mangle an ordinary version number or a hyphenated word.
+  it.each([
+    'Runs on Node 19.0.0 and later',
+    'A well-known state-management library',
+    'Supports semver ranges like ^1.2.3'
+  ])('leaves the mid-line text of %j untouched', (description) => {
+    const markdown = buildMarkdown({
+      packageName: 'react',
+      installedVersion: { status: 'not-installed' },
+      result: okResult({ description })
+    })
+
+    expect(markdown).toContain(description)
+  })
+})

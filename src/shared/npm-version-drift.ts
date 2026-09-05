@@ -6,6 +6,16 @@ type ParsedSemverCore = {
   core: [number, number, number]
 }
 
+/** `0|[1-9]\d*` per the spec: a numeric identifier may not carry a leading zero, so
+ *  `01.2.3` and `1.2.3-01` are not versions and must not compare `same` to themselves. */
+const NUMERIC_IDENTIFIER = String.raw`0|[1-9]\d*`
+const PRERELEASE_IDENTIFIER = String.raw`(?:${NUMERIC_IDENTIFIER}|\d*[A-Za-z-][0-9A-Za-z-]*)`
+const SEMVER_CORE = String.raw`(${NUMERIC_IDENTIFIER})\.(${NUMERIC_IDENTIFIER})\.(${NUMERIC_IDENTIFIER})`
+const SEMVER_PRERELEASE = String.raw`(?:-(${PRERELEASE_IDENTIFIER}(?:\.${PRERELEASE_IDENTIFIER})*))?`
+/** Build metadata takes any alphanumeric identifier; the leading-zero rule is numeric-only. */
+const SEMVER_BUILD = String.raw`(?:\+([0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*))?`
+const SEMVER_PATTERN = new RegExp(`^${SEMVER_CORE}${SEMVER_PRERELEASE}${SEMVER_BUILD}$`)
+
 /**
  * Local, minimal semver core+prerelease-presence parse. `app-version.ts`'s
  * `parseVersion` stays module-private (it is scoped to app-release semantics),
@@ -14,9 +24,7 @@ type ParsedSemverCore = {
  */
 function parseSemverCore(value: string): ParsedSemverCore | null {
   const normalized = value.trim().replace(/^v/i, '')
-  const match = normalized.match(
-    /^(\d+)\.(\d+)\.(\d+)(?:-([0-9A-Za-z-.]+))?(?:\+([0-9A-Za-z-.]+))?$/
-  )
+  const match = normalized.match(SEMVER_PATTERN)
   if (!match) {
     return null
   }

@@ -4,10 +4,7 @@ import type { GlobalSettings } from '../../shared/global-settings-types'
 import { normalizeRuntimePathForComparison } from '../../shared/cross-platform-path'
 import { resolveWorkspaceTrustMatch } from '../../shared/workspace-trust-resolution'
 import type { WorkspaceTrustChange, WorkspaceTrustEntry } from '../../shared/workspace-trust-types'
-import {
-  invalidateWorkspaceTrustPathCache,
-  resolveWorkspaceTrustForPath
-} from './workspace-trust-path-canonicalization'
+import { resolveWorkspaceTrustForPath } from './workspace-trust-path-canonicalization'
 
 export type WorkspaceTrustStore = {
   getSettings(): Pick<GlobalSettings, 'workspaceTrustEntries'>
@@ -89,7 +86,6 @@ export async function recordWorkspaceTrustDecision(
   // open windows. No `originWebContentsId` — unlike plugin enablement nothing repaints
   // optimistically here, so the deciding window needs the event as much as any other.
   store.updateSettings({ workspaceTrustEntries: [...remaining, entry] }, { notifyListeners: true })
-  invalidateWorkspaceTrustPathCache()
   emitChange([targetPath], args.decision === 'trust' ? 'granted' : 'declined')
   return entry
 }
@@ -107,7 +103,6 @@ export async function revokeWorkspaceTrustEntry(
     { workspaceTrustEntries: entries.filter((entry) => entry.id !== entryId) },
     { notifyListeners: true }
   )
-  invalidateWorkspaceTrustPathCache()
   emitChange([target.path], 'revoked')
   return true
 }

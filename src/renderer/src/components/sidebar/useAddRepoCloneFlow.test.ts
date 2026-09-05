@@ -8,6 +8,8 @@ const mocks = vi.hoisted(() => ({
   stateIndex: 0,
   refValues: [] as unknown[],
   refIndex: 0,
+  /** Every ref object the hook created, in creation order, so a test can supersede a flow mid-run. */
+  createdRefs: [] as { current: unknown }[],
   storeState: {
     settings: { activeRuntimeEnvironmentId: null as string | null },
     repos: [] as Repo[],
@@ -35,9 +37,11 @@ vi.mock('react', async (importOriginal) => {
     },
     useRef: <T>(value: T) => {
       const index = mocks.refIndex++
-      return {
+      const ref = {
         current: index in mocks.refValues ? (mocks.refValues[index] as T) : value
       }
+      mocks.createdRefs.push(ref as { current: unknown })
+      return ref
     },
     useState: <T>(initial: T | (() => T)) => {
       const index = mocks.stateIndex++
@@ -98,6 +102,7 @@ describe('useAddRepoCloneFlow', () => {
     mocks.stateSetters = []
     mocks.refIndex = 0
     mocks.refValues = []
+    mocks.createdRefs = []
     mocks.stateValues = ['https://github.com/stablyai/orca.git', '/srv', false, null, null]
     mocks.storeState.repos = []
     mocks.storeState.projects = []
@@ -265,5 +270,40 @@ describe('useAddRepoCloneFlow', () => {
     expect(mocks.resolveIntake).toHaveBeenCalledWith({
       target: { kind: 'repo', repoId: repo.id }
     })
+    // Why the order matters: a refresh that fails reports a failed clone, and a
+    // trust decision already written would outlive the failure it belongs to.
+    expect(mocks.resolveIntake.mock.invocationCallOrder[0]!).toBeGreaterThan(
+      mocks.fetchWorktrees.mock.invocationCallOrder[0]!
+    )
+  })
+
+  // Why: the user abandoned or superseded this flow. Writing a trust decision for
+  // a workspace they walked away from is a decision they never confirmed.
+  it('records no trust decision when the flow is superseded during the worktree refresh', async () => {
+    const repo = makeRepo()
+    mocks.cloneLocal.mockResolvedValue(repo)
+    mocks.resolveIntake.mockResolvedValue({ outcome: 'not-applicable' })
+    const { useAddRepoCloneFlow } = await import('./useAddRepoCloneFlow')
+
+    const result = useAddRepoCloneFlow({
+      step: 'clone',
+      activeRuntimeEnvironmentId: null,
+      sshTargetId: null,
+      workspaceDir: '/local/workspace',
+      fetchWorktrees: mocks.fetchWorktrees,
+      onGitRepoReady: mocks.onGitRepoReady
+    })
+    // The second ref the hook creates is the monotonic clone generation; bumping it
+    // mid-refresh is exactly what starting or resetting another clone does.
+    const cloneGenRef = mocks.createdRefs[1] as { current: number }
+    mocks.fetchWorktrees.mockImplementation(async () => {
+      cloneGenRef.current += 1
+      return true
+    })
+    await result.handleClone()
+
+    expect(mocks.fetchWorktrees).toHaveBeenCalled()
+    expect(mocks.resolveIntake).not.toHaveBeenCalled()
+    expect(mocks.onGitRepoReady).not.toHaveBeenCalled()
   })
 })

@@ -5,8 +5,7 @@ const { resolveWorkspaceTrustForPathMock } = vi.hoisted(() => ({
 }))
 
 vi.mock('./workspace-trust-path-canonicalization', () => ({
-  resolveWorkspaceTrustForPath: resolveWorkspaceTrustForPathMock,
-  invalidateWorkspaceTrustPathCache: vi.fn()
+  resolveWorkspaceTrustForPath: resolveWorkspaceTrustForPathMock
 }))
 
 import { resolveWorkspaceTrustIntake } from './workspace-trust-intake-resolution'

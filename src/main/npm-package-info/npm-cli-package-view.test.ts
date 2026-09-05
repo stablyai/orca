@@ -269,3 +269,98 @@ describe('npmCliPackageView hostile .npmrc containment', () => {
     expect(runProcessMock).toHaveBeenCalledTimes(1)
   })
 })
+
+/**
+ * A project `.npmrc` can redirect a single scope while leaving the default
+ * `registry` on https, so probing the default alone clears a plaintext host for
+ * every scoped package — and `npm view` sends that scope's credentials there.
+ */
+describe('npmCliPackageView scoped registry containment', () => {
+  beforeEach(resetMocks)
+
+  /** Answers each `npm config get <key>` probe from a table; anything else is the lookup. */
+  function mockRegistryConfig(byKey: Record<string, string>, view = processResult()): void {
+    runProcessMock.mockImplementation(async (spec: { args: string[] }) => {
+      if (!spec.args.includes('config')) {
+        return view
+      }
+      const key = spec.args.at(-1)!
+      return processResult({ stdout: `${byKey[key] ?? 'undefined'}\n` })
+    })
+  }
+
+  /** The keys passed to `npm config get`, in call order. */
+  function probedKeys(): string[] {
+    return runProcessMock.mock.calls
+      .filter((call) => (call[0].args as string[]).includes('config'))
+      .map((call) => (call[0].args as string[]).at(-1)!)
+  }
+
+  it('refuses a scoped package whose scope registry is plaintext, even on an https default', async () => {
+    mockRegistryConfig({
+      registry: 'https://registry.npmjs.org/',
+      '@types:registry': 'http://127.0.0.1:59999/'
+    })
+
+    const result = await npmCliPackageView('@types/node', AUTHORIZED_CWD)
+
+    expect(result).toEqual({ status: 'npm-unresolvable' })
+    expect(probedKeys()).toEqual(['registry', '@types:registry'])
+    expect(runProcessMock.mock.calls.some((c) => (c[0].args as string[]).includes('view'))).toBe(
+      false
+    )
+  })
+
+  it('proceeds when the scope registry is https', async () => {
+    mockRegistryConfig(
+      { registry: 'https://registry.npmjs.org/', '@types:registry': 'https://npm.internal/' },
+      processResult({ stdout: JSON.stringify({ version: '20.0.0' }) })
+    )
+
+    const result = await npmCliPackageView('@types/node', AUTHORIZED_CWD)
+
+    expect(result).toMatchObject({ status: 'ok', info: { latestVersion: '20.0.0' } })
+  })
+
+  // Why empty is not a failure: npm prints `undefined` for an unset scope key and
+  // then resolves through the default registry, which the first probe already cleared.
+  it.each(['undefined', ''])(
+    'treats the scope answer %j as no override rather than as a refusal',
+    async (scopeAnswer) => {
+      mockRegistryConfig(
+        { registry: 'https://registry.npmjs.org/', '@types:registry': scopeAnswer },
+        processResult({ stdout: JSON.stringify({ version: '20.0.0' }) })
+      )
+
+      const result = await npmCliPackageView('@types/node', AUTHORIZED_CWD)
+
+      expect(result).toMatchObject({ status: 'ok', info: { latestVersion: '20.0.0' } })
+    }
+  )
+
+  it('probes only the default registry for an unscoped package', async () => {
+    mockRegistryConfig(
+      { registry: 'https://registry.npmjs.org/' },
+      processResult({ stdout: JSON.stringify({ version: '19.0.0' }) })
+    )
+
+    await npmCliPackageView('react', AUTHORIZED_CWD)
+
+    expect(probedKeys()).toEqual(['registry'])
+  })
+
+  it('refuses when the scope probe itself fails', async () => {
+    runProcessMock.mockImplementation(async (spec: { args: string[] }) => {
+      if (!spec.args.includes('config')) {
+        return processResult()
+      }
+      return spec.args.at(-1) === 'registry'
+        ? processResult({ stdout: 'https://registry.npmjs.org/\n' })
+        : processResult({ code: 1, stderr: 'boom' })
+    })
+
+    expect(await npmCliPackageView('@types/node', AUTHORIZED_CWD)).toEqual({
+      status: 'npm-unresolvable'
+    })
+  })
+})

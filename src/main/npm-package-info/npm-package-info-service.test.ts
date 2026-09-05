@@ -38,8 +38,6 @@ vi.mock('../../shared/node-cli-command-resolution', () => ({
 const { createNpmPackageInfoService } = await import('./npm-package-info-service')
 const { invalidateAuthorizedRootsCache, registerWorktreeRootsForRepo } =
   await import('../ipc/registered-worktree-roots-cache')
-const { invalidateWorkspaceTrustPathCache } =
-  await import('../workspace-trust/workspace-trust-path-canonicalization')
 
 const REPO_ID = 'repo-1'
 
@@ -120,7 +118,6 @@ describe('createNpmPackageInfoService', () => {
     withCliRuntimeOnPathMock.mockReset()
     withCliRuntimeOnPathMock.mockImplementation((_program, env) => env)
     invalidateAuthorizedRootsCache()
-    invalidateWorkspaceTrustPathCache()
   })
 
   it('short-circuits to lookup-disabled without any npm or network call when the privacy setting is off', async () => {
@@ -221,7 +218,6 @@ describe('createNpmPackageInfoService source attribution', () => {
     withCliRuntimeOnPathMock.mockReset()
     withCliRuntimeOnPathMock.mockImplementation((_program, env) => env)
     invalidateAuthorizedRootsCache()
-    invalidateWorkspaceTrustPathCache()
   })
 
   it('degrades a declined local workspace to registry HTTP with the untrusted reason', async () => {
@@ -336,7 +332,6 @@ describe('createNpmPackageInfoService trust-classed cache key', () => {
     withCliRuntimeOnPathMock.mockReset()
     withCliRuntimeOnPathMock.mockImplementation((_program, env) => env)
     invalidateAuthorizedRootsCache()
-    invalidateWorkspaceTrustPathCache()
   })
 
   // Why the trust class belongs in the key: unlike the privacy flag, a trusted
@@ -362,7 +357,6 @@ describe('createNpmPackageInfoService trust-classed cache key', () => {
     })
 
     entries.length = 0
-    invalidateWorkspaceTrustPathCache()
 
     expect(await service.lookup(request)).toMatchObject({
       status: 'ok',
@@ -390,7 +384,6 @@ describe('createNpmPackageInfoService trust-classed cache key', () => {
     })
 
     entries.push(trustEntry(root, true))
-    invalidateWorkspaceTrustPathCache()
 
     expect(await service.lookup(request)).toMatchObject({
       status: 'ok',
@@ -398,7 +391,7 @@ describe('createNpmPackageInfoService trust-classed cache key', () => {
     })
   })
 
-  it('keys the cache by trust class, then execution host, then package name', async () => {
+  it('keys a CLI entry by class, authorized root, execution host, then package name', async () => {
     const root = await makeRoot('orca-npm-key-')
     const entries = [trustEntry(root, true)]
     const store = fakeStore({ repoPath: root, entries })
@@ -422,10 +415,11 @@ describe('createNpmPackageInfoService trust-classed cache key', () => {
 
     await service.lookup(request)
     entries.length = 0
-    invalidateWorkspaceTrustPathCache()
     await service.lookup(request)
 
-    expect(keys).toEqual(['cli\0local\0@scope/pkg', 'http\0local\0@scope/pkg'])
+    // The CLI key carries the authorized root; the HTTP key, which reads no
+    // workspace configuration, stays host-scoped.
+    expect(keys).toEqual([`cli\0${root}\0local\0@scope/pkg`, 'http\0local\0@scope/pkg'])
   })
 
   it('keys a remote host as untrusted, so it can never collide with a local CLI entry', async () => {
@@ -466,7 +460,6 @@ describe('createNpmPackageInfoService threat matrix', () => {
     withCliRuntimeOnPathMock.mockReset()
     withCliRuntimeOnPathMock.mockImplementation((_program, env) => env)
     invalidateAuthorizedRootsCache()
-    invalidateWorkspaceTrustPathCache()
   })
 
   // Why not merely "unregistered": `resolve()` would reinterpret a relative
@@ -587,5 +580,87 @@ describe('createNpmPackageInfoService threat matrix', () => {
 
     expect(result).toEqual({ status: 'unavailable', reason: 'timeout' })
     expect(npmRegistryHttpLookupMock).not.toHaveBeenCalled()
+  })
+})
+
+/**
+ * Every trusted local worktree shares `executionHostId === 'local'`, but a CLI
+ * result is derived from that worktree's own `.npmrc` — which is exactly what a
+ * private registry is. The authorized root must therefore be part of the key.
+ */
+describe('createNpmPackageInfoService per-worktree CLI cache scope', () => {
+  beforeEach(() => {
+    npmRegistryHttpLookupMock.mockReset()
+    runProcessMock.mockReset()
+    resolveCliCommandMock.mockReset()
+    resolveCliCommandMock.mockReturnValue('/usr/local/bin/npm')
+    withCliRuntimeOnPathMock.mockReset()
+    withCliRuntimeOnPathMock.mockImplementation((_program, env) => env)
+    invalidateAuthorizedRootsCache()
+  })
+
+  /** Registers several roots the way a repo with linked worktrees does. */
+  function registerRoots(store: Store, roots: string[]): void {
+    registerWorktreeRootsForRepo(store, REPO_ID, roots)
+  }
+
+  /** One fake `npm view` manifest per cwd, so a shared cache entry is visible in the result. */
+  function mockNpmViewByCwd(manifestByCwd: Record<string, string>): void {
+    runProcessMock.mockImplementation(async (spec: { args: string[]; cwd: string }) =>
+      spec.args.includes('config')
+        ? processResult(HTTPS_REGISTRY_PROBE)
+        : processResult({ stdout: manifestByCwd[spec.cwd] ?? '{}' })
+    )
+  }
+
+  it('never serves one trusted worktree the npm-cli result of another', async () => {
+    const first = await makeRoot('orca-npm-registry-a-')
+    const second = await makeRoot('orca-npm-registry-b-')
+    const store = fakeStore({
+      repoPath: first,
+      entries: [trustEntry(first, true), trustEntry(second, true)]
+    })
+    registerRoots(store, [first, second])
+    mockNpmViewByCwd({
+      [first]: JSON.stringify({ 'dist-tags.latest': '1.0.0-private-a', description: 'from a' }),
+      [second]: JSON.stringify({ 'dist-tags.latest': '2.0.0-private-b', description: 'from b' })
+    })
+    const service = createNpmPackageInfoService(store)
+
+    const firstResult = await service.lookup({
+      packageName: 'internal-pkg',
+      executionHostId: 'local',
+      worktreeRoot: first
+    })
+    const secondResult = await service.lookup({
+      packageName: 'internal-pkg',
+      executionHostId: 'local',
+      worktreeRoot: second
+    })
+
+    expect(firstResult).toMatchObject({
+      status: 'ok',
+      info: { source: 'npm-cli', latestVersion: '1.0.0-private-a', description: 'from a' }
+    })
+    expect(secondResult).toMatchObject({
+      status: 'ok',
+      info: { source: 'npm-cli', latestVersion: '2.0.0-private-b', description: 'from b' }
+    })
+  })
+
+  // Why the HTTP class stays host-keyed: it reads no workspace configuration, so
+  // its answer cannot differ between two worktrees on the same host.
+  it('still shares one HTTP entry across untrusted worktrees on the same host', async () => {
+    const first = await makeRoot('orca-npm-http-a-')
+    const second = await makeRoot('orca-npm-http-b-')
+    const store = fakeStore({ repoPath: first, entries: [] })
+    registerRoots(store, [first, second])
+    npmRegistryHttpLookupMock.mockResolvedValue(okResult)
+    const service = createNpmPackageInfoService(store)
+
+    await service.lookup({ packageName: 'react', executionHostId: 'local', worktreeRoot: first })
+    await service.lookup({ packageName: 'react', executionHostId: 'local', worktreeRoot: second })
+
+    expect(npmRegistryHttpLookupMock).toHaveBeenCalledTimes(1)
   })
 })

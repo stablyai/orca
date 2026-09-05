@@ -4,13 +4,22 @@ import { classifyNpmVersionDrift } from '../../../../shared/npm-version-drift'
 import type { NpmPackageInfoResult } from '../../../../shared/npm-package-info-types'
 import type { InstalledPackageVersionResult } from './package-json-installed-version'
 
-// Why: `.` and `-` are only markdown-significant at the start of a line (list
-// markers); escaping them mid-line would mangle ordinary version numbers
-// like `19.0.0` for no safety benefit, since every line here is prefixed.
+// Why `.` and `-` are absent: they are only markdown-significant at the start of
+// a line (list markers), and escaping them mid-line would mangle ordinary version
+// numbers like `19.0.0`. `escapeLeadingListMarkers` covers the line-start case.
 const MARKDOWN_ESCAPE_PATTERN = /[\\`*_{}[\]()#+!|>~]/g
 
 function escapeMarkdownText(value: string): string {
   return value.replace(MARKDOWN_ESCAPE_PATTERN, (char) => `\\${char}`)
+}
+
+/**
+ * Neutralizes `-` and `1.` where they open a line, which is the only place they
+ * start a list or a thematic break. The numeric form is escaped only before
+ * whitespace so a description opening with a version like `1.2.3` survives intact.
+ */
+function escapeLeadingListMarkers(value: string): string {
+  return value.replace(/^([ \t]*)-/gm, '$1\\-').replace(/^([ \t]*\d+)\.(?=[ \t])/gm, '$1\\.')
 }
 
 /** Only an `https:` URL renders as a clickable link; anything else is dropped. */
@@ -120,7 +129,9 @@ function buildDescriptionBlock(result: NpmPackageInfoResult): string | null {
   if (result.status !== 'ok' || !result.info.description) {
     return null
   }
-  return escapeMarkdownText(result.info.description)
+  // The one block emitted without a prefix, and it keeps the registry's own
+  // newlines, so every line of it can open a list.
+  return escapeLeadingListMarkers(escapeMarkdownText(result.info.description))
 }
 
 /**

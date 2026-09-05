@@ -118,8 +118,16 @@ export function createNpmPackageInfoService(
       // lookup DOES populate the cache, with private-registry-derived data. A
       // shared key would keep serving that to a workspace whose trust was
       // revoked; separate keys make a flip structurally unable to hit it.
-      const trustClass = authorization.kind === 'trusted' ? 'cli' : 'http'
-      const cacheKey = `${trustClass}\0${request.executionHostId}\0${request.packageName}`
+      //
+      // Why only the CLI class also carries the authorized root: its answer comes
+      // from that worktree's own `.npmrc`, and every trusted local worktree shares
+      // `executionHostId === 'local'`, so two of them pinned to different private
+      // registries would otherwise serve each other's data. The HTTP path reads no
+      // workspace configuration, so host and package name fully describe its answer.
+      const cacheKey =
+        authorization.kind === 'trusted'
+          ? `cli\0${authorization.cwd}\0${request.executionHostId}\0${request.packageName}`
+          : `http\0${request.executionHostId}\0${request.packageName}`
       return cache.getOrRun(cacheKey, async () => {
         if (authorization.kind === 'trusted') {
           const cliResult = await npmCliPackageView(request.packageName, authorization.cwd)

@@ -8,20 +8,16 @@ vi.mock('../ipc/floating-workspace-directory', () => ({
   canonicalizeAccessibleDirectory: canonicalizeAccessibleDirectoryMock
 }))
 
-import {
-  invalidateWorkspaceTrustPathCache,
-  resolveWorkspaceTrustForPath
-} from './workspace-trust-path-canonicalization'
+import { resolveWorkspaceTrustForPath } from './workspace-trust-path-canonicalization'
 import type { WorkspaceTrustEntry } from '../../shared/workspace-trust-types'
 
 function makeEntry(path: string, trusted: boolean): WorkspaceTrustEntry {
   return { id: 'entry-1', path, trusted, decidedAt: 1, origin: 'intake' }
 }
 
-describe('resolveWorkspaceTrustForPath cache behavior', () => {
+describe('resolveWorkspaceTrustForPath realpath I/O', () => {
   beforeEach(() => {
     canonicalizeAccessibleDirectoryMock.mockReset()
-    invalidateWorkspaceTrustPathCache()
   })
 
   it('never calls realpath canonicalization for a path with no trusted match', async () => {
@@ -33,26 +29,17 @@ describe('resolveWorkspaceTrustForPath cache behavior', () => {
     expect(canonicalizeAccessibleDirectoryMock).not.toHaveBeenCalled()
   })
 
-  it('caches a positive canonicalization so a repeated query does not re-invoke realpath', async () => {
+  // Why no memoization: a remembered realpath keeps authorizing a symlink that has
+  // since been retargeted outside the trusted root, which is the case phase 2 exists
+  // to catch. Each query must pay its own two syscalls.
+  it('re-canonicalizes both paths on every query rather than reusing an earlier answer', async () => {
     canonicalizeAccessibleDirectoryMock.mockImplementation((p: string) => Promise.resolve(p))
     const entries = [makeEntry('/home/user/work', true)]
 
     await resolveWorkspaceTrustForPath('/home/user/work/proj', entries)
     await resolveWorkspaceTrustForPath('/home/user/work/proj', entries)
 
-    // Why 2, not 4: each query canonicalizes the query path and the entry path once; the
-    // second query hits the warm cache for both, so total calls stay at the first query's count.
-    expect(canonicalizeAccessibleDirectoryMock).toHaveBeenCalledTimes(2)
-  })
-
-  it('invalidating the cache forces the next query to re-canonicalize', async () => {
-    canonicalizeAccessibleDirectoryMock.mockImplementation((p: string) => Promise.resolve(p))
-    const entries = [makeEntry('/home/user/work', true)]
-
-    await resolveWorkspaceTrustForPath('/home/user/work/proj', entries)
-    invalidateWorkspaceTrustPathCache()
-    await resolveWorkspaceTrustForPath('/home/user/work/proj', entries)
-
+    // Two per query: the query path and the entry path.
     expect(canonicalizeAccessibleDirectoryMock).toHaveBeenCalledTimes(4)
   })
 })

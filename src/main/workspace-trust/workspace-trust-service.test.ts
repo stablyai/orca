@@ -1,15 +1,11 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest'
 
-const { resolveWorkspaceTrustForPathMock, invalidateWorkspaceTrustPathCacheMock } = vi.hoisted(
-  () => ({
-    resolveWorkspaceTrustForPathMock: vi.fn(),
-    invalidateWorkspaceTrustPathCacheMock: vi.fn()
-  })
-)
+const { resolveWorkspaceTrustForPathMock } = vi.hoisted(() => ({
+  resolveWorkspaceTrustForPathMock: vi.fn()
+}))
 
 vi.mock('./workspace-trust-path-canonicalization', () => ({
-  resolveWorkspaceTrustForPath: resolveWorkspaceTrustForPathMock,
-  invalidateWorkspaceTrustPathCache: invalidateWorkspaceTrustPathCacheMock
+  resolveWorkspaceTrustForPath: resolveWorkspaceTrustForPathMock
 }))
 
 import {
@@ -37,7 +33,6 @@ function createFakeStore(initial: FakeSettings = {}) {
 describe('workspace-trust-service', () => {
   beforeEach(() => {
     resolveWorkspaceTrustForPathMock.mockReset()
-    invalidateWorkspaceTrustPathCacheMock.mockReset()
   })
 
   it('remembers a decline so re-querying the same path stays untrusted with no re-prompt', async () => {
@@ -51,8 +46,6 @@ describe('workspace-trust-service', () => {
     })
 
     expect(await getWorkspaceTrustDecision('/home/user/downloads', store)).toBe('declined')
-    // Why: cache must be invalidated on every trust write so a stale positive never survives it.
-    expect(invalidateWorkspaceTrustPathCacheMock).toHaveBeenCalled()
   })
 
   it('resolves trust through the two-phase canonicalization module', async () => {
@@ -143,5 +136,4 @@ describe('workspace-trust-service', () => {
 
     expect(updateSettings).toHaveBeenCalledWith(expect.anything(), { notifyListeners: true })
   })
-
 })
