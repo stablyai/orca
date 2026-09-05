@@ -9,6 +9,7 @@ type FileExplorerTreeStatusProps = {
   emptyMessage?: string
 }
 
+/** Treats even an empty error message as a failed read, keeping unreadable directories distinct from empty ones. */
 export function FileExplorerTreeStatus({
   isLoading,
   error,

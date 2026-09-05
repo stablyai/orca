@@ -19,6 +19,7 @@ function stopRightButtonMenuSelection(event: React.PointerEvent): void {
   event.stopPropagation()
 }
 
+/** Targets creation and paste at the displayed directory while keeping workspace operations rooted at the worktree. */
 export function FileExplorerBackgroundMenu({
   open,
   onOpenChange,

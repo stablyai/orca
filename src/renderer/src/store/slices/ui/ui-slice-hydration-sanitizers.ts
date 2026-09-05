@@ -240,6 +240,7 @@ export function migrateStatusBarItems(items: readonly string[] | undefined): Sta
   return out as StatusBarItem[]
 }
 
+/** Normalizes persisted explorer records before hydration, including malformed or absent legacy values. */
 export function sanitizeExplorerPreferences(
   ui: PersistedUIState
 ): Pick<AppState, 'explorerDisplayRootByWorktree' | 'showDotfilesByWorktree'> {

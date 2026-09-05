@@ -97,6 +97,7 @@ function stringArrayEqual(a: readonly string[], b: readonly string[]): boolean {
   return a === b || (a.length === b.length && a.every((value, i) => value === b[i]))
 }
 
+/** Compares collection fields by value so hydration does not produce redundant persistence writes from new identities. */
 function writeFieldEqual(field: keyof PersistedUIWriteBaseline, a: unknown, b: unknown): boolean {
   if (field === 'filterRepoIds') {
     return stringArrayEqual(a as readonly string[], b as readonly string[])

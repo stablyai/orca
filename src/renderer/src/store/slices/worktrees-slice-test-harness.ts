@@ -126,6 +126,7 @@ export function resetRemoteRuntimeMocks() {
   })
 }
 
+/** Supplies the worktree slice with the minimal UI and runtime state needed to exercise creation and teardown. */
 export function createTestStore() {
   return create<AppState>()(
     (...a) =>

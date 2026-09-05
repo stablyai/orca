@@ -24,8 +24,10 @@ import { callRuntimeResult } from './web-runtime-calls'
 import { requireActiveEnvironmentOrNull } from './web-runtime-session'
 import { UI_STORAGE_KEY, noopUnsubscribe, writeJson } from './web-storage'
 
+/** Combines browser-local preferences with host persistence; acknowledged writes remain distinct from best-effort writes. */
 export function createWebUiApi(): NonNullable<Partial<PreloadApi>['ui']> {
   const explorerRoots = createWebExplorerRootSync()
+  /** Captures the target host and strips browser-local or unsupported fields before sending a UI update. */
   const prepareHostUpdates = (updates: Parameters<PreloadApi['ui']['set']>[0]) => {
     const environmentId = requireActiveEnvironmentOrNull()?.id
     const hostUpdates = omitPairingLocalUiFields(updates)
@@ -34,6 +36,7 @@ export function createWebUiApi(): NonNullable<Partial<PreloadApi>['ui']> {
   }
   let zoomLevel = readLocalWebUIState().uiZoomLevel
   return {
+    /** Hydrates from the active host after replaying pending roots, falling back to local state on failure or host changes. */
     get: async () => {
       try {
         const environmentId = requireActiveEnvironmentOrNull()?.id
@@ -65,6 +68,7 @@ export function createWebUiApi(): NonNullable<Partial<PreloadApi>['ui']> {
         return readLocalWebUIState()
       }
     },
+    /** Persists locally first and attempts the host write without propagating offline failures to fire-and-forget callers. */
     set: async (updates) => {
       const next = mergeWebUIState(readLocalWebUIState(), updates)
       writeJson(UI_STORAGE_KEY, next)
@@ -79,9 +83,7 @@ export function createWebUiApi(): NonNullable<Partial<PreloadApi>['ui']> {
         // Why: unpaired/offline web clients still need local UI persistence.
       }
     },
-    // Why a separate entry point: set must stay best-effort for its many fire-and-forget
-    // callers, but the diff writer must NOT fold a patch the host never received into its
-    // baseline — that write would silently never be retried (STA-5781).
+    /** Rejects failed or stripped host updates so the diff writer cannot acknowledge preferences the host never received. */
     setWithAck: async (updates) => {
       const next = mergeWebUIState(readLocalWebUIState(), updates)
       writeJson(UI_STORAGE_KEY, next)

@@ -34,6 +34,7 @@ type FileExplorerToolbarProps = {
   onToggleDotfiles: () => void
 }
 
+/** Shares one toolbar across explorer views; root selection is supplied only where directory scoping applies. */
 export function FileExplorerToolbar({
   repoName,
   rootSelect,

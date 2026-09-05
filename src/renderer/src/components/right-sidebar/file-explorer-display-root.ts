@@ -6,6 +6,7 @@ import { splitPathSegments } from './path-tree'
 export { FILE_EXPLORER_FULL_ROOT }
 export type ExplorerRootOption = { value: string; label: string }
 
+/** Returns deduplicated safe sparse-directory choices plus full root, or null when scoping is unavailable. */
 export function getExplorerDisplayRootOptions(
   worktree: {
     isSparse?: boolean
@@ -38,6 +39,7 @@ export function getExplorerDisplayRootOptions(
     : null
 }
 
+/** Honors a valid saved choice; otherwise defaults to the first sparse directory or the full-root sentinel. */
 export function resolveExplorerDisplayRootChoice(
   options: ExplorerRootOption[] | null,
   saved?: string
@@ -47,6 +49,7 @@ export function resolveExplorerDisplayRootChoice(
     : (options?.[1]?.value ?? FILE_EXPLORER_FULL_ROOT)
 }
 
+/** Resolves a display choice against the actual workspace root; the full-root sentinel leaves that root intact. */
 export function getExplorerDisplayRootPath(
   worktreePath: string | null,
   choice: string
@@ -56,6 +59,7 @@ export function getExplorerDisplayRootPath(
     : worktreePath
 }
 
+/** Returns the ancestor depth to subtract from cached row indentation, without rebasing file identities. */
 export function getExplorerDisplayDepth(
   worktreePath: string | null,
   displayRootPath: string | null
@@ -64,6 +68,7 @@ export function getExplorerDisplayDepth(
   return relative ? splitPathSegments(relative).length : 0
 }
 
+/** Includes the displayed root for loading and refresh without persisting it as a user-expanded folder. */
 export function getExplorerEffectiveExpanded(
   expanded: Set<string>,
   displayRootPath: string | null

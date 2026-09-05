@@ -54,6 +54,7 @@ export type UIUpdateOperations = {
   notifyUIChanged: () => void
 }
 
+/** Applies a sanitized partial update while keeping active-view persistence separate from durable UI fields. */
 export function updatePersistedUI(
   operations: UIUpdateOperations,
   updates: Partial<PersistedState['ui']>

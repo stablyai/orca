@@ -31,6 +31,7 @@ type UseFileExplorerRevealParams = {
   virtualizer: Virtualizer<HTMLDivElement, Element>
 }
 
+/** Expands and selects reveal targets; explicit outside-scope requests restore full-root navigation. */
 export function useFileExplorerReveal({
   activeWorktreeId,
   worktreePath,

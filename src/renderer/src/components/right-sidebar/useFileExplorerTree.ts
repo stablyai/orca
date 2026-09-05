@@ -44,6 +44,7 @@ type UseFileExplorerTreeResult = {
   resetAndLoad: () => void
 }
 
+/** Owns worktree-addressed directory caches and load tokens; display scoping changes traversal rather than cache identity. */
 export function useFileExplorerTree(
   worktreePath: string | null,
   expanded: Set<string>,

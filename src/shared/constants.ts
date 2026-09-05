@@ -239,6 +239,7 @@ export function getDefaultPersistedState(homedir: string): PersistedState {
   }
 }
 
+/** Creates fresh UI defaults with completed migration markers so new profiles are not treated as legacy installations. */
 export function getDefaultUIState(): PersistedUIState {
   return {
     lastActiveRepoId: null,

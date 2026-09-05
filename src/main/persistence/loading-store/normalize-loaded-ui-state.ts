@@ -21,6 +21,7 @@ import {
 import type { PersistedState } from '../../../shared/persisted-state-types'
 import type { OnboardingState } from '../../../shared/onboarding-state-types'
 
+/** Normalizes legacy UI payloads and marks one-time migrations for saving without replacing explicit user choices. */
 export function normalizeLoadedUiState(
   parsed: PersistedState,
   defaults: PersistedState,

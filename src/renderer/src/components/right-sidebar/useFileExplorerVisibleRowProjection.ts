@@ -32,6 +32,7 @@ type VisibleFileExplorerRowProjectionInput = {
   displayRootPath?: string | null
 }
 
+/** Collects worktree-relative paths beneath the displayed root, respecting expanded folders and dotfile visibility. */
 export function getFileExplorerIgnoredQueryRelativePaths(
   input: VisibleFileExplorerRowProjectionInput,
   showDotfiles: boolean
@@ -63,6 +64,7 @@ export function getFileExplorerIgnoredQueryRelativePaths(
   return relativePaths
 }
 
+/** Projects the displayed subtree without rebasing row paths, including when filename filtering synthesizes nodes. */
 export function createVisibleFileExplorerRowProjection(
   input: VisibleFileExplorerRowProjectionInput,
   options: VisibleFileExplorerRowProjectionOptions
@@ -152,6 +154,7 @@ function useContentStableRelativePaths(relativePaths: string[], enabled: boolean
   return stable
 }
 
+/** Combines scoped rows with host-aware ignore checks while retaining worktree-relative Git query paths. */
 export function useFileExplorerVisibleRowProjection(
   activeWorktreeId: string | null,
   worktreePath: string | null,

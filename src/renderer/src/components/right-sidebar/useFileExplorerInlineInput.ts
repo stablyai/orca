@@ -34,6 +34,7 @@ type UseFileExplorerInlineInputResult = {
   handleInlineSubmit: (value: string) => void
 }
 
+/** Positions creation input under the displayed root while retaining true workspace paths for edits and undo. */
 export function useFileExplorerInlineInput({
   activeWorktreeId,
   worktreePath,

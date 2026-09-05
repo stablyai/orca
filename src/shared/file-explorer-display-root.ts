@@ -1,5 +1,6 @@
 export const FILE_EXPLORER_FULL_ROOT = '/'
 
+/** Accepts only string-valued choices with safe record keys; directory eligibility is validated against the current worktree. */
 export function normalizeExplorerDisplayRootByWorktree(value: unknown): Record<string, string> {
   if (!value || typeof value !== 'object' || Array.isArray(value)) {
     return {}
@@ -14,6 +15,7 @@ export function normalizeExplorerDisplayRootByWorktree(value: unknown): Record<s
   )
 }
 
+/** Preserves full-root navigation for preexisting sparse worktrees without replacing explicit saved choices. */
 export function migrateExplorerDisplayRoots(
   saved: unknown,
   migrated: boolean,

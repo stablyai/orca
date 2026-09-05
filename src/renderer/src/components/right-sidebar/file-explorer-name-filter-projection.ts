@@ -149,6 +149,7 @@ function createSyntheticNode(
   }
 }
 
+/** Builds a filtered subtree for the display root while retaining worktree-relative paths on synthetic nodes. */
 export function createNameFilteredFileExplorerProjection({
   collapsedPaths,
   ignoredSet,

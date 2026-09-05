@@ -49,6 +49,7 @@ type UseFileExplorerDragDropResult = {
   clearNativeDragState: () => void
 }
 
+/** Routes background drops to the displayed directory while preserving the worktree context for move operations. */
 export function useFileExplorerDragDrop({
   worktreePath,
   displayRootPath = worktreePath,

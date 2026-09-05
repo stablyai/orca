@@ -108,11 +108,7 @@ it.each([true, false])(
       succeeds ? Promise.resolve({}) : Promise.reject(new Error('Offline'))
     )
     const writing = ui.setWithAck!({ explorerDisplayRootByWorktree: { wt: 'second' } })
-    if (succeeds) {
-      await writing
-    } else {
-      await expect(writing).rejects.toThrow('Offline')
-    }
+    await (succeeds ? writing : expect(writing).rejects.toThrow('Offline'))
     finish()
     expect((await reading).explorerDisplayRootByWorktree).toEqual({ wt: 'second' })
     runtime.call.mockClear().mockResolvedValue({ ui: getDefaultUIState() })

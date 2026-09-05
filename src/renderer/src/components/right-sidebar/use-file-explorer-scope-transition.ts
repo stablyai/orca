@@ -2,6 +2,7 @@ import { useLayoutEffect, useRef } from 'react'
 import type { useFileExplorerTreePaneState } from './use-file-explorer-tree-pane-state'
 import type { useFileExplorerSelection } from './useFileExplorerSelection'
 
+/** Clears transient interactions when scope changes within a worktree, preserving directory caches and undo state. */
 export function useFileExplorerScopeTransition({
   displayRootPath,
   activeWorktreeId,

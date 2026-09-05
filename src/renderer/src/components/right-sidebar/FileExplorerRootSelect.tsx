@@ -16,6 +16,7 @@ export type FileExplorerRootSelectProps = {
   disabled: boolean
 }
 
+/** Exposes sparse-root choices with bounded path labels and a menu positioned outside the draggable titlebar. */
 export function FileExplorerRootSelect({
   options,
   ...props

@@ -30,6 +30,7 @@ export type RefreshFileExplorerExpandedDirsParams = {
   onDirCommitted?: (dirPath: string) => void
 }
 
+/** Refreshes directories with bounded concurrency and load-token ownership, preserving cached children on read failure. */
 export async function refreshFileExplorerExpandedDirs({
   dirs,
   worktreePath,
@@ -80,6 +81,7 @@ export async function refreshFileExplorerExpandedDirs({
     }
   }
 
+  /** Commits only still-owned reads so superseded refreshes cannot replace newer directory data. */
   const commitPendingResults = (): void => {
     if (stopped) {
       return

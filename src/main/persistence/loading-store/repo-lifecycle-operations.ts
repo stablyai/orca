@@ -246,6 +246,7 @@ export function pruneMobileClientTabSelections(
   }
 }
 
+/** Mutates UI state to remove selections and preferences whose owning repositories were deregistered. */
 function pruneDeregisteredRepoUiResidue(
   ui: PersistedState['ui'],
   orphanRepoIds: ReadonlySet<string>
