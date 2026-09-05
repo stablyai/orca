@@ -4,6 +4,7 @@ import { cleanup, render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { TooltipProvider } from '@/components/ui/tooltip'
+import type { AiVaultSessionMessageHit } from '../../../../shared/ai-vault-session-message-hit'
 import type { AiVaultSession } from '../../../../shared/ai-vault-types'
 import type { AiVaultSessionWorktreeInfo } from './ai-vault-session-worktree'
 import { VaultSessionRow } from './AiVaultSessionRow'
@@ -62,6 +63,8 @@ function renderRow(
     worktreeInfo?: AiVaultSessionWorktreeInfo | null
     onToggleDetails?: () => void
     onRequestDelete?: () => void
+    searchHit?: AiVaultSessionMessageHit
+    onJumpToHit?: () => void
   } = {}
 ) {
   return render(
@@ -88,6 +91,8 @@ function renderRow(
         onCopyId={vi.fn()}
         onCopyPath={vi.fn()}
         onRequestDelete={overrides.onRequestDelete ?? vi.fn()}
+        searchHit={overrides.searchHit}
+        onJumpToHit={overrides.onJumpToHit}
       />
     </TooltipProvider>
   )
@@ -149,6 +154,52 @@ describe('VaultSessionRow agent metadata line', () => {
     // The details panel replaces the one-line preview with the full turns.
     expect(screen.getByText('Latest turns')).toBeTruthy()
     expect(screen.queryByText(': Ready when you are')).toBeNull()
+  })
+
+  it('shows the matched message snippet and jumps without expanding', async () => {
+    const onJumpToHit = vi.fn()
+    const onToggleDetails = vi.fn()
+    renderRow({
+      onJumpToHit,
+      onToggleDetails,
+      searchHit: {
+        sessionId: session.id,
+        role: 'user',
+        snippet: '…please generate 二维码…',
+        jump: {
+          sessionId: session.id,
+          messageId: 12,
+          filePath: session.filePath,
+          lineNumber: 3,
+          byteOffset: 40,
+          matchLength: 3
+        }
+      }
+    })
+    const user = userEvent.setup()
+    await user.click(screen.getByRole('button', { name: /二维码/ }))
+    expect(onJumpToHit).toHaveBeenCalledTimes(1)
+    expect(onToggleDetails).not.toHaveBeenCalled()
+  })
+
+  it('labels an error-scope hit as Error', () => {
+    renderRow({
+      searchHit: {
+        sessionId: session.id,
+        role: 'error',
+        snippet: 'rate limit exceeded',
+        jump: {
+          sessionId: session.id,
+          messageId: 4,
+          filePath: session.filePath,
+          lineNumber: 8,
+          byteOffset: 120,
+          matchLength: 10
+        }
+      }
+    })
+    expect(screen.getByText('Error')).toBeTruthy()
+    expect(screen.getByText(': rate limit exceeded')).toBeTruthy()
   })
 
   it('renders the worktree badge once when expanded', () => {

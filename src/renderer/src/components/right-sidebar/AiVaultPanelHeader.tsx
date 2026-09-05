@@ -1,18 +1,22 @@
-import { LoaderCircle, RefreshCw, Search, X } from 'lucide-react'
+import { LoaderCircle, RefreshCw } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { translate } from '@/i18n/i18n'
 import type {
   AiVaultAgent,
   AiVaultGroup,
   AiVaultScope,
-  AiVaultSort
+  AiVaultSessionHost,
+  AiVaultSort,
+  AiVaultTimeRange
 } from '../../../../shared/ai-vault-types'
 import type { ExecutionHostScope } from '../../../../shared/execution-host'
+import type { AiVaultSearchScope } from '../../../../shared/ai-vault-session-search-scope'
 import { VaultHostScopeMenu, VaultScopeSwitch, VaultViewMenu } from './AiVaultPanelControls'
+import { AiVaultSearchField } from './AiVaultSearchField'
 import type { AiVaultHostScopeOption } from './ai-vault-host-scope'
 import type { AiVaultSessionLimit } from './ai-vault-session-limit'
 
-type AiVaultPanelHeaderProps = {
+export type AiVaultPanelHeaderProps = {
   query: string
   loading: boolean
   shownCount: number
@@ -28,8 +32,17 @@ type AiVaultPanelHeaderProps = {
   group: AiVaultGroup
   hideEmptySessions: boolean
   sessionLimit: AiVaultSessionLimit
+  timeRange: AiVaultTimeRange
+  hosts: readonly AiVaultSessionHost[]
   adjustmentCount: number
+  aiLoading: boolean
+  usedModel: boolean
+  aiAgentConfigured: boolean
+  searchScope: AiVaultSearchScope
+  rgLoading: boolean
+  rgHitCount: number | null
   onQueryChange: (query: string) => void
+  onSearchScopeChange: (searchScope: AiVaultSearchScope) => void
   onScopeChange: (scope: AiVaultScope) => void
   onExecutionHostScopeChange: (scope: ExecutionHostScope) => void
   onAgentEnabledChange: (agent: AiVaultAgent, enabled: boolean) => void
@@ -38,6 +51,9 @@ type AiVaultPanelHeaderProps = {
   onGroupChange: (group: AiVaultGroup) => void
   onHideEmptySessionsChange: (hideEmptySessions: boolean) => void
   onSessionLimitChange: (limit: AiVaultSessionLimit) => void
+  onTimeRangeChange: (timeRange: AiVaultTimeRange) => void
+  onHostEnabledChange: (host: AiVaultSessionHost, enabled: boolean) => void
+  onAiSearch: () => void
   onReset: () => void
   onRefresh: () => void
 }
@@ -58,8 +74,17 @@ export function AiVaultPanelHeader({
   group,
   hideEmptySessions,
   sessionLimit,
+  timeRange,
+  hosts,
   adjustmentCount,
+  aiLoading,
+  usedModel,
+  aiAgentConfigured,
+  searchScope,
+  rgLoading,
+  rgHitCount,
   onQueryChange,
+  onSearchScopeChange,
   onScopeChange,
   onExecutionHostScopeChange,
   onAgentEnabledChange,
@@ -68,6 +93,9 @@ export function AiVaultPanelHeader({
   onGroupChange,
   onHideEmptySessionsChange,
   onSessionLimitChange,
+  onTimeRangeChange,
+  onHostEnabledChange,
+  onAiSearch,
   onReset,
   onRefresh
 }: AiVaultPanelHeaderProps): React.JSX.Element {
@@ -125,6 +153,9 @@ export function AiVaultPanelHeader({
             group={group}
             hideEmptySessions={hideEmptySessions}
             sessionLimit={sessionLimit}
+            timeRange={timeRange}
+            hosts={hosts}
+            searchScope={searchScope}
             adjustmentCount={adjustmentCount}
             onAgentEnabledChange={onAgentEnabledChange}
             onAllAgentsEnabledChange={onAllAgentsEnabledChange}
@@ -132,6 +163,9 @@ export function AiVaultPanelHeader({
             onGroupChange={onGroupChange}
             onHideEmptySessionsChange={onHideEmptySessionsChange}
             onSessionLimitChange={onSessionLimitChange}
+            onTimeRangeChange={onTimeRangeChange}
+            onHostEnabledChange={onHostEnabledChange}
+            onSearchScopeChange={onSearchScopeChange}
             onReset={onReset}
           />
           <Button
@@ -165,35 +199,19 @@ export function AiVaultPanelHeader({
         />
       </div>
 
-      <div className="mt-2 flex h-8 items-center gap-1.5 rounded-md border border-sidebar-border bg-input/50 px-2 focus-within:border-sidebar-ring focus-within:ring-[2px] focus-within:ring-sidebar-ring/30">
-        <Search className="size-3.5 shrink-0 text-muted-foreground" />
-        <input
-          value={query}
-          onChange={(event) => onQueryChange(event.target.value)}
-          placeholder={translate(
-            'auto.components.right.sidebar.AiVaultPanel.searchSessions',
-            'Search sessions'
-          )}
-          className="min-w-0 flex-1 bg-transparent py-1.5 text-xs text-foreground outline-none placeholder:text-muted-foreground/50"
-          spellCheck={false}
-        />
-        {loading ? <LoaderCircle className="size-3 animate-spin text-muted-foreground" /> : null}
-        {query ? (
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon-xs"
-            className="size-5 rounded-sm text-muted-foreground hover:text-foreground"
-            onClick={() => onQueryChange('')}
-            aria-label={translate(
-              'auto.components.right.sidebar.AiVaultPanel.clearSearch',
-              'Clear search'
-            )}
-          >
-            <X className="size-3" />
-          </Button>
-        ) : null}
-      </div>
+      <AiVaultSearchField
+        query={query}
+        loading={loading}
+        aiLoading={aiLoading}
+        usedModel={usedModel}
+        aiAgentConfigured={aiAgentConfigured}
+        searchScope={searchScope}
+        rgLoading={rgLoading}
+        rgHitCount={rgHitCount}
+        onQueryChange={onQueryChange}
+        onSearchScopeChange={onSearchScopeChange}
+        onAiSearch={onAiSearch}
+      />
     </div>
   )
 }

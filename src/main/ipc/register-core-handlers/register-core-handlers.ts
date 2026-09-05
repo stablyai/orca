@@ -25,6 +25,7 @@ import { registerRuntimeHandlers } from '../runtime'
 import { registerRuntimeEnvironmentHandlers } from '../runtime-environments'
 import { registerEphemeralVmHandlers } from '../ephemeral-vm'
 import { registerAiVaultHandlers } from '../ai-vault'
+import { getLocalGitOptionsForRepo } from '../local-worktree-runtime-options'
 import { registerNativeChatHandlers } from '../native-chat'
 import { registerNotificationHandlers } from '../notifications'
 import { registerNotebookHandlers } from '../notebook'
@@ -225,7 +226,10 @@ export function registerCoreHandlers(
     resolveRuntimeAiVaultSessionTitles: async (environmentId, args) =>
       resolveRuntimeAiVaultSessionTitles(app.getPath('userData'), environmentId, args),
     prepareRuntimeSessionResume: async (environmentId, args) =>
-      prepareRuntimeAiVaultSessionResume(app.getPath('userData'), environmentId, args)
+      prepareRuntimeAiVaultSessionResume(app.getPath('userData'), environmentId, args),
+    getSettings: () => store.getSettings(),
+    getRepo: (repoId) => store.getRepo(repoId),
+    getWslDistroForRepo: (repo) => getLocalGitOptionsForRepo(store, repo).wslDistro
   })
   registerNativeChatHandlers()
   registerClipboardHandlers(store)

@@ -556,7 +556,10 @@ describe('registerCoreHandlers', () => {
         getAdditionalCodexHomePaths: getAdditionalAiVaultCodexHomePaths,
         getActiveRuntimeAiVaultHostInfos: expect.any(Function),
         scanRuntimeAiVaultSessions: expect.any(Function),
-        prepareRuntimeSessionResume: expect.any(Function)
+        prepareRuntimeSessionResume: expect.any(Function),
+        getSettings: expect.any(Function),
+        getRepo: expect.any(Function),
+        getWslDistroForRepo: expect.any(Function)
       })
     )
     expect(aiVaultOptions.getActiveRuntimeAiVaultHostInfos()).toEqual([])

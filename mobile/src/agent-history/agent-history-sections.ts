@@ -39,14 +39,22 @@ export function buildMobileAgentHistorySections(
   // filtering everything out (which would flash an empty list); the memo re-runs
   // with real paths once worktree.ps resolves.
   const narrowByPath = options.scope !== 'all' && options.scopeFilterPaths.length > 0
-  const filtered = filterAiVaultSessions(sessions, {
-    query: options.query,
-    agents: AI_VAULT_AGENTS,
-    scope: narrowByPath ? 'workspace' : 'all',
-    sort: 'updated',
-    activeWorktreePaths: narrowByPath ? options.scopeFilterPaths : [],
-    hideEmptySessions: true
-  })
+  const filtered = filterAiVaultSessions(
+    sessions,
+    {
+      query: options.query,
+      agents: AI_VAULT_AGENTS,
+      scope: narrowByPath ? 'workspace' : 'all',
+      sort: 'updated',
+      activeWorktreePaths: narrowByPath ? options.scopeFilterPaths : [],
+      hideEmptySessions: true
+    },
+    {
+      // Why: mobile has no rg/FTS retrieval; keep typed queries on card metadata.
+      forceCardTerms: true,
+      nowMs: options.now
+    }
+  )
 
   const groups = groupAiVaultSessions(filtered, 'folder')
   return groups.map((group) => ({

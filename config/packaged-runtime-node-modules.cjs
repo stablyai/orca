@@ -18,6 +18,10 @@ const PACKAGED_RUNTIME_PACKAGE_ROOTS = [
   '@linear/sdk',
   '@parcel/watcher',
   'electron-updater',
+  // Why: Session History FTS require()s this WASM sql.js build from main. Left
+  // off the runtime copy, packaged Electron dies at bootstrap with
+  // "Cannot find module 'fts5-sql-bundle'".
+  'fts5-sql-bundle',
   'i18next',
   'jsonc-parser',
   'node-pty',

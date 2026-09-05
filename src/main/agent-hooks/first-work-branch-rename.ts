@@ -22,7 +22,7 @@ import {
 } from '../git/branch-rename'
 import {
   generateBranchNameFromContext,
-  resolveTextGenerationParams
+  resolveBranchNameGenerationParams
 } from '../text-generation/commit-message-text-generation'
 import type { CommitMessageAgentEnvironmentResolvers } from '../text-generation/commit-message-agent-environment'
 import type { AgentGenerationFailureOutput } from '../text-generation/agent-failure-output'
@@ -209,7 +209,7 @@ async function runAutoRename(
 
   const settings = deps.getSettings()
   const hostKey = getCommitMessageModelDiscoveryHostKey(repo.connectionId ?? null)
-  const resolvedParams = resolveTextGenerationParams(settings, hostKey, 'branchName', repo)
+  const resolvedParams = resolveBranchNameGenerationParams(settings, hostKey, repo)
   if (!resolvedParams.ok) {
     // Why: a generation-step failure (vs a benign skip) is user-actionable, so surface it on the card.
     deps.setRenameError(worktreeId, resolvedParams.error)

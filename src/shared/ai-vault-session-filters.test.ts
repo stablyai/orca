@@ -9,35 +9,15 @@ import {
   parseVaultQuery
 } from './ai-vault-session-filters'
 import { sessionPreviewSearchText } from './ai-vault-session-display'
+import { AiVaultSessionSearchIndex } from './ai-vault-session-index'
+import { createAiVaultTestSession } from './ai-vault-session-test-session'
 
-const baseSession: AiVaultSession = {
+const baseSession: AiVaultSession = createAiVaultTestSession({
   id: 'claude:1',
-  executionHostId: 'local',
-  agent: 'claude',
-  sessionId: 'session-1',
-  title: 'Implement vault filters',
-  cwd: '/Users/ada/repo/app',
-  branch: 'feature/vault',
-  model: 'claude-sonnet-4-5',
-  filePath: '/Users/ada/.claude/projects/session-1.jsonl',
-  codexHome: null,
-  createdAt: '2026-05-01T10:00:00.000Z',
-  updatedAt: '2026-05-01T10:10:00.000Z',
-  modifiedAt: '2026-05-01T10:10:00.000Z',
-  messageCount: 4,
-  totalTokens: 1200,
-  previewMessages: [
-    { role: 'user', text: 'add the scope tabs', timestamp: null },
-    { role: 'assistant', text: 'done — added Workspace/Project/All', timestamp: null }
-  ],
-  queuedMessageCount: 0,
-  subagentTranscriptCount: 0,
-  resumeCommand: "cd '/Users/ada/repo/app' && claude --resume 'session-1'",
-  subagent: null
-}
+  sessionId: 'session-1'
+})
 
-const otherSession: AiVaultSession = {
-  ...baseSession,
+const otherSession: AiVaultSession = createAiVaultTestSession({
   id: 'codex:2',
   agent: 'codex',
   sessionId: 'session-2',
@@ -46,6 +26,14 @@ const otherSession: AiVaultSession = {
   branch: 'fix/terminal',
   filePath: '/Users/ada/.codex/sessions/session-2.jsonl',
   previewMessages: []
+})
+
+const emptyParsedQueryExtras = {
+  modelTerms: [],
+  branchTerms: [],
+  hostTerms: [],
+  afterMs: null,
+  beforeMs: null
 }
 
 describe('/shared ai-vault-session-filters (lifted core)', () => {
@@ -60,6 +48,33 @@ describe('/shared ai-vault-session-filters (lifted core)', () => {
         hideEmptySessions: true
       }).map((session) => session.id)
     ).toEqual(['claude:1'])
+  })
+
+  it('keeps card-term matching when searchScope is unset', () => {
+    expect(
+      filterAiVaultSessions([baseSession, otherSession], {
+        query: 'repair',
+        agents: ['claude', 'codex'],
+        scope: 'all',
+        sort: 'updated',
+        activeWorktreePaths: [],
+        hideEmptySessions: true
+      }).map((session) => session.id)
+    ).toEqual(['codex:2'])
+  })
+
+  it('skips card terms for an explicit full-text rg scope', () => {
+    expect(
+      filterAiVaultSessions([baseSession, otherSession], {
+        query: 'repair',
+        agents: ['claude', 'codex'],
+        scope: 'all',
+        sort: 'updated',
+        activeWorktreePaths: [],
+        hideEmptySessions: true,
+        searchScope: 'full'
+      }).map((session) => session.id)
+    ).toEqual(['claude:1', 'codex:2'])
   })
 
   it('hides empty sessions by default and keeps non-empty ones', () => {
@@ -177,7 +192,8 @@ describe('/shared ai-vault-session-filters (lifted core)', () => {
     expect(parseVaultQuery('hello repo:orca path:/tmp world')).toEqual({
       terms: ['hello', 'world'],
       repoTerms: ['orca'],
-      pathTerms: ['/tmp']
+      pathTerms: ['/tmp'],
+      ...emptyParsedQueryExtras
     })
   })
 
@@ -185,7 +201,8 @@ describe('/shared ai-vault-session-filters (lifted core)', () => {
     expect(parseVaultQuery('repo:"my repo" path:"/Users/ada/My Project"')).toEqual({
       terms: [],
       repoTerms: ['my repo'],
-      pathTerms: ['/users/ada/my project']
+      pathTerms: ['/users/ada/my project'],
+      ...emptyParsedQueryExtras
     })
   })
 
@@ -196,5 +213,169 @@ describe('/shared ai-vault-session-filters (lifted core)', () => {
 
   it('builds preview search text from conversation turns', () => {
     expect(sessionPreviewSearchText(baseSession)).toContain('scope tabs')
+  })
+})
+
+describe('filterAiVaultSessions dimensions', () => {
+  const nowMs = Date.parse('2026-05-08T12:00:00.000Z')
+
+  it('filters by time range, host, model:, branch:, and after: operators', () => {
+    const localRecent = createAiVaultTestSession({
+      id: 'local-recent',
+      title: 'Recent local pairing fix',
+      updatedAt: '2026-05-08T08:00:00.000Z',
+      model: 'claude-sonnet-4-5',
+      branch: 'fix/pairing'
+    })
+    const wslOld = createAiVaultTestSession({
+      id: 'wsl-old',
+      title: 'Old WSL pairing',
+      cwd: String.raw`\\wsl.localhost\Ubuntu\home\ada\repo`,
+      filePath: String.raw`\\wsl.localhost\Ubuntu\home\ada\.claude\projects\old.jsonl`,
+      updatedAt: '2026-03-01T08:00:00.000Z',
+      model: 'gpt-5.5',
+      branch: 'main'
+    })
+    const sessions = [localRecent, wslOld]
+    const index = new AiVaultSessionSearchIndex()
+    index.sync(sessions)
+
+    expect(
+      filterAiVaultSessions(
+        sessions,
+        {
+          query: '',
+          agents: ['claude'],
+          scope: 'all',
+          sort: 'updated',
+          activeWorktreePaths: [],
+          hideEmptySessions: true,
+          timeRange: '7d',
+          hosts: ['local']
+        },
+        { index, nowMs }
+      ).map((session) => session.id)
+    ).toEqual(['local-recent'])
+
+    expect(
+      filterAiVaultSessions(
+        sessions,
+        {
+          query: 'host:wsl model:gpt branch:main',
+          agents: ['claude'],
+          scope: 'all',
+          sort: 'updated',
+          activeWorktreePaths: [],
+          hideEmptySessions: true
+        },
+        { index, nowMs }
+      ).map((session) => session.id)
+    ).toEqual(['wsl-old'])
+
+    expect(
+      filterAiVaultSessions(
+        sessions,
+        {
+          query: 'after:2026-05-07',
+          agents: ['claude'],
+          scope: 'all',
+          sort: 'updated',
+          activeWorktreePaths: [],
+          hideEmptySessions: true
+        },
+        { index, nowMs }
+      ).map((session) => session.id)
+    ).toEqual(['local-recent'])
+  })
+
+  it('reuses an existing index so a later query does not rebuild postings', () => {
+    const session = createAiVaultTestSession({
+      id: 'claude:1',
+      title: 'Fixture ordering'
+    })
+    const index = new AiVaultSessionSearchIndex()
+    index.sync([session])
+    const upsertSpySize = index.size
+
+    const matches = filterAiVaultSessions(
+      [session],
+      {
+        query: 'fixture',
+        agents: ['claude'],
+        scope: 'all',
+        sort: 'updated',
+        activeWorktreePaths: [],
+        hideEmptySessions: true,
+        searchScope: 'title'
+      },
+      { index }
+    )
+
+    expect(matches.map((entry) => entry.id)).toEqual(['claude:1'])
+    expect(index.size).toBe(upsertSpySize)
+  })
+
+  it('uses title and summary card fields and leaves full-text terms for rg', () => {
+    const titled = createAiVaultTestSession({
+      id: 'title-hit',
+      title: 'alpha-title-only',
+      previewMessages: [{ role: 'user', text: 'unrelated preview', timestamp: null }]
+    })
+    const summarized = createAiVaultTestSession({
+      id: 'summary-hit',
+      title: 'Other session',
+      previewMessages: [{ role: 'user', text: 'alpha-summary-only first prompt', timestamp: null }]
+    })
+    const sessions = [titled, summarized]
+    const index = new AiVaultSessionSearchIndex()
+    index.sync(sessions)
+
+    expect(
+      filterAiVaultSessions(
+        sessions,
+        {
+          query: 'alpha-title-only',
+          agents: ['claude'],
+          scope: 'all',
+          sort: 'updated',
+          activeWorktreePaths: [],
+          hideEmptySessions: true,
+          searchScope: 'title'
+        },
+        { index }
+      ).map((session) => session.id)
+    ).toEqual(['title-hit'])
+
+    expect(
+      filterAiVaultSessions(
+        sessions,
+        {
+          query: 'alpha-summary-only',
+          agents: ['claude'],
+          scope: 'all',
+          sort: 'updated',
+          activeWorktreePaths: [],
+          hideEmptySessions: true,
+          searchScope: 'summary'
+        },
+        { index }
+      ).map((session) => session.id)
+    ).toEqual(['summary-hit'])
+
+    expect(
+      filterAiVaultSessions(
+        sessions,
+        {
+          query: 'alpha-title-only',
+          agents: ['claude'],
+          scope: 'all',
+          sort: 'updated',
+          activeWorktreePaths: [],
+          hideEmptySessions: true,
+          searchScope: 'full'
+        },
+        { index }
+      ).map((session) => session.id)
+    ).toEqual(['title-hit', 'summary-hit'])
   })
 })

@@ -1,8 +1,11 @@
 import {
   AI_VAULT_AGENTS,
+  AI_VAULT_SESSION_HOSTS,
   type AiVaultAgent,
   type AiVaultGroup,
-  type AiVaultSort
+  type AiVaultSessionHost,
+  type AiVaultSort,
+  type AiVaultTimeRange
 } from '../../../../shared/ai-vault-types'
 import { DEFAULT_AI_VAULT_SESSION_LIMIT, type AiVaultSessionLimit } from './ai-vault-session-limit'
 
@@ -18,15 +21,22 @@ export function countAiVaultViewAdjustments(options: {
   group: AiVaultGroup
   hideEmptySessions: boolean
   sessionLimit: AiVaultSessionLimit
+  timeRange?: AiVaultTimeRange
+  hosts?: readonly AiVaultSessionHost[]
 }): number {
   // Why: count by membership, not length — an agent swap keeps the array length but
   // still deviates from the default of every agent enabled.
   const allAgentsEnabled = AI_VAULT_AGENTS.every((agent) => options.agents.includes(agent))
+  const allHostsEnabled = AI_VAULT_SESSION_HOSTS.every((host) =>
+    (options.hosts ?? AI_VAULT_SESSION_HOSTS).includes(host)
+  )
   return (
     (allAgentsEnabled ? 0 : 1) +
     (options.sort === DEFAULT_AI_VAULT_SORT ? 0 : 1) +
     (options.group === DEFAULT_AI_VAULT_GROUP ? 0 : 1) +
     (options.hideEmptySessions === DEFAULT_AI_VAULT_HIDE_EMPTY_SESSIONS ? 0 : 1) +
-    (options.sessionLimit === DEFAULT_AI_VAULT_SESSION_LIMIT ? 0 : 1)
+    (options.sessionLimit === DEFAULT_AI_VAULT_SESSION_LIMIT ? 0 : 1) +
+    ((options.timeRange ?? 'all') === 'all' ? 0 : 1) +
+    (allHostsEnabled ? 0 : 1)
   )
 }

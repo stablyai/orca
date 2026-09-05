@@ -7,6 +7,7 @@ import {
   AI_VAULT_SESSION_DRAG_START_EVENT,
   writeAiVaultSessionDragData
 } from '@/lib/ai-vault-session-drag'
+import type { AiVaultSessionMessageHit } from '../../../../shared/ai-vault-session-message-hit'
 import type { AiVaultScope, AiVaultSession } from '../../../../shared/ai-vault-types'
 import type { AiVaultResumeStartup } from '@/lib/ai-vault-resume-command'
 import { translate } from '@/i18n/i18n'
@@ -49,7 +50,9 @@ export function VaultSessionRow({
   onOpenLog,
   onRevealLog,
   onOpenCwd,
-  onRequestDelete
+  onRequestDelete,
+  searchHit,
+  onJumpToHit
 }: {
   session: AiVaultSession
   liveState: AgentStatusState | null
@@ -76,6 +79,8 @@ export function VaultSessionRow({
   onRevealLog?: () => void
   onOpenCwd?: () => void
   onRequestDelete: (session: AiVaultSession) => void
+  searchHit?: AiVaultSessionMessageHit | null
+  onJumpToHit?: () => void
 }) {
   const updatedAt = session.updatedAt ?? session.modifiedAt
   const detailsId = getSessionDetailsId(session.id)
@@ -185,7 +190,21 @@ export function VaultSessionRow({
           </div>
           {!detailsExpanded ? (
             <div className="mt-0.5 min-w-0 line-clamp-2 text-[12px] leading-4 text-muted-foreground">
-              {latestTurn ? (
+              {searchHit ? (
+                <button
+                  type="button"
+                  className="block max-w-full truncate text-left hover:text-foreground"
+                  onClick={(event) => {
+                    event.stopPropagation()
+                    onJumpToHit?.()
+                  }}
+                >
+                  <span className="font-medium text-foreground/80">
+                    {conversationRoleLabel(searchHit.role)}
+                  </span>
+                  <span>: {searchHit.snippet}</span>
+                </button>
+              ) : latestTurn ? (
                 <>
                   <span className="font-medium text-foreground/80">
                     {conversationRoleLabel(latestTurn.role)}

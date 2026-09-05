@@ -10,6 +10,8 @@ import type {
 } from '../../shared/ai-vault-types'
 import type { AiVaultSessionTitlesArgs } from '../../shared/ai-vault-session-title'
 import type { AiVaultPrepareSessionResumeArgs } from '../../shared/ai-vault-resume-preparation'
+import type { AiVaultRankSessionsArgs } from '../../shared/ai-vault-session-ai-query'
+import type { AiVaultSearchSessionsArgs } from '../../shared/ai-vault-session-search-scope'
 import type { PreloadApi } from '../api-types'
 
 export const aiVaultApi = {
@@ -30,5 +32,8 @@ export const aiVaultApi = {
     const listener = (_event: Electron.IpcRendererEvent) => callback()
     ipcRenderer.on('aiVault:windowFocused', listener)
     return () => ipcRenderer.removeListener('aiVault:windowFocused', listener)
-  }
+  },
+  rankSessions: (args: AiVaultRankSessionsArgs) => ipcRenderer.invoke('aiVault:rankSessions', args),
+  searchSessions: (args: AiVaultSearchSessionsArgs) =>
+    ipcRenderer.invoke('aiVault:searchSessions', args)
 } satisfies PreloadApi['aiVault']

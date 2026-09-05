@@ -12954,7 +12954,25 @@
             "localSessionSshWorkspaceUnsupported": "This session's history is stored on this machine, so it can't resume in an SSH workspace. Open a local workspace instead.",
             "prepareSessionResumeFailed": "Could not prepare this session for resume.",
             "sessionDeleted": "Session deleted",
-            "sessionDeleteFailed": "Couldn't delete the session"
+            "sessionDeleteFailed": "Couldn't delete the session",
+            "askPastSessions": "Ask about past sessions",
+            "aiSearch": "AI search",
+            "aiRankedSessions": "AI ranked these sessions",
+            "aiSearchHint": "Press Enter to rank with the auto-rename agent",
+            "searchSessionsWithAi": "Search sessions with AI",
+            "searchingSessions": "Searching…",
+            "enterQueryToSearchWithAi": "Enter a query to search sessions with AI.",
+            "searchWithAi": "Search with AI",
+            "searchingTranscripts": "Searching transcripts…",
+            "transcriptHits": "{{count}} transcript hit",
+            "searchScopeFull": "Full text",
+            "searchScopeTitle": "Title",
+            "searchScopeSummary": "Summary",
+            "searchScopeWithoutTools": "Without tools",
+            "searchScopeUser": "User",
+            "searchScopeAssistant": "Assistant",
+            "searchScopeErrors": "Errors",
+            "searchIn": "Search in"
           },
           "AiVaultPanelControls": {
             "scanningSessions": "Scanning sessions",
@@ -12987,7 +13005,15 @@
             "currentProjectLower": "current project",
             "project": "Project",
             "hostScopeAriaLabel": "Session History host: {{value0}}",
-            "host": "Host"
+            "host": "Host",
+            "updated": "Updated",
+            "anyTime": "Any time",
+            "last24Hours": "Last 24 hours",
+            "last7Days": "Last 7 days",
+            "last30Days": "Last 30 days",
+            "wslHost": "WSL",
+            "localHost": "Local",
+            "searchIn": "Search in"
           },
           "AiVaultSessionDetails": {
             "originalAsk": "Original ask",
@@ -13090,7 +13116,8 @@
             "delete": "Delete",
             "deleteReasonNonLocalHost": "Only sessions on this device can be deleted.",
             "deleteReasonSyntheticPath": "This session can't be deleted from Orca.",
-            "deleteReasonUnsupportedAgent": "{{value0}} sessions can't be deleted from Orca."
+            "deleteReasonUnsupportedAgent": "{{value0}} sessions can't be deleted from Orca.",
+            "errorRole": "Error"
           },
           "AiVaultSessionDeleteDialog": {
             "title": "Delete this session?",
@@ -13251,6 +13278,9 @@
             "90cabf6cfc": "Stack this PR above #{{value0}}",
             "ff81473a57": "Creates a GitHub Stack or extends the parent's existing stack.",
             "29732f2fb0": "new PR"
+          },
+          "AiVaultSearchField": {
+            "65b6a40200": "Pick an agent in Settings -> Git -> Source Control AI."
           }
         }
       },

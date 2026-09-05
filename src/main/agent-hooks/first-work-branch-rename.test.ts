@@ -9,6 +9,7 @@ const {
   getSshGitUsernameMock,
   getSshGitProviderMock,
   generateBranchNameMock,
+  resolveBranchNameGenerationParamsMock,
   resolveTextGenerationParamsMock,
   prepareLocalEnvMock,
   computeBranchNameMock,
@@ -19,6 +20,7 @@ const {
   getSshGitUsernameMock: vi.fn(async () => 'you'),
   getSshGitProviderMock: vi.fn(() => undefined),
   generateBranchNameMock: vi.fn(),
+  resolveBranchNameGenerationParamsMock: vi.fn(),
   resolveTextGenerationParamsMock: vi.fn(),
   prepareLocalEnvMock: vi.fn(async () => ({ ok: true as const })),
   computeBranchNameMock: vi.fn((leaf: string) => `you/${leaf}`),
@@ -34,6 +36,7 @@ vi.mock('../git/git-username', () => ({
 vi.mock('../providers/ssh-git-dispatch', () => ({ getSshGitProvider: getSshGitProviderMock }))
 vi.mock('../text-generation/commit-message-text-generation', () => ({
   generateBranchNameFromContext: generateBranchNameMock,
+  resolveBranchNameGenerationParams: resolveBranchNameGenerationParamsMock,
   resolveTextGenerationParams: resolveTextGenerationParamsMock
 }))
 vi.mock('../text-generation/commit-message-agent-environment', () => ({
@@ -73,6 +76,10 @@ describe('maybeAutoRenameBranchOnFirstWork', () => {
     getSshGitProviderMock.mockReturnValue(undefined)
     computeBranchNameMock.mockImplementation((leaf: string) => `you/${leaf}`)
     prepareLocalEnvMock.mockResolvedValue({ ok: true })
+    resolveBranchNameGenerationParamsMock.mockReturnValue({
+      ok: true,
+      params: { agentId: 'claude', model: 'm' }
+    })
     resolveTextGenerationParamsMock.mockReturnValue({
       ok: true,
       params: { agentId: 'claude', model: 'm' }
@@ -90,10 +97,9 @@ describe('maybeAutoRenameBranchOnFirstWork', () => {
       ['branch', '-m', 'you/fix-auth'],
       expect.objectContaining({ cwd: '/repo/wt' })
     )
-    expect(resolveTextGenerationParamsMock).toHaveBeenCalledWith(
+    expect(resolveBranchNameGenerationParamsMock).toHaveBeenCalledWith(
       expect.anything(),
       'local',
-      'branchName',
       expect.objectContaining({ id: REPO_ID })
     )
     expect(setDisplayName).toHaveBeenCalledWith(WORKTREE_ID, 'Fix auth')
@@ -327,7 +333,7 @@ describe('maybeAutoRenameBranchOnFirstWork', () => {
   })
 
   it('records a user-facing error when no generation agent is configured', async () => {
-    resolveTextGenerationParamsMock.mockReturnValueOnce({
+    resolveBranchNameGenerationParamsMock.mockReturnValueOnce({
       ok: false,
       error: 'No agent configured.'
     })
