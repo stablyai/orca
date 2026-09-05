@@ -54,6 +54,8 @@ export type MRInfo = {
   /** Target branch name for review-created worktree compare-base repair. */
   baseRefName?: string
   conflictSummary?: PRConflictSummary
+  /** Unresolved, non-bot discussions. Absent when the lookup could not report it. */
+  unresolvedReviewCommentCount?: number
 }
 
 // Why: GitLab emoji awards are open-ended, so we carry the raw award name and let the renderer decide.

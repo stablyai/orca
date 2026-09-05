@@ -269,7 +269,13 @@ export async function resolvePRForBranchOutcome(input: {
     return { kind: 'no-pr', fetchedAt: Date.now() }
   }
 
-  const { mergeable, stack, stackMergeQueueRequired, conflictSummary } = await derivePRRefreshData({
+  const {
+    mergeable,
+    stack,
+    stackMergeQueueRequired,
+    conflictSummary,
+    unresolvedReviewCommentCount
+  } = await derivePRRefreshData({
     data,
     dataRepo,
     repoPath,
@@ -277,7 +283,8 @@ export async function resolvePRForBranchOutcome(input: {
     localGitOptions,
     ghOptions,
     executionScope,
-    usedExactNumberLookup
+    usedExactNumberLookup,
+    includeUnresolvedReviewCommentCount: options.includeUnresolvedReviewCommentCount === true
   })
 
   return assemblePRRefreshFoundOutcome({
@@ -289,6 +296,7 @@ export async function resolvePRForBranchOutcome(input: {
     stackMergeQueueRequired,
     confirmedContainedHeadOid,
     headDivergedFromMergedPRAtOid,
-    conflictSummary
+    conflictSummary,
+    unresolvedReviewCommentCount
   })
 }

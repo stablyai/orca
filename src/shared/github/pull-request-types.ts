@@ -87,6 +87,8 @@ export type PRInfo = {
   prRepo?: GitHubRepositoryIdentity
   headRepo?: GitHubRepositoryIdentity
   conflictSummary?: PRConflictSummary
+  /** Unresolved, non-bot review threads. Absent when the lookup could not report it. */
+  unresolvedReviewCommentCount?: number
 }
 
 export type IssueInfo = {

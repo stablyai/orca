@@ -37,9 +37,17 @@ export function isBotPRComment(
   comment: PRComment,
   botAuthorOverrides?: ReadonlySet<string>
 ): boolean {
-  const author = comment.author.trim()
+  return isBotPRCommentAuthor(comment.author, comment.isBot, botAuthorOverrides)
+}
+
+export function isBotPRCommentAuthor(
+  rawAuthor: string,
+  isBot?: boolean,
+  botAuthorOverrides?: ReadonlySet<string>
+): boolean {
+  const author = rawAuthor.trim()
   const normalized = normalizePRCommentAuthorLogin(author)
-  if (botAuthorOverrides?.has(normalized) || comment.isBot === true) {
+  if (botAuthorOverrides?.has(normalized) || isBot === true) {
     return true
   }
   if (normalized.endsWith(BOT_LOGIN_SUFFIX)) {

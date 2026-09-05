@@ -106,6 +106,41 @@ describe('gitlab client — MR operations', () => {
       )
     })
 
+    it('counts unresolved non-bot discussions when the open MR has user notes', async () => {
+      getProjectRefMock.mockResolvedValueOnce({ host: 'gitlab.com', path: 'g/p' })
+      glabExecFileAsyncMock
+        .mockResolvedValueOnce({
+          stdout: JSON.stringify({ iid: 10, title: 't', state: 'opened', user_notes_count: 3 })
+        })
+        .mockResolvedValueOnce({
+          stdout: JSON.stringify([
+            { notes: [{ resolvable: true, resolved: false, author: { username: 'alice' } }] },
+            { notes: [{ resolvable: true, resolved: true, author: { username: 'alice' } }] },
+            {
+              notes: [
+                { resolvable: true, resolved: false, author: { username: 'ci', state: 'bot' } }
+              ]
+            }
+          ])
+        })
+      const mr = await getMergeRequest('/repo', 10)
+      expect(mr?.unresolvedReviewCommentCount).toBe(1)
+      expect(glabExecFileAsyncMock).toHaveBeenCalledWith(
+        ['api', 'projects/g%2Fp/merge_requests/10/discussions?per_page=100'],
+        { cwd: '/repo' }
+      )
+    })
+
+    it('reports zero without fetching discussions when the MR has no user notes', async () => {
+      getProjectRefMock.mockResolvedValueOnce({ host: 'gitlab.com', path: 'g/p' })
+      glabExecFileAsyncMock.mockResolvedValueOnce({
+        stdout: JSON.stringify({ iid: 10, title: 't', state: 'opened', user_notes_count: 0 })
+      })
+      const mr = await getMergeRequest('/repo', 10)
+      expect(mr?.unresolvedReviewCommentCount).toBe(0)
+      expect(glabExecFileAsyncMock).toHaveBeenCalledTimes(1)
+    })
+
     it('falls back to `glab mr view` when project ref is unresolved', async () => {
       getProjectRefMock.mockResolvedValueOnce(null)
       glabExecFileAsyncMock.mockResolvedValueOnce({

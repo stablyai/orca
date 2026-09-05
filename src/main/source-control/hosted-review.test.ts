@@ -149,7 +149,8 @@ describe('getHostedReviewForBranch', () => {
       status: 'pending'
     })
     expect(getPRForBranchOutcomeMock).toHaveBeenCalledWith('/repo', 'feature', 3, null, null, {
-      currentHeadOid: null
+      currentHeadOid: null,
+      includeUnresolvedReviewCommentCount: true
     })
   })
 
@@ -225,7 +226,8 @@ describe('getHostedReviewForBranch', () => {
     })
     expect(getPRForBranchOutcomeMock).toHaveBeenCalledWith('/repo', '', null, null, 42, {
       acceptMergedFallbackPR: true,
-      currentHeadOid: null
+      currentHeadOid: null,
+      includeUnresolvedReviewCommentCount: true
     })
   })
 

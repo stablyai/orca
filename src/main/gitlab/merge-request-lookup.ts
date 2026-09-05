@@ -8,9 +8,11 @@ import {
   glabRepoExecOptions,
   glabExecFileAsync,
   release,
+  type LocalGitExecOptions,
   type ProjectRef
 } from './gl-utils'
 import { encodedProject } from './project-path-encoding'
+import { countUnresolvedDiscussions, fetchDiscussions } from './mr-discussion-notes'
 import {
   hasHostedReviewLocalGitOptions,
   getHostedReviewLocalGitOptions,
@@ -34,6 +36,45 @@ export async function getProjectSlug(
   const localGitArgs = hostedReviewLocalGitOptionArgs(options)
   const knownHosts = await getGlabKnownHosts(connectionId, localGitArgs[0])
   return getProjectRef(repoPath, knownHosts, connectionId, ...localGitArgs)
+}
+
+type GitLabMRPipelineRaw = Parameters<typeof mapMRInfo>[0] & {
+  head_pipeline?: { status?: string } | null
+  pipeline?: { status?: string } | null
+  user_notes_count?: number
+}
+
+/**
+ * Attach the unresolved-discussion count for an open MR. `user_notes_count` comes free on the
+ * list/detail payload, so the extra `/discussions` call only happens when there is something to count.
+ */
+async function withUnresolvedCommentCount(
+  info: MRInfo,
+  raw: GitLabMRPipelineRaw,
+  repoPath: string,
+  projectRef: ProjectRef | null,
+  connectionId: string | null | undefined,
+  localGitOptions: LocalGitExecOptions
+): Promise<MRInfo> {
+  if (!projectRef || raw.state !== 'opened' || typeof raw.user_notes_count !== 'number') {
+    return info
+  }
+  if (raw.user_notes_count === 0) {
+    return { ...info, unresolvedReviewCommentCount: 0 }
+  }
+  try {
+    const discussions = await fetchDiscussions(
+      repoPath,
+      projectRef,
+      'mr',
+      info.number,
+      connectionId,
+      localGitOptions
+    )
+    return { ...info, unresolvedReviewCommentCount: countUnresolvedDiscussions(discussions) }
+  } catch {
+    return info
+  }
 }
 
 /**
@@ -63,13 +104,17 @@ export async function getMergeRequest(
       args,
       glabRepoExecOptions(repoPath, connectionId, localGitOptions)
     )
-    const data = JSON.parse(stdout) as Parameters<typeof mapMRInfo>[0] & {
-      head_pipeline?: { status?: string } | null
-      pipeline?: { status?: string } | null
-    }
+    const data = JSON.parse(stdout) as GitLabMRPipelineRaw
     // Why: older GitLab instances expose `pipeline` instead of `head_pipeline`; try both.
     const pipelineStatus = derivePipelineStatus(data.head_pipeline ?? data.pipeline ?? null)
-    return mapMRInfo(data, pipelineStatus)
+    return withUnresolvedCommentCount(
+      mapMRInfo(data, pipelineStatus),
+      data,
+      repoPath,
+      projectRef,
+      connectionId,
+      localGitOptions
+    )
   } catch {
     return null
   } finally {
@@ -112,12 +157,16 @@ export async function getMergeRequestForBranch(
         ],
         glabRepoExecOptions(repoPath, connectionId, localGitOptions)
       )
-      const raw = JSON.parse(stdout) as Parameters<typeof mapMRInfo>[0] & {
-        head_pipeline?: { status?: string } | null
-        pipeline?: { status?: string } | null
-      }
+      const raw = JSON.parse(stdout) as GitLabMRPipelineRaw
       const pipelineStatus = derivePipelineStatus(raw.head_pipeline ?? raw.pipeline ?? null)
-      return mapMRInfo(raw, pipelineStatus)
+      return withUnresolvedCommentCount(
+        mapMRInfo(raw, pipelineStatus),
+        raw,
+        repoPath,
+        projectRef,
+        connectionId,
+        localGitOptions
+      )
     }
     if (branchName) {
       const { stdout } = await glabExecFileAsync(
@@ -132,10 +181,7 @@ export async function getMergeRequestForBranch(
         ],
         glabRepoExecOptions(repoPath, connectionId, localGitOptions)
       )
-      const data = JSON.parse(stdout) as (Parameters<typeof mapMRInfo>[0] & {
-        head_pipeline?: { status?: string } | null
-        pipeline?: { status?: string } | null
-      })[]
+      const data = JSON.parse(stdout) as GitLabMRPipelineRaw[]
       if (Array.isArray(data) && data.length > 0) {
         const raw = data[0]
         // Why: older GitLab list payloads expose `pipeline` instead of `head_pipeline`.
@@ -151,7 +197,14 @@ export async function getMergeRequestForBranch(
           localGitOptions
         })
         if (!hideOnDefaultBranch) {
-          return info
+          return withUnresolvedCommentCount(
+            info,
+            raw,
+            repoPath,
+            projectRef,
+            connectionId,
+            localGitOptions
+          )
         }
       }
     }

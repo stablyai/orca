@@ -381,3 +381,54 @@ describe('WorktreeCardDetailsHover', () => {
     expect(markup).toContain('View on Linear')
   })
 })
+
+describe('WorktreeCardMetaBadges unresolved comment count', () => {
+  const review = {
+    provider: 'github' as const,
+    number: 12,
+    title: 'Add badges',
+    state: 'open' as const,
+    url: 'https://github.com/acme/orca/pull/12',
+    status: 'success' as const
+  }
+
+  it('shows a count badge with a tooltip label next to the review glyph', () => {
+    const markup = renderToStaticMarkup(
+      <WorktreeCardMetaBadges
+        issue={null}
+        linearIssue={null}
+        review={review}
+        unresolvedReviewCommentCount={3}
+        comment={null}
+      />
+    )
+    expect(markup).toContain('data-testid="review-comment-count"')
+    expect(markup).toContain('3 unresolved comments')
+  })
+
+  it('keeps the count when the new card style moves the review glyph to the status lane', () => {
+    const markup = renderToStaticMarkup(
+      <WorktreeCardMetaBadges
+        issue={null}
+        linearIssue={null}
+        review={null}
+        unresolvedReviewCommentCount={3}
+        comment={null}
+      />
+    )
+    expect(markup).toContain('data-testid="review-comment-count"')
+  })
+
+  it('renders nothing for the count at zero', () => {
+    const markup = renderToStaticMarkup(
+      <WorktreeCardMetaBadges
+        issue={null}
+        linearIssue={null}
+        review={review}
+        unresolvedReviewCommentCount={0}
+        comment={null}
+      />
+    )
+    expect(markup).not.toContain('review-comment-count')
+  })
+})
