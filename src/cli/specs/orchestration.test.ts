@@ -29,7 +29,16 @@ describe('orchestration worker-start command spec', () => {
 
   it('documents the settings default and the fallback that keeps every dispatch working', () => {
     const notes = startSpec?.notes?.join('\n') ?? ''
-    expect(notes).toContain('follows your own setting for new agent tabs')
-    expect(notes).toContain('starts a terminal agent worker instead')
+    expect(notes).toContain("follows the user's own setting for new agent tabs")
+    expect(notes).toContain('A dispatch the setting cannot apply to still starts')
+  })
+
+  it('never points a caller at the worker kind, which nothing it runs depends on', () => {
+    const notes = startSpec?.notes?.join('\n') ?? ''
+    // The mode is in the receipt for operators and telemetry. Naming the field here would teach a
+    // coordinator agent to branch on something no verb it runs behaves differently for.
+    expect(notes).not.toMatch(/mode field/)
+    expect(notes).not.toMatch(/structured chat session/)
+    expect(notes).toContain('Drive every worker the same way')
   })
 })
