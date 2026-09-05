@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { ORCHESTRATION_CONTRACT_VERSION } from '../../../../shared/protocol-version'
 import {
+  buildInjectRejectionMessage,
   injectRejectedRefusal,
   taskNotFoundRefusal,
   taskNotStartableRefusal
@@ -36,7 +37,9 @@ describe('orchestration dispatch failure codes through RpcDispatcher', () => {
 
     const response = await dispatch(harness, { task: 'task_missing', to: WORKER_HANDLE })
 
-    expect(expectFailure(response).error).toEqual(taskNotFoundRefusal('task_missing'))
+    expect(expectFailure(response).error).toEqual(
+      taskNotFoundRefusal('Task not found: task_missing', { taskId: 'task_missing' })
+    )
   })
 
   it('reports task_not_startable with the unmet dependencies for a pending task', async () => {
@@ -47,7 +50,7 @@ describe('orchestration dispatch failure codes through RpcDispatcher', () => {
     const response = await dispatch(harness, { task: child.id, to: WORKER_HANDLE })
 
     expect(expectFailure(response).error).toEqual(
-      taskNotStartableRefusal({
+      taskNotStartableRefusal(`Task ${child.id} is pending; only ready tasks can be dispatched`, {
         taskId: child.id,
         status: 'pending',
         unmetDependencies: [parent.id]
@@ -64,7 +67,11 @@ describe('orchestration dispatch failure codes through RpcDispatcher', () => {
     const response = await dispatch(harness, { task: task.id, to: WORKER_HANDLE })
 
     expect(expectFailure(response).error).toEqual(
-      taskNotStartableRefusal({ taskId: task.id, status: 'completed', unmetDependencies: [] })
+      taskNotStartableRefusal(`Task ${task.id} is completed; only ready tasks can be dispatched`, {
+        taskId: task.id,
+        status: 'completed',
+        unmetDependencies: []
+      })
     )
   })
 
@@ -78,6 +85,7 @@ describe('orchestration dispatch failure codes through RpcDispatcher', () => {
     expect(expectFailure(response).error).toEqual(
       injectRejectedRefusal(WORKER_HANDLE, 'no_agent_detected')
     )
+    expect(expectFailure(response).error.message).toBe(buildInjectRejectionMessage(WORKER_HANDLE))
     expect(harness.db.getTask(task.id)?.status).toBe('ready')
     expect(harness.db.getDispatchContext(task.id)).toBeUndefined()
   })
@@ -97,13 +105,63 @@ describe('orchestration dispatch failure codes through RpcDispatcher', () => {
     )
 
     expect(expectFailure(response).error).toEqual(
-      taskNotStartableRefusal({
+      taskNotStartableRefusal(`Task ${child.id} is pending; only a ready Task can start.`, {
         taskId: child.id,
         status: 'pending',
         unmetDependencies: [parent.id]
       })
     )
     expect(harness.db.getTask(child.id)?.status).toBe('pending')
+  })
+
+  it('reports task_not_startable with retry detail for an invalid --retry-of', async () => {
+    const harness = createHarness()
+    const task = harness.db.createTask({ spec: 'work' })
+    mockWorkerStartTopology(harness.runtime)
+
+    const response = await harness.dispatcher.dispatch(
+      request('orchestration.workerStart', {
+        task: task.id,
+        from: COORDINATOR_HANDLE,
+        agent: 'claude',
+        retryOf: 'ctx_missing'
+      })
+    )
+
+    expect(expectFailure(response).error).toEqual(
+      taskNotStartableRefusal(`Task ${task.id} cannot retry from Dispatch ctx_missing.`, {
+        taskId: task.id,
+        status: 'ready',
+        unmetDependencies: [],
+        retryOf: 'ctx_missing'
+      })
+    )
+  })
+
+  it('types the atomic claim loser when the task changes after the ready precheck', async () => {
+    const harness = createHarness()
+    const task = harness.db.createTask({ spec: 'raced' })
+    // Why: the pane lookup runs after the ready precheck and before the DB claim, so failing the
+    // task there is the interleaving a concurrent status change produces. The loser's DB refusal
+    // must carry the same typed receipt instead of the bare Error it used to throw.
+    vi.mocked(harness.runtime.getTerminalPaneKey).mockImplementation((handle) => {
+      if (handle === WORKER_HANDLE) {
+        harness.db.updateTaskStatus(task.id, 'failed', 'raced out')
+        return WORKER_PANE
+      }
+      return handle === COORDINATOR_HANDLE ? COORDINATOR_PANE : null
+    })
+
+    const response = await dispatch(harness, { task: task.id, to: WORKER_HANDLE })
+
+    expect(expectFailure(response).error).toEqual(
+      taskNotStartableRefusal(`Task ${task.id} is failed; only ready tasks can be dispatched`, {
+        taskId: task.id,
+        status: 'failed',
+        unmetDependencies: []
+      })
+    )
+    expect(harness.db.getDispatchContext(task.id)).toBeUndefined()
   })
 
   it('keeps runtime_error for a genuinely unexpected dispatch failure', async () => {

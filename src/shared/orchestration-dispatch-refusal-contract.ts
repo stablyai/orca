@@ -1,10 +1,8 @@
 import { TUI_AGENT_CONFIG } from './tui-agent-config'
 
-// Why: dispatch and worker-start used to flatten these refusals to runtime_error, so an agent
-// reading the receipt could not tell "create the task" from "wait on deps" from "pick another
-// terminal". This module is the single source of each receipt's code, message, and data so the
-// runtime emits it and the CLI test formats exactly the same envelope. Recovery rides in
-// data.nextSteps, which every shipped CLI already prints for any code.
+// Why: one source for each dispatch refusal's code, message, and data, so the runtime emits and
+// the CLI test formats the identical envelope. Messages are supplied per call site because each
+// existing string is a published receipt an old consumer may match on.
 
 export type DispatchRefusalReceipt = {
   code: 'task_not_found' | 'task_not_startable' | 'inject_rejected'
@@ -12,15 +10,15 @@ export type DispatchRefusalReceipt = {
   data: Record<string, unknown> & { nextSteps: string[] }
 }
 
-export function taskNotFoundRefusal(taskId: string, runId?: string): DispatchRefusalReceipt {
+export function taskNotFoundRefusal(
+  message: string,
+  detail: { taskId: string; runId?: string }
+): DispatchRefusalReceipt {
   return {
     code: 'task_not_found',
-    message: runId
-      ? `Task ${taskId} was not found in Run ${runId}.`
-      : `Task ${taskId} was not found.`,
+    message,
     data: {
-      taskId,
-      ...(runId ? { runId } : {}),
+      ...detail,
       nextSteps: [
         'Run orca orchestration task-list --json in the bound Run to find the intended Task id.',
         'If the Task does not exist yet, create it with orca orchestration task-create --spec <text> --json.'
@@ -29,28 +27,43 @@ export function taskNotFoundRefusal(taskId: string, runId?: string): DispatchRef
   }
 }
 
-export function taskNotStartableRefusal(task: {
+export type TaskNotStartableDetail = {
   taskId: string
   status: string
   unmetDependencies: string[]
-}): DispatchRefusalReceipt {
-  const nextSteps =
-    task.unmetDependencies.length > 0
-      ? [
-          `Wait for ${task.unmetDependencies.join(', ')} to complete (orca orchestration check --wait --json), then dispatch again.`
-        ]
-      : task.status === 'dispatched'
-        ? [
-            'The Task already has an active Dispatch; inspect it with orca orchestration dispatch-show --task <task_id> --json.'
-          ]
-        : [
-            `A ${task.status} Task cannot be dispatched; create a new Task or use worker-start --retry-of for a failed attempt.`
-          ]
+  retryOf?: string
+}
+
+export function taskNotStartableRefusal(
+  message: string,
+  detail: TaskNotStartableDetail
+): DispatchRefusalReceipt {
   return {
     code: 'task_not_startable',
-    message: `Task ${task.taskId} is ${task.status}; only ready tasks can be dispatched`,
-    data: { ...task, nextSteps }
+    message,
+    data: { ...detail, nextSteps: taskNotStartableNextSteps(detail) }
   }
+}
+
+function taskNotStartableNextSteps(detail: TaskNotStartableDetail): string[] {
+  if (detail.retryOf) {
+    return [
+      `--retry-of must name the latest settled Dispatch of a failed or blocked Task; check orca orchestration dispatch-show --task ${detail.taskId} --json and orca orchestration worker-show --dispatch ${detail.retryOf} --json.`
+    ]
+  }
+  if (detail.unmetDependencies.length > 0) {
+    return [
+      `Dependencies ${detail.unmetDependencies.join(', ')} are not completed. Wait for running ones with orca orchestration check --wait --json; retry or unblock failed ones before dispatching again.`
+    ]
+  }
+  if (detail.status === 'dispatched') {
+    return [
+      `The Task already has an active Dispatch; inspect it with orca orchestration dispatch-show --task ${detail.taskId} --json.`
+    ]
+  }
+  return [
+    `A ${detail.status} Task cannot be dispatched; create a new Task or use worker-start --retry-of for a failed attempt.`
+  ]
 }
 
 // Why: the old five-name example read as an allowlist (#15125); derive from the field detection keys on so it cannot drift.

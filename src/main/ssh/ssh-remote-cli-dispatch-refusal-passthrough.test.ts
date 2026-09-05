@@ -14,8 +14,8 @@ vi.mock('../persistence', () => ({
 import { OrcaRuntimeService } from '../runtime/orca-runtime'
 import { runRemoteOrcaCli } from './ssh-remote-orca-cli'
 
-// Why: the SSH bridge relays the host CLI's stdout byte-for-byte; a typed dispatch refusal must
-// arrive at the remote agent with the same code and data it would see locally.
+// Why: the SSH bridge captures the host CLI child's stdout and exit code without reparsing; this
+// pins that a typed refusal envelope and its nonzero exit reach the remote agent unchanged.
 it('relays typed dispatch refusal codes from the host CLI unchanged', async () => {
   const child = new EventEmitter() as EventEmitter & {
     stdout: EventEmitter
@@ -55,11 +55,10 @@ it('relays typed dispatch refusal codes from the host CLI unchanged', async () =
     }
   )
 
+  const stdout = `${JSON.stringify(refusal, null, 2)}\n`
   await Promise.resolve()
-  child.stdout.emit('data', Buffer.from(`${JSON.stringify(refusal, null, 2)}\n`))
+  child.stdout.emit('data', Buffer.from(stdout))
   child.emit('close', 1)
 
-  const result = await resultPromise
-  expect(result.exitCode).toBe(1)
-  expect(JSON.parse(result.stdout)).toEqual(refusal)
+  expect(await resultPromise).toEqual({ stdout, stderr: '', exitCode: 1 })
 })

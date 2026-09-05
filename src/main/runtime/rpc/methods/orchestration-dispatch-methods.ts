@@ -26,7 +26,7 @@ export const ORCHESTRATION_DISPATCH_METHODS: RpcMethod[] = [
       const db = runtime.getOrchestrationDb()
       const task = db.getTask(params.task)
       if (!task) {
-        throw taskNotFoundError(params.task)
+        throw taskNotFoundError(`Task not found: ${params.task}`, { taskId: params.task })
       }
       const run = resolveRunScope(runtime, {
         runId: params.run,
@@ -36,7 +36,10 @@ export const ORCHESTRATION_DISPATCH_METHODS: RpcMethod[] = [
         callerEvidence: orchestrationCompatibilityEvidence
       })
       if (task.run_id !== run.id) {
-        throw taskNotFoundError(task.id, run.id)
+        throw taskNotFoundError(`Task ${task.id} was not found in Run ${run.id}.`, {
+          taskId: task.id,
+          runId: run.id
+        })
       }
 
       // Why: dry-run previews the preamble without mutating state, so it skips the ready-status check and uses a placeholder dispatchId.
@@ -67,7 +70,11 @@ export const ORCHESTRATION_DISPATCH_METHODS: RpcMethod[] = [
       const to = params.to
 
       if (task.status !== 'ready') {
-        throw taskNotStartableError(db, task)
+        throw taskNotStartableError(
+          db,
+          `Task ${params.task} is ${task.status}; only ready tasks can be dispatched`,
+          task
+        )
       }
 
       // Why: injecting the preamble into a bare shell dumps it as shell commands (gibberish), so require a detected agent first.

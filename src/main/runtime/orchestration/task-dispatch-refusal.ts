@@ -9,16 +9,27 @@ import {
   type InjectRejectionReason
 } from '../../../shared/orchestration-dispatch-refusal-contract'
 
-export function taskNotFoundError(taskId: string, runId?: string): OrchestrationError {
-  return toError(taskNotFoundRefusal(taskId, runId))
+// Why: each site keeps the exact message it published before; only the code and data are shared.
+
+export function taskNotFoundError(
+  message: string,
+  detail: { taskId: string; runId?: string }
+): OrchestrationError {
+  return toError(taskNotFoundRefusal(message, detail))
 }
 
-export function taskNotStartableError(db: OrchestrationDb, task: TaskRow): OrchestrationError {
+export function taskNotStartableError(
+  db: OrchestrationDb,
+  message: string,
+  task: TaskRow,
+  retryOf?: string
+): OrchestrationError {
   return toError(
-    taskNotStartableRefusal({
+    taskNotStartableRefusal(message, {
       taskId: task.id,
       status: task.status,
-      unmetDependencies: unmetTaskDependencies(db, task)
+      unmetDependencies: unmetTaskDependencies(db, task),
+      ...(retryOf ? { retryOf } : {})
     })
   )
 }

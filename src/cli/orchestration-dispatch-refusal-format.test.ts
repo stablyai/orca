@@ -12,20 +12,20 @@ afterEach(() => {
   vi.restoreAllMocks()
 })
 
-// Why: these are the exact envelopes the RPC dispatcher test proved the runtime emits. The CLI
-// never enumerates codes, so an older CLI prints the same recovery for a code it has never seen.
+// Why: these are the exact envelopes the RPC dispatcher test proved the runtime emits. This
+// checkout's formatter never enumerates codes (verified below with a code no build has defined),
+// which is what lets a client that predates a new code still print its message and nextSteps.
 describe('orchestration dispatch refusals through the CLI error boundary', () => {
   it.each([
     {
-      receipt: taskNotFoundRefusal('task_missing'),
+      receipt: taskNotFoundRefusal('Task not found: task_missing', { taskId: 'task_missing' }),
       recovery: /task-create|task-list/
     },
     {
-      receipt: taskNotStartableRefusal({
-        taskId: 'task_child',
-        status: 'pending',
-        unmetDependencies: ['task_parent']
-      }),
+      receipt: taskNotStartableRefusal(
+        'Task task_child is pending; only ready tasks can be dispatched',
+        { taskId: 'task_child', status: 'pending', unmetDependencies: ['task_parent'] }
+      ),
       recovery: /task_parent/
     },
     {
@@ -47,6 +47,29 @@ describe('orchestration dispatch refusals through the CLI error boundary', () =>
     expect(printed.ok).toBe(false)
     expect(printed.error).toEqual(receipt)
   })
+})
+
+// Why: a code this build has never defined stands in for a future host's new code; if the
+// formatter ever starts gating on known codes, this is the assertion that catches it.
+it('prints an unknown code with its message and nextSteps unchanged', () => {
+  const failure: RuntimeRpcFailure = {
+    id: 'rpc_1',
+    ok: false,
+    error: {
+      code: 'code_from_a_newer_host',
+      message: 'Refused for a reason this CLI has never heard of.',
+      data: { nextSteps: ['Do the thing the newer host suggested.'] }
+    },
+    _meta: { runtimeId: 'runtime_1' }
+  }
+  const error = new RuntimeRpcFailureError(failure)
+
+  expect(formatCliError(error, { commandPath: ['orchestration', 'dispatch'] })).toBe(
+    'Refused for a reason this CLI has never heard of.\nNext step: Do the thing the newer host suggested.'
+  )
+  const log = vi.spyOn(console, 'log').mockImplementation(() => {})
+  reportCliError(error, true, { commandPath: ['orchestration', 'dispatch'] })
+  expect(JSON.parse(log.mock.calls[0]?.[0] as string)).toEqual(failure)
 })
 
 function envelope(receipt: DispatchRefusalReceipt): RuntimeRpcFailure {

@@ -59,7 +59,10 @@ export const ORCHESTRATION_WORKER_START_METHODS: RpcMethod[] = [
       }
       const task = db.getTask(params.task)
       if (!task || task.run_id !== run.id) {
-        throw taskNotFoundError(params.task, run.id)
+        throw taskNotFoundError(`Task ${params.task} was not found in Run ${run.id}.`, {
+          taskId: params.task,
+          runId: run.id
+        })
       }
 
       if (params.on) {
