@@ -95,13 +95,14 @@ export async function refreshFileExplorerExpandedDirs({
     setDirCache((prev) => {
       const next = { ...prev }
       for (const result of currentResults) {
-        next[result.dirPath] = result.cache.error
-          ? {
-              ...prev[result.dirPath],
-              children: prev[result.dirPath]?.children ?? [],
-              error: result.cache.error
-            }
-          : result.cache
+        next[result.dirPath] =
+          result.cache.error !== undefined
+            ? {
+                ...prev[result.dirPath],
+                children: prev[result.dirPath]?.children ?? [],
+                error: result.cache.error
+              }
+            : result.cache
       }
       return next
     })

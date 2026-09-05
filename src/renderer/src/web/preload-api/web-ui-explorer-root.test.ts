@@ -20,7 +20,9 @@ it('keeps explorer preferences local when an old host rejects unknown keys', asy
   const { explorerDisplayRootByWorktree: _unused, ...oldUI } = getDefaultUIState()
   runtime.call.mockResolvedValue({ ui: oldUI })
   await ui.get()
-  await ui.setWithAck!({ explorerDisplayRootByWorktree: { wt: 'src' }, sidebarWidth: 300 })
+  await expect(
+    ui.setWithAck!({ explorerDisplayRootByWorktree: { wt: 'src' }, sidebarWidth: 300 })
+  ).rejects.toThrow('pending host support')
   expect(runtime.call).toHaveBeenLastCalledWith('ui.set', { sidebarWidth: 300 }, 15000)
   expect((await ui.get()).explorerDisplayRootByWorktree).toEqual({ wt: 'src' })
 })
@@ -37,6 +39,110 @@ it('sends roots only to the host that advertised the field', async () => {
     15000
   )
   runtime.id = 'old'
-  await ui.setWithAck!({ explorerDisplayRootByWorktree: { wt: 'src' }, sidebarWidth: 300 })
+  await expect(
+    ui.setWithAck!({ explorerDisplayRootByWorktree: { wt: 'src' }, sidebarWidth: 300 })
+  ).rejects.toThrow('pending host support')
   expect(runtime.call).toHaveBeenLastCalledWith('ui.set', { sidebarWidth: 300 }, 15000)
+})
+
+it('replays unacknowledged preferences after reload and host upgrade', async () => {
+  let ui = createWebUiApi()
+  const { explorerDisplayRootByWorktree: _unused, ...oldUI } = getDefaultUIState()
+  runtime.call.mockResolvedValue({ ui: oldUI })
+  await ui.get()
+  await expect(ui.setWithAck!({ explorerDisplayRootByWorktree: { wt: 'src' } })).rejects.toThrow()
+  expect((await ui.get()).explorerDisplayRootByWorktree).toEqual({ wt: 'src' })
+  ui = createWebUiApi()
+  runtime.call.mockResolvedValue({ ui: getDefaultUIState() })
+  expect((await ui.get()).explorerDisplayRootByWorktree).toEqual({ wt: 'src' })
+  expect(runtime.call).toHaveBeenLastCalledWith(
+    'ui.set',
+    { explorerDisplayRootByWorktree: { wt: 'src' } },
+    15000
+  )
+  runtime.call.mockClear().mockResolvedValue({ ui: getDefaultUIState() })
+  await ui.get()
+  expect(runtime.call).toHaveBeenCalledTimes(1)
+})
+
+it('isolates queued preferences by host and retries a failed replay', async () => {
+  const ui = createWebUiApi()
+  runtime.call.mockResolvedValue({})
+  await expect(ui.setWithAck!({ explorerDisplayRootByWorktree: { wt: 'src' } })).rejects.toThrow()
+  runtime.id = 'another'
+  runtime.call.mockClear().mockResolvedValue({ ui: getDefaultUIState() })
+  await ui.get()
+  expect(runtime.call).toHaveBeenCalledTimes(1)
+  runtime.id = 'old'
+  runtime.call
+    .mockResolvedValueOnce({ ui: getDefaultUIState() })
+    .mockRejectedValueOnce(new Error('Offline'))
+  await ui.get()
+  runtime.call.mockClear().mockResolvedValue({ ui: getDefaultUIState() })
+  await ui.get()
+  expect(runtime.call).toHaveBeenLastCalledWith(
+    'ui.set',
+    { explorerDisplayRootByWorktree: { wt: 'src' } },
+    15000
+  )
+})
+
+it.each([true, false])(
+  'preserves a newer preference during replay (write succeeds: %j)',
+  async (succeeds) => {
+    const ui = createWebUiApi()
+    runtime.call.mockResolvedValue({})
+    await expect(
+      ui.setWithAck!({ explorerDisplayRootByWorktree: { wt: 'first' } })
+    ).rejects.toThrow()
+    let finish!: () => void
+    runtime.call.mockResolvedValueOnce({ ui: getDefaultUIState() }).mockImplementationOnce(
+      () =>
+        new Promise<void>((resolve) => {
+          finish = resolve
+        })
+    )
+    const reading = ui.get()
+    await vi.waitFor(() => expect(finish).toBeTypeOf('function'))
+    runtime.call.mockImplementationOnce(() =>
+      succeeds ? Promise.resolve({}) : Promise.reject(new Error('Offline'))
+    )
+    const writing = ui.setWithAck!({ explorerDisplayRootByWorktree: { wt: 'second' } })
+    if (succeeds) {
+      await writing
+    } else {
+      await expect(writing).rejects.toThrow('Offline')
+    }
+    finish()
+    expect((await reading).explorerDisplayRootByWorktree).toEqual({ wt: 'second' })
+    runtime.call.mockClear().mockResolvedValue({ ui: getDefaultUIState() })
+    await ui.get()
+    if (succeeds) {
+      expect(runtime.call).toHaveBeenCalledTimes(1)
+    } else {
+      expect(runtime.call).toHaveBeenLastCalledWith(
+        'ui.set',
+        { explorerDisplayRootByWorktree: { wt: 'second' } },
+        15000
+      )
+    }
+  }
+)
+
+it('does not replay to a different host when the active host changes during ui.get', async () => {
+  const ui = createWebUiApi()
+  runtime.call.mockResolvedValue({})
+  await expect(ui.setWithAck!({ explorerDisplayRootByWorktree: { wt: 'src' } })).rejects.toThrow()
+  let finish!: (value: unknown) => void
+  runtime.call.mockClear().mockImplementationOnce(
+    () =>
+      new Promise((resolve) => {
+        finish = resolve
+      })
+  )
+  const reading = ui.get()
+  runtime.id = 'another'
+  finish({ ui: getDefaultUIState() })
+  await reading
+  expect(runtime.call).toHaveBeenCalledTimes(1)
 })

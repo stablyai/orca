@@ -120,8 +120,10 @@ export function FileExplorerFilesTreePane({
   const isLoading = isEmptyState && (hasNameFilter ? isNameFilterLoading : isRootLoading)
   const treeError = hasNameFilter
     ? nameFilterFiles.loadError
-    : ((displayRootPath ? tree.dirCache[displayRootPath]?.error : null) ?? rootError)
-  const hasError = isEmptyState && !isLoading && !!treeError
+    : displayRootPath
+      ? (rootCache?.error ?? null)
+      : rootError
+  const hasError = isEmptyState && !isLoading && treeError !== null
   const showTree = !isEmptyState
   const emptyMessage =
     hasNameFilter && !nameFilterFiles.loadError
@@ -165,7 +167,7 @@ export function FileExplorerFilesTreePane({
         onDoubleClick: handleExplorerBackgroundDoubleClick
       }}
     >
-      {treeError && !isLoading && !hasNameFilter && displayRootPath && (
+      {treeError !== null && !isLoading && !hasNameFilter && displayRootPath && (
         <div className="px-2 py-1 text-xs text-muted-foreground" role="status">
           {showTree && <p>{treeError}</p>}
           <Button variant="ghost" size="xs" onClick={() => void tree.refreshDir(displayRootPath)}>

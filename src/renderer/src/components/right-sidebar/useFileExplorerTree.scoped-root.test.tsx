@@ -20,36 +20,39 @@ const listing = (name?: string) => ({
 beforeEach(() => read.mockReset().mockResolvedValue(listing()))
 afterEach(cleanup)
 
-it('refreshes a scoped root after Collapse All and clears read errors on recovery', async () => {
-  const expanded = getExplorerEffectiveExpanded(new Set(), '/repo/packages/app')
-  const { result } = renderHook(() => useFileExplorerTree('/repo', expanded, 'wt'))
-  read.mockResolvedValueOnce(listing('before.ts'))
-  await act(async () => {
-    await result.current.loadDir('/repo/packages/app', 1)
-  })
-  read.mockImplementation(async (_id, _root, path) => {
-    if (path === '/repo/packages/app') {
-      throw new Error('Host unavailable')
-    }
-    return listing()
-  })
-  await act(async () => {
-    await result.current.refreshTree()
-  })
-  expect(result.current.dirCache['/repo/packages/app']).toMatchObject({
-    error: 'Host unavailable',
-    children: [{ relativePath: 'packages/app/before.ts', depth: 2 }]
-  })
-  read.mockResolvedValue(listing('after.ts'))
-  await act(async () => {
-    await result.current.refreshTree()
-  })
-  expect(result.current.dirCache['/repo/packages/app'].error).toBeUndefined()
-  expect(result.current.dirCache['/repo/packages/app'].children[0]).toMatchObject({
-    relativePath: 'packages/app/after.ts',
-    depth: 2
-  })
-})
+it.each(['Host unavailable', ''])(
+  'preserves cached children on refresh failure (%j) and recovers',
+  async (message) => {
+    const expanded = getExplorerEffectiveExpanded(new Set(), '/repo/packages/app')
+    const { result } = renderHook(() => useFileExplorerTree('/repo', expanded, 'wt'))
+    read.mockResolvedValueOnce(listing('before.ts'))
+    await act(async () => {
+      await result.current.loadDir('/repo/packages/app', 1)
+    })
+    read.mockImplementation(async (_id, _root, path) => {
+      if (path === '/repo/packages/app') {
+        throw new Error(message)
+      }
+      return listing()
+    })
+    await act(async () => {
+      await result.current.refreshTree()
+    })
+    expect(result.current.dirCache['/repo/packages/app']).toMatchObject({
+      error: message,
+      children: [{ relativePath: 'packages/app/before.ts', depth: 2 }]
+    })
+    read.mockResolvedValue(listing('after.ts'))
+    await act(async () => {
+      await result.current.refreshTree()
+    })
+    expect(result.current.dirCache['/repo/packages/app'].error).toBeUndefined()
+    expect(result.current.dirCache['/repo/packages/app'].children[0]).toMatchObject({
+      relativePath: 'packages/app/after.ts',
+      depth: 2
+    })
+  }
+)
 
 it('distinguishes an unreadable scoped directory from an empty one and allows forced retry', async () => {
   const { result } = renderHook(() => useFileExplorerTree('/repo', new Set(), 'wt'))

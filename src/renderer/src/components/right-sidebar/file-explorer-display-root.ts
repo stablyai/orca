@@ -1,3 +1,4 @@
+import { translate } from '@/i18n/i18n'
 import { getRelativePathInsideRoot, joinPath } from '@/lib/path'
 import { FILE_EXPLORER_FULL_ROOT } from '../../../../shared/file-explorer-display-root'
 import { splitPathSegments } from './path-tree'
@@ -28,7 +29,10 @@ export function getExplorerDisplayRootOptions(
   ].filter(Boolean)
   return dirs.length
     ? [
-        { value: FILE_EXPLORER_FULL_ROOT, label: 'Full repo root' },
+        {
+          value: FILE_EXPLORER_FULL_ROOT,
+          label: translate('fileExplorer.root.full', 'Full repo root')
+        },
         ...dirs.map((dir) => ({ value: dir, label: dir }))
       ]
     : null

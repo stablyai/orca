@@ -1,3 +1,4 @@
+import { createWebExplorerRootSync } from './web-explorer-root-sync'
 import type { PreloadApi } from '../../../../preload/api-types'
 import { assertClipboardTextWithinLimitWithYield } from '../../../../shared/clipboard-text'
 import type { ReadClipboardTextOptions } from '../../../../shared/clipboard-text'
@@ -24,15 +25,12 @@ import { requireActiveEnvironmentOrNull } from './web-runtime-session'
 import { UI_STORAGE_KEY, noopUnsubscribe, writeJson } from './web-storage'
 
 export function createWebUiApi(): NonNullable<Partial<PreloadApi>['ui']> {
-  const explorerRootHosts = new Set<string>()
+  const explorerRoots = createWebExplorerRootSync()
   const prepareHostUpdates = (updates: Parameters<PreloadApi['ui']['set']>[0]) => {
-    const hostUpdates = omitPairingLocalUiFields(updates)
     const environmentId = requireActiveEnvironmentOrNull()?.id
-    // Old hosts reject unknown ui.set keys; retain this preference in browser storage instead.
-    if (!environmentId || !explorerRootHosts.has(environmentId)) {
-      delete hostUpdates.explorerDisplayRootByWorktree
-    }
-    return hostUpdates
+    const hostUpdates = omitPairingLocalUiFields(updates)
+    explorerRoots.prepare(environmentId, hostUpdates)
+    return { environmentId, hostUpdates }
   }
   let zoomLevel = readLocalWebUIState().uiZoomLevel
   return {
@@ -40,12 +38,12 @@ export function createWebUiApi(): NonNullable<Partial<PreloadApi>['ui']> {
       try {
         const environmentId = requireActiveEnvironmentOrNull()?.id
         const result = await callRuntimeResult<{ ui: PairedUiState }>('ui.get', undefined, 15_000)
-        if (environmentId) {
-          if (result.ui.explorerDisplayRootByWorktree !== undefined) {
-            explorerRootHosts.add(environmentId)
-          } else {
-            explorerRootHosts.delete(environmentId)
-          }
+        if (environmentId !== requireActiveEnvironmentOrNull()?.id) {
+          return readLocalWebUIState()
+        }
+        await explorerRoots.read(environmentId, result.ui)
+        if (environmentId !== requireActiveEnvironmentOrNull()?.id) {
+          return readLocalWebUIState()
         }
         const local = readLocalWebUIState()
         const next = {
@@ -73,9 +71,10 @@ export function createWebUiApi(): NonNullable<Partial<PreloadApi>['ui']> {
       zoomLevel = next.uiZoomLevel
       // Why strip here too when the host also strips: an old host predating that strip would
       // otherwise persist this browser's runtime:web-* keys over the desktop profile's order.
-      const hostUpdates = prepareHostUpdates(updates)
+      const { environmentId, hostUpdates } = prepareHostUpdates(updates)
       try {
         await callRuntimeResult('ui.set', hostUpdates, 15_000)
+        explorerRoots.acknowledge(environmentId, hostUpdates)
       } catch {
         // Why: unpaired/offline web clients still need local UI persistence.
       }
@@ -87,8 +86,15 @@ export function createWebUiApi(): NonNullable<Partial<PreloadApi>['ui']> {
       const next = mergeWebUIState(readLocalWebUIState(), updates)
       writeJson(UI_STORAGE_KEY, next)
       zoomLevel = next.uiZoomLevel
-      const hostUpdates = prepareHostUpdates(updates)
+      const { environmentId, hostUpdates } = prepareHostUpdates(updates)
       await callRuntimeResult('ui.set', hostUpdates, 15_000)
+      explorerRoots.acknowledge(environmentId, hostUpdates)
+      if (
+        updates.explorerDisplayRootByWorktree !== undefined &&
+        hostUpdates.explorerDisplayRootByWorktree === undefined
+      ) {
+        throw new Error('Explorer root preference is pending host support')
+      }
     },
     recordFeatureInteraction: async (id: FeatureInteractionId) => {
       const current = readLocalWebUIState()
