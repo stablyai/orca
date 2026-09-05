@@ -13,6 +13,11 @@ export function originalIconHref(source: string): string | null {
 
 describe('repo icon source href compatibility', () => {
   it.each([
+    '<link <link <link rel="icon" href="last.png">',
+    '<link rel="icon" href="first.png" href="last.png">',
+    '<link rel="icon" href="cross>angle.png">',
+    '<LINK rel="ICON" href="upper.png">',
+    '<link href="wrong.png"><link rel="icon" href="right.png">',
     '',
     'plain source without icon properties',
     '{ rel: "icon", href: "/first.png", href: "/last.png" }',
@@ -34,7 +39,22 @@ describe('repo icon source href compatibility', () => {
   })
 
   it('matches the original across generated malformed property sequences', () => {
-    const tokens = ['}', '{', ' ', 'rel:"icon"', 'href:"a"', 'href:"b"', 'rel:"other"', 'x', '\n']
+    const tokens = [
+      '}',
+      '{',
+      ' ',
+      'rel:"icon"',
+      'href:"a"',
+      'href:"b"',
+      'rel:"other"',
+      'x',
+      '\n',
+      '<link ',
+      '>',
+      'rel="icon"',
+      'href="a"',
+      'href="b"'
+    ]
     let seed = 97
     for (let sample = 0; sample < 3000; sample++) {
       let source = ''
@@ -44,6 +64,10 @@ describe('repo icon source href compatibility', () => {
       }
       expect(extractIconHref(source), source).toBe(originalIconHref(source))
     }
+  })
+
+  it('handles a maximum-size unterminated HTML tag region', () => {
+    expect(extractIconHref('<link '.repeat(Math.floor((256 * 1024) / 6)))).toBeNull()
   })
 
   it('handles a maximum-size icon-free entrypoint', () => {
