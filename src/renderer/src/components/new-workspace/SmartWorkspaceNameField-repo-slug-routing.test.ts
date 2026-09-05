@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
 import type * as RuntimeRpcClient from '@/runtime/runtime-rpc-client'
 import type { TaskSourceContext } from '../../../../shared/task-source-context'
-import { getRepoSlugCached } from './SmartWorkspaceNameField'
+import { getRepoSlugCached, getRepoUpstreamCached } from './smart-workspace-repo-slug'
 
 vi.mock('@/runtime/runtime-rpc-client', async (importOriginal) => ({
   ...(await importOriginal<typeof RuntimeRpcClient>()),
@@ -10,9 +10,10 @@ vi.mock('@/runtime/runtime-rpc-client', async (importOriginal) => ({
 }))
 
 const repoSlug = vi.fn()
+const repoUpstream = vi.fn()
 
 // @ts-expect-error focused preload mock
-globalThis.window = { api: { gh: { repoSlug } } }
+globalThis.window = { api: { gh: { repoSlug, repoUpstream } } }
 
 function runtimeSource(environmentId: string): TaskSourceContext {
   return {
@@ -28,6 +29,7 @@ describe('SmartWorkspaceNameField repository slug routing', () => {
   beforeEach(() => {
     vi.mocked(callRuntimeRpc).mockReset()
     repoSlug.mockReset()
+    repoUpstream.mockReset()
   })
 
   it('resolves runtime-owned repos on their runtime and scopes the cache by runtime', async () => {
@@ -71,5 +73,30 @@ describe('SmartWorkspaceNameField repository slug routing', () => {
       host: 'github.acme.test'
     })
     expect(callRuntimeRpc).toHaveBeenCalledTimes(2)
+  })
+
+  it('resolves runtime-owned upstream slugs on their runtime', async () => {
+    vi.mocked(callRuntimeRpc).mockResolvedValueOnce({
+      owner: 'stablyai',
+      repo: 'orca',
+      host: 'github.one.test'
+    })
+    const cache = new Map()
+    const repo = { id: 'repo-1', path: '/workspace/widgets' }
+
+    await expect(getRepoUpstreamCached(repo, runtimeSource('one'), cache)).resolves.toMatchObject({
+      host: 'github.one.test'
+    })
+    await expect(getRepoUpstreamCached(repo, runtimeSource('one'), cache)).resolves.toMatchObject({
+      host: 'github.one.test'
+    })
+
+    expect(callRuntimeRpc).toHaveBeenCalledExactlyOnceWith(
+      { kind: 'environment', environmentId: 'one' },
+      'github.repoUpstream',
+      { repo: 'repo-1' },
+      { timeoutMs: 30_000 }
+    )
+    expect(repoUpstream).not.toHaveBeenCalled()
   })
 })
