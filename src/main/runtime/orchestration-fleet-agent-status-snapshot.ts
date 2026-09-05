@@ -2,13 +2,15 @@ import type { AgentStatusIpcPayload } from '../../shared/agent-status-ipc-payloa
 import type { FleetAgentStatusEvidence } from '../../shared/orchestration-fleet-agent-status-evidence'
 import {
   mintAgentStatusFleetEvidence,
-  type AgentStatusRuntimeEnrichment
+  type AgentStatusRuntimeEnrichment,
+  type ObservedAgentStatusPaneIdentity
 } from '../ipc/agent-status-ipc-boundary'
 
-/** The runtime facts the fleet snapshot needs: the hook rows, and the pane identity lookups
- *  the terminal registry owns. */
+/** The runtime facts the fleet snapshot needs: the hook rows, the pane identity lookups the
+ *  terminal registry owns, and the identity each pane was observed under when its row arrived. */
 export type FleetAgentStatusSnapshotSource = AgentStatusRuntimeEnrichment & {
   getAgentStatusSnapshotFn: (() => AgentStatusIpcPayload[]) | null
+  readObservedAgentStatusPaneIdentityFn: (paneKey: string) => ObservedAgentStatusPaneIdentity
 }
 
 /**
@@ -22,6 +24,10 @@ export function readOrchestrationFleetAgentStatusSnapshot(
   runtime: FleetAgentStatusSnapshotSource
 ): readonly FleetAgentStatusEvidence[] {
   return (runtime.getAgentStatusSnapshotFn?.() ?? []).map((entry) =>
-    mintAgentStatusFleetEvidence(entry, runtime)
+    mintAgentStatusFleetEvidence(
+      entry,
+      runtime,
+      runtime.readObservedAgentStatusPaneIdentityFn(entry.paneKey)
+    )
   )
 }

@@ -23,6 +23,10 @@ export type FleetEvidenceBindingGap =
   /** The pane resolves to a terminal whose process incarnation is not (yet) known — a
    *  replayed row after a restart lands here rather than binding to whatever now owns the pane. */
   | 'incarnation_unbound'
+  /** The pane has moved on since the row was observed, so the process the evidence describes
+   *  has already exited. Reminting such a row against the pane's current identity is what let a
+   *  cached observation acquire a replacement worker's incarnation and dispatch. */
+  | 'stale_incarnation'
 
 /** Terminal identity as the runtime resolves it at mint time. All three facts or none. */
 type FleetBoundTerminal = {

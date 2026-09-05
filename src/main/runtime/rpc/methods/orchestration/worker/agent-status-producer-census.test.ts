@@ -75,6 +75,11 @@ const CENSUS: readonly CensusRow[] = [
     role: 'resolveAgentStatusBinding — the one identity lookup the pull and fleet paths share'
   },
   {
+    path: 'main/runtime/agent-status-observed-pane-identity.ts',
+    kind: 'produces',
+    role: 'captures the identity a hook row was observed under (fleet-status-observed-identity)'
+  },
+  {
     path: 'main/runtime/orchestration-fleet-agent-status-snapshot.ts',
     kind: 'produces',
     role: 'readOrchestrationFleetAgentStatusSnapshot — the minted fleet evidence (driven below)'
