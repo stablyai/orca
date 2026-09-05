@@ -31,7 +31,9 @@ export function renderProjectSettingsSections(context: SettingsRenderContext): R
         title={translate(
           'auto.components.settings.Settings.3bf149e873',
           'Project Settings > {{value0}}',
-          { value0: project.displayName }
+          // Why: follow the selected checkout's name (repo), not the merged project's, so the
+          // title matches the pane's Display Name/path when 2+ checkouts share one project (#18493).
+          { value0: repo.displayName }
         )}
         description={repo.path}
         searchEntries={navigation.getSectionSearchEntries(repoSectionId)}
