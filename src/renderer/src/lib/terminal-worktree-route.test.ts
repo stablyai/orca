@@ -4,6 +4,7 @@ import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../shared/constants'
 import { brandEphemeralSetupTerminalWorktreeId } from '../../../shared/ephemeral-setup-terminal-worktree-id'
 import { folderWorkspaceKey } from '../../../shared/workspace-scope'
 import {
+  hasRenderableTerminalWorktreeSurface,
   resolveTerminalHostOwnership,
   resolveTerminalWorktreeRoute
 } from './terminal-worktree-route'
@@ -90,6 +91,24 @@ describe('resolveTerminalWorktreeRoute', () => {
 
   it('does not treat a folder workspace as an unresolved worktree', () => {
     expect(resolveTerminalWorktreeRoute(localState(), folderWorkspaceKey('abc-123'))).not.toBeNull()
+  })
+})
+
+describe('hasRenderableTerminalWorktreeSurface', () => {
+  it('is true for a worktree row this window can draw', () => {
+    expect(hasRenderableTerminalWorktreeSurface(localState(), 'repo-1::/w')).toBe(true)
+  })
+
+  it('is false when the repo is known but the worktree row is missing', () => {
+    // Why: routing accepts repo-level evidence, but Terminal never mounts a pane for this id.
+    expect(hasRenderableTerminalWorktreeSurface(localState(), 'repo-1::/unlisted')).toBe(false)
+  })
+
+  it('keeps floating, folder-workspace, and ephemeral-setup ids renderable', () => {
+    const state = localState()
+    expect(hasRenderableTerminalWorktreeSurface(state, FLOATING_TERMINAL_WORKTREE_ID)).toBe(true)
+    expect(hasRenderableTerminalWorktreeSurface(state, folderWorkspaceKey('abc-123'))).toBe(true)
+    expect(hasRenderableTerminalWorktreeSurface(state, EPHEMERAL_ID)).toBe(true)
   })
 })
 

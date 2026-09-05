@@ -2,7 +2,10 @@ import { requestBackgroundTerminalWorktreeMount } from '@/components/terminal/ba
 import { getConnectionIdFromState } from '@/lib/connection-context'
 import { initialAgentTabViewModeProps } from '@/lib/native-chat-initial-view-mode'
 import { isNativeChatTranscriptLocalReadable } from '@/lib/native-chat-transcript-readability'
-import { resolveTerminalWorktreeRoute } from '@/lib/terminal-worktree-route'
+import {
+  hasRenderableTerminalWorktreeSurface,
+  resolveTerminalWorktreeRoute
+} from '@/lib/terminal-worktree-route'
 import { translate } from '@/i18n/i18n'
 import { useAppStore } from '../../store'
 import {
@@ -48,6 +51,20 @@ export function registerTerminalRequestIpcBridge(unsubs: (() => void)[]): void {
         }
         const terminalPresentation = resolveTerminalPresentation(data)
         const shouldActivate = terminalPresentation === 'focused'
+        // Why: a routable worktree is not necessarily a renderable one; background creates
+        // have no second chance to mount, so minting the tab strands the caller for the
+        // handle timeout and leaks an undrawable tab. Focused creates re-add the active id
+        // every render, so a late-hydrating row can still spawn inside the wait.
+        if (!shouldActivate && !hasRenderableTerminalWorktreeSurface(store, worktreeId)) {
+          window.api.ui.replyTerminalCreate({
+            requestId: data.requestId,
+            error: translate(
+              'auto.hooks.useIpcEvents.unrenderableTerminalWorktreeSurface',
+              'Terminal creation is unavailable because this window has no surface for that worktree'
+            )
+          })
+          return
+        }
         const shouldSurfaceOwner =
           terminalPresentation !== 'background' && data.surfaceOwner !== false
         if (shouldActivate) {

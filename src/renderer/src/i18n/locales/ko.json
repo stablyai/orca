@@ -755,7 +755,8 @@
         "ef223fbb6b": "A device tried to connect but is not paired",
         "11992d0337": "If this was your phone or another Orca client, re-pair it from Settings → Mobile.",
         "6573cfe955": "Open Mobile Settings",
-        "unresolvedTerminalWorktreeOwner": "Terminal creation is unavailable because the worktree owner could not be resolved"
+        "unresolvedTerminalWorktreeOwner": "Terminal creation is unavailable because the worktree owner could not be resolved",
+        "unrenderableTerminalWorktreeSurface": "이 창에 해당 워크트리의 화면이 없어 터미널을 만들 수 없습니다"
       },
       "useSettingsNavigationMetadata": {
         "4a728cd56b": "아직 구체화되고 있는 새로운 기능입니다. 한번 시도해 보세요.",

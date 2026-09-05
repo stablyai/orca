@@ -752,7 +752,8 @@
         "ef223fbb6b": "接続を試みたデバイスがペアリングされていません",
         "11992d0337": "お使いのスマートフォンや別の Orca クライアントの場合は、[設定] → [モバイル] から再度ペアリングしてください。",
         "6573cfe955": "モバイル設定を開く",
-        "unresolvedTerminalWorktreeOwner": "ワークツリーの所有者を特定できないため、ターミナルを作成できません"
+        "unresolvedTerminalWorktreeOwner": "ワークツリーの所有者を特定できないため、ターミナルを作成できません",
+        "unrenderableTerminalWorktreeSurface": "このウィンドウにはそのワークツリーの画面がないため、ターミナルを作成できません"
       },
       "useSettingsNavigationMetadata": {
         "4a728cd56b": "まだ形になりつつある新機能。試してみてください。",
