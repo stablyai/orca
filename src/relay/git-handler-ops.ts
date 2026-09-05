@@ -6,6 +6,7 @@
  * remain decoupled from the GitHandler class.
  */
 import * as path from 'node:path'
+import { resolveBranchCompareBaseRef } from '../shared/worktree/base-ref'
 import { bufferToBlob, parseBranchDiff } from './git-handler-utils'
 import { buildDiffResult } from './git-diff-result'
 import { isGitBufferOverflowError } from './git-buffer-overflow'
@@ -170,7 +171,12 @@ export async function branchCompare(
   const [compareRef, headOidResult, baseOidResult] = await Promise.all([
     readCompareRef(),
     readOid('HEAD'),
-    readOid(baseRef)
+    resolveBranchCompareBaseRef(baseRef, (qualifiedRef) =>
+      git(['rev-parse', '--verify', '--quiet', `${qualifiedRef}^{commit}`], worktreePath).then(
+        ({ stdout }) => stdout.trim().length > 0,
+        () => false
+      )
+    ).then(readOid)
   ])
   summary.compareRef = compareRef
 

@@ -321,6 +321,86 @@ describe('getBranchCompare', () => {
 
   // Why: an already-qualified base ref skips the probe entirely, so its oid must still
   // come from rev-parse rather than from a stale or absent probe entry.
+  it('compares against origin/master when the configured base is a stale local master', async () => {
+    mockBranchCompareGit({
+      branch: 'feature\n',
+      probe: { 'refs/remotes/origin/master^{commit}': 'origin-master-oid\n' },
+      headOid: 'head-oid\n',
+      baseOid: 'origin-master-oid\n',
+      mergeBase: 'origin-master-oid\n',
+      nameStatus: 'A\tfeature-1.ts\nA\tfeature-2.ts\n',
+      numstat: '1\t0\tfeature-1.ts\n1\t0\tfeature-2.ts\n',
+      revList: '0\t2\n'
+    })
+
+    const result = await getBranchCompare('/repo', 'master')
+
+    expect(result.summary).toMatchObject({
+      baseRef: 'master',
+      baseOid: 'origin-master-oid',
+      commitsAhead: 2,
+      changedFiles: 2,
+      status: 'ready'
+    })
+    expect(result.entries).toHaveLength(2)
+    expect(gitExecFileAsyncMock).toHaveBeenCalledWith(
+      ['rev-parse', '--verify', '--quiet', 'refs/remotes/origin/master^{commit}'],
+      expect.objectContaining({ cwd: '/repo' })
+    )
+    expect(gitExecFileAsyncMock).toHaveBeenCalledWith(
+      ['rev-parse', '--verify', '--end-of-options', 'refs/remotes/origin/master'],
+      expect.objectContaining({ cwd: '/repo' })
+    )
+  })
+
+  it('compares against origin/release/24 when the configured base is a slash-containing local branch', async () => {
+    mockBranchCompareGit({
+      branch: 'feature\n',
+      probe: { 'refs/remotes/origin/release/24^{commit}': 'origin-release-oid\n' },
+      headOid: 'head-oid\n',
+      baseOid: 'origin-release-oid\n',
+      mergeBase: 'origin-release-oid\n',
+      nameStatus: 'A\tfeature-1.ts\n',
+      numstat: '1\t0\tfeature-1.ts\n',
+      revList: '0\t1\n'
+    })
+
+    const result = await getBranchCompare('/repo', 'release/24')
+
+    expect(result.summary).toMatchObject({
+      baseOid: 'origin-release-oid',
+      commitsAhead: 1,
+      status: 'ready'
+    })
+    expect(gitExecFileAsyncMock).toHaveBeenCalledWith(
+      ['rev-parse', '--verify', '--quiet', 'refs/remotes/origin/release/24^{commit}'],
+      expect.objectContaining({ cwd: '/repo' })
+    )
+  })
+
+  it('falls back to local master when origin/master is missing', async () => {
+    mockBranchCompareGit({
+      branch: 'feature\n',
+      probe: {
+        'refs/remotes/origin/master^{commit}': new Error('missing remote base'),
+        'refs/heads/master^{commit}': 'local-master-oid\n'
+      },
+      headOid: 'head-oid\n',
+      mergeBase: 'local-master-oid\n',
+      nameStatus: 'A\tstale.ts\nA\tfeature-1.ts\n',
+      numstat: '1\t0\tstale.ts\n1\t0\tfeature-1.ts\n',
+      revList: '0\t7\n'
+    })
+
+    const result = await getBranchCompare('/repo', 'master')
+
+    expect(result.summary).toMatchObject({
+      baseOid: 'local-master-oid',
+      commitsAhead: 7,
+      status: 'ready'
+    })
+  })
+
   it('resolves an already-qualified base ref without a probe', async () => {
     mockBranchCompareGit({
       branch: 'main\n',
