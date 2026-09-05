@@ -147,7 +147,9 @@ type SshPtyDataPayload = Parameters<SshPtyDataCallback>[0]
 type SshPtyLease = ReturnType<Store['getSshRemotePtyLeases']>[number]
 type ReattachedPtyRuntimeRestore = 'restored' | 'missing-surface'
 const SSH_PTY_REATTACH_MAX_CONCURRENCY = 8
-const SSH_PTY_REATTACH_ATTEMPT_TIMEOUT_MS = 10_000
+// Exported so ssh-relay-reestablish-budget.test.ts can hold RELAY_REESTABLISH_BUDGET_MS to the
+// deadlines it claims to cover; that constant is a literal and drifts silently otherwise.
+export const SSH_PTY_REATTACH_ATTEMPT_TIMEOUT_MS = 10_000
 const SSH_PTY_REATTACH_RETRY_MIN_DELAY_MS = 50
 const SSH_PTY_REATTACH_RETRY_JITTER_MS = 200
 const SSH_REJECTED_PTY_RECOVERY_MAX_ATTEMPTS = 2
