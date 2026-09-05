@@ -87,7 +87,9 @@ export function CreationDraftSurface(): React.JSX.Element | null {
         {drafts.length > 0 ? (
           <DropdownMenu
             onOpenChange={(open) => {
-              if (open) void loadCreationDrafts(true)
+              if (open) {
+                void loadCreationDrafts(true)
+              }
             }}
           >
             <DropdownMenuTrigger asChild>
