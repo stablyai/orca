@@ -110,7 +110,7 @@ All stable kinds (`patch`, `minor`, `major`) are computed off the latest _stable
 - **One-off RC for a feature branch:** `kind=rc`, `ref=<branch-or-sha>`. Produces an RC tag that does not touch `main`.
 - **Minor or major bump:** `kind=minor` or `kind=major`.
 
-The scheduled 2x/day RC cron in [`release-rc.yml`](../../actions/workflows/release-rc.yml) is independent and continues to run automatically from `main`.
+RCs are cut manually via [Actions → Cut Release](../../actions/workflows/release-cut.yml) (`kind=rc`). There is no scheduled RC workflow.
 
 ## Release Channels
 
