@@ -284,6 +284,39 @@ describe('GitHandler', () => {
       )
     })
 
+    // Why: this is issue #16424. `--source=HEAD` rebuilt the working tree from
+    // HEAD, so discarding the unstaged half of a partially staged (`MM`) file
+    // also erased the staged half from disk, and a newly added (`AM`) file was
+    // removed outright. Restoring from the index is what "discard unstaged
+    // changes" means, and the remote path must match the local one.
+    it('keeps the staged half of a partially staged file when discarding', async () => {
+      gitInit(tmpDir)
+      writeFileSync(path.join(tmpDir, 'f.txt'), 'base\n')
+      gitCommit(tmpDir, 'initial')
+      writeFileSync(path.join(tmpDir, 'f.txt'), 'base\nfeature1\n')
+      execFileSync('git', ['add', 'f.txt'], { cwd: tmpDir, stdio: 'pipe' })
+      writeFileSync(path.join(tmpDir, 'f.txt'), 'base\nfeature1\nfeature2\n')
+
+      await dispatcher.callRequest('git.discard', { worktreePath: tmpDir, filePath: 'f.txt' })
+
+      await expect(fs.readFile(path.join(tmpDir, 'f.txt'), 'utf-8')).resolves.toBe(
+        'base\nfeature1\n'
+      )
+    })
+
+    it('keeps a newly added file on disk when discarding its unstaged edit', async () => {
+      gitInit(tmpDir)
+      writeFileSync(path.join(tmpDir, 'seed.txt'), 'seed\n')
+      gitCommit(tmpDir, 'initial')
+      writeFileSync(path.join(tmpDir, 'new.txt'), 'brand new\n')
+      execFileSync('git', ['add', 'new.txt'], { cwd: tmpDir, stdio: 'pipe' })
+      writeFileSync(path.join(tmpDir, 'new.txt'), 'brand new\nplus an edit\n')
+
+      await dispatcher.callRequest('git.discard', { worktreePath: tmpDir, filePath: 'new.txt' })
+
+      await expect(fs.readFile(path.join(tmpDir, 'new.txt'), 'utf-8')).resolves.toBe('brand new\n')
+    })
+
     it('bulk discards tracked and untracked files', async () => {
       gitInit(tmpDir)
       writeFileSync(path.join(tmpDir, 'a.txt'), 'a')
@@ -324,7 +357,7 @@ describe('GitHandler', () => {
 
       expect(gitMock).toHaveBeenNthCalledWith(
         2,
-        ['restore', '--worktree', '--source=HEAD', '--', ':(literal)docs'],
+        ['restore', '--worktree', '--', ':(literal)docs'],
         tmpDir
       )
     })

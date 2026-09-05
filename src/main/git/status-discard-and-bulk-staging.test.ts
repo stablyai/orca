@@ -72,7 +72,7 @@ describe('discardChanges', () => {
     realpathMock.mockImplementation(async (targetPath: string) => path.resolve(targetPath))
   })
 
-  it('restores tracked files from HEAD', async () => {
+  it('restores tracked files from the index', async () => {
     gitExecFileAsyncMock.mockResolvedValueOnce({ stdout: 'src/file.ts\n' })
     gitExecFileAsyncMock.mockResolvedValueOnce({ stdout: '' })
 
@@ -87,12 +87,26 @@ describe('discardChanges', () => {
     )
     expect(gitExecFileAsyncMock).toHaveBeenNthCalledWith(
       2,
-      ['restore', '--worktree', '--source=HEAD', '--', ':(literal)src/file.ts'],
+      ['restore', '--worktree', '--', ':(literal)src/file.ts'],
       {
         cwd: '/repo'
       }
     )
     expect(rmMock).not.toHaveBeenCalled()
+  })
+
+  // Why: `--source=HEAD` rewrites the working tree from HEAD, so discarding the
+  // unstaged half of a partially-staged (`MM`) file also erases the staged half
+  // from disk. Restoring from the index is what "discard unstaged changes" means.
+  it('does not rebuild a partially staged file from HEAD', async () => {
+    gitExecFileAsyncMock.mockResolvedValueOnce({ stdout: 'src/file.ts\n' })
+    gitExecFileAsyncMock.mockResolvedValueOnce({ stdout: '' })
+
+    await discardChanges('/repo', 'src/file.ts')
+
+    const restoreArgs = gitExecFileAsyncMock.mock.calls[1]?.[0] as string[]
+    expect(restoreArgs).not.toContain('--source=HEAD')
+    expect(restoreArgs.some((arg) => arg.startsWith('--source'))).toBe(false)
   })
 
   it('removes untracked files from disk', async () => {
@@ -207,7 +221,7 @@ describe('bulk git helpers', () => {
     // tracked descendant, which keeps directory pathspecs on the restore path.
     expect(gitExecFileAsyncMock).toHaveBeenNthCalledWith(
       2,
-      ['restore', '--worktree', '--source=HEAD', '--', ':(literal)src/file.ts', ':(literal)docs'],
+      ['restore', '--worktree', '--', ':(literal)src/file.ts', ':(literal)docs'],
       {
         cwd: '/repo'
       }
@@ -234,12 +248,26 @@ describe('bulk git helpers', () => {
 
     expect(gitExecFileAsyncMock).toHaveBeenNthCalledWith(
       2,
-      ['restore', '--worktree', '--source=HEAD', '--', ':(literal)docs'],
+      ['restore', '--worktree', '--', ':(literal)docs'],
       {
         cwd: '/repo'
       }
     )
     expect(rmMock).not.toHaveBeenCalled()
+  })
+
+  // Why: the bulk path carries the same HEAD-vs-index defect as discardChanges,
+  // and it is the path the "Discard all" affordance uses.
+  it('does not rebuild bulk-discarded files from HEAD', async () => {
+    gitExecFileAsyncMock
+      .mockResolvedValueOnce({ stdout: 'src/file.ts\0' })
+      .mockResolvedValueOnce({ stdout: '' })
+
+    await bulkDiscardChanges('/repo', ['src/file.ts'])
+
+    const restoreArgs = gitExecFileAsyncMock.mock.calls[1]?.[0] as string[]
+    expect(restoreArgs).not.toContain('--source=HEAD')
+    expect(restoreArgs.some((arg) => arg.startsWith('--source'))).toBe(false)
   })
 
   it('rejects bulk discard paths that traverse outside the worktree', async () => {

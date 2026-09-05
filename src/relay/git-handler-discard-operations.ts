@@ -57,7 +57,10 @@ export class GitHandlerDiscardOperations extends GitHandlerOperationContext {
 
       if (tracked) {
         await this.git(
-          ['restore', '--worktree', '--source=HEAD', '--', this.literalPathspec(filePath)],
+          // Why: no `--source`, so the working tree is rebuilt from the index.
+          // Mirrors the local path in src/main/git/source-control/discard-changes.ts;
+          // `--source=HEAD` would also erase a partially staged file's staged half.
+          ['restore', '--worktree', '--', this.literalPathspec(filePath)],
           worktreePath
         )
         return
@@ -112,13 +115,8 @@ export class GitHandlerDiscardOperations extends GitHandlerOperationContext {
           for (let i = 0; i < trackedPaths.length; i += BULK_CHUNK_SIZE) {
             const chunk = trackedPaths.slice(i, i + BULK_CHUNK_SIZE)
             await this.git(
-              [
-                'restore',
-                '--worktree',
-                '--source=HEAD',
-                '--',
-                ...chunk.map((p) => this.literalPathspec(p))
-              ],
+              // Why: index-sourced restore, matching discardOne above.
+              ['restore', '--worktree', '--', ...chunk.map((p) => this.literalPathspec(p))],
               worktreePath
             )
           }
