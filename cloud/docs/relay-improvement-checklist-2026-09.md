@@ -119,9 +119,9 @@ independent. (2.2 deferred; if revived, do it after 2.1 so the new instance is p
 ### 1.1 Cell image roll (Roll 1)
 - [x] Confirm fleet is quiet: 15-min monitor dry-run passes. #19 green 23:07:53Z (run 33927238469). Canary then failed the evidence provenance check because main moved during the gate; re-gating with a same-commit chain.
 - [x] Confirm director is on 519f4914 and c7 on 85bf6799 (confirmed 2026-09-04 via instance-template census; 20 serving cells still on `5aedbca5`) (`verify` mode of the same-cap workflow).
-- [ ] Dispatch `cloud-deploy-relay-production-same-cap` waves per the plan in the findings doc; one wave, verify, next.
-- [ ] After each wave: controls recover on the recreated cells within 5 min; no `container die`; 4408/1006 burst subsides.
-- [ ] Record image census (all 23 on the same digest) in the findings doc.
+- [x] Dispatch `cloud-deploy-relay-production-same-cap` waves per the plan in the findings doc; one wave, verify, next. Done 2026-09-05 01:14Z–22:27Z: c8 canary, US batches c9–c10, c13–c16, c19–c26 at protocol 1, then Asia c27 (recovered via `mode=rollback` re-entry after gate freezes on the flat latency bar, fixed by #18877), c28, c29 as single-cell canaries at protocol 0.
+- [x] After each wave: the transition verifier passed at migration-only and again at general on every cell (assignments carried, heartbeat fresh, hard cap 3 000); no `container die` fleet-wide across the whole roll. The 4408/1006 burst per wave was not measured separately; the verifier's assignment count before and after each restart is the recovery evidence recorded.
+- [x] Record image census in the findings doc. 2026-09-05 22:27Z: all 19 general cells on `519f4914` except c7 on `85bf6799`; existing-only c1–c6, c11, c12 and migration-only c17, c18 untouched on their older images by design. Selector at gen 148.
 
 ### 1.2 Enable pruning
 - [x] `auth_token_pruner_image` = digest of `orca-cloud-auth-00031-tox` (`343a0915…`; it contains the entrypoint). orca-cloud #479 merged.
