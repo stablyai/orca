@@ -31,6 +31,7 @@ import {
 import { failWorkerStartWithReceipt } from './orchestration-worker-start-receipt'
 import { prepareLocalWorkerStart } from './orchestration-worker-start-validation'
 import { resolveDispatchCreator } from './orchestration-dispatch-creator'
+import { resolveDispatchCallerWorktreeId } from './orchestration-caller-workspace'
 import {
   discardStructuredWorkerSession,
   releaseStructuredWorkerSession,
@@ -57,9 +58,9 @@ export async function startLocalWorker(args: {
   const createsWorktree = requestedWorktree === 'new-child' || requestedWorktree === 'new-top-level'
   const { agent, launch } = prepareLocalWorkerStart({ params, createsWorktree, runtime })
 
-  const coordinatorTerminal = await runtime.showTerminal(params.from)
+  const coordinatorWorktreeId = await resolveDispatchCallerWorktreeId(runtime, params.from)
   const creationWorktree = createsWorktree
-    ? await runtime.showManagedWorktree(`id:${coordinatorTerminal.worktreeId}`)
+    ? await runtime.showManagedWorktree(`id:${coordinatorWorktreeId}`)
     : undefined
   if (creationWorktree) {
     await assertOrchestrationWorktreeCreationSupported({
@@ -71,7 +72,7 @@ export async function startLocalWorker(args: {
   let resolvedWorktree = creationWorktree
     ? undefined
     : requestedWorktree === 'current'
-      ? await runtime.showManagedTerminalWorkspace(`id:${coordinatorTerminal.worktreeId}`)
+      ? await runtime.showManagedTerminalWorkspace(`id:${coordinatorWorktreeId}`)
       : await runtime.showManagedTerminalWorkspace(requestedWorktree)
   let explicitTerminal
   if (params.terminal) {
@@ -247,10 +248,10 @@ export async function startLocalWorker(args: {
 
     failedStage = 'dispatch_input'
     const preamble = buildDispatchPreamble({
-      // Never for a structured worker: dispatching requires `showTerminal(--from)`, which cannot
-      // resolve a `structworker_` handle, so advertising the verb would only burn a turn.
-      canDispatchSubWorkers:
-        !structuredSession && started.dispatch.depth < runtime.getNestedWorkerMaxDepth(),
+      // Depth only. A worker is taught the same verbs whichever mode it runs in, so this must not
+      // become a second gate: `resolveDispatchCallerWorktreeId` is what lets a structured worker
+      // dispatch sub-workers exactly like a PTY one.
+      canDispatchSubWorkers: started.dispatch.depth < runtime.getNestedWorkerMaxDepth(),
       taskId: task.id,
       dispatchId: started.dispatch.id,
       taskSpec: task.spec,

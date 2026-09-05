@@ -48,7 +48,7 @@ export async function readArchivedWorkerOutput(args: {
     if (args.source === 'terminal') {
       throw new OrchestrationError(
         'archive_unavailable',
-        `Dispatch ${args.dispatchId} preserved structured chat output only; terminal output was released.`
+        `Dispatch ${args.dispatchId} preserved transcript output only; terminal output was released.`
       )
     }
     return readArchivedStructuredJournal({
@@ -66,7 +66,7 @@ export async function readArchivedWorkerOutput(args: {
     if (args.source === 'terminal') {
       throw new OrchestrationError(
         'archive_unavailable',
-        `Dispatch ${args.dispatchId} preserved structured transcript output only; terminal output was released.`
+        `Dispatch ${args.dispatchId} preserved transcript output only; terminal output was released.`
       )
     }
     const content = JSON.parse(archive.content) as

@@ -133,7 +133,9 @@ export function readStructuredWorkerOutput(args: {
   if (args.source === 'terminal') {
     throw new OrchestrationError(
       'archive_unavailable',
-      `Worker Dispatch ${args.dispatchId} is a structured chat session; it has no terminal output.`
+      // Mode-neutral on purpose: a coordinator is never told which kind of worker it started, so
+      // a refusal must not be the thing that discloses it. `auto` and `transcript` both work here.
+      `Worker Dispatch ${args.dispatchId} has no terminal output; read it with --source auto or --source transcript.`
     )
   }
   return readStructuredWorkerJournal({
@@ -162,7 +164,7 @@ export function readStructuredWorkerJournal(args: {
   if (!page) {
     throw new OrchestrationError(
       'transcript_required',
-      `The structured session for Dispatch ${args.dispatchId} is not attached; its journal cannot be read.`
+      `The transcript for Dispatch ${args.dispatchId} could not be read; its session is not attached.`
     )
   }
   // The oldest item on the page anchors the identity, because the cursor position is an index
