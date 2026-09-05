@@ -655,6 +655,10 @@ describe('registerWorktreeHandlers', () => {
       })
       if (setupScriptLaunchMode === 'new-tab') {
         expect(runtimeStub.createTerminal).toHaveBeenCalledTimes(2)
+        expect(runtimeStub.createTerminal.mock.calls[1][1]).toMatchObject({
+          activate: false,
+          surfaceOwner: false
+        })
         expect(runtimeStub.splitTerminal).not.toHaveBeenCalled()
       } else {
         expect(runtimeStub.createTerminal).toHaveBeenCalledTimes(1)
@@ -663,7 +667,8 @@ describe('registerWorktreeHandlers', () => {
           command: 'bash /workspace/repo/.git/orca/setup-runner.sh',
           env: expect.any(Object),
           sourceSurfaceVisible: true,
-          activate: false
+          activate: false,
+          surfaceOwner: false
         })
       }
     }

@@ -514,14 +514,16 @@ async function spawnLocalStartupAndSetupTerminals(args: {
           command: setupCommand,
           env: setup.envVars,
           sourceSurfaceVisible: startupTerminal?.surface === 'visible',
-          activate: false
+          activate: false,
+          ...(sequencedStartup.activate === false ? { surfaceOwner: false } : {})
         })
       } else {
         await runtime.createTerminal(`id:${worktree.id}`, {
           title: 'Setup',
           command: setupCommand,
           env: setup.envVars,
-          activate: false
+          activate: false,
+          ...(sequencedStartup.activate === false ? { surfaceOwner: false } : {})
         })
       }
       didSpawnSetup = true
