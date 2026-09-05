@@ -217,6 +217,7 @@ describe('ClaudeHookService.install', () => {
         'utf-8'
       )
       expect(managedScript).toContain('DEVIN_PROJECT_DIR')
+      expect(managedScript).toContain('GROK_HOOK_EVENT')
       // Why: guard and Devin-skip paths must still return neutral JSON (#14818).
       expect(managedScript).toMatch(
         process.platform === 'win32'
@@ -535,6 +536,8 @@ describe('ClaudeHookService.installRemote', () => {
     const script = fs.files.get('/home/dev/.orca/agent-hooks/claude-hook.sh')
     expect(script).toContain('#!/bin/sh')
     expect(script).toContain('DEVIN_PROJECT_DIR')
+    // Grok reads .claude hooks under [compat.claude]; the same skip must cover it.
+    expect(script).toContain('GROK_HOOK_EVENT')
     // Why: remote guard paths must still return neutral JSON (#14818).
     expect(script!.indexOf('printf "{}\\n"')).toBe(
       script!.indexOf('#!/bin/sh') + '#!/bin/sh\n'.length
@@ -637,6 +640,9 @@ describe('OpenClaudeHookService-compatible install', () => {
       expect(
         readFileSync(join(tmpHome, '.orca', 'agent-hooks', OPENCLAUDE_SCRIPT_FILE_NAME), 'utf-8')
       ).not.toContain('DEVIN_PROJECT_DIR')
+      expect(
+        readFileSync(join(tmpHome, '.orca', 'agent-hooks', OPENCLAUDE_SCRIPT_FILE_NAME), 'utf-8')
+      ).not.toContain('GROK_HOOK_EVENT')
       // Why: the statusline usage feed is Claude-only; OpenClaude installs must not set statusLine.
       expect(parsed.statusLine).toBeUndefined()
       expect(existsSync(join(tmpHome, '.claude', 'settings.json'))).toBe(false)

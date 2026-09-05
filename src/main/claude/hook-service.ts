@@ -61,7 +61,7 @@ const DEFAULT_CLAUDE_HOOK_SERVICE_OPTIONS: ClaudeHookServiceOptions = {
 
 function getManagedScript(
   target: 'local' | 'posix' = 'local',
-  options: { skipWhenDevinImportsClaude?: boolean } = {}
+  options: { skipWhenCompatAgentImportsClaude?: boolean } = {}
 ): string {
   if (target === 'local' && process.platform === 'win32') {
     return [
@@ -79,10 +79,12 @@ function getManagedScript(
       // Why exit, not the drain label: the drain parks in more.com and a worker is outside
       // an Orca pane — the abandoned-stdin hang #11549 guards against.
       'if not "%CLAUDE_JOB_DIR%"=="" exit /b 0',
-      ...(options.skipWhenDevinImportsClaude
+      ...(options.skipWhenCompatAgentImportsClaude
         ? [
-            // Why: Devin imports .claude hooks by default; skip Orca's managed hook there so status posts stay attributed to Devin.
-            `if not "%DEVIN_PROJECT_DIR%"=="" goto :${WINDOWS_HOOK_STDIN_DRAIN_LABEL}`
+            // Why: Devin and Grok read .claude hooks by default; skip Orca's managed hook under
+            // either so status posts stay attributed to the agent that actually owns the pane.
+            `if not "%DEVIN_PROJECT_DIR%"=="" goto :${WINDOWS_HOOK_STDIN_DRAIN_LABEL}`,
+            `if not "%GROK_HOOK_EVENT%"=="" goto :${WINDOWS_HOOK_STDIN_DRAIN_LABEL}`
           ]
         : []),
       // Why: use curl.exe to avoid an extra PowerShell startup per hook.
@@ -99,10 +101,13 @@ function getManagedScript(
     'printf "{}\\n"',
     ...buildPosixHookPayloadCapture(),
     ...buildPosixHookSpoolLines('claude'),
-    ...(options.skipWhenDevinImportsClaude
+    ...(options.skipWhenCompatAgentImportsClaude
       ? [
-          // Why: Devin imports .claude hooks by default; skip Orca's managed hook there so status posts stay attributed to Devin.
-          'if [ -n "$DEVIN_PROJECT_DIR" ]; then',
+          // Why: Devin and Grok read .claude hooks by default; skip Orca's managed hook under
+          // either so status posts stay attributed to the agent that actually owns the pane.
+          // GROK_HOOK_EVENT only: Grok sets it in every hook process, and it is absent from a
+          // plain shell, so this cannot silence a real Claude pane.
+          'if [ -n "$DEVIN_PROJECT_DIR" ] || [ -n "$GROK_HOOK_EVENT" ]; then',
           '  exit 0',
           'fi'
         ]
@@ -188,7 +193,9 @@ export class ClaudeHookService {
   async refreshManagedScripts(): Promise<void> {
     await refreshManagedScriptIfPresent(
       getManagedScriptPath(this.options.settings),
-      getManagedScript('local', { skipWhenDevinImportsClaude: this.options.agent === 'claude' })
+      getManagedScript('local', {
+        skipWhenCompatAgentImportsClaude: this.options.agent === 'claude'
+      })
     )
     // Why: no agent gate — the statusline script only ever exists for claude, so presence is the gate.
     await refreshManagedScriptIfPresent(
@@ -219,7 +226,9 @@ export class ClaudeHookService {
     )
     writeManagedScript(
       scriptPath,
-      getManagedScript('local', { skipWhenDevinImportsClaude: this.options.agent === 'claude' })
+      getManagedScript('local', {
+        skipWhenCompatAgentImportsClaude: this.options.agent === 'claude'
+      })
     )
     // Why: the statusline usage feed is Claude-only — OpenClaude data would be misattributed to the Claude provider.
     if (this.options.agent === 'claude') {
@@ -281,7 +290,9 @@ export class ClaudeHookService {
       await writeManagedScriptRemote(
         sftp,
         remoteScriptPath,
-        getManagedScript('posix', { skipWhenDevinImportsClaude: this.options.agent === 'claude' })
+        getManagedScript('posix', {
+          skipWhenCompatAgentImportsClaude: this.options.agent === 'claude'
+        })
       )
       // Why: no statusline install here — this path serves SSH remotes and WSL guests, whose relay hook
       // listener doesn't route /statusline/claude, and an SSH box's Claude login can be a different
