@@ -2,17 +2,7 @@
 // Mutations share one durable admission path and serialize per session.
 
 import type { AgentSessionExecutionLocation } from '../../../shared/agent-session-record'
-import type {
-  AgentSessionAttachResult,
-  AgentSessionHistoryRequest,
-  AgentSessionHistoryResult,
-  AgentSessionHandoffRequest,
-  AgentSessionHandoffResult,
-  AgentSessionHandoffStatus,
-  AgentSessionMutationResult,
-  AgentSessionOptionsResult,
-  AgentSessionWireRefusal
-} from '../../../shared/agent-session-wire'
+import type * as SessionWire from '../../../shared/agent-session-wire'
 import type { AgentSessionAttachParams } from './structured-agent-session-attach'
 import { AGENT_SESSION_NOT_ATTACHED } from './structured-agent-session-mutation-admission'
 import { createRestartReconciler } from './structured-agent-session-restart-reconcile'
@@ -77,7 +67,9 @@ export class StructuredAgentSessionHost {
   })
   private readonly tasks = new StructuredAgentSessionTaskQueue()
   private readonly runtimeState: StructuredAgentSessionHostRuntimeState
-  private readonly reconcileLeases: (sessionId: string) => Promise<AgentSessionWireRefusal | null>
+  private readonly reconcileLeases: (
+    sessionId: string
+  ) => Promise<SessionWire.AgentSessionWireRefusal | null>
   private readonly handoffs: StructuredAgentSessionHostHandoff
   private readonly readableRestorer: StructuredAgentSessionReadableRestorer
   private readonly restartRestore = new StructuredAgentSessionRestartRestoreGate()
@@ -252,7 +244,7 @@ export class StructuredAgentSessionHost {
   attach(
     caller: StructuredAgentSessionCaller,
     params: AgentSessionAttachParams
-  ): Promise<AgentSessionMutationResult<AgentSessionAttachResult>> {
+  ): Promise<SessionWire.AgentSessionMutationResult<SessionWire.AgentSessionAttachResult>> {
     return attachStructuredAgentSession(this.attachContext(), caller.callerKey, params)
   }
 
@@ -318,22 +310,23 @@ export class StructuredAgentSessionHost {
 
   requestHandoff = (
     caller: StructuredAgentSessionCaller,
-    params: AgentSessionHandoffRequest
-  ): Promise<AgentSessionMutationResult<AgentSessionHandoffResult>> =>
+    params: SessionWire.AgentSessionHandoffRequest
+  ): Promise<SessionWire.AgentSessionMutationResult<SessionWire.AgentSessionHandoffResult>> =>
     this.handoffs.request(caller.callerKey, params)
 
-  readOptions = (sessionId: string): Promise<AgentSessionOptionsResult> =>
+  readOptions = (sessionId: string): Promise<SessionWire.AgentSessionOptionsResult> =>
     readStructuredAgentSessionOptions(this.mutationContext(), sessionId)
 
-  async handoffStatus(sessionId: string): Promise<AgentSessionHandoffStatus> {
+  async handoffStatus(sessionId: string): Promise<SessionWire.AgentSessionHandoffStatus> {
     this.requireSession(sessionId)
     return this.serialize(sessionId, () =>
       refreshRecoverableStructuredHandoffStatus(this.handoffs, this.deps.store, sessionId)
     )
   }
 
-  history = (request: AgentSessionHistoryRequest): AgentSessionHistoryResult =>
-    this.backgroundTasks.history(request)
+  history = (
+    request: SessionWire.AgentSessionHistoryRequest
+  ): SessionWire.AgentSessionHistoryResult => this.backgroundTasks.history(request)
 
   subscribe = (input: AgentSessionSubscribeInput): (() => void) =>
     this.backgroundTasks.subscribe(input)
