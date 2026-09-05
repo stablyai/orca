@@ -40,9 +40,12 @@ import type { PtyHandler } from './pty-handler'
 import {
   beginPtyHandlerTest,
   createPtyRequestHelpers,
-  endPtyHandlerTest
+  endPtyHandlerTest,
+  testPtyId
 } from './pty-handler-test-harness'
 import type { MockDispatcher } from './pty-handler-test-harness'
+
+const PTY_1 = testPtyId(1)
 
 describe('PtyHandler', () => {
   let dispatcher: MockDispatcher
@@ -293,7 +296,7 @@ describe('PtyHandler', () => {
       expect(handler.retainedStartupCommandCount).toBe(0)
       vi.advanceTimersByTime(8)
       expect(dispatcher.notify).toHaveBeenCalledWith('pty.data', {
-        id: 'pty-1',
+        id: PTY_1,
         data: 'user@remote $ '
       })
     }
@@ -340,7 +343,7 @@ describe('PtyHandler', () => {
         mockCreateShellPromptReadinessProbe.mock.results[0]?.value.notifyOutput
       ).toHaveBeenCalledWith('\x1b[?2004hremote $ ')
       expect(dispatcher.notify).toHaveBeenCalledWith('pty.data', {
-        id: 'pty-1',
+        id: PTY_1,
         data: '\x1b[?2004hremote $ '
       })
       promptOptions.onPromptReady()
@@ -384,7 +387,7 @@ describe('PtyHandler', () => {
       dataCallback?.(`\x1b]777;orca-shell-start:${process.pid}\x07\x1b[?2004hremote $ `)
       await vi.advanceTimersByTimeAsync(8)
       expect(dispatcher.notify).toHaveBeenCalledWith('pty.data', {
-        id: 'pty-1',
+        id: PTY_1,
         data: '\x1b[?2004hremote $ '
       })
 
@@ -396,7 +399,7 @@ describe('PtyHandler', () => {
 
       expect(term.write).not.toHaveBeenCalled()
       expect(dispatcher.notify).toHaveBeenCalledWith('pty.data', {
-        id: 'pty-1',
+        id: PTY_1,
         data: '\x1b]777;orca-shell-ready\x07'
       })
       expect(handler.retainedStartupCommandCount).toBe(0)
@@ -439,7 +442,7 @@ describe('PtyHandler', () => {
       await vi.advanceTimersByTimeAsync(8)
 
       expect(dispatcher.notify).toHaveBeenCalledWith('pty.data', {
-        id: 'pty-1',
+        id: PTY_1,
         data: '\x1b]777;orca-shell-ready\x07remote $ '
       })
       expect(handler.retainedStartupCommandCount).toBe(0)
@@ -484,7 +487,7 @@ describe('PtyHandler', () => {
       expect(probe.notifyOutput).not.toHaveBeenCalled()
       expect(probe.dispose).toHaveBeenCalledOnce()
       expect(dispatcher.notify).toHaveBeenCalledWith('pty.data', {
-        id: 'pty-1',
+        id: PTY_1,
         data: '\x1b]777;orca-shell-ready\x07remote $ '
       })
       expect(handler.retainedStartupCommandCount).toBe(0)
@@ -563,12 +566,12 @@ describe('PtyHandler', () => {
       expect(term.write).toHaveBeenCalledWith('echo fallback\n')
       vi.advanceTimersByTime(8)
       expect(dispatcher.notify).toHaveBeenCalledWith('pty.data', {
-        id: 'pty-1',
+        id: PTY_1,
         data: '\x1b]777;orca-shell-ready'
       })
 
       const result = await attachPty({
-        id: 'pty-1',
+        id: PTY_1,
         suppressReplayNotification: true
       })
       expect(result).toEqual({
@@ -609,8 +612,8 @@ describe('PtyHandler', () => {
 
       const aliveSpy = vi.spyOn(ptyShellUtils, 'isProcessAlive').mockReturnValue(false)
       try {
-        await expect(dispatcher.callRequest('pty.attach', { id: 'pty-1' })).rejects.toThrow(
-          'PTY "pty-1" not found'
+        await expect(dispatcher.callRequest('pty.attach', { id: PTY_1 })).rejects.toThrow(
+          `PTY "${PTY_1}" not found`
         )
       } finally {
         aliveSpy.mockRestore()
@@ -658,7 +661,7 @@ describe('PtyHandler', () => {
     })
     expect(handler.retainedStartupCommandCount).toBe(1)
 
-    const shutdown = dispatcher.callRequest('pty.shutdown', { id: 'pty-1', immediate: true })
+    const shutdown = dispatcher.callRequest('pty.shutdown', { id: PTY_1, immediate: true })
     onExitCb!({ exitCode: 137 })
     await shutdown
     vi.advanceTimersByTime(50)

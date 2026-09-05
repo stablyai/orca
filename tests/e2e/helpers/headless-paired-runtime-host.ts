@@ -14,6 +14,7 @@ import {
 } from './electron-home-isolation'
 import type { RuntimeDesktopPairingOffer } from './paired-electron-client'
 import { readPairingOffer, readServeReadiness } from './headless-paired-runtime-serve-readiness'
+import { retryTransientMainEvaluate } from './electron-main-evaluate-retry'
 
 export type HeadlessPairedRuntimeHost = {
   /** Current serve process. Replaced by `restartServeProcess`, so always read it fresh. */
@@ -130,9 +131,9 @@ export async function launchHeadlessPairedRuntimeHost(
     app = await launchServeProcess()
     const [offer] = await Promise.all([
       readPairingOffer(app),
-      app
-        .evaluate(({ app: electronApp }) => electronApp.getPath('home'))
-        .then((home) => assertElectronResolvedIsolatedHome(home, isolation))
+      retryTransientMainEvaluate(() =>
+        app.evaluate(({ app: electronApp }) => electronApp.getPath('home'))
+      ).then((home) => assertElectronResolvedIsolatedHome(home, isolation))
     ])
     let serveProcess = app
     return {

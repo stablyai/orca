@@ -11,7 +11,7 @@ import { join } from 'node:path'
  */
 
 export const GPU_FALLBACK_MARKER_FILE = 'gpu-fallback.json'
-export const GPU_FALLBACK_SCHEME_VERSION = 2
+export const GPU_FALLBACK_SCHEME_VERSION = 3
 
 export type GpuFallbackEnvironment = {
   appVersion: string
@@ -25,6 +25,7 @@ export type GpuFallbackMarker = {
   schemeVersion: number
   engagedAt: number
   crashesInWindow: number
+  userConfirmed: boolean
   appVersion: string
   electronVersion: string
   platform: 'win32'
@@ -47,6 +48,7 @@ export function readGpuFallbackMarker(userDataPath: string): GpuFallbackMarker |
       !Number.isFinite(parsed.engagedAt) ||
       typeof parsed.crashesInWindow !== 'number' ||
       !Number.isFinite(parsed.crashesInWindow) ||
+      typeof parsed.userConfirmed !== 'boolean' ||
       typeof parsed.appVersion !== 'string' ||
       typeof parsed.electronVersion !== 'string' ||
       parsed.platform !== 'win32'
@@ -57,6 +59,7 @@ export function readGpuFallbackMarker(userDataPath: string): GpuFallbackMarker |
       schemeVersion: GPU_FALLBACK_SCHEME_VERSION,
       engagedAt: parsed.engagedAt,
       crashesInWindow: parsed.crashesInWindow,
+      userConfirmed: parsed.userConfirmed,
       appVersion: parsed.appVersion,
       electronVersion: parsed.electronVersion,
       platform: parsed.platform
@@ -69,13 +72,14 @@ export function readGpuFallbackMarker(userDataPath: string): GpuFallbackMarker |
 
 export function writeGpuFallbackMarker(
   userDataPath: string,
-  info: { engagedAt: number; crashesInWindow: number },
+  info: { engagedAt: number; crashesInWindow: number; userConfirmed: boolean },
   environment: WindowsGpuFallbackEnvironment
 ): void {
   const marker: GpuFallbackMarker = {
     schemeVersion: GPU_FALLBACK_SCHEME_VERSION,
     engagedAt: info.engagedAt,
     crashesInWindow: info.crashesInWindow,
+    userConfirmed: info.userConfirmed,
     appVersion: environment.appVersion,
     electronVersion: environment.electronVersion,
     platform: 'win32'

@@ -10,7 +10,7 @@ index 855bd4b86f0a3c18c7594212c0e42b6e35bc4001..33774e7ae296f0de39dd94156673c9e7
        ],
        "conditions": [
          ['OS=="win"', {
-@@ -15,14 +14,13 @@
+@@ -15,12 +14,11 @@
              "src/process_commandline.cc"
            ],
 -          "include_dirs": [],

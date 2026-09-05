@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, vi } from 'vitest'
 import * as electron from 'electron'
+import { join } from 'node:path'
 import { installFakeAppEnvironment } from '../../../config/scripts/vitest-host-ports-setup'
 import { setPtyHostBindings } from './pty-host-bindings'
 import { testPtyIpcSurface } from './pty-ipc-test-surface'
@@ -16,6 +17,7 @@ import {
   readFileSyncMock,
   writeFileSyncMock,
   chmodSyncMock,
+  linuxCliShimMock,
   getPathMock,
   loginPreflightExecFileMock,
   spawnMock,
@@ -139,6 +141,10 @@ export function createPtyIpcSuiteEnvironment(): PtyIpcSuiteEnvironment {
     readFileSyncMock.mockReset()
     writeFileSyncMock.mockReset()
     chmodSyncMock.mockReset()
+    linuxCliShimMock.mockReset()
+    linuxCliShimMock.mockImplementation((options: { userDataPath: string }) =>
+      join(options.userDataPath, 'linux-orca-cli-shim')
+    )
     getPathMock.mockReset()
     loginPreflightExecFileMock.mockReset()
     spawnMock.mockReset()

@@ -43,9 +43,9 @@ jobs:
           node-version-file: package.json
 
       - name: Setup pnpm
-        uses: pnpm/action-setup@v6
+        uses: pnpm/setup@v2
         with:
-          run_install: false
+          install: false
 
       # Why: Linux golden E2E uses the same native install path as PR/release CI,
       # which needs pnpm to bypass its non-executable bundled gyp_main.py.

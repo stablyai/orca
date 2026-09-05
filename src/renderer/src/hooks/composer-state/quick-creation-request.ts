@@ -18,6 +18,7 @@ export type QuickCreationRequestInput = {
   workspaceName: string
   nameWasGenerated: boolean
   displayName: string | undefined
+  displayNameKind?: 'generated' | 'user'
   selectedRepoIsGit: boolean
   baseBranch: string | undefined
   compareBaseRef: string | undefined
@@ -29,6 +30,7 @@ export type QuickCreationRequestInput = {
   linkedPR: number | null
   pushTarget: GitPushTarget | undefined
   agent: TuiAgent | null
+  agentLaunchRoute?: WorktreeCreationRequest['agentLaunchRoute']
   linkedLinearIssue: string | undefined
   linkedLinearIssueWorkspaceId: string | undefined
   linkedLinearIssueOrganizationUrlKey: string | undefined
@@ -63,6 +65,7 @@ export function buildQuickCreationRequest(
     name: input.workspaceName,
     ...(input.nameWasGenerated ? { nameWasGenerated: true } : {}),
     ...(input.displayName ? { displayName: input.displayName } : {}),
+    ...(input.displayNameKind ? { displayNameKind: input.displayNameKind } : {}),
     ...(input.selectedRepoIsGit && input.baseBranch ? { baseBranch: input.baseBranch } : {}),
     ...(input.selectedRepoIsGit && input.compareBaseRef
       ? { compareBaseRef: input.compareBaseRef }
@@ -81,6 +84,7 @@ export function buildQuickCreationRequest(
     ...(input.linkedPR != null ? { linkedPR: input.linkedPR } : {}),
     ...(input.pushTarget ? { pushTarget: input.pushTarget } : {}),
     agent: input.agent,
+    ...(input.agentLaunchRoute ? { agentLaunchRoute: input.agentLaunchRoute } : {}),
     ...(input.linkedLinearIssue ? { linkedLinearIssue: input.linkedLinearIssue } : {}),
     ...(input.linkedLinearIssueWorkspaceId !== undefined
       ? { linkedLinearIssueWorkspaceId: input.linkedLinearIssueWorkspaceId }

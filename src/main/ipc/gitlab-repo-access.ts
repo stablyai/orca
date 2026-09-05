@@ -11,12 +11,25 @@ export type GitLabRepoSelectorArgs = {
   repoPath: string
   repoId?: string | null
   sourceContext?: TaskSourceContext | null
+  repoOwnerExecutionHostId?: string
 }
 
 function findRegisteredGitLabRepo(args: GitLabRepoSelectorArgs, store: Store): Repo | undefined {
   const sourceRepoId =
     args.sourceContext?.provider === 'gitlab' ? args.sourceContext.repoId?.trim() : null
   const repoId = args.repoId?.trim() || sourceRepoId || null
+  if (args.repoOwnerExecutionHostId) {
+    const resolvedRepoPath = resolve(args.repoPath)
+    const matches = store
+      .getRepos()
+      .filter(
+        (repo) =>
+          (!repoId || repo.id === repoId) &&
+          resolve(repo.path) === resolvedRepoPath &&
+          getRepoExecutionHostId(repo) === args.repoOwnerExecutionHostId
+      )
+    return matches.length === 1 ? matches[0] : undefined
+  }
   if (repoId) {
     const repo = store.getRepo(repoId)
     if (repo) {

@@ -7,6 +7,7 @@ import { withTerminalCloseAttribution } from '../../terminal-close-attribution'
 import {
   AgentTeamsPrepareLaunch,
   AgentTeamsTmuxCompat,
+  TerminalCloseAll,
   TerminalCreateParams,
   TerminalFocus,
   TerminalHandle,
@@ -33,38 +34,49 @@ export const TERMINAL_LIFECYCLE_METHODS: RpcAnyMethod[] = [
   defineMethod({
     name: 'terminal.create',
     params: TerminalCreateParams,
-    handler: async (params, { runtime, pairedDeviceId, clientId }) => ({
-      terminal: await runtime.dedupeTerminalCreate(
-        pairedDeviceId ?? clientId ?? 'local',
-        params.worktree,
-        params.clientMutationId,
-        params.reconcileExisting === true,
-        (canonicalWorktreeSelector, preAllocatedHandle) =>
-          runtime.createTerminal(canonicalWorktreeSelector, {
-            command: params.command,
-            startupCommandDelivery: params.startupCommandDelivery,
-            env: params.env,
-            envToDelete: params.envToDelete,
-            ...(params.launchConfig ? { launchConfig: params.launchConfig } : {}),
-            ...(params.resumeProviderSession
-              ? { resumeProviderSession: params.resumeProviderSession }
-              : {}),
-            ...(params.launchToken ? { launchToken: params.launchToken } : {}),
-            ...(params.launchAgent ? { launchAgent: params.launchAgent } : {}),
-            ...(params.terminalColorQueryReplies
-              ? { terminalColorQueryReplies: params.terminalColorQueryReplies }
-              : {}),
-            title: params.title,
-            focus: params.focus === true,
-            rendererBacked: params.rendererBacked === true,
-            activate: params.activate === true,
-            presentation: params.presentation,
-            tabId: params.tabId,
-            leafId: params.leafId,
-            ...(preAllocatedHandle ? { preAllocatedHandle } : {})
-          })
-      )
-    })
+    handler: async (params, { runtime, pairedDeviceId, clientId, clientKind }) => {
+      // A focused terminal create predates paired-client navigation. Keep the
+      // authority boundary here so a remote caller cannot activate the host
+      // renderer. This legacy RPC remains a background create for paired viewers;
+      // caller-local selection belongs to the session-tab RPC flow.
+      const pairedViewer = clientKind !== undefined
+      const focus = pairedViewer ? false : params.focus === true
+      const activate = pairedViewer ? false : params.activate === true
+      const presentation =
+        pairedViewer && params.presentation === 'focused' ? 'background' : params.presentation
+      return {
+        terminal: await runtime.dedupeTerminalCreate(
+          pairedDeviceId ?? clientId ?? 'local',
+          params.worktree,
+          params.clientMutationId,
+          params.reconcileExisting === true,
+          (canonicalWorktreeSelector, preAllocatedHandle) =>
+            runtime.createTerminal(canonicalWorktreeSelector, {
+              command: params.command,
+              startupCommandDelivery: params.startupCommandDelivery,
+              env: params.env,
+              envToDelete: params.envToDelete,
+              ...(params.launchConfig ? { launchConfig: params.launchConfig } : {}),
+              ...(params.resumeProviderSession
+                ? { resumeProviderSession: params.resumeProviderSession }
+                : {}),
+              ...(params.launchToken ? { launchToken: params.launchToken } : {}),
+              ...(params.launchAgent ? { launchAgent: params.launchAgent } : {}),
+              ...(params.terminalColorQueryReplies
+                ? { terminalColorQueryReplies: params.terminalColorQueryReplies }
+                : {}),
+              title: params.title,
+              focus,
+              rendererBacked: params.rendererBacked === true,
+              activate,
+              presentation,
+              tabId: params.tabId,
+              leafId: params.leafId,
+              ...(preAllocatedHandle ? { preAllocatedHandle } : {})
+            })
+        )
+      }
+    }
   }),
   defineMethod({
     name: 'terminal.split',
@@ -82,6 +94,11 @@ export const TERMINAL_LIFECYCLE_METHODS: RpcAnyMethod[] = [
     name: 'terminal.stop',
     params: TerminalStop,
     handler: async (params, { runtime }) => runtime.stopTerminalsForWorktree(params.worktree)
+  }),
+  defineMethod({
+    name: 'terminal.closeAll',
+    params: TerminalCloseAll,
+    handler: async (params, { runtime }) => runtime.closeTerminalsForWorktree(params.worktree)
   }),
   defineMethod({
     name: 'terminal.sleep',

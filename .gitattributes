@@ -1,11 +1,7 @@
-/config/scripts/create-draft-release.mjs text eol=lf
-/config/scripts/orca-dev.mjs text eol=lf
-/config/scripts/latest-stable-release.mjs text eol=lf
-/config/scripts/publish-complete-draft-releases.mjs text eol=lf
-/config/scripts/release-rc-history.mjs text eol=lf
-/config/scripts/run-internal-dev-setup.mjs text eol=lf
-/config/scripts/verify-cli-bin.mjs text eol=lf
-/config/scripts/verify-release-required-assets.mjs text eol=lf
+# A shebang plus CRLF makes vite's SSR transform emit a literal `#!` mid-module,
+# so any suite importing the script dies at load with a SyntaxError. Pin the whole
+# directory rather than the scripts that happen to have a test today.
+/config/scripts/**/*.mjs text eol=lf
 /skill-guides/*.md text eol=lf
 /skill-stubs/*.md text eol=lf
 /skills/*/SKILL.md text eol=lf
@@ -22,3 +18,6 @@
 # the reviewable change, and pin LF because they are compared byte-for-byte.
 # Not -diff: the shell diff is the review surface when a wrapper does change.
 /src/main/__fixtures__/shell-wrapper-snapshots/*.txt linguist-generated=true text eol=lf
+# Generated runtime English subset: compared byte-for-byte by
+# verify:localization-runtime-catalog, so a CRLF checkout would fail the gate.
+/src/renderer/src/i18n/en-runtime-required.json linguist-generated=true text eol=lf

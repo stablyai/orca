@@ -27,6 +27,8 @@ export type GitLabRepoSelectorArgs = {
   repoPath: string
   repoId?: string | null
   sourceContext?: TaskSourceContext | null
+  /** Desktop IPC-only owner guard; web adapters remove it before runtime RPC. */
+  repoOwnerExecutionHostId?: string
 }
 
 // ── GitLab — parallel to gh, MR/issue surface only in v1 ────────

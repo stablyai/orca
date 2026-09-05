@@ -1,0 +1,5 @@
+{
+  "title": "Browser & Design Mode",
+  "defaultOpen": true,
+  "pages": ["overview", "design-mode", "profiles"]
+}

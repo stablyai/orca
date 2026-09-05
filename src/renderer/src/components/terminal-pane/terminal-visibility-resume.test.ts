@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { PaneManager } from '@/lib/pane-manager/pane-manager'
 import {
   recoverVisibleTerminalWindowWake,
@@ -9,8 +9,11 @@ vi.mock('@/lib/pane-manager/pane-manager-registry', () => ({
   resetAndRefreshAllTerminalWebglAtlases: vi.fn()
 }))
 const presentPaneViewport = vi.fn()
+const presentPaneViewportPreservingSynchronizedOutput = vi.fn()
 vi.mock('@/lib/pane-manager/pane-webgl-renderer', () => ({
-  presentPaneViewport: (pane: unknown) => presentPaneViewport(pane)
+  presentPaneViewport: (pane: unknown) => presentPaneViewport(pane),
+  presentPaneViewportPreservingSynchronizedOutput: (pane: unknown) =>
+    presentPaneViewportPreservingSynchronizedOutput(pane)
 }))
 vi.mock('@/lib/pane-manager/pane-terminal-output-scheduler', () => ({
   flushTerminalOutput: vi.fn(),
@@ -78,6 +81,10 @@ describe('resumeTerminalVisibility reveal repaint', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     repairPaneWebglCanvasDprMismatch.mockReturnValue(false)
+  })
+
+  afterEach(() => {
+    vi.unstubAllGlobals()
   })
 
   it('schedules an atlas-preserving present on a light tab reveal', () => {
@@ -148,7 +155,10 @@ describe('resumeTerminalVisibility reveal repaint', () => {
     expect(flushDeferredPaneMetricOptionsIfMeasurable).not.toHaveBeenCalled()
   })
 
-  it('defers a heavy-reveal dpr present until the shared atlas recovery', async () => {
+  it('rebuilds the atlas synchronously when a heavy reveal repaired a dpr mismatch', async () => {
+    // A repaired backing store leaves the shared atlas holding glyphs rasterized
+    // at the old dpr. Waiting two frames for the settled rebuild would paint
+    // those wrong-size glyphs first, so this path stays synchronous.
     const pane = { terminal: {} }
     const manager = createManager()
     manager.getPanes.mockReturnValue([pane])
@@ -160,15 +170,28 @@ describe('resumeTerminalVisibility reveal repaint', () => {
     resumeTerminalVisibility(resumeArgs(manager, false))
 
     expect(repairPaneWebglCanvasDprMismatch).toHaveBeenCalledWith(pane)
-    expect(presentPaneViewport).not.toHaveBeenCalled()
     expect(resetAndRefreshAllTerminalWebglAtlases).toHaveBeenCalledTimes(1)
-    const atlasResetCallOrder = resetAndRefreshAllTerminalWebglAtlases.mock.invocationCallOrder[0]
-    if (atlasResetCallOrder === undefined) {
-      throw new Error('Shared atlas recovery call order missing')
-    }
-    expect(repairPaneWebglCanvasDprMismatch.mock.invocationCallOrder[0]).toBeLessThan(
-      atlasResetCallOrder
+    expect(resetAndRefreshAllTerminalWebglAtlases).toHaveBeenCalledWith('visibility-resume-dpr')
+    expect(presentPaneViewportPreservingSynchronizedOutput).not.toHaveBeenCalled()
+    expect(manager.scheduleRevealRepaint).toHaveBeenCalledTimes(1)
+  })
+
+  it('presents immediately on a heavy reveal so no pre-hide pixels survive the settle', async () => {
+    // Without this present the canvas composites pre-hide pixels until the
+    // settled rebuild lands two frames later, which under load is not two frames.
+    const pane = { terminal: {} }
+    const manager = createManager()
+    manager.getPanes.mockReturnValue([pane])
+    const { resetAndRefreshAllTerminalWebglAtlases } = vi.mocked(
+      await import('@/lib/pane-manager/pane-manager-registry')
     )
+
+    resumeTerminalVisibility(resumeArgs(manager, false))
+
+    expect(presentPaneViewportPreservingSynchronizedOutput).toHaveBeenCalledWith(pane)
+    // The expensive registry-wide rebuild is still deferred to the settled frame.
+    expect(resetAndRefreshAllTerminalWebglAtlases).not.toHaveBeenCalled()
+    expect(manager.scheduleRevealRepaint).toHaveBeenCalledTimes(1)
   })
 
   it('does not fit on a light tab reveal', () => {

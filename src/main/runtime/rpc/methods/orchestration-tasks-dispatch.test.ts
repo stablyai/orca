@@ -52,6 +52,19 @@ describe('orchestration RPC methods', () => {
       expect(result.task.status).toBe('pending')
     })
 
+    it('persists a dependency from a PowerShell-stripped CLI deps payload', async () => {
+      setup()
+      const t1 = db.createTask({ spec: 'first' })
+
+      const result = (await call('orchestration.taskCreate', {
+        spec: 'second',
+        deps: `[${t1.id}]`
+      })) as { task: { id: string; status: string } }
+
+      expect(result.task.status).toBe('pending')
+      expect(db.getTask(result.task.id)?.deps).toBe(JSON.stringify([t1.id]))
+    })
+
     it('records the caller pane, process, and Run generation when creating a task', async () => {
       setup()
       vi.spyOn(runtime, 'getTerminalPaneKey').mockImplementation((handle) =>

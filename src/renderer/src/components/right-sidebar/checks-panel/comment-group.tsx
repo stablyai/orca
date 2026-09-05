@@ -34,6 +34,7 @@ export function PRCommentGroupView({
   selectionControl,
   actionState,
   isQueued,
+  now,
   replyDisabled,
   replyDisabledReason,
   presentation,
@@ -52,6 +53,7 @@ export function PRCommentGroupView({
   selectionControl?: React.ReactNode
   actionState: PRCommentGroupActionState
   isQueued: boolean
+  now: number
   replyDisabled?: boolean
   replyDisabledReason?: string
   presentation: PRCommentPresentationClasses
@@ -106,6 +108,7 @@ export function PRCommentGroupView({
     botAuthorOverrides,
     actionState,
     isQueued,
+    now,
     replyDisabled,
     replyDisabledReason,
     presentation,
@@ -153,6 +156,7 @@ export function PRCommentGroupView({
                   showResolve={false}
                   showReply={Boolean(onReply)}
                   isQueued={false}
+                  now={now}
                   onReply={startReply}
                 />
                 {renderReplyComposer(reply, true)}
@@ -187,6 +191,7 @@ export function ResolvedCommentGroupsSection({
   groups,
   botAuthorOverrides,
   replyingCommentId,
+  now,
   replyDisabled,
   replyDisabledReason,
   presentation,
@@ -201,6 +206,7 @@ export function ResolvedCommentGroupsSection({
   groups: PRCommentGroup[]
   botAuthorOverrides: ReadonlySet<string>
   replyingCommentId: number | null
+  now: number
   replyDisabled?: boolean
   replyDisabledReason?: string
   presentation: PRCommentPresentationClasses
@@ -239,6 +245,7 @@ export function ResolvedCommentGroupsSection({
                 group={group}
                 botAuthorOverrides={botAuthorOverrides}
                 replyingCommentId={replyingCommentId}
+                now={now}
                 actionState="resolved"
                 isQueued={false}
                 replyDisabled={replyDisabled}

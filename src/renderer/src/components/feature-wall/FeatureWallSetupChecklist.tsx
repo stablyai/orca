@@ -27,6 +27,8 @@ import type { TuiAgent } from '../../../../shared/tui-agent'
 import { getProviderRuntimeContextKey } from '@/lib/provider-runtime-context'
 import { translate } from '@/i18n/i18n'
 
+import { getLocalizedFeatureWallSetupChecklistCopy } from './feature-wall-setup-checklist-localized-copy'
+
 type FeatureWallSetupChecklistLayout = 'modal' | 'embedded'
 
 type FeatureWallSetupChecklistProps = {
@@ -49,6 +51,7 @@ function SetupStepRow(props: {
 }): React.JSX.Element {
   const { step, done, active, ordinal, onSelect, layout } = props
   const isEmbedded = layout === 'embedded'
+  const localizedStepCopy = getLocalizedFeatureWallSetupChecklistCopy(step)
   return (
     <button
       type="button"
@@ -85,7 +88,7 @@ function SetupStepRow(props: {
       </span>
       <span className="min-w-0 flex-1">
         <span className="block text-[15px] font-medium leading-snug text-foreground">
-          {step.name}
+          {localizedStepCopy.name}
         </span>
       </span>
     </button>
@@ -325,7 +328,7 @@ export function FeatureWallSetupChecklist(
             <div className="flex items-start justify-between gap-4">
               <div className="min-w-0">
                 <div className="text-2xl font-semibold leading-tight text-foreground">
-                  {activeStep.name}
+                  {getLocalizedFeatureWallSetupChecklistCopy(activeStep).name}
                 </div>
               </div>
               <span
@@ -361,7 +364,7 @@ export function FeatureWallSetupChecklist(
                     hasStepVisual && !isEmbedded ? 'pr-4 sm:pr-6' : null
                   )}
                 >
-                  {activeStep.description}
+                  {getLocalizedFeatureWallSetupChecklistCopy(activeStep).description}
                 </p>
                 {/* Action lives under the caption, not after the grid, so it sits just
                     below the copy instead of being pushed down by the taller visual. */}

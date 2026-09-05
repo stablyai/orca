@@ -78,8 +78,8 @@ export async function getMergeRequest(
 }
 
 /**
- * Find the merge request whose source branch matches the given name.
- * Returns the most recently updated MR for the branch, or null when none exists.
+ * Find the explicitly linked merge request, or the newest MR whose source branch matches.
+ * Returns null when neither exists.
  */
 export async function getMergeRequestForBranch(
   repoPath: string,
@@ -103,6 +103,22 @@ export async function getMergeRequestForBranch(
   }
   await acquire()
   try {
+    if (typeof linkedMRIid === 'number') {
+      const { stdout } = await glabExecFileAsync(
+        [
+          'api',
+          ...glabHostnameArgs(projectRef, connectionId),
+          `projects/${encodedProject(projectRef.path)}/merge_requests/${linkedMRIid}?with_merge_status_recheck=true`
+        ],
+        glabRepoExecOptions(repoPath, connectionId, localGitOptions)
+      )
+      const raw = JSON.parse(stdout) as Parameters<typeof mapMRInfo>[0] & {
+        head_pipeline?: { status?: string } | null
+        pipeline?: { status?: string } | null
+      }
+      const pipelineStatus = derivePipelineStatus(raw.head_pipeline ?? raw.pipeline ?? null)
+      return mapMRInfo(raw, pipelineStatus)
+    }
     if (branchName) {
       const { stdout } = await glabExecFileAsync(
         [
@@ -125,12 +141,10 @@ export async function getMergeRequestForBranch(
         // Why: older GitLab list payloads expose `pipeline` instead of `head_pipeline`.
         const pipelineStatus = derivePipelineStatus(raw.head_pipeline ?? raw.pipeline ?? null)
         const info = mapMRInfo(raw, pipelineStatus)
-        // Why (#9171): discard a non-open implicit branch match on the repo
-        // default branch and fall through to the linked-iid fallback below.
+        // Why (#9171): discard a non-open implicit branch match on the repo default branch.
         const hideOnDefaultBranch = await shouldHideNonOpenReviewOnDefaultBranch({
           state: info.state,
           reviewNumber: info.number,
-          linkedReviewNumber: linkedMRIid,
           branchName,
           repoPath,
           connectionId,
@@ -141,24 +155,7 @@ export async function getMergeRequestForBranch(
         }
       }
     }
-    if (typeof linkedMRIid !== 'number') {
-      return null
-    }
-    // Why: create-from-MR worktrees may rename the branch; fall back to the durable linked iid.
-    const { stdout } = await glabExecFileAsync(
-      [
-        'api',
-        ...glabHostnameArgs(projectRef, connectionId),
-        `projects/${encodedProject(projectRef.path)}/merge_requests/${linkedMRIid}`
-      ],
-      glabRepoExecOptions(repoPath, connectionId, localGitOptions)
-    )
-    const raw = JSON.parse(stdout) as Parameters<typeof mapMRInfo>[0] & {
-      head_pipeline?: { status?: string } | null
-      pipeline?: { status?: string } | null
-    }
-    const pipelineStatus = derivePipelineStatus(raw.head_pipeline ?? raw.pipeline ?? null)
-    return mapMRInfo(raw, pipelineStatus)
+    return null
   } catch (error) {
     if (throwOnFailure) {
       throw error

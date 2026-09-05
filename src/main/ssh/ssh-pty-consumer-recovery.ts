@@ -37,6 +37,15 @@ export function claimSshPtyConsumerRecovery(
     return current
   }
   const persisted = current ? null : store.getSshPtyConsumerRecovery(targetId)
+  if (!persisted) {
+    // Deliberately not stabilized: this id is also the consumer session's ownership identity, and
+    // reusing it without the generations the same dropped record carried would replay a stale
+    // owner generation at the relay. The cost is visible instead of silent — every relay PTY the
+    // host still attributes to the previous identity becomes permanently unsweepable (#9819).
+    console.warn(
+      `[ssh-pty-consumer] no recovery record for ${targetId}; minting a new consumer identity. Relay PTYs the host attributes to this client's previous identity can no longer be swept.`
+    )
+  }
   const created: SshPtyConsumerRecoveryState = {
     clientInstanceId: persisted?.clientInstanceId ?? randomUUID(),
     detached: false,

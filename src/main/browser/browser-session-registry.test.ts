@@ -1,12 +1,16 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-const { sessionFromPartitionMock, askForMediaAccessMock, getMediaAccessStatusMock } = vi.hoisted(
-  () => ({
-    sessionFromPartitionMock: vi.fn(),
-    askForMediaAccessMock: vi.fn(),
-    getMediaAccessStatusMock: vi.fn()
-  })
-)
+const {
+  sessionFromPartitionMock,
+  askForMediaAccessMock,
+  getMediaAccessStatusMock,
+  removeCertificateRequestGuardMock
+} = vi.hoisted(() => ({
+  sessionFromPartitionMock: vi.fn(),
+  askForMediaAccessMock: vi.fn(),
+  getMediaAccessStatusMock: vi.fn(),
+  removeCertificateRequestGuardMock: vi.fn()
+}))
 
 vi.mock('electron', () => ({
   session: {
@@ -23,13 +27,16 @@ vi.mock('./browser-manager', () => ({
     notifyPermissionDenied: vi.fn(),
     handleGuestWillDownload: vi.fn(),
     installCertificateRequestGuard: vi.fn(),
-    removeCertificateRequestGuard: vi.fn()
+    removeCertificateRequestGuard: removeCertificateRequestGuardMock
   }
 }))
 
 import { browserSessionRegistry } from './browser-session-registry'
 import { googleAuthUserAgent } from './browser-google-auth-ua'
 import { setupClientHintsOverride } from './browser-session-ua'
+import { setBrowserNetworkProxySettingsResolver } from './browser-session-proxy'
+import { handleElectronProxyLogin } from '../network/electron-proxy-credentials'
+import { applyProxySettingsToSession } from '../network/proxy-settings'
 import { ORCA_BROWSER_PARTITION } from '../../shared/constants'
 import {
   DEFAULT_LOCAL_ORCA_PROFILE_ID,
@@ -42,6 +49,8 @@ describe('BrowserSessionRegistry', () => {
     sessionFromPartitionMock.mockReset()
     askForMediaAccessMock.mockReset()
     getMediaAccessStatusMock.mockReset()
+    removeCertificateRequestGuardMock.mockClear()
+    setBrowserNetworkProxySettingsResolver(null)
     askForMediaAccessMock.mockResolvedValue(true)
     getMediaAccessStatusMock.mockReturnValue('granted')
     sessionFromPartitionMock.mockReturnValue({
@@ -51,6 +60,9 @@ describe('BrowserSessionRegistry', () => {
       setDisplayMediaRequestHandler: vi.fn(),
       on: vi.fn(),
       removeListener: vi.fn(),
+      resolveProxy: vi.fn().mockResolvedValue('DIRECT'),
+      setProxy: vi.fn().mockResolvedValue(undefined),
+      closeAllConnections: vi.fn().mockResolvedValue(undefined),
       clearStorageData: vi.fn().mockResolvedValue(undefined),
       clearCache: vi.fn().mockResolvedValue(undefined)
     })
@@ -71,8 +83,8 @@ describe('BrowserSessionRegistry', () => {
     expect(browserSessionRegistry.isAllowedPartition('persist:evil-partition')).toBe(false)
   })
 
-  it('creates an isolated profile with a unique partition', () => {
-    const profile = browserSessionRegistry.createProfile('isolated', 'Test Isolated')
+  it('creates an isolated profile with a unique partition', async () => {
+    const profile = await browserSessionRegistry.createProfile('isolated', 'Test Isolated')
     expect(profile).not.toBeNull()
     expect(profile!.scope).toBe('isolated')
     expect(profile!.partition).toMatch(/^persist:orca-browser-session-/)
@@ -81,33 +93,129 @@ describe('BrowserSessionRegistry', () => {
     expect(profile!.source).toBeNull()
   })
 
-  it('rejects creating a profile with scope default', () => {
-    const profile = browserSessionRegistry.createProfile('default', 'Sneaky')
+  it('does not return a runtime profile until its proxy is ready', async () => {
+    let finishWrite: (() => void) | undefined
+    let proxyReady = false
+    const navigate = vi.fn((_partition: string | undefined) => expect(proxyReady).toBe(true))
+    const proxySession = sessionFromPartitionMock()
+    proxySession.setProxy.mockImplementation(
+      () =>
+        new Promise<void>((resolve) => {
+          finishWrite = () => {
+            proxyReady = true
+            resolve()
+          }
+        })
+    )
+    sessionFromPartitionMock.mockReturnValueOnce(proxySession)
+    setBrowserNetworkProxySettingsResolver(() => ({
+      httpProxyUrl: 'socks5://127.0.0.1:1080',
+      httpProxyBypassRules: ''
+    }))
+
+    let ready = false
+    const creation = browserSessionRegistry
+      .createProfile('isolated', 'Proxy Ready')
+      .then((profile) => {
+        ready = true
+        navigate(profile?.partition)
+        return profile
+      })
+    await vi.waitFor(() => expect(proxySession.setProxy).toHaveBeenCalledTimes(1))
+    expect(ready).toBe(false)
+    expect(navigate).not.toHaveBeenCalled()
+
+    finishWrite?.()
+    await expect(creation).resolves.not.toBeNull()
+    expect(ready).toBe(true)
+    expect(navigate).toHaveBeenCalledTimes(1)
+  })
+
+  it('rejects and rolls back a runtime profile when its proxy cannot be applied', async () => {
+    const before = browserSessionRegistry.listProfiles().length
+    const proxySession = sessionFromPartitionMock()
+    proxySession.setProxy.mockRejectedValue(new Error('proxy unavailable'))
+    sessionFromPartitionMock.mockReturnValue(proxySession)
+    setBrowserNetworkProxySettingsResolver(() => ({
+      httpProxyUrl: 'socks5://127.0.0.1:1080',
+      httpProxyBypassRules: ''
+    }))
+
+    await expect(browserSessionRegistry.createProfile('isolated', 'Proxy Failure')).rejects.toThrow(
+      'proxy unavailable'
+    )
+
+    expect(browserSessionRegistry.listProfiles()).toHaveLength(before)
+    expect(proxySession.setPermissionRequestHandler).toHaveBeenLastCalledWith(null)
+    expect(proxySession.setPermissionCheckHandler).toHaveBeenLastCalledWith(null)
+  })
+
+  it('retires credentials when profile creation and proxy rollback both fail', async () => {
+    const proxySession = sessionFromPartitionMock()
+    proxySession.setProxy
+      .mockResolvedValueOnce(undefined)
+      .mockRejectedValue(new Error('proxy rollback failed'))
+    proxySession.closeAllConnections.mockRejectedValueOnce(new Error('proxy settlement failed'))
+    proxySession.setPermissionRequestHandler.mockImplementation((handler: unknown) => {
+      if (handler === null) {
+        throw new Error('policy cleanup failed')
+      }
+    })
+    sessionFromPartitionMock.mockReturnValue(proxySession)
+    setBrowserNetworkProxySettingsResolver(() => ({
+      httpProxyUrl: 'http://alice:secret@proxy.example:8080',
+      httpProxyBypassRules: ''
+    }))
+
+    await expect(
+      browserSessionRegistry.createProfile('isolated', 'Proxy Rollback')
+    ).rejects.toThrow('proxy rollback failed')
+    const callback = vi.fn()
+    handleElectronProxyLogin(
+      { preventDefault: vi.fn() } as never,
+      { session: proxySession } as never,
+      {} as never,
+      { isProxy: true, host: 'proxy.example', port: 8080 },
+      callback
+    )
+
+    expect(callback).not.toHaveBeenCalled()
+    await expect(
+      applyProxySettingsToSession(
+        proxySession,
+        { httpProxyUrl: 'http://later.example:8080' },
+        { env: {} }
+      )
+    ).rejects.toThrow('retired')
+  })
+
+  it('rejects creating a profile with scope default', async () => {
+    const profile = await browserSessionRegistry.createProfile('default', 'Sneaky')
     expect(profile).toBeNull()
   })
 
-  it('rejects invalid user-agent modes at the registry boundary', () => {
-    const profile = browserSessionRegistry.createProfile('isolated', 'Invalid UA', {
+  it('rejects invalid user-agent modes at the registry boundary', async () => {
+    const profile = await browserSessionRegistry.createProfile('isolated', 'Invalid UA', {
       userAgentMode: 'rotating' as never
     })
     expect(profile).toBeNull()
   })
 
-  it('allows created profile partitions', () => {
-    const profile = browserSessionRegistry.createProfile('isolated', 'Allowed')
+  it('allows created profile partitions', async () => {
+    const profile = await browserSessionRegistry.createProfile('isolated', 'Allowed')
     expect(profile).not.toBeNull()
     expect(browserSessionRegistry.isAllowedPartition(profile!.partition)).toBe(true)
   })
 
-  it('creates an imported profile', () => {
-    const profile = browserSessionRegistry.createProfile('imported', 'My Import')
+  it('creates an imported profile', async () => {
+    const profile = await browserSessionRegistry.createProfile('imported', 'My Import')
     expect(profile).not.toBeNull()
     expect(profile!.scope).toBe('imported')
     expect(profile!.partition).toMatch(/^persist:orca-browser-session-/)
   })
 
-  it('resolves partition for a known profile', () => {
-    const profile = browserSessionRegistry.createProfile('isolated', 'Resolve Test')
+  it('resolves partition for a known profile', async () => {
+    const profile = await browserSessionRegistry.createProfile('isolated', 'Resolve Test')
     expect(profile).not.toBeNull()
     expect(browserSessionRegistry.resolvePartition(profile!.id)).toBe(profile!.partition)
   })
@@ -121,8 +229,8 @@ describe('BrowserSessionRegistry', () => {
     expect(browserSessionRegistry.resolvePartition('nonexistent')).toBe(ORCA_BROWSER_PARTITION)
   })
 
-  it('strictly resolves known profile partitions without downgrading unknown profiles', () => {
-    const profile = browserSessionRegistry.createProfile('isolated', 'Strict Resolve')
+  it('strictly resolves known profile partitions without downgrading unknown profiles', async () => {
+    const profile = await browserSessionRegistry.createProfile('isolated', 'Strict Resolve')
     expect(profile).not.toBeNull()
 
     expect(browserSessionRegistry.resolveKnownPartition(null)).toBe(ORCA_BROWSER_PARTITION)
@@ -132,15 +240,15 @@ describe('BrowserSessionRegistry', () => {
     expect(browserSessionRegistry.resolveKnownPartition('missing-profile')).toBeNull()
   })
 
-  it('lists all profiles', () => {
+  it('lists all profiles', async () => {
     const before = browserSessionRegistry.listProfiles().length
-    browserSessionRegistry.createProfile('isolated', 'List Test')
+    await browserSessionRegistry.createProfile('isolated', 'List Test')
     const after = browserSessionRegistry.listProfiles()
     expect(after.length).toBe(before + 1)
   })
 
-  it('updates profile source', () => {
-    const profile = browserSessionRegistry.createProfile('imported', 'Source Test')
+  it('updates profile source', async () => {
+    const profile = await browserSessionRegistry.createProfile('imported', 'Source Test')
     expect(profile).not.toBeNull()
     const updated = browserSessionRegistry.updateProfileSource(profile!.id, {
       browserFamily: 'edge',
@@ -150,8 +258,8 @@ describe('BrowserSessionRegistry', () => {
     expect(updated!.source?.browserFamily).toBe('edge')
   })
 
-  it('updates profile source with comet family', () => {
-    const profile = browserSessionRegistry.createProfile('imported', 'Comet Source Test')
+  it('updates profile source with comet family', async () => {
+    const profile = await browserSessionRegistry.createProfile('imported', 'Comet Source Test')
     expect(profile).not.toBeNull()
     const updated = browserSessionRegistry.updateProfileSource(profile!.id, {
       browserFamily: 'comet',
@@ -162,7 +270,7 @@ describe('BrowserSessionRegistry', () => {
   })
 
   it('deletes a non-default profile', async () => {
-    const profile = browserSessionRegistry.createProfile('isolated', 'Delete Test')
+    const profile = await browserSessionRegistry.createProfile('isolated', 'Delete Test')
     expect(profile).not.toBeNull()
     expect(browserSessionRegistry.isAllowedPartition(profile!.partition)).toBe(true)
     const deleted = await browserSessionRegistry.deleteProfile(profile!.id)
@@ -171,21 +279,40 @@ describe('BrowserSessionRegistry', () => {
     expect(browserSessionRegistry.getProfile(profile!.id)).toBeNull()
   })
 
-  it('clears session policy callbacks when deleting a profile', async () => {
-    const profile = browserSessionRegistry.createProfile('isolated', 'Policy Delete Test')
+  it('retains session security policies when deleting a profile', async () => {
+    const profile = await browserSessionRegistry.createProfile('isolated', 'Policy Delete Test')
     expect(profile).not.toBeNull()
     const mockSession = sessionFromPartitionMock.mock.results[0]?.value
-    const downloadHandler = mockSession.on.mock.calls.find(
-      ([eventName]) => eventName === 'will-download'
-    )?.[1]
+    const permissionWrites = mockSession.setPermissionRequestHandler.mock.calls.length
+    const downloadListenerWrites = mockSession.removeListener.mock.calls.length
 
     await expect(browserSessionRegistry.deleteProfile(profile!.id)).resolves.toBe(true)
 
-    expect(mockSession.removeListener).toHaveBeenCalledWith('will-download', downloadHandler)
-    expect(mockSession.setPermissionRequestHandler).toHaveBeenLastCalledWith(null)
-    expect(mockSession.setPermissionCheckHandler).toHaveBeenLastCalledWith(null)
-    expect(mockSession.setDevicePermissionHandler).toHaveBeenLastCalledWith(null)
-    expect(mockSession.setDisplayMediaRequestHandler).toHaveBeenLastCalledWith(null)
+    expect(mockSession.setPermissionRequestHandler).toHaveBeenCalledTimes(permissionWrites)
+    expect(mockSession.removeListener).toHaveBeenCalledTimes(downloadListenerWrites)
+    expect(removeCertificateRequestGuardMock).not.toHaveBeenCalled()
+  })
+
+  it('keeps the request guard installed while deleted-profile guests remain', async () => {
+    setBrowserNetworkProxySettingsResolver(() => ({
+      httpProxyUrl: 'http://proxy.example:8080',
+      httpProxyBypassRules: ''
+    }))
+    const profile = await browserSessionRegistry.createProfile('isolated', 'Delayed Delete')
+    const mockSession = sessionFromPartitionMock.mock.results[0]?.value
+    let finishClose: (() => void) | undefined
+    mockSession.closeAllConnections.mockImplementationOnce(
+      () => new Promise<void>((resolve) => (finishClose = resolve))
+    )
+    removeCertificateRequestGuardMock.mockClear()
+
+    const deletion = browserSessionRegistry.deleteProfile(profile!.id)
+    await vi.waitFor(() => expect(mockSession.setProxy).toHaveBeenCalledWith({ mode: 'system' }))
+
+    expect(removeCertificateRequestGuardMock).not.toHaveBeenCalled()
+    finishClose?.()
+    await expect(deletion).resolves.toBe(true)
+    expect(removeCertificateRequestGuardMock).not.toHaveBeenCalled()
   })
 
   it('refuses to delete the default profile', async () => {
@@ -226,8 +353,8 @@ describe('BrowserSessionRegistry', () => {
     expect(browserSessionRegistry.isAllowedPartition(claimedPartition)).toBe(false)
   })
 
-  it('sets up session policies for new partitions', () => {
-    browserSessionRegistry.createProfile('isolated', 'Policy Test')
+  it('sets up session policies for new partitions', async () => {
+    await browserSessionRegistry.createProfile('isolated', 'Policy Test')
     expect(sessionFromPartitionMock).toHaveBeenCalled()
     const mockSession = sessionFromPartitionMock.mock.results[0]?.value
     expect(mockSession?.setPermissionRequestHandler).toHaveBeenCalled()
@@ -235,9 +362,13 @@ describe('BrowserSessionRegistry', () => {
     expect(mockSession?.setDevicePermissionHandler).toHaveBeenCalled()
   })
 
-  it('applies and clears existing browser-profile policy on an opaque route partition', () => {
+  it('applies and clears existing browser-profile policy on an opaque route partition', async () => {
     const partition =
       'persist:orca-browser-v1-1111111111111111222222222222222233333333333333334444444444444444'
+    setBrowserNetworkProxySettingsResolver(() => ({
+      httpProxyUrl: 'http://app-proxy.example:8080',
+      httpProxyBypassRules: ''
+    }))
 
     browserSessionRegistry.setupRoutePartitionPolicies(partition, 'default')
 
@@ -245,6 +376,8 @@ describe('BrowserSessionRegistry', () => {
     const configuredSession = sessionFromPartitionMock.mock.results[0]?.value
     expect(configuredSession.setPermissionRequestHandler).toHaveBeenCalled()
     expect(configuredSession.setPermissionCheckHandler).toHaveBeenCalled()
+    await new Promise<void>((resolve) => setImmediate(resolve))
+    expect(configuredSession.setProxy).not.toHaveBeenCalled()
 
     browserSessionRegistry.clearRoutePartitionPolicies(partition)
     const clearedSession = sessionFromPartitionMock.mock.results.at(-1)?.value
@@ -261,8 +394,8 @@ describe('BrowserSessionRegistry', () => {
     ).toThrow('browser_route_partition_profile_unavailable')
   })
 
-  it('auto-grants pointer lock for browser partitions', () => {
-    browserSessionRegistry.createProfile('isolated', 'Pointer Lock Test')
+  it('auto-grants pointer lock for browser partitions', async () => {
+    await browserSessionRegistry.createProfile('isolated', 'Pointer Lock Test')
     const mockSession = sessionFromPartitionMock.mock.results[0]?.value
     const requestHandler = mockSession.setPermissionRequestHandler.mock.calls[0][0]
     const checkHandler = mockSession.setPermissionCheckHandler.mock.calls[0][0]
@@ -275,10 +408,10 @@ describe('BrowserSessionRegistry', () => {
     expect(checkHandler(null, 'pointerLock', '', {})).toBe(true)
   })
 
-  it('auto-grants storage-access for isolated partitions', () => {
+  it('auto-grants storage-access for isolated partitions', async () => {
     // Why: mirrors the pointerLock precedent directly above — the default-partition suite does not
     // reach this install path.
-    browserSessionRegistry.createProfile('isolated', 'Storage Access Test')
+    await browserSessionRegistry.createProfile('isolated', 'Storage Access Test')
     const mockSession = sessionFromPartitionMock.mock.results[0]?.value
     const requestHandler = mockSession.setPermissionRequestHandler.mock.calls[0][0]
     const checkHandler = mockSession.setPermissionCheckHandler.mock.calls[0][0]
@@ -297,7 +430,7 @@ describe('BrowserSessionRegistry', () => {
     // profiles must also defer media permission checks to macOS instead of
     // denying outright, otherwise pages inside them still hit NotAllowedError
     // after the user grants Camera/Microphone to Orca.
-    browserSessionRegistry.createProfile('isolated', 'Media Test')
+    await browserSessionRegistry.createProfile('isolated', 'Media Test')
     const mockSession = sessionFromPartitionMock.mock.results[0]?.value
     const requestHandler = mockSession.setPermissionRequestHandler.mock.calls[0][0]
     const checkHandler = mockSession.setPermissionCheckHandler.mock.calls[0][0]
@@ -313,8 +446,8 @@ describe('BrowserSessionRegistry', () => {
     expect(checkHandler(null, 'geolocation', '', {})).toBe(false)
   })
 
-  it('wires WebAuthn device selection for isolated partitions', () => {
-    browserSessionRegistry.createProfile('isolated', 'Security Key Test')
+  it('wires WebAuthn device selection for isolated partitions', async () => {
+    await browserSessionRegistry.createProfile('isolated', 'Security Key Test')
     const mockSession = sessionFromPartitionMock.mock.results[0]?.value
     const devicePermissionHandler = mockSession.setDevicePermissionHandler.mock.calls[0][0]
     const checkHandler = mockSession.setPermissionCheckHandler.mock.calls[0][0]
@@ -371,7 +504,7 @@ describe('BrowserSessionRegistry', () => {
     expect(webAuthnCallback).toHaveBeenCalledWith('credential-1')
   })
 
-  it('uses profile-owned partitions for non-default Orca profiles', () => {
+  it('uses profile-owned partitions for non-default Orca profiles', async () => {
     const orcaProfileId = 'local-work'
     browserSessionRegistry.configureForOrcaProfile({
       orcaProfileId,
@@ -383,7 +516,7 @@ describe('BrowserSessionRegistry', () => {
     )
     expect(browserSessionRegistry.isAllowedPartition(ORCA_BROWSER_PARTITION)).toBe(false)
 
-    const profile = browserSessionRegistry.createProfile('isolated', 'Work Browser')
+    const profile = await browserSessionRegistry.createProfile('isolated', 'Work Browser')
     expect(profile).not.toBeNull()
     expect(profile!.partition).toBe(
       getOrcaProfileBrowserSessionPartition(orcaProfileId, profile!.id)

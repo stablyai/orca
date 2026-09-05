@@ -85,7 +85,7 @@ describe('session tab browser placement mutations', () => {
   it('keeps capable mutation callers on the unprojected path', async () => {
     const runtime = {
       getRuntimeId: () => 'test-runtime',
-      listMobileSessionTabs: vi.fn(),
+      listMobileSessionTabs: vi.fn().mockResolvedValue(mixedPlacementSnapshot()),
       closeMobileSessionTab: vi.fn().mockResolvedValue({ closed: true })
     } as unknown as OrcaRuntimeService
     const dispatcher = new RpcDispatcher({ runtime, methods: SESSION_TAB_METHODS })
@@ -102,7 +102,7 @@ describe('session tab browser placement mutations', () => {
     )
 
     expect(response.ok).toBe(true)
-    expect(runtime.listMobileSessionTabs).not.toHaveBeenCalled()
+    expect(runtime.listMobileSessionTabs).toHaveBeenCalledOnce()
     expect(runtime.closeMobileSessionTab).toHaveBeenCalledOnce()
   })
 })

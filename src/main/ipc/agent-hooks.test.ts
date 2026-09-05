@@ -8,6 +8,8 @@ import { makePaneKey } from '../../shared/stable-pane-id'
 // evicts the entry.
 
 const dropStatusEntry = vi.fn()
+const dropPersistedStatusEntry = vi.fn()
+const dropPersistedStatusEntries = vi.fn(() => [] as string[])
 const dropStatusEntriesByTabPrefix = vi.fn()
 const retirePaneAuthority = vi.fn()
 const transferPaneAuthority = vi.fn()
@@ -44,6 +46,8 @@ vi.mock('../agent-hooks/server', async () => {
     ...actual,
     agentHookServer: {
       dropStatusEntry,
+      dropPersistedStatusEntry,
+      dropPersistedStatusEntries,
       dropStatusEntriesByTabPrefix,
       retirePaneAuthority,
       transferPaneAuthority,
@@ -105,6 +109,9 @@ vi.mock('../kimi/hook-service', () => ({
 
 beforeEach(() => {
   dropStatusEntry.mockReset()
+  dropPersistedStatusEntry.mockReset()
+  dropPersistedStatusEntries.mockReset()
+  dropPersistedStatusEntries.mockReturnValue([])
   dropStatusEntriesByTabPrefix.mockReset()
   retirePaneAuthority.mockReset()
   transferPaneAuthority.mockReset()
@@ -208,72 +215,6 @@ describe('agentStatus:getSnapshot IPC', () => {
   })
 })
 
-describe('agentHooks:antigravityStatus IPC', () => {
-  it('returns Antigravity hook installation status', async () => {
-    const { registerAgentHookHandlers } = await import('./agent-hooks')
-    registerAgentHookHandlers()
-
-    const handler = handleHandlers.get('agentHooks:antigravityStatus')
-    expect(handler).toBeDefined()
-    expect(handler!({})).toEqual({ agent: 'antigravity', state: 'absent' })
-  })
-})
-
-describe('agentHooks:ampStatus IPC', () => {
-  it('returns Amp hook installation status', async () => {
-    const { registerAgentHookHandlers } = await import('./agent-hooks')
-    registerAgentHookHandlers()
-
-    const handler = handleHandlers.get('agentHooks:ampStatus')
-    expect(handler).toBeDefined()
-    expect(handler!({})).toEqual({ agent: 'amp', state: 'absent' })
-  })
-})
-
-describe('agentHooks:openClaudeStatus IPC', () => {
-  it('returns OpenClaude hook installation status', async () => {
-    const { registerAgentHookHandlers } = await import('./agent-hooks')
-    registerAgentHookHandlers()
-
-    const handler = handleHandlers.get('agentHooks:openClaudeStatus')
-    expect(handler).toBeDefined()
-    expect(handler!({})).toEqual({ agent: 'openclaude', state: 'absent' })
-  })
-})
-
-describe('agentHooks:commandCodeStatus IPC', () => {
-  it('returns Command Code hook installation status', async () => {
-    const { registerAgentHookHandlers } = await import('./agent-hooks')
-    registerAgentHookHandlers()
-
-    const handler = handleHandlers.get('agentHooks:commandCodeStatus')
-    expect(handler).toBeDefined()
-    expect(handler!({})).toEqual({ agent: 'command-code', state: 'absent' })
-  })
-})
-
-describe('agentHooks:devinStatus IPC', () => {
-  it('returns Devin hook installation status', async () => {
-    const { registerAgentHookHandlers } = await import('./agent-hooks')
-    registerAgentHookHandlers()
-
-    const handler = handleHandlers.get('agentHooks:devinStatus')
-    expect(handler).toBeDefined()
-    expect(handler!({})).toEqual({ agent: 'devin', state: 'absent' })
-  })
-})
-
-describe('agentHooks:kimiStatus IPC', () => {
-  it('returns Kimi hook installation status', async () => {
-    const { registerAgentHookHandlers } = await import('./agent-hooks')
-    registerAgentHookHandlers()
-
-    const handler = handleHandlers.get('agentHooks:kimiStatus')
-    expect(handler).toBeDefined()
-    expect(handler!({})).toEqual({ agent: 'kimi', state: 'absent' })
-  })
-})
-
 describe('agentStatus:inferInterrupt IPC', () => {
   it('forwards valid inference requests to the hook server', async () => {
     inferInterrupt.mockReturnValue(true)
@@ -342,6 +283,71 @@ describe('agentStatus:drop IPC', () => {
       expect(() => handler({}, value)).not.toThrow()
     }
     expect(dropStatusEntry).not.toHaveBeenCalled()
+  })
+})
+
+describe('agentStatus:dropPersisted IPC', () => {
+  it('forwards a validated cache identity without clearing pane state', async () => {
+    const { registerAgentHookHandlers } = await import('./agent-hooks')
+    registerAgentHookHandlers()
+
+    const handler = onHandlers.get('agentStatus:dropPersisted')
+    expect(handler).toBeDefined()
+    const identity = {
+      paneKey: PANE_KEY,
+      receivedAt: 2_000,
+      stateStartedAt: 1_000
+    }
+    handler!({}, identity)
+    expect(dropPersistedStatusEntry).toHaveBeenCalledWith(identity)
+    expect(dropStatusEntry).not.toHaveBeenCalled()
+  })
+
+  it('forwards a batch, keeping only valid identities, and clears migration state per evicted pane', async () => {
+    const { registerAgentHookHandlers } = await import('./agent-hooks')
+    registerAgentHookHandlers()
+
+    const handler = onHandlers.get('agentStatus:dropPersistedBatch')
+    expect(handler).toBeDefined()
+    const good = { paneKey: PANE_KEY, receivedAt: 2_000, stateStartedAt: 1_000 }
+    const alsoGood = { paneKey: CHILD_PANE_KEY, receivedAt: 3_000, stateStartedAt: 2_500 }
+    dropPersistedStatusEntries.mockReturnValue([PANE_KEY])
+    handler!({}, [good, { paneKey: 'not-a-pane-key', receivedAt: 1, stateStartedAt: 1 }, alsoGood])
+    expect(dropPersistedStatusEntries).toHaveBeenCalledWith([good, alsoGood])
+    expect(clearMigrationUnsupportedPtysForPaneKey).toHaveBeenCalledWith(PANE_KEY)
+    expect(clearMigrationUnsupportedPtysForPaneKey).not.toHaveBeenCalledWith(CHILD_PANE_KEY)
+    expect(dropPersistedStatusEntry).not.toHaveBeenCalled()
+  })
+
+  it('ignores a batch that is not an array or is empty after validation', async () => {
+    const { registerAgentHookHandlers } = await import('./agent-hooks')
+    registerAgentHookHandlers()
+
+    const handler = onHandlers.get('agentStatus:dropPersistedBatch')!
+    for (const value of [null, {}, 'x', [], [{ paneKey: PANE_KEY }]]) {
+      expect(() => handler({}, value)).not.toThrow()
+    }
+    expect(dropPersistedStatusEntries).not.toHaveBeenCalled()
+  })
+
+  it('rejects malformed cache identities', async () => {
+    const { registerAgentHookHandlers } = await import('./agent-hooks')
+    registerAgentHookHandlers()
+
+    const handler = onHandlers.get('agentStatus:dropPersisted')!
+    for (const value of [
+      null,
+      undefined,
+      {},
+      { paneKey: PANE_KEY },
+      { paneKey: PANE_KEY, receivedAt: Number.NaN, stateStartedAt: 1 },
+      { paneKey: PANE_KEY, receivedAt: 2, stateStartedAt: Number.POSITIVE_INFINITY },
+      { paneKey: 'not-a-pane-key', receivedAt: 2, stateStartedAt: 1 },
+      { paneKey: PANE_KEY, receivedAt: '2', stateStartedAt: 1 }
+    ]) {
+      expect(() => handler({}, value)).not.toThrow()
+    }
+    expect(dropPersistedStatusEntry).not.toHaveBeenCalled()
   })
 })
 

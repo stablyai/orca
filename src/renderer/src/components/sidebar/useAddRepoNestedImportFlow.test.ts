@@ -126,6 +126,46 @@ describe('useAddRepoNestedImportFlow open folder fallback', () => {
     })
   })
 
+  it('names the folder project after the edited group name', async () => {
+    const { handleOpenNestedRootFolder } = useTestAddRepoNestedImportFlow({
+      nestedGroupName: '  inf-오케스트레이터  '
+    })
+
+    await handleOpenNestedRootFolder()
+
+    expect(mocks.state.addNonGitFolder).toHaveBeenCalledWith('/workspace/platform', {
+      runtimeEnvironmentId: null,
+      displayName: 'inf-오케스트레이터'
+    })
+  })
+
+  it('leaves host basename naming alone when the group name is untouched', async () => {
+    const { handleOpenNestedRootFolder } = useTestAddRepoNestedImportFlow({
+      nestedGroupName: '  platform  '
+    })
+
+    await handleOpenNestedRootFolder()
+
+    expect(mocks.state.addNonGitFolder).toHaveBeenCalledWith('/workspace/platform', {
+      runtimeEnvironmentId: null
+    })
+  })
+
+  it('carries the edited group name into the SSH folder confirmation', async () => {
+    const { handleOpenNestedRootFolder } = useTestAddRepoNestedImportFlow({
+      nestedConnectionId: 'ssh-builder',
+      nestedRuntimeKind: 'ssh',
+      nestedGroupName: 'inf-오케스트레이터'
+    })
+
+    await handleOpenNestedRootFolder()
+
+    expect(mocks.state.openModal).toHaveBeenCalledWith(
+      'confirm-non-git-folder',
+      expect.objectContaining({ displayName: 'inf-오케스트레이터' })
+    )
+  })
+
   it('tracks the open-as-folder recovery action with zero selection', async () => {
     const { handleOpenNestedRootFolder } = useTestAddRepoNestedImportFlow()
 

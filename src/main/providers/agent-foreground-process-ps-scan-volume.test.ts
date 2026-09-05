@@ -17,7 +17,7 @@ const { execFileMock, psScanCount } = vi.hoisted(() => ({
 
 vi.mock('child_process', () => ({ execFile: execFileMock }))
 
-import { resetProcessTableSnapshotForTests } from '../../shared/process-table-snapshot'
+import { resetProcessTableSnapshotForTests } from '../../shared/process-table-snapshot-reader'
 import { resolveAgentForegroundProcess } from './agent-foreground-process'
 
 const ACTIVE_POLL_INTERVAL_MS = 750 // mirrors agent-completion-coordinator.ts

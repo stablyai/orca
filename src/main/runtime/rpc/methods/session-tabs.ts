@@ -14,30 +14,44 @@ import {
 } from './session-tabs-inventory'
 import { SESSION_TAB_MARKDOWN_METHODS } from './session-tab-markdown-methods'
 import { SESSION_TAB_MUTATION_METHODS } from './session-tab-mutation-methods'
+import { restoreStructuredTabsIfSupported } from './structured-session-tab-restore'
+import { isStructuredNativeChatEnabled } from './structured-agent-session-policy'
+import { assertLegacyAiVaultResumeCommandAllowed } from '../../../ai-vault/structured-session-ownership'
 
 export const SESSION_TAB_METHODS: RpcAnyMethod[] = [
   defineMethod({
     name: 'session.tabs.list',
     params: WorktreeTabSelector,
-    handler: async (params, { runtime, pairedDeviceId, clientKind, clientCapabilities }) =>
-      projectSessionTabsForClient(
+    handler: async (params, { runtime, pairedDeviceId, clientKind, clientCapabilities }) => {
+      await restoreStructuredTabsIfSupported({ runtime, clientKind, clientCapabilities })
+      return projectSessionTabsForClient(
         await runtime.listMobileSessionTabs(params.worktree, pairedDeviceId),
         clientKind,
-        clientCapabilities
+        clientCapabilities,
+        clientKind === 'mobile' ? isStructuredNativeChatEnabled(runtime) : undefined
       )
+    }
   }),
   defineMethod({
     name: 'session.tabs.listAll',
     params: null,
-    handler: async (_params, context) => listSessionTabsInventory(context)
+    handler: async (_params, context) => {
+      await restoreStructuredTabsIfSupported(context)
+      return listSessionTabsInventory(context)
+    }
   }),
   ...SESSION_TAB_MUTATION_METHODS,
   ...SESSION_TAB_CLOSE_METHODS,
   defineMethod({
     name: 'session.tabs.createTerminal',
     params: CreateTerminalTab,
-    handler: async (params, { runtime, signal, clientKind, pairedDeviceId }) =>
-      runtime.createMobileSessionTerminal(params.worktree, {
+    handler: async (params, { runtime, signal, clientKind, pairedDeviceId }) => {
+      if (params.command) {
+        await assertLegacyAiVaultResumeCommandAllowed(params.command, () =>
+          runtime.ensureStructuredAgentSessionHost()
+        )
+      }
+      return runtime.createMobileSessionTerminal(params.worktree, {
         afterTabId: params.afterTabId,
         targetGroupId: params.targetGroupId,
         command: params.command,
@@ -63,6 +77,7 @@ export const SESSION_TAB_METHODS: RpcAnyMethod[] = [
         // of running down the timeout and rolling back a live tab (#7718).
         signal
       })
+    }
   }),
   defineStreamingMethod({
     name: 'session.tabs.subscribe',
@@ -76,6 +91,7 @@ export const SESSION_TAB_METHODS: RpcAnyMethod[] = [
       let unsubscribe = (): void => {}
       let closed = false
       let initialized = false
+      await restoreStructuredTabsIfSupported({ runtime, clientKind, clientCapabilities })
       const initial = await runtime.listMobileSessionTabs(params.worktree, pairedDeviceId)
       if (closed) {
         return
@@ -101,7 +117,12 @@ export const SESSION_TAB_METHODS: RpcAnyMethod[] = [
       }
       emit({
         type: 'snapshot',
-        ...projectSessionTabsForClient(initial, clientKind, clientCapabilities)
+        ...projectSessionTabsForClient(
+          initial,
+          clientKind,
+          clientCapabilities,
+          clientKind === 'mobile' ? isStructuredNativeChatEnabled(runtime) : undefined
+        )
       })
       initialized = true
       if (closed) {
@@ -112,7 +133,12 @@ export const SESSION_TAB_METHODS: RpcAnyMethod[] = [
         if (snapshot.worktree === subscribedWorktree) {
           emit({
             type: 'updated',
-            ...projectSessionTabsForClient(snapshot, clientKind, clientCapabilities)
+            ...projectSessionTabsForClient(
+              snapshot,
+              clientKind,
+              clientCapabilities,
+              clientKind === 'mobile' ? isStructuredNativeChatEnabled(runtime) : undefined
+            )
           })
         }
       }, pairedDeviceId)
@@ -142,7 +168,10 @@ export const SESSION_TAB_METHODS: RpcAnyMethod[] = [
   defineStreamingMethod({
     name: 'session.tabs.subscribeAll',
     params: null,
-    handler: async (_params, context, emit) => subscribeSessionTabsInventory(context, emit)
+    handler: async (_params, context, emit) => {
+      await restoreStructuredTabsIfSupported(context)
+      return subscribeSessionTabsInventory(context, emit)
+    }
   }),
   defineMethod({
     name: 'session.tabs.unsubscribeAll',

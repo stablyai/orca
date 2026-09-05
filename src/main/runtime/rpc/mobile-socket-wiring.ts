@@ -165,7 +165,9 @@ export class MobileSocketWiring {
             ws,
             connectionId,
             device,
-            clientCapabilities: channel.clientCapabilities,
+            get clientCapabilities() {
+              return channel.clientCapabilities
+            },
             transport: metadata
           }
           this.authenticatedSockets.set(ws, socket)

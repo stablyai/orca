@@ -45,8 +45,16 @@ export function useTabGroupWorkspaceModel({
   const setTabCustomTitle = useAppStore((state) => state.setTabCustomTitle)
   const setTabColor = useAppStore((state) => state.setTabColor)
 
-  const { group, groupTabs, activeTab, terminalTabs, editorItems, browserItems, tabBarOrder } =
-    useTabGroupItemProjections({ groupId, worktreeId, worktreeState })
+  const {
+    group,
+    groupTabs,
+    activeTab,
+    terminalTabs,
+    editorItems,
+    browserItems,
+    agentSessionItems,
+    tabBarOrder
+  } = useTabGroupItemProjections({ groupId, worktreeId, worktreeState })
 
   const { closeItem, closeMany, leaveWorktreeIfEmpty } = useTabGroupTabCloseCommands({
     worktreeId,
@@ -64,8 +72,13 @@ export function useTabGroupWorkspaceModel({
       leaveWorktreeIfEmpty
     })
 
-  const { activateTerminal, toggleTerminalPaneExpand, activateEditor, activateBrowser } =
-    useTabGroupActivationCommands({ groupId, worktreeId, groupTabs, worktreeState })
+  const {
+    activateTerminal,
+    toggleTerminalPaneExpand,
+    activateEditor,
+    activateBrowser,
+    activateAgentSession
+  } = useTabGroupActivationCommands({ groupId, worktreeId, groupTabs, worktreeState })
 
   const creationCommands = useTabGroupCreationCommands({ groupId, worktreeId, worktreeState })
 
@@ -74,6 +87,7 @@ export function useTabGroupWorkspaceModel({
     activeTab,
     browserItems,
     editorItems,
+    agentSessionItems,
     terminalTabs,
     tabBarOrder,
     groupTabs,
@@ -82,6 +96,7 @@ export function useTabGroupWorkspaceModel({
       focusGroup: () => {
         focusGroup(worktreeId, groupId)
       },
+      activateAgentSession,
       activateBrowser,
       activateEditor,
       activateTerminal,

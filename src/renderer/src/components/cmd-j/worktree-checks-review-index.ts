@@ -6,6 +6,7 @@ import type { AppState } from '@/store/types'
 import type { HostedReviewInfo } from '../../../../shared/hosted-review'
 import type { Repo } from '../../../../shared/repo-types'
 import type { Worktree } from '../../../../shared/worktree/types'
+import { isGitHubPRSuppressed } from '../../../../shared/worktree/github-pr-suppression'
 import { selectChecksPanelReview } from '../right-sidebar/checks-panel-review'
 
 type WorktreeChecksReviewIndexArgs = {
@@ -58,9 +59,12 @@ export function buildWorktreeChecksReviewIndex({
     )
     // Why: Cmd+J should expose exactly the review metadata Checks has already
     // resolved, without starting another provider lookup from the search path.
+    const pr = prCache[prKey]?.data
     const review = selectChecksPanelReview({
       hostedReview: hostedReviewCache[hostedReviewKey]?.data,
-      pr: prCache[prKey]?.data,
+      pr,
+      linkedPR: worktree.linkedPR ?? null,
+      suppressedGitHubPR: worktree.suppressedGitHubPR ?? null,
       linkedGitLabMR: worktree.linkedGitLabMR ?? null,
       linkedBitbucketPR: worktree.linkedBitbucketPR ?? null,
       linkedAzureDevOpsPR: worktree.linkedAzureDevOpsPR ?? null,
@@ -71,13 +75,14 @@ export function buildWorktreeChecksReviewIndex({
       // scope preserves these object references while sorting and filtering.
       reviews.set(worktree, review)
     } else if (
+      (pr && isGitHubPRSuppressed(worktree, pr.number)) ||
       worktree.linkedGitLabMR != null ||
       worktree.linkedBitbucketPR != null ||
       worktree.linkedAzureDevOpsPR != null ||
       worktree.linkedGiteaPR != null
     ) {
-      // Why: an empty Checks selection for a non-GitHub link is authoritative;
-      // omitting it would let Cmd+J surface stale GitHub metadata as a fallback.
+      // Why: an empty Checks selection caused by suppression or a non-GitHub
+      // link is authoritative; omission lets Cmd+J fall back to stale GitHub data.
       reviews.set(worktree, null)
     }
   }

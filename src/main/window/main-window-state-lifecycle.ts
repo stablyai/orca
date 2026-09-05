@@ -1,6 +1,6 @@
 import { app, type BrowserWindow } from 'electron'
 import type { Store } from '../persistence'
-import { getMainE2EConfig } from '../e2e-config'
+import { isWindowlessLaunch, showWindowWithoutStealingFocus } from './foreground-activation-policy'
 import { MIN_HEIGHT, MIN_WIDTH, syncTrafficLightPosition } from './main-window-visual-lifecycle'
 
 export type MainWindowStateLifecycle = {
@@ -57,15 +57,14 @@ export function installMainWindowStateLifecycle(args: {
     handledInitialReadyToShow = true
     clearInitialRevealFallbackTimer()
 
-    // Why: in E2E headless mode keep the window hidden (Playwright drives via CDP) so tests don't steal focus.
-    const e2eConfig = getMainE2EConfig()
-    if (e2eConfig.headless) {
+    // Why: headless E2E keeps the window off screen entirely (Playwright drives via CDP).
+    if (isWindowlessLaunch()) {
       return
     }
     if (savedMaximized) {
       mainWindow.maximize()
     }
-    mainWindow.show()
+    showWindowWithoutStealingFocus(mainWindow)
   }
   mainWindow.on('ready-to-show', revealInitialWindow)
   if (revealOnDidFinishLoad === true) {

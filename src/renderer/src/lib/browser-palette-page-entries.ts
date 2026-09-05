@@ -1,6 +1,6 @@
 import { getWorktreeHostIdentity } from '../../../shared/worktree/host-qualified-identity'
 import type { BrowserPage, BrowserWorkspace } from '../../../shared/browser-workspace-types'
-import type { Tab } from '../../../shared/tab-types'
+import type { Tab, WorkspaceVisibleTabType } from '../../../shared/tab-types'
 import type { Worktree } from '../../../shared/worktree/types'
 import type { ExecutionHostId } from '../../../shared/execution-host'
 import { isPaletteCurrentWorktree, resolvePaletteRepoForWorktree } from './palette-repo-resolution'
@@ -14,7 +14,7 @@ import {
   isUnifiedTabOwnedByWorktree
 } from './unified-tab-host-ownership'
 
-type BrowserPaletteActiveTabType = 'browser' | 'editor' | 'terminal' | 'simulator'
+type BrowserPaletteActiveTabType = WorkspaceVisibleTabType
 
 export type BuildSearchableBrowserPagesOptions = {
   worktrees: readonly Worktree[]

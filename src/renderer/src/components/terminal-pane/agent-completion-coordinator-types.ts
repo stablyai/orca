@@ -25,10 +25,14 @@ export type AgentCompletionCoordinatorOptions = {
   paneKey: string
   statusLane?: 'hook' | 'pty'
   getPtyId: () => string | null
+  /** Remote authorities are event-triggered only; no periodic process polls. */
+  isRemotePtyId?: (ptyId: string) => boolean
+  getExpectedIncarnationId?: () => string | null
   getSettings: () => Pick<GlobalSettings, 'activeRuntimeEnvironmentId'> | null | undefined
   inspectProcess: (
     settings: Pick<GlobalSettings, 'activeRuntimeEnvironmentId'> | null | undefined,
-    ptyId: string
+    ptyId: string,
+    options?: { expectedIncarnationId?: string }
   ) => Promise<RuntimeTerminalProcessInspection>
   dispatchCompletion: (title: string, meta?: AgentCompletionDispatchMeta) => void
   dispatchAttention?: (title: string, meta: AgentAttentionDispatchMeta) => void
@@ -40,9 +44,16 @@ export type AgentCompletionCoordinatorOptions = {
   shouldSuppressConfirmedProcessExitCompletion?: (exited: RecognizedAgentProcess) => boolean
   isLive: () => boolean
   shouldPollProcessCadence?: () => boolean
-  // Why: on hosts where one inspection forks a whole-process-table scan (local
-  // Windows PowerShell/CIM), panes without agent evidence relax to a slow
-  // cadence; cheap hosts (POSIX `ps`, SSH/remote-owned scans) keep full cadence.
+  // Why: a host that publishes foreground evidence with its inventory lets a
+  // pane without agent evidence stay push-driven instead of scheduling
+  // redundant host process-table reads while idle. Wire a producer only once
+  // this renderer CONSUMES that evidence and can tell "no evidence published"
+  // from "host too old to publish it" — mixed-version hosts omit the field.
+  shouldPollNoEvidenceProcessCadence?: () => boolean
+  // Why: where one inspection is a whole-process-table scan (local Windows
+  // PowerShell/CIM) or a host round trip plus a host-side scan (remote/SSH),
+  // panes without agent evidence relax to a slow cadence and re-arm from
+  // output/title/hook activity. See agent-process-inspection-cost.ts.
   isProcessInspectionCostly?: () => boolean
   shouldSuppressHookCompletion?: (payload: AgentCompletionStatusSnapshot) => boolean
 }

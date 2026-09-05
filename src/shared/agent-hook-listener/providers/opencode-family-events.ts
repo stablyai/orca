@@ -51,6 +51,7 @@ export function normalizeOpenCodeFamilyEvent(
     toolInput: snapshot.toolInput,
     interactivePrompt: snapshot.interactivePrompt,
     lastAssistantMessage: snapshot.lastAssistantMessage,
+    lastAssistantMessageIsToolOutput: snapshot.lastAssistantMessageIsToolOutput,
     sessionBoundary: source === 'opencode' && eventName === 'SessionStart' ? true : undefined
   })
 }

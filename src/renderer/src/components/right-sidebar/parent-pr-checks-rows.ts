@@ -4,6 +4,7 @@ import type { Worktree } from '../../../../shared/worktree/types'
 import type { HostedReviewInfo } from '../../../../shared/hosted-review'
 import { hostedReviewInfoFromGitHubPRInfo } from '../../../../shared/hosted-review-github'
 import { isFolderRepo } from '../../../../shared/repo-kind'
+import { isGitHubPRSuppressed } from '../../../../shared/worktree/github-pr-suppression'
 import { getWorktreeCardPrDisplay } from '@/components/sidebar/worktree-card-pr-display'
 import { getWorktreeGitIdentityDisplay } from '@/lib/worktree-git-identity-display'
 import { getGitHubRepoCacheKey } from '@/store/slices/github-cache-key'
@@ -40,10 +41,7 @@ export function buildParentPrChecksProjection(
   args: BuildParentPrChecksRowsArgs
 ): ParentPrChecksProjection {
   const repoById = new Map(args.repos.map((repo) => [repo.id, repo]))
-  const rows = buildParentPrChecksRows({
-    ...args,
-    repoById
-  })
+  const rows = buildParentPrChecksRows({ ...args, repoById })
   const groups = PARENT_PR_CHECKS_GROUP_ORDER.map((key) => ({
     key,
     label: PARENT_PR_CHECKS_GROUP_LABELS[key],
@@ -114,7 +112,8 @@ function buildParentPrChecksRow(
     args.worktree.linkedGitLabMR ?? null,
     args.worktree.linkedBitbucketPR ?? null,
     args.worktree.linkedAzureDevOpsPR ?? null,
-    args.worktree.linkedGiteaPR ?? null
+    args.worktree.linkedGiteaPR ?? null,
+    { suppressedGitHubPR: args.worktree.suppressedGitHubPR ?? null }
   )
   const review = reviewSnapshot.review
   const status = classifyParentPrChecksRowStatus({
@@ -136,7 +135,7 @@ function buildParentPrChecksRow(
     status,
     group: groupForRowStatus(status),
     checkTone: getRowCheckTone(status, review),
-    title: getRowTitle(args.worktree, branch, review, fallbackDisplay?.title),
+    title: review?.title ?? fallbackDisplay?.title ?? branch ?? args.worktree.displayName,
     reviewNumber: review?.number ?? fallbackDisplay?.number ?? null,
     reviewLabel: getReviewLabel(review, fallbackDisplay),
     reviewUrl: review?.url ?? fallbackDisplay?.url ?? null,
@@ -157,7 +156,11 @@ function getReviewSnapshot(
   branch: string | null,
   outcome: ParentPrChecksRefreshOutcome | undefined
 ): { review: HostedReviewInfo | null | undefined; hasCacheEntry: boolean } {
-  if (outcome?.kind === 'found') {
+  if (
+    outcome?.kind === 'found' &&
+    (outcome.review.provider !== 'github' ||
+      !isGitHubPRSuppressed(args.worktree, outcome.review.number))
+  ) {
     return { review: outcome.review, hasCacheEntry: true }
   }
   if (!args.repo || !branch) {
@@ -191,15 +194,6 @@ function getReviewSnapshot(
     review: hostedReviewEntry?.data === null ? null : undefined,
     hasCacheEntry: hostedReviewEntry !== undefined
   }
-}
-
-function getRowTitle(
-  worktree: Worktree,
-  branch: string | null,
-  review: HostedReviewInfo | null | undefined,
-  fallbackTitle: string | undefined
-): string {
-  return review?.title ?? fallbackTitle ?? branch ?? worktree.displayName
 }
 
 function getReviewLabel(

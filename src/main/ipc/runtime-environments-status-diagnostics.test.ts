@@ -2,7 +2,10 @@ import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES } from '../../shared/protocol-version'
+import {
+  ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES,
+  REMOTE_RUNTIME_SHARED_CONTROL_CAPABILITY
+} from '../../shared/protocol-version'
 
 const {
   handleMock,
@@ -17,6 +20,8 @@ const {
   subscribeRemoteRuntimeSharedControlRequestMock,
   getRemoteRuntimeSharedControlDiagnosticsMock,
   reconnectRemoteRuntimeSharedControlConnectionMock,
+  ensureRemoteRuntimeSharedControlConnectionMock,
+  pauseRemoteRuntimeSharedControlRetryMock,
   retryRemoteRuntimeSharedControlConnectionsNowMock,
   closeRemoteRuntimeRequestConnectionMock
 } = vi.hoisted(() => ({
@@ -32,6 +37,8 @@ const {
   subscribeRemoteRuntimeSharedControlRequestMock: vi.fn(),
   getRemoteRuntimeSharedControlDiagnosticsMock: vi.fn(),
   reconnectRemoteRuntimeSharedControlConnectionMock: vi.fn(),
+  ensureRemoteRuntimeSharedControlConnectionMock: vi.fn(),
+  pauseRemoteRuntimeSharedControlRetryMock: vi.fn(),
   retryRemoteRuntimeSharedControlConnectionsNowMock: vi.fn(),
   closeRemoteRuntimeRequestConnectionMock: vi.fn()
 }))
@@ -58,6 +65,9 @@ vi.mock('./runtime-environment-request-connections', () => ({
   getRemoteRuntimeSharedControlDiagnostics: getRemoteRuntimeSharedControlDiagnosticsMock,
   reconnectRemoteRuntimeSharedControlConnection: reconnectRemoteRuntimeSharedControlConnectionMock,
   retryRemoteRuntimeSharedControlConnectionsNow: retryRemoteRuntimeSharedControlConnectionsNowMock,
+  retryRemoteRuntimeSharedControlConnectionNow: vi.fn(),
+  ensureRemoteRuntimeSharedControlConnection: ensureRemoteRuntimeSharedControlConnectionMock,
+  pauseRemoteRuntimeSharedControlRetry: pauseRemoteRuntimeSharedControlRetryMock,
   closeRemoteRuntimeRequestConnection: closeRemoteRuntimeRequestConnectionMock
 }))
 
@@ -97,6 +107,8 @@ describe('registerRuntimeEnvironmentHandlers', () => {
     getRemoteRuntimeSharedControlDiagnosticsMock.mockReset()
     getRemoteRuntimeSharedControlDiagnosticsMock.mockReturnValue(null)
     reconnectRemoteRuntimeSharedControlConnectionMock.mockReset()
+    ensureRemoteRuntimeSharedControlConnectionMock.mockReset()
+    pauseRemoteRuntimeSharedControlRetryMock.mockReset()
     retryRemoteRuntimeSharedControlConnectionsNowMock.mockReset()
     closeRemoteRuntimeRequestConnectionMock.mockReset()
   })
@@ -110,7 +122,11 @@ describe('registerRuntimeEnvironmentHandlers', () => {
     sendRemoteRuntimeRequestMock.mockResolvedValue({
       id: 'rpc-1',
       ok: true,
-      result: { runtimeId: 'runtime-remote', graphStatus: 'ready' },
+      result: {
+        runtimeId: 'runtime-remote',
+        graphStatus: 'ready',
+        capabilities: [REMOTE_RUNTIME_SHARED_CONTROL_CAPABILITY]
+      },
       _meta: { runtimeId: 'runtime-remote' }
     })
 
@@ -140,6 +156,10 @@ describe('registerRuntimeEnvironmentHandlers', () => {
     expect(reconnectRemoteRuntimeSharedControlConnectionMock).toHaveBeenCalledWith(
       added.environment.id
     )
+    expect(ensureRemoteRuntimeSharedControlConnectionMock).toHaveBeenCalledWith(
+      added.environment.id,
+      expect.objectContaining({ endpoint: 'ws://127.0.0.1:6768' })
+    )
 
     const resolve = handler<{ selector: string }, { id: string; runtimeId: string | null }>(
       'runtimeEnvironments:resolve'
@@ -148,6 +168,77 @@ describe('registerRuntimeEnvironmentHandlers', () => {
       id: added.environment.id,
       runtimeId: 'runtime-remote'
     })
+  })
+
+  it('observes diagnostics without ensuring, refreshing, or marking the environment used', async () => {
+    registerRuntimeEnvironmentHandlers(store as never)
+    getRemoteRuntimeSharedControlDiagnosticsMock.mockReturnValue({
+      state: 'reconnecting',
+      pendingRequestCount: 0,
+      subscriptionCount: 0,
+      reconnectAttempt: 2,
+      lastConnectedAt: null,
+      lastClose: null,
+      lastError: 'offline'
+    })
+    sendRemoteRuntimeRequestMock.mockResolvedValue({
+      id: 'status',
+      ok: true,
+      result: {
+        runtimeId: 'runtime-remote',
+        graphStatus: 'ready',
+        capabilities: [REMOTE_RUNTIME_SHARED_CONTROL_CAPABILITY]
+      },
+      _meta: { runtimeId: 'runtime-remote' }
+    })
+    const add = handler<{ name: string; pairingCode: string }, { environment: { id: string } }>(
+      'runtimeEnvironments:addFromPairingCode'
+    )
+    const added = await add(null, { name: 'desk', pairingCode: pairingCode() })
+    const getStatus = handler<
+      { selector: string; observeOnly?: true },
+      { ok: true; result: { remoteControl: { state: string } } }
+    >('runtimeEnvironments:getStatus')
+
+    await expect(getStatus(null, { selector: 'desk', observeOnly: true })).resolves.toMatchObject({
+      result: { remoteControl: { state: 'reconnecting' } }
+    })
+    expect(ensureRemoteRuntimeSharedControlConnectionMock).not.toHaveBeenCalled()
+    expect(reconnectRemoteRuntimeSharedControlConnectionMock).not.toHaveBeenCalled()
+    const resolve = handler<{ selector: string }, { runtimeId: string | null }>(
+      'runtimeEnvironments:resolve'
+    )
+    expect((await resolve(null, { selector: added.environment.id })).runtimeId).toBeNull()
+  })
+
+  it('strips diagnostics from successful capability-less status results', async () => {
+    registerRuntimeEnvironmentHandlers(store as never)
+    getRemoteRuntimeSharedControlDiagnosticsMock.mockReturnValue({
+      state: 'reconnecting',
+      pendingRequestCount: 0,
+      subscriptionCount: 0,
+      reconnectAttempt: 1,
+      lastConnectedAt: null,
+      lastClose: null,
+      lastError: null
+    })
+    sendRemoteRuntimeRequestMock.mockResolvedValue({
+      id: 'status',
+      ok: true,
+      result: { runtimeId: 'runtime-legacy', graphStatus: 'ready', capabilities: [] },
+      _meta: { runtimeId: 'runtime-legacy' }
+    })
+    const add = handler<{ name: string; pairingCode: string }, unknown>(
+      'runtimeEnvironments:addFromPairingCode'
+    )
+    await add(null, { name: 'desk', pairingCode: pairingCode() })
+    const getStatus = handler<{ selector: string }, { result: { remoteControl?: unknown } }>(
+      'runtimeEnvironments:getStatus'
+    )
+
+    const result = await getStatus(null, { selector: 'desk' })
+    expect(result.result.remoteControl).toBeUndefined()
+    expect(pauseRemoteRuntimeSharedControlRetryMock).toHaveBeenCalledOnce()
   })
 
   it('attaches shared-control diagnostics to saved remote runtime status', async () => {
@@ -164,7 +255,11 @@ describe('registerRuntimeEnvironmentHandlers', () => {
     sendRemoteRuntimeRequestMock.mockResolvedValue({
       id: 'rpc-status',
       ok: true,
-      result: { runtimeId: 'runtime-remote', graphStatus: 'ready' },
+      result: {
+        runtimeId: 'runtime-remote',
+        graphStatus: 'ready',
+        capabilities: [REMOTE_RUNTIME_SHARED_CONTROL_CAPABILITY]
+      },
       _meta: { runtimeId: 'runtime-remote' }
     })
 

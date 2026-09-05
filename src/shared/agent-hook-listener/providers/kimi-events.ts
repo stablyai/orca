@@ -68,6 +68,7 @@ export function normalizeKimiEvent(
     toolName: snapshot.toolName,
     toolInput: snapshot.toolInput,
     lastAssistantMessage: snapshot.lastAssistantMessage,
+    lastAssistantMessageIsToolOutput: snapshot.lastAssistantMessageIsToolOutput,
     interrupted
   })
 }

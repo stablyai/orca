@@ -191,9 +191,9 @@ jobs:
 
       # pnpm must be on PATH before setup-node so setup-node can locate the store.
       - name: Setup pnpm
-        uses: pnpm/action-setup@v6
+        uses: pnpm/setup@v2
         with:
-          run_install: false
+          install: false
 
       - name: Setup Node.js
         uses: actions/setup-node@v6

@@ -14,9 +14,10 @@ import {
   type LinkedReviewHints
 } from './hosted-review-cache-identity'
 import {
-  canReuseInflightHint,
   findHostedReviewRepoByPath,
+  findHostedReviewRepoForFetch,
   hasNewerHostedReviewCacheEntry,
+  hostedReviewOwnerIpcArgs,
   isFreshHostedReview,
   isStaleMergedGitHubReviewForHead,
   settingsForHostedReviewActionOwner,
@@ -32,8 +33,11 @@ import {
 } from './hosted-review-cache-state'
 import { clearHostedReviewConflictingPrCache } from './hosted-review-pr-cache'
 import {
+  hostedReviewRequestKey,
   hostedReviewRequestGenerations as requestGenerations,
-  inflightHostedReviewRequests
+  inflightHostedReviewRequests,
+  queueHostedReviewRevalidation,
+  registerInflightHostedReviewRequest
 } from './hosted-review-request-state'
 
 export type HostedReviewSlice = {
@@ -149,24 +153,24 @@ export const createHostedReviewSlice: StateCreator<AppState, [], [], HostedRevie
     branch,
     options
   ): Promise<HostedReviewInfo | null> => {
-    const settings = get().settings
-    const repo = get().repos?.find((candidate) =>
-      options?.repoId ? candidate.id === options.repoId : candidate.path === repoPath
-    )
-    const ownerSettings = settingsForHostedReviewRepoOwner(settings, repo)
+    const repo = findHostedReviewRepoForFetch(get().repos, repoPath, options)
+    if (repo === null) {
+      return null
+    }
+    const ownerSettings = settingsForHostedReviewRepoOwner(get().settings, repo)
     const target = getActiveRuntimeTarget(ownerSettings)
-    const repoId = options?.repoId ?? repo?.id
     const cacheKey = getHostedReviewCacheKey(
       repoPath,
       branch,
       ownerSettings,
-      repoId,
+      options?.repoId ?? repo?.id,
       repo?.connectionId,
       repo?.executionHostId,
       repo !== undefined
     )
     const cached = get().hostedReviewCache[cacheKey]
     const hintKey = linkedReviewHintKey(options)
+    const requestKey = hostedReviewRequestKey(cacheKey, hintKey)
     const linkedRefetch = shouldRefetchForLinkedHint(cached, hintKey)
     const scopedResultRefetch = shouldRefetchGitHubScopedResultForNoHint(cached, hintKey)
     const staleMergedHeadRefetch = isStaleMergedGitHubReviewForHead(cached, options?.currentHeadOid)
@@ -180,10 +184,7 @@ export const createHostedReviewSlice: StateCreator<AppState, [], [], HostedRevie
       return cached.data
     }
 
-    const inflightRequest = inflightHostedReviewRequests.get(cacheKey)
-    const inflightHasRequestedHint =
-      inflightRequest !== undefined &&
-      canReuseInflightHint(inflightRequest.linkedReviewHintKey, hintKey)
+    const inflightRequest = inflightHostedReviewRequests.get(requestKey)
     const startRequest = (): Promise<HostedReviewInfo | null> => {
       const generation = (requestGenerations.get(cacheKey) ?? 0) + 1
       const requestStartedAt = Date.now()
@@ -195,6 +196,7 @@ export const createHostedReviewSlice: StateCreator<AppState, [], [], HostedRevie
             options?.linkedGitHubPR == null ? (options?.fallbackGitHubPR ?? null) : null
           const args = {
             branch,
+            ...(options?.admissionTier ? { admissionTier: options.admissionTier } : {}),
             ...(options?.repoId !== undefined ? { repoId: options.repoId } : {}),
             currentHeadOid: options?.currentHeadOid ?? null,
             ...(options?.active === true ? { active: true } : {}),
@@ -219,6 +221,7 @@ export const createHostedReviewSlice: StateCreator<AppState, [], [], HostedRevie
                 )
               : await window.api.hostedReview.forBranch({
                   repoPath,
+                  ...hostedReviewOwnerIpcArgs(options),
                   ...args
                 })
           if (requestGenerations.get(cacheKey) === generation) {
@@ -238,7 +241,7 @@ export const createHostedReviewSlice: StateCreator<AppState, [], [], HostedRevie
                 cache: currentPRCache,
                 review,
                 repoPath,
-                repoId,
+                repoId: options?.repoId ?? repo?.id,
                 branch,
                 settings: ownerSettings,
                 repo
@@ -278,9 +281,9 @@ export const createHostedReviewSlice: StateCreator<AppState, [], [], HostedRevie
           }
           return preserved?.data ?? null
         } finally {
-          const activeRequest = inflightHostedReviewRequests.get(cacheKey)
+          const activeRequest = inflightHostedReviewRequests.get(requestKey)
           if (activeRequest?.generation === generation) {
-            inflightHostedReviewRequests.delete(cacheKey)
+            inflightHostedReviewRequests.delete(requestKey)
             if (requestGenerations.get(cacheKey) === generation) {
               requestGenerations.delete(cacheKey)
             }
@@ -288,11 +291,11 @@ export const createHostedReviewSlice: StateCreator<AppState, [], [], HostedRevie
         }
       })()
 
-      inflightHostedReviewRequests.set(cacheKey, {
+      registerInflightHostedReviewRequest(requestKey, {
         promise: request,
         force: Boolean(options?.force),
         generation,
-        linkedReviewHintKey: hintKey
+        startedAt: requestStartedAt
       })
       return request
     }
@@ -307,13 +310,11 @@ export const createHostedReviewSlice: StateCreator<AppState, [], [], HostedRevie
     ) {
       // Why: sidebar PR metadata can stay visible while a quiet refresh updates
       // it; don't block card rendering on a quota-bound GitHub round trip.
-      if (!inflightRequest || !inflightHasRequestedHint) {
-        void startRequest()
-      }
+      queueHostedReviewRevalidation(requestKey, startRequest, inflightRequest)
       return cached.data
     }
 
-    if (inflightRequest && (!options?.force || inflightRequest.force) && inflightHasRequestedHint) {
+    if (inflightRequest && (!options?.force || inflightRequest.force)) {
       return inflightRequest.promise
     }
 

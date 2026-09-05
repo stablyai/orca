@@ -21,6 +21,8 @@ export function createMockDeps(): SshRelaySessionTestDeps {
     upsertSshPtyConsumerRecovery: vi.fn(),
     removeSshPtyConsumerRecovery: vi.fn(),
     getSshRemotePtyLeases: vi.fn().mockReturnValue([]),
+    reconcileSshRemotePtyLeasesForTarget: vi.fn(),
+    getWorkspaceSession: vi.fn(),
     markSshRemotePtyLease: vi.fn(),
     markSshRemotePtyLeases: vi.fn(),
     markSshRemotePtyLeasesAsync: vi.fn(),

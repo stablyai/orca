@@ -148,6 +148,80 @@ describe('applyWebSessionTabsSnapshot', () => {
     })
   })
 
+  it('indexes mirrored agent mappings so removed tabs cannot retain stale host ids', () => {
+    const agentSnapshot = (
+      sessionId: string,
+      hostTabId: string,
+      snapshotVersion: number
+    ): RuntimeMobileSessionTabsResult =>
+      makeSnapshot(
+        [
+          {
+            type: 'agent-session',
+            id: hostTabId,
+            title: 'Codex Chat',
+            sessionId,
+            agent: 'codex',
+            isActive: true
+          }
+        ],
+        {
+          snapshotVersion,
+          activeTabId: hostTabId,
+          activeTabType: 'agent-session'
+        }
+      )
+
+    const firstPatch = applyFreshWebSessionTabsSnapshot(
+      makeState(),
+      agentSnapshot('session-1', 'host-agent-1', 1),
+      ENV,
+      NOW
+    ) as Partial<WebSessionTabsSyncState>
+    const afterFirstSnapshot = { ...makeState(), ...firstPatch } as WebSessionTabsSyncState
+
+    expect(_getWebSessionTabsTrackingCountsForTest()).toEqual({
+      freshness: 1,
+      hostMappings: 1,
+      hostMappingWorktrees: 1
+    })
+
+    applyFreshWebSessionTabsSnapshot(
+      afterFirstSnapshot,
+      agentSnapshot('session-2', 'host-agent-2', 2),
+      ENV,
+      NOW + 1
+    )
+
+    expect(_getWebSessionTabsTrackingCountsForTest()).toEqual({
+      freshness: 1,
+      hostMappings: 1,
+      hostMappingWorktrees: 1
+    })
+    expect(
+      resolveHostSessionTabIdForWebSessionTab(makeState(), {
+        environmentId: ENV,
+        worktreeId: WT,
+        tabId: 'structured-agent-session-session-1'
+      })
+    ).toBeNull()
+    expect(
+      resolveHostSessionTabIdForWebSessionTab(makeState(), {
+        environmentId: ENV,
+        worktreeId: WT,
+        tabId: 'structured-agent-session-session-2'
+      })
+    ).toBe('host-agent-2')
+
+    clearWebSessionTabsTrackingForEnvironment(ENV)
+
+    expect(_getWebSessionTabsTrackingCountsForTest()).toEqual({
+      freshness: 0,
+      hostMappings: 0,
+      hostMappingWorktrees: 0
+    })
+  })
+
   it('clears web session tracking maps for one runtime environment on teardown', () => {
     applyFreshWebSessionTabsSnapshot(
       makeState(),

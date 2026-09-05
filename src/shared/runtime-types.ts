@@ -114,11 +114,13 @@ export type {
   RuntimeBrowserDriverState,
   RuntimeDesktopWindowStatus,
   RuntimeGraphStatus,
+  RuntimeMobileSessionAgentTab,
   RuntimeMobileSessionBrowserTab,
   RuntimeMobileSessionClientTab,
   RuntimeMobileSessionCreateTerminalResult,
   RuntimeMobileSessionFileTab,
   RuntimeMobileSessionMarkdownTab,
+  RuntimeMobileSessionRetiredTerminalSurface,
   RuntimeMobileSessionSnapshotTab,
   RuntimeMobileSessionTabCloseResult,
   RuntimeMobileSessionTabGroup,
@@ -175,6 +177,7 @@ export type {
   RuntimeTerminalWait,
   RuntimeTerminalWaitBlockedReason,
   RuntimeTerminalWaitCondition,
+  RuntimeWorktreeTerminalCloseResult,
   RuntimeWorktreeTerminalSleepResult
 } from './runtime-terminal-contracts'
 export type {

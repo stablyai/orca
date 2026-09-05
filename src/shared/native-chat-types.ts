@@ -31,6 +31,17 @@ export type NativeChatRole = (typeof NATIVE_CHAT_ROLES)[number]
 export type NativeChatTextBlock = {
   type: 'text'
   text: string
+  /** Optional structured detail for an otherwise ordinary fallback line. */
+  providerFrame?: {
+    provider: string
+    kind: string
+    payload: {
+      head: string
+      byteLength: number
+      digest: string
+      truncated: boolean
+    }
+  }
 }
 
 /** A tool invocation by the agent. `input` is the (already-serialized) tool
@@ -40,6 +51,8 @@ export type NativeChatToolCallBlock = {
   type: 'tool-call'
   name: string
   input: unknown
+  /** Provider lifecycle when the structured app-server path can supply it. */
+  state?: 'running' | 'completed' | 'failed'
 }
 
 /** The result returned to the agent for a prior tool call. */

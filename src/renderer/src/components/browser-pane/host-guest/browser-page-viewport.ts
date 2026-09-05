@@ -10,6 +10,15 @@ type BrowserPageViewport = {
   shell: HTMLDivElement
   chromeInset: HTMLDivElement
   container: HTMLDivElement
+  scroller: HTMLDivElement
+  content: HTMLDivElement
+}
+
+export type BrowserPageViewportScrollState = {
+  scrollLeft: number
+  scrollTop: number
+  maxScrollLeft: number
+  maxScrollTop: number
 }
 
 const browserPageViewports = new Map<string, BrowserPageViewport>()
@@ -18,6 +27,7 @@ const browserPageViewports = new Map<string, BrowserPageViewport>()
 // re-measure (guest recovery/replacement, profile switch, slot remount). Remembering
 // the inset keeps geometry a property of attaching a guest, not of the first mount.
 const browserPageChromeInsetHeights = new Map<string, number>()
+const browserPageViewportPresetSizes = new Map<string, { width: number; height: number }>()
 
 const slotRootListeners = new Map<string, Set<() => void>>()
 
@@ -107,12 +117,91 @@ export function ensureBrowserPageViewport(
   container.dataset.browserPageContainer = ''
   container.className = 'relative flex min-h-0 flex-1 overflow-hidden bg-background'
 
+  const scroller = document.createElement('div')
+  scroller.dataset.browserPageScroller = ''
+  scroller.className = 'scrollbar-sleek relative min-h-0 min-w-0 flex-1 overflow-hidden'
+
+  const content = document.createElement('div')
+  content.dataset.browserPageContent = ''
+  content.className = 'relative mx-auto'
+
+  scroller.appendChild(content)
+  container.appendChild(scroller)
+
   shell.append(chromeInset, container)
   root.appendChild(shell)
 
-  const viewport = { shell, chromeInset, container }
+  const viewport = { shell, chromeInset, container, scroller, content }
   browserPageViewports.set(browserPageId, viewport)
+  applyViewportPresetSizeStyles(viewport, browserPageViewportPresetSizes.get(browserPageId) ?? null)
   return viewport
+}
+
+function applyViewportPresetSizeStyles(
+  viewport: BrowserPageViewport,
+  size: { width: number; height: number } | null
+): void {
+  viewport.content.style.width = size ? `${size.width}px` : '100%'
+  viewport.content.style.height = size ? `${size.height}px` : '100%'
+  viewport.scroller.style.overflow = size ? 'auto' : ''
+}
+
+export function setBrowserPageViewportPresetSize(
+  browserPageId: string,
+  size: { width: number; height: number } | null
+): void {
+  if (size) {
+    browserPageViewportPresetSizes.set(browserPageId, size)
+  } else {
+    browserPageViewportPresetSizes.delete(browserPageId)
+  }
+  const viewport = browserPageViewports.get(browserPageId)
+  if (viewport) {
+    applyViewportPresetSizeStyles(viewport, size)
+  }
+}
+
+export function clearBrowserPageViewportPresetSize(browserPageId: string): void {
+  setBrowserPageViewportPresetSize(browserPageId, null)
+}
+
+export function scrollBrowserPageViewport(
+  browserPageId: string,
+  deltaX: number,
+  deltaY: number
+): void {
+  const scroller = browserPageViewports.get(browserPageId)?.scroller
+  if (!scroller) {
+    return
+  }
+  scroller.scrollLeft += deltaX
+  scroller.scrollTop += deltaY
+}
+
+export function getBrowserPageViewportScrollState(
+  browserPageId: string
+): BrowserPageViewportScrollState | null {
+  const scroller = browserPageViewports.get(browserPageId)?.scroller
+  if (!scroller) {
+    return null
+  }
+  return {
+    scrollLeft: Math.max(0, scroller.scrollLeft),
+    scrollTop: Math.max(0, scroller.scrollTop),
+    maxScrollLeft: Math.max(0, scroller.scrollWidth - scroller.clientWidth),
+    maxScrollTop: Math.max(0, scroller.scrollHeight - scroller.clientHeight)
+  }
+}
+
+export function subscribeBrowserPageViewportScroll(
+  scroller: HTMLDivElement | null,
+  listener: () => void
+): () => void {
+  if (!scroller) {
+    return () => {}
+  }
+  scroller.addEventListener('scroll', listener, { passive: true })
+  return () => scroller.removeEventListener('scroll', listener)
 }
 
 export function removeBrowserPageViewport(browserPageId: string): void {

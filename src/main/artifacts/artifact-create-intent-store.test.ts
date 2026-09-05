@@ -3,7 +3,11 @@ import { mkdtemp, readFile, readdir, rm, stat, truncate, writeFile } from 'node:
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { ARTIFACT_CLI_MAX_RPC_BYTES, artifactWriteRequestByteLength } from '../../shared/artifacts'
+import {
+  ARTIFACT_MAX_CONTENT_BYTES,
+  ARTIFACT_MAX_REQUEST_BYTES,
+  artifactWriteRequestByteLength
+} from '../../shared/artifacts'
 import {
   MAX_ARTIFACT_CREATE_INTENT_BYTES,
   MAX_PENDING_ARTIFACT_CREATES,
@@ -270,12 +274,15 @@ describe('artifact create intent store', () => {
     ).toThrow(/unsupported format/)
   })
 
-  it('persists a valid artifact request near the RPC limit', async () => {
+  it('persists an escaped artifact within the recovery limit', async () => {
     const userDataPath = await createUserDataPath()
-    const nearLimitBody = { ...body, content: 'x'.repeat(ARTIFACT_CLI_MAX_RPC_BYTES - 200) }
+    const nearLimitBody = {
+      ...body,
+      content: '"'.repeat(Math.floor(ARTIFACT_MAX_CONTENT_BYTES / 2))
+    }
     expect(
       artifactWriteRequestByteLength({ sourceKey: '/repo/report.html', ...nearLimitBody })
-    ).toBeLessThanOrEqual(ARTIFACT_CLI_MAX_RPC_BYTES)
+    ).toBeLessThanOrEqual(ARTIFACT_MAX_REQUEST_BYTES)
 
     expect(() =>
       getOrCreateArtifactCreateIntent(
@@ -289,7 +296,41 @@ describe('artifact create intent store', () => {
     ).not.toThrow()
     const directory = join(userDataPath, 'profiles', 'local-profile', 'artifact-create-intents')
     const [fileName] = await readdir(directory)
-    expect((await stat(join(directory, fileName))).size).toBeGreaterThan(ARTIFACT_CLI_MAX_RPC_BYTES)
+    expect((await stat(join(directory, fileName))).size).toBeGreaterThan(ARTIFACT_MAX_CONTENT_BYTES)
+  })
+
+  it('rejects oversized artifact content before creating a recovery record', async () => {
+    const userDataPath = await createUserDataPath()
+    expect(() =>
+      getOrCreateArtifactCreateIntent(
+        'local-profile',
+        userDataPath,
+        '/repo/report.html',
+        scope,
+        'key-a',
+        { ...body, content: 'x'.repeat(ARTIFACT_MAX_CONTENT_BYTES + 1) }
+      )
+    ).toThrow(/10 MiB limit/)
+  })
+
+  it('rejects a recovery body whose escaped request exceeds the transport budget', async () => {
+    const userDataPath = await createUserDataPath()
+    const content = '\u0000'.repeat(Math.ceil(ARTIFACT_MAX_REQUEST_BYTES / 6))
+    expect(content.length).toBeLessThan(ARTIFACT_MAX_CONTENT_BYTES)
+    expect(
+      artifactWriteRequestByteLength({ sourceKey: '/repo/report.html', ...body, content })
+    ).toBeGreaterThan(ARTIFACT_MAX_REQUEST_BYTES)
+
+    expect(() =>
+      getOrCreateArtifactCreateIntent(
+        'local-profile',
+        userDataPath,
+        '/repo/report.html',
+        scope,
+        'key-a',
+        { ...body, content }
+      )
+    ).toThrow(/supported size/)
   })
 
   it('rejects an oversized recovery record before reading it', async () => {

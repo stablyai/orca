@@ -260,4 +260,86 @@ describe('computeWorktreePath WSL layout', () => {
       })
     ).toBe('\\\\wsl.localhost\\Ubuntu\\home\\jin\\custom-worktrees\\feature')
   })
+
+  // The C:\ repo + WSL runtime case: git status stats every working-tree file,
+  // so a tree on the Windows drive costs ~46s across the 9p mount versus ~0.2s
+  // native with only the gitdir left behind.
+  describe('Windows-drive repo whose project runs in WSL', () => {
+    it('places worktrees inside the distro', () => {
+      parseWslPathMock.mockReturnValue(null)
+      getWslHomeMock.mockReturnValue('\\\\wsl.localhost\\Ubuntu\\home\\jin')
+
+      expect(
+        computeWorktreePath('feature', 'C:\\Users\\jin\\repo', {
+          nestWorkspaces: false,
+          workspaceDir: 'C:\\workspaces',
+          wslMirrorDistro: 'Ubuntu'
+        })
+      ).toBe('\\\\wsl.localhost\\Ubuntu\\home\\jin\\orca\\workspaces\\feature')
+    })
+
+    it('keeps Windows placement when the project has no WSL runtime', () => {
+      parseWslPathMock.mockReturnValue(null)
+
+      expect(
+        computeWorktreePath('feature', 'C:\\Users\\jin\\repo', {
+          nestWorkspaces: false,
+          workspaceDir: 'C:\\workspaces'
+        })
+      ).toBe(win32.join('C:\\workspaces', 'feature'))
+      expect(getWslHomeMock).not.toHaveBeenCalled()
+    })
+
+    it('falls back to Windows placement when the distro home cannot be resolved', () => {
+      parseWslPathMock.mockReturnValue(null)
+      getWslHomeMock.mockReturnValue(null)
+
+      expect(
+        computeWorktreePath('feature', 'C:\\Users\\jin\\repo', {
+          nestWorkspaces: false,
+          workspaceDir: 'C:\\workspaces',
+          wslMirrorDistro: 'Ubuntu'
+        })
+      ).toBe(win32.join('C:\\workspaces', 'feature'))
+    })
+
+    it('respects an explicit repo-relative workspace dir', () => {
+      parseWslPathMock.mockReturnValue(null)
+
+      expect(
+        computeWorktreePath('feature', 'C:\\Users\\jin\\repo', {
+          nestWorkspaces: false,
+          workspaceDir: 'worktrees',
+          wslMirrorDistro: 'Ubuntu'
+        })
+      ).toBe(win32.join('C:\\Users\\jin\\repo', 'worktrees', 'feature'))
+      expect(getWslHomeMock).not.toHaveBeenCalled()
+    })
+
+    it('ignores a stray mirror distro on a POSIX repo path', () => {
+      parseWslPathMock.mockReturnValue(null)
+
+      expect(
+        computeWorktreePath('feature', '/Users/jin/repo', {
+          nestWorkspaces: false,
+          workspaceDir: '/Users/jin/workspaces',
+          wslMirrorDistro: 'Ubuntu'
+        })
+      ).toBe('/Users/jin/workspaces/feature')
+      expect(getWslHomeMock).not.toHaveBeenCalled()
+    })
+
+    it('mirrors on the async path too', async () => {
+      parseWslPathMock.mockReturnValue(null)
+      getWslHomeAsyncMock.mockResolvedValue('\\\\wsl.localhost\\Ubuntu\\home\\jin')
+
+      await expect(
+        computeWorktreePathAsync('feature', 'C:\\Users\\jin\\repo', {
+          nestWorkspaces: false,
+          workspaceDir: 'C:\\workspaces',
+          wslMirrorDistro: 'Ubuntu'
+        })
+      ).resolves.toBe('\\\\wsl.localhost\\Ubuntu\\home\\jin\\orca\\workspaces\\feature')
+    })
+  })
 })

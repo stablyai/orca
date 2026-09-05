@@ -171,6 +171,35 @@ async function gradeWorkerExit(
 }
 
 describe('STA-4604 worker PTY exit escalation reaches the coordinator', () => {
+  // Why: every other case here uses a short single-line spec, where the derived title and the
+  // raw spec are identical — so a refactor that inlines `task.spec` stays green while the
+  // banner rots. Grade the prose the coordinator actually reads.
+  it('titles the escalation from task_title, not the raw spec', async () => {
+    const { runtime, workerHandle, coordinatorHandle } = makeRuntimeWithTwoPanes()
+    const db = new OrchestrationDb(':memory:')
+    try {
+      const runId = db.createRun({
+        objective: 'escalation prose',
+        coordinatorHandle,
+        coordinatorPaneKey: COORDINATOR_PANE_KEY
+      }).id
+      const spec = `Fix the auth redirect loop\n\n${'detail '.repeat(60)}`
+      const task = db.createTask({ spec, runId, taskTitle: 'Fix auth redirect' })
+      createRootDispatch(db, task.id, workerHandle, WORKER_PANE_KEY)
+      runtime.setOrchestrationDb(db as never)
+
+      runtime.onPtyExit(WORKER_PTY_ID, 137)
+      await settle()
+
+      const body = String(db.getUnreadRunMailbox(runId, 100, ['escalation'])[0]?.body ?? '')
+      expect(body).toContain('"Fix auth redirect"')
+      expect(body).not.toContain('detail detail')
+      expect(body.split('\n')).toHaveLength(1)
+    } finally {
+      db.close()
+    }
+  })
+
   it('delivers the escalation to a lightweight Run mailbox', async () => {
     const graded = await gradeWorkerExit('lightweight-run')
     expect(graded).toMatchObject({

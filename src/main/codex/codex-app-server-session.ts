@@ -2,6 +2,7 @@ import { spawn, type ChildProcess, type ChildProcessWithoutNullStreams } from 'n
 import { waitForProcessExitUntil } from './codex-process-exit-deadline'
 import { stderrIndicatesMissingAppServer } from './codex-app-server-capability-signal'
 import { withCliRuntimeOnPath } from '../../shared/node-cli-command-resolution'
+import { admitProcessTreeKill } from '../../shared/child-process/process-tree-kill-gate'
 
 // Why: `codex app-server` is Orca's sanctioned RPC surface into Codex-owned
 // state (hook trust hashes, the sqlite thread index). This module owns the
@@ -74,6 +75,18 @@ export function killCodexAppServerProcessTree(
   const platform = options.platform ?? process.platform
   const spawnImpl = options.spawnImpl ?? spawn
   if (platform === 'win32' && child.pid) {
+    if (
+      !admitProcessTreeKill({
+        pid: child.pid,
+        site: 'codex-app-server-session-deadline',
+        scope: 'win-taskkill-tree'
+      })
+    ) {
+      // Refusal blocks the tree walk, not the termination: the root kill is
+      // handle-addressed, so it cannot reach the recycled pid we refused.
+      child.kill('SIGKILL')
+      return
+    }
     try {
       // Why: npm-installed Codex runs behind cmd.exe; killing only that wrapper
       // leaves the app-server child alive after a timeout or failed shutdown.
@@ -100,11 +113,35 @@ export function killCodexAppServerProcessTree(
       // Fall through to the direct-child best effort when taskkill cannot start.
     }
   }
+  if (child.pid) {
+    try {
+      // npm/package-manager launchers insert a shim child on POSIX. Reap its
+      // direct descendants before signalling the wrapper itself.
+      const descendants = spawnImpl('pkill', ['-KILL', '-P', String(child.pid)], {
+        stdio: 'ignore'
+      })
+      // A missing pkill surfaces as an async 'error' event, and an unhandled one
+      // takes down the main process.
+      descendants.on('error', () => undefined)
+      descendants.unref()
+    } catch {
+      // The direct kill below remains the fallback when pkill is unavailable.
+    }
+  }
   child.kill('SIGKILL')
 }
 
-function isMethodNotFoundError(error: { code?: number; message?: string }): boolean {
-  return error.code === JSON_RPC_METHOD_NOT_FOUND || /method not found/i.test(error.message ?? '')
+/** Codex answering "no such method" is the only response that proves the RPC
+ *  surface is absent rather than temporarily failing. */
+export function isCodexMethodNotFoundError(error: unknown): boolean {
+  if (typeof error !== 'object' || error === null) {
+    return false
+  }
+  const { code, message } = error as { code?: unknown; message?: unknown }
+  return (
+    code === JSON_RPC_METHOD_NOT_FOUND ||
+    /method not found/i.test(typeof message === 'string' ? message : '')
+  )
 }
 
 /**
@@ -265,7 +302,7 @@ export async function runCodexAppServerSession<T>(
       }
     })
     if (response.error) {
-      if (isMethodNotFoundError(response.error)) {
+      if (isCodexMethodNotFoundError(response.error)) {
         throw new CodexAppServerUnsupportedError(
           `codex app-server does not support ${method}: ${response.error.message ?? 'method not found'}`
         )

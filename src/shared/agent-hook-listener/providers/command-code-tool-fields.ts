@@ -31,6 +31,7 @@ export function extractCommandCodeToolFields(
         extractToolResponseText(hookPayload.tool_output)
       if (responseText) {
         update.lastAssistantMessage = responseText
+        update.lastAssistantMessageIsToolOutput = true
       }
     }
     return update

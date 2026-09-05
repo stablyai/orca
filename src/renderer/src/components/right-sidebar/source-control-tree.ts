@@ -165,7 +165,7 @@ export function buildGitStatusSourceControlTree(
 }
 
 export function flattenSourceControlTree<Entry extends SourceControlTreeEntry, Area extends string>(
-  nodes: SourceControlTreeNode<Entry, Area>[],
+  nodes: readonly SourceControlTreeNode<Entry, Area>[],
   collapsedDirectoryKeys: ReadonlySet<string>
 ): SourceControlTreeNode<Entry, Area>[] {
   const result: SourceControlTreeNode<Entry, Area>[] = []

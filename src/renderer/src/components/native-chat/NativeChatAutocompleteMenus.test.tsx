@@ -89,6 +89,24 @@ describe('NativeChatPickerMenu', () => {
     expect(screen.getAllByText('Loading skills...')).toHaveLength(2)
   })
 
+  it('renders a retryable error instead of the loading spinner when discovery fails', () => {
+    const onRetry = vi.fn()
+    render(
+      <NativeChatPickerMenu
+        autocomplete={autocomplete({ items: [], skillStatus: 'error', skillErrorKind: 'host' })}
+        activeIndex={0}
+        listboxId="picker"
+        onChoose={vi.fn()}
+        onRetry={onRetry}
+      />
+    )
+
+    expect(screen.getAllByText('Could not load skills from this host')).toHaveLength(2)
+    expect(screen.queryByText('Loading skills...')).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: 'Retry' }))
+    expect(onRetry).toHaveBeenCalledOnce()
+  })
+
   it('uses command-only empty copy for a picker without skill support', () => {
     render(
       <NativeChatPickerMenu

@@ -93,6 +93,16 @@ describe('parseArgs', () => {
     expect(parsed.flags.get('repo')).toBe('id:abc')
   })
 
+  it('preserves a project selector before the project command', () => {
+    const parsed = parseArgs(
+      ['--project', 'github:stablyai/orca', 'project', 'setups'],
+      [['project', 'setups']]
+    )
+
+    expect(parsed.commandPath).toEqual(['project', 'setups'])
+    expect(parsed.flags.get('project')).toBe('github:stablyai/orca')
+  })
+
   it('preserves a selector value that is also a registered command', () => {
     const parsed = parseArgs(
       ['--environment', 'status', 'worktree', 'list'],
@@ -111,6 +121,16 @@ describe('parseArgs', () => {
 
     expect(parsed.commandPath).toEqual(['status'])
     expect(parsed.flags.get('environment')).toBe('worktree')
+  })
+
+  it.each([
+    ['--project', 'project', 'project', 'setups'],
+    ['--project=project', 'project', 'setups']
+  ])('preserves a command-named project selector in %j', (...args) => {
+    const parsed = parseArgs(args, [['project', 'setups']])
+
+    expect(parsed.commandPath).toEqual(['project', 'setups'])
+    expect(parsed.flags.get('project')).toBe('project')
   })
 
   it('parses emulator reinstall as a boolean flag', () => {

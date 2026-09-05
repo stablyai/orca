@@ -3,6 +3,7 @@ import { useAppStore } from '@/store'
 import { BROWSER_CERTIFICATE_TRUST_RUNTIME_CAPABILITY } from '../../../../../shared/protocol-version'
 import type { BrowserPage as BrowserPageState } from '../../../../../shared/browser-workspace-types'
 import { runtimeEnvironmentSupportsCapability } from '@/runtime/runtime-rpc-client'
+import { convertBrowserPageToWorkspaceDoc } from '@/lib/file-preview'
 import { openWorkspaceBrowserTab } from '@/lib/workspace-browser-tab-open'
 import { useBrowserPageChromeFocus } from '../assemble-chrome/use-browser-page-chrome-focus'
 import { useBrowserAddressBarEditSession } from '../assemble-chrome/use-browser-address-bar-edit-session'
@@ -358,7 +359,8 @@ export function RemoteBrowserPagePane({
               workspaceId: worktreeId,
               url: linkUrl,
               intent: { kind: 'url' },
-              expectedRuntimeEnvironmentId: runtimeEnvironmentId
+              expectedRuntimeEnvironmentId: runtimeEnvironmentId,
+              placementPreference: 'server'
             }).catch((error) => {
               setPaneNotice({
                 kind: 'direct',
@@ -378,6 +380,9 @@ export function RemoteBrowserPagePane({
         onAddressBarChange={setAddressBarValue}
         onSubmitAddressBar={submitAddressBar}
         onNavigateToUrl={navigateToUrl}
+        onOpenWorkspaceDoc={(docLocation) =>
+          convertBrowserPageToWorkspaceDoc(browserTab.id, docLocation)
+        }
         addressBarInputRef={addressBarInputRef}
         addressBarEditSession={addressBarEditSession}
         busy={busy}

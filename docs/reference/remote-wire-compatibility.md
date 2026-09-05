@@ -91,14 +91,73 @@ pnpm exec vitest run --config config/vitest.config.ts tests/e2e/cross-version-wi
 
 It fails when a frame is refused by the receiving build's decoder (Rule 2), when the
 observed frame sequence changes (Rule 3), or when published snapshot content or
-negotiated capabilities differ from the contract. Adding an optional field keeps it
-green (Rule 1); making a client depend on that field turns the new-client/old-host
-pairing red.
+negotiated capabilities differ from the contract. Repeated frame shapes are compared
+by corresponding journey occurrence (initial, reveal, reconnect), so a field removed
+from one occurrence cannot hide behind a sibling that still publishes it. Adding an
+optional field keeps the suite green (Rule 1); making a client depend on that field
+turns the new-client/old-host pairing red.
 
-The harness covers the terminal stream only. It does **not** cover the session-tab
-sync channel, agent-session publications, file or Git RPCs, mobile/E2EE framing, or
-the relay transport. A change on those paths still needs its own reasoning against
-the three rules above.
+### Never write down what the old side has
+
+The baseline is whichever release tag is newest, so it moves on every cut. An
+expectation of the form "the old side does not have X" — a `not.toHaveProperty`, a
+`not.toContain`, a hard-coded field list — stops being true the first time a release
+ships X. The suite then reddens on whatever pull request is in flight, with no code
+change anywhere, and the job trains people to ignore it. That is worse than no test,
+because a rolling baseline eventually contains every additive field the wire has, and
+adding one is the sanctioned way to evolve it.
+
+Derive the expectation from the baseline that was actually checked out:
+
+- for a published frame, pair each build against a client of its own version and
+  compare the skewed pairing against that same-version reference, so the expectation
+  is whatever that build publishes today. Compare repeated frames by corresponding
+  occurrence with `comparePublishedFieldOccurrences` in
+  `tests/e2e/cross-version-wire/published-field-shape.ts`; never union keys across
+  initial, reveal, and reconnect frames, because a sibling can mask one occurrence's
+  removed field;
+- for a negotiated surface, read the old build's advertised capabilities and
+  registered method names from its checkout, and assert they agree with each other
+  rather than asserting the old build lacks them;
+- for a "client too old to know X", derive that client's advertised list by removing
+  X from the baseline's own list, so the gate stays exercised after X ships.
+
+Name the direction in the assertion. `new client against old server` and `old client
+against new server` fail for different reasons, and the host is the only side that
+authors a published frame — the terminal `terminalOwner` false positive on 2026-08-29
+was misread as a new client sending an unknown field when the old server was
+publishing it. Two things are still safe to state literally: the current build's own
+contract, and an invariant that holds for every version.
+
+Pinning a legacy ref is the fallback when a contract genuinely needs a release from
+before a feature shipped, as `cross-version-browser-placement.unit.test.ts` does with
+`LEGACY_BROWSER_PLACEMENT_RELEASE_REF`. It does not rot on a cut, but it is
+hand-maintained, so prefer deriving.
+
+`tests/e2e/cross-version-wire/cross-version-agent-session-wire.unit.test.ts` pairs the
+same two builds over the structured `agentSession.*` surface. Because a released build
+cannot name a capability string its own source never contains, the old side's advertised
+list and registered method names are read from the extracted checkout rather than
+hand-written. It covers the three skews that surface can fail on:
+
+- an old client — advertising the baseline's list minus this capability — is told the
+  whole surface does not exist and reaches no host method;
+- a new client against the old dispatcher always gets an answer rather than silence,
+  and `method_not_found` for every method that release does not register, so the
+  absence is visible during negotiation instead of by calling;
+- a cursor survives a host restart: the client's fence is refused as stale with the live
+  one attached, and resuming from the held cursor replays only what it missed.
+
+Run it with:
+
+```bash
+pnpm exec vitest run --config config/vitest.config.ts tests/e2e/cross-version-wire/cross-version-agent-session-wire.unit.test.ts
+```
+
+The harness covers the terminal stream and the structured agent-session surface. It does
+**not** cover the session-tab sync channel, legacy agent-session publications, file or Git
+RPCs, mobile/E2EE framing, or the relay transport. A change on those paths still needs its
+own reasoning against the three rules above.
 
 ## Worked example: `agentWait` on terminal and worker reads
 

@@ -133,7 +133,8 @@ export const createRefreshSweepActions = (
           worktreeId: candidate.worktreeId,
           linkedPRNumber: candidate.linkedPRNumber ?? null,
           fallbackPRNumber: candidate.fallbackPRNumber ?? null,
-          fallbackPRSource: candidate.fallbackPRSource ?? null
+          fallbackPRSource: candidate.fallbackPRSource ?? null,
+          reason: 'swr'
         })
       } else if (shouldEnqueueLocalPRRefresh(candidate)) {
         enqueueLocalGitHubPRRefresh({ candidate, reason: 'swr', priority: 10 })
@@ -207,7 +208,8 @@ export const createRefreshSweepActions = (
             worktreeId: candidate.worktreeId,
             linkedPRNumber: candidate.linkedPRNumber ?? null,
             fallbackPRNumber: candidate.fallbackPRNumber ?? null,
-            fallbackPRSource: candidate.fallbackPRSource ?? null
+            fallbackPRSource: candidate.fallbackPRSource ?? null,
+            reason: 'post-push'
           })
         } else if (shouldEnqueueLocalPRRefresh(candidate)) {
           enqueueLocalGitHubPRRefresh({ candidate, reason: 'post-push', priority: 100 })

@@ -245,6 +245,7 @@ export function formatCliStatus(status: CliStatusResult): string {
     `desktopWindowStatus: ${status.app.desktopWindowStatus ?? 'unknown'}`,
     `runtimeState: ${status.runtime.state}`,
     `runtimeReachable: ${status.runtime.reachable}`,
+    `runtimeConnectionState: ${status.runtime.connectionState ?? 'unknown'}`,
     `runtimeId: ${status.runtime.runtimeId ?? 'none'}`,
     `graphState: ${status.graph.state}`
   ].join('\n')

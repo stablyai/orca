@@ -3,6 +3,7 @@ import { constants } from 'node:fs'
 import { access, readlink, realpath, stat } from 'node:fs/promises'
 import { delimiter, isAbsolute, resolve } from 'node:path'
 import { promisify } from 'node:util'
+import { PS_MAX_BUFFER_BYTES } from './process-table-snapshot'
 
 const execFile = promisify(execFileCallback)
 const PROCESS_READINESS_TIMEOUT_MS = 3000
@@ -45,7 +46,8 @@ export async function readShellProcessReadiness(
     readExecutablePath(pid),
     execFile('ps', ['-p', String(pid), '-o', 'stat='], {
       encoding: 'utf8',
-      timeout: PROCESS_READINESS_TIMEOUT_MS
+      timeout: PROCESS_READINESS_TIMEOUT_MS,
+      maxBuffer: PS_MAX_BUFFER_BYTES
     })
   ])
   const status = stdout.trim()

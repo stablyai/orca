@@ -34,17 +34,17 @@ export function registerBrowserSessionProfileHandlers(): void {
 
   ipcMain.handle(
     'browser:session:createProfile',
-    (
+    async (
       event,
       args: {
         scope: BrowserSessionProfileScope
         label: string
       } & BrowserSessionProfileCreateOptions
-    ): BrowserSessionProfile | null => {
+    ): Promise<BrowserSessionProfile | null> => {
       if (!isTrustedBrowserRenderer(event.sender)) {
         return null
       }
-      return browserSessionRegistry.createProfile(args.scope, args.label, {
+      return await browserSessionRegistry.createProfile(args.scope, args.label, {
         userAgentMode: args.userAgentMode
       })
     }

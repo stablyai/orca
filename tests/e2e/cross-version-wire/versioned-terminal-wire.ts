@@ -1,4 +1,8 @@
-import { materializeReleaseCheckout, type ReleaseCheckout } from './release-checkout'
+import {
+  importReleaseCheckoutModule,
+  materializeReleaseCheckout,
+  type ReleaseCheckout
+} from './release-checkout'
 
 /**
  * Structural views of the three modules that make up the remote terminal wire.
@@ -112,19 +116,15 @@ async function loadWorkingTreeBuild(): Promise<TerminalWireBuild> {
   }
 }
 
-// Why @vite-ignore: the checkout is created at run time, so Vite cannot glob it at
-// transform time. Vite-node still resolves and transforms the target on demand.
-function importFromCheckout(specifier: string): Promise<Record<string, unknown>> {
-  return import(/* @vite-ignore */ specifier) as Promise<Record<string, unknown>>
-}
-
 async function loadReleaseBuild(checkout: ReleaseCheckout): Promise<TerminalWireBuild> {
-  const base = `${checkout.root}/src`
   const [codec, dispatcher, terminalMethods, client] = await Promise.all([
-    importFromCheckout(`${base}/shared/terminal-stream-protocol.ts`),
-    importFromCheckout(`${base}/main/runtime/rpc/dispatcher.ts`),
-    importFromCheckout(`${base}/main/runtime/rpc/methods/terminal.ts`),
-    importFromCheckout(`${base}/renderer/src/runtime/remote-runtime-terminal-multiplexer.ts`)
+    importReleaseCheckoutModule(checkout, '/src/shared/terminal-stream-protocol.ts'),
+    importReleaseCheckoutModule(checkout, '/src/main/runtime/rpc/dispatcher.ts'),
+    importReleaseCheckoutModule(checkout, '/src/main/runtime/rpc/methods/terminal.ts'),
+    importReleaseCheckoutModule(
+      checkout,
+      '/src/renderer/src/runtime/remote-runtime-terminal-multiplexer.ts'
+    )
   ])
   return {
     label: checkout.ref,
@@ -147,5 +147,39 @@ export async function loadTerminalWireBuild(ref: string): Promise<TerminalWireBu
   if (ref === WORKING_TREE) {
     return loadWorkingTreeBuild()
   }
-  return loadReleaseBuild(materializeReleaseCheckout(ref))
+  return loadReleaseBuild(await materializeReleaseCheckout(ref))
+}
+
+/**
+ * The same build with one opcode taken out of its decoder — the shape a peer whose
+ * release predates that opcode has on the wire, without needing a release that
+ * predates it. Production drops a frame whose opcode the receiver cannot decode,
+ * so this is the failure the suite exists to catch, expressed as a build.
+ */
+export function withoutOpcodeSupport(
+  build: TerminalWireBuild,
+  opcodeName: string
+): TerminalWireBuild {
+  const opcode = build.codec.TerminalStreamOpcode[opcodeName]
+  if (typeof opcode !== 'number') {
+    throw new Error(`Build ${build.label} publishes no terminal stream opcode named ${opcodeName}`)
+  }
+  return {
+    ...build,
+    label: `${build.label}-without-${opcodeName}`,
+    codec: {
+      ...build.codec,
+      // Both directions of the reverse-mapped opcode table go, so an observer
+      // names the frame `Opcode<n>` rather than borrowing a name this build lost.
+      TerminalStreamOpcode: Object.fromEntries(
+        Object.entries(build.codec.TerminalStreamOpcode).filter(
+          ([name, value]) => name !== opcodeName && value !== opcodeName
+        )
+      ),
+      decodeTerminalStreamFrame: (bytes) => {
+        const frame = build.codec.decodeTerminalStreamFrame(bytes)
+        return frame && frame.opcode === opcode ? null : frame
+      }
+    }
+  }
 }

@@ -14,9 +14,9 @@
  * is still `display: none`. The syllable commits normally afterwards, which is exactly the
  * reported symptom: the committed text lands but the user types the next one blind.
  *
- * The assertion is therefore on the DISPLAYED overlay — the `active` class that CSS keys
- * `display: block` off, together with the text in it. Asserting `onData` here would pass on the
- * broken build, because the commit path is not what breaks.
+ * The first contract is the DISPLAYED overlay — the `active` class that CSS keys `display: block`
+ * off, together with the text in it. The resumed update must also become a real transaction so its
+ * later compositionend commits and cleans up normally.
  *
  * happy-dom performs no layout, so the cell size is supplied and geometry is not asserted.
  */
@@ -109,6 +109,7 @@ function buildEvent(recorded: RecordedEvent): Event {
 
 type Rig = {
   compositionView: HTMLElement
+  emitted: string[]
   replay: (events: RecordedEvent[]) => Promise<void>
   terminal: Terminal
 }
@@ -134,7 +135,11 @@ function openTerminal(): Rig {
   )._core._renderService.dimensions.css.cell
   cell.width = CELL_WIDTH_PX
   cell.height = CELL_HEIGHT_PX
-  terminal.onData((data) => terminal.write(data))
+  const emitted: string[] = []
+  terminal.onData((data) => {
+    emitted.push(data)
+    terminal.write(data)
+  })
 
   const replay = async (events: RecordedEvent[]): Promise<void> => {
     for (const recorded of events) {
@@ -150,7 +155,7 @@ function openTerminal(): Rig {
     }
   }
 
-  return { compositionView, replay, terminal }
+  return { compositionView, emitted, replay, terminal }
 }
 
 /** What the user sees: the class CSS keys `display: block` off, and the text inside it. */
@@ -186,6 +191,21 @@ describe('preedit visibility across a composition the IME resumes', () => {
     await rig.replay(RESUMED_WITHOUT_START)
 
     expect(displayedPreedit(rig.compositionView)).toEqual({ preedit: '네', shown: true })
+  })
+
+  it('commits and cleans up a transaction resumed with an update alone', async () => {
+    const rig = openTerminal()
+
+    await rig.replay([
+      { type: 'compositionstart', data: '' },
+      ...RESUMED_WITHOUT_START,
+      { type: 'compositionend', data: '네' }
+    ])
+    await nextEventLoop()
+    await nextEventLoop()
+
+    expect(rig.emitted.join('')).toBe('네네')
+    expect(displayedPreedit(rig.compositionView)).toEqual({ preedit: '', shown: false })
   })
 
   it('shows a preedit the IME resumes after the Enter that committed the last syllable', async () => {

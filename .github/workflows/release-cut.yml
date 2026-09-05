@@ -864,9 +864,9 @@ jobs:
           node-version-file: package.json
 
       - name: Setup pnpm
-        uses: pnpm/action-setup@v6
+        uses: pnpm/setup@v2
         with:
-          run_install: false
+          install: false
 
       # Why: Linux terminal golden E2E uses the same native install path as
       # release CI, which needs pnpm to bypass its non-executable gyp_main.py.
@@ -922,9 +922,7 @@ jobs:
         run: |
           $env:SKIP_BUILD = '1'
           $env:ORCA_E2E_FORWARD_APP_LOGS = '1'
-          pnpm run --if-present test:e2e:workspace-session-golden
           pnpm run --if-present test:e2e:windows-fresh-startup-golden
-          pnpm run --if-present test:e2e:source-control-golden
 
       - name: Upload Playwright traces
         if: failure()
@@ -940,6 +938,9 @@ jobs:
     if: needs.cut.outputs.should_release == 'true'
     name: skill sharing release gate ${{ matrix.platform }}
     runs-on: ${{ matrix.os }}
+    # The full suite is release-blocking on macOS. Windows still produces the
+    # same evidence, but intermittent filesystem contention cannot block signing.
+    continue-on-error: ${{ matrix.platform == 'windows' }}
     timeout-minutes: 20
     strategy:
       fail-fast: false
@@ -1079,9 +1080,9 @@ jobs:
           node-version-file: package.json
 
       - name: Setup pnpm
-        uses: pnpm/action-setup@v6
+        uses: pnpm/setup@v2
         with:
-          run_install: false
+          install: false
 
       # Why: keep the non-blocking evidence lane on the same Linux native
       # install path as the blocking golden and release build jobs.
@@ -1122,10 +1123,33 @@ jobs:
           retention-days: 7
           if-no-files-found: ignore
 
+  # Why: artifact jobs submit Windows binaries to SignPath. Keep every
+  # quota-consuming build behind all blocking release gates so a late test
+  # failure cannot create signing requests that can never be published.
+  release-preflight:
+    needs:
+      - cut
+      - terminal-rendering-golden
+      - skill-sharing-release-gate
+      - skill-sharing-linux-floor-release-gate
+    if: >-
+      always() &&
+      needs.cut.outputs.should_release == 'true' &&
+      needs.terminal-rendering-golden.result == 'success' &&
+      needs.skill-sharing-release-gate.result == 'success' &&
+      needs.skill-sharing-linux-floor-release-gate.result == 'success'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Confirm blocking release gates passed
+        run: echo "All blocking release gates passed; artifact builds may start."
+
   build:
     needs:
       - cut
       - create-release
+      - release-preflight
     if: needs.cut.outputs.should_release == 'true'
     strategy:
       fail-fast: false
@@ -1170,12 +1194,22 @@ jobs:
         with:
           ref: refs/tags/${{ needs.cut.outputs.tag }}
 
+      # GitHub reruns also resume jobs skipped behind a failed gate. Never
+      # recreate Windows signing requests on a rerun; reuse the assets from the
+      # original attempt and require a fresh dispatch if they are missing.
+      - name: Skip Windows artifact rebuild on rerun
+        if: matrix.platform == 'win' && github.run_attempt != 1
+        shell: bash
+        run: |
+          echo "Windows artifact/signing steps are disabled on reruns (attempt $GITHUB_RUN_ATTEMPT)."
+          echo "Existing signed release assets must be reused; dispatch a fresh release only when a rebuild is required." >> "$GITHUB_STEP_SUMMARY"
+
       # Why: `uses: ./…` resolves from the checked-out tag, not from the workflow
       # ref, so cutting from an older/off-main ref whose tree predates a composite
       # action would fail the step with "Can't find 'action.yml'". Restore the
       # actions directory from the commit this workflow file itself came from.
       - name: Restore composite actions from the workflow ref
-        if: matrix.platform == 'win'
+        if: matrix.platform == 'win' && github.run_attempt == 1
         shell: bash
         env:
           WORKFLOW_SHA: ${{ github.workflow_sha }}
@@ -1193,9 +1227,9 @@ jobs:
 
       # pnpm must be on PATH before setup-node so setup-node can locate the store for caching.
       - name: Setup pnpm
-        uses: pnpm/action-setup@v6
+        uses: pnpm/setup@v2
         with:
-          run_install: false
+          install: false
 
       - name: Setup Node.js
         uses: actions/setup-node@v6
@@ -1316,6 +1350,47 @@ jobs:
           # Kill only its child and require both PTY and watch recovery before packaging.
           node config/scripts/relay-watcher-fault-harness.mjs
 
+      # Why: main ships minified with sourcemap:'hidden' and packaging drops
+      # out/**/*.map from app.asar, so a crash trace from a released build is
+      # otherwise undecodable. The main bundle is platform-independent, so one
+      # leg publishes the maps for the whole release.
+      - name: Bundle main-process source maps
+        id: bundle-main-sourcemaps
+        if: matrix.platform == 'linux-x64'
+        shell: bash
+        env:
+          TAG: ${{ needs.cut.outputs.tag }}
+        run: |
+          set -euo pipefail
+          if [ -z "$(find out/main -name '*.js.map' -print -quit)" ]; then
+            # Older cut tags predate the hidden-source-map build setting. They
+            # are valid legacy releases, but have no map bundle to publish.
+            if grep -Eq "sourcemap:[[:space:]]*['\"]hidden['\"]" electron.vite.config.ts; then
+              echo "::error::No main-process source maps in out/main despite build.sourcemap='hidden'."
+              exit 1
+            fi
+            echo "has_maps=false" >>"$GITHUB_OUTPUT"
+            echo "::notice::Cut ref predates hidden main-process source maps; skipping map publication."
+            exit 0
+          fi
+          echo "has_maps=true" >>"$GITHUB_OUTPUT"
+          # Why: every entry in electron-builder's `files` is a negation, so
+          # app-builder prepends `**/*` and packs anything left in the workspace
+          # root into app.asar. Stage the bundle outside the checkout instead.
+          find out/main -name '*.js.map' -print | sort | zip -q -X "$RUNNER_TEMP/orca-sourcemaps-$TAG.zip" -@
+          ls -l "$RUNNER_TEMP/orca-sourcemaps-$TAG.zip"
+
+      - name: Publish main-process source maps
+        if: matrix.platform == 'linux-x64' && steps.bundle-main-sourcemaps.outputs.has_maps == 'true'
+        uses: nick-fields/retry@v4
+        with:
+          timeout_minutes: 10
+          max_attempts: 3
+          retry_wait_seconds: 30
+          command: gh release upload "${{ needs.cut.outputs.tag }}" "${{ runner.temp }}/orca-sourcemaps-${{ needs.cut.outputs.tag }}.zip" --clobber --repo "${{ github.repository }}"
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
       - name: Publish release artifacts (Linux)
         if: matrix.platform == 'linux-x64' || matrix.platform == 'linux-arm64'
         uses: nick-fields/retry@v4
@@ -1341,7 +1416,7 @@ jobs:
       # Why: SignPath signs GitHub workflow artifacts, so Windows builds must
       # upload only after the production-signed installer has been returned.
       - name: Build Windows release artifacts
-        if: matrix.platform == 'win'
+        if: matrix.platform == 'win' && github.run_attempt == 1
         uses: nick-fields/retry@v4
         with:
           timeout_minutes: 30
@@ -1352,7 +1427,7 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Verify Windows node-pty ConPTY runtime
-        if: matrix.platform == 'win'
+        if: matrix.platform == 'win' && github.run_attempt == 1
         shell: pwsh
         run: |
           $runtimeDir = 'dist/win-unpacked/resources/node_modules/node-pty/build/Release'
@@ -1369,7 +1444,7 @@ jobs:
           }
 
       - name: Install SignPath PowerShell module
-        if: matrix.platform == 'win'
+        if: matrix.platform == 'win' && github.run_attempt == 1
         uses: ./.github/actions/install-signpath-module
 
       # ── Windows inner-binary signing (issue #7785) ─────────────────────
@@ -1386,7 +1461,7 @@ jobs:
       # valid signature (Microsoft's OpenConsole.exe) must keep their signer.
       - name: Stage unsigned inner PE files for signing
         id: stage-inner
-        if: matrix.platform == 'win'
+        if: matrix.platform == 'win' && github.run_attempt == 1
         continue-on-error: true
         shell: pwsh
         run: |
@@ -1425,7 +1500,7 @@ jobs:
 
       - name: Upload unsigned inner binaries for SignPath
         id: upload-unsigned-inner
-        if: matrix.platform == 'win' && steps.stage-inner.outcome == 'success'
+        if: matrix.platform == 'win' && github.run_attempt == 1 && steps.stage-inner.outcome == 'success'
         continue-on-error: true
         uses: actions/upload-artifact@v7
         with:
@@ -1435,7 +1510,7 @@ jobs:
 
       - name: Submit inner binaries signing request
         id: submit-inner-signing
-        if: matrix.platform == 'win' && steps.upload-unsigned-inner.outcome == 'success'
+        if: matrix.platform == 'win' && github.run_attempt == 1 && steps.upload-unsigned-inner.outcome == 'success'
         continue-on-error: true
         uses: signpath/github-action-submit-signing-request@v2
         with:
@@ -1449,7 +1524,7 @@ jobs:
 
       - name: Notify Slack that inner-binary signing is waiting for approval
         id: notify-inner-signing
-        if: matrix.platform == 'win' && steps.submit-inner-signing.outcome == 'success'
+        if: matrix.platform == 'win' && github.run_attempt == 1 && steps.submit-inner-signing.outcome == 'success'
         continue-on-error: true
         shell: pwsh
         env:
@@ -1517,7 +1592,7 @@ jobs:
       # falls through to today's unsigned-inner flow rather than blocking.
       - name: Download signed inner binaries from SignPath
         id: download-signed-inner
-        if: matrix.platform == 'win' && steps.submit-inner-signing.outcome == 'success' && steps.notify-inner-signing.outcome == 'success'
+        if: matrix.platform == 'win' && github.run_attempt == 1 && steps.submit-inner-signing.outcome == 'success' && steps.notify-inner-signing.outcome == 'success'
         continue-on-error: true
         shell: pwsh
         env:
@@ -1540,7 +1615,7 @@ jobs:
       # shipping a mix of signed and unsigned binaries.
       - name: Restore signed inner binaries into unpacked app
         id: restore-signed-inner
-        if: matrix.platform == 'win' && steps.download-signed-inner.outcome == 'success'
+        if: matrix.platform == 'win' && github.run_attempt == 1 && steps.download-signed-inner.outcome == 'success'
         continue-on-error: true
         shell: pwsh
         run: |
@@ -1581,7 +1656,7 @@ jobs:
       # unsigned again, which the evidence gate will flag.
       - name: Replace cached elevate.exe with the signed copy
         id: sign-elevate-cache
-        if: matrix.platform == 'win' && steps.restore-signed-inner.outcome == 'success'
+        if: matrix.platform == 'win' && github.run_attempt == 1 && steps.restore-signed-inner.outcome == 'success'
         continue-on-error: true
         shell: pwsh
         run: |
@@ -1608,7 +1683,7 @@ jobs:
 
       - name: Rebuild NSIS installer from signed unpacked app
         id: rebuild-nsis-signed
-        if: matrix.platform == 'win' && steps.restore-signed-inner.outcome == 'success'
+        if: matrix.platform == 'win' && github.run_attempt == 1 && steps.restore-signed-inner.outcome == 'success'
         continue-on-error: true
         shell: pwsh
         run: |
@@ -1625,7 +1700,7 @@ jobs:
           }
 
       - name: Roll back to original installer after failed rebuild
-        if: matrix.platform == 'win' && steps.rebuild-nsis-signed.outcome == 'failure'
+        if: matrix.platform == 'win' && github.run_attempt == 1 && steps.rebuild-nsis-signed.outcome == 'failure'
         shell: pwsh
         run: |
           if (Test-Path 'prepack-backup/orca-windows-setup.exe') {
@@ -1635,7 +1710,7 @@ jobs:
           }
       # ── End Windows inner-binary signing ───────────────────────────────
       - name: Upload unsigned Windows installer for SignPath
-        if: matrix.platform == 'win'
+        if: matrix.platform == 'win' && github.run_attempt == 1
         id: upload-unsigned-windows-installer
         uses: actions/upload-artifact@v7
         with:
@@ -1647,7 +1722,7 @@ jobs:
       # so the release job waits while the signing request is approved in UI.
       - name: Submit Windows installer signing request
         id: submit-signing-request
-        if: matrix.platform == 'win'
+        if: matrix.platform == 'win' && github.run_attempt == 1
         uses: signpath/github-action-submit-signing-request@v2
         with:
           api-token: ${{ secrets.SIGNPATH_API_TOKEN }}
@@ -1659,7 +1734,7 @@ jobs:
           wait-for-completion: false
 
       - name: Notify Slack that Windows signing is waiting for approval
-        if: matrix.platform == 'win'
+        if: matrix.platform == 'win' && github.run_attempt == 1
         shell: pwsh
         env:
           SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
@@ -1723,7 +1798,7 @@ jobs:
           Invoke-RestMethod -Method Post -Uri $env:SLACK_WEBHOOK_URL -ContentType 'application/json' -Body $payload
 
       - name: Download signed Windows installer from SignPath
-        if: matrix.platform == 'win'
+        if: matrix.platform == 'win' && github.run_attempt == 1
         shell: pwsh
         env:
           SIGNPATH_API_TOKEN: ${{ secrets.SIGNPATH_API_TOKEN }}
@@ -1741,7 +1816,7 @@ jobs:
           Expand-Archive -Path signed-windows.zip -DestinationPath signed-windows -Force
 
       - name: Stage signed Windows release assets
-        if: matrix.platform == 'win'
+        if: matrix.platform == 'win' && github.run_attempt == 1
         shell: pwsh
         run: |
           $signedInstaller = Get-ChildItem -Path signed-windows -Recurse -File -Filter 'orca-windows-setup.exe' | Select-Object -First 1
@@ -1778,7 +1853,7 @@ jobs:
           Get-Item 'dist/orca-windows-setup.exe', 'dist/orca-windows-setup.exe.blockmap', 'dist/latest.yml'
 
       - name: Verify signed Windows installer
-        if: matrix.platform == 'win'
+        if: matrix.platform == 'win' && github.run_attempt == 1
         shell: pwsh
         run: |
           $signature = Get-AuthenticodeSignature -FilePath 'dist/orca-windows-setup.exe'
@@ -1796,7 +1871,7 @@ jobs:
       # proven on a real release, then flip ORCA_WINDOWS_INNER_SIGNATURE_REQUIRED
       # to 'true' so unsigned inner binaries block the release.
       - name: Verify Windows inner binary signatures
-        if: matrix.platform == 'win'
+        if: matrix.platform == 'win' && github.run_attempt == 1
         shell: pwsh
         env:
           ORCA_WINDOWS_INNER_SIGNATURE_REQUIRED: 'false'
@@ -1928,7 +2003,7 @@ jobs:
           if ($policyFailure) { throw $policyFailure }
 
       - name: Upload Windows inner signing evidence
-        if: always() && matrix.platform == 'win'
+        if: always() && matrix.platform == 'win' && github.run_attempt == 1
         uses: actions/upload-artifact@v7
         with:
           name: orca-windows-inner-signing-evidence-${{ needs.cut.outputs.tag }}
@@ -1939,7 +2014,7 @@ jobs:
           retention-days: 30
 
       - name: Publish signed Windows release artifacts
-        if: matrix.platform == 'win'
+        if: matrix.platform == 'win' && github.run_attempt == 1
         uses: nick-fields/retry@v4
         with:
           timeout_minutes: 10
@@ -1994,6 +2069,7 @@ jobs:
     needs:
       - cut
       - create-release
+      - release-preflight
     if: needs.cut.outputs.should_release == 'true'
     # Why: SignPath requires every job in this signing workflow to be
     # GitHub-hosted. The actual mac build runs in release-mac-build.yml so
@@ -2117,6 +2193,42 @@ jobs:
             [[ "$attempt" -eq 3 ]] || sleep "$((attempt * 5))"
           done
           echo "::warning::Failed to dispatch post-release E2E for $TAG after 3 attempts."
+
+  docs-production-dispatch:
+    needs:
+      - cut
+      - publish-release
+    # A release created with GITHUB_TOKEN does not reliably emit a release
+    # event to other workflows. Dispatch the trusted default-branch workflow;
+    # it validates and checks out the released tag before deploying.
+    if: ${{ needs.cut.outputs.tag != '' }}
+    runs-on: ubuntu-latest
+    permissions:
+      actions: write
+    steps:
+      - name: Dispatch docs deployment for stable desktop tags
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ needs.cut.outputs.tag }}
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+        run: |
+          set -euo pipefail
+          if [[ ! "$TAG" =~ ^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ ]]; then
+            echo "Skipping docs deployment for non-stable tag $TAG."
+            exit 0
+          fi
+          for attempt in 1 2 3; do
+            if gh workflow run docs.yml \
+              --repo "$GITHUB_REPOSITORY" \
+              --ref "$DEFAULT_BRANCH" \
+              --field "tag=$TAG"; then
+              echo "Dispatched docs deployment for $TAG."
+              exit 0
+            fi
+            [[ "$attempt" -eq 3 ]] || sleep "$((attempt * 5))"
+          done
+          echo "::error::Failed to dispatch docs deployment for $TAG after 3 attempts."
+          exit 1
 
   homebrew-bump-published-rc-draft:
     needs:

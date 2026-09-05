@@ -39,7 +39,6 @@ export const RUNTIME_REPO_ID = RUNTIME_REPO_ID_FIXTURE
 export const RUNTIME_WORKSPACE_ID = RUNTIME_WORKSPACE_ID_FIXTURE
 
 export type ListPanelProps = {
-  filteredAutomations: Automation[]
   filteredExternalAutomationEntries: ExternalAutomationListEntry[]
   selectedExternal: ExternalAutomationListEntry | null
   openEditExternalDialog: (

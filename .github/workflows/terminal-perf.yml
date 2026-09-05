@@ -73,9 +73,9 @@ jobs:
           node-version-file: package.json
 
       - name: Setup pnpm
-        uses: pnpm/action-setup@v6
+        uses: pnpm/setup@v2
         with:
-          run_install: false
+          install: false
 
       # Why: this scheduled/manual workflow uses the same native install path as
       # PR and E2E CI, which needs pnpm to bypass its bundled gyp_main.py.

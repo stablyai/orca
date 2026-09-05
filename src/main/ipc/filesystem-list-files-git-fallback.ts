@@ -132,6 +132,7 @@ export async function listFilesWithGit(
     // rootPath and use the output directly — no prefix stripping needed.
     const child = await gitSpawnAfterWindowsEnvironmentReady(['ls-files', ...args], {
       cwd: rootPath,
+      admissionTier: 'interactive',
       ...(localGitOptions.wslDistro ? { wslDistro: localGitOptions.wslDistro } : {}),
       signal: scanController.signal,
       stdio: ['ignore', 'pipe', 'pipe']

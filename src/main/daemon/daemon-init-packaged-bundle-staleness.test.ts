@@ -164,6 +164,7 @@ describe('daemon-init: runRestartDaemon (7-step sequence)', () => {
     daemonClientMock.mockImplementationOnce(function MockDaemonClient() {
       return {
         ensureConnected: vi.fn(async () => {}),
+        ensureConnectedWithin: vi.fn(async () => {}),
         request: requestMock,
         disconnect: disconnectMock
       }
@@ -184,7 +185,7 @@ describe('daemon-init: runRestartDaemon (7-step sequence)', () => {
       '/fake/token',
       '1.2.3'
     )
-    expect(requestMock).toHaveBeenCalledWith('listSessions', undefined)
+    expect(requestMock).toHaveBeenCalledWith('listSessions', undefined, expect.any(Number))
     expect(disconnectMock).toHaveBeenCalledOnce()
     expect(killStaleDaemonMock).not.toHaveBeenCalled()
     expect(forkMock).not.toHaveBeenCalled()

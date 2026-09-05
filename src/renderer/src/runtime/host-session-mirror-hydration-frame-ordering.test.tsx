@@ -87,6 +87,159 @@ import { WINDOW_VISIBILITY_SUBSCRIPTION_PARK_DELAY_MS } from './window-visibilit
 describe('mirrored-pane resume deferral against real stream frames', () => {
   installFrameOrderingHarness()
 
+  it('does not let late bootstrap inventory restore a pre-restart terminal handle', async () => {
+    let resolveListAll: (response: unknown) => void = () => {}
+    runtimeCall.mockImplementation((request: { method: string }) =>
+      request.method === 'session.tabs.listAll'
+        ? new Promise((resolve) => {
+            resolveListAll = resolve
+          })
+        : new Promise(() => {})
+    )
+    renderHook(() => useWebSessionTabsSync())
+    await act(settle)
+
+    const beforeRestart = makeHostSnapshot(WT, HOST_SURFACE_ID, HOST_PARENT_TAB_ID)
+    beforeRestart.publicationEpoch = 'before-restart'
+    if (beforeRestart.tabs[0]?.type !== 'terminal') {
+      throw new Error('fixture must contain a terminal surface')
+    }
+    beforeRestart.tabs[0].terminal = 'terminal-before-restart'
+    const afterRestart = makeHostSnapshot(WT, HOST_SURFACE_ID, HOST_PARENT_TAB_ID)
+    afterRestart.publicationEpoch = 'after-restart'
+    if (afterRestart.tabs[0]?.type !== 'terminal') {
+      throw new Error('fixture must contain a terminal surface')
+    }
+    afterRestart.tabs[0].terminal = 'terminal-after-restart'
+    const afterRestartPtyId = `remote:${ENV}@@terminal-after-restart`
+
+    await publish(findSubscription('session.tabs.subscribeAll'), {
+      type: 'updated',
+      ...afterRestart
+    })
+    expect(useAppStore.getState().ptyIdsByTabId[MIRROR_TAB_ID]).toEqual([afterRestartPtyId])
+
+    await act(async () => {
+      resolveListAll({
+        id: 'listall-before-restart',
+        ok: true as const,
+        result: { snapshots: [beforeRestart] },
+        _meta: { runtimeId: 'runtime-a' }
+      })
+      await settle()
+    })
+
+    const state = useAppStore.getState()
+    expect(state.ptyIdsByTabId[MIRROR_TAB_ID]).toEqual([afterRestartPtyId])
+    expect(state.tabsByWorktree[WT]?.find((tab) => tab.id === MIRROR_TAB_ID)?.ptyId).toBe(
+      afterRestartPtyId
+    )
+    expect(state.terminalLayoutsByTabId[MIRROR_TAB_ID]?.ptyIdsByLeafId?.[LEAF_ID]).toBe(
+      afterRestartPtyId
+    )
+  })
+
+  it('does not let late bootstrap inventory repopulate after a newer empty inventory', async () => {
+    let resolveListAll: (response: unknown) => void = () => {}
+    runtimeCall.mockImplementation((request: { method: string }) =>
+      request.method === 'session.tabs.listAll'
+        ? new Promise((resolve) => {
+            resolveListAll = resolve
+          })
+        : new Promise(() => {})
+    )
+    renderHook(() => useWebSessionTabsSync())
+    await act(settle)
+
+    const beforeRestart = makeHostSnapshot(WT, HOST_SURFACE_ID, HOST_PARENT_TAB_ID)
+    beforeRestart.publicationEpoch = 'before-empty-inventory'
+    if (beforeRestart.tabs[0]?.type !== 'terminal') {
+      throw new Error('fixture must contain a terminal surface')
+    }
+    beforeRestart.tabs[0].terminal = 'terminal-before-empty-inventory'
+
+    await publish(findSubscription('session.tabs.subscribeAll'), {
+      type: 'snapshots',
+      snapshots: []
+    })
+
+    await act(async () => {
+      resolveListAll({
+        id: 'listall-before-empty-inventory',
+        ok: true as const,
+        result: { snapshots: [beforeRestart] },
+        _meta: { runtimeId: 'runtime-a' }
+      })
+      await settle()
+    })
+
+    // The empty full inventory is newer evidence; the late list must not
+    // reinsert its stale host handle into the renderer's existing mirror row.
+    const state = useAppStore.getState()
+    expect(state.ptyIdsByTabId[MIRROR_TAB_ID]).toBeUndefined()
+    expect(state.tabsByWorktree[WT]?.find((tab) => tab.id === MIRROR_TAB_ID)?.ptyId).toBeNull()
+  })
+
+  it('does not let a late bootstrap runtime id retire a newer stream runtime', async () => {
+    let resolveListAll: (response: unknown) => void = () => {}
+    runtimeCall.mockImplementation((request: { method: string }) =>
+      request.method === 'session.tabs.listAll'
+        ? new Promise((resolve) => {
+            resolveListAll = resolve
+          })
+        : new Promise(() => {})
+    )
+    renderHook(() => useWebSessionTabsSync())
+    await act(settle)
+
+    const backgroundParentTabId = 'host-tab-2'
+    const backgroundSurfaceId = `${backgroundParentTabId}::${LEAF_ID}`
+    const firstRuntimeB = makeHostSnapshot(BG_WT, backgroundSurfaceId, backgroundParentTabId)
+    firstRuntimeB.publicationEpoch = 'runtime-b-epoch'
+    if (firstRuntimeB.tabs[0]?.type !== 'terminal') {
+      throw new Error('fixture must contain a terminal surface')
+    }
+    firstRuntimeB.tabs[0].terminal = 'runtime-b-terminal-1'
+    await publish(
+      findSubscription('session.tabs.subscribeAll'),
+      { type: 'updated', ...firstRuntimeB },
+      'runtime-b'
+    )
+
+    const lateRuntimeA = makeHostSnapshot(WT, HOST_SURFACE_ID, HOST_PARENT_TAB_ID)
+    lateRuntimeA.publicationEpoch = 'runtime-a-epoch'
+    if (lateRuntimeA.tabs[0]?.type !== 'terminal') {
+      throw new Error('fixture must contain a terminal surface')
+    }
+    lateRuntimeA.tabs[0].terminal = 'runtime-a-terminal'
+    await act(async () => {
+      resolveListAll({
+        id: 'listall-after-runtime-restart',
+        ok: true as const,
+        result: { snapshots: [lateRuntimeA] },
+        _meta: { runtimeId: 'runtime-a' }
+      })
+      await settle()
+    })
+
+    const secondRuntimeB = makeHostSnapshot(BG_WT, backgroundSurfaceId, backgroundParentTabId)
+    secondRuntimeB.publicationEpoch = 'runtime-b-epoch'
+    secondRuntimeB.snapshotVersion = 2
+    if (secondRuntimeB.tabs[0]?.type !== 'terminal') {
+      throw new Error('fixture must contain a terminal surface')
+    }
+    secondRuntimeB.tabs[0].terminal = 'runtime-b-terminal-2'
+    await publish(
+      findSubscription('session.tabs.subscribeAll'),
+      { type: 'updated', ...secondRuntimeB },
+      'runtime-b'
+    )
+
+    expect(useAppStore.getState().ptyIdsByTabId[BG_MIRROR_TAB_ID]).toEqual([
+      `remote:${ENV}@@runtime-b-terminal-2`
+    ])
+  })
+
   it('does not relaunch when a stream frame is the first hydration signal', async () => {
     renderHook(() => useWebSessionTabsSync())
     await act(settle)

@@ -26,13 +26,14 @@ export async function configureGoldenStubAgent(
   page: Page,
   options: {
     agent?: (typeof GOLDEN_STUB_AGENTS)[number]['id']
+    agentArgs?: string
     /** Windows default shell the launch command must survive; ignored elsewhere. */
     windowsShell?: BuiltInWindowsTerminalShell
   } = {}
 ): Promise<void> {
   const agent = options.agent ?? 'codex'
   await page.evaluate(
-    async ({ agent, windowsShell }) => {
+    async ({ agent, agentArgs, windowsShell }) => {
       const store = window.__store
       if (!store) {
         throw new Error('Orca store is unavailable')
@@ -40,11 +41,11 @@ export async function configureGoldenStubAgent(
       await store.getState().updateSettings({
         defaultTuiAgent: agent,
         agentCmdOverrides: { [agent]: 'golden-stub-agent' },
-        agentDefaultArgs: { [agent]: '' },
+        agentDefaultArgs: { [agent]: agentArgs },
         ...(windowsShell ? { terminalWindowsShell: windowsShell } : {})
       })
     },
-    { agent, windowsShell: options.windowsShell ?? null }
+    { agent, agentArgs: options.agentArgs ?? '', windowsShell: options.windowsShell ?? null }
   )
 }
 

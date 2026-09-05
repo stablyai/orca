@@ -22,16 +22,15 @@ RUN apt-get update \
     libxkbcommon0 \
     libxrandr2 \
     libxss1 \
-    p7zip-full \
     procps \
     util-linux \
     xauth \
     xvfb \
-    zlib1g-dev \
   && rm -rf /var/lib/apt/lists/*
 
 RUN useradd --create-home --shell /bin/bash orca
 
 COPY run-signal-case.sh /usr/local/bin/run-signal-case
+COPY run-appimage-desktop-startup-case.sh /usr/local/bin/run-appimage-desktop-startup-case
 
 ENTRYPOINT ["/usr/local/bin/run-signal-case"]

@@ -137,8 +137,11 @@ describe('#12729 — the block over a trailing Korean syllable is the preedit ov
     expect(rig.terminal.buffer.active.cursorX).toBe(6)
     expect(rig.compositionView.classList.contains('active')).toBe(true)
     expect(stripMarks(rig.compositionView.textContent)).toBe('라')
-    // Nothing follows the cursor, so the overlay carries the preedit alone.
-    expect(rig.compositionView.children).toHaveLength(0)
+    // Nothing follows the cursor, so the overlay needs only the preedit and its caret.
+    const preedit = rig.compositionView.querySelector('.xterm-composition-preedit')
+    const caret = rig.compositionView.querySelector('.xterm-composition-caret')
+    expect(Array.from(rig.compositionView.children)).toEqual([preedit, caret])
+    expect(rig.compositionView.querySelector('.xterm-composition-remainder')).toBeNull()
   })
 
   it('anchors the overlay to the cursor cell so the preedit continues the run', async () => {

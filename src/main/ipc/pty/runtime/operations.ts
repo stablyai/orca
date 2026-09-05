@@ -1,28 +1,44 @@
 import type { IPtyProvider } from '../../../providers/types'
 import { LocalPtyProvider } from '../../../providers/local-pty-provider'
-import type { PtyProcessInfo } from '../../../providers/pty-process-info'
 import { parseAppSshPtyId } from '../../../providers/ssh-pty-id'
-import {
-  LOCAL_EXECUTION_HOST_ID,
-  toSshExecutionHostId,
-  type ExecutionHostId
-} from '../../../../shared/execution-host'
 import { ptyOwnership } from '../provider/ownership-state'
 import { ptySizes } from '../delivery/visibility-state'
 import { rendererSerializerReadiness } from '../pane/serializer-state'
-import {
-  getProvider,
-  getProviderForPty,
-  localProvider,
-  registeredPtyProviders
-} from '../provider/registry'
+import { getProviderForPty, localProvider } from '../provider/registry'
 import { inspectPtyProviderProcess } from '../../../providers/pty-process-inspection'
 import type { PtyRuntimeControllerDeps } from './controller-deps'
+import { agentSessionPtyWriteGate } from '../../../runtime/agent-session-pty-write-gate'
+import { reportAgentSessionWriteRefusal } from '../agent-session-write-refusal-report'
 
-export function writePtyFromRuntimeController(ptyId: string, data: string): boolean {
+export function writePtyFromRuntimeController(
+  deps: PtyRuntimeControllerDeps,
+  ptyId: string,
+  data: string
+): boolean {
+  // Why: the backstop for every runtime write path — query replies, followups, deliveries —
+  // so a caller that forgets the typed gate still cannot reach a provider.
+  const admission = agentSessionPtyWriteGate.admit(ptyId)
+  if (!admission.admitted) {
+    reportAgentSessionWriteRefusal(deps.mainWindow, ptyId, admission.refusal)
+    return false
+  }
   try {
-    getProviderForPty(ptyId).write(ptyId, data)
-    return true
+    return getProviderForPty(ptyId).write(ptyId, data) !== false
+  } catch {
+    return false
+  }
+}
+
+export function writePtyAgentSessionProofFromRuntimeController(
+  ptyId: string,
+  data: string,
+  authority: { sessionId: string; spawnToken: string }
+): boolean {
+  if (!agentSessionPtyWriteGate.admitProof(ptyId, authority)) {
+    return false
+  }
+  try {
+    return getProviderForPty(ptyId).write(ptyId, data) !== false
   } catch {
     return false
   }
@@ -100,8 +116,11 @@ export async function getForegroundProcessFromRuntimeController(ptyId: string) {
   }
 }
 
-export async function inspectProcessFromRuntimeController(ptyId: string) {
-  return inspectPtyProviderProcess(getProviderForPty(ptyId), ptyId)
+export async function inspectProcessFromRuntimeController(
+  ptyId: string,
+  options?: { expectedIncarnationId?: string }
+) {
+  return inspectPtyProviderProcess(getProviderForPty(ptyId), ptyId, options)
 }
 
 export async function confirmForegroundProcessFromRuntimeController(ptyId: string) {
@@ -152,74 +171,39 @@ export async function clearBufferFromRuntimeController(
   }
 }
 
-export function hasPtyFromRuntimeController(ptyId: string): boolean | null {
+const settledLocalPtyProviderStartups = new WeakSet<Promise<void>>()
+const watchedLocalPtyProviderStartups = new WeakSet<Promise<void>>()
+
+export function hasPtyFromRuntimeController(
+  deps: PtyRuntimeControllerDeps,
+  ptyId: string
+): boolean | null {
   try {
+    // Why: no locally routed provider can authoritatively answer for a
+    // remote host's PTY, so remote-scoped ids stay unknown, never absent.
+    if (ptyId.startsWith('remote:')) {
+      return null
+    }
+    const connectionId = ptyOwnership.get(ptyId) ?? parseAppSshPtyId(ptyId)?.connectionId
+    const startupPromise = deps.getLocalPtyProviderStartupPromise(connectionId)
+    if (startupPromise && !settledLocalPtyProviderStartups.has(startupPromise)) {
+      // Why: a sync probe cannot wait out the cold-start daemon swap the way
+      // probePtyLiveness does, and the pre-swap provider's "no PTY" for a
+      // daemon-restored id is fabricated — answer unverifiable until the swap
+      // settles (docs/reference/ssh-execution-boundary.md rule 2).
+      if (!watchedLocalPtyProviderStartups.has(startupPromise)) {
+        watchedLocalPtyProviderStartups.add(startupPromise)
+        const markSettled = (): void => {
+          settledLocalPtyProviderStartups.add(startupPromise)
+        }
+        startupPromise.then(markSettled, markSettled)
+      }
+      return null
+    }
     return getProviderForPty(ptyId).hasPty?.(ptyId) ?? null
   } catch {
     return null
   }
-}
-
-function markSshInventoryUnverifiable(
-  runtime: PtyRuntimeControllerDeps['runtime'],
-  connectionId: string,
-  error: unknown
-): void {
-  const reason = error instanceof Error ? error.message : String(error)
-  for (const [ptyId, ownerConnectionId] of ptyOwnership) {
-    if (ownerConnectionId === connectionId) {
-      runtime?.markPtyLivenessUnverifiable?.(ptyId, reason)
-    }
-  }
-}
-
-export async function listProcessesWithHostScopeFromRuntimeController(
-  deps: PtyRuntimeControllerDeps,
-  opts?: { deadlineMs?: number }
-): Promise<{ processes: PtyProcessInfo[]; hostIds: ExecutionHostId[] }> {
-  const providerSessions = await Promise.all(
-    registeredPtyProviders().map(async ({ provider, connectionId }) => {
-      const hostId: ExecutionHostId = connectionId
-        ? toSshExecutionHostId(connectionId)
-        : LOCAL_EXECUTION_HOST_ID
-      try {
-        return {
-          processes: await (connectionId ? provider.listProcesses(opts) : provider.listProcesses()),
-          hostId
-        }
-      } catch (error) {
-        if (!connectionId) {
-          throw error
-        }
-        markSshInventoryUnverifiable(deps.runtime, connectionId, error)
-        return null
-      }
-    })
-  )
-  const respondingSessions = providerSessions.filter((session) => session !== null)
-  return {
-    processes: respondingSessions.flatMap((session) => session.processes),
-    hostIds: respondingSessions.map((session) => session.hostId)
-  }
-}
-
-export async function listProcessesFromRuntimeController(
-  deps: PtyRuntimeControllerDeps,
-  connectionId?: string | null,
-  opts?: { deadlineMs?: number }
-) {
-  if (connectionId === null) {
-    return localProvider.listProcesses()
-  }
-  if (connectionId !== undefined) {
-    try {
-      return await getProvider(connectionId).listProcesses(opts)
-    } catch (error) {
-      markSshInventoryUnverifiable(deps.runtime, connectionId, error)
-      throw error
-    }
-  }
-  return (await listProcessesWithHostScopeFromRuntimeController(deps, opts)).processes
 }
 
 export function resizePtyFromRuntimeController(ptyId: string, cols: number, rows: number): boolean {
@@ -256,7 +240,7 @@ export function getSizeFromRuntimeController(ptyId: string) {
 
 export async function serializeProviderBufferFromRuntimeController(
   ptyId: string,
-  opts?: { scrollbackRows?: number; altScreenForcesZeroRows?: boolean }
+  opts?: { scrollbackRows?: number }
 ) {
   try {
     // Why: restored daemon PTYs can be live while their desktop pane is unmounted; query the provider model so phone-local navigation works.

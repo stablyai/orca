@@ -115,7 +115,7 @@ export function registerTerminalRequestIpcBridge(unsubs: (() => void)[]): void {
         }
         if (shouldSurfaceOwner) {
           store.revealWorktreeInSidebar(worktreeId)
-          focusTerminalInitiatedTab(tab.id)
+          focusTerminalInitiatedTab(tab.id, undefined, worktreeId)
         }
         if (data.title) {
           store.setTabCustomTitle(tab.id, data.title, { recordInteraction: false })

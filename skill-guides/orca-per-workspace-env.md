@@ -140,8 +140,10 @@ shape is §7a; key points:
   booted from it: the pairing keypair and device-token registry (`orca-devices.json`,
   `orca-e2ee-keypair.json`), `agent-session-authority.key`, and the build box's logs, terminal history
   and orchestration db. Confirmed: two VMs from one such snapshot emitted **identical `deviceToken` and
-  `pairedDeviceId`**. Snapshot **before** the runtime has ever run, or `rm -rf` the whole user-data dir
-  (`~/.config/orca` on Linux) first — deleting a named file list will drift as Orca adds state.
+  `pairedDeviceId`**. Snapshot **before** the runtime has ever run, or delete the resolved user-data
+  directory first: `orca_user_data_path="${ORCA_USER_DATA_PATH:-${XDG_CONFIG_HOME:-$HOME/.config}/orca}"; rm -rf -- "$orca_user_data_path"`.
+  This matches Orca's Linux precedence for custom and default paths; deleting a named file list will
+  drift as Orca adds state.
 - Snapshot the stopped sandbox, parse the snapshot id, and write it + scope/project/port/repo to state.
 
 ---

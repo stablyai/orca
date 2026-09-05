@@ -53,12 +53,17 @@ export function createTerminalStartupQueueActions(
       })
       return pending
     },
-    consumeTabStartupCommand: (tabId) => {
+    consumeTabStartupCommand: (tabId, expected) => {
       const pending = get().pendingStartupByTabId[tabId]
-      if (!pending) {
+      // Why identity, not equality: the one-shot settle must only spend the exact captured
+      // startup; a newer queued command for the same tab is someone else's to consume.
+      if (!pending || (expected && pending !== expected)) {
         return null
       }
       set((s) => {
+        if (s.pendingStartupByTabId[tabId] !== pending) {
+          return {}
+        }
         const next = { ...s.pendingStartupByTabId }
         delete next[tabId]
         return { pendingStartupByTabId: next }

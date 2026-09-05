@@ -1,17 +1,21 @@
-import type { AgentStatusEntry, AgentStatusOrchestrationContext } from './agent-status-types'
-import type { BrowserCertificateFailure, BrowserLoadError } from './browser-workspace-types'
+import type { AgentStatusOrchestrationContext } from './agent-status-types'
 import type { RemoteServerUpdateSupport } from './remote-server-update'
 import type { RemoteRuntimeSharedConnectionDiagnostics } from './remote-runtime-shared-control-types'
-import type { RuntimeBrowserPlacement } from './runtime-browser-placement'
+import type { RuntimeHostConnectionState } from './runtime-host-connection-state'
 import type { RuntimeCapability } from './protocol-version'
 import type {
   RuntimeBrowserUnavailableReason,
   RuntimeDegradation
 } from './runtime-capability-degradation'
 import type { TabGroupLayoutNode } from './tab-types'
-import type { TerminalColorOverrides } from './terminal-color-overrides'
-import type { TerminalLayoutSnapshot, TerminalPaneLayoutNode } from './terminal-tab-types'
-import type { TuiAgent } from './tui-agent'
+import type { TerminalPaneLayoutNode } from './terminal-tab-types'
+import type {
+  RuntimeMobileSessionClientTab,
+  RuntimeMobileSessionSnapshotTab,
+  RuntimeMobileSessionTerminalClientTab
+} from './runtime-mobile-session-tab-contracts'
+
+export type * from './runtime-mobile-session-tab-contracts'
 
 export type RuntimeGraphStatus = 'ready' | 'reloading' | 'unavailable'
 
@@ -108,6 +112,8 @@ export type CliStatusResult = {
   runtime: {
     state: CliRuntimeState
     reachable: boolean
+    /** Canonical runtime transport verdict, when the caller has runtime evidence. */
+    connectionState?: RuntimeHostConnectionState
     runtimeId: string | null
     appVersion?: string
     remoteUpdateSupport?: RemoteServerUpdateSupport
@@ -160,103 +166,6 @@ export type RuntimeSyncWindowGraphResult = RuntimeStatus & {
   mobileSessionResyncWorktrees?: string[]
 }
 
-export type RuntimeMobileSessionTerminalTab = {
-  type: 'terminal'
-  id: string
-  title: string
-  quickCommandLabel?: string | null
-  parentTabId: string
-  leafId: string
-  ptyId?: string | null
-  terminalTheme?: RuntimeMobileTerminalTheme
-  agentStatus?: AgentStatusEntry | null
-  /** Event-only lead-turn end time for paired clients; never persisted in AgentStatusEntry. */
-  turnCompletedAt?: number
-  launchAgent?: TuiAgent
-  startupCwd?: string
-  parentLayout?: TerminalLayoutSnapshot
-  color?: string | null
-  isPinned?: boolean
-  viewMode?: 'terminal' | 'chat'
-  launchDraft?: string
-  launchDraftCreatedAt?: number
-  isActive: boolean
-}
-
-export type RuntimeMobileTerminalTheme = {
-  mode: 'dark' | 'light'
-  theme: TerminalColorOverrides
-}
-
-export type RuntimeMobileSessionMarkdownTab = {
-  type: 'markdown'
-  id: string
-  title: string
-  filePath: string
-  relativePath: string
-  language: 'markdown'
-  mode: 'edit' | 'markdown-preview'
-  isDirty: boolean
-  isActive: boolean
-  sourceFileId: string
-  sourceFilePath: string
-  sourceRelativePath: string
-  documentVersion: string
-  color?: string | null
-  isPinned?: boolean
-}
-
-export type RuntimeMobileSessionFileTab = {
-  type: 'file'
-  id: string
-  title: string
-  filePath: string
-  relativePath: string
-  language: string
-  mode?: 'edit' | 'diff'
-  diffSource?: 'staged' | 'unstaged'
-  isDirty: boolean
-  color?: string | null
-  isPinned?: boolean
-  isActive: boolean
-}
-
-export type RuntimeMobileSessionBrowserTab = {
-  type: 'browser'
-  id: string
-  title: string
-  browserWorkspaceId: string
-  browserPageId: string | null
-  browserProfileId?: string
-  executionHostKey?: string
-  placement?: RuntimeBrowserPlacement
-  url: string
-  loading: boolean
-  canGoBack: boolean
-  canGoForward: boolean
-  loadError?: BrowserLoadError | null
-  certificateFailure?: BrowserCertificateFailure | null
-  color?: string | null
-  isPinned?: boolean
-  isActive: boolean
-}
-
-export type RuntimeMobileSessionSnapshotTab =
-  | RuntimeMobileSessionTerminalTab
-  | RuntimeMobileSessionMarkdownTab
-  | RuntimeMobileSessionFileTab
-  | RuntimeMobileSessionBrowserTab
-
-export type RuntimeMobileSessionTerminalClientTab =
-  | (RuntimeMobileSessionTerminalTab & { status: 'pending-handle'; terminal: null })
-  | (RuntimeMobileSessionTerminalTab & { status: 'ready'; terminal: string })
-
-export type RuntimeMobileSessionClientTab =
-  | RuntimeMobileSessionTerminalClientTab
-  | RuntimeMobileSessionMarkdownTab
-  | RuntimeMobileSessionFileTab
-  | RuntimeMobileSessionBrowserTab
-
 export type RuntimeMobileSessionTabGroup = {
   id: string
   activeTabId: string | null
@@ -306,14 +215,25 @@ export const UNPUBLISHED_WORKTREE_PUBLICATION_EPOCH = 'none'
 
 export type RuntimeMobileSessionTabsSnapshot = {
   worktree: string
+  /** Immutable catalog identity used to fence snapshots across path reuse. */
+  worktreeInstanceId?: string
   publicationEpoch: string
   snapshotVersion: number
   activeGroupId: string | null
   activeTabId: string | null
-  activeTabType: 'terminal' | 'markdown' | 'file' | 'browser' | null
+  activeTabType: 'terminal' | 'markdown' | 'file' | 'browser' | 'agent-session' | null
   tabGroups?: RuntimeMobileSessionTabGroup[]
   tabGroupLayout?: TabGroupLayoutNode | null
+  retiredTerminalSurfaces?: RuntimeMobileSessionRetiredTerminalSurface[]
   tabs: RuntimeMobileSessionSnapshotTab[]
+}
+
+export type RuntimeMobileSessionRetiredTerminalSurface = {
+  parentTabId: string
+  leafId: string
+  ptyId: string
+  terminal: string
+  incarnationId?: string
 }
 
 export type RuntimeMobileSessionTabsResult = {
@@ -323,9 +243,10 @@ export type RuntimeMobileSessionTabsResult = {
   navigationIntent?: 'follow'
   activeGroupId: string | null
   activeTabId: string | null
-  activeTabType: 'terminal' | 'markdown' | 'file' | 'browser' | null
+  activeTabType: 'terminal' | 'markdown' | 'file' | 'browser' | 'agent-session' | null
   tabGroups?: RuntimeMobileSessionTabGroup[]
   tabGroupLayout?: TabGroupLayoutNode | null
+  retiredTerminalSurfaces?: RuntimeMobileSessionRetiredTerminalSurface[]
   tabs: RuntimeMobileSessionClientTab[]
   /**
    * Set while a freshly started runtime has not yet taken back the client-hosted pages its paired

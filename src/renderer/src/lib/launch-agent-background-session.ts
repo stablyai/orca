@@ -40,6 +40,7 @@ import {
 } from '@/lib/adopt-agent-background-session-tab'
 import { createBackgroundAgentStatusConsumer } from '@/lib/background-agent-status-consumer'
 import { isWslUncPath } from '../../../shared/wsl-paths'
+import { runtimeWaitExitCode, settleTabPtyBinding } from '@/lib/agent-background-session-exit'
 
 export async function launchAgentBackgroundSession(
   args: LaunchAgentBackgroundSessionArgs
@@ -145,7 +146,7 @@ export async function launchAgentBackgroundSession(
     unsubscribeData()
     sshStartupDelivery.clear()
     if (tab) {
-      useAppStore.getState().clearTabPtyId(tab.id, exitPtyId)
+      settleTabPtyBinding(tab.id, exitPtyId, code)
     }
     useAppStore.getState().clearAgentLaunchConfig(paneKey)
     onExit?.(exitPtyId, code)
@@ -279,7 +280,7 @@ export async function launchAgentBackgroundSession(
         { terminal: runtimeTerminalHandle, for: 'exit' },
         { timeoutMs: 24 * 60 * 60 * 1000 }
       )
-        .then((result) => handleExit(ptyId, result.wait.exitCode ?? 0))
+        .then((result) => handleExit(ptyId, runtimeWaitExitCode(result.wait)))
         .catch(() => {})
     } else {
       // Why the incarnation: a relay-recycled id can hold the previous owner's exit, and draining

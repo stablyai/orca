@@ -21,6 +21,7 @@ export type MobileNativeChatController = {
   nativeChatAgent: string | null
   chatComposerText: string
   setChatComposerText: Dispatch<SetStateAction<string>>
+  getChatComposerEditGeneration: () => number
   chatPending: MobileNativeChatPendingMessage[]
   chatImagePreviewsByMessageId: Record<string, string[]>
   nativeChatSession: ReturnType<typeof useMobileNativeChatSession>
@@ -57,7 +58,12 @@ export type MobileNativeChatController = {
   handleNativeChatSendWithOutcome: (
     text: string,
     images?: string[],
-    deadline?: number
+    deadline?: number,
+    attachments?: readonly {
+      id?: string
+      path: string
+      previewUri: string
+    }[]
   ) => Promise<MobileNativeChatSendOutcome>
   /** Launch-context text still parked on the agent's TUI input line, or null.
    *  Image sends read it to size their leading clear (one Ctrl+U per line). */

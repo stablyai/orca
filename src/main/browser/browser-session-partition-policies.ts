@@ -2,6 +2,11 @@ import { session } from 'electron'
 import type { Session } from 'electron'
 import type { BrowserSessionProfile } from '../../shared/browser-workspace-types'
 import { browserManager } from './browser-manager'
+import { clearProxySessionCredentials } from '../network/proxy-settings'
+import {
+  applyProxyToBrowserSession,
+  invalidateBrowserSessionProxyApplication
+} from './browser-session-proxy'
 import { hasSystemMediaAccess, requestSystemMediaAccess } from './browser-media-access'
 import { isAutoGrantedBrowserSessionPermission } from './browser-session-permission-policy'
 import { cleanElectronUserAgent, setupClientHintsOverride } from './browser-session-ua'
@@ -15,6 +20,11 @@ import { noticeDocPreviewDownloadBlocked } from './doc-preview-download-block-no
 
 // Why: one shared installer keeps every partition's deny-by-default permission/download policies from drifting apart.
 const configuredPartitions = new Set<string>()
+
+/** Drop only the installer memo; retired-session guards remain fail-closed. */
+export function forgetBrowserSessionPartitionConfiguration(partition: string): void {
+  configuredPartitions.delete(partition)
+}
 const handleWillDownload = (
   _event: Electron.Event,
   item: Electron.DownloadItem,
@@ -61,16 +71,24 @@ export type BrowserPartitionPermissionPolicy = 'browser' | 'deny'
 
 export function installBrowserSessionPartitionPolicies(
   profile: BrowserSessionProfile,
-  options?: {
+  options: {
     downloads?: BrowserPartitionDownloadPolicy
     permissions?: BrowserPartitionPermissionPolicy
-  }
-): void {
+    applyAppWideProxy?: boolean
+  } = {}
+): Promise<void> {
   const { partition } = profile
   const sess = session.fromPartition(partition)
   setBrowserSessionUserAgentMode(sess, profile.userAgentMode ?? 'clean')
+  // Why: route partitions own a SOCKS transport policy that the app proxy must not overwrite.
+  const proxyReady = (
+    options.applyAppWideProxy === false ? Promise.resolve() : applyProxyToBrowserSession(sess)
+  ).catch((error: unknown) => {
+    clearProxySessionCredentials(sess)
+    throw error
+  })
   if (configuredPartitions.has(partition)) {
-    return
+    return proxyReady
   }
 
   browserManager.installCertificateRequestGuard(sess)
@@ -146,10 +164,12 @@ export function installBrowserSessionPartitionPolicies(
     options?.downloads === 'deny' ? handleDeniedWillDownload : handleWillDownload
   )
   configuredPartitions.add(partition)
+  return proxyReady
 }
 
 export function clearBrowserSessionPartitionPolicies(partition: string, sess: Session): void {
   // Why: the Electron Session survives partition deletion; clear callbacks/listeners so removed profiles don't retain closures.
+  invalidateBrowserSessionProxyApplication(sess)
   configuredPartitions.delete(partition)
   browserManager.removeCertificateRequestGuard(sess)
   sess.removeListener('will-download', handleWillDownload)

@@ -605,6 +605,23 @@ describe('hosted review slice', () => {
     })
   })
 
+  it('marks an explicit card refresh interactive', async () => {
+    const fetchHostedReviewForBranch = vi.fn().mockResolvedValue(null)
+
+    await refreshHostedReviewCard(fetchHostedReviewForBranch, {
+      repoPath: '/repo',
+      repoId: 'repo-id',
+      branch: 'feature/test',
+      admissionTier: 'interactive'
+    })
+
+    expect(fetchHostedReviewForBranch).toHaveBeenCalledWith(
+      '/repo',
+      'feature/test',
+      expect.objectContaining({ admissionTier: 'interactive' })
+    )
+  })
+
   it('refetches a fresh null branch result when a linked PR hint is later available', async () => {
     mockApi.hostedReview.forBranch.mockResolvedValueOnce(null).mockResolvedValueOnce(review)
     const store = makeStore()

@@ -28,7 +28,6 @@ RUN apt-get update \
     util-linux \
     xauth \
     xvfb \
-    zlib1g-dev \
   && rm -rf /var/lib/apt/lists/*
 
 RUN useradd --create-home --shell /bin/bash orca

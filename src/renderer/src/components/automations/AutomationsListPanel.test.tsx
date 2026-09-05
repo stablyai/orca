@@ -13,8 +13,17 @@ import { TooltipProvider } from '@/components/ui/tooltip'
 import { AutomationsListPanel } from './AutomationsListPanel'
 import { EMPTY_AUTOMATION_LIST_FILTER } from './automation-list-view'
 import type { AutomationHostCatalogView } from './use-automation-host-catalog'
-import { makeAutomation, makeAutomationListRow } from './automations-page-fixtures'
+import {
+  makeAutomation,
+  makeAutomationListRow,
+  makeScopedExternalManager
+} from './automations-page-fixtures'
 import type { AutomationListRow } from './automation-list-row-identity'
+import {
+  buildExternalAutomationListEntries,
+  type ExternalAutomationListEntry
+} from './external-automation-list-entries'
+import type { AutomationPaneTab } from './automation-page-state'
 
 let container: HTMLDivElement
 let root: Root
@@ -52,33 +61,44 @@ function renderPanel(
   rows: readonly AutomationListRow[],
   query: string,
   onQueryChange: (next: string) => void = () => undefined,
-  uncheckedNotice: string | null = null
+  uncheckedNotice: string | null = null,
+  options: {
+    selectedRowKey?: string | null
+    selectedExternalKey?: string | null
+    onOpenDetail?: () => void
+    selectAutomationRow?: (key: string | null) => void
+    selectExternalKey?: (key: string | null) => void
+    externalEntries?: readonly ExternalAutomationListEntry[]
+    setActivePaneTab?: (tab: AutomationPaneTab) => void
+  } = {}
 ): void {
+  const externalEntries = options.externalEntries ?? []
   act(() => {
     root.render(
       <TooltipProvider>
         <AutomationsListPanel
-          hasListItems={rows.length > 0}
-          hasFilteredListItems={rows.length > 0}
+          hasListItems={rows.length > 0 || externalEntries.length > 0}
+          hasFilteredListItems={rows.length > 0 || externalEntries.length > 0}
           listFilter={EMPTY_AUTOMATION_LIST_FILTER}
           onListFilterChange={() => undefined}
           listSearchQuery={query}
           isListSearchQueryTooLarge={false}
           onListSearchQueryChange={onQueryChange}
           searchCounts={{
-            hostRowCount: rows.length,
-            visibleRowCount: rows.length,
+            hostRowCount: rows.length + externalEntries.length,
+            visibleRowCount: rows.length + externalEntries.length,
             searchActive: query !== ''
           }}
           hostCatalog={HOST_CATALOG}
           canCreateAutomation={true}
+          onOpenRuns={() => undefined}
           externalManagersUncheckedNotice={uncheckedNotice}
           onSelectHost={() => undefined}
           onRecoverHost={() => undefined}
           filteredRows={rows}
-          filteredExternalAutomationEntries={[]}
-          selectedRowKey={null}
-          selectedExternalKey={null}
+          filteredExternalAutomationEntries={externalEntries}
+          selectedRowKey={options.selectedRowKey ?? null}
+          selectedExternalKey={options.selectedExternalKey ?? null}
           relativeNow={0}
           repoMap={new Map()}
           worktreeMap={new Map()}
@@ -89,9 +109,9 @@ function renderPanel(
           automationSourceHostAvailabilityByRowKey={new Map()}
           isActionEnabled={() => true}
           externalActionKey={null}
-          selectAutomationRow={() => undefined}
-          selectExternalKey={() => undefined}
-          setActivePaneTab={() => undefined}
+          selectAutomationRow={options.selectAutomationRow ?? (() => undefined)}
+          selectExternalKey={options.selectExternalKey ?? (() => undefined)}
+          setActivePaneTab={options.setActivePaneTab ?? (() => undefined)}
           runNow={() => undefined}
           openEditDialog={() => undefined}
           toggleAutomation={() => undefined}
@@ -99,7 +119,7 @@ function renderPanel(
           requestExternalAction={() => undefined}
           openEditExternalDialog={() => undefined}
           openCreateDialog={() => undefined}
-          onOpenDetail={() => undefined}
+          onOpenDetail={options.onOpenDetail ?? (() => undefined)}
           onRefresh={() => undefined}
           isRefreshing={false}
         />
@@ -177,5 +197,120 @@ describe('AutomationsListPanel flat table layout', () => {
     expect(container.textContent).toContain('Host')
     expect(container.textContent).toContain('Nightly Sync')
     expect(container.textContent).toContain('Remote Linux')
+  })
+})
+
+describe('AutomationsListPanel enter key navigation', () => {
+  it('opens detail of the first row on Enter when nothing is selected', () => {
+    const row = makeAutomationListRow({
+      automation: makeAutomation({ id: 'auto-1', name: 'First Auto' })
+    })
+    let selectedKey: string | null = null
+    let detailOpened = false
+
+    renderPanel([row], '', () => undefined, null, {
+      selectedRowKey: null,
+      selectAutomationRow: (key) => {
+        selectedKey = key
+      },
+      onOpenDetail: () => {
+        detailOpened = true
+      }
+    })
+
+    const input = searchField()
+    expect(input).not.toBeNull()
+
+    const enter = new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true })
+    input?.dispatchEvent(enter)
+
+    expect(enter.defaultPrevented).toBe(true)
+    expect(selectedKey).toBe(row.key)
+    expect(detailOpened).toBe(true)
+  })
+
+  it('opens detail of the selected row on Enter', () => {
+    const row1 = makeAutomationListRow({
+      automation: makeAutomation({ id: 'auto-1', name: 'First Auto' })
+    })
+    const row2 = makeAutomationListRow({
+      automation: makeAutomation({ id: 'auto-2', name: 'Second Auto' })
+    })
+    let selectedKey: string | null = null
+    let detailOpened = false
+
+    renderPanel([row1, row2], '', () => undefined, null, {
+      selectedRowKey: row2.key,
+      selectAutomationRow: (key) => {
+        selectedKey = key
+      },
+      onOpenDetail: () => {
+        detailOpened = true
+      }
+    })
+
+    const input = searchField()
+    expect(input).not.toBeNull()
+
+    const enter = new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true })
+    input?.dispatchEvent(enter)
+
+    expect(enter.defaultPrevented).toBe(true)
+    expect(selectedKey).toBe(row2.key)
+    expect(detailOpened).toBe(true)
+  })
+
+  it('does nothing on Enter when there are no visible rows', () => {
+    let detailOpened = false
+
+    renderPanel([], '', () => undefined, null, {
+      onOpenDetail: () => {
+        detailOpened = true
+      }
+    })
+
+    const input = searchField()
+    expect(input).not.toBeNull()
+
+    const enter = new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true })
+    input?.dispatchEvent(enter)
+
+    expect(detailOpened).toBe(false)
+  })
+
+  it('opens the selected external row on its overview tab', () => {
+    const [entry] = buildExternalAutomationListEntries([makeScopedExternalManager()])
+    expect(entry).toBeDefined()
+    if (!entry) {
+      return
+    }
+    const localSelections: (string | null)[] = []
+    const externalSelections: (string | null)[] = []
+    const paneTabs: AutomationPaneTab[] = []
+    let detailOpened = false
+
+    renderPanel([], '', () => undefined, null, {
+      externalEntries: [entry],
+      selectedExternalKey: entry.key,
+      selectAutomationRow: (key) => localSelections.push(key),
+      selectExternalKey: (key) => externalSelections.push(key),
+      setActivePaneTab: (tab) => paneTabs.push(tab),
+      onOpenDetail: () => {
+        detailOpened = true
+      }
+    })
+
+    const enter = new KeyboardEvent('keydown', {
+      key: 'Enter',
+      bubbles: true,
+      cancelable: true
+    })
+    searchField()?.dispatchEvent(enter)
+
+    expect(enter.defaultPrevented).toBe(true)
+    expect(localSelections).toEqual([null])
+    expect(externalSelections).toEqual([entry.key])
+    expect(paneTabs).toEqual(['overview'])
+    expect(detailOpened).toBe(true)
   })
 })

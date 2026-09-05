@@ -319,11 +319,13 @@ export class WebSocketTransport implements RpcTransport {
     ws.on('close', finalizeConnection)
     ws.on('error', onError)
 
-    // Why: every lifecycle event must have an owner before the first synchronous probe.
+    // Why: install lifecycle ownership before periodic heartbeat ticks can observe this socket.
     this.heartbeatConnections.add(ws)
     this.heartbeat.noteAlive(ws)
     if (this.heartbeatConnections.size === 1) {
-      this.heartbeat.start(() => this.wss?.clients ?? [])
+      // Unauthenticated sockets are protected by the pre-auth timeout; heartbeat probes begin only
+      // after E2EE binds a client id, avoiding control frames during the handshake.
+      this.heartbeat.start(() => this.wsClientIds.keys())
     }
   }
 

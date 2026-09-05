@@ -217,6 +217,7 @@ export function makeStoreState(): AutomationsPageStoreFixtures {
       openSettingsPage: noop,
       openSettingsTarget: noop,
       closeAutomationsPage: noop,
+      activeModal: 'none',
       sshConnectionStates: new Map(),
       sshTargetLabels: new Map(),
       removedSshTargetLabels: new Map(),

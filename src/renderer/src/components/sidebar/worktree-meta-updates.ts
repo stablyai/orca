@@ -7,6 +7,9 @@ import { parseIssueLinkInput, type IssueLinkProvider } from '../../../../shared/
 import type { WorkspaceSourceProvider } from '../../../../shared/new-workspace/workspace-source'
 import type { WorktreeMeta } from '../../../../shared/worktree/meta-types'
 import type { WorkspaceLinkedItem } from '../../../../shared/worktree/types'
+import { parseGitLabIssueOrMRLink } from '../../../../shared/new-workspace/gitlab-links'
+
+export type WorktreeReviewProvider = 'github' | 'gitlab'
 
 export type WorktreeMetaSavedPayload = {
   worktreeId: string
@@ -18,7 +21,7 @@ export type WorktreeMetaDraft = {
   displayNameInput: string
   issueInput: string
   issueProvider: IssueLinkProvider
-  prInput: string
+  reviewInput: string
   commentInput: string
 }
 
@@ -30,6 +33,7 @@ export type WorktreeMetaSnapshot = {
   comment: string
   issueInput: string
   issueProvider: IssueLinkProvider
+  prInput: string
   /** Stands in for an org key the typed value omits, so re-saving a stored bare
    *  identifier does not read as a change. */
   linkedLinearIssueOrganizationUrlKey?: string | null
@@ -41,6 +45,7 @@ export type WorktreeMetaSnapshot = {
  *  displace it, and a clear must not be emitted for a slot that is already empty
  *  — persistence gates the remote Linear capability on key presence, not value. */
 export type WorktreeMetaLiveLinks = {
+  linkedPR?: number | null
   linkedIssue?: number | null
   linkedLinearIssue?: string | null
   linkedLinearIssueOrganizationUrlKey?: string | null
@@ -71,6 +76,28 @@ export function parseGitHubWorkItemNumberForMetaField(
   }
 
   return parseGitHubIssueOrPRNumber(input)
+}
+
+export function parseGitLabMergeRequestNumberForMetaField(input: string): number | null {
+  const trimmed = input.trim()
+  const direct = trimmed.startsWith('!') ? trimmed.slice(1) : trimmed
+  if (/^\d+$/.test(direct)) {
+    const number = Number(direct)
+    return Number.isSafeInteger(number) && number > 0 ? number : null
+  }
+  let url: URL
+  try {
+    url = new URL(trimmed)
+  } catch {
+    return null
+  }
+  if (url.protocol !== 'http:' && url.protocol !== 'https:') {
+    return null
+  }
+  const link = parseGitLabIssueOrMRLink(trimmed)
+  return link?.type === 'mr' && Number.isSafeInteger(link.number) && link.number > 0
+    ? link.number
+    : null
 }
 
 // Why: blanking the field means "fall back to the branch/folder name", and the
@@ -235,16 +262,32 @@ function buildIssueLinkUpdates(
   return linearUpdates ? { linkedIssue: null, ...linearUpdates, ...displacedWorkItem } : {}
 }
 
-// Requires the dialog to seed `prInput` from the persisted `linkedPR`: the blank
-// input is written through as a clear, so an unseeded field drops the link on an
-// untouched save.
-function buildPrLinkUpdate(draft: WorktreeMetaDraft): Partial<WorktreeMeta> {
-  const trimmed = draft.prInput.trim()
-  if (trimmed === '') {
-    return { linkedPR: null }
+function buildReviewLinkUpdate(
+  draft: WorktreeMetaDraft,
+  current: WorktreeMetaSnapshot,
+  live: WorktreeMetaLiveLinks,
+  provider: WorktreeReviewProvider
+): Partial<WorktreeMeta> {
+  const trimmed = draft.reviewInput.trim()
+  if (provider === 'github' && trimmed === current.prInput.trim()) {
+    return {}
   }
-  const number = parseGitHubWorkItemNumberForMetaField(trimmed, 'pr')
-  return number === null ? {} : { linkedPR: number }
+  if (trimmed === '') {
+    return provider === 'gitlab'
+      ? { linkedGitLabMR: null }
+      : {
+          linkedPR: null,
+          ...(typeof live.linkedPR === 'number' ? { suppressedGitHubPR: live.linkedPR } : {})
+        }
+  }
+  const number =
+    provider === 'gitlab'
+      ? parseGitLabMergeRequestNumberForMetaField(trimmed)
+      : parseGitHubWorkItemNumberForMetaField(trimmed, 'pr')
+  if (number === null) {
+    return {}
+  }
+  return provider === 'gitlab' ? { linkedGitLabMR: number } : { linkedPR: number }
 }
 
 /** Pure save-payload builder for the worktree meta dialog: empty inputs clear
@@ -254,12 +297,13 @@ function buildPrLinkUpdate(draft: WorktreeMetaDraft): Partial<WorktreeMeta> {
 export function buildWorktreeMetaUpdates(
   draft: WorktreeMetaDraft,
   current: WorktreeMetaSnapshot,
-  live: WorktreeMetaLiveLinks
+  live: WorktreeMetaLiveLinks,
+  reviewProvider: WorktreeReviewProvider = 'github'
 ): Partial<WorktreeMeta> {
   return {
     ...buildCommentUpdate(draft, current),
     ...buildDisplayNameUpdate(draft, current),
     ...buildIssueLinkUpdates(draft, current, live),
-    ...buildPrLinkUpdate(draft)
+    ...buildReviewLinkUpdate(draft, current, live, reviewProvider)
   }
 }

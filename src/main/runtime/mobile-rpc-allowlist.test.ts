@@ -36,7 +36,13 @@ const MOBILE_DYNAMIC_RPC_METHODS = [
   'github.resolveReviewThread',
   'github.project.updateIssueCommentBySlug',
   'github.project.deleteIssueCommentBySlug',
-  'hostedReview.forBranch'
+  'hostedReview.forBranch',
+  'runtime.clientCapabilities.update',
+  'agentSession.send',
+  'agentSession.cancel',
+  'agentSession.history',
+  'agentSession.hold',
+  'agentSession.release'
 ]
 
 const MOBILE_STREAMING_CLEANUP_RPC_METHODS = [
@@ -95,7 +101,10 @@ function mobileRpcMethods(): string[] {
 }
 
 function mobileRpcAllowlist(): Set<string> {
-  const source = readFileSync(join(process.cwd(), 'src/main/runtime/runtime-rpc.ts'), 'utf8')
+  const source = readFileSync(
+    join(process.cwd(), 'src/main/runtime/runtime-rpc/runtime-rpc-mobile-method-allowlist.ts'),
+    'utf8'
+  )
   const allowlist = source.match(/const MOBILE_RPC_METHOD_ALLOWLIST = new Set\(\[([\s\S]*?)\]\)/)
   if (!allowlist) {
     throw new Error('MOBILE_RPC_METHOD_ALLOWLIST not found')
@@ -140,5 +149,30 @@ describe('mobile RPC allowlist', () => {
         (method) => allowed.has(method)
       )
     ).toEqual([])
+  })
+
+  it('exposes only the mobile structured agent-session surface', () => {
+    expect(
+      [...mobileRpcAllowlist()].filter((method) => method.startsWith('agentSession.'))
+    ).toEqual([
+      'agentSession.createSupport',
+      'agentSession.create',
+      'agentSession.ensure',
+      'agentSession.send',
+      'agentSession.cancel',
+      'agentSession.close',
+      'agentSession.respondToApproval',
+      'agentSession.respondToQuestion',
+      'agentSession.setOption',
+      'agentSession.handoffStatus',
+      'agentSession.options',
+      'agentSession.history',
+      'agentSession.subscribe',
+      'agentSession.unsubscribe',
+      'agentSession.hold',
+      'agentSession.release'
+    ])
+    expect(mobileRpcAllowlist().has('agentSession.attach')).toBe(false)
+    expect(mobileRpcAllowlist().has('agentSession.requestHandoff')).toBe(false)
   })
 })

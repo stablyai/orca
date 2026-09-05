@@ -47,6 +47,11 @@ export abstract class DaemonPtyConnectionLifecycle extends DaemonPtyEventSubscri
     if (previous && sameEndpointIdentity(previous, current)) {
       return
     }
+    if (previous) {
+      // Capability probes belong to one daemon incarnation; a replacement may
+      // support getSize even when the preserved owner did not.
+      this.getSizeUnsupported = false
+    }
     this.lastAuthenticatedIdentity = { ...current }
     this.exactDaemonIncarnation = exactDaemonIncarnationForPidRecord(current, this.pidRecord)
     if (!previous) {

@@ -1,25 +1,43 @@
 import type { IPtyProvider } from './types'
+import type { PtyIncarnationId } from '../../shared/pty-incarnation'
+import {
+  classifyTerminalProcessInspectionFailure,
+  clientOnlyUnverifiableInspection,
+  type TerminalProcessInspection
+} from '../../shared/terminal-process-inspection'
 
-export type PtyProcessInspection = {
-  foregroundProcess: string | null
-  hasChildProcesses: boolean
-  unavailable?: true
-}
+export type PtyProcessInspection = TerminalProcessInspection
 
 type CompletionSensitivePtyProvider = IPtyProvider & {
-  inspectProcess?: (id: string) => Promise<PtyProcessInspection>
+  inspectProcess?: (
+    id: string,
+    options?: PtyProcessInspectionOptions
+  ) => Promise<PtyProcessInspection>
+}
+
+/**
+ * `scanChildProcesses` marks a read whose answer decides something once, rather than a poll that
+ * self-corrects on its next tick. Only hosts where the child answer costs a process-table read
+ * act on it; everywhere else the answer was already captured.
+ */
+export type PtyProcessInspectionOptions = {
+  expectedIncarnationId?: PtyIncarnationId
+  scanChildProcesses?: boolean
 }
 
 export async function inspectPtyProviderProcess(
   provider: IPtyProvider,
-  ptyId: string
+  ptyId: string,
+  options?: PtyProcessInspectionOptions
 ): Promise<PtyProcessInspection> {
   if (provider.hasPty?.(ptyId) === false) {
     throw new Error('terminal_gone')
   }
   const inspectProcess = (provider as CompletionSensitivePtyProvider).inspectProcess
   if (inspectProcess) {
-    return inspectProcess.call(provider, ptyId)
+    return options
+      ? inspectProcess.call(provider, ptyId, options)
+      : inspectProcess.call(provider, ptyId)
   }
   const foregroundProcess = await provider.getForegroundProcess(ptyId)
   const hasChildProcesses = await provider.hasChildProcesses(ptyId)
@@ -28,13 +46,15 @@ export async function inspectPtyProviderProcess(
 
 export async function inspectPtyProviderProcessForRenderer(
   provider: IPtyProvider,
-  ptyId: string
+  ptyId: string,
+  options?: PtyProcessInspectionOptions
 ): Promise<PtyProcessInspection> {
   try {
-    return await inspectPtyProviderProcess(provider, ptyId)
+    return await inspectPtyProviderProcess(provider, ptyId, options)
   } catch (error) {
-    if (error instanceof Error && error.message === 'terminal_gone') {
-      return { foregroundProcess: null, hasChildProcesses: false, unavailable: true }
+    const reason = classifyTerminalProcessInspectionFailure(error)
+    if (reason) {
+      return clientOnlyUnverifiableInspection(reason)
     }
     throw error
   }

@@ -44,7 +44,8 @@ export class SshGitReadProvider {
     }
   }
 
-  private invalidateGitReads(): void {
+  /** Overridden by subclasses that own additional read caches (worktree listings). */
+  protected invalidateGitReads(): void {
     this.gitDiffReadDedupe.clear()
     this.statusReadLeaseOwner.invalidate()
     this.upstreamStatusReadOwner.invalidate()
@@ -57,7 +58,9 @@ export class SshGitReadProvider {
     this.gitDiffReadDedupe.clear()
     const request = {
       worktreePath,
+      ...(options?.admissionTier ? { admissionTier: options.admissionTier } : {}),
       ...(options?.includeIgnored ? { includeIgnored: true } : {}),
+      ...(options?.includeLineStats === false ? { includeLineStats: false } : {}),
       ...(options?.bypassEffectiveUpstreamNegativeCache
         ? { bypassEffectiveUpstreamNegativeCache: true }
         : {}),
@@ -68,7 +71,9 @@ export class SshGitReadProvider {
     }
     const key = stableInFlightKey([
       worktreePath,
+      options?.admissionTier ?? 'status',
       options?.includeIgnored === true,
+      options?.includeLineStats !== false,
       options?.bypassEffectiveUpstreamNegativeCache === true,
       options?.reuseLineStats === true,
       options?.branchLineTotalMergeBase ?? ''

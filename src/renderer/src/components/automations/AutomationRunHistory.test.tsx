@@ -113,7 +113,8 @@ describe('AutomationRunHistory unanswered history', () => {
     expect(container.textContent).not.toContain('No runs yet.')
     // "0 runs" is a count of something nobody managed to read.
     expect(container.textContent).not.toContain('0 runs')
-    expect(container.textContent).toContain('Run history could not be loaded')
+    expect(container.textContent).toContain('Run history is unavailable from this host')
+    expect(container.textContent).toContain('does not mean the automation failed or has no runs')
     expect(container.textContent).toContain('web-01 is not connected')
   })
 
@@ -128,5 +129,111 @@ describe('AutomationRunHistory unanswered history', () => {
     })
 
     expect(onRecoverHistory).toHaveBeenCalledWith('reconnect')
+  })
+})
+
+describe('AutomationRunHistory keyboard navigation', () => {
+  it('navigates runs with ArrowDown and ArrowUp and opens on Enter', async () => {
+    const onOpenRun = vi.fn()
+    const run1 = makeRun({ id: 'run-1', scheduledFor: FIRST })
+    const run2 = makeRun({ id: 'run-2', scheduledFor: LATEST })
+
+    const container = document.createElement('div')
+    document.body.appendChild(container)
+    const root = createRoot(container)
+    roots.push(root)
+
+    await act(async () => {
+      root.render(
+        <AutomationRunHistory
+          runs={[run1, run2]}
+          automationId="a-1"
+          worktreeMap={new Map()}
+          onOpenRun={onOpenRun}
+        />
+      )
+    })
+
+    const buttons = container.querySelectorAll<HTMLButtonElement>('button[data-automation-run-id]')
+    expect(buttons[0].getAttribute('data-current')).toBe('true')
+    expect(buttons[1].getAttribute('data-current')).toBe('false')
+
+    // Press ArrowDown
+    await act(async () => {
+      window.dispatchEvent(
+        new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true, cancelable: true })
+      )
+    })
+
+    expect(buttons[0].getAttribute('data-current')).toBe('false')
+    expect(buttons[1].getAttribute('data-current')).toBe('true')
+
+    // Press Enter to open selected run
+    await act(async () => {
+      window.dispatchEvent(
+        new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true })
+      )
+    })
+
+    expect(onOpenRun).toHaveBeenCalledWith(run2)
+
+    // Press ArrowUp
+    await act(async () => {
+      window.dispatchEvent(
+        new KeyboardEvent('keydown', { key: 'ArrowUp', bubbles: true, cancelable: true })
+      )
+    })
+
+    expect(buttons[0].getAttribute('data-current')).toBe('true')
+    expect(buttons[1].getAttribute('data-current')).toBe('false')
+
+    // Press Enter to open first run
+    await act(async () => {
+      window.dispatchEvent(
+        new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true })
+      )
+    })
+
+    expect(onOpenRun).toHaveBeenCalledWith(run1)
+  })
+
+  it('moves focus with the selection so Enter reaches the selected row, not the old one', async () => {
+    const onOpenRun = vi.fn()
+    const run1 = makeRun({ id: 'run-1', scheduledFor: FIRST })
+    const run2 = makeRun({ id: 'run-2', scheduledFor: LATEST })
+
+    const container = document.createElement('div')
+    document.body.appendChild(container)
+    const root = createRoot(container)
+    roots.push(root)
+
+    await act(async () => {
+      root.render(
+        <AutomationRunHistory
+          runs={[run1, run2]}
+          automationId="a-1"
+          worktreeMap={new Map()}
+          onOpenRun={onOpenRun}
+        />
+      )
+    })
+
+    const buttons = container.querySelectorAll<HTMLButtonElement>('button[data-automation-run-id]')
+    buttons[0].focus()
+    expect(document.activeElement).toBe(buttons[0])
+
+    await act(async () => {
+      buttons[0].dispatchEvent(
+        new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true, cancelable: true })
+      )
+    })
+
+    expect(buttons[1].getAttribute('data-current')).toBe('true')
+    expect(document.activeElement).toBe(buttons[1])
+
+    // Enter is passed through to the focused row, which must now be the selected one.
+    ;(document.activeElement as HTMLButtonElement).click()
+    expect(onOpenRun).toHaveBeenCalledTimes(1)
+    expect(onOpenRun).toHaveBeenCalledWith(run2)
   })
 })

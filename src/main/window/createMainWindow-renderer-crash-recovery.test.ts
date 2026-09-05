@@ -21,7 +21,7 @@ vi.mock('../browser/browser-client-page-renderer-runtime', async () => {
   }
 })
 
-import { createMainWindow } from './createMainWindow'
+import { createMainWindow, loadMainWindow } from './createMainWindow'
 import { ipcMain } from 'electron'
 import { shouldRecoverRendererAfterProcessGone } from '../crash-reporting/process-gone-classification'
 import {
@@ -589,6 +589,40 @@ describe('createMainWindow', () => {
     expect(onRendererRecoveryExhausted).toHaveBeenCalledWith(
       expect.objectContaining({ recentRecoveryCount: 3 })
     )
+
+    consoleError.mockRestore()
+  })
+
+  it('serves a manual retry while the breaker stays open for the next crash', () => {
+    vi.useFakeTimers()
+
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const onRendererRecoveryExhausted = vi.fn()
+    const { browserWindowInstance, windowHandlers } = createRendererRecoveryWindowHarness()
+
+    createMainWindow(null, { onRendererRecoveryExhausted })
+
+    const details = { reason: 'crashed', exitCode: 5 } as Electron.RenderProcessGoneDetails
+    const driveCrashCycle = (): void => {
+      windowHandlers['render-process-gone']?.({} as never, details)
+      vi.advanceTimersByTime(250)
+    }
+    driveCrashCycle()
+    driveCrashCycle()
+    driveCrashCycle()
+    driveCrashCycle()
+    expect(onRendererRecoveryExhausted).toHaveBeenCalledTimes(1)
+    // 1 initial load + 3 recoveries; the 4th crash was refused.
+    expect(browserWindowInstance.loadFile).toHaveBeenCalledTimes(4)
+
+    // The recovery prompt's Reload button goes straight to loadMainWindow, which the breaker never gates.
+    loadMainWindow(browserWindowInstance as unknown as Electron.BrowserWindow)
+    expect(browserWindowInstance.loadFile).toHaveBeenCalledTimes(5)
+
+    // Still-poisoned machine: the next crash re-raises the prompt immediately instead of re-arming auto-reloads.
+    driveCrashCycle()
+    expect(browserWindowInstance.loadFile).toHaveBeenCalledTimes(5)
+    expect(onRendererRecoveryExhausted).toHaveBeenCalledTimes(2)
 
     consoleError.mockRestore()
   })

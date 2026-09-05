@@ -29,12 +29,15 @@ import {
   readSync,
   writeFileSync
 } from 'node:fs'
-import { createRequire } from 'node:module'
-import { dirname, join, resolve } from 'node:path'
+import { join, resolve } from 'node:path'
 import { RELAY_WINDOWS_PROCESS_TREE_FILENAME } from '../../src/shared/relay-artifacts.ts'
+import {
+  nodeGypRebuildInvocation,
+  stageWindowsProcessTreeNodeAddonApiHeaders,
+  WINDOWS_PROCESS_TREE_PACKAGE_DIR as PACKAGE_DIR
+} from './windows-process-tree-gyp-rebuild.mjs'
 
 const ROOT = resolve(import.meta.dirname, '..', '..')
-const PACKAGE_DIR = join(ROOT, 'node_modules', '@vscode', 'windows-process-tree')
 const SUPPORTED_ARCHES = ['x64', 'arm64']
 
 /** PE `IMAGE_FILE_HEADER.Machine` values, so a cross-build cannot silently emit host arch. */
@@ -93,10 +96,6 @@ function assertPatchApplied() {
 function applyWindowsProcessTreeBuildFixes() {
   const bindingPath = join(PACKAGE_DIR, 'binding.gyp')
   const processPath = join(PACKAGE_DIR, 'src', 'process.cc')
-  const nodeAddonApiDir = dirname(
-    createRequire(join(PACKAGE_DIR, 'package.json')).resolve('node-addon-api/package.json')
-  )
-  const stagedHeaderDir = join(PACKAGE_DIR, 'deps', 'node-addon-api')
   let bindingGyp = readFileSync(bindingPath, 'utf8')
   let processCc = readFileSync(processPath, 'utf8')
   const originalBinding = bindingGyp
@@ -131,10 +130,7 @@ function applyWindowsProcessTreeBuildFixes() {
   if (processCc !== originalProcess) {
     writeFileSync(processPath, processCc)
   }
-  mkdirSync(stagedHeaderDir, { recursive: true })
-  for (const header of ['napi.h', 'napi-inl.h', 'napi-inl.deprecated.h']) {
-    copyFileSync(join(nodeAddonApiDir, header), join(stagedHeaderDir, header))
-  }
+  stageWindowsProcessTreeNodeAddonApiHeaders(PACKAGE_DIR)
   if (bindingGyp !== originalBinding || processCc !== originalProcess) {
     console.warn('[windows-process-tree] Repaired un-applied pnpm patch hunks before build.')
   }
@@ -169,12 +165,9 @@ function main() {
   applyWindowsProcessTreeBuildFixes()
   assertPatchApplied()
 
-  console.log(`[windows-process-tree] building ${arch} from ${PACKAGE_DIR}`)
-  execFileSync(
-    process.execPath,
-    [join(ROOT, 'node_modules', 'node-gyp', 'bin', 'node-gyp.js'), 'rebuild', `--arch=${arch}`],
-    { cwd: PACKAGE_DIR, stdio: 'inherit' }
-  )
+  const gyp = nodeGypRebuildInvocation(arch)
+  console.log(`[windows-process-tree] building ${arch} from ${gyp.cwd}`)
+  execFileSync(process.execPath, gyp.args, { cwd: gyp.cwd, stdio: 'inherit' })
 
   const built = join(PACKAGE_DIR, 'build', 'Release', 'windows_process_tree.node')
   if (!existsSync(built)) {

@@ -126,14 +126,19 @@ export function activateMultiplexStream(
       condition: 'exit',
       signal: stream.exitWaiterAbort.signal
     })
-    .then(() => {
+    .then((wait) => {
       if (streams.get(request.streamId) === stream) {
-        state.detachStream(request.streamId, true)
+        state.detachStream(
+          request.streamId,
+          wait.satisfied && wait.condition === 'exit' && wait.status === 'exited'
+            ? 'exited'
+            : 'unverifiable'
+        )
       }
     })
     .catch(() => {
       if (streams.get(request.streamId) === stream) {
-        state.detachStream(request.streamId, true)
+        state.detachStream(request.streamId, 'unverifiable')
       }
     })
 }

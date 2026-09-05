@@ -1,6 +1,7 @@
 import { memo, useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { useAppStore } from '../../store'
+import { isProvenProcessExit } from '../../../../shared/terminal-exit-cause'
 import { SYNC_FIT_PANES_EVENT } from '@/constants/terminal'
 import { tabGroupBodyAnchorName } from '../tab-group/tab-group-body-anchor'
 import type { ActivityTerminalPortalTarget } from '../activity/activity-terminal-portal'
@@ -227,8 +228,13 @@ export const TerminalOverlaySlot = memo(function TerminalOverlaySlot({
       isVisible={isVisible || activityTerminalPortal !== null}
       isWorktreeActive={isWorktreeActive || activityTerminalPortal !== null}
       isolatedPaneKey={activityTerminalPortal?.paneKey ?? null}
-      onPtyExit={(ptyId) => {
+      onPtyExit={(ptyId, exitCode) => {
         if (consumeSuppressedPtyExit(ptyId)) {
+          return
+        }
+        // A synthetic host-loss exit is not evidence that the user closed the tab.
+        if (exitCode !== undefined && !isProvenProcessExit(exitCode)) {
+          useAppStore.getState().markUnverifiedPtyLoss(terminalTabId)
           return
         }
         // Why: a parked multi-leaf tab has no PaneManager to promote split

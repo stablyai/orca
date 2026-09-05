@@ -160,7 +160,9 @@ export function forwardGuestShortcutInput(
     if (isFloatingGuest) {
       renderer.send('ui:closeFloatingItem', { sourceId: browserTabId })
     } else {
-      renderer.send('ui:closeActiveTab')
+      // Why: carry the guest's page id — activeTabType/activeBrowserTabId can be stale in split
+      // layouts (guest focus doesn't reach the group's focus-capture), silently dropping the close.
+      renderer.send('ui:closeActiveTab', { sourceId: browserTabId })
     }
   } else if (keybindingMatchesAction('tab.nextSameType', input, process.platform, keybindings)) {
     renderer.send('ui:switchTab', 1)

@@ -94,3 +94,11 @@ ReactDOM.createRoot(document.getElementById('root') as HTMLElement).render(
     <WebRootBoundary />
   </I18nProvider>
 )
+
+// Why: the web client is its own entry point and hosts terminals too, so it has
+// to start the deferred WebGL addon load itself (see main.tsx). Dynamic because
+// this entry deliberately keeps the whole App graph — pane manager included —
+// out of its own startup chunk.
+void import('../lib/pane-manager/pane-webgl-renderer').then((module) =>
+  module.primeTerminalWebglAddon()
+)

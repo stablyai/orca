@@ -19,6 +19,7 @@ export type HostedReviewCache = Record<string, HostedReviewCacheEntry<HostedRevi
 export type HostedReviewFetchOptions = {
   force?: boolean
   repoId?: string
+  admissionTier?: 'interactive' | 'status' | 'background'
   staleWhileRevalidate?: boolean
   currentHeadOid?: string | null
   /**
@@ -26,6 +27,7 @@ export type HostedReviewFetchOptions = {
    * that branch per minute and paces the O(N) card list far slower (#11532).
    */
   active?: boolean
+  repoOwnerExecutionHostId?: string
 }
 export type CreateHostedReviewStoreInput = CreateHostedReviewInput & { repoId?: string | null }
 export type CreateStackedHostedReviewStoreInput = CreateStackedHostedReviewInput & {
@@ -78,11 +80,42 @@ export function isFreshHostedReview<T>(
 export function findHostedReviewRepoByPath(
   repos: readonly Repo[] | undefined,
   repoPath: string,
-  repoId?: string | null
+  repoId?: string | null,
+  repoOwnerExecutionHostId?: string
 ): Repo | undefined {
-  return repos?.find((candidate) =>
-    repoId ? candidate.id === repoId : candidate.path === repoPath
+  const matches = repos?.filter(
+    (candidate) =>
+      (repoId ? candidate.id === repoId : candidate.path === repoPath) &&
+      (!repoOwnerExecutionHostId || candidate.path === repoPath)
   )
+  if (repoOwnerExecutionHostId) {
+    return matches?.find(
+      (candidate) => getRepoExecutionHostId(candidate) === repoOwnerExecutionHostId
+    )
+  }
+  return matches?.[0]
+}
+
+export function findHostedReviewRepoForFetch(
+  repos: readonly Repo[] | undefined,
+  repoPath: string,
+  options: HostedReviewFetchOptions | undefined
+): Repo | null | undefined {
+  const repo = findHostedReviewRepoByPath(
+    repos,
+    repoPath,
+    options?.repoId,
+    options?.repoOwnerExecutionHostId
+  )
+  return options?.repoOwnerExecutionHostId && !repo ? null : repo
+}
+
+export function hostedReviewOwnerIpcArgs(options: HostedReviewFetchOptions | undefined): {
+  repoOwnerExecutionHostId?: string
+} {
+  return options?.repoOwnerExecutionHostId
+    ? { repoOwnerExecutionHostId: options.repoOwnerExecutionHostId }
+    : {}
 }
 
 export function shouldRefetchForLinkedHint(

@@ -127,6 +127,41 @@ describe('focusExistingMainWindow', () => {
     expect(timer.scheduledMs()).toEqual([])
   })
 
+  // The blocking install-DACL repair holds the first window for up to 20s of blank
+  // screen, which is exactly when a user double-clicks the shortcut again. That
+  // second instance must not spawn a renderer onto a tree icacls is rewriting.
+  it('drops a reopen while another path must own the first window', () => {
+    const openWindow = vi.fn()
+
+    const result = focusExistingMainWindow({
+      app: makeFakeApp(),
+      getWindow: () => null,
+      openWindow,
+      canOpenWindow: () => false
+    })
+
+    expect(result).toBe('pending')
+    expect(openWindow).not.toHaveBeenCalled()
+  })
+
+  it('still focuses a window that already exists while reopening is held', () => {
+    const window = makeFakeWindow()
+    const openWindow = vi.fn()
+
+    const result = focusExistingMainWindow({
+      app: makeFakeApp(),
+      getWindow: () => window,
+      openWindow,
+      canOpenWindow: () => false,
+      platform: 'darwin',
+      setTimeout: makeTimer().setTimeout
+    })
+
+    expect(result).toBe('focused')
+    expect(openWindow).not.toHaveBeenCalled()
+    expect(window.calls.focus).toHaveBeenCalledTimes(1)
+  })
+
   it('waits for normal startup when no window exists before app readiness', () => {
     const openWindow = vi.fn()
 

@@ -1,6 +1,7 @@
 // Why: local PTYs and the daemon/SSH path must use identical ZDOTDIR discovery;
 // small drift here breaks different terminal transports in different ways.
 import { SHELL_STARTUP_FEATURE_ENV } from './shell-startup-features'
+import { POSIX_SHELL_STARTUP_COMMAND_ENV } from './pty/posix-shell-startup-command'
 
 /** Basename of the file every Orca-generated zsh wrapper dir is stamped with. */
 export const ZSH_WRAPPER_DIR_MARKER_FILE = '.orca-shell-wrapper'
@@ -146,7 +147,24 @@ fi`
 // first hook and fails — silently suppressing the marker and stalling every
 // startup command on the pre-ready timeout. Instead, own zle-line-init: emit
 // the marker first, then chain to whatever widget was installed before.
-export function getZshShellReadyMarkerRegistrationBlock(escapedMarker: string): string {
+export function getZshShellReadyMarkerRegistrationBlock(
+  escapedMarker: string,
+  supportsStartupCommand = false
+): string {
+  const markerBlock = supportsStartupCommand
+    ? `  if [[ "\${__orca_emit_ready_marker-1}" == 1 ]]; then
+    printf "${escapedMarker}"
+  fi`
+    : `  printf "${escapedMarker}"`
+  const startupCommandBlock = supportsStartupCommand
+    ? `
+  if (( \${+${POSIX_SHELL_STARTUP_COMMAND_ENV}} )); then
+    BUFFER="\$${POSIX_SHELL_STARTUP_COMMAND_ENV}"
+    CURSOR=\${#BUFFER}
+    builtin unset ${POSIX_SHELL_STARTUP_COMMAND_ENV}
+    zle accept-line
+  fi`
+    : ''
   return `# Why: capture the prior zle-line-init so the marker chains to it. On a
 # re-source we are already the bound widget, so keep the function captured
 # the first time instead of clobbering it to empty (which would silently
@@ -161,14 +179,14 @@ else
   __orca_prev_line_init_fn=""
 fi
 __orca_prompt_mark() {
-  printf "${escapedMarker}"
+${markerBlock}
   # Why: call the prior hook as a plain function, not an aliased widget, so
   # $WIDGET stays zle-line-init for add-zle-hook-widget dispatchers.
   if [[ -n "\${__orca_prev_line_init_fn:-}" ]]; then
     "\${__orca_prev_line_init_fn}" "$@"
-  fi
+  fi${startupCommandBlock}
 }
-zle -N zle-line-init __orca_prompt_mark`
+zle -N zle-line-init __orca_prompt_mark`.replace(/\n\n}\n$/, '\n}\n')
 }
 
 // Why: fish has no ZDOTDIR-style wrapper dir, so the marker rides `--init-command`,
@@ -181,9 +199,22 @@ zle -N zle-line-init __orca_prompt_mark`
 //
 // Why no feature variable: the init command is composed per pane, so the
 // selection is already baked into the text and nothing needs to be exported.
-export function getFishShellReadyInitCommand(escapedMarker: string): string {
+export function getFishShellReadyInitCommand(
+  escapedMarker: string,
+  emitReadyMarker = true,
+  supportsStartupCommand = false
+): string {
+  const readyMarkerBlock = emitReadyMarker ? `  builtin printf "${escapedMarker}"\n` : ''
+  const startupCommandBlock = supportsStartupCommand
+    ? `  if set -q ${POSIX_SHELL_STARTUP_COMMAND_ENV}
+    set -l __orca_command "\$${POSIX_SHELL_STARTUP_COMMAND_ENV}"
+    set -e ${POSIX_SHELL_STARTUP_COMMAND_ENV}
+    builtin printf '%s\\n' "$__orca_command"
+    eval "$__orca_command"
+    return $status
+  end\n`
+    : ''
   return `function __orca_shell_ready_marker --on-event fish_prompt
-  builtin printf "${escapedMarker}"
-  functions -e __orca_shell_ready_marker
-end`
+${readyMarkerBlock}  functions -e __orca_shell_ready_marker
+${startupCommandBlock}end`
 }

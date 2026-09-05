@@ -11,12 +11,19 @@ import type { DocPreviewDocumentIdentity } from './doc-preview-document-identity
  * machine it was read from, which is the part a paired or SSH reader cannot otherwise tell.
  */
 export function DocPreviewDocumentChip({
-  identity
+  identity,
+  onBeginEdit
 }: {
   identity: DocPreviewDocumentIdentity
+  /** When set, a click edits the address instead of copying the path (copy stays in the menu). */
+  onBeginEdit?: () => void
 }): React.JSX.Element {
   const { copyText, status } = useClipboardTextCopyFeedback(identity.absolutePath)
   const copied = status === 'copied'
+  const editLabel = translate(
+    'auto.components.editor.HtmlDocPreview.editAddressControl',
+    'Edit address'
+  )
   const copyLabel = translate(
     'auto.components.editor.HtmlDocPreview.copyDocumentPathControl',
     'Copy file path'
@@ -27,14 +34,15 @@ export function DocPreviewDocumentChip({
     'auto.components.editor.HtmlDocPreview.documentPathCopied',
     'Copied'
   )
+  const label = onBeginEdit ? editLabel : copied ? copiedLabel : copyLabel
 
   return (
     <Tooltip>
       <TooltipTrigger asChild>
         <button
           type="button"
-          onClick={() => void copyText()}
-          aria-label={copied ? copiedLabel : copyLabel}
+          onClick={onBeginEdit ?? (() => void copyText())}
+          aria-label={label}
           className="@container flex min-w-0 flex-1 items-center gap-2 overflow-hidden rounded-xl border border-border bg-background px-3 py-1 text-left shadow-sm hover:bg-accent/40 focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:outline-none"
         >
           {copied ? (
@@ -68,7 +76,11 @@ export function DocPreviewDocumentChip({
         </button>
       </TooltipTrigger>
       <TooltipContent side="bottom" sideOffset={4}>
-        {copied ? copiedLabel : `${copyLabel} · ${identity.absolutePath}`}
+        {onBeginEdit
+          ? `${editLabel} · ${identity.absolutePath}`
+          : copied
+            ? copiedLabel
+            : `${copyLabel} · ${identity.absolutePath}`}
       </TooltipContent>
     </Tooltip>
   )

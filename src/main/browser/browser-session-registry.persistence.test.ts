@@ -219,7 +219,7 @@ describe('BrowserSessionRegistry persistence', () => {
       orcaProfileId: 'local-work',
       profileDirectory: '/user-data/profiles/local-work'
     })
-    const profile = browserSessionRegistry.createProfile('isolated', 'Work Browser', {
+    const profile = await browserSessionRegistry.createProfile('isolated', 'Work Browser', {
       userAgentMode: 'native'
     })
 
@@ -239,7 +239,7 @@ describe('BrowserSessionRegistry persistence', () => {
     const { sessionFromPartitionMock, setupClientHintsOverrideMock } = installModuleMocks(fsState)
     const { browserSessionRegistry } = await import('./browser-session-registry')
 
-    browserSessionRegistry.createProfile('isolated', 'Default identity')
+    await browserSessionRegistry.createProfile('isolated', 'Default identity')
 
     const profileSession = sessionFromPartitionMock.mock.results.at(-1)?.value
     expect(profileSession.setUserAgent).toHaveBeenCalledWith('Mozilla/5.0 Orca')
@@ -251,7 +251,7 @@ describe('BrowserSessionRegistry persistence', () => {
     const { sessionFromPartitionMock, setupClientHintsOverrideMock } = installModuleMocks(fsState)
     const { browserSessionRegistry } = await import('./browser-session-registry')
 
-    browserSessionRegistry.createProfile('isolated', 'Google', { userAgentMode: 'native' })
+    await browserSessionRegistry.createProfile('isolated', 'Google', { userAgentMode: 'native' })
 
     const profileSession = sessionFromPartitionMock.mock.results.at(-1)?.value
     const { getBrowserSessionUserAgentMode } = await import('./browser-session-user-agent-mode')

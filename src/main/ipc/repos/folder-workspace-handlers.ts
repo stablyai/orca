@@ -9,6 +9,7 @@ import {
   getFolderWorkspacePathStatusForPath
 } from '../../project-groups/folder-workspace-path-status'
 import { getSshFilesystemProvider } from '../../providers/ssh-filesystem-dispatch'
+import type { OrcaRuntimeService } from '../../runtime/orca-runtime'
 import { notifyReposChanged } from './repos-changed-notification'
 import {
   FolderWorkspaceCreateArgs,
@@ -18,7 +19,11 @@ import {
   parseProjectGroupIpcArgs
 } from './repo-ipc-arg-schemas'
 
-export function registerFolderWorkspaceHandlers(mainWindow: BrowserWindow, store: Store): void {
+export function registerFolderWorkspaceHandlers(
+  mainWindow: BrowserWindow,
+  store: Store,
+  runtime: OrcaRuntimeService
+): void {
   ipcMain.handle('folderWorkspaces:list', (): FolderWorkspace[] => store.getFolderWorkspaces())
 
   ipcMain.handle('folderWorkspaces:getPathStatus', async (_event, rawArgs: unknown) => {
@@ -107,16 +112,13 @@ export function registerFolderWorkspaceHandlers(mainWindow: BrowserWindow, store
     }
   )
 
-  ipcMain.handle('folderWorkspaces:delete', (_event, rawArgs: unknown): boolean => {
+  ipcMain.handle('folderWorkspaces:delete', async (_event, rawArgs: unknown): Promise<boolean> => {
     const args = parseProjectGroupIpcArgs(
       FolderWorkspaceSelectorArgs,
       rawArgs,
       'invalid_folder_workspace_delete_args'
     )
-    const deleted = store.removeFolderWorkspace(args.folderWorkspaceId)
-    if (deleted) {
-      notifyReposChanged(mainWindow)
-    }
-    return deleted
+    // Why: the runtime owns PTY/browser/session teardown and notifies on success.
+    return (await runtime.deleteFolderWorkspace(args.folderWorkspaceId)).deleted
   })
 }

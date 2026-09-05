@@ -57,6 +57,7 @@ import {
   resolveAiVaultSessionTitlesByHost,
   type RuntimeAiVaultSessionTitleResolver
 } from './ai-vault-session-title-routing'
+import { projectStructuredAiVaultSessions } from '../ai-vault/structured-session-ownership'
 
 const AI_VAULT_ALL_HOST_RUNTIME_TIMEOUT_MS = 3_000
 // Why: a remote home with many agent roots routinely needs seconds to walk,
@@ -282,7 +283,9 @@ export function registerAiVaultHandlers(options: AiVaultHandlerOptions = {}): vo
         : undefined
     const controller = listCancellations.begin(event, requestToken)
     try {
-      return await listAiVaultSessions(args, { signal: controller?.signal })
+      await handlerOptions.ensureStructuredSessionOwnership?.()
+      const result = await listAiVaultSessions(args, { signal: controller?.signal })
+      return projectStructuredAiVaultSessions(result, true)
     } catch (error) {
       // Why: superseding a scan is normal control flow, but Electron logs every
       // rejected handler — report it as a result so the log stays truthful.
@@ -317,8 +320,7 @@ export function registerAiVaultHandlers(options: AiVaultHandlerOptions = {}): vo
     handleAiVaultGetFirstUserPrompt(args)
   )
   registerAiVaultDeleteHandler(aiVaultDeleteDeps)
-  // DOM focus/visibility events don't fire in the renderer on macOS app
-  // activation, so refresh-on-refocus needs this main-process signal.
+  // macOS app activation skips DOM focus events, so emit the refresh signal here.
   app.on('browser-window-focus', (_event, window) => {
     if (!window.isDestroyed()) {
       window.webContents.send('aiVault:windowFocused')

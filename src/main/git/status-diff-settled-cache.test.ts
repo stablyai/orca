@@ -1,4 +1,5 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import * as path from 'node:path'
 import type * as BoundedFileReader from '../../shared/node-bounded-file-reader'
 import { createBoundedFileReaderModuleMock, createGitRunnerModuleMock } from './status-test-harness'
 
@@ -147,6 +148,86 @@ describe('settled diff cache', () => {
     expect(blobReadCount()).toBe(spawnsAfterFirst)
     expect(second).toEqual(first)
     expect(settledDiffCache.stats().hits).toBe(1)
+  })
+
+  // A WSL-routed read whose worktree path never went through UNC translation: git resolves
+  // `/home/...` inside the distro, but every Node read here has to be spelled for Win32.
+  describe('on a Windows host reading a raw Linux WSL worktree path', () => {
+    const WSL_WORKTREE = '/home/me/repo/feature'
+    const WSL_OPTIONS = { wslDistro: 'Ubuntu' }
+    const HOST_WORKTREE = String.raw`\\wsl.localhost\Ubuntu\home\me\repo\feature`
+    let platformDescriptor: PropertyDescriptor | undefined
+
+    beforeEach(() => {
+      platformDescriptor = Object.getOwnPropertyDescriptor(process, 'platform')
+      Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
+      files.clear()
+      // `.git` is a directory here, so the gitdir is the worktree path plus a segment.
+      writeFile(path.join(HOST_WORKTREE, '.git/HEAD'), 'ref: refs/heads/main\n')
+      writeFile(path.join(HOST_WORKTREE, '.git/refs/heads/main'), `${'a'.repeat(40)}\n`)
+      writeFile(path.join(HOST_WORKTREE, '.git/index'), 'index-bytes')
+      writeFile(path.join(HOST_WORKTREE, FILE), 'working-tree-content')
+    })
+
+    afterEach(() => {
+      if (platformDescriptor) {
+        Object.defineProperty(process, 'platform', platformDescriptor)
+      }
+    })
+
+    it('reads the working tree through the host spelling instead of reporting a deletion', async () => {
+      const result = await getDiff(WSL_WORKTREE, FILE, false, false, WSL_OPTIONS)
+
+      expect(result.modifiedContent).toBe('working-tree-content')
+      expect(readFileMock).toHaveBeenCalledWith(path.join(HOST_WORKTREE, FILE))
+      expect(readFileMock).not.toHaveBeenCalledWith(path.join(WSL_WORKTREE, FILE))
+    })
+
+    it('stamps through the host spelling so the second read does not respawn git', async () => {
+      await getDiff(WSL_WORKTREE, FILE, false, false, WSL_OPTIONS)
+      const spawnsAfterFirst = blobReadCount()
+
+      await getDiff(WSL_WORKTREE, FILE, false, false, WSL_OPTIONS)
+
+      expect(spawnsAfterFirst).toBeGreaterThan(0)
+      expect(blobReadCount()).toBe(spawnsAfterFirst)
+      expect(settledDiffCache.stats().hits).toBe(1)
+      expect(statMock).toHaveBeenCalledWith(path.join(HOST_WORKTREE, '.git/index'))
+    })
+
+    // Each stamp component has to be stat'd under the host spelling too: one that permanently
+    // misses is a constant, so the stamp stops moving and the cache serves a stale diff.
+    it('invalidates when the working tree file is edited under the host spelling', async () => {
+      await getDiff(WSL_WORKTREE, FILE, false, false, WSL_OPTIONS)
+      const spawnsAfterFirst = blobReadCount()
+
+      writeFile(path.join(HOST_WORKTREE, FILE), 'edited-in-another-editor')
+      const second = await getDiff(WSL_WORKTREE, FILE, false, false, WSL_OPTIONS)
+
+      expect(blobReadCount()).toBeGreaterThan(spawnsAfterFirst)
+      expect(second.modifiedContent).toBe('edited-in-another-editor')
+    })
+
+    it('invalidates when .gitmodules appears under the host spelling', async () => {
+      await getDiff(WSL_WORKTREE, FILE, false, false, WSL_OPTIONS)
+      const spawnsAfterFirst = blobReadCount()
+
+      writeFile(path.join(HOST_WORKTREE, '.gitmodules'), '[submodule "vendor"]\n')
+      await getDiff(WSL_WORKTREE, FILE, false, false, WSL_OPTIONS)
+
+      expect(blobReadCount()).toBeGreaterThan(spawnsAfterFirst)
+      expect(statMock).toHaveBeenCalledWith(path.join(HOST_WORKTREE, '.gitmodules'))
+    })
+  })
+
+  // An empty worktree path has no host spelling, and `path.join('', x)` is a *relative* path:
+  // every fs read would land in the process cwd, which in dev is Orca's own checkout.
+  it('reads nothing relative to the cwd when the worktree path has no host spelling', async () => {
+    await getDiff('', FILE, false)
+
+    expect(statMock).not.toHaveBeenCalledWith(FILE)
+    expect(readFileMock).not.toHaveBeenCalledWith('.git', 'utf-8')
+    expect(settledDiffCache.stats().entries).toBe(0)
   })
 
   // The four invalidation axes, one per diff input. Each proves the stale result is

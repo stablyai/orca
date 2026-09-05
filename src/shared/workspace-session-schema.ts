@@ -25,6 +25,7 @@ import { isTuiAgent } from './tui-agent-config'
 import { isWorkspaceKey } from './workspace-scope'
 import {
   browserHistoryEntriesSchema,
+  workspaceDocHistoryEntriesSchema,
   browserPageSchema,
   browserWorkspaceSchema
 } from './workspace-session-browser-schema'
@@ -32,6 +33,10 @@ import { clientHostedBrowserCloseIntentSchema } from './client-hosted-browser-cl
 import { persistedClientHostedBrowserPageSchema } from './client-hosted-browser-page-record'
 import { persistedOpenFileSchema } from './workspace-session-editor-schema'
 import { sleepingAgentSessionsByPaneKeySchema } from './workspace-session-sleeping-agents'
+import {
+  tabContentTypeSchema,
+  workspaceVisibleTabTypeSchema
+} from './workspace-session-tab-type-schema'
 import { salvagedField, salvagedOptional, salvagingArray, salvagingRecord } from './zod-salvage'
 
 // ─── Terminal pane layout (recursive) ───────────────────────────────
@@ -42,9 +47,10 @@ const workspaceKeySchema = z.custom<WorkspaceKey>(
 )
 
 // Why: z.lazy + type annotation keeps the recursive inference working without
-// forcing zod to resolve the whole tree at definition time.
+// forcing zod to resolve the whole tree at definition time. Discriminated on `type` because a
+// plain union re-tries the leaf branch for every split node of every restored terminal layout.
 const terminalPaneLayoutNodeSchema: z.ZodType<TerminalPaneLayoutNode> = z.lazy(() =>
-  z.union([
+  z.discriminatedUnion('type', [
     z.object({
       type: z.literal('leaf'),
       leafId: z.string()
@@ -109,18 +115,6 @@ const terminalTabSchema = z.object({
 
 // ─── Unified tab model ──────────────────────────────────────────────
 
-const tabContentTypeSchema = z.enum([
-  'terminal',
-  'editor',
-  'diff',
-  'conflict-review',
-  'check-details',
-  'browser',
-  'simulator'
-])
-
-const workspaceVisibleTabTypeSchema = z.enum(['terminal', 'editor', 'browser', 'simulator'])
-
 const executionHostIdSchema = z.custom<ExecutionHostId>(
   (value) => typeof value === 'string' && Boolean(parseExecutionHostId(value))
 )
@@ -132,6 +126,10 @@ const tabSchema = z.object({
   worktreeId: z.string(),
   executionHostId: executionHostIdSchema.optional(),
   contentType: tabContentTypeSchema,
+  agentSessionAgent: z.enum(['codex', 'claude']).optional().catch(undefined),
+  // Why: a structured terminal tab must recover its durable host session after
+  // restart; omitting this additive field silently routes it back through PTY.
+  structuredSessionId: z.string().min(1).optional().catch(undefined),
   label: z.string(),
   generatedLabel: z.string().nullable().optional(),
   aiVaultTitle: z
@@ -171,7 +169,7 @@ const tabGroupSchema = z.object({
 const tabGroupSplitDirectionSchema = z.enum(['horizontal', 'vertical'])
 
 const tabGroupLayoutNodeSchema: z.ZodType<TabGroupLayoutNode> = z.lazy(() =>
-  z.union([
+  z.discriminatedUnion('type', [
     z.object({
       type: z.literal('leaf'),
       groupId: z.string()
@@ -250,6 +248,7 @@ export const workspaceSessionStateSchema: z.ZodType<WorkspaceSessionState> = z.o
     salvagingRecord(worktreeIdSchema, workspaceVisibleTabTypeSchema)
   ),
   browserUrlHistory: salvagedOptional('browserUrlHistory', browserHistoryEntriesSchema),
+  workspaceDocHistory: salvagedOptional('workspaceDocHistory', workspaceDocHistoryEntriesSchema),
   activeTabIdByWorktree: salvagedOptional(
     'activeTabIdByWorktree',
     salvagingRecord(worktreeIdSchema, z.string().nullable())

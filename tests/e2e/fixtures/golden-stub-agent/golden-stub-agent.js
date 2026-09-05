@@ -4,6 +4,7 @@ const READY_MARKER = 'GOLDEN_STUB_AGENT_READY'
 const EXIT_MARKER = 'GOLDEN_STUB_AGENT_EXITED'
 
 const ESC = '\x1b'
+const keyboardProtocolMode = process.argv.includes('--keyboard-protocol')
 // Both match the bytes after ESC, so the control character stays out of the
 // pattern: a CSI/SS3 introducer still missing its final byte, and a complete
 // CSI/SS3 sequence. Shift+Enter is matched before either is consulted.
@@ -19,7 +20,7 @@ function render() {
   const lines = composer.split('\n')
   const renderedComposer = lines.map((line, index) => `${index === 0 ? '> ' : '  '}${line}`)
   process.stdout.write(
-    `\x1b]0;Golden Stub Agent\x07${[
+    `${keyboardProtocolMode ? '\x1b]0;\u280b Codex is thinking\x07\x1b[>1u' : '\x1b]0;Golden Stub Agent\x07'}${[
       '\x1b[H\x1b[2JGolden Stub Agent',
       `[${READY_MARKER}]`,
       '',
@@ -39,7 +40,8 @@ function exitCleanly() {
   if (process.stdin.isTTY) {
     process.stdin.setRawMode(false)
   }
-  process.stdout.write(`\x1b[?1049l[${EXIT_MARKER}]\r\n`, () => process.exit(0))
+  const idleTitle = keyboardProtocolMode ? '\x1b]0;Codex\x07' : ''
+  process.stdout.write(`${idleTitle}\x1b[?1049l[${EXIT_MARKER}]\r\n`, () => process.exit(0))
 }
 
 function submit() {
@@ -54,6 +56,12 @@ function submit() {
 
 function consumeInput() {
   while (pendingInput.length > 0 && !exiting) {
+    const enter = ['\x1b[13u', '\x1b[13;1u'].find((sequence) => pendingInput.startsWith(sequence))
+    if (enter) {
+      pendingInput = pendingInput.slice(enter.length)
+      submit()
+      continue
+    }
     const shiftEnter = ['\x1b[13;2u', '\x1b[13;2~', '\x1b\r'].find((sequence) =>
       pendingInput.startsWith(sequence)
     )

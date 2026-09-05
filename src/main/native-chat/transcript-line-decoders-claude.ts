@@ -11,6 +11,7 @@ import {
   parseJsonObject,
   timestampMs
 } from '../ai-vault/session-scanner-values'
+import { imageSourcePathFromText } from '../../shared/native-chat-image-transcript-markers'
 import { claudeContentBlocks } from './transcript-record-blocks'
 import { claudeInterruptedMessageId } from './transcript-turn-markers'
 
@@ -49,8 +50,15 @@ export function decodeClaudeTranscriptLine(
   const isInjectedUserTurn =
     role === 'user' &&
     (record.isMeta === true || record.isSynthetic === true || record.isCompactSummary === true)
+  // Why image-source text survives the filter: Claude records a pasted image as a
+  // companion turn marked `isMeta`, holding one `[Image: source: <path>]` block per
+  // image. Dropping it left the prompt turn with no trace of its attachments — the
+  // base64 blocks on the prompt itself carry no url/path and are dropped too — so a
+  // turn with images rendered with no images at all.
   const blocks = isInjectedUserTurn
-    ? decodedBlocks.filter((block) => block.type === 'tool-result')
+    ? isImageSourceRecord(decodedBlocks)
+      ? decodedBlocks
+      : decodedBlocks.filter((block) => block.type === 'tool-result')
     : decodedBlocks
   if (blocks.length === 0) {
     return null
@@ -63,6 +71,15 @@ export function decodeClaudeTranscriptLine(
     timestamp,
     source: 'transcript'
   }
+}
+
+// Keep only genuine image companion records; a marker mixed with prose must
+// remain an injected turn (or be dropped), never become an image-source turn.
+function isImageSourceRecord(blocks: NativeChatBlock[]): boolean {
+  return (
+    blocks.length > 0 &&
+    blocks.every((block) => block.type === 'text' && imageSourcePathFromText(block.text) !== null)
+  )
 }
 
 // Claude marks reasoning via `thinking` content blocks; when a message is made

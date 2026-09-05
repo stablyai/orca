@@ -7,6 +7,7 @@ import { omitPairingLocalUiFields } from '../../../../shared/pairing-local-ui-fi
 import type { PairedUiState } from '../../../../shared/pairing-local-ui-fields'
 import {
   readClipboardImagePngBase64,
+  readClipboardImageThumbnail,
   saveClipboardImageAsTempFileInRuntime,
   writeWebClipboardText
 } from './web-clipboard-api'
@@ -60,6 +61,16 @@ export function createWebUiApi(): NonNullable<Partial<PreloadApi>['ui']> {
       } catch {
         // Why: unpaired/offline web clients still need local UI persistence.
       }
+    },
+    // Why a separate entry point: set must stay best-effort for its many fire-and-forget
+    // callers, but the diff writer must NOT fold a patch the host never received into its
+    // baseline — that write would silently never be retried (STA-5781).
+    setWithAck: async (updates) => {
+      const next = mergeWebUIState(readLocalWebUIState(), updates)
+      writeJson(UI_STORAGE_KEY, next)
+      zoomLevel = next.uiZoomLevel
+      const hostUpdates = omitPairingLocalUiFields(updates)
+      await callRuntimeResult('ui.set', hostUpdates, 15_000)
     },
     recordFeatureInteraction: async (id: FeatureInteractionId) => {
       const current = readLocalWebUIState()
@@ -121,6 +132,7 @@ export function createWebUiApi(): NonNullable<Partial<PreloadApi>['ui']> {
       }
       return saveClipboardImageAsTempFileInRuntime(contentBase64, args)
     },
+    readClipboardImageThumbnail: () => readClipboardImageThumbnail().catch(() => null),
     writeClipboardText: writeWebClipboardText,
     writeTerminalClipboardText: writeWebClipboardText,
     writeSelectionClipboardText: () =>
@@ -147,6 +159,9 @@ export function createWebUiApi(): NonNullable<Partial<PreloadApi>['ui']> {
     consumePendingOpenSettings: () => Promise.resolve(false),
     onOpenSkillShare: () => noopUnsubscribe,
     consumePendingSkillShare: () => Promise.resolve(null),
+    // Why: the web client has no OS shell handing it files, so there is never a queued open.
+    onOpenMarkdownFiles: () => noopUnsubscribe,
+    consumePendingMarkdownFileOpens: () => Promise.resolve([]),
     onOpenSetupGuide: () => noopUnsubscribe,
     onOpenFeatureTour: () => noopUnsubscribe,
     onOpenCrashReport: () => noopUnsubscribe,

@@ -1,0 +1,366 @@
+---
+title: Orca CLI reference
+description: Commands, selectors, and agent-friendly patterns for driving Orca from a shell.
+---
+
+import { Callout } from '@/components/docs/prose'
+
+The `orca` CLI talks to a running Orca runtime. Use it when a shell script or agent needs to inspect worktrees, launch terminals, open files, automate the built-in browser, or report progress back into Orca.
+
+## Verify the runtime
+
+Register the CLI under [Settings → General → Orca CLI](/docs/settings), then check that it can reach Orca.
+
+<Callout title="On Linux the command is orca-ide">
+  GNOME Orca — the screen reader that ships with most GNOME desktops — already owns `/usr/bin/orca`,
+  so Orca's Linux CLI installs as `orca-ide`. Do not check for it with `command -v orca`: that
+  succeeds on a GNOME desktop and resolves to the screen reader, not to Orca. This page writes
+  `orca` throughout — read it as `orca-ide` on Linux. See [Install → Linux](/docs/install#linux).
+</Callout>
+
+On macOS and Windows:
+
+```bash
+command -v orca
+orca status --json
+```
+
+On Linux:
+
+```bash
+command -v orca-ide
+orca-ide status --json
+```
+
+If Orca is not already running:
+
+```bash
+orca open --json
+orca status --json
+```
+
+Use `--json` when another tool will parse the result. Human-readable output is for quick terminal checks.
+
+## Selectors
+
+Most commands accept selectors instead of requiring long IDs:
+
+```bash
+orca repo show --repo id:<repoId> --json
+orca worktree show --worktree active --json
+orca worktree show --worktree path:/abs/path/to/worktree --json
+orca worktree show --worktree branch:feature-name --json
+orca worktree show --worktree issue:123 --json
+```
+
+`active` and `current` resolve to the enclosing Orca-managed worktree from the shell's current directory or terminal context. Use explicit selectors in scripts that may run outside the target worktree. For remote runtimes, prefer full server-side selectors such as `id:<repoId>::<absolute-worktree-path>` or `path:<absolute-server-path>` because the local shell's current directory may not exist on the runtime host.
+
+## Choose a host
+
+List every machine the current Orca host can target and the selector for each one:
+
+```bash
+orca host list --json
+```
+
+The result includes this machine, its registered [SSH targets](/docs/ssh), and paired [Remote Orca Servers](/docs/remote-servers). Use `--host local` for this machine, `--host ssh:<target-id>` for an SSH target, and `--environment <server-name>` for a paired server. SSH labels and paired-server names also resolve when they are unique; use the IDs from `host list` when names collide. If you put a machine name on the wrong selector, Orca reports the matching machine and the flag to use instead of returning an empty result.
+
+## Runtime commands
+
+```bash
+orca open --json
+orca status --json
+orca serve --port 6768 --pairing-address 100.64.1.20 --json
+```
+
+`orca serve` starts a runtime server in the foreground without opening the desktop window. Use it for [Remote Orca Servers](/docs/remote-servers) or headless environments, and stop it with `Ctrl-C`.
+
+## Repos
+
+```bash
+orca repo list --json
+orca repo add --path /abs/path/to/repo --json
+orca repo show --repo id:<repoId> --json
+orca repo set-base-ref --repo id:<repoId> --ref origin/main --json
+orca repo search-refs --repo id:<repoId> --query main --limit 10 --json
+```
+
+Set the repo base ref before creating lots of worktrees so new tasks branch from the right place by default.
+
+## Worktrees
+
+```bash
+orca worktree list --repo id:<repoId> --json
+orca worktree ps --json
+orca worktree current --json
+orca worktree show --worktree active --json
+orca worktree create --repo id:<repoId> --name fix-login --json
+orca worktree create --name child-task --agent codex --prompt "Investigate the flaky login test" --json
+orca worktree set --worktree active --comment "reproduced failure; testing token refresh fix" --json
+orca worktree rm --worktree id:<worktreeId> --force --json
+```
+
+When `worktree create` runs from inside an Orca-managed worktree, Orca records the new worktree as a child when it can infer the relationship. Pass `--parent-worktree active` to be explicit, or `--no-parent` when the new work is independent.
+
+Agent startup flags:
+
+```bash
+orca worktree create --name review-api --agent claude --setup run --json
+orca worktree create --name quick-check --agent codex --prompt "Summarize the diff" --setup skip --json
+orca worktree create --name hidden-setup --setup inherit --json
+```
+
+`--agent` launches the selected agent in the first terminal. `--prompt` sends initial work to that agent. `--setup run|skip|inherit` controls repo setup hooks; `inherit` follows the repo policy.
+
+## Terminals
+
+```bash
+orca terminal list --worktree active --json
+orca terminal show --terminal <handle> --json
+orca terminal read --terminal <handle> --json
+orca terminal read --terminal <handle> --screen --json
+orca terminal read --terminal <handle> --cursor <cursor> --limit 1000 --json
+orca terminal send --terminal <handle> --text "continue" --enter --json
+orca terminal wait --terminal <handle> --for tui-idle --timeout-ms 300000 --json
+orca terminal create --worktree active --title "tests" --command "npm test" --json
+orca terminal split --terminal <handle> --direction horizontal --command "npm run dev" --json
+orca terminal rename --terminal <handle> --title "runner" --json
+orca terminal switch --terminal <handle> --json
+orca terminal close --terminal <handle> --json
+orca terminal close --worktree active --all --json
+```
+
+Omit `--terminal` to target the active terminal in the current worktree. Read before sending when you are not sure what the terminal is waiting for.
+
+Close stops the process as part of removing the terminal. Use `--terminal <handle>` for one
+terminal, or `--worktree <selector> --all` to durably close every terminal in exactly that
+workspace, including its saved layouts and agent-resume records. Use workspace Sleep when those
+terminals should resume later. If the execution host cannot confirm that every PTY stopped, bulk
+close returns a failing `unverifiable` result rather than claiming the processes exited.
+`terminal stop` remains only for compatibility with older tooling.
+
+<Callout title="Terminal handles">
+  Terminal handles are runtime-scoped. If Orca restarts or a command reports a stale terminal
+  handle, run `orca terminal list --json` and reacquire the handle.
+</Callout>
+
+`terminal list` reports each terminal's `executionHostId` when Orca can verify it, plus a result-level `hostScope` with covered and omitted host IDs. Treat a missing host identity or scope as **unverifiable**, not local. A missing terminal is evidence that it exited only when its execution host is listed in `hostScope.hostIds`.
+
+By default, `terminal read` returns the accumulated output stream with terminal escapes stripped. Programs that redraw lines can therefore appear as stacked fragments. Use `--screen` when you need the currently rendered frame; the response's `source` identifies `stream`, `screen`, or `screen-unavailable`. Screen reads have no history to page, so `--screen` and `--cursor` are mutually exclusive.
+
+For long output, use cursor reads. Save `nextCursor` from one stream read, then pass it back with `--cursor` to fetch only new output.
+
+## Files
+
+```bash
+orca file open src/App.tsx --worktree active --json
+orca file diff src/App.tsx --staged --worktree active --json
+orca file open-changed --mode both --worktree active --json
+```
+
+Paths are relative to the selected worktree. `open-changed` reads git status and opens changed files in edit, diff, or both modes.
+
+## Built-in browser
+
+Browser commands control Orca's embedded browser tab for the selected worktree. They do not control Chrome, Safari, or the Orca desktop UI.
+
+Use a snapshot -> act -> snapshot loop:
+
+```bash
+orca goto --url http://localhost:3000 --worktree active --json
+orca snapshot --worktree active --json
+orca click --element @e3 --worktree active --json
+orca fill --element @e1 --value "user@example.com" --worktree active --json
+orca wait --text "Welcome" --worktree active --json
+orca screenshot --worktree active --json
+```
+
+Refs such as `@e3` come from `snapshot`. Re-snapshot after navigation, tab switches, clicks that change the page, and any stale-ref error.
+
+Tab and capture commands:
+
+```bash
+orca tab list --worktree active --json
+orca tab create --url http://localhost:3000 --worktree active --json
+orca tab switch --index 1 --worktree active --json
+orca capture start --worktree active --json
+orca console --limit 50 --worktree active --json
+orca network --limit 50 --worktree active --json
+orca full-screenshot --worktree active --json
+orca pdf --worktree active --json
+```
+
+Use `orca exec --command "<agent-browser command>" --json` only for browser actions that do not have a typed Orca command yet.
+
+Browser device emulation:
+
+```bash
+orca set device --name "iPhone 12" --worktree active --json
+orca screenshot --worktree active --json
+```
+
+## Desktop computer use
+
+Use `orca computer` for native desktop apps outside the built-in browser:
+
+```bash
+orca computer permissions --json
+orca computer list-apps --json
+orca computer get-app-state --app com.apple.Safari --json
+orca computer click --app com.apple.Safari --element-index 12 --json
+orca computer paste-text --app com.apple.Safari --text "hello" --json
+```
+
+See [Computer use](/docs/cli/computer-use) for the full workflow and permission setup.
+
+## Mobile emulator
+
+The mobile emulator commands control iOS Simulator devices through Orca's worktree-scoped bridge. Use them instead of raw `serve-sim` or `simctl` when an agent is operating from inside Orca, so lifecycle and active-device state stay attached to the current worktree.
+
+```bash
+orca emulator list --worktree active --json
+orca emulator attach "<device-name-or-udid>" --worktree active --json
+orca emulator tap 0.5 0.7 --worktree active --json
+orca emulator type "hello" --worktree active --json
+orca emulator gesture '[{"type":"begin","x":0.5,"y":0.8},{"type":"move","x":0.5,"y":0.4},{"type":"end","x":0.5,"y":0.2}]' --worktree active --json
+orca emulator button home --worktree active --json
+orca emulator rotate landscape_left --worktree active --json
+orca emulator exec --command "tap 0.5 0.7" --worktree active --json
+orca emulator kill --worktree active --json
+orca emulator shutdown --worktree active --json
+```
+
+Coordinates are normalized from `0` to `1`. Prefer `tap` for single taps, and use `gesture` for drags or multi-step touch input. Pass `--device <udid-or-name>` or `--emulator <id>` when a script must target a specific simulator instead of the worktree's active emulator.
+
+## Linear
+
+The `orca linear` surface is what agents use via the `orca-linear` skill (legacy install name `linear-tickets` still works). Prefer `--json`. Linked worktrees resolve with `--current`.
+
+### Read
+
+```bash
+orca linear issue --current --full --json
+orca linear issue ENG-123 --comments --children --relations --activity --json
+orca linear search "auth bug" --workspace all --json
+orca linear list --filter assigned --limit 10 --json
+orca linear list-issues --team ENG --state started --assignee me --json
+orca linear list-issues --query auth --updated-at -P7D --cursor <cursor> --workspace <id> --json
+orca linear team list --json
+orca linear team states --team ENG --json
+orca linear team labels --team ENG --json
+orca linear project list --query launch --json
+```
+
+`--full` expands comments, children, attachments, relations, and activity. Section flags (`--comments`, `--children`, `--attachments`, `--relations`, `--activity`) work individually.
+
+### MCP-style write
+
+```bash
+# Create or update (omit id/--current to create; requires --team and --title on create)
+orca linear save-issue --team ENG --title "Fix auth" --priority high --json
+orca linear save-issue ENG-123 --state "In Progress" --assignee me --json
+orca linear save-issue --current --project null --due-date null --json
+
+orca linear relation add ENG-1 --related ENG-2 --type blocks --json
+orca linear relation remove ENG-1 --related ENG-2 --type related --json
+```
+
+`save-issue` labels **replace** the full label set (Linear MCP `save_issue` semantics). Literal `null` clears assignee, estimate, due date, project, or parent.
+
+### Field helpers (still valid)
+
+```bash
+orca linear status set --current --to "In Progress" --json
+orca linear assignee set --current --me --json
+orca linear priority set ENG-123 --to high --json
+orca linear estimate set --current --to 3 --json
+orca linear due-date set --current --to 2026-08-01 --json
+orca linear label add --current --label backend --json
+orca linear comment add --current --body "Investigating regression" --json
+orca linear attach --current --url https://example.com/repro --title "Repro" --json
+orca linear create --title "Flaky login test" --team ENG --priority high --json
+```
+
+Run `orca linear --help` or `orca skills get orca-linear` for the version-matched list. Pass an explicit issue id (e.g. `ENG-123`) when a script may run outside an Orca-linked worktree.
+
+## Skills (local, no runtime required)
+
+List bundled guides, print a version-matched guide, or install/update hybrid skill packages without the desktop Settings UI:
+
+```bash
+orca skills list
+orca skills get orca-cli
+orca skills get orchestration --full
+orca skills install --skill orca-cli --skill orchestration
+orca skills install --all --dry-run
+orca skills update --all
+```
+
+`install` / `update` shell out to the same `npx skills` commands Settings uses. They do not contact the Orca runtime. See [Orca skills](/docs/cli/skills#keep-skills-up-to-date).
+
+## Account (host-local runtime)
+
+On a headless host running Orca (`orca serve` or the desktop app), add managed Claude/Codex accounts when the remote client cannot use **Add account** (remote runtime scope disables that button):
+
+```bash
+orca account list
+orca account add                 # Claude by default
+orca account add --agent codex
+```
+
+`account add` runs `claude login` / `codex login` in **this** terminal on the host, then registers the captured credentials with the local runtime. Codex uses device authorization so the browser can finish on another machine. Run these on the machine that owns the accounts — not through a client-only remote session.
+
+## Artifacts
+
+Publish HTML or Markdown through the signed-in Orca account. Viewing a public link does not require sign-in; create/list/update/delete do. **Publishing is off by default** — a human must enable **Settings → Artifacts → Allow publishing public artifact links** on the device. There is no CLI flag that grants the gate. `list`, `unshare`, and `delete` stay available so you can audit or revoke links after turning publishing off.
+
+```bash
+orca artifacts share ./report.html --json
+orca artifacts share ./notes.md --json
+orca artifacts update ./notes.md --json
+orca artifacts unshare ./notes.md --json
+orca artifacts list --json
+orca artifacts list --cursor <cursor> --json
+orca artifacts delete <id> --json
+```
+
+- Accepted files: `.html`, `.htm`, `.md`, `.markdown`.
+- `share` stores the edit token in the active Orca profile and does not print it. `update` / `unshare` resolve by the same local path and profile that originally shared the file.
+- `list` is paged (`nextCursor` → `--cursor`). `delete` takes the artifact id from `list` and does not need the original file.
+- Relative HTML assets are not uploaded — share self-contained HTML or absolute asset URLs.
+- Denied publish/update fails with `artifact_sharing_disabled`; fix Settings instead of retrying.
+- Desktop: open a local HTML or Markdown file and use **Share as artifact**, or manage links from the sidebar **Artifacts** page.
+
+## Automations, environments, and hooks
+
+Scheduled prompts:
+
+```bash
+orca automations list --json
+orca automations create --name "Daily review" --trigger daily --time 09:00 --prompt "Review open changes" --provider codex --repo id:<repoId> --disabled --json
+orca automations run <automationId> --json
+```
+
+Remote runtime environments:
+
+```bash
+orca environment add --name work-laptop --pairing-code "orca://pair?code=..." --json
+orca environment list --json
+orca environment rm --environment <selector> --json
+```
+
+Agent status hooks:
+
+```bash
+orca agent hooks status --json
+orca agent hooks on --json
+orca agent hooks off --json
+```
+
+## Agent habits
+
+- Prefer `--json` for automation and agent calls.
+- Prefer selectors over parsing UI labels.
+- Read terminal state before sending input unless the next input is obvious.
+- Use worktree comments for progress checkpoints. See [Worktree checkpoints](/docs/cli/worktree-checkpoints).
+- Use [Orchestration](/docs/cli/orchestration) for tracked multi-agent dispatches instead of ad hoc terminal prompts.

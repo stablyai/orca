@@ -83,25 +83,24 @@ export function useRepositorySourceControlAiGlobalUx({
   const lastSyncedRepoIdRef = useRef(repoId)
   const pendingWritesRef = useRef(0)
 
-  const queueRef = useRef(
-    createRepoAiPersistQueue({
-      getRepoId: () => repoIdRef.current,
-      getPersisted: () => persistedRef.current,
-      setPersisted: (value) => {
-        persistedRef.current = value
-        if (mountedRef.current) {
-          setBaselineRepoAiRef.current(value)
-        }
-      },
-      updateRepo: (id, updates) => updateRepoRef.current(id, updates),
-      isMounted: () => mountedRef.current,
-      onError: (message) => {
-        if (mountedRef.current) {
-          setSaveError(message)
-        }
+  const queueRef = useRef<ReturnType<typeof createRepoAiPersistQueue>>(undefined!)
+  queueRef.current ??= createRepoAiPersistQueue({
+    getRepoId: () => repoIdRef.current,
+    getPersisted: () => persistedRef.current,
+    setPersisted: (value) => {
+      persistedRef.current = value
+      if (mountedRef.current) {
+        setBaselineRepoAiRef.current(value)
       }
-    })
-  )
+    },
+    updateRepo: (id, updates) => updateRepoRef.current(id, updates),
+    isMounted: () => mountedRef.current,
+    onError: (message) => {
+      if (mountedRef.current) {
+        setSaveError(message)
+      }
+    }
+  })
 
   useEffect(() => {
     const repoChanged = lastSyncedRepoIdRef.current !== repoId

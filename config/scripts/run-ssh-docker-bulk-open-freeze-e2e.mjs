@@ -1,18 +1,17 @@
 import { spawnSync } from 'node:child_process'
+import { resolvePnpmCliInvocation } from './pnpm-cli-invocation.mjs'
 
 const extraArgs = process.argv.slice(2)
-const pnpmEntry = process.env.npm_execpath
-if (!pnpmEntry) {
-  throw new Error('npm_execpath is required; run this harness through pnpm')
-}
+const { command: pnpm, prefixArgs: pnpmPrefix, shell } = resolvePnpmCliInvocation()
 const env = {
   ...process.env,
   ORCA_E2E_SSH_DOCKER: '1'
 }
 
-const runtime = spawnSync(process.execPath, [pnpmEntry, 'run', 'ensure:electron-runtime'], {
+const runtime = spawnSync(pnpm, [...pnpmPrefix, 'run', 'ensure:electron-runtime'], {
   stdio: 'inherit',
-  env
+  env,
+  shell
 })
 
 if (runtime.status !== 0) {
@@ -20,9 +19,9 @@ if (runtime.status !== 0) {
 }
 
 const result = spawnSync(
-  process.execPath,
+  pnpm,
   [
-    pnpmEntry,
+    ...pnpmPrefix,
     'exec',
     'playwright',
     'test',
@@ -36,7 +35,8 @@ const result = spawnSync(
   ],
   {
     stdio: 'inherit',
-    env
+    env,
+    shell
   }
 )
 

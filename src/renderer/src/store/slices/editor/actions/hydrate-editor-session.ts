@@ -7,7 +7,7 @@ import { folderWorkspaceKey } from '../../../../../../shared/workspace-scope'
 import type { WorkspaceVisibleTabType } from '../../../../../../shared/tab-types'
 import type { OpenFile } from '../types/open-file'
 import { buildValidWorktreeIdsForSessionHydration } from '../../degraded-repo-worktree-validity'
-import { buildOwnedEditorFileId } from '../file-ids/editor-file-ids'
+import { buildOwnedEditorFileId, isSameEditorOwner } from '../file-ids/editor-file-ids'
 import {
   addEditorFileIdMigration,
   migrateEditorFileId,
@@ -49,6 +49,16 @@ export function createHydrateEditorSession(
             continue
           }
           for (const pf of files) {
+            // Split tabs share one OpenFile; repeated records for the same owner are corruption.
+            if (
+              legacyHydratedOpenFiles.some(
+                (file) =>
+                  file.filePath === pf.filePath &&
+                  isSameEditorOwner(file, worktreeId, pf.runtimeEnvironmentId)
+              )
+            ) {
+              continue
+            }
             const legacyId = resolveLegacyHydratedEditorFileId(
               legacyHydratedOpenFiles,
               pf,

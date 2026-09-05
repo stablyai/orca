@@ -6,6 +6,9 @@ import {
   findJiraCreateAllowedValue,
   getJiraCreateAllowedValueLabel,
   getJiraCreateOptionPayload,
+  getJiraUserCreateFieldKeys,
+  isJiraScalarUserCreateField,
+  isJiraUserCreateField,
   isVisibleJiraCreateField
 } from './task-page-jira-create-fields'
 import type { JiraCreateField } from '../../../shared/jira-types'
@@ -32,6 +35,54 @@ describe('isVisibleJiraCreateField', () => {
       expect(isVisibleJiraCreateField(field({ key, required }))).toBe(expected)
     })
   }
+})
+
+describe('isJiraUserCreateField', () => {
+  it('matches user pickers, which carry no allowedValues to detect them by', () => {
+    expect(isJiraUserCreateField(field({ key: 'reporter', schema: { type: 'user' } }))).toBe(true)
+    expect(isJiraUserCreateField(field({ schema: { type: 'array', items: 'user' } }))).toBe(true)
+  })
+
+  it('ignores non-user fields', () => {
+    expect(isJiraUserCreateField(field({ schema: { type: 'string' } }))).toBe(false)
+    expect(isJiraUserCreateField(field({ schema: { type: 'array', items: 'option' } }))).toBe(false)
+    expect(isJiraUserCreateField(field())).toBe(false)
+  })
+})
+
+describe('isJiraScalarUserCreateField', () => {
+  it('matches single-user fields the picker can hold', () => {
+    expect(isJiraScalarUserCreateField(field({ key: 'reporter', schema: { type: 'user' } }))).toBe(
+      true
+    )
+  })
+
+  it('rejects array-of-user, which the single-value picker would collapse to one member', () => {
+    expect(isJiraScalarUserCreateField(field({ schema: { type: 'array', items: 'user' } }))).toBe(
+      false
+    )
+  })
+
+  it('ignores non-user fields', () => {
+    expect(isJiraScalarUserCreateField(field({ schema: { type: 'string' } }))).toBe(false)
+    expect(isJiraScalarUserCreateField(field())).toBe(false)
+  })
+})
+
+describe('getJiraUserCreateFieldKeys', () => {
+  it('collects only the user-typed keys for the host to shape', () => {
+    expect(
+      getJiraUserCreateFieldKeys([
+        field({ key: 'reporter', schema: { type: 'user' } }),
+        field({ key: 'customfield_1', schema: { type: 'string' } }),
+        field({ key: 'customfield_2', schema: { type: 'array', items: 'user' } })
+      ])
+    ).toEqual(['reporter', 'customfield_2'])
+  })
+
+  it('returns an empty list when nothing is user-typed', () => {
+    expect(getJiraUserCreateFieldKeys([field()])).toEqual([])
+  })
 })
 
 describe('getJiraCreateAllowedValueLabel', () => {

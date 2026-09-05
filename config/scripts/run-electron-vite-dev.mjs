@@ -1,7 +1,6 @@
 import { execFileSync, spawn } from 'node:child_process'
 import { createHash } from 'node:crypto'
 import {
-  cpSync,
   existsSync,
   lstatSync,
   mkdirSync,
@@ -16,8 +15,15 @@ import {
 import net from 'node:net'
 import { createRequire } from 'node:module'
 import path from 'node:path'
+
 import { prepareDevCliTerminalWrappers } from './dev-cli-terminal-wrapper.mjs'
-import { isDevBundleInUse, selectStaleDevBundleDirs } from './dev-electron-bundle-cache.mjs'
+import {
+  DEV_BUNDLE_MARKER_FILENAME,
+  getDevBundleProcessTable,
+  isDevBundleInUse,
+  selectStaleDevBundleDirs
+} from './dev-electron-bundle-cache.mjs'
+import { copyPrivateTree } from './space-sharing-copy.mjs'
 import {
   DEV_BUNDLE_ID,
   getDevBundlePlistPatches,
@@ -116,23 +122,6 @@ function sanitizeMacAppBundleName(value) {
   )
 }
 
-function getDevBundleProcessTable() {
-  // Not pgrep: macOS pgrep has no -a (a Linux procps extension) and silently prints bare PIDs,
-  // which reads as "nothing is running" and deletes a live bundle. -ww keeps the command column
-  // from being truncated. The raw text is searched directly; see dev-electron-bundle-cache.mjs
-  // for why it is deliberately not parsed into paths.
-  try {
-    return execFileSync('/bin/ps', ['-Awwo', 'command='], {
-      encoding: 'utf8',
-      stdio: ['ignore', 'pipe', 'ignore'],
-      timeout: 5000
-    })
-  } catch {
-    // Treating a failure as "nothing live" would risk deleting a running bundle, so skip pruning.
-    return null
-  }
-}
-
 function pruneStaleDevBundles(distDir) {
   const root = path.dirname(distDir)
   let bundles
@@ -143,7 +132,7 @@ function pruneStaleDevBundles(distDir) {
         const dir = path.join(root, entry.name)
         return {
           dir,
-          hasMarker: existsSync(path.join(dir, 'orca-dev-electron-app.json')),
+          hasMarker: existsSync(path.join(dir, DEV_BUNDLE_MARKER_FILENAME)),
           mtimeMs: getMtimeMs(dir)
         }
       })
@@ -203,7 +192,7 @@ function prepareMacDevElectronApp() {
   // and it sits outside the code signature, so varying it does not disturb the cdhash.
   const appBundleName = `${sanitizeMacAppBundleName(title)}.app`
   const appPath = path.join(distDir, appBundleName)
-  const markerPath = path.join(distDir, 'orca-dev-electron-app.json')
+  const markerPath = path.join(distDir, DEV_BUNDLE_MARKER_FILENAME)
   // Why: one stable id for every dev instance. Per-instance ids registered a
   // new macOS Notification Settings entry for each branch × Electron version,
   // piling up "Orca: <branch>" rows forever and breaking the notification
@@ -298,9 +287,9 @@ function prepareMacDevElectronApp() {
 
   rmSync(distDir, { recursive: true, force: true })
   mkdirSync(distDir, { recursive: true })
-  // Why: Electron.framework uses relative symlinks for its bundle resources;
-  // resolving them to pnpm-store absolutes breaks Chromium's bundle lookup.
-  cpSync(sourceAppPath, appPath, { recursive: true, verbatimSymlinks: true })
+  // Why clone-first: this ~280MB copy is made per branch title x Electron version, and only the
+  // plist/helper/codesign bytes patched below ever diverge from the source.
+  copyPrivateTree(sourceAppPath, appPath)
   restoreElectronFrameworkSymlinks(appPath)
 
   const plistPath = path.join(appPath, 'Contents', 'Info.plist')
@@ -623,6 +612,11 @@ const userPassedPort = forwardedRaw.some(
 const isHelpOrVersion = forwardedRaw.some((a) => a === '--help' || a === '-h' || a === '--version')
 if (!isHelpOrVersion && process.env.ORCA_DEV_INSTANCE_LABEL) {
   console.error(`[orca-dev] Instance: ${process.env.ORCA_DEV_INSTANCE_LABEL}`)
+}
+// Why: automation launches this app while someone is working; announce that the
+// window will come up without taking the foreground so the mode is visible in logs.
+if (!isHelpOrVersion && process.env.ORCA_BACKGROUND_LAUNCH === '1') {
+  console.error('[orca-dev] Background launch: window shows without stealing focus')
 }
 let forwardedExtras = []
 if (!userPassedPort && !isHelpOrVersion) {

@@ -4,11 +4,17 @@ import { parse as parseJsonc } from 'jsonc-parser'
 import { describe, expect, it } from 'vitest'
 import { parse as parseYaml } from 'yaml'
 import {
+  hasNativeImeSourceChange,
   hasSshSourceChange,
+  NATIVE_IME_SOURCE_ROUTE_IDS,
   PR_E2E_SOURCE_ROUTES,
   selectPrE2eSpecs,
   SSH_SOURCE_ROUTE_IDS
 } from './pr-e2e-source-routing.mjs'
+import {
+  EXPECTED_NATIVE_IME_TESTS,
+  IME_ENGAGEMENT_RECEIPT_ENV
+} from './terminal-ime-engagement-receipt.mjs'
 
 const projectDir = resolve(import.meta.dirname, '../..')
 const prWorkflow = parseYaml(readFileSync(join(projectDir, '.github/workflows/pr.yml'), 'utf8'))
@@ -19,6 +25,17 @@ const reliabilityManifest = parseJsonc(
 const playwrightConfig = readFileSync(join(projectDir, 'tests/playwright.config.ts'), 'utf8')
 const sshDockerRunner = readFileSync(
   join(projectDir, 'config/scripts/run-ssh-docker-terminal-parking-e2e.mjs'),
+  'utf8'
+)
+const nativeImeWorkflow = parseYaml(
+  readFileSync(join(projectDir, '.github/workflows/terminal-ime-e2e.yml'), 'utf8')
+)
+const nativeImeRunner = readFileSync(
+  join(projectDir, 'config/scripts/run-terminal-ibus-hangul-e2e.mjs'),
+  'utf8'
+)
+const nativeImeSpec = readFileSync(
+  join(projectDir, 'tests/e2e/terminal-ibus-hangul-native.spec.ts'),
   'utf8'
 )
 
@@ -97,6 +114,7 @@ describe('PR E2E gate contract', () => {
     expect(prWorkflow.jobs['e2e-paths'].outputs.test_files).toBe(
       '${{ steps.filter.outputs.test_files }}'
     )
+    expect(prWorkflow.jobs.e2e.with.ref).toBe('${{ github.event.pull_request.head.sha }}')
     expect(prWorkflow.jobs.e2e.with.test_files).toBe('${{ needs.e2e-paths.outputs.test_files }}')
   })
 
@@ -138,6 +156,12 @@ describe('PR E2E gate contract', () => {
     expect(e2eWorkflow.jobs.e2e.if).toBe("inputs.test_files == ''")
     expect(e2eWorkflow.jobs['changed-e2e'].if).toBe("inputs.test_files != ''")
     expect(e2eWorkflow.jobs['changed-e2e'].strategy).toBeUndefined()
+    expect(e2eWorkflow.jobs.e2e.strategy.matrix.include).toEqual(
+      Array.from({ length: 14 }, (_, index) => ({
+        shard: `${index + 1}/14`,
+        shard_name: `${index + 1}-of-14`
+      }))
+    )
     const changedRun = e2eWorkflow.jobs['changed-e2e'].steps.find(
       (step) => step.name === 'Run changed E2E specs'
     )
@@ -185,7 +209,10 @@ describe('PR E2E gate contract', () => {
     }
   })
 
-  it('keeps dedicated E2E workflows out of pull request CI', () => {
+  it('keeps dedicated E2E workflows from self-triggering on pull requests', () => {
+    // Why this still holds for terminal-ime-e2e.yml now that pr.yml runs it: pr.yml reaches it
+    // through workflow_call, behind the path filter. A pull_request trigger here would run a
+    // real ibus session on every PR, which is the cost the filter exists to avoid.
     const dedicatedWorkflows = [
       'golden-e2e-experiment.yml',
       'linux-wayland-gpu-sandbox.yml',
@@ -240,6 +267,7 @@ describe('PR E2E gate contract', () => {
       'tests/e2e/pty-input-write-queue-ssh.spec.ts',
       'tests/e2e/ssh-cold-activation-restore.spec.ts',
       'tests/e2e/ssh-docker-reconnect-pane-restore.spec.ts',
+      'tests/e2e/ssh-docker-transport-drop-recovery.spec.ts',
       'tests/e2e/ssh-port-forward-lifecycle.spec.ts',
       'tests/e2e/ssh-reconnect-tab-destruction.spec.ts',
       'tests/e2e/ssh-startup-exec-readiness.spec.ts',
@@ -288,6 +316,11 @@ describe('PR E2E gate contract', () => {
 
     expect(
       selectPrE2eSpecs(['src/renderer/src/hooks/remote-workspace-session-merge.test.ts'])
+    ).toEqual([])
+    expect(
+      selectPrE2eSpecs([
+        'src/renderer/src/hooks/__tests__/remote-workspace-target-sync-test-harness.ts'
+      ])
     ).toEqual([])
   })
 
@@ -438,6 +471,50 @@ describe('PR E2E gate contract', () => {
       expect(selectPrE2eSpecs([source.replace(/\.tsx?$/, '.test.ts')]), source).toEqual([])
       expect(existsSync(join(projectDir, spec)), spec).toBe(true)
     }
+    const parkedSplitSpec = 'tests/e2e/terminal-parked-cli-split.spec.ts'
+    for (const source of [
+      'src/main/window/attach-main-window-services.ts',
+      'src/preload/api/ui-command-event-api.ts',
+      'src/preload/index.ts',
+      'src/renderer/src/components/terminal-pane/terminal-pane-split-request-routing.ts',
+      'src/renderer/src/components/terminal-pane/use-terminal-pane-lifecycle.ts',
+      'src/renderer/src/components/terminal-pane/use-terminal-tab-cold-parking.ts',
+      'src/renderer/src/hooks/ipc-events/terminal-ui-routing-ipc-bridge.ts'
+    ]) {
+      expect(selectPrE2eSpecs([source]), source).toContain(parkedSplitSpec)
+      expect(selectPrE2eSpecs([source.replace(/\.ts$/, '.test.ts')]), source).not.toContain(
+        parkedSplitSpec
+      )
+    }
+    expect(existsSync(join(projectDir, parkedSplitSpec)), parkedSplitSpec).toBe(true)
+
+    const restartContinuitySpec = 'tests/e2e/paired-remote-terminal-serve-restart-binding.spec.ts'
+    for (const source of [
+      'src/main/daemon/daemon-attach-only-retirement.ts',
+      'src/main/daemon/daemon-pty-applied-size.ts',
+      'src/main/daemon/daemon-pty-session-control.ts',
+      'src/main/daemon/daemon-pty-spawn-result.ts',
+      'src/renderer/src/components/terminal-pane/remote-runtime-pty-transport.ts',
+      'src/renderer/src/components/terminal-pane/terminal-error-accumulation.ts',
+      'src/renderer/src/runtime/web-runtime-session.ts',
+      'src/renderer/src/runtime/web-session-tabs-sync.ts',
+      'src/renderer/src/runtime/web-session-terminal-orphan-recovery.ts',
+      'src/renderer/src/runtime/web-session-terminal-orphan-recovery-adoption.ts',
+      'src/renderer/src/runtime/web-session-terminal-orphan-recovery-surface.ts',
+      'src/renderer/src/runtime/web-session-terminal-orphan-recovery-inventory.ts',
+      'src/renderer/src/runtime/web-session-terminal-orphan-recovery-inventory-validation.ts',
+      'src/renderer/src/runtime/web-session-terminal-orphan-recovery-cache.ts',
+      'src/renderer/src/runtime/web-session-terminal-orphan-recovery-pane.ts',
+      'src/renderer/src/runtime/web-session-terminal-orphan-recovery-queue.ts',
+      'src/renderer/src/runtime/web-session-terminal-orphan-recovery-rpc-lane.ts',
+      'src/renderer/src/runtime/web-session-terminal-orphan-topology.ts'
+    ]) {
+      expect(selectPrE2eSpecs([source]), source).toContain(restartContinuitySpec)
+      expect(selectPrE2eSpecs([source.replace(/\.ts$/, '.test.ts')]), source).not.toContain(
+        restartContinuitySpec
+      )
+    }
+    expect(existsSync(join(projectDir, restartContinuitySpec)), restartContinuitySpec).toBe(true)
     const quickCommandSpec = 'tests/e2e/terminal-quick-command-pre-bind-recovery.spec.ts'
     for (const source of [
       'src/renderer/src/components/terminal-pane/pty-connection.ts',
@@ -478,6 +555,147 @@ describe('PR E2E gate contract', () => {
     ).not.toContain('tests/e2e/paired-remote-terminal-materialization-reconnect.spec.ts')
     expect(selectPrE2eSpecs(['src/main/ipc/pty.ts'])).not.toContain(
       'tests/e2e/paired-remote-terminal-materialization-reconnect.spec.ts'
+    )
+  })
+
+  it('puts the real-IME lane on the PR gate behind the IME source filter', () => {
+    // Why a whole lane and not a spec in changed-e2e: the harness is an ibus-daemon, an xfwm4
+    // session, and an X11 display; the generic lane has none of them and the spec would skip.
+    expect(nativeImeWorkflow.on.workflow_call).toBeDefined()
+    expect(prWorkflow.jobs.terminal_ime_native.uses).toBe(
+      './.github/workflows/terminal-ime-e2e.yml'
+    )
+    expect(prWorkflow.jobs.terminal_ime_native.needs).toBe('e2e-paths')
+    expect(prWorkflow.jobs.terminal_ime_native.if).toBe(
+      "needs.e2e-paths.outputs.native_ime_source_changed == 'true'"
+    )
+    expect(prWorkflow.jobs['e2e-paths'].outputs.native_ime_source_changed).toBe(
+      '${{ steps.filter.outputs.native_ime_source_changed }}'
+    )
+    expect(filterStep.run).toContain('pr-e2e-source-routing.mjs --native-ime-source')
+    expect(filterStep.run).toContain('native_ime_source_changed=$NATIVE_IME_SOURCE_CHANGED')
+
+    // Why: continue-on-error would report the lane green and hide every failure it exists to
+    // surface. Advisory here means "absent from verify.needs", not "always passes".
+    expect(prWorkflow.jobs.terminal_ime_native['continue-on-error']).toBeUndefined()
+    expect(prWorkflow.jobs.verify.needs).not.toContain('terminal_ime_native')
+    expect(verifyStep.env.TERMINAL_IME_NATIVE).toBeUndefined()
+
+    for (const id of NATIVE_IME_SOURCE_ROUTE_IDS) {
+      expect(
+        PR_E2E_SOURCE_ROUTES.map((route) => route.id),
+        id
+      ).toContain(id)
+    }
+  })
+
+  it('triggers the real-IME lane from every surface an input method can judge', () => {
+    for (const file of [
+      'src/renderer/src/components/terminal-pane/terminal-ime-composition-route.ts',
+      'src/renderer/src/components/terminal-pane/terminal-ime-native-text-forwarder.ts',
+      'src/renderer/src/components/terminal-pane/terminal-ios-hangul-preedit.ts',
+      'src/renderer/src/components/terminal-pane/xterm-bypass-policy.ts',
+      'src/renderer/src/lib/pane-manager/terminal-ime-anchor.ts',
+      'src/shared/terminal-unicode-provider.ts',
+      // The xterm fork owns the helper textarea the IME attaches to; no file here says "ime".
+      'config/patches/@xterm__xterm@6.1.0-beta.287.patch',
+      'config/patches/xterm-src/browser/Terminal.ts',
+      // The harness is source too: breaking the runner or a probe is how the lane goes blind.
+      'config/scripts/run-terminal-ibus-hangul-e2e.mjs',
+      'config/scripts/terminal-ime-engagement-receipt.mjs',
+      'tests/e2e/terminal-ime-boundary-probe.ts',
+      'tests/e2e/terminal-ime-byte-reader.ts',
+      'tests/e2e/terminal-ime-engagement-receipt.ts',
+      'tests/e2e/terminal-ibus-hangul-native.spec.ts'
+    ]) {
+      expect(hasNativeImeSourceChange([file]), file).toBe(true)
+    }
+
+    // Why: a real ibus session on a Git or tab-bar edit is the cost the filter exists to avoid,
+    // and a unit test beside the source must not summon a three-and-a-half-minute lane.
+    for (const file of [
+      'src/main/git/git-status.ts',
+      'src/renderer/src/components/tab-bar/BrowserTab.tsx',
+      'src/main/terminal/pty-manager.ts',
+      'docs/STYLEGUIDE.md',
+      'src/renderer/src/components/terminal-pane/terminal-ime-composition-route.test.ts',
+      'src/renderer/src/lib/pane-manager/terminal-ime-anchor.test.ts'
+    ]) {
+      expect(hasNativeImeSourceChange([file]), file).toBe(false)
+    }
+  })
+
+  it('gives every input-method-gated spec a lane that runs it, or an honest exemption', () => {
+    // Why this shape: a spec gated on a native-IME env var that no runner sets is a skip that
+    // reports as a pass. This repo already carries such specs; the point is that they are named
+    // as gaps rather than counted as coverage.
+    const nativeGateExpression = /ORCA_E2E_NATIVE_(?:IBUS_HANGUL|MACOS_KOREAN)\s*[!=]==\s*['"]1['"]/
+    const nativeGatedSpecs = readdirSync(join(projectDir, 'tests/e2e'))
+      .filter((file) => file.endsWith('.spec.ts'))
+      .map((file) => `tests/e2e/${file}`)
+      .filter((spec) => nativeGateExpression.test(readFileSync(join(projectDir, spec), 'utf8')))
+    expect(nativeGatedSpecs.length).toBeGreaterThan(0)
+
+    // Why exempt: the digit repro needs a nested gnome-shell, which no hosted runner provides
+    // (headless mutter never answers RemoteDesktop.CreateSession); the macOS spec needs a real
+    // macOS input source, and no macOS runner exists on any PR or scheduled lane.
+    const unreachableSpecs = new Set([
+      'tests/e2e/terminal-hangul-terminating-digit-native.spec.ts',
+      'tests/e2e/terminal-macos-2set-korean-native.spec.ts'
+    ])
+    const unclaimed = nativeGatedSpecs.filter(
+      (spec) => !unreachableSpecs.has(spec) && !nativeImeRunner.includes(spec)
+    )
+    expect(
+      unclaimed,
+      `Native-IME-gated specs claimed by no lane runner: ${unclaimed.join(', ')}`
+    ).toEqual([])
+
+    for (const spec of unreachableSpecs) {
+      expect(nativeGatedSpecs, spec).toContain(spec)
+      expect(nativeImeRunner.includes(spec), `${spec} is exempt but still invoked`).toBe(false)
+    }
+  })
+
+  it('requires proof an input method engaged before the lane may report success', () => {
+    // Why this is the assertion that matters: every other check in this file protects a job from
+    // not running. This one protects a job that ran from having exercised nothing.
+    expect(nativeImeRunner).toContain('verifyImeEngagementReceipts')
+    expect(nativeImeRunner).toContain(`[IME_ENGAGEMENT_RECEIPT_ENV]: receiptPath`)
+    expect(nativeImeSpec).toContain('appendImeEngagementReceipt(testInfo.title, trace)')
+
+    // Why: the synthetic CDP step runs first in the same job. Under the default success()
+    // condition its failure skipped the real-IME step, so the half that needs an input method
+    // reported nothing on exactly the changes that broke IME code.
+    const nativeStep = nativeImeWorkflow.jobs['linux-x11'].steps.find(
+      (step) => step.name === 'Run native IBus Hangul exact-byte tests'
+    )
+    expect(nativeStep.if).toBe('!cancelled()')
+
+    // Why a literal comparison: the spec cannot import the .mjs module, so the env var name is
+    // written twice and would otherwise drift into a receipt nobody reads.
+    const specSideReceipt = readFileSync(
+      join(projectDir, 'tests/e2e/terminal-ime-engagement-receipt.ts'),
+      'utf8'
+    )
+    expect(specSideReceipt).toContain(`'${IME_ENGAGEMENT_RECEIPT_ENV}'`)
+
+    // Why pin the titles: the runner requires one receipt per name, so a rename that nobody
+    // mirrored here would fail the lane loudly instead of quietly halving it.
+    for (const title of EXPECTED_NATIVE_IME_TESTS) {
+      expect(nativeImeSpec, title).toContain(title)
+    }
+  })
+
+  it('keeps the native IME spec out of the lane that would silently skip it', () => {
+    const changedRun = e2eWorkflow.jobs['changed-e2e'].steps.find(
+      (step) => step.name === 'Run changed E2E specs'
+    )
+    expect(changedRun.run).toContain('. != "tests/e2e/terminal-ibus-hangul-native.spec.ts"')
+    // Why it still has to be routed: the dedicated lane is selected by the same route, so the
+    // spec appearing in test_files is how a spec-only edit reaches the real-IME lane at all.
+    expect(selectPrE2eSpecs(['src/shared/terminal-unicode-provider.ts'])).toContain(
+      'tests/e2e/terminal-ibus-hangul-native.spec.ts'
     )
   })
 

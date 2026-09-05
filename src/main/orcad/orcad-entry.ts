@@ -190,7 +190,7 @@ async function startOrcadRuntime(
   // Codex-home and Claude-auth preparation are left unset: both are desktop account
   // flows. A launch that needs one fails with its own message rather than silently
   // spawning an unauthenticated agent.
-  registerHeadlessPtyRuntime(runtime, undefined, () => store.getSettings(), undefined, store)
+  await registerHeadlessPtyRuntime(runtime, undefined, () => store.getSettings(), undefined, store)
 
   // Why: same post-registration reconciliation `--serve` performs. Skipping it leaves
   // restored orchestration rows claiming an authority this host never took over.

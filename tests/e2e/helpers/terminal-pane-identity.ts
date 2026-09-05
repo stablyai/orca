@@ -3,6 +3,7 @@ import type { Page } from '@stablyai/playwright-test'
 export type PaneIdentitySnapshot = {
   tabId: string
   activeLeafId: string | null
+  storeActiveLeafId: string | null
   panes: {
     numericPaneId: number
     leafId: string
@@ -100,6 +101,7 @@ export async function readPaneIdentitySnapshot(page: Page): Promise<PaneIdentity
     return {
       tabId,
       activeLeafId: activePane?.leafId ?? null,
+      storeActiveLeafId: store.getState().terminalLayoutsByTabId[tabId]?.activeLeafId ?? null,
       panes: manager.getPanes().map((pane) => ({
         numericPaneId: pane.id,
         leafId: pane.leafId,
