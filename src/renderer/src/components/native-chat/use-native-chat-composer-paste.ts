@@ -120,9 +120,10 @@ export function useNativeChatComposerPaste({
       try {
         // SSH panes save the image on the remote host (SFTP) so the attached
         // path is readable by the remote agent, matching terminal image paste.
-        const tempPath = await window.api.ui.saveClipboardImageAsTempFile(
+        const savedImage = await window.api.ui.saveClipboardImageAsTempFile(
           owner.kind === 'ssh' ? { connectionId: owner.connectionId } : undefined
         )
+        const tempPath = typeof savedImage === 'string' ? savedImage : (savedImage?.path ?? null)
         return tempPath ? { status: 'saved', tempPath } : { status: 'empty' }
       } catch (error) {
         // A failed save must be visible: over SSH it fails whenever the

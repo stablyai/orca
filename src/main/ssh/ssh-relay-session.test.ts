@@ -8,13 +8,19 @@ import {
 import { SSH_RELAY_CONFIGURE_GRACE_TIME_METHOD } from '../../shared/ssh-types'
 import { createMockDeps, mockDeploySuccess } from './ssh-relay-session-test-fixtures'
 
-const { acceptOutputDataMock, muxRequestMock, openConsumerSessionMock, pauseAdapterMock } =
-  vi.hoisted(() => ({
-    acceptOutputDataMock: vi.fn().mockResolvedValue(undefined),
-    muxRequestMock: vi.fn(),
-    openConsumerSessionMock: vi.fn(),
-    pauseAdapterMock: vi.fn()
-  }))
+const {
+  acceptOutputDataMock,
+  filesystemProviderRawTransferMock,
+  muxRequestMock,
+  openConsumerSessionMock,
+  pauseAdapterMock
+} = vi.hoisted(() => ({
+  acceptOutputDataMock: vi.fn().mockResolvedValue(undefined),
+  filesystemProviderRawTransferMock: vi.fn(),
+  muxRequestMock: vi.fn(),
+  openConsumerSessionMock: vi.fn(),
+  pauseAdapterMock: vi.fn()
+}))
 
 vi.mock('./ssh-relay-deploy', () => ({
   deployAndLaunchRelay: vi.fn()
@@ -79,6 +85,9 @@ vi.mock('../providers/ssh-pty-provider', () => ({
 vi.mock('../providers/ssh-filesystem-provider', () => ({
   SshFilesystemProvider: class MockSshFilesystemProvider {
     dispose = vi.fn()
+    constructor(_connectionId: string, _mux: unknown, _createSftp: unknown, rawTransfer: unknown) {
+      filesystemProviderRawTransferMock(rawTransfer)
+    }
   }
 }))
 
@@ -204,6 +213,25 @@ describe('SshRelaySession', () => {
     expect(registerSshPtyProvider).toHaveBeenCalledWith('target-1', expect.anything())
     expect(registerSshFilesystemProvider).toHaveBeenCalledWith('target-1', expect.anything())
     expect(registerSshGitProvider).toHaveBeenCalledWith('target-1', expect.anything())
+  })
+
+  it('forwards private file modes through the relay raw-transfer adapter', async () => {
+    const { mockConn, mockStore, mockPortForward, getMainWindow } = createMockDeps()
+    const writeBuffer = vi.fn().mockResolvedValue(undefined)
+    mockConn.writeBuffer = writeBuffer
+    const session = new SshRelaySession('target-1', getMainWindow, mockStore, mockPortForward)
+
+    await session.establish(mockConn)
+    const rawTransfer = filesystemProviderRawTransferMock.mock.calls[0]?.[0] as {
+      writeBuffer: (path: string, contents: Buffer, options: object) => Promise<void>
+    }
+    const options = { append: false, exclusive: true, mode: 0o600 }
+    await rawTransfer.writeBuffer('/tmp/private.png', Buffer.from('png'), options)
+
+    expect(writeBuffer).toHaveBeenCalledWith('/tmp/private.png', Buffer.from('png'), {
+      hostPlatform: undefined,
+      ...options
+    })
   })
 
   it('continues provider registration when the relay managed-hook request fails', async () => {

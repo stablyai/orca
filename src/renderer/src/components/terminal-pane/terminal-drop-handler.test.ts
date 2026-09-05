@@ -164,6 +164,71 @@ describe('handleTerminalFileDrop', () => {
     expect(mocks.toastDismiss).toHaveBeenCalledWith('toast-1')
   })
 
+  it('routes resolved runtime paths to an open rich-input composer without PTY writes', async () => {
+    mocks.importExternalPathsToRuntime.mockResolvedValue({
+      results: [
+        {
+          sourcePath: '/Users/me/logo.png',
+          status: 'imported',
+          destPath: '/remote/repo/.orca/drops/logo.png',
+          kind: 'file',
+          renamed: false
+        }
+      ]
+    })
+    const sendInput = vi.fn(() => true)
+    const onResolvedPaths = vi.fn(() => true)
+    const pane = { id: 1, leafId: 'leaf-1', terminal: { focus: vi.fn() } }
+    const manager = { getActivePane: () => pane, getPanes: () => [pane] }
+
+    await handleTerminalFileDrop({
+      manager: manager as never,
+      paneTransports: new Map([[1, createTerminalTransport(sendInput)]]) as never,
+      worktreeId: 'wt-1',
+      tabId: 'tab-1',
+      cwd: undefined,
+      data: { paths: ['/Users/me/logo.png'], target: 'terminal' },
+      onResolvedPaths
+    })
+
+    expect(onResolvedPaths).toHaveBeenCalledWith(['/remote/repo/.orca/drops/logo.png'])
+    expect(sendInput).not.toHaveBeenCalled()
+    expect(mocks.recordTerminalUserInputForLeaf).not.toHaveBeenCalled()
+  })
+
+  it('falls back to the captured PTY when rich input closes during path resolution', async () => {
+    mocks.importExternalPathsToRuntime.mockResolvedValue({
+      results: [
+        {
+          sourcePath: '/Users/me/logo.png',
+          status: 'imported',
+          destPath: '/remote/repo/.orca/drops/logo.png',
+          kind: 'file',
+          renamed: false
+        }
+      ]
+    })
+    const sendInput = vi.fn(() => true)
+    const onResolvedPaths = vi.fn(() => false)
+    const pane = { id: 1, leafId: 'leaf-1', terminal: { focus: vi.fn() } }
+    const manager = { getActivePane: () => pane, getPanes: () => [pane] }
+
+    await handleTerminalFileDrop({
+      manager: manager as never,
+      paneTransports: new Map([[1, createTerminalTransport(sendInput)]]) as never,
+      worktreeId: 'wt-1',
+      tabId: 'tab-1',
+      cwd: undefined,
+      data: { paths: ['/Users/me/logo.png'], target: 'terminal' },
+      onResolvedPaths
+    })
+
+    expect(sendInput).toHaveBeenCalledWith(
+      wrapTerminalBracketedPasteText('/remote/repo/.orca/drops/logo.png')
+    )
+    expect(mocks.recordTerminalUserInputForLeaf).toHaveBeenCalledWith('tab-1', 'leaf-1')
+  })
+
   it('does not paste runtime-uploaded paths when the target PTY changed', async () => {
     let ptyId = 'pty-1'
     mocks.importExternalPathsToRuntime.mockImplementation(async () => {

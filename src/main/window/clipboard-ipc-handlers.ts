@@ -9,7 +9,11 @@ import {
 import { spawn } from 'node:child_process'
 import { open, stat } from 'node:fs/promises'
 import type { Store } from '../persistence'
-import { PATH_ACCESS_DENIED_MESSAGE, resolveAuthorizedPath } from '../ipc/filesystem-auth'
+import {
+  authorizeExternalPath,
+  PATH_ACCESS_DENIED_MESSAGE,
+  resolveAuthorizedPath
+} from '../ipc/filesystem-auth'
 import { isENOENT } from '../ipc/filesystem-path-containment'
 import {
   assertClipboardTextWriteWithinLimitWithYield,
@@ -18,7 +22,8 @@ import {
 } from '../../shared/clipboard-text'
 import {
   saveClipboardImageBufferAsTempFile,
-  type SaveClipboardImageAsTempFileArgs
+  type SaveClipboardImageAsTempFileArgs,
+  type SavedClipboardImage
 } from './clipboard-image-temp-file'
 import {
   assertClipboardImageBase64LengthWithinLimit,
@@ -52,21 +57,33 @@ type ClipboardWriteFileRequest = {
 async function saveClipboardImageBufferForTarget(
   buffer: Buffer,
   args?: SaveClipboardImageAsTempFileArgs
-): Promise<string> {
+): Promise<string | SavedClipboardImage> {
   assertClipboardImageByteLengthWithinLimit(buffer.byteLength)
   const runtimeEnvironmentId = args?.runtimeEnvironmentId?.trim()
   // Why (#17679): with a runtime owner, a connectionId names one of the RUNTIME's SSH
   // connections (nested Remote Server -> SSH), not one this process dialed. Looking it up
   // in the local provider registry can only miss, so the runtime must perform the save.
   if (runtimeEnvironmentId) {
-    return saveClipboardImageBufferInRuntime(
+    const targetPath = await saveClipboardImageBufferInRuntime(
       app.getPath('userData'),
       runtimeEnvironmentId,
       buffer,
       args?.connectionId ?? null
     )
+    if (!args?.includeLocalPreview) {
+      return targetPath
+    }
+    const previewSrc = await saveClipboardImageBufferAsTempFile(buffer)
+    authorizeExternalPath(previewSrc)
+    return { path: targetPath, previewSrc }
   }
-  return saveClipboardImageBufferAsTempFile(buffer, args)
+  const tempPath = await saveClipboardImageBufferAsTempFile(buffer, args)
+  if (!args?.connectionId) {
+    // Why: Orca-created clipboard files are safe preview sources even though
+    // the OS temp directory sits outside normal workspace authorization.
+    authorizeExternalPath(tempPath)
+  }
+  return args?.includeLocalPreview ? { path: tempPath, previewSrc: tempPath } : tempPath
 }
 
 export function setTrustedClipboardRendererWebContentsId(webContentsId: number | null): void {
