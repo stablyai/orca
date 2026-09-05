@@ -44,7 +44,10 @@ export function BitbucketIntegrationCard(): React.JSX.Element {
 
   const envManaged = connection?.source === 'environment'
   const storedCredential = connection?.source === 'stored'
-  const account = connection?.account ?? statuses.bitbucketAccount
+  // Data Center sites often expose no account name, so fall back to the site URL
+  // rather than dropping to the anonymous description. `||`, not `??`: an empty
+  // account string is falsy but not nullish and would render a blank name.
+  const account = connection?.account || statuses.bitbucketAccount || statuses.bitbucketBaseUrl
   // Only surface a base URL the user actually overrode; the default is noise.
   const baseUrlOverride =
     connection?.baseUrl && connection.baseUrl !== DEFAULT_API_BASE_URL ? connection.baseUrl : null
@@ -111,7 +114,7 @@ export function BitbucketIntegrationCard(): React.JSX.Element {
               )
           : translate(
               'auto.components.settings.bitbucket.integration.card.description',
-              'Pull requests and build statuses for Bitbucket Cloud.'
+              'Pull requests and build statuses for Bitbucket Cloud or Data Center.'
             )
       }
       checking={status === 'checking'}
@@ -266,7 +269,7 @@ function BitbucketCardNote(props: {
     <p className="text-xs text-muted-foreground">
       {translate(
         'auto.components.settings.bitbucket.integration.card.notConfigured',
-        'Connect a Bitbucket Cloud account with an Atlassian API token or an access token. ORCA_BITBUCKET_* environment variables work too and take precedence.'
+        'Connect a Bitbucket Cloud account with an Atlassian API token or an access token. ORCA_BITBUCKET_* environment variables work too and take precedence. For Bitbucket Data Center, set ORCA_BITBUCKET_SERVER_URL and ORCA_BITBUCKET_SERVER_TOKEN.'
       )}
     </p>
   )

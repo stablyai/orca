@@ -8,7 +8,13 @@ export const preflightApi = {
     git: { installed: boolean }
     gh: { installed: boolean; authenticated: boolean }
     glab?: { installed: boolean; authenticated: boolean }
-    bitbucket?: { configured: boolean; authenticated: boolean; account: string | null }
+    bitbucket?: {
+      configured: boolean
+      authenticated: boolean
+      account: string | null
+      baseUrl: string | null
+      tokenConfigured: boolean
+    }
     azureDevOps?: {
       configured: boolean
       authenticated: boolean

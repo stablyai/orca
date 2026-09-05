@@ -9708,8 +9708,8 @@
             "b79c21bd42": "github",
             "7166b9090c": "GitHub authentication via the gh CLI.",
             "f16e41cc72": "GitHub Integration",
-            "760e2446e0": "Bitbucket Cloud authentication with a saved API token or environment variables.",
-            "af5ae87847": "access token"
+            "af5ae87847": "access token",
+            "b7790a4b9f": "Bitbucket Cloud and Data Center authentication with a saved API token or environment variables."
           }
         },
         "jira": {
@@ -10658,7 +10658,12 @@
                   "statusNotConfigured": "Not configured",
                   "statusAuthFailed": "Auth failed",
                   "statusConfigured": "Configured",
-                  "statusOptionalSetup": "Optional setup"
+                  "statusOptionalSetup": "Optional setup",
+                  "2ec6eeae8a": "Pull requests and build statuses via Bitbucket Cloud or Data Center.",
+                  "347f5be5e5": "For Bitbucket Cloud, set",
+                  "2330a1e7a3": "For Bitbucket Data Center, set",
+                  "18d24502a8": "ORCA_BITBUCKET_SERVER_URL",
+                  "87e9409058": "ORCA_BITBUCKET_SERVER_TOKEN"
                 }
               }
             }
@@ -11722,7 +11727,7 @@
           },
           "integration": {
             "card": {
-              "description": "Pull requests and build statuses for Bitbucket Cloud.",
+              "description": "Pull requests and build statuses for Bitbucket Cloud or Data Center.",
               "edit": "Edit credentials",
               "connect": "Connect",
               "accountUnknown": "Bitbucket Cloud",
@@ -11732,7 +11737,7 @@
               "envManaged": "Configured via environment variables. Unset the ORCA_BITBUCKET_* variables to manage this credential in Orca.",
               "storedAuthFailed": "The saved Bitbucket credential could not authenticate. Edit it, or check that the token still has pull request access.",
               "storedCredential": "Saved in Orca on this machine. ORCA_BITBUCKET_* environment variables take precedence when set.",
-              "notConfigured": "Connect a Bitbucket Cloud account with an Atlassian API token or an access token. ORCA_BITBUCKET_* environment variables work too and take precedence.",
+              "notConfigured": "Connect a Bitbucket Cloud account with an Atlassian API token or an access token. ORCA_BITBUCKET_* environment variables work too and take precedence. For Bitbucket Data Center, set ORCA_BITBUCKET_SERVER_URL and ORCA_BITBUCKET_SERVER_TOKEN.",
               "disconnectFailed": "Could not remove the saved Bitbucket credential."
             }
           }

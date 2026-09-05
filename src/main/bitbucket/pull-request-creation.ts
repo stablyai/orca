@@ -15,7 +15,7 @@ import { resolveBitbucketAuthConfig } from './resolve-auth'
 import { hasStoredBitbucketCredential } from './credential-store'
 import { getBitbucketPullRequestForBranch } from './client'
 import { mapBitbucketPullRequest, type RawBitbucketPullRequest } from './pull-request-mappers'
-import { getBitbucketRepoRef, type BitbucketRepoRef } from './repository-ref'
+import { getBitbucketRepoRef, type BitbucketCloudRepoRef } from './repository-ref'
 import type { HostedReviewExecutionOptions } from '../source-control/hosted-review-git-options'
 import { getHostedReviewLocalGitOptions } from '../source-control/hosted-review-git-options'
 
@@ -29,7 +29,7 @@ export function isBitbucketReviewCreationAuthenticated(): boolean {
   return hasAuth(getEnvAuthConfig()) || hasStoredBitbucketCredential()
 }
 
-function encodedRepoPath(repo: BitbucketRepoRef): string {
+function encodedRepoPath(repo: BitbucketCloudRepoRef): string {
   return `${encodeURIComponent(repo.workspace)}/${encodeURIComponent(repo.repoSlug)}`
 }
 
@@ -144,6 +144,17 @@ export async function createBitbucketPullRequest(
       ok: false,
       code: 'unsupported_provider',
       error: 'Creating pull requests requires a Bitbucket remote.'
+    }
+  }
+  // Why: the create payload below is Cloud's REST 2.0 shape. Data Center wants
+  // /rest/api/1.0 with fromRef/toRef, so fail closed here rather than POST a
+  // Cloud-shaped body at a Data Center site and report a confusing 404.
+  if (repo.kind === 'server') {
+    return {
+      ok: false,
+      code: 'unsupported_provider',
+      error:
+        'Creating pull requests is not supported for Bitbucket Data Center yet. Next step: open the pull request in Bitbucket.'
     }
   }
 

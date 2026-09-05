@@ -28,6 +28,8 @@ describe('Bitbucket hosted review integration', () => {
     process.env = { ...OLD_ENV, ORCA_BITBUCKET_ACCESS_TOKEN: 'local-token' }
     delete process.env.ORCA_BITBUCKET_EMAIL
     delete process.env.ORCA_BITBUCKET_API_TOKEN
+    delete process.env.ORCA_BITBUCKET_SERVER_URL
+    delete process.env.ORCA_BITBUCKET_SERVER_TOKEN
     _resetBitbucketRepoRefCache()
     __resetHostedReviewBranchCacheForTests()
   })
@@ -203,6 +205,113 @@ describe('Bitbucket hosted review integration', () => {
       expect(pullRequestCalls).toBe(2)
       // The failed lookup never reaches build status, so the recovery owns this call.
       expect(buildStatusCalls).toBe(1)
+    } finally {
+      await rm(repoPath, { recursive: true, force: true })
+      await new Promise<void>((resolve, reject) => {
+        server.close((error) => (error ? reject(error) : resolve()))
+      })
+    }
+  })
+})
+
+describe('Bitbucket Data Center hosted review integration', () => {
+  beforeEach(() => {
+    process.env = { ...OLD_ENV }
+    delete process.env.ORCA_BITBUCKET_ACCESS_TOKEN
+    delete process.env.ORCA_BITBUCKET_EMAIL
+    delete process.env.ORCA_BITBUCKET_API_TOKEN
+    delete process.env.ORCA_BITBUCKET_API_BASE_URL
+    _resetBitbucketRepoRefCache()
+  })
+
+  afterEach(() => {
+    process.env = OLD_ENV
+    _resetBitbucketRepoRefCache()
+  })
+
+  it('resolves a Data Center PR from an /scm/ remote through the 1.0 REST API', async () => {
+    const seen: SeenRequest[] = []
+    const server = createServer((req: IncomingMessage, res: ServerResponse) => {
+      const url = new URL(req.url ?? '/', `http://${req.headers.host ?? '127.0.0.1'}`)
+      seen.push({
+        pathname: url.pathname,
+        search: url.search,
+        authorization: req.headers.authorization
+      })
+
+      if (url.pathname === '/rest/api/1.0/projects/PRJ/repos/repo/pull-requests') {
+        sendJson(res, {
+          size: 1,
+          limit: 1,
+          isLastPage: true,
+          start: 0,
+          values: [
+            {
+              id: 12,
+              title: 'Local Data Center branch',
+              state: 'OPEN',
+              version: 3,
+              updatedDate: Date.parse('2026-05-15T00:00:00.000Z'),
+              fromRef: {
+                id: 'refs/heads/feature/dc',
+                displayId: 'feature/dc',
+                latestCommit: 'abc123'
+              },
+              toRef: { id: 'refs/heads/main', displayId: 'main' }
+            }
+          ]
+        })
+        return
+      }
+
+      if (url.pathname === '/rest/build-status/1.0/commits/stats/abc123') {
+        sendJson(res, { successful: 2, inProgress: 0, failed: 0, cancelled: 0, unknown: 0 })
+        return
+      }
+
+      res.writeHead(404, { 'Content-Type': 'application/json' })
+      res.end(JSON.stringify({ errors: [{ message: 'not found' }] }))
+    })
+    await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve))
+
+    const repoPath = await mkdtemp(join(tmpdir(), 'orca-bitbucket-dc-review-'))
+    try {
+      const address = server.address()
+      if (!address || typeof address === 'string') {
+        throw new Error('expected TCP server address')
+      }
+      const site = `http://127.0.0.1:${address.port}`
+
+      process.env.ORCA_BITBUCKET_SERVER_URL = site
+      process.env.ORCA_BITBUCKET_SERVER_TOKEN = 'local-pat'
+      await execFileAsync('git', ['init'], { cwd: repoPath })
+      await execFileAsync('git', ['remote', 'add', 'origin', `${site}/scm/PRJ/repo.git`], {
+        cwd: repoPath
+      })
+
+      await expect(
+        getHostedReviewForBranch({ repoPath, executionHostId: 'local', branch: 'refs/heads/feature/dc' })
+      ).resolves.toEqual({
+        provider: 'bitbucket',
+        number: 12,
+        title: 'Local Data Center branch',
+        state: 'open',
+        url: `${site}/projects/PRJ/repos/repo/pull-requests/12`,
+        status: 'success',
+        updatedAt: '2026-05-15T00:00:00.000Z',
+        mergeable: 'UNKNOWN',
+        headSha: 'abc123'
+      })
+
+      expect(seen.map((request) => request.pathname)).toEqual([
+        '/rest/api/1.0/projects/PRJ/repos/repo/pull-requests',
+        '/rest/build-status/1.0/commits/stats/abc123'
+      ])
+      expect(seen.every((request) => request.authorization === 'Bearer local-pat')).toBe(true)
+      const query = new URLSearchParams(seen[0].search)
+      expect(query.get('at')).toBe('refs/heads/feature/dc')
+      expect(query.get('direction')).toBe('OUTGOING')
+      expect(query.get('state')).toBe('ALL')
     } finally {
       await rm(repoPath, { recursive: true, force: true })
       await new Promise<void>((resolve, reject) => {
