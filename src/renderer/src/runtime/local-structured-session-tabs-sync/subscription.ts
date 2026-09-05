@@ -15,10 +15,13 @@ import {
   type StructuredSessionSnapshotApplyOptions
 } from './snapshot-apply'
 
-// Wired here, not inside the apply, so the repair lane's dependency on the inventory refresh
-// stays one-directional.
+// The refresh is supplied here rather than imported by the repair lane, so nothing the snapshot
+// apply depends on depends back on it.
 const REPAIR_DROPPED_EPOCHS: StructuredSessionSnapshotApplyOptions = {
-  onRetiredEpochDrop: scheduleRetiredEpochRepair
+  onRetiredEpochDrop: (worktreeId, publicationEpoch) =>
+    scheduleRetiredEpochRepair(worktreeId, publicationEpoch, (generation) =>
+      refreshLocalStructuredSessionTabs(generation, { authoritative: true })
+    )
 }
 
 type SessionTabsEvent =

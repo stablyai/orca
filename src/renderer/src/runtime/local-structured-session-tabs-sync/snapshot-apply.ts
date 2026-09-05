@@ -23,6 +23,7 @@ import {
   localStructuredSessionVersionByWorktree,
   supersedeLocalStructuredSessionGeneration
 } from './inventory-generation-fence'
+import { forgetRetiredEpochRepairsOutside } from './retired-epoch-repair'
 import { projectLocalStructuredSessionTabs } from './snapshot-projection'
 
 export const LOCAL_STRUCTURED_SESSION_OWNER = 'local-structured-session'
@@ -139,5 +140,6 @@ export function applyLocalStructuredSessionTabSnapshots<
       localStructuredSessionEpochHistoryByWorktree.delete(worktreeId)
     }
   }
+  forgetRetiredEpochRepairsOutside(knownWorktreeIds)
   return next
 }
