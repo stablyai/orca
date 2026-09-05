@@ -11080,6 +11080,10 @@
           "description": "Font used by file editors and diff views. Leave empty to follow the terminal font.",
           "placeholder": "Same as terminal font"
         },
+        "EditorChangedLineHighlightsSetting": {
+          "24b4de517a": "Tint lines that differ from the git baseline while editing a tracked file.",
+          "67d39a5ae2": "Changed Line Highlights"
+        },
         "GeneralRemoteServerUpdates": {
           "serverCount": "{{value0}} paired servers",
           "availableCount": "{{value0}} ready to update",

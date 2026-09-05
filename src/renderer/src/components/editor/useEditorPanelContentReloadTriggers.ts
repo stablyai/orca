@@ -24,6 +24,7 @@ type UseEditorPanelContentReloadTriggersParams = {
   gitStatusEntries: GitStatusByWorktree[string] | undefined
   gitBranchEntries: GitBranchChangesByWorktree[string] | undefined
   gitBranchCompareSummary: GitBranchCompareSummary | null | undefined
+  changedLineHighlightsEnabled: boolean
   isChangesMode: boolean
   diffContentsRef: MutableRefObject<Record<string, DiffContent>>
   isVisibleRef: MutableRefObject<boolean>
@@ -39,6 +40,7 @@ export function useEditorPanelContentReloadTriggers({
   gitStatusEntries,
   gitBranchEntries,
   gitBranchCompareSummary,
+  changedLineHighlightsEnabled,
   isChangesMode,
   diffContentsRef,
   isVisibleRef,
@@ -116,12 +118,18 @@ export function useEditorPanelContentReloadTriggers({
   )
   const activeFileShouldReloadChangedLineDiff = useMemo(
     () =>
+      changedLineHighlightsEnabled &&
       shouldLoadChangedLineDiffForEditFile(
         activeFile,
         activeFileGitStatusEntries,
         activeFileGitBranchEntries
       ),
-    [activeFile, activeFileGitBranchEntries, activeFileGitStatusEntries]
+    [
+      activeFile,
+      activeFileGitBranchEntries,
+      activeFileGitStatusEntries,
+      changedLineHighlightsEnabled
+    ]
   )
   useEffect(() => {
     if (!activeFile?.id) {

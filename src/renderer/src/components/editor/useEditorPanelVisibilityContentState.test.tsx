@@ -101,6 +101,7 @@ function Probe({
     gitStatusEntries,
     gitBranchEntries: undefined,
     gitBranchCompareSummary: undefined,
+    changedLineHighlightsEnabled: true,
     isChangesMode,
     isVisible,
     openFiles: panelOpenFiles

@@ -131,6 +131,7 @@ function EditorPanelInner({
     gitStatusEntries,
     gitBranchEntries,
     gitBranchCompareSummary,
+    changedLineHighlightsEnabled: settings?.editorChangedLineHighlightsEnabled ?? true,
     editorViewMode,
     isVisible
   })

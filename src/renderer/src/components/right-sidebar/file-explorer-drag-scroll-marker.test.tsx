@@ -125,7 +125,7 @@ describe('file explorer draggable rows carry the wheel-scroll marker', () => {
 
     expect(container.textContent).toContain('src')
     expect(container.textContent).toContain('index.ts')
-    expect(container.querySelectorAll('[style*="--file-explorer-row-status-color"]').length).toBe(
+    expect(container.querySelectorAll('svg[style*="var(--git-decoration-modified)"]').length).toBe(
       2
     )
   })

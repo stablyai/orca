@@ -30,6 +30,7 @@ type UseEditorPanelContentStateParams = {
   gitStatusEntries: GitStatusByWorktree[string] | undefined
   gitBranchEntries: GitBranchChangesByWorktree[string] | undefined
   gitBranchCompareSummary: GitBranchCompareSummaryByWorktree[string] | undefined
+  changedLineHighlightsEnabled: boolean
   editorViewMode: EditorViewModeByFile
 }
 
@@ -47,6 +48,7 @@ export function useEditorPanelContentState({
   gitStatusEntries,
   gitBranchEntries,
   gitBranchCompareSummary,
+  changedLineHighlightsEnabled,
   editorViewMode
 }: UseEditorPanelContentStateParams): UseEditorPanelContentStateResult {
   const [fileContents, setFileContents] = useState<Record<string, FileContent>>({})
@@ -190,6 +192,7 @@ export function useEditorPanelContentState({
     gitStatusEntries,
     gitBranchEntries,
     gitBranchCompareSummary,
+    changedLineHighlightsEnabled,
     fileContents,
     diffContents,
     fileReadGenerationRef,
@@ -214,6 +217,7 @@ export function useEditorPanelContentState({
     gitStatusEntries,
     gitBranchEntries,
     gitBranchCompareSummary,
+    changedLineHighlightsEnabled,
     isChangesMode,
     diffContentsRef,
     isVisibleRef,

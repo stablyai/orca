@@ -84,6 +84,8 @@ export type GlobalSettings = {
   editorAutoSave: boolean
   editorAutoSaveDelayMs: number
   editorMinimapEnabled: boolean
+  /** Tints lines that differ from the git baseline in the regular (non-diff) editor view. */
+  editorChangedLineHighlightsEnabled: boolean
   /** Opt-in code-editor font; empty (the default) keeps following `terminalFontFamily`. */
   editorFontFamily?: string
   /** Defaults on for profiles saved before file-editor wrapping became configurable. */

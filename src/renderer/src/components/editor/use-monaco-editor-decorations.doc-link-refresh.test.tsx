@@ -22,7 +22,8 @@ function Harness({ content, language }: { content: string; language: string }): 
     content,
     language,
     markdownDocuments: undefined,
-    conflictDecorationsEnabled: false
+    conflictDecorationsEnabled: false,
+    changedLineDecorationsEnabled: false
   })
   decorations.markdownDocLinkDecorationsRef.current = controller
   return null

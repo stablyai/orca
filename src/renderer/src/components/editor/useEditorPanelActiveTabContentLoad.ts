@@ -28,6 +28,7 @@ type UseEditorPanelActiveTabContentLoadParams = {
   gitStatusEntries: GitStatusByWorktree[string] | undefined
   gitBranchEntries: GitBranchChangesByWorktree[string] | undefined
   gitBranchCompareSummary: GitBranchCompareSummary | null | undefined
+  changedLineHighlightsEnabled: boolean
   fileContents: Record<string, FileContent>
   diffContents: Record<string, DiffContent>
   fileReadGenerationRef: MutableRefObject<Record<string, number>>
@@ -58,6 +59,7 @@ export function useEditorPanelActiveTabContentLoad({
   gitStatusEntries,
   gitBranchEntries,
   gitBranchCompareSummary,
+  changedLineHighlightsEnabled,
   fileContents,
   diffContents,
   fileReadGenerationRef,
@@ -141,6 +143,7 @@ export function useEditorPanelActiveTabContentLoad({
           : null
       const activeBranchEntries: readonly GitBranchChangeEntry[] | undefined = gitBranchEntries
       const shouldLoadChangedLineDiff =
+        changedLineHighlightsEnabled &&
         !isChangesMode &&
         shouldLoadChangedLineDiffForEditFile(fileToLoad, gitStatusEntries, activeBranchEntries)
       const changedLineDiffFile = shouldLoadChangedLineDiff
@@ -165,6 +168,7 @@ export function useEditorPanelActiveTabContentLoad({
     isVisible,
     gitStatusEntries,
     gitBranchEntries,
-    gitBranchCompareSummary
+    gitBranchCompareSummary,
+    changedLineHighlightsEnabled
   ])
 }

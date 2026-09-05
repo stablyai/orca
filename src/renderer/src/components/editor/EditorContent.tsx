@@ -111,15 +111,16 @@ export function EditorContent({
       : `${activeFile.filePath}::${viewStateScopeId}:pdf`
   const monacoLanguage = resolvedLanguage === 'notebook' ? 'json' : resolvedLanguage
   const reloadOpenCheckRunDetailsTab = useAppStore((state) => state.reloadOpenCheckRunDetailsTab)
+  const changedLineHighlightsEnabled = useAppStore(
+    (state) => state.settings?.editorChangedLineHighlightsEnabled ?? true
+  )
   const markdownDocuments = useMarkdownDocuments(activeFile, isMarkdown, mdViewMode, handleSave)
   const getConflictNavigation = useEditorConflictNavigation()
   const activeConflictEntry =
     worktreeEntries.find((entry) => entry.path === activeFile.relativePath) ?? null
-  const highlightChangedLines = shouldLoadChangedLineDiffForEditFile(
-    activeFile,
-    worktreeEntries,
-    branchEntries
-  )
+  const highlightChangedLines =
+    changedLineHighlightsEnabled &&
+    shouldLoadChangedLineDiffForEditFile(activeFile, worktreeEntries, branchEntries)
   const isCombinedDiff =
     activeFile.mode === 'diff' &&
     (activeFile.diffSource === 'combined-all' ||
