@@ -134,9 +134,11 @@ a checkpoint, not a failure. Do not stop, retry, release, or launch a duplicate
 editor without the positive proof `## Outcome` requires.
 
 After three consecutive empty waits, stop waiting blindly and enumerate with
-`ORCA orchestration worker-list --run <run_id> --include-remote --json`, acting
-on each row's `projection.attention` categories,
-`projection.attention.requiresAction`, and literal `projection.nextAction` argv.
+`ORCA orchestration worker-list --include-remote --json`, which defaults to the
+Run bound to this terminal; pass `--run <run_id>` to enumerate a different Run,
+and read the receipt's `scope` to confirm which was listed. Act on each row's
+`projection.attention` categories, `projection.attention.requiresAction`, and
+literal `projection.nextAction` argv.
 An `inspect` `nextAction` on a `live` row with `attention.requiresAction` false
 is informational, not a command to re-run: keep waiting with `check --wait`.
 Leave the wait only on positive proof the agent stopped: `exited` liveness, the

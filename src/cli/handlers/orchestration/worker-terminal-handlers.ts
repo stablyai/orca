@@ -8,6 +8,11 @@ import {
 import { RuntimeClientError } from '../../runtime-client'
 import { callOrchestrationMutation } from './mutation-request'
 import { formatWorkerRelease, type WorkerReleaseReceipt } from './worker-output'
+import {
+  formatWorkerListScope,
+  resolveWorkerListRunScope,
+  type WorkerListRunScope
+} from './worker-list-run-scope'
 
 const WORKER_TERMINAL_LIST_STATES = [
   'active',
@@ -82,7 +87,7 @@ export const ORCHESTRATION_WORKER_TERMINAL_HANDLERS: Record<string, CommandHandl
     printResult(result, json, formatWorkerRelease)
   },
 
-  'orchestration worker-list': async ({ flags, client, json }) => {
+  'orchestration worker-list': async ({ flags, client, cwd, json }) => {
     const terminalState = getOptionalStringFlag(flags, 'terminal-state')
     if (
       terminalState &&
@@ -95,6 +100,7 @@ export const ORCHESTRATION_WORKER_TERMINAL_HANDLERS: Record<string, CommandHandl
         `invalid --terminal-state '${terminalState}', expected one of: ${WORKER_TERMINAL_LIST_STATES.join(', ')}`
       )
     }
+    const scope = await resolveWorkerListRunScope(flags, cwd, client)
     const requiresCurrentListSemantics =
       flags.has('include-remote') || flags.has('cursor') || flags.has('limit')
     const result = await client.call<{
@@ -118,6 +124,7 @@ export const ORCHESTRATION_WORKER_TERMINAL_HANDLERS: Record<string, CommandHandl
         }
       }[]
       counts: Record<string, number>
+      scope?: WorkerListRunScope
       page?: { hasMore: boolean; nextCursor: string | null; total: number }
       partialHostErrors?: {
         environmentId: string
@@ -127,7 +134,7 @@ export const ORCHESTRATION_WORKER_TERMINAL_HANDLERS: Record<string, CommandHandl
       }[]
     }>('orchestration.workerList', {
       paginate: true,
-      run: getOptionalStringFlag(flags, 'run'),
+      run: scope.run,
       terminalState,
       ...(flags.has('include-remote') ? { includeRemote: true } : {}),
       cursor: getOptionalStringFlag(flags, 'cursor'),
@@ -139,7 +146,7 @@ export const ORCHESTRATION_WORKER_TERMINAL_HANDLERS: Record<string, CommandHandl
         'The connected Orca runtime did not prove support for the requested worker-list flags, so no inventory was printed. Update the connected Orca runtime and retry.'
       )
     }
-    printResult(result, json, (value) => {
+    printResult({ ...result, result: { ...result.result, scope } }, json, (value) => {
       const rows =
         value.workers.length === 0
           ? 'No workers found.'
@@ -175,7 +182,8 @@ export const ORCHESTRATION_WORKER_TERMINAL_HANDLERS: Record<string, CommandHandl
           `Warning: worker observations from ${error.name} (${error.environmentId}) are incomplete: ${error.code}; dispatches=${error.dispatchIds.join(',') || 'none'}`
       )
       const warningBlock = warnings.length ? `\n${warnings.join('\n')}` : ''
-      return `${counts ? `${rows}\nTerminals: ${counts}` : rows}${pagination}${warningBlock}`
+      const scopeLine = `\n${formatWorkerListScope(value.scope ?? scope)}`
+      return `${counts ? `${rows}\nTerminals: ${counts}` : rows}${scopeLine}${pagination}${warningBlock}`
     })
   }
 }

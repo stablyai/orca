@@ -490,7 +490,10 @@ describe('orchestration worker-start CLI contract', () => {
       } as never)
     ).rejects.toMatchObject({ code: 'incompatible_runtime' })
 
-    expect(callMock).toHaveBeenCalledTimes(1)
+    // The extra call is the bound-Run lookup; the enumeration itself must not be retried.
+    expect(
+      callMock.mock.calls.filter(([method]) => method === 'orchestration.workerList')
+    ).toHaveLength(1)
     expect(printResult).not.toHaveBeenCalled()
   })
 
@@ -639,7 +642,8 @@ describe('orchestration worker-start CLI contract', () => {
       | ((result: (typeof response)['result']) => string)
       | undefined
     expect(formatter?.(response.result)).toBe(
-      'No workers found.\nWarning: worker observations from Linux host (environment_linux) are incomplete: capability_unsupported; dispatches=none'
+      'No workers found.\nScope: all Runs (no Run is bound to this terminal; pass --run to narrow)' +
+        '\nWarning: worker observations from Linux host (environment_linux) are incomplete: capability_unsupported; dispatches=none'
     )
   })
 
@@ -668,7 +672,11 @@ describe('orchestration worker-start CLI contract', () => {
       json: true
     } as never)
 
-    expect(printResult).toHaveBeenCalledWith(response, true, expect.any(Function))
+    expect(printResult).toHaveBeenCalledWith(
+      { ...response, result: { ...response.result, scope: { source: 'all' } } },
+      true,
+      expect.any(Function)
+    )
   })
 
   it('parses, forwards, and documents the remote fleet opt-in', async () => {
@@ -709,8 +717,11 @@ describe('orchestration worker-start CLI contract', () => {
       cwd: '/tmp/repo',
       json: true
     } as never)
-    expect(callMock.mock.calls[0]?.[1]).toHaveProperty('paginate', true)
-    expect(callMock.mock.calls[0]?.[1]).not.toHaveProperty('includeRemote')
+    const listParams = callMock.mock.calls.find(
+      ([method]) => method === 'orchestration.workerList'
+    )?.[1]
+    expect(listParams).toHaveProperty('paginate', true)
+    expect(listParams).not.toHaveProperty('includeRemote')
   })
 
   it('keeps cleanup and retention TTL controls off the public CLI surface', async () => {
