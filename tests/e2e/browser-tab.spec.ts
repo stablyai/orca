@@ -240,21 +240,31 @@ async function clickBrowserLink(
       if (!point) {
         throw new Error(`Missing browser link ${targetSelector}`)
       }
-      await webview.sendInputEvent({ type: 'mouseMove', modifiers: inputModifiers, ...point })
-      await webview.sendInputEvent({
-        type: 'mouseDown',
-        button,
-        clickCount: 1,
-        modifiers: inputModifiers,
-        ...point
-      })
-      await webview.sendInputEvent({
-        type: 'mouseUp',
-        button,
-        clickCount: 1,
-        modifiers: inputModifiers,
-        ...point
-      })
+      const holdShift = inputModifiers.includes('shift')
+      if (holdShift) {
+        await webview.sendInputEvent({ type: 'keyDown', keyCode: 'Shift', modifiers: ['shift'] })
+      }
+      try {
+        await webview.sendInputEvent({ type: 'mouseMove', modifiers: inputModifiers, ...point })
+        await webview.sendInputEvent({
+          type: 'mouseDown',
+          button,
+          clickCount: 1,
+          modifiers: inputModifiers,
+          ...point
+        })
+        await webview.sendInputEvent({
+          type: 'mouseUp',
+          button,
+          clickCount: 1,
+          modifiers: inputModifiers,
+          ...point
+        })
+      } finally {
+        if (holdShift) {
+          await webview.sendInputEvent({ type: 'keyUp', keyCode: 'Shift' })
+        }
+      }
     },
     {
       targetBrowserTabId: browserTabId,
