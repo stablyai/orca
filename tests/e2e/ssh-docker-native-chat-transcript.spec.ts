@@ -21,9 +21,9 @@ import {
 } from './helpers/docker-ssh-relay-target'
 import {
   connectDockerSshRelayTarget,
-  disconnectDockerSshRelayTarget,
-  reconnectDisconnectedDockerSshRelayTarget
+  disconnectDockerSshRelayTarget
 } from './helpers/docker-ssh-relay-connection'
+import { reconnectDisconnectedDockerSshRelayTarget } from './helpers/docker-ssh-relay-reconnect'
 import {
   DOCKER_SSH_NATIVE_CHAT_SESSION_ID,
   DOCKER_SSH_NATIVE_CHAT_TRANSCRIPT_PATH,

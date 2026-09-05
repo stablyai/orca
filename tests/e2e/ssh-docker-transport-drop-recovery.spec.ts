@@ -18,10 +18,8 @@ import {
   startDockerSshRelayTarget,
   type DockerSshRelayTarget
 } from './helpers/docker-ssh-relay-target'
-import {
-  connectDockerSshRelayTarget,
-  recoverDockerSshRelayAfterFault
-} from './helpers/docker-ssh-relay-connection'
+import { connectDockerSshRelayTarget } from './helpers/docker-ssh-relay-connection'
+import { recoverDockerSshRelayAfterFault } from './helpers/docker-ssh-relay-reconnect'
 import {
   clearDockerSshRelayFaults,
   dropDockerSshRelayTransport,
