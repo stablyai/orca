@@ -113,13 +113,19 @@ export function openMainWindow(options: { revealOnDidFinishLoad?: boolean } = {}
         reason: details.reason,
         expectedTeardown: getExpectedTeardownScope(webContentsId, false)
       }),
-    onRendererRecoveryExhausted: ({ details, recentRecoveryCount }) => {
-      recordDurableCrashBreadcrumb('renderer_recovery_circuit_breaker_open', {
-        reason: details.reason,
-        exitCode: details.exitCode ?? null,
-        recentRecoveryCount
-      })
-      void showRendererRecoveryPrompt(recentRecoveryCount)
+    onRendererRecoveryExhausted: ({ details, recentRecoveryCount, cause, retry }) => {
+      // Why two names: a stalled reload never opened the breaker, and a bundle that says it did misreads the failure.
+      recordDurableCrashBreadcrumb(
+        cause === 'reload-stalled'
+          ? 'renderer_recovery_reload_exhausted'
+          : 'renderer_recovery_circuit_breaker_open',
+        {
+          reason: details.reason,
+          exitCode: details.exitCode ?? null,
+          recentRecoveryCount
+        }
+      )
+      void showRendererRecoveryPrompt(recentRecoveryCount, cause, retry)
     },
     deferLoad: true,
     ...(options.revealOnDidFinishLoad === true ? { revealOnDidFinishLoad: true } : {}),
@@ -131,9 +137,16 @@ export function openMainWindow(options: { revealOnDidFinishLoad?: boolean } = {}
       }
       recordCrashBreadcrumb('manual_reload_requested', { ignoreCache })
     },
-    onBeforeRecoveryReload: (webContentsId) => {
+    // Manual retries also preserve PTYs, but have their own intent breadcrumb.
+    onBeforeRecoveryReload: (webContentsId, trigger) => {
       markRecoveryReloadInFlight(webContentsId)
-      recordDurableCrashBreadcrumb('renderer_recovery_reload')
+      if (trigger === 'automatic') {
+        recordDurableCrashBreadcrumb('renderer_recovery_reload')
+      }
+    },
+    // Pair the intent breadcrumb with its path-free outcome.
+    onRecoveryReloadOutcome: ({ status, ...outcome }) => {
+      recordDurableCrashBreadcrumb(`renderer_recovery_reload_${status}`, outcome)
     }
   })
   recordCrashBreadcrumb('main_window_created')

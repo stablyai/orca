@@ -146,18 +146,29 @@ export async function performSend(
 
 export async function performCancel(
   ctx: AgentSessionTurnContext,
-  input: { clientOperationId: string; turnId: string }
+  input: {
+    clientOperationId: string
+    turnId: string
+    scope?: 'background-tasks'
+  }
 ): Promise<TurnOutcome<AgentSessionCancelResult>> {
   let cancelled = false
   let note = 'Cancellation requested.'
   try {
-    cancelled = (
-      await ctx.adapter.cancelTurn({
-        sessionId: ctx.sessionId,
-        turnId: input.turnId,
-        fence: ctx.fence
-      })
-    ).cancelled
+    cancelled = input.scope
+      ? (
+          await ctx.adapter.stopBackgroundTasks?.({
+            sessionId: ctx.sessionId,
+            fence: ctx.fence
+          })
+        )?.cancelled === true
+      : (
+          await ctx.adapter.cancelTurn({
+            sessionId: ctx.sessionId,
+            turnId: input.turnId,
+            fence: ctx.fence
+          })
+        ).cancelled
     if (!cancelled) {
       note = 'The provider had already finished this turn.'
     }
@@ -165,6 +176,9 @@ export async function performCancel(
     note = `Cancellation was not confirmed: ${
       error instanceof Error ? error.message : String(error)
     }`
+  }
+  if (input.scope) {
+    return { ok: true, value: { turnId: input.turnId, cancelled } }
   }
   // Keyed by the operation id so a replayed cancel upserts one item, not two.
   await appendStatus(ctx, input.clientOperationId, note)

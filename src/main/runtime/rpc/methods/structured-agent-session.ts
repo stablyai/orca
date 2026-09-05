@@ -2,14 +2,14 @@
 //
 // Every method here is gated on the client advertising
 // `agent-session.structured.v1`. A client that does not is told the surface does
-// not exist rather than being handed a session it cannot render or drive; that
-// is the whole visibility rule, because nothing else on the runtime publishes a
-// structured session.
+// not exist rather than receiving the journal or mutation surface. Session-tab
+// inventory may expose only a metadata placeholder for an incapable mobile client.
 
 import {
   agentSessionFingerprintConflict,
   computeAgentSessionPayloadFingerprint
 } from '../../../../shared/agent-session-mutation-envelope'
+import type { z } from 'zod'
 import { defineMethod, defineStreamingMethod, type RpcAnyMethod, type RpcContext } from '../core'
 import {
   ensureStructuredHostInstalled as ensureHostInstalled,
@@ -18,13 +18,16 @@ import {
   structuredCallerFor as callerFor,
   supportsStructuredSessions
 } from './structured-agent-session-gate'
+import type { AgentSessionAttachParams } from '../../../native-chat/agent-session-wire/structured-agent-session-attach'
 import { STRUCTURED_AGENT_SESSION_HOLD_METHODS } from './structured-agent-session-hold'
+import { resolveUncommittedStructuredCreate } from './structured-agent-session-precommit-refusal'
 import {
   AttachParams,
   CancelParams,
   CreateParams,
   CreateSupportParams,
   HistoryParams,
+  HandoffParams,
   HandoffStatusParams,
   OptionsParams,
   RespondParams,
@@ -41,6 +44,35 @@ function subscriptionIdFor(ctx: RpcContext, sessionId: string): string {
   // Shared control multiplexes several streams over one socket; the frame id
   // keeps one subscriber from evicting another on the same session.
   return ctx.requestId ? `${base}:${ctx.requestId}` : base
+}
+
+/**
+ * The attach-shaped entries take the location from the client instead of resolving it from a
+ * worktree, so they never reach the worktree-resolving create-support check. Ask the executing
+ * host the same question directly: the answer includes host-measured facts the client cannot see
+ * or forge, such as whether this machine can read a provider child's process start time.
+ */
+async function resolveClientSuppliedAttach(params: z.infer<typeof AttachParams>, ctx: RpcContext) {
+  await ensureHostInstalled(ctx)
+  const host = requireHost(ctx)
+  if (!host.supportsCreate(params.location, params.agent)) {
+    throw new Error('structured_agent_session_unsupported')
+  }
+  const { agent: _attachAgent, provider: _attachProvider, ...attachWithoutAgent } = params
+  const attachParams = {
+    ...attachWithoutAgent,
+    provider: params.provider as 'claude' | 'codex',
+    agent: params.agent as 'claude' | 'codex'
+  } as AgentSessionAttachParams
+  return { host, attachParams }
+}
+
+async function attachClientSuppliedLocation(
+  params: z.infer<typeof AttachParams>,
+  ctx: RpcContext
+): Promise<unknown> {
+  const { host, attachParams } = await resolveClientSuppliedAttach(params, ctx)
+  return host.attach(callerFor(ctx), attachParams)
 }
 
 export const STRUCTURED_AGENT_SESSION_METHODS: RpcAnyMethod[] = [
@@ -62,66 +94,82 @@ export const STRUCTURED_AGENT_SESSION_METHODS: RpcAnyMethod[] = [
       if (params.envelope.expectedRuntimeFence !== null) {
         throw new Error('agent_session_operation_invalid')
       }
-      if ('worktree' in params) {
-        const intentFingerprint = computeAgentSessionPayloadFingerprint({
-          method: 'agentSession.create',
-          sessionId: params.envelope.sessionId,
-          fields: { worktree: params.worktree, agent: params.agent }
-        })
-        const conflict = agentSessionFingerprintConflict(params.envelope, intentFingerprint)
-        if (conflict) {
-          return { ok: false, refusal: conflict }
-        }
-        const resolved = await ctx.runtime.resolveStructuredAgentSessionCreateIntent(params)
-        const hostFingerprint = computeAgentSessionPayloadFingerprint({
-          method: 'agentSession.attach',
-          sessionId: params.envelope.sessionId,
-          fields: {
-            location: resolved.location,
-            provider: resolved.provider,
-            agent: resolved.agent,
-            accountHome: resolved.accountHome,
-            runtimeKind: resolved.runtimeKind,
-            expectedRuntimeFence: null
+      // Everything up to `attach` is pre-commit, and answers with a refusal rather than a throw so
+      // a client can tell "nothing was created" from "the outcome is unknown".
+      const prepared = await resolveUncommittedStructuredCreate(async () => {
+        if ('worktree' in params) {
+          const intentFingerprint = computeAgentSessionPayloadFingerprint({
+            method: 'agentSession.create',
+            sessionId: params.envelope.sessionId,
+            fields: { worktree: params.worktree, agent: params.agent }
+          })
+          const conflict = agentSessionFingerprintConflict(params.envelope, intentFingerprint)
+          if (conflict) {
+            return { refusal: conflict }
           }
-        })
-        await ensureHostInstalled(ctx)
-        const result = await requireHost(ctx).attach(callerFor(ctx), {
-          ...resolved,
-          envelope: { ...params.envelope, payloadFingerprint: hostFingerprint }
-        })
-        if (result.ok && resolved.agent === 'codex') {
-          try {
-            await ctx.runtime.publishStructuredAgentSessionTab({
+          const resolved = await ctx.runtime.resolveStructuredAgentSessionCreateIntent(params)
+          const hostFingerprint = computeAgentSessionPayloadFingerprint({
+            method: 'agentSession.attach',
+            sessionId: params.envelope.sessionId,
+            fields: {
+              location: resolved.location,
+              provider: resolved.provider,
+              agent: resolved.agent,
+              accountHome: resolved.accountHome,
+              runtimeKind: resolved.runtimeKind,
+              expectedRuntimeFence: null
+            }
+          })
+          await ensureHostInstalled(ctx)
+          const { agent: _resolvedAgent, provider: _resolvedProvider, ...resolvedAttach } = resolved
+          const attachParams: AgentSessionAttachParams = {
+            ...resolvedAttach,
+            provider: resolved.provider as 'claude' | 'codex',
+            agent: resolved.agent as 'claude' | 'codex',
+            envelope: { ...params.envelope, payloadFingerprint: hostFingerprint }
+          }
+          return {
+            host: requireHost(ctx),
+            attachParams,
+            tab: {
               workspaceId: resolved.location.workspaceId,
-              sessionId: result.value.sessionId,
-              agent: 'codex',
-              activate: true
-            })
-          } catch (error) {
-            console.warn('[agent-session] create committed before tab publication failed', error)
-            return {
-              ok: false,
-              refusal: {
-                code: 'agent_session_operation_unknown',
-                message: 'The Codex chat may have been created, but its tab could not be confirmed.'
-              }
+              agent: resolved.agent as 'claude' | 'codex'
             }
           }
         }
-        return result
+        const { host, attachParams } = await resolveClientSuppliedAttach(params, ctx)
+        return { host, attachParams, tab: null }
+      })
+      if ('refusal' in prepared) {
+        return { ok: false, refusal: prepared.refusal }
       }
-      await ensureHostInstalled(ctx)
-      return requireHost(ctx).attach(callerFor(ctx), params)
+      const result = await prepared.host.attach(callerFor(ctx), prepared.attachParams)
+      if (result.ok && prepared.tab) {
+        try {
+          await ctx.runtime.publishStructuredAgentSessionTab({
+            workspaceId: prepared.tab.workspaceId,
+            sessionId: result.value.sessionId,
+            agent: prepared.tab.agent,
+            activate: true
+          })
+        } catch (error) {
+          console.warn('[agent-session] create committed before tab publication failed', error)
+          return {
+            ok: false,
+            refusal: {
+              code: 'agent_session_operation_unknown',
+              message: 'The chat may have been created, but its tab could not be confirmed.'
+            }
+          }
+        }
+      }
+      return result
     }
   }),
   defineMethod({
     name: 'agentSession.ensure',
     params: AttachParams,
-    handler: async (params, ctx) => {
-      await ensureHostInstalled(ctx)
-      return requireHost(ctx).attach(callerFor(ctx), params)
-    }
+    handler: async (params, ctx) => attachClientSuppliedLocation(params, ctx)
   }),
   defineMethod({
     name: 'agentSession.send',
@@ -164,6 +212,11 @@ export const STRUCTURED_AGENT_SESSION_METHODS: RpcAnyMethod[] = [
     name: 'agentSession.setOption',
     params: SetOptionParams,
     handler: async (params, ctx) => requireHost(ctx).setOption(callerFor(ctx), params)
+  }),
+  defineMethod({
+    name: 'agentSession.requestHandoff',
+    params: HandoffParams,
+    handler: async (params, ctx) => requireHost(ctx).requestHandoff(callerFor(ctx), params)
   }),
   defineMethod({
     name: 'agentSession.handoffStatus',

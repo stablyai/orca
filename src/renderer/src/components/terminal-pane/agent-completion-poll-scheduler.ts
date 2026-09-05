@@ -7,6 +7,7 @@ import {
   POLL_TIER_INTERVAL_MS,
   type PollCadenceTier
 } from './agent-completion-poll-cadence'
+import { nextCadenceInspectionDelayMs } from './agent-completion-poll-interval'
 
 export function createAgentCompletionPollScheduler(args: {
   options: AgentCompletionCoordinatorOptions
@@ -88,7 +89,19 @@ export function createAgentCompletionPollScheduler(args: {
       state.consecutiveInspectionErrors > 0
         ? Math.min(Math.max(10_000, base), base * 2 ** state.consecutiveInspectionErrors)
         : base
-    const interval = Math.round(backoff * (1 + (Math.random() * 0.2 - 0.1)))
+    const now = Date.now()
+    // Only genuinely idle panes share a deadline: a pane with a foreground agent, or one still
+    // inside the post-activity hot window, keeps its exact interval and its own phase.
+    const isIdlePane =
+      state.lastForegroundAgent === null &&
+      (state.lastPaneActivityAt === null ||
+        now - state.lastPaneActivityAt >= NO_EVIDENCE_ACTIVITY_HOT_WINDOW_MS)
+    const interval = nextCadenceInspectionDelayMs({
+      baseMs: backoff,
+      hasConsecutiveErrors: state.consecutiveInspectionErrors > 0,
+      alignToSharedGrid: isIdlePane,
+      now
+    })
     state.pollTimerTier = tier
     state.pollTimer = setTimeout(() => {
       state.pollTimer = null

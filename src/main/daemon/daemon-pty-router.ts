@@ -179,7 +179,7 @@ export class DaemonPtyRouter implements IPtyProvider {
 
   async inspectProcess(
     id: string,
-    options?: { expectedIncarnationId?: string }
+    options?: { expectedIncarnationId?: string; steadyState?: boolean }
   ): Promise<PtyProcessInspection> {
     return this.adapterForInspection(id).inspectProcess(id, options)
   }

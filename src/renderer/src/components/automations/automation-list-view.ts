@@ -237,16 +237,18 @@ export function sortAutomationListViewItems(
   items: readonly AutomationListViewItem[],
   sort: AutomationListSort | null
 ): AutomationListViewItem[] {
-  if (!sort) {
+  if (!sort || items.length < 2) {
     return [...items]
   }
   const next = [...items]
-  const locale = getIntlLocale()
+  const compareNames =
+    sort.field === 'name'
+      ? new Intl.Collator(getIntlLocale(), { sensitivity: 'base' }).compare
+      : null
   next.sort((left, right) => {
-    const compared =
-      sort.field === 'name'
-        ? left.name.localeCompare(right.name, locale, { sensitivity: 'base' })
-        : (left.lastRunAt ?? 0) - (right.lastRunAt ?? 0)
+    const compared = compareNames
+      ? compareNames(left.name, right.name)
+      : (left.lastRunAt ?? 0) - (right.lastRunAt ?? 0)
     if (compared !== 0) {
       return sort.direction === 'asc' ? compared : -compared
     }

@@ -6,10 +6,9 @@ import { useMobileNativeChatActiveResolution } from './use-mobile-native-chat-ac
 import { useMobileNativeChatAskDismiss } from './use-mobile-native-chat-ask-dismiss'
 import { useMobileNativeChatDrafts } from './use-mobile-native-chat-drafts'
 import { useMobileNativeChatFileSearch } from './use-mobile-native-chat-file-search'
-import { useMobileNativeChatSession } from './use-mobile-native-chat-session'
 import { useMobileNativeChatSessionOptionController } from './use-mobile-native-chat-session-option-controller'
+import { useMobileNativeChatSessionLane } from './use-mobile-native-chat-session-lane'
 import { useMobileNativeChatTerminalWrites } from './use-mobile-native-chat-terminal-writes'
-import { useMobileStructuredAgentSession } from './use-mobile-structured-agent-session'
 import { useMobileStructuredNativeChatSendBridge } from './use-mobile-structured-native-chat-send-bridge'
 import { useMobileNativeChatPrompts } from './use-mobile-native-chat-prompts'
 import { useMobileNativeChatTarget } from './use-mobile-native-chat-target'
@@ -95,29 +94,23 @@ export function useMobileNativeChatController(args: {
     terminalId: activeHandleRef.current,
     clientId: deviceTokenRef.current
   })
-  const legacyNativeChatSession = useMobileNativeChatSession({
-    operations,
-    workspaceId: worktreeId,
-    agent: activeChatStructured ? null : activeChatAgent,
-    sessionId: activeChatStructured ? null : activeChatSessionId,
-    transcriptPath: activeChatStructured ? null : (activeChatResolution?.transcriptPath ?? null),
-    terminalId: nativeChatTarget?.terminalId ?? null,
-    clientId: nativeChatTarget?.clientId ?? null
-  })
-  const structuredNativeChat = useMobileStructuredAgentSession({
-    client,
-    sessionId: activeChatStructured ? activeChatSessionId : null,
-    sourceIdentity,
-    enabled: showNativeChat,
-    // Holds are connection-scoped; dropping this on transport loss lets the hook
-    // reacquire the provider without clearing the cached transcript.
-    connected,
-    agent: activeChatStructured ? activeChatAgent : null,
-    onSendError
-  })
-  const nativeChatSession = activeChatStructured
-    ? structuredNativeChat.session
-    : legacyNativeChatSession
+  const { structuredSession: structuredNativeChat, session: nativeChatSession } =
+    useMobileNativeChatSessionLane({
+      operations,
+      client,
+      workspaceId: worktreeId,
+      structured: activeChatStructured,
+      agent: activeChatAgent,
+      resolvedAgent: activeChatAgent,
+      transcriptPath: activeChatResolution?.transcriptPath ?? null,
+      sessionId: activeChatSessionId,
+      terminalId: nativeChatTarget?.terminalId ?? null,
+      clientId: nativeChatTarget?.clientId ?? null,
+      sourceIdentity,
+      enabled: showNativeChat,
+      connected,
+      onSendError
+    })
   const {
     composerText: chatComposerText,
     setComposerText: setChatComposerText,
@@ -277,6 +270,8 @@ export function useMobileNativeChatController(args: {
     chatPending,
     chatImagePreviewsByMessageId,
     nativeChatSession,
+    /** Structured lane: drives the per-turn status row and live tool progress. */
+    nativeChatStructured: activeChatStructured,
     nativeChatAgentWorking,
     nativeChatTargetRef,
     nativeChatStreamingText,

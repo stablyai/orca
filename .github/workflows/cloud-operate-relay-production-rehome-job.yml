@@ -95,7 +95,11 @@ jobs:
               ;;
           esac
 
+      # Full history: the monitor evidence this job verifies is sealed at an ancestor commit,
+      # and the provenance check fails closed on a commit a shallow clone left out.
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - uses: actions/setup-node@v4
         with:

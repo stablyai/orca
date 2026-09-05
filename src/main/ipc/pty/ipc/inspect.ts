@@ -172,7 +172,12 @@ export function installPtyInspectIpcHandlers(deps: {
     'pty:inspectProcess',
     async (
       _event,
-      args: { id: string; expectedIncarnationId?: string; scanChildProcesses?: boolean }
+      args: {
+        id: string
+        expectedIncarnationId?: string
+        scanChildProcesses?: boolean
+        steadyState?: boolean
+      }
     ) => {
       // Why: same routing hazard as pty:hasPty — an unroutable id must read as client-only unverifiable, not as a local-provider answer or a raised IPC error.
       if (typeof args?.id !== 'string' || !args.id || args.id.startsWith('remote:')) {
@@ -189,7 +194,8 @@ export function installPtyInspectIpcHandlers(deps: {
         ...(args.expectedIncarnationId
           ? { expectedIncarnationId: args.expectedIncarnationId }
           : {}),
-        ...(args.scanChildProcesses === true ? { scanChildProcesses: true } : {})
+        ...(args.scanChildProcesses === true ? { scanChildProcesses: true } : {}),
+        ...(args.steadyState === true ? { steadyState: true } : {})
       }
       return Object.keys(options).length > 0
         ? inspectPtyProviderProcessForRenderer(getProviderForPty(args.id), args.id, options)

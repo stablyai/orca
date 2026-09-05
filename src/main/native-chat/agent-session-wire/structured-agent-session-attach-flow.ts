@@ -26,6 +26,7 @@ import type { AgentSessionRecordStore } from '../../runtime/agent-session-record
 import type { StructuredAgentSessionAdapter } from './structured-agent-session-adapter'
 import {
   AgentSessionAcquisitionExitUnprovenError,
+  AgentSessionAcquisitionRootExitObservedError,
   AgentSessionAcquisitionRefusal,
   AgentSessionPreSpawnError,
   isAgentSessionPreSpawnError,
@@ -119,7 +120,9 @@ export async function performAttach(
         ? 'processless'
         : error instanceof AgentSessionAcquisitionExitUnprovenError
           ? 'unproven'
-          : 'exit-proven'
+          : error instanceof AgentSessionAcquisitionRootExitObservedError
+            ? 'root-exit-observed'
+            : 'exit-proven'
       const outcome =
         error instanceof AgentSessionAcquisitionExitUnprovenError
           ? {
@@ -209,13 +212,17 @@ async function settlePostAcquisitionAttachFailure(
   cause: unknown
 ): Promise<never> {
   let cleanupError: unknown = cause
-  let exitProof: 'exit-proven' | 'unproven' = 'unproven'
+  let exitProof: 'exit-proven' | 'root-exit-observed' | 'unproven' = 'unproven'
   try {
     await rethrowAfterAgentSessionAcquisitionCleanup(input.adapter, record.sessionId, cause)
   } catch (error) {
     cleanupError = error
     exitProof =
-      error instanceof AgentSessionAcquisitionExitUnprovenError ? 'unproven' : 'exit-proven'
+      error instanceof AgentSessionAcquisitionExitUnprovenError
+        ? 'unproven'
+        : error instanceof AgentSessionAcquisitionRootExitObservedError
+          ? 'root-exit-observed'
+          : 'exit-proven'
   }
   // Why: the close is awaited so the map entry is gone only once its handle is
   // released, but a failed close must not also cost the store settlement below.

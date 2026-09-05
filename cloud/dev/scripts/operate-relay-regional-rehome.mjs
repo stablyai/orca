@@ -1,4 +1,5 @@
 import { pathToFileURL } from 'node:url'
+import { fetchAdminOnceMore } from './relay-admin-transient-retry.mjs'
 import { inspectAdmissionSelector } from './relay-admission-selector.mjs'
 
 const DIRECTOR_ORIGIN = 'https://relay.onorca.dev'
@@ -229,15 +230,20 @@ export async function recoverRegionalRehomeEnable(config, post) {
 export async function operateRegionalRehome(config, dependencies = {}) {
   const fetchImpl = dependencies.fetch ?? fetch
   const post = dependencies.post ?? (async (path, body) => await responseJson(
-    await fetchImpl(`${config.directorOrigin}${path}`, {
-      method: 'POST',
-      headers: {
-        authorization: `Bearer ${config.token}`,
-        'content-type': 'application/json'
+    // Generation-guarded writes make a retry a no-op or an explicit mismatch, never a double apply.
+    await fetchAdminOnceMore(
+      fetchImpl,
+      `${config.directorOrigin}${path}`,
+      {
+        method: 'POST',
+        headers: {
+          authorization: `Bearer ${config.token}`,
+          'content-type': 'application/json'
+        },
+        body: JSON.stringify(body)
       },
-      body: JSON.stringify(body),
-      signal: AbortSignal.timeout(30_000)
-    }),
+      { wait: dependencies.wait }
+    ),
     path
   ))
   if (config.mode === 'recover-enable') {

@@ -325,6 +325,56 @@ describe('structured session cold restoration', () => {
     expect(closed.tabGroups?.[0]?.tabOrder).toEqual(['terminal-tab'])
   })
 
+  it('publishes restored Claude tabs with the Claude title', async () => {
+    const runtime = new OrcaRuntimeService()
+    const publish = vi.spyOn(runtime, 'publishStructuredAgentSessionTab')
+    const internal = runtime as unknown as {
+      hasPersistedStructuredAgentSessionStore(): boolean
+      getKnownWorkspaceSessionWorktreeIds(): Set<string>
+      hydrateHeadlessMobileSessionTabsFromWorkspaceSession(): Set<string>
+      refreshMobileSessionPtyRecords(): Promise<Set<string> | null>
+      ensureStructuredAgentSessionHost(): Promise<void>
+    }
+    internal.hasPersistedStructuredAgentSessionStore = () => true
+    internal.getKnownWorkspaceSessionWorktreeIds = () => new Set()
+    internal.hydrateHeadlessMobileSessionTabsFromWorkspaceSession = () => new Set()
+    internal.refreshMobileSessionPtyRecords = async () => new Set()
+    internal.ensureStructuredAgentSessionHost = async () => undefined
+    setStructuredAgentSessionHost({
+      reconcileRestartLeases: async () => undefined,
+      restoreReadableSessions: async () => undefined,
+      listSessionTabs: () => [
+        {
+          sessionId: 'agent-session:agent-session:restored-claude',
+          workspaceId: 'workspace-1',
+          agent: 'claude'
+        }
+      ]
+    } as never)
+
+    await runtime.restoreStructuredAgentSessionTabs()
+
+    expect(publish).toHaveBeenCalledWith({
+      workspaceId: 'workspace-1',
+      sessionId: 'restored-claude',
+      agent: 'claude',
+      activate: false,
+      notify: false
+    })
+
+    const restored = await runtime.listMobileSessionTabs('id:workspace-1')
+    expect(restored.tabs).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          type: 'agent-session',
+          id: 'agent-session:restored-claude',
+          title: 'Claude Chat',
+          agent: 'claude'
+        })
+      ])
+    )
+  })
+
   it('commits the host close when the renderer already removed the structured tab', async () => {
     const runtime = new OrcaRuntimeService()
     runtime.setNotifier({

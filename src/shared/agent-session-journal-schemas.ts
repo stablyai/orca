@@ -64,7 +64,24 @@ const Block = z.union([
   z.object({ type: z.string() }).refine((block) => !KNOWN_BLOCK_TYPES.has(block.type))
 ])
 
-const PromptOption = z.object({ id: z.string(), label: z.string() })
+const PromptOption = z
+  .object({
+    id: z.string(),
+    label: z.string(),
+    description: z.string().optional()
+  })
+  .strict()
+
+const Question = z
+  .object({
+    id: z.string(),
+    question: z.string(),
+    header: z.string().optional(),
+    multiSelect: z.boolean(),
+    options: z.array(PromptOption),
+    freeTextQuestionId: z.string().optional()
+  })
+  .strict()
 
 const Resolution = z.object({
   state: z.string().min(1),
@@ -101,6 +118,7 @@ export const AgentJournalItemBodySchema = z.discriminatedUnion('kind', [
     kind: z.literal('question'),
     question: z.string(),
     options: z.array(PromptOption),
+    questions: z.array(Question).optional(),
     freeTextQuestionId: z.string().optional(),
     resolution: Resolution
   }),

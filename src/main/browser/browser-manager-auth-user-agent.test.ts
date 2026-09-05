@@ -51,7 +51,7 @@ import {
 import {
   createViewportGuestFactory,
   flushViewportOps,
-  GUEST_CLEAN_UA
+  GUEST_ELECTRON_UA
 } from './browser-manager-viewport-test-fixtures'
 
 const {
@@ -197,8 +197,9 @@ describe('browserManager', () => {
 
   // Why: popup child windows get attachGuestPolicies but are never entered into tabIdByWebContentsId,
   // so a direct lookup of the UA mode misses the native opt-out. That is worse than doing nothing —
-  // native sessions skip setupClientHintsOverride, so the popup would send the raw Electron UA on the
-  // wire while navigator.userAgent claimed Firefox. Google sign-in popups are a first-class surface.
+  // native sessions never install the header-level Firefox switch, so the popup would send the
+  // Electron UA on the wire while navigator.userAgent claimed Firefox. Google sign-in popups are a
+  // first-class surface.
   it('leaves the UA untouched on auth hosts for a popup owned by a native-UA profile', () => {
     const ownerGuest = {
       id: 415,
@@ -543,7 +544,7 @@ describe('browserManager', () => {
     )
     expect(uaWrites.length).toBeGreaterThan(0)
     for (const [, params] of uaWrites) {
-      expect((params as { userAgent: string }).userAgent).toBe(GUEST_CLEAN_UA)
+      expect((params as { userAgent: string }).userAgent).toBe(GUEST_ELECTRON_UA)
     }
   })
 })

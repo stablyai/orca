@@ -6,11 +6,21 @@ import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
 
 vi.mock('react-native', async () => {
   const React = await import('react')
+  const Text = ({ children, ...props }: { children?: unknown }): unknown =>
+    React.createElement('Text', props, children)
   return {
+    Animated: {
+      Text,
+      Value: class {
+        setValue(): void {}
+      },
+      loop: (animation: unknown) => animation,
+      sequence: () => ({ start: vi.fn(), stop: vi.fn() }),
+      timing: () => ({ start: vi.fn(), stop: vi.fn() })
+    },
     Image: 'Image',
     Pressable: 'Pressable',
-    Text: ({ children, ...props }: { children?: unknown }) =>
-      React.createElement('Text', props, children),
+    Text,
     View: ({ children, ...props }: { children?: unknown }) =>
       React.createElement('View', props, children),
     StyleSheet: { create: (styles: unknown) => styles, hairlineWidth: 1 }
@@ -20,7 +30,10 @@ vi.mock('lucide-react-native', () => ({
   ArrowUp: 'ArrowUp',
   ChevronDown: 'ChevronDown',
   Copy: 'Copy',
-  SquareChevronRight: 'SquareChevronRight'
+  SquareChevronRight: 'SquareChevronRight',
+  SquareTerminal: 'SquareTerminal',
+  Wrench: 'Wrench',
+  ChevronRight: 'ChevronRight'
 }))
 vi.mock('../components/MobileMarkdown', () => ({ MobileMarkdown: 'MobileMarkdown' }))
 
@@ -47,6 +60,15 @@ describe('MobileNativeChatMessage', () => {
     props: {
       toolsExpanded?: boolean
       onCopyText?: (text: string) => Promise<void>
+      structuredActivityUi?: boolean
+      activeTurnIsWorking?: boolean
+      turnExpanded?: boolean
+      turnStatus?: {
+        startedAt: number | null
+        thinking: boolean
+        workedSeconds: number | null
+      } | null
+      onToggleTurn?: () => void
     } = {}
   ): ReactTestRenderer {
     act(() => {
@@ -166,5 +188,97 @@ describe('MobileNativeChatMessage', () => {
     })
 
     expect(onCopyText).toHaveBeenCalledWith('copy through shell')
+  })
+
+  describe('structured activity UI', () => {
+    const runningCall = {
+      type: 'tool-call' as const,
+      name: 'Bash',
+      input: { command: 'npm test' },
+      state: 'running' as const
+    }
+    const settledCall = {
+      type: 'tool-call' as const,
+      name: 'Read',
+      input: { file_path: 'a/b.ts' },
+      state: 'completed' as const
+    }
+
+    it('shows the live tool label with a terminal glyph while a command runs', () => {
+      const tree = render(toolMessage([runningCall]), {
+        structuredActivityUi: true,
+        activeTurnIsWorking: true
+      })
+      expect(textIn(tree.root)).toContain('Running npm test')
+      expect(tree.root.findAllByType('SquareTerminal' as never)).toHaveLength(1)
+      expect(tree.root.findAllByType('Wrench' as never)).toHaveLength(0)
+    })
+
+    it('uses the wrench glyph for a non-command tool', () => {
+      const tree = render(
+        toolMessage([
+          { type: 'tool-call', name: 'Read', input: { file_path: 'a/b.ts' }, state: 'running' }
+        ]),
+        { structuredActivityUi: true, activeTurnIsWorking: true }
+      )
+      expect(textIn(tree.root)).toContain('Running Read a/b.ts')
+      expect(tree.root.findAllByType('Wrench' as never)).toHaveLength(1)
+    })
+
+    it('falls back to the collapsed count row once the run settles', () => {
+      const tree = render(toolMessage([settledCall]), {
+        structuredActivityUi: true,
+        activeTurnIsWorking: true
+      })
+      expect(textIn(tree.root)).not.toContain('Running Read a/b.ts')
+      expect(textIn(tree.root)).toContain('1×')
+    })
+
+    it("hides a completed turn's activity until the turn caret discloses it", () => {
+      const collapsed = render(toolMessage([settledCall]), {
+        structuredActivityUi: true,
+        activeTurnIsWorking: false
+      })
+      expect(textIn(collapsed.root)).not.toContain('1×')
+      act(() => collapsed.unmount())
+
+      const disclosed = render(toolMessage([settledCall]), {
+        structuredActivityUi: true,
+        activeTurnIsWorking: false,
+        turnExpanded: true
+      })
+      expect(textIn(disclosed.root)).toContain('1×')
+    })
+
+    it('lets the global Tools toggle reveal a hidden settled run', () => {
+      // Otherwise the composer's Tools control is a no-op on every settled turn.
+      const tree = render(toolMessage([settledCall]), {
+        structuredActivityUi: true,
+        activeTurnIsWorking: false,
+        toolsExpanded: true
+      })
+      expect(textIn(tree.root)).toContain('1\u00d7')
+    })
+
+    it('keeps the bridge lane on its always-visible tool run', () => {
+      const tree = render(toolMessage([settledCall]), { activeTurnIsWorking: false })
+      expect(textIn(tree.root)).toContain('1×')
+      expect(tree.root.findAllByType('Wrench' as never)).toHaveLength(0)
+    })
+
+    it('renders the turn status row under a user message', () => {
+      const tree = render(userMessage([{ type: 'text', text: 'go' }]), {
+        structuredActivityUi: true,
+        turnStatus: { startedAt: Date.now(), thinking: true, workedSeconds: null }
+      })
+      expect(textIn(tree.root)).toContain('Thinking')
+    })
+
+    it('does not render a turn status row without one', () => {
+      const tree = render(userMessage([{ type: 'text', text: 'go' }]), {
+        structuredActivityUi: true
+      })
+      expect(textIn(tree.root)).toEqual(['go'])
+    })
   })
 })

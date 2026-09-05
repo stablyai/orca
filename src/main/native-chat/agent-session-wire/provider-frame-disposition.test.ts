@@ -65,6 +65,29 @@ describe('provider frame classification catalog', () => {
     ).toBe('error-surface')
   })
 
+  it('keeps command queue bookkeeping off the transcript without hiding a failed one', () => {
+    expect(
+      classifyProviderFrame('claude', 'message:command_lifecycle', {
+        command_uuid: 'command-1',
+        state: 'started'
+      })
+    ).toBe('status-chrome')
+    expect(
+      classifyProviderFrame('claude', 'message:command_lifecycle', {
+        command_uuid: 'command-1',
+        state: 'cancelled'
+      })
+    ).toBe('status-chrome')
+    // Payload inspection outranks the catalogue, so suppressing the kind cannot
+    // swallow a state the provider reports as a failure.
+    expect(
+      classifyProviderFrame('claude', 'message:command_lifecycle', {
+        command_uuid: 'command-1',
+        state: 'failed'
+      })
+    ).toBe('error-surface')
+  })
+
   it('keeps unknown future frames on the substantive bounded fallback path', () => {
     expect(classifyProviderFrame('codex', 'notification:future/event', {})).toBe(
       'timeline-substantive'

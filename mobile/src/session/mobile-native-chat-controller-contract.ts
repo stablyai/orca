@@ -24,6 +24,8 @@ export type MobileNativeChatController = {
   chatPending: MobileNativeChatPendingMessage[]
   chatImagePreviewsByMessageId: Record<string, string[]>
   nativeChatSession: ReturnType<typeof useMobileNativeChatSession>
+  /** Structured lane: drives the per-turn status row and live tool progress. */
+  nativeChatStructured: boolean
   nativeChatAgentWorking: boolean
   nativeChatTargetRef: MutableRefObject<HostSessionNativeChatTarget | null>
   nativeChatStreamingText?: string

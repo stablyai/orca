@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { agentJournalItemKey } from '../../shared/agent-session-journal-item-key'
+import { createToolInputDisplay } from '../../shared/native-chat-tool-summary'
 import {
   codexItemBody,
   codexItemIdentity,
@@ -193,6 +194,279 @@ describe('codex item bodies', () => {
       state: 'completed',
       output: { head: 'a\nb\n', byteLength: 4, truncated: false, digest: expect.any(String) }
     })
+  })
+
+  it('names a classified read command by its class and keeps the raw command', () => {
+    const body = codexItemBody({
+      type: 'commandExecution',
+      id: 'item-read',
+      command: "sed -n '1,200p' notes.txt",
+      cwd: '/repo',
+      status: 'completed',
+      exitCode: 0,
+      commandActions: [
+        {
+          type: 'read',
+          command: "sed -n '1,200p' notes.txt",
+          name: 'notes.txt',
+          path: '/repo/notes.txt'
+        }
+      ]
+    })
+
+    expect(body).toEqual({
+      kind: 'tool-call',
+      name: 'read',
+      // `name` is the target's basename, which `path` already carries and no
+      // label ever reads, so it stays out of the bounded journal payload.
+      input: { command: "sed -n '1,200p' notes.txt", cwd: '/repo', path: '/repo/notes.txt' },
+      state: 'completed'
+    })
+    // `read` is the one class that keeps `path`, so its row stays a tappable
+    // file on mobile — the other half of the rule `list`/`search` obey below.
+    const display = createToolInputDisplay(body?.kind === 'tool-call' ? body.input : null)
+    expect(display.filePath).toBe('/repo/notes.txt')
+    expect(display.label).toBe('/repo/notes.txt')
+  })
+
+  it('carries a classified search query so the row labels by term, not scan root', () => {
+    expect(
+      codexItemBody({
+        type: 'commandExecution',
+        id: 'item-search',
+        command: 'rg -n --no-heading beta .',
+        cwd: '/repo',
+        status: 'inProgress',
+        commandActions: [
+          { type: 'search', command: 'rg -n --no-heading beta .', query: 'beta', path: '.' }
+        ]
+      })
+    ).toEqual({
+      kind: 'tool-call',
+      name: 'search',
+      input: { command: 'rg -n --no-heading beta .', cwd: '/repo', query: 'beta', directory: '.' },
+      state: 'running'
+    })
+  })
+
+  it('omits a null classified field rather than standing it in as a target', () => {
+    expect(
+      codexItemBody({
+        type: 'commandExecution',
+        id: 'item-search-bare',
+        command: 'rg beta',
+        cwd: '/repo',
+        status: 'completed',
+        exitCode: 0,
+        commandActions: [{ type: 'search', command: 'rg beta', query: null, path: null }]
+      })
+    ).toEqual({
+      kind: 'tool-call',
+      name: 'search',
+      input: { command: 'rg beta', cwd: '/repo' },
+      state: 'completed'
+    })
+  })
+
+  it('names a classified listFiles command `list` and invents no target for a null path', () => {
+    const body = codexItemBody({
+      type: 'commandExecution',
+      id: 'item-list',
+      command: 'ls',
+      cwd: '/repo',
+      status: 'completed',
+      exitCode: 0,
+      commandActions: [{ type: 'listFiles', command: 'ls', path: null }]
+    })
+
+    expect(body).toEqual({
+      kind: 'tool-call',
+      name: 'list',
+      input: { command: 'ls', cwd: '/repo' },
+      state: 'completed'
+    })
+    // A stand-in `.` reaches mobile as a tappable "open file" link onto a
+    // directory, which can only fail. The raw command is the honest label.
+    const display = createToolInputDisplay(body?.kind === 'tool-call' ? body.input : null)
+    expect(display.filePath).toBeNull()
+    expect(display.label).toBe('ls')
+  })
+
+  it('keeps the shell row when one command did two different classified things', () => {
+    // `cat a.txt && ls src` classifies as a read and a listing; naming the row
+    // after either drops the other.
+    expect(
+      codexItemBody({
+        type: 'commandExecution',
+        id: 'item-mixed',
+        command: 'cat a.txt && ls src',
+        cwd: '/repo',
+        status: 'completed',
+        exitCode: 0,
+        commandActions: [
+          { type: 'read', command: 'cat a.txt', name: 'a.txt', path: 'a.txt' },
+          { type: 'listFiles', command: 'ls src', path: 'src' }
+        ]
+      })
+    ).toEqual({
+      kind: 'tool-call',
+      name: 'shell',
+      input: { command: 'cat a.txt && ls src', cwd: '/repo' },
+      state: 'completed'
+    })
+  })
+
+  it('keeps one class run twice, naming no target when the two disagree', () => {
+    expect(
+      codexItemBody({
+        type: 'commandExecution',
+        id: 'item-two-reads',
+        command: 'cat a.ts && cat b.ts',
+        cwd: '/repo',
+        status: 'completed',
+        exitCode: 0,
+        commandActions: [
+          { type: 'read', command: 'cat a.ts', path: 'a.ts' },
+          { type: 'read', command: 'cat b.ts', path: 'b.ts' }
+        ]
+      })
+    ).toEqual({
+      kind: 'tool-call',
+      name: 'read',
+      input: { command: 'cat a.ts && cat b.ts', cwd: '/repo' },
+      state: 'completed'
+    })
+  })
+
+  it('keeps a target both entries of one class name', () => {
+    expect(
+      codexItemBody({
+        type: 'commandExecution',
+        id: 'item-same-read',
+        command: 'head a.ts && tail a.ts',
+        cwd: '/repo',
+        status: 'completed',
+        exitCode: 0,
+        commandActions: [
+          { type: 'read', command: 'head a.ts', path: 'a.ts' },
+          { type: 'read', command: 'tail a.ts', path: 'a.ts' }
+        ]
+      })
+    ).toMatchObject({ name: 'read', input: { path: 'a.ts' } })
+  })
+
+  it('keeps the listed directory as a label, never as a file target', () => {
+    const body = codexItemBody({
+      type: 'commandExecution',
+      id: 'item-list-path',
+      command: 'ls src',
+      cwd: '/repo',
+      status: 'completed',
+      exitCode: 0,
+      commandActions: [{ type: 'listFiles', command: 'ls src', path: 'src' }]
+    })
+
+    expect(body).toMatchObject({ name: 'list', input: { directory: 'src' } })
+    // Under `path` this reaches mobile as a tappable open-file link onto a
+    // directory — the same dead link a stand-in `.` would have produced.
+    const display = createToolInputDisplay(body?.kind === 'tool-call' ? body.input : null)
+    expect(display.filePath).toBeNull()
+    expect(display.label).toBe('src')
+  })
+
+  it('keeps a scan root off the file-target key even when the search has no term', () => {
+    const body = codexItemBody({
+      type: 'commandExecution',
+      id: 'item-search-root',
+      command: 'rg --files src',
+      cwd: '/repo',
+      status: 'completed',
+      exitCode: 0,
+      commandActions: [{ type: 'search', command: 'rg --files src', query: null, path: 'src' }]
+    })
+
+    expect(body).toMatchObject({ name: 'search', input: { directory: 'src' } })
+    // `path` is only excluded from the file target while a query is present, so
+    // a term-less search under it would link to the folder it scanned.
+    expect(
+      createToolInputDisplay(body?.kind === 'tool-call' ? body.input : null).filePath
+    ).toBeNull()
+  })
+
+  it('leaves the other classes without a stand-in target', () => {
+    expect(
+      codexItemBody({
+        type: 'commandExecution',
+        id: 'item-read-null',
+        command: 'cat',
+        cwd: '/repo',
+        status: 'completed',
+        exitCode: 0,
+        commandActions: [{ type: 'read', command: 'cat', path: null, name: null }]
+      })
+    ).toEqual({
+      kind: 'tool-call',
+      name: 'read',
+      input: { command: 'cat', cwd: '/repo' },
+      state: 'completed'
+    })
+  })
+
+  it('skips unclassified actions to reach the first classified one', () => {
+    expect(
+      codexItemBody({
+        type: 'commandExecution',
+        id: 'item-piped',
+        command: 'true && cat a.ts',
+        cwd: '/repo',
+        status: 'completed',
+        exitCode: 0,
+        commandActions: [
+          { type: 'unknown', command: 'true' },
+          { type: 'read', command: 'cat a.ts', name: 'a.ts', path: 'a.ts' }
+        ]
+      })
+    ).toMatchObject({ name: 'read', input: { path: 'a.ts' } })
+  })
+
+  it('falls back to the unclassified shell row for absent or malformed commandActions', () => {
+    const shellRow = {
+      kind: 'tool-call',
+      name: 'shell',
+      input: { command: 'ls', cwd: '/tmp' },
+      state: 'completed'
+    }
+    const base = {
+      type: 'commandExecution',
+      id: 'item-fallback',
+      command: 'ls',
+      cwd: '/tmp',
+      status: 'completed',
+      exitCode: 0
+    }
+
+    expect(codexItemBody(base)).toEqual(shellRow)
+    expect(codexItemBody({ ...base, commandActions: null })).toEqual(shellRow)
+    expect(codexItemBody({ ...base, commandActions: [] })).toEqual(shellRow)
+    expect(
+      codexItemBody({ ...base, commandActions: [{ type: 'unknown', command: 'ls' }] })
+    ).toEqual(shellRow)
+    expect(codexItemBody({ ...base, commandActions: 'read' })).toEqual(shellRow)
+    expect(codexItemBody({ ...base, commandActions: [null, 7, 'read', {}, { type: 5 }] })).toEqual(
+      shellRow
+    )
+    // The classification table is a Map because an object index answers
+    // `__proto__`/`constructor` with a truthy non-string tool name.
+    expect(
+      codexItemBody({ ...base, commandActions: [{ type: '__proto__', command: 'ls' }] })
+    ).toEqual(shellRow)
+    expect(
+      codexItemBody({ ...base, commandActions: [{ type: 'constructor', command: 'ls' }] })
+    ).toEqual(shellRow)
+    // The rollout-file shape is a different lane and never reaches app-server.
+    expect(
+      codexItemBody({ ...base, parsedCmd: [{ type: 'read', cmd: 'ls', path: 'a.ts' }] })
+    ).toEqual(shellRow)
   })
 
   it('accepts snake-case command completion output and preserves blob evidence', () => {

@@ -1,4 +1,4 @@
-import type { Page } from '@stablyai/playwright-test'
+import { expect, type Page } from '@stablyai/playwright-test'
 
 import {
   DOCKER_SSH_PROXY_JUMP_REMOTE_REPO_PATH,
@@ -302,4 +302,34 @@ export async function reconnectDisconnectedDockerSshRelayTarget(
   options: DockerSshRelayReconnectOptions = {}
 ): Promise<void> {
   return performDockerSshRelayReconnect(page, targetId, false, options)
+}
+
+export async function recoverDockerSshRelayAfterFault(
+  page: Page,
+  targetId: string,
+  injectFault: () => void | Promise<void>
+): Promise<void> {
+  const readAuthority = () =>
+    page.evaluate((id) => window.__store?.getState().sshConnectionStates.get(id), targetId)
+  const before = await readAuthority()
+  expect(before).toMatchObject({
+    status: 'connected',
+    providerEpoch: expect.any(String),
+    connectionGeneration: expect.any(Number)
+  })
+  await injectFault()
+  // The pre-fault connected publication can remain visible until the next IPC event.
+  await expect
+    .poll(
+      async () => {
+        const after = await readAuthority()
+        return (
+          after?.status === 'connected' &&
+          (after.providerEpoch !== before?.providerEpoch ||
+            after.connectionGeneration !== before?.connectionGeneration)
+        )
+      },
+      { timeout: 120_000, message: 'SSH authority did not recover after the injected fault' }
+    )
+    .toBe(true)
 }

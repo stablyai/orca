@@ -144,6 +144,14 @@ export function extractPartialEscapeTail(stream: string): string {
 /** Ingest-time fold: advance the tracked tail with one more chunk. Returns ''
  *  (tracking abandoned) when the tail exceeds the cap — see the cap comment. */
 export function advancePartialEscapeTail(pendingTail: string, chunk: string): string {
+  // Why the pre-filter: `extractPartialEscapeTail` only leaves `ground` on an ESC byte, so with
+  // no pending tail and no ESC in the chunk the answer is always ''. Taking it here skips both
+  // the full-chunk concat and the per-code-unit walk on ESC-free output (build logs, `cat`,
+  // piped tool output) — the same gate `TerminalOscCwdTitleScanner.scan` and
+  // `TerminalMouseModeMirror.scan` already apply on the very same ingest path.
+  if (pendingTail.length === 0 && !chunk.includes('\x1b')) {
+    return ''
+  }
   const tail = extractPartialEscapeTail(pendingTail + chunk)
   return tail.length > MAX_PARTIAL_ESCAPE_TAIL_LENGTH ? '' : tail
 }

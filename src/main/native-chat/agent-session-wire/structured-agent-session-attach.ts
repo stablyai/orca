@@ -5,7 +5,6 @@
 // the record store's compare-and-swap, which also owns the idempotency row, so
 // a retried attach replays instead of reserving a second owner.
 
-import type { AgentType } from '../../../shared/agent-status-types'
 import type {
   AgentSessionJournalIdentity,
   AgentSessionProviderHandle
@@ -52,7 +51,7 @@ export type AgentSessionAttachParams = {
   envelope: AgentSessionMutationEnvelope
   location: AgentSessionExecutionLocation
   provider: AgentSessionHandleProvider
-  agent: AgentType
+  agent: AgentSessionHandleProvider
   accountHome: AgentSessionAccountHome
   runtimeKind: AgentSessionOwnerRuntimeKind
   /** Omitted only for create-by-intent; the adapter proves the durable handle. */

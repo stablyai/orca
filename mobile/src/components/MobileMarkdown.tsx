@@ -219,6 +219,7 @@ function MobileMarkdownInner({
           return (
             <Text
               key={index}
+              selectable
               style={[styles.heading, block.level <= 2 ? styles.headingLarge : null]}
             >
               {renderInline(block.text, onOpenFile, onOpenLink)}
@@ -228,7 +229,7 @@ function MobileMarkdownInner({
         if (block.type === 'quote') {
           return (
             <View key={index} style={styles.quote}>
-              <Text style={styles.quoteText}>
+              <Text selectable style={styles.quoteText}>
                 {renderInline(block.text, onOpenFile, onOpenLink)}
               </Text>
             </View>
@@ -252,7 +253,9 @@ function MobileMarkdownInner({
           return (
             <View key={index} style={styles.codeBlock}>
               {block.language ? <Text style={styles.codeLanguage}>{block.language}</Text> : null}
-              <Text style={styles.codeText}>{block.text}</Text>
+              <Text selectable style={styles.codeText}>
+                {block.text}
+              </Text>
             </View>
           )
         }
@@ -280,7 +283,7 @@ function MobileMarkdownInner({
               <View style={styles.table}>
                 <View style={styles.tableRow}>
                   {visibleHeaders.map((header, cellIndex) => (
-                    <Text key={cellIndex} style={[styles.tableCell, styles.tableHeader]}>
+                    <Text key={cellIndex} selectable style={[styles.tableCell, styles.tableHeader]}>
                       {renderInline(header, onOpenFile, onOpenLink)}
                     </Text>
                   ))}
@@ -288,7 +291,7 @@ function MobileMarkdownInner({
                 {visibleRows.map((row, rowIndex) => (
                   <View key={rowIndex} style={styles.tableRow}>
                     {visibleHeaders.map((_, cellIndex) => (
-                      <Text key={cellIndex} style={styles.tableCell}>
+                      <Text key={cellIndex} selectable style={styles.tableCell}>
                         {renderInline(row[cellIndex] ?? '', onOpenFile, onOpenLink)}
                       </Text>
                     ))}
@@ -319,7 +322,7 @@ function MobileMarkdownInner({
                         ? '[x]'
                         : '[ ]'}
                   </Text>
-                  <Text style={[styles.listText, listScale]}>
+                  <Text selectable style={[styles.listText, listScale]}>
                     {renderInline(item.text, onOpenFile, onOpenLink)}
                   </Text>
                 </View>
