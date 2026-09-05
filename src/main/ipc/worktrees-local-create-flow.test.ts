@@ -707,6 +707,7 @@ describe('registerWorktreeHandlers', () => {
       } else {
         expect(runtimeStub.splitTerminal).toHaveBeenCalledWith('term-startup', {
           direction: setupScriptLaunchMode === 'split-horizontal' ? 'horizontal' : 'vertical',
+          sourceSurfaceVisible: true,
           ...setupOptions
         })
       }

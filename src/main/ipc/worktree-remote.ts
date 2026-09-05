@@ -495,6 +495,7 @@ async function spawnLocalStartupAndSetupTerminals(args: {
           direction: setupLaunchMode === 'split-horizontal' ? 'horizontal' : 'vertical',
           command: setupCommand,
           env: setup.envVars,
+          sourceSurfaceVisible: startupTerminal?.surface === 'visible',
           activate: false,
           ...(sequencedStartup.activate === false ? { surfaceOwner: false } : {})
         })

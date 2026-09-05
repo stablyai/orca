@@ -16,6 +16,7 @@ export class OrcaRuntimeWithSplitPtyBackedTerminal extends OrcaRuntimeWithSplitT
       env?: Record<string, string>
       envToDelete?: string[]
       activate?: boolean
+      sourceSurfaceVisible?: boolean
       // Why: same split as createTerminal — adopt the pane without revealing its
       // workspace, for splits the user never asked to see.
       surfaceOwner?: false
@@ -190,7 +191,12 @@ export class OrcaRuntimeWithSplitPtyBackedTerminal extends OrcaRuntimeWithSplitT
           pty.ptyId
         )
       : null
-    if (sourceAuthority.persisted && committedSourceAuthority?.rendererMounted) {
+    if (
+      sourceAuthority.persisted &&
+      committedSourceAuthority &&
+      (committedSourceAuthority.rendererMounted || opts.sourceSurfaceVisible === true)
+    ) {
+      // A successful create reveal can precede the renderer's first graph sync.
       // Why: renderer adoption is a projection after the durable main commit; rejection cannot undo it.
       void revealSplit().catch(() => undefined)
     }
