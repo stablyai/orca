@@ -27,7 +27,11 @@ export class DirectReturnProbe {
       canSchedule: () => boolean
       canAttempt: () => boolean
       beginOperation: () => void
-      migrate: (client: RpcClient, path: MobileConnectionPath) => Promise<void>
+      migrate: (
+        client: RpcClient,
+        path: MobileConnectionPath,
+        shouldAbort: () => boolean
+      ) => Promise<void>
       onDirectMigrated: () => Promise<void>
       afterProbe: () => void
     }
@@ -86,8 +90,20 @@ export class DirectReturnProbe {
         successful.client.close()
         return
       }
-      await this.hooks.migrate(successful.client, successful.path)
+      const candidate = successful
+      // Migration owns the candidate, including closing it if cutover is canceled.
       successful = null
+      try {
+        await this.hooks.migrate(candidate.client, candidate.path, () => this.stopped)
+      } catch (error) {
+        if (this.stopped) {
+          return
+        }
+        throw error
+      }
+      if (this.stopped) {
+        return
+      }
       this.hooks.hysteresis.recordMigration(this.deps.now())
       await this.hooks.onDirectMigrated()
     } finally {

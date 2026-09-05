@@ -120,7 +120,7 @@ export class MobileEndpointSupervisor {
       canSchedule: () => this.isActive() && this.logical.getActivePath() === 'relay',
       canAttempt: () => this.isActive() && !this.operationInFlight,
       beginOperation: () => (this.operationInFlight = true),
-      migrate: (client, path) => this.logical.migrateTo(client, path),
+      migrate: (client, path, abort) => this.logical.migrateTo(client, path, undefined, abort),
       onDirectMigrated: async () => {
         this.leaseRotation.clear()
         this.relayRotationPending = false
