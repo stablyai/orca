@@ -3,7 +3,7 @@ import { readFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { getSpawnArgsForWindows, wrapWindowsStartWait } from './windows-batch-spawn'
-import { resolveWindowsPowerShellHost } from './windows-powershell-host'
+import { getWindowsPowerShellHost } from './windows-powershell-host'
 
 export type WindowsHostInteractiveLoginSpawn = {
   command: string
@@ -74,7 +74,7 @@ function waitForPidFile(pidFilePath: string): Promise<number | null> {
 export function buildWindowsHostInteractiveLoginSpawn(
   command: string,
   args: string[],
-  powerShellHost: string = resolveWindowsPowerShellHost()
+  powerShellHost: string = getWindowsPowerShellHost()
 ): WindowsHostInteractiveLoginSpawn {
   const { spawnCmd, spawnArgs } = getSpawnArgsForWindows(command, args)
   const pidFilePath = join(tmpdir(), `orca-interactive-login-${randomUUID()}.pid`)

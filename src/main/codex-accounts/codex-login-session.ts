@@ -2,6 +2,7 @@ import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import type { WindowsHostInteractiveLoginSpawn } from '../../shared/windows-interactive-login-spawn'
 import { buildWindowsHostInteractiveLoginSpawn } from '../../shared/windows-interactive-login-spawn'
+import { warmWindowsPowerShellHostCache } from '../../shared/windows-powershell-host'
 import { recordLoginConsoleStartIfMissed } from '../crash-reporting/login-console-start-breadcrumb'
 import { withCliRuntimeOnPath } from '../../shared/node-cli-command-resolution'
 import { parseWslUncPath } from '../../shared/wsl-paths'
@@ -91,6 +92,12 @@ export async function runCodexLoginSession(
   const initialAuthSnapshot = wslInfo
     ? null
     : readLoginAuthSnapshot(join(managedHomePath, 'auth.json'))
+  if (!wslInfo && process.platform === 'win32') {
+    // Why here and not at spawn time: resolving the host runs PowerShell, and
+    // the console builder is synchronous — probing there would block the main
+    // process for as long as the slowest candidate takes to start.
+    await warmWindowsPowerShellHostCache()
+  }
 
   await new Promise<void>((resolvePromise, rejectPromise) => {
     const spawnConfig = wslInfo

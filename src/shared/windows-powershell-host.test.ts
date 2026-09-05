@@ -1,10 +1,26 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import {
-  getWindowsPowerShellHostCandidates,
-  resetWindowsPowerShellHostCacheForTests,
-  resolveWindowsPowerShellHost
+import type * as NodeFs from 'node:fs'
+
+const statSyncMock = vi.fn()
+
+vi.mock('node:fs', async () => {
+  const actual = await vi.importActual<typeof NodeFs>('node:fs')
+  return { ...actual, statSync: (...args: unknown[]) => statSyncMock(...args) }
+})
+
+import type {
+  WindowsPowerShellHostAsyncProbe,
+  WindowsPowerShellHostResolution
 } from './windows-powershell-host'
 
+import {
+  getWindowsPowerShellHost,
+  getWindowsPowerShellHostCandidates,
+  isPossibleWindowsPowerShellHost,
+  resetWindowsPowerShellHostCacheForTests,
+  setWindowsPowerShellHostResolutionObserver,
+  warmWindowsPowerShellHostCache
+} from './windows-powershell-host'
 const ENV = {
   SystemRoot: 'C:\\Windows',
   ProgramFiles: 'C:\\Program Files',
@@ -16,8 +32,25 @@ const SYSTEM32_POWERSHELL = 'C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\pow
 const PROGRAM_FILES_PWSH = 'C:\\Program Files\\PowerShell\\7\\pwsh.exe'
 const WINDOWS_APPS_PWSH = 'C:\\Users\\dev\\AppData\\Local\\Microsoft\\WindowsApps\\pwsh.exe'
 
+const found = async (): Promise<{ ok: true; exitCode: number; markerOk: true }> => ({
+  ok: true,
+  exitCode: 7,
+  markerOk: true
+})
+const missed = async (): Promise<{ ok: false; exitCode: number; markerOk: false }> => ({
+  ok: false,
+  exitCode: 0,
+  markerOk: false
+})
+
+function throwFsError(code: string): never {
+  throw Object.assign(new Error(code), { code })
+}
+
 beforeEach(() => {
   resetWindowsPowerShellHostCacheForTests()
+  statSyncMock.mockReset()
+  statSyncMock.mockReturnValue({})
 })
 
 describe('getWindowsPowerShellHostCandidates', () => {
@@ -35,48 +68,112 @@ describe('getWindowsPowerShellHostCandidates', () => {
   })
 })
 
-describe('resolveWindowsPowerShellHost', () => {
-  it('keeps Windows PowerShell when it can still run a script', () => {
-    const probe = vi.fn().mockReturnValue(true)
-    expect(resolveWindowsPowerShellHost(probe, ENV)).toBe(SYSTEM32_POWERSHELL)
+describe('isPossibleWindowsPowerShellHost', () => {
+  it('rules out a path that is definitively missing', () => {
+    statSyncMock.mockImplementation(() => throwFsError('ENOENT'))
+    expect(isPossibleWindowsPowerShellHost(PROGRAM_FILES_PWSH)).toBe(false)
+  })
+
+  // Why: the Store build of PowerShell 7 is reached through an App Execution
+  // Alias, a reparse point that runs but answers stat with EACCES. Treating any
+  // stat failure as missing threw away the only working host on such a machine.
+  it('keeps a candidate whose stat fails for a reason other than absence', () => {
+    statSyncMock.mockImplementation(() => throwFsError('EACCES'))
+    expect(isPossibleWindowsPowerShellHost(WINDOWS_APPS_PWSH)).toBe(true)
+  })
+})
+
+describe('getWindowsPowerShellHost', () => {
+  // Why it must not probe: this is the path the ACL hardening and the console
+  // builder take, and both run on the main process.
+  it('answers with Windows PowerShell until a warm-up resolves something better', async () => {
+    expect(getWindowsPowerShellHost(ENV)).toBe(SYSTEM32_POWERSHELL)
+    await warmWindowsPowerShellHostCache(
+      async (candidate) => (candidate === WINDOWS_APPS_PWSH ? found() : missed()),
+      ENV
+    )
+    expect(getWindowsPowerShellHost(ENV)).toBe(WINDOWS_APPS_PWSH)
+  })
+})
+
+describe('warmWindowsPowerShellHostCache', () => {
+  it('keeps Windows PowerShell when it can still run a script', async () => {
+    expect(await warmWindowsPowerShellHostCache(vi.fn(found), ENV)).toBe(SYSTEM32_POWERSHELL)
   })
 
   // Why this is the whole point: on a locked-down fleet powershell.exe exists and
   // exits 0 without finishing the script, so only a probe that checks the script's
   // effect can reject it in favour of the PowerShell 7 that actually works.
-  it('falls through to PowerShell 7 when Windows PowerShell exits without doing the work', () => {
-    const probe = vi.fn((candidate: string) => candidate === PROGRAM_FILES_PWSH)
-    expect(resolveWindowsPowerShellHost(probe, ENV)).toBe(PROGRAM_FILES_PWSH)
+  it('falls through to PowerShell 7 when Windows PowerShell exits without doing the work', async () => {
+    const probe = vi.fn((candidate: string) =>
+      candidate === PROGRAM_FILES_PWSH ? found() : missed()
+    )
+    expect(await warmWindowsPowerShellHostCache(probe, ENV)).toBe(PROGRAM_FILES_PWSH)
     expect(probe).toHaveBeenCalledWith(SYSTEM32_POWERSHELL)
+  })
+
+  it('probes an execution alias instead of skipping it as missing', async () => {
+    statSyncMock.mockImplementation((path: unknown) =>
+      path === WINDOWS_APPS_PWSH ? throwFsError('EACCES') : throwFsError('ENOENT')
+    )
+    const probe = vi.fn((candidate: string) =>
+      candidate === WINDOWS_APPS_PWSH ? found() : missed()
+    )
+    expect(await warmWindowsPowerShellHostCache(probe, ENV)).toBe(WINDOWS_APPS_PWSH)
+    expect(probe).toHaveBeenCalledTimes(1)
+    expect(probe).toHaveBeenCalledWith(WINDOWS_APPS_PWSH)
   })
 
   // Why not report nothing: a probe can fail for reasons unrelated to the host,
   // and every environment that worked before this resolver existed used this path.
-  it('falls back to Windows PowerShell when no candidate answers the probe', () => {
-    expect(resolveWindowsPowerShellHost(() => false, ENV)).toBe(SYSTEM32_POWERSHELL)
+  it('falls back to Windows PowerShell when no candidate answers the probe', async () => {
+    expect(await warmWindowsPowerShellHostCache(missed, ENV)).toBe(SYSTEM32_POWERSHELL)
   })
 
-  it('probes once for a working host', () => {
-    const probe = vi.fn().mockReturnValue(true)
-    resolveWindowsPowerShellHost(probe, ENV)
-    resolveWindowsPowerShellHost(probe, ENV)
+  it('probes once for a working host', async () => {
+    const probe = vi.fn(found)
+    await warmWindowsPowerShellHostCache(probe, ENV)
+    await warmWindowsPowerShellHostCache(probe, ENV)
     expect(probe).toHaveBeenCalledTimes(1)
   })
 
-  it('re-probes after a negative answer expires so a later PowerShell 7 install is picked up', () => {
-    const probe = vi.fn().mockReturnValue(false)
-    expect(resolveWindowsPowerShellHost(probe, ENV)).toBe(SYSTEM32_POWERSHELL)
-    const probeCallsWhileCached = probe.mock.calls.length
-    resolveWindowsPowerShellHost(probe, ENV)
-    expect(probe).toHaveBeenCalledTimes(probeCallsWhileCached)
+  it('re-probes after a fallback expires so a later PowerShell 7 install is picked up', async () => {
+    const probe: WindowsPowerShellHostAsyncProbe = vi.fn(missed)
+    expect(await warmWindowsPowerShellHostCache(probe, ENV)).toBe(SYSTEM32_POWERSHELL)
+    const probeCallsWhileCached = vi.mocked(probe).mock.calls.length
+    await warmWindowsPowerShellHostCache(probe, ENV)
+    expect(vi.mocked(probe)).toHaveBeenCalledTimes(probeCallsWhileCached)
 
     vi.useFakeTimers()
     try {
       vi.setSystemTime(Date.now() + 31_000)
-      probe.mockImplementation((candidate: string) => candidate === WINDOWS_APPS_PWSH)
-      expect(resolveWindowsPowerShellHost(probe, ENV)).toBe(WINDOWS_APPS_PWSH)
+      vi.mocked(probe).mockImplementation(async (candidate: string) =>
+        candidate === WINDOWS_APPS_PWSH ? found() : missed()
+      )
+      expect(await warmWindowsPowerShellHostCache(probe, ENV)).toBe(WINDOWS_APPS_PWSH)
     } finally {
       vi.useRealTimers()
     }
+  })
+
+  it('reports the chosen host and what each probed candidate did', async () => {
+    const seen: WindowsPowerShellHostResolution[] = []
+    setWindowsPowerShellHostResolutionObserver((resolution) => seen.push(resolution))
+    await warmWindowsPowerShellHostCache(
+      (candidate) => (candidate === WINDOWS_APPS_PWSH ? found() : missed()),
+      ENV
+    )
+    expect(seen).toHaveLength(1)
+    expect(seen[0]?.host).toBe(WINDOWS_APPS_PWSH)
+    expect(seen[0]?.fellBack).toBe(false)
+    expect(seen[0]?.attempts.map((attempt) => attempt.path)).toContain(SYSTEM32_POWERSHELL)
+  })
+
+  it('reports the fallback as a fallback rather than a choice', async () => {
+    const seen: WindowsPowerShellHostResolution[] = []
+    setWindowsPowerShellHostResolutionObserver((resolution) => seen.push(resolution))
+    await warmWindowsPowerShellHostCache(async () => ({ ok: false, timedOut: true }), ENV)
+    expect(seen[0]?.fellBack).toBe(true)
+    expect(seen[0]?.attempts.every((attempt) => attempt.timedOut)).toBe(true)
   })
 })

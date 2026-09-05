@@ -13,6 +13,15 @@ vi.mock('../codex-cli/command', () => ({
   resolveClaudeCommand: vi.fn(() => 'C:\\Tools\\claude.cmd')
 }))
 
+// Why: the login path now waits for a PowerShell host to be resolved, and that
+// resolution spawns real processes. Pin it so these tests keep testing the login.
+vi.mock('../../shared/windows-powershell-host', () => ({
+  warmWindowsPowerShellHostCache: () =>
+    Promise.resolve('C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe'),
+  getWindowsPowerShellHost: () => 'C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe',
+  setWindowsPowerShellHostResolutionObserver: () => {}
+}))
+
 describe('Claude Windows host interactive login', () => {
   afterEach(() => {
     restorePlatform()

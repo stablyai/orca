@@ -9,6 +9,10 @@ import { openMainWindow as openMainWindowController } from './startup/main-windo
 import { mainProcessState as state } from './startup/main-process-state'
 import { runMainProcessPreflight } from './startup/main-process-preflight'
 import { registerMainProcessIpcHandlers } from './startup/main-process-ipc-bootstrap'
+import {
+  registerPowerShellHostResolutionBreadcrumb,
+  warmPowerShellHostInBackground
+} from './crash-reporting/powershell-host-resolution-breadcrumb'
 import { initializeMainProcessReady } from './startup/main-process-ready'
 import { installMainProcessQuitHandlers } from './startup/main-process-quit'
 import { shouldActivateDesktopForSecondInstance } from './startup/single-instance-lock'
@@ -105,6 +109,8 @@ if (preflightReady) {
   // Why no publish: nothing is listening this early, so the first renderer pulls these on mount.
   state.osOpenedMarkdownFiles.capture(process.argv)
   registerMainProcessIpcHandlers()
+  registerPowerShellHostResolutionBreadcrumb()
+  warmPowerShellHostInBackground()
   installMainProcessQuitHandlers()
   void app.whenReady().then(async () => {
     await initializeMainProcessReady({

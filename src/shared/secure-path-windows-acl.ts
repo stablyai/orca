@@ -1,6 +1,6 @@
 import { execFile, execFileSync } from 'node:child_process'
 import { win32 as pathWin32 } from 'node:path'
-import { resolveWindowsPowerShellHost } from './windows-powershell-host'
+import { getWindowsPowerShellHost } from './windows-powershell-host'
 
 let cachedWindowsUserSid: string | null | undefined
 
@@ -27,7 +27,7 @@ export function bestEffortRestrictWindowsPath(targetPath: string, isDirectory: b
   if (!currentUserSid) {
     return
   }
-  const powerShellHost = resolveWindowsPowerShellHost()
+  const powerShellHost = getWindowsPowerShellHost()
   // Why: async to avoid blocking the main thread — sync PowerShell cold-start (~1-1.5s) on the frequent read path stormed it (#4901).
   execFile(
     powerShellHost,
@@ -47,7 +47,7 @@ export function restrictWindowsPathSync(targetPath: string, isDirectory: boolean
   if (!currentUserSid) {
     return false
   }
-  const powerShellHost = resolveWindowsPowerShellHost()
+  const powerShellHost = getWindowsPowerShellHost()
   // Why: file must not be published until its ACL is actually restricted, so block and report real success (read path stays async, #4901).
   try {
     execFileSync(
