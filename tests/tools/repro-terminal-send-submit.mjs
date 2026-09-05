@@ -186,7 +186,11 @@ async function parentMain() {
   const expectBlocked = hasFlag('expect-blocked')
   const providedHandle = argValue('terminal')
   await mkdir(tempDir, { recursive: true })
-  await rm(reportPath, { force: true })
+  // Only safe when this process also starts the agent; a caller-supplied handle
+  // means the agent already ran and may have written its setup report.
+  if (!providedHandle) {
+    await rm(reportPath, { force: true })
+  }
 
   let handle = providedHandle
   if (!handle) {

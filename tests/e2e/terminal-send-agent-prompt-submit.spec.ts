@@ -39,6 +39,9 @@ async function createFakeCodexTerminal(
   testRepoPath: string,
   args: string[] = []
 ): Promise<string> {
+  // Clear before the agent starts: it may write its report immediately, and the
+  // repro tool no longer clears a slot it did not create.
+  rmSync(fixtureReport, { force: true })
   const client = new RuntimeClient(userDataDir, 30_000, null, null)
   const expectedPath = path.resolve(testRepoPath)
   const findWorktree = async (): Promise<{ id: string } | undefined> => {
