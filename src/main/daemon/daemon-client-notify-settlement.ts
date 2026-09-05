@@ -37,8 +37,15 @@ export async function writeNotifyWithSettlement(
       resolve(settlement)
     }
     const disconnectAndSettle = (settlement: WriteSettlement): void => {
-      onUndeliverable()
+      if (settled) {
+        return
+      }
       settle(settlement)
+      try {
+        onUndeliverable()
+      } catch (error) {
+        console.warn('[daemon] Write recovery notification failed:', error)
+      }
     }
     const timer = setTimeout(
       () => disconnectAndSettle(writeUnverifiable('settlement_timeout', true)),
@@ -51,8 +58,8 @@ export async function writeNotifyWithSettlement(
           : settle(WRITE_ACCEPTED)
       )
     } catch {
-      // The stream refused the buffer outright, but a partial flush cannot be ruled out.
-      disconnectAndSettle(writeUnverifiable('endpoint_write_threw', false))
+      // A synchronous throw can follow a partial flush.
+      disconnectAndSettle(writeUnverifiable('endpoint_write_threw', true))
     }
   })
 }
