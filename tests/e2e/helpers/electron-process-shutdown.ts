@@ -20,6 +20,16 @@ function hasExited(proc: ChildProcess): boolean {
   return proc.exitCode !== null || proc.signalCode !== null
 }
 
+function releaseExitedProcessPipes(proc: ChildProcess): void {
+  if (!hasExited(proc)) {
+    return
+  }
+  // Detached SSH helpers can retain inherited pipes after Electron itself exits.
+  for (const stream of proc.stdio) {
+    stream?.destroy()
+  }
+}
+
 function waitForExit(proc: ChildProcess, timeoutMs: number): Promise<boolean> {
   if (hasExited(proc)) {
     return Promise.resolve(true)
@@ -167,12 +177,16 @@ export async function forceQuitElectronAppForE2E(app: ElectronApplication): Prom
     }
   }
   await waitForExit(proc, PROCESS_EXIT_TIMEOUT_MS)
+  releaseExitedProcessPipes(proc)
   // Hands the dead app back to Playwright so worker teardown has nothing left to wait on.
   await app.close().catch(() => undefined)
 }
 
 export async function closeElectronAppForE2E(app: ElectronApplication): Promise<void> {
   const proc = app.process()
+  const releasePipes = (): void => releaseExitedProcessPipes(proc)
+  proc.once('exit', releasePipes)
+  releasePipes()
   try {
     await withTimeout(app.close(), GRACEFUL_CLOSE_TIMEOUT_MS, 'Timed out closing Electron app')
     if (proc) {
@@ -185,6 +199,9 @@ export async function closeElectronAppForE2E(app: ElectronApplication): Promise<
     if (proc) {
       await forceKillProcessTree(proc)
     }
+  } finally {
+    proc.off('exit', releasePipes)
+    releasePipes()
   }
 }
 
