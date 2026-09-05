@@ -35,7 +35,7 @@ export function normalizeLoadedUiState(
     parsed.ui?._explorerDisplayRootMigrated === true,
     parsed.worktreeMeta ?? {}
   )
-  if (!parsed.ui?._explorerDisplayRootMigrated) {
+  if (parsed.ui?._explorerDisplayRootMigrated !== true) {
     markNeedsSave()
   }
   const rawSort = parsed.ui?.sortBy
