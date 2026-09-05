@@ -170,4 +170,42 @@ describe('production Relay capacity cell admission', () => {
       /irreversible/
     )
   })
+
+  it('retries a transient 503 on the cell drain endpoint', async () => {
+    let calls = 0
+    const result = await prepareProductionCapacityCell(
+      { ...config, mode: 'drain' },
+      {
+        token: 'token',
+        wait: async () => {},
+        fetch: async (url) => {
+          assert.equal(new URL(url).pathname, '/v1/admin/drain')
+          calls += 1
+          if (calls === 1) return response({ error: 'warming up' }, 503)
+          return response({ v: 1, draining: true })
+        }
+      }
+    )
+    assert.equal(calls, 2)
+    assert.deepEqual(result, { changed: false, drained: true })
+  })
+
+  it('fails when both drain attempts return a transient 503', async () => {
+    let calls = 0
+    await assert.rejects(
+      prepareProductionCapacityCell(
+        { ...config, mode: 'drain' },
+        {
+          token: 'token',
+          wait: async () => {},
+          fetch: async () => {
+            calls += 1
+            return response({ error: 'warming up' }, 503)
+          }
+        }
+      ),
+      /returned 503/
+    )
+    assert.equal(calls, 2)
+  })
 })

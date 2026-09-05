@@ -1,4 +1,5 @@
 import { pathToFileURL } from 'node:url'
+import { fetchAdminOnceMore } from './relay-admin-transient-retry.mjs'
 import {
   applyExactAdmissionSelector,
   inspectAdmissionSelector,
@@ -72,12 +73,16 @@ export async function prepareProductionCapacityCell(config, overrides = {}) {
   if (!token || token.length > 8_192) throw new Error('admin identity token is unavailable')
   const postAt = async (origin, path, body) =>
     await responseJson(
-      await fetchImpl(`${origin}${path}`, {
-        method: 'POST',
-        headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json' },
-        body: JSON.stringify(body),
-        signal: AbortSignal.timeout(30_000)
-      }),
+      await fetchAdminOnceMore(
+        fetchImpl,
+        `${origin}${path}`,
+        {
+          method: 'POST',
+          headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json' },
+          body: JSON.stringify(body)
+        },
+        { wait: overrides.wait }
+      ),
       path
     )
   const post = async (path, body) => await postAt(config.directorOrigin, path, body)
