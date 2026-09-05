@@ -511,6 +511,41 @@ describe('attachEditorAutosaveController', () => {
     }
   })
 
+  it('settles the quiesce request when flushing the pending draft throws', async () => {
+    const writeFile = vi.fn().mockResolvedValue(undefined)
+    const eventTarget = new EventTarget()
+    vi.stubGlobal('window', {
+      addEventListener: eventTarget.addEventListener.bind(eventTarget),
+      removeEventListener: eventTarget.removeEventListener.bind(eventTarget),
+      dispatchEvent: eventTarget.dispatchEvent.bind(eventTarget),
+      setTimeout: globalThis.setTimeout.bind(globalThis),
+      clearTimeout: globalThis.clearTimeout.bind(globalThis),
+      api: { fs: { writeFile } }
+    } satisfies WindowStub)
+
+    const store = createEditorStore()
+    store.getState().openFile({
+      filePath: '/repo/file.md',
+      relativePath: 'file.md',
+      worktreeId: 'wt-1',
+      language: 'markdown',
+      mode: 'edit'
+    })
+
+    const unregisterFlush = registerPendingEditorFlush('/repo/file.md', () => {
+      throw new Error('serializer blew up')
+    })
+    const cleanup = attachEditorAutosaveController(store)
+    try {
+      // Why: the controller claims the request, so an unsettled promise hangs its
+      // caller forever with no error — a folder delete never reaches the host (#18371).
+      await expect(requestEditorSaveQuiesce({ fileId: '/repo/file.md' })).resolves.toBeUndefined()
+    } finally {
+      cleanup()
+      unregisterFlush()
+    }
+  }, 1000)
+
   it('drops an autosave already queued when owner migration starts', async () => {
     let releaseFirstWrite!: () => void
     const firstWrite = new Promise<void>((resolve) => {
