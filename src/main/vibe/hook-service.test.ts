@@ -1,4 +1,4 @@
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
@@ -11,11 +11,13 @@ import { VIBE_HOOK_TYPES } from './hook-config-toml'
 let home: string
 let originalHome: string | undefined
 let originalVibeHome: string | undefined
+let originalPlatform: string | undefined
 
 beforeEach(() => {
   home = mkdtempSync(join(tmpdir(), 'orca-vibe-hook-'))
   originalHome = process.env.HOME
   originalVibeHome = process.env.VIBE_HOME
+  originalPlatform = (process as { platform: string }).platform
   process.env.HOME = home
   process.env.VIBE_HOME = join(home, '.vibe')
 })
@@ -31,8 +33,13 @@ afterEach(() => {
   } else {
     process.env.VIBE_HOME = originalVibeHome
   }
+  Object.defineProperty(process, 'platform', { configurable: true, value: originalPlatform })
   rmSync(home, { recursive: true, force: true })
 })
+
+function setPlatform(platform: string): void {
+  Object.defineProperty(process, 'platform', { configurable: true, value: platform })
+}
 
 const configPath = (): string => join(home, '.vibe', 'hooks.toml')
 const scriptPath = (): string => join(home, '.orca', 'agent-hooks', 'mistral-vibe-hook.sh')
@@ -101,5 +108,38 @@ describe('VibeHookService', () => {
     expect(removed.state).toBe('not_installed')
     const afterRemove = readFileSync(configPath(), 'utf-8')
     expect(afterRemove).toBe(userConfig)
+  })
+
+  describe('on Windows', () => {
+    beforeEach(() => {
+      setPlatform('win32')
+    })
+
+    it('install skips without writing the POSIX script or hooks.toml', () => {
+      const status = new VibeHookService().install()
+      expect(status.state).toBe('skipped')
+      expect(status.skipReason).toBe('platform_unsupported')
+      expect(existsSync(scriptPath())).toBe(false)
+      expect(existsSync(configPath())).toBe(false)
+    })
+
+    it('getStatus reports skipped', () => {
+      expect(new VibeHookService().getStatus().state).toBe('skipped')
+    })
+
+    it('remove skips without touching hooks.toml', () => {
+      const dir = join(home, '.vibe')
+      mkdirSync(dir, { recursive: true })
+      const userConfig = 'default_agent = "accept-edits"\n'
+      writeFileSync(configPath(), userConfig)
+      const status = new VibeHookService().remove()
+      expect(status.state).toBe('skipped')
+      expect(readFileSync(configPath(), 'utf-8')).toBe(userConfig)
+    })
+
+    it('refreshManagedScripts is a no-op', async () => {
+      await new VibeHookService().refreshManagedScripts()
+      expect(existsSync(scriptPath())).toBe(false)
+    })
   })
 })
