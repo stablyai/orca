@@ -13,7 +13,12 @@
     Sleep 300
   ${endIf}
 
+  orca_check_again:
   ${nsProcess::FindProcess} "${APP_EXECUTABLE_FILENAME}" $R0
+  ${if} $R0 != 0
+  ${andIf} $R0 != 603
+    Goto orca_check_failed
+  ${endIf}
   ${if} $R0 == 0
     ${if} ${isUpdated}
       Sleep 1000
@@ -34,16 +39,22 @@
 
     orca_wait_loop:
       ${nsProcess::FindProcess} "${APP_EXECUTABLE_FILENAME}" $R0
-      ${if} $R0 != 0
+      ${if} $R0 == 603
         Goto orca_not_running
+      ${endIf}
+      ${if} $R0 != 0
+        Goto orca_check_failed
       ${endIf}
 
       Sleep 1000
       ${nsProcess::KillProcess} "${APP_EXECUTABLE_FILENAME}" $R0
 
       ${nsProcess::FindProcess} "${APP_EXECUTABLE_FILENAME}" $R0
-      ${if} $R0 != 0
+      ${if} $R0 == 603
         Goto orca_not_running
+      ${endIf}
+      ${if} $R0 != 0
+        Goto orca_check_failed
       ${endIf}
 
       DetailPrint `Waiting for "${PRODUCT_NAME}" to close.`
@@ -61,6 +72,15 @@
     orca_not_running:
   ${endIf}
 
+  Goto orca_check_done
+
+  orca_check_failed:
+    MessageBox MB_RETRYCANCEL|MB_ICONEXCLAMATION "Unable to check whether ${PRODUCT_NAME} is running (process query error $R0). Close ${PRODUCT_NAME} and retry." /SD IDCANCEL IDRETRY orca_check_again
+    ${nsProcess::Unload}
+    SetErrorLevel 2
+    Quit
+
+  orca_check_done:
   ${nsProcess::Unload}
 !macroend
 

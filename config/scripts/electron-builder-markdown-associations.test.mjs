@@ -155,4 +155,13 @@ describe('electron-builder app-running check', () => {
     expect(macro).toContain('${nsProcess::KillProcess}')
     expect(macro).not.toMatch(/powershell|nsExec::Exec|!insertmacro\s+(?:FIND|KILL)_PROCESS/i)
   })
+
+  it('only treats code 603 as absence and reports process enumeration errors', async () => {
+    const macro = extractNsisMacro(await readInstallerHooks(), 'customCheckAppRunning')
+    expect(macro.match(/Goto orca_check_failed/g)).toHaveLength(3)
+    expect(macro.match(/\$\{if\} \$R0 == 603/g)).toHaveLength(2)
+    expect(macro).toContain('${andIf} $R0 != 603')
+    expect(macro).toContain('process query error $R0')
+    expect(macro).toContain('SetErrorLevel 2')
+  })
 })
