@@ -149,7 +149,7 @@ export function advancePartialEscapeTail(pendingTail: string, chunk: string): st
   // the full-chunk concat and the per-code-unit walk on ESC-free output (build logs, `cat`,
   // piped tool output) — the same gate `TerminalOscCwdTitleScanner.scan` and
   // `TerminalMouseModeMirror.scan` already apply on the very same ingest path.
-  if (pendingTail.length === 0 && !chunk.includes('\u001b')) {
+  if (pendingTail.length === 0 && !chunk.includes('\x1b')) {
     return ''
   }
   const tail = extractPartialEscapeTail(pendingTail + chunk)
