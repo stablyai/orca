@@ -125,7 +125,7 @@ describe('provider frame classification catalog', () => {
     )
   })
 
-  it('keeps subagent items visible — the only evidence a spawned agent is working', () => {
+  it('suppresses subAgentActivity once the roster renders it, but never collabAgentToolCall', () => {
     expect(
       classifyProviderFrame('codex', 'item:subAgentActivity', {
         id: 'a-1',
@@ -133,7 +133,9 @@ describe('provider frame classification catalog', () => {
         agentThreadId: 'thread-child',
         agentPath: '/root/list_directory'
       })
-    ).toBe('timeline-substantive')
+      // The spawn-group roster row renders this now, so a raw gray row beside it
+      // would duplicate it. Suppressing it was gated on that renderer existing.
+    ).toBe('status-chrome')
     expect(
       classifyProviderFrame('codex', 'item:collabAgentToolCall', {
         id: 'c-1',
