@@ -10,9 +10,11 @@ import SidebarToolbar from './SidebarToolbar'
 
 const mocks = vi.hoisted(() => ({
   activeTooltipOpen: false,
+  openWorkspaceMultiplexer: vi.fn(),
   state: {
     persistedUIReady: true,
-    featureInteractions: {}
+    featureInteractions: {},
+    openWorkspaceMultiplexer: vi.fn()
   } as Partial<AppState>
 }))
 
@@ -70,9 +72,11 @@ describe('SidebarToolbar moved workspace board hint', () => {
     globalThis.IS_REACT_ACT_ENVIRONMENT = true
     window.localStorage.clear()
     mocks.activeTooltipOpen = false
+    mocks.openWorkspaceMultiplexer.mockReset()
     mocks.state = {
       persistedUIReady: true,
-      featureInteractions: {}
+      featureInteractions: {},
+      openWorkspaceMultiplexer: mocks.openWorkspaceMultiplexer
     }
   })
 
@@ -153,5 +157,16 @@ describe('SidebarToolbar moved workspace board hint', () => {
 
     expect(container.textContent).not.toContain('Profile')
     expect(container.textContent).toContain('Settings')
+  })
+
+  it('opens Workspace Multiplexer from the right-side icon group', async () => {
+    const { container } = await renderToolbar()
+    const button = container.querySelector<HTMLButtonElement>(
+      'button[data-workspace-multiplexer-trigger]'
+    )
+
+    expect(button?.getAttribute('aria-label')).toBe('Workspace Multiplexer')
+    await act(async () => button?.click())
+    expect(mocks.openWorkspaceMultiplexer).toHaveBeenCalledOnce()
   })
 })

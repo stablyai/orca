@@ -4,7 +4,7 @@ import { useAppStore } from '../../store'
 import { isProvenProcessExit } from '../../../../shared/terminal-exit-cause'
 import { SYNC_FIT_PANES_EVENT } from '@/constants/terminal'
 import { tabGroupBodyAnchorName } from '../tab-group/tab-group-body-anchor'
-import type { ActivityTerminalPortalTarget } from '../activity/activity-terminal-portal'
+import type { TerminalSurfacePortalTarget } from '../activity/activity-terminal-portal'
 import TerminalPane from './TerminalPane'
 import { closeTerminalTab } from '../terminal/terminal-tab-actions'
 import { shouldDeferParkedPtyExitTabClose } from './terminal-parked-tab-watchers'
@@ -42,7 +42,7 @@ type TerminalOverlaySlotProps = {
   isWorktreeActive: boolean
   isVisible: boolean
   isActive: boolean
-  activityTerminalPortal: ActivityTerminalPortalTarget | null
+  activityTerminalPortal: TerminalSurfacePortalTarget | null
   onFocusOwningGroup: ((groupId: string) => void) | undefined
   consumeSuppressedPtyExit: (ptyId: string) => boolean
   leaveWorktreeIfEmpty: () => void
@@ -262,7 +262,7 @@ export const TerminalOverlaySlot = memo(function TerminalOverlaySlot({
     return createPortal(
       terminalPane,
       activityTerminalPortal.target,
-      `activity-terminal-${terminalTabId}`
+      `terminal-surface-${activityTerminalPortal.slotId}-${terminalTabId}`
     )
   }
 

@@ -18,6 +18,7 @@ import { ClientUiWorkspaceFilterFields } from './client-ui-workspace-filter-fiel
 import { TaskResumeState } from './task-resume-state-schema'
 import { WorkspaceCleanup } from './workspace-cleanup-ui-schema'
 import { omitUndefinedValues, tolerateUnknownValues } from './ui-update-value-tolerance'
+import { normalizeWorkspaceMultiplexerState } from '../../../../shared/workspace-multiplexer-types'
 
 const NullableString = z.string().nullable()
 const StringArray = z.array(z.string())
@@ -92,23 +93,30 @@ const FeatureInteractions = z
 export const FeatureInteractionIdParam = z.custom<FeatureInteractionId>(isFeatureInteractionId, {
   message: 'Unknown feature interaction id'
 })
-const TopLevelViewSchema = z.enum([
-  'terminal',
-  'settings',
-  'tasks',
-  'activity',
-  'automations',
-  'space',
-  'skills',
-  'artifacts',
-  'mobile'
-])
+const WorkspaceMultiplexer = z.unknown().transform(normalizeWorkspaceMultiplexerState)
+const TopLevelViewSchema = z
+  .enum([
+    'terminal',
+    'settings',
+    'tasks',
+    'activity',
+    'automations',
+    'space',
+    'skills',
+    'artifacts',
+    'mobile',
+    'multiplexer',
+    'deck'
+  ])
+  .transform((value) => (value === 'deck' ? 'multiplexer' : value))
 const UiUpdateFields = z
   .object({
     lastActiveRepoId: NullableString.optional(),
     lastActiveWorktreeId: NullableString.optional(),
     // Why: sync hydration ignores this persisted startup view, so paired windows stay put.
     activeView: TopLevelViewSchema.optional(),
+    workspaceMultiplexer: WorkspaceMultiplexer.optional(),
+    workspaceDeck: WorkspaceMultiplexer.optional(),
     sidebarWidth: z.number().finite().optional(),
     rightSidebarOpen: z.boolean().optional(),
     rightSidebarTab: RightSidebarTabParam.optional(),

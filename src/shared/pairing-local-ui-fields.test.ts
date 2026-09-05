@@ -10,6 +10,8 @@ describe('pairing-local UI fields', () => {
       'hideWorkspacesFromOtherDevices',
       'manualRepoOrder',
       'workspaceHostOrder',
+      'workspaceMultiplexer',
+      'workspaceDeck',
       'agentsVisibleHostIds',
       'agentsFilterRepoIds',
       'agentsShowChildAgents',
@@ -26,6 +28,8 @@ describe('pairing-local UI fields', () => {
       hideWorkspacesFromOtherDevices: true,
       manualRepoOrder: [{ hostId: 'local' as const, repoId: 'repo-a' }],
       workspaceHostOrder: ['local' as const],
+      workspaceMultiplexer: { slots: [], panes: [], layout: null },
+      workspaceDeck: { slots: [], panes: [], layout: null },
       sidebarWidth: 280,
       activeView: 'tasks' as const
     }

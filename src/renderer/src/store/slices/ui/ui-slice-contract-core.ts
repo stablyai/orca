@@ -10,6 +10,7 @@ import type { LaunchSource } from '../../../../../shared/telemetry-events'
 import type { TaskSourceContext } from '../../../../../shared/task-source-context'
 import type { ExecutionHostId } from '../../../../../shared/execution-host'
 import type { TaskResumeState, TopLevelView } from '../../../../../shared/ui-chrome-types'
+import type { WorkspaceMultiplexerState } from '../../../../../shared/workspace-multiplexer-types'
 
 export type PendingSidebarWorktreeReveal = {
   worktreeId: string
@@ -113,6 +114,7 @@ export type UiViewHistory =
   | 'skills'
   | 'artifacts'
   | 'mobile'
+  | 'multiplexer'
 
 export type UISliceCore = {
   sidebarOpen: boolean
@@ -148,6 +150,7 @@ export type UISliceCore = {
   previousViewBeforeSkills: Exclude<UiViewHistory, 'skills'>
   previousViewBeforeMobile: Exclude<UiViewHistory, 'mobile'>
   previousViewBeforeArtifacts: Exclude<UiViewHistory, 'artifacts'>
+  previousViewBeforeMultiplexer: Exclude<UiViewHistory, 'multiplexer'>
   setActiveView: (view: UISliceCore['activeView']) => void
   taskPageData: TaskPageData
   taskResumeState: TaskResumeState | undefined
@@ -191,6 +194,10 @@ export type UISliceCore = {
   closeArtifactsPage: () => void
   openMobilePage: () => void
   closeMobilePage: () => void
+  workspaceMultiplexer: WorkspaceMultiplexerState
+  setWorkspaceMultiplexer: (multiplexer: WorkspaceMultiplexerState) => void
+  openWorkspaceMultiplexer: () => void
+  closeWorkspaceMultiplexer: () => void
   setNewWorkspaceDraft: (draft: NonNullable<UISliceCore['newWorkspaceDraft']>) => void
   clearNewWorkspaceDraft: () => void
   pendingRevealWorktree: PendingSidebarWorktreeReveal | null

@@ -66,6 +66,9 @@ export const forgetRemovedForExecutionHostMock = vi.fn<
 >(async () => ({ forgottenWorktreeIds: [] }))
 
 export const mockApi = {
+  ui: {
+    set: stubMock().mockResolvedValue(undefined)
+  },
   worktrees: {
     create: stubMock(),
     adoptProvisionedRoot: stubMock(),

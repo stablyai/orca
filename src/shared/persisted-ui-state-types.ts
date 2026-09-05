@@ -25,12 +25,17 @@ import type {
 } from './ui-chrome-types'
 import type { WorkspaceStatusDefinition } from './worktree/types'
 import type { PersistedAutomationHostFilter } from './automation-host-filter'
+import type { WorkspaceMultiplexerState } from './workspace-multiplexer-types'
 
 export type PersistedUIState = {
   lastActiveRepoId: string | null
   lastActiveWorktreeId: string | null
   /** Active top-level view at save time, restored on relaunch; sanitized to 'terminal' if unknown or now-gated. */
   activeView: TopLevelView
+  /** This client's persistent cross-workspace terminal arrangement. */
+  workspaceMultiplexer?: WorkspaceMultiplexerState
+  /** Deprecated pre-rename key; read only so existing local layouts survive upgrade. */
+  workspaceDeck?: WorkspaceMultiplexerState
   sidebarWidth: number
   rightSidebarOpen: boolean
   rightSidebarTab: RightSidebarTab

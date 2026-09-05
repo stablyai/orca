@@ -40,15 +40,23 @@ export function createWorktreeEventRuntime(
   ): Promise<void> => {
     const localRefreshStartedWithRuntime =
       options?.forceLocalOwner === true && isRuntimeEnvironmentActive()
-    // Why: capture active-ness before migration moves the pointer; re-key maps before the diff so a rename isn't a deletion.
+    const renameHostId = options?.executionHostId ?? LOCAL_EXECUTION_HOST_ID
+    const initialState = useAppStore.getState()
+    // Why: capture active-ness before migration moves the pointer; ids collide across hosts, so only a same-host rename re-points the active workspace.
     const renamedWasActive =
-      renamed != null && useAppStore.getState().activeWorktreeId === renamed.oldWorktreeId
+      renamed != null &&
+      initialState.activeWorktreeId === renamed.oldWorktreeId &&
+      (initialState.activeWorkspaceExecutionHostId ?? LOCAL_EXECUTION_HOST_ID) === renameHostId
     if (renamed) {
       // Shield both ids from the deletion diff across the rename's event burst — the worktree list lags the on-disk move.
       const expiry = Date.now() + WORKTREE_RENAME_PURGE_GRACE_MS
       recentlyRenamedWorktreeIdExpiry.set(renamed.oldWorktreeId, expiry)
       recentlyRenamedWorktreeIdExpiry.set(renamed.newWorktreeId, expiry)
-      useAppStore.getState().migrateWorktreeIdentity(renamed.oldWorktreeId, renamed.newWorktreeId)
+      initialState.migrateWorktreeIdentity(
+        renamed.oldWorktreeId,
+        renamed.newWorktreeId,
+        renameHostId
+      )
     }
     // Why: diff before/after fetch to catch out-of-band deletions and purge worktree state, else zombie ptyId entries leak (design §2c, §4.4).
     const state = useAppStore.getState()
@@ -77,7 +85,7 @@ export function createWorktreeEventRuntime(
       )
     // Why: an id change unmounts the active pane; re-activate so the tab reconciles, else it vanishes until re-select.
     if (renamedWasActive && renamed) {
-      useAppStore.getState().setActiveWorktree(renamed.newWorktreeId)
+      useAppStore.getState().setActiveWorktree(renamed.newWorktreeId, renameHostId)
     }
     // Sweep expired rename-grace entries before any early return, else forced-local
     // (or non-authoritative) events let the map grow for the session.

@@ -13,6 +13,10 @@ import {
   pushRecentTabId,
   sanitizeRecentTabIds
 } from '../tab-group-state'
+import {
+  dispatchTabGroupSplitCreated,
+  type TabGroupSplitCreatedDetail
+} from './tab-group-split-event'
 
 export function createTabsDropActions(
   set: TabsSliceSet,
@@ -21,6 +25,7 @@ export function createTabsDropActions(
   return {
     dropUnifiedTab: (tabId, target) => {
       let moved = false
+      let splitCreated: TabGroupSplitCreatedDetail | null = null
       set((state) => {
         const foundTab = findTabAndWorktree(state.unifiedTabsByWorktree, tabId)
         const foundTarget = findGroupAndWorktree(state.groupsByWorktree, target.groupId)
@@ -81,6 +86,14 @@ export function createTabsDropActions(
           )
 
           resolvedTargetGroupId = newGroupId
+          splitCreated = {
+            worktreeId,
+            sourceGroupId: sourceGroup.id,
+            targetGroupId: target.groupId,
+            newGroupId,
+            direction: target.splitDirection,
+            unifiedTabId: tabId
+          }
           nextGroups = [...nextGroups, newGroup]
           nextLayoutByWorktree = {
             ...nextLayoutByWorktree,
@@ -187,6 +200,9 @@ export function createTabsDropActions(
       if (moved) {
         get().recordFeatureInteraction?.('terminal-tabs')
         get().recordFeatureInteraction?.('tab-splits')
+      }
+      if (splitCreated) {
+        dispatchTabGroupSplitCreated(splitCreated)
       }
       return moved
     }

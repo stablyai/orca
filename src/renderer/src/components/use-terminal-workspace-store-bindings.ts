@@ -1,6 +1,6 @@
 import { useAppStore } from '../store'
-import { useActivityTerminalPortals } from './activity/activity-terminal-portal'
-import type { ActivityTerminalPortalTarget } from './activity/activity-terminal-portal'
+import { useTerminalSurfacePortals } from './activity/activity-terminal-portal'
+import type { TerminalSurfacePortalTarget } from './activity/activity-terminal-portal'
 import type { TerminalWorkspaceFoundation } from './use-terminal-workspace-foundation'
 
 export function useTerminalWorkspaceStoreBindings(controller: TerminalWorkspaceFoundation) {
@@ -63,8 +63,8 @@ export function useTerminalWorkspaceStoreBindings(controller: TerminalWorkspaceF
   const tabBarOrder = renderedActiveWorktreeId
     ? tabBarOrderByWorktree[renderedActiveWorktreeId]
     : undefined
-  const activityTerminalPortals: ActivityTerminalPortalTarget[] = useActivityTerminalPortals(
-    activeView === 'activity'
+  const activityTerminalPortals: TerminalSurfacePortalTarget[] = useTerminalSurfacePortals(
+    activeView === 'activity' || activeView === 'multiplexer'
   )
 
   return {

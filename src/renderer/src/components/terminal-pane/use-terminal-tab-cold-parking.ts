@@ -11,8 +11,8 @@ import { useShallow } from 'zustand/react/shallow'
 import type { TerminalTab } from '../../../../shared/terminal-tab-types'
 import { useAppStore } from '../../store'
 import {
-  findActivityTerminalPortal,
-  type ActivityTerminalPortalTarget
+  findTerminalSurfacePortal,
+  type TerminalSurfacePortalTarget
 } from '../activity/activity-terminal-portal'
 import { getTerminalTabColdParkRecheckDelayMs } from './terminal-cold-park-recheck-deadlines'
 import {
@@ -70,7 +70,7 @@ export function useTerminalTabColdParking(args: {
   /** Hidden-measuring startup probe from Terminal.tsx — the panes must stay
    *  mounted for their first xterm fit, mirroring the worktree-level guard. */
   shouldMeasureHiddenWorktree: boolean
-  activityTerminalPortals: ActivityTerminalPortalTarget[]
+  activityTerminalPortals: TerminalSurfacePortalTarget[]
   /** Tabs cold activation keeps unmounted — parked-equivalent for watcher
    *  purposes. Targeted background restrictions intentionally stay bounded. */
   activationDeferredMountTabIds?: ReadonlySet<string> | null
@@ -302,7 +302,7 @@ export function useTerminalTabColdParking(args: {
       const assignment = assignments.get(terminalTab.id)
       const isVisible = Boolean(isWorktreeActive && assignment && assignment.isActiveInGroup)
       const hasActivityTerminalPortal =
-        findActivityTerminalPortal(activityTerminalPortals, {
+        findTerminalSurfacePortal(activityTerminalPortals, {
           worktreeId,
           tabId: terminalTab.id
         }) !== null

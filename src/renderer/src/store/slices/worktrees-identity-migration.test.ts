@@ -12,6 +12,7 @@ import {
   resetHostedReviewLinkMutationGenerationForTests
 } from './worktrees'
 import { worktreeWorkspaceKey } from '../../../../shared/workspace-scope'
+import { getWorktreeVisitKey } from '@/lib/worktree-visit-recency'
 import { makeWorktree } from './worktrees-slice-test-fixtures'
 import {
   createTestStore,
@@ -202,6 +203,95 @@ describe('migrateWorktreeIdentity', () => {
     expect(s.sleepingAgentSessionsByPaneKey['tab1:leaf']?.worktreeId).toBe(NEW)
     // Tab-id-keyed state is untouched — the tab survives with the same id.
     expect(s.terminalLayoutsByTabId.tab1).toBeDefined()
+  })
+
+  it('keeps the host-scoped Workspace Multiplexer selection across a rename', () => {
+    const store = createTestStore()
+    store.setState({
+      workspaceMultiplexer: {
+        slots: [
+          {
+            id: 'local-slot',
+            worktreeId: OLD,
+            groupId: null,
+            activeTerminalTabId: null
+          },
+          {
+            id: 'remote-slot',
+            worktreeId: OLD,
+            executionHostId: 'ssh:devbox',
+            groupId: null,
+            activeTerminalTabId: null
+          }
+        ],
+        panes: [],
+        layout: null
+      }
+    } as Partial<AppState>)
+
+    store.getState().migrateWorktreeIdentity(OLD, NEW, 'local')
+
+    expect(store.getState().workspaceMultiplexer.slots.map((slot) => slot.worktreeId)).toEqual([
+      NEW,
+      OLD
+    ])
+    expect(mockApi.ui.set).toHaveBeenCalledWith({
+      workspaceMultiplexer: store.getState().workspaceMultiplexer
+    })
+  })
+
+  it('does not rewrite local active state during a duplicate-id remote rename', () => {
+    const store = createTestStore()
+    const remoteHost = 'ssh:devbox' as const
+    const localWarningProbe = beginHugeRepoWarningProbe({
+      id: OLD,
+      instanceId: 'local-instance'
+    })
+    expect(markHugeRepoWarningDismissed(localWarningProbe)).toBe(true)
+    store.setState({
+      activeWorktreeId: OLD,
+      activeWorkspaceKey: worktreeWorkspaceKey(OLD),
+      activeWorkspaceExecutionHostId: 'local',
+      renamingWorktreeId: { worktreeId: OLD, rowKey: 'local-row' },
+      tabsByWorktree: { [OLD]: [{ id: 'local-tab', worktreeId: OLD }] },
+      lastVisitedAtByWorktreeId: {
+        [getWorktreeVisitKey(OLD, 'local')]: 10,
+        [getWorktreeVisitKey(OLD, remoteHost)]: 20
+      },
+      workspaceMultiplexer: {
+        slots: [
+          {
+            id: 'local-slot',
+            worktreeId: OLD,
+            groupId: null,
+            activeTerminalTabId: null
+          },
+          {
+            id: 'remote-slot',
+            worktreeId: OLD,
+            executionHostId: remoteHost,
+            groupId: null,
+            activeTerminalTabId: null
+          }
+        ],
+        panes: [],
+        layout: null
+      }
+    } as unknown as Partial<AppState>)
+
+    store.getState().migrateWorktreeIdentity(OLD, NEW, remoteHost)
+    const state = store.getState()
+
+    expect(state.activeWorktreeId).toBe(OLD)
+    expect(state.activeWorkspaceKey).toBe(worktreeWorkspaceKey(OLD))
+    expect(state.renamingWorktreeId).toEqual({ worktreeId: OLD, rowKey: 'local-row' })
+    expect(state.tabsByWorktree[OLD]).toEqual([{ id: 'local-tab', worktreeId: OLD }])
+    expect(state.tabsByWorktree[NEW]).toBeUndefined()
+    expect(state.lastVisitedAtByWorktreeId[getWorktreeVisitKey(OLD, 'local')]).toBe(10)
+    expect(state.lastVisitedAtByWorktreeId[getWorktreeVisitKey(OLD, remoteHost)]).toBeUndefined()
+    expect(state.lastVisitedAtByWorktreeId[getWorktreeVisitKey(NEW, remoteHost)]).toBe(20)
+    expect(state.workspaceMultiplexer.slots.map((slot) => slot.worktreeId)).toEqual([OLD, NEW])
+    expect(hasDismissedHugeRepoWarning(localWarningProbe)).toBe(true)
   })
 
   it('is a no-op when the ids match', () => {

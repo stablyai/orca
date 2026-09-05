@@ -12,7 +12,11 @@ import type {
   FeatureInteractionState
 } from '../../../../shared/feature-interactions'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
-import type { PairedUiState, PairingLocalUiField } from '../../../../shared/pairing-local-ui-fields'
+import {
+  omitPairingLocalUiFields,
+  type PairedUiState,
+  type PairingLocalUiField
+} from '../../../../shared/pairing-local-ui-fields'
 import type { PersistedUIState } from '../../../../shared/persisted-ui-state-types'
 import { normalizeStatusBarUsageMode } from '../../../../shared/status-bar-usage-mode'
 import { normalizeTerminalCustomThemes } from '../../../../shared/terminal-custom-themes'
@@ -23,7 +27,15 @@ import {
 import { normalizeDisabledTuiAgents } from '../../../../shared/tui-agent-selection'
 import { normalizeUiLanguage } from '../../../../shared/ui-language'
 import { normalizeUsagePercentageDisplay } from '../../../../shared/usage-percentage-display'
+import { normalizeTopLevelView } from '../../../../shared/top-level-view'
 import { mergeWorkspaceCleanupUIState } from '../../../../shared/workspace-cleanup-ui-state'
+
+export function buildHostUiUpdates(updates: Partial<PersistedUIState>): Partial<PersistedUIState> {
+  const hostUpdates = omitPairingLocalUiFields(updates)
+  return normalizeTopLevelView(hostUpdates.activeView) === 'multiplexer'
+    ? { ...hostUpdates, activeView: 'terminal' }
+    : hostUpdates
+}
 
 export function mergeWebUIState(
   base: PersistedUIState,
@@ -69,6 +81,8 @@ export function mergeHostWebUIState(
     hideWorkspacesFromOtherDevices: local.hideWorkspacesFromOtherDevices === true,
     manualRepoOrder: local.manualRepoOrder,
     workspaceHostOrder: local.workspaceHostOrder,
+    workspaceMultiplexer: local.workspaceMultiplexer ?? local.workspaceDeck,
+    workspaceDeck: local.workspaceDeck,
     agentsVisibleHostIds: local.agentsVisibleHostIds,
     agentsFilterRepoIds: local.agentsFilterRepoIds,
     agentsShowChildAgents: local.agentsShowChildAgents,
@@ -78,7 +92,10 @@ export function mergeHostWebUIState(
     activityClearedAtByPaneKey: local.activityClearedAtByPaneKey,
     manuallyUnreadTurnsByPaneKey: local.manuallyUnreadTurnsByPaneKey
   } satisfies Record<PairingLocalUiField, unknown> & Partial<PersistedUIState>
-  return { ...mergeWebUIState(local, incoming), ...pinned }
+  const merged = { ...mergeWebUIState(local, incoming), ...pinned }
+  return normalizeTopLevelView(local.activeView) === 'multiplexer'
+    ? { ...merged, activeView: 'multiplexer' }
+    : merged
 }
 
 export function mergeFeatureInteractionState(

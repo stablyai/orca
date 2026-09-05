@@ -1,6 +1,6 @@
 import React from 'react'
 import type { TabGroupLayoutNode } from '../../../shared/tab-types'
-import type { ActivityTerminalPortalTarget } from './activity/activity-terminal-portal'
+import type { TerminalSurfacePortalTarget } from './activity/activity-terminal-portal'
 import {
   useBrowserGuestPaintRetention,
   useWorktreeBrowserPageIds
@@ -37,7 +37,7 @@ export const WorktreeSplitSurface = React.memo(function WorktreeSplitSurface({
   shouldMeasureHiddenWorktree: boolean
   shouldColdParkTerminalPanes: boolean
   isForceParked: boolean
-  activityTerminalPortals: ActivityTerminalPortalTarget[]
+  activityTerminalPortals: TerminalSurfacePortalTarget[]
   backgroundMountTabIds: ReadonlySet<string> | null
   activationDeferredMountTabIds: ReadonlySet<string> | null
 }): React.JSX.Element {

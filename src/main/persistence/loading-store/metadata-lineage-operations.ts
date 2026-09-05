@@ -21,7 +21,10 @@ import {
   partitionHasOtherRepoWorktreeTabs,
   removeWorkspaceSessionOwnerInPartition
 } from './session-host-partitions'
-import { migrateWorktreeIdentity as migrateWorktreeIdentityOperation } from '../tracking-repos/worktree-identity-migration'
+import {
+  migratePersistedWorkspaceMultiplexerIdentity,
+  migrateWorktreeIdentity as migrateWorktreeIdentityOperation
+} from '../tracking-repos/worktree-identity-migration'
 import {
   getAllWorktreeMetaForHost as getAllWorktreeMetaForHostOperation,
   getWorktreeMetaForHost as getWorktreeMetaForHostOperation,
@@ -255,20 +258,26 @@ export class MetadataLineageOperations {
   ): void {
     const state = this[metadataLineageOperationsContext].runtime.state
     const persistedOwner = state.worktreeMeta[oldWorktreeId]?.hostId
-    const mover = executionHostId ?? persistedOwner ?? LOCAL_EXECUTION_HOST_ID
-    const legacyChanged =
+    // Why: an unowned legacy rename still sweeps every session partition; a known owner scopes it.
+    const knownOwner = executionHostId ?? persistedOwner
+    const mover = knownOwner ?? LOCAL_EXECUTION_HOST_ID
+    const legacyMigrationVetoed =
       executionHostId !== undefined &&
       persistedOwner !== undefined &&
       persistedOwner !== executionHostId
-        ? false
-        : migrateWorktreeIdentityOperation(state, oldWorktreeId, newWorktreeId)
+    const legacyChanged =
+      !legacyMigrationVetoed &&
+      migrateWorktreeIdentityOperation(state, oldWorktreeId, newWorktreeId, knownOwner)
+    const multiplexerChanged =
+      legacyMigrationVetoed &&
+      migratePersistedWorkspaceMultiplexerIdentity(state, oldWorktreeId, newWorktreeId, mover)
     const canonicalChanged = migrateWorktreeMetadataLocator(
       state,
       oldWorktreeId,
       newWorktreeId,
       mover
     )
-    if (legacyChanged || canonicalChanged) {
+    if (legacyChanged || multiplexerChanged || canonicalChanged) {
       scheduleSave(this[metadataLineageOperationsContext].scheduling)
     }
   }

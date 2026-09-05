@@ -2600,6 +2600,38 @@
             "unknownBaseBlocker": "No se pudieron verificar confirmaciones sin enviar",
             "dismissedBlocker": "Ignorado"
           }
+        },
+        "multiplexer": {
+          "WorkspaceMultiplexerPage": {
+            "emptyTitle": "Mantén a la vista el trabajo en curso",
+            "emptyDescription": "Añade los worktrees y las carpetas entre los que alternas para ver sus terminales juntos. Orca restaura la disposición después de reiniciar.",
+            "back": "Atrás",
+            "title": "Multiplexor de espacios de trabajo",
+            "description": "Reúne los espacios de trabajo activos y sus terminales para no perder de vista el trabajo en curso.",
+            "dropToAdd": "Suelta para añadir el espacio de trabajo"
+          },
+          "WorkspaceMultiplexerPicker": {
+            "add": "Añadir espacio de trabajo",
+            "search": "Buscar espacios de trabajo...",
+            "empty": "No se encontraron espacios de trabajo.",
+            "primary": "principal",
+            "terminalTabs_one": "{{count}} pestaña de terminal",
+            "terminalTabs_other": "{{count}} pestañas de terminal",
+            "inMultiplexer": "{{value0}} en el Multiplexor de espacios de trabajo"
+          },
+          "WorkspaceMultiplexerTile": {
+            "unknownProject": "Proyecto desconocido",
+            "removeNamed": "Quitar {{value0}} del Multiplexor de espacios de trabajo",
+            "unavailable": "Espacio de trabajo no disponible",
+            "noTerminal": "No hay terminal en esta división",
+            "unavailableHint": "Puede que el espacio de trabajo esté desconectado o ya no figure en el catálogo.",
+            "noTerminalHint": "Abre aquí un terminal sin salir del Multiplexor de espacios de trabajo.",
+            "newTerminal": "Nuevo terminal",
+            "splitRight": "Dividir el espacio de trabajo a la derecha",
+            "splitDown": "Dividir el espacio de trabajo hacia abajo",
+            "restore": "Restaurar la disposición del Multiplexor de espacios de trabajo",
+            "maximize": "Maximizar espacio de trabajo"
+          }
         }
       },
       "ui": {
@@ -4464,7 +4496,8 @@
           "abc62b6328": "Agregar proyecto",
           "87d0064026": "El tablero de espacios de trabajo se movió a la barra inferior",
           "a30e34eb5c": "Cerrar tablero de espacios de trabajo",
-          "49f62c5665": "Tablero de espacios de trabajo"
+          "49f62c5665": "Tablero de espacios de trabajo",
+          "workspaceMultiplexer": "Multiplexor de espacios de trabajo"
         },
         "SidebarWorkspaceFilterSection": {
           "c3fa13dc2e": "Ocultar rama predeterminada",

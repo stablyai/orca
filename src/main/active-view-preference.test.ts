@@ -35,6 +35,21 @@ describe('ActiveViewPreference', () => {
     })
   })
 
+  it('renames and persists the pre-multiplexer active view value', async () => {
+    vi.useFakeTimers()
+    writeFileSync(getActiveViewPreferenceFile(dataFile), '{"activeView":"deck"}', 'utf-8')
+    const preference = new ActiveViewPreference(dataFile, 'terminal')
+
+    expect(preference.get()).toBe('multiplexer')
+    expect(preference.set('multiplexer')).toBe(false)
+    vi.advanceTimersByTime(100)
+    await preference.waitForPendingWrite()
+
+    expect(JSON.parse(readFileSync(getActiveViewPreferenceFile(dataFile), 'utf-8'))).toEqual({
+      activeView: 'multiplexer'
+    })
+  })
+
   it('coalesces rapid switches into one tiny preference write', async () => {
     vi.useFakeTimers()
     const preference = new ActiveViewPreference(dataFile, 'terminal')

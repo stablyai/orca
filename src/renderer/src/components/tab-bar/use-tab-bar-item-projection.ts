@@ -46,7 +46,8 @@ export function useTabBarItemProjection({
     activeBrowserTabId,
     activeSimulatorTabId,
     activeTabType,
-    expandedPaneByTabId
+    expandedPaneByTabId,
+    terminalOnly = false
   } = props
   const terminalMap = useMemo(() => new Map(tabs.map((tab) => [tab.id, tab])), [tabs])
   const editorMap = useMemo(
@@ -69,10 +70,12 @@ export function useTabBarItemProjection({
   const browserTabIds = useMemo(() => browserTabs?.map((tab) => tab.id) ?? [], [browserTabs])
   const simulatorTabIds = useMemo(
     () =>
-      unifiedTabs
-        .filter((tab) => tab.groupId === resolvedGroupId && tab.contentType === 'simulator')
-        .map((tab) => tab.id),
-    [unifiedTabs, resolvedGroupId]
+      terminalOnly
+        ? []
+        : unifiedTabs
+            .filter((tab) => tab.groupId === resolvedGroupId && tab.contentType === 'simulator')
+            .map((tab) => tab.id),
+    [resolvedGroupId, terminalOnly, unifiedTabs]
   )
   const agentSessionTabIds = useMemo(
     () => agentSessionTabs?.map((tab) => tab.id) ?? [],

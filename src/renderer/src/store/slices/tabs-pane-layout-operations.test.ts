@@ -332,6 +332,45 @@ describe('TabsSlice', () => {
       ).toEqual([])
     })
 
+    it('reports both source and target groups for a cross-pane split', () => {
+      const dispatched = vi.fn()
+      vi.stubGlobal('window', { ...window, dispatchEvent: dispatched })
+      vi.stubGlobal(
+        'CustomEvent',
+        class<T> {
+          detail: T
+
+          constructor(_type: string, init: CustomEventInit<T>) {
+            this.detail = init.detail!
+          }
+        } as typeof CustomEvent
+      )
+      try {
+        const source = store.getState().createUnifiedTab(WT, 'terminal')
+        const sourceGroupId = source.groupId
+        const targetGroupId = store.getState().createEmptySplitGroup(WT, sourceGroupId, 'right')!
+        store.getState().createUnifiedTab(WT, 'terminal', { targetGroupId })
+
+        expect(
+          store.getState().dropUnifiedTab(source.id, {
+            groupId: targetGroupId,
+            splitDirection: 'down'
+          })
+        ).toBe(true)
+
+        expect(dispatched).toHaveBeenCalledOnce()
+        expect(dispatched.mock.calls[0]?.[0]).toMatchObject({
+          detail: {
+            sourceGroupId,
+            targetGroupId,
+            unifiedTabId: source.id
+          }
+        })
+      } finally {
+        vi.unstubAllGlobals()
+      }
+    })
+
     it('treats splitting the only tab onto its own pane body as a no-op', () => {
       const onlyTab = store.getState().createUnifiedTab(WT, 'editor', {
         id: 'file-a.ts',

@@ -2600,6 +2600,38 @@
             "unknownBaseBlocker": "未プッシュのコミットを確認できませんでした",
             "dismissedBlocker": "無視済み"
           }
+        },
+        "multiplexer": {
+          "WorkspaceMultiplexerPage": {
+            "emptyTitle": "実行中の作業を常に把握",
+            "emptyDescription": "行き来するワークツリーやフォルダーを追加すると、それぞれのターミナルをまとめて確認できます。再起動後も Orca がレイアウトを復元します。",
+            "back": "戻る",
+            "title": "ワークスペースマルチプレクサ",
+            "description": "アクティブなワークスペースとターミナルをまとめ、実行中の作業を見失わないようにします。",
+            "dropToAdd": "ドロップしてワークスペースを追加"
+          },
+          "WorkspaceMultiplexerPicker": {
+            "add": "ワークスペースを追加",
+            "search": "ワークスペースを検索...",
+            "empty": "ワークスペースが見つかりません。",
+            "primary": "メイン",
+            "terminalTabs_one": "{{count}} 個のターミナルタブ",
+            "terminalTabs_other": "{{count}} 個のターミナルタブ",
+            "inMultiplexer": "ワークスペースマルチプレクサに {{value0}} 件"
+          },
+          "WorkspaceMultiplexerTile": {
+            "unknownProject": "不明なプロジェクト",
+            "removeNamed": "{{value0}} をワークスペースマルチプレクサから削除",
+            "unavailable": "ワークスペースを利用できません",
+            "noTerminal": "この分割にはターミナルがありません",
+            "unavailableHint": "ワークスペースが切断されているか、カタログから削除された可能性があります。",
+            "noTerminalHint": "ワークスペースマルチプレクサを離れずに、ここでターミナルを開きます。",
+            "newTerminal": "新しいターミナル",
+            "splitRight": "ワークスペースを右に分割",
+            "splitDown": "ワークスペースを下に分割",
+            "restore": "ワークスペースマルチプレクサのレイアウトを復元",
+            "maximize": "ワークスペースを最大化"
+          }
         }
       },
       "ui": {
@@ -4445,7 +4477,8 @@
           "abc62b6328": "プロジェクトを追加",
           "87d0064026": "ワークスペースボードは下部バーに移動しました",
           "a30e34eb5c": "ワークスペースボードを閉じる",
-          "49f62c5665": "ワークスペースボード"
+          "49f62c5665": "ワークスペースボード",
+          "workspaceMultiplexer": "ワークスペースマルチプレクサ"
         },
         "SidebarWorkspaceFilterSection": {
           "c3fa13dc2e": "デフォルトのブランチを非表示にする",

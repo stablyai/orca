@@ -737,3 +737,16 @@ describe('createUISlice space navigation', () => {
     expect(store.getState().activeView).toBe('artifacts')
   })
 })
+
+describe('createUISlice Workspace Multiplexer navigation', () => {
+  it('returns to the originating page', () => {
+    const store = createUIStore()
+
+    store.getState().openTaskPage()
+    store.getState().openWorkspaceMultiplexer()
+    expect(store.getState().activeView).toBe('multiplexer')
+
+    store.getState().closeWorkspaceMultiplexer()
+    expect(store.getState().activeView).toBe('tasks')
+  })
+})

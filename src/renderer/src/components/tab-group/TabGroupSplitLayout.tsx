@@ -11,7 +11,7 @@ import { type HoveredTabInsertion, useTabDragSplit } from './useTabDragSplit'
 const MIN_RATIO = 0.15
 const MAX_RATIO = 0.85
 
-function ResizeHandle({
+export function TabGroupResizeHandle({
   direction,
   onResizeStart,
   onRatioChange
@@ -234,7 +234,7 @@ function SplitNode({
           hoveredTabInsertion={hoveredTabInsertion}
         />
       </div>
-      <ResizeHandle
+      <TabGroupResizeHandle
         direction={node.direction}
         onResizeStart={() => recordFeatureInteraction('terminal-panes')}
         onRatioChange={(nextRatio) => setTabGroupSplitRatio(worktreeId, nodePath, nextRatio)}

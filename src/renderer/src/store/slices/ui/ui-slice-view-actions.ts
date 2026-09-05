@@ -1,8 +1,30 @@
 import type { UISlice, UISliceGet, UISliceSet } from './ui-slice-contract'
 import { rewindHistoryIndexPastView } from '../worktree-nav-history'
+import {
+  EMPTY_WORKSPACE_MULTIPLEXER_STATE,
+  normalizeWorkspaceMultiplexerState
+} from '../../../../../shared/workspace-multiplexer-types'
 
 export function createUiViewActions(set: UISliceSet, get: UISliceGet): Partial<UISlice> {
   return {
+    workspaceMultiplexer: EMPTY_WORKSPACE_MULTIPLEXER_STATE,
+    setWorkspaceMultiplexer: (multiplexer) => {
+      const normalized = normalizeWorkspaceMultiplexerState(multiplexer)
+      set({ workspaceMultiplexer: normalized })
+      window.api.ui.set({ workspaceMultiplexer: normalized }).catch(console.error)
+    },
+    openWorkspaceMultiplexer: () =>
+      set((state) => ({
+        activeView: 'multiplexer',
+        previousViewBeforeMultiplexer:
+          state.activeView === 'multiplexer'
+            ? state.previousViewBeforeMultiplexer
+            : state.activeView
+      })),
+    closeWorkspaceMultiplexer: () =>
+      set((state) => ({
+        activeView: state.previousViewBeforeMultiplexer
+      })),
     openActivityPage: () => {
       set((state) => ({
         activeView: 'activity',

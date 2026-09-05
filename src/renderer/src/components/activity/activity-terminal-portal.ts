@@ -1,6 +1,6 @@
-import { useCallback, useSyncExternalStore } from 'react'
+import { useCallback, useMemo, useSyncExternalStore } from 'react'
 
-export type ActivityTerminalPortalTarget = {
+export type TerminalSurfacePortalTarget = {
   slotId: string
   requestToken: string
   target: HTMLElement
@@ -9,24 +9,26 @@ export type ActivityTerminalPortalTarget = {
   // Why: each Activity thread targets one stable terminal leaf inside a tab.
   // Carry the durable paneKey across this boundary; TerminalPane resolves it
   // to the current numeric PaneManager handle immediately before isolation.
-  paneKey: string
+  paneKey?: string
   forceUnavailable?: boolean
   active: boolean
 }
 
-let currentTargets: ActivityTerminalPortalTarget[] = []
-const emptyTargets: ActivityTerminalPortalTarget[] = []
+export type ActivityTerminalPortalTarget = TerminalSurfacePortalTarget & { paneKey: string }
+
+let currentTargets: TerminalSurfacePortalTarget[] = []
+const emptyTargets: TerminalSurfacePortalTarget[] = []
 const subscribers = new Set<() => void>()
 
-type ActivityTerminalPortalFieldEquals = (
-  left: ActivityTerminalPortalTarget,
-  right: ActivityTerminalPortalTarget
+type TerminalSurfacePortalFieldEquals = (
+  left: TerminalSurfacePortalTarget,
+  right: TerminalSurfacePortalTarget
 ) => boolean
 
 // Why the keyed record: a dropped field here silently suppresses a publish and
 // strands Terminal on stale routing — the wrong-terminal flash this file exists
 // to prevent. `satisfies` turns a new descriptor field into a build error.
-const ACTIVITY_TERMINAL_PORTAL_FIELD_EQUALS: readonly ActivityTerminalPortalFieldEquals[] =
+const TERMINAL_SURFACE_PORTAL_FIELD_EQUALS: readonly TerminalSurfacePortalFieldEquals[] =
   Object.values({
     slotId: (left, right) => left.slotId === right.slotId,
     requestToken: (left, right) => left.requestToken === right.requestToken,
@@ -36,11 +38,11 @@ const ACTIVITY_TERMINAL_PORTAL_FIELD_EQUALS: readonly ActivityTerminalPortalFiel
     paneKey: (left, right) => left.paneKey === right.paneKey,
     forceUnavailable: (left, right) => left.forceUnavailable === right.forceUnavailable,
     active: (left, right) => left.active === right.active
-  } satisfies Record<keyof ActivityTerminalPortalTarget, ActivityTerminalPortalFieldEquals>)
+  } satisfies Record<keyof TerminalSurfacePortalTarget, TerminalSurfacePortalFieldEquals>)
 
-function haveSameActivityTerminalPortals(
-  left: readonly ActivityTerminalPortalTarget[],
-  right: readonly ActivityTerminalPortalTarget[]
+function haveSameTerminalSurfacePortals(
+  left: readonly TerminalSurfacePortalTarget[],
+  right: readonly TerminalSurfacePortalTarget[]
 ): boolean {
   return (
     left.length === right.length &&
@@ -48,7 +50,7 @@ function haveSameActivityTerminalPortals(
       const candidate = right[index]
       return (
         candidate !== undefined &&
-        ACTIVITY_TERMINAL_PORTAL_FIELD_EQUALS.every((isEqual) => isEqual(target, candidate))
+        TERMINAL_SURFACE_PORTAL_FIELD_EQUALS.every((isEqual) => isEqual(target, candidate))
       )
     })
   )
@@ -61,15 +63,19 @@ function haveSameActivityTerminalPortals(
 // repo/worktree updates landed before the matching setActiveTab, briefly
 // portaling a different terminal into the activity slot ("flash" of the wrong
 // terminal for a few ms).
-export function setActivityTerminalPortals(targets: ActivityTerminalPortalTarget[]): void {
+export function setTerminalSurfacePortals(targets: TerminalSurfacePortalTarget[]): void {
   // Why: semantic no-ops must not synchronously bounce through Terminal and back into Activity.
-  if (currentTargets === targets || haveSameActivityTerminalPortals(currentTargets, targets)) {
+  if (currentTargets === targets || haveSameTerminalSurfacePortals(currentTargets, targets)) {
     return
   }
   currentTargets = targets
   for (const subscriber of subscribers) {
     subscriber()
   }
+}
+
+export function setActivityTerminalPortals(targets: ActivityTerminalPortalTarget[]): void {
+  setTerminalSurfacePortals(targets)
 }
 
 function subscribeActivityTerminalPortals(onStoreChange: () => void): () => void {
@@ -79,7 +85,7 @@ function subscribeActivityTerminalPortals(onStoreChange: () => void): () => void
   }
 }
 
-export function useActivityTerminalPortals(enabled: boolean): ActivityTerminalPortalTarget[] {
+export function useTerminalSurfacePortals(enabled: boolean): TerminalSurfacePortalTarget[] {
   // Why: portal targets live in module state so Terminal can consume them
   // without routing through the app store; subscribe as an external store.
   const subscribe = useCallback(
@@ -93,8 +99,18 @@ export function useActivityTerminalPortals(enabled: boolean): ActivityTerminalPo
   return useSyncExternalStore(subscribe, getSnapshot, getSnapshot)
 }
 
-export function findActivityTerminalPortal(
-  targets: ActivityTerminalPortalTarget[],
+function hasPaneKey(target: TerminalSurfacePortalTarget): target is ActivityTerminalPortalTarget {
+  return target.paneKey !== undefined
+}
+
+export function useActivityTerminalPortals(enabled: boolean): ActivityTerminalPortalTarget[] {
+  const targets = useTerminalSurfacePortals(enabled)
+  // Why: the Multiplexer publishes pane-less targets on the same channel.
+  return useMemo(() => targets.filter(hasPaneKey), [targets])
+}
+
+export function findTerminalSurfacePortal(
+  targets: TerminalSurfacePortalTarget[],
   query: {
     worktreeId: string
     tabId: string
@@ -102,7 +118,7 @@ export function findActivityTerminalPortal(
     paneKey?: string
     requestToken?: string
   }
-): ActivityTerminalPortalTarget | null {
+): TerminalSurfacePortalTarget | null {
   const matchingTab = targets.filter(
     (target) => target.worktreeId === query.worktreeId && target.tabId === query.tabId
   )
@@ -126,4 +142,11 @@ export function findActivityTerminalPortal(
     (matchingTab.length === 1 ? matchingTab[0] : null) ??
     null
   )
+}
+
+export function findActivityTerminalPortal(
+  targets: ActivityTerminalPortalTarget[],
+  query: Parameters<typeof findTerminalSurfacePortal>[1]
+): ActivityTerminalPortalTarget | null {
+  return findTerminalSurfacePortal(targets, query) as ActivityTerminalPortalTarget | null
 }

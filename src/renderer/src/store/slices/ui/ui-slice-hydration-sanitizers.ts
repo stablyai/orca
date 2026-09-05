@@ -9,7 +9,7 @@ import type {
 } from '../../../../../shared/ui-chrome-types'
 import type { WorkspaceCleanupDismissal } from '../../../../../shared/workspace-cleanup'
 import { WORKSPACE_CLEANUP_CLASSIFIER_VERSION } from '../../../../../shared/workspace-cleanup'
-import { isTopLevelView } from '../../../../../shared/top-level-view'
+import { normalizeTopLevelView } from '../../../../../shared/top-level-view'
 import {
   normalizeVisibleExecutionHostIds,
   normalizeExecutionHostScope
@@ -171,12 +171,13 @@ export function sanitizeWorkspaceCleanupDismissals(
   return out
 }
 
-export function sanitizeHydratedActiveView(value: PersistedUIState['activeView']): TopLevelView {
+export function sanitizeHydratedActiveView(value: unknown): TopLevelView {
   // Why: older data (pre-activeView) or a view a different build doesn't have falls back to terminal rather than rendering nothing.
-  if (!isTopLevelView(value)) {
+  const normalized = normalizeTopLevelView(value)
+  if (!normalized) {
     return 'terminal'
   }
-  return value
+  return normalized
 }
 
 export function hydratedUIPartialMatchesState(

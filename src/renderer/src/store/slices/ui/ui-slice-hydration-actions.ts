@@ -33,6 +33,7 @@ import { PET_SIZE_DEFAULT, PET_SIZE_MAX, PET_SIZE_MIN } from '../../../../../sha
 import { clampMarkdownTocPanelWidth } from '../../../../../shared/markdown-toc-panel-width'
 import { clampCombinedDiffFileTreeWidth } from '../../../../../shared/combined-diff-file-tree-width'
 import { parsePersistedAutomationHostFilter } from '../../../../../shared/automation-host-filter'
+import { normalizeWorkspaceMultiplexerState } from '../../../../../shared/workspace-multiplexer-types'
 import { normalizeUsagePercentageDisplay } from '../../../../../shared/usage-percentage-display'
 import { normalizeStatusBarUsageMode } from '../../../../../shared/status-bar-usage-mode'
 import { normalizeBrowserPageZoomLevel } from '../../../../../shared/browser-page-zoom'
@@ -112,14 +113,15 @@ export function createUiHydrationActions(set: UISliceSet, _get: UISliceGet): Par
             ? ui.customSidekicks
             : []
         const petId = ui.petId ?? ui.sidekickId
-        // Migration: one-shot old-'recent'→'smart' runs in main (_sortBySmartMigrated), not here, so a deliberate 'recent' choice survives restart.
-        const sortBy = ui.sortBy
         const statusBarItemsWithGrok = hydrateStatusBarItems(ui)
         const rightSidebarRoute = normalizeRightSidebarRoute(
           ui.rightSidebarTab,
           ui.rightSidebarExplorerView
         )
         const hydrated = {
+          workspaceMultiplexer: normalizeWorkspaceMultiplexerState(
+            ui.workspaceMultiplexer ?? ui.workspaceDeck
+          ),
           // Why: persisted widths may be stale/corrupt/hand-edited; clamp during hydration so invalid values can't break layout.
           sidebarWidth: sanitizePersistedSidebarWidth(
             ui.sidebarWidth,
@@ -145,7 +147,8 @@ export function createUiHydrationActions(set: UISliceSet, _get: UISliceGet): Par
           rightSidebarTab: rightSidebarRoute.rightSidebarTab,
           rightSidebarExplorerView: rightSidebarRoute.rightSidebarExplorerView,
           groupBy: (ui.groupBy as UISlice['groupBy'] | 'parent') === 'parent' ? 'repo' : ui.groupBy,
-          sortBy,
+          // Migration runs in main so a deliberate 'recent' choice survives restart.
+          sortBy: ui.sortBy,
           // Why: main-process getUI() already normalized this (defaulting to 'manual'); read it through without migrating.
           projectOrderBy: ui.projectOrderBy,
           // Why: Active-only was retired; force the old flag off so an old profile can't invisibly narrow the workspace list.
@@ -165,8 +168,7 @@ export function createUiHydrationActions(set: UISliceSet, _get: UISliceGet): Par
           hideCliCreatedWorkspaces: ui.hideCliCreatedWorkspaces === true,
           hideDetachedHeadWorkspaces: ui.hideDetachedHeadWorkspaces === true,
           hideWorkspacesFromOtherDevices: ui.hideWorkspacesFromOtherDevices === true,
-          // Why !== false: profiles written before #8873 have no key, and they are
-          // precisely the ones showing the bug, so absence must mean "exempt".
+          // Why !== false: pre-#8873 profiles lack this key, so absence must mean "exempt".
           alwaysShowDefaultBranchWorkspace: ui.alwaysShowDefaultBranchWorkspace !== false,
           showDotfilesByWorktree: sanitizeShowDotfilesByWorktree(ui.showDotfilesByWorktree),
           // Why: startup hydrates UI before repo catalogs, so defer repo-filter validation to the all-host refresh.

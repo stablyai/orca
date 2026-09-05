@@ -2,13 +2,38 @@ import type { WorkspaceKey } from '../../../shared/folder-workspace-types'
 import type { BrowserPage, BrowserWorkspace } from '../../../shared/browser-workspace-types'
 import { remapBrowserPageDocLocation } from '../../../shared/browser-page-doc-location'
 import type { WorkspaceSessionState } from '../../../shared/workspace-session-state-types'
+import { LOCAL_EXECUTION_HOST_ID, type ExecutionHostId } from '../../../shared/execution-host'
 import { worktreeWorkspaceKey } from '../../../shared/workspace-scope'
 import type { PersistedState } from '../../../shared/persisted-state-types'
+import { remapWorkspaceMultiplexerWorktreeId } from '../../../shared/workspace-multiplexer-types'
 import {
   getWorktreeIdFromHostIdentity,
   isWorktreeHostIdentity
 } from '../../../shared/worktree/host-qualified-identity'
 import { splitWorktreeIdForFilesystem } from '../../../shared/worktree/id'
+
+export function migratePersistedWorkspaceMultiplexerIdentity(
+  state: PersistedState,
+  oldWorktreeId: string,
+  newWorktreeId: string,
+  executionHostId?: ExecutionHostId
+): boolean {
+  let changed = false
+  for (const key of ['workspaceMultiplexer', 'workspaceDeck'] as const) {
+    const current = state.ui[key]
+    const remapped = remapWorkspaceMultiplexerWorktreeId(
+      current,
+      oldWorktreeId,
+      newWorktreeId,
+      executionHostId
+    )
+    if (remapped !== current) {
+      state.ui[key] = remapped
+      changed = true
+    }
+  }
+  return changed
+}
 
 /**
  * Re-keys every worktreeId-keyed record in `state` from `oldWorktreeId` to `newWorktreeId`. Mutates `state` in place;
@@ -18,7 +43,8 @@ import { splitWorktreeIdForFilesystem } from '../../../shared/worktree/id'
 export function migrateWorktreeIdentity(
   state: PersistedState,
   oldWorktreeId: string,
-  newWorktreeId: string
+  newWorktreeId: string,
+  executionHostId?: ExecutionHostId
 ): boolean {
   if (oldWorktreeId === newWorktreeId) {
     return false
@@ -241,9 +267,16 @@ export function migrateWorktreeIdentity(
     }
   }
 
-  changed = migrateSession(state.workspaceSession) || changed
-  for (const session of Object.values(state.workspaceSessionsByHostId ?? {})) {
-    changed = migrateSession(session) || changed
+  // Why: path-derived ids collide across hosts, so a rename must not rewrite another host's session partition.
+  if (executionHostId === undefined || executionHostId === LOCAL_EXECUTION_HOST_ID) {
+    changed = migrateSession(state.workspaceSession) || changed
+  }
+  if (executionHostId === undefined) {
+    for (const session of Object.values(state.workspaceSessionsByHostId ?? {})) {
+      changed = migrateSession(session) || changed
+    }
+  } else if (executionHostId !== LOCAL_EXECUTION_HOST_ID) {
+    changed = migrateSession(state.workspaceSessionsByHostId?.[executionHostId]) || changed
   }
   for (const selectionsByWorktree of Object.values(
     state.mobileClientTabSelectionsByDeviceId ?? {}
@@ -254,6 +287,13 @@ export function migrateWorktreeIdentity(
   if (showDotfiles) {
     changed = moveKey(showDotfiles) || changed
   }
+  changed =
+    migratePersistedWorkspaceMultiplexerIdentity(
+      state,
+      oldWorktreeId,
+      newWorktreeId,
+      executionHostId
+    ) || changed
 
   return changed
 }

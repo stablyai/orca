@@ -2950,6 +2950,38 @@
               }
             }
           }
+        },
+        "multiplexer": {
+          "WorkspaceMultiplexerPage": {
+            "emptyTitle": "Keep running work in sight",
+            "emptyDescription": "Add the worktrees and folders you move between to watch their terminals together. Orca restores the layout after restart.",
+            "back": "Back",
+            "title": "Workspace Multiplexer",
+            "description": "Keep active workspaces and their terminals together so running work stays in sight.",
+            "dropToAdd": "Drop to add workspace"
+          },
+          "WorkspaceMultiplexerPicker": {
+            "add": "Add workspace",
+            "search": "Search workspaces...",
+            "empty": "No workspaces found.",
+            "primary": "primary",
+            "terminalTabs_one": "{{count}} terminal tab",
+            "terminalTabs_other": "{{count}} terminal tabs",
+            "inMultiplexer": "{{value0}} in Workspace Multiplexer"
+          },
+          "WorkspaceMultiplexerTile": {
+            "unknownProject": "Unknown project",
+            "removeNamed": "Remove {{value0}} from Workspace Multiplexer",
+            "unavailable": "Workspace unavailable",
+            "noTerminal": "No terminal in this split",
+            "unavailableHint": "The workspace may be disconnected or no longer in the catalog.",
+            "noTerminalHint": "Open a terminal here without leaving Workspace Multiplexer.",
+            "newTerminal": "New terminal",
+            "splitRight": "Split workspace right",
+            "splitDown": "Split workspace down",
+            "restore": "Restore Workspace Multiplexer layout",
+            "maximize": "Maximize workspace"
+          }
         }
       },
       "ui": {
@@ -5312,7 +5344,8 @@
           "a30e34eb5c": "Close workspace board",
           "49f62c5665": "Workspace board",
           "19e32d0e5f": "Open folder picker to add a project",
-          "abc62b6328": "Add Project"
+          "abc62b6328": "Add Project",
+          "workspaceMultiplexer": "Workspace Multiplexer"
         },
         "SidebarWorkspaceFilterSection": {
           "c3fa13dc2e": "Hide default branch",

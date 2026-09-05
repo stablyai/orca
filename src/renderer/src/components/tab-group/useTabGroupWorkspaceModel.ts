@@ -19,10 +19,12 @@ const EMPTY_TERMINAL_LAYOUTS_BY_TAB_ID: NonNullable<
 
 export function useTabGroupWorkspaceModel({
   groupId,
-  worktreeId
+  worktreeId,
+  terminalOnly = false
 }: {
   groupId: string
   worktreeId: string
+  terminalOnly?: boolean
 }) {
   const worktreeState = useAppStore(
     useShallow((state) => ({
@@ -54,7 +56,7 @@ export function useTabGroupWorkspaceModel({
     browserItems,
     agentSessionItems,
     tabBarOrder
-  } = useTabGroupItemProjections({ groupId, worktreeId, worktreeState })
+  } = useTabGroupItemProjections({ groupId, worktreeId, worktreeState, terminalOnly })
 
   const { closeItem, closeMany, leaveWorktreeIfEmpty } = useTabGroupTabCloseCommands({
     worktreeId,

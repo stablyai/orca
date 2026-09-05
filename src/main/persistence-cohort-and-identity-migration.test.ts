@@ -413,6 +413,97 @@ describe('Store.migrateWorktreeIdentity', () => {
     expect(reloaded.getMobileClientTabSelections()['device-a']?.[NEW]?.activeTabId).toBe('tab-1')
   })
 
+  it('keeps persisted Workspace Multiplexer selections across a host-scoped rename', async () => {
+    const store = await createStore()
+    const workspaceMultiplexer = {
+      slots: [
+        {
+          id: 'local-slot',
+          worktreeId: OLD,
+          groupId: null,
+          activeTerminalTabId: null
+        },
+        {
+          id: 'remote-slot',
+          worktreeId: OLD,
+          executionHostId: 'ssh:devbox' as const,
+          groupId: null,
+          activeTerminalTabId: null
+        }
+      ],
+      panes: [],
+      layout: null
+    }
+    store.updateUI({ workspaceMultiplexer, workspaceDeck: workspaceMultiplexer })
+
+    store.migrateWorktreeIdentity(OLD, NEW, 'local')
+    store.flush()
+
+    const reloaded = await createStore()
+    expect(reloaded.getUI().workspaceMultiplexer?.slots.map((slot) => slot.worktreeId)).toEqual([
+      NEW,
+      OLD
+    ])
+    expect(reloaded.getUI().workspaceDeck?.slots.map((slot) => slot.worktreeId)).toEqual([NEW, OLD])
+  })
+
+  it('remaps remote Multiplexer slots when local metadata vetoes legacy migration', async () => {
+    const store = await createStore()
+    store.addRepo(makeRepo({ id: 'repo1', path: '/repo1' }))
+    store.setWorktreeMeta(OLD, { displayName: 'Local twin', hostId: 'local' })
+    const workspaceMultiplexer = {
+      slots: [
+        { id: 'local-slot', worktreeId: OLD, groupId: null, activeTerminalTabId: null },
+        {
+          id: 'remote-slot',
+          worktreeId: OLD,
+          executionHostId: 'ssh:devbox' as const,
+          groupId: null,
+          activeTerminalTabId: null
+        }
+      ],
+      panes: [],
+      layout: null
+    }
+    store.updateUI({ workspaceMultiplexer, workspaceDeck: workspaceMultiplexer })
+
+    store.migrateWorktreeIdentity(OLD, NEW, 'ssh:devbox')
+    store.flush()
+
+    const reloaded = await createStore()
+    expect(reloaded.getWorktreeMeta(OLD)?.hostId).toBe('local')
+    expect(reloaded.getUI().workspaceMultiplexer?.slots.map((slot) => slot.worktreeId)).toEqual([
+      OLD,
+      NEW
+    ])
+    expect(reloaded.getUI().workspaceDeck?.slots.map((slot) => slot.worktreeId)).toEqual([OLD, NEW])
+  })
+
+  it('scopes session migration to the renaming execution host', async () => {
+    const hostSession = (): WorkspaceSessionState => ({
+      ...getDefaultWorkspaceSession(),
+      activeRepoId: 'repo1',
+      activeWorktreeId: OLD,
+      tabsByWorktree: { [OLD]: [makeTerminalTab({ id: `tab-${OLD}`, worktreeId: OLD })] }
+    })
+    const store = await createStore()
+    store.addRepo(makeRepo({ id: 'repo1', path: '/repo1' }))
+    store.setWorkspaceSession(hostSession(), 'local')
+    store.setWorkspaceSession(hostSession(), 'ssh:devbox')
+
+    store.migrateWorktreeIdentity(OLD, NEW, 'local')
+
+    expect(Object.keys(store.getWorkspaceSession('local').tabsByWorktree)).toEqual([NEW])
+    expect(store.getWorkspaceSession('local').activeWorktreeId).toBe(NEW)
+    expect(Object.keys(store.getWorkspaceSession('ssh:devbox').tabsByWorktree)).toEqual([OLD])
+    expect(store.getWorkspaceSession('ssh:devbox').activeWorktreeId).toBe(OLD)
+
+    store.migrateWorktreeIdentity(OLD, NEW, 'ssh:devbox')
+
+    expect(Object.keys(store.getWorkspaceSession('ssh:devbox').tabsByWorktree)).toEqual([NEW])
+    expect(store.getWorkspaceSession('local').activeWorktreeId).toBe(NEW)
+  })
+
   it('accumulates prior ids across chained renames', async () => {
     const store = await createStore()
     store.setWorktreeMeta(OLD, { displayName: 'Cunner' })

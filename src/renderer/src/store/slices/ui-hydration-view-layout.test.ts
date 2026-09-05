@@ -151,6 +151,83 @@ describe('createUISlice hydratePersistedUI', () => {
     expect(store.getState().activeView).toBe('skills')
   })
 
+  it('restores the Workspace Multiplexer and its layout', () => {
+    const store = createUIStore()
+    const workspaceMultiplexer = {
+      slots: [
+        {
+          id: 'slot-a',
+          worktreeId: 'worktree-a',
+          executionHostId: 'ssh:devbox' as const,
+          groupId: 'group-a',
+          activeTerminalTabId: 'terminal-a'
+        }
+      ],
+      panes: [{ id: 'slot-a', activeSlotId: 'slot-a', slotOrder: ['slot-a'] }],
+      layout: { type: 'leaf' as const, groupId: 'slot-a' }
+    }
+
+    store
+      .getState()
+      .hydratePersistedUI(
+        makePersistedUI({ activeView: 'multiplexer', workspaceMultiplexer }),
+        'startup'
+      )
+
+    expect(store.getState().activeView).toBe('multiplexer')
+    expect(store.getState().workspaceMultiplexer).toEqual(workspaceMultiplexer)
+  })
+
+  it('migrates the pre-rename Workspace Multiplexer state', () => {
+    const store = createUIStore()
+    const legacyWorkspaceMultiplexer = {
+      slots: [
+        {
+          id: 'slot-a',
+          worktreeId: 'worktree-a',
+          groupId: null,
+          activeTerminalTabId: null
+        }
+      ],
+      panes: [{ id: 'slot-a', activeSlotId: 'slot-a', slotOrder: ['slot-a'] }],
+      layout: { type: 'leaf' as const, groupId: 'slot-a' }
+    }
+
+    store.getState().hydratePersistedUI(
+      makePersistedUI({
+        activeView: 'deck' as unknown as PersistedUIState['activeView'],
+        workspaceDeck: legacyWorkspaceMultiplexer
+      }),
+      'startup'
+    )
+
+    expect(store.getState().activeView).toBe('multiplexer')
+    expect(store.getState().workspaceMultiplexer).toEqual(legacyWorkspaceMultiplexer)
+  })
+
+  it('persists Workspace Multiplexer changes', () => {
+    const setUI = vi.fn(() => Promise.resolve())
+    vi.stubGlobal('window', { api: { ui: { set: setUI } } })
+    const store = createUIStore()
+    const workspaceMultiplexer = {
+      slots: [
+        {
+          id: 'slot-a',
+          worktreeId: 'worktree-a',
+          groupId: null,
+          activeTerminalTabId: null
+        }
+      ],
+      panes: [{ id: 'slot-a', activeSlotId: 'slot-a', slotOrder: ['slot-a'] }],
+      layout: { type: 'leaf' as const, groupId: 'slot-a' }
+    }
+
+    store.getState().setWorkspaceMultiplexer(workspaceMultiplexer)
+
+    expect(store.getState().workspaceMultiplexer).toEqual(workspaceMultiplexer)
+    expect(setUI).toHaveBeenCalledWith({ workspaceMultiplexer })
+  })
+
   it('falls back to terminal when the persisted active view is not a known view', () => {
     const store = createUIStore()
 

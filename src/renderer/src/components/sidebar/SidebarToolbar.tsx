@@ -1,5 +1,5 @@
 import React from 'react'
-import { Kanban } from 'lucide-react'
+import { Kanban, PanelsTopLeft } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip'
@@ -35,6 +35,7 @@ const SidebarToolbar = React.memo(function SidebarToolbar({
   const hasUsedWorkspaceBoard = useAppStore((state) =>
     hasFeatureInteraction(state.featureInteractions, 'workspace-board')
   )
+  const openWorkspaceMultiplexer = useAppStore((state) => state.openWorkspaceMultiplexer)
 
   React.useEffect(() => {
     if (!persistedUIReady) {
@@ -76,6 +77,30 @@ const SidebarToolbar = React.memo(function SidebarToolbar({
           <SidebarSettingsHelpMenu />
         </div>
         <div className="flex items-center gap-1">
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant="ghost"
+                size="icon-xs"
+                type="button"
+                aria-label={translate(
+                  'auto.components.sidebar.SidebarToolbar.workspaceMultiplexer',
+                  'Workspace Multiplexer'
+                )}
+                data-workspace-multiplexer-trigger=""
+                onClick={openWorkspaceMultiplexer}
+                className="text-muted-foreground"
+              >
+                <PanelsTopLeft className="size-3.5" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent side="top" sideOffset={4}>
+              {translate(
+                'auto.components.sidebar.SidebarToolbar.workspaceMultiplexer',
+                'Workspace Multiplexer'
+              )}
+            </TooltipContent>
+          </Tooltip>
           <ScrollToCurrentWorkspaceToolbarButton />
           <Tooltip open={workspaceBoardMovedHintOpen ? true : undefined}>
             <TooltipTrigger asChild>

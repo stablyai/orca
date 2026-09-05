@@ -11,11 +11,17 @@ const TOP_LEVEL_VIEW_LOOKUP: Record<TopLevelView, true> = {
   space: true,
   skills: true,
   artifacts: true,
-  mobile: true
+  mobile: true,
+  multiplexer: true
 }
 
 export function isTopLevelView(value: unknown): value is TopLevelView {
   // Why: hasOwn (not `in`) so inherited keys like "constructor"/"__proto__" from a
   // corrupt sidecar can't pass as a view and leave the main surface blank.
   return typeof value === 'string' && Object.hasOwn(TOP_LEVEL_VIEW_LOOKUP, value)
+}
+
+export function normalizeTopLevelView(value: unknown): TopLevelView | null {
+  const normalized = value === 'deck' ? 'multiplexer' : value
+  return isTopLevelView(normalized) ? normalized : null
 }

@@ -341,7 +341,11 @@ export type WorktreeSlice = {
    * The inverse of purge: move state instead of dropping it, so the live worktree
    * keeps its tabs, terminals, and selections. No-op when the ids match.
    */
-  migrateWorktreeIdentity: (oldWorktreeId: string, newWorktreeId: string) => void
+  migrateWorktreeIdentity: (
+    oldWorktreeId: string,
+    newWorktreeId: string,
+    executionHostId?: ExecutionHostId
+  ) => void
   updateWorktreeGitIdentity: (
     worktreeId: string,
     identity: { head?: string; branch?: string | null }

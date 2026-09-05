@@ -1,4 +1,4 @@
-import { Suspense, useMemo } from 'react'
+import { Suspense, useCallback, useMemo } from 'react'
 import { lazyWithRetry as lazy } from '@/lib/lazy-with-retry'
 import { useDroppable } from '@dnd-kit/core'
 import { Ellipsis, X } from 'lucide-react'
@@ -43,7 +43,12 @@ export default function TabGroupPanel({
   reserveClosedExplorerToggleSpace,
   reserveCollapsedSidebarHeaderSpace,
   isTabDragActive = false,
-  hoveredTabInsertion = null
+  hoveredTabInsertion = null,
+  terminalOnly = false,
+  activeTerminalTabId,
+  onTerminalActivate,
+  onBodyElement,
+  terminalEmptyState
 }: {
   groupId: string
   worktreeId: string
@@ -60,10 +65,15 @@ export default function TabGroupPanel({
   reserveCollapsedSidebarHeaderSpace: boolean
   isTabDragActive?: boolean
   hoveredTabInsertion?: HoveredTabInsertion | null
+  terminalOnly?: boolean
+  activeTerminalTabId?: string | null
+  onTerminalActivate?: (terminalTabId: string) => void
+  onBodyElement?: (element: HTMLDivElement | null) => void
+  terminalEmptyState?: React.ReactNode
 }): React.JSX.Element {
   const rightSidebarOpen = useAppStore((state) => state.rightSidebarOpen)
   const sidebarOpen = useAppStore((state) => state.sidebarOpen)
-  const model = useTabGroupWorkspaceModel({ groupId, worktreeId })
+  const model = useTabGroupWorkspaceModel({ groupId, worktreeId, terminalOnly })
   const {
     activeTab,
     agentSessionItems,
@@ -93,6 +103,13 @@ export default function TabGroupPanel({
     },
     disabled: !isTabDragActive
   })
+  const setBodyRef = useCallback(
+    (element: HTMLDivElement | null) => {
+      setBodyDropRef(element)
+      onBodyElement?.(element)
+    },
+    [onBodyElement, setBodyDropRef]
+  )
   // Why: per-group anchor-name lets the worktree-level overlay position panes via CSS anchor positioning, so moving a tab between groups re-targets the anchor instead of remounting xterm (loses alt-screen TUI state) or reloading `<webview>`.
   const bodyAnchorName = tabGroupBodyAnchorName(groupId)
   // Why: memoize so a fresh style object each render doesn't break downstream memoization keyed on referential equality.
@@ -105,16 +122,21 @@ export default function TabGroupPanel({
     <TabBar
       tabs={terminalTabs}
       activeTabId={
-        activeTab?.contentType === 'terminal'
-          ? activeTab.entityId
-          : activeTab?.contentType === 'agent-session'
-            ? activeTab.id
-            : null
+        activeTerminalTabId !== undefined
+          ? activeTerminalTabId
+          : activeTab?.contentType === 'terminal'
+            ? activeTab.entityId
+            : activeTab?.contentType === 'agent-session'
+              ? activeTab.id
+              : null
       }
       groupId={groupId}
       worktreeId={worktreeId}
       expandedPaneByTabId={model.expandedPaneByTabId}
-      onActivate={commands.activateTerminal}
+      onActivate={(terminalId) => {
+        commands.activateTerminal(terminalId)
+        onTerminalActivate?.(terminalId)
+      }}
       onClose={(terminalId) => {
         const item = resolveGroupTabFromVisibleId(model.groupTabs, terminalId)
         if (item?.contentType === 'terminal' || item?.contentType === 'agent-session') {
@@ -147,17 +169,18 @@ export default function TabGroupPanel({
       onNewTerminalWithShell={commands.newTerminalWithShell}
       onNewBrowserTab={commands.newBrowserTab}
       onNewSimulatorTab={commands.newSimulatorTab}
-      onOpenEntry={commands.openEntry}
+      onOpenEntry={terminalOnly ? undefined : commands.openEntry}
       onNewFileTab={commands.newFileTab}
       onSetCustomTitle={commands.setTabCustomTitle}
       onSetTabColor={commands.setTabColor}
       onTogglePaneExpand={commands.toggleTerminalPaneExpand}
-      editorFiles={editorItems}
-      browserTabs={browserItems}
-      clientHostedBrowserRows={clientHostedRows}
+      editorFiles={terminalOnly ? undefined : editorItems}
+      browserTabs={terminalOnly ? undefined : browserItems}
+      clientHostedBrowserRows={terminalOnly ? undefined : clientHostedRows}
       groupActiveTabId={activeTab?.id ?? null}
-      agentSessionTabs={agentSessionItems}
+      agentSessionTabs={terminalOnly ? undefined : agentSessionItems}
       activeFileId={
+        terminalOnly ||
         activeTab?.contentType === 'terminal' ||
         activeTab?.contentType === 'agent-session' ||
         activeTab?.contentType === 'browser' ||
@@ -165,18 +188,24 @@ export default function TabGroupPanel({
           ? null
           : activeTab?.id
       }
-      activeBrowserTabId={activeTab?.contentType === 'browser' ? activeTab.entityId : null}
-      activeSimulatorTabId={activeTab?.contentType === 'simulator' ? activeTab.id : null}
+      activeBrowserTabId={
+        !terminalOnly && activeTab?.contentType === 'browser' ? activeTab.entityId : null
+      }
+      activeSimulatorTabId={
+        !terminalOnly && activeTab?.contentType === 'simulator' ? activeTab.id : null
+      }
       activeTabType={
-        activeTab?.contentType === 'terminal'
+        terminalOnly
           ? 'terminal'
-          : activeTab?.contentType === 'agent-session'
-            ? 'agent-session'
-            : activeTab?.contentType === 'browser'
-              ? 'browser'
-              : activeTab?.contentType === 'simulator'
-                ? 'simulator'
-                : 'editor'
+          : activeTab?.contentType === 'terminal'
+            ? 'terminal'
+            : activeTab?.contentType === 'agent-session'
+              ? 'agent-session'
+              : activeTab?.contentType === 'browser'
+                ? 'browser'
+                : activeTab?.contentType === 'simulator'
+                  ? 'simulator'
+                  : 'editor'
       }
       onActivateFile={commands.activateEditor}
       onCloseFile={commands.closeItem}
@@ -214,6 +243,7 @@ export default function TabGroupPanel({
       }}
       tabBarOrder={tabBarOrder}
       hoveredTabInsertion={hoveredTabInsertion}
+      terminalOnly={terminalOnly}
     />
   )
 
@@ -334,7 +364,7 @@ export default function TabGroupPanel({
       </div>
 
       <div
-        ref={setBodyDropRef}
+        ref={setBodyRef}
         data-tab-group-body-id={groupId}
         data-worktree-id={worktreeId}
         className="relative flex-1 min-h-0 overflow-hidden"
@@ -347,7 +377,9 @@ export default function TabGroupPanel({
             data-contextual-tour-target="workspace-agent-terminal-tip"
           />
         ) : null}
-        {activeTab &&
+        {terminalOnly && terminalTabs.length === 0 ? terminalEmptyState : null}
+        {!terminalOnly &&
+          activeTab &&
           activeTab.contentType !== 'terminal' &&
           activeTab.contentType !== 'agent-session' &&
           activeTab.contentType !== 'browser' &&

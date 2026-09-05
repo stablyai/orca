@@ -2615,6 +2615,38 @@
               }
             }
           }
+        },
+        "multiplexer": {
+          "WorkspaceMultiplexerPage": {
+            "emptyTitle": "让进行中的工作一目了然",
+            "emptyDescription": "添加你经常切换的工作树和文件夹，在同一屏幕查看它们的终端。Orca 会在重启后恢复布局。",
+            "back": "返回",
+            "title": "工作区多路复用器",
+            "description": "集中显示活动工作区及其终端，不再遗漏正在运行的工作。",
+            "dropToAdd": "拖放以添加工作区"
+          },
+          "WorkspaceMultiplexerPicker": {
+            "add": "添加工作区",
+            "search": "搜索工作区...",
+            "empty": "未找到工作区。",
+            "primary": "主工作区",
+            "terminalTabs_one": "{{count}} 个终端标签页",
+            "terminalTabs_other": "{{count}} 个终端标签页",
+            "inMultiplexer": "多路复用器中有 {{value0}} 个工作区"
+          },
+          "WorkspaceMultiplexerTile": {
+            "unknownProject": "未知项目",
+            "removeNamed": "从工作区多路复用器中移除 {{value0}}",
+            "unavailable": "工作区不可用",
+            "noTerminal": "此拆分区域中没有终端",
+            "unavailableHint": "工作区可能已断开连接或不再位于目录中。",
+            "noTerminalHint": "无需离开工作区多路复用器，即可在此处打开终端。",
+            "newTerminal": "新建终端",
+            "splitRight": "向右拆分工作区",
+            "splitDown": "向下拆分工作区",
+            "restore": "恢复工作区多路复用器布局",
+            "maximize": "最大化工作区"
+          }
         }
       },
       "ui": {
@@ -4493,7 +4525,8 @@
           "abc62b6328": "添加项目",
           "87d0064026": "工作区板已移到底部栏",
           "a30e34eb5c": "关闭工作区板",
-          "49f62c5665": "工作区板"
+          "49f62c5665": "工作区板",
+          "workspaceMultiplexer": "工作区多路复用器"
         },
         "SidebarWorkspaceFilterSection": {
           "c3fa13dc2e": "隐藏默认分支",

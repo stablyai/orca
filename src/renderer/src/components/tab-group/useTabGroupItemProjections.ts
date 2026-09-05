@@ -29,19 +29,24 @@ type TerminalTabItem = TerminalTab & { unifiedTabId: string }
 export function useTabGroupItemProjections({
   groupId,
   worktreeId,
-  worktreeState
+  worktreeState,
+  terminalOnly = false
 }: {
   groupId: string
   worktreeId: string
   worktreeState: TabGroupWorktreeSnapshot
+  terminalOnly?: boolean
 }) {
   const group = useMemo(
     () => worktreeState.groups.find((item) => item.id === groupId) ?? null,
     [groupId, worktreeState.groups]
   )
   const groupTabs = useMemo(
-    () => worktreeState.unifiedTabs.filter((item) => item.groupId === groupId),
-    [groupId, worktreeState.unifiedTabs]
+    () =>
+      worktreeState.unifiedTabs.filter(
+        (item) => item.groupId === groupId && (!terminalOnly || item.contentType === 'terminal')
+      ),
+    [groupId, terminalOnly, worktreeState.unifiedTabs]
   )
   const activeItemId = group?.activeTabId ?? null
   const activeTab = groupTabs.find((item) => item.id === activeItemId) ?? null
@@ -129,16 +134,18 @@ export function useTabGroupItemProjections({
 
   const tabBarOrder = useMemo(
     () =>
-      (group?.tabOrder ?? []).map((itemId) => {
+      (group?.tabOrder ?? []).flatMap((itemId) => {
         const item = groupTabs.find((candidate) => candidate.id === itemId)
         if (!item) {
-          return itemId
+          return terminalOnly ? [] : [itemId]
         }
-        return item.contentType === 'terminal' || item.contentType === 'browser'
-          ? item.entityId
-          : item.id
+        return [
+          item.contentType === 'terminal' || item.contentType === 'browser'
+            ? item.entityId
+            : item.id
+        ]
       }),
-    [group, groupTabs]
+    [group, groupTabs, terminalOnly]
   )
 
   return {
