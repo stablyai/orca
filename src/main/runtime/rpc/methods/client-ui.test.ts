@@ -359,6 +359,50 @@ describe('client UI RPC methods', () => {
     expect((update as { prBotAuthorOverrides: string[] }).prBotAuthorOverrides).toHaveLength(500)
   })
 
+  it('lets the local unix socket persist agent launch env and args', async () => {
+    const runtime = {
+      getRuntimeId: () => 'test-runtime',
+      updateClientSettings: vi.fn(() => ({}))
+    } as unknown as OrcaRuntimeService
+    const dispatcher = new RpcDispatcher({ runtime, methods: CLIENT_UI_METHODS })
+
+    const response = await dispatcher.dispatch(
+      makeRequest('settings.update', {
+        agentDefaultEnv: { claude: { PATH: '/evil' } },
+        agentDefaultArgs: { claude: '--debug' }
+      })
+    )
+
+    expect(runtime.updateClientSettings).toHaveBeenCalledWith({
+      agentDefaultEnv: { claude: { PATH: '/evil' } },
+      agentDefaultArgs: { claude: '--debug' }
+    })
+    expect(response).toMatchObject({ ok: true })
+  })
+
+  it('strips agentDefaultEnv and agentDefaultArgs from paired settings.update', async () => {
+    const runtime = {
+      getRuntimeId: () => 'test-runtime',
+      updateClientSettings: vi.fn(() => ({}))
+    } as unknown as OrcaRuntimeService
+    const dispatcher = new RpcDispatcher({ runtime, methods: CLIENT_UI_METHODS })
+
+    for (const clientKind of ['mobile', 'runtime'] as const) {
+      vi.mocked(runtime.updateClientSettings).mockClear()
+      const response = await dispatcher.dispatch(
+        makeRequest('settings.update', {
+          agentDefaultEnv: { claude: { PATH: '/evil' } },
+          agentDefaultArgs: { claude: '--debug' },
+          compactWorktreeCards: true
+        }),
+        { clientKind }
+      )
+
+      expect(runtime.updateClientSettings).toHaveBeenCalledWith({ compactWorktreeCards: true })
+      expect(response).toMatchObject({ ok: true })
+    }
+  })
+
   it('routes bot-author deltas to the runtime-owned atomic update', async () => {
     const settings = { prBotAuthorOverrides: ['alice', 'bob'] }
     const runtime = {

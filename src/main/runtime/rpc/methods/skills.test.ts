@@ -320,6 +320,42 @@ describe('skills.share RPC', () => {
   })
 })
 
+const SKILL_INSTALL_REQUEST = {
+  operationId: 'operation_1',
+  package: {
+    packageId: 'package_1',
+    versionId: 'version_1',
+    packageDigest: 'a'.repeat(64),
+    archiveSha256: 'b'.repeat(64),
+    compressedBytes: 100
+  },
+  ingress: {
+    kind: 'download-grant' as const,
+    url: 'https://storage.googleapis.com/package',
+    expiresAt: '2026-08-11T12:00:00.000Z'
+  },
+  destination: { scope: 'global' as const }
+}
+
+const SKILL_BUNDLE_INSTALL_REQUEST = {
+  operationId: 'operation_1',
+  package: {
+    packageId: 'package_1',
+    versionId: 'version_1',
+    bundleDigest: 'a'.repeat(64),
+    archiveSha256: 'b'.repeat(64),
+    compressedBytes: 100
+  },
+  selectedSkillIds: ['alpha'],
+  ingress: {
+    kind: 'download-grant' as const,
+    url: 'https://storage.googleapis.com/package',
+    expiresAt: '2026-08-11T12:00:00.000Z'
+  },
+  destination: { scope: 'global' as const },
+  conflictDecisions: []
+}
+
 describe('skill management RPC', () => {
   it('delegates preview and removal to the executing runtime', async () => {
     const previewSharedSkillInstallRequest = vi.fn(async () => ({ currentState: 'missing' }))
@@ -346,4 +382,38 @@ describe('skill management RPC', () => {
     expect(previewSharedSkillInstallRequest).toHaveBeenCalledOnce()
     expect(removeSharedSkillInstallRequest).toHaveBeenCalledOnce()
   })
+
+  it.each([
+    ['skills.install', SKILL_INSTALL_REQUEST, 'installSharedSkillRequest'],
+    ['skills.installBundle', SKILL_BUNDLE_INSTALL_REQUEST, 'installSharedSkillBundleRequest'],
+    [
+      'skills.removeInstall',
+      { operationId: 'operation_1', name: 'example', destination: { scope: 'global' as const } },
+      'removeSharedSkillInstallRequest'
+    ],
+    ['skills.commitUpload', { uploadId: 'upload_1' }, 'commitSkillUpload'],
+    ['skills.beginUpload', { package: SKILL_INSTALL_REQUEST.package }, 'beginSkillUpload'],
+    [
+      'skills.uploadChunk',
+      { uploadId: 'upload_1', offset: 0, bytesBase64: '' },
+      'appendSkillUploadChunk'
+    ]
+  ] as const)(
+    'rejects paired callers to %s with the unsupported-environment code',
+    async (methodName, params, runtimeMethod) => {
+      const runtimeFn = vi.fn()
+      const runtime = { [runtimeMethod]: runtimeFn }
+
+      for (const clientKind of ['mobile', 'runtime'] as const) {
+        await expect(
+          (async () =>
+            method(methodName).handler(params, {
+              runtime,
+              clientKind
+            } as unknown as RpcContext))()
+        ).rejects.toMatchObject({ code: 'agent_skill_sharing_unsupported_environment' })
+      }
+      expect(runtimeFn).not.toHaveBeenCalled()
+    }
+  )
 })
