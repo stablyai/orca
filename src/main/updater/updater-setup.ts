@@ -78,7 +78,7 @@ export class UpdaterSetup extends UpdaterDownloadInstall {
     return super.downloadRemoteServerUpdate(runtimeId)
   }
 
-  installRemoteServerUpdate(runtimeId: string): RemoteServerUpdateInstallResult {
+  async installRemoteServerUpdate(runtimeId: string): Promise<RemoteServerUpdateInstallResult> {
     return super.installRemoteServerUpdate(runtimeId)
   }
 
