@@ -109,3 +109,10 @@ export function setServeUpdateCensusGate(
 ): void {
   updater.setServeUpdateCensusGate(gate)
 }
+
+/** Arms the census-and-stop fence consulted just before the supervised install quits. */
+export function setServeUpdateCensusRuntime(
+  runtime: Parameters<typeof updater.setServeUpdateCensusRuntime>[0]
+): void {
+  updater.setServeUpdateCensusRuntime(runtime)
+}
