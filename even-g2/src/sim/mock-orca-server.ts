@@ -4,45 +4,36 @@
 // bytes mobile/src/transport/e2ee.ts produces, so a converged Unit 8 can swap this for the real
 // glasses-e2ee.ts module without changing wire behavior.
 import nacl from 'tweetnacl'
-import {
-  encodeTerminalStreamFrame,
-  TerminalStreamOpcode
-} from '@orca-shared/terminal-stream-protocol'
 import type { RpcFailure, RpcResponse, RpcSuccess } from '../transport/orca-rpc-wire'
 import {
   base64ToBytes,
   bytesToBase64,
   decryptText,
-  encryptBytes,
   encryptText
 } from './mock-orca-server-encryption'
 import type { MemorySocketLike } from './memory-socket-pair'
 import { MEMORY_SOCKET_READY_STATE } from './memory-socket-pair'
 import {
   createFixtureNotifications,
-  createFixtureTerminals,
   createFixtureWorktrees,
   FIXTURE_TERMINAL_SCROLLBACK,
   type FixtureNotificationEvent,
   type FixtureWorktreeStatus
 } from './mock-orca-fixtures'
+import { MockTerminalRegistry } from './mock-terminal-registry'
+import type { ConnectionState, RpcRequestLike } from './mock-orca-connection-state'
+import {
+  handleTerminalList,
+  handleTerminalResolveActive,
+  handleTerminalSend,
+  handleTerminalSubscribe,
+  handleTerminalUnsubscribe,
+  publishTerminalOutput,
+  type TerminalRpcContext
+} from './mock-orca-terminal-methods'
 
 const DEFAULT_DEVICE_TOKEN = 'mock-device-token'
 const DEFAULT_RUNTIME_ID = 'mock-g2-runtime'
-
-type ConnectionState = {
-  sharedKey: Uint8Array
-  authenticated: boolean
-  notificationSubscriptionId: string | null
-  terminalSubscriptions: Map<string, { streamId: number; seq: number }>
-}
-
-type RpcRequestLike = {
-  id: string
-  deviceToken?: string
-  method: string
-  params?: Record<string, unknown>
-}
 
 export type MockOrcaServerOptions = {
   deviceToken?: string
@@ -64,17 +55,20 @@ export class MockOrcaServer {
   private readonly runtimeId: string
   private readonly connections = new Map<MemorySocketLike, ConnectionState>()
   private readonly worktrees = createFixtureWorktrees()
-  private readonly terminalBuffers = new Map<string, string>()
+  private readonly terminals = new MockTerminalRegistry(FIXTURE_TERMINAL_SCROLLBACK, this.worktrees)
   private nextStreamId = 1
   private rejectNextAuth = false
+  private readonly terminalRpc: TerminalRpcContext = {
+    respond: (socket, state, response) => this.respond(socket, state, response),
+    sendEncryptedText: (socket, state, message) => this.sendEncryptedText(socket, state, message),
+    success: (id, result, streaming) => this.success(id, result, streaming),
+    allocateStreamId: () => this.nextStreamId++
+  }
 
   constructor(options?: MockOrcaServerOptions) {
     this.deviceToken = options?.deviceToken ?? DEFAULT_DEVICE_TOKEN
     this.runtimeId = options?.runtimeId ?? DEFAULT_RUNTIME_ID
     this.publicKeyB64 = bytesToBase64(this.keyPair.publicKey)
-    for (const terminal of createFixtureTerminals()) {
-      this.terminalBuffers.set(terminal.terminalId, FIXTURE_TERMINAL_SCROLLBACK)
-    }
   }
 
   /** Wires a server-side memory socket into the handshake/RPC pipeline. Returns a detach fn. */
@@ -125,14 +119,26 @@ export class MockOrcaServer {
     this.rejectNextAuth = true
   }
 
+  /** Overrides `terminal.resolveActive`'s answer for `worktreeId` (`null` = ambiguous / no
+   *  unique candidate — the ask/tail flows must fail closed rather than guess). */
+  setActiveTerminal(worktreeId: string, terminalId: string | null): void {
+    this.terminals.setActiveTerminal(worktreeId, terminalId)
+  }
+
+  /** Makes `terminal.send` to `terminalId` come back `accepted: false` (disconnected/read-only
+   *  terminal) until re-enabled with `setTerminalWritable(id, true)`. */
+  setTerminalWritable(terminalId: string, writable: boolean): void {
+    this.terminals.setTerminalWritable(terminalId, writable)
+  }
+
   /** Test-only: pushes host-originated output to every connection subscribed to `terminalId`,
    *  independent of terminal.send (which represents client-originated keystrokes). */
   pushTerminalOutputForTest(terminalId: string, text: string): void {
-    this.terminalBuffers.set(terminalId, (this.terminalBuffers.get(terminalId) ?? '') + text)
+    this.terminals.appendOutput(terminalId, text)
     for (const [socket, state] of this.connections) {
       const subscription = state.terminalSubscriptions.get(terminalId)
       if (subscription) {
-        this.pushTerminalFrame(socket, state, subscription, TerminalStreamOpcode.Output, text)
+        publishTerminalOutput(this.terminalRpc, socket, state, subscription, text)
       }
     }
   }
@@ -260,65 +266,25 @@ export class MockOrcaServer {
         )
         return
 
-      case 'terminal.list': {
-        const worktreeSelector = request.params?.worktree
-        const worktreeId =
-          typeof worktreeSelector === 'string' ? worktreeSelector.replace(/^id:/, '') : undefined
-        const terminals = createFixtureTerminals(worktreeId)
-        this.respond(
-          socket,
-          state,
-          this.success(request.id, { terminals, totalCount: terminals.length, truncated: false })
-        )
+      case 'terminal.list':
+        handleTerminalList(this.terminalRpc, socket, state, this.terminals, request)
         return
-      }
 
-      case 'terminal.send': {
-        const terminalId = String(request.params?.terminal ?? '')
-        const text = String(request.params?.text ?? '')
-        const previous = this.terminalBuffers.get(terminalId) ?? ''
-        this.terminalBuffers.set(terminalId, previous + text)
-        const subscription = state.terminalSubscriptions.get(terminalId)
-        if (subscription) {
-          this.pushTerminalFrame(socket, state, subscription, TerminalStreamOpcode.Output, text)
-        }
-        this.respond(socket, state, this.success(request.id, { ok: true }))
+      case 'terminal.resolveActive':
+        handleTerminalResolveActive(this.terminalRpc, socket, state, this.terminals, request)
         return
-      }
 
-      case 'terminal.subscribe': {
-        const terminalId = String(request.params?.terminal ?? 'term-wt1-1')
-        const streamId = this.nextStreamId++
-        const subscription = { streamId, seq: 0 }
-        state.terminalSubscriptions.set(terminalId, subscription)
-        // Wire shape verified against src/main/runtime/rpc/methods/terminal/
-        // terminal-multiplex-initial-snapshot.ts: `{ type: 'subscribed', streamId }`, matched by
-        // orca-socket-client.ts's isSubscribedResult guard. Not `{ subscriptionId }` — that
-        // field name belongs to the unrelated clientEvents/screencast subscription family.
-        this.respond(
-          socket,
-          state,
-          this.success(request.id, { type: 'subscribed', streamId }, true)
-        )
-        const scrollback = this.terminalBuffers.get(terminalId) ?? ''
-        this.pushTerminalFrame(socket, state, subscription, TerminalStreamOpcode.SnapshotStart, '')
-        this.pushTerminalFrame(
-          socket,
-          state,
-          subscription,
-          TerminalStreamOpcode.SnapshotChunk,
-          scrollback
-        )
-        this.pushTerminalFrame(socket, state, subscription, TerminalStreamOpcode.SnapshotEnd, '')
+      case 'terminal.send':
+        handleTerminalSend(this.terminalRpc, socket, state, this.terminals, request)
         return
-      }
 
-      case 'terminal.unsubscribe': {
-        const subscriptionId = String(request.params?.subscriptionId ?? '')
-        state.terminalSubscriptions.delete(subscriptionId)
-        this.respond(socket, state, this.success(request.id, { unsubscribed: true }))
+      case 'terminal.subscribe':
+        handleTerminalSubscribe(this.terminalRpc, socket, state, this.terminals, request)
         return
-      }
+
+      case 'terminal.unsubscribe':
+        handleTerminalUnsubscribe(this.terminalRpc, socket, state, request)
+        return
 
       case 'notifications.subscribe':
         state.notificationSubscriptionId = request.id
@@ -343,27 +309,6 @@ export class MockOrcaServer {
           this.failure(request.id, 'method_not_found', `Unknown method: ${request.method}`)
         )
     }
-  }
-
-  private pushTerminalFrame(
-    socket: MemorySocketLike,
-    state: ConnectionState,
-    subscription: { streamId: number; seq: number },
-    opcode: TerminalStreamOpcode,
-    text: string
-  ): void {
-    if (socket.readyState !== MEMORY_SOCKET_READY_STATE.OPEN) {
-      return
-    }
-    const payload = new TextEncoder().encode(text)
-    const frame = encodeTerminalStreamFrame({
-      opcode,
-      streamId: subscription.streamId,
-      seq: subscription.seq++,
-      payload
-    })
-    const bundle = encryptBytes(frame, state.sharedKey)
-    socket.send(bundle)
   }
 
   private respond(socket: MemorySocketLike, state: ConnectionState, response: RpcResponse): void {

@@ -127,6 +127,109 @@ describe('HudRenderQueue', () => {
     expect(scheduled).toHaveLength(1)
   })
 
+  it('spends the startup latch and falls through to rebuild when createStartUpPage rejects', async () => {
+    const bridge = createMockBridge()
+    bridge.createStartUpPage.mockRejectedValueOnce(new Error('bridge exploded'))
+    const onRenderError = vi.fn()
+    const queue = new HudRenderQueue(bridge, { onRenderError })
+    const page = buildHudPage({ layout: 'text', header: 'H', body: 'B', footer: 'F' })
+
+    queue.submit(page)
+    await flush()
+
+    // The one-shot latch must be spent even though the call threw, or a later submit would
+    // illegally retry createStartUpPage (rejected by firmware, ~2.1s block per attempt).
+    expect(queue.startupSpent).toBe(true)
+    expect(bridge.rebuildPage).toHaveBeenCalledTimes(1)
+    expect(bridge.rebuildPage).toHaveBeenCalledWith(page)
+    expect(onRenderError).toHaveBeenCalled()
+  })
+
+  it('does not retry createStartUpPage on a later submit after a rejected create', async () => {
+    const bridge = createMockBridge()
+    bridge.createStartUpPage.mockRejectedValueOnce(new Error('bridge exploded'))
+    const queue = new HudRenderQueue(bridge)
+    const page1 = buildHudPage({ layout: 'text', header: 'H', body: 'B', footer: 'F' })
+    queue.submit(page1)
+    await flush()
+    // The rejected create already fell through to a (successful, mocked) rebuild.
+    expect(bridge.rebuildPage).toHaveBeenCalledTimes(1)
+
+    const page2 = buildHudPage({ layout: 'text', header: 'H2', body: 'B2', footer: 'F2' })
+    queue.submit(page2)
+    await flush()
+
+    expect(bridge.createStartUpPage).toHaveBeenCalledTimes(1)
+    expect(bridge.rebuildPage).toHaveBeenCalledTimes(2)
+  })
+
+  it('drops (never sends) a page that fails HUD validation and reports the violation', async () => {
+    const bridge = createMockBridge()
+    const onRenderError = vi.fn()
+    const queue = new HudRenderQueue(bridge, { onRenderError })
+    const page = buildHudPage({ layout: 'text', header: 'H', body: 'B', footer: 'F' })
+    // Force a violation (name > 16 chars) without going through buildHudPage's own truncation.
+    page.containers[0] = {
+      ...page.containers[0]!,
+      name: 'x'.repeat(20)
+    } as (typeof page.containers)[0]
+
+    queue.submit(page)
+    await flush()
+
+    expect(bridge.createStartUpPage).not.toHaveBeenCalled()
+    expect(bridge.rebuildPage).not.toHaveBeenCalled()
+    expect(onRenderError).toHaveBeenCalledTimes(1)
+    // The one-shot latch is untouched by a dropped page — it never reached the bridge.
+    expect(queue.startupSpent).toBe(false)
+  })
+
+  it('drops an invalid upgrade payload instead of sending it, and does not fall back to an equally invalid rebuild', async () => {
+    const bridge = createMockBridge()
+    const onRenderError = vi.fn()
+    const queue = new HudRenderQueue(bridge, { onRenderError })
+
+    const page1 = buildHudPage({ layout: 'text', header: 'H', body: 'B', footer: 'F' })
+    queue.submit(page1)
+    await flush()
+
+    const page2 = buildHudPage({ layout: 'text', header: 'H', body: 'B2', footer: 'F' })
+    // Bypass buildHudPage's own <=1000-char truncation to force an over-limit upgrade payload
+    // (>2000 chars) while keeping the container skeleton identical (still an 'upgrade' plan).
+    page2.containers[1] = {
+      ...page2.containers[1]!,
+      content: 'x'.repeat(2500)
+    } as (typeof page2.containers)[1]
+
+    queue.submit(page2)
+    await flush()
+
+    expect(bridge.upgradeText).not.toHaveBeenCalled()
+    // The oversized content also fails full-page validation, so the fallback rebuild is
+    // dropped too rather than sending the same invalid content another way.
+    expect(bridge.rebuildPage).not.toHaveBeenCalled()
+    expect(onRenderError).toHaveBeenCalled()
+  })
+
+  it('invalidate() forces a rebuild on the next submit even with identical content, without re-spending create', async () => {
+    const bridge = createMockBridge()
+    const queue = new HudRenderQueue(bridge)
+    const page = buildHudPage({ layout: 'text', header: 'H', body: 'B', footer: 'F' })
+
+    queue.submit(page)
+    await flush()
+    expect(bridge.createStartUpPage).toHaveBeenCalledTimes(1)
+
+    queue.invalidate()
+    queue.submit(page) // identical content — would normally diff to 'noop'
+    await flush()
+
+    expect(bridge.rebuildPage).toHaveBeenCalledTimes(1)
+    expect(bridge.rebuildPage).toHaveBeenCalledWith(page)
+    // The one-shot startup API must never be retried just because the queue was invalidated.
+    expect(bridge.createStartUpPage).toHaveBeenCalledTimes(1)
+  })
+
   it('recovers previous page state when the retried rebuild succeeds', async () => {
     const bridge = createMockBridge()
     const scheduled: { cb: () => void; ms: number }[] = []

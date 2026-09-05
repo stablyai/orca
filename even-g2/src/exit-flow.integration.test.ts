@@ -70,7 +70,28 @@ describe('exit flow integration', () => {
       }
     })
 
+    // HIGH finding hud-navigation.ts:264: firmware genuinely clears the page behind the exit
+    // dialog and does NOT restore it on cancel — the mock must reproduce that blanking rather
+    // than silently bringing the dashboard back, or a real "stuck blank HUD" regression would be
+    // invisible here. (Cluster D's FOREGROUND_ENTER handler is responsible for forcing the
+    // rebuild that un-blanks the HUD; this integration test only pins the mock's honesty.)
+    expect(bridge.pageSnapshot()).toBeNull()
+
     expect(shell.sessions.current()?.client.getState()).toBe('connected')
+
+    // integrator: once hud-navigation.ts's armed FOREGROUND_ENTER path forces a render-queue
+    // rebuild (not just a refreshDashboard request) instead of relying on the differ to notice a
+    // content change, the dashboard should reappear here. Left failing intentionally until that
+    // lands — do not silently loosen this into a no-op assertion.
+    await vi.waitFor(
+      () => {
+        const page = bridge.pageSnapshot()
+        if (!page || !textContent(page.containers, 2).includes('api-refactor')) {
+          throw new Error('dashboard did not rebuild after the exit dialog cleared the page')
+        }
+      },
+      { timeout: 1000 }
+    )
 
     shell.stop()
   })

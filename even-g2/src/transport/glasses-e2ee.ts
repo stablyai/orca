@@ -4,6 +4,14 @@
 // of Node's Buffer base64 codec. Wire bytes (nonce || box ciphertext) are identical.
 import nacl from 'tweetnacl'
 
+// Mirrors src/shared/e2ee-crypto.ts's MAX_E2EE_ENCRYPTED_BASE64_CHARACTERS bound, recomputed
+// locally rather than imported — that module uses Node's Buffer, which the browser bundle
+// doesn't have. Keep the derivation in sync if the shared cap changes.
+const MAX_E2EE_PLAINTEXT_BYTES = 4 * 1024 * 1024
+const E2EE_FRAME_OVERHEAD_BYTES = nacl.box.nonceLength + nacl.box.overheadLength
+export const MAX_E2EE_ENCRYPTED_BASE64_CHARACTERS =
+  Math.ceil((MAX_E2EE_PLAINTEXT_BYTES + E2EE_FRAME_OVERHEAD_BYTES) / 3) * 4
+
 export function generateKeyPair(): { publicKey: Uint8Array; secretKey: Uint8Array } {
   const kp = nacl.box.keyPair()
   return { publicKey: kp.publicKey, secretKey: kp.secretKey }
@@ -50,9 +58,19 @@ export function encryptText(plaintext: string, sharedKey: Uint8Array): string {
 }
 
 export function decryptText(encrypted: string, sharedKey: Uint8Array): string | null {
-  const bundle = base64ToUint8(encrypted)
-  const plaintext = decryptBytes(bundle, sharedKey)
-  return plaintext ? new TextDecoder().decode(plaintext) : null
+  // Untrusted input: bound the size before atob (avoids a huge allocation from an oversized
+  // frame) and contain malformed base64 — atob throws on invalid input, unlike Node's lenient
+  // Buffer.from that src/shared/e2ee-crypto.ts relies on.
+  if (encrypted.length > MAX_E2EE_ENCRYPTED_BASE64_CHARACTERS) {
+    return null
+  }
+  try {
+    const bundle = base64ToUint8(encrypted)
+    const plaintext = decryptBytes(bundle, sharedKey)
+    return plaintext ? new TextDecoder().decode(plaintext) : null
+  } catch {
+    return null
+  }
 }
 
 function encryptToBundle(plaintext: Uint8Array, sharedKey: Uint8Array): Uint8Array {
@@ -71,9 +89,12 @@ export function decryptBytes(bundle: Uint8Array, sharedKey: Uint8Array): Uint8Ar
     return null
   }
 
-  const nonce = bundle.subarray(0, nacl.box.nonceLength)
-  const ciphertext = bundle.subarray(nacl.box.nonceLength)
-  const plaintext = nacl.box.open.after(ciphertext, nonce, sharedKey)
-
-  return plaintext ? plaintext : null
+  try {
+    const nonce = bundle.subarray(0, nacl.box.nonceLength)
+    const ciphertext = bundle.subarray(nacl.box.nonceLength)
+    const plaintext = nacl.box.open.after(ciphertext, nonce, sharedKey)
+    return plaintext ? plaintext : null
+  } catch {
+    return null
+  }
 }

@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
+  encodeTerminalStreamJson,
   TerminalStreamOpcode,
   type TerminalStreamFrame
 } from '@orca-shared/terminal-stream-protocol'
@@ -57,14 +58,38 @@ describe('TerminalTailDecoder', () => {
     expect(decoder.lines()).toEqual(['line-7', 'line-8', 'line-9'])
   })
 
-  it('resets the buffer on SnapshotStart, then appends SnapshotChunk/SnapshotEnd', () => {
+  it('resets the buffer on SnapshotStart and does not render its JSON metadata payload, then appends SnapshotChunk/SnapshotEnd', () => {
     const decoder = new TerminalTailDecoder()
     decoder.pushFrame(frame(TerminalStreamOpcode.Output, 'stale line\n'))
-    decoder.pushFrame(frame(TerminalStreamOpcode.SnapshotStart, 'fresh-'))
+    decoder.pushFrame({
+      opcode: TerminalStreamOpcode.SnapshotStart,
+      streamId: 1,
+      seq: 0,
+      // Real hosts send JSON metadata here (see terminal-snapshot-publication.ts), not text.
+      payload: encodeTerminalStreamJson({ kind: 'scrollback', cols: 80, rows: 24 })
+    })
     decoder.pushFrame(frame(TerminalStreamOpcode.SnapshotChunk, 'start\n'))
     decoder.pushFrame(frame(TerminalStreamOpcode.SnapshotChunk, 'second line'))
     decoder.pushFrame(frame(TerminalStreamOpcode.SnapshotEnd, ''))
-    expect(decoder.lines()).toEqual(['fresh-start', 'second line'])
+    expect(decoder.lines()).toEqual(['start', 'second line'])
+  })
+
+  it('never contaminates lines() with SnapshotStart metadata, even when it looks like text', () => {
+    const decoder = new TerminalTailDecoder()
+    decoder.pushFrame({
+      opcode: TerminalStreamOpcode.SnapshotStart,
+      streamId: 1,
+      seq: 0,
+      payload: encodeTerminalStreamJson({
+        kind: 'scrollback',
+        cols: 80,
+        rows: 24,
+        cwd: '/Users/dev/should-not-appear-in-tail'
+      })
+    })
+    expect(decoder.lines()).toEqual([''])
+    decoder.pushFrame(frame(TerminalStreamOpcode.SnapshotChunk, 'real output\n'))
+    expect(decoder.lines()).toEqual(['real output'])
   })
 
   it('renders Error frames as an inline marker line', () => {

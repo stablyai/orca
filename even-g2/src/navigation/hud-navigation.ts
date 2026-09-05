@@ -3,28 +3,27 @@
 import type { HudInput, NavContext, NavEffect, NavState, ScreenFrame } from './nav-contract'
 import { clampAskCursor, resolveAskQuickAction } from './ask-quick-action'
 import {
+  clampToRange as clamp,
   frameHostId,
   isListLayoutScreen,
   isRootFrame,
+  NO_EFFECTS,
   popFrame,
   pushFrame,
+  type ReducedNav,
   replaceTopFrame,
-  topFrame
+  topFrame,
+  unchangedNav as unchanged
 } from './hud-navigation-frames'
+import { reduceDashboardClick, reduceDashboardScroll } from './hud-navigation-dashboard'
+import {
+  reduceHostListSelect,
+  reduceWorktreeListScroll,
+  reduceWorktreeListSelect
+} from './hud-navigation-list-select'
 
 export { createInitialNavState } from './hud-navigation-frames'
-
-export type ReducedNav = { state: NavState; effects: NavEffect[] }
-
-const NO_EFFECTS: NavEffect[] = []
-
-function unchanged(state: NavState): ReducedNav {
-  return { state, effects: NO_EFFECTS }
-}
-
-function clamp(value: number, min: number, max: number): number {
-  return Math.min(Math.max(value, min), max)
-}
+export type { ReducedNav } from './hud-navigation-frames'
 
 export function reduceHudInput(state: NavState, input: HudInput, ctx: NavContext): ReducedNav {
   switch (input.kind) {
@@ -37,7 +36,7 @@ export function reduceHudInput(state: NavState, input: HudInput, ctx: NavContext
     case 'click':
       return reduceClick(state, ctx)
     case 'listSelect':
-      return reduceListSelect(state, ctx, input.index)
+      return reduceListSelect(state, ctx, input.index, input.label)
     case 'foregroundEnter':
       return reduceForegroundEnter(state)
     case 'foregroundExit':
@@ -68,10 +67,15 @@ function reduceDoubleClick(state: NavState): ReducedNav {
   return { state: popFrame(state), effects }
 }
 
-// --- scroll: list layouts are a no-op (firmware scrolls natively); text layouts page-turn or
-// move a cursor depending on the screen. ---
+// --- scroll: hostList never paginates so it's a no-op (firmware scrolls natively);
+// worktreeList's native scrolling is also free within a page, but SCROLL_TOP/BOTTOM fire when
+// the user hits the very top/bottom of the current ≤20-item window, so those boundary hits
+// must turn our own page; text layouts page-turn or move a cursor depending on the screen. ---
 function reduceScroll(state: NavState, ctx: NavContext, direction: -1 | 1): ReducedNav {
   const frame = topFrame(state)
+  if (frame.screen === 'worktreeList') {
+    return reduceWorktreeListScroll(state, ctx, frame, direction)
+  }
   if (isListLayoutScreen(frame.screen)) {
     return unchanged(state)
   }
@@ -88,32 +92,8 @@ function reduceScroll(state: NavState, ctx: NavContext, direction: -1 | 1): Redu
   return unchanged(state) // pairing: nothing to scroll
 }
 
-type DashboardFrame = Extract<ScreenFrame, { screen: 'dashboard' }>
 type TerminalTailFrame = Extract<ScreenFrame, { screen: 'terminalTail' }>
 type AskFrame = Extract<ScreenFrame, { screen: 'ask' }>
-type HostListFrame = Extract<ScreenFrame, { screen: 'hostList' }>
-type WorktreeListFrame = Extract<ScreenFrame, { screen: 'worktreeList' }>
-
-// Dashboard's `page` field is dual-purpose: a row cursor when the dashboard fits on one page
-// (scroll = select, click = drill into that worktree), a page index once it doesn't
-// (scroll = page-turn, click = open worktreeList) — spec's "footer states current click meaning".
-function reduceDashboardScroll(
-  state: NavState,
-  ctx: NavContext,
-  frame: DashboardFrame,
-  direction: -1 | 1
-): ReducedNav {
-  const paginated = ctx.dashboardPageCount(frame.hostId) > 1
-  const bound = paginated ? ctx.dashboardPageCount(frame.hostId) : ctx.worktreeCount(frame.hostId)
-  if (bound <= 0) {
-    return unchanged(state)
-  }
-  const next = clamp(frame.page + direction, 0, bound - 1)
-  if (next === frame.page) {
-    return unchanged(state)
-  }
-  return { state: replaceTopFrame(state, { ...frame, page: next }), effects: NO_EFFECTS }
-}
 
 function reduceTerminalTailScroll(
   state: NavState,
@@ -183,94 +163,54 @@ function reduceAskClick(state: NavState, ctx: NavContext, frame: AskFrame): Redu
   return { state, effects: [{ kind: 'sendAskAnswer', hostId: frame.hostId, worktreeId, option }] }
 }
 
-function reduceDashboardClick(state: NavState, ctx: NavContext, frame: DashboardFrame): ReducedNav {
-  if (ctx.dashboardPageCount(frame.hostId) > 1) {
-    const next = pushFrame(state, {
-      screen: 'worktreeList',
-      hostId: frame.hostId,
-      selectedIndex: 0,
-      page: 0
-    })
-    return { state: next, effects: NO_EFFECTS }
-  }
-  const worktreeId = ctx.worktreeIdAt(frame.hostId, frame.page)
-  if (worktreeId === null) {
-    return unchanged(state)
-  }
-  const next = pushFrame(state, {
-    screen: 'terminalTail',
-    hostId: frame.hostId,
-    worktreeId,
-    terminalId: '',
-    page: 0
-  })
-  return { state: next, effects: [{ kind: 'openTerminalTail', worktreeId }] }
-}
-
-// --- listSelect: click on a native list container. Index -1 (SDK quirk on item 0) falls back
-// to the frame's own tracked selection. ---
-function reduceListSelect(state: NavState, ctx: NavContext, rawIndex: number): ReducedNav {
+// --- listSelect: click on a native list container. ---
+function reduceListSelect(
+  state: NavState,
+  ctx: NavContext,
+  rawIndex: number,
+  label: string | undefined
+): ReducedNav {
   const frame = topFrame(state)
   if (frame.screen === 'hostList') {
-    return reduceHostListSelect(state, ctx, frame, rawIndex)
+    return reduceHostListSelect(state, ctx, frame, rawIndex, label)
   }
   if (frame.screen === 'worktreeList') {
-    return reduceWorktreeListSelect(state, ctx, frame, rawIndex)
+    return reduceWorktreeListSelect(state, ctx, frame, rawIndex, label)
   }
   return unchanged(state)
-}
-
-function reduceHostListSelect(
-  state: NavState,
-  ctx: NavContext,
-  frame: HostListFrame,
-  rawIndex: number
-): ReducedNav {
-  const index = rawIndex === -1 ? frame.selectedIndex : rawIndex
-  const tracked = replaceTopFrame(state, { ...frame, selectedIndex: index })
-  const hostId = ctx.hostIdAt(index)
-  if (hostId === null) {
-    return { state: tracked, effects: NO_EFFECTS }
-  }
-  return {
-    state: pushFrame(tracked, { screen: 'dashboard', hostId, page: 0 }),
-    effects: [{ kind: 'connectHost', hostId }]
-  }
-}
-
-function reduceWorktreeListSelect(
-  state: NavState,
-  ctx: NavContext,
-  frame: WorktreeListFrame,
-  rawIndex: number
-): ReducedNav {
-  const index = rawIndex === -1 ? frame.selectedIndex : rawIndex
-  const tracked = replaceTopFrame(state, { ...frame, selectedIndex: index })
-  const worktreeId = ctx.worktreeIdAt(frame.hostId, index)
-  if (worktreeId === null) {
-    return { state: tracked, effects: NO_EFFECTS }
-  }
-  const next = pushFrame(tracked, {
-    screen: 'terminalTail',
-    hostId: frame.hostId,
-    worktreeId,
-    terminalId: '',
-    page: 0
-  })
-  return { state: next, effects: [{ kind: 'openTerminalTail', worktreeId }] }
 }
 
 // --- foreground/system/abnormal exit: exit-dialogue polarity inverts these while armed. ---
 function reduceForegroundEnter(state: NavState): ReducedNav {
   if (state.exitDialogArmed) {
-    return { state, effects: [{ kind: 'refreshDashboard' }] }
+    // Firmware clears the page to show the confirm dialogue; invalidate the render queue's
+    // remembered previous page so whatever gets submitted next — now, or once the user
+    // answers — forces a rebuild instead of being diffed as a no-op against stale memory
+    // (spec: "host cleared the page -> effect refreshDashboard + re-render (rebuild) cue").
+    return { state, effects: [{ kind: 'refreshDashboard' }, { kind: 'invalidateRender' }] }
+  }
+  if (state.terminalTailsNeedReopen) {
+    const reopenEffects: NavEffect[] = terminalTailFrames(state).map((frame) => ({
+      kind: 'reopenTerminalTail',
+      worktreeId: frame.worktreeId
+    }))
+    return {
+      state: { ...state, terminalTailsNeedReopen: false },
+      effects: [{ kind: 'resumePolling' }, ...reopenEffects]
+    }
   }
   return { state, effects: [{ kind: 'resumePolling' }] }
 }
 
 function reduceForegroundExit(state: NavState): ReducedNav {
   if (state.exitDialogArmed) {
-    return { state: { ...state, exitDialogArmed: false }, effects: [{ kind: 'resumePolling' }] }
+    // "No" dismisses the dialogue; firmware leaves the page blank (it was cleared to show the
+    // dialogue and is not restored). invalidateRender forces the queue to rebuild the current
+    // screen now so the HUD un-blanks (finding hud-navigation.ts:264).
+    return {
+      state: { ...state, exitDialogArmed: false },
+      effects: [{ kind: 'invalidateRender' }, { kind: 'resumePolling' }]
+    }
   }
   return { state, effects: [{ kind: 'pausePolling' }] }
 }
@@ -284,16 +224,28 @@ function reduceSystemExit(state: NavState): ReducedNav {
   }
 }
 
+// abnormalExit tears down subscriptions but keeps the terminalTail frame(s) on the stack (spec:
+// "reconnect on next foregroundEnter"); mark them as needing re-subscription so the next
+// non-armed foregroundEnter can reopen them instead of leaving a still-visible frame
+// permanently disconnected.
 function reduceAbnormalExit(state: NavState): ReducedNav {
-  return { state, effects: teardownEffects(state) }
+  const needsReopen = terminalTailFrames(state).length > 0
+  return {
+    state: needsReopen ? { ...state, terminalTailsNeedReopen: true } : state,
+    effects: teardownEffects(state)
+  }
+}
+
+function terminalTailFrames(state: NavState): TerminalTailFrame[] {
+  return state.stack.filter((frame): frame is TerminalTailFrame => frame.screen === 'terminalTail')
 }
 
 // No generic "close everything" effect exists (spec S7's NavEffect union); teardown is the
 // closest reachable combination: pause polling, close any open terminal-tail subscription.
 function teardownEffects(state: NavState): NavEffect[] {
   const effects: NavEffect[] = [{ kind: 'pausePolling' }]
-  for (const frame of state.stack) {
-    if (frame.screen === 'terminalTail' && frame.terminalId) {
+  for (const frame of terminalTailFrames(state)) {
+    if (frame.terminalId) {
       effects.push({ kind: 'closeTerminalTail', terminalId: frame.terminalId })
     }
   }

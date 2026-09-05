@@ -1,11 +1,12 @@
 // Client-side twin of the SDK's validateEvenHubPageContainer (spec S5). Called by
 // hud-render-queue before every bridge call; violations are never sent to firmware.
-import type { HudContainerSpec, HudPageBuild } from '../glasses/glasses-bridge'
+import type { HudContainerSpec, HudPageBuild, HudTextUpgrade } from '../glasses/glasses-bridge'
 
 const MAX_TEXT_LIST_CONTAINERS = 8
 const MAX_TOTAL_CONTAINERS = 12
 const MAX_CONTAINER_NAME_CHARS = 16
 const MAX_TEXT_CHARS = 1000
+const MAX_UPGRADE_TEXT_CHARS = 2000
 const MAX_LIST_ITEMS = 20
 const MAX_LIST_ITEM_CHARS = 64
 const CANVAS_WIDTH = 576
@@ -81,5 +82,18 @@ export function validateHudPage(page: HudPageBuild): HudPageViolation[] {
     }
   }
 
+  return violations
+}
+
+/** Twin check for `upgradeText` payloads (spec S5): they bypass buildHudPage's own truncation,
+ * so validate the wire-level limits directly before every upgrade call. */
+export function validateHudTextUpgrade(update: HudTextUpgrade): HudPageViolation[] {
+  const violations: HudPageViolation[] = []
+  if (update.name.length > MAX_CONTAINER_NAME_CHARS) {
+    violations.push({ code: 'container-name-too-long', name: update.name })
+  }
+  if (update.content.length > MAX_UPGRADE_TEXT_CHARS) {
+    violations.push({ code: 'text-too-long', id: update.id, length: update.content.length })
+  }
   return violations
 }

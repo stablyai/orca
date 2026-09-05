@@ -27,6 +27,11 @@ export type NavPorts = {
   pausePolling(): void
   resumePolling(): void
   disconnectHost(): void
+  // Optional (additive): older port implementations no-op these rather than fail to typecheck.
+  // invalidateRender -> HudRenderQueue.invalidate(); reopenTerminalTail -> re-subscribe after
+  // an abnormalExit tore the stream down (see nav-contract.ts's NavEffect union).
+  invalidateRender?(): void
+  reopenTerminalTail?(worktreeId: string): void
 }
 
 export type HudInputRouterOptions = {
@@ -103,6 +108,10 @@ export class HudInputRouter {
         return ports.resumePolling()
       case 'disconnectHost':
         return ports.disconnectHost()
+      case 'invalidateRender':
+        return ports.invalidateRender?.()
+      case 'reopenTerminalTail':
+        return ports.reopenTerminalTail?.(effect.worktreeId)
     }
   }
 }

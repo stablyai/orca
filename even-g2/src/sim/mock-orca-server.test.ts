@@ -186,7 +186,40 @@ describe('MockOrcaServer handshake', () => {
     expect(response.result.minCompatibleMobileVersion).toBe(2)
   })
 
-  it('terminal.subscribe streams SnapshotStart/Chunk/End as encrypted binary frames', async () => {
+  it('terminal.subscribe streams SnapshotStart/Chunk/End as encrypted binary frames when the binary capability is negotiated', async () => {
+    const client = await connectAndHandshake(server)
+    client.sendEncrypted({ type: 'e2ee_auth', deviceToken: 'mock-device-token' })
+    await waitMicrotasks(2)
+    client.sendEncrypted({
+      id: 'req-sub',
+      deviceToken: 'mock-device-token',
+      method: 'terminal.subscribe',
+      params: { terminal: 'term-wt1-1', capabilities: { terminalBinaryStream: 1 } }
+    })
+    await waitMicrotasks(4)
+    expect(client.binaryMessages.length).toBeGreaterThanOrEqual(3)
+    // Header byte 0 is the terminal-stream kind marker (0x74).
+    expect(client.binaryMessages[0]![0]).toBe(0x74)
+    // SnapshotStart (opcode 2, byte 2 of the 16-byte header) carries JSON metadata, never the
+    // scrollback text itself (HIGH finding terminal-tail-decoder.ts:65).
+    expect(client.binaryMessages[0]![2]).toBe(2)
+    const snapshotStartText = new TextDecoder().decode(client.binaryMessages[0]!.slice(16))
+    const metadata = JSON.parse(snapshotStartText) as { kind: string; cols: number; rows: number }
+    expect(metadata.kind).toBe('scrollback')
+    expect(metadata.cols).toBeGreaterThan(0)
+    expect(snapshotStartText).not.toContain('All tests passed')
+    // SnapshotChunk (opcode 3) carries the actual scrollback text.
+    expect(client.binaryMessages[1]![2]).toBe(3)
+    expect(new TextDecoder().decode(client.binaryMessages[1]!.slice(16))).toContain(
+      'All tests passed'
+    )
+    const subscribedControl = client.messages.at(-1) as {
+      result: { type: string; streamId: number }
+    }
+    expect(subscribedControl.result.type).toBe('subscribed')
+  })
+
+  it('terminal.subscribe without the binary capability streams JSON scrollback/data only — no binary frames', async () => {
     const client = await connectAndHandshake(server)
     client.sendEncrypted({ type: 'e2ee_auth', deviceToken: 'mock-device-token' })
     await waitMicrotasks(2)
@@ -197,12 +230,20 @@ describe('MockOrcaServer handshake', () => {
       params: { terminal: 'term-wt1-1' }
     })
     await waitMicrotasks(4)
-    expect(client.binaryMessages.length).toBeGreaterThanOrEqual(3)
-    // Header byte 0 is the terminal-stream kind marker (0x74).
-    expect(client.binaryMessages[0]![0]).toBe(0x74)
+    expect(client.binaryMessages.length).toBe(0)
+    const scrollback = client.messages.at(-1) as { result: { type: string; lines: string[] } }
+    expect(scrollback.result.type).toBe('scrollback')
+    expect(scrollback.result.lines.join('\n')).toContain('All tests passed')
+
+    server.pushTerminalOutputForTest('term-wt1-1', 'more output\n')
+    await waitMicrotasks(2)
+    expect(client.binaryMessages.length).toBe(0)
+    const dataPush = client.messages.at(-1) as { result: { type: string; chunk: string } }
+    expect(dataPush.result.type).toBe('data')
+    expect(dataPush.result.chunk).toBe('more output\n')
   })
 
-  it('terminal.send echoes into a subscribed terminal as an Output frame', async () => {
+  it('terminal.send echoes into a subscribed binary terminal as an Output frame and reports accepted/bytesWritten', async () => {
     const client = await connectAndHandshake(server)
     client.sendEncrypted({ type: 'e2ee_auth', deviceToken: 'mock-device-token' })
     await waitMicrotasks(2)
@@ -210,7 +251,7 @@ describe('MockOrcaServer handshake', () => {
       id: 'req-sub',
       deviceToken: 'mock-device-token',
       method: 'terminal.subscribe',
-      params: { terminal: 'term-wt1-1' }
+      params: { terminal: 'term-wt1-1', capabilities: { terminalBinaryStream: 1 } }
     })
     await waitMicrotasks(4)
     const framesBefore = client.binaryMessages.length
@@ -222,6 +263,91 @@ describe('MockOrcaServer handshake', () => {
     })
     await waitMicrotasks(3)
     expect(client.binaryMessages.length).toBeGreaterThan(framesBefore)
+    const response = client.messages.at(-1) as {
+      result: { send: { accepted: boolean; bytesWritten: number } }
+    }
+    expect(response.result.send).toEqual({
+      handle: 'term-wt1-1',
+      accepted: true,
+      bytesWritten: 'echo me'.length
+    })
+  })
+
+  it('terminal.send reports accepted:false without writing when the terminal is marked unwritable', async () => {
+    server.setTerminalWritable('term-wt1-1', false)
+    const client = await connectAndHandshake(server)
+    client.sendEncrypted({ type: 'e2ee_auth', deviceToken: 'mock-device-token' })
+    await waitMicrotasks(2)
+    client.sendEncrypted({
+      id: 'req-send',
+      deviceToken: 'mock-device-token',
+      method: 'terminal.send',
+      params: { terminal: 'term-wt1-1', text: '1\r' }
+    })
+    await waitMicrotasks(2)
+    const response = client.messages.at(-1) as {
+      ok: boolean
+      result: { send: { accepted: boolean; bytesWritten: number } }
+    }
+    expect(response.ok).toBe(true) // a refusal is still a SUCCESSFUL RPC (HIGH finding nav-ports.ts:42)
+    expect(response.result.send.accepted).toBe(false)
+    expect(response.result.send.bytesWritten).toBe(0)
+  })
+
+  it('terminal.resolveActive resolves the designated active terminal, not merely the newest output', async () => {
+    const client = await connectAndHandshake(server)
+    client.sendEncrypted({ type: 'e2ee_auth', deviceToken: 'mock-device-token' })
+    await waitMicrotasks(2)
+    client.sendEncrypted({
+      id: 'req-resolve',
+      deviceToken: 'mock-device-token',
+      method: 'terminal.resolveActive',
+      params: { worktree: 'id:wt-1' }
+    })
+    await waitMicrotasks(2)
+    const response = client.messages.at(-1) as { result: { handle: string | null } }
+    // term-wt1-2 (fixture decoy) has a newer lastOutputAt but is not wt-1's active terminal.
+    expect(response.result.handle).toBe('term-wt1-1')
+  })
+
+  it('terminal.resolveActive returns handle:null for an ambiguous worktree (setActiveTerminal override)', async () => {
+    server.setActiveTerminal('wt-1', null)
+    const client = await connectAndHandshake(server)
+    client.sendEncrypted({ type: 'e2ee_auth', deviceToken: 'mock-device-token' })
+    await waitMicrotasks(2)
+    client.sendEncrypted({
+      id: 'req-resolve',
+      deviceToken: 'mock-device-token',
+      method: 'terminal.resolveActive',
+      params: { worktree: 'id:wt-1' }
+    })
+    await waitMicrotasks(2)
+    const response = client.messages.at(-1) as { result: { handle: string | null } }
+    expect(response.result.handle).toBeNull()
+  })
+
+  it('terminal.list rows are RuntimeTerminalSummary-shaped (handle/agentIdentity/lastOutputAt)', async () => {
+    const client = await connectAndHandshake(server)
+    client.sendEncrypted({ type: 'e2ee_auth', deviceToken: 'mock-device-token' })
+    await waitMicrotasks(2)
+    client.sendEncrypted({
+      id: 'req-list',
+      deviceToken: 'mock-device-token',
+      method: 'terminal.list',
+      params: { worktree: 'id:wt-1' }
+    })
+    await waitMicrotasks(2)
+    const response = client.messages.at(-1) as {
+      result: {
+        terminals: { handle: string; agentIdentity?: string; lastOutputAt: number | null }[]
+      }
+    }
+    expect(response.result.terminals.length).toBe(2)
+    for (const row of response.result.terminals) {
+      expect(typeof row.handle).toBe('string')
+      expect('terminalId' in row).toBe(false)
+    }
+    expect(response.result.terminals.map((t) => t.agentIdentity)).toEqual(['claude', 'codex'])
   })
 
   it('pushNotification delivers to a subscribed client', async () => {

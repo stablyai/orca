@@ -6,8 +6,8 @@ export type HudTextPaginationOptions = {
   maxLinesPerPage?: number // default 9 (216px body / ~24px line height)
 }
 
-const DEFAULT_MAX_CHARS_PER_PAGE = 400
-const DEFAULT_MAX_LINES_PER_PAGE = 9
+export const DEFAULT_MAX_CHARS_PER_PAGE = 400
+export const DEFAULT_MAX_LINES_PER_PAGE = 9
 
 export function paginateHudBody(lines: string[], opts?: HudTextPaginationOptions): string[] {
   const maxChars = opts?.maxCharsPerPage ?? DEFAULT_MAX_CHARS_PER_PAGE

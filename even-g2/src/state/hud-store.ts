@@ -54,6 +54,11 @@ export type TerminalTailSlice = {
   terminalId: string | null
   lines: string[]
   live: boolean
+  // Set when the host's terminal.subscribe stream never negotiated/delivered binary frames
+  // (older host, or the JSON fallback path — full JSON terminal decoding is v2). Screens should
+  // render an "unavailable" state instead of an empty tail. Optional so existing initial-state
+  // literals ({ terminalId: null, lines: [], live: false }) keep compiling.
+  unavailable?: boolean
 }
 
 // Integrator wiring (Unit 8): tracks the optimistic "answered" footer on the ask screen (spec

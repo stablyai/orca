@@ -5,7 +5,11 @@
 // reducer's cursor bound matches what's rendered here.
 import { GLYPH_CURSOR_PREFIX } from '../hud/hud-glyphs'
 import type { HudScreenPage } from '../hud/hud-page-spec'
-import { paginateHudBody } from '../hud/hud-text-pagination'
+import {
+  DEFAULT_MAX_CHARS_PER_PAGE,
+  DEFAULT_MAX_LINES_PER_PAGE,
+  paginateHudBody
+} from '../hud/hud-text-pagination'
 import { topFrame } from '../navigation/hud-navigation-frames'
 import type { ScreenFrame } from '../navigation/nav-contract'
 import type { HudState } from '../state/hud-store'
@@ -16,24 +20,37 @@ export function renderAskScreen(state: HudState): Extract<HudScreenPage, { layou
   const frame = topFrame(state.nav) as Extract<ScreenFrame, { screen: 'ask' }>
   const entry = state.inbox.entries.find((e) => e.notificationId === frame.notificationId)
   const title = entry?.title ?? 'Needs input'
-  const [firstBodyPage = ''] = entry ? paginateHudBody(entry.body.split('\n')) : ['']
   const strip = buildOptionStrip(frame.selectedOption, DEFAULT_ASK_OPTION_COUNT)
+
+  // Reserve a line + its chars for the strip appended below the body, so a full first page
+  // never pushes the strip past the 216px text region (only the first body page is ever
+  // shown — the rest, if any, is surfaced via the footer's truncation indicator instead of a
+  // second scroll axis, since scroll on this screen already moves the option cursor).
+  const bodyPages = entry
+    ? paginateHudBody(entry.body.split('\n'), {
+        maxLinesPerPage: DEFAULT_MAX_LINES_PER_PAGE - 1,
+        maxCharsPerPage: DEFAULT_MAX_CHARS_PER_PAGE - strip.length - 1
+      })
+    : ['']
+  const firstBodyPage = bodyPages[0] ?? ''
+  const truncated = bodyPages.length > 1
 
   return {
     layout: 'text',
     header: `Orca · ${title}`,
     body: `${firstBodyPage}\n${strip}`,
-    footer: askFooter(state, entry?.worktreeId)
+    footer: askFooter(state, entry?.worktreeId, truncated)
   }
 }
 
 // Optimistic "answered" footer (spec S7): shows right after sendAskAnswer; once the dashboard
 // polls again (fetchedAt advances past sentAt) and the worktree is still `permission`, flips to
 // a "still waiting" nudge instead of silently staying "answered".
-function askFooter(state: HudState, worktreeId: string | undefined): string {
+function askFooter(state: HudState, worktreeId: string | undefined, truncated: boolean): string {
+  const truncatedMark = truncated ? '  ⋯more' : ''
   const answered = state.askAnswered
   if (!answered || answered.worktreeId !== worktreeId) {
-    return 'click=send  2tap=back'
+    return `click=send  2tap=back${truncatedMark}`
   }
   const worktree = state.dashboard.rows.find((r) => r.worktreeId === worktreeId)
   const polledSinceAnswer = state.dashboard.fetchedAt >= answered.sentAt

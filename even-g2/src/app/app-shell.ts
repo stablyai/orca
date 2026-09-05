@@ -14,10 +14,12 @@ import type { WebSocketLike } from '../transport/orca-socket-client'
 import { buildNavContext } from './nav-context'
 import { HostSessionManager } from './host-session-manager'
 import { createNavPorts } from './nav-ports'
+import { ProfileController, type HostProfilePort } from './profile-controller'
 
 export type AppShellOptions = {
   bridge: GlassesBridge
-  hostProfileStore?: HostProfileStore
+  hostProfileStore?: HostProfilePort
+  profiles?: ProfileController
   socketFactory?: (url: string) => WebSocketLike
 }
 
@@ -26,6 +28,7 @@ export type AppShell = {
   router: HudInputRouter
   renderQueue: HudRenderQueue
   sessions: HostSessionManager
+  profiles: ProfileController
   stop(): void
 }
 
@@ -46,7 +49,9 @@ function initialHudState(): HudState {
 
 export async function startAppShell(options: AppShellOptions): Promise<AppShell> {
   const { bridge } = options
-  const hostProfileStore = options.hostProfileStore ?? new HostProfileStore(bridge)
+  const profiles =
+    options.profiles ??
+    new ProfileController(options.hostProfileStore ?? new HostProfileStore(bridge))
 
   const store = createHudStore(initialHudState())
   const renderQueue = new HudRenderQueue(bridge)
@@ -62,7 +67,7 @@ export async function startAppShell(options: AppShellOptions): Promise<AppShell>
   let foreground = true
   const sessions = new HostSessionManager({
     store,
-    hostProfileStore,
+    hostProfileStore: profiles,
     isForeground: () => foreground,
     socketFactory: options.socketFactory
   })
@@ -71,6 +76,8 @@ export async function startAppShell(options: AppShellOptions): Promise<AppShell>
     bridge,
     store,
     sessions,
+    renderQueue,
+    submitRender,
     setForeground: (value) => {
       foreground = value
     }
@@ -79,19 +86,42 @@ export async function startAppShell(options: AppShellOptions): Promise<AppShell>
   const router = new HudInputRouter({ bridge, store, ports, buildContext: buildNavContext })
   router.start()
 
-  const hosts = await hostProfileStore.load()
+  const hosts = await profiles.load()
   store.update((s) => ({ ...s, hosts, nav: createInitialNavState(hosts) }))
 
   if (hosts.length === 1) {
     await sessions.connect(hosts[0]!.id)
   }
 
+  // Finding #6: react to pairing/removal after boot — the shell otherwise only ever saw the
+  // profile list it loaded at startup. Pairing a new host while no session is active connects
+  // it (mirrors the single-known-host boot path); removing the currently-active host's profile
+  // tears its session down instead of leaving a stale connection with no backing profile.
+  const stopProfileSync = profiles.subscribe((event) => {
+    if (event.type === 'upserted') {
+      store.update((s) => ({
+        ...s,
+        hosts: [...s.hosts.filter((h) => h.id !== event.profile.id), event.profile]
+      }))
+      if (!sessions.current()) {
+        void sessions.connect(event.profile.id)
+      }
+    } else {
+      store.update((s) => ({ ...s, hosts: s.hosts.filter((h) => h.id !== event.id) }))
+      if (sessions.current()?.hostId === event.id) {
+        sessions.close()
+      }
+    }
+  })
+
   return {
     store,
     router,
     renderQueue,
     sessions,
+    profiles,
     stop: () => {
+      stopProfileSync()
       router.stop()
       sessions.close()
     }

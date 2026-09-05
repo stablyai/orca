@@ -135,6 +135,57 @@ describe('createPhoneSettingsPage', () => {
     expect(container.querySelector('.phone-log')?.textContent).toContain('not available yet')
   })
 
+  it('derives a non-secret, stable host id when pairedDeviceId is absent (finding #9)', async () => {
+    const store = fakeStore()
+    const offer: PairingOffer = {
+      endpoint: 'ws://192.168.1.5:6768',
+      deviceToken: 'super-secret-token',
+      publicKeyB64: `${'c'.repeat(43)}=`
+    }
+    const parsePairingCode = vi.fn(() => offer)
+    const page = createPhoneSettingsPage({
+      store,
+      parsePairingCode,
+      probeConnect: async () => ({ ok: true })
+    })
+    page.mount(container)
+    await flush()
+
+    const textarea = container.querySelector('textarea') as HTMLTextAreaElement
+    const form = container.querySelector('form') as HTMLFormElement
+    textarea.value = 'good-code'
+    form.dispatchEvent(new Event('submit', { cancelable: true }))
+    await flush()
+
+    const upserted = (store.upsert as ReturnType<typeof vi.fn>).mock
+      .calls[0]![0] as GlassesHostProfile
+    expect(upserted.id).not.toContain(offer.deviceToken)
+    expect(upserted.id).toMatch(/^host-[0-9a-f]{8}$/)
+
+    const hostRow = container.querySelector('.phone-host-row') as HTMLElement
+    expect(hostRow.dataset.hostId).not.toContain(offer.deviceToken)
+
+    // Stable across separately-parsed offers with the same endpoint+publicKeyB64.
+    const store2 = fakeStore()
+    const page2 = createPhoneSettingsPage({
+      store: store2,
+      parsePairingCode: vi.fn(() => offer),
+      probeConnect: async () => ({ ok: true })
+    })
+    const container2 = document.createElement('div')
+    document.body.appendChild(container2)
+    page2.mount(container2)
+    await flush()
+    const textarea2 = container2.querySelector('textarea') as HTMLTextAreaElement
+    const form2 = container2.querySelector('form') as HTMLFormElement
+    textarea2.value = 'good-code'
+    form2.dispatchEvent(new Event('submit', { cancelable: true }))
+    await flush()
+    const upserted2 = (store2.upsert as ReturnType<typeof vi.fn>).mock
+      .calls[0]![0] as GlassesHostProfile
+    expect(upserted2.id).toBe(upserted.id)
+  })
+
   it('unmount removes the DOM and stops future interaction', async () => {
     const store = fakeStore()
     const page = createPhoneSettingsPage({ store })

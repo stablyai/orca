@@ -395,4 +395,103 @@ describe('OrcaSocketClient', () => {
     const decoded = binaryPayloads[0]!
     expect(new TextDecoder().decode(decoded.slice(16))).toBe('hello')
   })
+
+  it('times out and reconnects when the socket never opens', async () => {
+    vi.useFakeTimers()
+    // A fake socket that never fires onopen/onmessage/onclose — the "never progresses" case.
+    class StuckSocket implements WebSocketLike {
+      onopen: ((event: unknown) => void) | null = null
+      onmessage: ((event: { data: unknown }) => void) | null = null
+      onclose: ((event: unknown) => void) | null = null
+      onerror: ((event: unknown) => void) | null = null
+      binaryType?: string
+      closed = false
+      send(): void {}
+      close(): void {
+        this.closed = true
+      }
+    }
+    const stuckSockets: StuckSocket[] = []
+    const states: ConnectionState[] = []
+    new OrcaSocketClient({
+      endpoint: 'ws://test',
+      deviceToken: 'token-1',
+      serverPublicKeyB64: publicKeyToBase64(nacl.box.keyPair().publicKey),
+      connectTimeoutMs: 5000,
+      socketFactory: () => {
+        const s = new StuckSocket()
+        stuckSockets.push(s)
+        return s
+      },
+      onState: (s) => states.push(s)
+    })
+    await flushMicrotasks()
+    // 'connecting' is the client's initial state, so no onState fires for it — only the
+    // eventual timeout-driven transition is observable here.
+    expect(states).toEqual([])
+
+    vi.advanceTimersByTime(4999)
+    expect(states).toEqual([])
+    vi.advanceTimersByTime(1)
+    await flushMicrotasks()
+
+    expect(stuckSockets[0]!.closed).toBe(true)
+    expect(states.at(-1)).toBe('reconnecting')
+  })
+
+  it('times out and reconnects when the socket opens but the peer never completes the handshake', async () => {
+    vi.useFakeTimers()
+    const harness = createHarness('token-1')
+    // Sever the peer link right after creation so e2ee_hello is sent into the void — the socket
+    // opens (handshaking starts) but no e2ee_ready ever arrives.
+    const socketFactory = (url: string): WebSocketLike => {
+      const socket = harness.socketFactory(url) as FakeSocket
+      socket.peer = null
+      return socket
+    }
+    const states: ConnectionState[] = []
+    new OrcaSocketClient({
+      endpoint: 'ws://test',
+      deviceToken: 'token-1',
+      serverPublicKeyB64: harness.serverPublicKeyB64,
+      handshakeTimeoutMs: 5000,
+      socketFactory,
+      onState: (s) => states.push(s)
+    })
+    await flushMicrotasks()
+    expect(states.at(-1)).toBe('handshaking')
+
+    vi.advanceTimersByTime(4999)
+    expect(states.at(-1)).toBe('handshaking')
+    vi.advanceTimersByTime(1)
+    await flushMicrotasks()
+
+    expect(harness.sockets[0]!.closed).toBe(true)
+    expect(states.at(-1)).toBe('reconnecting')
+  })
+
+  it('does not double-send a request created by a connected listener during bootstrap replay', async () => {
+    const harness = createHarness('token-1')
+    const client = new OrcaSocketClient({
+      endpoint: 'ws://test',
+      deviceToken: 'token-1',
+      serverPublicKeyB64: harness.serverPublicKeyB64,
+      socketFactory: harness.socketFactory,
+      onState: (state) => {
+        if (state === 'connected') {
+          // A listener reacting to 'connected' synchronously issues a new request; it must be
+          // sent exactly once, not once immediately and again by the bootstrap replay loop.
+          client.sendRequest('extra.method').catch(() => {})
+        }
+      }
+    })
+    harness.servers[0]!.responder = (method) => (method === 'extra.method' ? { result: {} } : null)
+
+    await flushMicrotasks()
+
+    const extraCalls = harness.servers[0]!.receivedRpcCalls.filter(
+      (c) => c.method === 'extra.method'
+    )
+    expect(extraCalls).toHaveLength(1)
+  })
 })

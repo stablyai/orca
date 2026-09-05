@@ -38,6 +38,9 @@ describe('terminal tail integration', () => {
       lastConnected: Date.now()
     })
 
+    const sentRequests: { method: string; params?: Record<string, unknown> }[] = []
+    server.onRequestForTest = (method, params) => sentRequests.push({ method, params })
+
     const shell = await startAppShell({
       bridge,
       hostProfileStore,
@@ -63,6 +66,22 @@ describe('terminal tail integration', () => {
         throw new Error('terminal tail scrollback not shown yet')
       }
     })
+
+    // CRITICAL finding terminal-tail-state.ts:42: the client must negotiate the binary stream
+    // capability — a host that doesn't see it publishes JSON events the decoder can't render.
+    const subscribe = sentRequests.find((r) => r.method === 'terminal.subscribe')
+    if (
+      (subscribe?.params?.capabilities as { terminalBinaryStream?: number } | undefined)
+        ?.terminalBinaryStream !== 1
+    ) {
+      throw new Error('terminal.subscribe did not request capabilities.terminalBinaryStream: 1')
+    }
+    // HIGH finding terminal-tail-decoder.ts:65: SnapshotStart carries JSON metadata
+    // (kind/cols/rows/...), never terminal text — it must never leak into the rendered tail.
+    const firstBody = textContent(bridge.pageSnapshot()!.containers, 2)
+    if (firstBody.includes('"kind"') || firstBody.includes('"cols"')) {
+      throw new Error('SnapshotStart metadata leaked into the rendered terminal tail')
+    }
 
     // Push enough output that the tail overflows one page (paginateHudBody: 9 lines/400 chars).
     for (let i = 0; i < 20; i++) {

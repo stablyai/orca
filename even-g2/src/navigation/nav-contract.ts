@@ -24,7 +24,10 @@ export type ScreenId =
 export type ScreenFrame =
   | { screen: 'pairing' }
   | { screen: 'hostList'; selectedIndex: number }
-  | { screen: 'dashboard'; hostId: string; page: number }
+  // `cursor` = row highlight, used when the dashboard fits on one page; `page` = page index,
+  // used once it doesn't. Kept separate (rather than one dual-purpose field) so a shrinking
+  // row set can normalize each independently without one meaning stomping the other.
+  | { screen: 'dashboard'; hostId: string; cursor: number; page: number }
   | { screen: 'worktreeList'; hostId: string; selectedIndex: number; page: number }
   | { screen: 'ask'; hostId: string; notificationId: string; selectedOption: number }
   | { screen: 'terminalTail'; hostId: string; worktreeId: string; terminalId: string; page: number }
@@ -32,6 +35,10 @@ export type ScreenFrame =
 export type NavState = {
   stack: ScreenFrame[] // top = visible; bottom = root
   exitDialogArmed: boolean // shutDownPage(1) in flight - invert foreground events
+  // Set by abnormalExit when terminal-tail frames were retained but their subscriptions were
+  // torn down; consumed (cleared) by the next non-armed foregroundEnter, which emits
+  // reopenTerminalTail for each one. Optional so existing NavState literals stay valid.
+  terminalTailsNeedReopen?: boolean
 }
 
 export type AskQuickAction =
@@ -51,6 +58,12 @@ export type NavEffect =
   // Integrator addition (spec S7: "systemExit = really exiting -> close sockets, unsubscribe").
   // Distinct from abnormalExit's teardown, which keeps the session alive for reconnect.
   | { kind: 'disconnectHost' }
+  // Drops HudRenderQueue's remembered previous page so the next submit forces a rebuild —
+  // emitted when firmware clears the canvas out of band (the in-canvas exit dialog).
+  | { kind: 'invalidateRender' }
+  // Re-subscribes a terminal-tail frame's stream after abnormalExit tore it down, so a
+  // still-visible terminal frame doesn't stay silently disconnected forever.
+  | { kind: 'reopenTerminalTail'; worktreeId: string }
 
 // Read-only lookups reduceHudInput (Unit 5) needs to stay a pure function — supplied by
 // hud-store selectors rather than reading HudState directly.

@@ -3,9 +3,14 @@ import { planHudRender } from './hud-page-differ'
 import { buildHudPage } from './hud-page-spec'
 
 describe('planHudRender', () => {
-  it('creates when there is no previous page', () => {
+  it('creates on the very first render (no previous page, startup not yet spent)', () => {
     const next = buildHudPage({ layout: 'text', header: 'H', body: 'B', footer: 'F' })
-    expect(planHudRender(null, next, true)).toEqual({ kind: 'create', page: next })
+    expect(planHudRender(null, next, false)).toEqual({ kind: 'create', page: next })
+  })
+
+  it('rebuilds (never re-creates) when the queue was invalidated: no previous page but startup already spent', () => {
+    const next = buildHudPage({ layout: 'text', header: 'H', body: 'B', footer: 'F' })
+    expect(planHudRender(null, next, true)).toEqual({ kind: 'rebuild', page: next })
   })
 
   it('creates when startup has not been spent yet, even with a previous page', () => {
@@ -62,6 +67,27 @@ describe('planHudRender', () => {
     const prev = buildHudPage({ layout: 'text', header: 'H', body: 'B', footer: 'F' })
     const next = buildHudPage({ layout: 'text', header: 'H', body: 'B', footer: 'F' })
     next.containers[1] = { ...next.containers[1]!, width: 500 } as (typeof next.containers)[1]
+    expect(planHudRender(prev, next, true)).toEqual({ kind: 'rebuild', page: next })
+  })
+
+  it('rebuilds on a border-only style change even if text content is identical', () => {
+    const prev = buildHudPage({ layout: 'text', header: 'H', body: 'B', footer: 'F' })
+    const next = buildHudPage({ layout: 'text', header: 'H', body: 'B', footer: 'F' })
+    next.containers[1] = {
+      ...next.containers[1]!,
+      borderWidth: 2,
+      borderColor: 5
+    } as (typeof next.containers)[1]
+    expect(planHudRender(prev, next, true)).toEqual({ kind: 'rebuild', page: next })
+  })
+
+  it('rebuilds on a selection-border-only change on a list container', () => {
+    const prev = buildHudPage({ layout: 'list', header: 'H', items: ['a', 'b'], footer: 'F' })
+    const next = buildHudPage({ layout: 'list', header: 'H', items: ['a', 'b'], footer: 'F' })
+    next.containers[1] = {
+      ...next.containers[1]!,
+      showSelectionBorder: false
+    } as (typeof next.containers)[1]
     expect(planHudRender(prev, next, true)).toEqual({ kind: 'rebuild', page: next })
   })
 })

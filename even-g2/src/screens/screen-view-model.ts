@@ -5,6 +5,7 @@ import { frameHostId, topFrame } from '../navigation/hud-navigation-frames'
 import type { ScreenFrame } from '../navigation/nav-contract'
 import type { HudState } from '../state/hud-store'
 import { renderAskScreen } from './ask-screen'
+import { renderBlockedCompatScreen } from './blocked-compat-screen'
 import { renderDashboardScreen } from './dashboard-screen'
 import { renderHostListScreen } from './host-list-screen'
 import { renderPairingScreen } from './pairing-screen'
@@ -50,6 +51,11 @@ function pendingAskNudgeHeader(state: HudState, frame: ScreenFrame): string | nu
 }
 
 export function renderScreen(state: HudState): HudScreenPage {
+  // A blocked compat verdict for the connected host wins over every screen (spec S6).
+  const compat = state.connection.compat
+  if (compat?.kind === 'blocked' && state.connection.hostId !== null) {
+    return renderBlockedCompatScreen(compat)
+  }
   const frame = topFrame(state.nav)
   const page = renderForFrame(state, frame)
   const nudge = pendingAskNudgeHeader(state, frame)

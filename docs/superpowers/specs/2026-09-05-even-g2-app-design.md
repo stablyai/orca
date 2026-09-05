@@ -964,6 +964,12 @@ Boot sequence (Unit 8, for reference):
   exist) is **unverified**. v1 ships via QR-sideloaded dev URL where docs indicate no such
   enforcement; portal submission is blocked on testing this. Fallback if enforcement bites:
   relay transport (fixed HTTPS origins) graduates from non-goal to requirement.
+  **Note (verified against `src/main/runtime/rpc/e2ee-channel.ts` + `mobile-socket-wiring.ts`):**
+  the desktop sets `requireV2: metadata.transport === 'relay'`, so the relay path rejects this
+  app's legacy `e2ee_hello` (`publicKeyB64`, no `v:2`). Adopting relay is therefore NOT a
+  transport-only swap — it also requires implementing the E2EE **v2** handshake
+  (`clientPublicKeyB64` + `clientNonceB64` + `v:2`, per `src/shared/mobile-e2ee-v2-contract.ts`).
+  Direct (LAN/Tailscale) accepts legacy (`requireV2` defaults false), which is why v1 works today.
 - **R5 — ask quick actions are keystroke-based.** Sending `1\r`/`\r`/`\x1b` via
   `terminal.send` matches how interactive agent prompts are actually answered (mobile does the
   body+Enter dance through the same RPC), but option numbering/meaning varies by agent and

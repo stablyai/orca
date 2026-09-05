@@ -56,7 +56,6 @@ type ExitDialogSelection = 'no' | 'yes'
 /** Full GlassesBridge implementing firmware semantics (spec S4). */
 export class MockGlassesBridge implements GlassesBridge {
   private currentPage: HudPageBuild | null = null
-  private pageBeforeDialog: HudPageBuild | null = null
   private startupSpent = false
   private exitDialogOpen = false
   private exitDialogSelection: ExitDialogSelection = 'no'
@@ -127,7 +126,6 @@ export class MockGlassesBridge implements GlassesBridge {
       this.notifyRawEvent({ source: 'sys', eventType: OS_EVENT.SYSTEM_EXIT })
       return true
     }
-    this.pageBeforeDialog = this.currentPage
     this.exitDialogOpen = true
     this.exitDialogSelection = 'no'
     this.scheduleRepaint()
@@ -298,8 +296,12 @@ export class MockGlassesBridge implements GlassesBridge {
     if (isClickEventType(event.eventType)) {
       const selection = this.exitDialogSelection
       this.exitDialogOpen = false
-      this.currentPage = this.pageBeforeDialog
-      this.pageBeforeDialog = null
+      // Firmware trap (spec S9, HIGH finding hud-navigation.ts:264): the dialog's page-clear
+      // is NOT undone automatically on cancel — dismissing the dialog leaves the HUD blank
+      // until something explicitly rebuilds it. Silently restoring the prior page here would
+      // hide a real bug where FOREGROUND_ENTER only requests a refresh and the render queue's
+      // differ then no-ops on an unchanged page.
+      this.currentPage = null
       this.scheduleRepaint()
       this.notifyRawEvent({
         source: 'sys',

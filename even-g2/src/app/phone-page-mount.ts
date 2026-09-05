@@ -10,6 +10,7 @@ import {
 import { parsePairingCode } from '../transport/pairing-code-decode'
 import { HostProfileStore } from '../transport/host-profile-store'
 import { OrcaSocketClient } from '../transport/orca-socket-client'
+import type { HostProfilePort } from './profile-controller'
 
 const PROBE_TIMEOUT_MS = 8000
 
@@ -44,12 +45,15 @@ function probeConnect(offer: PairingOffer): Promise<ProbeConnectResult> {
   })
 }
 
-export function mountPhoneSettingsPage(bridge: GlassesBridge): void {
+// `profiles` is the shared ProfileController from main.ts (finding #6) so pairing here also
+// notifies the app shell; falls back to a standalone HostProfileStore when unwired (e.g. a
+// caller that only needs the pairing form, or a test mounting this in isolation).
+export function mountPhoneSettingsPage(bridge: GlassesBridge, profiles?: HostProfilePort): void {
   const root = document.getElementById('phone-settings-root')
   if (!root) {
     return
   }
-  const store = new HostProfileStore(bridge)
+  const store = profiles ?? new HostProfileStore(bridge)
   const page = createPhoneSettingsPage({ store, parsePairingCode, probeConnect })
   page.mount(root)
 }

@@ -42,8 +42,24 @@ export type PhoneSettingsPage = {
   unmount(): void
 }
 
+// FNV-1a: a small, dependency-free, deterministic hash — not cryptographic, just needs to be
+// stable and non-secret (finding: device token in DOM). Collisions would only ever cause two
+// distinct hosts lacking pairedDeviceId to share a profile id, which upsert()'s last-write-wins
+// semantics already tolerate safely.
+function fnv1aHex(input: string): string {
+  let hash = 0x811c9dc5
+  for (let i = 0; i < input.length; i++) {
+    hash ^= input.charCodeAt(i)
+    hash = Math.imul(hash, 0x01000193)
+  }
+  return (hash >>> 0).toString(16).padStart(8, '0')
+}
+
+// Never derive the id from deviceToken (finding: it lands in DOM via data-host-id and would be
+// exposed/inspectable) — hash the non-secret endpoint+publicKeyB64 instead when the offer has
+// no pairedDeviceId.
 function hostIdFromOffer(offer: PairingOffer): string {
-  return offer.pairedDeviceId ?? `${offer.endpoint}::${offer.deviceToken}`
+  return offer.pairedDeviceId ?? `host-${fnv1aHex(`${offer.endpoint}|${offer.publicKeyB64}`)}`
 }
 
 function hostNameFromOffer(offer: PairingOffer): string {

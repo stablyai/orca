@@ -18,6 +18,7 @@ import {
   type Subscription
 } from './orca-subscription-registry'
 import { ReconnectScheduler } from './orca-reconnect-scheduler'
+import { ConnectionStageTimer } from './orca-connection-stage-timer'
 import {
   decodeAuthenticatedBinaryFrame,
   decodeAuthenticatedRpcResponse,
@@ -30,6 +31,8 @@ import {
 export type { WebSocketLike } from './orca-socket-frames'
 
 const DEFAULT_REQUEST_TIMEOUT_MS = 15000
+const DEFAULT_CONNECT_TIMEOUT_MS = 10000
+const DEFAULT_HANDSHAKE_TIMEOUT_MS = 10000
 
 export type OrcaSocketClientOptions = {
   endpoint: string
@@ -38,12 +41,17 @@ export type OrcaSocketClientOptions = {
   socketFactory?: (url: string) => WebSocketLike
   onState?: (state: ConnectionState) => void
   onLog?: (line: string) => void
+  // How long to wait for the socket to open before giving up and reconnecting. Default ~10s.
+  connectTimeoutMs?: number
+  // How long to wait after open for e2ee_ready/e2ee_authenticated before giving up. Default ~10s.
+  handshakeTimeoutMs?: number
 }
 
 type Session = {
   socket: WebSocketLike
   sharedKey: Uint8Array | null
   authenticated: boolean
+  stageTimer: ConnectionStageTimer
 }
 
 export class OrcaSocketClient implements RpcPort {
@@ -77,14 +85,7 @@ export class OrcaSocketClient implements RpcPort {
         reject(new Error(`Request timed out after ${timeoutMs}ms: ${method}`))
       }, timeoutMs)
       this.pending.add({ id, method, params, resolve, reject, timer })
-      if (this.session?.authenticated) {
-        sendEncrypted(this.session.socket, this.session.sharedKey, {
-          id,
-          deviceToken: this.options.deviceToken,
-          method,
-          params
-        })
-      }
+      this.sendIfAuthenticated(id, method, params)
     })
   }
 
@@ -97,14 +98,7 @@ export class OrcaSocketClient implements RpcPort {
     const id = this.nextId()
     const subscription: Subscription = { id, method, params, onData, onBinary, cancelled: false }
     this.subscriptions.add(subscription)
-    if (this.session?.authenticated) {
-      sendEncrypted(this.session.socket, this.session.sharedKey, {
-        id,
-        deviceToken: this.options.deviceToken,
-        method,
-        params
-      })
-    }
+    this.sendIfAuthenticated(id, method, params)
     return () => this.unsubscribe(id)
   }
 
@@ -120,6 +114,7 @@ export class OrcaSocketClient implements RpcPort {
     this.reconnect.cancel()
     const session = this.session
     this.session = null
+    session?.stageTimer.clear()
     this.pending.rejectAll('Client closed')
     this.setState('disconnected')
     session?.socket.close()
@@ -135,13 +130,21 @@ export class OrcaSocketClient implements RpcPort {
     if (subscription.method === 'terminal.subscribe' && this.session?.authenticated) {
       const terminal = (subscription.params as { terminal?: unknown } | null)?.terminal
       if (typeof terminal === 'string') {
-        sendEncrypted(this.session.socket, this.session.sharedKey, {
-          id: this.nextId(),
-          deviceToken: this.options.deviceToken,
-          method: 'terminal.unsubscribe',
-          params: { subscriptionId: terminal }
+        this.sendIfAuthenticated(this.nextId(), 'terminal.unsubscribe', {
+          subscriptionId: terminal
         })
       }
+    }
+  }
+
+  private sendIfAuthenticated(id: string, method: string, params: unknown): void {
+    if (this.session?.authenticated) {
+      sendEncrypted(this.session.socket, this.session.sharedKey, {
+        id,
+        deviceToken: this.options.deviceToken,
+        method,
+        params
+      })
     }
   }
 
@@ -153,24 +156,33 @@ export class OrcaSocketClient implements RpcPort {
     const factory = this.options.socketFactory ?? defaultSocketFactory
     const socket = factory(this.options.endpoint)
     socket.binaryType = 'arraybuffer'
-    const session: Session = { socket, sharedKey: null, authenticated: false }
+    const session: Session = {
+      socket,
+      sharedKey: null,
+      authenticated: false,
+      stageTimer: new ConnectionStageTimer()
+    }
     this.session = session
+    const connectTimeoutMs = this.options.connectTimeoutMs ?? DEFAULT_CONNECT_TIMEOUT_MS
+    session.stageTimer.arm(connectTimeoutMs, () =>
+      this.forceReconnect(session, 'connect timed out')
+    )
 
     socket.onopen = () => {
       if (this.session !== session) {
         return
       }
       this.setState('handshaking')
+      const handshakeTimeoutMs = this.options.handshakeTimeoutMs ?? DEFAULT_HANDSHAKE_TIMEOUT_MS
+      session.stageTimer.arm(handshakeTimeoutMs, () =>
+        this.forceReconnect(session, 'handshake timed out')
+      )
       this.log(`ws open — sending e2ee_hello (${this.options.endpoint})`)
       const ephemeral = generateKeyPair()
       session.sharedKey = deriveSharedKey(ephemeral.secretKey, this.serverPublicKey)
+      const hello = { type: 'e2ee_hello', publicKeyB64: publicKeyToBase64(ephemeral.publicKey) }
       try {
-        socket.send(
-          JSON.stringify({
-            type: 'e2ee_hello',
-            publicKeyB64: publicKeyToBase64(ephemeral.publicKey)
-          })
-        )
+        socket.send(JSON.stringify(hello))
       } catch {
         this.handleSocketClosed(session)
       }
@@ -207,7 +219,11 @@ export class OrcaSocketClient implements RpcPort {
     const response = decodeAuthenticatedRpcResponse(raw, session.sharedKey)
     if (response) {
       routeRpcResponse(response, this.subscriptions, this.pending)
+      return
     }
+    // A decrypt/parse failure on an authenticated frame is a protocol error (tampered,
+    // corrupted, or a wire mismatch), not a crash — close and let reconnect backoff take over.
+    this.forceReconnect(session, 'decrypt/parse failed on encrypted RPC message — closing')
   }
 
   private handleHandshakeMessage(session: Session, raw: string): void {
@@ -238,6 +254,7 @@ export class OrcaSocketClient implements RpcPort {
     }
     const decoded = decodeAuthenticatedBinaryFrame(bytes, session.sharedKey)
     if (!decoded) {
+      this.forceReconnect(session, 'decrypt/parse failed on binary terminal frame — closing')
       return
     }
     const subscription = this.subscriptions.bySubscriptionForStream(decoded.streamId)
@@ -248,9 +265,12 @@ export class OrcaSocketClient implements RpcPort {
     if (this.session !== session) {
       return
     }
+    session.stageTimer.clear()
     this.reconnect.reset()
-    this.setState('connected')
     this.log('authenticated')
+    // Replay pending requests/subscriptions BEFORE publishing 'connected': a listener reacting
+    // to 'connected' may itself create a request, and if that happened before replay it would
+    // land in `pending` and get sent twice — once immediately, once by the replay loop below.
     runAuthenticatedBootstrap(
       this.options.deviceToken,
       () => this.nextId(),
@@ -258,12 +278,14 @@ export class OrcaSocketClient implements RpcPort {
       this.subscriptions,
       (payload) => sendEncrypted(session.socket, session.sharedKey, payload)
     )
+    this.setState('connected')
   }
 
   private handleSocketClosed(session: Session): void {
     if (this.session !== session) {
       return
     }
+    session.stageTimer.clear()
     this.session = null
     this.pending.rejectAll('Disconnected')
     if (this.closed) {
@@ -282,12 +304,24 @@ export class OrcaSocketClient implements RpcPort {
     if (this.session !== session) {
       return
     }
+    session.stageTimer.clear()
     this.authFailed = true
     this.session = null
     this.reconnect.cancel()
     this.pending.rejectAll('Authentication failed — pairing may be revoked')
     this.setState('auth-failed')
     this.log('e2ee auth failed — latched, no retry')
+    session.socket.close()
+  }
+
+  // Shared by the stage-timeout and decode-failure paths: log, tear down the session, and let
+  // handleSocketClosed's normal disconnected/auth-failed/reconnecting branching take over.
+  private forceReconnect(session: Session, reason: string): void {
+    if (this.session !== session) {
+      return
+    }
+    this.log(reason)
+    this.handleSocketClosed(session)
     session.socket.close()
   }
 

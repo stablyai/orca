@@ -65,7 +65,7 @@ export function renderDashboardScreen(state: HudState): Extract<HudScreenPage, {
   const footer = paginated
     ? 'scroll=pages  click=list  2tap=back'
     : 'scroll=select  click=open  2tap=back'
-  const body = dashboardBody(rows, lines, pages, page, paginated, frame.page)
+  const body = dashboardBody(rows, lines, pages, page, paginated, frame.cursor)
 
   return { layout: 'text', header, body, footer }
 }

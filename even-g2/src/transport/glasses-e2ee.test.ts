@@ -5,6 +5,7 @@ import {
   deriveSharedKey,
   encryptText,
   generateKeyPair,
+  MAX_E2EE_ENCRYPTED_BASE64_CHARACTERS,
   publicKeyFromBase64,
   publicKeyToBase64
 } from './glasses-e2ee'
@@ -41,6 +42,26 @@ describe('glasses-e2ee', () => {
   it('returns null for a bundle too short to contain nonce+overhead', () => {
     const { bShared } = derivePair()
     expect(decryptBytes(new Uint8Array(4), bShared)).toBeNull()
+  })
+
+  it('decryptText returns null (not a throw) for malformed base64', () => {
+    const { bShared } = derivePair()
+    expect(() => decryptText('!!!not-valid-base64!!!', bShared)).not.toThrow()
+    expect(decryptText('!!!not-valid-base64!!!', bShared)).toBeNull()
+  })
+
+  it('decryptText returns null for input over the max encoded size, without calling atob', () => {
+    const { bShared } = derivePair()
+    const oversized = 'A'.repeat(MAX_E2EE_ENCRYPTED_BASE64_CHARACTERS + 4)
+    expect(() => decryptText(oversized, bShared)).not.toThrow()
+    expect(decryptText(oversized, bShared)).toBeNull()
+  })
+
+  it('decryptBytes returns null (not a throw) for a malformed/oversized nonce+ciphertext bundle', () => {
+    const { bShared } = derivePair()
+    const garbage = new Uint8Array(1024).fill(7)
+    expect(() => decryptBytes(garbage, bShared)).not.toThrow()
+    expect(decryptBytes(garbage, bShared)).toBeNull()
   })
 
   it('publicKeyFromBase64 throws unless exactly 32 bytes', () => {

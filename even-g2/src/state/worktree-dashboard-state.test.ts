@@ -231,6 +231,30 @@ describe('WorktreeDashboardController', () => {
     expect(isCleared()).toBe(true)
   })
 
+  it('treats a null lastOutputAt (no recorded activity) the same as absent, not epoch 0', async () => {
+    const store = createHudStore(fixtureState())
+    const port = new FakeRpcPort()
+    port.queue.push(
+      okResponse([{ worktreeId: 'w1', displayName: 'idle', status: 'active', lastOutputAt: null }])
+    )
+    const { timer } = fakeTimer()
+    const controller = new WorktreeDashboardController(store, {
+      port,
+      isVisible: () => true,
+      isForeground: () => true,
+      now: () => 5 * 60_000,
+      timer
+    })
+
+    controller.start()
+    await Promise.resolve()
+    await Promise.resolve()
+
+    expect(store.getState().dashboard.rows).toEqual([
+      { worktreeId: 'w1', displayName: 'idle', status: 'active', elapsedLabel: undefined }
+    ])
+  })
+
   it('degrades gracefully: absent status and lastOutputAt', async () => {
     const store = createHudStore(fixtureState())
     const port = new FakeRpcPort()

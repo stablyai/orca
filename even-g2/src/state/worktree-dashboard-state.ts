@@ -10,7 +10,10 @@ type WorktreePsRow = {
   worktreeId: string
   displayName: string
   status?: 'working' | 'active' | 'permission' | 'done' | 'inactive'
-  lastOutputAt?: number
+  // Nullable, not just optional: orca-runtime-record-pty-worktree.ts sends
+  // `lastOutputAt: state.lastOutputAt ?? null` — a row with no recorded output arrives as
+  // an explicit null, which must be treated the same as "absent" (see toDashboardRow).
+  lastOutputAt?: number | null
 }
 
 type WorktreePsResult = { worktrees?: WorktreePsRow[] }
@@ -47,8 +50,10 @@ function toDashboardRow(row: WorktreePsRow, now: number): DashboardRow {
     worktreeId: row.worktreeId,
     displayName: row.displayName,
     status: row.status,
-    elapsedLabel:
-      row.lastOutputAt === undefined ? undefined : formatElapsedLabel(row.lastOutputAt, now)
+    // `== null` deliberately covers both undefined AND null: worktree.ps rows send an explicit
+    // null for "no activity time" (never undefined), and treating null as epoch-0 previously
+    // produced multi-decade elapsed labels.
+    elapsedLabel: row.lastOutputAt == null ? undefined : formatElapsedLabel(row.lastOutputAt, now)
   }
 }
 

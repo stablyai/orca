@@ -66,7 +66,9 @@ function createPorts(): NavPorts & Record<keyof NavPorts, ReturnType<typeof vi.f
     refreshDashboard: vi.fn(),
     pausePolling: vi.fn(),
     resumePolling: vi.fn(),
-    disconnectHost: vi.fn()
+    disconnectHost: vi.fn(),
+    invalidateRender: vi.fn(),
+    reopenTerminalTail: vi.fn()
   }
 }
 
@@ -98,6 +100,7 @@ describe('HudInputRouter', () => {
     expect(store.getState().nav.stack.at(-1)).toEqual({
       screen: 'dashboard',
       hostId: 'host-1',
+      cursor: 0,
       page: 0
     })
   })
@@ -152,6 +155,35 @@ describe('HudInputRouter', () => {
 
     emit({ source: 'sys', eventType: 3 })
     expect(ports.shutdownDialog).not.toHaveBeenCalled()
+  })
+
+  it('routes invalidateRender and reopenTerminalTail effects to their ports', () => {
+    const store = createHudStore(
+      fixtureState({
+        nav: {
+          stack: [
+            { screen: 'dashboard', hostId: 'h1', cursor: 0, page: 0 },
+            {
+              screen: 'terminalTail',
+              hostId: 'h1',
+              worktreeId: 'wt-1',
+              terminalId: 'term-1',
+              page: 0
+            }
+          ],
+          exitDialogArmed: false,
+          terminalTailsNeedReopen: true
+        }
+      })
+    )
+    const { bridge } = createFakeBridge()
+    const ports = createPorts()
+    const router = new HudInputRouter({ bridge, store, ports, buildContext: () => fixtureCtx() })
+
+    router.dispatch({ kind: 'foregroundEnter' })
+
+    expect(ports.resumePolling).toHaveBeenCalledTimes(1)
+    expect(ports.reopenTerminalTail).toHaveBeenCalledWith('wt-1')
   })
 
   it('dispatch() drives the reducer directly without a bridge event', () => {

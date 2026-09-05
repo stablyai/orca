@@ -23,11 +23,18 @@ export function buildNavContext(state: HudState): NavContext {
       state.terminalTail.terminalId === terminalId
         ? computeTerminalTailPageCount(state.terminalTail.lines)
         : 1,
+    // Finding #5: an ask notification stays actionable only while its worktree's CURRENT
+    // status is still `permission` — membership in the host's worktree set alone isn't enough,
+    // otherwise an ask the agent already cleared (the next poll shows a different status)
+    // remains re-openable/re-sendable from a stale inbox entry.
     pendingAskNotificationId: (hostId) => {
-      const worktreeIds = new Set(rowsForHost(state, hostId).map((row) => row.worktreeId))
-      const entry = state.inbox.entries.find(
-        (e) => e.kind === 'ask' && e.worktreeId !== undefined && worktreeIds.has(e.worktreeId)
-      )
+      const rows = rowsForHost(state, hostId)
+      const entry = state.inbox.entries.find((e) => {
+        if (e.kind !== 'ask' || e.worktreeId === undefined) {
+          return false
+        }
+        return rows.find((row) => row.worktreeId === e.worktreeId)?.status === 'permission'
+      })
       return entry?.notificationId ?? null
     },
     askOptionCount: () => DEFAULT_ASK_OPTION_COUNT,

@@ -3,7 +3,7 @@ import { GLYPH_CURSOR_PREFIX, toFullwidthColumns } from '../hud/hud-glyphs'
 import type { DashboardRow, HudState } from '../state/hud-store'
 import { dashboardPageCount, renderDashboardScreen, statusGlyph } from './dashboard-screen'
 
-function fixtureState(rows: DashboardRow[], page = 0): HudState {
+function fixtureState(rows: DashboardRow[], cursorOrPage = 0): HudState {
   return {
     connection: { hostId: 'h1', state: 'connected', compat: null },
     hosts: [],
@@ -12,7 +12,10 @@ function fixtureState(rows: DashboardRow[], page = 0): HudState {
     terminalTail: { terminalId: null, lines: [], live: false },
     device: null,
     askAnswered: null,
-    nav: { stack: [{ screen: 'dashboard', hostId: 'h1', page }], exitDialogArmed: false }
+    nav: {
+      stack: [{ screen: 'dashboard', hostId: 'h1', cursor: cursorOrPage, page: cursorOrPage }],
+      exitDialogArmed: false
+    }
   }
 }
 

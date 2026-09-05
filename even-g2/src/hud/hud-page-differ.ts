@@ -17,13 +17,24 @@ function skeletonEqual(a: HudContainerSpec, b: HudContainerSpec): boolean {
     a.y !== b.y ||
     a.width !== b.width ||
     a.height !== b.height ||
-    a.isEventCapture !== b.isEventCapture
+    a.isEventCapture !== b.isEventCapture ||
+    // Style properties are never upgradable in place (only text `content` is) — any change to
+    // one of these must force a rebuild, or stale border/padding/color persists on the device.
+    a.borderWidth !== b.borderWidth ||
+    a.borderColor !== b.borderColor ||
+    a.borderRadius !== b.borderRadius ||
+    a.paddingLength !== b.paddingLength
   ) {
     return false
   }
-  // List containers are not upgradable in place: any item change forces a rebuild.
+  // List containers are not upgradable in place: any item or selection-border change forces a
+  // rebuild.
   if (a.kind === 'list' && b.kind === 'list') {
-    return a.items.length === b.items.length && a.items.every((item, i) => item === b.items[i])
+    return (
+      a.showSelectionBorder === b.showSelectionBorder &&
+      a.items.length === b.items.length &&
+      a.items.every((item, i) => item === b.items[i])
+    )
   }
   return true
 }
@@ -33,8 +44,14 @@ export function planHudRender(
   next: HudPageBuild,
   startupSpent: boolean
 ): HudRenderPlan {
-  if (previous === null || !startupSpent) {
+  if (!startupSpent) {
     return { kind: 'create', page: next }
+  }
+  // previous === null past this point means the queue was explicitly invalidated (e.g. firmware
+  // cleared the canvas out of band) rather than "never rendered" — rebuild, don't retry the
+  // one-shot startup API a second time.
+  if (previous === null) {
+    return { kind: 'rebuild', page: next }
   }
 
   const prevContainers = previous.containers

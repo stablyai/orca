@@ -115,6 +115,19 @@ describe('ask flow integration', () => {
       }
     })
 
+    // CRITICAL finding agent-terminal-resolution.ts:22 / nav-ports.ts:33: the keystroke must go
+    // to the host's authoritative terminal.resolveActive answer (term-wt1-1), never a
+    // most-recent-output guess — the fixture's term-wt1-2 decoy has newer output than term-wt1-1
+    // but is NOT wt-1's active terminal (see mock-orca-fixtures.ts's createFixtureActiveTerminals).
+    const resolved = sentRequests.find((r) => r.method === 'terminal.resolveActive')
+    if (resolved?.params?.worktree !== 'id:wt-1') {
+      throw new Error('terminal.resolveActive was not called for wt-1')
+    }
+    const sentToTerminal = sentRequests.find((r) => r.method === 'terminal.send')
+    if (sentToTerminal?.params?.terminal !== 'term-wt1-1') {
+      throw new Error(`ask answer went to ${sentToTerminal?.params?.terminal}, not term-wt1-1`)
+    }
+
     server.setWorktreeStatus('wt-1', 'active')
     forceRefresh(bridge)
     await vi.waitFor(() => {
@@ -123,6 +136,88 @@ describe('ask flow integration', () => {
         throw new Error('footer has not confirmed yet')
       }
     })
+
+    shell.stop()
+  })
+
+  it('keeps the ask actionable when the host refuses the send (accepted: false)', async () => {
+    const bridge = new MockGlassesBridge()
+    const server = new MockOrcaServer()
+    const hostProfileStore = new HostProfileStore(bridge)
+    await hostProfileStore.upsert({
+      id: 'host-1',
+      name: 'Dev machine',
+      endpoint: 'memory://host-1',
+      deviceToken: 'mock-device-token',
+      publicKeyB64: server.publicKeyB64,
+      lastConnected: Date.now()
+    })
+
+    const sentRequests: { method: string; params?: Record<string, unknown> }[] = []
+    server.onRequestForTest = (method, params) => sentRequests.push({ method, params })
+    // HIGH finding nav-ports.ts:42: a refused send (accepted: false) is a SUCCESSFUL RPC, not an
+    // RpcFailure — a caller that only checks `response.ok` would wrongly mark the ask answered.
+    server.setTerminalWritable('term-wt1-1', false)
+
+    const shell = await startAppShell({
+      bridge,
+      hostProfileStore,
+      socketFactory: socketFactoryFor(server)
+    })
+
+    await vi.waitFor(() => {
+      const page = bridge.pageSnapshot()
+      if (!page || !textContent(page.containers, 2).includes('api-refactor')) {
+        throw new Error('dashboard not rendered yet')
+      }
+    })
+
+    server.setWorktreeStatus('wt-1', 'permission')
+    forceRefresh(bridge)
+    server.pushNotification({
+      type: 'notification',
+      source: 'claude',
+      title: 'Needs input',
+      body: 'Approve write? [1] Yes [2] No',
+      worktreeId: 'wt-1',
+      notificationId: 'notif-ask-2'
+    })
+    await vi.waitFor(() => {
+      const page = bridge.pageSnapshot()!
+      if (!textContent(page.containers, 1).includes('needs input')) {
+        throw new Error('header nudge not shown yet')
+      }
+    })
+
+    bridge.simulateClick() // jumps into the ask screen
+    await vi.waitFor(() => {
+      const page = bridge.pageSnapshot()!
+      if (!textContent(page.containers, 1).includes('Needs input')) {
+        throw new Error('ask screen not shown yet')
+      }
+    })
+    // The sys-source click dedupe window is 600ms (glasses-event-normalization.ts) — clear it
+    // so this second click isn't dropped as a duplicate of the one that entered the ask screen.
+    await new Promise((resolve) => setTimeout(resolve, 650))
+    bridge.simulateClick() // sends the default option — the mock refuses it
+
+    await vi.waitFor(() => {
+      const sent = sentRequests.find((r) => r.method === 'terminal.send')
+      if (!sent) {
+        throw new Error('terminal.send not observed yet')
+      }
+    })
+
+    // Give the (rejected) round trip a chance to resolve, then confirm the footer never claims
+    // "answered" and the ask screen is still showing (not silently dismissed).
+    await new Promise((resolve) => setTimeout(resolve, 50))
+    const page = bridge.pageSnapshot()!
+    if (textContent(page.containers, 3).includes('answered')) {
+      throw new Error('footer should not confirm a refused send')
+    }
+    if (!textContent(page.containers, 1).includes('Needs input')) {
+      throw new Error('ask screen should still be open after a refused send')
+    }
 
     shell.stop()
   })

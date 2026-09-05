@@ -65,8 +65,10 @@ export class TerminalTailDecoder {
       case TerminalStreamOpcode.SnapshotStart:
         // Why: a fresh snapshot replaces the tail entirely — mirrors opcode semantics in
         // @orca-shared/terminal-stream-protocol (SnapshotStart begins a full-buffer resend).
+        // The payload itself is JSON snapshot metadata (kind/cols/rows/cwd/...), not terminal
+        // text — see terminal-snapshot-publication.ts's sendSnapshotFrames — so it's dropped;
+        // terminal text starts with SnapshotChunk.
         this.reset()
-        this.appendText(this.decoder.decode(frame.payload))
         break
       case TerminalStreamOpcode.SnapshotChunk:
       case TerminalStreamOpcode.Output:
