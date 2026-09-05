@@ -473,7 +473,7 @@ describe('buildDashboardSnapshot', () => {
     expect(snapshot.repoIconsByRepoId).toEqual({ r1: null })
   })
 
-  it('nulls ptyId when the layout entry points at a dead pty', () => {
+  it('omits a local agent when the layout points at a dead pty', () => {
     const snapshot = buildDashboardSnapshot(
       baseState({
         agentStatusByPaneKey: { [PANE_KEY]: entry({}) },
@@ -483,7 +483,30 @@ describe('buildDashboardSnapshot', () => {
       }),
       NOW
     )
-    expect(snapshot.cards[0].ptyId).toBeNull()
+
+    expect(snapshot.cards).toEqual([])
+  })
+
+  it('keeps a remote agent visible when terminal liveness is unverifiable', () => {
+    const snapshot = buildDashboardSnapshot(
+      baseState({
+        repos: [
+          {
+            id: 'r1',
+            path: '/r1',
+            displayName: 'Repo One',
+            badgeColor: '#000',
+            executionHostId: 'ssh:host-1'
+          }
+        ],
+        agentStatusByPaneKey: { [PANE_KEY]: entry({}) },
+        ptyIdsByTabId: { [TAB_ID]: [] }
+      } as unknown as Partial<DashboardSnapshotState>),
+      NOW
+    )
+
+    expect(snapshot.cards).toHaveLength(1)
+    expect(snapshot.cards[0]).toMatchObject({ ptyId: null, hostKind: 'ssh' })
   })
 
   it('moves an acknowledged completion to idle while retaining its raw done state', () => {
@@ -549,7 +572,7 @@ describe('buildDashboardSnapshot', () => {
     expect(snapshot.cards[0].dotState).toBe('idle')
   })
 
-  it('routes retained done agents to the done bucket', () => {
+  it('omits retained done agents whose local pane is gone', () => {
     const donePaneKey = makePaneKey(TAB_ID, GONE_LEAF_ID)
     const snapshot = buildDashboardSnapshot(
       baseState({
@@ -565,9 +588,8 @@ describe('buildDashboardSnapshot', () => {
       }),
       NOW
     )
-    const done = snapshot.cards.find((c) => c.dotState === 'done')
-    expect(done).toBeDefined()
-    expect(done?.bucket).toBe('done')
+
+    expect(snapshot.cards).toEqual([])
   })
 
   it('includes collapsed subagents and workspace status metadata on the parent card', () => {
