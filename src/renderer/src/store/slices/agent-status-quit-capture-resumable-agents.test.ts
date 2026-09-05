@@ -39,4 +39,38 @@ describe('quit-time capture for newly resumable agents', () => {
       origin: 'live'
     })
   })
+
+  it('keeps a completed Cursor conversation checkpoint through quit capture', () => {
+    const store = createTestStore()
+    store.setState({
+      tabsByWorktree: {
+        'wt-1': [makeTab({ id: 'tab-1', worktreeId: 'wt-1' })]
+      }
+    } as Partial<AppState>)
+    const providerSession = { key: 'conversation_id' as const, id: 'cursor-conversation-1' }
+
+    store
+      .getState()
+      .setAgentStatus(
+        'tab-1:leaf-1',
+        { state: 'working', prompt: 'finish the task', agentType: 'cursor' },
+        'Cursor',
+        { updatedAt: 10, stateStartedAt: 10 },
+        { tabId: 'tab-1', worktreeId: 'wt-1' },
+        { providerSession }
+      )
+    store.getState().setAgentStatus('tab-1:leaf-1', {
+      state: 'done',
+      prompt: 'finish the task',
+      agentType: 'cursor'
+    })
+    store.getState().captureAllSleepingAgentSessions('quit')
+
+    expect(store.getState().sleepingAgentSessionsByPaneKey['tab-1:leaf-1']).toMatchObject({
+      agent: 'cursor',
+      state: 'done',
+      providerSession,
+      origin: 'live'
+    })
+  })
 })

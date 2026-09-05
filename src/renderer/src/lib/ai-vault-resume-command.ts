@@ -259,6 +259,9 @@ export function getAiVaultAgentProviderSession(
   if (session.agent === 'antigravity') {
     return { key: 'conversation_id', id: session.sessionId }
   }
+  if (session.agent === 'cursor') {
+    return { key: 'conversation_id', id: session.sessionId }
+  }
   if (session.agent === 'pi' || session.agent === 'prime-agent') {
     return session.filePath
       ? { key: 'session_id', id: session.sessionId, transcriptPath: session.filePath }
