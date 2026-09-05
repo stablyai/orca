@@ -84,3 +84,48 @@ describe('advancePartialEscapeTail', () => {
     expect(advancePartialEscapeTail('', huge)).toBe('')
   })
 })
+
+describe('advancePartialEscapeTail ESC-free fast path', () => {
+  // The gate must be indistinguishable from the walk it skips: `extractPartialEscapeTail` only
+  // leaves `ground` on an ESC byte, so a chunk with none can only produce ''.
+  const pieces = [
+    '',
+    'plain output\n',
+    '\u001b[32mgreen\u001b[0m',
+    '\u001b[3',
+    '\u001b]0;title\u0007',
+    '\u001b]0;partial',
+    '\u001bP dcs payload',
+    '\u001b',
+    '\u0018',
+    '\u001a',
+    '\u001b]8;;https://example.com\u001b\\',
+    '\u001b(',
+    'no escapes at all',
+    '\u001b[1;2;3'
+  ]
+
+  it('matches an unconditional fold for every pending-tail and chunk pairing', () => {
+    for (const pending of pieces) {
+      const seedTail = extractPartialEscapeTail(pending)
+      for (const chunk of pieces) {
+        const unconditional = extractPartialEscapeTail(seedTail + chunk)
+        expect({
+          pending: seedTail,
+          chunk,
+          tail: advancePartialEscapeTail(seedTail, chunk)
+        }).toEqual({
+          pending: seedTail,
+          chunk,
+          tail: unconditional.length > MAX_PARTIAL_ESCAPE_TAIL_LENGTH ? '' : unconditional
+        })
+      }
+    }
+  })
+
+  it('still carries a pending tail through an ESC-free chunk', () => {
+    const pending = '\u001b]0;my-title'
+    const chunk = ' still inside the OSC payload'
+    expect(advancePartialEscapeTail(pending, chunk)).toBe(pending + chunk)
+  })
+})

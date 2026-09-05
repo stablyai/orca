@@ -143,6 +143,7 @@
     "bench:zustand-selector-fanout": "node config/scripts/zustand-selector-fanout-benchmark.mjs",
     "bench:agent-inspection-cadence": "node config/scripts/agent-inspection-cadence-batching-benchmark.mjs",
     "bench:session-write-hot-path": "node config/scripts/session-write-hot-path-benchmark.mjs",
+    "bench:terminal-partial-escape-tail": "node config/scripts/terminal-partial-escape-tail-benchmark.mjs",
     "bench:worktree-refresh-churn": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON config/scripts/worktree-refresh-churn-benchmark.mjs",
     "bench:multi-workspace-typing": "pnpm run ensure:electron-runtime && node config/scripts/run-multi-workspace-typing-bench.mjs",
     "bench:ai-vault-typing": "pnpm run ensure:electron-runtime && node config/scripts/run-ai-vault-typing-bench.mjs",
