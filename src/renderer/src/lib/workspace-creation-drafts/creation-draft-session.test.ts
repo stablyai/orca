@@ -125,3 +125,28 @@ it('discovers other-window drafts on refresh without replacing local edits', asy
   expect(useCreationDraftSession.getState().entries['create-1'].buffer.text).toBe('local text')
   expect(useCreationDraftSession.getState().entries['create-2'].buffer.text).toBe('new draft')
 })
+
+it('reconciles external draft replacement without accumulating removed records', async () => {
+  for (let generation = 0; generation < 3; generation++) {
+    database.listDrafts.mockResolvedValue(
+      Array.from({ length: 64 }, (_, index) => ({
+        ...draft('external', `${generation}-${index}`),
+        revision: 1
+      }))
+    )
+    await loadCreationDrafts(true)
+    expect(Object.keys(useCreationDraftSession.getState().entries)).toHaveLength(64)
+  }
+})
+
+it('preserves the open recovered draft when another writer deletes it', async () => {
+  database.listDrafts.mockResolvedValue([{ ...draft('keep open'), revision: 1 }])
+  await loadCreationDrafts()
+  useCreationDraftSession.setState({ viewedDraftId: 'create-1' })
+  database.listDrafts.mockResolvedValue([])
+  await loadCreationDrafts(true)
+  expect(useCreationDraftSession.getState().entries['create-1'].buffer.text).toBe('keep open')
+  useCreationDraftSession.setState({ viewedDraftId: null })
+  await loadCreationDrafts(true)
+  expect(useCreationDraftSession.getState().entries).toEqual({})
+})

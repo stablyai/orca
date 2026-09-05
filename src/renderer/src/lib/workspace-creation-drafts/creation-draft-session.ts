@@ -54,8 +54,16 @@ export function loadCreationDrafts(refresh = false): Promise<void> {
     .then((drafts) => {
       useCreationDraftSession.setState((state) => {
         const entries = { ...state.entries }
+        const storedIds = new Set(drafts.map((draft) => draft.id))
+        const isUntouched = (id: string): boolean =>
+          entries[id]?.editVersion === 0 && state.viewedDraftId !== id
+        for (const id of Object.keys(entries)) {
+          if (!storedIds.has(id) && isUntouched(id)) {
+            delete entries[id]
+          }
+        }
         for (const draft of drafts) {
-          if (!entries[draft.id]) {
+          if (!entries[draft.id] || isUntouched(draft.id)) {
             entries[draft.id] = fromStored(draft)
           }
         }
