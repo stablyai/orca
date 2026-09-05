@@ -22,6 +22,7 @@ import {
 } from '../../structured-worker-identity'
 import { ORCHESTRATION_METHODS } from './orchestration'
 import { readStructuredWorkerOutput } from './orchestration-structured-worker-lifecycle'
+import { inspectWorkerTerminal } from './orchestration-worker-observation'
 
 const WORKTREE = 'repo::wt'
 const STRUCTURED_HANDLE = 'structworker_worker'
@@ -256,5 +257,25 @@ describe('a worker cannot tell which mode it is running in', () => {
     // The refusal names a source that works instead of naming the worker's kind.
     expect(read).toThrow(/--source auto or --source transcript/)
     expect(read).not.toThrow(/structured/i)
+  })
+
+  it('never claims a structured worker was checked for a human-answerable prompt', async () => {
+    installStructuredCoordinator(STRUCTURED_HANDLE, 'sess_worker')
+    vi.spyOn(runtime, 'showTerminal').mockResolvedValue({
+      handle: 'term_coord',
+      worktreeId: WORKTREE,
+      status: 'running'
+    } as never)
+    const started = await startWorker({
+      settings: STRUCTURED_DEFAULT,
+      from: 'term_coord',
+      coordinatorPaneKey
+    })
+
+    const observation = await inspectWorkerTerminal(runtime, db, started.dispatchId)
+
+    // Absent, not null: null is the contract's "looked and found none", and a journal question is
+    // invisible to every prompt scan, so null would be a false negative a coordinator acts on.
+    expect('agentWait' in observation).toBe(false)
   })
 })
