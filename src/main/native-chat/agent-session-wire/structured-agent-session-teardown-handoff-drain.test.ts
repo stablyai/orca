@@ -146,4 +146,20 @@ describe('structured agent-session host teardown', () => {
     })
     expect(host.hasSession(SESSION)).toBe(false)
   })
+
+  it('gives up on a wedged handoff instead of holding the quit open', async () => {
+    const request = requests.request('to-tui', 'now', { operationId: hostTestOperationId() })
+    expect(await host.requestHandoff(CALLER, request)).toMatchObject({ ok: true })
+    await launchEntered.promise
+
+    // The gate is never opened: this is the flow that never comes back.
+    vi.useFakeTimers()
+    try {
+      const teardown = host.flushAllStreamedEvents()
+      await vi.advanceTimersByTimeAsync(5_000)
+      await expect(teardown).resolves.toBeUndefined()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
 })

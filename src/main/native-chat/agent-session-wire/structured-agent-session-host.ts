@@ -59,7 +59,11 @@ import type {
 } from './structured-agent-session-host-types'
 import { StructuredAgentSessionEventRecovery } from './structured-agent-session-event-recovery'
 import { StructuredAgentSessionBackgroundTaskChannel } from './structured-agent-session-background-task-channel'
+import { withTimeout } from '../../../shared/promise-timeout-fallback'
 export type { StructuredAgentSessionHostDeps } from './structured-agent-session-host-types'
+/** Quit must not wait indefinitely on an in-flight handoff; see the drain phase below. */
+const HANDOFF_DRAIN_TIMEOUT_MS = 5_000
+
 export class StructuredAgentSessionHost {
   private readonly sessions = new Map<string, StructuredAgentSessionHostSession>()
   private readonly subscribers = new AgentSessionSubscribers()
@@ -261,7 +265,13 @@ export class StructuredAgentSessionHost {
         { name: 'stop-tui-catchup', run: () => this.handoffs.stopTuiHistoryCatchup() },
         // Before the session map is dropped: a handoff flow left running writes rows into a
         // journal this teardown is about to close, and publishes against a session it removed.
-        { name: 'drain-handoffs', run: () => this.handoffs.drain() },
+        // Why bounded: this phase is on the app-quit path, and a flow wedged in `launchTui` would
+        // otherwise hold the quit open forever. Giving up merely restores the old orphaning, which
+        // the publish guard above already makes survivable.
+        {
+          name: 'drain-handoffs',
+          run: () => withTimeout(this.handoffs.drain(), HANDOFF_DRAIN_TIMEOUT_MS, undefined)
+        },
         { name: 'drain-attaches', run: () => this.tasks.drainAttaches() },
         { name: 'flush-event-sinks', run: () => this.runtimeState.flushAllEventSinks() }
       ],
