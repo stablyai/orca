@@ -174,6 +174,7 @@ export function registerTerminalPresentationIpcBridge(unsubs: (() => void)[]): v
                     tabId: tab.id,
                     worktreeId,
                     paneRuntimeId: -1,
+                    activate: shouldActivate,
                     direction: splitDirection ?? 'horizontal',
                     sourceLeafId: splitFromLeafId,
                     sourcePtyId,
