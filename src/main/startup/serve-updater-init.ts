@@ -2,6 +2,7 @@ import {
   setupAutoUpdater,
   resolveUpdateInstallMode,
   setServeUpdateCensusGate,
+  setServeUpdateCensusRuntime,
   setServeUpdateRuntimeId
 } from '../updater'
 import { runServeUpdateCensus, type CensusCapableRuntime } from '../serve-update-census'
@@ -25,6 +26,7 @@ export function initializeServeAutoUpdater(
   // while live work exists (see docs/reference/ssh-execution-boundary.md).
   if (censusRuntime) {
     setServeUpdateCensusGate(() => runServeUpdateCensus(censusRuntime))
+    setServeUpdateCensusRuntime(censusRuntime)
   }
   setupAutoUpdater(null, {
     getLastUpdateCheckAt: () => getStore().getUI().lastUpdateCheckAt,

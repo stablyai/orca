@@ -14,6 +14,7 @@ import { captureServeUpdateAppImage } from '../serve-update-artifact-capture'
 import { resolveTrustedExecutable } from '../linux-package-install-command'
 import { SERVE_UPDATE_HELPER_INSTALL_PATH } from '../cli/serve-update-helper-installer'
 import { runProcess } from '../../shared/child-process/run-process'
+import { runServeUpdateCensus, type CensusCapableRuntime } from '../serve-update-census'
 import { UpdaterPackageRecovery } from './updater-package-recovery'
 
 const SERVE_UPDATE_VERDICT_TIMEOUT_MS = 90_000
@@ -30,10 +31,17 @@ export abstract class UpdaterServeInstallHandoff extends UpdaterPackageRecovery 
   private serveUpdateRuntimeId = ''
   /** The most recent update-downloaded event, kept for the supervised serve install path. */
   private supervisedServeDownloadInfo: Record<string, unknown> | null = null
+  /** Set by serve startup; the census fence re-consults it immediately before quit. */
+  private serveUpdateCensusRuntime: CensusCapableRuntime | null = null
 
   /** Called by serve startup once the runtime id exists. */
   setServeUpdateRuntimeId(runtimeId: string): void {
     this.serveUpdateRuntimeId = runtimeId
+  }
+
+  /** Called by serve startup alongside the runtime id; null keeps the fence unarmed. */
+  setServeUpdateCensusRuntime(runtime: CensusCapableRuntime | null): void {
+    this.serveUpdateCensusRuntime = runtime
   }
 
   /** Called by the update-downloaded event bridge so serve can spool the artifact later. */
@@ -187,6 +195,30 @@ export abstract class UpdaterServeInstallHandoff extends UpdaterPackageRecovery 
       return
     }
     recordUpdaterLifecycle('headless_serve_update_accepted', { version: pendingVersion || null })
+    // Census-and-stop fence: the install-RPC gate ran earlier, so work may have started
+    // since. Re-run the census here, as close to the quit as this process can get; the
+    // helper's systemctl stop is the other half of the fence. A blocked census aborts
+    // the install and the server keeps running.
+    if (this.serveUpdateCensusRuntime) {
+      const census = await runServeUpdateCensus(this.serveUpdateCensusRuntime)
+      if (!census.ok) {
+        clearUpdateRequest()
+        recordUpdaterLifecycle(
+          'headless_serve_update_census_blocked',
+          { version: pendingVersion || null, reason: census.reason },
+          {
+            level: 'warn',
+            message: 'Server update blocked at the quit fence: live terminals may exist'
+          }
+        )
+        this.sendErrorStatus(
+          'The server still has live terminals or agents. Close them, then try the update again.',
+          true
+        )
+        this.resetQuitForUpdateState()
+        return
+      }
+    }
     // Why before quit: the helper needs the unit stop to look like a supervised exit, and
     // pre-quit cleanup (auth preservation) must still run while this process is alive.
     await this.runBeforeUpdateQuitCleanup()
