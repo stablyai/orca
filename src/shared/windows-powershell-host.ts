@@ -73,7 +73,7 @@ function getPathPwshCandidates(env: NodeJS.ProcessEnv): string[] {
     .map((directory) => win32.join(directory.replace(/^"(.*)"$/, '$1'), 'pwsh.exe'))
 }
 
-// PS5.1 can pass a probe intermittently on managed PCs, then fail every login.
+/** Ordered pwsh-first: PS5.1 can pass a probe intermittently, then fail every login. */
 export function getWindowsPowerShellHostCandidates(env: NodeJS.ProcessEnv = process.env): string[] {
   const candidates = [
     win32.join(env.ProgramFiles ?? 'C:\\Program Files', 'PowerShell', '7', 'pwsh.exe'),
@@ -111,7 +111,7 @@ export function isPossibleWindowsPowerShellHost(executablePath: string): boolean
 }
 
 /**
- * Runs the same shape Orca depends on — an `-EncodedCommand` payload that writes
+ * Runs the shape that matters — an `-EncodedCommand` payload that writes
  * a file and then exits with a known code — and requires both halves. A host
  * that returns the exit code without producing the file is exactly the failure
  * this probe exists to catch.
@@ -132,8 +132,8 @@ function buildProbeSpec(
       '-NoLogo',
       '-NoProfile',
       '-NonInteractive',
-      '-ExecutionPolicy',
-      'Bypass',
+      // No -ExecutionPolicy Bypass: the policy gates script files, never an
+      // encoded payload, so it is pure EDR signal here (windows-edr-posture.md).
       '-EncodedCommand',
       Buffer.from(script, 'utf16le').toString('base64')
     ],
@@ -154,6 +154,7 @@ function newMarkerPath(): string {
   return join(tmpdir(), `orca-powershell-probe-${randomUUID()}.txt`)
 }
 
+/** Accepts a host only when it both wrote the marker and reported the exit code. */
 export async function probeWindowsPowerShellHostAsync(
   executablePath: string
 ): Promise<WindowsPowerShellHostProbeResult> {
@@ -248,6 +249,7 @@ export function setWindowsPowerShellHostResolutionObserver(
   resolutionObserver = observer
 }
 
+/** Clears the resolved host, any in-flight warm-up, and the observer. */
 export function resetWindowsPowerShellHostCacheForTests(): void {
   hostCache = null
   warmupInFlight = null

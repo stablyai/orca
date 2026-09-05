@@ -128,4 +128,18 @@ describe('buildWindowsHostInteractiveLoginSpawn', () => {
     expect(spawn.hasRelayedPid()).toBe(true)
     expect(spawn.getTerminationPid()).toBe(1357)
   })
+
+  it('resolves the relayed PID after cleanup removed the relay file', async () => {
+    const spawn = withWindows(() =>
+      buildWindowsHostInteractiveLoginSpawn(
+        'C:\\Tools\\claude.exe',
+        ['auth', 'login'],
+        POWERSHELL_HOST
+      )
+    )
+    writeFileSync(pidFilePathFromSpawnArgs(spawn.args), '5791')
+    spawn.cleanup()
+
+    await expect(spawn.waitForTerminationPid()).resolves.toBe(5791)
+  })
 })

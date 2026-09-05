@@ -102,9 +102,13 @@ export function buildWindowsHostInteractiveLoginSpawn(
     },
     getTerminationPid: () => capturePid(),
     waitForTerminationPid: async () => {
-      const pid = await waitForPidFile(pidFilePath)
-      relayedPid ??= pid
-      return pid
+      // Why check first: after cleanup the relay file is gone, so waiting would
+      // burn the timeout and then discard a PID we already hold.
+      if (relayedPid !== null) {
+        return relayedPid
+      }
+      relayedPid = await waitForPidFile(pidFilePath)
+      return relayedPid
     },
     hasRelayedPid: () => capturePid() !== null
   }
