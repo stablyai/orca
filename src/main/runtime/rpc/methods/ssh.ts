@@ -15,11 +15,15 @@ const SshTarget = z.object({
 
 // Why: `generation` stays optional on the wire — an old server simply omits it and its rows key on target id alone.
 function listRegisteredSshTargetSummaries(): SshTargetSummary[] {
-  return listRegisteredSshTargets().map(({ id, label, generation }) => ({
-    id,
-    label,
-    ...(generation === undefined ? {} : { generation })
-  }))
+  return listRegisteredSshTargets().map(({ id, label, generation }) => {
+    const remotePlatform = getRegisteredSshState(id)?.remotePlatform
+    return {
+      id,
+      label,
+      ...(generation === undefined ? {} : { generation }),
+      ...(remotePlatform === undefined ? {} : { remotePlatform })
+    }
+  })
 }
 
 export const SSH_METHODS: RpcMethod[] = [

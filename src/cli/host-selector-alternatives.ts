@@ -1,6 +1,10 @@
 import type { RuntimeClient } from './runtime-client'
 
-export type SshTargetSummary = { id: string; label: string }
+export type SshTargetSummary = {
+  id: string
+  label: string
+  remotePlatform?: 'linux' | 'darwin' | 'win32'
+}
 export type EnvironmentSummary = { id: string; name: string }
 
 export type HostAlternatives = {

@@ -220,6 +220,7 @@ export type HostListEntry = {
   name: string
   id: string
   selector: string
+  platform?: string
 }
 
 // Why: the selector column is the point of this command — the name alone is what callers already
@@ -231,7 +232,10 @@ export function formatHostList(result: { hosts: HostListEntry[] }): string {
     environment: 'orca server'
   }
   return result.hosts
-    .map((host) => `${kindLabel[host.kind].padEnd(11)} ${host.name}  ->  ${host.selector}`)
+    .map(
+      (host) =>
+        `${kindLabel[host.kind].padEnd(11)} ${host.name}  ${host.platform ?? 'platform unknown'}  ->  ${host.selector}`
+    )
     .join('\n')
 }
 
