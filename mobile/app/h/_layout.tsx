@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { View, StyleSheet, PanResponder } from 'react-native'
-import { Stack, useGlobalSearchParams, usePathname } from 'expo-router'
+import { Stack, useGlobalSearchParams, usePathname, useRouter } from 'expo-router'
 import { colors } from '../../src/theme/mobile-theme'
 import { useResponsiveLayout } from '../../src/layout/responsive-layout'
 import {
@@ -12,6 +12,10 @@ import {
 } from '../../src/storage/preferences'
 import { HostProtocolGate } from '../../src/components/HostProtocolGate'
 import { HostScreen } from './[hostId]/index'
+import { useHostClient } from '../../src/transport/client-context'
+import { useMobileWorktreeKeyboardNavigation } from '../../src/hardware-keyboard/use-mobile-worktree-keyboard-navigation'
+import { useMobileSessionHardwareKeyboardContext } from '../../src/hardware-keyboard/mobile-session-hardware-keyboard-context'
+import type { Worktree } from '../../src/worktree/workspace-list-sections'
 
 // Keep at least this much room for the detail pane when resizing the sidebar.
 const MIN_DETAIL_WIDTH = 320
@@ -61,10 +65,20 @@ function HostStack({ animation }: { animation: 'none' | 'default' }) {
 export default function HostGroupLayout() {
   // Wide layout = tablet/foldable canvas (see responsive-layout-metrics).
   const { isWideLayout, width: windowWidth } = useResponsiveLayout()
-  const { hostId, action } = useGlobalSearchParams<{ hostId?: string; action?: string }>()
+  const { hostId, action, worktreeId } = useGlobalSearchParams<{
+    hostId?: string
+    action?: string
+    worktreeId?: string
+  }>()
   const pathname = usePathname()
+  const router = useRouter()
+  const { client, state: connState } = useHostClient(hostId)
   const [sidebarOpen, setSidebarOpen] = useState(true)
   const [sidebarWidth, setSidebarWidth] = useState(HOST_SIDEBAR_DEFAULT_WIDTH)
+  const [sidebarKeyboardCatalog, setSidebarKeyboardCatalog] = useState<{
+    hostId: string
+    worktrees: readonly Worktree[]
+  } | null>(null)
 
   // Refs keep the once-created PanResponder reading live values without
   // re-creating its handlers on every width/window change.
@@ -97,6 +111,31 @@ export default function HostGroupLayout() {
   const showSidebar = isWideLayout && !!hostId
   const detailHasContent = !!hostId && pathname !== `/h/${hostId}`
   const canCollapseSidebar = showSidebar && detailHasContent
+  const updateSidebarKeyboardWorktrees = useCallback(
+    (worktrees: readonly Worktree[]) => {
+      if (hostId) {
+        setSidebarKeyboardCatalog({ hostId, worktrees })
+      }
+    },
+    [hostId]
+  )
+  const sessionKeyboardContext = useMobileSessionHardwareKeyboardContext(
+    pathname.includes('/session/') ? hostId : undefined,
+    pathname.includes('/session/') ? worktreeId : undefined
+  )
+
+  useMobileWorktreeKeyboardNavigation({
+    client,
+    connState,
+    context: sessionKeyboardContext,
+    hostId,
+    orderedWorktrees:
+      showSidebar && sidebarKeyboardCatalog?.hostId === hostId
+        ? sidebarKeyboardCatalog.worktrees
+        : undefined,
+    router,
+    worktreeId
+  })
 
   // Why: there is no reveal button — navigating Back to the base host route brings
   // the sidebar back (and that route's detail pane is only a placeholder, so a
@@ -147,6 +186,8 @@ export default function HostGroupLayout() {
               embedded
               hostId={hostId}
               action={action}
+              selectedWorktreeId={worktreeId}
+              onKeyboardWorktreesChange={updateSidebarKeyboardWorktrees}
               onHideSidebar={canCollapseSidebar ? hideSidebar : undefined}
             />
             {/* Dedicated drag handle straddling the right border — see resizer note. */}

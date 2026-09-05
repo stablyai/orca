@@ -3,8 +3,9 @@ import type { SectionList, SectionListData } from 'react-native'
 
 type WithId = { worktreeId: string; isActive?: boolean }
 
-// Scrolls the desktop-focused worktree into view when the active selection
-// changes, so the mobile list mirrors the desktop's current workspace. Fires
+// Scrolls the focused worktree into view when the active selection changes.
+// The tablet sidebar supplies its route-selected workspace; standalone lists
+// use the desktop selection. Fires
 // only on a *change* of active id (not every re-render) so it never yanks the
 // list while the user scrolls or searches. Returns the ref to attach to the
 // SectionList and the onScrollToIndexFailed handler it needs for rows that

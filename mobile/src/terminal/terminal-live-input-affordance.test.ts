@@ -35,6 +35,19 @@ function liveInputBarBlock(): string {
 }
 
 describe('terminal live input affordance', () => {
+  it('routes both terminal input modes through hardware-keyboard focus', () => {
+    expect(commandDockSource).toContain('useHardwareKeyboardTextInputFocus({')
+    expect(commandDockSource).toContain(
+      'const terminalInputRef = liveInputEnabled ? liveInputRef : commandInputRef'
+    )
+    expect(
+      commandDockSource.match(/onTouchStart=\{hardwareInputFocus\.handleTouchStart\}/g)
+    ).toHaveLength(2)
+    expect(
+      commandDockSource.match(/showSoftInputOnFocus=\{hardwareInputFocus\.showSoftInputOnFocus\}/g)
+    ).toHaveLength(2)
+  })
+
   it('keeps the live status row wired as the keyboard focus control', () => {
     const block = liveInputBarBlock()
 

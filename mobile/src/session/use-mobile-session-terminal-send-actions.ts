@@ -3,6 +3,7 @@ import { Keyboard } from 'react-native'
 import { triggerError } from '../platform/haptics'
 import type { createTerminalLiveAccessoryInput } from '../terminal/terminal-live-accessory-input'
 import { sendTerminalLiveAccessoryRawBytes } from '../terminal/terminal-live-accessory-raw-send'
+import { resolveMobileTerminalInputGate } from '../terminal/terminal-input-connection-gate'
 import {
   clearTerminalLiveInputFocusTimer,
   isTerminalLiveInputWithinByteLimit
@@ -144,13 +145,13 @@ export function useMobileSessionTerminalSendActions(scope: MobileSessionTerminal
         return false
       }
       const rpc = clientRef.current
+      const inputGate = resolveMobileTerminalInputGate({
+        connState: connStateRef.current,
+        activeHandle: handle === activeHandleRef.current ? handle : null,
+        activeSessionTabType: activeSessionTabTypeRef.current
+      })
       // Why: callers suppress follow-up controls/toasts when this live send is stale.
-      if (
-        !rpc ||
-        connStateRef.current !== 'connected' ||
-        handle !== activeHandleRef.current ||
-        activeSessionTabTypeRef.current !== 'terminal'
-      ) {
+      if (!rpc || !inputGate.canSend) {
         return false
       }
       // Why: live-mirror deltas queued behind a dying send drain into the connect

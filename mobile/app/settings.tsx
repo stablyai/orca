@@ -22,7 +22,8 @@ import {
   Globe,
   MessageSquare,
   Terminal as TerminalIcon,
-  KeyRound
+  KeyRound,
+  Keyboard
 } from 'lucide-react-native'
 import { colors, radii, spacing, typography } from '../src/theme/mobile-theme'
 import {
@@ -112,6 +113,15 @@ export default function SettingsScreen() {
           >
             <TerminalIcon size={16} color={colors.textSecondary} />
             <Text style={styles.rowLabel}>Terminal</Text>
+            <ChevronRight size={16} color={colors.textMuted} />
+          </Pressable>
+          <View style={styles.separator} />
+          <Pressable
+            style={({ pressed }) => [styles.row, pressed && styles.rowPressed]}
+            onPress={() => router.push('/hardware-keyboard-settings')}
+          >
+            <Keyboard size={16} color={colors.textSecondary} />
+            <Text style={styles.rowLabel}>Hardware Keyboard</Text>
             <ChevronRight size={16} color={colors.textMuted} />
           </Pressable>
           <View style={styles.separator} />

@@ -80,12 +80,20 @@ describe('terminal input connection gate', () => {
         activeSessionTabType: undefined
       })
     ).toEqual({ canCompose: true, canSend: false })
+    expect(
+      resolveMobileTerminalInputGate({
+        connState: 'connected',
+        activeHandle: 'terminal-a',
+        activeSessionTabType: undefined
+      })
+    ).toEqual({ canCompose: true, canSend: true })
   })
 })
 
 describe('session route offline-compose wiring', () => {
   it('derives both gates from the shared resolver', () => {
     expect(runtimeSource).toContain('resolveMobileTerminalInputGate({')
+    expect(sendActionsSource).toContain('resolveMobileTerminalInputGate({')
   })
 
   it('keeps the buffered command box editable offline while the live capture stays send-gated', () => {

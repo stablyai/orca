@@ -9,6 +9,7 @@ import {
   Smartphone
 } from 'lucide-react-native'
 import { triggerMediumImpact } from '../platform/haptics'
+import { useHardwareKeyboardTextInputFocus } from '../hardware-keyboard/use-hardware-keyboard-text-input-focus'
 import { createTerminalLiveAccessoryInput } from '../terminal/terminal-live-accessory-input'
 import {
   getTerminalCommandKeyboardType,
@@ -24,6 +25,7 @@ import type { MobileSessionController } from './use-mobile-session-controller'
 export function MobileSessionCommandDock({ controller }: { controller: MobileSessionController }) {
   const {
     insets,
+    worktreeId,
     bufferedTerminalDraftState,
     autocompleteEnabled,
     liveInputCapture,
@@ -69,6 +71,12 @@ export function MobileSessionCommandDock({ controller }: { controller: MobileSes
     activeBrowserTab,
     keyboardLift
   } = controller
+  const terminalInputRef = liveInputEnabled ? liveInputRef : commandInputRef
+  const hardwareInputFocus = useHardwareKeyboardTextInputFocus({
+    enabled: liveInputEnabled ? canSend : canCompose,
+    inputRef: terminalInputRef,
+    surfaceId: `${worktreeId}\0${activeSessionTab?.id ?? activeHandle ?? ''}\0${liveInputEnabled}`
+  })
   return (
     !activeMarkdownTab &&
     !activeFileTab &&
@@ -294,6 +302,7 @@ export function MobileSessionCommandDock({ controller }: { controller: MobileSes
             />
             <TextInput
               ref={liveInputRef}
+              onTouchStart={hardwareInputFocus.handleTouchStart}
               style={styles.liveInputCapture}
               value={liveInputCapture}
               onChange={handleLiveInputChange}
@@ -313,7 +322,7 @@ export function MobileSessionCommandDock({ controller }: { controller: MobileSes
                 )
               }}
               placeholder=""
-              showSoftInputOnFocus
+              showSoftInputOnFocus={hardwareInputFocus.showSoftInputOnFocus}
               autoCapitalize="none"
               autoCorrect={false}
               spellCheck={false}
@@ -331,6 +340,8 @@ export function MobileSessionCommandDock({ controller }: { controller: MobileSes
           <View style={styles.inputBar}>
             <TextInput
               ref={commandInputRef}
+              onTouchStart={hardwareInputFocus.handleTouchStart}
+              showSoftInputOnFocus={hardwareInputFocus.showSoftInputOnFocus}
               // Why: Android caches IME inputType at mount, so toggling autocomplete must remount there; iOS updates in place.
               key={
                 Platform.OS === 'android'

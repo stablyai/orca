@@ -10,6 +10,7 @@ import {
   View
 } from 'react-native'
 import { ArrowUp, ImagePlus, Mic, Square, X } from 'lucide-react-native'
+import { useHardwareKeyboardTextInputFocus } from '../hardware-keyboard/use-hardware-keyboard-text-input-focus'
 import { colors, radii, spacing, typography } from '../theme/mobile-theme'
 import { getVerifiedNativeChatCommands } from '../../../src/shared/native-chat-agent-profiles'
 import {
@@ -97,6 +98,12 @@ export function MobileNativeChatComposer({
     null
   )
   const sendingRef = useRef(false)
+  const inputRef = useRef<TextInput>(null)
+  const hardwareInputFocus = useHardwareKeyboardTextInputFocus({
+    enabled: true,
+    inputRef,
+    surfaceId: sendSurfaceId
+  })
   const mountedRef = useRef(true)
   const sendSurfaceIdRef = useRef(sendSurfaceId)
   const sendSurfaceGenerationRef = useRef(0)
@@ -239,6 +246,9 @@ export function MobileNativeChatComposer({
       <View style={styles.composerInset} testID="native-chat-composer-inset">
         <View style={styles.bar} testID="native-chat-composer">
           <TextInput
+            ref={inputRef}
+            onTouchStart={hardwareInputFocus.handleTouchStart}
+            showSoftInputOnFocus={hardwareInputFocus.showSoftInputOnFocus}
             style={styles.input}
             value={value}
             onChangeText={handleChange}

@@ -1,11 +1,15 @@
 import { createElement, StrictMode, type ComponentProps } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { Keyboard } from 'react-native'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { radii, spacing } from '../theme/mobile-theme'
 import { MobileNativeChatComposer as NativeChatComposer } from './MobileNativeChatComposer'
 
 const getNoComposerEditGeneration = () => 0
+const textInputFocus = vi.hoisted(() => vi.fn())
+const textInputSetNativeProps = vi.hoisted(() => vi.fn())
+const textInputIsFocused = vi.hoisted(() => vi.fn(() => true))
+const hardwareKeyboard = vi.hoisted(() => ({ connected: false }))
 
 function MobileNativeChatComposer({
   getComposerEditGeneration = getNoComposerEditGeneration,
@@ -18,10 +22,20 @@ function MobileNativeChatComposer({
 
 vi.mock('react-native', async () => {
   const React = await import('react')
+  const TextInput = React.forwardRef((_props: object, ref) => {
+    React.useImperativeHandle(ref, () => ({
+      focus: textInputFocus,
+      setNativeProps: textInputSetNativeProps,
+      isFocused: textInputIsFocused,
+      blur: vi.fn()
+    }))
+    return React.createElement('TextInput', _props)
+  })
   return {
     ActivityIndicator: 'ActivityIndicator',
     Image: 'Image',
     Keyboard: { dismiss: vi.fn() },
+    Platform: { OS: 'android' },
     Pressable: 'Pressable',
     ScrollView: ({ children, ...props }: { children?: unknown }) =>
       React.createElement('ScrollView', props, children),
@@ -30,7 +44,7 @@ vi.mock('react-native', async () => {
       hairlineWidth: 1
     },
     Text: 'Text',
-    TextInput: 'TextInput',
+    TextInput,
     View: 'View'
   }
 })
@@ -47,6 +61,10 @@ vi.mock('lucide-react-native', () => ({
   X: 'X'
 }))
 
+vi.mock('@orca/expo-hardware-keyboard-navigation', () => ({
+  isHardwareKeyboardConnected: () => hardwareKeyboard.connected
+}))
+
 vi.mock('../components/BottomDrawer', async () => {
   const React = await import('react')
   return {
@@ -59,9 +77,23 @@ describe('MobileNativeChatComposer', () => {
   let renderer: ReactTestRenderer | null = null
   const getCurrentSendCompletionGeneration = () => 0
 
+  beforeEach(() => {
+    hardwareKeyboard.connected = false
+    vi.mocked(Keyboard.dismiss).mockClear()
+    vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) => {
+      callback(0)
+      return 1
+    })
+    vi.stubGlobal('cancelAnimationFrame', vi.fn())
+  })
+
   afterEach(() => {
     act(() => renderer?.unmount())
     renderer = null
+    textInputFocus.mockClear()
+    textInputSetNativeProps.mockClear()
+    textInputIsFocused.mockClear()
+    vi.unstubAllGlobals()
   })
 
   async function render(
@@ -98,6 +130,38 @@ describe('MobileNativeChatComposer', () => {
       (node) => node.type === 'Pressable' && node.props.accessibilityLabel === 'Send message'
     ) as { props: { onPress: () => Promise<void> } }
   }
+
+  it('focuses each active chat surface without showing the software keyboard', async () => {
+    hardwareKeyboard.connected = true
+    const props = {
+      value: '',
+      onChangeText: vi.fn(),
+      onSend: vi.fn().mockResolvedValue(true),
+      getSendCompletionGeneration: getCurrentSendCompletionGeneration
+    }
+    await act(async () => {
+      renderer = create(
+        createElement(MobileNativeChatComposer, {
+          ...props,
+          sendSurfaceId: 'tab-a'
+        })
+      )
+    })
+    await act(async () => {
+      renderer.update(
+        createElement(MobileNativeChatComposer, {
+          ...props,
+          sendSurfaceId: 'tab-b'
+        })
+      )
+    })
+
+    expect(textInputFocus).toHaveBeenCalledTimes(2)
+    expect(textInputSetNativeProps).toHaveBeenNthCalledWith(1, {
+      showSoftInputOnFocus: false
+    })
+    expect(Keyboard.dismiss).not.toHaveBeenCalled()
+  })
 
   it('reports an accepted send without owning route-scoped draft cleanup', async () => {
     const onChangeText = vi.fn()
