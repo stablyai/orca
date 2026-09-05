@@ -6,7 +6,10 @@ import {
   livePreflightGcloud,
   runIncidentLivePreflight
 } from './incident-live-preflight-cli.js'
-import type { IncidentSample } from './incident-monitor.js'
+import {
+  INCIDENT_MONITOR_THRESHOLDS,
+  type IncidentSample
+} from './incident-monitor.js'
 import type { AdmissionSelector } from './incident-selector.js'
 
 const directories: string[] = []
@@ -313,7 +316,7 @@ describe('relay incident live preflight', () => {
   it('retries freshness-only failures when explicitly requested', async () => {
     const stale = sample()
     stale.sources['cloud-monitoring']!.signals['cloud_sql.cpu']!.observedAt =
-      new Date(now - 180_001).toISOString()
+      new Date(now - (INCIDENT_MONITOR_THRESHOLDS.cloudDataMaxAgeMs + 1)).toISOString()
     const missing = sample()
     delete missing.sources['relay-logs']
     const collect = vi.fn()
@@ -334,7 +337,7 @@ describe('relay incident live preflight', () => {
   it('retries a first-wave stale sample and passes on the fresh one', async () => {
     const stale = sample()
     stale.sources['cloud-monitoring']!.signals['cloud_sql.cpu']!.observedAt =
-      new Date(now - 180_001).toISOString()
+      new Date(now - (INCIDENT_MONITOR_THRESHOLDS.cloudDataMaxAgeMs + 1)).toISOString()
     const collect = vi.fn().mockResolvedValueOnce(stale).mockResolvedValueOnce(sample())
     const wait = vi.fn(async () => undefined)
     await expect(runIncidentLivePreflight(
@@ -348,7 +351,7 @@ describe('relay incident live preflight', () => {
   it('stops retrying when the next wait would exceed the evidence-age bound', async () => {
     const completedAt = now - 290_000
     const stale = sample()
-    stale.sources['cloud-monitoring']!.observedAt = new Date(now - 180_001).toISOString()
+    stale.sources['cloud-monitoring']!.observedAt = new Date(now - (INCIDENT_MONITOR_THRESHOLDS.cloudDataMaxAgeMs + 1)).toISOString()
     const collect = vi.fn(async () => stale)
     const wait = vi.fn(async () => undefined)
     await expect(runIncidentLivePreflight(
@@ -368,7 +371,7 @@ describe('relay incident live preflight', () => {
     const unhealthy = sample()
     unhealthy.sources['cloud-monitoring']!.signals['cloud_sql.cpu']!.value = 0.9
     unhealthy.sources['cloud-monitoring']!.signals['cloud_sql.cpu']!.observedAt =
-      new Date(now - 180_001).toISOString()
+      new Date(now - (INCIDENT_MONITOR_THRESHOLDS.cloudDataMaxAgeMs + 1)).toISOString()
     const collect = vi.fn(async () => unhealthy)
     const wait = vi.fn(async () => undefined)
     await expect(runIncidentLivePreflight(
@@ -381,7 +384,7 @@ describe('relay incident live preflight', () => {
 
   it('fails closed after the bounded freshness retry window', async () => {
     const stale = sample()
-    stale.sources['cloud-monitoring']!.observedAt = new Date(now - 180_001).toISOString()
+    stale.sources['cloud-monitoring']!.observedAt = new Date(now - (INCIDENT_MONITOR_THRESHOLDS.cloudDataMaxAgeMs + 1)).toISOString()
     const collect = vi.fn(async () => stale)
     const wait = vi.fn(async () => undefined)
     await expect(runIncidentLivePreflight(

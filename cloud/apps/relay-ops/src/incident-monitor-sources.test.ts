@@ -93,7 +93,7 @@ describe('incident monitor sources', () => {
   })
 
   it('zero-fills an expired sparse lock-wait point', async () => {
-    let pointAt = now - INCIDENT_MONITOR_THRESHOLDS.cloudDataMaxAgeMs
+    let pointAt = now - INCIDENT_MONITOR_THRESHOLDS.cloudLockWaitCarryMs
     const fetchImpl: typeof fetch = async () => Response.json({
       timeSeries: [{
         points: [{
@@ -141,7 +141,7 @@ describe('incident monitor sources', () => {
 
   it('freshens a sparse zero without masking a recent nonzero lock wait', async () => {
     let value = 0
-    const pointAt = now - INCIDENT_MONITOR_THRESHOLDS.cloudDataMaxAgeMs
+    const pointAt = now - INCIDENT_MONITOR_THRESHOLDS.cloudLockWaitCarryMs
     const readAt = now + 11_879
     const fetchImpl: typeof fetch = async () => Response.json({
       timeSeries: [{
