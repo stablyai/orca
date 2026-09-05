@@ -22,8 +22,6 @@ import {
 import { inheritedZdotdirEnv, resolveInheritedZdotdir } from '../zsh-wrapper-dir-ownership'
 import { SHELL_READY_MARKER } from './daemon-shell-ready-marker'
 
-export { shellReadyMarkerComesFromLineEditor } from '../../shared/shell-ready-marker-timing'
-
 const ORCA_USER_DATA_PATH_ENV = 'ORCA_USER_DATA_PATH'
 
 function getShellReadyWrapperBaseDir(): string {

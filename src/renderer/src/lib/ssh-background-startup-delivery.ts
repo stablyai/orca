@@ -12,8 +12,10 @@ import { buildStartupCommandSubmission } from '../../../shared/startup-command-s
 /**
  * Why every Codex launch waits and not only the prompt-carrying ones: the remote
  * shell is the host's to know, and it arms the ready marker for plain Codex too
- * (#18767). Waiting costs nothing there, and the fallback below still covers a
- * host shell that never publishes one.
+ * (#18767). On such a host the wait ends at the prompt and costs nothing. On one
+ * that never publishes a marker -- fish, sh, Windows, or a host predating #18767 --
+ * the fallback below releases instead, at the same price prompt-carrying Codex
+ * already paid there.
  */
 export function sshBackgroundLaunchWaitsForShellReady(startupPlan: {
   launchCommand: string | null | undefined

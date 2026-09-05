@@ -11,11 +11,19 @@ const hasZsh = process.platform !== 'win32' && spawnSync('/bin/zsh', ['--version
 const hasBash = process.platform !== 'win32' && spawnSync('/bin/bash', ['--version']).status === 0
 const COMMAND_OUTPUT = 'ORCA_STARTUP_COMMAND_RAN'
 // A second Bash install with its own canonical path -- the shape a login profile
-// switches to (`exec /opt/homebrew/bin/bash`) and the one #18768 stalled on.
+// switches to (`exec /opt/homebrew/bin/bash`) and the one #18768 stalled on. A
+// symlink cannot stand in: both sides are realpath'd before they are compared.
 const alternateBashPath = ['/opt/homebrew/bin/bash', '/usr/local/bin/bash', '/usr/bin/bash'].find(
   (candidate) =>
     hasBash && existsSync(candidate) && realpathSync(candidate) !== realpathSync('/bin/bash')
 )
+if (process.platform !== 'win32' && !alternateBashPath) {
+  // Why announced: usrmerge hosts resolve /usr/bin/bash back to /bin/bash, so these
+  // two skip on most Linux CI. A silent skip reads as coverage that does not exist.
+  console.warn(
+    '[repro-13767] no second Bash install with a distinct realpath; skipping the alternate-install recovery tests'
+  )
+}
 const READ_STARTED_FILE = '.orca-read-started'
 
 type ShellFixture = {
