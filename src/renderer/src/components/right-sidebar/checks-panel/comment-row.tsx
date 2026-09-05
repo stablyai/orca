@@ -168,6 +168,21 @@ export function CommentRow({
         </button>
       )}
       <CopyButton text={buildCopyText(comment)} />
+      <CommentMoreMenu
+        comment={comment}
+        botAuthorOverrides={botAuthorOverrides}
+        onStartEdit={canMutateComment && onEditComment ? handleStartEdit : undefined}
+        onDelete={canMutateComment && onDeleteComment ? handleDelete : undefined}
+        onQueueForAgent={!isReply ? onQueueForAgent : undefined}
+      />
+    </div>
+  ) : null
+
+  const commentActions = !editing ? (
+    <div className="flex shrink-0 items-center gap-0.5">
+      {presentation.useCardLayout ? null : queueButton}
+      {hoverActions}
+      {/* Why: outside hoverActions so the link stays visible (and focusable) without hover. */}
       {comment.url ? (
         <button
           type="button"
@@ -184,20 +199,6 @@ export function CommentRow({
           <ExternalLink className="size-3" />
         </button>
       ) : null}
-      <CommentMoreMenu
-        comment={comment}
-        botAuthorOverrides={botAuthorOverrides}
-        onStartEdit={canMutateComment && onEditComment ? handleStartEdit : undefined}
-        onDelete={canMutateComment && onDeleteComment ? handleDelete : undefined}
-        onQueueForAgent={!isReply ? onQueueForAgent : undefined}
-      />
-    </div>
-  ) : null
-
-  const commentActions = !editing ? (
-    <div className="flex shrink-0 items-center gap-0.5">
-      {presentation.useCardLayout ? null : queueButton}
-      {hoverActions}
     </div>
   ) : null
 
