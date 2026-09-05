@@ -6,6 +6,7 @@ import { assertTerminalAgentSendable } from '../../terminal-agent-send-guard'
 import { TerminalSend } from './unary-schemas'
 import {
   assertTerminalSendExactPtyBinding,
+  assertTerminalSendIncarnation,
   assertTerminalSendTextWithinLimit,
   commitMobileInputFloorClaim,
   getTerminalSendGuardRefusedReason,
@@ -50,6 +51,17 @@ export const TERMINAL_SEND_METHODS: RpcAnyMethod[] = [
       }
       // Why: a stale handle must fail with terminal_handle_stale, not evaluate driver/lock state against the wrong PTY (#7718).
       const leaf = runtime.resolveLiveLeafForHandle(params.terminal)
+      const expectedIncarnationId = params.expectedIncarnationId
+      const assertIncarnation = expectedIncarnationId
+        ? (): void =>
+            assertTerminalSendIncarnation(
+              runtime,
+              params.terminal,
+              leaf?.ptyId,
+              expectedIncarnationId
+            )
+        : undefined
+      assertIncarnation?.()
       const driver = leaf?.ptyId ? runtime.getDriver(leaf.ptyId) : null
       if (
         params.inputKind === 'query-reply' &&
@@ -157,7 +169,15 @@ export const TERMINAL_SEND_METHODS: RpcAnyMethod[] = [
       }
       const mobileFloorClientId = resolveMobileFloorClientId(driver, params.client)
       const mobileFloorClaim: MobileInputFloorClaimHolder = { current: null }
-      const beforeWrite = assertSendPreconditions
+      const beforeWrite = assertIncarnation
+        ? async (ptyId: string): Promise<void> => {
+            if (ptyId !== leaf?.ptyId) {
+              throw new Error('terminal_handle_stale')
+            }
+            await assertSendPreconditions?.(ptyId)
+            assertIncarnation()
+          }
+        : assertSendPreconditions
       const useSettledAgentPrompt =
         params.agentPrompt === true &&
         hasText &&
@@ -165,7 +185,7 @@ export const TERMINAL_SEND_METHODS: RpcAnyMethod[] = [
         params.interrupt !== true &&
         params.client?.type === 'desktop' &&
         (await runtime.isTerminalRunningSettledPromptAgent(params.terminal))
-      const reserveWrite =
+      const reserveMobileFloor =
         params.inputKind !== 'query-reply' && leaf?.ptyId && mobileFloorClientId
           ? (ptyId: string): void => {
               const claim = runtime.beginMobileInputFloor(ptyId, mobileFloorClientId)
@@ -175,6 +195,15 @@ export const TERMINAL_SEND_METHODS: RpcAnyMethod[] = [
               mobileFloorClaim.current = claim
             }
           : undefined
+      const reserveWrite = assertIncarnation
+        ? (ptyId: string): void => {
+            if (ptyId !== leaf?.ptyId) {
+              throw new Error('terminal_handle_stale')
+            }
+            assertIncarnation()
+            reserveMobileFloor?.(ptyId)
+          }
+        : reserveMobileFloor
       let result
       try {
         result = useSettledAgentPrompt
