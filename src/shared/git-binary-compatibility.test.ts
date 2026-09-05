@@ -111,6 +111,33 @@ describeBinaryCompatibility('real Git binary compatibility', () => {
     }
   })
 
+  it('quietly distinguishes present and absent branch refs', async () => {
+    const head = (await runGit(['rev-parse', 'HEAD'])).stdout.trim()
+    await runGit(['branch', 'quiet-probe-present', head])
+    await expect(
+      runGit(['rev-parse', '--verify', '--quiet', 'refs/heads/quiet-probe-present'])
+    ).resolves.toMatchObject({ stdout: `${head}\n`, stderr: '' })
+    await expect(
+      runGit(['rev-parse', '--verify', '--quiet', 'refs/heads/quiet-probe-absent'])
+    ).rejects.toMatchObject({ code: 1, stdout: '', stderr: '' })
+  })
+
+  it('distinguishes an absent branch from a ref pointing at a missing object', async () => {
+    const missingObject = 'a'.repeat(40)
+    const refPath = join(repoPath, '.git', 'refs', 'heads', 'quiet-probe-dangling')
+    await writeFile(refPath, `${missingObject}\n`)
+    try {
+      await expect(
+        runGit(['rev-parse', '--verify', '--quiet', 'refs/heads/quiet-probe-dangling'])
+      ).resolves.toMatchObject({ stdout: `${missingObject}\n`, stderr: '' })
+      await expect(
+        runGit(['rev-parse', '--verify', '--quiet', 'refs/heads/quiet-probe-dangling^{commit}'])
+      ).rejects.toMatchObject({ code: 1, stdout: '', stderr: '' })
+    } finally {
+      await rm(refPath)
+    }
+  })
+
   it('recognizes worktree-list and rev-parse compatibility boundaries', async () => {
     await expectPreferredOrRecognizedFallback(
       ['worktree', 'list', '--porcelain', '-z'],
