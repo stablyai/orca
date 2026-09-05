@@ -1,13 +1,21 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-const { childSpawnMock, resolveCodexCommandMock, ptySpawnMock } = vi.hoisted(() => ({
+const { childSpawnMock, readFileMock, resolveCodexCommandMock, ptySpawnMock } = vi.hoisted(() => ({
   childSpawnMock: vi.fn(),
+  readFileMock: vi.fn(),
   resolveCodexCommandMock: vi.fn(),
   ptySpawnMock: vi.fn()
 }))
 
 vi.mock('node:child_process', () => ({
   spawn: childSpawnMock
+}))
+
+// Why: supplementCodexSessionWindow reads the real ~/.codex/auth.json when it
+// exists and overwrites the PTY windows with live backend usage — these tests
+// assert the PTY parse, so the backend supplement must be inert.
+vi.mock('node:fs/promises', () => ({
+  readFile: readFileMock
 }))
 
 vi.mock('../codex-cli/command', () => ({
@@ -34,6 +42,8 @@ describe('fetchCodexRateLimits PTY settle timers', () => {
     vi.useFakeTimers()
     vi.clearAllMocks()
     resolveCodexCommandMock.mockReturnValue('codex')
+    // No backend auth -> the session/reset-credit supplements are no-ops.
+    readFileMock.mockRejectedValue(new Error('no auth fixture'))
   })
 
   it('coalesces the PTY fallback status settle timer while output keeps streaming', async () => {
