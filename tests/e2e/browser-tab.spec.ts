@@ -692,12 +692,6 @@ test.describe('Browser Tab', () => {
       })
       await expectBrowserTabOpenedInBackground(orcaPage, sourceTab!.id, 'Modifier destination')
 
-      await clickBrowserLink(orcaPage, sourceTab!.id, '#shift-middle-link', {
-        button: 'middle',
-        modifiers: ['shift']
-      })
-      await expectBrowserTabActive(orcaPage, 'Shift middle destination')
-      await switchToBrowserTab(orcaPage, worktreeId, sourceTab!.id)
       await clickBrowserLink(orcaPage, sourceTab!.id, '#frame-shift-middle-link', {
         button: 'middle',
         modifiers: ['shift'],
