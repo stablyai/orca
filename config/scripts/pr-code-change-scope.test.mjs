@@ -111,6 +111,8 @@ describe('per-job path classification', () => {
     expect(steps[compileIndex].run).toContain('--publish never')
     expect(steps[compileIndex]['continue-on-error']).not.toBe(true)
     expect(steps[compileIndex].if).toBeUndefined()
+    // PR CI has no signing certificate; discovery would fail the compile.
+    expect(steps[compileIndex].env).toMatchObject({ CSC_IDENTITY_AUTO_DISCOVERY: 'false' })
   })
 
   it('runs every expensive job on an empty diff rather than skipping by accident', () => {
