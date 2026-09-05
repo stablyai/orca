@@ -6,13 +6,6 @@ const worktreeActivation = vi.hoisted(() => ({
   activateAndRevealWorktree: vi.fn()
 }))
 
-// This store path resolves the launch route, which asks whether the renderer is
-// a paired web client. The test's window stub has no `location`, so mock the
-// module rather than reaching into window — the convention 7 other suites use.
-vi.mock('../../lib/web-client-location', () => ({
-  isWebClientLocation: () => false
-}))
-
 vi.mock('../../lib/worktree-activation', () => ({
   activateAndRevealWorktree: worktreeActivation.activateAndRevealWorktree
 }))
