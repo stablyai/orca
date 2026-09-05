@@ -49,6 +49,15 @@ describe('deriveWorkspaceRootPath', () => {
       })
     ).toBe('/repo')
   })
+
+  it('derives the root when the file path uses Windows separators the relative path does not', () => {
+    expect(
+      deriveWorkspaceRootPath({
+        filePath: 'C:\\repo\\apps\\api\\src\\service.ts',
+        relativePath: 'apps/api/src/service.ts'
+      })
+    ).toBe('C:\\repo')
+  })
 })
 
 describe('isLocalTypeScriptWorkspaceConnection', () => {

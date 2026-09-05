@@ -1,4 +1,5 @@
 import { createHash } from 'node:crypto'
+import { statSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import { basename, dirname, isAbsolute, relative, sep } from 'node:path'
 // Why: the repo's main `typescript` dep (^7.0.2) ships only the native tsc CLI shim (no
@@ -12,6 +13,8 @@ import type {
 
 type TypeScriptProject = {
   configPath: string
+  // configPath plus every transitively `extends`-ed config, so inherited changes are detected too.
+  configPaths: string[]
   configVersion: string
   options: ts.CompilerOptions
   fileNames: Set<string>
@@ -46,15 +49,28 @@ function findConfigPath(filePath: string, rootPath: string): string | null {
 function readProjectConfig(configPath: string): {
   options: ts.CompilerOptions
   fileNames: Set<string>
+  configPaths: string[]
 } {
   const config = ts.readConfigFile(configPath, ts.sys.readFile)
   if (config.error) {
     throw new Error(ts.flattenDiagnosticMessageText(config.error.messageText, '\n'))
   }
-  const parsed = ts.parseJsonConfigFileContent(config.config, ts.sys, dirname(configPath))
+  // Populated with every resolved `extends` config, keyed by absolute path.
+  const extendedConfigCache = new Map<string, ts.ExtendedConfigCacheEntry>()
+  const parsed = ts.parseJsonConfigFileContent(
+    config.config,
+    ts.sys,
+    dirname(configPath),
+    undefined,
+    configPath,
+    undefined,
+    undefined,
+    extendedConfigCache
+  )
   return {
     options: parsed.options,
-    fileNames: new Set(parsed.fileNames)
+    fileNames: new Set(parsed.fileNames),
+    configPaths: [configPath, ...extendedConfigCache.keys()]
   }
 }
 
@@ -62,22 +78,31 @@ function hashFileContent(content: string): string {
   return createHash('sha1').update(content).digest('hex')
 }
 
-function getConfigVersion(configPath: string): string {
-  const content = ts.sys.readFile(configPath)
-  return content === undefined ? 'missing' : hashFileContent(content)
+function getConfigVersion(configPaths: string[]): string {
+  return configPaths
+    .map((configPath) => {
+      const content = ts.sys.readFile(configPath)
+      return content === undefined ? 'missing' : hashFileContent(content)
+    })
+    .join(':')
 }
 
-// Why: tsconfig.json can change between requests (e.g. edited on disk); refresh the cached
-// project's options/fileNames in place rather than serving a stale parse forever.
+// Refreshes the cached project's options/fileNames in place when tsconfig.json (or an
+// inherited config) changes on disk, rather than serving a stale parse forever.
 function refreshProjectConfigIfChanged(project: TypeScriptProject): void {
-  const configVersion = getConfigVersion(project.configPath)
+  const configVersion = getConfigVersion(project.configPaths)
   if (configVersion === project.configVersion) {
     return
   }
-  const config = readProjectConfig(project.configPath)
-  project.options = config.options
-  project.fileNames = config.fileNames
-  project.configVersion = configVersion
+  try {
+    const config = readProjectConfig(project.configPath)
+    project.options = config.options
+    project.fileNames = config.fileNames
+    project.configPaths = config.configPaths
+    project.configVersion = getConfigVersion(config.configPaths)
+  } catch {
+    // A transiently-invalid tsconfig (e.g. mid-edit) keeps serving the last-good options.
+  }
 }
 
 function getOrCreateProject(configPath: string): TypeScriptProject {
@@ -90,7 +115,8 @@ function getOrCreateProject(configPath: string): TypeScriptProject {
   const config = readProjectConfig(configPath)
   const project: TypeScriptProject = {
     configPath,
-    configVersion: getConfigVersion(configPath),
+    configPaths: config.configPaths,
+    configVersion: getConfigVersion(config.configPaths),
     options: config.options,
     fileNames: config.fileNames,
     overrides: new Map(),
@@ -115,10 +141,13 @@ function getOrCreateProject(configPath: string): TypeScriptProject {
       if (override) {
         return `override:${override.version}`
       }
-      // Why: disk-backed files have no version counter, so hash their content to detect
-      // changes made outside the currently open editor (e.g. an imported file edited elsewhere).
-      const content = ts.sys.readFile(resolveTypeScriptSystemPath(filePath))
-      return content === undefined ? 'missing' : hashFileContent(content)
+      // stat (not read+hash) so an on-disk edit elsewhere is detected without re-reading the file.
+      try {
+        const stats = statSync(resolveTypeScriptSystemPath(filePath))
+        return `${stats.mtimeMs}:${stats.size}`
+      } catch {
+        return 'missing'
+      }
     },
     fileExists: (filePath) => ts.sys.fileExists(resolveTypeScriptSystemPath(filePath)),
     readFile: (filePath, encoding) =>

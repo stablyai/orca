@@ -39,8 +39,10 @@ export function deriveWorkspaceRootPath(params: {
   if (!relativePath || relativePath === filePath) {
     return null
   }
-  const candidate = filePath.slice(0, Math.max(0, filePath.length - relativePath.length))
-  if (filePath.slice(candidate.length) !== relativePath) {
+  // Compare with separators normalized (filePath itself stays untouched, so the root keeps its native separators).
+  const candidateLength = Math.max(0, filePath.length - relativePath.length)
+  const candidate = filePath.slice(0, candidateLength)
+  if (filePath.slice(candidateLength).replace(/\\/g, '/') !== relativePath.replace(/\\/g, '/')) {
     return null
   }
   return candidate.replace(/[\\/]+$/, '') || null

@@ -117,6 +117,165 @@ describe('getTypeScriptDefinition', () => {
     expect(second?.range.startLineNumber).toBe(2)
   })
 
+  it('picks up a tsconfig.json compilerOptions change (e.g. a new path alias)', async () => {
+    const { rootPath, srcPath } = await createProject()
+    const libPath = join(rootPath, 'lib')
+    await mkdir(libPath, { recursive: true })
+    const utilFilePath = join(libPath, 'util.ts')
+    await writeFile(
+      utilFilePath,
+      'export function greet(name: string): string {\n  return name\n}\n'
+    )
+    const indexFilePath = join(srcPath, 'index.ts')
+    const indexContent = "import { greet } from '@lib/util'\n\nconst message = greet('world')\n"
+    const position = positionInsideSecondOccurrence(indexContent, 'greet')
+
+    const before = getTypeScriptDefinition({
+      rootPath,
+      filePath: indexFilePath,
+      content: indexContent,
+      position
+    })
+    expect(before?.filePath).not.toBe(utilFilePath)
+
+    await writeFile(
+      join(rootPath, 'tsconfig.json'),
+      JSON.stringify({
+        compilerOptions: {
+          target: 'ES2020',
+          module: 'commonjs',
+          moduleResolution: 'node',
+          baseUrl: '.',
+          paths: { '@lib/*': ['lib/*'] }
+        },
+        include: ['src/**/*.ts', 'lib/**/*.ts']
+      })
+    )
+
+    const after = getTypeScriptDefinition({
+      rootPath,
+      filePath: indexFilePath,
+      content: indexContent,
+      position
+    })
+    expect(after?.filePath).toBe(utilFilePath)
+  })
+
+  it('invalidates the cached project when an inherited (`extends`) config changes', async () => {
+    const rootPath = await mkdtemp(join(tmpdir(), 'orca-ts-definition-'))
+    roots.push(rootPath)
+    const srcPath = join(rootPath, 'src')
+    await mkdir(srcPath, { recursive: true })
+    const libPath = join(rootPath, 'lib')
+    await mkdir(libPath, { recursive: true })
+    const utilFilePath = join(libPath, 'util.ts')
+    await writeFile(
+      utilFilePath,
+      'export function greet(name: string): string {\n  return name\n}\n'
+    )
+    await writeFile(
+      join(rootPath, 'tsconfig.base.json'),
+      JSON.stringify({
+        compilerOptions: { target: 'ES2020', module: 'commonjs', moduleResolution: 'node' }
+      })
+    )
+    await writeFile(
+      join(rootPath, 'tsconfig.json'),
+      JSON.stringify({
+        extends: './tsconfig.base.json',
+        include: ['src/**/*.ts', 'lib/**/*.ts']
+      })
+    )
+    const indexFilePath = join(srcPath, 'index.ts')
+    const indexContent = "import { greet } from '@lib/util'\n\nconst message = greet('world')\n"
+    const position = positionInsideSecondOccurrence(indexContent, 'greet')
+
+    const before = getTypeScriptDefinition({
+      rootPath,
+      filePath: indexFilePath,
+      content: indexContent,
+      position
+    })
+    expect(before?.filePath).not.toBe(utilFilePath)
+
+    // Only the extended (base) config changes — tsconfig.json itself is untouched.
+    await writeFile(
+      join(rootPath, 'tsconfig.base.json'),
+      JSON.stringify({
+        compilerOptions: {
+          target: 'ES2020',
+          module: 'commonjs',
+          moduleResolution: 'node',
+          baseUrl: '.',
+          paths: { '@lib/*': ['lib/*'] }
+        }
+      })
+    )
+
+    const after = getTypeScriptDefinition({
+      rootPath,
+      filePath: indexFilePath,
+      content: indexContent,
+      position
+    })
+    expect(after?.filePath).toBe(utilFilePath)
+  })
+
+  it('keeps serving the last-good config when tsconfig.json becomes transiently invalid', async () => {
+    const { rootPath, srcPath } = await createProject()
+    const utilFilePath = join(srcPath, 'util.ts')
+    await writeFile(
+      utilFilePath,
+      'export function greet(name: string): string {\n  return name\n}\n'
+    )
+    const indexFilePath = join(srcPath, 'index.ts')
+    const indexContent = "import { greet } from './util'\n\nconst message = greet('world')\n"
+    const position = positionInsideSecondOccurrence(indexContent, 'greet')
+
+    const before = getTypeScriptDefinition({
+      rootPath,
+      filePath: indexFilePath,
+      content: indexContent,
+      position
+    })
+    expect(before?.filePath).toBe(utilFilePath)
+
+    // Simulate a mid-edit save that leaves the file as invalid JSON.
+    await writeFile(join(rootPath, 'tsconfig.json'), '{ "compilerOptions": ')
+
+    const duringInvalidEdit = getTypeScriptDefinition({
+      rootPath,
+      filePath: indexFilePath,
+      content: indexContent,
+      position
+    })
+    expect(duringInvalidEdit?.filePath).toBe(utilFilePath)
+  })
+
+  it('rejects a tsconfig.json found via a directory name that merely starts with rootPath', async () => {
+    const rootPath = await mkdtemp(join(tmpdir(), 'orca-ts-definition-'))
+    roots.push(rootPath)
+    const siblingPath = `${rootPath}-sibling`
+    roots.push(siblingPath)
+    const siblingSrcPath = join(siblingPath, 'src')
+    await mkdir(siblingSrcPath, { recursive: true })
+    await writeFile(
+      join(siblingPath, 'tsconfig.json'),
+      JSON.stringify({ compilerOptions: {}, include: ['src/**/*.ts'] })
+    )
+    const filePath = join(siblingSrcPath, 'index.ts')
+    await writeFile(filePath, 'const value = 1\n')
+
+    const result = getTypeScriptDefinition({
+      rootPath,
+      filePath,
+      content: 'const value = 1\n',
+      position: { lineNumber: 1, column: 7 }
+    })
+
+    expect(result).toBeNull()
+  })
+
   it('returns null when the file is outside any tsconfig project', async () => {
     const rootPath = await mkdtemp(join(tmpdir(), 'orca-ts-definition-'))
     roots.push(rootPath)
