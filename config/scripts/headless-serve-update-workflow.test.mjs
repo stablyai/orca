@@ -36,9 +36,10 @@ describe('headless serve update PR gate', () => {
   })
 
   it('exercises the full spool handshake in the case script', () => {
-    // request spool -> helper -> verdict
+    // request spool -> helper -> verdict. The helper runs as root via the service
+    // user's sudoers rule, exactly the way updater-serve-install-handoff launches it.
     expect(updateCase).toContain('request.json')
-    expect(updateCase).toContain('sudo -n -u "$SERVICE_USER"')
+    expect(updateCase).toContain('runuser -u "$SERVICE_USER" -- sudo -n "$HELPER_PATH"')
     expect(updateCase).toContain("'.phase'")
     // swap + VERSION + restart + readiness
     expect(updateCase).toContain('/opt/orca/VERSION')
@@ -48,9 +49,13 @@ describe('headless serve update PR gate', () => {
     expect(updateCase).toContain('downgrade')
   })
 
-  it('installs the helper from the generated script, not a hand-copied copy', () => {
-    expect(updateCase).toContain('__HELPER_INSTALL_SCRIPT__')
-    expect(updateCase).toContain('helper-install.sh')
+  it('installs the helper from the runner-generated installer, not a hand-copied copy', () => {
+    // The runner bundles the real installer and mounts it where the case script expects it.
+    expect(updateRunner).toContain('buildServeUpdateHelperInstallScript')
+    expect(updateRunner).toContain('/tmp/helper-install.sh')
+    expect(updateCase).toContain('bash /tmp/helper-install.sh')
+    expect(updateRunner).toContain('buildSync({')
+    expect(updateRunner).toContain('serve-update-helper-installer.ts')
   })
 
   it('keeps helper output contract in sync with the spool schema', () => {

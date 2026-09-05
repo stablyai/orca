@@ -25,6 +25,7 @@ RUN apt-get update \
     libxss1 \
     procps \
     python3 \
+    sudo \
     systemd \
     util-linux \
     xauth \
