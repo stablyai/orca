@@ -4,9 +4,11 @@ import {
   type TerminalSnapshotState
 } from './rpc-client-terminal-binary-frame'
 import {
+  buildStreamUnsubscribe,
   buildTerminalUnsubscribeParams,
   updateTerminalSubscriptionViewport
 } from './rpc-client-terminal-subscription'
+import { buildReadyStreamUnsubscribe } from './rpc-client-server-subscription'
 import type { RpcClient } from './rpc-client'
 import type { RpcResponse, RpcSuccess } from './types'
 
@@ -22,6 +24,8 @@ type StreamRecord = {
   streamIds: Set<number>
   subscriptionId?: string
   cancelled: boolean
+  sent: boolean
+  receivedSnapshot?: boolean
 }
 
 type StreamManagerOptions = {
@@ -32,6 +36,10 @@ type StreamManagerOptions = {
 
 export class MobileRelayRpcStreams {
   private readonly streams = new Map<string, StreamRecord>()
+  private readonly cancelledSubscriptions = new Map<
+    string,
+    { method: string; unsubscribe?: NonNullable<ReturnType<typeof buildStreamUnsubscribe>> }
+  >()
   private readonly terminalListeners = new Map<number, (result: unknown) => void>()
   private readonly terminalSnapshots = new Map<number, TerminalSnapshotState>()
   private activeBrowserStream: StreamRecord | null = null
@@ -51,13 +59,15 @@ export class MobileRelayRpcStreams {
       listener,
       onBinaryFrame: subscribeOptions?.onBinaryFrame,
       streamIds: new Set(),
-      cancelled: false
+      cancelled: false,
+      sent: false
     }
     this.streams.set(id, stream)
     void this.options
       .waitForConnected()
       .then(() => {
         if (!stream.cancelled) {
+          stream.sent = true
           if (!this.options.sendFrame({ id, method, params: stream.params })) {
             this.fail(id, stream, 'Connection interrupted')
           }
@@ -75,6 +85,30 @@ export class MobileRelayRpcStreams {
   }
 
   handleResponse(response: RpcResponse): boolean {
+    const cancelled = this.cancelledSubscriptions.get(response.id)
+    if (cancelled) {
+      if (!response.ok) {
+        this.cancelledSubscriptions.delete(response.id)
+      } else if (response.result && typeof response.result === 'object') {
+        const result = response.result as { subscriptionId?: unknown; type?: unknown }
+        if (result.type === 'end') {
+          this.cancelledSubscriptions.delete(response.id)
+        } else if (result.type === 'snapshot' && cancelled.unsubscribe) {
+          this.cancelledSubscriptions.delete(response.id)
+          this.options.sendFrame({ id: this.options.nextId(), ...cancelled.unsubscribe })
+        } else if (typeof result.subscriptionId === 'string') {
+          this.cancelledSubscriptions.delete(response.id)
+          const unsubscribe = buildReadyStreamUnsubscribe(cancelled.method, result.subscriptionId)
+          if (unsubscribe) {
+            this.options.sendFrame({ id: this.options.nextId(), ...unsubscribe })
+          }
+        }
+      }
+      if (response.ok && response.streaming !== true) {
+        this.cancelledSubscriptions.delete(response.id)
+      }
+      return true
+    }
     const stream = this.streams.get(response.id)
     if (!stream) {
       return false
@@ -86,6 +120,9 @@ export class MobileRelayRpcStreams {
     const result = (response as RpcSuccess).result
     if (result && typeof result === 'object') {
       const metadata = result as { subscriptionId?: unknown; streamId?: unknown; type?: unknown }
+      if (stream.method === 'session.tabs.subscribe' && metadata.type === 'snapshot') {
+        stream.receivedSnapshot = true
+      }
       if (typeof metadata.subscriptionId === 'string') {
         stream.subscriptionId = metadata.subscriptionId
       }
@@ -125,6 +162,7 @@ export class MobileRelayRpcStreams {
       stream.cancelled = true
     }
     this.streams.clear()
+    this.cancelledSubscriptions.clear()
     this.terminalListeners.clear()
     this.terminalSnapshots.clear()
     this.activeBrowserStream = null
@@ -136,21 +174,40 @@ export class MobileRelayRpcStreams {
       return
     }
     stream.cancelled = true
-    if (stream.method === 'terminal.subscribe') {
-      const params = buildTerminalUnsubscribeParams(stream.params)
-      if (params) {
-        this.options.sendFrame({
-          id: this.options.nextId(),
-          method: 'terminal.unsubscribe',
-          params
-        })
+    if (stream.sent) {
+      if (stream.method === 'terminal.subscribe') {
+        const params = buildTerminalUnsubscribeParams(stream.params)
+        if (params) {
+          this.options.sendFrame({
+            id: this.options.nextId(),
+            method: 'terminal.unsubscribe',
+            params
+          })
+        }
+      } else {
+        const unsubscribe = stream.subscriptionId
+          ? buildReadyStreamUnsubscribe(stream.method, stream.subscriptionId)
+          : null
+        const byParams = buildStreamUnsubscribe(stream.method, stream.params, id)
+        if (byParams && stream.method === 'session.tabs.subscribe' && !stream.receivedSnapshot) {
+          // The host registers cleanup only after resolving the initial snapshot.
+          this.cancelledSubscriptions.set(id, { method: stream.method, unsubscribe: byParams })
+        } else if (unsubscribe || byParams) {
+          this.options.sendFrame({ id: this.options.nextId(), ...(unsubscribe ?? byParams)! })
+        } else if (
+          stream.method === 'browser.screencast' ||
+          stream.method === 'runtime.clientEvents.subscribe'
+        ) {
+          // Keep only the cleanup route while the server assigns its subscription ID.
+          this.cancelledSubscriptions.set(id, { method: stream.method })
+        } else if (stream.subscriptionId) {
+          this.options.sendFrame({
+            id: this.options.nextId(),
+            method: stream.method.replace(/\.subscribe$/, '.unsubscribe'),
+            params: { subscriptionId: stream.subscriptionId }
+          })
+        }
       }
-    } else if (stream.subscriptionId) {
-      this.options.sendFrame({
-        id: this.options.nextId(),
-        method: stream.method.replace(/\.subscribe$/, '.unsubscribe'),
-        params: { subscriptionId: stream.subscriptionId }
-      })
     }
     this.remove(id)
   }
