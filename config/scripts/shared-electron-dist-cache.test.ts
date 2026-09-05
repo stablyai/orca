@@ -22,7 +22,7 @@ import {
 } from './shared-electron-dist-cache.mjs'
 import { makeTreeReadOnly } from './space-sharing-copy.mjs'
 
-const VERSION = '43.4.1'
+const VERSION = '43.5.1'
 const PLATFORM_PATH = path.join('Electron.app', 'Contents', 'MacOS', 'Electron')
 const identity = { version: VERSION, platformPath: PLATFORM_PATH }
 const roots: string[] = []
@@ -71,7 +71,7 @@ describe('resolveSharedElectronDistEntry', () => {
     const entry = resolveSharedElectronDistEntry(baseOptions)
     expect(entry?.cacheRoot).toBe(path.join('/repo/.git', 'orca-cache', 'electron'))
     expect(entry?.entryPath).toBe(
-      path.join('/repo/.git', 'orca-cache', 'electron', '43.4.1-darwin-arm64')
+      path.join('/repo/.git', 'orca-cache', 'electron', `${VERSION}-darwin-arm64`)
     )
     expect(entry?.markerPath).toBe(path.join('/repo/node_modules/electron', '.orca-shared-dist'))
   })
@@ -136,7 +136,7 @@ describe('publishSharedElectronDist', () => {
     const entry = makeEntry(root)
     const dist = writeDist(path.join(root, 'dist'))
     const share = vi.fn((source: string, destination: string) => {
-      expect(path.basename(destination)).toMatch(/^43\.4\.1-darwin-arm64\.staging-/)
+      expect(path.basename(destination)).toMatch(/^43\.5\.1-darwin-arm64\.staging-/)
       writeDist(destination)
       expect(source).toBe(dist)
     })
