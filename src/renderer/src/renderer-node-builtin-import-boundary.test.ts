@@ -20,17 +20,30 @@ import { describe, expect, it } from 'vitest'
 const REPO_ROOT = resolve(__dirname, '../../..')
 const RENDERER_ENTRY = join(REPO_ROOT, 'src/renderer/src/main.tsx')
 
-const NODE_BUILTIN_IMPORT = /(?:from\s+['"](node:[\w/]+)['"]|require\(\s*['"](node:[\w/]+)['"])/g
-const MODULE_SPECIFIER =
-  /(?:^|\n)\s*(?:import|export)[\s\S]{0,400}?from\s+['"]([^'"]+)['"]|import\(\s*['"]([^'"]+)['"]\s*\)/g
+/** Every specifier shape that creates a real edge, including bare `import './x'` — a
+ *  side-effect import has no `from`, and is the exact shape that runs module-level code. */
+const MODULE_SPECIFIER = /(?:\bfrom|\bimport|\brequire)\s*\(?\s*['"]([^'"]+)['"]/g
 /** Type-only imports are erased before the bundle, so they never reach the sandbox. */
-const TYPE_ONLY_IMPORT = /import\s+type[\s\S]*?from\s+['"][^'"]+['"]/g
+const TYPE_ONLY_IMPORT = /\bimport\s+type\b[\s\S]*?from\s+['"][^'"]+['"]/g
+const COMMENT = /\/\*[\s\S]*?\*\/|(?<![:'"`\\])\/\/[^\n]*/g
 
-function resolveRelativeImport(fromFile: string, specifier: string): string | null {
-  if (!specifier.startsWith('.')) {
+/** Mirrors `renderer.resolve.alias` in electron.vite.config.ts. Most renderer imports are
+ *  aliased, not relative, so a walker that only follows `./` sees a fraction of the graph. */
+const ALIAS_PREFIXES: readonly [string, string][] = [
+  ['@renderer/', 'src/renderer/src/'],
+  ['@/', 'src/renderer/src/']
+]
+
+function resolveImport(fromFile: string, specifier: string): string | null {
+  const alias = ALIAS_PREFIXES.find(([prefix]) => specifier.startsWith(prefix))
+  let base: string
+  if (alias) {
+    base = join(REPO_ROOT, alias[1], specifier.slice(alias[0].length))
+  } else if (specifier.startsWith('.')) {
+    base = resolve(dirname(fromFile), specifier)
+  } else {
     return null
   }
-  const base = resolve(dirname(fromFile), specifier)
   const candidates = [`${base}.ts`, `${base}.tsx`, join(base, 'index.ts'), join(base, 'index.tsx')]
   return (
     candidates.find((candidate) => existsSync(candidate) && statSync(candidate).isFile()) ?? null
@@ -42,6 +55,7 @@ function collectNodeBuiltinImporters(): { file: string; builtin: string; chain: 
   const visited = new Set<string>([RENDERER_ENTRY])
   const queue = [RENDERER_ENTRY]
   const offenders: { file: string; builtin: string; chain: string[] }[] = []
+  const reported = new Set<string>()
 
   const chainTo = (file: string): string[] => {
     const chain: string[] = []
@@ -62,26 +76,28 @@ function collectNodeBuiltinImporters(): { file: string; builtin: string; chain: 
     } catch {
       continue
     }
-    const runtimeSource = source.replaceAll(TYPE_ONLY_IMPORT, '')
-
-    NODE_BUILTIN_IMPORT.lastIndex = 0
-    const builtin = NODE_BUILTIN_IMPORT.exec(runtimeSource)
-    if (builtin) {
-      offenders.push({
-        file: relative(REPO_ROOT, file),
-        builtin: builtin[1] ?? builtin[2] ?? 'node:?',
-        chain: chainTo(file)
-      })
-    }
+    const runtimeSource = source.replaceAll(COMMENT, '').replaceAll(TYPE_ONLY_IMPORT, '')
 
     MODULE_SPECIFIER.lastIndex = 0
     let match: RegExpExecArray | null
     while ((match = MODULE_SPECIFIER.exec(runtimeSource))) {
-      const specifier = match[1] ?? match[2]
+      const specifier = match[1]
       if (!specifier) {
         continue
       }
-      const resolved = resolveRelativeImport(file, specifier)
+      if (specifier.startsWith('node:')) {
+        // First builtin per file is enough to fail; the chain is what makes it fixable.
+        if (!reported.has(file)) {
+          reported.add(file)
+          offenders.push({
+            file: relative(REPO_ROOT, file),
+            builtin: specifier,
+            chain: chainTo(file)
+          })
+        }
+        continue
+      }
+      const resolved = resolveImport(file, specifier)
       if (resolved && !visited.has(resolved)) {
         visited.add(resolved)
         parents.set(resolved, file)
