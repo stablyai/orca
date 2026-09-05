@@ -63,7 +63,13 @@ describe('agent session resume metadata', () => {
       'kimi',
       { session_id: 'session_431324d7-2165-42f0-9ecd-9f93437b3201' },
       { key: 'session_id', id: 'session_431324d7-2165-42f0-9ecd-9f93437b3201' }
-    ]
+    ],
+    [
+      'cursor',
+      { conversation_id: 'cursor-conversation' },
+      { key: 'session_id', id: 'cursor-conversation' }
+    ],
+    ['cursor', { session_id: 'cursor-session' }, { key: 'session_id', id: 'cursor-session' }]
   ] as const)('extracts %s provider session ids', (source, payload, expected) => {
     expect(extractAgentProviderSession(source, payload)).toEqual(expected)
   })
@@ -100,7 +106,6 @@ describe('agent session resume metadata', () => {
   })
 
   it('rejects unsupported sources and unsafe ids', () => {
-    expect(extractAgentProviderSession('cursor', { session_id: 'cursor-session' })).toBeNull()
     expect(normalizeAgentProviderSession({ key: 'session_id', id: 'bad\nid' })).toBeNull()
     expect(normalizeAgentProviderSession({ key: 'session_id', id: '--last' })).toBeNull()
     expect(extractAgentProviderSession('codex', { session_id: '--last' })).toBeNull()
@@ -146,6 +151,16 @@ describe('agent session resume metadata', () => {
     expect(
       extractAgentProviderSession('codex', { session_id: 'xs', transcriptPath: '/x/r.jsonl' })
     ).toEqual({ key: 'session_id', id: 'xs', transcriptPath: '/x/r.jsonl' })
+    expect(
+      extractAgentProviderSession('cursor', {
+        conversation_id: 'cs',
+        transcript_path: '/home/u/.cursor/projects/slug/agent-transcripts/cs.jsonl'
+      })
+    ).toEqual({
+      key: 'session_id',
+      id: 'cs',
+      transcriptPath: '/home/u/.cursor/projects/slug/agent-transcripts/cs.jsonl'
+    })
   })
 
   it('does not attach transcript_path for non-native-chat agents', () => {

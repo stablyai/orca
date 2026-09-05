@@ -16,6 +16,7 @@ const EXPECTED_SUPPORTED_AGENTS = [
   'claude',
   'openclaude',
   'codex',
+  'cursor',
   'grok',
   'omp'
 ] as const satisfies readonly TuiAgent[]

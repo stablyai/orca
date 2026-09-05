@@ -12,11 +12,12 @@ describe('resolveNativeChatTranscriptAgent', () => {
     expect(resolveNativeChatTranscriptAgent('claude')).toBe('claude')
   })
 
-  it('passes codex, grok and omp through and rejects everything else', () => {
+  it('passes codex, cursor, grok and omp through and rejects everything else', () => {
     expect(resolveNativeChatTranscriptAgent('codex')).toBe('codex')
+    expect(resolveNativeChatTranscriptAgent('cursor')).toBe('cursor')
     expect(resolveNativeChatTranscriptAgent('grok')).toBe('grok')
     expect(resolveNativeChatTranscriptAgent('omp')).toBe('omp')
-    expect(resolveNativeChatTranscriptAgent('cursor')).toBeNull()
+    expect(resolveNativeChatTranscriptAgent('gemini')).toBeNull()
     expect(resolveNativeChatTranscriptAgent(null)).toBeNull()
     expect(resolveNativeChatTranscriptAgent(undefined)).toBeNull()
   })
@@ -27,7 +28,7 @@ describe('isNativeChatSupportedAgent', () => {
     expect(isNativeChatSupportedAgent('claude')).toBe(true)
     expect(isNativeChatSupportedAgent('openclaude')).toBe(true)
     expect(isNativeChatSupportedAgent('omp')).toBe(true)
-    expect(isNativeChatSupportedAgent('cursor')).toBe(false)
+    expect(isNativeChatSupportedAgent('cursor')).toBe(true)
     expect(isNativeChatSupportedAgent(null)).toBe(false)
     expect(isNativeChatSupportedAgent(undefined)).toBe(false)
   })

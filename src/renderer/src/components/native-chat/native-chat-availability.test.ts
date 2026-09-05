@@ -11,6 +11,13 @@ describe('canToggleNativeChat', () => {
         launchAgent: 'claude'
       })
     ).toBe(true)
+    expect(
+      canToggleNativeChat({
+        experimentalNativeChatEnabled: true,
+        contentType: 'terminal',
+        launchAgent: 'cursor'
+      })
+    ).toBe(true)
   })
 
   it('allows a terminal with a live detected supported agent but no launchAgent', () => {

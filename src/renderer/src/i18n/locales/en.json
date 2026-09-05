@@ -9392,6 +9392,7 @@
               "chat": "chat",
               "claude": "claude",
               "codex": "codex",
+              "cursor": "cursor",
               "openclaude": "openclaude",
               "omp": "omp",
               "terminal": "terminal",

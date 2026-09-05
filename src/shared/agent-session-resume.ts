@@ -194,6 +194,13 @@ export function extractAgentProviderSession(
       const id = readSessionId(payload, ['session_id'])
       return id ? withTranscriptPath({ key: 'session_id', id }, payload) : null
     }
+    // Why: Cursor hooks identify the chat as `conversation_id` (and sometimes
+    // `session_id`, which Cursor docs say is the same value) and may report the
+    // JSONL path as `transcript_path` — same native-chat locator as Claude/Codex.
+    case 'cursor': {
+      const id = readSessionId(payload, ['session_id', 'conversation_id', 'conversationId'])
+      return id ? withTranscriptPath({ key: 'session_id', id }, payload) : null
+    }
     case 'gemini':
     case 'droid':
     // Why: Kimi Code posts a Claude-shaped `session_id` (e.g. session_<uuid>).
@@ -239,7 +246,6 @@ export function extractAgentProviderSession(
       return id ? { key: 'session_id', id } : null
     }
     case 'amp':
-    case 'cursor':
     case 'command-code':
     case 'hermes':
       return null

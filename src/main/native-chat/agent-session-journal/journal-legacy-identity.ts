@@ -8,7 +8,7 @@
 // store, and `uuid` survives `--fork-session` unchanged, so a later structured
 // session reconciles against these keys directly.
 //
-// Codex, Grok, and omp get the `legacy` namespace. A Codex rollout file records
+// Codex, Cursor, Grok, and omp get the `legacy` namespace. A Codex rollout file records
 // `response_item` ids (`msg_…`, `rs_…`, `ctc_…`) which are a different namespace
 // from the app-server's positional `item-N` ordinals, and rollout records carry
 // no turn id at all — so a rollout line cannot be expressed as a stable

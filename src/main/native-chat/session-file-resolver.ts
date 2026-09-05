@@ -25,6 +25,7 @@ import {
 import { findWslCodexSessionPath } from './wsl-codex-session-path-scan'
 import { wslTranscriptFsRefusal, type WslTranscriptFsError } from './wsl-transcript-fs-gate'
 import { proveClaudeTranscriptBranch } from '../claude/claude-transcript-branch-proof'
+import { resolveCursorSessionFile } from './session-file-resolver-cursor'
 
 // Why: these mirror the path constants in ai-vault/session-scanner.ts. Reads
 // run in the main process against the runtime's own home directory; over SSH
@@ -87,6 +88,8 @@ export type ResolveSessionFileOptions = {
   grokSessionsDir?: string
   /** Override the omp sessions root (`~/.omp/agent/sessions`). */
   ompSessionsDir?: string
+  /** Override the Cursor projects root (`~/.cursor/projects`). */
+  cursorProjectsDir?: string
   /** Authoritative transcript path reported by the agent hook
    *  (`providerSession.transcriptPath`). When set and the file exists, it is used
    *  directly — recent Claude Code names the transcript with a UUID that differs
@@ -209,6 +212,9 @@ async function resolveSessionFileById(
   }
   if (transcriptAgent === 'omp') {
     return resolveOmpSessionFile(trimmedId, options.ompSessionsDir ?? ompSessionsDir(), signal)
+  }
+  if (transcriptAgent === 'cursor') {
+    return resolveCursorSessionFile(trimmedId, options.cursorProjectsDir, signal)
   }
   // Why: a new transcript agent must pick its own resolver. Falling through to
   // OMP's scan would search the wrong root with a foreign session id, so fail

@@ -3,17 +3,11 @@ import type {
   NativeChatMessage,
   NativeChatTurnLifecycle
 } from '../../shared/native-chat-types'
-import { resolveNativeChatTranscriptAgent } from '../../shared/native-chat-agent-support'
 import { errorMessage } from '../ai-vault/session-scanner-values'
 import { resolveSessionFilePath, type ResolveSessionFileOptions } from './session-file-resolver'
 import { openTranscriptReadStream } from './wsl-transcript-fs-access'
 import { wslTranscriptFsRefusal } from './wsl-transcript-fs-gate'
-import {
-  decodeClaudeTranscriptLine,
-  decodeCodexTranscriptLine,
-  decodeGrokTranscriptLine,
-  decodeOmpTranscriptLine
-} from './transcript-line-decoders'
+import { nativeChatLineDecoderForAgent } from './transcript-tail-reader'
 import { decodeTranscriptStream } from './transcript-stream-lines'
 
 export type ReadTranscriptResult =
@@ -31,11 +25,10 @@ export type ReadTranscriptOptions = ResolveSessionFileOptions & {
 }
 
 /**
- * Read the ENTIRE Claude/Codex JSONL transcript for an agent + session id into
- * the NativeChatMessage model. Unlike the AI-Vault preview scan, this applies
- * NO message cap. Unknown record types are skipped rather than throwing, so a
- * single malformed/unrecognized line cannot fail the whole read. The per-line
- * record-to-message mapping is shared with the live tailer.
+ * Read a supported agent's JSONL transcript into the NativeChatMessage model.
+ * Unlike the AI-Vault preview scan, this applies no message cap. Unknown records
+ * are skipped rather than thrown so one malformed line cannot fail the read.
+ * The per-line mapping is shared with the live tailer.
  */
 export async function readNativeChatTranscript(
   agent: AgentType,
@@ -54,20 +47,11 @@ export async function readNativeChatTranscript(
     return { error: `No transcript found for ${agent} session ${sessionId}`, notFound: true }
   }
   try {
-    const transcriptAgent = resolveNativeChatTranscriptAgent(agent)
-    if (transcriptAgent === 'claude') {
-      return { messages: await readTranscript(filePath, decodeClaudeTranscriptLine) }
+    const decode = nativeChatLineDecoderForAgent(agent)
+    if (!decode) {
+      return { error: `Unsupported agent for Chat UI transcript: ${agent}` }
     }
-    if (transcriptAgent === 'codex') {
-      return { messages: await readTranscript(filePath, decodeCodexTranscriptLine) }
-    }
-    if (transcriptAgent === 'grok') {
-      return { messages: await readTranscript(filePath, decodeGrokTranscriptLine) }
-    }
-    if (transcriptAgent === 'omp') {
-      return { messages: await readTranscript(filePath, decodeOmpTranscriptLine) }
-    }
-    return { error: `Unsupported agent for Chat UI transcript: ${agent}` }
+    return { messages: await readTranscript(filePath, decode) }
   } catch (err) {
     // Why: ENOENT after a successful resolve is the same first-flush/rotation
     // race as an unresolved path — keep it retry-worthy (#8401).

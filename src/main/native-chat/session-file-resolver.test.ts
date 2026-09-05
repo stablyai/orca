@@ -545,6 +545,28 @@ describe('resolveSessionFilePath', () => {
     ).resolves.toBe(join(cwdDir, `${stem}.jsonl`))
   })
 
+  it('resolves Cursor transcripts under project/agent-transcripts by file name', async () => {
+    const root = await makeRoot('orca-native-chat-resolve-cursor-')
+    const cursorProjectsDir = join(root, 'cursor-projects')
+    const transcriptsDir = join(cursorProjectsDir, 'my-repo', 'agent-transcripts')
+    await mkdir(transcriptsDir, { recursive: true })
+    const nestedId = 'aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee'
+    const nested = join(transcriptsDir, nestedId, `${nestedId}.jsonl`)
+    await mkdir(join(transcriptsDir, nestedId), { recursive: true })
+    await writeFile(nested, '{}\n')
+    await writeFile(join(transcriptsDir, 'cursor-session.jsonl'), '{}\n')
+
+    await expect(
+      resolveSessionFilePath('cursor', 'cursor-session', { cursorProjectsDir })
+    ).resolves.toBe(join(transcriptsDir, 'cursor-session.jsonl'))
+    await expect(resolveSessionFilePath('cursor', nestedId, { cursorProjectsDir })).resolves.toBe(
+      nested
+    )
+    await expect(
+      resolveSessionFilePath('cursor', 'missing', { cursorProjectsDir })
+    ).resolves.toBeNull()
+  })
+
   it('honors OMP_CODING_AGENT_DIR when resolving omp transcripts', async () => {
     const root = await makeRoot('orca-native-chat-resolve-omp-env-')
     const cwdDir = join(root, 'omp-sessions', '-Users-ada-repo')

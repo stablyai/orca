@@ -84,6 +84,27 @@ describe('resolveMobileNativeChat', () => {
     expect(resolveMobileNativeChat({ type: 'terminal', launchAgent: 'gemini' })).toBeNull()
   })
 
+  it('admits Cursor terminal sessions', () => {
+    expect(
+      resolveMobileNativeChat({
+        type: 'terminal',
+        launchAgent: 'cursor',
+        agentStatus: status({
+          agentType: 'cursor',
+          providerSession: {
+            key: 'session_id',
+            id: 'cursor-session',
+            transcriptPath: '/tmp/cursor.jsonl'
+          }
+        })
+      })
+    ).toEqual({
+      agent: 'cursor',
+      sessionId: 'cursor-session',
+      transcriptPath: '/tmp/cursor.jsonl'
+    })
+  })
+
   it('admits Grok only when its transcript is readable by the serving host', () => {
     const tab = { type: 'terminal', launchAgent: 'grok' }
     expect(resolveMobileNativeChat(tab, isMobileNativeChatTranscriptReadable(null))).toMatchObject({

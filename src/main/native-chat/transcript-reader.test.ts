@@ -300,6 +300,35 @@ describe('readNativeChatTranscript (errors)', () => {
   })
 })
 
+describe('readNativeChatTranscript (cursor)', () => {
+  it('decodes Cursor agent-transcripts rows and strips user envelopes', async () => {
+    const filePath = await writeFixture('orca-native-chat-cursor-', [
+      {
+        role: 'user',
+        message: {
+          content: [
+            {
+              type: 'text',
+              text: '<timestamp>Friday, Aug 28, 2026, 10:20 AM (UTC-4)</timestamp>\n<user_query>\nplease rebase\n</user_query>'
+            }
+          ]
+        }
+      },
+      {
+        role: 'assistant',
+        message: { content: [{ type: 'text', text: 'Rebasing onto master.' }] }
+      }
+    ])
+
+    await expect(readNativeChatTranscript('cursor', 'sess', { filePath })).resolves.toMatchObject({
+      messages: [
+        { role: 'user', blocks: [{ type: 'text', text: 'please rebase' }] },
+        { role: 'assistant', blocks: [{ type: 'text', text: 'Rebasing onto master.' }] }
+      ]
+    })
+  })
+})
+
 describe('readNativeChatTranscriptTailFile', () => {
   it('keeps a missing tail retry-worthy for the live-session seed', async () => {
     const result = await readNativeChatTranscriptTail({

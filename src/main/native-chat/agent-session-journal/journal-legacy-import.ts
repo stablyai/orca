@@ -24,6 +24,7 @@ import { resolveSessionFilePath, type ResolveSessionFileOptions } from '../sessi
 import {
   decodeClaudeTranscriptLine,
   decodeCodexTranscriptLine,
+  decodeCursorTranscriptLine,
   decodeGrokTranscriptLine,
   decodeOmpTranscriptLine
 } from '../transcript-line-decoders'
@@ -166,6 +167,7 @@ export async function importLegacyTranscriptIntoJournal(input: {
 const TRANSCRIPT_DECODERS = {
   claude: decodeClaudeTranscriptLine,
   codex: decodeCodexTranscriptLine,
+  cursor: decodeCursorTranscriptLine,
   grok: decodeGrokTranscriptLine,
   omp: decodeOmpTranscriptLine
 } as const

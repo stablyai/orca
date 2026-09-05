@@ -22,6 +22,11 @@ describe('native chat agent picker profiles', () => {
       groupedSlash: true,
       skillSourceOwner: 'grok'
     })
+    expect(getNativeChatAgentProfile('cursor')).toMatchObject({
+      skillPrefix: '/',
+      groupedSlash: true,
+      skillSourceOwner: 'cursor'
+    })
   })
 
   it('does not grant custom or unverified agents a skill grammar', () => {

@@ -114,9 +114,10 @@ describe('resolveAgentLaunchRoute', () => {
 
   it('fails closed for missing capability, unsupported providers, and explicit TUI options', () => {
     expect(route({ hostCapabilities: [] })).toBe('legacy-native-chat')
-    // openclaude and grok render native chat but have no structured adapter.
+    // openclaude, grok, and cursor render native chat but have no structured adapter.
     expect(route({ agent: 'openclaude' })).toBe('legacy-native-chat')
     expect(route({ agent: 'grok' })).toBe('legacy-native-chat')
+    expect(route({ agent: 'cursor' })).toBe('legacy-native-chat')
     expect(route({ requiresTuiLaunchCustomization: true })).toBe('legacy-native-chat')
     expect(route({ initialSessionOptions: { model: 'gpt-5.6-sol' } })).toBe('legacy-native-chat')
   })
