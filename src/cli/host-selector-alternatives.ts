@@ -4,6 +4,8 @@ export type SshTargetSummary = {
   id: string
   label: string
   remotePlatform?: 'linux' | 'darwin' | 'win32'
+  connected?: boolean
+  connectionStatus?: string
 }
 export type EnvironmentSummary = { id: string; name: string }
 

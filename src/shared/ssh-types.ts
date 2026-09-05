@@ -69,6 +69,10 @@ export type SshTargetUpdateInput = Partial<SshTargetCreateInput>
 export type SshTargetSummary = Pick<SshTarget, 'id' | 'label' | 'generation'> & {
   /** The SSH host's OS, when it has connected and the relay has detected it. */
   remotePlatform?: SshRemotePlatform
+  /** Whether the target currently has a host-owned connected SSH lifecycle. */
+  connected?: boolean
+  /** Current SSH lifecycle state, when the desktop has one for this target. */
+  connectionStatus?: SshConnectionStatus
 }
 
 /** Identity of a removed SSH target, recorded so that re-adding the same host

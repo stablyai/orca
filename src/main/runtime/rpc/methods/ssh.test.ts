@@ -116,7 +116,7 @@ describe('ssh RPC methods', () => {
       }
     ]
     listRegisteredSshTargetsMock.mockReturnValueOnce(targets)
-    getRegisteredSshStateMock.mockReturnValueOnce({ remotePlatform: 'win32' })
+    getRegisteredSshStateMock.mockReturnValueOnce({ status: 'connected', remotePlatform: 'win32' })
     const runtime = { getRuntimeId: () => 'test-runtime' } as unknown as OrcaRuntimeService
     const dispatcher = new RpcDispatcher({ runtime, methods: SSH_METHODS })
 
@@ -124,7 +124,17 @@ describe('ssh RPC methods', () => {
 
     expect(response).toMatchObject({
       ok: true,
-      result: { targets: [{ id: 'ssh-1', label: 'Dev box', remotePlatform: 'win32' }] }
+      result: {
+        targets: [
+          {
+            id: 'ssh-1',
+            label: 'Dev box',
+            connected: true,
+            connectionStatus: 'connected',
+            remotePlatform: 'win32'
+          }
+        ]
+      }
     })
     expect(JSON.stringify(response)).not.toContain('dev.internal')
     expect(JSON.stringify(response)).not.toContain('/secret/key')
@@ -144,6 +154,22 @@ describe('ssh RPC methods', () => {
       result: { targets: [{ id: 'ssh-1', label: 'Dev box' }] }
     })
     expect(JSON.stringify(response)).not.toContain('remotePlatform')
+  })
+
+  it('reports disconnected lifecycle states without calling them connected', async () => {
+    listRegisteredSshTargetsMock.mockReturnValueOnce([{ id: 'ssh-1', label: 'Dev box' }])
+    getRegisteredSshStateMock.mockReturnValueOnce({ status: 'reconnecting' })
+    const runtime = { getRuntimeId: () => 'test-runtime' } as unknown as OrcaRuntimeService
+    const dispatcher = new RpcDispatcher({ runtime, methods: SSH_METHODS })
+
+    const response = await dispatcher.dispatch(makeRequest('ssh.listTargetSummaries'))
+
+    expect(response).toMatchObject({
+      ok: true,
+      result: {
+        targets: [{ id: 'ssh-1', connected: false, connectionStatus: 'reconnecting' }]
+      }
+    })
   })
 
   it('redacts the legacy target response for older clients', async () => {

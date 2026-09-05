@@ -51,6 +51,8 @@ export const ENVIRONMENT_HANDLERS: Record<string, CommandHandler> = {
       name: target.label,
       id: target.id,
       selector: `--host ssh:${target.id}`,
+      connected: target.connected ?? false,
+      ...(target.connectionStatus ? { connectionStatus: target.connectionStatus } : {}),
       ...(target.remotePlatform ? { platform: target.remotePlatform } : {})
     }))
     const hosts = [

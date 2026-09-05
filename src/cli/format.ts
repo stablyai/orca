@@ -221,6 +221,8 @@ export type HostListEntry = {
   id: string
   selector: string
   platform?: string
+  connected?: boolean
+  connectionStatus?: string
 }
 
 // Why: the selector column is the point of this command — the name alone is what callers already
@@ -234,9 +236,18 @@ export function formatHostList(result: { hosts: HostListEntry[] }): string {
   return result.hosts
     .map(
       (host) =>
-        `${kindLabel[host.kind].padEnd(11)} ${host.name}  ${host.platform ?? 'platform unknown'}  ->  ${host.selector}`
+        `${kindLabel[host.kind].padEnd(11)} ${host.name}  ${host.platform ?? 'platform unknown'}  ${formatHostConnection(host)}  ->  ${host.selector}`
     )
     .join('\n')
+}
+
+function formatHostConnection(host: HostListEntry): string {
+  if (host.kind !== 'ssh') {
+    return ''
+  }
+  return host.connected
+    ? `connected${host.connectionStatus ? ` (${host.connectionStatus})` : ''}`
+    : `not connected${host.connectionStatus ? ` (${host.connectionStatus})` : ''}`
 }
 
 export function formatCliStatus(status: CliStatusResult): string {
