@@ -6697,7 +6697,8 @@
           "a3f8c2d1e0b4": "Imported {{value0}} cookies from {{value1}} ({{value2}}) into {{value3}}.",
           "b4e9d3f2a1c5": "Imported {{value0}} cookies from {{value1}} into {{value2}}.",
           "c5a273a809": "From {{value0}}",
-          "b5c0479e21": "Unmodified user agent"
+          "b5c0479e21": "Unmodified user agent",
+          "4054c458e1": "Clear default cookies"
         },
         "BrowserUseComputerUseNotice": {
           "15b5e680ba": "Open Computer Use",
