@@ -402,6 +402,10 @@ describe('EditorFileTab rename menu', () => {
     // "untitled-N.md" files directly.
     expect(renameItem.props.disabled).toBe(false)
     ;(renameItem.props.onSelect as () => void)()
+    const content = findElementsByType(firstRender, 'DropdownMenuContent')[0]!
+    ;(content.props.onCloseAutoFocus as (event: { preventDefault: () => void }) => void)({
+      preventDefault: vi.fn()
+    })
 
     const secondRender = expandNode((await renderEditorFileTab(file, onActivate)).element)
     const inputs = findElementsByType(secondRender, 'input')
@@ -428,6 +432,10 @@ describe('EditorFileTab rename menu', () => {
     const renameItem = findMenuItemByText(firstRender, 'Rename')
 
     ;(renameItem.props.onSelect as () => void)()
+    const content = findElementsByType(firstRender, 'DropdownMenuContent')[0]!
+    ;(content.props.onCloseAutoFocus as (event: { preventDefault: () => void }) => void)({
+      preventDefault: vi.fn()
+    })
 
     const secondRender = expandNode((await renderEditorFileTab(file)).element)
     const input = findElementsByType(secondRender, 'input')[0]
@@ -460,6 +468,10 @@ describe('EditorFileTab rename menu', () => {
     const renameItem = findMenuItemByText(firstRender, 'Rename')
 
     ;(renameItem.props.onSelect as () => void)()
+    const content = findElementsByType(firstRender, 'DropdownMenuContent')[0]!
+    ;(content.props.onCloseAutoFocus as (event: { preventDefault: () => void }) => void)({
+      preventDefault: vi.fn()
+    })
 
     const secondRender = expandNode((await renderEditorFileTab(file)).element)
     const input = findElementsByType(secondRender, 'input')[0]
