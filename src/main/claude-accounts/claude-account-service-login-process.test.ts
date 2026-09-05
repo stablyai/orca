@@ -529,7 +529,8 @@ describe('ClaudeAccountService credential capture', () => {
       waitForTerminationPid: () =>
         new Promise<number>((resolve) => {
           publishTerminationPid = resolve
-        })
+        }),
+      hasRelayedPid: () => true
     }))
     vi.doMock('node:child_process', () => ({ spawn: spawnMock }))
     vi.doMock('../../shared/windows-interactive-login-spawn', () => ({

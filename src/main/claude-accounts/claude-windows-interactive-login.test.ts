@@ -49,7 +49,8 @@ describe('Claude Windows host interactive login', () => {
         '--claudeai'
       ],
       stdio: 'ignore' as const,
-      windowsHide: true
+      windowsHide: true,
+      hasRelayedPid: () => true
     }))
     vi.doMock('node:child_process', () => ({ spawn: spawnMock }))
     vi.doMock('../../shared/windows-interactive-login-spawn', () => ({
