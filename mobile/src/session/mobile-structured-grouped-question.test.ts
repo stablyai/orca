@@ -1,7 +1,11 @@
 import { describe, expect, it } from 'vitest'
 import type { AgentJournalQuestion } from '../../../src/shared/agent-session-journal-types'
 import { decodeAgentSessionQuestionAnswers } from '../../../src/shared/agent-session-question-answer'
-import { formatQuestionAnswer, formatQuestionFreeTextAnswer } from './mobile-native-chat-question'
+import {
+  formatQuestionAnswer,
+  formatQuestionFreeTextAnswer,
+  mobileChatQuestionKey
+} from './mobile-native-chat-question'
 import {
   advanceGroupedQuestion,
   groupedQuestionPromptKey,
@@ -117,6 +121,27 @@ describe('mobile structured grouped questions', () => {
     expect(
       decodeAgentSessionQuestionAnswers(result?.kind === 'submit' ? result.optionId : '')
     ).toEqual([{ questionId: 'q1', optionIds: [], other: 'DuckDB' }])
+  })
+
+  it('gives each step a distinct card key so a selection cannot carry into the next question', () => {
+    // The view keys MobileNativeChatQuestion by this value; an identical key would reuse the
+    // mounted card and submit step 1's checkboxes as step 2's answer. Claude can legitimately ask
+    // the SAME text twice in one group (once per file, say), so identical wording must still key
+    // apart on the question id and step counter.
+    const questions = [
+      question({ id: 'q1', question: 'Approve?' }),
+      question({ id: 'q2', question: 'Approve?' })
+    ]
+    const first = projectGroupedQuestion(questions, null, PROMPT_KEY)!
+    const second = projectGroupedQuestion(
+      questions,
+      { promptKey: PROMPT_KEY, answers: [{ questionId: 'q1', optionIds: ['q1:choice-1'] }] },
+      PROMPT_KEY
+    )!
+
+    expect(first.question).toBe('Approve? (1 of 2)')
+    expect(second.question).toBe('Approve? (2 of 2)')
+    expect(mobileChatQuestionKey(first)).not.toBe(mobileChatQuestionKey(second))
   })
 
   it('discards a draft collected against a superseded prompt revision', () => {
