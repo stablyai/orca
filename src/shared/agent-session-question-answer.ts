@@ -11,7 +11,8 @@ export type AgentSessionQuestionAnswer = {
 export function encodeAgentSessionQuestionAnswers(
   answers: readonly AgentSessionQuestionAnswer[]
 ): string {
-  return `${GROUP_ANSWER_PREFIX}${encodeURIComponent(JSON.stringify(answers))}`
+  // RPC already JSON-frames this value; escaping `%` alone preserves decodeURIComponent readers.
+  return `${GROUP_ANSWER_PREFIX}${JSON.stringify(answers).replaceAll('%', '%25')}`
 }
 
 export function decodeAgentSessionQuestionAnswers(

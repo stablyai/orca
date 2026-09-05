@@ -66,11 +66,12 @@ export function useMobileStructuredPromptResponses(args: {
     async (answer: string): Promise<boolean> => {
       const prompt = stateRef.current.items.find(pendingStructuredQuestion) ?? null
       if (prompt?.body.questions) {
+        const promptKey = groupedQuestionPromptKey(prompt.itemId, prompt.revision)
         const grouped = advanceGroupedQuestion({
           response: answer,
           questions: prompt.body.questions,
           draft: groupedDraft,
-          promptKey: groupedQuestionPromptKey(prompt.itemId, prompt.revision)
+          promptKey
         })
         if (!grouped) {
           return false
@@ -86,7 +87,11 @@ export function useMobileStructuredPromptResponses(args: {
         )
         if (result.status !== 'rejected') {
           // The group left the phone; a retry must start from the first question, not a stale tail.
-          setCollected(null)
+          setCollected((current) =>
+            current?.sessionKey === sessionKey && current.draft.promptKey === promptKey
+              ? null
+              : current
+          )
         }
         if (result.status === 'unknown') {
           onSendError('Answer unconfirmed — check chat before retrying')
