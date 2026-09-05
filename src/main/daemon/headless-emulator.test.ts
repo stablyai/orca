@@ -455,8 +455,8 @@ describe('HeadlessEmulator', () => {
       const snapshot = emulator.getSnapshot()
       expect(snapshot.modes.mouseTrackingMode).toBe('drag')
       expect(snapshot.modes.sgrMouseMode).toBe(true)
-      expect(snapshot.rehydrateSequences).toContain('\x1b[?1002h')
-      expect(snapshot.rehydrateSequences).toContain('\x1b[?1006h')
+      expect(snapshot.rehydrateSequences).not.toContain('\x1b[?1002h')
+      expect(snapshot.rehydrateSequences).not.toContain('\x1b[?1006h')
     })
 
     it('tracks private mouse modes with leading zero params', async () => {
@@ -467,8 +467,8 @@ describe('HeadlessEmulator', () => {
       const snapshot = emulator.getSnapshot()
       expect(snapshot.modes.mouseTrackingMode).toBe('drag')
       expect(snapshot.modes.sgrMouseMode).toBe(true)
-      expect(snapshot.rehydrateSequences).toContain('\x1b[?1002h')
-      expect(snapshot.rehydrateSequences).toContain('\x1b[?1006h')
+      expect(snapshot.rehydrateSequences).not.toContain('\x1b[?1002h')
+      expect(snapshot.rehydrateSequences).not.toContain('\x1b[?1006h')
     })
 
     it('tracks C1 CSI private mouse mode sequences', async () => {
@@ -479,8 +479,8 @@ describe('HeadlessEmulator', () => {
       const snapshot = emulator.getSnapshot()
       expect(snapshot.modes.mouseTrackingMode).toBe('drag')
       expect(snapshot.modes.sgrMouseMode).toBe(true)
-      expect(snapshot.rehydrateSequences).toContain('\x1b[?1002h')
-      expect(snapshot.rehydrateSequences).toContain('\x1b[?1006h')
+      expect(snapshot.rehydrateSequences).not.toContain('\x1b[?1002h')
+      expect(snapshot.rehydrateSequences).not.toContain('\x1b[?1006h')
     })
 
     it('tracks split C1 CSI private mouse mode sequences', async () => {
@@ -494,7 +494,7 @@ describe('HeadlessEmulator', () => {
       expect(snapshot.modes.mouseTracking).toBe(false)
       expect(snapshot.modes.sgrMouseMode).toBe(true)
       expect(snapshot.rehydrateSequences).not.toContain('\x1b[?1002h')
-      expect(snapshot.rehydrateSequences).toContain('\x1b[?1006h')
+      expect(snapshot.rehydrateSequences).not.toContain('\x1b[?1006h')
     })
 
     it('tracks C1 CSI split before private marker', async () => {
@@ -506,8 +506,8 @@ describe('HeadlessEmulator', () => {
       const snapshot = emulator.getSnapshot()
       expect(snapshot.modes.mouseTrackingMode).toBe('drag')
       expect(snapshot.modes.sgrMouseMode).toBe(true)
-      expect(snapshot.rehydrateSequences).toContain('\x1b[?1002h')
-      expect(snapshot.rehydrateSequences).toContain('\x1b[?1006h')
+      expect(snapshot.rehydrateSequences).not.toContain('\x1b[?1002h')
+      expect(snapshot.rehydrateSequences).not.toContain('\x1b[?1006h')
     })
 
     it('does not retain complete private CSI queries as scan tail', async () => {
@@ -540,8 +540,8 @@ describe('HeadlessEmulator', () => {
       expect(after.modes.mouseTrackingMode).toBe('drag')
       expect(after.modes.sgrMouseMode).toBe(true)
       expect(after.rehydrateSequences).toContain('\x1b[?1049h')
-      expect(after.rehydrateSequences).toContain('\x1b[?1002h')
-      expect(after.rehydrateSequences).toContain('\x1b[?1006h')
+      expect(after.rehydrateSequences).not.toContain('\x1b[?1002h')
+      expect(after.rehydrateSequences).not.toContain('\x1b[?1006h')
     })
 
     it('clears SGR mouse reporting on full terminal reset', async () => {
@@ -554,7 +554,7 @@ describe('HeadlessEmulator', () => {
       const snapshot = emulator.getSnapshot()
       expect(snapshot.modes.mouseTrackingMode).toBe('drag')
       expect(snapshot.modes.sgrMouseMode).toBe(false)
-      expect(snapshot.rehydrateSequences).toContain('\x1b[?1002h')
+      expect(snapshot.rehydrateSequences).not.toContain('\x1b[?1002h')
       expect(snapshot.rehydrateSequences).not.toContain('\x1b[?1006h')
     })
 
@@ -568,8 +568,8 @@ describe('HeadlessEmulator', () => {
       expect(snapshot.modes.mouseTrackingMode).toBe('drag')
       expect(snapshot.modes.sgrMouseMode).toBe(false)
       expect(snapshot.modes.sgrMousePixelsMode).toBe(true)
-      expect(snapshot.rehydrateSequences).toContain('\x1b[?1002h')
-      expect(snapshot.rehydrateSequences).toContain('\x1b[?1016h')
+      expect(snapshot.rehydrateSequences).not.toContain('\x1b[?1002h')
+      expect(snapshot.rehydrateSequences).not.toContain('\x1b[?1016h')
       expect(snapshot.rehydrateSequences).not.toContain('\x1b[?1006h')
     })
   })
@@ -640,30 +640,30 @@ describe('HeadlessEmulator', () => {
       expect(snapshot.rehydrateSequences).toBe('')
     })
 
-    it('rehydrates mouse reporting after alternate screen activation', async () => {
+    it('rehydrates alternate screen without restoring mouse reporting', async () => {
       emulator = new HeadlessEmulator({ cols: 80, rows: 24 })
       await emulator.write('\x1b[?1049h\x1b[?1002;1006h')
 
       const snapshot = emulator.getSnapshot()
+      expect(snapshot.modes.mouseTrackingMode).toBe('drag')
+      expect(snapshot.modes.sgrMouseMode).toBe(true)
       expect(snapshot.rehydrateSequences).toContain('\x1b[?1049h')
-      expect(snapshot.rehydrateSequences).toContain('\x1b[?1002h')
-      expect(snapshot.rehydrateSequences).toContain('\x1b[?1006h')
-      expect(snapshot.rehydrateSequences.indexOf('\x1b[?1049h')).toBeLessThan(
-        snapshot.rehydrateSequences.indexOf('\x1b[?1002h')
-      )
+      expect(snapshot.rehydrateSequences).not.toContain('\x1b[?1002h')
+      expect(snapshot.rehydrateSequences).not.toContain('\x1b[?1006h')
     })
 
-    it('preserves mouse modes after mobile normalizes an alternate-screen replay', async () => {
+    it('keeps a single alt-screen switch when mobile normalizes an alternate-screen replay', async () => {
       emulator = new HeadlessEmulator({ cols: 80, rows: 24 })
       await emulator.write('normal buffer\r\n\x1b[?1049h\x1b[?2004h\x1b[?1002;1006halternate')
       const snapshot = emulator.getSnapshot()
       const payload = snapshot.rehydrateSequences + snapshot.snapshotAnsi
       expect(payload.split('\x1b[?1049h')).toHaveLength(2)
-      expect(payload.slice(payload.lastIndexOf('\x1b[?1049h'))).toContain('\x1b[?1002h')
-      expect(payload.slice(payload.lastIndexOf('\x1b[?1049h'))).toContain('\x1b[?1006h')
+      expect(snapshot.rehydrateSequences).toContain('\x1b[?2004h')
+      expect(snapshot.rehydrateSequences).not.toContain('\x1b[?1002h')
+      expect(snapshot.rehydrateSequences).not.toContain('\x1b[?1006h')
     })
 
-    it('rehydrates mouse encoding independently from reporting mode', async () => {
+    it('does not rehydrate leftover SGR mouse encoding after reporting is off', async () => {
       emulator = new HeadlessEmulator({ cols: 80, rows: 24 })
       await emulator.write('\x1b[?1002;1006h')
       await emulator.write('\x1b[?1002l')
@@ -671,7 +671,7 @@ describe('HeadlessEmulator', () => {
       const snapshot = emulator.getSnapshot()
       expect(snapshot.modes.mouseTracking).toBe(false)
       expect(snapshot.modes.sgrMouseMode).toBe(true)
-      expect(snapshot.rehydrateSequences).toContain('\x1b[?1006h')
+      expect(snapshot.rehydrateSequences).not.toContain('\x1b[?1006h')
       expect(snapshot.rehydrateSequences).not.toContain('\x1b[?1002h')
     })
 
