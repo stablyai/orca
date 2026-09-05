@@ -19,6 +19,8 @@ export type WslGuestEnvironment = {
   home: string
   /** Absolute path to `env`, used to run programs without a shell. */
   envBinary: string
+  /** Claude's selected config directory from the login-shell environment. */
+  claudeConfigDir?: string
 }
 
 const PROBE_TIMEOUT_MS = 10_000
@@ -60,7 +62,7 @@ function parseProbePayload(payload: string | null): WslGuestEnvironment | null {
   if (payload === null) {
     return null
   }
-  const [path = '', home = '', envBinary = ''] = payload.split('\0')
+  const [path = '', home = '', envBinary = '', claudeConfigDir = ''] = payload.split('\0')
   const isCleanAbsolute = (value: string): boolean =>
     value.startsWith('/') && !value.includes('\n') && !value.includes('\r')
   if (!path.includes('/') || path.length > 32_768 || /[\n\r]/.test(path)) {
@@ -69,7 +71,10 @@ function parseProbePayload(payload: string | null): WslGuestEnvironment | null {
   if (!isCleanAbsolute(home) || !isCleanAbsolute(envBinary)) {
     return null
   }
-  return { path, home, envBinary }
+  if (claudeConfigDir && !isCleanAbsolute(claudeConfigDir)) {
+    return null
+  }
+  return { path, home, envBinary, ...(claudeConfigDir ? { claudeConfigDir } : {}) }
 }
 
 async function probeGuestEnvironment(
@@ -81,7 +86,9 @@ async function probeGuestEnvironment(
   const script = [
     '_orca_env=$(command -v env 2>/dev/null || true)',
     'case "$_orca_env" in /*) [ -x "$_orca_env" ] || exit 127 ;; *) exit 127 ;; esac',
-    `printf '%s\\0%s\\0%s' "$PATH" "$HOME" "$_orca_env"`
+    '_orca_claude_config_dir="${CLAUDE_CONFIG_DIR:-$HOME/.claude}"',
+    'case "$_orca_claude_config_dir" in /*) ;; *) exit 127 ;; esac',
+    `printf '%s\\0%s\\0%s\\0%s' "$PATH" "$HOME" "$_orca_env" "$_orca_claude_config_dir"`
   ].join('\n')
   const captured = buildWslCapturedLoginShellCommand(script)
   const result = await runProcess({

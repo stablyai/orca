@@ -664,4 +664,14 @@ describe('ClaudeUsageStore', () => {
     expect(scanClaudeUsageFiles).toHaveBeenCalledWith([], [])
     expect(readFileSync(join(tempUserData, 'orca-claude-usage.json'), 'utf-8')).toContain('\n')
   })
+
+  it('passes the current runtime target into Claude transcript scans', async () => {
+    const target = { configDir: '/selected/.claude' }
+    const store = new ClaudeUsageStore(createBackingStore(), async () => target)
+    ;(store as unknown as { state: ClaudeUsagePersistedState }).state.scanState.enabled = true
+
+    await store.refresh(true)
+
+    expect(scanClaudeUsageFiles).toHaveBeenCalledWith([], [], target)
+  })
 })

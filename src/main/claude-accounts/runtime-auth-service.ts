@@ -1,6 +1,12 @@
+import { parseWslUncPath } from '../../shared/wsl-paths'
+import type { ClaudeUsageScanTarget } from '../claude-usage/scanner'
 import type { Store } from '../persistence'
+import { getInitialClaudeRateLimitTarget } from '../rate-limits/claude-rate-limit-target'
+import { getDefaultWslDistro, getWslHome, toWindowsWslPath } from '../wsl'
+import { getWslGuestEnvironment } from '../wsl/wsl-guest-environment'
 import {
   getSelectedClaudeAccountIdForTarget,
+  normalizeClaudeAccountSelectionTarget,
   type ClaudeAccountSelectionTarget
 } from './runtime-selection'
 import { ClaudeRuntimeAuthSync } from './runtime-auth/runtime-auth-sync'
@@ -58,6 +64,36 @@ export class ClaudeRuntimeAuthService extends ClaudeRuntimeAuthSync {
 
   getRuntimeConfigDir(target?: ClaudeAccountSelectionTarget): string {
     return this.getPreparation(target).configDir
+  }
+
+  async getUsageScanTarget(): Promise<ClaudeUsageScanTarget> {
+    const settings = this.store.getSettings()
+    const target = this.resolveWslDefaultTarget(getInitialClaudeRateLimitTarget(settings))
+    const normalizedTarget = normalizeClaudeAccountSelectionTarget(target)
+    if (normalizedTarget.runtime !== 'wsl') {
+      return { configDir: this.pathResolver.getRuntimePaths().configDir, includeWslHomes: true }
+    }
+
+    const activeAccountId = getSelectedClaudeAccountIdForTarget(settings, normalizedTarget)
+    const activeAccount = this.getActiveAccount(settings.claudeManagedAccounts, activeAccountId)
+    const distro = normalizedTarget.wslDistro ?? getDefaultWslDistro()
+    if (activeAccount?.managedAuthRuntime === 'wsl' && activeAccount.wslLinuxAuthPath && distro) {
+      return { configDir: toWindowsWslPath(activeAccount.wslLinuxAuthPath, distro) }
+    }
+
+    const environment = distro ? await getWslGuestEnvironment(distro) : null
+    const wslHome = distro ? getWslHome(distro) : null
+    const wslHomeInfo = wslHome ? parseWslUncPath(wslHome) : null
+    const linuxConfigDir =
+      environment?.claudeConfigDir ??
+      (wslHomeInfo ? `${wslHomeInfo.linuxPath.replace(/\/$/, '')}/.claude` : null)
+    if (!distro || !linuxConfigDir) {
+      throw new Error('Selected WSL Claude runtime is unavailable')
+    }
+    return {
+      configDir: toWindowsWslPath(linuxConfigDir, distro),
+      includeWslHomes: false
+    }
   }
 
   private initializeLastSyncedState(): void {

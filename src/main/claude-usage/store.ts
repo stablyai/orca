@@ -13,7 +13,7 @@ import type {
 import type { AutomationRunUsage } from '../../shared/automations-types'
 import type { Store } from '../persistence'
 import type { ClaudeUsagePersistedState } from './types'
-import { scanClaudeUsageFiles } from './scanner'
+import { scanClaudeUsageFiles, type ClaudeUsageScanTarget } from './scanner'
 import { UsageProviderStoreLifecycle } from '../usage/usage-provider-store-lifecycle'
 import { buildBreakdown, buildDaily, buildSummary } from './claude-usage-report-aggregation'
 import { buildRecentSessions } from './claude-usage-session-rows'
@@ -77,7 +77,10 @@ export class ClaudeUsageStore extends UsageProviderStoreLifecycle<
   ClaudeUsagePersistedState,
   'hasAnyClaudeData'
 > {
-  constructor(store: Pick<Store, 'getRepos' | 'getAllWorktreeMeta'>) {
+  constructor(
+    store: Pick<Store, 'getRepos' | 'getAllWorktreeMeta'>,
+    resolveScanTarget?: () => Promise<ClaudeUsageScanTarget>
+  ) {
     super(store, {
       logTag: '[claude-usage]',
       resolveCacheFile: getClaudeUsageFile,
@@ -86,7 +89,10 @@ export class ClaudeUsageStore extends UsageProviderStoreLifecycle<
       sourceKey: 'processedFiles',
       dataPresenceKey: 'hasAnyClaudeData',
       jsonIndent: 2,
-      scan: scanClaudeUsageFiles
+      scan: resolveScanTarget
+        ? async (worktrees, previous) =>
+            scanClaudeUsageFiles(worktrees, previous, await resolveScanTarget())
+        : scanClaudeUsageFiles
     })
   }
 
