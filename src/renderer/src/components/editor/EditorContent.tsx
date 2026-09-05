@@ -1,9 +1,10 @@
 import { useAppStore } from '@/store'
 import type { MarkdownViewMode, OpenFile, PendingEditorReveal } from '@/store/slices/editor'
-import type { GitDiffResult } from '../../../../shared/git-diff-compare-types'
+import type { GitBranchChangeEntry, GitDiffResult } from '../../../../shared/git-diff-compare-types'
 import type { GitStatusEntry } from '../../../../shared/git-status-types'
 import { CheckRunDetailsPanel } from './CheckRunDetailsPanel'
 import { CombinedDiffViewer, MarkdownPreview } from './editor-lazy-views'
+import { shouldLoadChangedLineDiffForEditFile } from './editor-panel-changed-line-diff'
 import { EditorConflictReviewSurface } from './EditorConflictReviewSurface'
 import { EditorDiffFileSurface } from './EditorDiffFileSurface'
 import { EditorEditFileSurface } from './EditorEditFileSurface'
@@ -42,6 +43,7 @@ export function EditorContent({
   editBuffers,
   openFiles,
   worktreeEntries,
+  branchEntries,
   resolvedLanguage,
   isMarkdown,
   isMermaid,
@@ -70,6 +72,7 @@ export function EditorContent({
   editBuffers: Record<string, string>
   openFiles: OpenFile[]
   worktreeEntries: GitStatusEntry[]
+  branchEntries: GitBranchChangeEntry[]
   resolvedLanguage: string
   isMarkdown: boolean
   isMermaid: boolean
@@ -112,6 +115,11 @@ export function EditorContent({
   const getConflictNavigation = useEditorConflictNavigation()
   const activeConflictEntry =
     worktreeEntries.find((entry) => entry.path === activeFile.relativePath) ?? null
+  const highlightChangedLines = shouldLoadChangedLineDiffForEditFile(
+    activeFile,
+    worktreeEntries,
+    branchEntries
+  )
   const isCombinedDiff =
     activeFile.mode === 'diff' &&
     (activeFile.diffSource === 'combined-all' ||
@@ -233,6 +241,7 @@ export function EditorContent({
         pdfViewStateKey={pdfViewStateKey}
         fileContent={fileContents[activeFile.id]}
         diffContent={diffContents[activeFile.id]}
+        highlightChangedLines={highlightChangedLines}
         editBuffer={editBuffers[activeFile.id]}
         activeConflictEntry={activeConflictEntry}
         monacoLanguage={monacoLanguage}

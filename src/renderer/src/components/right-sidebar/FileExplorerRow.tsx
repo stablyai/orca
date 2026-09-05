@@ -104,6 +104,16 @@ export function FileExplorerRow({
 }: FileExplorerRowProps): React.JSX.Element {
   const FileIcon = getFileTypeIcon(node.relativePath || node.name)
   const rowDropDir = node.isDirectory ? node.path : targetDir
+  const statusAccent = nodeStatus ? statusColor : null
+  const rowStyle = {
+    paddingLeft: `${node.depth * 16 + 8}px`,
+    ...(statusAccent
+      ? {
+          '--file-explorer-row-status-color': statusAccent
+        }
+      : {})
+  } as React.CSSProperties
+  const iconStyle = statusAccent ? { color: statusAccent } : undefined
   const { setRowDragNode, handleDragOver, handleDragEnter, handleDragLeave, handleDrop } =
     useFileExplorerRowDrag({
       rowDropDir,
@@ -137,7 +147,7 @@ export function FileExplorerRow({
             isSelected && 'text-accent-foreground',
             isFlashing && 'bg-amber-400/20 ring-1 ring-inset ring-amber-400/70'
           )}
-          style={{ paddingLeft: `${node.depth * 16 + 8}px` }}
+          style={rowStyle}
           ref={setRowDragNode}
           data-native-file-drop-dir={rowDropDir}
           // Why: marks this draggable row so the wheel-capture handler can rescue
@@ -183,22 +193,23 @@ export function FileExplorerRow({
                 )}
               />
               {isLoading ? (
-                <Loader2 className="size-3 shrink-0 animate-spin text-muted-foreground" />
+                <Loader2
+                  className="size-3 shrink-0 animate-spin text-muted-foreground"
+                  style={iconStyle}
+                />
               ) : isExpanded ? (
-                <FolderOpen className="size-3 shrink-0 text-muted-foreground" />
+                <FolderOpen className="size-3 shrink-0 text-muted-foreground" style={iconStyle} />
               ) : (
-                <Folder className="size-3 shrink-0 text-muted-foreground" />
+                <Folder className="size-3 shrink-0 text-muted-foreground" style={iconStyle} />
               )}
             </>
           ) : (
             <>
               <span className="size-3 shrink-0" />
               {node.isSymlink ? (
-                <Link className="size-3 shrink-0 text-muted-foreground" />
+                <Link className="size-3 shrink-0 text-muted-foreground" style={iconStyle} />
               ) : (
-                React.createElement(FileIcon, {
-                  className: 'size-3 shrink-0 text-muted-foreground'
-                })
+                <FileIcon className="size-3 shrink-0 text-muted-foreground" style={iconStyle} />
               )}
             </>
           )}

@@ -120,6 +120,7 @@ export function useFileExplorerTreePaneState({
   const openFile = useAppStore((s) => s.openFile)
   const makePreviewFilePermanent = useAppStore((s) => s.makePreviewFilePermanent)
   const gitStatusByWorktree = useAppStore((s) => s.gitStatusByWorktree)
+  const gitBranchChangesByWorktree = useAppStore((s) => s.gitBranchChangesByWorktree)
   const closeFile = useAppStore((s) => s.closeFile)
 
   const runtimeDownloadContext = useMemo(
@@ -140,8 +141,19 @@ export function useFileExplorerTreePaneState({
     () => (activeWorktreeId ? (gitStatusByWorktree[activeWorktreeId] ?? []) : []),
     [activeWorktreeId, gitStatusByWorktree]
   )
-  const statusByRelativePath = useMemo(() => buildStatusMap(entries), [entries])
-  const folderStatusByRelativePath = useMemo(() => buildFolderStatusMap(entries), [entries])
+  const branchEntries = useMemo(
+    () => (activeWorktreeId ? (gitBranchChangesByWorktree[activeWorktreeId] ?? []) : []),
+    [activeWorktreeId, gitBranchChangesByWorktree]
+  )
+  const decoratedEntries = useMemo(
+    () => [...branchEntries, ...entries],
+    [branchEntries, entries]
+  )
+  const statusByRelativePath = useMemo(() => buildStatusMap(decoratedEntries), [decoratedEntries])
+  const folderStatusByRelativePath = useMemo(
+    () => buildFolderStatusMap(decoratedEntries),
+    [decoratedEntries]
+  )
 
   const deletion = useFileDeletion({
     activeWorktreeId,

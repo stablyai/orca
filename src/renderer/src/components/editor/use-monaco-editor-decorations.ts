@@ -1,16 +1,19 @@
 import { useCallback, useEffect, useRef, type MutableRefObject } from 'react'
 import type { editor } from 'monaco-editor'
 import type { MarkdownDocument } from '../../../../shared/filesystem-entry-types'
+import type { GitDiffResult } from '../../../../shared/git-diff-compare-types'
 import {
   clearMarkdownDocCompletionDocuments,
   setMarkdownDocCompletionDocuments
 } from './monaco-markdown-doc-completions'
 import type { MarkdownDocLinkDecorationController } from './monaco-markdown-doc-link-decorations'
-import { buildGitConflictDecorations } from './monaco-conflict-decorations'
+import { buildGitConflictDecorations, hasGitConflictMarkers } from './monaco-conflict-decorations'
+import { buildChangedLineDecorations } from './monaco-changed-line-decorations'
 
 export type MonacoEditorDecorations = {
   markdownDocLinkDecorationsRef: MutableRefObject<MarkdownDocLinkDecorationController | null>
   conflictDecorationsRef: MutableRefObject<editor.IEditorDecorationsCollection | null>
+  changedLineDecorationsRef: MutableRefObject<editor.IEditorDecorationsCollection | null>
   updateMarkdownCompletionDocuments: () => void
 }
 
@@ -22,6 +25,8 @@ export function useMonacoEditorDecorations(params: {
   language: string
   markdownDocuments: MarkdownDocument[] | undefined
   conflictDecorationsEnabled: boolean
+  changedLineDecorationsEnabled: boolean
+  diffContent?: GitDiffResult
 }): MonacoEditorDecorations {
   const {
     editorRef,
@@ -29,12 +34,15 @@ export function useMonacoEditorDecorations(params: {
     content,
     language,
     markdownDocuments,
-    conflictDecorationsEnabled
+    conflictDecorationsEnabled,
+    changedLineDecorationsEnabled,
+    diffContent
   } = params
 
   const modelKeyRef = useRef<string | null>(null)
   const markdownDocLinkDecorationsRef = useRef<MarkdownDocLinkDecorationController | null>(null)
   const conflictDecorationsRef = useRef<editor.IEditorDecorationsCollection | null>(null)
+  const changedLineDecorationsRef = useRef<editor.IEditorDecorationsCollection | null>(null)
 
   const updateMarkdownCompletionDocuments = useCallback((): void => {
     const modelKey = editorRef.current?.getModel()?.uri.toString() ?? null
@@ -86,6 +94,21 @@ export function useMonacoEditorDecorations(params: {
   }, [conflictDecorationsEnabled, content, mountedEditor])
 
   useEffect(() => {
+    const ed = mountedEditor
+    if (!ed || !changedLineDecorationsEnabled) {
+      changedLineDecorationsRef.current?.clear()
+      return
+    }
+
+    const decorations = buildChangedLineDecorations(diffContent, content)
+    if (!changedLineDecorationsRef.current) {
+      changedLineDecorationsRef.current = ed.createDecorationsCollection(decorations)
+      return
+    }
+    changedLineDecorationsRef.current.set(decorations)
+  }, [changedLineDecorationsEnabled, content, diffContent, mountedEditor])
+
+  useEffect(() => {
     updateMarkdownCompletionDocuments()
   }, [updateMarkdownCompletionDocuments])
 
@@ -98,12 +121,15 @@ export function useMonacoEditorDecorations(params: {
       markdownDocLinkDecorationsRef.current = null
       conflictDecorationsRef.current?.clear()
       conflictDecorationsRef.current = null
+      changedLineDecorationsRef.current?.clear()
+      changedLineDecorationsRef.current = null
     }
   }, [])
 
   return {
     markdownDocLinkDecorationsRef,
     conflictDecorationsRef,
+    changedLineDecorationsRef,
     updateMarkdownCompletionDocuments
   }
 }
