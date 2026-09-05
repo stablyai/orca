@@ -13,6 +13,10 @@ import {
   isChromiumErrorPage,
   toDisplayUrl
 } from '../describe-page/browser-page-url-display'
+import {
+  browserNavigationLeavesFaviconOrigin,
+  pickDisplayableFaviconUrl
+} from '../describe-page/browser-favicon-url'
 import type {
   BrowserPageNavigateEvent,
   BrowserPageRecoveryNavigationValidation,
@@ -73,6 +77,21 @@ export function createBrowserPageWebviewNavigationHandlers({
     const startedUrl = normalizeBrowserNavigationUrl(browserStartedUrl) ?? browserStartedUrl
     if (pendingRecoveryNavigation?.targetUrl === startedUrl) {
       pendingRecoveryNavigation.started = true
+    }
+    // Why here and not on did-start-loading: Chromium re-announces a favicon only when the icon URL
+    // list changes, so clearing on every load strands same-origin navigations with no icon and no
+    // event that would ever restore one.
+    // Why getURL() and not lastKnownWebviewUrlRef: Orca-driven navigations point that ref at the
+    // destination before assigning src, so it can't identify the document being left.
+    let committedUrl: string | null = null
+    try {
+      committedUrl = webview.getURL() || null
+    } catch {
+      // Why: a guest that hasn't attached yet rejects getURL(); an unknown origin keeps the icon.
+    }
+    if (browserNavigationLeavesFaviconOrigin(committedUrl, startedUrl)) {
+      faviconUrlRef.current = null
+      onUpdatePageStateRef.current(browserTabId, { faviconUrl: null })
     }
   }
 
@@ -136,14 +155,7 @@ export function createBrowserPageWebviewNavigationHandlers({
   }
 
   const handleFaviconUpdate = (event: { favicons?: string[] }): void => {
-    const faviconUrl = event.favicons?.[0] ?? null
-    faviconUrlRef.current =
-      faviconUrl &&
-      (faviconUrl.startsWith('https://') ||
-        faviconUrl.startsWith('http://') ||
-        faviconUrl.startsWith('data:image/'))
-        ? faviconUrl
-        : null
+    faviconUrlRef.current = pickDisplayableFaviconUrl(event.favicons)
     onUpdatePageStateRef.current(browserTabId, { faviconUrl: faviconUrlRef.current })
   }
 

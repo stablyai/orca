@@ -191,6 +191,7 @@ export default function BrowserTab({
           muted-foreground made the icon read as "disabled" in practice. */}
       <BrowserFavicon
         faviconUrl={tab.faviconUrl}
+        loading={tab.loading}
         className="size-3 mr-1"
         fallbackClassName="text-blue-500"
       />
