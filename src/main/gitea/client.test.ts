@@ -23,6 +23,14 @@ import {
 } from './pull-request-scan-cache'
 import { __resetRepoDefaultBranchCacheForTests } from '../source-control/repo-default-branch'
 
+const { windowsEnvOverridesMock } = vi.hoisted(() => ({
+  windowsEnvOverridesMock: vi.fn(async () => ({}))
+}))
+
+vi.mock('../env/windows-env-refresh', () => ({
+  readCurrentWindowsEnvOverrides: windowsEnvOverridesMock
+}))
+
 const OLD_ENV = process.env
 
 /** Serve the remote URL plus the #9171 default-branch resolver probes. */
@@ -379,6 +387,24 @@ describe('Gitea client', () => {
       baseUrl: null,
       tokenConfigured: true
     })
+  })
+
+
+  it('prefers a refreshed registry token over the stale inherited environment (#14740)', async () => {
+    process.env.ORCA_GITEA_TOKEN = 'tok_stale_from_explorer'
+    windowsEnvOverridesMock.mockResolvedValue({ ORCA_GITEA_TOKEN: 'tok_fresh_from_registry' })
+    const fetchMock = vi.fn(async (_url: string, init?: RequestInit) => {
+      expect((init?.headers as Record<string, string>).Authorization).toBe(
+        'token tok_fresh_from_registry'
+      )
+      return Response.json({ login: 'gitea-user' })
+    })
+    vi.stubGlobal('fetch', fetchMock)
+    try {
+      await expect(getGiteaAuthStatus()).resolves.toMatchObject({ authenticated: true })
+    } finally {
+      windowsEnvOverridesMock.mockResolvedValue({})
+    }
   })
 
   it('verifies token auth when a global API base URL is configured', async () => {
