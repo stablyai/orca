@@ -120,6 +120,7 @@ describe('onboarding flow persistence', () => {
     const notifications = buildCompletedOnboardingNotificationSettings({
       enabled: false,
       agentTaskComplete: false,
+      dispatchedWorkerTaskComplete: false,
       terminalBell: false,
       suppressWhenFocused: false,
       customSoundId: 'two-tone',
@@ -130,6 +131,8 @@ describe('onboarding flow persistence', () => {
     expect(notifications).toEqual({
       enabled: true,
       agentTaskComplete: true,
+      // Why: onboarding turns the alert sources on, but a deliberate worker-silence choice is a user preference and survives.
+      dispatchedWorkerTaskComplete: false,
       terminalBell: true,
       suppressWhenFocused: false,
       customSoundId: 'two-tone',
