@@ -85,4 +85,47 @@ describe('tui agent permissions', () => {
       })
     ).toBe('yolo')
   })
+
+  it('resolves Muse yolo and manual launches correctly', () => {
+    expect(
+      resolveTuiAgentPermissionMode({
+        agent: 'muse',
+        agentArgs: YOLO_TUI_AGENT_ARGS.muse,
+        agentEnv: {}
+      })
+    ).toBe('yolo')
+
+    expect(
+      resolveTuiAgentPermissionMode({
+        agent: 'muse',
+        agentArgs: '',
+        agentEnv: {}
+      })
+    ).toBe('manual')
+
+    expect(
+      resolveTuiAgentPermissionMode({
+        agent: 'muse',
+        agentArgs: '--trust-workspace',
+        agentEnv: {}
+      })
+    ).toBe('mixed')
+  })
+
+  it('applies yolo and manual modes to Muse without affecting other policies', () => {
+    const manualResult = applyAgentPermissionMode({
+      mode: 'manual',
+      agentDefaultArgs: { muse: '--yolo' },
+      agentDefaultEnv: {}
+    })
+    expect(manualResult.agentDefaultArgs.muse).toBe('')
+
+    const yoloResult = applyAgentPermissionMode({
+      mode: 'yolo',
+      agentDefaultArgs: { muse: '' },
+      agentDefaultEnv: {}
+    })
+    expect(yoloResult.agentDefaultArgs.muse).toBe('--yolo')
+  })
 })
+

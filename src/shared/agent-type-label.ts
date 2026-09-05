@@ -24,8 +24,10 @@ const WELL_KNOWN_LABELS: Record<string, string> = {
   devin: 'Devin',
   ante: 'Ante',
   trae: 'Trae',
-  kimi: 'Kimi'
+  kimi: 'Kimi',
+  muse: 'Meta Muse'
 }
+
 
 export function formatAgentTypeLabel(agentType: AgentType | null | undefined): string {
   if (!agentType || agentType === 'unknown') {

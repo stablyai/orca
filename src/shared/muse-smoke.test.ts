@@ -1,9 +1,22 @@
+import { execFile, spawnSync } from 'node:child_process'
+import { promisify } from 'node:util'
 import { describe, expect, it } from 'vitest'
+import { buildMuseExecArgs } from './muse-headless'
 import { isTuiAgent, TUI_AGENT_CONFIG } from './tui-agent-config'
 import { pickTuiAgent } from './tui-agent-selection'
 import { TUI_AGENT_DISPLAY_NAMES } from './tui-agent-display-names'
 import { buildAgentStartupPlan } from './tui-agent-startup'
-import { executeMuseHeadless } from './muse-headless-exec'
+
+const execFileAsync = promisify(execFile)
+
+const hasMuseInstalled = (() => {
+  try {
+    const { status } = spawnSync('muse', ['--version'], { stdio: 'ignore' })
+    return status === 0
+  } catch {
+    return false
+  }
+})()
 
 describe('ORCA Meta Muse smoke test', () => {
   it('selects Meta Muse through Orca selection and configuration contracts', () => {
@@ -36,14 +49,23 @@ describe('ORCA Meta Muse smoke test', () => {
     expect(plan?.expectedProcess).toBe('muse')
   })
 
-  it('runs live smoke test and receives expected response MUSE_OK', async () => {
-    const result = await executeMuseHeadless({
-      prompt: 'Responda apenas com a palavra MUSE_OK',
-      extraArgs: ['--trust-workspace'],
-      timeoutMs: 30000
-    })
+  it.runIf(hasMuseInstalled)(
+    'executes offline smoke test using --provider echo without network or credentials',
+    async () => {
+      const args = buildMuseExecArgs('MUSE_ECHO_SMOKE', ['--provider', 'echo', '--trust-workspace'])
+      const { stdout } = await execFileAsync('muse', args, { timeout: 15000 })
+      expect(stdout).toContain('MUSE_ECHO_SMOKE')
+    }
+  )
 
-    expect(result.exitCode).toBe(0)
-    expect(result.stdout).toContain('MUSE_OK')
-  }, 45000)
+  it.runIf(process.env.ORCA_MUSE_LIVE_TEST === 'true' && hasMuseInstalled)(
+    'runs live smoke test against Meta Muse API when ORCA_MUSE_LIVE_TEST=true',
+    async () => {
+      const args = buildMuseExecArgs('Responda apenas com a palavra MUSE_OK', ['--trust-workspace'])
+      const { stdout } = await execFileAsync('muse', args, { timeout: 45000 })
+      expect(stdout).toContain('MUSE_OK')
+    },
+    60000
+  )
 })
+

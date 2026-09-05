@@ -870,7 +870,12 @@ describe('formatAgentTypeLabel', () => {
     expect(formatAgentTypeLabel('prime-agent')).toBe('Prime Agent')
   })
 
+  it("maps 'muse' to 'Meta Muse'", () => {
+    expect(formatAgentTypeLabel('muse')).toBe('Meta Muse')
+  })
+
   it('passes through arbitrary custom agent names as-is', () => {
+
     expect(formatAgentTypeLabel('weirdo')).toBe('weirdo')
   })
 })
@@ -896,7 +901,9 @@ describe('agentTypeToIconAgent', () => {
     expect(agentTypeToIconAgent('ante')).toBe('ante')
     expect(agentTypeToIconAgent('trae')).toBe('trae')
     expect(agentTypeToIconAgent('prime-agent')).toBe('prime-agent')
+    expect(agentTypeToIconAgent('muse')).toBe('muse')
   })
+
 
   it('returns null for arbitrary non-iconable strings', () => {
     // Why: unknown agentTypes must return null so the caller falls back to a neutral glyph, not a broken icon.

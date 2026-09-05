@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as ChildProcess from 'node:child_process'
 import { createFakeChild, createHandlers, requestContext } from './agent-exec-handler-test-harness'
 import { TERMINAL_GIT_CREDENTIAL_GUARD_POLICY_ENV } from '../shared/terminal-git-credential-guard'
+import { buildMuseExecArgs } from '../shared/muse-headless'
 
 vi.mock('child_process', async (importOriginal) => {
   const actual = await importOriginal<typeof ChildProcess>()
@@ -474,4 +475,42 @@ describe('AgentExecHandler', () => {
       vi.useRealTimers()
     }
   })
+
+  it('executes muse headless commands using buildMuseExecArgs through the common handler', async () => {
+    const child = createFakeChild()
+    spawnMock.mockReturnValue(child as never)
+    const handlers = createHandlers()
+
+    const pending = handlers.get('agent.execNonInteractive')!(
+      {
+        binary: 'muse',
+        args: buildMuseExecArgs('Analyze this diff', ['--provider', 'echo']),
+        cwd: '/repo',
+        stdin: null,
+        timeoutMs: 10_000
+      },
+      requestContext()
+    )
+
+    child.stdout.emit('data', Buffer.from('echoed: Analyze this diff'))
+    child.emit('close', 0)
+
+    await expect(pending).resolves.toEqual({
+      stdout: 'echoed: Analyze this diff',
+      stderr: '',
+      exitCode: 0,
+      timedOut: false,
+      canceled: false
+    })
+    expect(spawnMock).toHaveBeenCalledWith(
+      expect.stringMatching(/(?:^|[\\/])muse(?:\.exe)?$/i),
+      ['exec', '--provider', 'echo', 'Analyze this diff'],
+      expect.objectContaining({
+        cwd: '/repo',
+        stdio: ['pipe', 'pipe', 'pipe']
+      })
+    )
+  })
 })
+
+
