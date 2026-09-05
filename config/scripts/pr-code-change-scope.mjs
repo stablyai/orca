@@ -125,6 +125,11 @@ const CROSS_VERSION_WIRE_PREFIXES = [
   'src/main/runtime/rpc/methods/session-tabs.ts',
   'src/main/runtime/rpc/methods/structured-agent-session',
   'src/main/runtime/rpc/methods/terminal',
+  'src/main/runtime/rpc/methods/git.ts',
+  'src/main/runtime/rpc/methods/git-',
+  'src/main/runtime/orca-runtime-git',
+  'src/main/runtime/runtime-git-',
+  'src/relay/git-handler',
   'src/renderer/src/runtime/remote-runtime-terminal-multiplexer'
 ]
 
