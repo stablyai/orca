@@ -17922,6 +17922,139 @@
         "The sentinel changes a pane title within an existing layout; concurrent split and close conflicts remain separate coverage."
       ],
       "demotionRule": "Demote if a failed push suppresses an identical retry, a successful equal write resumes redundant churn, or the routed observer journey flakes without a diagnosed cause."
+    },
+    {
+      "id": "ssh.docker-recovery-and-resource-lifecycle",
+      "title": "Docker SSH reconnect, host faults, listing and watcher lifecycle",
+      "maturity": "experimental",
+      "protection": "partial",
+      "owner": "terminal-runtime",
+      "layer": "electron-docker-ssh",
+      "surfaces": [
+        "SSH terminal recovery",
+        "SSH remote resource ownership",
+        "remote file listing",
+        "remote explorer watcher recovery",
+        "Electron test process cleanup"
+      ],
+      "platforms": ["macos", "linux", "windows"],
+      "providers": ["ssh"],
+      "coveredPlatforms": ["macos"],
+      "coveredProviders": ["ssh"],
+      "coverageNotes": "A macOS Electron client drives a Linux Docker SSH execution host. The six-spec suite passed ten enabled cases with clean worker exit (5.2m). The formerly skipped frozen-host input case now waits for recovered authority before sending input and passed four separate executions (one initial and three repetitions). The existing flooded-shell fixme remains an explicitly reproduced application gap.",
+      "motivatingLinks": [
+        "https://github.com/stablyai/orca/issues/18018",
+        "https://github.com/stablyai/orca/pull/18546",
+        "https://github.com/stablyai/orca/issues/12547"
+      ],
+      "invariant": "Transport loss and frozen-host silence must preserve the remote session; host relay loss may rebind a pane without accumulating reattachable leases. Reconnects must preserve usable terminal content, bounded PTYs/fds/processes, complete large listings, and independently recoverable watcher processes. Electron test shutdown must release inherited pipes after confirmed root exit without closing live-process pipes.",
+      "oracle": "Poll a changed connected SSH authority after injected faults, then require terminal output and appropriate PTY identity. Read remote process/fd state, listFiles replies, and rendered explorer rows. Resolve Playwright cleanup only after the root process exits and its inherited pipes close; live-process pipes remain untouched.",
+      "commands": [
+        "ORCA_E2E_SSH_DOCKER=1 SKIP_BUILD=1 pnpm exec playwright test tests/e2e/ssh-docker-transport-drop-recovery.spec.ts tests/e2e/ssh-docker-half-open-link.spec.ts tests/e2e/ssh-docker-quick-open-large-listing.spec.ts tests/e2e/ssh-docker-reconnect-pane-restore.spec.ts tests/e2e/ssh-docker-resource-accumulation.spec.ts tests/e2e/ssh-docker-watcher-isolation.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1",
+        "pnpm exec vitest run --config config/vitest.config.ts tests/e2e/helpers/electron-process-shutdown.unit.test.ts"
+      ],
+      "testFiles": [
+        "tests/e2e/ssh-docker-transport-drop-recovery.spec.ts",
+        "tests/e2e/ssh-docker-half-open-link.spec.ts",
+        "tests/e2e/ssh-docker-quick-open-large-listing.spec.ts",
+        "tests/e2e/ssh-docker-reconnect-pane-restore.spec.ts",
+        "tests/e2e/ssh-docker-resource-accumulation.spec.ts",
+        "tests/e2e/ssh-docker-watcher-isolation.spec.ts",
+        "tests/e2e/helpers/electron-process-shutdown.unit.test.ts"
+      ],
+      "assertionRefs": [
+        {
+          "file": "tests/e2e/ssh-docker-transport-drop-recovery.spec.ts",
+          "assertions": [
+            "preserves transport-drop PTY and scrollback, replaces relay-loss binding, and keeps one reattachable lease per pane"
+          ]
+        },
+        {
+          "file": "tests/e2e/ssh-docker-half-open-link.spec.ts",
+          "assertions": [
+            "leaves connected after host freeze and renders process-produced output after recovery"
+          ]
+        },
+        {
+          "file": "tests/e2e/ssh-docker-quick-open-large-listing.spec.ts",
+          "assertions": [
+            "returns both a bounded client page and a complete legacy-client remote listing"
+          ]
+        },
+        {
+          "file": "tests/e2e/ssh-docker-reconnect-pane-restore.spec.ts",
+          "assertions": [
+            "restores shell scrollback and full-screen output and opens a usable fresh tab"
+          ]
+        },
+        {
+          "file": "tests/e2e/ssh-docker-resource-accumulation.spec.ts",
+          "assertions": [
+            "keeps remote pts devices, relay fds, process counts and inherited master fds bounded"
+          ]
+        },
+        {
+          "file": "tests/e2e/ssh-docker-watcher-isolation.spec.ts",
+          "assertions": [
+            "keeps rendered explorer changes and terminal output live after watcher crash and repairs a deleted watcher artifact"
+          ]
+        },
+        {
+          "file": "tests/e2e/helpers/electron-process-shutdown.unit.test.ts",
+          "assertions": [
+            "releases inherited pipes after confirmed exit, including prior exit",
+            "retains live-process pipes on shutdown timeout"
+          ]
+        }
+      ],
+      "evidenceRuns": [
+        {
+          "date": "2026-09-05",
+          "runner": "local",
+          "platform": "macos",
+          "result": "passed",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts tests/e2e/helpers/electron-process-shutdown.unit.test.ts",
+          "durationSeconds": 0.168,
+          "summary": "All three shutdown regression tests passed; disabling pipe release fails the first two by timeout. Two half-open Electron repetitions separately passed in 1.7m without worker teardown timeout."
+        },
+        {
+          "date": "2026-09-05",
+          "runner": "local",
+          "platform": "macos",
+          "result": "passed",
+          "command": "ORCA_E2E_SSH_DOCKER=1 SKIP_BUILD=1 pnpm exec playwright test tests/e2e/ssh-docker-transport-drop-recovery.spec.ts tests/e2e/ssh-docker-half-open-link.spec.ts tests/e2e/ssh-docker-quick-open-large-listing.spec.ts tests/e2e/ssh-docker-reconnect-pane-restore.spec.ts tests/e2e/ssh-docker-resource-accumulation.spec.ts tests/e2e/ssh-docker-watcher-isolation.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1",
+          "durationSeconds": 312,
+          "summary": "Six specs: ten passed, two existing fixme skipped, clean worker shutdown. Baseline same enabled suite: ten passed but worker teardown timed out (7.3m)."
+        }
+      ],
+      "runtimeBudget": {
+        "p95Seconds": 420,
+        "scope": "per Electron Docker test; measured suite p95 and CI soak not yet established"
+      },
+      "flakeHistory": {
+        "status": "flaky",
+        "evidence": "Baseline: ten enabled tests passed, two fixme skipped, worker teardown timed out (7.3m). After pipe cleanup: ten passed and worker exited cleanly (5.2m); two half-open repeats passed (1.7m). The formerly skipped thaw-input case failed before its recovered-authority wait and passed 1+3 executions afterward (56.9s + 2.6m). Flood failed both its original input oracle and a strengthened producer-completion oracle after recovery."
+      },
+      "redGreenEvidence": {
+        "status": "partial",
+        "evidence": "Disabling exited-process pipe release causes two shutdown contract tests to time out; restoring it passes 3/3. Baseline Docker worker teardown failed; final six-spec enabled run and half-open repeats exit successfully. Frozen-host input fails without the post-thaw recovered-authority wait and passes four runs with it. Full product fault/recovery mutation coverage and CI history remain missing."
+      },
+      "performanceBudget": {
+        "required": true,
+        "evidence": "Test-only bounded pipe destruction and authority polling; no production polling, subprocesses, or runtime work added. Remote resources are counted instead of using wall-clock leak thresholds."
+      },
+      "promotionCriteria": [
+        "Require complete six-spec repeat runs with clean worker shutdown.",
+        "Resolve the remaining #18018 flooded-shell reproduction and remove its fixme marker.",
+        "Collect CI runtime and flake history plus product red/green evidence before blocking."
+      ],
+      "knownGaps": [
+        "The disconnected 48MB flood still loses its relay channel: original post-flood input marker failed in 60s, and waiting for the finite producer completion marker failed in 120s. It remains an explicit #18018 fixme reproduction; frozen-host input is re-enabled after four successful runs.",
+        "Linux and Windows desktop clients, WSL, folder workspaces, paired runtimes and live agent CLIs are not exercised by these Docker specs.",
+        "Some legacy assertions inspect terminal serialization or backing state rather than rendered DOM; no blanket visual coverage claim.",
+        "No p95 CI history or full product mutation proof."
+      ],
+      "demotionRule": "Keep experimental while any recovery reproduction fails or any teardown, identity, resource-count, or rendered oracle flakes; never promote by extending sleeps or retries."
     }
   ]
 }
