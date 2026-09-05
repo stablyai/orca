@@ -196,7 +196,7 @@ test.describe('Agent awake setting', () => {
         expect.objectContaining({
           activeIds: expect.arrayContaining([expect.any(Number)]),
           starts: expect.arrayContaining([
-            expect.objectContaining({ type: 'prevent-display-sleep' })
+            expect.objectContaining({ type: 'prevent-app-suspension' })
           ])
         })
       )

@@ -230,7 +230,8 @@ export class AgentAwakeService {
       }
     }
     try {
-      const id = this.blocker.start('prevent-display-sleep')
+      // Why: mirrors terminal `caffeinate` (-i) — hold the system awake and leave display sleep to the OS.
+      const id = this.blocker.start('prevent-app-suspension')
       this.blockerId = id
       this.reconcileBlocker('post-start')
     } catch (err) {

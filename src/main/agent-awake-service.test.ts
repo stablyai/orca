@@ -118,9 +118,23 @@ describe('AgentAwakeService', () => {
     service.setStatuses([workingStatus()])
 
     expect(blocker.start).toHaveBeenCalledTimes(1)
-    expect(blocker.start).toHaveBeenCalledWith('prevent-display-sleep')
+    expect(blocker.start).toHaveBeenCalledWith('prevent-app-suspension')
     expect(macosAssertion.start).toHaveBeenCalledTimes(1)
     expect(linuxAssertion.start).toHaveBeenCalledTimes(1)
+  })
+
+  it('never holds a display assertion, so the screen sleeps like plain caffeinate', () => {
+    const blocker = createBlocker()
+    const macosAssertion = createMacosAssertion()
+    const linuxAssertion = createLinuxAssertion()
+    const service = createService(() => 1_000, blocker, macosAssertion, linuxAssertion)
+
+    service.setMode('on')
+    service.setStatuses([workingStatus()])
+
+    expect(blocker.start).not.toHaveBeenCalledWith('prevent-display-sleep')
+    expect(macosAssertion.start).toHaveBeenCalled()
+    expect(linuxAssertion.start).toHaveBeenCalled()
   })
 
   it('stays awake in On mode without a working agent', () => {
@@ -129,7 +143,7 @@ describe('AgentAwakeService', () => {
 
     service.setMode('on')
 
-    expect(blocker.start).toHaveBeenCalledWith('prevent-display-sleep')
+    expect(blocker.start).toHaveBeenCalledWith('prevent-app-suspension')
     expect(service.getStatus()).toEqual({ mode: 'on', active: true })
   })
 
