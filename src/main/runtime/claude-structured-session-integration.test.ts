@@ -707,9 +707,10 @@ describe('a structured Claude session over agentSession.*', () => {
 
     await ok('agentSession.requestHandoff', handoffParams('to-tui', created.fence))
     const host = getStructuredAgentSessionHost()!
-    await vi.waitFor(async () =>
-      expect(await host.handoffStatus(SESSION)).toMatchObject({ owner: 'tui', phase: 'idle' })
-    )
+    // No poll: the request enqueues the flow on the session's serialized chain before it returns,
+    // so this status read is already ordered behind it. Polling only added a wall-clock deadline
+    // that a loaded runner missed, abandoning a live flow into the suite's teardown.
+    expect(await host.handoffStatus(SESSION)).toMatchObject({ owner: 'tui', phase: 'idle' })
     expect(claude.connections[0]?.closed).toBe(true)
 
     const tuiFence = (
@@ -719,9 +720,7 @@ describe('a structured Claude session over agentSession.*', () => {
     ).deps.store.getRecord(SESSION).lease.runtimeFence
     readClaudeTranscriptLeafUuid.mockResolvedValueOnce('tui-assistant')
     await ok('agentSession.requestHandoff', handoffParams('to-native', tuiFence))
-    await vi.waitFor(async () =>
-      expect(await host.handoffStatus(SESSION)).toMatchObject({ owner: 'native', phase: 'idle' })
-    )
+    expect(await host.handoffStatus(SESSION)).toMatchObject({ owner: 'native', phase: 'idle' })
 
     const frames = await subscribe()
     const texts = itemsOf(frames).map(textOf).filter(Boolean)

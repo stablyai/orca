@@ -100,6 +100,7 @@ export class StructuredAgentSessionHost {
     })
     this.handoffs = createStructuredAgentSessionHostHandoff(deps, {
       session: (sessionId) => this.requireSession(sessionId),
+      findSession: (sessionId) => this.sessions.get(sessionId),
       eventSink: (sessionId) => this.runtimeState.eventSinkFor(sessionId),
       flush: (sessionId) => this.flushStreamedEvents(sessionId),
       serialize: (sessionId, task) => this.serialize(sessionId, task),
@@ -258,6 +259,9 @@ export class StructuredAgentSessionHost {
         { name: 'dispose-holds', run: () => this.holds.dispose() },
         { name: 'stop-lease-renewal', run: () => this.runtimeState.stopLeaseRenewal() },
         { name: 'stop-tui-catchup', run: () => this.handoffs.stopTuiHistoryCatchup() },
+        // Before the session map is dropped: a handoff flow left running writes rows into a
+        // journal this teardown is about to close, and publishes against a session it removed.
+        { name: 'drain-handoffs', run: () => this.handoffs.drain() },
         { name: 'drain-attaches', run: () => this.tasks.drainAttaches() },
         { name: 'flush-event-sinks', run: () => this.runtimeState.flushAllEventSinks() }
       ],
