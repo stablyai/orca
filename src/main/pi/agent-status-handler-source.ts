@@ -1,7 +1,8 @@
 import type { PiAgentKind } from '../../shared/pi-agent-kind'
 
-// Why: keep the generated handler registrations separate from hook transport;
-// both are independently sizeable and the installed extension concatenates them.
+/** The `pi.on(...)` registrations of the status extension, as source lines.
+ *  Why: kept separate from hook transport; both are independently sizeable and
+ *  the installed extension concatenates them. */
 export function getPiAgentStatusHandlerSourceLines(kind: PiAgentKind): string[] {
   const sessionStartHandler =
     kind !== 'omp'
@@ -54,6 +55,21 @@ export function getPiAgentStatusHandlerSourceLines(kind: PiAgentKind): string[] 
           '      tool_name: event.toolName,',
           '      approved: event.approved,',
           '    })',
+          '  })',
+          ''
+        ]
+
+  // Why: OMP does not fire model_select today, but Pi does and OMP wraps Pi's
+  // runtime; when it arrives it is the one event that reports a switch between turns.
+  const modelSelectHandler =
+    kind === 'prime-agent'
+      ? []
+      : [
+          `  pi.on('model_select', (event${ctxParam}) => {`,
+          ...captureSessionMetadata,
+          '    if (!isOmpRuntime()) return',
+          '    updateModelMetadata(event)',
+          "    post('model_select')",
           '  })',
           ''
         ]
@@ -131,6 +147,7 @@ export function getPiAgentStatusHandlerSourceLines(kind: PiAgentKind): string[] 
     '  })',
     '',
     ...approvalHandlers,
+    ...modelSelectHandler,
     "  // Why: capture the assistant's final text on each completed message",
     '  // so the dashboard preview reflects the most recent reply even before',
     '  // agent_end fires. message_end is the right hook because pi guarantees',

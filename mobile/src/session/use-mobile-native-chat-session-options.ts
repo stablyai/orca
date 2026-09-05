@@ -90,6 +90,9 @@ function activeModels(
   return withTrackedNativeChatModel(catalog, catalog.models, record)
 }
 
+/** Model and session-option state for the active mobile chat tab: builds the
+ *  picker snapshot from the agent's catalog, seeds it from the hook-reported
+ *  model, and dispatches picks as the agent's own slash commands. */
 export function useMobileNativeChatSessionOptions(args: {
   agent: string | null
   /** Stable per-tab scope (host + worktree + tab), or null when no tab is active. */
@@ -109,7 +112,11 @@ export function useMobileNativeChatSessionOptions(args: {
     // Widening this to a `defaultModelIsCliDefault` catalog (grok) also needs the
     // effective-model resolution desktop does — `previousModelId` below is tracked-only,
     // so a CLI-default model would render option rows that do nothing when tapped.
-    () => (agent === 'claude' || agent === 'codex' ? getAgentSessionOptionCatalog(agent) : null),
+    // OMP has no seed and no CLI default; its rows are only ever the hook-reported model.
+    () =>
+      agent === 'claude' || agent === 'codex' || agent === 'omp'
+        ? getAgentSessionOptionCatalog(agent)
+        : null,
     [agent]
   )
   const identity = agent && scopeKey ? `${scopeKey}\0${agent}` : null

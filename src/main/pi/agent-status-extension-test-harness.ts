@@ -7,6 +7,7 @@ import { getPiAgentStatusExtensionSource } from './agent-status-extension-source
 
 export type HookContext = {
   isIdle?: () => boolean
+  model?: { provider?: unknown; id?: unknown } | null
   sessionManager?: {
     getSessionId?: () => unknown
     getSessionFile?: () => unknown
