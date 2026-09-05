@@ -46,6 +46,7 @@ export class RpcClientStreamRegistry {
   readonly supportsTerminalStreamInput = this.orderedInput.supports.bind(this.orderedInput)
   readonly getTerminalStreamInputFailure = this.orderedInput.failure.bind(this.orderedInput)
   readonly recoverTerminalStreamInput = this.orderedInput.recover.bind(this.orderedInput)
+  readonly fenceTerminalStreamInput = this.orderedInput.fence.bind(this.orderedInput)
   cancelTerminalStreamInput(terminal: string): void {
     for (const id of this.orderedInput.cancel(terminal)) {
       this.dispose(id)
@@ -259,9 +260,8 @@ export class RpcClientStreamRegistry {
     }
   }
 
-  private sendBrowserUnsubscribe(subscriptionId: string): void {
-    this.sendRpc('browser.screencast.unsubscribe', { subscriptionId })
-  }
+  private sendBrowserUnsubscribe = (subscriptionId: string): void =>
+    void this.sendRpc('browser.screencast.unsubscribe', { subscriptionId })
 
   private sendRpc(method: string, params: unknown): boolean {
     return this.options.sendEncrypted({

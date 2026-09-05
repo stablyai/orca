@@ -48,6 +48,7 @@ export class MobileRelayRpcStreams {
   }
   getTerminalStreamInputFailure = (terminal: string) => this.orderedInput.failure(terminal)
   recoverTerminalStreamInput = (terminal: string) => this.orderedInput.recover(terminal)
+  fenceTerminalStreamInput = () => this.orderedInput.fence()
   cancelTerminalStreamInput(terminal: string): void {
     for (const id of this.orderedInput.cancel(terminal)) {
       this.cancel(id)

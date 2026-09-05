@@ -1,13 +1,13 @@
 import { encodeTerminalStreamFrame, TerminalStreamOpcode } from './terminal-stream-protocol'
-import { TERMINAL_ORDERED_INPUT_CAPABILITY } from '../../../src/shared/terminal-ordered-input'
+import { parseLimits, type Limits } from './terminal-ordered-input-negotiation'
+export { advertiseTerminalOrderedInput } from './terminal-ordered-input-negotiation'
 import type { TerminalStreamInputFailure } from './terminal-stream-input-failure'
+import {
+  TERMINAL_INPUT_HISTORY_LIMIT,
+  TERMINAL_INPUT_HISTORY_FAILURE,
+  grantTerminalInputPermit
+} from './terminal-stream-input-failure'
 
-type Limits = {
-  version: 1
-  maxFrameBytes: number
-  maxPendingBytes: number
-  maxPendingFrames: number
-}
 type Pending = {
   bytes: number
   resolve: (accepted: boolean) => void
@@ -26,34 +26,46 @@ type InputStream = {
   pending: Map<number, Pending>
 }
 
-export function advertiseTerminalOrderedInput(method: string, params: unknown): unknown {
-  if (method !== 'terminal.subscribe' || !params || typeof params !== 'object') {
-    return params
-  }
-  const existing = (params as { capabilities?: unknown }).capabilities
-  return {
-    ...params,
-    capabilities: { ...(existing && typeof existing === 'object' ? existing : {}), orderedInput: 1 }
-  }
-}
-
 export class TerminalOrderedInput {
   private readonly streams = new Map<string, InputStream>()
   private readonly byTerminal = new Map<string, InputStream>()
   private registration = 0
+  private overflowRegistration: number | null = null
+  private readonly retainedFailures = new Set<InputStream>()
+  private readonly permits = new Set<InputStream>()
   constructor(private readonly sendBinary: (bytes: Uint8Array) => boolean) {}
 
   supports(terminal: string): boolean {
-    return this.byTerminal.has(terminal)
+    return this.overflowRegistration !== null || this.byTerminal.has(terminal)
   }
 
   failure(terminal: string): TerminalStreamInputFailure | null {
-    return this.byTerminal.get(terminal)?.failure ?? null
+    const stream = this.byTerminal.get(terminal)
+    return (
+      stream?.failure ??
+      (this.overflowRegistration !== null && (!stream || !this.permits.has(stream))
+        ? TERMINAL_INPUT_HISTORY_FAILURE
+        : null)
+    )
+  }
+
+  fence(): void {
+    this.overflowRegistration = this.registration
+    this.permits.clear()
+    for (const stream of this.streams.values()) {
+      this.fail(stream, TERMINAL_INPUT_HISTORY_FAILURE)
+    }
+    for (const stream of this.retainedFailures) {
+      if (this.byTerminal.get(stream.terminal) === stream) {
+        this.byTerminal.delete(stream.terminal)
+      }
+    }
+    this.retainedFailures.clear()
   }
 
   recover(terminal: string): boolean {
     const failed = this.byTerminal.get(terminal)
-    if (!failed?.failed) {
+    if (!failed?.failed && this.overflowRegistration === null) {
       return !!failed && failed.sequence === 0
     }
     const fresh = [...this.streams.values()].findLast(
@@ -61,12 +73,19 @@ export class TerminalOrderedInput {
         stream.terminal === terminal &&
         !stream.failed &&
         stream.sequence === 0 &&
-        stream.registration > failed.failureRegistration
+        stream.registration >
+          Math.max(failed?.failureRegistration ?? 0, this.overflowRegistration ?? 0)
     )
     if (!fresh) {
       return false
     }
     this.byTerminal.set(terminal, fresh)
+    if (failed) {
+      this.retainedFailures.delete(failed)
+    }
+    if (this.overflowRegistration !== null) {
+      grantTerminalInputPermit(this.permits, fresh)
+    }
     return true
   }
 
@@ -136,6 +155,9 @@ export class TerminalOrderedInput {
   }
 
   send(terminal: string, text: string): Promise<boolean> | null {
+    if (this.failure(terminal)) {
+      return Promise.resolve(false)
+    }
     const stream = this.byTerminal.get(terminal)
     if (!stream) {
       return null
@@ -245,11 +267,18 @@ export class TerminalOrderedInput {
     if (stream) {
       const retainFailure = stream.pending.size > 0 || stream.failed
       this.fail(stream)
-      if (!retainFailure && this.byTerminal.get(stream.terminal) === stream) {
-        this.byTerminal.delete(stream.terminal)
+      if (this.byTerminal.get(stream.terminal) === stream) {
+        if (!retainFailure || this.overflowRegistration !== null) {
+          this.byTerminal.delete(stream.terminal)
+        } else {
+          this.retainedFailures.add(stream)
+        }
       }
     }
     this.streams.delete(requestId)
+    if (this.retainedFailures.size > TERMINAL_INPUT_HISTORY_LIMIT) {
+      this.fence()
+    }
   }
 
   clear(): void {
@@ -265,6 +294,7 @@ export class TerminalOrderedInput {
       reason: 'stream_closed'
     }
   ): void {
+    this.permits.delete(stream)
     if (!stream.failed) {
       stream.failure = failure
       stream.failureRegistration = this.registration
@@ -276,32 +306,5 @@ export class TerminalOrderedInput {
     }
     stream.pending.clear()
     stream.pendingBytes = 0
-  }
-}
-
-function parseLimits(value: unknown): Limits | null {
-  if (!value || typeof value !== 'object') {
-    return null
-  }
-  const limits = value as Limits
-  if (limits.version !== 1) {
-    return null
-  }
-  for (const key of ['maxFrameBytes', 'maxPendingBytes', 'maxPendingFrames'] as const) {
-    if (!Number.isSafeInteger(limits[key]) || limits[key] <= 0) {
-      return null
-    }
-  }
-  return {
-    version: 1,
-    maxFrameBytes: Math.min(limits.maxFrameBytes, TERMINAL_ORDERED_INPUT_CAPABILITY.maxFrameBytes),
-    maxPendingBytes: Math.min(
-      limits.maxPendingBytes,
-      TERMINAL_ORDERED_INPUT_CAPABILITY.maxPendingBytes
-    ),
-    maxPendingFrames: Math.min(
-      limits.maxPendingFrames,
-      TERMINAL_ORDERED_INPUT_CAPABILITY.maxPendingFrames
-    )
   }
 }

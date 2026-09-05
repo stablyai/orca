@@ -105,6 +105,7 @@ export function connectMobileRelayRpcSession(args: {
     getTerminalStreamInputFailure: (terminal) => streams.getTerminalStreamInputFailure(terminal),
     recoverTerminalStreamInput: (terminal) => streams.recoverTerminalStreamInput(terminal),
     cancelTerminalStreamInput: (terminal) => streams.cancelTerminalStreamInput(terminal),
+    fenceTerminalStreamInput: () => streams.fenceTerminalStreamInput(),
     sendTerminalStreamInput: (terminal, text) => streams.sendTerminalStreamInput(terminal, text),
     async sendRequest(method, params, options) {
       assertTerminalInputRequestAllowed(method, params, streams.getTerminalStreamInputFailure)

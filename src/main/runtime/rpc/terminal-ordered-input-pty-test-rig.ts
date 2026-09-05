@@ -158,6 +158,8 @@ export async function createOrderedInputPtyTestRig(expected: Buffer) {
     registerSubscriptionCleanup: vi.fn(registry.registerSubscriptionCleanup),
     registerOwnedSubscriptionCleanup: vi.fn(registry.registerOwnedSubscriptionCleanup),
     cleanupSubscription: vi.fn(registry.cleanupSubscription),
+    cleanupSubscriptionIfOwnedByConnection: vi.fn(registry.cleanupSubscriptionIfOwnedByConnection),
+    cleanupSubscriptionsForConnection: vi.fn(registry.cleanupSubscriptionsForConnection),
     sendTerminal: async (handle, action, options) => {
       await writer.writeAction('pty-1', action, action.text ?? '', options)
       return { accepted: true, bytesWritten: Buffer.byteLength(action.text ?? ''), handle }

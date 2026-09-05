@@ -1,5 +1,10 @@
 import type { RpcClient } from './rpc-client'
 import type { TerminalStreamInputFailure } from './terminal-stream-input-failure'
+import {
+  TERMINAL_INPUT_HISTORY_LIMIT,
+  TERMINAL_INPUT_HISTORY_FAILURE,
+  grantTerminalInputPermit
+} from './terminal-stream-input-failure'
 
 type InputAttempt = {
   generation: number
@@ -14,32 +19,73 @@ const interrupted: TerminalStreamInputFailure = {
 
 export class LogicalTerminalStreamInput {
   private readonly attempts = new Map<string, InputAttempt>()
+  private overflow = false
+  private overflowGeneration: number | null = null
+  private readonly permits = new Set<string>()
   constructor(private readonly context: () => InputContext) {}
 
   supports = (terminal: string): boolean => {
     const { session } = this.context()
-    return this.attempts.has(terminal) || (session.supportsTerminalStreamInput?.(terminal) ?? false)
+    return (
+      this.overflow ||
+      this.attempts.has(terminal) ||
+      (session.supportsTerminalStreamInput?.(terminal) ?? false)
+    )
+  }
+
+  fence = (): void => {
+    this.overflow = true
+    this.permits.clear()
+    for (const attempt of this.attempts.values()) {
+      attempt.failure ??= TERMINAL_INPUT_HISTORY_FAILURE
+    }
+    this.attempts.clear()
+    this.overflowGeneration = null
+    this.syncOverflow()
+  }
+
+  private syncOverflow(): void {
+    const current = this.context()
+    if (this.overflow && this.overflowGeneration !== current.generation) {
+      this.overflowGeneration = current.generation
+      this.permits.clear()
+      current.session.fenceTerminalStreamInput?.()
+    }
   }
 
   failure = (terminal: string): TerminalStreamInputFailure | null => {
+    this.syncOverflow()
     const current = this.context()
     const attempt = this.attempts.get(terminal)
     if (attempt && (!current.available || attempt.generation !== current.generation)) {
       attempt.failure ??= interrupted
     }
-    return attempt?.failure ?? current.session.getTerminalStreamInputFailure?.(terminal) ?? null
+    return (
+      attempt?.failure ??
+      current.session.getTerminalStreamInputFailure?.(terminal) ??
+      (this.overflow && !this.permits.has(terminal) ? TERMINAL_INPUT_HISTORY_FAILURE : null)
+    )
   }
 
   recover = (terminal: string): boolean => {
+    this.syncOverflow()
     const current = this.context()
-    if (!current.available || !current.session.recoverTerminalStreamInput?.(terminal)) {
+    if (
+      !current.available ||
+      (this.overflow && !current.session.fenceTerminalStreamInput) ||
+      !current.session.recoverTerminalStreamInput?.(terminal)
+    ) {
       return false
     }
     this.attempts.delete(terminal)
+    if (this.overflow) {
+      grantTerminalInputPermit(this.permits, terminal)
+    }
     return true
   }
 
   cancel = (terminal: string): void => {
+    this.permits.delete(terminal)
     const attempt = this.attempts.get(terminal)
     if (attempt?.pending) {
       attempt.failure ??= { outcome: 'unknown', reason: 'cancelled' }
@@ -53,6 +99,10 @@ export class LogicalTerminalStreamInput {
       return Promise.resolve(false)
     }
     const previous = this.attempts.get(terminal)
+    if (!previous && this.attempts.size >= TERMINAL_INPUT_HISTORY_LIMIT) {
+      this.fence()
+      return Promise.resolve(false)
+    }
     const result = context.session.sendTerminalStreamInput?.(terminal, text) ?? null
     if (!result) {
       return previous ? Promise.resolve(false) : null
@@ -77,8 +127,13 @@ export class LogicalTerminalStreamInput {
           ? (current.session.getTerminalStreamInputFailure?.(terminal) ?? interrupted)
           : interrupted
     }
-    if (this.attempts.get(terminal) === attempt && attempt.pending === 0 && !attempt.failure) {
-      this.attempts.delete(terminal)
+    if (this.attempts.get(terminal) === attempt) {
+      if (attempt.failure) {
+        this.permits.delete(terminal)
+      }
+      if (attempt.pending === 0 && (!attempt.failure || this.overflow)) {
+        this.attempts.delete(terminal)
+      }
     }
     return valid
   }

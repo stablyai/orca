@@ -28,6 +28,7 @@ export type RpcClient = {
   ) => import('./terminal-stream-input-failure').TerminalStreamInputFailure | null
   recoverTerminalStreamInput?: (terminal: string) => boolean
   cancelTerminalStreamInput?: (terminal: string) => void
+  fenceTerminalStreamInput?: () => void
   /** null means no negotiated stream; a returned promise must never be retried over RPC. */
   sendTerminalStreamInput?: (terminal: string, text: string) => Promise<boolean> | null
   sendRequest: (

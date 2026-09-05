@@ -152,6 +152,7 @@ export class DirectRpcClient implements RpcClient {
   recoverTerminalStreamInput = (terminal: string) =>
     this.streams.recoverTerminalStreamInput(terminal)
   cancelTerminalStreamInput = (terminal: string) => this.streams.cancelTerminalStreamInput(terminal)
+  fenceTerminalStreamInput = () => this.streams.fenceTerminalStreamInput()
 
   subscribe(
     method: string,
@@ -292,9 +293,8 @@ export class DirectRpcClient implements RpcClient {
     this.requests.rejectAll(reason)
   }
 
-  private sendEncrypted(request: unknown): boolean {
-    return sendSessionEncrypted(this.socketSession, request, this.getState())
-  }
+  private sendEncrypted = (request: unknown): boolean =>
+    sendSessionEncrypted(this.socketSession, request, this.getState())
 
   private sendLivenessProbe(identity: object): boolean {
     if (identity !== this.livenessSession || this.getState() !== 'connected') {

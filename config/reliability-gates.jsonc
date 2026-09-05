@@ -32,12 +32,15 @@
       "oracle": "Compare all 25,007 observed PTY stdin bytes against a 25,000-byte Unicode paste followed by Z, Tab, Up, Backspace and Return. Separately inspect write calls under lease/generation replacement, abort saturation, queue overload and independent-terminal progress.",
       "commands": [
         "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/runtime-terminal-writer-pty.integration.test.ts",
-        "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/runtime-terminal-writer.test.ts src/shared/runtime-rpc-call-queue.test.ts src/main/runtime/runtime-terminal-writer-pty.integration.test.ts"
+        "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/runtime-terminal-writer.test.ts src/shared/runtime-rpc-call-queue.test.ts src/main/runtime/runtime-terminal-writer-pty.integration.test.ts",
+        "pnpm exec vitest run --config mobile/vitest.config.ts mobile/src/transport/terminal-ordered-input-history.test.ts mobile/src/transport/logical-terminal-stream-input-history.test.ts"
       ],
       "testFiles": [
         "src/main/runtime/runtime-terminal-writer.test.ts",
         "src/shared/runtime-rpc-call-queue.test.ts",
-        "src/main/runtime/runtime-terminal-writer-pty.integration.test.ts"
+        "src/main/runtime/runtime-terminal-writer-pty.integration.test.ts",
+        "mobile/src/transport/terminal-ordered-input-history.test.ts",
+        "mobile/src/transport/logical-terminal-stream-input-history.test.ts"
       ],
       "assertionRefs": [
         {
@@ -52,6 +55,18 @@
             "rejects queued writes from an old PTY generation while the replacement proceeds",
             "reclaims 1023 aborted queued writes before the blocked head finishes",
             "bounds retained text before admitting another paste"
+          ]
+        },
+        {
+          "file": "mobile/src/transport/terminal-ordered-input-history.test.ts",
+          "assertions": [
+            "bounds 2048 failed identities without retaining timers, pending payloads, or unsafe fallback"
+          ]
+        },
+        {
+          "file": "mobile/src/transport/logical-terminal-stream-input-history.test.ts",
+          "assertions": [
+            "rejects stale candidates, old clients, and late completions across a fence and recovery"
           ]
         }
       ],

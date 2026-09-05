@@ -80,6 +80,7 @@ export function createStableLogicalRpcClient(
     getTerminalStreamInputFailure: terminalInput.failure,
     recoverTerminalStreamInput: terminalInput.recover,
     cancelTerminalStreamInput: terminalInput.cancel,
+    fenceTerminalStreamInput: terminalInput.fence,
     async sendRequest(method, params, options) {
       assertTerminalInputRequestAllowed(method, params, terminalInput.failure)
       if (closed) {
