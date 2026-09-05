@@ -1,21 +1,10 @@
 import type { FleetAgentStatusEvidence } from '../../../shared/orchestration-fleet-agent-status-evidence'
 import { projectOrchestrationFleetAttention } from '../../../shared/orchestration-fleet-attention'
+import { resolveFleetWorkerOutcome } from '../../../shared/orchestration-fleet-outcome-resolution'
 import { projectLiveness } from '../../../shared/orchestration-fleet-worker-projection'
 import type { OrchestrationDb } from './db'
 import type { WorkerAttentionFacts } from './db/worker-terminal/worker-terminal-attention-query'
 import type { DispatchContextRow, TaskRow } from './types'
-
-function resolvedOutcome(facts: WorkerAttentionFacts): WorkerAttentionFacts['outcome'] {
-  if (facts.outcome !== 'outcome_unknown') {
-    return facts.outcome
-  }
-  if (facts.workerState === 'succeeded' || facts.workerState === 'failed') {
-    return facts.workerState
-  }
-  return facts.dispatchStatus === 'pending' || facts.dispatchStatus === 'dispatched'
-    ? 'in_progress'
-    : facts.outcome
-}
 
 export function buildWorkerAttentionContext(args: {
   db: OrchestrationDb
@@ -42,7 +31,11 @@ export function projectWorkerAttentionContext(args: {
 }) {
   return projectOrchestrationFleetAttention({
     isRoot: args.isRoot,
-    outcome: resolvedOutcome(args.facts),
+    outcome: resolveFleetWorkerOutcome({
+      attemptOutcome: args.facts.outcome,
+      workerState: args.facts.workerState,
+      dispatchStatus: args.facts.dispatchStatus
+    }),
     pendingInput: args.facts.pendingInput,
     pendingGuidance: args.facts.pendingGuidance,
     pendingApproval: args.facts.pendingApproval,
@@ -53,6 +46,7 @@ export function projectWorkerAttentionContext(args: {
       {
         workerState: args.facts.workerState,
         workerStage: args.facts.workerStage,
+        dispatchStatus: args.facts.dispatchStatus,
         terminationReason: args.facts.terminationReason,
         resource:
           args.facts.hostScope === undefined

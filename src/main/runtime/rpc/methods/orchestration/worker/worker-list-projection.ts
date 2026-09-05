@@ -3,6 +3,7 @@ import {
   projectOrchestrationFleet,
   type FleetDurableWorker
 } from '../../../../../../shared/orchestration-fleet-projection'
+import { resolveFleetWorkerOutcome } from '../../../../../../shared/orchestration-fleet-outcome-resolution'
 import type { WorkerTerminalListState } from '../../../../orchestration/worker-terminal-ownership'
 import type { OrchestrationDb } from '../../../../orchestration/db'
 
@@ -22,19 +23,13 @@ export function projectWorkerFleet(args: {
   completeProjection?: boolean
 }) {
   const workers: FleetDurableWorker[] = args.rows.map((row) => {
-    const outcome = args.attentionFacts.get(row.dispatchId)?.outcome ?? 'outcome_unknown'
     return {
       ...row,
-      outcome:
-        outcome === 'outcome_unknown'
-          ? row.workerState === 'succeeded'
-            ? 'succeeded'
-            : row.workerState === 'failed'
-              ? 'failed'
-              : row.dispatchStatus === 'pending' || row.dispatchStatus === 'dispatched'
-                ? 'in_progress'
-                : outcome
-          : outcome,
+      outcome: resolveFleetWorkerOutcome({
+        attemptOutcome: args.attentionFacts.get(row.dispatchId)?.outcome ?? 'outcome_unknown',
+        workerState: row.workerState,
+        dispatchStatus: row.dispatchStatus
+      }),
       resource: row.resource
         ? {
             id: row.resource.id,

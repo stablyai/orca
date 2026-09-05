@@ -1,6 +1,10 @@
 import { AGENT_STATUS_STALE_AFTER_MS } from './agent-status-types'
 import type { FleetAgentStatusEvidence } from './orchestration-fleet-agent-status-evidence'
 import { projectOrchestrationFleetAttention } from './orchestration-fleet-attention'
+import {
+  isUnsupervisedSettledDispatch,
+  resolveFleetWorkerOutcome
+} from './orchestration-fleet-outcome-resolution'
 import { readWorkerTerminalHostScope } from './worker-terminal-host-scope'
 import type {
   FleetDurableWorker,
@@ -16,6 +20,7 @@ const FLEET_STATUS_FUTURE_TOLERANCE_MS = 5_000
 type FleetLivenessSubject = {
   workerStage?: string | null
   workerState?: string | null
+  dispatchStatus?: string | null
   terminationReason?: FleetDurableWorker['terminationReason']
   resource: { releaseState?: string | null; hostScope: string | null } | null
 }
@@ -57,6 +62,11 @@ export function projectLiveness(
   // `missing_status` and report a proven-dead worker as absence in the same receipt.
   if (hasCertifiedExit(worker)) {
     return { verdict: 'exited', source: 'execution_host' }
+  }
+  // A settled Dispatch with no worker row never had a supervised process, so there is no
+  // absence to report. Not `exited`: nothing ever certified an exit, and absence is not proof.
+  if (!evidence && isUnsupervisedSettledDispatch(worker)) {
+    return { verdict: 'unverifiable', reason: 'unsupervised_settled' }
   }
   if (!evidence) {
     return { verdict: 'unverifiable', reason: 'missing_status' }
@@ -122,9 +132,12 @@ export function projectFleetNextAction(
       argv: ['orchestration', 'worker-release', '--dispatch', worker.dispatchId]
     }
   }
+  // A completed Dispatch with no worker row and no resource kept a stale pre-v3 terminal handle:
+  // there is no worker to show and nothing to release, so `inspect` was a self-loop on this row.
   if (
     worker.terminalState === 'released' ||
-    (worker.dispatchStatus === 'completed' && !worker.agentTerminalHandle)
+    (worker.dispatchStatus === 'completed' &&
+      (!worker.agentTerminalHandle || (isUnsupervisedSettledDispatch(worker) && !worker.resource)))
   ) {
     return { kind: 'none', argv: [] }
   }
@@ -202,13 +215,11 @@ export function projectOrchestrationFleetWorker(
   const activity = evidence?.activity
   const workspaceId =
     activity?.worktreeId ?? worker.worktreeId ?? worker.resource?.worktreeId ?? null
-  const outcome =
-    worker.outcome ??
-    (worker.workerState === 'succeeded'
-      ? 'succeeded'
-      : worker.workerState === 'failed' || worker.dispatchStatus === 'failed'
-        ? 'failed'
-        : 'in_progress')
+  const outcome = resolveFleetWorkerOutcome({
+    attemptOutcome: worker.outcome,
+    workerState: worker.workerState,
+    dispatchStatus: worker.dispatchStatus
+  })
   return {
     id: worker.dispatchId,
     dispatchId: worker.dispatchId,
