@@ -6,6 +6,7 @@ import { generateId } from '../generated-id'
 import type { OrchestrationDb } from '../orchestration-db'
 import { insertStartingDispatchContextRow } from '../dispatch-row-writer'
 import type { DispatchCreator } from '../dispatch-depth'
+import { taskNotFoundError, taskNotReadyError } from '../../task-dispatch-refusal'
 
 export function createStartingWorkerDispatch(
   this: OrchestrationDb,
@@ -60,7 +61,7 @@ export function createStartingWorkerDispatch(
     }
     const task = this.getTask(params.taskId)
     if (!task) {
-      throw new OrchestrationError('task_not_found', `Task ${params.taskId} was not found.`)
+      throw taskNotFoundError(params.taskId)
     }
     if (params.retryOf) {
       const prior = this.getDispatchContextById(params.retryOf)
@@ -80,10 +81,7 @@ export function createStartingWorkerDispatch(
         )
       }
     } else if (task.status !== 'ready') {
-      throw new OrchestrationError(
-        'task_not_startable',
-        `Task ${task.id} is ${task.status}; only a ready Task can start.`
-      )
+      throw taskNotReadyError(this, task)
     }
 
     const id = generateId('ctx')

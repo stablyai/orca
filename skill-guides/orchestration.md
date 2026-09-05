@@ -180,6 +180,15 @@ Dispatch rules:
 - After 3 consecutive failures on one task, the dispatch context circuit-breaks and the task is marked failed.
 - Use `task-list --brief --json` for coordinator sweeps; it collapses whitespace and caps each echoed spec at 160 characters (`spec_truncated` marks shortened rows). Omit `--brief` when the full spec is required, or when an older CLI rejects it as an unknown flag.
 
+Dispatch and `worker-start` refuse with a stable `error.code`; read it before choosing a recovery, and treat `error.data.nextSteps` as the exact recovery text:
+
+| Code              | Meaning                                                            | Recovery                                                                                                    |
+| ----------------- | ------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------- |
+| `task_not_found`  | No Task with that id in the bound Run (`data.taskId`)              | Check `task-list --json`; create the Task with `task-create` if it does not exist                           |
+| `task_not_ready`  | Task is not `ready` (`data.status`, `data.unmetDependencies`)      | Wait for the listed dependencies with `check --wait`, or inspect `dispatch-show` if already dispatched      |
+| `inject_rejected` | Target terminal refused injection (`data.terminal`, `data.reason`) | Start a recognized agent there or pick another terminal; or dispatch without `--inject` and `terminal send` |
+| `runtime_error`   | Unexpected failure; nothing about the Task or terminal is implied  | Read the message, inspect state, and do not retry unchanged                                                 |
+
 ## How deep workers can nest
 
 A dispatched worker normally cannot dispatch sub-workers. Attempting it fails with

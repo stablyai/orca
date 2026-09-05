@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
-import { buildInjectRejectionMessage } from './orchestration-inject-rejection-message'
-import { TUI_AGENT_CONFIG } from '../../../../shared/tui-agent-config'
-import { recognizeAgentProcess } from '../../../../shared/agent-process-recognition'
+import { buildInjectRejectionMessage } from './task-dispatch-refusal'
+import { TUI_AGENT_CONFIG } from '../../../shared/tui-agent-config'
+import { recognizeAgentProcess } from '../../../shared/agent-process-recognition'
 
 describe('buildInjectRejectionMessage', () => {
   const message = buildInjectRejectionMessage('term_a')
