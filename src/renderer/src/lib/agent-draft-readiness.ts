@@ -1,4 +1,4 @@
-import type { DraftPasteReadySignal } from '../../../shared/tui-agent-config'
+import type { DraftPasteReadySignal } from '../../../shared/tui-agent-config-types'
 import type { GlobalSettings } from '../../../shared/global-settings-types'
 import { subscribeToPtyData } from '@/components/terminal-pane/pty-data-sidecar-subscriptions'
 import { replayPreHandlerPtyData } from '@/components/terminal-pane/pty-pre-handler-buffer'

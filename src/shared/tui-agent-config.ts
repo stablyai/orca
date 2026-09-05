@@ -1,56 +1,6 @@
 import type { TuiAgent } from './tui-agent'
+import type { TuiAgentConfig } from './tui-agent-config-types'
 import { getOrcaCliCommandNameForPlatform } from './orca-cli-command-name'
-
-export type AgentPromptInjectionMode =
-  | 'argv'
-  | 'flag-prompt'
-  | 'flag-prompt-interactive'
-  | 'flag-interactive'
-  | 'hermes-query'
-  | 'stdin-after-start'
-
-export type DraftPasteReadySignal =
-  | 'render-quiet-after-bracketed-paste'
-  | 'codex-composer-prompt'
-  | 'render-cursor-after-bracketed-paste'
-  | 'grok-composer-prompt'
-
-export type TuiAgentDetectionRuntime = NodeJS.Platform | 'wsl'
-
-export type TuiAgentConfig = {
-  detectCmd: string
-  /** Additional executable names that identify the same agent on PATH. */
-  detectCmdAliases?: readonly string[]
-  /** Other commands that must also be present before this agent counts as installed. */
-  detectRequiredCommands?: readonly string[]
-  /** Detection runtimes where this launch mode is not available as a detected agent. */
-  detectUnsupportedRuntimes?: readonly TuiAgentDetectionRuntime[]
-  launchCmd: string
-  /** Platform-specific launch command when the public binary name differs. */
-  launchCmdByPlatform?: Partial<Record<NodeJS.Platform, string>>
-  expectedProcess: string
-  promptInjectionMode: AgentPromptInjectionMode
-  /** Option terminator required before positional prompts that may look like CLI syntax. */
-  argvPromptSeparator?: '--'
-  /** Native CLI flag that seeds the input without submitting (e.g. Claude's `--prefill <text>`); preferred over the paste-after-ready path. */
-  draftPromptFlag?: string
-  /** Startup env var that seeds the input without submitting, for agents with no `--prefill`-style flag (e.g. pi); avoids the paste-after-ready race. */
-  draftPromptEnvVar?: string
-  /** Pre-write a trust artifact so the agent's first-launch "trust this folder?" menu doesn't consume the bracketed paste (see agent-trust-presets.ts). */
-  preflightTrust?: 'cursor' | 'copilot' | 'codex'
-  /** Agent-specific signal that the composer is ready for paste, stronger than the default quiet-render window. */
-  draftPasteReadySignal?: DraftPasteReadySignal
-  /** Hard deadline for the agent's composer readiness signal. */
-  draftPasteReadyTimeoutMs?: number
-  /** Delay before one extra blind submit Enter, for agents that render their composer before Enter is live (codex); a no-op if the first Enter landed. */
-  submitRetryDelayMs?: number
-  /** Windows Shift+Enter encoding override; omitted agents keep the legacy Esc+CR path. */
-  windowsShiftEnterEncoding?: 'csi-u'
-  /** Paste newlines for TUIs that read Windows console input records instead of VT paste frames. */
-  windowsInputRecordPasteNewline?: 'alt-enter' | 'csi-u'
-  /** Ctrl+Enter encoding for agents that consume CSI-u without active kitty flags. */
-  ctrlEnterEncoding?: 'csi-u'
-}
 
 /** Authoring form: `launchCmd` and `expectedProcess` default to `detectCmd` (true for most agents). */
 type TuiAgentConfigSource = Omit<TuiAgentConfig, 'launchCmd' | 'expectedProcess'> & {
@@ -268,6 +218,25 @@ const TUI_AGENT_CONFIG_SOURCE: Record<TuiAgent, TuiAgentConfigSource> = {
     promptInjectionMode: 'flag-interactive',
     // Why: first-launch trust menu swallows the bracketed paste; pre-write trust so it skips (see agent-trust-presets.ts).
     preflightTrust: 'copilot'
+  },
+  bob: {
+    detectCmd: 'bob',
+    // Why: Bob Shell 2.x puts the TUI behind `chat` (bare `bob` only opens it on a TTY,
+    // and `--auto-approve` is a `chat` option). `--trust` skips the first-launch trust
+    // menu that would otherwise consume the injected prompt paste.
+    launchCmd: 'bob chat --trust',
+    // Why: MordechaiHadad/bob is a Neovim version manager that also installs as `bob`,
+    // and any stray script can hold the name too. Neovim in the help text excludes the
+    // hit; otherwise Bob Shell's own banner/IBM license line must be present. A failed
+    // probe keeps the agent so a real install is never hidden.
+    detectIdentityExclusion: {
+      args: ['--help'],
+      excludePattern: /\bneo\s?vim\b|\bnvim\b/i,
+      requirePattern: /Bob in your terminal|\bIBM\b|\bbob ?shell\b/i
+    },
+    // Why: Bob Shell 2.x has no interactive initial-prompt flag (`-p`/`run` are
+    // headless and need BOB_API_KEY), so inject after the chat UI is up.
+    promptInjectionMode: 'stdin-after-start'
   },
   grok: {
     detectCmd: 'grok',
