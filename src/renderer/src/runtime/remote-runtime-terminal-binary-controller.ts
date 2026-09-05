@@ -95,11 +95,6 @@ export abstract class RemoteRuntimeTerminalBinaryController extends RemoteRuntim
         frame.opcode === TerminalStreamOpcode.OutputSpan && typeof span?.rawLength === 'number'
           ? span.rawLength
           : data.length
-      // Why: a resync snapshot is authoritative; discard live output while
-      // it is in flight, but still return transport credit in finally.
-      if (stream.resyncInFlight) {
-        return
-      }
       const seq = typeof frame.seq === 'number' && frame.seq > 0 ? frame.seq : undefined
       // Why: older servers replay snapshot-covered buffered chunks after a
       // requested recovery; rendering them would duplicate the recovered tail.
@@ -110,11 +105,18 @@ export abstract class RemoteRuntimeTerminalBinaryController extends RemoteRuntim
       ) {
         return
       }
-      if (this.detectOutputGap(stream, seq, rawLength)) {
+      const resyncInFlight = stream.resyncInFlight
+      // Why: recovery is corrective, not a renderer backpressure gate. Keep
+      // painting live output while the authoritative snapshot travels over a
+      // jittery link; leave expectedSeq anchored so a failed/expired recovery
+      // still exposes the gap and retries on a later frame. Discard the frame
+      // that exposes the gap because it follows missing bytes and cannot be
+      // parsed safely against the prior terminal state.
+      if (!resyncInFlight && this.detectOutputGap(stream, seq, rawLength)) {
         this.requestResyncSnapshot(stream)
         return
       }
-      if (typeof seq === 'number') {
+      if (typeof seq === 'number' && !resyncInFlight) {
         stream.expectedSeq = seq
         stream.commandProbeBaselineSeq = undefined
       }
