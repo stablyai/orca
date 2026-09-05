@@ -232,6 +232,15 @@ export function parseCursorModels(stdout: string): CommitMessageModel[] {
   return uniqueModels(models)
 }
 
+/**
+ * Parses stdout output from `agy models`.
+ *
+ * Handles optional status headers (such as "Fetching available models..."), skips
+ * blank lines, and parses tab-separated `<slug>\t<Display Name>` or single-token lines.
+ *
+ * @param stdout - Output from the `agy models` CLI command.
+ * @returns Deduplicated list of models available for Antigravity.
+ */
 export function parseAntigravityModels(stdout: string): CommitMessageModel[] {
   const models: CommitMessageModel[] = []
   for (const rawLine of iterateModelOutputLines(stdout)) {

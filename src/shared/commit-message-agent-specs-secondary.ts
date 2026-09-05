@@ -12,6 +12,12 @@ type SecondaryAgentSpecDeps = {
   parseAntigravityModels: (stdout: string) => CommitMessageModel[]
 }
 
+/**
+ * Builds specs for secondary commit-message generation agents.
+ *
+ * @param deps - Shared thinking levels and parser functions.
+ * @returns Map of secondary agent IDs to their commit-message specifications.
+ */
 export function buildSecondaryCommitMessageAgentSpecs({
   BASIC_THINKING_LEVELS,
   OPENAI_THINKING_LEVELS,
@@ -212,9 +218,12 @@ export function buildSecondaryCommitMessageAgentSpecs({
       id: 'antigravity',
       label: 'Antigravity',
       binary: 'agy',
-      // Why: agy expects prompt delivery via `--print <prompt>` on argv. Passing
-      // `--print` followed by other flags without a prompt argument causes agy to
-      // parse the next flag (e.g. `--sandbox`) as the prompt value.
+      // Why: agy expects prompt delivery via `--print <prompt>` on argv. In text
+      // print mode, `--print` strictly requires an argument in the CLI flag parser
+      // and does not accept prompts via stdin (stdin is supported only for NDJSON
+      // streaming with `--input-format stream-json`). Passing `--print` without an
+      // argument caused agy to consume the subsequent `--sandbox` flag as its prompt
+      // and exit code 2. Prompt delivery on argv mirrors Cursor, Kimi, and Copilot.
       promptDelivery: 'argv',
       buildArgs: ({ prompt, model }) => [
         '--print',
