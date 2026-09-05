@@ -1,5 +1,4 @@
-import { execFile as execFileCb } from 'node:child_process'
-import { promisify } from 'node:util'
+import { runProcess } from './child-process/run-process'
 import {
   CHEAP_PS_ARGS,
   PS_MAX_BUFFER_BYTES,
@@ -13,8 +12,6 @@ import {
   withEvidenceBudget
 } from './process-table-snapshot-reader'
 
-const execFile = promisify(execFileCb)
-
 /**
  * The cheap-tier sibling of the strict evidence reader: same coalescing and TTL, a
  * column set without `tty=`/`command=`. Separate instance because the two column sets
@@ -22,23 +19,23 @@ const execFile = promisify(execFileCb)
  */
 const cheapProcessTableReader = createProcessTableSnapshotReader<CheapProcessTableRow[]>({
   runPs: async () => {
-    let stdout: string
-    try {
-      ;({ stdout } = await execFile('ps', [...CHEAP_PS_ARGS], {
-        encoding: 'utf-8',
-        timeout: PS_TIMEOUT_MS,
-        maxBuffer: PS_MAX_BUFFER_BYTES
-      }))
-    } catch (error) {
-      if ((error as { code?: unknown } | null)?.code === 'ERR_CHILD_PROCESS_STDIO_MAXBUFFER') {
-        throw new ProcessTableCaptureError('capture_truncated')
-      }
-      throw error
-    }
-    if (Buffer.byteLength(stdout, 'utf-8') >= PS_MAX_BUFFER_BYTES) {
+    const result = await runProcess({
+      program: 'ps',
+      args: CHEAP_PS_ARGS,
+      timeoutMs: PS_TIMEOUT_MS,
+      maxOutputBytes: PS_MAX_BUFFER_BYTES
+    })
+    // A ceiling hit is truncation, not absence: name it in the domain vocabulary.
+    if (result.outputTruncated) {
       throw new ProcessTableCaptureError('capture_truncated')
     }
-    return parseCheapProcessTableRows(stdout)
+    if (result.timedOut) {
+      throw new ProcessTableCaptureError('capture_timeout')
+    }
+    if (result.code !== 0) {
+      throw new ProcessTableCaptureError(`ps_exit_${result.code ?? result.signal ?? 'unknown'}`)
+    }
+    return parseCheapProcessTableRows(result.stdout)
   },
   now: () => Date.now()
 })

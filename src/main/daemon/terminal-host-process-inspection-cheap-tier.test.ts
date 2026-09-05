@@ -1,7 +1,13 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-const { execFileMock } = vi.hoisted(() => ({ execFileMock: vi.fn() }))
+// Two seams because the two tiers spawn differently: the full evidence reader still forks
+// through node:child_process, the cheap reader through Orca's runProcess entry point.
+const { execFileMock, runProcessMock } = vi.hoisted(() => ({
+  execFileMock: vi.fn(),
+  runProcessMock: vi.fn()
+}))
 vi.mock('node:child_process', () => ({ execFile: execFileMock }))
+vi.mock('../../shared/child-process/run-process', () => ({ runProcess: runProcessMock }))
 
 import { resetCheapProcessTableSnapshotForTests } from '../../shared/cheap-process-table-snapshot-reader'
 import { resetProcessTableSnapshotForTests } from '../../shared/process-table-snapshot-reader'
@@ -60,14 +66,23 @@ let table: Table = { agent: 'claude' }
 
 function installPs(): void {
   execFileMock.mockImplementation((_cmd: string, args: string[], _opts: unknown, cb: unknown) => {
-    const columns = args[1] ?? ''
-    const rendered = renderTable(table)
-    const isFull = columns.includes('command=')
-    forks[isFull ? 'full' : 'cheap'] += 1
+    expect(args[1]).toContain('command=')
+    forks.full += 1
     ;(cb as (err: unknown, r: { stdout: string; stderr: string }) => void)(null, {
-      stdout: isFull ? rendered.full : rendered.cheap,
+      stdout: renderTable(table).full,
       stderr: ''
     })
+  })
+  runProcessMock.mockImplementation(async (spec: { args: readonly string[] }) => {
+    expect(spec.args[1]).not.toContain('command=')
+    forks.cheap += 1
+    return {
+      code: 0,
+      signal: null,
+      stdout: renderTable(table).cheap,
+      stderr: '',
+      timedOut: false
+    }
   })
 }
 
@@ -137,6 +152,7 @@ describe('daemon cheap-tier process inspection', () => {
 
   beforeEach(() => {
     execFileMock.mockReset()
+    runProcessMock.mockReset()
     resetProcessTableSnapshotForTests()
     resetCheapProcessTableSnapshotForTests()
     forks.full = 0
@@ -248,9 +264,7 @@ describe('daemon cheap-tier process inspection', () => {
   it('falls through to the full capture when the cheap fork fails, and after an incarnation mismatch', async () => {
     const session = await anchoredSession()
     await advance(2_000)
-    execFileMock.mockImplementationOnce((_c: string, _a: string[], _o: unknown, cb: unknown) => {
-      ;(cb as (err: unknown) => void)(new Error('ps died'))
-    })
+    runProcessMock.mockRejectedValueOnce(new Error('ps died'))
     expect((await inspect(session, { steadyState: true })).tier).toBe('full')
     await advance(2_000)
     const mismatched = await inspect(session, { steadyState: true, expectedIncarnationId: 'other' })

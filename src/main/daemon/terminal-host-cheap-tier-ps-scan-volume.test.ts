@@ -10,8 +10,14 @@
 // and a restart, produces the identical foregroundProcess series with the cheap tier on and off.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-const { execFileMock } = vi.hoisted(() => ({ execFileMock: vi.fn() }))
+// Two seams because the two tiers spawn differently: the full evidence reader still forks
+// through node:child_process, the cheap reader through Orca's runProcess entry point.
+const { execFileMock, runProcessMock } = vi.hoisted(() => ({
+  execFileMock: vi.fn(),
+  runProcessMock: vi.fn()
+}))
 vi.mock('node:child_process', () => ({ execFile: execFileMock }))
+vi.mock('../../shared/child-process/run-process', () => ({ runProcess: runProcessMock }))
 
 import { resetCheapProcessTableSnapshotForTests } from '../../shared/cheap-process-table-snapshot-reader'
 import { resetProcessTableSnapshotForTests } from '../../shared/process-table-snapshot-reader'
@@ -55,13 +61,17 @@ function renderRows(): { full: string; cheap: string } {
 
 function installCountingPs(): void {
   execFileMock.mockImplementation((_cmd: string, args: string[], _opts: unknown, cb: unknown) => {
-    const isFull = (args[1] ?? '').includes('command=')
-    forks[isFull ? 'full' : 'cheap'] += 1
-    const rendered = renderRows()
+    expect(args[1]).toContain('command=')
+    forks.full += 1
     ;(cb as (err: unknown, r: { stdout: string; stderr: string }) => void)(null, {
-      stdout: isFull ? rendered.full : rendered.cheap,
+      stdout: renderRows().full,
       stderr: ''
     })
+  })
+  runProcessMock.mockImplementation(async (spec: { args: readonly string[] }) => {
+    expect(spec.args[1]).not.toContain('command=')
+    forks.cheap += 1
+    return { code: 0, signal: null, stdout: renderRows().cheap, stderr: '', timedOut: false }
   })
 }
 
@@ -114,6 +124,7 @@ describe('cheap-tier ps scan volume at 8 idle agent panes over 60s', () => {
 
   beforeEach(() => {
     execFileMock.mockReset()
+    runProcessMock.mockReset()
     resetProcessTableSnapshotForTests()
     resetCheapProcessTableSnapshotForTests()
     forks.full = 0

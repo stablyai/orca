@@ -1,13 +1,16 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-const { execFileMock } = vi.hoisted(() => ({ execFileMock: vi.fn() }))
+const { runProcessMock } = vi.hoisted(() => ({ runProcessMock: vi.fn() }))
 
-vi.mock('node:child_process', () => ({ execFile: execFileMock }))
+// The cheap reader goes through Orca's single child-process entry point (windowsHide, argv
+// encoding, tree termination); mock at that seam rather than node:child_process.
+vi.mock('./child-process/run-process', () => ({ runProcess: runProcessMock }))
 
 import {
   getCheapProcessTableSnapshot,
   resetCheapProcessTableSnapshotForTests
 } from './cheap-process-table-snapshot-reader'
+import { PS_TIMEOUT_MS } from './process-table-snapshot-reader'
 import {
   CHEAP_PS_ARGS,
   PS_ARGS,
@@ -16,14 +19,11 @@ import {
   ProcessTableCaptureError
 } from './process-table-snapshot'
 
-function installPs(stdout: string): string[][] {
+function installPs(stdout: string, outputTruncated = false): string[][] {
   const calls: string[][] = []
-  execFileMock.mockImplementation((cmd: string, args: string[], _opts: unknown, cb: unknown) => {
-    calls.push([cmd, ...args])
-    ;(cb as (err: unknown, result: { stdout: string; stderr: string }) => void)(null, {
-      stdout,
-      stderr: ''
-    })
+  runProcessMock.mockImplementation(async (spec: { program: string; args: readonly string[] }) => {
+    calls.push([spec.program, ...spec.args])
+    return { code: 0, signal: null, stdout, stderr: '', timedOut: false, outputTruncated }
   })
   return calls
 }
@@ -82,7 +82,7 @@ describe('parseCheapProcessTableRows', () => {
 
 describe('getCheapProcessTableSnapshot', () => {
   beforeEach(() => {
-    execFileMock.mockReset()
+    runProcessMock.mockReset()
     resetCheapProcessTableSnapshotForTests()
     vi.useFakeTimers({ toFake: ['Date'] })
     vi.setSystemTime(0)
@@ -110,19 +110,38 @@ describe('getCheapProcessTableSnapshot', () => {
     expect(calls).toHaveLength(2)
   })
 
-  it('names a capture at the buffer ceiling as truncated', async () => {
-    execFileMock.mockImplementation((_c: string, _a: string[], _o: unknown, cb: unknown) => {
-      ;(cb as (err: unknown) => void)(
-        Object.assign(new Error('maxBuffer'), { code: 'ERR_CHILD_PROCESS_STDIO_MAXBUFFER' })
-      )
-    })
+  it('passes the full-tier buffer ceiling and timeout to the runner', async () => {
+    installPs(' 7 1 7 7 S\n')
+    await getCheapProcessTableSnapshot()
+    expect(runProcessMock).toHaveBeenCalledWith(
+      expect.objectContaining({ maxOutputBytes: PS_MAX_BUFFER_BYTES, timeoutMs: PS_TIMEOUT_MS })
+    )
+  })
+
+  it('names a clipped capture as truncated, a killed one as a timeout, and a non-zero exit by its code', async () => {
+    installPs(' 7 1 7 7 S\n', true)
     await expect(getCheapProcessTableSnapshot()).rejects.toMatchObject({
       reason: 'capture_truncated'
     })
     resetCheapProcessTableSnapshotForTests()
-    installPs(' 7 1 7 7 S\n'.padEnd(PS_MAX_BUFFER_BYTES, ' '))
-    await expect(getCheapProcessTableSnapshot()).rejects.toMatchObject({
-      reason: 'capture_truncated'
+    runProcessMock.mockResolvedValueOnce({
+      code: null,
+      signal: 'SIGKILL',
+      stdout: '',
+      stderr: '',
+      timedOut: true
     })
+    await expect(getCheapProcessTableSnapshot()).rejects.toMatchObject({
+      reason: 'capture_timeout'
+    })
+    resetCheapProcessTableSnapshotForTests()
+    runProcessMock.mockResolvedValueOnce({
+      code: 1,
+      signal: null,
+      stdout: '',
+      stderr: 'ps: bad column',
+      timedOut: false
+    })
+    await expect(getCheapProcessTableSnapshot()).rejects.toMatchObject({ reason: 'ps_exit_1' })
   })
 })
