@@ -91,7 +91,11 @@ jobs:
           test -n "${CAPACITY_SERVICE_ACCOUNT}"
           test -n "${DIRECTOR_RUNTIME_SERVICE_ACCOUNT}"
 
+      # Full history: the monitor evidence this job verifies is sealed at an ancestor commit,
+      # and the provenance check fails closed on a commit a shallow clone left out.
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - uses: pnpm/action-setup@v4
         with: { package_json_file: cloud/package.json }
