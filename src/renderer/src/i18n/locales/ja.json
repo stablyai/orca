@@ -9260,6 +9260,26 @@
               "713c4a2f92": "Windows 上の新規ターミナルペインのデフォルトシェルを選択します。",
               "13715f9d23": "デフォルトのシェル"
             }
+          },
+          "history": {
+            "scopeTitle": "ワークスペースごとにシェル履歴を分離",
+            "scopeDescription": "上矢印で呼び出す履歴、逆方向検索、シェルの自動候補をワークスペース間で分離します。変更は新しいターミナルセッションに適用されます。",
+            "search": {
+              "shell": "シェル",
+              "history": "履歴",
+              "workspace": "ワークスペース",
+              "worktree": "ワークツリー",
+              "reverseSearch": "逆方向検索",
+              "autosuggestions": "自動候補",
+              "shared": "共有",
+              "isolated": "分離",
+              "arrowUp": "上矢印",
+              "ctrlR": "Ctrl+R",
+              "histfile": "HISTFILE",
+              "zsh": "zsh",
+              "bash": "bash",
+              "fish": "fish"
+            }
           }
         },
         "voice": {

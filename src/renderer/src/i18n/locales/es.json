@@ -9238,6 +9238,26 @@
               "713c4a2f92": "Elija el shell predeterminado para los nuevos paneles de terminal en Windows.",
               "13715f9d23": "Shell predeterminado"
             }
+          },
+          "history": {
+            "scopeTitle": "Limitar el historial del shell a cada espacio de trabajo",
+            "scopeDescription": "Aísla entre espacios de trabajo las entradas de historial al pulsar Flecha arriba, la búsqueda inversa y las sugerencias automáticas del shell. Los cambios se aplican a las nuevas sesiones de terminal.",
+            "search": {
+              "shell": "shell",
+              "history": "historial",
+              "workspace": "espacio de trabajo",
+              "worktree": "worktree",
+              "reverseSearch": "búsqueda inversa",
+              "autosuggestions": "sugerencias automáticas",
+              "shared": "compartido",
+              "isolated": "aislado",
+              "arrowUp": "Flecha arriba",
+              "ctrlR": "Ctrl+R",
+              "histfile": "HISTFILE",
+              "zsh": "zsh",
+              "bash": "bash",
+              "fish": "fish"
+            }
           }
         },
         "voice": {
