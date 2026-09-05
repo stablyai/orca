@@ -9,7 +9,17 @@ import {
   refreshLocalStructuredSessionTabs,
   restoreLocalStructuredSessionTabsOnce
 } from './inventory-refresh'
-import { applyStructuredSessionTabSnapshots } from './snapshot-apply'
+import { scheduleRetiredEpochRepair } from './retired-epoch-repair'
+import {
+  applyStructuredSessionTabSnapshots,
+  type StructuredSessionSnapshotApplyOptions
+} from './snapshot-apply'
+
+// Wired here, not inside the apply, so the repair lane's dependency on the inventory refresh
+// stays one-directional.
+const REPAIR_DROPPED_EPOCHS: StructuredSessionSnapshotApplyOptions = {
+  onRetiredEpochDrop: scheduleRetiredEpochRepair
+}
 
 type SessionTabsEvent =
   | (RuntimeMobileSessionTabsResult & { type: 'snapshot' | 'updated' })
@@ -84,9 +94,9 @@ export async function startLocalStructuredSessionTabsSync(args: {
         }
         const event = response.result as SessionTabsEvent
         if (event.type === 'snapshots') {
-          applyStructuredSessionTabSnapshots(event.snapshots)
+          applyStructuredSessionTabSnapshots(event.snapshots, undefined, REPAIR_DROPPED_EPOCHS)
         } else if (event.type === 'snapshot' || event.type === 'updated') {
-          applyStructuredSessionTabSnapshots([event])
+          applyStructuredSessionTabSnapshots([event], undefined, REPAIR_DROPPED_EPOCHS)
         } else if (event.type === 'end' && generation === subscriptionGeneration) {
           // Reattach with one refresh so a runtime-restart boundary cannot strand stale tabs.
           subscriptionGeneration += 1
