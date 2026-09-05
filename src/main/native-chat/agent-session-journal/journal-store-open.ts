@@ -7,6 +7,13 @@ import {
 import type { JournalLoad } from './journal-open'
 import { journalRepairDisclosure, type JournalRepairDisclosure } from './journal-repair-disclosure'
 
+/** What any of this file's disclosures hands the store — a repair's, or the
+ *  pre-SQLite notice's. Same shape, and neither is only a repair. */
+type JournalDisclosure = {
+  identity: JournalRepairDisclosure['identity']
+  body: JournalRepairDisclosure['body']
+}
+
 export async function ensureJournalDir(journalDir: string): Promise<void> {
   await mkdir(journalDir, { recursive: true })
 }
@@ -89,8 +96,8 @@ async function discloseFileFormatRemnant(input: {
   journalDir: string
   agent: AgentType
   appendDisclosure: (
-    identity: JournalRepairDisclosure['identity'],
-    body: JournalRepairDisclosure['body'],
+    identity: JournalDisclosure['identity'],
+    body: JournalDisclosure['body'],
     fence: number
   ) => Promise<unknown>
   highestFence: () => number

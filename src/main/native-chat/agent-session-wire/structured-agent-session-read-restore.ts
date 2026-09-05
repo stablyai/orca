@@ -53,9 +53,10 @@ export async function restoreStructuredAgentSessionRead(
   const journal = await openAgentSessionJournal({
     identity: journalIdentityFor(record, params),
     journalDir,
-    // Omitted, not `null`: the store reads `null` as "replay already ran and found
-    // nothing" and founds a fresh epoch, which would discard a database created
-    // between the probe above and this open.
+    // Omitted, not `null`: the store reads `null` as "replay already ran and
+    // found nothing" and founds a fresh epoch. In process the probe above is the
+    // previous statement, so the window is zero-width; this holds the line for a
+    // database another process creates in between.
     ...(loaded ? { loaded } : {})
   })
   // Read restore opens the journal and nothing else: no adapter call, so no

@@ -75,6 +75,27 @@ describe('a chat whose history is still in the pre-SQLite format', () => {
     expect(disclosure(journal)).toContain('Codex')
   })
 
+  // Both files is the normal shape of a pre-SQLite directory: every epoch roll
+  // staged a snapshot whether or not anything compacted into it, so preferring
+  // the snapshot would name an empty file for ~every affected chat.
+  it('names the log, not the snapshot staged beside it', async () => {
+    await writeRemnant('log.jsonl')
+    await writeRemnant('snapshot.json')
+
+    const journal = await open()
+
+    expect(disclosure(journal)).toContain(join(root, 'log.jsonl'))
+    expect(disclosure(journal)).not.toContain('snapshot.json')
+  })
+
+  it('falls back to the snapshot when a chat has no log beside it', async () => {
+    await writeRemnant('snapshot.json')
+
+    const journal = await open()
+
+    expect(disclosure(journal)).toContain(join(root, 'snapshot.json'))
+  })
+
   it('says nothing to a chat that is genuinely new', async () => {
     const journal = await open()
 
