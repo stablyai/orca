@@ -20,6 +20,7 @@
  * rotating braille frame so consecutive frames dedupe while the label survives.
  */
 import { describe, expect, it } from 'vitest'
+import { getAgentLabel } from './agent-detection'
 import { detectAgentStatusFromTitle, normalizeTerminalTitle } from './agent-title-status'
 import { isDecorativeAgentTitleFrameChange } from './agent-decorative-title-signature'
 import {
@@ -85,9 +86,37 @@ describe('detectAgentStatusFromTitle reads the π state separator', () => {
     ['π > fixing the sidebar', 'idle'],
     ['π ⠋ fixing the sidebar', 'working'],
     ['⠋ π - fixing the sidebar - orca', 'working'],
-    ['π: fixing the sidebar', 'idle']
+    ['π: fixing the sidebar', 'idle'],
+    ['π : fixing the sidebar', 'working']
   ])('classifies %s as %s', (title, expected) => {
     expect(detectAgentStatusFromTitle(title)).toBe(expected)
+  })
+})
+
+describe('OMP owner rewrite preserves spaced-colon working titles (#17690)', () => {
+  const raw = 'π : Run a long task'
+
+  it('detects working on the raw π state title', () => {
+    expect(detectAgentStatusFromTitle(raw)).toBe('working')
+    expect(getAgentLabel(raw)).toBe('Pi')
+  })
+
+  it('detects working and OMP identity after the owner rewrite', () => {
+    const rewritten = normalizeCompatibleAgentTitleForOwner(raw, 'omp', { ownerIsLaunch: true })
+    expect(rewritten).toBe('OMP : Run a long task')
+    expect(detectAgentStatusFromTitle(rewritten)).toBe('working')
+    expect(getAgentLabel(rewritten)).toBe('OMP')
+  })
+})
+
+describe('OMP owner rewrite preserves idle separator titles before the first turn', () => {
+  const raw = 'π > New OMP session'
+
+  it('detects idle and OMP identity after the owner rewrite', () => {
+    const rewritten = normalizeCompatibleAgentTitleForOwner(raw, 'omp', { ownerIsLaunch: true })
+    expect(rewritten).toBe('OMP > New OMP session')
+    expect(detectAgentStatusFromTitle(rewritten)).toBe('idle')
+    expect(getAgentLabel(rewritten)).toBe('OMP')
   })
 })
 
@@ -158,6 +187,7 @@ describe('the owner relabel keeps the label and swaps only the brand', () => {
     'π - fixing the sidebar - orca',
     'π ! fixing the sidebar',
     'π > fixing the sidebar',
+    'π : fixing the sidebar',
     '⠋ Pi',
     'Pi ready',
     'Pi - action required'
@@ -244,10 +274,19 @@ describe('latent hazards the reviewers flagged', () => {
     'π - fixing the sidebar - orca',
     'π ! fixing the sidebar',
     'π ⠙ fixing the sidebar',
+    'π : Run a long task',
+    'OMP : Run a long task',
+    'OMP > New OMP session',
     'zsh | ⠙ π - a - b'
   ])('is a fixed point when the owner rewrite re-runs on %s', (title) => {
     const once = normalizeCompatibleAgentTitleForOwner(title, 'omp')
     expect(normalizeCompatibleAgentTitleForOwner(once, 'omp')).toBe(once)
     expect(once).toContain('OMP')
+    if (title.includes('Run a long task')) {
+      expect(once).toContain('Run a long task')
+    }
+    if (title.includes('New OMP session')) {
+      expect(once).toContain('New OMP session')
+    }
   })
 })
