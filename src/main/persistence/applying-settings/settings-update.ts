@@ -10,6 +10,10 @@ import { normalizeTerminalCustomThemes } from '../../../shared/terminal-custom-t
 import { normalizeTerminalCursorStyleDefault } from '../../../shared/terminal-cursor-style-settings'
 import { normalizeDesktopTerminalScrollbackRows } from '../../../shared/terminal-scrollback-policy'
 import { normalizeTaskProviderSettings } from '../../../shared/task-providers'
+import {
+  normalizeOrchestrationDefaultWorkerAgent,
+  normalizeOrchestrationWorkerPreferenceUpdates
+} from '../../../shared/orchestration-worker-model-settings'
 import { normalizeOpenInApplications } from '../../../shared/open-in-applications'
 import { normalizeTerminalShortcutPolicy } from '../../../shared/keybindings'
 import { normalizeSourceControlGroupOrder } from '../../../shared/source-control-group-order'
@@ -95,6 +99,15 @@ export function updateSettings(
     sanitizedUpdates.agentDefaultArgs = normalizeTuiAgentArgsRecord(updates.agentDefaultArgs)
     sanitizedUpdates.agentYoloDefaultsMigrated = true
   }
+  if ('orchestrationDefaultWorkerAgent' in updates) {
+    sanitizedUpdates.orchestrationDefaultWorkerAgent = normalizeOrchestrationDefaultWorkerAgent(
+      updates.orchestrationDefaultWorkerAgent
+    )
+  }
+  Object.assign(
+    sanitizedUpdates,
+    normalizeOrchestrationWorkerPreferenceUpdates(updates, operations.state.settings)
+  )
   if ('agentDefaultEnv' in updates) {
     sanitizedUpdates.agentDefaultEnv = normalizeTuiAgentEnvRecord(updates.agentDefaultEnv)
     sanitizedUpdates.agentYoloDefaultsMigrated = true

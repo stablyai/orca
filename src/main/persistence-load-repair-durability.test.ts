@@ -6,7 +6,7 @@
  * repair marked the state dirty by itself.
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { rmSync, mkdtempSync } from 'node:fs'
+import { rmSync, mkdtempSync, statSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import type { PersistedState } from '../shared/persisted-state-types'
@@ -108,5 +108,70 @@ describe('load-time normalization durability', () => {
     const persisted = await reloadAndSettleWrites()
 
     expect(persisted.settings.notifications.enabled).toBe(true)
+  })
+
+  it('persists repaired orchestration worker preferences and reloads them', async () => {
+    const settled = await settledProfile()
+    settled.settings.orchestrationDefaultWorkerAgent = 'unknown' as never
+    settled.settings.orchestrationWorkerModels = {
+      codex: '  gpt-5.6-luna  ',
+      unknown: 'ignored'
+    } as never
+    settled.settings.orchestrationWorkerEfforts = {
+      codex: ' max ',
+      unknown: 'ignored'
+    } as never
+    writeDataFile(settled)
+
+    vi.useFakeTimers()
+    let repaired: Awaited<ReturnType<typeof createStore>>
+    try {
+      repaired = await createStore()
+
+      expect(repaired.getSettings().orchestrationDefaultWorkerAgent).toBeNull()
+      expect(repaired.getSettings().orchestrationWorkerModels).toEqual({
+        codex: 'gpt-5.6-luna'
+      })
+      expect(repaired.getSettings().orchestrationWorkerEfforts).toEqual({ codex: 'max' })
+
+      vi.advanceTimersByTime(5000)
+      await repaired.waitForPendingWrite()
+    } finally {
+      vi.useRealTimers()
+    }
+
+    const persisted = readDataFile() as PersistedState
+    expect(persisted.settings.orchestrationDefaultWorkerAgent).toBeNull()
+    expect(persisted.settings.orchestrationWorkerModels).toEqual({ codex: 'gpt-5.6-luna' })
+    expect(persisted.settings.orchestrationWorkerEfforts).toEqual({ codex: 'max' })
+
+    const reloaded = await createStore()
+    expect(reloaded.getSettings().orchestrationDefaultWorkerAgent).toBeNull()
+    expect(reloaded.getSettings().orchestrationWorkerModels).toEqual({ codex: 'gpt-5.6-luna' })
+    expect(reloaded.getSettings().orchestrationWorkerEfforts).toEqual({ codex: 'max' })
+  })
+
+  it('does not rewrite persisted orchestration worker preferences when already normalized', async () => {
+    const settled = await settledProfile()
+    settled.settings.orchestrationDefaultWorkerAgent = 'codex'
+    settled.settings.orchestrationWorkerModels = { codex: 'gpt-5.6-luna' }
+    settled.settings.orchestrationWorkerEfforts = { codex: 'max' }
+    writeDataFile(settled)
+    const inodeBeforeLoad = statSync(join(testState.dir, 'orca-data.json')).ino
+
+    vi.useFakeTimers()
+    try {
+      const store = await createStore()
+      expect(store.getSettings().orchestrationDefaultWorkerAgent).toBe('codex')
+      expect(store.getSettings().orchestrationWorkerModels).toEqual({ codex: 'gpt-5.6-luna' })
+      expect(store.getSettings().orchestrationWorkerEfforts).toEqual({ codex: 'max' })
+
+      vi.advanceTimersByTime(5000)
+      await store.waitForPendingWrite()
+    } finally {
+      vi.useRealTimers()
+    }
+
+    expect(statSync(join(testState.dir, 'orca-data.json')).ino).toBe(inodeBeforeLoad)
   })
 })

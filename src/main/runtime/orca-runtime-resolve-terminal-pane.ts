@@ -1,5 +1,5 @@
 // @ts-nocheck -- mechanically split from OrcaRuntimeService; behavior is covered by AST equivalence and characterization tests.
-import { OrcaRuntimeWithGetTerminalInteractiveWait } from './orca-runtime-get-terminal-interactive-wait'
+import { OrcaRuntimeWithGetOrchestrationWorkerLaunchDefaults } from './orca-runtime-get-orchestration-worker-launch-defaults'
 import type {
   RuntimeTerminalRead,
   RuntimeTerminalResolvePane,
@@ -14,7 +14,7 @@ import {
 } from './terminal-tail-read'
 import { getTerminalState } from './terminal-wait-results'
 
-export class OrcaRuntimeWithResolveTerminalPane extends OrcaRuntimeWithGetTerminalInteractiveWait {
+export class OrcaRuntimeWithResolveTerminalPane extends OrcaRuntimeWithGetOrchestrationWorkerLaunchDefaults {
   resolveTerminalPane(paneKey: string, expectedWorktreeId?: string): RuntimeTerminalResolvePane {
     // Why: the renderer context menu only knows the stable pane key; main owns
     // the runtime terminal handle that agents and CLI commands can address.

@@ -1,0 +1,201 @@
+import {
+  findCatalogModel,
+  findCatalogOption,
+  getAgentSessionOptionCatalog,
+  type CatalogModel,
+  type CatalogOption
+} from './agent-session-option-catalog'
+import { isTuiAgent } from './tui-agent-config'
+import type { TuiAgent } from './tui-agent'
+
+export type OrchestrationWorkerModels = Partial<Record<TuiAgent, string>>
+export type OrchestrationWorkerEfforts = Partial<Record<TuiAgent, string>>
+export type OrchestrationWorkerLaunchDefaults = {
+  agent: TuiAgent | null
+  models: OrchestrationWorkerModels
+  efforts: OrchestrationWorkerEfforts
+}
+
+type PersistedOrchestrationWorkerPreferences = {
+  orchestrationDefaultWorkerAgent?: unknown
+  orchestrationWorkerModels?: unknown
+  orchestrationWorkerEfforts?: unknown
+}
+
+type OrchestrationWorkerPreferenceUpdateInput = {
+  orchestrationWorkerModels?: unknown
+  orchestrationWorkerEfforts?: unknown
+}
+
+type NormalizedOrchestrationWorkerPreferenceUpdates = {
+  orchestrationWorkerModels?: OrchestrationWorkerModels
+  orchestrationWorkerEfforts?: OrchestrationWorkerEfforts
+}
+
+type CurrentOrchestrationWorkerPreferences = {
+  orchestrationWorkerModels?: OrchestrationWorkerModels
+  orchestrationWorkerEfforts?: unknown
+}
+
+export function normalizeOrchestrationDefaultWorkerAgent(value: unknown): TuiAgent | null {
+  return typeof value === 'string' && isTuiAgent(value) ? value : null
+}
+
+function persistedOrchestrationWorkerMapMatches(
+  value: unknown,
+  normalized: Record<string, string>
+): boolean {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    return false
+  }
+  const persisted = value as Record<string, unknown>
+  const persistedEntries = Object.entries(persisted)
+  return (
+    persistedEntries.length === Object.keys(normalized).length &&
+    persistedEntries.every(
+      ([agent, modelOrEffort]) =>
+        Object.hasOwn(normalized, agent) && normalized[agent] === modelOrEffort
+    )
+  )
+}
+
+export function normalizeOrchestrationWorkerPreferenceUpdates(
+  updates: OrchestrationWorkerPreferenceUpdateInput,
+  current: CurrentOrchestrationWorkerPreferences | null | undefined
+): NormalizedOrchestrationWorkerPreferenceUpdates {
+  const hasModels = 'orchestrationWorkerModels' in updates
+  const models = hasModels
+    ? normalizeOrchestrationWorkerModels(updates.orchestrationWorkerModels)
+    : current?.orchestrationWorkerModels
+  const normalized: NormalizedOrchestrationWorkerPreferenceUpdates = {}
+  if (hasModels) {
+    normalized.orchestrationWorkerModels = models
+  }
+  if ('orchestrationWorkerEfforts' in updates) {
+    normalized.orchestrationWorkerEfforts = normalizeOrchestrationWorkerEfforts(
+      updates.orchestrationWorkerEfforts,
+      models
+    )
+  } else if (hasModels && current?.orchestrationWorkerEfforts !== undefined) {
+    const efforts = normalizeOrchestrationWorkerEfforts(current.orchestrationWorkerEfforts, models)
+    if (!persistedOrchestrationWorkerMapMatches(current.orchestrationWorkerEfforts, efforts)) {
+      normalized.orchestrationWorkerEfforts = efforts
+    }
+  }
+  return normalized
+}
+
+export function persistedOrchestrationWorkerPreferencesRepaired(
+  persisted: PersistedOrchestrationWorkerPreferences,
+  normalized: OrchestrationWorkerLaunchDefaults
+): boolean {
+  return (
+    (persisted.orchestrationDefaultWorkerAgent !== undefined &&
+      persisted.orchestrationDefaultWorkerAgent !== normalized.agent) ||
+    (persisted.orchestrationWorkerModels !== undefined &&
+      !persistedOrchestrationWorkerMapMatches(
+        persisted.orchestrationWorkerModels,
+        normalized.models
+      )) ||
+    (persisted.orchestrationWorkerEfforts !== undefined &&
+      !persistedOrchestrationWorkerMapMatches(
+        persisted.orchestrationWorkerEfforts,
+        normalized.efforts
+      ))
+  )
+}
+
+export function supportsLaunchModel(agent: TuiAgent): boolean {
+  const catalog = getAgentSessionOptionCatalog(agent)
+  return Boolean(catalog?.supportsWorkerLaunchPreferences && catalog.modelApply.launchArgs)
+}
+
+export function getOrchestrationWorkerEffortOption(
+  agent: TuiAgent,
+  modelId: string | null | undefined,
+  modelOverride?: CatalogModel
+): CatalogOption | undefined {
+  const catalog = getAgentSessionOptionCatalog(agent)
+  const normalizedModelId = modelId?.trim() ?? ''
+  const model =
+    modelOverride ?? (catalog ? findCatalogModel(catalog, normalizedModelId) : undefined)
+  const option =
+    findCatalogOption(model, 'effort') ??
+    (!model && normalizedModelId
+      ? catalog?.unknownModelOptions?.find((candidate) => candidate.id === 'effort')
+      : undefined)
+  return option?.kind.type === 'select' &&
+    (option.apply.launchArgs || option.apply.composedIntoModel)
+    ? option
+    : undefined
+}
+
+export function resolveOrchestrationWorkerEffort(
+  agent: TuiAgent,
+  modelId: string | null | undefined,
+  effort: string | null | undefined,
+  modelOverride?: CatalogModel
+): string | undefined {
+  const normalizedEffort = effort?.trim()
+  const option = getOrchestrationWorkerEffortOption(agent, modelId, modelOverride)
+  return normalizedEffort &&
+    option?.kind.type === 'select' &&
+    option.kind.choices.some((choice) => choice.value === normalizedEffort)
+    ? normalizedEffort
+    : undefined
+}
+
+function agentSupportsEffort(agent: TuiAgent, effort: string): boolean {
+  const catalog = getAgentSessionOptionCatalog(agent)
+  return Boolean(
+    supportsLaunchModel(agent) &&
+    catalog?.models.some((model) => {
+      const option = getOrchestrationWorkerEffortOption(agent, model.id)
+      return (
+        option?.kind.type === 'select' &&
+        option.kind.choices.some((choice) => choice.value === effort)
+      )
+    })
+  )
+}
+
+export function normalizeOrchestrationWorkerModels(value: unknown): OrchestrationWorkerModels {
+  const normalized: OrchestrationWorkerModels = {}
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    return normalized
+  }
+  for (const [agent, rawModel] of Object.entries(value)) {
+    if (!isTuiAgent(agent) || !supportsLaunchModel(agent) || typeof rawModel !== 'string') {
+      continue
+    }
+    const model = rawModel.trim()
+    if (model) {
+      normalized[agent] = model
+    }
+  }
+  return normalized
+}
+
+export function normalizeOrchestrationWorkerEfforts(
+  value: unknown,
+  models?: OrchestrationWorkerModels | null
+): OrchestrationWorkerEfforts {
+  const normalized: OrchestrationWorkerEfforts = {}
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    return normalized
+  }
+  for (const [agent, rawEffort] of Object.entries(value)) {
+    if (!isTuiAgent(agent) || !supportsLaunchModel(agent) || typeof rawEffort !== 'string') {
+      continue
+    }
+    const effort = rawEffort.trim()
+    const model = models?.[agent]
+    const isSupported = model
+      ? resolveOrchestrationWorkerEffort(agent, model, effort) !== undefined
+      : agentSupportsEffort(agent, effort)
+    if (effort && isSupported) {
+      normalized[agent] = effort
+    }
+  }
+  return normalized
+}

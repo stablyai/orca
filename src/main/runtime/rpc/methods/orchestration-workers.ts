@@ -19,9 +19,10 @@ import {
   persistWorkerSetupWaitOutcome
 } from './orchestration-worker-setup-gate'
 import { failWorkerStartWithReceipt } from './orchestration-worker-start-receipt'
+import { resolveOrchestrationWorkerLaunchDefaults } from './orchestration-worker-launch-preferences'
 import { prepareLocalWorkerStart } from './orchestration-worker-start-validation'
 import { resolveDispatchCreator } from './orchestration-dispatch-creator'
-import { resolveOrchestrationCaller } from './orchestration-run-scope'
+import { resolveWorkerStartRunBinding } from './orchestration-worker-start-run-binding'
 import {
   isWorkerStartTimeoutWithinTimerLimit,
   resolveWorkerStartReadinessTimeoutMs
@@ -32,36 +33,36 @@ export const ORCHESTRATION_WORKER_START_METHODS: RpcMethod[] = [
     name: 'orchestration.workerStart',
     params: WorkerStartParams,
     handler: async (
-      params,
+      input,
       { runtime, orchestrationMutation, orchestrationCompatibilityEvidence }
     ) => {
-      if (!isWorkerStartTimeoutWithinTimerLimit(params.timeoutMs)) {
+      if (!isWorkerStartTimeoutWithinTimerLimit(input.timeoutMs)) {
         throw new OrchestrationError(
           'invalid_argument',
           `--timeout-ms is too large for worker-start transport grace; the derived timeout must fit within the timer limit.`
         )
       }
-      const readinessTimeoutMs = resolveWorkerStartReadinessTimeoutMs(params.timeoutMs)
+      const readinessTimeoutMs = resolveWorkerStartReadinessTimeoutMs(input.timeoutMs)
       const db = runtime.getOrchestrationDb()
-      // Why: worker-start was the only Run-scoped verb that skipped this, so a
-      // declared --from could name someone else's pane and inherit their depth.
-      const coordinatorPane = resolveOrchestrationCaller(runtime, {
-        callerTerminalHandle: params.from,
+      const { run, task } = resolveWorkerStartRunBinding({
+        runtime,
+        db,
+        input,
         callerEvidence: orchestrationCompatibilityEvidence
       })
-      const run = coordinatorPane ? db.getCurrentRunForPane(coordinatorPane) : undefined
-      if (!run || (params.run && params.run !== run.id)) {
-        throw new OrchestrationError(
-          'consumer_fenced',
-          'worker-start requires the coordinator terminal currently bound to the Task Run.'
-        )
-      }
-      const task = db.getTask(params.task)
-      if (!task || task.run_id !== run.id) {
-        throw new OrchestrationError(
-          'task_not_found',
-          `Task ${params.task} was not found in Run ${run.id}.`
-        )
+
+      const resolvedDefaults = resolveOrchestrationWorkerLaunchDefaults({
+        terminal: input.terminal,
+        agent: input.agent,
+        model: input.model,
+        effort: input.effort,
+        defaults: runtime.getOrchestrationWorkerLaunchDefaults()
+      })
+      const params = {
+        ...input,
+        ...(resolvedDefaults.agent !== undefined ? { agent: resolvedDefaults.agent } : {}),
+        ...(resolvedDefaults.model !== undefined ? { model: resolvedDefaults.model } : {}),
+        ...(resolvedDefaults.effort !== undefined ? { effort: resolvedDefaults.effort } : {})
       }
 
       if (params.on) {
@@ -71,7 +72,8 @@ export const ORCHESTRATION_WORKER_START_METHODS: RpcMethod[] = [
           db,
           runId: run.id,
           task,
-          orchestrationMutation
+          orchestrationMutation,
+          defaultsApplied: resolvedDefaults.applied
         })
       }
 
