@@ -4,6 +4,7 @@ import { claudeProviderHandleLink } from './claude-structured-owner-identity'
 import type { ClaudePromptRegistry } from './claude-structured-prompt-replies'
 import type { ClaudeJournalTranslator } from './claude-structured-journal-translation'
 import type { ClaudeSession } from './claude-structured-session-state'
+import { ClaudeBackgroundTaskTracker } from './claude-background-task-tracker'
 
 export function createClaudeSessionPublication(input: {
   connection: ClaudeSession['connection']
@@ -50,6 +51,7 @@ export function createClaudeSessionPublication(input: {
       dispatchWaiters: [],
       retiredDispatchWaiters: [],
       replayContentFallbackBlocked: false,
+      backgroundTasks: new ClaudeBackgroundTaskTracker(),
       dispatchSequence: 0,
       optionMutationSequence: 0,
       options: new Map(input.options),

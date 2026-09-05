@@ -11,6 +11,7 @@ import {
   AgentSessionPreSpawnError
 } from '../native-chat/agent-session-wire/structured-agent-session-adapter'
 import type { ClaudeStreamJsonConnection } from './claude-stream-json-connection'
+import type { AgentSessionBackgroundTaskState } from '../../shared/agent-session-wire'
 import { closeProcessRegistry } from '../../shared/child-process/close-process-registry'
 import { readClaudeTranscriptLeafWithReproof } from './claude-transcript-branch-proof'
 
@@ -52,6 +53,10 @@ type CloseClaudePublishedSessionInput = {
     fence: number
   }) => Promise<void>
   onEvent?: (event: ClaudeStructuredSessionEvent) => void
+  onBackgroundTasksChanged?: (
+    sessionId: string,
+    state: AgentSessionBackgroundTaskState | null
+  ) => void
   readTranscriptLeaf?: (input: {
     providerSessionId: string
     previousLeafUuid: string | null
@@ -71,6 +76,9 @@ async function finalizeClaudePublishedSession(
   }
   if ((await session.connection.close()) !== true) {
     return false
+  }
+  if (session.backgroundTasks.clear()) {
+    input.onBackgroundTasksChanged?.(input.sessionId, null)
   }
   try {
     const transcriptLeaf = input.readTranscriptLeaf
@@ -194,6 +202,10 @@ export function closeClaudePublishedSessionForDeps(
       fence: number
     }) => Promise<void>
     onEvent?: (event: ClaudeStructuredSessionEvent) => void
+    onBackgroundTasksChanged?: (
+      sessionId: string,
+      state: AgentSessionBackgroundTaskState | null
+    ) => void
     readTranscriptLeaf?: (input: {
       providerSessionId: string
       previousLeafUuid: string | null
@@ -215,6 +227,10 @@ export async function closeClaudeSession(input: {
     fence: number
   }) => Promise<void>
   onEvent?: (event: ClaudeStructuredSessionEvent) => void
+  onBackgroundTasksChanged?: (
+    sessionId: string,
+    state: AgentSessionBackgroundTaskState | null
+  ) => void
   readTranscriptLeaf?: (input: {
     providerSessionId: string
     previousLeafUuid: string | null

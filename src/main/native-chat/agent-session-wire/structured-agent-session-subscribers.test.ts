@@ -114,6 +114,54 @@ describe('AgentSessionSubscribers', () => {
     })
   })
 
+  it('publishes background lifecycle without advancing the journal and carries its fence forward', async () => {
+    const journal = await journals.open({
+      identity: {
+        sessionId: SESSION,
+        workspaceId: 'workspace-1',
+        hostId: 'local',
+        agent: 'claude',
+        providerHandle: { kind: 'claude', sessionId: 'provider-1', leafUuid: null }
+      },
+      journalDir: join(root, 'background-journal')
+    })
+    const subscribers = new AgentSessionSubscribers()
+    const events: AgentSessionSubscribeEvent[] = []
+    subscribers.open({
+      id: 'subscriber-1',
+      sessionId: SESSION,
+      journal,
+      fence: 1,
+      backgroundTasks: null,
+      emit: (event) => events.push(event)
+    })
+    const cursor = journal.cursor()
+
+    const backgroundTasks = {
+      state: 'monitoring' as const,
+      tasks: [{ id: 'task-1', kind: 'command' as const, description: 'run the build' }]
+    }
+    subscribers.backgroundTasks(SESSION, backgroundTasks, 2)
+
+    expect(journal.cursor()).toEqual(cursor)
+    expect(events.at(-1)).toEqual({
+      type: 'batch',
+      sessionId: SESSION,
+      batch: { cursor, items: [], removedItemIds: [], submissions: [] },
+      fence: 2,
+      backgroundTasks
+    })
+
+    await journal.appendItem(
+      { provider: 'orca', clientMessageId: 'after-background-fence' },
+      { kind: 'status', text: 'After background state' },
+      { fence: 2 }
+    )
+    subscribers.publish(SESSION, journal)
+
+    expect(events.at(-1)).toMatchObject({ type: 'batch', fence: 2 })
+  })
+
   it('catches a subscriber up past a pre-existing unsendable removal with a bounded reset', async () => {
     const journalDir = join(root, 'oversized-removal-journal')
     const seeded = await journals.open({

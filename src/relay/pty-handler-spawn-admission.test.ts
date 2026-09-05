@@ -174,7 +174,13 @@ describe('PtyHandler', () => {
 
   it('spawns a PTY and returns an id', async () => {
     const result = await spawnPty({ cols: 80, rows: 24 })
-    expect(result).toEqual({ id: testPtyId(1), incarnationId: expect.any(String) })
+    // shellReadyArmed rides every spawn reply, false included: absent has to keep
+    // meaning "host predates the field", not "host did not arm".
+    expect(result).toEqual({
+      id: testPtyId(1),
+      incarnationId: expect.any(String),
+      shellReadyArmed: false
+    })
     expect(mockPtySpawn).toHaveBeenCalled()
     expect(handler.activePtyCount).toBe(1)
   })
@@ -193,7 +199,11 @@ describe('PtyHandler', () => {
       agentSessionCreateOperationId: operationId
     })
 
-    expect(replayed).toEqual({ id: testPtyId(1), incarnationId: expect.any(String) })
+    expect(replayed).toEqual({
+      id: testPtyId(1),
+      incarnationId: expect.any(String),
+      shellReadyArmed: false
+    })
     expect(mockPtySpawn).toHaveBeenCalledOnce()
     expect(mockPtyInstance.kill).not.toHaveBeenCalled()
     expect(handler.activePtyCount).toBe(1)

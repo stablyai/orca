@@ -161,7 +161,11 @@ export const SendParams = z
   .strict()
 
 export const CancelParams = z
-  .object({ envelope: MutationEnvelope, turnId: Identifier('Invalid turn id') })
+  .object({
+    envelope: MutationEnvelope,
+    turnId: Identifier('Invalid turn id'),
+    scope: z.literal('background-tasks').optional()
+  })
   .strict()
 
 export const RespondParams = z

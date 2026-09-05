@@ -40,6 +40,7 @@ describe('Claude structured processless acquisition', () => {
         setPermissionMode: async () => {},
         applyFlagSettings: async () => {},
         send: async () => {},
+        stopTask: async () => {},
         close
       }
       return connection

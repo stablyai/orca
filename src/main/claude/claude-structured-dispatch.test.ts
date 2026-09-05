@@ -6,6 +6,7 @@ import type { AgentJournalMessageItem } from '../../shared/agent-session-journal
 import { dispatchClaudeTurn, resolveClaudeReplayWaiter } from './claude-structured-dispatch'
 import { readClaudeImage } from './claude-structured-dispatch-content'
 import type { ClaudeSession } from './claude-structured-session-state'
+import { ClaudeBackgroundTaskTracker } from './claude-background-task-tracker'
 
 function sessionFor(send = vi.fn().mockResolvedValue(undefined)): ClaudeSession {
   return {
@@ -19,6 +20,7 @@ function sessionFor(send = vi.fn().mockResolvedValue(undefined)): ClaudeSession 
     dispatchWaiters: [],
     retiredDispatchWaiters: [],
     replayContentFallbackBlocked: false,
+    backgroundTasks: new ClaudeBackgroundTaskTracker(),
     dispatchSequence: 0,
     optionMutationSequence: 0,
     options: new Map(),

@@ -91,6 +91,7 @@ export type ClaudeControlSurface = {
     settings: Parameters<Query['applyFlagSettings']>[0],
     options?: ClaudeControlOptions
   ) => Promise<void>
+  stopTask: (taskId: string, options?: ClaudeControlOptions) => Promise<void>
   supportedModels: (options?: ClaudeControlOptions) => Promise<unknown[]>
   initializationResult: (options?: ClaudeControlOptions) => Promise<unknown>
   getSettings: (options?: ClaudeControlOptions) => Promise<unknown>
@@ -135,6 +136,10 @@ export function createClaudeControlSurface(query: Query): ClaudeControlSurface {
         () => query.applyFlagSettings(settings),
         options?.timeoutMs
       ).then(() => {}),
+    stopTask: (taskId, options) =>
+      runClaudeControl('stop_task', () => query.stopTask(taskId), options?.timeoutMs).then(
+        () => {}
+      ),
     supportedModels: (options) =>
       runClaudeControl('list_models', () => query.supportedModels(), options?.timeoutMs),
     initializationResult: (options) =>

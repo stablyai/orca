@@ -8,7 +8,7 @@ import type {
   AgentSessionPromptResult
 } from '../../../../shared/agent-session-wire'
 import { getAgentSessionOptionCatalog } from '../../../../shared/agent-session-option-catalog'
-import type { SessionOptionsSurface } from '../../../../shared/native-chat-session-options'
+import { useStructuredSessionOptionsSurface } from './use-structured-session-options-surface'
 import {
   isCrossProviderStructuredModelChoice,
   parseStructuredModelChoice
@@ -148,6 +148,8 @@ export function useStructuredAgentSession(args: {
   // on the frame that opens each one, so re-read the options as a turn changes
   // rather than leaving the last write unconfirmed for the life of the session.
   const turnId = activeStructuredAgentSessionTurnId(state.items)
+  const isMonitoringBackgroundTasks =
+    turnId === null && state.backgroundTasks?.state === 'monitoring'
 
   useEffect(() => {
     if (!isVisible || !optionCatalog) {
@@ -262,18 +264,7 @@ export function useStructuredAgentSession(args: {
     },
     [agent, mutate, optionCatalog, optionSnapshot, optionState, sessionId, target]
   )
-  const optionSurface = useMemo<SessionOptionsSurface>(
-    () => ({
-      getSnapshot: () => optionSnapshot,
-      setOption: async (id, value) => {
-        await setStructuredOption(id, value)
-        return { snapshot: optionSnapshot }
-      },
-      invokeAction: async () => ({ snapshot: optionSnapshot }),
-      subscribe: () => () => {}
-    }),
-    [optionSnapshot, setStructuredOption]
-  )
+  const optionSurface = useStructuredSessionOptionsSurface(optionSnapshot, setStructuredOption)
 
   const prompts = state.items.filter(
     (item): item is StructuredPromptItem =>
@@ -297,8 +288,15 @@ export function useStructuredAgentSession(args: {
     send: outboxController.send,
     retry: outboxController.retry,
     isWorking: turnId !== null,
+    isMonitoringBackgroundTasks,
+    backgroundTasks: state.backgroundTasks?.tasks ?? [],
     turnId,
     cancel: (turnId: string) => mutate('agentSession.cancel', 'agentSession.cancel', { turnId }),
+    stopBackgroundTasks: () =>
+      mutate('agentSession.cancel', 'agentSession.cancel', {
+        turnId: 'background-tasks',
+        scope: 'background-tasks'
+      }),
     respond: (item: StructuredPromptItem, optionId: string) =>
       mutate<AgentSessionPromptResult>(
         item.body.kind === 'approval'

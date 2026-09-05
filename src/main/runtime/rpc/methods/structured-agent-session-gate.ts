@@ -2,8 +2,11 @@
 //
 // Shared by every structured method file so one gate governs the whole surface: a client that does
 // not advertise `agent-session.structured.v1` is told the surface does not exist rather than being
-// handed a session it cannot render or drive — and, just as importantly, cannot make the host EXIST
-// by calling into it, which is an observable side effect.
+// handed the session journal or mutation surface.
+//
+// This gate no longer implies such a client cannot make the host exist: session-tab restore runs
+// for old mobile clients while structured chat is enabled so they receive a fallback row, and that
+// path constructs the host. `agentSession.*` stays refused either way, which is what this gate is for.
 
 import { getStructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/structured-agent-session-registry'
 import type { StructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/structured-agent-session-host'

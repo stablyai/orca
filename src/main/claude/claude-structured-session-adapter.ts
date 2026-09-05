@@ -4,7 +4,11 @@ import type {
   StructuredAgentSessionAdapter
 } from '../native-chat/agent-session-wire/structured-agent-session-adapter'
 import type { StructuredAgentSessionEventSink } from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
-import { answerClaudePrompt, cancelClaudeTurn } from './claude-structured-control-actions'
+import {
+  answerClaudePrompt,
+  cancelClaudeTurn,
+  stopClaudeBackgroundTasks
+} from './claude-structured-control-actions'
 import { dispatchClaudeTurn } from './claude-structured-dispatch'
 import { releaseClaudeAcquisition } from './claude-structured-acquisition-release'
 import { acquireClaudeSession } from './claude-structured-session-acquisition'
@@ -87,9 +91,35 @@ export class ClaudeStructuredSessionAdapter implements StructuredAgentSessionAda
       closePromise
     }
     this.exits.set(sessionId, exit)
-    void closePromise
+    exit.publication = closePromise
       .then((proven) => (proven ? this.settleUnexpectedExit(sessionId, exit) : undefined))
       .catch(() => undefined)
+  }
+
+  /** Resolves once every first-hand exit observed so far has published its
+   *  lifecycle event — or has failed its tree proof and stayed indexed for a
+   *  retry. Publication trails observation by the close ladder and the
+   *  transcript cursor write, so nothing outside can otherwise tell the two
+   *  apart without guessing at wall-clock. */
+  drainObservedExits = async (): Promise<void> => {
+    const awaited = new Set<Promise<void>>()
+    for (;;) {
+      const pending = [...this.exits.values()]
+        .map((exit) => exit.publication)
+        .filter(
+          (publication): publication is Promise<void> =>
+            publication !== undefined && !awaited.has(publication)
+        )
+      if (pending.length === 0) {
+        return
+      }
+      for (const publication of pending) {
+        awaited.add(publication)
+      }
+      // A publication can settle an exit that itself observes another; only the
+      // ones this pass has not already awaited keep the loop going.
+      await Promise.all(pending)
+    }
   }
 
   /** Lifecycle recovery is published only after the child tree proof is true. */
@@ -149,12 +179,21 @@ export class ClaudeStructuredSessionAdapter implements StructuredAgentSessionAda
   }
 
   private emit(
-    _session: ClaudeSession | null,
+    session: ClaudeSession | null,
     _events: StructuredAgentSessionEventSink | undefined,
     event: ClaudeStructuredSessionEvent
   ): void {
-    _session?.translator?.handle(event)
+    const backgroundTasksChanged =
+      event.type === 'ended'
+        ? (session?.backgroundTasks.clear() ?? false)
+        : event.type === 'message'
+          ? (session?.backgroundTasks.observe(event.message, event.startsTurn === true) ?? false)
+          : false
+    session?.translator?.handle(event)
     this.deps.onEvent?.(event)
+    if (backgroundTasksChanged) {
+      this.deps.onBackgroundTasksChanged?.(event.sessionId, session?.backgroundTasks.state ?? null)
+    }
   }
 
   bindPromptItemId(
@@ -191,6 +230,21 @@ export class ClaudeStructuredSessionAdapter implements StructuredAgentSessionAda
       )
     })
   }
+  stopBackgroundTasks: StructuredAgentSessionAdapter['stopBackgroundTasks'] = (input) => {
+    const session = this.session(input.sessionId)
+    const acquisitionGeneration = session.acquisitionGeneration
+    return stopClaudeBackgroundTasks(session, this.deps.requestTimeoutMs, () =>
+      Boolean(
+        this.sessions.get(input.sessionId) === session &&
+        session.fence === input.fence &&
+        session.acquisitionGeneration === acquisitionGeneration &&
+        session.backgroundTasks.state
+      )
+    )
+  }
+  backgroundTaskState: NonNullable<StructuredAgentSessionAdapter['backgroundTaskState']> = (
+    sessionId
+  ) => this.sessions.get(sessionId)?.backgroundTasks.state
   answerPrompt: StructuredAgentSessionAdapter['answerPrompt'] = (input) =>
     answerClaudePrompt(this.session(input.sessionId), input)
   setOption: StructuredAgentSessionAdapter['setOption'] = (input) =>
@@ -210,6 +264,9 @@ export class ClaudeStructuredSessionAdapter implements StructuredAgentSessionAda
       exits: this.exits,
       onExitProven: (sessionId, exit) => this.settleUnexpectedExit(sessionId, exit),
       ...(this.deps.persistHandle ? { persistHandle: this.deps.persistHandle } : {}),
+      ...(this.deps.onBackgroundTasksChanged
+        ? { onBackgroundTasksChanged: this.deps.onBackgroundTasksChanged }
+        : {}),
       ...(this.deps.onEvent ? { onEvent: this.deps.onEvent } : {})
     })
 
@@ -223,6 +280,9 @@ export class ClaudeStructuredSessionAdapter implements StructuredAgentSessionAda
       acquisitions: this.acquisitions,
       ...(this.deps.persistHandle ? { persistHandle: this.deps.persistHandle } : {}),
       ...(this.deps.readTranscriptLeaf ? { readTranscriptLeaf: this.deps.readTranscriptLeaf } : {}),
+      ...(this.deps.onBackgroundTasksChanged
+        ? { onBackgroundTasksChanged: this.deps.onBackgroundTasksChanged }
+        : {}),
       ...(this.deps.onEvent ? { onEvent: this.deps.onEvent } : {})
     })
   }

@@ -5,7 +5,11 @@ import {
   STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY
 } from '../../../../shared/protocol-version'
 import type { RuntimeMobileSessionTabsSnapshot } from '../../../../shared/runtime-types'
-import { projectSessionTabAgentStatus } from './session-tab-agent-status-projection'
+import {
+  CLAUDE_STRUCTURED_CHAT_DESKTOP_ONLY_TAB_TITLE,
+  STRUCTURED_CHAT_UPDATE_REQUIRED_TAB_TITLE,
+  projectSessionTabAgentStatus
+} from './session-tab-agent-status-projection'
 
 function makeSnapshot(sessionBoundary: boolean): RuntimeMobileSessionTabsSnapshot {
   return {
@@ -160,23 +164,96 @@ describe('projectSessionTabAgentStatus', () => {
     CLAUDE_STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY
   ]
 
-  it.each([
-    ['mobile', 'mobile' as const, [STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY]],
-    ['runtime', 'runtime' as const, [STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY]]
-  ])(
-    'withholds Claude rows from a paired %s client that never negotiated them',
-    (_name, clientKind, capabilities) => {
-      const projected = projectSessionTabAgentStatus(claudeSnapshot, clientKind, capabilities, true)
+  it('withholds Claude rows from a paired runtime client that never negotiated them', () => {
+    const projected = projectSessionTabAgentStatus(
+      claudeSnapshot,
+      'runtime',
+      [STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY],
+      true
+    )
 
-      expect(projected.tabs.map((tab) => tab.id)).toEqual(['agent-session:codex'])
-      // A row pruned from `tabs` but left in the layout is its own dead tab.
-      expect(projected.tabGroups?.map((group) => group.id)).toEqual(['group-a'])
-      expect(projected.tabGroupLayout).toEqual({ type: 'leaf', groupId: 'group-a' })
-      expect(projected.activeGroupId).toBe('group-a')
-      expect(projected.activeTabId).toBe('agent-session:codex')
-      expect(projected.activeTabType).toBe('agent-session')
+    expect(projected.tabs.map((tab) => tab.id)).toEqual(['agent-session:codex'])
+    // A row pruned from `tabs` but left in the layout is its own dead tab.
+    expect(projected.tabGroups?.map((group) => group.id)).toEqual(['group-a'])
+    expect(projected.tabGroupLayout).toEqual({ type: 'leaf', groupId: 'group-a' })
+    expect(projected.activeGroupId).toBe('group-a')
+    expect(projected.activeTabId).toBe('agent-session:codex')
+    expect(projected.activeTabType).toBe('agent-session')
+  })
+
+  it('uses a desktop fallback for an unsupported Claude row instead of withholding it', () => {
+    const projected = projectSessionTabAgentStatus(
+      claudeSnapshot,
+      'mobile',
+      [STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY],
+      true
+    )
+
+    // The row survives so the chat the desktop shows is not simply absent on the phone.
+    expect(projected.tabs.map((tab) => tab.id)).toEqual([
+      'agent-session:codex',
+      'agent-session:claude'
+    ])
+    expect(projected.tabs.map((tab) => tab.title)).toEqual([
+      'Codex Chat',
+      CLAUDE_STRUCTURED_CHAT_DESKTOP_ONLY_TAB_TITLE
+    ])
+    // Nothing is removed, so the layout it belonged to is untouched.
+    expect(projected.tabGroups?.map((group) => group.id)).toEqual(['group-a', 'group-b'])
+    expect(projected.tabGroupLayout).toEqual(claudeSnapshot.tabGroupLayout)
+    expect(projected.activeTabId).toBe('agent-session:codex')
+  })
+
+  it('projects agent-specific fallback titles for a mobile client with no capabilities', () => {
+    const projected = projectSessionTabAgentStatus(claudeSnapshot, 'mobile', [], true)
+
+    expect(projected.tabs.map((tab) => tab.title)).toEqual([
+      STRUCTURED_CHAT_UPDATE_REQUIRED_TAB_TITLE,
+      CLAUDE_STRUCTURED_CHAT_DESKTOP_ONLY_TAB_TITLE
+    ])
+    expect(projected.tabGroupLayout).toEqual(claudeSnapshot.tabGroupLayout)
+  })
+
+  it('does not treat the Claude capability as a substitute for the base structured capability', () => {
+    const projected = projectSessionTabAgentStatus(
+      claudeSnapshot,
+      'mobile',
+      [CLAUDE_STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY],
+      true
+    )
+
+    expect(projected.tabs.map((tab) => tab.title)).toEqual([
+      STRUCTURED_CHAT_UPDATE_REQUIRED_TAB_TITLE,
+      CLAUDE_STRUCTURED_CHAT_DESKTOP_ONLY_TAB_TITLE
+    ])
+  })
+
+  it('shows both real titles once mobile negotiates Claude', () => {
+    expect(projectSessionTabAgentStatus(claudeSnapshot, 'mobile', structuredMobile, true)).toBe(
+      claudeSnapshot
+    )
+  })
+
+  // Why: updating cannot reveal a chat the desktop is not serving, so the prompt would lie.
+  it('withholds rather than prompts when the desktop experiment is off', () => {
+    for (const capabilities of [
+      [],
+      [STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY],
+      structuredMobile
+    ]) {
+      const projected = projectSessionTabAgentStatus(claudeSnapshot, 'mobile', capabilities, false)
+      expect(projected.tabs).toEqual([])
     }
-  )
+  })
+
+  it('never emits an empty structured tab title', () => {
+    for (const capabilities of [[], [STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY]]) {
+      const projected = projectSessionTabAgentStatus(claudeSnapshot, 'mobile', capabilities, true)
+      for (const tab of projected.tabs) {
+        expect(tab.title.length).toBeGreaterThan(0)
+      }
+    }
+  })
 
   it.each([
     ['mobile', 'mobile' as const, structuredMobile],

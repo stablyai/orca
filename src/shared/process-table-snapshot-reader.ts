@@ -2,6 +2,7 @@ import { execFile as execFileCb } from 'node:child_process'
 import { readFile } from 'node:fs/promises'
 import { promisify } from 'node:util'
 import {
+  PROCESS_TABLE_SNAPSHOT_MAX_STALENESS_MS,
   PS_ARGS,
   PS_MAX_BUFFER_BYTES,
   ProcessTableCaptureError,
@@ -10,7 +11,7 @@ import {
   type ProcessTableRow
 } from './process-table-snapshot'
 
-export { PS_ARGS, PS_MAX_BUFFER_BYTES }
+export { PROCESS_TABLE_SNAPSHOT_MAX_STALENESS_MS, PS_ARGS, PS_MAX_BUFFER_BYTES }
 
 const execFile = promisify(execFileCb)
 
@@ -20,7 +21,7 @@ const execFile = promisify(execFileCb)
 // whole subsystem answered "unverifiable" about a table it could read. This keeps a wedged
 // `ps` bounded while staying out of reach of a host that is merely busy.
 export const PS_TIMEOUT_MS = 15_000
-const DEFAULT_SNAPSHOT_TTL_MS = 500
+const DEFAULT_SNAPSHOT_TTL_MS = PROCESS_TABLE_SNAPSHOT_MAX_STALENESS_MS
 
 type Snapshot<T> = { value: T; capturedAtMs: number; completedAtMs: number }
 
@@ -207,6 +208,19 @@ function assertWholeCapture(stdout: string): string {
   return stdout
 }
 
+/** Field 22 (`starttime`) of `/proc/<pid>/stat`, read past the parenthesised comm. */
+export function parseLinuxProcStatStartTime(stat: string): string | null {
+  const closingParen = stat.lastIndexOf(')')
+  if (closingParen === -1) {
+    return null
+  }
+  const tail = stat
+    .slice(closingParen + 1)
+    .trim()
+    .split(/\s+/)
+  return tail[19] || null
+}
+
 /** Read Linux's stable PID start-time ticks without spawning another process. */
 async function readLinuxProcessStartTimes(
   rows: readonly ProcessTableRow[]
@@ -218,16 +232,9 @@ async function readLinuxProcessStartTimes(
   const starts = await Promise.all(
     candidates.map(async (row) => {
       try {
-        const stat = await readFile(`/proc/${row.pid}/stat`, 'utf8')
-        const closingParen = stat.lastIndexOf(')')
-        if (closingParen === -1) {
-          return null
-        }
-        const tail = stat
-          .slice(closingParen + 1)
-          .trim()
-          .split(/\s+/)
-        const startTime = tail[19]
+        const startTime = parseLinuxProcStatStartTime(
+          await readFile(`/proc/${row.pid}/stat`, 'utf8')
+        )
         return startTime ? ([row.pid, startTime] as const) : null
       } catch {
         return null
@@ -300,7 +307,7 @@ export const PROCESS_TABLE_EVIDENCE_BUDGET_MS = 1_200
  *  capture some identity probe started under the 15s budget; abandoning the wait leaves that
  *  capture running to fill the cache instead of forking a second whole-machine `ps` on the host
  *  that can least afford one. */
-async function withEvidenceBudget<T>(pending: Promise<T>): Promise<T> {
+export async function withEvidenceBudget<T>(pending: Promise<T>): Promise<T> {
   let timer: ReturnType<typeof setTimeout> | undefined
   try {
     return await Promise.race([
@@ -324,10 +331,6 @@ export async function getStrictProcessTableSnapshotWithAge(): Promise<{
   const snapshot = await withEvidenceBudget(processTableReader.getSnapshotWithAge())
   return { rows: snapshot.value.strict(), capturedAgeMs: snapshot.capturedAgeMs }
 }
-
-/** How much older than its own await a TTL-cached capture may be, on top of the capture's own
- *  duration. Reported ages carry both, so this alone is not the staleness bound. */
-export const PROCESS_TABLE_SNAPSHOT_MAX_STALENESS_MS = DEFAULT_SNAPSHOT_TTL_MS
 
 export function resetProcessTableSnapshotForTests(): void {
   processTableReader.reset()

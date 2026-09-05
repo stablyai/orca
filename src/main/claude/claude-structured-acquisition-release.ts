@@ -23,6 +23,7 @@ export async function releaseClaudeAcquisition(input: {
   onExitProven?: (sessionId: string, exit: ClaudeSessionExit) => Promise<void>
   persistHandle?: ClaudeStructuredSessionAdapterDeps['persistHandle']
   onEvent?: ClaudeStructuredSessionAdapterDeps['onEvent']
+  onBackgroundTasksChanged?: ClaudeStructuredSessionAdapterDeps['onBackgroundTasksChanged']
 }): Promise<boolean> {
   const exit = input.exits.get(input.sessionId)
   if (!exit || input.sessions.has(input.sessionId) || input.acquisitions.get(input.sessionId)) {

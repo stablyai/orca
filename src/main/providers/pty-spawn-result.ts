@@ -16,6 +16,11 @@ export type PtySpawnResult = {
   sourceActivation?: PtySourceReceivingActivation
   /** The provider observed this exact spawn exit before returning its spawn result. */
   exitedBeforeSpawnReply?: true
+  /** Whether the execution host armed the shell-ready marker for a renderer-delivered startup
+   *  command. `false` means the host looked and did not (fish, sh, Windows) so the client must
+   *  not wait; absent means the host predates the field and the client keeps its own guess.
+   *  Never collapse absent into `false`. */
+  shellReadyArmed?: boolean
   /** OS-level pid of the shell process, when available at spawn time.
    *  Why: the memory collector needs this to walk each PTY's process
    *  subtree. Daemon-backed providers return it from the RPC result;
