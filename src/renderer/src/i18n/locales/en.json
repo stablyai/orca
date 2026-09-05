@@ -15158,6 +15158,7 @@
           "55127a3706": "Dictation failed: {{value0}}",
           "bb7f599ee7": "Open Settings",
           "2d5b9fabf9": "Microphone access denied. Grant access in system settings, then restart Orca.",
+          "f2c6b6d4aa": "Offline speech transcription is unavailable on Windows ARM64. Select an OpenAI transcription model in Voice settings.",
           "5d2c3e7ae3": "No speech detected.",
           "micFallback": "Selected microphone unavailable. Using system default.",
           "micDisconnected": "Microphone disconnected. Dictation stopped."

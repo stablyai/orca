@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import type * as SpeechPlatformSupport from './speech-platform-support'
 
 const {
   MockOpenAiTranscriptionSession,
@@ -153,6 +154,18 @@ vi.mock('./openai-api-key-store', () => ({
 
 vi.mock('./openai-transcription-client', () => ({
   OpenAiTranscriptionSession: MockOpenAiTranscriptionSession
+}))
+
+// Why: local worker tests must also run on Windows ARM64 hosts.
+vi.mock('./speech-platform-support', async (importOriginal) => ({
+  ...(await importOriginal<typeof SpeechPlatformSupport>()),
+  assertLocalSpeechRecognitionSupported: vi.fn()
+}))
+
+// Why: worker paths require initialized app state that these unit tests do not use.
+vi.mock('./stt-worker-paths', () => ({
+  getSherpaModulePath: () => '/mock/sherpa-onnx',
+  getSttWorkerPath: () => '/mock/stt-worker.js'
 }))
 
 import { IDLE_WORKER_TEARDOWN_MS, START_DICTATION_TIMEOUT_MS, SttService } from './stt-service'

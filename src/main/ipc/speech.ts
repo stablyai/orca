@@ -6,6 +6,11 @@ import { SPEECH_MODEL_CATALOG } from '../speech/model-catalog'
 import { deleteLocalSpeechModel } from '../speech/speech-model-deletion'
 import { getSpeechModelManager, getSpeechSttService } from '../speech/speech-runtime-service'
 import {
+  getSupportedSpeechModelSelection,
+  getSupportedSpeechModels
+} from '../speech/speech-platform-support'
+import { getDefaultVoiceSettings } from '../../shared/constants'
+import {
   clearOpenAiSpeechApiKey,
   hasOpenAiSpeechApiKey,
   saveOpenAiSpeechApiKey
@@ -13,8 +18,10 @@ import {
 import type { Store } from '../persistence'
 
 export function registerSpeechHandlers(store: Store): void {
+  reconcileUnsupportedSpeechSettings(store)
+
   ipcMain.handle('speech:getCatalog', () => {
-    return SPEECH_MODEL_CATALOG
+    return getSupportedSpeechModels(SPEECH_MODEL_CATALOG)
   })
 
   ipcMain.handle('speech:getModelStates', async () => {
@@ -210,4 +217,28 @@ export function registerSpeechHandlers(store: Store): void {
   ipcMain.handle('speech:stopDictation', async (_event, sessionId = 'desktop') => {
     await getSpeechSttService(store).stopDictation(getDesktopOwner(_event.sender.id, sessionId))
   })
+}
+
+export function reconcileUnsupportedSpeechSettings(
+  store: Store,
+  platform: NodeJS.Platform = process.platform,
+  architecture: string = process.arch
+): boolean {
+  const currentVoice = store.getSettings().voice ?? getDefaultVoiceSettings()
+  const selectedModelId = getSupportedSpeechModelSelection(
+    currentVoice.sttModel,
+    SPEECH_MODEL_CATALOG,
+    platform,
+    architecture
+  )
+  if (selectedModelId === currentVoice.sttModel) {
+    return false
+  }
+  // Why: migrated settings can select an x64-only local model that is hidden
+  // on ARM64; clearing it prevents every dictation shortcut from failing.
+  store.updateSettings(
+    { voice: { ...currentVoice, sttModel: selectedModelId } },
+    { notifyListeners: true }
+  )
+  return true
 }

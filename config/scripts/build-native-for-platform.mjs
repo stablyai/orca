@@ -2,6 +2,7 @@
 
 import { spawnSync } from 'node:child_process'
 import { resolvePnpmCliInvocation } from './pnpm-cli-invocation.mjs'
+import { forwardSynchronousChildFailure } from './synchronous-child-process-result.mjs'
 
 if (process.platform === 'win32') {
   runNodeScript('config/scripts/build-windows-cli-launcher.mjs')
@@ -32,10 +33,5 @@ function runPnpmScript(scriptName) {
 
 function runNodeScript(scriptPath) {
   const result = spawnSync(process.execPath, [scriptPath], { stdio: 'inherit' })
-  if (result.signal) {
-    process.kill(process.pid, result.signal)
-  }
-  if (result.status !== 0 || result.error) {
-    process.exit(result.status ?? 1)
-  }
+  forwardSynchronousChildFailure(result)
 }

@@ -7,6 +7,11 @@ import {
   deleteLocalSpeechModel,
   getSpeechModelDeletionErrorCode
 } from '../speech/speech-model-deletion'
+import {
+  assertLocalSpeechRecognitionSupported,
+  getSupportedSpeechModelSelection,
+  getSupportedSpeechModels
+} from '../speech/speech-platform-support'
 import type { RuntimeStore } from './runtime-store-contract'
 
 export class RuntimeMobileSpeechCatalog {
@@ -17,21 +22,26 @@ export class RuntimeMobileSpeechCatalog {
     const voice = store.getSettings().voice ?? getDefaultVoiceSettings()
     const states = await getSpeechModelManager(store).getModelStates()
     const stateById = new Map(states.map((state) => [state.id, state]))
-    const models: RuntimeSpeechModelSummary[] = SPEECH_MODEL_CATALOG.map((manifest) => {
-      const state = stateById.get(manifest.id)
-      return {
-        id: manifest.id,
-        label: manifest.label,
-        provider: manifest.provider === 'openai' ? 'openai' : 'local',
-        sizeBytes: manifest.sizeBytes ?? null,
-        recommended: manifest.recommended === true,
-        status: state?.status ?? 'not-downloaded',
-        progress: state?.progress ?? null
+    const models: RuntimeSpeechModelSummary[] = getSupportedSpeechModels(SPEECH_MODEL_CATALOG).map(
+      (manifest) => {
+        const state = stateById.get(manifest.id)
+        return {
+          id: manifest.id,
+          label: manifest.label,
+          provider: manifest.provider === 'openai' ? 'openai' : 'local',
+          sizeBytes: manifest.sizeBytes ?? null,
+          recommended: manifest.recommended === true,
+          status: state?.status ?? 'not-downloaded',
+          progress: state?.progress ?? null
+        }
       }
-    })
+    )
     return {
       enabled: voice.enabled === true,
-      selectedModelId: voice.sttModel ?? '',
+      selectedModelId: getSupportedSpeechModelSelection(
+        voice.sttModel ?? '',
+        SPEECH_MODEL_CATALOG
+      ),
       dictationMode: voice.dictationMode === 'hold' ? 'hold' : 'toggle',
       models
     }
@@ -43,6 +53,7 @@ export class RuntimeMobileSpeechCatalog {
     if (!manifest || !isLocalSpeechModel(manifest)) {
       throw new Error('voice_model_not_downloadable')
     }
+    assertLocalSpeechRecognitionSupported()
     void getSpeechModelManager(store)
       .downloadModel(modelId)
       .catch((err) =>
@@ -76,8 +87,14 @@ export class RuntimeMobileSpeechCatalog {
   }): Promise<RuntimeSpeechSetupState> {
     const store = this.requireWritableStore()
     const current = store.getSettings().voice ?? getDefaultVoiceSettings()
-    if (params.modelId !== undefined && params.modelId !== '' && !getCatalogModel(params.modelId)) {
-      throw new Error('voice_model_unknown')
+    if (params.modelId !== undefined && params.modelId !== '') {
+      const manifest = getCatalogModel(params.modelId)
+      if (!manifest) {
+        throw new Error('voice_model_unknown')
+      }
+      if (isLocalSpeechModel(manifest)) {
+        assertLocalSpeechRecognitionSupported()
+      }
     }
     const nextVoice: VoiceSettings = {
       ...current,
