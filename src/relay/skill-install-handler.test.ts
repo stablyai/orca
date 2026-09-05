@@ -1,5 +1,6 @@
+import { execFileSync } from 'node:child_process'
 import { createHash } from 'node:crypto'
-import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, readFile, realpath, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -76,6 +77,46 @@ async function fixture(
       signal: new AbortController().signal
     })
   return { archive, bytes, call, home, root, state }
+}
+
+async function initGitWorktree(directory: string): Promise<string> {
+  await mkdir(directory, { recursive: true })
+  execFileSync('git', ['init', '-q'], { cwd: directory, stdio: 'pipe' })
+  return realpath(directory)
+}
+
+async function installStagedSkill(
+  call: (method: string, params: Record<string, unknown>) => unknown,
+  archive: Awaited<ReturnType<typeof createSkillPackageArchive>>,
+  bytes: Buffer,
+  destination: Record<string, unknown>,
+  workspace?: Record<string, unknown>
+) {
+  const packageIdentity = {
+    packageId: archive.manifest.packageId,
+    versionId: archive.manifest.versionId,
+    packageDigest: archive.manifest.packageDigest,
+    archiveSha256: archive.archiveSha256,
+    compressedBytes: bytes.length
+  }
+  const begun = (await call(SKILL_SSH_RELAY_BEGIN_UPLOAD_METHOD, {
+    package: packageIdentity
+  })) as { uploadId: string }
+  await call(SKILL_SSH_RELAY_UPLOAD_CHUNK_METHOD, {
+    uploadId: begun.uploadId,
+    offset: 0,
+    bytesBase64: bytes.toString('base64')
+  })
+  await call(SKILL_SSH_RELAY_COMMIT_UPLOAD_METHOD, { uploadId: begun.uploadId })
+  return call(SKILL_SSH_RELAY_INSTALL_METHOD, {
+    request: {
+      operationId: 'operation_workspace',
+      package: packageIdentity,
+      ingress: { kind: 'staged-upload', uploadId: begun.uploadId },
+      destination
+    },
+    ...(workspace ? { workspace } : {})
+  })
 }
 
 describe('SkillInstallHandler', () => {
@@ -330,5 +371,169 @@ describe('SkillInstallHandler', () => {
       code: 'skill_install_failure',
       data: { category: 'archive', retryable: false }
     })
+  })
+
+  it('rejects a matching workspace id whose client path is outside home', async () => {
+    const { archive, bytes, call, home, root } = await fixture()
+    const outside = await initGitWorktree(join(root, 'outside'))
+    const worktreeId = `repo::${outside}`
+
+    await expect(
+      installStagedSkill(
+        call,
+        archive,
+        bytes,
+        { scope: 'workspace', worktreeId },
+        { kind: 'worktree', id: worktreeId, path: outside }
+      )
+    ).rejects.toMatchObject({
+      code: 'skill_install_failure',
+      data: {
+        category: 'admission',
+        code: expect.stringMatching(/workspace-not-found|destination-escape/)
+      }
+    })
+    await expect(
+      readFile(join(outside, '.agents', 'skills', 'relay-skill', 'SKILL.md'))
+    ).rejects.toMatchObject({ code: 'ENOENT' })
+    await expect(
+      readFile(join(home, '.agents', 'skills', 'relay-skill', 'SKILL.md'))
+    ).rejects.toMatchObject({
+      code: 'ENOENT'
+    })
+  })
+
+  it('rejects installing when the client path is the relay home', async () => {
+    const { archive, bytes, call, home } = await fixture()
+    execFileSync('git', ['init', '-q'], { cwd: home, stdio: 'pipe' })
+    const worktreeId = `repo::${home}`
+
+    await expect(
+      installStagedSkill(
+        call,
+        archive,
+        bytes,
+        { scope: 'workspace', worktreeId },
+        { kind: 'worktree', id: worktreeId, path: home }
+      )
+    ).rejects.toMatchObject({
+      code: 'skill_install_failure',
+      data: {
+        category: 'admission',
+        code: expect.stringMatching(/workspace-not-found|destination-escape/)
+      }
+    })
+  })
+
+  it('rejects an unlisted subdirectory of home even when the workspace id matches', async () => {
+    const { archive, bytes, call, home } = await fixture()
+    const sshDir = join(home, '.ssh')
+    await mkdir(sshDir)
+    const worktreeId = `repo::${sshDir}`
+
+    await expect(
+      installStagedSkill(
+        call,
+        archive,
+        bytes,
+        { scope: 'workspace', worktreeId },
+        { kind: 'worktree', id: worktreeId, path: sshDir }
+      )
+    ).rejects.toMatchObject({
+      code: 'skill_install_failure',
+      data: {
+        category: 'admission',
+        code: expect.stringMatching(/workspace-not-found|destination-escape/)
+      }
+    })
+    await expect(
+      readFile(join(sshDir, '.agents', 'skills', 'relay-skill', 'SKILL.md'))
+    ).rejects.toMatchObject({
+      code: 'ENOENT'
+    })
+  })
+
+  it('installs into a listed git worktree under home', async () => {
+    const { archive, bytes, call, home } = await fixture()
+    const worktree = await initGitWorktree(join(home, 'repo'))
+    const worktreeId = `repo::${worktree}`
+
+    const result = (await installStagedSkill(
+      call,
+      archive,
+      bytes,
+      { scope: 'workspace', worktreeId },
+      { kind: 'worktree', id: worktreeId, path: worktree }
+    )) as { status: string }
+
+    expect(result.status).toBe('installed')
+    expect(
+      await readFile(join(worktree, '.agents', 'skills', 'relay-skill', 'SKILL.md'), 'utf8')
+    ).toContain('# Relay')
+  })
+
+  it('installs into a host-listed worktree under home and ignores a client path outside home', async () => {
+    const { archive, bytes, call, home, root } = await fixture()
+    const worktree = await initGitWorktree(join(home, 'repo'))
+    const outside = await initGitWorktree(join(root, 'outside'))
+
+    const result = (await installStagedSkill(
+      call,
+      archive,
+      bytes,
+      { scope: 'workspace', worktreeId: `repo::${worktree}` },
+      { kind: 'worktree', id: `repo::${worktree}`, path: outside }
+    )) as { status: string }
+
+    expect(result.status).toBe('installed')
+    expect(
+      await readFile(join(worktree, '.agents', 'skills', 'relay-skill', 'SKILL.md'), 'utf8')
+    ).toContain('# Relay')
+    await expect(
+      readFile(join(outside, '.agents', 'skills', 'relay-skill', 'SKILL.md'))
+    ).rejects.toMatchObject({ code: 'ENOENT' })
+  })
+
+  it('installs into a folder workspace under home without listing it as a git worktree', async () => {
+    const { archive, bytes, call, home } = await fixture()
+    const folder = join(home, 'notes')
+    await mkdir(folder)
+    const folderId = '123e4567-e89b-12d3-a456-426614174000'
+
+    const result = (await installStagedSkill(
+      call,
+      archive,
+      bytes,
+      { scope: 'workspace', folderWorkspaceId: folderId },
+      { kind: 'folder', id: folderId, path: folder }
+    )) as { status: string }
+
+    expect(result.status).toBe('installed')
+    expect(
+      await readFile(join(folder, '.agents', 'skills', 'relay-skill', 'SKILL.md'), 'utf8')
+    ).toContain('# Relay')
+  })
+
+  it('rejects a folder workspace whose host path is outside home', async () => {
+    const { archive, bytes, call, root } = await fixture()
+    const folder = join(root, 'outside-folder')
+    await mkdir(folder)
+    const folderId = '123e4567-e89b-12d3-a456-426614174000'
+
+    await expect(
+      installStagedSkill(
+        call,
+        archive,
+        bytes,
+        { scope: 'workspace', folderWorkspaceId: folderId },
+        { kind: 'folder', id: folderId, path: folder }
+      )
+    ).rejects.toMatchObject({
+      code: 'skill_install_failure',
+      data: { category: 'admission', code: 'skill-install-destination-escape' }
+    })
+    await expect(
+      readFile(join(folder, '.agents', 'skills', 'relay-skill', 'SKILL.md'))
+    ).rejects.toMatchObject({ code: 'ENOENT' })
   })
 })

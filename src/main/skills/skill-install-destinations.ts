@@ -11,6 +11,8 @@ type WorkspaceIdentity = {
 export type SkillInstallDestinationAuthority = {
   environmentId: string
   homeDirectory: string
+  /** Relay-only: caller path is untrusted, so the workspace must sit strictly inside home. */
+  mustContainInHome?: boolean
   resolveWorktree(id: string): Promise<WorkspaceIdentity | null>
   resolveFolderWorkspace(id: string): Promise<WorkspaceIdentity | null>
   resolveWsl?(distro: string): Promise<{ homeDirectory: string } | null>
@@ -33,7 +35,12 @@ async function requireDirectory(path: string, category: string): Promise<string>
 }
 
 function requireContained(root: string, path: string): void {
-  const child = relative(resolve(root), resolve(path))
+  const resolvedRoot = resolve(root)
+  const resolvedPath = resolve(path)
+  if (resolvedRoot === resolvedPath) {
+    throw new Error('skill-install-destination-escape')
+  }
+  const child = relative(resolvedRoot, resolvedPath)
   if (
     child === '..' ||
     child.startsWith(`..${process.platform === 'win32' ? '\\' : '/'}`) ||
@@ -91,7 +98,9 @@ export async function resolveSkillInstallDestination(
     workspace.path,
     'skill-install-workspace-unavailable'
   )
-  requireContained(workspaceDirectory, workspaceDirectory)
+  if (authority.mustContainInHome) {
+    requireContained(homeDirectory, workspaceDirectory)
+  }
   return {
     scope: 'workspace',
     homeDirectory,
