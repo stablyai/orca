@@ -3,6 +3,8 @@ import { monaco } from '@/lib/monaco-setup'
 import { useAppStore } from '@/store'
 import { getConnectionIdForFile } from '@/lib/connection-context'
 import { getRelativePathInsideRoot } from '@/lib/path'
+import { detectLanguage } from '@/lib/language-detect'
+import { isMacUserAgent } from '../terminal-pane/pane-helpers'
 import {
   deriveWorkspaceRootPath,
   isLocalTypeScriptWorkspaceConnection,
@@ -44,6 +46,71 @@ export function resolveMonacoTypeScriptWorkspaceRoot(
   return deriveWorkspaceRootPath({ filePath, relativePath, worktreePath: worktree?.path })
 }
 
+function findWorktreeForFilePath(filePath: string): { id: string; path: string } | null {
+  return (
+    Object.values(useAppStore.getState().worktreesByRepo)
+      .flat()
+      .find((candidate) => getRelativePathInsideRoot(filePath, candidate.path) !== null) ?? null
+  )
+}
+
+function getDefinitionOpenerRange(
+  selectionOrPosition: monaco.IRange | monaco.IPosition | undefined
+): { startLineNumber: number; startColumn: number; endColumn: number } {
+  if (selectionOrPosition && 'startLineNumber' in selectionOrPosition) {
+    return selectionOrPosition
+  }
+  const position = selectionOrPosition ?? { lineNumber: 1, column: 1 }
+  return {
+    startLineNumber: position.lineNumber,
+    startColumn: position.column,
+    endColumn: position.column
+  }
+}
+
+// Why: bridges Monaco's built-in F12/Peek Definition navigation (which only knows how to jump
+// within its own already-open model) to Orca's own tabs — without this, cross-file navigation
+// only works through the Cmd/Ctrl+Click handler below. Registered once at module scope since
+// Monaco's editor-opener registry is global, not per-editor-instance.
+monaco.editor.registerEditorOpener({
+  openCodeEditor: (_source, resource, selectionOrPosition) => {
+    const filePath = resource.fsPath
+    const worktree = findWorktreeForFilePath(filePath)
+    if (
+      !worktree ||
+      !isLocalTypeScriptWorkspaceConnection(getConnectionIdForFile(worktree.id, filePath))
+    ) {
+      return false
+    }
+    const relativePath = getRelativePathInsideRoot(filePath, worktree.path) ?? filePath
+    const range = getDefinitionOpenerRange(selectionOrPosition)
+    const state = useAppStore.getState()
+    const fileId = state.openFile(
+      {
+        filePath,
+        relativePath,
+        worktreeId: worktree.id,
+        language: detectLanguage(relativePath),
+        mode: 'edit'
+      },
+      { focusEditor: true }
+    )
+    state.setPendingEditorReveal(null)
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        useAppStore.getState().setPendingEditorReveal({
+          filePath,
+          fileId,
+          line: range.startLineNumber,
+          column: range.startColumn,
+          matchLength: Math.max(0, range.endColumn - range.startColumn)
+        })
+      })
+    })
+    return true
+  }
+})
+
 export function installMonacoTypeScriptDefinitionNavigation({
   editor,
   filePath,
@@ -66,7 +133,8 @@ export function installMonacoTypeScriptDefinitionNavigation({
   }) => void
 }): monaco.IDisposable {
   const disposable = editor.onMouseDown((event) => {
-    if (!event.event.leftButton || (!event.event.metaKey && !event.event.ctrlKey)) {
+    const modifierPressed = isMacUserAgent() ? event.event.metaKey : event.event.ctrlKey
+    if (!event.event.leftButton || !modifierPressed) {
       return
     }
     const position = event.target.position
@@ -83,7 +151,9 @@ export function installMonacoTypeScriptDefinitionNavigation({
     if (!rootPath) {
       return
     }
-    if (!isLocalTypeScriptWorkspaceConnection(getConnectionIdForFile(worktreeId ?? null, filePath))) {
+    if (
+      !isLocalTypeScriptWorkspaceConnection(getConnectionIdForFile(worktreeId ?? null, filePath))
+    ) {
       return
     }
     event.event.preventDefault()
@@ -151,7 +221,11 @@ export function useMonacoTypeScriptWorkspaceModels({
         if (model.uri.toString() !== modelUri) {
           return null
         }
-        if (!isLocalTypeScriptWorkspaceConnection(getConnectionIdForFile(worktreeId ?? null, filePath))) {
+        if (
+          !isLocalTypeScriptWorkspaceConnection(
+            getConnectionIdForFile(worktreeId ?? null, filePath)
+          )
+        ) {
           return null
         }
         const result = await window.api.editorLanguage.getDefinition({

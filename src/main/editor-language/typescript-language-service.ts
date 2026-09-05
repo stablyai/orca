@@ -1,5 +1,8 @@
 import { createRequire } from 'node:module'
 import { basename, dirname } from 'node:path'
+// Why: the repo's main `typescript` dep (^7.0.2) ships only the native tsc CLI shim (no
+// ts.LanguageService/ts.sys/etc.) — `typescript-api` aliases the last classic JS package
+// (6.0.3) that still exposes the Language Service API this file needs.
 import ts from 'typescript-api'
 import type {
   EditorLanguageDefinitionResult,
