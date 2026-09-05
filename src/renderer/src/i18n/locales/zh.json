@@ -9924,7 +9924,27 @@
           "serverCountOne": "1 paired server",
           "reviewUpdateOne": "1 update available"
         },
-        "RemoteServerUpdateDialog": "安装更新将停止服务器，并终止其上的所有终端和智能体。{{value0}} 个活动标签页和 {{value1}} 个终端窗格可能会短暂断开连接。",
+        "RemoteServerUpdateDialog": {
+          "versionUnavailable": "版本不可用",
+          "restartingHelp": "正在等待替代服务器在新版本上重新连接。",
+          "retry": "重试",
+          "update": "更新",
+          "title": "更新远程 Orca 服务器",
+          "description": "查看已配对的服务器，并从此 Orca 客户端更新受支持的安装。",
+          "restartWarning": "更新将重启这些服务器，并终止其上的所有终端和智能体。{{value0}} 个活动标签页和 {{value1}} 个终端窗格可能会短暂断开连接。",
+          "checking": "正在检查已配对的服务器…",
+          "empty": "没有已配对的远程 Orca 服务器。",
+          "checkAgain": "再次检查",
+          "updating": "正在更新服务器…",
+          "updateAll": "更新 {{value0}} 台服务器",
+          "noUpdates": "没有可用更新",
+          "updateOne": "更新服务器",
+          "downloadProgress": "{{value0}} 下载进度",
+          "liveTabOne": "1 个活动标签页",
+          "liveTabs": "{{value0}} 个活动标签页",
+          "livePaneOne": "1 个活动窗格",
+          "livePanes": "{{value0}} 个活动窗格"
+        },
         "RemoteServerUpdateStatus": {
           "checking": "检查中…",
           "available": "有可用更新",

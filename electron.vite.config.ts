@@ -254,7 +254,11 @@ export const electronViteConfig: UserConfig = {
             'src/main/agent-hooks/managed-agent-hook-controls.ts'
           ),
           // Why: account import mutates the user's macOS Keychain from the CLI.
-          'claude-accounts/keychain': resolve('src/main/claude-accounts/keychain.ts')
+          'claude-accounts/keychain': resolve('src/main/claude-accounts/keychain.ts'),
+          // Why: `serve update-helper install` emits this generated installer script.
+          'cli/serve-update-helper-installer': resolve(
+            'src/main/cli/serve-update-helper-installer.ts'
+          )
         },
         // Why: Rolldown's SSR default is ESM, but Electron and sidecar launchers
         // consume these stable CommonJS paths.

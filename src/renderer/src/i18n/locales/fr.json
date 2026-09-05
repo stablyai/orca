@@ -10711,7 +10711,27 @@
           "serverCountOne": "1 serveur jumelé",
           "reviewUpdateOne": "1 mise à jour disponible"
         },
-        "RemoteServerUpdateDialog": "L'installation de la mise à jour arrête le serveur, ce qui met fin à tous les terminaux et agents sur celui-ci. {{value0}} onglets actifs et {{value1}} volets de terminal peuvent se déconnecter brièvement.",
+        "RemoteServerUpdateDialog": {
+          "versionUnavailable": "Version indisponible",
+          "restartingHelp": "En attente de la reconnexion du serveur de remplacement sur la nouvelle version.",
+          "retry": "Réessayer",
+          "update": "Mettre à jour ce serveur",
+          "title": "Mettre à jour les serveurs distants Orca",
+          "description": "Consultez les serveurs jumelés et mettez à jour les installations prises en charge depuis ce client Orca.",
+          "restartWarning": "La mise à jour redémarre ces serveurs et met fin à tous les terminaux et agents sur ceux-ci. {{value0}} onglets actifs et {{value1}} volets de terminal peuvent se déconnecter brièvement.",
+          "checking": "Vérification des serveurs jumelés…",
+          "empty": "Aucun serveur distant Orca jumelé.",
+          "checkAgain": "Rechercher des mises à jour du serveur",
+          "updating": "Mise à jour des serveurs…",
+          "updateAll": "Mettre à jour tous les {{value0}} serveurs",
+          "noUpdates": "Tous les serveurs sont à jour.",
+          "updateOne": "Mettre à jour le serveur",
+          "downloadProgress": "Progression du téléchargement de {{value0}}",
+          "liveTabOne": "1 onglet actif",
+          "liveTabs": "{{value0}} onglets actifs",
+          "livePaneOne": "1 volet actif",
+          "livePanes": "{{value0}} volets actifs"
+        },
         "RemoteServerUpdateStatus": {
           "checking": "Vérification…",
           "available": "Mise à jour disponible",

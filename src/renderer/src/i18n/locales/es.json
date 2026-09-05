@@ -9876,7 +9876,27 @@
           "serverCountOne": "1 paired server",
           "reviewUpdateOne": "1 update available"
         },
-        "RemoteServerUpdateDialog": "La instalación de la actualización detiene el servidor, lo que finaliza todos los terminales y agentes en él. {{value0}} pestañas activas y {{value1}} paneles de terminal pueden desconectarse brevemente.",
+        "RemoteServerUpdateDialog": {
+          "versionUnavailable": "Version unavailable",
+          "restartingHelp": "Waiting for the replacement server to reconnect on the new version.",
+          "retry": "Retry",
+          "update": "Update",
+          "title": "Update Remote Orca Servers",
+          "description": "Review paired servers and update supported installs from this Orca client.",
+          "restartWarning": "La actualización reinicia estos servidores y finaliza todos los terminales y agentes en ellos. {{value0}} pestañas activas y {{value1}} paneles de terminal pueden desconectarse brevemente.",
+          "checking": "Checking paired servers…",
+          "empty": "No paired Remote Orca Servers.",
+          "checkAgain": "Check again",
+          "updating": "Updating servers…",
+          "updateAll": "Update {{value0}} servers",
+          "noUpdates": "No updates available",
+          "updateOne": "Update server",
+          "downloadProgress": "{{value0}} download progress",
+          "liveTabOne": "1 live tab",
+          "liveTabs": "{{value0}} live tabs",
+          "livePaneOne": "1 live pane",
+          "livePanes": "{{value0}} live panes"
+        },
         "RemoteServerUpdateStatus": {
           "checking": "Checking…",
           "available": "Update available",
