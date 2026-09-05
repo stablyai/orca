@@ -178,10 +178,11 @@ function createFixture(
   }
   const runtime = {
     getRuntimeId: () => 'test-runtime',
-    getClientSettings: vi.fn(() => ({ experimentalStructuredNativeChat: true })),
     listMobileSessionTabs: vi.fn().mockResolvedValue(snapshot),
     getClientSettings: () => ({
-      experimentalStructuredNativeChat: options.structuredNativeChatEnabled === true
+      // Why: defaults on, so a fixture that says nothing about the setting exercises capability
+      // gating alone; callers opt into the off case explicitly.
+      experimentalStructuredNativeChat: options.structuredNativeChatEnabled !== false
     }),
     ...calls
   } as unknown as OrcaRuntimeService

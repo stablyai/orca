@@ -87,7 +87,9 @@ describe('projectSessionTabAgentStatus', () => {
         }
       ]
     }
-    const oldClient = projectSessionTabAgentStatus(snapshot, 'mobile', [], true)
+    // A paired client that never negotiated the capability, with the setting on: mobile keeps an
+    // unrenderable row under a fallback title, so only a non-mobile old client still loses them.
+    const oldClient = projectSessionTabAgentStatus(snapshot, 'runtime', [], true)
     expect(oldClient.tabs.map((tab) => tab.type)).toEqual(['terminal'])
     expect(oldClient.activeTabId).toBe('tab-1::leaf-1')
     expect(oldClient.activeTabType).toBe('terminal')
