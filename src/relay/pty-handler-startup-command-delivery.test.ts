@@ -145,10 +145,11 @@ describe('PtyHandler', () => {
       try {
         // No prefill flag and no shell-ready hint: the host decides from its own
         // shell, because the client cannot see it (#18767).
-        await dispatcher.callRequest('pty.spawn', {
+        const reply = await dispatcher.callRequest('pty.spawn', {
           env: { HOME: homeDir },
           command: 'codex'
         })
+        expect(reply).toMatchObject({ shellReadyArmed: true })
       } finally {
         if (oldShell === undefined) {
           delete process.env.SHELL
@@ -180,10 +181,13 @@ describe('PtyHandler', () => {
 
       process.env.HOME = homeDir
       try {
-        await dispatcher.callRequest('pty.spawn', {
+        const reply = await dispatcher.callRequest('pty.spawn', {
           env: { HOME: homeDir, SHELL: '/usr/bin/fish' },
           command: 'codex'
         })
+        // Why the reply carries it: the client cannot see this shell, and without
+        // the verdict it waits the full fallback for a marker fish never emits.
+        expect(reply).toMatchObject({ shellReadyArmed: false })
       } finally {
         if (oldHome === undefined) {
           delete process.env.HOME

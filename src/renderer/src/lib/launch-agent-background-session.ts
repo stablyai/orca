@@ -221,6 +221,7 @@ export async function launchAgentBackgroundSession(
       })
       ptyId = result.id
       spawned = result
+      sshStartupDelivery.applyHostShellReadyArmed(result.shellReadyArmed)
     }
     const adopted = await adoptAgentBackgroundSessionTab({
       store,

@@ -246,6 +246,27 @@ describe('launchAgentBackgroundSession remote runtime and SSH startup delivery',
     }
   })
 
+  it('skips the shell-ready wait when the host reports it did not arm the marker', async () => {
+    vi.useFakeTimers()
+    try {
+      state.repos = [{ id: 'repo-1', connectionId: 'ssh-1', path: '/repo' }]
+      mockSpawn.mockResolvedValue({ id: 'pty-1', shellReadyArmed: false })
+      const { launchAgentBackgroundSession } = await import('./launch-agent-background-session')
+
+      await launchAgentBackgroundSession({ agent: 'codex', worktreeId: 'wt-1' })
+      const dataSidecar = mockSubscribeToPtyData.mock.calls[0]?.[1] as (data: string) => void
+      dataSidecar('user@remote repo % ')
+      vi.advanceTimersByTime(50)
+
+      expect(mockWrite).toHaveBeenCalledWith(
+        'pty-1',
+        "codex '--dangerously-bypass-approvals-and-sandbox'\r"
+      )
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   it('falls back when an SSH shell produces no observable startup data', async () => {
     vi.useFakeTimers()
     try {

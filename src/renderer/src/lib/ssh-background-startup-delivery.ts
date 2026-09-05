@@ -48,6 +48,12 @@ export type SshBackgroundStartupDelivery = {
   handleData(data: string): string
   armFallback(ptyId: string): void
   schedule(ptyId: string): void
+  /**
+   * The host's verdict from the spawn reply, which lands after this delivery was built.
+   * `false` releases the wait: no marker will ever come. `true` keeps it. `undefined` is
+   * a host that predates the field, so the constructor-time prediction stands.
+   */
+  applyHostShellReadyArmed(armed: boolean | undefined): void
   clear(): void
 }
 
@@ -56,12 +62,13 @@ export function createSshBackgroundStartupDelivery(
 ): SshBackgroundStartupDelivery {
   let pendingCommand = options.command
   let lastPtyId: string | null = null
-  let startupShellReady = !options.waitForShellReady
+  let waitForShellReady = options.waitForShellReady
+  let startupShellReady = !waitForShellReady
   // Why tracked apart from `startupShellReady`: only an observed marker proves the
   // host wrapped the shell and armed bracketed paste. A fallback release means the
   // host shell never published one, so the raw submit is the only safe form.
   let markerObserved = false
-  const markerScan = options.waitForShellReady ? createShellReadyMarkerScanState() : null
+  let markerScan = waitForShellReady ? createShellReadyMarkerScanState() : null
   let injectTimer: ReturnType<typeof setTimeout> | null = null
   let fallbackTimer: ReturnType<typeof setTimeout> | null = null
   let sawOutput = false
@@ -97,7 +104,7 @@ export function createSshBackgroundStartupDelivery(
     }
     // The long budget only buys time for the shell-ready marker; the fast path
     // pastes nothing prompt-sensitive, so delaying it there is pure latency.
-    const waitingForSilentShell = options.waitForShellReady && !sawOutput
+    const waitingForSilentShell = waitForShellReady && !sawOutput
     fallbackTimer = setTimeout(
       () => {
         fallbackTimer = null
@@ -166,6 +173,19 @@ export function createSshBackgroundStartupDelivery(
     },
     armFallback,
     schedule,
+    applyHostShellReadyArmed(armed) {
+      if (armed !== false || !waitForShellReady) {
+        return
+      }
+      // Not a marker sighting: bracketed paste stays unproven, so the submit stays raw.
+      waitForShellReady = false
+      startupShellReady = true
+      markerScan = null
+      clearFallbackTimer()
+      if (lastPtyId) {
+        schedule(lastPtyId)
+      }
+    },
     clear() {
       clearInjectTimer()
       clearFallbackTimer()
