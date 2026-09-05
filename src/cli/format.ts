@@ -245,6 +245,9 @@ function formatHostConnection(host: HostListEntry): string {
   if (host.kind !== 'ssh') {
     return ''
   }
+  if (host.connected === undefined) {
+    return `connection unknown${host.connectionStatus ? ` (${host.connectionStatus})` : ''}`
+  }
   return host.connected
     ? `connected${host.connectionStatus ? ` (${host.connectionStatus})` : ''}`
     : `not connected${host.connectionStatus ? ` (${host.connectionStatus})` : ''}`
