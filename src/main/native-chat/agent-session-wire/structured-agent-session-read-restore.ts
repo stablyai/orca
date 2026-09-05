@@ -3,6 +3,7 @@ import type {
   AgentSessionRecord
 } from '../../../shared/agent-session-record'
 import type { AgentSessionRecordStore } from '../../runtime/agent-session-record-store'
+import { findJournalFileFormatRemnant } from '../agent-session-journal/journal-file-format-remnant'
 import { loadJournal } from '../agent-session-journal/journal-open'
 import { journalDirectoryFor } from '../agent-session-journal/journal-paths'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
@@ -40,13 +41,19 @@ export async function restoreStructuredAgentSessionRead(
     sessionId
   })
   const loaded = loadJournal(journalDir, sessionId)
-  if (!loaded || loaded.corrupt) {
+  if (loaded?.corrupt) {
+    return null
+  }
+  // A session still in the pre-SQLite format has no `journal.db` to load. Dropping
+  // it here leaves it unpublished, which is also what prunes its tab out of the
+  // saved workspace — so the chat disappears with nowhere to explain itself.
+  if (!loaded && !findJournalFileFormatRemnant(journalDir)) {
     return null
   }
   const journal = await openAgentSessionJournal({
     identity: journalIdentityFor(record, params),
     journalDir,
-    loaded
+    ...(loaded ? { loaded } : {})
   })
   // Read restore opens the journal and nothing else: no adapter call, so no provider child.
   return {

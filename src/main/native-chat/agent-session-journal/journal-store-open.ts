@@ -1,4 +1,9 @@
 import { mkdir } from 'node:fs/promises'
+import type { AgentType } from '../../../shared/agent-status-types'
+import {
+  findJournalFileFormatRemnant,
+  journalFileFormatRemnantDisclosure
+} from './journal-file-format-remnant'
 import type { JournalLoad } from './journal-open'
 import { journalRepairDisclosure, type JournalRepairDisclosure } from './journal-repair-disclosure'
 
@@ -32,6 +37,7 @@ export async function openJournalStoreState(input: {
     body: JournalRepairDisclosure['body'],
     fence: number
   ) => Promise<unknown>
+  agent: AgentType
   highestFence: () => number
   malformedRows: () => number
   setMalformedRows: (count: number) => void
@@ -40,6 +46,13 @@ export async function openJournalStoreState(input: {
   const loaded = input.loaded !== undefined ? input.loaded : input.replay()
   if (!loaded) {
     input.start()
+    // An empty journal beside a pre-SQLite remnant is not a new chat; say so,
+    // and say how to carry the conversation on.
+    const transcriptPath = findJournalFileFormatRemnant(input.journalDir)
+    if (transcriptPath) {
+      const disclosure = journalFileFormatRemnantDisclosure({ transcriptPath, agent: input.agent })
+      await input.appendDisclosure(disclosure.identity, disclosure.body, input.highestFence())
+    }
     return
   }
   input.adopt(loaded)
