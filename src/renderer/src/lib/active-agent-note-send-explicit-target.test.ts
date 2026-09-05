@@ -11,6 +11,7 @@ import {
   PASTE_END,
   type NoteSendAppState
 } from './active-agent-note-send-test-harness'
+import { toWebTerminalSurfaceTabId } from '../../../shared/terminal-surface-id'
 
 const testState = vi.hoisted(() => ({
   appState: null as unknown as NoteSendAppState,
@@ -52,9 +53,11 @@ describe('active agent note send', () => {
     testState.getActiveRuntimeTarget.mockReturnValue({ kind: 'local' })
   })
 
-  it('sends notes immediately to an explicit note target using bracketed paste and Enter', async () => {
+  it('sends notes to a mirrored explicit target using the raw runtime tab identity', async () => {
     testState.appState.activeTabType = 'editor'
     testState.appState.activeTabIdByWorktree = {}
+    const hostTabId = 'host-tab-9'
+    const mirroredTabId = toWebTerminalSurfaceTabId(hostTabId)
     const methods: string[] = []
     testState.callRuntimeRpc.mockImplementation(async (_target, method, params) => {
       methods.push(method)
@@ -66,7 +69,7 @@ describe('active agent note send', () => {
               worktreeId: 'wt-1',
               worktreePath: '/repo',
               branch: 'main',
-              tabId: 'tab-9',
+              tabId: hostTabId,
               leafId: OTHER_LEAF_ID,
               title: 'Codex',
               connected: true,
@@ -98,7 +101,7 @@ describe('active agent note send', () => {
       sendNotesToActiveAgentSession({
         worktreeId: 'wt-1',
         prompt: 'notes',
-        noteTarget: { tabId: 'tab-9', leafId: OTHER_LEAF_ID }
+        noteTarget: { tabId: mirroredTabId, leafId: OTHER_LEAF_ID }
       })
     ).resolves.toEqual({ status: 'sent' })
 
