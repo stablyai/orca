@@ -7,10 +7,11 @@ import { build } from 'esbuild'
 
 const sourcePath = 'mobile/src/components/mobile-markdown-preview-html.ts'
 const baselineRef = process.argv[2]
-if (!baselineRef)
+if (!baselineRef) {
   throw new Error(
     'Usage: node config/scripts/mobile-markdown-placeholder-benchmark.mjs <baseline-ref>'
   )
+}
 async function load(source) {
   const result = await build({
     stdin: { contents: source, resolveDir: dirname(resolve(sourcePath)), loader: 'ts' },
