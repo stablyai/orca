@@ -20,6 +20,7 @@ import { worktreeRefreshOptions, type CapturedRuntimeOwner } from './add-repo-ru
 import { completeNestedFolderOpen } from './complete-nested-folder-open'
 import { defaultProjectGroupNameForPath } from './add-repo-dialog-types'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
+import { includeReposInFilter } from '@/store/slices/repo-filter-selection'
 
 export function useAddRepoNestedImportFlow({
   nestedAttemptId,
@@ -201,6 +202,8 @@ export function useAddRepoNestedImportFlow({
             }
           )
         }
+        // Why: 'separate' mode can import several repos, but only the first is revealed below.
+        includeReposInFilter(useAppStore.getState(), importedRepoIds)
         const repo = useAppStore.getState().repos.find((entry) => entry.id === firstRepoId)
         if (repo) {
           const source: AddRepoExistingWorkspaceSource = nestedConnectionId

@@ -529,7 +529,7 @@ describe('finishProjectAddWithDefaultCheckout', () => {
       reason: 'no_authoritative_detection'
     })
     expect(mocks.state.setActiveRepo).toHaveBeenCalledWith('repo-1')
-    expect(mocks.state.setFilterRepoIds).toHaveBeenCalledWith([])
+    expect(mocks.state.setFilterRepoIds).toHaveBeenCalledWith(['repo-2', 'repo-1'])
     expect(mocks.state.setShowActiveOnly).toHaveBeenCalledWith(false)
   })
 })
