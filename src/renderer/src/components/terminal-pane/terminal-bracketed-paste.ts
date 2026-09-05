@@ -26,7 +26,6 @@ export const BRACKETED_PASTE_END = `${ESCAPE}[201~`
 const BRACKETED_PASTE_MODE_SEQUENCE_RE = /^\[\?(?:\d+;)*2004(?:;\d+)*[hl]/
 const BRACKETED_PASTE_MODE_TAIL_MAX = 128
 const BRACKETED_PASTE_MODE_SEQUENCE_SCAN_MAX = BRACKETED_PASTE_MODE_TAIL_MAX
-const LINE_BREAK_RE = /[\r\n]/
 
 function hasBracketedPasteModeSequence(data: string): boolean {
   let escapeIndex = data.indexOf(ESCAPE)
@@ -142,7 +141,7 @@ export function pasteTerminalText(
   }
   if (options?.forceBracketedPaste) {
     // Why: generated image paths are paste payloads, even when they are a
-    // single line, so they must bypass stale Ctrl+C plain-text suppression.
+    // single line or bracketed-paste mode is off.
     forceBracketedPaste(terminal, text)
     return
   }
@@ -156,18 +155,7 @@ export function pasteTerminalText(
     terminal.paste(text)
     return
   }
-  if (LINE_BREAK_RE.test(text)) {
-    terminal.paste(text)
-    return
-  }
-
-  const previousIgnoreBracketedPasteMode = terminal.options.ignoreBracketedPasteMode
-  // Why: Ctrl+C can leave xterm's bracketed-paste bit stale after the foreground
-  // process dies. Single-line paste does not need wrappers, so avoid leaking them.
-  terminal.options.ignoreBracketedPasteMode = true
-  try {
-    terminal.paste(sanitizeTerminalPasteText(text))
-  } finally {
-    terminal.options.ignoreBracketedPasteMode = previousIgnoreBracketedPasteMode
-  }
+  // Why: TUI agents treat paste vs keystrokes by bracketing, not line count.
+  // Stripping wrappers after Ctrl+C truncates long single-line pastes.
+  terminal.paste(text)
 }
