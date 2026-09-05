@@ -16989,6 +16989,8 @@
       "backgroundTasks": {
         "monitoring": "Monitoring background tasks",
         "stop": "Stop",
+        "stopTask": "Stop {{value0}}",
+        "stopAll": "Stop background tasks",
         "agent": "Background agent",
         "workflow": "Background workflow",
         "command": "Background command",

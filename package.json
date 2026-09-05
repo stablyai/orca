@@ -10,6 +10,8 @@
   },
   "main": "./out/main/index.js",
   "scripts": {
+    "audit:perf": "oxlint --config config/oxlint-performance-audit.json --format json src",
+    "test:perf:contracts": "vitest run --config config/vitest.performance.config.ts",
     "format": "oxfmt --write .",
     "lint": "oxlint && pnpm run audit:code-quality:native && pnpm run audit:code-quality:type-aware && pnpm run check:reliability-gates && pnpm run check:max-lines-ratchet && pnpm run check:ts-nocheck-ratchet && pnpm run check:runtime-electron-ratchet && pnpm run verify:bundled-skill-guides && pnpm run verify:skill-bundle-manifest && pnpm run verify:localization-catalog && pnpm run verify:localization-runtime-catalog && pnpm run verify:localization-extraction && pnpm run verify:localization-coverage",
     "audit:code-quality": "pnpm run audit:code-quality:native && pnpm run audit:code-quality:type-aware && pnpm run audit:react-doctor",
@@ -144,7 +146,6 @@
     "bench:agent-inspection-cadence": "node config/scripts/agent-inspection-cadence-batching-benchmark.mjs",
     "bench:renderer-quadratic-scans": "node config/scripts/renderer-quadratic-scan-benchmark.mjs",
     "bench:session-write-hot-path": "node config/scripts/session-write-hot-path-benchmark.mjs",
-    "bench:terminal-partial-escape-tail": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON config/scripts/terminal-partial-escape-tail-benchmark.mjs",
     "bench:terminal-partial-escape-tail": "node config/scripts/terminal-partial-escape-tail-benchmark.mjs",
     "bench:worktree-refresh-churn": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON config/scripts/worktree-refresh-churn-benchmark.mjs",
     "bench:multi-workspace-typing": "pnpm run ensure:electron-runtime && node config/scripts/run-multi-workspace-typing-bench.mjs",

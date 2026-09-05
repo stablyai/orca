@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Check, ChevronRight, SquareTerminal, Wrench } from 'lucide-react'
+import { Check, ChevronRight } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { translate } from '@/i18n/i18n'
 import {
@@ -23,11 +23,12 @@ import {
 } from './native-chat-tool-summary'
 import {
   describeActiveToolCall,
-  isCommandToolName,
   NATIVE_CHAT_TOOL_ACTIVITY_COPY,
   selectActiveToolCall
 } from '../../../../shared/native-chat-tool-activity'
+import { nativeChatToolRunIconName } from '../../../../shared/native-chat-tool-icon'
 import { NativeChatDiffView } from './NativeChatDiffView'
+import { NativeChatToolIcon, NativeChatToolRunIcon } from './NativeChatToolIcon'
 
 function activeToolLabel(call: Extract<NativeChatBlock, { type: 'tool-call' }>): string {
   const { key, toolName, preview } = describeActiveToolCall(call)
@@ -60,8 +61,9 @@ function ToolLine({
   let body: { output: string; isError?: boolean } | null = null
   let detail: string | null = null
   let inputHasDetail = false
+  const isCall = isToolCallBlock(block)
 
-  if (isToolCallBlock(block)) {
+  if (isCall) {
     name = block.name
     const inputDisplay = createToolInputDisplay(block.input)
     preview = inputDisplay.label
@@ -90,6 +92,14 @@ function ToolLine({
         )}
         aria-expanded={hasDetail ? expanded : undefined}
       >
+        {isCall ? (
+          /* Decorative category glyph; the word beside it is the row's name. */
+          <NativeChatToolIcon rowWord={name} className="text-muted-foreground" />
+        ) : (
+          /* A result's word is translated copy, not a tool name, so there is no
+             category to read from it. The empty slot keeps rows aligned. */
+          <span aria-hidden className="size-4 shrink-0" />
+        )}
         <code className="shrink-0 font-mono text-xs font-semibold text-foreground/90 transition-colors group-hover:text-foreground">
           {name}
         </code>
@@ -217,8 +227,13 @@ export function NativeChatToolRun({
     () => (open ? buildEditCards(blocks) : NO_EDIT_CARDS),
     [open, blocks]
   )
-  const ActiveToolIcon =
-    latestActiveCall && isCommandToolName(latestActiveCall.name) ? SquareTerminal : Wrench
+  // Only the settled header reads this. It stands over `summary`, which speaks
+  // for the run's first calls rather than its last, so a glyph taken from one
+  // call would assert a category the text beside it doesn't describe. A run that
+  // spans categories therefore heads with the generic tool glyph. The glyph is
+  // fixed once settled, so state rides on the trailing mark — a leading glyph
+  // that flipped to a check would read as a change of identity.
+  const settledHeaderIcon = nativeChatToolRunIconName(blocks.filter(isToolCallBlock))
   const fallbackLabel =
     callCount === 1
       ? translate('components.native-chat.tool.countOne', NATIVE_CHAT_TOOL_ACTIVITY_COPY.countOne)
@@ -250,9 +265,7 @@ export function NativeChatToolRun({
           aria-expanded={open}
           aria-live="polite"
         >
-          <span className="flex size-6 shrink-0 items-center justify-center text-muted-foreground">
-            <ActiveToolIcon className="size-4" />
-          </span>
+          <NativeChatToolIcon rowWord={latestActiveCall.name} className="text-muted-foreground" />
           <span className="min-w-0 flex-1 animate-pulse truncate text-foreground/85 motion-reduce:animate-none">
             {activeToolLabel(latestActiveCall)}
           </span>
@@ -265,10 +278,8 @@ export function NativeChatToolRun({
           className="group flex min-h-6 w-full items-center gap-1.5 py-0.5 text-left"
           aria-expanded={open}
         >
-          {structuredActivityUi ? (
-            <span className="flex size-6 shrink-0 items-center justify-center text-muted-foreground">
-              <Check className="size-3.5" />
-            </span>
+          {structuredActivityUi && settledHeaderIcon ? (
+            <NativeChatToolRunIcon iconName={settledHeaderIcon} className="text-muted-foreground" />
           ) : null}
           <span className="shrink-0 font-mono text-[11px] font-bold text-muted-foreground transition-colors group-hover:text-foreground/80">
             {callCount}×
@@ -276,6 +287,10 @@ export function NativeChatToolRun({
           <span className="min-w-0 truncate font-mono text-[11px] text-muted-foreground transition-colors group-hover:text-foreground/80">
             {summary || fallbackLabel}
           </span>
+          {/* Completion reads as a trailing mark so the leading glyph can stay fixed. */}
+          {structuredActivityUi ? (
+            <Check aria-hidden className="size-3 shrink-0 text-muted-foreground" />
+          ) : null}
           {/* Chevron is revealed on hover when collapsed and points down when open. */}
           <ChevronRight
             className={cn(

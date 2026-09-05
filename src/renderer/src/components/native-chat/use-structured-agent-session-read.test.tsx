@@ -19,10 +19,7 @@ vi.mock('@/runtime/structured-agent-session-client', () => ({
   subscribeStructuredAgentSession: mocks.subscribe
 }))
 
-import {
-  useStructuredAgentSessionRead,
-  useStructuredAgentSessionReadObservation
-} from './use-structured-agent-session-read'
+import { useStructuredAgentSessionRead } from './use-structured-agent-session-read'
 import { resetStructuredAgentSessionReadOwnersForTests } from './structured-agent-session-read-owner'
 
 const LOCAL_TARGET = { kind: 'local' } as const
@@ -355,32 +352,6 @@ describe('useStructuredAgentSessionRead history window', () => {
     expect(mocks.subscribe).not.toHaveBeenCalled()
     first.unmount()
     second.unmount()
-  })
-
-  it('shares one subscriber when pane and projection observe the same visible session', async () => {
-    const unsubscribe = vi.fn()
-    mocks.call.mockResolvedValue({ ok: true, page: page('tail', [], false) })
-    mocks.subscribe.mockResolvedValue({ unsubscribe })
-
-    const view = renderHook(() => {
-      const pane = useStructuredAgentSessionRead({
-        sessionId: 'session-shared',
-        target: LOCAL_TARGET,
-        isVisible: true
-      })
-      const projection = useStructuredAgentSessionReadObservation({
-        sessionId: 'session-shared',
-        target: LOCAL_TARGET
-      })
-      return { pane, projection }
-    })
-
-    await waitFor(() => expect(mocks.subscribe).toHaveBeenCalledOnce())
-    expect(mocks.call).toHaveBeenCalledOnce()
-    expect(view.result.current.pane.state).toBe(view.result.current.projection.state)
-
-    view.unmount()
-    expect(unsubscribe).toHaveBeenCalledOnce()
   })
 
   it('preserves cached state while switching away and refreshes once on re-entry', async () => {

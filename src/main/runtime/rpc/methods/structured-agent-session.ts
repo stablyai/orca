@@ -22,6 +22,14 @@ import type { AgentSessionAttachParams } from '../../../native-chat/agent-sessio
 import { STRUCTURED_AGENT_SESSION_HOLD_METHODS } from './structured-agent-session-hold'
 import { resolveUncommittedStructuredCreate } from './structured-agent-session-precommit-refusal'
 import {
+  bindStructuredAgentSessionStream,
+  STRUCTURED_AGENT_SESSION_STATUS_METHODS
+} from './structured-agent-session-status-stream'
+import {
+  structuredAgentSessionSubscriptionBase as subscriptionBaseFor,
+  structuredAgentSessionSubscriptionId as subscriptionIdFor
+} from './structured-agent-session-subscription-id'
+import {
   AttachParams,
   CancelParams,
   CreateParams,
@@ -36,15 +44,6 @@ import {
   SubscribeParams,
   UnsubscribeParams
 } from './structured-agent-session-schemas'
-
-const SUBSCRIPTION_PREFIX = 'agentSession'
-
-function subscriptionIdFor(ctx: RpcContext, sessionId: string): string {
-  const base = `${SUBSCRIPTION_PREFIX}:${ctx.connectionId ?? 'local'}:${sessionId}`
-  // Shared control multiplexes several streams over one socket; the frame id
-  // keeps one subscriber from evicting another on the same session.
-  return ctx.requestId ? `${base}:${ctx.requestId}` : base
-}
 
 /**
  * The attach-shaped entries take the location from the client instead of resolving it from a
@@ -245,33 +244,12 @@ export const STRUCTURED_AGENT_SESSION_METHODS: RpcAnyMethod[] = [
       // Retain-only: reading history must never be what starts a provider process. Current clients
       // explicitly hold every open surface before subscribing.
       const streamHolder = `subscription:${subscriptionId}`
-      let closed = false
       let dispose = (): void => {}
-      let releaseTransportSubscription = (): void => {}
-      const onTransportAbort = (): void => releaseTransportSubscription()
-      const cleanup = () => {
-        closed = true
-        ctx.signal?.removeEventListener('abort', onTransportAbort)
+      const stream = bindStructuredAgentSessionStream(ctx, subscriptionId, () => {
         dispose()
         host.release(params.sessionId, streamHolder)
-      }
-      let registration: { releaseIfCurrent: () => void }
-      if (typeof ctx.runtime.registerOwnedSubscriptionCleanup === 'function') {
-        registration = ctx.runtime.registerOwnedSubscriptionCleanup(
-          subscriptionId,
-          cleanup,
-          ctx.connectionId
-        )
-      } else {
-        ctx.runtime.registerSubscriptionCleanup(subscriptionId, cleanup, ctx.connectionId)
-        registration = { releaseIfCurrent: () => ctx.runtime.cleanupSubscription(subscriptionId) }
-      }
-      releaseTransportSubscription = registration.releaseIfCurrent
-      ctx.signal?.addEventListener('abort', onTransportAbort, { once: true })
-      if (ctx.signal?.aborted) {
-        onTransportAbort()
-      }
-      if (closed) {
+      })
+      if (stream.isClosed()) {
         return
       }
       // The host emits the opening snapshot (or the missed batch) synchronously
@@ -282,7 +260,7 @@ export const STRUCTURED_AGENT_SESSION_METHODS: RpcAnyMethod[] = [
         emit,
         ...(params.cursor ? { cursor: params.cursor } : {})
       })
-      if (closed) {
+      if (stream.isClosed()) {
         dispose()
       } else {
         // Fire-and-forget, but never unhandled: a resume that refuses leaves the stream holding a
@@ -300,8 +278,7 @@ export const STRUCTURED_AGENT_SESSION_METHODS: RpcAnyMethod[] = [
     params: UnsubscribeParams,
     handler: async (params, ctx) => {
       requireHost(ctx)
-      const connection = ctx.connectionId ?? 'local'
-      const base = `${SUBSCRIPTION_PREFIX}:${connection}:${params.sessionId}`
+      const base = subscriptionBaseFor(ctx, params.sessionId)
       if (params.subscriptionId) {
         ctx.runtime.cleanupSubscription(`${base}:${params.subscriptionId}`)
         return { unsubscribed: true }
@@ -311,5 +288,6 @@ export const STRUCTURED_AGENT_SESSION_METHODS: RpcAnyMethod[] = [
       return { unsubscribed: true }
     }
   }),
-  ...STRUCTURED_AGENT_SESSION_HOLD_METHODS
+  ...STRUCTURED_AGENT_SESSION_HOLD_METHODS,
+  ...STRUCTURED_AGENT_SESSION_STATUS_METHODS
 ]

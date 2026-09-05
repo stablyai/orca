@@ -54,6 +54,39 @@ function hydrationPage(
 }
 
 describe('structured agent session reducer', () => {
+  it('applies an additive targeted-stop capability update without journal churn', () => {
+    const backgroundTasks = {
+      state: 'monitoring' as const,
+      tasks: [{ id: 'task-1', kind: 'agent' as const }]
+    }
+    const initial = reduceStructuredAgentSession(EMPTY_STRUCTURED_AGENT_SESSION, {
+      type: 'event',
+      event: {
+        type: 'snapshot',
+        sessionId: 'session-a',
+        fence: 1,
+        page: { ...hydrationPage([]), backgroundTasks }
+      }
+    })
+    const updated = reduceStructuredAgentSession(initial, {
+      type: 'event',
+      event: {
+        type: 'batch',
+        sessionId: 'session-a',
+        batch: {
+          cursor: { epoch: 'epoch-a', sequence: 0 },
+          items: [],
+          removedItemIds: [],
+          submissions: []
+        },
+        backgroundTasks: { ...backgroundTasks, supportsTaskStop: true }
+      }
+    })
+
+    expect(updated.backgroundTasks).toEqual({ ...backgroundTasks, supportsTaskStop: true })
+    expect(updated.items).toBe(initial.items)
+  })
+
   it('uses the bounded hydration page pagination boundary', () => {
     const restored = reduceStructuredAgentSession(EMPTY_STRUCTURED_AGENT_SESSION, {
       type: 'event',
