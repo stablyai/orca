@@ -32,6 +32,7 @@ import {
   structuredWorkerProcessIncarnation,
   type StructuredWorkerIdentity
 } from '../../structured-worker-identity'
+import { createKeyedTrailingEdgeCoalescer } from '../../keyed-trailing-edge-coalescer'
 import { createStructuredAgentSessionForWorktree } from './structured-agent-session-create'
 
 type StructuredWorkerBinding = {
@@ -269,29 +270,57 @@ function requireInstalledHost(): StructuredAgentSessionHost {
 }
 
 /**
- * Any journal movement is the redrive edge.
+ * Quiet window before a coalesced redrive runs. A settled turn stops emitting, so this is how long
+ * after the last batch the nudge lands — short enough to read as immediate, long enough that a
+ * streaming turn collapses into a handful of evaluations instead of one per batch.
+ */
+const REDRIVE_FLUSH_MS = 300
+
+/** A turn that streams without pause still gets re-evaluated this often. */
+const REDRIVE_MAX_WAIT_MS = 2_000
+
+/**
+ * Any journal movement is the redrive edge, coalesced.
  *
  * A settled turn is TOMBSTONED rather than rewritten, so watching for a completed lifecycle row
- * would miss the common case. Re-running the gate on every batch is cheap because it only does
- * work when a pointer is actually parked on this session.
+ * would miss the common case — every batch has to be a candidate. Running the gate on each one is
+ * not free once mail IS parked on the session: the edge re-resolves the dispatch, queries unread
+ * mail and reads the host's gate facts, only to re-park because the turn is still running. A
+ * streaming turn paid that per batch.
+ *
+ * Coalescing costs nothing in delivery terms. The pointer body names only HOW MANY messages are
+ * waiting, so the edge is inherently batch-shaped, and this is not the path fresh mail takes to an
+ * idle worker — that is `deliverForHandle`, called when the message is enqueued and untouched
+ * here. This is only the retry for mail already parked because the worker was busy.
  */
 function subscribeForRedrive(
   host: StructuredAgentSessionHost,
   sessionId: string,
   onJournalActivity: (sessionId: string) => void
 ): () => void {
+  const coalescer = createKeyedTrailingEdgeCoalescer(onJournalActivity, {
+    flushMs: REDRIVE_FLUSH_MS,
+    maxWaitMs: REDRIVE_MAX_WAIT_MS
+  })
   try {
-    return host.subscribe({
+    const unsubscribe = host.subscribe({
       id: `orchestration:redrive:${sessionId}`,
       sessionId,
       emit: (event) => {
         if (event.type === 'batch' || event.type === 'reset') {
-          onJournalActivity(sessionId)
+          coalescer.schedule(sessionId)
         }
       }
     })
+    // Disposal drops the pending timer rather than flushing it: every settlement reaches here, and
+    // a redrive that fires after the hold is gone would nudge a session no dispatch owns.
+    return () => {
+      coalescer.dispose()
+      unsubscribe()
+    }
   } catch (error) {
     console.warn('[orchestration] structured worker redrive subscription failed', sessionId, error)
+    coalescer.dispose()
     return () => {}
   }
 }
