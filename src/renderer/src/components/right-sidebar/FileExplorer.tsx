@@ -1,6 +1,14 @@
 import React, { useCallback, useMemo } from 'react'
 import { useAppStore } from '@/store'
 import { useActiveWorktree, useRepoById } from '@/store/selectors'
+import {
+  getExplorerDisplayRootOptions,
+  resolveExplorerDisplayRootChoice,
+  getExplorerDisplayRootPath,
+  getExplorerDisplayDepth,
+  getExplorerEffectiveExpanded
+} from './file-explorer-display-root'
+import { useFileExplorerScopeTransition } from './use-file-explorer-scope-transition'
 import { basename } from '@/lib/path'
 import { cn } from '@/lib/utils'
 import { isGitRepoKind } from '../../../../shared/repo-kind'
@@ -28,6 +36,7 @@ import { useFileExplorerTreePaneState } from './use-file-explorer-tree-pane-stat
 import { translate } from '@/i18n/i18n'
 import type { RightSidebarExplorerView } from '../../../../shared/ui-chrome-types'
 
+/** Coordinates scoped navigation while retaining the actual worktree root for file operations and runtime routing. */
 function FileExplorerFiles(): React.JSX.Element {
   const explorerView = useAppStore((s) => s.rightSidebarExplorerView)
   const showRightSidebarFiles = useAppStore((s) => s.showRightSidebarFiles)
@@ -46,7 +55,15 @@ function FileExplorerFiles(): React.JSX.Element {
   )
   const toggleShowDotfilesForWorktree = useAppStore((s) => s.toggleShowDotfilesForWorktree)
 
+  const savedRoot = useAppStore((s) =>
+    activeWorktreeId ? s.explorerDisplayRootByWorktree[activeWorktreeId] : undefined
+  )
+  const setExplorerRoot = useAppStore((s) => s.setExplorerDisplayRootForWorktree)
+  const rootOptions = useMemo(() => getExplorerDisplayRootOptions(activeWorktree), [activeWorktree])
+  const rootChoice = resolveExplorerDisplayRootChoice(rootOptions, savedRoot)
   const worktreePath = activeWorktree?.path ?? null
+  const displayRootPath = getExplorerDisplayRootPath(worktreePath, rootChoice)
+  const displayDepth = getExplorerDisplayDepth(worktreePath, displayRootPath)
   const isFilesViewActive = explorerView === 'files'
   const visibleFilesWorktreePath = getVisibleFileExplorerWorktreePath({
     explorerView,
@@ -62,7 +79,15 @@ function FileExplorerFiles(): React.JSX.Element {
     [activeWorktreeId, expandedDirs]
   )
 
-  const tree = useFileExplorerTree(worktreePath, expanded, activeWorktreeId)
+  const effectiveExpanded = useMemo(
+    () =>
+      getExplorerEffectiveExpanded(
+        expanded,
+        visibleFilesWorktreePath && displayRootPath !== worktreePath ? displayRootPath : null
+      ),
+    [expanded, visibleFilesWorktreePath, displayRootPath, worktreePath]
+  )
+  const tree = useFileExplorerTree(worktreePath, effectiveExpanded, activeWorktreeId)
   const {
     nameFilterQuery,
     setNameFilterQuery,
@@ -99,7 +124,8 @@ function FileExplorerFiles(): React.JSX.Element {
     activeRepoSupportsGit && isFilesViewActive,
     showDotfiles,
     nameFilterSource,
-    hasNameFilter ? nameFilterCollapsedPaths : null
+    hasNameFilter ? nameFilterCollapsedPaths : null,
+    visibleFilesWorktreePath ? displayRootPath : null
   )
   const rowExpandedPaths = useMemo(
     () =>
@@ -153,6 +179,8 @@ function FileExplorerFiles(): React.JSX.Element {
     activeRepo,
     worktreePath,
     visibleFilesWorktreePath,
+    displayRootPath,
+    effectiveExpanded,
     expanded,
     activeFileId,
     openFiles,
@@ -174,10 +202,29 @@ function FileExplorerFiles(): React.JSX.Element {
     handleExplorerBackgroundContextMenuCapture,
     handleExplorerBackgroundDoubleClick
   } = useFileExplorerBackgroundMenu({
-    worktreePath,
+    worktreePath: displayRootPath,
+    displayDepth,
     inlineInput: inlineInputState.inlineInput,
     startNew: inlineInputState.startNew
   })
+
+  useFileExplorerScopeTransition({
+    displayRootPath,
+    activeWorktreeId,
+    paneState,
+    selection,
+    setBgMenuOpen
+  })
+  const handleRootChange = useCallback(
+    (value: string) => {
+      if (!activeWorktreeId) {
+        return
+      }
+      useAppStore.getState().clearPendingExplorerReveal()
+      setExplorerRoot(activeWorktreeId, value)
+    },
+    [activeWorktreeId, setExplorerRoot]
+  )
 
   if (!worktreePath) {
     return (
@@ -206,6 +253,18 @@ function FileExplorerFiles(): React.JSX.Element {
         className="flex min-h-0 flex-1 flex-col"
       >
         <FileExplorerToolbar
+          rootSelect={
+            isFilesViewActive && rootOptions
+              ? {
+                  options: rootOptions,
+                  value: rootChoice,
+                  onValueChange: handleRootChange,
+                  disabled:
+                    Boolean(paneState.dragDrop.dragSourcePath) ||
+                    paneState.dragDrop.isNativeDragOver
+                }
+              : null
+          }
           repoName={repoName}
           worktreePath={worktreePath}
           connectionId={activeRepo?.connectionId ?? null}
@@ -258,6 +317,7 @@ function FileExplorerFiles(): React.JSX.Element {
            avoids remounting heavy virtualized panes while preserving full height. */}
         <div className="relative min-h-0 flex-1 overflow-hidden">
           <FileExplorerFilesTreePane
+            displayRootPath={displayRootPath}
             activeRepo={activeRepo}
             worktreePath={worktreePath}
             visibleFilesWorktreePath={visibleFilesWorktreePath}
@@ -302,7 +362,8 @@ function FileExplorerFiles(): React.JSX.Element {
         open={bgMenuOpen}
         onOpenChange={setBgMenuOpen}
         point={bgMenuPoint}
-        worktreePath={worktreePath}
+        worktreePath={displayRootPath ?? worktreePath}
+        displayDepth={displayDepth}
         onStartNew={inlineInputState.startNew}
       />
     </>

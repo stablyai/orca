@@ -239,6 +239,7 @@ export function getDefaultPersistedState(homedir: string): PersistedState {
   }
 }
 
+/** Creates fresh UI defaults with completed migration markers so new profiles are not treated as legacy installations. */
 export function getDefaultUIState(): PersistedUIState {
   return {
     lastActiveRepoId: null,
@@ -268,6 +269,8 @@ export function getDefaultUIState(): PersistedUIState {
     hideDetachedHeadWorkspaces: false,
     hideWorkspacesFromOtherDevices: false,
     alwaysShowDefaultBranchWorkspace: true,
+    _explorerDisplayRootMigrated: true,
+    explorerDisplayRootByWorktree: {},
     showDotfilesByWorktree: {},
     filterRepoIds: [],
     agentsVisibleHostIds: null,

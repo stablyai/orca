@@ -16580,5 +16580,12 @@
   },
   "quickOpen": {
     "moreMatchesAvailable": "D'autres correspondances sont peut-être disponibles. Affinez votre recherche pour réduire les résultats."
+  },
+  "fileExplorer": {
+    "root": {
+      "label": "Racine de l’explorateur",
+      "full": "Racine du dépôt",
+      "retry": "Réessayer"
+    }
   }
 }

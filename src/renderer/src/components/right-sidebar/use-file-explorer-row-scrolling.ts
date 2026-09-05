@@ -15,6 +15,7 @@ type UseFileExplorerRowScrollingParams = {
   scrollRef: RefObject<HTMLDivElement | null>
   activeWorktreeId: string | null
   worktreePath: string | null
+  displayRootPath?: string | null
   expanded: Set<string>
   dirCache: Record<string, DirCache>
   loadingDirPaths: ReadonlySet<string>
@@ -29,6 +30,7 @@ type UseFileExplorerRowScrollingResult = {
   virtualizer: Virtualizer<HTMLDivElement, Element>
   scrollToIndex: (index: number) => void
   flashingPath: string | null
+  cancelRevealTimers: () => void
   explorerShellRef: RefObject<HTMLDivElement | null>
   setExplorerShellRef: (node: HTMLDivElement | null) => void
 }
@@ -41,6 +43,7 @@ export function useFileExplorerRowScrolling({
   scrollRef,
   activeWorktreeId,
   worktreePath,
+  displayRootPath = worktreePath,
   expanded,
   dirCache,
   loadingDirPaths,
@@ -79,12 +82,13 @@ export function useFileExplorerRowScrolling({
   const cancelRevealTimers = useFileExplorerReveal({
     activeWorktreeId,
     worktreePath,
+    displayRootPath,
     pendingExplorerReveal,
     clearPendingExplorerReveal,
     expanded,
     dirCache,
     loadingDirPaths,
-    rootCache,
+    rootCache: displayRootPath ? dirCache[displayRootPath] : rootCache,
     rowProjection,
     loadDir,
     setSelectedPath,
@@ -109,6 +113,7 @@ export function useFileExplorerRowScrolling({
     activeFileId,
     activeWorktreeId,
     worktreePath,
+    displayRootPath,
     pendingExplorerReveal,
     openFiles,
     rowProjection,
@@ -129,5 +134,12 @@ export function useFileExplorerRowScrolling({
     [virtualizer]
   )
 
-  return { virtualizer, scrollToIndex, flashingPath, explorerShellRef, setExplorerShellRef }
+  return {
+    virtualizer,
+    scrollToIndex,
+    flashingPath,
+    explorerShellRef,
+    setExplorerShellRef,
+    cancelRevealTimers
+  }
 }

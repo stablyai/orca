@@ -250,6 +250,9 @@ export function migrateWorktreeIdentity(
   )) {
     changed = moveKey(selectionsByWorktree) || changed
   }
+  if (state.ui?.explorerDisplayRootByWorktree) {
+    changed = moveKey(state.ui.explorerDisplayRootByWorktree) || changed
+  }
   const showDotfiles = state.ui?.showDotfilesByWorktree
   if (showDotfiles) {
     changed = moveKey(showDotfiles) || changed

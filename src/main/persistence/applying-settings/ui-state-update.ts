@@ -1,3 +1,4 @@
+import { normalizeExplorerDisplayRootByWorktree } from '../../../shared/file-explorer-display-root'
 import type { PersistedState } from '../../../shared/persisted-state-types'
 import {
   getDefaultUIState,
@@ -53,6 +54,7 @@ export type UIUpdateOperations = {
   notifyUIChanged: () => void
 }
 
+/** Applies a sanitized partial update while keeping active-view persistence separate from durable UI fields. */
 export function updatePersistedUI(
   operations: UIUpdateOperations,
   updates: Partial<PersistedState['ui']>
@@ -167,6 +169,12 @@ export function updatePersistedUI(
     browserDefaultZoomLevel: normalizeBrowserPageZoomLevel(
       sanitizedUpdates.browserDefaultZoomLevel ?? operations.state.ui?.browserDefaultZoomLevel
     ),
+    explorerDisplayRootByWorktree:
+      sanitizedUpdates.explorerDisplayRootByWorktree !== undefined
+        ? normalizeExplorerDisplayRootByWorktree(sanitizedUpdates.explorerDisplayRootByWorktree)
+        : normalizeExplorerDisplayRootByWorktree(
+            operations.state.ui?.explorerDisplayRootByWorktree
+          ),
     showDotfilesByWorktree:
       sanitizedUpdates.showDotfilesByWorktree !== undefined
         ? normalizeShowDotfilesByWorktree(sanitizedUpdates.showDotfilesByWorktree)

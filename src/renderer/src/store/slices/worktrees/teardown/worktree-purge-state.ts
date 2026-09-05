@@ -9,6 +9,7 @@ import { removeDeleteStatesForWorktreeIds } from './worktree-delete-state'
 import { removeWorktreeVisitEntriesForTargets } from '@/lib/worktree-visit-recency'
 import { forgetAmbiguousOwnerWarnings } from '../listing/worktree-owner-settings'
 
+/** Builds a bulk cleanup patch and clears auxiliary warning records without requiring individual terminal teardown. */
 export function buildWorktreePurgeState(
   s: AppState,
   worktreeTargets: WorktreePurgeTargets
@@ -169,6 +170,7 @@ export function buildWorktreePurgeState(
     ),
     // Why: keyed by worktreeId; without this it leaks a huge-status marker per removed worktree.
     gitStatusHugeByWorktree: omitByWorktree(s.gitStatusHugeByWorktree),
+    explorerDisplayRootByWorktree: omitByWorktree(s.explorerDisplayRootByWorktree),
     showDotfilesByWorktree: omitByWorktree(s.showDotfilesByWorktree),
     expandedDirs: omitByWorktree(s.expandedDirs),
     // Per-file editor state for removed files

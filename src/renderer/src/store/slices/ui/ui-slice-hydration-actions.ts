@@ -56,7 +56,7 @@ import {
   preserveStringArrayIdentity,
   sanitizeHydratedActiveView,
   sanitizePersistedRepoIds,
-  sanitizeShowDotfilesByWorktree,
+  sanitizeExplorerPreferences,
   sanitizeWorkspaceCleanupDismissals,
   sanitizePersistedSidebarWidth,
   hydratedUIPartialMatchesState,
@@ -95,8 +95,10 @@ function hydrateStatusBarItems(ui: PersistedUIState): StatusBarItem[] {
   return items
 }
 
+/** Builds hydration actions that reconcile authoritative UI state without discarding pending local edits. */
 export function createUiHydrationActions(set: UISliceSet, _get: UISliceGet): Partial<UISlice> {
   return {
+    /** Captures the incoming write baseline before overlaying dirty or in-flight local fields. */
     hydratePersistedUI: (ui, source = 'sync') =>
       set((s) => {
         const manualRepoOrder = normalizeManualRepoOrder(ui.manualRepoOrder)
@@ -168,7 +170,7 @@ export function createUiHydrationActions(set: UISliceSet, _get: UISliceGet): Par
           // Why !== false: profiles written before #8873 have no key, and they are
           // precisely the ones showing the bug, so absence must mean "exempt".
           alwaysShowDefaultBranchWorkspace: ui.alwaysShowDefaultBranchWorkspace !== false,
-          showDotfilesByWorktree: sanitizeShowDotfilesByWorktree(ui.showDotfilesByWorktree),
+          ...sanitizeExplorerPreferences(ui),
           // Why: startup hydrates UI before repo catalogs, so defer repo-filter validation to the all-host refresh.
           filterRepoIds:
             validRepoIds.size === 0

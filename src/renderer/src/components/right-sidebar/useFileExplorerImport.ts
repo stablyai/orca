@@ -1,4 +1,5 @@
-import { useEffect, useRef } from 'react'
+import { getRelativePathInsideRoot } from '@/lib/path'
+import { useEffect, useLayoutEffect, useRef } from 'react'
 import { toast } from 'sonner'
 import { extractIpcErrorMessage } from '@/lib/ipc-error'
 import { importExternalPathsToRuntime } from '@/runtime/runtime-file-client'
@@ -8,6 +9,7 @@ import { captureFileExplorerOperationGuard } from './file-explorer-operation-own
 
 type UseFileExplorerImportParams = {
   worktreePath: string | null
+  displayRootPath?: string | null
   activeWorktreeId: string | null
   refreshDir: (dirPath: string) => Promise<void>
   clearNativeDragState: () => void
@@ -26,6 +28,7 @@ type UseFileExplorerImportParams = {
  */
 export function useFileExplorerImport({
   worktreePath,
+  displayRootPath = worktreePath,
   activeWorktreeId,
   refreshDir,
   clearNativeDragState,
@@ -33,18 +36,32 @@ export function useFileExplorerImport({
   operationOwner
 }: UseFileExplorerImportParams): void {
   // Refs to avoid re-subscribing IPC listener on every render
+  const displayRootRef = useRef(displayRootPath)
   const worktreePathRef = useRef(worktreePath)
-  worktreePathRef.current = worktreePath
   const activeWorktreeIdRef = useRef(activeWorktreeId)
-  activeWorktreeIdRef.current = activeWorktreeId
   const refreshDirRef = useRef(refreshDir)
-  refreshDirRef.current = refreshDir
   const clearNativeDragStateRef = useRef(clearNativeDragState)
-  clearNativeDragStateRef.current = clearNativeDragState
   const setSelectedPathRef = useRef(setSelectedPath)
-  setSelectedPathRef.current = setSelectedPath
   const operationOwnerRef = useRef(operationOwner)
-  operationOwnerRef.current = operationOwner
+
+  // Native drops must observe only committed workspace state.
+  useLayoutEffect(() => {
+    displayRootRef.current = displayRootPath
+    worktreePathRef.current = worktreePath
+    activeWorktreeIdRef.current = activeWorktreeId
+    refreshDirRef.current = refreshDir
+    clearNativeDragStateRef.current = clearNativeDragState
+    setSelectedPathRef.current = setSelectedPath
+    operationOwnerRef.current = operationOwner
+  }, [
+    displayRootPath,
+    worktreePath,
+    activeWorktreeId,
+    refreshDir,
+    clearNativeDragState,
+    setSelectedPath,
+    operationOwner
+  ])
 
   useEffect(() => {
     return window.api.ui.onFileDrop((data) => {
@@ -93,7 +110,11 @@ export function useFileExplorerImport({
           const skipped = results.filter((r) => r.status === 'skipped')
           const failed = results.filter((r) => r.status === 'failed')
 
-          if (imported.length > 0) {
+          if (
+            imported.length > 0 &&
+            activeWorktreeIdRef.current === wtId &&
+            getRelativePathInsideRoot(imported[0].destPath, displayRootRef.current) !== null
+          ) {
             setSelectedPathRef.current(imported[0].destPath)
           }
 

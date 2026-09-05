@@ -9,6 +9,7 @@ type FileExplorerTreeStatusProps = {
   emptyMessage?: string
 }
 
+/** Treats even an empty error message as a failed read, keeping unreadable directories distinct from empty ones. */
 export function FileExplorerTreeStatus({
   isLoading,
   error,
@@ -23,7 +24,7 @@ export function FileExplorerTreeStatus({
     )
   }
 
-  if (error) {
+  if (error !== null) {
     return (
       <div className="flex h-full items-center justify-center px-4 text-center text-[11px] text-muted-foreground">
         {translate(

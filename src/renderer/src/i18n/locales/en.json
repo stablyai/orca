@@ -17583,5 +17583,12 @@
       "action": "Try Agents",
       "hiddenToast": "Agents tab hidden. Re-enable it in Settings → Experimental."
     }
+  },
+  "fileExplorer": {
+    "root": {
+      "label": "Explorer root",
+      "full": "Full repo root",
+      "retry": "Retry"
+    }
   }
 }

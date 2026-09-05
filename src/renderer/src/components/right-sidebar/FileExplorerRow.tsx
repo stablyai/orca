@@ -23,6 +23,7 @@ import { FileExplorerRowContextMenu } from './file-explorer-row-context-menu'
 
 export type FileExplorerRowProps = {
   node: TreeNode
+  displayDepthOffset?: number
   isExpanded: boolean
   isLoading: boolean
   isSelected: boolean
@@ -62,8 +63,10 @@ export type FileExplorerRowProps = {
   onNativeDragExpandDir: (dirPath: string) => void
 }
 
+/** Offsets visual indentation for a scoped tree without changing the node paths passed to file actions. */
 export function FileExplorerRow({
   node,
+  displayDepthOffset = 0,
   isExpanded,
   isLoading,
   isSelected,
@@ -137,7 +140,7 @@ export function FileExplorerRow({
             isSelected && 'text-accent-foreground',
             isFlashing && 'bg-amber-400/20 ring-1 ring-inset ring-amber-400/70'
           )}
-          style={{ paddingLeft: `${node.depth * 16 + 8}px` }}
+          style={{ paddingLeft: `${(node.depth - displayDepthOffset) * 16 + 8}px` }}
           ref={setRowDragNode}
           data-native-file-drop-dir={rowDropDir}
           // Why: marks this draggable row so the wheel-capture handler can rescue

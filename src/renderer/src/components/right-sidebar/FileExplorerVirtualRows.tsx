@@ -14,6 +14,7 @@ type FileExplorerVirtualRowsProps = {
   virtualizer: Virtualizer<HTMLDivElement, Element>
   inlineInputIndex: number
   rowProjection: FileExplorerRowProjection
+  displayDepthOffset?: number
   inlineInput: InlineInput | null
   handleInlineSubmit: (value: string) => void
   dismissInlineInput: () => void
@@ -56,11 +57,13 @@ type FileExplorerVirtualRowsProps = {
   nativeDropTargetDir: string | null
 }
 
+/** Renders virtual and inline-input rows using display-relative indentation but worktree-relative operation paths. */
 export function FileExplorerVirtualRows(props: FileExplorerVirtualRowsProps): React.JSX.Element {
   const {
     virtualizer,
     inlineInputIndex,
     rowProjection,
+    displayDepthOffset = 0,
     inlineInput,
     handleInlineSubmit,
     dismissInlineInput,
@@ -133,7 +136,7 @@ export function FileExplorerVirtualRows(props: FileExplorerVirtualRowsProps): Re
               style={{ transform: `translateY(${vItem.start}px)` }}
             >
               <InlineInputRow
-                depth={inlineDepth}
+                depth={inlineDepth - displayDepthOffset}
                 inlineInput={inlineInput!}
                 onSubmit={handleInlineSubmit}
                 onCancel={dismissInlineInput}
@@ -170,6 +173,7 @@ export function FileExplorerVirtualRows(props: FileExplorerVirtualRowsProps): Re
             style={{ transform: `translateY(${vItem.start}px)` }}
           >
             <FileExplorerRow
+              displayDepthOffset={displayDepthOffset}
               node={n}
               isExpanded={expanded.has(n.path)}
               isLoading={n.isDirectory && loadingDirPaths.has(n.path)}
