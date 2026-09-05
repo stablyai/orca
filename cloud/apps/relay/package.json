@@ -15,7 +15,7 @@
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
-    "@hono/node-server": "^1.19.14",
+    "@hono/node-server": "^1.19.15",
     "@orca-cloud/relay-contract": "workspace:*",
     "hono": "^4.12.27",
     "jose": "^6.1.3",
