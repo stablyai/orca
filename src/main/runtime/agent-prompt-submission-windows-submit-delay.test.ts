@@ -4,6 +4,7 @@ import {
   getAgentPromptSubmitDelayMs,
   getTerminalPasteIngestMs
 } from '../../shared/agent-prompt-injection'
+import { AGENT_PROMPT_ECHO_SETTLE_MS } from './agent-prompt-paste-echo'
 import { setSshTargetRegistryHandlers } from '../ssh/ssh-target-registry'
 import { OrcaRuntimeService } from './orca-runtime'
 import { makeStore } from './runtime-rpc-worktree-store-fixtures'
@@ -321,7 +322,12 @@ describe('agent prompt render gate on a ConPTY host', () => {
           submitTimes.push(Date.now() - startedAt)
         }
         if (data.includes('\x1b[201~')) {
-          setTimeout(() => runtime.onPtyData(PTY_ID, '\x1b[?25h', Date.now()), markerDelayMs)
+          setTimeout(() => {
+            runtime.onPtyData(PTY_ID, '\x1b[?25h', Date.now())
+            // Why: the paste-echo wait layered on the render gate needs pane evidence the
+            // paste landed; a collapse placeholder is the fast path a real composer takes.
+            runtime.onPtyData(PTY_ID, '[Pasted text #1 +1 lines]', Date.now())
+          }, markerDelayMs)
           for (let at = markerDelayMs + 500; at <= (agentOutput.noiseUntilMs ?? 0); at += 500) {
             setTimeout(() => runtime.onPtyData(PTY_ID, '.', Date.now()), at)
           }
@@ -378,8 +384,10 @@ describe('agent prompt render gate on a ConPTY host', () => {
 
     await vi.runAllTimersAsync()
     expect(submitTimes).toHaveLength(1)
-    expect(submitTimes[0]).toBeGreaterThanOrEqual(ingestMs + 8_000)
-    expect(submitTimes[0]).toBeLessThan(ingestMs + 8_500)
+    // Why +AGENT_PROMPT_ECHO_SETTLE_MS: the pane's placeholder echo is already visible by the
+    // time the gate's hard cap fires, so the paste-echo wait adds only its fixed settle here.
+    expect(submitTimes[0]).toBeGreaterThanOrEqual(ingestMs + 8_000 + AGENT_PROMPT_ECHO_SETTLE_MS)
+    expect(submitTimes[0]).toBeLessThan(ingestMs + 8_500 + AGENT_PROMPT_ECHO_SETTLE_MS)
     await stalled
   })
 
@@ -392,9 +400,11 @@ describe('agent prompt render gate on a ConPTY host', () => {
 
     await vi.runAllTimersAsync()
     expect(submitTimes).toHaveLength(1)
-    // 100 ms marker + 1_500 ms quiet: a sub-chunk paste adds no measurable ingest.
-    expect(submitTimes[0]).toBeGreaterThanOrEqual(1_600)
-    expect(submitTimes[0]).toBeLessThan(1_700)
+    // 100 ms marker + 1_500 ms quiet: a sub-chunk paste adds no measurable ingest. The
+    // placeholder echo is already visible by then, so the paste-echo wait adds only its
+    // fixed settle on top.
+    expect(submitTimes[0]).toBeGreaterThanOrEqual(1_600 + AGENT_PROMPT_ECHO_SETTLE_MS)
+    expect(submitTimes[0]).toBeLessThan(1_700 + AGENT_PROMPT_ECHO_SETTLE_MS)
     await stalled
   })
 })
