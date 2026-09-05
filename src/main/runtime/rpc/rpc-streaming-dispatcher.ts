@@ -15,6 +15,7 @@ import { parseRpcRequestParams } from './dispatcher-request-parsing'
 import { routeDispatcherClientHostedBrowserRpc } from './dispatcher-client-browser-routing'
 import { needsLocalCallerFingerprint } from './dispatcher-caller-fingerprint'
 import { createDispatcherStreamingFeatureEmitter } from './dispatcher-streaming-feature-emitter'
+import { runTerminalRpcInArrivalOrder } from '../terminal-input-arrival'
 
 export type RpcStreamingDispatcherDependencies = {
   runtime: OrcaRuntimeService
@@ -65,82 +66,98 @@ export class RpcStreamingDispatcher {
 
     if (!isStreamingMethod(method)) {
       try {
-        const clientHostedBrowser = await routeDispatcherClientHostedBrowserRpc(
+        await runTerminalRpcInArrivalOrder(
           runtime,
           request.method,
-          parsedParams.value
-        )
-        if (clientHostedBrowser.handled) {
-          recordRuntimeFeatureInteraction(
-            runtime,
-            request.method,
-            clientHostedBrowser.result,
-            undefined,
-            request.params
-          )
-          reply(
-            JSON.stringify(successResponse(request.id, envelopeMeta, clientHostedBrowser.result))
-          )
-          return
-        }
-        const compatibility = await legacyOrchestration.tryHandle(
-          request,
           parsedParams.value,
-          options?.signal
+          options?.signal,
+          async () => {
+            const clientHostedBrowser = await routeDispatcherClientHostedBrowserRpc(
+              runtime,
+              request.method,
+              parsedParams.value
+            )
+            if (clientHostedBrowser.handled) {
+              recordRuntimeFeatureInteraction(
+                runtime,
+                request.method,
+                clientHostedBrowser.result,
+                undefined,
+                request.params
+              )
+              reply(
+                JSON.stringify(
+                  successResponse(request.id, envelopeMeta, clientHostedBrowser.result)
+                )
+              )
+              return
+            }
+            const compatibility = await legacyOrchestration.tryHandle(
+              request,
+              parsedParams.value,
+              options?.signal
+            )
+            if (compatibility.handled) {
+              reply(JSON.stringify(successResponse(request.id, envelopeMeta, compatibility.result)))
+              return
+            }
+            const effectiveParams = compatibility.params ?? parsedParams.value
+            const legacyCoordinator = legacyOrchestration.createCoordinatorInvocation(
+              request,
+              compatibility.legacyCoordinatorAuthority
+            )
+            const authenticatedCallerFingerprint =
+              options?.authenticatedCallerFingerprint ??
+              (needsLocalCallerFingerprint(request, effectiveParams)
+                ? orchestrationMutations.getLocalAuthenticatedCallerFingerprint()
+                : undefined)
+            const invoke = (mutation?: DurableMutationInvocation) => {
+              const legacyCoordinatorRunId = legacyCoordinator?.revalidate()
+              return method.handler(effectiveParams, {
+                runtime,
+                signal: options?.signal,
+                requestId: request.id,
+                connectionId: options?.connectionId,
+                clientId: options?.clientId,
+                pairedDeviceId: options?.pairedDeviceId,
+                clientKind: options?.clientKind,
+                clientCapabilities: options?.clientCapabilities,
+                updateClientCapabilities: options?.updateClientCapabilities,
+                orchestrationCapability: request.orchestrationCapability,
+                authenticatedCallerFingerprint:
+                  mutation?.identity.callerFingerprint ??
+                  legacyCoordinator?.mutationCallerFingerprint ??
+                  authenticatedCallerFingerprint,
+                recordMutationReceipt: mutation?.recordReceipt,
+                orchestrationMutation: mutation?.identity,
+                pairing: options?.pairing,
+                sendBinary: options?.sendBinary,
+                registerBinaryStreamHandler: options?.registerBinaryStreamHandler,
+                registerBinaryMessageHandler: options?.registerBinaryMessageHandler,
+                legacyCoordinatorRunId,
+                legacyCoordinatorAuthority: legacyCoordinator?.authority,
+                revalidateLegacyCoordinator: legacyCoordinator?.revalidate,
+                orchestrationCompatibilityCallerAuthority:
+                  compatibility.orchestrationCompatibilityCallerAuthority,
+                orchestrationCompatibilityEvidence: request.orchestrationCompatibilityEvidence
+              })
+            }
+            const result = await orchestrationMutations.run(
+              request,
+              effectiveParams,
+              invoke,
+              legacyCoordinator?.mutationCallerFingerprint ?? authenticatedCallerFingerprint
+            )
+            recordRuntimeFeatureInteraction(
+              runtime,
+              request.method,
+              result,
+              undefined,
+              request.params
+            )
+            reply(JSON.stringify(successResponse(request.id, envelopeMeta, result)))
+          }
         )
-        if (compatibility.handled) {
-          reply(JSON.stringify(successResponse(request.id, envelopeMeta, compatibility.result)))
-          return
-        }
-        const effectiveParams = compatibility.params ?? parsedParams.value
-        const legacyCoordinator = legacyOrchestration.createCoordinatorInvocation(
-          request,
-          compatibility.legacyCoordinatorAuthority
-        )
-        const authenticatedCallerFingerprint =
-          options?.authenticatedCallerFingerprint ??
-          (needsLocalCallerFingerprint(request, effectiveParams)
-            ? orchestrationMutations.getLocalAuthenticatedCallerFingerprint()
-            : undefined)
-        const invoke = (mutation?: DurableMutationInvocation) => {
-          const legacyCoordinatorRunId = legacyCoordinator?.revalidate()
-          return method.handler(effectiveParams, {
-            runtime,
-            signal: options?.signal,
-            requestId: request.id,
-            connectionId: options?.connectionId,
-            clientId: options?.clientId,
-            pairedDeviceId: options?.pairedDeviceId,
-            clientKind: options?.clientKind,
-            clientCapabilities: options?.clientCapabilities,
-            updateClientCapabilities: options?.updateClientCapabilities,
-            orchestrationCapability: request.orchestrationCapability,
-            authenticatedCallerFingerprint:
-              mutation?.identity.callerFingerprint ??
-              legacyCoordinator?.mutationCallerFingerprint ??
-              authenticatedCallerFingerprint,
-            recordMutationReceipt: mutation?.recordReceipt,
-            orchestrationMutation: mutation?.identity,
-            pairing: options?.pairing,
-            sendBinary: options?.sendBinary,
-            registerBinaryStreamHandler: options?.registerBinaryStreamHandler,
-            registerBinaryMessageHandler: options?.registerBinaryMessageHandler,
-            legacyCoordinatorRunId,
-            legacyCoordinatorAuthority: legacyCoordinator?.authority,
-            revalidateLegacyCoordinator: legacyCoordinator?.revalidate,
-            orchestrationCompatibilityCallerAuthority:
-              compatibility.orchestrationCompatibilityCallerAuthority,
-            orchestrationCompatibilityEvidence: request.orchestrationCompatibilityEvidence
-          })
-        }
-        const result = await orchestrationMutations.run(
-          request,
-          effectiveParams,
-          invoke,
-          legacyCoordinator?.mutationCallerFingerprint ?? authenticatedCallerFingerprint
-        )
-        recordRuntimeFeatureInteraction(runtime, request.method, result, undefined, request.params)
-        reply(JSON.stringify(successResponse(request.id, envelopeMeta, result)))
       } catch (error) {
         reply(JSON.stringify(mapDispatcherError(request, envelopeMeta, error)))
       }

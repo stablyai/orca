@@ -23,6 +23,7 @@ export type TerminalSubscriptionArgs = {
   isMobile: boolean
   supportsDesktopViewportClaims: boolean
   supportsWriteUnavailable: boolean
+  supportsOrderedInput?: boolean
   missingHeadlessStateBeforeMobileFit: boolean
   rendererMountRequestedBeforePty: boolean
   serializerGenerationBeforeMobileFit: number

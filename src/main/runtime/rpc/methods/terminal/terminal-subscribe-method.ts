@@ -73,6 +73,12 @@ export const TERMINAL_SUBSCRIBE_METHODS: RpcAnyMethod[] = [
         isMobile,
         supportsDesktopViewportClaims: params.capabilities?.desktopViewportClaims === 1,
         supportsWriteUnavailable: params.capabilities?.writeUnavailable === 1,
+        supportsOrderedInput:
+          isMobile &&
+          params.capabilities?.orderedInput === 1 &&
+          Boolean(registerBinaryStreamHandler) &&
+          useBinaryStream &&
+          params.capabilities?.mobileInputLeaseOnly !== 1,
         rendererMountRequestedBeforePty,
         missingHeadlessStateBeforeMobileFit,
         serializerGenerationBeforeMobileFit: missingHeadlessStateBeforeMobileFit

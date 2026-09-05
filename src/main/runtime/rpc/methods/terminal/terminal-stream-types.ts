@@ -7,6 +7,7 @@ import type {
   TerminalOutputMeta
 } from '../../terminal-output-frame-chunks'
 import type { TerminalOutputBatcher } from './terminal-output-batcher'
+import type { TerminalInputArrivalTarget } from '../../../terminal-input-arrival'
 
 export type SnapshotFrameOptions = {
   kind: 'scrollback' | 'resized'
@@ -54,6 +55,7 @@ export type TerminalViewportClient = {
 }
 
 export type TerminalMultiplexStream = {
+  inputTarget: TerminalInputArrivalTarget
   streamId: number
   terminal: string
   ptyId: string

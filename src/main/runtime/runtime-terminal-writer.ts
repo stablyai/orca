@@ -1,5 +1,6 @@
 import { getAgentPromptSubmitDelayMs } from '../../shared/agent-prompt-injection'
 import { iterateTerminalInputChunks, TERMINAL_INPUT_MAX_BYTES } from '../../shared/terminal-input'
+import { captureTerminalInputArrivalWriteGuard } from './terminal-input-arrival'
 import {
   RuntimeRpcCallQueuePool,
   RuntimeRpcCallQueueOverloadError
@@ -131,9 +132,12 @@ export class RuntimeTerminalWriter {
     if (options.signal?.aborted) {
       return Promise.reject(new Error('request_aborted'))
     }
+    const assertArrival = captureTerminalInputArrivalWriteGuard()
+    assertArrival(ptyId)
     const generation = this.getPtyGeneration(ptyId, true)
     const key = `${ptyId}\0${generation}`
     const assertCurrent = (): void => {
+      assertArrival(ptyId)
       if (options.signal?.aborted) {
         throw new Error('request_aborted')
       }

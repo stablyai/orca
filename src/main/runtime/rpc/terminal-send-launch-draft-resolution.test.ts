@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 import type { OrcaRuntimeService } from '../orca-runtime'
 import type { RpcRequest } from './core'
 import { RpcDispatcher } from './dispatcher'
+import { captureTerminalInputArrivalTestTarget } from './terminal-input-arrival-test-target'
 import { TERMINAL_METHODS } from './methods/terminal'
 
 const RESOLUTION = { text: 'seed', createdAt: 1 }
@@ -12,6 +13,7 @@ function makeRequest(params: unknown): RpcRequest {
 
 function makeRuntime(accepted: boolean): OrcaRuntimeService {
   return {
+    captureTerminalInputArrivalTarget: captureTerminalInputArrivalTestTarget,
     getRuntimeId: () => 'runtime',
     resolveLiveLeafForHandle: vi.fn().mockReturnValue({ ptyId: 'pty-1' }),
     getDriver: vi.fn().mockReturnValue({ kind: 'idle' }),

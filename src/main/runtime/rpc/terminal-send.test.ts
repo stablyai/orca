@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { RpcDispatcher } from './dispatcher'
+import { captureTerminalInputArrivalTestTarget } from './terminal-input-arrival-test-target'
 import type { RpcRequest } from './core'
 import type { OrcaRuntimeService } from '../orca-runtime'
 import { TERMINAL_METHODS } from './methods/terminal'
@@ -15,7 +16,9 @@ import {
 
 function stubRuntime(overrides: Partial<OrcaRuntimeService> = {}): OrcaRuntimeService {
   return {
+    captureTerminalInputArrivalTarget: captureTerminalInputArrivalTestTarget,
     getRuntimeId: () => 'test-runtime',
+    getDriver: vi.fn(),
     beginMobileInputFloor: vi.fn((ptyId: string, clientId: string) => ({
       commit: async () => {
         await overrides.mobileTookFloor?.(ptyId, clientId)
@@ -426,7 +429,7 @@ describe('terminal send RPC', () => {
     )
 
     expect(response).toMatchObject({ ok: false, error: { code: 'invalid_argument' } })
-    expect(runtime.resolveLiveLeafForHandle).not.toHaveBeenCalled()
+    expect(runtime.getDriver).not.toHaveBeenCalled()
     expect(runtime.sendTerminal).not.toHaveBeenCalled()
     expect(runtime.mobileTookFloor).not.toHaveBeenCalled()
   })
@@ -453,7 +456,7 @@ describe('terminal send RPC', () => {
     )
 
     expect(response).toMatchObject({ ok: false, error: { code: 'invalid_argument' } })
-    expect(runtime.resolveLiveLeafForHandle).not.toHaveBeenCalled()
+    expect(runtime.getDriver).not.toHaveBeenCalled()
     expect(runtime.sendTerminal).not.toHaveBeenCalled()
   })
 
@@ -480,7 +483,7 @@ describe('terminal send RPC', () => {
       ok: false,
       error: { code: 'invalid_argument' }
     })
-    expect(runtime.resolveLiveLeafForHandle).not.toHaveBeenCalled()
+    expect(runtime.getDriver).not.toHaveBeenCalled()
     expect(runtime.sendTerminal).not.toHaveBeenCalled()
   })
 

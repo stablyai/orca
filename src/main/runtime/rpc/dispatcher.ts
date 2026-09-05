@@ -26,6 +26,7 @@ import { parseRpcRequestParams } from './dispatcher-request-parsing'
 import { routeDispatcherClientHostedBrowserRpc } from './dispatcher-client-browser-routing'
 import { needsLocalCallerFingerprint } from './dispatcher-caller-fingerprint'
 import { RpcStreamingDispatcher } from './rpc-streaming-dispatcher'
+import { runTerminalRpcInArrivalOrder } from '../terminal-input-arrival'
 
 export type DispatcherOptions = { runtime: OrcaRuntimeService; methods?: readonly RpcAnyMethod[] }
 
@@ -87,79 +88,87 @@ export class RpcDispatcher {
       emulatorProbe(`rpc ${request.method}`, request.params)
     }
     try {
-      const clientHostedBrowser = await routeDispatcherClientHostedBrowserRpc(
+      return await runTerminalRpcInArrivalOrder(
         this.runtime,
         request.method,
-        parsedParams.value
-      )
-      if (clientHostedBrowser.handled) {
-        recordRuntimeFeatureInteraction(
-          this.runtime,
-          request.method,
-          clientHostedBrowser.result,
-          undefined,
-          request.params
-        )
-        return successResponse(request.id, meta, clientHostedBrowser.result)
-      }
-      const compatibility = await this.legacyOrchestration.tryHandle(
-        request,
         parsedParams.value,
-        options?.signal
+        options?.signal,
+        async () => {
+          const clientHostedBrowser = await routeDispatcherClientHostedBrowserRpc(
+            this.runtime,
+            request.method,
+            parsedParams.value
+          )
+          if (clientHostedBrowser.handled) {
+            recordRuntimeFeatureInteraction(
+              this.runtime,
+              request.method,
+              clientHostedBrowser.result,
+              undefined,
+              request.params
+            )
+            return successResponse(request.id, meta, clientHostedBrowser.result)
+          }
+          const compatibility = await this.legacyOrchestration.tryHandle(
+            request,
+            parsedParams.value,
+            options?.signal
+          )
+          if (compatibility.handled) {
+            return successResponse(request.id, meta, compatibility.result)
+          }
+          const effectiveParams = compatibility.params ?? parsedParams.value
+          const legacyCoordinator = this.legacyOrchestration.createCoordinatorInvocation(
+            request,
+            compatibility.legacyCoordinatorAuthority
+          )
+          const authenticatedCallerFingerprint =
+            options?.authenticatedCallerFingerprint ??
+            (needsLocalCallerFingerprint(request, effectiveParams)
+              ? this.orchestrationMutations.getLocalAuthenticatedCallerFingerprint()
+              : undefined)
+          const invoke = (mutation?: DurableMutationInvocation) => {
+            const legacyCoordinatorRunId = legacyCoordinator?.revalidate()
+            return method.handler(effectiveParams, {
+              runtime: this.runtime,
+              signal: options?.signal,
+              connectionId: options?.connectionId,
+              requestId: request.id,
+              clientId: options?.clientId,
+              clientKind: options?.clientKind,
+              clientCapabilities: options?.clientCapabilities,
+              updateClientCapabilities: options?.updateClientCapabilities,
+              orchestrationCapability: request.orchestrationCapability,
+              authenticatedCallerFingerprint:
+                mutation?.identity.callerFingerprint ??
+                legacyCoordinator?.mutationCallerFingerprint ??
+                authenticatedCallerFingerprint,
+              recordMutationReceipt: mutation?.recordReceipt,
+              orchestrationMutation: mutation?.identity,
+              legacyCoordinatorRunId,
+              legacyCoordinatorAuthority: legacyCoordinator?.authority,
+              revalidateLegacyCoordinator: legacyCoordinator?.revalidate,
+              orchestrationCompatibilityCallerAuthority:
+                compatibility.orchestrationCompatibilityCallerAuthority,
+              orchestrationCompatibilityEvidence: request.orchestrationCompatibilityEvidence
+            })
+          }
+          const result = await this.orchestrationMutations.run(
+            request,
+            effectiveParams,
+            invoke,
+            legacyCoordinator?.mutationCallerFingerprint ?? authenticatedCallerFingerprint
+          )
+          recordRuntimeFeatureInteraction(
+            this.runtime,
+            request.method,
+            result,
+            undefined,
+            request.params
+          )
+          return successResponse(request.id, meta, result)
+        }
       )
-      if (compatibility.handled) {
-        return successResponse(request.id, meta, compatibility.result)
-      }
-      const effectiveParams = compatibility.params ?? parsedParams.value
-      const legacyCoordinator = this.legacyOrchestration.createCoordinatorInvocation(
-        request,
-        compatibility.legacyCoordinatorAuthority
-      )
-      const authenticatedCallerFingerprint =
-        options?.authenticatedCallerFingerprint ??
-        (needsLocalCallerFingerprint(request, effectiveParams)
-          ? this.orchestrationMutations.getLocalAuthenticatedCallerFingerprint()
-          : undefined)
-      const invoke = (mutation?: DurableMutationInvocation) => {
-        const legacyCoordinatorRunId = legacyCoordinator?.revalidate()
-        return method.handler(effectiveParams, {
-          runtime: this.runtime,
-          signal: options?.signal,
-          connectionId: options?.connectionId,
-          requestId: request.id,
-          clientId: options?.clientId,
-          clientKind: options?.clientKind,
-          clientCapabilities: options?.clientCapabilities,
-          updateClientCapabilities: options?.updateClientCapabilities,
-          orchestrationCapability: request.orchestrationCapability,
-          authenticatedCallerFingerprint:
-            mutation?.identity.callerFingerprint ??
-            legacyCoordinator?.mutationCallerFingerprint ??
-            authenticatedCallerFingerprint,
-          recordMutationReceipt: mutation?.recordReceipt,
-          orchestrationMutation: mutation?.identity,
-          legacyCoordinatorRunId,
-          legacyCoordinatorAuthority: legacyCoordinator?.authority,
-          revalidateLegacyCoordinator: legacyCoordinator?.revalidate,
-          orchestrationCompatibilityCallerAuthority:
-            compatibility.orchestrationCompatibilityCallerAuthority,
-          orchestrationCompatibilityEvidence: request.orchestrationCompatibilityEvidence
-        })
-      }
-      const result = await this.orchestrationMutations.run(
-        request,
-        effectiveParams,
-        invoke,
-        legacyCoordinator?.mutationCallerFingerprint ?? authenticatedCallerFingerprint
-      )
-      recordRuntimeFeatureInteraction(
-        this.runtime,
-        request.method,
-        result,
-        undefined,
-        request.params
-      )
-      return successResponse(request.id, meta, result)
     } catch (error) {
       if (request.method.startsWith('emulator.')) {
         emulatorProbeError(`rpc ${request.method}`, error, { params: request.params })

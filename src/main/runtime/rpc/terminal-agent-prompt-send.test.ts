@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 import type { OrcaRuntimeService } from '../orca-runtime'
 import type { RpcRequest } from './core'
 import { RpcDispatcher } from './dispatcher'
+import { captureTerminalInputArrivalTestTarget } from './terminal-input-arrival-test-target'
 import { TERMINAL_METHODS } from './methods/terminal'
 
 function makeRequest(params: unknown): RpcRequest {
@@ -10,6 +11,7 @@ function makeRequest(params: unknown): RpcRequest {
 
 function makeRuntime(overrides: Partial<OrcaRuntimeService>): OrcaRuntimeService {
   return {
+    captureTerminalInputArrivalTarget: captureTerminalInputArrivalTestTarget,
     getRuntimeId: () => 'test-runtime',
     ...overrides
   } as OrcaRuntimeService
