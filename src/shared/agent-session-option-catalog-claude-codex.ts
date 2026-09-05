@@ -174,6 +174,9 @@ export const CLAUDE_SESSION_OPTION_CATALOG: AgentSessionOptionCatalog = {
     }
   },
   unknownModelOptions: [claudeEffort(true)],
+  // Why: list_models omits Fable until the account accepts its usage-credit consent,
+  // which only an interactive /model can collect.
+  consentGatedModelIds: ['fable'],
   listModels: {
     command: `echo '${CLAUDE_MODEL_LIST_STDIN.trim()}' | claude ${CLAUDE_MODEL_LIST_ARGS.join(' ')}`,
     parse: parseClaudeCatalogModels
