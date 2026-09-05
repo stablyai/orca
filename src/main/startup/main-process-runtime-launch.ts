@@ -207,7 +207,7 @@ async function launchServeMode(
   // otherwise never run and `updater.getStatus` would report updater-unavailable forever.
   // Post-whenReady is required by electron-updater; ahead of printServeReady so clients pairing
   // at first contact already see the real update verdict.
-  initializeServeAutoUpdater(runtime.getRuntimeId(), () => state.store!)
+  initializeServeAutoUpdater(runtime.getRuntimeId(), () => state.store!, runtime)
   await printServeReady(serveOptions)
 }
 

@@ -14582,7 +14582,8 @@
         "requestedVersionUnavailable": "服务器更新器未提供所请求的 Orca 版本。",
         "updateUnavailable": "服务器未报告有可用更新。",
         "downloadIncomplete": "服务器更新未完成下载。",
-        "reconnectTimeout": "服务器未以更新后的版本重新连接。"
+        "reconnectTimeout": "服务器未以更新后的版本重新连接。",
+        "liveTerminals": "服务器上仍有活跃的终端或智能体。请先关闭它们，然后重试更新。"
       },
       "webRuntimeSession": {
         "remoteHostDisconnected": "工作区未连接到远程 Orca 主机。"

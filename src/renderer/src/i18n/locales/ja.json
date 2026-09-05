@@ -14526,7 +14526,8 @@
         "requestedVersionUnavailable": "サーバーのアップデーターは、要求した Orca のバージョンを提供しませんでした。",
         "updateUnavailable": "サーバーは、利用可能な更新を報告しませんでした。",
         "downloadIncomplete": "サーバーの更新のダウンロードが完了しませんでした。",
-        "reconnectTimeout": "サーバーは、更新後のバージョンで再接続しませんでした。"
+        "reconnectTimeout": "サーバーは、更新後のバージョンで再接続しませんでした。",
+        "liveTerminals": "サーバー上に実行中のターミナルまたはエージェントがあります。それらを終了してから、再度更新をお試しください。"
       },
       "webRuntimeSession": {
         "remoteHostDisconnected": "このワークスペースは、リモートの Orca ホストに接続されていません。"
