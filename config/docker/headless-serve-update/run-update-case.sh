@@ -10,8 +10,7 @@ UNIT_NAME=orca-serve.service
 APPIMAGE_TARGET=/opt/orca/orca-linux.AppImage
 VERSION_TARGET=/opt/orca/VERSION
 SERVICE_USER=orca
-READY_TIMEOUT=${ORCA_READINESS_TIMEOUT:-60}
-UPDATE_TIMEOUT=${ORCA_UPDATE_TIMEOUT:-180}
+HELPER_PATH=/usr/lib/orca/serve-update-helper.sh
 
 fail() { echo "FAIL: $*" >&2; exit 1; }
 log() { echo "[update-case] $*"; }
@@ -71,11 +70,11 @@ EOF
 systemctl daemon-reload
 systemctl start "$UNIT_NAME"
 
-# --- 4. Install the helper ---------------------------------------------------
-cat > /tmp/helper-install.sh <<'INSTALL_EOF'
-__HELPER_INSTALL_SCRIPT__
-INSTALL_EOF
+# --- 4. Install the helper (real installer output, spool dir + sudoers included) ---
+# /tmp/helper-install.sh is mounted by the runner: the generated install script.
 bash /tmp/helper-install.sh
+[[ -f "$HELPER_PATH" ]] || fail "helper not installed at $HELPER_PATH"
+[[ -f /etc/sudoers.d/orca-serve-update-helper ]] || fail "sudoers drop-in missing"
 
 # --- 5. Spool a request the way the app does ---------------------------------
 install -d -m 0775 -o root -g "$SERVICE_USER" "$SPOOL_DIR"
@@ -85,10 +84,10 @@ EOF
 chown root:"$SERVICE_USER" "$SPOOL_DIR/request.json"
 chmod 0664 "$SPOOL_DIR/request.json"
 
-# --- 6. Run the helper as the service user via sudo --------------------------
+# --- 6. Run the helper the way the app does: sudo from the service user ------
 old_main_pid=$(systemctl show -p MainPID --value "$UNIT_NAME")
 [[ -n "$old_main_pid" && "$old_main_pid" != 0 ]] || fail "unit not running before helper run"
-sudo -n -u "$SERVICE_USER" "$HELPER_PATH"
+runuser -u "$SERVICE_USER" -- sudo -n "$HELPER_PATH"
 
 verdict=$(cat "$SPOOL_DIR/result.json")
 log "verdict: $verdict"
@@ -110,7 +109,7 @@ EOF
 chown root:"$SERVICE_USER" "$SPOOL_DIR/request.json"
 chmod 0664 "$SPOOL_DIR/request.json"
 rm -f "$SPOOL_DIR/result.json"
-sudo -n -u "$SERVICE_USER" "$HELPER_PATH"
+runuser -u "$SERVICE_USER" -- sudo -n "$HELPER_PATH"
 downgrade_verdict=$(cat "$SPOOL_DIR/result.json")
 [[ $(jq -r '.phase' <<<"$downgrade_verdict") == "rejected" ]] || fail "downgrade not rejected: $downgrade_verdict"
 [[ $(jq -r '.reason' <<<"$downgrade_verdict") == *"downgrade"* ]] || fail "unexpected downgrade reason"
