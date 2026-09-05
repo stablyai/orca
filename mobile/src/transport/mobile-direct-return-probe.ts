@@ -11,6 +11,9 @@ const DIRECT_PROBE_INTERVAL_MS = 15_000
 export class DirectReturnProbe {
   private timer: ReturnType<typeof setTimeout> | null = null
 
+  private stopped = false
+  private activeProbe: AbortController | null = null
+
   constructor(
     private readonly deps: {
       now: () => number
@@ -31,7 +34,7 @@ export class DirectReturnProbe {
   ) {}
 
   schedule(delayMs = DIRECT_PROBE_INTERVAL_MS): void {
-    if (!this.hooks.canSchedule() || this.timer) {
+    if (this.stopped || !this.hooks.canSchedule() || this.timer) {
       return
     }
     this.timer = this.deps.setTimer(() => {
@@ -47,19 +50,34 @@ export class DirectReturnProbe {
     }
   }
 
+  stop(): void {
+    this.stopped = true
+    this.clear()
+    this.activeProbe?.abort()
+  }
+
   private async probe(): Promise<void> {
+    if (this.stopped) {
+      return
+    }
     if (!this.hooks.canAttempt() || !this.hooks.hysteresis.canProbe(this.deps.now())) {
       this.schedule()
       return
     }
+    const controller = new AbortController()
+    this.activeProbe = controller
     this.hooks.beginOperation()
     let successful: Awaited<ReturnType<typeof openAuthenticatedDirectEndpoint>> = null
     try {
       successful = await openAuthenticatedDirectEndpoint(
         this.hooks.host(),
         this.deps.openDirect,
-        12_000
+        12_000,
+        controller.signal
       )
+      if (this.stopped) {
+        return
+      }
       if (!successful) {
         this.hooks.hysteresis.recordDirectFailure(this.deps.now())
         return
@@ -73,6 +91,7 @@ export class DirectReturnProbe {
       this.hooks.hysteresis.recordMigration(this.deps.now())
       await this.hooks.onDirectMigrated()
     } finally {
+      this.activeProbe = null
       successful?.client.close()
       // Why: a relay drop or backoff timer can arrive while the probe owns the
       // operation mutex; afterProbe releases it and replays deferred recovery.

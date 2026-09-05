@@ -195,6 +195,7 @@ export class MobileEndpointSupervisor {
 
   stop(): void {
     this.stopped = true
+    this.directProbe.stop()
     this.unsubscribeState?.()
     this.unsubscribeState = null
     this.backgroundGrace.stop()
