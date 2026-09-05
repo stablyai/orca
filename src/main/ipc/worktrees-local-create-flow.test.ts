@@ -616,7 +616,9 @@ describe('registerWorktreeHandlers', () => {
   ] as const)(
     'spawns startup and setup with activation %s in %s after registration',
     async (activate, setupScriptLaunchMode) => {
-      store.getSettings.mockReturnValue({ ...store.getSettings(), setupScriptLaunchMode })
+      store.getSettings.mockReturnValue(
+        Object.assign({}, store.getSettings(), { setupScriptLaunchMode })
+      )
       addWorktreeMock.mockResolvedValue({})
       listWorktreesMock.mockResolvedValueOnce([
         {
