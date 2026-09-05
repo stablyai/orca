@@ -175,8 +175,10 @@ describe('headless serve shutdown PR gate', () => {
     expect(headlessLinuxProse).toContain(
       'Every `systemctl stop` or `restart` therefore ends live terminals and agent processes'
     )
+    // The one-click flow blocks installs while terminals are live; the manual
+    // restart still kills everything in the service cgroup.
     expect(headlessLinuxProse).toContain(
-      'These guarantees do not preserve live processes. The service restart kills every terminal and agent in its cgroup'
+      'a manual upgrade kills every terminal and agent in the service'
     )
     expect(headlessLinuxProse).toContain(
       'A separately paired runtime is outside that boundary; local execution and SSH hosts reached through this runtime are not. An affected or unknown omission, missing scope, failed request or lost connection is `unverifiable`'
