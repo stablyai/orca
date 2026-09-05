@@ -1,6 +1,9 @@
 import { describe, expect, it, vi } from 'vitest'
 import { runServeUpdateCensus, type CensusCapableRuntime } from './serve-update-census'
+import type { RuntimeListingHostScope } from '../shared/runtime-listing-host-scope'
 import type { RuntimeTerminalListResult } from '../shared/runtime-types'
+
+const completeScope: RuntimeListingHostScope = { hostIds: ['local'], omittedHostIds: [] }
 
 function makeRuntime(
   result: Partial<RuntimeTerminalListResult> | { throws: Error }
@@ -19,8 +22,6 @@ function makeRuntime(
     })
   }
 }
-
-const completeScope = { hostIds: ['local'], omittedHostIds: [] }
 
 describe('runServeUpdateCensus', () => {
   it('passes when no terminals exist on a complete host scope', async () => {
@@ -47,7 +48,9 @@ describe('runServeUpdateCensus', () => {
       reason: 'incomplete-scope'
     })
 
-    const partial = makeRuntime({ hostScope: { hostIds: [], omittedHostIds: [] } as never })
+    const partial = makeRuntime({
+      hostScope: { hostIds: [], omittedHostIds: [] } as unknown as RuntimeListingHostScope
+    })
     await expect(runServeUpdateCensus(partial)).resolves.toEqual({
       ok: false,
       reason: 'incomplete-scope'
