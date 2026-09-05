@@ -39,7 +39,9 @@ const PROVIDER_PATTERNS: { tag: string; re: RegExp }[] = [
 const URL_USERINFO = /(https?:\/\/)([^/@\s]+)@/g
 
 // Per-line .env shape. `m` anchors `^` in multi-line strings; `\S.*` redacts the whole value (so `FOO=Bearer <jwt>` can't leak its tail), leading `\S` skips empty `FOO=`.
-const ENV_LINE = /^\s*([A-Z_][A-Z0-9_]*)\s*=\s*\S.*/gm
+const ENV_LINE = /^\s*([A-Z_][A-Z0-9_]*)\s*=\s*\S.*/my
+const NON_WHITESPACE = /\S/g
+const LINE_TERMINATOR = /[\r\n\u2028\u2029]/g
 
 // Attribute keys dropped regardless of value. Matched case-insensitively since HTTP headers vary in case.
 const CLIENT_ATTR_BLOCKLIST = new Set([
@@ -110,9 +112,43 @@ export function redactString(input: string): string {
   out = out.replace(URL_USERINFO, '$1[redacted]@')
 
   // Rule 4 — .env-shape line: keep key, redact value. Last so rule 1 wins over a coincidentally .env-shaped substring.
-  out = out.replace(ENV_LINE, (_match, key) => `${String(key)}=[redacted:env-value]`)
+  out = redactEnvironmentLines(out)
 
   return out
+}
+
+function redactEnvironmentLines(input: string): string {
+  const parts: string[] = []
+  let copiedThrough = 0
+  let start = 0
+  while (start < input.length) {
+    ENV_LINE.lastIndex = start
+    const match = ENV_LINE.exec(input)
+    if (match) {
+      parts.push(input.slice(copiedThrough, start), `${match[1]}=[redacted:env-value]`)
+      copiedThrough = ENV_LINE.lastIndex
+      start = copiedThrough
+    } else {
+      // Failed starts within this leading whitespace all see the same next key.
+      NON_WHITESPACE.lastIndex = start
+      const nextContent = NON_WHITESPACE.exec(input)
+      if (!nextContent) {
+        break
+      }
+      start = nextContent.index
+    }
+    LINE_TERMINATOR.lastIndex = start
+    const terminator = LINE_TERMINATOR.exec(input)
+    if (!terminator) {
+      break
+    }
+    start = terminator.index + 1
+  }
+  if (parts.length === 0) {
+    return input
+  }
+  parts.push(input.slice(copiedThrough))
+  return parts.join('')
 }
 
 /**
