@@ -53,7 +53,7 @@ export function journalFileFormatRemnantDisclosure(input: {
         `This chat's history was saved in an older format Orca no longer reads, so it starts ` +
           `empty. The session still points at the same ${formatAgentTypeLabel(input.agent)} ` +
           `conversation — send a message to pick up where you left off. The original ` +
-          `transcript is on the session's host at ${input.transcriptPath}`
+          `transcript is on the session's host at \`${input.transcriptPath}\``
       )
     }
   }

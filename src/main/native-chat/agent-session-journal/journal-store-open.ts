@@ -9,10 +9,7 @@ import { journalRepairDisclosure, type JournalRepairDisclosure } from './journal
 
 /** What any of this file's disclosures hands the store — a repair's, or the
  *  pre-SQLite notice's. Same shape, and neither is only a repair. */
-type JournalDisclosure = {
-  identity: JournalRepairDisclosure['identity']
-  body: JournalRepairDisclosure['body']
-}
+type JournalDisclosure = JournalRepairDisclosure
 
 export async function ensureJournalDir(journalDir: string): Promise<void> {
   await mkdir(journalDir, { recursive: true })

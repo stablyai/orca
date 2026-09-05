@@ -85,7 +85,7 @@ describe('a session whose journal is still the pre-SQLite format', () => {
     expect(restored!.hasProviderChild).toBe(false)
   })
 
-  it('is published for a compacted remnant too, which has no log beside it', async () => {
+  it('is published for a remnant whose log is gone', async () => {
     await writeRemnant('snapshot.json')
 
     const restored = await restoreStructuredAgentSessionRead(store, journalRoot, SESSION_ID)
