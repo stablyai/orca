@@ -6,7 +6,7 @@ import { generateId } from '../generated-id'
 import type { OrchestrationDb } from '../orchestration-db'
 import { insertStartingDispatchContextRow } from '../dispatch-row-writer'
 import type { DispatchCreator } from '../dispatch-depth'
-import { taskNotFoundError, taskNotReadyError } from '../../task-dispatch-refusal'
+import { taskNotFoundError, taskNotStartableError } from '../../task-dispatch-refusal'
 
 export function createStartingWorkerDispatch(
   this: OrchestrationDb,
@@ -81,7 +81,7 @@ export function createStartingWorkerDispatch(
         )
       }
     } else if (task.status !== 'ready') {
-      throw taskNotReadyError(this, task)
+      throw taskNotStartableError(this, task)
     }
 
     const id = generateId('ctx')

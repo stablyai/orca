@@ -5,7 +5,7 @@ import { resolveDispatchCreator } from './orchestration-dispatch-creator'
 import {
   injectRejectedError,
   taskNotFoundError,
-  taskNotReadyError
+  taskNotStartableError
 } from '../../orchestration/task-dispatch-refusal'
 import { resolveRunScope } from './orchestration-run-scope'
 import { DispatchParams, DispatchShowParams } from './orchestration-schemas'
@@ -67,7 +67,7 @@ export const ORCHESTRATION_DISPATCH_METHODS: RpcMethod[] = [
       const to = params.to
 
       if (task.status !== 'ready') {
-        throw taskNotReadyError(db, task)
+        throw taskNotStartableError(db, task)
       }
 
       // Why: injecting the preamble into a bare shell dumps it as shell commands (gibberish), so require a detected agent first.

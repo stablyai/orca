@@ -32,7 +32,7 @@ it('relays typed dispatch refusal codes from the host CLI unchanged', async () =
     id: 'rpc_1',
     ok: false,
     error: {
-      code: 'task_not_ready',
+      code: 'task_not_startable',
       message: 'Task task_1 is pending; only ready tasks can be dispatched',
       data: { taskId: 'task_1', status: 'pending', unmetDependencies: ['task_0'] }
     },
