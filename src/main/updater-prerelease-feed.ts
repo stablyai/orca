@@ -12,7 +12,16 @@ const MAX_MANIFEST_PROBE_CANDIDATES = 6
 // without any channel filtering.
 const TAG_HREF_RE = /href="https:\/\/github\.com\/stablyai\/orca\/releases\/tag\/([^"]+)"/g
 
+/**
+ * Test/E2E seam: ORCA_RELEASE_FEED_BASE overrides the pinned GitHub download base so
+ * packaged builds can point at a local feed (e.g. the headless-serve-update Docker case).
+ * Unset in production builds; only affects release-source installs.
+ */
 export function getReleaseDownloadUrl(tag: string): string {
+  const base = process.env.ORCA_RELEASE_FEED_BASE
+  if (base) {
+    return `${base.replace(/\/+$/, '')}/${encodeURIComponent(tag)}`
+  }
   return `${RELEASES_DOWNLOAD_BASE}/${encodeURIComponent(tag)}`
 }
 

@@ -155,9 +155,13 @@ export class UpdaterSetup extends UpdaterDownloadInstall {
 
     // Security: never re-add a verifyUpdateCodeSignature override — a no-op disables electron-updater's built-in Authenticode check and accepts any installer.
     if (this.activeUpdateSource === 'release') {
+      // Why: E2E harnesses point a packaged build at a local feed; unset in production.
+      const feedBaseOverride = process.env.ORCA_RELEASE_FEED_BASE
       autoUpdater.setFeedURL({
         provider: 'generic',
-        url: 'https://github.com/stablyai/orca/releases/latest/download'
+        url: feedBaseOverride
+          ? `${feedBaseOverride.replace(/\/+$/, '')}/latest/download`
+          : 'https://github.com/stablyai/orca/releases/latest/download'
       })
     }
     if (this.autoUpdaterInitialized) {
