@@ -158,4 +158,42 @@ describe('stopClaudeBackgroundTasks', () => {
     await stopClaudeBackgroundTasks(session, undefined, () => current)
     expect(stopTask).toHaveBeenCalledTimes(1)
   })
+
+  it('stops only the requested live task id', async () => {
+    const backgroundTasks = new ClaudeBackgroundTaskTracker()
+    backgroundTasks.observe({
+      type: 'system',
+      subtype: 'background_tasks_changed',
+      tasks: [
+        { task_id: 'task-one', task_type: 'local_agent' },
+        { task_id: 'task-two', task_type: 'local_bash' }
+      ]
+    })
+    const stopTask = vi.fn(async (_taskId: string) => {})
+    const session = { backgroundTasks, connection: { stopTask } } as unknown as ClaudeSession
+
+    await expect(
+      stopClaudeBackgroundTasks(session, 5_000, () => true, 'task-two')
+    ).resolves.toEqual({ cancelled: true })
+    expect(stopTask).toHaveBeenCalledWith('task-two', { timeoutMs: 5_000 })
+    expect(stopTask).toHaveBeenCalledTimes(1)
+  })
+
+  it('refuses a stale or unknown task id without a provider call', async () => {
+    const backgroundTasks = new ClaudeBackgroundTaskTracker()
+    backgroundTasks.observe({
+      type: 'system',
+      subtype: 'task_started',
+      task_id: 'task-live',
+      task_type: 'local_agent',
+      is_backgrounded: true
+    })
+    const stopTask = vi.fn(async (_taskId: string) => {})
+    const session = { backgroundTasks, connection: { stopTask } } as unknown as ClaudeSession
+
+    await expect(
+      stopClaudeBackgroundTasks(session, undefined, () => true, 'task-stale')
+    ).resolves.toEqual({ cancelled: false })
+    expect(stopTask).not.toHaveBeenCalled()
+  })
 })

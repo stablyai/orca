@@ -220,6 +220,9 @@ export type HostListEntry = {
   name: string
   id: string
   selector: string
+  platform?: string
+  connected?: boolean
+  connectionStatus?: string
 }
 
 // Why: the selector column is the point of this command — the name alone is what callers already
@@ -231,8 +234,23 @@ export function formatHostList(result: { hosts: HostListEntry[] }): string {
     environment: 'orca server'
   }
   return result.hosts
-    .map((host) => `${kindLabel[host.kind].padEnd(11)} ${host.name}  ->  ${host.selector}`)
+    .map(
+      (host) =>
+        `${kindLabel[host.kind].padEnd(11)} ${host.name}  ${host.platform ?? 'platform unknown'}  ${formatHostConnection(host)}  ->  ${host.selector}`
+    )
     .join('\n')
+}
+
+function formatHostConnection(host: HostListEntry): string {
+  if (host.kind !== 'ssh') {
+    return ''
+  }
+  if (host.connected === undefined) {
+    return `connection unknown${host.connectionStatus ? ` (${host.connectionStatus})` : ''}`
+  }
+  return host.connected
+    ? `connected${host.connectionStatus ? ` (${host.connectionStatus})` : ''}`
+    : `not connected${host.connectionStatus ? ` (${host.connectionStatus})` : ''}`
 }
 
 export function formatCliStatus(status: CliStatusResult): string {

@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { AGENT_SESSION_JOURNAL_SCHEMA_VERSION } from '../../../shared/agent-session-journal-types'
 import type {
   AgentSessionHandoffStatus,
+  AgentSessionStatusEvent,
   AgentSessionSubscribeEvent
 } from '../../../shared/agent-session-wire'
 import {
@@ -16,6 +17,7 @@ import { journalDatabaseFile } from '../agent-session-journal/journal-paths'
 import { insertJournalRow } from '../agent-session-journal/journal-row-table'
 import type { JournalRow } from '../agent-session-journal/journal-row-schema'
 import { createTrackedJournalOpener } from '../agent-session-journal/journal-store-test-open'
+import { StructuredAgentSessionStatusFeed } from './structured-agent-session-status-feed'
 import { AgentSessionSubscribers } from './structured-agent-session-subscribers'
 
 const SESSION = 'subscriber-session'
@@ -68,6 +70,96 @@ describe('AgentSessionSubscribers', () => {
         fence: 7
       }
     ])
+  })
+
+  it('reports every content publication to the journal hook, subscribed or not', async () => {
+    const journal = await journals.open({
+      identity: {
+        sessionId: SESSION,
+        workspaceId: 'workspace-1',
+        hostId: 'local',
+        agent: 'codex',
+        providerHandle: { kind: 'codex', threadId: 'thread-1' }
+      },
+      journalDir: join(root, 'hook-journal')
+    })
+    const published: string[] = []
+    const subscribers = new AgentSessionSubscribers({
+      onJournalPublished: (sessionId, published_journal) => {
+        expect(published_journal).toBe(journal)
+        published.push(sessionId)
+      }
+    })
+
+    subscribers.publish(SESSION, journal)
+    subscribers.reset(SESSION, journal, 'epoch_changed', 1)
+    subscribers.snapshot(SESSION, journal, 1)
+    subscribers.handoff(SESSION, 1, {
+      owner: 'native',
+      direction: null,
+      phase: 'idle',
+      stage: null,
+      operationId: null
+    })
+
+    expect(published).toEqual([SESSION, SESSION, SESSION])
+  })
+
+  it('settles a session nobody is reading, from running to idle', async () => {
+    // The defect this whole feed exists for: status used to come from a transcript reader, so a
+    // session with no open pane had no reader and froze on whatever it last said. Nothing here
+    // ever calls `subscribers.open`.
+    const journal = await journals.open({
+      identity: {
+        sessionId: SESSION,
+        workspaceId: 'workspace-1',
+        hostId: 'local',
+        agent: 'codex',
+        providerHandle: { kind: 'codex', threadId: 'thread-1' }
+      },
+      journalDir: join(root, 'unread-journal')
+    })
+    const statusFeed = new StructuredAgentSessionStatusFeed({
+      sessions: new Map([
+        [
+          SESSION,
+          { journal, params: { location: { workspaceId: 'workspace-1' }, provider: 'codex' } }
+        ]
+      ]),
+      getRecord: () => null,
+      now: () => 1_000
+    })
+    const subscribers = new AgentSessionSubscribers({
+      onJournalPublished: (sessionId, published) => statusFeed.publish(sessionId, published)
+    })
+    const statuses: AgentSessionStatusEvent[] = []
+    statusFeed.subscribe({ id: 'session-list', emit: (event) => statuses.push(event) })
+    const turn = { provider: 'codex', threadId: 'thread-1', turnId: 'turn-1', ordinal: 0 } as const
+
+    await journal.appendItem(
+      { ...turn, ordinal: 1 },
+      { kind: 'message', role: 'user', blocks: [{ type: 'text', text: 'write a poem' }] },
+      { fence: 1 }
+    )
+    await journal.appendItem(
+      turn,
+      { kind: 'status', text: 'Working', turnLifecycle: { turnId: 'turn-1', state: 'running' } },
+      { fence: 1 }
+    )
+    subscribers.publish(SESSION, journal)
+
+    expect(statuses.at(-1)).toEqual({
+      type: 'status',
+      session: expect.objectContaining({ status: 'working', latestPrompt: 'write a poem' })
+    })
+
+    await journal.appendTombstone(turn, { fence: 1 })
+    subscribers.publish(SESSION, journal)
+
+    expect(statuses.at(-1)).toEqual({
+      type: 'status',
+      session: expect.objectContaining({ status: 'idle' })
+    })
   })
 
   it('publishes handoff-only changes without serializing a transcript snapshot', async () => {
