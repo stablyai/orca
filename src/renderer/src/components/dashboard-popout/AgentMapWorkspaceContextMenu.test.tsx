@@ -345,8 +345,15 @@ describe('Agent Map workspace context menu', () => {
     )
 
     fireEvent.contextMenu(container.querySelector('[data-agent-map-project]')!)
-    fireEvent.click(
-      await screen.findByText('Create workspace for Documentation', {}, { timeout: 5_000 })
+    // Why retry the click: the ring's target settles from repo to group after the menu first
+    // mounts, which remounts the item — a click on the node the first query returned lands on a
+    // detached element and never reaches onSelect. Re-query and click until the modal opens.
+    await waitFor(
+      () => {
+        fireEvent.click(screen.getByText('Create workspace for Documentation'))
+        expect(useAppStore.getState().activeModal).toBe('new-workspace-composer')
+      },
+      { timeout: 5_000 }
     )
 
     expect(useAppStore.getState().modalData).toEqual({
