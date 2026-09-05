@@ -15,10 +15,11 @@ import {
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { translate } from '@/i18n/i18n'
 import { sortNativeChatSessionOptions } from '../../../../shared/native-chat-session-option-snapshot'
-import type {
-  SessionOptionDescriptor,
-  SessionOptionsSurface,
-  SessionOptionValue
+import {
+  sessionOptionDispatchUnconfirmed,
+  type SessionOptionDescriptor,
+  type SessionOptionsSurface,
+  type SessionOptionValue
 } from '../../../../shared/native-chat-session-options'
 import {
   nativeChatModelPillLabel,
@@ -250,7 +251,7 @@ function NativeChatSessionOptionPickersInner({
             tooltipLabel={optionsTooltip}
             disabled={isWorking || pendingId !== null}
             disabledReason={optionsReason}
-            dispatched={options.some((descriptor) => descriptor.valueSource === 'dispatched')}
+            dispatched={options.some(sessionOptionDispatchUnconfirmed)}
           />
           <DropdownMenuContent align="start" side="top" collisionPadding={8} className="w-60">
             {options.map((descriptor, index) => {
@@ -283,7 +284,7 @@ function NativeChatSessionOptionPickersInner({
           tooltipLabel={modelTooltip}
           disabled={isWorking || pendingId !== null}
           disabledReason={modelReason}
-          dispatched={model.valueSource === 'dispatched'}
+          dispatched={sessionOptionDispatchUnconfirmed(model)}
         />
         <DropdownMenuContent align="start" side="top" collisionPadding={8} className="w-64">
           {modelReason && !model.settable ? (

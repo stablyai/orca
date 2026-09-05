@@ -5,6 +5,7 @@ import { join, resolve } from 'node:path'
 import { getVersionManagerBinPaths } from '../codex-cli/command'
 import { getMainE2EConfig } from '../e2e-config'
 import { DISABLED_CHROMIUM_FEATURES } from './disabled-chromium-features'
+import { readHttp1CompatibilityMarker } from './http1-compatibility-marker'
 
 const DEV_PARENT_SHUTDOWN_GRACE_MS = 3000
 const HTTP1_COMPATIBILITY_ENV_VAR = 'ORCA_DISABLE_HTTP2'
@@ -54,7 +55,13 @@ export function shouldDisableHttp2ForElectronNetworking(
   if (envValue !== null) {
     return envValue
   }
-  return readPersistedHttp1CompatibilityMode(options.userDataPath ?? app.getPath('userData'))
+  const userDataPath = options.userDataPath ?? app.getPath('userData')
+  // Why the marker first: this runs before app.whenReady(), and the settings file is the multi-MB
+  // orca-data.json the Store parses again moments later. The marker is refreshed whenever settings
+  // change, so the full read only happens on a profile that has never written one.
+  return (
+    readHttp1CompatibilityMarker(userDataPath) ?? readPersistedHttp1CompatibilityMode(userDataPath)
+  )
 }
 
 export function configureElectronNetworkCompatibility(

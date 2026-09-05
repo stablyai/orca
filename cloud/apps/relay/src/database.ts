@@ -796,12 +796,34 @@ class PostgresTransaction implements RelayDatabase {
 const POSTGRES_TRANSACTION_ATTEMPTS = 3
 const POSTGRES_RETRY_MAX_DELAY_MS = 25
 const POSTGRES_CONNECTION_TIMEOUT_MS = 2_000
-const POSTGRES_STATEMENT_TIMEOUT_MS = 5_000
+// Derivation: a control renewal must land inside its own 30s tick
+// (RELAY_PROTOCOL_LIMITS.controlPingIntervalMs * 2), and a transaction gets
+// POSTGRES_TRANSACTION_ATTEMPTS tries, so the worst case a renewal can spend in
+// Postgres is attempts * timeout. 5s keeps that at 15s, half the tick, and still
+// leaves room for the connect timeout above.
+export const POSTGRES_STATEMENT_TIMEOUT_MS = 5_000
 const POSTGRES_IDLE_TRANSACTION_TIMEOUT_MS = 5_000
+
+export function relayPostgresStatementTimeoutMs(
+  env: NodeJS.ProcessEnv = process.env
+): number {
+  const configured = env.ORCA_RELAY_POSTGRES_STATEMENT_TIMEOUT_MS
+  if (configured === undefined || configured === '') return POSTGRES_STATEMENT_TIMEOUT_MS
+  const milliseconds = Number(configured)
+  // 0 is PostgreSQL's "no timeout"; refusing it keeps the deadline this exists
+  // to enforce from being disabled by a typo in an environment variable.
+  if (!Number.isInteger(milliseconds) || milliseconds < 1) {
+    throw new Error('invalid_statement_timeout')
+  }
+  return milliseconds
+}
 
 function retryablePostgresTransactionError(error: unknown): boolean {
   const code = String((error as { code?: unknown }).code)
-  return code === '40P01' || code === '40001' || code === '55P03'
+  // 57014 is the pool statement_timeout firing. It aborts the transaction the
+  // same way a lock timeout does, so it belongs on the bounded retry path
+  // rather than surfacing as a terminal failure to the caller.
+  return code === '40P01' || code === '40001' || code === '55P03' || code === '57014'
 }
 
 export function isRelayDatabaseTransientError(error: unknown): boolean {
@@ -963,11 +985,36 @@ async function applySchema(database: RelayDatabase): Promise<void> {
   }
 }
 
-async function applySchemaWithPostgresRetries(database: RelayDatabase): Promise<void> {
-  await applyPostgresSchema(
-    SCHEMA.split(';').filter((statement) => statement.trim()),
-    async (statement) => await database.query(statement)
-  )
+// Why: DDL is not a request. A CREATE INDEX on a grown table legitimately runs
+// longer than the request statement_timeout, and inheriting that timeout would
+// make every startup fail at the same statement instead of finishing once. One
+// short-lived connection of its own, ended before the serving pool opens, keeps
+// the untimed session off the request path entirely.
+async function applySchemaOnUntimedPool(
+  databaseUrl: string,
+  applicationName: string | undefined
+): Promise<void> {
+  const pool = new pg.Pool({
+    connectionString: databaseUrl,
+    max: 1,
+    application_name: applicationName ? `${applicationName}/schema` : undefined,
+    connectionTimeoutMillis: POSTGRES_CONNECTION_TIMEOUT_MS,
+    statement_timeout: 0,
+    // Kept: a DDL blocked behind another director's ACCESS EXCLUSIVE lock must
+    // yield to the bounded schema retry instead of holding the connection.
+    lock_timeout: POSTGRES_LOCK_TIMEOUT_MS,
+    idle_in_transaction_session_timeout: POSTGRES_IDLE_TRANSACTION_TIMEOUT_MS
+  })
+  absorbPostgresIdleClientErrors(pool)
+  const database = new PostgresDatabase(pool)
+  try {
+    await applyPostgresSchema(
+      SCHEMA.split(';').filter((statement) => statement.trim()),
+      async (statement) => await database.query(statement)
+    )
+  } finally {
+    await database.close().catch(() => undefined)
+  }
 }
 
 async function backfillRelayCellRegions(database: RelayDatabase): Promise<void> {
@@ -983,15 +1030,17 @@ export async function openRelayDatabase(input: {
   dataDir: string
   poolMax?: number
   applicationName?: string
+  statementTimeoutMs?: number
 }): Promise<RelayDatabase> {
   let database: RelayDatabase
   if (input.databaseUrl) {
+    await applySchemaOnUntimedPool(input.databaseUrl, input.applicationName)
     const pool = new pg.Pool({
       connectionString: input.databaseUrl,
       max: input.poolMax ?? 10,
       application_name: input.applicationName,
       connectionTimeoutMillis: POSTGRES_CONNECTION_TIMEOUT_MS,
-      statement_timeout: POSTGRES_STATEMENT_TIMEOUT_MS,
+      statement_timeout: input.statementTimeoutMs ?? relayPostgresStatementTimeoutMs(),
       lock_timeout: POSTGRES_LOCK_TIMEOUT_MS,
       idle_in_transaction_session_timeout: POSTGRES_IDLE_TRANSACTION_TIMEOUT_MS
     })
@@ -1004,8 +1053,7 @@ export async function openRelayDatabase(input: {
     database = new SqliteDatabase(sqlite)
   }
   try {
-    if (input.databaseUrl) await applySchemaWithPostgresRetries(database)
-    else await applySchema(database)
+    if (!input.databaseUrl) await applySchema(database)
     await backfillRelayCellRegions(database)
     return database
   } catch (error) {

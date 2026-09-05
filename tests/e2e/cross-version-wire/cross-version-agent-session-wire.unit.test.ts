@@ -2,9 +2,14 @@
 // way the terminal wire harness is: current code against a real published release.
 //
 // Three skews matter here, and none can be checked from one build alone — an old
-// client must not be shown a session it cannot render, a new client must find an
-// old host's missing surface cleanly, and a client's cursor must survive the host
-// process that minted it.
+// client must not receive a journal-backed RPC surface it cannot read, a new client
+// must find an old host's missing surface cleanly, and a client's cursor must survive
+// the host process that minted it.
+//
+// The session-tabs projection may keep a metadata-only row for an incapable mobile client so the
+// chat is not simply absent on the phone. Every `agentSession.*` method and destructive close stays
+// refused, which is what the tests below pin; the row-level behaviour is pinned in
+// src/main/runtime/rpc/methods/session-tab-agent-status-projection.test.ts.
 
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -76,6 +81,11 @@ const STRUCTURED_CALLS: {
     method: 'agentSession.setOption',
     hostMethod: 'setOption',
     result: { ok: true, replayed: false }
+  },
+  {
+    method: 'agentSession.requestHandoff',
+    hostMethod: 'requestHandoff',
+    result: { status: { owner: 'native' } }
   },
   {
     method: 'agentSession.handoffStatus',
@@ -197,6 +207,14 @@ function paramsFor(method: string): unknown {
       const fields = { itemId: 'item-1', expectedRevision: 1, optionId: 'allow' }
       return { envelope: envelope({ method, fields, fence }), ...fields }
     }
+    case 'agentSession.requestHandoff': {
+      const fields = {
+        direction: 'to-tui' as const,
+        mode: 'now' as const,
+        action: 'start' as const
+      }
+      return { envelope: envelope({ method, fields, fence }), ...fields }
+    }
     case 'agentSession.setOption': {
       const fields = { key: 'model', value: 'gpt-5' }
       return { envelope: envelope({ method, fields, fence }), ...fields }
@@ -286,6 +304,10 @@ async function callBuild(
 function structuredHostStub(): Record<string, ReturnType<typeof vi.fn>> {
   return {
     attach: vi.fn(async () => ({ ok: true, replayed: false, value: { sessionId: SESSION } })),
+    // Attach-shaped entries take a client-supplied location, so the host is asked whether it
+    // supports creating there. A real host always answers; leaving it unstubbed made every
+    // `ensure` refuse for the harness's own reason rather than the location's.
+    supportsCreate: vi.fn(() => true),
     send: vi.fn(async () => ({ ok: true, replayed: false })),
     cancel: vi.fn(async () => ({ ok: true, replayed: false })),
     close: vi.fn(async () => undefined),
@@ -723,6 +745,10 @@ describe('cross-version structured agent sessions', () => {
     /** Phase 2 owns provider processes; the adapter is the only stub here. */
     function adapter(): StructuredAgentSessionAdapter {
       return {
+        // Every real adapter answers this; without it adapterSupportsCreate falls through to
+        // `supportsLocation`, which this fake also lacks, so the client-supplied-location gate
+        // refused for the fake's silence rather than for the location.
+        supportsCreate: () => true,
         acquire: async ({ fence }) => ({
           process: {
             hostId: 'local',

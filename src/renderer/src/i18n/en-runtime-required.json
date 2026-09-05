@@ -3665,18 +3665,29 @@
         }
       },
       "status": {
-        "working": "Working…"
+        "responding": "Agent is responding",
+        "thinking": "Thinking",
+        "toggleDetails": "Toggle turn details",
+        "workedFor": "Worked for {{value0}}",
+        "working": "Working…",
+        "workingFor": "Working for {{value0}}"
       },
       "toggle": {
         "showChat": "Show chat view",
         "showTerminal": "Show terminal"
       },
       "tool": {
+        "countN": "{{value0}} tool calls",
+        "countOne": "1 tool call",
         "ranCommandManyToolsSummary": "Ran {{commandCount}} command and used {{toolCount}} tools",
         "ranCommandOneToolSummary": "Ran {{commandCount}} command and used {{toolCount}} tool",
         "ranCommandsManyToolsSummary": "Ran {{commandCount}} commands and used {{toolCount}} tools",
         "ranCommandsOneToolSummary": "Ran {{commandCount}} commands and used {{toolCount}} tool",
         "running": "Running…",
+        "runningCommand": "Running command",
+        "runningNamed": "Running {{toolName}}",
+        "runningNamedPreview": "Running {{toolName}} {{preview}}",
+        "runningPreview": "Running {{preview}}",
         "usedManySummary": "Used {{toolCount}} tools",
         "usedOneSummary": "Used 1 tool"
       }

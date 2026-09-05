@@ -6,7 +6,27 @@ import {
 
 export const INCIDENT_MONITOR_THRESHOLDS = {
   activeProbeMaxAgeMs: 60_000,
-  cloudDataMaxAgeMs: 180_000,
+  // Why: Cloud Monitoring publishes on Google's clock, not ours. Per the metric
+  // list read 2026-09-05, Cloud Run instance_count / cpu / memory /
+  // max_request_concurrencies / request_count are "Sampled every 60 seconds.
+  // After sampling, data is not visible for up to 120 seconds" (60+120=180 s),
+  // and Cloud SQL cpu / memory / num_backends / backends_in_wait /
+  // deadlock_count say "up to 165 seconds" (60+165=225 s). Window-sum signals
+  // age differently: observedAt is the newest point in the 5-minute query
+  // window, so a label series that stops emitting reads as 300 s old while its
+  // summed value is still complete. 330 s clears the worst of the three (the
+  // 300 s query window) plus ~30 s of collect-to-evaluate latency. The old
+  // 180 s bar restarted healthy 15-minute windows at 181 s, 189 s and 255 s on
+  // 2026-09-04/05, once burning the whole 25-minute lineage with no verdict.
+  cloudDataMaxAgeMs: 330_000,
+  // Why: the director admin API answers live on our own request, so hold its
+  // freshness bar where it sat while it shared cloudDataMaxAgeMs.
+  directorAdminMaxAgeMs: 180_000,
+  // Why: how long a nonzero backends-in-wait point is carried before it reads as
+  // zero. Held at the pre-2026-09-05 cloud bar: carrying it for the full
+  // cloudDataMaxAgeMs would hand the evaluator a point older than its own
+  // freshness bar as soon as collection latency is added.
+  cloudLockWaitCarryMs: 180_000,
   relayLogMaxAgeMs: 180_000,
   heartbeatMaxAgeMs: 45_000,
   endpointLatencyMs: 2_000,
@@ -175,6 +195,7 @@ export type IncidentMonitorState = {
   continuityEvents: {
     recordedAt: string
     windowSequence: number
+    tolerated: boolean
     failures: IncidentFailure[]
   }[]
   frozenAt: string | null
@@ -307,7 +328,7 @@ const SOURCE_MAX_AGE: Record<IncidentSourceName, number> = {
   'active-probe': INCIDENT_MONITOR_THRESHOLDS.activeProbeMaxAgeMs,
   'cloud-monitoring': INCIDENT_MONITOR_THRESHOLDS.cloudDataMaxAgeMs,
   'relay-logs': INCIDENT_MONITOR_THRESHOLDS.relayLogMaxAgeMs,
-  'director-admin': INCIDENT_MONITOR_THRESHOLDS.cloudDataMaxAgeMs
+  'director-admin': INCIDENT_MONITOR_THRESHOLDS.directorAdminMaxAgeMs
 }
 
 function ageMs(timestamp: string, nowMs: number): number {
@@ -608,13 +629,58 @@ function checkpointMinutes(durationMinutes: number): number[] {
   return INCIDENT_CHECKPOINT_MINUTES.filter((minute) => minute <= durationMinutes)
 }
 
-const CONTINUITY_FAILURE_CODES = new Set([
-  'collector_failed',
-  'monitor_gap',
+// Freshness-only failures: we could not read a signal this sample. Distinct from
+// collector_failed / monitor_gap, where the whole sample is absent.
+export const FRESHNESS_FAILURE_CODES = new Set([
+  'signal_missing',
   'signal_stale',
   'source_missing',
   'source_stale'
 ])
+
+const CONTINUITY_FAILURE_CODES = new Set([
+  'collector_failed',
+  'monitor_gap',
+  ...FRESHNESS_FAILURE_CODES
+])
+
+// Why: Cloud Monitoring overshoots its own publish bar, and one unread sample is
+// not evidence of an unhealthy fleet. Under the 25-minute lineage cap a restart
+// past minute 10 costs the entire verdict, so a healthy fleet produced none on
+// 2026-09-05. A signal may miss this many consecutive samples before the window
+// restarts; the sample is still evaluated against every threshold it can read,
+// and a threshold breach still freezes the run outright.
+export const INCIDENT_FRESHNESS_TOLERANCE_SAMPLES = 2
+
+function freshnessKey(failure: IncidentFailure): string {
+  return `${failure.source}/${failure.signal ?? '*'}`
+}
+
+// Rebuild the per-signal tolerated streak from the trailing continuity events so a
+// resumed monitor cannot hand a signal a fresh budget.
+function resumeFreshnessStreaks(
+  state: IncidentMonitorState
+): Map<string, number> {
+  const events = state.continuityEvents
+  const streaks = new Map<string, number>()
+  const last = events[events.length - 1]
+  if (!last?.tolerated) return streaks
+  for (const key of new Set(last.failures.map(freshnessKey))) {
+    let streak = 0
+    let laterAt: number | null = null
+    for (let index = events.length - 1; index >= 0; index--) {
+      const event = events[index]!
+      const recordedAt = Date.parse(event.recordedAt)
+      if (!event.tolerated) break
+      if (laterAt !== null && laterAt - recordedAt > state.intervalMs * 1.5) break
+      if (!event.failures.some((failure) => freshnessKey(failure) === key)) break
+      streak++
+      laterAt = recordedAt
+    }
+    streaks.set(key, streak)
+  }
+  return streaks
+}
 
 function resetContinuousWindow(
   state: IncidentMonitorState,
@@ -631,6 +697,7 @@ function resetContinuousWindow(
   state.continuityEvents.push({
     recordedAt,
     windowSequence: state.windowSequence,
+    tolerated: false,
     failures
   })
 }
@@ -681,6 +748,7 @@ export async function runIncidentMonitor(
     await dependencies.persist(state)
     return state
   }
+  const freshnessStreaks = resumeFreshnessStreaks(state)
   while (state.completedAt === null) {
     if (dependencies.now() > lineageDeadlineMs) {
       completeContinuityDeadline(state, dependencies.now(), lineageStartMs)
@@ -715,9 +783,34 @@ export async function runIncidentMonitor(
     const thresholdFailures = evaluation.failures.filter((failure) =>
       !CONTINUITY_FAILURE_CODES.has(failure.code)
     )
-    if (continuityFailures.length > 0) {
+    const toleratedKeys = new Set(
+      state.windowStartedAt !== null &&
+        continuityFailures.length > 0 &&
+        continuityFailures.every((failure) => FRESHNESS_FAILURE_CODES.has(failure.code))
+        ? continuityFailures.map(freshnessKey)
+        : []
+    )
+    for (const key of [...freshnessStreaks.keys()]) {
+      if (!toleratedKeys.has(key)) freshnessStreaks.delete(key)
+    }
+    let tolerated = toleratedKeys.size > 0
+    for (const key of toleratedKeys) {
+      const streak = (freshnessStreaks.get(key) ?? 0) + 1
+      freshnessStreaks.set(key, streak)
+      if (streak > INCIDENT_FRESHNESS_TOLERANCE_SAMPLES) tolerated = false
+    }
+    if (continuityFailures.length > 0 && !tolerated) {
+      freshnessStreaks.clear()
       resetContinuousWindow(state, evaluation.evaluatedAt, continuityFailures)
     } else {
+      if (tolerated) {
+        state.continuityEvents.push({
+          recordedAt: evaluation.evaluatedAt,
+          windowSequence: state.windowSequence,
+          tolerated: true,
+          failures: continuityFailures
+        })
+      }
       if (state.windowStartedAt === null) {
         state.windowStartedAt = evaluation.evaluatedAt
       }

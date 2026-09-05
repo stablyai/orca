@@ -1,16 +1,14 @@
-import type { AgentJournalSnapshot } from '../../../shared/agent-session-journal-types'
-import { malformedRowsDisclosure, quarantineCorruptSuffix } from './journal-corruption-quarantine'
-import { ensureJournalDir } from './journal-log-file'
-import { loadJournal, type JournalLoad } from './journal-open'
-import { assertJournalPhysicalCapacity, journalDirectoryBytes } from './journal-physical-quota'
-import type { JournalRow } from './journal-row-schema'
+import { mkdir } from 'node:fs/promises'
+import type { JournalLoad } from './journal-open'
+import { journalRepairDisclosure, type JournalRepairDisclosure } from './journal-repair-disclosure'
+
+export async function ensureJournalDir(journalDir: string): Promise<void> {
+  await mkdir(journalDir, { recursive: true })
+}
 
 export function journalStoreLoadedFields(loaded: JournalLoad) {
   return {
     state: loaded.state,
-    tailRows: loaded.tailRows,
-    compactedThrough: loaded.compactedThrough,
-    sizeBytes: loaded.sizeBytes,
     readOnly: loaded.readOnly,
     malformedRows: loaded.malformedRows
   }
@@ -18,60 +16,47 @@ export function journalStoreLoadedFields(loaded: JournalLoad) {
 
 export async function openJournalStoreState(input: {
   journalDir: string
-  sessionId: string
-  maxBytes: number
   loaded: JournalLoad | null | undefined
-  start: () => Promise<void>
+  replay: () => JournalLoad | null
+  /** Drops the rejected suffix and records the rebuild it owes, in ONE
+   *  transaction. Corruption is not preserved; replay keeps reporting `corrupt`
+   *  until provider history republishes the epoch or the session writes past
+   *  `contentFrom`, the first sequence the repair left free. */
+  deleteSuffix: (fromSeq: number, contentFrom: number) => number
+  start: () => void
   adopt: (loaded: JournalLoad) => void
-  tailRows: () => readonly JournalRow[]
-  snapshot: () => AgentJournalSnapshot
-  rebuildLifecycle: (snapshot: AgentJournalSnapshot, physicalBytes: number) => void
+  /** Republishes an anchor row for an epoch a repair emptied. */
+  publishRepairEpoch: () => void
   appendDisclosure: (
-    identity: ReturnType<typeof malformedRowsDisclosure>['identity'],
-    body: ReturnType<typeof malformedRowsDisclosure>['body'],
+    identity: JournalRepairDisclosure['identity'],
+    body: JournalRepairDisclosure['body'],
     fence: number
   ) => Promise<unknown>
   highestFence: () => number
   malformedRows: () => number
+  setMalformedRows: (count: number) => void
   readOnly: () => boolean
-  setPhysicalBytes: (bytes: number) => void
 }): Promise<void> {
-  await ensureJournalDir(input.journalDir)
-  input.setPhysicalBytes(
-    await assertJournalPhysicalCapacity({
-      journalDir: input.journalDir,
-      sessionId: input.sessionId,
-      maxBytes: input.maxBytes
-    })
-  )
-  const loaded =
-    input.loaded !== undefined
-      ? input.loaded
-      : await loadJournal(input.journalDir, input.sessionId, { maxBytes: input.maxBytes })
+  const loaded = input.loaded !== undefined ? input.loaded : input.replay()
   if (!loaded) {
-    await input.start()
-    input.setPhysicalBytes(await journalDirectoryBytes(input.journalDir))
+    input.start()
     return
   }
   input.adopt(loaded)
-  if (loaded.corrupt && !loaded.readOnly) {
-    await quarantineCorruptSuffix(input.journalDir, input.tailRows(), loaded.quarantineRemainder, {
-      sessionId: input.sessionId,
-      maxBytes: input.maxBytes
-    })
+  if (loaded.truncateFrom !== undefined && !loaded.readOnly) {
+    input.deleteSuffix(loaded.truncateFrom, loaded.state.lastSequence + 1)
   }
-  let physicalBytes = await journalDirectoryBytes(input.journalDir)
-  input.setPhysicalBytes(physicalBytes)
-  // A future-schema/read-only journal is inspection-only. Its reduced state is
-  // intentionally empty, and rebuilding reservations from it would mutate the
-  // in-memory quota model (and could influence later admission decisions).
-  if (!loaded.readOnly) {
-    input.rebuildLifecycle(input.snapshot(), physicalBytes)
+  // A repair that took every live row leaves the epoch with no anchor. Publish
+  // one before anything can append into it: an ordinary row at sequence 1 would
+  // replay as a clean timeline and hide that the history was never rebuilt.
+  if (!loaded.readOnly && loaded.state.lastSequence === 0) {
+    input.publishRepairEpoch()
+    // The replacement epoch adopts a clean load; what this open's repair did is
+    // still the answer `repair` and the disclosure below owe the caller.
+    input.setMalformedRows(loaded.malformedRows)
   }
   if (input.malformedRows() > 0 && !input.readOnly()) {
-    const disclosure = malformedRowsDisclosure(input.malformedRows())
+    const disclosure = journalRepairDisclosure({ malformedRows: input.malformedRows() })
     await input.appendDisclosure(disclosure.identity, disclosure.body, input.highestFence())
   }
-  physicalBytes = await journalDirectoryBytes(input.journalDir)
-  input.setPhysicalBytes(physicalBytes)
 }

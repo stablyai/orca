@@ -474,7 +474,10 @@ describe('connectPanePty', () => {
         forceHostRuntime: true
       })
     ).resolves.toBe('codex "--dangerously-bypass-approvals-and-sandbox" "resume" "codex-session-1"')
-    expect(createdTransportOptions.at(-1)).toMatchObject({ forceHostRuntime: true })
+    expect(createdTransportOptions.at(-1)).toMatchObject({
+      cwd: 'C:\\Users\\neil\\orca\\workspaces\\orca\\feature',
+      forceHostRuntime: true
+    })
     expect(createdTransportOptions.at(-1)).not.toHaveProperty('cwdFallback')
   })
 

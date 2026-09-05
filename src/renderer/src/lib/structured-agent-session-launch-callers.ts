@@ -1,6 +1,6 @@
-import { StructuredAgentSessionCreateRefusalError } from '@/lib/launch-structured-codex-session'
+import { StructuredAgentSessionCreateRefusalError } from '@/lib/launch-structured-agent-session'
 import {
-  settleStructuredCodexLaunchPrompt,
+  settleStructuredAgentLaunchPrompt,
   type StructuredPromptDeliveryResult
 } from '@/lib/structured-agent-session-launch-prompt'
 import type { StructuredAgentSessionOutboxEntry } from '../../../shared/structured-agent-session-outbox'
@@ -10,7 +10,7 @@ export type StructuredRefusalFallback = () =>
   | StructuredPromptDeliveryResult
   | Promise<void | StructuredPromptDeliveryResult>
 
-export type StructuredCodexLaunchOptions = {
+export type StructuredAgentLaunchOptions = {
   prompt?: string
   promptDelivery?: 'auto-submit' | 'submit-after-ready'
   onPromptDelivered?: () => void
@@ -137,7 +137,7 @@ function trackPromptDelivery(
 export function addStructuredLaunchCaller(args: {
   group: StructuredLaunchCallerGroup
   launchResult: Promise<{ sessionId: string; fence: number }>
-  options: StructuredCodexLaunchOptions
+  options: StructuredAgentLaunchOptions
   stagedEntry: StructuredAgentSessionOutboxEntry | null
 }): StructuredLaunchCaller {
   const fallback = Promise.withResolvers<boolean>()
@@ -156,7 +156,7 @@ export function addStructuredLaunchCaller(args: {
     }
   }
   args.group.entries.add(caller)
-  const promptDeliveryResult = settleStructuredCodexLaunchPrompt({
+  const promptDeliveryResult = settleStructuredAgentLaunchPrompt({
     launchResult: args.launchResult,
     options: args.options,
     stagedEntry: args.stagedEntry

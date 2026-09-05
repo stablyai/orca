@@ -95,7 +95,7 @@ export const GOOGLE_METRICS: GoogleMetricDefinition[] = [
       'resource.type="cloudsql_database" AND metric.label."wait_event_type"="Lock"',
     aggregation: 'latest-max',
     emptyIsZero: true,
-    zeroAfterMs: INCIDENT_MONITOR_THRESHOLDS.cloudDataMaxAgeMs
+    zeroAfterMs: INCIDENT_MONITOR_THRESHOLDS.cloudLockWaitCarryMs
   },
   {
     signal: 'cloud_sql.deadlocks',

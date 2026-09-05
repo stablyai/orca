@@ -20,10 +20,7 @@ export function codexJournalPromptIdPart(value: string): string {
   }
   const suffix = `#${digestPayload(value).slice(0, 32)}`
   const bounded = boundPayload(value, {
-    inlineHeadBytes: CODEX_JOURNAL_PROMPT_ID_COMPONENT_MAX_BYTES - suffix.length,
-    maxSessionBytes: Number.MAX_SAFE_INTEGER,
-    maxAppendsPerWindow: Number.MAX_SAFE_INTEGER,
-    appendWindowMs: Number.MAX_SAFE_INTEGER
+    inlineHeadBytes: CODEX_JOURNAL_PROMPT_ID_COMPONENT_MAX_BYTES - suffix.length
   })
   return `${bounded.head}${suffix}`
 }

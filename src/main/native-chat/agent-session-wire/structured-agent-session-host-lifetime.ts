@@ -48,7 +48,10 @@ export async function evictHeldStructuredAgentSession(
     hasProviderChild: hasProviderChild(context, sessionId),
     eventSink: context.runtimeState.eventSinkFor(sessionId),
     adapter: context.deps.adapter,
-    forget: () => context.sessions.delete(sessionId),
+    forget: async () => {
+      await context.sessions.get(sessionId)?.journal.close()
+      context.sessions.delete(sessionId)
+    },
     discardSink: () => context.runtimeState.discardEventSink(sessionId),
     releaseLease: () =>
       releaseStoredStructuredAgentSessionOwner({

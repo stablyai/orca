@@ -51,8 +51,10 @@ export function reattachLocalPty(id: string, cols: number, rows: number): PtySpa
   if (!existing) {
     return null
   }
+  let resized = false
   try {
     existing.resize(cols, rows)
+    resized = true
   } catch {
     /* Existing PTY may reject resize during teardown; still return the live handle. */
   }
@@ -60,6 +62,8 @@ export function reattachLocalPty(id: string, cols: number, rows: number): PtySpa
     id,
     pid: existing.pid,
     ...(ptyWslDistroById.has(id) ? { wslDistro: ptyWslDistroById.get(id) ?? null } : {}),
-    isReattach: true
+    isReattach: true,
+    // Why: unlike daemon/relay attach, this one really moved the live PTY to the caller's grid.
+    ...(resized ? { attachedGrid: { cols, rows } } : {})
   }
 }

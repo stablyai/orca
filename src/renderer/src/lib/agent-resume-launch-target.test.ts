@@ -93,6 +93,32 @@ describe('resolveAgentResumeLaunchTarget on a Windows client', () => {
     ).resolves.toEqual({ platform: 'linux', shell: undefined })
   })
 
+  for (const forceHostRuntime of [false, true]) {
+    it(`keeps an SSH execution owner POSIX when its legacy connection is absent (forceHostRuntime: ${forceHostRuntime})`, async () => {
+      const target = await resolveWith({
+        connectionId: null,
+        executionHostId: 'ssh:ssh-1',
+        forceHostRuntime,
+        terminalWindowsShell: 'cmd.exe'
+      })
+
+      expect(target).toEqual({ platform: 'linux', shell: undefined })
+      expect(
+        buildAgentResumeStartupPlan({
+          agent: 'pi',
+          providerSession: {
+            key: 'session_id',
+            id: 'omo-session-1',
+            transcriptPath: '/home/neil/.omo/agent/sessions/repo/session.jsonl'
+          },
+          cmdOverrides: { pi: 'omo' },
+          platform: target.platform,
+          shell: target.shell
+        })?.launchCommand
+      ).toBe("omo '--session' '/home/neil/.omo/agent/sessions/repo/session.jsonl'")
+    })
+  }
+
   it('does not describe a remote runtime host with the local Windows shell setting', async () => {
     await expect(
       resolveWith({

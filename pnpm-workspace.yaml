@@ -12,6 +12,20 @@ minimumReleaseAgeExclude:
   - zod@4.5.4
 shamefullyHoist: true
 
+# Orca always launches the user's own resolved Claude CLI via
+# pathToClaudeCodeExecutable, so the SDK's bundled ~95 MB-per-platform CLI
+# binaries must never be installed. Excluding them is what makes the path
+# override mandatory rather than merely preferred.
+ignoredOptionalDependencies:
+  - '@anthropic-ai/claude-agent-sdk-darwin-arm64'
+  - '@anthropic-ai/claude-agent-sdk-darwin-x64'
+  - '@anthropic-ai/claude-agent-sdk-linux-arm64'
+  - '@anthropic-ai/claude-agent-sdk-linux-arm64-musl'
+  - '@anthropic-ai/claude-agent-sdk-linux-x64'
+  - '@anthropic-ai/claude-agent-sdk-linux-x64-musl'
+  - '@anthropic-ai/claude-agent-sdk-win32-arm64'
+  - '@anthropic-ai/claude-agent-sdk-win32-x64'
+
 supportedArchitectures:
   os:
     - current

@@ -141,6 +141,11 @@
     "bench:main-thread-jank": "pnpm run ensure:electron-runtime && node tests/tools/benchmarks/main-thread-jank-bench.mjs",
     "bench:worktree-deletion": "node tests/tools/benchmarks/worktree-deletion-dev-bench.mjs",
     "bench:zustand-selector-fanout": "node config/scripts/zustand-selector-fanout-benchmark.mjs",
+    "bench:agent-inspection-cadence": "node config/scripts/agent-inspection-cadence-batching-benchmark.mjs",
+    "bench:renderer-quadratic-scans": "node config/scripts/renderer-quadratic-scan-benchmark.mjs",
+    "bench:session-write-hot-path": "node config/scripts/session-write-hot-path-benchmark.mjs",
+    "bench:terminal-partial-escape-tail": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON config/scripts/terminal-partial-escape-tail-benchmark.mjs",
+    "bench:terminal-partial-escape-tail": "node config/scripts/terminal-partial-escape-tail-benchmark.mjs",
     "bench:worktree-refresh-churn": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON config/scripts/worktree-refresh-churn-benchmark.mjs",
     "bench:multi-workspace-typing": "pnpm run ensure:electron-runtime && node config/scripts/run-multi-workspace-typing-bench.mjs",
     "bench:ai-vault-typing": "pnpm run ensure:electron-runtime && node config/scripts/run-ai-vault-typing-bench.mjs",
@@ -153,6 +158,7 @@
     "repro:live-remote-realistic-freeze": "node config/scripts/live-remote-realistic-freeze-repro.mjs"
   },
   "dependencies": {
+    "@anthropic-ai/claude-agent-sdk": "0.3.251",
     "@electron-toolkit/preload": "^3.0.2",
     "@electron-toolkit/utils": "^4.0.0",
     "@floating-ui/dom": "1.7.6",

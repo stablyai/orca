@@ -11,6 +11,6 @@ import { runtimeTargetForExecutionHostId, type RuntimeClientTarget } from './run
 export function useWorktreeRuntimeTarget(
   worktreeId: string | null | undefined
 ): RuntimeClientTarget | null {
-  const hostId = useAppStore((state) => getExecutionHostIdForWorktree(state, worktreeId))
-  return useMemo(() => runtimeTargetForExecutionHostId(hostId), [hostId])
+  const executionHostId = useAppStore((state) => getExecutionHostIdForWorktree(state, worktreeId))
+  return useMemo(() => runtimeTargetForExecutionHostId(executionHostId), [executionHostId])
 }

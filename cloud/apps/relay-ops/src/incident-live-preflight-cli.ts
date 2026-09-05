@@ -7,6 +7,7 @@ import { suppliedIdentityToken } from './incident-monitor-cli.js'
 import { AdmissionSelectorSchema, type AdmissionSelector } from './incident-selector.js'
 import {
   evaluateIncidentSample,
+  FRESHNESS_FAILURE_CODES,
   preDrainDryRunPassed,
   type IncidentSample
 } from './incident-monitor.js'
@@ -18,12 +19,6 @@ const MONITOR_EVIDENCE_MAX_AGE_MS = 5 * 60_000
 // Matches the same-cap cell job timeout-minutes; bounds each predecessor wave.
 const WAVE_PREDECESSOR_TIMEOUT_MS = 75 * 60_000
 const WAVE_INDEX_PATTERN = /^[0-3]$/
-const FRESHNESS_FAILURE_CODES = new Set([
-  'signal_missing',
-  'signal_stale',
-  'source_missing',
-  'source_stale'
-])
 
 export function livePreflightGcloud(
   gcloud: ReturnType<typeof createGcloudClient>,
@@ -173,7 +168,11 @@ export async function runIncidentLivePreflight(
     const freshnessOnly = evaluation.failures.every((failure) =>
       FRESHNESS_FAILURE_CODES.has(failure.code)
     )
-    if (!freshnessOnly || attempt === attempts) {
+    // Waiting must never carry the mutation past the same evidence-age bound
+    // the entry check enforces, so the wave budget also caps the retry window.
+    const budgetExhausted =
+      now() + FRESHNESS_RETRY_INTERVAL_MS - completedAt > maxEvidenceAgeMs
+    if (!freshnessOnly || attempt === attempts || budgetExhausted) {
       throw new Error(
         `relay live preflight failed: ${evaluation.failures
           .map((failure) => `${failure.source}/${failure.code}`)

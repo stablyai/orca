@@ -1,3 +1,4 @@
+import { isAgentSessionHandleProvider } from '../../../shared/agent-session-provider-handle'
 import type { TuiAgent } from '../../../shared/tui-agent'
 import type { AgentStartupPlan } from '@/lib/tui-agent-startup'
 import type { LaunchSource } from '../../../shared/telemetry-events'
@@ -9,8 +10,8 @@ import {
   buildDirectWorkItemAgentStartupPlan,
   buildDirectWorkItemStartupOpts
 } from '@/lib/launch-work-item-direct-agent'
-import { startStructuredCodexLaunch } from '@/lib/structured-agent-session-launch'
-import { StructuredAgentSessionCreateRefusalError } from '@/lib/launch-structured-codex-session'
+import { startStructuredAgentLaunch } from '@/lib/structured-agent-session-launch'
+import { StructuredAgentSessionCreateRefusalError } from '@/lib/launch-structured-agent-session'
 import { isNativeChatTranscriptLocalReadable } from '@/lib/native-chat-transcript-readability'
 import { resolveSourceControlLaunchPlatform } from '@/lib/source-control-launch-platform'
 import { preflightAgentTrust } from '@/lib/agent-trust-preflight'
@@ -127,11 +128,11 @@ export async function settleDirectWorkItemStructuredLaunch(args: {
   primaryTabId: string | null
 }> {
   let { structuredLaunch, primaryTabId } = args
-  if (!structuredLaunch || args.agent !== 'codex') {
+  if (!structuredLaunch || !isAgentSessionHandleProvider(args.agent)) {
     return { completed: false, structuredLaunch, visibilityUnknown: false, primaryTabId }
   }
 
-  const launch = startStructuredCodexLaunch(args.worktreeId, {
+  const launch = startStructuredAgentLaunch(args.worktreeId, args.agent, {
     prompt: args.draftContent,
     ...(args.promptDelivery === 'submit-after-ready' ? { promptDelivery: args.promptDelivery } : {})
   })

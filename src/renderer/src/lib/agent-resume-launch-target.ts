@@ -26,7 +26,11 @@ export type AgentResumeLaunchTargetArgs = {
 }
 
 function resolveResumeLaunchPlatform(args: AgentResumeLaunchTargetArgs): NodeJS.Platform {
-  const isRemoteRuntime = parseExecutionHostId(args.executionHostId)?.kind === 'runtime'
+  const executionHost = parseExecutionHostId(args.executionHostId)
+  if (executionHost?.kind === 'ssh') {
+    return 'linux'
+  }
+  const isRemoteRuntime = executionHost?.kind === 'runtime'
   if (
     args.forceHostRuntime === true &&
     !args.connectionId &&

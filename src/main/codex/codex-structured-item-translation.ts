@@ -172,7 +172,6 @@ function commandState(item: CodexThreadItem): 'running' | 'completed' | 'failed'
 
 export type CodexJournalItem = {
   body: AgentJournalItemBody | null
-  blobs: { digest: string; payload: string }[]
   handled: boolean
 }
 
@@ -190,10 +189,6 @@ function commandItem(item: CodexThreadItem): CodexJournalItem {
       state: commandState(item),
       ...(bounded === null ? {} : { output: bounded.bounded })
     },
-    blobs:
-      output !== null && bounded?.bounded.truncated
-        ? [{ digest: bounded.bounded.digest, payload: output }]
-        : [],
     handled: true
   }
 }
@@ -215,7 +210,6 @@ function fileChangeItem(item: CodexThreadItem): CodexJournalItem {
         input: boundToolInput({ changes: item.changes ?? null }, DEFAULT_JOURNAL_PAYLOAD_LIMITS),
         state: commandState(item)
       },
-      blobs: [],
       handled: true
     }
   }
@@ -227,7 +221,6 @@ function fileChangeItem(item: CodexThreadItem): CodexJournalItem {
       path: changes.length === 1 ? changes[0]!.path : `${changes.length} files`,
       patch: bounded
     },
-    blobs: bounded.truncated ? [{ digest: bounded.digest, payload: patch }] : [],
     handled: true
   }
 }
@@ -246,7 +239,6 @@ export function codexJournalItem(item: CodexThreadItem): CodexJournalItem {
         blocks.length === 0
           ? null
           : { kind: 'message', role: item.type === 'userMessage' ? 'user' : 'assistant', blocks },
-      blobs: [],
       handled: true
     }
   }
@@ -266,14 +258,11 @@ export function codexJournalItem(item: CodexThreadItem): CodexJournalItem {
         text === null
           ? null
           : { kind: 'status', text: boundInlineText(text, DEFAULT_JOURNAL_PAYLOAD_LIMITS).text },
-      blobs: [],
       handled: true
     }
   }
   const unhandled = unhandledProviderFrameJournalItem('codex', `item:${item.type}`, item)
-  return unhandled
-    ? { body: unhandled.body, blobs: unhandled.blobs, handled: false }
-    : { body: null, blobs: [], handled: true }
+  return unhandled ? { body: unhandled.body, handled: false } : { body: null, handled: true }
 }
 
 export function codexItemBody(item: CodexThreadItem): AgentJournalItemBody | null {
@@ -292,7 +281,7 @@ export function codexStreamingMessageBody(text: string): AgentJournalItemBody {
 /** Snapshot body for any item-level stream, keyed onto its parent item. */
 export function codexStreamingJournalItem(item: CodexThreadItem, text: string): CodexJournalItem {
   if (item.type === 'agentMessage') {
-    return { body: codexStreamingMessageBody(text), blobs: [], handled: true }
+    return { body: codexStreamingMessageBody(text), handled: true }
   }
   if (item.type === 'commandExecution') {
     return commandItem({ ...item, aggregatedOutput: text })
@@ -304,10 +293,9 @@ export function codexStreamingJournalItem(item: CodexThreadItem, text: string): 
     const bounded = boundInlineText(text, DEFAULT_JOURNAL_PAYLOAD_LIMITS).bounded
     return {
       body: { kind: 'diff', path: path ?? 'pending patch', patch: bounded },
-      blobs: bounded.truncated ? [{ digest: bounded.digest, payload: text }] : [],
       handled: true
     }
   }
   const bounded = boundInlineText(text, DEFAULT_JOURNAL_PAYLOAD_LIMITS)
-  return { body: { kind: 'status', text: bounded.text }, blobs: [], handled: true }
+  return { body: { kind: 'status', text: bounded.text }, handled: true }
 }

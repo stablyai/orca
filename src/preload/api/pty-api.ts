@@ -71,6 +71,8 @@ export type PtyApi = {
     coldRestore?: { scrollback: string; cwd: string; cols?: number; rows?: number }
     startupCwdFallback?: { kind: 'worktree'; cwd: string }
     agentResumeUnavailable?: true
+    /** Host verdict on the shell-ready marker; absent when the execution host predates the field. */
+    shellReadyArmed?: boolean
   }>
   write: (id: string, data: string) => void
   writeAccepted: (id: string, data: string) => Promise<boolean>
@@ -114,7 +116,11 @@ export type PtyApi = {
   getForegroundProcess: (id: string) => Promise<string | null>
   inspectProcess: (
     id: string,
-    options?: { expectedIncarnationId?: string; scanChildProcesses?: boolean }
+    options?: {
+      expectedIncarnationId?: string
+      scanChildProcesses?: boolean
+      steadyState?: boolean
+    }
   ) => Promise<TerminalProcessInspection>
   confirmForegroundProcess: (id: string) => Promise<string | null>
   getCwd: (id: string) => Promise<string>

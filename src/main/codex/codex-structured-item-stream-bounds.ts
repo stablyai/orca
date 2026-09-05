@@ -17,14 +17,8 @@ export function codexStructuredItemKey(threadId: string, itemId: string): string
   return `${key.slice(0, 960)}:${(hash >>> 0).toString(16)}`
 }
 
-export function pendingPatchBytes(pending: {
-  body: unknown
-  blobs: readonly { payload: string }[]
-}): number {
-  return (
-    Buffer.byteLength(JSON.stringify(pending.body), 'utf8') +
-    pending.blobs.reduce((total, blob) => total + Buffer.byteLength(blob.payload, 'utf8'), 0)
-  )
+export function pendingPatchBytes(pending: { body: unknown }): number {
+  return Buffer.byteLength(JSON.stringify(pending.body), 'utf8')
 }
 
 export function boundStreamItem(item: Record<string, unknown>): Record<string, unknown> {

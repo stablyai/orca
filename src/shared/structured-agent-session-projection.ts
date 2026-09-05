@@ -6,6 +6,22 @@ function boundedText(payload: { head: string; truncated: boolean; byteLength: nu
   return payload.truncated ? `${payload.head}\n… (${payload.byteLength} bytes)` : payload.head
 }
 
+/** The markers a clipped payload carries in its own text, anchored to the end
+ *  so nothing that merely looks like one inside the body can match. */
+const BOUNDED_TEXT_MARKERS = [
+  /\n… \(\d+ bytes\)$/,
+  /\n\[Orca: output truncated — \d+ bytes total, digest [0-9a-f]+\]$/
+]
+
+/** Recovers the clipped body from a bounded payload's text, and says whether a
+ *  marker was there. A reader that treats the text as content renders the
+ *  marker as a line of it — with a line number, which reads as a real position
+ *  in the file — and reports the body as complete. */
+export function stripBoundedTextMarker(text: string): { text: string; truncated: boolean } {
+  const stripped = BOUNDED_TEXT_MARKERS.reduce((value, marker) => value.replace(marker, ''), text)
+  return { text: stripped, truncated: stripped.length !== text.length }
+}
+
 function itemBlocks(item: AgentJournalRenderItem): {
   role: NativeChatMessage['role']
   blocks: NativeChatBlock[]

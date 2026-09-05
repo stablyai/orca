@@ -263,3 +263,55 @@ test('main executes recovery mode and emits verified disabled control', async ()
     control: control(6, false)
   })
 })
+
+test('retries a transient 503 on the director control endpoint', async () => {
+  const config = parseRegionalRehomeArguments(
+    argumentsFor('inspect'),
+    { ORCA_RELAY_ADMIN_ID_TOKEN: 'token' }
+  )
+  const paths = []
+  let selectorCalls = 0
+  const result = await operateRegionalRehome(config, {
+    wait: async () => {},
+    fetch: async (url) => {
+      const path = new URL(url).pathname
+      paths.push(path)
+      if (path === '/v1/admin/admission-selector/status') {
+        selectorCalls += 1
+        // The first read of each admin path 503s the way a warming instance does.
+        if (selectorCalls === 1) return new Response('warming up', { status: 503 })
+        return Response.json({ selector: { generation: 11, membership } })
+      }
+      if (paths.filter((value) => value === path).length === 1) {
+        return new Response('warming up', { status: 503 })
+      }
+      return Response.json({ v: 1, control: control(4, false) })
+    }
+  })
+  assert.equal(result.control.generation, 4)
+  assert.deepEqual(paths, [
+    '/v1/admin/admission-selector/status',
+    '/v1/admin/admission-selector/status',
+    '/v1/admin/regional-rehome-control',
+    '/v1/admin/regional-rehome-control'
+  ])
+})
+
+test('fails when both attempts at the director control endpoint return 503', async () => {
+  const config = parseRegionalRehomeArguments(
+    argumentsFor('inspect'),
+    { ORCA_RELAY_ADMIN_ID_TOKEN: 'token' }
+  )
+  let calls = 0
+  await assert.rejects(
+    operateRegionalRehome(config, {
+      wait: async () => {},
+      fetch: async () => {
+        calls += 1
+        return new Response('warming up', { status: 503 })
+      }
+    }),
+    /returned 503/
+  )
+  assert.equal(calls, 2)
+})

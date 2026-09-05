@@ -2,8 +2,8 @@
 
 import '@testing-library/jest-dom/vitest'
 
-import { cleanup, render, screen } from '@testing-library/react'
-import { afterEach, describe, expect, it } from 'vitest'
+import { cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { AgentJournalRenderItem } from '../../../../shared/agent-session-journal-types'
 import type { NativeChatBlock } from '../../../../shared/native-chat-types'
 import { projectStructuredItemToNativeChat } from '../../../../shared/structured-agent-session-projection'
@@ -32,6 +32,9 @@ describe('NativeChatToolRun', () => {
       {
         type: 'tool-call',
         name: 'apply_patch',
+        // The patch lives on the call in this lane, so the provider's own
+        // completion is what says the edit landed.
+        state: 'completed',
         input: {
           changes: [
             {
@@ -46,8 +49,9 @@ describe('NativeChatToolRun', () => {
 
     const { container } = render(<NativeChatToolRun blocks={blocks} expandSignal />)
 
-    expect(screen.getByText('+after')).toBeInTheDocument()
-    expect(screen.getByText('-before')).toBeInTheDocument()
+    expect(screen.getByText('after')).toBeInTheDocument()
+    expect(screen.getByText('before')).toBeInTheDocument()
+    expect(screen.getByText('Edited file')).toBeInTheDocument()
     expect(container.querySelector('pre')).toBeNull()
   })
 
@@ -78,16 +82,154 @@ describe('NativeChatToolRun', () => {
       <NativeChatToolRun blocks={projected?.blocks ?? []} expandSignal />
     )
 
-    expect(screen.getByText('+after')).toHaveClass(
-      'bg-emerald-500/10',
-      'text-[var(--git-decoration-added)]'
-    )
-    expect(screen.getByText('-before')).toHaveClass(
-      'bg-rose-500/10',
-      'text-[var(--git-decoration-deleted)]'
-    )
+    // Row grounds come from the diff tokens, not a hardcoded palette value.
+    expect(screen.getByText('after').closest('div')).toHaveClass('bg-[var(--diff-added-ground)]')
+    expect(screen.getByText('before').closest('div')).toHaveClass('bg-[var(--diff-removed-ground)]')
     expect(container).not.toHaveTextContent('"changes"')
     expect(container.querySelector('pre')).toBeNull()
+  })
+
+  it('keeps the provider error visible for an edit the agent could not apply', () => {
+    const blocks: NativeChatBlock[] = [
+      {
+        type: 'tool-call',
+        name: 'Edit',
+        input: { file_path: '/repo/a.ts', old_string: 'missing', new_string: 'now' }
+      },
+      { type: 'tool-result', output: 'String to replace not found in file.', isError: true }
+    ]
+
+    const { container } = render(<NativeChatToolRun blocks={blocks} expandSignal />)
+
+    expect(screen.queryByText('Edited file')).toBeNull()
+    const body = container.querySelector('pre')
+    expect(body).toHaveTextContent('String to replace not found in file.')
+    expect(body).toHaveClass('text-destructive')
+  })
+
+  it('leaves a `git diff` command as a command row rather than an edit card', () => {
+    const blocks: NativeChatBlock[] = [
+      { type: 'tool-call', name: 'exec', input: { command: 'git diff' }, state: 'completed' },
+      {
+        type: 'tool-result',
+        output: 'diff --git a/a.ts b/a.ts\n--- a/a.ts\n+++ b/a.ts\n@@ -1 +1 @@\n-was\n+now'
+      }
+    ]
+
+    const { container } = render(<NativeChatToolRun blocks={blocks} expandSignal />)
+
+    expect(screen.queryByText('Edited file')).toBeNull()
+    expect(container).toHaveTextContent('git diff')
+  })
+
+  it('shows no gutter number for a snippet edit, which cannot locate itself', () => {
+    const blocks: NativeChatBlock[] = [
+      {
+        type: 'tool-call',
+        name: 'Edit',
+        input: { file_path: '/repo/a.ts', old_string: 'was', new_string: 'now' },
+        state: 'completed'
+      },
+      { type: 'tool-result', output: 'ok' }
+    ]
+
+    render(<NativeChatToolRun blocks={blocks} expandSignal />)
+
+    // Exact, because a snippet-relative number would sit ahead of the marker.
+    expect(screen.getByText('now').closest('div')?.textContent).toBe('+now')
+    expect(screen.getByText('was').closest('div')?.textContent).toBe('-was')
+  })
+
+  it('separates two regions of a file so the gutter jump is accounted for', () => {
+    const blocks: NativeChatBlock[] = [
+      {
+        type: 'tool-call',
+        name: 'Edit',
+        input: { file_path: '/repo/a.ts' },
+        state: 'completed'
+      },
+      {
+        type: 'tool-result',
+        output: 'ok',
+        editPatch: {
+          filePath: '/repo/a.ts',
+          hunks: [
+            { oldStart: 42, oldLines: 1, newStart: 42, newLines: 1, lines: ['-was', '+now'] },
+            { oldStart: 310, oldLines: 1, newStart: 310, newLines: 1, lines: ['-old', '+new'] }
+          ]
+        }
+      }
+    ]
+
+    render(<NativeChatToolRun blocks={blocks} expandSignal />)
+
+    const separators = screen.getAllByRole('separator')
+    expect(separators).toHaveLength(1)
+    expect(separators[0]).toHaveAccessibleName('Lines not shown')
+  })
+
+  it('offers no empty body for a delete, which names the file and nothing else', () => {
+    const blocks: NativeChatBlock[] = [
+      {
+        type: 'tool-call',
+        name: 'apply_patch',
+        input: { input: '*** Begin Patch\n*** Delete File: gone.ts\n*** End Patch' },
+        state: 'completed'
+      }
+    ]
+
+    render(<NativeChatToolRun blocks={blocks} expandSignal />)
+
+    expect(screen.getByTitle('gone.ts')).toBeInTheDocument()
+    // The header states the change; there is no body behind a disclosure.
+    expect(screen.getByText('Deleted file').closest('button')).not.toHaveAttribute('aria-expanded')
+  })
+
+  it('says a diff was clipped even while the card is collapsed', () => {
+    const blocks: NativeChatBlock[] = [
+      {
+        type: 'tool-call',
+        name: 'Diff',
+        input: { path: 'src/a.ts' },
+        state: 'completed'
+      },
+      { type: 'tool-result', output: '@@ -1,3 +1,3 @@\n ctx\n-was\n+now\n… (48210 bytes)' }
+    ]
+
+    // A defined expandOverride opens the run while leaving each card closed.
+    render(<NativeChatToolRun blocks={blocks} expandSignal={false} expandOverride />)
+
+    expect(screen.getByText('Diff truncated')).toBeInTheDocument()
+    expect(screen.queryByText('was')).toBeNull()
+  })
+
+  it('copies the diff as signed rows, with the region breaks left out', () => {
+    const writeClipboardText = vi.fn()
+    Object.assign(window, { api: { ui: { writeClipboardText } } })
+    const blocks: NativeChatBlock[] = [
+      {
+        type: 'tool-call',
+        name: 'Edit',
+        input: { file_path: '/repo/a.ts' },
+        state: 'completed'
+      },
+      {
+        type: 'tool-result',
+        output: 'ok',
+        editPatch: {
+          filePath: '/repo/a.ts',
+          hunks: [
+            { oldStart: 1, oldLines: 2, newStart: 1, newLines: 2, lines: [' ctx', '-was', '+now'] },
+            { oldStart: 90, oldLines: 1, newStart: 90, newLines: 1, lines: ['+tail'] }
+          ]
+        }
+      }
+    ]
+
+    render(<NativeChatToolRun blocks={blocks} expandSignal />)
+    fireEvent.click(screen.getByRole('button', { name: 'Copy diff' }))
+
+    expect(writeClipboardText).toHaveBeenCalledWith(' ctx\n-was\n+now\n+tail')
   })
 
   it('keeps a grouped active run to one stable row showing only the latest tool', () => {
@@ -99,7 +241,9 @@ describe('NativeChatToolRun', () => {
 
     const { container } = render(<NativeChatToolRun blocks={blocks} expandSignal={false} />)
 
-    expect(screen.getByText('Running cat package.json')).toBeInTheDocument()
+    const activeLabel = screen.getByText('Running cat package.json')
+    expect(activeLabel).toBeInTheDocument()
+    expect(activeLabel).toHaveClass('animate-pulse', 'motion-reduce:animate-none')
     expect(screen.queryByText('Running date')).toBeNull()
     expect(screen.queryByText('Running pwd')).toBeNull()
     expect(screen.queryByText('Ran 3 commands and used 1 tool')).toBeNull()

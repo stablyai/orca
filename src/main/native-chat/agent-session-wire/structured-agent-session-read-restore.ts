@@ -39,7 +39,7 @@ export async function restoreStructuredAgentSessionRead(
     workspaceId: record.location.workspaceId,
     sessionId
   })
-  const loaded = await loadJournal(journalDir, sessionId)
+  const loaded = loadJournal(journalDir, sessionId)
   if (!loaded || loaded.corrupt) {
     return null
   }
