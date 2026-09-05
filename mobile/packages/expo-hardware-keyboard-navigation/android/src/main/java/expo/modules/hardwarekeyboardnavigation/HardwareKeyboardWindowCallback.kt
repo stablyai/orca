@@ -12,6 +12,13 @@ class HardwareKeyboardWindowCallback(
   override fun dispatchKeyEvent(event: KeyEvent): Boolean {
     val text = (window.currentFocus as? TextView)?.editableText
     val composing = text != null && BaseInputConnection.getComposingSpanStart(text) >= 0
-    return (!composing && HardwareKeyboardNavigationRegistry.dispatch(event)) || delegate.dispatchKeyEvent(event)
+    return HardwareKeyboardNavigationRegistry.dispatch(event, canStartCapture = !composing) || delegate.dispatchKeyEvent(event)
+  }
+
+  override fun onWindowFocusChanged(hasFocus: Boolean) {
+    if (!hasFocus) {
+      HardwareKeyboardNavigationRegistry.clearCapturedKeys()
+    }
+    delegate.onWindowFocusChanged(hasFocus)
   }
 }

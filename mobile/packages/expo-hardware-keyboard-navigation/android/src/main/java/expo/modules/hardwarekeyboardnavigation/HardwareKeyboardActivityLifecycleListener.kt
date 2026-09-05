@@ -14,6 +14,7 @@ class HardwareKeyboardActivityLifecycleListener : ReactActivityLifecycleListener
   }
 
   override fun onDestroy(activity: Activity) {
+    HardwareKeyboardNavigationRegistry.clearCapturedKeys()
     val callback = activity.window.callback
     if (callback is HardwareKeyboardWindowCallback) {
       activity.window.callback = callback.delegate

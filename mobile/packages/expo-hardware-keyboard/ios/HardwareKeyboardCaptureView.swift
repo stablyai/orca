@@ -1,4 +1,5 @@
 import ExpoModulesCore
+import ExpoHardwareKeyboardNavigation
 import UIKit
 
 // Captured keys stay in the focused field's responder chain.
@@ -41,11 +42,17 @@ public class HardwareKeyboardCaptureView: ExpoView {
       command.wantsPriorityOverSystemBehavior = true
       return [command]
     }
-    return Self.terminalKeyCommands
+    return Self.terminalKeyCommands.filter {
+      !HardwareKeyboardCommandRegistry.shared.owns($0, in: window)
+    }
   }
 
   public override func canPerformAction(_ action: Selector, withSender sender: Any?) -> Bool {
     if action == #selector(handleKeyCommand(_:)) {
+      if captureMode == "terminal", let command = sender as? UIKeyCommand,
+         HardwareKeyboardCommandRegistry.shared.owns(command, in: window) {
+        return false
+      }
       guard enabled, let input = focusedTextInput(in: self) else { return false }
       return input.markedTextRange == nil
     }
@@ -53,6 +60,9 @@ public class HardwareKeyboardCaptureView: ExpoView {
   }
 
   @objc func handleKeyCommand(_ sender: UIKeyCommand) {
+    if captureMode == "terminal", HardwareKeyboardCommandRegistry.shared.owns(sender, in: window) {
+      return
+    }
     guard enabled, let textInput = focusedTextInput(in: self), textInput.markedTextRange == nil else {
       return
     }

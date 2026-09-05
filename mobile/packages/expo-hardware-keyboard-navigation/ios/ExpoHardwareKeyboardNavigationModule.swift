@@ -20,13 +20,20 @@ private struct HardwareKeyboardCommandIdentity: Hashable {
 }
 
 @MainActor
-private final class HardwareKeyboardCommandRegistry {
-  static let shared = HardwareKeyboardCommandRegistry()
+public final class HardwareKeyboardCommandRegistry {
+  public static let shared = HardwareKeyboardCommandRegistry()
 
   private weak var controller: UIViewController?
   private var commandPayloads: [HardwareKeyboardCommandIdentity: [String: String]] = [:]
   private var installedCommands: [UIKeyCommand] = []
   var handler: (([String: String]) -> Void)?
+
+  public func owns(_ command: UIKeyCommand, in window: UIWindow?) -> Bool {
+    guard let window, controller?.viewIfLoaded?.window === window,
+      let identity = commandIdentity(input: command.input, modifierFlags: command.modifierFlags)
+    else { return false }
+    return commandPayloads[identity] != nil
+  }
 
   func install(_ records: [HardwareKeyboardCommandRecord]) {
     guard let controller = rootViewController() else { return }

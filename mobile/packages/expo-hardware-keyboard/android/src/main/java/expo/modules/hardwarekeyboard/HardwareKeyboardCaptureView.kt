@@ -2,6 +2,7 @@ package expo.modules.hardwarekeyboard
 
 import android.content.Context
 import android.view.KeyEvent
+import android.view.KeyCharacterMap
 import android.view.inputmethod.BaseInputConnection
 import android.widget.EditText
 import expo.modules.kotlin.AppContext
@@ -48,6 +49,9 @@ class HardwareKeyboardCaptureView(context: Context, appContext: AppContext) :
     val shift = (meta and KeyEvent.META_SHIFT_ON) != 0
     val repeat = event.repeatCount > 0
     if (captureMode == "submit") {
+      if (!isPhysicalKeyboardEvent(event)) {
+        return super.dispatchKeyEvent(event)
+      }
       val enter = event.keyCode == KeyEvent.KEYCODE_ENTER || event.keyCode == KeyEvent.KEYCODE_NUMPAD_ENTER
       if (!enter || ctrl || alt || shift) {
         return super.dispatchKeyEvent(event)
@@ -161,3 +165,7 @@ class HardwareKeyboardCaptureView(context: Context, appContext: AppContext) :
       key.startsWith("F")
   }
 }
+
+internal fun isPhysicalKeyboardEvent(event: KeyEvent): Boolean =
+  event.flags and KeyEvent.FLAG_SOFT_KEYBOARD == 0 &&
+    event.deviceId != KeyCharacterMap.VIRTUAL_KEYBOARD && event.device?.isVirtual != true

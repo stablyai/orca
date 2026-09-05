@@ -16,6 +16,7 @@ object HardwareKeyboardNavigationRegistry {
   @Volatile
   private var commands: List<HardwareKeyboardCommand> = emptyList()
   private val observers = mutableSetOf<WeakReference<(HardwareKeyboardCommand) -> Unit>>()
+  private val capturedKeys = mutableSetOf<Pair<Int, Int>>()
 
   fun setCommands(next: List<HardwareKeyboardCommand>) {
     commands = next
@@ -34,8 +35,24 @@ object HardwareKeyboardNavigationRegistry {
     observers.removeAll { it.get() == null }
   }
 
-  fun dispatch(event: KeyEvent): Boolean {
-    if (event.action != KeyEvent.ACTION_DOWN || event.repeatCount > 0) {
+  fun clearCapturedKeys() {
+    capturedKeys.clear()
+  }
+
+  fun dispatch(event: KeyEvent, canStartCapture: Boolean = true): Boolean {
+    val identity = event.deviceId to event.keyCode
+    if (event.action == KeyEvent.ACTION_UP) {
+      return capturedKeys.remove(identity)
+    }
+    if (event.action != KeyEvent.ACTION_DOWN) {
+      return false
+    }
+    if (event.repeatCount > 0) {
+      return identity in capturedKeys
+    }
+    // A fresh down supersedes an up lost during device/window changes.
+    capturedKeys.remove(identity)
+    if (!canStartCapture) {
       return false
     }
     val key = keyToken(event.keyCode) ?: return false
@@ -52,6 +69,7 @@ object HardwareKeyboardNavigationRegistry {
     if (currentObservers.isEmpty()) {
       return false
     }
+    capturedKeys.add(identity)
     currentObservers.forEach { it(command) }
     return true
   }

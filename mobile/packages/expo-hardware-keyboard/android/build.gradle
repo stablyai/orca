@@ -3,6 +3,11 @@ plugins {
   id 'expo-module-gradle-plugin'
 }
 
+dependencies {
+  testImplementation 'junit:junit:4.13.2'
+  testImplementation 'org.robolectric:robolectric:4.16'
+}
+
 group = 'expo.modules.hardwarekeyboard'
 version = '0.0.1'
 
