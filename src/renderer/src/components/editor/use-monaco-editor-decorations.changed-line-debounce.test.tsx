@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-import { act, useRef } from 'react'
+import { act, useRef, type MutableRefObject } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import type { editor } from 'monaco-editor'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -33,11 +33,20 @@ const diffContent: GitDiffResult = {
   modifiedIsBinary: false
 }
 
-function Harness({ content }: { content: string }): null {
+let latestChangedLineDecorationsRef: MutableRefObject<editor.IEditorDecorationsCollection | null> | null =
+  null
+
+function Harness({
+  content,
+  mountedEditor = fakeEditor
+}: {
+  content: string
+  mountedEditor?: editor.IStandaloneCodeEditor
+}): null {
   const editorRef = useRef<editor.IStandaloneCodeEditor | null>(null)
-  useMonacoEditorDecorations({
+  const decorations = useMonacoEditorDecorations({
     editorRef,
-    mountedEditor: fakeEditor,
+    mountedEditor,
     content,
     language: 'typescript',
     markdownDocuments: undefined,
@@ -45,6 +54,7 @@ function Harness({ content }: { content: string }): null {
     changedLineDecorationsEnabled: true,
     diffContent
   })
+  latestChangedLineDecorationsRef = decorations.changedLineDecorationsRef
   return null
 }
 
@@ -105,5 +115,35 @@ describe('useMonacoEditorDecorations changed-line debounce', () => {
     vi.advanceTimersByTime(CHANGED_LINE_DECORATION_DEBOUNCE_MS)
 
     expect(setDecorations).not.toHaveBeenCalled()
+  })
+
+  it('creates a fresh collection for a new editor instead of reusing the previous one', async () => {
+    const secondCreateDecorationsCollection = vi.fn()
+    const setDecorationsOnSecondEditor = vi.fn()
+    const secondEditor = {
+      createDecorationsCollection: (initial: unknown) => {
+        secondCreateDecorationsCollection(initial)
+        return { set: setDecorationsOnSecondEditor, clear: vi.fn() }
+      }
+    } as unknown as editor.IStandaloneCodeEditor
+
+    await act(async () =>
+      root.render(<Harness content="one\ntwo\nthree" mountedEditor={fakeEditor} />)
+    )
+    vi.advanceTimersByTime(CHANGED_LINE_DECORATION_DEBOUNCE_MS)
+    expect(createDecorationsCollection).toHaveBeenCalledTimes(1)
+
+    // Why: the real editor-mount lifecycle clears this ref when the old editor
+    // is disposed, before the new one mounts — reproduce that here since this
+    // harness doesn't run that lifecycle itself.
+    latestChangedLineDecorationsRef!.current = null
+
+    await act(async () =>
+      root.render(<Harness content="one\nTWO\nthree" mountedEditor={secondEditor} />)
+    )
+    vi.advanceTimersByTime(CHANGED_LINE_DECORATION_DEBOUNCE_MS)
+
+    expect(secondCreateDecorationsCollection).toHaveBeenCalledTimes(1)
+    expect(setDecorationsOnSecondEditor).not.toHaveBeenCalled()
   })
 })

@@ -49,6 +49,7 @@ export type MonacoEditorMountParams = {
   decorations: {
     markdownDocLinkDecorationsRef: MutableRefObject<MarkdownDocLinkDecorationController | null>
     conflictDecorationsRef: MutableRefObject<editor.IEditorDecorationsCollection | null>
+    changedLineDecorationsRef: MutableRefObject<editor.IEditorDecorationsCollection | null>
     updateMarkdownCompletionDocuments: () => void
   }
   annotations: {
