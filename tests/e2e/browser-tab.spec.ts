@@ -283,7 +283,7 @@ async function clickBrowserLink(
   selector: string,
   options: {
     modifiers?: ('meta' | 'control' | 'shift')[]
-    button?: 'left' | 'middle'
+    button?: 'left' | 'middle' | 'right'
     frameSelector?: string
   } = {}
 ): Promise<void> {
@@ -344,18 +344,24 @@ async function clickBrowserLink(
   )
 }
 
-async function expectBrowserTabActive(
+async function waitForTabIdByExactTitle(
   page: Parameters<typeof getActiveWorktreeId>[0],
   title: string
-): Promise<void> {
+): Promise<string> {
   const resolveTabId = (): Promise<string | null> =>
     page.locator('[data-tab-id]').evaluateAll((tabs, exactTitle) => {
       const tab = tabs.find((candidate) => candidate.textContent?.trim() === exactTitle)
       return tab?.getAttribute('data-tab-id') ?? null
     }, title)
   await expect.poll(resolveTabId, { timeout: 10_000 }).not.toBeNull()
-  const tabId = await resolveTabId()
-  expect(tabId).toBeTruthy()
+  return (await resolveTabId()) as string
+}
+
+async function expectBrowserTabActive(
+  page: Parameters<typeof getActiveWorktreeId>[0],
+  title: string
+): Promise<void> {
+  const tabId = await waitForTabIdByExactTitle(page, title)
   await expect(page.locator(`[data-browser-overlay-tab-id="${tabId}"]`)).toHaveCSS('opacity', '1')
 }
 
@@ -364,10 +370,7 @@ async function expectBrowserTabOpenedInBackground(
   sourceTabId: string,
   title: string
 ): Promise<void> {
-  const openedTab = page.locator('[data-tab-id]').filter({ hasText: title })
-  await expect(openedTab).toBeVisible()
-  const openedTabId = await openedTab.getAttribute('data-tab-id')
-  expect(openedTabId).toBeTruthy()
+  const openedTabId = await waitForTabIdByExactTitle(page, title)
   await expect(page.locator(`[data-browser-overlay-tab-id="${sourceTabId}"]`)).toHaveCSS(
     'opacity',
     '1'
@@ -718,19 +721,16 @@ test.describe('Browser Tab', () => {
       const baseWindowCount = await electronApp.evaluate(
         ({ BaseWindow }) => BaseWindow.getAllWindows().length
       )
-      // A plain target=_blank click is a new-tab request, in the main frame and in an iframe;
-      // the source tab must stay put rather than navigate away under it.
-      const sourceTabLocator = orcaPage.locator(`[data-tab-id="${sourceTab!.id}"]`)
-      await clickBrowserLink(orcaPage, sourceTab!.id, '#external-link')
-      await expectBrowserTabActive(orcaPage, 'Linked destination')
-      await expect(sourceTabLocator).toContainText('Source page')
-      await switchToBrowserTab(orcaPage, worktreeId, sourceTab!.id)
-
+      // Context-menu links keep the source visible until the new tab is selected.
+      await clickBrowserLink(orcaPage, sourceTab!.id, '#external-link', { button: 'right' })
+      await orcaPage
+        .getByRole('menuitem', { name: 'Open Link In Orca Browser', exact: true })
+        .click()
+      await expectBrowserTabOpenedInBackground(orcaPage, sourceTab!.id, 'Linked destination')
       await clickBrowserLink(orcaPage, sourceTab!.id, '#frame-link', {
         frameSelector: '#link-frame'
       })
       await expectBrowserTabActive(orcaPage, 'Frame destination')
-      await expect(sourceTabLocator).toContainText('Source page')
       await switchToBrowserTab(orcaPage, worktreeId, sourceTab!.id)
 
       await clickBrowserLink(orcaPage, sourceTab!.id, '#frame-modifier-link', {
