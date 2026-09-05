@@ -15,3 +15,21 @@ describe('orchestration send command spec', () => {
     )
   })
 })
+
+describe('orchestration worker-start command spec', () => {
+  const startSpec = ORCHESTRATION_COMMAND_SPECS.find(
+    (spec) => spec.path.join(' ') === 'orchestration worker-start'
+  )
+
+  it('offers no flag for the worker mode, because settings decide it', () => {
+    expect(startSpec?.allowedFlags).not.toContain('structured')
+    expect(startSpec?.usage).not.toContain('--structured')
+    expect(startSpec?.notes?.join('\n')).not.toContain('--structured')
+  })
+
+  it('documents the settings default and the fallback that keeps every dispatch working', () => {
+    const notes = startSpec?.notes?.join('\n') ?? ''
+    expect(notes).toContain('follows your own setting for new agent tabs')
+    expect(notes).toContain('starts a terminal agent worker instead')
+  })
+})

@@ -36,6 +36,10 @@ import {
   releaseStructuredWorkerSession,
   sendStructuredWorkerPreamble
 } from './orchestration-structured-worker-session'
+import {
+  resolveWorkerStartModeOnHost,
+  type WorkerStartModeReceipt
+} from './orchestration-worker-start-mode'
 
 export async function startLocalWorker(args: {
   params: WorkerStartInput
@@ -45,6 +49,8 @@ export async function startLocalWorker(args: {
   task: { id: string; spec: string }
   readinessTimeoutMs: number
   orchestrationMutation: RpcContext['orchestrationMutation']
+  /** Settings-driven; the executing host still gets to refuse below. */
+  mode: WorkerStartModeReceipt
 }) {
   const { params, runtime, db, run, task, readinessTimeoutMs, orchestrationMutation } = args
   const requestedWorktree = params.worktree ?? 'current'
@@ -84,8 +90,11 @@ export async function startLocalWorker(args: {
     }
   }
 
+  const mode = await resolveWorkerStartModeOnHost(runtime, args.mode, resolvedWorktree?.id, agent)
+
   const startOptions = {
     worktree: requestedWorktree,
+    mode,
     resolvedWorktreeId: resolvedWorktree?.id ?? null,
     name: params.name ?? null,
     repo: params.repo ?? creationWorktree?.repoId ?? null,
@@ -148,7 +157,7 @@ export async function startLocalWorker(args: {
       resolvedWorktree = created.worktree
       terminalHandle = created.terminalHandle
       setupReceipt = created.setupReceipt
-    } else if (!terminalHandle && params.structured) {
+    } else if (!terminalHandle && mode.mode === 'structured') {
       db.recordWorkerStage({
         dispatchId: started.dispatch.id,
         stage: 'terminal_creating',
@@ -282,6 +291,7 @@ export async function startLocalWorker(args: {
       stage: worker.stage,
       setup: setupReceipt,
       launch: launch.receipt,
+      mode,
       timeoutMs: readinessTimeoutMs,
       effects,
       residualResources: [],
@@ -304,7 +314,8 @@ export async function startLocalWorker(args: {
       failedStage,
       error,
       setup: setupReceipt,
-      launch: launch.receipt
+      launch: launch.receipt,
+      mode
     })
   }
 }

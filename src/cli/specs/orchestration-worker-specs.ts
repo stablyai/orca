@@ -5,7 +5,7 @@ export const ORCHESTRATION_WORKER_COMMAND_SPECS: CommandSpec[] = [
     path: ['orchestration', 'worker-start'],
     summary: 'Start one supervised worker on the Run home or a connected Orca server',
     usage:
-      'orca orchestration worker-start --task <task_id> [--on <saved-environment>] [--worktree <current|selector|new-child|new-top-level>] (--agent <agent> | --terminal <handle>) [--model <id>] [--effort <level>] [--name <name>] [--repo <selector>] [--base-branch <ref>] [--display-name <text>] [--comment <text>] [--setup <run|skip|inherit>] [--structured] [--retry-of <dispatch_id>] [--timeout-ms <n>] [--run <run_id>] [--from <handle>] [--retry-request <id>] [--json]',
+      'orca orchestration worker-start --task <task_id> [--on <saved-environment>] [--worktree <current|selector|new-child|new-top-level>] (--agent <agent> | --terminal <handle>) [--model <id>] [--effort <level>] [--name <name>] [--repo <selector>] [--base-branch <ref>] [--display-name <text>] [--comment <text>] [--setup <run|skip|inherit>] [--retry-of <dispatch_id>] [--timeout-ms <n>] [--run <run_id>] [--from <handle>] [--retry-request <id>] [--json]',
     allowedFlags: [
       ...GLOBAL_FLAGS,
       'task',
@@ -21,7 +21,6 @@ export const ORCHESTRATION_WORKER_COMMAND_SPECS: CommandSpec[] = [
       'model',
       'effort',
       'terminal',
-      'structured',
       'retry-of',
       'timeout-ms',
       'run',
@@ -34,7 +33,8 @@ export const ORCHESTRATION_WORKER_COMMAND_SPECS: CommandSpec[] = [
       '--model supports Claude, Codex, and Cursor opaque provider model ids; --effort requires --model. Neither can combine with --terminal.',
       'New worktrees use agent-first creation and default --setup to run. Repository start-immediately runs setup beside the agent; wait-for-setup gates agent readiness and task input.',
       'Creation flags (--name, --repo, --base-branch, --display-name, --comment, --setup) are rejected for current/existing worktrees. Use exact --repo on the selected server; project/host convenience routing remains on worktree create.',
-      '--structured starts the worker as a native structured chat session instead of a terminal agent. Local claude/codex only, outside WSL; it cannot combine with --terminal, --model, --effort, a remote --on, or a new-child/new-top-level worktree.',
+      'The worker mode follows your own setting for new agent tabs: with structured native chat on by default, a local claude/codex worker starts as a structured chat session. There is no flag for it.',
+      'That default is a preference, not a demand. A dispatch that cannot honour it — a remote --on, an existing --terminal, a new-child/new-top-level worktree, --model/--effort, a non-claude/codex agent, WSL, or Codex on Windows — starts a terminal agent worker instead, and the receipt mode field names the mode used and why.',
       '--on selects only the worker server; the Run and this command remain on the current Orca server.',
       'Remote current and new-child are invalid; discover an exact remote selector or use new-top-level.',
       '--retry-of links the replacement attempt but does not inherit placement; repeat the intended --on/worktree and --agent/terminal choices.',

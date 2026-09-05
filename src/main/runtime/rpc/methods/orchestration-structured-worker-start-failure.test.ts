@@ -92,6 +92,7 @@ function fakes() {
     getRuntimeId: () => 'epoch-1',
     ensureStructuredAgentSessionHost: async () => {},
     getTerminalOrchestrationCliCommand: () => 'orca',
+    getStructuredAgentSessionCreateSupport: async () => ({ supported: true }),
     getOrchestrationDispatchAuthority: () => ({
       paneKey: 'pane',
       processIncarnation: 'structured:x'
@@ -117,7 +118,13 @@ describe('a structured worker-start that fails after the session exists', () => 
     const { runtime, db, retireStructuredAgentSessionTabFromSnapshot } = fakes()
 
     const receipt = await startLocalWorker({
-      params: { from: 'term_c', structured: true } as never,
+      params: { from: 'term_c' } as never,
+      mode: {
+        mode: 'structured',
+        preferred: 'structured',
+        reason: 'user_default',
+        detail: 'structured by default'
+      } as const,
       runtime,
       db,
       run: { id: 'run_1' },

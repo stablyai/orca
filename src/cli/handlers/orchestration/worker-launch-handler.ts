@@ -34,6 +34,7 @@ export const ORCHESTRATION_WORKER_LAUNCH_HANDLER: Record<string, CommandHandler>
       failedStage?: string
       lastError?: string
       warning?: string
+      mode?: { mode: string; preferred: string; reason: string; detail: string }
       effects: unknown[]
       residualResources: unknown[]
     }>(client, flags, 'orchestration.workerStart', {
@@ -53,8 +54,6 @@ export const ORCHESTRATION_WORKER_LAUNCH_HANDLER: Record<string, CommandHandler>
       retryOf: getOptionalStringFlag(flags, 'retry-of'),
       timeoutMs: getOptionalPositiveIntegerValueFlag(flags, 'timeout-ms'),
       run: getOptionalStringFlag(flags, 'run'),
-      // Omitted rather than false so the payload matches every other optional flag.
-      structured: flags.has('structured') ? flags.get('structured') !== 'false' : undefined,
       from: await resolveCoordinatorTerminalHandle(flags, cwd, client),
       devMode: isDevCliInvocation()
     })
@@ -62,11 +61,18 @@ export const ORCHESTRATION_WORKER_LAUNCH_HANDLER: Record<string, CommandHandler>
       process.exitCode = 1
     }
     printResult(result, json, (worker) => {
-      const base = `Worker ${worker.dispatchId} [${worker.state}] for ${worker.taskId}`
-      if (worker.lastError) {
-        return `${base}\n${worker.failedStage ?? 'start'}: ${worker.lastError}`
+      // The mode is settings-driven rather than requested, so the human line always states which
+      // one ran; a fallback from the user's structured default is never silent.
+      const lines = [`Worker ${worker.dispatchId} [${worker.state}] for ${worker.taskId}`]
+      if (worker.mode) {
+        lines.push(worker.mode.detail)
       }
-      return worker.warning ? `${base}\nWarning: ${worker.warning}` : base
+      if (worker.lastError) {
+        lines.push(`${worker.failedStage ?? 'start'}: ${worker.lastError}`)
+      } else if (worker.warning) {
+        lines.push(`Warning: ${worker.warning}`)
+      }
+      return lines.join('\n')
     })
   }
 }

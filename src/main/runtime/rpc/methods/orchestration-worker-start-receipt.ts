@@ -5,6 +5,7 @@ import {
   type WorkerSetupReceipt
 } from './orchestration-worker-topology'
 import type { OrchestrationWorkerLaunchReceipt } from './orchestration-worker-launch-preferences'
+import type { WorkerStartModeReceipt } from './orchestration-worker-start-mode'
 import { isAgentSessionPtyWriteRefusedError } from '../../../../shared/agent-session-pty-write-admission'
 import { structuredChatPtyWriteRefusalCopy } from '../../../../shared/agent-session-pty-write-refusal-copy'
 
@@ -17,6 +18,7 @@ export function failWorkerStartWithReceipt(args: {
   error: unknown
   setup: WorkerSetupReceipt
   launch: OrchestrationWorkerLaunchReceipt
+  mode: WorkerStartModeReceipt
 }): unknown {
   const agentSessionRefusal = isAgentSessionPtyWriteRefusedError(args.error)
     ? args.error.refusal
@@ -43,6 +45,7 @@ export function failWorkerStartWithReceipt(args: {
     lastError: reason,
     setup: args.setup,
     launch: args.launch,
+    mode: args.mode,
     effects: JSON.parse(worker.effects) as unknown[],
     residualResources: JSON.parse(worker.residual_resources) as unknown[],
     ...(agentSessionRefusal ? { agentSessionRefusal } : {}),

@@ -8,6 +8,10 @@ import {
   isWorkerStartTimeoutWithinTimerLimit,
   resolveWorkerStartReadinessTimeoutMs
 } from '../../../../shared/orchestration-timing-budgets'
+import {
+  decideWorkerStartMode,
+  readWorkerStartModeSettings
+} from './orchestration-worker-start-mode'
 
 export const ORCHESTRATION_WORKER_START_METHODS: RpcMethod[] = [
   defineMethod({
@@ -46,9 +50,15 @@ export const ORCHESTRATION_WORKER_START_METHODS: RpcMethod[] = [
         )
       }
 
-      assertStructuredWorkerStartSupported(params)
+      const mode = decideWorkerStartMode({
+        params,
+        settings: readWorkerStartModeSettings(runtime),
+        platform: process.platform
+      })
       if (params.on) {
-        return startFederatedWorker({
+        // A remote worker is always a terminal agent; the mode receipt rides along so the
+        // coordinator still learns why its structured default did not apply.
+        const receipt = await startFederatedWorker({
           params,
           runtime,
           db,
@@ -56,6 +66,7 @@ export const ORCHESTRATION_WORKER_START_METHODS: RpcMethod[] = [
           task,
           orchestrationMutation
         })
+        return receipt && typeof receipt === 'object' ? { ...receipt, mode } : receipt
       }
       return startLocalWorker({
         params,
@@ -64,54 +75,9 @@ export const ORCHESTRATION_WORKER_START_METHODS: RpcMethod[] = [
         run,
         task,
         readinessTimeoutMs,
-        orchestrationMutation
+        orchestrationMutation,
+        mode
       })
     }
   })
 ]
-
-/**
- * Where `--structured` cannot apply.
- *
- * Refused rather than ignored: silently starting a terminal worker under a structured request
- * would hand the coordinator a worker of a different kind than it asked for.
- */
-export function assertStructuredWorkerStartSupported(params: {
-  structured?: boolean
-  on?: string
-  terminal?: string
-  worktree?: string
-  model?: string
-  effort?: string
-}): void {
-  if (!params.structured) {
-    return
-  }
-  if (params.model || params.effort) {
-    // Structured session creation takes no launch preferences, so accepting these would run the
-    // worker on the workspace default while the start receipt's `launch.effective` reported the
-    // model that was asked for. Refused for the same reason `--terminal` refuses them.
-    throw new OrchestrationError(
-      'invalid_argument',
-      '--model and --effort cannot be applied to a structured worker; its session uses the workspace default.'
-    )
-  }
-  if (params.on) {
-    throw new OrchestrationError(
-      'invalid_argument',
-      'Structured workers run only on the local execution host; --structured cannot combine with --on.'
-    )
-  }
-  if (params.terminal) {
-    throw new OrchestrationError(
-      'invalid_argument',
-      '--terminal reuses a running terminal agent and cannot combine with --structured.'
-    )
-  }
-  if (params.worktree === 'new-child' || params.worktree === 'new-top-level') {
-    throw new OrchestrationError(
-      'invalid_argument',
-      'Structured workers attach to an existing worktree; create the worktree first, then pass it as --worktree.'
-    )
-  }
-}
