@@ -17588,5 +17588,15 @@
       "action": "Try Agents",
       "hiddenToast": "Agents tab hidden. Re-enable it in Settings → Experimental."
     }
+  },
+  "agentSession": {
+    "tab": {
+      "title": {
+        "claude": "Claude Chat",
+        "grok": "Grok Chat",
+        "cursor": "Cursor Chat",
+        "codex": "Codex Chat"
+      }
+    }
   }
 }

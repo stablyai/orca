@@ -15,6 +15,7 @@ export function acpProviderHandle(agent: string, acpSessionId: string): AgentSes
   return { provider: 'grok', sessionId: acpSessionId }
 }
 
+/** Resume id from journal identity (`kind`). Durable chain handles use `provider`; `journalIdentityFor` maps grok/cursor onto `opaque.value`. */
 export function acpResumeSessionId(identity: AgentSessionJournalIdentity): string | null {
   const handle = identity.providerHandle
   if (handle.kind === 'claude') {

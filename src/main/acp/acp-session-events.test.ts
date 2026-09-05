@@ -19,8 +19,9 @@ describe('acpPromptBlocks', () => {
   })
 
   it('rejects an unreadable image without claiming an empty prompt', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'orca-acp-missing-'))
     const result = await acpPromptBlocks(
-      { blocks: [{ type: 'image-ref', path: join(tmpdir(), 'orca-acp-missing.png') }] },
+      { blocks: [{ type: 'image-ref', path: join(dir, 'missing.png') }] },
       true
     )
     expect(result.ok).toBe(false)

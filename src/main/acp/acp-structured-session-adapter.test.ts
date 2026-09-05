@@ -163,6 +163,62 @@ describe('AcpStructuredSessionAdapter', () => {
     expect(connection.calls.at(-1)).toMatchObject({ method: 'session/cancel' })
   })
 
+  it('loads an existing ACP session when the journal already holds its id', async () => {
+    const connection = fakeConnection({
+      initialize: { agentCapabilities: { loadSession: true } },
+      onRequest: (method) => (method === 'session/load' ? { sessionId: 'grok-sess' } : {})
+    })
+    const adapter = new AcpStructuredSessionAdapter({
+      openConnection: async () => connection,
+      resolveLaunch: async () => ({ command: 'grok', args: ['agent', 'stdio'], cwd: '/repo' }),
+      readProcessStartTime: async () => 1
+    })
+    const acquired = await adapter.acquire({
+      identity: {
+        sessionId: 'orca-resume',
+        workspaceId: 'ws-1',
+        hostId: 'local',
+        agent: 'grok',
+        providerHandle: { kind: 'opaque', agent: 'grok', value: 'grok-sess' }
+      },
+      fence: 3,
+      spawnToken: 'token-resume'
+    })
+    expect(connection.calls.map((call) => call.method)).toEqual(['session/load'])
+    expect(connection.calls[0]?.params).toMatchObject({
+      sessionId: 'grok-sess',
+      cwd: '/repo'
+    })
+    expect(acquired.link).toMatchObject({
+      origin: 'resumed',
+      handle: { provider: 'grok', sessionId: 'grok-sess' }
+    })
+  })
+
+  it('opens a new ACP session when the journal handle is still pending', async () => {
+    const connection = fakeConnection({
+      initialize: { agentCapabilities: { loadSession: true } },
+      onRequest: (method) => (method === 'session/new' ? { sessionId: 'grok-fresh' } : {})
+    })
+    const adapter = new AcpStructuredSessionAdapter({
+      openConnection: async () => connection,
+      resolveLaunch: async () => ({ command: 'grok', args: ['agent', 'stdio'], cwd: '/repo' }),
+      readProcessStartTime: async () => 1
+    })
+    await adapter.acquire({
+      identity: {
+        sessionId: 'orca-fresh',
+        workspaceId: 'ws-1',
+        hostId: 'local',
+        agent: 'grok',
+        providerHandle: { kind: 'opaque', agent: 'grok', value: 'pending' }
+      },
+      fence: 1,
+      spawnToken: 'token-fresh'
+    })
+    expect(connection.calls.map((call) => call.method)).toEqual(['session/new'])
+  })
+
   it('restores model and effort and retains a child whose exit is unproven', async () => {
     const connection = fakeConnection({
       onRequest: (method) =>
