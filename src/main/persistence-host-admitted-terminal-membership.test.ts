@@ -89,6 +89,29 @@ describe('host-admitted terminal membership survives a stale renderer replay', (
     expect(persistedTabIds(store.getWorkspaceSession(), OTHER_WORKTREE)).toContain('host-tab-other')
   })
 
+  it('stamps default-terminal-tab markers so a renderer persist snapshot cannot un-apply them', async () => {
+    const store = await createStore()
+    store.setWorkspaceSession(rendererSession())
+
+    expect(
+      store.persistPtyBinding({
+        worktreeId: WORKTREE,
+        tabId: 'host-tab',
+        leafId: TEST_LEAF_2,
+        ptyId: 'host-pty',
+        hostAdmittedMembership: true
+      })
+    ).toBe(true)
+    expect(store.getWorkspaceSession().defaultTerminalTabsAppliedByWorktreeId?.[WORKTREE]).toBe(
+      true
+    )
+
+    store.setWorkspaceSession(rendererSession())
+    expect(store.getWorkspaceSession().defaultTerminalTabsAppliedByWorktreeId?.[WORKTREE]).toBe(
+      true
+    )
+  })
+
   // Polarity: without the flag the renderer still owns membership, so a renderer
   // spawn racing its own writer must not freeze the tab list.
   it('leaves renderer-owned membership alone when the binding is not host-admitted', async () => {
