@@ -173,7 +173,11 @@ export async function runIncidentLivePreflight(
     const freshnessOnly = evaluation.failures.every((failure) =>
       FRESHNESS_FAILURE_CODES.has(failure.code)
     )
-    if (!freshnessOnly || attempt === attempts) {
+    // Waiting must never carry the mutation past the same evidence-age bound
+    // the entry check enforces, so the wave budget also caps the retry window.
+    const budgetExhausted =
+      now() + FRESHNESS_RETRY_INTERVAL_MS - completedAt > maxEvidenceAgeMs
+    if (!freshnessOnly || attempt === attempts || budgetExhausted) {
       throw new Error(
         `relay live preflight failed: ${evaluation.failures
           .map((failure) => `${failure.source}/${failure.code}`)

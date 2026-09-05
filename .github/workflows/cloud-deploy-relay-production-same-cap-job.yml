@@ -181,11 +181,12 @@ jobs:
         env:
           ORCA_RELAY_ADMIN_ID_TOKEN: ${{ steps.deploy-auth.outputs.id_token }}
         run: |
-          RETRY_ARGS=()
-          if test "${WAVE_INDEX}" != 0; then RETRY_ARGS=(--retry-freshness); fi
+          # Freshness-only failures are publish lag, not health, on every wave
+          # including the first; the CLI still caps the retry at the wave's
+          # evidence-age budget, so this cannot mutate on aged evidence.
           pnpm incident:relay-preflight -- \
             --state-file "${OUTPUT_DIRECTORY}/relay-${MONITOR_RUN_ID}-dry-run.state.json" \
-            --wave-index "${WAVE_INDEX}" "${RETRY_ARGS[@]}"
+            --wave-index "${WAVE_INDEX}" --retry-freshness
 
       - name: Require durable rehome disabled and exact selector
         env:

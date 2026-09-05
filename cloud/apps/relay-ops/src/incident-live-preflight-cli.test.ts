@@ -331,6 +331,39 @@ describe('relay incident live preflight', () => {
     expect(wait).toHaveBeenNthCalledWith(2, 15_000)
   })
 
+  it('retries a first-wave stale sample and passes on the fresh one', async () => {
+    const stale = sample()
+    stale.sources['cloud-monitoring']!.signals['cloud_sql.cpu']!.observedAt =
+      new Date(now - 180_001).toISOString()
+    const collect = vi.fn().mockResolvedValueOnce(stale).mockResolvedValueOnce(sample())
+    const wait = vi.fn(async () => undefined)
+    await expect(runIncidentLivePreflight(
+      ['--state-file', stateFile(), '--wave-index', '0', '--retry-freshness'],
+      { now: () => now, collect, wait }
+    )).resolves.toBeUndefined()
+    expect(collect).toHaveBeenCalledTimes(2)
+    expect(wait).toHaveBeenCalledOnce()
+  })
+
+  it('stops retrying when the next wait would exceed the evidence-age bound', async () => {
+    const completedAt = now - 290_000
+    const stale = sample()
+    stale.sources['cloud-monitoring']!.observedAt = new Date(now - 180_001).toISOString()
+    const collect = vi.fn(async () => stale)
+    const wait = vi.fn(async () => undefined)
+    await expect(runIncidentLivePreflight(
+      ['--state-file', stateFile('strict', {
+        startedAt: new Date(completedAt - 17 * 60_000).toISOString(),
+        windowStartedAt: new Date(completedAt - 16 * 60_000).toISOString(),
+        lastSampleAt: new Date(completedAt - 30_000).toISOString(),
+        completedAt: new Date(completedAt).toISOString()
+      }), '--retry-freshness'],
+      { now: () => now, collect, wait }
+    )).rejects.toThrow('cloud-monitoring/source_stale')
+    expect(collect).toHaveBeenCalledOnce()
+    expect(wait).not.toHaveBeenCalled()
+  })
+
   it('does not retry a threshold failure', async () => {
     const unhealthy = sample()
     unhealthy.sources['cloud-monitoring']!.signals['cloud_sql.cpu']!.value = 0.9
