@@ -1,8 +1,10 @@
 import { execFileSync } from 'node:child_process'
+import { existsSync, watch, type FSWatcher } from 'node:fs'
 import { mkdir, mkdtemp, readFile, realpath, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
+import * as gitRunner from './runner'
 import {
   createWorktreePreparationLockReason,
   isWorktreeCreatePreparation,
@@ -46,6 +48,59 @@ afterEach(async () => {
 })
 
 describe('prepared worktree creation with real Git', () => {
+  it('removes partial checkout files and registration after materialization is aborted', async () => {
+    const { repoPath, root } = await createRepo()
+    await Promise.all(
+      Array.from({ length: 1000 }, (_, index) =>
+        writeFile(
+          join(repoPath, `payload-${index.toString().padStart(4, '0')}.txt`),
+          'payload'.repeat(128)
+        )
+      )
+    )
+    git(repoPath, ['add', '.'])
+    git(repoPath, ['commit', '--quiet', '-m', 'materialization fixture'])
+    const preparationRoot = join(root, WORKTREE_CREATE_PREPARATION_DIRECTORY)
+    const preparedPath = join(preparationRoot, `${process.pid}-partial`)
+    await mkdir(preparationRoot, { recursive: true })
+    const controller = new AbortController()
+    const original = gitRunner.gitExecFileAsync
+    let watcher: FSWatcher | undefined
+    let observedMaterialization = false
+    const calls: string[][] = []
+    const spy = vi.spyOn(gitRunner, 'gitExecFileAsync').mockImplementation((args, options) => {
+      calls.push([...args])
+      if (args.includes('reset')) {
+        watcher = watch(preparedPath, (_event, filename) => {
+          if (filename?.toString().startsWith('payload-')) {
+            observedMaterialization = true
+            watcher?.close()
+            controller.abort()
+          }
+        })
+      }
+      return original(args, options)
+    })
+    try {
+      await expect(
+        prepareWorktreeCreateCheckout(
+          repoPath,
+          preparedPath,
+          'main',
+          createWorktreePreparationLockReason('partial-test'),
+          { signal: controller.signal }
+        )
+      ).rejects.toThrow()
+      expect(observedMaterialization).toBe(true)
+      expect(calls.some((args) => args[args.indexOf('worktree') + 1] === 'lock')).toBe(false)
+      expect(existsSync(preparedPath)).toBe(false)
+      expect(await listWorktrees(repoPath, { includeCreatePreparations: true })).toHaveLength(1)
+    } finally {
+      watcher?.close()
+      spy.mockRestore()
+    }
+  })
+
   it('cleans up when the create signal is canceled', async () => {
     const { repoPath, root } = await createRepo()
     const preparationRoot = join(root, WORKTREE_CREATE_PREPARATION_DIRECTORY)
