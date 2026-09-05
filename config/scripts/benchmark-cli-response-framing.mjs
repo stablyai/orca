@@ -7,9 +7,10 @@ import { dirname, resolve } from 'node:path'
 import { performance } from 'node:perf_hooks'
 import { build } from 'esbuild'
 
-// Run from the worktree root: node config/scripts/benchmark-cli-response-framing.mjs [base-ref]
+// Run from the worktree root: node config/scripts/benchmark-cli-response-framing.mjs <base-ref>
 const sourcePath = 'src/cli/runtime/transport.ts'
-const baselineRef = process.argv[2] ?? 'HEAD'
+const baselineRef = process.argv[2]
+assert.ok(baselineRef, 'Pass the pre-change transport revision as base-ref.')
 const beforeSource = execFileSync('git', ['show', `${baselineRef}:${sourcePath}`], {
   encoding: 'utf8'
 })
