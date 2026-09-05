@@ -1,6 +1,10 @@
 import { execFile } from 'node:child_process'
 import { RuntimeClientError } from './runtime-client-error'
 import type { DesktopScriptPlatform } from './desktop-script-provider-paths'
+import {
+  buildWindowsPowerShellFileArgs,
+  isPowerShellExecutionPolicyBlocked
+} from './windows-powershell-execution-policy'
 
 const REQUEST_TIMEOUT_MS = 30_000
 const FORCE_KILL_GRACE_MS = 1_000
@@ -13,19 +17,12 @@ export function execBridge(
   const command = platform === 'windows' ? 'powershell.exe' : 'python3'
   const args =
     platform === 'windows'
-      ? [
-          '-NoProfile',
-          '-NonInteractive',
-          '-ExecutionPolicy',
-          'Bypass',
-          '-File',
-          scriptPath,
-          operationPath
-        ]
+      ? buildWindowsPowerShellFileArgs(scriptPath, operationPath, 'RemoteSigned')
       : [scriptPath, operationPath]
   return new Promise((resolve, reject) => {
     let child: ReturnType<typeof execFile> | null = null
     let settled = false
+    let retriedPolicy = false
     let forceKillTimer: ReturnType<typeof setTimeout> | null = null
 
     const clearForceKillTimer = (): void => {
@@ -73,19 +70,30 @@ export function execBridge(
       )
     }, REQUEST_TIMEOUT_MS)
 
-    try {
-      child = execFile(
-        command,
-        args,
-        {
-          env: process.env,
-          maxBuffer: 20 * 1024 * 1024,
-          timeout: REQUEST_TIMEOUT_MS,
-          windowsHide: true
-        },
-        (error, stdout, stderr) => {
+    const spawnOptions = {
+      env: process.env,
+      maxBuffer: 20 * 1024 * 1024,
+      timeout: REQUEST_TIMEOUT_MS,
+      windowsHide: true
+    }
+
+    const launch = (launchArgs: string[]): void => {
+      try {
+        child = execFile(command, launchArgs, spawnOptions, (error, stdout, stderr) => {
           if (error) {
             const message = stderr.trim() || stdout.trim() || error.message
+            // Why: EDR scores Bypass on first argv; retry only after a policy-blocked start.
+            if (
+              platform === 'windows' &&
+              !retriedPolicy &&
+              !settled &&
+              !error.killed &&
+              isPowerShellExecutionPolicyBlocked(`${stderr}\n${stdout}\n${error.message}`)
+            ) {
+              retriedPolicy = true
+              launch(buildWindowsPowerShellFileArgs(scriptPath, operationPath, 'Bypass'))
+              return
+            }
             finish(
               error.killed
                 ? new RuntimeClientError('action_timeout', message)
@@ -94,12 +102,14 @@ export function execBridge(
             return
           }
           finish(null, { stdout, stderr })
-        }
-      )
-      child?.once('exit', clearForceKillTimer)
-    } catch (error) {
-      finish(mapBridgeError(error instanceof Error ? error.message : String(error)))
+        })
+        child?.once('exit', clearForceKillTimer)
+      } catch (error) {
+        finish(mapBridgeError(error instanceof Error ? error.message : String(error)))
+      }
     }
+
+    launch(args)
   })
 }
 
