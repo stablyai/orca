@@ -251,6 +251,8 @@ test.describe('Activity Agent Pane Isolation', () => {
         activeLeafId: first.leafId
       })
 
+    // Revealing a workspace returns the sidebar to its workspace list.
+    await agentsSidebarButton(orcaPage).click()
     await orcaPage.getByRole('button').filter({ hasText: second.prompt }).first().click()
     await expect
       .poll(async () => readActivePaneSelection(orcaPage), {
