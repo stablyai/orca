@@ -15,6 +15,10 @@ export function hasVisibleOverlay(options?: VisibleOverlayOptions): boolean {
     if (!(element instanceof HTMLElement)) {
       return false
     }
+    // The persistent workspace list is page chrome, not an Escape-owning popup.
+    if (element.matches('[role="listbox"][data-worktree-sidebar]')) {
+      return false
+    }
     if (element.closest('[aria-hidden="true"]')) {
       return false
     }
