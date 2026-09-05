@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       image-digest:
-        description: 'Immutable relay image digest (sha256: plus 64 lowercase hex characters)'
+        description: "Immutable relay image digest (sha256: plus 64 lowercase hex characters)"
         required: true
         type: string
       regional-placement-mode:

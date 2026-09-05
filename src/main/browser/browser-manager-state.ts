@@ -26,7 +26,6 @@ import type {
 } from '../../shared/browser-guest-events'
 import type { BrowserGrabCancelReason } from '../../shared/browser-grab-types'
 import { BrowserManagerViewportScrollState } from './browser-manager-viewport-scroll-state'
-import type { BrowserClickedLinkFrameNames } from './browser-clicked-link-routing'
 
 export abstract class BrowserManagerState extends BrowserManagerViewportScrollState {
   protected abstract attachGuestPolicies(
@@ -148,10 +147,6 @@ export abstract class BrowserManagerState extends BrowserManagerViewportScrollSt
   protected readonly policyAttachedGuestIds = new Set<number>()
   protected readonly offscreenGuestIds = new Set<number>()
   protected readonly policyCleanupByGuestId = new Map<number, () => void>()
-  protected readonly clickedLinkFrameNamesByGuestId = new Map<
-    number,
-    BrowserClickedLinkFrameNames
-  >()
   protected readonly loadErrorsByGuestId = new Map<number, BrowserLoadError>()
   // Why: did-start-navigation hides the overlay optimistically; stash the cleared error so did-fail-load(-3) can restore an aborted nav.
   protected readonly clearedLoadErrorsByGuestId = new Map<number, BrowserLoadError>()

@@ -20,9 +20,16 @@ import { BrowserManagerNavigation } from './browser-manager-navigation'
 export abstract class BrowserManagerGuestPopupPolicy extends BrowserManagerNavigation {
   protected installGuestPopupPolicy(
     guest: Electron.WebContents,
-    clickedLinkFrameNames: BrowserClickedLinkFrameNames | null
+    routeClickedLinks: boolean
   ): () => void {
-    let clickedLinkRoutingActive = Boolean(clickedLinkFrameNames)
+    // OAuth child windows keep native link behavior.
+    const clickedLinkFrameNames: BrowserClickedLinkFrameNames | null = routeClickedLinks
+      ? {
+          foreground: `__orca_clicked_link_foreground_${randomUUID()}`,
+          background: `__orca_clicked_link_background_${randomUUID()}`
+        }
+      : null
+    let clickedLinkRoutingActive = routeClickedLinks
     const installClickedLinkRouting = (): void => {
       if (!clickedLinkRoutingActive || !clickedLinkFrameNames || guest.isDestroyed()) {
         return
@@ -125,7 +132,7 @@ export abstract class BrowserManagerGuestPopupPolicy extends BrowserManagerNavig
       const browserTabId = ownerContext?.browserTabId ?? null
       const browserUrl = normalizeBrowserNavigationUrl(url)
       const externalUrl = normalizeExternalBrowserUrl(url)
-      const expectedClickedLinkFrameNames = this.clickedLinkFrameNamesByGuestId.get(guest.id)
+      const expectedClickedLinkFrameNames = clickedLinkRoutingActive ? clickedLinkFrameNames : null
       const iframeRouting = frameName ? iframeRoutingByFrameName.get(frameName) : undefined
       let clickedLinkActivate: boolean | null = null
       if (expectedClickedLinkFrameNames && frameName === expectedClickedLinkFrameNames.foreground) {

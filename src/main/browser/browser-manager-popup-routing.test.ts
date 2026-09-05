@@ -421,11 +421,12 @@ describe('browserManager', () => {
     domReadyHandler?.()
     await vi.waitFor(() => expect(executeJavaScriptInIsolatedWorldMock).toHaveBeenCalledTimes(1))
 
-    const managerState = browserManager as unknown as {
-      clickedLinkFrameNamesByGuestId: Map<number, { foreground: string; background: string }>
+    const script = executeJavaScriptInIsolatedWorldMock.mock.calls[0][1][0].code as string
+    const clickedLinkFrameNames = {
+      foreground: script.match(/__orca_clicked_link_foreground_[0-9a-f-]+/)?.[0],
+      background: script.match(/__orca_clicked_link_background_[0-9a-f-]+/)?.[0]
     }
-    const clickedLinkFrameNames = managerState.clickedLinkFrameNamesByGuestId.get(guest.id)
-    if (!clickedLinkFrameNames) {
+    if (!clickedLinkFrameNames.foreground || !clickedLinkFrameNames.background) {
       throw new Error('Expected private clicked-link frame names')
     }
     expect(clickedLinkFrameNames.foreground).toMatch(/^__orca_clicked_link_foreground_/)

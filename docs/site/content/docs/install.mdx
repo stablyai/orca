@@ -30,7 +30,8 @@ import { Callout } from '@/components/docs/prose'
     [installer](https://github.com/stablyai/orca/releases/latest/download/orca-windows-setup.exe)
   </li>
   <li>
-    **Linux:** AppImage
+    **Linux:**
+    AppImage
     [x64](https://github.com/stablyai/orca/releases/latest/download/orca-linux.AppImage) ·
     [arm64](https://github.com/stablyai/orca/releases/latest/download/orca-linux-arm64.AppImage) ·
     [.deb](https://github.com/stablyai/orca/releases) ·
@@ -130,7 +131,7 @@ On Linux the [Orca CLI](/docs/cli/reference) installs as **`orca-ide`**, not `or
 - The `.deb` and `.rpm` put `orca-ide` on your `PATH` at install time, as `/usr/bin/orca-ide`.
 - With the AppImage, register the CLI from [Settings → General → Orca CLI](/docs/settings). That installs `~/.local/bin/orca-ide`.
 - Inside Orca's own terminals, bare `orca` works. Orca puts a shim on the `PATH` of the terminals it manages, so agents and scripts running there use the same command as on macOS and Windows.
-- On a headless host, a packaged `orca serve` writes a bare `orca` into `~/.local/bin` as it starts, unless a file it does not own already holds that name. It writes that _during_ startup, so it is never what starts the server — the first launch is always [`orca-ide serve`](/docs/remote-servers).
+- On a headless host, a packaged `orca serve` writes a bare `orca` into `~/.local/bin` as it starts, unless a file it does not own already holds that name. It writes that *during* startup, so it is never what starts the server — the first launch is always [`orca-ide serve`](/docs/remote-servers).
 
 Do not verify with `command -v orca`: on a GNOME desktop that succeeds and resolves to the screen reader. Use `orca-ide` in your own shell and `orca` inside Orca. If you want the short name everywhere and you do not use the screen reader, link it yourself:
 
