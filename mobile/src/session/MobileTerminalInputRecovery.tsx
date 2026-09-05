@@ -1,4 +1,6 @@
-import { Pressable, StyleSheet, Text, View } from 'react-native'
+import { useCallback, useRef } from 'react'
+import { useFocusEffect } from 'expo-router'
+import { Platform, Pressable, StyleSheet, Text, View } from 'react-native'
 import { colors, typography } from '../theme/mobile-theme'
 import type { TerminalStreamInputFailure } from '../transport/terminal-stream-input-failure'
 
@@ -11,6 +13,22 @@ export function MobileTerminalInputRecovery({
   onRecover: () => void
   recoveryUnavailable: boolean
 }) {
+  const recoveryButtonRef = useRef<View>(null)
+  useFocusEffect(
+    useCallback(() => {
+      if (Platform.OS !== 'android') {
+        return
+      }
+      const frame = requestAnimationFrame(() => {
+        // RN's imperative View.focus is gated off; Android exposes requestFocus through this prop.
+        recoveryButtonRef.current?.setNativeProps({ hasTVPreferredFocus: true })
+      })
+      return () => {
+        cancelAnimationFrame(frame)
+        recoveryButtonRef.current?.setNativeProps({ hasTVPreferredFocus: false })
+      }
+    }, [])
+  )
   return (
     <View style={styles.container} accessibilityLiveRegion="polite">
       <Text style={styles.title}>Terminal input paused</Text>
@@ -26,7 +44,12 @@ export function MobileTerminalInputRecovery({
           needed.
         </Text>
       )}
-      <Pressable accessibilityRole="button" onPress={onRecover} style={styles.button}>
+      <Pressable
+        ref={recoveryButtonRef}
+        accessibilityRole="button"
+        onPress={onRecover}
+        style={styles.button}
+      >
         <Text style={styles.title}>Reconnect input</Text>
       </Pressable>
     </View>
