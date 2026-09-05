@@ -78,6 +78,7 @@ vi.mock('../../shared/runtime-environment-store', () => ({
 }))
 
 import { registerSettingsHandlers } from './settings'
+import { DEFAULT_CODEX_MICRO_SETTINGS } from '../../shared/codex-micro-settings'
 
 const settingsInvokeEvent = { sender: { id: 1 } }
 type SettingsChangedListener = (
@@ -607,6 +608,42 @@ describe('registerSettingsHandlers', () => {
             }
           })
         ]
+      },
+      { notifyListeners: true, originWebContentsId: 1 }
+    )
+  })
+
+  it('normalizes codexMicro settings from renderer settings IPC', async () => {
+    store.getSettings.mockReturnValue({ codexMicro: DEFAULT_CODEX_MICRO_SETTINGS })
+    store.updateSettings.mockReturnValue({ codexMicro: DEFAULT_CODEX_MICRO_SETTINGS })
+    registerSettingsHandlers(store as never)
+
+    const handler = handleMock.mock.calls.find((call) => call[0] === 'settings:set')?.[1] as (
+      _event: unknown,
+      args: unknown
+    ) => Promise<unknown>
+
+    await handler(settingsInvokeEvent, {
+      codexMicro: {
+        enabled: true,
+        lightingEnabled: true,
+        brightness: 500,
+        idleTimeoutSeconds: -1,
+        dialMode: 'spin',
+        mappings: { AG00: 'not.a.real.action', ACT06: 'worktree.history.forward' }
+      }
+    })
+
+    expect(store.updateSettings).toHaveBeenCalledWith(
+      {
+        codexMicro: {
+          enabled: true,
+          lightingEnabled: true,
+          brightness: 100,
+          idleTimeoutSeconds: 10,
+          dialMode: 'navigate',
+          mappings: { ACT06: 'worktree.history.forward' }
+        }
       },
       { notifyListeners: true, originWebContentsId: 1 }
     )

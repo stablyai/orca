@@ -33,11 +33,12 @@ function ids(
 
 describe('settings navigation metadata', () => {
   it('puts AI capability panes at the top on desktop', () => {
-    expect(ids().slice(0, 10)).toEqual([
+    expect(ids().slice(0, 11)).toEqual([
       'agents',
       'accounts',
       'orchestration',
       'computer-use',
+      'codex-micro',
       'voice',
       'orca-account',
       'setup-guide',
@@ -61,6 +62,11 @@ describe('settings navigation metadata', () => {
     expect(orchestration?.searchEntries.map((entry) => entry.title)).toContain(
       'Nested worker depth'
     )
+  })
+
+  it('keeps Codex Micro desktop-only', () => {
+    expect(ids()).toContain('codex-micro')
+    expect(ids({ isWebClient: true })).not.toContain('codex-micro')
   })
 
   it('adds the Linear capability section right after Orchestration only when connected', () => {
