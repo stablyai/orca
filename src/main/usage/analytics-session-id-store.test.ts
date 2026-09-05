@@ -35,6 +35,7 @@ const UUID_V4 = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f
 let directory: string
 let file: string
 let stores: AnalyticsSessionIdStore[]
+/** Registers every instance for flush-before-cleanup, including simulated restarts. */
 function createStore(path = file): AnalyticsSessionIdStore {
   const store = new AnalyticsSessionIdStore(path)
   stores.push(store)
