@@ -34,6 +34,11 @@ export function CreationDraftSurface(): React.JSX.Element | null {
   const [hiddenId, setHiddenId] = useState<string | null>(null)
   useEffect(() => {
     void loadCreationDrafts()
+    const refresh = (): void => {
+      void loadCreationDrafts(true)
+    }
+    window.addEventListener('focus', refresh)
+    return () => window.removeEventListener('focus', refresh)
   }, [])
   if (activeView !== 'terminal') {
     return null
@@ -80,7 +85,11 @@ export function CreationDraftSurface(): React.JSX.Element | null {
           <span className="flex-1" />
         )}
         {drafts.length > 0 ? (
-          <DropdownMenu>
+          <DropdownMenu
+            onOpenChange={(open) => {
+              if (open) void loadCreationDrafts(true)
+            }}
+          >
             <DropdownMenuTrigger asChild>
               <Button variant="ghost" size="xs">
                 {translate('creationDraft.savedDrafts', 'Saved drafts')} ({drafts.length})

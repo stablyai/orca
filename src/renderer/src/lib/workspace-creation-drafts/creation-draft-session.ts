@@ -43,11 +43,11 @@ function fromStored(draft: CreationDraft): CreationDraftEntry {
   return { buffer, storedRevision: revision, editVersion: 0, savedVersion: 0, error: null }
 }
 
-export function loadCreationDrafts(): Promise<void> {
+export function loadCreationDrafts(refresh = false): Promise<void> {
   if (loading) {
     return loading
   }
-  if (useCreationDraftSession.getState().loaded) {
+  if (!refresh && useCreationDraftSession.getState().loaded) {
     return Promise.resolve()
   }
   loading = listDrafts()

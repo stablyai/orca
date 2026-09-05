@@ -110,3 +110,18 @@ describe('creation draft session ownership', () => {
     expect(database.saveDraft).toHaveBeenLastCalledWith(entry.buffer, null)
   })
 })
+
+it('discovers other-window drafts on refresh without replacing local edits', async () => {
+  await loadCreationDrafts()
+  editCreationDraft(draft('local text'))
+  await flushCreationDraft('create-1')
+  database.listDrafts.mockResolvedValue([
+    { ...draft('other window replacement'), revision: 2 },
+    { ...draft('new draft', 'create-2'), revision: 1 }
+  ])
+  await loadCreationDrafts()
+  expect(database.listDrafts).toHaveBeenCalledTimes(1)
+  await loadCreationDrafts(true)
+  expect(useCreationDraftSession.getState().entries['create-1'].buffer.text).toBe('local text')
+  expect(useCreationDraftSession.getState().entries['create-2'].buffer.text).toBe('new draft')
+})
