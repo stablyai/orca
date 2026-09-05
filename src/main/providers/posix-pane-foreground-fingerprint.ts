@@ -76,11 +76,18 @@ export async function buildPaneProcessFingerprint(
   if (!rootStart) {
     return null
   }
-  const members = descendants
-    .map(
-      (row) =>
-        `${row.pid}@${startTimes.get(row.pid) ?? '?'}:${row.pgid ?? '?'}:${jobControlState(row.stat)}`
-    )
-    .sort()
+  // Why every member, not just the root: a start marker is what makes a pid comparison
+  // recycle-safe. Stamping a missing one as a placeholder would let two captures that both
+  // failed to read it compare equal across a recycled pid, so a vanished agent could look
+  // unchanged. Refusing the fingerprint sends the caller to the full capture instead.
+  const members: string[] = []
+  for (const row of descendants) {
+    const startTime = startTimes.get(row.pid)
+    if (!startTime) {
+      return null
+    }
+    members.push(`${row.pid}@${startTime}:${row.pgid ?? '?'}:${jobControlState(row.stat)}`)
+  }
+  members.sort()
   return `${rootPid}@${rootStart}#${root.tpgid}:${jobControlState(root.stat)}|${members.join(',')}`
 }

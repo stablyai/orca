@@ -150,5 +150,38 @@ describe('buildPaneProcessFingerprint', () => {
         })
       ).toBeNull()
     })
+    it('refuses when a DESCENDANT start marker cannot be read', async () => {
+      // Why: the start marker is what makes a pid comparison recycle-safe. Stamping a missing
+      // one as a placeholder let two captures that both failed to read it compare equal across
+      // a recycled pid, so a vanished agent looked unchanged and the cheap tier kept serving
+      // its name. Refusing sends the caller to the full capture.
+      const rows = [shell(), agent()]
+
+      expect(
+        await buildPaneProcessFingerprint(rows, SHELL, {
+          platform: 'linux',
+          readLinuxStartTime: async (pid) => (pid === SHELL ? '2400' : null)
+        })
+      ).toBeNull()
+    })
+
+    it('does not let a recycled descendant pid reuse a fingerprint', async () => {
+      // Both captures fail to read the descendant marker; the pid is reused by a different
+      // process in between. Equal fingerprints here would mask the agent's exit.
+      const readNoDescendant = async (pid: number): Promise<string | null> =>
+        pid === SHELL ? '2400' : null
+      const before = await buildPaneProcessFingerprint([shell(), agent()], SHELL, {
+        platform: 'linux',
+        readLinuxStartTime: readNoDescendant
+      })
+      const after = await buildPaneProcessFingerprint(
+        [shell(), agent({ stat: 'S+', pgid: AGENT })],
+        SHELL,
+        { platform: 'linux', readLinuxStartTime: readNoDescendant }
+      )
+
+      expect(before).toBeNull()
+      expect(after).toBeNull()
+    })
   })
 })
