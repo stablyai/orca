@@ -4,6 +4,7 @@ import path from 'node:path'
 import React, { type ReactNode, useState, act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { fireEvent } from '@testing-library/react'
 import { getDefaultSettings } from '../../../../shared/constants'
 import type { SourceControlActionRecipe } from '../../../../shared/source-control-ai-actions'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
@@ -21,8 +22,14 @@ const mocks = vi.hoisted(() => ({
   toastError: vi.fn()
 }))
 vi.mock('@/components/agent/AgentCombobox', () => ({
-  default: ({ value }: { value: string | null }) =>
-    React.createElement('div', { 'data-agent-value': value ?? '' })
+  default: ({ value, onValueChange }: { value: string | null; onValueChange?: (val: string | null) => void }) =>
+    React.createElement('input', {
+      'data-testid': 'agent-combobox',
+      'data-agent-value': value ?? '',
+      value: value ?? '',
+      onChange: onValueChange ? (e) => onValueChange(e.target.value || null) : undefined,
+      readOnly: !onValueChange
+    })
 }))
 vi.mock('@/components/ui/dialog', () => ({
   Dialog: ({ open, children }: { open: boolean; children?: ReactNode }) =>
@@ -309,5 +316,270 @@ describe('SourceControlAgentActionDialog', () => {
     await flushEffects()
     expect(mocks.onStart).toHaveBeenCalledTimes(1)
     expect(mocks.onLaunched).toHaveBeenCalledTimes(1)
+  })
+
+  it('falls back to default agent arguments (like --yolo for gemini) when savedAgentArgs is null', async () => {
+    mocks.ensureDetectedAgents.mockResolvedValue(['gemini'])
+    mocks.ensureRemoteDetectedAgents.mockResolvedValue(['gemini'])
+    resetStore(
+      settingsWithGlobalRecipe({
+        agentId: 'gemini',
+        commandInputTemplate: '{basePrompt}',
+        agentArgs: undefined
+      })
+    )
+    renderControlledDialog({
+      savedAgentId: 'gemini',
+      savedAgentArgs: null
+    })
+    expect(container.textContent).not.toContain('Launch agent')
+    await vi.waitFor(() => expect(mocks.onStart).toHaveBeenCalledTimes(1))
+    expect(mocks.onStart).toHaveBeenCalledWith({
+      agent: 'gemini',
+      commandInput: 'Resolve conflicts.',
+      agentArgs: '--yolo'
+    })
+  })
+
+  it('falls back to an enabled fallback agent when the saved agent is disabled or stale', async () => {
+    mocks.ensureDetectedAgents.mockResolvedValue(['gemini'])
+    mocks.ensureRemoteDetectedAgents.mockResolvedValue(['gemini'])
+    resetStore(
+      settingsWithGlobalRecipe({
+        agentId: 'codex',
+        commandInputTemplate: '{basePrompt}',
+        agentArgs: ''
+      })
+    )
+    renderControlledDialog({
+      savedAgentId: 'codex',
+      savedAgentArgs: null
+    })
+    await vi.waitFor(() => expect(mocks.ensureDetectedAgents).toHaveBeenCalledTimes(1))
+    await flushEffects()
+
+    expect(mocks.onStart).not.toHaveBeenCalled()
+    expect(container.textContent).toContain('Launch agent')
+    expect(container.querySelector('[data-agent-value]')?.getAttribute('data-agent-value')).toBe(
+      'gemini'
+    )
+  })
+
+  it('does not overwrite user-edited agentArgs during deferred detection', async () => {
+    let resolveDetection: (value: TuiAgent[]) => void = () => {}
+    const detectionPromise = new Promise<TuiAgent[]>((resolve) => {
+      resolveDetection = resolve
+    })
+    mocks.ensureDetectedAgents.mockReturnValue(detectionPromise)
+    mocks.ensureRemoteDetectedAgents.mockReturnValue(detectionPromise)
+
+    resetStore(settingsWithGlobalRecipe(null))
+
+    renderControlledDialog({
+      savedAgentId: 'gemini',
+      savedAgentArgs: null
+    })
+
+    await vi.waitFor(() => expect(container.textContent).toContain('Launch agent'))
+    const input = container.querySelector('#source-control-agent-cli-args') as HTMLInputElement
+    expect(input).not.toBeNull()
+    expect(input.value).toBe('--yolo')
+
+    act(() => {
+      fireEvent.change(input, { target: { value: '--verbose' } })
+    })
+    expect(input.value).toBe('--verbose')
+
+    act(() => {
+      resolveDetection(['gemini', 'codex'])
+    })
+    await flushEffects()
+
+    expect(input.value).toBe('--verbose')
+  })
+
+  it('does not overwrite user-edited agentArgs when settings.agentDefaultArgs updates', async () => {
+    mocks.ensureDetectedAgents.mockResolvedValue(['gemini'])
+    mocks.ensureRemoteDetectedAgents.mockResolvedValue(['gemini'])
+    resetStore(settingsWithGlobalRecipe(null))
+
+    renderControlledDialog({
+      savedAgentId: 'gemini',
+      savedAgentArgs: null
+    })
+
+    await vi.waitFor(() => expect(container.textContent).toContain('Launch agent'))
+    const input = container.querySelector('#source-control-agent-cli-args') as HTMLInputElement
+    expect(input).not.toBeNull()
+    expect(input.value).toBe('--yolo')
+
+    // Simulate user typing manually
+    act(() => {
+      fireEvent.change(input, { target: { value: '--verbose' } })
+    })
+    expect(input.value).toBe('--verbose')
+
+    // Update global setting
+    await act(async () => {
+      useAppStore.setState({
+        settings: {
+          ...useAppStore.getState().settings!,
+          agentDefaultArgs: { gemini: '--new-default' }
+        }
+      })
+    })
+    await flushEffects()
+
+    // It must remain --verbose
+    expect(input.value).toBe('--verbose')
+  })
+
+  it('syncs agentArgs when settings.agentDefaultArgs updates if user has not edited them', async () => {
+    mocks.ensureDetectedAgents.mockResolvedValue(['gemini'])
+    mocks.ensureRemoteDetectedAgents.mockResolvedValue(['gemini'])
+    resetStore(settingsWithGlobalRecipe(null))
+
+    renderControlledDialog({
+      savedAgentId: 'gemini',
+      savedAgentArgs: null
+    })
+
+    await vi.waitFor(() => expect(container.textContent).toContain('Launch agent'))
+    const input = container.querySelector('#source-control-agent-cli-args') as HTMLInputElement
+    expect(input).not.toBeNull()
+    expect(input.value).toBe('--yolo')
+
+    // Update global setting without user typing
+    await act(async () => {
+      useAppStore.setState({
+        settings: {
+          ...useAppStore.getState().settings!,
+          agentDefaultArgs: { gemini: '--new-default' }
+        }
+      })
+    })
+    await flushEffects()
+
+    // It must update to the new default
+    expect(input.value).toBe('--new-default')
+  })
+
+  it('does not overwrite user manual selection or arguments if changed during deferred detection', async () => {
+    let resolveDetection: (value: TuiAgent[]) => void = () => {}
+    const detectionPromise = new Promise<TuiAgent[]>((resolve) => {
+      resolveDetection = resolve
+    })
+    mocks.ensureDetectedAgents.mockReturnValue(detectionPromise)
+    mocks.ensureRemoteDetectedAgents.mockReturnValue(detectionPromise)
+
+    resetStore(settingsWithGlobalRecipe(null))
+
+    renderControlledDialog({
+      savedAgentId: 'gemini',
+      savedAgentArgs: null
+    })
+
+    await vi.waitFor(() => expect(container.textContent).toContain('Launch agent'))
+    
+    const agentCombobox = container.querySelector('[data-testid="agent-combobox"]') as HTMLInputElement
+    expect(agentCombobox).not.toBeNull()
+    expect(agentCombobox.value).toBe('gemini')
+
+    // Simulate user manually selecting a different agent ('codex')
+    act(() => {
+      fireEvent.change(agentCombobox, { target: { value: 'codex' } })
+    })
+    expect(agentCombobox.value).toBe('codex')
+
+    // Resolve deferred detection
+    act(() => {
+      resolveDetection(['gemini', 'codex'])
+    })
+    await flushEffects()
+
+    // It must remain 'codex' (user choice preserved!)
+    expect(agentCombobox.value).toBe('codex')
+  })
+
+  it('falls back to detected agent and resets to its default arguments if only arguments changed during deferred detection', async () => {
+    let resolveDetection: (value: TuiAgent[]) => void = () => {}
+    const detectionPromise = new Promise<TuiAgent[]>((resolve) => {
+      resolveDetection = resolve
+    })
+    mocks.ensureDetectedAgents.mockReturnValue(detectionPromise)
+    mocks.ensureRemoteDetectedAgents.mockReturnValue(detectionPromise)
+
+    resetStore(settingsWithGlobalRecipe(null))
+
+    renderControlledDialog({
+      savedAgentId: 'codex',
+      savedAgentArgs: null
+    })
+
+    await vi.waitFor(() => expect(container.textContent).toContain('Launch agent'))
+
+    const input = container.querySelector('#source-control-agent-cli-args') as HTMLInputElement
+    expect(input).not.toBeNull()
+
+    // User edits the CLI arguments while detection is pending
+    act(() => {
+      fireEvent.change(input, { target: { value: '--verbose' } })
+    })
+    expect(input.value).toBe('--verbose')
+
+    // Resolve deferred detection with only 'gemini' enabled
+    act(() => {
+      resolveDetection(['gemini'])
+    })
+    await flushEffects()
+
+    // The selected agent must fall back to 'gemini'
+    const agentCombobox = container.querySelector('[data-testid="agent-combobox"]') as HTMLInputElement
+    expect(agentCombobox).not.toBeNull()
+    expect(agentCombobox.value).toBe('gemini')
+
+    // The edited arguments ('--verbose') must be reset to the fallback agent's default args ('--yolo')!
+    expect(input.value).toBe('--yolo')
+  })
+
+  it('preserves edited arguments if agent does not change during deferred detection', async () => {
+    let resolveDetection: (value: TuiAgent[]) => void = () => {}
+    const detectionPromise = new Promise<TuiAgent[]>((resolve) => {
+      resolveDetection = resolve
+    })
+    mocks.ensureDetectedAgents.mockReturnValue(detectionPromise)
+    mocks.ensureRemoteDetectedAgents.mockReturnValue(detectionPromise)
+
+    resetStore(settingsWithGlobalRecipe(null))
+
+    renderControlledDialog({
+      savedAgentId: 'gemini',
+      savedAgentArgs: null
+    })
+
+    await vi.waitFor(() => expect(container.textContent).toContain('Launch agent'))
+
+    const input = container.querySelector('#source-control-agent-cli-args') as HTMLInputElement
+    expect(input).not.toBeNull()
+
+    // User edits the CLI arguments while detection is pending
+    act(() => {
+      fireEvent.change(input, { target: { value: '--verbose' } })
+    })
+    expect(input.value).toBe('--verbose')
+
+    // Resolve deferred detection with 'gemini' still enabled
+    act(() => {
+      resolveDetection(['gemini'])
+    })
+    await flushEffects()
+
+    // The selected agent must remain 'gemini'
+    const agentCombobox = container.querySelector('[data-testid="agent-combobox"]') as HTMLInputElement
+    expect(agentCombobox).not.toBeNull()
+    expect(agentCombobox.value).toBe('gemini')
+
+    // Since the agent did not change, the edited arguments ('--verbose') must be preserved!
+    expect(input.value).toBe('--verbose')
   })
 })
