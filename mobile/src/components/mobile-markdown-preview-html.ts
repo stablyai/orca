@@ -204,11 +204,17 @@ function escapeRegExp(value: string): string {
 }
 
 function codePlaceholderPrefix(content: string): string {
-  let prefix = CODE_PLACEHOLDER_PREFIX_BASE
-  while (content.includes(prefix)) {
-    prefix = `${prefix}_`
+  let suffixLength = 0
+  let cursor = 0
+  while ((cursor = content.indexOf(CODE_PLACEHOLDER_PREFIX_BASE, cursor)) !== -1) {
+    cursor += CODE_PLACEHOLDER_PREFIX_BASE.length
+    const suffixStart = cursor
+    while (content[cursor] === '_') {
+      cursor += 1
+    }
+    suffixLength = Math.max(suffixLength, cursor - suffixStart + 1)
   }
-  return prefix
+  return CODE_PLACEHOLDER_PREFIX_BASE + '_'.repeat(suffixLength)
 }
 
 function protectMarkdownCode(content: string): {
