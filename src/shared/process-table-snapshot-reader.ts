@@ -9,13 +9,9 @@ import {
   parseStrictProcessTableRows,
   type ProcessTableRow
 } from './process-table-snapshot'
-import {
-  DEFAULT_PROCESS_TABLE_SNAPSHOT_TTL_MS,
-  PROCESS_TABLE_SNAPSHOT_MAX_STALENESS_MS
-} from './process-table-snapshot-ttl'
+import { DEFAULT_PROCESS_TABLE_SNAPSHOT_TTL_MS } from './process-table-snapshot-ttl'
 
 export { PS_ARGS, PS_MAX_BUFFER_BYTES }
-export { PROCESS_TABLE_SNAPSHOT_MAX_STALENESS_MS }
 
 const execFile = promisify(execFileCb)
 
