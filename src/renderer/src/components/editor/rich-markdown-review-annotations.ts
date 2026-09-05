@@ -192,13 +192,15 @@ export function getRichMarkdownCommentAnchorTop(
   block: RichMarkdownCommentBlock,
   containerRect: DOMRect,
   containerScrollTop: number,
-  markdownSourceLineOffset: number
+  markdownSourceLineOffset: number,
+  prebuiltBlocks?: RichMarkdownCommentBlock[]
 ): number | null {
   try {
     const ranges = getRichMarkdownAnnotationHighlightRangesForComment(
       editor,
       comment,
-      markdownSourceLineOffset
+      markdownSourceLineOffset,
+      prebuiltBlocks
     )
     // Why: range notes should sort by the start of the selected text. Anchoring
     // to the end puts overlapping ranges with the same final line in creation
