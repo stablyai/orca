@@ -17,6 +17,8 @@ export const ORCHESTRATION_DISPATCH_HANDLER: Record<string, CommandHandler> = {
     const result = await callOrchestrationMutation<{
       dispatch: { id: string; task_id: string; status: string } | null
       injected?: boolean
+      /** The preamble landed but the agent's turn start was not observed; do not re-inject. */
+      promptUnobserved?: boolean
       dryRun?: boolean
       preamble?: string
     }>(client, flags, 'orchestration.dispatch', {
@@ -34,7 +36,12 @@ export const ORCHESTRATION_DISPATCH_HANDLER: Record<string, CommandHandler> = {
         return value.preamble ?? ''
       }
       const base = `Dispatched ${value.dispatch?.task_id} -> ${value.dispatch?.id} [${value.dispatch?.status}]`
-      return value.preamble ? `${base}\n\n--- Preamble ---\n${value.preamble}` : base
+      const unobserved = value.promptUnobserved
+        ? `\nThe preamble was injected but the agent's turn start was not observed. It is in the composer; read the terminal before re-sending anything.`
+        : ''
+      return value.preamble
+        ? `${base}${unobserved}\n\n--- Preamble ---\n${value.preamble}`
+        : `${base}${unobserved}`
     })
   }
 }

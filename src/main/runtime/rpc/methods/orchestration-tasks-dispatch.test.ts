@@ -327,6 +327,33 @@ describe('orchestration RPC methods', () => {
       expect(db.getActiveDispatchForTerminal('term_a')).toBeUndefined()
     })
 
+    it('keeps an injected dispatch active when the turn start is not observed', async () => {
+      setup()
+      provideInjectIdentity()
+      const task = db.createTask({ spec: 'work' })
+      vi.spyOn(runtime, 'isTerminalRunningAgent').mockResolvedValue(true)
+      vi.spyOn(runtime, 'sendTerminalAgentPrompt').mockRejectedValue(
+        new Error('agent_prompt_stalled')
+      )
+      vi.spyOn(console, 'warn').mockImplementation(() => {})
+
+      const result = (await call('orchestration.dispatch', {
+        task: task.id,
+        to: 'term_a',
+        inject: true
+      })) as {
+        dispatch: { id: string; status: string }
+        injected: boolean
+        promptUnobserved?: boolean
+      }
+
+      // Why: the preamble is in the composer; revoking here rejects the worker's own worker_done.
+      expect(result).toMatchObject({ injected: true, promptUnobserved: true })
+      expect(result.dispatch.status).toBe('dispatched')
+      expect(db.getTask(task.id)?.status).toBe('dispatched')
+      expect(db.getDispatchContextById(result.dispatch.id)?.capability_revoked_at).toBeNull()
+    })
+
     it('uses caller-provided dev mode for injected preamble', async () => {
       setup()
       provideInjectIdentity()
