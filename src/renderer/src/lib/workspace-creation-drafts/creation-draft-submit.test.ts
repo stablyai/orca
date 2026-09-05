@@ -121,7 +121,7 @@ describe('creation draft explicit delivery', () => {
     expect(delivery.sendCreationDraft).toHaveBeenCalledOnce()
   })
 
-  it('retains edits made while sending and never replaces them with the sent text', async () => {
+  it('leaves remount edits unsent when an older version finishes sending', async () => {
     const sending = deferred<{ status: 'delivered' }>()
     delivery.sendCreationDraft.mockReturnValue(sending.promise)
     const submitting = submitCreationDraft(source.id)
@@ -129,8 +129,55 @@ describe('creation draft explicit delivery', () => {
     editCreationDraft({ ...current().buffer, text: 'Newer source' })
     sending.resolve({ status: 'delivered' })
     await submitting
-    expect(durable).toMatchObject({ text: 'Newer source', delivery: { state: 'delivered' } })
+    expect(durable).toMatchObject({ text: 'Newer source' })
+    expect(durable?.delivery).toBeUndefined()
+    expect(delivery.sendCreationDraft).toHaveBeenCalledOnce()
+    expect(delivery.sendCreationDraft.mock.calls[0][0].text).toBe(source.text)
+    expect(await submitCreationDraft(source.id)).toEqual({ status: 'delivered' })
+    expect(delivery.sendCreationDraft).toHaveBeenCalledTimes(2)
+    expect(delivery.sendCreationDraft.mock.calls[1][0].text).toBe('Newer source')
+    expect(durable?.delivery?.state).toBe('delivered')
   })
+
+  it('retains the uncertain fence when text changes during an unconfirmed send', async () => {
+    const sending = deferred<{ status: 'uncertain'; reason: 'transport' }>()
+    delivery.sendCreationDraft.mockReturnValue(sending.promise)
+    const submitting = submitCreationDraft(source.id)
+    await vi.waitFor(() => expect(delivery.sendCreationDraft).toHaveBeenCalledOnce())
+    editCreationDraft({ ...current().buffer, text: 'Newer source' })
+    sending.resolve({ status: 'uncertain', reason: 'transport' })
+    await submitting
+    expect(durable).toMatchObject({ text: 'Newer source', delivery: { state: 'uncertain' } })
+    expect(await submitCreationDraft(source.id)).toEqual({ status: 'already-attempted' })
+    expect(delivery.sendCreationDraft).toHaveBeenCalledOnce()
+  })
+
+  it.each(['sending', 'uncertain'] as const)(
+    'keeps a restored %s fence after editing without replaying the attempt',
+    async (state) => {
+      editCreationDraft({
+        ...source,
+        delivery: { attemptId: 'previous-renderer', revision: 1, state }
+      })
+      await flushCreationDraft(source.id)
+      const { revision, ...buffer } = durable!
+      useCreationDraftSession.setState({
+        entries: {
+          [source.id]: {
+            buffer,
+            storedRevision: revision,
+            editVersion: 0,
+            savedVersion: 0,
+            error: null
+          }
+        }
+      })
+      editCreationDraft({ ...current().buffer, text: 'Edited recovered source' })
+      expect(await submitCreationDraft(source.id)).toEqual({ status: 'already-attempted' })
+      expect(delivery.sendCreationDraft).not.toHaveBeenCalled()
+      expect(durable).toMatchObject({ text: 'Edited recovered source', delivery: { state } })
+    }
+  )
 
   it('refuses sending when another window has already committed a delivery attempt', async () => {
     durable = {

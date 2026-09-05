@@ -79,6 +79,42 @@ describe('explicit creation draft delivery', () => {
     vi.unstubAllGlobals()
   })
 
+  it.each(['capabilities', 'listing'])(
+    'bounds a hung %s query without sending late',
+    async (query) => {
+      let respond!: (value: unknown) => void
+      const hanging = new Promise((resolve) => {
+        respond = resolve
+      })
+      if (query === 'capabilities') {
+        mocks.capabilities.mockReturnValue(hanging)
+      } else {
+        mocks.rpc.mockReturnValue(hanging)
+      }
+      const pending = sendCreationDraft({ target, text: 'hello' })
+      await vi.advanceTimersByTimeAsync(1000)
+      expect(await pending).toMatchObject({ status: 'refused' })
+      respond(query === 'capabilities' ? [TERMINAL_SEND_INCARNATION_RUNTIME_CAPABILITY] : listing())
+      await vi.runAllTimersAsync()
+      expect(sends()).toEqual([])
+      expect(vi.getTimerCount()).toBe(0)
+    }
+  )
+
+  it.each(['capabilities', 'listing'])('bounds capture when %s never responds', async (query) => {
+    const hanging = new Promise(() => {})
+    if (query === 'capabilities') {
+      mocks.capabilities.mockReturnValue(hanging)
+    } else {
+      mocks.rpc.mockReturnValue(hanging)
+    }
+    const pending = captureCreationDraftTarget(target)
+    await vi.advanceTimersByTimeAsync(1000)
+    expect(await pending).toBeNull()
+    expect(sends()).toEqual([])
+    expect(vi.getTimerCount()).toBe(0)
+  })
+
   it('refuses startup without writing any bytes', async () => {
     mocks.ready.mockResolvedValue(false)
     expect(await deliver()).toEqual({ status: 'refused', reason: 'input-not-ready' })

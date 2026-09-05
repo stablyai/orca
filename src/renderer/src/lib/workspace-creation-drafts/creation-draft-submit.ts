@@ -91,9 +91,14 @@ async function submit(id: string): Promise<CreationDraftSubmitResult> {
   }
   const current = useCreationDraftSession.getState().entries[id]
   if (current?.buffer.delivery?.attemptId === attemptId) {
+    const newerText = current.buffer.text !== buffer.text
     editCreationDraft({
       ...current.buffer,
-      delivery: result.status === 'refused' ? undefined : { ...delivery, state: result.status },
+      // Confirmed delivery belongs to the submitted text, not edits made after a remount.
+      delivery:
+        result.status === 'refused' || (result.status === 'delivered' && newerText)
+          ? undefined
+          : { ...delivery, state: result.status },
       updatedAt: Date.now()
     })
     await flushCreationDraft(id)

@@ -1,4 +1,5 @@
 import { useAppStore } from '@/store'
+import { withTimeout } from '../../../../shared/promise-timeout-fallback'
 import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
 import { refreshLocalRuntimeCapabilities } from '@/runtime/local-runtime-capabilities'
 import { runTerminalPtyInputTransaction } from '@/components/terminal-pane/terminal-pty-input-transaction'
@@ -61,14 +62,17 @@ async function readNativeTarget(target: UnverifiedDraftTarget) {
     return null
   }
   try {
-    const listing = await callRuntimeRpc<RuntimeTerminalListResult>(
-      { kind: 'local' },
-      'terminal.list',
-      {
+    const listing = await withTimeout<RuntimeTerminalListResult | null>(
+      callRuntimeRpc<RuntimeTerminalListResult>({ kind: 'local' }, 'terminal.list', {
         handles: [target.terminalHandle],
         includeVisualLayouts: false
-      }
+      }),
+      1000,
+      null
     )
+    if (!listing) {
+      return null
+    }
     const matches = listing.terminals.filter((entry) => entry.handle === target.terminalHandle)
     const terminal = matches.length === 1 ? matches[0] : undefined
     return terminal?.ptyId &&
@@ -94,7 +98,7 @@ export async function captureCreationDraftTarget(args: UnverifiedDraftTarget): P
     return null
   }
   if (
-    !(await refreshLocalRuntimeCapabilities()).includes(
+    !(await withTimeout(refreshLocalRuntimeCapabilities(), 1000, [])).includes(
       TERMINAL_SEND_INCARNATION_RUNTIME_CAPABILITY
     )
   ) {
@@ -132,7 +136,7 @@ export async function sendCreationDraft(args: {
     return { status: 'refused', reason: 'invalid-text' }
   }
   if (
-    !(await refreshLocalRuntimeCapabilities()).includes(
+    !(await withTimeout(refreshLocalRuntimeCapabilities(), 1000, [])).includes(
       TERMINAL_SEND_INCARNATION_RUNTIME_CAPABILITY
     )
   ) {
