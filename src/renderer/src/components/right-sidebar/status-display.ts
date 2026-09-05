@@ -46,9 +46,33 @@ export function getDominantStatus(statuses: Iterable<GitFileStatus>): GitFileSta
 
 type GitStatusLikeEntry = Pick<GitStatusEntry, 'path' | 'status'>
 
-export function buildStatusMap(
-  entries: readonly GitStatusLikeEntry[]
-): Map<string, GitFileStatus> {
+/**
+ * Combines branch-comparison entries with worktree git-status entries for
+ * file-tree status coloring.
+ *
+ * Why: the two axes aren't comparable by dominance priority — a worktree
+ * entry reflects what's actually different on disk right now, while a branch
+ * entry compares against a different base ref. A path with a "modified"
+ * worktree entry showing as "deleted" because the branch comparison had
+ * higher priority would be a misleading color. The worktree entry wins for
+ * any path it covers; the branch entry only fills in paths that are clean in
+ * the worktree but differ from the comparison branch.
+ */
+export function mergeBranchAndWorktreeEntries(
+  branchEntries: readonly GitStatusLikeEntry[],
+  worktreeEntries: readonly GitStatusLikeEntry[]
+): GitStatusLikeEntry[] {
+  if (branchEntries.length === 0) {
+    return [...worktreeEntries]
+  }
+  const worktreePaths = new Set(worktreeEntries.map((entry) => normalizeRelativePath(entry.path)))
+  const branchOnlyEntries = branchEntries.filter(
+    (entry) => !worktreePaths.has(normalizeRelativePath(entry.path))
+  )
+  return [...branchOnlyEntries, ...worktreeEntries]
+}
+
+export function buildStatusMap(entries: readonly GitStatusLikeEntry[]): Map<string, GitFileStatus> {
   const statusByPath = new Map<string, GitFileStatus>()
 
   for (const entry of entries) {

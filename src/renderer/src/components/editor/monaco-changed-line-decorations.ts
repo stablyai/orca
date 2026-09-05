@@ -19,7 +19,8 @@ export function buildChangedLineRanges(
   const originalLines = splitLines(originalContent)
   const modifiedLines = splitLines(modifiedContent)
   if (modifiedLines.length === 0) {
-    return []
+    // Why: the whole file was cleared — Monaco still has one (empty) line, so anchor there.
+    return [{ startLineNumber: 1, endLineNumber: 1 }]
   }
 
   if (originalLines.length * modifiedLines.length > MAX_EXACT_LINE_DIFF_CELLS) {
@@ -79,7 +80,13 @@ function buildSingleChangedRange(
 
   const startLineNumber = prefix + 1
   const endLineNumber = modifiedLines.length - suffix
-  return startLineNumber <= endLineNumber ? [{ startLineNumber, endLineNumber }] : []
+  if (startLineNumber <= endLineNumber) {
+    return [{ startLineNumber, endLineNumber }]
+  }
+  // Why: a deletion-only change collapses to an empty range — anchor on the
+  // nearest surviving line instead of showing no decoration at all.
+  const anchor = Math.max(1, Math.min(startLineNumber, modifiedLines.length))
+  return [{ startLineNumber: anchor, endLineNumber: anchor }]
 }
 
 function buildExactChangedLineRanges(
@@ -102,15 +109,37 @@ function buildExactChangedLineRanges(
   const changedLines: number[] = []
   let i = 0
   let j = 0
+  // Why: a hunk (a contiguous run of inserts/deletes between two matches) that
+  // deletes lines without inserting any has no line of its own in the
+  // modified content. Track whether the current hunk pushed an insert so a
+  // delete-only hunk can still anchor on the nearest surviving line instead
+  // of being silently invisible; a hunk that already inserted a line doesn't
+  // need a separate anchor for the deletes it also contains (a substitution).
+  let hunkAnchorJ: number | null = null
+  let hunkHasInsert = false
+
+  const closeHunk = (): void => {
+    if (hunkAnchorJ !== null && !hunkHasInsert) {
+      changedLines.push(Math.max(1, Math.min(hunkAnchorJ + 1, modifiedLines.length)))
+    }
+    hunkAnchorJ = null
+    hunkHasInsert = false
+  }
+
   while (i < originalLines.length || j < modifiedLines.length) {
     if (
       i < originalLines.length &&
       j < modifiedLines.length &&
       originalLines[i] === modifiedLines[j]
     ) {
+      closeHunk()
       i += 1
       j += 1
       continue
+    }
+
+    if (hunkAnchorJ === null) {
+      hunkAnchorJ = j
     }
 
     const shouldTakeModifiedLine =
@@ -119,12 +148,14 @@ function buildExactChangedLineRanges(
         table[i * columnCount + j + 1] >= table[(i + 1) * columnCount + j])
     if (shouldTakeModifiedLine) {
       changedLines.push(j + 1)
+      hunkHasInsert = true
       j += 1
       continue
     }
 
     i += 1
   }
+  closeHunk()
 
   return mergeChangedLines(changedLines)
 }

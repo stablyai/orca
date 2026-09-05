@@ -8,7 +8,11 @@ import type { OpenFile } from '@/store/slices/editor'
 import type { Repo } from '../../../../shared/repo-types'
 import type { FileExplorerRowProjection } from './file-explorer-row-projection'
 import type { TreeNode } from './file-explorer-types'
-import { buildFolderStatusMap, buildStatusMap } from './status-display'
+import {
+  buildFolderStatusMap,
+  buildStatusMap,
+  mergeBranchAndWorktreeEntries
+} from './status-display'
 import { useFileDeletion } from './useFileDeletion'
 import { useFileExplorerDragDrop } from './useFileExplorerDragDrop'
 import { useFileExplorerHandlers } from './useFileExplorerHandlers'
@@ -146,7 +150,7 @@ export function useFileExplorerTreePaneState({
     [activeWorktreeId, gitBranchChangesByWorktree]
   )
   const decoratedEntries = useMemo(
-    () => [...branchEntries, ...entries],
+    () => mergeBranchAndWorktreeEntries(branchEntries, entries),
     [branchEntries, entries]
   )
   const statusByRelativePath = useMemo(() => buildStatusMap(decoratedEntries), [decoratedEntries])

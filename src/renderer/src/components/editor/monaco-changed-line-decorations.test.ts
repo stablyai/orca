@@ -28,6 +28,33 @@ describe('buildChangedLineRanges', () => {
     ])
   })
 
+  it('anchors a mid-file deletion on the line that now sits where it was removed', () => {
+    expect(buildChangedLineRanges('one\ntwo\nthree', 'one\nthree')).toEqual([
+      { startLineNumber: 2, endLineNumber: 2 }
+    ])
+  })
+
+  it('anchors a trailing-line deletion on the last remaining line', () => {
+    expect(buildChangedLineRanges('one\ntwo', 'one')).toEqual([
+      { startLineNumber: 1, endLineNumber: 1 }
+    ])
+  })
+
+  it('anchors on line 1 when the whole file was cleared', () => {
+    expect(buildChangedLineRanges('one\ntwo', '')).toEqual([
+      { startLineNumber: 1, endLineNumber: 1 }
+    ])
+  })
+
+  it('anchors a deletion-only change on the nearest surviving line via the large-input fallback', () => {
+    const originalLines = Array.from({ length: 1000 }, (_, i) => `line${i}`)
+    const modifiedLines = [...originalLines.slice(0, 500), ...originalLines.slice(501)]
+
+    expect(buildChangedLineRanges(originalLines.join('\n'), modifiedLines.join('\n'))).toEqual([
+      { startLineNumber: 501, endLineNumber: 501 }
+    ])
+  })
+
   it('does not decorate binary or limited diffs', () => {
     expect(
       buildChangedLineDecorations(
