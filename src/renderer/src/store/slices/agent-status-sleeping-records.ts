@@ -59,7 +59,8 @@ export function sleepingRecordFromEntry(args: {
       : {}),
     ...(args.launchConfig ? { launchConfig: copyLaunchConfig(args.launchConfig) } : {}),
     ...(args.entry.interrupted ? { interrupted: true } : {}),
-    ...(args.origin ? { origin: args.origin } : {})
+    ...(args.origin ? { origin: args.origin } : {}),
+    ...(agent === 'pi' && args.origin === 'live' ? { resumeScope: 'pane' as const } : {})
   }
 }
 

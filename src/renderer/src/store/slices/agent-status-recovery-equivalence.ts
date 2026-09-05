@@ -43,6 +43,7 @@ export function sleepingRecordsEquivalentIgnoringCaptureTime(
     existing.lastAssistantMessage === next.lastAssistantMessage &&
     existing.interrupted === next.interrupted &&
     existing.origin === next.origin &&
+    existing.resumeScope === next.resumeScope &&
     launchConfigsEqual(existing.launchConfig, next.launchConfig)
   )
 }

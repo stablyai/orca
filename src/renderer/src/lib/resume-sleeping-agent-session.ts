@@ -72,6 +72,10 @@ function getNewestActiveRecordsByClaimKey(
   return newestRecords
 }
 
+function isPaneOnlyLiveResumeRecord(record: SleepingAgentSessionRecord): boolean {
+  return record.origin === 'live' && record.resumeScope === 'pane'
+}
+
 function getAgentStatusTabId(entry: {
   paneKey: string
   tabId?: string | undefined
@@ -193,8 +197,11 @@ export function resumeSleepingAgentSessionsForWorktree(
   const activeWorktreeRecords = validWorktreeRecords.filter(
     (record) => !isPassiveCompletedHibernationEvidence(record)
   )
-  const activeClaimKeys = new Set(activeWorktreeRecords.map(getProviderSessionClaimKey))
-  const newestActiveRecordByClaimKey = getNewestActiveRecordsByClaimKey(activeWorktreeRecords)
+  const autoLaunchActiveRecords = activeWorktreeRecords.filter(
+    (record) => !isPaneOnlyLiveResumeRecord(record)
+  )
+  const activeClaimKeys = new Set(autoLaunchActiveRecords.map(getProviderSessionClaimKey))
+  const newestActiveRecordByClaimKey = getNewestActiveRecordsByClaimKey(autoLaunchActiveRecords)
   const freshlyLaunchedClaimKeys = new Set<string>()
 
   let launched = 0
@@ -242,6 +249,9 @@ export function resumeSleepingAgentSessionsForWorktree(
       // Why: main can replay the old wake record after the same provider
       // session was already queued in a fresh tab; clear the stale replay.
       state.clearSleepingAgentSession(record.paneKey)
+      continue
+    }
+    if (isPaneOnlyLiveResumeRecord(record)) {
       continue
     }
     const paneOwnedClaimKeys = getCurrentPaneOwnedClaimKeys(activeWorktreeRecords)

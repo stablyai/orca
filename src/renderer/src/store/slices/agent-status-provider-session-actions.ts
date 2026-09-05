@@ -120,7 +120,8 @@ export function createAgentStatusProviderSessionActions(
           ...(preservesCompletedRecoveryRecord && existingRecord.interrupted !== undefined
             ? { interrupted: existingRecord.interrupted }
             : {}),
-          origin: preservesQuitOrigin ? 'quit' : 'live'
+          origin: preservesQuitOrigin ? 'quit' : 'live',
+          ...(agent === 'pi' && !preservesQuitOrigin ? { resumeScope: 'pane' as const } : {})
         }
         removedLiveStatus = existingStatus !== undefined
         const nextLive = removedLiveStatus ? { ...s.agentStatusByPaneKey } : s.agentStatusByPaneKey
