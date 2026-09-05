@@ -16,10 +16,13 @@ import type { AgentPaneThread } from './activity-thread-types'
 function ActivityThreadRowAction({
   label,
   onClick,
+  keyboardReachable = false,
   children
 }: {
   label: string
   onClick: () => void
+  // Hover-only actions stay `invisible` so long lists don't gain a tab stop per row.
+  keyboardReachable?: boolean
   children: React.ReactNode
 }): React.JSX.Element {
   return (
@@ -29,7 +32,10 @@ function ActivityThreadRowAction({
           type="button"
           variant="ghost"
           size="icon-xs"
-          className="size-4 p-0 text-muted-foreground transition-opacity hover:text-foreground can-hover:pointer-events-none can-hover:opacity-0 can-hover:group-hover:pointer-events-auto can-hover:group-hover:opacity-100 focus-visible:opacity-100"
+          className={cn(
+            'size-4 p-0 text-muted-foreground transition-opacity hover:text-foreground can-hover:pointer-events-none can-hover:opacity-0 can-hover:group-hover:pointer-events-auto can-hover:group-hover:opacity-100 focus-visible:opacity-100',
+            !keyboardReachable && 'can-hover:invisible can-hover:group-hover:visible'
+          )}
           aria-label={label}
           onClick={(event) => {
             event.stopPropagation()
@@ -167,6 +173,7 @@ export const ActivityThreadRow = React.memo(function ActivityThreadRow({
                     'auto.components.activity.ActivityThreadRow.clearNotification',
                     'Clear notification'
                   )}
+                  keyboardReachable
                   onClick={() => onClear(thread)}
                 >
                   <X className="size-2.5" />
