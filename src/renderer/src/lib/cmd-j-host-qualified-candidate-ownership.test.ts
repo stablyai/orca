@@ -274,10 +274,78 @@ describe('Cmd-J host-qualified candidate ownership', () => {
     })
 
     expect(
-      searchWorkspaceTabs(entries, 'shell').map((result) => [result.tabId, result.executionHostId])
+      searchWorkspaceTabs(entries, 'shell')
+        .map((result) => [result.tabId, result.executionHostId])
+        .sort(([left], [right]) => String(left).localeCompare(String(right)))
     ).toEqual([
       ['local-terminal', 'local'],
       ['remote-terminal', RUNTIME_HOST_ID]
+    ])
+  })
+
+  it('does not borrow editor paths across same-id worktrees', () => {
+    const entries = buildSearchableWorkspaceTabs({
+      worktrees: pairedWorktrees(),
+      repoMap: new Map(),
+      worktreeOrder: new Map(),
+      unifiedTabsByWorktree: {
+        [SHARED_WORKTREE_ID]: [
+          makeTab({
+            id: 'shared-editor',
+            entityId: 'shared-file',
+            contentType: 'editor',
+            executionHostId: 'local'
+          }),
+          makeTab({
+            id: 'shared-editor',
+            entityId: 'shared-file',
+            contentType: 'editor',
+            executionHostId: RUNTIME_HOST_ID
+          })
+        ]
+      },
+      tabsByWorktree: {},
+      openFiles: [
+        {
+          id: 'shared-file',
+          filePath: '/local/local-atlas.ts',
+          relativePath: 'local/local-atlas.ts',
+          worktreeId: SHARED_WORKTREE_ID,
+          language: 'typescript',
+          isDirty: false,
+          mode: 'edit'
+        },
+        {
+          id: 'shared-file',
+          filePath: '/remote/remote-atlas.ts',
+          relativePath: 'remote/remote-atlas.ts',
+          worktreeId: SHARED_WORKTREE_ID,
+          language: 'typescript',
+          isDirty: false,
+          runtimeEnvironmentId: 'paired-host',
+          mode: 'edit'
+        }
+      ],
+      agentStatusByPaneKey: {},
+      retainedAgentsByPaneKey: {},
+      sleepingAgentSessionsByPaneKey: {},
+      activeGroupIdByWorktree: {},
+      groupsByWorktree: {},
+      activeWorktreeId: null,
+      activeTabType: 'terminal',
+      activeTabId: null,
+      activeTabIdByWorktree: {},
+      activeFileId: null,
+      activeFileIdByWorktree: {},
+      activeTabTypeByWorktree: {},
+      generatedTitlesEnabled: true
+    })
+
+    expect(searchWorkspaceTabs(entries, 'local-atlas')).toMatchObject([
+      { executionHostId: 'local', secondaryText: 'local/local-atlas.ts' }
+    ])
+    expect(searchWorkspaceTabs(entries, 'remote-atlas')).toMatchObject([
+      { executionHostId: RUNTIME_HOST_ID, secondaryText: 'remote/remote-atlas.ts' }
     ])
   })
 

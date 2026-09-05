@@ -1,6 +1,12 @@
 import type { Tab } from '../../../shared/tab-types'
 import type { Worktree } from '../../../shared/worktree/types'
-import { LOCAL_EXECUTION_HOST_ID, type ExecutionHostId } from '../../../shared/execution-host'
+import type { OpenFile } from '@/store/slices/editor'
+import {
+  LOCAL_EXECUTION_HOST_ID,
+  toRuntimeExecutionHostId,
+  toSshExecutionHostId,
+  type ExecutionHostId
+} from '../../../shared/execution-host'
 import { isExecutionHostAliasForWorktree } from './worktree-execution-host-alias'
 
 export function findAmbiguousWorktreeIds(
@@ -41,6 +47,32 @@ export function isUnifiedTabOwnedByWorktree(
     return isExecutionHostAliasForWorktree(tab.executionHostId, worktree)
   }
   return !ambiguousWorktreeIds.has(worktree.id)
+}
+
+export function isOpenFileOwnedByWorktree(
+  file: Pick<
+    OpenFile,
+    'externalSshTargetId' | 'operationProvenance' | 'runtimeEnvironmentId' | 'worktreeId'
+  >,
+  worktree: Pick<Worktree, 'hostId' | 'id' | 'runtimeOwnerEnvironmentId'>
+): boolean {
+  if (file.worktreeId !== worktree.id) {
+    return false
+  }
+  const operationHost = file.operationProvenance?.generation.route.executionHostId
+  if (operationHost) {
+    return isExecutionHostAliasForWorktree(operationHost, worktree)
+  }
+  if (file.externalSshTargetId) {
+    return isExecutionHostAliasForWorktree(toSshExecutionHostId(file.externalSshTargetId), worktree)
+  }
+  if (file.runtimeEnvironmentId) {
+    return isExecutionHostAliasForWorktree(
+      toRuntimeExecutionHostId(file.runtimeEnvironmentId),
+      worktree
+    )
+  }
+  return isExecutionHostAliasForWorktree(LOCAL_EXECUTION_HOST_ID, worktree)
 }
 
 export function getUnifiedTabPaletteExecutionHostId(

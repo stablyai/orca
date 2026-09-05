@@ -195,6 +195,29 @@ describe('activateBrowserPagePaletteResult', () => {
     })
   })
 
+  it('focuses the owned unified tab when child ids collide across hosts', () => {
+    seedStore({
+      worktreesByRepo: {
+        'repo-1': [makeWorktree({ hostId: 'ssh:host-1' })],
+        'repo-2': [makeWorktree({ repoId: 'repo-2', hostId: 'ssh:host-2' })]
+      },
+      unifiedTabsByWorktree: {
+        'wt-1': [
+          makeBrowserTab({ executionHostId: 'ssh:host-1', groupId: 'group-host-1' }),
+          makeBrowserTab({ executionHostId: 'ssh:host-2', groupId: 'group-host-2' })
+        ]
+      },
+      groupsByWorktree: {
+        'wt-1': [makeGroup({ id: 'group-host-1' }), makeGroup({ id: 'group-host-2' })]
+      }
+    })
+
+    expect(
+      activateBrowserPagePaletteResult({ ...target, executionHostId: 'ssh:host-2' }).status
+    ).toBe('activated')
+    expect(useAppStore.getState().activeGroupIdByWorktree['wt-1']).toBe('group-host-2')
+  })
+
   it('activates pages in remote folder workspaces', () => {
     const worktreeId = folderWorkspaceKey('folder-1')
     seedStore({

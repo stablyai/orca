@@ -66,6 +66,7 @@ export function WorktreeJumpPaletteSimulatorRow({
               titleRanges={result.titleRanges}
               secondaryText={result.secondaryText}
               secondaryRanges={result.secondaryRanges}
+              secondaryMatches={result.secondaryMatches}
               worktreeName={result.worktreeName}
               worktreeRanges={result.worktreeRanges}
               sessionAge={simulatorSessionAge}
@@ -87,6 +88,13 @@ export function WorktreeJumpPaletteSimulatorRow({
                 </>
               }
             />
+            {result.typeAliasMatches.length ? (
+              <span className="sr-only">
+                {translate('components.cmd-j.matchedAliases', 'Matched aliases: {{value0}}', {
+                  value0: result.typeAliasMatches.map((match) => match.text).join(', ')
+                })}
+              </span>
+            ) : null}
           </div>
           <div className="flex shrink-0 items-center gap-1.5">
             <PaletteHostBadgeChip badge={simulatorHostBadge} />
@@ -158,6 +166,7 @@ export function WorktreeJumpPaletteBrowserRow({
               titleRanges={result.titleRanges}
               secondaryText={result.secondaryText}
               secondaryRanges={result.secondaryRanges}
+              secondaryMatches={result.secondaryMatches}
               worktreeName={result.worktreeName}
               worktreeRanges={result.worktreeRanges}
               sessionAge={browserSessionAge}

@@ -105,6 +105,7 @@ function makeResult(
     occupantAgent: null,
     title: 'Terminal',
     secondaryText: '',
+    secondaryMatches: [],
     repoName: 'repo/orca',
     worktreeName: 'Palette Worktree',
     branchName: 'main',
@@ -113,12 +114,14 @@ function makeResult(
     repoRanges: [],
     worktreeRanges: [],
     branchRanges: [],
+    typeAliasMatches: [],
     isCurrentTab: false,
     isCurrentWorktree: false,
     score: 0,
     qualityClass: null,
     rank: null,
     lastActiveAt: null,
+    activity: { ageBucket: null, timestamp: 0 },
     ...overrides
   }
 }
@@ -183,12 +186,42 @@ describe('activateWorkspaceTabPaletteResult', () => {
 
   it('scopes activation to the host carried by the search result', () => {
     const executionHostId = 'runtime:host-1' as const
+    mocks.store.getKnownWorktreeById.mockReturnValue({
+      id: 'wt-1',
+      repoId: 'repo-1',
+      path: '/tmp/wt-1',
+      runtimeOwnerEnvironmentId: 'host-1'
+    })
+    mocks.store.unifiedTabsByWorktree['wt-1'][0].executionHostId = executionHostId
 
     expect(activateWorkspaceTabPaletteResult({ ...makeResult(), executionHostId })).toEqual({
       status: 'activated'
     })
 
     expect(mocks.store.getKnownWorktreeById).toHaveBeenCalledWith('wt-1', executionHostId)
+    expect(mocks.activateAndRevealWorktree).toHaveBeenCalledWith('wt-1', { executionHostId })
+  })
+
+  it('activates the owned tab when child ids collide across hosts', () => {
+    const executionHostId = 'runtime:host-1' as const
+    mocks.store.getKnownWorktreeById.mockImplementation((_worktreeId, hostId) =>
+      hostId === executionHostId
+        ? {
+            id: 'wt-1',
+            repoId: 'repo-1',
+            path: '/remote/wt-1',
+            runtimeOwnerEnvironmentId: 'host-1'
+          }
+        : { id: 'wt-1', repoId: 'repo-1', path: '/local/wt-1', hostId: 'local' }
+    )
+    mocks.store.unifiedTabsByWorktree['wt-1'] = [
+      { ...mocks.store.unifiedTabsByWorktree['wt-1'][0], executionHostId: 'local' },
+      { ...mocks.store.unifiedTabsByWorktree['wt-1'][0], executionHostId }
+    ]
+
+    expect(activateWorkspaceTabPaletteResult({ ...makeResult(), executionHostId })).toEqual({
+      status: 'activated'
+    })
     expect(mocks.activateAndRevealWorktree).toHaveBeenCalledWith('wt-1', { executionHostId })
   })
 

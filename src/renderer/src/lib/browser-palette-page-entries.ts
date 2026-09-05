@@ -13,6 +13,7 @@ import {
   getUnifiedTabPaletteExecutionHostId,
   isUnifiedTabOwnedByWorktree
 } from './unified-tab-host-ownership'
+import { maxValidPaletteActivityTimestamp } from './palette-match/palette-ranking'
 
 type BrowserPaletteActiveTabType = WorkspaceVisibleTabType
 
@@ -95,8 +96,11 @@ export function buildSearchableBrowserPages({
             activeWorktreeId,
             activeWorkspaceExecutionHostId
           ),
-          // Never older than the page itself: it was opened while the workspace was focused.
-          lastActiveAt: workspaceFocusedAt ? Math.max(workspaceFocusedAt, page.createdAt) : null,
+          // Workspace focus is a lossy proxy for only its currently active page.
+          lastActiveAt:
+            workspace.activePageId === page.id && workspaceFocusedAt
+              ? maxValidPaletteActivityTimestamp([workspaceFocusedAt, page.createdAt])
+              : maxValidPaletteActivityTimestamp([page.createdAt]),
           document: buildSearchableBrowserPageDocument({ page, workspace, worktree, repoName })
         })
       }

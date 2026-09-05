@@ -38,7 +38,11 @@ type WorktreeJumpPaletteSectionsInput = WorktreeJumpPaletteOpenTabs &
   Pick<WorktreeJumpPaletteWorktrees, 'hasQuery'> &
   Pick<
     WorktreeJumpPaletteLocalState,
-    'createWorktreeName' | 'showCreateAction' | 'expandedSectionCaps' | 'setExpandedSectionCaps'
+    | 'createWorktreeName'
+    | 'showCreateAction'
+    | 'expandedSectionCaps'
+    | 'setExpandedSectionCaps'
+    | 'selectedItemId'
   >
 
 export function useWorktreeJumpPaletteSections({
@@ -51,19 +55,20 @@ export function useWorktreeJumpPaletteSections({
   createWorktreeName,
   showCreateAction,
   expandedSectionCaps,
-  setExpandedSectionCaps
+  setExpandedSectionCaps,
+  selectedItemId
 }: WorktreeJumpPaletteSectionsInput) {
   const openTabsLeadSections = useMemo(() => {
     if (!hasQuery) {
       return true
     }
     return shouldOpenTabsLeadPaletteSections({
-      bestWorktreeQualityRank: worktreeItems[0]
-        ? bestPaletteQualityRank([worktreeItems[0].match.qualityClass])
-        : NO_PALETTE_QUALITY_RANK,
-      bestOpenTabQualityRank: openTabItems[0]
-        ? bestPaletteQualityRank([openTabItems[0].result.qualityClass])
-        : NO_PALETTE_QUALITY_RANK
+      bestWorktreeQualityRank: bestPaletteQualityRank(
+        worktreeItems.map((item) => item.match.qualityClass)
+      ),
+      bestOpenTabQualityRank: bestPaletteQualityRank(
+        openTabItems.map((item) => item.result.qualityClass)
+      )
     })
   }, [hasQuery, openTabItems, worktreeItems])
 
@@ -72,11 +77,11 @@ export function useWorktreeJumpPaletteSections({
       return false
     }
     const bestEntityQualityRank = Math.min(
-      worktreeItems[0]
-        ? bestPaletteQualityRank([worktreeItems[0].match.qualityClass])
+      worktreeItems.length
+        ? bestPaletteQualityRank(worktreeItems.map((item) => item.match.qualityClass))
         : NO_PALETTE_QUALITY_RANK,
-      openTabItems[0]
-        ? bestPaletteQualityRank([openTabItems[0].result.qualityClass])
+      openTabItems.length
+        ? bestPaletteQualityRank(openTabItems.map((item) => item.result.qualityClass))
         : NO_PALETTE_QUALITY_RANK
     )
     return shouldIntentSectionLeadPaletteSections({
@@ -100,13 +105,14 @@ export function useWorktreeJumpPaletteSections({
 
   const paletteSections = useMemo(() => {
     const openTabsCap = PALETTE_SECTION_RENDER_CAP + (expandedSectionCaps['open-tabs'] ?? 0)
+    const retainSelected = (item: { id: string }): boolean => item.id === selectedItemId
     // Why: "See more" drops the above-the-fold trim outright instead of stepping 20 at a time, so one
     // click reveals the whole recent history the shared render cap allows.
     const recentTabsCap = expandedSectionCaps['open-tabs']
       ? openTabsCap
       : EMPTY_QUERY_RECENT_TAB_CAP
     const openTabs = hasQuery
-      ? capPaletteSection(openTabItems, openTabsCap)
+      ? capPaletteSection(openTabItems, openTabsCap, retainSelected)
       : capPaletteSection(recentTabItems, recentTabsCap)
     const baseWorktreeCap = hasQuery
       ? Infinity
@@ -118,7 +124,7 @@ export function useWorktreeJumpPaletteSections({
       ? PALETTE_SECTION_RENDER_CAP + (expandedSectionCaps.worktrees ?? 0)
       : baseWorktreeCap + (expandedSectionCaps.worktrees ?? 0)
     const worktrees = hasQuery
-      ? capPaletteSection(worktreeItems, worktreeCap)
+      ? capPaletteSection(worktreeItems, worktreeCap, retainSelected)
       : {
           visible: worktreeItems.slice(0, worktreeCap),
           overflowCount: Math.max(0, worktreeItems.length - worktreeCap)
@@ -141,7 +147,9 @@ export function useWorktreeJumpPaletteSections({
             TYPED_QUERY_LEADING_PREVIEW +
             (expandedSectionCaps[openTabsLeadSections ? 'open-tabs' : 'worktrees'] ?? 0),
           leadingHardCap: openTabsLeadSections ? openTabsCap : worktreeCap,
-          trailingHardCap: openTabsLeadSections ? worktreeCap : openTabsCap
+          trailingHardCap: openTabsLeadSections ? worktreeCap : openTabsCap,
+          leadingRetain: retainSelected,
+          trailingRetain: retainSelected
         })
       : null
     return {
@@ -164,6 +172,7 @@ export function useWorktreeJumpPaletteSections({
     openTabsLeadSections,
     projectTargetItems,
     recentTabItems,
+    selectedItemId,
     worktreeItems
   ])
 

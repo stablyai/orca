@@ -23,16 +23,28 @@ export type PaletteIdentifierOptions = {
   sigil?: PaletteIdentifierSigil
 }
 
-export type PaletteFieldSource = {
+export type PaletteFieldRole = 'primary' | 'secondary' | 'alias' | 'container'
+
+type PaletteFieldSourceBase = {
   id: string
   profile: PaletteFieldProfile
   text: string
-  /** null marks a visible identity field; identity fields combine freely. */
-  evidenceId?: string | null
   identifier?: PaletteIdentifierOptions
-  /** Container-level fields (e.g. worktree/branch for tabs) demote when matched alone. */
-  isContainer?: boolean
 }
+
+export type PaletteVisibleFieldSource = PaletteFieldSourceBase & {
+  evidenceId?: null
+  role: PaletteFieldRole
+  destinationEligible: boolean
+}
+
+export type PaletteEvidenceFieldSource = PaletteFieldSourceBase & {
+  evidenceId: string
+  role?: never
+  destinationEligible?: never
+}
+
+export type PaletteFieldSource = PaletteVisibleFieldSource | PaletteEvidenceFieldSource
 
 export type PaletteIndexedField = {
   id: string
@@ -42,7 +54,8 @@ export type PaletteIndexedField = {
   words: readonly PaletteWord[]
   evidenceId: string | null
   identifier: PaletteIdentifierOptions | null
-  isContainer: boolean
+  role: PaletteFieldRole | null
+  destinationEligible: boolean
 }
 
 const IDENTIFIER_PREFIX_KINDS: ReadonlySet<PaletteIdentifierKind> = new Set<PaletteIdentifierKind>([
@@ -129,7 +142,8 @@ export function indexPaletteField(source: PaletteFieldSource): PaletteIndexedFie
     words: segments.words,
     evidenceId: source.evidenceId ?? null,
     identifier: source.identifier ?? null,
-    isContainer: Boolean(source.isContainer)
+    role: source.role ?? null,
+    destinationEligible: source.destinationEligible === true
   }
 }
 

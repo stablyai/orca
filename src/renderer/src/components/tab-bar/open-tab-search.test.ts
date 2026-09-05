@@ -21,6 +21,7 @@ import {
   type OpenTabSearchInput,
   type OpenTabSearchResult
 } from './open-tab-search'
+import { createPaletteSearchContext } from '@/lib/palette-match/palette-ranking'
 
 const worktree: Worktree = {
   id: 'wt-1',
@@ -71,7 +72,8 @@ function makeWorkspaceTab({
   occupantAgent = null,
   tabSortIndex = 0,
   groupSortIndex = 0,
-  isCurrentTab = false
+  isCurrentTab = false,
+  createdAt = 0
 }: {
   id: string
   title: string
@@ -83,10 +85,13 @@ function makeWorkspaceTab({
   tabSortIndex?: number
   groupSortIndex?: number
   isCurrentTab?: boolean
+  createdAt?: number
 }): SearchableWorkspaceTab {
   const searchTexts = secondarySearchTexts ?? (secondaryText ? [secondaryText] : [])
+  const tab = makeTab(id, contentType) as SearchableWorkspaceTab['tab']
+  tab.createdAt = createdAt
   return {
-    tab: makeTab(id, contentType) as SearchableWorkspaceTab['tab'],
+    tab,
     worktree,
     repoName: REPO_NAME,
     worktreeSortIndex: 0,
@@ -218,7 +223,62 @@ function search(input: Partial<OpenTabSearchInput> & { query: string }): OpenTab
   })
 }
 
+function readableId(result: OpenTabSearchResult): string {
+  return `open-tab:${result.source}:${result.source === 'browser' ? result.pageId : result.tabId}`
+}
+
 describe('searchOpenTabs ranking', () => {
+  it('uses the shared Atlas order before applying the four-row cap', () => {
+    const now = 100 * 24 * 60 * 60 * 1000
+    const age = (milliseconds: number): number => now - milliseconds
+    const workspaceTabs = [
+      makeWorkspaceTab({
+        id: 'old-prefix-2d',
+        title: 'atlas-follow-up-draft-2026-09-01.md',
+        createdAt: age(2 * 24 * 60 * 60 * 1000)
+      }),
+      makeWorkspaceTab({
+        id: 'old-prefix-3d',
+        title: 'atlas-meeting-todo.md',
+        createdAt: age(3 * 24 * 60 * 60 * 1000)
+      }),
+      makeWorkspaceTab({
+        id: 'recent-title',
+        title: 'Clarify Atlas action items',
+        createdAt: age(30_000)
+      }),
+      makeWorkspaceTab({
+        id: 'recent-path',
+        title: 'questions-and-answers.md',
+        secondaryText: 'notes/atlas/questions.md',
+        createdAt: age(30 * 60 * 1000)
+      }),
+      makeWorkspaceTab({
+        id: 'older-path',
+        title: 'worklog.md',
+        secondaryText: 'notes/atlas/worklog.md',
+        createdAt: age(9 * 60 * 60 * 1000)
+      }),
+      makeWorkspaceTab({
+        id: 'older-title',
+        title: 'Advance Atlas security review',
+        createdAt: age(19 * 60 * 60 * 1000)
+      })
+    ]
+    const results = search({
+      query: 'atlas',
+      context: createPaletteSearchContext(now),
+      workspaceTabs
+    })
+
+    expect(results.map((result) => (result.source === 'workspace' ? result.tabId : ''))).toEqual([
+      'recent-title',
+      'older-title',
+      'old-prefix-2d',
+      'old-prefix-3d'
+    ])
+  })
+
   it('ranks a title-prefix match above a title-substring match from another source', () => {
     const results = search({
       query: 'zebra',
@@ -226,10 +286,7 @@ describe('searchOpenTabs ranking', () => {
       browserPages: [makeBrowserPage({ id: 'page-1', title: 'Zebra release notes' })]
     })
 
-    expect(results.map((result) => result.id)).toEqual([
-      'open-tab:browser:page-1',
-      'open-tab:workspace:tab-1'
-    ])
+    expect(results.map(readableId)).toEqual(['open-tab:browser:page-1', 'open-tab:workspace:tab-1'])
   })
 
   it('ranks any title match above any secondary match', () => {
@@ -246,7 +303,7 @@ describe('searchOpenTabs ranking', () => {
       simulatorTabs: [makeSimulatorTab({ id: 'sim-1', label: 'Trailing zebra' })]
     })
 
-    expect(results.map((result) => result.id)).toEqual([
+    expect(results.map(readableId)).toEqual([
       'open-tab:simulator:sim-1',
       'open-tab:workspace:tab-secondary'
     ])
@@ -274,7 +331,7 @@ describe('searchOpenTabs ranking', () => {
       ]
     })
 
-    expect(results.map((result) => result.id)).toEqual([
+    expect(results.map(readableId)).toEqual([
       'open-tab:workspace:tab-path',
       'open-tab:workspace:tab-agent'
     ])
@@ -291,7 +348,7 @@ describe('searchOpenTabs ranking', () => {
       simulatorTabs: [makeSimulatorTab({ id: 'sim-1', label: 'Zebra emulator' })]
     })
 
-    expect(results.map((result) => result.id)).toEqual([
+    expect(results.map(readableId)).toEqual([
       'open-tab:workspace:tab-early',
       'open-tab:workspace:tab-late',
       'open-tab:browser:page-1',
@@ -312,12 +369,36 @@ describe('searchOpenTabs ranking', () => {
     })
 
     expect(results).toHaveLength(OPEN_TAB_SEARCH_RESULT_LIMIT)
-    expect(results.map((result) => result.id)).toEqual([
+    expect(results.map(readableId)).toEqual([
       'open-tab:workspace:tab-0',
       'open-tab:workspace:tab-1',
       'open-tab:workspace:tab-2',
       'open-tab:workspace:tab-3'
     ])
+  })
+
+  it('reserves one capped slot for a retained eligible result', () => {
+    const input = {
+      query: 'zebra',
+      workspaceTabs: [0, 1, 2, 3, 4].map((index) =>
+        makeWorkspaceTab({ id: `tab-${index}`, title: `Zebra ${index}`, tabSortIndex: index })
+      )
+    }
+    const uncappedSelection = searchOpenTabs({
+      browserPages: [],
+      simulatorTabs: [],
+      ...input
+    })[3]
+    input.workspaceTabs[4].tab.createdAt = Date.now()
+    const retained = searchOpenTabs({
+      browserPages: [],
+      simulatorTabs: [],
+      ...input,
+      retainedResultId: uncappedSelection.id
+    })
+
+    expect(retained).toHaveLength(OPEN_TAB_SEARCH_RESULT_LIMIT)
+    expect(retained.some((result) => result.id === uncappedSelection.id)).toBe(true)
   })
 })
 
@@ -334,7 +415,7 @@ describe('searchOpenTabs filtering', () => {
       ]
     })
 
-    expect(results.map((result) => result.id)).toEqual([
+    expect(results.map(readableId)).toEqual([
       'open-tab:workspace:tab-1',
       'open-tab:browser:page-1',
       'open-tab:simulator:sim-1'
@@ -372,10 +453,7 @@ describe('searchOpenTabs filtering', () => {
       ]
     })
 
-    expect(results.map((result) => result.id)).toEqual([
-      'open-tab:workspace:tab-1',
-      'open-tab:browser:page-1'
-    ])
+    expect(results.map(readableId)).toEqual(['open-tab:workspace:tab-1', 'open-tab:browser:page-1'])
   })
 
   // Both tokens land on the "ios simulator" alias, so the row fills no title or
@@ -386,7 +464,7 @@ describe('searchOpenTabs filtering', () => {
       simulatorTabs: [makeSimulatorTab({ id: 'sim-1', label: 'Pixel 8' })]
     })
 
-    expect(results.map((result) => result.id)).toEqual(['open-tab:simulator:sim-1'])
+    expect(results.map(readableId)).toEqual(['open-tab:simulator:sim-1'])
   })
 })
 

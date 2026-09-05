@@ -1,6 +1,7 @@
 import {
   indexPaletteFields,
   type PaletteFieldSource,
+  type PaletteEvidenceFieldSource as IndexedPaletteEvidenceFieldSource,
   type PaletteIndexedField
 } from './indexed-field'
 import type { MatchRange } from './normalized-text'
@@ -18,8 +19,7 @@ export type PaletteEvidenceUnit = {
   accessibilityLabel: string
 }
 
-export type PaletteEvidenceFieldSource = PaletteFieldSource & {
-  evidenceId: string
+export type PaletteEvidenceFieldSource = IndexedPaletteEvidenceFieldSource & {
   /** Offset of this field's text inside its unit's rendered text. */
   renderOffset: number
 }
@@ -127,17 +127,14 @@ export type PaletteSupportingEvidence = {
 }
 
 export type PaletteDocumentRank = {
-  /** 0 when a recognized exact intent (such as a task URL) produced this row. */
-  exactIntent: number
-  /** Tokens whose chosen assignment only matched container fields. */
-  containerOnlyTokenCount: number
-  /** 0 equality, 1 prefix, 2 word boundary, 3 none — whole query in visible text. */
-  wholeQuery: number
-  worstQuality: number
-  /** 0 when every token landed on visible identity text. */
-  usesSupportingEvidence: number
-  fuzzyTokenCount: number
-  fieldHopCount: number
+  /** 0 recognized destination, 1 eligible equality, 2 structured, 3 fallback. */
+  destination: number
+  recovery: number
+  wordMatch: number
+  coverage: number
+  strength: number
+  /** 0 prefix, 1 later word boundary, 2 distributed/other. */
+  placement: number
 }
 
 export type PaletteDocumentMatch = {
@@ -149,20 +146,48 @@ export type PaletteDocumentMatch = {
 }
 
 const RANK_KEYS: readonly (keyof PaletteDocumentRank)[] = [
-  'exactIntent',
-  'containerOnlyTokenCount',
-  'wholeQuery',
-  'worstQuality',
-  'usesSupportingEvidence',
-  'fuzzyTokenCount',
-  'fieldHopCount'
+  'destination',
+  'recovery',
+  'wordMatch',
+  'coverage',
+  'strength',
+  'placement'
 ]
 
-export function comparePaletteDocumentRank(a: PaletteDocumentRank, b: PaletteDocumentRank): number {
-  for (const key of RANK_KEYS) {
-    if (a[key] !== b[key]) {
-      return a[key] - b[key]
+const SEMANTIC_RANK_KEYS: readonly (keyof PaletteDocumentRank)[] = [
+  'destination',
+  'recovery',
+  'wordMatch',
+  'coverage',
+  'strength'
+]
+
+function compareRankKeys(
+  a: PaletteDocumentRank,
+  b: PaletteDocumentRank,
+  keys: readonly (keyof PaletteDocumentRank)[]
+): number {
+  for (const key of keys) {
+    const difference = a[key] - b[key]
+    if (difference !== 0) {
+      return difference
     }
   }
   return 0
+}
+
+export function comparePaletteSemanticRank(a: PaletteDocumentRank, b: PaletteDocumentRank): number {
+  return compareRankKeys(a, b, SEMANTIC_RANK_KEYS)
+}
+
+export function comparePaletteDocumentRank(a: PaletteDocumentRank, b: PaletteDocumentRank): number {
+  return compareRankKeys(a, b, RANK_KEYS)
+}
+
+export function createRecognizedPaletteRank(): PaletteDocumentRank {
+  return { destination: 0, recovery: 0, wordMatch: 0, coverage: 0, strength: 0, placement: 0 }
+}
+
+export function createPaletteFallbackRank(): PaletteDocumentRank {
+  return { destination: 3, recovery: 0, wordMatch: 0, coverage: 0, strength: 0, placement: 0 }
 }

@@ -24,8 +24,11 @@ import type {
 import {
   findAmbiguousWorktreeIds,
   getUnifiedTabPaletteExecutionHostId,
+  isOpenFileOwnedByWorktree,
   isUnifiedTabOwnedByWorktree
 } from './unified-tab-host-ownership'
+import type { OpenFile } from '@/store/slices/editor'
+import type { TerminalTab } from '../../../shared/terminal-tab-types'
 
 function getActiveUnifiedTabId({
   worktreeId,
@@ -121,7 +124,15 @@ export function buildSearchableWorkspaceTabEntries({
 }: BuildSearchableWorkspaceTabsOptions): SearchableWorkspaceTab[] {
   const entries: SearchableWorkspaceTab[] = []
   const seenTabIdentities = new Set<string>()
-  const openFilesById = new Map(openFiles.map((file) => [file.id, file]))
+  const openFilesById = new Map<string, OpenFile[]>()
+  for (const file of openFiles) {
+    const bucket = openFilesById.get(file.id)
+    if (bucket) {
+      bucket.push(file)
+    } else {
+      openFilesById.set(file.id, [file])
+    }
+  }
   const agentIndex = buildAgentMetadataTabIndex({
     agentStatusByPaneKey,
     retainedAgentsByPaneKey,
@@ -156,7 +167,10 @@ export function buildSearchableWorkspaceTabEntries({
     for (const group of groups) {
       group.tabOrder.forEach((tabId, index) => tabOrder.set(tabId, index))
     }
-    const terminalTabs = new Map((tabsByWorktree[worktree.id] ?? []).map((tab) => [tab.id, tab]))
+    const terminalTabs = new Map<string, TerminalTab | null>()
+    for (const terminalTab of tabsByWorktree[worktree.id] ?? []) {
+      terminalTabs.set(terminalTab.id, terminalTabs.has(terminalTab.id) ? null : terminalTab)
+    }
 
     for (const rawTab of unifiedTabsByWorktree[worktree.id] ?? []) {
       if (
@@ -225,7 +239,12 @@ export function buildSearchableWorkspaceTabEntries({
             repoName,
             typeAliases: ['terminal tab', 'terminal']
           }),
-          agentMetadata: collectAgentMetadataFromIndex(agentIndex, tab.entityId, worktree.id),
+          agentMetadata: collectAgentMetadataFromIndex(
+            agentIndex,
+            tab.entityId,
+            worktree,
+            ambiguousWorktreeIds
+          ),
           occupantAgent: resolveOpenTabOccupantAgent({
             tabId: tab.entityId,
             title,
@@ -240,8 +259,15 @@ export function buildSearchableWorkspaceTabEntries({
         })
         continue
       }
-      const file = openFilesById.get(tab.entityId)
-      if (!file || file.worktreeId !== worktree.id) {
+      const file = openFilesById
+        .get(tab.entityId)
+        ?.find(
+          (candidate) =>
+            candidate.worktreeId === worktree.id &&
+            (!ambiguousWorktreeIds.has(worktree.id) ||
+              isOpenFileOwnedByWorktree(candidate, worktree))
+        )
+      if (!file) {
         continue
       }
       const title = getEditorDisplayLabel(file)

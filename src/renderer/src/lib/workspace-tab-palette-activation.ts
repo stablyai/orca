@@ -8,6 +8,10 @@ import { useAppStore } from '@/store'
 import type { AppState } from '@/store/types'
 import type { ExecutionHostId } from '../../../shared/execution-host'
 import { activateAndRevealWorktree } from './worktree-activation'
+import {
+  isOpenFileOwnedByWorktree,
+  isUnifiedTabOwnedByWorktree
+} from './unified-tab-host-ownership'
 import type { WorkspaceTabPaletteSearchResult } from './workspace-tab-palette-search'
 
 export type WorkspaceTabPaletteActivationFailure =
@@ -43,7 +47,8 @@ function validateTarget(
   state: WorkspaceTabPaletteActivationState,
   result: WorkspaceTabPaletteActivationTarget
 ): WorkspaceTabPaletteActivationFailure | null {
-  if (!state.getKnownWorktreeById(result.worktreeId, result.executionHostId)) {
+  const worktree = state.getKnownWorktreeById(result.worktreeId, result.executionHostId)
+  if (!worktree) {
     return 'missing-worktree'
   }
   const group = (state.groupsByWorktree[result.worktreeId] ?? []).find(
@@ -58,16 +63,23 @@ function validateTarget(
       candidate.entityId === result.entityId &&
       candidate.groupId === result.groupId &&
       candidate.worktreeId === result.worktreeId &&
-      candidate.contentType === result.contentType
+      candidate.contentType === result.contentType &&
+      isUnifiedTabOwnedByWorktree(candidate, worktree, new Set())
   )
   if (!tab) {
     return 'missing-tab'
   }
   if (
     result.contentType !== 'terminal' &&
-    !state.openFiles.some(
-      (file) => file.id === result.entityId && file.worktreeId === result.worktreeId
-    )
+    (() => {
+      const files = state.openFiles.filter(
+        (file) => file.id === result.entityId && file.worktreeId === result.worktreeId
+      )
+      return (
+        files.length === 0 ||
+        (files.length > 1 && !files.some((file) => isOpenFileOwnedByWorktree(file, worktree)))
+      )
+    })()
   ) {
     return 'missing-file'
   }

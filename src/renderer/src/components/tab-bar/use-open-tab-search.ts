@@ -10,6 +10,7 @@ import {
   type OpenTabSearchEntries
 } from './open-tab-search-entries'
 import { searchOpenTabs, type OpenTabSearchResult } from './open-tab-search'
+import { createPaletteSearchContext } from '@/lib/palette-match/palette-ranking'
 
 const EMPTY_RESULTS: OpenTabSearchResult[] = []
 
@@ -17,6 +18,7 @@ export type UseOpenTabSearchOptions = {
   enabled: boolean
   query: string
   worktreeId: string
+  retainedResultId?: string | null
 }
 
 export type OpenTabSearchSnapshot = {
@@ -30,7 +32,8 @@ export type OpenTabSearchSnapshot = {
 export function useOpenTabSearch({
   enabled,
   query,
-  worktreeId
+  worktreeId,
+  retainedResultId
 }: UseOpenTabSearchOptions): OpenTabSearchSnapshot {
   // Why null while disabled: a closed menu stays stable across store churn.
   const state = useAppStore(
@@ -48,13 +51,24 @@ export function useOpenTabSearch({
     [agentState, state]
   )
   const deferredQuery = useDeferredValue(query)
+  const context = useMemo(
+    () => createPaletteSearchContext(Date.now()),
+    [deferredQuery, enabled, entries]
+  )
 
   return useMemo(
     () => ({
       query: deferredQuery,
       entries,
-      results: entries ? searchOpenTabs({ ...entries, query: deferredQuery }) : EMPTY_RESULTS
+      results: entries
+        ? searchOpenTabs({
+            ...entries,
+            query: deferredQuery,
+            context,
+            retainedResultId
+          })
+        : EMPTY_RESULTS
     }),
-    [deferredQuery, entries]
+    [context, deferredQuery, entries, retainedResultId]
   )
 }

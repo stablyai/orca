@@ -1,5 +1,5 @@
 import { useLayoutEffect, useRef, useState } from 'react'
-import type React from 'react'
+import React from 'react'
 import { ShortcutKeyCombo } from '@/components/ShortcutKeyCombo'
 import { translate } from '@/i18n/i18n'
 import type { PaletteHostBadge } from '@/components/cmd-j/palette-host-badge'
@@ -69,6 +69,7 @@ export function PaletteOpenTabPrimaryLine({
   titleRanges,
   secondaryText,
   secondaryRanges,
+  secondaryMatches = NO_SECONDARY_MATCHES,
   worktreeName,
   worktreeRanges,
   sessionAge,
@@ -78,6 +79,7 @@ export function PaletteOpenTabPrimaryLine({
   titleRanges: readonly MatchRange[]
   secondaryText: string
   secondaryRanges: readonly MatchRange[]
+  secondaryMatches?: readonly { text: string; ranges: readonly MatchRange[] }[]
   worktreeName: string
   worktreeRanges: readonly MatchRange[]
   sessionAge?: string
@@ -115,6 +117,16 @@ export function PaletteOpenTabPrimaryLine({
           </span>
         </>
       ) : null}
+      {secondaryMatches
+        .filter((match) => match.text && match.text !== secondaryText)
+        .map((match) => (
+          <React.Fragment key={match.text}>
+            <span className="shrink-0 text-muted-foreground/45">·</span>
+            <span className="min-w-0 truncate text-[12px] font-medium text-muted-foreground/92">
+              <HighlightedText text={match.text} matchRanges={match.ranges} />
+            </span>
+          </React.Fragment>
+        ))}
       {showWorktree ? (
         <>
           <span className="shrink-0 text-muted-foreground/45">·</span>
@@ -264,3 +276,4 @@ export function getPaletteSupportingTextLabel(
       return translate('worktreeJumpPalette.matchLabel.automation', 'Automation')
   }
 }
+const NO_SECONDARY_MATCHES: readonly { text: string; ranges: readonly MatchRange[] }[] = []

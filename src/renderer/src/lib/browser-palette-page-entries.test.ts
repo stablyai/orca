@@ -375,12 +375,45 @@ describe('buildSearchableBrowserPages', () => {
     expect(entries.map((entry) => entry.lastActiveAt)).toEqual([4000, 9000])
   })
 
+  it('moves the workspace-focus proxy when the active browser page changes', () => {
+    const browserTab: Tab = {
+      id: 'tab-ws-1',
+      entityId: 'ws-1',
+      groupId: 'group-1',
+      worktreeId: 'wt-1',
+      contentType: 'browser',
+      label: 'Example',
+      customLabel: null,
+      color: null,
+      sortOrder: 0,
+      createdAt: 0,
+      lastFocusedAt: 8_000
+    }
+    const pages = [makePage({ createdAt: 1_000 }), makePage({ id: 'page-2', createdAt: 2_000 })]
+    const build = (activePageId: string) =>
+      buildSearchableBrowserPages({
+        worktrees: [worktreeA],
+        repoMap,
+        worktreeOrder,
+        browserTabsByWorktree: {
+          'wt-1': [makeWorkspace({ activePageId, pageIds: ['page-1', 'page-2'] })]
+        },
+        browserPagesByWorkspace: { 'ws-1': pages },
+        unifiedTabsByWorktree: { 'wt-1': [browserTab] },
+        activeBrowserTabId: null,
+        activeWorktreeId: null,
+        activeTabType: 'browser'
+      })
+
+    expect(build('page-1').map((entry) => entry.lastActiveAt)).toEqual([8_000, 2_000])
+    expect(build('page-2').map((entry) => entry.lastActiveAt)).toEqual([1_000, 8_000])
+  })
+
   it('feeds Cmd+J browser search the same ranking as the inline builder did', () => {
     const results = searchBrowserPages(buildFixture(), 'docs')
 
-    // Current page first, then the two url-only matches in the active worktree,
-    // then the other worktree's title match.
-    expect(results.map((result) => result.pageId)).toEqual(['page-1', 'page-2', 'page-3', 'page-4'])
+    // Primary title proofs lead URL-only proofs even across worktrees.
+    expect(results.map((result) => result.pageId)).toEqual(['page-1', 'page-4', 'page-2', 'page-3'])
     expect(results[0].isCurrentPage).toBe(true)
   })
 })

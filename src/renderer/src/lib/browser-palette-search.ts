@@ -17,6 +17,13 @@ import type { ExecutionHostId } from '../../../shared/execution-host'
 import type { MatchRange } from './palette-match/normalized-text'
 import type { PaletteDocument, PaletteDocumentRank } from './palette-match/palette-document'
 import type { PaletteResultQualityClass } from './palette-match/match-quality'
+import {
+  createPaletteSearchContext,
+  encodePaletteIdentity,
+  preparePaletteActivity,
+  type PaletteActivityRank,
+  type PaletteSearchContext
+} from './palette-match/palette-ranking'
 
 const NO_RANGES: readonly MatchRange[] = []
 
@@ -46,6 +53,7 @@ export type BrowserPaletteSearchResult = {
   /** Raw page URL, so callers can dedupe a row against another list of destinations. */
   url: string
   secondaryText: string
+  secondaryMatches: readonly { text: string; ranges: readonly MatchRange[] }[]
   workspaceLabel: string | null
   repoName: string
   worktreeName: string
@@ -62,6 +70,7 @@ export type BrowserPaletteSearchResult = {
   qualityClass: PaletteResultQualityClass | null
   rank: PaletteDocumentRank | null
   lastActiveAt?: number | null
+  activity: PaletteActivityRank
 }
 
 export const BROWSER_PALETTE_QUERY_MAX_BYTES = 2 * 1024
@@ -145,9 +154,13 @@ function positionScore(entry: SearchableBrowserPage): number {
   return entry.worktreeSortIndex * 100 - (entry.isCurrentWorktree ? 1000 : 0)
 }
 
-function baseResult(entry: SearchableBrowserPage): BrowserPaletteSearchResult {
+function baseResult(
+  entry: SearchableBrowserPage,
+  context: PaletteSearchContext
+): BrowserPaletteSearchResult {
   const formattedUrl = formatBrowserPaletteUrl(entry.page.url)
   const executionHostId = entry.executionHostId ?? entry.worktree.hostId
+  const activity = preparePaletteActivity(entry.lastActiveAt, context)
   return {
     ...(executionHostId ? { executionHostId } : {}),
     pageId: entry.page.id,
@@ -157,6 +170,7 @@ function baseResult(entry: SearchableBrowserPage): BrowserPaletteSearchResult {
     faviconUrl: entry.page.faviconUrl,
     url: entry.page.url,
     secondaryText: formattedUrl,
+    secondaryMatches: [],
     workspaceLabel: entry.workspace.label ?? null,
     repoName: entry.repoName,
     // Why resolve: a cleared display name leaves the raw field undefined at runtime.
@@ -173,14 +187,17 @@ function baseResult(entry: SearchableBrowserPage): BrowserPaletteSearchResult {
     score: positionScore(entry),
     qualityClass: null,
     rank: null,
-    lastActiveAt: entry.lastActiveAt ?? null
+    lastActiveAt: activity.timestamp || null,
+    activity
   }
 }
 
 export function searchBrowserPages(
   entries: readonly SearchableBrowserPage[],
-  query: string
+  query: string,
+  options: { context?: PaletteSearchContext; fieldMode?: 'all' | 'omnibox' } = {}
 ): BrowserPaletteSearchResult[] {
+  const context = options.context ?? createPaletteSearchContext(Date.now())
   if (isBrowserPaletteQueryTooLarge(query)) {
     return []
   }
@@ -190,14 +207,19 @@ export function searchBrowserPages(
     // listing, so the invalid case is filtered out by the token guard below.
     return query.trim()
       ? []
-      : entries.map((entry) => baseResult(entry)).sort(compareEmptyQueryResults)
+      : entries.map((entry) => baseResult(entry, context)).sort(compareEmptyQueryResults)
   }
 
   const results: BrowserPaletteSearchResult[] = []
   for (const entry of entries) {
-    const base = baseResult(entry)
+    const base = baseResult(entry, context)
     const secondaryTexts = browserPaletteSecondaryTexts(entry.page)
-    const match = matchPaletteTabDocument(entry.document, prepared)
+    const match = matchPaletteTabDocument(entry.document, prepared, {
+      isFieldAllowed:
+        options.fieldMode === 'omnibox'
+          ? (field) => field.id !== 'worktree' && field.id !== 'repo'
+          : undefined
+    })
     if (!match) {
       continue
     }
@@ -205,6 +227,10 @@ export function searchBrowserPages(
       ...base,
       secondaryText:
         match.secondary !== null ? secondaryTexts[match.secondary.index] : base.secondaryText,
+      secondaryMatches: match.secondaryMatches.map((secondary) => ({
+        text: secondaryTexts[secondary.index] ?? '',
+        ranges: secondary.ranges
+      })),
       workspaceRanges: match.workspaceRanges,
       titleRanges: match.titleRanges,
       secondaryRanges: match.secondary?.ranges ?? NO_RANGES,
@@ -222,14 +248,26 @@ export function searchBrowserPages(
           {
             rank: a.rank,
             positionScore: a.score,
-            id: a.pageId,
-            lastActiveAt: a.lastActiveAt ?? undefined
+            identity: encodePaletteIdentity([
+              'browser',
+              a.executionHostId ?? '',
+              a.worktreeId,
+              a.workspaceId,
+              a.pageId
+            ]),
+            activity: a.activity
           },
           {
             rank: b.rank,
             positionScore: b.score,
-            id: b.pageId,
-            lastActiveAt: b.lastActiveAt ?? undefined
+            identity: encodePaletteIdentity([
+              'browser',
+              b.executionHostId ?? '',
+              b.worktreeId,
+              b.workspaceId,
+              b.pageId
+            ]),
+            activity: b.activity
           }
         )
       : compareEmptyQueryResults(a, b)

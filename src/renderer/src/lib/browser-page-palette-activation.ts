@@ -29,18 +29,21 @@ export function activateBrowserPagePaletteResult({
   worktreeId
 }: BrowserPagePaletteActivationTarget): BrowserPagePaletteActivationResult {
   const initialState = useAppStore.getState()
-  const page = (initialState.browserPagesByWorkspace[workspaceId] ?? []).find(
-    (candidate) => candidate.id === pageId
-  )
-  const workspace = (initialState.browserTabsByWorktree[worktreeId] ?? []).find(
-    (candidate) => candidate.id === workspaceId
-  )
   const worktree = initialState.getKnownWorktreeById(worktreeId, executionHostId)
   // Why worktree first: removing a worktree also purges its browser workspaces
   // and pages, so a page-first check would report a dead workspace as a stale page.
   if (!worktree) {
     return { status: 'failed', reason: 'missing-worktree' }
   }
+  const page = (initialState.browserPagesByWorkspace[workspaceId] ?? []).find(
+    (candidate) =>
+      candidate.id === pageId &&
+      candidate.workspaceId === workspaceId &&
+      candidate.worktreeId === worktreeId
+  )
+  const workspace = (initialState.browserTabsByWorktree[worktreeId] ?? []).find(
+    (candidate) => candidate.id === workspaceId && candidate.worktreeId === worktreeId
+  )
   if (!page || !workspace) {
     return { status: 'failed', reason: 'missing-page' }
   }
@@ -66,7 +69,8 @@ export function activateBrowserPagePaletteResult({
     !activateBrowserWorkspaceTab({
       worktreeId: worktree.id,
       workspaceId: workspace.id,
-      pageId
+      pageId,
+      ...(targetHostId ? { executionHostId: targetHostId } : {})
     })
   ) {
     return { status: 'failed', reason: 'missing-tab' }

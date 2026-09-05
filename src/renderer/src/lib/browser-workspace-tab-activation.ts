@@ -1,4 +1,6 @@
 import { useAppStore } from '@/store'
+import type { ExecutionHostId } from '../../../shared/execution-host'
+import { isUnifiedTabOwnedByWorktree } from './unified-tab-host-ownership'
 
 /**
  * Bring a browser workspace forward as the surface the reader is in.
@@ -12,10 +14,17 @@ export function activateBrowserWorkspaceTab(params: {
   worktreeId: string
   workspaceId: string
   pageId?: string
+  executionHostId?: ExecutionHostId
 }): boolean {
   const state = useAppStore.getState()
+  const worktree = params.executionHostId
+    ? state.getKnownWorktreeById(params.worktreeId, params.executionHostId)
+    : undefined
   const unifiedTab = (state.unifiedTabsByWorktree[params.worktreeId] ?? []).find(
-    (candidate) => candidate.contentType === 'browser' && candidate.entityId === params.workspaceId
+    (candidate) =>
+      candidate.contentType === 'browser' &&
+      candidate.entityId === params.workspaceId &&
+      (!worktree || isUnifiedTabOwnedByWorktree(candidate, worktree, new Set()))
   )
   if (!unifiedTab) {
     return false

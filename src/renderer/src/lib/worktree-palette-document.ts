@@ -147,17 +147,23 @@ export function buildWorktreePaletteDocument(
       {
         id: WORKTREE_PALETTE_NAME_FIELD_ID,
         profile: 'structured-label',
-        text: resolveWorktreeDisplayName(worktree)
+        text: resolveWorktreeDisplayName(worktree),
+        role: 'primary',
+        destinationEligible: true
       },
       {
         id: WORKTREE_PALETTE_BRANCH_FIELD_ID,
         profile: 'structured-label',
-        text: resolveWorktreeBranchLabel(worktree)
+        text: resolveWorktreeBranchLabel(worktree),
+        role: 'secondary',
+        destinationEligible: true
       },
       {
         id: WORKTREE_PALETTE_REPO_FIELD_ID,
         profile: 'structured-label',
-        text: repo?.displayName ?? ''
+        text: repo?.displayName ?? '',
+        role: 'secondary',
+        destinationEligible: false
       },
       {
         id: WORKTREE_PALETTE_HOST_FIELD_ID,
@@ -169,7 +175,9 @@ export function buildWorktreePaletteDocument(
         text:
           sources.hostLabelByWorktreeId?.get(getWorktreeHostIdentity(worktree)) ??
           sources.hostLabelByWorktreeId?.get(worktree.id) ??
-          ''
+          '',
+        role: 'secondary',
+        destinationEligible: false
       }
     ],
     compositePairs: [

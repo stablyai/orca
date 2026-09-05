@@ -30,6 +30,12 @@ import {
   matchWorktreePaletteTaskUrl,
   parseCmdJTaskSourceUrl
 } from './worktree-palette-task-url-match'
+import {
+  createPaletteSearchContext,
+  preparePaletteActivity,
+  type PaletteActivityRank,
+  type PaletteSearchContext
+} from './palette-match/palette-ranking'
 
 export type { MatchRange }
 
@@ -56,6 +62,9 @@ export type PaletteSearchResult = {
   /** null for the empty query, where every worktree is listed without a match. */
   qualityClass: PaletteResultQualityClass | null
   rank: PaletteDocumentRank | null
+  /** Normalized against the evaluation context for ranking and the age badge. */
+  lastActiveAt: number | null
+  activity: PaletteActivityRank
 }
 
 const NO_RANGES: readonly MatchRange[] = []
@@ -76,8 +85,11 @@ export function getWorktreePaletteSearchScope(args: {
 
 export function makeEmptyPaletteSearchResult(
   worktreeId: string,
-  worktreeHostId?: Worktree['hostId']
+  worktreeHostId?: Worktree['hostId'],
+  context = createPaletteSearchContext(Date.now()),
+  lastActivityAt?: number | null
 ): PaletteSearchResult {
+  const activity = preparePaletteActivity(lastActivityAt, context)
   return {
     worktreeId,
     ...(worktreeHostId ? { worktreeHostId } : {}),
@@ -88,7 +100,9 @@ export function makeEmptyPaletteSearchResult(
     hostRanges: NO_RANGES,
     supportingText: null,
     qualityClass: null,
-    rank: null
+    rank: null,
+    lastActiveAt: activity.timestamp || null,
+    activity
   }
 }
 
@@ -125,8 +139,11 @@ function toSupportingText(match: PaletteDocumentMatch): PaletteSupportingText | 
 export function toWorktreePaletteSearchResult(
   worktreeId: string,
   match: PaletteDocumentMatch,
-  worktreeHostId?: Worktree['hostId']
+  worktreeHostId?: Worktree['hostId'],
+  context = createPaletteSearchContext(Date.now()),
+  lastActivityAt?: number | null
 ): PaletteSearchResult {
+  const activity = preparePaletteActivity(lastActivityAt, context)
   const supportingText = toSupportingText(match)
   const matchedFields: PaletteMatchedField[] = []
   for (const fieldId of match.rangesByField.keys()) {
@@ -149,7 +166,9 @@ export function toWorktreePaletteSearchResult(
     hostRanges: match.rangesByField.get(WORKTREE_PALETTE_HOST_FIELD_ID) ?? NO_RANGES,
     supportingText,
     qualityClass: match.qualityClass,
-    rank: match.rank
+    rank: match.rank,
+    lastActiveAt: activity.timestamp || null,
+    activity
   }
 }
 
@@ -160,17 +179,19 @@ export type WorktreePaletteSearchArgs = {
   repoMap: ReadonlyMap<string, Repo>
   repoMapByHostIdentity?: ReadonlyMap<string, Repo>
   checksReviewByWorktree?: ReadonlyMap<Worktree, HostedReviewInfo | null>
+  context?: PaletteSearchContext
 }
 
 /** Matches prepared documents; callers memoize `documents` across keystrokes. */
 export function searchWorktreeDocuments(args: WorktreePaletteSearchArgs): PaletteSearchResult[] {
+  const context = args.context ?? createPaletteSearchContext(Date.now())
   const prepared = preparePaletteQuery(args.query)
   if (prepared.state === 'invalid') {
     return []
   }
   if (prepared.state === 'empty') {
     return args.worktrees.map((worktree) =>
-      makeEmptyPaletteSearchResult(worktree.id, worktree.hostId)
+      makeEmptyPaletteSearchResult(worktree.id, worktree.hostId, context, worktree.lastActivityAt)
     )
   }
 
@@ -185,7 +206,12 @@ export function searchWorktreeDocuments(args: WorktreePaletteSearchArgs): Palett
         review: args.checksReviewByWorktree?.get(worktree)
       })
       if (match) {
-        results.push(match)
+        const activity = preparePaletteActivity(worktree.lastActivityAt, context)
+        results.push({
+          ...match,
+          lastActiveAt: activity.timestamp || null,
+          activity
+        })
       }
       continue
     }
@@ -197,10 +223,19 @@ export function searchWorktreeDocuments(args: WorktreePaletteSearchArgs): Palett
     const match = matchPaletteDocument({
       document,
       tokens: prepared.tokens,
-      normalizedQuery: prepared.normalized
+      normalizedQuery: prepared.normalized,
+      tokenCountBeforeDeduplication: prepared.tokenCountBeforeDeduplication
     })
     if (match) {
-      results.push(toWorktreePaletteSearchResult(worktree.id, match, worktree.hostId))
+      results.push(
+        toWorktreePaletteSearchResult(
+          worktree.id,
+          match,
+          worktree.hostId,
+          context,
+          worktree.lastActivityAt
+        )
+      )
     }
   }
   return results

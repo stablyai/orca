@@ -560,9 +560,8 @@ describe('workspace-tab-palette-search', () => {
       title: 'Fix login race',
       secondaryText: '',
       secondaryRanges: [],
-      // The bare alias matches exactly, so it outranks "terminal tab"; its range
-      // indexes the alias string, not the row.
-      typeAliasMatch: { text: 'terminal', ranges: [{ start: 0, end: 8 }] }
+      // Equal-strength aliases use the builder's stable display order.
+      typeAliasMatch: { text: 'terminal tab', ranges: [{ start: 0, end: 8 }] }
     })
   })
 

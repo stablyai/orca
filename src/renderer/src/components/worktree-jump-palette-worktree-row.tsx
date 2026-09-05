@@ -51,7 +51,7 @@ export function WorktreeJumpPaletteWorktreeRow({
     activeWorktreeId,
     controller.activeWorkspaceExecutionHostId
   )
-  const sessionAge = formatPaletteSessionAge(worktree.lastActivityAt, controller.paletteNowMs)
+  const sessionAge = formatPaletteSessionAge(entry.match.lastActiveAt, controller.paletteNowMs)
   const sshConnectionId =
     repo?.connectionId && !isRuntimeOwnedSshTargetId(repo.connectionId) ? repo.connectionId : null
   const sshStatus = sshConnectionId

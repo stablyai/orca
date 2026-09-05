@@ -3,6 +3,7 @@ import type { ExecutionHostId } from '../../../shared/execution-host'
 import type { Tab, TabGroup, WorkspaceVisibleTabType } from '../../../shared/tab-types'
 import type { Worktree } from '../../../shared/worktree/types'
 import { isPaletteCurrentWorktree, resolvePaletteRepoForWorktree } from './palette-repo-resolution'
+import { getActiveSimulatorTabId } from './simulator-palette-active-tab'
 import { isClipboardTextByteLengthOverLimit } from '../../../shared/clipboard-text'
 import { compareBaseSensitivityLocaleText } from './locale-text-collators'
 import {
@@ -18,6 +19,14 @@ import {
 import type { MatchRange } from './palette-match/normalized-text'
 import type { PaletteDocument, PaletteDocumentRank } from './palette-match/palette-document'
 import type { PaletteResultQualityClass } from './palette-match/match-quality'
+import {
+  createPaletteSearchContext,
+  encodePaletteIdentity,
+  maxValidPaletteActivityTimestamp,
+  preparePaletteActivity,
+  type PaletteActivityRank,
+  type PaletteSearchContext
+} from './palette-match/palette-ranking'
 import {
   findAmbiguousWorktreeIds,
   getUnifiedTabPaletteExecutionHostId,
@@ -45,6 +54,7 @@ export type SimulatorPaletteSearchResult = {
   groupId: string
   title: string
   secondaryText: string
+  secondaryMatches: readonly { text: string; ranges: readonly MatchRange[] }[]
   repoName: string
   worktreeName: string
   branchName: string
@@ -54,12 +64,14 @@ export type SimulatorPaletteSearchResult = {
   worktreeRanges: readonly MatchRange[]
   branchRanges: readonly MatchRange[]
   typeAliasMatch?: { text: string; ranges: readonly MatchRange[] } | null
+  typeAliasMatches: readonly { text: string; ranges: readonly MatchRange[] }[]
   isCurrentTab: boolean
   isCurrentWorktree: boolean
   score: number
   qualityClass: PaletteResultQualityClass | null
   rank: PaletteDocumentRank | null
   lastActiveAt?: number | null
+  activity: PaletteActivityRank
 }
 
 type SimulatorPaletteActiveTabType = WorkspaceVisibleTabType
@@ -134,7 +146,14 @@ export function simulatorPaletteTabTitle(tab: Tab): string {
   return tab.label || 'Mobile Emulator'
 }
 
-function baseResult(entry: SearchableSimulatorTab): SimulatorPaletteSearchResult {
+function baseResult(
+  entry: SearchableSimulatorTab,
+  context: PaletteSearchContext
+): SimulatorPaletteSearchResult {
+  const activity = preparePaletteActivity(
+    maxValidPaletteActivityTimestamp([entry.tab.lastFocusedAt, entry.tab.createdAt]),
+    context
+  )
   return {
     executionHostId: getUnifiedTabPaletteExecutionHostId(entry.tab, entry.worktree),
     tabId: entry.tab.id,
@@ -143,6 +162,7 @@ function baseResult(entry: SearchableSimulatorTab): SimulatorPaletteSearchResult
     title: simulatorPaletteTabTitle(entry.tab),
     // Why empty: the smartphone icon already says the type; a fixed label crowds the row.
     secondaryText: '',
+    secondaryMatches: [],
     repoName: entry.repoName,
     // Why resolve: a cleared display name leaves the raw field undefined at runtime.
     worktreeName: resolveWorktreeDisplayName(entry.worktree),
@@ -152,55 +172,15 @@ function baseResult(entry: SearchableSimulatorTab): SimulatorPaletteSearchResult
     repoRanges: NO_RANGES,
     worktreeRanges: NO_RANGES,
     branchRanges: NO_RANGES,
+    typeAliasMatches: [],
     isCurrentTab: entry.isCurrentTab,
     isCurrentWorktree: entry.isCurrentWorktree,
     score: positionScore(entry),
     qualityClass: null,
     rank: null,
-    // Never older than the tab itself: creation is a focus event too.
-    lastActiveAt: entry.tab.lastFocusedAt
-      ? Math.max(entry.tab.lastFocusedAt, entry.tab.createdAt)
-      : null
+    lastActiveAt: activity.timestamp || null,
+    activity
   }
-}
-
-function getActiveUnifiedTabId({
-  worktreeId,
-  worktreeHostId,
-  worktreeRuntimeOwnerEnvironmentId,
-  activeWorktreeId,
-  activeWorkspaceExecutionHostId,
-  activeTabType,
-  activeGroupId,
-  groups
-}: Pick<
-  BuildSearchableSimulatorTabsOptions,
-  'activeTabType' | 'activeWorktreeId' | 'activeWorkspaceExecutionHostId'
-> & {
-  worktreeId: string
-  worktreeHostId?: Worktree['hostId']
-  worktreeRuntimeOwnerEnvironmentId?: Worktree['runtimeOwnerEnvironmentId']
-  activeGroupId?: string
-  groups?: readonly TabGroup[]
-}): string | null {
-  if (
-    !isPaletteCurrentWorktree(
-      {
-        id: worktreeId,
-        hostId: worktreeHostId,
-        runtimeOwnerEnvironmentId: worktreeRuntimeOwnerEnvironmentId
-      },
-      activeWorktreeId,
-      activeWorkspaceExecutionHostId
-    ) ||
-    activeTabType !== 'simulator'
-  ) {
-    return null
-  }
-  const activeGroup = activeGroupId
-    ? groups?.find((group) => group.id === activeGroupId)
-    : undefined
-  return activeGroup?.activeTabId ?? null
 }
 
 export function buildSearchableSimulatorTabs({
@@ -225,7 +205,7 @@ export function buildSearchableSimulatorTabs({
       worktreeOrder.get(getWorktreeHostIdentity(worktree)) ??
       worktreeOrder.get(worktree.id) ??
       Number.MAX_SAFE_INTEGER
-    const activeUnifiedTabId = getActiveUnifiedTabId({
+    const activeUnifiedTabId = getActiveSimulatorTabId({
       worktreeId: worktree.id,
       worktreeHostId: worktree.hostId,
       worktreeRuntimeOwnerEnvironmentId: worktree.runtimeOwnerEnvironmentId,
@@ -273,8 +253,10 @@ export function buildSearchableSimulatorTabs({
 
 export function searchSimulatorTabs(
   entries: readonly SearchableSimulatorTab[],
-  query: string
+  query: string,
+  options: { context?: PaletteSearchContext; fieldMode?: 'all' | 'omnibox' } = {}
 ): SimulatorPaletteSearchResult[] {
+  const context = options.context ?? createPaletteSearchContext(Date.now())
   if (isSimulatorPaletteQueryTooLarge(query)) {
     return []
   }
@@ -282,19 +264,24 @@ export function searchSimulatorTabs(
   if (!prepared) {
     return query.trim()
       ? []
-      : entries.map((entry) => baseResult(entry)).sort(compareEmptyQueryResults)
+      : entries.map((entry) => baseResult(entry, context)).sort(compareEmptyQueryResults)
   }
 
   const results: SimulatorPaletteSearchResult[] = []
   for (const entry of entries) {
-    const match = matchPaletteTabDocument(entry.document, prepared)
+    const match = matchPaletteTabDocument(entry.document, prepared, {
+      isFieldAllowed:
+        options.fieldMode === 'omnibox'
+          ? (field) => field.id !== 'worktree' && field.id !== 'repo'
+          : undefined
+    })
     if (!match) {
       continue
     }
     const alias =
       match.typeAlias !== null ? SIMULATOR_TYPE_SEARCH_ALIASES[match.typeAlias.index] : undefined
     results.push({
-      ...baseResult(entry),
+      ...baseResult(entry, context),
       titleRanges: match.titleRanges,
       repoRanges: match.repoRanges,
       worktreeRanges: match.worktreeRanges,
@@ -302,6 +289,10 @@ export function searchSimulatorTabs(
       // Ranges are into the alias string, not the row: the icon explains the hit,
       // so nothing on the row is highlighted from them.
       typeAliasMatch: alias ? { text: alias, ranges: match.typeAlias?.ranges ?? NO_RANGES } : null,
+      typeAliasMatches: match.typeAliasMatches.map((typeAlias) => ({
+        text: SIMULATOR_TYPE_SEARCH_ALIASES[typeAlias.index] ?? '',
+        ranges: typeAlias.ranges
+      })),
       qualityClass: match.qualityClass,
       rank: match.rank
     })
@@ -313,14 +304,24 @@ export function searchSimulatorTabs(
           {
             rank: a.rank,
             positionScore: a.score,
-            id: a.tabId,
-            lastActiveAt: a.lastActiveAt ?? undefined
+            identity: encodePaletteIdentity([
+              'simulator',
+              a.executionHostId ?? '',
+              a.worktreeId,
+              a.tabId
+            ]),
+            activity: a.activity
           },
           {
             rank: b.rank,
             positionScore: b.score,
-            id: b.tabId,
-            lastActiveAt: b.lastActiveAt ?? undefined
+            identity: encodePaletteIdentity([
+              'simulator',
+              b.executionHostId ?? '',
+              b.worktreeId,
+              b.tabId
+            ]),
+            activity: b.activity
           }
         )
       : compareEmptyQueryResults(a, b)

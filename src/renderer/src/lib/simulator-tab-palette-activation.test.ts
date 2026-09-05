@@ -137,6 +137,15 @@ describe('activateSimulatorTabPaletteResult', () => {
       worktreesByRepo: {
         'repo-1': [makeWorktree({ hostId: 'ssh:host-1' })],
         'repo-2': [makeWorktree({ repoId: 'repo-2', hostId: 'ssh:host-2', path: '/tmp/wt-1-b' })]
+      },
+      unifiedTabsByWorktree: {
+        'wt-1': [
+          makeTab({ executionHostId: 'ssh:host-1', groupId: 'group-host-1' }),
+          makeTab({ executionHostId: 'ssh:host-2', groupId: 'group-host-2' })
+        ]
+      },
+      groupsByWorktree: {
+        'wt-1': [makeGroup({ id: 'group-host-1' }), makeGroup({ id: 'group-host-2' })]
       }
     })
 
@@ -146,6 +155,7 @@ describe('activateSimulatorTabPaletteResult', () => {
     expect(mocks.activateAndRevealWorktree).toHaveBeenCalledWith('wt-1', {
       executionHostId: 'ssh:host-2'
     })
+    expect(useAppStore.getState().activeGroupIdByWorktree['wt-1']).toBe('group-host-2')
   })
 
   it('reports an unknown worktree without activating', () => {
