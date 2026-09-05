@@ -2,11 +2,22 @@
 import { MAX_TIMER_DELAY_MS } from './timer-delay'
 
 export const AGENT_PROMPT_EFFECT_TIMEOUT_MS = 30_000
+/** Extra verification time granted once when the injected payload is still visible in the
+ *  composer after the effect window: a parked prompt is being re-submitted, not lost. */
+export const AGENT_PROMPT_PENDING_COMPOSER_GRACE_MS = 30_000
+/** Ceiling on one prompt submission's verification, grace included. */
+export const AGENT_PROMPT_VERIFICATION_MAX_MS =
+  AGENT_PROMPT_EFFECT_TIMEOUT_MS + AGENT_PROMPT_PENDING_COMPOSER_GRACE_MS
+/** Bound on waiting for a booting TUI's composer before the paste is written. */
+export const AGENT_PROMPT_COMPOSER_READY_TIMEOUT_MS = 20_000
+/** Everything one sendTerminalAgentPrompt can spend before it answers. */
+export const AGENT_PROMPT_SUBMISSION_MAX_MS =
+  AGENT_PROMPT_COMPOSER_READY_TIMEOUT_MS + AGENT_PROMPT_VERIFICATION_MAX_MS
 export const ORCHESTRATION_CONTRACT_PREFLIGHT_TIMEOUT_MS = 5_000
 export const ORCHESTRATION_READINESS_TIMEOUT_MS = 60_000
-export const ORCHESTRATION_FEDERATION_ATTACH_GRACE_MS = AGENT_PROMPT_EFFECT_TIMEOUT_MS + 10_000
-export const ORCHESTRATION_WORKER_START_CLIENT_GRACE_MS = AGENT_PROMPT_EFFECT_TIMEOUT_MS + 20_000
-export const SWALLOWED_ENTER_FIXTURE_TIMEOUT_MS = AGENT_PROMPT_EFFECT_TIMEOUT_MS + 30_000
+export const ORCHESTRATION_FEDERATION_ATTACH_GRACE_MS = AGENT_PROMPT_SUBMISSION_MAX_MS + 10_000
+export const ORCHESTRATION_WORKER_START_CLIENT_GRACE_MS = AGENT_PROMPT_SUBMISSION_MAX_MS + 20_000
+export const SWALLOWED_ENTER_FIXTURE_TIMEOUT_MS = AGENT_PROMPT_SUBMISSION_MAX_MS + 30_000
 
 export function resolveWorkerStartReadinessTimeoutMs(timeoutMs: number | undefined): number {
   return typeof timeoutMs === 'number' && Number.isFinite(timeoutMs) && timeoutMs > 0

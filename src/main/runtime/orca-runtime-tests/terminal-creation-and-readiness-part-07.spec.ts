@@ -8,6 +8,7 @@ import {
 import { TUI_AGENT_CONFIG } from '../../../shared/tui-agent-config'
 import type { TuiAgent } from '../../../shared/tui-agent'
 import { OrcaRuntimeService } from '../orca-runtime'
+import { AGENT_PROMPT_TEST_READY_HEADER } from '../agent-prompt-submission-runtime-test-fixture'
 import { acknowledgeAgentPromptSubmit } from '../orca-runtime-test-mocks.spec'
 import {
   TEST_WORKTREE_PATH,
@@ -557,6 +558,9 @@ describe('OrcaRuntimeService', () => {
         const { handle } = await runtime.createTerminal(`path:${TEST_WORKTREE_PATH}`, {
           launchAgent: agent
         })
+        // Why: the paste path first waits for composer readiness; this suite measures the submit
+        // timing after the paste, so give it the cheapest readiness evidence up front.
+        runtime.onPtyData('pty-bg', AGENT_PROMPT_TEST_READY_HEADER, Date.now())
         const assertAuthority = vi.fn()
 
         const sendPromise = runtime.sendTerminalAgentPrompt(handle, 'review this change', {
@@ -605,6 +609,7 @@ describe('OrcaRuntimeService', () => {
       const { handle } = await runtime.createTerminal(`path:${TEST_WORKTREE_PATH}`, {
         launchAgent: agent
       })
+      runtime.onPtyData('pty-bg', AGENT_PROMPT_TEST_READY_HEADER, Date.now())
 
       const submitDelayMs = getAgentPromptSubmitDelayMs(
         process.platform,

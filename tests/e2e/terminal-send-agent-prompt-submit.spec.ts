@@ -134,7 +134,9 @@ test('CLI text plus Enter waits for a slow agent composer before submitting', as
   })
 })
 
-test('CLI reports a swallowed Enter without submitting a second Enter', async ({
+// Why: the composer visibly keeps the payload after the first Enter, which is the one condition
+// under which a second Enter is safe — and the manual recovery every field report ended with.
+test('CLI re-sends Enter when the composer still shows the payload after the first one', async ({
   electronApp,
   orcaPage,
   testRepoPath
@@ -162,7 +164,7 @@ test('CLI reports a swallowed Enter without submitting a second Enter', async ({
         terminal,
         '--timeout-ms',
         String(swallowedEnterFixtureTimeoutMs),
-        '--expect-stalled',
+        '--expect-swallowed-enter',
         '--report',
         fixtureReport,
         '--marker',
@@ -183,11 +185,11 @@ test('CLI reports a swallowed Enter without submitting a second Enter', async ({
 
   expect(JSON.parse(stdout)).toMatchObject({
     rescueSent: false,
-    sendErrorCode: 'agent_prompt_stalled',
+    sendErrorCode: null,
     contractOk: true,
-    submitted: false,
+    submitted: true,
     prematureEnters: 0,
-    receivedEnters: 1,
+    receivedEnters: 2,
     swallowedEnters: 1,
     configuredTimeoutMs: swallowedEnterFixtureTimeoutMs,
     markerReceived: true

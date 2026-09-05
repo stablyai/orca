@@ -5,6 +5,7 @@ import {
   getTerminalPasteIngestMs
 } from '../../shared/agent-prompt-injection'
 import { setSshTargetRegistryHandlers } from '../ssh/ssh-target-registry'
+import { AGENT_PROMPT_TEST_READY_HEADER } from './agent-prompt-submission-runtime-test-fixture'
 import { OrcaRuntimeService } from './orca-runtime'
 import { makeStore } from './runtime-rpc-worktree-store-fixtures'
 
@@ -65,6 +66,7 @@ async function createPromptRuntime(): Promise<{
   const terminal = await runtime.createTerminal(`path:${WORKTREE_PATH}`, {
     launchAgent: 'aider'
   })
+  runtime.onPtyData(PTY_ID, AGENT_PROMPT_TEST_READY_HEADER, Date.now())
   return { runtime, handle: terminal.handle, writes, submitTimes }
 }
 
@@ -334,6 +336,7 @@ describe('agent prompt render gate on a ConPTY host', () => {
     const terminal = await runtime.createTerminal(`path:${WORKTREE_PATH}`, {
       launchAgent: 'claude'
     })
+    runtime.onPtyData(PTY_ID, AGENT_PROMPT_TEST_READY_HEADER, Date.now())
     return { runtime, handle: terminal.handle, writes, submitTimes }
   }
 

@@ -1,13 +1,18 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
+  AGENT_PROMPT_COMPOSER_CLEAR_CONFIRM_MS,
   AGENT_PROMPT_EFFECT_TIMEOUT_MS,
   AGENT_PROMPT_HOOK_EFFECT_TIMEOUT_MS,
+  AGENT_PROMPT_PENDING_COMPOSER_GRACE_MS,
+  AGENT_PROMPT_STALLED_ERROR,
+  AGENT_PROMPT_SUBMIT_RETRY_DELAYS_MS,
   type AgentPromptActivity,
   isAgentPromptStalledError,
   readAgentPromptWaitText,
   resolveAgentPromptEffectTimeoutMs,
   verifyAgentPromptSubmission
 } from './agent-prompt-submission-verification'
+import type { AgentPromptComposerVerdict } from './agent-prompt-composer-pending'
 
 function activity(overrides: Partial<AgentPromptActivity> = {}): AgentPromptActivity {
   return {
@@ -46,7 +51,7 @@ describe('agent prompt submission verification', () => {
     current = activity({ workingSequence: 5, status: 'working' })
     await vi.advanceTimersByTimeAsync(50)
 
-    await expect(verification).resolves.toBeUndefined()
+    await expect(verification).resolves.toMatchObject({ evidence: 'activity' })
   })
 
   it('accepts a completed lifecycle transition between polls', async () => {
@@ -60,7 +65,7 @@ describe('agent prompt submission verification', () => {
     current = activity({ workingSequence: 5 })
     await vi.advanceTimersByTimeAsync(50)
 
-    await expect(verification).resolves.toBeUndefined()
+    await expect(verification).resolves.toMatchObject({ evidence: 'activity' })
   })
 
   it('does not accept an unrelated transition to a neutral title', async () => {
@@ -104,7 +109,7 @@ describe('agent prompt submission verification', () => {
     current = activity({ workingSequence: 5, status: 'working' })
     await vi.advanceTimersByTimeAsync(50)
 
-    await expect(verification).resolves.toBeUndefined()
+    await expect(verification).resolves.toMatchObject({ evidence: 'activity' })
   })
 
   it('blocks when permission appears after submit', async () => {
@@ -171,7 +176,7 @@ describe('agent prompt submission verification', () => {
     current = activity({ explicitWorkingStartedAt: 2_000, status: 'working' })
     await vi.advanceTimersByTimeAsync(50)
 
-    await expect(verification).resolves.toBeUndefined()
+    await expect(verification).resolves.toMatchObject({ evidence: 'activity' })
   })
 
   it('does not accept a hook working status that predates the baseline', async () => {
@@ -216,7 +221,7 @@ describe('agent prompt submission verification', () => {
     current = activity({ status: 'working', outputSequence: 8 })
     await vi.advanceTimersByTimeAsync(50)
 
-    await expect(verification).resolves.toBeUndefined()
+    await expect(verification).resolves.toMatchObject({ evidence: 'activity' })
   })
 
   it('does not accept pane output when the agent was idle at submit', async () => {
@@ -247,7 +252,7 @@ describe('agent prompt submission verification', () => {
     current = activity({ explicitWorkingStartedAt: 9_000, status: 'working' })
     await vi.advanceTimersByTimeAsync(50)
 
-    await expect(verification).resolves.toBeUndefined()
+    await expect(verification).resolves.toMatchObject({ evidence: 'activity' })
   })
 
   it('gives hook-observed agents the longer effect window', () => {
@@ -288,5 +293,224 @@ describe('agent prompt submission verification', () => {
     controller.abort()
 
     await expect(verification).rejects.toThrow('request_aborted')
+  })
+})
+
+describe('agent prompt submission verification with a composer observer', () => {
+  afterEach(() => vi.useRealTimers())
+
+  function composerObserver(
+    verdicts: AgentPromptComposerVerdict[],
+    beforeSubmit: AgentPromptComposerVerdict = 'pending'
+  ) {
+    // Why: the last verdict repeats, the way a screen keeps showing the same frame.
+    const read = vi.fn(async () => (verdicts.length > 1 ? verdicts.shift()! : verdicts[0]!))
+    const resubmit = vi.fn()
+    return { observer: { beforeSubmit, read, resubmit }, read, resubmit }
+  }
+
+  it('re-sends Enter with backoff while the composer keeps the payload, then accepts activity', async () => {
+    vi.useFakeTimers()
+    let current = activity()
+    const { observer, resubmit } = composerObserver(['pending', 'pending', 'clear'])
+    const verification = verifyAgentPromptSubmission({
+      baseline: current,
+      readActivity: () => current,
+      composer: observer
+    })
+
+    await vi.advanceTimersByTimeAsync(AGENT_PROMPT_SUBMIT_RETRY_DELAYS_MS[0]! + 100)
+    expect(resubmit).toHaveBeenCalledTimes(1)
+    await vi.advanceTimersByTimeAsync(
+      AGENT_PROMPT_SUBMIT_RETRY_DELAYS_MS[1]! - AGENT_PROMPT_SUBMIT_RETRY_DELAYS_MS[0]!
+    )
+    expect(resubmit).toHaveBeenCalledTimes(2)
+
+    current = activity({ workingSequence: 5, status: 'working' })
+    // Why: the payload was last seen parked, so the activity only counts after a composer re-read.
+    await vi.advanceTimersByTimeAsync(AGENT_PROMPT_COMPOSER_CLEAR_CONFIRM_MS + 100)
+
+    await expect(verification).resolves.toEqual({ evidence: 'activity', enterRetries: 2 })
+  })
+
+  it('accepts a payload that was visible before Enter and stays cleared afterwards', async () => {
+    vi.useFakeTimers()
+    const current = activity()
+    const { observer, read, resubmit } = composerObserver(['clear', 'clear'])
+    const verification = verifyAgentPromptSubmission({
+      baseline: current,
+      readActivity: () => current,
+      composer: observer
+    })
+
+    await vi.advanceTimersByTimeAsync(AGENT_PROMPT_SUBMIT_RETRY_DELAYS_MS[0]! + 100)
+    expect(read).toHaveBeenCalledTimes(1)
+    await vi.advanceTimersByTimeAsync(AGENT_PROMPT_COMPOSER_CLEAR_CONFIRM_MS + 100)
+
+    await expect(verification).resolves.toEqual({ evidence: 'composer-cleared', enterRetries: 0 })
+    expect(read).toHaveBeenCalledTimes(2)
+    expect(resubmit).not.toHaveBeenCalled()
+  })
+
+  it('does not accept one cleared read that the confirmation read contradicts', async () => {
+    vi.useFakeTimers()
+    const current = activity()
+    const { observer, resubmit } = composerObserver(['clear', 'pending', 'pending', 'pending'])
+    const verification = verifyAgentPromptSubmission({
+      baseline: current,
+      readActivity: () => current,
+      composer: observer,
+      timeoutMs: 10_000
+    })
+    const rejected = expect(verification).rejects.toThrow(AGENT_PROMPT_STALLED_ERROR)
+
+    await vi.advanceTimersByTimeAsync(AGENT_PROMPT_SUBMIT_RETRY_DELAYS_MS[1]! + 100)
+    expect(resubmit).toHaveBeenCalledTimes(1)
+    await vi.advanceTimersByTimeAsync(60_000)
+
+    await rejected
+  })
+
+  it('accepts a cleared composer after a retry made the payload visible first', async () => {
+    vi.useFakeTimers()
+    const current = activity()
+    const { observer, resubmit } = composerObserver(['pending', 'clear', 'clear'], 'clear')
+    const verification = verifyAgentPromptSubmission({
+      baseline: current,
+      readActivity: () => current,
+      composer: observer
+    })
+
+    await vi.advanceTimersByTimeAsync(AGENT_PROMPT_SUBMIT_RETRY_DELAYS_MS[1]! + 100)
+    expect(resubmit).toHaveBeenCalledTimes(1)
+    await vi.advanceTimersByTimeAsync(AGENT_PROMPT_COMPOSER_CLEAR_CONFIRM_MS + 100)
+
+    await expect(verification).resolves.toEqual({ evidence: 'composer-cleared', enterRetries: 1 })
+  })
+
+  it('never re-sends Enter while the composer reads clear or unknown', async () => {
+    vi.useFakeTimers()
+    for (const verdict of ['clear', 'unknown'] as const) {
+      const current = activity()
+      const { observer, resubmit } = composerObserver([verdict], verdict)
+      const verification = verifyAgentPromptSubmission({
+        baseline: current,
+        readActivity: () => current,
+        composer: observer
+      })
+      const rejected = expect(verification).rejects.toThrow(AGENT_PROMPT_STALLED_ERROR)
+
+      await vi.advanceTimersByTimeAsync(AGENT_PROMPT_EFFECT_TIMEOUT_MS + 100)
+
+      await rejected
+      expect(resubmit).not.toHaveBeenCalled()
+    }
+  })
+
+  it('extends the deadline once while the payload is still parked and reports the verdict', async () => {
+    vi.useFakeTimers()
+    const current = activity()
+    const { observer, resubmit } = composerObserver(['pending'])
+    const verification = verifyAgentPromptSubmission({
+      baseline: current,
+      readActivity: () => current,
+      composer: observer
+    })
+    let settled: unknown = null
+    verification.then(
+      () => (settled = 'resolved'),
+      (error: unknown) => (settled = error)
+    )
+
+    await vi.advanceTimersByTimeAsync(AGENT_PROMPT_EFFECT_TIMEOUT_MS + 100)
+    expect(settled).toBeNull()
+    await vi.advanceTimersByTimeAsync(AGENT_PROMPT_PENDING_COMPOSER_GRACE_MS + 100)
+
+    expect(settled).toBeInstanceOf(Error)
+    expect(isAgentPromptStalledError(settled)).toBe(true)
+    expect(settled).toMatchObject({
+      composer: 'pending',
+      enterRetries: AGENT_PROMPT_SUBMIT_RETRY_DELAYS_MS.length
+    })
+    expect(resubmit).toHaveBeenCalledTimes(AGENT_PROMPT_SUBMIT_RETRY_DELAYS_MS.length)
+  })
+
+  // Why: a busy agent keeps printing after Enter whether or not it took the paste; the parked
+  // payload on screen outranks that activity until the composer is seen to let go of it.
+  it('does not accept activity while the payload still reads pending, then accepts once it clears', async () => {
+    vi.useFakeTimers()
+    // Reads: 0ms, 500ms, 1000ms (activity-triggered, one per confirm window), 1500ms (checkpoint,
+    // still pending → Enter again), 2000ms (cleared → the activity finally counts).
+    const { observer, read, resubmit } = composerObserver([
+      'pending',
+      'pending',
+      'pending',
+      'pending',
+      'clear'
+    ])
+    const baseline = activity({ status: 'working' })
+    const verification = verifyAgentPromptSubmission({
+      baseline,
+      readActivity: () => activity({ status: 'working', outputSequence: 9 }),
+      composer: observer
+    })
+    let settled = false
+    verification.then(
+      () => (settled = true),
+      () => (settled = true)
+    )
+
+    await vi.advanceTimersByTimeAsync(100)
+    expect(read).toHaveBeenCalledTimes(1)
+    expect(settled).toBe(false)
+    await vi.advanceTimersByTimeAsync(AGENT_PROMPT_SUBMIT_RETRY_DELAYS_MS[0]!)
+    expect(resubmit).toHaveBeenCalledTimes(1)
+    expect(settled).toBe(false)
+    await vi.advanceTimersByTimeAsync(AGENT_PROMPT_COMPOSER_CLEAR_CONFIRM_MS + 100)
+
+    await expect(verification).resolves.toEqual({ evidence: 'activity', enterRetries: 1 })
+    expect(read).toHaveBeenCalledTimes(5)
+  })
+
+  it('rejects request_aborted when the signal fires during a deferred composer read', async () => {
+    vi.useFakeTimers()
+    const controller = new AbortController()
+    let releaseRead!: (verdict: AgentPromptComposerVerdict) => void
+    const read = vi.fn(
+      () => new Promise<AgentPromptComposerVerdict>((resolve) => (releaseRead = resolve))
+    )
+    const baseline = activity({ status: 'working' })
+    const verification = verifyAgentPromptSubmission({
+      baseline,
+      readActivity: () => activity({ status: 'working', outputSequence: 9 }),
+      composer: { beforeSubmit: 'pending', read, resubmit: vi.fn() },
+      signal: controller.signal
+    })
+    const rejected = expect(verification).rejects.toThrow('request_aborted')
+
+    await vi.advanceTimersByTimeAsync(100)
+    expect(read).toHaveBeenCalledTimes(1)
+    controller.abort()
+    releaseRead('clear')
+
+    await rejected
+  })
+
+  it('does not re-send Enter once a permission state appears', async () => {
+    vi.useFakeTimers()
+    let current = activity()
+    const { observer, resubmit } = composerObserver(['pending'])
+    const verification = verifyAgentPromptSubmission({
+      baseline: current,
+      readActivity: () => current,
+      composer: observer
+    })
+    const rejected = expect(verification).rejects.toThrow('agent_prompt_blocked')
+
+    current = activity({ status: 'permission' })
+    await vi.advanceTimersByTimeAsync(AGENT_PROMPT_SUBMIT_RETRY_DELAYS_MS[0]! + 100)
+
+    await rejected
+    expect(resubmit).not.toHaveBeenCalled()
   })
 })

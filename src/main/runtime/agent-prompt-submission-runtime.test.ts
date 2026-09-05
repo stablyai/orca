@@ -8,6 +8,7 @@ import {
   AGENT_PROMPT_TEST_WORKTREE_PATH,
   createAgentPromptSubmissionRuntime
 } from './agent-prompt-submission-runtime-test-fixture'
+import { AGENT_PROMPT_SUBMIT_RETRY_DELAYS_MS } from './agent-prompt-submission-verification'
 import { OrcaRuntimeService } from './orca-runtime'
 import { makeStore } from './runtime-rpc-worktree-store-fixtures'
 
@@ -70,7 +71,7 @@ describe('agent prompt submission runtime', () => {
     expect(writes.filter((data) => data === '\r')).toHaveLength(1)
   })
 
-  it('reports redraw-only activity as stalled without retrying Enter', async () => {
+  it('re-sends Enter while a redraw keeps the prompt parked, then reports it stalled', async () => {
     vi.useFakeTimers()
     const { runtime, handle, writes } = await createPromptRuntime((runtime, data) => {
       if (data.includes(AGENT_PROMPT_BRACKETED_PASTE_END)) {
@@ -80,7 +81,32 @@ describe('agent prompt submission runtime', () => {
       }
     })
     const submission = runtime.sendTerminalAgentPrompt(handle, 'review this')
-    const rejected = expect(submission).rejects.toThrow('agent_prompt_stalled')
+    const rejected = expect(submission).rejects.toMatchObject({
+      message: 'agent_prompt_stalled',
+      composer: 'pending'
+    })
+
+    await vi.runAllTimersAsync()
+
+    await rejected
+    expect(writes.filter((data) => data === '\r')).toHaveLength(
+      1 + AGENT_PROMPT_SUBMIT_RETRY_DELAYS_MS.length
+    )
+  })
+
+  it('reports a redraw with an empty composer as stalled without retrying Enter', async () => {
+    vi.useFakeTimers()
+    const { runtime, handle, writes } = await createPromptRuntime((runtime, data) => {
+      if (data.includes(AGENT_PROMPT_BRACKETED_PASTE_END) || data === '\r') {
+        runtime.onPtyData('pty-prompt', '\x1b[2J\x1b[H› ', Date.now())
+      }
+    })
+    const submission = runtime.sendTerminalAgentPrompt(handle, 'review this')
+    const rejected = expect(submission).rejects.toMatchObject({
+      message: 'agent_prompt_stalled',
+      composer: 'clear',
+      enterRetries: 0
+    })
 
     await vi.runAllTimersAsync()
 

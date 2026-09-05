@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
+import { AGENT_PROMPT_TEST_READY_HEADER } from '../agent-prompt-submission-runtime-test-fixture'
 import {
   AGENT_PROMPT_BRACKETED_PASTE_END,
   AGENT_PROMPT_BRACKETED_PASTE_START,
@@ -44,6 +45,7 @@ describe('OrcaRuntimeService', () => {
       const { handle } = await runtime.createTerminal(`path:${TEST_WORKTREE_PATH}`)
 
       await expect(runtime.isTerminalRunningSettledPromptAgent(handle)).resolves.toBe(true)
+      runtime.onPtyData('pty-bg', AGENT_PROMPT_TEST_READY_HEADER, Date.now())
       const sendPromise = runtime.sendTerminalAgentPrompt(handle, 'review this change')
       await vi.advanceTimersByTimeAsync(1_199)
       expect(writes).not.toContain('\r')
@@ -78,6 +80,7 @@ describe('OrcaRuntimeService', () => {
         launchAgent: 'claude'
       })
 
+      runtime.onPtyData('pty-bg', AGENT_PROMPT_TEST_READY_HEADER, Date.now())
       const sendPromise = runtime.sendTerminalAgentPrompt(handle, 'review this change')
       await vi.advanceTimersByTimeAsync(renderGateCapMs('review this change') - 1)
       expect(writes).not.toContain('\r')
@@ -117,6 +120,7 @@ describe('OrcaRuntimeService', () => {
         launchAgent: 'codex'
       })
 
+      runtime.onPtyData('pty-bg', AGENT_PROMPT_TEST_READY_HEADER, Date.now())
       const sendPromise = runtime.sendTerminalAgentPrompt(handle, 'review this change')
       await vi.advanceTimersByTimeAsync(8_000)
       expect(writes).not.toContain('\r')
@@ -159,6 +163,7 @@ describe('OrcaRuntimeService', () => {
         launchAgent: 'claude'
       })
 
+      runtime.onPtyData('pty-bg', AGENT_PROMPT_TEST_READY_HEADER, Date.now())
       const sendPromise = runtime.sendTerminalAgentPrompt(handle, 'review this change')
       // The marker at 100 ms re-arms the cap, but the ingest term is absolute: a prompt this
       // small is already ingested by then, so the fallback is one flat render timeout later.
