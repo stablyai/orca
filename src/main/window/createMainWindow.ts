@@ -39,17 +39,13 @@ export function loadMainWindow(mainWindow: BrowserWindow, observer?: MainWindowL
     is.dev && process.env.ELECTRON_RENDERER_URL
       ? mainWindow.loadURL(process.env.ELECTRON_RENDERER_URL)
       : mainWindow.loadFile(join(__dirname, '../renderer/index.html'))
-  // Why: the discarded promise was the only report an ERR_FILE_NOT_FOUND/ERR_CONNECTION_REFUSED load ever made,
-  // so a recovery reload that was rejected outright left a blank window and no signal anywhere.
+  // Observe each load promise so failures cannot leave recovery waiting silently.
   load.then(
     () => observer?.onLoaded?.(),
     (cause: unknown) => {
       const error = cause instanceof Error ? cause : new Error(String(cause))
       const errorCode = mainWindowLoadErrorCode(error)
-      // Why durable: catching the rejection retires the main_unhandled_rejection crumb this used to produce, and
-      // console output never reaches the diagnostic bundle — a packaged app discards stdout. Why not on teardown:
-      // a quit or close aborts the pending load (ERR_ABORTED, or a destroyed-object rejection that maps to
-      // 'unknown'), and a healthy shutdown must not write a load failure into the stream triage reads.
+      // Keep durable diagnostics path-free and exclude shutdown/navigation aborts.
       if (!mainWindow.isDestroyed() && errorCode !== 'ERR_ABORTED') {
         recordDurableCrashBreadcrumb('main_window_load_failed', { errorCode })
       }
@@ -176,8 +172,7 @@ export function createMainWindow(
     }
     forceRepaint(mainWindow)
     mainWindow.webContents.send('system:resumed')
-    // Why: a suspend freezes the recovery-reload stall timer, which then fires on wake against a load that never
-    // got its budget; reuse this existing resume signal rather than adding a second powerMonitor listener.
+    // Give a suspended recovery load its full budget on wake.
     focus.notifySystemResume()
   }
 
@@ -195,8 +190,7 @@ export function createMainWindow(
     reloadMainWindow: (observer) => loadMainWindow(mainWindow, observer),
     rendererWebContentsId
   })
-  // Why registered here, not at definition: onSystemResume closes over `focus`, so an earlier listener would sit
-  // in its temporal dead zone.
+  // Register after focus is initialized because the resume callback uses it.
   powerMonitor.on('resume', onSystemResume)
   installMainWindowShortcutRouting({ focus, mainWindow, opts, store })
   const closeLifecycle = installMainWindowCloseLifecycle({

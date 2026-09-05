@@ -4,16 +4,13 @@ import { isSystemSessionEnding } from '../crash-reporting/expected-teardown-stat
 import type { CreateMainWindowOptions, MainWindowLoadObserver } from './main-window-contracts'
 import { mainWindowLoadErrorCode } from './main-window-load-error-code'
 
-// Why 45s of *silence*: in the field a recovery reload that lands does so in 0.3-2s (slowest observed 30.4s),
-// while a stalled one never lands at all — silent for up to 4h until the user force-quits. The budget measures
-// time since the last observed milestone, not since issue, so a progressing load is never called stalled.
+// Field recoveries took up to 30.4s; allow 45s before retrying a load with no document.
 export const RENDERER_RECOVERY_LOAD_TIMEOUT_MS = 45_000
-// Why: the dev load comes from Vite, whose cold start (or restart) legitimately outruns any packaged-load budget.
+// Vite cold starts need a longer budget than packaged files.
 export const RENDERER_RECOVERY_DEV_LOAD_TIMEOUT_MS = 180_000
-// Why: one retry covers a one-off stalled or aborted load; a second failure is the machine, not the load.
+// Retry once before handing recovery back to the user.
 const RENDERER_RECOVERY_LOAD_ATTEMPTS = 2
-// Why a cap: milestone kicks must not defer the verdict forever on a load that inches forward and never lands.
-// It holds the same ~90s worst case as before, since only a load that reached a document can be kicked at all.
+// Milestones may extend the budget, but cannot postpone the prompt indefinitely.
 const RENDERER_RECOVERY_LOAD_CAP_FACTOR = 2
 
 /** Automatic recovery vs the prompt's manual Reload; they must not share one breadcrumb name. */
@@ -66,18 +63,7 @@ type RecoveryReloadSeed = Pick<RecoveryReload, 'attempt' | 'details' | 'recentRe
 /** What a raised prompt is about; the crash-loop breaker has no attempt to hand over, only the crash. */
 export type RecoveryPromptSubject = Pick<RecoveryReload, 'details' | 'recentRecoveryCount'>
 
-/**
- * Watches the automatic recovery reload for a load that never produces a document.
- *
- * The reload had no failure path at all: `loadFile`/`loadURL` rejections were discarded, no `did-fail-load`
- * listener existed, and the crash-loop breaker only counts renderer *deaths* — so a reload that silently never
- * lands never trips it and never reaches the recovery prompt. 62% of field bundles with a recovery reload end
- * exactly there: main process alive, renderer child spawned, no document, and a window the user force-quits.
- *
- * The verdict is deliberately one-sided. Nothing can cancel a pending Chromium load and nothing can dismiss a
- * native message box, so escalation keeps watching instead of forgetting: a load that lands late still records
- * the truth, and the prompt's Reload refuses to destroy a window that recovered behind the dialog.
- */
+/** Bounds stalled recovery reloads while still observing success after escalation. */
 export function createRendererRecoveryReloadWatchdog(args: {
   /** True when a renderer death has already queued its own recovery, which then owns the next load. */
   isRecoveryPending: () => boolean
@@ -95,14 +81,12 @@ export function createRendererRecoveryReloadWatchdog(args: {
     reloadMainWindow,
     rendererWebContentsId
   } = args
-  // Why cached: `mainWindow.webContents` throws once the window is destroyed, and clear() runs during teardown.
+  // Cache before teardown: accessing a destroyed window's webContents throws.
   const rendererWebContents = mainWindow.webContents
   let inFlight: RecoveryReload | null = null
-  // Why separate from inFlight: the most recent reload owns the document even after its budget ran out — a
-  // late landing under the prompt is still the truth the bundle and the Reload button need.
+  // Retain timed-out loads so a late success can disarm the prompt's Reload.
   let latest: RecoveryReload | null = null
-  // Why kept until the user answers: the box is undismissable, so while it is up no retry and no second prompt may
-  // be raised — and the pending load is uncancellable, so a late landing still records against it.
+  // Keep one prompt until answered; native message boxes cannot be dismissed programmatically.
   let prompt: RecoveryPromptSubject | null = null
   let documentLanded = false
   let timer: ReturnType<typeof setTimeout> | null = null
@@ -113,7 +97,7 @@ export function createRendererRecoveryReloadWatchdog(args: {
       timer = null
     }
   }
-  // Why: mirrors loadMainWindow's dev/prod branch — a Vite-served document has a different honest budget.
+  // Match loadMainWindow's dev/prod branch.
   const timeoutMs = (): number =>
     is.dev && process.env.ELECTRON_RENDERER_URL
       ? RENDERER_RECOVERY_DEV_LOAD_TIMEOUT_MS
@@ -133,8 +117,7 @@ export function createRendererRecoveryReloadWatchdog(args: {
     if (inFlight !== reload) {
       return
     }
-    // Why: a load that reached a new milestone is progressing, and 'no did-finish-load yet' is not evidence of a
-    // stall — aborting it here restarts a nearly-done load cold and can miss the budget it would have made.
+    // Give a progressing load the remaining budget instead of restarting it cold.
     if (reload.progressedSinceArm && Date.now() < reload.capAt) {
       armTimer(reload)
       return
@@ -155,10 +138,9 @@ export function createRendererRecoveryReloadWatchdog(args: {
     inFlight = reload
     latest = reload
     documentLanded = false
-    // Why: mark this in-place reload so the did-finish-load orphan sweep spares live PTYs until session restore (#5787).
+    // Preserve live PTYs until renderer session restore (#5787).
     opts?.onBeforeRecoveryReload?.(mainWindow.webContents.id, trigger)
-    // Why the promise and not did-finish-load: Electron resolves it for this load alone, rejects it when a later
-    // navigation supersedes it, and rejects it for an error page — which still emits did-finish-load.
+    // Only this load's promise distinguishes success from stale events and error pages.
     reloadMainWindow({
       onLoaded: () => settleLoaded(reload),
       onError: (error) => onLoadRejected(reload, mainWindowLoadErrorCode(error))
@@ -167,10 +149,11 @@ export function createRendererRecoveryReloadWatchdog(args: {
   }
 
   const settleLoaded = (reload: RecoveryReload): void => {
-    // Why: a replaced attempt's promise can still resolve on the replacement's document.
+    // A replaced attempt's promise may resolve on the replacement document.
     if (reload !== latest) {
       return
     }
+    latest = null
     documentLanded = true
     if (reload === inFlight) {
       inFlight = null
@@ -180,34 +163,31 @@ export function createRendererRecoveryReloadWatchdog(args: {
       status: 'loaded',
       attempt: reload.attempt,
       elapsedMs: Math.max(0, Date.now() - reload.issuedAt),
-      // Why published: without it a bundle for a recovery that worked reads as exhausted, misleading triage
-      // in exactly the way the paired-outcome crumb exists to prevent.
+      // Record late recovery even if the prompt has already appeared.
       ...(prompt ? { afterPrompt: true } : {}),
-      // Why: elapsedMs then measures the replacement, not this reload; the budget analysis has to exclude it.
+      // Replacement timings must be excluded from recovery-load budget analysis.
       ...(reload.superseded ? { superseded: true } : {})
     })
   }
 
-  // Why ERR_ABORTED is never a verdict: Chromium aborts a load whenever something supersedes it — this watchdog's
-  // own retry, a user navigation, a close race, another loadURL caller — and the replacement owns the outcome, so
-  // failing here would raise the undismissable prompt over a window that is fine, and a cold retry would stomp the
-  // load that replaced this one. Re-arming keeps the silence budget honest; capAt still bounds an abort that led
-  // nowhere, so a load that truly goes dark still escalates on timeout.
+  // ERR_ABORTED transfers ownership to a replacement; the cap still bounds a silent replacement.
   const onLoadRejected = (reload: RecoveryReload, errorCode: string): void => {
     if (errorCode !== 'ERR_ABORTED') {
       fail(reload, errorCode)
       return
     }
+    if (latest !== reload) {
+      return
+    }
+    reload.superseded = true
     if (inFlight === reload) {
-      reload.superseded = true
       armTimer(reload)
     }
   }
 
   const retryFrom = (subject: RecoveryPromptSubject): void => {
     prompt = null
-    // Why: no API dismisses a native message box, so a load that lands while the prompt is up leaves Reload aimed
-    // at a healthy window; reloading it would destroy the session the recovery just restored.
+    // A late recovery makes the prompt's Reload unnecessary.
     if (documentLanded) {
       return
     }
@@ -218,8 +198,7 @@ export function createRendererRecoveryReloadWatchdog(args: {
   }
 
   const escalate = (subject: RecoveryPromptSubject, cause: RecoveryExhaustionCause): void => {
-    // Why reset first: whatever document last landed died with the renderer, so a Reload from the prompt already
-    // up must not be declined as if the window were healthy.
+    // A new crash invalidates any document that landed while the prompt was open.
     documentLanded = false
     if (prompt) {
       return
@@ -230,19 +209,17 @@ export function createRendererRecoveryReloadWatchdog(args: {
       webContentsId: rendererWebContentsId,
       recentRecoveryCount: subject.recentRecoveryCount,
       cause,
-      // Why: the prompt's default button is Reload, and an unwatched retry drops the user back into the same
-      // silent hang with no further prompt — the retry has to be watched or the remedy is one-shot.
+      // Watch manual retries too, so another stall can offer recovery again.
       retry: () => retryFrom(subject)
     })
   }
 
   const fail = (reload: RecoveryReload, errorCode?: string): void => {
-    // Why: a superseded attempt can still report late; only the live one owns the outcome.
+    // Only the live attempt owns a failure verdict.
     if (inFlight !== reload) {
       return
     }
-    // Why before any mutation: teardown is not a verdict, so no modal is raised mid-shutdown. inFlight survives
-    // the return, so a later resume or renderer death re-arms this attempt; nothing re-arms it here.
+    // Suppress shutdown verdicts; resume may re-arm the retained attempt.
     if (
       isWindowClosing() ||
       opts?.getIsQuitting?.() ||
@@ -256,18 +233,16 @@ export function createRendererRecoveryReloadWatchdog(args: {
     opts?.onRecoveryReloadOutcome?.({
       status: errorCode === undefined ? 'timeout' : 'failed',
       attempt: reload.attempt,
-      // Why clamp: a backward wall-clock jump must not publish a negative duration into a crash bundle.
+      // Wall-clock changes must not produce negative diagnostic durations.
       elapsedMs: Math.max(0, Date.now() - reload.issuedAt),
       progress: reload.milestone,
       ...(errorCode === undefined ? {} : { errorCode })
     })
-    // Why: a prompt already up owns the next load; a retry under it is a reload the user did not ask for, and a
-    // second prompt would stack on the first.
+    // A pending prompt or crash recovery owns the next reload.
     if (prompt || isRecoveryPending()) {
       return
     }
-    // Why only a load that never reached a document: a cold retry is the remedy for a load that went nowhere,
-    // and the wrong one for a document that parsed and then hung — that restart throws the work away.
+    // Restart only loads with no document; preserve progress until the user chooses Reload.
     if (reload.attempt < RENDERER_RECOVERY_LOAD_ATTEMPTS && reload.milestone === 'none') {
       start({ ...reload, attempt: reload.attempt + 1 }, 'automatic')
       return
@@ -275,9 +250,7 @@ export function createRendererRecoveryReloadWatchdog(args: {
     escalate(reload, 'reload-stalled')
   }
 
-  // Why these two: they separate the field failure (renderer spawned, no document, ever) from a machine that is
-  // merely slow — commit means the document arrived, dom-ready that it parsed. isLoadingMainFrame() cannot make
-  // that call: it reads true for a stalled load and a progressing one alike.
+  // Commit and DOM-ready distinguish a blank load from a document still loading.
   const observeMilestone = (milestone: RecoveryReloadMilestone) => (): void => {
     if (!inFlight || MILESTONE_RANK[milestone] <= MILESTONE_RANK[inFlight.milestone]) {
       return
@@ -287,22 +260,36 @@ export function createRendererRecoveryReloadWatchdog(args: {
   }
   const onDidNavigate = observeMilestone('committed')
   const onDomReady = observeMilestone('dom-ready')
+  const onDidFailLoad = (
+    _event: Electron.Event,
+    errorCode: number,
+    errorDescription: string,
+    _validatedURL: string,
+    isMainFrame: boolean
+  ): void => {
+    if (!isMainFrame || errorCode === -3 || !latest?.superseded) {
+      return
+    }
+    // Error documents also finish loading; only a successful replacement may settle an aborted attempt.
+    latest.superseded = false
+    documentLanded = false
+    fail(latest, mainWindowLoadErrorCode(new Error(errorDescription)))
+  }
   rendererWebContents.on('did-navigate', onDidNavigate)
   rendererWebContents.on('dom-ready', onDomReady)
+  rendererWebContents.on('did-fail-load', onDidFailLoad)
 
   return {
     issue: (details, recentRecoveryCount, trigger = 'automatic') =>
       start({ attempt: 1, details, recentRecoveryCount }, trigger),
     escalate,
     notifyDocumentLoaded: () => {
-      // Why latest, not inFlight: a superseded load whose cap already raised the prompt still recovers this way.
+      // Timed-out replacements can still recover beneath the prompt.
       if (latest?.superseded) {
         settleLoaded(latest)
       }
     },
-    // Why: sleep freezes the timer, so it fires on wake against a load that never got its budget — and would
-    // abort a healthy load, or across both attempts raise the dialog on a healthy machine. Move the deadline
-    // only; issuedAt stays put so elapsedMs remains time-since-issue rather than time-since-last-resume.
+    // Restore the budget after sleep without rewriting the diagnostic issue time.
     notifySystemResume: () => {
       if (!inFlight) {
         return
@@ -317,6 +304,7 @@ export function createRendererRecoveryReloadWatchdog(args: {
       clearTimer()
       rendererWebContents.off?.('did-navigate', onDidNavigate)
       rendererWebContents.off?.('dom-ready', onDomReady)
+      rendererWebContents.off?.('did-fail-load', onDidFailLoad)
     }
   }
 }

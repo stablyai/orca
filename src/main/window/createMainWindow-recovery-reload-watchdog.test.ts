@@ -372,6 +372,10 @@ describe('renderer recovery reload watchdog', () => {
     )
     expect(onRendererRecoveryExhausted).not.toHaveBeenCalled()
 
+    vi.advanceTimersByTime(RENDERER_RECOVERY_LOAD_TIMEOUT_MS * 2)
+    windowHandlers['did-finish-load']?.()
+    expect(onRecoveryReloadOutcome).toHaveBeenCalledTimes(1)
+
     consoleError.mockRestore()
   })
 

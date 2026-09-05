@@ -1,19 +1,9 @@
 import type { MessageBoxOptions, MessageBoxReturnValue } from 'electron'
+import { translateMain } from '../i18n/main-i18n'
 import type { InstallDirAclPoisonDiagnosis } from '../startup/windows-install-dir-acl-recovery'
+import type { RecoveryExhaustionCause } from './renderer-recovery-reload-watchdog'
 
-/**
- * The dialog shown when the renderer crash-loop breaker opens: the window is
- * blank by then, so this is the only retry/quit surface the user has.
- */
-
-const GENERIC_DETAIL =
-  'This is often a graphics-driver or installation problem. Reload to try again, or quit and relaunch Orca.'
-// Why keep it alongside the ACL diagnosis: the probe cannot name-check every
-// locale, so a driver crash on a healthy install must not lose its only hint.
-const DRIVER_FALLBACK = 'If that does not help, the cause is usually a graphics driver.'
-
-/** 'reload-stalled': the recovery reload never produced a document, so nothing crashed repeatedly. */
-export type RendererRecoveryPromptFailure = 'crash-loop' | 'reload-stalled'
+export type RendererRecoveryPromptFailure = RecoveryExhaustionCause
 
 export type RendererRecoveryPromptDeps = {
   recentRecoveryCount: number
@@ -30,35 +20,58 @@ export async function presentRendererRecoveryPrompt(
   deps: RendererRecoveryPromptDeps
 ): Promise<void> {
   const stalled = deps.failure === 'reload-stalled'
-  // Why a loop: copying the commands must not dismiss the only surface offering them.
+  // Copying must preserve the only available recovery surface.
   while (!deps.isQuitting()) {
     const diagnosis = deps.diagnose()
-    const buttons = diagnosis ? ['Reload', 'Copy Commands', 'Quit'] : ['Reload', 'Quit']
+    const buttons = [translateMain('rendererRecovery.reload', 'Reload')]
+    if (diagnosis) {
+      buttons.push(translateMain('rendererRecovery.copyCommands', 'Copy Commands'))
+    }
+    buttons.push(translateMain('rendererRecovery.quit', 'Quit'))
+    const recoveryDetail = stalled
+      ? translateMain(
+          'rendererRecovery.stalledDetail',
+          'Orca reloaded the window after a crash, but it never finished loading.'
+        )
+      : translateMain(
+          'rendererRecovery.crashLoopDetail',
+          'Orca tried to recover {{recoveryCount}} times in a row without success.',
+          { recoveryCount: deps.recentRecoveryCount }
+        )
+    const causeDetail = diagnosis
+      ? `${diagnosis.detail}\n\n${translateMain(
+          'rendererRecovery.driverFallback',
+          'If that does not help, the cause is usually a graphics driver.'
+        )}`
+      : translateMain(
+          'rendererRecovery.genericDetail',
+          'This is often a graphics-driver or installation problem. Reload to try again, or quit and relaunch Orca.'
+        )
     const { response } = await deps.showMessageBox({
       type: 'error',
       buttons,
       defaultId: 0,
-      // Why Reload and not Quit: this box is window-modal over the very window it is about, and Escape is the
-      // reflex when one appears. Quitting on it destroys the session; retrying is recoverable either way.
+      // Escape retries instead of destroying the session.
       cancelId: 0,
-      title: 'Orca keeps failing to load',
+      title: translateMain('rendererRecovery.title', 'Orca keeps failing to load'),
       message: stalled
-        ? 'The app window stopped responding while reloading after a crash.'
-        : 'The app window crashed repeatedly and stopped reloading automatically.',
-      detail: `${
-        stalled
-          ? 'Orca reloaded the window after a crash, but it never finished loading.'
-          : `Orca tried to recover ${deps.recentRecoveryCount} times in a row without success.`
-      }\n\n${diagnosis ? `${diagnosis.detail}\n\n${DRIVER_FALLBACK}` : GENERIC_DETAIL}`
+        ? translateMain(
+            'rendererRecovery.stalledMessage',
+            'The app window stopped responding while reloading after a crash.'
+          )
+        : translateMain(
+            'rendererRecovery.crashLoopMessage',
+            'The app window crashed repeatedly and stopped reloading automatically.'
+          ),
+      detail: `${recoveryDetail}\n\n${causeDetail}`
     })
-    const choice = buttons[response]
-    if (choice === 'Copy Commands' && diagnosis) {
+    if (response === 1 && diagnosis) {
       deps.copyToClipboard(diagnosis.commands.join('\r\n'))
       continue
     }
-    if (choice === 'Reload') {
+    if (response === 0) {
       deps.reload()
-    } else if (choice === 'Quit') {
+    } else if (response === buttons.length - 1) {
       deps.quit()
     }
     return
