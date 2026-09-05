@@ -12,6 +12,11 @@ declare module 'monaco-editor/esm/vs/basic-languages/python/python.js' {
   export const language: languages.IMonarchLanguage
 }
 
+declare module 'monaco-editor/esm/vs/basic-languages/markdown/markdown.js' {
+  export const conf: languages.LanguageConfiguration
+  export const language: languages.IMonarchLanguage
+}
+
 // Monaco ships these contributions without public type declarations. We only
 // touch the paste-override surface, so declare the minimal shape we use.
 declare module 'monaco-editor/esm/vs/editor/contrib/clipboard/browser/clipboard.js' {
