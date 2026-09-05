@@ -26,8 +26,8 @@ export type GroupedQuestionAdvance =
 const GROUPED_TOKEN_PREFIX = 'structured-grouped-question:'
 
 type GroupedTokenPayload =
-  | { kind: 'option'; questionId: string; optionId: string }
-  | { kind: 'free-text'; questionId: string }
+  | { kind: 'option'; promptKey: string; questionId: string; optionId: string }
+  | { kind: 'free-text'; promptKey: string; questionId: string }
 
 export function groupedQuestionPromptKey(itemId: string, revision: number): string {
   return `${itemId}:${revision}`
@@ -45,14 +45,19 @@ function decodeGroupedToken(value: string): GroupedTokenPayload | null {
     const decoded = JSON.parse(
       decodeURIComponent(value.slice(GROUPED_TOKEN_PREFIX.length))
     ) as Record<string, unknown>
-    if (typeof decoded.questionId !== 'string') {
+    if (typeof decoded.promptKey !== 'string' || typeof decoded.questionId !== 'string') {
       return null
     }
     if (decoded.kind === 'option' && typeof decoded.optionId === 'string') {
-      return { kind: 'option', questionId: decoded.questionId, optionId: decoded.optionId }
+      return {
+        kind: 'option',
+        promptKey: decoded.promptKey,
+        questionId: decoded.questionId,
+        optionId: decoded.optionId
+      }
     }
     if (decoded.kind === 'free-text') {
-      return { kind: 'free-text', questionId: decoded.questionId }
+      return { kind: 'free-text', promptKey: decoded.promptKey, questionId: decoded.questionId }
     }
   } catch {
     return null
@@ -60,7 +65,11 @@ function decodeGroupedToken(value: string): GroupedTokenPayload | null {
   return null
 }
 
-function decodeGroupedFreeTextAnswer(value: string): { questionId: string; answer: string } | null {
+function decodeGroupedFreeTextAnswer(value: string): {
+  promptKey: string
+  questionId: string
+  answer: string
+} | null {
   if (!value.startsWith(GROUPED_TOKEN_PREFIX)) {
     return null
   }
@@ -70,9 +79,18 @@ function decodeGroupedFreeTextAnswer(value: string): { questionId: string; answe
     return null
   }
   const payload = decodeGroupedToken(value.slice(0, separator))
-  return payload?.kind === 'free-text'
-    ? { questionId: payload.questionId, answer: decodeURIComponent(value.slice(separator + 1)) }
-    : null
+  if (payload?.kind !== 'free-text') {
+    return null
+  }
+  try {
+    return {
+      promptKey: payload.promptKey,
+      questionId: payload.questionId,
+      answer: decodeURIComponent(value.slice(separator + 1))
+    }
+  } catch {
+    return null
+  }
 }
 
 /** Answers already collected for this exact prompt revision; a stale draft counts as none. */
@@ -95,17 +113,30 @@ export function projectGroupedQuestion(
     return null
   }
   const heading = question.header ? `${question.header}: ${question.question}` : question.question
+  const optionDescriptions = question.options.map((option) => option.description)
   return {
     question:
       questions.length > 1 ? `${heading} (${answered + 1} of ${questions.length})` : heading,
     options: question.options.map((option) => option.label),
+    ...(optionDescriptions.some(Boolean) ? { optionDescriptions } : {}),
     multiSelect: question.multiSelect,
     allowOther: Boolean(question.freeTextQuestionId),
     optionTokens: question.options.map((option) =>
-      encodeGroupedToken({ kind: 'option', questionId: question.id, optionId: option.id })
+      encodeGroupedToken({
+        kind: 'option',
+        promptKey,
+        questionId: question.id,
+        optionId: option.id
+      })
     ),
     ...(question.freeTextQuestionId
-      ? { freeTextToken: encodeGroupedToken({ kind: 'free-text', questionId: question.id }) }
+      ? {
+          freeTextToken: encodeGroupedToken({
+            kind: 'free-text',
+            promptKey,
+            questionId: question.id
+          })
+        }
       : {})
   }
 }
@@ -113,33 +144,56 @@ export function projectGroupedQuestion(
 /** Read one step's answer out of what the question card sent back. */
 function answerFromResponse(
   response: string,
-  question: AgentJournalQuestion
+  question: AgentJournalQuestion,
+  promptKey: string
 ): AgentSessionQuestionAnswer | null {
-  const freeText = decodeGroupedFreeTextAnswer(response)
-  if (freeText) {
-    const other = freeText.answer.trim()
-    return freeText.questionId === question.id && other
-      ? { questionId: question.id, optionIds: [], other }
-      : null
+  // Multi-select submits comma-joined parts; tokens and free text are encoded, so the separator is stable.
+  const optionIds: string[] = []
+  let other: string | undefined
+  for (const part of response.split(', ')) {
+    const trimmed = part.trim()
+    const freeText = decodeGroupedFreeTextAnswer(trimmed)
+    if (freeText) {
+      const answer = freeText.answer.trim()
+      if (
+        freeText.promptKey !== promptKey ||
+        freeText.questionId !== question.id ||
+        answer.length === 0 ||
+        other !== undefined
+      ) {
+        return null
+      }
+      other = answer
+      continue
+    }
+
+    const payload = decodeGroupedToken(trimmed)
+    if (
+      payload?.kind !== 'option' ||
+      payload.promptKey !== promptKey ||
+      payload.questionId !== question.id
+    ) {
+      return null
+    }
+    optionIds.push(payload.optionId)
   }
-  // Multi-select submits the selected option tokens as one comma-joined string; option tokens are
-  // percent-encoded, so no token can contain the separator.
-  const optionIds = response
-    .split(', ')
-    .map((part) => decodeGroupedToken(part.trim()))
-    .flatMap((payload) =>
-      payload?.kind === 'option' && payload.questionId === question.id ? [payload.optionId] : []
-    )
   const offered = new Set(question.options.map((option) => option.id))
-  return optionIds.length > 0 && optionIds.every((optionId) => offered.has(optionId))
-    ? { questionId: question.id, optionIds }
-    : null
+  if (optionIds.some((optionId) => !offered.has(optionId))) {
+    return null
+  }
+  if (other && !question.freeTextQuestionId) {
+    return null
+  }
+  const answerCount = optionIds.length + (other ? 1 : 0)
+  if (answerCount === 0 || (!question.multiSelect && answerCount !== 1)) {
+    return null
+  }
+  return { questionId: question.id, optionIds, ...(other ? { other } : {}) }
 }
 
 /**
  * Fold one answer into the draft. Returns `advance` while questions remain and `submit` with the
- * encoded group once the last one lands; null when the response does not answer the current step,
- * so the caller can fall through to the flat single-question path.
+ * encoded group once the last one lands; null when the response does not answer this prompt step.
  */
 export function advanceGroupedQuestion(args: {
   response: string
@@ -152,7 +206,7 @@ export function advanceGroupedQuestion(args: {
   if (!question) {
     return null
   }
-  const answer = answerFromResponse(args.response, question)
+  const answer = answerFromResponse(args.response, question, args.promptKey)
   if (!answer) {
     return null
   }

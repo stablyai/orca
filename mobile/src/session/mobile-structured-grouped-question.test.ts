@@ -123,6 +123,22 @@ describe('mobile structured grouped questions', () => {
     ).toEqual([{ questionId: 'q1', optionIds: [], other: 'DuckDB' }])
   })
 
+  it('keeps selected options and other text for grouped multi-select answers', () => {
+    const questions = [SECOND]
+    const only = projectGroupedQuestion(questions, null, PROMPT_KEY)!
+
+    const result = advanceGroupedQuestion({
+      response: `${tapOption(only, 0)}, ${formatQuestionFreeTextAnswer(only, 'ap-south')}`,
+      questions,
+      draft: null,
+      promptKey: PROMPT_KEY
+    })
+
+    expect(
+      decodeAgentSessionQuestionAnswers(result?.kind === 'submit' ? result.optionId : '')
+    ).toEqual([{ questionId: 'q2', optionIds: ['q2:choice-1'], other: 'ap-south' }])
+  })
+
   it('gives each step a distinct card key so a selection cannot carry into the next question', () => {
     // The view keys MobileNativeChatQuestion by this value; an identical key would reuse the
     // mounted card and submit step 1's checkboxes as step 2's answer. Claude can legitimately ask
@@ -162,6 +178,61 @@ describe('mobile structured grouped questions', () => {
     expect(
       advanceGroupedQuestion({
         response: 'Postgres',
+        questions,
+        draft: null,
+        promptKey: PROMPT_KEY
+      })
+    ).toBeNull()
+  })
+
+  it('refuses an option token rendered for a superseded prompt revision', () => {
+    const stale = projectGroupedQuestion([question()], null, groupedQuestionPromptKey('item-1', 2))!
+
+    expect(
+      advanceGroupedQuestion({
+        response: tapOption(stale, 0),
+        questions: [question()],
+        draft: null,
+        promptKey: PROMPT_KEY
+      })
+    ).toBeNull()
+  })
+
+  it('refuses free text rendered for a superseded prompt revision', () => {
+    const stale = projectGroupedQuestion([question()], null, groupedQuestionPromptKey('item-1', 2))!
+
+    expect(
+      advanceGroupedQuestion({
+        response: formatQuestionFreeTextAnswer(stale, 'stale answer'),
+        questions: [question()],
+        draft: null,
+        promptKey: PROMPT_KEY
+      })
+    ).toBeNull()
+  })
+
+  it('rejects a multi-select response when one selected token is malformed', () => {
+    const questions = [SECOND]
+    const only = projectGroupedQuestion(questions, null, PROMPT_KEY)!
+
+    expect(
+      advanceGroupedQuestion({
+        response: `${tapOption(only, 0)}, not-a-grouped-token`,
+        questions,
+        draft: null,
+        promptKey: PROMPT_KEY
+      })
+    ).toBeNull()
+  })
+
+  it('rejects a multi-select response when one selected token belongs to another prompt', () => {
+    const questions = [SECOND]
+    const current = projectGroupedQuestion(questions, null, PROMPT_KEY)!
+    const stale = projectGroupedQuestion(questions, null, groupedQuestionPromptKey('item-1', 2))!
+
+    expect(
+      advanceGroupedQuestion({
+        response: `${tapOption(current, 0)}, ${tapOption(stale, 1)}`,
         questions,
         draft: null,
         promptKey: PROMPT_KEY

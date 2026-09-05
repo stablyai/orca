@@ -161,9 +161,11 @@ export function projectStructuredQuestion(
       groupedQuestionPromptKey(prompt.itemId, prompt.revision)
     )
   }
+  const optionDescriptions = prompt.body.options.map((option) => option.description)
   return {
     question: prompt.body.question,
     options: prompt.body.options.map((option) => option.label),
+    ...(optionDescriptions.some(Boolean) ? { optionDescriptions } : {}),
     multiSelect: false,
     allowOther: Boolean(prompt.body.freeTextQuestionId),
     optionTokens: prompt.body.options.map((option) =>

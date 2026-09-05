@@ -20,7 +20,7 @@ function groupedPrompt(): StructuredQuestionItem {
           id: 'q1',
           question: 'Which database?',
           multiSelect: false,
-          options: [{ id: 'q1:choice-1', label: 'Postgres' }],
+          options: [{ id: 'q1:choice-1', label: 'Postgres', description: 'Durable server' }],
           freeTextQuestionId: 'q1'
         },
         {
@@ -42,6 +42,7 @@ describe('structured question projection for grouped Claude prompts', () => {
 
     expect(projected?.question).not.toBe('2 grouped questions from Claude')
     expect(projected?.options).toEqual(['Postgres'])
+    expect(projected?.optionDescriptions).toEqual(['Durable server'])
     expect(projected?.optionTokens.filter(Boolean)).toHaveLength(1)
   })
 })

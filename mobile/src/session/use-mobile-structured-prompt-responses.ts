@@ -65,22 +65,36 @@ export function useMobileStructuredPromptResponses(args: {
   const respondQuestion = useCallback(
     async (answer: string): Promise<boolean> => {
       const prompt = stateRef.current.items.find(pendingStructuredQuestion) ?? null
-      const grouped = prompt?.body.questions
-        ? advanceGroupedQuestion({
-            response: answer,
-            questions: prompt.body.questions,
-            draft: groupedDraft,
-            promptKey: groupedQuestionPromptKey(prompt.itemId, prompt.revision)
-          })
-        : null
-      if (grouped?.kind === 'advance') {
-        setCollected({ sessionKey, draft: grouped.draft })
-        return true
+      if (prompt?.body.questions) {
+        const grouped = advanceGroupedQuestion({
+          response: answer,
+          questions: prompt.body.questions,
+          draft: groupedDraft,
+          promptKey: groupedQuestionPromptKey(prompt.itemId, prompt.revision)
+        })
+        if (!grouped) {
+          return false
+        }
+        if (grouped.kind === 'advance') {
+          setCollected({ sessionKey, draft: grouped.draft })
+          return true
+        }
+        const result = await mutate<AgentSessionPromptResult>(
+          'agentSession.respondToQuestion',
+          'agentSession.respondTo:question',
+          { itemId: prompt.itemId, expectedRevision: prompt.revision, optionId: grouped.optionId }
+        )
+        if (result.status !== 'rejected') {
+          // The group left the phone; a retry must start from the first question, not a stale tail.
+          setCollected(null)
+        }
+        if (result.status === 'unknown') {
+          onSendError('Answer unconfirmed — check chat before retrying')
+          return false
+        }
+        return result.status === 'accepted'
       }
-      const target =
-        grouped && prompt
-          ? { itemId: prompt.itemId, expectedRevision: prompt.revision, optionId: grouped.optionId }
-          : structuredQuestionResponseTarget(answer, prompt)
+      const target = structuredQuestionResponseTarget(answer, prompt)
       if (!target) {
         return false
       }
@@ -89,10 +103,6 @@ export function useMobileStructuredPromptResponses(args: {
         'agentSession.respondTo:question',
         target
       )
-      if (grouped && result.status !== 'rejected') {
-        // The group left the phone; a retry must start from the first question, not a stale tail.
-        setCollected(null)
-      }
       if (result.status === 'unknown') {
         onSendError('Answer unconfirmed — check chat before retrying')
         return false
