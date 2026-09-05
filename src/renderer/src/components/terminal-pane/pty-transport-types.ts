@@ -177,7 +177,7 @@ export type PtyTransport = {
     isAlternateScreen?: boolean
     callbacks: PtyCallbacks
   }) => void
-  disconnect: () => void
+  disconnect: () => void | Promise<void>
   sendInput: (data: string) => boolean
   // Why: latency-critical terminal query replies (CPR/DSR/DA/OSC color/pixel
   // size) must skip input coalescing — a querying program reads them in raw
@@ -210,6 +210,8 @@ export type PtyTransport = {
   /** The user dismissed the error surface; the next occurrence of the same message must surface again. */
   notifyErrorSurfaceDismissed?: () => void
   getPtyId: () => string | null
+  /** Retained owner identity when shutdown failed and can be retried. */
+  getPendingShutdownPtyId?: () => string | null
   getConnectionId?: () => string | null | undefined
   /** The runtime captured by this transport; legacy remote PTY ids do not
    * encode their owner, and current worktree settings may have changed. */

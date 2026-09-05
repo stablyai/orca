@@ -84,6 +84,49 @@ describe('createIpcPtyTransport', () => {
     expect(collectRendererMemoryProfileCounts()['ptySideEffects.processors']).toBe(0)
   })
 
+  it('settles destroy only after the PTY shutdown completes', async () => {
+    const { createIpcPtyTransport } = await import('./pty-transport')
+    const kill = window.api.pty.kill as unknown as ReturnType<typeof vi.fn>
+    let finishKill!: () => void
+    const killFinished = new Promise<void>((resolve) => {
+      finishKill = resolve
+    })
+    kill.mockReturnValueOnce(killFinished)
+    const transport = createIpcPtyTransport({})
+    await transport.connect({ url: '', callbacks: {} })
+
+    const destroyed = transport.destroy?.()
+    let settled = false
+    void Promise.resolve(destroyed).then(() => {
+      settled = true
+    })
+    await Promise.resolve()
+
+    expect(settled).toBe(false)
+    expect(kill).toHaveBeenCalledOnce()
+    finishKill()
+    await destroyed
+    expect(settled).toBe(true)
+  })
+
+  it('retains a failed shutdown identity so destroy can retry it', async () => {
+    const { createIpcPtyTransport } = await import('./pty-transport')
+    const kill = window.api.pty.kill as unknown as ReturnType<typeof vi.fn>
+    kill.mockRejectedValueOnce(new Error('provider unavailable')).mockResolvedValueOnce(undefined)
+    const transport = createIpcPtyTransport({})
+    await transport.connect({ url: '', callbacks: {} })
+    const ptyId = transport.getPtyId()
+
+    await expect(transport.destroy?.()).rejects.toThrow('provider unavailable')
+    expect(transport.getPtyId()).toBeNull()
+    expect(transport.getPendingShutdownPtyId?.()).toBe(ptyId)
+
+    await transport.destroy?.()
+    expect(kill).toHaveBeenCalledTimes(2)
+    expect(kill).toHaveBeenLastCalledWith(ptyId)
+    expect(transport.getPendingShutdownPtyId?.()).toBeNull()
+  })
+
   it('keeps the live handler when detach() runs after a newer transport attached to the same PTY', async () => {
     // Why: a new pane can attach the same ptyId before the old detaches; unconditional unregister deletes the live handler (frozen-pane bug).
     const { createIpcPtyTransport } = await import('./pty-transport')
