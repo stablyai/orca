@@ -29,6 +29,7 @@ export type PasteTextIntoTerminalPaneArgs = {
   getPaneTransports: () => Map<number, PtyTransport>
   focusAfterPaste?: boolean
   forceBracketedPaste?: boolean
+  canContinue?: () => boolean
 }
 
 /** Runs programmatic composer/file pastes through the same bounded local/remote path. */
@@ -41,7 +42,8 @@ export async function pasteTextIntoTerminalPane({
   getManager,
   getPaneTransports,
   focusAfterPaste = false,
-  forceBracketedPaste = false
+  forceBracketedPaste = false,
+  canContinue
 }: PasteTextIntoTerminalPaneArgs): Promise<boolean> {
   const ptyId = transport?.getPtyId() ?? null
   const platform = getShortcutPlatform()
@@ -66,6 +68,7 @@ export async function pasteTextIntoTerminalPane({
     forceBracketedPaste
   })
   const targetIsCurrent = (): boolean =>
+    (canContinue?.() ?? true) &&
     isTerminalPanePasteTargetCurrent({
       manager: getManager(),
       paneTransports: getPaneTransports(),
@@ -74,13 +77,21 @@ export async function pasteTextIntoTerminalPane({
       transport,
       ptyId
     })
+  let pasteBlocked = false
   const result = await executeTerminalPastePlan(plan, {
-    pasteText: (nextText, options) => pasteTerminalText(pane.terminal, nextText, options),
-    writePty: (data) => writeTerminalPastePtyInput(transport, data),
+    pasteText: (nextText, options) => {
+      // The executor defers writes to a microtask, after its continuation check.
+      if (!targetIsCurrent()) {
+        pasteBlocked = true
+        return
+      }
+      pasteTerminalText(pane.terminal, nextText, options)
+    },
+    writePty: (data) => targetIsCurrent() && writeTerminalPastePtyInput(transport, data),
     isTargetCurrent: targetIsCurrent,
     canContinue: targetIsCurrent
   })
-  if (result.status !== 'pasted') {
+  if (pasteBlocked || result.status !== 'pasted') {
     return false
   }
   recordTerminalUserInputForLeaf(tabId, pane.leafId)

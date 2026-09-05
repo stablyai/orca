@@ -1,5 +1,6 @@
 import type { ManagedPane, PaneManager } from '@/lib/pane-manager/pane-manager'
 import type { PtyTransport } from './pty-transport'
+import { isPtyLocked } from '@/lib/pane-manager/mobile-driver-state'
 import { recordTerminalUserInputForLeaf } from './terminal-input-activity'
 import { pasteTextIntoTerminalPane } from './terminal-programmatic-text-paste'
 import { waitForRichInputPasteDelivery } from './terminal-rich-input-delivery-wait'
@@ -42,6 +43,7 @@ export async function submitTerminalRichInput({
   if ((!text.trim() && imagePaths.length === 0) || !transport || !ptyId) {
     return { status: 'not-started' }
   }
+  const canContinue = (): boolean => !isPtyLocked(ptyId)
   let imagePathsWritten = 0
   let textWritten = false
   const interruptedResult = (): TerminalRichInputSubmitResult =>
@@ -57,7 +59,8 @@ export async function submitTerminalRichInput({
       transport,
       getManager,
       getPaneTransports,
-      forceBracketedPaste: true
+      forceBracketedPaste: true,
+      canContinue
     })
     if (!pastedImage) {
       return interruptedResult()
@@ -75,7 +78,8 @@ export async function submitTerminalRichInput({
       pane,
       transport,
       getManager,
-      getPaneTransports
+      getPaneTransports,
+      canContinue
     })
     if (!pastedText) {
       return interruptedResult()
@@ -97,6 +101,7 @@ export async function submitTerminalRichInput({
     .find((candidate) => candidate.leafId === pane.leafId)
   const currentTransport = currentPane ? getPaneTransports().get(currentPane.id) : undefined
   if (
+    !canContinue() ||
     !currentPane ||
     currentTransport !== transport ||
     !currentTransport.isConnected() ||
