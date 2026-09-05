@@ -42,7 +42,10 @@ describe('wrapWindowsDirectCmdHookCommand', () => {
       'C:\\Users\\a&b\\.orca\\agent-hooks\\claude-hook.cmd',
       'C:\\Users\\a(b)\\.orca\\agent-hooks\\claude-hook.cmd',
       'C:\\Users\\rené\\.orca\\agent-hooks\\claude-hook.cmd',
-      '/home/alice/.orca/agent-hooks/claude-hook.sh'
+      '/home/alice/.orca/agent-hooks/claude-hook.sh',
+      // Why: WINDOWS_CMD_SAFE_PATH admits a UNC profile, but `//server/share/...` is not a
+      // command cmd.exe reliably starts — keep those on the encoded launcher.
+      '\\\\server\\share\\alice\\.orca\\agent-hooks\\claude-hook.cmd'
     ]) {
       expect(wrapWindowsDirectCmdHookCommand(path), path).toBeNull()
     }

@@ -526,6 +526,54 @@ describe('ClaudeHookService.install', () => {
   )
 
   it.skipIf(process.platform !== 'win32')(
+    'reports a stale absolute path as not_installed and rewrites it on install (#18875)',
+    () => {
+      // Why: the direct shape bakes the profile path in, where the encoded launcher resolved
+      // %USERPROFILE% at run time (STA-3348). That is only safe because a moved profile is
+      // caught here and rewritten, so this is the test that carries the replaced contract.
+      const tmpHome = mkdtempSync(join(tmpdir(), 'orca-claude-moved-'))
+      vi.stubEnv('HOME', tmpHome)
+      vi.stubEnv('USERPROFILE', tmpHome)
+      const scriptPath = join(tmpHome, '.orca', 'agent-hooks', CLAUDE_SCRIPT_FILE_NAME)
+      if (!WINDOWS_CMD_SAFE_PATH.test(scriptPath)) {
+        vi.unstubAllEnvs()
+        rmSync(tmpHome, { recursive: true, force: true })
+        return
+      }
+      try {
+        const settingsPath = join(tmpHome, '.claude', 'settings.json')
+        mkdirSync(join(tmpHome, '.claude'), { recursive: true })
+        const staleCommand = 'C:/Users/someone-else/.orca/agent-hooks/claude-hook.cmd || echo {}'
+        const stale = { type: 'command', command: staleCommand, timeout: 10 }
+        writeFileSync(
+          settingsPath,
+          JSON.stringify({
+            hooks: Object.fromEntries(
+              CLAUDE_EVENTS.map(({ eventName }) => [eventName, [{ hooks: [stale] }]])
+            )
+          }),
+          'utf-8'
+        )
+
+        expect(new ClaudeHookService().getStatus().state).toBe('not_installed')
+        expect(new ClaudeHookService().install().state).toBe('installed')
+
+        const settings = JSON.parse(readFileSync(settingsPath, 'utf-8')) as {
+          hooks: Record<string, { hooks: TestHook[] }[]>
+        }
+        expect(JSON.stringify(settings.hooks)).not.toContain('someone-else')
+        expect(settings.hooks.PreToolUse[0].hooks[0].command).toBe(
+          `${scriptPath.replaceAll('\\', '/')} || echo {}`
+        )
+        expect(new ClaudeHookService().getStatus().state).toBe('installed')
+      } finally {
+        vi.unstubAllEnvs()
+        rmSync(tmpHome, { recursive: true, force: true })
+      }
+    }
+  )
+
+  it.skipIf(process.platform !== 'win32')(
     'posts from the managed .cmd via curl.exe, not a second PowerShell',
     () => {
       const tmpHome = mkdtempSync(join(tmpdir(), 'orca-claude-curl-'))

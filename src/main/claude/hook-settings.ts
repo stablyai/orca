@@ -171,12 +171,8 @@ export function getWindowsManagedLifecycleHook(
   scriptPath: string,
   options: WindowsManagedLifecycleHookOptions = {}
 ): HookCommandConfig {
-  // Why (#18875): the encoded launcher spent a PowerShell start-up per hook event — 471ms
-  // against 213ms for the script alone — before the `.cmd` could reach its ORCA_PANE_KEY
-  // guard, and left a stdout-holding orphan behind when the hook timeout killed it. Take
-  // the direct path whenever the host that runs it can parse `||`: Claude Code hosts hooks
-  // in Git Bash, falling back to PowerShell only when Git Bash is absent, and PowerShell
-  // 5.1 rejects `||`.
+  // Why (#18875): the encoded launcher cost a PowerShell start-up per hook event. Take the direct
+  // path only where the host can parse `||` — Git Bash can, Windows PowerShell 5.1 cannot.
   const directCommand =
     (options.gitBashAvailable ?? isGitBashAvailable())
       ? wrapWindowsDirectCmdHookCommand(scriptPath)

@@ -7,7 +7,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { spawn } from 'node:child_process'
 import { createServer, type Server } from 'node:http'
-import { mkdtempSync, readFileSync } from 'node:fs'
+import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
 import { removeTreeSync } from '../../shared/windows-transient-lock-removal'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -123,6 +123,15 @@ function runHookCommand(
   })
 }
 
+// Why: a developer box may set HKCU\...\Command Processor\AutoRun, which cmd.exe runs before
+// any .cmd — and MSYS spawns a .cmd without `/d`, so it fires on the Git Bash leg. Redirecting
+// USERPROFILE to a temp home makes the usual `%USERPROFILE%\.cmd_aliases.cmd` target vanish, and
+// cmd's "not recognized" lands on the hook's stderr. Seed an empty target so this suite measures
+// the launcher rather than the host's shell configuration.
+function seedCmdAutoRunTarget(home: string): void {
+  writeFileSync(join(home, '.cmd_aliases.cmd'), '@echo off\r\n', 'utf8')
+}
+
 function hookEnvironment(extra: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
   const base = Object.fromEntries(
     Object.entries(process.env).filter(([key]) => !key.startsWith('ORCA_'))
@@ -159,6 +168,7 @@ describe.skipIf(process.platform !== 'win32')('Windows managed hook payload deli
   it('delivers the piped payload to the hook listener through cmd.exe and Git Bash', async () => {
     home = mkdtempSync(join(tmpdir(), 'orca-hook-payload-'))
     homedirMock.mockReturnValue(home)
+    seedCmdAutoRunTarget(home)
     expect(new ClaudeHookService().install().state).toBe('installed')
 
     const settings = JSON.parse(readFileSync(getConfigPath(), 'utf8')) as {
