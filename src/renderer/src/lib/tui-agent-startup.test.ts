@@ -280,6 +280,23 @@ describe('buildAgentStartupPlan', () => {
     })
   })
 
+  it('launches Meta Muse with positional argv and option terminator', () => {
+    expect(
+      buildAgentStartupPlan({
+        agent: 'muse',
+        prompt: 'Fix the issue',
+        cmdOverrides: {},
+        platform: 'linux'
+      })
+    ).toEqual({
+      agent: 'muse',
+      launchCommand: "muse -- 'Fix the issue'",
+      expectedProcess: 'muse',
+      followupPrompt: null,
+      launchConfig: emptyLaunchConfig('muse')
+    })
+  })
+
   it('returns null when there is no prompt to inject', () => {
     expect(
       buildAgentStartupPlan({

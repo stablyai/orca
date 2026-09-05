@@ -79,6 +79,13 @@ export const getAgentCatalog = createLocalizedCatalog((): AgentCatalogEntry[] =>
     homepageUrl: 'https://x.ai/cli'
   },
   {
+    id: 'muse',
+    label: translate('auto.lib.agent.catalog.meta_muse_label', 'Meta Muse'),
+    cmd: 'muse',
+    faviconDomain: 'meta.ai',
+    homepageUrl: 'https://dev.meta.ai/'
+  },
+  {
     id: 'copilot',
     label: translate('auto.lib.agent.catalog.706b0fe68b', 'GitHub Copilot'),
     cmd: 'copilot',

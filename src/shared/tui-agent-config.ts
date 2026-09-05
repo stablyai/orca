@@ -285,6 +285,13 @@ const TUI_AGENT_CONFIG_SOURCE: Record<TuiAgent, TuiAgentConfigSource> = {
     detectCmd: 'devin',
     // Why: `devin -- <prompt>` auto-submits immediately (docs.devin.ai/cli), so start the REPL with no argv prompt.
     promptInjectionMode: 'stdin-after-start'
+  },
+  muse: {
+    detectCmd: 'muse',
+    // Why: `muse [prompt]` launches the interactive full-screen TUI with the initial prompt.
+    promptInjectionMode: 'argv',
+    // Why: separator so prompts starting with flags/subcommands aren't parsed as Muse CLI syntax.
+    argvPromptSeparator: '--'
   }
 }
 

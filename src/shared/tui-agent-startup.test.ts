@@ -119,6 +119,17 @@ describe('tui agent startup plans', () => {
     expect(plan?.launchCommand).toBe('grok -- "help"')
   })
 
+  it('terminates Meta Muse options before a flag-shaped prompt', () => {
+    const plan = buildAgentStartupPlan({
+      agent: 'muse',
+      prompt: '--version',
+      cmdOverrides: {},
+      platform: 'linux'
+    })
+
+    expect(plan?.launchCommand).toBe("muse -- '--version'")
+  })
+
   it('places the Grok prompt separator after configured agent arguments', () => {
     const plan = buildAgentStartupPlan({
       agent: 'grok',
