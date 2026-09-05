@@ -95,7 +95,10 @@ export class OrcaRuntimeWithGetOrchestrationDispatchAuthority extends OrcaRuntim
       }
       const hostScope = this.getOrchestrationCompatibilityHostScope(pty)
       if (!hostScope || JSON.stringify(hostScope) !== serializedHostScope) {
-        return null
+        // Keep scanning: a colon-ambiguous decoy pty in a different host scope that this
+        // incarnation string happens to prefix-match must not suppress the genuine same-scope
+        // pty later in ptysById. The scope check still fences the real match below.
+        continue
       }
       return this.issuePtyHandle(pty)
     }

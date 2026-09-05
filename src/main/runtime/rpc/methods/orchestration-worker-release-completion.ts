@@ -119,21 +119,10 @@ async function completeWorkerTerminalReleaseOnce(
     return retainWithUnprovenIdentity(dispatchId, db, resource.id)
   }
   if (observation.status === 'missing' || observation.status === 'unattached') {
-    if (args.mode === 'recovery') {
-      // Inventory may still be incomplete during startup/reconnect discovery; defer.
-      return {
-        dispatchId,
-        state: 'release_pending',
-        processAction: 'none',
-        archive: archiveSummary(resource),
-        recovery:
-          'The recorded terminal has not been rediscovered yet; recovery will retry after the next terminal inventory.'
-      }
-    }
     // Re-resolution by process incarnation (inspectWorkerTerminal) already failed, so no live PTY
     // carries this worker's exact incarnation. If that incarnation is provably gone, settle
-    // released; otherwise the process may have been re-homed and only an exact observation may
-    // settle it — concede release_unknown rather than hide, or guess at, a live process.
+    // released BEFORE the recovery defer: proof of death outranks deferral, so a provably-exited
+    // worker never languishes in release_pending across recovery passes.
     if (
       resource.process_incarnation &&
       (await runtime.inspectTerminalProcessIncarnationLiveness(
@@ -150,6 +139,21 @@ async function completeWorkerTerminalReleaseOnce(
         archive: archiveSummary(settled)
       }
     }
+    if (args.mode === 'recovery') {
+      // No death certificate yet: inventory may still be incomplete during startup/reconnect
+      // discovery, so defer instead of guessing.
+      return {
+        dispatchId,
+        state: 'release_pending',
+        processAction: 'none',
+        archive: archiveSummary(resource),
+        recovery:
+          'The recorded terminal has not been rediscovered yet; recovery will retry after the next terminal inventory.'
+      }
+    }
+    // Normal mode with no proof of death: the process may have been re-homed and only an exact
+    // observation may settle it — concede release_unknown rather than hide, or guess at, a live
+    // process.
     const unknown = db.markWorkerTerminalReleaseUnknown(
       resource.id,
       'The recorded terminal no longer resolves; whether its process is gone cannot be proven.'

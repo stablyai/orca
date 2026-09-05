@@ -279,4 +279,28 @@ describe('resolveTerminalHandleByProcessIncarnation direct fencing', () => {
     const handle = resolve(runtime, `${windowsPtyId}:incarnation-win`, LOCAL_SCOPE)
     expect(handle).toMatch(/^term_/)
   })
+
+  it('keeps scanning past a colon-ambiguous decoy in another host scope to the genuine match', () => {
+    const { runtime } = makeRuntime()
+    // One process-incarnation string, two colon-ambiguous pty ids that both satisfy the exact
+    // matcher: 'relay' + 'conn:incarnation-1' AND 'relay:conn' + 'incarnation-1' both stringify to
+    // 'relay:conn:incarnation-1'. The decoy is registered FIRST and lives in a different host scope
+    // (ssh:decoy); the genuine pty is local and registered later.
+    const processIncarnation = 'relay:conn:incarnation-1'
+    runtime.registerPty('relay', WORKTREE_ID, 'decoy', {
+      tabId: 'tab-decoy',
+      leafId: '22222222-2222-4222-8222-222222222222',
+      incarnationId: 'conn:incarnation-1'
+    })
+    runtime.registerPty('relay:conn', WORKTREE_ID, null, {
+      tabId: 'tab-genuine',
+      leafId: '33333333-3333-4333-8333-333333333333',
+      incarnationId: 'incarnation-1'
+    })
+
+    // Before the fix, the earlier decoy's host-scope mismatch returned null and suppressed the
+    // genuine same-scope pty entirely. `continue` lets the scan reach it.
+    const handle = resolve(runtime, processIncarnation, LOCAL_SCOPE)
+    expect(handle).toMatch(/^term_/)
+  })
 })

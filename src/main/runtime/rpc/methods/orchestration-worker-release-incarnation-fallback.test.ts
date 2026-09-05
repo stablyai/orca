@@ -3,6 +3,7 @@ import { ORCHESTRATION_METHODS } from './orchestration'
 import type { RpcContext } from '../core'
 import { OrchestrationDb } from '../../orchestration/db'
 import { OrcaRuntimeService } from '../../orca-runtime'
+import { completeWorkerTerminalRelease } from './orchestration-worker-release-completion'
 
 describe('orchestration worker release incarnation fallback', () => {
   let db: OrchestrationDb
@@ -354,5 +355,75 @@ describe('orchestration worker release incarnation fallback', () => {
     )
     expect(runtime.readTerminal).toHaveBeenCalledWith('term_reminted', expect.anything())
     expect(output.terminal?.tail).toEqual(['worker output line 1', 'worker output line 2'])
+  })
+
+  it('recovery-mode: settles released before the defer when a stale-handle worker is provably exited', async () => {
+    setup()
+    const { dispatchId } = await startSettledWorker()
+    // Durable handle is stale and no live PTY carries the recorded incarnation, so
+    // inspectWorkerTerminal reports 'missing' with a null handle.
+    vi.mocked(runtime.showTerminal).mockRejectedValue(new Error('terminal_handle_stale'))
+    const resolveByIncarnation = vi.fn().mockReturnValue(null)
+    ;(
+      runtime as unknown as {
+        resolveTerminalHandleByProcessIncarnation: typeof resolveByIncarnation
+      }
+    ).resolveTerminalHandleByProcessIncarnation = resolveByIncarnation
+    // The recorded incarnation is provably gone: proof of death outranks the recovery defer.
+    inspectProcessLiveness.mockResolvedValue('exited')
+    const requested = db.requestWorkerTerminalRelease(dispatchId)
+    if (requested.disposition !== 'requested') {
+      throw new Error(`expected a requested release, got ${requested.disposition}`)
+    }
+
+    const receipt = await completeWorkerTerminalRelease({
+      runtime,
+      db,
+      dispatchId,
+      resource: requested.resource,
+      mode: 'recovery'
+    })
+
+    expect(receipt).toMatchObject({ state: 'released', processAction: 'none' })
+    expect(receipt.state).not.toBe('release_pending')
+    expect(inspectProcessLiveness).toHaveBeenCalledWith(
+      'runtime_test:term_worker:1',
+      JSON.stringify({ kind: 'local', hostId: 'local' })
+    )
+    expect(runtime.closeTerminal).not.toHaveBeenCalled()
+    expect(db.getWorkerTerminalResourceByOwner(dispatchId)).toMatchObject({
+      ownership_state: 'released',
+      release_state: 'released'
+    })
+  })
+
+  it('recovery-mode: defers release_pending when liveness is unverifiable rather than provably exited', async () => {
+    setup()
+    const { dispatchId } = await startSettledWorker()
+    vi.mocked(runtime.showTerminal).mockRejectedValue(new Error('terminal_handle_stale'))
+    const resolveByIncarnation = vi.fn().mockReturnValue(null)
+    ;(
+      runtime as unknown as {
+        resolveTerminalHandleByProcessIncarnation: typeof resolveByIncarnation
+      }
+    ).resolveTerminalHandleByProcessIncarnation = resolveByIncarnation
+    // Not a death certificate: inventory may still be incomplete, so recovery must defer.
+    inspectProcessLiveness.mockResolvedValue('unverifiable')
+    const requested = db.requestWorkerTerminalRelease(dispatchId)
+    if (requested.disposition !== 'requested') {
+      throw new Error(`expected a requested release, got ${requested.disposition}`)
+    }
+
+    const receipt = await completeWorkerTerminalRelease({
+      runtime,
+      db,
+      dispatchId,
+      resource: requested.resource,
+      mode: 'recovery'
+    })
+
+    expect(receipt.state).toBe('release_pending')
+    expect(runtime.closeTerminal).not.toHaveBeenCalled()
+    expect(db.getWorkerTerminalResourceByOwner(dispatchId)?.release_state).not.toBe('released')
   })
 })
