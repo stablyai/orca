@@ -243,10 +243,13 @@ async function measureRegion(
     }
     samples.push(Math.min(...latencies))
   }
-  samples.sort((left, right) => left - right)
-  const median = samples[1]!
-  const spread = samples[2]! - samples[0]!
-  if (spread > Math.max(20, median * 0.5)) {
+  // Why: the first probe pays DNS+TCP+TLS on top of the RTT, so jitter is judged on the two
+  // warm rounds and the cold one only has to stay within a handshake-sized ceiling of them.
+  const [cold, firstWarm, secondWarm] = samples
+  const median = [...samples].sort((left, right) => left - right)[1]!
+  const warmSpread = Math.abs(firstWarm! - secondWarm!)
+  const coldSpread = cold! - Math.min(firstWarm!, secondWarm!)
+  if (warmSpread > Math.max(20, median * 0.5) || coldSpread > Math.max(150, median * 5)) {
     return null
   }
   return { region: entry.region, latencyMs: median }

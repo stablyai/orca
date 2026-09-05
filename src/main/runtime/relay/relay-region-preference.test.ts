@@ -170,6 +170,103 @@ describe('Relay region preference', () => {
     ).resolves.toBeUndefined()
   })
 
+  it('forgives a first probe that paid the TLS handshake instead of pinning the far region', async () => {
+    const path = userDataPath()
+    // Why: the cold round carries DNS+TCP+TLS on top of the RTT; the two warm rounds are the
+    // comparable pair. Reading the spread across all three disqualified every healthy region.
+    const { probe } = sampledProbe({ [US]: [200, 40, 42], [ASIA]: [780, 792, 800] })
+
+    await expect(
+      new RelayRegionPreferenceResolver({
+        directorUrl: DIRECTOR,
+        userDataPath: path,
+        fetch: catalogFetch([
+          { region: 'us-central1', probeOrigins: [US] },
+          { region: 'asia-east2', probeOrigins: [ASIA] }
+        ]),
+        probe,
+        now: () => 1_000
+      }).resolve()
+    ).resolves.toBe('us-central1')
+    expect(JSON.parse(readFileSync(cachePath(path), 'utf8'))).toMatchObject({
+      region: 'us-central1',
+      latencyMs: 42
+    })
+  })
+
+  it('still rejects a region whose warm rounds disagree, whatever the cold one did', async () => {
+    const path = userDataPath()
+    // Why: 260 ms between the comparable rounds trips only the warm gate; the 900 ms tail
+    // sits under the cold ceiling, so this cannot pass through the other check.
+    const jittery = sampledProbe({ [US]: [40, 300, 900] })
+
+    await expect(
+      new RelayRegionPreferenceResolver({
+        directorUrl: DIRECTOR,
+        userDataPath: path,
+        fetch: catalogFetch([{ region: 'us-central1', probeOrigins: [US] }]),
+        probe: jittery.probe,
+        now: () => 1_000
+      }).resolve()
+    ).resolves.toBeUndefined()
+  })
+
+  it('judges jitter on the warm rounds even when the cold sample sits between or below them', async () => {
+    const path = userDataPath()
+    const jitteryWarmRounds = sampledProbe({ [US]: [150, 100, 300] })
+    await expect(
+      new RelayRegionPreferenceResolver({
+        directorUrl: DIRECTOR,
+        userDataPath: path,
+        fetch: catalogFetch([{ region: 'us-central1', probeOrigins: [US] }]),
+        probe: jitteryWarmRounds.probe,
+        now: () => 1_000
+      }).resolve()
+    ).resolves.toBeUndefined()
+
+    const fastColdRound = sampledProbe({ [US]: [30, 100, 102] })
+    await expect(
+      new RelayRegionPreferenceResolver({
+        directorUrl: DIRECTOR,
+        userDataPath: path,
+        fetch: catalogFetch([{ region: 'us-central1', probeOrigins: [US] }]),
+        probe: fastColdRound.probe,
+        now: () => 1_000
+      }).resolve()
+    ).resolves.toBe('us-central1')
+    expect(JSON.parse(readFileSync(cachePath(path), 'utf8'))).toMatchObject({ latencyMs: 100 })
+  })
+
+  it('still rejects a first round that stalls far beyond any handshake', async () => {
+    const path = userDataPath()
+    const stalledColdRound = sampledProbe({ [US]: [1400, 95, 100] })
+
+    await expect(
+      new RelayRegionPreferenceResolver({
+        directorUrl: DIRECTOR,
+        userDataPath: path,
+        fetch: catalogFetch([{ region: 'us-central1', probeOrigins: [US] }]),
+        probe: stalledColdRound.probe,
+        now: () => 1_000
+      }).resolve()
+    ).resolves.toBeUndefined()
+  })
+
+  it('still rejects a region that stalls one round in three', async () => {
+    const path = userDataPath()
+    const stalling = sampledProbe({ [US]: [95, 100, 1400] })
+
+    await expect(
+      new RelayRegionPreferenceResolver({
+        directorUrl: DIRECTOR,
+        userDataPath: path,
+        fetch: catalogFetch([{ region: 'us-central1', probeOrigins: [US] }]),
+        probe: stalling.probe,
+        now: () => 1_000
+      }).resolve()
+    ).resolves.toBeUndefined()
+  })
+
   it('recovers from corrupt cache and cancels an old directors error response', async () => {
     const path = userDataPath()
     writeFileSync(cachePath(path), '{not-json')
