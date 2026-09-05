@@ -212,6 +212,7 @@ function codePlaceholderPrefix(content: string): string {
     while (content[cursor] === '_') {
       cursor += 1
     }
+    // One extra underscore keeps the prefix longer than every authored run.
     suffixLength = Math.max(suffixLength, cursor - suffixStart + 1)
   }
   return CODE_PLACEHOLDER_PREFIX_BASE + '_'.repeat(suffixLength)
