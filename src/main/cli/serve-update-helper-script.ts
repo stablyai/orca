@@ -8,16 +8,19 @@ import { quoteShell } from './cli-install-path-format'
  * well-defined systemctl/sha512sum pipeline that a shell expresses without a build step.
  *
  * Contract (see docs/reference/headless-linux-server.md):
- * 1. Read the request from the spool; validate shape and unit name.
+ * 1. Read the request from the spool; validate shape and unit name; refuse downgrades and
+ *    no-op when already at the target version.
  * 2. Write { phase: "accepted" } — from here the app is allowed to quit.
  * 3. Re-hash the staged AppImage against the request's sha512 (the helper is the trust anchor:
  *    it verifies the file it will actually install, not just the metadata it was handed).
- * 4. systemctl stop the unit (census is the app's job).
- * 5. Copy the artifact onto the target filesystem, fsync, atomic rename.
- * 6. Write VERSION, reset-failed, systemctl start.
- * 7. Write { phase: "ok", targetVersion } on success.
- * Any failure after acceptance writes { phase: "failed", reason }; after a stop the unit is
- * always restarted, with the old binary still in place unless the swap already succeeded.
+ * 4. Snapshot the current binary, systemctl stop the unit (census is the app's job).
+ * 5. Copy the artifact onto the target filesystem, fsync, atomic rename; write VERSION.
+ * 6. reset-failed, systemctl start, then verify readiness: the unit's new MainPID must emit
+ *    the `orca_server_ready` journal line (the unit runs `serve --json`).
+ * 7. Write { phase: "ok", targetVersion } on success; on any post-acceptance failure roll
+ *    back to the snapshot, restart the old binary, and write { phase: "failed", reason }.
+ * The request file is consumed at every terminal verdict so a stale request can never be
+ * re-applied by a later invocation.
  */
 export function buildServeUpdateHelperScript(input: {
   spoolDir: string
@@ -36,6 +39,9 @@ APPIMAGE_TARGET=${q(input.appImageTargetPath)}
 VERSION_TARGET=${q(input.versionRecordPath)}
 REQUEST="$SPOOL_DIR/request.json"
 RESULT="$SPOOL_DIR/result.json"
+STAGING="$APPIMAGE_TARGET.new"
+BACKUP="$APPIMAGE_TARGET.update-backup"
+READY_TIMEOUT_SECONDS=60
 LOG_TAG="orca-serve-update-helper"
 
 log() { echo "[$LOG_TAG] $*" >&2; }
@@ -49,12 +55,14 @@ write_result() {
 
 reject() {
   log "rejected: $1"
+  rm -f "$REQUEST"
   write_result '{"phase":"rejected","reason":'"$(printf '%s' "$1" | jq -Rs .)"'}'
   exit 0
 }
 
 fail() {
   log "failed: $1"
+  rm -f "$REQUEST"
   write_result '{"phase":"failed","reason":'"$(printf '%s' "$1" | jq -Rs .)"'}'
   exit 0
 }
@@ -64,6 +72,12 @@ rm -f "$RESULT"
 
 if [[ $(id -u) -ne 0 ]]; then
   reject "helper must run as root"
+fi
+
+# Serialize concurrent invocations; the lock dies with this process.
+exec 9>"$SPOOL_DIR/helper.lock"
+if ! flock -w 30 9; then
+  reject "another update is in progress"
 fi
 
 if [[ ! -f "$REQUEST" ]]; then
@@ -116,64 +130,105 @@ if [[ "$ARTIFACT_PATH" -ef "$APPIMAGE_TARGET" ]]; then
   reject "artifact is the live binary"
 fi
 
+CURRENT_VERSION=""
+if [[ -f "$VERSION_TARGET" ]]; then
+  CURRENT_VERSION=$(cat "$VERSION_TARGET")
+fi
+if [[ -n "$CURRENT_VERSION" ]]; then
+  if [[ "$TARGET_VERSION" == "$CURRENT_VERSION" ]]; then
+    reject "already at version $TARGET_VERSION"
+  fi
+  OLDEST=$(printf '%s\\n' "$CURRENT_VERSION" "$TARGET_VERSION" | sort -V | head -n 1)
+  if [[ "$OLDEST" == "$TARGET_VERSION" ]]; then
+    reject "refusing downgrade from $CURRENT_VERSION to $TARGET_VERSION"
+  fi
+fi
+
 # From here the app may quit; the helper owns the unit.
 write_result '{"phase":"accepted","runtimeId":"'"$RUNTIME_ID"'","targetVersion":"'"$TARGET_VERSION"'"}'
 log "accepted request from pid $SERVING_PID for $TARGET_VERSION"
 
-STAGING="$APPIMAGE_TARGET.new"
-OLD_VERSION_RECORD=""
-if [[ -f "$VERSION_TARGET" ]]; then
-  OLD_VERSION_RECORD=$(cat "$VERSION_TARGET")
-fi
+OLD_VERSION_RECORD="$CURRENT_VERSION"
 
-cleanup_and_fail() {
+# Roll back to the snapshot and bring the OLD binary back up; used for every
+# post-acceptance failure so the unit is never left down.
+rollback_and_fail() {
   set +e
-  rm -f "$STAGING"
+  rm -f "$STAGING" "$VERSION_TARGET.tmp"
+  if [[ -f "$BACKUP" ]]; then
+    mv -f "$BACKUP" "$APPIMAGE_TARGET"
+  fi
+  if [[ -n "$OLD_VERSION_RECORD" ]]; then
+    printf '%s\\n' "$OLD_VERSION_RECORD" > "$VERSION_TARGET" 2>/dev/null || true
+  fi
   log "restarting unit after failure"
   systemctl reset-failed "$UNIT_NAME" 2>/dev/null || true
   systemctl start "$UNIT_NAME" 2>/dev/null || true
   fail "$1"
 }
 
+# Snapshot before touching anything so a failed swap or failed readiness can restore.
+if ! cp -p -- "$APPIMAGE_TARGET" "$BACKUP"; then
+  rm -f "$BACKUP"
+  rollback_and_fail "could not snapshot current binary"
+fi
+
 # Stop before touching the binary; the FUSE mount holds the live image.
 if ! systemctl stop "$UNIT_NAME"; then
-  cleanup_and_fail "could not stop $UNIT_NAME"
+  rollback_and_fail "could not stop $UNIT_NAME"
 fi
 
 # Copy (never mv) onto the target filesystem so a cross-device artifact still lands,
 # then fsync + atomic rename. A partial copy can never be promoted.
 if ! cp -- "$ARTIFACT_PATH" "$STAGING"; then
-  cleanup_and_fail "could not stage artifact"
+  rollback_and_fail "could not stage artifact"
 fi
 if ! chmod 0755 "$STAGING"; then
-  cleanup_and_fail "could not chmod staged artifact"
+  rollback_and_fail "could not chmod staged artifact"
 fi
 if ! chown root:root "$STAGING"; then
-  cleanup_and_fail "could not chown staged artifact"
+  rollback_and_fail "could not chown staged artifact"
 fi
 sync -f "$STAGING" 2>/dev/null || sync || true
 
 if ! mv -f "$STAGING" "$APPIMAGE_TARGET"; then
-  cleanup_and_fail "could not promote staged artifact"
+  rollback_and_fail "could not promote staged artifact"
 fi
 
 if ! printf '%s\\n' "$TARGET_VERSION" > "$VERSION_TARGET.tmp"; then
-  cleanup_and_fail "could not write version record"
+  rollback_and_fail "could not write version record"
 fi
 if ! mv -f "$VERSION_TARGET.tmp" "$VERSION_TARGET"; then
-  cleanup_and_fail "could not promote version record"
+  rollback_and_fail "could not promote version record"
 fi
 
 # A tripped StartLimitBurst refuses a plain start.
 systemctl reset-failed "$UNIT_NAME" 2>/dev/null || true
 if ! systemctl start "$UNIT_NAME"; then
-  set +e
-  rm -f "$VERSION_TARGET.tmp"
-  log "new binary failed to start"
-  write_result '{"phase":"failed","reason":"start-failed"}'
-  exit 0
+  rollback_and_fail "new binary failed to start"
 fi
 
+# Readiness: the unit's new MainPID must report orca_server_ready (unit runs serve --json).
+wait_for_ready() {
+  local deadline=$(( $(date +%s) + READY_TIMEOUT_SECONDS ))
+  local pid
+  while (( $(date +%s) < deadline )); do
+    pid=$(systemctl show -p MainPID --value "$UNIT_NAME" 2>/dev/null || true)
+    if [[ "$pid" =~ ^[0-9]+$ ]] && (( pid > 0 )); then
+      if journalctl -u "$UNIT_NAME" _PID="$pid" -n 100 --no-pager 2>/dev/null | grep -q 'orca_server_ready'; then
+        return 0
+      fi
+    fi
+    sleep 1
+  done
+  return 1
+}
+
+if ! wait_for_ready; then
+  rollback_and_fail "new binary did not report ready within $READY_TIMEOUT_SECONDS seconds"
+fi
+
+rm -f "$BACKUP"
 write_result '{"phase":"ok","runtimeId":"'"$RUNTIME_ID"'","targetVersion":"'"$TARGET_VERSION"'"}'
 log "update to $TARGET_VERSION applied"
 `
