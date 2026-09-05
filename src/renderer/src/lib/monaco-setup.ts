@@ -9,6 +9,8 @@ import htmlWorker from 'monaco-editor/esm/vs/language/html/html.worker?worker'
 import tsWorker from 'monaco-editor/esm/vs/language/typescript/ts.worker?worker'
 import { registerAstroLanguage } from './monaco-languages/register-astro'
 import { registerJsonlLanguage } from './monaco-languages/register-jsonl'
+import { registerLatexLanguage } from './monaco-languages/register-latex'
+import { registerMatlabLanguage } from './monaco-languages/register-matlab'
 import { registerNimLanguage } from './monaco-languages/register-nim'
 import { registerSvelteLanguage } from './monaco-languages/register-svelte'
 import { registerVueLanguage } from './monaco-languages/register-vue'
@@ -78,6 +80,8 @@ registerVueLanguage(monaco)
 registerSvelteLanguage(monaco)
 registerAstroLanguage(monaco)
 registerNimLanguage(monaco)
+registerMatlabLanguage(monaco)
+registerLatexLanguage(monaco)
 registerJsonlLanguage(monaco)
 installMonacoDelayerCancellationGuard()
 installMonacoDiffEditorDisposalGuard(monaco)

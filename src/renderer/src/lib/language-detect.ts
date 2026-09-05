@@ -98,6 +98,14 @@ const EXT_TO_LANGUAGE: Record<string, string> = {
   '.nim': 'nim',
   '.nims': 'nim',
   '.nimble': 'nim',
+  // Why: #10363 — .m/.tex were plaintext; MATLAB TextMate + LaTeX Monarch.
+  // .m is also Objective-C, but we never mapped it before and the report is MATLAB.
+  '.m': 'matlab',
+  '.tex': 'latex',
+  '.ltx': 'latex',
+  '.latex': 'latex',
+  '.sty': 'latex',
+  '.cls': 'latex',
   '.tf': 'hcl',
   '.hcl': 'hcl',
   '.prisma': 'graphql',
