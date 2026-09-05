@@ -98,6 +98,21 @@ describe('favicon retention across navigations', () => {
     expect(harness.updates.at(-1)).toEqual({ faviconUrl: null })
   })
 
+  it('drops the icon when a same-origin navigation redirects to another origin', () => {
+    const harness = createHarness('https://github.com/nodejs/node')
+    harness.navigation.handleFaviconUpdate({ favicons: [GITHUB_ICON] })
+    harness.navigateTo('https://github.com/login')
+
+    harness.navigation.handleDidRedirectNavigation({
+      isMainFrame: true,
+      isInPlace: false,
+      url: 'https://example.com/after-login'
+    } as Electron.DidRedirectNavigationEvent)
+
+    expect(harness.faviconUrlRef.current).toBeNull()
+    expect(harness.updates.at(-1)).toEqual({ faviconUrl: null })
+  })
+
   it('does not clear on a same-document navigation', () => {
     const harness = createHarness('https://github.com/nodejs/node')
     harness.navigation.handleFaviconUpdate({ favicons: [GITHUB_ICON] })
