@@ -98,6 +98,152 @@ function assertPatchApplied() {
         'config/patches/@vscode__windows-process-tree@0.8.0.patch; run pnpm install.'
     )
   }
+  const requiredCreationTimeSources = [
+    ['src/process.h', 'CREATIONTIME = 4'],
+    ['src/process.h', 'ULONGLONG creationTimeMs'],
+    ['src/process.cc', 'GetProcessCreationTime(pinfo)'],
+    ['src/process.cc', 'GetProcessTimes(hProcess, &creationTime'],
+    ['src/process_worker.cc', 'object.Set("creationTimeMs"'],
+    ['lib/index.js', '["CreationTime"] = 4'],
+    ['lib/index.ts', 'CreationTime = 4'],
+    ['typings/windows-process-tree.d.ts', 'creationTimeMs?: number']
+  ]
+  for (const [relativePath, expected] of requiredCreationTimeSources) {
+    if (!readFileSync(join(PACKAGE_DIR, relativePath), 'utf8').includes(expected)) {
+      throw new Error(
+        `${relativePath} does not contain the process creation-time patch (${expected}). ` +
+          'Run pnpm install before building the relay addon.'
+      )
+    }
+  }
+}
+
+function repairCreationTimeSources() {
+  let repaired = false
+  const rewrite = (relativePath, transform) => {
+    const filePath = join(PACKAGE_DIR, relativePath)
+    const source = readFileSync(filePath, 'utf8')
+    const next = transform(source, source.includes('\r\n') ? '\r\n' : '\n')
+    if (next !== source) {
+      writeFileSync(filePath, next)
+      repaired = true
+    }
+  }
+
+  rewrite('src/process.h', (source, eol) => {
+    let next = source
+    if (!next.includes('ULONGLONG creationTimeMs')) {
+      next = next.replace(
+        /  std::string commandLine;\r?\n/,
+        `  std::string commandLine;${eol}  ULONGLONG creationTimeMs;${eol}`
+      )
+    }
+    if (!next.includes('CREATIONTIME = 4')) {
+      next = next.replace(
+        /  COMMANDLINE = 2\r?\n/,
+        `  COMMANDLINE = 2,${eol}  CREATIONTIME = 4${eol}`
+      )
+    }
+    if (!next.includes('void GetProcessCreationTime')) {
+      next = next.replace(
+        /void GetProcessMemoryUsage\(ProcessInfo& process_info\);\r?\n/,
+        `void GetProcessMemoryUsage(ProcessInfo& process_info);${eol}${eol}` +
+          `void GetProcessCreationTime(ProcessInfo& process_info);${eol}`
+      )
+    }
+    return next
+  })
+
+  rewrite('src/process.cc', (source, eol) => {
+    let next = source.replace('ProcessInfo pinfo;', 'ProcessInfo pinfo{};')
+    if (!next.includes('GetProcessCreationTime(pinfo)')) {
+      next = next.replace(
+        /(        if \(COMMANDLINE & process_data_flags\) \{\r?\n          GetProcessCommandLine\(pinfo\);\r?\n        \})/,
+        `$1${eol}${eol}        if (CREATIONTIME & process_data_flags) {${eol}` +
+          `          GetProcessCreationTime(pinfo);${eol}        }`
+      )
+    }
+    if (!next.includes('void GetProcessCreationTime(ProcessInfo& process_info) {')) {
+      const producer = [
+        'void GetProcessCreationTime(ProcessInfo& process_info) {',
+        '  HANDLE hProcess = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, false, process_info.pid);',
+        '  if (hProcess == NULL) {',
+        '    return;',
+        '  }',
+        '',
+        '  FILETIME creationTime, exitTime, kernelTime, userTime;',
+        '  if (GetProcessTimes(hProcess, &creationTime, &exitTime, &kernelTime, &userTime)) {',
+        '    ULARGE_INTEGER timestamp;',
+        '    timestamp.LowPart = creationTime.dwLowDateTime;',
+        '    timestamp.HighPart = creationTime.dwHighDateTime;',
+        '    constexpr ULONGLONG WINDOWS_EPOCH_OFFSET_100NS = 116444736000000000ULL;',
+        '    constexpr ULONGLONG HUNDRED_NS_PER_MILLISECOND = 10000ULL;',
+        '    if (timestamp.QuadPart >= WINDOWS_EPOCH_OFFSET_100NS) {',
+        '      process_info.creationTimeMs =',
+        '          (timestamp.QuadPart - WINDOWS_EPOCH_OFFSET_100NS) / HUNDRED_NS_PER_MILLISECOND;',
+        '    }',
+        '  }',
+        '',
+        '  CloseHandle(hProcess);',
+        '}',
+        ''
+      ].join(eol)
+      next = next.replace(
+        'void GetProcessMemoryUsage',
+        `${producer}${eol}void GetProcessMemoryUsage`
+      )
+    }
+    return next
+  })
+
+  rewrite('src/process_worker.cc', (source, eol) => {
+    if (source.includes('object.Set("creationTimeMs"')) {
+      return source
+    }
+    const emission = [
+      '    if ((CREATIONTIME & process_data_flags_) && pinfo.creationTimeMs != 0) {',
+      '      object.Set("creationTimeMs",',
+      '                 Napi::Number::New(env, static_cast<double>(pinfo.creationTimeMs)));',
+      '    }',
+      ''
+    ].join(eol)
+    return source.replace(
+      '    result.Set(i, object);',
+      `${emission}${eol}    result.Set(i, object);`
+    )
+  })
+
+  for (const relativePath of ['lib/index.ts', 'lib/index.js']) {
+    rewrite(relativePath, (source, eol) => {
+      if (source.includes('CreationTime')) {
+        return source
+      }
+      return relativePath.endsWith('.ts')
+        ? source.replace('  CommandLine = 2', `  CommandLine = 2,${eol}  CreationTime = 4`)
+        : source.replace(
+            '    ProcessDataFlag[ProcessDataFlag["CommandLine"] = 2] = "CommandLine";',
+            '    ProcessDataFlag[ProcessDataFlag["CommandLine"] = 2] = "CommandLine";' +
+              `${eol}    ProcessDataFlag[ProcessDataFlag["CreationTime"] = 4] = "CreationTime";`
+          )
+    })
+  }
+
+  rewrite('typings/windows-process-tree.d.ts', (source, eol) => {
+    let next = source
+    if (!next.includes('CreationTime = 4')) {
+      next = next.replace('    CommandLine = 2', `    CommandLine = 2,${eol}    CreationTime = 4`)
+    }
+    if (!next.includes('creationTimeMs?: number')) {
+      next = next.replace(
+        /    commandLine\?: string;\r?\n/,
+        `    commandLine?: string;${eol}${eol}` +
+          `    /** Process creation time in Unix milliseconds. */${eol}` +
+          `    creationTimeMs?: number;${eol}`
+      )
+    }
+    return next
+  })
+  return repaired
 }
 
 // pnpm can materialize this CRLF package without applying its patch. Repair the
@@ -146,9 +292,15 @@ function applyWindowsProcessTreeBuildFixes() {
   if (processCc !== originalProcess) {
     writeFileSync(processPath, processCc)
   }
+  const repairedCreationTime = repairCreationTimeSources()
   stageWindowsProcessTreeNodeAddonApiHeaders(PACKAGE_DIR)
   const repairedCommandLine = ensureWindowsProcessTreeCommandLinePatch(PACKAGE_DIR)
-  if (bindingGyp !== originalBinding || processCc !== originalProcess || repairedCommandLine) {
+  if (
+    bindingGyp !== originalBinding ||
+    processCc !== originalProcess ||
+    repairedCommandLine ||
+    repairedCreationTime
+  ) {
     console.warn('[windows-process-tree] Repaired un-applied pnpm patch hunks before build.')
   }
 }
