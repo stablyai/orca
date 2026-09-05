@@ -536,7 +536,11 @@ describe('Subprocess: Relay entry point', () => {
       const sockPath = path.join(tmpDir, 'relay.sock')
       relay = spawn(['--detached', '--grace-time', '1', '--sock-path', sockPath], {
         ...process.env,
-        ORCA_RELAY_EMPTY_STARTUP_GRACE_MS: '500'
+        // Why: under full-suite parallelism the bridge child can take >1s to spawn and
+        // accept; a 500ms startup grace lets the relay exit before any client connects,
+        // so the test hangs. Post-first-client the branch switches to the configured
+        // grace (--grace-time 1), so this override only governs the pre-accept window.
+        ORCA_RELAY_EMPTY_STARTUP_GRACE_MS: '5000'
       })
       await relay.sentinelReceived
 
@@ -554,7 +558,9 @@ describe('Subprocess: Relay entry point', () => {
       await relay.waitForExit(2000)
       expect(relay.proc.exitCode).toBe(0)
     },
-    10_000
+    // Why: spawns two real node subprocesses; under full-suite parallelism child
+    // startup alone can eat most of the default 10s budget (flaky on merge-base too).
+    30_000
   )
 
   // Why: a relay holding zero PTYs preserves nothing, so the unlimited default must still be
