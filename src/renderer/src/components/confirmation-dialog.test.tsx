@@ -83,6 +83,22 @@ describe('ConfirmationDialogProvider', () => {
     await waitFor(() => expect(onSettled).toHaveBeenCalledWith(false))
   })
 
+  it('focuses the confirm action so Enter runs it instead of dismissing the prompt', async () => {
+    const { onSettled } = renderDialog({
+      title: 'Delete artifact?',
+      confirmLabel: 'Delete',
+      confirmVariant: 'destructive'
+    })
+
+    await userEvent.click(screen.getByRole('button', { name: 'ask' }))
+    const confirmButton = await screen.findByRole('button', { name: 'Delete' })
+    await waitFor(() => expect(confirmButton).toHaveFocus())
+
+    await userEvent.keyboard('{Enter}')
+
+    await waitFor(() => expect(onSettled).toHaveBeenCalledWith(true))
+  })
+
   it('does not carry a checked box into the next prompt', async () => {
     const onConfirmed = vi.fn()
     renderDialog({

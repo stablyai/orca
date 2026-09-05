@@ -32,6 +32,7 @@ export function ConfirmationDialogProvider({
   children: React.ReactNode
 }): React.JSX.Element {
   const nextIdRef = useRef(0)
+  const confirmButtonRef = useRef<HTMLButtonElement>(null)
   const [queue, setQueue] = useState<ConfirmationDialogRequest[]>([])
   const [dontAskAgain, setDontAskAgain] = useState(false)
   const activeRequest = queue[0] ?? null
@@ -96,7 +97,19 @@ export function ConfirmationDialogProvider({
         open={activeRequest !== null}
         onOpenChange={(open) => !open && settleActiveRequest(false)}
       >
-        <DialogContent showCloseButton={false} className="sm:max-w-md">
+        <DialogContent
+          showCloseButton={false}
+          className="sm:max-w-md"
+          onOpenAutoFocus={(event) => {
+            if (!confirmButtonRef.current) {
+              return
+            }
+            // Why: Radix otherwise focuses Cancel first, so Enter dismisses the prompt
+            // instead of running the action the user was just asked to confirm.
+            event.preventDefault()
+            confirmButtonRef.current.focus()
+          }}
+        >
           <DialogHeader>
             <DialogTitle>{displayedRequest?.options.title}</DialogTitle>
             {displayedRequest?.options.description ? (
@@ -130,8 +143,10 @@ export function ConfirmationDialogProvider({
                 translate('auto.components.confirmation.dialog.56f5c60e0c', 'Cancel')}
             </Button>
             <Button
+              ref={confirmButtonRef}
               type="button"
               variant={displayedRequest?.options.confirmVariant ?? 'default'}
+              autoFocus
               onClick={() => settleActiveRequest(true)}
             >
               {displayedRequest?.options.confirmLabel ??
