@@ -413,9 +413,9 @@ describe('renderer startup runtime routing', () => {
 
     const loaderSource = readSource('src/renderer/src/lib/terminal-component-loader.ts')
     expect(shellSource).toContain("from '@/lib/terminal-component-loader'")
-    expect(shellSource).toContain('const Terminal = lazy(loadTerminalComponent)')
-    expect(loaderSource).toContain("() => import('../components/Terminal')")
-    expect(loaderSource).not.toContain("from '../components/Terminal'")
+    expect(shellSource).toContain('PreloadedTerminal as Terminal')
+    expect(loaderSource).toContain("await import('../components/Terminal')")
+    expect(loaderSource).not.toMatch(/^import (?!type ).*from ['"]\.\.\/components\/Terminal['"]/m)
     expect(shellSource).not.toContain("from '../components/Terminal'")
     expect(layoutSource).toContain(
       'const canMountTerminalWorkbenchNow = activeWorktreeId !== null || backgroundTerminalMountRequested'

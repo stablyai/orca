@@ -1,5 +1,5 @@
 import { Suspense, useRef } from 'react'
-import { loadTerminalComponent } from '@/lib/terminal-component-loader'
+import { PreloadedTerminal as Terminal } from '@/lib/terminal-component-loader'
 import { lazyWithRetry as lazy } from '@/lib/lazy-with-retry'
 import { translate } from '@/i18n/i18n'
 import Sidebar from '../components/Sidebar'
@@ -25,7 +25,6 @@ const SkillsPage = lazy(() => import('../components/skills/SkillsPage'))
 const ArtifactsPage = lazy(() => import('../components/artifacts/ArtifactsPage'))
 const WorkspaceSpacePage = lazy(() => import('../components/workspace-space/WorkspaceSpacePage'))
 const MobilePage = lazy(() => import('../components/mobile/MobilePage'))
-const Terminal = lazy(loadTerminalComponent)
 
 type WorktreeSidebarScrollRefs = {
   scrollOffsetRef: React.MutableRefObject<number>
