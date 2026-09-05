@@ -9,6 +9,7 @@ import {
   buildLineageRowRekeyMap,
   getActiveStickyIndexesForScroll,
   getVirtualRowKey,
+  getVirtualRowIndexAtOffset,
   pruneStaleVirtualRowElementCache
 } from './virtual-rows'
 import { getRenderRowKey } from '../listing/render-row'
@@ -55,10 +56,16 @@ export function useVirtualRowMeasurementSync(args: {
   const lineageRowRekeys = useMemo(() => buildLineageRowRekeyMap(renderRows), [renderRows])
   const totalSize = virtualizer.getTotalSize()
   const virtualItems = virtualizer.getVirtualItems()
+  const maxScrollOffset = Math.max(0, totalSize - (virtualizer.scrollRect?.height ?? 0))
   const activeStickyIndexes = getActiveStickyIndexesForScroll({
     rows: renderRows,
     rangeStartIndex: virtualization.stickyRangeStartIndexRef.current,
     scrollOffset: virtualizer.scrollOffset ?? scrollOffsetRef.current,
+    // Why: remounts retain the prior view's offset until a scroll event, but
+    // all-collapsed content may be too short to emit one.
+    maxScrollOffset,
+    rangeStartIndexAtMaxScrollOffset:
+      getVirtualRowIndexAtOffset(virtualItems, maxScrollOffset) ?? 0,
     stickyHeaderIndexes: virtualization.stickyHeaderIndexes,
     virtualItems
   })
