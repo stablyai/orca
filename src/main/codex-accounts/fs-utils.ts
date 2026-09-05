@@ -4,10 +4,12 @@ import { dirname } from 'node:path'
 import { grantDirAcl, isPermissionError } from '../win32-utils'
 import { nodeFileContentsEqualSync } from '../../shared/node-file-content-equality'
 
+type AtomicWriteOptions = { mode?: number; repairPermissions?: boolean }
+
 export function writeFileAtomically(
   targetPath: string,
   contents: string,
-  options?: { mode?: number }
+  options?: AtomicWriteOptions
 ): void {
   const tmpPath = `${targetPath}.${process.pid}.${randomUUID()}.tmp`
   try {
@@ -21,7 +23,11 @@ export function writeFileAtomically(
     // EPERM on all writes. Grant an explicit ACL on the parent directory
     // and retry once so the write succeeds even if Chromium reset the DACL
     // after our startup fix ran.
-    if (isPermissionError(error) && process.platform === 'win32') {
+    if (
+      options?.repairPermissions !== false &&
+      isPermissionError(error) &&
+      process.platform === 'win32'
+    ) {
       try {
         grantDirAcl(dirname(targetPath))
         const retryTmpPath = `${targetPath}.${process.pid}.${randomUUID()}.tmp`
@@ -44,12 +50,16 @@ export function writeFileAtomicallyIfUnchanged(
   targetPath: string,
   expectedContents: string | null,
   contents: string,
-  options?: { mode?: number }
+  options?: AtomicWriteOptions
 ): boolean {
   try {
     return attemptGuardedAtomicWrite(targetPath, expectedContents, contents, options)
   } catch (error) {
-    if (!isPermissionError(error) || process.platform !== 'win32') {
+    if (
+      options?.repairPermissions === false ||
+      !isPermissionError(error) ||
+      process.platform !== 'win32'
+    ) {
       throw error
     }
     grantDirAcl(dirname(targetPath))
@@ -96,11 +106,15 @@ export function recoverInterruptedGuardedFileOperation(targetPath: string): void
   recoverInterruptedGuardedOperation(getGuardedOperationHeldPath(targetPath), targetPath)
 }
 
-function restoreMovedFileWithoutOverwrite(sourcePath: string, targetPath: string): void {
+function restoreMovedFileWithoutOverwrite(
+  sourcePath: string,
+  targetPath: string,
+  repairPermissions = true
+): void {
   if (!existsSync(sourcePath)) {
     return
   }
-  publishFileWithoutOverwrite(sourcePath, targetPath)
+  publishFileWithoutOverwrite(sourcePath, targetPath, repairPermissions)
   rmSync(sourcePath, { force: true })
 }
 
@@ -108,11 +122,15 @@ function getGuardedOperationHeldPath(targetPath: string): string {
   return `${targetPath}.orca-guarded`
 }
 
-function recoverInterruptedGuardedOperation(heldPath: string, targetPath: string): void {
+function recoverInterruptedGuardedOperation(
+  heldPath: string,
+  targetPath: string,
+  repairPermissions = true
+): void {
   if (!existsSync(heldPath)) {
     return
   }
-  publishFileWithoutOverwrite(heldPath, targetPath)
+  publishFileWithoutOverwrite(heldPath, targetPath, repairPermissions)
   rmSync(heldPath, { force: true })
 }
 
@@ -120,17 +138,17 @@ function attemptGuardedAtomicWrite(
   targetPath: string,
   expectedContents: string | null,
   contents: string,
-  options?: { mode?: number }
+  options?: AtomicWriteOptions
 ): boolean {
   const tmpPath = `${targetPath}.${process.pid}.${randomUUID()}.tmp`
   const heldPath = getGuardedOperationHeldPath(targetPath)
-  recoverInterruptedGuardedOperation(heldPath, targetPath)
+  recoverInterruptedGuardedOperation(heldPath, targetPath, options?.repairPermissions)
   try {
     writeFileSync(tmpPath, contents, { encoding: 'utf-8', mode: options?.mode })
     if (expectedContents === null) {
-      return publishFileWithoutOverwrite(tmpPath, targetPath)
+      return publishFileWithoutOverwrite(tmpPath, targetPath, options?.repairPermissions)
     }
-    assertHardLinkPublicationSupported(tmpPath, targetPath)
+    assertHardLinkPublicationSupported(tmpPath, targetPath, options?.repairPermissions)
     try {
       renameFileWithWindowsRetry(targetPath, heldPath)
     } catch (error) {
@@ -140,27 +158,31 @@ function attemptGuardedAtomicWrite(
       throw error
     }
     if (!nodeFileContentsEqualSync(heldPath, expectedContents)) {
-      restoreMovedFileWithoutOverwrite(heldPath, targetPath)
+      restoreMovedFileWithoutOverwrite(heldPath, targetPath, options?.repairPermissions)
       return false
     }
-    if (!publishFileWithoutOverwrite(tmpPath, targetPath)) {
+    if (!publishFileWithoutOverwrite(tmpPath, targetPath, options?.repairPermissions)) {
       rmSync(heldPath, { force: true })
       return false
     }
     rmSync(heldPath, { force: true })
     return true
   } catch (error) {
-    restoreMovedFileWithoutOverwrite(heldPath, targetPath)
+    restoreMovedFileWithoutOverwrite(heldPath, targetPath, options?.repairPermissions)
     throw error
   } finally {
     rmSync(tmpPath, { force: true })
   }
 }
 
-function assertHardLinkPublicationSupported(sourcePath: string, targetPath: string): void {
+function assertHardLinkPublicationSupported(
+  sourcePath: string,
+  targetPath: string,
+  repairPermissions = true
+): void {
   const probePath = `${targetPath}.${process.pid}.${randomUUID()}.link-probe`
   try {
-    if (!publishFileWithoutOverwrite(sourcePath, probePath)) {
+    if (!publishFileWithoutOverwrite(sourcePath, probePath, repairPermissions)) {
       throw new Error(`Guarded file publication probe already exists: ${probePath}`)
     }
   } finally {
@@ -168,7 +190,11 @@ function assertHardLinkPublicationSupported(sourcePath: string, targetPath: stri
   }
 }
 
-function publishFileWithoutOverwrite(sourcePath: string, targetPath: string): boolean {
+function publishFileWithoutOverwrite(
+  sourcePath: string,
+  targetPath: string,
+  repairPermissions = true
+): boolean {
   try {
     linkSync(sourcePath, targetPath)
     return true
@@ -176,7 +202,7 @@ function publishFileWithoutOverwrite(sourcePath: string, targetPath: string): bo
     if ((error as NodeJS.ErrnoException).code === 'EEXIST') {
       return false
     }
-    if (isPermissionError(error) && process.platform === 'win32') {
+    if (repairPermissions && isPermissionError(error) && process.platform === 'win32') {
       grantDirAcl(dirname(targetPath))
       try {
         linkSync(sourcePath, targetPath)

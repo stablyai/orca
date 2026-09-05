@@ -172,6 +172,9 @@ Agents drive Orca too — script every workflow with `orca worktree create`, `sn
 
 Works with **any CLI agent** — if it runs in a terminal, it runs in Orca.
 
+[Set up Chrome DevTools MCP for Codex and OpenCode](docs/reference/chrome-devtools-mcp.md)
+to connect an agent to your open Chrome browser.
+
 <p>
   <a href="https://docs.anthropic.com/claude/docs/claude-code"><kbd><img src="docs/assets/claude-logo.svg" alt="Claude Code logo" width="16" valign="middle" /> Claude Code</kbd></a> &nbsp;
   <a href="https://github.com/openai/codex"><kbd><img src="https://www.google.com/s2/favicons?domain=openai.com&sz=64" alt="Codex logo" width="16" valign="middle" /> Codex</kbd></a> &nbsp;
