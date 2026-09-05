@@ -2,8 +2,14 @@
 // accepts once they can.
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import type { AgentJournalRenderItem } from '../../../../shared/agent-session-journal-types'
+import type { AgentSessionJournal } from '../../../native-chat/agent-session-journal/journal-store'
 import type { StructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/structured-agent-session-host'
 import { setStructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/structured-agent-session-registry'
+import {
+  StructuredAgentSessionStatusFeed,
+  type StructuredAgentSessionStatusSubscriber
+} from '../../../native-chat/agent-session-wire/structured-agent-session-status-feed'
 import {
   RUNTIME_CAPABILITIES,
   RUNTIME_PROTOCOL_VERSION,
@@ -64,6 +70,44 @@ function request(method: string, params: unknown): RpcRequest {
 let hostCalls: Record<string, ReturnType<typeof vi.fn>>
 let runtimeCalls: Record<string, ReturnType<typeof vi.fn>>
 
+const STATUS_SESSION = 'session-status'
+const STATUS_ITEMS: AgentJournalRenderItem[] = [
+  {
+    itemId: 'user-1',
+    sequence: 1,
+    revision: 1,
+    observedAt: 1,
+    body: { kind: 'message', role: 'user', blocks: [{ type: 'text', text: 'write a poem' }] }
+  },
+  {
+    itemId: 'turn-1',
+    sequence: 2,
+    revision: 1,
+    observedAt: 2,
+    body: { kind: 'status', text: 'Working', turnLifecycle: { turnId: 'turn-1', state: 'running' } }
+  }
+]
+
+/** One indexed session over a journal that reads back fixed items; the projection is real. */
+function statusFeed(): StructuredAgentSessionStatusFeed {
+  return new StructuredAgentSessionStatusFeed({
+    sessions: new Map([
+      [
+        STATUS_SESSION,
+        {
+          journal: {
+            isReadOnly: false,
+            snapshot: () => ({ items: STATUS_ITEMS })
+          } as unknown as AgentSessionJournal,
+          params: { location: { workspaceId: 'workspace-1' }, provider: 'codex' as const }
+        }
+      ]
+    ]),
+    getRecord: () => null,
+    now: () => 1_000
+  })
+}
+
 function hostStub(): StructuredAgentSessionHost {
   hostCalls = {
     attach: vi.fn(async () => ({
@@ -122,6 +166,11 @@ function hostStub(): StructuredAgentSessionHost {
     })),
     history: vi.fn(() => ({ ok: true, page: { items: [] } })),
     subscribe: vi.fn(() => () => undefined),
+    // A real feed, so the snapshot this method hands back is a genuine projection rather
+    // than a shape the stub restated.
+    subscribeStatus: vi.fn((subscriber: StructuredAgentSessionStatusSubscriber) =>
+      statusFeed().subscribe(subscriber)
+    ),
     unsubscribe: vi.fn()
   }
   return hostCalls as unknown as StructuredAgentSessionHost
@@ -240,7 +289,7 @@ describe('capability gating', () => {
     }
     // Bump deliberately: the whole agentSession.* surface is behind the structured capability,
     // so an additive method is invisible to old clients and needs no protocol bump.
-    expect(STRUCTURED_AGENT_SESSION_METHODS).toHaveLength(17)
+    expect(STRUCTURED_AGENT_SESSION_METHODS).toHaveLength(18)
   })
 
   it('hides the surface from a declared client that did not advertise it', async () => {
@@ -480,6 +529,20 @@ describe('method routing', () => {
     ])
   })
 
+  it('routes an optional background task id through cancellation', async () => {
+    const params = {
+      envelope: envelope(),
+      turnId: 'background-tasks',
+      scope: 'background-tasks' as const,
+      taskId: 'task-2'
+    }
+
+    const response = await call('agentSession.cancel', params, STRUCTURED_CLIENT)
+
+    expect(response).toMatchObject({ ok: true })
+    expect(hostCalls.cancel).toHaveBeenCalledWith(expect.anything(), params)
+  })
+
   it('routes the structured handoff mutation through the host', async () => {
     const response = await call('agentSession.requestHandoff', {
       envelope: envelope(),
@@ -508,6 +571,21 @@ describe('parameter validation', () => {
       ...sendParams(),
       envelope: { ...envelope(), priority: 'high' }
     })
+  })
+
+  it('rejects invalid or unscoped background task ids', async () => {
+    await rejects('agentSession.cancel', {
+      envelope: envelope(),
+      turnId: 'background-tasks',
+      scope: 'background-tasks',
+      taskId: ' task-2'
+    })
+    await rejects('agentSession.cancel', {
+      envelope: envelope(),
+      turnId: 'turn-1',
+      taskId: 'task-2'
+    })
+    expect(hostCalls.cancel).not.toHaveBeenCalled()
   })
 
   it('refuses to let a client author anything but a user turn', async () => {
@@ -581,5 +659,33 @@ describe('parameter validation', () => {
       STRUCTURED_CLIENT
     )
     expect(response).toMatchObject({ ok: true })
+  })
+})
+
+describe('agentSession.subscribeStatus', () => {
+  it('is invisible to a client without the structured capability', async () => {
+    const reply = await call('agentSession.subscribeStatus', null, { clientKind: 'runtime' })
+    expect(reply.ok).toBe(false)
+    expect(hostCalls.subscribeStatus).not.toHaveBeenCalled()
+  })
+
+  it('opens the host status feed with a projected snapshot as its first reply', async () => {
+    const reply = await call('agentSession.subscribeStatus', null, STRUCTURED_CLIENT)
+    expect(reply).toMatchObject({
+      ok: true,
+      result: {
+        type: 'snapshot',
+        sessions: [
+          {
+            sessionId: STATUS_SESSION,
+            workspaceId: 'workspace-1',
+            agent: 'codex',
+            status: 'working',
+            latestPrompt: 'write a poem'
+          }
+        ]
+      }
+    })
+    expect(hostCalls.subscribeStatus).toHaveBeenCalledOnce()
   })
 })
