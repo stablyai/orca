@@ -566,7 +566,7 @@ describe('Claude stream-json connection', () => {
     )
   })
 
-  it('reports a self-exit with its status and stderr, and leaves its tree unverifiable', async () => {
+  it('reports a self-exit with its status, stderr, and observed tree verdict', async () => {
     const scenario = scriptScenario([{ stderr: 'claude: not signed in\n' }, { exit: 1 }])
     let exit: Error | null = null
     const connection = await open(launchFor(scenario), {
@@ -579,10 +579,11 @@ describe('Claude stream-json connection', () => {
     // The status and stderr are the only diagnostic a refused start leaves behind.
     expect((exit as unknown as Error).message).toMatch(/exited \(code 1\): claude: not signed in/)
     expect(connection.closed).toBe(true)
-    // The root's exit is first-hand, but it left before a descendant snapshot
-    // could be armed, so close() has no tree proof to offer and says so.
-    await expect(connection.close()).resolves.toBe(false)
-    expect(connection.exitVerdict).toEqual({ root: 'exited', tree: 'unverifiable' })
+    // Stderr-triggered capture can win or lose the race with this real child's exit.
+    const closed = await connection.close()
+    expect(connection.exitVerdict.root).toBe('exited')
+    expect(['exited', 'unverifiable']).toContain(connection.exitVerdict.tree)
+    expect(closed).toBe(connection.exitVerdict.tree === 'exited')
   })
 
   it.runIf(process.platform !== 'win32')(

@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { AGENT_STATUS_MAX_FIELD_LENGTH } from './agent-status-field-normalization'
 import type { AgentJournalRenderItem } from './agent-session-journal-types'
 import { parsePaneKey } from './stable-pane-id'
 import {
@@ -6,6 +7,7 @@ import {
   hasPersistedStructuredAgentSessionTurn,
   projectStructuredItemToNativeChat,
   projectStructuredAgentSessionStatus,
+  projectStructuredAgentSessionStatusSummary,
   structuredAgentSessionPaneKey
 } from './structured-agent-session-projection'
 
@@ -42,6 +44,52 @@ describe('structured agent session status projection', () => {
     expect(projectStructuredAgentSessionStatus([running, prompt])).toBe('attention')
     expect(activeStructuredAgentSessionTurnId([running, completed])).toBeNull()
     expect(projectStructuredAgentSessionStatus([running, completed])).toBe('idle')
+  })
+
+  it('summarizes status with the newest user prompt, and null before any persisted turn', () => {
+    const running = item('running', 3, {
+      kind: 'status',
+      text: 'Working',
+      turnLifecycle: { turnId: 'turn-1', state: 'running' }
+    })
+    const first = item('first', 1, {
+      kind: 'message',
+      role: 'user',
+      blocks: [{ type: 'text', text: 'first' }]
+    })
+    const second = item('second', 2, {
+      kind: 'message',
+      role: 'user',
+      blocks: [
+        { type: 'text', text: 'second' },
+        { type: 'text', text: 'line' }
+      ]
+    })
+
+    expect(projectStructuredAgentSessionStatusSummary([running])).toEqual({
+      status: null,
+      latestPrompt: ''
+    })
+    expect(projectStructuredAgentSessionStatusSummary([first, second, running])).toEqual({
+      status: 'working',
+      latestPrompt: 'second line'
+    })
+    expect(projectStructuredAgentSessionStatusSummary([first, second])).toEqual({
+      status: 'idle',
+      latestPrompt: 'second line'
+    })
+  })
+
+  it('bounds the wire prompt at the shared agent-status preview cap', () => {
+    const pasted = item('pasted', 1, {
+      kind: 'message',
+      role: 'user',
+      blocks: [{ type: 'text', text: 'x'.repeat(AGENT_STATUS_MAX_FIELD_LENGTH * 40) }]
+    })
+
+    expect(projectStructuredAgentSessionStatusSummary([pasted]).latestPrompt).toHaveLength(
+      AGENT_STATUS_MAX_FIELD_LENGTH
+    )
   })
 
   it('creates a deterministic pane identity for status stores', () => {
