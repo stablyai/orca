@@ -25,6 +25,7 @@ export class AnalyticsSessionIdStore {
 
   constructor(private readonly file: string) {}
 
+  /** Resolves only after persistence succeeds, so an uploaded ID survives a restart. */
   async getOrCreate(providerSessionId: string): Promise<AnalyticsSessionId> {
     if (!providerSessionIdSchema.safeParse(providerSessionId).success) {
       throw new Error('Invalid provider session ID')
@@ -51,6 +52,7 @@ export class AnalyticsSessionIdStore {
     return operation
   }
 
+  /** Includes queued lookups that have not reached the durable writer yet. */
   async flush(): Promise<void> {
     await this.pending
     await this.writer?.flush()
