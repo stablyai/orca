@@ -1,9 +1,15 @@
 import { spawn } from 'node:child_process'
+import { writeFileSync } from 'node:fs'
 import type { CommandHandler } from '../dispatch'
 import { formatCliStatus, formatStatus, printResult } from '../format'
 import { RuntimeClientError, serveOrcaApp } from '../runtime-client'
 import { stripElectronRunAsNode } from '../runtime/launch'
 import { getServeOptionValidationError } from '../../shared/serve-option-validation'
+import {
+  buildServeUpdateHelperInstallScript,
+  SERVE_UPDATE_HELPER_INSTALL_PATH,
+  SERVE_UPDATE_SUDOERS_PATH
+} from '../../main/cli/serve-update-helper-installer'
 
 function envRecord(): Record<string, string> {
   // Why: the `orca` launcher runs Orca's Electron binary as Node, so this CLI
@@ -119,6 +125,63 @@ export const CORE_HANDLERS: Record<string, CommandHandler> = {
       projectRoot
     })
     process.exitCode = exitCode
+  },
+  'serve update-helper install': async ({ flags, json }) => {
+    if (process.platform === 'win32') {
+      throw new RuntimeClientError(
+        'unsupported_platform',
+        'The serve auto-update helper is only supported on Linux.'
+      )
+    }
+    const option = (name: string, fallback: string): string => {
+      const value = flags.get(name)
+      if (typeof value !== 'string' || value.length === 0) {
+        return fallback
+      }
+      return value
+    }
+    const spoolDir = option('spool-dir', '/var/lib/orca-server-update')
+    const unitName = option('unit', 'orca-serve.service')
+    const appImageTargetPath = option('appimage', '/opt/orca/orca-linux.AppImage')
+    const versionRecordPath = option('version-record', '/opt/orca/VERSION')
+    const serviceUser = option('service-user', 'orca')
+    const outPath = flags.get('out')
+    const script = buildServeUpdateHelperInstallScript({
+      spoolDir,
+      unitName,
+      appImageTargetPath,
+      versionRecordPath,
+      serviceUser
+    })
+    if (typeof outPath === 'string' && outPath.length > 0) {
+      writeFileSync(outPath, script, { mode: 0o755 })
+      const lines = [
+        `Install script written to ${outPath}.`,
+        `Run it with: sudo bash ${outPath}`,
+        `Helper will be installed at ${SERVE_UPDATE_HELPER_INSTALL_PATH}.`
+      ]
+      if (json) {
+        console.log(
+          JSON.stringify(
+            {
+              result: {
+                written: outPath,
+                helperPath: SERVE_UPDATE_HELPER_INSTALL_PATH,
+                sudoersPath: SERVE_UPDATE_SUDOERS_PATH
+              }
+            },
+            null,
+            2
+          )
+        )
+      } else {
+        for (const line of lines) {
+          console.log(line)
+        }
+      }
+      return
+    }
+    process.stdout.write(script)
   },
   status: async ({ client, json }) => {
     const result = await client.getCliStatus()
