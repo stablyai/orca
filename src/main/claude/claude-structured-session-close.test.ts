@@ -4,7 +4,13 @@ import type {
   ClaudeStructuredSessionAdapterDeps,
   ClaudeStructuredSessionEvent
 } from './claude-structured-session-adapter'
-import { adapterFor, fakeClaude, identityFor } from './claude-structured-session-test-support'
+import {
+  PROVIDER_SESSION_ID,
+  adapterFor,
+  fakeClaude,
+  identityFor
+} from './claude-structured-session-test-support'
+import type { AgentSessionBackgroundTaskState } from '../../shared/agent-session-wire'
 
 describe('Claude published session close lifecycle', () => {
   it('ends the session even when the durable handle write rejects', async () => {
@@ -15,7 +21,17 @@ describe('Claude published session close lifecycle', () => {
       .fn<NonNullable<ClaudeStructuredSessionAdapterDeps['persistHandle']>>()
       .mockRejectedValueOnce(persistenceError)
       .mockResolvedValueOnce(undefined)
-    const adapter = adapterFor(claude, {}, events, [], undefined, undefined, persistHandle)
+    const backgroundStates: (AgentSessionBackgroundTaskState | null)[] = []
+    const adapter = adapterFor(
+      claude,
+      {},
+      events,
+      [],
+      undefined,
+      undefined,
+      persistHandle,
+      (_sessionId, state) => backgroundStates.push(state)
+    )
     const journalSink: StructuredAgentSessionEventSink = {
       appendItem: () => {},
       appendTombstone: () => {},
@@ -27,6 +43,18 @@ describe('Claude published session close lifecycle', () => {
       spawnToken: 'spawn-9',
       events: journalSink
     })
+    claude.connections[0]!.handlers.onMessage?.({
+      type: 'system',
+      subtype: 'task_started',
+      session_id: PROVIDER_SESSION_ID,
+      uuid: 'task-start',
+      task_id: 'background-1',
+      task_type: 'local_agent',
+      is_backgrounded: true
+    })
+    expect(backgroundStates).toEqual([
+      { state: 'monitoring', tasks: [{ id: 'background-1', kind: 'agent' }] }
+    ])
     const session = (
       adapter as unknown as {
         sessions: Map<string, { translator: { dispose: () => void } | null }>
@@ -39,6 +67,10 @@ describe('Claude published session close lifecycle', () => {
     expect(events.filter((event) => event.type === 'ended')).toHaveLength(1)
     expect(events.filter((event) => event.type === 'handle')).toHaveLength(0)
     expect(disposeTranslator).toHaveBeenCalledOnce()
+    expect(backgroundStates).toEqual([
+      { state: 'monitoring', tasks: [{ id: 'background-1', kind: 'agent' }] },
+      null
+    ])
 
     await expect(adapter.closeSession('session-1')).resolves.toBe(true)
     expect(persistHandle).toHaveBeenCalledTimes(2)

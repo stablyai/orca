@@ -103,6 +103,8 @@ export type ResourceInventory = {
 const unavailableEndpoint = (): EndpointHealth => ({ health: null, ready: null, latencyMs: null })
 const independentEndpointRetryDelayMs = 11_000
 const transientProbeRetryDelayMs = 1_000
+const sleep = async (ms: number): Promise<void> =>
+  await new Promise((resolvePromise) => setTimeout(resolvePromise, ms))
 
 function finalSegment(value: string): string {
   return value.split('/').at(-1) ?? value
@@ -121,6 +123,12 @@ function parseService(value: unknown): ServiceInventory {
   }
 }
 
+class GoogleApiError extends Error {
+  constructor(readonly status: number) {
+    super(`Google API returned ${status}`)
+  }
+}
+
 async function googleRequest(
   fetchImpl: typeof fetch,
   token: string,
@@ -135,8 +143,22 @@ async function googleRequest(
     },
     signal: AbortSignal.timeout(30_000)
   })
-  if (!response.ok) throw new Error(`Google API returned ${response.status}`)
+  if (!response.ok) throw new GoogleApiError(response.status)
   return await response.json()
+}
+
+// A 404 is the API's answer about the resource; anything else is the absence of a reading, so re-ask.
+async function readOnceMore(
+  read: () => Promise<unknown>,
+  wait: (ms: number) => Promise<void>
+): Promise<unknown> {
+  try {
+    return await read()
+  } catch (error) {
+    if (error instanceof GoogleApiError && error.status === 404) throw error
+    await wait(transientProbeRetryDelayMs)
+    return await read()
+  }
 }
 
 // A reading the endpoint actually produced: ok is its answer, latencyMs is that answer's round trip.
@@ -201,8 +223,7 @@ export async function probeEndpointHealth(
   options: EndpointProbeOptions = {}
 ): Promise<EndpointHealth> {
   const requiresReady = options.requiresReady ?? true
-  const wait = options.wait ??
-    (async (ms: number) => await new Promise((resolvePromise) => setTimeout(resolvePromise, ms)))
+  const wait = options.wait ?? sleep
   const accepted = (probe: EndpointHealth): boolean =>
     probe.health === true &&
     (!requiresReady || probe.ready === true) &&
@@ -325,11 +346,17 @@ function unavailableInventory(environment: RelayOpsEnvironment, warning: string)
   }
 }
 
+export type ResourceInventoryOptions = {
+  wait?: (ms: number) => Promise<void>
+}
+
 export async function readResourceInventory(
   environment: RelayOpsEnvironment,
   gcloud: GcloudClient,
-  fetchImpl: typeof fetch = fetch
+  fetchImpl: typeof fetch = fetch,
+  options: ResourceInventoryOptions = {}
 ): Promise<ResourceInventory> {
+  const wait = options.wait ?? sleep
   let token: string
   try {
     token = await gcloud.accessToken()
@@ -356,7 +383,10 @@ export async function readResourceInventory(
       token,
       `https://certificatemanager.googleapis.com/v1/projects/${environment.project}/locations/global/certificates/${environment.certificateName}`
     ),
-    ...environment.cells.map((cell) => googleRequest(fetchImpl, token, migUrl(cell)))
+    // One transient Compute read must never become a verdict on a cell's power state.
+    ...environment.cells.map((cell) =>
+      readOnceMore(async () => await googleRequest(fetchImpl, token, migUrl(cell)), wait)
+    )
   ])
   const warnings: string[] = []
   const directorValue = parsed(settled[0]!, RunServiceSchema, 'Director service inventory is unavailable.', warnings)

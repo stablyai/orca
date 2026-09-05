@@ -6,6 +6,13 @@ import {
   DEFAULT_JOURNAL_PAYLOAD_LIMITS
 } from '../native-chat/agent-session-journal/journal-payload-bounds'
 import { unhandledProviderFrameJournalItem } from '../native-chat/agent-session-wire/unhandled-provider-frame'
+import { commandActionFacts } from './codex-command-action-class'
+import {
+  readFirstString,
+  readRecord,
+  readString,
+  readTextContent
+} from './codex-item-field-readers'
 import type { CodexThreadItem } from './codex-thread-item-identity'
 export {
   codexItemIdentity,
@@ -20,47 +27,6 @@ export {
 } from './codex-turn-ordinals'
 
 // Codex thread items → journal item bodies.
-
-function readRecord(value: unknown): Record<string, unknown> {
-  return typeof value === 'object' && value !== null ? (value as Record<string, unknown>) : {}
-}
-
-function readString(source: Record<string, unknown>, key: string): string | null {
-  const value = source[key]
-  return typeof value === 'string' && value.length > 0 ? value : null
-}
-
-function readFirstString(source: Record<string, unknown>, keys: readonly string[]): string | null {
-  for (const key of keys) {
-    const value = readString(source, key)
-    if (value !== null) {
-      return value
-    }
-  }
-  return null
-}
-
-function readTextContent(source: Record<string, unknown>, key: string): string | null {
-  const direct = readString(source, key)
-  if (direct) {
-    return direct
-  }
-  const value = source[key]
-  if (!Array.isArray(value)) {
-    return null
-  }
-  const parts = value.flatMap((part) => {
-    if (typeof part === 'string') {
-      return part.length > 0 ? [part] : []
-    }
-    if (typeof part !== 'object' || part === null) {
-      return []
-    }
-    const text = readString(part as Record<string, unknown>, 'text')
-    return text ? [text] : []
-  })
-  return parts.length > 0 ? parts.join('\n') : null
-}
 
 /** `userMessage` carries structured content parts; `agentMessage` a flat text. */
 export function codexMessageBlocks(item: CodexThreadItem): NativeChatBlock[] {
@@ -120,12 +86,14 @@ export type CodexJournalItem = {
 function commandItem(item: CodexThreadItem): CodexJournalItem {
   const output = readFirstString(item, ['aggregatedOutput', 'aggregated_output'])
   const bounded = output === null ? null : boundInlineText(output, DEFAULT_JOURNAL_PAYLOAD_LIMITS)
+  const parsed = commandActionFacts(item)
   return {
     body: {
       kind: 'tool-call',
-      name: 'shell',
+      name: parsed?.name ?? 'shell',
+      // Raw command and cwd stay so the expanded view still shows what ran.
       input: boundToolInput(
-        { command: item.command ?? null, cwd: item.cwd ?? null },
+        { command: item.command ?? null, cwd: item.cwd ?? null, ...parsed?.fields },
         DEFAULT_JOURNAL_PAYLOAD_LIMITS
       ),
       state: commandState(item),

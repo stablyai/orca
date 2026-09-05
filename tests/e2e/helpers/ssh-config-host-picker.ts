@@ -1,3 +1,4 @@
+import { openSidebarProjectDialog } from './sidebar-project-dialog'
 /**
  * Shared helpers for SSH config host picker / import E2E specs.
  * Prefer role/label locators and user-visible copy over ids / data-*.
@@ -101,10 +102,7 @@ export async function returnToAppShell(page: Page): Promise<void> {
 /** Add Project → Host → Add remote host → Add SSH host → form dialog. */
 export async function openAddSshHostDialog(page: Page): Promise<Locator> {
   await returnToAppShell(page)
-  await page
-    .getByRole('button', { name: /Add Project/i })
-    .first()
-    .click()
+  await openSidebarProjectDialog(page)
   const addProjectDialog = page.getByRole('dialog', { name: /Add a project/i })
   await expect(addProjectDialog).toBeVisible({ timeout: 10_000 })
 

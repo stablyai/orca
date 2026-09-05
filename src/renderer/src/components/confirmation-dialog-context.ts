@@ -1,4 +1,5 @@
 import { createContext, useContext } from 'react'
+import type { LucideIcon } from 'lucide-react'
 
 // Keep the context component-free so Fast Refresh preserves its identity.
 
@@ -9,6 +10,9 @@ export type ConfirmationDialogOptions = {
   confirmLabel?: string
   cancelLabel?: string
   confirmVariant?: 'default' | 'destructive'
+  icon?: LucideIcon
+  cancelVariant?: 'outline' | 'ghost'
+  initialFocus?: 'confirm'
   /** Renders a "Don't ask again" checkbox. `onConfirmed` runs only when the user confirms with it checked. */
   dontAskAgain?: { label?: string; onConfirmed: () => void }
 }

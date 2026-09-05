@@ -20,6 +20,7 @@ import { NativeChatOrchestrationPausedNotice } from './NativeChatOrchestrationPa
 import { useNativeChatImageRuntimeContext } from './native-chat-image-runtime-context'
 import { useStructuredNativeChatPaneCommands } from './use-structured-native-chat-pane-commands'
 import type { NativeChatStructuredViewProps } from './native-chat-view-types'
+import { NativeChatBackgroundTasksStatus } from './NativeChatBackgroundTasksStatus'
 
 function encodeQuestionAnswer(questionId: string, answer: string): string {
   return `${encodeURIComponent(questionId)}:${encodeURIComponent(answer)}`
@@ -30,6 +31,7 @@ export function NativeChatStructuredSession(
 ): React.JSX.Element {
   const controller = useStructuredAgentSession(props)
   const [composerError, setComposerError] = useState<string | null>(null)
+  const [stoppingBackgroundTasks, setStoppingBackgroundTasks] = useState(false)
   const [optionPickerRequest, setOptionPickerRequest] = useState<{
     id: string
     sequence: number
@@ -80,7 +82,7 @@ export function NativeChatStructuredSession(
   const fontScale = useNativeChatFontScale(viewState.kind === 'ready')
   const fileLinkContext = useNativeChatFileLinkContext(props.tabId)
   const imageRuntimeContext = useNativeChatImageRuntimeContext(props.tabId)
-  const fileLinkClick = useNativeChatFileLinkClick(props.allowFileUriLinks ? fileLinkContext : null)
+  const fileLinkClick = useNativeChatFileLinkClick(fileLinkContext)
   const prompt = controller.prompts[0] ?? null
   const questionBody = prompt?.body.kind === 'question' ? prompt.body : null
   const questions =
@@ -166,10 +168,10 @@ export function NativeChatStructuredSession(
             expandSignal={false}
             fontScale={fontScale.scale}
             workingStartedAt={null}
-            showTurnStatus={props.agent === 'codex'}
+            showTurnStatus
             onLinkClick={fileLinkClick}
             allowFileUriLinks={fileLinkClick !== undefined}
-            runtimeContext={props.agent === 'codex' ? imageRuntimeContext : undefined}
+            runtimeContext={imageRuntimeContext}
           />
         )}
       </div>
@@ -271,6 +273,16 @@ export function NativeChatStructuredSession(
         <p className="mx-auto w-full max-w-4xl px-4 py-1 text-xs text-destructive">
           {controller.error ?? composerError}
         </p>
+      ) : null}
+      {controller.isMonitoringBackgroundTasks ? (
+        <NativeChatBackgroundTasksStatus
+          tasks={controller.backgroundTasks}
+          stopping={stoppingBackgroundTasks}
+          onStop={() => {
+            setStoppingBackgroundTasks(true)
+            void controller.stopBackgroundTasks().finally(() => setStoppingBackgroundTasks(false))
+          }}
+        />
       ) : null}
       {prompt ? null : (
         <NativeChatComposer

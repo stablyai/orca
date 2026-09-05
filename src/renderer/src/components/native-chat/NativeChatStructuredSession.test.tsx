@@ -4,6 +4,7 @@ import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-libra
 import React, { forwardRef, useImperativeHandle } from 'react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { AgentJournalRenderItem } from '../../../../shared/agent-session-journal-types'
+import type { AgentSessionBackgroundTask } from '../../../../shared/agent-session-wire'
 import { decodeAgentSessionQuestionAnswers } from '../../../../shared/agent-session-question-answer'
 import type { NativeChatQuestionCardProps } from './NativeChatQuestionCard'
 
@@ -14,14 +15,22 @@ const mocks = vi.hoisted(() => ({
   messageListProps: null as null | {
     allowFileUriLinks?: boolean
     onLinkClick?: (...args: unknown[]) => void
+    showTurnStatus?: boolean
+    runtimeContext?: unknown
   },
-  composerProps: null as null | { structuredTransport?: Record<string, unknown> },
+  composerProps: null as null | {
+    structuredTransport?: Record<string, unknown>
+    isWorking?: boolean
+  },
   questionCardProps: null as NativeChatQuestionCardProps | null,
   promptItems: [] as AgentJournalRenderItem[],
   respond: vi.fn(),
   handlePasteEvent: vi.fn(),
   pasteFromClipboard: vi.fn(),
-  submissions: [] as unknown[]
+  submissions: [] as unknown[],
+  monitoringBackgroundTasks: false,
+  backgroundTasks: [] as AgentSessionBackgroundTask[],
+  stopBackgroundTasks: vi.fn()
 }))
 
 vi.mock('@/runtime/structured-agent-session-client', () => ({
@@ -65,8 +74,11 @@ vi.mock('./use-structured-agent-session', async () => {
         send: outbox.send,
         retry: outbox.retry,
         isWorking: false,
+        isMonitoringBackgroundTasks: mocks.monitoringBackgroundTasks,
+        backgroundTasks: mocks.backgroundTasks,
         turnId: null,
         cancel: vi.fn(),
+        stopBackgroundTasks: mocks.stopBackgroundTasks,
         respond: mocks.respond,
         optionSnapshot: [
           {
@@ -153,6 +165,9 @@ describe('NativeChatStructuredSession', () => {
     mocks.handlePasteEvent.mockReset()
     mocks.pasteFromClipboard.mockReset()
     mocks.submissions = []
+    mocks.monitoringBackgroundTasks = false
+    mocks.stopBackgroundTasks.mockReset()
+    mocks.backgroundTasks = []
   })
 
   it('routes app-menu paste into the structured composer', () => {
@@ -163,7 +178,6 @@ describe('NativeChatStructuredSession', () => {
         sessionId="session-paste"
         target={{ kind: 'local' }}
         agent="codex"
-        allowFileUriLinks
       />
     )
 
@@ -174,20 +188,80 @@ describe('NativeChatStructuredSession', () => {
     expect(mocks.pasteFromClipboard).toHaveBeenCalledOnce()
   })
 
-  it('wires local structured file links through the native chat opener', () => {
+  it('wires remote structured file links through the host-aware native chat opener', () => {
     render(
       <NativeChatStructuredSession
         isVisible
         tabId="structured-tab-1"
         sessionId="session-1"
-        target={{ kind: 'local' }}
+        target={{ kind: 'environment', environmentId: 'env-1' }}
         agent="codex"
-        allowFileUriLinks
       />
     )
 
     expect(mocks.messageListProps?.allowFileUriLinks).toBe(true)
     expect(mocks.messageListProps?.onLinkClick).toBe(mocks.fileLinkClick)
+  })
+
+  // Turn status and transcript image previews shipped Codex-first. Every
+  // structured session renders through the same list, so neither is agent-gated.
+  it.each(['codex', 'claude'] as const)(
+    'renders the same structured transcript chrome for %s',
+    (agent) => {
+      render(
+        <NativeChatStructuredSession
+          isVisible
+          tabId="structured-tab-parity"
+          sessionId="session-parity"
+          target={{ kind: 'local' }}
+          agent={agent}
+        />
+      )
+
+      expect(mocks.messageListProps?.showTurnStatus).toBe(true)
+      expect(mocks.messageListProps?.runtimeContext).not.toBeUndefined()
+    }
+  )
+
+  it('places background monitoring above the usable composer and stops without an active turn', async () => {
+    mocks.monitoringBackgroundTasks = true
+    mocks.backgroundTasks = [
+      { id: 'task-command', kind: 'command', description: 'sleep 180' },
+      { id: 'task-agent', kind: 'agent' }
+    ]
+    mocks.stopBackgroundTasks.mockResolvedValue({ cancelled: true })
+
+    render(
+      <NativeChatStructuredSession
+        isVisible
+        tabId="structured-tab-background"
+        sessionId="session-background"
+        target={{ kind: 'local' }}
+        agent="claude"
+      />
+    )
+
+    const status = screen
+      .getByText('Monitoring background tasks')
+      .closest('[data-native-chat-background-tasks="true"]')
+    const composer = screen.getByTestId('structured-composer')
+    if (!status) {
+      throw new Error('background task status was not rendered')
+    }
+    expect(status.compareDocumentPosition(composer) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    expect(mocks.composerProps?.isWorking).toBe(false)
+    expect(screen.queryByRole('list', { name: 'Running background tasks' })).toBeNull()
+
+    const disclosure = screen.getByRole('button', { name: 'Monitoring background tasks' })
+    expect(disclosure.getAttribute('aria-expanded')).toBe('false')
+    fireEvent.click(disclosure)
+    expect(disclosure.getAttribute('aria-expanded')).toBe('true')
+    expect(screen.getByRole('list', { name: 'Running background tasks' })).toBeTruthy()
+    expect(screen.getByText('sleep 180')).toBeTruthy()
+    expect(screen.getByText('Background agent')).toBeTruthy()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Stop' }))
+    await waitFor(() => expect(mocks.stopBackgroundTasks).toHaveBeenCalledOnce())
   })
 
   it('routes a bare model command to the native option picker', async () => {
@@ -198,7 +272,6 @@ describe('NativeChatStructuredSession', () => {
         sessionId="session-1"
         target={{ kind: 'local' }}
         agent="codex"
-        allowFileUriLinks
       />
     )
     const dispatchCommand = mocks.composerProps?.structuredTransport?.dispatchCommand as
@@ -234,7 +307,6 @@ describe('NativeChatStructuredSession', () => {
         sessionId="session-1"
         target={{ kind: 'local' }}
         agent="codex"
-        allowFileUriLinks
       />
     )
 
@@ -266,7 +338,6 @@ describe('NativeChatStructuredSession', () => {
         sessionId="session-wedge"
         target={{ kind: 'local' }}
         agent="codex"
-        allowFileUriLinks
       />
     )
 
@@ -298,7 +369,6 @@ describe('NativeChatStructuredSession', () => {
         sessionId="session-probe-flag"
         target={{ kind: 'local' }}
         agent="codex"
-        allowFileUriLinks
       />
     )
 
@@ -331,7 +401,6 @@ describe('NativeChatStructuredSession', () => {
         sessionId="session-parked"
         target={{ kind: 'local' }}
         agent="codex"
-        allowFileUriLinks
       />
     )
 
@@ -381,7 +450,6 @@ describe('NativeChatStructuredSession', () => {
         sessionId="session-churn"
         target={{ kind: 'local' }}
         agent="codex"
-        allowFileUriLinks
       />
     )
     const { rerender } = render(makeView())
@@ -435,7 +503,6 @@ describe('NativeChatStructuredSession', () => {
         sessionId="session-target-switch"
         target={target}
         agent="codex"
-        allowFileUriLinks
       />
     )
     const { rerender } = render(makeView({ kind: 'local' }))
@@ -470,7 +537,6 @@ describe('NativeChatStructuredSession', () => {
         sessionId="session-forced"
         target={{ kind: 'local' }}
         agent="codex"
-        allowFileUriLinks
       />
     )
 
@@ -509,7 +575,6 @@ describe('NativeChatStructuredSession', () => {
         sessionId="session-pending"
         target={{ kind: 'local' }}
         agent="codex"
-        allowFileUriLinks
       />
     )
 
@@ -539,7 +604,6 @@ describe('NativeChatStructuredSession', () => {
           sessionId="session-budget"
           target={{ kind: 'local' }}
           agent="codex"
-          allowFileUriLinks
         />
       )
 
@@ -610,7 +674,6 @@ describe('NativeChatStructuredSession', () => {
         sessionId="session-questions"
         target={{ kind: 'local' }}
         agent="claude"
-        allowFileUriLinks={false}
       />
     )
 
@@ -669,7 +732,6 @@ describe('NativeChatStructuredSession', () => {
         sessionId="session-legacy-question"
         target={{ kind: 'local' }}
         agent="claude"
-        allowFileUriLinks={false}
       />
     )
 

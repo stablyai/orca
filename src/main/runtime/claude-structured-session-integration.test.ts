@@ -30,7 +30,8 @@ import { RpcDispatcher } from './rpc/dispatcher'
 import { STRUCTURED_AGENT_SESSION_METHODS } from './rpc/methods/structured-agent-session'
 import {
   ensureStructuredAgentSessionHost,
-  stopStructuredAgentSessionRuntime
+  stopStructuredAgentSessionRuntime,
+  waitForStructuredAgentSessionRecovery
 } from './structured-agent-session-runtime'
 
 const SESSION = 'claude-integration-1'
@@ -119,6 +120,9 @@ function fakeClaude() {
         return undefined
       },
       cancelAsyncMessage: async () => {},
+      stopTask: async (taskId) => {
+        connection.calls.push({ subtype: 'stop_task', params: { taskId } })
+      },
       send: async (message) => {
         connection.sent.push(message)
         if (message.type === 'user') {
@@ -521,13 +525,9 @@ describe('a structured Claude session over agentSession.*', () => {
     connection.exitVerdict = { root: 'exited', tree: 'unverifiable' }
     connection.handlers.onExit?.(new Error('claude stream-json exited (code 1): crashed'))
 
-    for (
-      let attempt = 0;
-      attempt < 20 && leaseOf(SESSION).claimStatus !== 'released';
-      attempt += 1
-    ) {
-      await new Promise((resolve) => setTimeout(resolve, 5))
-    }
+    // Claude publishes an exit only after its close ladder and transcript write,
+    // so the recovery barrier — not a wall-clock poll — is what says it landed.
+    await waitForStructuredAgentSessionRecovery()
     expect(leaseOf(SESSION)).toMatchObject({ claimStatus: 'released', handoffStage: null })
   })
 
@@ -704,9 +704,10 @@ describe('a structured Claude session over agentSession.*', () => {
 
     await ok('agentSession.requestHandoff', handoffParams('to-tui', created.fence))
     const host = getStructuredAgentSessionHost()!
-    await vi.waitFor(async () =>
-      expect(await host.handoffStatus(SESSION)).toMatchObject({ owner: 'tui', phase: 'idle' })
-    )
+    // No poll: the request enqueues the flow on the session's serialized chain before it returns,
+    // so this status read is already ordered behind it. Polling only added a wall-clock deadline
+    // that a loaded runner missed, abandoning a live flow into the suite's teardown.
+    expect(await host.handoffStatus(SESSION)).toMatchObject({ owner: 'tui', phase: 'idle' })
     expect(claude.connections[0]?.closed).toBe(true)
 
     const tuiFence = (
@@ -716,9 +717,7 @@ describe('a structured Claude session over agentSession.*', () => {
     ).deps.store.getRecord(SESSION).lease.runtimeFence
     readClaudeTranscriptLeafUuid.mockResolvedValueOnce('tui-assistant')
     await ok('agentSession.requestHandoff', handoffParams('to-native', tuiFence))
-    await vi.waitFor(async () =>
-      expect(await host.handoffStatus(SESSION)).toMatchObject({ owner: 'native', phase: 'idle' })
-    )
+    expect(await host.handoffStatus(SESSION)).toMatchObject({ owner: 'native', phase: 'idle' })
 
     const frames = await subscribe()
     const texts = itemsOf(frames).map(textOf).filter(Boolean)

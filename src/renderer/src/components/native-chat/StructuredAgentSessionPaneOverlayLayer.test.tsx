@@ -8,7 +8,6 @@ type MockAppState = {
   unifiedTabsByWorktree: Record<string, readonly Tab[]>
   groupsByWorktree: Record<string, readonly TabGroup[]>
   runtimeEnvironmentId: string | null
-  executionHostId: string
   focusGroup: (worktreeId: string, groupId: string) => void
 }
 
@@ -26,7 +25,6 @@ vi.mock('@/store', async () => {
     unifiedTabsByWorktree: {},
     groupsByWorktree: {},
     runtimeEnvironmentId: null,
-    executionHostId: 'local',
     focusGroup: mocks.focusGroup
   }))
   mocks.store = useAppStore
@@ -34,8 +32,7 @@ vi.mock('@/store', async () => {
 })
 
 vi.mock('@/lib/worktree-runtime-owner', () => ({
-  getRuntimeEnvironmentIdForWorktree: (state: MockAppState) => state.runtimeEnvironmentId,
-  getExecutionHostIdForWorktree: (state: MockAppState) => state.executionHostId
+  getRuntimeEnvironmentIdForWorktree: (state: MockAppState) => state.runtimeEnvironmentId
 }))
 
 vi.mock('@/runtime/runtime-rpc-client', () => ({
@@ -177,7 +174,6 @@ function createState(activeTabId: string): MockAppState {
     },
     groupsByWorktree: { [WORKTREE_ID]: [createGroup(activeTabId)] },
     runtimeEnvironmentId: null,
-    executionHostId: 'local',
     focusGroup: mocks.focusGroup
   }
 }

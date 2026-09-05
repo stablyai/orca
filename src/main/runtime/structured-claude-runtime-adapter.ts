@@ -1,4 +1,5 @@
 import type { AgentSessionRecord } from '../../shared/agent-session-record'
+import type { AgentSessionBackgroundTaskState } from '../../shared/agent-session-wire'
 import { join } from 'node:path'
 import { resolveClaudeCommand } from '../codex-cli/command'
 import type { ClaudeStructuredAuthPolicy } from '../claude-accounts/claude-structured-auth-policy'
@@ -29,6 +30,10 @@ export type StructuredClaudeRuntimeAdapterDeps = {
   openClaudeConnection?: ClaudeStructuredSessionAdapterDeps['openConnection']
   readProcessStartTime?: ClaudeStructuredSessionAdapterDeps['readProcessStartTime']
   onUnexpectedExit: (event: StructuredAgentSessionLifecycleEvent) => void
+  onBackgroundTasksChanged?: (
+    sessionId: string,
+    state: AgentSessionBackgroundTaskState | null
+  ) => void
 }
 
 export function createStructuredClaudeRuntimeAdapter(
@@ -92,6 +97,9 @@ export function createStructuredClaudeRuntimeAdapter(
         })
       }
     },
+    ...(deps.onBackgroundTasksChanged
+      ? { onBackgroundTasksChanged: deps.onBackgroundTasksChanged }
+      : {}),
     ...(deps.openClaudeConnection ? { openConnection: deps.openClaudeConnection } : {}),
     ...(deps.readProcessStartTime ? { readProcessStartTime: deps.readProcessStartTime } : {})
   })

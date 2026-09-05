@@ -73,4 +73,35 @@ describe('performCancel', () => {
       { kind: 'status', text: 'Cancellation requested.' }
     ])
   })
+
+  it('stops background tasks without interrupting the foreground turn or writing a row', async () => {
+    root = await mkdtemp(join(tmpdir(), 'orca-background-task-cancel-'))
+    const journal = await journals.open({ identity: IDENTITY, journalDir: root })
+    const cancelTurn = vi.fn(async () => ({ cancelled: true }))
+    const stopBackgroundTasks = vi.fn(async () => ({ cancelled: true }))
+    const ctx: AgentSessionTurnContext = {
+      sessionId: 'session-1',
+      journal,
+      fence: 1,
+      adapter: { cancelTurn, stopBackgroundTasks } as unknown as StructuredAgentSessionAdapter,
+      persistOptions: async () => undefined,
+      resolvedBy: 'client-1',
+      publish: vi.fn(),
+      now: () => 1
+    }
+
+    const result = await performCancel(ctx, {
+      clientOperationId: 'cancel-background-tasks',
+      turnId: 'background-tasks',
+      scope: 'background-tasks'
+    })
+
+    expect(result).toEqual({
+      ok: true,
+      value: { turnId: 'background-tasks', cancelled: true }
+    })
+    expect(stopBackgroundTasks).toHaveBeenCalledWith({ sessionId: 'session-1', fence: 1 })
+    expect(cancelTurn).not.toHaveBeenCalled()
+    expect(journal.snapshot().items).toEqual([])
+  })
 })

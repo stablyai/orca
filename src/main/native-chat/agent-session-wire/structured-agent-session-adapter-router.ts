@@ -49,6 +49,17 @@ export class StructuredAgentSessionAdapterRouter implements StructuredAgentSessi
   cancelTurn: StructuredAgentSessionAdapter['cancelTurn'] = (input) =>
     this.owner(input.sessionId).cancelTurn(input)
 
+  stopBackgroundTasks: NonNullable<StructuredAgentSessionAdapter['stopBackgroundTasks']> = (
+    input
+  ) => {
+    const stop = this.owner(input.sessionId).stopBackgroundTasks
+    return stop ? stop(input) : Promise.resolve({ cancelled: false })
+  }
+
+  backgroundTaskState: NonNullable<StructuredAgentSessionAdapter['backgroundTaskState']> = (
+    sessionId
+  ) => this.owners.get(sessionId)?.backgroundTaskState?.(sessionId)
+
   answerPrompt: StructuredAgentSessionAdapter['answerPrompt'] = (input) =>
     this.owner(input.sessionId).answerPrompt(input)
 
