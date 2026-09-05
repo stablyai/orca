@@ -163,9 +163,8 @@ describe('orchestration kernel', () => {
     expect(kernel).toContain("`worker-list`'s `projection.liveness` is the fleet verdict")
     expect(kernel).toContain("`worker-show`'s `observation.status` is PTY liveness only")
     expect(kernel).toContain('After three consecutive empty waits')
-    expect(kernel).toContain(
-      '`ORCA orchestration worker-list --run <run_id> --include-remote --json`'
-    )
+    expect(kernel).toContain('`ORCA orchestration worker-list --include-remote --json`')
+    expect(kernel).toContain('defaults to the bound Run; `--run <run_id>` overrides')
     expect(kernel).toContain(
       '`projection.attention` categories, `projection.attention.requiresAction`, and literal `projection.nextAction` argv'
     )
