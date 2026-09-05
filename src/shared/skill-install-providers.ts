@@ -15,6 +15,7 @@ export type SkillInstallProviderId =
   | 'trae'
   | 'grok'
   | 'aug'
+  | 'zeroclaw'
 
 export type SkillInstallProviderDefinition = {
   id: SkillInstallProviderId
@@ -80,6 +81,12 @@ export const SKILL_INSTALL_PROVIDERS: readonly SkillInstallProviderDefinition[] 
     displayName: 'Augment',
     globalSegments: ['.augment', 'skills'],
     workspaceSegments: ['.augment', 'skills']
+  },
+  {
+    id: 'zeroclaw',
+    displayName: 'ZeroClaw',
+    globalSegments: ['.zeroclaw', 'skills'],
+    workspaceSegments: ['.zeroclaw', 'skills']
   }
 ]
 

@@ -4,10 +4,13 @@ import { joinRemotePath } from '../ssh/ssh-remote-platform'
 import { parseAntigravitySessionContent } from './session-scanner-antigravity-parser'
 import { isAntigravityTranscriptPath } from './session-scanner-antigravity-paths'
 import { parseCodexSessionContent } from './session-scanner-codex-parser'
+import { parseClaudeSessionContent } from './session-scanner-primary-parsers'
 import { parseDevinSessionContent } from './session-scanner-devin-parser'
 import { parseDroidSessionContent } from './session-scanner-droid-parser'
-import { parseMessageGraphSessionContent } from './session-scanner-graph-parsers'
-import { parseClaudeSessionContent } from './session-scanner-primary-parsers'
+import {
+  parseMessageGraphSessionContent,
+  type MessageGraphAgent
+} from './session-scanner-graph-parsers'
 import { parseGeminiSessionContent } from './session-scanner-gemini-parsers'
 import { parseCopilotSessionContent } from './session-scanner-copilot-parser'
 import { parseCursorSessionContent } from './session-scanner-cursor-parser'
@@ -124,7 +127,8 @@ export function remoteSessionSources(
       ['.factory', 'projects'],
       parseDroidSessionContent
     ),
-    ...remoteOpenClawSources(remoteHome, hostPlatform)
+    ...remoteOpenClawSources(remoteHome, hostPlatform),
+    ...remoteZeroClawSources(remoteHome, hostPlatform)
   ]
 }
 
@@ -244,61 +248,51 @@ function parserOptions(context: RemoteScannerContext): RemoteParserOptions {
   }
 }
 
-function piParser(
-  file: FileWithMtime,
-  content: string,
-  platform: NodeJS.Platform,
-  options: RemoteParserOptions,
-  signal?: AbortSignal
-): Promise<AiVaultSession | null> {
-  return parseMessageGraphSessionContent('pi', file, content, platform, options, signal)
+function messageGraphParser(agent: MessageGraphAgent) {
+  return (
+    file: FileWithMtime,
+    content: string,
+    platform: NodeJS.Platform,
+    options: RemoteParserOptions,
+    signal?: AbortSignal
+  ): Promise<AiVaultSession | null> =>
+    parseMessageGraphSessionContent(agent, file, content, platform, options, signal)
 }
 
-function ompParser(
-  file: FileWithMtime,
-  content: string,
-  platform: NodeJS.Platform,
-  options: RemoteParserOptions,
-  signal?: AbortSignal
-): Promise<AiVaultSession | null> {
-  return parseMessageGraphSessionContent('omp', file, content, platform, options, signal)
-}
+const piParser = messageGraphParser('pi')
+const ompParser = messageGraphParser('omp')
+const primeAgentParser = messageGraphParser('prime-agent')
+const openClawParser = messageGraphParser('openclaw')
+const zeroClawParser = messageGraphParser('zeroclaw')
 
-function primeAgentParser(
-  file: FileWithMtime,
-  content: string,
-  platform: NodeJS.Platform,
-  options: RemoteParserOptions,
-  signal?: AbortSignal
-): Promise<AiVaultSession | null> {
-  return parseMessageGraphSessionContent('prime-agent', file, content, platform, options, signal)
-}
-
-function openClawParser(
-  file: FileWithMtime,
-  content: string,
-  platform: NodeJS.Platform,
-  options: RemoteParserOptions,
-  signal?: AbortSignal
-): Promise<AiVaultSession | null> {
-  return parseMessageGraphSessionContent('openclaw', file, content, platform, options, signal)
-}
+const remoteZeroClawSources = (
+  remoteHome: string,
+  hostPlatform: RemoteHostPlatform
+): RemoteSessionSource[] => [
+  jsonlSource('zeroclaw', remoteHome, hostPlatform, ['.zeroclaw', 'sessions'], zeroClawParser),
+  jsonlSource(
+    'zeroclaw',
+    remoteHome,
+    hostPlatform,
+    ['.zeroclaw', 'data', 'sessions'],
+    zeroClawParser
+  ),
+  jsonlSource(
+    'zeroclaw',
+    remoteHome,
+    hostPlatform,
+    ['.zeroclaw', 'agents'],
+    zeroClawParser,
+    (path) => remotePathSegments(path).includes('sessions')
+  )
+]
 
 function remotePathSegments(path: string): string[] {
   return path.replace(/\\/g, '/').split('/').filter(Boolean)
 }
 
-function remotePiSessionsSegments(): string[] {
-  return normalizeAgentSessionsDir('/.pi/agent/sessions', '.pi').split('/').filter(Boolean)
-}
-
-function remoteOmpSessionsSegments(): string[] {
-  return normalizeAgentSessionsDir('/.omp/agent/sessions', '.omp').split('/').filter(Boolean)
-}
-
-// Why: remote roots are posix regardless of the client platform, so these stay literal
-// rather than round-tripping through a local-platform path join that would emit
-// backslashes on a Windows client and collapse into a single bogus segment.
-function remotePrimeAgentSessionsSegments(): string[] {
-  return ['.prime', 'agent', 'sessions']
-}
+const remotePiSessionsSegments = () =>
+  normalizeAgentSessionsDir('/.pi/agent/sessions', '.pi').split('/').filter(Boolean)
+const remoteOmpSessionsSegments = () =>
+  normalizeAgentSessionsDir('/.omp/agent/sessions', '.omp').split('/').filter(Boolean)
+const remotePrimeAgentSessionsSegments = () => ['.prime', 'agent', 'sessions']

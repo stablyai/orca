@@ -28,6 +28,16 @@ const NATIVE_CHAT_AGENT_PROFILES: Partial<Record<AgentType, NativeChatAgentProfi
     skillPrefix: '/',
     groupedSlash: true,
     skillSourceOwner: 'grok'
+  },
+  openclaw: {
+    skillPrefix: '/',
+    groupedSlash: true,
+    skillSourceOwner: 'openclaw'
+  },
+  zeroclaw: {
+    skillPrefix: '/',
+    groupedSlash: true,
+    skillSourceOwner: 'zeroclaw'
   }
 }
 

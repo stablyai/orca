@@ -81,6 +81,7 @@ const SKILLS_CLI_VALID_AGENT_KEYS = new Set([
   'zcode',
   'zencoder',
   'zenflow',
+  'zeroclaw',
   'neovate',
   'pochi',
   'promptscript',

@@ -29,6 +29,10 @@ const CURSOR_PROJECTS_DIR = join(homedir(), '.cursor', 'projects')
 const HERMES_SESSIONS_DIR = join(homedir(), '.hermes', 'sessions')
 const ROVO_SESSIONS_DIR = join(homedir(), '.rovodev', 'sessions')
 const OPENCLAW_STATE_DIR = process.env.OPENCLAW_STATE_DIR?.trim() || join(homedir(), '.openclaw')
+const ZEROCLAW_STATE_DIR =
+  process.env.ZEROCLAW_STATE_DIR?.trim() ||
+  process.env.ZEROCLAW_HOME?.trim() ||
+  join(homedir(), '.zeroclaw')
 const PI_SESSIONS_DIR = normalizeAgentSessionsDir(
   process.env.PI_CODING_AGENT_DIR?.trim() || join(homedir(), '.pi', 'agent', 'sessions'),
   '.pi'
@@ -253,6 +257,16 @@ export const AI_VAULT_AGENT_SOURCES: AiVaultAgentSourceTable = {
     // only those (not the sibling agents/*/wire.jsonl transcripts).
     filePredicate: (filePath) =>
       basename(filePath) === 'state.json' && basename(dirname(filePath)).startsWith('session_')
+  },
+  zeroclaw: {
+    // Sessions live under <stateDir>/sessions or <stateDir>/agents/.../sessions.
+    rootDirs: (options, wslHomeDirs) => [
+      options.zeroclawStateDir ?? ZEROCLAW_STATE_DIR,
+      ...wslHomeDirs.map((homeDir) => join(homeDir, '.zeroclaw'))
+    ],
+    extensions: ['.jsonl', '.json'],
+    filePredicate: (filePath) => pathSegments(filePath).includes('sessions'),
+    mergeRootDiscoveries: true
   }
 }
 

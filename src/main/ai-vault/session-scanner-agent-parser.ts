@@ -79,5 +79,7 @@ export async function parseAgentSessionFile(
       return parseDevinSessionFile(candidate.file, platform)
     case 'kimi':
       return parseKimiSessionFile(candidate.file, platform)
+    case 'zeroclaw':
+      return parseMessageGraphSessionFile('zeroclaw', candidate.file, platform)
   }
 }

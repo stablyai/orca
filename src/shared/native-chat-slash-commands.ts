@@ -78,10 +78,23 @@ const CODEX_COMMANDS: readonly SlashCommandSuggestion[] = [
   { name: 'subagents', description: 'Switch the active agent thread' }
 ]
 
+const ZEROCLAW_COMMANDS: readonly SlashCommandSuggestion[] = [
+  { name: 'skills', description: 'Manage and inspect active skills' },
+  { name: 'model', description: 'Configure active LLM backbone' },
+  { name: 'swarm', description: 'Configure subagent worker swarm' },
+  { name: 'cron', description: 'View and manage scheduled automations' },
+  { name: 'context', description: 'View current context and token usage' },
+  { name: 'mcp', description: 'List and inspect configured MCP servers' },
+  { name: 'review', description: 'Review current workspace changes' },
+  { name: 'clear', description: 'Clear session transcript' },
+  { name: 'help', description: 'Show available ZeroClaw commands' }
+]
+
 const COMMANDS_BY_AGENT: Partial<Record<AgentType, readonly SlashCommandSuggestion[]>> = {
   claude: CLAUDE_COMMANDS,
   openclaude: CLAUDE_COMMANDS,
-  codex: CODEX_COMMANDS
+  codex: CODEX_COMMANDS,
+  zeroclaw: ZEROCLAW_COMMANDS
 }
 
 /** Known slash commands for an agent, falling back to a small common set so the

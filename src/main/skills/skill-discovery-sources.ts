@@ -88,30 +88,26 @@ export function buildSkillDiscoverySources(
   const hermesSkillsRoot = args.pathApi
     ? pathApi.join(home, '.hermes', 'skills')
     : (resolveEnvironmentHermesSkillsRoot() ?? resolveDefaultHermesSkillsRoot({ homeDir: home }))
+  const homeSource = (
+    id: string,
+    label: string,
+    relativePath: string[],
+    owner: AgentType | null,
+    overridePath?: string,
+    providers: SkillProvider[] = ['agent-skills']
+  ): SkillScanRoot =>
+    source(id, label, overridePath ?? pathApi.join(home, ...relativePath), 'home', providers, owner)
+
   const roots: SkillScanRoot[] = [
-    source(
-      'home-codex',
-      'Codex home',
-      pathApi.join(home, '.codex', 'skills'),
-      'home',
-      ['codex'],
-      'codex'
-    ),
-    source(
-      'home-agents',
-      'Agent skills home',
-      pathApi.join(home, '.agents', 'skills'),
-      'home',
-      ['agent-skills'],
-      null
-    ),
-    source(
+    homeSource('home-codex', 'Codex home', ['.codex', 'skills'], 'codex', undefined, ['codex']),
+    homeSource('home-agents', 'Agent skills home', ['.agents', 'skills'], null),
+    homeSource(
       'home-claude',
       'Claude home',
-      providerRootOverrides.claude ?? pathApi.join(home, '.claude', 'skills'),
-      'home',
-      ['claude'],
-      'claude'
+      ['.claude', 'skills'],
+      'claude',
+      providerRootOverrides.claude,
+      ['claude']
     ),
     source(
       'codex-plugin-cache',
@@ -121,104 +117,49 @@ export function buildSkillDiscoverySources(
       ['codex', 'agent-skills'],
       'codex'
     ),
-    // Why: `npx skills add --global` writes into each agent's own home skills
-    // directory, so coverage misses them unless we scan every provider root.
-    source(
-      'home-grok',
-      'Grok home',
-      providerRootOverrides.grok ?? pathApi.join(home, '.grok', 'skills'),
-      'home',
-      ['agent-skills'],
-      'grok'
-    ),
-    source(
-      'home-opencode',
-      'OpenCode home',
-      pathApi.join(home, '.config', 'opencode', 'skills'),
-      'home',
-      ['agent-skills'],
-      'opencode'
-    ),
-    source(
-      'home-pi',
-      'Pi home',
-      pathApi.join(home, '.pi', 'agent', 'skills'),
-      'home',
-      ['agent-skills'],
-      'pi'
-    ),
-    source(
-      'home-omp',
-      'OMP home',
-      pathApi.join(home, '.omp', 'agent', 'skills'),
-      'home',
-      ['agent-skills'],
-      'omp'
-    ),
-    source('home-hermes', 'Hermes home', hermesSkillsRoot, 'home', ['agent-skills'], 'hermes'),
-    source(
+    // Why: `npx skills add --global` writes into each agent's own home skills directory; scan every provider root.
+    homeSource('home-grok', 'Grok home', ['.grok', 'skills'], 'grok', providerRootOverrides.grok),
+    homeSource('home-opencode', 'OpenCode home', ['.config', 'opencode', 'skills'], 'opencode'),
+    homeSource('home-pi', 'Pi home', ['.pi', 'agent', 'skills'], 'pi'),
+    homeSource('home-omp', 'OMP home', ['.omp', 'agent', 'skills'], 'omp'),
+    homeSource('home-hermes', 'Hermes home', [], 'hermes', hermesSkillsRoot),
+    homeSource(
       'home-prime-agent',
       'Prime Agent home',
-      pathApi.join(home, '.prime', 'agent', 'skills'),
-      'home',
-      ['agent-skills'],
+      ['.prime', 'agent', 'skills'],
       'prime-agent'
     ),
-    source(
-      'home-gemini',
-      'Gemini home',
-      pathApi.join(home, '.gemini', 'skills'),
-      'home',
-      ['agent-skills'],
-      'gemini'
-    ),
-    source(
+    homeSource('home-gemini', 'Gemini home', ['.gemini', 'skills'], 'gemini'),
+    homeSource(
       'home-antigravity',
       'Antigravity home',
-      pathApi.join(home, '.gemini', 'antigravity', 'skills'),
-      'home',
-      ['agent-skills'],
+      ['.gemini', 'antigravity', 'skills'],
       'antigravity'
     ),
-    source(
-      'home-cursor',
-      'Cursor home',
-      pathApi.join(home, '.cursor', 'skills'),
-      'home',
-      ['agent-skills'],
-      'cursor'
+    homeSource('home-cursor', 'Cursor home', ['.cursor', 'skills'], 'cursor'),
+    homeSource('home-droid', 'Droid home', ['.factory', 'skills'], 'droid'),
+    homeSource('home-continue', 'Continue home', ['.continue', 'skills'], 'continue'),
+    homeSource('home-trae', 'Trae home', ['.trae-cn', 'skills'], 'trae'),
+    homeSource('home-aug', 'Augment home', ['.augment', 'skills'], 'aug'),
+    homeSource('home-openclaw', 'OpenClaw home', ['.openclaw', 'skills'], 'openclaw'),
+    homeSource('home-zeroclaw', 'ZeroClaw home', ['.zeroclaw', 'skills'], 'zeroclaw'),
+    homeSource(
+      'home-zeroclaw-data',
+      'ZeroClaw data skills',
+      ['.zeroclaw', 'data', 'skills'],
+      'zeroclaw'
     ),
-    source(
-      'home-droid',
-      'Droid home',
-      pathApi.join(home, '.factory', 'skills'),
-      'home',
-      ['agent-skills'],
-      'droid'
+    homeSource(
+      'home-zeroclaw-shared',
+      'ZeroClaw shared skills',
+      ['.zeroclaw', 'shared', 'skills'],
+      'zeroclaw'
     ),
-    source(
-      'home-continue',
-      'Continue home',
-      pathApi.join(home, '.continue', 'skills'),
-      'home',
-      ['agent-skills'],
-      'continue'
-    ),
-    source(
-      'home-trae',
-      'Trae home',
-      pathApi.join(home, '.trae-cn', 'skills'),
-      'home',
-      ['agent-skills'],
-      'trae'
-    ),
-    source(
-      'home-aug',
-      'Augment home',
-      pathApi.join(home, '.augment', 'skills'),
-      'home',
-      ['agent-skills'],
-      'aug'
+    homeSource(
+      'home-zeroclaw-workspace',
+      'ZeroClaw workspace skills',
+      ['.zeroclaw', 'workspace', 'skills'],
+      'zeroclaw'
     )
   ]
 

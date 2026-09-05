@@ -169,7 +169,7 @@ export function rovoPartsText(parts: unknown[], role: 'user' | 'assistant'): str
 // Agents whose transcripts are append-only message-graph JSONL (session +
 // model_change + message records). OMP and Prime Agent are Pi forks and
 // share the format.
-export type MessageGraphAgent = 'openclaw' | 'pi' | 'omp' | 'prime-agent'
+export type MessageGraphAgent = 'openclaw' | 'pi' | 'omp' | 'prime-agent' | 'zeroclaw'
 
 export async function parseMessageGraphSessionFile(
   agent: MessageGraphAgent,

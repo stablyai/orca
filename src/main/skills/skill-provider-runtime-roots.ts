@@ -32,10 +32,19 @@ export function resolveEnvironmentSkillProviderRoots(
 ): SkillProviderRootOverrides {
   const claudeConfig = normalizedRoot(env.CLAUDE_CONFIG_DIR)
   const grokHome = normalizedRoot(env.GROK_HOME)
+  const zeroclawHome = normalizedRoot(env.ZEROCLAW_STATE_DIR || env.ZEROCLAW_HOME)
   return {
     ...(claudeConfig ? { claude: join(claudeConfig, 'skills') } : {}),
-    ...(grokHome ? { grok: join(grokHome, 'skills') } : {})
+    ...(grokHome ? { grok: join(grokHome, 'skills') } : {}),
+    ...(zeroclawHome ? { zeroclaw: join(zeroclawHome, 'skills') } : {})
   }
+}
+
+export function resolveEnvironmentZeroClawSkillsRoot(
+  env: NodeJS.ProcessEnv = process.env
+): string | null {
+  const zeroclawHome = normalizedRoot(env.ZEROCLAW_STATE_DIR || env.ZEROCLAW_HOME)
+  return zeroclawHome ? join(zeroclawHome, 'skills') : null
 }
 
 // Why: `HERMES_HOME` relocates a whole Hermes profile tree (`hermes -p coder`),

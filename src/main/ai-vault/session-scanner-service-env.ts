@@ -46,6 +46,8 @@ const AGENT_ROOT_ENV_ALLOWLIST = [
   'PRIME_AGENT_CODING_AGENT_DIR',
   'PRIME_AGENT_CODING_AGENT_SESSION_DIR',
   'PRIME_AGENT_SESSION_DIR',
+  'ZEROCLAW_HOME',
+  'ZEROCLAW_STATE_DIR',
   // Why: OpenCode has no home variable — its store hangs off the XDG data dir,
   // so this one is an agent root here rather than generic runtime state.
   'XDG_DATA_HOME'
