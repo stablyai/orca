@@ -10,7 +10,13 @@ import type { TuiAgent } from '../../../../shared/tui-agent'
 import { resolveWorkspaceCreationTarget } from '@/lib/project-host-workspace-target'
 import { isGitRepoKind } from '../../../../shared/repo-kind'
 import { CLIENT_PLATFORM } from '@/lib/new-workspace'
-import { getLocalRepoProjectExecutionRuntimeContext } from '@/lib/local-preflight-context'
+import {
+  getCachedLocalProjectRuntimeWslContext,
+  getLocalRepoProjectExecutionRuntimeContext,
+  getProjectRuntimePreflightContext,
+  getWslDistroFromPath,
+  localPreflightContextKey
+} from '@/lib/local-preflight-context'
 import { getAgentLaunchPlatformForRepo } from '@/lib/agent-launch-platform'
 import { repoIsRemote } from '../../../../shared/agent-launch-remote'
 import { resolveLocalWindowsAgentStartupShell } from '../../../../shared/windows-terminal-shell'
@@ -46,6 +52,40 @@ export function useComposerRuntimeTargetSelection(input: ComposerRuntimeTargetSe
     [projectGroups, repos, selectedProjectGroup]
   )
 
+  const folderTargetLocalPreflightContext = useMemo(() => {
+    if (!selectedProjectGroup?.parentPath) {
+      return undefined
+    }
+    const sourceRepo = folderSourceRepos.find((repo) => repo.id === repoId) ?? folderSourceRepos[0]
+    const projectRuntime = sourceRepo
+      ? getLocalRepoProjectExecutionRuntimeContext(
+          { activeRepoId, activeWorktreeId: null, projects, repos, settings, worktreesByRepo },
+          sourceRepo.id,
+          CLIENT_PLATFORM,
+          getCachedLocalProjectRuntimeWslContext()
+        )
+      : undefined
+    if (projectRuntime) {
+      if (projectRuntime.status === 'repair-required' || projectRuntime.runtime.kind === 'wsl') {
+        return getProjectRuntimePreflightContext(projectRuntime)
+      }
+      if (projectRuntime.runtime.reason === 'project-override') {
+        return undefined
+      }
+    }
+    const wslDistro = getWslDistroFromPath(selectedProjectGroup.parentPath)
+    return wslDistro ? { wslDistro } : undefined
+  }, [
+    activeRepoId,
+    folderSourceRepos,
+    projects,
+    repos,
+    repoId,
+    selectedProjectGroup,
+    settings,
+    worktreesByRepo
+  ])
+
   const parsedFolderTargetHost = parseExecutionHostId(selectedProjectGroup?.executionHostId)
 
   const folderTargetRuntimeEnvironmentId =
@@ -62,7 +102,13 @@ export function useComposerRuntimeTargetSelection(input: ComposerRuntimeTargetSe
     : folderTargetConnectionId
       ? { kind: 'ssh' as const, connectionId: folderTargetConnectionId }
       : selectedProjectGroup
-        ? { kind: 'local' as const }
+        ? {
+            kind: 'local' as const,
+            localPreflightContext: folderTargetLocalPreflightContext,
+            localPreflightContextKey: folderTargetLocalPreflightContext
+              ? localPreflightContextKey(folderTargetLocalPreflightContext)
+              : undefined
+          }
         : undefined
 
   const folderTargetSshState = folderTargetConnectionId

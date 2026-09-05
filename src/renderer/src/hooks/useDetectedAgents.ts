@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef } from 'react'
 import { useAppStore } from '@/store'
 import type { TuiAgent } from '../../../shared/tui-agent'
+import { localPreflightContextKey, type LocalPreflightContext } from '@/lib/local-preflight-context'
 
 export type UseDetectedAgentsResult = {
   /** Null while detection is in flight on first load. */
@@ -17,7 +18,13 @@ export type UseDetectedAgentsResult = {
 }
 
 export type AgentDetectionTarget =
-  | { kind: 'local'; worktreeId?: string | null; contextKey?: string }
+  | {
+      kind: 'local'
+      worktreeId?: string | null
+      contextKey?: string
+      localPreflightContext?: NonNullable<LocalPreflightContext>
+      localPreflightContextKey?: string
+    }
   | { kind: 'ssh'; connectionId: string }
   | { kind: 'runtime'; environmentId: string }
 
@@ -66,7 +73,13 @@ export function useDetectedAgents(
         ? target.environmentId
         : null
   const localWorktreeId = target?.kind === 'local' ? target.worktreeId : undefined
-  const localContextKey = target?.kind === 'local' ? target.contextKey : undefined
+  const localContext = target?.kind === 'local' ? target.localPreflightContext : undefined
+  const localContextKey =
+    target?.kind === 'local'
+      ? (target.localPreflightContextKey ??
+        target.contextKey ??
+        (localContext ? localPreflightContextKey(localContext) : undefined))
+      : undefined
   const remoteTargetKey =
     targetKind === 'ssh' && targetId
       ? `ssh:${targetId}`
@@ -137,8 +150,8 @@ export function useDetectedAgents(
     if (targetKind === 'ssh' && targetId) {
       return state.refreshRemoteDetectedAgents(targetId)
     }
-    return state.refreshDetectedAgents(localWorktreeId)
-  }, [isUnknown, localWorktreeId, targetKind, targetId])
+    return state.refreshDetectedAgents(localContext ?? localWorktreeId)
+  }, [isUnknown, localContext, localWorktreeId, targetKind, targetId])
 
   useEffect(() => {
     if (isUnknown) {
@@ -170,7 +183,7 @@ export function useDetectedAgents(
       }
     } else {
       if (detectedIds === null) {
-        void state.ensureDetectedAgents(localWorktreeId)
+        void state.ensureDetectedAgents(localContext ?? localWorktreeId)
       }
     }
   }, [
@@ -179,6 +192,7 @@ export function useDetectedAgents(
     targetId,
     remoteTargetKey,
     detectedIds,
+    localContext,
     localWorktreeId,
     localContextKey
   ])
