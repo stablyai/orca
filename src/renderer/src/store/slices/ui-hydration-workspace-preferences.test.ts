@@ -139,7 +139,8 @@ describe('createUISlice hydratePersistedUI', () => {
       'kimi',
       'minimax',
       'antigravity',
-      'grok'
+      'grok',
+      'zai'
     ])
     expect(setUI).toHaveBeenCalledWith({
       statusBarItems: [
@@ -149,13 +150,15 @@ describe('createUISlice hydratePersistedUI', () => {
         'kimi',
         'minimax',
         'antigravity',
-        'grok'
+        'grok',
+        'zai'
       ],
       _portsStatusBarDefaultAdded: true,
       _kimiStatusBarDefaultAdded: true,
       _minimaxStatusBarDefaultAdded: true,
       _antigravityStatusBarDefaultAdded: true,
-      _grokStatusBarDefaultAdded: true
+      _grokStatusBarDefaultAdded: true,
+      _zaiStatusBarDefaultAdded: true
     })
   })
 
@@ -171,11 +174,58 @@ describe('createUISlice hydratePersistedUI', () => {
         _kimiStatusBarDefaultAdded: true,
         _minimaxStatusBarDefaultAdded: true,
         _antigravityStatusBarDefaultAdded: true,
-        _grokStatusBarDefaultAdded: true
+        _grokStatusBarDefaultAdded: true,
+        _zaiStatusBarDefaultAdded: true
       })
     )
 
     expect(store.getState().statusBarItems).toEqual(['claude', 'resource-usage'])
+    expect(setUI).not.toHaveBeenCalled()
+  })
+
+  it('inserts the Z.AI status item after Codex in one shot', () => {
+    const setUI = vi.fn().mockResolvedValue(undefined)
+    vi.stubGlobal('window', { api: { ui: { set: setUI } } })
+    const store = createUIStore()
+
+    store.getState().hydratePersistedUI(
+      makePersistedUI({
+        statusBarItems: ['claude', 'codex', 'gemini', 'ports'],
+        _portsStatusBarDefaultAdded: true,
+        _kimiStatusBarDefaultAdded: true,
+        _minimaxStatusBarDefaultAdded: true,
+        _antigravityStatusBarDefaultAdded: true,
+        _grokStatusBarDefaultAdded: true
+      })
+    )
+
+    expect(store.getState().statusBarItems).toEqual(['claude', 'codex', 'zai', 'gemini', 'ports'])
+    expect(setUI).toHaveBeenCalledWith(
+      expect.objectContaining({
+        statusBarItems: ['claude', 'codex', 'zai', 'gemini', 'ports'],
+        _zaiStatusBarDefaultAdded: true
+      })
+    )
+  })
+
+  it('does not re-insert Z.AI once its one-shot migration has run', () => {
+    const setUI = vi.fn().mockResolvedValue(undefined)
+    vi.stubGlobal('window', { api: { ui: { set: setUI } } })
+    const store = createUIStore()
+
+    store.getState().hydratePersistedUI(
+      makePersistedUI({
+        statusBarItems: ['claude', 'codex'],
+        _portsStatusBarDefaultAdded: true,
+        _kimiStatusBarDefaultAdded: true,
+        _minimaxStatusBarDefaultAdded: true,
+        _antigravityStatusBarDefaultAdded: true,
+        _grokStatusBarDefaultAdded: true,
+        _zaiStatusBarDefaultAdded: true
+      })
+    )
+
+    expect(store.getState().statusBarItems).toEqual(['claude', 'codex'])
     expect(setUI).not.toHaveBeenCalled()
   })
 

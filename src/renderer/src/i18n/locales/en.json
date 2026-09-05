@@ -141,7 +141,8 @@
         "resourceUsageToggleDescription": "Show the Resource Manager. Click it for CPU, memory, sessions, daemon controls, and workspace disk scans.",
         "portsToggleDescription": "Show live workspace ports. Click it for workspace-scoped ports and external listeners.",
         "antigravityToggleDescription": "Show Antigravity subscription usage for the active workspace.",
-        "grokToggleDescription": "Show Grok subscription credit usage when signed in via Grok CLI."
+        "grokToggleDescription": "Show Grok subscription credit usage when signed in via Grok CLI.",
+        "zaiToggleDescription": "Show Z.AI Coding Plan usage when signed in through opencode auth."
       },
       "menuBarIcon": {
         "title": "Show Menu Bar Icon",
@@ -3696,6 +3697,8 @@
             "antigravityUsageDetails": "Open Antigravity usage details",
             "grokUsageAria": "Open Grok usage details",
             "grokUsageMenu": "Grok Usage",
+            "zaiUsageAria": "Open Z.AI usage details",
+            "zaiUsageMenu": "Z.AI Usage",
             "floatingTerminalNewActivity": "{{label}}, new activity",
             "codexSignInSuccess": "Signed in to Codex",
             "codexSignInError": "Codex sign-in failed. Please try again."
@@ -3874,6 +3877,7 @@
             "c06c1d215d": "Claude usage could not be refreshed because the network request failed.",
             "cabdc2a9e0": "Claude sign-in credentials could not be read.",
             "a7517cccb6": "Claude usage is unavailable right now.",
+            "zaiAuthRecovery": "Run opencode auth login in a terminal, choose Z.AI Coding Plan, and complete sign-in, then retry usage.",
             "e2c6a4f917": "Run Grok to refresh",
             "d1b7f509ac": "Run grok in a terminal on the computer running Orca and wait for it to start. If prompted, complete sign-in, then retry usage. You do not need to send a chat message.",
             "f90b3d7a16": "Run Kimi to refresh",
@@ -9056,6 +9060,8 @@
             "antigravityKeyword": "antigravity",
             "f8e2a1c4b6": "Grok Usage",
             "e7d1b0f3a5": "Show Grok weekly credit usage from Grok CLI OAuth.",
+            "zaiUsageTitle": "Z.AI Usage",
+            "zaiUsageDescription": "Show Z.AI Coding Plan usage in the status bar.",
             "d6c0a9e2f4": "grok",
             "c5b9f8d1e3": "xai",
             "usagePercentageDisplayTitle": "Usage percentages",
@@ -9067,7 +9073,10 @@
               "close": "close",
               "notification": "notification area",
               "background": "background"
-            }
+            },
+            "zaiKeyword": "z.ai",
+            "zaiGlmKeyword": "glm",
+            "zaiOpencodeKeyword": "opencode"
           }
         },
         "auto": {
