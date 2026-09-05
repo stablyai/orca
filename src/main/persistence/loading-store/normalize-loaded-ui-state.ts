@@ -152,7 +152,10 @@ export function normalizeLoadedUiState(
     typeof parsed.ui?.setupGuideSettingsDismissed === 'boolean'
       ? parsed.ui.setupGuideSettingsDismissed
       : normalizedOnboarding.checklist.dismissed === true
-  if (parsed.ui?.setupGuideSettingsDismissed === undefined && setupGuideSettingsDismissed) {
+  if (
+    parsed.ui?.setupGuideSettingsDismissed !== setupGuideSettingsDismissed &&
+    (setupGuideSettingsDismissed || parsed.ui?.setupGuideSettingsDismissed !== undefined)
+  ) {
     markNeedsSave()
   }
   // Why: only upgraded profiles still on the new default get the one-time usage-display notice; fresh profiles stay quiet.
