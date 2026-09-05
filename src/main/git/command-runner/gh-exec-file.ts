@@ -20,6 +20,7 @@ import {
   resolveHostGitHubCli
 } from './github-cli-host-fallback'
 import { execFileCaptureToTermination } from './exec-file-capture'
+import { logHostedCliDeadlineKill } from './hosted-cli-deadline-log'
 import type { GitExecOptions } from './git-exec-options'
 import { argsLookIdempotent } from './gh-idempotency'
 import { applyGhHostToArgs, explicitGhHostname, explicitGhRepoHostname } from './gh-host-args'
@@ -109,6 +110,7 @@ export async function ghExecFileAsync(
   // Why: scope by runtime and host so unrelated github.com, GHES, and WSL quotas cannot block each other.
   const rateLimitBucket = classifyGhRateLimitBucket(args)
   const rateLimitProbe = isGhRateLimitProbe(args)
+  const timeoutMs = options.timeout ?? defaultGhExecTimeoutMs(options.env)
   assertGhRateLimitScopeAvailable(args, options, resolved, rateLimitBucket, rateLimitProbe)
   let lastError: unknown
   let attemptedHostFallback = false
@@ -128,9 +130,10 @@ export async function ghExecFileAsync(
           encoding: (options.encoding ?? 'utf-8') as BufferEncoding,
           maxBuffer: options.maxBuffer,
           // Why: bound gh so one stuck child fails visibly instead of wedging the IPC lane.
-          timeout: options.timeout ?? defaultGhExecTimeoutMs(options.env),
+          timeout: timeoutMs,
           env: nonInteractiveGhEnv(options.env),
-          signal: options.signal
+          signal: options.signal,
+          onDeadlineKill: () => logHostedCliDeadlineKill('gh', resolved.binary, args, timeoutMs)
         },
         resolved.termination
       )
