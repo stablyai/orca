@@ -208,7 +208,12 @@ const CODEX_ITEM_CLASSIFICATIONS: Record<string, ProviderFrameClassification> = 
   // guarantees a session reports subagent work as `subAgentActivity` at all; one
   // that only ever emits the collab tool call gets no roster row, and suppressing
   // that too would leave its fan-out showing nothing.
-  subAgentActivity: 'status-chrome'
+  subAgentActivity: 'status-chrome',
+  // `{id, durationMs}` and nothing else — Codex's own transcript renders it as
+  // nothing at all. Every other item type this build does not model carries text
+  // a user would want (review output, an image path, hook prompt text), so those
+  // keep their visible fallback row.
+  sleep: 'status-chrome'
 }
 
 function notificationKind(kind: string): string {

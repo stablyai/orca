@@ -11,6 +11,102 @@
   },
   "gates": [
     {
+      "id": "terminal-output.prestarted-shell-snapshot-adoption",
+      "title": "Prestarted shell adoption paints covered output once",
+      "maturity": "experimental",
+      "protection": "partial",
+      "owner": "terminal-runtime",
+      "layer": "renderer-transport-and-live-electron",
+      "surfaces": [
+        "backend-created first terminal",
+        "daemon snapshot adoption",
+        "deferred live output"
+      ],
+      "platforms": ["macos", "linux", "windows"],
+      "providers": ["local", "daemon", "wsl", "ssh", "remote-runtime"],
+      "coveredPlatforms": ["macos", "linux", "windows"],
+      "coveredProviders": ["local", "daemon", "wsl"],
+      "coverageNotes": "macOS daemon-backed Electron journey verifies same PID and terminal identity plus rendered output. Focused renderer contracts pass on Linux, Windows and WSL. Neighboring SSH model and replay contracts pass locally; no new live SSH or paired-runtime journey.",
+      "motivatingLinks": [
+        "https://github.com/user-attachments/assets/e8c6d1dc-6150-4c3d-b55a-3d12efefdd04",
+        "https://github.com/user-attachments/assets/b0328f88-34ac-4d51-8119-9efe17072435"
+      ],
+      "invariant": "Adopting a prestarted terminal preserves its existing process and paints snapshot-covered startup output once while retaining subsequent live output. Missing sequence proof or blank snapshots must not authorize dropping output.",
+      "oracle": "Pass snapshot sequence and proven zero keyboard flags through real IPC transport projection. Deliver snapshot-covered and newer output before reattach resolves; drain replay parse callbacks and require one startup marker and the newer output. Repeat with no sequence and blank snapshot to retain unproven bytes. In Electron select a prestarted workspace, type a generated marker and compare PID and stable terminal identities before and after.",
+      "commands": [
+        "pnpm test src/renderer/src/components/terminal-pane/pty-transport-connect-spawn.test.ts src/renderer/src/components/terminal-pane/pty-connection-deferred-reattach-live-output.test.ts",
+        "pnpm test src/renderer/src/components/terminal-pane/pty-transport-connect-spawn.test.ts src/renderer/src/components/terminal-pane/pty-connection-deferred-reattach-live-output.test.ts src/renderer/src/components/terminal-pane/pty-connection-hidden-snapshot-live-overlap.test.ts src/renderer/src/components/terminal-pane/pty-connection-replay-payload-handling.test.ts src/renderer/src/components/terminal-pane/pty-connection/reattach-payload-ssh-reconnect-model-paint.test.ts",
+        "pnpm test src/renderer/src/components/terminal-pane/pty-connection src/renderer/src/components/terminal-pane/pty-transport"
+      ],
+      "testFiles": [
+        "src/renderer/src/components/terminal-pane/pty-transport-connect-spawn.test.ts",
+        "src/renderer/src/components/terminal-pane/pty-connection-deferred-reattach-live-output.test.ts"
+      ],
+      "assertionRefs": [
+        {
+          "file": "src/renderer/src/components/terminal-pane/pty-transport-connect-spawn.test.ts",
+          "assertions": [
+            "zero and nonzero snapshot sequence and proven zero keyboard flags survive IPC projection"
+          ]
+        },
+        {
+          "file": "src/renderer/src/components/terminal-pane/pty-connection-deferred-reattach-live-output.test.ts",
+          "assertions": [
+            "startup output covered by the snapshot is painted once",
+            "new output remains visible",
+            "legacy unsequenced and blank snapshots retain bytes"
+          ]
+        }
+      ],
+      "evidenceRuns": [
+        {
+          "date": "2026-09-04",
+          "runner": "local",
+          "platform": "macos",
+          "command": "pnpm test src/renderer/src/components/terminal-pane/pty-transport-connect-spawn.test.ts src/renderer/src/components/terminal-pane/pty-connection-deferred-reattach-live-output.test.ts src/renderer/src/components/terminal-pane/pty-connection-hidden-snapshot-live-overlap.test.ts src/renderer/src/components/terminal-pane/pty-connection-replay-payload-handling.test.ts src/renderer/src/components/terminal-pane/pty-connection/reattach-payload-ssh-reconnect-model-paint.test.ts",
+          "result": "passed",
+          "durationSeconds": 2.34,
+          "summary": "5 suites / 48 tests pass. Focused 2-suite runs independently pass 27 tests on Linux, Windows and WSL."
+        },
+        {
+          "date": "2026-09-04",
+          "runner": "local",
+          "platform": "macos",
+          "command": "pnpm test src/renderer/src/components/terminal-pane/pty-connection src/renderer/src/components/terminal-pane/pty-transport",
+          "result": "passed",
+          "durationSeconds": 5.67,
+          "summary": "Broader connection/transport gate: 77 files and 813 tests passed, including neighboring restore, reconnect, input and replay behavior. Log: artifacts/worktree-create/orca-draft-replay-broader-gate.log."
+        }
+      ],
+      "runtimeBudget": {
+        "p95Seconds": 15,
+        "scope": "focused renderer transport and deferred-adoption contracts"
+      },
+      "flakeHistory": {
+        "status": "unknown",
+        "evidence": "Focused local and remote runs pass; no CI soak history."
+      },
+      "redGreenEvidence": {
+        "status": "partial",
+        "evidence": "Metadata tests fail before forwarding. Corrected parse-draining regression observes two startup markers when the baseline installation is removed, and one after restoration. Initial missing-live-output failure was a harness parse-drain omission and is not red proof. Before/fixed Electron screenshots show duplicate/single startup output."
+      },
+      "performanceBudget": {
+        "required": true,
+        "evidence": "Reuses existing snapshot baseline reconciliation with no new scan, timer or subprocess. Corrected daemon-backed rendered trial reaches replay at 116.6 ms and generated keyboard output at 177 ms after selecting the prestarted workspace. This measures selection/adoption, not ordinary composer creation."
+      },
+      "promotionCriteria": [
+        "Meet manifest CI and soak policy.",
+        "Retain intentional-break and rendered identity/output proof.",
+        "Exercise live SSH and paired-runtime snapshot adoption before claiming full provider coverage."
+      ],
+      "knownGaps": [
+        "Composer draft creation and cancellation are not implemented by this gate.",
+        "No new live SSH, Windows or WSL UI run; remote evidence is focused contract tests.",
+        "Mixed-version snapshots without sequence proof intentionally retain legacy behavior."
+      ],
+      "demotionRule": "Keep experimental or demote if adoption duplicates covered output, drops newer or unproven output, changes terminal ownership, or flakes without explanation."
+    },
+    {
       "id": "cmd-j-tabs.host-qualified-candidate-ownership",
       "title": "Cmd-J tab candidates retain execution-host ownership",
       "maturity": "experimental",

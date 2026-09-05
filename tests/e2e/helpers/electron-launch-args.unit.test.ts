@@ -8,10 +8,17 @@ describe('getOrcaElectronLaunchArgs', () => {
     const mainPath = join(root, 'out', 'main', 'index.js')
 
     const args = getOrcaElectronLaunchArgs(mainPath, true)
-    expect(args.at(-1)).toBe(root)
     if (process.platform === 'darwin') {
-      expect(args.slice(0, -1)).toEqual(['--password-store=basic', '--use-mock-keychain'])
+      expect(args).toEqual([
+        '--password-store=basic',
+        '--use-mock-keychain',
+        root,
+        '-ApplePersistenceIgnoreState',
+        'YES'
+      ])
+    } else {
+      expect(args.at(-1)).toBe(root)
     }
-    expect(getOrcaElectronLaunchArgs(mainPath, false).at(-1)).toBe(root)
+    expect(getOrcaElectronLaunchArgs(mainPath, false)).toContain(root)
   })
 })
