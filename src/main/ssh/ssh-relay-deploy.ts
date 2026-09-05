@@ -1146,6 +1146,12 @@ async function installNativeDeps(
     if (linkedProbe.available) {
       return
     }
+    if (linkedProbe.missing.length === 0) {
+      console.warn(
+        `[ssh-relay][NATIVE-CACHE-PROBE-UNVERIFIABLE] shared entry ${cache.key} could not be verified at ${remoteDir} (${platform}); preserving the linked cache and launching as-is. stderr=${linkedProbe.stderr.trim().slice(-500)}`
+      )
+      return
+    }
     // Why fall through rather than repair the entry: it is shared, and something else on this
     // host may be running out of it right now. This directory installs its own copy instead.
     console.warn(
