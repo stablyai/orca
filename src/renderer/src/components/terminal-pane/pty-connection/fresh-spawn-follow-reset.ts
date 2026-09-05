@@ -101,7 +101,18 @@ export function bindFreshSpawnFollowReset(session: ConnectPanePtySession): void 
   // sequences don't leak into the shell. xterm.write() buffers internally
   // regardless of DOM visibility and the guard stays engaged via the
   // write-completion callback until xterm finishes parsing.
+  // Why: a reattach/restore paint bypasses dataCallback, so it never marked
+  // pane activity and a silently-running agent stayed on the relaxed (or
+  // disarmed) no-evidence cadence until its next byte. Replay bytes are the
+  // same "something may be running here" signal as live output.
+  const recordReplayPaintActivity = (data: string): void => {
+    if (data.length > 0) {
+      session.agentCompletionCoordinator?.observeOutputActivity()
+    }
+  }
+
   session.writeReplayData = (data: string): void => {
+    recordReplayPaintActivity(data)
     // Why: drain any queued background bytes BEFORE the replay paint, so the
     // scheduler's deferred drain cannot land older bytes on top of the replay.
     flushTerminalOutput(session.pane.terminal)
@@ -117,6 +128,7 @@ export function bindFreshSpawnFollowReset(session: ConnectPanePtySession): void 
   }
 
   session.writeReplayDataAsync = (data: string): Promise<void> => {
+    recordReplayPaintActivity(data)
     // Why: WebGL must be rebuilt after xterm has parsed replay bytes, not
     // merely after the write was queued.
     flushTerminalOutput(session.pane.terminal)
