@@ -5,6 +5,7 @@ export type WorkerTerminalHostScope =
   | { kind: 'wsl'; hostId: 'local'; distro: string }
   | { kind: 'ssh'; targetId: string }
 
+/** Parse the persisted worker host scope; any unknown or malformed shape is rejected as null so a downstream process check fails closed. */
 export function parseWorkerTerminalHostScope(value: string | null): WorkerTerminalHostScope | null {
   if (!value) {
     return null
@@ -36,10 +37,12 @@ export function parseWorkerTerminalHostScope(value: string | null): WorkerTermin
   return null
 }
 
-// Does `processIncarnation` name exactly this pty's live incarnation? Anchors on the pty id as a
-// prefix and then requires exact `${ptyId}:${incarnationId}` equality, so it is immune to colons
-// on either side (relay/SSH ptyIds, colon-bearing relay incarnationIds). A pty with no (or a
-// whitespace-dirty) incarnationId can never match — the exact-incarnation fence stays intact.
+/**
+ * Does `processIncarnation` name exactly this pty's live incarnation? Anchors on the pty id as a
+ * prefix and then requires exact `${ptyId}:${incarnationId}` equality, so it is immune to colons
+ * on either side (relay/SSH ptyIds, colon-bearing relay incarnationIds). A pty with no (or a
+ * whitespace-dirty) incarnationId can never match — the exact-incarnation fence stays intact.
+ */
 export function matchesProcessIncarnation(
   ptyId: string,
   incarnationId: string | null | undefined,
@@ -54,6 +57,7 @@ export function matchesProcessIncarnation(
   return `${ptyId}:${incarnationId}` === processIncarnation
 }
 
+/** Classify a recorded incarnation against live sessions: live on exact match, unverifiable when a candidate pty has a dirty or absent incarnationId (lost contact is never a death certificate), else exited. */
 export function classifyWorkerTerminalProcessIncarnation(
   processIncarnation: string,
   sessions: readonly PtyProcessInfo[]

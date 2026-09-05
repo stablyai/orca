@@ -102,6 +102,7 @@ export function completeWorkerTerminalRelease(
   return release
 }
 
+/** Settle a durably-requested release once: a provably gone worker settles released or release_unknown before the lease check, never falsely retained. */
 async function completeWorkerTerminalReleaseOnce(
   args: WorkerTerminalReleaseArgs
 ): Promise<WorkerReleaseReceipt> {
@@ -255,6 +256,7 @@ async function completeWorkerTerminalReleaseOnce(
   }
 }
 
+/** Revert a release to retained when the worker identity cannot be re-proven — never act on a terminal we cannot fence to this exact worker. */
 function retainWithUnprovenIdentity(
   dispatchId: string,
   db: OrchestrationDb,
@@ -270,6 +272,7 @@ function retainWithUnprovenIdentity(
   }
 }
 
+/** Does this dispatch still hold the live lease? Probes the possibly re-minted live handle while the durable identity stays fenced to the recorded terminal_handle. */
 function workerTerminalLeaseIsCurrent(
   runtime: OrcaRuntimeService,
   db: OrchestrationDb,

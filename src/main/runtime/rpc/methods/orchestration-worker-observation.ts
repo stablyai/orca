@@ -8,6 +8,7 @@ import type {
   WorkerDispatchRow
 } from '../../orchestration/types'
 
+/** Observe a worker terminal, re-minting a live handle from the recorded process incarnation when the durable handle went stale, so a still-running worker is never reported missing and leaked. */
 export async function inspectWorkerTerminal(
   runtime: OrcaRuntimeService,
   db: OrchestrationDb,

@@ -32,6 +32,7 @@ export class OrcaRuntimeWithGetOrchestrationDispatchAuthority extends OrcaRuntim
     return paneKeys
   }
 
+  /** The live lease authority for a handle: null unless its pty is connected under a known host scope, so a dead or unknown-scope terminal can never prove a current lease. */
   getOrchestrationDispatchAuthority(
     terminalHandle: string
   ): OrchestrationCompatibilityTerminalAuthority | null {
@@ -69,12 +70,14 @@ export class OrcaRuntimeWithGetOrchestrationDispatchAuthority extends OrcaRuntim
     }
   }
 
-  // Recover a live terminal handle for a worker whose durable handle stopped resolving
-  // (renderer graph epoch bump / handle invalidation) while its PTY is still tracked. Fences on
-  // the recorded process incarnation EXACTLY — never a bare ptyId, worktree, or pane — so a
-  // reused ptyId belonging to a different process can never be closed, and fails closed on an
-  // unknown host scope (this is also consumed by workerShow, which does no lease re-check).
-  // Returns a freshly minted live handle, or null when no live PTY carries that exact incarnation.
+  /**
+   * Recover a live terminal handle for a worker whose durable handle stopped resolving
+   * (renderer graph epoch bump / handle invalidation) while its PTY is still tracked. Fences on
+   * the recorded process incarnation EXACTLY — never a bare ptyId, worktree, or pane — so a
+   * reused ptyId belonging to a different process can never be closed, and fails closed on an
+   * unknown host scope (this is also consumed by workerShow, which does no lease re-check).
+   * Returns a freshly minted live handle, or null when no live PTY carries that exact incarnation.
+   */
   resolveTerminalHandleByProcessIncarnation(
     processIncarnation: string,
     serializedHostScope: string | null

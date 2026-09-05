@@ -6,6 +6,7 @@ const WORKTREE_ID = 'repo::/worktree'
 const TAB_ID = 'tab-terminal'
 const LEAF_ID = '11111111-1111-4111-8111-111111111111'
 
+/** A runtime whose pty controller captures every write for assertion. */
 function makeRuntime(): { runtime: OrcaRuntimeService; writes: string[] } {
   const writes: string[] = []
   const runtime = new OrcaRuntimeService(null)
@@ -20,6 +21,7 @@ function makeRuntime(): { runtime: OrcaRuntimeService; writes: string[] } {
   return { runtime, writes }
 }
 
+/** Attach a window and publish a one-tab, one-leaf terminal graph. */
 function syncGraph(runtime: OrcaRuntimeService): void {
   runtime.attachWindow(1)
   runtime.syncWindowGraph(1, {
@@ -44,6 +46,7 @@ function syncGraph(runtime: OrcaRuntimeService): void {
   })
 }
 
+/** (Re)register the fixture pty leaf under the given incarnation id. */
 function register(runtime: OrcaRuntimeService, incarnationId: string): void {
   runtime.registerPty(PTY_ID, WORKTREE_ID, 'target', {
     tabId: TAB_ID,
@@ -188,6 +191,7 @@ describe('resolveTerminalHandleByProcessIncarnation direct fencing', () => {
   // host scope is ssh:target rather than local.
   const SSH_TARGET_SCOPE = JSON.stringify({ kind: 'ssh', targetId: 'target' })
 
+  /** Register a pty leaf directly, optionally under a connection and incarnation. */
   function seedPty(
     runtime: OrcaRuntimeService,
     ptyId: string,
@@ -201,6 +205,7 @@ describe('resolveTerminalHandleByProcessIncarnation direct fencing', () => {
     })
   }
 
+  /** Call the private resolveTerminalHandleByProcessIncarnation on the runtime. */
   function resolve(
     runtime: OrcaRuntimeService,
     processIncarnation: string,

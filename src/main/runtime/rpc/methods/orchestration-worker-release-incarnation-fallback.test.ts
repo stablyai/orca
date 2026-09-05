@@ -15,6 +15,7 @@ describe('orchestration worker release incarnation fallback', () => {
   const coordinatorPaneKey = 'tab_coord:aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'
   const workerPaneKey = 'tab_worker:bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb'
 
+  /** Fresh in-memory db and a fully-stubbed runtime for one worker-release scenario. */
   function setup(): void {
     db = new OrchestrationDb(':memory:')
     dbOpen = true
@@ -102,6 +103,7 @@ describe('orchestration worker release incarnation fallback', () => {
     vi.restoreAllMocks()
   })
 
+  /** Look up a registered orchestration RPC method by name. */
   function findMethod(name: string) {
     const method = ORCHESTRATION_METHODS.find((m) => m.name === name)
     if (!method) {
@@ -110,12 +112,14 @@ describe('orchestration worker release incarnation fallback', () => {
     return method
   }
 
+  /** Parse a method's params and invoke its handler against the shared ctx. */
   async function call(name: string, params: Record<string, unknown>) {
     const method = findMethod(name)
     const parsed = method.params ? method.params.parse(params) : undefined
     return method.handler(parsed, ctx)
   }
 
+  /** Start a ready worker on a fresh task off the coordinator terminal. */
   async function startWorker(options: { terminal?: string } = {}): Promise<{
     taskId: string
     dispatchId: string
@@ -130,6 +134,7 @@ describe('orchestration worker release incarnation fallback', () => {
     return { taskId: task.id, dispatchId: result.dispatchId }
   }
 
+  /** Record the worker's report as settled — the precondition for release. */
   function settle(taskId: string, dispatchId: string, outcome: 'succeeded' | 'failed'): void {
     const settlement = db.settleWorkerReport({
       taskId,
@@ -140,6 +145,7 @@ describe('orchestration worker release incarnation fallback', () => {
     expect(settlement.action).toBe('settled')
   }
 
+  /** Start a worker and settle its report, the state a release acts on. */
   async function startSettledWorker(
     outcome: 'succeeded' | 'failed' = 'succeeded',
     options: { terminal?: string } = {}

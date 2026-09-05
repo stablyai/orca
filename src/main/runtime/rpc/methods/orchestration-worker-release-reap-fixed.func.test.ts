@@ -52,6 +52,7 @@ describe('PRB-0219 worker-release reap FIX (functional verification)', () => {
   let rendererGraphEpoch: number
   let closedPtyIds: string[]
 
+  /** Resolve a handle to its live pty only while its stamped graph epoch is current. */
   function resolveHandleToLivePty(
     handle: string
   ): { ptyId: string; pty: { incarnationId: number; alive: boolean } } | null {
@@ -70,6 +71,7 @@ describe('PRB-0219 worker-release reap FIX (functional verification)', () => {
     return { ptyId: entry.ptyId, pty }
   }
 
+  /** Wire the real RPC surface and db against the two-plane fake runtime. */
   function setup(): void {
     ptysById = new Map([
       ['coord-pty', { incarnationId: 1, alive: true }],
@@ -112,31 +114,33 @@ describe('PRB-0219 worker-release reap FIX (functional verification)', () => {
           hostScope: string | null
         ) => string | null
       }
-    ).resolveTerminalHandleByProcessIncarnation = vi.fn(
-      (incarnation: string): string | null => {
-        const idx = incarnation.lastIndexOf(':')
-        const ptyId = incarnation.slice(0, idx)
-        const inc = Number(incarnation.slice(idx + 1))
-        const pty = ptysById.get(ptyId)
-        if (!pty || !pty.alive) {
-          return null
-        }
-        if (pty.incarnationId !== inc) {
-          // Fence: a reused ptyId with a different incarnation must NOT resolve.
-          return null
-        }
-        // Remint a live handle at the current graph epoch.
-        handleTable.set('term_reminted', { ptyId, epoch: rendererGraphEpoch })
-        return 'term_reminted'
+    ).resolveTerminalHandleByProcessIncarnation = vi.fn((incarnation: string): string | null => {
+      const idx = incarnation.lastIndexOf(':')
+      const ptyId = incarnation.slice(0, idx)
+      const inc = Number(incarnation.slice(idx + 1))
+      const pty = ptysById.get(ptyId)
+      if (!pty || !pty.alive) {
+        return null
       }
-    ) as never
+      if (pty.incarnationId !== inc) {
+        // Fence: a reused ptyId with a different incarnation must NOT resolve.
+        return null
+      }
+      // Remint a live handle at the current graph epoch.
+      handleTable.set('term_reminted', { ptyId, epoch: rendererGraphEpoch })
+      return 'term_reminted'
+    }) as never
 
     // Identity plane (durable) — answers for the original AND any reminted handle. Independent of
     // the graph epoch, exactly like the real getTerminal* accessors that read dispatch authority.
     const knownWorkerHandle = (handle: string): boolean =>
       handle === 'term_worker' || handle === 'term_reminted'
     vi.spyOn(runtime, 'getTerminalPaneKey').mockImplementation((handle) =>
-      handle === 'term_coord' ? coordinatorPaneKey : knownWorkerHandle(handle) ? workerPaneKey : null
+      handle === 'term_coord'
+        ? coordinatorPaneKey
+        : knownWorkerHandle(handle)
+          ? workerPaneKey
+          : null
     )
     vi.spyOn(runtime, 'getTerminalProcessIncarnation').mockImplementation((handle) =>
       knownWorkerHandle(handle) ? PROCESS_INCARNATION : null
@@ -223,6 +227,7 @@ describe('PRB-0219 worker-release reap FIX (functional verification)', () => {
     vi.restoreAllMocks()
   })
 
+  /** Look up a registered orchestration RPC method by name. */
   function findMethod(name: string) {
     const method = ORCHESTRATION_METHODS.find((m) => m.name === name)
     if (!method) {
@@ -231,12 +236,14 @@ describe('PRB-0219 worker-release reap FIX (functional verification)', () => {
     return method
   }
 
+  /** Parse a method's params and invoke its handler against the shared ctx. */
   async function call(name: string, params: Record<string, unknown>) {
     const method = findMethod(name)
     const parsed = method.params ? method.params.parse(params) : undefined
     return method.handler(parsed, ctx)
   }
 
+  /** Start a worker and settle its report, the state a release acts on. */
   async function startSettledWorker(): Promise<{ taskId: string; dispatchId: string }> {
     const task = db.createTask({ spec: 'reap-leak fixture task', runId: activeRunId })
     const result = (await call('orchestration.workerStart', {
@@ -255,7 +262,7 @@ describe('PRB-0219 worker-release reap FIX (functional verification)', () => {
     return { taskId: task.id, dispatchId: result.dispatchId }
   }
 
-
+  /** The terminalState workerList projects for a dispatch, or null. */
   async function workerTerminalState(dispatchId: string): Promise<string | null> {
     const listed = (await call('orchestration.workerList', { run: activeRunId })) as {
       workers: { dispatchId: string; terminalState: string | null }[]
@@ -330,5 +337,4 @@ describe('PRB-0219 worker-release reap FIX (functional verification)', () => {
     expect(ptysById.get(PTY_ID)?.alive).toBe(true)
     expect(await workerTerminalState(dispatchId)).toBe('release_unknown')
   })
-
 })
