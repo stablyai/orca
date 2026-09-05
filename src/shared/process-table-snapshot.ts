@@ -20,6 +20,60 @@ export const PS_ARGS = (
     : ['-axo', 'pid=,ppid=,pgid=,tpgid=,stat=,tty=,etimes=,command=']
 ) as readonly string[]
 
+/**
+ * Cheap tier: the same job-control columns without `tty=` (0.29s of the 0.34s on a
+ * 1,900-process Mac) or `command=` (per-pid argv read, 1.15s on Linux). Enough to prove a
+ * pane's subtree is unchanged since the last full capture; never enough to name a process.
+ * No `etimes=` on Linux: it is elapsed seconds, so it changes every tick; the stable start
+ * marker comes from `/proc/<pid>/stat` for the pane subtree only.
+ */
+export const CHEAP_PS_ARGS = (
+  process.platform === 'darwin'
+    ? ['-axo', 'pid=,ppid=,pgid=,tpgid=,stat=,lstart=']
+    : ['-axo', 'pid=,ppid=,pgid=,tpgid=,stat=']
+) as readonly string[]
+
+export type CheapProcessTableRow = {
+  pid: number
+  ppid: number
+  pgid: number
+  tpgid: number
+  stat: string
+  /** Host start marker when the column set carries one (macOS `lstart`). */
+  startTime?: string
+}
+
+/**
+ * Parse a {@link CHEAP_PS_ARGS} capture. Lenient on purpose: a dropped row can only make a
+ * fingerprint DIFFER from the strict full-capture one, which escalates to the full capture --
+ * the safe direction. An empty capture is unreadable, not "no processes".
+ */
+export function parseCheapProcessTableRows(stdout: string): CheapProcessTableRow[] {
+  const rows: CheapProcessTableRow[] = []
+  for (const rawLine of stdout.split(/\r?\n/)) {
+    const match = rawLine.trim().match(/^(\d+)\s+(\d+)\s+(-?\d+)\s+(-?\d+)\s+(\S+)(?:\s+(.+?))?$/)
+    if (!match) {
+      continue
+    }
+    const pid = Number(match[1])
+    if (!Number.isSafeInteger(pid) || pid <= 0) {
+      continue
+    }
+    rows.push({
+      pid,
+      ppid: Number(match[2]),
+      pgid: Number(match[3]),
+      tpgid: Number(match[4]),
+      stat: match[5],
+      ...(match[6] !== undefined ? { startTime: match[6] } : {})
+    })
+  }
+  if (rows.length === 0) {
+    throw new ProcessTableCaptureError('empty_capture')
+  }
+  return rows
+}
+
 // Why: execFile's 1MB default leaves ~3x headroom (326KB / 1,460 processes, and
 // a single 5KB argv row is ordinary), so a busy host overflows it and then EVERY
 // capture fails — a readable process table degrading into permanent

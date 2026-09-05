@@ -112,7 +112,11 @@ export type PtyApi = {
   getForegroundProcess: (id: string) => Promise<string | null>
   inspectProcess: (
     id: string,
-    options?: { expectedIncarnationId?: string; scanChildProcesses?: boolean }
+    options?: {
+      expectedIncarnationId?: string
+      scanChildProcesses?: boolean
+      steadyState?: boolean
+    }
   ) => Promise<TerminalProcessInspection>
   confirmForegroundProcess: (id: string) => Promise<string | null>
   getCwd: (id: string) => Promise<string>
