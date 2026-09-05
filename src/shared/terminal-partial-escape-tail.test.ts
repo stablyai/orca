@@ -107,8 +107,12 @@ describe('advancePartialEscapeTail ESC-free fast path', () => {
   it('matches an unconditional fold for every pending-tail and chunk pairing', () => {
     for (const pending of pieces.map((piece) => extractPartialEscapeTail(piece))) {
       for (const chunk of pieces) {
+        // The cap belongs in the expectation: `advancePartialEscapeTail` abandons a tail over
+        // MAX_PARTIAL_ESCAPE_TAIL_LENGTH, so comparing it against an uncapped extract would stop
+        // modelling the function the moment a pairing crossed the cap.
+        const unguarded = extractPartialEscapeTail(pending + chunk)
         expect(advancePartialEscapeTail(pending, chunk), JSON.stringify({ pending, chunk })).toBe(
-          extractPartialEscapeTail(pending + chunk)
+          unguarded.length > MAX_PARTIAL_ESCAPE_TAIL_LENGTH ? '' : unguarded
         )
       }
     }

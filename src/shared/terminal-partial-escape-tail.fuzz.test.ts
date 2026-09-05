@@ -69,13 +69,16 @@ const SEQUENCES = [
   'ab\x1b[2Jcd'
 ]
 
-function* stringsUpTo(maxLength: number): Generator<string> {
-  yield ''
-  for (let length = 1; length <= maxLength; length++) {
-    const digits = Array.from({ length }, () => 0)
+// Yields {text, depth} because an astral symbol is two UTF-16 code units: filtering on
+// `text.length` would silently drop every depth-N string containing one, so the corpus would
+// not be exhaustive at depth N the way the test names claim.
+function* stringsUpTo(maxDepth: number): Generator<{ depth: number; text: string }> {
+  yield { depth: 0, text: '' }
+  for (let depth = 1; depth <= maxDepth; depth++) {
+    const digits = Array.from({ length: depth }, () => 0)
     for (;;) {
-      yield digits.map((digit) => ALPHABET[digit]).join('')
-      let place = length - 1
+      yield { depth, text: digits.map((digit) => ALPHABET[digit]).join('') }
+      let place = depth - 1
       while (place >= 0 && ++digits[place] === ALPHABET.length) {
         digits[place--] = 0
       }
@@ -104,13 +107,13 @@ describe('advancePartialEscapeTail differential fuzz', () => {
   }
 
   it('matches the unguarded oracle on every chunk up to length 4', () => {
-    for (const chunk of stringsUpTo(3)) {
+    for (const { text: chunk } of stringsUpTo(3)) {
       for (const pending of PENDINGS) {
         check(pending, chunk)
       }
     }
-    for (const chunk of stringsUpTo(4)) {
-      if (chunk.length === 4) {
+    for (const { depth, text: chunk } of stringsUpTo(4)) {
+      if (depth === 4) {
         check('', chunk)
         check('\x1b[', chunk)
       }
@@ -146,6 +149,6 @@ describe('advancePartialEscapeTail differential fuzz', () => {
   })
 
   it('ran the whole corpus', () => {
-    expect(checked).toBe(516_566)
+    expect(checked).toBe(593_468)
   })
 })
