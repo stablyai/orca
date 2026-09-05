@@ -6,8 +6,9 @@ import { performance } from 'node:perf_hooks'
 
 // Pass the pre-change source saved with git show <base>:src/shared/relay-frame-buffer.ts.
 const baselinePath = process.argv[2]
-if (!baselinePath)
+if (!baselinePath) {
   throw new Error('Usage: node config/scripts/relay-frame-buffer-benchmark.mjs <baseline.ts>')
+}
 async function load(source) {
   return (
     await import(
@@ -31,11 +32,15 @@ for (const count of [1, 256, 16384, 65536]) {
       for (const arm of round % 2 === 0 ? [0, 1] : [1, 0]) {
         const FrameBuffer = arm === 0 ? Before : After
         const buffer = new FrameBuffer()
-        for (const chunk of chunks) buffer.append(chunk)
+        for (const chunk of chunks) {
+          buffer.append(chunk)
+        }
         const start = performance.now()
         const output = buffer[mode](expected.length)
         times[arm].push(performance.now() - start)
-        if (mode === 'take') assert.deepEqual(output, expected)
+        if (mode === 'take') {
+          assert.deepEqual(output, expected)
+        }
         assert.equal(buffer.length, 0)
         buffer.append(Buffer.from('tail'))
         assert.equal(buffer.drain().toString(), 'tail')

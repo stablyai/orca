@@ -33,7 +33,9 @@ describe('RelayFrameBuffer', () => {
   it('releases consumed references and amortizes storage compaction in a large backlog', () => {
     const buffer = new RelayFrameBuffer()
     const chunks = Array.from({ length: 32768 }, (_, index) => Buffer.from([index % 256]))
-    for (const chunk of chunks) buffer.append(chunk)
+    for (const chunk of chunks) {
+      buffer.append(chunk)
+    }
     const shifted = vi.spyOn(Array.prototype, 'shift')
     let shiftCount: number
     try {
