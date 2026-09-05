@@ -3,6 +3,7 @@ import { useShallow } from 'zustand/react/shallow'
 import { useAppStore } from '../../store'
 import type { AgentType } from '../../../../shared/agent-status-types'
 import type { DiscoveredSkill, SkillDiscoveryResult } from '../../../../shared/skills'
+import type { DiscoveredSlashCommand } from '../../../../shared/custom-slash-commands'
 import { getNativeChatAgentProfile } from '../../../../shared/native-chat-agent-profiles'
 import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
 import { emitNativeChatSkillDiscovery } from '@/lib/native-chat-telemetry'
@@ -28,14 +29,19 @@ const DISCOVERY_BACKSTOP_TIMEOUT_MS = 18_000
 export type NativeChatSkillDiscovery = {
   status: 'idle' | 'loading' | 'ready' | 'error'
   skills: DiscoveredSkill[]
+  /** Claude Code `.claude/commands` entries from the same scan; empty for agents
+   *  that do not read Claude-owned roots. */
+  commands: readonly DiscoveredSlashCommand[]
   error: Error | null
   errorKind?: 'unavailable' | 'timeout' | 'host' | 'unknown'
   retry: () => void
 }
 
-type StoredDiscoveryState = Omit<NativeChatSkillDiscovery, 'retry'> & {
+type StoredDiscoveryState = Omit<NativeChatSkillDiscovery, 'retry' | 'commands'> & {
   contextKey: string | null
 }
+
+const NO_COMMANDS: readonly DiscoveredSlashCommand[] = []
 
 const IDLE_STATE: StoredDiscoveryState = {
   status: 'idle',
@@ -201,6 +207,16 @@ export function useNativeChatSkills(
       : []
   }, [agent, context, effectiveState, profile])
 
+  // Why gated on the Claude-owned root set: `.claude/commands` is Claude Code
+  // grammar, so offering it under Codex would insert a token its TUI rejects.
+  const visibleCommands = useMemo(() => {
+    if (profile?.skillSourceOwner !== 'claude' || effectiveState.status !== 'ready') {
+      return NO_COMMANDS
+    }
+    const result = context ? paneDiscoveryCache.current.get(context.key) : undefined
+    return result?.commands ?? NO_COMMANDS
+  }, [context, effectiveState, profile])
+
   const retry = useCallback(() => {
     forceNextDiscovery.current = true
     if (context) {
@@ -213,11 +229,12 @@ export function useNativeChatSkills(
     () => ({
       status: effectiveState.status,
       skills: visibleSkills,
+      commands: visibleCommands,
       error: effectiveState.error,
       ...(effectiveState.errorKind ? { errorKind: effectiveState.errorKind } : {}),
       retry
     }),
-    [effectiveState, retry, visibleSkills]
+    [effectiveState, retry, visibleCommands, visibleSkills]
   )
 }
 

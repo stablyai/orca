@@ -24,3 +24,17 @@ export function isSafeDisplayCharacter(character: string): boolean {
 export function stripUnsafeDisplayCharacters(value: string): string {
   return [...value].filter(isSafeDisplayCharacter).join('')
 }
+
+// Why: the row's visual truncation is CSS; a picker name IS the token inserted
+// into the PTY, so it must never be sliced. Token safety instead rejects absurd
+// lengths and anything unspellable as a single argument-free token.
+export const MAX_TOKEN_SAFE_NAME_LENGTH = 200
+
+export function isTokenSafeName(value: string): boolean {
+  return (
+    value.length > 0 &&
+    value.length <= MAX_TOKEN_SAFE_NAME_LENGTH &&
+    !/\s/u.test(value) &&
+    [...value].every(isSafeDisplayCharacter)
+  )
+}

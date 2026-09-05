@@ -1,7 +1,7 @@
 import type { DiscoveredSkill, SkillSourceKind } from '../../../../shared/skills'
 import type { SlashCommandSuggestion } from '../../../../shared/native-chat-slash-commands'
 import {
-  isSafeDisplayCharacter,
+  isTokenSafeName,
   stripUnsafeDisplayCharacters
 } from '../../../../shared/skill-display-text'
 import { compareBaseSensitivityLocaleText } from '@/lib/locale-text-collators'
@@ -56,8 +56,9 @@ export function buildNativeChatPickerItems(
     commands.map((command, index) => ({
       item: {
         kind: 'command' as const,
-        // Why: the name is the dispatch token and the catalog is curated, so
-        // it is inserted verbatim; only untrusted skill text gets sanitized.
+        // Why: the name is the dispatch token, and discovered `.claude/commands`
+        // names are already validated/sanitized where they join the catalog
+        // (mergeDiscoveredSlashCommands), so it is inserted verbatim here.
         id: `command:${command.name}`,
         name: command.name,
         description: command.description ? sanitizePickerText(command.description, 240) : undefined,
@@ -164,25 +165,12 @@ function isSubsequence(query: string, value: string): boolean {
   return false
 }
 
-// Why: the row's visual truncation is CSS; the name IS the inserted PTY token,
-// so it must never be sliced. Token safety instead rejects absurd lengths.
-const MAX_TOKEN_SAFE_NAME_LENGTH = 200
-
 function getSafeSkillName(skill: DiscoveredSkill): string | null {
-  if (isTokenSafe(skill.name)) {
+  if (isTokenSafeName(skill.name)) {
     return skill.name
   }
   const directoryName = skill.directoryPath.split(/[\\/]/).findLast(Boolean) ?? ''
-  return isTokenSafe(directoryName) ? directoryName : null
-}
-
-function isTokenSafe(value: string): boolean {
-  return (
-    value.length > 0 &&
-    value.length <= MAX_TOKEN_SAFE_NAME_LENGTH &&
-    !/\s/u.test(value) &&
-    [...value].every(isSafeDisplayCharacter)
-  )
+  return isTokenSafeName(directoryName) ? directoryName : null
 }
 
 function sanitizePickerText(value: string, maxLength: number): string {

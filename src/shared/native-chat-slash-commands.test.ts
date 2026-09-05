@@ -4,6 +4,7 @@ import {
   filterSlashCommands,
   getAgentSlashCommands,
   isSlashCommandDraft,
+  mergeDiscoveredSlashCommands,
   slashCommandDispatchText
 } from './native-chat-slash-commands'
 
@@ -62,5 +63,48 @@ describe('dispatch vs completion text', () => {
 
   it('completion text has a trailing space (Tab completes for arguments)', () => {
     expect(applySlashSuggestion({ name: 'model' })).toBe('/model ')
+  })
+})
+
+describe('mergeDiscoveredSlashCommands', () => {
+  const discovered = (name: string, description: string | null = null) => ({
+    name,
+    description,
+    scope: 'project' as const,
+    commandFilePath: `/repo/.claude/commands/${name}.md`
+  })
+
+  it('appends discovered commands to the curated catalog', () => {
+    const merged = mergeDiscoveredSlashCommands(getAgentSlashCommands('claude'), [
+      discovered('opsx:apply', 'Apply a change')
+    ])
+    expect(merged.map((command) => command.name)).toContain('opsx:apply')
+    expect(merged.find((command) => command.name === 'opsx:apply')?.description).toBe(
+      'Apply a change'
+    )
+  })
+
+  it('keeps the built-in when a custom command shadows its name', () => {
+    const merged = mergeDiscoveredSlashCommands(
+      [{ name: 'review', description: 'Review the current changes' }],
+      [discovered('review', 'Custom review')]
+    )
+    expect(merged).toHaveLength(1)
+    expect(merged[0].description).toBe('Review the current changes')
+  })
+
+  it('drops filesystem names that are not typeable as one slash token', () => {
+    const merged = mergeDiscoveredSlashCommands([], [discovered('two words')])
+    expect(merged).toHaveLength(0)
+  })
+
+  it('sanitizes author-controlled descriptions', () => {
+    const merged = mergeDiscoveredSlashCommands([], [discovered('opsx:apply', 'a‮b')])
+    expect(merged[0].description).toBe('ab')
+  })
+
+  it('returns the curated catalog untouched when nothing was discovered', () => {
+    const builtins = getAgentSlashCommands('claude')
+    expect(mergeDiscoveredSlashCommands(builtins, [])).toBe(builtins)
   })
 })

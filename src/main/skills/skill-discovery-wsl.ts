@@ -1,5 +1,10 @@
 import { posix as pathPosix } from 'node:path'
 import { summarizeSkillMarkdown } from '../../shared/skill-metadata'
+import {
+  customSlashCommandName,
+  dedupeCustomSlashCommands,
+  type DiscoveredSlashCommand
+} from '../../shared/custom-slash-commands'
 import type {
   DiscoveredSkill,
   SkillDiscoveryResult,
@@ -18,13 +23,20 @@ import {
 import { discoverClaudePluginSkillSourcesInWsl } from './claude-plugin-skill-sources-wsl'
 import type { SkillProviderRootOverrides } from './skill-provider-destinations'
 import { SKILL_STAGING_GLOB } from './skill-delete/staging-names'
-import { skillFileMaxDepth } from '../../shared/skill-discovery-depth'
+import { SKILL_FILE_MAX_DEPTH, skillFileMaxDepth } from '../../shared/skill-discovery-depth'
+import {
+  buildCustomSlashCommandRoots,
+  type CustomSlashCommandRoot
+} from './custom-slash-command-discovery'
 
 const MAX_MARKDOWN_BYTES = 256 * 1024
 const WSL_SCAN_TIMEOUT_MS = 10_000
 const WSL_SCAN_MAX_OUTPUT_BYTES = 128 * 1024 * 1024
 
-export function buildWslSkillDiscoveryCommand(roots: readonly SkillScanRoot[]): string {
+export function buildWslSkillDiscoveryCommand(
+  roots: readonly SkillScanRoot[],
+  commandRoots: readonly CustomSlashCommandRoot[] = []
+): string {
   const lines = [
     'set -u',
     'set -o pipefail',
@@ -47,9 +59,29 @@ export function buildWslSkillDiscoveryCommand(roots: readonly SkillScanRoot[]): 
     `  done < <(find -L "$root_path" -mindepth 1 -maxdepth "$max_depth" \\( -name '${SKILL_STAGING_GLOB}' -prune \\) -o \\( -type f -name 'SKILL.md' -print0 \\) 2>/dev/null)`,
     '}'
   ]
+  if (commandRoots.length > 0) {
+    lines.push(
+      'scan_command_root() {',
+      '  root_index=$1',
+      '  root_path=$2',
+      '  if [ ! -d "$root_path" ]; then',
+      '    return',
+      '  fi',
+      `  while IFS= read -r -d '' command_file; do`,
+      `    encoded_markdown=$(head -c ${MAX_MARKDOWN_BYTES} -- "$command_file" 2>/dev/null | base64 | tr -d '\\n') || continue`,
+      `    printf '%s\\0%s\\0%s\\0' C "$root_index" "$command_file"`,
+      `    printf '%s' "$encoded_markdown"`,
+      `    printf '\\0'`,
+      `  done < <(find -L "$root_path" -mindepth 1 -maxdepth ${SKILL_FILE_MAX_DEPTH} -type f -name '*.md' -print0 2>/dev/null)`,
+      '}'
+    )
+  }
   roots.forEach((root, index) => {
     const maxDepth = skillFileMaxDepth(root.sourceKind)
     lines.push(`scan_root ${index} ${quoteBashString(root.path)} ${maxDepth}`)
+  })
+  commandRoots.forEach((root, index) => {
+    lines.push(`scan_command_root ${index} ${quoteBashString(root.path)}`)
   })
   return lines.join('\n')
 }
@@ -87,15 +119,35 @@ function readProtocolField(fields: string[], index: number): string {
 export function parseWslSkillDiscoveryOutput(
   output: string,
   roots: readonly SkillScanRoot[],
-  scannedAt = Date.now()
+  scannedAt = Date.now(),
+  commandRoots: readonly CustomSlashCommandRoot[] = []
 ): SkillDiscoveryResult {
   const fields = output.split('\0')
   const rootExists = new Map<number, boolean>()
   const skillsByCanonicalPath = new Map<string, DiscoveredSkill>()
+  const commands: DiscoveredSlashCommand[] = []
   let index = 0
   while (index < fields.length && fields[index]) {
     const recordKind = fields[index++]
     const rootIndex = Number.parseInt(readProtocolField(fields, index++), 10)
+    if (recordKind === 'C') {
+      const commandRoot = commandRoots[rootIndex]
+      if (!commandRoot) {
+        throw new Error('WSL skill discovery returned an unknown source.')
+      }
+      const commandFilePath = readProtocolField(fields, index++)
+      const markdown = Buffer.from(readProtocolField(fields, index++), 'base64').toString('utf8')
+      const name = customSlashCommandName(pathPosix.relative(commandRoot.path, commandFilePath))
+      if (name) {
+        commands.push({
+          name,
+          description: summarizeSkillMarkdown(markdown).description,
+          scope: commandRoot.scope,
+          commandFilePath
+        })
+      }
+      continue
+    }
     const root = roots[rootIndex]
     if (!root) {
       throw new Error('WSL skill discovery returned an unknown source.')
@@ -166,7 +218,8 @@ export function parseWslSkillDiscoveryOutput(
     sources: sources.sort((a, b) =>
       a.label.localeCompare(b.label, undefined, { sensitivity: 'base' })
     ),
-    scannedAt
+    scannedAt,
+    commands: dedupeCustomSlashCommands(commands)
   }
 }
 
@@ -201,8 +254,16 @@ export async function discoverSkillsInWsl(args: {
     }),
     ...pluginRoots
   ]
+  const commandRoots = buildCustomSlashCommandRoots({
+    homeDir: args.homeDir,
+    cwd: args.cwd,
+    pathApi: pathPosix
+  })
   // Why: UNC traversal applies Windows casing and symlink rules. The distro
   // must own enumeration, metadata reads, and canonical path identity.
-  const output = await executeWslSkillDiscovery(args.distro, buildWslSkillDiscoveryCommand(roots))
-  return parseWslSkillDiscoveryOutput(output, roots)
+  const output = await executeWslSkillDiscovery(
+    args.distro,
+    buildWslSkillDiscoveryCommand(roots, commandRoots)
+  )
+  return parseWslSkillDiscoveryOutput(output, roots, undefined, commandRoots)
 }

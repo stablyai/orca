@@ -5,6 +5,11 @@
 // Metro forces us to duplicate.
 
 import type { AgentType } from './agent-status-types'
+import {
+  sanitizeCustomSlashCommandDescription,
+  type DiscoveredSlashCommand
+} from './custom-slash-commands'
+import { isTokenSafeName } from './skill-display-text'
 
 export type SlashCommandSuggestion = {
   /** The command token without its leading slash, e.g. `clear`. */
@@ -88,6 +93,31 @@ const COMMANDS_BY_AGENT: Partial<Record<AgentType, readonly SlashCommandSuggesti
  *  `/` menu is never empty for a recognized agent. */
 export function getAgentSlashCommands(agent: AgentType): readonly SlashCommandSuggestion[] {
   return COMMANDS_BY_AGENT[agent] ?? COMMON_COMMANDS
+}
+
+/** Fold discovered `.claude/commands` entries into the curated catalog so the
+ *  picker, send classification, and dispatch all read one list. Built-ins win a
+ *  name collision because the TUI resolves them first, and discovered names are
+ *  filesystem-controlled, so they are validated here — the one merge point —
+ *  before any of them becomes an inserted token. */
+export function mergeDiscoveredSlashCommands(
+  builtins: readonly SlashCommandSuggestion[],
+  discovered: readonly DiscoveredSlashCommand[]
+): readonly SlashCommandSuggestion[] {
+  if (discovered.length === 0) {
+    return builtins
+  }
+  const seen = new Set(builtins.map((command) => command.name))
+  const merged = [...builtins]
+  for (const command of discovered) {
+    if (seen.has(command.name) || !isTokenSafeName(command.name)) {
+      continue
+    }
+    seen.add(command.name)
+    const description = sanitizeCustomSlashCommandDescription(command.description)
+    merged.push({ name: command.name, ...(description ? { description } : {}) })
+  }
+  return merged
 }
 
 /** Whether the draft is a slash command (leading `/`, ignoring leading space).
