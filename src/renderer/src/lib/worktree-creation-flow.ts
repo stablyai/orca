@@ -1,5 +1,6 @@
 import type { CreateWorktreeResult } from '../../../shared/worktree/create-types'
 import { useAppStore } from '@/store'
+import { useCreationDraftSession } from './workspace-creation-drafts/creation-draft-session'
 import {
   findPendingLinkedWorkItemCreationId,
   type WorktreeCreationPhase,
@@ -23,6 +24,7 @@ function revealPendingCreation(
   phase: WorktreeCreationPhase
 ): void {
   const store = useAppStore.getState()
+  useCreationDraftSession.setState({ viewedDraftId: null })
   const indeterminate = getWorktreeCreationIndeterminate(request)
   store.beginPendingWorktreeCreation({
     creationId,
@@ -58,6 +60,7 @@ export function runBackgroundWorktreeCreation(
     request
   )
   if (existingCreationId) {
+    useCreationDraftSession.setState({ viewedDraftId: null })
     store.setActivePendingWorktreeCreation(existingCreationId)
     store.setActiveView('terminal')
     store.setSidebarOpen(true)

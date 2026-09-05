@@ -21,6 +21,30 @@ describe('worktree startup activation intent', () => {
     }
   )
 
+  it('suppresses native activation only when completion owns the handoff', () => {
+    const request = { repoId: 'repo', name: 'draft', startup: { command: 'codex' } }
+    expect(buildLocalWorktreeCreateArgs(request, { name: 'draft' }, true).startup).toEqual({
+      command: 'codex',
+      activate: false
+    })
+    expect(buildLocalWorktreeCreateArgs(request, { name: 'draft' }).startup).toEqual({
+      command: 'codex'
+    })
+  })
+
+  it('waits for provisioning and suppresses host-built draft activation on capable runtimes', () => {
+    const request = { repoId: 'repo', name: 'draft', options: { startupDraft: 'task' } }
+    expect(buildRuntimeWorktreeCreateParams(request, { name: 'draft' }, true)).toMatchObject({
+      startupDraft: 'task',
+      startupActivate: false,
+      activate: false,
+      awaitTerminalProvisioning: true
+    })
+    expect(buildRuntimeWorktreeCreateParams(request, { name: 'draft' })).not.toHaveProperty(
+      'awaitTerminalProvisioning'
+    )
+  })
+
   it('keeps ordinary foreground creation compatible when activation intent is absent', () => {
     const payload = buildRuntimeWorktreeCreateParams(
       { repoId: 'repo', name: 'draft', startup: { command: 'codex' } },

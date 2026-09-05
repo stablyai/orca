@@ -133,10 +133,11 @@ describe('durable composer creation launch boundary', () => {
     expect(createWorktree.mock.calls[0][16]).toBeUndefined()
   })
 
-  it('preserves ordinary backend agent launch', async () => {
+  it('launches the agent with renderer-owned completion focus', async () => {
     const startup = { command: 'codex', launchAgent: 'codex' as const }
     await createRequestedWorktree('submit', makeRequest({ agent: 'codex', startup }))
     expect(createWorktree.mock.calls[0][16]).toEqual(startup)
+    expect(createWorktree.mock.calls[0][25]).toMatchObject({ callerOwnsCompletion: true })
   })
 
   it('preserves ordinary host-owned draft launch', async () => {

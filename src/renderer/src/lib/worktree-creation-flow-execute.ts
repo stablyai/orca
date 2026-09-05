@@ -1,4 +1,5 @@
 import { toast } from 'sonner'
+import { bindCreationDraft } from './workspace-creation-drafts/creation-draft-session'
 import { useAppStore } from '@/store'
 import { preflightAgentTrust as preflightWorkspaceAgentTrust } from '@/lib/agent-trust-preflight'
 import { activateAndRevealWorktree, type ActivateAndRevealResult } from '@/lib/worktree-activation'
@@ -146,6 +147,15 @@ export async function executeWorktreeCreation(
     (isPendingCreationSurfaceVisible(creationId) ||
       (completionState.activeView === 'terminal' &&
         completionState.activePendingCreationId === null))
+
+  bindCreationDraft(creationId, {
+    worktreeId: worktree.id,
+    ...(result.startupTerminal?.handle ? { terminalHandle: result.startupTerminal.handle } : {}),
+    ...(result.startupTerminal?.deferredStartup?.incarnationId
+      ? { incarnationId: result.startupTerminal.deferredStartup.incarnationId }
+      : {}),
+    ...(result.startupTerminal?.tabId ? { tabId: result.startupTerminal.tabId } : {})
+  })
 
   let activation: ActivateAndRevealResult | false = false
   let primaryTabId: string | null

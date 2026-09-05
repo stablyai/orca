@@ -119,6 +119,39 @@ describe.each(['local', 'remote'] as const)('%s background startup', (host) => {
     }
   )
 
+  it('awaits setup provisioning and preserves failed setup for renderer recovery', async () => {
+    const f = fixture(host, { worktree, setup, defaultTabs })
+    let finishProvisioning!: (result: {
+      setupSpawned: boolean
+      setupTerminalHandle: string
+    }) => void
+    f.provision.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          finishProvisioning = resolve
+        })
+    )
+    let settled = false
+    const creating = f
+      .run({ startup: { command: 'agent', activate: false }, awaitTerminalProvisioning: true })
+      .then((result) => {
+        settled = true
+        return result
+      })
+    await vi.waitFor(() => expect(f.provision).toHaveBeenCalledOnce())
+    expect(settled).toBe(false)
+    finishProvisioning({ setupSpawned: false, setupTerminalHandle: '' })
+    const result = await creating
+    expect(
+      'returnedSetup' in result
+        ? result.returnedSetup
+        : 'setup' in result
+          ? result.setup
+          : undefined
+    ).toEqual(setup)
+    expect(f.activate).not.toHaveBeenCalled()
+  })
+
   it('preserves hook activation when the caller supplies no startup', async () => {
     const f = fixture(host, { worktree, setup, defaultTabs })
     await f.run({ runHooks: true })

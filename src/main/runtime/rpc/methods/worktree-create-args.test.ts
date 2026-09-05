@@ -23,6 +23,27 @@ describe('buildManagedWorktreeCreateArgs', () => {
     ).toMatchObject({ startup: { command, activate: false }, activate: false })
   })
 
+  it('preserves caller completion flags for a host-built draft startup', () => {
+    expect(
+      build({
+        repo: 'repo',
+        startupDraft: 'task',
+        startupActivate: false,
+        awaitTerminalProvisioning: true
+      })
+    ).toMatchObject({
+      startupDraft: 'task',
+      startupActivate: false,
+      awaitTerminalProvisioning: true
+    })
+  })
+
+  it('leaves provisioning and startup override absent for legacy callers', () => {
+    const args = build({ repo: 'repo', startupDraft: 'task' })
+    expect(args).not.toHaveProperty('startupActivate')
+    expect(args).not.toHaveProperty('awaitTerminalProvisioning')
+  })
+
   it('keeps legacy empty-command and absent-command requests free of startup', () => {
     expect(build({ repo: 'repo', startupCommand: '' }).startup).toBeUndefined()
     expect(build({ repo: 'repo', startupActivate: false }).startup).toBeUndefined()

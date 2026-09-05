@@ -55,6 +55,7 @@ export type RuntimeManagedWorktreeCreateArgs = {
   automationProvenance?: AutomationWorkspaceProvenance
   cliProvenance?: CliWorkspaceProvenance
   creatorProvenance?: Worktree['creatorProvenance']
+  startupActivate?: boolean
   startup?: WorktreeStartupLaunch
   startupDraft?: string
   startupDraftPaste?: WorktreeStartupDraftPaste

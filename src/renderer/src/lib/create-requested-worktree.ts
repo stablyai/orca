@@ -49,6 +49,7 @@ export async function createRequestedWorktree(
       preparedRequest.linkedGiteaPR,
       preparedRequest.compareBaseRef,
       {
+        callerOwnsCompletion: !background,
         ...(preparedRequest.nameWasGenerated ? { nameWasGenerated: true } : {}),
         ...(preparedRequest.displayNameKind
           ? { displayNameKind: preparedRequest.displayNameKind }

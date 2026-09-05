@@ -105,6 +105,7 @@ export const WorktreeCreate = z
     // Clients that can't quote for the host shell send `startupAgent` instead.
     startupCommand: OptionalPlainString,
     startupActivate: z.boolean().optional(),
+    awaitTerminalProvisioning: z.boolean().optional(),
     startupEnv: z.record(z.string(), z.string()).optional(),
     startupLaunchConfig: sleepingAgentLaunchConfigSchema,
     startupCommandDelivery: z.enum(['fast', 'shell-ready']).optional(),
