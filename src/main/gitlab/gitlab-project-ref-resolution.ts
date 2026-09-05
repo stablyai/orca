@@ -1,5 +1,6 @@
 import { glabExecFileAsync } from '../git/runner'
 import type { GitAdmissionTier } from '../git/command-runner/git-exec-options'
+import { shouldProbeGitRemote } from '../git/remote-name-listing'
 import { isTransientGitProbeError, readRemoteUrl } from '../git/remote-url-probe'
 import { NEGATIVE_ENTRY_TTL_MS } from '../git/remote-ref-probe-cache'
 import { getSshGitProviderGeneration } from '../providers/ssh-git-dispatch'
@@ -180,17 +181,19 @@ export async function getIssueProjectRef(
   connectionId?: string | null,
   localGitOptions: LocalGitExecOptions = {}
 ): Promise<ProjectRef | null> {
-  const upstream = await getProjectRefForRemote(
-    repoPath,
-    'upstream',
-    knownHosts,
-    connectionId,
-    localGitOptions
-  )
-  return (
-    upstream ??
-    getProjectRefForRemote(repoPath, 'origin', knownHosts, connectionId, localGitOptions)
-  )
+  if (await shouldProbeGitRemote(repoPath, 'upstream', connectionId, localGitOptions)) {
+    const upstream = await getProjectRefForRemote(
+      repoPath,
+      'upstream',
+      knownHosts,
+      connectionId,
+      localGitOptions
+    )
+    if (upstream) {
+      return upstream
+    }
+  }
+  return getProjectRefForRemote(repoPath, 'origin', knownHosts, connectionId, localGitOptions)
 }
 
 export type ResolvedIssueSource = {

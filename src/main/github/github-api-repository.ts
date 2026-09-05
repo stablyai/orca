@@ -4,6 +4,7 @@ import {
   githubRepoIdentityKey,
   isDefaultGitHubHost
 } from '../../shared/github/repository-identity-key'
+import { shouldProbeGitRemote } from '../git/remote-name-listing'
 import {
   getOwnerRepoForRemote,
   ghRepoExecOptions,
@@ -162,16 +163,12 @@ export async function getIssueGitHubApiRepository(
   connectionId?: string | null,
   localGitOptions: LocalGitExecOptions = {}
 ): Promise<GitHubApiRepository | null> {
-  const upstream = await getGitHubApiRepositoryForRemote(
-    repoPath,
-    'upstream',
-    connectionId,
-    localGitOptions
+  const upstream = (await shouldProbeGitRemote(repoPath, 'upstream', connectionId, localGitOptions))
+    ? await getGitHubApiRepositoryForRemote(repoPath, 'upstream', connectionId, localGitOptions)
+    : null
+  return (
+    upstream ?? getGitHubApiRepositoryForRemote(repoPath, 'origin', connectionId, localGitOptions)
   )
-  if (upstream) {
-    return upstream
-  }
-  return getGitHubApiRepositoryForRemote(repoPath, 'origin', connectionId, localGitOptions)
 }
 
 export type GitHubApiRepositoryCandidates = {
@@ -186,9 +183,11 @@ export async function resolveGitHubApiRepositoryCandidates(
   localGitOptions: LocalGitExecOptions = {}
 ): Promise<GitHubApiRepositoryCandidates> {
   const [upstream, origin] = await Promise.all([
-    getGitHubApiRepositoryForRemote(repoPath, 'upstream', connectionId, localGitOptions, {
-      requireVerifiedSshProbe: true
-    }),
+    (await shouldProbeGitRemote(repoPath, 'upstream', connectionId, localGitOptions))
+      ? getGitHubApiRepositoryForRemote(repoPath, 'upstream', connectionId, localGitOptions, {
+          requireVerifiedSshProbe: true
+        })
+      : null,
     getGitHubApiRepositoryForRemote(repoPath, 'origin', connectionId, localGitOptions, {
       requireVerifiedSshProbe: true
     })

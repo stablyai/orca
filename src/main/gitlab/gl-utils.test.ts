@@ -33,8 +33,38 @@ import {
 } from './gl-utils'
 import { GlabNonListResponseError } from './glab-api-response'
 import { registerSshGitProvider, unregisterSshGitProvider } from '../providers/ssh-git-dispatch'
+import { _resetRemoteNameListingCache } from '../git/remote-name-listing'
 import { REMOTE_URL_PROBE_TIMEOUT_MS } from '../git/remote-url-probe'
 import { NEGATIVE_ENTRY_TTL_MS } from '../git/remote-ref-probe-cache'
+
+function mockGitRemoteCommands(remotes: Record<string, string>): void {
+  gitExecFileAsyncMock.mockImplementation(async (args: string[]) => {
+    if (args[0] === 'remote' && args[1] !== 'get-url') {
+      return { stdout: `${Object.keys(remotes).join('\n')}\n` }
+    }
+    if (args[0] === 'remote' && args[1] === 'get-url') {
+      const url = remotes[args[2] ?? '']
+      if (!url) {
+        throw new Error(`fatal: No such remote '${args[2]}'`)
+      }
+      return { stdout: url }
+    }
+    throw new Error(`unexpected git ${args.join(' ')}`)
+  })
+}
+
+function gitRemoteGetUrlCalls(remoteName: string): unknown[][] {
+  return gitExecFileAsyncMock.mock.calls.filter(
+    ([args]) =>
+      Array.isArray(args) && args[0] === 'remote' && args[1] === 'get-url' && args[2] === remoteName
+  )
+}
+
+function gitRemoteListCalls(): unknown[][] {
+  return gitExecFileAsyncMock.mock.calls.filter(
+    ([args]) => Array.isArray(args) && args[0] === 'remote' && args[1] !== 'get-url'
+  )
+}
 
 describe('gitlab project ref resolution', () => {
   beforeEach(() => {
@@ -43,6 +73,7 @@ describe('gitlab project ref resolution', () => {
     sshExecMock.mockReset()
     unregisterSshGitProvider('conn-1')
     _resetProjectRefCache()
+    _resetRemoteNameListingCache()
   })
 
   afterEach(() => {
@@ -66,35 +97,53 @@ describe('gitlab project ref resolution', () => {
   })
 
   it('prefers upstream for issue project ref resolution', async () => {
-    gitExecFileAsyncMock.mockResolvedValueOnce({
-      stdout: 'git@gitlab.com:stablyai/orca.git\n'
+    mockGitRemoteCommands({
+      origin: 'git@gitlab.com:fork/orca.git\n',
+      upstream: 'git@gitlab.com:stablyai/orca.git\n'
     })
 
     await expect(getIssueProjectRef('/repo')).resolves.toEqual({
       host: 'gitlab.com',
       path: 'stablyai/orca'
     })
-    expect(gitExecFileAsyncMock).toHaveBeenCalledWith(['remote', 'get-url', 'upstream'], {
-      cwd: '/repo',
-      timeout: REMOTE_URL_PROBE_TIMEOUT_MS
-    })
+    expect(gitRemoteGetUrlCalls('upstream')).toHaveLength(1)
   })
 
-  it('falls back to origin when upstream is missing or non-GitLab', async () => {
-    gitExecFileAsyncMock
-      .mockResolvedValueOnce({ stdout: 'git@example.com:stablyai/orca.git\n' })
-      .mockResolvedValueOnce({ stdout: 'git@gitlab.com:fork/orca.git\n' })
+  it('does not spawn git remote get-url upstream on an origin-only clone', async () => {
+    mockGitRemoteCommands({ origin: 'git@gitlab.com:fork/orca.git\n' })
 
     await expect(getIssueProjectRef('/repo')).resolves.toEqual({
       host: 'gitlab.com',
       path: 'fork/orca'
     })
+    await expect(getIssueProjectRef('/repo')).resolves.toEqual({
+      host: 'gitlab.com',
+      path: 'fork/orca'
+    })
+    expect(gitRemoteListCalls()).toHaveLength(1)
+    expect(gitRemoteGetUrlCalls('upstream')).toHaveLength(0)
+    expect(gitRemoteGetUrlCalls('origin')).toHaveLength(1)
+  })
+
+  it('falls back to origin when upstream is present but non-GitLab', async () => {
+    mockGitRemoteCommands({
+      origin: 'git@gitlab.com:fork/orca.git\n',
+      upstream: 'git@example.com:stablyai/orca.git\n'
+    })
+
+    await expect(getIssueProjectRef('/repo')).resolves.toEqual({
+      host: 'gitlab.com',
+      path: 'fork/orca'
+    })
+    expect(gitRemoteGetUrlCalls('upstream')).toHaveLength(1)
+    expect(gitRemoteGetUrlCalls('origin')).toHaveLength(1)
   })
 
   it('does not mix origin and upstream cache entries for the same repo path', async () => {
-    gitExecFileAsyncMock
-      .mockResolvedValueOnce({ stdout: 'git@gitlab.com:fork/orca.git\n' })
-      .mockResolvedValueOnce({ stdout: 'git@gitlab.com:stablyai/orca.git\n' })
+    mockGitRemoteCommands({
+      origin: 'git@gitlab.com:fork/orca.git\n',
+      upstream: 'git@gitlab.com:stablyai/orca.git\n'
+    })
 
     await expect(getProjectRef('/repo')).resolves.toEqual({
       host: 'gitlab.com',
@@ -355,23 +404,27 @@ describe('resolveIssueSource', () => {
   beforeEach(() => {
     gitExecFileAsyncMock.mockReset()
     _resetProjectRefCache()
+    _resetRemoteNameListingCache()
   })
 
   it("'auto' + upstream exists → upstream, fellBack=false", async () => {
-    gitExecFileAsyncMock.mockResolvedValueOnce({
-      stdout: 'git@gitlab.com:stablyai/orca.git\n'
+    mockGitRemoteCommands({
+      origin: 'git@gitlab.com:fork/orca.git\n',
+      upstream: 'git@gitlab.com:stablyai/orca.git\n'
     })
 
     await expect(resolveIssueSource('/repo', 'auto')).resolves.toEqual({
       source: { host: 'gitlab.com', path: 'stablyai/orca' },
       fellBack: false
     })
+    expect(gitRemoteGetUrlCalls('upstream')).toHaveLength(1)
   })
 
-  it("'auto' + no upstream → origin, fellBack=false", async () => {
-    gitExecFileAsyncMock
-      .mockResolvedValueOnce({ stdout: 'git@example.com:stablyai/orca.git\n' })
-      .mockResolvedValueOnce({ stdout: 'git@gitlab.com:solo/orca.git\n' })
+  it("'auto' + no gitlab upstream → origin, fellBack=false", async () => {
+    mockGitRemoteCommands({
+      origin: 'git@gitlab.com:solo/orca.git\n',
+      upstream: 'git@example.com:stablyai/orca.git\n'
+    })
 
     await expect(resolveIssueSource('/repo', 'auto')).resolves.toEqual({
       source: { host: 'gitlab.com', path: 'solo/orca' },
@@ -407,8 +460,9 @@ describe('resolveIssueSource', () => {
   })
 
   it('undefined preference is treated identically to auto', async () => {
-    gitExecFileAsyncMock.mockResolvedValueOnce({
-      stdout: 'git@gitlab.com:stablyai/orca.git\n'
+    mockGitRemoteCommands({
+      origin: 'git@gitlab.com:fork/orca.git\n',
+      upstream: 'git@gitlab.com:stablyai/orca.git\n'
     })
 
     await expect(resolveIssueSource('/repo', undefined)).resolves.toEqual({
