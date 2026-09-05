@@ -8,6 +8,12 @@ vi.mock('node:fs', async () => {
   return { ...actual, statSync: (...args: unknown[]) => statSyncMock(...args) }
 })
 
+const runProcessMock = vi.fn()
+
+vi.mock('./child-process/run-process', () => ({
+  runProcess: (...args: unknown[]) => runProcessMock(...args)
+}))
+
 import type {
   WindowsPowerShellHostAsyncProbe,
   WindowsPowerShellHostResolution
@@ -17,6 +23,7 @@ import {
   getWindowsPowerShellHost,
   getWindowsPowerShellHostCandidates,
   isPossibleWindowsPowerShellHost,
+  probeWindowsPowerShellHostAsync,
   resetWindowsPowerShellHostCacheForTests,
   setWindowsPowerShellHostResolutionObserver,
   warmWindowsPowerShellHostCache
@@ -51,6 +58,7 @@ beforeEach(() => {
   resetWindowsPowerShellHostCacheForTests()
   statSyncMock.mockReset()
   statSyncMock.mockReturnValue({})
+  runProcessMock.mockReset()
 })
 
 describe('getWindowsPowerShellHostCandidates', () => {
@@ -216,5 +224,36 @@ describe('warmWindowsPowerShellHostCache', () => {
     await warmWindowsPowerShellHostCache(async () => ({ ok: false, timedOut: true }), ENV)
     expect(seen[0]?.fellBack).toBe(true)
     expect(seen[0]?.attempts.every((attempt) => attempt.timedOut)).toBe(true)
+  })
+})
+
+describe('probeWindowsPowerShellHostAsync', () => {
+  // Guards the removal of a no-op -ExecutionPolicy Bypass: the policy gates
+  // script files, never an encoded payload, so it was pure EDR signal.
+  it('encodes the payload without an execution-policy bypass', async () => {
+    runProcessMock.mockResolvedValue({ code: 7, timedOut: false })
+
+    await probeWindowsPowerShellHostAsync(PROGRAM_FILES_PWSH)
+
+    const { program, args } = runProcessMock.mock.calls[0][0]
+    expect(program).toBe(PROGRAM_FILES_PWSH)
+    expect(args).not.toContain('-ExecutionPolicy')
+    expect(args).not.toContain('Bypass')
+    expect(args.slice(0, 4)).toEqual([
+      '-NoLogo',
+      '-NoProfile',
+      '-NonInteractive',
+      '-EncodedCommand'
+    ])
+    expect(Buffer.from(args[4], 'base64').toString('utf16le')).toContain('exit 7')
+  })
+
+  it('rejects a host that reports the exit code without writing the marker', async () => {
+    runProcessMock.mockResolvedValue({ code: 7, timedOut: false })
+
+    await expect(probeWindowsPowerShellHostAsync(PROGRAM_FILES_PWSH)).resolves.toMatchObject({
+      ok: false,
+      markerOk: false
+    })
   })
 })
