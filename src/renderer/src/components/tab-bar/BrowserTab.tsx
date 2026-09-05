@@ -191,15 +191,12 @@ export default function BrowserTab({
           muted-foreground made the icon read as "disabled" in practice. */}
       <BrowserFavicon
         faviconUrl={tab.faviconUrl}
-        loading={tab.loading}
+        loading={tab.loading && !tab.loadError && !isBlankBrowserTab(tab)}
         className="size-3 mr-1"
         fallbackClassName="text-blue-500"
       />
       {isPinned && <Pin className="mr-1 size-3 shrink-0 text-muted-foreground" aria-hidden />}
       <span className={`${TAB_LABEL_WIDTH_CLASSES} mr-1`}>{tabLabel}</span>
-      {tab.loading && !tab.loadError && !isBlankBrowserTab(tab) && (
-        <span className="mr-1 size-1.5 rounded-full bg-sky-500/80 shrink-0" />
-      )}
       {!isPinned && (
         <button
           className={`flex items-center justify-center w-4 h-4 rounded-sm shrink-0 ${
