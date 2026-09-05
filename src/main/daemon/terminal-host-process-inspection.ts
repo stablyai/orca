@@ -1,4 +1,5 @@
 import { isShellProcess } from '../../shared/agent-detection'
+import { recognizeAgentProcess } from '../../shared/agent-process-recognition'
 import type { RemoteForegroundEvidence } from '../../shared/foreground-process-evidence'
 import { getCheapProcessTableSnapshot } from '../../shared/cheap-process-table-snapshot-reader'
 import { getStrictProcessTableSnapshotWithAge } from '../../shared/process-table-snapshot-reader'
@@ -100,8 +101,18 @@ export async function inspectTerminalHostProcess(args: {
       clearSteadyStateAnchor(session)
     }
   }
+  // Agent-only evidence cannot erase an ordinary running command's PTY name.
+  const ordinaryForeground =
+    foregroundProcess !== null &&
+    !isShellProcess(foregroundProcess) &&
+    !recognizeAgentProcess(foregroundProcess)
+      ? foregroundProcess
+      : null
   return {
-    foregroundProcess: evidence.verdict === 'live' ? evidence.processName : foregroundProcess,
+    foregroundProcess:
+      evidence.verdict === 'live'
+        ? (evidence.processName ?? ordinaryForeground)
+        : foregroundProcess,
     hasChildProcesses: foregroundProcess !== null && !isShellProcess(foregroundProcess),
     foregroundProcessEvidence: evidence
   }
