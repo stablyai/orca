@@ -1,3 +1,4 @@
+import { migrateExplorerDisplayRoots } from '../../../shared/file-explorer-display-root'
 import {
   getWorktreeCardModeProperties,
   isDefaultedCompactWorktreeCardProperties,
@@ -28,6 +29,14 @@ export function normalizeLoadedUiState(
   osc52ClipboardNoticePending: boolean,
   markNeedsSave: () => void
 ): PersistedState['ui'] {
+  const explorerDisplayRootByWorktree = migrateExplorerDisplayRoots(
+    parsed.ui?.explorerDisplayRootByWorktree,
+    parsed.ui?._explorerDisplayRootMigrated === true,
+    parsed.worktreeMeta ?? {}
+  )
+  if (!parsed.ui?._explorerDisplayRootMigrated) {
+    markNeedsSave()
+  }
   const rawSort = parsed.ui?.sortBy
   const sort = normalizeSortBy(rawSort)
   const migrate = !parsed.ui?._sortBySmartMigrated && rawSort === 'recent'
@@ -189,6 +198,8 @@ export function normalizeLoadedUiState(
     // window exists, and it must survive a crash before the user ever sees the notice.
     osc52ClipboardDefaultOnNoticePending: osc52ClipboardNoticePending,
     sortBy: migrate ? ('smart' as const) : sort,
+    _explorerDisplayRootMigrated: true,
+    explorerDisplayRootByWorktree,
     showDotfilesByWorktree: normalizeShowDotfilesByWorktree(parsed.ui?.showDotfilesByWorktree),
     workspaceStatuses,
     _workspaceStatusesDefaultOrderMigrated: true,

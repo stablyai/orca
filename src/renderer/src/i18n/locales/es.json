@@ -14891,5 +14891,12 @@
       "action": "Probar Agentes",
       "hiddenToast": "La pestaña Agentes está oculta. Vuelve a activarla en Configuración → Experimental."
     }
+  },
+  "fileExplorer": {
+    "root": {
+      "label": "Raíz del explorador",
+      "full": "Raíz del repositorio",
+      "retry": "Reintentar"
+    }
   }
 }

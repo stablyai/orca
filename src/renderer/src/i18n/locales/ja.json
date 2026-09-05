@@ -14891,5 +14891,12 @@
       "action": "Agent を試す",
       "hiddenToast": "Agent タブを非表示にしました。設定 → 実験的機能で再度有効にできます。"
     }
+  },
+  "fileExplorer": {
+    "root": {
+      "label": "エクスプローラーのルート",
+      "full": "リポジトリのルート",
+      "retry": "再試行"
+    }
   }
 }

@@ -169,6 +169,7 @@ export function buildWorktreePurgeState(
     ),
     // Why: keyed by worktreeId; without this it leaks a huge-status marker per removed worktree.
     gitStatusHugeByWorktree: omitByWorktree(s.gitStatusHugeByWorktree),
+    explorerDisplayRootByWorktree: omitByWorktree(s.explorerDisplayRootByWorktree),
     showDotfilesByWorktree: omitByWorktree(s.showDotfilesByWorktree),
     expandedDirs: omitByWorktree(s.expandedDirs),
     // Per-file editor state for removed files

@@ -116,6 +116,18 @@ export function createUiPreferenceActions(set: UISliceSet, get: UISliceGet): Par
     alwaysShowDefaultBranchWorkspace: true,
     setAlwaysShowDefaultBranchWorkspace: (v) => set({ alwaysShowDefaultBranchWorkspace: v }),
 
+    explorerDisplayRootByWorktree: {},
+    setExplorerDisplayRootForWorktree: (worktreeId, value) => {
+      if (!worktreeId || ['__proto__', 'constructor', 'prototype'].includes(worktreeId)) {
+        return
+      }
+      set((s) => ({
+        explorerDisplayRootByWorktree: {
+          ...s.explorerDisplayRootByWorktree,
+          [worktreeId]: value
+        }
+      }))
+    },
     showDotfilesByWorktree: {},
     setShowDotfilesForWorktree: (worktreeId, showDotfiles) =>
       set((s) => {

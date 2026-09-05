@@ -24,11 +24,29 @@ import { requireActiveEnvironmentOrNull } from './web-runtime-session'
 import { UI_STORAGE_KEY, noopUnsubscribe, writeJson } from './web-storage'
 
 export function createWebUiApi(): NonNullable<Partial<PreloadApi>['ui']> {
+  const explorerRootHosts = new Set<string>()
+  const prepareHostUpdates = (updates: Parameters<PreloadApi['ui']['set']>[0]) => {
+    const hostUpdates = omitPairingLocalUiFields(updates)
+    const environmentId = requireActiveEnvironmentOrNull()?.id
+    // Old hosts reject unknown ui.set keys; retain this preference in browser storage instead.
+    if (!environmentId || !explorerRootHosts.has(environmentId)) {
+      delete hostUpdates.explorerDisplayRootByWorktree
+    }
+    return hostUpdates
+  }
   let zoomLevel = readLocalWebUIState().uiZoomLevel
   return {
     get: async () => {
       try {
+        const environmentId = requireActiveEnvironmentOrNull()?.id
         const result = await callRuntimeResult<{ ui: PairedUiState }>('ui.get', undefined, 15_000)
+        if (environmentId) {
+          if (result.ui.explorerDisplayRootByWorktree !== undefined) {
+            explorerRootHosts.add(environmentId)
+          } else {
+            explorerRootHosts.delete(environmentId)
+          }
+        }
         const local = readLocalWebUIState()
         const next = {
           ...mergeHostWebUIState(local, result.ui),
@@ -55,7 +73,7 @@ export function createWebUiApi(): NonNullable<Partial<PreloadApi>['ui']> {
       zoomLevel = next.uiZoomLevel
       // Why strip here too when the host also strips: an old host predating that strip would
       // otherwise persist this browser's runtime:web-* keys over the desktop profile's order.
-      const hostUpdates = omitPairingLocalUiFields(updates)
+      const hostUpdates = prepareHostUpdates(updates)
       try {
         await callRuntimeResult('ui.set', hostUpdates, 15_000)
       } catch {
@@ -69,7 +87,7 @@ export function createWebUiApi(): NonNullable<Partial<PreloadApi>['ui']> {
       const next = mergeWebUIState(readLocalWebUIState(), updates)
       writeJson(UI_STORAGE_KEY, next)
       zoomLevel = next.uiZoomLevel
-      const hostUpdates = omitPairingLocalUiFields(updates)
+      const hostUpdates = prepareHostUpdates(updates)
       await callRuntimeResult('ui.set', hostUpdates, 15_000)
     },
     recordFeatureInteraction: async (id: FeatureInteractionId) => {

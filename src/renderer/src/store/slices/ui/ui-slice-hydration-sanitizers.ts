@@ -1,3 +1,4 @@
+import { normalizeExplorerDisplayRootByWorktree } from '../../../../../shared/file-explorer-display-root'
 import type { AppState } from '../../types'
 import type { PersistedTrustedOrcaHooks } from '../../../../../shared/orca-yaml-hook-types'
 import type { PersistedUIState } from '../../../../../shared/persisted-ui-state-types'
@@ -237,4 +238,15 @@ export function migrateStatusBarItems(items: readonly string[] | undefined): Sta
     }
   }
   return out as StatusBarItem[]
+}
+
+export function sanitizeExplorerPreferences(
+  ui: PersistedUIState
+): Pick<AppState, 'explorerDisplayRootByWorktree' | 'showDotfilesByWorktree'> {
+  return {
+    explorerDisplayRootByWorktree: normalizeExplorerDisplayRootByWorktree(
+      ui.explorerDisplayRootByWorktree
+    ),
+    showDotfilesByWorktree: sanitizeShowDotfilesByWorktree(ui.showDotfilesByWorktree)
+  }
 }

@@ -1,3 +1,4 @@
+import { normalizeExplorerDisplayRootByWorktree } from '../../../shared/file-explorer-display-root'
 import type { PersistedState } from '../../../shared/persisted-state-types'
 import {
   getDefaultUIState,
@@ -167,6 +168,12 @@ export function updatePersistedUI(
     browserDefaultZoomLevel: normalizeBrowserPageZoomLevel(
       sanitizedUpdates.browserDefaultZoomLevel ?? operations.state.ui?.browserDefaultZoomLevel
     ),
+    explorerDisplayRootByWorktree:
+      sanitizedUpdates.explorerDisplayRootByWorktree !== undefined
+        ? normalizeExplorerDisplayRootByWorktree(sanitizedUpdates.explorerDisplayRootByWorktree)
+        : normalizeExplorerDisplayRootByWorktree(
+            operations.state.ui?.explorerDisplayRootByWorktree
+          ),
     showDotfilesByWorktree:
       sanitizedUpdates.showDotfilesByWorktree !== undefined
         ? normalizeShowDotfilesByWorktree(sanitizedUpdates.showDotfilesByWorktree)

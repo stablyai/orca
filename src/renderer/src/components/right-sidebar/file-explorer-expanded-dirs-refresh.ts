@@ -95,7 +95,13 @@ export async function refreshFileExplorerExpandedDirs({
     setDirCache((prev) => {
       const next = { ...prev }
       for (const result of currentResults) {
-        next[result.dirPath] = result.cache
+        next[result.dirPath] = result.cache.error
+          ? {
+              ...prev[result.dirPath],
+              children: prev[result.dirPath]?.children ?? [],
+              error: result.cache.error
+            }
+          : result.cache
       }
       return next
     })
@@ -157,9 +163,9 @@ export async function refreshFileExplorerExpandedDirs({
             operationOwner: listing.operationOwner
           }
         }
-      } catch {
+      } catch (error) {
         if (dirLoadTracker.isCurrent(loadToken)) {
-          cache = { children: [] }
+          cache = { children: [], error: error instanceof Error ? error.message : String(error) }
         }
       }
       settleRead(cache ? { dirPath, cache } : undefined)

@@ -1,3 +1,4 @@
+import { getRelativePathInsideRoot } from '@/lib/path'
 import { useEffect, useRef } from 'react'
 import { toast } from 'sonner'
 import { extractIpcErrorMessage } from '@/lib/ipc-error'
@@ -8,6 +9,7 @@ import { captureFileExplorerOperationGuard } from './file-explorer-operation-own
 
 type UseFileExplorerImportParams = {
   worktreePath: string | null
+  displayRootPath?: string | null
   activeWorktreeId: string | null
   refreshDir: (dirPath: string) => Promise<void>
   clearNativeDragState: () => void
@@ -26,6 +28,7 @@ type UseFileExplorerImportParams = {
  */
 export function useFileExplorerImport({
   worktreePath,
+  displayRootPath = worktreePath,
   activeWorktreeId,
   refreshDir,
   clearNativeDragState,
@@ -33,6 +36,8 @@ export function useFileExplorerImport({
   operationOwner
 }: UseFileExplorerImportParams): void {
   // Refs to avoid re-subscribing IPC listener on every render
+  const displayRootRef = useRef(displayRootPath)
+  displayRootRef.current = displayRootPath
   const worktreePathRef = useRef(worktreePath)
   worktreePathRef.current = worktreePath
   const activeWorktreeIdRef = useRef(activeWorktreeId)
@@ -93,7 +98,11 @@ export function useFileExplorerImport({
           const skipped = results.filter((r) => r.status === 'skipped')
           const failed = results.filter((r) => r.status === 'failed')
 
-          if (imported.length > 0) {
+          if (
+            imported.length > 0 &&
+            activeWorktreeIdRef.current === wtId &&
+            getRelativePathInsideRoot(imported[0].destPath, displayRootRef.current) !== null
+          ) {
             setSelectedPathRef.current(imported[0].destPath)
           }
 

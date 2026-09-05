@@ -1,4 +1,5 @@
 import React from 'react'
+import { FileExplorerRootSelect, type FileExplorerRootSelectProps } from './FileExplorerRootSelect'
 import { Ellipsis, ListCollapse, Loader2, RefreshCw } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import {
@@ -15,6 +16,7 @@ import { cn } from '@/lib/utils'
 
 type FileExplorerToolbarProps = {
   repoName: string
+  rootSelect?: FileExplorerRootSelectProps | null
   worktreePath: string
   connectionId?: string | null
   refresh: {
@@ -34,6 +36,7 @@ type FileExplorerToolbarProps = {
 
 export function FileExplorerToolbar({
   repoName,
+  rootSelect,
   worktreePath,
   connectionId,
   refresh,
@@ -49,11 +52,15 @@ export function FileExplorerToolbar({
   return (
     <div className="flex h-8 min-h-8 items-center gap-2 border-b border-border px-2">
       <span
-        className="min-w-0 flex-1 truncate text-xs font-medium text-foreground"
+        className={cn(
+          'min-w-0 truncate text-xs font-medium text-foreground',
+          rootSelect ? 'max-w-20' : 'flex-1'
+        )}
         title={repoName}
       >
         {repoName}
       </span>
+      {rootSelect && <FileExplorerRootSelect {...rootSelect} />}
       <Tooltip>
         <TooltipTrigger asChild>
           <Button

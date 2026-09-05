@@ -144,6 +144,8 @@ export function applyRemoveWorktreeSuccessState(
     }
     const nextExpandedDirs = { ...s.expandedDirs }
     delete nextExpandedDirs[worktreeId]
+    const nextExplorerDisplayRootByWorktree = { ...s.explorerDisplayRootByWorktree }
+    delete nextExplorerDisplayRootByWorktree[worktreeId]
     const nextShowDotfilesByWorktree = { ...s.showDotfilesByWorktree }
     delete nextShowDotfilesByWorktree[worktreeId]
     // Why: clear the huge-status marker so it doesn't linger after the worktree is gone.
@@ -249,6 +251,7 @@ export function applyRemoveWorktreeSuccessState(
       editorViewMode: nextEditorViewMode,
       markdownFrontmatterVisible: nextMarkdownFrontmatterVisible,
       editorCursorLine: nextEditorCursorLine,
+      explorerDisplayRootByWorktree: nextExplorerDisplayRootByWorktree,
       showDotfilesByWorktree: nextShowDotfilesByWorktree,
       expandedDirs: nextExpandedDirs,
       gitStatusHugeByWorktree: nextGitStatusHugeByWorktree,
