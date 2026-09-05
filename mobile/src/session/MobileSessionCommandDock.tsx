@@ -10,6 +10,7 @@ import {
 } from 'lucide-react-native'
 import { triggerMediumImpact } from '../platform/haptics'
 import { MobileTerminalLiveInputBar } from './MobileTerminalLiveInputBar'
+import { MobileTerminalInputRecovery } from './MobileTerminalInputRecovery'
 import { useHardwareKeyboardTextInputFocus } from '../hardware-keyboard/use-hardware-keyboard-text-input-focus'
 import { createTerminalLiveAccessoryInput } from '../terminal/terminal-live-accessory-input'
 import { getTerminalCommandKeyboardType } from '../terminal/terminal-keyboard-type'
@@ -36,7 +37,7 @@ export function MobileSessionCommandDock({ controller }: { controller: MobileSes
     liveInputRef,
     commandInputRef,
     activeSessionTab,
-    canSend,
+    canSend: connectionCanSend,
     canCompose,
     liveInputEnabled,
     showNativeChat,
@@ -60,6 +61,7 @@ export function MobileSessionCommandDock({ controller }: { controller: MobileSes
     activeBrowserTab,
     keyboardLift
   } = controller
+  const canSend = connectionCanSend && !controller.terminalInputFailure
   const hardwareInputFocus = useHardwareKeyboardTextInputFocus({
     enabled:
       !activeMarkdownTab &&
@@ -84,6 +86,13 @@ export function MobileSessionCommandDock({ controller }: { controller: MobileSes
           }
         ]}
       >
+        {controller.terminalInputFailure && (
+          <MobileTerminalInputRecovery
+            failure={controller.terminalInputFailure}
+            onRecover={controller.recoverTerminalInput}
+            recoveryUnavailable={controller.terminalInputRecoveryUnavailable}
+          />
+        )}
         {/* Accessory keys */}
         <View style={styles.accessoryBar}>
           {/* Why: fixed keyboard escape hatch; outside ScrollView + shortcut path so it can't scroll away or be hidden (#5106). */}

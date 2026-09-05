@@ -189,7 +189,7 @@ describe('terminal send keyboard dismissal wiring', () => {
     const slice = sourceSlice(
       sendActionsSource,
       'async function handleAccessoryKey(',
-      'const sendLiveTerminalInput = useCallback('
+      'const sendLiveTerminalInput = useCallback<TerminalLiveInputSender>('
     )
     expect(slice).not.toContain('dismissKeyboardAfterAgentSend')
   })

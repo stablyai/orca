@@ -58,6 +58,7 @@ export function useMobileSessionTerminalRuntime(scope: MobileSessionScreenStateM
   const commandInputRef = useRef<TextInput>(null)
   const liveInputFocusTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const sendLiveTerminalInputRef = useRef<TerminalLiveInputSender>(async () => false)
+  const terminalInputSubscribedRef = useRef<(handle: string) => void>(() => {})
   const sessionTabActionSheetKeyboardHideSubRef = useRef<ReturnType<
     typeof Keyboard.addListener
   > | null>(null)
@@ -172,6 +173,7 @@ export function useMobileSessionTerminalRuntime(scope: MobileSessionScreenStateM
     liveInputFocusTimerRef,
     sendLiveTerminalInputRef,
     sessionTabActionSheetKeyboardHideSubRef,
+    terminalInputSubscribedRef,
     sessionTabActionSheetRequestSeqRef,
     dictationRouteContextRef,
     terminalUnsubsRef,

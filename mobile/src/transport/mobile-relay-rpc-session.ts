@@ -1,3 +1,4 @@
+import { assertTerminalInputRequestAllowed } from './terminal-input-request-fence'
 import {
   PairingGetEndpointsResultSchema,
   type DeviceResumeConfirmed,
@@ -61,6 +62,7 @@ export function connectMobileRelayRpcSession(args: {
   const streams = new MobileRelayRpcStreams({
     nextId: () => pending.nextId(),
     sendFrame,
+    sendBinary: (bytes) => !closed && state === 'connected' && link.sendBinary(bytes),
     waitForConnected: () => waitForConnected()
   })
 
@@ -99,9 +101,16 @@ export function connectMobileRelayRpcSession(args: {
   })
 
   const client: MobileRelayRpcSession = {
+    supportsTerminalStreamInput: (terminal) => streams.supportsTerminalStreamInput(terminal),
+    getTerminalStreamInputFailure: (terminal) => streams.getTerminalStreamInputFailure(terminal),
+    recoverTerminalStreamInput: (terminal) => streams.recoverTerminalStreamInput(terminal),
+    cancelTerminalStreamInput: (terminal) => streams.cancelTerminalStreamInput(terminal),
+    sendTerminalStreamInput: (terminal, text) => streams.sendTerminalStreamInput(terminal, text),
     async sendRequest(method, params, options) {
+      assertTerminalInputRequestAllowed(method, params, streams.getTerminalStreamInputFailure)
       const budget = openRpcRequestBudget(options)
       await waitForConnected(budget.timeoutMs)
+      assertTerminalInputRequestAllowed(method, params, streams.getTerminalStreamInputFailure)
       return sendRpc(method, params, resolvePostConnectRequestTimeout(budget, requestTimeoutMs))
     },
 

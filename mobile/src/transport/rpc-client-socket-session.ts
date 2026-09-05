@@ -9,32 +9,13 @@ import {
 import { isRpcResponse } from './rpc-response-shape'
 import { isStaleRpcSocketEvent, logRpcSocketClose } from './rpc-socket-close-evidence'
 import { describeSocketEvent, redactSocketEndpoint } from './socket-event-debug'
-import type { ConnectionLogEmitter, ConnectionState, RpcResponse } from './types'
+import type { SocketSessionOptions } from './rpc-client-socket-options'
 import { websocketPayloadToUint8 } from './websocket-payload-bytes'
+import { sendSocketEncryptedBinary } from './rpc-client-socket-send'
 
 const CONNECT_TIMEOUT_MS = 12_000
 const HANDSHAKE_TIMEOUT_MS = 5_000
 const WEBSOCKET_CONNECTING_STATE = 0
-
-type SocketSessionOptions = {
-  endpoint: string
-  deviceToken: string
-  serverPublicKey: Uint8Array
-  getCurrentSocket: () => WebSocket | null
-  getState: () => ConnectionState
-  getReconnectAttempt: () => number
-  isIntentionallyClosed: () => boolean
-  emitLog: ConnectionLogEmitter
-  onHandshakeStarted: () => void
-  onAuthenticated: (session: RpcClientSocketSession) => void
-  onAuthRejected: (reason: string) => void
-  onRpcResponse: (response: RpcResponse) => void
-  onBinary: (bytes: Uint8Array) => void
-  onAnyInbound: (receivedAt: number) => void
-  onAuthenticatedInbound: (session: RpcClientSocketSession) => void
-  onClosed: (session: RpcClientSocketSession, closeCode?: number) => void
-  onForcedClose: (session: RpcClientSocketSession) => void
-}
 
 export class RpcClientSocketSession {
   readonly socket: WebSocket
@@ -84,6 +65,16 @@ export class RpcClientSocketSession {
 
   close(): void {
     this.socket.close()
+  }
+
+  sendBinary(bytes: Uint8Array): boolean {
+    return sendSocketEncryptedBinary(
+      this.socket,
+      this.sharedKey,
+      this.authenticated && this.options.getCurrentSocket() === this.socket,
+      bytes,
+      () => this.options.onForcedClose(this)
+    )
   }
 
   clearTimers(): void {

@@ -5,6 +5,7 @@ import {
 } from '../../../src/shared/browser-screencast-protocol'
 import { encodeTerminalStreamFrame, TerminalStreamOpcode } from './terminal-stream-protocol'
 import { isRpcDeliveryUnknown } from './rpc-delivery-ambiguity'
+import { TERMINAL_ORDERED_INPUT_CAPABILITY } from '../../../src/shared/terminal-ordered-input'
 
 const fakes = vi.hoisted(() => ({
   linkOptions: null as null | {
@@ -19,6 +20,7 @@ const fakes = vi.hoisted(() => ({
     onError(error: Error): void
   },
   sendText: vi.fn(() => true),
+  sendBinary: vi.fn(() => true),
   close: vi.fn()
 }))
 
@@ -28,6 +30,7 @@ vi.mock('./mobile-relay-e2ee-link', () => ({
       fakes.linkOptions = options
     }
     sendText = fakes.sendText
+    sendBinary = fakes.sendBinary
     close = fakes.close
   }
 }))
@@ -133,8 +136,37 @@ describe('mobile relay RPC session', () => {
     vi.clearAllMocks()
     fakes.linkOptions = null
     fakes.sendText.mockReturnValue(true)
+    fakes.sendBinary.mockReturnValue(true)
   })
   afterEach(() => vi.useRealTimers())
+
+  it('rechecks failed input after the connected await before sending JSON controls', async () => {
+    const { session } = await authenticateSession()
+    const dispose = session.subscribe('terminal.subscribe', { terminal: 't' }, vi.fn())
+    await vi.waitFor(() => expect(fakes.sendText).toHaveBeenCalledOnce())
+    const request = JSON.parse(fakes.sendText.mock.calls[0]![0] as string)
+    fakes.linkOptions!.onText(
+      JSON.stringify({
+        id: request.id,
+        ok: true,
+        streaming: true,
+        result: {
+          type: 'subscribed',
+          streamId: 7,
+          capabilities: { orderedInput: TERMINAL_ORDERED_INPUT_CAPABILITY }
+        },
+        _meta: { runtimeId: 'runtime-1' }
+      })
+    )
+    fakes.sendText.mockClear()
+    const enter = session.sendRequest('terminal.send', { terminal: 't', text: '\r' })
+    fakes.sendBinary.mockReturnValue(false)
+    expect(await session.sendTerminalStreamInput?.('t', 'prefix')).toBe(false)
+    await expect(enter).rejects.toThrow('Terminal input stopped')
+    expect(fakes.sendText).not.toHaveBeenCalled()
+    dispose()
+    session.close()
+  })
 
   it('requires exact resume observations and confirms by request ID before becoming connected', async () => {
     const { session, confirmationRequest, capabilityRequest } = await authenticateSession()

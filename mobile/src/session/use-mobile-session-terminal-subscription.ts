@@ -34,6 +34,7 @@ export function useMobileSessionTerminalSubscription(
     scheduleDelayedAction,
     showToast,
     markNativeChatInputLeaseReady,
+    terminalInputSubscribedRef,
     showNativeChatRef,
     getTerminalRef,
     unsubscribeTerminal,
@@ -113,6 +114,7 @@ export function useMobileSessionTerminalSubscription(
           }
           if (data.type === 'subscribed') {
             markNativeChatInputLeaseReady(handle)
+            terminalInputSubscribedRef.current(handle)
             return
           }
           // Why: keep the subscription as the input-floor lease but don't mutate covered xterm state; return-to-terminal resubscribes.

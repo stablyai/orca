@@ -1,4 +1,5 @@
 import type { ConnectionState, RpcResponse } from './types'
+import { assertTerminalInputRequestAllowed } from './terminal-input-request-fence'
 import type { RpcClient } from './rpc-client'
 import {
   forwardMigrationDialState,
@@ -7,22 +8,11 @@ import {
 import { waitForAuthenticated } from './replacement-session-authentication'
 import { projectMobileRpcRequestParams } from './mobile-rpc-request-projection'
 import { LogicalClientConnectionPath } from './logical-client-connection-path'
+import { LogicalClientCutoverError, type PendingLogicalRequest } from './logical-client-cutover'
+import { LogicalTerminalStreamInput } from './logical-terminal-stream-input'
+export { LogicalClientCutoverError, isLogicalClientCutoverError } from './logical-client-cutover'
 
 export type MobileConnectionPath = 'lan' | 'tailscale' | 'relay'
-
-export class LogicalClientCutoverError extends Error {
-  constructor() {
-    super('RPC interrupted by connection migration')
-  }
-}
-
-// Why: instanceof can miss across bundle copies, so also match by message.
-export function isLogicalClientCutoverError(error: unknown): boolean {
-  return (
-    error instanceof LogicalClientCutoverError ||
-    (error instanceof Error && error.message === 'RPC interrupted by connection migration')
-  )
-}
 
 type SubscriptionRecord = {
   method: string
@@ -31,10 +21,6 @@ type SubscriptionRecord = {
   options?: Parameters<RpcClient['subscribe']>[3]
   disposePhysical: (() => void) | null
   cancelled: boolean
-}
-
-type PendingRequest = {
-  reject: (error: Error) => void
 }
 
 export type StableLogicalRpcClient = RpcClient & {
@@ -75,20 +61,32 @@ export function createStableLogicalRpcClient(
   let nextSubscriptionId = 0
   let activeStateUnsubscribe: (() => void) | null = null
   const subscriptions = new Map<number, SubscriptionRecord>()
-  const pendingRequests = new Set<PendingRequest>()
+  const pendingRequests = new Set<PendingLogicalRequest>()
   const stateListeners = new Set<(state: ConnectionState) => void>()
   let state = initialSession.getState()
   const connectionPath = new LogicalClientConnectionPath(() => state === 'connected')
 
   bindActiveState(initialSession, generation)
 
+  const terminalInput = new LogicalTerminalStreamInput(() => ({
+    generation,
+    session: activeSession,
+    available: !closed && !suspended && state === 'connected'
+  }))
+
   const logical: StableLogicalRpcClient = {
-    sendRequest(method, params, options) {
+    supportsTerminalStreamInput: terminalInput.supports,
+    sendTerminalStreamInput: terminalInput.send,
+    getTerminalStreamInputFailure: terminalInput.failure,
+    recoverTerminalStreamInput: terminalInput.recover,
+    cancelTerminalStreamInput: terminalInput.cancel,
+    async sendRequest(method, params, options) {
+      assertTerminalInputRequestAllowed(method, params, terminalInput.failure)
       if (closed) {
-        return Promise.reject(new Error('Client closed'))
+        throw new Error('Client closed')
       }
       if (suspended) {
-        return Promise.reject(new Error('Client suspended'))
+        throw new Error('Client suspended')
       }
       const requestGeneration = generation
       const session = activeSession

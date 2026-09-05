@@ -26,7 +26,7 @@ export function MobileTerminalLiveInputBar({
   )
   const {
     handleLiveInputHardwareKey,
-    canSend,
+    canSend: connectionCanSend,
     focusLiveInput,
     dictation,
     isAttaching,
@@ -46,6 +46,7 @@ export function MobileTerminalLiveInputBar({
     getLiveInteractionGeneration,
     dismissKeyboardAfterAgentSend
   } = controller
+  const canSend = connectionCanSend && !controller.terminalInputFailure
   return (
     <HardwareKeyboardCaptureView
       style={[styles.inputBar, styles.liveInputBar]}

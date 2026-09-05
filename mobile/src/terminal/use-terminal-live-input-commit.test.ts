@@ -260,7 +260,7 @@ describe('terminal live input commit hook', () => {
     await vi.waitFor(() => expect(sent).toEqual(['한']))
   })
 
-  it('Given a failed mirrored Backspace When accessory input commits Then reports failure', async () => {
+  it('Given a failed mirrored prefix When accessory Backspace commits Then suppresses the dependent erase', async () => {
     const { handlers, sent } = createTerminalLiveInputCommitHarness({ sendResult: false })
     changeLiveInput(handlers, 'a', false)
     await vi.waitFor(() => expect(sent).toEqual(['a']))
@@ -270,7 +270,7 @@ describe('terminal live input commit hook', () => {
       localEdit: 'backspace'
     })
 
-    expect(sent).toEqual(['a', '\x7f'])
+    expect(sent).toEqual(['a'])
     expect(result).toEqual({ kind: 'suppress-raw' })
   })
 
