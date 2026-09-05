@@ -7,7 +7,7 @@ const { spawnMock } = vi.hoisted(() => ({ spawnMock: vi.fn() }))
 vi.mock('node:child_process', () => ({ spawn: spawnMock }))
 
 import { forceTerminateProcessTree, signalProcessTree } from './process-tree-termination'
-import { setProcessTreeKillObserver, type ProcessTreeKill } from './process-tree-kill-observer'
+import { setProcessTreeKillGate, type ProcessTreeKill } from './process-tree-kill-gate'
 
 function mockProcess(pid: number): ChildProcess {
   const child = new EventEmitter() as EventEmitter & {
@@ -103,11 +103,14 @@ describe('process-tree-kill breadcrumb seam', () => {
 
   beforeEach(() => {
     observed.length = 0
-    setProcessTreeKillObserver((kill) => observed.push(kill))
+    setProcessTreeKillGate((kill) => {
+      observed.push(kill)
+      return true
+    })
   })
 
   afterEach(() => {
-    setProcessTreeKillObserver(null)
+    setProcessTreeKillGate(null)
     spawnMock.mockReset()
     vi.restoreAllMocks()
   })

@@ -219,6 +219,7 @@ const WINDOWS_PACKAGE_TESTS = [
   'src/main/agent-hooks/windows-hook-payload-delivery.test.ts',
   'src/main/windows/windows-pty-job.win32.test.ts',
   'src/main/windows/windows-host-job.win32.test.ts',
+  'src/main/windows-live-tree-kill.win32.test.ts',
   'src/main/wsl/wsl-runner.test.ts',
   'src/main/wsl/wsl-guest-environment.test.ts',
   'src/main/wsl/wsl-invocation-boundary.test.ts',

@@ -3,6 +3,8 @@ import { OrcaRuntimeWithStopStructuredSessionProcess } from './orca-runtime-stop
 import type { AgentSessionOwnerBinding } from '../../shared/agent-session-host-authority'
 import { agentSessionOwnerBindingsEqual } from '../../shared/claimed-agent-pty-owner-snapshot'
 import { resolvePinnedCodexRolloutProof } from '../codex/codex-tui-rollout-proof'
+import { supportsCodexStructuredLocation } from '../codex/codex-structured-location-support'
+import { supportsClaudeStructuredLocation } from '../claude/claude-structured-location-support'
 import { getStructuredAgentSessionHost } from '../native-chat/agent-session-wire/structured-agent-session-registry'
 import { resolveStructuredAgentSessionCreateSupport } from '../native-chat/structured-agent-session-create-support'
 import { LOCAL_EXECUTION_HOST_ID } from '../../shared/execution-host'
@@ -52,13 +54,13 @@ export class OrcaRuntimeWithResolveRecoveredStructuredTuiTranscript extends Orca
     agent: 'codex' | 'claude' | 'openclaude' | 'grok' | 'cursor'
   ): Promise<{ supported: boolean; reason?: 'agent' | 'remote' | 'wsl' }> {
     const location = await this.resolveStructuredAgentSessionLocation(worktreeSelector)
-    await this.ensureStructuredAgentSessionHost()
-    // The verdict lives in a typechecked module; this file is @ts-nocheck.
     return resolveStructuredAgentSessionCreateSupport({
       agent,
       location,
       adapterSupportsCreate:
-        getStructuredAgentSessionHost()?.supportsCreate(location, agent) === true,
+        agent === 'claude'
+          ? supportsClaudeStructuredLocation(location)
+          : supportsCodexStructuredLocation(location),
       getSettings: () => this.requireStore().getSettings()
     })
   }

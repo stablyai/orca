@@ -14,6 +14,8 @@ const mocks = vi.hoisted(() => ({
   messageListProps: null as null | {
     allowFileUriLinks?: boolean
     onLinkClick?: (...args: unknown[]) => void
+    showTurnStatus?: boolean
+    runtimeContext?: unknown
   },
   composerProps: null as null | { structuredTransport?: Record<string, unknown> },
   questionCardProps: null as NativeChatQuestionCardProps | null,
@@ -189,6 +191,27 @@ describe('NativeChatStructuredSession', () => {
     expect(mocks.messageListProps?.allowFileUriLinks).toBe(true)
     expect(mocks.messageListProps?.onLinkClick).toBe(mocks.fileLinkClick)
   })
+
+  // Turn status and transcript image previews shipped Codex-first. Every
+  // structured session renders through the same list, so neither is agent-gated.
+  it.each(['codex', 'claude'] as const)(
+    'renders the same structured transcript chrome for %s',
+    (agent) => {
+      render(
+        <NativeChatStructuredSession
+          isVisible
+          tabId="structured-tab-parity"
+          sessionId="session-parity"
+          target={{ kind: 'local' }}
+          agent={agent}
+          allowFileUriLinks
+        />
+      )
+
+      expect(mocks.messageListProps?.showTurnStatus).toBe(true)
+      expect(mocks.messageListProps?.runtimeContext).not.toBeUndefined()
+    }
+  )
 
   it('routes a bare model command to the native option picker', async () => {
     render(

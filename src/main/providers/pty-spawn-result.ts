@@ -57,6 +57,10 @@ export type PtySpawnResult = {
   snapshotTerminalOwner?: TerminalOwner
   /** True when the spawn reattached to an existing daemon session. */
   isReattach?: boolean
+  /** Grid the PTY is proven to be at once this spawn settled. Only providers whose attach
+   *  applies the requested size set it; daemon/relay attach leave the live grid alone, so main
+   *  must not read the requested dims back as a measurement (see `resolveCommittedPtySize`). */
+  attachedGrid?: { cols: number; rows: number }
   /** Last OSC title tracked by the daemon session the snapshot came from.
    *  Seeds main's terminal title records after a relaunch; never replayed
    *  into a terminal. */

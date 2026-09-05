@@ -13,6 +13,41 @@ const runService = {
   latestReadyRevision: 'projects/project/revisions/revision-one'
 }
 
+const sleepingStagingGcloud: GcloudClient = { accessToken: async () => 'a'.repeat(40) }
+
+// Staging's Cloud SQL is stopped, so this inventory reads REST only and probes no endpoint.
+type MigOutcome = 'ok' | 'throw' | 'missing'
+const sleepingStagingFetch = (migOutcome: (migName: string) => MigOutcome): typeof fetch =>
+  async (input) => {
+    const url = new URL(String(input))
+    if (url.hostname === 'run.googleapis.com') return Response.json(runService)
+    if (url.hostname === 'sqladmin.googleapis.com') return Response.json({
+      state: 'STOPPED',
+      databaseVersion: 'POSTGRES_17',
+      settings: { activationPolicy: 'NEVER', availabilityType: 'ZONAL', tier: 'db-custom-1-3840' }
+    })
+    if (url.hostname === 'certificatemanager.googleapis.com') return Response.json({
+      managed: { domains: ['*.relay-staging.onorca.dev'], state: 'ACTIVE' }
+    })
+    if (url.pathname.includes('/instanceGroupManagers/')) {
+      const name = url.pathname.split('/').at(-1)!
+      const outcome = migOutcome(name)
+      if (outcome === 'throw') throw new TypeError('fetch failed')
+      if (outcome === 'missing') return new Response(null, { status: 404 })
+      return Response.json({
+        name,
+        targetSize: 0,
+        size: '0',
+        instanceGroup: `projects/project/zones/zone/instanceGroups/${name}`,
+        instanceTemplate: `projects/project/global/instanceTemplates/template-${name}`,
+        status: { isStable: true }
+      })
+    }
+    if (url.pathname.includes('/instanceTemplates/')) return Response.json({ properties: {} })
+    if (url.pathname.endsWith('/getHealth')) return Response.json([])
+    throw new Error(`Unexpected request to ${url.hostname}${url.pathname}`)
+  }
+
 describe('readResourceInventory', () => {
   it('does not delay a healthy endpoint sample', async () => {
     let calls = 0
@@ -247,6 +282,74 @@ describe('readResourceInventory', () => {
     expect(result.cells.every((cell) => cell.endpoint.health === null)).toBe(true)
     expect(result.cells.every((cell) => cell.imageDigest === digest)).toBe(true)
     expect(JSON.stringify(result)).not.toContain('SECRET_TEXT')
+  })
+
+  it('re-asks a MIG read that failed once before calling a cell powered-unknown', async () => {
+    const parkedCell = RELAY_OPS_ENVIRONMENTS.staging.cells[0]!
+    const waits: number[] = []
+    let parkedMigCalls = 0
+    const result = await readResourceInventory(
+      RELAY_OPS_ENVIRONMENTS.staging,
+      sleepingStagingGcloud,
+      sleepingStagingFetch((migName) => {
+        if (!migName.endsWith(parkedCell.hostname)) return 'ok'
+        parkedMigCalls += 1
+        return parkedMigCalls === 1 ? 'throw' : 'ok'
+      }),
+      { wait: async (ms) => { waits.push(ms) } }
+    )
+
+    const parked = result.cells.find((cell) => cell.cellId === parkedCell.cellId)!
+    // The MIG was fine and parked at zero; one transient read must not erase that reading.
+    expect(parked.targetSize).toBe(0)
+    expect(parkedMigCalls).toBe(2)
+    expect(waits).toEqual([1_000])
+    expect(result.warnings).toEqual([])
+  })
+
+  it('reports a MIG unavailable only when the retry fails too', async () => {
+    const parkedCell = RELAY_OPS_ENVIRONMENTS.staging.cells[0]!
+    const waits: number[] = []
+    let parkedMigCalls = 0
+    const result = await readResourceInventory(
+      RELAY_OPS_ENVIRONMENTS.staging,
+      sleepingStagingGcloud,
+      sleepingStagingFetch((migName) => {
+        if (!migName.endsWith(parkedCell.hostname)) return 'ok'
+        parkedMigCalls += 1
+        return 'throw'
+      }),
+      { wait: async (ms) => { waits.push(ms) } }
+    )
+
+    const parked = result.cells.find((cell) => cell.cellId === parkedCell.cellId)!
+    expect(parked.targetSize).toBeNull()
+    expect(parked.backendHealth).toBe('unknown')
+    expect(parkedMigCalls).toBe(2)
+    expect(waits).toEqual([1_000])
+    expect(result.warnings).toEqual([
+      `${parkedCell.hostname.toUpperCase()} MIG inventory is unavailable.`
+    ])
+  })
+
+  it('does not re-ask a MIG read the API answered with 404', async () => {
+    const missingCell = RELAY_OPS_ENVIRONMENTS.staging.cells[0]!
+    const waits: number[] = []
+    let missingMigCalls = 0
+    const result = await readResourceInventory(
+      RELAY_OPS_ENVIRONMENTS.staging,
+      sleepingStagingGcloud,
+      sleepingStagingFetch((migName) => {
+        if (!migName.endsWith(missingCell.hostname)) return 'ok'
+        missingMigCalls += 1
+        return 'missing'
+      }),
+      { wait: async (ms) => { waits.push(ms) } }
+    )
+
+    expect(result.cells.find((cell) => cell.cellId === missingCell.cellId)!.targetSize).toBeNull()
+    expect(missingMigCalls).toBe(1)
+    expect(waits).toEqual([])
   })
 
   it('represents missing credentials as unknown inventory, never sleeping', async () => {

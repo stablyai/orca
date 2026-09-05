@@ -166,10 +166,10 @@ export function NativeChatStructuredSession(
             expandSignal={false}
             fontScale={fontScale.scale}
             workingStartedAt={null}
-            showTurnStatus={props.agent === 'codex'}
+            showTurnStatus
             onLinkClick={fileLinkClick}
             allowFileUriLinks={fileLinkClick !== undefined}
-            runtimeContext={props.agent === 'codex' ? imageRuntimeContext : undefined}
+            runtimeContext={imageRuntimeContext}
           />
         )}
       </div>
