@@ -86,46 +86,37 @@ describe('advancePartialEscapeTail', () => {
 })
 
 describe('advancePartialEscapeTail ESC-free fast path', () => {
-  // The gate must be indistinguishable from the walk it skips: `extractPartialEscapeTail` only
-  // leaves `ground` on an ESC byte, so a chunk with none can only produce ''.
+  // Every pending-tail state the scanner can be left in x every chunk shape, asserted
+  // indistinguishable from the unconditional fold the gate sits in front of.
   const pieces = [
     '',
     'plain output\n',
-    '\u001b[32mgreen\u001b[0m',
-    '\u001b[3',
-    '\u001b]0;title\u0007',
-    '\u001b]0;partial',
-    '\u001bP dcs payload',
-    '\u001b',
-    '\u0018',
-    '\u001a',
-    '\u001b]8;;https://example.com\u001b\\',
-    '\u001b(',
-    'no escapes at all',
-    '\u001b[1;2;3'
+    '\x1b[32mgreen\x1b[0m',
+    '\x1b[3',
+    '\x1b]0;title\x07',
+    '\x1b]0;partial',
+    '\x1bP dcs payload',
+    '\x1b',
+    '\x18',
+    '\x1a',
+    '\x1b]8;;https://example.com\x1b\\',
+    '\x1b(',
+    '\x1b[1;2;3'
   ]
 
   it('matches an unconditional fold for every pending-tail and chunk pairing', () => {
-    for (const pending of pieces) {
-      const seedTail = extractPartialEscapeTail(pending)
+    for (const pending of pieces.map((piece) => extractPartialEscapeTail(piece))) {
       for (const chunk of pieces) {
-        const unconditional = extractPartialEscapeTail(seedTail + chunk)
-        expect({
-          pending: seedTail,
-          chunk,
-          tail: advancePartialEscapeTail(seedTail, chunk)
-        }).toEqual({
-          pending: seedTail,
-          chunk,
-          tail: unconditional.length > MAX_PARTIAL_ESCAPE_TAIL_LENGTH ? '' : unconditional
-        })
+        expect(advancePartialEscapeTail(pending, chunk), JSON.stringify({ pending, chunk })).toBe(
+          extractPartialEscapeTail(pending + chunk)
+        )
       }
     }
   })
 
   it('still carries a pending tail through an ESC-free chunk', () => {
-    const pending = '\u001b]0;my-title'
-    const chunk = ' still inside the OSC payload'
-    expect(advancePartialEscapeTail(pending, chunk)).toBe(pending + chunk)
+    expect(advancePartialEscapeTail('\x1b]0;my-title', ' still in the OSC')).toBe(
+      '\x1b]0;my-title still in the OSC'
+    )
   })
 })
