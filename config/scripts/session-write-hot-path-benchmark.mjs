@@ -5,7 +5,7 @@
 //   1. capTerminalScrollbackSessionBuffer — UTF-8 budget scan per retained scrollback buffer
 //   2. remapPaneKeys                      — pane-key map rebuild that steady state throws away
 //
-// The snapshot disk rewrite on the same path is measured by bench:scrollback-snapshot-write-skip.
+// The snapshot disk rewrite on the same path is measured separately (#18764).
 //
 // Each scenario runs the production export against a baseline that reproduces the pre-change
 // shape, so the reported speedup cannot drift away from what production actually does.
@@ -63,7 +63,12 @@ const { TERMINAL_SCROLLBACK_SESSION_BUFFER_BYTE_LIMIT } = await import(
 const { remapAcknowledgedAgentPaneKeys } = await import(
   path.join(ROOT, 'src/main/persistence/restoring-sessions/pane-key-remapping.ts')
 )
-const { makePaneKey } = await import(path.join(ROOT, 'src/shared/stable-pane-id.ts'))
+const { clampUtf8TextTail, measureUtf8ByteLength } = await import(
+  path.join(ROOT, 'src/shared/utf8-byte-limits.ts')
+)
+const { isTerminalLeafId, makePaneKey, parsePaneKey } = await import(
+  path.join(ROOT, 'src/shared/stable-pane-id.ts')
+)
 
 function median(samples) {
   const sorted = [...samples].sort((left, right) => left - right)
@@ -91,49 +96,17 @@ function report(label, baselineMs, currentMs, extra = '') {
 
 // ---------------------------------------------------------------- scenario 1
 
-// Pre-change shape of measureUtf8ByteLength: two calls plus a Number.isFinite per code unit.
-function baselineReadUtf8CodePointAt(text, index) {
-  const leadUnit = text.charCodeAt(index)
-  if (leadUnit < 0xd800 || leadUnit > 0xdbff || index + 1 >= text.length) {
-    return leadUnit
-  }
-  const trailUnit = text.charCodeAt(index + 1)
-  if (trailUnit < 0xdc00 || trailUnit > 0xdfff) {
-    return leadUnit
-  }
-  return (leadUnit - 0xd800) * 0x400 + (trailUnit - 0xdc00) + 0x10000
-}
-
-function baselineUtf8ByteLengthForCodePoint(codePoint) {
-  if (codePoint <= 0x7f) {
-    return 1
-  }
-  if (codePoint <= 0x7ff) {
-    return 2
-  }
-  if (codePoint <= 0xffff) {
-    return 3
-  }
-  return 4
-}
-
+// Verbatim pre-change capTerminalScrollbackSessionBuffer; measureUtf8ByteLength itself is unchanged.
 function baselineCapScrollbackBuffer(buffer) {
-  if (buffer.length > TERMINAL_SCROLLBACK_SESSION_BUFFER_BYTE_LIMIT) {
+  if (
+    buffer.length <= TERMINAL_SCROLLBACK_SESSION_BUFFER_BYTE_LIMIT &&
+    !measureUtf8ByteLength(buffer, {
+      stopAfterBytes: TERMINAL_SCROLLBACK_SESSION_BUFFER_BYTE_LIMIT
+    }).exceededLimit
+  ) {
     return buffer
   }
-  const stopAfterBytes = TERMINAL_SCROLLBACK_SESSION_BUFFER_BYTE_LIMIT
-  let byteLength = 0
-  for (let index = 0; index < buffer.length; index += 1) {
-    const codePoint = baselineReadUtf8CodePointAt(buffer, index)
-    byteLength += baselineUtf8ByteLengthForCodePoint(codePoint)
-    if (Number.isFinite(stopAfterBytes) && byteLength > stopAfterBytes) {
-      return buffer
-    }
-    if (codePoint > 0xffff) {
-      index += 1
-    }
-  }
-  return buffer
+  return clampUtf8TextTail(buffer, TERMINAL_SCROLLBACK_SESSION_BUFFER_BYTE_LIMIT).text
 }
 
 // A terminal that has been running a while sits at the cap, which is the case that scanned in full.
@@ -187,6 +160,7 @@ for (let index = 0; index < PANE_KEYS; index += 1) {
   leaves.set(leafId, leafId)
 }
 
+// Verbatim pre-change remapPaneKeys: parses every key, then rebuilds the object regardless.
 function baselineRemapPaneKeys(values, remap) {
   if (!values || Object.keys(values).length === 0) {
     return { values, changed: false }
@@ -198,17 +172,27 @@ function baselineRemapPaneKeys(values, remap) {
     next[paneKey] = existing === undefined ? value : Math.max(existing, value)
   }
   for (const [paneKey, value] of Object.entries(values)) {
+    if (parsePaneKey(paneKey)) {
+      setValue(paneKey, value)
+      continue
+    }
     const delimiter = paneKey.indexOf(':')
     if (delimiter <= 0 || delimiter === paneKey.length - 1) {
       setValue(paneKey, value)
       continue
     }
-    const remapped = remap.get(paneKey.slice(0, delimiter))?.get(paneKey.slice(delimiter + 1))
-    if (!remapped) {
+    const tabId = paneKey.slice(0, delimiter)
+    const remappedLeafId = remap.get(tabId)?.get(paneKey.slice(delimiter + 1))
+    if (!remappedLeafId || !isTerminalLeafId(remappedLeafId)) {
       setValue(paneKey, value)
       continue
     }
-    setValue(paneKey, value)
+    try {
+      setValue(makePaneKey(tabId, remappedLeafId), value)
+      changed = true
+    } catch {
+      setValue(paneKey, value)
+    }
   }
   return { values: next, changed }
 }

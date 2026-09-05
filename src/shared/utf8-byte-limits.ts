@@ -56,8 +56,8 @@ export function getUtf8ByteLength(text: string): number {
 // destination's end, so `read < text.length` means the text needs more than maxBytes. The scratch
 // buffer is reused across calls and grows to the largest limit asked for, up to this cap.
 const MAX_UTF8_SCRATCH_BYTES = 1024 * 1024
-let utf8Encoder: TextEncoder | null = null
-let utf8Scratch: Uint8Array | null = null
+const utf8Encoder = new TextEncoder()
+let utf8Scratch = new Uint8Array(0)
 
 export function isUtf8ByteLengthWithinLimit(text: string, maxBytes: number): boolean {
   if (text.length === 0) {
@@ -66,13 +66,8 @@ export function isUtf8ByteLengthWithinLimit(text: string, maxBytes: number): boo
   if (text.length > maxBytes) {
     return false
   }
-  if (
-    Number.isSafeInteger(maxBytes) &&
-    maxBytes <= MAX_UTF8_SCRATCH_BYTES &&
-    typeof TextEncoder !== 'undefined'
-  ) {
-    utf8Encoder ??= new TextEncoder()
-    if (!utf8Scratch || utf8Scratch.length < maxBytes) {
+  if (Number.isSafeInteger(maxBytes) && maxBytes <= MAX_UTF8_SCRATCH_BYTES) {
+    if (utf8Scratch.length < maxBytes) {
       utf8Scratch = new Uint8Array(maxBytes)
     }
     return utf8Encoder.encodeInto(text, utf8Scratch.subarray(0, maxBytes)).read === text.length

@@ -15,34 +15,27 @@ function resolveRemappedPaneKey(
   if (delimiter <= 0 || delimiter === paneKey.length - 1) {
     return null
   }
-  const remappedLeafId = leafIdByInputLeafIdByTabId
-    .get(paneKey.slice(0, delimiter))
-    ?.get(paneKey.slice(delimiter + 1))
-  if (!remappedLeafId || !isTerminalLeafId(remappedLeafId)) {
-    return null
-  }
-  try {
-    return makePaneKey(paneKey.slice(0, delimiter), remappedLeafId)
-  } catch {
-    return null
-  }
+  const tabId = paneKey.slice(0, delimiter)
+  const remappedLeafId = leafIdByInputLeafIdByTabId.get(tabId)?.get(paneKey.slice(delimiter + 1))
+  // makePaneKey cannot throw here: tabId is non-empty and colon-free by construction.
+  return remappedLeafId && isTerminalLeafId(remappedLeafId)
+    ? makePaneKey(tabId, remappedLeafId)
+    : null
 }
 
 function remapPaneKeys<T extends number>(
   values: Record<string, T> | undefined,
   leafIdByInputLeafIdByTabId: PaneLeafRemap
 ): { values: Record<string, T> | undefined; changed: boolean } {
-  if (!values || Object.keys(values).length === 0) {
-    return { values, changed: false }
-  }
-
   // Why the classify-first pass: these maps grow with every pane ever opened and this runs on
   // every session write, but post-migration no key is ever rewritten. Rebuilding the whole
   // object only to discard it was pure garbage; the rewrite below is unchanged.
-  const requiresRemap = Object.keys(values).some(
-    (paneKey) => resolveRemappedPaneKey(paneKey, leafIdByInputLeafIdByTabId) !== null
-  )
-  if (!requiresRemap) {
+  if (
+    !values ||
+    !Object.keys(values).some(
+      (paneKey) => resolveRemappedPaneKey(paneKey, leafIdByInputLeafIdByTabId) !== null
+    )
+  ) {
     return { values, changed: false }
   }
 
