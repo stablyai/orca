@@ -9876,27 +9876,7 @@
           "serverCountOne": "ペアリング済みサーバー 1 台",
           "reviewUpdateOne": "1 件の更新があります"
         },
-        "RemoteServerUpdateDialog": {
-          "versionUnavailable": "バージョンを取得できません",
-          "restartingHelp": "置き換え後のサーバーが、新規バージョンで再接続するのを待っています。",
-          "retry": "再試行",
-          "update": "このサーバーを更新",
-          "title": "リモート Orca サーバーを更新",
-          "description": "ペアリング済みサーバーを確認し、対応するインストールをこの Orca クライアントから更新します。",
-          "restartWarning": "更新すると、これらのサーバーが再起動し、サーバー上のすべてのターミナルとエージェントが終了します。実行中のタブ {{value0}} 個とターミナルペイン {{value1}} 個が、一時的に切断される可能性があります。",
-          "checking": "ペアリング済みサーバーを確認しています…",
-          "empty": "ペアリング済みのリモート Orca サーバーはありません。",
-          "checkAgain": "サーバーの更新を確認",
-          "updating": "サーバーを更新しています…",
-          "updateAll": "{{value0}} 台のサーバーをすべて更新",
-          "noUpdates": "すべてのサーバーが最新です。",
-          "updateOne": "サーバーを更新",
-          "downloadProgress": "{{value0}} ダウンロード進捗",
-          "liveTabOne": "1つのライブタブ",
-          "liveTabs": "{{value0}}つのライブタブ",
-          "livePaneOne": "1つのライブペイン",
-          "livePanes": "{{value0}}つのライブペイン"
-        },
+        "RemoteServerUpdateDialog": "アップデートのインストールではサーバーが停止され、そのサーバー上のすべてのターミナルとエージェントが終了します。実行中のタブ {{value0}} 個とターミナルペイン {{value1}} 個が、一時的に切断される可能性があります。",
         "RemoteServerUpdateStatus": {
           "checking": "確認中…",
           "available": "更新があります",

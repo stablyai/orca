@@ -9881,27 +9881,7 @@
           "serverCountOne": "1 paired server",
           "reviewUpdateOne": "1 update available"
         },
-        "RemoteServerUpdateDialog": {
-          "versionUnavailable": "Version unavailable",
-          "restartingHelp": "Waiting for the replacement server to reconnect on the new version.",
-          "retry": "Retry",
-          "update": "Update",
-          "title": "Update Remote Orca Servers",
-          "description": "Review paired servers and update supported installs from this Orca client.",
-          "restartWarning": "Updating restarts these servers. {{value0}} live tabs and {{value1}} terminal panes may briefly disconnect.",
-          "checking": "페어링된 서버 확인 중…",
-          "empty": "페어링된 원격 Orca 서버가 없습니다.",
-          "checkAgain": "다시 확인",
-          "updating": "서버 업데이트 중…",
-          "updateAll": "{{value0}}개 서버 업데이트",
-          "noUpdates": "사용 가능한 업데이트 없음",
-          "updateOne": "서버 업데이트",
-          "downloadProgress": "{{value0}} 다운로드 진행률",
-          "liveTabOne": "1개 활성 탭",
-          "liveTabs": "{{value0}}개 활성 탭",
-          "livePaneOne": "1개 활성 패널",
-          "livePanes": "{{value0}}개 활성 패널"
-        },
+        "RemoteServerUpdateDialog": "업데이트를 설치하면 서버가 중지되고 해당 서버의 모든 터미널과 에이전트가 종료됩니다. 활성 탭 {{value0}}개와 터미널 패널 {{value1}}개가 일시적으로 연결 해제될 수 있습니다.",
         "RemoteServerUpdateStatus": {
           "checking": "확인 중…",
           "available": "업데이트 사용 가능",
