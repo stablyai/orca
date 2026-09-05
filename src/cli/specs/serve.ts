@@ -3,6 +3,31 @@ import { GLOBAL_FLAGS } from '../args'
 
 export const SERVE_COMMAND_SPECS: CommandSpec[] = [
   {
+    path: ['serve', 'update-helper', 'install'],
+    summary: 'Print the root setup script for the serve auto-update helper',
+    usage:
+      'orca serve update-helper install [--spool-dir <dir>] [--unit <name>] [--appimage <path>] [--version-record <path>] [--service-user <user>] [--out <file>]',
+    allowedFlags: [
+      ...GLOBAL_FLAGS,
+      'spool-dir',
+      'unit',
+      'appimage',
+      'version-record',
+      'service-user',
+      'out'
+    ],
+    notes: [
+      'Prints a bash script to stdout that installs the root-owned update helper and its sudoers rule.',
+      'Run it with `sudo bash <script>` (or pipe it: `orca serve update-helper install | sudo bash`).',
+      'The helper lets the orca service user apply AppImage updates without a password prompt.',
+      'Re-running the script upgrades the helper in place; it is safe to run repeatedly.'
+    ],
+    examples: [
+      'orca serve update-helper install | sudo bash',
+      'orca serve update-helper install --unit orca-serve.service --service-user orca | sudo bash'
+    ]
+  },
+  {
     path: ['serve'],
     summary: 'Start an Orca runtime server without opening a desktop window',
     usage:
