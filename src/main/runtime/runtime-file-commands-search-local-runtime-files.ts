@@ -24,8 +24,30 @@ import { wslAwareSpawn } from '../git/runner'
 import type { RuntimeFileExplorerPath } from './runtime-file-command-target'
 import type { IFilesystemProvider } from '../providers/types'
 import { joinWorktreeRelativePath, normalizeRuntimeRelativePath } from './runtime-relative-paths'
+import { requireRuntimeFileProvider } from './runtime-file-command-target'
 
 export class RuntimeFileCommandsWithSearchLocalRuntimeFiles extends RuntimeFileCommandsWithSearchRuntimeFiles {
+  async resolvePluginFileAuthority(
+    worktreeSelector: string,
+    relativePath: string
+  ): Promise<{ canonicalRoot: string; canonicalTarget: string }> {
+    const target = await this.resolveFileExplorerPath(worktreeSelector, relativePath)
+    const provider = requireRuntimeFileProvider(target)
+    if (provider) {
+      const [canonicalRoot, canonicalTarget] = await Promise.all([
+        provider.realpath(target.worktree.path),
+        provider.realpath(target.path)
+      ])
+      return { canonicalRoot, canonicalTarget }
+    }
+    const store = this.host.requireStore()
+    const [canonicalRoot, canonicalTarget] = await Promise.all([
+      resolveAuthorizedPath(target.worktree.path, store),
+      resolveAuthorizedPath(target.path, store)
+    ])
+    return { canonicalRoot, canonicalTarget }
+  }
+
   protected async searchLocalRuntimeFiles(
     rootPath: string,
     options: SearchOptions

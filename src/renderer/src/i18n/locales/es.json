@@ -9952,7 +9952,8 @@
             "storage": "Guardar datos en la carpeta de almacenamiento propia del plugin",
             "secrets": "Guardar y leer secretos en la bóveda cifrada propia del plugin",
             "eventsSubscribe": "Recibir avisos cuando se creen o eliminen worktrees y cuando cambie el estado de un agente",
-            "settingsOwn": "Leer y cambiar la configuración propia del plugin"
+            "settingsOwn": "Leer y cambiar la configuración propia del plugin",
+            "workspaceList": "Leer el nombre, la rama y el host de todos tus worktrees"
           },
           "decisionFailed": "No se pudo guardar la decisión sobre los permisos. Inténtalo de nuevo."
         },
@@ -10056,7 +10057,8 @@
           "blocked": "La lista de seguridad de Orca bloquea este plugin: {{value0}}",
           "current": "Este contenido exacto del plugin ya está instalado.",
           "close": "Close",
-          "cancel": "Cancelar",
+          "cancelInstallation": "Cancelar instalación",
+          "cancelUpdate": "Cancelar actualización",
           "update": "Actualizar plugin",
           "install": "Instalar plugin"
         },

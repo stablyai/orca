@@ -6,6 +6,7 @@ import type { PluginConsentRequest } from '../../shared/plugins/plugin-consent-r
 import type { PluginLanguagePackRegistration } from '../../shared/plugins/plugin-language-pack-artifact'
 import type { PluginChangeEvent } from '../../shared/plugins/plugin-change-event'
 import type { PluginManifest } from '../../shared/plugins/plugin-manifest'
+import type { PluginCapability } from '../../shared/plugins/plugin-capabilities'
 import type { PluginMarketplaceGitSource } from '../../shared/plugins/plugin-marketplace'
 
 /** Panel contribution as surfaced by the main-process plugin service. */
@@ -44,7 +45,7 @@ export type PluginHostListEntry = {
   isDev: boolean
   official: boolean
   bundled: boolean
-  capabilities: { kind: string; description: string }[]
+  capabilities: (PluginCapability & { description: string })[]
   panels: PluginHostPanel[]
   commands: {
     id: string

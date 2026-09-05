@@ -10000,7 +10000,8 @@
             "storage": "在插件自己的存储文件夹中存储数据",
             "secrets": "在插件自己的加密保险库中存储和读取密钥",
             "eventsSubscribe": "在工作树创建或移除以及智能体状态更改时获得通知",
-            "settingsOwn": "读取和更改插件自己的设置"
+            "settingsOwn": "读取和更改插件自己的设置",
+            "workspaceList": "读取所有工作树的名称、分支和主机"
           },
           "decisionFailed": "无法保存权限决定。请重试。"
         },
@@ -10104,7 +10105,8 @@
           "blocked": "Orca 的安全列表阻止了此插件：{{value0}}",
           "current": "此插件内容已安装。",
           "close": "关闭",
-          "cancel": "取消",
+          "cancelInstallation": "取消安装",
+          "cancelUpdate": "取消更新",
           "update": "更新插件",
           "install": "安装插件"
         },
