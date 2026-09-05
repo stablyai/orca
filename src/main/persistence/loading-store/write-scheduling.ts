@@ -59,7 +59,8 @@ export function scheduleSave(owner: WriteSchedulingOperations): void {
   owner[writeSchedulingOperationsContext].runtime.writeTimer = setTimeout(() => {
     owner[writeSchedulingOperationsContext].runtime.writeTimer = null
     owner[writeSchedulingOperationsContext].runtime.firstPendingSaveAt = null
-    void enqueueWrite(owner[writeSchedulingOperationsContext].writes)
+    // Why: pendingWrite already rejects for waiters; this only silences the debounce caller.
+    void enqueueWrite(owner[writeSchedulingOperationsContext].writes).catch(() => {})
   }, delay)
 }
 

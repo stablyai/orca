@@ -136,4 +136,28 @@ describe('loading Store write-risk characterization', () => {
     }
     expect(persisted.sshPtyConsumerRecoveries[0]?.clientInstanceId).toBe('client-1')
   })
+
+  it('rejects waitForPendingWrite when a debounced primary write fails, then persists a later flush', async () => {
+    const store = await createStore()
+    const errors = vi.spyOn(console, 'error').mockImplementation(() => {})
+    writeControl.failPrimaryOpen = true
+    store.updateUI({ sidebarWidth: 714 })
+    vi.advanceTimersByTime(1_000)
+
+    try {
+      await expect(store.waitForPendingWrite()).rejects.toThrow('profile mount rejected write')
+
+      writeControl.failPrimaryOpen = false
+      store.updateUI({ sidebarWidth: 715 })
+      vi.advanceTimersByTime(1_000)
+      await store.waitForPendingWrite()
+    } finally {
+      errors.mockRestore()
+    }
+
+    const persisted = JSON.parse(readFileSync(join(testState.dir, 'orca-data.json'), 'utf-8')) as {
+      ui: { sidebarWidth: number }
+    }
+    expect(persisted.ui.sidebarWidth).toBe(715)
+  })
 })
