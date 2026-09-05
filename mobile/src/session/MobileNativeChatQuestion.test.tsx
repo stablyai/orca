@@ -51,6 +51,30 @@ describe('MobileNativeChatQuestion', () => {
     expect(onAnswer).toHaveBeenCalledWith('second-token')
   })
 
+  it('submits a tokenless duplicate-label row by position', async () => {
+    const onAnswer = vi.fn(async () => true)
+
+    await act(async () => {
+      renderer = create(
+        createElement(MobileNativeChatQuestion, {
+          question: {
+            question: 'Pick one',
+            options: ['Choice', 'Choice'],
+            multiSelect: false,
+            allowOther: false,
+            optionTokens: ['first-token', null]
+          },
+          onAnswer
+        })
+      )
+    })
+
+    const choices = renderer.root.findAllByProps({ accessibilityRole: 'button' })
+    await act(async () => choices[1]!.props.onPress())
+
+    expect(onAnswer).toHaveBeenCalledWith('Choice')
+  })
+
   it('submits structured multi-select choices together with other text', async () => {
     const onAnswer = vi.fn(async () => true)
 

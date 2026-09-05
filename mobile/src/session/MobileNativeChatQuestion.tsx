@@ -3,7 +3,6 @@ import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native'
 import { ArrowUp, Check, CircleHelp } from 'lucide-react-native'
 import { colors, radii, spacing, typography } from '../theme/mobile-theme'
 import {
-  formatQuestionAnswer,
   formatQuestionAnswerByIndexes,
   formatQuestionAnswerWithOtherByIndexes,
   formatQuestionFreeTextAnswer,
@@ -51,9 +50,11 @@ export function MobileNativeChatQuestion({ question, onAnswer }: Props): React.J
     }
   }
 
-  const answerSingle = async (option: string, optionIndex: number): Promise<void> => {
+  const answerSingle = async (optionIndex: number): Promise<void> => {
     const token = question.optionTokens[optionIndex]
-    await sendAnswer(token && token.length > 0 ? token : formatQuestionAnswer(question, [option]))
+    await sendAnswer(
+      token && token.length > 0 ? token : formatQuestionAnswerByIndexes(question, [optionIndex])
+    )
   }
 
   const submitMulti = async (): Promise<void> => {
@@ -117,9 +118,7 @@ export function MobileNativeChatQuestion({ question, onAnswer }: Props): React.J
                   isSelected && styles.optionSelected,
                   pressed && styles.pressed
                 ]}
-                onPress={() =>
-                  question.multiSelect ? toggle(optIndex) : answerSingle(label, optIndex)
-                }
+                onPress={() => (question.multiSelect ? toggle(optIndex) : answerSingle(optIndex))}
               >
                 {question.multiSelect ? (
                   <View style={[styles.checkbox, isSelected && styles.checkboxOn]}>
