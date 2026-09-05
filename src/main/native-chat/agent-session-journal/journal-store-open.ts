@@ -46,13 +46,7 @@ export async function openJournalStoreState(input: {
   const loaded = input.loaded !== undefined ? input.loaded : input.replay()
   if (!loaded) {
     input.start()
-    // An empty journal beside a pre-SQLite remnant is not a new chat; say so,
-    // and say how to carry the conversation on.
-    const transcriptPath = findJournalFileFormatRemnant(input.journalDir)
-    if (transcriptPath) {
-      const disclosure = journalFileFormatRemnantDisclosure({ transcriptPath, agent: input.agent })
-      await input.appendDisclosure(disclosure.identity, disclosure.body, input.highestFence())
-    }
+    await discloseFileFormatRemnant(input)
     return
   }
   input.adopt(loaded)
@@ -72,4 +66,37 @@ export async function openJournalStoreState(input: {
     const disclosure = journalRepairDisclosure({ malformedRows: input.malformedRows() })
     await input.appendDisclosure(disclosure.identity, disclosure.body, input.highestFence())
   }
+  // Founding the epoch and appending the row are two transactions, and a
+  // committed epoch sends every later open down this branch instead. Anything
+  // that interrupts between them — a quit during startup restore, a failed
+  // append — would otherwise lose the message for good. An epoch holding nothing
+  // is exactly the state that append was owed, so offer it again.
+  if (loaded.state.items.size === 0 && loaded.state.submissions.size === 0) {
+    await discloseFileFormatRemnant(input)
+  }
+}
+
+/** Says what happened to a chat whose history is in the abandoned file format.
+ *  Upserts by a constant identity, so the offer above is exactly-once in effect:
+ *  once the row exists the epoch is no longer empty. */
+async function discloseFileFormatRemnant(input: {
+  journalDir: string
+  agent: AgentType
+  appendDisclosure: (
+    identity: JournalRepairDisclosure['identity'],
+    body: JournalRepairDisclosure['body'],
+    fence: number
+  ) => Promise<unknown>
+  highestFence: () => number
+  readOnly: () => boolean
+}): Promise<void> {
+  if (input.readOnly()) {
+    return
+  }
+  const transcriptPath = findJournalFileFormatRemnant(input.journalDir)
+  if (!transcriptPath) {
+    return
+  }
+  const disclosure = journalFileFormatRemnantDisclosure({ transcriptPath, agent: input.agent })
+  await input.appendDisclosure(disclosure.identity, disclosure.body, input.highestFence())
 }

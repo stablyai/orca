@@ -11,9 +11,16 @@
 import { existsSync } from 'node:fs'
 import { join } from 'node:path'
 import type { AgentJournalItemIdentity } from '../../../shared/agent-session-journal-types'
+import { formatAgentTypeLabel } from '../../../shared/agent-type-label'
 import type { AgentType } from '../../../shared/agent-status-types'
 
-/** The remnant's transcript, or null when the directory never held one. */
+/** The remnant's transcript, or null when the directory never held one.
+ *
+ *  `log.jsonl` first, and the order matters: every epoch roll staged a
+ *  `snapshot.json` whether or not anything was ever compacted into it, so the
+ *  file's existence says nothing about where the history lives. Measured across
+ *  a real profile, `compactedThrough` was 0 in all 80 — the log holds the
+ *  transcript and the snapshot is the fallback for a session that has no log. */
 export function findJournalFileFormatRemnant(journalDir: string): string | null {
   for (const name of ['log.jsonl', 'snapshot.json']) {
     const path = join(journalDir, name)
@@ -30,8 +37,9 @@ export const JOURNAL_FILE_FORMAT_REMNANT_DISCLOSURE_IDENTITY: AgentJournalItemId
   clientMessageId: 'journal-file-format-remnant'
 }
 
-/** How to carry on. The session attaches on the record's own provider handle, so
- *  the agent still holds this conversation even though the transcript does not. */
+/** How to carry on. The session attaches on the record's own provider handle, so it
+ *  still names the conversation the transcript no longer shows — whether the provider
+ *  itself still holds that thread is its own business, hence "points at". */
 export function journalFileFormatRemnantDisclosure(input: {
   transcriptPath: string
   agent: AgentType
@@ -42,9 +50,10 @@ export function journalFileFormatRemnantDisclosure(input: {
       kind: 'status',
       text:
         `This chat's history was saved in an older format Orca no longer reads, so it starts ` +
-        `empty. The session is still attached to the same ${input.agent} conversation — send a ` +
-        `message to pick up where you left off. The original transcript is on disk at ` +
-        `${input.transcriptPath}`
+        `empty. The session still points at the same ${formatAgentTypeLabel(input.agent)} ` +
+        `conversation — send a ` +
+        `message to pick up where you left off. The original transcript is on the session's ` +
+        `host at ${input.transcriptPath}`
     }
   }
 }

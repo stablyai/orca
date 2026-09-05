@@ -67,7 +67,7 @@ describe('a chat whose history is still in the pre-SQLite format', () => {
 
     expect(disclosure(journal)).toContain('send a message to pick up where you left off')
     expect(disclosure(journal)).toContain(join(root, 'log.jsonl'))
-    expect(disclosure(journal)).toContain('codex')
+    expect(disclosure(journal)).toContain('Codex')
   })
 
   it('says nothing to a chat that is genuinely new', async () => {
@@ -76,16 +76,35 @@ describe('a chat whose history is still in the pre-SQLite format', () => {
     expect(journal.snapshot().items).toEqual([])
   })
 
-  it('restates the one row rather than adding another on every open', async () => {
+  // Counting rows proves nothing here — the append upserts by identity, so a
+  // second append would still leave exactly one. The revision is what moves.
+  it('does not re-append the row on a later open', async () => {
     await writeRemnant()
     const first = await open()
+    const firstRevision = first
+      .snapshot()
+      .items.find((e) => e.itemId === DISCLOSURE_ITEM_ID)?.revision
     await first.close()
 
     const reopened = await open()
 
-    expect(
-      reopened.snapshot().items.filter((entry) => entry.itemId === DISCLOSURE_ITEM_ID)
-    ).toHaveLength(1)
+    const row = reopened.snapshot().items.find((e) => e.itemId === DISCLOSURE_ITEM_ID)
+    expect(firstRevision).toBe(1)
+    expect(row?.revision).toBe(1)
+    expect(reopened.cursor().sequence).toBe(2)
+  })
+
+  // The epoch commit and this append are separate transactions; if the append is
+  // lost the epoch exists but holds nothing, and every later open takes the
+  // adopt branch. The offer has to survive that.
+  it('offers the message again when a committed epoch holds nothing', async () => {
+    const founded = await open()
+    await founded.close()
+    await writeRemnant()
+
+    const reopened = await open()
+
+    expect(disclosure(reopened)).toContain(join(root, 'log.jsonl'))
   })
 
   // A row nothing projects is a row nobody reads.

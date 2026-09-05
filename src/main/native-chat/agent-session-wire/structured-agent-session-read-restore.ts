@@ -53,9 +53,14 @@ export async function restoreStructuredAgentSessionRead(
   const journal = await openAgentSessionJournal({
     identity: journalIdentityFor(record, params),
     journalDir,
+    // Omitted, not `null`: the store reads `null` as "replay already ran and found
+    // nothing" and founds a fresh epoch, which would discard a database created
+    // between the probe above and this open.
     ...(loaded ? { loaded } : {})
   })
-  // Read restore opens the journal and nothing else: no adapter call, so no provider child.
+  // Read restore opens the journal and nothing else: no adapter call, so no
+  // provider child. Opening it can still write — a session whose history is in
+  // the old format founds its epoch and commits the row explaining that here.
   return {
     journal,
     params,
