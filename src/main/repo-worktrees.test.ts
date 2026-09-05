@@ -253,6 +253,44 @@ describe('repo-worktrees', () => {
       expect(listWorktrees).not.toHaveBeenCalled()
       expect(listWorktreesMock).not.toHaveBeenCalled()
     })
+
+    it('never lists an ssh-owned graph with local git when the provider is missing', async () => {
+      await expect(listRepoWorktreeGraph(sshOnlyRepo)).rejects.toThrow(
+        WorktreeCatalogUnavailableError
+      )
+      await expect(listRepoWorktreeGraph(sshOnlyRepo)).rejects.toThrow(
+        'Worktree catalog unavailable for /srv/repo: SSH connection "host-a" is not connected.'
+      )
+      expect(listWorktreeGraphMock).not.toHaveBeenCalled()
+    })
+
+    it('lists an ssh-owned graph through its registered provider', async () => {
+      const listWorktrees = vi.fn().mockResolvedValue([{ path: '/srv/repo' }])
+      registerSshGitProvider('host-a', { listWorktrees } as never)
+
+      await expect(listRepoWorktreeGraph(sshOnlyRepo)).resolves.toEqual([{ path: '/srv/repo' }])
+      expect(listWorktrees).toHaveBeenCalledWith('/srv/repo')
+      expect(listWorktreeGraphMock).not.toHaveBeenCalled()
+    })
+
+    it('refuses to answer a runtime-owned graph from a same-named local target', async () => {
+      const listWorktrees = vi.fn().mockResolvedValue([{ path: '/wrong/host' }])
+      registerSshGitProvider('nested-target', { listWorktrees } as never)
+
+      const runtimeRepo = {
+        ...sshOnlyRepo,
+        executionHostId: 'runtime:env-7' as const,
+        connectionId: 'nested-target'
+      }
+      await expect(listRepoWorktreeGraph(runtimeRepo)).rejects.toThrow(
+        WorktreeCatalogUnavailableError
+      )
+      await expect(listRepoWorktreeGraph(runtimeRepo)).rejects.toThrow(
+        'Worktree catalog unavailable for /srv/repo: host runtime:env-7 is not reachable from this process.'
+      )
+      expect(listWorktrees).not.toHaveBeenCalled()
+      expect(listWorktreeGraphMock).not.toHaveBeenCalled()
+    })
   })
 
   it('treats Windows repo root casing differences as the same local root', () => {
