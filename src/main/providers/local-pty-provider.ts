@@ -178,9 +178,9 @@ export class LocalPtyProvider implements IPtyProvider {
     return getLocalPtyProcess(id)
   }
 
-  /** Kill all in-process local PTYs. Call on app quit. */
-  killAll(): void {
-    killAllLocalPtys()
+  /** Kill all in-process local PTYs and their owned descendants. Call on app quit. */
+  killAll(): Promise<void> {
+    return killAllLocalPtys()
   }
 }
 

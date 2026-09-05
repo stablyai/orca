@@ -188,6 +188,37 @@ describe('EmulatorBridge helper ownership', () => {
     expect(bridge.getActiveForWorktree('wt-external')).toBeNull()
   })
 
+  it('reaps a helper when app shutdown wins a concurrent attach', async () => {
+    let finishStart:
+      | ((info: Awaited<ReturnType<typeof execServeSimCommandMock>>) => void)
+      | undefined
+    execServeSimCommandMock.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          finishStart = resolve
+        })
+    )
+    const bridge = new EmulatorBridge({ waitForEndpointReady: vi.fn(async () => true) })
+    const acquire = bridge.acquireHelperForDevice('device-1')
+
+    await vi.waitFor(() => expect(execServeSimCommandMock).toHaveBeenCalledOnce())
+    const shutdown = bridge.destroyAllSessions()
+    finishStart?.({
+      device: 'device-1',
+      streamUrl: 'http://127.0.0.1:3102/stream.mjpeg',
+      wsUrl: 'ws://127.0.0.1:3102'
+    })
+
+    await expect(acquire).rejects.toMatchObject({ code: 'emulator_no_active' })
+    await shutdown
+
+    expect(killServeSimHelperProcessesForDeviceMock).toHaveBeenCalledWith('device-1', {
+      helperPid: undefined,
+      includeOrphaned: true
+    })
+    expect(shutdownSimulatorDeviceMock).toHaveBeenCalledWith('device-1')
+  })
+
   it('rejects a capability the resolved backend does not support', async () => {
     const bridge = new EmulatorBridge()
     // device-1 resolves to the iOS backend, which advertises no explicit-verb caps.
