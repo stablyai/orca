@@ -47,6 +47,7 @@ export type PasteTerminalTextDetail = {
 }
 
 export type SplitTerminalPaneDetail = {
+  activate?: boolean
   tabId: string
   worktreeId?: string
   paneRuntimeId: number
