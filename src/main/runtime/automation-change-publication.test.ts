@@ -161,7 +161,9 @@ describe('scoped automationsChanged publication', () => {
     expect(published).toEqual([])
   })
 
-  it('names the host a delete removed a row from', async () => {
+  // Why: makeRuntime() re-imports the full persistence+runtime module graph via
+  // vi.resetModules(); alone that costs 30s+ on a loaded machine.
+  it('names the host a delete removed a row from', { timeout: 120_000 }, async () => {
     const { runtime, published } = await makeRuntime()
     await runtime.deleteAutomation('ssh-1-a', {
       selector: { kind: 'ssh', targetId: 'ssh-1', targetGeneration: 7 }
