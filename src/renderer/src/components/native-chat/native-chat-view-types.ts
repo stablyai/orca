@@ -44,7 +44,6 @@ export type NativeChatStructuredViewProps = NativeChatOrchestrationProps & {
   target: RuntimeClientTarget
   agent: AgentType
   isVisible: boolean
-  allowFileUriLinks: boolean
   worktreeId?: string
   contextMenuActions?: Omit<NativeChatContextMenuActions, 'onPaste'>
 }

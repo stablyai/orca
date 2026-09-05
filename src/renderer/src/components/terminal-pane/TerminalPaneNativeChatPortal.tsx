@@ -77,7 +77,6 @@ export function TerminalPaneNativeChatPortal({
           agent={structuredChatAgent}
           isVisible={isRendererVisible}
           target={structuredChatTarget}
-          allowFileUriLinks
           contextMenuActions={contextMenuActions}
           orchestrationDispatchStatus={chatPaneDispatchStatus}
           worktreeId={controller.worktreeId}
