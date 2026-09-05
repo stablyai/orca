@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const {
   callMock,
@@ -59,6 +59,10 @@ function queueSshTargetLookups(count: number): void {
 }
 
 describe('runtime-selector flags on locally pinned CLI commands', () => {
+  beforeEach(() => {
+    runtimeClientConstructorMock.mockClear()
+  })
+
   useWorktreeAwarenessEnvironment({
     callMock,
     serveOrcaAppMock,
@@ -71,6 +75,7 @@ describe('runtime-selector flags on locally pinned CLI commands', () => {
   it('answers `host list` from this machine and stamps the runtime that actually answered', async () => {
     pairRuntimeEnvironment(listEnvironmentsMock, 'env-m4air', 'm4air')
     queueSshTargetLookups(1)
+    queueFixtures(callMock, okFixture('req_m4air_status', { hostPlatform: 'win32' }))
     const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
 
     await main(['host', 'list', '--json'], '/tmp/repo')
@@ -85,6 +90,13 @@ describe('runtime-selector flags on locally pinned CLI commands', () => {
     expect(
       printed.result.hosts.find((host: { id: string }) => host.id === SSH_TARGET.id).platform
     ).toBe('win32')
+    expect(
+      printed.result.hosts.find((host: { id: string }) => host.id === 'env-m4air')
+    ).toMatchObject({
+      platform: 'win32',
+      connected: true,
+      connectionStatus: 'connected'
+    })
     // The tell: `runtimeId: local` is only honest if no routed client was ever built.
     expect(runtimeClientConstructorMock).toHaveBeenCalledWith(null, null)
   })

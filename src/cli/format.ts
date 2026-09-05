@@ -242,7 +242,7 @@ export function formatHostList(result: { hosts: HostListEntry[] }): string {
 }
 
 function formatHostConnection(host: HostListEntry): string {
-  if (host.kind !== 'ssh') {
+  if (host.kind === 'local') {
     return ''
   }
   if (host.connected === undefined) {
