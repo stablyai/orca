@@ -2,7 +2,31 @@ import {
   createShellReadyMarkerScanState,
   scanForShellReadyMarker
 } from '@/components/terminal-pane/shell-ready-marker-scan'
+import {
+  isCodexStartupCommand,
+  shouldUseShellReadyStartupDelivery,
+  type StartupCommandDelivery
+} from '../../../shared/codex-startup-delivery'
 import { buildStartupCommandSubmission } from '../../../shared/startup-command-submission'
+
+/**
+ * Why every Codex launch waits and not only the prompt-carrying ones: the remote
+ * shell is the host's to know, and it arms the ready marker for plain Codex too
+ * (#18767). Waiting costs nothing there, and the fallback below still covers a
+ * host shell that never publishes one.
+ */
+export function sshBackgroundLaunchWaitsForShellReady(startupPlan: {
+  launchCommand: string | null | undefined
+  startupCommandDelivery?: StartupCommandDelivery
+}): boolean {
+  return (
+    isCodexStartupCommand(startupPlan.launchCommand) ||
+    shouldUseShellReadyStartupDelivery({
+      command: startupPlan.launchCommand,
+      startupCommandDelivery: startupPlan.startupCommandDelivery
+    })
+  )
+}
 
 const SSH_SHELL_READY_STARTUP_FALLBACK_MS = 1500
 // Why: a remote shell that has not emitted a single byte is still booting —
@@ -31,6 +55,10 @@ export function createSshBackgroundStartupDelivery(
   let pendingCommand = options.command
   let lastPtyId: string | null = null
   let startupShellReady = !options.waitForShellReady
+  // Why tracked apart from `startupShellReady`: only an observed marker proves the
+  // host wrapped the shell and armed bracketed paste. A fallback release means the
+  // host shell never published one, so the raw submit is the only safe form.
+  let markerObserved = false
   const markerScan = options.waitForShellReady ? createShellReadyMarkerScanState() : null
   let injectTimer: ReturnType<typeof setTimeout> | null = null
   let fallbackTimer: ReturnType<typeof setTimeout> | null = null
@@ -53,6 +81,7 @@ export function createSshBackgroundStartupDelivery(
       return
     }
     startupShellReady = true
+    markerObserved = true
     clearFallbackTimer()
     if (pendingCommand && lastPtyId) {
       schedule(lastPtyId)
@@ -100,14 +129,14 @@ export function createSshBackgroundStartupDelivery(
       // Why: the SSH relay treats spawn.command as metadata for interactive
       // PTYs; hidden automation tabs still submit the command themselves.
       // Why bracketed paste: multiline prompts are pasted literally only when we
-      // synchronized on the Orca shell-ready marker (waitForShellReady) — that
-      // is the bash/zsh overlay with bracketed-paste mode armed. Submit with CR
-      // since the relay drives a remote shell.
+      // synchronized on the Orca shell-ready marker — that is the bash/zsh overlay
+      // with bracketed-paste mode armed. Submit with CR since the relay drives a
+      // remote shell.
       options.write(
         ptyId,
         buildStartupCommandSubmission(command, {
           submit: '\r',
-          bracketedPasteSafe: options.waitForShellReady
+          bracketedPasteSafe: markerObserved
         })
       )
     }, 50)

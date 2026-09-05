@@ -22,6 +22,8 @@ import {
 import { inheritedZdotdirEnv, resolveInheritedZdotdir } from '../zsh-wrapper-dir-ownership'
 import { SHELL_READY_MARKER } from './daemon-shell-ready-marker'
 
+export { shellReadyMarkerComesFromLineEditor } from '../../shared/shell-ready-marker-timing'
+
 const ORCA_USER_DATA_PATH_ENV = 'ORCA_USER_DATA_PATH'
 
 function getShellReadyWrapperBaseDir(): string {
@@ -99,11 +101,6 @@ export function resolvePtyShellPath(env: Record<string, string>): string {
     return env.ORCA_TERMINAL_WINDOWS_SHELL || 'powershell.exe'
   }
   return env.SHELL || process.env.SHELL || '/bin/zsh'
-}
-
-export function shellReadyMarkerComesFromLineEditor(shellPath: string): boolean {
-  const shellName = pathWin32.basename(basename(shellPath)).toLowerCase()
-  return shellName === 'bash' || shellName === 'zsh'
 }
 
 export function shellPathSupportsPtyStartupBarrier(shellPath: string): boolean {

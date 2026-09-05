@@ -1896,12 +1896,16 @@ export class PtyHandler {
       isUnattended: launchAgent !== undefined,
       platform: process.platform
     })
+    // Why the shell is part of the decision here and not on the client: the client
+    // cannot see which shell this host runs, and plain Codex must still wait where
+    // the marker rides the line editor rather than double-echoing an early write.
     const shouldEmitShellReadyMarker =
       launchCommandHint !== undefined &&
       shouldUseShellReadyStartupDelivery({
         command: launchCommandHint,
         startupCommandDelivery:
-          params.startupCommandDelivery === 'shell-ready' ? 'shell-ready' : undefined
+          params.startupCommandDelivery === 'shell-ready' ? 'shell-ready' : undefined,
+        shellPath: shell
       })
     const managedStartupCommand = shouldProviderDeliverCommand ? command : launchCommandHint
     // Why: both renderer- and provider-delivered startup commands use this marker; the delivering side strips it from output.
