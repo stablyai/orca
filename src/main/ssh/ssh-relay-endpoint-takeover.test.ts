@@ -122,6 +122,19 @@ describe('incumbent unverifiable', () => {
     execCommand.mockRejectedValueOnce(new Error('exec timeout'))
     await expect(resolve()).resolves.toMatchObject({ verdict: 'unverifiable' })
   })
+
+  it('rethrows an unconfirmed probe termination without relaunching, unlinking, or killing', async () => {
+    const unconfirmed = Object.assign(new Error('remote channel close was not confirmed'), {
+      sshChannelCloseConfirmed: false
+    })
+    execCommand.mockRejectedValueOnce(unconfirmed)
+
+    await expect(resolve()).rejects.toBe(unconfirmed)
+    expect(issuedCommands()).toHaveLength(1)
+    expect(issuedCommands().some((command) => /--detached|\brm -f\b|\bkill\b/.test(command))).toBe(
+      false
+    )
+  })
 })
 
 describe('reapEmptyRelayHuskCommand', () => {

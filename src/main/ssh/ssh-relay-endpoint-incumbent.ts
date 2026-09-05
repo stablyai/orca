@@ -65,6 +65,7 @@ export type RelayEndpointIncumbent = {
 const PROBE_BEGIN = 'ORCA-INCUMBENT-BEGIN'
 const PROBE_END = 'ORCA-INCUMBENT-END'
 const CONNECT_PROBE_TIMEOUT_MS = 1000
+const INCUMBENT_PROBE_TIMEOUT_MS = 5_000
 
 // Why ES5 syntax: nodePath may be a host-resolved system node, not the bundled one.
 const CONNECT_PROBE_JS = [
@@ -213,7 +214,8 @@ export async function probeRelayEndpointIncumbent(
   try {
     const output = await execCommand(conn, relayEndpointIncumbentProbeCommand(nodePath, sockPath), {
       wrapCommand: true,
-      signal: options?.signal
+      signal: options?.signal,
+      timeoutMs: INCUMBENT_PROBE_TIMEOUT_MS
     })
     return parseRelayEndpointIncumbentProbe(sockPath, output)
   } catch (err) {

@@ -204,7 +204,9 @@ describe('deployAndLaunchRelay', () => {
 
     const commands = vi.mocked(conn.exec).mock.calls.map(([command]) => command)
     expect(commands).toHaveLength(1)
-    expect(commands.some((command) => command.includes('--detached'))).toBe(false)
+    expect(
+      commands.filter((command) => /--detached|\brm -f\b|\bkill\b/.test(command))
+    ).toHaveLength(0)
   })
 
   it('resolves the remote node path once per deploy', async () => {
