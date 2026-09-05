@@ -24,11 +24,14 @@ class HardwareKeyboardCaptureView(context: Context, appContext: AppContext) :
   var captureMode: String = "terminal"
   private val capturedKeys = mutableSetOf<Int>()
 
+  // Yoga owns child bounds; LinearLayout would collapse the hidden input after its siblings.
+  override fun onLayout(changed: Boolean, left: Int, top: Int, right: Int, bottom: Int) = Unit
+
   override fun dispatchKeyEvent(event: KeyEvent): Boolean {
     if (event.action == KeyEvent.ACTION_UP && capturedKeys.remove(event.keyCode)) {
       return true
     }
-    if (!captureEnabled || event.action != KeyEvent.ACTION_DOWN) {
+    if (!captureEnabled || event.action != KeyEvent.ACTION_DOWN || !isPhysicalKeyboardEvent(event)) {
       return super.dispatchKeyEvent(event)
     }
 
@@ -49,9 +52,6 @@ class HardwareKeyboardCaptureView(context: Context, appContext: AppContext) :
     val shift = (meta and KeyEvent.META_SHIFT_ON) != 0
     val repeat = event.repeatCount > 0
     if (captureMode == "submit") {
-      if (!isPhysicalKeyboardEvent(event)) {
-        return super.dispatchKeyEvent(event)
-      }
       val enter = event.keyCode == KeyEvent.KEYCODE_ENTER || event.keyCode == KeyEvent.KEYCODE_NUMPAD_ENTER
       if (!enter || ctrl || alt || shift) {
         return super.dispatchKeyEvent(event)
