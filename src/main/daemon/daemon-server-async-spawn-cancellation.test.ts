@@ -101,15 +101,22 @@ describe('daemon async spawn cancellation', () => {
   })
 
   it('reaps a subprocess after the client request times out', async () => {
-    const create = client.request(
-      'createOrAttach',
-      { sessionId: 'timed-out-spawn', cols: 80, rows: 24 },
-      10
-    )
-    await spawnStarted
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
+    try {
+      const create = client.request(
+        'createOrAttach',
+        { sessionId: 'timed-out-spawn', cols: 80, rows: 24 },
+        10
+      )
+      const timedOut = expect(create).rejects.toThrow('timed out')
+      await spawnStarted
 
-    await expect(create).rejects.toThrow('timed out')
-    releaseSpawn()
+      await vi.advanceTimersByTimeAsync(10)
+      await timedOut
+    } finally {
+      vi.useRealTimers()
+      releaseSpawn()
+    }
 
     await vi.waitFor(() => expect(subprocess.forceKill).toHaveBeenCalledOnce())
     await expect(client.request('listSessions', undefined)).resolves.toEqual({ sessions: [] })
