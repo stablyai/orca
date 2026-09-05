@@ -11,6 +11,7 @@ import {
   isTypeScriptWorkspaceLanguage
 } from './monaco-typescript-workspace-model-policy'
 import { readWorkspaceModels } from './monaco-typescript-workspace-model-hydration'
+import { applyWorkspaceCompilerOptions } from './monaco-typescript-package-alias-resolution'
 
 type MonacoTypeScriptWorkspaceModelParams = {
   filePath: string
@@ -193,12 +194,16 @@ export function useMonacoTypeScriptWorkspaceModels({
     if (!rootPath) {
       return
     }
-    const connectionId = getConnectionIdForFile(worktreeId ?? null, filePath) ?? undefined
-    const hydrationKey = `${connectionId ?? 'local'}\0${rootPath}`
+    const connectionId = getConnectionIdForFile(worktreeId ?? null, filePath)
+    if (!isLocalTypeScriptWorkspaceConnection(connectionId)) {
+      return
+    }
+    applyWorkspaceCompilerOptions(rootPath)
+    const hydrationKey = `local\0${rootPath}`
     if (hydrationByWorkspace.has(hydrationKey)) {
       return
     }
-    const promise = readWorkspaceModels({ rootPath, connectionId }).catch((error) => {
+    const promise = readWorkspaceModels({ rootPath }).catch((error) => {
       hydrationByWorkspace.delete(hydrationKey)
       console.warn('[editor] failed to hydrate TypeScript workspace models', error)
     })

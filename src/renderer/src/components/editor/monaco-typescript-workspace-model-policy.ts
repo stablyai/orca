@@ -40,6 +40,9 @@ export function deriveWorkspaceRootPath(params: {
     return null
   }
   const candidate = filePath.slice(0, Math.max(0, filePath.length - relativePath.length))
+  if (filePath.slice(candidate.length) !== relativePath) {
+    return null
+  }
   return candidate.replace(/[\\/]+$/, '') || null
 }
 

@@ -80,6 +80,43 @@ describe('getTypeScriptDefinition', () => {
     expect(result?.range.startLineNumber).toBe(1)
   })
 
+  it('picks up definition changes made on disk to a file that is not the open editor', async () => {
+    const { rootPath, srcPath } = await createProject()
+    const utilFilePath = join(srcPath, 'util.ts')
+    await writeFile(
+      utilFilePath,
+      'export function greet(name: string): string {\n  return name\n}\n'
+    )
+    const indexFilePath = join(srcPath, 'index.ts')
+    const indexContent = "import { greet } from './util'\n\nconst message = greet('world')\n"
+    const position = positionInsideSecondOccurrence(indexContent, 'greet')
+
+    const first = getTypeScriptDefinition({
+      rootPath,
+      filePath: indexFilePath,
+      content: indexContent,
+      position
+    })
+    expect(first?.range.startLineNumber).toBe(1)
+
+    // Shift `greet`'s declaration down a line, simulating an edit made outside this editor
+    // (e.g. in another tab). util.ts was never opened here, so it has no override version.
+    await writeFile(
+      utilFilePath,
+      '\nexport function greet(name: string): string {\n  return name\n}\n'
+    )
+
+    const second = getTypeScriptDefinition({
+      rootPath,
+      filePath: indexFilePath,
+      content: indexContent,
+      position
+    })
+
+    expect(second?.filePath).toBe(utilFilePath)
+    expect(second?.range.startLineNumber).toBe(2)
+  })
+
   it('returns null when the file is outside any tsconfig project', async () => {
     const rootPath = await mkdtemp(join(tmpdir(), 'orca-ts-definition-'))
     roots.push(rootPath)

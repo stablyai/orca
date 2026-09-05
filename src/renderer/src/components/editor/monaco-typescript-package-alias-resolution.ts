@@ -7,7 +7,19 @@ export {
   type WorkspacePackageAlias
 } from './monaco-typescript-package-alias-path'
 
-const configuredWorkspaceCompilerOptions = new Set<string>()
+type WorkspaceCompilerConfig = {
+  baseUrl: string
+  paths: Record<string, string[]>
+}
+
+// Why: captured once, before any workspace ever applies its own baseUrl/paths, so switching
+// workspaces can always derive from a clean base instead of merging onto whatever the
+// previously active workspace left behind (monacoTS.typescriptDefaults is process-global).
+const baseCompilerOptions = monacoTS.typescriptDefaults.getCompilerOptions()
+const compilerConfigByRootPath = new Map<string, WorkspaceCompilerConfig>()
+let activeRootPath: string | null = null
+let activeConfig: WorkspaceCompilerConfig | undefined
+
 const DEFAULT_PACKAGE_SOURCE_ENTRIES = [
   './src/index.ts',
   './src/index.tsx',
@@ -18,7 +30,10 @@ const DEFAULT_PACKAGE_SOURCE_ENTRIES = [
 ] as const
 
 function normalizeRelativePath(path: string): string {
-  return path.replace(/[\\/]+/g, '/').replace(/^\.\//, '').replace(/^\/+/, '')
+  return path
+    .replace(/[\\/]+/g, '/')
+    .replace(/^\.\//, '')
+    .replace(/^\/+/, '')
 }
 
 function tryParseJsonObject(content: string): Record<string, unknown> | null {
@@ -67,10 +82,9 @@ function getPackageSourceEntryPaths(params: {
   for (const entry of DEFAULT_PACKAGE_SOURCE_ENTRIES) {
     relativeEntries.add(entry)
   }
-  return Array.from(relativeEntries)
-    .map((entry) =>
-      joinPath(joinPath(params.rootPath, params.directory), normalizeRelativePath(entry))
-    )
+  return Array.from(relativeEntries).map((entry) =>
+    joinPath(joinPath(params.rootPath, params.directory), normalizeRelativePath(entry))
+  )
 }
 
 export async function readWorkspacePackageAliases(params: {
@@ -116,13 +130,10 @@ export async function readWorkspacePackageAliases(params: {
   return aliases
 }
 
-export function configureWorkspacePackageResolution(params: {
+function computeWorkspaceCompilerConfig(params: {
   rootPath: string
   packageAliases: ReadonlyMap<string, WorkspacePackageAlias>
-}): void {
-  if (params.packageAliases.size === 0 || configuredWorkspaceCompilerOptions.has(params.rootPath)) {
-    return
-  }
+}): WorkspaceCompilerConfig {
   const paths: Record<string, string[]> = {}
   for (const alias of params.packageAliases.values()) {
     paths[alias.name] = alias.entryPaths
@@ -138,11 +149,40 @@ export function configureWorkspacePackageResolution(params: {
     }
     paths[`${alias.name}/*`] = Array.from(sourceRoots).map((sourceRoot) => `${sourceRoot}/*`)
   }
-  const current = monacoTS.typescriptDefaults.getCompilerOptions()
-  monacoTS.typescriptDefaults.setCompilerOptions({
-    ...current,
-    baseUrl: params.rootPath,
-    paths: { ...current.paths, ...paths }
-  })
-  configuredWorkspaceCompilerOptions.add(params.rootPath)
+  return { baseUrl: params.rootPath, paths }
+}
+
+// Why: Monaco's typescriptDefaults are process-global, so only one workspace's baseUrl/paths
+// can be active at a time. Always replace from the captured base rather than merging onto the
+// current options, so a previous workspace's aliases never leak into one with none (or
+// different alias names).
+export function applyWorkspaceCompilerOptions(rootPath: string): void {
+  const config = compilerConfigByRootPath.get(rootPath)
+  if (activeRootPath === rootPath && activeConfig === config) {
+    return
+  }
+  activeRootPath = rootPath
+  activeConfig = config
+  monacoTS.typescriptDefaults.setCompilerOptions(
+    config
+      ? { ...baseCompilerOptions, baseUrl: config.baseUrl, paths: config.paths }
+      : { ...baseCompilerOptions }
+  )
+}
+
+export function cacheWorkspacePackageResolution(params: {
+  rootPath: string
+  packageAliases: ReadonlyMap<string, WorkspacePackageAlias>
+}): void {
+  if (params.packageAliases.size === 0) {
+    return
+  }
+  compilerConfigByRootPath.set(params.rootPath, computeWorkspaceCompilerConfig(params))
+  // Why: hydration is async — reapply immediately only if this workspace is still the one
+  // being viewed, so a slow hydration for a workspace the user has since navigated away from
+  // doesn't clobber whichever workspace's options are active now.
+  if (activeRootPath === params.rootPath) {
+    activeConfig = undefined
+    applyWorkspaceCompilerOptions(params.rootPath)
+  }
 }

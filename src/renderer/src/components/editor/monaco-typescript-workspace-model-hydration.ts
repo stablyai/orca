@@ -5,7 +5,7 @@ import {
 } from './monaco-typescript-workspace-model-policy'
 import { syncModel } from './monaco-typescript-model-sync'
 import {
-  configureWorkspacePackageResolution,
+  cacheWorkspacePackageResolution,
   getWorkspacePackageAliasModelPath,
   readWorkspacePackageAliases,
   type WorkspacePackageAlias
@@ -162,7 +162,7 @@ export async function readWorkspaceModels(params: {
     packageJsonPaths,
     connectionId: params.connectionId
   })
-  configureWorkspacePackageResolution({ rootPath: params.rootPath, packageAliases })
+  cacheWorkspacePackageResolution({ rootPath: params.rootPath, packageAliases })
   await hydrateWorkspacePackageGraphs({
     rootPath: params.rootPath,
     packageAliases,

@@ -1,5 +1,6 @@
+import { createHash } from 'node:crypto'
 import { createRequire } from 'node:module'
-import { basename, dirname } from 'node:path'
+import { basename, dirname, isAbsolute, relative, sep } from 'node:path'
 // Why: the repo's main `typescript` dep (^7.0.2) ships only the native tsc CLI shim (no
 // ts.LanguageService/ts.sys/etc.) — `typescript-api` aliases the last classic JS package
 // (6.0.3) that still exposes the Language Service API this file needs.
@@ -11,6 +12,7 @@ import type {
 
 type TypeScriptProject = {
   configPath: string
+  configVersion: string
   options: ts.CompilerOptions
   fileNames: Set<string>
   overrides: Map<string, { content: string; version: number }>
@@ -30,7 +32,15 @@ function resolveTypeScriptSystemPath(filePath: string): string {
 
 function findConfigPath(filePath: string, rootPath: string): string | null {
   const configPath = ts.findConfigFile(dirname(filePath), ts.sys.fileExists, 'tsconfig.json')
-  return configPath?.startsWith(rootPath) ? configPath : null
+  if (!configPath) {
+    return null
+  }
+  const relativeConfigPath = relative(rootPath, configPath)
+  const isOutsideRoot =
+    relativeConfigPath === '..' ||
+    relativeConfigPath.startsWith(`..${sep}`) ||
+    isAbsolute(relativeConfigPath)
+  return isOutsideRoot ? null : configPath
 }
 
 function readProjectConfig(configPath: string): {
@@ -48,15 +58,39 @@ function readProjectConfig(configPath: string): {
   }
 }
 
+function hashFileContent(content: string): string {
+  return createHash('sha1').update(content).digest('hex')
+}
+
+function getConfigVersion(configPath: string): string {
+  const content = ts.sys.readFile(configPath)
+  return content === undefined ? 'missing' : hashFileContent(content)
+}
+
+// Why: tsconfig.json can change between requests (e.g. edited on disk); refresh the cached
+// project's options/fileNames in place rather than serving a stale parse forever.
+function refreshProjectConfigIfChanged(project: TypeScriptProject): void {
+  const configVersion = getConfigVersion(project.configPath)
+  if (configVersion === project.configVersion) {
+    return
+  }
+  const config = readProjectConfig(project.configPath)
+  project.options = config.options
+  project.fileNames = config.fileNames
+  project.configVersion = configVersion
+}
+
 function getOrCreateProject(configPath: string): TypeScriptProject {
   const existing = projectsByConfigPath.get(configPath)
   if (existing) {
+    refreshProjectConfigIfChanged(existing)
     return existing
   }
 
   const config = readProjectConfig(configPath)
   const project: TypeScriptProject = {
     configPath,
+    configVersion: getConfigVersion(configPath),
     options: config.options,
     fileNames: config.fileNames,
     overrides: new Map(),
@@ -76,7 +110,16 @@ function getOrCreateProject(configPath: string): TypeScriptProject {
       const content = override?.content ?? ts.sys.readFile(resolveTypeScriptSystemPath(filePath))
       return content === undefined ? undefined : ts.ScriptSnapshot.fromString(content)
     },
-    getScriptVersion: (filePath) => String(project.overrides.get(filePath)?.version ?? 0),
+    getScriptVersion: (filePath) => {
+      const override = project.overrides.get(filePath)
+      if (override) {
+        return `override:${override.version}`
+      }
+      // Why: disk-backed files have no version counter, so hash their content to detect
+      // changes made outside the currently open editor (e.g. an imported file edited elsewhere).
+      const content = ts.sys.readFile(resolveTypeScriptSystemPath(filePath))
+      return content === undefined ? 'missing' : hashFileContent(content)
+    },
     fileExists: (filePath) => ts.sys.fileExists(resolveTypeScriptSystemPath(filePath)),
     readFile: (filePath, encoding) =>
       ts.sys.readFile(resolveTypeScriptSystemPath(filePath), encoding),

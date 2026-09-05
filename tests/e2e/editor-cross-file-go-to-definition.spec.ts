@@ -13,6 +13,8 @@ import {
 } from './helpers/golden-source-control'
 import { waitForSessionReady, waitForActiveWorktree } from './helpers/store'
 
+const DEFINITION_A_CONTENT =
+  'export function crossFileGreeting(name: string): string {\n  return `hi ${name}`\n}\n'
 const DEFINITION_B_CONTENT =
   "import { crossFileGreeting } from './definition-a'\n\nconst message = crossFileGreeting('e2e')\n"
 
@@ -27,6 +29,26 @@ const CALL_POSITION = positionOfOffset(
   DEFINITION_B_CONTENT,
   DEFINITION_B_CONTENT.lastIndexOf('crossFileGreeting') + 1
 )
+
+// Position of the declaration itself in definition-a.ts, to assert the resolved selection.
+const DEFINITION_POSITION = positionOfOffset(
+  DEFINITION_A_CONTENT,
+  DEFINITION_A_CONTENT.indexOf('crossFileGreeting')
+)
+
+async function expectSelectionAtDefinition(
+  page: Parameters<typeof waitForActiveWorktree>[0]
+): Promise<void> {
+  await expect
+    .poll(() => page.evaluate(() => window.__monacoEditorE2E?.snapshot().selection ?? null), {
+      message: 'Monaco selection did not move to the resolved definition',
+      timeout: 20_000
+    })
+    .toMatchObject({
+      selectionStartLineNumber: DEFINITION_POSITION.lineNumber,
+      selectionStartColumn: DEFINITION_POSITION.column
+    })
+}
 
 function seedCrossFileProject(worktreePath: string): void {
   const srcDir = path.join(worktreePath, 'src')
@@ -117,6 +139,7 @@ test('Cmd/Ctrl+Click and F12 both jump to a definition in another file', async (
   await expect(orcaPage.locator('.editor-header-path').first()).toContainText('definition-a.ts', {
     timeout: 20_000
   })
+  await expectSelectionAtDefinition(orcaPage)
 
   // Re-open definition-b.ts and exercise F12 from a plain (unmodified) click at the same call site.
   await openDefinitionB(orcaPage, worktreeId, fixture.worktreePath)
@@ -130,4 +153,5 @@ test('Cmd/Ctrl+Click and F12 both jump to a definition in another file', async (
   await expect(orcaPage.locator('.editor-header-path').first()).toContainText('definition-a.ts', {
     timeout: 20_000
   })
+  await expectSelectionAtDefinition(orcaPage)
 })
