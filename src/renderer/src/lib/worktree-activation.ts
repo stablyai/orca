@@ -1,4 +1,3 @@
-import type { FolderWorkspace } from '../../../shared/folder-workspace-types'
 import type {
   WorktreeDefaultTabsLaunch,
   WorktreeSetupLaunch
@@ -30,7 +29,10 @@ import type { ExecutionHostId } from '../../../shared/execution-host'
 import { findFolderWorkspaceOwner } from './folder-workspace-runtime-owner'
 import type { WorktreeStartupPayload } from '@/lib/worktree-startup-payload'
 import type { IssueCommandLaunch } from '@/lib/worktree-setup-issue-command-queue'
-import { ensureWorktreeHasInitialTerminal } from '@/lib/worktree-initial-terminal-seeding'
+import {
+  ensureFolderWorkspaceInitialTerminal,
+  ensureWorktreeHasInitialTerminal
+} from '@/lib/worktree-initial-terminal-seeding'
 import { ensureWebRuntimeWorktreeTerminalAfterWake } from '@/lib/web-runtime-worktree-terminal-after-wake'
 import { applyWorktreeNavViewEntry } from '@/lib/worktree-nav-view-history-replay'
 
@@ -43,28 +45,6 @@ export type ActivateAndRevealResult = {
   /** Id of the primary terminal tab seeded with `opts.startup`, or null. Prefer this over
    *  `activeTabIdByWorktree`, which may point at another tab if setup/issue scripts opened their own. */
   primaryTabId: string | null
-}
-
-function ensureFolderWorkspaceInitialTerminal(
-  folderWorkspace: FolderWorkspace,
-  startup?: WorktreeStartupPayload,
-  providesInitialSurface?: boolean
-): string | null {
-  if (providesInitialSurface === true && startup === undefined) {
-    return null
-  }
-  const state = useAppStore.getState()
-  const workspaceKey = folderWorkspaceKey(folderWorkspace.id)
-  const primaryTabId = ensureWorktreeHasInitialTerminal(
-    state,
-    workspaceKey,
-    startup,
-    undefined,
-    undefined,
-    undefined,
-    { reseedEmptiedWorkspace: providesInitialSurface !== true }
-  )
-  return primaryTabId
 }
 
 function canInspectAgentActivationInventory(): boolean {
@@ -270,7 +250,15 @@ export function activateAndRevealWorktree(
         opts?.providesInitialSurface !== true &&
         currentState.activeWorktreeId === worktreeId
       ) {
-        ensureWorktreeHasInitialTerminal(currentState, worktreeId)
+        ensureWorktreeHasInitialTerminal(
+          currentState,
+          worktreeId,
+          undefined,
+          undefined,
+          undefined,
+          undefined,
+          { reseedEmptiedWorkspace: true }
+        )
       }
     })
   }
