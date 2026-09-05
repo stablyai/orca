@@ -1,11 +1,14 @@
-import { describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { AgentAwakeService } from './agent-awake-service'
 import type { AgentAwakeStatus } from './agent-awake-service'
+
+const isOnBatteryPowerMock = vi.hoisted(() => vi.fn(() => false))
 
 vi.mock('electron', () => ({
   powerMonitor: {
     on: vi.fn(),
-    off: vi.fn()
+    off: vi.fn(),
+    isOnBatteryPower: isOnBatteryPowerMock
   },
   powerSaveBlocker: {
     start: vi.fn(),
@@ -81,7 +84,83 @@ function createService(
 }
 
 describe('AgentAwakeService platform assertions', () => {
-  it('uses caffeinate without Electron display blocking on macOS', () => {
+  beforeEach(() => {
+    isOnBatteryPowerMock.mockReset()
+    isOnBatteryPowerMock.mockReturnValue(false)
+  })
+
+  it('uses caffeinate without Electron display blocking on macOS AC', () => {
+    const blocker = createBlocker()
+    const macosAssertion = createPlatformAssertion()
+    const service = createService(blocker, macosAssertion, createPlatformAssertion(), 'darwin')
+
+    service.setEnabled(true)
+    service.setStatuses([workingStatus()])
+
+    expect(macosAssertion.start).toHaveBeenCalledTimes(1)
+    expect(blocker.start).not.toHaveBeenCalled()
+  })
+
+  it('starts Electron display blocking on macOS battery while keep-awake is active', () => {
+    isOnBatteryPowerMock.mockReturnValue(true)
+    const blocker = createBlocker()
+    const macosAssertion = createPlatformAssertion()
+    const service = createService(blocker, macosAssertion, createPlatformAssertion(), 'darwin')
+
+    service.setEnabled(true)
+    service.setStatuses([workingStatus()])
+
+    expect(macosAssertion.start).toHaveBeenCalledTimes(1)
+    expect(blocker.start).toHaveBeenCalledTimes(1)
+    expect(blocker.start).toHaveBeenCalledWith('prevent-display-sleep')
+  })
+
+  it('does not start the display blocker on battery while keep-awake is idle', () => {
+    isOnBatteryPowerMock.mockReturnValue(true)
+    const blocker = createBlocker()
+    const macosAssertion = createPlatformAssertion()
+    const service = createService(blocker, macosAssertion, createPlatformAssertion(), 'darwin')
+
+    service.setEnabled(true)
+
+    expect(macosAssertion.start).not.toHaveBeenCalled()
+    expect(blocker.start).not.toHaveBeenCalled()
+  })
+
+  it('stops the display blocker when keep-awake goes idle on battery', () => {
+    isOnBatteryPowerMock.mockReturnValue(true)
+    const blocker = createBlocker()
+    const macosAssertion = createPlatformAssertion()
+    const service = createService(blocker, macosAssertion, createPlatformAssertion(), 'darwin')
+
+    service.setEnabled(true)
+    service.setStatuses([workingStatus()])
+    service.setStatuses([])
+
+    expect(blocker.stop).toHaveBeenCalledWith(1)
+    expect(macosAssertion.stop).toHaveBeenCalledWith('status-change')
+  })
+
+  it('drops the display blocker when macOS returns to AC while still blocking', () => {
+    isOnBatteryPowerMock.mockReturnValue(true)
+    const blocker = createBlocker()
+    const macosAssertion = createPlatformAssertion()
+    const service = createService(blocker, macosAssertion, createPlatformAssertion(), 'darwin')
+
+    service.setEnabled(true)
+    service.setStatuses([workingStatus()])
+    macosAssertion.stop.mockClear()
+    isOnBatteryPowerMock.mockReturnValue(false)
+    service.setStatuses([{ ...workingStatus(), receivedAt: 1_001 }])
+
+    expect(blocker.stop).toHaveBeenCalledWith(1)
+    expect(macosAssertion.stop).not.toHaveBeenCalled()
+  })
+
+  it('treats an unavailable battery API as AC on macOS', () => {
+    isOnBatteryPowerMock.mockImplementation(() => {
+      throw new Error('unsupported')
+    })
     const blocker = createBlocker()
     const macosAssertion = createPlatformAssertion()
     const service = createService(blocker, macosAssertion, createPlatformAssertion(), 'darwin')

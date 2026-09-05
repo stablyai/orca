@@ -5,7 +5,8 @@ import type { AgentAwakeStatus } from './agent-awake-service'
 vi.mock('electron', () => ({
   powerMonitor: {
     on: vi.fn(),
-    off: vi.fn()
+    off: vi.fn(),
+    isOnBatteryPower: vi.fn(() => false)
   },
   powerSaveBlocker: {
     start: vi.fn(),
