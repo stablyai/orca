@@ -40,6 +40,26 @@ function getConfigPath(): string {
 // is not yet supported (see VIBE_INTEGRATION.md).
 const MANAGED_SCRIPT_FILE_NAME = 'mistral-vibe-hook.sh'
 
+// Why: Vibe spawns hook commands via asyncio.create_subprocess_shell (cmd.exe on
+// Windows), so a /bin/sh script is not directly executable there. Unlike Kimi
+// (Git Bash on Windows), Vibe has no working shell for `.sh` on win32 — installing
+// would write a hook Vibe cannot run, and a failed pre_tool could gate tools.
+// Skip the whole service on Windows until a .cmd launcher exists.
+function isUnsupportedPlatform(): boolean {
+  return process.platform === 'win32'
+}
+
+function unsupportedStatus(configPath: string): AgentHookInstallStatus {
+  return {
+    agent: 'mistral-vibe',
+    state: 'skipped',
+    configPath,
+    managedHooksPresent: false,
+    detail: 'Vibe hooks are POSIX-only; Windows is not yet supported.',
+    skipReason: 'platform_unsupported'
+  }
+}
+
 function getManagedScriptPath(): string {
   return getSharedManagedScriptPath(MANAGED_SCRIPT_FILE_NAME)
 }
@@ -112,11 +132,17 @@ function buildStatus(present: Set<string>, configPath: string): AgentHookInstall
 
 export class VibeHookService {
   async refreshManagedScripts(): Promise<void> {
+    if (isUnsupportedPlatform()) {
+      return
+    }
     await refreshManagedScriptIfPresent(getManagedScriptPath(), getVibeManagedScript())
   }
 
   getStatus(): AgentHookInstallStatus {
     const configPath = getConfigPath()
+    if (isUnsupportedPlatform()) {
+      return unsupportedStatus(configPath)
+    }
     const text = readConfigToml(configPath)
     if (text === null) {
       return {
@@ -133,6 +159,9 @@ export class VibeHookService {
 
   install(): AgentHookInstallStatus {
     const configPath = getConfigPath()
+    if (isUnsupportedPlatform()) {
+      return unsupportedStatus(configPath)
+    }
     const text = readConfigToml(configPath)
     if (text === null) {
       return {
@@ -153,6 +182,9 @@ export class VibeHookService {
 
   remove(): AgentHookInstallStatus {
     const configPath = getConfigPath()
+    if (isUnsupportedPlatform()) {
+      return unsupportedStatus(configPath)
+    }
     const text = readConfigToml(configPath)
     if (text === null) {
       return {

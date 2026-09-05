@@ -37,6 +37,15 @@ export type ManagedAgentHookAsyncRemover = readonly [
 ]
 export type ManagedAgentHookStatusReader = readonly [HookInstallAgent, () => AgentHookInstallStatus]
 
+// Why: these agents' hook runner is cmd.exe on Windows, so their POSIX-only `.sh`
+// launcher is not installable there. The installer skips on win32 (see
+// vibe/hook-service.ts) and writes no shared launcher, so the coverage test in
+// managed-hook-script-refresh.test.ts reads this to skip the reverse
+// refresher→file check for these agents under a forced win32 platform.
+export const MANAGED_HOOK_POSIX_ONLY_AGENTS: ReadonlySet<HookInstallAgent> = new Set([
+  'mistral-vibe'
+])
+
 export const MANAGED_AGENT_HOOK_INSTALLERS: readonly ManagedAgentHookInstaller[] = [
   ['claude', () => claudeHookService.install()],
   ['openclaude', () => openClaudeHookService.install()],
