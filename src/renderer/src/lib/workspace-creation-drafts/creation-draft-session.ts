@@ -63,7 +63,7 @@ export function loadCreationDrafts(refresh = false): Promise<void> {
           }
         }
         for (const draft of drafts) {
-          if (!entries[draft.id] || isUntouched(draft.id)) {
+          if (!entries[draft.id]) {
             entries[draft.id] = fromStored(draft)
           }
         }

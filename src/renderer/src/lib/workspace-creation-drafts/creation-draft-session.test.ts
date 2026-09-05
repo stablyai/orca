@@ -150,3 +150,13 @@ it('preserves the open recovered draft when another writer deletes it', async ()
   await loadCreationDrafts(true)
   expect(useCreationDraftSession.getState().entries).toEqual({})
 })
+
+it('retains discovered buffer identity and revision when the database record changes', async () => {
+  database.listDrafts.mockResolvedValue([{ ...draft('original'), revision: 1 }])
+  await loadCreationDrafts()
+  const original = useCreationDraftSession.getState().entries['create-1']
+  database.listDrafts.mockResolvedValue([{ ...draft('external update'), revision: 2 }])
+  await loadCreationDrafts(true)
+  expect(useCreationDraftSession.getState().entries['create-1']).toBe(original)
+  expect(original.storedRevision).toBe(1)
+})
