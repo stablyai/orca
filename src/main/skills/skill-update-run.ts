@@ -27,6 +27,15 @@ const OUTPUT_FLUSH_MS = 100
 // while a slow-but-healthy sweep is still working.
 export const CANCEL_RELEASE_TIMEOUT_MS = 12_000
 
+const VERSION_MANAGER_SHIM_EXIT_CODES = new Set([126, 127])
+const VERSION_MANAGER_SHIM_FAILURE_PATTERNS = [
+  /\bNo version is set for command npx\b/i,
+  /\bNo preset version installed for command npx\b/i,
+  /\bversion\s+['"]?[^'"\s]+['"]?\s+is not installed\b/i,
+  /\basdf\b[\s\S]*\bnot installed\b/i,
+  /\bmise\b[\s\S]*\bnot installed\b/i
+]
+
 export type SkillUpdateRunnerDeps = {
   spawnProcess?: typeof spawn
   resolveCommand?: (commandName: string) => string
@@ -45,6 +54,39 @@ function stripAnsi(value: string): string {
 
 function clampOutput(value: string): string {
   return value.length <= MAX_OUTPUT_CHARS ? value : value.slice(value.length - MAX_OUTPUT_CHARS)
+}
+
+function versionManagerShimDetail(output: string): string | null {
+  const lines = output
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean)
+  return (
+    lines.find((line) => VERSION_MANAGER_SHIM_FAILURE_PATTERNS.some((p) => p.test(line))) ?? null
+  )
+}
+
+function skillUpdateExitMessage(
+  npxCommand: string,
+  code: number | null,
+  output: string,
+  platform: NodeJS.Platform
+): string {
+  const base = `skills update exited with code ${code}`
+  if (platform === 'win32' || code === null || !VERSION_MANAGER_SHIM_EXIT_CODES.has(code)) {
+    return base
+  }
+
+  const detail = versionManagerShimDetail(output)
+  if (!detail) {
+    return base
+  }
+
+  return (
+    `npx failed at ${npxCommand}: ${detail}. ` +
+    'Install the Node.js version configured for asdf/mise, or move a working npx ahead of that shim on PATH. ' +
+    `(${base})`
+  )
 }
 
 /**
@@ -176,10 +218,11 @@ export class SkillUpdateRunner {
     })
     child.on('close', (code) => {
       drain()
+      const output = this.run.state === 'running' ? this.run.output : ''
       this.settle(
         token,
         canonicalNames,
-        code === 0 ? null : `skills update exited with code ${code}`
+        code === 0 ? null : skillUpdateExitMessage(npxCommand, code, output, process.platform)
       )
     })
 

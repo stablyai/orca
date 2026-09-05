@@ -1,4 +1,7 @@
 import { EventEmitter } from 'node:events'
+import { chmodSync, mkdtempSync, mkdirSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { delimiter, join } from 'node:path'
 import { describe, expect, it, vi } from 'vitest'
 import type { SkillUpdateRun } from '../../shared/skill-freshness'
 import {
@@ -43,6 +46,17 @@ function makeRunner(
 
 async function flush(): Promise<void> {
   await new Promise((resolve) => setImmediate(resolve))
+}
+
+async function waitForSettled(runner: SkillUpdateRunner): Promise<SkillUpdateRun> {
+  for (let attempt = 0; attempt < 100; attempt += 1) {
+    await new Promise((resolve) => setTimeout(resolve, 10))
+    const run = runner.getState()
+    if (run.state !== 'running') {
+      return run
+    }
+  }
+  throw new Error('Timed out waiting for skill update runner to settle')
 }
 
 describe('SkillUpdateRunner', () => {
@@ -152,6 +166,81 @@ describe('SkillUpdateRunner', () => {
     const run = runner.getState()
     expect(run.state === 'error' && run.message).toBe('spawn ENOENT')
     expect(rescan).toHaveBeenCalledTimes(1)
+  })
+
+  it.skipIf(process.platform === 'win32')(
+    'explains asdf shim failures with the resolved npx path',
+    async () => {
+      const root = mkdtempSync(join(tmpdir(), 'orca-skill-update-shim-'))
+      const badDir = join(root, 'bad-shim')
+      const npx = join(badDir, 'npx')
+      mkdirSync(badDir, { recursive: true })
+      writeFileSync(
+        npx,
+        [
+          '#!/bin/sh',
+          "echo 'No version is set for command npx' >&2",
+          "echo 'nodejs 22.22.2' >&2",
+          'exit 126'
+        ].join('\n')
+      )
+      chmodSync(npx, 0o755)
+      const previousPath = process.env.PATH
+      process.env.PATH = [badDir, previousPath].filter(Boolean).join(delimiter)
+
+      try {
+        const runner = new SkillUpdateRunner({
+          now: () => 1000,
+          rescanOutdatedNames: async () => ['orca-cli']
+        })
+
+        expect(runner.start(['orca-cli'])).toEqual({ started: true })
+        const run = await waitForSettled(runner)
+
+        expect(run.state).toBe('error')
+        expect(run.state === 'error' && run.output).toContain('No version is set for command npx')
+        expect(run.state === 'error' && run.message).toContain(`npx failed at ${npx}`)
+        expect(run.state === 'error' && run.message).toContain(
+          'Install the Node.js version configured for asdf/mise'
+        )
+        expect(run.state === 'error' && run.message).toContain('skills update exited with code 126')
+      } finally {
+        if (previousPath === undefined) {
+          delete process.env.PATH
+        } else {
+          process.env.PATH = previousPath
+        }
+      }
+    }
+  )
+
+  it('keeps unrelated exit 126 failures generic', async () => {
+    const { runner, child } = makeRunner({ rescanOutdatedNames: async () => ['orca-cli'] })
+    runner.start(['orca-cli'])
+    child.stderr.emit('data', Buffer.from('inner skills command failed after starting'))
+    child.emit('close', 126)
+    await flush()
+
+    const run = runner.getState()
+    expect(run.state).toBe('error')
+    expect(run.state === 'error' && run.message).toBe('skills update exited with code 126')
+  })
+
+  it('does not apply POSIX shim guidance on Windows', async () => {
+    const platform = vi.spyOn(process, 'platform', 'get').mockReturnValue('win32')
+    try {
+      const { runner, child } = makeRunner({ rescanOutdatedNames: async () => ['orca-cli'] })
+      runner.start(['orca-cli'])
+      child.stderr.emit('data', Buffer.from('No version is set for command npx'))
+      child.emit('close', 126)
+      await flush()
+
+      const run = runner.getState()
+      expect(run.state).toBe('error')
+      expect(run.state === 'error' && run.message).toBe('skills update exited with code 126')
+    } finally {
+      platform.mockRestore()
+    }
   })
 
   it('refuses a new run until the cancelled process tree is actually dead', async () => {
