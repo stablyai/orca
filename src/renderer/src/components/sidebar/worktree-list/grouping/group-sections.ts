@@ -16,8 +16,8 @@ import {
 } from './host-labels'
 import type { OrderedGroupEntry, ProjectGroupingIndex } from './project-grouping'
 import {
+  appendFolderWorkspaceRows,
   appendWorktreeRows,
-  buildFolderWorkspaceRow,
   buildImportedWorktreesCardRow,
   buildNewExternalWorktreesInboxRow,
   buildPendingCreationRow
@@ -50,6 +50,8 @@ export type SectionAppendContext = {
   worktreeMap: Map<string, Worktree>
   nestLineage: boolean
   cyclicLineageIds: ReadonlySet<string>
+  /** Worktrees nested beneath each folder workspace row, keyed by folder id. */
+  attachedByFolderId: ReadonlyMap<string, Worktree[]>
 }
 
 export function appendOrderedGroups(
@@ -210,9 +212,16 @@ export function appendOrderedGroups(
         hostContextLabelByWorktreeIdentity,
         cyclicLineageIds
       })
-      for (const pair of folderPairs) {
-        result.push(buildFolderWorkspaceRow(pair, projectGroupDepth))
-      }
+      appendFolderWorkspaceRows(result, folderPairs, projectGroupDepth, {
+        attachedByFolderId: ctx.attachedByFolderId,
+        repoMap,
+        lineageById,
+        worktreeMap,
+        nestLineage,
+        collapsedGroups,
+        cyclicLineageIds,
+        hostContextLabelByWorktreeIdentity
+      })
     }
   }
 }

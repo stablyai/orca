@@ -1,13 +1,20 @@
 import { describe, expect, it } from 'vitest'
 import { buildRows } from './build-rows'
 import { getFolderWorkspaceLaneKey } from './folder-workspace-lanes'
-import { getPRGroupKey, getPRLaneKey } from './group-keys'
+import {
+  getFolderWorkspaceAttachedGroupKey,
+  getPRGroupKey,
+  getPRLaneKey,
+  PINNED_GROUP_KEY
+} from './group-keys'
 import type { Row, WorktreeGroupBy } from './row-types'
 import { repo, worktree } from '../../worktree-list-groups-test-fixtures'
 import type { FolderWorkspace } from '../../../../../../shared/folder-workspace-types'
 import type { ProjectGroup } from '../../../../../../shared/project-group-types'
 import type { Repo } from '../../../../../../shared/repo-types'
 import type { ExecutionHostId } from '../../../../../../shared/execution-host'
+import type { WorkspaceLineage } from '../../../../../../shared/worktree/lineage-types'
+import { folderWorkspaceKey, worktreeWorkspaceKey } from '../../../../../../shared/workspace-scope'
 
 const GROUP: ProjectGroup = {
   id: 'group-1',
@@ -50,6 +57,7 @@ function buildSidebarRows(options: {
   projectGroups?: readonly ProjectGroup[]
   worktrees?: (typeof worktree)[]
   collapsedGroups?: Set<string>
+  workspaceLineageByChildKey?: Record<string, WorkspaceLineage>
 }): Row[] {
   const worktrees = options.worktrees ?? [worktree]
   return buildRows(
@@ -71,8 +79,26 @@ function buildSidebarRows(options: {
     new Map(),
     [],
     undefined,
-    options.folderWorkspaces ?? [makeFolderWorkspace()]
+    options.folderWorkspaces ?? [makeFolderWorkspace()],
+    undefined,
+    undefined,
+    undefined,
+    options.workspaceLineageByChildKey ?? {}
   )
+}
+
+function attachedTo(folderWorkspaceId: string, worktreeId: string): WorkspaceLineage {
+  return {
+    childWorkspaceKey: worktreeWorkspaceKey(worktreeId),
+    parentWorkspaceKey: folderWorkspaceKey(folderWorkspaceId),
+    origin: 'manual',
+    capture: { source: 'manual-action', confidence: 'explicit' },
+    createdAt: 1
+  }
+}
+
+function itemRows(rows: Row[]): Extract<Row, { type: 'item' }>[] {
+  return rows.filter((row): row is Extract<Row, { type: 'item' }> => row.type === 'item')
 }
 
 function folderRows(rows: Row[]): Extract<Row, { type: 'folder-workspace' }>[] {
@@ -95,6 +121,92 @@ describe('folder workspaces render under every Group by mode', () => {
   it('does not duplicate the row under repo grouping', () => {
     const rows = buildSidebarRows({ groupBy: 'repo' })
     expect(folderRows(rows).map((row) => row.key)).toEqual(['folder-workspace:fw-1'])
+  })
+})
+
+describe('worktrees attached to a folder workspace', () => {
+  // The child's own status would put it in the todo lane; attachment wins.
+  const attachedChild = { ...worktree, workspaceStatus: 'todo' as const }
+  const lineage = { [worktreeWorkspaceKey(worktree.id)]: attachedTo('fw-1', worktree.id) }
+
+  for (const groupBy of ALL_GROUP_BY) {
+    it(`nests the child beneath its folder workspace when groupBy is ${groupBy}`, () => {
+      const rows = buildSidebarRows({
+        groupBy,
+        worktrees: [attachedChild],
+        workspaceLineageByChildKey: lineage
+      })
+
+      const [folderRow] = folderRows(rows)
+      const [childRow, ...otherItems] = itemRows(rows)
+      expect(otherItems).toHaveLength(0)
+      expect(folderRow).toMatchObject({
+        attachedChildCount: 1,
+        attachedGroupKey: getFolderWorkspaceAttachedGroupKey('fw-1'),
+        attachedCollapsed: false
+      })
+      expect(rows.indexOf(childRow)).toBe(rows.indexOf(folderRow) + 1)
+      expect(childRow).toMatchObject({
+        worktree: attachedChild,
+        sectionKey: folderWorkspaceKey('fw-1'),
+        depth: 1
+      })
+      expect(rows.some((row) => row.type === 'header' && row.key === 'workspace-status:todo')).toBe(
+        false
+      )
+    })
+  }
+
+  it('hides the children while the attached group is collapsed', () => {
+    const rows = buildSidebarRows({
+      groupBy: 'workspace-status',
+      worktrees: [attachedChild],
+      workspaceLineageByChildKey: lineage,
+      collapsedGroups: new Set([getFolderWorkspaceAttachedGroupKey('fw-1')])
+    })
+
+    expect(itemRows(rows)).toHaveLength(0)
+    expect(folderRows(rows)[0]).toMatchObject({ attachedChildCount: 1, attachedCollapsed: true })
+  })
+
+  it('keeps a pinned child in the pinned section, matching worktree lineage', () => {
+    const rows = buildSidebarRows({
+      groupBy: 'workspace-status',
+      worktrees: [{ ...attachedChild, isPinned: true }],
+      workspaceLineageByChildKey: lineage
+    })
+
+    expect(itemRows(rows).map((row) => row.sectionKey)).toEqual([PINNED_GROUP_KEY])
+    expect(folderRows(rows)[0]).toMatchObject({ attachedChildCount: 0 })
+  })
+
+  it('leaves the child in its own lane when the folder workspace is not rendered', () => {
+    // Why: a host filter that hides the folder must not also hide its children.
+    const rows = buildSidebarRows({
+      groupBy: 'workspace-status',
+      worktrees: [attachedChild],
+      workspaceLineageByChildKey: lineage,
+      folderWorkspaces: []
+    })
+
+    expect(itemRows(rows).map((row) => row.sectionKey)).toEqual(['workspace-status:todo'])
+  })
+
+  it('ignores lineage whose child instance no longer matches', () => {
+    const staleLineage = {
+      [worktreeWorkspaceKey(worktree.id)]: {
+        ...attachedTo('fw-1', worktree.id),
+        childInstanceId: 'instance-from-a-previous-checkout'
+      }
+    }
+    const rows = buildSidebarRows({
+      groupBy: 'workspace-status',
+      worktrees: [{ ...attachedChild, instanceId: 'current-instance' }],
+      workspaceLineageByChildKey: staleLineage
+    })
+
+    expect(itemRows(rows).map((row) => row.sectionKey)).toEqual(['workspace-status:todo'])
+    expect(folderRows(rows)[0]).toMatchObject({ attachedChildCount: 0 })
   })
 })
 

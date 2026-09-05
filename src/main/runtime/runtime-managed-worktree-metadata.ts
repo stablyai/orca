@@ -3,9 +3,14 @@ import type { WorktreeMeta } from '../../shared/worktree/meta-types'
 import { worktreeWorkspaceKey } from '../../shared/workspace-scope'
 import { splitWorktreeId } from '../../shared/worktree/id'
 import { planWorktreeSortOrderUpdates } from '../../shared/worktree/sort-order-update'
+import { folderWorkspaceToWorktree } from '../../shared/folder-workspace-worktree'
+import { LOCAL_EXECUTION_HOST_ID } from '../../shared/execution-host'
 import { stripOrcaProvenanceMetaUpdates } from '../worktree-removal-safety'
 import type { RuntimeStore } from './runtime-store-contract'
-import { RuntimeLineageError } from './runtime-worktree-lineage-resolution'
+import {
+  RuntimeLineageError,
+  type ResolvedWorkspaceParent
+} from './runtime-worktree-lineage-resolution'
 import type { ResolvedWorktree } from './runtime-worktree-path-identity'
 
 type Updates = Omit<Partial<WorktreeMeta>, 'pushTarget'> & {
@@ -15,6 +20,7 @@ type Updates = Omit<Partial<WorktreeMeta>, 'pushTarget'> & {
 
 type Ports = {
   resolveWorktree: (selector: string) => Promise<ResolvedWorktree>
+  resolveParent: (selector: string) => Promise<ResolvedWorkspaceParent>
   validateParent: (worktree: ResolvedWorktree, parent: ResolvedWorktree) => void
   invalidateResolved: () => void
   invalidateScan: (repoId: string) => void
@@ -55,39 +61,76 @@ export async function updateRuntimeManagedWorktreeMetadata(args: {
     args.store.removeWorktreeLineage?.(worktree.id)
     args.store.removeWorkspaceLineage?.(worktreeWorkspaceKey(worktree.id))
   } else if (lineage?.parentWorktree) {
-    const parent = await args.ports.resolveWorktree(lineage.parentWorktree)
-    args.ports.validateParent(worktree, parent)
-    if (!worktree.instanceId || !parent.instanceId) {
-      throw new RuntimeLineageError(
-        'LINEAGE_PARENT_CONTEXT_MISSING',
-        'Worktree instance identity was unavailable.'
-      )
+    const parent = await args.ports.resolveParent(lineage.parentWorktree)
+    if (parent.type === 'folder') {
+      // Why: a folder workspace has no repo or project, so the worktree boundary
+      // rules do not apply — but the hosts must match, or the folder view could
+      // never show the row it now claims.
+      const worktreeHostId =
+        worktree.identity?.executionHostId ?? worktree.hostId ?? LOCAL_EXECUTION_HOST_ID
+      if (worktreeHostId !== folderWorkspaceToWorktree(parent.folderWorkspace).hostId) {
+        throw new RuntimeLineageError(
+          'LINEAGE_PARENT_CONTEXT_CONFLICT',
+          'Parent folder workspace must belong to the same execution host.'
+        )
+      }
+      if (!worktree.instanceId) {
+        throw new RuntimeLineageError(
+          'LINEAGE_PARENT_CONTEXT_MISSING',
+          'Worktree instance identity was unavailable.'
+        )
+      }
+      if (!args.store.setWorkspaceLineage) {
+        throw new RuntimeLineageError(
+          'LINEAGE_PARENT_CONTEXT_MISSING',
+          'Workspace lineage storage was unavailable.'
+        )
+      }
+      // A folder parent replaces any worktree parent: workspace lineage is the only edge.
+      args.store.removeWorktreeLineage?.(worktree.id)
+      args.store.setWorkspaceLineage({
+        childWorkspaceKey: worktreeWorkspaceKey(worktree.id),
+        childInstanceId: worktree.instanceId,
+        parentWorkspaceKey: parent.workspaceKey,
+        parentInstanceId: parent.instanceId,
+        origin: 'manual',
+        capture: { source: 'manual-action', confidence: 'explicit' },
+        createdAt: Date.now()
+      })
+    } else {
+      args.ports.validateParent(worktree, parent.worktree)
+      if (!worktree.instanceId || !parent.instanceId) {
+        throw new RuntimeLineageError(
+          'LINEAGE_PARENT_CONTEXT_MISSING',
+          'Worktree instance identity was unavailable.'
+        )
+      }
+      if (!args.store.setWorktreeLineage) {
+        throw new RuntimeLineageError(
+          'LINEAGE_PARENT_CONTEXT_MISSING',
+          'Worktree lineage storage was unavailable.'
+        )
+      }
+      const createdAt = Date.now()
+      args.store.setWorktreeLineage(worktree.id, {
+        worktreeId: worktree.id,
+        worktreeInstanceId: worktree.instanceId,
+        parentWorktreeId: parent.worktree.id,
+        parentWorktreeInstanceId: parent.instanceId,
+        origin: 'manual',
+        capture: { source: 'manual-action', confidence: 'explicit' },
+        createdAt
+      })
+      args.store.setWorkspaceLineage?.({
+        childWorkspaceKey: worktreeWorkspaceKey(worktree.id),
+        childInstanceId: worktree.instanceId,
+        parentWorkspaceKey: parent.workspaceKey,
+        parentInstanceId: parent.instanceId,
+        origin: 'manual',
+        capture: { source: 'manual-action', confidence: 'explicit' },
+        createdAt
+      })
     }
-    if (!args.store.setWorktreeLineage) {
-      throw new RuntimeLineageError(
-        'LINEAGE_PARENT_CONTEXT_MISSING',
-        'Worktree lineage storage was unavailable.'
-      )
-    }
-    const createdAt = Date.now()
-    args.store.setWorktreeLineage(worktree.id, {
-      worktreeId: worktree.id,
-      worktreeInstanceId: worktree.instanceId,
-      parentWorktreeId: parent.id,
-      parentWorktreeInstanceId: parent.instanceId,
-      origin: 'manual',
-      capture: { source: 'manual-action', confidence: 'explicit' },
-      createdAt
-    })
-    args.store.setWorkspaceLineage?.({
-      childWorkspaceKey: worktreeWorkspaceKey(worktree.id),
-      childInstanceId: worktree.instanceId,
-      parentWorkspaceKey: worktreeWorkspaceKey(parent.id),
-      parentInstanceId: parent.instanceId,
-      origin: 'manual',
-      capture: { source: 'manual-action', confidence: 'explicit' },
-      createdAt
-    })
   }
   const metadataUpdates = stripOrcaProvenanceMetaUpdates(persisted)
   const executionHostId = worktree.identity?.executionHostId ?? worktree.hostId

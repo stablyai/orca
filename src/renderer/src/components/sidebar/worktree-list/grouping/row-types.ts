@@ -91,6 +91,11 @@ export type FolderWorkspaceRow = {
   projectGroup: ProjectGroup
   depth: number
   groupDepth: number
+  /** Worktrees whose workspace lineage names this folder workspace as parent;
+   *  they render nested beneath the row instead of as rows of their own. */
+  attachedChildCount?: number
+  attachedGroupKey?: string
+  attachedCollapsed?: boolean
 }
 
 /** Minimal shape buildRows needs for an in-flight create. Deliberately not the

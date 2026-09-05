@@ -3,8 +3,9 @@ import type { WorktreeLineage } from '../../../../../../shared/worktree/lineage-
 import type { Worktree } from '../../../../../../shared/worktree/types'
 import { getWorktreeHostIdentity } from '../../../../../../shared/worktree/host-qualified-identity'
 import { isValidResolvedWorktreeLineageEdge } from '../../../../../../shared/resolved-worktree-lineage'
+import { folderWorkspaceKey } from '../../../../../../shared/workspace-scope'
 import { getProjectedWorktreeLineage } from '../../worktree-lineage-projection'
-import { getWorktreeLineageGroupKey } from './group-keys'
+import { getFolderWorkspaceAttachedGroupKey, getWorktreeLineageGroupKey } from './group-keys'
 import type { NoticeHostContext } from './host-labels'
 import type { RenderableFolderWorkspace } from './folder-workspace-lanes'
 import type {
@@ -111,6 +112,8 @@ export function appendWorktreeRows(
     hostContextLabelByRepoId?: ReadonlyMap<string, string>
     hostContextLabelByWorktreeIdentity?: ReadonlyMap<string, string>
     cyclicLineageIds: ReadonlySet<string>
+    /** Depth the roots start at — 1 when they render beneath a folder workspace row. */
+    baseDepth?: number
   }
 ): void {
   const {
@@ -120,18 +123,19 @@ export function appendWorktreeRows(
     sectionKey,
     hostContextLabelByRepoId,
     hostContextLabelByWorktreeIdentity,
-    cyclicLineageIds
+    cyclicLineageIds,
+    baseDepth = 0
   } = options
   if (!nestLineage) {
-    for (const worktree of worktrees) {
+    for (const [index, worktree] of worktrees.entries()) {
       result.push(
         buildWorktreeRow(worktree, repoMap, {
           rowKey: `${sectionKey}:${getWorktreeHostIdentity(worktree)}`,
           sectionKey,
-          depth: 0,
+          depth: baseDepth,
           groupDepth,
-          lineageTrail: [],
-          isLastLineageChild: false,
+          lineageTrail: baseDepth > 0 ? [index < worktrees.length - 1] : [],
+          isLastLineageChild: baseDepth > 0 && index === worktrees.length - 1,
           lineageChildCount: 0,
           lineageCollapsed: false,
           hostContextLabel:
@@ -239,14 +243,19 @@ export function appendWorktreeRows(
     (worktree) => !childIdentities.has(getWorktreeHostIdentity(worktree))
   )
   for (const [index, worktree] of roots.entries()) {
-    emit(worktree, 0, [], index === roots.length - 1)
+    emit(
+      worktree,
+      baseDepth,
+      baseDepth > 0 ? [index < roots.length - 1] : [],
+      index === roots.length - 1
+    )
   }
   if (roots.length === 0) {
     for (const worktree of worktrees) {
       if (!emitted.has(getWorktreeHostIdentity(worktree))) {
         // Why: malformed cyclic lineage should not hide every participant.
         // Render any leftovers as roots rather than recursing forever.
-        emit(worktree, 0, [], true)
+        emit(worktree, baseDepth, [], true)
       }
     }
   }
@@ -256,7 +265,8 @@ export function appendWorktreeRows(
  *  grouped-lane and flat emitters so their rows cannot diverge. */
 export function buildFolderWorkspaceRow(
   pair: RenderableFolderWorkspace,
-  groupDepth: number
+  groupDepth: number,
+  attached: { childCount: number; collapsed: boolean } = { childCount: 0, collapsed: false }
 ): FolderWorkspaceRow {
   return {
     type: 'folder-workspace',
@@ -264,6 +274,63 @@ export function buildFolderWorkspaceRow(
     folderWorkspace: pair.folderWorkspace,
     projectGroup: pair.projectGroup,
     depth: 0,
-    groupDepth
+    groupDepth,
+    attachedChildCount: attached.childCount,
+    ...(attached.childCount > 0
+      ? {
+          attachedGroupKey: getFolderWorkspaceAttachedGroupKey(pair.folderWorkspace.id),
+          attachedCollapsed: attached.collapsed
+        }
+      : {})
+  }
+}
+
+/**
+ * Emits each folder workspace row followed by its attached worktrees, nested one
+ * level deep (cross-status nesting: a child renders under its folder whatever
+ * lane the child's own status would have put it in).
+ */
+export function appendFolderWorkspaceRows(
+  result: Row[],
+  pairs: readonly RenderableFolderWorkspace[],
+  groupDepth: number,
+  options: {
+    attachedByFolderId: ReadonlyMap<string, Worktree[]>
+    repoMap: Map<string, Repo>
+    lineageById: Record<string, WorktreeLineage>
+    worktreeMap: Map<string, Worktree>
+    nestLineage: boolean
+    collapsedGroups: Set<string>
+    cyclicLineageIds: ReadonlySet<string>
+    hostContextLabelByWorktreeIdentity?: ReadonlyMap<string, string>
+  }
+): void {
+  for (const pair of pairs) {
+    const attached = options.attachedByFolderId.get(pair.folderWorkspace.id) ?? []
+    const collapsed = options.collapsedGroups.has(
+      getFolderWorkspaceAttachedGroupKey(pair.folderWorkspace.id)
+    )
+    result.push(
+      buildFolderWorkspaceRow(pair, groupDepth, { childCount: attached.length, collapsed })
+    )
+    if (attached.length === 0 || collapsed) {
+      continue
+    }
+    appendWorktreeRows(
+      result,
+      attached,
+      options.repoMap,
+      options.lineageById,
+      options.worktreeMap,
+      {
+        nestLineage: options.nestLineage,
+        collapsedGroups: options.collapsedGroups,
+        groupDepth,
+        sectionKey: folderWorkspaceKey(pair.folderWorkspace.id),
+        hostContextLabelByWorktreeIdentity: options.hostContextLabelByWorktreeIdentity,
+        cyclicLineageIds: options.cyclicLineageIds,
+        baseDepth: 1
+      }
+    )
   }
 }
