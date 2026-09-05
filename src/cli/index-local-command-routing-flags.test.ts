@@ -48,7 +48,7 @@ import { main } from './index'
 import { okFixture, queueFixtures } from './test-fixtures'
 import { pairRuntimeEnvironment, useWorktreeAwarenessEnvironment } from './index-test-harness'
 
-const SSH_TARGET = { id: 'ssh-1777360569033-yvz2mp', label: 'openclaw' }
+const SSH_TARGET = { id: 'ssh-1777360569033-yvz2mp', label: 'openclaw', remotePlatform: 'win32' }
 
 /** Every SSH-target lookup answers with the one target only this machine's runtime knows about. */
 function queueSshTargetLookups(count: number): void {
@@ -82,6 +82,9 @@ describe('runtime-selector flags on locally pinned CLI commands', () => {
       SSH_TARGET.id,
       'env-m4air'
     ])
+    expect(
+      printed.result.hosts.find((host: { id: string }) => host.id === SSH_TARGET.id).platform
+    ).toBe('win32')
     // The tell: `runtimeId: local` is only honest if no routed client was ever built.
     expect(runtimeClientConstructorMock).toHaveBeenCalledWith(null, null)
   })

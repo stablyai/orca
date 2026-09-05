@@ -53,7 +53,11 @@ describe('Claude published session close lifecycle', () => {
       is_backgrounded: true
     })
     expect(backgroundStates).toEqual([
-      { state: 'monitoring', tasks: [{ id: 'background-1', kind: 'agent' }] }
+      {
+        state: 'monitoring',
+        tasks: [{ id: 'background-1', kind: 'agent' }],
+        supportsTaskStop: true
+      }
     ])
     const session = (
       adapter as unknown as {
@@ -68,7 +72,11 @@ describe('Claude published session close lifecycle', () => {
     expect(events.filter((event) => event.type === 'handle')).toHaveLength(0)
     expect(disposeTranslator).toHaveBeenCalledOnce()
     expect(backgroundStates).toEqual([
-      { state: 'monitoring', tasks: [{ id: 'background-1', kind: 'agent' }] },
+      {
+        state: 'monitoring',
+        tasks: [{ id: 'background-1', kind: 'agent' }],
+        supportsTaskStop: true
+      },
       null
     ])
 

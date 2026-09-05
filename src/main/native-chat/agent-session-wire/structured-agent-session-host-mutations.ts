@@ -78,6 +78,7 @@ export function cancelStructuredAgentSessionTurn(
     envelope: AgentSessionMutationEnvelope
     turnId: string
     scope?: 'background-tasks'
+    taskId?: string
   }
 ): Promise<AgentSessionMutationResult<AgentSessionCancelResult>> {
   return mutate(context, caller, params.envelope, cancelPlan(params))
