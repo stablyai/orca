@@ -17,7 +17,7 @@
   "dependencies": {
     "@hono/node-server": "^1.19.14",
     "@orca-cloud/relay-contract": "workspace:*",
-    "hono": "^4.12.27",
+    "hono": "^4.12.34",
     "jose": "^6.1.3",
     "pg": "^8.22.0",
     "tweetnacl": "^1.0.3",
