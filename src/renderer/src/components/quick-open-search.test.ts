@@ -174,6 +174,22 @@ describe('quick-open-search', () => {
     })
   })
 
+  it('skips streamed paths for oversized or excessive-term queries', () => {
+    const oversized = new QuickOpenPathRanker(
+      'secret-quick-open'.repeat(QUICK_OPEN_QUERY_MAX_BYTES),
+      8
+    )
+    oversized.consider('src/secret.ts')
+    expect(oversized.result()).toEqual({ paths: [], totalCount: 0 })
+
+    const excessive = new QuickOpenPathRanker(
+      Array.from({ length: 33 }, (_, index) => `term-${index}`).join(' '),
+      8
+    )
+    excessive.consider('src/file.ts')
+    expect(excessive.result()).toEqual({ paths: [], totalCount: 0 })
+  })
+
   it('returns scores sorted ascending', () => {
     const files = [
       'src/components/QuickOpen.tsx',

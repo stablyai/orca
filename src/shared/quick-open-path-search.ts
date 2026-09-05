@@ -90,10 +90,10 @@ export class QuickOpenPathRanker {
   }
 
   consider(path: string): void {
-    const file = prepareQuickOpenFile(path, this.inputIndex++)
     if (this.queryTerms === null) {
       return
     }
+    const file = prepareQuickOpenFile(path, this.inputIndex++)
     const score = scoreIndexedFile(this.queryTerms, file)
     if (score === null) {
       return
