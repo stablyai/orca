@@ -17,6 +17,7 @@ import {
   pinnedAgentSessionLaunchEnv
 } from './structured-agent-session-launch-env'
 import { refuseAgentSessionMutation } from './structured-agent-session-mutation-admission'
+import { retryPendingStructuredAgentSessionSettlement } from './structured-agent-session-settlement-retry'
 import type { StructuredAgentSessionAttachContext } from './structured-agent-session-attach-context'
 import type { DeferredStructuredAgentSessionEventSink } from './structured-agent-session-event-sink'
 import { agentSessionJournalCloseRetries } from '../agent-session-journal/journal-close-retry'
@@ -41,14 +42,20 @@ export function attachStructuredAgentSession(
       return refuseAgentSessionMutation(unreconciled)
     }
     await context.runtimeState.resolveRecovery(sessionId)
-    if (context.retryPendingSettlement) {
-      const settled = await context.retryPendingSettlement(sessionId, params)
-      if (!settled) {
-        return refuseAgentSessionMutation({
-          code: 'agent_session_ownership_unknown',
-          message: 'The provider-exit terminal journal settlement is still pending; retry attach.'
-        })
-      }
+    // Retries a durable provider-exit journal settlement before a new owner is reserved. Answers
+    // settled when the record has none pending, so every attach can ask unconditionally.
+    const settled = await retryPendingStructuredAgentSessionSettlement({
+      deps: context.deps,
+      sessions: context.sessions,
+      sessionId,
+      params,
+      now: () => context.now()
+    })
+    if (!settled) {
+      return refuseAgentSessionMutation({
+        code: 'agent_session_ownership_unknown',
+        message: 'The provider-exit terminal journal settlement is still pending; retry attach.'
+      })
     }
     const eventSink = context.runtimeState.eventSinkFor(sessionId)
     const attached = await performAttach({

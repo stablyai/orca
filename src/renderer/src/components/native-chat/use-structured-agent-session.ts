@@ -136,6 +136,13 @@ export function useStructuredAgentSession(args: {
     [sessionId, target]
   )
 
+  // Turns are what confirm an option: the provider names the model it is running
+  // on the frame that opens each one, so re-read the options as a turn changes
+  // rather than leaving the last write unconfirmed for the life of the session.
+  const turnId = activeStructuredAgentSessionTurnId(state.items)
+  const isMonitoringBackgroundTasks =
+    turnId === null && state.backgroundTasks?.state === 'monitoring'
+
   useEffect(() => {
     if (!isVisible || !optionCatalog) {
       return
@@ -157,7 +164,7 @@ export function useStructuredAgentSession(args: {
     return () => {
       stale = true
     }
-  }, [isVisible, optionCatalog, sessionId, state.fence, target])
+  }, [isVisible, optionCatalog, sessionId, state.fence, target, turnId])
 
   const optionSnapshot = useMemo(
     () => structuredAgentSessionOptionSnapshot(optionState),
@@ -219,7 +226,6 @@ export function useStructuredAgentSession(args: {
       (item.body.kind === 'approval' || item.body.kind === 'question') &&
       item.body.resolution.state === 'pending'
   )
-  const turnId = activeStructuredAgentSessionTurnId(state.items)
   return {
     messages: projectStructuredAgentSessionMessages(
       state.items,
@@ -237,8 +243,15 @@ export function useStructuredAgentSession(args: {
     send: outboxController.send,
     retry: outboxController.retry,
     isWorking: turnId !== null,
+    isMonitoringBackgroundTasks,
+    backgroundTasks: state.backgroundTasks?.tasks ?? [],
     turnId,
     cancel: (turnId: string) => mutate('agentSession.cancel', 'agentSession.cancel', { turnId }),
+    stopBackgroundTasks: () =>
+      mutate('agentSession.cancel', 'agentSession.cancel', {
+        turnId: 'background-tasks',
+        scope: 'background-tasks'
+      }),
     respond: (item: StructuredPromptItem, optionId: string) =>
       mutate<AgentSessionPromptResult>(
         item.body.kind === 'approval'

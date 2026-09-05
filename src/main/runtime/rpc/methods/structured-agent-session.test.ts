@@ -99,6 +99,22 @@ function hostStub(): StructuredAgentSessionHost {
     setSessionTabVisibility: vi.fn(async () => undefined),
     respondToPrompt: vi.fn(async () => ({ ok: true, replayed: false })),
     setOption: vi.fn(async () => ({ ok: true, replayed: false })),
+    requestHandoff: vi.fn(async () => ({
+      ok: true,
+      replayed: false,
+      fence: 1,
+      cursor: { epoch: 'epoch-a', sequence: 0 },
+      value: {
+        status: {
+          owner: 'native',
+          direction: null,
+          phase: 'idle',
+          stage: null,
+          operationId: null
+        }
+      }
+    })),
+    supportsCreate: vi.fn(() => true),
     handoffStatus: vi.fn(async () => ({ owner: 'native' })),
     readOptions: vi.fn(async () => ({
       models: [{ id: 'gpt-live', label: 'GPT Live', isDefault: true, efforts: [] }],
@@ -122,9 +138,12 @@ function dispatcher(runtimeOverrides: Record<string, unknown> = {}): RpcDispatch
         workspaceId: 'workspace-1',
         workspaceKind: 'git-worktree'
       },
-      provider: 'codex',
-      agent: 'codex',
-      accountHome: { variable: 'CODEX_HOME', path: '/host/.codex' },
+      provider: params.agent,
+      agent: params.agent,
+      accountHome: {
+        variable: params.agent === 'claude' ? 'CLAUDE_CONFIG_DIR' : 'CODEX_HOME',
+        path: params.agent === 'claude' ? '/host/.claude' : '/host/.codex'
+      },
       runtimeKind: 'native'
     })),
     publishStructuredAgentSessionTab: vi.fn()
@@ -221,7 +240,7 @@ describe('capability gating', () => {
     }
     // Bump deliberately: the whole agentSession.* surface is behind the structured capability,
     // so an additive method is invisible to old clients and needs no protocol bump.
-    expect(STRUCTURED_AGENT_SESSION_METHODS).toHaveLength(16)
+    expect(STRUCTURED_AGENT_SESSION_METHODS).toHaveLength(17)
   })
 
   it('hides the surface from a declared client that did not advertise it', async () => {
@@ -329,6 +348,49 @@ describe('method routing', () => {
     )
   })
 
+  it('routes Claude create support and create through the provider-aware runtime', async () => {
+    const worktree = 'id:workspace-1'
+    const support = await call(
+      'agentSession.createSupport',
+      { worktree, agent: 'claude' },
+      STRUCTURED_CLIENT
+    )
+    expect(support).toMatchObject({ ok: true, result: { supported: true } })
+    expect(runtimeCalls.getStructuredAgentSessionCreateSupport).toHaveBeenCalledWith(
+      worktree,
+      'claude'
+    )
+
+    const params = {
+      envelope: envelope({
+        expectedRuntimeFence: null,
+        payloadFingerprint: computeAgentSessionPayloadFingerprint({
+          method: 'agentSession.create',
+          sessionId: SESSION,
+          fields: { worktree, agent: 'claude' }
+        })
+      }),
+      worktree,
+      agent: 'claude'
+    }
+    const created = await call('agentSession.create', params, STRUCTURED_CLIENT)
+    expect(created).toMatchObject({ ok: true, result: { ok: true } })
+    expect(runtimeCalls.resolveStructuredAgentSessionCreateIntent).toHaveBeenCalledWith(params)
+    expect(hostCalls.attach).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        accountHome: { variable: 'CLAUDE_CONFIG_DIR', path: '/host/.claude' }
+      })
+    )
+    expect(runtimeCalls.publishStructuredAgentSessionTab).toHaveBeenCalledWith(
+      expect.objectContaining({
+        sessionId: SESSION,
+        activate: true,
+        agent: 'claude'
+      })
+    )
+  })
+
   it('reports an unknown create outcome when attach commits before tab publication fails', async () => {
     const worktree = 'id:workspace-1'
     const params = {
@@ -371,6 +433,38 @@ describe('method routing', () => {
     expect(ensured).toMatchObject({ ok: true })
   })
 
+  /** A client-supplied location skips the worktree-resolving support check, so both attach-shaped
+   *  entries must ask the executing host directly or a host that cannot fence a provider child
+   *  would create one anyway. */
+  it('returns a refusal envelope when create cannot support a client-supplied location', async () => {
+    hostCalls.supportsCreate.mockReturnValue(false)
+
+    const refused = await call('agentSession.create', attachParams())
+
+    expect(refused).toMatchObject({
+      ok: true,
+      result: {
+        ok: false,
+        refusal: { code: 'structured_agent_session_unsupported' }
+      }
+    })
+    expect(hostCalls.attach).not.toHaveBeenCalled()
+    expect(hostCalls.supportsCreate).toHaveBeenCalledWith(attachParams().location, 'codex')
+  })
+
+  it('keeps ensure failures as top-level errors for an unsupported client location', async () => {
+    hostCalls.supportsCreate.mockReturnValue(false)
+
+    const refused = await call('agentSession.ensure', attachParams())
+
+    expect(refused).toMatchObject({
+      ok: false,
+      error: { message: expect.stringContaining('structured_agent_session_unsupported') }
+    })
+    expect(hostCalls.attach).not.toHaveBeenCalled()
+    expect(hostCalls.supportsCreate).toHaveBeenCalledWith(attachParams().location, 'codex')
+  })
+
   it('tags the prompt kind from the method name, not from the client', async () => {
     const params = {
       envelope: envelope(),
@@ -386,7 +480,7 @@ describe('method routing', () => {
     ])
   })
 
-  it('does not register the structured handoff mutation', async () => {
+  it('routes the structured handoff mutation through the host', async () => {
     const response = await call('agentSession.requestHandoff', {
       envelope: envelope(),
       direction: 'to-tui',
@@ -394,7 +488,11 @@ describe('method routing', () => {
       action: 'start'
     })
 
-    expect(response).toMatchObject({ ok: false, error: { code: 'method_not_found' } })
+    expect(response).toMatchObject({ ok: true })
+    expect(hostCalls.requestHandoff).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ direction: 'to-tui', mode: 'now', action: 'start' })
+    )
   })
 })
 
@@ -432,25 +530,6 @@ describe('parameter validation', () => {
       'agentSession.create',
       attachParams({ providerHandle: { kind: 'opaque', agent: 'codex', value: 'thread-1' } })
     )
-  })
-
-  it('rejects Claude structured create shapes', async () => {
-    await rejects('agentSession.createSupport', {
-      worktree: 'id:workspace-1',
-      agent: 'claude'
-    })
-    const fields = { worktree: 'id:workspace-1', agent: 'claude' }
-    await rejects('agentSession.create', {
-      envelope: envelope({
-        expectedRuntimeFence: null,
-        payloadFingerprint: computeAgentSessionPayloadFingerprint({
-          method: 'agentSession.create',
-          sessionId: SESSION,
-          fields
-        })
-      }),
-      ...fields
-    })
   })
 
   it('requires a sha256 fingerprint and a positive fence', async () => {

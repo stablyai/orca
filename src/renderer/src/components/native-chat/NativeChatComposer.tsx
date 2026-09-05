@@ -3,7 +3,7 @@ import { useAppStore } from '../../store'
 import { sendRuntimePtyInput } from '@/runtime/runtime-terminal-inspection'
 import { getSettingsForAgentTabRuntimeOwner } from '@/lib/agent-paste-draft'
 import { getVerifiedNativeChatCommands } from '../../../../shared/native-chat-agent-profiles'
-import { STRUCTURED_AGENT_SESSION_SLASH_COMMANDS } from '../../../../shared/structured-agent-session-composer'
+import { structuredSlashCommands } from '../../../../shared/structured-agent-session-composer'
 import {
   applyMentionSuggestion,
   EMPTY_HISTORY,
@@ -111,9 +111,7 @@ const NativeChatComposerPane = forwardRef<NativeChatComposerHandle, NativeChatCo
 
     const agentCommands = useMemo(
       () =>
-        structuredTransport
-          ? STRUCTURED_AGENT_SESSION_SLASH_COMMANDS
-          : getVerifiedNativeChatCommands(agent),
+        structuredTransport ? structuredSlashCommands(agent) : getVerifiedNativeChatCommands(agent),
       [agent, structuredTransport]
     )
     const picker = useNativeChatPickerState({

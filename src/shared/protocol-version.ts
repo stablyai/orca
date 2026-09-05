@@ -121,11 +121,14 @@ export const AGENT_SESSION_HOST_AUTHORITY_RUNTIME_CAPABILITY =
   'agent-session.host-authority.v1' as const
 export const AGENT_SESSION_OMP_RESUME_PATH_RUNTIME_CAPABILITY =
   'agent-session.omp-resume-path.v1' as const
-// Why: structured sessions are journal-backed, not PTY-backed, so a client that
-// cannot read them must not see them at all — it would render an agent tab it
-// can neither display nor drive. The host also refuses every agentSession.*
-// method from a connection that does not advertise this.
+// Why: structured sessions are journal-backed, not PTY-backed, so an incapable client must not
+// receive their journal or drive their lifecycle. Mobile may receive a metadata-only placeholder;
+// the host still refuses agentSession.* methods and destructive tab mutations without capability.
 export const STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY = 'agent-session.structured.v1' as const
+// Why: paired clients advertise Claude-structured support so the host can gate its agent-specific
+// journal and lifecycle surfaces independently from Codex support.
+export const CLAUDE_STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY =
+  'agent-session.structured.claude.v1' as const
 // Why: paired structured clients explicitly hold every visible session surface, allowing the host
 // to stop provider children after the last surface closes without tying lifetime to a transport.
 export const STRUCTURED_AGENT_SESSION_HOLD_RUNTIME_CAPABILITY =

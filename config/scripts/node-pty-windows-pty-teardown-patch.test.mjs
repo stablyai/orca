@@ -1,11 +1,18 @@
-// The relay's copy of the ConPTY teardown release, and the guard that keeps it in lockstep with the
-// desktop's own node-pty patch. pnpm patches do not cross the SSH boundary, so a relay runs the tree
-// `npm install` put there; the desktop had this fix and the relay did not, and every terminal on a
-// Windows SSH host leaked one File handle for the life of the relay process.
+// The relay's copy of the ConPTY teardown release, and the guard that keeps it in lockstep with
+// `config/patches/node-pty@1.1.0.patch`. pnpm patches do not cross the SSH boundary, so a relay runs
+// the tree `npm install` put there, and every terminal on a Windows SSH host leaked one File handle
+// for the life of the relay process.
 //
-// The ORDER of the conin release is the fix. Releasing it at the top of the branch -- what the
-// desktop patch does -- was measured at 3x WORSE than shipping nothing (File +2/terminal and a new
-// Process +1/terminal); releasing it after the console-list fork and the native kill is flat.
+// The ORDER of the conin release is the fix. Releasing it at the top of the branch -- the placement
+// the desktop patch uses -- was measured at 3x WORSE than shipping nothing (File +2/terminal and a
+// new Process +1/terminal); releasing it after the console-list fork and the native kill is flat.
+//
+// Those numbers are the `!useConptyDll` branch, which is the branch a RELAY runs. Every desktop
+// site that opens a terminal pane sets `useConptyDll: true` and takes the other branch, where
+// upstream already destroys the input socket. Two hidden rate-limit probes
+// (`src/main/rate-limits/claude-pty.ts`, `codex-pty-rate-limit-probe.ts`) do omit the option and so
+// do run this hunk, but no user-visible pane does. The divergence pinned below is about which
+// branch each host runs for terminals -- not about a regression in the panes users open.
 import { createRequire } from 'node:module'
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { join, resolve } from 'node:path'
@@ -90,9 +97,11 @@ describe('Windows SSH relay node-pty ConPTY teardown patch', () => {
     )
   })
 
-  // The one hunk that must NOT match the desktop, and the reason is measured, not stylistic:
-  // releasing conin before `_getConsoleProcessList()` forks aborts teardown partway.
-  it('releases conin after the console-list fork, not before it like the desktop patch', () => {
+  // The one hunk that must NOT match the desktop patch, and the reason is measured, not stylistic:
+  // on the branch a relay runs, releasing conin before `_getConsoleProcessList()` forks aborts
+  // teardown partway. Desktop terminal panes take the other branch, so no pane is affected either
+  // way; what this guards is a patch sync putting the early placement onto the relay's branch.
+  it('releases conin after the console-list fork, unlike the desktop patch placement', () => {
     const fixture = writeNodePtyFixture('1.1.0')
     patchNodePtyWindowsTeardown(fixture.root)
     const patched = readFileSync(join(fixture.libDir, 'windowsPtyAgent.js'), 'utf8')
@@ -108,7 +117,8 @@ describe('Windows SSH relay node-pty ConPTY teardown patch', () => {
     expect(branch.indexOf('this._inSocket.destroy();')).toBeGreaterThan(
       branch.indexOf('this._getConsoleProcessList()')
     )
-    // Pinned so a future "sync the relay asset to config/patches" cannot copy the regression back.
+    // Pinned so a future "sync the relay asset to config/patches" cannot copy the early placement
+    // onto the relay's branch, where it costs +2 File and +1 Process per terminal.
     expect(patched).not.toBe(readFileSync(desktopPath('windowsPtyAgent.js'), 'utf8'))
   })
 

@@ -68,3 +68,46 @@ test('rejects partial or mismatched proof', async () => {
     /incomplete/
   )
 })
+
+const provenProbe = {
+  v: 1,
+  dedicatedIdentity: {
+    firstOutcome: 'host-not-connected',
+    secondOutcome: 'host-not-connected',
+    accepted: true,
+    idempotent: true
+  },
+  sharedRuntimeIdentityRejected: true,
+  proven: true
+}
+
+test('retries a transient 503 on the trust probe and proves on the second answer', async () => {
+  const config = parseRehomeTrustProbeArguments(argv, environment)
+  let calls = 0
+  const result = await probeRehomeTrust(config, {
+    wait: async () => {},
+    fetch: async () => {
+      calls += 1
+      if (calls === 1) return new Response('warming up', { status: 503 })
+      return Response.json(provenProbe)
+    }
+  })
+  assert.equal(calls, 2)
+  assert.equal(result.proven, true)
+})
+
+test('fails when both trust-probe attempts return a transient 503', async () => {
+  const config = parseRehomeTrustProbeArguments(argv, environment)
+  let calls = 0
+  await assert.rejects(
+    probeRehomeTrust(config, {
+      wait: async () => {},
+      fetch: async () => {
+        calls += 1
+        return new Response('warming up', { status: 503 })
+      }
+    }),
+    /returned 503/
+  )
+  assert.equal(calls, 2)
+})

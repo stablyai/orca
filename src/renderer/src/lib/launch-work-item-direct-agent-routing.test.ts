@@ -1,13 +1,13 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const mocks = vi.hoisted(() => ({
-  startStructuredCodexLaunch: vi.fn(),
+  startStructuredAgentLaunch: vi.fn(),
   activateAndRevealWorktree: vi.fn(),
   preflightAgentTrust: vi.fn()
 }))
 
 vi.mock('@/lib/structured-agent-session-launch', () => ({
-  startStructuredCodexLaunch: mocks.startStructuredCodexLaunch
+  startStructuredAgentLaunch: mocks.startStructuredAgentLaunch
 }))
 
 vi.mock('@/lib/worktree-activation', () => ({
@@ -18,7 +18,7 @@ vi.mock('@/lib/agent-trust-preflight', () => ({
   preflightAgentTrust: mocks.preflightAgentTrust
 }))
 
-vi.mock('@/lib/launch-structured-codex-session', () => ({
+vi.mock('@/lib/launch-structured-agent-session', () => ({
   StructuredAgentSessionCreateRefusalError: class extends Error {}
 }))
 
@@ -26,7 +26,7 @@ vi.mock('@/lib/native-chat-transcript-readability', () => ({
   isNativeChatTranscriptLocalReadable: vi.fn(() => true)
 }))
 
-import { StructuredAgentSessionCreateRefusalError } from '@/lib/launch-structured-codex-session'
+import { StructuredAgentSessionCreateRefusalError } from '@/lib/launch-structured-agent-session'
 import { settleDirectWorkItemStructuredLaunch } from './launch-work-item-direct-agent-routing'
 
 const baseArgs = {
@@ -47,7 +47,7 @@ describe('settleDirectWorkItemStructuredLaunch', () => {
 
   it('runs the legacy terminal fallback after a definitive refusal', async () => {
     mocks.activateAndRevealWorktree.mockReturnValue({ primaryTabId: 'fallback-tab' })
-    mocks.startStructuredCodexLaunch.mockReturnValue({
+    mocks.startStructuredAgentLaunch.mockReturnValue({
       launchResult: Promise.reject(new StructuredAgentSessionCreateRefusalError('unsupported')),
       isVisibilityUnknown: () => false,
       claimDefinitiveRefusalFallback: (fallback: () => Promise<unknown>) =>
@@ -65,7 +65,7 @@ describe('settleDirectWorkItemStructuredLaunch', () => {
   })
 
   it('reports an unknown outcome without starting a fallback terminal', async () => {
-    mocks.startStructuredCodexLaunch.mockReturnValue({
+    mocks.startStructuredAgentLaunch.mockReturnValue({
       launchResult: Promise.reject(new Error('connection lost')),
       isVisibilityUnknown: () => true,
       claimDefinitiveRefusalFallback: vi.fn(() => Promise.resolve(false))

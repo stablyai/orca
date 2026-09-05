@@ -110,6 +110,7 @@ export const gitWorktreeModuleMock = () => ({
   listWorktrees: listWorktreesMock,
   listWorktreesStrict: listWorktreesMock,
   listWorktreesSharedStrict: listWorktreesMock,
+  listWorktreesSharedStrictAllowingTrueEmpty: listWorktreesMock,
   describeCreatedWorktree: describeCreatedWorktreeMock,
   parseWorktreeList: parseWorktreeListMock,
   assertWorktreeCleanForRemoval: assertWorktreeCleanForRemovalMock,

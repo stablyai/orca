@@ -211,7 +211,8 @@ resource "google_logging_metric" "relay_snapshot" {
   label_extractors = {
     role    = "EXTRACT(jsonPayload.role)"
     cell_id = "EXTRACT(jsonPayload.cellId)"
-    region  = "EXTRACT(jsonPayload.region)"
+    # No region label: adding one replaces all 21 live metrics (label change = delete+create),
+    # which resets history and blanks the relay alert policies during the swap.
   }
 
   metric_descriptor {
@@ -229,12 +230,6 @@ resource "google_logging_metric" "relay_snapshot" {
       key         = "cell_id"
       value_type  = "STRING"
       description = "Durable relay cell identifier."
-    }
-
-    labels {
-      key         = "region"
-      value_type  = "STRING"
-      description = "Coarse Relay region."
     }
   }
 

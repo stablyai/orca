@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Check, ChevronRight, SquareTerminal, Wrench } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { translate } from '@/i18n/i18n'
@@ -8,53 +8,37 @@ import {
   type NativeChatBlock
 } from '../../../../shared/native-chat-types'
 import { diffFromText, diffFromToolCall, type DiffLine } from './native-chat-diff'
+import { NativeChatDiffCard } from './NativeChatDiffCard'
+import { pairToolBlocks } from './native-chat-tool-fold'
+import {
+  editFilesFromToolPair,
+  isEditToolName
+} from '../../../../shared/native-chat-edit-normalize'
+import type { NativeChatEditFile } from '../../../../shared/native-chat-edit-model'
 import {
   countToolCalls,
   createToolInputDisplay,
   summarizeToolRun,
   truncateToolDetail
 } from './native-chat-tool-summary'
+import {
+  describeActiveToolCall,
+  isCommandToolName,
+  NATIVE_CHAT_TOOL_ACTIVITY_COPY,
+  selectActiveToolCall
+} from '../../../../shared/native-chat-tool-activity'
 import { NativeChatDiffView } from './NativeChatDiffView'
 
-const COMMAND_TOOL_NAMES = new Set([
-  'bash',
-  'shell',
-  'powershell',
-  'terminal',
-  'execute',
-  'run_command',
-  'run_shell_command',
-  'shell_command',
-  'exec_command',
-  'run_terminal_cmd',
-  'run_terminal_command'
-])
-
-function normalizedToolName(name: string): string {
-  return name.trim().toLowerCase()
-}
-
 function activeToolLabel(call: Extract<NativeChatBlock, { type: 'tool-call' }>): string {
-  const preview = createToolInputDisplay(call.input).label
-  if (COMMAND_TOOL_NAMES.has(normalizedToolName(call.name))) {
-    return preview
-      ? translate('components.native-chat.tool.runningPreview', 'Running {{preview}}', {
-          preview
-        })
-      : translate('components.native-chat.tool.runningCommand', 'Running command')
-  }
-  return preview
-    ? translate(
-        'components.native-chat.tool.runningNamedPreview',
-        'Running {{toolName}} {{preview}}',
-        {
-          toolName: call.name,
-          preview
-        }
-      )
-    : translate('components.native-chat.tool.runningNamed', 'Running {{toolName}}', {
-        toolName: call.name
-      })
+  const { key, toolName, preview } = describeActiveToolCall(call)
+  const copy = NATIVE_CHAT_TOOL_ACTIVITY_COPY[key]
+  return key === 'runningPreview'
+    ? translate('components.native-chat.tool.runningPreview', copy, { preview })
+    : key === 'runningCommand'
+      ? translate('components.native-chat.tool.runningCommand', copy)
+      : key === 'runningNamedPreview'
+        ? translate('components.native-chat.tool.runningNamedPreview', copy, { toolName, preview })
+        : translate('components.native-chat.tool.runningNamed', copy, { toolName })
 }
 
 /** A single inline tool line — `▸ ToolName  preview` — that expands in place to
@@ -151,6 +135,50 @@ function ToolLine({
   )
 }
 
+type EditCardModel = {
+  editCards: Map<NativeChatBlock, { files: NativeChatEditFile[]; key: string }>
+  /** Result blocks the card already speaks for, so they render no second row. */
+  consumedResults: Set<NativeChatBlock>
+}
+
+const NO_EDIT_CARDS: EditCardModel = { editCards: new Map(), consumedResults: new Set() }
+
+/** An edit renders as one card, so its result block is folded into the call. The
+ *  model decides which calls have landed; a call that has not keeps the generic
+ *  tool view, its result still visible as the provider's own error. */
+function buildEditCards(blocks: NativeChatBlock[]): EditCardModel {
+  const editCards: EditCardModel['editCards'] = new Map()
+  const consumedResults: EditCardModel['consumedResults'] = new Set()
+  for (const [index, pair] of pairToolBlocks(blocks).entries()) {
+    const call = pair.call
+    if (!call || !isEditToolName(call.name)) {
+      continue
+    }
+    const files = editFilesFromToolPair({
+      name: call.name,
+      input: call.input,
+      ...(call.state ? { state: call.state } : {}),
+      ...(pair.result
+        ? {
+            result: {
+              output: pair.result.output,
+              isError: pair.result.isError,
+              editPatch: pair.result.editPatch
+            }
+          }
+        : {})
+    })
+    if (!files || files.length === 0) {
+      continue
+    }
+    editCards.set(call, { files, key: `${call.name}:${index}` })
+    if (pair.result) {
+      consumedResults.add(pair.result)
+    }
+  }
+  return { editCards, consumedResults }
+}
+
 /** A run of a message's tool calls/results, collapsed to a one-line summary that
  *  expands to the individual inline tool lines. `expandSignal` lets the global
  *  toolbar toggle drive every run at once while still allowing per-run override. */
@@ -176,27 +204,25 @@ export function NativeChatToolRun({
 
   const callCount = countToolCalls(blocks) || blocks.length
   const summary = summarizeToolRun(blocks)
-  const calls = blocks.filter(isToolCallBlock)
-  const activeCalls = structuredActivityUi
-    ? calls.filter(
-        (call) =>
-          (call.state === 'running' || (call.state == null && activeTurnIsWorking === true)) &&
-          activeTurnIsWorking !== false
-      )
-    : []
-  const latestActiveCall = activeCalls.at(-1)
+  const latestActiveCall = structuredActivityUi
+    ? selectActiveToolCall(blocks, { activeTurnIsWorking })
+    : null
   const isSettled = latestActiveCall == null
   // The turn caret opens the activity group, while each child tool remains
   // collapsed. The global expand toolbar still opens child details together.
   const expandToolLines = expandOverride === undefined ? open : false
+  // Diffing every edit is the run's most expensive work, so a collapsed run —
+  // which renders none of it — never pays for it.
+  const { editCards, consumedResults } = useMemo(
+    () => (open ? buildEditCards(blocks) : NO_EDIT_CARDS),
+    [open, blocks]
+  )
   const ActiveToolIcon =
-    latestActiveCall && COMMAND_TOOL_NAMES.has(normalizedToolName(latestActiveCall.name))
-      ? SquareTerminal
-      : Wrench
+    latestActiveCall && isCommandToolName(latestActiveCall.name) ? SquareTerminal : Wrench
   const fallbackLabel =
     callCount === 1
-      ? translate('components.native-chat.tool.countOne', '1 tool call')
-      : translate('components.native-chat.tool.countN', '{{value0}} tool calls', {
+      ? translate('components.native-chat.tool.countOne', NATIVE_CHAT_TOOL_ACTIVITY_COPY.countOne)
+      : translate('components.native-chat.tool.countN', NATIVE_CHAT_TOOL_ACTIVITY_COPY.countN, {
           value0: callCount
         })
 
@@ -227,7 +253,7 @@ export function NativeChatToolRun({
           <span className="flex size-6 shrink-0 items-center justify-center text-muted-foreground">
             <ActiveToolIcon className="size-4" />
           </span>
-          <span className="min-w-0 flex-1 truncate text-foreground/85">
+          <span className="min-w-0 flex-1 animate-pulse truncate text-foreground/85 motion-reduce:animate-none">
             {activeToolLabel(latestActiveCall)}
           </span>
           {open ? <ChevronRight className="size-3.5 rotate-90 text-muted-foreground" /> : null}
@@ -264,6 +290,23 @@ export function NativeChatToolRun({
           {(() => {
             const seen = new Map<string, number>()
             return blocks.map((block) => {
+              const edit = editCards.get(block)
+              if (edit) {
+                return (
+                  <div key={`edit:${edit.key}`}>
+                    {edit.files.map((file, fileIndex) => (
+                      <NativeChatDiffCard
+                        key={`${edit.key}:${fileIndex}`}
+                        file={file}
+                        initiallyExpanded={expandToolLines}
+                      />
+                    ))}
+                  </div>
+                )
+              }
+              if (consumedResults.has(block)) {
+                return null
+              }
               const signature =
                 block.type === 'tool-call'
                   ? `${block.type}:${block.name}:${JSON.stringify(block.input)}`

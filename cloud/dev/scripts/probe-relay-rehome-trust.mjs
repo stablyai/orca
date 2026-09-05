@@ -1,4 +1,5 @@
 import { pathToFileURL } from 'node:url'
+import { fetchAdminOnceMore } from './relay-admin-transient-retry.mjs'
 
 const PRODUCTION_CELL = /^production-gce-c(?:7|8|9|10|13|14|15|16|19|20|21|22|23|24|25|26)$/
 const DIRECTOR_ORIGIN = 'https://relay.onorca.dev'
@@ -35,7 +36,8 @@ export function parseRehomeTrustProbeArguments(argv, environment = process.env) 
 
 export async function probeRehomeTrust(config, dependencies = {}) {
   const fetchImpl = dependencies.fetch ?? fetch
-  const response = await fetchImpl(
+  const response = await fetchAdminOnceMore(
+    fetchImpl,
     `${config.directorOrigin}/v1/admin/regional-rehome-trust-probe`,
     {
       method: 'POST',
@@ -47,9 +49,9 @@ export async function probeRehomeTrust(config, dependencies = {}) {
         v: 1,
         sourceCellId: config.cellId,
         sourceCellIncarnation: config.cellIncarnation
-      }),
-      signal: AbortSignal.timeout(30_000)
-    }
+      })
+    },
+    { wait: dependencies.wait }
   )
   const body = await response.json().catch(() => ({}))
   if (!response.ok) {

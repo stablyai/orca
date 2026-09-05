@@ -104,6 +104,47 @@ describe('production Relay capacity cell admission', () => {
       '--cell-id', 'production-gce-c7',
       '--mode', 'isolate'
     ]), /origin is not exact/)
+    assert.throws(() => parseProductionCapacityCellArguments([
+      '--director-origin', 'https://relay.onorca.dev',
+      '--cell-origin', 'https://c27.relay.onorca.dev',
+      '--cell-id', 'production-gce-c27',
+      '--mode', 'isolate'
+    ]), /not approved/)
+  })
+
+  it('admits the same-cap Asia cells only under the same-cap allowlist', () => {
+    for (const cellId of ['production-gce-c27', 'production-gce-c28', 'production-gce-c29']) {
+      const hostname = cellId.slice('production-gce-'.length)
+      assert.deepEqual(parseProductionCapacityCellArguments([
+        '--director-origin', 'https://relay.onorca.dev',
+        '--cell-origin', `https://${hostname}.relay.onorca.dev`,
+        '--cell-id', cellId,
+        '--approved-cells', 'same-cap',
+        '--mode', 'isolate'
+      ]), {
+        directorOrigin: 'https://relay.onorca.dev',
+        cellOrigin: `https://${hostname}.relay.onorca.dev`,
+        cellId,
+        mode: 'isolate'
+      })
+    }
+    for (const cellId of ['production-gce-c17', 'production-gce-c18', 'production-gce-c30']) {
+      const hostname = cellId.slice('production-gce-'.length)
+      assert.throws(() => parseProductionCapacityCellArguments([
+        '--director-origin', 'https://relay.onorca.dev',
+        '--cell-origin', `https://${hostname}.relay.onorca.dev`,
+        '--cell-id', cellId,
+        '--approved-cells', 'same-cap',
+        '--mode', 'isolate'
+      ]), /not approved/)
+    }
+    assert.throws(() => parseProductionCapacityCellArguments([
+      '--director-origin', 'https://relay.onorca.dev',
+      '--cell-origin', 'https://c27.relay.onorca.dev',
+      '--cell-id', 'production-gce-c27',
+      '--approved-cells', 'every-cell',
+      '--mode', 'isolate'
+    ]), /not a known allowlist/)
   })
 
   it('isolates only the selected cell without depending on its runtime', async () => {
@@ -169,5 +210,43 @@ describe('production Relay capacity cell admission', () => {
       ),
       /irreversible/
     )
+  })
+
+  it('retries a transient 503 on the cell drain endpoint', async () => {
+    let calls = 0
+    const result = await prepareProductionCapacityCell(
+      { ...config, mode: 'drain' },
+      {
+        token: 'token',
+        wait: async () => {},
+        fetch: async (url) => {
+          assert.equal(new URL(url).pathname, '/v1/admin/drain')
+          calls += 1
+          if (calls === 1) return response({ error: 'warming up' }, 503)
+          return response({ v: 1, draining: true })
+        }
+      }
+    )
+    assert.equal(calls, 2)
+    assert.deepEqual(result, { changed: false, drained: true })
+  })
+
+  it('fails when both drain attempts return a transient 503', async () => {
+    let calls = 0
+    await assert.rejects(
+      prepareProductionCapacityCell(
+        { ...config, mode: 'drain' },
+        {
+          token: 'token',
+          wait: async () => {},
+          fetch: async () => {
+            calls += 1
+            return response({ error: 'warming up' }, 503)
+          }
+        }
+      ),
+      /returned 503/
+    )
+    assert.equal(calls, 2)
   })
 })

@@ -233,7 +233,7 @@ export class TerminalHost {
 
   inspectProcess(
     sessionId: string,
-    options?: { expectedIncarnationId?: string }
+    options?: { expectedIncarnationId?: string; steadyState?: boolean }
   ): Promise<TerminalHostProcessInspection> {
     pruneRetiredPtyIncarnations(this.retiredIncarnations)
     const session = this.sessions.get(sessionId)
@@ -253,6 +253,7 @@ export class TerminalHost {
       ...(options?.expectedIncarnationId
         ? { expectedIncarnationId: options.expectedIncarnationId }
         : {}),
+      ...(options?.steadyState === true ? { steadyState: true } : {}),
       retiredIncarnation: this.retiredIncarnations.get(sessionId),
       authorityGeneration: this.authorityGeneration,
       nextObservationEpoch: () => ++this.observationEpoch

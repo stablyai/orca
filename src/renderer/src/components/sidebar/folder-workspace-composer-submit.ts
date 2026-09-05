@@ -28,8 +28,9 @@ import {
   resolveAgentLaunchRoute
 } from '@/lib/agent-launch-routing'
 import { readLocalRuntimeCapabilities } from '@/runtime/local-runtime-capabilities'
-import { startStructuredCodexLaunch } from '@/lib/structured-agent-session-launch'
-import { StructuredAgentSessionCreateRefusalError } from '@/lib/launch-structured-codex-session'
+import { startStructuredAgentLaunch } from '@/lib/structured-agent-session-launch'
+import { isAgentSessionHandleProvider } from '../../../../shared/agent-session-provider-handle'
+import { StructuredAgentSessionCreateRefusalError } from '@/lib/launch-structured-agent-session'
 import { useAppStore } from '@/store'
 import {
   buildFolderWorkspaceLinkedStartupPlan,
@@ -232,8 +233,8 @@ export async function submitFolderWorkspaceCreate({
       runtimeEnvironmentId
     })
     let structuredLaunchAccepted = structuredLaunch
-    if (structuredLaunch && quickAgent === 'codex') {
-      const launch = startStructuredCodexLaunch(folderWorkspaceKey(workspace.id), {
+    if (structuredLaunch && isAgentSessionHandleProvider(quickAgent)) {
+      const launch = startStructuredAgentLaunch(folderWorkspaceKey(workspace.id), quickAgent, {
         prompt: launchDraftPrompt ?? note
       })
       const refusalFallback = launch.claimDefinitiveRefusalFallback(async () => {

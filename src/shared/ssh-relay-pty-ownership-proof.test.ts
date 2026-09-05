@@ -174,6 +174,52 @@ describe('planRelayPtySweep', () => {
     expect(reasonFor(plan, 'pty-1')).toBe('host foreground observation is malformed')
   })
 
+  // The kill gate's own boundary. Unlike the renderer's admission this sum is correct --
+  // `evidenceAgeSinceListingMs` is stamped after the listing ARRIVES, so it measures planning time
+  // and overlaps the host's capture window not at all.
+  it.each([
+    ['at the ceiling', RELAY_PTY_SWEEP_MAX_EVIDENCE_AGE_MS, 0],
+    ['at the ceiling once planning is counted', RELAY_PTY_SWEEP_MAX_EVIDENCE_AGE_MS - 10, 10]
+  ])('still sweeps on an observation %s', (_label, capturedAgeMs, evidenceAgeSinceListingMs) => {
+    const plan = planRelayPtySweep(
+      [orphan({ foregroundProcessEvidence: { ...idleShell(), capturedAgeMs } })],
+      context({ evidenceAgeSinceListingMs })
+    )
+
+    expect(plan.sweep).toEqual([{ ptyId: 'pty-1', incarnationId: 'inc-1' }])
+  })
+
+  it.each([
+    ['the capture alone', RELAY_PTY_SWEEP_MAX_EVIDENCE_AGE_MS + 1, 0],
+    ['the capture plus planning', RELAY_PTY_SWEEP_MAX_EVIDENCE_AGE_MS, 1]
+  ])('refuses the stop one step past the ceiling on %s', (_label, capturedAgeMs, sinceListing) => {
+    const plan = planRelayPtySweep(
+      [orphan({ foregroundProcessEvidence: { ...idleShell(), capturedAgeMs } })],
+      context({ evidenceAgeSinceListingMs: sinceListing })
+    )
+
+    expect(plan.sweep).toEqual([])
+    expect(reasonFor(plan, 'pty-1')).toBe(
+      'host foreground observation is too old to authorize a stop'
+    )
+  })
+
+  it('refuses the stop on a capture slow enough to be worth waiting out', () => {
+    // Measured `ps` with PS_ARGS: 2.5-9.0s on a 2,002-process laptop, 4.0-18.6s at load 46. This
+    // gate tolerates the fast end and refuses the rest, so waiting out a slow capture cannot buy a
+    // sweep -- which is why the evidence path gives up on one instead of blocking a connect for it.
+    for (const capturedAgeMs of [6_140, 9_010, 18_600]) {
+      const plan = planRelayPtySweep(
+        [orphan({ foregroundProcessEvidence: { ...idleShell(), capturedAgeMs } })],
+        context()
+      )
+      expect(plan.sweep, `capturedAgeMs=${capturedAgeMs}`).toEqual([])
+      expect(reasonFor(plan, 'pty-1'), `capturedAgeMs=${capturedAgeMs}`).toBe(
+        'host foreground observation is too old to authorize a stop'
+      )
+    }
+  })
+
   it('never sweeps on an evidence record whose other host stamps are malformed', () => {
     const plan = planRelayPtySweep(
       [

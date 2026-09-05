@@ -1,4 +1,12 @@
 {
+  "sidebar": {
+    "revealFiltered": {
+      "title": "Reveal hidden workspace?",
+      "description": "The active workspace is hidden in the sidebar. Revealing it will clear your sidebar filters.",
+      "confirm": "Clear filters and reveal",
+      "cancel": "Keep filters"
+    }
+  },
   "app": {
     "recoverableError": {
       "rootTitle": "Orca hit a renderer error.",
@@ -6231,6 +6239,11 @@
           "projectOnly": "Added in this project only.",
           "useGlobalFor": "Use global for {{value0}}",
           "useGlobal": "Use global"
+        },
+        "RepoScanUnavailableIndicator": {
+          "title": "Worktree scan failed for {{value0}}",
+          "retry": "Retry scan",
+          "retained": "Existing worktrees are kept until a scan succeeds. Click to retry."
         }
       },
       "shared": {
@@ -6964,8 +6977,8 @@
             "defaultViewTerminal": "Terminal chat",
             "defaultViewNative": "Chat UI",
             "structuredTitle": "Use updated structured native chat",
-            "structuredCopy": "Opt in to the host-owned structured Codex runtime. Off keeps the existing terminal-backed chat path.",
-            "structuredScope": "Local macOS and Linux sessions only for now. Windows, WSL, and remote execution hosts (including SSH) continue to use terminal chat.",
+            "structuredCopy": "Opt in to the host-owned structured chat runtime for Codex and Claude. Off keeps the existing terminal-backed chat path.",
+            "structuredScope": "Local sessions only for now. WSL and remote execution hosts (including SSH) continue to use terminal chat, and Windows falls back to it unless Orca can read process start times.",
             "structuredToggleLabel": "Toggle updated structured native chat"
           },
           "agentDashboard": {
@@ -15299,8 +15312,18 @@
                 "removeWorktree": "remove worktree",
                 "trashWorktree": "trash worktree",
                 "addQuickCommand": "add quick command",
-                "newQuickCommand": "new quick command"
-              }
+                "newQuickCommand": "new quick command",
+                "splitChatRight": "split chat right",
+                "moveChatRight": "move chat right",
+                "chatPaneRight": "chat pane right",
+                "splitChatDown": "split chat down",
+                "moveChatDown": "move chat down",
+                "chatPaneBelow": "chat pane below"
+              },
+              "splitChatRight": "Split Chat Right",
+              "splitChatRightDescription": "Open the active chat in a split pane to the right.",
+              "splitChatDown": "Split Chat Down",
+              "splitChatDownDescription": "Open the active chat in a split pane below."
             }
           },
           "palette": {
@@ -16943,7 +16966,14 @@
         "ranCommandsOneToolSummary": "Ran {{commandCount}} commands and used {{toolCount}} tool",
         "ranCommandsManyToolsSummary": "Ran {{commandCount}} commands and used {{toolCount}} tools",
         "usedOneSummary": "Used 1 tool",
-        "usedManySummary": "Used {{toolCount}} tools"
+        "usedManySummary": "Used {{toolCount}} tools",
+        "editedFile": "Edited file",
+        "addedFile": "Added file",
+        "deletedFile": "Deleted file",
+        "renamedFile": "Renamed file",
+        "copyDiff": "Copy diff",
+        "diffGap": "Lines not shown",
+        "diffTruncated": "Diff truncated"
       },
       "providerFrame": {
         "byteLength": "{{value0}} bytes"
@@ -16952,9 +16982,20 @@
         "responding": "Agent is responding",
         "working": "Working…",
         "thinking": "Thinking",
-        "workingFor": "Working for {{value0}} seconds",
-        "workedFor": "Worked for {{value0}} seconds",
+        "workingFor": "Working for {{value0}}",
+        "workedFor": "Worked for {{value0}}",
         "toggleDetails": "Toggle turn details"
+      },
+      "backgroundTasks": {
+        "monitoring": "Monitoring background tasks",
+        "stop": "Stop",
+        "agent": "Background agent",
+        "workflow": "Background workflow",
+        "command": "Background command",
+        "monitor": "Background monitor",
+        "task": "Background task",
+        "runningList": "Running background tasks",
+        "detailsUnavailable": "Task details are unavailable for this session."
       },
       "jumpToLatest": "Jump to latest",
       "toggle": {
@@ -17009,9 +17050,45 @@
         "message": "Structured Chat blocks terminal prompts and sends. Orchestration messages remain queued; switch to Terminal, then check the Orca inbox with",
         "command": "orca orchestration check"
       },
-      "structuredSessionCloseFailed": "Could not close this Codex chat",
-      "structuredSessionLaunchFailed": "Could not open Codex chat",
-      "structuredSessionCloseFailedDescription": "The terminal stayed open so the provider remains recoverable."
+      "structuredSessionCloseFailed": "Could not close this chat session",
+      "structuredSessionLaunchFailed": "Could not open {{value0}} chat",
+      "structuredSessionLaunchPending": "Starting {{value0}} chat…",
+      "structuredSessionCloseFailedDescription": "The terminal stayed open so the provider remains recoverable.",
+      "handoff": {
+        "stage": {
+          "finishingChat": "Finishing chat session…",
+          "finishingTerminal": "Finishing agent terminal…",
+          "openingTerminal": "Opening agent terminal…",
+          "resumingChat": "Resuming chat session…",
+          "verifyingTerminal": "Verifying agent terminal…",
+          "verifyingChat": "Verifying chat session…",
+          "recovering": "Recovering agent session…",
+          "manualRecovery": "Agent session needs recovery"
+        },
+        "switchingOwner": "Switching session owner…",
+        "mode": {
+          "switching": "Switching",
+          "terminal": "Terminal",
+          "chat": "Chat"
+        },
+        "switchingAfterTurn": "Switching after this turn",
+        "returningAfterTurn": "Returning after this turn",
+        "cancel": "Cancel",
+        "switchAfterTurn": "Switch after this turn",
+        "stopTurnAndSwitch": "Stop turn and switch",
+        "openAgentTui": "Open agent TUI",
+        "returnAfterTurn": "Return after this turn",
+        "returnToChat": "Return to chat",
+        "agentOpenOnHost": "Agent is open in terminal on {{value0}}.",
+        "agentOpen": "Agent is open in terminal.",
+        "exitTerminal": "Exit the agent terminal to continue in chat.",
+        "retryProof": "Retry proof",
+        "retry": "Retry",
+        "details": "Details"
+      },
+      "structuredSessionFellBackToTerminal": "Structured chat isn't available",
+      "structuredSessionFellBackToTerminalDescription": "Orca tried to open a {{value0}} terminal instead.",
+      "structuredSessionLaunchFailedDescription": "Orca could not open a structured {{value0}} chat. See the logs for details."
     },
     "tab": {
       "bar": {
@@ -17535,5 +17612,17 @@
       "action": "Try Agents",
       "hiddenToast": "Agents tab hidden. Re-enable it in Settings → Experimental."
     }
+  },
+  "rendererRecovery": {
+    "reload": "Reload",
+    "copyCommands": "Copy Commands",
+    "quit": "Quit",
+    "stalledDetail": "Orca reloaded the window after a crash, but it never finished loading.",
+    "crashLoopDetail": "Orca tried to recover {{recoveryCount}} times in a row without success.",
+    "driverFallback": "If that does not help, the cause is usually a graphics driver.",
+    "genericDetail": "This is often a graphics-driver or installation problem. Reload to try again, or quit and relaunch Orca.",
+    "title": "Orca keeps failing to load",
+    "stalledMessage": "The app window stopped responding while reloading after a crash.",
+    "crashLoopMessage": "The app window crashed repeatedly and stopped reloading automatically."
   }
 }
