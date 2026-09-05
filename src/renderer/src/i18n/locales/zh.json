@@ -14241,7 +14241,27 @@
           "beb2c19173": "未读",
           "5651b216c6": "未知项目",
           "22b22034bc": "独立终端在活动中不可用。",
-          "afdc2139a8": "智能体终端关闭。在此工作区中打开一个新终端以继续。"
+          "afdc2139a8": "智能体终端关闭。在此工作区中打开一个新终端以继续。",
+          "compactModeDescription": "以单行标题和两行状态消息显示更短的线程行。",
+          "unreadOnlyDescription": "将活动列表筛选为仅显示有未读更新的线程。",
+          "clearCompleted": "清除已完成",
+          "none": "无",
+          "search": "搜索",
+          "showUnreadOnly": "仅显示未读",
+          "showChildAgents": "显示子智能体",
+          "activityOptions": "活动选项",
+          "interrupted": "已中断",
+          "state": {
+            "working": "工作中",
+            "monitoring": "监控后台任务",
+            "blocked": "受阻",
+            "waiting": "等待输入",
+            "failed": "失败",
+            "done": "完成",
+            "idle": "空闲",
+            "unverifiable": "暂无近期更新",
+            "permission": "需要权限"
+          }
         },
         "ActivityTitlebarControls": {
           "f915168c8e": "未读",
@@ -14952,7 +14972,11 @@
   "dashboard": {
     "sidebar": {
       "label": "智能体",
-      "dashboardLabel": "智能体仪表盘"
+      "dashboardLabel": "智能体仪表盘",
+      "openActivity": "查看活动",
+      "closeActivity": "关闭活动视图",
+      "projects": "项目",
+      "workspaces": "工作区"
     }
   },
   "browser": {

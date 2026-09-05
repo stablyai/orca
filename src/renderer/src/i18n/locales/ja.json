@@ -14185,7 +14185,27 @@
           "beb2c19173": "未読",
           "5651b216c6": "不明なプロジェクト",
           "22b22034bc": "スタンドアロンターミナルはアクティビティでは使用できません。",
-          "afdc2139a8": "Agent ターミナルが閉じられました。続行するには、このワークスペースで新規ターミナルを開いてください。"
+          "afdc2139a8": "Agent ターミナルが閉じられました。続行するには、このワークスペースで新規ターミナルを開いてください。",
+          "compactModeDescription": "1 行のタイトルと 2 行のステータスメッセージで短いスレッド行を表示します。",
+          "unreadOnlyDescription": "未読の更新があるスレッドのみをアクティビティ一覧に表示します。",
+          "clearCompleted": "完了済みをクリア",
+          "none": "なし",
+          "search": "検索",
+          "showUnreadOnly": "未読のみ表示",
+          "showChildAgents": "子 Agent を表示",
+          "activityOptions": "アクティビティのオプション",
+          "interrupted": "中断",
+          "state": {
+            "working": "作業中",
+            "monitoring": "バックグラウンドタスクを監視中",
+            "blocked": "ブロック",
+            "waiting": "入力待ち",
+            "failed": "失敗",
+            "done": "完了",
+            "idle": "アイドル",
+            "unverifiable": "最近の更新なし",
+            "permission": "権限が必要"
+          }
         },
         "ActivityTitlebarControls": {
           "f915168c8e": "未読",
@@ -14870,7 +14890,11 @@
   "dashboard": {
     "sidebar": {
       "label": "Agent",
-      "dashboardLabel": "Agent ダッシュボード"
+      "dashboardLabel": "Agent ダッシュボード",
+      "openActivity": "アクティビティを表示",
+      "closeActivity": "アクティビティビューを閉じる",
+      "projects": "プロジェクト",
+      "workspaces": "ワークスペース"
     }
   },
   "browser": {

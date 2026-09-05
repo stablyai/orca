@@ -195,7 +195,18 @@
         "ActivityPrototypePage": {
           "770d458144": "Group by",
           "a472a14700": "More options",
-          "beb2c19173": "Unread"
+          "beb2c19173": "Unread",
+          "state": {
+            "blocked": "Blocked",
+            "done": "Done",
+            "failed": "Failed",
+            "idle": "Idle",
+            "monitoring": "Monitoring background tasks",
+            "permission": "Needs permission",
+            "unverifiable": "No recent update",
+            "waiting": "Waiting for input",
+            "working": "Working"
+          }
         },
         "ActivityScopeFilterControls": {
           "hiddenCount": "{{value0}} hidden"
@@ -3744,7 +3755,9 @@
     "sidebar": {
       "closeActivity": "Turn off activity view",
       "label": "Agents",
-      "openActivity": "View activity"
+      "openActivity": "View activity",
+      "projects": "Projects",
+      "workspaces": "Workspaces"
     }
   },
   "dashboardPopout": {

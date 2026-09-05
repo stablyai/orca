@@ -14263,7 +14263,27 @@
           "beb2c19173": "읽지 않음",
           "5651b216c6": "알 수 없는 프로젝트",
           "22b22034bc": "활동에서는 독립형 terminal을 사용할 수 없습니다.",
-          "afdc2139a8": "Agent terminal이 닫혔습니다. 계속하려면 이 워크스페이스에서 새 terminal을 여세요."
+          "afdc2139a8": "Agent terminal이 닫혔습니다. 계속하려면 이 워크스페이스에서 새 terminal을 여세요.",
+          "compactModeDescription": "한 줄 제목과 두 줄 상태 메시지로 더 짧은 스레드 행을 표시합니다.",
+          "unreadOnlyDescription": "읽지 않은 업데이트가 있는 스레드만 활동 목록에 표시합니다.",
+          "clearCompleted": "완료된 항목 지우기",
+          "none": "없음",
+          "search": "검색",
+          "showUnreadOnly": "읽지 않은 항목만 표시",
+          "showChildAgents": "하위 에이전트 표시",
+          "activityOptions": "활동 옵션",
+          "interrupted": "중단됨",
+          "state": {
+            "working": "작업 중",
+            "monitoring": "백그라운드 작업 모니터링 중",
+            "blocked": "차단됨",
+            "waiting": "입력 대기 중",
+            "failed": "실패",
+            "done": "완료",
+            "idle": "유휴",
+            "unverifiable": "최근 업데이트 없음",
+            "permission": "권한 필요"
+          }
         },
         "ActivityTitlebarControls": {
           "f915168c8e": "읽지 않음",
@@ -15009,7 +15029,11 @@
   "dashboard": {
     "sidebar": {
       "label": "에이전트",
-      "dashboardLabel": "에이전트 대시보드"
+      "dashboardLabel": "에이전트 대시보드",
+      "openActivity": "활동 보기",
+      "closeActivity": "활동 보기 닫기",
+      "projects": "프로젝트",
+      "workspaces": "워크스페이스"
     }
   },
   "browser": {

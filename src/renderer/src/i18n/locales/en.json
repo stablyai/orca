@@ -16161,7 +16161,19 @@
           "search": "Search",
           "showUnreadOnly": "Show unread only",
           "showChildAgents": "Show child agents",
-          "activityOptions": "Activity options"
+          "activityOptions": "Activity options",
+          "interrupted": "Interrupted",
+          "state": {
+            "working": "Working",
+            "monitoring": "Monitoring background tasks",
+            "blocked": "Blocked",
+            "waiting": "Waiting for input",
+            "failed": "Failed",
+            "done": "Done",
+            "idle": "Idle",
+            "unverifiable": "No recent update",
+            "permission": "Needs permission"
+          }
         },
         "clearCompleted": {
           "clearedOne": "Cleared 1 completed agent",
@@ -17550,7 +17562,9 @@
       "label": "Agents",
       "dashboardLabel": "Agent Dashboard",
       "openActivity": "View activity",
-      "closeActivity": "Turn off activity view"
+      "closeActivity": "Turn off activity view",
+      "projects": "Projects",
+      "workspaces": "Workspaces"
     }
   },
   "runtimeRpc": {

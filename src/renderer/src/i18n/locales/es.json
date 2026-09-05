@@ -14185,7 +14185,27 @@
           "beb2c19173": "No leído",
           "5651b216c6": "Proyecto desconocido",
           "22b22034bc": "Terminal independiente no disponible en Actividad.",
-          "afdc2139a8": "Terminal de Agent cerrada. Abre una nueva terminal en este workspace para continuar."
+          "afdc2139a8": "Terminal de Agent cerrada. Abre una nueva terminal en este workspace para continuar.",
+          "compactModeDescription": "Muestra filas de hilo más cortas con títulos de una línea y mensajes de estado de dos líneas.",
+          "unreadOnlyDescription": "Filtra la lista de actividad para mostrar solo hilos con actualizaciones sin leer.",
+          "clearCompleted": "Borrar completados",
+          "none": "Ninguno",
+          "search": "Buscar",
+          "showUnreadOnly": "Mostrar solo no leídos",
+          "showChildAgents": "Mostrar agentes secundarios",
+          "activityOptions": "Opciones de actividad",
+          "interrupted": "Interrumpido",
+          "state": {
+            "working": "Trabajando",
+            "monitoring": "Supervisando tareas en segundo plano",
+            "blocked": "Bloqueado",
+            "waiting": "Esperando entrada",
+            "failed": "Fallido",
+            "done": "Completado",
+            "idle": "Inactivo",
+            "unverifiable": "Sin actualizaciones recientes",
+            "permission": "Se necesita permiso"
+          }
         },
         "ActivityTitlebarControls": {
           "f915168c8e": "no leído",
@@ -14835,7 +14855,11 @@
   "dashboard": {
     "sidebar": {
       "label": "Agentes",
-      "dashboardLabel": "Panel de agentes"
+      "dashboardLabel": "Panel de agentes",
+      "openActivity": "Ver actividad",
+      "closeActivity": "Cerrar vista de actividad",
+      "projects": "Proyectos",
+      "workspaces": "Espacios de trabajo"
     }
   },
   "browser": {
