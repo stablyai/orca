@@ -8,10 +8,15 @@ import { mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import Database from '../../sqlite/sync-database'
 import { agentJournalItemKey } from '../../../shared/agent-session-journal-item-key'
 import type { AgentSessionJournalIdentity } from '../../../shared/agent-session-journal-types'
 import { projectStructuredItemsToNativeChat } from '../../../shared/structured-agent-session-projection'
+import { openJournalDatabase } from './journal-database'
+import { JOURNAL_DB_SCHEMA_VERSION } from './journal-database-schema'
 import { JOURNAL_FILE_FORMAT_REMNANT_DISCLOSURE_IDENTITY } from './journal-file-format-remnant'
+import { loadJournal } from './journal-open'
+import { journalDatabaseFile } from './journal-paths'
 import type { AgentSessionJournal } from './journal-store'
 import type { openAgentSessionJournal } from './journal-store-factory'
 import { createTrackedJournalOpener } from './journal-store-test-open'
@@ -105,6 +110,56 @@ describe('a chat whose history is still in the pre-SQLite format', () => {
     const reopened = await open()
 
     expect(disclosure(reopened)).toContain(join(root, 'log.jsonl'))
+  })
+
+  // A repair's epoch is the marker that history was deleted and never rebuilt,
+  // and any row that is not the repair's own disclosure retires it. Appending
+  // here would silently stop the session ever asking the provider for that
+  // history — with the journal still holding none.
+  it('stays out of a journal this open just repaired', async () => {
+    const journal = await open()
+    await journal.appendItem(
+      { provider: 'codex', threadId: 'thread-1', turnId: 'turn-1', ordinal: 0 },
+      { kind: 'message', role: 'assistant', blocks: [{ type: 'text', text: 'history' }] },
+      { fence: 1 }
+    )
+    await journal.close()
+    // Deleting the anchor leaves every row unanchored: replay keeps nothing, so
+    // the repair publishes an empty `unreconcilable_prefix` epoch and — costing
+    // no malformed row — appends no disclosure of its own. That is the one state
+    // where this branch and a repair meet.
+    const opened = openJournalDatabase(journalDatabaseFile(root))
+    try {
+      opened.db.prepare('DELETE FROM journal_rows WHERE seq = ?').run(1)
+    } finally {
+      opened.db.close()
+    }
+    await writeRemnant()
+
+    const repaired = await open()
+
+    expect(disclosure(repaired)).toBeNull()
+    // Still asking the provider for the history the repair dropped.
+    expect(loadJournal(root, IDENTITY.sessionId)).toMatchObject({ corrupt: true })
+  })
+
+  // A latched journal loads empty, so it reaches the same branch — and an append
+  // into one throws, which would make the session unopenable rather than read-only.
+  it('writes nothing into a journal latched by a newer schema', async () => {
+    const founded = await open()
+    await founded.close()
+    const db = new Database(journalDatabaseFile(root))
+    try {
+      db.pragma(`user_version = ${JOURNAL_DB_SCHEMA_VERSION + 1}`)
+    } finally {
+      db.close()
+    }
+    await writeRemnant()
+
+    const latched = await open()
+
+    expect(latched.isReadOnly).toBe(true)
+    expect(disclosure(latched)).toBeNull()
   })
 
   // A row nothing projects is a row nobody reads.

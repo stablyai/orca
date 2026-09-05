@@ -11,6 +11,7 @@
 import { existsSync } from 'node:fs'
 import { join } from 'node:path'
 import type { AgentJournalItemIdentity } from '../../../shared/agent-session-journal-types'
+import { boundJournalStatusText } from './journal-prompt-body-bounds'
 import { formatAgentTypeLabel } from '../../../shared/agent-type-label'
 import type { AgentType } from '../../../shared/agent-status-types'
 
@@ -48,12 +49,12 @@ export function journalFileFormatRemnantDisclosure(input: {
     identity: JOURNAL_FILE_FORMAT_REMNANT_DISCLOSURE_IDENTITY,
     body: {
       kind: 'status',
-      text:
+      text: boundJournalStatusText(
         `This chat's history was saved in an older format Orca no longer reads, so it starts ` +
-        `empty. The session still points at the same ${formatAgentTypeLabel(input.agent)} ` +
-        `conversation — send a ` +
-        `message to pick up where you left off. The original transcript is on the session's ` +
-        `host at ${input.transcriptPath}`
+          `empty. The session still points at the same ${formatAgentTypeLabel(input.agent)} ` +
+          `conversation — send a message to pick up where you left off. The original ` +
+          `transcript is on the session's host at ${input.transcriptPath}`
+      )
     }
   }
 }

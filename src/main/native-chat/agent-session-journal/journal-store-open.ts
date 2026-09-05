@@ -71,7 +71,13 @@ export async function openJournalStoreState(input: {
   // that interrupts between them — a quit during startup restore, a failed
   // append — would otherwise lose the message for good. An epoch holding nothing
   // is exactly the state that append was owed, so offer it again.
-  if (loaded.state.items.size === 0 && loaded.state.submissions.size === 0) {
+  //
+  // Never onto a repair, though: `loaded.state` is the PRE-repair load, so a
+  // journal this open just emptied looks identical. The repair's epoch is the
+  // marker that its history was deleted and never rebuilt, and any row that is
+  // not the repair's own disclosure retires it — this row would silently stop
+  // the session ever asking the provider for that history again.
+  if (!loaded.corrupt && loaded.state.items.size === 0 && loaded.state.submissions.size === 0) {
     await discloseFileFormatRemnant(input)
   }
 }
