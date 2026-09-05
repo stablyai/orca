@@ -121,6 +121,7 @@ export class ClaudeAccountRegistration {
         : entry
     )
     let wroteCredentials = false
+    const target = getClaudeSelectionTargetForAccount(account)
     try {
       await this.dependencies.writeOauth(accountId, managedAuthPath, captured.oauthAccount)
       await this.dependencies.writeCredentials(accountId, managedAuthPath, captured.credentialsJson)
@@ -128,10 +129,7 @@ export class ClaudeAccountRegistration {
       this.dependencies.store.updateSettings({ claudeManagedAccounts: nextAccounts })
       this.dependencies.runtimeAuth.clearLastWrittenCredentialsJson(accountId)
       this.dependencies.rateLimits.evictInactiveClaudeCache(accountId)
-      const target = getClaudeSelectionTargetForAccount(account)
       await this.dependencies.selection.syncRuntimeAuth(target)
-      await this.dependencies.rateLimits.refreshForClaudeAccountChange(undefined, target)
-      return this.dependencies.selection.snapshot()
     } catch (error) {
       await this.rollbackReauthentication(
         accountId,
@@ -143,6 +141,16 @@ export class ClaudeAccountRegistration {
       )
       throw error
     }
+    // Why: usage refresh is advisory and must not roll back durable OAuth reauthentication.
+    void this.dependencies.rateLimits
+      .refreshForClaudeAccountChange(undefined, target)
+      .catch((error: unknown) =>
+        console.warn(
+          '[claude-accounts] Failed to refresh Claude usage after reauthentication:',
+          error
+        )
+      )
+    return this.dependencies.selection.snapshot()
   }
 
   private async persist(
