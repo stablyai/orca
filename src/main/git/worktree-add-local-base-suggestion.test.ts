@@ -95,7 +95,6 @@ describe('addWorktree', () => {
       ['rev-parse', '--verify', '--quiet', 'refs/remotes/origin/main^{commit}'],
       ['rev-list', '--left-right', '--count', 'refs/heads/main...refs/remotes/origin/main'],
       [
-        ...(process.platform === 'darwin' ? ['-c', 'checkout.workers=4'] : []),
         'worktree',
         'add',
         '--no-track',

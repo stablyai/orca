@@ -68,8 +68,6 @@ describe('addWorktree', () => {
       [['rev-parse', '--verify', '--quiet', 'refs/remotes/origin/main^{commit}'], { cwd: '/repo' }],
       [
         [
-          '-c',
-          'checkout.workers=4',
           'worktree',
           'add',
           '--no-track',
@@ -104,7 +102,7 @@ describe('addWorktree', () => {
 
     expect(gitExecFileAsyncMock.mock.calls).toEqual([
       [
-        ['-c', 'checkout.workers=4', 'worktree', 'add', '/repo-feature', 'feature/test'],
+        ['worktree', 'add', '/repo-feature', 'feature/test'],
         { cwd: '/repo', timeout: WORKTREE_ADD_TIMEOUT_MS }
       ]
     ])
@@ -184,13 +182,7 @@ describe('addWorktree', () => {
       })
 
       expect(gitExecFileAsyncMock).toHaveBeenCalledWith(
-        [
-          ...(platform === 'darwin' ? ['-c', 'checkout.workers=4'] : []),
-          'worktree',
-          'add',
-          '/repo-feature',
-          'feature/test'
-        ],
+        ['worktree', 'add', '/repo-feature', 'feature/test'],
         { cwd: '/repo', timeout: WORKTREE_ADD_TIMEOUT_MS }
       )
     }
@@ -235,16 +227,7 @@ describe('addWorktree', () => {
 
     expect(gitExecFileAsyncMock.mock.calls).toEqual([
       [
-        [
-          '-c',
-          'checkout.workers=4',
-          'worktree',
-          'add',
-          '--no-track',
-          '-b',
-          'feature/no-base',
-          '/repo-feature'
-        ],
+        ['worktree', 'add', '--no-track', '-b', 'feature/no-base', '/repo-feature'],
         { cwd: '/repo', timeout: WORKTREE_ADD_TIMEOUT_MS }
       ],
       [['config', '--get', 'push.autoSetupRemote'], { cwd: '/repo-feature' }]
@@ -319,8 +302,6 @@ describe('addWorktree', () => {
       [['rev-parse', '--verify', '--quiet', 'refs/remotes/origin/main^{commit}'], { cwd: '/repo' }],
       [
         [
-          '-c',
-          'checkout.workers=4',
           'worktree',
           'add',
           '--no-track',
@@ -359,8 +340,6 @@ describe('addWorktree', () => {
       [['rev-parse', '--verify', '--quiet', 'refs/remotes/origin/main^{commit}'], { cwd: '/repo' }],
       [
         [
-          '-c',
-          'checkout.workers=4',
           'worktree',
           'add',
           '--no-track',
@@ -400,8 +379,6 @@ describe('addWorktree', () => {
       [['rev-parse', '--verify', '--quiet', 'refs/remotes/origin/main^{commit}'], { cwd: '/repo' }],
       [
         [
-          '-c',
-          'checkout.workers=4',
           'worktree',
           'add',
           '--no-track',
@@ -442,8 +419,6 @@ describe('addWorktree', () => {
       [['rev-parse', '--verify', '--quiet', 'refs/remotes/origin/main^{commit}'], { cwd: '/repo' }],
       [
         [
-          '-c',
-          'checkout.workers=4',
           'worktree',
           'add',
           '--no-track',
@@ -475,8 +450,6 @@ describe('addWorktree', () => {
     ])
     expect(gitExecFileAsyncMock.mock.calls[1]).toEqual([
       [
-        '-c',
-        'checkout.workers=4',
         'worktree',
         'add',
         '--no-track',
@@ -503,8 +476,6 @@ describe('addWorktree', () => {
       ['rev-parse', '--verify', '--quiet', 'refs/remotes/release/main^{commit}'],
       ['rev-parse', '--verify', '--quiet', 'refs/heads/release/main^{commit}'],
       [
-        '-c',
-        'checkout.workers=4',
         'worktree',
         'add',
         '--no-track',
@@ -546,8 +517,6 @@ describe('addWorktree', () => {
       ['rev-parse', '--verify', '--quiet', 'refs/remotes/release/main^{commit}'],
       ['rev-parse', '--verify', '--quiet', 'refs/heads/release/main^{commit}'],
       [
-        '-c',
-        'checkout.workers=4',
         'worktree',
         'add',
         '--no-track',

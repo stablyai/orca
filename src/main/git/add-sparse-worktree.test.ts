@@ -167,7 +167,7 @@ branch refs/heads/main
     const calls = getGitCalls()
     expect(calls).toEqual(
       expect.arrayContaining([
-        'git -c checkout.workers=4 worktree add --no-checkout --no-track -b feature/test /repo-feature',
+        'git worktree add --no-checkout --no-track -b feature/test /repo-feature',
         'git config --get push.autoSetupRemote',
         'git config --local push.autoSetupRemote true',
         'git sparse-checkout init --cone',

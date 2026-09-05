@@ -20,7 +20,6 @@ import type {
 } from './worktree-operation-options'
 import { gitExecOptions, resolveWorktreeAddTimeoutMs } from './worktree-operation-options'
 import { bumpWorktreeScanGeneration } from './worktree-scan-cache'
-import { worktreeCheckoutGitArgs } from '../../shared/worktree-checkout-config'
 
 export type WorktreeAddBaseContext = AddWorktreeResult & {
   effectiveBase: string
@@ -188,12 +187,7 @@ async function performAddWorktree(
   let localBaseRefRefresh: LocalBaseRefRefreshResult | undefined
   let localBaseRefUpdateSuggestion: LocalBaseRefUpdateSuggestion | undefined
   // Why: enable long paths for this Windows checkout without changing user Git config.
-  const args = [
-    ...windowsLongPathGitArgs(repoPath),
-    ...worktreeCheckoutGitArgs(options),
-    'worktree',
-    'add'
-  ]
+  const args = [...windowsLongPathGitArgs(repoPath), 'worktree', 'add']
   let effectiveBase: string | undefined
   if (noCheckout) {
     args.push('--no-checkout')

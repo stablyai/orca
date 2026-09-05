@@ -53,17 +53,6 @@ in one record and pick at parse time.
 | --------------- | ----------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
 | `%(decorate:…)` | Git 2.43 separates commit decorations with `\x1f`, so ref names containing commas survive | The same record also carries `%D` (Git 2.10); an unexpanded `%(decorate` placeholder selects it, at the cost of comma-splitting |
 
-### Parallel checkout configuration
-
-Native macOS worktree creation and prepared-checkout materialization pass the
-command-local setting `-c checkout.workers=4`. Parallel checkout arrived in Git
-2.32; Git 2.25–2.31 accepts and ignores this unknown configuration key, preserving
-serial checkout without a rejected command or retry. No capability-cache entry is
-needed for this setting. The real-binary contract checks the worker boundary using
-Trace2 and verifies checked-out content and clean status. Windows, WSL, Linux, and
-SSH keep their existing checkout settings pending host measurements. The setting
-is never persisted to repository or user configuration.
-
 ## Why Not `simple-git`
 
 `simple-git` is a process wrapper around the installed Git binary. Its custom

@@ -2,6 +2,7 @@ import type { ChildProcess } from 'node:child_process'
 import { execFileSync } from 'node:child_process'
 import { existsSync, readFileSync, readdirSync } from 'node:fs'
 import path from 'node:path'
+import { cleanupE2ECrashpad } from './electron-crashpad-cleanup'
 import type { ElectronApplication } from '@stablyai/playwright-test'
 
 const GRACEFUL_CLOSE_TIMEOUT_MS = 10_000
@@ -221,4 +222,5 @@ export async function cleanupE2EDaemons(userDataDir: string): Promise<void> {
   for (const pid of readDaemonPidFiles(userDataDir)) {
     await forceKillPidTree(pid)
   }
+  cleanupE2ECrashpad(userDataDir)
 }

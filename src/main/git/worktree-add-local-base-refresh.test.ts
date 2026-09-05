@@ -82,7 +82,6 @@ describe('addWorktree', () => {
       [['reset', '--hard', 'remote-main'], { cwd: '/repo' }],
       [
         [
-          ...(process.platform === 'darwin' ? ['-c', 'checkout.workers=4'] : []),
           'worktree',
           'add',
           '--no-track',
@@ -320,7 +319,6 @@ describe('addWorktree', () => {
       'refs/remotes/origin/main^{commit}'
     ])
     expect(gitExecFileAsyncMock.mock.calls[7]?.[0]).toEqual([
-      ...(process.platform === 'darwin' ? ['-c', 'checkout.workers=4'] : []),
       'worktree',
       'add',
       '--no-track',
@@ -380,7 +378,6 @@ describe('addWorktree', () => {
       ],
       [
         [
-          ...(process.platform === 'darwin' ? ['-c', 'checkout.workers=4'] : []),
           'worktree',
           'add',
           '--no-track',
@@ -437,7 +434,6 @@ describe('addWorktree', () => {
 
     expect(result.localBaseRefRefresh).toBeUndefined()
     expect(gitExecFileAsyncMock.mock.calls.map((call) => call[0])).toContainEqual([
-      ...(process.platform === 'darwin' ? ['-c', 'checkout.workers=4'] : []),
       'worktree',
       'add',
       '--no-track',
@@ -559,7 +555,6 @@ describe('addWorktree', () => {
       ],
       [
         [
-          ...(process.platform === 'darwin' ? ['-c', 'checkout.workers=4'] : []),
           'worktree',
           'add',
           '--no-track',
