@@ -1,10 +1,29 @@
 import { describe, expect, it, vi } from 'vitest'
+import type * as NodeOs from 'node:os'
 import { homedir } from 'node:os'
 import type { GitWorktreeInfo } from '../shared/worktree/types'
+
+type NodeOsModule = typeof NodeOs
+
+const { homedirSpy } = vi.hoisted(() => ({
+  homedirSpy: vi.fn<() => string>()
+}))
+
+// Why: production binds `import { homedir }`; spyOn(default.homedir) does not wrap that export.
+vi.mock('node:os', async (importOriginal) => {
+  const actual = await importOriginal<NodeOsModule>()
+  homedirSpy.mockImplementation(() => actual.homedir())
+  return {
+    ...actual,
+    homedir: homedirSpy
+  }
+})
+
 import {
   canCleanupUnregisteredOrcaLeftoverDirectory,
   canSafelyRemoveOrphanedWorktreeDirectory,
-  getRegisteredDeletableWorktree
+  getRegisteredDeletableWorktree,
+  isDangerousWorktreeRemovalPath
 } from './worktree-removal-safety'
 
 function makeGitWorktree(path: string, isMainWorktree = false): GitWorktreeInfo {
@@ -93,6 +112,32 @@ describe('getRegisteredDeletableWorktree', () => {
     ).toThrow(
       'Refusing to delete worktree because it contains another registered worktree: /workspaces/parent/..child'
     )
+  })
+})
+
+describe('isDangerousWorktreeRemovalPath', () => {
+  it.each([
+    { worktreePath: '/Users/alice', repoPath: '/opt/src', expected: true },
+    { worktreePath: '/home/alice', repoPath: '/opt/src', expected: true },
+    { worktreePath: '/home/alice/wt/foo', repoPath: '/opt/src', expected: false },
+    { worktreePath: 'C:\\Users\\bob', repoPath: 'C:\\src\\repo', expected: true },
+    { worktreePath: 'C:\\Users\\bob\\wt\\foo', repoPath: 'C:\\src\\repo', expected: false },
+    { worktreePath: 'D:\\Users\\bob', repoPath: 'D:\\src\\repo', expected: true },
+    { worktreePath: 'D:\\Users\\bob\\wt\\foo', repoPath: 'D:\\src\\repo', expected: false }
+  ] as const)(
+    'treats $worktreePath against $repoPath as dangerous=$expected',
+    ({ worktreePath, repoPath, expected }) => {
+      expect(isDangerousWorktreeRemovalPath(worktreePath, repoPath)).toBe(expected)
+    }
+  )
+
+  it('treats a Windows user profile as dangerous without using the client homedir', async () => {
+    homedirSpy.mockClear()
+    await withProcessPlatform('darwin', async () => {
+      expect(isDangerousWorktreeRemovalPath('C:\\Users\\bob', 'C:\\src\\repo')).toBe(true)
+      expect(isDangerousWorktreeRemovalPath('C:\\Users\\bob\\wt\\foo', 'C:\\src\\repo')).toBe(false)
+    })
+    expect(homedirSpy).not.toHaveBeenCalled()
   })
 })
 
