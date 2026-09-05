@@ -1,4 +1,4 @@
-import { PROCESS_TABLE_SNAPSHOT_MAX_STALENESS_MS } from '../../../../shared/process-table-snapshot-reader'
+import { PROCESS_TABLE_SNAPSHOT_MAX_STALENESS_MS } from '../../../../shared/process-table-snapshot-ttl'
 
 /**
  * Picks the delay until a pane's next cadence inspection.

@@ -9,8 +9,13 @@ import {
   parseStrictProcessTableRows,
   type ProcessTableRow
 } from './process-table-snapshot'
+import {
+  DEFAULT_PROCESS_TABLE_SNAPSHOT_TTL_MS,
+  PROCESS_TABLE_SNAPSHOT_MAX_STALENESS_MS
+} from './process-table-snapshot-ttl'
 
 export { PS_ARGS, PS_MAX_BUFFER_BYTES }
+export { PROCESS_TABLE_SNAPSHOT_MAX_STALENESS_MS }
 
 const execFile = promisify(execFileCb)
 
@@ -20,7 +25,6 @@ const execFile = promisify(execFileCb)
 // whole subsystem answered "unverifiable" about a table it could read. This keeps a wedged
 // `ps` bounded while staying out of reach of a host that is merely busy.
 export const PS_TIMEOUT_MS = 15_000
-const DEFAULT_SNAPSHOT_TTL_MS = 500
 
 type Snapshot<T> = { value: T; capturedAtMs: number; completedAtMs: number }
 
@@ -39,7 +43,7 @@ export function createProcessTableSnapshotReader<T = string>(
   getFreshSnapshot: () => Promise<T>
   reset: () => void
 } {
-  const ttlMs = deps.ttlMs ?? DEFAULT_SNAPSHOT_TTL_MS
+  const ttlMs = deps.ttlMs ?? DEFAULT_PROCESS_TABLE_SNAPSHOT_TTL_MS
   let cached: Snapshot<T> | null = null
   let inFlight: Promise<T> | null = null
   let sequence = 0
@@ -330,10 +334,6 @@ export async function getStrictProcessTableSnapshotWithAge(): Promise<{
   const snapshot = await withEvidenceBudget(processTableReader.getSnapshotWithAge())
   return { rows: snapshot.value.strict(), capturedAgeMs: snapshot.capturedAgeMs }
 }
-
-/** How much older than its own await a TTL-cached capture may be, on top of the capture's own
- *  duration. Reported ages carry both, so this alone is not the staleness bound. */
-export const PROCESS_TABLE_SNAPSHOT_MAX_STALENESS_MS = DEFAULT_SNAPSHOT_TTL_MS
 
 export function resetProcessTableSnapshotForTests(): void {
   processTableReader.reset()
