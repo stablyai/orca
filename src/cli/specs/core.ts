@@ -140,19 +140,21 @@ export const CORE_COMMAND_SPECS: CommandSpec[] = [
     path: ['worktree', 'set'],
     summary: 'Update Orca metadata for a worktree',
     usage:
-      'orca worktree set --worktree <selector> [--display-name <name>] [--issue <number|null>] [--linear-issue <identifier-or-url|null>] [--comment <text>] [--workspace-status <id>] [--parent-worktree <selector>|--no-parent] [--json]',
+      'orca worktree set --worktree <selector> [--display-name <name>] [--issue <number|null>] [--linear-issue <identifier-or-url|null>] [--jira <key|url|null>] [--comment <text>] [--workspace-status <id>] [--parent-worktree <selector>|--no-parent] [--json]',
     allowedFlags: [
       ...GLOBAL_FLAGS,
       'worktree',
       'display-name',
       'issue',
       'linear-issue',
+      'jira',
       'comment',
       'workspace-status',
       'parent-worktree',
       'no-parent'
     ],
     notes: [
+      'Use --jira with an issue key (PROJ-123) or a Jira issue URL to link the workspace to a ticket; the title and URL are resolved from the connected Jira site. Pass null to clear. The card shows it when the jira-issue card property is enabled.',
       'Workspace status ids match the board columns (defaults: todo, in-progress, in-review, completed); custom statuses use their configured id.',
       'Pass --linear-issue null to clear the Linear issue link.'
     ],
