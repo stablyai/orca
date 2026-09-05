@@ -111,9 +111,10 @@ for (const paneCount of PANE_COUNTS) {
       })
     )
   )
-  console.log(
-    `| ${paneCount} | ${before} | ${after} | ${(((before - after) / before) * 100).toFixed(0)}% |`
-  )
+  // A window shorter than one cadence tier can leave the baseline at zero; reporting a
+  // percentage off that divides by zero and prints a meaningless reduction.
+  const reduction = before > 0 ? `${(((before - after) / before) * 100).toFixed(0)}%` : 'n/a'
+  console.log(`| ${paneCount} | ${before} | ${after} | ${reduction} |`)
 }
 
 // Detection latency must not regress: the grid deadline is always within one interval.
