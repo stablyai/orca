@@ -123,6 +123,7 @@ describe('scanAiVaultSessions Codex worker sessions', () => {
       droidSessionsDir: join(root, 'droid-sessions'),
       droidProjectsDir: join(root, 'droid-projects'),
       kimiSessionsDir: join(root, 'kimi-sessions'),
+      qwenProjectsDir: join(root, 'qwen-projects'),
       platform: 'darwin'
     })
 
