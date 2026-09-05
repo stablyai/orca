@@ -243,6 +243,10 @@ export function extractAgentProviderSession(
     case 'command-code':
     case 'hermes':
       return null
+    // Why: Auggie exposes conversation_id but no verified CLI resume flag yet; returning
+    // session metadata without a resume path would advertise a resume Orca cannot perform.
+    case 'aug':
+      return null
   }
 }
 

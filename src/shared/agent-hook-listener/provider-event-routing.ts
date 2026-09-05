@@ -19,6 +19,7 @@ import { extractCommandCodeToolFields } from './providers/command-code-tool-fiel
 import { isGrokEvent } from './provider-event-names'
 import { extractGrokToolFields } from './providers/grok-tool-fields'
 import { extractHermesToolFields } from './providers/hermes-tool-fields'
+import { extractAuggieToolFields } from './providers/aug-tool-fields'
 
 export function isGrokIdleNotification(message: string | undefined): boolean {
   if (!message) {
@@ -78,6 +79,12 @@ export function isNewTurnEvent(source: AgentHookSource, eventName: unknown): boo
     case 'devin':
       // Why: SessionStart is handled by an early return in normalizeDevinEvent, so UserPromptSubmit is Devin's real new-turn boundary here.
       return eventName === 'UserPromptSubmit'
+    case 'aug':
+      // Why: PromptSubmit (added in a newer Auggie build than this integration's original)
+      // fires on every user turn, unlike SessionStart which fires once per process — it is
+      // Auggie's real per-turn boundary. Kept alongside SessionStart for older CLI builds that
+      // never emit PromptSubmit and only ever get one turn boundary at process start.
+      return eventName === 'SessionStart' || eventName === 'PromptSubmit'
   }
 }
 
@@ -170,5 +177,7 @@ export function extractToolFields(
       return extractHermesToolFields(eventName, hookPayload)
     case 'devin':
       return extractClaudeToolFields(eventName, hookPayload)
+    case 'aug':
+      return extractAuggieToolFields(eventName, hookPayload)
   }
 }

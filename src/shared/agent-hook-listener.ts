@@ -15,6 +15,7 @@ import { extractPromptText } from './agent-hook-listener/prompt-fields'
 import { normalizeProviderEvent } from './agent-hook-listener/provider-dispatch'
 import { hasExplicitUserPrompt } from './agent-hook-listener/provider-event-routing'
 import { hasExplicitAmpPrompt } from './agent-hook-listener/providers/amp-events'
+import { hasExplicitAuggiePrompt } from './agent-hook-listener/providers/aug-events'
 import { readString } from './agent-hook-listener/tool-input-preview'
 /** Canonical transport-agnostic normalization entry shared by main and relay listeners. */
 export function normalizeHookPayload(
@@ -141,13 +142,17 @@ export function normalizeHookPayload(
         ? hasExplicitAmpPrompt(eventName, promptText, hookPayloadRecord)
           ? true
           : undefined
-        : hasExplicitUserPrompt(
-            source,
-            eventName,
-            extractedPrompt,
-            dispatched.resolvedPromptText,
-            dispatched.hasTranscriptPromptEvidence
-          ),
+        : source === 'aug'
+          ? hasExplicitAuggiePrompt(eventName, hookPayloadRecord)
+            ? true
+            : undefined
+          : hasExplicitUserPrompt(
+              source,
+              eventName,
+              extractedPrompt,
+              dispatched.resolvedPromptText,
+              dispatched.hasTranscriptPromptEvidence
+            ),
     promptInteractionKey: dispatched.promptInteractionKey,
     hookEventName: typeof eventName === 'string' ? eventName : undefined,
     providerPromptId,

@@ -22,12 +22,11 @@ import { CopilotHookService, copilotHookService } from '../copilot/hook-service'
 import { HermesHookService, hermesHookService } from '../hermes/hook-service'
 import { DevinHookService, devinHookService } from '../devin/hook-service'
 import { KimiHookService, kimiHookService } from '../kimi/hook-service'
+import { auggieHookService } from '../auggie/hook-service'
 import { openClaudeHookService } from '../openclaude/hook-service'
 import { MANAGED_AGENT_HOOK_INSTALLERS } from './managed-agent-hook-controls'
-import {
-  installRemoteManagedAgentHooks,
-  REMOTE_MANAGED_HOOK_INSTALLER_AGENTS
-} from './remote-managed-hook-installers'
+import { installRemoteManagedAgentHooks } from './remote-managed-hook-installers'
+import { REMOTE_MANAGED_HOOK_INSTALLER_AGENTS } from './remote-managed-hook-installers'
 
 type FakeFs = {
   files: Map<string, string>
@@ -688,11 +687,8 @@ describe('remote hook service installers', () => {
     expect(fs.modes.get('/home/dev/.orca/agent-hooks/copilot-hook.sh')).toBe(0o755)
   })
 
-  // Why: Droid (and Copilot) each shipped a working installRemote but were never
-  // registered in REMOTE_MANAGED_HOOK_INSTALLERS, so their status silently never
-  // appeared over SSH (issue #7253). Guard the whole bug class, not one agent:
-  // every locally-managed hook service that implements installRemote MUST be
-  // wired into the remote installer.
+  // Why: Droid/Copilot had working installRemote impls that were never registered in
+  // REMOTE_MANAGED_HOOK_INSTALLERS (#7253); require every installRemote agent to be wired in.
   it('registers every managed agent that implements installRemote in the remote installer (issue #7253)', () => {
     const servicesByAgent = new Map<string, { installRemote?: unknown }>([
       ['claude', claudeHookService],
@@ -708,7 +704,8 @@ describe('remote hook service installers', () => {
       ['copilot', copilotHookService],
       ['hermes', hermesHookService],
       ['devin', devinHookService],
-      ['kimi', kimiHookService]
+      ['kimi', kimiHookService],
+      ['aug', auggieHookService]
     ])
 
     // Guard against a service silently missing from the map above as new agents land.
