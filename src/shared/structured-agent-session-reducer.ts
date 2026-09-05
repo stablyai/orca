@@ -51,7 +51,12 @@ function backgroundTaskStatesEqual(
   if (left === right) {
     return true
   }
-  if (!left || !right || left.state !== right.state) {
+  if (
+    !left ||
+    !right ||
+    left.state !== right.state ||
+    left.supportsTaskStop !== right.supportsTaskStop
+  ) {
     return false
   }
   if (left.tasks === right.tasks) {

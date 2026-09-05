@@ -33,13 +33,37 @@ export type StructuredAgentSessionLaunchIntent = {
   params: StructuredAgentSessionCreateParams
 }
 
-export class StructuredAgentSessionCreateRefusalError extends Error {
+class StructuredAgentSessionCreateError extends Error {
   constructor(
     message: string,
-    readonly code: string = 'structured_agent_session_unsupported'
+    /** The wire refusal code, or the RPC error code when the create never reached a handler. */
+    readonly code: string
   ) {
     super(message)
+  }
+}
+
+/**
+ * The host proved it created nothing, so a caller may open a legacy terminal instead. The class
+ * itself is the verdict: `launchStructuredAgentSession` is the only place that decides it, against
+ * the shared allowlist, so no consumer has to remember to re-check a code.
+ */
+export class StructuredAgentSessionCreateRefusalError extends StructuredAgentSessionCreateError {
+  constructor(message: string, code: string = 'structured_agent_session_unsupported') {
+    super(message, code)
     this.name = 'StructuredAgentSessionCreateRefusalError'
+  }
+}
+
+/**
+ * Refused with a code that does not prove the session is absent. A sibling opened here would sit
+ * beside a session the host may already hold, so this deliberately is NOT a refusal error: it flows
+ * down the same path as a lost reply, which replays the intent and reconciles.
+ */
+export class StructuredAgentSessionCreateUnknownOutcomeError extends StructuredAgentSessionCreateError {
+  constructor(message: string, code: string) {
+    super(message, code)
+    this.name = 'StructuredAgentSessionCreateUnknownOutcomeError'
   }
 }
 
@@ -49,8 +73,12 @@ const DEFINITIVE_CREATE_FAILURE_CODES = [
 ] as const
 
 function definitiveStructuredAgentSessionCreateErrorCode(error: unknown): string | null {
-  if (error instanceof StructuredAgentSessionCreateRefusalError) {
-    return isDefinitiveAgentSessionCreateRefusal(error.code) ? error.code : null
+  if (error instanceof StructuredAgentSessionCreateError) {
+    // Our own classes already carry the verdict; message sniffing below could only invert it.
+    return error instanceof StructuredAgentSessionCreateRefusalError &&
+      isDefinitiveAgentSessionCreateRefusal(error.code)
+      ? error.code
+      : null
   }
   for (const code of DEFINITIVE_CREATE_FAILURE_CODES) {
     if (hasRuntimeRpcErrorCode(error, code)) {
@@ -200,15 +228,13 @@ export async function launchStructuredAgentSession(
     throw error
   }
   if (!result.ok) {
-    const error = new StructuredAgentSessionCreateRefusalError(
-      result.refusal.message,
-      result.refusal.code
-    )
-    if (isDefinitiveStructuredAgentSessionCreateError(error)) {
-      abandonStructuredAgentSessionLaunchIntent(intent)
-      throw error
+    const { code, message } = result.refusal
+    if (!isDefinitiveAgentSessionCreateRefusal(code)) {
+      // Keep the focus intent: the session may exist, and recovery still has to adopt it.
+      throw new StructuredAgentSessionCreateUnknownOutcomeError(message, code)
     }
-    throw Object.assign(new Error(error.message), { code: error.code })
+    abandonStructuredAgentSessionLaunchIntent(intent)
+    throw new StructuredAgentSessionCreateRefusalError(message, code)
   }
   return { sessionId: result.value.sessionId, fence: result.value.fence }
 }

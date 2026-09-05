@@ -151,6 +151,7 @@ export async function performCancel(
     clientOperationId: string
     turnId: string
     scope?: 'background-tasks'
+    taskId?: string
   }
 ): Promise<TurnOutcome<AgentSessionCancelResult>> {
   let cancelled = false
@@ -160,7 +161,8 @@ export async function performCancel(
       ? (
           await ctx.adapter.stopBackgroundTasks?.({
             sessionId: ctx.sessionId,
-            fence: ctx.fence
+            fence: ctx.fence,
+            ...(input.taskId ? { taskId: input.taskId } : {})
           })
         )?.cancelled === true
       : (

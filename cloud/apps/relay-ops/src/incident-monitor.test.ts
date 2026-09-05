@@ -33,6 +33,7 @@ function healthySample(at = startedAt): IncidentSample {
     expectedSelector: selector,
     cells: [{
       cellId: 'production-gce-c1',
+      region: 'us-central1',
       runtimeKnown: true,
       powered: true,
       expectedAdmissionState: 'general'
@@ -147,6 +148,52 @@ describe('incident monitor evaluator', () => {
       status: 'freeze',
       failures: [
         expect.objectContaining({ signal: 'relay.postgres_retry_exhausted', threshold: 300 })
+      ]
+    })
+  })
+
+  // Why: an asia-east2 cell's /ready reaches auth and Cloud SQL in us-central1, so
+  // from the US runner it measures p50 0.88 s / max 2.7 s and the flat 2 000 bar
+  // froze three healthy gates on 2026-09-05 (c27 at 2568/2668/2685 ms).
+  it('holds cell endpoint latency to a per-region bar', () => {
+    const asiaTail = healthySample()
+    asiaTail.cells[0]!.region = 'asia-east2'
+    asiaTail.sources['active-probe']!.signals['cell.production-gce-c1.latency_ms'] =
+      signal(2_685)
+    expect(evaluateIncidentSample(asiaTail, startedAt)).toMatchObject({
+      status: 'green',
+      failures: []
+    })
+
+    const asiaIncident = healthySample()
+    asiaIncident.cells[0]!.region = 'asia-east2'
+    asiaIncident.sources['active-probe']!.signals['cell.production-gce-c1.latency_ms'] =
+      signal(4_001)
+    expect(evaluateIncidentSample(asiaIncident, startedAt)).toMatchObject({
+      status: 'freeze',
+      failures: [
+        expect.objectContaining({
+          code: 'threshold_max',
+          source: 'active-probe',
+          signal: 'cell.production-gce-c1.latency_ms',
+          observed: 4_001,
+          threshold: 4_000
+        })
+      ]
+    })
+
+    const usIncident = healthySample()
+    usIncident.sources['active-probe']!.signals['cell.production-gce-c1.latency_ms'] =
+      signal(2_001)
+    expect(evaluateIncidentSample(usIncident, startedAt)).toMatchObject({
+      status: 'freeze',
+      failures: [
+        expect.objectContaining({
+          code: 'threshold_max',
+          signal: 'cell.production-gce-c1.latency_ms',
+          observed: 2_001,
+          threshold: 2_000
+        })
       ]
     })
   })
@@ -401,12 +448,14 @@ describe('incident monitor evaluator', () => {
     ] = signal(0)
     sample.cells.push({
       cellId: 'production-gce-c2',
+      region: 'us-central1',
       runtimeKnown: true,
       powered: true,
       expectedAdmissionState: 'general'
     })
     sample.cells.push({
       cellId: 'production-gce-c3',
+      region: 'us-central1',
       runtimeKnown: true,
       powered: true,
       expectedAdmissionState: 'general'
