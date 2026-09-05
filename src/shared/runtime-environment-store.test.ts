@@ -1,4 +1,5 @@
 import { mkdtempSync, rmSync, truncateSync, writeFileSync } from 'node:fs'
+import type * as NodeFs from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -12,6 +13,23 @@ import {
   markEnvironmentUsed,
   updateEnvironmentFromPairingCode
 } from './runtime-environment-store'
+
+const storeWriteSyscalls = vi.hoisted(() => [] as ('fsync:file' | 'fsync:directory' | 'rename')[])
+
+vi.mock('node:fs', async () => {
+  const actual = await vi.importActual<typeof NodeFs>('node:fs')
+  return {
+    ...actual,
+    fsyncSync: (fd: number) => {
+      storeWriteSyscalls.push(actual.fstatSync(fd).isDirectory() ? 'fsync:directory' : 'fsync:file')
+      return actual.fsyncSync(fd)
+    },
+    renameSync: (from: NodeFs.PathLike, to: NodeFs.PathLike) => {
+      storeWriteSyscalls.push('rename')
+      return actual.renameSync(from, to)
+    }
+  }
+})
 
 // Why: keeps PowerShell ACL work out of this suite without lying about the platform, which the
 // store's durable write reads to pick its fsync flags (#14173).
@@ -39,9 +57,22 @@ describe('runtime environment store', () => {
     if (originalPlatform) {
       Object.defineProperty(process, 'platform', originalPlatform)
     }
+    storeWriteSyscalls.length = 0
     for (const dir of tempDirs.splice(0)) {
       rmSync(dir, { recursive: true, force: true })
     }
+  })
+
+  it('fsyncs the store before publishing it', () => {
+    const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-env-store-durable-'))
+    tempDirs.push(userDataPath)
+
+    addEnvironmentFromPairingCode(userDataPath, {
+      name: 'dev box',
+      pairingCode: pairingCode()
+    })
+
+    expect(storeWriteSyscalls.slice(0, 2)).toEqual(['fsync:file', 'rename'])
   })
 
   it('rejects duplicate server names instead of silently replacing the saved server', () => {
