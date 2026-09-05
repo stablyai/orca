@@ -9931,7 +9931,7 @@
           "update": "更新",
           "title": "更新远程 Orca 服务器",
           "description": "查看已配对的服务器，并从此 Orca 客户端更新受支持的安装。",
-          "restartWarning": "更新将重启这些服务器。{{value0}} 个活动标签页和 {{value1}} 个终端窗格可能会短暂断开连接。",
+          "restartWarning": "更新将重启这些服务器，并终止其上的所有终端和智能体。{{value0}} 个活动标签页和 {{value1}} 个终端窗格可能会短暂断开连接。",
           "checking": "正在检查已配对的服务器…",
           "empty": "没有已配对的远程 Orca 服务器。",
           "checkAgain": "再次检查",
@@ -9957,7 +9957,7 @@
           "restarting": "正在重启…",
           "updated": "已更新",
           "failed": "更新失败",
-          "serviceManagerHelp": "通过启动此服务器的服务管理器更新 Orca。",
+          "serviceManagerHelp": "通过启动此服务器的服务管理器更新 Orca。服务重启将终止服务器上的所有终端和智能体。",
           "unpackedHelp": "开发版本必须从其源代码检出进行更新。",
           "legacyHelp": "手动更新此服务器一次以启用远程更新。"
         },
