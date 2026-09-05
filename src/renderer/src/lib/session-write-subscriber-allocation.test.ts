@@ -90,6 +90,9 @@ afterEach(() => {
 })
 
 describe('session write subscriber allocation', () => {
+  // Scope: a subscriber whose baseline is still the priming write. This is the easy half — it
+  // says nothing about a baseline that has since advanced over a tabs write, which is what the
+  // collapsed-write cases below cover. It stayed green while that case was broken.
   it('allocates nothing for store writes that touch no session field', () => {
     const harness = createHarness()
     try {
@@ -111,6 +114,54 @@ describe('session write subscriber allocation', () => {
       harness.dispose()
     }
   })
+
+  // Why both: these are the two ways a real tabs write reaches the subscriber with an unchanged
+  // projection — a decorative agent spinner frame, and the stripped handoff flag.
+  const collapsedTabWrites: { name: string; from: object; to: object }[] = [
+    {
+      name: 'a decorative agent spinner frame',
+      from: { id: 't1', title: '\u280b Claude Code' },
+      to: { id: 't1', title: '\u2819 Claude Code' }
+    },
+    {
+      name: 'a pendingActivationSpawn toggle',
+      from: { id: 't1', title: 'Claude Code', pendingActivationSpawn: false },
+      to: { id: 't1', title: 'Claude Code', pendingActivationSpawn: true }
+    }
+  ]
+
+  for (const { name, from, to } of collapsedTabWrites) {
+    it(`keeps the fast path after a tabs write collapsed by ${name}`, () => {
+      const harness = createHarness()
+      try {
+        harness.write()
+        vi.advanceTimersByTime(500)
+        // A real tabs change first, so the baseline records this slice and the pending set drains.
+        harness.write(() => ({ tabsByWorktree: { w1: [from] } }) as never)
+        vi.advanceTimersByTime(500)
+        // Now a write the session projection collapses: the raw slice moves, the projection does
+        // not. The baseline must still advance past it, or the identity scan never matches again.
+        harness.write(() => ({ tabsByWorktree: { w1: [to] } }) as never)
+        vi.advanceTimersByTime(500)
+
+        const writes = 100
+        const calls = countFilterCalls(() => {
+          for (let write = 0; write < writes; write += 1) {
+            harness.write((previous) => ({
+              agentStatusByPaneKey: {
+                ...previous.agentStatusByPaneKey,
+                [`p-${write}`]: {}
+              } as never
+            }))
+          }
+        })
+        // Before the baseline hoist: 100 — every later write fell through to the full scan.
+        expect(calls).toBe(0)
+      } finally {
+        harness.dispose()
+      }
+    })
+  }
 
   it('still allocates and persists when a session field really changes', () => {
     const harness = createHarness()

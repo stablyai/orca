@@ -233,12 +233,15 @@ export function createSessionWriteSubscriber({
       prev === null
         ? [...SESSION_RELEVANT_FIELDS]
         : SESSION_RELEVANT_FIELDS.filter((key) => prev?.[key] !== next[key])
-    if (changedFields.length === 0 && pendingChangedFields.size === 0) {
-      return
-    }
+    // Why advanced before the bail: these three are one baseline. A tabs write the projection
+    // collapses moves the raw slice without changing changedFields, so bailing first pinned the
+    // sources a write in the past and every later write failed the identity scan from then on.
     prev = next
     prevTabsSource = state.tabsByWorktree
     prevUnifiedTabsSource = state.unifiedTabsByWorktree
+    if (changedFields.length === 0 && pendingChangedFields.size === 0) {
+      return
+    }
     for (const field of changedFields) {
       pendingChangedFields.add(field)
     }
