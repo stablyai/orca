@@ -47,9 +47,21 @@ function tryParseJsonObject(content: string): Record<string, unknown> | null {
   }
 }
 
-function collectPackageExportPaths(value: unknown, paths: Set<string>): void {
+// Why: an `exports` subpath key (e.g. "./runtime") doesn't necessarily match the shape of its
+// target path (e.g. "./src/browser.ts"), so track each subpath's exact target alongside the
+// flat set of all targets — condition keys ("import", "require", "types", ...) share the
+// nearest enclosing subpath rather than introducing one, per the exports field spec.
+function collectPackageExportEntries(
+  value: unknown,
+  subpath: string | null,
+  allTargets: Set<string>,
+  exportEntries: Map<string, string>
+): void {
   if (typeof value === 'string') {
-    paths.add(value)
+    allTargets.add(value)
+    if (subpath !== null && !exportEntries.has(subpath)) {
+      exportEntries.set(subpath, value)
+    }
     return
   }
   if (!value || typeof value !== 'object') {
@@ -57,12 +69,17 @@ function collectPackageExportPaths(value: unknown, paths: Set<string>): void {
   }
   if (Array.isArray(value)) {
     for (const item of value) {
-      collectPackageExportPaths(item, paths)
+      collectPackageExportEntries(item, subpath, allTargets, exportEntries)
     }
     return
   }
-  for (const item of Object.values(value)) {
-    collectPackageExportPaths(item, paths)
+  for (const [key, item] of Object.entries(value)) {
+    collectPackageExportEntries(
+      item,
+      key.startsWith('.') ? key : subpath,
+      allTargets,
+      exportEntries
+    )
   }
 }
 
@@ -70,7 +87,7 @@ function getPackageSourceEntryPaths(params: {
   rootPath: string
   directory: string
   packageJson: Record<string, unknown>
-}): string[] {
+}): { entryPaths: string[]; exportSubpaths: Record<string, string> } {
   const relativeEntries = new Set<string>()
   for (const field of ['types', 'typings', 'module', 'main'] as const) {
     const value = params.packageJson[field]
@@ -78,13 +95,30 @@ function getPackageSourceEntryPaths(params: {
       relativeEntries.add(value)
     }
   }
-  collectPackageExportPaths(params.packageJson.exports, relativeEntries)
+  const exportTargets = new Set<string>()
+  const exportEntries = new Map<string, string>()
+  collectPackageExportEntries(params.packageJson.exports, null, exportTargets, exportEntries)
+  for (const target of exportTargets) {
+    relativeEntries.add(target)
+  }
   for (const entry of DEFAULT_PACKAGE_SOURCE_ENTRIES) {
     relativeEntries.add(entry)
   }
-  return Array.from(relativeEntries).map((entry) =>
-    joinPath(joinPath(params.rootPath, params.directory), normalizeRelativePath(entry))
+  const packageDirectory = joinPath(params.rootPath, params.directory)
+  const entryPaths = Array.from(relativeEntries).map((entry) =>
+    joinPath(packageDirectory, normalizeRelativePath(entry))
   )
+  const exportSubpaths: Record<string, string> = {}
+  for (const [subpath, target] of exportEntries) {
+    if (subpath === '.') {
+      continue // the bare package specifier — already covered by paths[alias.name]
+    }
+    exportSubpaths[normalizeRelativePath(subpath)] = joinPath(
+      packageDirectory,
+      normalizeRelativePath(target)
+    )
+  }
+  return { entryPaths, exportSubpaths }
 }
 
 export async function readWorkspacePackageAliases(params: {
@@ -115,12 +149,12 @@ export async function readWorkspacePackageAliases(params: {
           ? filePath.slice(params.rootPath.length).replace(/^[\\/]+/, '')
           : filePath
         const directory = relativePath.replace(/[\\/]package\.json$/, '').replace(/[\\/]+/g, '/')
-        const entryPaths = getPackageSourceEntryPaths({
+        const { entryPaths, exportSubpaths } = getPackageSourceEntryPaths({
           rootPath: params.rootPath,
           directory,
           packageJson: json
         })
-        aliases.set(directory, { name, directory, entryPaths })
+        aliases.set(directory, { name, directory, entryPaths, exportSubpaths })
         syncModel(joinPath(params.rootPath, `node_modules/${name}/package.json`), result.content)
       } catch {
         // Best-effort package context: unreadable package.json files are ignored.
@@ -148,6 +182,14 @@ function computeWorkspaceCompilerConfig(params: {
       sourceRoots.add(sourceRootMatch?.[1] ?? alias.directory)
     }
     paths[`${alias.name}/*`] = Array.from(sourceRoots).map((sourceRoot) => `${sourceRoot}/*`)
+    for (const [subpath, target] of Object.entries(alias.exportSubpaths ?? {})) {
+      if (!target.startsWith(params.rootPath)) {
+        continue
+      }
+      paths[`${alias.name}/${subpath}`] = [
+        normalizeRelativePath(target.slice(params.rootPath.length))
+      ]
+    }
   }
   return { baseUrl: params.rootPath, paths }
 }

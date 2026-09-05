@@ -3,7 +3,8 @@ import { typescript as monacoTS } from 'monaco-editor'
 import { describe, expect, it } from 'vitest'
 import {
   applyWorkspaceCompilerOptions,
-  cacheWorkspacePackageResolution
+  cacheWorkspacePackageResolution,
+  readWorkspacePackageAliases
 } from './monaco-typescript-package-alias-resolution'
 import type { WorkspacePackageAlias } from './monaco-typescript-package-alias-path'
 
@@ -66,5 +67,36 @@ describe('workspace compiler option isolation', () => {
     expect(optionsForA.baseUrl).toBe(workspaceA)
     expect(optionsForA.paths?.['@acme/lib-a2']).toBeDefined()
     expect(optionsForA.paths?.['@acme/lib-b2']).toBeUndefined()
+  })
+
+  it('maps an exports subpath to its exact target, not a name-mirrored wildcard guess', async () => {
+    const rootPath = '/repo/workspace-exports'
+    const packageJsonPath = `${rootPath}/packages/lib-c/package.json`
+    window.api = {
+      fs: {
+        readFile: async ({ filePath }: { filePath: string }) => {
+          if (filePath !== packageJsonPath) {
+            throw new Error(`unexpected read: ${filePath}`)
+          }
+          return {
+            isBinary: false,
+            content: JSON.stringify({
+              name: '@acme/lib-c',
+              exports: { '.': './src/index.ts', './runtime': './src/browser.ts' }
+            })
+          }
+        }
+      }
+    } as never
+
+    const packageAliases = await readWorkspacePackageAliases({
+      rootPath,
+      packageJsonPaths: [packageJsonPath]
+    })
+    cacheWorkspacePackageResolution({ rootPath, packageAliases })
+    applyWorkspaceCompilerOptions(rootPath)
+
+    const options = monacoTS.typescriptDefaults.getCompilerOptions()
+    expect(options.paths?.['@acme/lib-c/runtime']).toEqual(['packages/lib-c/src/browser.ts'])
   })
 })

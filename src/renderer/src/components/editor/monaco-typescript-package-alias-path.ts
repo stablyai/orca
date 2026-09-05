@@ -4,10 +4,17 @@ export type WorkspacePackageAlias = {
   name: string
   directory: string
   entryPaths: string[]
+  // Why: exact `package.json#exports` subpath -> source file mappings (e.g. "runtime" ->
+  // ".../src/browser.ts"), kept separate from the directory-shape wildcard fallback since an
+  // export's subpath key doesn't necessarily match its target's path.
+  exportSubpaths?: Record<string, string>
 }
 
 function normalizeRelativePath(path: string): string {
-  return path.replace(/[\\/]+/g, '/').replace(/^\.\//, '').replace(/^\/+/, '')
+  return path
+    .replace(/[\\/]+/g, '/')
+    .replace(/^\.\//, '')
+    .replace(/^\/+/, '')
 }
 
 function getRelativePathInsideDirectory(relativePath: string, directory: string): string | null {
@@ -27,7 +34,8 @@ export function getWorkspacePackageAliasModelPath(params: {
 }): string | null {
   const alias = Array.from(params.packageAliases.values())
     .filter(
-      (candidate) => getRelativePathInsideDirectory(params.relativePath, candidate.directory) !== null
+      (candidate) =>
+        getRelativePathInsideDirectory(params.relativePath, candidate.directory) !== null
     )
     .sort((left, right) => right.directory.length - left.directory.length)[0]
   if (!alias) {
