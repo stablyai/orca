@@ -50,7 +50,11 @@ export class OrcaRuntimeWithCreateManagedWorktree extends OrcaRuntimeWithGetWork
       !args.startup && !agentStartup && args.startupDraft
         ? await this.buildStartupForDraft(repo, args.startupDraft, requestedAgent)
         : null
-    const effectiveStartup = args.startup ?? agentStartup?.startup ?? draftStartup?.startup
+    const resolvedStartup = args.startup ?? agentStartup?.startup ?? draftStartup?.startup
+    const effectiveStartup =
+      resolvedStartup && args.startupActivate !== undefined
+        ? { ...resolvedStartup, activate: args.startupActivate }
+        : resolvedStartup
     const effectiveStartupFollowup = agentStartup?.followup
     const effectiveCreatedWithAgent = args.startup
       ? args.createdWithAgent

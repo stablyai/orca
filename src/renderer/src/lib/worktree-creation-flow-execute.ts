@@ -1,3 +1,4 @@
+import { bindCreationDraft } from './workspace-creation-drafts/creation-draft-session'
 import { toast } from 'sonner'
 import { useAppStore } from '@/store'
 import { preflightAgentTrust as preflightWorkspaceAgentTrust } from '@/lib/agent-trust-preflight'
@@ -86,6 +87,7 @@ export async function executeWorktreeCreation(
         preparedRequest.linkedGiteaPR,
         preparedRequest.compareBaseRef,
         {
+          callerOwnsCompletion: true,
           ...(preparedRequest.nameWasGenerated ? { nameWasGenerated: true } : {}),
           ...(preparedRequest.displayNameKind
             ? { displayNameKind: preparedRequest.displayNameKind }
@@ -170,6 +172,12 @@ export async function executeWorktreeCreation(
     (isPendingCreationSurfaceVisible(creationId) ||
       (completionState.activeView === 'terminal' &&
         completionState.activePendingCreationId === null))
+
+  bindCreationDraft(creationId, {
+    worktreeId: worktree.id,
+    ...(result.startupTerminal?.handle ? { terminalHandle: result.startupTerminal.handle } : {}),
+    ...(result.startupTerminal?.tabId ? { tabId: result.startupTerminal.tabId } : {})
+  })
 
   let activation: ActivateAndRevealResult | false = false
   let primaryTabId: string | null

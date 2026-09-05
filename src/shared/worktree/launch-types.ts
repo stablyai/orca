@@ -14,6 +14,8 @@ export type WorktreeSetupLaunch = {
 }
 
 export type WorktreeStartupLaunch = {
+  /** False leaves workspace selection to the caller. */
+  activate?: boolean
   command: string
   env?: Record<string, string>
   launchConfig?: SleepingAgentLaunchConfig

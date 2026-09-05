@@ -1,5 +1,6 @@
 import type { PaneManager } from '@/lib/pane-manager/pane-manager'
 import { useAppStore } from '@/store'
+import { shouldPreserveEditableFocus } from './pane-helpers'
 import { applyExpandedLayoutTo } from './expand-collapse'
 import { replayTerminalLayout, restoreScrollbackBuffers } from './layout-serialization'
 import { canReleaseReplayedScrollbackFromStore } from './replayed-scrollback-store-release'
@@ -20,8 +21,11 @@ export function restoreTerminalPaneLayout(args: {
 }): Map<string, number> {
   const { manager, deps, refs, ptyDeps, initialLayoutHadBuffers } = args
   const { initialLayoutRef, tabId, worktreeId, isActive, managerRef } = deps
+  const shouldFocus =
+    isActive &&
+    !shouldPreserveEditableFocus(typeof document === 'undefined' ? null : document.activeElement)
   const restoredPaneByLeafId = replayLayoutWithOneShotParkIntent(ptyDeps, () =>
-    replayTerminalLayout(manager, initialLayoutRef.current, isActive)
+    replayTerminalLayout(manager, initialLayoutRef.current, shouldFocus)
   )
   const restoredBuffers = initialLayoutRef.current.buffersByLeafId
   restoreScrollbackBuffers(
@@ -65,7 +69,7 @@ export function restoreTerminalPaneLayout(args: {
     manager.getPanes()[0]?.id ??
     null
   if (restoredActivePaneId !== null) {
-    manager.setActivePane(restoredActivePaneId, { focus: isActive })
+    manager.setActivePane(restoredActivePaneId, { focus: shouldFocus })
   }
   const restoredExpandedPaneId = initialLayoutRef.current.expandedLeafId
     ? (restoredPaneByLeafId.get(initialLayoutRef.current.expandedLeafId) ?? null)

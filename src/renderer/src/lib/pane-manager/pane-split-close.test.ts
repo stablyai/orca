@@ -118,7 +118,7 @@ describe('splitManagedPane', () => {
     vi.clearAllMocks()
   })
 
-  it('focuses the new pane before publishing an unresolved cwd spawn hint', () => {
+  it.each([undefined, true, false])('honors activate=%s before publishing a split', (activate) => {
     const existingPane = createPane(1, null)
     const newPane = createPane(2, null)
     const panes = new Map<number, ManagedPaneInternal>([[existingPane.id, existingPane]])
@@ -129,14 +129,15 @@ describe('splitManagedPane', () => {
       // Keep CWD pending across every synchronous split assertion.
     })
     const setActivePaneId = vi.fn()
+    const restorePaneOpacity = vi.fn()
     const publishPaneCreated = vi.fn(() => {
-      expect(newPane.terminal.focus).toHaveBeenCalledOnce()
+      expect(newPane.terminal.focus).toHaveBeenCalledTimes(activate === false ? 0 : 1)
     })
 
     const result = splitManagedPane({
       paneId: existingPane.id,
       direction: 'vertical',
-      opts: { cwdPromise },
+      opts: { cwdPromise, activate },
       panes,
       root: root as unknown as HTMLElement,
       styleOptions: {},
@@ -147,14 +148,20 @@ describe('splitManagedPane', () => {
       },
       createDivider: () => new MockElement(['pane-divider']) as unknown as HTMLElement,
       publishPaneCreated,
-      getDragCallbacks: () => ({}) as never,
+      getDragCallbacks: () => ({ applyPaneOpacity: restorePaneOpacity }) as never,
       setActivePaneId,
       isDestroyed: () => false
     })
 
     expect(result?.id).toBe(newPane.id)
-    expect(setActivePaneId).toHaveBeenCalledWith(newPane.id)
-    expect(newPane.terminal.focus).toHaveBeenCalledOnce()
+    if (activate === false) {
+      expect(setActivePaneId).not.toHaveBeenCalled()
+      expect(restorePaneOpacity).toHaveBeenCalledOnce()
+      expect(applyPaneOpacity).not.toHaveBeenCalled()
+    } else {
+      expect(setActivePaneId).toHaveBeenCalledWith(newPane.id)
+    }
+    expect(newPane.terminal.focus).toHaveBeenCalledTimes(activate === false ? 0 : 1)
     expect(publishPaneCreated).toHaveBeenCalledWith(newPane, { cwdPromise })
   })
 

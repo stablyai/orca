@@ -13,6 +13,7 @@ export class OrcaRuntimeWithSplitTerminal extends OrcaRuntimeWithStopExplicitlyC
       env?: Record<string, string>
       envToDelete?: string[]
       activate?: boolean
+      sourceSurfaceVisible?: boolean
       // Why: same split as createTerminal — adopt the pane without revealing its
       // workspace, for splits the user never asked to see.
       surfaceOwner?: false

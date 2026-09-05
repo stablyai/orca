@@ -25,6 +25,7 @@ export type PaneSpawnHints = {
 }
 
 export type PaneSplitOptions = PaneSpawnHints & {
+  activate?: boolean
   ratio?: number
   leafId?: string
 }

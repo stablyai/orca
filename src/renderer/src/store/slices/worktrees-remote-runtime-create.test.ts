@@ -209,6 +209,52 @@ describe('worktree remote runtime mutations', () => {
     expect(runtimeEnvironmentCall).not.toHaveBeenCalled()
   })
 
+  it.each([true, false])(
+    'negotiates caller-owned completion (supported: %s)',
+    async (supported) => {
+      const status = createCompatibleRuntimeStatusResponse('runtime-remote')
+      if (status.ok && !supported) {
+        status.result.capabilities = status.result.capabilities?.filter(
+          (capability) => capability !== 'worktree.caller-completion.v1'
+        )
+      }
+      runtimeEnvironmentTransportCall.mockImplementation((args: RuntimeEnvironmentCallRequest) =>
+        args.method === 'status.get' ? status : runtimeEnvironmentCall(args)
+      )
+      const store = createTestStore()
+      store.setState({
+        settings: { activeRuntimeEnvironmentId: 'env-1' } as never
+      } as Partial<AppState>)
+      runtimeEnvironmentCall.mockResolvedValue({
+        id: 'created',
+        ok: true,
+        result: { worktree: makeWorktree({ id: 'repo1::/path/draft', repoId: 'repo1' }) },
+        _meta: { runtimeId: 'runtime-remote' }
+      })
+      const createWorktree = store.getState().createWorktree
+      const args: Parameters<typeof createWorktree> = ['repo1', 'draft']
+      args[16] = { command: 'codex' }
+      args[25] = { callerOwnsCompletion: true }
+      await createWorktree(...args)
+      expect(runtimeEnvironmentCall).toHaveBeenCalledWith(
+        expect.objectContaining({
+          method: 'worktree.create',
+          params: expect.objectContaining(
+            supported
+              ? { startupActivate: false, activate: false, awaitTerminalProvisioning: true }
+              : { startupCommand: 'codex', activate: true }
+          )
+        })
+      )
+      if (!supported) {
+        expect(runtimeEnvironmentCall.mock.calls[0][0].params).not.toHaveProperty(
+          'awaitTerminalProvisioning'
+        )
+        expect(runtimeEnvironmentCall.mock.calls[0][0].params).not.toHaveProperty('startupActivate')
+      }
+    }
+  )
+
   it('passes startup commands through remote runtime worktree creation', async () => {
     const store = createTestStore()
     const wt = makeWorktree({

@@ -6,6 +6,8 @@ import type { WorkspaceLinkedItem } from '../../../../../../shared/worktree/type
 
 /** Trailing bag for `createWorktree` args that outgrew its positional list. */
 export type CreateWorktreeCallOptions = {
+  /** Bind the draft before revealing its terminal. */
+  callerOwnsCompletion?: boolean
   automationProvenanceRequest?: CreateWorktreeArgs['automationProvenanceRequest']
   linkedWorkItem?: WorkspaceLinkedItem | null
   linkedTaskSourceContext?: TaskSourceContext | null
@@ -100,19 +102,25 @@ function sharedCreateFields(
 
 export function buildLocalWorktreeCreateArgs(
   request: WorktreeCreateRequest,
-  attempt: WorktreeCreateAttempt
+  attempt: WorktreeCreateAttempt,
+  callerOwnsCompletion = false
 ): CreateWorktreeArgs {
   return {
     repoId: request.repoId,
     ...sharedCreateFields(request, attempt),
-    ...(request.startup ? { startup: request.startup } : {}),
+    ...(request.startup
+      ? {
+          startup: callerOwnsCompletion ? { ...request.startup, activate: false } : request.startup
+        }
+      : {}),
     ...(request.creationId ? { creationId: request.creationId } : {})
   }
 }
 
 export function buildRuntimeWorktreeCreateParams(
   request: WorktreeCreateRequest,
-  attempt: WorktreeCreateAttempt
+  attempt: WorktreeCreateAttempt,
+  callerOwnsCompletion = false
 ): Record<string, unknown> {
   const { startup, options } = request
   return {
@@ -129,8 +137,12 @@ export function buildRuntimeWorktreeCreateParams(
           ...(startup.startupCommandDelivery
             ? { startupCommandDelivery: startup.startupCommandDelivery }
             : {}),
-          activate: true
+          activate: startup.activate !== false,
+          ...(startup.activate !== undefined ? { startupActivate: startup.activate } : {})
         }
+      : {}),
+    ...(callerOwnsCompletion
+      ? { startupActivate: false, activate: false, awaitTerminalProvisioning: true }
       : {})
   }
 }

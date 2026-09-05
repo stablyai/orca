@@ -16580,5 +16580,32 @@
   },
   "quickOpen": {
     "moreMatchesAvailable": "D'autres correspondances sont peut-être disponibles. Affinez votre recherche pour réduire les résultats."
+  },
+  "creationDraft": {
+    "copyFailed": "Impossible de copier le brouillon.",
+    "copySaved": "Enregistré séparément. Utilisez Copier le brouillon pour transmettre ce texte à votre agent.",
+    "copySaveFailed": "Impossible d’enregistrer un brouillon séparé. Votre texte est toujours ici.",
+    "discardFailed": "Impossible de supprimer le brouillon. Votre texte est toujours ici.",
+    "promptLabel": "Brouillon du prompt de l’espace de travail",
+    "promptPlaceholder": "Commencez votre prompt pendant la préparation de l’espace de travail…",
+    "tooLong": "Ce texte dépasse la limite de 64 Ko par brouillon. Votre texte précédent est conservé.",
+    "full": "Les 64 emplacements de brouillon sont occupés. Supprimez un brouillon enregistré pour en commencer un autre.",
+    "delivered": "Envoyé au terminal. Votre brouillon est conservé ici.",
+    "uncertain": "L’envoi n’est pas confirmé. Vérifiez le terminal avant de renvoyer le texte. Votre brouillon est conservé ici.",
+    "sendFailed": "L’agent d’origine n’est pas prêt à recevoir ce brouillon. Votre texte est toujours ici ; vous pouvez le copier ou réessayer.",
+    "conflict": "Ce brouillon a été modifié dans une autre fenêtre. Enregistrez une copie séparée pour conserver votre texte.",
+    "saveFailed": "Non enregistré. Gardez cette fenêtre ouverte ou copiez votre texte.",
+    "saving": "Enregistrement…",
+    "saved": "Enregistré sur cet appareil",
+    "saveCopy": "Enregistrer une copie",
+    "retry": "Réessayer",
+    "openWorkspace": "Ouvrir l’espace de travail",
+    "discard": "Supprimer",
+    "sending": "Envoi…",
+    "send": "Envoyer",
+    "copy": "Copier le brouillon",
+    "savedDrafts": "Brouillons enregistrés",
+    "hide": "Masquer",
+    "loadFailed": "Impossible de charger les brouillons enregistrés."
   }
 }
