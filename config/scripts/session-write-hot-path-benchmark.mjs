@@ -1,10 +1,11 @@
 #!/usr/bin/env node
-// Benchmarks the three costs `setLocalWorkspaceSession` pays on every session write — the write
+// Benchmarks two CPU costs `setLocalWorkspaceSession` pays on every session write — the write
 // that fires on something as ordinary as clicking between two terminal split panes.
 //
-//   1. capTerminalScrollbackSessionBuffer  — UTF-8 budget scan per retained scrollback buffer
-//   2. remapPaneKeys                       — pane-key map rebuild that steady state throws away
-//   3. writeTerminalScrollbackSnapshotSync — synchronous encode + write + rename per leaf
+//   1. capTerminalScrollbackSessionBuffer — UTF-8 budget scan per retained scrollback buffer
+//   2. remapPaneKeys                      — pane-key map rebuild that steady state throws away
+//
+// The snapshot disk rewrite on the same path is measured by bench:scrollback-snapshot-write-skip.
 //
 // Each scenario runs the production export against a baseline that reproduces the pre-change
 // shape, so the reported speedup cannot drift away from what production actually does.
@@ -12,7 +13,6 @@ import { spawnSync } from 'node:child_process'
 import { performance } from 'node:perf_hooks'
 import fs from 'node:fs'
 import nodeModule from 'node:module'
-import os from 'node:os'
 import path from 'node:path'
 import process from 'node:process'
 import { fileURLToPath } from 'node:url'
@@ -64,8 +64,6 @@ const { remapAcknowledgedAgentPaneKeys } = await import(
   path.join(ROOT, 'src/main/persistence/restoring-sessions/pane-key-remapping.ts')
 )
 const { makePaneKey } = await import(path.join(ROOT, 'src/shared/stable-pane-id.ts'))
-const { writeTerminalScrollbackSnapshotSync, resetTerminalScrollbackSnapshotWriteMemoryForTest } =
-  await import(path.join(ROOT, 'src/main/terminal-scrollback-snapshots.ts'))
 
 function median(samples) {
   const sorted = [...samples].sort((left, right) => left - right)
@@ -237,44 +235,3 @@ report(
   remapCurrentMs,
   '  — and 3 discarded objects/write become 0'
 )
-
-// ---------------------------------------------------------------- scenario 3
-
-const snapshotRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'orca-session-write-bench-'))
-try {
-  const storage = { snapshotRoot, fallbackSnapshotRoot: null }
-  const leaves = Array.from({ length: LEAVES }, (_, index) => ({
-    tabId: 'slept-tab',
-    leafId: `leaf-${index}`,
-    buffer: atCapBuffer,
-    storage
-  }))
-  const writeAll = () => {
-    for (const leaf of leaves) {
-      writeTerminalScrollbackSnapshotSync(leaf)
-    }
-  }
-  // Baseline: what a republish cost before, i.e. every leaf reaching disk every time.
-  const alwaysWriteMs = timeRounds(() => {
-    resetTerminalScrollbackSnapshotWriteMemoryForTest()
-    writeAll()
-  })
-  writeAll()
-  const republishMs = timeRounds(writeAll)
-  const writtenFiles = fs.readdirSync(snapshotRoot).filter((name) => !name.endsWith('.tmp'))
-  if (writtenFiles.length !== LEAVES) {
-    throw new Error(`expected ${LEAVES} snapshot files, found ${writtenFiles.length}`)
-  }
-  const republishedBytes = writtenFiles.reduce(
-    (total, name) => total + fs.statSync(path.join(snapshotRoot, name)).size,
-    0
-  )
-  report(
-    `3. scrollback snapshot republish (${LEAVES} unchanged leaves/write)`,
-    alwaysWriteMs,
-    republishMs,
-    `  — ${(republishedBytes / 1024 / 1024).toFixed(2)} MB of disk writes per session write become 0`
-  )
-} finally {
-  fs.rmSync(snapshotRoot, { recursive: true, force: true })
-}

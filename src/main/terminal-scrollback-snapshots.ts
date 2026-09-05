@@ -96,41 +96,6 @@ function readTrailingUtf8(path: string, maxBytes: number): string {
   return bytes.subarray(start).toString('utf-8')
 }
 
-// Why: `setLocalWorkspaceSession` re-publishes every retained scrollback buffer on any layout
-// change — clicking between two split panes counts — so the same bytes were re-encoded and
-// re-written to disk each time. Remembering what is already on disk turns those into no-ops.
-// Keyed by resolved path and dropped on delete or write failure, so a missing file is always
-// rewritten.
-const writtenSnapshotDigestByPath = new Map<string, string>()
-const MAX_TRACKED_SNAPSHOT_DIGESTS = 256
-
-// Digests the source string, not the encoded bytes: `trailingUtf8Bytes` is a deterministic
-// function of it, so this keys the same content while skipping the encode on a republish.
-function snapshotDigest(buffer: string): string {
-  return createHash('sha256').update(buffer, 'utf-8').digest('base64')
-}
-
-function rememberWrittenSnapshotDigest(path: string, digest: string): void {
-  writtenSnapshotDigestByPath.delete(path)
-  writtenSnapshotDigestByPath.set(path, digest)
-  while (writtenSnapshotDigestByPath.size > MAX_TRACKED_SNAPSHOT_DIGESTS) {
-    const oldest = writtenSnapshotDigestByPath.keys().next().value
-    if (oldest === undefined) {
-      break
-    }
-    writtenSnapshotDigestByPath.delete(oldest)
-  }
-}
-
-function forgetWrittenSnapshotDigest(path: string): void {
-  writtenSnapshotDigestByPath.delete(path)
-}
-
-/** Test seam: drops the "already on disk" memory so a fixture can assert real writes. */
-export function resetTerminalScrollbackSnapshotWriteMemoryForTest(): void {
-  writtenSnapshotDigestByPath.clear()
-}
-
 export function writeTerminalScrollbackSnapshotSync(args: {
   tabId: string
   leafId: string
@@ -147,13 +112,9 @@ export function writeTerminalScrollbackSnapshotSync(args: {
     return null
   }
   try {
-    const digest = snapshotDigest(args.buffer)
-    if (writtenSnapshotDigestByPath.get(path) === digest) {
-      return ref
-    }
-    const bytes = trailingUtf8Bytes(args.buffer, TERMINAL_SCROLLBACK_STORE_BYTE_LIMIT)
     mkdirSync(snapshotRoot, { recursive: true, mode: 0o700 })
     const tmpPath = `${path}.${process.pid}.${Date.now()}.${Math.random().toString(16).slice(2)}.tmp`
+    const bytes = trailingUtf8Bytes(args.buffer, TERMINAL_SCROLLBACK_STORE_BYTE_LIMIT)
     let renamed = false
     try {
       writeFileSync(tmpPath, bytes, { mode: 0o600 })
@@ -164,10 +125,8 @@ export function writeTerminalScrollbackSnapshotSync(args: {
         rmSync(tmpPath, { force: true })
       }
     }
-    rememberWrittenSnapshotDigest(path, digest)
     return ref
   } catch (err) {
-    forgetWrittenSnapshotDigest(path)
     console.warn(
       `[terminal-scrollback] Failed to write snapshot: ${err instanceof Error ? err.message : String(err)}`
     )
@@ -190,22 +149,16 @@ export async function writeTerminalScrollbackSnapshot(args: {
   if (!path) {
     return null
   }
-  const digest = snapshotDigest(args.buffer)
-  if (writtenSnapshotDigestByPath.get(path) === digest) {
-    return ref
-  }
-  const bytes = trailingUtf8Bytes(args.buffer, TERMINAL_SCROLLBACK_STORE_BYTE_LIMIT)
   const tmpPath = `${path}.${process.pid}.${Date.now()}.${Math.random().toString(16).slice(2)}.tmp`
   let renamed = false
   try {
     await mkdir(snapshotRoot, { recursive: true, mode: 0o700 })
+    const bytes = trailingUtf8Bytes(args.buffer, TERMINAL_SCROLLBACK_STORE_BYTE_LIMIT)
     await writeFile(tmpPath, bytes, { mode: 0o600 })
     await rename(tmpPath, path)
     renamed = true
-    rememberWrittenSnapshotDigest(path, digest)
     return ref
   } catch (err) {
-    forgetWrittenSnapshotDigest(path)
     console.warn(
       `[terminal-scrollback] Failed to write snapshot: ${err instanceof Error ? err.message : String(err)}`
     )
@@ -236,7 +189,6 @@ export function deleteTerminalScrollbackSnapshotSync(
   storage?: TerminalScrollbackSnapshotStorage
 ): void {
   for (const path of snapshotReadPaths(ref, storage)) {
-    forgetWrittenSnapshotDigest(path)
     try {
       rmSync(path, { force: true })
     } catch {
@@ -250,10 +202,7 @@ export async function deleteTerminalScrollbackSnapshot(
   storage?: TerminalScrollbackSnapshotStorage
 ): Promise<void> {
   await Promise.all(
-    snapshotReadPaths(ref, storage).map((path) => {
-      forgetWrittenSnapshotDigest(path)
-      return rm(path, { force: true }).catch(() => {})
-    })
+    snapshotReadPaths(ref, storage).map((path) => rm(path, { force: true }).catch(() => {}))
   )
 }
 

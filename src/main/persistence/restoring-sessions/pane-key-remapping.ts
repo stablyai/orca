@@ -3,10 +3,7 @@ import { isTerminalLeafId, makePaneKey, parsePaneKey } from '../../../shared/sta
 
 type PaneLeafRemap = Map<string, Map<string, string>>
 
-/**
- * Resolves the pane key a legacy entry should move to, or `null` when it stays put.
- * Mirrors the classification the rewrite pass below applies.
- */
+/** Resolves the pane key a legacy entry should move to, or `null` when it stays put. */
 function resolveRemappedPaneKey(
   paneKey: string,
   leafIdByInputLeafIdByTabId: PaneLeafRemap
@@ -42,35 +39,21 @@ function remapPaneKeys<T extends number>(
   // Why the classify-first pass: these maps grow with every pane ever opened and this runs on
   // every session write, but post-migration no key is ever rewritten. Rebuilding the whole
   // object only to discard it was pure garbage; the rewrite below is unchanged.
-  let requiresRemap = false
-  for (const paneKey of Object.keys(values)) {
-    if (resolveRemappedPaneKey(paneKey, leafIdByInputLeafIdByTabId) !== null) {
-      requiresRemap = true
-      break
-    }
-  }
+  const requiresRemap = Object.keys(values).some(
+    (paneKey) => resolveRemappedPaneKey(paneKey, leafIdByInputLeafIdByTabId) !== null
+  )
   if (!requiresRemap) {
     return { values, changed: false }
   }
 
-  let changed = false
   const next: Record<string, T> = {}
-  const setValue = (paneKey: string, value: T): void => {
-    const existing = next[paneKey]
-    next[paneKey] = existing === undefined ? value : (Math.max(existing, value) as T)
-  }
   for (const [paneKey, value] of Object.entries(values)) {
-    const remappedPaneKey = resolveRemappedPaneKey(paneKey, leafIdByInputLeafIdByTabId)
-    if (remappedPaneKey === null) {
-      setValue(paneKey, value)
-      continue
-    }
-    // Carry values over when a legacy leaf is promoted to a UUID.
-    setValue(remappedPaneKey, value)
-    changed = true
+    // Carry values over when a legacy leaf is promoted to a UUID; keep the max on collision.
+    const target = resolveRemappedPaneKey(paneKey, leafIdByInputLeafIdByTabId) ?? paneKey
+    const existing = next[target]
+    next[target] = existing === undefined ? value : (Math.max(existing, value) as T)
   }
-
-  return { values: next, changed }
+  return { values: next, changed: true }
 }
 
 export function remapAcknowledgedAgentPaneKeys(
