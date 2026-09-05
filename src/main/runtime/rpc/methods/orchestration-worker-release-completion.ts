@@ -117,9 +117,6 @@ async function completeWorkerTerminalReleaseOnce(
   if (observation.status === 'identity_changed') {
     return retainWithUnprovenIdentity(dispatchId, db, resource.id)
   }
-  if (!workerTerminalLeaseIsCurrent(runtime, db, dispatchId, resource, terminalHandle)) {
-    return retainWithUnprovenIdentity(dispatchId, db, resource.id)
-  }
   if (observation.status === 'missing' || observation.status === 'unattached') {
     if (args.mode === 'recovery') {
       // Inventory may still be incomplete during startup/reconnect discovery; defer.
@@ -164,6 +161,10 @@ async function completeWorkerTerminalReleaseOnce(
       lastError: unknown.release_error ?? undefined,
       recovery: `Inspect with: orca orchestration worker-show --dispatch ${dispatchId} --json — then repeat worker-release with the same --retry-request. Never substitute a broad terminal close.`
     }
+  }
+
+  if (!workerTerminalLeaseIsCurrent(runtime, db, dispatchId, resource, terminalHandle)) {
+    return retainWithUnprovenIdentity(dispatchId, db, resource.id)
   }
 
   const archive = db.getWorkerTerminalArchive(dispatchId)

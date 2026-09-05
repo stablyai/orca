@@ -239,6 +239,62 @@ describe('orchestration worker release incarnation fallback', () => {
     })
   })
 
+  it('settles released before the lease check when a gone worker is provably exited with no live authority', async () => {
+    setup()
+    const { dispatchId } = await startSettledWorker()
+    // The durable handle no longer resolves and no live PTY carries the recorded incarnation, so
+    // inspectWorkerTerminal reports status 'missing' with a null handle.
+    vi.mocked(runtime.showTerminal).mockRejectedValue(new Error('terminal_handle_stale'))
+    const resolveByIncarnation = vi.fn().mockReturnValue(null)
+    ;(
+      runtime as unknown as {
+        resolveTerminalHandleByProcessIncarnation: typeof resolveByIncarnation
+      }
+    ).resolveTerminalHandleByProcessIncarnation = resolveByIncarnation
+    // No live authority backs the stale durable handle: the lease check cannot prove the lease
+    // current and must not pre-empt the missing-branch disposition of a provably gone worker.
+    vi.mocked(runtime.getOrchestrationDispatchAuthority).mockReturnValue(null)
+    inspectProcessLiveness.mockResolvedValue('exited')
+
+    const receipt = (await call('orchestration.workerRelease', { dispatch: dispatchId })) as {
+      state: string
+      processAction: string
+    }
+
+    expect(receipt).toMatchObject({ state: 'released', processAction: 'none' })
+    expect(receipt.state).not.toBe('retained')
+    expect(runtime.closeTerminal).not.toHaveBeenCalled()
+    expect(db.getWorkerTerminalResourceByOwner(dispatchId)).toMatchObject({
+      ownership_state: 'released',
+      release_state: 'released'
+    })
+  })
+
+  it('concedes release_unknown before the lease check when a gone worker has no live authority and liveness is unproven', async () => {
+    setup()
+    const { dispatchId } = await startSettledWorker()
+    vi.mocked(runtime.showTerminal).mockRejectedValue(new Error('terminal_handle_stale'))
+    const resolveByIncarnation = vi.fn().mockReturnValue(null)
+    ;(
+      runtime as unknown as {
+        resolveTerminalHandleByProcessIncarnation: typeof resolveByIncarnation
+      }
+    ).resolveTerminalHandleByProcessIncarnation = resolveByIncarnation
+    vi.mocked(runtime.getOrchestrationDispatchAuthority).mockReturnValue(null)
+    // Liveness is unresolvable/not-exited: the process may have been re-homed, so concede rather
+    // than retain or guess at a live process.
+    inspectProcessLiveness.mockResolvedValue('live')
+
+    const receipt = (await call('orchestration.workerRelease', { dispatch: dispatchId })) as {
+      state: string
+    }
+
+    expect(receipt.state).toBe('release_unknown')
+    expect(receipt.state).not.toBe('retained')
+    expect(runtime.closeTerminal).not.toHaveBeenCalled()
+    expect(db.getWorkerTerminalResourceByOwner(dispatchId)?.release_state).toBe('unknown')
+  })
+
   it('workerStop closes a live worker via the reminted handle when the durable handle is stale', async () => {
     setup()
     const { dispatchId } = await startWorker()
