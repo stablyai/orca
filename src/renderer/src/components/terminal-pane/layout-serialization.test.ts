@@ -350,6 +350,31 @@ describe('replayTerminalLayout', () => {
     }
   }
 
+  it.each([false, true])('preserves focus intent %s when restoring split panes', (focus) => {
+    const manager = createReplayManager()
+    manager.splitPane.mockReturnValue({ id: 2, leafId: LEAF_2 })
+    replayTerminalLayout(
+      manager as unknown as Parameters<typeof replayTerminalLayout>[0],
+      {
+        root: {
+          type: 'split',
+          direction: 'horizontal',
+          ratio: 0.5,
+          first: { type: 'leaf', leafId: LEAF_1 },
+          second: { type: 'leaf', leafId: LEAF_2 }
+        },
+        activeLeafId: LEAF_1,
+        expandedLeafId: null
+      },
+      focus
+    )
+    expect(manager.splitPane).toHaveBeenCalledWith(1, 'horizontal', {
+      ratio: 0.5,
+      leafId: LEAF_2,
+      activate: focus
+    })
+  })
+
   it('preserves the active leaf when replaying a single-pane snapshot without a root', () => {
     const manager = createReplayManager()
 
