@@ -30,9 +30,9 @@ type QueuedRuntimeCall<T> = {
 type RuntimeCallQueue = {
   active: number
   backgroundActive: number
-  foreground: QueuedRuntimeCall<unknown>[]
+  foreground: (QueuedRuntimeCall<unknown> | undefined)[]
   foregroundHead: number
-  background: QueuedRuntimeCall<unknown>[]
+  background: (QueuedRuntimeCall<unknown> | undefined)[]
   backgroundHead: number
 }
 
@@ -202,6 +202,7 @@ export class RuntimeRpcCallQueuePool {
       return undefined
     }
     const call = queue.foreground[queue.foregroundHead]
+    queue.foreground[queue.foregroundHead] = undefined
     queue.foregroundHead += 1
     this.queuedCallCount = Math.max(0, this.queuedCallCount - 1)
     this.compactForeground(queue)
@@ -213,6 +214,7 @@ export class RuntimeRpcCallQueuePool {
       return undefined
     }
     const call = queue.background[queue.backgroundHead]
+    queue.background[queue.backgroundHead] = undefined
     queue.backgroundHead += 1
     this.queuedCallCount = Math.max(0, this.queuedCallCount - 1)
     this.compactBackground(queue)
