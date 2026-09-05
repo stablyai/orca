@@ -23,6 +23,8 @@ describe('withStructuredSessionContinuation', () => {
       clientMessageId: 'provider-switch-ready:8'
     })
     const prior = agentJournalItemKey({ provider: 'orca', clientMessageId: 'prior' })
+    // Sits between the two status items, so only the ready boundary captures it.
+    const midSwitch = agentJournalItemKey({ provider: 'orca', clientMessageId: 'mid-switch' })
     const body = {
       kind: 'message' as const,
       role: 'user' as const,
@@ -49,10 +51,21 @@ describe('withStructuredSessionContinuation', () => {
           body: { kind: 'status', text: 'Switching to Claude.' }
         },
         {
-          itemId: ready,
+          itemId: midSwitch,
           revision: 1,
           sequence: 3,
           observedAt: 3,
+          body: {
+            kind: 'message',
+            role: 'assistant',
+            blocks: [{ type: 'text', text: 'Carrying the widget across' }]
+          }
+        },
+        {
+          itemId: ready,
+          revision: 1,
+          sequence: 4,
+          observedAt: 4,
           body: { kind: 'status', text: 'Now talking to Claude.' }
         }
       ]),
@@ -60,6 +73,7 @@ describe('withStructuredSessionContinuation', () => {
       body
     )
     expect(JSON.stringify(result)).toContain('Remember the blue widget')
+    expect(JSON.stringify(result)).toContain('Carrying the widget across')
     expect(result.blocks.at(-1)).toEqual(body.blocks[0])
   })
 })

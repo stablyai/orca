@@ -392,6 +392,78 @@ describe('method routing', () => {
     )
   })
 
+  it('restamps the switch envelope with the account home the host actually resolved', async () => {
+    hostCalls.listSessionTabs
+      .mockReturnValueOnce([{ sessionId: SESSION, workspaceId: 'workspace-1', agent: 'grok' }])
+      .mockReturnValue([{ sessionId: SESSION, workspaceId: 'workspace-1', agent: 'claude' }])
+    const fields = { agent: 'claude' as const, model: 'sonnet' }
+    await call(
+      'agentSession.switchProvider',
+      {
+        envelope: envelope({
+          payloadFingerprint: computeAgentSessionPayloadFingerprint({
+            method: 'agentSession.switchProvider',
+            sessionId: SESSION,
+            fields
+          })
+        }),
+        ...fields
+      },
+      STRUCTURED_CLIENT
+    )
+    expect(hostCalls.switchProvider.mock.calls[0]?.[1]?.envelope.payloadFingerprint).toBe(
+      computeAgentSessionPayloadFingerprint({
+        method: 'agentSession.switchProvider',
+        sessionId: SESSION,
+        fields: {
+          ...fields,
+          provider: 'claude',
+          accountHome: { variable: 'CLAUDE_CONFIG_DIR', path: '/host/.claude' }
+        }
+      })
+    )
+  })
+
+  it('refuses a switch whose declared intent fingerprint does not match its params', async () => {
+    const response = await call(
+      'agentSession.switchProvider',
+      { envelope: envelope(), agent: 'claude', model: 'sonnet' },
+      STRUCTURED_CLIENT
+    )
+    expect(response).toMatchObject({ ok: true, result: { ok: false } })
+    expect(hostCalls.switchProvider).not.toHaveBeenCalled()
+  })
+
+  it('reports an unknown outcome when the tab cannot be published after a committed switch', async () => {
+    hostCalls.listSessionTabs
+      .mockReturnValueOnce([{ sessionId: SESSION, workspaceId: 'workspace-1', agent: 'grok' }])
+      .mockReturnValue([{ sessionId: SESSION, workspaceId: 'workspace-1', agent: 'claude' }])
+    const fields = { agent: 'claude' as const, model: 'sonnet' }
+    const response = await call(
+      'agentSession.switchProvider',
+      {
+        envelope: envelope({
+          payloadFingerprint: computeAgentSessionPayloadFingerprint({
+            method: 'agentSession.switchProvider',
+            sessionId: SESSION,
+            fields
+          })
+        }),
+        ...fields
+      },
+      STRUCTURED_CLIENT,
+      {
+        publishStructuredAgentSessionTab: vi.fn(async () => {
+          throw new Error('snapshot write failed')
+        })
+      }
+    )
+    expect(response).toMatchObject({
+      ok: true,
+      result: { ok: false, refusal: { code: 'agent_session_operation_unknown' } }
+    })
+  })
+
   it('keeps current provider metadata when replaying an earlier switch', async () => {
     hostCalls.switchProvider.mockResolvedValueOnce({
       ok: true,

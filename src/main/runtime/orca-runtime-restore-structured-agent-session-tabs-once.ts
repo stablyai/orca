@@ -22,18 +22,19 @@ import { isWindowsAbsolutePathLike } from '../../shared/cross-platform-path'
 import { isWslUncPath } from '../../shared/wsl-paths'
 import { parseAppSshPtyId } from '../../shared/ssh-pty-id'
 import type { PtyProcessInspection } from '../providers/pty-process-inspection'
+import { translateMain } from '../i18n/main-i18n'
 
 function structuredAgentSessionTabTitle(agent: RuntimeMobileSessionAgentTab['agent']): string {
   if (agent === 'claude' || agent === 'openclaude') {
-    return 'Claude Chat'
+    return translateMain('agentSession.tab.title.claude', 'Claude Chat')
   }
   if (agent === 'grok') {
-    return 'Grok Chat'
+    return translateMain('agentSession.tab.title.grok', 'Grok Chat')
   }
   if (agent === 'cursor') {
-    return 'Cursor Chat'
+    return translateMain('agentSession.tab.title.cursor', 'Cursor Chat')
   }
-  return 'Codex Chat'
+  return translateMain('agentSession.tab.title.codex', 'Codex Chat')
 }
 
 export class OrcaRuntimeWithRestoreStructuredAgentSessionTabsOnce extends OrcaRuntimeWithResolveRecoveredStructuredTuiTranscript {

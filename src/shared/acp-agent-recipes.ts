@@ -44,6 +44,10 @@ export function acpAccountHomeVariable(
   return null
 }
 
+/** Pinned so a launch runs reviewed adapter code instead of whatever the registry publishes next. */
+const CLAUDE_ACP_ADAPTER = '@agentclientprotocol/claude-agent-acp@0.74.0'
+const CODEX_ACP_ADAPTER = '@agentclientprotocol/codex-acp@1.10.0'
+
 export function acpSpawnRecipe(agent: string): AcpSpawnRecipe | null {
   switch (agent) {
     case 'grok':
@@ -52,9 +56,9 @@ export function acpSpawnRecipe(agent: string): AcpSpawnRecipe | null {
       return { program: 'agent', args: ['acp'] }
     case 'claude':
     case 'openclaude':
-      return { program: 'npx', args: ['-y', '@agentclientprotocol/claude-agent-acp'] }
+      return { program: 'npx', args: ['-y', CLAUDE_ACP_ADAPTER] }
     case 'codex':
-      return { program: 'npx', args: ['-y', '@agentclientprotocol/codex-acp'] }
+      return { program: 'npx', args: ['-y', CODEX_ACP_ADAPTER] }
     default:
       return null
   }

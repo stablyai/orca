@@ -1,10 +1,17 @@
-import { readFile } from 'node:fs/promises'
 import { extname } from 'node:path'
 import type { AgentJournalItemBody } from '../../shared/agent-session-journal-types'
 import type { StructuredAgentSessionAcquireInput } from '../native-chat/agent-session-wire/structured-agent-session-adapter'
+import {
+  chatImageMimeType,
+  MAX_CHAT_IMAGE_COUNT,
+  MAX_CHAT_IMAGE_TOTAL_BYTES,
+  readBoundedChatImage
+} from '../native-chat/chat-image-attachment'
 import type { AcpJsonRpcServerRequest } from './acp-jsonrpc-connection'
 
 export type AcpPendingPrompt = { id: number | string; kind: 'approval' | 'question' | 'plan' }
+
+type AcpImageBudget = { count: number; bytes: number }
 
 type SessionUpdate = {
   sessionUpdate?: string
@@ -15,19 +22,12 @@ type SessionUpdate = {
   rawInput?: unknown
 }
 
-const IMAGE_MIME_BY_EXTENSION: Record<string, string> = {
-  '.gif': 'image/gif',
-  '.jpeg': 'image/jpeg',
-  '.jpg': 'image/jpeg',
-  '.png': 'image/png',
-  '.webp': 'image/webp'
-}
-
 export async function acpPromptBlocks(
   body: { blocks: { type: string; text?: string; path?: string }[] },
   imageCapable: boolean
 ): Promise<{ ok: true; prompt: Record<string, unknown>[] } | { ok: false; reason: string }> {
   const parts: Record<string, unknown>[] = []
+  const budget: AcpImageBudget = { count: 0, bytes: 0 }
   for (const block of body.blocks) {
     if (block.type === 'text' && block.text && block.text.length > 0) {
       parts.push({ type: 'text', text: block.text })
@@ -35,7 +35,7 @@ export async function acpPromptBlocks(
       if (!imageCapable) {
         return { ok: false, reason: 'ACP session does not accept images' }
       }
-      const image = await acpImageBlock(block.path)
+      const image = await acpImageBlock(block.path, budget)
       if (!image.ok) {
         return image
       }
@@ -65,24 +65,38 @@ export function acpPromptReply(
 }
 
 async function acpImageBlock(
-  path: string | undefined
+  path: string | undefined,
+  budget: AcpImageBudget
 ): Promise<{ ok: true; block: Record<string, unknown> } | { ok: false; reason: string }> {
   if (!path) {
     return { ok: false, reason: 'ACP image is missing a local path' }
   }
-  const mimeType = IMAGE_MIME_BY_EXTENSION[extname(path).toLowerCase()]
+  const mimeType = chatImageMimeType(path)
   if (!mimeType) {
     return { ok: false, reason: `ACP session does not support the image type ${extname(path)}` }
   }
-  try {
-    const data = await readFile(path)
-    if (data.byteLength === 0) {
-      return { ok: false, reason: 'ACP image is empty' }
-    }
-    return { ok: true, block: { type: 'image', mimeType, data: data.toString('base64') } }
-  } catch {
-    return { ok: false, reason: 'ACP image could not be read' }
+  budget.count += 1
+  if (budget.count > MAX_CHAT_IMAGE_COUNT) {
+    return { ok: false, reason: `ACP messages support at most ${MAX_CHAT_IMAGE_COUNT} images` }
   }
+  let data: Buffer
+  try {
+    // Bounded before the read: the base64 copy doubles whatever lands in main-process memory.
+    data = await readBoundedChatImage(path, 'ACP image')
+  } catch (error) {
+    return {
+      ok: false,
+      reason: error instanceof Error ? error.message : 'ACP image could not be read'
+    }
+  }
+  budget.bytes += data.byteLength
+  if (budget.bytes > MAX_CHAT_IMAGE_TOTAL_BYTES) {
+    return {
+      ok: false,
+      reason: `ACP images must total no more than ${MAX_CHAT_IMAGE_TOTAL_BYTES} bytes`
+    }
+  }
+  return { ok: true, block: { type: 'image', mimeType, data: data.toString('base64') } }
 }
 
 export function applyAcpSessionUpdate(input: {

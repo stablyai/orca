@@ -460,7 +460,7 @@ describe('AcpStructuredSessionAdapter', () => {
       openConnection: async () => connection,
       resolveLaunch: async () => ({
         command: 'npx',
-        args: ['-y', '@agentclientprotocol/claude-agent-acp'],
+        args: ['-y', '@agentclientprotocol/claude-agent-acp@0.74.0'],
         cwd: '/repo'
       }),
       readProcessStartTime: async () => 1

@@ -47,10 +47,26 @@ export type StructuredAgentSessionSwitchContext = Pick<
 
 const METHOD = 'agentSession.switchProvider'
 
-export function switchProviderFingerprintFields(
+/** What the renderer can name before the host resolves a provider: the switch intent alone. */
+export function switchProviderIntentFingerprintFields(
   params: Pick<StructuredAgentSessionSwitchProviderParams, 'agent' | 'model'>
 ): Record<string, unknown> {
   return params.model ? { agent: params.agent, model: params.model } : { agent: params.agent }
+}
+
+/** The resolved switch the host commits. The RPC boundary recomputes this and restamps the
+ *  envelope, so a retry that resolves a different account home is a different operation. */
+export function switchProviderFingerprintFields(
+  params: Pick<
+    StructuredAgentSessionSwitchProviderParams,
+    'agent' | 'model' | 'provider' | 'accountHome'
+  >
+): Record<string, unknown> {
+  return {
+    ...switchProviderIntentFingerprintFields(params),
+    provider: params.provider,
+    accountHome: params.accountHome
+  }
 }
 
 export async function switchStructuredAgentSessionProvider(

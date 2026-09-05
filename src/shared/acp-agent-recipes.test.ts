@@ -26,12 +26,12 @@ describe('ACP spawn recipes', () => {
   it('spawns the official ACP adapters for Claude and Codex', () => {
     expect(acpSpawnRecipe('claude')).toEqual({
       program: 'npx',
-      args: ['-y', '@agentclientprotocol/claude-agent-acp']
+      args: ['-y', '@agentclientprotocol/claude-agent-acp@0.74.0']
     })
     expect(acpSpawnRecipe('openclaude')).toEqual(acpSpawnRecipe('claude'))
     expect(acpSpawnRecipe('codex')).toEqual({
       program: 'npx',
-      args: ['-y', '@agentclientprotocol/codex-acp']
+      args: ['-y', '@agentclientprotocol/codex-acp@1.10.0']
     })
   })
 

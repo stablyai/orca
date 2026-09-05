@@ -125,16 +125,19 @@ afterEach(async () => {
 
 describe('switchProvider', () => {
   function switchToClaude() {
-    return {
-      envelope: envelope(
-        'agentSession.switchProvider',
-        { agent: 'claude', model: 'sonnet' },
-        store.getRecord(SESSION)!.lease.runtimeFence
-      ),
+    const resolved = {
       agent: 'claude' as const,
       provider: 'claude' as const,
       accountHome: { variable: 'CLAUDE_CONFIG_DIR' as const, path: '/home/dev/.claude' },
       model: 'sonnet'
+    }
+    return {
+      ...resolved,
+      envelope: envelope(
+        'agentSession.switchProvider',
+        switchProviderFingerprintFields(resolved),
+        store.getRecord(SESSION)!.lease.runtimeFence
+      )
     }
   }
 
@@ -154,17 +157,20 @@ describe('switchProvider', () => {
     await host.attach(CALLER, grokAttach())
     const first = switchToClaude()
     expect((await host.switchProvider(CALLER, first)).ok).toBe(true)
+    const backToGrok = {
+      agent: 'grok' as const,
+      provider: 'grok' as const,
+      accountHome: { variable: 'GROK_HOME' as const, path: '/home/dev/.grok' }
+    }
     expect(
       (
         await host.switchProvider(CALLER, {
+          ...backToGrok,
           envelope: envelope(
             'agentSession.switchProvider',
-            { agent: 'grok' },
+            switchProviderFingerprintFields(backToGrok),
             store.getRecord(SESSION)!.lease.runtimeFence
-          ),
-          agent: 'grok',
-          provider: 'grok',
-          accountHome: { variable: 'GROK_HOME', path: '/home/dev/.grok' }
+          )
         })
       ).ok
     ).toBe(true)
@@ -250,17 +256,7 @@ describe('switchProvider', () => {
       envelope: envelope('agentSession.send', { body: hostTestMessage('hi') }, fence),
       body: hostTestMessage('hi')
     })
-    const switched = await host.switchProvider(CALLER, {
-      envelope: envelope(
-        'agentSession.switchProvider',
-        switchProviderFingerprintFields({ agent: 'claude', model: 'sonnet' }),
-        fence
-      ),
-      agent: 'claude',
-      provider: 'claude',
-      accountHome: { variable: 'CLAUDE_CONFIG_DIR', path: '/home/dev/.claude' },
-      model: 'sonnet'
-    })
+    const switched = await host.switchProvider(CALLER, switchToClaude())
     expect(switched).toMatchObject({ ok: true, replayed: false, value: { agent: 'claude' } })
     expect(closeSession).toHaveBeenCalledOnce()
     expect(acquire.mock.calls.map((call) => call[0]?.identity.agent)).toEqual(['grok', 'claude'])
@@ -295,15 +291,18 @@ describe('switchProvider', () => {
     const created = await host.attach(CALLER, grokAttach())
     expect(created.ok).toBe(true)
     const fence = store.getRecord(SESSION)?.lease.runtimeFence ?? 1
-    const params = {
-      envelope: envelope(
-        'agentSession.switchProvider',
-        switchProviderFingerprintFields({ agent: 'claude' }),
-        fence
-      ),
+    const resolved = {
       agent: 'claude' as const,
       provider: 'claude' as const,
       accountHome: { variable: 'CLAUDE_CONFIG_DIR' as const, path: '/home/dev/.claude' }
+    }
+    const params = {
+      ...resolved,
+      envelope: envelope(
+        'agentSession.switchProvider',
+        switchProviderFingerprintFields(resolved),
+        fence
+      )
     }
     expect((await host.switchProvider(CALLER, params)).ok).toBe(true)
     closeSession.mockClear()
