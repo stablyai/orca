@@ -22,8 +22,8 @@ export function EditorChangedLineHighlightsSetting({
         'Changed Line Highlights'
       )}
       description={translate(
-        'auto.components.settings.EditorChangedLineHighlightsSetting.24b4de517a',
-        'Tint lines that differ from the git baseline while editing a tracked file.'
+        'auto.components.settings.EditorChangedLineHighlightsSetting.d483e27bbc',
+        'Tint changed lines while editing a tracked file, and color changed files in the file tree.'
       )}
       keywords={['changed lines', 'git', 'diff', 'gutter', 'highlight']}
     >
@@ -33,8 +33,8 @@ export function EditorChangedLineHighlightsSetting({
           'Changed Line Highlights'
         )}
         description={translate(
-          'auto.components.settings.EditorChangedLineHighlightsSetting.24b4de517a',
-          'Tint lines that differ from the git baseline while editing a tracked file.'
+          'auto.components.settings.EditorChangedLineHighlightsSetting.d483e27bbc',
+          'Tint changed lines while editing a tracked file, and color changed files in the file tree.'
         )}
         checked={enabled}
         onChange={() => updateSettings({ editorChangedLineHighlightsEnabled: !enabled })}

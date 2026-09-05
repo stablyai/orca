@@ -10,6 +10,8 @@ import type { MarkdownDocLinkDecorationController } from './monaco-markdown-doc-
 import { buildGitConflictDecorations } from './monaco-conflict-decorations'
 import { buildChangedLineDecorations } from './monaco-changed-line-decorations'
 
+export const CHANGED_LINE_DECORATION_DEBOUNCE_MS = 150
+
 export type MonacoEditorDecorations = {
   markdownDocLinkDecorationsRef: MutableRefObject<MarkdownDocLinkDecorationController | null>
   conflictDecorationsRef: MutableRefObject<editor.IEditorDecorationsCollection | null>
@@ -43,6 +45,7 @@ export function useMonacoEditorDecorations(params: {
   const markdownDocLinkDecorationsRef = useRef<MarkdownDocLinkDecorationController | null>(null)
   const conflictDecorationsRef = useRef<editor.IEditorDecorationsCollection | null>(null)
   const changedLineDecorationsRef = useRef<editor.IEditorDecorationsCollection | null>(null)
+  const changedLineDecorationTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const updateMarkdownCompletionDocuments = useCallback((): void => {
     const modelKey = editorRef.current?.getModel()?.uri.toString() ?? null
@@ -95,17 +98,33 @@ export function useMonacoEditorDecorations(params: {
 
   useEffect(() => {
     const ed = mountedEditor
+    const clearPendingRecompute = (): void => {
+      if (changedLineDecorationTimerRef.current !== null) {
+        clearTimeout(changedLineDecorationTimerRef.current)
+        changedLineDecorationTimerRef.current = null
+      }
+    }
+
     if (!ed || !changedLineDecorationsEnabled) {
+      clearPendingRecompute()
       changedLineDecorationsRef.current?.clear()
       return
     }
 
-    const decorations = buildChangedLineDecorations(diffContent, content)
-    if (!changedLineDecorationsRef.current) {
-      changedLineDecorationsRef.current = ed.createDecorationsCollection(decorations)
-      return
-    }
-    changedLineDecorationsRef.current.set(decorations)
+    // Why: buildChangedLineDecorations reruns a full LCS diff, so debounce it
+    // instead of recomputing on every keystroke of a large file.
+    clearPendingRecompute()
+    changedLineDecorationTimerRef.current = setTimeout(() => {
+      changedLineDecorationTimerRef.current = null
+      const decorations = buildChangedLineDecorations(diffContent, content)
+      if (!changedLineDecorationsRef.current) {
+        changedLineDecorationsRef.current = ed.createDecorationsCollection(decorations)
+        return
+      }
+      changedLineDecorationsRef.current.set(decorations)
+    }, CHANGED_LINE_DECORATION_DEBOUNCE_MS)
+
+    return clearPendingRecompute
   }, [changedLineDecorationsEnabled, content, diffContent, mountedEditor])
 
   useEffect(() => {

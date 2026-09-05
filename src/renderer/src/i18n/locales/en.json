@@ -11081,8 +11081,8 @@
           "placeholder": "Same as terminal font"
         },
         "EditorChangedLineHighlightsSetting": {
-          "24b4de517a": "Tint lines that differ from the git baseline while editing a tracked file.",
-          "67d39a5ae2": "Changed Line Highlights"
+          "67d39a5ae2": "Changed Line Highlights",
+          "d483e27bbc": "Tint changed lines while editing a tracked file, and color changed files in the file tree."
         },
         "GeneralRemoteServerUpdates": {
           "serverCount": "{{value0}} paired servers",
