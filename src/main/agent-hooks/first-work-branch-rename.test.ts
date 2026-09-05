@@ -556,4 +556,20 @@ describe('maybeAutoRenameBranchOnFirstWork', () => {
     expect(provider.renameCurrentBranch).toHaveBeenCalledWith('/repo/wt', 'you/fix-auth')
     expect(onRenamed).toHaveBeenCalledWith(REPO_ID)
   })
+
+  it('never runs git for a folder project, and settles so it stops re-probing', async () => {
+    // A folder project has no .git, so the branch probes below would all fail.
+    const folderRepo = { id: REPO_ID, path: '/folder', kind: 'folder' } as unknown as Repo
+    const getRepo = vi.fn(() => folderRepo)
+    const { deps, onRenamed, setRenameError } = makeDeps({ getRepo })
+
+    await maybeAutoRenameBranchOnFirstWork(workingEvent(), deps)
+    await maybeAutoRenameBranchOnFirstWork(workingEvent(), deps)
+
+    expect(gitExecFileAsyncMock).not.toHaveBeenCalled()
+    // Settled, not retried: the second `working` event short-circuits before resolving the repo again.
+    expect(getRepo).toHaveBeenCalledTimes(1)
+    expect(onRenamed).not.toHaveBeenCalled()
+    expect(setRenameError).not.toHaveBeenCalled()
+  })
 })

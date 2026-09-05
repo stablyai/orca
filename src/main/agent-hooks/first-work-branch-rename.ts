@@ -1,6 +1,7 @@
 // On first agent work in a fresh workspace, replace the auto-generated creature branch (e.g. `you/Nautilus`) with a short work-derived name.
 import type { GlobalSettings } from '../../shared/global-settings-types'
 import type { Repo } from '../../shared/repo-types'
+import { isFolderRepo } from '../../shared/repo-kind'
 import { getRepoIdFromWorktreeId, splitWorktreeIdForFilesystem } from '../../shared/worktree/id'
 import { parseWorkspaceKey } from '../../shared/workspace-scope'
 import { parsePaneKey } from '../../shared/stable-pane-id'
@@ -169,6 +170,10 @@ async function runAutoRename(
   const parsed = splitWorktreeIdForFilesystem(worktreeId)
   if (!repo || !parsed) {
     return stop('unresolved repo or worktree id')
+  }
+  // Why: a folder project is not a git repo, so every branch probe below fails; without a settled verdict it re-runs on each `working` event.
+  if (isFolderRepo(repo)) {
+    return stop('folder project has no branch to rename')
   }
   const worktreePath = parsed.worktreePath
 
