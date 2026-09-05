@@ -361,3 +361,51 @@ describe('terminal send CLI', () => {
     })
   })
 })
+
+describe('terminal create CLI', () => {
+  afterEach(() => {
+    vi.restoreAllMocks()
+  })
+
+  async function createWith(command: string | undefined): Promise<Record<string, unknown>> {
+    const call = vi.fn().mockResolvedValue({
+      result: { terminal: { handle: 'term-1', tabId: 'tab-1', worktreeId: 'wt-1' } }
+    })
+    vi.spyOn(console, 'log').mockImplementation(() => {})
+    const flags = new Map<string, string | boolean>([['worktree', 'path:/tmp/wt']])
+    if (command !== undefined) {
+      flags.set('command', command)
+    }
+    await TERMINAL_HANDLERS['terminal create']({
+      flags,
+      client: { call, isRemote: false } as unknown as RuntimeClient,
+      cwd: '/tmp/worktree',
+      json: true
+    })
+    return call.mock.calls[0]![1] as Record<string, unknown>
+  }
+
+  // Why (#17291): a worker-start chained right after create must find the agent already recognized.
+  it.each([
+    ['codex', 'codex'],
+    ['claude --model sonnet --effort high', 'claude'],
+    ['codex --yolo', 'codex']
+  ])('infers launchAgent from the interactive agent command %s', async (command, agent) => {
+    expect(await createWith(command)).toMatchObject({ command, launchAgent: agent })
+  })
+
+  it.each([
+    'codex exec "summarize"',
+    'claude -p "hello"',
+    'claude --version',
+    'npm run dev',
+    // Why: the interactivity of other agents' commands is not classified here, and a launchAgent
+    // also marks the pane unattended, so they stay unlabeled until the runtime infers them.
+    'gemini',
+    'opencode run "summarize"',
+    'aider --message "fix"',
+    undefined
+  ])('leaves launchAgent unset for %s', async (command) => {
+    expect(await createWith(command)).not.toHaveProperty('launchAgent')
+  })
+})
