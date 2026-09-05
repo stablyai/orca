@@ -767,6 +767,7 @@ describe('useIpcEvents updater integration', () => {
           tabId: 'tab-existing',
           worktreeId: 'wt-2',
           paneRuntimeId: -1,
+          activate: true,
           direction: 'vertical',
           sourceLeafId: 'leaf-source',
           sourcePtyId: 'pty-bg',

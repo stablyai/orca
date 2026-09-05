@@ -452,11 +452,16 @@ async function spawnLocalStartupAndSetupTerminals(args: {
       ...(sequencedStartup.viewMode ? { viewMode: sequencedStartup.viewMode } : {}),
       startupCommandDelivery: sequencedStartup.startupCommandDelivery,
       telemetry: sequencedStartup.telemetry,
-      activate: true
+      activate: sequencedStartup.activate !== false,
+      ...(sequencedStartup.activate === false ? { surfaceOwner: false } : {})
     })
     startupTerminalHandle = terminal.handle
     startupTerminal = {
       spawned: true,
+      handle: terminal.handle,
+      tabId: terminal.tabId,
+      paneKey: terminal.paneKey,
+      ptyId: terminal.ptyId,
       surface: terminal.surface
     }
   } catch (error) {
@@ -490,14 +495,17 @@ async function spawnLocalStartupAndSetupTerminals(args: {
           direction: setupLaunchMode === 'split-horizontal' ? 'horizontal' : 'vertical',
           command: setupCommand,
           env: setup.envVars,
-          activate: false
+          sourceSurfaceVisible: startupTerminal?.surface === 'visible',
+          activate: false,
+          ...(sequencedStartup.activate === false ? { surfaceOwner: false } : {})
         })
       } else {
         await runtime.createTerminal(`id:${worktree.id}`, {
           title: 'Setup',
           command: setupCommand,
           env: setup.envVars,
-          activate: false
+          activate: false,
+          ...(sequencedStartup.activate === false ? { surfaceOwner: false } : {})
         })
       }
       didSpawnSetup = true

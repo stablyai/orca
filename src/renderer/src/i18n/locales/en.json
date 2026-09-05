@@ -17626,5 +17626,32 @@
     "title": "Orca keeps failing to load",
     "stalledMessage": "The app window stopped responding while reloading after a crash.",
     "crashLoopMessage": "The app window crashed repeatedly and stopped reloading automatically."
+  },
+  "creationDraft": {
+    "copyFailed": "Could not copy the draft.",
+    "copySaved": "Saved separately. Use Copy draft to bring this text to your agent.",
+    "copySaveFailed": "Could not save a separate draft. Your text is still here.",
+    "discardFailed": "Could not discard the draft. Your text is still here.",
+    "promptLabel": "Workspace prompt draft",
+    "promptPlaceholder": "Start your prompt while the workspace prepares…",
+    "tooLong": "That text exceeds the 64 KB draft limit. Your previous text is kept.",
+    "full": "All 64 draft slots are in use. Discard a saved draft to start another.",
+    "delivered": "Sent to the terminal. Your draft is kept here.",
+    "uncertain": "Delivery is unconfirmed. Check the terminal before sending again. Your draft is kept here.",
+    "sendFailed": "The original agent is not ready for this draft. Your text is still here; you can copy it or try again.",
+    "conflict": "This draft changed in another window. Save a separate copy to keep your text.",
+    "saveFailed": "Not saved. Keep this window open or copy your text.",
+    "saving": "Saving…",
+    "saved": "Saved on this device",
+    "saveCopy": "Save a copy",
+    "retry": "Retry",
+    "openWorkspace": "Open workspace",
+    "discard": "Discard",
+    "sending": "Sending…",
+    "send": "Send",
+    "copy": "Copy draft",
+    "savedDrafts": "Saved drafts",
+    "hide": "Hide",
+    "loadFailed": "Saved drafts could not be loaded."
   }
 }

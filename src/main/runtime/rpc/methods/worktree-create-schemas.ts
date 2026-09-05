@@ -103,6 +103,8 @@ export const WorktreeCreate = z
     // first terminal pane launches the selected agent instead of an idle shell.
     // Clients that can't quote for the host shell send `startupAgent` instead.
     startupCommand: OptionalString,
+    startupActivate: z.boolean().optional(),
+    awaitTerminalProvisioning: z.boolean().optional(),
     startupEnv: z.record(z.string(), z.string()).optional(),
     startupLaunchConfig: sleepingAgentLaunchConfigSchema,
     startupCommandDelivery: z.enum(['fast', 'shell-ready']).optional(),

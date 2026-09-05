@@ -1,3 +1,4 @@
+import { isWebClientLocation } from '@/lib/web-client-location'
 import type { WorktreeSlice } from '../../worktree-helpers'
 import type { WorktreeSliceGet, WorktreeSliceSet } from '../listing/worktree-slice-types'
 import type { CreateWorktreeResult } from '../../../../../../shared/worktree/create-types'
@@ -9,10 +10,14 @@ import {
 } from '../../../../../../shared/new-workspace/worktree-create-retry-policy'
 import {
   assertRuntimeEnvironmentCapability,
+  runtimeEnvironmentSupportsCapability,
   callRuntimeRpc,
   getActiveRuntimeTarget
 } from '../../../../runtime/runtime-rpc-client'
-import { WORKTREE_LINKED_WORK_ITEM_CONTEXT_RUNTIME_CAPABILITY } from '../../../../../../shared/protocol-version'
+import {
+  WORKTREE_CALLER_COMPLETION_RUNTIME_CAPABILITY,
+  WORKTREE_LINKED_WORK_ITEM_CONTEXT_RUNTIME_CAPABILITY
+} from '../../../../../../shared/protocol-version'
 import { showLocalBaseRefUpdateSuggestionToast } from '@/components/sidebar/local-base-ref-suggestion-toast'
 import { requestWorktreeBaseFallbackNotice } from '@/components/worktree-base-fallback-notice'
 import { showLocalBaseRefRefreshToast } from './local-base-ref-refresh-toast'
@@ -44,24 +49,44 @@ async function runCreateAttempt(
   attempt: WorktreeCreateAttempt,
   target: RuntimeTarget
 ): Promise<CreateAttemptOutcome> {
+  const callerOwnsCompletion =
+    Boolean(request.options?.callerOwnsCompletion) &&
+    (target.kind === 'local'
+      ? !isWebClientLocation()
+      : await runtimeEnvironmentSupportsCapability(
+          target.environmentId,
+          WORKTREE_CALLER_COMPLETION_RUNTIME_CAPABILITY
+        ).catch(() => false))
   const provisionedRoot = request.options?.provisionedRoot
   const create = async (
     parentWorkspace: WorktreeCreateAttempt['parentWorkspace']
   ): Promise<CreateWorktreeResult> =>
     provisionedRoot
       ? await window.api.worktrees.adoptProvisionedRoot({
-          ...buildLocalWorktreeCreateArgs(request, { ...attempt, parentWorkspace }),
+          ...buildLocalWorktreeCreateArgs(
+            request,
+            { ...attempt, parentWorkspace },
+            callerOwnsCompletion
+          ),
           ...provisionedRoot
         })
       : target.kind === 'local'
         ? // Why local can still reject on the parent: paired web clients route this API to their host.
           await window.api.worktrees.create(
-            buildLocalWorktreeCreateArgs(request, { ...attempt, parentWorkspace })
+            buildLocalWorktreeCreateArgs(
+              request,
+              { ...attempt, parentWorkspace },
+              callerOwnsCompletion
+            )
           )
         : await callRuntimeRpc<CreateWorktreeResult>(
             target,
             'worktree.create',
-            buildRuntimeWorktreeCreateParams(request, { ...attempt, parentWorkspace }),
+            buildRuntimeWorktreeCreateParams(
+              request,
+              { ...attempt, parentWorkspace },
+              callerOwnsCompletion
+            ),
             { timeoutMs: 10 * 60_000 }
           )
   try {

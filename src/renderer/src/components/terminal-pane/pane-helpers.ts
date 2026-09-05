@@ -42,7 +42,7 @@ export function isLinuxUserAgent(
   return !isMacUserAgent(userAgent) && !isWindowsUserAgent(userAgent) && userAgent.includes('Linux')
 }
 
-function shouldPreserveEditableFocus(element: Element | null): boolean {
+export function shouldPreserveEditableFocus(element: Element | null): boolean {
   if (!(element instanceof HTMLElement)) {
     return false
   }

@@ -225,6 +225,28 @@ function createHarness(
 }
 
 describe('remote runtime terminal split authority', () => {
+  it('reveals a split after startup tab adoption but before its first graph sync', async () => {
+    const harness = createHarness(true, { rendererMounted: false })
+    const split = await harness.runtime.splitTerminal(harness.handle, {
+      direction: 'horizontal',
+      sourceSurfaceVisible: true,
+      surfaceOwner: false,
+      activate: false
+    })
+    expect(harness.revealTerminalSession).toHaveBeenCalledExactlyOnceWith(
+      WORKTREE_ID,
+      expect.objectContaining({
+        ptyId: SPLIT_PTY_ID,
+        tabId: TAB_ID,
+        leafId: split.leafId,
+        splitFromLeafId: SOURCE_LEAF_ID,
+        activate: false,
+        surfaceOwner: false
+      })
+    )
+    expect(harness.kill).not.toHaveBeenCalled()
+  })
+
   it('addresses a graph-backed split by stable leaf identity across a parked remount', async () => {
     const harness = createHarness(true, { rendererMounted: true, graphOnlySource: true })
 

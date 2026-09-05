@@ -66,7 +66,9 @@ export function splitManagedPane(args: SplitManagedPaneArgs): ManagedPane | null
   const movedPaneStates = prepareMovedPanesForSplit(existingContainer, existing, args.panes)
 
   wrapInSplit(existingContainer, newPane.container, isVertical, divider, args.opts)
-  args.setActivePaneId(newPane.id)
+  if (args.opts?.activate !== false) {
+    args.setActivePaneId(newPane.id)
+  }
   openSplitPane(args, newPane, args.opts?.cwd)
 
   for (const movedPaneState of movedPaneStates) {
@@ -142,9 +144,15 @@ function openSplitPane(
   cwd?: string
 ): void {
   openTerminal(newPane, args.managerOptions.terminalLigaturesEnabled?.())
-  applyPaneOpacity(args.panes.values(), newPane.id, args.styleOptions)
+  if (args.opts?.activate === false) {
+    args.getDragCallbacks().applyPaneOpacity()
+  } else {
+    applyPaneOpacity(args.panes.values(), newPane.id, args.styleOptions)
+  }
   applyDividerStyles(args.root, args.styleOptions)
-  newPane.terminal.focus()
+  if (args.opts?.activate !== false) {
+    newPane.terminal.focus()
+  }
   updateMultiPaneState(args.getDragCallbacks())
   // Why: forward one-shot spawn/adoption hints so the new pane inherits the
   // source cwd for local splits or attaches a runtime-spawned PTY for web splits.
