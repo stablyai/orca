@@ -433,13 +433,13 @@ jobs:
           # result's generation is authoritative either way.
           ISOLATE_RESULT="$(node dev/scripts/prepare-relay-production-capacity-canary.mjs \
             --director-origin "${DIRECTOR_ORIGIN}" --cell-origin "${CELL_ORIGIN}" \
-            --cell-id "${TARGET_CELL_ID}" --mode isolate)"
+            --cell-id "${TARGET_CELL_ID}" --approved-cells same-cap --mode isolate)"
           echo "${ISOLATE_RESULT}"
           ISOLATE_GENERATION="$(jq -er '.generation' <<< "${ISOLATE_RESULT}")"
           echo "SELECTOR_GENERATION_AFTER_ISOLATE=${ISOLATE_GENERATION}" >> "${GITHUB_ENV}"
           node dev/scripts/prepare-relay-production-capacity-canary.mjs \
             --director-origin "${DIRECTOR_ORIGIN}" --cell-origin "${CELL_ORIGIN}" \
-            --cell-id "${TARGET_CELL_ID}" --mode drain
+            --cell-id "${TARGET_CELL_ID}" --approved-cells same-cap --mode drain
           node dev/scripts/verify-relay-capacity-transition.mjs \
             --director-origin "${DIRECTOR_ORIGIN}" --cell-origin "${CELL_ORIGIN}" \
             --cell-id "${TARGET_CELL_ID}" --hard-cap "${EXPECTED_HARD_CAP}" \
@@ -613,7 +613,7 @@ jobs:
           echo "MUTATION_STARTED=true" >> "${GITHUB_ENV}"
           ACTIVATE_RESULT="$(node dev/scripts/prepare-relay-production-capacity-canary.mjs \
             --director-origin "${DIRECTOR_ORIGIN}" --cell-origin "${CELL_ORIGIN}" \
-            --cell-id "${TARGET_CELL_ID}" --mode activate)"
+            --cell-id "${TARGET_CELL_ID}" --approved-cells same-cap --mode activate)"
           echo "${ACTIVATE_RESULT}"
           SELECTOR_GENERATION_AFTER_ACTIVATE="$(jq -er '.generation' \
             <<< "${ACTIVATE_RESULT}")"
@@ -652,7 +652,7 @@ jobs:
           test "${MUTATION_STARTED:-false}" = true || exit 0
           ISOLATE_RESULT="$(node dev/scripts/prepare-relay-production-capacity-canary.mjs \
             --director-origin "${DIRECTOR_ORIGIN}" --cell-origin "${CELL_ORIGIN}" \
-            --cell-id "${TARGET_CELL_ID}" --mode isolate)"
+            --cell-id "${TARGET_CELL_ID}" --approved-cells same-cap --mode isolate)"
           echo "${ISOLATE_RESULT}"
           # The isolate result carries the authoritative post-isolate generation;
           # fixed offsets are wrong whenever an earlier isolate was a no-op.
