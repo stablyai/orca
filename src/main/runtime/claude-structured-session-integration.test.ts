@@ -30,7 +30,8 @@ import { RpcDispatcher } from './rpc/dispatcher'
 import { STRUCTURED_AGENT_SESSION_METHODS } from './rpc/methods/structured-agent-session'
 import {
   ensureStructuredAgentSessionHost,
-  stopStructuredAgentSessionRuntime
+  stopStructuredAgentSessionRuntime,
+  waitForStructuredAgentSessionRecovery
 } from './structured-agent-session-runtime'
 
 const SESSION = 'claude-integration-1'
@@ -524,13 +525,9 @@ describe('a structured Claude session over agentSession.*', () => {
     connection.exitVerdict = { root: 'exited', tree: 'unverifiable' }
     connection.handlers.onExit?.(new Error('claude stream-json exited (code 1): crashed'))
 
-    for (
-      let attempt = 0;
-      attempt < 20 && leaseOf(SESSION).claimStatus !== 'released';
-      attempt += 1
-    ) {
-      await new Promise((resolve) => setTimeout(resolve, 5))
-    }
+    // Claude publishes an exit only after its close ladder and transcript write,
+    // so the recovery barrier — not a wall-clock poll — is what says it landed.
+    await waitForStructuredAgentSessionRecovery()
     expect(leaseOf(SESSION)).toMatchObject({ claimStatus: 'released', handoffStage: null })
   })
 

@@ -91,9 +91,35 @@ export class ClaudeStructuredSessionAdapter implements StructuredAgentSessionAda
       closePromise
     }
     this.exits.set(sessionId, exit)
-    void closePromise
+    exit.publication = closePromise
       .then((proven) => (proven ? this.settleUnexpectedExit(sessionId, exit) : undefined))
       .catch(() => undefined)
+  }
+
+  /** Resolves once every first-hand exit observed so far has published its
+   *  lifecycle event — or has failed its tree proof and stayed indexed for a
+   *  retry. Publication trails observation by the close ladder and the
+   *  transcript cursor write, so nothing outside can otherwise tell the two
+   *  apart without guessing at wall-clock. */
+  drainObservedExits = async (): Promise<void> => {
+    const awaited = new Set<Promise<void>>()
+    for (;;) {
+      const pending = [...this.exits.values()]
+        .map((exit) => exit.publication)
+        .filter(
+          (publication): publication is Promise<void> =>
+            publication !== undefined && !awaited.has(publication)
+        )
+      if (pending.length === 0) {
+        return
+      }
+      for (const publication of pending) {
+        awaited.add(publication)
+      }
+      // A publication can settle an exit that itself observes another; only the
+      // ones this pass has not already awaited keep the loop going.
+      await Promise.all(pending)
+    }
   }
 
   /** Lifecycle recovery is published only after the child tree proof is true. */
