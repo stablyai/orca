@@ -67,6 +67,16 @@ function readProjectConfig(configPath: string): {
     undefined,
     extendedConfigCache
   )
+  // Code 18003 ("no inputs found") is expected here: a brand-new unsaved file has no on-disk
+  // match for `include`, but it's still served via the open-file override below.
+  const fatalErrors = parsed.errors.filter((error) => error.code !== 18003)
+  if (fatalErrors.length > 0) {
+    throw new Error(
+      fatalErrors
+        .map((error) => ts.flattenDiagnosticMessageText(error.messageText, '\n'))
+        .join('\n')
+    )
+  }
   return {
     options: parsed.options,
     fileNames: new Set(parsed.fileNames),
@@ -141,10 +151,13 @@ function getOrCreateProject(configPath: string): TypeScriptProject {
       if (override) {
         return `override:${override.version}`
       }
-      // stat (not read+hash) so an on-disk edit elsewhere is detected without re-reading the file.
+      // stat (not read+hash) so an on-disk edit elsewhere is detected without re-reading the
+      // file. ctimeMs is included because it can't be preserved by whatever rewrote the file
+      // (unlike mtime/size, e.g. via rsync --times), so a same-size rewrite that restores the
+      // original mtime still changes the version.
       try {
         const stats = statSync(resolveTypeScriptSystemPath(filePath))
-        return `${stats.mtimeMs}:${stats.size}`
+        return `${stats.mtimeMs}:${stats.ctimeMs}:${stats.size}`
       } catch {
         return 'missing'
       }

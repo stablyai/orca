@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from 'vitest'
-import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, rm, stat, utimes, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { getTypeScriptDefinition } from './typescript-language-service'
@@ -219,6 +219,107 @@ describe('getTypeScriptDefinition', () => {
       position
     })
     expect(after?.filePath).toBe(utilFilePath)
+  })
+
+  it('detects a same-size on-disk rewrite even when the modification time is restored', async () => {
+    const { rootPath, srcPath } = await createProject()
+    const utilFilePath = join(srcPath, 'util.ts')
+    const otherBlock = 'export function other(): void {}\n'
+    const greetBlock = 'export function greet(name: string): string {\n  return name\n}\n'
+    await writeFile(utilFilePath, otherBlock + greetBlock)
+    const indexFilePath = join(srcPath, 'index.ts')
+    const indexContent = "import { greet } from './util'\n\nconst message = greet('world')\n"
+    const position = positionInsideSecondOccurrence(indexContent, 'greet')
+
+    const first = getTypeScriptDefinition({
+      rootPath,
+      filePath: indexFilePath,
+      content: indexContent,
+      position
+    })
+    expect(first?.range.startLineNumber).toBe(2)
+
+    const statsBefore = await stat(utilFilePath)
+
+    // Reorder the two same-length declarations (file size unchanged), then restore the
+    // original mtime — simulates a tool (e.g. `rsync --times`) that preserves timestamps.
+    await writeFile(utilFilePath, greetBlock + otherBlock)
+    await utimes(utilFilePath, statsBefore.atime, statsBefore.mtime)
+
+    const second = getTypeScriptDefinition({
+      rootPath,
+      filePath: indexFilePath,
+      content: indexContent,
+      position
+    })
+    expect(second?.range.startLineNumber).toBe(1)
+  })
+
+  it('keeps serving the last-good config when an inherited config has semantically invalid options', async () => {
+    const rootPath = await mkdtemp(join(tmpdir(), 'orca-ts-definition-'))
+    roots.push(rootPath)
+    const srcPath = join(rootPath, 'src')
+    await mkdir(srcPath, { recursive: true })
+    const libPath = join(rootPath, 'lib')
+    await mkdir(libPath, { recursive: true })
+    const utilFilePath = join(libPath, 'util.ts')
+    await writeFile(
+      utilFilePath,
+      'export function greet(name: string): string {\n  return name\n}\n'
+    )
+    await writeFile(
+      join(rootPath, 'tsconfig.base.json'),
+      JSON.stringify({
+        compilerOptions: {
+          target: 'ES2020',
+          module: 'commonjs',
+          moduleResolution: 'node',
+          baseUrl: '.',
+          paths: { '@lib/*': ['lib/*'] }
+        }
+      })
+    )
+    await writeFile(
+      join(rootPath, 'tsconfig.json'),
+      JSON.stringify({
+        extends: './tsconfig.base.json',
+        include: ['src/**/*.ts', 'lib/**/*.ts']
+      })
+    )
+    const indexFilePath = join(srcPath, 'index.ts')
+    const indexContent = "import { greet } from '@lib/util'\n\nconst message = greet('world')\n"
+    const position = positionInsideSecondOccurrence(indexContent, 'greet')
+
+    const before = getTypeScriptDefinition({
+      rootPath,
+      filePath: indexFilePath,
+      content: indexContent,
+      position
+    })
+    expect(before?.filePath).toBe(utilFilePath)
+
+    // Valid JSON, but a `target` value TypeScript rejects — parseJsonConfigFileContent reports
+    // this via `parsed.errors`, not a readConfigFile parse error.
+    await writeFile(
+      join(rootPath, 'tsconfig.base.json'),
+      JSON.stringify({
+        compilerOptions: {
+          target: 'notarealtarget',
+          module: 'commonjs',
+          moduleResolution: 'node',
+          baseUrl: '.',
+          paths: { '@lib/*': ['lib/*'] }
+        }
+      })
+    )
+
+    const duringInvalidEdit = getTypeScriptDefinition({
+      rootPath,
+      filePath: indexFilePath,
+      content: indexContent,
+      position
+    })
+    expect(duringInvalidEdit?.filePath).toBe(utilFilePath)
   })
 
   it('keeps serving the last-good config when tsconfig.json becomes transiently invalid', async () => {
