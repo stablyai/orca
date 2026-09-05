@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import { OrcaRuntimeService } from './orca-runtime'
+import { makePaneKey } from '../../shared/stable-pane-id'
 
 const PTY_ID = 'ssh:target@@relay-pty'
 const WORKTREE_ID = 'repo::/worktree'
@@ -287,14 +288,18 @@ describe('resolveTerminalHandleByProcessIncarnation direct fencing', () => {
     // 'relay:conn:incarnation-1'. The decoy is registered FIRST and lives in a different host scope
     // (ssh:decoy); the genuine pty is local and registered later.
     const processIncarnation = 'relay:conn:incarnation-1'
+    const DECOY_TAB_ID = 'tab-decoy'
+    const DECOY_LEAF_ID = '22222222-2222-4222-8222-222222222222'
+    const GENUINE_TAB_ID = 'tab-genuine'
+    const GENUINE_LEAF_ID = '33333333-3333-4333-8333-333333333333'
     runtime.registerPty('relay', WORKTREE_ID, 'decoy', {
-      tabId: 'tab-decoy',
-      leafId: '22222222-2222-4222-8222-222222222222',
+      tabId: DECOY_TAB_ID,
+      leafId: DECOY_LEAF_ID,
       incarnationId: 'conn:incarnation-1'
     })
     runtime.registerPty('relay:conn', WORKTREE_ID, null, {
-      tabId: 'tab-genuine',
-      leafId: '33333333-3333-4333-8333-333333333333',
+      tabId: GENUINE_TAB_ID,
+      leafId: GENUINE_LEAF_ID,
       incarnationId: 'incarnation-1'
     })
 
@@ -302,5 +307,13 @@ describe('resolveTerminalHandleByProcessIncarnation direct fencing', () => {
     // genuine same-scope pty entirely. `continue` lets the scan reach it.
     const handle = resolve(runtime, processIncarnation, LOCAL_SCOPE)
     expect(handle).toMatch(/^term_/)
+    // getTerminalProcessIncarnation cannot separate the two (both stringify to
+    // 'relay:conn:incarnation-1'), so pin the remint to the GENUINE pane. The paneKey is the only
+    // terminal-specific observable that distinguishes the genuine leaf from the same-incarnation
+    // decoy; this fails if the resolver ever mints the decoy's handle instead of the genuine pty's.
+    const genuinePaneKey = makePaneKey(GENUINE_TAB_ID, GENUINE_LEAF_ID)
+    const decoyPaneKey = makePaneKey(DECOY_TAB_ID, DECOY_LEAF_ID)
+    expect(runtime.getTerminalPaneKey(handle!)).toBe(genuinePaneKey)
+    expect(runtime.getTerminalPaneKey(handle!)).not.toBe(decoyPaneKey)
   })
 })
