@@ -501,6 +501,7 @@ jobs:
                 --rollback-image "${DESIRED_IMAGE}" \
                 --rehome-director-service-account "${DIRECTOR_RUNTIME_SERVICE_ACCOUNT}" \
                 --rehome-audience https://relay.onorca.dev/v1/admin/host-drain \
+                --regional-rehome-protocol "${DESIRED_REHOME_PROTOCOL}" \
               | jq -e '.changes == 2' >/dev/null
           fi
           gcloud compute instance-groups managed wait-until "${MIG_NAME}" --stable \
@@ -526,7 +527,8 @@ jobs:
               --unobserved-bound "${EXPECTED_UNOBSERVED_BOUND}" --image "${DESIRED_IMAGE}" \
               --rollback-image "${IMAGE_REPOSITORY}@${CURRENT_IMAGE_DIGEST}" \
               --rehome-director-service-account "${DIRECTOR_RUNTIME_SERVICE_ACCOUNT}" \
-              --rehome-audience https://relay.onorca.dev/v1/admin/host-drain
+              --rehome-audience https://relay.onorca.dev/v1/admin/host-drain \
+              --regional-rehome-protocol "${DESIRED_REHOME_PROTOCOL}"
           terraform -chdir=infra/terraform apply -auto-approve \
             "${RUNNER_TEMP}/relay-same-cap.tfplan"
           gcloud compute instance-groups managed wait-until "${MIG_NAME}" --stable \
