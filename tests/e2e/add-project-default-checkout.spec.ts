@@ -4,6 +4,7 @@ import { mkdtemp } from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
 import { test, expect } from './helpers/orca-app'
+import { openAddProjectDialog } from './helpers/sidebar-navigation'
 import { waitForSessionReady } from './helpers/store'
 
 const tempRoots: string[] = []
@@ -86,10 +87,7 @@ test.describe('Add project default checkout', () => {
     await waitForSessionReady(orcaPage)
     const fixture = await createCloneFixture()
 
-    await orcaPage
-      .getByRole('button', { name: /Add Project/i })
-      .first()
-      .click()
+    await openAddProjectDialog(orcaPage)
     const addDialog = orcaPage.getByRole('dialog', { name: /Add a project/i })
     await expect(addDialog).toBeVisible()
     await addDialog.getByRole('button', { name: /Clone from URL/i }).click()

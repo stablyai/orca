@@ -32,7 +32,7 @@ type SplitGroupTerminal = {
 }
 
 function agentsSidebarButton(page: Page) {
-  return page.getByRole('radio', { name: /^Agents$/ }).first()
+  return page.getByRole('button', { name: /View activity|Turn off activity view/i }).first()
 }
 
 async function seedActivityThread(

@@ -5,6 +5,7 @@ import os from 'node:os'
 import path from 'node:path'
 import type { ElectronApplication, Locator } from '@stablyai/playwright-test'
 import { test, expect } from './helpers/orca-app'
+import { openAddProjectDialog } from './helpers/sidebar-navigation'
 import { waitForSessionReady } from './helpers/store'
 
 const tempRoots: string[] = []
@@ -166,10 +167,7 @@ test('prioritizes shallow sibling repositories in a bounded nested scan', async 
   const fixture = await createShallowPriorityTruncationFixture()
   await chooseFolderInNativeDialog(electronApp, fixture.parentPath)
 
-  await orcaPage
-    .getByRole('button', { name: /Add Project/i })
-    .first()
-    .click()
+  await openAddProjectDialog(orcaPage)
   const dialog = orcaPage.getByRole('dialog', { name: /Add a project/i })
   await expect(dialog).toBeVisible()
   await dialog.getByRole('button', { name: /Browse folder/i }).click()
@@ -256,10 +254,7 @@ test('can stop a nested repo scan and import repositories found so far', async (
   })
   await chooseFolderInNativeDialog(electronApp, fixture.parentPath)
 
-  await orcaPage
-    .getByRole('button', { name: /Add Project/i })
-    .first()
-    .click()
+  await openAddProjectDialog(orcaPage)
   const dialog = orcaPage.getByRole('dialog', { name: /Add a project/i })
   await dialog.getByRole('button', { name: /Browse folder/i }).click()
 

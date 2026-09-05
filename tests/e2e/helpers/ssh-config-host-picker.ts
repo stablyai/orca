@@ -7,6 +7,7 @@ import { mkdirSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
 import type { ElectronApplication, Locator, Page } from '@stablyai/playwright-test'
 import { expect } from '@stablyai/playwright-test'
+import { openAddProjectDialog } from './sidebar-navigation'
 
 export function makeSshConfigHostPrefix(): string {
   return `e2e-ssh-cfg-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`
@@ -101,10 +102,7 @@ export async function returnToAppShell(page: Page): Promise<void> {
 /** Add Project → Host → Add remote host → Add SSH host → form dialog. */
 export async function openAddSshHostDialog(page: Page): Promise<Locator> {
   await returnToAppShell(page)
-  await page
-    .getByRole('button', { name: /Add Project/i })
-    .first()
-    .click()
+  await openAddProjectDialog(page)
   const addProjectDialog = page.getByRole('dialog', { name: /Add a project/i })
   await expect(addProjectDialog).toBeVisible({ timeout: 10_000 })
 

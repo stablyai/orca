@@ -5,6 +5,7 @@ import os from 'node:os'
 import path from 'node:path'
 import type { ElectronApplication, Page } from '@stablyai/playwright-test'
 import { test, expect } from './helpers/orca-app'
+import { openAddProjectDialog } from './helpers/sidebar-navigation'
 import { worktreeRow, worktreeRowSurface } from './worktree-row-locators'
 
 type RuntimePairingOffer = {
@@ -343,10 +344,7 @@ test('routes Add Project folder browsing through the paired host', async ({
   const offer = await createPairingOffer(orcaPage)
   const client = await openPairedClient(electronApp, offer, visibleWorktreeId)
   try {
-    await client
-      .getByRole('button', { name: /Add Project/i })
-      .first()
-      .click()
+    await openAddProjectDialog(client)
     const addDialog = client.getByRole('dialog', { name: /Add a project/i })
     await expect(addDialog).toBeVisible()
     await expect(addDialog).not.toContainText('Local Mac')
