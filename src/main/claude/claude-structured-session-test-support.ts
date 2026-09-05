@@ -155,6 +155,10 @@ export function fakeClaude(
         connection.calls.push({ subtype: 'cancel_async_message', params: { uuid } })
         routed('cancel_async_message', { uuid })
       },
+      stopTask: async (taskId) => {
+        connection.calls.push({ subtype: 'stop_task', params: { taskId } })
+        routed('stop_task', { taskId })
+      },
       send: async (message) => {
         connection.sent.push(message)
         if (message.type === 'user' && options.replayUuid !== null) {
@@ -191,7 +195,8 @@ export function adapterFor(
   persistedHandles: unknown[] = [],
   initTimeoutMs?: number,
   readTranscriptLeaf?: ClaudeStructuredSessionAdapterDeps['readTranscriptLeaf'],
-  persistHandle?: ClaudeStructuredSessionAdapterDeps['persistHandle']
+  persistHandle?: ClaudeStructuredSessionAdapterDeps['persistHandle'],
+  onBackgroundTasksChanged?: ClaudeStructuredSessionAdapterDeps['onBackgroundTasksChanged']
 ): ClaudeStructuredSessionAdapter {
   return new ClaudeStructuredSessionAdapter({
     resolveLaunch: async () => ({
@@ -215,6 +220,7 @@ export function adapterFor(
       (async (handle) => {
         persistedHandles.push(handle)
       }),
+    ...(onBackgroundTasksChanged ? { onBackgroundTasksChanged } : {}),
     ...(readTranscriptLeaf ? { readTranscriptLeaf } : {})
   })
 }

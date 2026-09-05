@@ -9,6 +9,7 @@ import {
   structuredAgentSessionPayloadFingerprint
 } from '../../../shared/structured-agent-session-mutation'
 import { hasRuntimeRpcErrorCode } from '../../../shared/runtime-rpc-error-code'
+import { isDefinitiveAgentSessionCreateRefusal } from '../../../shared/agent-session-definitive-refusal'
 import { callStructuredAgentSession } from '@/runtime/structured-agent-session-client'
 import { toRuntimeWorktreeSelector } from '@/runtime/runtime-worktree-selector'
 import { useAppStore } from '@/store'
@@ -32,7 +33,36 @@ export type StructuredAgentSessionLaunchIntent = {
   params: StructuredAgentSessionCreateParams
 }
 
-export class StructuredAgentSessionCreateRefusalError extends Error {}
+export class StructuredAgentSessionCreateRefusalError extends Error {
+  constructor(
+    message: string,
+    readonly code: string = 'structured_agent_session_unsupported'
+  ) {
+    super(message)
+    this.name = 'StructuredAgentSessionCreateRefusalError'
+  }
+}
+
+const DEFINITIVE_CREATE_FAILURE_CODES = [
+  'structured_agent_session_unsupported',
+  'method_not_found'
+] as const
+
+function definitiveStructuredAgentSessionCreateErrorCode(error: unknown): string | null {
+  if (error instanceof StructuredAgentSessionCreateRefusalError) {
+    return isDefinitiveAgentSessionCreateRefusal(error.code) ? error.code : null
+  }
+  for (const code of DEFINITIVE_CREATE_FAILURE_CODES) {
+    if (hasRuntimeRpcErrorCode(error, code)) {
+      return code
+    }
+  }
+  return null
+}
+
+export function isDefinitiveStructuredAgentSessionCreateError(error: unknown): boolean {
+  return definitiveStructuredAgentSessionCreateErrorCode(error) !== null
+}
 
 export function createStructuredAgentSessionLaunchIntent(
   worktreeId: string,
@@ -140,7 +170,10 @@ async function requireHostCreateSupport(intent: StructuredAgentSessionLaunchInte
   }
   if (!(await hostSupportsCreate(intent))) {
     abandonStructuredAgentSessionLaunchIntent(intent)
-    throw new StructuredAgentSessionCreateRefusalError('structured_agent_session_unsupported')
+    throw new StructuredAgentSessionCreateRefusalError(
+      'structured_agent_session_unsupported',
+      'structured_agent_session_unsupported'
+    )
   }
 }
 
@@ -148,12 +181,34 @@ export async function launchStructuredAgentSession(
   intent: StructuredAgentSessionLaunchIntent
 ): Promise<Pick<AgentSessionAttachResult, 'sessionId' | 'fence'>> {
   await requireHostCreateSupport(intent)
-  const result = await callStructuredAgentSession<
-    AgentSessionMutationResult<AgentSessionAttachResult>
-  >({ kind: 'local' }, 'agentSession.create', intent.params)
+  let result: AgentSessionMutationResult<AgentSessionAttachResult>
+  try {
+    result = await callStructuredAgentSession<AgentSessionMutationResult<AgentSessionAttachResult>>(
+      { kind: 'local' },
+      'agentSession.create',
+      intent.params
+    )
+  } catch (error) {
+    const code = definitiveStructuredAgentSessionCreateErrorCode(error)
+    if (code) {
+      abandonStructuredAgentSessionLaunchIntent(intent)
+      throw new StructuredAgentSessionCreateRefusalError(
+        error instanceof Error ? error.message : String(error),
+        code
+      )
+    }
+    throw error
+  }
   if (!result.ok) {
-    abandonStructuredAgentSessionLaunchIntent(intent)
-    throw new StructuredAgentSessionCreateRefusalError(result.refusal.message)
+    const error = new StructuredAgentSessionCreateRefusalError(
+      result.refusal.message,
+      result.refusal.code
+    )
+    if (isDefinitiveStructuredAgentSessionCreateError(error)) {
+      abandonStructuredAgentSessionLaunchIntent(intent)
+      throw error
+    }
+    throw Object.assign(new Error(error.message), { code: error.code })
   }
   return { sessionId: result.value.sessionId, fence: result.value.fence }
 }

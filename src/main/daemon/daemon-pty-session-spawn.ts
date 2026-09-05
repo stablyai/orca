@@ -12,11 +12,8 @@ import { DaemonPtySpawnResult } from './daemon-pty-spawn-result'
 import type { DaemonPtySpawnContext } from './daemon-pty-spawn-request'
 import type { ColdRestoreInfo } from './history-reader'
 import { mintPtySessionId } from './pty-session-id'
-import {
-  shellPathSupportsPtyStartupBarrier,
-  shellReadyMarkerComesFromLineEditor,
-  resolvePtyShellPath
-} from './shell-ready'
+import { shellPathSupportsPtyStartupBarrier, resolvePtyShellPath } from './shell-ready'
+import { shellReadyMarkerComesFromLineEditor } from '../../shared/shell-ready-marker-timing'
 import { getRecoveredHistorySeedSegments } from './terminal-history-seed-segments'
 import { AGENT_SESSION_CLAIM_DAEMON_PROTOCOL_VERSION, type CreateOrAttachResult } from './types'
 import { normalizeWslColdRestoreCwd } from './wsl-cold-restore-cwd'

@@ -140,6 +140,8 @@ export function useStructuredAgentSession(args: {
   // on the frame that opens each one, so re-read the options as a turn changes
   // rather than leaving the last write unconfirmed for the life of the session.
   const turnId = activeStructuredAgentSessionTurnId(state.items)
+  const isMonitoringBackgroundTasks =
+    turnId === null && state.backgroundTasks?.state === 'monitoring'
 
   useEffect(() => {
     if (!isVisible || !optionCatalog) {
@@ -241,8 +243,15 @@ export function useStructuredAgentSession(args: {
     send: outboxController.send,
     retry: outboxController.retry,
     isWorking: turnId !== null,
+    isMonitoringBackgroundTasks,
+    backgroundTasks: state.backgroundTasks?.tasks ?? [],
     turnId,
     cancel: (turnId: string) => mutate('agentSession.cancel', 'agentSession.cancel', { turnId }),
+    stopBackgroundTasks: () =>
+      mutate('agentSession.cancel', 'agentSession.cancel', {
+        turnId: 'background-tasks',
+        scope: 'background-tasks'
+      }),
     respond: (item: StructuredPromptItem, optionId: string) =>
       mutate<AgentSessionPromptResult>(
         item.body.kind === 'approval'

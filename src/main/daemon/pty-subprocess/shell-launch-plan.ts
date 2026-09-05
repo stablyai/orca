@@ -35,11 +35,7 @@ import {
 } from '../../../shared/agent-process-recognition'
 import { ORCA_HERMES_STARTUP_QUERY_ENV } from '../../../shared/hermes-startup-query'
 import { WINDOWS_GIT_BASH_SHELL } from '../../../shared/windows-terminal-shell'
-import {
-  getShellLaunchConfig,
-  resolvePtyShellPath,
-  shellReadyMarkerComesFromLineEditor
-} from '../shell-ready'
+import { getShellLaunchConfig, resolvePtyShellPath } from '../shell-ready'
 import { resolveWslSessionContext } from '../wsl-session-context'
 import { finalizeDaemonPtyEnvironment, rescrubDaemonPtyEnvironment } from './spawn-environment'
 import type { PtySubprocessOptions } from '../pty-subprocess'
@@ -196,10 +192,10 @@ export function createPtyShellLaunchPlan(
     const waitsForShellReady =
       Boolean(opts.command) &&
       (startupAgentRecognition?.agent !== 'codex' ||
-        shellReadyMarkerComesFromLineEditor(shellPath) ||
         shouldUseShellReadyStartupDelivery({
           command: opts.command,
-          startupCommandDelivery: opts.startupCommandDelivery
+          startupCommandDelivery: opts.startupCommandDelivery,
+          shellPath
         }))
     delete env.ORCA_SHELL_FEATURES
     const shellLaunch = getShellLaunchConfig(

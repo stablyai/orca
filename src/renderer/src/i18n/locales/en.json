@@ -1,4 +1,12 @@
 {
+  "sidebar": {
+    "revealFiltered": {
+      "title": "Reveal hidden workspace?",
+      "description": "The active workspace is hidden in the sidebar. Revealing it will clear your sidebar filters.",
+      "confirm": "Clear filters and reveal",
+      "cancel": "Keep filters"
+    }
+  },
   "app": {
     "recoverableError": {
       "rootTitle": "Orca hit a renderer error.",
@@ -16958,7 +16966,14 @@
         "ranCommandsOneToolSummary": "Ran {{commandCount}} commands and used {{toolCount}} tool",
         "ranCommandsManyToolsSummary": "Ran {{commandCount}} commands and used {{toolCount}} tools",
         "usedOneSummary": "Used 1 tool",
-        "usedManySummary": "Used {{toolCount}} tools"
+        "usedManySummary": "Used {{toolCount}} tools",
+        "editedFile": "Edited file",
+        "addedFile": "Added file",
+        "deletedFile": "Deleted file",
+        "renamedFile": "Renamed file",
+        "copyDiff": "Copy diff",
+        "diffGap": "Lines not shown",
+        "diffTruncated": "Diff truncated"
       },
       "providerFrame": {
         "byteLength": "{{value0}} bytes"
@@ -16970,6 +16985,17 @@
         "workingFor": "Working for {{value0}}",
         "workedFor": "Worked for {{value0}}",
         "toggleDetails": "Toggle turn details"
+      },
+      "backgroundTasks": {
+        "monitoring": "Monitoring background tasks",
+        "stop": "Stop",
+        "agent": "Background agent",
+        "workflow": "Background workflow",
+        "command": "Background command",
+        "monitor": "Background monitor",
+        "task": "Background task",
+        "runningList": "Running background tasks",
+        "detailsUnavailable": "Task details are unavailable for this session."
       },
       "jumpToLatest": "Jump to latest",
       "toggle": {
@@ -17059,7 +17085,10 @@
         "retryProof": "Retry proof",
         "retry": "Retry",
         "details": "Details"
-      }
+      },
+      "structuredSessionFellBackToTerminal": "Structured chat isn't available",
+      "structuredSessionFellBackToTerminalDescription": "Orca tried to open a {{value0}} terminal instead.",
+      "structuredSessionLaunchFailedDescription": "Orca could not open a structured {{value0}} chat. See the logs for details."
     },
     "tab": {
       "bar": {
@@ -17583,5 +17612,17 @@
       "action": "Try Agents",
       "hiddenToast": "Agents tab hidden. Re-enable it in Settings → Experimental."
     }
+  },
+  "rendererRecovery": {
+    "reload": "Reload",
+    "copyCommands": "Copy Commands",
+    "quit": "Quit",
+    "stalledDetail": "Orca reloaded the window after a crash, but it never finished loading.",
+    "crashLoopDetail": "Orca tried to recover {{recoveryCount}} times in a row without success.",
+    "driverFallback": "If that does not help, the cause is usually a graphics driver.",
+    "genericDetail": "This is often a graphics-driver or installation problem. Reload to try again, or quit and relaunch Orca.",
+    "title": "Orca keeps failing to load",
+    "stalledMessage": "The app window stopped responding while reloading after a crash.",
+    "crashLoopMessage": "The app window crashed repeatedly and stopped reloading automatically."
   }
 }

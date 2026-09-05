@@ -43,9 +43,16 @@ export const ptyAgentForegroundContextPaths = new Map<string, string[]>()
 // Why: remember the last recognized agent foreground so a degraded scan doesn't report the shell and look like an exit.
 // `pid` anchors the identity to the row that proved it (null when ambiguous);
 // `at` is the last confirmation, so unanchored job evidence -- only a superset -- cannot hold it forever.
+// `steady` (POSIX) is the pane fingerprint the recognizing capture proved plus node-pty's name at
+// that moment; a cheap capture matching it re-proves the identity without the full table.
 export const ptyLastRecognizedForeground = new Map<
   string,
-  { name: string; pid: number | null; at: number }
+  {
+    name: string
+    pid: number | null
+    at: number
+    steady?: { fingerprint: string; fallbackProcess: string | null } | null
+  }
 >()
 export const ptyTerminalHandle = new Map<string, string>()
 export const ptyWorktreeId = new Map<string, string>()

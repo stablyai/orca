@@ -226,6 +226,14 @@ export class RuntimeRemoteFetchController {
     baseBranch: string,
     gitOptions: GitOptions = {}
   ): Promise<RemoteTrackingBase | null> {
+    const remoteRefPrefix = 'refs/remotes/'
+    const shortBaseBranch = baseBranch.startsWith(remoteRefPrefix)
+      ? baseBranch.slice(remoteRefPrefix.length)
+      : baseBranch
+    // A remote-tracking base needs both a configured remote and a branch component.
+    if (!shortBaseBranch.includes('/')) {
+      return null
+    }
     let remotes: string[]
     try {
       const { stdout } = await gitExecFileAsync(['remote'], { cwd: repoPath, ...gitOptions })
@@ -236,10 +244,6 @@ export class RuntimeRemoteFetchController {
     } catch {
       return null
     }
-    const remoteRefPrefix = 'refs/remotes/'
-    const shortBaseBranch = baseBranch.startsWith(remoteRefPrefix)
-      ? baseBranch.slice(remoteRefPrefix.length)
-      : baseBranch
     const remote = remotes
       .filter((candidate) => shortBaseBranch.startsWith(`${candidate}/`))
       .sort((a, b) => b.length - a.length)[0]

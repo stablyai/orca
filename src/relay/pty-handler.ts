@@ -231,6 +231,10 @@ type ManagedPty = {
   gitCredentialPromptGuarded: boolean
   historyIsolationEnabled?: boolean
   startupCommand?: ManagedStartupCommand
+  /** Whether this host armed the shell-ready marker for a renderer-delivered startup command.
+   *  Kept off `startupCommand`, which is dropped once delivered; the client reads it from the
+   *  spawn reply to skip waiting for a marker that will never come (fish, sh, Windows). */
+  shellReadyArmed?: boolean
   physicalExit?: PhysicalExitTracker
   forceKillSent?: boolean
   gracefulKillSent?: boolean
@@ -253,6 +257,7 @@ type RelayAgentSessionCreateResult = {
   replay?: string
   agentSessionEnsure?: unknown
   sourceActivation?: PtySourceReceivingActivation
+  shellReadyArmed?: boolean
 }
 
 const AGENT_SESSION_CREATE_OPERATION_ID_PATTERN = /^[A-Za-z0-9_-]{43}$/
@@ -1804,7 +1809,10 @@ export class PtyHandler {
         incarnationId: managed.incarnationId,
         agentSessionEnsure: result,
         ...(sourceActivation ? { sourceActivation } : {}),
-        ...(adoptedReplay ? { replay: adoptedReplay } : {})
+        ...(adoptedReplay ? { replay: adoptedReplay } : {}),
+        ...(managed.shellReadyArmed !== undefined
+          ? { shellReadyArmed: managed.shellReadyArmed }
+          : {})
       }
     } catch (error) {
       if (!physicalSpawnCommitted) {
@@ -1827,6 +1835,7 @@ export class PtyHandler {
     id: string
     incarnationId: string
     sourceActivation?: PtySourceReceivingActivation
+    shellReadyArmed?: boolean
   }> {
     const pty = await this.loadPty()
     if (!pty) {
@@ -1896,12 +1905,16 @@ export class PtyHandler {
       isUnattended: launchAgent !== undefined,
       platform: process.platform
     })
+    // Why the shell is part of the decision here and not on the client: the client
+    // cannot see which shell this host runs, and plain Codex must still wait where
+    // the marker rides the line editor rather than double-echoing an early write.
     const shouldEmitShellReadyMarker =
       launchCommandHint !== undefined &&
       shouldUseShellReadyStartupDelivery({
         command: launchCommandHint,
         startupCommandDelivery:
-          params.startupCommandDelivery === 'shell-ready' ? 'shell-ready' : undefined
+          params.startupCommandDelivery === 'shell-ready' ? 'shell-ready' : undefined,
+        shellPath: shell
       })
     const managedStartupCommand = shouldProviderDeliverCommand ? command : launchCommandHint
     // Why: both renderer- and provider-delivered startup commands use this marker; the delivering side strips it from output.
@@ -1994,6 +2007,7 @@ export class PtyHandler {
       }),
       ...(startupIngressIntent ? { startupIngressIntent } : {}),
       ...(terminalHandle ? { terminalHandle } : {}),
+      shellReadyArmed: rendererShellReadySupported,
       ...(managedStartupCommand && (shouldProviderDeliverCommand || rendererShellReadySupported)
         ? {
             startupCommand: {
@@ -2035,7 +2049,8 @@ export class PtyHandler {
     return {
       id,
       incarnationId: managed.incarnationId,
-      ...(sourceActivation ? { sourceActivation } : {})
+      ...(sourceActivation ? { sourceActivation } : {}),
+      shellReadyArmed: rendererShellReadySupported
     }
   }
 

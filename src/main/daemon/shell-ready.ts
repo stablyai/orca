@@ -101,11 +101,6 @@ export function resolvePtyShellPath(env: Record<string, string>): string {
   return env.SHELL || process.env.SHELL || '/bin/zsh'
 }
 
-export function shellReadyMarkerComesFromLineEditor(shellPath: string): boolean {
-  const shellName = pathWin32.basename(basename(shellPath)).toLowerCase()
-  return shellName === 'bash' || shellName === 'zsh'
-}
-
 export function shellPathSupportsPtyStartupBarrier(shellPath: string): boolean {
   const shellName = pathWin32.basename(basename(shellPath)).toLowerCase()
   // Why fish: markerless, its startup command is written before fish's reader owns

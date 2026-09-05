@@ -190,6 +190,58 @@ describe('MobileSocketWiring', () => {
     expect(wiring.connectionCount).toBe(0)
   })
 
+  it('lets the capability RPC write capabilities back onto the socket', () => {
+    // `runtime.clientCapabilities.update` stores the advertised set by assigning
+    // `authenticatedSocket.clientCapabilities`. A read-only socket makes that a
+    // TypeError, the RPC answers `runtime_error`, and every structured
+    // agent-session tab is then projected away from a capable phone.
+    const desktop = generateKeyPair()
+    const phone = generateKeyPair()
+    const ws = new FakeSocket()
+    const transport = new FakeTransport()
+    const onText = vi.fn()
+    const wiring = new MobileSocketWiring({
+      deviceRegistry: registryFor('device-1', 'valid-token', 'mobile'),
+      e2eeKeypair: {
+        publicKey: desktop.publicKey,
+        secretKey: desktop.secretKey,
+        publicKeyB64: Buffer.from(desktop.publicKey).toString('base64')
+      },
+      onText,
+      onBinary: vi.fn(),
+      onClose: vi.fn()
+    })
+    wiring.attachTransport(transport)
+
+    transport.receive(
+      ws,
+      JSON.stringify({
+        type: 'e2ee_hello',
+        publicKeyB64: Buffer.from(phone.publicKey).toString('base64')
+      })
+    )
+    const sharedKey = deriveSharedKey(phone.secretKey, desktop.publicKey)
+    transport.receive(
+      ws,
+      encrypt(JSON.stringify({ type: 'e2ee_auth', deviceToken: 'valid-token' }), sharedKey)
+    )
+    transport.receive(ws, encrypt('{"id":"rpc-1","method":"status.get"}', sharedKey))
+
+    const socket = onText.mock.calls[0]?.[0]
+    expect(socket).toBeDefined()
+    expect(socket.clientCapabilities).toEqual([])
+
+    expect(() => {
+      socket.clientCapabilities = ['agent-session.structured.v1']
+    }).not.toThrow()
+    expect(socket.clientCapabilities).toEqual(['agent-session.structured.v1'])
+
+    // Later requests on the same connection must see the updated set, so the
+    // channel is the single source of truth rather than a detached copy.
+    transport.receive(ws, encrypt('{"id":"rpc-2","method":"status.get"}', sharedKey))
+    expect(onText.mock.calls[1]?.[0].clientCapabilities).toEqual(['agent-session.structured.v1'])
+  })
+
   it('closes an unknown-token socket even when reporting the failure throws', () => {
     const desktop = generateKeyPair()
     const phone = generateKeyPair()

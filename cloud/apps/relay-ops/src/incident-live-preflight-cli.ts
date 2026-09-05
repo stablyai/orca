@@ -7,7 +7,9 @@ import { suppliedIdentityToken } from './incident-monitor-cli.js'
 import { AdmissionSelectorSchema, type AdmissionSelector } from './incident-selector.js'
 import {
   evaluateIncidentSample,
+  FRESHNESS_FAILURE_CODES,
   preDrainDryRunPassed,
+  type IncidentFailure,
   type IncidentSample
 } from './incident-monitor.js'
 import { createIncidentSampleCollector } from './incident-monitor-sources.js'
@@ -18,12 +20,6 @@ const MONITOR_EVIDENCE_MAX_AGE_MS = 5 * 60_000
 // Matches the same-cap cell job timeout-minutes; bounds each predecessor wave.
 const WAVE_PREDECESSOR_TIMEOUT_MS = 75 * 60_000
 const WAVE_INDEX_PATTERN = /^[0-3]$/
-const FRESHNESS_FAILURE_CODES = new Set([
-  'signal_missing',
-  'signal_stale',
-  'source_missing',
-  'source_stale'
-])
 
 export function livePreflightGcloud(
   gcloud: ReturnType<typeof createGcloudClient>,
@@ -73,6 +69,17 @@ const PreflightStateSchema = z.object({
     })
   }
 })
+
+// Keep the source/code prefix other tooling matches on, then name the signal and
+// its numbers so a frozen wave is attributable without re-reading the sample.
+function describeFailure(failure: IncidentFailure): string {
+  const detail = [
+    failure.signal,
+    failure.observed === undefined ? null : `observed=${failure.observed}`,
+    failure.threshold === undefined ? null : `threshold=${failure.threshold}`
+  ].filter((part): part is string => part !== null && part !== undefined)
+  return [`${failure.source}/${failure.code}`, ...detail].join(' ')
+}
 
 export async function runIncidentLivePreflight(
   argv: string[],
@@ -180,7 +187,7 @@ export async function runIncidentLivePreflight(
     if (!freshnessOnly || attempt === attempts || budgetExhausted) {
       throw new Error(
         `relay live preflight failed: ${evaluation.failures
-          .map((failure) => `${failure.source}/${failure.code}`)
+          .map(describeFailure)
         .join(',')}`
       )
     }

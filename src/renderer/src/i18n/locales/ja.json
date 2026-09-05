@@ -14561,6 +14561,41 @@
     }
   },
   "components": {
+    "onboarding": {
+      "flow": {
+        "stepTooltip": {
+          "agent": "デフォルトの Agent",
+          "theme": "外観",
+          "windowsTerminal": "Windows ターミナル",
+          "notifications": "通知",
+          "integrations": "連携"
+        },
+        "actions": {
+          "addFirstProject": "最初のプロジェクトを追加",
+          "continue": "続行",
+          "openingAddProject": "[プロジェクトを追加] を開いています…"
+        }
+      },
+      "skipConfirmation": {
+        "skip": "スキップ",
+        "keepGoing": "いいえ、続ける"
+      },
+      "theme": {
+        "hints": {
+          "system": "OS に合わせる",
+          "dark": "目にやさしい",
+          "light": "明るく鮮明"
+        }
+      },
+      "integrations": {
+        "capabilities": {
+          "startWorkspaceFromIssue": "GitHub の Issue や PR から、タイトルとコンテキストがあらかじめ入力されたワークスペースを開始",
+          "browseIssues": "Orca から離れずに、「タスク」ページで GitHub の Issue と PR を閲覧",
+          "reviewStatus": "すべてのワークツリーで Issue の状態、レビュー状況、CI チェックを確認",
+          "managePullRequests": "Orca から離れずに、PR の閲覧、コメント、マージ"
+        }
+      }
+    },
     "native-chat": {
       "composer": {
         "imageUnsupported": "この Agent では画像の貼り付けはサポートされていません。",

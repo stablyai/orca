@@ -1,8 +1,13 @@
 import { describe, expect, it, vi } from 'vitest'
-import { cancelClaudeTurn, answerClaudePrompt } from './claude-structured-control-actions'
+import {
+  cancelClaudeTurn,
+  answerClaudePrompt,
+  stopClaudeBackgroundTasks
+} from './claude-structured-control-actions'
 import { ClaudeControlRequestError } from './claude-stream-json-connection'
 import { ClaudePromptRegistry } from './claude-structured-prompt-replies'
 import type { ClaudeSession } from './claude-structured-session-state'
+import { ClaudeBackgroundTaskTracker } from './claude-background-task-tracker'
 
 type InterruptResult = Awaited<ReturnType<ClaudeSession['connection']['interrupt']>>
 
@@ -109,5 +114,48 @@ describe('answerClaudePrompt', () => {
     await expect(
       answerClaudePrompt(session, { itemId: 'missing', kind: 'approval', optionId: 'allow' })
     ).rejects.toThrow(/no longer waiting/)
+  })
+})
+
+describe('stopClaudeBackgroundTasks', () => {
+  it('stops each live SDK task id and never depends on an active turn id', async () => {
+    const backgroundTasks = new ClaudeBackgroundTaskTracker()
+    backgroundTasks.observe({
+      type: 'system',
+      subtype: 'background_tasks_changed',
+      tasks: [
+        { task_id: 'task-agent', task_type: 'local_agent', description: 'agent' },
+        { task_id: 'task-bash', task_type: 'local_bash', description: 'bash' }
+      ]
+    })
+    const stopTask = vi.fn(async (_taskId: string, _options?: { timeoutMs?: number }) => {})
+    const session = { backgroundTasks, connection: { stopTask } } as unknown as ClaudeSession
+
+    await expect(stopClaudeBackgroundTasks(session, 5_000)).resolves.toEqual({ cancelled: true })
+    expect(stopTask.mock.calls).toEqual([
+      ['task-agent', { timeoutMs: 5_000 }],
+      ['task-bash', { timeoutMs: 5_000 }]
+    ])
+  })
+
+  it('stops issuing requests when ownership changes between tasks', async () => {
+    const backgroundTasks = new ClaudeBackgroundTaskTracker()
+    for (const taskId of ['task-1', 'task-2']) {
+      backgroundTasks.observe({
+        type: 'system',
+        subtype: 'task_started',
+        task_id: taskId,
+        task_type: 'local_agent',
+        is_backgrounded: true
+      })
+    }
+    let current = true
+    const stopTask = vi.fn(async (_taskId: string) => {
+      current = false
+    })
+    const session = { backgroundTasks, connection: { stopTask } } as unknown as ClaudeSession
+
+    await stopClaudeBackgroundTasks(session, undefined, () => current)
+    expect(stopTask).toHaveBeenCalledTimes(1)
   })
 })

@@ -436,21 +436,34 @@ describe('method routing', () => {
   /** A client-supplied location skips the worktree-resolving support check, so both attach-shaped
    *  entries must ask the executing host directly or a host that cannot fence a provider child
    *  would create one anyway. */
-  it.each(['agentSession.create', 'agentSession.ensure'])(
-    'refuses %s for a client-supplied location the executing host does not support',
-    async (method) => {
-      hostCalls.supportsCreate.mockReturnValue(false)
+  it('returns a refusal envelope when create cannot support a client-supplied location', async () => {
+    hostCalls.supportsCreate.mockReturnValue(false)
 
-      const refused = await call(method, attachParams())
+    const refused = await call('agentSession.create', attachParams())
 
-      expect(refused).toMatchObject({
+    expect(refused).toMatchObject({
+      ok: true,
+      result: {
         ok: false,
-        error: { message: expect.stringContaining('structured_agent_session_unsupported') }
-      })
-      expect(hostCalls.attach).not.toHaveBeenCalled()
-      expect(hostCalls.supportsCreate).toHaveBeenCalledWith(attachParams().location, 'codex')
-    }
-  )
+        refusal: { code: 'structured_agent_session_unsupported' }
+      }
+    })
+    expect(hostCalls.attach).not.toHaveBeenCalled()
+    expect(hostCalls.supportsCreate).toHaveBeenCalledWith(attachParams().location, 'codex')
+  })
+
+  it('keeps ensure failures as top-level errors for an unsupported client location', async () => {
+    hostCalls.supportsCreate.mockReturnValue(false)
+
+    const refused = await call('agentSession.ensure', attachParams())
+
+    expect(refused).toMatchObject({
+      ok: false,
+      error: { message: expect.stringContaining('structured_agent_session_unsupported') }
+    })
+    expect(hostCalls.attach).not.toHaveBeenCalled()
+    expect(hostCalls.supportsCreate).toHaveBeenCalledWith(attachParams().location, 'codex')
+  })
 
   it('tags the prompt kind from the method name, not from the client', async () => {
     const params = {

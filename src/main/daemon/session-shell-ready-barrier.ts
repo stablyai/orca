@@ -1,4 +1,4 @@
-import { shellReadyMarkerComesFromLineEditor } from './shell-ready'
+import { shellReadyMarkerComesFromLineEditor } from '../../shared/shell-ready-marker-timing'
 import {
   installDeviceAttributesResponder,
   STARTUP_DA1_RESPONSE
