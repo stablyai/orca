@@ -289,7 +289,7 @@ describe('searchOpenTabs ranking', () => {
     expect(results.map(readableId)).toEqual(['open-tab:browser:page-1', 'open-tab:workspace:tab-1'])
   })
 
-  it('ranks any title match above any secondary match', () => {
+  it('ranks a primary word match above a comparable secondary word match', () => {
     const results = search({
       query: 'zebra',
       workspaceTabs: [
@@ -309,7 +309,7 @@ describe('searchOpenTabs ranking', () => {
     ])
   })
 
-  // Both land in the secondary tier, so match rank has to beat tab position: the
+  // Both use secondary coverage, so match rank has to beat tab position: the
   // agent tab sits earlier in the group and would win a position-only tie-break.
   it('ranks a path match above an agent-snippet match on tabs in the same group', () => {
     const results = search({
@@ -337,7 +337,7 @@ describe('searchOpenTabs ranking', () => {
     ])
   })
 
-  it('breaks tier ties on source order, then on engine score', () => {
+  it('breaks semantic and activity ties on source order, then engine score', () => {
     const results = search({
       query: 'zebra',
       workspaceTabs: [
@@ -400,6 +400,19 @@ describe('searchOpenTabs ranking', () => {
     expect(retained).toHaveLength(OPEN_TAB_SEARCH_RESULT_LIMIT)
     expect(retained.some((result) => result.id === uncappedSelection.id)).toBe(true)
   })
+
+  it('ranks an exact browser destination above a workspace typo', () => {
+    const results = search({
+      query: 'zebra',
+      workspaceTabs: [makeWorkspaceTab({ id: 'tab-typo', title: 'zebrb' })],
+      browserPages: [makeBrowserPage({ id: 'page-exact', title: 'Notes', url: 'zebra' })]
+    })
+
+    expect(results.map(readableId)).toEqual([
+      'open-tab:browser:page-exact',
+      'open-tab:workspace:tab-typo'
+    ])
+  })
 })
 
 describe('searchOpenTabs filtering', () => {
@@ -454,6 +467,46 @@ describe('searchOpenTabs filtering', () => {
     })
 
     expect(results.map(readableId)).toEqual(['open-tab:workspace:tab-1', 'open-tab:browser:page-1'])
+  })
+
+  it('keeps branch matches while excluding worktree and repository fields', () => {
+    expect(
+      search({
+        query: 'main',
+        workspaceTabs: [makeWorkspaceTab({ id: 'tab-1', title: 'Notes' })]
+      }).map(readableId)
+    ).toEqual(['open-tab:workspace:tab-1'])
+  })
+
+  it('uses an admissible title proof when the unrestricted match prefers the worktree', () => {
+    const entry = makeWorkspaceTab({ id: 'tab-1', title: 'atlaz' })
+    entry.document = buildPaletteTabDocument({
+      id: 'tab-1',
+      title: 'atlaz',
+      secondaryTexts: [],
+      worktreeName: 'atlas',
+      branch: BRANCH_NAME,
+      repoName: REPO_NAME
+    })
+
+    expect(search({ query: 'atlas', workspaceTabs: [entry] }).map(readableId)).toEqual([
+      'open-tab:workspace:tab-1'
+    ])
+  })
+
+  it('does not create a snippet fallback when only excluded structured fields match', () => {
+    expect(
+      search({
+        query: 'aurora',
+        workspaceTabs: [
+          makeWorkspaceTab({
+            id: 'tab-1',
+            title: 'Notes',
+            agentSnippets: ['aurora agent notes']
+          })
+        ]
+      })
+    ).toEqual([])
   })
 
   // Both tokens land on the "ios simulator" alias, so the row fills no title or

@@ -29,11 +29,12 @@ export function activateBrowserWorkspaceTab(params: {
   if (!unifiedTab) {
     return false
   }
-  state.focusGroup(params.worktreeId, unifiedTab.groupId)
   state.activateTab(unifiedTab.id)
   state.setActiveBrowserTab(params.workspaceId)
   if (params.pageId) {
     state.setActiveBrowserPage(params.workspaceId, params.pageId)
   }
+  // Refocus the host-owned group if stale mirrored state temporarily repeats a UUID.
+  state.focusGroup(params.worktreeId, unifiedTab.groupId)
   return true
 }

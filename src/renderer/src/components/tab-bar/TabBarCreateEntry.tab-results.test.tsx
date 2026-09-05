@@ -11,6 +11,7 @@ import type { OpenTabSearchEntries } from './open-tab-search-entries'
 import type { TabAgentLaunchOption } from './tab-agent-launch-options'
 import type { TabCreateMenuOption } from './tab-create-menu-options'
 import type { TabEntryOption } from './tab-create-entry-action'
+import { encodePaletteIdentity } from '@/lib/palette-match/palette-ranking'
 
 // Why: the real entry-action module pulls in runtime IPC + the app store; these
 // tests only need a controllable option list beneath the tab rows.
@@ -136,7 +137,7 @@ function terminalResult(overrides: Partial<OpenTabSearchResult> = {}): OpenTabSe
   return {
     executionHostId: 'local',
     source: 'workspace',
-    id: 'open-tab:workspace:tab-1',
+    id: encodePaletteIdentity(['open-tab', 'workspace', 'local', 'wt', 'tab-1']),
     title: 'Add tab search and jump in worktree',
     matchedText: null,
     worktreeId: 'wt',
@@ -264,7 +265,11 @@ describe('TabBarCreateEntry tab results', () => {
   it('shows the matched text rather than the shared label when tabs share a title (AE2)', () => {
     tabSearchMock.resultsByQuery['fix the flaky'] = [
       terminalResult({ title: 'Claude Code', matchedText: 'fix the flaky retry test' }),
-      terminalResult({ id: 'open-tab:workspace:tab-2', tabId: 'tab-2', title: 'Claude Code' })
+      terminalResult({
+        id: encodePaletteIdentity(['open-tab', 'workspace', 'local', 'wt', 'tab-2']),
+        tabId: 'tab-2',
+        title: 'Claude Code'
+      })
     ]
     renderEntry()
 
@@ -415,7 +420,11 @@ describe('TabBarCreateEntry tab results', () => {
     activationMocks.workspace.mockReturnValue({ status: 'failed', reason: 'missing-tab' })
     tabSearchMock.resultsByQuery['add tab'] = [
       terminalResult(),
-      terminalResult({ id: 'open-tab:workspace:tab-2', tabId: 'tab-2', title: 'second tab' })
+      terminalResult({
+        id: encodePaletteIdentity(['open-tab', 'workspace', 'local', 'wt', 'tab-2']),
+        tabId: 'tab-2',
+        title: 'second tab'
+      })
     ]
     const onDidOpenEntry = vi.fn()
     const onOpenEntry = vi.fn().mockResolvedValue(undefined)

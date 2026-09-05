@@ -8,6 +8,8 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import type { Worktree } from '../../../shared/worktree/types'
 import { resolveWorktreeBranchLabel } from '@/lib/worktree-default-display-name'
 
+const NO_SECONDARY_MATCHES: readonly { text: string; ranges: readonly MatchRange[] }[] = []
+
 export function PaletteRowShortcutBadge({
   index,
   modifierKeys
@@ -87,6 +89,9 @@ export function PaletteOpenTabPrimaryLine({
 }): React.JSX.Element {
   const showSecondary = secondaryText.trim().length > 0
   const showWorktree = worktreeName.trim().length > 0
+  const additionalSecondaryMatches = secondaryMatches.filter(
+    (match) => match.text && match.text !== secondaryText
+  )
 
   return (
     <div className="flex min-w-0 items-center gap-2 overflow-hidden">
@@ -117,16 +122,25 @@ export function PaletteOpenTabPrimaryLine({
           </span>
         </>
       ) : null}
-      {secondaryMatches
-        .filter((match) => match.text && match.text !== secondaryText)
-        .map((match) => (
-          <React.Fragment key={match.text}>
-            <span className="shrink-0 text-muted-foreground/45">·</span>
-            <span className="min-w-0 truncate text-[12px] font-medium text-muted-foreground/92">
-              <HighlightedText text={match.text} matchRanges={match.ranges} />
+      {additionalSecondaryMatches.length ? (
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <span
+              aria-label={additionalSecondaryMatches.map((match) => match.text).join(', ')}
+              className="shrink-0 rounded-md border border-border/60 bg-background/45 px-1.5 py-px text-[9px] font-medium text-muted-foreground/88"
+            >
+              +{additionalSecondaryMatches.length}
             </span>
-          </React.Fragment>
-        ))}
+          </TooltipTrigger>
+          <TooltipContent side="top" sideOffset={4} align="start" className="max-w-96 space-y-1">
+            {additionalSecondaryMatches.map((match) => (
+              <div className="break-all" key={match.text}>
+                <HighlightedText text={match.text} matchRanges={match.ranges} />
+              </div>
+            ))}
+          </TooltipContent>
+        </Tooltip>
+      ) : null}
       {showWorktree ? (
         <>
           <span className="shrink-0 text-muted-foreground/45">·</span>
@@ -276,4 +290,3 @@ export function getPaletteSupportingTextLabel(
       return translate('worktreeJumpPalette.matchLabel.automation', 'Automation')
   }
 }
-const NO_SECONDARY_MATCHES: readonly { text: string; ranges: readonly MatchRange[] }[] = []

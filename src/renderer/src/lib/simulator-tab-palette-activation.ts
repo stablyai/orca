@@ -45,8 +45,9 @@ export function activateSimulatorTabPaletteResult({
   }
 
   const state = useAppStore.getState()
-  state.focusGroup(worktreeId, tab.groupId)
   state.activateTab(tab.id)
+  // Refocus the host-owned group if stale mirrored state temporarily repeats a UUID.
+  state.focusGroup(worktreeId, tab.groupId)
   state.setActiveTab(tab.id)
   state.setActiveTabType('simulator')
   return { status: 'activated', tabId: tab.id }

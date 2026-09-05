@@ -90,9 +90,7 @@ export function WorktreeJumpPaletteSimulatorRow({
             />
             {result.typeAliasMatches.length ? (
               <span className="sr-only">
-                {translate('components.cmd-j.matchedAliases', 'Matched aliases: {{value0}}', {
-                  value0: result.typeAliasMatches.map((match) => match.text).join(', ')
-                })}
+                {result.typeAliasMatches.map((match) => match.text).join(', ')}
               </span>
             ) : null}
           </div>

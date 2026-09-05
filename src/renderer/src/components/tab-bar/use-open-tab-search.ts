@@ -10,7 +10,7 @@ import {
   type OpenTabSearchEntries
 } from './open-tab-search-entries'
 import { searchOpenTabs, type OpenTabSearchResult } from './open-tab-search'
-import { createPaletteSearchContext } from '@/lib/palette-match/palette-ranking'
+import { usePaletteSearchEvaluationContext } from '@/hooks/use-palette-search-evaluation-context'
 
 const EMPTY_RESULTS: OpenTabSearchResult[] = []
 
@@ -51,10 +51,11 @@ export function useOpenTabSearch({
     [agentState, state]
   )
   const deferredQuery = useDeferredValue(query)
-  const context = useMemo(
-    () => createPaletteSearchContext(Date.now()),
+  const evaluationSnapshot = useMemo(
+    () => ({ deferredQuery, enabled, entries }),
     [deferredQuery, enabled, entries]
   )
+  const context = usePaletteSearchEvaluationContext(evaluationSnapshot)
 
   return useMemo(
     () => ({
