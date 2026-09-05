@@ -142,6 +142,18 @@ describe('MobileNativeChatComposer', () => {
     expect(onSend).not.toHaveBeenCalled()
   })
 
+  it('submits the latest native text even before controlled props render it', async () => {
+    const onSend = vi.fn().mockResolvedValue(true)
+    await render(onSend, vi.fn())
+    const input = renderer!.root.findByType('TextInput')
+    const capture = renderer!.root.findByType('HardwareKeyboardCaptureView')
+    await act(async () => {
+      input.props.onChangeText('abc')
+      capture.props.onHardwareKey({ nativeEvent: { key: 'Enter', repeat: false } })
+    })
+    expect(onSend).toHaveBeenCalledWith('abc')
+  })
+
   it('leaves software Return and Shift+Return text editing with the native multiline input', async () => {
     const onSend = vi.fn().mockResolvedValue(true)
     const onChangeText = vi.fn()
@@ -390,12 +402,13 @@ describe('MobileNativeChatComposer', () => {
 
   it('moves the caret to the insert point after an autocomplete pick, then releases control', async () => {
     const onChangeText = vi.fn()
+    const onSend = vi.fn().mockResolvedValue(true)
     await act(async () => {
       renderer = create(
         createElement(MobileNativeChatComposer, {
           value: '/c',
           onChangeText,
-          onSend: vi.fn().mockResolvedValue(true),
+          onSend,
           sendSurfaceId: 'tab-a',
           getSendCompletionGeneration: getCurrentSendCompletionGeneration,
           agent: 'claude'
@@ -418,8 +431,14 @@ describe('MobileNativeChatComposer', () => {
     const firstSuggestion = renderer!.root.findAll(
       (node) => node.type === 'Pressable' && !node.props.accessibilityLabel
     )[0] as { props: { onPress: () => void } }
-    await act(async () => firstSuggestion.props.onPress())
+    await act(async () => {
+      firstSuggestion.props.onPress()
+      renderer!.root.findByType('HardwareKeyboardCaptureView').props.onHardwareKey({
+        nativeEvent: { key: 'Enter', repeat: false }
+      })
+    })
     expect(onChangeText).toHaveBeenCalledWith('/clear ')
+    expect(onSend).toHaveBeenCalledWith('/clear ')
     // `/clear ` is 7 chars — the caret jumps just past the inserted command + space.
     expect(input().props.selection).toEqual({ start: 7, end: 7 })
     // The next native selection event releases control so manual placement still works.

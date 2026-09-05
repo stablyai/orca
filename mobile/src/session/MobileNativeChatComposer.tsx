@@ -5,7 +5,6 @@ import {
   Keyboard,
   Pressable,
   ScrollView,
-  StyleSheet,
   TextInput,
   View
 } from 'react-native'
@@ -13,7 +12,8 @@ import { ArrowUp, ImagePlus, Mic, Square, X } from 'lucide-react-native'
 import { MobileNativeChatHardwareSubmit } from './MobileNativeChatHardwareSubmit'
 import { isHardwareKeyboardConnected } from '@orca/expo-hardware-keyboard-navigation'
 import { useHardwareKeyboardTextInputFocus } from '../hardware-keyboard/use-hardware-keyboard-text-input-focus'
-import { colors, radii, spacing, typography } from '../theme/mobile-theme'
+import { colors } from '../theme/mobile-theme'
+import { styles } from './mobile-native-chat-composer-styles'
 import { getVerifiedNativeChatCommands } from '../../../src/shared/native-chat-agent-profiles'
 import {
   applyAutocomplete,
@@ -93,6 +93,10 @@ export function MobileNativeChatComposer({
   onNeedFiles
 }: Props): React.JSX.Element {
   const inputRef = useRef<TextInput>(null)
+  const inputValueRef = useRef(value)
+  useLayoutEffect(() => {
+    inputValueRef.current = value
+  }, [value])
   const hardwareFocus = useHardwareKeyboardTextInputFocus({
     enabled: !disabled,
     inputRef,
@@ -159,6 +163,7 @@ export function MobileNativeChatComposer({
   }, [])
 
   const handleChange = (next: string): void => {
+    inputValueRef.current = next
     onChangeText(next)
   }
 
@@ -171,13 +176,21 @@ export function MobileNativeChatComposer({
       trigger,
       composerSuggestionInsertText(suggestion)
     )
-    onChangeText(nextText)
+    handleChange(nextText)
     setCursor(nextCursor)
     setPendingSelection({ start: nextCursor, end: nextCursor })
   }
 
   const handleSend = async (source: 'hardware' | 'touch' = 'touch'): Promise<void> => {
-    if (!canSend || sendingRef.current) {
+    const text = source === 'hardware' ? inputValueRef.current : value
+    if (
+      (text.trim().length === 0 && attachments.length === 0) ||
+      disabled ||
+      sending ||
+      isAttaching ||
+      sessionOptions?.controller.pendingId != null ||
+      sendingRef.current
+    ) {
       return
     }
     sendingRef.current = true
@@ -187,7 +200,7 @@ export function MobileNativeChatComposer({
     const composerEditGeneration = getComposerEditGeneration()
     try {
       // Preserve the verbatim draft on rejected sends (#14819).
-      const accepted = await onSend(value)
+      const accepted = await onSend(text)
       if (
         accepted &&
         mountedRef.current &&
@@ -334,102 +347,3 @@ export function MobileNativeChatComposer({
     </View>
   )
 }
-
-const styles = StyleSheet.create({
-  attachmentStrip: {
-    maxHeight: 76,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: colors.borderSubtle,
-    backgroundColor: colors.bgPanel
-  },
-  attachmentStripContent: {
-    gap: spacing.sm,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm
-  },
-  attachmentThumb: {
-    width: 60,
-    height: 60,
-    borderRadius: radii.button,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.borderSubtle,
-    backgroundColor: colors.bgRaised
-  },
-  attachmentImage: {
-    width: '100%',
-    height: '100%',
-    borderRadius: radii.button
-  },
-  attachmentRemove: {
-    // Inset inside the thumb: Android drops touches outside the parent's bounds,
-    // so an overhanging badge would lose part of its tap target.
-    position: 'absolute',
-    top: 2,
-    right: 2,
-    width: 20,
-    height: 20,
-    borderRadius: 10,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: colors.bgRaised,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.borderSubtle
-  },
-  composerInset: {
-    paddingHorizontal: spacing.md,
-    paddingTop: spacing.sm,
-    paddingBottom: spacing.md
-  },
-  bar: {
-    gap: spacing.xs,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.borderSubtle,
-    borderRadius: radii.card,
-    backgroundColor: colors.bgPanel,
-    overflow: 'hidden'
-  },
-  actionRow: {
-    minHeight: 40,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm
-  },
-  actionSpacer: {
-    flex: 1
-  },
-  input: {
-    width: '100%',
-    maxHeight: 140,
-    minHeight: 40,
-    color: colors.textPrimary,
-    fontSize: typography.bodySize + 1,
-    backgroundColor: colors.bgRaised,
-    borderRadius: radii.input,
-    paddingHorizontal: spacing.md,
-    paddingTop: spacing.sm,
-    paddingBottom: spacing.sm
-  },
-  iconButton: {
-    width: 40,
-    height: 40,
-    alignItems: 'center',
-    justifyContent: 'center'
-  },
-  sendButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    alignItems: 'center',
-    justifyContent: 'center',
-    // White send affordance per design — dark arrow on a light circle.
-    backgroundColor: colors.textPrimary
-  },
-  sendButtonDisabled: {
-    backgroundColor: colors.bgRaised
-  },
-  pressed: {
-    opacity: 0.7
-  }
-})
