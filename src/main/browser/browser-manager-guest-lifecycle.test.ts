@@ -298,9 +298,9 @@ describe('browserManager', () => {
     expect(browserManager.getGuestWebContentsId('browser-2')).toBeNull()
     expect(guestOffMock).toHaveBeenCalled()
     const managerState = browserManager as unknown as {
-      clickedLinkFrameNameByGuestId: Map<number, unknown>
+      clickedLinkFrameNamesByGuestId: Map<number, unknown>
     }
-    expect(managerState.clickedLinkFrameNameByGuestId.size).toBe(0)
+    expect(managerState.clickedLinkFrameNamesByGuestId.size).toBe(0)
   })
 
   it('rejects non-webview guest types to prevent privilege escalation', () => {

@@ -263,6 +263,11 @@ describe('browserManager', () => {
       browserPageId: 'browser-1',
       url: 'https://docs.example.com/guide'
     })
+    expect(rendererSendMock).toHaveBeenCalledWith('browser:open-link-in-orca-tab', {
+      browserPageId: 'browser-1',
+      url: 'https://docs.example.com/guide',
+      activate: false
+    })
     expect(rendererSendMock).toHaveBeenCalledWith('browser:popup', {
       browserPageId: 'browser-1',
       origin: 'https://docs.example.com',
@@ -417,19 +422,19 @@ describe('browserManager', () => {
     await vi.waitFor(() => expect(executeJavaScriptInIsolatedWorldMock).toHaveBeenCalledTimes(1))
 
     const managerState = browserManager as unknown as {
-      clickedLinkFrameNameByGuestId: Map<number, string>
+      clickedLinkFrameNamesByGuestId: Map<number, { foreground: string; background: string }>
     }
-    const clickedLinkFrameName = managerState.clickedLinkFrameNameByGuestId.get(guest.id)
-    if (!clickedLinkFrameName) {
-      throw new Error('Expected a private clicked-link frame name')
+    const clickedLinkFrameNames = managerState.clickedLinkFrameNamesByGuestId.get(guest.id)
+    if (!clickedLinkFrameNames) {
+      throw new Error('Expected private clicked-link frame names')
     }
-    expect(clickedLinkFrameName).toMatch(/^__orca_clicked_link_foreground_/)
+    expect(clickedLinkFrameNames.foreground).toMatch(/^__orca_clicked_link_foreground_/)
     expect(executeJavaScriptInIsolatedWorldMock).toHaveBeenCalledWith(
       expect.any(Number),
       [
         expect.objectContaining({
           code: expect.stringContaining(
-            `${JSON.stringify(clickedLinkFrameName)},${process.platform === 'darwin'})`
+            `${JSON.stringify(clickedLinkFrameNames.foreground)},${JSON.stringify(clickedLinkFrameNames.background)},${process.platform === 'darwin'})`
           )
         })
       ],
@@ -443,13 +448,14 @@ describe('browserManager', () => {
     expect(
       handler({
         url: 'https://docs.example.com/guide',
-        frameName: clickedLinkFrameName
+        frameName: clickedLinkFrameNames.background
       })
     ).toEqual({ action: 'deny' })
 
     expect(rendererSendMock).toHaveBeenCalledWith('browser:open-link-in-orca-tab', {
       browserPageId: 'browser-1',
-      url: 'https://docs.example.com/guide'
+      url: 'https://docs.example.com/guide',
+      activate: false
     })
     expect(rendererSendMock).toHaveBeenCalledWith('browser:popup', {
       browserPageId: 'browser-1',
@@ -512,8 +518,14 @@ describe('browserManager', () => {
     const foregroundFrameName = firstScript.match(
       /__orca_clicked_link_iframe_foreground_[0-9a-f-]+/
     )?.[0]
+    const backgroundFrameName = firstScript.match(
+      /__orca_clicked_link_iframe_background_[0-9a-f-]+/
+    )?.[0]
     if (!foregroundFrameName) {
       throw new Error('Expected a private child-frame routing token')
+    }
+    if (!backgroundFrameName) {
+      throw new Error('Expected a private background child-frame routing token')
     }
     expect(firstScript).toContain('installBrowserIframeClickedLinkRouting')
     expect(executeJavaScriptMock).toHaveBeenCalledWith(firstScript, false)
@@ -525,17 +537,26 @@ describe('browserManager', () => {
     expect(
       popupHandler({
         url: 'https://docs.example.com/from-frame',
-        frameName: foregroundFrameName
+        frameName: backgroundFrameName
       })
     ).toEqual({ action: 'deny' })
     expect(rendererSendMock).toHaveBeenCalledWith('browser:open-link-in-orca-tab', {
       browserPageId: 'browser-frame',
-      url: 'https://docs.example.com/from-frame'
+      url: 'https://docs.example.com/from-frame',
+      activate: false
     })
+    expect(
+      popupHandler({
+        url: 'https://docs.example.com/from-frame-sibling',
+        frameName: foregroundFrameName
+      })
+    ).toMatchObject({ action: 'allow' })
+    expect(rendererSendMock).toHaveBeenCalledTimes(2)
 
     await vi.waitFor(() => expect(executeJavaScriptMock).toHaveBeenCalledTimes(2))
     const secondScript = executeJavaScriptMock.mock.calls[1][0] as string
     expect(secondScript).not.toContain(foregroundFrameName)
+    expect(secondScript).not.toContain(backgroundFrameName)
   })
 
   it('hosts allowed popups in an origin-bar window with inherited guest policies', () => {

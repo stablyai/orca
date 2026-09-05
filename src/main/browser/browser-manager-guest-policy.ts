@@ -6,6 +6,7 @@ import {
 } from './browser-manager-types'
 import { BrowserManagerGuestCleanup } from './browser-manager-guest-cleanup'
 import { installDocPreviewGuestPolicy } from './doc-preview-guest-policy'
+import type { BrowserClickedLinkFrameNames } from './browser-clicked-link-routing'
 
 export abstract class BrowserManagerGuestPolicy extends BrowserManagerGuestCleanup {
   attachGuestPolicies(
@@ -28,17 +29,20 @@ export abstract class BrowserManagerGuestPolicy extends BrowserManagerGuestClean
       this.popupOwnerContextByGuestId.set(guest.id, inheritedOwnerContext)
     }
     // Why: only the primary embedded browser converts new-tab clicks to Orca tabs; OAuth child windows keep native link behavior.
-    const clickedLinkFrameName = inheritedOwnerContext
+    const clickedLinkFrameNames: BrowserClickedLinkFrameNames | null = inheritedOwnerContext
       ? null
-      : `__orca_clicked_link_foreground_${randomUUID()}`
-    if (clickedLinkFrameName) {
-      this.clickedLinkFrameNameByGuestId.set(guest.id, clickedLinkFrameName)
+      : {
+          foreground: `__orca_clicked_link_foreground_${randomUUID()}`,
+          background: `__orca_clicked_link_background_${randomUUID()}`
+        }
+    if (clickedLinkFrameNames) {
+      this.clickedLinkFrameNamesByGuestId.set(guest.id, clickedLinkFrameNames)
     }
 
     const disposeAuthDetachTracking = this.trackDebuggerDetachForAuthUserAgent(guest)
     // Why: disable throttling so background screenshots still get frames; else the compositor stalls and capture returns empty.
     guest.setBackgroundThrottling(false)
-    const disposePopupPolicy = this.installGuestPopupPolicy(guest, clickedLinkFrameName)
+    const disposePopupPolicy = this.installGuestPopupPolicy(guest, clickedLinkFrameNames)
     const disposeNavigationPolicy = this.installGuestNavigationPolicy(guest)
 
     // Why: store cleanup so unregisterGuest can drop these listeners on teardown and let the WebContents wrapper GC.

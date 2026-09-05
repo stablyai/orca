@@ -155,7 +155,7 @@ async function startBrowserLinkServer(): Promise<{
     }
     if (pathname === '/frame') {
       response.end(
-        `<!doctype html><html><body><a style="display:block" id="frame-link" href="${origin}/frame-destination" target="_blank">Open frame destination</a><a style="display:block" id="frame-modifier-link" href="${origin}/frame-modifier-destination">Open frame modifier destination</a><a style="display:block" id="frame-middle-link" href="${origin}/frame-middle-destination">Open frame middle destination</a></body></html>`
+        `<!doctype html><html><head><title>${request.url?.includes('shift-middle') ? 'Frame shift middle destination' : ''}</title></head><body><a style="display:block" id="frame-link" href="${origin}/frame-destination" target="_blank">Open frame destination</a><a style="display:block" id="frame-modifier-link" href="${origin}/frame-modifier-destination">Open frame modifier destination</a><a style="display:block" id="frame-middle-link" href="${origin}/frame-middle-destination">Open frame middle destination</a><a style="display:block" id="frame-shift-middle-link" href="${origin}/frame?shift-middle">Open foreground frame tab</a></body></html>`
       )
       return
     }
@@ -174,11 +174,12 @@ async function startBrowserLinkServer(): Promise<{
     response.end(`
       <!doctype html>
       <html>
-        <head><title>Source page</title></head>
+        <head><title>${request.url?.includes('shift-middle') ? 'Shift middle destination' : 'Source page'}</title></head>
         <body>
           <a id="external-link" href="${origin}/destination" target="_blank">Open destination</a>
           <a id="modifier-link" href="${origin}/modifier-destination">Open with modifier</a>
           <a id="middle-link" href="${origin}/middle-destination">Open with middle click</a>
+          <a id="shift-middle-link" href="${origin}/source?shift-middle">Open foreground tab</a>
           <a id="cancelled-link" href="${origin}/destination" target="_blank">Handle in page</a>
           <iframe id="link-frame" src="${origin}/frame" title="Embedded links"></iframe>
           <script>
@@ -281,7 +282,7 @@ async function clickBrowserLink(
   browserTabId: string,
   selector: string,
   options: {
-    modifiers?: ('meta' | 'control')[]
+    modifiers?: ('meta' | 'control' | 'shift')[]
     button?: 'left' | 'middle'
     frameSelector?: string
   } = {}
@@ -356,6 +357,25 @@ async function expectBrowserTabActive(
   const tabId = await resolveTabId()
   expect(tabId).toBeTruthy()
   await expect(page.locator(`[data-browser-overlay-tab-id="${tabId}"]`)).toHaveCSS('opacity', '1')
+}
+
+async function expectBrowserTabOpenedInBackground(
+  page: Parameters<typeof getActiveWorktreeId>[0],
+  sourceTabId: string,
+  title: string
+): Promise<void> {
+  const openedTab = page.locator('[data-tab-id]').filter({ hasText: title })
+  await expect(openedTab).toBeVisible()
+  const openedTabId = await openedTab.getAttribute('data-tab-id')
+  expect(openedTabId).toBeTruthy()
+  await expect(page.locator(`[data-browser-overlay-tab-id="${sourceTabId}"]`)).toHaveCSS(
+    'opacity',
+    '1'
+  )
+  await expect(page.locator(`[data-browser-overlay-tab-id="${openedTabId}"]`)).toHaveCSS(
+    'opacity',
+    '0'
+  )
 }
 
 async function readBrowserInputValue(
@@ -680,7 +700,7 @@ test.describe('Browser Tab', () => {
     }
   })
 
-  test('every new-tab link gesture activates an Orca tab and never a native window', async ({
+  test('new-tab link gestures follow Chrome foreground and background behavior', async ({
     electronApp,
     orcaPage
   }) => {
@@ -717,19 +737,34 @@ test.describe('Browser Tab', () => {
         frameSelector: '#link-frame',
         modifiers: process.platform === 'darwin' ? ['meta'] : ['control']
       })
-      await expectBrowserTabActive(orcaPage, 'Frame modifier destination')
-      await switchToBrowserTab(orcaPage, worktreeId, sourceTab!.id)
+      await expectBrowserTabOpenedInBackground(
+        orcaPage,
+        sourceTab!.id,
+        'Frame modifier destination'
+      )
       await clickBrowserLink(orcaPage, sourceTab!.id, '#frame-middle-link', {
         button: 'middle',
         frameSelector: '#link-frame'
       })
-      await expectBrowserTabActive(orcaPage, 'Frame middle destination')
-      await switchToBrowserTab(orcaPage, worktreeId, sourceTab!.id)
+      await expectBrowserTabOpenedInBackground(orcaPage, sourceTab!.id, 'Frame middle destination')
 
       await clickBrowserLink(orcaPage, sourceTab!.id, '#modifier-link', {
         modifiers: process.platform === 'darwin' ? ['meta'] : ['control']
       })
-      await expectBrowserTabActive(orcaPage, 'Modifier destination')
+      await expectBrowserTabOpenedInBackground(orcaPage, sourceTab!.id, 'Modifier destination')
+
+      await clickBrowserLink(orcaPage, sourceTab!.id, '#shift-middle-link', {
+        button: 'middle',
+        modifiers: ['shift']
+      })
+      await expectBrowserTabActive(orcaPage, 'Shift middle destination')
+      await switchToBrowserTab(orcaPage, worktreeId, sourceTab!.id)
+      await clickBrowserLink(orcaPage, sourceTab!.id, '#frame-shift-middle-link', {
+        button: 'middle',
+        modifiers: ['shift'],
+        frameSelector: '#link-frame'
+      })
+      await expectBrowserTabActive(orcaPage, 'Frame shift middle destination')
       await switchToBrowserTab(orcaPage, worktreeId, sourceTab!.id)
 
       const tabCountBeforeCancelledClick = await orcaPage.locator('[data-tab-id]').count()
@@ -740,7 +775,7 @@ test.describe('Browser Tab', () => {
       await expect(orcaPage.locator('[data-tab-id]')).toHaveCount(tabCountBeforeCancelledClick)
 
       await clickBrowserLink(orcaPage, sourceTab!.id, '#middle-link', { button: 'middle' })
-      await expectBrowserTabActive(orcaPage, 'Middle-click destination')
+      await expectBrowserTabOpenedInBackground(orcaPage, sourceTab!.id, 'Middle-click destination')
       await expect
         .poll(() => electronApp.evaluate(({ BaseWindow }) => BaseWindow.getAllWindows().length), {
           timeout: 5_000
