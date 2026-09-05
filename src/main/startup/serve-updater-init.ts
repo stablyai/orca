@@ -1,4 +1,10 @@
-import { setupAutoUpdater, resolveUpdateInstallMode, setServeUpdateRuntimeId } from '../updater'
+import {
+  setupAutoUpdater,
+  resolveUpdateInstallMode,
+  setServeUpdateCensusGate,
+  setServeUpdateRuntimeId
+} from '../updater'
+import { runServeUpdateCensus, type CensusCapableRuntime } from '../serve-update-census'
 import { mainProcessState as state } from './main-process-state'
 
 /**
@@ -10,9 +16,16 @@ import { mainProcessState as state } from './main-process-state'
  */
 export function initializeServeAutoUpdater(
   runtimeId: string,
-  getStore: () => NonNullable<typeof state.store>
+  getStore: () => NonNullable<typeof state.store>,
+  censusRuntime?: CensusCapableRuntime
 ): void {
   setServeUpdateRuntimeId(runtimeId)
+  // Why: on Linux serve, the install RPC ends in a service restart that kills every
+  // terminal and agent. The census gate runs at install time to refuse the update
+  // while live work exists (see docs/reference/ssh-execution-boundary.md).
+  if (censusRuntime) {
+    setServeUpdateCensusGate(() => runServeUpdateCensus(censusRuntime))
+  }
   setupAutoUpdater(null, {
     getLastUpdateCheckAt: () => getStore().getUI().lastUpdateCheckAt,
     setLastUpdateCheckAt: (timestamp) => {
