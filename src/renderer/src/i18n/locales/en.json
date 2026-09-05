@@ -17486,7 +17486,9 @@
     "close": "Close dashboard",
     "settings": {
       "showIdle": "Show idle agents",
-      "showIdleCopy": "Include agents that have gone quiet for 30 minutes without reporting completion. Hidden by default."
+      "showIdleCopy": "Include agents that have gone quiet for 30 minutes without reporting completion. Hidden by default.",
+      "cardClickOpensWorktree": "Open the worktree on click",
+      "cardClickOpensWorktreeCopy": "Clicking a card opens the worktree and {{modifierClick}} shows the live preview. Off: click previews, {{modifierClick}} opens the worktree."
     },
     "settingsTooltip": "Board settings",
     "card": {
@@ -17504,7 +17506,11 @@
         "closed": "Closed review"
       },
       "subagents_one": "{{count}} subagent",
-      "subagents_other": "{{count}} subagents"
+      "subagents_other": "{{count}} subagents",
+      "clickHint": {
+        "openWorktree": "Click to open the worktree · {{modifierClick}} for a live preview",
+        "preview": "Click for a live preview · {{modifierClick}} to open the worktree"
+      }
     },
     "terminal": {
       "closed": "No live terminal — this agent's pane has closed.",

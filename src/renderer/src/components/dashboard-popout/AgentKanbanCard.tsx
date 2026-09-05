@@ -21,6 +21,7 @@ import {
 import type { RepoIcon } from '../../../../shared/repo-icon'
 import { translate } from '@/i18n/i18n'
 import { DashboardHostBadge } from './DashboardHostBadge'
+import { agentCardActivationHint } from './agent-card-activation'
 
 /** Compact "started N ago" (the card is glanceable — coarse units are fine). */
 function formatStartedAgo(startedAt: number, now: number): string {
@@ -188,19 +189,25 @@ type AgentKanbanCardProps = {
   /** The card repo's icon. null renders the default folder glyph. */
   repoIcon?: RepoIcon | null
   now: number
-  /** Opens the board-level terminal dialog. The dialog is NOT owned by the
-   *  card: bucket moves remount the card, and an embedded dialog would close
-   *  the chat mid-conversation. */
-  onOpenTerminal: (card: DashboardCard) => void
+  /** Whether a plain click opens the worktree (modifier-click previews) rather
+   *  than the reverse; only the hover hint depends on it here. */
+  clickOpensWorktree: boolean
+  /** Hands the click to the board, which opens the board-level terminal dialog
+   *  or reveals the worktree. The dialog is NOT owned by the card: bucket moves
+   *  remount the card, and an embedded dialog would close the chat
+   *  mid-conversation. */
+  onActivate: (card: DashboardCard, event: React.MouseEvent<HTMLButtonElement>) => void
 }
 
-/** One agent on the kanban board. Clicking opens the board's live terminal dialog. */
+/** One agent on the kanban board. Clicking opens the board's live terminal
+ *  dialog or the worktree, depending on the modifier and the board setting. */
 export const AgentKanbanCard = memo(
   function AgentKanbanCard({
     card,
     repoIcon = null,
     now,
-    onOpenTerminal
+    clickOpensWorktree,
+    onActivate
   }: AgentKanbanCardProps): React.JSX.Element {
     useTranslation()
     const [subagentsOpen, setSubagentsOpen] = useState(false)
@@ -233,7 +240,8 @@ export const AgentKanbanCard = memo(
       >
         <button
           type="button"
-          onClick={() => onOpenTerminal(card)}
+          onClick={(event) => onActivate(card, event)}
+          title={agentCardActivationHint(clickOpensWorktree)}
           className="flex w-full flex-col gap-1.5 text-left focus-visible:rounded-md focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
         >
           <div className="flex w-full items-center gap-1.5">
@@ -316,7 +324,7 @@ export const AgentKanbanCard = memo(
 
         <button
           type="button"
-          onClick={() => onOpenTerminal(card)}
+          onClick={(event) => onActivate(card, event)}
           className="flex w-full items-center gap-2 rounded-md text-left text-[11px] text-muted-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
         >
           <Tooltip>
@@ -350,7 +358,8 @@ export const AgentKanbanCard = memo(
     )
   },
   (previous, next) =>
-    previous.onOpenTerminal === next.onOpenTerminal &&
+    previous.onActivate === next.onActivate &&
+    previous.clickOpensWorktree === next.clickOpensWorktree &&
     sameCard(previous.card, next.card) &&
     sameRepoIcon(previous.repoIcon, next.repoIcon) &&
     (displayTimestamp(previous.card) <= 0 ||
