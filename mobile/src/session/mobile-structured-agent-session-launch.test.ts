@@ -120,6 +120,41 @@ describe('mobile structured agent-session launch', () => {
     expect(client.sendRequest).toHaveBeenCalledTimes(1)
   })
 
+  it('retries a transient unresolved worktree before deciding structured support', async () => {
+    vi.useFakeTimers()
+    const client = clientReturning(
+      { ok: false, error: { code: 'selector_not_found', message: 'Selector not found' } },
+      { ok: true, result: { supported: true } },
+      acceptedCreate
+    )
+
+    try {
+      const result = createMobileStructuredAgentSession(client, 'workspace-1', 'claude')
+      await vi.runAllTimersAsync()
+
+      await expect(result).resolves.toMatchObject({ kind: 'created' })
+      expect(client.sendRequest.mock.calls.map(([method]) => method)).toEqual([
+        'agentSession.createSupport',
+        'agentSession.createSupport',
+        'agentSession.create'
+      ])
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('does not retry a support failure unrelated to worktree resolution', async () => {
+    const client = clientReturning({
+      ok: false,
+      error: { code: 'runtime_busy', message: 'Runtime busy' }
+    })
+
+    await expect(
+      createMobileStructuredAgentSession(client, 'workspace-1', 'claude')
+    ).resolves.toEqual({ kind: 'unsupported' })
+    expect(client.sendRequest).toHaveBeenCalledTimes(1)
+  })
+
   it('keeps an unknown create outcome distinct so callers do not create a duplicate terminal', async () => {
     const client = clientReturning({ ok: true, result: { supported: true } })
     client.sendRequest.mockImplementationOnce(async () => ({

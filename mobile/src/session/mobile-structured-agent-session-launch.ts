@@ -10,12 +10,20 @@ import {
   type StructuredAgentSessionCreateParams
 } from '../../../src/shared/structured-agent-session-create'
 import { TUI_AGENT_DISPLAY_NAMES } from '../../../src/shared/tui-agent-display-names'
+import { hasRuntimeRpcErrorCode } from '../../../src/shared/runtime-rpc-error-code'
 import type { RpcClient } from '../transport/rpc-client'
 import { structuredSessionRandomUuid } from './mobile-structured-agent-session-rpc'
 
 type StructuredCreateSupport = {
   supported?: boolean
   reason?: 'agent' | 'remote' | 'wsl'
+}
+
+const SELECTOR_NOT_RESOLVABLE_CODE = 'selector_not_found'
+const CREATE_SUPPORT_RETRY_DELAYS_MS: readonly number[] = [50, 150, 300]
+
+function delay(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms))
 }
 
 export type MobileStructuredAgentLaunchResult =
@@ -72,11 +80,29 @@ export async function createMobileStructuredAgentSession(
 ): Promise<MobileStructuredAgentLaunchResult> {
   const worktree = `id:${worktreeId}`
   let supportResponse
-  try {
-    supportResponse = await client.sendRequest('agentSession.createSupport', { worktree, agent })
-  } catch {
-    // A support probe has no side effect; an unavailable probe safely degrades to terminal chat.
-    return { kind: 'unsupported' }
+  for (let attempt = 0; ; attempt += 1) {
+    try {
+      supportResponse = await client.sendRequest('agentSession.createSupport', { worktree, agent })
+    } catch (error) {
+      const retryDelayMs = CREATE_SUPPORT_RETRY_DELAYS_MS[attempt]
+      if (
+        retryDelayMs === undefined ||
+        !hasRuntimeRpcErrorCode(error, SELECTOR_NOT_RESOLVABLE_CODE)
+      ) {
+        return { kind: 'unsupported' }
+      }
+      await delay(retryDelayMs)
+      continue
+    }
+    const retryDelayMs = CREATE_SUPPORT_RETRY_DELAYS_MS[attempt]
+    if (
+      retryDelayMs !== undefined &&
+      hasRuntimeRpcErrorCode(supportResponse, SELECTOR_NOT_RESOLVABLE_CODE)
+    ) {
+      await delay(retryDelayMs)
+      continue
+    }
+    break
   }
   if (
     !supportResponse ||
