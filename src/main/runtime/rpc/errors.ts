@@ -22,6 +22,7 @@ import {
 } from '../../../shared/skill-install-failure'
 import { GIT_DIFF_TOO_LARGE_CODE } from '../../../shared/git-diff-transport-budget'
 import { AUTOMATION_OWNER_CONFLICT_CODES } from '../../../shared/automation-owner-conflict'
+import { AGENT_PROMPT_STALLED_ERROR } from '../agent-prompt-submission-verification'
 
 export function successResponse(id: string, meta: RpcEnvelopeMeta, result: unknown): RpcSuccess {
   return {
@@ -63,7 +64,7 @@ const RUNTIME_PASSTHROUGH_CODES: ReadonlySet<string> = new Set([
   'terminal_tab_not_found',
   'terminal_tab_pinned',
   'agent_prompt_blocked',
-  'agent_prompt_stalled',
+  AGENT_PROMPT_STALLED_ERROR,
   'no_active_terminal',
   'repo_not_found',
   'timeout',
@@ -186,7 +187,11 @@ export function mapRuntimeError(id: string, meta: RpcEnvelopeMeta, error: unknow
     )
   }
   if (RUNTIME_PASSTHROUGH_CODES.has(message)) {
-    return errorResponse(id, meta, message, message)
+    const data =
+      message === AGENT_PROMPT_STALLED_ERROR && error instanceof Error && 'data' in error
+        ? (error as { data?: unknown }).data
+        : undefined
+    return errorResponse(id, meta, message, message, data)
   }
   const skillInstallFailure = classifySkillInstallFailureCode(message)
   if (skillInstallFailure) {

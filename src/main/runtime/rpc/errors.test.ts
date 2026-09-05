@@ -59,6 +59,21 @@ describe('mapRuntimeError', () => {
     }
   )
 
+  it('preserves the written receipt for an unobserved agent prompt submission', () => {
+    const error = Object.assign(new Error('agent_prompt_stalled'), {
+      data: { bytesWritten: 19, submitted: true }
+    })
+
+    expect(mapRuntimeError('req_1', { runtimeId: 'runtime-1' }, error)).toMatchObject({
+      ok: false,
+      error: {
+        code: 'agent_prompt_stalled',
+        message: 'agent_prompt_stalled',
+        data: { bytesWritten: 19, submitted: true }
+      }
+    })
+  })
+
   it.each([
     'remote_update_manual_required',
     'remote_update_not_available',

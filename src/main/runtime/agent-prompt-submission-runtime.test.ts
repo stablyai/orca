@@ -80,7 +80,13 @@ describe('agent prompt submission runtime', () => {
       }
     })
     const submission = runtime.sendTerminalAgentPrompt(handle, 'review this')
-    const rejected = expect(submission).rejects.toThrow('agent_prompt_stalled')
+    const rejected = expect(submission).rejects.toMatchObject({
+      message: 'agent_prompt_stalled',
+      data: {
+        bytesWritten: Buffer.byteLength(buildAgentPromptPasteBytes('review this')) + 1,
+        submitted: true
+      }
+    })
 
     await vi.runAllTimersAsync()
 
