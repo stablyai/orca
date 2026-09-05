@@ -84,9 +84,11 @@ export function createTerminalTabCreationActions(
           options?.initialLeafId && isTerminalLeafId(options.initialLeafId)
             ? options.initialLeafId
             : undefined
-        // Why: startup delivery is pane-owned; pin its first leaf so an aborted/remounted renderer retries against the same spawn reservation.
+        // Why: pin the first leaf for startup delivery and for tab-bar + launchAgent
+        // tabs — + queues startup after createTab, so a missing leaf drops the newest
+        // sidebar agent row (#18113).
         const initialLeafId =
-          options?.initialPtyId || options?.pendingStartup
+          options?.initialPtyId || options?.pendingStartup || options?.launchAgent
             ? (requestedInitialLeafId ?? createBrowserUuid())
             : undefined
         const shouldActivate = options?.activate !== false
