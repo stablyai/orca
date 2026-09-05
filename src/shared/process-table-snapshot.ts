@@ -13,9 +13,14 @@ export type ProcessTableRow = {
   command: string
 }
 
+// Why guarded: this module is the renderer-safe half of the process-table pair, and the renderer
+// runs sandboxed with contextIsolation, where a bare `process` read throws at module evaluation
+// and takes the whole chunk — and the app — down with it. Only hosts ever run these argv.
+const HOST_IS_DARWIN = typeof process !== 'undefined' && process.platform === 'darwin'
+
 /** Columns used by the evidence reader. Keep command last so its spaces survive parsing. */
 export const PS_ARGS = (
-  process.platform === 'darwin'
+  HOST_IS_DARWIN
     ? ['-axo', 'pid=,ppid=,pgid=,tpgid=,stat=,tty=,lstart=,command=']
     : ['-axo', 'pid=,ppid=,pgid=,tpgid=,stat=,tty=,etimes=,command=']
 ) as readonly string[]
@@ -28,7 +33,7 @@ export const PS_ARGS = (
  * marker comes from `/proc/<pid>/stat` for the pane subtree only.
  */
 export const CHEAP_PS_ARGS = (
-  process.platform === 'darwin'
+  HOST_IS_DARWIN
     ? ['-axo', 'pid=,ppid=,pgid=,tpgid=,stat=,lstart=']
     : ['-axo', 'pid=,ppid=,pgid=,tpgid=,stat=']
 ) as readonly string[]
@@ -79,6 +84,14 @@ export function parseCheapProcessTableRows(stdout: string): CheapProcessTableRow
 // capture fails — a readable process table degrading into permanent
 // "unverifiable". Matches the sibling reader in pty-descendant-termination.ts.
 export const PS_MAX_BUFFER_BYTES = 32 * 1024 * 1024
+
+/** How much older than its own await a TTL-cached capture may be, on top of the capture's own
+ *  duration. Reported ages carry both, so this alone is not the staleness bound.
+ *
+ *  Why here and not beside the reader that applies it: the renderer's cadence scheduler pulls a
+ *  pane's next poll forward by at most this much, and the reader is a `node:child_process` module
+ *  the renderer must never reach. */
+export const PROCESS_TABLE_SNAPSHOT_MAX_STALENESS_MS = 500
 
 /**
  * Parse legacy or evidence-shaped `ps` output into rows. Tolerates CRLF so a
