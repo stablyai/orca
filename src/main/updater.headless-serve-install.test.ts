@@ -18,6 +18,7 @@ const {
   clearUpdateResultMock,
   readServeUpdateResultForMock,
   captureServeUpdateAppImageMock,
+  runProcessMock,
   resetHandlers
 } = vi.hoisted(() => {
   const appHandlers = new Map<string, ((...args: unknown[]) => void)[]>()
@@ -74,6 +75,9 @@ const {
     clearUpdateResultMock: vi.fn(),
     readServeUpdateResultForMock: vi.fn(),
     captureServeUpdateAppImageMock: vi.fn(),
+    runProcessMock: vi.fn(() =>
+      Promise.resolve({ code: 0, stdout: '', stderr: '', timedOut: false })
+    ),
     resetHandlers: () => {
       appHandlers.clear()
       updaterHandlers.clear()
@@ -133,6 +137,15 @@ vi.mock('./serve-update-spool', () => ({
 }))
 vi.mock('./serve-update-artifact-capture', () => ({
   captureServeUpdateAppImage: captureServeUpdateAppImageMock
+}))
+vi.mock('./cli/serve-update-helper-installer', () => ({
+  SERVE_UPDATE_HELPER_INSTALL_PATH: '/usr/lib/orca/serve-update-helper.sh'
+}))
+vi.mock('./cli/linux-package-install-command', () => ({
+  resolveTrustedExecutable: vi.fn(() => '/usr/bin/sudo')
+}))
+vi.mock('../../shared/child-process/run-process', () => ({
+  runProcess: runProcessMock
 }))
 
 warmUpdaterModule()
@@ -722,12 +735,12 @@ describe('headless serve update install handoff', () => {
         'updater:status',
         expect.objectContaining({
           state: 'error',
-          message: expect.stringContaining('server update did not complete')
+          message: expect.stringContaining('Could not launch the server update helper')
         })
       )
       expect(recordUpdaterLifecycleMock).toHaveBeenCalledWith(
         'headless_serve_update_not_accepted',
-        { version: '1.0.61' },
+        { version: '1.0.61', reason: expect.any(String) },
         expect.objectContaining({ level: 'warn' })
       )
     }
