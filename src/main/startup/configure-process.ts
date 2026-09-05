@@ -314,7 +314,7 @@ export function enableMainProcessGpuFeatures(): void {
 
   if (process.platform === 'darwin') {
     // Why: Graphite can strand corrupt Metal tiles after idle; Ganesh preserves GPU compositing without the stale surface.
-    // Reached on every macOS launch only because GPU fallback skips this function and is win32-only; if fallback ever
+    // Reached on every macOS launch only because GPU fallback skips this function and is win32|linux only; if fallback ever
     // reaches macOS this must move out of this path or Macs silently lose the fix.
     app.commandLine.appendSwitch('disable-skia-graphite')
   }
