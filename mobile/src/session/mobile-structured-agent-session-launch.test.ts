@@ -100,7 +100,9 @@ describe('mobile structured agent-session launch', () => {
   it('names the refusing agent in the failure copy rather than always saying Codex', async () => {
     const client = clientReturning(
       { ok: true, result: { supported: true } },
-      { ok: false, error: { code: 'agent_session_refused', message: '' } }
+      // A definitive refusal is the only path that reaches the failure copy; anything else
+      // stays unknown and never renders a message.
+      { ok: false, error: { code: 'method_not_found', message: '' } }
     )
 
     await expect(
@@ -234,7 +236,9 @@ describe('mobile structured agent-session launch', () => {
         { ok: false, error: { code, message: 'structured create unavailable' } }
       )
 
-      await expect(createMobileStructuredCodexSession(client, 'workspace-1')).resolves.toEqual({
+      await expect(
+        createMobileStructuredAgentSession(client, 'workspace-1', 'codex')
+      ).resolves.toEqual({
         kind: 'failed',
         message: 'structured create unavailable'
       })
@@ -249,7 +253,9 @@ describe('mobile structured agent-session launch', () => {
         { ok: false, error: { code, message: 'create outcome ambiguous' } }
       )
 
-      await expect(createMobileStructuredCodexSession(client, 'workspace-1')).resolves.toEqual({
+      await expect(
+        createMobileStructuredAgentSession(client, 'workspace-1', 'codex')
+      ).resolves.toEqual({
         kind: 'unknown',
         message: 'create outcome ambiguous'
       })
@@ -271,7 +277,9 @@ describe('mobile structured agent-session launch', () => {
       }
     )
 
-    await expect(createMobileStructuredCodexSession(client, 'workspace-1')).resolves.toEqual({
+    await expect(
+      createMobileStructuredAgentSession(client, 'workspace-1', 'codex')
+    ).resolves.toEqual({
       kind: 'failed',
       message: 'structured create unavailable'
     })
@@ -291,7 +299,9 @@ describe('mobile structured agent-session launch', () => {
         }
       )
 
-      await expect(createMobileStructuredCodexSession(client, 'workspace-1')).resolves.toEqual({
+      await expect(
+        createMobileStructuredAgentSession(client, 'workspace-1', 'codex')
+      ).resolves.toEqual({
         kind: 'unknown',
         message: 'create outcome ambiguous'
       })
