@@ -1,0 +1,19 @@
+{
+  "package_id": "com.stably.orcag2",
+  "edition": "202601",
+  "name": "Orca",
+  "version": "0.1.0",
+  "entrypoint": "index.html",
+  "supported_languages": ["en"],
+  "min_sdk_version": "0.0.14",
+  "min_app_version": "2.2.7",
+  "permissions": [
+    {
+      "name": "network",
+      "desc": "Connects to your paired Orca desktop.",
+      "whitelist": [
+        "TODO(R4): Orca desktop endpoints are arbitrary ws://<lan-ip>:<port> / Tailscale hosts, not fixed origins. Whether the Even App enforces this whitelist against WebSocket dials (and whether wildcards are supported) is unverified — see design spec docs/superpowers/specs/2026-09-05-even-g2-app-design.md §12 risk R4. v1 ships via QR-sideloaded dev URL; replace this placeholder and confirm enforcement behavior before any hub.evenrealities.com portal submission."
+      ]
+    }
+  ]
+}
