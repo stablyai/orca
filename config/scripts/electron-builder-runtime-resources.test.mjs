@@ -108,15 +108,44 @@ describe('packaged runtime resources', () => {
         ['out/main/agent-hooks/managed-agent-hook-controls.js', ''],
         ['out/main/chunks/managed-agent-hook-controls-CWf8D-KR.js', 'require(`jsonc-parser`)']
       ])
+      // Real listPackage emits directory nodes too, and extractFile throws on them,
+      // so the `.js` anchor is load-bearing -- keep the mock able to catch that.
+      const directories = ['/out', '/out/main', '/out/main/chunks']
       const asar = {
-        listPackage: () => [...sources.keys()].map((entry) => `/${entry}`),
-        extractFile: (_asarPath, internalPath) => Buffer.from(sources.get(internalPath), 'utf8')
+        listPackage: () => [...directories, ...[...sources.keys()].map((entry) => `/${entry}`)],
+        extractFile: (_asarPath, internalPath) => {
+          const source = sources.get(internalPath)
+          if (source === undefined) {
+            throw new Error(`Expected to find file at: ${internalPath} but found a directory`)
+          }
+          return Buffer.from(source, 'utf8')
+        }
       }
 
       expect(() => verifyPackagedMainRuntimeDeps(resourcesDir, asar)).toThrow(/jsonc-parser/)
 
       await mkdir(join(resourcesDir, 'node_modules', 'jsonc-parser'), { recursive: true })
       expect(() => verifyPackagedMainRuntimeDeps(resourcesDir, asar)).not.toThrow()
+    } finally {
+      await rm(resourcesDir, { recursive: true, force: true })
+    }
+  })
+
+  it('reads a spread require, whose leading dots are not member access', async () => {
+    const resourcesDir = await mkdtemp(join(tmpdir(), 'orca-runtime-spread-require-'))
+    try {
+      await writeFile(join(resourcesDir, 'app.asar'), '', 'utf8')
+
+      const sources = new Map([
+        ['out/main/index.js', 'const all=[...require("jsonc-parser")]'],
+        ['out/main/agent-hooks/managed-agent-hook-controls.js', '']
+      ])
+      const asar = {
+        listPackage: () => [...sources.keys()].map((entry) => `/${entry}`),
+        extractFile: (_asarPath, internalPath) => Buffer.from(sources.get(internalPath), 'utf8')
+      }
+
+      expect(() => verifyPackagedMainRuntimeDeps(resourcesDir, asar)).toThrow(/jsonc-parser/)
     } finally {
       await rm(resourcesDir, { recursive: true, force: true })
     }

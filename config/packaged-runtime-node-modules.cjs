@@ -251,12 +251,15 @@ function verifyPackagedMainRuntimeDeps(resourcesDir, asar = require('@electron/a
     const source = asar.extractFile(asarPath, internalPath).toString('utf8')
     // Why the lookbehind: Orca has its own registry methods named `require`, so a
     // minified `registry.require('some-id')` must not read as a bare specifier.
+    // Why it readmits `...`: a dot that ends a spread is not member access, and
+    // the two error directions are not symmetric -- a false positive fails the
+    // release build loudly, a false negative is this guard going blind.
     // Known limit: a specifier inside an embedded source string counts too, and
     // ssh-relay-deploy's remote probe names node-pty that way. A remote-only
     // dependency added to that script would fail desktop packaging here; telling
     // the two apart needs a parser, not a wider pattern.
     for (const match of source.matchAll(
-      /(?<![.\w])(?:require|import)\s*\(\s*(["'`])([^"'`$]+)\1\s*\)/g
+      /(?:(?<![.\w])|(?<=\.\.\.))(?:require|import)\s*\(\s*(["'`])([^"'`$]+)\1\s*\)/g
     )) {
       const specifier = match[2]
       if (!isPackagedExternalSpecifier(specifier)) {
