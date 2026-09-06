@@ -73,7 +73,7 @@ test.describe('five SSH panes under simultaneous output', () => {
     const visibleTerminals = orcaPage.locator('.xterm:visible')
     await expect(visibleTerminals).toHaveCount(5)
 
-    for (let round = 0; round < 2; round++) {
+    for (let round = 0; round < 10; round++) {
       await orcaPage.evaluate(() => window.__store!.getState().setActiveView('tasks'))
       await expect
         .poll(() => orcaPage.evaluate(() => window.__store!.getState().activeView))
@@ -83,6 +83,24 @@ test.describe('five SSH panes under simultaneous output', () => {
       await expect(visibleTerminals).toHaveCount(5)
       await waitForActiveTerminalManager(orcaPage, 60_000)
       for (const [index, owner] of owners.entries()) {
+        const inputTrace = await orcaPage.evaluateHandle((tabId) => {
+          const manager = window.__paneManagers!.get(tabId)!
+          const entries = manager.getPanes().map((pane) => ({
+            ptyId: pane.container.dataset.ptyId,
+            data: '',
+            focusedAtFirstInput: null as boolean | null
+          }))
+          const subscriptions = manager.getPanes().map((pane, index) =>
+            pane.terminal.onData((data) => {
+              entries[index].focusedAtFirstInput ??= pane.container.contains(document.activeElement)
+              entries[index].data = (entries[index].data + data).slice(-512)
+            })
+          )
+          return {
+            entries,
+            dispose: () => subscriptions.forEach((subscription) => subscription.dispose())
+          }
+        }, tabId)
         await orcaPage.evaluate(
           ({ tabId, leafId }) => {
             const manager = window.__paneManagers!.get(tabId)!
@@ -97,23 +115,6 @@ test.describe('five SSH panes under simultaneous output', () => {
         expect(await waitForActivePanePtyId(orcaPage)).toBe(owner.ptyId)
         await focusActiveTerminalInput(orcaPage)
         const input = `input_${runId}_${round}_${index}`
-        const inputTrace = await orcaPage.evaluateHandle((tabId) => {
-          const manager = window.__paneManagers!.get(tabId)!
-          const entries = manager.getPanes().map((pane) => ({
-            ptyId: pane.container.dataset.ptyId,
-            data: '',
-            focusedBefore: pane.container.contains(document.activeElement)
-          }))
-          const subscriptions = manager.getPanes().map((pane, index) =>
-            pane.terminal.onData((data) => {
-              entries[index].data = (entries[index].data + data).slice(-512)
-            })
-          )
-          return {
-            entries,
-            dispose: () => subscriptions.forEach((subscription) => subscription.dispose())
-          }
-        }, tabId)
         // The remote process repeats its latest ACK, so flood eviction cannot hide it.
         try {
           await orcaPage.keyboard.type(input)
