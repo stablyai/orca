@@ -1,6 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { RuntimeMobileSessionTabsResult } from '../../../shared/runtime-types'
 import { applyWebSessionTabsSnapshot } from './web-session-tabs-sync'
+import { toRemoteRuntimePtyId } from './runtime-terminal-stream'
+import { finalizeHostTerminalSnapshot } from './__fixtures__/web-session-terminal-host-finalization'
 import {
   makeState as makeTabsSyncState,
   resetWebSessionTabsSyncTestState
@@ -519,51 +521,62 @@ describe('web session terminal orphan adoption regressions', () => {
     }
   )
 
-  it.each(['retired', 'rebound', 'pending-replacement'])(
-    'honors fresh %s sibling state from the post-adoption list',
+  it.each(['retired', 'rebound', 'pending-without-proof'])(
+    'merges host-projected %s sibling state after adoption without treating pending as exited',
     async (verdict) => {
       const worktree = 'folder:post-adoption-sibling'
-      const leaves = [
-        { leafId: 'leaf-claim', handle: 'term-claim' },
-        { leafId: 'leaf-hold', handle: 'term-hold' }
-      ]
-      const state = makeState(worktree, leaves)
-      const snapshot: RuntimeMobileSessionTabsResult = {
-        ...makeSnapshot(worktree, 'renderer:host:client-navigation', leaves),
+      const previous = finalizeHostTerminalSnapshot({
+        ...makeSnapshot(worktree, 'renderer:host:client-navigation', []),
+        tabs: [
+          pendingSurface('host-tab', 'leaf-claim', 'pty-claim', 'term-claim'),
+          pendingSurface('host-tab', 'leaf-hold', 'pty-hold', 'term-hold')
+        ]
+      })
+      const empty = makeTabsSyncState({ activeWorktreeId: worktree })
+      const state = {
+        ...empty,
+        ...applyWebSessionTabsSnapshot(empty, previous, ENVIRONMENT_ID, 1)
+      }
+      const snapshot = finalizeHostTerminalSnapshot({
+        ...previous,
+        snapshotVersion: 2,
         tabs: [
           pendingSurface('host-tab', 'leaf-claim', 'pty-claim'),
           pendingSurface('host-tab', 'leaf-hold', 'pty-hold')
         ]
-      }
-      const adopted: RuntimeMobileSessionTabsResult = {
+      })
+      const adopted = finalizeHostTerminalSnapshot({
         ...snapshot,
         publicationEpoch: 'renderer:host',
-        snapshotVersion: 2,
+        snapshotVersion: 3,
         tabs: [pendingSurface('host-tab', 'leaf-claim', 'pty-claim', 'term-claim')]
+      })
+      const retirement = {
+        parentTabId: 'host-tab',
+        leafId: 'leaf-hold',
+        terminal: 'term-hold',
+        ptyId: 'pty-hold',
+        incarnationId: 'inc-hold'
       }
-      const projected: RuntimeMobileSessionTabsResult = {
+      const projected = finalizeHostTerminalSnapshot({
         ...adopted,
         publicationEpoch: snapshot.publicationEpoch,
-        snapshotVersion: 3,
+        snapshotVersion: 4,
         tabs:
-          verdict === 'rebound'
-            ? [...adopted.tabs, pendingSurface('host-tab', 'leaf-hold', 'pty-new', 'term-new')]
-            : verdict === 'pending-replacement'
-              ? [...adopted.tabs, pendingSurface('host-tab', 'leaf-hold', 'pty-new')]
-              : adopted.tabs,
-        retiredTerminalSurfaces:
-          verdict !== 'rebound'
-            ? [
-                {
-                  parentTabId: 'host-tab',
-                  leafId: 'leaf-hold',
-                  terminal: 'term-hold',
-                  ptyId: 'pty-hold',
-                  incarnationId: 'inc-hold'
-                }
-              ]
-            : []
-      }
+          verdict === 'retired'
+            ? adopted.tabs
+            : [
+                ...adopted.tabs,
+                pendingSurface(
+                  'host-tab',
+                  'leaf-hold',
+                  'pty-new',
+                  verdict === 'rebound' ? 'term-new' : null
+                )
+              ],
+        retiredTerminalSurfaces: [retirement]
+      })
+      expect(projected.retiredTerminalSurfaces).toEqual(verdict === 'retired' ? [retirement] : [])
       const call = vi.fn(async ({ method }: { method: string }) => {
         if (method === 'terminal.list') {
           return {
@@ -581,13 +594,49 @@ describe('web session terminal orphan adoption regressions', () => {
         if (method === 'terminal.adoptOrphans') {
           return { ok: true, result: { adopted: true, topologyRevision: 8, snapshot: adopted } }
         }
+        expect(method).toBe('session.tabs.list')
         return { ok: true, result: projected }
       })
-      await expect(
-        recoverWebSessionTerminalOrphansBeforeApply(state, snapshot, ENVIRONMENT_ID, {
-          call: call as never
-        })
-      ).resolves.toEqual(projected)
+      const recovered = await recoverWebSessionTerminalOrphansBeforeApply(
+        state,
+        snapshot,
+        ENVIRONMENT_ID,
+        { call: call as never }
+      )
+      expect(recovered).toEqual(
+        verdict === 'pending-without-proof'
+          ? {
+              ...projected,
+              tabs: [
+                projected.tabs[0],
+                { ...snapshot.tabs[1], status: 'ready', terminal: 'term-hold' }
+              ]
+            }
+          : projected
+      )
+      const mirrored = {
+        ...state,
+        ...applyWebSessionTabsSnapshot(state, recovered!, ENVIRONMENT_ID, 2)
+      }
+      const localTabId = state.tabsByWorktree[worktree]![0]!.id
+      const expectedBindings = {
+        'leaf-claim': toRemoteRuntimePtyId('term-claim', ENVIRONMENT_ID),
+        ...(verdict === 'retired'
+          ? {}
+          : {
+              'leaf-hold': toRemoteRuntimePtyId(
+                verdict === 'rebound' ? 'term-new' : 'term-hold',
+                ENVIRONMENT_ID
+              )
+            })
+      }
+      expect(mirrored.terminalLayoutsByTabId[localTabId]?.ptyIdsByLeafId).toEqual(expectedBindings)
+      expect(mirrored.ptyIdsByTabId[localTabId]).toEqual(Object.values(expectedBindings))
+      expect(call.mock.calls.map(([request]) => request.method)).toEqual([
+        'terminal.list',
+        'terminal.adoptOrphans',
+        'session.tabs.list'
+      ])
     }
   )
 

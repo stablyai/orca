@@ -3,12 +3,7 @@ import type { TerminalLayoutSnapshot, TerminalTab } from '../../../../shared/ter
 import { normalizeTerminalLayoutPtyOwnership } from '@/components/terminal-pane/terminal-layout-pty-ownership'
 import { resolvePaneAgentOwnerRecord } from '../../../../shared/pane-agent-owner'
 import { normalizeCompatibleAgentTitleForOwner } from '../../../../shared/agent-title-owner'
-import {
-  getRemoteRuntimePtyEnvironmentId,
-  parseRemoteRuntimePtyId,
-  toRemoteRuntimePtyId
-} from '../runtime-terminal-stream'
-import { hasTerminalHandleRetirementProof } from '../web-session-terminal-orphan-recovery-surface-index'
+import { getRemoteRuntimePtyEnvironmentId, toRemoteRuntimePtyId } from '../runtime-terminal-stream'
 import { toWebTerminalSurfaceTabId } from '../web-runtime-session'
 import type { MirroredTerminalTab, TerminalSurface, ReadyTerminalSurface } from './state'
 import { chooseRemoteTerminalLayout, isTerminalSurfaceTab } from './terminal-surfaces'
@@ -26,7 +21,6 @@ function pendingBindingBelongsToEnvironment(
 
 /** Keep a known pane binding while the host briefly publishes its surface as pending. */
 function retainPendingTerminalBindings(
-  snapshot: RuntimeMobileSessionTabsResult,
   surfaces: readonly TerminalSurface[],
   existingLayout: TerminalLayoutSnapshot | undefined,
   ptyIdsByLeafId: Record<string, string>,
@@ -46,18 +40,6 @@ function retainPendingTerminalBindings(
     if (
       !priorPtyId ||
       !pendingBindingBelongsToEnvironment(priorPtyId, environmentId, terminalPtyMode)
-    ) {
-      continue
-    }
-    const priorHandle =
-      terminalPtyMode === 'local' ? priorPtyId : parseRemoteRuntimePtyId(priorPtyId)?.handle
-    if (
-      priorHandle &&
-      hasTerminalHandleRetirementProof(snapshot, {
-        tabId: surface.parentTabId,
-        leafId: surface.leafId,
-        handle: priorHandle
-      })
     ) {
       continue
     }
@@ -109,7 +91,6 @@ export function buildMirroredTerminalTabs(
         .map((surface) => [surface.leafId, ptyIdForSurface(surface.terminal)])
     )
     const ptyIdsByLeafId = retainPendingTerminalBindings(
-      snapshot,
       surfaces,
       existingLayout,
       freshPtyIdsByLeafId,
