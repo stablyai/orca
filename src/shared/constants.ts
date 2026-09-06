@@ -302,6 +302,7 @@ export function getDefaultUIState(): PersistedUIState {
     activityClearedAtByPaneKey: {},
     manuallyUnreadTurnsByPaneKey: {},
     setupGuideSidebarDismissed: false,
+    setupGuideSettingsDismissed: false,
     setupGuideBrowserMilestoneMigrated: true,
     setupGuideBrowserMilestoneLegacyComplete: false,
     browserImportHintHidden: false,
