@@ -809,13 +809,7 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAG: ${{ needs.cut.outputs.tag }}
-        run: |
-          if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
-            echo "Release $TAG already exists."
-            exit 0
-          fi
-
-          node config/scripts/create-draft-release.mjs "$TAG"
+        run: node config/scripts/create-draft-release.mjs "$TAG"
 
   terminal-rendering-golden:
     needs: cut
