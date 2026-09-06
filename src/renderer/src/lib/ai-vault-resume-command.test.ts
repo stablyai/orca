@@ -7,7 +7,7 @@ import {
 } from './ai-vault-resume-command'
 import { dropDeletedSshResumeCwd } from './ai-vault-session-resume-preparation'
 
-vi.mock('@/lib/new-workspace', () => ({
+vi.mock('@/lib/client-platform', () => ({
   CLIENT_PLATFORM: 'win32'
 }))
 
