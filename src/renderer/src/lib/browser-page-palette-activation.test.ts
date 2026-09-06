@@ -350,3 +350,62 @@ describe('activateBrowserPagePaletteResult group focus', () => {
     expect(useAppStore.getState().activeBrowserTabId).toBeNull()
   })
 })
+
+describe('activateBrowserPagePaletteResult host-colliding browser tabs', () => {
+  it('focuses the selected paired host tab when workspace ids collide', () => {
+    const localHost = makeWorktree({ hostId: 'local', displayName: 'Local' })
+    const remoteHost = makeWorktree({
+      hostId: 'ssh:private-target',
+      runtimeOwnerEnvironmentId: 'paired-host',
+      displayName: 'Remote'
+    })
+    const localTab = makeBrowserTab({ id: 'browser-local-tab', executionHostId: 'local' })
+    const remoteTab = makeBrowserTab({
+      id: 'browser-remote-tab',
+      executionHostId: 'runtime:paired-host',
+      groupId: 'group-remote'
+    })
+    seedStore({
+      worktreesByRepo: { 'repo-1': [localHost, remoteHost] },
+      browserTabsByWorktree: { 'wt-1': [makeWorkspace()] },
+      unifiedTabsByWorktree: { 'wt-1': [localTab, remoteTab] },
+      groupsByWorktree: {
+        'wt-1': [
+          makeGroup({ id: 'group-1', activeTabId: localTab.id }),
+          makeGroup({ id: 'group-remote', activeTabId: remoteTab.id })
+        ]
+      },
+      activeWorktreeId: 'wt-1',
+      activeWorkspaceExecutionHostId: 'local'
+    })
+    mocks.activateAndRevealWorktree.mockImplementation((_id, options) => {
+      useAppStore.setState({ activeWorkspaceExecutionHostId: options?.executionHostId ?? null })
+      return true
+    })
+
+    expect(
+      activateBrowserPagePaletteResult({
+        pageId: 'page-1',
+        workspaceId: 'ws-1',
+        worktreeId: 'wt-1',
+        executionHostId: 'runtime:paired-host'
+      })
+    ).toMatchObject({ status: 'activated' })
+    const state = useAppStore.getState()
+    expect(state.activeWorkspaceExecutionHostId).toBe('runtime:paired-host')
+    expect(state.activeGroupIdByWorktree['wt-1']).toBe('group-remote')
+    expect(state.groupsByWorktree['wt-1'][1].activeTabId).toBe('browser-remote-tab')
+
+    expect(
+      activateBrowserPagePaletteResult({
+        pageId: 'page-1',
+        workspaceId: 'ws-1',
+        worktreeId: 'wt-1',
+        executionHostId: 'local'
+      })
+    ).toMatchObject({ status: 'activated' })
+    expect(useAppStore.getState().activeWorkspaceExecutionHostId).toBe('local')
+    expect(useAppStore.getState().activeGroupIdByWorktree['wt-1']).toBe('group-1')
+    expect(useAppStore.getState().groupsByWorktree['wt-1'][0].activeTabId).toBe('browser-local-tab')
+  })
+})

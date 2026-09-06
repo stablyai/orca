@@ -1,5 +1,8 @@
 import { useAppStore } from '@/store'
-import { activateBrowserWorkspaceTab } from '@/lib/browser-workspace-tab-activation'
+import {
+  activateBrowserWorkspaceTab,
+  resolveBrowserWorkspaceUnifiedTab
+} from '@/lib/browser-workspace-tab-activation'
 import type { ExecutionHostId } from '../../../shared/execution-host'
 import { isBlankBrowserUrl } from './browser-palette-search'
 import { activateAndRevealWorktree } from './worktree-activation'
@@ -29,11 +32,14 @@ export function activateBrowserPagePaletteResult({
   worktreeId
 }: BrowserPagePaletteActivationTarget): BrowserPagePaletteActivationResult {
   const initialState = useAppStore.getState()
-  const page = (initialState.browserPagesByWorkspace[workspaceId] ?? []).find(
-    (candidate) => candidate.id === pageId
-  )
   const workspace = (initialState.browserTabsByWorktree[worktreeId] ?? []).find(
-    (candidate) => candidate.id === workspaceId
+    (candidate) => candidate.id === workspaceId && candidate.worktreeId === worktreeId
+  )
+  const page = (initialState.browserPagesByWorkspace[workspaceId] ?? []).find(
+    (candidate) =>
+      candidate.id === pageId &&
+      candidate.workspaceId === workspaceId &&
+      candidate.worktreeId === worktreeId
   )
   const worktree = initialState.getKnownWorktreeById(worktreeId, executionHostId)
   // Why worktree first: removing a worktree also purges its browser workspaces
@@ -52,6 +58,16 @@ export function activateBrowserPagePaletteResult({
     : 'webview'
 
   const targetHostId = executionHostId ?? worktree.hostId
+  const matchingUnifiedTab = resolveBrowserWorkspaceUnifiedTab({
+    executionHostId: targetHostId,
+    worktreeId: worktree.id,
+    workspaceId: workspace.id
+  })
+  // Validate ownership before activation so a stale browser tab cannot partially
+  // switch the active host and then fail to render a browser surface.
+  if (!matchingUnifiedTab) {
+    return { status: 'failed', reason: 'missing-tab' }
+  }
   const activated = activateAndRevealWorktree(
     worktree.id,
     targetHostId ? { executionHostId: targetHostId } : {}
@@ -64,6 +80,7 @@ export function activateBrowserPagePaletteResult({
   // active behind a tab that never shows the page.
   if (
     !activateBrowserWorkspaceTab({
+      executionHostId: targetHostId,
       worktreeId: worktree.id,
       workspaceId: workspace.id,
       pageId
