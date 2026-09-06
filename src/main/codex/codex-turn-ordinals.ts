@@ -37,10 +37,7 @@ export class CodexTurnOrdinals {
     const suffix = `#${digestPayload(value).slice(0, 24)}`
     return `${
       boundPayload(encoded, {
-        inlineHeadBytes: 256 - Buffer.byteLength(suffix, 'utf8'),
-        maxSessionBytes: Number.MAX_SAFE_INTEGER,
-        maxAppendsPerWindow: Number.MAX_SAFE_INTEGER,
-        appendWindowMs: Number.MAX_SAFE_INTEGER
+        inlineHeadBytes: 256 - Buffer.byteLength(suffix, 'utf8')
       }).head
     }${suffix}`
   }

@@ -2,8 +2,11 @@
 //
 // Shared by every structured method file so one gate governs the whole surface: a client that does
 // not advertise `agent-session.structured.v1` is told the surface does not exist rather than being
-// handed a session it cannot render or drive — and, just as importantly, cannot make the host EXIST
-// by calling into it, which is an observable side effect.
+// handed the session journal or mutation surface.
+//
+// This gate no longer implies such a client cannot make the host exist: session-tab restore runs
+// for old mobile clients while structured chat is enabled so they receive a fallback row, and that
+// path constructs the host. `agentSession.*` stays refused either way, which is what this gate is for.
 
 import { getStructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/structured-agent-session-registry'
 import type { StructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/structured-agent-session-host'
@@ -34,9 +37,10 @@ export function requireStructuredHost(ctx: RpcContext): StructuredAgentSessionHo
   return host
 }
 
-/** Attach is the only way a session comes into being, so it is the only call
- *  that builds the host. Every other method addresses a session that must
- *  already be attached, and correctly reports absent when none is. */
+/** Builds the host for the calls that address a session by durable record rather than by live
+ *  state: attach, which is the only way a session comes into being, plus hold and reveal, which
+ *  each reach for a record on disk this process may not have opened yet. Every other method
+ *  addresses a session that must already be attached, and correctly reports absent when none is. */
 export async function ensureStructuredHostInstalled(ctx: RpcContext): Promise<void> {
   // Gated first: a client that cannot read structured sessions must not be able
   // to make the host exist, which is an observable side effect of the surface.

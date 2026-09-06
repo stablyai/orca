@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto'
 import { chmod, readFile, readdir, stat, writeFile } from 'node:fs/promises'
 import { basename, join, resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
+import { requireSameEvidenceCode } from './relay-evidence-code-provenance.mjs'
 
 const SAFE_ID = /^[A-Za-z0-9][A-Za-z0-9._-]{1,127}$/
 const SHA = /^[a-f0-9]{40}$/
@@ -102,7 +103,7 @@ export async function createEvidenceManifest(argv) {
   return manifest
 }
 
-async function readAndVerifyManifest(directory, expected) {
+async function readAndVerifyManifest(directory, expected, sameCodeCommit) {
   const manifest = JSON.parse(
     await readFile(join(directory, 'evidence-manifest.json'), 'utf8')
   )
@@ -111,10 +112,22 @@ async function readAndVerifyManifest(directory, expected) {
     manifest.incidentId !== expected.incidentId ||
     manifest.runId !== expected.runId ||
     manifest.runAttempt !== expected.runAttempt ||
-    manifest.commitSha !== expected.commitSha ||
-    manifest.mode !== expected.mode
+    !SHA.test(manifest.commitSha ?? '') ||
+    manifest.mode !== expected.mode ||
+    (!sameCodeCommit && manifest.commitSha !== expected.commitSha)
   ) {
     throw new Error('relay monitor evidence provenance does not match')
+  }
+  // Unrelated merges land on main every few minutes, so the deployer resolves a newer commit than
+  // the monitor it must trust; identical monitor and mutation code is the property the SHA stood in
+  // for. Restore and mutation keep the exact-SHA bind: both run at the commit that sealed them.
+  if (sameCodeCommit) {
+    requireSameEvidenceCode({
+      sealedSha: manifest.commitSha,
+      currentSha: expected.commitSha,
+      label: 'relay monitor evidence',
+      ...sameCodeCommit
+    })
   }
   const names = Object.keys(manifest.files ?? {})
   if (!names.includes(`${expected.incidentId}.state.json`)) {
@@ -209,12 +222,12 @@ function validCompletedDryRunState(state, expected, nowMs, maxAgeMs) {
   )
 }
 
-export async function verifyDryRunAuthority(argv, now = Date.now) {
+export async function verifyDryRunAuthority(argv, now = Date.now, repositoryRoot) {
   const values = argumentsByName(argv)
   const directory = resolve(values.directory ?? '')
   const expected = provenance(values)
   if (expected.mode !== 'dry-run') throw new Error('relay mutation requires dry-run evidence')
-  const manifest = await readAndVerifyManifest(directory, expected)
+  const manifest = await readAndVerifyManifest(directory, expected, { repositoryRoot })
   const state = JSON.parse(
     await readFile(join(directory, `${expected.incidentId}.state.json`), 'utf8')
   )

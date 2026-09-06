@@ -1,7 +1,7 @@
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 vi.mock('electron', () => ({
   app: { isPackaged: false },
@@ -43,11 +43,10 @@ const cloudB: OrcaProfileCloudSummary = {
   linkedAt: 2
 }
 
-// Why computed default: a hardcoded default expires (this one lapsed at UTC midnight on
-// 2026-09-06) and pruneRecords silently dropped every record, failing the suite as a time bomb.
-const FIXTURE_DEFAULT_EXPIRES_AT = () => new Date(Date.now() + 86_400_000).toISOString()
-
-function createResponse(slug = 'artifact-a', expiresAt = FIXTURE_DEFAULT_EXPIRES_AT()): Response {
+function createResponse(
+  slug = 'artifact-a',
+  expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString()
+): Response {
   return new Response(
     JSON.stringify({
       artifact: {
@@ -95,6 +94,12 @@ const writeRequest = {
   apiUrl,
   authToken: 'token-a'
 }
+
+beforeEach(() => {
+  // Keep fixed response expirations independent of the runner's wall clock.
+  vi.useFakeTimers({ toFake: ['Date'] })
+  vi.setSystemTime('2026-08-07T00:00:00.000Z')
+})
 
 afterEach(async () => {
   vi.useRealTimers()
@@ -459,7 +464,7 @@ describe('ArtifactCloudService record authorization', () => {
     let resolveUpdate: ((response: Response) => void) | undefined
     const fetchMock = vi
       .fn()
-      .mockResolvedValueOnce(createResponse('artifact-a', '2027-09-06T00:00:00.000Z'))
+      .mockResolvedValueOnce(createResponse('artifact-a', '2026-09-06T00:00:00.000Z'))
       .mockImplementationOnce(
         () =>
           new Promise<Response>((resolve) => {
@@ -474,7 +479,7 @@ describe('ArtifactCloudService record authorization', () => {
     const update = service.update(writeRequest)
     await vi.waitFor(() => expect(resolveUpdate).toBeTypeOf('function'))
     vi.setSystemTime('2026-09-07T00:00:00.000Z')
-    resolveUpdate?.(createResponse('artifact-a', '2027-10-06T00:00:00.000Z'))
+    resolveUpdate?.(createResponse('artifact-a', '2026-10-06T00:00:00.000Z'))
     await update
     await expect(
       service.unshare({ sourceKey: writeRequest.sourceKey, apiUrl, authToken: 'token-a' })

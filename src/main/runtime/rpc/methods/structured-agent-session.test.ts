@@ -2,12 +2,19 @@
 // accepts once they can.
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import type { AgentJournalRenderItem } from '../../../../shared/agent-session-journal-types'
+import type { AgentSessionJournal } from '../../../native-chat/agent-session-journal/journal-store'
 import type { StructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/structured-agent-session-host'
 import { setStructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/structured-agent-session-registry'
+import {
+  StructuredAgentSessionStatusFeed,
+  type StructuredAgentSessionStatusSubscriber
+} from '../../../native-chat/agent-session-wire/structured-agent-session-status-feed'
 import {
   RUNTIME_CAPABILITIES,
   RUNTIME_PROTOCOL_VERSION,
   STRUCTURED_AGENT_SESSION_HOLD_RUNTIME_CAPABILITY,
+  STRUCTURED_AGENT_SESSION_REVEAL_RUNTIME_CAPABILITY,
   STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY
 } from '../../../../shared/protocol-version'
 import type { OrcaRuntimeService } from '../../orca-runtime'
@@ -64,6 +71,44 @@ function request(method: string, params: unknown): RpcRequest {
 let hostCalls: Record<string, ReturnType<typeof vi.fn>>
 let runtimeCalls: Record<string, ReturnType<typeof vi.fn>>
 
+const STATUS_SESSION = 'session-status'
+const STATUS_ITEMS: AgentJournalRenderItem[] = [
+  {
+    itemId: 'user-1',
+    sequence: 1,
+    revision: 1,
+    observedAt: 1,
+    body: { kind: 'message', role: 'user', blocks: [{ type: 'text', text: 'write a poem' }] }
+  },
+  {
+    itemId: 'turn-1',
+    sequence: 2,
+    revision: 1,
+    observedAt: 2,
+    body: { kind: 'status', text: 'Working', turnLifecycle: { turnId: 'turn-1', state: 'running' } }
+  }
+]
+
+/** One indexed session over a journal that reads back fixed items; the projection is real. */
+function statusFeed(): StructuredAgentSessionStatusFeed {
+  return new StructuredAgentSessionStatusFeed({
+    sessions: new Map([
+      [
+        STATUS_SESSION,
+        {
+          journal: {
+            isReadOnly: false,
+            snapshot: () => ({ items: STATUS_ITEMS })
+          } as unknown as AgentSessionJournal,
+          params: { location: { workspaceId: 'workspace-1' }, provider: 'codex' as const }
+        }
+      ]
+    ]),
+    getRecord: () => null,
+    now: () => 1_000
+  })
+}
+
 function hostStub(): StructuredAgentSessionHost {
   hostCalls = {
     attach: vi.fn(async () => ({
@@ -96,9 +141,31 @@ function hostStub(): StructuredAgentSessionHost {
     send: vi.fn(async () => ({ ok: true, replayed: false })),
     cancel: vi.fn(async () => ({ ok: true, replayed: false })),
     close: vi.fn(async () => undefined),
+    revealSession: vi.fn(async () => ({
+      sessionId: SESSION,
+      workspaceId: 'workspace-1',
+      agent: 'codex' as const,
+      readable: true
+    })),
     setSessionTabVisibility: vi.fn(async () => undefined),
     respondToPrompt: vi.fn(async () => ({ ok: true, replayed: false })),
     setOption: vi.fn(async () => ({ ok: true, replayed: false })),
+    requestHandoff: vi.fn(async () => ({
+      ok: true,
+      replayed: false,
+      fence: 1,
+      cursor: { epoch: 'epoch-a', sequence: 0 },
+      value: {
+        status: {
+          owner: 'native',
+          direction: null,
+          phase: 'idle',
+          stage: null,
+          operationId: null
+        }
+      }
+    })),
+    supportsCreate: vi.fn(() => true),
     handoffStatus: vi.fn(async () => ({ owner: 'native' })),
     readOptions: vi.fn(async () => ({
       models: [{ id: 'gpt-live', label: 'GPT Live', isDefault: true, efforts: [] }],
@@ -106,6 +173,11 @@ function hostStub(): StructuredAgentSessionHost {
     })),
     history: vi.fn(() => ({ ok: true, page: { items: [] } })),
     subscribe: vi.fn(() => () => undefined),
+    // A real feed, so the snapshot this method hands back is a genuine projection rather
+    // than a shape the stub restated.
+    subscribeStatus: vi.fn((subscriber: StructuredAgentSessionStatusSubscriber) =>
+      statusFeed().subscribe(subscriber)
+    ),
     unsubscribe: vi.fn()
   }
   return hostCalls as unknown as StructuredAgentSessionHost
@@ -122,9 +194,12 @@ function dispatcher(runtimeOverrides: Record<string, unknown> = {}): RpcDispatch
         workspaceId: 'workspace-1',
         workspaceKind: 'git-worktree'
       },
-      provider: 'codex',
-      agent: 'codex',
-      accountHome: { variable: 'CODEX_HOME', path: '/host/.codex' },
+      provider: params.agent,
+      agent: params.agent,
+      accountHome: {
+        variable: params.agent === 'claude' ? 'CLAUDE_CONFIG_DIR' : 'CODEX_HOME',
+        path: params.agent === 'claude' ? '/host/.claude' : '/host/.codex'
+      },
       runtimeKind: 'native'
     })),
     publishStructuredAgentSessionTab: vi.fn()
@@ -185,6 +260,92 @@ afterEach(() => {
   setStructuredAgentSessionHost(null)
 })
 
+describe('agentSession.reveal', () => {
+  it.each(['codex', 'claude'] as const)('republishes a persisted %s chat tab', async (agent) => {
+    hostCalls.revealSession.mockResolvedValueOnce({
+      sessionId: SESSION,
+      workspaceId: 'workspace-1',
+      agent,
+      readable: true
+    })
+
+    const response = await call('agentSession.reveal', { sessionId: SESSION }, STRUCTURED_CLIENT)
+
+    expect(hostCalls.revealSession).toHaveBeenCalledWith(SESSION)
+    expect(response).toMatchObject({ ok: true, result: { ok: true, agent } })
+    expect(runtimeCalls.publishStructuredAgentSessionTab).toHaveBeenCalledWith(
+      expect.objectContaining({ agent, activate: true })
+    )
+  })
+
+  it('publishes the workspace the host reported, not one the client could assert', async () => {
+    // The client sends only a session id, so a stale or forged one cannot aim the publish at
+    // another workspace.
+    hostCalls.revealSession.mockResolvedValueOnce({
+      sessionId: SESSION,
+      workspaceId: 'workspace-from-record',
+      agent: 'claude',
+      readable: true
+    })
+
+    await call('agentSession.reveal', { sessionId: SESSION }, STRUCTURED_CLIENT)
+
+    expect(runtimeCalls.publishStructuredAgentSessionTab).toHaveBeenCalledWith({
+      workspaceId: 'workspace-from-record',
+      sessionId: SESSION,
+      agent: 'claude',
+      activate: true
+    })
+  })
+
+  it('publishes the tab even when the journal could not be read', async () => {
+    // A pre-SQLite chat restores to nothing, but attach still recovers it, so the tab is worth
+    // publishing and the pane's hold finishes the job. Refusing here would strand it forever.
+    hostCalls.revealSession.mockResolvedValueOnce({
+      sessionId: SESSION,
+      workspaceId: 'workspace-1',
+      agent: 'codex',
+      readable: false
+    })
+
+    const response = await call('agentSession.reveal', { sessionId: SESSION }, STRUCTURED_CLIENT)
+
+    expect(response).toMatchObject({ ok: true, result: { ok: true, readable: false } })
+    expect(runtimeCalls.publishStructuredAgentSessionTab).toHaveBeenCalledOnce()
+  })
+
+  it('refuses rather than throws when the host holds no such record', async () => {
+    hostCalls.revealSession.mockRejectedValueOnce(new Error('agent_session_identity_required'))
+
+    const response = await call('agentSession.reveal', { sessionId: SESSION }, STRUCTURED_CLIENT)
+
+    expect(response).toMatchObject({
+      ok: true,
+      result: { ok: false, refusal: { code: 'agent_session_identity_required' } }
+    })
+    expect(runtimeCalls.publishStructuredAgentSessionTab).not.toHaveBeenCalled()
+  })
+
+  it('does not launder an unrelated fault into a refusal', async () => {
+    hostCalls.revealSession.mockRejectedValueOnce(new Error('EACCES: journal directory'))
+
+    const response = await call('agentSession.reveal', { sessionId: SESSION }, STRUCTURED_CLIENT)
+
+    expect(response).toMatchObject({ ok: false })
+  })
+
+  it('is refused for a client that cannot read structured sessions', async () => {
+    const response = await call(
+      'agentSession.reveal',
+      { sessionId: SESSION },
+      { clientKind: 'runtime', clientCapabilities: [] }
+    )
+
+    expect(response).toMatchObject({ ok: false })
+    expect(hostCalls.revealSession).not.toHaveBeenCalled()
+  })
+})
+
 describe('capability gating', () => {
   it('clears durable tab visibility when closing through the agent-session RPC', async () => {
     const response = await call('agentSession.close', { sessionId: SESSION }, STRUCTURED_CLIENT)
@@ -209,6 +370,7 @@ describe('capability gating', () => {
   it('advertises the capability without bumping the protocol version', () => {
     expect(RUNTIME_CAPABILITIES).toContain(STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY)
     expect(RUNTIME_CAPABILITIES).toContain(STRUCTURED_AGENT_SESSION_HOLD_RUNTIME_CAPABILITY)
+    expect(RUNTIME_CAPABILITIES).toContain(STRUCTURED_AGENT_SESSION_REVEAL_RUNTIME_CAPABILITY)
     // Additive methods do not break an old client; bumping would strand every
     // paired device that has not updated.
     expect(RUNTIME_PROTOCOL_VERSION).toBe(3)
@@ -221,7 +383,7 @@ describe('capability gating', () => {
     }
     // Bump deliberately: the whole agentSession.* surface is behind the structured capability,
     // so an additive method is invisible to old clients and needs no protocol bump.
-    expect(STRUCTURED_AGENT_SESSION_METHODS).toHaveLength(16)
+    expect(STRUCTURED_AGENT_SESSION_METHODS).toHaveLength(19)
   })
 
   it('hides the surface from a declared client that did not advertise it', async () => {
@@ -329,6 +491,49 @@ describe('method routing', () => {
     )
   })
 
+  it('routes Claude create support and create through the provider-aware runtime', async () => {
+    const worktree = 'id:workspace-1'
+    const support = await call(
+      'agentSession.createSupport',
+      { worktree, agent: 'claude' },
+      STRUCTURED_CLIENT
+    )
+    expect(support).toMatchObject({ ok: true, result: { supported: true } })
+    expect(runtimeCalls.getStructuredAgentSessionCreateSupport).toHaveBeenCalledWith(
+      worktree,
+      'claude'
+    )
+
+    const params = {
+      envelope: envelope({
+        expectedRuntimeFence: null,
+        payloadFingerprint: computeAgentSessionPayloadFingerprint({
+          method: 'agentSession.create',
+          sessionId: SESSION,
+          fields: { worktree, agent: 'claude' }
+        })
+      }),
+      worktree,
+      agent: 'claude'
+    }
+    const created = await call('agentSession.create', params, STRUCTURED_CLIENT)
+    expect(created).toMatchObject({ ok: true, result: { ok: true } })
+    expect(runtimeCalls.resolveStructuredAgentSessionCreateIntent).toHaveBeenCalledWith(params)
+    expect(hostCalls.attach).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        accountHome: { variable: 'CLAUDE_CONFIG_DIR', path: '/host/.claude' }
+      })
+    )
+    expect(runtimeCalls.publishStructuredAgentSessionTab).toHaveBeenCalledWith(
+      expect.objectContaining({
+        sessionId: SESSION,
+        activate: true,
+        agent: 'claude'
+      })
+    )
+  })
+
   it('reports an unknown create outcome when attach commits before tab publication fails', async () => {
     const worktree = 'id:workspace-1'
     const params = {
@@ -371,6 +576,38 @@ describe('method routing', () => {
     expect(ensured).toMatchObject({ ok: true })
   })
 
+  /** A client-supplied location skips the worktree-resolving support check, so both attach-shaped
+   *  entries must ask the executing host directly or a host that cannot fence a provider child
+   *  would create one anyway. */
+  it('returns a refusal envelope when create cannot support a client-supplied location', async () => {
+    hostCalls.supportsCreate.mockReturnValue(false)
+
+    const refused = await call('agentSession.create', attachParams())
+
+    expect(refused).toMatchObject({
+      ok: true,
+      result: {
+        ok: false,
+        refusal: { code: 'structured_agent_session_unsupported' }
+      }
+    })
+    expect(hostCalls.attach).not.toHaveBeenCalled()
+    expect(hostCalls.supportsCreate).toHaveBeenCalledWith(attachParams().location, 'codex')
+  })
+
+  it('keeps ensure failures as top-level errors for an unsupported client location', async () => {
+    hostCalls.supportsCreate.mockReturnValue(false)
+
+    const refused = await call('agentSession.ensure', attachParams())
+
+    expect(refused).toMatchObject({
+      ok: false,
+      error: { message: expect.stringContaining('structured_agent_session_unsupported') }
+    })
+    expect(hostCalls.attach).not.toHaveBeenCalled()
+    expect(hostCalls.supportsCreate).toHaveBeenCalledWith(attachParams().location, 'codex')
+  })
+
   it('tags the prompt kind from the method name, not from the client', async () => {
     const params = {
       envelope: envelope(),
@@ -386,7 +623,21 @@ describe('method routing', () => {
     ])
   })
 
-  it('does not register the structured handoff mutation', async () => {
+  it('routes an optional background task id through cancellation', async () => {
+    const params = {
+      envelope: envelope(),
+      turnId: 'background-tasks',
+      scope: 'background-tasks' as const,
+      taskId: 'task-2'
+    }
+
+    const response = await call('agentSession.cancel', params, STRUCTURED_CLIENT)
+
+    expect(response).toMatchObject({ ok: true })
+    expect(hostCalls.cancel).toHaveBeenCalledWith(expect.anything(), params)
+  })
+
+  it('routes the structured handoff mutation through the host', async () => {
     const response = await call('agentSession.requestHandoff', {
       envelope: envelope(),
       direction: 'to-tui',
@@ -394,7 +645,11 @@ describe('method routing', () => {
       action: 'start'
     })
 
-    expect(response).toMatchObject({ ok: false, error: { code: 'method_not_found' } })
+    expect(response).toMatchObject({ ok: true })
+    expect(hostCalls.requestHandoff).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ direction: 'to-tui', mode: 'now', action: 'start' })
+    )
   })
 })
 
@@ -410,6 +665,21 @@ describe('parameter validation', () => {
       ...sendParams(),
       envelope: { ...envelope(), priority: 'high' }
     })
+  })
+
+  it('rejects invalid or unscoped background task ids', async () => {
+    await rejects('agentSession.cancel', {
+      envelope: envelope(),
+      turnId: 'background-tasks',
+      scope: 'background-tasks',
+      taskId: ' task-2'
+    })
+    await rejects('agentSession.cancel', {
+      envelope: envelope(),
+      turnId: 'turn-1',
+      taskId: 'task-2'
+    })
+    expect(hostCalls.cancel).not.toHaveBeenCalled()
   })
 
   it('refuses to let a client author anything but a user turn', async () => {
@@ -432,25 +702,6 @@ describe('parameter validation', () => {
       'agentSession.create',
       attachParams({ providerHandle: { kind: 'opaque', agent: 'codex', value: 'thread-1' } })
     )
-  })
-
-  it('rejects Claude structured create shapes', async () => {
-    await rejects('agentSession.createSupport', {
-      worktree: 'id:workspace-1',
-      agent: 'claude'
-    })
-    const fields = { worktree: 'id:workspace-1', agent: 'claude' }
-    await rejects('agentSession.create', {
-      envelope: envelope({
-        expectedRuntimeFence: null,
-        payloadFingerprint: computeAgentSessionPayloadFingerprint({
-          method: 'agentSession.create',
-          sessionId: SESSION,
-          fields
-        })
-      }),
-      ...fields
-    })
   })
 
   it('requires a sha256 fingerprint and a positive fence', async () => {
@@ -502,5 +753,33 @@ describe('parameter validation', () => {
       STRUCTURED_CLIENT
     )
     expect(response).toMatchObject({ ok: true })
+  })
+})
+
+describe('agentSession.subscribeStatus', () => {
+  it('is invisible to a client without the structured capability', async () => {
+    const reply = await call('agentSession.subscribeStatus', null, { clientKind: 'runtime' })
+    expect(reply.ok).toBe(false)
+    expect(hostCalls.subscribeStatus).not.toHaveBeenCalled()
+  })
+
+  it('opens the host status feed with a projected snapshot as its first reply', async () => {
+    const reply = await call('agentSession.subscribeStatus', null, STRUCTURED_CLIENT)
+    expect(reply).toMatchObject({
+      ok: true,
+      result: {
+        type: 'snapshot',
+        sessions: [
+          {
+            sessionId: STATUS_SESSION,
+            workspaceId: 'workspace-1',
+            agent: 'codex',
+            status: 'working',
+            latestPrompt: 'write a poem'
+          }
+        ]
+      }
+    })
+    expect(hostCalls.subscribeStatus).toHaveBeenCalledOnce()
   })
 })

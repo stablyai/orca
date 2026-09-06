@@ -139,4 +139,76 @@ describe('mobile structured Codex launch', () => {
       kind: 'unknown'
     })
   })
+
+  it.each(['structured_agent_session_unsupported', 'method_not_found'])(
+    'treats a top-level %s as a definitive refusal',
+    async (code) => {
+      const client = clientReturning(
+        { ok: true, result: { supported: true } },
+        { ok: false, error: { code, message: 'structured create unavailable' } }
+      )
+
+      await expect(createMobileStructuredCodexSession(client, 'workspace-1')).resolves.toEqual({
+        kind: 'failed',
+        message: 'structured create unavailable'
+      })
+    }
+  )
+
+  it.each(['agent_session_operation_unknown', 'runtime_error', 'future_unknown_code'])(
+    'keeps a top-level %s outcome unknown',
+    async (code) => {
+      const client = clientReturning(
+        { ok: true, result: { supported: true } },
+        { ok: false, error: { code, message: 'create outcome ambiguous' } }
+      )
+
+      await expect(createMobileStructuredCodexSession(client, 'workspace-1')).resolves.toEqual({
+        kind: 'unknown',
+        message: 'create outcome ambiguous'
+      })
+    }
+  )
+
+  it('treats an envelope unsupported refusal as definitive', async () => {
+    const client = clientReturning(
+      { ok: true, result: { supported: true } },
+      {
+        ok: true,
+        result: {
+          ok: false,
+          refusal: {
+            code: 'structured_agent_session_unsupported',
+            message: 'structured create unavailable'
+          }
+        }
+      }
+    )
+
+    await expect(createMobileStructuredCodexSession(client, 'workspace-1')).resolves.toEqual({
+      kind: 'failed',
+      message: 'structured create unavailable'
+    })
+  })
+
+  it.each(['agent_session_operation_unknown', 'agent_session_ownership_unknown', 'future_code'])(
+    'keeps an envelope %s refusal unknown',
+    async (code) => {
+      const client = clientReturning(
+        { ok: true, result: { supported: true } },
+        {
+          ok: true,
+          result: {
+            ok: false,
+            refusal: { code, message: 'create outcome ambiguous' }
+          }
+        }
+      )
+
+      await expect(createMobileStructuredCodexSession(client, 'workspace-1')).resolves.toEqual({
+        kind: 'unknown',
+        message: 'create outcome ambiguous'
+      })
+    }
+  )
 })

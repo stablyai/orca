@@ -23,7 +23,7 @@ export type ViewportUserAgentOverride = {
 }
 
 // Why: responsive sites UA-sniff; this is Chrome DevTools' default iPhone UA template with the real
-// Chrome major spliced in to keep sec-ch-ua consistent (see setupClientHintsOverride).
+// Chrome major spliced in so the userAgentMetadata brands below agree with it.
 function buildMobileUserAgent(chromeMajor: string): string {
   return `Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) CriOS/${chromeMajor}.0.0.0 Mobile/15E148 Safari/604.1`
 }
@@ -44,7 +44,7 @@ export function buildViewportUserAgentOverride(args: {
     return { userAgent: googleAuthUserAgent() }
   }
   if (!args.mobile) {
-    // Why: desktop presets still need the clean (non-Electron) UA so Cloudflare/Turnstile don't flag the session.
+    // Why: desktop presets republish the session's own identity unchanged.
     return { userAgent: args.baseUserAgent }
   }
   const chromeMajor = extractChromeMajor(args.baseUserAgent)

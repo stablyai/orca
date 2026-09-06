@@ -1,9 +1,15 @@
 import { ipcRenderer } from 'electron'
 import type { PreloadApi } from '../api-types'
+import { ORCA_PROFILE_AUTH_STATUS_CHANGED_CHANNEL } from '../../shared/orca-profiles'
 
 export const orcaProfilesApi = {
   list: () => ipcRenderer.invoke('orcaProfiles:list'),
   authStatus: () => ipcRenderer.invoke('orcaProfiles:authStatus'),
+  onAuthStatusChanged: (callback: () => void): (() => void) => {
+    const listener = (): void => callback()
+    ipcRenderer.on(ORCA_PROFILE_AUTH_STATUS_CHANGED_CHANNEL, listener)
+    return () => ipcRenderer.removeListener(ORCA_PROFILE_AUTH_STATUS_CHANGED_CHANNEL, listener)
+  },
   createLocal: (args) => ipcRenderer.invoke('orcaProfiles:createLocal', args),
   createCloudLinked: (args) => ipcRenderer.invoke('orcaProfiles:createCloudLinked', args),
   switchProfile: (args) => ipcRenderer.invoke('orcaProfiles:switch', args),

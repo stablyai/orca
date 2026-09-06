@@ -1,4 +1,12 @@
 {
+  "sidebar": {
+    "revealFiltered": {
+      "title": "Reveal hidden workspace?",
+      "description": "The active workspace is hidden in the sidebar. Revealing it will clear your sidebar filters.",
+      "confirm": "Clear filters and reveal",
+      "cancel": "Keep filters"
+    }
+  },
   "app": {
     "recoverableError": {
       "rootTitle": "Orca hit a renderer error.",
@@ -955,7 +963,9 @@
         }
       },
       "activateAiVaultStructuredSession": {
-        "unavailable": "The structured agent session is not available yet. Retry in a moment."
+        "unavailable": "The structured agent session is not available yet. Retry in a moment.",
+        "gone": "This chat is no longer on this host, so it cannot be reopened here.",
+        "hostCannotOpen": "This chat can't be reopened until Orca is updated."
       },
       "ephemeralVmWorktreeCreation": {
         "sparseCheckoutUnsupported": "Provisioned-root recipes do not support sparse checkout."
@@ -2551,6 +2561,30 @@
                 "7c302f8174": "Untitled"
               }
             }
+          },
+          "ProjectRoadmap": {
+            "be52f7b6db": "This roadmap view has no date or iteration field to place items on, so Orca is listing them instead.",
+            "6405e036e0": "Month",
+            "f2b1cabef7": "Quarter",
+            "b6afc6fe45": "Year",
+            "343888b143": "Placed by {{value0}}",
+            "6a088a5da1": "{{value0}} without dates",
+            "86eebd6020": "Today",
+            "0bb1c1bc07": "Timeline zoom",
+            "e304235879": "Item",
+            "e077c79083": "No dates"
+          },
+          "ProjectRoadmapBar": {
+            "cd68ccc17a": "{{value0}} — {{value1}}",
+            "7d1220d979": "Restricted item"
+          },
+          "ProjectPickerPanels": {
+            "04ec212ccb": "Roadmap",
+            "9fe1ac868c": "Unsupported"
+          },
+          "ProjectViewStates": {
+            "ac83c45672": "Switch to a Table or Roadmap view to work with this project in Orca.",
+            "e4cc8b14f2": "Orca renders table and roadmap project views. This view uses a layout it cannot render yet."
           }
         },
         "GitHubMarkdownComposer": {
@@ -6231,6 +6265,11 @@
           "projectOnly": "Added in this project only.",
           "useGlobalFor": "Use global for {{value0}}",
           "useGlobal": "Use global"
+        },
+        "RepoScanUnavailableIndicator": {
+          "title": "Worktree scan failed for {{value0}}",
+          "retry": "Retry scan",
+          "retained": "Existing worktrees are kept until a scan succeeds. Click to retry."
         }
       },
       "shared": {
@@ -6964,8 +7003,8 @@
             "defaultViewTerminal": "Terminal chat",
             "defaultViewNative": "Chat UI",
             "structuredTitle": "Use updated structured native chat",
-            "structuredCopy": "Opt in to the host-owned structured Codex runtime. Off keeps the existing terminal-backed chat path.",
-            "structuredScope": "Local macOS and Linux sessions only for now. Windows, WSL, and remote execution hosts (including SSH) continue to use terminal chat.",
+            "structuredCopy": "Opt in to the host-owned structured chat runtime for Codex and Claude. Off keeps the existing terminal-backed chat path.",
+            "structuredScope": "Local sessions only for now. WSL and remote execution hosts (including SSH) continue to use terminal chat, and Windows falls back to it unless Orca can read process start times.",
             "structuredToggleLabel": "Toggle updated structured native chat"
           },
           "agentDashboard": {
@@ -13771,7 +13810,9 @@
           "useLan": "Use LAN",
           "retrying": "Retrying…",
           "retry": "Retry Relay",
-          "copyDiagnostics": "Copy diagnostics"
+          "copyDiagnostics": "Copy diagnostics",
+          "reconnectTitle": "Your Orca account session expired.",
+          "reconnectBody": "Sign in again to use Orca Relay, or use LAN to pair over Tailscale or the same Wi‑Fi."
         }
       },
       "gitlab": {
@@ -15297,8 +15338,18 @@
                 "removeWorktree": "remove worktree",
                 "trashWorktree": "trash worktree",
                 "addQuickCommand": "add quick command",
-                "newQuickCommand": "new quick command"
-              }
+                "newQuickCommand": "new quick command",
+                "splitChatRight": "split chat right",
+                "moveChatRight": "move chat right",
+                "chatPaneRight": "chat pane right",
+                "splitChatDown": "split chat down",
+                "moveChatDown": "move chat down",
+                "chatPaneBelow": "chat pane below"
+              },
+              "splitChatRight": "Split Chat Right",
+              "splitChatRightDescription": "Open the active chat in a split pane to the right.",
+              "splitChatDown": "Split Chat Down",
+              "splitChatDownDescription": "Open the active chat in a split pane below."
             }
           },
           "palette": {
@@ -16136,7 +16187,8 @@
           "search": "Search",
           "showUnreadOnly": "Show unread only",
           "showChildAgents": "Show child agents",
-          "activityOptions": "Activity options"
+          "activityOptions": "Activity options",
+          "threadListOptionsFiltered": "Thread list options, filters active"
         },
         "clearCompleted": {
           "clearedOne": "Cleared 1 completed agent",
@@ -16153,8 +16205,7 @@
           "dc708f3eff": "Close agents"
         },
         "ActivityScopeFilterControls": {
-          "clearHostFilter": "Show all hosts",
-          "clearProjectFilter": "Show all projects",
+          "resetScope": "Show all hosts and projects",
           "hiddenCount": "{{value0}} hidden"
         },
         "ActivityThreadHoverCard": {
@@ -16163,6 +16214,9 @@
           "workspace": "Workspace",
           "copyPath": "Copy path",
           "jumpToWorkspace": "Jump to workspace"
+        },
+        "ActivityThreadRow": {
+          "clearNotification": "Clear notification"
         }
       },
       "confirmation": {
@@ -16942,7 +16996,14 @@
         "ranCommandsOneToolSummary": "Ran {{commandCount}} commands and used {{toolCount}} tool",
         "ranCommandsManyToolsSummary": "Ran {{commandCount}} commands and used {{toolCount}} tools",
         "usedOneSummary": "Used 1 tool",
-        "usedManySummary": "Used {{toolCount}} tools"
+        "usedManySummary": "Used {{toolCount}} tools",
+        "editedFile": "Edited file",
+        "addedFile": "Added file",
+        "deletedFile": "Deleted file",
+        "renamedFile": "Renamed file",
+        "copyDiff": "Copy diff",
+        "diffGap": "Lines not shown",
+        "diffTruncated": "Diff truncated"
       },
       "providerFrame": {
         "byteLength": "{{value0}} bytes"
@@ -16951,9 +17012,22 @@
         "responding": "Agent is responding",
         "working": "Working…",
         "thinking": "Thinking",
-        "workingFor": "Working for {{value0}} seconds",
-        "workedFor": "Worked for {{value0}} seconds",
+        "workingFor": "Working for {{value0}}",
+        "workedFor": "Worked for {{value0}}",
         "toggleDetails": "Toggle turn details"
+      },
+      "backgroundTasks": {
+        "monitoring": "Monitoring background tasks",
+        "stop": "Stop",
+        "stopTask": "Stop {{value0}}",
+        "stopAll": "Stop background tasks",
+        "agent": "Background agent",
+        "workflow": "Background workflow",
+        "command": "Background command",
+        "monitor": "Background monitor",
+        "task": "Background task",
+        "runningList": "Running background tasks",
+        "detailsUnavailable": "Task details are unavailable for this session."
       },
       "jumpToLatest": "Jump to latest",
       "toggle": {
@@ -17008,9 +17082,45 @@
         "message": "Structured Chat blocks terminal prompts and sends. Orchestration messages remain queued; switch to Terminal, then check the Orca inbox with",
         "command": "orca orchestration check"
       },
-      "structuredSessionCloseFailed": "Could not close this Codex chat",
-      "structuredSessionLaunchFailed": "Could not open Codex chat",
-      "structuredSessionCloseFailedDescription": "The terminal stayed open so the provider remains recoverable."
+      "structuredSessionCloseFailed": "Could not close this chat session",
+      "structuredSessionLaunchFailed": "Could not open {{value0}} chat",
+      "structuredSessionLaunchPending": "Starting {{value0}} chat…",
+      "structuredSessionCloseFailedDescription": "The terminal stayed open so the provider remains recoverable.",
+      "handoff": {
+        "stage": {
+          "finishingChat": "Finishing chat session…",
+          "finishingTerminal": "Finishing agent terminal…",
+          "openingTerminal": "Opening agent terminal…",
+          "resumingChat": "Resuming chat session…",
+          "verifyingTerminal": "Verifying agent terminal…",
+          "verifyingChat": "Verifying chat session…",
+          "recovering": "Recovering agent session…",
+          "manualRecovery": "Agent session needs recovery"
+        },
+        "switchingOwner": "Switching session owner…",
+        "mode": {
+          "switching": "Switching",
+          "terminal": "Terminal",
+          "chat": "Chat"
+        },
+        "switchingAfterTurn": "Switching after this turn",
+        "returningAfterTurn": "Returning after this turn",
+        "cancel": "Cancel",
+        "switchAfterTurn": "Switch after this turn",
+        "stopTurnAndSwitch": "Stop turn and switch",
+        "openAgentTui": "Open agent TUI",
+        "returnAfterTurn": "Return after this turn",
+        "returnToChat": "Return to chat",
+        "agentOpenOnHost": "Agent is open in terminal on {{value0}}.",
+        "agentOpen": "Agent is open in terminal.",
+        "exitTerminal": "Exit the agent terminal to continue in chat.",
+        "retryProof": "Retry proof",
+        "retry": "Retry",
+        "details": "Details"
+      },
+      "structuredSessionFellBackToTerminal": "Structured chat isn't available",
+      "structuredSessionFellBackToTerminalDescription": "Orca tried to open a {{value0}} terminal instead.",
+      "structuredSessionLaunchFailedDescription": "Orca could not open a structured {{value0}} chat. See the logs for details."
     },
     "tab": {
       "bar": {
@@ -17534,5 +17644,17 @@
       "action": "Try Agents",
       "hiddenToast": "Agents tab hidden. Re-enable it in Settings → Experimental."
     }
+  },
+  "rendererRecovery": {
+    "reload": "Reload",
+    "copyCommands": "Copy Commands",
+    "quit": "Quit",
+    "stalledDetail": "Orca reloaded the window after a crash, but it never finished loading.",
+    "crashLoopDetail": "Orca tried to recover {{recoveryCount}} times in a row without success.",
+    "driverFallback": "If that does not help, the cause is usually a graphics driver.",
+    "genericDetail": "This is often a graphics-driver or installation problem. Reload to try again, or quit and relaunch Orca.",
+    "title": "Orca keeps failing to load",
+    "stalledMessage": "The app window stopped responding while reloading after a crash.",
+    "crashLoopMessage": "The app window crashed repeatedly and stopped reloading automatically."
   }
 }

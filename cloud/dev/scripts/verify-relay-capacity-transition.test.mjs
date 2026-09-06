@@ -1094,3 +1094,77 @@ test('does not retry a rejected cell admin token', async () => {
   )
   assert.equal(waits, 0)
 })
+
+test('retries a transient 503 on the director cell-status read', async () => {
+  const base = harness()
+  const statusCalls = []
+  const result = await verifyCapacityTransition(config, {
+    token: 'masked-token',
+    wait: async () => {},
+    fetch: async (url, options) => {
+      const path = new URL(url).pathname
+      if (path !== '/v1/admin/cell-status') return await base(url, options)
+      statusCalls.push(path)
+      if (statusCalls.length === 1) return new Response('warming up', { status: 503 })
+      return await base(url, options)
+    }
+  })
+  assert.equal(statusCalls.length, 2)
+  assert.equal(result.cellId, config.cellId)
+})
+
+test('fails when both director cell-status attempts return a transient 503', async () => {
+  const base = harness()
+  let statusCalls = 0
+  await assert.rejects(
+    verifyCapacityTransition(config, {
+      token: 'masked-token',
+      wait: async () => {},
+      fetch: async (url, options) => {
+        const path = new URL(url).pathname
+        if (path !== '/v1/admin/cell-status') return await base(url, options)
+        statusCalls += 1
+        return new Response('warming up', { status: 503 })
+      }
+    }),
+    /cell status returned 503/
+  )
+  assert.equal(statusCalls, 2)
+})
+
+test('retries a transient 503 on the director health preflight', async () => {
+  const base = harness()
+  let healthCalls = 0
+  const result = await verifyCapacityTransition(config, {
+    token: 'masked-token',
+    wait: async () => {},
+    fetch: async (url, options) => {
+      const path = new URL(url).pathname
+      if (path !== '/health') return await base(url, options)
+      healthCalls += 1
+      if (healthCalls === 1) return new Response('warming up', { status: 503 })
+      return await base(url, options)
+    }
+  })
+  assert.equal(healthCalls, 2)
+  assert.equal(result.cellId, config.cellId)
+})
+
+test('fails when both director health attempts return a transient 503', async () => {
+  const base = harness()
+  let healthCalls = 0
+  await assert.rejects(
+    verifyCapacityTransition(config, {
+      token: 'masked-token',
+      wait: async () => {},
+      fetch: async (url, options) => {
+        const path = new URL(url).pathname
+        if (path !== '/health') return await base(url, options)
+        healthCalls += 1
+        return new Response('warming up', { status: 503 })
+      }
+    }),
+    /director health returned 503/
+  )
+  assert.equal(healthCalls, 2)
+})

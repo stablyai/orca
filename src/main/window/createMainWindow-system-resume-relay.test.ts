@@ -56,8 +56,8 @@ describe('createMainWindow', () => {
         setSize: vi.fn(),
         maximize: vi.fn(),
         show: vi.fn(),
-        loadFile: vi.fn(),
-        loadURL: vi.fn()
+        loadFile: vi.fn(() => Promise.resolve()),
+        loadURL: vi.fn(() => Promise.resolve())
       }
       browserWindowMock.mockImplementation(function () {
         return instance

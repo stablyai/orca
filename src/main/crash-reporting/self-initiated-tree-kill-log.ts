@@ -1,8 +1,5 @@
 import type { CrashReportDetailValue } from '../../shared/crash-reporting'
-import {
-  setProcessTreeKillObserver,
-  type ProcessTreeKillScope
-} from '../../shared/child-process/process-tree-kill-observer'
+import type { ProcessTreeKillScope } from '../../shared/child-process/process-tree-kill-gate'
 import { recordCoalescedDurableCrashBreadcrumb } from './durable-crash-breadcrumb'
 
 /**
@@ -19,24 +16,38 @@ import { recordCoalescedDurableCrashBreadcrumb } from './durable-crash-breadcrum
  * The ring is per-process and its only reader is `process-gone-recorder`, which
  * exists in Electron main. So a count reported on a `render-process-gone` covers
  * kills issued *from Electron main*, and nothing else:
- * - Main only: the three `taskkill /T /F` families that gate on
- *   `admitSelfInitiatedTreeKill` (`terminateWindowsProcessTree` and the codex /
- *   claude account-login teardowns) and the codex app-server POSIX group
+ * - Main only: the families that import the gate directly —
+ *   `terminateWindowsProcessTree`, the codex and claude account-login
+ *   teardowns, the git command-runner abort, the notebook-cell and
+ *   automation-precheck timeouts — plus the codex app-server POSIX group
  *   teardowns.
- * - Main *and* other hosts: `signalProcessTree` (the `runProcess` choke point,
- *   reached from the CLI, relay and daemon too — a fourth pid-addressed
- *   `taskkill` family, gated on the child not being reaped rather than on the
- *   Chromium set it cannot read), the POSIX PTY process-group sweep and the
- *   Windows PTY Job Object (relay `pty-handler`, daemon
- *   `subprocess-handle`). When those run outside main they record into that
- *   process's own ring, which nothing reads — no observer is installed there,
- *   and the tracer sink is a no-op.
- * - Never instrumented: the direct `process.kill(-pid)` calls in the browser
- *   routes, notebooks, automation prechecks and ephemeral-VM recipes.
+ * - Main *and* other hosts, through the `process-tree-kill-gate` seam main
+ *   installs the same guard into: `signalProcessTree` (the `runProcess` choke
+ *   point, reached from the CLI, relay and daemon too), the codex app-server
+ *   deadline kill (compiled into the CLI as well) and the ephemeral-VM recipe
+ *   kill. Also host-spanning but recording directly: the POSIX PTY
+ *   process-group sweep and the Windows PTY Job Object (relay `pty-handler`,
+ *   daemon `subprocess-handle`). When any of these run outside main they record
+ *   into that process's own ring, which nothing reads — no gate is installed
+ *   there, and the tracer sink is a no-op.
+ * - Never instrumented, and none of them a pid-addressed kill issued from main:
+ *   the POSIX `process.kill(-pid, …)` group arms of the notebook, precheck,
+ *   browser-route and ephemeral-VM kills, plus the macOS keyboard-input-source
+ *   probe's group kill in `ipc/app.ts`; the relay's own
+ *   `subprocess-tree-termination` taskkill and the CLI's login-interruption
+ *   taskkill (neither runs in main); and the browser-route Electron probes,
+ *   which are reached only from `*.electron.test.ts`.
+ *
+ * `main-process-tree-kill-gate.test.ts` is the ratchet that keeps that list
+ * closed: it counts `/pid` call sites against gate admissions per file, so a new
+ * pid-addressed kill fails it whether it lands in a new file or inside a family
+ * that already asks the gate. It does not see a `/pid` argument built from a
+ * variable.
  *
  * A daemon or relay kill missing from the count is a diagnostics gap, not a
  * missed suspect: those hosts cannot reach a Chromium pid in the first place
- * (see `orca-chromium-process-pids.ts`). Absence is evidence, not proof.
+ * (see `orca-chromium-process-pids.ts`), and a group or Job-Object kill can
+ * only contain what Orca put in it. Absence is evidence, not proof.
  */
 
 /** Which mechanism issued the kill; each has a different blast radius. */
@@ -81,6 +92,25 @@ function isPidAddressedTreeKill(scope: SelfInitiatedTreeKillScope): boolean {
   return scope === 'win-taskkill-tree'
 }
 
+/**
+ * Drop one entry, newest-first-preserving.
+ *
+ * Two rules, in order. The entry just recorded is never a candidate: it is the
+ * one closest to any death that follows, and evicting it leaves a detail
+ * byte-identical to the external-kill arm. Among the rest, routine group/job
+ * teardown goes before a pid-addressed kill — a window-close burst is 30+ group
+ * kills and plain FIFO would drop the one entry that can explain the death —
+ * falling back to plain FIFO once every candidate is pid-addressed, which is
+ * what an ordinary session saturates the ring with.
+ */
+function evictOneSelfInitiatedTreeKill(): void {
+  const lastCandidate = selfInitiatedKills.length - 1
+  const oldestGroupKill = selfInitiatedKills.findIndex(
+    (kill, index) => index < lastCandidate && !isPidAddressedTreeKill(kill.scope)
+  )
+  selfInitiatedKills.splice(Math.max(oldestGroupKill, 0), 1)
+}
+
 export function recordSelfInitiatedTreeKill({
   pid,
   site,
@@ -96,13 +126,15 @@ export function recordSelfInitiatedTreeKill({
     return
   }
   selfInitiatedKills.push({ pid, site, scope, at })
-  if (selfInitiatedKills.length > MAX_TRACKED_SELF_KILLS) {
-    selfInitiatedKills = selfInitiatedKills.slice(-MAX_TRACKED_SELF_KILLS)
+  while (selfInitiatedKills.length > MAX_TRACKED_SELF_KILLS) {
+    evictOneSelfInitiatedTreeKill()
   }
   // Durable so it survives into the diagnostic bundle even when the kill takes
   // the reporting renderer with it; coalesced because the crash detail above is
   // the primary record and a teardown burst must not cost 30 ring slots plus a
-  // forced disk flush each. The newest pid still rides the emitted crumb.
+  // forced disk flush each. The retained ring crumb carries the newest pid, but
+  // the span trail emits only the first of a coalesced burst — read
+  // `selfInitiatedKills` for the rest.
   recordCoalescedDurableCrashBreadcrumb({
     name: 'self_tree_kill',
     data: { pid, site, scope },
@@ -131,11 +163,6 @@ export function recordRefusedOwnChromiumTreeKill(target: {
     coalesceKey: `${target.site}\u0000${target.pid}`,
     minIntervalMs: SELF_TREE_KILL_LOOKBACK_MS
   })
-}
-
-/** Routes the `runProcess` choke point's kills here; shared code cannot import us. */
-export function installProcessTreeKillBreadcrumbObserver(): void {
-  setProcessTreeKillObserver((kill) => recordSelfInitiatedTreeKill(kill))
 }
 
 export function findSelfInitiatedTreeKills(at: number): SelfInitiatedTreeKill[] {

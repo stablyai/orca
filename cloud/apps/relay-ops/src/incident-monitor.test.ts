@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   evaluateIncidentSample,
   INCIDENT_CHECKPOINT_MINUTES,
+  INCIDENT_FRESHNESS_TOLERANCE_SAMPLES,
   INCIDENT_MONITOR_THRESHOLDS,
   INCIDENT_PRE_DRAIN_MAX_LINEAGE_MS,
   initialIncidentMonitorState,
@@ -32,6 +33,7 @@ function healthySample(at = startedAt): IncidentSample {
     expectedSelector: selector,
     cells: [{
       cellId: 'production-gce-c1',
+      region: 'us-central1',
       runtimeKnown: true,
       powered: true,
       expectedAdmissionState: 'general'
@@ -150,6 +152,52 @@ describe('incident monitor evaluator', () => {
     })
   })
 
+  // Why: an asia-east2 cell's /ready reaches auth and Cloud SQL in us-central1, so
+  // from the US runner it measures p50 0.88 s / max 2.7 s and the flat 2 000 bar
+  // froze three healthy gates on 2026-09-05 (c27 at 2568/2668/2685 ms).
+  it('holds cell endpoint latency to a per-region bar', () => {
+    const asiaTail = healthySample()
+    asiaTail.cells[0]!.region = 'asia-east2'
+    asiaTail.sources['active-probe']!.signals['cell.production-gce-c1.latency_ms'] =
+      signal(2_685)
+    expect(evaluateIncidentSample(asiaTail, startedAt)).toMatchObject({
+      status: 'green',
+      failures: []
+    })
+
+    const asiaIncident = healthySample()
+    asiaIncident.cells[0]!.region = 'asia-east2'
+    asiaIncident.sources['active-probe']!.signals['cell.production-gce-c1.latency_ms'] =
+      signal(4_001)
+    expect(evaluateIncidentSample(asiaIncident, startedAt)).toMatchObject({
+      status: 'freeze',
+      failures: [
+        expect.objectContaining({
+          code: 'threshold_max',
+          source: 'active-probe',
+          signal: 'cell.production-gce-c1.latency_ms',
+          observed: 4_001,
+          threshold: 4_000
+        })
+      ]
+    })
+
+    const usIncident = healthySample()
+    usIncident.sources['active-probe']!.signals['cell.production-gce-c1.latency_ms'] =
+      signal(2_001)
+    expect(evaluateIncidentSample(usIncident, startedAt)).toMatchObject({
+      status: 'freeze',
+      failures: [
+        expect.objectContaining({
+          code: 'threshold_max',
+          signal: 'cell.production-gce-c1.latency_ms',
+          observed: 2_001,
+          threshold: 2_000
+        })
+      ]
+    })
+  })
+
   it('allows missing auth readiness and legacy existing-only connections', () => {
     const sample = healthySample()
     const legacySelector = {
@@ -182,10 +230,47 @@ describe('incident monitor evaluator', () => {
       code: 'source_missing',
       source: 'relay-logs'
     })
-    const stale = healthySample(startedAt - 180_001)
+    const stale = healthySample(
+      startedAt - INCIDENT_MONITOR_THRESHOLDS.cloudDataMaxAgeMs - 1
+    )
     const failures = evaluateIncidentSample(stale, startedAt).failures
     expect(failures.some((failure) => failure.source === 'cloud-monitoring')).toBe(true)
     expect(failures.some((failure) => failure.source === 'active-probe')).toBe(true)
+  })
+
+  // Why: production run 33944873727 at 2026-09-05T04:46:09Z read
+  // cloud_sql.lock_waits 189 286 ms old and restarted a 15-minute window on
+  // Google's publish lag. Cloud SQL documents 60 s sampling plus up to 165 s of
+  // invisibility, so that age is Google's clock, not our fleet.
+  it('reads a 189-second cloud signal as fresh and holds the other sources at 180 s', () => {
+    const lagged = healthySample()
+    lagged.sources['cloud-monitoring']!.signals['cloud_sql.lock_waits'] =
+      signal(0, startedAt - 189_286)
+    expect(evaluateIncidentSample(lagged, startedAt)).toMatchObject({
+      status: 'green',
+      failures: []
+    })
+    const laggedDirector = healthySample()
+    laggedDirector.sources['director-admin']!.observedAt =
+      new Date(startedAt - 189_286).toISOString()
+    expect(evaluateIncidentSample(laggedDirector, startedAt).failures).toContainEqual(
+      expect.objectContaining({ code: 'source_stale', source: 'director-admin' })
+    )
+  })
+
+  it('still fails a cloud signal past the documented publish lag', () => {
+    const dark = healthySample()
+    dark.sources['cloud-monitoring']!.signals['cloud_sql.lock_waits'] = signal(
+      0,
+      startedAt - INCIDENT_MONITOR_THRESHOLDS.cloudDataMaxAgeMs - 1
+    )
+    expect(evaluateIncidentSample(dark, startedAt).failures).toContainEqual(
+      expect.objectContaining({
+        code: 'signal_stale',
+        source: 'cloud-monitoring',
+        signal: 'cloud_sql.lock_waits'
+      })
+    )
   })
 
   it('freezes on SQL, director, relay pool, heartbeat, and migration breaches', () => {
@@ -363,12 +448,14 @@ describe('incident monitor evaluator', () => {
     ] = signal(0)
     sample.cells.push({
       cellId: 'production-gce-c2',
+      region: 'us-central1',
       runtimeKnown: true,
       powered: true,
       expectedAdmissionState: 'general'
     })
     sample.cells.push({
       cellId: 'production-gce-c3',
+      region: 'us-central1',
       runtimeKnown: true,
       powered: true,
       expectedAdmissionState: 'general'
@@ -592,7 +679,7 @@ describe('incident monitor lifecycle', () => {
     'restarts a %i-minute continuous window after stale telemetry',
     async (durationMinutes) => {
       let now = startedAt
-      let staleInjected = false
+      let staleSamples = INCIDENT_FRESHNESS_TOLERANCE_SAMPLES + 1
       const checkpoints: Array<[number, number]> = []
       const state = initialIncidentMonitorState({
         incidentId: 'incident-1',
@@ -612,9 +699,11 @@ describe('incident monitor lifecycle', () => {
           now += ms
         },
         collect: async () => {
-          if (!staleInjected && now === startedAt + 5 * 60_000) {
-            staleInjected = true
-            return healthySample(now - 180_001)
+          if (staleSamples > 0 && now >= startedAt + 5 * 60_000) {
+            staleSamples--
+            return healthySample(
+              now - INCIDENT_MONITOR_THRESHOLDS.cloudDataMaxAgeMs - 1
+            )
           }
           return healthySample(now)
         },
@@ -623,16 +712,20 @@ describe('incident monitor lifecycle', () => {
           checkpoints.push([summary.windowSequence, summary.checkpointMinute])
         }
       })
+      const restartMinute = 5 + INCIDENT_FRESHNESS_TOLERANCE_SAMPLES + 1
       expect(result.windowSequence).toBe(1)
       expect(result.windowStartedAt).toBe(
-        new Date(startedAt + 6 * 60_000).toISOString()
+        new Date(startedAt + restartMinute * 60_000).toISOString()
       )
       expect(result.completedAt).toBe(
-        new Date(startedAt + (durationMinutes + 6) * 60_000).toISOString()
+        new Date(startedAt + (durationMinutes + restartMinute) * 60_000).toISOString()
       )
       expect(result.sampleCount).toBe(durationMinutes + 1)
-      expect(result.continuityEvents).toHaveLength(1)
-      expect(result.continuityEvents[0]!.failures).toEqual(
+      expect(result.continuityEvents.map((event) => event.tolerated)).toEqual([
+        ...Array<boolean>(INCIDENT_FRESHNESS_TOLERANCE_SAMPLES).fill(true),
+        false
+      ])
+      expect(result.continuityEvents.at(-1)!.failures).toEqual(
         expect.arrayContaining([
           expect.objectContaining({ code: 'source_stale' })
         ])
@@ -641,6 +734,188 @@ describe('incident monitor lifecycle', () => {
       expect(result.frozenAt).toBeNull()
     }
   )
+
+  // Why: run 33944873727 on 2026-09-05 restarted at 04:46:09Z on a single
+  // 189-second cloud reading and then blew the 25-minute lineage cap, so a
+  // green fleet produced no verdict at all. One unread sample now continues the
+  // window; the sample is still checked against every threshold it can read.
+  it('carries a 15-minute window through a single stale cloud sample', async () => {
+    let now = startedAt
+    const state = initialIncidentMonitorState({
+      incidentId: 'incident-1',
+      environment: 'production',
+      expectedSelector: selector,
+      preDrainDryRun: true,
+      migrationPolicy: 'strict',
+      recoverySourceCellId: null,
+      capacityCellId: null,
+      startedAt: new Date(startedAt).toISOString(),
+      durationMinutes: 15,
+      intervalMs: 60_000
+    })
+    const result = await runIncidentMonitor(state, {
+      now: () => now,
+      wait: async (ms) => {
+        now += ms
+      },
+      collect: async () => {
+        const sample = healthySample(now)
+        if (now === startedAt + 10 * 60_000) {
+          sample.sources['cloud-monitoring']!.signals['cloud_sql.lock_waits'] =
+            signal(0, now - INCIDENT_MONITOR_THRESHOLDS.cloudDataMaxAgeMs - 1)
+        }
+        return sample
+      },
+      persist: async () => {},
+      checkpoint: async () => {}
+    })
+    expect(result.windowSequence).toBe(0)
+    expect(result.windowStartedAt).toBe(new Date(startedAt).toISOString())
+    expect(result.completedAt).toBe(new Date(startedAt + 15 * 60_000).toISOString())
+    expect(result.sampleCount).toBe(16)
+    expect(result.frozenAt).toBeNull()
+    expect(result.continuityEvents).toEqual([{
+      recordedAt: new Date(startedAt + 10 * 60_000).toISOString(),
+      windowSequence: 0,
+      tolerated: true,
+      failures: [expect.objectContaining({
+        code: 'signal_stale',
+        source: 'cloud-monitoring',
+        signal: 'cloud_sql.lock_waits'
+      })]
+    }])
+    expect(preDrainDryRunPassed(result)).toBe(true)
+  })
+
+  it('gives a signal a fresh budget only after it reads fresh again', async () => {
+    let now = startedAt
+    const staleMinutes = new Set([3, 5, 6, 9, 10])
+    const state = initialIncidentMonitorState({
+      incidentId: 'incident-1',
+      environment: 'production',
+      expectedSelector: selector,
+      preDrainDryRun: true,
+      migrationPolicy: 'strict',
+      recoverySourceCellId: null,
+      capacityCellId: null,
+      startedAt: new Date(startedAt).toISOString(),
+      durationMinutes: 15,
+      intervalMs: 60_000
+    })
+    const result = await runIncidentMonitor(state, {
+      now: () => now,
+      wait: async (ms) => {
+        now += ms
+      },
+      collect: async () => {
+        const sample = healthySample(now)
+        if (staleMinutes.has((now - startedAt) / 60_000)) {
+          sample.sources['cloud-monitoring']!.signals['cloud_sql.lock_waits'] =
+            signal(0, now - INCIDENT_MONITOR_THRESHOLDS.cloudDataMaxAgeMs - 1)
+        }
+        return sample
+      },
+      persist: async () => {},
+      checkpoint: async () => {}
+    })
+    expect(result.windowSequence).toBe(0)
+    expect(result.continuityEvents).toHaveLength(staleMinutes.size)
+    expect(result.continuityEvents.every((event) => event.tolerated)).toBe(true)
+    expect(preDrainDryRunPassed(result)).toBe(true)
+  })
+
+  it('does not hand a resumed monitor a fresh tolerance budget', async () => {
+    let now = startedAt + 3 * 60_000
+    const resumed = {
+      ...initialIncidentMonitorState({
+        incidentId: 'incident-1',
+        environment: 'production',
+        expectedSelector: selector,
+        preDrainDryRun: true,
+        migrationPolicy: 'strict',
+        recoverySourceCellId: null,
+        capacityCellId: null,
+        startedAt: new Date(startedAt).toISOString(),
+        durationMinutes: 15,
+        intervalMs: 60_000
+      }),
+      windowStartedAt: new Date(startedAt).toISOString(),
+      lastSampleAt: new Date(startedAt + 2 * 60_000).toISOString(),
+      sampleCount: 3,
+      totalSampleCount: 3,
+      continuityEvents: Array.from(
+        { length: INCIDENT_FRESHNESS_TOLERANCE_SAMPLES },
+        (_, index) => ({
+          recordedAt: new Date(startedAt + (index + 1) * 60_000).toISOString(),
+          windowSequence: 0,
+          tolerated: true,
+          failures: [{
+            code: 'signal_stale',
+            source: 'cloud-monitoring' as const,
+            signal: 'cloud_sql.lock_waits'
+          }]
+        })
+      )
+    }
+    const stop = new Error('stop after the resumed sample')
+    await expect(runIncidentMonitor(resumed, {
+      now: () => now,
+      wait: async () => {
+        throw stop
+      },
+      collect: async () => {
+        const sample = healthySample(now)
+        sample.sources['cloud-monitoring']!.signals['cloud_sql.lock_waits'] =
+          signal(0, now - INCIDENT_MONITOR_THRESHOLDS.cloudDataMaxAgeMs - 1)
+        return sample
+      },
+      persist: async (state) => {
+        expect(state.windowSequence).toBe(1)
+        expect(state.windowStartedAt).toBeNull()
+        expect(state.continuityEvents.at(-1)!.tolerated).toBe(false)
+      },
+      checkpoint: async () => {}
+    })).rejects.toThrow(stop)
+  })
+
+  it('freezes on a threshold breach that arrives with a tolerated stale signal', async () => {
+    let now = startedAt
+    const state = initialIncidentMonitorState({
+      incidentId: 'incident-1',
+      environment: 'production',
+      expectedSelector: selector,
+      preDrainDryRun: true,
+      migrationPolicy: 'strict',
+      recoverySourceCellId: null,
+      capacityCellId: null,
+      startedAt: new Date(startedAt).toISOString(),
+      durationMinutes: 15,
+      intervalMs: 60_000
+    })
+    const result = await runIncidentMonitor(state, {
+      now: () => now,
+      wait: async (ms) => {
+        now += ms
+      },
+      collect: async () => {
+        const sample = healthySample(now)
+        if (now === startedAt + 2 * 60_000) {
+          sample.sources['cloud-monitoring']!.signals['cloud_sql.lock_waits'] =
+            signal(0, now - INCIDENT_MONITOR_THRESHOLDS.cloudDataMaxAgeMs - 1)
+          sample.sources['cloud-monitoring']!.signals['cloud_sql.cpu'] = signal(0.81, now)
+        }
+        return sample
+      },
+      persist: async () => {},
+      checkpoint: async () => {}
+    })
+    expect(result.frozenAt).toBe(new Date(startedAt + 2 * 60_000).toISOString())
+    expect(result.failures).toContainEqual(expect.objectContaining({
+      code: 'threshold_max',
+      signal: 'cloud_sql.cpu'
+    }))
+    expect(preDrainDryRunPassed(result)).toBe(false)
+  })
 
   it('resets at the next fresh sample after a runner gap', async () => {
     let now = startedAt + 10 * 60_000
@@ -690,13 +965,21 @@ describe('incident monitor lifecycle', () => {
       durationMinutes: 15,
       intervalMs: 60_000
     })
+    let staleSamples = INCIDENT_FRESHNESS_TOLERANCE_SAMPLES + 1
     const result = await runIncidentMonitor(state, {
       now: () => now,
       wait: async (ms) => {
         now += ms
       },
-      collect: async () =>
-        healthySample(now === startedAt + 10 * 60_000 ? now - 180_001 : now),
+      collect: async () => {
+        if (staleSamples > 0 && now >= startedAt + 10 * 60_000) {
+          staleSamples--
+          return healthySample(
+            now - INCIDENT_MONITOR_THRESHOLDS.cloudDataMaxAgeMs - 1
+          )
+        }
+        return healthySample(now)
+      },
       persist: async () => {},
       checkpoint: async () => {}
     })
@@ -706,7 +989,7 @@ describe('incident monitor lifecycle', () => {
     )
     expect(result.frozenAt).not.toBeNull()
     expect(result.windowSequence).toBe(1)
-    expect(result.sampleCount).toBe(15)
+    expect(result.sampleCount).toBe(13)
     expect(result.failures).toContainEqual({
       code: 'continuity_deadline_exceeded',
       source: 'active-probe',
