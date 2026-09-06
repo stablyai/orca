@@ -16,6 +16,7 @@ import {
 import type { TerminalSlice, TerminalStoreGet, TerminalStoreSet } from './terminal-state'
 import { startTerminalTabProviderRetirement } from './terminal-tab-close-providers'
 import { omitUnverifiedPtyLossTabIds } from './terminal-unverified-pty-loss'
+import { omitRecordKey, omitRecordKeys } from '../slices/worktrees/teardown/record-key-omission'
 
 export function createTerminalTabCloseActions(
   set: TerminalStoreSet,
@@ -96,32 +97,29 @@ export function createTerminalTabCloseActions(
                 ...(closedPosition ? { position: closedPosition } : {})
               }
             : null
-        const nextExpanded = { ...s.expandedPaneByTabId }
-        delete nextExpanded[tabId]
-        const nextCanExpand = { ...s.canExpandPaneByTabId }
-        delete nextCanExpand[tabId]
-        const nextLayouts = { ...s.terminalLayoutsByTabId }
-        delete nextLayouts[tabId]
-        const nextPtyIdsByTabId = { ...s.ptyIdsByTabId }
-        delete nextPtyIdsByTabId[tabId]
-        const nextLastKnownRelay = { ...s.lastKnownRelayPtyIdByTabId }
-        delete nextLastKnownRelay[tabId]
-        const nextDeferredSshSessionIdsByTabId = { ...s.deferredSshSessionIdsByTabId }
-        delete nextDeferredSshSessionIdsByTabId[tabId]
-        const nextPendingReconnectPtyIdByTabId = { ...s.pendingReconnectPtyIdByTabId }
-        delete nextPendingReconnectPtyIdByTabId[tabId]
-        const nextRuntimePaneTitlesByTabId = { ...s.runtimePaneTitlesByTabId }
-        delete nextRuntimePaneTitlesByTabId[tabId]
-        const nextDirectSshPaneRetryByTabId = { ...s.directSshPaneRetryByTabId }
-        delete nextDirectSshPaneRetryByTabId[tabId]
-        const nextDirectSshLivePtyBindingByTabId = {
-          ...s.directSshLivePtyBindingByTabId
-        }
-        delete nextDirectSshLivePtyBindingByTabId[tabId]
-        const nextDirectSshPaneRetryHistoryByTabId = {
-          ...s.directSshPaneRetryHistoryByTabId
-        }
-        delete nextDirectSshPaneRetryHistoryByTabId[tabId]
+        const nextExpanded = omitRecordKey(s.expandedPaneByTabId, tabId)
+        const nextCanExpand = omitRecordKey(s.canExpandPaneByTabId, tabId)
+        const nextLayouts = omitRecordKey(s.terminalLayoutsByTabId, tabId)
+        const nextPtyIdsByTabId = omitRecordKey(s.ptyIdsByTabId, tabId)
+        const nextLastKnownRelay = omitRecordKey(s.lastKnownRelayPtyIdByTabId, tabId)
+        const nextDeferredSshSessionIdsByTabId = omitRecordKey(
+          s.deferredSshSessionIdsByTabId,
+          tabId
+        )
+        const nextPendingReconnectPtyIdByTabId = omitRecordKey(
+          s.pendingReconnectPtyIdByTabId,
+          tabId
+        )
+        const nextRuntimePaneTitlesByTabId = omitRecordKey(s.runtimePaneTitlesByTabId, tabId)
+        const nextDirectSshPaneRetryByTabId = omitRecordKey(s.directSshPaneRetryByTabId, tabId)
+        const nextDirectSshLivePtyBindingByTabId = omitRecordKey(
+          s.directSshLivePtyBindingByTabId,
+          tabId
+        )
+        const nextDirectSshPaneRetryHistoryByTabId = omitRecordKey(
+          s.directSshPaneRetryHistoryByTabId,
+          tabId
+        )
         const nextUnverifiedPtyLossTabIds = omitUnverifiedPtyLossTabIds(s.unverifiedPtyLossTabIds, [
           tabId
         ])
@@ -149,52 +147,61 @@ export function createTerminalTabCloseActions(
             delete nextUnreadAgentCompletionPanes[paneKey]
           }
         }
-        const nextLastTerminalInputAtByPaneKey = { ...s.lastTerminalInputAtByPaneKey }
-        for (const paneKey of Object.keys(nextLastTerminalInputAtByPaneKey)) {
-          if (paneKey.startsWith(`${tabId}:`)) {
-            delete nextLastTerminalInputAtByPaneKey[paneKey]
-          }
-        }
+        const nextLastTerminalInputAtByPaneKey = omitRecordKeys(
+          s.lastTerminalInputAtByPaneKey,
+          Object.keys(s.lastTerminalInputAtByPaneKey).filter((paneKey) =>
+            paneKey.startsWith(`${tabId}:`)
+          )
+        )
         const nextSleepingAgentSessionsByPaneKey = retiresSession
           ? removeSleepingAgentSessionsForTab(s.sleepingAgentSessionsByPaneKey, tabId)
           : s.sleepingAgentSessionsByPaneKey
-        const nextPendingStartupByTabId = { ...s.pendingStartupByTabId }
-        delete nextPendingStartupByTabId[tabId]
-        const nextAutomaticAgentResumeClaimsByTabId = { ...s.automaticAgentResumeClaimsByTabId }
-        delete nextAutomaticAgentResumeClaimsByTabId[tabId]
-        const nextNativeChatLaunchPromptByTabId = { ...s.nativeChatLaunchPromptByTabId }
-        delete nextNativeChatLaunchPromptByTabId[tabId]
-        const nextNativeChatLaunchDraftByTabId = { ...s.nativeChatLaunchDraftByTabId }
-        delete nextNativeChatLaunchDraftByTabId[tabId]
-        const nextPendingInitialCwdByTabId = { ...s.pendingInitialCwdByTabId }
-        delete nextPendingInitialCwdByTabId[tabId]
-        const nextPendingSetupSplitByTabId = { ...s.pendingSetupSplitByTabId }
-        delete nextPendingSetupSplitByTabId[tabId]
-        const nextPendingIssueCommandSplitByTabId = { ...s.pendingIssueCommandSplitByTabId }
-        delete nextPendingIssueCommandSplitByTabId[tabId]
-        const nextCacheTimer = { ...s.cacheTimerByKey }
+        const nextPendingStartupByTabId = omitRecordKey(s.pendingStartupByTabId, tabId)
+        const nextAutomaticAgentResumeClaimsByTabId = omitRecordKey(
+          s.automaticAgentResumeClaimsByTabId,
+          tabId
+        )
+        const nextNativeChatLaunchPromptByTabId = omitRecordKey(
+          s.nativeChatLaunchPromptByTabId,
+          tabId
+        )
+        const nextNativeChatLaunchDraftByTabId = omitRecordKey(
+          s.nativeChatLaunchDraftByTabId,
+          tabId
+        )
+        const nextPendingInitialCwdByTabId = omitRecordKey(s.pendingInitialCwdByTabId, tabId)
+        const nextPendingSetupSplitByTabId = omitRecordKey(s.pendingSetupSplitByTabId, tabId)
+        const nextPendingIssueCommandSplitByTabId = omitRecordKey(
+          s.pendingIssueCommandSplitByTabId,
+          tabId
+        )
         // Why: cache timer keys are `${tabId}:${leafId}` composites; remove all entries for the closing tab.
-        for (const key of Object.keys(nextCacheTimer)) {
-          if (key.startsWith(`${tabId}:`)) {
-            delete nextCacheTimer[key]
-          }
-        }
+        const nextCacheTimer = omitRecordKeys(
+          s.cacheTimerByKey,
+          Object.keys(s.cacheTimerByKey).filter((key) => key.startsWith(`${tabId}:`))
+        )
         // Why: keep activeTabIdByWorktree in sync when closing a background-worktree tab, else the stale remembered tab falls back to tabs[0] on switch.
-        const nextActiveTabIdByWorktree = { ...s.activeTabIdByWorktree }
+        let nextActiveTabIdByWorktree = s.activeTabIdByWorktree
         for (const [wId, tabs] of Object.entries(next)) {
-          if (nextActiveTabIdByWorktree[wId] === tabId) {
-            nextActiveTabIdByWorktree[wId] = tabs[0]?.id ?? null
+          if (nextActiveTabIdByWorktree[wId] !== tabId) {
+            continue
           }
+          if (nextActiveTabIdByWorktree === s.activeTabIdByWorktree) {
+            nextActiveTabIdByWorktree = { ...s.activeTabIdByWorktree }
+          }
+          nextActiveTabIdByWorktree[wId] = tabs[0]?.id ?? null
         }
         // Why: keep tabBarOrderByWorktree in sync so stale terminal IDs don't linger and shift positions on later tab operations.
-        const nextTabBarOrderByWorktree: Record<string, string[]> = {
-          ...s.tabBarOrderByWorktree
-        }
-        for (const wId of Object.keys(nextTabBarOrderByWorktree)) {
-          const order = nextTabBarOrderByWorktree[wId]
-          if (order?.includes(tabId)) {
-            nextTabBarOrderByWorktree[wId] = order.filter((entryId) => entryId !== tabId)
+        let nextTabBarOrderByWorktree: Record<string, string[]> = s.tabBarOrderByWorktree
+        for (const wId of Object.keys(s.tabBarOrderByWorktree)) {
+          const order = s.tabBarOrderByWorktree[wId]
+          if (!order?.includes(tabId)) {
+            continue
           }
+          if (nextTabBarOrderByWorktree === s.tabBarOrderByWorktree) {
+            nextTabBarOrderByWorktree = { ...s.tabBarOrderByWorktree }
+          }
+          nextTabBarOrderByWorktree[wId] = order.filter((entryId) => entryId !== tabId)
         }
         // Why: clean up unconsumed snapshot/cold-restore data (e.g. tab closed before TerminalPane mounted) to prevent unbounded store growth across restarts.
         let nextSnapshots = s.pendingSnapshotByPtyId
