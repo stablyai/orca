@@ -73,11 +73,19 @@ export async function closeSettingsPage(page: Page): Promise<void> {
 
 export async function closeOpenDialogs(page: Page): Promise<void> {
   for (let attempt = 0; attempt < 5; attempt += 1) {
+    // Nested dialogs can finish their exit animations in different frames.
+    await expect(page.locator('[role="dialog"][data-state="closed"]')).toHaveCount(0, {
+      timeout: 3_000
+    })
     const dialogCount = await page.getByRole('dialog').count()
     if (dialogCount === 0) {
       return
     }
-    const dialog = page.getByRole('dialog').last()
+    const dialogId = await page.getByRole('dialog').last().getAttribute('id')
+    if (!dialogId) {
+      throw new Error('Open dialog is missing its Radix identity')
+    }
+    const dialog = page.locator(`[role="dialog"][id=${JSON.stringify(dialogId)}]`)
     const cancelOrBack = dialog.getByRole('button', { name: /^(Cancel|Back)$/ })
     await ((await cancelOrBack
       .first()
@@ -85,11 +93,10 @@ export async function closeOpenDialogs(page: Page): Promise<void> {
       .catch(() => false))
       ? cancelOrBack.first().click()
       : page.keyboard.press('Escape'))
-    await expect
-      .poll(async () => page.getByRole('dialog').count(), { timeout: 3_000 })
-      .toBeLessThan(dialogCount)
-      .catch(() => undefined)
+    // Back can replace the picker with its parent without reducing the dialog count.
+    await expect(dialog).toBeHidden({ timeout: 3_000 })
   }
+  await expect(page.getByRole('dialog')).toHaveCount(0, { timeout: 3_000 })
 }
 
 /** Leave settings / overlays so the main shell (Add Project) is reachable. */

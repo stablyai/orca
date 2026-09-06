@@ -157,7 +157,6 @@ test.describe('Tabs', () => {
     await orcaPage.getByRole('button', { name: 'New tab' }).click({ force: true })
     const newMarkdownMenuItem = orcaPage.getByRole('menuitem', { name: /New Markdown/i }).first()
     await newMarkdownMenuItem.click()
-    await expect(newMarkdownMenuItem).toBeHidden({ timeout: 3_000 })
 
     // Why: require an id that did not exist before the click, so an already-open
     // Markdown file can't satisfy the assertions (or be deleted by cleanup), and
@@ -179,6 +178,7 @@ test.describe('Tabs', () => {
 
     const editor = orcaPage.locator('.rich-markdown-editor')
     await expect(editor).toBeVisible({ timeout: 25_000 })
+    await expect(newMarkdownMenuItem).toBeHidden({ timeout: 3_000 })
 
     await expect
       .poll(() => editor.evaluate((element) => document.activeElement === element), {
